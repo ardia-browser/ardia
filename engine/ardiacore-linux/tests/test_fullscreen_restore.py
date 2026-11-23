@@ -5,6 +5,7 @@ import tempfile
 import unittest
 
 SOURCE = pathlib.Path(__file__).resolve().parents[1] / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 LINUX = SOURCE / 'ardia' / 'linux'
 
 LEDGER = r'''#include <cassert>
@@ -115,7 +116,7 @@ class FullScreenRestoreLedgerTests(unittest.TestCase):
             root = pathlib.Path(scratch)
             (root / 'ledger.cc').write_text(LEDGER)
             binary = root / 'ledger'
-            built = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-I', str(SOURCE),
+            built = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE),
                                     str(root / 'ledger.cc'), str(LINUX / 'ac_linux_fullscreen_restore.cc'), '-o', str(binary)],
                                    capture_output=True, text=True)
             self.assertEqual(built.returncode, 0, built.stdout + built.stderr)

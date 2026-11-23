@@ -102,8 +102,12 @@ bool WriteAll(int fd, const Bytes& data) {
   return true;
 }
 
+bool TooLarge(const struct stat& info, size_t limit) {
+  return S_ISREG(info.st_mode) && static_cast<uint64_t>(info.st_size) > limit;
+}
+
 std::optional<Bytes> ReadOpenFile(int fd, const struct stat& info, size_t limit) {
-  if (!S_ISREG(info.st_mode) || static_cast<uint64_t>(info.st_size) > limit) return std::nullopt;
+  if (!S_ISREG(info.st_mode) || TooLarge(info, limit)) return std::nullopt;
   Bytes data(static_cast<size_t>(info.st_size));
   size_t got = 0;
   while (got < data.size()) {
@@ -228,7 +232,8 @@ std::string Vault::ChainPath() const {
 }
 
 std::string Vault::ScopePath(std::string_view scope) const {
-  return Join(ChainPath(), keys_.ScopeTag(scope));
+  const std::string scope_tag = keys_.ScopeTag(scope);
+  return scope_tag.empty() ? std::string() : Join(ChainPath(), scope_tag);
 }
 
 bool Vault::ChainExists() const {
@@ -257,15 +262,16 @@ VaultError Vault::WriteAs(std::string_view scope, const Bytes& payload, const st
   const Fd folder = OpenFolder(folder_);
   if (!folder.valid()) return {"The sync folder isn't available"};
   const std::string scope_tag = keys_.ScopeTag(scope);
+  if (scope_tag.empty()) return {"The sync scope isn't valid"};
   auto sealed = keys_.Seal(payload, scope_tag, id);
   if (!sealed) return {"Couldn't seal the sync file"};
   const Fd chain = OpenChild(folder, keys_.chain_tag(), true);
   const Fd directory = OpenChild(chain, scope_tag, true);
   if (!directory.valid()) return {ErrorText("Couldn't open the sync data folder", errno)};
   RemoveStaleStaging(directory, NowSeconds());
-  uint8_t random[10];
-  if (!RandomBytes(random, sizeof(random))) return {"Couldn't make a staging name"};
-  const std::string staging = kStagingPrefix + Base32(random, sizeof(random));
+  const std::string staging_id = NewFileId();
+  if (staging_id.empty()) return {"Couldn't make a staging name"};
+  const std::string staging = kStagingPrefix + staging_id;
   const std::string destination = id + kFileExtension;
   const int fd = openat(directory.get(), staging.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, kFileMode);
   if (fd < 0) return {ErrorText("Couldn't write a sync file", errno)};
@@ -287,6 +293,7 @@ VaultError Vault::WriteAs(std::string_view scope, const Bytes& payload, const st
 Listing Vault::Read(std::string_view scope, const std::vector<std::string>& known_ids, int64_t now_seconds) const {
   Listing listing;
   const std::string scope_tag = keys_.ScopeTag(scope);
+  if (scope_tag.empty()) return listing;
   const Fd directory = OpenChild(OpenChild(OpenFolder(folder_), keys_.chain_tag(), false), scope_tag, false);
   if (!directory.valid()) return listing;
   const std::set<std::string, std::less<>> known(known_ids.begin(), known_ids.end());
@@ -320,18 +327,22 @@ Listing Vault::Read(std::string_view scope, const std::vector<std::string>& know
                                      : fstatat(directory.get(), name.c_str(), &info, AT_SYMLINK_NOFOLLOW) == 0;
     auto data = file.valid() && stated ? ReadOpenFile(file.get(), info, kMaxSyncFileBytes) : std::nullopt;
     Bytes payload;
-    if (data && keys_.Open(*data, scope_tag, id, &payload) == OpenError::kNone) {
+    OpenError reason = stated && TooLarge(info, kMaxSyncFileBytes) ? OpenError::kTooLarge : OpenError::kOther;
+    if (data) reason = keys_.Open(*data, scope_tag, id, &payload);
+    if (reason == OpenError::kNone) {
       listing.files.push_back({id, std::move(payload)});
       continue;
     }
     const int64_t modified = stated ? static_cast<int64_t>(info.st_mtime) : now_seconds;
-    listing.damaged.push_back({id, static_cast<double>(std::max<int64_t>(0, now_seconds - modified))});
+    listing.damaged.push_back({id, static_cast<double>(std::max<int64_t>(0, now_seconds - modified)), reason});
   }
   return listing;
 }
 
 void Vault::Remove(std::string_view scope, const std::vector<std::string>& ids) const {
-  const Fd directory = OpenChild(OpenChild(OpenFolder(folder_), keys_.chain_tag(), false), keys_.ScopeTag(scope), false);
+  const std::string scope_tag = keys_.ScopeTag(scope);
+  if (scope_tag.empty()) return;
+  const Fd directory = OpenChild(OpenChild(OpenFolder(folder_), keys_.chain_tag(), false), scope_tag, false);
   if (!directory.valid()) return;
   for (const auto& id : ids) {
     if (!IsTag(id)) continue;

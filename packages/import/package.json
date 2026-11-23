@@ -8,7 +8,7 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsrs -p .",
-    "test": "swift test --scratch-path \"${TMPDIR:-/tmp}/ardia-import-swiftpm\"",
+    "test": "../core-rs/scripts/build-xcframework.sh && swift test --scratch-path \"${TMPDIR:-/tmp}/ardia-import-swiftpm\"",
     "fixtures": "python3 fixtures/generate.py"
   },
   "dependencies": {

@@ -126,6 +126,10 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         fields: ["glass_shaders_failed"],
       },
       {
+        text: "In the same daily counts, on iPhone: how often you opened one of the Settings panes, such as General or Tabs. Counts only, never which pane or what you changed",
+        fields: ["settings_panes_opened"],
+      },
+      {
         text: "In the same daily counts, on Android: how many actions you chose in menus Ardia draws, never which action or while browsing privately",
         fields: ["drawn_menu_actions_chosen"],
       },

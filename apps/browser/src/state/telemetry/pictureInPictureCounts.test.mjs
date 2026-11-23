@@ -87,18 +87,19 @@ test("pinches on a Picture in Picture window and resizes that ended before Chrom
     const saved = JSON.parse(stub.docs.get("telemetry-queue.json") ?? '{"events":[]}');
     return saved.events
       .filter((e) => e.event === "usage_counts" && (e.properties.pip_pinches || e.properties.pip_stand_in_timeouts))
-      .map((e) => [e.properties.pip_pinches, e.properties.pip_stand_in_timeouts]);
+      .map((e) => [e.properties.pip_pinches, e.properties.pip_stand_in_timeouts, e.properties.pip_pinches_unfocused, e.properties.pip_pinches_from_other_app]);
   };
   const before = (await sentCounts()).length;
 
+  pipCounts.notePictureInPictureStandIn({ pinch: true, timedOut: false, unfocused: true, fromOtherApp: true, epoch: client.consentEpoch() });
+  pipCounts.notePictureInPictureStandIn({ pinch: true, timedOut: true, unfocused: true, fromOtherApp: false, epoch: client.consentEpoch() });
   pipCounts.notePictureInPictureStandIn({ pinch: true, timedOut: false, epoch: client.consentEpoch() });
-  pipCounts.notePictureInPictureStandIn({ pinch: true, timedOut: true, epoch: client.consentEpoch() });
-  pipCounts.notePictureInPictureStandIn({ pinch: false, timedOut: true, epoch: client.consentEpoch() });
-  pipCounts.notePictureInPictureStandIn({ pinch: true, timedOut: false, epoch: "an epoch from before" });
+  pipCounts.notePictureInPictureStandIn({ pinch: false, timedOut: true, unfocused: true, fromOtherApp: true, epoch: client.consentEpoch() });
+  pipCounts.notePictureInPictureStandIn({ pinch: true, timedOut: false, unfocused: true, epoch: "an epoch from before" });
   usage.sessionEnding();
   const sent = await sentCounts();
   assert.equal(sent.length, before + 1);
-  assert.deepEqual(sent.at(-1), [2, 2]);
+  assert.deepEqual(sent.at(-1), [3, 2, 2, 1]);
 
   usage.sessionEnding();
   assert.equal((await sentCounts()).length, before + 1);

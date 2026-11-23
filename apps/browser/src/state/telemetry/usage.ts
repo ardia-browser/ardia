@@ -3,10 +3,11 @@ import { currentAppIcon, listComponents, onAppEvent } from "../../platform/app";
 import { useTranslate } from "../site/translate";
 import { useBrowser } from "../browser/store";
 import { keysOf } from "../browser/changes";
-import { syncCore, takeOpenTabSyncCounts, takeSnapshotWrites, useSync } from "../sync/engine";
+import { takeOpenTabSyncCounts, takeSnapshotWrites, useSync, whenSyncCore } from "../sync/engine";
 import { takeSyncCodeCounts } from "../sync/recoveryKit";
 import { capture, consentNow, consentToken, counted, consentOrNow, countFor, endSession, flush, isSharing, markSettingsSnapshot, settingsSnapshotDay, startClient, stillValid, watchConsentBoundary, withHourlyExtras, type ConsentToken } from "./usageClient";
 import { reportLocalStore, startLocalStore } from "./localStoreReport";
+import { watchSyncToggles } from "./syncToggles";
 import { watchExtensionInstalls } from "./extensionInstalls";
 import { nativeConsent } from "./nativeConsent";
 import { startWatchChecks } from "./watch";
@@ -107,7 +108,7 @@ function emitCounts(consent: ConsentToken | null) {
       split_view_closes: counts.splitViewCloses,
       window_close_tabs_kept: counts.windowCloseTabsKept,
       sync_snapshots_written: snapshots.count, synced_profiles_removed: snapshots.removedProfiles, synced_devices_removed: snapshots.removedDevices, synced_removals_returned: snapshots.removalsReturned, sync_cycles: snapshots.cycles, sync_cycle_ms: snapshots.ms, sync_cycle_longest_ms: snapshots.longestMs, sync_folder_picked_at_turn_on: snapshots.folders.picked, sync_folder_kept_at_turn_on: snapshots.folders.kept, sync_folder_moves: snapshots.folders.moved, sync_folder_rejoins: snapshots.folders.joined, sync_folder_move_refusals: snapshots.folders.refused,
-      sync_snapshot_kb_written: Math.round(snapshots.bytes / 1024), auto_pip_nothing_playing: autoPictureInPictureNothingPlaying, pip_back_to_tab: backToTab.chromium, pip_back_to_tab_webkit: backToTab.webkit, pip_back_to_tab_from_other_app: backToTabFromOtherApp, ...stripBounces, pip_drags: pipDrags.moved, pip_drags_off_cursor: pipDrags.offCursor, pip_drags_slow_move: pipDrags.slowMove, pip_resizes: pipResizes.started, pip_resizes_without_cursor: pipResizes.withoutCursor, pip_click_skips_back: clickSkips.back, pip_click_skips_ahead: clickSkips.ahead, pip_handle_unstashes: pipHandleUnstashes, ...pipReleases, pip_pinches: pipStandIns.pinches, pip_stand_in_timeouts: pipStandIns.timeouts, pip_activations: pipActivations.asked, pip_activation_failures: pipActivations.failed, pip_activation_hand_backs: pipHandBacks.given, pip_activation_hand_back_repeats: pipHandBacks.repeats,
+      sync_snapshot_kb_written: Math.round(snapshots.bytes / 1024), auto_pip_nothing_playing: autoPictureInPictureNothingPlaying, pip_back_to_tab: backToTab.chromium, pip_back_to_tab_webkit: backToTab.webkit, pip_back_to_tab_from_other_app: backToTabFromOtherApp, ...stripBounces, pip_drags: pipDrags.moved, pip_drags_off_cursor: pipDrags.offCursor, pip_drags_slow_move: pipDrags.slowMove, pip_resizes: pipResizes.started, pip_resizes_without_cursor: pipResizes.withoutCursor, pip_click_skips_back: clickSkips.back, pip_click_skips_ahead: clickSkips.ahead, pip_handle_unstashes: pipHandleUnstashes, ...pipReleases, pip_pinches: pipStandIns.pinches, pip_pinches_unfocused: pipStandIns.unfocused, pip_pinches_from_other_app: pipStandIns.fromOtherApp, pip_stand_in_timeouts: pipStandIns.timeouts, pip_activations: pipActivations.asked, pip_activation_failures: pipActivations.failed, pip_activation_hand_backs: pipHandBacks.given, pip_activation_hand_back_repeats: pipHandBacks.repeats,
       toolbar_scroll_hides: counts.toolbarScrollHides,
       toolbar_scroll_hide_bounces: counts.toolbarScrollHideBounces, toolbar_peeks: counts.toolbarPeeks, toolbar_peek_page_hides: counts.toolbarPeekPageHides, toolbar_motion_page_hides: counts.toolbarMotionPageHides,
       card_resize_layouts: counts.cardResizeLayouts,
@@ -275,14 +276,7 @@ function watchToolbarAutoHide() {
 }
 
 function watchSync() {
-  let last = useSync.getState().status;
-  useSync.subscribe(({ status }) => {
-    const was = last;
-    last = status;
-    if (was === status) return;
-    if (was === "off" && status !== "unavailable") capture("sync_toggled", { on: true, sync_core: syncCore() }, consentNow());
-    else if (status === "off" && was !== "unavailable") capture("sync_toggled", { on: false }, consentNow());
-  });
+  watchSyncToggles(useSync, whenSyncCore, consentNow, (toggle, consent) => capture("sync_toggled", toggle, consent));
 }
 
 function watchTranslate() {

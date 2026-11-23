@@ -14,6 +14,7 @@ import { noteTabGone, noteTabWoke, pressureChanged, startLoadedTabBudget } from 
 import { pressureOf } from "./sleepPolicy";
 import { focusedWindowOf } from "../windows/ui";
 import { noteMemoryPressure, noteTabSlept } from "../telemetry/tabSleepCounts";
+import { noteTabLoaded } from "./busyTabWatch";
 import { consentToken } from "../telemetry/client";
 import type { ConsentToken } from "../telemetry/choice";
 
@@ -34,6 +35,7 @@ export function noteReady(tabId: string) {
   if (tab) loadedProfiles.add(engineProfile(useBrowser.getState(), tab.profileId));
   noteTabWoke(tabId);
   forget(tabId);
+  noteTabLoaded(tabId);
 }
 
 export function noteDiscarded(tabId: string, reason: string | null = null) {

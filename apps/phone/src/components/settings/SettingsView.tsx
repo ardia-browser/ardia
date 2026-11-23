@@ -23,6 +23,10 @@ import { PageSummaryPage } from "./PageSummaryPage";
 export function SettingsPageFor({ route }: { route: SettingsRoute }) {
   switch (route.page) {
     case "root":
+    case "general":
+    case "tabs":
+    case "search":
+    case "experimental":
       return <SettingsRoot />;
     case "appearance":
       return <AppearancePage />;

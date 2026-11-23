@@ -1,11 +1,11 @@
 #include <cassert>
 #include <cstdio>
 
-#include "ardia/linux/ac_linux_page_keys.h"
+#include "ardia/desktop/ac_desktop_page_keys.h"
 
-using ardia::linux_keys::IsUnhandledEscape;
-using ardia::linux_keys::PageKey;
-using ardia::linux_keys::PageTakesEscape;
+using ardia::desktop_keys::IsUnhandledEscape;
+using ardia::desktop_keys::PageKey;
+using ardia::desktop_keys::PageTakesEscape;
 
 int main() {
   assert(IsUnhandledEscape({.raw_key_down = true, .key_code = 0x1B}));

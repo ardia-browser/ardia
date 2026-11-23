@@ -40,6 +40,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ardia-apple-ffi"
+version = "0.1.0"
+dependencies = [
+ "ardia-ffi",
+ "ardia-import-ffi",
+]
+
+[[package]]
 name = "ardia-crypto"
 version = "0.1.0"
 dependencies = [
@@ -120,6 +128,19 @@ dependencies = [
  "ardia-update-core",
  "cbindgen",
  "serde_json",
+]
+
+[[package]]
+name = "ardia-update-verify"
+version = "0.1.0"
+dependencies = [
+ "ardia-crypto",
+ "ardia-update-core",
+ "base64",
+ "ed25519-dalek",
+ "libc",
+ "serde_json",
+ "sha2",
 ]
 
 [[package]]

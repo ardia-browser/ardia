@@ -109,7 +109,7 @@ class RendererContractTests(unittest.TestCase):
             cpp = Path(scratch) / 'renderer.cc'
             binary = Path(scratch) / 'renderer'
             cpp.write_text(code)
-            result = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-I', str(ROOT / 'src'), str(cpp), '-o', str(binary)], capture_output=True, text=True)
+            result = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-I', str(ROOT / 'src'), '-I', str(ROOT.parent / 'ardiacore-desktop' / 'src'), str(cpp), '-o', str(binary)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             result = subprocess.run([str(binary), mode], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)

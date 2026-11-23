@@ -278,10 +278,6 @@ public struct AppIconPreview: View {
       .interpolation(.high)
       .frame(width: scaledSide, height: scaledSide)
       .clipShape(.rect(cornerRadius: scaledSide * 0.225, style: .continuous))
-      .overlay {
-        RoundedRectangle(cornerRadius: scaledSide * 0.225, style: .continuous)
-          .strokeBorder(.primary.opacity(0.08), lineWidth: 0.5)
-      }
       .accessibilityHidden(true)
   }
 }

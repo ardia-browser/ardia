@@ -19,6 +19,7 @@
 #include "ardia/win/host.h"
 #include "ardia/win/kept_pages.h"
 #include "ardia/win/launch_guard.h"
+#include "ardia/win/renderer_efficiency.h"
 #include "ardia/win/test_gate.h"
 #include "ardia/win/webui/webui_mode.h"
 #include "ardia/win/webui/webui_shell.h"
@@ -595,6 +596,7 @@ class WebUIMainParts : public ChromeBrowserMainExtraParts {
     WriteLaunchLog("webui shell: --ardia-shell=webui; the React Native app is "
                    "not loaded");
     ClaimGuardUntilOwned(kClaimAttempts);
+    StartRendererEfficiency();
     base::g_ardia_pre_translate_message = &WebUIShellPreTranslate;
     OpenWebUIShell();
   }

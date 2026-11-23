@@ -22,11 +22,16 @@ import { ExpoClearDataPage } from "./ExpoClearDataPage";
 import { ExpoAboutPage, ExpoLicensesPage } from "./ExpoAboutPages";
 import { ExpoDefaultBrowserPage, ExpoWhatsSentPage } from "./ExpoInfoPages";
 import { ExpoSettingsRoot } from "./ExpoSettingsRoot";
+import { ExpoExperimentalPane, ExpoGeneralPane, ExpoSearchPane, ExpoTabsPane } from "./ExpoSettingsPanes";
 import { ExpoSettingsDone } from "./ExpoSettingsDone";
 import { SettingsHostedContext } from "./SettingsKit";
 import { SettingsPageFor } from "./SettingsView";
 
 const CONVERTED: Partial<Record<SettingsRoute["page"], (props: { route: SettingsRoute }) => React.JSX.Element>> = {
+  general: ExpoGeneralPane,
+  tabs: ExpoTabsPane,
+  search: ExpoSearchPane,
+  experimental: ExpoExperimentalPane,
   appearance: ExpoAppearancePage,
   siteSettings: ExpoSiteSettingsPage,
   sync: ExpoSyncPage,
@@ -47,12 +52,16 @@ const CONVERTED: Partial<Record<SettingsRoute["page"], (props: { route: Settings
 
 const TITLES: Record<SettingsRoute["page"], string> = {
   root: destinationWords.settings,
+  general: "General",
+  tabs: "Tabs",
+  search: "Search",
+  experimental: "Experimental",
   appearance: "Appearance",
   theme: "Theme",
   searchEngine: "Search Engine",
   browseForMe: "Browse for Me",
   pageSummary: "Pinch to Summarize",
-  siteSettings: "Site Settings",
+  siteSettings: "Site settings",
   filterLists: "Filter Lists",
   filterList: "Filter List",
   myFilters: "My Filters",

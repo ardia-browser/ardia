@@ -20,6 +20,7 @@
 #include "ardia/win/page_links.h"
 #include "ardia/win/private_sessions.h"
 #include "ardia/win/profiles.h"
+#include "ardia/win/renderer_efficiency.h"
 #include "ardia/win/tab_calls.h"
 #include "ardia/win/tab_events.h"
 #include "ardia/win/tab_state.h"
@@ -349,6 +350,7 @@ void Host::Start() {
       };
   InstallHostedPageMenus();
   InstallAutoplayPolicy();
+  StartRendererEfficiency();
   browsers_observation_.Observe(GlobalBrowserCollection::GetInstance());
 }
 
@@ -418,6 +420,17 @@ void Host::Call(const std::string& verb,
     result = ListTabs();
   } else if (verb == "host.info") {
     result = Info();
+  } else if (verb == "renderer.efficiencyCounts") {
+    result = Ok();
+    result.Set("counts", TakeRendererEfficiencyCounts());
+  } else if (verb == "renderer.efficiency") {
+    content::WebContents* contents = Find(Text(args, "key"));
+    if (!contents) {
+      result = Error("no such tab");
+    } else {
+      result = Ok();
+      result.Set("renderer", RendererEfficiencyOf(contents));
+    }
   } else if (verb == "keyboard.forget") {
     keyboard_wanted_.erase(window);
     result = Ok();
@@ -1316,6 +1329,7 @@ void Host::Hide(Browser* browser, Hosted& hosted) {
   if (content::WebContents* shown = Find(hosted.shown)) {
     ardiacore::NoteTabShownByHost(shown, false);
     performance_manager::PageLiveStateDecorator::SetIsActiveTab(shown, false);
+    NoteTabHiddenForEfficiency(shown);
     if (ExclusiveAccessManager* manager =
             ExclusiveAccessManager::From(browser)) {
       manager->OnTabDeactivated(shown);

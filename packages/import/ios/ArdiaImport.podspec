@@ -10,6 +10,7 @@ Pod::Spec.new do |s|
   s.static_framework = true
   s.dependency 'ExpoModulesCore'
   s.dependency 'ArdiaCore'
+  s.dependency 'ArdiaSync'
   s.frameworks     = 'AppKit', 'Security'
   s.libraries      = 'sqlite3'
   s.source_files   = '*.swift', 'Core/**/*.swift'

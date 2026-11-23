@@ -10,13 +10,14 @@ import unittest
 
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parents[3]
+CORE_RS = HERE.parents[1]
 LINUX = REPO / 'engine/ardiacore-linux/src'
 FIXTURES = REPO / 'packages/sync/tests/fixtures'
 VECTORS = FIXTURES / 'sync-vectors'
 CASES = HERE.parent / 'phrase-cases.json'
 PASSWORD_READS = HERE.parent / 'password-read-cases.json'
 REQUIRED = os.environ.get('ARDIA_REQUIRE_LINUX_CROSSCHECK') == '1'
-SOURCES = [LINUX / 'ardia/linux/ac_linux_sync_crypto.cc', LINUX / 'ardia/linux/ac_linux_sync_wordlist.cc', HERE / 'vectors.cc']
+SOURCES = [LINUX / 'ardia/linux/ac_linux_sync_keys.cc', HERE / 'vectors.cc']
 
 
 def h(data):
@@ -35,12 +36,17 @@ def unavailable(why):
     raise unittest.SkipTest(why)
 
 
-def openssl_flags():
-    prefix = os.environ.get('OPENSSL_PREFIX')
-    if not prefix and platform.system() == 'Darwin' and shutil.which('brew'):
-        found = subprocess.run(['brew', '--prefix', 'openssl'], capture_output=True, text=True)
-        prefix = found.stdout.strip() if found.returncode == 0 else None
-    return (['-I', f'{prefix}/include'], ['-L', f'{prefix}/lib']) if prefix else ([], [])
+def core_library():
+    cargo = shutil.which('cargo') or next((str(path) for path in [pathlib.Path.home() / '.cargo/bin/cargo']
+                                           if path.exists()), None)
+    if cargo is None:
+        unavailable('cargo is unavailable')
+    target = pathlib.Path(os.environ.get('CARGO_TARGET_DIR') or CORE_RS / 'target')
+    built = subprocess.run([cargo, 'build', '--locked', '--quiet', '-p', 'ardia-ffi', '--target-dir', str(target)],
+                           cwd=CORE_RS, capture_output=True, text=True, timeout=540)
+    assert built.returncode == 0, built.stderr
+    system = ['-lpthread', '-ldl', '-lm'] if platform.system() == 'Linux' else []
+    return [str(target / 'debug/libardia_core.a'), *system]
 
 
 class LinuxSyncVectorTests(unittest.TestCase):
@@ -51,13 +57,14 @@ class LinuxSyncVectorTests(unittest.TestCase):
             unavailable('C++ compiler is unavailable')
         cls.scratch = tempfile.TemporaryDirectory(prefix='ardia-linux-sync-')
         cls.binary = pathlib.Path(cls.scratch.name) / 'linux-sync-vectors'
-        includes, libraries = openssl_flags()
+        headers = pathlib.Path(cls.scratch.name) / 'headers'
+        (headers / 'ardia/core_rs').mkdir(parents=True)
+        (headers / 'ardia/core_rs/include').symlink_to(CORE_RS / 'include', target_is_directory=True)
+        library = core_library()
         sanitize = ['-fsanitize=address,undefined', '-fno-omit-frame-pointer'] if platform.system() == 'Linux' else []
         built = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g', *sanitize, '-I', str(LINUX),
-                                *includes, *map(str, SOURCES), '-o', str(cls.binary), *libraries, '-lcrypto'],
+                                '-I', str(headers), *map(str, SOURCES), '-o', str(cls.binary), *library],
                                capture_output=True, text=True, timeout=300)
-        if built.returncode != 0 and 'openssl/' in built.stderr and 'not found' in built.stderr:
-            unavailable('OpenSSL headers are unavailable')
         assert built.returncode == 0, built.stderr
 
     @classmethod
@@ -72,7 +79,7 @@ class LinuxSyncVectorTests(unittest.TestCase):
         self.assertEqual(len(out), len(lines))
         return out
 
-    def test_fixed_nonce_vectors_reproduce_every_committed_byte(self):
+    def test_committed_vaults_open_and_reseal_to_their_committed_length(self):
         inputs = load(VECTORS / 'inputs.json')
         expected = load(VECTORS / 'expected.json')
         entropy = {name: value for name, value in inputs['entropies'].items()}
@@ -91,8 +98,8 @@ class LinuxSyncVectorTests(unittest.TestCase):
             tag = tags[(file['entropy'], file['scope'])]
             entry = next(e for e in expected['vault']['files'] if e['id'] == file['id'])
             committed = (VECTORS / entry['path']).read_bytes()
-            seal = f'seal {entropy[file["entropy"]]} {h(tag)} {h(file["id"])} {file["nonce"]} {h(payload[file["payload"]])}'
-            checks.append((seal, committed.hex()))
+            seal = f'seal {entropy[file["entropy"]]} {h(tag)} {h(file["id"])} {h(payload[file["payload"]])}'
+            checks.append((seal, f'{len(committed)} ok {h(payload[file["payload"]])}'))
             checks.append((f'open {entropy[file["entropy"]]} {h(tag)} {h(file["id"])} {committed.hex()}',
                            f'ok {h(payload[file["payload"]])}'))
         for file in expected['vault']['damaged']:
@@ -101,8 +108,11 @@ class LinuxSyncVectorTests(unittest.TestCase):
             checks.append((f'open {entropy[file["entropy"]]} {h(tag)} {h(file["id"])} {committed.hex()}',
                            'authentication'))
         for state, sealed in zip(inputs['localStates'], expected['localStates']):
-            seal = f'seal {entropy[state["entropy"]]} {h("local")} {h(state["fileId"])} {state["nonce"]} {h(payload[state["payload"]])}'
-            checks.append((seal, base64.b64decode(sealed['sealed']).hex()))
+            seal = f'seal {entropy[state["entropy"]]} {h("local")} {h(state["fileId"])} {h(payload[state["payload"]])}'
+            committed = base64.b64decode(sealed['sealed'])
+            checks.append((seal, f'{len(committed)} ok {h(payload[state["payload"]])}'))
+            checks.append((f'open {entropy[state["entropy"]]} {h("local")} {h(state["fileId"])} {committed.hex()}',
+                           f'ok {h(payload[state["payload"]])}'))
         for login in expected['passwords']:
             key = entropy[login['entropy']]
             checks.append((f'sealpw {key} {h(login["password"])} {h(login["origin"])} {h(login["username"])}',
@@ -110,7 +120,7 @@ class LinuxSyncVectorTests(unittest.TestCase):
             checks.append((f'openpw {key} {h(login["sealed"])} {h(login["origin"])} {h(login["username"])}',
                            f'ok {h(login["password"])}'))
         self.check(checks)
-        self.assertEqual(len(checks), 63)
+        self.assertEqual(len(checks), 65)
 
     def test_random_nonce_sets_and_old_vaults_open(self):
         inputs = load(VECTORS / 'inputs.json')

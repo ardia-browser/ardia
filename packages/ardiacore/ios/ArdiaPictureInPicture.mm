@@ -4,6 +4,7 @@
 #import "ArdiaChromeWindowHost.h"
 #import "ArdiaPiPThrowMath.h"
 #import "ArdiaPiPSeekMath.h"
+#import "ArdiaPiPZoomMath.h"
 
 #import <ApplicationServices/ApplicationServices.h>
 #import <dlfcn.h>
@@ -114,13 +115,51 @@ void InstallDragMonitor() {
                                                   }];
 }
 
+id gOtherAppPinchMonitor;
+
+void FollowPinchesFromOtherApps() {
+  const BOOL wanted = ardia_pip_zoom::WantsOtherAppPinches(NSApp.isActive, [ArdiaPiPZoom enabled], [ArdiaPiPZoom anyZoomable]);
+  if (wanted == (gOtherAppPinchMonitor != nil)) return;
+  if (!wanted) {
+    [NSEvent removeMonitor:gOtherAppPinchMonitor];
+    gOtherAppPinchMonitor = nil;
+    return;
+  }
+  gOtherAppPinchMonitor = [NSEvent addGlobalMonitorForEventsMatchingMask:NSEventMaskMagnify
+                                                                 handler:^(NSEvent *event) {
+                                                                   PinchFromOtherApp(event);
+                                                                 }];
+}
+
 void InstallZoomMonitor() {
   static id monitor;
-  if (monitor) return;
-  monitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskScrollWheel | NSEventMaskMagnify
-                                                  handler:^NSEvent *(NSEvent *event) {
-                                                    return [ArdiaPiPController handleSwipe:event] || [ArdiaPiPZoom handle:event] ? nil : event;
-                                                  }];
+  if (!monitor) {
+    monitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskScrollWheel | NSEventMaskMagnify
+                                                    handler:^NSEvent *(NSEvent *event) {
+                                                      return [ArdiaPiPController handleSwipe:event] || [ArdiaPiPZoom handle:event] ? nil : event;
+                                                    }];
+    NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
+    for (NSNotificationName name in @[ NSApplicationDidBecomeActiveNotification, NSApplicationDidResignActiveNotification ])
+      [center addObserverForName:name object:NSApp queue:nil usingBlock:^(NSNotification *) {
+        FollowPinchesFromOtherApps();
+      }];
+    [center addObserverForName:NSWindowWillCloseNotification object:nil queue:nil usingBlock:^(NSNotification *note) {
+      [ArdiaPiPZoom dropStandInOn:note.object];
+      RefreshPinchesFromOtherApps();
+    }];
+    [center addObserverForName:NSWindowDidChangeOcclusionStateNotification object:nil queue:nil usingBlock:^(NSNotification *note) {
+      NSWindow *window = note.object;
+      if (!window.visible) [ArdiaPiPZoom dropStandInOn:window];
+      RefreshPinchesFromOtherApps();
+    }];
+    [center addObserverForName:NSApplicationDidHideNotification object:NSApp queue:nil usingBlock:^(NSNotification *) {
+      [ArdiaPiPZoom dropStandInOn:nil];
+    }];
+    [center addObserverForName:NSUserDefaultsDidChangeNotification object:nil queue:nil usingBlock:^(NSNotification *) {
+      RefreshPinchesFromOtherApps();
+    }];
+  }
+  FollowPinchesFromOtherApps();
 }
 
 bool Attach(ArdiaWebView *view, NSString *host, ArdiaConsentStamp *stamp) {
@@ -188,6 +227,17 @@ NSView *DevFindView(NSView *view, NSString *className) {
   for (NSView *subview in view.subviews)
     if (NSView *found = DevFindView(subview, className)) return found;
   return nil;
+}
+
+NSString *DevZoomSetting(NSString *value) {
+  if (!ArdiaLaunchConfig.shared.testInstance) return @"test instances only";
+  NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+  NSMutableDictionary *arguments = [[defaults volatileDomainForName:NSArgumentDomain] mutableCopy] ?: [NSMutableDictionary dictionary];
+  if ([value isEqual:@"default"]) [arguments removeObjectForKey:kZoomDefault];
+  else arguments[kZoomDefault] = @([value isEqual:@"1"]);
+  [defaults setVolatileDomain:arguments forName:NSArgumentDomain];
+  FollowPinchesFromOtherApps();
+  return [ArdiaPiPZoom enabled] ? @"1" : @"0";
 }
 
 NSString *DevJSON(NSDictionary *object) {
@@ -322,6 +372,19 @@ BOOL ActivateApp(NSString *why) {
 
 void WatchZoom() { InstallZoomMonitor(); }
 
+void PinchFromOtherApp(NSEvent *event) {
+  if (!ardia_pip_zoom::WantsOtherAppPinches(NSApp.isActive, [ArdiaPiPZoom enabled], [ArdiaPiPZoom anyZoomable])) return FollowPinchesFromOtherApps();
+  [ArdiaPiPZoom handleFromOtherApp:event];
+}
+
+void RefreshPinchesFromOtherApps() {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    FollowPinchesFromOtherApps();
+  });
+}
+
+BOOL FollowsPinchesFromOtherApps() { return gOtherAppPinchMonitor != nil; }
+
 NSWindow *GrabbedWindow() { return gDragged.window; }
 
 BOOL TabRequestedActivation(ArdiaWebView *view, BOOL *fromOtherApp) {
@@ -362,6 +425,7 @@ void DocumentEntered(ArdiaWebView *view, ArdiaConsentStamp *stamp) {
       if (window.visible && IsChromeDocumentPictureInPicture(window) && IsChromeFloatingWindow(window)) found = window;
     if (strongView && found) {
       JoinFullScreenSpaces(found);
+      InstallZoomMonitor();
       [strongView emit:@"pictureInPicture" payload:[stamp onto:@{@"kind" : @"document", @"active" : @YES, @"fullScreenSpaces" : @(JoinsFullScreenSpaces(found)), @"leftApp" : @(strongView.leftAppInPictureInPicture), @"leftTab" : @(!strongView.seenByUser)}]];
     }
     if (!strongView || found || ++tries >= 20) {
@@ -418,6 +482,13 @@ void DocumentEntered(ArdiaWebView *view, ArdiaConsentStamp *stamp) {
 }
 
 + (NSString *)devPictureInPictureAction:(NSString *)action {
+  if ([action isEqual:@"pinchMonitor"]) return FollowsPinchesFromOtherApps() ? @"1" : @"0";
+  if ([action hasPrefix:@"zoomSetting:"]) return DevZoomSetting([action substringFromIndex:12]);
+  if ([action isEqual:@"appHidden"]) {
+    if (!ArdiaLaunchConfig.shared.testInstance) return @"test instances only";
+    [NSNotificationCenter.defaultCenter postNotificationName:NSApplicationDidHideNotification object:NSApp];
+    return @"posted";
+  }
   ArdiaPiPController *controller = nil;
   for (NSWindow *window in NSApp.windows)
     if ([ArdiaPiPController forWindow:window] && window.visible) controller = [ArdiaPiPController forWindow:window];
@@ -443,6 +514,13 @@ void DocumentEntered(ArdiaWebView *view, ArdiaConsentStamp *stamp) {
   else if ([action hasPrefix:@"pinch:"]) [ArdiaPiPZoom devPinch:controller.window args:[[action substringFromIndex:6] componentsSeparatedByString:@","]];
   else if ([action isEqual:@"pinchStats"]) return DevJSON([ArdiaPiPZoom devPinchStats:controller.window]);
   else if ([action isEqual:@"standIn"]) return [ArdiaPiPZoom devStandInWindow:controller.window];
+  else if ([action isEqual:@"lastPinch"]) return DevJSON([ArdiaPiPZoom devLastPinch]);
+  else if ([action hasPrefix:@"magnify:"]) return [controller devMagnify:[[action substringFromIndex:8] componentsSeparatedByString:@","]];
+  else if ([action hasPrefix:@"hittable:"]) {
+    if (!ArdiaLaunchConfig.shared.testInstance) return @"test instances only";
+    controller.window.ignoresMouseEvents = ![[action substringFromIndex:9] isEqual:@"1"];
+    return controller.window.ignoresMouseEvents ? @"0" : @"1";
+  }
   else if ([action hasPrefix:@"resizeCursor:"]) controller.resizeCursor.enabled = [[action substringFromIndex:13] isEqual:@"on"];
   else if ([action isEqual:@"interactive"]) {
     if (!ArdiaLaunchConfig.shared.testInstance) return @"test instances only";

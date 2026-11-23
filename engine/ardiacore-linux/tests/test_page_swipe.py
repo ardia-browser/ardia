@@ -6,7 +6,9 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 LINUX = SOURCE / 'ardia/linux'
+DESKTOP = LINUX.parents[3] / 'ardiacore-desktop' / 'src' / 'ardia' / 'desktop'
 REPO = ROOT.parents[1]
 
 
@@ -15,7 +17,7 @@ class PageSwipeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='ardia-page-swipe-') as directory:
             binary = Path(directory) / 'page-swipe'
             subprocess.run([os.environ.get('CXX', 'c++'), '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g',
-                            '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-I', str(SOURCE),
+                            '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE),
                             str(ROOT / 'tests/page_swipe_test.cc'), '-o', str(binary)],
                            check=True, text=True, timeout=180)
             result = subprocess.run([str(binary)], text=True, timeout=60, capture_output=True,
@@ -49,11 +51,11 @@ class PageSwipeTests(unittest.TestCase):
         report = host[host.index('void TabBinding::ReportSwipe(base::DictValue swipe) {'):]
         report = report[:report.index('\n}\n')]
         self.assertIn('if (!owner_ || !presented || !pane_visible) return;', report)
-        self.assertIn('ardia::linux_swipe::kPageSwipeEvent', report)
-        self.assertIn('kPageSwipeEvent[] = "onPageSwipe"', (LINUX / 'ac_linux_page_swipe.h').read_text())
+        self.assertIn('ardia::desktop_swipe::kPageSwipeEvent', report)
+        self.assertIn('kPageSwipeEvent[] = "onPageSwipe"', (DESKTOP / 'ac_desktop_page_swipe.h').read_text())
         shim = (REPO / 'apps/linux/src/shims/web/motion/swipe.ts').read_text()
         self.assertIn('event === "onPageSwipe"', shim)
-        self.assertIn('"ac_linux_page_swipe.h"', (LINUX / 'BUILD.gn').read_text())
+        self.assertIn('"ac_desktop_page_swipe.h"', (DESKTOP / 'BUILD.gn').read_text())
 
 
 if __name__ == '__main__':

@@ -6,6 +6,7 @@ import unittest
 
 
 SOURCE = pathlib.Path(__file__).resolve().parents[1] / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 
 
 class LaunchStepsTests(unittest.TestCase):
@@ -45,7 +46,7 @@ int main() {
             cpp = scratch / 'steps.cc'
             cpp.write_text(code)
             binary = scratch / 'steps'
-            subprocess.run([compiler, '-std=c++20', '-Wall', '-Werror', '-I', str(SOURCE), str(cpp), '-o', str(binary)], check=True, capture_output=True)
+            subprocess.run([compiler, '-std=c++20', '-Wall', '-Werror', '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE), str(cpp), '-o', str(binary)], check=True, capture_output=True)
             subprocess.run([str(binary)], check=True)
 
 

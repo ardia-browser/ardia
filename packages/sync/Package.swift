@@ -6,6 +6,7 @@ let package = Package(
   platforms: [.macOS(.v14), .iOS(.v17)],
   products: [
     .library(name: "ArdiaSyncCore", targets: ["ArdiaSyncCore"]),
+    .library(name: "ArdiaCoreRS", targets: ["ArdiaCoreRS"]),
     .executable(name: "legacy-migration", targets: ["LegacyMigrationTool"]),
   ],
   targets: [

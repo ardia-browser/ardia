@@ -8,13 +8,15 @@ import subprocess
 import tempfile
 import unittest
 
+from support import core_rs_flags
+
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 REPO = ROOT.parents[1]
 LINUX = ROOT / 'src/ardia/linux'
 SEALED = REPO / 'packages/sync/tests/fixtures/sealed-0.2.32.b64'
 WORDLIST = REPO / 'packages/sync/ios/Core/Wordlist.swift'
-HELPERS = ['ac_linux_sync.cc', 'ac_linux_sync_crypto.cc', 'ac_linux_sync_wordlist.cc', 'ac_linux_sync_json.cc',
-           'ac_linux_sync_vault.cc', 'ac_linux_sync_keystore.cc', 'ac_linux_credentials.cc']
+HELPERS = ['ac_linux_sync.cc', 'ac_linux_sync_keys.cc', 'ac_linux_sync_json.cc', 'ac_linux_sync_vault.cc',
+           'ac_linux_sync_keystore.cc', 'ac_linux_credentials.cc']
 
 
 def build(test, directory, name, fixture):
@@ -22,10 +24,11 @@ def build(test, directory, name, fixture):
     if compiler is None:
         test.skipTest('C++ compiler is unavailable')
     executable = pathlib.Path(directory) / name
+    includes, core = core_rs_flags(test, directory)
     compiled = subprocess.run([
         compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g', '-fsanitize=address,undefined',
-        '-fno-omit-frame-pointer', '-I', str(ROOT / 'src'), *[str(LINUX / source) for source in HELPERS],
-        str(ROOT / 'tests/fixtures' / fixture), '-o', str(executable), '-lcrypto', '-ldl',
+        '-fno-omit-frame-pointer', '-I', str(ROOT / 'src'), '-I', str(ROOT.parent / 'ardiacore-desktop' / 'src'), *includes, *[str(LINUX / source) for source in HELPERS],
+        str(ROOT / 'tests/fixtures' / fixture), '-o', str(executable), *core, '-ldl',
     ], capture_output=True, text=True, timeout=300)
     test.assertEqual(compiled.returncode, 0, compiled.stderr)
     return executable

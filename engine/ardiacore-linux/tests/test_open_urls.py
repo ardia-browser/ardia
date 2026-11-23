@@ -6,6 +6,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 LINUX = SOURCE / 'ardia/linux'
 PATCHES = ROOT.parent / 'patches'
 
@@ -16,7 +17,7 @@ class OpenUrlsTests(unittest.TestCase):
         cls.directory = tempfile.TemporaryDirectory(prefix='ardia-open-urls-')
         cls.binary = Path(cls.directory.name) / 'open-urls'
         subprocess.run([os.environ.get('CXX', 'c++'), '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g',
-                        '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-I', str(SOURCE),
+                        '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE),
                         str(ROOT / 'tests/open_urls_test.cc'), '-o', str(cls.binary)],
                        check=True, text=True, timeout=180)
 

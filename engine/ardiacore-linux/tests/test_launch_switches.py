@@ -7,6 +7,7 @@ import unittest
 
 
 SOURCE = pathlib.Path(__file__).resolve().parents[1] / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 SHARED = SOURCE.parents[1] / 'ardiacore/src'
 
 FIXTURE = r'''
@@ -305,7 +306,7 @@ class LaunchSwitchTests(unittest.TestCase):
         harness = cls.root / 'harness.cc'
         harness.write_text(HARNESS)
         cls.binary = cls.root / 'launch-test'
-        result = subprocess.run([shutil.which('clang++') or 'c++', '-std=c++20', '-Wall', '-Wextra', '-Werror', '-I', str(cls.root), '-I', str(SOURCE), '-I', str(SHARED), str(SOURCE / 'ardia/core/ac_launch_switches_linux.cc'), str(harness), '-o', str(cls.binary)], capture_output=True, text=True, timeout=30)
+        result = subprocess.run([shutil.which('clang++') or 'c++', '-std=c++20', '-Wall', '-Wextra', '-Werror', '-I', str(cls.root), '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE), '-I', str(SHARED), str(SOURCE / 'ardia/core/ac_launch_switches_linux.cc'), str(harness), '-o', str(cls.binary)], capture_output=True, text=True, timeout=30)
         if result.returncode:
             cls.temp.cleanup()
             raise AssertionError(result.stdout + result.stderr)

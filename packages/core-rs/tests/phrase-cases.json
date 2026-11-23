@@ -1,7 +1,7 @@
 {
   "sources": {
     "swift": "run: packages/sync/ios/Core/RecoveryPhrase.swift on macOS 27.2, the reference the Rust core matches",
-    "linux": "run: engine/ardiacore-linux/src/ardia/linux/ac_linux_sync_crypto.cc, checked by tests/linux-sync/test_linux_sync.py",
+    "linux": "run: engine/ardiacore-linux/src/ardia/linux/ac_linux_sync_keys.cc, which splits words as Linux always has and has the Rust core check the words and checksum since #3977, checked by tests/linux-sync/test_linux_sync.py",
     "windows": "read from apps/browser/windows/Ardia/SyncPhrase.h (LCMapStringEx lowercase, GetStringTypeW C1_LOWER and C1_ALPHA per UTF-16 unit), not run",
     "kotlin": "read from packages/phone/android/src/main/java/com/ardia/sync/core/RecoveryPhrase.kt (lowercase then Character.getType LOWERCASE_LETTER per code point), not run"
   },

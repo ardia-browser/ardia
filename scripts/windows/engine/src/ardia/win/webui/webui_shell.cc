@@ -15,9 +15,9 @@
 #include <vector>
 
 #include "ardia/linux/ac_linux_contract.h"
-#include "ardia/linux/ac_linux_policy.h"
+#include "ardia/desktop/ac_desktop_policy.h"
 #include "ardia/linux/ac_linux_session.h"
-#include "ardia/linux/ac_linux_window_state.h"
+#include "ardia/desktop/ac_desktop_window_state.h"
 #include "ardia/core/ac_launch_switches.h"
 #include "ardia/linux/host_bootstrap.h"
 #include "ardia/win/ac_calls.h"
@@ -222,7 +222,7 @@ std::optional<std::string> ReadAsset(base::FilePath directory,
                                      std::string path,
                                      std::string bootstrap_json,
                                      base::FilePath documents) {
-  if (!ardia::linux_policy::ValidAssetPath(path) || MimeType(path).empty()) {
+  if (!ardia::desktop_policy::ValidAssetPath(path) || MimeType(path).empty()) {
     return std::nullopt;
   }
   if (path == "host-bootstrap.js") {
@@ -952,7 +952,7 @@ class ShellWindow : public views::WidgetDelegate,
       return;
     }
     reported_maximized_ = maximized;
-    Emit("ArdiaShell", ardia::linux_window_state::kWindowStateEvent,
+    Emit("ArdiaShell", ardia::desktop_window_state::kWindowStateEvent,
          base::Value(WindowState()));
   }
 
@@ -1226,8 +1226,8 @@ std::string ShellWindow::BootstrapJson() const {
   for (const char* capability :
        {"ArdiaShell.startWindowMove", "ArdiaShell.captionDoubleClick",
         "ArdiaShell.windowIdentity", "shell.inputRegions",
-        ardia::linux_window_state::kWindowButtonLayoutCall,
-        ardia::linux_window_state::kWindowStateCall}) {
+        ardia::desktop_window_state::kWindowButtonLayoutCall,
+        ardia::desktop_window_state::kWindowStateCall}) {
     capabilities.Append(capability);
   }
   for (const auto& route : ardiacore::linux_contract::kRoutes) {
@@ -1354,10 +1354,10 @@ void ShellWindow::Invoke(const std::string& method,
   if (method == "ArdiaShell.windowFrame") {
     return std::move(done).Run(true, base::Value(WindowFrame()));
   }
-  if (method == ardia::linux_window_state::kWindowStateCall) {
+  if (method == ardia::desktop_window_state::kWindowStateCall) {
     return std::move(done).Run(true, base::Value(WindowState()));
   }
-  if (method == ardia::linux_window_state::kWindowButtonLayoutCall) {
+  if (method == ardia::desktop_window_state::kWindowButtonLayoutCall) {
     return std::move(done).Run(
         true, base::Value(base::DictValue()
                               .Set("layout", ":minimize,maximize,close")

@@ -47,7 +47,7 @@ int main(int argc, char** argv) {
   const std::string mode = argv[1];
   if (mode == "split") {
     Pane p;
-    p.binding->pane_radii = linux_window_corners::Corners{0, 0, 10, 10};
+    p.binding->pane_radii = desktop_window_corners::Corners{0, 0, 10, 10};
     p.Dock();
     assert(!ardiacore::shown_slot);
     p.host.Show(p.binding, true);
@@ -59,8 +59,8 @@ int main(int argc, char** argv) {
     assert(std::ranges::count(p.host.clipped, p.binding->viewport()) == 1);
     assert(std::ranges::count(p.host.clipped, p.tools()) == 1);
     for (size_t i = 0; i < p.host.clipped.size(); ++i) {
-      if (p.host.clipped[i] == p.binding->viewport()) assert((p.host.clipped_radii[i] == linux_window_corners::Corners{0, 0, 0, 10}));
-      if (p.host.clipped[i] == p.tools()) assert((p.host.clipped_radii[i] == linux_window_corners::Corners{0, 0, 10, 10}));
+      if (p.host.clipped[i] == p.binding->viewport()) assert((p.host.clipped_radii[i] == desktop_window_corners::Corners{0, 0, 0, 10}));
+      if (p.host.clipped[i] == p.tools()) assert((p.host.clipped_radii[i] == desktop_window_corners::Corners{0, 0, 10, 10}));
     }
     assert(*p.host.GetIndexOf(p.tools()) < *p.host.GetIndexOf(p.binding->viewport()));
     DevToolsWindow::strategies[&p.page].hide = true;
@@ -237,7 +237,7 @@ int main(int argc, char** argv) {
   }
   if (mode == "clipped-content") {
     Pane p;
-    p.binding->pane_radii = linux_window_corners::Corners{0, 0, 10, 10};
+    p.binding->pane_radii = desktop_window_corners::Corners{0, 0, 10, 10};
     p.binding->pane_bounds = gfx::Rect(100, 70, 800, 580);
     p.binding->content_bounds = gfx::Rect(100, 70, 800, 600);
     p.binding->pane_visible = true;
@@ -251,7 +251,7 @@ int main(int argc, char** argv) {
     assert(view->layer() && view->layer()->masks_to_bounds);
     assert(view->layer()->radii == gfx::RoundedCornersF(0, 0, 10, 10));
     assert(view->holder()->applied_radii == gfx::RoundedCornersF());
-    assert((p.host.clipped_radii.back() == linux_window_corners::Corners{0, 0, 10, 10}));
+    assert((p.host.clipped_radii.back() == desktop_window_corners::Corners{0, 0, 10, 10}));
     const int base_before_move = view->base_bounds_changes;
     p.binding->pane_bounds = gfx::Rect(100, 82, 800, 568);
     p.binding->content_bounds = gfx::Rect(100, 82, 800, 600);
@@ -307,7 +307,7 @@ int main(int argc, char** argv) {
   if (mode == "clipped-content-unmanaged") {
     views::manages_layers = false;
     Pane p;
-    p.binding->pane_radii = linux_window_corners::Corners{0, 0, 10, 10};
+    p.binding->pane_radii = desktop_window_corners::Corners{0, 0, 10, 10};
     p.binding->pane_bounds = gfx::Rect(100, 70, 800, 580);
     p.binding->content_bounds = gfx::Rect(100, 70, 800, 600);
     p.binding->pane_visible = true;
@@ -353,7 +353,7 @@ class PaneLayoutTests(unittest.TestCase):
         root = pathlib.Path(cls.temp.name)
         (root / 'main.cc').write_text(code + MAIN)
         cls.binary = root / 'pane'
-        result = subprocess.run([compiler, '-std=c++20', '-I', str(ROOT / 'src'), '-Wall', '-Wextra', '-Werror', '-Wno-unused-parameter',
+        result = subprocess.run([compiler, '-std=c++20', '-I', str(ROOT / 'src'), '-I', str(ROOT.parent / 'ardiacore-desktop' / 'src'), '-Wall', '-Wextra', '-Werror', '-Wno-unused-parameter',
                                  '-Wno-unused-private-field', '-fsanitize=address,undefined', '-fno-omit-frame-pointer',
                                  str(root / 'main.cc'), '-o', str(cls.binary)], capture_output=True, text=True, timeout=120)
         if result.returncode:

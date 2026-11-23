@@ -12,7 +12,7 @@
 #include <utility>
 #include <vector>
 
-#include "ardia/linux/ac_linux_window_corners.h"
+#include "ardia/desktop/ac_desktop_window_corners.h"
 
 namespace base {
 template <typename T> class WeakPtr {
@@ -385,7 +385,7 @@ inline std::vector<content::WebContents*> forgotten_hangs;
 inline void ForgetDeferredLinuxHangs(content::WebContents* contents) { forgotten_hangs.push_back(contents); }
 }
 
-namespace linux_window_corners = ardia::linux_window_corners;
+namespace desktop_window_corners = ardia::desktop_window_corners;
 
 class ShellHostView;
 ARDIA_FRONTEND_WATCH
@@ -423,7 +423,7 @@ class TabBinding {
   std::vector<gfx::Rect> pane_shape;
   std::vector<gfx::Rect> pane_input_shape;
   bool pane_visible = false;
-  linux_window_corners::Corners pane_radii = linux_window_corners::kPageCardCorners;
+  desktop_window_corners::Corners pane_radii = desktop_window_corners::kPageCardCorners;
   std::string claim = "claim";
   uint64_t renderer_generation = 1;
   int resets = 0;
@@ -442,7 +442,7 @@ class ShellHostView : public views::View {
   void HideDevToolsViewport(TabBinding* binding);
   void Restack() { restacks++; }
   void ClipPaneView(TabBinding* binding, views::WebView* view);
-  void ClipViewport(views::WebView* view, const linux_window_corners::Corners& own) {
+  void ClipViewport(views::WebView* view, const desktop_window_corners::Corners& own) {
     clipped.push_back(view);
     clipped_radii.push_back(own);
     if (auto* viewport = dynamic_cast<ViewportView*>(view)) {
@@ -514,7 +514,7 @@ class ShellHostView : public views::View {
   uint64_t renderer_generation_ = 1;
   int restacks = 0;
   std::vector<views::WebView*> clipped;
-  std::vector<linux_window_corners::Corners> clipped_radii;
+  std::vector<desktop_window_corners::Corners> clipped_radii;
   base::WeakPtrFactory<ShellHostView> weak{this};
 };
 

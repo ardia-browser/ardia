@@ -155,6 +155,22 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
   checks they're current and that Linux's `kRoutes` and `EventName`, the Mac's `ForwardedTopics` and Windows'
   `forwarded.json` agree with the schema; those tables stay hand-written until the desktop host generates them.
   A domain Windows has no module for (`webKit`) is absent there call by call and never named in `forwarded.json`.
+  **Module domains** (positional Expo functions, piloted with `shaders`) are listed in the schema's `moduleDomains`
+  through `defineModuleDomain`: the package, then per Expo module (`ArdiaWindowBackdrop`) its functions, each with
+  positional `args` (`[name, type]`, plus a Swift type when the TS one isn't a primitive), `result`, `async`, optional
+  `promise`/`queue`, and explicit `mac` (`custom`/`absent`), `desktop` (`custom`, `host` or `absent`) and `windows`
+  (`custom`/`absent`) bindings, and its module events. The generator writes `<package>/src/generated/native.ts`
+  (`<Name>Native` per module, `<Domain>Modules` for all of them; the package calls `requireNativeModule` through
+  them), `<package>/ios/<Domain>Native.swift` (a protocol of the Mac module's static functions, plus
+  `moduleName`, `<fn>Function` and `eventsDefinition` definitions), and the domain's entry under the manifest's
+  `modules`. The hand-written module conforms (`class WindowBackdropModule: Module, WindowBackdropNative`), writes
+  `Name(Self.moduleName)` and `Self.holdKeyLookFunction` in its `definition()` and implements the static bodies, so a
+  schema change that the body doesn't follow fails to compile (Swift keyword names are backticked). The manifest keeps
+  each written file's SHA-256, and `--write` never overwrites or deletes one that no longer matches it. The tests check
+  that conformance and that no function, event or name is registered by hand, that the package never types a module
+  past the generated map (both TypeScript scans use the compiler's syntax tree), that the desktop UI answers exactly the `custom` functions (a Promise when `async`), and
+  that the Linux host (`if (method == …)` dispatch outside `bool` helpers, `SendEvent`) and Windows (`REACT_METHOD`, the `writtenInJs` object's
+  members, `moduleDefaults` keys, `EmitEvent`/`emitNativeEvent`) serve exactly the functions and events bound to them.
 - **The page script** is `packages/ardiacore/ios/page_script.js`, a pod resource: `ArdiaHostEngineDelegate.mm` hands it to the
   engine at launch and the renderer runs it in every http(s) and file frame. Changing it needs an app rebuild, not an
   engine one. Its `post(kind, json)` crosses the page channel to `-[ArdiaWebView tab:didReceivePageMessage:…]` (`ArdiaWebView+PageMessages.mm`),

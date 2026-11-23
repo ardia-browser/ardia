@@ -497,7 +497,7 @@ test("drawn menus count public opens and Android selections once, but neither is
     }
   };
   onDrawnMenuOpened(countDrawnMenu);
-  onDrawnMenuActionChosen(countDrawnMenuAction);
+  if (Platform.OS === "android") onDrawnMenuActionChosen(countDrawnMenuAction);
   try {
     act(() => {
       useTabs.setState({ ...launchTabs(someTabs(2), 0), incognito: false, listing: 0 });

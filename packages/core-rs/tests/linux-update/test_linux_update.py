@@ -1,26 +1,29 @@
 import base64
+import importlib.util
 import json
 import os
 import pathlib
 import re
 import shutil
+import struct
 import subprocess
+import sys
+import tarfile
 import tempfile
 import unittest
 
 HERE = pathlib.Path(__file__).resolve().parent
+CORE = HERE.parents[1]
 REPO = HERE.parents[3]
 LINUX = REPO / 'engine/ardiacore-linux/src'
 HELPER = REPO / 'scripts/linux/ardia-update'
+HOSTILE = REPO / 'scripts/security/hostile-inputs.mjs'
 VECTORS = json.loads((HERE.parent / 'update-vectors.json').read_text(encoding='utf-8'))
 REQUIRED = os.environ.get('ARDIA_REQUIRE_LINUX_CROSSCHECK') == '1'
 SPKI_PREFIX = bytes.fromhex('302a300506032b6570032100')
-HELPER_FUNCTIONS = ['note', 'finish', 'fail', 'version_parts', 'newer_than', 'parse_manifest']
-HELPER_SETTINGS = ['max_package', 'max_manifest', 'signature_size', 'version_pattern', 'version_line_pattern',
-                   'package_line_pattern']
 MANIFESTS = VECTORS['manifests']
 VERSIONS = VECTORS['versions']
-EMPTY_INPUT_REFUSALS = {'failed signature', 'failed manifest'}
+MAX_ARGUMENT = 65536
 
 
 def h(data):
@@ -64,62 +67,76 @@ def openssl3():
     return None
 
 
-def bash4():
-    for candidate in [os.environ.get('BASH4'), shutil.which('bash'), '/opt/homebrew/bin/bash', '/usr/local/bin/bash']:
-        if not candidate or not pathlib.Path(candidate).exists():
-            continue
-        major = subprocess.run([candidate, '-c', 'echo ${BASH_VERSINFO[0]}'], capture_output=True, text=True).stdout
-        if major.strip().isdigit() and int(major) >= 4:
-            return candidate
-    return None
+def rust_tool(name):
+    found = shutil.which(name)
+    if found:
+        return found
+    installed = pathlib.Path.home() / '.cargo/bin' / name
+    return str(installed) if os.access(installed, os.X_OK) else None
 
 
-def helper_source():
-    text = HELPER.read_text(encoding='utf-8')
-    parts = []
-    for name in HELPER_SETTINGS:
-        found = re.search(rf'^{name}=.*$', text, re.M)
-        assert found, f'{name}= is no longer in {HELPER}'
-        parts.append(found.group(0))
-    for name in HELPER_FUNCTIONS:
-        found = re.search(rf'^{name}\(\) \{{.*?\}}$' if f'{name}() {{ ' in text else rf'^{name}\(\) \{{\n.*?^\}}$',
-                          text, re.M | re.S)
-        assert found, f'{name}() is no longer in {HELPER}'
-        parts.append(found.group(0))
-    return '\n'.join(parts)
+def cargo_target_dir():
+    return pathlib.Path(os.environ.get('CARGO_TARGET_DIR') or 'target')
 
 
-HELPER_DRIVER = r'''
-set -uo pipefail
-run_case() {
-  local file=$1 named_version=$2 installed=$3 kind=$4 signature=$5 key=$6 signature_ok=$7
-  (
-    work=$(mktemp -d)
-    trap 'rm -rf -- "$work"' EXIT
-    current=$installed
-    version_parts "$current" >/dev/null || fail kind
-    version_parts "$named_version" >/dev/null || fail manifest
-    (($(wc -c <"$file") <= max_manifest)) || fail manifest
-    (($(wc -c <"$signature") == signature_size)) || fail signature
-    if [[ -n "$OPENSSL3" ]]; then
-      "$OPENSSL3" pkeyutl -verify -pubin -inkey "$key" -rawin -in "$file" -sigfile "$signature" >/dev/null 2>&1 \
-        || fail signature
-    else
-      [[ "$signature_ok" == 1 ]] || fail signature
-    fi
-    version="" package_name="" package_digest="" package_size=""
-    parse_manifest "$file"
-    [[ "$version" == "$named_version" ]] || fail manifest
-    newer_than "$version" "$current" || fail notNewer
-    [[ -n "$package_name" ]] || fail kind
-    finish "ok $package_name $package_digest $package_size"
-  ) 2>/dev/null
-}
-while IFS=$'\t' read -r file named installed kind signature key signature_ok; do
-  run_case "$file" "$named" "$installed" "$kind" "$signature" "$key" "$signature_ok" | tail -n 1
-done
-exit 0
+def verifier_binary():
+    cargo = rust_tool('cargo')
+    if cargo is None:
+        unavailable('cargo is unavailable to build ardia-update-verify')
+    built = subprocess.run([cargo, 'build', '--locked', '--release', '--quiet', '-p', 'ardia-update-verify'], cwd=CORE,
+                           capture_output=True, text=True, timeout=900)
+    if built.returncode != 0:
+        raise AssertionError(built.stderr)
+    return CORE / cargo_target_dir() / 'release' / ('ardia-update-verify.exe' if os.name == 'nt' else 'ardia-update-verify')
+
+
+def verdict(binary, manifest, signature, key, version, installed, kind):
+    result = subprocess.run([str(binary), 'manifest', '--key', str(key), '--manifest', str(manifest), '--signature',
+                             str(signature), '--version', version, '--installed', installed, '--kind', kind],
+                            capture_output=True, timeout=60)
+    lines = result.stdout.decode('utf-8', 'replace').splitlines()
+    return (lines[-1] if lines else ''), result.returncode
+
+
+def passable(value):
+    if len(value) > MAX_ARGUMENT or '\0' in value:
+        return False
+    try:
+        os.fsencode(value)
+    except UnicodeError:
+        return False
+    return True
+
+
+def packaging_module():
+    sys.dont_write_bytecode = True
+    spec = importlib.util.spec_from_file_location('ardia_linux_package', REPO / 'scripts/linux/package.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def elf(kind=2, machine=0x3e, segments=((1, 0, 120),), program_headers=None, entry=0x401000, length=None):
+    count = len(segments) if program_headers is None else program_headers
+    header = bytearray(b'\x7fELF\x02\x01\x01' + bytes(9))
+    header += struct.pack('<HHIQQQIHHHHHH', kind, machine, 1, entry, 64, 0, 0, 64, 56, count, 64, 0, 0)
+    for segment_kind, offset, size in segments:
+        header += struct.pack('<IIQQQQQQ', segment_kind, 5, offset, 0x400000, 0x400000, size, size, 0x1000)
+    body = bytes(header) + bytes(max(0, 512 - len(header)))
+    return body if length is None else body[:length]
+
+
+SIGNING_DRIVER = r'''
+import { generateKeyPairSync, sign } from "node:crypto";
+import { readFileSync } from "node:fs";
+const manifests = JSON.parse(readFileSync(process.argv[2], "utf8")).map((hex) => Buffer.from(hex, "hex"));
+const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+console.log(JSON.stringify({
+  publicKey: publicKey.export({ format: "der", type: "spki" }).subarray(12).toString("hex"),
+  signatures: manifests.map((manifest) => sign(null, manifest, privateKey).toString("hex")),
+}));
 '''
+
 
 NODE_DRIVER = r'''
 import { createPublicKey, verify } from "node:crypto";
@@ -213,29 +230,84 @@ class LinuxUpdateParityTests(unittest.TestCase):
         for (a, b, want), line in zip(pairs, out):
             self.assertEqual(line, str(want), f'{a} vs {b}')
 
-    def test_the_root_helper_installs_or_refuses_every_manifest_as_recorded(self):
-        bash = bash4()
-        if bash is None:
-            unavailable('bash 4 or later is unavailable')
-        openssl = openssl3()
-        script = helper_source() + HELPER_DRIVER
-        rows = []
+    def verifier(self):
+        if not hasattr(type(self), 'binary'):
+            type(self).binary = verifier_binary()
+        return type(self).binary
+
+    def test_the_root_helper_leaves_every_manifest_check_to_ardia_update_verify(self):
+        text = HELPER.read_text(encoding='utf-8')
+        self.assertIn('verifier="$libdir/ardia-update-verify"', text)
+        self.assertIn('verify "$((left < small_copy_seconds ? left : small_copy_seconds))" manifest', text)
+        self.assertIn('verify "$left" package --package "$destination"', text)
+        for duplicated in ['openssl', 'pkeyutl', 'sha256sum', 'version_parts', 'parse_manifest', 'newer_than']:
+            self.assertNotIn(duplicated, text)
+
+    def test_the_root_helpers_verifier_installs_or_refuses_every_manifest_as_recorded(self):
+        binary = self.verifier()
         for case, (manifest, signature, key) in zip(MANIFESTS, self.files):
-            rows.append('\t'.join([str(manifest), case['version'], case['installed'], case['kind'], str(signature),
-                                   str(key), '1' if case.get('openssl', case['signatureValid']) else '0']))
-        result = subprocess.run([bash, '-c', script], input='\n'.join(rows) + '\n', capture_output=True, text=True,
-                                timeout=300, env={'PATH': os.environ['PATH'], 'LC_ALL': 'C', 'OPENSSL3': openssl or ''})
-        self.assertEqual(result.returncode, 0, result.stderr)
-        out = result.stdout.splitlines()
-        self.assertEqual(len(out), len(MANIFESTS), result.stderr)
-        for case, line in zip(MANIFESTS, out):
+            line, status = verdict(binary, manifest, signature, key, case['version'], case['installed'], case['kind'])
             want = expected(case, 'helper', 'outcome')
-            if not case['manifest'] and openssl:
-                self.assertIn(line, EMPTY_INPUT_REFUSALS, case['name'])
-            elif 'error' not in want:
-                self.assertEqual(line, f'ok {want["name"]} {want["sha256"]} {want["size"]}', case['name'])
+            if 'error' in want:
+                self.assertEqual((line, status), (f'failed {want["error"]}', 1), case['name'])
             else:
-                self.assertEqual(line, f'failed {want["error"]}', case['name'])
+                self.assertEqual((line, status), (f'ok {want["name"]} {want["sha256"]} {want["size"]}', 0),
+                                 case['name'])
+
+    def test_no_hostile_string_passes_the_verifier(self):
+        node = shutil.which('node')
+        if node is None:
+            unavailable('node is unavailable to read scripts/security/hostile-inputs.mjs')
+        listed = subprocess.run([node, '--input-type=module', '-e',
+                                 f'import {{ HOSTILE_STRINGS }} from {json.dumps(HOSTILE.as_uri())};'
+                                 'process.stdout.write(JSON.stringify(HOSTILE_STRINGS));'],
+                                capture_output=True, text=True, timeout=120)
+        self.assertEqual(listed.returncode, 0, listed.stderr)
+        hostile = json.loads(listed.stdout)
+        self.assertGreater(len(hostile), 50)
+        base = next(case for case in MANIFESTS if case['name'] == 'deb install, all three formats')
+        deb = base['manifest'].split('\n')[2].split(' ')
+        forged = []
+        for entry in hostile:
+            value = entry['value']
+            forged += [
+                (entry['id'], 'version', base['manifest'].replace('0.2.48', value)),
+                (entry['id'], 'name', base['manifest'].replace(deb[1], value)),
+                (entry['id'], 'digest', base['manifest'].replace(deb[2], value)),
+                (entry['id'], 'size', base['manifest'].replace(f' {deb[3]}\n', f' {value}\n', 1)),
+                (entry['id'], 'kind', base['manifest'].replace('deb Ardia', f'{value} Ardia')),
+                (entry['id'], 'line', base['manifest'] + value + '\n'),
+            ]
+        encoded = [text.encode('utf-8', 'surrogatepass') for _, _, text in forged]
+        hexes = self.dir / 'hostile.json'
+        hexes.write_text(json.dumps([manifest.hex() for manifest in encoded]))
+        script = self.dir / 'sign.mjs'
+        script.write_text(SIGNING_DRIVER)
+        signed = subprocess.run([node, str(script), str(hexes)], capture_output=True, text=True, timeout=300)
+        self.assertEqual(signed.returncode, 0, signed.stderr)
+        signed = json.loads(signed.stdout)
+        key = self.dir / 'hostile.pem'
+        key.write_text(public_pem(signed['publicKey']))
+        binary = self.verifier()
+        manifest = self.dir / 'hostile.txt'
+        signature = self.dir / 'hostile.sig'
+        for (name, field, _), body, sig in zip(forged, encoded, signed['signatures']):
+            manifest.write_bytes(body)
+            signature.write_bytes(bytes.fromhex(sig))
+            self.assertEqual(verdict(binary, manifest, signature, key, '0.2.48', '0.2.47', 'deb'),
+                             ('failed manifest', 1), f'{name} as the {field}')
+        good = self.files[MANIFESTS.index(base)]
+        self.assertEqual(verdict(binary, *good, '0.2.48', '0.2.47', 'deb')[1], 0)
+        for entry in hostile:
+            value = entry['value']
+            if not passable(value):
+                continue
+            for field, args, want in [('--version', (value, '0.2.47', 'deb'), ('failed manifest', 1)),
+                                      ('--installed', ('0.2.48', value, 'deb'), ('failed kind', 1)),
+                                      ('--kind', ('0.2.48', '0.2.47', value), ('failed usage', 2))]:
+                self.assertEqual(verdict(binary, *good, *args), want, f'{entry["id"]} as {field}')
+            result = subprocess.run([str(binary), 'version', value], capture_output=True, timeout=60)
+            self.assertEqual((result.stdout, result.returncode), (b'failed version\n', 1), entry['id'])
 
     def test_openssl_pkeyutl_verifies_exactly_the_signatures_recorded_valid(self):
         openssl = openssl3()
@@ -281,6 +353,105 @@ class LinuxUpdateParityTests(unittest.TestCase):
         outcomes = {c['outcome'].get('error', 'ok') for c in MANIFESTS}
         self.assertEqual(outcomes, {'ok', 'tooLarge', 'manifest', 'signature', 'notNewer', 'kind', 'version'})
         self.assertEqual({o['outcome'] for o in VECTORS['offers']}, {'ok', 'notNewer', 'channel', 'version'})
+
+
+class PackagedVerifierTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.packaging = packaging_module()
+        cls.scratch = tempfile.TemporaryDirectory(prefix='ardia-packaged-verifier-')
+        cls.dir = pathlib.Path(cls.scratch.name)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.scratch.cleanup()
+
+    def problem(self, data):
+        return self.packaging.static_x86_64_executable_problem(data)
+
+    def test_a_static_x86_64_executable_header_passes(self):
+        self.assertIsNone(self.problem(elf()))
+        self.assertIsNone(self.problem(elf(kind=3)))
+
+    def test_malformed_or_dynamic_elves_are_refused(self):
+        refused = {
+            'an empty file': b'',
+            'a truncated header': elf(length=40),
+            'a 32-bit ELF': b'\x7fELF\x01' + elf()[5:],
+            'a big-endian ELF': elf()[:5] + b'\x02' + elf()[6:],
+            'a relocatable object': elf(kind=1),
+            'a core dump': elf(kind=4),
+            'an arm64 ELF': elf(machine=0xb7),
+            'no entry point': elf(entry=0),
+            'no program headers': elf(segments=()),
+            'program headers past the end': elf(program_headers=40),
+            'a segment past the end': elf(segments=((1, 0, 1 << 20),)),
+            'a dynamic loader': elf(segments=((3, 0, 28), (1, 0, 120))),
+            'no loadable segment': elf(segments=((6, 0, 56),)),
+            'program headers cut off by truncation': elf(length=100),
+        }
+        for label, data in refused.items():
+            self.assertIsNotNone(self.problem(data), label)
+
+    def test_package_py_refuses_a_verifier_that_is_not_a_static_x86_64_executable(self):
+        for label, data in [('ET_REL', elf(kind=1)), ('PT_INTERP', elf(segments=((3, 0, 28), (1, 0, 120)))),
+                            ('truncated', elf(length=40))]:
+            binary = self.dir / f'{label}-verify'
+            binary.write_bytes(data)
+            binary.chmod(0o755)
+            with self.assertRaises(ValueError, msg=label):
+                self.packaging.check_update_verify(binary)
+
+    def test_package_py_runs_the_verifier_where_it_can(self):
+        binary = self.dir / 'header-only-verify'
+        binary.write_bytes(elf())
+        binary.chmod(0o755)
+        if self.packaging.runs_here():
+            with self.assertRaisesRegex(ValueError, 'does not run here'):
+                self.packaging.check_update_verify(binary)
+        else:
+            self.packaging.check_update_verify(binary)
+
+    def fake_build(self, name):
+        root = self.dir / name
+        output, ui = root / 'out', root / 'ui'
+        output.mkdir(parents=True)
+        ui.mkdir()
+        for required in self.packaging.REQUIRED:
+            if required == 'locales':
+                (output / required).mkdir()
+                (output / required / 'en-US.pak').write_bytes(b'locale')
+            else:
+                (output / required).write_bytes(b'runtime')
+        (output / 'chrome').chmod(0o755)
+        (ui / 'index.html').write_text('<html></html>')
+        return root, output, ui
+
+    def test_package_py_checks_the_staged_copy_and_writes_nothing_when_it_fails(self):
+        root, output, ui = self.fake_build('refused')
+        broken = root / 'ardia-update-verify'
+        broken.write_bytes(elf(kind=1))
+        broken.chmod(0o755)
+        destination = root / 'ardia.tar.xz'
+        with self.assertRaisesRegex(ValueError, 'lib/ardia/ardia-update-verify'):
+            self.packaging.package(output, ui, destination, update_verify=broken)
+        self.assertFalse(destination.exists())
+
+    def test_the_built_verifier_passes_the_packaging_check(self):
+        if rust_tool('cargo') is None or rust_tool('rustup') is None:
+            unavailable('cargo and rustup are unavailable to build the musl ardia-update-verify')
+        built = subprocess.run(['bash', str(REPO / 'scripts/linux/update-verify.sh')], capture_output=True, text=True,
+                               timeout=900)
+        self.assertEqual(built.returncode, 0, built.stderr)
+        binary = pathlib.Path(built.stdout.strip())
+        self.assertIsNone(self.problem(binary.read_bytes()))
+        self.packaging.check_update_verify(binary)
+        root, output, ui = self.fake_build('packaged')
+        archive = self.packaging.package(output, ui, root / 'ardia.tar.xz', update_verify=binary)
+        with tarfile.open(archive) as packed:
+            member = packed.getmember('ardia/lib/ardia/ardia-update-verify')
+            self.assertEqual(member.mode & 0o777, 0o755)
+            self.assertEqual(packed.extractfile(member).read(), binary.read_bytes())
 
 
 if __name__ == '__main__':

@@ -9,10 +9,12 @@ import { ardiaHost, type ArdiaHost } from "./host";
 import { syncIdle, syncNowIfIdle, syncNowThrough } from "./syncForward";
 import { keyringMessage, presentSyncState, SYNC_KEY_NOT_SAVED } from "./syncKeyStore";
 import { consentToken } from "../../browser/src/state/telemetry/client";
+import { noteSyncOpenFailures } from "../../browser/src/state/telemetry/syncFileCounts";
 import { warnFor } from "../../browser/src/state/telemetry/logs";
 import {
   claimSyncAuthority,
   configureHeldLogins,
+  configureOpenFailureCount,
   createHeldLogins,
   HeldLoginsResetError,
   enterPhraseBegins,
@@ -20,6 +22,7 @@ import {
   whileResettingHeldLogins,
   KEYRING_RETRY_MS,
   keyringResumer,
+  loadSyncCore,
   watchLockedSync,
   loadSyncDeviceName,
   refreshSyncDocuments,
@@ -42,6 +45,8 @@ import {
 } from "./syncAuthority.ts";
 
 const KEYCHAIN_ERROR = "Couldn’t save the sync key in your Keychain.";
+
+configureOpenFailureCount(consentToken, noteSyncOpenFailures);
 
 export const useSync = create<SyncUi>()(() => ({ ...engine.useSync.getState(), status: SyncNative ? "starting" : "unavailable" }));
 
@@ -178,6 +183,7 @@ async function becomeAuthority(host: ArdiaHost) {
 export function startLinuxSync(options: { host?: ArdiaHost; candidate: boolean; locks?: LocksLike; channel?: () => BroadcastChannel | null }) {
   const host = options.host ?? ardiaHost;
   if (authority || !SyncNative || !host) return authority;
+  void loadSyncCore(host);
   const channel = (options.channel ?? (() => (typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(SYNC_CHANNEL))))();
   const id = `${host.bootstrap.windowId}:${Math.random().toString(36).slice(2)}`;
   const started = startSyncAuthority<SyncUi>({
@@ -350,7 +356,7 @@ function refreshSendTargets() {
 export const onTabsReceived = engine.onTabsReceived;
 export const takeSnapshotWrites = engine.takeSnapshotWrites;
 export const takeOpenTabSyncCounts = engine.takeOpenTabSyncCounts;
-export const syncCore = (): "rust" | "native" => "native";
+export { whenSyncCore } from "./hostSync.ts";
 
 export function sendTargets(profileId: string): SendTarget[] {
   return leading() ? engine.sendTargets(profileId) : relayedTargets[profileId] ?? [];

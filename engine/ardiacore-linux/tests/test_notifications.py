@@ -6,7 +6,9 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 LINUX = SOURCE / 'ardia/linux'
+DESKTOP = LINUX.parents[3] / 'ardiacore-desktop' / 'src' / 'ardia' / 'desktop'
 REPO = ROOT.parents[1]
 
 
@@ -16,7 +18,7 @@ class NotificationTests(unittest.TestCase):
         cls.directory = tempfile.TemporaryDirectory(prefix='ardia-notifications-')
         cls.binary = Path(cls.directory.name) / 'notifications-core'
         subprocess.run([os.environ.get('CXX', 'c++'), '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g',
-                        '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-I', str(SOURCE),
+                        '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE),
                         str(ROOT / 'tests/notifications_core_test.cc'), '-o', str(cls.binary)],
                        check=True, text=True, timeout=180)
 
@@ -52,7 +54,7 @@ class NotificationTests(unittest.TestCase):
         for key in ('"id"', '"title"', '"body"', '"subtitle"', '"silent"', '"dismissible"', '"tabId"', '"windowId"', '"data"'):
             self.assertIn(key, post)
         self.assertIn('std::move(done).Run(true, base::Value(std::move(id)));', post)
-        self.assertIn('kResponseEvent[] = "onNotificationResponse"', (LINUX / 'ac_linux_notifications_core.h').read_text())
+        self.assertIn('kResponseEvent[] = "onNotificationResponse"', (DESKTOP / 'ac_desktop_notifications_core.h').read_text())
 
     def test_notifications_go_through_chromiums_system_bridge_and_come_back_through_ardias_handler(self):
         glue = (LINUX / 'ac_linux_notifications.cc').read_text()
@@ -75,20 +77,22 @@ class NotificationTests(unittest.TestCase):
         self.assertIn('BackgroundInstance() ? nullptr : Service(profile)', remove)
         self.assertNotIn('getenv', glue)
         build = (LINUX / 'BUILD.gn').read_text()
-        for name in ('ac_linux_notifications.cc', 'ac_linux_notifications.h', 'ac_linux_notifications_core.cc',
-                     'ac_linux_notifications_core.h', '//chrome/browser/notifications', '//ui/message_center/public/cpp'):
+        for name in ('ac_linux_notifications.cc', 'ac_linux_notifications.h', '//ardia/desktop', '//chrome/browser/notifications',
+                     '//ui/message_center/public/cpp'):
             self.assertIn(f'"{name}"', build)
+        for name in ('ac_desktop_notifications_core.cc', 'ac_desktop_notifications_core.h'):
+            self.assertIn(f'"{name}"', (DESKTOP / 'BUILD.gn').read_text())
 
     def test_the_host_routes_the_calls_and_sends_the_response_to_the_window_that_posted(self):
         host = (LINUX / 'ac_linux_host.cc').read_text()
         self.assertIn('if (ardiacore::LinuxNotificationsInvokes(method)) {\n    return ardiacore::LinuxNotificationsInvoke(method, values, profile(), id_, std::move(done));', host)
-        self.assertIn('for (const char* capability : ardia::linux_notifications::kNotificationCapabilities) capabilities.Append(capability);', host)
+        self.assertIn('for (const char* capability : ardia::desktop_notifications::kNotificationCapabilities) capabilities.Append(capability);', host)
         self.assertIn('ardiacore::InitLinuxNotifications(base::BindRepeating(&ReportNotificationResponse));', host)
         report = host[host.index('void ReportNotificationResponse('):host.index('void BroadcastProfileLoaded(')]
         self.assertLess(report.index('posted->second->ShellLive()'), report.index('host->TakesOpenUrls()'))
         self.assertLess(report.index('if (!chosen) return;'), report.index('if (clicked) chosen->FocusWindow();'))
-        self.assertIn('chosen->Event("ArdiaApp", ardia::linux_notifications::kResponseEvent, std::move(response));', report)
-        core = (LINUX / 'ac_linux_notifications_core.h').read_text()
+        self.assertIn('chosen->Event("ArdiaApp", ardia::desktop_notifications::kResponseEvent, std::move(response));', report)
+        core = (DESKTOP / 'ac_desktop_notifications_core.h').read_text()
         fallbacks = (REPO / 'apps/linux/src/appModuleFallbacks.ts').read_text()
         for name in ('notificationPermission', 'requestNotificationPermission', 'postNotification', 'removeNotifications'):
             self.assertIn(f'"ArdiaApp.{name}"', core)

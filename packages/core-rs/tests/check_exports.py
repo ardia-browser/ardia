@@ -5,8 +5,9 @@ import subprocess
 import sys
 
 CORE = pathlib.Path(__file__).resolve().parents[1]
-LIBRARIES = [('ardia_core', 'ardia_', 15), ('ardia_update', 'ardia_update_', 5),
-             ('ardia_import', 'ardia_import_', 3)]
+LIBRARIES = [('ardia_core', ['ardia_core'], 'ardia_', 15), ('ardia_update', ['ardia_update'], 'ardia_update_', 5),
+             ('ardia_import', ['ardia_import'], 'ardia_import_', 4),
+             ('ardia_apple', ['ardia_core', 'ardia_import'], 'ardia_', 19)]
 DARWIN = platform.system() == 'Darwin'
 FORBIDDEN = re.compile(r'nonce|fixture', re.I)
 
@@ -61,15 +62,16 @@ def check(library, want, prefix):
 def main():
     problems = []
     summary = []
-    for name, prefix, count in LIBRARIES:
-        want = declared(CORE / f'include/{name}.h')
+    for name, headers, prefix, count in LIBRARIES:
+        want = sorted(set().union(*(declared(CORE / f'include/{header}.h') for header in headers)))
+        listed = ' and '.join(f'include/{header}.h' for header in headers)
         if len(want) != count:
-            print(f'include/{name}.h declares {len(want)} functions, not {count}: {want}', file=sys.stderr)
+            print(f'{listed} declare {len(want)} functions, not {count}: {want}', file=sys.stderr)
             return 1
         shared = CORE / (f'target/release/lib{name}.dylib' if DARWIN else f'target/release/lib{name}.so')
         static = CORE / f'target/release/lib{name}.a'
         problems += check(shared, want, prefix) + check(static, want, prefix)
-        summary.append(f'{shared.name} and {static.name} export exactly the {len(want)} functions of include/{name}.h')
+        summary.append(f'{shared.name} and {static.name} export exactly the {len(want)} functions of {listed}')
     for problem in problems:
         print(problem, file=sys.stderr)
     if problems:

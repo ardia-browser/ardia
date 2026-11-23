@@ -6,6 +6,7 @@ import unittest
 
 
 SOURCE = pathlib.Path(__file__).resolve().parents[1] / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 
 
 class HostPolicyTests(unittest.TestCase):
@@ -15,9 +16,9 @@ class HostPolicyTests(unittest.TestCase):
             self.skipTest('C++ compiler is unavailable')
         code = '''#include <cassert>
 #include <string>
-#include "ardia/linux/ac_linux_policy.h"
+#include "ardia/desktop/ac_desktop_policy.h"
 int main() {
-  using namespace ardia::linux_policy;
+  using namespace ardia::desktop_policy;
   assert(ValidDocumentName("bookmarks-cache.json"));
   assert(ValidDocumentName("session.json"));
   assert(!ValidDocumentName("../session.json"));
@@ -46,7 +47,7 @@ int main() {
             cpp = scratch / 'policy.cc'
             cpp.write_text(code)
             binary = scratch / 'policy'
-            subprocess.run([compiler, '-std=c++20', '-Wall', '-Werror', '-I', str(SOURCE), str(cpp), '-o', str(binary)], check=True, capture_output=True)
+            subprocess.run([compiler, '-std=c++20', '-Wall', '-Werror', '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE), str(cpp), '-o', str(binary)], check=True, capture_output=True)
             subprocess.run([str(binary)], check=True)
 
 
@@ -56,9 +57,9 @@ int main() {
             self.skipTest('C++ compiler is unavailable')
         code = r'''#include <cassert>
 #include <cerrno>
-#include "ardia/linux/ac_linux_policy.h"
+#include "ardia/desktop/ac_desktop_policy.h"
 int main() {
-  using namespace ardia::linux_policy;
+  using namespace ardia::desktop_policy;
   assert(ClassifyStoredRead(ENOENT, false) == StoredRead::kMissing);
   assert(ClassifyStoredRead(0, true) == StoredRead::kFound);
   assert(ClassifyStoredRead(0, false) == StoredRead::kFailed);
@@ -72,7 +73,7 @@ int main() {
             cpp = scratch / 'stored.cc'
             cpp.write_text(code)
             binary = scratch / 'stored'
-            subprocess.run([compiler, '-std=c++20', '-Wall', '-Werror', '-I', str(SOURCE), str(cpp), '-o', str(binary)], check=True, capture_output=True)
+            subprocess.run([compiler, '-std=c++20', '-Wall', '-Werror', '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE), str(cpp), '-o', str(binary)], check=True, capture_output=True)
             subprocess.run([str(binary)], check=True)
 
 
@@ -81,21 +82,21 @@ int main() {
         if compiler is None:
             self.skipTest('C++ compiler is unavailable')
         code = r'''#include <cassert>
-#include "ardia/linux/ac_linux_policy.h"
+#include "ardia/desktop/ac_desktop_policy.h"
 #include "ardia/linux/ac_linux_sync.h"
 int main() {
   using namespace ardia;
   constexpr size_t mib = 1024 * 1024;
-  static_assert(linux_policy::kDocumentLimit == 8 * mib);
-  assert(linux_policy::DocumentLimit(linux_policy::kSyncStateDocument) == linux_policy::kSyncStateDocumentLimit);
-  assert(linux_policy::DocumentLimit("sync-state.nns") > linux_policy::kDocumentLimit);
+  static_assert(desktop_policy::kDocumentLimit == 8 * mib);
+  assert(desktop_policy::DocumentLimit(desktop_policy::kSyncStateDocument) == desktop_policy::kSyncStateDocumentLimit);
+  assert(desktop_policy::DocumentLimit("sync-state.nns") > desktop_policy::kDocumentLimit);
   for (const char* name : {"settings.json", "sync.json", "sync-journal.nns", "sync-journal-1.nns", "sync-state.nns.bak", "live.json"})
-    assert(linux_policy::DocumentLimit(name) == linux_policy::kDocumentLimit);
+    assert(desktop_policy::DocumentLimit(name) == desktop_policy::kDocumentLimit);
   constexpr size_t plain = 4 + linux_sync::kMaxPayloadBytes;
   constexpr size_t padded = (plain + linux_sync::kFilePadding - 1) / linux_sync::kFilePadding * linux_sync::kFilePadding;
   constexpr size_t sealed = 4 + linux_sync::kNonceBytes + padded + linux_sync::kTagBytes;
-  static_assert(4 * ((sealed + 2) / 3) <= linux_policy::kSyncStateDocumentLimit);
-  static_assert(linux_policy::kSyncStateDocumentLimit <= 48 * mib);
+  static_assert(4 * ((sealed + 2) / 3) <= desktop_policy::kSyncStateDocumentLimit);
+  static_assert(desktop_policy::kSyncStateDocumentLimit <= 48 * mib);
 }
 '''
         with tempfile.TemporaryDirectory(prefix='ardia-document-limit-test-') as scratch:
@@ -103,7 +104,7 @@ int main() {
             cpp = scratch / 'limit.cc'
             cpp.write_text(code)
             binary = scratch / 'limit'
-            subprocess.run([compiler, '-std=c++20', '-Wall', '-Werror', '-I', str(SOURCE), str(cpp), '-o', str(binary)], check=True, capture_output=True)
+            subprocess.run([compiler, '-std=c++20', '-Wall', '-Werror', '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE), str(cpp), '-o', str(binary)], check=True, capture_output=True)
             subprocess.run([str(binary)], check=True)
 
 

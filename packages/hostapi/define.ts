@@ -34,3 +34,45 @@ export type Domain = EngineDomain;
 export function defineDomain<const D extends Domain>(domain: D): D {
   return domain;
 }
+
+export type ModuleBinding = "custom" | "absent";
+
+export type DesktopModuleBinding = "custom" | "host" | "absent";
+
+export type Parameter = readonly [name: string, type: string] | readonly [name: string, type: string, swift: string];
+
+export type ModuleFunction = {
+  args: readonly Parameter[];
+  result: string;
+  swiftResult?: string;
+  async: boolean;
+  promise?: true;
+  queue?: "main";
+  mac: ModuleBinding;
+  desktop: DesktopModuleBinding;
+  windows: ModuleBinding;
+};
+
+export type ModuleEvent = {
+  payload: string;
+  mac: ModuleBinding;
+  desktop: DesktopModuleBinding;
+  windows: ModuleBinding;
+};
+
+export type NativeModule = {
+  functions: Record<string, ModuleFunction>;
+  events: Record<string, ModuleEvent>;
+};
+
+export type ModuleDomain = {
+  kind: "module";
+  package: string;
+  imports: Record<string, readonly string[]>;
+  types: Record<string, string>;
+  modules: Record<string, NativeModule>;
+};
+
+export function defineModuleDomain<const D extends ModuleDomain>(domain: D): D {
+  return domain;
+}

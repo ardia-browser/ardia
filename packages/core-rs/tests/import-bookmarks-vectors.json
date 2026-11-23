@@ -1,7 +1,7 @@
 {
   "sources": {
     "rust": "packages/core-rs/crates/ardia-import-core, the answer under expect",
-    "swift": "run: packages/import/ios/Core/ChromiumBookmarks.swift (ChromiumBookmarks.load) on macOS 27.2, by tests/import-bookmarks/test_import_bookmarks.py",
+    "swift": "run: packages/import/ios/Core/ChromiumBookmarks.swift (ChromiumBookmarks.load, which calls ardia_import_chromium_bookmarks in libardia_apple and maps its tooLarge to the app's unreadable) on macOS 27.2, by tests/import-bookmarks/test_import_bookmarks.py",
     "windows": "run: packages/expo-windows/src/import/chromium.ts (chromiumBookmarks) on Node 24 with apps/browser/windows/Ardia/ImportFiles.h ReadOpened and TextOf emulated, by tests/import-bookmarks/test_import_bookmarks.py",
     "linux": "read from engine/ardiacore-linux/src/ardia/linux/ac_linux_import_readers.cc (ReadChromiumBookmarks, base::JSONReader with JSON_PARSE_RFC), not run"
   },
@@ -771,28 +771,6 @@
             }
           ]
         }
-      },
-      "platforms": {
-        "swift": {
-          "ok": {
-            "type": "folder",
-            "title": "Bookmarks",
-            "children": [
-              {
-                "type": "folder",
-                "title": "Other Bookmarks",
-                "children": [
-                  {
-                    "type": "url",
-                    "title": "Other",
-                    "url": "https://other.example/"
-                  }
-                ],
-                "role": "other"
-              }
-            ]
-          }
-        }
       }
     },
     {
@@ -1244,91 +1222,6 @@
             ]
           }
         },
-        "swift": {
-          "ok": {
-            "type": "folder",
-            "title": "Bookmarks",
-            "children": [
-              {
-                "type": "folder",
-                "title": "Bookmarks Bar",
-                "children": [
-                  {
-                    "type": "url",
-                    "title": "plain",
-                    "url": "https://0.example/",
-                    "dateAdded": 1655526400000
-                  },
-                  {
-                    "type": "url",
-                    "title": "plus sign",
-                    "url": "https://1.example/",
-                    "dateAdded": 1655526400000
-                  },
-                  {
-                    "type": "url",
-                    "title": "leading space",
-                    "url": "https://2.example/"
-                  },
-                  {
-                    "type": "url",
-                    "title": "before 1970",
-                    "url": "https://3.example/",
-                    "dateAdded": -11644473599999.996
-                  },
-                  {
-                    "type": "url",
-                    "title": "the unix epoch",
-                    "url": "https://4.example/",
-                    "dateAdded": 0
-                  },
-                  {
-                    "type": "url",
-                    "title": "negative",
-                    "url": "https://5.example/"
-                  },
-                  {
-                    "type": "url",
-                    "title": "exponent",
-                    "url": "https://6.example/"
-                  },
-                  {
-                    "type": "url",
-                    "title": "hex",
-                    "url": "https://7.example/"
-                  },
-                  {
-                    "type": "url",
-                    "title": "empty",
-                    "url": "https://8.example/"
-                  },
-                  {
-                    "type": "url",
-                    "title": "number, not string",
-                    "url": "https://9.example/"
-                  },
-                  {
-                    "type": "url",
-                    "title": "past int64",
-                    "url": "https://10.example/"
-                  },
-                  {
-                    "type": "url",
-                    "title": "odd past 2^53",
-                    "url": "https://11.example/",
-                    "dateAdded": 1655526400123.457
-                  },
-                  {
-                    "type": "url",
-                    "title": "fraction",
-                    "url": "https://12.example/"
-                  }
-                ],
-                "role": "toolbar"
-              }
-            ]
-          }
-        },
         "windows": {
           "ok": {
             "type": "folder",
@@ -1446,28 +1339,6 @@
               "role": "other"
             }
           ]
-        }
-      },
-      "platforms": {
-        "swift": {
-          "ok": {
-            "type": "folder",
-            "title": "Bookmarks",
-            "children": [
-              {
-                "type": "folder",
-                "title": "Bookmarks Bar",
-                "children": [
-                  {
-                    "type": "url",
-                    "title": "first",
-                    "url": "https://first.example/"
-                  }
-                ],
-                "role": "toolbar"
-              }
-            ]
-          }
         }
       }
     },
@@ -1634,28 +1505,6 @@
       },
       "expect": {
         "error": "unreadable"
-      },
-      "platforms": {
-        "swift": {
-          "ok": {
-            "type": "folder",
-            "title": "Bookmarks",
-            "children": [
-              {
-                "type": "folder",
-                "title": "Other Bookmarks",
-                "children": [
-                  {
-                    "type": "url",
-                    "title": "A",
-                    "url": "https://a.example/"
-                  }
-                ],
-                "role": "other"
-              }
-            ]
-          }
-        }
       }
     },
     {
@@ -2134,13 +1983,6 @@
         }
       },
       "platforms": {
-        "swift": {
-          "shape": {
-            "links": 71,
-            "folders": 71,
-            "depth": 71
-          }
-        },
         "windows": {
           "shape": {
             "links": 71,
@@ -2161,13 +2003,6 @@
         "error": "unreadable"
       },
       "platforms": {
-        "swift": {
-          "shape": {
-            "links": 121,
-            "folders": 121,
-            "depth": 121
-          }
-        },
         "windows": {
           "shape": {
             "links": 121,
@@ -2192,13 +2027,6 @@
         }
       },
       "platforms": {
-        "swift": {
-          "shape": {
-            "links": 250001,
-            "folders": 1,
-            "depth": 1
-          }
-        },
         "windows": {
           "shape": {
             "links": 250001,
@@ -2249,13 +2077,6 @@
         }
       },
       "platforms": {
-        "swift": {
-          "shape": {
-            "links": 250001,
-            "folders": 2,
-            "depth": 1
-          }
-        },
         "windows": {
           "shape": {
             "links": 250001,
@@ -2352,24 +2173,7 @@
           "error": "unreadable"
         },
         "swift": {
-          "ok": {
-            "type": "folder",
-            "title": "Bookmarks",
-            "children": [
-              {
-                "type": "folder",
-                "title": "Other Bookmarks",
-                "children": [
-                  {
-                    "type": "url",
-                    "title": "A",
-                    "url": "https://a.example/"
-                  }
-                ],
-                "role": "other"
-              }
-            ]
-          }
+          "error": "unreadable"
         }
       }
     },
@@ -2469,57 +2273,6 @@
               "role": "other"
             }
           ]
-        }
-      },
-      "platforms": {
-        "swift": {
-          "ok": {
-            "type": "folder",
-            "title": "Bookmarks",
-            "children": [
-              {
-                "type": "folder",
-                "title": "Bookmarks Bar",
-                "children": [
-                  {
-                    "type": "url",
-                    "title": "Local",
-                    "url": "https://local.example/"
-                  },
-                  {
-                    "type": "url",
-                    "title": "Acct",
-                    "url": "https://account.example/"
-                  }
-                ],
-                "role": "toolbar"
-              },
-              {
-                "type": "folder",
-                "title": "Other Bookmarks",
-                "children": [
-                  {
-                    "type": "url",
-                    "title": "O",
-                    "url": "https://o.example/"
-                  }
-                ],
-                "role": "other"
-              },
-              {
-                "type": "folder",
-                "title": "Mobile Bookmarks",
-                "children": [
-                  {
-                    "type": "url",
-                    "title": "Phone",
-                    "url": "https://phone.example/"
-                  }
-                ],
-                "role": "mobile"
-              }
-            ]
-          }
         }
       }
     }

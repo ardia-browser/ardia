@@ -73,6 +73,34 @@ export function noteHistoryImport(batches: number, failed: number, consent?: Con
   });
 }
 
+type ImportCoreRead = { format: string; backend: string; outcome: string };
+
+const coreCounts = {
+  import_core_chromium_bookmarks_rust: 0,
+  import_core_chromium_bookmarks_native: 0,
+  import_core_chromium_bookmarks_unreadable: 0,
+  import_core_chromium_bookmarks_too_large: 0,
+};
+
+export function noteImportCore(reads: readonly ImportCoreRead[] | undefined, consent?: ConsentToken | null) {
+  const chromium = (reads ?? []).filter((read) => read.format === "chromium_bookmarks" && read.outcome !== "notFound");
+  if (!chromium.length) return;
+  countFor(consentOrNow(consent), () => {
+    for (const read of chromium) {
+      if (read.backend === "rust") coreCounts.import_core_chromium_bookmarks_rust += 1;
+      else coreCounts.import_core_chromium_bookmarks_native += 1;
+      if (read.outcome === "unreadable" || read.outcome === "argument") coreCounts.import_core_chromium_bookmarks_unreadable += 1;
+      if (read.outcome === "tooLarge") coreCounts.import_core_chromium_bookmarks_too_large += 1;
+    }
+  });
+}
+
+function takeImportCoreCounts() {
+  const taken = { ...coreCounts };
+  for (const key of Object.keys(coreCounts) as (keyof typeof coreCounts)[]) coreCounts[key] = 0;
+  return taken;
+}
+
 export function takeImportRuns() {
   const taken = {
     import_runs: runs,
@@ -112,7 +140,7 @@ export function takeImportRuns() {
   searchEngineOffersTaken = 0;
   historyImportCalls = 0;
   historyImportCallsFailed = 0;
-  return { ...taken, ...takeImportExtensionCounts() };
+  return { ...taken, ...takeImportExtensionCounts(), ...takeImportCoreCounts() };
 }
 
 const extensionCounts = {

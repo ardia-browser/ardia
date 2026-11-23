@@ -7,6 +7,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 HOST = SOURCE / 'ardia/linux/ac_linux_host.cc'
 FILES = [SOURCE / 'ardia/linux' / f'ac_linux_{name}.cc' for name in ['page_lease', 'security', 'history_zoom', 'theme', 'page_status', 'page_state']]
 FIXTURE = ROOT / 'tests/fixtures/page_state.h'
@@ -357,7 +358,7 @@ class PageHostJoinTests(unittest.TestCase):
         test = directory / 'join.cc'
         test.write_text(PRELUDE + '\n'.join(methods) + TESTS)
         cls.binary = directory / 'join'
-        subprocess.run([os.environ.get('CXX', 'c++'), '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g', '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-no-pie', '-I', str(directory), '-I', str(SOURCE), '-I', str(ROOT / 'tests'), *map(str, FILES), str(test), '-o', str(cls.binary)], check=True, text=True, timeout=120)
+        subprocess.run([os.environ.get('CXX', 'c++'), '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g', '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-no-pie', '-I', str(directory), '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE), '-I', str(ROOT / 'tests'), *map(str, FILES), str(test), '-o', str(cls.binary)], check=True, text=True, timeout=120)
 
     @classmethod
     def tearDownClass(cls):

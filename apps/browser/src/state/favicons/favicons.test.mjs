@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import { mock, test } from "node:test";
+import React from "react";
 import { mount } from "../../test-hooks.mjs";
 
 globalThis.__DEV__ = false;
@@ -239,6 +240,49 @@ test("an icon drawn for a regular profile inside a private window looks up as th
     stop();
     delete globalThis.faviconsForTest;
     delete globalThis.peekFaviconsForTest;
+  }
+});
+
+test("a Favicon's private-window flag reads nothing on a tab switch and follows its window's profile", () => {
+  const S = () => useBrowser.getState();
+  S().hydrate({});
+  const internals = React.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
+  let reads = 0;
+  const countingReads = (hook) => () => {
+    const dispatcher = internals.H;
+    const original = dispatcher.useSyncExternalStore;
+    dispatcher.useSyncExternalStore = (subscribe, read, serverRead) => original(subscribe, () => (reads++, read()), serverRead);
+    try {
+      return hook();
+    } finally {
+      dispatcher.useSyncExternalStore = original;
+    }
+  };
+  const windowId = S().createWindow({ profileId: "default" });
+  const first = S().windows[windowId].tabIds[0];
+  const second = S().newTab(windowId, { url: "https://second-tab.test/" });
+  S().activate(first);
+  const row = mount(countingReads(usePrivateViewer), { contexts: [[WindowContext, windowId]] });
+  try {
+    assert.equal(row.value, undefined);
+    reads = 0;
+    const before = S().windows[windowId];
+    S().activate(second);
+    assert.notEqual(S().windows[windowId], before, "the tab switch rewrote the window record");
+    S().activate(first);
+    assert.equal(reads, 0, "a tab switch doesn't wake the flag");
+    const work = S().createProfile({ name: "Work" });
+    reads = 0;
+    S().switchProfile(windowId, work);
+    assert.equal(S().windows[windowId].profileId, work);
+    assert.equal(reads, 1, "a profile switch reads the flag again");
+    assert.equal(row.value, undefined);
+    const viewer = "incognito:flag-test@default";
+    useBrowser.setState((s) => ({ windows: { ...s.windows, [windowId]: { ...s.windows[windowId], profileId: viewer } } }));
+    assert.equal(row.value, viewer);
+  } finally {
+    row.unmount();
+    S().closeWindow(windowId);
   }
 });
 

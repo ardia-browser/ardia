@@ -3017,6 +3017,15 @@ const { actionRow, createRow, dedupeSuggestions, Output, pageSuggestion, suggest
 const DAY = 86_400_000;
 const lowerOrigin = (url        ) => url.replace(/^[a-z][a-z0-9+.-]*:\/\/[^/?#]*/i, (origin) => origin.toLowerCase());
 const withoutFragment = (url        ) => url.replace(/#.*$/, "");
+function withoutLead(listed                   , lead                   )           {
+  const rest           = [];
+  for (const x of listed) {
+    let inLead = false;
+    for (const y of lead) if (y === x) inLead = true;
+    if (!inLead) rest[rest.length] = x;
+  }
+  return rest;
+}
 
 function buildSuggestions(raw        , source                  , options                 = {})                   {
   const { limit = 8, now = Date.now(), engine = BUILT_IN_ENGINES[0] , preference = "website", remote = [], actions = [], scope, preventInline = false } = options;
@@ -3040,7 +3049,8 @@ function buildSuggestions(raw        , source                  , options        
   }
 
   const pool = poolFor(source.history, source.bookmarks ?? NO_BOOKMARKS);
-  const { tabIds, extra, renamed } = tabsOver(pool, source.tabs, options.currentTabId);
+  const tabsNow = tabsOver(pool, source.tabs, options.currentTabId);
+  const { tabIds, extra, renamed } = tabsNow;
   const currentKey = options.currentUrl ? pageKey(options.currentUrl) : null;
   const via = new Map                           ();
   const tag = (s            , as                                   )             => {
@@ -3115,12 +3125,15 @@ function buildSuggestions(raw        , source                  , options        
         age = d < 0 ? 0 : d > 30 ? 30 : d;
       }
       const base = c.logVisits - age + (c.bookmarked ? 20 : 0);
-      const tabId = c.tabId ?? tabIds.get(key);
-      if (!bound && !tabId && top.floor >= m + base - derank + 7) {
-        if (!completes) continue;
-        if (inline === null ? false : inline.s >= m + base - derank + 7) continue;
-        if (c.visits <= 0 || !c.text.shownLower.startsWith(q)) continue;
+      const upper = m + base - derank + 7;
+      const belowTop = !bound && top.floor >= upper;
+      let cannotLead                     ;
+      if (belowTop && !tabTop.takes(m, upper)) {
+        cannotLead = !completes || (inline !== null && inline.s >= upper) || c.visits <= 0 || !c.text.shownLower.startsWith(q);
+        if (cannotLead) continue;
       }
+      const tabId = c.tabId ?? (c.openIn === tabsNow.mark ? c.openTabId : undefined);
+      if (belowTop && !tabId && (cannotLead ?? (!completes || (inline !== null && inline.s >= upper) || c.visits <= 0 || !c.text.shownLower.startsWith(q)))) continue;
       const s = m + (base + (tabId ? 6 : 0)) - derank;
       let r                    ;
       if (top.floor < s || top.items.length < limit + 1) {
@@ -3193,10 +3206,10 @@ function buildSuggestions(raw        , source                  , options        
   out.push(...remoteSites.map((site)             => known(site.url) ?? tag({ kind: "page", url: site.url, title: site.title, favicon: null }, "engine_site")));
   const providerAt = out.items.length;
   out.push(...remoteRows((text) => searchUrl(engine, text), engine.name));
-  const trailing = listed.filter((x) => !lead.includes(x));
+  const trailing = withoutLead(listed, lead);
   const providerRows = options.providers?.length ? globalProviderRows(options.providers, [...out.items, ...trailing.filter((x) => x.tabId).map((x) => rowOf(x))]) : [];
-  const offered = new Set(providerRows.map((row) => pageKey(row.url)));
-  if (!options.remotePending) out.push(...trailing.filter((x) => x.tabId || !offered.has(pageKey(x.c.url))).map((x) => rowOf(x)));
+  const offered = providerRows.length ? new Set(providerRows.map((row) => pageKey(row.url))) : null;
+  if (!options.remotePending) out.push(...(offered ? trailing.filter((x) => x.tabId || !offered.has(pageKey(x.c.url))) : trailing).map((x) => rowOf(x)));
   const items = providerRows.length ? [...out.items.slice(0, providerAt), ...providerRows, ...out.items.slice(providerAt)] : out.items;
   if (guessRow && out.items.includes(guessRow)) tag(guessRow, "spaced_address");
   const shownVia = via.size ? viaOf(items, via) : undefined;
@@ -3281,6 +3294,9 @@ const { logVisits, pageText, pageTexts, tabPageText, withRootSlash } = __require
                   
                  
                    
+                    
+                     
+                        
   
 
                                                                                      
@@ -3401,15 +3417,31 @@ function exactRows                             (rows                )           
 const savedVisit = (history                       , url        )                         => exactRows(history).get(withRootSlash(url));
 const savedBookmark = (bookmarks                        , url        )                          => exactRows(bookmarks).get(withRootSlash(url));
 
-                                                                                                                                                        
+                                             
+                                                                                                                                                                               
 const tabsOverCache = new WeakMap                             ();
+let lastMarked                  = null;
+
+function marked(result          )           {
+  if (lastMarked === result.mark) return result;
+  for (const [key, tabId] of result.tabIds) {
+    const c = result.pool.byKey.get(key);
+    if (c) {
+      c.openIn = result.mark;
+      c.openTabId = tabId;
+      c.openRenamed = false;
+    }
+  }
+  lastMarked = result.mark;
+  return result;
+}
 
 function tabsOver(pool      , tabs                   , currentTabId         )           {
   const cached = tabsOverCache.get(tabs);
   if (cached && cached.pool === pool && cached.currentTabId === currentTabId && cached.rows.length === tabs.length) {
     let same = true;
     for (let i = 0; same && i < tabs.length; i++) same = cached.rows[i] === tabs[i];
-    if (same) return cached;
+    if (same) return marked(cached);
   }
   const tabIds = new Map                ();
   const renamedTabKeys = new Set        ();
@@ -3430,11 +3462,18 @@ function tabsOver(pool      , tabs                   , currentTabId         )   
   }
   const extra              = [];
   const renamed = new Set        ();
+  const mark           = {};
+  const result           = { pool, currentTabId, rows: tabs.slice(), tabIds, extra, renamed, mark };
   for (let i = 0; i < tabs.length; i++) {
     const t = tabs[i] ;
     if (!t.url || t.id === currentTabId) continue;
     const key = pageText(t).key;
     const listed = pool.byKey.get(key);
+    if (listed && (listed.openIn !== mark || (t.customTitle && !listed.openRenamed))) {
+      listed.openIn = mark;
+      listed.openTabId = t.id;
+      listed.openRenamed = !!t.customTitle;
+    }
     if (!t.customTitle) {
       if (!listed && firstOfPage[i] && (renamedTabKeys.size === 0 || !renamedTabKeys.has(key))) extra.push({ url: t.url, title: t.title, pageTitle: t.title, favicon: t.favicon, visits: 0, lastVisit: 0, logVisits: 0, fresh: true, bookmarked: false, tabId: t.id, text: tabPageText(t) });
     } else if (!listed) {
@@ -3444,8 +3483,8 @@ function tabsOver(pool      , tabs                   , currentTabId         )   
       extra.push({ url: t.url, title: t.customTitle, renamed: true, favicon: t.favicon ?? listed.favicon, visits: listed.visits, lastVisit: listed.lastVisit, logVisits: listed.logVisits, bookmarked: listed.bookmarked, tabId: t.id, text: tabPageText(t, listed.text), named: listed.named });
     }
   }
-  const result = { pool, currentTabId, rows: tabs.slice(), tabIds, extra, renamed };
   tabsOverCache.set(tabs, result);
+  lastMarked = result.mark;
   return result;
 }
 
@@ -3651,7 +3690,7 @@ class TopList {
   offer(r        ) {
     const items = this.items;
     if (items.length === this.size && items[items.length - 1] .s >= r.s) return;
-    const same = items.findIndex((x) => x.c.text.key === r.c.text.key);
+    const same = r.c.renamed ? sameKeyAt(items, r) : -1;
     if (same >= 0) {
       if (items[same] .s >= r.s) return;
       items.splice(same, 1);
@@ -3669,11 +3708,20 @@ const LEADING_ROWS = 5;
 
 const matchesAhead = (a        , b        ) => a.m > b.m || (a.m === b.m && a.s > b.s);
 
+function sameKeyAt(items                   , r        )         {
+  for (let i = 0; i < items.length; i++) if (items[i] .c.text.key === r.c.text.key) return i;
+  return -1;
+}
+
 class TabList {
            items           = [];
+  takes(m        , s        )          {
+    const last = this.items[LEADING_ROWS - 1];
+    return !last || m > last.m || (m === last.m && s > last.s);
+  }
   offer(r        ) {
     const items = this.items;
-    const same = items.findIndex((x) => x.c.text.key === r.c.text.key);
+    const same = r.c.renamed ? sameKeyAt(items, r) : -1;
     if (same >= 0) {
       if (!matchesAhead(r, items[same] )) return;
       items.splice(same, 1);
@@ -3690,12 +3738,12 @@ function leadingRows(ranked                   , tabs                   )        
   const lead           = [];
   for (const x of ranked) {
     if (lead.length >= LEADING_PAGE_ROWS) break;
-    if (!lead.some((y) => y.c.text.key === x.c.text.key)) lead.push(x);
+    if (sameKeyAt(lead, x) < 0) lead.push(x);
   }
   const bar = lead.length === LEADING_PAGE_ROWS ? lead[LEADING_PAGE_ROWS - 1] .m : 0;
   for (const t of tabs) {
     if (lead.length >= LEADING_ROWS) break;
-    if (t.m >= bar && !lead.some((x) => x.c.text.key === t.c.text.key)) lead.push(t);
+    if (t.m >= bar && sameKeyAt(lead, t) < 0) lead.push(t);
   }
   return lead;
 }

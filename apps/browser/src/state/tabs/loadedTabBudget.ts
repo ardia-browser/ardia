@@ -19,7 +19,8 @@ import { shownTabIds } from "./shownTabs";
 import { isSleeping, useLifecycle } from "./sleepingTabs";
 import { engineVeto, MINUTE, sleepRules, sleepVeto, tabsToSleep, type SleepPlan, type SleepRules, type SleepVeto, type TabSleepFacts } from "./sleepPolicy";
 import { liveOf, onLiveChange } from "./tabLive";
-import { countSwitches, forgetSwitchesExcept, switchesOf } from "./tabSwitches";
+import { countSwitch, forgetSwitchesExcept, switchesOf } from "./tabSwitches";
+import { onFrontTabChanged } from "../windows/frontTabs";
 import { heldByCli } from "./cliHolds";
 
 type LoadedTabBudget = Pick<SleepRules, "tabs" | "hiddenMs"> & Partial<SleepRules>;
@@ -247,7 +248,7 @@ export function startLoadedTabBudget(system: () => SystemState | null) {
   if (started) return;
   started = true;
   const budget = (budgetNow = () => loadedTabBudget(useBrowser.getState().settings, system()));
-  useBrowser.subscribeTo(["windows"], (s, prev) => countSwitches(prev, s));
+  onFrontTabChanged((change) => countSwitch(change));
   onLiveChange((tabId, live, prev) => {
     if (prev.playingAudio && !live.playingAudio) noteAudibleEnded(tabId);
   });

@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { callHost } from "./host.ts";
 import { BOOKMARKS_EXPORT_CALL } from "./hostBookmarksExport.ts";
-import { resolveHostModule } from "./hostModules.ts";
+import { reachesNativeHostUnchecked, resolveHostModule } from "./hostModules.ts";
 import { createNativeEvents } from "./hostEvents.ts";
 import { hostLaunchConfig } from "./hostLaunchConfig.ts";
 import { HostTab } from "./hostTab.ts";
@@ -54,6 +54,34 @@ test("every call of a schema-generated domain reaches a host that serves it unde
       assert.deepEqual(requests.at(-1), { name: `${domain}.${verb}`, profile: "default", args: '{"profile":"default"}' });
     }
   }
+});
+
+async function checkModuleFunction(module, fn, row) {
+  const name = `${module}.${fn}`;
+  const args = row.args.map((_, index) => `arg${index}`);
+  const { host, requests } = fixture();
+  const resolved = resolveHostModule(host, module, fn);
+  assert.equal(typeof resolved, "function", `${name} resolves to a function`);
+  assert.equal(reachesNativeHostUnchecked(resolved), row.desktop !== "custom", row.desktop === "custom" ? `${name} is answered by the desktop UI` : `${name} goes to the native host, which serves it only when its binding is host`);
+  const answer = resolved(...args);
+  const promised = row.desktop === "absent" || row.async;
+  assert.equal(answer instanceof Promise, promised, row.desktop === "absent" ? `${name} has no desktop implementation, so the host fallback answers it with a Promise the host settles` : `${name} answers ${row.async ? "with a Promise" : "synchronously"}, as the schema's async says`);
+  await answer;
+  assert.deepEqual(requests, row.desktop === "custom" ? [] : [{ method: name, args: { args } }], row.desktop === "custom" ? `${name} never reaches the host` : `${name} reaches the host with its positional arguments`);
+}
+
+test("every function of a schema module domain is answered by the desktop UI when its desktop binding is custom, and otherwise reaches the native host with its positional arguments, as a Promise exactly when it is async or left to the host", async () => {
+  const manifest = JSON.parse(readFileSync(new URL("../../../packages/ardiacore/src/engine/generated/manifest.json", import.meta.url), "utf8"));
+  const functions = Object.values(manifest.modules).flatMap((domain) => Object.entries(domain.modules).flatMap(([module, entry]) => Object.entries(entry.functions).map(([fn, row]) => ({ module, fn, row }))));
+  assert.ok(functions.some(({ module, fn }) => module === "ArdiaWindowBackdrop" && fn === "holdKeyLook"), "the scan found the shaders pilot");
+  for (const { module, fn, row } of functions) await checkModuleFunction(module, fn, row);
+});
+
+test("a Mac-only synchronous module function, which the desktop leaves to the host, passes as the host fallback's Promise, and a desktop answer of the wrong shape fails", async () => {
+  await checkModuleFunction("ArdiaDemoOnMac", "size", { args: [], async: false, mac: "custom", desktop: "absent", windows: "absent" });
+  await checkModuleFunction("ArdiaDemoOnMac", "measure", { args: ["dir"], async: true, mac: "custom", desktop: "absent", windows: "absent" });
+  await assert.rejects(checkModuleFunction("ArdiaWindowBackdrop", "holdKeyLook", { args: ["on"], async: false, mac: "custom", desktop: "custom", windows: "absent" }), /answers synchronously/);
+  await assert.rejects(checkModuleFunction("ArdiaWindowBackdrop", "holdKeyLook", { args: ["on"], async: true, mac: "custom", desktop: "absent", windows: "absent" }), /goes to the native host/);
 });
 
 test("engine errors and bad replies reject with stable codes, profiles never retry", async () => {

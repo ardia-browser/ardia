@@ -2,9 +2,9 @@
 #include <iostream>
 #include <string>
 
-#include "ardia/linux/ac_linux_sync_crypto.h"
 #include "ardia/linux/ac_linux_sync.h"
 #include "ardia/linux/ac_linux_sync_json.h"
+#include "ardia/linux/ac_linux_sync_keys.h"
 #include "ardia/linux/ac_linux_sync_keystore.h"
 #include "ardia/linux/ac_linux_sync_vault.h"
 

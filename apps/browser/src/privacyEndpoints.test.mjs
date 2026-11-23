@@ -26,6 +26,7 @@ const SCANNED = [
   "packages/shell",
   "packages/sync",
   "engine/ardiacore/src",
+  "engine/ardiacore-desktop/src",
   "engine/ardiacore-linux/src",
   "engine/chromium/src",
   "engine/patches",

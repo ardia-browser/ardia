@@ -8,7 +8,9 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 LINUX = SOURCE / 'ardia' / 'linux'
+DESKTOP = LINUX.parents[3] / 'ardiacore-desktop' / 'src' / 'ardia' / 'desktop'
 
 
 class TelemetryPolicyTests(unittest.TestCase):
@@ -18,9 +20,9 @@ class TelemetryPolicyTests(unittest.TestCase):
             self.skipTest('C++ compiler is unavailable')
         code = r'''#include <cassert>
 #include <string>
-#include "ardia/linux/ac_linux_telemetry_policy.h"
+#include "ardia/desktop/ac_desktop_telemetry_policy.h"
 int main() {
-  using namespace ardia::linux_telemetry_policy;
+  using namespace ardia::desktop_telemetry_policy;
   assert(kEndpoint == "https://ardia.dev/otel/v1/logs");
   assert(IngestKeyAcceptable("ak_app_41b5d0762fd8ade6949ac2ac"));
   assert(IngestKeyAcceptable("ak_cli_0123456789abcdef01234567"));
@@ -74,7 +76,7 @@ int main() {
             cpp = scratch / 'telemetry.cc'
             cpp.write_text(code, encoding='latin-1')
             binary = scratch / 'telemetry'
-            compiled = subprocess.run([compiler, '-std=c++20', '-Wall', '-Werror', '-I', str(SOURCE), str(cpp), '-o', str(binary)], capture_output=True, text=True)
+            compiled = subprocess.run([compiler, '-std=c++20', '-Wall', '-Werror', '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE), str(cpp), '-o', str(binary)], capture_output=True, text=True)
             if compiled.returncode != 0:
                 raise AssertionError(compiled.stderr)
             subprocess.run([str(binary)], check=True)
@@ -99,8 +101,8 @@ int main() {
         self.assertIn('PostAcceptable(values[0].GetString(), values[1].GetString())', route)
         self.assertIn('values.size() != 2', route)
         self.assertRegex(host, re.compile(r'bool IsolatedInstance\(\) \{\n.*switches::kUserDataDir.*\n.*"ARDIA_DATA_DIR"', re.M))
-        build = (LINUX / 'BUILD.gn').read_text()
-        for name in ['"ac_linux_telemetry.cc"', '"ac_linux_telemetry.h"', '"ac_linux_telemetry_policy.h"', '"//chrome/browser/net"']:
+        build = (LINUX / 'BUILD.gn').read_text() + (DESKTOP / 'BUILD.gn').read_text()
+        for name in ['"ac_linux_telemetry.cc"', '"ac_linux_telemetry.h"', '"ac_desktop_telemetry_policy.h"', '"//chrome/browser/net"']:
             self.assertIn(name, build)
 
 

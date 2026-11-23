@@ -214,7 +214,6 @@ fn the_wordlist_matches_every_platform_copy() {
     for copy in [
         "packages/sync/ios/Core/Wordlist.swift",
         "packages/phone/android/src/main/java/com/ardia/sync/core/Wordlist.kt",
-        "engine/ardiacore-linux/src/ardia/linux/ac_linux_sync_wordlist.cc",
         "apps/browser/windows/Ardia/SyncWordlist.h",
     ] {
         let source = fs::read_to_string(repo().join(copy)).unwrap();

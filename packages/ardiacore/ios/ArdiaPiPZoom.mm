@@ -42,6 +42,9 @@ using namespace ardia_pip;
   double _standInWidth;
   CGFloat _hiddenAlpha;
   std::vector<double> _appliedAt;
+  BOOL _pinchUnfocused;
+  BOOL _pinchFromOtherApp;
+  NSInteger _pinchSession;
 }
 
 static CALayer *LayerHostIn(CALayer *layer) {
@@ -79,59 +82,6 @@ static CALayer *CopyGeometry(CALayer *source) {
   return zoom;
 }
 
-static __weak NSWindow *gZoomGesture;
-
-+ (BOOL)handle:(NSEvent *)event {
-  BOOL handled = [self route:event];
-  static BOOL trace = [ArdiaLaunchConfig.shared traced:@"pipZoom"];
-  if (trace)
-    NSLog(@"[pip-zoom] type %lu window %ld (%@) cmd %d phase %lu/%lu dy %.2f precise %d mag %.3f -> %@ %@", (unsigned long)event.type,
-          (long)event.windowNumber, event.window.className, (event.modifierFlags & NSEventModifierFlagCommand) != 0,
-          (unsigned long)(event.type == NSEventTypeScrollWheel ? event.phase : 0),
-          (unsigned long)(event.type == NSEventTypeScrollWheel ? event.momentumPhase : 0),
-          event.type == NSEventTypeScrollWheel ? event.scrollingDeltaY : 0,
-          event.type == NSEventTypeScrollWheel ? event.hasPreciseScrollingDeltas : 0,
-          event.type == NSEventTypeMagnify ? event.magnification : 0, handled ? @"zoomed" : @"passed",
-          NSStringFromRect(event.window.frame));
-  return handled;
-}
-
-+ (NSWindow *)windowFor:(NSEvent *)event {
-  if (event.window) return event.window;
-  NSPoint point = event.locationInWindow;
-  for (NSWindow *window in NSApp.orderedWindows)
-    if (NSPointInRect(point, window.frame) && [self zooms:window]) return window;
-  return nil;
-}
-
-+ (BOOL)route:(NSEvent *)event {
-  NSWindow *window = [self windowFor:event];
-  BOOL command = (event.modifierFlags & NSEventModifierFlagCommand) != 0;
-  BOOL scroll = event.type == NSEventTypeScrollWheel;
-  if (scroll) {
-    NSEventPhase phase = event.phase, momentum = event.momentumPhase;
-    BOOL wheel = phase == NSEventPhaseNone && momentum == NSEventPhaseNone;
-    if (wheel || (phase & (NSEventPhaseBegan | NSEventPhaseMayBegin))) gZoomGesture = nil;
-    if (gZoomGesture) window = gZoomGesture;
-    if (!window || (!command && gZoomGesture != window)) return NO;
-    if (![self zooms:window] || ![self enabled]) return NO;
-    if (!wheel) gZoomGesture = window;
-    if (momentum & (NSEventPhaseEnded | NSEventPhaseCancelled)) gZoomGesture = nil;
-    double dy = event.scrollingDeltaY;
-    if (dy == 0) return YES;
-    [[self forWindow:window] zoomBy:ardia_pip_zoom::ScrollFactor(dy, event.hasPreciseScrollingDeltas)
-                                 at:[self screenPoint:event]
-                               ease:!event.hasPreciseScrollingDeltas];
-    return YES;
-  }
-  if (!window || ![self zooms:window] || ![self enabled]) return NO;
-  ArdiaPiPZoom *zoom = [self forWindow:window];
-  if (event.phase & NSEventPhaseBegan) [zoom pinchBegan];
-  [zoom pinchBy:ardia_pip_zoom::MagnifyFactor(event.magnification) at:[self screenPoint:event]];
-  if (event.phase & (NSEventPhaseEnded | NSEventPhaseCancelled)) [zoom pinchEnded];
-  return YES;
-}
-
 + (void)devPinch:(NSWindow *)window args:(NSArray<NSString *> *)args {
   if (args.count != 3 || ![self zooms:window]) return;
   const double total = args[0].doubleValue;
@@ -143,6 +93,8 @@ static __weak NSWindow *gZoomGesture;
   const double factor = std::pow(total, 1.0 / steps);
   __block int left = steps;
   [zoom pinchBegan];
+  zoom->_pinchUnfocused = NO;
+  zoom->_pinchFromOtherApp = NO;
   [NSTimer scheduledTimerWithTimeInterval:1.0 / hz repeats:YES block:^(NSTimer *timer) {
     if (!window.visible) return [timer invalidate];
     if (left-- <= 0) {
@@ -188,10 +140,13 @@ static __weak ArdiaPiPZoom *gEdgeResizing;
   const NSInteger direction = [window _resizeDirectionForMouseLocation:event.locationInWindow];
   if (direction < 0 || direction > 7) return NO;
   ArdiaPiPZoom *zoom = [self forWindow:window];
+  [self finishPendingPinch];
   [zoom pinchBegan];
   if (!zoom->_standIn) return NO;
   zoom->_follow = 0;
   zoom->_standInPinch = NO;
+  zoom->_pinchUnfocused = NO;
+  zoom->_pinchFromOtherApp = NO;
   zoom->_resizeStart = zoom->_pinchTarget;
   zoom->_resizeFrom = PointerOf(event);
   zoom->_resizeDirection = direction;
@@ -214,6 +169,10 @@ static __weak ArdiaPiPZoom *gEdgeResizing;
     [zoom pinchEnded];
   }
   return YES;
+}
+
++ (BOOL)edgeResizing {
+  return gEdgeResizing != nil;
 }
 
 - (void)edgeResizeTo:(NSPoint)pointer {
@@ -239,6 +198,7 @@ static __weak ArdiaPiPZoom *gEdgeResizing;
 }
 
 - (void)pinchBegan {
+  _pinchSession++;
   _follow = ardia_pip_zoom::kPinchFollow;
   [_ease invalidate], _ease = nil, _target = 0;
   if (_standIn && _handingOff) {
@@ -351,7 +311,8 @@ static __weak ArdiaPiPZoom *gEdgeResizing;
 
 - (void)tick:(CADisplayLink *)link {
   NSWindow *window = _window;
-  if (!window || !window.visible) return [self cancelStandIn];
+  if (!ardia_pip_zoom::KeepsStandIn(window != nil, window.visible, [ArdiaPiPController forWindow:window].stashedEdge != ArdiaPiPEdgeNone))
+    return [self cancelStandIn];
   const CFTimeInterval now = link.timestamp;
   const double dt = _tickedAt > 0 ? MIN(now - _tickedAt, 0.05) : 1.0 / 120;
   _tickedAt = now;
@@ -411,7 +372,12 @@ static __weak ArdiaPiPZoom *gEdgeResizing;
   _standInStamp = nil;
   if (!stamp) return;
   [[ArdiaPiPController forWindow:_window].view emit:@"pictureInPictureStandIn"
-                                            payload:[stamp onto:@{@"pinch" : @(_standInPinch), @"timedOut" : @(timedOut)}]];
+                                            payload:[stamp onto:@{
+                                              @"pinch" : @(_standInPinch),
+                                              @"timedOut" : @(timedOut),
+                                              @"unfocused" : @(_standInPinch && _pinchUnfocused),
+                                              @"fromOtherApp" : @(_standInPinch && _pinchFromOtherApp),
+                                            }]];
 }
 
 - (void)cancelStandIn {
@@ -443,8 +409,21 @@ static __weak ArdiaPiPZoom *gEdgeResizing;
   _host = nil;
 }
 
-+ (NSPoint)screenPoint:(NSEvent *)event {
-  return event.window ? [event.window convertPointToScreen:event.locationInWindow] : event.locationInWindow;
+- (NSRect)shownFrame {
+  return _standIn ? _shown : _window.frame;
+}
+
+- (NSInteger)pinchSession {
+  return _pinchSession;
+}
+
+- (NSInteger)standInNumber {
+  return _standIn ? _standIn.windowNumber : 0;
+}
+
+- (void)notePinchUnfocused:(BOOL)unfocused fromOtherApp:(BOOL)fromOtherApp {
+  _pinchUnfocused = unfocused;
+  _pinchFromOtherApp = fromOtherApp;
 }
 
 + (BOOL)enabled {

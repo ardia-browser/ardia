@@ -18,10 +18,10 @@
 #include <tuple>
 #include <vector>
 
-#include "ardia/linux/ac_linux_policy.h"
+#include "ardia/desktop/ac_desktop_policy.h"
 #include "ardia/linux/ac_linux_sync.h"
-#include "ardia/linux/ac_linux_sync_crypto.h"
 #include "ardia/linux/ac_linux_sync_json.h"
+#include "ardia/linux/ac_linux_sync_keys.h"
 #include "ardia/linux/ac_linux_sync_keystore.h"
 #include "ardia/linux/ac_linux_sync_vault.h"
 
@@ -53,10 +53,6 @@ int failures = 0;
       ++failures;                                                           \
     }                                                                       \
   } while (false)
-
-std::string Hex(const uint8_t* data, size_t size) {
-  return HexEncode(Bytes(data, data + size));
-}
 
 std::string ReadText(const std::string& path) {
   std::ifstream in(path, std::ios::binary);
@@ -106,11 +102,11 @@ class FailingStore final : public KeyStore {
   bool WritesWithoutPrompt() override { return false; }
 };
 
-void Wordlist() {
-  std::string joined;
-  for (size_t i = 0; i < kWordCount; ++i) joined += std::string(kWordlist[i]) + "\n";
-  const auto digest = Sha256(reinterpret_cast<const uint8_t*>(joined.data()), joined.size());
-  CHECK(Hex(digest.data(), digest.size()) == "2f5eed53a4727b4bf8880d8f3f199efc90e58503646d9ff8eff3a2ed3b24dbda");
+std::unique_ptr<SyncKeys> Keys(const Bytes& entropy) {
+  auto keys = SyncKeys::Make(entropy);
+  CHECK(keys != nullptr);
+  if (!keys) std::exit(1);
+  return keys;
 }
 
 void PhraseVectors() {
@@ -152,7 +148,13 @@ void PhraseVectors() {
   auto bad = EntropyFromPhrase(unknown, &entropy);
   CHECK(bad.kind == PhraseProblem::Kind::kUnknownWord && bad.word == "notaword");
   auto prefix_too_long = EntropyFromPhrase("abandons" + vectors[0].second.substr(7), &entropy);
-  CHECK(prefix_too_long.kind == PhraseProblem::Kind::kUnknownWord);
+  CHECK(prefix_too_long.kind == PhraseProblem::Kind::kUnknownWord && prefix_too_long.word == "abandons");
+  std::string last_unknown = vectors[0].second;
+  last_unknown.replace(last_unknown.rfind(' ') + 1, std::string::npos, "abandonment");
+  auto overlong = EntropyFromPhrase(last_unknown, &entropy);
+  CHECK(overlong.kind == PhraseProblem::Kind::kUnknownWord && overlong.word == "abandonment");
+  auto short_word = EntropyFromPhrase("aba" + vectors[0].second.substr(7), &entropy);
+  CHECK(short_word.kind == PhraseProblem::Kind::kUnknownWord && short_word.word == "aba");
   std::string swapped = vectors[1].second;
   swapped.replace(0, 12, "winner legal");
   CHECK(EntropyFromPhrase(swapped, &entropy).kind == PhraseProblem::Kind::kChecksum);
@@ -161,7 +163,8 @@ void PhraseVectors() {
 }
 
 void MacVectors(const std::string& sealed_fixture) {
-  const SyncKeys keys(Bytes(kEntropyBytes, 0));
+  const auto made = Keys(Bytes(kEntropyBytes, 0));
+  const SyncKeys& keys = *made;
   CHECK(keys.chain_tag() == "gbcx4r55mk3rlaegbggknyx4ta");
   CHECK(keys.ScopeTag("app") == "nr4ncp5iyqzqgjn6ol4zksqtne");
   auto sealed = Base64Decode(Trim(ReadText(sealed_fixture)));
@@ -175,8 +178,11 @@ void MacVectors(const std::string& sealed_fixture) {
 
 void SealAndTamper() {
   auto entropy = NewEntropy();
-  CHECK(entropy.has_value());
-  const SyncKeys keys(*entropy);
+  CHECK(entropy.has_value() && entropy->size() == kEntropyBytes);
+  CHECK(!SyncKeys::Make(Bytes(kEntropyBytes - 1, 1)) && !SyncKeys::Make(Bytes(kEntropyBytes + 1, 1)));
+  CHECK(PhraseWords(Bytes(kEntropyBytes - 1, 1)).empty());
+  const auto made = Keys(*entropy);
+  const SyncKeys& keys = *made;
   for (size_t size : {0u, 1019u, 1020u, 1021u, 5000u}) {
     const Bytes payload(size, 'x');
     auto sealed = keys.Seal(payload, "s", "f");
@@ -197,9 +203,13 @@ void SealAndTamper() {
         OpenError::kNone);
   CHECK(keys.Open(Bytes(sealed.begin(), sealed.begin() + 10), "s", "f", &out) == OpenError::kFormat);
   CHECK(keys.Open(Bytes(), "s", "f", &out) == OpenError::kFormat);
+  CHECK(keys.Open(sealed, "s", "\xff", &out) == OpenError::kOther);
+  CHECK(keys.ScopeTag("\xff").empty() && IsTag(keys.ScopeTag(std::string(512, 's'))));
+  CHECK(OpenFailureCode(OpenError::kTooLarge) == "too_large" && OpenFailureCode(OpenError::kNone).empty());
   CHECK(keys.Open(sealed, "s", "g", &out) == OpenError::kAuthentication);
   CHECK(keys.Open(sealed, "t", "f", &out) == OpenError::kAuthentication);
-  const SyncKeys other(*NewEntropy());
+  const auto other_made = Keys(*NewEntropy());
+  const SyncKeys& other = *other_made;
   CHECK(other.Open(sealed, "s", "f", &out) == OpenError::kAuthentication);
   CHECK(other.chain_tag() != keys.chain_tag());
 
@@ -254,6 +264,7 @@ void Core(const std::string& scratch) {
   CHECK(core.Dispatch("ArdiaSync.savePassword", {S("default"), S("https://a.example"), S("u"), S("s"), JsonValue::Bool(false)}, now).code ==
         "ERR_UNKNOWN_CALL");
   CHECK(core.Dispatch("ArdiaSync.status", {}, now).value.Find("passwords")->flag);
+  CHECK(core.Dispatch("ArdiaSync.core", {}, now).value.text == "rust");
   CHECK(core.Dispatch("ArdiaSync.nope", {}, now).code == "ERR_UNKNOWN_CALL");
 
   const std::string device = NewFileId();
@@ -278,8 +289,32 @@ void Core(const std::string& scratch) {
   CHECK(core.Dispatch("ArdiaSync.openLocal", {S(sealed.value.text)}, now).value.text == "{\"scopes\":{}}");
   std::string tampered = sealed.value.text;
   tampered[10] = tampered[10] == 'A' ? 'B' : 'A';
-  CHECK(core.Dispatch("ArdiaSync.openLocal", {S(tampered)}, now).value.type == JsonValue::Type::kNull);
+  auto tampered_open = core.Dispatch("ArdiaSync.openLocal", {S(tampered)}, now);
+  CHECK(tampered_open.ok && tampered_open.value.is_object() && tampered_open.value.Find("openFailure") &&
+        tampered_open.value.Find("openFailure")->text == "authentication");
   CHECK(!core.unreadable());
+  const auto failure_count = [](const Outcome& read, std::string_view code) {
+    const JsonValue* counts = read.ok ? read.value.Find("openFailures") : nullptr;
+    const JsonValue* value = counts ? counts->Find(code) : nullptr;
+    return value ? value->text : std::string("missing");
+  };
+  CHECK(!read.value.Find("openFailures"));
+  Bytes core_entropy;
+  CHECK(EntropyFromPhrase(phrase, &core_entropy).kind == PhraseProblem::Kind::kNone);
+  const auto core_keys = Keys(core_entropy);
+  const std::string scope_folder = folder + "/" + core_keys->chain_tag() + "/" + core_keys->ScopeTag("app") + "/";
+  const std::string damaged_id(kTagLength, 'd');
+  const std::string huge_id(kTagLength, 'h');
+  WriteText(scope_folder + damaged_id + ".nns", "not a sync file");
+  const int huge = open((scope_folder + huge_id + ".nns").c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0600);
+  CHECK(huge >= 0 && ftruncate(huge, static_cast<off_t>(kMaxSyncFileBytes) + 1) == 0 && close(huge) == 0);
+  auto with_damage = core.Dispatch("ArdiaSync.read", {S(folder), S("app"), JsonValue::Array({S(written.value.text)})}, now);
+  CHECK(with_damage.ok && with_damage.value.Find("damaged")->items.size() == 2);
+  CHECK(failure_count(with_damage, "format") == "1" && failure_count(with_damage, "too_large") == "1" &&
+        failure_count(with_damage, "authentication") == "0" && failure_count(with_damage, "other") == "0");
+  core.Dispatch("ArdiaSync.remove", {S(folder), S("app"), JsonValue::Array({S(damaged_id), S(huge_id)})}, now);
+  auto healed = core.Dispatch("ArdiaSync.read", {S(folder), S("app"), JsonValue::Array({S(written.value.text)})}, now);
+  CHECK(healed.value.Find("damaged")->items.empty() && failure_count(healed, "format") == "missing");
 
   SyncCore joiner(MakeFileKeyStore(scratch + "/joiner-keys"), {folder, "Joiner"});
   const std::string joining = NewFileId();
@@ -385,7 +420,8 @@ void CrossFormat(const std::string& reference, const std::string& out) {
   if (!parsed) return;
   Bytes entropy;
   CHECK(HexDecode(parsed->Find("entropy")->text, &entropy));
-  const SyncKeys keys(entropy);
+  const auto made = Keys(entropy);
+  const SyncKeys& keys = *made;
   CHECK(keys.chain_tag() == parsed->Find("chain")->text);
   CHECK(keys.ScopeTag("app") == parsed->Find("appScope")->text);
   CHECK(Join(PhraseWords(entropy)) == parsed->Find("phrase")->text);
@@ -397,10 +433,10 @@ void CrossFormat(const std::string& reference, const std::string& out) {
     Bytes opened;
     CHECK(keys.Open(Text(data), keys.ScopeTag(scope), id, &opened) == OpenError::kNone);
     CHECK(AsText(opened) == file.Find("payload")->text);
-    Bytes nonce;
-    CHECK(HexDecode(file.Find("nonce")->text, &nonce));
-    auto resealed = keys.SealWithNonce(opened, keys.ScopeTag(scope), id, nonce.data());
-    CHECK(resealed && AsText(*resealed) == data);
+    auto resealed = keys.Seal(opened, keys.ScopeTag(scope), id);
+    Bytes reopened;
+    CHECK(resealed && resealed->size() == data.size() && AsText(*resealed) != data);
+    CHECK(resealed && keys.Open(*resealed, keys.ScopeTag(scope), id, &reopened) == OpenError::kNone && reopened == opened);
   }
   for (const auto& login : parsed->Find("passwords")->items) {
     std::string password;
@@ -434,7 +470,6 @@ void CrossFormat(const std::string& reference, const std::string& out) {
 int main(int argc, char** argv) {
   if (argc >= 3) {
     const std::string scratch = argv[1];
-    Wordlist();
     PhraseVectors();
     MacVectors(argv[2]);
     SealAndTamper();

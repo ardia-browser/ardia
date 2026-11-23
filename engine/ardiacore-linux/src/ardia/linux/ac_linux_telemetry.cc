@@ -5,7 +5,7 @@
 #include <string>
 #include <utility>
 
-#include "ardia/linux/ac_linux_telemetry_policy.h"
+#include "ardia/desktop/ac_desktop_telemetry_policy.h"
 #include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
@@ -28,7 +28,7 @@
 namespace ardia::linux_telemetry {
 namespace {
 
-namespace policy = ardia::linux_telemetry_policy;
+namespace policy = ardia::desktop_telemetry_policy;
 
 constexpr net::NetworkTrafficAnnotationTag kTrafficAnnotation =
     net::DefineNetworkTrafficAnnotation("ardia_linux_usage_telemetry", R"(

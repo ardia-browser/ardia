@@ -3,9 +3,9 @@
 #include <string>
 #include <vector>
 
-#include "ardia/linux/ac_linux_notifications_core.cc"
+#include "ardia/desktop/ac_desktop_notifications_core.cc"
 
-namespace notifications = ardia::linux_notifications;
+namespace notifications = ardia::desktop_notifications;
 
 namespace {
 

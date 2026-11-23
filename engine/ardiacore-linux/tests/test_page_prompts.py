@@ -68,7 +68,7 @@ class PagePromptPolicyTest(unittest.TestCase):
             source.write_text(POLICY_TEST)
             binary = pathlib.Path(scratch) / 'policy'
             subprocess.run([compiler, '-std=c++20', '-Wall', '-Werror', '-fsanitize=address,undefined',
-                            '-I', str(ROOT / 'src'), str(source), '-o', str(binary)], check=True)
+                            '-I', str(ROOT / 'src'), '-I', str(ROOT.parent / 'ardiacore-desktop' / 'src'), str(source), '-o', str(binary)], check=True)
             subprocess.run([str(binary)], check=True)
 
 

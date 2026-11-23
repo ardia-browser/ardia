@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "ardia/core/ac_launch_switches.h"
-#include "ardia/linux/ac_linux_report_core.h"
+#include "ardia/desktop/ac_desktop_report_core.h"
 #include "base/compiler_specific.h"
 #include "base/containers/span.h"
 #include "base/files/file.h"
@@ -37,7 +37,7 @@ namespace ardiacore {
 
 namespace {
 
-namespace report = ardia::linux_report;
+namespace report = ardia::desktop_report;
 
 using Done = base::OnceCallback<void(bool, base::Value)>;
 

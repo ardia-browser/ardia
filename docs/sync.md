@@ -362,7 +362,18 @@ It covers profiles that share another's data (tabs are each profile's own).
   doubles. The check needs no memory of the window closing, so closing and reopening between two syncs works too. Quitting and relaunching with the
   session restored publishes nothing (tab ids survive a relaunch; tested).
 - **Pins.** A tab pinned on one Mac deletes its `otab:t:` record and goes out as `pin:t:` under the same key; the pin
-  adapter, which runs first, pins the other Mac's regular tab, so it isn't doubled. Unpinning gives it back.
+  adapter, which runs first, pins the other Mac's regular tab, so it isn't doubled. Unpinning gives it back. A pin's
+  page counts as looked at when the pin adapter writes it: `applyPinned` compares the profile's tabs and parked pins
+  before and after it applies, and hands every page it set (a pin another Mac brings back, a sleeping copy a `pin:t:`
+  record moved, and the copies the mirror moves with it) to `openTabsPinPageWrites`, which keeps them in the open-tabs
+  memory of that scope (weakly keyed by the scope, so a deleted scope takes them along). A loaded pin whose page the
+  record left alone gets nothing. Pages are taken only while the profile syncs all open tabs and no newer `otab:on`
+  says it went off, and every hand-over and extraction drops pages for keys no tab or parked pin holds and pages no copy
+  or parked pin still shows. On unpin, a copy whose page is the one looked at, or one the pin adapter set, keeps the
+  other Mac's newer record; any other page is a navigation made here and is sent. A pin this Mac hasn't seen as an open
+  tab or had a page set on by the pin adapter since launch has no page looked at, so it keeps the newer record unless
+  the record is gone. The remembered page of a key goes once no tab or parked pin has it and its record is
+  deleted or compacted away, also while the profile has no window (tested).
 - **Turning it off.** The Mac where the switch went off tombstones every `otab:` record of the profile and writes
   `otab:on` `{ on: false }` in the same batch (and keeps tombstoning stragglers while it stays off, `tabsRetire` on the
   profile's link; it stops as soon as a newer `otab:on` `{ on: true }` shows the switch went back on elsewhere, even
@@ -593,7 +604,7 @@ bookmark, settings, profile or group edit, and on Sync Now. A cycle:
     - `companion/companion.test.ts`: the iPhone's adapters and cycle.
   - `apps/phone/scripts/bundle-shared.mjs --check`: the iPhone's bundle of this code is up to date.
   - `scripts/legacy-migration-e2e.mjs`: the migration tool run end to end on a scratch install.
-- Rust core (`packages/core-rs`; the Mac app and the iPhone link it, Linux and Windows still have their own C++):
+- Rust core (`packages/core-rs`; the Mac app, the iPhone and Linux link it, Windows still has its own C++):
   `packages/core-rs/scripts/build-xcframework.sh` builds `ArdiaCoreRS.xcframework` (Mac, iPhone, simulator; release,
   `panic = abort`, RustCrypto) into `packages/sync/ios/Frameworks`, untracked. The `ArdiaSync` podspec runs it at
   `pod install` and vendors it, `packages/sync/Package.swift` takes it as a `binaryTarget` (so `swift test`, `ArdiaKit`
@@ -606,7 +617,7 @@ bookmark, settings, profile or group edit, and on Sync Now. A cycle:
   random-nonce sets, both `windows-interop` vaults and `sealed-0.2.32.b64`, and checks every platform's wordlist copy.
   `tests/phrase-cases.json` and `tests/password-read-cases.json` freeze how each platform reads unusual phrases and
   sealed passwords today (Rust follows Swift, including Foundation's lenient base64 and its dropped leading U+FEFF);
-  `tests/linux-sync/test_linux_sync.py` runs the Linux C++ against the same vectors and cases. The Rust workflow (`.github/workflows/rust.yml`) runs all of it on
+  `tests/linux-sync/test_linux_sync.py` runs Linux's `ac_linux_sync_keys.cc`, linked to the core, against the same vectors and cases. The Rust workflow (`.github/workflows/rust.yml`) runs all of it on
   macOS, Linux and Windows.
 - `pnpm --filter @ardia/browser test` runs `src/state/sync/adapters.test.mjs` (4 tests against the real
   store: delete versus add, concurrent moves that would make a cycle, parked pinned tabs, passwords

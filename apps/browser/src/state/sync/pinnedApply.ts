@@ -1,5 +1,5 @@
 import type { ApplyRecords } from "../../platform/sync";
-import { useBrowser } from "../browser/store";
+import { useBrowser, type BrowserState } from "../browser/store";
 import { depthsIn, leaveGroups, orderSections, syncGroupOrder, withParent } from "../groups/groups";
 import { makeTab, newId, pinKeyOf, ROW_PIN } from "../browser/model";
 import { noteRemotePinDeletion } from "../pins/tabCleanup";
@@ -29,7 +29,29 @@ import {
 import { homeWindow, store, type Window } from "./pinnedSyncState";
 import { ASLEEP, hasPage, isAsleep } from "../tabs/pageSession";
 
-export function applyPinned(profileId: string, visible: Map<string, unknown>, changed: Set<string>, base: (key: string) => unknown, records: ApplyRecords): boolean | void {
+export type PinPageWrites = (written: Map<string, Set<string>>) => void;
+
+function pagesWritten(profileId: string, prev: BrowserState, next: BrowserState): Map<string, Set<string>> {
+  const written = new Map<string, Set<string>>();
+  const add = (key: string, url: string) => {
+    const urls = written.get(key);
+    if (urls) urls.add(url);
+    else written.set(key, new Set([url]));
+  };
+  for (const t of Object.values(next.tabs)) if (t.profileId === profileId && prev.tabs[t.id]?.url !== t.url) add(pinKeyOf(t), t.url);
+  const parkedBefore = new Map((prev.parkedPins[profileId]?.tabs ?? []).map((p) => [p.id, p.url]));
+  for (const p of next.parkedPins[profileId]?.tabs ?? []) if (parkedBefore.get(p.id) !== p.url) add(p.id, p.url);
+  return written;
+}
+
+export function applyPinned(
+  profileId: string,
+  visible: Map<string, unknown>,
+  changed: Set<string>,
+  base: (key: string) => unknown,
+  records: ApplyRecords,
+  pageWrites?: PinPageWrites,
+): boolean | void {
   if ([...changed].every((k) => k.startsWith(PIN_ROW))) return true;
   const pinItem = (k: string) => k.startsWith(PIN_TAB) || k.startsWith(PIN_GROUP) || k.startsWith(`${PIN_NEST}g:`);
   if ([...changed].some((k) => pinItem(k) && !visible.has(k))) noteRemotePinDeletion(profileId);
@@ -324,5 +346,7 @@ export function applyPinned(profileId: string, visible: Map<string, unknown>, ch
   }
   const { find, splits, selection, windowOrder, windowUi } = s;
   const pinSync = noted.size ? { ...s.pinSync, [profileId]: { ...s.pinSync[profileId], ...Object.fromEntries(noted) } } : s.pinSync;
+  const prev = useBrowser.getState();
   fromSync(() => useBrowser.setState({ tabs, windows, groups, find, splits, selection, windowOrder, windowUi, parkedPins, pinSync }));
+  pageWrites?.(pagesWritten(profileId, prev, useBrowser.getState()));
 }

@@ -9,6 +9,7 @@ from support import method as extract
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 LINUX = SOURCE / 'ardia' / 'linux'
 HOST = (LINUX / 'ac_linux_host.cc').read_text()
 
@@ -92,7 +93,7 @@ class TypeaheadLedgerTests(unittest.TestCase):
             root = pathlib.Path(scratch)
             (root / 'ledger.cc').write_text(LEDGER)
             binary = root / 'ledger'
-            built = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-I', str(SOURCE),
+            built = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE),
                                     str(root / 'ledger.cc'), '-o', str(binary)], capture_output=True, text=True)
             self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
             ran = subprocess.run([str(binary)], capture_output=True, text=True)
@@ -120,7 +121,7 @@ class TypeaheadInputTests(unittest.TestCase):
             binary = pathlib.Path(scratch) / 'typeahead-input'
             built = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-Wno-unused-parameter', '-g',
                                     '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-I', str(stubs),
-                                    '-I', str(ROOT / 'tests/fixtures'), '-I', str(SOURCE), str(source),
+                                    '-I', str(ROOT / 'tests/fixtures'), '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE), str(source),
                                     str(ROOT / 'tests/fixtures/typeahead_input_scenarios.cc'), '-o', str(binary)],
                                    capture_output=True, text=True, timeout=180)
             self.assertEqual(built.returncode, 0, built.stdout + built.stderr)

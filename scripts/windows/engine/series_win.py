@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Our series on a Windows tree: the `chromium` lines of engine/patches/series that are for every platform or whose
 platforms include `mac` or `win` (Windows started from the Mac's set; `linux` lines are never applied, `linux,win`
-lines are; a `layer` line it would select, untagged or naming win, is refused until this script runs series layers,
-engine/chromium aside), then those of
+lines are; a `layer` line it would select, untagged or naming win, is refused unless it is a layer this script runs
+itself: engine/chromium and engine/ardiacore-desktop), then those of
 scripts/windows/engine/series-win (when it exists; its patches in scripts/windows/engine/patches,
 and its `skip <patch>` lines leave a patch of engine/patches/series out), each applied strictly (git apply), else with patch's fuzz.
 A patch that fails is recorded and the rest still run. Each patch that goes in is written to .series-win-applied beside
@@ -12,6 +12,7 @@ portable files of its Mac block named in WINDOWS_FROM_MAC_BLOCK), the fixes in
 ardia-layer-win.patch that make its sources build on Windows, and the files under src/chrome/browser/ardia in place of
 the ones that are POSIX only), engine/ardiacore
 gives the hook headers the patches include and ac_launch_switches (its Mac signature check answers no),
+engine/ardiacore-desktop/src/ardia/desktop, the host layer Linux and Windows share, is copied to //ardia/desktop as is,
 the files //ardia/win's BUILD.gn names from engine/ardiacore-linux are copied to //ardia/linux (the WebUI shell of
 --ardia-shell=webui compiles them as they are; with ARDIA_LINUX_COMPILE_PROBE=1 the whole Linux layer is copied with a
 BUILD.gn made from linux-probe.gn for a compile probe, loaded only with the GN arg ardia_linux_compile_probe=true), and
@@ -39,8 +40,9 @@ LAUNCH_SWITCHES = 'ardia/core/ac_launch_switches'
 LAYER_PATCH = os.path.join(HERE, 'ardia-layer-win.patch')
 LAYER_OVERLAY = os.path.join(HERE, 'src', 'chrome', 'browser', 'ardia')
 LINUX_LAYER = os.path.join(REPO, 'engine', 'ardiacore-linux', 'src', 'ardia', 'linux')
+DESKTOP_LAYER = os.path.join(REPO, 'engine', 'ardiacore-desktop', 'src', 'ardia', 'desktop')
 LINUX_PROBE_BUILD = os.path.join(HERE, 'linux-probe.gn')
-LINUX_PROBE_SKIPPED = ('BUILD.gn',)
+LINUX_PROBE_SKIPPED = ('BUILD.gn', 'ac_linux_desktop_platform.cc')
 LINUX_PROBE_SWITCH = 'ARDIA_LINUX_COMPILE_PROBE'
 LINUX_PROBE_OUTSIDE = ('renderer/', 'mojom/')
 WIN_BUILD = os.path.join(HERE, 'src', 'ardia', 'win', 'BUILD.gn')
@@ -53,7 +55,7 @@ SERIES_TAGS = ('all',) + ENGINES
 WINDOWS_FROM_MAC_BLOCK = ('ac_reauth.cc',)
 GN_PLATFORMS = {'is_mac': False, 'is_linux': False, 'is_win': True}
 GN_TOKEN = re.compile(r'\s*(\|\||&&|[!()]|[A-Za-z_][A-Za-z0-9_]*)')
-WINDOWS_OWN_LAYERS = ('engine/chromium',)
+WINDOWS_OWN_LAYERS = ('engine/chromium', 'engine/ardiacore-desktop')
 GN_LEXEME = re.compile(r'\s+|#[^\n]*|"(?:[^"\\\n]|\\.)*"|[A-Za-z_][A-Za-z0-9_]*|[0-9]+|\+=|-=|==|!=|<=|>=|&&|\|\||[{}\[\](),.=<>!+-]')
 GN_NAME = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
 GN_BINARY = ('+', '-', '==', '!=', '<', '>', '<=', '>=', '&&', '||')
@@ -183,8 +185,22 @@ def layers(tree):
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         shutil.copyfile(os.path.join(REPO, 'engine/ardiacore/src', rel), dst)
     print(f'engine/chromium: {replaced} files changed; {len(HOOK_HEADERS)} ArdiaCore hook headers copied')
+    desktop_layer(tree)
     linux_layer(tree)
     win_layer(tree)
+
+
+def desktop_layer(tree):
+    wanted = files_under(DESKTOP_LAYER)
+    target = os.path.join(tree, 'ardia', 'desktop')
+    changed = 0
+    for rel, path in wanted.items():
+        changed += copy_if_changed(path, os.path.join(target, rel))
+    for rel, path in files_under(target).items():
+        if rel not in wanted:
+            os.remove(path)
+            changed += 1
+    print(f'ardia/desktop: {len(wanted)} files of the shared desktop layer, {changed} changed')
 
 
 def linux_reused():

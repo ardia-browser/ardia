@@ -40,6 +40,7 @@ chromium chromium-skipped-on-win.patch mac
 
 layer engine/chromium
 layer engine/ardiacore mac
+layer engine/ardiacore-desktop linux
 layer engine/ardiacore-linux linux
 `
 
@@ -135,10 +136,11 @@ const files = {
   'engine/ardiacore-linux/copies.tsv': copies.map((row) => row.join('\t')).join('\n') + '\n',
   'engine/ardiacore-linux/src/ardia/linux/shell.cc': 'linux shell\n',
   'engine/ardiacore-linux/src/ardia/linux/ac_linux_contract.h': 'linux ac_linux_contract.h\n',
-  'engine/ardiacore-linux/src/ardia/linux/ac_linux_policy.h': 'linux ac_linux_policy.h\n',
+  'engine/ardiacore-desktop/apply.sh': '#!/usr/bin/env bash\n',
+  'engine/ardiacore-desktop/src/ardia/desktop/ac_desktop_policy.h': 'desktop ac_desktop_policy.h\n',
   'engine/ardiacore-linux/src/ardia/linux/ac_linux_session.cc': 'linux ac_linux_session.cc\n',
   'engine/ardiacore-linux/src/ardia/linux/ac_linux_session.h': 'linux ac_linux_session.h\n',
-  'engine/ardiacore-linux/src/ardia/linux/ac_linux_window_state.h': 'linux ac_linux_window_state.h\n',
+  'engine/ardiacore-desktop/src/ardia/desktop/ac_desktop_window_state.h': 'desktop ac_desktop_window_state.h\n',
   'engine/ardiacore-linux/src/ardia/linux/bootstrap.js': 'linux bootstrap.js\n',
   'engine/ardiacore-linux/src/ardia/linux/generate_bootstrap.py': 'linux generate_bootstrap.py\n',
   'engine/ardiacore-linux/src/ardia/core/ac_linux_core.cc': 'linux core\n',
@@ -228,6 +230,8 @@ const cases = [
   ['the Linux layer', 'engine/ardiacore-linux/src/ardia/linux/shell.cc', { macos: false, linux: true, win: false }],
   ['a Linux layer file the Windows WebUI shell compiles', 'engine/ardiacore-linux/src/ardia/linux/ac_linux_session.cc', { macos: false, linux: true, win: true }],
   ['the Linux layer apply.sh', 'engine/ardiacore-linux/apply.sh', { macos: false, linux: true, win: false }],
+  ['the desktop layer Linux and Windows share', 'engine/ardiacore-desktop/src/ardia/desktop/ac_desktop_policy.h', { macos: false, linux: true, win: true }],
+  ['the desktop layer apply.sh, which Windows does not run', 'engine/ardiacore-desktop/apply.sh', { macos: false, linux: true, win: false }],
   ['the Linux layer copies.tsv', 'engine/ardiacore-linux/copies.tsv', { macos: false, linux: true, win: false }],
   ['the macOS layer', 'engine/ardiacore/src/ardia/core/ardiacore_engine.mm', { macos: true, linux: false, win: false }],
   ['a macOS layer file the Linux layer copies', 'engine/ardiacore/src/ardia/core/ac_hooks.h', { macos: true, linux: true, win: true }],
@@ -1006,29 +1010,22 @@ for (const selector of ['windows', 'linux,', ',win', 'linux,linux', 'all,win', '
 }
 
 test(
-  'a layer for linux,win counts in the Linux key, never the macOS key, and has no Windows key until Windows runs series layers',
-  withFixture(({ root, key, write, git, run, pathspecs, dirty }) => {
-    const before = { macos: key('macos'), linux: key('linux') }
-    write('engine/ardiacore-desktop/apply.sh', '#!/usr/bin/env bash\n')
-    write('engine/ardiacore-desktop/src/ardia/desktop/host.cc', 'desktop host\n')
-    write('engine/patches/series', `${series}layer engine/ardiacore-desktop linux,win\n`)
+  'the desktop layer counts in the Linux and Windows keys, never the macOS key, and retagging it linux,win moves no key',
+  withFixture(({ root, keys, write, git, change, pathspecs, dirty }) => {
+    const before = keys()
+    assertKeys(before, change('engine/ardiacore-desktop/src/ardia/desktop/host.cc', 'desktop host\n'), { macos: false, linux: true, win: true })
+    const added = keys()
+    write('engine/patches/series', series.replace('layer engine/ardiacore-desktop linux\n', 'layer engine/ardiacore-desktop linux,win\n'))
     git('add', '-A')
-    git('commit', '-q', '-m', 'a desktop layer')
-    const added = { macos: key('macos'), linux: key('linux') }
-    assert.equal(added.macos, before.macos)
-    assert.notEqual(added.linux, before.linux)
-    const refused = run(['--platform', 'win'])
-    assert.notEqual(refused.status, 0)
-    assert.match(refused.stderr, /engine\/ardiacore-desktop` is a layer for win, and the Windows build runs no series layer yet/)
+    git('commit', '-q', '-m', 'the desktop layer for linux,win')
+    assert.deepEqual(keys(), added)
     assert.ok(pathspecs('macos').includes(':(exclude)engine/ardiacore-desktop'))
     assert.ok(!pathspecs('linux').some((spec) => spec.includes('ardiacore-desktop')))
+    assert.ok(pathspecs('win').includes('engine/ardiacore-desktop/src'))
     appendFileSync(join(root, 'engine/ardiacore-desktop/src/ardia/desktop/host.cc'), 'uncommitted\n')
     assert.equal(dirty('macos'), '')
     assert.notEqual(dirty('linux'), '')
-    git('add', '-A')
-    git('commit', '-q', '-m', 'edit the desktop layer')
-    assert.equal(key('macos'), added.macos)
-    assert.notEqual(key('linux'), added.linux)
+    assert.notEqual(dirty('win'), '')
   }),
 )
 
@@ -1143,18 +1140,18 @@ test(
   }),
 )
 
-for (const line of ['layer engine/ardiacore-desktop', 'layer engine/ardiacore-desktop all', 'layer engine/ardiacore-desktop mac,linux,win', 'layer engine/ardiacore-desktop win']) {
+for (const line of ['layer engine/ardiacore-extra', 'layer engine/ardiacore-extra all', 'layer engine/ardiacore-extra mac,linux,win', 'layer engine/ardiacore-extra win']) {
   test(
-    `\`${line}\` has no Windows key, since the Windows build runs no series layer but engine/chromium`,
+    `\`${line}\` has no Windows key, since the Windows build runs no series layer but engine/chromium and engine/ardiacore-desktop`,
     withFixture(({ key, write, git, run }) => {
-      write('engine/ardiacore-desktop/apply.sh', '#!/usr/bin/env bash\n')
-      write('engine/ardiacore-desktop/src/ardia/desktop/host.cc', 'desktop host\n')
+      write('engine/ardiacore-extra/apply.sh', '#!/usr/bin/env bash\n')
+      write('engine/ardiacore-extra/src/ardia/extra/host.cc', 'extra host\n')
       write('engine/patches/series', `${series}${line}\n`)
       git('add', '-A')
       git('commit', '-q', '-m', line)
       const refused = run(['--platform', 'win'])
       assert.notEqual(refused.status, 0)
-      assert.match(refused.stderr, /engine\/ardiacore-desktop` is a layer for win, and the Windows build runs no series layer yet but engine\/chromium/)
+      assert.match(refused.stderr, /engine\/ardiacore-extra` is a layer for win, and the Windows build runs no series layer yet but engine\/chromium, engine\/ardiacore-desktop/)
       assert.match(key('macos'), /^[0-9a-f]{40}$/)
       assert.match(key('linux'), /^[0-9a-f]{40}$/)
     }),

@@ -106,5 +106,6 @@ chromium-win-discard-asks-the-host.patch
 chromium-win-devtools-other-clients.patch
 chromium-win-autoplay-policy.patch
 chromium-win-hosted-theme-change.patch
+chromium-win-renderer-efficiency.patch
 chromium-win-extension-action-popup.patch
 chromium-win-extension-popup-cancel-before-show.patch

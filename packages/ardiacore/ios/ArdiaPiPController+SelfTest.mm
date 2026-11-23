@@ -252,4 +252,61 @@ using namespace ardia_pip;
   else [NSApp postEvent:event atStart:NO];
 }
 
+- (NSString *)devMagnify:(NSArray<NSString *> *)args {
+  NSWindow *window = _window;
+  if (!ArdiaLaunchConfig.shared.testInstance) return @"test instances only";
+  if (args.count != 5 && args.count != 6) return @"usage: x,y,total,steps,main|none|otherApp[,noEnd]";
+  constexpr int kGestureType = 29, kGestureHIDType = 110, kZoomGesture = 8, kGestureZoomValue = 113, kGesturePhase = 132, kWindowUnderPointer = 51;
+  constexpr int kGestureBegan = 1, kGestureChanged = 2, kGestureEnded = 4;
+  const NSRect frame = window.frame;
+  const NSPoint pointer = NSMakePoint(NSMinX(frame) + args[0].doubleValue, NSMaxY(frame) - args[1].doubleValue);
+  const double total = args[2].doubleValue;
+  const int steps = MAX(1, args[3].intValue);
+  NSString *mode = args[4];
+  NSWindow *browser = nil;
+  for (NSWindow *candidate in NSApp.orderedWindows)
+    if (candidate != window && candidate.visible && candidate.level == NSNormalWindowLevel && ![ArdiaPiPZoom zooms:candidate]) {
+      browser = candidate;
+      break;
+    }
+  const NSInteger target = [mode isEqual:@"main"] ? browser.windowNumber : 0;
+  const BOOL otherApp = [mode isEqual:@"otherApp"];
+  const BOOL dropEnd = args.count == 6 && [args[5] isEqual:@"noEnd"];
+  const double each = std::pow(total, 1.0 / steps) - 1;
+  const CGFloat top = NSMaxY(NSScreen.screens.firstObject.frame);
+  auto send = [=](double seconds, int phase, double magnification) {
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(seconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+      CGEventRef cg = CGEventCreate(nullptr);
+      CGEventSetType(cg, (CGEventType)kGestureType);
+      CGEventSetIntegerValueField(cg, (CGEventField)kGestureHIDType, kZoomGesture);
+      CGEventSetDoubleValueField(cg, (CGEventField)kGestureZoomValue, magnification);
+      CGEventSetIntegerValueField(cg, (CGEventField)kGesturePhase, phase);
+      CGEventSetLocation(cg, CGPointMake(pointer.x, top - pointer.y));
+      if (target) CGEventSetIntegerValueField(cg, (CGEventField)kWindowUnderPointer, target);
+      NSEvent *event = [NSEvent eventWithCGEvent:cg];
+      CFRelease(cg);
+      if (event.type != NSEventTypeMagnify) return;
+      if (otherApp) PinchFromOtherApp(event);
+      else [NSApp postEvent:event atStart:NO];
+    });
+  };
+  const double interval = 1.0 / 120;
+  send(0, kGestureBegan, 0);
+  for (int i = 1; i <= steps; i++) send(i * interval, kGestureChanged, each);
+  if (!dropEnd) send((steps + 1) * interval, kGestureEnded, 0);
+  NSWindow *under = [ArdiaPiPZoom windowUnder:pointer];
+  NSDictionary *answer = @{
+    @"pointer" : NSStringFromPoint(pointer),
+    @"topmost" : @([NSWindow windowNumberAtPoint:pointer belowWindowWithWindowNumber:0]),
+    @"under" : @(under.windowNumber),
+    @"pip" : @(window.windowNumber),
+    @"browser" : @(browser.windowNumber),
+    @"requestedEventWindow" : @(target),
+    @"active" : @(NSApp.isActive),
+    @"followsOtherApps" : @(FollowsPinchesFromOtherApps()),
+    @"windows" : [ArdiaPiPZoom devWindowsAt:pointer],
+  };
+  return [[NSString alloc] initWithData:[NSJSONSerialization dataWithJSONObject:answer options:0 error:nil] encoding:NSUTF8StringEncoding];
+}
+
 @end

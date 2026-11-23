@@ -126,8 +126,11 @@ update_action_is_safe() {
   fi
   local runtime="$prefix/lib/ardia" folder uid mode
   [[ "$(readlink -f -- "$runtime")" == "$runtime" ]] || return 1
-  [[ -f "$runtime/ardia-update" && ! -L "$runtime/ardia-update" ]] || return 1
-  [[ "$(stat -c '%u %a' -- "$runtime/ardia-update")" == "0 755" ]] || return 1
+  local helper
+  for helper in ardia-update ardia-update-verify; do
+    [[ -f "$runtime/$helper" && ! -L "$runtime/$helper" ]] || return 1
+    [[ "$(stat -c '%u %a' -- "$runtime/$helper")" == "0 755" ]] || return 1
+  done
   folder=$runtime
   while :; do
     [[ -d "$folder" && ! -L "$folder" ]] || return 1

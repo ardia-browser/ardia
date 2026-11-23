@@ -9,7 +9,9 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 LINUX = SOURCE / 'ardia/linux'
+DESKTOP = LINUX.parents[3] / 'ardiacore-desktop' / 'src' / 'ardia' / 'desktop'
 REPO = ROOT.parents[1]
 
 
@@ -27,8 +29,8 @@ class ReportCoreTests(unittest.TestCase):
         cls.binary = root / 'report-core'
         compiled = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g',
                                    '-fsanitize=address,undefined', '-fno-omit-frame-pointer',
-                                   '-I', str(root / 'include'), '-I', str(SOURCE),
-                                   str(ROOT / 'tests/report_core_test.cc'), str(LINUX / 'ac_linux_report_core.cc'),
+                                   '-I', str(root / 'include'), '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE),
+                                   str(ROOT / 'tests/report_core_test.cc'), str(DESKTOP / 'ac_desktop_report_core.cc'),
                                    '-lz', '-o', str(cls.binary)], capture_output=True, text=True, timeout=300)
         if compiled.returncode != 0:
             if 'zlib.h' in compiled.stderr or 'cannot find -lz' in compiled.stderr:
@@ -61,8 +63,8 @@ class ReportCoreTests(unittest.TestCase):
                 self.assertEqual(gzip.decompress(destination.read_bytes()), data)
 
     def test_the_caps_names_ids_and_json_limit_are_the_feedback_services(self):
-        core = (LINUX / 'ac_linux_report_core.cc').read_text()
-        header = (LINUX / 'ac_linux_report_core.h').read_text()
+        core = (DESKTOP / 'ac_desktop_report_core.cc').read_text()
+        header = (DESKTOP / 'ac_desktop_report_core.h').read_text()
         validate = (REPO / 'infra/feedback/lib/validate.mjs').read_text()
         self.assertIn('export const MAX_JSON_BYTES = 128 * 1024;', validate)
         self.assertIn('kJsonMaxBytes = 128 * 1024;', header)
@@ -80,7 +82,7 @@ class ReportCoreTests(unittest.TestCase):
 
     def test_the_mac_uploader_gives_the_reply_shape_and_limits(self):
         uploader = (REPO / 'packages/shell/ios/ReportUploader.swift').read_text()
-        header = (LINUX / 'ac_linux_report_core.h').read_text()
+        header = (DESKTOP / 'ac_desktop_report_core.h').read_text()
         self.assertIn('upload.body.prefix(4096)', uploader)
         self.assertIn('kUploadReplyMaxBytes = 4096;', header)
         self.assertIn('configuration.timeoutIntervalForResource = 15 * 60', uploader)
@@ -88,7 +90,7 @@ class ReportCoreTests(unittest.TestCase):
         self.assertIn('error.map { cancelled ? "cancelled" : $0.localizedDescription }', uploader)
         files = (REPO / 'packages/shell/ios/ReportFiles.swift').read_text()
         self.assertIn('deflateInit2_(&stream, 6, Z_DEFLATED, 31, 8, Z_DEFAULT_STRATEGY', files)
-        self.assertIn('deflateInit2(&stream, 6, Z_DEFLATED, 31, 8, Z_DEFAULT_STRATEGY)', (LINUX / 'ac_linux_report_core.cc').read_text())
+        self.assertIn('deflateInit2(&stream, 6, Z_DEFLATED, 31, 8, Z_DEFAULT_STRATEGY)', (DESKTOP / 'ac_desktop_report_core.cc').read_text())
         self.assertIn('DocumentStore.url("Report Drafts")', files)
         self.assertIn('kDraftsFolder[] = "Report Drafts";', header)
 
@@ -178,11 +180,11 @@ class ReportHostTests(unittest.TestCase):
         route = self.host[self.host.index('if (ardiacore::LinuxReportInvokes(method)) {'):]
         route = route[:route.index('if (ardiacore::LinuxNotificationsInvokes(method)) {')]
         self.assertIn('profile() ? DocumentDirectory(profile()) : base::FilePath(), id_,', route)
-        self.assertIn('if (host) host->Event("ArdiaReport", ardia::linux_report::kEvent, std::move(event));', route)
+        self.assertIn('if (host) host->Event("ArdiaReport", ardia::desktop_report::kEvent, std::move(event));', route)
         closing = self.host[self.host.index('ShellHostView::~ShellHostView() {'):]
         self.assertIn('ardiacore::LinuxReportCallerGone(id_);', closing[:closing.index('DropPlayer();')])
-        self.assertIn('  if (!is_utility()) {\n    for (const char* capability : ardia::linux_report::kReportCapabilities) capabilities.Append(capability);\n  }', self.host)
-        header = (LINUX / 'ac_linux_report_core.h').read_text()
+        self.assertIn('  if (!is_utility()) {\n    for (const char* capability : ardia::desktop_report::kReportCapabilities) capabilities.Append(capability);\n  }', self.host)
+        header = (DESKTOP / 'ac_desktop_report_core.h').read_text()
         self.assertIn('kReportCapabilities[] = {"report.files", "report.send"};', header)
         calls = header[header.index('kReportCalls[] = {'):]
         calls = calls[:calls.index('};')]
@@ -197,11 +199,11 @@ class ReportHostTests(unittest.TestCase):
     def test_the_shell_keeps_its_own_answers_until_it_opts_in(self):
         fallbacks = (REPO / 'apps/linux/src/appModuleFallbacks.ts').read_text()
         self.assertIn('if (hostSupports(`${name}.${method}`, host)) return undefined;', fallbacks)
-        header = (LINUX / 'ac_linux_report_core.h').read_text()
+        header = (DESKTOP / 'ac_desktop_report_core.h').read_text()
         advertised = header[header.index('kReportCapabilities[] = {'):header.index('};')]
         self.assertNotIn('ArdiaReport.', advertised)
-        build = (LINUX / 'BUILD.gn').read_text()
-        for name in ('"ac_linux_report.cc"', '"ac_linux_report.h"', '"ac_linux_report_core.cc"', '"ac_linux_report_core.h"', '"//third_party/zlib"'):
+        build = (LINUX / 'BUILD.gn').read_text() + (DESKTOP / 'BUILD.gn').read_text()
+        for name in ('"ac_linux_report.cc"', '"ac_linux_report.h"', '"ac_desktop_report_core.cc"', '"ac_desktop_report_core.h"', '"//third_party/zlib"'):
             self.assertIn(name, build)
 
 

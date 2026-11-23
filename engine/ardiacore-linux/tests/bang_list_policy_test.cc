@@ -2,9 +2,9 @@
 #include <cstdio>
 #include <string>
 
-#include "ardia/linux/ac_linux_bang_list_policy.h"
+#include "ardia/desktop/ac_desktop_bang_list_policy.h"
 
-namespace bang_list = ardia::linux_bang_list;
+namespace bang_list = ardia::desktop_bang_list;
 
 int main() {
   using bang_list::Failure;

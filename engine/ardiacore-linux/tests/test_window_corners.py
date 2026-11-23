@@ -7,10 +7,12 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 LINUX = SOURCE / 'ardia/linux'
+DESKTOP = LINUX.parents[3] / 'ardiacore-desktop' / 'src' / 'ardia' / 'desktop'
 REPO = ROOT.parents[1]
 HOST = (LINUX / 'ac_linux_host.cc').read_text()
-CORE = (LINUX / 'ac_linux_window_corners.h').read_text()
+CORE = (DESKTOP / 'ac_desktop_window_corners.h').read_text()
 
 
 def between(text, start, end):
@@ -23,7 +25,7 @@ class WindowCornersTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='ardia-window-corners-') as directory:
             binary = Path(directory) / 'window-corners'
             subprocess.run([os.environ.get('CXX', 'c++'), '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g',
-                            '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-I', str(SOURCE),
+                            '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE),
                             str(ROOT / 'tests/window_corners_test.cc'), '-o', str(binary)],
                            check=True, text=True, timeout=180)
             result = subprocess.run([str(binary)], text=True, timeout=60, capture_output=True,
@@ -48,11 +50,11 @@ class WindowCornersTests(unittest.TestCase):
         self.assertIn('frame && views::Widget::IsWindowCompositingSupported()', round_corners)
         self.assertIn('? frame->GetWindowRoundedCorners()', round_corners)
         self.assertNotIn('is_utility()) return', round_corners)
-        self.assertNotIn('return;', round_corners[round_corners.index('const linux_window_corners::Corners corners{'):])
+        self.assertNotIn('return;', round_corners[round_corners.index('const desktop_window_corners::Corners corners{'):])
         self.assertIn('  if (window_corners_ != corners) ApplyWindowCorners(corners);\n'
                       '  for (const auto& [id, binding] : bindings_) {\n    ClipPaneView(binding.get(), binding->viewport());\n'
                       '    ClipPaneView(binding.get(), binding->devtools_viewport());\n  }', round_corners)
-        apply = between(HOST, 'void ShellHostView::ApplyWindowCorners(const linux_window_corners::Corners& corners) {', '\n}\n')
+        apply = between(HOST, 'void ShellHostView::ApplyWindowCorners(const desktop_window_corners::Corners& corners) {', '\n}\n')
         self.assertLess(apply.index('window_corners_ = corners;'), apply.index('shell_->holder()->SetNativeViewCornerRadii(rounded);'))
         self.assertNotIn('ClipViewport', apply)
         round_corners = apply
@@ -63,10 +65,10 @@ class WindowCornersTests(unittest.TestCase):
                       '    browser_view_->layer()->SetFillsBoundsOpaquely(false);\n  }\n'
                       '  if (browser_view_->layer()) {\n    browser_view_->layer()->SetRoundedCornerRadius(rounded);\n'
                       '    browser_view_->layer()->SetIsFastRoundedCorner(true);\n  }', round_corners)
-        clip = between(HOST, 'void ShellHostView::ClipViewport(views::WebView* view, const linux_window_corners::Corners& own) {', '\n}\n')
-        self.assertIn('linux_window_corners::ClipToWindow(', clip)
+        clip = between(HOST, 'void ShellHostView::ClipViewport(views::WebView* view, const desktop_window_corners::Corners& own) {', '\n}\n')
+        self.assertIn('desktop_window_corners::ClipToWindow(', clip)
         self.assertIn('width(), height(),', clip)
-        self.assertIn('window_corners_.value_or(linux_window_corners::Corners()), own));', clip)
+        self.assertIn('window_corners_.value_or(desktop_window_corners::Corners()), own));', clip)
         self.assertIn('viewport->ApplyCornerRadii(radii);', clip)
         self.assertNotIn('kPageCardRadius', clip)
         pane = between(HOST, 'void ShellHostView::LayoutPane(TabBinding* binding) {', '\nvoid ShellHostView::KeepPaneFocus(')
@@ -74,13 +76,13 @@ class WindowCornersTests(unittest.TestCase):
         self.assertIn('    ClipPaneView(binding, page);\n', pane)
         self.assertIn('  ClipPaneView(binding, tools);\n', pane)
         shared = between(HOST, 'void ShellHostView::ClipPaneView(TabBinding* binding, views::WebView* view) {', '\n}\n')
-        self.assertIn('linux_window_corners::CornersSharedWithPane(', shared)
+        self.assertIn('desktop_window_corners::CornersSharedWithPane(', shared)
         self.assertIn('binding->pane_radii));', shared)
 
     def test_each_window_reads_its_own_compositors_answer_and_only_that_window_follows_a_change(self):
         self.assertNotIn('g_ardia_linux_compositor_decoration_mode', HOST)
         self.assertIn('extern void (*g_ardia_linux_compositor_decoration_changed)(gfx::AcceleratedWidget widget);', HOST)
-        answer = between(HOST, 'linux_window_corners::DecorationAnswer ShellHostView::DecorationAnswer() const {', '\n}\n')
+        answer = between(HOST, 'desktop_window_corners::DecorationAnswer ShellHostView::DecorationAnswer() const {', '\n}\n')
         self.assertIn('WaylandToplevelOf(GetWidget())', answer)
         self.assertIn('toplevel->CompositorDecorationMode()', answer)
         toplevel = between(HOST, 'const ui::WaylandToplevelExtension* WaylandToplevelOf(const views::Widget* widget) {', '\n}\n')
@@ -98,14 +100,14 @@ class WindowCornersTests(unittest.TestCase):
         self.assertNotIn('RefreshEngineFrame', changed)
         follow = between(HOST, 'void ShellHostView::FollowDecorations() {', '\n}\n')
         self.assertIn('if (changed && (decorated || !attaching)) {\n    RefreshEngineFrame();\n  } else if (changed) {\n    RoundWindowCorners();\n  }', follow)
-        self.assertIn('Event("ArdiaShell", linux_window_corners::kWindowDecorationsEvent', follow)
+        self.assertIn('Event("ArdiaShell", desktop_window_corners::kWindowDecorationsEvent', follow)
         initialize = between(HOST, 'void ShellHostView::Initialize() {', '\n}\n')
         self.assertIn('  LayoutOverlay();\n  FollowDecorations();\n', initialize)
         self.assertNotIn('RefreshEngineFrame();', initialize)
         route = HOST[HOST.index('if (method == "ArdiaShell.windowFrame" || method == "ArdiaShell.closeWindow" ||'):]
-        self.assertLess(route.index('method == linux_window_corners::kWindowDecorationsCall ||'), route.index('ShellHostView* target = nullptr;'))
+        self.assertLess(route.index('method == desktop_window_corners::kWindowDecorationsCall ||'), route.index('ShellHostView* target = nullptr;'))
         self.assertIn('return std::move(done).Run(true, base::Value(target->WindowDecorationsValue()));', route)
-        self.assertIn('for (const char* capability : ardia::linux_window_corners::kWindowCornersCapabilities) capabilities.Append(capability);', HOST)
+        self.assertIn('for (const char* capability : ardia::desktop_window_corners::kWindowCornersCapabilities) capabilities.Append(capability);', HOST)
         self.assertIn('bootstrap.Set("shellZoom", blink::ZoomLevelToZoomFactor(', HOST)
 
     def test_a_window_resize_reclips_every_page_even_when_the_frame_radii_stay(self):
@@ -120,7 +122,7 @@ class WindowCornersTests(unittest.TestCase):
         self.assertIn('const bool restored = !widget->IsMaximized() && !widget->IsFullscreen() && !widget->IsMinimized();', keep)
         self.assertNotIn('tiled()', keep)
         self.assertIn('DefaultWindowSizer(browser_).DefaultBounds(', keep)
-        self.assertIn('linux_window_corners::DefaultBoundsWithoutFrame(', keep)
+        self.assertIn('desktop_window_corners::DefaultBoundsWithoutFrame(', keep)
         self.assertIn('FramedRestoredInsets(), restored, sized_by_default_);\n  if (!kept) return;', keep)
         initialize = between(HOST, 'void ShellHostView::Initialize() {', '\n}\n')
         self.assertTrue(initialize.startswith('void ShellHostView::Initialize() {\n  sized_by_default_ = ArdiaLinuxTakeDefaultSizedBrowser(browser_);\n'))
@@ -129,7 +131,7 @@ class WindowCornersTests(unittest.TestCase):
         sizer = between(HOST, 'class DefaultWindowSizer : public WindowSizerLinux {', '\n};\n')
         self.assertIn('WindowSizerLinux(nullptr, browser)', sizer)
         self.assertIn('return WindowSizer::GetDefaultWindowBounds(display);', sizer)
-        framed = between(HOST, 'linux_window_corners::FrameInsets ShellHostView::FramedRestoredInsets() {', '\n}\n')
+        framed = between(HOST, 'desktop_window_corners::FrameInsets ShellHostView::FramedRestoredInsets() {', '\n}\n')
         self.assertLess(framed.index('base::AutoReset<bool> framed(&measuring_framed_insets_, true);'),
                         framed.index('tree_host->CalculateInsetsInDIP(ui::PlatformWindowState::kNormal)'))
         borderless = between(HOST, 'bool ShellHostView::FrameIsBorderless() const {', '\n}\n')
@@ -138,7 +140,7 @@ class WindowCornersTests(unittest.TestCase):
         follow = between(HOST, 'void ShellHostView::FollowDecorations() {', '\n}\n')
         self.assertEqual(follow.count('KeepDefaultVisibleSize();'), 1)
         self.assertIn('if (decorated && !default_size_followed_ &&\n'
-                      '      (answer != linux_window_corners::DecorationAnswer::kNone || !HasWaylandToplevel())) {\n'
+                      '      (answer != desktop_window_corners::DecorationAnswer::kNone || !HasWaylandToplevel())) {\n'
                       '    default_size_followed_ = true;\n    KeepDefaultVisibleSize();\n  }', follow)
         self.assertLess(follow.index('RefreshEngineFrame();'), follow.index('KeepDefaultVisibleSize();'))
         self.assertLess(follow.index('if (followed_decorations_ == std::pair(decorated, answer)) return;'),
@@ -147,24 +149,24 @@ class WindowCornersTests(unittest.TestCase):
         self.assertIn('"//chrome/browser/ui/views:window_sizer_linux",', build)
 
     def test_a_tab_viewport_brings_its_card_radii_and_the_page_keeps_them_until_new_ones_arrive(self):
-        self.assertIn('  linux_window_corners::Corners pane_radii = linux_window_corners::kPageCardCorners;\n', HOST)
+        self.assertIn('  desktop_window_corners::Corners pane_radii = desktop_window_corners::kPageCardCorners;\n', HOST)
         viewport = between(HOST, 'void ShellHostView::SetViewport(', '\n}\n')
         self.assertIn('if (const base::Value* given = args.Find("radii")) {', viewport)
         self.assertIn('const base::DictValue* corners = given->GetIfDict();', viewport)
-        self.assertIn('radii = linux_window_corners::PageRadiiInDip(', viewport)
+        self.assertIn('radii = desktop_window_corners::PageRadiiInDip(', viewport)
         self.assertIn('corners->FindDouble("lowerLeft").value_or(NAN), scale);', viewport)
         self.assertLess(viewport.index('if (!radii) {\n      return std::move(done).Run(false,'), viewport.index('binding->pane_bounds = bounds;'))
         self.assertIn('  if (radii) binding->pane_radii = *radii;\n', viewport)
         self.assertLess(viewport.index('if (radii) binding->pane_radii = *radii;'), viewport.index('LayoutPane(binding);'))
         self.assertIn('if (const base::Value* given = args.Find("contentRect")) {', viewport)
-        self.assertIn('linux_window_corners::ContentBoxInDip(', viewport)
+        self.assertIn('desktop_window_corners::ContentBoxInDip(', viewport)
         self.assertLess(viewport.index('if (!content_box) {\n      return std::move(done).Run(false,'), viewport.index('binding->pane_bounds = bounds;'))
         self.assertIn('  binding->content_bounds = content_bounds.value_or(bounds);\n', viewport)
         self.assertIn('capabilities.Append("tab.viewportClip");', HOST)
 
     def test_a_viewport_rounds_out_from_doubles_and_windows_report_the_decision_the_frame_follows(self):
         viewport = between(HOST, 'void ShellHostView::SetViewport(', '\n}\n')
-        self.assertIn('linux_window_corners::EnclosingBox(left, top, right, bottom)', viewport)
+        self.assertIn('desktop_window_corners::EnclosingBox(left, top, right, bottom)', viewport)
         self.assertNotIn('gfx::RectF(left, top', viewport)
         decorations = between(HOST, 'base::DictValue ShellHostView::WindowDecorationsValue() const {', '\n}\n')
         self.assertIn('DecoratedByName(FrameIsBorderless())', decorations)
@@ -183,7 +185,7 @@ class WindowCornersTests(unittest.TestCase):
         docs = (REPO / 'docs/linux-port.md').read_text()
         outer = docs[docs.index('- **Outer frame.**'):]
         outer = outer[:outer.index('- **Menu button.**')]
-        for phrase in ('GetWindowRoundedCorners', 'server-side', 'ac_linux_window_corners.h', 'overflow', 'per window',
+        for phrase in ('GetWindowRoundedCorners', 'server-side', 'ac_desktop_window_corners.h', 'overflow', 'per window',
                        'ArdiaShell.windowDecorations', 'shellZoom', 'SetIsFastRoundedCorner'):
             self.assertIn(phrase, outer)
 

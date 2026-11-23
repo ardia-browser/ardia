@@ -8,6 +8,7 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 FIXTURE = ROOT / 'tests/fixtures/page_commands.h'
 PRODUCTION = [SOURCE / 'ardia/linux/ac_linux_page_commands.cc', SOURCE / 'ardia/linux/ac_linux_find.cc', SOURCE / 'ardia/linux/ac_linux_devtools_authority.cc']
 MAIN = r'''
@@ -358,7 +359,7 @@ class PageCommandTests(unittest.TestCase):
         cls.binary = cls.root / 'commands'
         result = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror',
                                  '-Wno-unused-parameter', '-fsanitize=address,undefined', '-fno-omit-frame-pointer',
-                                 '-I', str(cls.root), '-I', str(SOURCE),
+                                 '-I', str(cls.root), '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE),
                                  *map(str, PRODUCTION), str(cls.root / 'main.cc'), '-o', str(cls.binary)],
                                 capture_output=True, text=True, timeout=120)
         if result.returncode:

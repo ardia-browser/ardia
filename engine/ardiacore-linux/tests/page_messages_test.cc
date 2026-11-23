@@ -12,7 +12,7 @@
 #include "ardia/linux/ac_linux_page_commits.h"
 #include "ardia/linux/ac_linux_page_evaluation.h"
 #include "ardia/linux/ac_linux_page_messages.h"
-#include "ardia/linux/ac_linux_status_geometry.h"
+#include "ardia/desktop/ac_desktop_status_geometry.h"
 
 using namespace ardiacore;
 

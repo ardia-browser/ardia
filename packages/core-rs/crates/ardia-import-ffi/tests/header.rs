@@ -50,6 +50,7 @@ fn the_committed_header_is_current_and_has_no_comments() {
     );
     for name in [
         "ardia_import_chromium_bookmarks",
+        "ardia_import_netscape_bookmarks",
         "ardia_import_buf_free",
         "ardia_import_abi_version",
         "ARDIA_IMPORT_STATUS_OK",

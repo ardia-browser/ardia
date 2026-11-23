@@ -1,7 +1,5 @@
 ac_linux_contract.h
-ac_linux_policy.h
 ac_linux_session.cc
 ac_linux_session.h
-ac_linux_window_state.h
 bootstrap.js
 generate_bootstrap.py

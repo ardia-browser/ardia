@@ -4,11 +4,12 @@
   "frame": "any frame, including cross-origin and sandboxed iframes",
   "main-world": "a value returned from script evaluated in the page's main world, which the page can rewrite (Chromium evaluates there; WebKit uses an isolated world)",
   "sync": "a record from another device that holds the sync key",
-  "other-app": "another app on this Mac, through an opened URL, an Apple Event or a notification",
+  "other-app": "another app on this Mac, through an opened URL, an Apple Event, a notification, or an input event posted while it is in front",
   "plugin": "an approved plugin, within its manifest's permissions",
   "socket": "a same-user process on the control socket while Settings > Advanced > Let programs control Ardia is on",
   "native": "the browser's own native layer, relaying OS input",
-  "import": "a file or browser profile the user chose to import"
+  "import": "a file or browser profile the user chose to import",
+  "update": "a release manifest, its signature and the package the browser downloaded for the self-updater, trusted only once the release key's signature verifies"
  },
  "customEvents": {
   "ardia:media-element": "Page-world shim names a media element for the isolated world to track; only an HTMLMediaElement is taken, and only its own playback state is read",
@@ -1663,10 +1664,33 @@
   {
    "id": "import:chromium-bookmarks-rust",
    "source": "import",
-   "guard": "Rust Chromium bookmarks parser behind libardia_import, not linked by any host yet: a Bookmarks file over 64 MiB is refused before it is read, RFC JSON only with at most 200 nested containers, 64 folder levels and 250,000 nodes; titles and URLs reach the tree verbatim and scheme policy stays with import:bookmarks; the shared hostile list runs through the static library",
+   "guard": "Rust Chromium bookmarks parser behind libardia_import, which the Mac reads every Chrome-family Bookmarks and AccountBookmarks file through (ChromiumBookmarks.swift, linked as libardia_apple in ArdiaCoreRS.xcframework): a Bookmarks file over 64 MiB is refused before it is read, RFC JSON only with at most 200 nested containers, 64 folder levels and 250,000 nodes; titles and URLs reach the tree verbatim and scheme policy stays with import:bookmarks; the shared hostile list runs through the static library and every vector through the Swift caller",
    "checks": [
     "packages/core-rs/crates/ardia-import-core/src/chromium_bookmarks.rs",
+    "packages/import/ios/Core/ChromiumBookmarks.swift",
     "packages/core-rs/tests/import-bookmarks/test_import_bookmarks.py"
+   ],
+   "detected": false
+  },
+  {
+   "id": "update:linux-manifest",
+   "source": "update",
+   "guard": "The Linux self-update helper copies the downloaded manifest (at most 4096 bytes), its signature (at most 64) and the package as the user, then lib/ardia/ardia-update-verify (ardia-update-core) refuses anything the release key didn't sign, any manifest that isn't canonical format 1 for the version its file name gives, any version not newer than lib/ardia/VERSION and any package whose size or SHA-256 differs; it opens nothing through a symbolic link and answers one fixed line, so no manifest byte reaches the shell; the shared hostile list runs through the binary",
+   "checks": [
+    "scripts/linux/ardia-update#verify()",
+    "packages/core-rs/crates/ardia-update-verify/src/main.rs#fn verify(",
+    "packages/core-rs/crates/ardia-update-core/src/manifest.rs#pub fn verify_linux_update",
+    "packages/core-rs/tests/linux-update/test_linux_update.py#test_no_hostile_string_passes_the_verifier"
+   ],
+   "detected": false
+  },
+  {
+   "id": "import:netscape-html-rust",
+   "source": "import",
+   "guard": "Rust Netscape HTML bookmarks parser behind libardia_import, not linked by any host yet: a file over 64 MiB is refused before it is read, 64 folder levels and 250,000 nodes with each folder reserved before its contents, no recursion on the input, and one slot per attribute the parser reads whatever a tag carries; entities decode once and titles and URLs reach the tree verbatim, place: queries are skipped and scheme policy stays with import:bookmarks; the shared hostile list runs through the static library",
+   "checks": [
+    "packages/core-rs/crates/ardia-import-core/src/netscape_bookmarks.rs",
+    "packages/core-rs/tests/import-netscape/test_import_netscape.py"
    ],
    "detected": false
   },
@@ -1738,6 +1762,29 @@
     "scripts/windows/engine/src/ardia/win/webui/webui_shell.cc#CreatePageIn",
     "scripts/windows/engine/src/ardia/win/webui/webui_shell.cc#StartPage",
     "scripts/windows/engine/src/ardia/win/webui/webui_shell.cc#AllowedPageUrl"
+   ],
+   "detected": false
+  },
+  {
+   "id": "native-monitor:pinchFromOtherApp",
+   "source": "other-app",
+   "guard": "A magnify event seen while another app is in front only resizes a Picture in Picture window: the monitor exists only while Ardia is inactive with a zoomable window, a missing CGEvent falls back to the mouse location, a non-finite or far-off pointer is refused before hit-testing, the window must be the topmost under the pointer, and a non-finite or huge magnification becomes a factor between 0.05 and 4 before the clamped, finite-checked resize",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaPictureInPicture.mm#PinchFromOtherApp",
+    "packages/ardiacore/ios/ArdiaPiPZoomMath.h#UsablePointer",
+    "packages/ardiacore/ios/ArdiaPiPZoomMath.h#MagnifyFactor",
+    "packages/ardiacore/ios/ArdiaPiPController.mm#if (!backing) return NSEvent.mouseLocation;",
+    "packages/ardiacore/tests/pip-zoom.test.cc#for (double hostile"
+   ],
+   "detected": false
+  },
+  {
+   "id": "windows-engine:renderer-efficiency-counts",
+   "source": "native",
+   "guard": "Background renderer efficiency counts kept by the Windows engine layer itself, asked for and kept per consent epoch; only whole positive numbers under the seven known keys are added, anything else counts as 0",
+   "checks": [
+    "packages/expo-windows/src/engine/rendererEfficiency.ts",
+    "scripts/windows/engine/src/ardia/win/renderer_efficiency.cc"
    ],
    "detected": false
   }

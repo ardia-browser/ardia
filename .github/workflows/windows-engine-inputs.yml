@@ -7,6 +7,7 @@ on:
       - "engine/chromium/**"
       - "engine/ardiacore/**"
       - "engine/ardiacore-linux/**"
+      - "engine/ardiacore-desktop/**"
       - "engine/engine-key.*"
       - "packages/ardiacore/prebuilt-engines.tsv"
       - "packages/ardiacore/prebuilt-engines-linux.tsv"

@@ -622,8 +622,11 @@ command ([linux-ci.md](linux-ci.md) › Linux releases).
   - `lib/ardia/ardia-ui`;
   - `lib/ardia/extensions/ublock`;
   - `lib/ardia/VERSION` (with `--version`), one line with the Ardia version (`0.2.44`, `0.2.44-nightly.3`);
-  - `lib/ardia/ardia-update` (mode 0755), the self-update helper, and `lib/ardia/linux-update.pem` (0644), the
-    Ed25519 public key it verifies release manifests with;
+  - `lib/ardia/ardia-update` (mode 0755), the self-update helper, `lib/ardia/ardia-update-verify` (0755, with
+    `--update-verify`), the static `ardia-update-core` verifier it checks every manifest and package with
+    (`scripts/linux/update-verify.sh` builds it for `x86_64-unknown-linux-musl`; a package without it reports
+    `unsupported noVerifier` and never updates itself), and `lib/ardia/linux-update.pem` (0644), the Ed25519 public
+    key the manifests are signed for;
   - `lib/ardia/cli/` (with `--cli`): `ardia-cli-install.sh` (`apps/cli/install.sh`, the pinned installer from
     ardia-browser/plugins; `scripts/release/official-plugins.py check` holds it to the pin, mode 0755),
     `ardia-cli-<version>-linux-x64.tar.gz` and `ardia-cli.sha256` (the digest is its first token), the `ardia`
@@ -665,7 +668,8 @@ command ([linux-ci.md](linux-ci.md) › Linux releases).
     Chromium loads them only on Qt desktops) maps to its Debian package with the 64-bit-time name first
     (`libasound2t64 | libasound2`), `libc6`'s minimum is the highest `GLIBC_` symbol version, and the list adds what
     Chromium loads at run time (GTK 3, libsecret, Liberation fonts, xdg-utils) and `curl`, which the bundled CLI
-    installer downloads with, and `openssl`, which the update helper verifies signatures with. A library with no
+    installer downloads with, and `openssl` (the update helper used it before `ardia-update-verify`; it stays until
+    the packaging fixtures under `engine/patches/build/tests` drop it). A library with no
     package in `SONAME_PACKAGES` fails the build, so a new engine dependency can't ship unnoticed. polkit, `pkexec`
     and Vulkan are `Recommends`;
   - it `Provides: www-browser`; `postinst` makes `chrome-sandbox` setuid root, copies the AppArmor profile to
@@ -707,8 +711,9 @@ command ([linux-ci.md](linux-ci.md) › Linux releases).
 - **Self-update helper.** `lib/ardia/ardia-update` (`scripts/linux/ardia-update`, bash) installs a release the
   browser downloaded. `ardia-update kind` prints one line: `appimage` (`$APPIMAGE` names a file whose folder the user
   can write, and when `$APPDIR` is set the helper runs from it), `managed` (pacman or rpm owns `lib/ardia/chrome`, or
-  a dpkg package other than `ardia`), `deb` (dpkg's `ardia` owns it), `tarball`, or `unsupported <reason>`: `noVersion`,
-  `noKey`, `noOpenssl` (no OpenSSL 3 with `pkeyutl -rawin`), and for deb and tarball `noPkexec` (no setuid pkexec) and
+  a dpkg package other than `ardia`), `deb` (dpkg's `ardia` owns it), `tarball`, or `unsupported <reason>`: `noVerifier`
+  (no `lib/ardia/ardia-update-verify` that runs here), `noVersion`, `noKey`, and for deb and tarball `noPkexec` (no
+  setuid pkexec) and
   `noPolicy` (the installed policy's update action doesn't name this helper, as for a tarball run in place).
   `ardia-update install <dir>` runs as root through `pkexec` for a `.deb` or tarball and as the user for an AppImage.
   It takes a lock (`/run/ardia-update.lock`, or the AppImage's folder), refuses a folder or file that isn't a regular,
@@ -716,11 +721,15 @@ command ([linux-ci.md](linux-ci.md) › Linux releases).
   (64 bytes) into a fresh 0700 folder, read by `dd iflag=nofollow,nonblock` running as the calling user (`setpriv`), so
   root never opens a path the caller controls. That reader only gets a pipe that root's `head` empties into the copy,
   never the copy or the lock itself, so a process of the caller that traces it can't change a file after it is
-  verified. It verifies them with
-  `openssl pkeyutl -verify -rawin` against `lib/ardia/linux-update.pem`, parses the manifest strictly (it must
-  re-serialize byte for byte, and each package name must be exactly `Ardia-<V>-linux-x64.<deb|tar.xz|AppImage>`),
-  requires `<V>` to be newer than `lib/ardia/VERSION` (a nightly sorts before its stable), then copies its package
-  (at most the manifest's size, the same way) and checks size and sha256. Everything from its start to the post-install version check shares
+  verified. The helper parses nothing itself: `lib/ardia/ardia-update-verify manifest` (`packages/core-rs`'s
+  `ardia-update-verify`, a thin command line over `ardia-update-core`) verifies the Ed25519 signature against
+  `lib/ardia/linux-update.pem`, parses the manifest strictly (canonical format 1, each package name exactly
+  `Ardia-<V>-linux-x64.<deb|tar.xz|AppImage>` for the `<V>` the file name gives), requires `<V>` to be newer than
+  `lib/ardia/VERSION` (a nightly sorts before its stable) and a line for this kind, and answers one line,
+  `ok <name> <sha256> <size>` or `failed <reason>`. The helper then copies the package (at most that size, the same
+  way) and `ardia-update-verify package` checks the signature again and the copy's size and sha256. The verifier
+  opens nothing through a symbolic link and reads nothing past its cap; `lib/ardia/VERSION` is checked with
+  `ardia-update-verify version`, so no version rule lives in bash. Everything from its start to the post-install version check shares
   one 9-minute deadline, enforced with `timeout`, so the helper gives up before the browser's 10-minute deadline. Run
   through pkexec, it re-runs itself under a `timeout` watchdog 30 s past that deadline too, since the browser can't signal a root process,
   so a step outside that deadline (a `stat` that stalls) still ends. A `.deb` goes through `apt-get install --no-remove`, a
@@ -745,11 +754,13 @@ command ([linux-ci.md](linux-ci.md) › Linux releases).
   `linux-sign` job signs the `linux` artifact with the `LINUX_UPDATE_ED_PRIVATE_KEY` secret (a PKCS#8 PEM from
   `openssl genpkey -algorithm ed25519`) in a job of its own, so the build never sees it; if it fails, the release
   ships without the manifest and warns. `node --test scripts/linux/sign-update.test.mjs` covers the script.
-- **Testing the helper.** `scripts/linux/update-helper-test.sh` builds two stand-in releases with package.py, signs
-  them with a throwaway key it swaps into each test install, and in `debian:13` and `ubuntu:24.04` containers checks
-  `kind` and its reasons, upgrades a `.deb`, a tarball (no `ardia.new`/`ardia.old` left, a process running from the old
-  tree survives) and an AppImage as a user, and every refusal; in `archlinux` it installs the PKGBUILD and checks
-  `kind` is `managed`.
+- **Testing the helper.** `scripts/linux/update-helper-test.sh` builds `ardia-update-verify` and two stand-in
+  releases with package.py, signs them with a throwaway key it swaps into each test install, and in `debian:13` and
+  `ubuntu:24.04` containers checks `kind` and its reasons (no OpenSSL needed, `noVerifier` without the verifier or
+  with one that doesn't run), upgrades a `.deb`, a tarball (no `ardia.new`/`ardia.old` left, a process running from
+  the old tree survives) and an AppImage as a user, and every refusal; in `archlinux` it installs the PKGBUILD and
+  checks `kind` is `managed`. The Rust workflow's `linux-update-helper` job runs it on every change to the helper,
+  the verifier or the packaging it reads.
 
 CI builds packages from a prebuilt engine instead of compiling Chromium; see [linux-ci.md](linux-ci.md).
 
@@ -801,7 +812,8 @@ pnpm --filter @ardia/desktop acceptance -- <extracted>/ardia/bin/ardia
 ### The Rust sync core in the engine build
 
 `packages/core-rs` builds inside the Chromium tree too, with Chromium's own Rust toolchain, so Chromium links a single
-Rust standard library. Nothing in `ac_linux_*` calls it yet.
+Rust standard library. `//ardia/linux` depends on `//ardia/core_rs:ardia_core`, and `ac_linux_sync_keys.cc` is the only
+caller: sync keys, sealing and opening files and passwords, and the recovery phrase all go through `ardia_core.h`.
 
 - **How it gets in.** `engine/ardiacore-linux/copies.tsv` copies `packages/core-rs` into `//ardia/core_rs`, with the same
   layout. Those files count toward the Linux engine key only, never the Mac's. `packages/core-rs/BUILD.gn` is the
@@ -1001,7 +1013,7 @@ Rust standard library. Nothing in `ac_linux_*` calls it yet.
     keyboard focus where it was, as the native buttons do, and lights slid off the window with a hidden sidebar are
     inert, so Tab never lands on them.
   - Desktop layout and window state: the engine answers two calls, each advertised in the bootstrap's capabilities
-    (`ac_linux_window_state.h`), and sends an `ArdiaShell` event of the same name when a value changes:
+    (`ac_desktop_window_state.h`), and sends an `ArdiaShell` event of the same name when a value changes:
     - `ArdiaShell.windowButtonLayout` → `{ layout, desktop }`: `layout` is GTK's raw `gtk-decoration-layout` string
       (GNOME fills it from `org.gnome.desktop.wm.preferences button-layout`: Ubuntu `:minimize,maximize,close`, upstream
       GNOME `appmenu:close`, elementary `close:maximize`), or `null` without GTK's Linux UI; `desktop` is the browser's
@@ -1041,7 +1053,7 @@ Rust standard library. Nothing in `ac_linux_*` calls it yet.
 - **Header drag and double-click.** Dragging the header moves the window (`DispatchHostWindowDragMovement`).
   Double-clicking it runs the desktop's titlebar action.
 - **Outer frame.** The host overlays Chromium's client view, and what happens to Chromium's frame around it depends on
-  who decorates the window, decided per window (`CompositorDecorates`, `ac_linux_window_corners.h`). A window's own
+  who decorates the window, decided per window (`CompositorDecorates`, `ac_desktop_window_corners.h`). A window's own
   xdg-decoration answer wins: server-side means the compositor decorates it, client-side means Ardia does. Only with no
   answer (X11, or a compositor without the protocol) does `XDG_CURRENT_DESKTOP` decide: a tiling desktop (hyprland,
   sway, niri, i3, river, dwl, bspwm, awesome, qtile, xmonad, dwm, herbstluftwm, regolith; the window-buttons shell
@@ -1137,7 +1149,7 @@ Rust standard library. Nothing in `ac_linux_*` calls it yet.
     (`ui::Clipboard`, plain text from the copy and paste buffer, as the Mac reads `NSPasteboard`). An older engine
     without it leaves the shell's `navigator.clipboard.readText()`, which answers empty in `chrome://ardia`.
   - **Back and forward swipes over a page.** A two-finger horizontal touchpad scroll the page doesn't consume
-    (`ac_linux_page_swipe.h`, from the page channel's gesture acks) is sent to the shell as
+    (`ac_desktop_page_swipe.h`, from the page channel's gesture acks) is sent to the shell as
     `ArdiaShell`/`onPageSwipe` and drives the same swipe overlay as a swipe over the shell
     (`shims/web/motion/swipe.ts`). Chromium's own overscroll navigation is off in every bound tab. A swipe the page
     starts by scrolling stays with the page, and the momentum after the fingers lift ends the swipe. Untested on
@@ -1656,8 +1668,23 @@ Linux reads calendars from Evolution Data Server, which GNOME Online Accounts, G
 
 ### Sync
 
-- **Format.** Folder sync uses the macOS format byte for byte (`ac_linux_sync_crypto`, `ac_linux_sync_vault`), so a
-  Linux and a Mac install can share a Syncthing, Dropbox or NAS folder.
+- **Format.** Folder sync uses the macOS format byte for byte, so a Linux and a Mac install can share a Syncthing,
+  Dropbox or NAS folder. The format is the shared Rust core (`packages/core-rs`, BoringSSL inside the engine), called
+  through `ac_linux_sync_keys`; `ac_linux_sync_vault` keeps the files.
+  - Linux splits a typed phrase into words as it always has (ASCII letters, a separator list), turns any word that
+    can't be a list word into `x`, and hands the core those 24 words, so the core checks words, prefixes and the
+    checksum and its unknown-word index points at the word the user typed.
+  - The host tests (`tests/test_sync.py`, `tests/test_live.py`) build the core with cargo (RustCrypto) and link it;
+    without cargo they skip, and in CI (`CI` set) they fail.
+  - Failed opens travel back with the call that hit them: `ArdiaSync.read` adds `openFailures` (counts by reason)
+    when a file in it didn't open, and a failed `openLocal` answers `{ openFailure: <reason> }`. `hostSync.ts` strips
+    both before the shared engine sees the result (it gets the listing, or `null`) and counts them under the consent
+    token taken when that call began, into `syncFileCounts.ts`, which the hourly usage counts drain. No count lives in
+    the engine, so nothing from before opting in can be claimed later.
+  - Every window asks `ArdiaSync.core` once at start, so whichever window leads telemetry sends `sync_core: "rust"`
+    on `sync_toggled` even when another window holds sync. Toggles that arrive while that answer is pending, on and
+    off alike, wait for it in order (`whenSyncCore`, `telemetry/syncToggles.ts`) and are sent under the consent token
+    taken at each toggle, so they are dropped if sharing ended meanwhile; an engine without the call answers `native`.
   - HKDF-SHA256 key derivation.
   - `NNS1` files with AES-256-GCM and 1 KiB padding.
   - A 24-word BIP-39 phrase.
@@ -1995,7 +2022,7 @@ Both are ports of the Mac's native code (`ArdiaWebView+Peek.mm`, `ArdiaWebView+T
 
 - **Link status.** The `status` page event carries `fromBottom` beside `text`, as on the Mac: the pointer's distance
   from the page's bottom edge, in the shell's points, when the pointer is over the page
-  (`ShellHostView::PointerFromPageBottom`, `ac_linux_status_geometry.h`). The shared UI moves the bubble to the top
+  (`ShellHostView::PointerFromPageBottom`, `ac_desktop_status_geometry.h`). The shared UI moves the bubble to the top
   when the pointer is near the bottom.
 - **`ArdiaSystem.setThinScrollBars(thin)`** (Settings › Appearance › Scroll bars). Helium turns on Chromium's
   overlay scroll bars in the mode that follows the OS, which on Linux is GTK's `gtk-overlay-scrolling`.
@@ -2038,7 +2065,7 @@ Both are ports of the Mac's native code (`ArdiaWebView+Peek.mm`, `ArdiaWebView+T
 - **Escape a page leaves unhandled.** `chromium-linux-unhandled-key.patch` hands a key a tab's page left unhandled to
   the host before the window gets it. For a key-down of Escape without Ctrl, Alt or Super, in a tab the window
   shows, the host sends that tab's page the Mac's `command` event `{command: "escape", text: ""}`
-  (`ac_linux_page_keys.h`), which closes Peek and a Little Ardia window while the page has focus. Chromium still
+  (`ac_desktop_page_keys.h`), which closes Peek and a Little Ardia window while the page has focus. Chromium still
   gets the key afterwards (it stops a loading page). An Escape that leaves full screen or a page that handles Escape
   never gets here. Advertised as `tab.unhandledEscape`.
 - **App activation.** When an Ardia window loses activation and no other Ardia window (a Settings or Import window
@@ -2062,7 +2089,7 @@ Both are ports of the Mac's native code (`ArdiaWebView+Peek.mm`, `ArdiaWebView+T
 ### Problem reports
 
 The engine serves the part of the Mac's `ArdiaReport` that needs no recording (`ac_linux_report.cc`, rules in
-`ac_linux_report_core.cc`). It advertises `report.files` (drafts and gzip) and `report.send` (the requests), not
+`ac_desktop_report_core.cc`). It advertises `report.files` (drafts and gzip) and `report.send` (the requests), not
 the method names: the shell sends a module method straight to a host that advertises it by name, and four of these
 answer at once on the Mac and with a promise here, so the shell has to opt in.
 
@@ -2101,7 +2128,7 @@ answer at once on the Mac and with a promise here, so the shell has to opt in.
 ### Ardia's notifications
 
 `ArdiaApp.notificationPermission`, `requestNotificationPermission`, `postNotification` and `removeNotifications`
-(`ac_linux_notifications.cc`, with the checks and the ledger in `ac_linux_notifications_core.cc`) show Ardia's own
+(`ac_linux_notifications.cc`, with the checks and the ledger in `ac_desktop_notifications_core.cc`) show Ardia's own
 notifications, such as a meeting reminder, through Chromium's Linux notification stack
 (`NotificationDisplayService`, then `org.freedesktop.Notifications`), the one sites' notifications use.
 
@@ -2246,7 +2273,7 @@ Newest first. Each entry names the upstream commit `linux-support` was rebased o
   `e3f26f7253b3` to `756f755c2bf0`. Linux changes:
   - `extensions.loadHealth` is routed to `ac_extensions_load_health`, so `extensions_loaded` reports from Linux.
   - Google suggestions moved to `www.google.com/complete/search?client=chrome`; the native allowlist
-    (`ac_linux_suggest_policy.h`) and the F10 fixture follow it. Linux keeps its own `ArdiaSearch.suggest` (no cookies,
+    (`ac_desktop_suggest_policy.h`) and the F10 fixture follow it. Linux keeps its own `ArdiaSearch.suggest` (no cookies,
     the endpoint allowlist) rather than upstream's `search.suggest`, which sends the profile's cookies to any URL. The
     Linux fetcher counts `search_suggest_ok` and `search_suggest_failed`; `search_suggest_blocked` stays 0.
   - Onboarding is three steps, and the default browser and Dock questions moved to the last one. Its probes refuse on

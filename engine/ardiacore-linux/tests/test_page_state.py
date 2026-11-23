@@ -7,6 +7,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 FILES = [SOURCE / 'ardia/linux' / f'ac_linux_{name}.cc' for name in ['page_lease', 'security', 'history_zoom', 'theme', 'page_status', 'page_state']]
 FIXTURE = ROOT / 'tests/fixtures/page_state.h'
 
@@ -24,7 +25,7 @@ class PageStateTests(unittest.TestCase):
                 header.parent.mkdir(parents=True, exist_ok=True)
                 header.write_text(f'#include "{FIXTURE}"\n')
         cls.binary = directory / 'page-state'
-        subprocess.run([os.environ.get('CXX', 'c++'), '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g', '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-no-pie', '-I', str(directory), '-I', str(SOURCE), *map(str, FILES), str(ROOT / 'tests/page_state_test.cc'), '-o', str(cls.binary)], check=True, text=True, timeout=90)
+        subprocess.run([os.environ.get('CXX', 'c++'), '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g', '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-no-pie', '-I', str(directory), '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE), *map(str, FILES), str(ROOT / 'tests/page_state_test.cc'), '-o', str(cls.binary)], check=True, text=True, timeout=90)
 
     @classmethod
     def tearDownClass(cls):

@@ -1,20 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
-usage='usage: scripts/linux/update-helper-test.sh [--work DIR] [image...]
+usage='usage: scripts/linux/update-helper-test.sh [--work DIR] [--update-verify FILE] [image...]
 
-Tests lib/ardia/ardia-update, the Linux self-update helper, in fresh
-containers (docker or podman). It builds two stand-in releases with
+Tests lib/ardia/ardia-update, the Linux self-update helper, and the
+lib/ardia/ardia-update-verify it checks every manifest and package with, in
+fresh containers (docker or podman). It builds two stand-in releases with
 package.py, OLD 0.2.47-nightly.6 and NEW 0.2.47-nightly.9 (a copy of sleep
 stands in for chrome), signs their manifests with a throwaway Ed25519 key
 that each test install swaps into lib/ardia/linux-update.pem, and forges the
 manifests the helper must refuse.
 
 In each Debian-family image (default debian:13 and ubuntu:24.04) it checks
-kind for every install type and missing requirement, upgrades a .deb, a
+kind for every install type and missing requirement (the verifier among
+them), upgrades a .deb, a
 tarball installed with install.sh --prefix /usr (no ardia.new or ardia.old
 left behind, and a process running from the old tree survives) and an
-AppImage as a non-root user, and checks every refusal: a bad signature, the
-wrong key, an older or equal version, checksum and size mismatches,
+AppImage as a non-root user, and checks every refusal: a bad, short, long or
+missing signature, the wrong key, a key that is not an Ed25519 key, an older
+or equal version, checksum and size mismatches,
 symlinked, hard-linked, FIFO and foreign-owned files, a manifest naming
 another version'"'"'s file, a path or shell metacharacters, a bad version
 string, a concurrent run, a relative folder and an AppImage replaced after
@@ -23,17 +26,23 @@ private copies, and that its watchdog stops a stalled step. In archlinux (defaul
 installs the AUR PKGBUILD built from the OLD tarball and checks kind is
 managed.
 
-  --work DIR   build the releases and fixtures in DIR (default: a temporary
-               directory, removed afterwards)
+  --work DIR            build the releases and fixtures in DIR (default: a
+                        temporary directory, removed afterwards)
+  --update-verify FILE  bundle this x86_64-unknown-linux-musl
+                        ardia-update-verify (default: build it with
+                        scripts/linux/update-verify.sh)
 
-Needs python3, node, openssl, dpkg-deb, readelf, xz and docker or podman.'
+Needs python3, node, openssl, dpkg-deb, readelf, xz, docker or podman, and
+cargo unless --update-verify is given.'
 
 work=""
+update_verify=()
 images=()
 while (($#)); do
   case "$1" in
     -h|--help) echo "$usage"; exit 0 ;;
     --work) work=${2:?--work needs a directory}; shift 2 ;;
+    --update-verify) update_verify=(--update-verify "${2:?--update-verify needs a file}"); shift 2 ;;
     -*) echo "$usage" >&2; exit 64 ;;
     *) images+=("$1"); shift ;;
   esac
@@ -46,6 +55,10 @@ for tool in python3 node openssl dpkg-deb readelf xz; do
 done
 
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)
+if ((${#update_verify[@]} == 0)); then
+  echo "==> building ardia-update-verify"
+  update_verify=(--update-verify "$("$root/scripts/linux/update-verify.sh")")
+fi
 if [[ -z "$work" ]]; then
   work=$(mktemp -d)
   trap 'rm -rf "$work"' EXIT
@@ -76,7 +89,7 @@ build_release() {
   printf '<html><body>Ardia %s</body></html>\n' "$version" > "$stub/ui/index.html"
   python3 "$root/scripts/linux/package.py" --out "$stub/engine" --ui "$stub/ui" --version "$version" --no-ubo-seed \
     --destination "$out/Ardia-$version-linux-x64.tar.xz" --deb "$out/Ardia-$version-linux-x64.deb" \
-    --appimage "$out/Ardia-$version-linux-x64.AppImage" >/dev/null
+    --appimage "$out/Ardia-$version-linux-x64.AppImage" "${update_verify[@]}" >/dev/null
 }
 echo "==> building $OLD and $NEW with package.py"
 build_release "$OLD"
@@ -122,6 +135,10 @@ release_case smaller "$NEW" "$NEW"
 release_case symlink "$NEW" "$NEW"
 release_case bigsig "$NEW" "$NEW"
 printf 'x' >> "$cases/bigsig/Ardia-$NEW-linux-update.txt.sig"
+release_case shortsig "$NEW" "$NEW"
+truncate -s 63 "$cases/shortsig/Ardia-$NEW-linux-update.txt.sig"
+release_case nosig "$NEW" "$NEW"
+rm "$cases/nosig/Ardia-$NEW-linux-update.txt.sig"
 for extension in deb tar.xz AppImage; do
   file="Ardia-$NEW-linux-x64.$extension"
   flip_last_byte "$cases/checksum/$file"
@@ -219,7 +236,7 @@ expect() {
   if [[ "$got" == "$wanted" ]]; then ok "$label: $got"; else bad "$label: wanted '$wanted', got '$got'"; fi
 }
 apt-get update -qq
-apt-get install -y -qq --no-install-recommends pkexec openssl xz-utils >/dev/null
+apt-get install -y -qq --no-install-recommends pkexec xz-utils >/dev/null
 useradd -m -u 1234 tester
 helper=/usr/lib/ardia/ardia-update
 cases=/home/tester/cases
@@ -242,10 +259,11 @@ result_of() {
 }
 as_pkexec() { result_of timeout 300 env -i PATH=/usr/bin:/bin HOME=/root PKEXEC_UID=1234 "$@"; }
 swap_key() { cp /work/keys/test.pub.pem /usr/lib/ardia/linux-update.pem; }
+verifier=/usr/lib/ardia/ardia-update-verify
 installed_version() { cat /usr/lib/ardia/VERSION; }
 refusals() {
   local kind=$1 entry name wanted
-  for entry in badsig:signature wrongkey:signature bigsig:signature older:notNewer equal:notNewer checksum:checksum size:checksum \
+  for entry in badsig:signature wrongkey:signature bigsig:signature shortsig:signature nosig:missing older:notNewer equal:notNewer checksum:checksum size:checksum \
     smaller:checksum symlink:missing othername:manifest badversion:manifest traversal:manifest metachar:manifest \
     outoforder:manifest crlf:manifest versionmismatch:manifest bigmanifest:manifest; do
     name=${entry%%:*} wanted=${entry#*:}
@@ -253,6 +271,13 @@ refusals() {
     expect "$kind refuses $name" "failed $wanted" "$(as_pkexec "$helper" install "$cases/$name")"
   done
   [[ "$kind" != deb ]] || { stage tarballonly; expect "deb refuses a manifest without a deb line" "failed kind" "$(as_pkexec "$helper" install "$cases/tarballonly")"; }
+  stage valid
+  printf -- '-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VxAyEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\n-----END PUBLIC KEY-----\n' > /usr/lib/ardia/linux-update.pem
+  expect "$kind refuses with a key that isn't an Ed25519 key" "failed signature" "$(as_pkexec "$helper" install "$cases/valid")"
+  swap_key
+  mv "$verifier" /tmp/verifier.aside
+  expect "$kind refuses without the verifier" "failed kind" "$(as_pkexec "$helper" install "$cases/valid")"
+  mv /tmp/verifier.aside "$verifier"
   stage valid
   ln "$cases/valid/Ardia-$NEW-linux-x64.deb" "$cases/valid/linked.deb"
   ln "$cases/valid/Ardia-$NEW-linux-x64.tar.xz" "$cases/valid/linked.tar.xz"
@@ -294,6 +319,8 @@ echo "-- deb"
 apt-get install -y -qq "/work/pkgs/$OLD/Ardia-$OLD-linux-x64.deb" >/tmp/apt.log 2>&1 || { cat /tmp/apt.log; exit 1; }
 expect "deb helper mode and owner" "755 root" "$(stat -c '%a %U' "$helper")"
 expect "deb key mode" "644" "$(stat -c '%a' /usr/lib/ardia/linux-update.pem)"
+expect "deb verifier mode and owner" "755 root" "$(stat -c '%a %U' "$verifier")"
+expect "the verifier is static and runs without OpenSSL" "ok" "$(env -i "$verifier" version "$OLD")"
 swap_key
 expect "deb kind" deb "$(kind_of "$helper")"
 expect "an unprivileged kind ignores APPIMAGE outside an AppImage" deb "$(as_tester APPIMAGE=/home/tester/x.AppImage APPDIR=/tmp/elsewhere "$helper" kind)"
@@ -348,6 +375,7 @@ tar -xJf "/work/pkgs/$OLD/Ardia-$OLD-linux-x64.tar.xz" -C /tmp/old
 /tmp/old/ardia/install.sh --prefix /usr
 swap_key
 expect "tarball helper mode and owner" "755 root" "$(stat -c '%a %U' "$helper")"
+expect "tarball verifier mode and owner" "755 root" "$(stat -c '%a %U' "$verifier")"
 expect "tarball kind" tarball "$(kind_of "$helper")"
 mv /usr/lib/ardia/VERSION /tmp/VERSION.aside
 expect "kind without VERSION" "unsupported noVersion" "$(kind_of "$helper")"
@@ -355,9 +383,15 @@ mv /tmp/VERSION.aside /usr/lib/ardia/VERSION
 mv /usr/lib/ardia/linux-update.pem /tmp/key.aside
 expect "kind without the key" "unsupported noKey" "$(kind_of "$helper")"
 mv /tmp/key.aside /usr/lib/ardia/linux-update.pem
-mv /usr/bin/openssl /tmp/openssl.aside
-expect "kind without openssl" "unsupported noOpenssl" "$(kind_of "$helper")"
-mv /tmp/openssl.aside /usr/bin/openssl
+if command -v openssl >/dev/null; then mv "$(command -v openssl)" /tmp/openssl.aside; fi
+expect "kind without openssl" tarball "$(kind_of "$helper")"
+[[ ! -e /tmp/openssl.aside ]] || mv /tmp/openssl.aside /usr/bin/openssl
+mv "$verifier" /tmp/verifier.aside
+expect "kind without the verifier" "unsupported noVerifier" "$(kind_of "$helper")"
+printf '#!/bin/sh\nexit 1\n' > "$verifier"
+chmod 0755 "$verifier"
+expect "kind with a verifier that doesn't run here" "unsupported noVerifier" "$(kind_of "$helper")"
+mv /tmp/verifier.aside "$verifier"
 chmod u-s /usr/bin/pkexec
 expect "kind without a setuid pkexec" "unsupported noPkexec" "$(kind_of "$helper")"
 chmod u+s /usr/bin/pkexec
@@ -425,7 +459,7 @@ expect "kind without APPIMAGE" "unsupported noPolicy" "$(as_tester "$inner" kind
 chmod 0555 "$apps"
 expect "kind when the AppImage's folder isn't writable" "unsupported noPolicy" "$(as_app "$inner" kind)"
 chmod 0755 "$apps"
-for entry in badsig:signature wrongkey:signature older:notNewer equal:notNewer checksum:checksum size:checksum symlink:missing othername:manifest traversal:manifest metachar:manifest; do
+for entry in badsig:signature wrongkey:signature shortsig:signature older:notNewer equal:notNewer checksum:checksum size:checksum smaller:checksum symlink:missing othername:manifest traversal:manifest metachar:manifest crlf:manifest bigmanifest:manifest; do
   name=${entry%%:*} wanted=${entry#*:}
   stage "$name"
   expect "appimage refuses $name" "failed $wanted" "$(app_install "$cases/$name")"
@@ -460,7 +494,7 @@ CHECK
 
 cat > "$work/check-arch.sh" <<'CHECK'
 set -euo pipefail
-pacman -Syu --noconfirm --needed base-devel openssl >/dev/null 2>&1
+pacman -Syu --noconfirm --needed base-devel >/dev/null 2>&1
 useradd -m builder
 cp -r /work/arch /home/builder/build
 chown -R builder:builder /home/builder/build

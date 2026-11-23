@@ -5,14 +5,18 @@ import {
   HELD_LOGINS_DOCUMENT,
   SYNC_CAPABILITIES,
   configureHeldLogins,
+  configureOpenFailureCount,
   createHeldLogins,
   keyringResumer,
   newSyncDeviceId,
   refreshSyncDocuments,
   whileResettingHeldLogins,
+  loadSyncCore,
   syncModuleMethod,
+  whenSyncCore,
 } from "./hostSync.ts";
 import { NO_AUTHORITY_MESSAGE, REMOTE_METHODS, startSyncAuthority } from "./syncAuthority.ts";
+import { consentToken, setConsentPeriod, stillValid } from "../../browser/src/state/telemetry/consentPeriod.ts";
 
 const PHRASE = "legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth title";
 const fast = { set: (callback, ms) => setTimeout(callback, Math.min(ms, 15)), clear: (handle) => clearTimeout(handle) };
@@ -342,4 +346,97 @@ test("a forwarded sync.now checks its caller after the sync window's cycle ends,
   assert.equal(started, 0);
   assert.equal(await syncNowIfIdle(engineSyncNow), true);
   assert.equal(started, 1);
+});
+
+test("each read and openLocal counts its own open failures under the consent it began in, and hands the engine a plain result", async () => {
+  let consent = null;
+  const noted = [];
+  configureOpenFailureCount(() => consent, (started, failures) => noted.push({ started, failures }));
+  const replies = {
+    "ArdiaSync.read": [],
+    "ArdiaSync.openLocal": [],
+  };
+  const host = fakeHost((method) => new Promise((resolve) => replies[method].push(resolve)));
+  try {
+    const read = resolveHostModule(host, "ArdiaSync", "read");
+    const openLocal = resolveHostModule(host, "ArdiaSync", "openLocal");
+    const beforeOptIn = read("/sync", "app", []);
+    const localBeforeOptIn = openLocal("AAAA");
+    consent = "period-1";
+    const afterOptIn = read("/sync", "app", []);
+    const clean = read("/sync", "app", []);
+    const localAfterOptIn = openLocal("AAAA");
+    const fine = openLocal("BBBB");
+    await tick();
+    assert.equal(replies["ArdiaSync.read"].length, 3);
+    assert.equal(replies["ArdiaSync.openLocal"].length, 3);
+    const damaged = { files: [], pending: [], damaged: [{ id: "a", age: 0 }], present: ["a"] };
+    replies["ArdiaSync.read"][1]({ ...damaged, openFailures: { format: 1, authentication: 0, too_large: 0, other: 0 } });
+    replies["ArdiaSync.read"][0]({ ...damaged, openFailures: { format: 0, authentication: 4, too_large: 0, other: 0 } });
+    replies["ArdiaSync.read"][2]({ files: [], pending: [], damaged: [], present: [] });
+    replies["ArdiaSync.openLocal"][0]({ openFailure: "authentication" });
+    replies["ArdiaSync.openLocal"][1]({ openFailure: "too_large" });
+    replies["ArdiaSync.openLocal"][2]("{}");
+    assert.deepEqual(await afterOptIn, damaged, "the counts never reach the shared engine's listing");
+    assert.deepEqual(await beforeOptIn, damaged);
+    assert.deepEqual(await clean, { files: [], pending: [], damaged: [], present: [] });
+    assert.equal(await localBeforeOptIn, null, "a failed open is null to the engine, as before");
+    assert.equal(await localAfterOptIn, null);
+    assert.equal(await fine, "{}");
+    assert.deepEqual(noted, [
+      { started: "period-1", failures: { format: 1, authentication: 0, too_large: 0, other: 0 } },
+      { started: null, failures: { format: 0, authentication: 4, too_large: 0, other: 0 } },
+      { started: null, failures: { authentication: 1 } },
+      { started: "period-1", failures: { too_large: 1 } },
+    ], "a request that began before opting in carries no consent, even when it finishes after");
+  } finally {
+    configureOpenFailureCount(() => null, () => {});
+  }
+});
+
+function pendingCore() {
+  let answer;
+  const host = fakeHost((method) => (method === "ArdiaSync.core" ? new Promise((resolve, reject) => (answer = { resolve, reject })) : null));
+  return { host, answer: () => answer };
+}
+
+function recordToggle(recorded) {
+  return (core, consent) => {
+    if (stillValid(consent)) recorded.push({ on: true, sync_core: core });
+  };
+}
+
+test("a sync toggle that reaches the telemetry leader while ArdiaSync.core is pending is recorded with the engine's answer, not native", async () => {
+  setConsentPeriod(true, "toggle-period");
+  const recorded = [];
+  const { host, answer } = pendingCore();
+  const loading = loadSyncCore(host);
+  await tick();
+  whenSyncCore(consentToken(), recordToggle(recorded));
+  assert.deepEqual(recorded, [], "nothing is recorded before the engine answers");
+  answer().resolve("rust");
+  await loading;
+  await tick();
+  assert.deepEqual(recorded, [{ on: true, sync_core: "rust" }]);
+  whenSyncCore(consentToken(), recordToggle(recorded));
+  assert.deepEqual(recorded.at(-1), { on: true, sync_core: "rust" }, "once settled, a toggle records at once");
+  assert.equal(host.calls.filter((call) => call.method === "ArdiaSync.core").length, 1, "no keyring status or authority claim is needed");
+  setConsentPeriod(false, null);
+});
+
+test("an engine without ArdiaSync.core, or one that fails it, records native once it answers", async () => {
+  setConsentPeriod(true, "older-engine");
+  const recorded = [];
+  const { host, answer } = pendingCore();
+  const loading = loadSyncCore(host);
+  await tick();
+  whenSyncCore(consentToken(), recordToggle(recorded));
+  answer().reject(new Error("ERR_UNKNOWN_CALL"));
+  assert.equal(await loading, "native");
+  await tick();
+  assert.deepEqual(recorded, [{ on: true, sync_core: "native" }]);
+  await loadSyncCore(fakeHost((method) => (method === "ArdiaSync.core" ? "something else" : null)));
+  whenSyncCore(consentToken(), recordToggle(recorded));
+  assert.deepEqual(recorded.at(-1), { on: true, sync_core: "native" });
+  setConsentPeriod(false, null);
 });

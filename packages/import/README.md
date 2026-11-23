@@ -15,7 +15,7 @@ the file and its WAL before opening it.
 
 | Kind | Chromium family (Chrome, Edge, Brave, Helium, Opera, Vivaldi, Island, Dia…) | Arc | Firefox |
 |---|---|---|---|
-| bookmarks | `ChromiumBookmarks.swift`: `Bookmarks`, `AccountBookmarks` | same as Chromium | `Firefox.swift`: `places.sqlite` |
+| bookmarks | `ChromiumBookmarks.swift` (parsed by Rust's `ardia_import_chromium_bookmarks`): `Bookmarks`, `AccountBookmarks` | same as Chromium | `Firefox.swift`: `places.sqlite` |
 | history | `HistoryReader.swift`: `History` | same as Chromium | `HistoryReader.swift`: `places.sqlite` |
 | tabs | `ChromiumSessions.swift`: newest readable `Session_*` across `Sessions/` (SNSS v3) and `Sessions_Encrypted/` (v5, Chromium 156+, needs the key; without it the cleartext copy is read), legacy `Current Session` | `ArcSidebar.swift` | `Firefox.swift`: `sessionstore-backups/recovery.jsonlz4`, `sessionstore.jsonlz4` |
 | passwords | `ChromiumSecrets.swift`: `Login Data`, `Login Data For Account` (key from `ChromiumCrypto.swift`) | same as Chromium | `FirefoxLogins.swift`: `key4.db` + `logins.db` (A256GCM JWE, key labelled `as-logins-key`) merged with `logins.json` |

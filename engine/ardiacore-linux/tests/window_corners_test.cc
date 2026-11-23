@@ -4,9 +4,9 @@
 #include <limits>
 #include <utility>
 
-#include "ardia/linux/ac_linux_window_corners.h"
+#include "ardia/desktop/ac_desktop_window_corners.h"
 
-namespace corners = ardia::linux_window_corners;
+namespace corners = ardia::desktop_window_corners;
 
 namespace {
 

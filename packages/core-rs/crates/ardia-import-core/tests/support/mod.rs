@@ -79,6 +79,78 @@ pub fn materialize(spec: &Value) -> Vec<u8> {
     data
 }
 
+pub fn netscape_vectors() -> Value {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/import-netscape-vectors.json");
+    serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap()
+}
+
+pub fn netscape_cases() -> Vec<Value> {
+    netscape_vectors()["cases"].as_array().unwrap().clone()
+}
+
+const NETSCAPE_HEADER: &str = "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n";
+
+fn netscape_link(index: usize) -> String {
+    format!(
+        "<DT><A HREF=\"https://example.com/{index}\" ADD_DATE=\"{}\">L{index}</A>\n",
+        1_700_000_000 + index
+    )
+}
+
+fn netscape_generated(spec: &Value) -> String {
+    let number = |key: &str| spec.get(key).and_then(Value::as_u64).map(|count| count as usize);
+    let deep_link = "<DT><A HREF=\"https://deep.example/\">Deep</A>\n";
+    if let Some(count) = number("nestedFolders") {
+        let mut text = format!("{NETSCAPE_HEADER}<DL><p>\n{}", netscape_link(0));
+        for index in 1..=count {
+            text.push_str(&format!("<DT><H3>F{index}</H3>\n<DL><p>\n{}", netscape_link(index)));
+        }
+        text + &"</DL><p>\n".repeat(count + 1)
+    } else if let Some(count) = number("nestedLists") {
+        format!(
+            "{NETSCAPE_HEADER}{}{deep_link}{}",
+            "<DL><p>\n".repeat(count),
+            "</DL><p>\n".repeat(count)
+        )
+    } else if let Some(count) = number("unclosedLists") {
+        format!("{NETSCAPE_HEADER}{}{deep_link}", "<DL><p>\n".repeat(count))
+    } else if let Some(count) = number("links") {
+        let inside = number("insideFolders").unwrap_or(0);
+        let opened: String = (1..=inside)
+            .map(|index| format!("<DT><H3>F{index}</H3>\n<DL><p>\n"))
+            .collect();
+        let body: String = (0..count).map(netscape_link).collect();
+        format!(
+            "{NETSCAPE_HEADER}<DL><p>\n{opened}{body}{}",
+            "</DL><p>\n".repeat(inside + 1)
+        )
+    } else {
+        panic!("unknown input {spec}");
+    }
+}
+
+pub fn netscape_file(spec: &Value) -> Vec<u8> {
+    let mut data = if let Some(text) = spec.get("text") {
+        text.as_str().unwrap().as_bytes().to_vec()
+    } else if let Some(text) = spec.get("hex") {
+        hex(text.as_str().unwrap())
+    } else {
+        netscape_generated(spec).into_bytes()
+    };
+    let boms = spec.get("bom").and_then(Value::as_u64).unwrap_or(0) as usize;
+    data.splice(0..0, b"\xEF\xBB\xBF".repeat(boms));
+    if let Some(size) = spec.get("padTo").and_then(Value::as_u64) {
+        let size = size as usize;
+        assert!(
+            data.len() <= size,
+            "input is already {} bytes, over padTo {size}",
+            data.len()
+        );
+        data.resize(size, b' ');
+    }
+    data
+}
+
 pub fn files(case: &Value) -> [Option<Vec<u8>>; 2] {
     PROFILE_FILES.map(|name| case["files"].get(name).map(materialize))
 }

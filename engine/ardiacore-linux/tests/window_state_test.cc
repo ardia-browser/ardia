@@ -2,9 +2,9 @@
 #include <cstdio>
 #include <string>
 
-#include "ardia/linux/ac_linux_window_state.h"
+#include "ardia/desktop/ac_desktop_window_state.h"
 
-namespace state = ardia::linux_window_state;
+namespace state = ardia::desktop_window_state;
 
 namespace {
 

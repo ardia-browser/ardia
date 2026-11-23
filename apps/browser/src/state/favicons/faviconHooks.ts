@@ -1,8 +1,8 @@
 import { useContext, useEffect } from "react";
 import { withoutFragment } from "../../lib/url";
-import { keyedWatch, recordWatch, useKeyed, watchWindowRecord } from "../browser/keyedWatch";
+import { keyedWatch, recordWatch, useKeyed } from "../browser/keyedWatch";
 import { WindowContext } from "../browser/hooks";
-import { useBrowser } from "../browser/store";
+import { useBrowser, type BrowserState } from "../browser/store";
 import { keysFor, privateViewer } from "./faviconKeys";
 import { changedIds } from "../browser/changes";
 import type { IconTheme } from "../../platform/favicons";
@@ -99,9 +99,17 @@ export function useFavicon(url: string, src?: string | null, profileId?: string,
   return key ? { profileId: key.slice(0, split), uri: key.slice(split + 1) } : null;
 }
 
+const watchWindowProfile = keyedWatch<BrowserState>(
+  () => useBrowser,
+  (s, prev, wake) => {
+    if (s.windows === prev.windows) return;
+    for (const id of changedIds(s.windows, prev.windows)) if (s.windows[id]?.profileId !== prev.windows[id]?.profileId) wake(id);
+  },
+);
+
 export function usePrivateViewer(): string | undefined {
   const windowId = useContext(WindowContext) ?? "";
-  return useKeyed(watchWindowRecord, windowId, () => privateViewer(useBrowser.getState().windows[windowId]?.profileId));
+  return useKeyed(watchWindowProfile, windowId, () => privateViewer(useBrowser.getState().windows[windowId]?.profileId));
 }
 
 export function useFaviconTheme(url: string, src?: string | null, profileId?: string, source?: string): IconTheme | null | undefined {

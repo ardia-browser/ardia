@@ -242,6 +242,12 @@ BOOL TracingPictureInPicture() {
   if ([state[@"active"] boolValue]) _pictureInPictureRequestStamp = nil;
   const BOOL active = [state[@"active"] boolValue];
   NSMutableDictionary *payload = [@{@"kind" : [state[@"kind"] isEqual:@"document"] ? @"document" : @"video", @"active" : @(active)} mutableCopy];
+  if (!active) {
+    ardia_pip::RefreshPinchesFromOtherApps();
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 300 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+      ardia_pip::RefreshPinchesFromOtherApps();
+    });
+  }
   if (!active && state[@"closedBy"]) {
     payload[@"closedBy"] = state[@"closedBy"];
     payload[@"auto"] = @([state[@"auto"] boolValue]);

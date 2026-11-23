@@ -139,4 +139,5 @@ chromium chromium-linux-geolocation.patch linux
 
 layer engine/chromium
 layer engine/ardiacore mac
+layer engine/ardiacore-desktop linux
 layer engine/ardiacore-linux linux

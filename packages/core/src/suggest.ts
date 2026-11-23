@@ -21,6 +21,15 @@ export { dedupeSuggestions, suggestionKey } from "./suggestionRows.ts";
 const DAY = 86_400_000;
 const lowerOrigin = (url: string) => url.replace(/^[a-z][a-z0-9+.-]*:\/\/[^/?#]*/i, (origin) => origin.toLowerCase());
 const withoutFragment = (url: string) => url.replace(/#.*$/, "");
+function withoutLead(listed: readonly Ranked[], lead: readonly Ranked[]): Ranked[] {
+  const rest: Ranked[] = [];
+  for (const x of listed) {
+    let inLead = false;
+    for (const y of lead) if (y === x) inLead = true;
+    if (!inLead) rest[rest.length] = x;
+  }
+  return rest;
+}
 
 export function buildSuggestions(raw: string, source: SuggestionSource, options: SuggestOptions = {}): SuggestionResult {
   const { limit = 8, now = Date.now(), engine = BUILT_IN_ENGINES[0]!, preference = "website", remote = [], actions = [], scope, preventInline = false } = options;
@@ -44,7 +53,8 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
   }
 
   const pool = poolFor(source.history, source.bookmarks ?? NO_BOOKMARKS);
-  const { tabIds, extra, renamed } = tabsOver(pool, source.tabs, options.currentTabId);
+  const tabsNow = tabsOver(pool, source.tabs, options.currentTabId);
+  const { tabIds, extra, renamed } = tabsNow;
   const currentKey = options.currentUrl ? pageKey(options.currentUrl) : null;
   const via = new Map<Suggestion, SuggestionVia>();
   const tag = (s: Suggestion, as: SuggestionVia | false | undefined): Suggestion => {
@@ -119,12 +129,15 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
         age = d < 0 ? 0 : d > 30 ? 30 : d;
       }
       const base = c.logVisits - age + (c.bookmarked ? 20 : 0);
-      const tabId = c.tabId ?? tabIds.get(key);
-      if (!bound && !tabId && top.floor >= m + base - derank + 7) {
-        if (!completes) continue;
-        if (inline === null ? false : inline.s >= m + base - derank + 7) continue;
-        if (c.visits <= 0 || !c.text.shownLower.startsWith(q)) continue;
+      const upper = m + base - derank + 7;
+      const belowTop = !bound && top.floor >= upper;
+      let cannotLead: boolean | undefined;
+      if (belowTop && !tabTop.takes(m, upper)) {
+        cannotLead = !completes || (inline !== null && inline.s >= upper) || c.visits <= 0 || !c.text.shownLower.startsWith(q);
+        if (cannotLead) continue;
       }
+      const tabId = c.tabId ?? (c.openIn === tabsNow.mark ? c.openTabId : undefined);
+      if (belowTop && !tabId && (cannotLead ?? (!completes || (inline !== null && inline.s >= upper) || c.visits <= 0 || !c.text.shownLower.startsWith(q)))) continue;
       const s = m + (base + (tabId ? 6 : 0)) - derank;
       let r: Ranked | undefined;
       if (top.floor < s || top.items.length < limit + 1) {
@@ -197,10 +210,10 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
   out.push(...remoteSites.map((site): Suggestion => known(site.url) ?? tag({ kind: "page", url: site.url, title: site.title, favicon: null }, "engine_site")));
   const providerAt = out.items.length;
   out.push(...remoteRows((text) => searchUrl(engine, text), engine.name));
-  const trailing = listed.filter((x) => !lead.includes(x));
+  const trailing = withoutLead(listed, lead);
   const providerRows = options.providers?.length ? globalProviderRows(options.providers, [...out.items, ...trailing.filter((x) => x.tabId).map((x) => rowOf(x))]) : [];
-  const offered = new Set(providerRows.map((row) => pageKey(row.url)));
-  if (!options.remotePending) out.push(...trailing.filter((x) => x.tabId || !offered.has(pageKey(x.c.url))).map((x) => rowOf(x)));
+  const offered = providerRows.length ? new Set(providerRows.map((row) => pageKey(row.url))) : null;
+  if (!options.remotePending) out.push(...(offered ? trailing.filter((x) => x.tabId || !offered.has(pageKey(x.c.url))) : trailing).map((x) => rowOf(x)));
   const items = providerRows.length ? [...out.items.slice(0, providerAt), ...providerRows, ...out.items.slice(providerAt)] : out.items;
   if (guessRow && out.items.includes(guessRow)) tag(guessRow, "spaced_address");
   const shownVia = via.size ? viaOf(items, via) : undefined;

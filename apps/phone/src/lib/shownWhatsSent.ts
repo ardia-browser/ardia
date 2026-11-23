@@ -6,7 +6,7 @@ const APPEARANCE_WITHOUT_SYNC = "With each launch, the Appearance you chose: Gla
 
 const COLOR_WITHOUT_SYNC = "With each launch, whether your color is one of Ardia’s colors or a custom theme. Never which colors";
 
-const IPHONE_ONLY_FIELDS = ["perf_backdrop", "browse_for_me_opened", "page_summaries_pinched", "talk_to_me_answers_read", "page_covers_capped"];
+const IPHONE_ONLY_FIELDS = ["perf_backdrop", "browse_for_me_opened", "page_summaries_pinched", "talk_to_me_answers_read", "settings_panes_opened", "page_covers_capped"];
 
 const ANDROID_ONLY_FIELDS = ["page_summaries_chatgpt", "start_logo_taps", "gemini_nano_not_offered"];
 

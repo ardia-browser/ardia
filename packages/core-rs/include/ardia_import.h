@@ -35,6 +35,9 @@ enum ardia_import_status ardia_import_chromium_bookmarks(const struct ardia_impo
                                                          const struct ardia_import_bytes *account_bookmarks,
                                                          struct ardia_import_buf *out);
 
+enum ardia_import_status ardia_import_netscape_bookmarks(const struct ardia_import_bytes *html,
+                                                         struct ardia_import_buf *out);
+
 void ardia_import_buf_free(struct ardia_import_buf *buf);
 
 #ifdef __cplusplus

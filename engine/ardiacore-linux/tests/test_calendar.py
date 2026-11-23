@@ -57,7 +57,7 @@ class CalendarBusTests(unittest.TestCase):
             self.assertEqual(glib.returncode, 0, glib.stderr)
             compiled = subprocess.run([
                 compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g', '-fsanitize=address,undefined',
-                '-fno-omit-frame-pointer', '-pthread', '-I', str(ROOT / 'src'), str(LINUX / 'ac_linux_calendar_eds.cc'),
+                '-fno-omit-frame-pointer', '-pthread', '-I', str(ROOT / 'src'), '-I', str(ROOT.parent / 'ardiacore-desktop' / 'src'), str(LINUX / 'ac_linux_calendar_eds.cc'),
                 str(FIXTURES / 'calendar_eds_driver.cc'), *glib.stdout.split(), '-ldl', '-o', str(self.driver),
             ], capture_output=True, text=True, timeout=300)
             self.assertEqual(compiled.returncode, 0, compiled.stderr)

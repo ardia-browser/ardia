@@ -8,6 +8,7 @@
 namespace ardia_pip {
 
 void WatchZoom();
+void RefreshPinchesFromOtherApps();
 
 NSWindow *GrabbedWindow();
 

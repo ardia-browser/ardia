@@ -5,7 +5,7 @@
 #include <utility>
 #include <vector>
 
-#include "ardia/linux/ac_linux_search_engine_policy.h"
+#include "ardia/desktop/ac_desktop_search_engine_policy.h"
 #include "base/callback_list.h"
 #include "base/check.h"
 #include "base/files/file_path.h"
@@ -28,7 +28,7 @@
 namespace ardiacore {
 namespace {
 
-namespace policy = linux_search_engines;
+namespace policy = desktop_search_engines;
 
 enum class Outcome { kApplied, kQueued, kSkipped, kNoMatch };
 

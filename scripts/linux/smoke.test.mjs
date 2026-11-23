@@ -4,11 +4,11 @@ import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { launchArguments, launchEnvironment } from "../../apps/desktop/scripts/acceptance/lib/ardia.mjs";
-import { ASSERTIONS, SCRIPT_NAME, SCRIPT_TITLE_PREFIX, UNKNOWN_WINDOW_ERROR, USAGE, USER_SCRIPTS_CAPABILITIES, VERSION_PATTERN, WINDOW_STATE_CAPABILITIES, windowStateProblems, windowStateSupport, windowStateVerdict, appVersionVerdict, cliControlSupport, cliTarball, debLayoutProblems, privateFolder, packageFormat, formatTable, installerRanAgain, launchRefusal, packageStagedFiles, parseArgs, pipeLaunchArguments, splitPipeMessages, summarize, uboSeedProblems, uboTuningProblems, userScriptSource } from "./smoke.mjs";
+import { ASSERTIONS, SYNC_CORE_PHRASES, syncCoreProblems, syncCoreVerdict, SCRIPT_NAME, SCRIPT_TITLE_PREFIX, UNKNOWN_WINDOW_ERROR, USAGE, USER_SCRIPTS_CAPABILITIES, VERSION_PATTERN, WINDOW_STATE_CAPABILITIES, windowStateProblems, windowStateSupport, windowStateVerdict, appVersionVerdict, cliControlSupport, cliTarball, debLayoutProblems, privateFolder, packageFormat, formatTable, installerRanAgain, launchRefusal, packageStagedFiles, parseArgs, pipeLaunchArguments, splitPipeMessages, summarize, uboSeedProblems, uboTuningProblems, userScriptSource } from "./smoke.mjs";
 
 test("the package checks are named in the usage and keep the original eight first", () => {
   assert.deepEqual(ASSERTIONS.slice(0, 8), ["ldd", "shell-ui", "bootstrap", "native-tab", "sandbox", "content-blocker", "restart-restore", "staged-install"]);
-  for (const name of ["app-version", "cli-install", "cli-control", "cli-scripts", "window-state"]) {
+  for (const name of ["app-version", "cli-install", "cli-control", "cli-scripts", "window-state", "sync-core"]) {
     assert.ok(ASSERTIONS.includes(name), name);
     assert.ok(USAGE.includes(name), name);
   }
@@ -181,4 +181,18 @@ test("window-state accepts the contract's shapes and the unknown-window error, a
   assert.match(problems.join("\n"), /windowState.fullScreen is undefined/);
   assert.match(problems.join("\n"), /unknown window answered \{"answered":null\}/);
   assert.equal(windowStateProblems(null).length, 3);
+});
+
+test("sync-core wants the Rust core's answers through ArdiaSync.enterPhrase, and calls an engine without ArdiaSync.core old", () => {
+  assert.equal(syncCoreVerdict(null).status, "old");
+  assert.equal(syncCoreVerdict(["ArdiaSync.status"]).status, "old");
+  assert.equal(syncCoreVerdict(["ArdiaSync.status", "ArdiaSync.core"]).status, "pass");
+  for (const phrase of Object.values(SYNC_CORE_PHRASES)) assert.equal(phrase.split(" ").length, 24);
+  const good = { core: "rust", claim: { granted: true }, valid: { error: "noData" }, checksum: { error: "checksum" }, unknown: { error: "unknownWord", word: "zzzz" } };
+  assert.deepEqual(syncCoreProblems(good), []);
+  const problems = syncCoreProblems({ core: "native", valid: { thrown: "Another Ardia window is running sync" }, checksum: { error: "checksum" }, unknown: { error: "unknownWord", word: "x" } });
+  assert.equal(problems.length, 3, problems.join("\n"));
+  assert.match(problems.join("\n"), /not "rust"/);
+  assert.match(problems.join("\n"), /valid phrase answered .*thrown/);
+  assert.match(problems.join("\n"), /unknown phrase answered .*"word":"x"/);
 });

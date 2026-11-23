@@ -13,8 +13,9 @@ Installs a signed Ardia update for Linux.
   kind           prints how this Ardia is installed: deb, tarball, appimage,
                  managed, or unsupported <reason>
   install <dir>  verifies Ardia-<V>-linux-update.txt and its .sig in <dir>
-                 against lib/ardia/linux-update.pem, then installs the package
-                 for this kind of install when <V> is newer than lib/ardia/VERSION.
+                 against lib/ardia/linux-update.pem with lib/ardia/ardia-update-verify,
+                 then installs the package for this kind of install when <V> is
+                 newer than lib/ardia/VERSION and the package matches the manifest.
                  A .deb or tarball install runs it as root through pkexec; an
                  AppImage replaces the file APPIMAGE names, as its user. The last line on
                  stdout is "installed <V>" or "failed <reason>". The whole
@@ -23,21 +24,23 @@ Installs a signed Ardia update for Linux.
 self=$(readlink -f -- "${BASH_SOURCE[0]}")
 libdir=${self%/*}
 key="$libdir/linux-update.pem"
+verifier="$libdir/ardia-update-verify"
 policy=/usr/share/polkit-1/actions/dev.ardia.linux.policy
 action_id=dev.ardia.linux.update
-max_package=536870912
 max_manifest=4096
-signature_size=64
+max_signature=64
 install_budget=540
 watchdog_seconds=$((install_budget + 30))
 start_time_slack=0.25
 small_copy_seconds=60
-version_pattern='^([0-9]{1,9})\.([0-9]{1,9})\.([0-9]{1,9})(-nightly\.([0-9]{1,9}))?$'
-version_line_pattern='^version (.+)$'
-package_line_pattern='^(deb|tarball|appimage) ([^ ]+) ([0-9a-f]{64}) ([1-9][0-9]{0,9})$'
 manifest_name_pattern='^Ardia-(.+)-linux-update\.txt$'
+verdict_pattern='^ok (Ardia-[A-Za-z0-9.-]+-linux-x64\.(deb|tar\.xz|AppImage)) [0-9a-f]{64} ([1-9][0-9]{0,9})$'
 
 reported=0
+version=""
+current=""
+package_name=""
+package_size=""
 install_deadline=0
 left=0
 owner=""
@@ -71,23 +74,13 @@ on_exit() {
   exit "$status"
 }
 
-version_parts() {
-  [[ "$1" =~ $version_pattern ]] || return 1
-  local nightly=1000000000
-  [[ -z "${BASH_REMATCH[4]}" ]] || nightly=$((10#${BASH_REMATCH[5]}))
-  printf '%d %d %d %d' "$((10#${BASH_REMATCH[1]}))" "$((10#${BASH_REMATCH[2]}))" "$((10#${BASH_REMATCH[3]}))" "$nightly"
+verifier_ready() {
+  [[ -f "$verifier" && ! -L "$verifier" && -x "$verifier" ]] || return 1
+  timeout 10 "$verifier" version 0.0.0 </dev/null >/dev/null 2>&1
 }
 
-newer_than() {
-  local candidate current index
-  read -r -a candidate <<<"$(version_parts "$1")"
-  read -r -a current <<<"$(version_parts "$2")"
-  for index in 0 1 2 3; do
-    ((candidate[index] == current[index])) && continue
-    ((candidate[index] > current[index]))
-    return
-  done
-  return 1
+valid_version() {
+  timeout 10 "$verifier" version "$1" </dev/null >/dev/null 2>&1
 }
 
 installed_version() {
@@ -95,7 +88,7 @@ installed_version() {
   [[ -f "$file" && ! -L "$file" ]] || return 1
   (($(stat -c %s -- "$file") <= 64)) || return 1
   IFS= read -r line <"$file" || [[ -n "$line" ]] || return 1
-  version_parts "$line" >/dev/null || return 1
+  valid_version "$line" || return 1
   printf '%s' "$line"
 }
 
@@ -149,14 +142,6 @@ dpkg_owner() {
   printf '%s' "${owner%%: *}"
 }
 
-openssl_ready() {
-  command -v openssl >/dev/null 2>&1 || return 1
-  local line
-  line=$(openssl version 2>/dev/null) || return 1
-  [[ "$line" =~ ^OpenSSL\ ([0-9]+)\. ]] && ((BASH_REMATCH[1] >= 3)) || return 1
-  openssl pkeyutl -help 2>&1 | grep -- '-rawin' >/dev/null
-}
-
 policy_names_this_helper() {
   [[ -f "$policy" ]] || return 1
   local path
@@ -185,9 +170,9 @@ detect_kind() {
   else
     kind=tarball
   fi
+  if ! verifier_ready; then printf 'unsupported noVerifier'; return; fi
   if ! installed_version >/dev/null; then printf 'unsupported noVersion'; return; fi
   if [[ ! -f "$key" ]]; then printf 'unsupported noKey'; return; fi
-  if ! openssl_ready; then printf 'unsupported noOpenssl'; return; fi
   if [[ "$kind" != appimage ]]; then
     local pkexec
     pkexec=$(command -v pkexec 2>/dev/null || true)
@@ -239,36 +224,23 @@ copy_in() {
   ((copied <= cap)) || fail "$oversize" "$name grew past $cap bytes"
 }
 
-parse_manifest() {
-  local file=$1 line format name digest size rank previous=-1 expected
-  local -a lines
-  mapfile -t lines <"$file"
-  ((${#lines[@]} >= 2 && ${#lines[@]} <= 5)) || fail manifest "the manifest has ${#lines[@]} lines"
-  [[ "${lines[0]}" == "ardia-linux-update 1" ]] || fail manifest "the manifest is not format 1"
-  [[ "${lines[1]}" =~ $version_line_pattern ]] || fail manifest "the manifest has no version line"
-  version=${BASH_REMATCH[1]}
-  version_parts "$version" >/dev/null || fail manifest "the manifest's version is malformed"
-  : >"$work/canonical"
-  printf 'ardia-linux-update 1\nversion %s\n' "$version" >>"$work/canonical"
-  package_name=""
-  for line in "${lines[@]:2}"; do
-    [[ "$line" =~ $package_line_pattern ]] || fail manifest "a manifest line is malformed"
-    format=${BASH_REMATCH[1]} name=${BASH_REMATCH[2]} digest=${BASH_REMATCH[3]} size=${BASH_REMATCH[4]}
-    case "$format" in
-      deb) rank=0 expected="Ardia-$version-linux-x64.deb" ;;
-      tarball) rank=1 expected="Ardia-$version-linux-x64.tar.xz" ;;
-      appimage) rank=2 expected="Ardia-$version-linux-x64.AppImage" ;;
-    esac
-    ((rank > previous)) || fail manifest "the manifest's package lines are out of order"
-    previous=$rank
-    [[ "$name" == "$expected" ]] || fail manifest "the manifest names a file that isn't $expected"
-    ((size <= max_package)) || fail manifest "the manifest's $format is larger than $max_package bytes"
-    printf '%s %s %s %s\n' "$format" "$name" "$digest" "$size" >>"$work/canonical"
-    if [[ "$format" == "$kind" ]]; then
-      package_name=$name package_digest=$digest package_size=$size
-    fi
-  done
-  cmp -s -- "$work/canonical" "$file" || fail manifest "the manifest isn't in canonical form"
+verify() {
+  local seconds=$1 status=0 output line
+  shift
+  output=$(limited "$seconds" "$verifier" "$@" --key "$key" --manifest "$work/manifest" --signature "$work/signature" \
+    --version "$version" --installed "$current" --kind "$kind" </dev/null) || status=$?
+  ((status != 124 && status != 137)) || fail timeout "ardia-update-verify $1: past the deadline"
+  line=${output##*$'\n'}
+  if ((status == 0)) && [[ "$line" =~ $verdict_pattern ]]; then
+    package_name=${BASH_REMATCH[1]} package_size=${BASH_REMATCH[3]}
+    return
+  fi
+  case "$line" in
+    "failed missing" | "failed manifest" | "failed signature" | "failed notNewer" | "failed kind" | "failed checksum")
+      fail "${line#failed }" "ardia-update-verify $1 refused the update: ${line#failed }"
+      ;;
+  esac
+  fail install "ardia-update-verify $1 exited $status without a verdict"
 }
 
 install_deb() {
@@ -339,7 +311,6 @@ run_install() {
   info=$(stat -c '%F|%u' -- "$dir" 2>/dev/null) || fail missing "no folder at $dir"
   [[ "$info" == "directory|$owner" ]] || fail missing "$dir is not a folder owned by uid $owner"
 
-  local current
   current=$(installed_version) || fail kind "no valid $libdir/VERSION"
 
   if [[ "$kind" == appimage ]]; then
@@ -357,22 +328,14 @@ run_install() {
   ((${#names[@]} == 1)) || fail missing "the update folder holds ${#names[@]} manifests, not one"
   local manifest_name=${names[0]}
   [[ "$manifest_name" =~ $manifest_name_pattern ]] || fail manifest "the manifest's file name is malformed"
-  local named_version=${BASH_REMATCH[1]}
-  version_parts "$named_version" >/dev/null || fail manifest "the manifest's file name has a malformed version"
+  version=${BASH_REMATCH[1]}
 
   refresh_left
   copy_in "$manifest_name" "$max_manifest" "$work/manifest" manifest "$((left < small_copy_seconds ? left : small_copy_seconds))"
   refresh_left
-  copy_in "$manifest_name.sig" "$signature_size" "$work/signature" signature "$((left < small_copy_seconds ? left : small_copy_seconds))"
-  [[ "$(stat -c %s -- "$work/signature")" == "$signature_size" ]] || fail signature "the signature is not $signature_size bytes"
-  openssl pkeyutl -verify -pubin -inkey "$key" -rawin -in "$work/manifest" -sigfile "$work/signature" >/dev/null 2>&1 \
-    || fail signature "the manifest's signature doesn't verify"
-
-  version="" package_name="" package_digest="" package_size=""
-  parse_manifest "$work/manifest"
-  [[ "$version" == "$named_version" ]] || fail manifest "the manifest is for $version, not $named_version"
-  newer_than "$version" "$current" || fail notNewer "$version is not newer than the installed $current"
-  [[ -n "$package_name" ]] || fail kind "the manifest has no $kind package"
+  copy_in "$manifest_name.sig" "$max_signature" "$work/signature" signature "$((left < small_copy_seconds ? left : small_copy_seconds))"
+  refresh_left
+  verify "$((left < small_copy_seconds ? left : small_copy_seconds))" manifest
 
   local destination="$work/$package_name"
   if [[ "$kind" == appimage ]]; then
@@ -381,11 +344,8 @@ run_install() {
   fi
   refresh_left
   copy_in "$package_name" "$package_size" "$destination" checksum "$left"
-  [[ "$(stat -c %s -- "$destination")" == "$package_size" ]] || fail checksum "$package_name is not $package_size bytes"
-  local digest
   refresh_left
-  digest=$(limited "$left" sha256sum <"$destination") || settle $? checksum "hashing $package_name"
-  [[ "${digest%% *}" == "$package_digest" ]] || fail checksum "$package_name doesn't match the manifest's sha256"
+  verify "$left" package --package "$destination"
 
   umask 022
   case "$kind" in

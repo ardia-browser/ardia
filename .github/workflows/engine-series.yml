@@ -7,6 +7,7 @@ on:
       - "engine/chromium/**"
       - "engine/ardiacore/apply.sh"
       - "engine/ardiacore/src/ardia/core/**"
+      - "engine/ardiacore-desktop/apply.sh"
       - "engine/ardiacore-linux/apply.sh"
       - "engine/ardiacore-linux/copies.tsv"
       - "packages/ardiacore/ios/page_script.js"

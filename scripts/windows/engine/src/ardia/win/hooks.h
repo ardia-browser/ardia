@@ -1,9 +1,11 @@
 #ifndef ARDIA_WIN_HOOKS_H_
 #define ARDIA_WIN_HOOKS_H_
 
+#include <atomic>
 #include <memory>
 #include <optional>
 
+#include "base/process/process.h"
 #include "base/win/windows_types.h"
 #include "chrome/browser/ui/extensions/extension_popup_types.h"
 #include "ui/base/window_open_disposition.h"
@@ -64,6 +66,13 @@ extern bool (*g_ardia_win_open_as_offer)(
     const blink::mojom::WindowFeatures& features);
 
 extern void (*g_ardia_win_offer_inserted)();
+
+extern std::atomic<void (*)(const void* key,
+                            const base::Process& process,
+                            base::Process::Priority priority)>
+    g_ardia_win_renderer_priority;
+
+extern std::atomic<void (*)(const void* key)> g_ardia_win_renderer_gone;
 
 extern BrowserWindowInterface* (*g_ardia_win_active_extension_browser)(
     Profile& profile,

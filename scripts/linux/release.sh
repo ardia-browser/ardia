@@ -4,7 +4,8 @@ usage='usage: scripts/linux/release.sh <version> [--engine exact|nearest|<dir>] 
 
 Builds the Linux x64 release of Ardia <version> (a -nightly.<n> version is a
 nightly), the Linux counterpart of scripts/release.sh: it fetches the engine,
-builds apps/desktop/dist/linux and the ardia CLI, prepares uBlock Origin, packages
+builds apps/desktop/dist/linux, the ardia CLI and lib/ardia/ardia-update-verify
+(scripts/linux/update-verify.sh), prepares uBlock Origin, packages
 Ardia-<version>-linux-x64.tar.xz with lib/ardia/VERSION and the CLI, and the
 same build as Ardia-<version>-linux-x64.deb and .AppImage, writes
 ardia-bin-<version>.src.tar.gz (the Arch PKGBUILD and .SRCINFO pinned to that
@@ -36,7 +37,8 @@ It needs MARKETING_VERSION to be <version> and docs/release-notes/<version>.md,
 as scripts/release.sh does: the Linux assets go on the GitHub release the
 macOS release made. pnpm comes from PATH, else
 ~/ardia-linux-build-156/tools/pnpm/node_modules/.bin. The .deb needs dpkg-deb
-and readelf (apt install dpkg binutils, pacman -S dpkg binutils).'
+and readelf (apt install dpkg binutils, pacman -S dpkg binutils), and the
+update verifier cargo and rustup (https://rustup.rs).'
 
 die() { echo "release.sh: $*" >&2; exit 1; }
 warn() { echo "warning: $*" >&2; }
@@ -94,7 +96,7 @@ node scripts/lib/release-note.mjs "docs/release-notes/$version.md" headline >/de
 
 release_output_entry() {
   case $1 in
-    provenance.txt|ui-build.log|ubo.log|smoke|smoke-deb|smoke-appimage) return 0 ;;
+    provenance.txt|ui-build.log|update-verify.log|ubo.log|smoke|smoke-deb|smoke-appimage) return 0 ;;
     Ardia-*-linux-x64.tar.xz|Ardia-*-linux-x64.tar.xz.sha256) return 0 ;;
     Ardia-*-linux-x64.deb|Ardia-*-linux-x64.deb.sha256|Ardia-*-linux-x64.AppImage|Ardia-*-linux-x64.AppImage.sha256) return 0 ;;
     ardia-bin-*.src.tar.gz|ardia-bin-*.src.tar.gz.sha256) return 0 ;;
@@ -165,13 +167,17 @@ echo "==> ardia command (pinned in apps/browser/official-plugins.json)"
 python3 -I scripts/release/official-plugins.py ${OFFICIAL_PLUGINS_FROM:+--from "$OFFICIAL_PLUGINS_FROM"} linux-cli "$version" "$out/$cli_name" \
   || die "the pinned ardia command couldn't be fetched and verified"
 
+echo "==> ardia-update-verify (packages/core-rs)"
+update_verify=$(scripts/linux/update-verify.sh 2>"$out/update-verify.log") \
+  || { tail -20 "$out/update-verify.log" >&2; die "building ardia-update-verify failed ($out/update-verify.log)"; }
+
 echo "==> uBlock Origin"
 blocker=$(scripts/linux/fetch-ubo.sh 2>"$out/ubo.log") \
   || { tail -20 "$out/ubo.log" >&2; die "preparing uBlock Origin failed ($out/ubo.log)"; }
 
 echo "==> Package"
 python3 scripts/linux/package.py --out "$engine" --ui apps/desktop/dist/linux --content-blocker "$blocker" \
-  --version "$version" --cli "$out/$cli_name" --destination "$out/$package_name" \
+  --version "$version" --cli "$out/$cli_name" --update-verify "$update_verify" --destination "$out/$package_name" \
   --deb "$out/$deb_name" --appimage "$out/$appimage_name" >/dev/null
 srcpkg=$(mktemp -d)
 scripts/linux/arch/update-pkgbuild.sh "$version" --package "$out/$package_name" --out "$srcpkg/ardia-bin" >/dev/null \

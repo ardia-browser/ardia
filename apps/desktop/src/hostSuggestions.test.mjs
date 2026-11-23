@@ -5,7 +5,7 @@ import { BUILT_IN_ENGINES, suggestRequestUrl } from "../../../packages/core/src/
 import { createSuggestFetcher } from "../../../packages/core/src/suggestFetcher.ts";
 import { CANCEL_SUGGEST_METHOD, SUGGEST_METHOD, SUGGEST_REPLY_LIMIT, hostSuggestFetch, suggestionEndpoints, suggestionRequestAllowed } from "./hostSuggestions.ts";
 
-const nativePolicy = readFileSync(new URL("../../../engine/ardiacore-linux/src/ardia/linux/ac_linux_suggest_policy.h", import.meta.url), "utf8");
+const nativePolicy = readFileSync(new URL("../../../engine/ardiacore-desktop/src/ardia/desktop/ac_desktop_suggest_policy.h", import.meta.url), "utf8");
 const nativeEndpoints = [...nativePolicy.slice(nativePolicy.indexOf("kEndpoints[]"), nativePolicy.indexOf("};", nativePolicy.indexOf("kEndpoints[]"))).matchAll(/"([^"]+)"/g)].map((match) => match[1]);
 const nativeReplyLimit = Number(/kMaxReplyBytes = (\d+) \* (\d+);/.exec(nativePolicy).slice(1).reduce((a, b) => a * b));
 

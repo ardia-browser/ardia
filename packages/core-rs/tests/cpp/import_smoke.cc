@@ -37,6 +37,14 @@ Answer Parse(const std::string *local, const std::string *account) {
   return {status, std::move(out)};
 }
 
+Answer ParseHtml(const std::string *html) {
+  ardia_import_bytes bytes{};
+  if (html) bytes = {reinterpret_cast<const uint8_t *>(html->data()), html->size()};
+  Buf out(new ardia_import_buf);
+  ardia_import_status status = ardia_import_netscape_bookmarks(html ? &bytes : nullptr, out.get());
+  return {status, std::move(out)};
+}
+
 int Fail(const char *what) {
   std::fprintf(stderr, "ardia_import C++ smoke failed: %s\n", what);
   return 1;
@@ -65,6 +73,21 @@ int main() {
   if (unreadable.status != ARDIA_IMPORT_STATUS_UNREADABLE || unreadable.text() != R"({"code":"unreadable"})") status = Fail("unreadable");
   Answer ignored = Parse(&local, &truncated);
   if (ignored.status != ARDIA_IMPORT_STATUS_OK || ignored.text().find("https://account/") != std::string_view::npos) status = Fail("account ignored");
+  const std::string html =
+      R"(<dl><p><dt><h3 id="com.apple.ReadingList">Later</h3><dl><p>)"
+      R"(<dt><a href='https://later.example/?a=1&amp;b=2' add_date=1700000000>Read <b>me</b><!-- x --> later</a>)"
+      R"(</dl><p></dl><p>)";
+  const std::string empty_html = "<!DOCTYPE NETSCAPE-Bookmark-file-1>";
+  Answer html_tree = ParseHtml(&html);
+  if (html_tree.status != ARDIA_IMPORT_STATUS_OK) return Fail("netscape parse");
+  if (html_tree.text().find(R"("role":"readingList")") == std::string_view::npos ||
+      html_tree.text().find(R"("title":"Read me later")") == std::string_view::npos ||
+      html_tree.text().find("https://later.example/?a=1&b=2") == std::string_view::npos)
+    status = Fail("netscape tree");
+  Answer html_missing = ParseHtml(nullptr);
+  if (html_missing.status != ARDIA_IMPORT_STATUS_NOT_FOUND || html_missing.text() != R"({"code":"notFound"})") status = Fail("netscape not found");
+  Answer html_empty = ParseHtml(&empty_html);
+  if (html_empty.status != ARDIA_IMPORT_STATUS_UNREADABLE || html_empty.text() != R"({"code":"unreadable"})") status = Fail("netscape unreadable");
   if (status == 0) std::printf("ardia_import C++ smoke passed\n");
   return status;
 }

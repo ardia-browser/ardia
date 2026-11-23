@@ -6,12 +6,13 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 
 CASES = r'''
-#include "ardia/linux/ac_linux_favicon_policy.h"
+#include "ardia/desktop/ac_desktop_favicon_policy.h"
 #include <cassert>
 #include <string>
-using namespace ardiacore::linux_favicons;
+using namespace ardiacore::desktop_favicons;
 int main() {
   assert(Allowed("https://example.test/favicon.ico", Source::kNetwork));
   assert(Allowed("HTTP://example.test/a.png", Source::kNetwork));
@@ -48,7 +49,7 @@ class FaviconPolicyTests(unittest.TestCase):
             source = Path(directory) / 'cases.cc'
             source.write_text(CASES)
             binary = Path(directory) / 'cases'
-            subprocess.run([os.environ.get('CXX', 'c++'), '-std=c++20', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined', '-I', str(SOURCE), str(source), '-o', str(binary)], check=True, timeout=60)
+            subprocess.run([os.environ.get('CXX', 'c++'), '-std=c++20', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined', '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE), str(source), '-o', str(binary)], check=True, timeout=60)
             subprocess.run([str(binary)], check=True, timeout=10)
 
 

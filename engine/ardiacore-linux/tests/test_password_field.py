@@ -7,6 +7,7 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 LINUX = SOURCE / 'ardia' / 'linux'
 
 SCENARIOS = r'''#include <cassert>
@@ -156,7 +157,7 @@ class PasswordFieldTests(unittest.TestCase):
             (scratch / 'scenarios.cc').write_text(SCENARIOS)
             binary = scratch / 'scenarios'
             compiled = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g', '-fsanitize=address,undefined',
-                                       '-I', str(SOURCE), str(scratch / 'scenarios.cc'), str(LINUX / 'ac_linux_secret_text.cc'),
+                                       '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE), str(scratch / 'scenarios.cc'), str(LINUX / 'ac_linux_secret_text.cc'),
                                        '-o', str(binary)], capture_output=True, text=True, timeout=180)
             self.assertEqual(compiled.returncode, 0, compiled.stderr)
             result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=60)

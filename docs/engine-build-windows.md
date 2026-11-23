@@ -235,7 +235,7 @@ On the Windows tree (2026-11-10): `pins` and `guard` pass, 356 patches applied w
 `04-series.sh` applies every `chromium` line of `engine/patches/series`, minus the `skip` lines of
 `scripts/windows/engine/series-win`, then that file's own `chromium` lines (patches in `scripts/windows/engine/patches/`),
 strictly with `git apply` and else with `patch`'s fuzz. It records a failure and goes on, and writes
-`~/chromium-build-win/logs/series-win.tsv`. `series-win` today: three skips and 21 Windows-only patches ([Windows-only patches](#windows-only-patches)).
+`~/chromium-build-win/logs/series-win.tsv`. `series-win` today: three skips and 22 Windows-only patches ([Windows-only patches](#windows-only-patches)).
 A shared `chromium` line may end in a platform tag since the Linux port: untagged lines are for every platform, and
 Windows takes those and the `mac` ones (the set it started from), never `linux`. A tag can name several platforms
 joined by commas (`linux,win`); Windows takes a line whose platforms include `mac` or `win`. A `layer` line Windows would
@@ -357,7 +357,7 @@ a Windows build needs.
 | `chromium-ardia-layer.patch` | applies | OS-neutral | It links `chrome/browser/ardia` into the Mac framework only; Windows needs the same link once the `ac_*` layer builds there |
 
 Every patch that applies does so strictly (`git apply`, no fuzz). The current plan (`series_win.py`) selects the 89
-shared lines a Windows tree takes (untagged and `mac`), skips 3 of them and adds 21 Windows patches: 107 in all. The Windows-only patches follow them (`series-win`, [below](#windows-only-patches)). The file classes above come from paths, so a
+shared lines a Windows tree takes (untagged and `mac`), skips 3 of them and adds 22 Windows patches: 108 in all. The Windows-only patches follow them (`series-win`, [below](#windows-only-patches)). The file classes above come from paths, so a
 shared file can still call into Mac-only code: two did (`chrome.dll` failed to link without the guard patch).
 
 ### Windows-only patches
@@ -395,6 +395,7 @@ fails when a line has no row here, a row's Line doesn't match it, a Removable wh
 | `chromium-win-devtools-other-clients.patch` | chromium | `content::ArdiaHasOtherDevToolsClient`: whether a DevTools client other than the engine's own is attached to a page, so the engine's always-attached Peek client doesn't count as DevTools open | Never while the engine keeps its own DevTools client on pages |
 | `chromium-win-autoplay-policy.patch` | chromium | Per-site and global autoplay blocking, as on the Mac: a navigation commits with `ardia_autoplay_blocked`, which `//ardia/win` decides, Blink's autoplay policy reads it, and the host counts the plays Blink refused and the media commands that may start playback | Never: Ardia feature (autoplay blocking) |
 | `chromium-win-hosted-theme-change.patch` | chromium | A window the React Native path hosts skips the frame regeneration Chrome does on every theme change (`RegenerateFrameOnThemeChange`): `PerformDwmTransition` CHECKs a system-drawn frame, and hosted windows are custom drawn, so resetting or changing the theme killed the browser process | Chromium stops assuming a DWM frame on a theme change, or the WebUI host (#3686) is verified as the Windows default and the React Native Windows host paths are retired. Until then it serves the React Native path; the `--ardia-shell=webui` pilot never sets the hook |
+| `chromium-win-renderer-efficiency.patch` | chromium | The launcher hands each renderer priority it applies, on its own thread, to `//ardia/win` (`g_ardia_win_renderer_priority`, and `g_ardia_win_renderer_gone` when the launcher helper is destroyed, fast shutdown included; both atomic, since `//ardia/win` installs them after startup), which lowers a best-effort renderer's memory priority and ignores its timer resolution requests, then puts both back. Running there serializes its throttling writes with Chromium's own EcoQoS writes and follows loading and other boosts (#3840) | Chromium applies memory priority and timer throttling to background renderers itself |
 
 ## GN args
 

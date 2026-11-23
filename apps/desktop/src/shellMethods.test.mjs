@@ -10,8 +10,8 @@ import { setTrafficLightsCenter, trafficLightPosition, trafficLightsPlace } from
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const nativeHost = read("../../../engine/ardiacore-linux/src/ardia/linux/ac_linux_host.cc");
 const bootstrap = nativeHost.slice(nativeHost.indexOf("base::DictValue ShellHostView::Bootstrap() const {"), nativeHost.indexOf("void ShellHostView::LayoutOverlay()"));
-const engineDir = new URL("../../../engine/ardiacore-linux/src/ardia/linux/", import.meta.url);
-const engineSources = readdirSync(engineDir).filter((file) => /\.(cc|h)$/.test(file)).map((file) => readFileSync(new URL(file, engineDir), "utf8"));
+const engineDirs = ["ardiacore-linux/src/ardia/linux/", "ardiacore-desktop/src/ardia/desktop/"].map((dir) => new URL(`../../../engine/${dir}`, import.meta.url));
+const engineSources = engineDirs.flatMap((dir) => readdirSync(dir).filter((file) => /\.(cc|h)$/.test(file)).map((file) => readFileSync(new URL(file, dir), "utf8")));
 const capabilityArrays = new Map(engineSources.flatMap((source) => [...source.matchAll(/const char\* (k[A-Za-z]+)\[\] = \{([^}]*)\}/g)].map(([, name, body]) => [name, [...body.matchAll(/"([^"]+)"/g)].map((match) => match[1])])));
 const advertisedLoops = [...bootstrap.matchAll(/for \(const char\* \w+ : (?:\w+::)*(k[A-Za-z]+)\)/g)].map((match) => match[1]);
 const advertised = [

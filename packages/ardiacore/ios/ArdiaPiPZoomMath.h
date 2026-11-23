@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 #include "ArdiaPiPThrowMath.h"
 
@@ -26,12 +27,17 @@ constexpr double kPinchFollow = 0.05;
 constexpr double kHandOffLinger = 0.25, kHandOffTimeout = 0.6;
 constexpr double kHittableHiddenAlpha = 0.01;
 
+constexpr double kMostScrollExponent = 2, kLeastMagnifyFactor = 0.05, kMostMagnifyFactor = 4, kFarthestPointer = 1e6;
+constexpr double kPinchStall = 1.0;
+
 inline double ScrollFactor(double deltaY, bool precise) {
-  return std::exp((precise ? kPerPoint : kPerLine) * deltaY);
+  if (!std::isfinite(deltaY)) return 1;
+  return std::exp(std::clamp((precise ? kPerPoint : kPerLine) * deltaY, -kMostScrollExponent, kMostScrollExponent));
 }
 
 inline double MagnifyFactor(double magnification) {
-  return std::max(0.05, 1 + magnification);
+  if (!std::isfinite(magnification)) return 1;
+  return std::clamp(1 + magnification, kLeastMagnifyFactor, kMostMagnifyFactor);
 }
 
 inline void WidthLimits(double aspect, Size minSize, Size maxSize, Rect visible, double *low, double *high) {
@@ -78,6 +84,144 @@ inline Result Zoom(Rect frame, double width, double aspect, double factor, Point
   x = KeptWithin(x, rw, frame.x, frame.w, visible.x, visible.maxX());
   y = KeptWithin(y, rh, frame.y, frame.h, visible.y, visible.maxY());
   return {{std::round(x), std::round(y), rw, rh}, w};
+}
+
+struct Window {
+  long number, standIn;
+  Rect frame;
+  Rect shown = {0, 0, 0, 0};
+  bool standInClear = false;
+};
+
+inline bool UsablePointer(Point p) {
+  return std::isfinite(p.x) && std::isfinite(p.y) && std::fabs(p.x) <= kFarthestPointer && std::fabs(p.y) <= kFarthestPointer;
+}
+
+inline bool KeepsStandIn(bool windowExists, bool visible, bool stashed) { return windowExists && visible && !stashed; }
+
+inline bool WantsOtherAppPinches(bool appActive, bool zoomEnabled, bool anyZoomable) { return !appActive && zoomEnabled && anyZoomable; }
+
+inline bool Contains(Rect r, Point p) { return p.x >= r.x && p.x < r.maxX() && p.y >= r.y && p.y < r.maxY(); }
+
+inline long WindowUnder(const std::vector<Window> &frontToBack, Point pointer, long topmost) {
+  for (const Window &window : frontToBack) {
+    const bool named = topmost && (topmost == window.number || (window.standIn && topmost == window.standIn));
+    if (window.standIn) {
+      if (Contains(window.shown, pointer) && (window.standInClear || named)) return window.number;
+      continue;
+    }
+    if (Contains(window.frame, pointer) && named) return window.number;
+  }
+  return 0;
+}
+
+enum class Phase { None, Began, Changed, Ended };
+
+struct PinchLock {
+  long window = 0;
+  bool owned = false, elsewhere = false, stalled = false;
+  long session = 0;
+};
+
+struct PinchStep {
+  long window = 0;
+  bool consume = false, begin = false, apply = false, end = false, cancel = false;
+  long finish = 0, session = 0, finishSession = 0;
+};
+
+inline PinchStep On(const PinchLock &lock, long window, bool begin, bool apply, bool end, bool cancel) {
+  PinchStep step;
+  step.window = window;
+  step.consume = true;
+  step.begin = begin;
+  step.apply = apply;
+  step.end = end;
+  step.cancel = cancel;
+  step.session = begin ? 0 : lock.session;
+  return step;
+}
+
+inline PinchStep StepPinch(PinchLock &lock, Phase phase, long under, bool lockedZooms) {
+  if (phase == Phase::Began) {
+    const bool finishing = lock.owned && lock.window && !lock.stalled;
+    const long finish = finishing ? lock.window : 0, finishSession = finishing ? lock.session : 0;
+    lock = {under, under != 0, under == 0, false, 0};
+    PinchStep step = under ? On(lock, under, true, true, false, false) : PinchStep{};
+    step.finish = finish;
+    step.finishSession = finishSession;
+    return step;
+  }
+  const bool ended = phase == Phase::Ended;
+  PinchStep step;
+  if (lock.owned) {
+    step.consume = true;
+    if (lock.window && !lockedZooms) {
+      if (!lock.stalled) step = On(lock, lock.window, false, false, false, true);
+      lock.window = 0;
+    } else if (lock.window && lock.stalled) {
+      if (!ended) step = On(lock, lock.window, true, true, false, false);
+      lock.stalled = false;
+    } else if (lock.window) {
+      step = On(lock, lock.window, false, true, ended, false);
+    }
+  } else if (!lock.elsewhere && under) {
+    step = On(lock, under, false, true, ended, false);
+  }
+  if (ended) lock = {};
+  return step;
+}
+
+inline void BindSession(PinchLock &lock, long window, long session) {
+  if (lock.owned && lock.window == window) lock.session = session;
+}
+
+inline PinchStep StallPinch(PinchLock &lock) {
+  if (!lock.owned || !lock.window || lock.stalled) return {};
+  lock.stalled = true;
+  PinchStep step;
+  step.window = lock.window;
+  step.end = true;
+  step.session = lock.session;
+  return step;
+}
+
+inline void YieldPinch(PinchLock &lock, long window) {
+  if (!lock.window || (window && lock.window != window)) return;
+  lock.window = 0;
+  lock.stalled = false;
+  lock.session = 0;
+}
+
+inline bool SameSession(long stepSession, long current) { return !stepSession || stepSession == current; }
+
+inline PinchStep FinishPending(PinchLock &lock) {
+  PinchStep step;
+  if (!lock.owned || !lock.window || lock.stalled) return step;
+  step.finish = lock.window;
+  step.finishSession = lock.session;
+  lock.window = 0;
+  lock.session = 0;
+  return step;
+}
+
+inline PinchStep HoldPinch(PinchLock &lock, Phase phase) {
+  PinchStep step = phase == Phase::Changed || phase == Phase::None ? PinchStep{} : FinishPending(lock);
+  if (phase == Phase::Began) lock = {0, true, false, false, 0};
+  else if (phase == Phase::Ended) lock = {};
+  step.consume = lock.owned || phase == Phase::Ended;
+  return step;
+}
+
+struct PinchStart {
+  PinchStep finish, step;
+};
+
+inline PinchStart StartPinch(PinchLock &lock, const std::vector<Window> &frontToBack, Point pointer, long topmost) {
+  const long under = WindowUnder(frontToBack, pointer, topmost);
+  PinchStart start;
+  start.finish = FinishPending(lock);
+  start.step = StepPinch(lock, Phase::Began, under, true);
+  return start;
 }
 
 }

@@ -5,6 +5,7 @@
   "series_tags": ["all", "mac", "win"],
   "trees": [
     "engine/chromium/src",
+    "engine/ardiacore-desktop/src",
     "engine/patches/build",
     "apps/browser/assets/offline-game",
     "apps/browser/assets/offline-game-pipeline",
@@ -19,10 +20,8 @@
     "engine/ardiacore/src/ardia/core/ac_launch_switches.cc",
     "engine/ardiacore/src/ardia/core/ac_launch_switches.h",
     "engine/ardiacore-linux/src/ardia/linux/ac_linux_contract.h",
-    "engine/ardiacore-linux/src/ardia/linux/ac_linux_policy.h",
     "engine/ardiacore-linux/src/ardia/linux/ac_linux_session.cc",
     "engine/ardiacore-linux/src/ardia/linux/ac_linux_session.h",
-    "engine/ardiacore-linux/src/ardia/linux/ac_linux_window_state.h",
     "engine/ardiacore-linux/src/ardia/linux/bootstrap.js",
     "engine/ardiacore-linux/src/ardia/linux/generate_bootstrap.py"
   ],

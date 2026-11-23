@@ -164,7 +164,9 @@ public final class Importer: @unchecked Sendable {
         case (_, .chromium) where readsDiaSidebar && DiaSidebar.kinds.contains(kind):
           count = takeDia(try diaSidebar(), for: kind)
         case (.bookmarks, .chromium), (.bookmarks, .arc):
-          result.bookmarks = try ChromiumBookmarks.load(profile: dir)
+          let read = ChromiumBookmarks.read(profile: dir)
+          result.importCore.append(read.core)
+          result.bookmarks = try read.tree.get()
           count = result.bookmarks?.linkCount ?? 0
         case (.bookmarks, .firefox):
           result.bookmarks = try Firefox.bookmarks(places: dir.appendingPathComponent("places.sqlite"), cancellation: cancellation, snapshots: snapshots)

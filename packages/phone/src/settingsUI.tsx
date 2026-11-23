@@ -138,6 +138,8 @@ export const minListRowHeight = (height: number) => ardia("minListRowHeight", { 
 
 export const contentMargins = (params: { edges: "top" | "bottom" | "all"; length: number }) => ardia("contentMargins", params);
 
+export const bouncesOnlyWhenScrollable = () => ardia("bouncesOnlyWhenScrollable");
+
 export const modifierList = (...items: (ModifierConfig | null | undefined | false)[]): ModifierConfig[] => items.filter((item): item is ModifierConfig => !!item);
 
 export const accessibilityFocusRequest = (request: number) => ardia("accessibilityFocusRequest", { request });

@@ -5,7 +5,7 @@
 use std::ptr;
 use std::slice;
 
-use ardia_import_core::{chromium_bookmarks, ImportError, ProfileFile};
+use ardia_import_core::{chromium_bookmarks, netscape_bookmarks, BookmarkNode, ImportError, ProfileFile};
 use serde_json::json;
 use zeroize::Zeroize;
 
@@ -85,6 +85,13 @@ fn failure(code: &str) -> ardia_import_buf {
     hand_over(json!({ "code": code }).to_string().into_bytes())
 }
 
+fn answer(result: Result<BookmarkNode, ImportError>) -> (ardia_import_status, ardia_import_buf) {
+    match result {
+        Ok(tree) => (ardia_import_status::Ok, hand_over(tree.to_json())),
+        Err(error) => (error.into(), failure(error.code())),
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn ardia_import_abi_version() -> u32 {
     ARDIA_IMPORT_ABI_VERSION
@@ -101,11 +108,24 @@ pub unsafe extern "C" fn ardia_import_chromium_bookmarks(
     }
     let files = unsafe { (profile_file(bookmarks), profile_file(account_bookmarks)) };
     let (status, result) = match files {
-        (Some(local), Some(account)) => match chromium_bookmarks(local, account) {
-            Ok(tree) => (ardia_import_status::Ok, hand_over(tree.to_json())),
-            Err(error) => (error.into(), failure(error.code())),
-        },
+        (Some(local), Some(account)) => answer(chromium_bookmarks(local, account)),
         _ => (ardia_import_status::InvalidArgument, failure("argument")),
+    };
+    unsafe { out.write(result) };
+    status
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ardia_import_netscape_bookmarks(
+    html: *const ardia_import_bytes,
+    out: *mut ardia_import_buf,
+) -> ardia_import_status {
+    if out.is_null() {
+        return ardia_import_status::InvalidArgument;
+    }
+    let (status, result) = match unsafe { profile_file(html) } {
+        Some(file) => answer(netscape_bookmarks(file)),
+        None => (ardia_import_status::InvalidArgument, failure("argument")),
     };
     unsafe { out.write(result) };
     status

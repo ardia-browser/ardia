@@ -1,7 +1,9 @@
 import hashlib
 import json
+import os
 import secrets
 import pathlib
+import platform
 import shutil
 import sqlite3
 import struct
@@ -12,6 +14,27 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 LINUX = ROOT / 'src/ardia/linux'
 FIXTURES = ROOT / 'tests/fixtures'
+CORE_RS = ROOT.parents[1] / 'packages/core-rs'
+
+
+def core_rs_flags(test, directory):
+    cargo = shutil.which('cargo') or next((str(path) for path in [pathlib.Path.home() / '.cargo/bin/cargo']
+                                           if path.exists()), None)
+    if cargo is None:
+        if os.environ.get('CI'):
+            raise AssertionError('cargo is unavailable, and the Linux sync code links the Rust core')
+        test.skipTest('cargo is unavailable to build the Rust sync core')
+    target = pathlib.Path(os.environ.get('CARGO_TARGET_DIR') or CORE_RS / 'target')
+    built = subprocess.run([cargo, 'build', '--locked', '--quiet', '-p', 'ardia-ffi', '--target-dir', str(target)],
+                           cwd=CORE_RS, capture_output=True, text=True, timeout=540)
+    test.assertEqual(built.returncode, 0, built.stderr)
+    headers = pathlib.Path(directory) / 'core-rs-headers'
+    (headers / 'ardia/core_rs').mkdir(parents=True, exist_ok=True)
+    link = headers / 'ardia/core_rs/include'
+    if not link.exists():
+        link.symlink_to(CORE_RS / 'include', target_is_directory=True)
+    system = ['-lpthread', '-ldl', '-lm'] if platform.system() == 'Linux' else []
+    return ['-I', str(headers)], [str(target / 'debug/libardia_core.a'), *system]
 
 VALUES = r'''
 #pragma once
@@ -283,7 +306,7 @@ def compile_and_run(test, name, sources, args=(), extra_includes=()):
         compiled = subprocess.run([
             compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g',
             '-fsanitize=address,undefined', '-fno-omit-frame-pointer',
-            *[f'-I{path}' for path in extra_includes], '-I', str(ROOT / 'src'),
+            *[f'-I{path}' for path in extra_includes], '-I', str(ROOT / 'src'), '-I', str(ROOT.parent / 'ardiacore-desktop' / 'src'),
             *[str(source) for source in sources], '-o', str(executable),
         ], capture_output=True, text=True, timeout=120)
         test.assertEqual(compiled.returncode, 0, compiled.stderr)
@@ -439,7 +462,7 @@ class ImportFixture(unittest.TestCase):
         cls.binary = root / 'import-scenarios'
         compiled = subprocess.run([
             compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g', '-fsanitize=address,undefined',
-            '-fno-omit-frame-pointer', f'-I{include}', '-I', str(ROOT / 'src'),
+            '-fno-omit-frame-pointer', f'-I{include}', '-I', str(ROOT / 'src'), '-I', str(ROOT.parent / 'ardiacore-desktop' / 'src'),
             *[str(LINUX / name) for name in IMPORT_SOURCES],
             str(FIXTURES / 'import_scenarios.cc'), '-lsqlite3', '-lcrypto', '-ldl', '-o', str(cls.binary),
         ], capture_output=True, text=True, timeout=300)

@@ -3,7 +3,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 import { typeRows } from "../../../packages/ardiacore/src/engine/apiRows.mjs";
 
-const nativeSource = (path) => readFileSync(new URL(`../../../engine/ardiacore-linux/src/ardia/linux/${path}`, import.meta.url), "utf8");
+const nativeFolder = (path) => (path.startsWith("ac_desktop_") ? "ardiacore-desktop/src/ardia/desktop" : "ardiacore-linux/src/ardia/linux");
+const nativeSource = (path) => readFileSync(new URL(`../../../engine/${nativeFolder(path)}/${path}`, import.meta.url), "utf8");
 const listed = (path, list) => {
   const source = nativeSource(path);
   const from = source.indexOf(`${list}[] = {`);
@@ -19,17 +20,17 @@ const appended = (name) => {
 const ENGINE = {
   system: listed("ac_linux_desktop_core.h", "kSystemCapabilities"),
   openUrls: listed("ac_linux_open_urls.h", "kOpenUrlCapabilities"),
-  windowCommands: listed("ac_linux_window_commands.h", "kWindowCommandCapabilities"),
-  windowState: listed("ac_linux_window_state.h", "kWindowStateCapabilities"),
-  windowCorners: listed("ac_linux_window_corners.h", "kWindowCornersCapabilities"),
-  notifications: listed("ac_linux_notifications_core.h", "kNotificationCapabilities"),
+  windowCommands: listed("ac_desktop_window_commands.h", "kWindowCommandCapabilities"),
+  windowState: listed("ac_desktop_window_state.h", "kWindowStateCapabilities"),
+  windowCorners: listed("ac_desktop_window_corners.h", "kWindowCornersCapabilities"),
+  notifications: listed("ac_desktop_notifications_core.h", "kNotificationCapabilities"),
   hardware: listed("ac_linux_hardware.h", "kHardwareCapabilities"),
   linkTabs: listed("ac_linux_link_tabs.h", "kLinuxLinkTabRoutes"),
   pageCommits: listed("ac_linux_page_commits.h", "kLinuxPageCommitRoutes"),
-  pageKeys: listed("ac_linux_page_keys.h", "kPageKeyCapabilities"),
+  pageKeys: listed("ac_desktop_page_keys.h", "kPageKeyCapabilities"),
   appActivation: listed("ac_linux_app_activation.h", "kAppActivationCapabilities"),
   smallWindows: listed("ac_linux_window_lifecycle.h", "kSmallWindowCapabilities"),
-  report: listed("ac_linux_report_core.h", "kReportCapabilities"),
+  report: listed("ac_desktop_report_core.h", "kReportCapabilities"),
   hiddenElements: listed("ac_linux_site_controls.cc", "kBlockerCalls").filter((name) => /^contentBlocker\.(hiddenElements|hideElements|restoreElements)$/.test(name)),
   customFilterLists: listed("ac_linux_site_controls.cc", "kBlockerCalls").filter((name) => /^contentBlocker\.(addList|removeList)$/.test(name)),
   appendedByName: [appended("profiles.deleteData"), appended("ArdiaShell.fetchBangList"), appended("tab.viewportClip")],
@@ -193,7 +194,7 @@ test("the window-button layout and window state reach the engine as calls and co
   assert.deepEqual(layouts, [layout]);
   assert.deepEqual(states, [state]);
   const nativeHost = nativeSource("ac_linux_host.cc");
-  assert.match(nativeHost, /\.Set\("layout", layout && linux_window_state::ReportableToolkitString\(\*layout\) \? base::Value\(\*layout\) : base::Value\(\)\)\s*\.Set\("desktop", CurrentDesktop\(\)\)/);
+  assert.match(nativeHost, /\.Set\("layout", layout && desktop_window_state::ReportableToolkitString\(\*layout\) \? base::Value\(\*layout\) : base::Value\(\)\)\s*\.Set\("desktop", CurrentDesktop\(\)\)/);
   for (const key of ["maximized", "tiled", "fullScreen"]) assert.ok(nativeHost.includes(`.Set("${key}", state.`), `windowState carries ${key}`);
   assert.ok(nativeHost.includes('base::Value(WindowStateValue(state).Set("windowId", window_id_))'), "the windowState event names its window");
 });

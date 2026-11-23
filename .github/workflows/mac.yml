@@ -127,6 +127,9 @@ jobs:
               - "pnpm-lock.yaml"
               - ".github/workflows/mac.yml"
             swift:
+              - "packages/core-rs/**"
+              - ".github/actions/core-rs-xcframework/**"
+              - "packages/sync/Package.swift"
               - "packages/shell/ios/PluginCore/**"
               - "packages/shell/ios/PluginProcess.swift"
               - "packages/shell/plugin-*/**"
@@ -291,6 +294,8 @@ jobs:
           persist-credentials: false
       - name: Plugin core, its sandbox and the official archive reader
         run: swift test --package-path packages/shell --scratch-path "$RUNNER_TEMP/shell" --filter ArdiaPluginCoreTests
-      - name: The import package, its zip reader included
+      - uses: ./.github/actions/core-rs-xcframework
+        if: ${{ !cancelled() }}
+      - name: The import package, its zip reader and the Rust Chromium bookmarks reader included
         if: ${{ !cancelled() }}
         run: swift test --package-path packages/import --scratch-path "$RUNNER_TEMP/import"

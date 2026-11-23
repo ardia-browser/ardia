@@ -5,11 +5,15 @@ import { windowColors } from "./tokens";
 import { useTab } from "../../state/browser/hooks";
 import { activate } from "../../state/tabs/actions";
 import { notePainted, startPinHandoff, useFrozenPages } from "../../state/pins/pinHandoff";
+import { holderOfPage } from "../../state/tabs/pageSession";
+import { presentTab } from "../../state/tabs/busyTabWatch";
 
 export function FrozenPage({ windowId, tabId, top }: { windowId: string; tabId: string | undefined; top: number }) {
   const theme = useTheme();
   useEffect(startPinHandoff, []);
-  const frozen = useTab(tabId, (t) => t?.page.kind === "frozen");
+  const holderId = useTab(tabId, (t) => holderOfPage(t));
+  const frozen = holderId !== undefined;
+  useEffect(() => (holderId ? presentTab(holderId) : undefined), [holderId]);
   const pass = useFrozenPages((f) => f.bridges[windowId]);
   const copyId = frozen ? tabId : pass?.copyId;
   const uri = useFrozenPages((f) => (copyId ? f.frames[copyId] : undefined)) ?? pass?.uri;

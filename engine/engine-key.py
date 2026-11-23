@@ -28,7 +28,7 @@ LEAVES_OUT = {'mac': 'linux', 'linux': 'mac', 'win': 'mac'}
 GN_PLATFORMS = {'is_mac': 'mac', 'is_linux': 'linux', 'is_win': 'win'}
 GN_TOKEN = r'\s*(\|\||&&|==|!=|<=|>=|[!()<>,\[\]]|"(?:[^"\\]|\\.)*"|[A-Za-z_][A-Za-z0-9_.]*|-?[0-9]+)'
 GN_COMPARISONS = ('==', '!=', '<', '>', '<=', '>=')
-WINDOWS_OWN_LAYERS = ('engine/chromium',)
+WINDOWS_OWN_LAYERS = ('engine/chromium', 'engine/ardiacore-desktop')
 GN_INTERPOLATION = r'\$(\{[^}]*\}|0x[0-9A-Fa-f]{2}|[A-Za-z_][A-Za-z0-9_]*)'
 CHECKOUT = pathlib.Path(__file__).resolve().parents[1]
 WIN_ROOT = 'scripts/windows/engine'

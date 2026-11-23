@@ -51,6 +51,6 @@ fn password_reads_match_swift_and_writes_stay_canonical() {
             .filter(|case| case["outcomes"][platform] != case["outcomes"]["swift"])
             .count()
     };
-    assert!(differs("linux") >= 5 && differs("kotlin") >= 5);
+    assert!(differs("linux") == 0 && differs("kotlin") >= 5);
     let _: &Value = &table["sources"];
 }

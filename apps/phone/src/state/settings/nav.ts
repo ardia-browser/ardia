@@ -2,6 +2,10 @@ import { create } from "zustand";
 
 export type SettingsRoute =
   | { page: "root" }
+  | { page: "general" }
+  | { page: "tabs" }
+  | { page: "search" }
+  | { page: "experimental" }
   | { page: "appearance" }
   | { page: "theme" }
   | { page: "searchEngine" }
@@ -94,7 +98,7 @@ export function closeSettings() {
 
 export const settingsNav = () => useSettingsNav.getState();
 
-const SIMPLE_PAGES = new Set<SettingsRoute["page"]>(["root", "appearance", "theme", "searchEngine", "browseForMe", "pageSummary", "siteSettings", "filterLists", "myFilters", "trustedSites", "clearData", "sync", "defaultBrowser", "syncConnect", "syncWords", "syncScan", "about", "licenses", "whatsSent"]);
+const SIMPLE_PAGES = new Set<SettingsRoute["page"]>(["root", "general", "tabs", "search", "experimental", "appearance", "theme", "searchEngine", "browseForMe", "pageSummary", "siteSettings", "filterLists", "myFilters", "trustedSites", "clearData", "sync", "defaultBrowser", "syncConnect", "syncWords", "syncScan", "about", "licenses", "whatsSent"]);
 
 export const settingsRouteKey = (route: SettingsRoute): string => (route.page === "filterList" ? `filterList:${route.id}` : route.page);
 

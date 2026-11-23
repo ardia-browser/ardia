@@ -133,6 +133,12 @@ export type ArcArchivedTab = { url: string; title: string; customTitle?: string;
 export type ArcArchive = { tabs: ArcArchivedTab[]; dropped?: number; cleanUpAfterMinutes?: number };
 export type ImportedSearchEngine = { name: string; keyword: string; url: string; prepopulateId?: number };
 
+export type ImportCoreRead = {
+  format: "chromium_bookmarks";
+  backend: "rust" | "native";
+  outcome: "ok" | "notFound" | "unreadable" | "tooLarge" | "argument";
+};
+
 export type ImportResult = {
   browserId: string;
   profileId: string;
@@ -158,6 +164,7 @@ export type ImportResult = {
   arcCachedIcons?: number;
   failed: ImportKind[];
   warnings: ImportWarning[];
+  importCore?: ImportCoreRead[];
 };
 
 export type SafariExport = {

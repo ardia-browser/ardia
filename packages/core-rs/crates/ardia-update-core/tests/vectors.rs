@@ -109,10 +109,6 @@ fn ok_size(kind: PackageKind, version: &str, size: u64) -> Value {
     json!({ "name": kind.package_name(version), "size": size })
 }
 
-fn ok_full(kind: PackageKind, version: &str, size: u64) -> Value {
-    json!({ "name": kind.package_name(version), "sha256": digest(kind.name(), version), "size": size })
-}
-
 fn small_order_key_and_signature() -> ([u8; 32], [u8; 64]) {
     let mut key = [0u8; 32];
     key[0] = 1;
@@ -221,8 +217,7 @@ fn cases() -> Vec<Case> {
             Err(E::Signature),
         )
         .signing(Signing::SmallOrder)
-        .differs("openssl", json!(true))
-        .differs("helper", ok_full(Deb, "0.2.48", 1000)),
+        .differs("openssl", json!(true)),
         case("the installed version again", base.clone(), Err(E::NotNewer)).versions("0.2.48", "0.2.48"),
         case("a downgrade", full("0.2.47"), Err(E::NotNewer)).versions("0.2.47", "0.2.48"),
         case(

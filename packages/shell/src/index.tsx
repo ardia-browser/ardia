@@ -21,6 +21,7 @@ export * from "./dialogPages";
 export * from "./keptFollows";
 export * from "./externalApps";
 export * from "./launchLinks";
+export * from "./rendererEfficiency";
 export * from "./motion";
 export * from "./scripting";
 export * from "./selfCheck";

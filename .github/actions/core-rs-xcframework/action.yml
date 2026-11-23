@@ -1,5 +1,5 @@
 name: Rust core framework
-description: Installs the toolchain in packages/core-rs/rust-toolchain.toml with rustup, then builds ArdiaCoreRS.xcframework for the Mac, iPhone and simulator into packages/sync/ios/Frameworks
+description: Installs the toolchain in packages/core-rs/rust-toolchain.toml with rustup, then builds ArdiaCoreRS.xcframework (the sync core and the import parsers) for the Mac, iPhone and simulator into packages/sync/ios/Frameworks
 runs:
   using: composite
   steps:
@@ -9,7 +9,7 @@ runs:
           ~/.cargo/registry/index
           ~/.cargo/registry/cache
           packages/core-rs/target
-        key: core-rs-apple-${{ runner.os }}-${{ hashFiles('packages/core-rs/rust-toolchain.toml', 'packages/core-rs/Cargo.lock', 'packages/core-rs/crates/ardia-crypto/**', 'packages/core-rs/crates/ardia-sync-core/**', 'packages/core-rs/crates/ardia-ffi/**') }}
+        key: core-rs-apple-${{ runner.os }}-${{ hashFiles('packages/core-rs/rust-toolchain.toml', 'packages/core-rs/Cargo.lock', 'packages/core-rs/crates/ardia-crypto/**', 'packages/core-rs/crates/ardia-sync-core/**', 'packages/core-rs/crates/ardia-ffi/**', 'packages/core-rs/crates/ardia-import-core/**', 'packages/core-rs/crates/ardia-import-ffi/**', 'packages/core-rs/crates/ardia-apple-ffi/**') }}
         restore-keys: core-rs-apple-${{ runner.os }}-
     - name: Build ArdiaCoreRS.xcframework
       shell: bash

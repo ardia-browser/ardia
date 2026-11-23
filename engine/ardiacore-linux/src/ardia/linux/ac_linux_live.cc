@@ -5,7 +5,7 @@
 #include <cstdlib>
 #include <utility>
 
-#include "ardia/linux/ac_linux_sync_crypto.h"
+#include "ardia/linux/ac_linux_sync_keys.h"
 
 namespace ardia::linux_live {
 namespace {

@@ -16,3 +16,5 @@ packages/ardiacore/ios/TabsCalls.swift text eol=lf
 packages/ardiacore/ios/WebKitCalls.swift text eol=lf
 packages/ardiacore/ios/WebViewCalls.swift text eol=lf
 packages/ardiacore/ios/WindowsCalls.swift text eol=lf
+packages/shaders/src/generated/** text eol=lf
+packages/shaders/ios/ShadersNative.swift text eol=lf

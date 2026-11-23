@@ -37,11 +37,13 @@ on:
       - "packages/shell/ios/WindowManager.swift"
       - "packages/sync/ios/Core/Wordlist.swift"
       - "packages/sync/tests/fixtures/**"
+      - "packages/core-rs/**"
       - "packages/ardiacore/prebuilt-engines-linux.tsv"
       - "packages/ardiacore/tests/ubo-scriptlets.test.mjs"
       - "packages/shaders/ios/Meadow/**"
       - "packages/shaders/windows/**"
       - "engine/ardiacore-linux/**"
+      - "engine/ardiacore-desktop/**"
       - "engine/ardiacore/src/**"
       - "engine/chromium/**"
       - "engine/patches/**"
@@ -65,8 +67,15 @@ on:
       - "turbo.json"
       - "tsconfig.base.json"
       - ".nvmrc"
+      - "packages/core-rs/Cargo.toml"
+      - "packages/core-rs/Cargo.lock"
+      - "packages/core-rs/rust-toolchain.toml"
+      - "packages/core-rs/crates/ardia-crypto/**"
+      - "packages/core-rs/crates/ardia-update-core/**"
+      - "packages/core-rs/crates/ardia-update-verify/**"
       - ".github/workflows/linux.yml"
       - ".github/actions/linux-setup/**"
+      - ".github/actions/linux-update-verify/**"
   push:
     branches: [main]
     paths: *linux
@@ -186,6 +195,16 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/linux-setup
+      - name: The Rust sync core the host tests link
+        if: matrix.part == 'engine'
+        run: |
+          if ! command -v rustup >/dev/null && [ ! -x "$HOME/.cargo/bin/rustup" ]; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none --no-modify-path
+          fi
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          cd packages/core-rs
+          PATH="$HOME/.cargo/bin:$PATH" rustup toolchain install
+          PATH="$HOME/.cargo/bin:$PATH" cargo build --locked -p ardia-ffi
       - id: chromium
         name: A stock Chromium, on runners without GitHub's image
         if: runner.environment != 'github-hosted'
@@ -234,7 +253,8 @@ jobs:
           set -euo pipefail
           full=true
           if [ "$GITHUB_EVENT_NAME" = pull_request ] && [ "$FULL_CI" != true ]; then
-            if git diff --quiet "$BASE" HEAD -- scripts/linux .github/workflows/linux.yml .github/actions/linux-setup; then full=false; fi
+            if git diff --quiet "$BASE" HEAD -- scripts/linux packages/core-rs/crates/ardia-update-core packages/core-rs/crates/ardia-update-verify \
+              .github/workflows/linux.yml .github/actions/linux-setup .github/actions/linux-update-verify; then full=false; fi
           fi
           echo "FULL=$full" >> "$GITHUB_ENV"
           if [ "$full" = true ]; then
@@ -258,6 +278,7 @@ jobs:
             libx11-6 libxcb1 libxcomposite1 libxdamage1 libxext6 libxfixes3 libxrandr2 libxkbcommon0
             libgbm1 libdrm2 libexpat1 libcairo2 libpango-1.0-0 libudev1 libasound2t64 libglib2.0-0t64
             libgtk-3-0t64 libsecret-1-0
+      - uses: ./.github/actions/linux-update-verify
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: apps/browser/build-ardiacore/prebuilt-linux-x86_64
@@ -305,6 +326,7 @@ jobs:
         run: |
           set -euo pipefail
           blocker=$(scripts/linux/fetch-ubo.sh)
+          update_verify=$(scripts/linux/update-verify.sh)
           formats=(tar.xz)
           extra=()
           if [ "$FULL" = true ]; then
@@ -312,7 +334,7 @@ jobs:
             extra+=(--deb "$RUNNER_TEMP/dist/$PACKAGE_NAME.deb" --appimage "$RUNNER_TEMP/dist/$PACKAGE_NAME.AppImage")
           fi
           python3 scripts/linux/package.py --out "$ENGINE" --ui apps/desktop/dist/linux --content-blocker "$blocker" \
-            --version "$VERSION" $CLI_ARGS --destination "$RUNNER_TEMP/dist/$PACKAGE_NAME.tar.xz" "${extra[@]}"
+            --version "$VERSION" $CLI_ARGS --update-verify "$update_verify" --destination "$RUNNER_TEMP/dist/$PACKAGE_NAME.tar.xz" "${extra[@]}"
           for built in "${formats[@]}"; do
             (cd "$RUNNER_TEMP/dist" && sha256sum "$PACKAGE_NAME.$built" > "$PACKAGE_NAME.$built.sha256")
           done

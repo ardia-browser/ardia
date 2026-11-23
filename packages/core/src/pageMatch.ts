@@ -110,7 +110,7 @@ export class TopList {
   offer(r: Ranked) {
     const items = this.items;
     if (items.length === this.size && items[items.length - 1]!.s >= r.s) return;
-    const same = items.findIndex((x) => x.c.text.key === r.c.text.key);
+    const same = r.c.renamed ? sameKeyAt(items, r) : -1;
     if (same >= 0) {
       if (items[same]!.s >= r.s) return;
       items.splice(same, 1);
@@ -128,11 +128,20 @@ const LEADING_ROWS = 5;
 
 const matchesAhead = (a: Ranked, b: Ranked) => a.m > b.m || (a.m === b.m && a.s > b.s);
 
+function sameKeyAt(items: readonly Ranked[], r: Ranked): number {
+  for (let i = 0; i < items.length; i++) if (items[i]!.c.text.key === r.c.text.key) return i;
+  return -1;
+}
+
 export class TabList {
   readonly items: Ranked[] = [];
+  takes(m: number, s: number): boolean {
+    const last = this.items[LEADING_ROWS - 1];
+    return !last || m > last.m || (m === last.m && s > last.s);
+  }
   offer(r: Ranked) {
     const items = this.items;
-    const same = items.findIndex((x) => x.c.text.key === r.c.text.key);
+    const same = r.c.renamed ? sameKeyAt(items, r) : -1;
     if (same >= 0) {
       if (!matchesAhead(r, items[same]!)) return;
       items.splice(same, 1);
@@ -149,12 +158,12 @@ export function leadingRows(ranked: readonly Ranked[], tabs: readonly Ranked[]):
   const lead: Ranked[] = [];
   for (const x of ranked) {
     if (lead.length >= LEADING_PAGE_ROWS) break;
-    if (!lead.some((y) => y.c.text.key === x.c.text.key)) lead.push(x);
+    if (sameKeyAt(lead, x) < 0) lead.push(x);
   }
   const bar = lead.length === LEADING_PAGE_ROWS ? lead[LEADING_PAGE_ROWS - 1]!.m : 0;
   for (const t of tabs) {
     if (lead.length >= LEADING_ROWS) break;
-    if (t.m >= bar && !lead.some((x) => x.c.text.key === t.c.text.key)) lead.push(t);
+    if (t.m >= bar && sameKeyAt(lead, t) < 0) lead.push(t);
   }
   return lead;
 }

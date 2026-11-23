@@ -1,0 +1,48 @@
+--- a/content/browser/child_process_launcher_helper.cc
++++ b/content/browser/child_process_launcher_helper.cc
+@@ -46,6 +46,19 @@
+ #include "base/files/scoped_temp_dir.h"
+ #endif
+ 
++#if BUILDFLAG(IS_WIN)
++#include <atomic>
++
++// Ardia: //ardia/win puts a background renderer's memory priority and timer
++// resolution in line with the priority the launcher applies, on this thread.
++// It installs these after startup, so they are atomic.
++std::atomic<void (*)(const void* key,
++                     const base::Process& process,
++                     base::Process::Priority priority)>
++    g_ardia_win_renderer_priority{nullptr};
++std::atomic<void (*)(const void* key)> g_ardia_win_renderer_gone{nullptr};
++#endif
++
+ namespace content {
+ namespace internal {
+ 
+@@ -248,6 +261,11 @@ ChildProcessLauncherHelper::ChildProcessLauncherHelper(
+ }
+ 
+ ChildProcessLauncherHelper::~ChildProcessLauncherHelper() {
++#if BUILDFLAG(IS_WIN)
++  if (auto* gone = g_ardia_win_renderer_gone.load(std::memory_order_acquire)) {
++    gone(this);
++  }
++#endif
+ #if BUILDFLAG(IS_CHROMEOS)
+   if (base::FeatureList::IsEnabled(features::kSchedQoSOnResourcedForChrome) &&
+       process_id_.has_value()) {
+@@ -482,6 +500,13 @@ void ChildProcessLauncherHelper::SetProcessPriorityOnLauncherThread(
+     return;
+   }
+   ApplyProcessPriorityOnLauncherThread(child_process_, priority);
++#if BUILDFLAG(IS_WIN)
++  if (auto* on_priority =
++          g_ardia_win_renderer_priority.load(std::memory_order_acquire);
++      on_priority && GetProcessType() == switches::kRendererProcess) {
++    on_priority(this, child_process_, priority);
++  }
++#endif
+ }
+ #endif  // !BUILDFLAG(IS_ANDROID)
+ 

@@ -47,13 +47,17 @@ ARDIA_BACKGROUND=1, a throwaway profile and HOME, the sandbox on) without
   window-state      ArdiaShell.windowButtonLayout answers {layout: string|null, desktop: string},
                     ArdiaShell.windowState for the shell's own window answers three booleans, and for
                     an unknown window fails with "No such native window" (old: neither call advertised)
+  sync-core         ArdiaSync.core answers "rust", and ArdiaSync.enterPhrase runs the Rust core: a valid
+                    phrase for a folder that doesn't exist answers noData, a broken checksum answers
+                    checksum, and an unknown word answers unknownWord naming the word typed; nothing is
+                    saved (old: ArdiaSync.core not advertised)
 
 It writes <results>/results.json ({ok, package, started, assertions[]}) and the
 launch logs to <results>, prints a table, and exits 0 only when every check ran
 and passed or was skipped. A check whose feature the engine's host predates
 (appVersion is Chromium's version; no engine.setCliControl, ArdiaCli.install or
 ArdiaAutomation.start capability; neither ArdiaShell.windowButtonLayout nor
-ArdiaShell.windowState) reports "old": a failure, unless
+ArdiaShell.windowState; no ArdiaSync.core) reports "old": a failure, unless
 --allow-old-engine accepts it, as CI and release.sh do for an engine that isn't
 the commit's own.
 
@@ -66,7 +70,7 @@ the commit's own.
 `;
 
 export const privateFolder = (path) => mkdir(path, { recursive: true, mode: 0o700 });
-export const ASSERTIONS = ["ldd", "shell-ui", "bootstrap", "native-tab", "sandbox", "content-blocker", "restart-restore", "staged-install", "app-version", "cli-install", "cli-control", "cli-scripts", "window-state"];
+export const ASSERTIONS = ["ldd", "shell-ui", "bootstrap", "native-tab", "sandbox", "content-blocker", "restart-restore", "staged-install", "app-version", "cli-install", "cli-control", "cli-scripts", "window-state", "sync-core"];
 const FORBIDDEN_SWITCHES = ["--no-sandbox", "--disable-seccomp-filter-sandbox", "--disable-namespace-sandbox", "--disable-setuid-sandbox", "--disable-gpu-sandbox", "--no-zygote-sandbox", "--single-process", "--in-process-gpu"];
 const TREE_FORBIDDEN_SWITCHES = ["--no-sandbox", "--disable-seccomp-filter-sandbox", "--disable-namespace-sandbox", "--disable-setuid-sandbox"];
 const STAGED_FILES = [
@@ -312,6 +316,31 @@ export function windowStateProblems(reply) {
     for (const key of ["maximized", "tiled", "fullScreen"]) if (typeof state[key] !== "boolean") problems.push(`windowState.${key} is ${JSON.stringify(state[key])}, not a boolean`);
   }
   if (reply?.unknown !== UNKNOWN_WINDOW_ERROR) problems.push(`windowState for an unknown window answered ${JSON.stringify(reply?.unknown)}, not the error ${JSON.stringify(UNKNOWN_WINDOW_ERROR)}`);
+  return problems;
+}
+
+export const SYNC_CORE_ACCOUNT = "aaaaaaaaaaaaaaaaaaaaaaaaaa";
+export const SYNC_CORE_PHRASES = {
+  valid: [...Array(23).fill("abandon"), "art"].join(" "),
+  checksum: Array(24).fill("abandon").join(" "),
+  unknown: [...Array(22).fill("abandon"), "zzzz", "art"].join(" "),
+};
+
+export function syncCoreVerdict(capabilities) {
+  if (!Array.isArray(capabilities) || !capabilities.includes("ArdiaSync.core")) return { status: "old", message: "the host doesn't advertise ArdiaSync.core: the engine predates the Rust sync core on Linux" };
+  return { status: "pass", message: "the host advertises ArdiaSync.core" };
+}
+
+export function syncCoreProblems(reply) {
+  const problems = [];
+  if (reply?.core !== "rust") problems.push(`ArdiaSync.core answered ${JSON.stringify(reply?.core)}, not "rust"`);
+  const expect = (name, want) => {
+    const got = reply?.[name];
+    if (!got || typeof got !== "object" || Object.entries(want).some(([key, value]) => got[key] !== value)) problems.push(`enterPhrase with the ${name} phrase answered ${JSON.stringify(got)}, not ${JSON.stringify(want)}`);
+  };
+  expect("valid", { error: "noData" });
+  expect("checksum", { error: "checksum" });
+  expect("unknown", { error: "unknownWord", word: "zzzz" });
   return problems;
 }
 
@@ -859,6 +888,23 @@ class Smoke {
     return reply;
   }
 
+  async syncCore(shell) {
+    const verdict = syncCoreVerdict(this.capabilities);
+    if (verdict.status === "old") throw outcome("old", verdict.message, { capabilities: this.capabilities?.length ?? null });
+    const reply = await shell.eval(`(async () => {
+      const host = globalThis.__ardiaHost;
+      const call = (method, args) => host.invoke(method, { args }).catch((error) => ({ thrown: String(error?.message ?? error) }));
+      const core = await call("ArdiaSync.core", []);
+      const claim = await call("ArdiaSync.claimAuthority", []);
+      const phrase = (text) => call("ArdiaSync.enterPhrase", [${js(SYNC_CORE_ACCOUNT)}, text, ${js(`/${nonce("no-sync-folder")}`)}]);
+      const phrases = ${js(SYNC_CORE_PHRASES)};
+      return { core, claim, valid: await phrase(phrases.valid), checksum: await phrase(phrases.checksum), unknown: await phrase(phrases.unknown) };
+    })()`);
+    const problems = syncCoreProblems(reply);
+    if (problems.length) throw Object.assign(new Error(problems.join("; ")), { detail: reply });
+    return reply;
+  }
+
   async appVersion(shell) {
     if (!this.version) throw outcome("skip", "a dev package: no lib/ardia/VERSION");
     if (!VERSION_PATTERN.test(this.version)) throw new Error(`lib/ardia/VERSION reads ${JSON.stringify(this.version)}, not a version`);
@@ -1097,12 +1143,13 @@ class Smoke {
       return this.shellUi(shell);
     }, { timeout: 120000 });
     if (!first) {
-      for (const name of [...ASSERTIONS.slice(2, 7), "app-version", "window-state"]) this.skip(name, `Ardia did not start: ${launched.detail.error}`);
+      for (const name of [...ASSERTIONS.slice(2, 7), "app-version", "window-state", "sync-core"]) this.skip(name, `Ardia did not start: ${launched.detail.error}`);
     } else {
       await this.record("bootstrap", () => this.bootstrap(first.shell));
       this.capabilities = await first.shell.eval("globalThis.__ardiaHost?.bootstrap?.capabilities ?? []").catch(() => null);
       await this.record("app-version", () => this.appVersion(first.shell));
       await this.record("window-state", () => this.windowState(first.shell));
+      await this.record("sync-core", () => this.syncCore(first.shell));
       await this.record("content-blocker", () => this.contentBlocker(first.shell), { timeout: 90000 });
       const tab = await this.record("native-tab", () => this.nativeTab(first.app, first.shell), { timeout: 90000 });
       if (tab.ok) first.tabId = tab.detail.tabId;

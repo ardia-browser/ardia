@@ -6,7 +6,7 @@
 #include <utility>
 #include <vector>
 
-#include "ardia/linux/ac_linux_glass_geometry.h"
+#include "ardia/desktop/ac_desktop_glass_geometry.h"
 #include "base/feature_list.h"
 #include "base/functional/bind.h"
 #include "components/viz/common/frame_timing_details.h"
@@ -28,7 +28,7 @@ bool ArdiaLinuxGpuCompositingDisabled();
 namespace ardia {
 namespace {
 
-namespace glass = linux_glass;
+namespace glass = desktop_glass;
 
 std::optional<double> Number(const base::DictValue* dict, std::string_view key) {
   return dict ? dict->FindDouble(key) : std::nullopt;

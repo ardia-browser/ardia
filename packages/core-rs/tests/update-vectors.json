@@ -340,11 +340,6 @@
       "version": "0.2.48"
     },
     {
-      "helper": {
-        "name": "Ardia-0.2.48-linux-x64.deb",
-        "sha256": "cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9",
-        "size": 1000
-      },
       "installed": "0.2.47",
       "kind": "deb",
       "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",

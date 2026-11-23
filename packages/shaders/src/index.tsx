@@ -1,6 +1,7 @@
 import type { ThemeBackdropProps, ThemeTexture } from "@ardia/core";
 import { requireNativeModule, requireNativeViewManager } from "expo-modules-core";
 import type { ViewProps } from "react-native";
+import type { ShadersModules } from "./generated/native";
 import { MEADOW_INK } from "./meadowPage/config";
 
 export const DIA_SPECTRUM = ["#0358F7", "#5092C7", "#E1E1FE", "#FFD400", "#FA3D1D", "#FD02F5"];
@@ -23,7 +24,9 @@ export type WindowBackdropProps = ViewProps &
 
 const NativeBackdrop = requireNativeViewManager<WindowBackdropProps>("ArdiaWindowBackdrop");
 
-const BackdropModule = requireNativeModule<{ holdKeyLook(on: boolean): Promise<void> }>("ArdiaWindowBackdrop");
+const nativeModule = <Name extends keyof ShadersModules>(name: Name) => requireNativeModule<ShadersModules[Name]>(name);
+
+const BackdropModule = nativeModule("ArdiaWindowBackdrop");
 
 export function holdThemedWindowsKeyLook(on: boolean) {
   void BackdropModule.holdKeyLook(on);
@@ -115,5 +118,7 @@ export type MeadowIntroEvent =
 export type MeadowProps = ViewProps & { night: boolean; onTone?: (tone: MeadowTone) => void; intro?: MeadowIntro; onIntro?: (event: MeadowIntroEvent) => void };
 
 export type { MeadowPageConfig, MeadowPageReport, MeadowPageState } from "./meadowPage/config";
+
+export type { AreaLightNative, MeadowNative, MetalSurfaceSnapshot, ShadersModules, WindowBackdropNative } from "./generated/native";
 
 export { Meadow } from "./meadow";

@@ -483,7 +483,7 @@ class DocumentCloseTests(unittest.TestCase):
         (root / 'base/json/json_writer.h').write_text(WRITER)
         (root / 'main.cc').write_text(PRELUDE + host_methods() + close_invoke() + SUPPORT + MAIN)
         cls.binary = root / 'close'
-        result = subprocess.run([compiler, '-std=c++23', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-I', str(root), '-I', str(ROOT / 'src'), *[str(ROOT / 'src/ardia/linux' / source) for source in SOURCES], str(root / 'main.cc'), '-o', str(cls.binary)], capture_output=True, text=True, timeout=300)
+        result = subprocess.run([compiler, '-std=c++23', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-I', str(root), '-I', str(ROOT / 'src'), '-I', str(ROOT.parent / 'ardiacore-desktop' / 'src'), *[str(ROOT / 'src/ardia/linux' / source) for source in SOURCES], str(root / 'main.cc'), '-o', str(cls.binary)], capture_output=True, text=True, timeout=300)
         if result.returncode:
             raise AssertionError(result.stdout + result.stderr)
 

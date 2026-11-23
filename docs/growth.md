@@ -241,6 +241,10 @@ owner's Mac ──▶ ardia.dev/_ch/ (read-only ClickHouse user)   ardia.dev/_re
     drift from where the press began when Pressable ended it, in buckets of under 5 pt, 5-9 pt, 10 pt or more and
     unknown, for every press (`drift_lt5`/`drift_5_9`/`drift_10_plus`/`drift_unknown`) and for those without `onPress`
     (`no_press_drift_*`). Counts only: no tab id, URL, title or position.
+  - `usage_counts` adds `pip_pinches_unfocused` and `pip_pinches_from_other_app` (#3973): pinches that resized a
+    Picture in Picture window while it wasn't the key window, and those that arrived while another app was in front.
+    Both are within `pip_pinches`; either dropping while `pip_pinches` holds means pinching an unfocused window broke.
+    Counts only: never the window's size or place.
   - `usage_counts` adds `web_notifications_from_shim` (website notifications that reached the page script this
     period; a notification that never reaches the page script doesn't count, so a gap shows up as missing counts),
     `web_notification_clicks` (clicks on Ardia's website notifications) and `worker_notification_responses` (clicks or

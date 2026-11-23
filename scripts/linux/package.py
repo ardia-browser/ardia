@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import pathlib
+import platform
 import re
 import shutil
 import subprocess
@@ -23,6 +24,14 @@ CLI_INSTALLER = REPO / 'apps/cli/install.sh'
 UBO_SEED = REPO / 'scripts/linux/ubo-seed.mjs'
 UPDATE_HELPER = REPO / 'scripts/linux/ardia-update'
 UPDATE_KEY = REPO / 'scripts/linux/linux-update.pem'
+UPDATE_VERIFY_TARGET = 'x86_64-unknown-linux-musl'
+ELF_IDENT_64_LE_V1 = b'\x7fELF\x02\x01\x01'
+ELF_HEADER_BYTES = 64
+ELF_PROGRAM_HEADER_BYTES = 56
+ELF_EXECUTABLE_TYPES = (2, 3)
+ELF_X86_64 = 0x3e
+PT_LOAD = 1
+PT_INTERP = 3
 CLI_PLATFORM = 'linux-x64'
 VERSION_PATTERN = re.compile(r'^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$')
 REQUIRED = runtime_files.REQUIRED
@@ -99,6 +108,57 @@ def add_cli(runtime, tarball, digest, installer=CLI_INSTALLER):
     return digest
 
 
+def static_x86_64_executable_problem(data):
+    if len(data) < ELF_HEADER_BYTES or data[:7] != ELF_IDENT_64_LE_V1:
+        return 'is not a 64-bit little-endian ELF'
+    field = lambda offset, size: int.from_bytes(data[offset:offset + size], 'little')
+    if field(16, 2) not in ELF_EXECUTABLE_TYPES:
+        return 'is not an executable or position-independent executable ELF'
+    if field(18, 2) != ELF_X86_64 or field(20, 4) != 1:
+        return 'is not an x86-64 ELF'
+    if field(24, 8) == 0:
+        return 'has no entry point'
+    offset, count = field(32, 8), field(56, 2)
+    if field(52, 2) != ELF_HEADER_BYTES or field(54, 2) != ELF_PROGRAM_HEADER_BYTES or count == 0:
+        return 'has no program headers of the 64-bit size'
+    if offset < ELF_HEADER_BYTES or offset + count * ELF_PROGRAM_HEADER_BYTES > len(data):
+        return 'has program headers past the end of the file'
+    loads = 0
+    for index in range(count):
+        header = offset + index * ELF_PROGRAM_HEADER_BYTES
+        kind, start, size = field(header, 4), field(header + 8, 8), field(header + 32, 8)
+        if start + size > len(data):
+            return 'has a segment past the end of the file'
+        if kind == PT_INTERP:
+            return f'is dynamically linked: build it for {UPDATE_VERIFY_TARGET}, so it runs wherever Ardia does'
+        loads += kind == PT_LOAD
+    if loads == 0:
+        return 'has no loadable segment'
+    return None
+
+
+def runs_here():
+    return sys.platform.startswith('linux') and platform.machine() in ('x86_64', 'amd64')
+
+
+def check_update_verify(path):
+    if not path.is_file() or not os.access(path, os.X_OK):
+        raise ValueError(f'no executable ardia-update-verify at {path}')
+    problem = static_x86_64_executable_problem(path.read_bytes())
+    if problem:
+        raise ValueError(f'{path} {problem}')
+    if not runs_here():
+        return
+    env = {'PATH': '/usr/bin:/bin', 'LC_ALL': 'C'}
+    for args, status, line in [(['version', '0.2.0'], 0, 'ok\n'), (['version', 'v0.2.0'], 1, 'failed version\n')]:
+        try:
+            result = subprocess.run([str(path), *args], capture_output=True, text=True, timeout=30, env=env)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            raise ValueError(f'{path} does not run here: {error}') from error
+        if (result.returncode, result.stdout) != (status, line):
+            raise ValueError(f'{path} does not run here: version {args[1]} exited {result.returncode} with {result.stdout!r}')
+
+
 def normalize_modes(root):
     for path in [root, *root.rglob('*')]:
         if path.is_symlink():
@@ -111,13 +171,15 @@ def seed_content_blocker(runtime, blocker):
                    check=True, stdout=subprocess.DEVNULL)
 
 
-def package(output, ui, destination, content_blocker=None, version=None, cli=None, deb=None, appimage=None, ubo_seed=False):
+def package(output, ui, destination, content_blocker=None, version=None, cli=None, deb=None, appimage=None, ubo_seed=False, update_verify=None):
     if version is not None:
         check_version(version)
     if deb is not None:
         if version is None:
             raise ValueError('a package with a .deb needs --version')
         linux_formats.deb_version(version)
+    if update_verify is not None and not update_verify.is_file():
+        raise ValueError(f'no ardia-update-verify at {update_verify}')
     cli_digest = None
     if cli is not None:
         if version is None:
@@ -145,6 +207,9 @@ def package(output, ui, destination, content_blocker=None, version=None, cli=Non
         (runtime / 'ardia-launch').chmod(0o755)
         shutil.copyfile(UPDATE_HELPER, runtime / 'ardia-update')
         (runtime / 'ardia-update').chmod(0o755)
+        if update_verify is not None:
+            shutil.copyfile(update_verify, runtime / 'ardia-update-verify')
+            (runtime / 'ardia-update-verify').chmod(0o755)
         shutil.copyfile(UPDATE_KEY, runtime / 'linux-update.pem')
         (runtime / 'linux-update.pem').chmod(0o644)
         shutil.copytree(ui, runtime / 'ardia-ui')
@@ -182,6 +247,8 @@ def package(output, ui, destination, content_blocker=None, version=None, cli=Non
             target = root / 'share/icons/hicolor/256x256/apps/ardia.png'
             target.parent.mkdir(parents=True)
             shutil.copyfile(icon, target)
+        if update_verify is not None:
+            check_update_verify(runtime / 'ardia-update-verify')
         normalize_modes(root)
         write_archive(root, destination)
         if deb is not None:
@@ -223,6 +290,7 @@ def main():
     parser.add_argument('--cli', type=pathlib.Path, help=f'the ardia-cli-<version>-{CLI_PLATFORM}.tar.gz to bundle in lib/ardia/cli (needs --version)')
     parser.add_argument('--deb', type=pathlib.Path, help='also build a .deb at this path (dpkg-deb and readelf; needs --version)')
     parser.add_argument('--appimage', type=pathlib.Path, help='also build an AppImage at this path (a pinned type 2 runtime and mksquashfs)')
+    parser.add_argument('--update-verify', type=pathlib.Path, help=f'the {UPDATE_VERIFY_TARGET} ardia-update-verify to bundle in lib/ardia, as scripts/linux/update-verify.sh builds it (without it the package never updates itself)')
     parser.add_argument('--no-ubo-seed', action='store_true', help="don't seed the content blocker (by default package.py runs the staged chrome once to save uBlock Origin's compiled engine, so a new profile filters from its first page)")
     args = parser.parse_args()
     if args.cli is not None and args.version is None:
@@ -234,7 +302,11 @@ def main():
         cli = args.cli.resolve() if args.cli else None
         deb = args.deb.resolve() if args.deb else None
         appimage = args.appimage.resolve() if args.appimage else None
-        print(package(args.out.resolve(), args.ui.resolve(), args.destination.resolve(), blocker, args.version, cli, deb, appimage, ubo_seed=not args.no_ubo_seed))
+        update_verify = args.update_verify.resolve() if args.update_verify else None
+        if update_verify is None:
+            print('package.py: no --update-verify, so this package has no lib/ardia/ardia-update-verify and its kind is "unsupported noVerifier": it never updates itself', file=sys.stderr)
+        print(package(args.out.resolve(), args.ui.resolve(), args.destination.resolve(), blocker, args.version, cli, deb, appimage, ubo_seed=not args.no_ubo_seed,
+                      update_verify=update_verify))
     except (ValueError, OSError, json.JSONDecodeError, subprocess.CalledProcessError) as error:
         parser.error(str(error))
 

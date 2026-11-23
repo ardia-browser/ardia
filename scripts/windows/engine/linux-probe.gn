@@ -11,6 +11,7 @@ source_set("compile_probe") {
   sources += [ "$root_gen_dir/ardia/linux/host_bootstrap.h" ]
   deps = [
     ":page_mojom",
+    "//ardia/desktop",
     "//ardia/win:launch_switches",
     "//ardia/win:webui_bootstrap",
     "//base",

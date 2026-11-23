@@ -5,9 +5,9 @@
 #include <string_view>
 #include <vector>
 
-#include "ardia/linux/ac_linux_report_core.h"
+#include "ardia/desktop/ac_desktop_report_core.h"
 
-using namespace ardia::linux_report;
+using namespace ardia::desktop_report;
 
 namespace {
 

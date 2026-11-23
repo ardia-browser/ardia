@@ -1821,6 +1821,7 @@ Every count and timing the phone can send, for the owner to read as one set and 
 | `search_tile_taps`, `voice_tile_taps`, `incognito_tile_taps` | Android's Quick Settings tiles | Voice and Incognito should appear once the release is out; a tile that stays at zero while Search counts can point to a broken tile |
 | `browse_chatgpt_fallbacks` | Browse for Me on Expo | How often a connected ChatGPT plan fails to answer; a jump after a release, or against `browse_answers_chatgpt`, means the Responses call or the token refresh broke |
 | `custom_theme_chosen`, `theme_edits`, `app_launched.color_choice` | the custom profile theme on the phone (2026-11-22) | How many testers make a theme of their own and how many keep it. `color_choice` = custom gives the share of launches on a custom theme. `theme_edits` against `custom_theme_chosen` shows whether people shape the theme or leave the starting one. Edits with no custom launches afterwards mean the theme doesn't stick: it fails to save, or people go back to a preset |
+| `settings_panes_opened` | iPhone Settings laid out as the Mac's panes (2026-11-23) | General, Tabs, Search or Experimental opened from the Settings root (Appearance and Site settings are older pages and aren't counted). Should track Settings visits; near zero while people still change settings means the pane list hides them |
 | `material_you_turned_on`, `material_you_turned_off` | the Material You switch in Android Settings (the owner, 2026-11-20) | How many testers try Material You and how many go back. Read `off` against `on`: a share near one means it is tried and dropped. `app_launched.material_colors` says how many launches run with it on |
 | `app_launched.glass_render` | Liquid Glass on Android (the owner, 2026-11-23) | The best glass each Android launch can draw, a capability, not what each surface drew: `lens` (Android 13+), `frost` (Android 12 or `ArdiaFlatGlass`), `solid` (below 12, over the look budget or the look off). A growing `solid` share among Android 13+ phones means the look budget is turning the glass down; `classic` counts Classic and Reduce Transparency, `native` iPhone and `none` Material You |
 | `card_close_tapped` | the × on a card in Android's Material deck | Whether people close tabs with the card's own button rather than a flick; zero across Android testers after a release means the × stopped closing cards, or its tap zone opens the card instead |
@@ -1969,7 +1970,7 @@ and drawn-menu usage counts; no new telemetry fields are sent.
 - After an Android swipe into the deck, the landing or return runs on the UI thread on the iPhone's springs (0.34 s to land,
   0.28 s back, no bounce; a fixed 300 ms timing until 2026-11-20). The live page still follows the finger and remains
   visible until its card can take over.
-- Android Settings uses the same General, Search, Tabs, Privacy, Experimental and About groups as iPhone.
+- Android Settings uses General, Search, Tabs, Privacy, Experimental and About groups (iPhone moved to the Mac's panes on 2026-11-23).
   The page menu opens History, Bookmarks and Downloads in Android's Library sheet using the same entries
   and file actions as iPhone. Android still uses its default-browser role and summary provider choices.
 - Watch Android's `deck_pulls_hitched` alongside swipe opens and returns, and `library_opened` for access to
@@ -3800,50 +3801,41 @@ Whole stack (`SettingsView.swift`):
 - Every toolkit screen's simulator pass reads three elements' frames from the accessibility tree (`snapshot --json`)
   and compares them with where the screenshot draws them.
 
-Root (`SettingsRootList`), sections in order. Main's SwiftUI order was: Sync row, shortcuts, Appearance alone, Site
-Settings with Default Browser, the three search rows, then one mixed group (Archive Inactive Tabs, Open App Links In,
-Clear Browsing Data, Export Open Tabs), Experimental, usage sharing, Show Onboarding with About. The Expo app's root
-was regrouped after build 13 (the owner: group them sensibly, as iOS Settings and Safari do, Experimental and About at
-the bottom, no group holding one unrelated row). Every row is kept with its name, icon and tint; only the grouping,
-the order and the section titles changed (`ExpoSettingsRoot.tsx`). Android's Settings (`SettingsRoot.tsx`) keeps
-main's order for now.
-1. Sync row: `NavigationLink` to Sync; `SettingsIconTile("macbook.and.iphone", sync blue, baseSide 56)` (44 at
-   accessibility sizes, stacked) beside a headline title and a subheadline secondary status (`.contentTransition(.opacity)`),
-   6 pt vertical padding, one accessibility element. First, as iOS Settings puts the account first: it is the one
-   card with a status line.
-2. Shortcuts: two capsule buttons, "Archive" and "Spaces", side by side 12 pt apart (stacked at accessibility
-   sizes): body medium, full width, min height 48, `secondarySystemGroupedBackground` capsule, `PressableStyle`
-   (scale 0.94 pressed, `Motion.press` spring 0.16/1). Row background clear, zero insets, section spacing 12.
-   They leave Settings for a sheet, so they stay above the settings proper.
-3. "General": Appearance (`NavigationLink` + `LabeledContent`, value the summary, e.g. "Match My Mac" or "Blue,
-   Glass, Dark"; "paintpalette.fill" in the profile's swatch colour), "Site Settings" ("globe", neutral #86888D),
-   "Default Browser" ("safari.fill", #007AFF, only when `DefaultBrowserStatus.isOffered`) and `Picker` "Open App Links
-   In" ("arrow.up.forward.app.fill", #3EA82E). How browsing looks and behaves everywhere: Appearance is the most
-   visited page, Site Settings holds blocking, Night Shade, swipes and the bar, and where links open sits with the
-   default browser. It replaces Appearance's one-row group and Site Settings' two-row one.
-4. "Search": "Search Engine" (`LabeledContent` with the engine's name, "magnifyingglass", #007AFF), `Toggle` "Search
-   Suggestions" ("text.magnifyingglass", #458AFF), `Toggle` "Auto-Open Keyboard" ("keyboard.fill", #FFC829). Safari's
-   first group; unchanged rows, now titled.
-5. "Tabs": `Picker` "Archive Inactive Tabs" ("archivebox.fill", #B059EE, menu picker tinted secondary) and "Export
-   Open Tabs" ("square.and.arrow.up.fill", #0153FF: a `ShareLink` of the open tabs' addresses, or a toast when there
-   are none). Safari's Tabs group; both act on the open tabs.
-6. "Privacy": "Clear Browsing Data" ("eraser.fill", #FF5A5F), `Toggle` "Share anonymous usage stats"
-   ("checkmark.shield", neutral) and "What's Sent" ("info", neutral), with no footer (the owner after build 13: the
-   sharing summary under it is gone; What's Sent and the opt-in say it). What the app keeps and what it sends,
-   together; Clear Browsing Data used to sit in the mixed group. Android's Settings keeps the summary.
-7. "Experimental": "Browse for Me" when offered. Rarely changed, so near the bottom.
-8. "About": "Show Onboarding" button ("hand.wave.fill", #FF901A, tinted primary) and "About Ardia" link ("info",
-   neutral). Footer: the version line, centred, 16 pt above. Last, as iOS Settings ends with About.
+Root (`ExpoSettingsRoot.tsx`), laid out as the Mac's Settings window (2026-11-23, the owner: "change the settings in
+iPhone similar to the Mac app"). The Mac's sidebar becomes the root list and each Mac pane a pushed page, so the
+root holds no switches or pickers. Main's SwiftUI root (one long list of tinted rows, Archive and Spaces shortcuts) and
+the regrouping after build 13 are gone; Android's Settings (`SettingsRoot.tsx`) keeps its own groups.
+1. Sync card: `NavigationLink` to Sync; `SettingsIconTile("macbook.and.iphone", sync blue, baseSide 56)` beside a
+   headline title and a subheadline secondary status (`.contentTransition(.opacity)`), 6 pt vertical padding, 14 pt
+   gap, one accessibility element. First, as the account comes first in iOS Settings.
+2. The panes, one section, each a `NavigationLink` with a Mac-style tile (`SettingsRowLabel`, 29 pt) and its title
+   only: General (`gearshape.fill`, neutral, the Mac's gray), Tabs (`square.on.square.fill`, orange), Appearance
+   (`circle.lefthalf.filled`, #5856D6, the Mac's indigo), Search (`magnifyingglass`, blue), Site settings (`globe`,
+   #30B0C7, the Mac's teal) and Experimental (`sparkles`, purple, only when Browse for Me or Pinch to Summarize is
+   offered). Tiles appear only here, as on the Mac they appear only in the sidebar.
+Each pane (`ExpoSettingsPanes.tsx`) is a `Form` of plain rows: the title, with a footnote description in secondary
+under it where the Mac has one, no icon tile. Titles and section headers use the Mac's sentence case.
+- General: "Default browser" (when offered), "Links" (Open app links in), "Privacy" (Clear browsing data, Share
+  anonymous usage stats, What's Sent; no footer), "About" (Set up Ardia again, About Ardia; footer the version line,
+  centred). The Mac keeps default browser, privacy and setup in General too.
+- Tabs: "Tab view" (Stack and Grid checkmark rows with the deck footer; it moved here from Appearance, as the Mac's
+  Tabs pane opens with its layout), "Clean up" (Archive inactive tabs, a menu picker), "Export" (Export open tabs).
+- Search: "Search engine" (the engine row with its name, Search suggestions), "New tabs" (Auto-open keyboard).
+- Site settings: "Content blocking" (Block ads, Block trackers, Block cookie banners, Filter lists, Trusted sites),
+  "Browsing" (Night Shade, Swipe to navigate, Collapse bottom bar; the change-one-site footer), then "Camera,
+  microphone and location".
+- Experimental: Browse for Me (with "ChatGPT" or "On iPhone"), Pinch to Summarize with its footer.
+- Telemetry: `settings_panes_opened` counts a pane opening (not which pane).
 
 Appearance (`AppearancePage.swift`, `ColorChoiceRows.swift`):
 - Colour: the word "Color" over nine swatches in one row (`ColorSwatch`: 26 pt circle, a 2 pt ring 3 pt out when
   chosen, 44 pt hit height, `Motion.snappy` spring 0.2/1), then a `Toggle` "Match My Mac" when sync is on.
   The Expo app shows the nine presets and a tenth swatch, Custom, in two rows of five (2026-11-22). See "Custom theme"
   below.
-- "Interface Style" section: `CheckmarkRow`s Match My Mac, Glass, Classic (a semibold checkmark in `formAccent`,
+- "Interface style" section: `CheckmarkRow`s Match My Mac, Glass, Classic (a semibold checkmark in `formAccent`,
   the row a plain `Button` tinted primary, `.isSelected` trait). Footer: "Match My Mac follows your Mac. Reduce
   Transparency in iOS Settings always uses Classic."
-- "Light or Dark" section: `CheckmarkRow`s Match My Mac, System, Light, Dark. Footer: "Match My Mac follows your Mac.
+- "Light or dark" section: `CheckmarkRow`s Match My Mac, System, Light, Dark. Footer: "Match My Mac follows your Mac.
   System follows this device."
 
 Custom theme (the Mac's custom profile theme on the phone, 2026-11-22):

@@ -196,6 +196,21 @@ class HostileInputsThroughTheCAbi(unittest.TestCase):
                 self.assertTrue(same(got, want), f'got {json.dumps(got)[:600]}, want {json.dumps(want)[:600]}')
 
 
+def build_apple_library(scratch):
+    cargo = shutil.which('cargo')
+    if cargo is None:
+        unavailable('swift', 'cargo is unavailable to build libardia_apple')
+    built = subprocess.run([cargo, 'build', '--locked', '--release', '-p', 'ardia-apple-ffi'], cwd=CORE,
+                           capture_output=True, text=True, timeout=900)
+    if built.returncode != 0:
+        raise AssertionError(built.stderr[-4000:])
+    modules = pathlib.Path(scratch) / 'modules'
+    modules.mkdir()
+    headers = ''.join(f'  header {json.dumps(str(CORE / "include" / name))}\n' for name in ('ardia_core.h', 'ardia_import.h'))
+    (modules / 'module.modulemap').write_text('module ArdiaCoreRS {\n' + headers + '  export *\n}\n')
+    return modules, CORE / 'target/release/libardia_apple.a'
+
+
 class SwiftChromiumBookmarks(CrossCheck, unittest.TestCase):
     platform = 'swift'
 
@@ -205,10 +220,11 @@ class SwiftChromiumBookmarks(CrossCheck, unittest.TestCase):
         if compiler is None or sys.platform != 'darwin':
             unavailable('swift', 'swiftc on macOS is unavailable')
         cls.scratch = tempfile.TemporaryDirectory(prefix='ardia-import-swift-')
+        modules, library = build_apple_library(cls.scratch.name)
         cls.binary = pathlib.Path(cls.scratch.name) / 'chromium-bookmarks'
         sources = sorted(map(str, SWIFT_CORE.glob('*.swift')))
         built = subprocess.run([compiler, '-Onone', '-module-name', 'ArdiaImportCore', '-o', str(cls.binary),
-                                str(HERE / 'main.swift'), *sources, '-lsqlite3'],
+                                '-I', str(modules), str(HERE / 'main.swift'), *sources, str(library), '-lsqlite3'],
                                capture_output=True, text=True, timeout=600)
         if built.returncode != 0:
             raise AssertionError(built.stderr[-4000:])

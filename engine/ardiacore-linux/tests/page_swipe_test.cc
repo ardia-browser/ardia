@@ -1,9 +1,9 @@
 #include <cassert>
 #include <cstdio>
 
-#include "ardia/linux/ac_linux_page_swipe.h"
+#include "ardia/desktop/ac_desktop_page_swipe.h"
 
-namespace swipe = ardia::linux_swipe;
+namespace swipe = ardia::desktop_swipe;
 
 int main() {
   using swipe::Phase;

@@ -11,7 +11,7 @@ import { formatNumber } from "../../state/settings/settingsRules";
 import { refreshSitePermissions, revokeSiteAccess, useSitePermissions } from "../../state/settings/sitePermissions";
 import type { SitePermissionGrant } from "../../platform/pages";
 import { contentMargins, Favicon, modifierList, settingsChrome, settingsLayout, settingsSwitchStyle, useDesign } from "../ui";
-import { ExpoRowLabel } from "./ExpoRowLabel";
+import { ExpoRowText } from "./ExpoRowLabel";
 import { NIGHT_SHADE, SWIPE_NAVIGATION } from "./SitePages";
 
 const SECONDARY = { type: "hierarchical", style: "secondary" } as const;
@@ -26,37 +26,37 @@ export function ExpoSiteSettingsPage() {
   const enabledLists = state?.lists.filter((list) => list.isEnabled).length ?? 0;
   const trusted = state?.exemptHosts.length ?? 0;
   return (
-    <Form modifiers={modifierList(navigationTitle("Site Settings"), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), contentMargins({ edges: "top", length: settingsLayout.expoListTop }))}>
-      <Section>
+    <Form modifiers={modifierList(navigationTitle("Site settings"), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), contentMargins({ edges: "top", length: settingsLayout.expoListTop }))}>
+      <Section title="Content blocking">
         <Toggle isOn={state?.blocksAds ?? true} onIsOnChange={(on) => setBlockingCategory("ads", on)} modifiers={modifierList(settingsSwitchStyle())}>
-          <ExpoRowLabel title="Block Ads" systemImage="hand.raised.fill" tint="ads" />
+          <ExpoRowText title="Block ads" />
         </Toggle>
         <Toggle isOn={state?.blocksTrackers ?? true} onIsOnChange={(on) => setBlockingCategory("trackers", on)} modifiers={modifierList(settingsSwitchStyle())}>
-          <ExpoRowLabel title="Block Trackers" systemImage="eyeglasses" tint="trackers" />
+          <ExpoRowText title="Block trackers" />
         </Toggle>
         <Toggle isOn={state?.hidesCookieBanners ?? true} onIsOnChange={(on) => setBlockingCategory("cookieBanners", on)} modifiers={modifierList(settingsSwitchStyle())}>
-          <ExpoRowLabel title="Block Cookie Banners" systemImage="list.bullet.rectangle.portrait.fill" tint="cookies" />
+          <ExpoRowText title="Block cookie banners" />
         </Toggle>
         <NavigationLink value={settingsRouteKey({ page: "filterLists" })}>
-          <LabeledContent label={<ExpoRowLabel title="Filter Lists" systemImage="line.3.horizontal.decrease" tint="neutral" />}>
+          <LabeledContent label={<ExpoRowText title="Filter lists" description="Extra filter lists for the blocker." />}>
             <Text>{formatNumber(enabledLists)}</Text>
           </LabeledContent>
         </NavigationLink>
         <NavigationLink value={settingsRouteKey({ page: "trustedSites" })}>
-          <LabeledContent label={<ExpoRowLabel title="Trusted Sites" systemImage="checkmark.shield.fill" tint="green" />}>
+          <LabeledContent label={<ExpoRowText title="Trusted sites" description="Sites that load without blocking." />}>
             <Text>{trusted ? formatNumber(trusted) : "None"}</Text>
           </LabeledContent>
         </NavigationLink>
       </Section>
-      <Section footer={<Text>Change one site from its page menu.</Text>}>
-        <Picker label={<ExpoRowLabel title="Night Shade" systemImage="moon.fill" tint="nightShade" />} selection={nightShade} onSelectionChange={setDefaultNightShade} modifiers={[pickerStyle("menu"), tint("secondary")]}>
+      <Section title="Browsing" footer={<Text>Change one site from its page menu.</Text>}>
+        <Picker label={<ExpoRowText title="Night Shade" description="Darkens light pages." />} selection={nightShade} onSelectionChange={setDefaultNightShade} modifiers={[pickerStyle("menu"), tint("secondary")]}>
           {NIGHT_SHADE.map((option) => (
             <Text key={option.id} modifiers={[tag(option.id)]}>
               {option.title}
             </Text>
           ))}
         </Picker>
-        <Picker label={<ExpoRowLabel title="Swipe to Navigate" systemImage="hand.draw.fill" tint="swipe" />} selection={swipe} onSelectionChange={setSwipeNavigation} modifiers={[pickerStyle("menu"), tint("secondary")]}>
+        <Picker label={<ExpoRowText title="Swipe to navigate" />} selection={swipe} onSelectionChange={setSwipeNavigation} modifiers={[pickerStyle("menu"), tint("secondary")]}>
           {SWIPE_NAVIGATION.map((option) => (
             <Text key={option.id} modifiers={[tag(option.id)]}>
               {option.title}
@@ -64,7 +64,7 @@ export function ExpoSiteSettingsPage() {
           ))}
         </Picker>
         <Toggle isOn={collapses} onIsOnChange={setCollapsesBottomBar} modifiers={modifierList(settingsSwitchStyle())}>
-          <ExpoRowLabel title="Collapse Bottom Bar" systemImage="platter.filled.bottom.and.arrow.down.iphone" tint="bottomBar" />
+          <ExpoRowText title="Collapse bottom bar" description="Shrinks the bar while you scroll down a page." />
         </Toggle>
       </Section>
       <AllowedSites />
@@ -80,7 +80,7 @@ function AllowedSites() {
   }, []);
   if (!listed) return null;
   return (
-    <Section title="Camera, Microphone and Location" footer={<Text>Sites you allowed keep access on this iPhone until you revoke it. Private tabs always ask.</Text>}>
+    <Section title="Camera, microphone and location" footer={<Text>Sites you allowed keep access on this iPhone until you revoke it. Private tabs always ask.</Text>}>
       {grants.length ? grants.map((grant) => <AllowedSite key={grant.origin} grant={grant} />) : <Text modifiers={[foregroundStyle(SECONDARY)]}>None</Text>}
     </Section>
   );

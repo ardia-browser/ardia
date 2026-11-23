@@ -15,7 +15,7 @@ let handleUnstashes = 0;
 const releaseFields = { corner: "pip_releases_to_corner", flickTuck: "pip_releases_flicked_into_tuck", tuck: "pip_releases_tucked", pullOut: "pip_releases_pulled_out_of_tuck", cornerPull: "pip_releases_pulled_into_corner", placed: "pip_releases_placed" } as const;
 const noReleases = () => ({ pip_releases_to_corner: 0, pip_releases_flicked_into_tuck: 0, pip_releases_tucked: 0, pip_releases_pulled_out_of_tuck: 0, pip_releases_pulled_into_corner: 0, pip_releases_placed: 0 });
 let releases = noReleases();
-const noStandIns = () => ({ pinches: 0, timeouts: 0 });
+const noStandIns = () => ({ pinches: 0, timeouts: 0, unfocused: 0, fromOtherApp: 0 });
 let standIns = noStandIns();
 const noActivations = () => ({ asked: 0, failed: 0 });
 let activations = noActivations();
@@ -80,12 +80,14 @@ export function notePictureInPictureReleased(release: PictureInPictureRelease) {
 }
 
 export function notePictureInPictureStandIn(standIn: PictureInPictureStandIn) {
-  const { pinch, timedOut } = standIn;
+  const { pinch, timedOut, unfocused, fromOtherApp } = standIn;
   counted(
     nativeConsent(standIn),
     () => {
       if (pinch) standIns.pinches++;
       if (timedOut) standIns.timeouts++;
+      if (pinch && unfocused) standIns.unfocused++;
+      if (pinch && fromOtherApp) standIns.fromOtherApp++;
     },
   );
 }

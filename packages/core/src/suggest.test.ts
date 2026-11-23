@@ -876,3 +876,22 @@ test("an open tab further down keeps its Switch to Tab row over a provider row f
     if (!options.remotePending) assert.ok(listed.includes("tab:https://docs.example.com/react-6"), listed.join(", "));
   }
 });
+
+test("a tab row replaced in the same list is seen on the next key, also for a spaced address", () => {
+  const tabs: { id: string; url: string; title: string; favicon: null }[] = [{ id: "t1", url: "https://example.com/my%20page", title: "Mine", favicon: null }];
+  const source = { tabs, history };
+  for (const q of ["example.com/my page", "example.com/my pag"]) buildSuggestions(q, source, { now });
+  tabs[0] = { ...tabs[0]!, url: "https://example.com/my%20page#new" };
+  const fresh = buildSuggestions("example.com/my page", { tabs: [...tabs], history }, { now });
+  assert.deepEqual(buildSuggestions("example.com/my page", source, { now }), fresh);
+});
+
+test("a spaced address reads a tab's current address even when the same tab row object changes", () => {
+  const row = { id: "t1", url: "https://example.com/my%20page#old", title: "Mine", favicon: null };
+  const source = { tabs: [row], history };
+  buildSuggestions("example.com/my pag", source, { now });
+  row.url = "https://example.com/my%20page#new";
+  const urls = buildSuggestions("example.com/my pag", source, { now }).items.flatMap((i) => (i.kind === "page" && i.tabId === "t1" ? [i.url] : []));
+  assert.ok(urls.length > 0, "the tab's row is listed");
+  assert.ok(urls.every((u) => u === row.url), urls.join(", "));
+});

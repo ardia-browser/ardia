@@ -116,7 +116,9 @@ BOOL ThrowEnabled() {
 }
 
 NSPoint PointerOf(NSEvent *event) {
-  CGPoint point = CGEventGetLocation(event.CGEvent);
+  CGEventRef backing = event.CGEvent;
+  if (!backing) return NSEvent.mouseLocation;
+  CGPoint point = CGEventGetLocation(backing);
   return NSMakePoint(point.x, NSMaxY(NSScreen.screens.firstObject.frame) - point.y);
 }
 
@@ -198,6 +200,7 @@ NSString *CornerName(int corner) {
 }
 
 - (void)detach {
+  [ArdiaPiPZoom dropStandInOn:_window];
   [ArdiaPiPController abandonSwipeOn:_window];
   for (id observer in _observers) [NSNotificationCenter.defaultCenter removeObserver:observer];
   [_observers removeAllObjects];
@@ -207,6 +210,7 @@ NSString *CornerName(int corner) {
   [_resizeCursor detach];
   [_overlay removeFromSuperview];
   objc_setAssociatedObject(_window, kControllerKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  RefreshPinchesFromOtherApps();
 }
 
 - (void)roundCorners {
@@ -388,6 +392,8 @@ NSString *CornerName(int corner) {
 
 - (void)setStashedEdge:(ArdiaPiPEdge)edge {
   _stashedEdge = edge;
+  if (edge != ArdiaPiPEdgeNone) [ArdiaPiPZoom dropStandInOn:_window];
+  RefreshPinchesFromOtherApps();
   ArdiaPiPHandle *handle = _overlay.handle;
   if (edge != ArdiaPiPEdgeNone) {
     handle.edge = edge;

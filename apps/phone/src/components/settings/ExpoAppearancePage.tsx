@@ -5,7 +5,7 @@ import { Button, Form, HStack, NavigationLink, Section, Text, Toggle, VStack } f
 import { accessibilityAddTraits, accessibilityLabel, buttonStyle, frame, navigationBarTitleDisplayMode, navigationTitle, padding, tint } from "@expo/ui/swift-ui/modifiers";
 import { actionWords } from "../../lib/sharedWords";
 import { rainbow } from "../../lib/themeEditor";
-import { INTERFACE_STYLE_NAMES, INTERFACE_STYLES, offeredInterfaceStyle, offeredScheme, SCHEME_CHOICES, SCHEME_NAMES, TABS_STYLE_FOOTER } from "../../lib/appearance";
+import { INTERFACE_STYLE_NAMES, INTERFACE_STYLES, offeredInterfaceStyle, offeredScheme, SCHEME_CHOICES, SCHEME_NAMES } from "../../lib/appearance";
 import { setColorChoice, setInterfaceStyle, setSchemeChoice } from "../../state/settings/actions";
 import { usePreferences } from "../../state/settings/hooks";
 import { openThemeEditor } from "../../state/settings/customTheme";
@@ -13,8 +13,6 @@ import { settingsRouteKey } from "../../state/settings/nav";
 import { matchMyMac } from "../../state/sync/actions";
 import { useSyncEnabled } from "../../state/sync/hooks";
 import { syncOffered } from "../../state/sync/offer";
-import { setDeckGrid, useDeckGrid } from "../../state/browse/deckGrid";
-import { useIncognito } from "../../state/tabs/hooks";
 import { ColorSwatch, contentMargins, controlSize, modifierList, PROFILE_COLORS, settingsChrome, settingsLayout, settingsSwitchStyle, settingsTint, settingsUIAvailable, themeEditorLayout, useProfileLook, type ProfileColor } from "../ui";
 import { ExpoChoiceRow } from "./ExpoSettingsParts";
 
@@ -34,8 +32,6 @@ export function ExpoAppearancePage() {
   const schemeChoices = offersSync ? SCHEME_CHOICES : SCHEME_CHOICES.filter((choice) => choice !== "matchMac");
   const chosen = usePreferences((p) => p.colorChoice);
   const look = useProfileLook();
-  const grid = useDeckGrid();
-  const incognito = useIncognito();
   return (
     <Form modifiers={modifierList(navigationTitle("Appearance"), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), contentMargins({ edges: "top", length: settingsLayout.expoListTop }))}>
       <Section>
@@ -55,7 +51,7 @@ export function ExpoAppearancePage() {
         </VStack>
         {chosen === "custom" ? (
           <NavigationLink value={settingsRouteKey({ page: "theme" })}>
-            <Text>Edit Theme</Text>
+            <Text>Edit theme</Text>
           </NavigationLink>
         ) : null}
         {syncEnabled ? (
@@ -64,19 +60,15 @@ export function ExpoAppearancePage() {
           </Toggle>
         ) : null}
       </Section>
-      <Section title="Interface Style" footer={offersSync ? <Text>Match My Mac follows your Mac. Reduce Transparency in iOS Settings always uses Classic.</Text> : undefined}>
+      <Section title="Interface style" footer={offersSync ? <Text>Match My Mac follows your Mac. Reduce Transparency in iOS Settings always uses Classic.</Text> : undefined}>
         {styleChoices.map((choice) => (
           <ExpoChoiceRow key={choice} title={INTERFACE_STYLE_NAMES[choice]} checked={style === choice} onPress={() => setInterfaceStyle(choice)} />
         ))}
       </Section>
-      <Section title="Light or Dark" footer={<Text>{offersSync ? "Match My Mac follows your Mac. System follows this device." : "System follows this device."}</Text>}>
+      <Section title="Light or dark" footer={<Text>{offersSync ? "Match My Mac follows your Mac. System follows this device." : "System follows this device."}</Text>}>
         {schemeChoices.map((choice) => (
           <ExpoChoiceRow key={choice} title={SCHEME_NAMES[choice]} checked={scheme === choice} onPress={() => setSchemeChoice(choice)} />
         ))}
-      </Section>
-      <Section title="Tabs" footer={<Text>{TABS_STYLE_FOOTER}</Text>}>
-        <ExpoChoiceRow title="Stack" checked={!grid} onPress={() => setDeckGrid(false, !incognito)} />
-        <ExpoChoiceRow title="Grid" checked={grid} onPress={() => setDeckGrid(true, !incognito)} />
       </Section>
     </Form>
   );

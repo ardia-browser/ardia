@@ -19,6 +19,9 @@ export type Candidate = {
   fresh?: boolean;
   text: PageText;
   named?: PageText;
+  openIn?: OpenMark;
+  openTabId?: string;
+  openRenamed?: boolean;
 };
 
 type Lookup = { get(key: string): Candidate | undefined; has(key: string): boolean };
@@ -139,15 +142,31 @@ function exactRows<Row extends { url: string }>(rows: readonly Row[]): Map<strin
 export const savedVisit = (history: readonly HistoryRow[], url: string): HistoryRow | undefined => exactRows(history).get(withRootSlash(url));
 export const savedBookmark = (bookmarks: readonly BookmarkRow[], url: string): BookmarkRow | undefined => exactRows(bookmarks).get(withRootSlash(url));
 
-type TabsOver = { pool: Pool; currentTabId: string | undefined; rows: TabRow[]; tabIds: Map<string, string>; extra: Candidate[]; renamed: Set<string> };
+export type OpenMark = Record<string, never>;
+export type TabsOver = { pool: Pool; currentTabId: string | undefined; rows: TabRow[]; tabIds: Map<string, string>; extra: Candidate[]; renamed: Set<string>; mark: OpenMark };
 const tabsOverCache = new WeakMap<readonly TabRow[], TabsOver>();
+let lastMarked: OpenMark | null = null;
+
+function marked(result: TabsOver): TabsOver {
+  if (lastMarked === result.mark) return result;
+  for (const [key, tabId] of result.tabIds) {
+    const c = result.pool.byKey.get(key);
+    if (c) {
+      c.openIn = result.mark;
+      c.openTabId = tabId;
+      c.openRenamed = false;
+    }
+  }
+  lastMarked = result.mark;
+  return result;
+}
 
 export function tabsOver(pool: Pool, tabs: readonly TabRow[], currentTabId?: string): TabsOver {
   const cached = tabsOverCache.get(tabs);
   if (cached && cached.pool === pool && cached.currentTabId === currentTabId && cached.rows.length === tabs.length) {
     let same = true;
     for (let i = 0; same && i < tabs.length; i++) same = cached.rows[i] === tabs[i];
-    if (same) return cached;
+    if (same) return marked(cached);
   }
   const tabIds = new Map<string, string>();
   const renamedTabKeys = new Set<string>();
@@ -168,11 +187,18 @@ export function tabsOver(pool: Pool, tabs: readonly TabRow[], currentTabId?: str
   }
   const extra: Candidate[] = [];
   const renamed = new Set<string>();
+  const mark: OpenMark = {};
+  const result: TabsOver = { pool, currentTabId, rows: tabs.slice(), tabIds, extra, renamed, mark };
   for (let i = 0; i < tabs.length; i++) {
     const t = tabs[i]!;
     if (!t.url || t.id === currentTabId) continue;
     const key = pageText(t).key;
     const listed = pool.byKey.get(key);
+    if (listed && (listed.openIn !== mark || (t.customTitle && !listed.openRenamed))) {
+      listed.openIn = mark;
+      listed.openTabId = t.id;
+      listed.openRenamed = !!t.customTitle;
+    }
     if (!t.customTitle) {
       if (!listed && firstOfPage[i] && (renamedTabKeys.size === 0 || !renamedTabKeys.has(key))) extra.push({ url: t.url, title: t.title, pageTitle: t.title, favicon: t.favicon, visits: 0, lastVisit: 0, logVisits: 0, fresh: true, bookmarked: false, tabId: t.id, text: tabPageText(t) });
     } else if (!listed) {
@@ -182,7 +208,7 @@ export function tabsOver(pool: Pool, tabs: readonly TabRow[], currentTabId?: str
       extra.push({ url: t.url, title: t.customTitle, renamed: true, favicon: t.favicon ?? listed.favicon, visits: listed.visits, lastVisit: listed.lastVisit, logVisits: listed.logVisits, bookmarked: listed.bookmarked, tabId: t.id, text: tabPageText(t, listed.text), named: listed.named });
     }
   }
-  const result = { pool, currentTabId, rows: tabs.slice(), tabIds, extra, renamed };
   tabsOverCache.set(tabs, result);
+  lastMarked = result.mark;
   return result;
 }

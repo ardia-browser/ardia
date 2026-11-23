@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "ardia/linux/ac_linux_idle_policy.h"
+#include "ardia/desktop/ac_desktop_idle_policy.h"
 #include "base/callback_list.h"
 #include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
@@ -44,7 +44,7 @@ class LinuxSystemSignals {
 
   base::RepeatingCallbackList<void(const base::DictValue&)> listeners_;
   std::map<int, std::set<double>> wanted_;
-  linux_idle::IdleWatch idle_;
+  desktop_idle::IdleWatch idle_;
   base::OneShotTimer poll_;
   scoped_refptr<dbus::Bus> bus_;
   bool asleep_ = false;

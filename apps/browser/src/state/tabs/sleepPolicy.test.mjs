@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { capWarmPanes, warmOrder, engineVeto, FREQUENT_SWITCHES, MINUTE, RECENTLY_AUDIBLE_MS, RECENTLY_SEEN_MS, sleepRules, sleepVeto, tabsToSleep } from "./sleepPolicy.ts";
-import { countSwitches } from "./tabSwitches.ts";
+import { countSwitch } from "./tabSwitches.ts";
+import { frontTabChanges } from "../windows/frontTabs.ts";
+
+const countSwitches = (prev, next, counts) => {
+  for (const change of frontTabChanges(prev, next)) countSwitch(change, counts);
+};
 
 const NOW = 1_000_000_000_000;
 const idle = (id, minutesAgo, extra = {}) => ({

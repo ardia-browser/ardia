@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "ardia/linux/ac_linux_memory_pressure.h"
-#include "ardia/linux/ac_linux_tab_policy.h"
+#include "ardia/desktop/ac_desktop_tab_policy.h"
 #include "base/callback_list.h"
 #include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"

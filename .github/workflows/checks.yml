@@ -106,6 +106,7 @@ jobs:
               - "packages/**"
               - "engine/ardiacore/src/**"
               - "engine/chromium/src/**"
+              - "engine/ardiacore-desktop/src/**"
               - "engine/ardiacore-linux/src/**"
               - "engine/ardiacore-linux/content-blocker/**"
               - "engine/patches/**"

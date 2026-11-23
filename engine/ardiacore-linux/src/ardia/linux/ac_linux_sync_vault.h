@@ -7,7 +7,7 @@
 #include <string_view>
 #include <vector>
 
-#include "ardia/linux/ac_linux_sync_crypto.h"
+#include "ardia/linux/ac_linux_sync_keys.h"
 
 namespace ardia::linux_sync {
 
@@ -39,6 +39,7 @@ struct SyncFile {
 struct DamagedFile {
   std::string id;
   double age_seconds = 0;
+  OpenError reason = OpenError::kOther;
 };
 
 struct Listing {

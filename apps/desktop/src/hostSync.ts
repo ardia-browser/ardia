@@ -31,6 +31,7 @@ export const SYNC_CAPABILITIES = [
   "ArdiaSync.savePassword",
   "ArdiaSync.claimAuthority",
   "ArdiaSync.releaseAuthority",
+  "ArdiaSync.core",
 ] as const;
 
 export type SyncKeyStoreStatus = {
@@ -42,11 +43,15 @@ export type SyncKeyStoreStatus = {
   passwords: boolean;
 };
 
+export type SyncOpenFailure = "format" | "authentication" | "too_large" | "other";
+type OpenFailureCount = (failures: Partial<Record<SyncOpenFailure, number>>) => void;
+
 type AuthorityClaim = { granted: boolean; leaseMs: number };
 
 const BASE32 = "abcdefghijklmnopqrstuvwxyz234567";
 const FALLBACK_DEVICE_NAME = "Linux";
 const SYNC_METHODS: ReadonlySet<string> = new Set(SYNC_CAPABILITIES);
+const OPEN_FAILURES: readonly SyncOpenFailure[] = ["format", "authentication", "too_large", "other"];
 
 function base32(bytes: Uint8Array): string {
   let out = "";
@@ -382,8 +387,69 @@ export const releaseSyncAuthority = (host: ArdiaHost) => invokeHost<void>("Ardia
 const invoke = (host: ArdiaHost, method: string) => (...args: unknown[]) =>
   invokeHost(`ArdiaSync.${method}`, { args: args.map((arg) => (arg === undefined ? null : arg)) }, host);
 
+let startOpenFailureCount: () => OpenFailureCount = () => () => {};
+type SyncCore = "rust" | "native";
+let reportedCore: SyncCore | null = null;
+let coreLoad: Promise<SyncCore> | null = null;
+
+export function configureOpenFailureCount<Consent>(consent: () => Consent, note: (consent: Consent, failures: Partial<Record<SyncOpenFailure, number>>) => void) {
+  startOpenFailureCount = () => {
+    const started = consent();
+    return (failures) => note(started, failures);
+  };
+}
+
+export function loadSyncCore(host: ArdiaHost): Promise<SyncCore> {
+  reportedCore = null;
+  const load: Promise<SyncCore> = invokeHost<unknown>("ArdiaSync.core", { args: [] }, host).then(
+    (core) => (core === "rust" ? "rust" : "native"),
+    () => "native",
+  );
+  coreLoad = load;
+  void load.then((core) => {
+    if (coreLoad === load) reportedCore = core;
+  });
+  return load;
+}
+
+export function whenSyncCore<Consent>(consent: Consent, emit: (core: SyncCore, consent: Consent) => void) {
+  const load = coreLoad;
+  if (reportedCore || !load) return emit(reportedCore ?? "native", consent);
+  void load.then((core) => emit(core, consent));
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
+
+function settleRead(result: unknown, count: OpenFailureCount) {
+  if (!isRecord(result) || !("openFailures" in result)) return result;
+  const { openFailures, ...listing } = result;
+  if (isRecord(openFailures)) {
+    const failures: Partial<Record<SyncOpenFailure, number>> = {};
+    for (const code of OPEN_FAILURES) {
+      const value = openFailures[code];
+      if (typeof value === "number") failures[code] = value;
+    }
+    count(failures);
+  }
+  return listing;
+}
+
+function settleOpenLocal(result: unknown, count: OpenFailureCount) {
+  if (!isRecord(result)) return result;
+  const code = OPEN_FAILURES.find((failure) => failure === result.openFailure);
+  if (code) count({ [code]: 1 });
+  return null;
+}
+
 export function syncModuleMethod(host: ArdiaHost, name: string, method: string): unknown {
   if (name !== "ArdiaSync") return undefined;
+  if (method === "read" || method === "openLocal") {
+    return async (...args: unknown[]) => {
+      const count = startOpenFailureCount();
+      const result = await invoke(host, method)(...args);
+      return method === "read" ? settleRead(result, count) : settleOpenLocal(result, count);
+    };
+  }
   if (method === "newDeviceId") return () => newSyncDeviceId();
   if (method === "deviceName") return syncDeviceName;
   if (method === "readPasswords") {

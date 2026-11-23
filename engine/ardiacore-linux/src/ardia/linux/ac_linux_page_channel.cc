@@ -538,7 +538,7 @@ void LinuxPageChannel::OnInputEventAck(const content::RenderWidgetHost& widget,
   const auto& gesture = static_cast<const blink::WebGestureEvent&>(event);
   if (gesture.SourceDevice() != blink::mojom::GestureDevice::kTouchpad) return;
   using Type = blink::WebInputEvent::Type;
-  std::optional<ardia::linux_swipe::Step> step;
+  std::optional<ardia::desktop_swipe::Step> step;
   switch (event.GetType()) {
     case Type::kGestureScrollBegin:
       swipe_.Begin(gesture.data.scroll_begin.delta_hint_units == ui::ScrollGranularity::kScrollByPrecisePixel);
@@ -561,13 +561,13 @@ void LinuxPageChannel::OnInputEventAck(const content::RenderWidgetHost& widget,
   if (step) ForwardSwipe(*step, gesture.PositionInWidget());
 }
 
-void LinuxPageChannel::ForwardSwipe(const ardia::linux_swipe::Step& step, std::optional<gfx::PointF> page_point) {
+void LinuxPageChannel::ForwardSwipe(const ardia::desktop_swipe::Step& step, std::optional<gfx::PointF> page_point) {
   if (!hooks_ || !hooks_->swipe) return;
   base::DictValue swipe = base::DictValue()
-      .Set("phase", std::string(ardia::linux_swipe::PhaseName(step.phase)))
+      .Set("phase", std::string(ardia::desktop_swipe::PhaseName(step.phase)))
       .Set("dx", step.dx)
       .Set("dy", step.dy);
-  if (step.phase == ardia::linux_swipe::Phase::kBegan) {
+  if (step.phase == ardia::desktop_swipe::Phase::kBegan) {
     std::optional<gfx::PointF> point =
         page_point && hooks_->shell_point ? hooks_->shell_point.Run(*page_point) : std::nullopt;
     if (!point) {

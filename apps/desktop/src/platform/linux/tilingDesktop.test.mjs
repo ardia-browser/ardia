@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { isTilingDesktop } from "./tilingDesktop.ts";
 
-const ENGINE_CORNERS = new URL("../../../../../engine/ardiacore-linux/src/ardia/linux/ac_linux_window_corners.h", import.meta.url);
+const ENGINE_CORNERS = new URL("../../../../../engine/ardiacore-desktop/src/ardia/desktop/ac_desktop_window_corners.h", import.meta.url);
 const quoted = (text) => [...text.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
 
 test("the shell and the engine name the same tiling desktops, in the same order", () => {

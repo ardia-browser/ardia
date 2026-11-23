@@ -7,7 +7,9 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 LINUX = SOURCE / 'ardia/linux'
+DESKTOP = LINUX.parents[3] / 'ardiacore-desktop' / 'src' / 'ardia' / 'desktop'
 REPO = ROOT.parents[1]
 PATCHES = ROOT.parent / 'patches'
 PATCH = PATCHES / 'chromium-linux-unhandled-key.patch'
@@ -31,7 +33,7 @@ class PageKeysTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='ardia-page-keys-') as directory:
             binary = Path(directory) / 'page-keys'
             subprocess.run([os.environ.get('CXX', 'c++'), '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g',
-                            '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-I', str(SOURCE),
+                            '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE),
                             str(ROOT / 'tests/page_keys_test.cc'), '-o', str(binary)],
                            check=True, text=True, timeout=180)
             result = subprocess.run([str(binary)], text=True, timeout=60, capture_output=True,
@@ -40,7 +42,7 @@ class PageKeysTests(unittest.TestCase):
             self.assertEqual(result.stdout, 'ok\n')
 
     def test_the_event_is_the_one_the_mac_sends_and_the_shared_page_handles(self):
-        core = (LINUX / 'ac_linux_page_keys.h').read_text()
+        core = (DESKTOP / 'ac_desktop_page_keys.h').read_text()
         self.assertIn('kCommandEvent[] = "command"', core)
         self.assertIn('kEscapeCommand[] = "escape"', core)
         self.assertIn('[target emit:@"command" payload:@{@"command" : @"escape", @"text" : @""}];',
@@ -61,14 +63,14 @@ class PageKeysTests(unittest.TestCase):
         self.assertIn('if (host->ReportUnhandledEscape(contents)) return;', hook)
         report = host[host.index('bool ShellHostView::ReportUnhandledEscape('):host.index('std::string ShellHostView::ExtensionTabKey(')]
         self.assertLess(report.index('binding->contents() != contents'), report.index('PageTakesEscape(!!binding->page(), binding->presented, binding->pane_visible)'))
-        self.assertIn('.Set("command", ardia::linux_keys::kEscapeCommand).Set("text", "")', report)
-        self.assertIn('binding->page()->EmitDocument(ardia::linux_keys::kCommandEvent,', report)
+        self.assertIn('.Set("command", ardia::desktop_keys::kEscapeCommand).Set("text", "")', report)
+        self.assertIn('binding->page()->EmitDocument(ardia::desktop_keys::kCommandEvent,', report)
 
     def test_browser_windows_advertise_it(self):
         host = (LINUX / 'ac_linux_host.cc').read_text()
-        self.assertIn('  if (!is_utility()) {\n    for (const char* capability : ardia::linux_keys::kPageKeyCapabilities) capabilities.Append(capability);\n  }', host)
-        self.assertIn('kPageKeyCapabilities[] = {"tab.unhandledEscape"}', (LINUX / 'ac_linux_page_keys.h').read_text())
-        self.assertIn('"ac_linux_page_keys.h"', (LINUX / 'BUILD.gn').read_text())
+        self.assertIn('  if (!is_utility()) {\n    for (const char* capability : ardia::desktop_keys::kPageKeyCapabilities) capabilities.Append(capability);\n  }', host)
+        self.assertIn('kPageKeyCapabilities[] = {"tab.unhandledEscape"}', (DESKTOP / 'ac_desktop_page_keys.h').read_text())
+        self.assertIn('"ac_desktop_page_keys.h"', (DESKTOP / 'BUILD.gn').read_text())
 
     def test_the_hook_patch_is_linux_only_and_after_the_scroll_bar_patch(self):
         steps = [line.split() for line in (PATCHES / 'series').read_text().splitlines() if line.startswith('chromium ')]

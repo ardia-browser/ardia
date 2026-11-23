@@ -7,6 +7,7 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 LINUX = SOURCE / 'ardia' / 'linux'
 
 POLICY_TEST = r'''#include <cassert>
@@ -222,7 +223,7 @@ class SelfUpdatePolicyTests(unittest.TestCase):
             cpp = scratch / 'self_update.cc'
             cpp.write_text(POLICY_TEST, encoding='utf-8')
             binary = scratch / 'self_update'
-            compiled = subprocess.run([compiler, '-std=c++20', '-Wall', '-Werror', '-fsanitize=address,undefined', '-I', str(SOURCE), str(cpp), '-o', str(binary)], capture_output=True, text=True)
+            compiled = subprocess.run([compiler, '-std=c++20', '-Wall', '-Werror', '-fsanitize=address,undefined', '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE), str(cpp), '-o', str(binary)], capture_output=True, text=True)
             if compiled.returncode != 0:
                 raise AssertionError(compiled.stderr)
             subprocess.run([str(binary)], check=True)
@@ -274,7 +275,10 @@ class SelfUpdatePolicyTests(unittest.TestCase):
         host = (LINUX / 'ac_linux_host.cc').read_text()
         bootstrap = host[host.index('base::DictValue ShellHostView::Bootstrap() const {'):host.index('void ShellHostView::LayoutOverlay()')]
         self.assertIn('for (const char* capability : ardia::linux_self_update_policy::kSelfUpdateCapabilities) capabilities.Append(capability);', bootstrap)
-        self.assertIn('if (ardia::linux_self_update::Invokes(method)) {\n    return ardia::linux_self_update::Invoke(method, values, std::move(done));', host)
+        self.assertIn('if (const auto capability = ardia::desktop::Platform().CapabilityFor(method)) {', host)
+        platform = (LINUX / 'ac_linux_desktop_platform.cc').read_text()
+        self.assertIn('if (linux_self_update::Invokes(method)) return PlatformCapability::kSelfUpdate;', platform)
+        self.assertIn('return linux_self_update::Invoke(call.method, call.args, std::move(done));', platform)
         build = (LINUX / 'BUILD.gn').read_text()
         for name in ['"ac_linux_self_update.cc"', '"ac_linux_self_update.h"', '"ac_linux_self_update_policy.h"']:
             self.assertIn(name, build)

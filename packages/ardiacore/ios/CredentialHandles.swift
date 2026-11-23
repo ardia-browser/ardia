@@ -61,3 +61,41 @@ struct CredentialHandles: Sendable {
 
   func values(in call: String) -> [String] { handles.values.filter { $0.call == call }.map(\.value) }
 }
+
+enum CredentialHostOutcome: String, Sendable {
+  case cancelled
+  case timedOut
+  case stopped
+  case invalid
+  case tooLarge
+  case overloaded
+  case stale
+}
+
+enum CredentialCallAnswer: @unchecked Sendable {
+  case result(Any, session: String?)
+  case error(CredentialWireError)
+  case host(CredentialHostOutcome)
+}
+
+extension CredentialCallAnswer {
+  var isFailure: Bool {
+    switch self {
+    case .result: return false
+    case .error(let wire): return !["locked", "signedOut", "notFound"].contains(wire.code)
+    case .host(let outcome): return outcome != .cancelled
+    }
+  }
+}
+
+struct CredentialRequestId: @unchecked Sendable {
+  let json: Any
+}
+
+struct CredentialCallBuilder {
+  var mint: (String, CredentialHandles.Kind) -> String?
+
+  mutating func handle(_ value: String, kind: CredentialHandles.Kind = .typed) -> [String: Any]? {
+    mint(value, kind).map { [CredentialVerbLaunch.handleKey: $0] }
+  }
+}

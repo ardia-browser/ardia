@@ -8,44 +8,6 @@ public protocol CredentialPluginLink: AnyObject, Sendable {
   func stopRun()
 }
 
-enum CredentialHostOutcome: String, Sendable {
-  case cancelled
-  case timedOut
-  case stopped
-  case invalid
-  case tooLarge
-  case overloaded
-  case stale
-}
-
-enum CredentialCallAnswer: @unchecked Sendable {
-  case result(Any, session: String?)
-  case error(CredentialWireError)
-  case host(CredentialHostOutcome)
-}
-
-extension CredentialCallAnswer {
-  var isFailure: Bool {
-    switch self {
-    case .result: return false
-    case .error(let wire): return !["locked", "signedOut", "notFound"].contains(wire.code)
-    case .host(let outcome): return outcome != .cancelled
-    }
-  }
-}
-
-struct CredentialRequestId: @unchecked Sendable {
-  let json: Any
-}
-
-struct CredentialCallBuilder {
-  fileprivate var mint: (String, CredentialHandles.Kind) -> String?
-
-  mutating func handle(_ value: String, kind: CredentialHandles.Kind = .typed) -> [String: Any]? {
-    mint(value, kind).map { [CredentialVerbLaunch.handleKey: $0] }
-  }
-}
-
 public final class CredentialRunEndpoint: @unchecked Sendable {
   static let forwardedReadyId = "ardia-ready"
   static let refusedMethodMessage = "A password manager plugin can only use hello, ready, result and credentials requests."

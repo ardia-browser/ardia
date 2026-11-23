@@ -236,18 +236,6 @@ const NATIVE_COUNTS = {
 
 const countOf = (n: unknown) => (typeof n === "number" && Number.isFinite(n) && n > 0 ? Math.floor(n) : 0);
 
-function bumpCredentialCounts(native: unknown, consent: ConsentToken | null) {
-  if (!native || typeof native !== "object") return;
-  for (const [from, to] of Object.entries(CREDENTIAL_KINDS) as [keyof typeof CREDENTIAL_KINDS, (typeof CREDENTIAL_KINDS)[keyof typeof CREDENTIAL_KINDS]][]) {
-    const byProvider = (native as Record<string, unknown>)[from];
-    if (!byProvider || typeof byProvider !== "object") continue;
-    for (const [provider, n] of Object.entries(byProvider as Record<string, unknown>)) {
-      const by = countOf(n);
-      if (by) bump(`credential_${to}_${credentialCountName(provider)}`, consent, by);
-    }
-  }
-}
-
 export async function pullVaultKeychainCounts() {
   const consent = consentToken();
   const native: (Partial<Record<keyof typeof NATIVE_COUNTS, unknown>> & { credential?: unknown }) | null = await Promise.resolve().then(takeVaultKeychainCounts).catch(() => null);
@@ -256,7 +244,15 @@ export async function pullVaultKeychainCounts() {
     const n = countOf(native[from]);
     if (n) bump(to, consent, n);
   }
-  bumpCredentialCounts(native.credential, consent);
+  const credential = native.credential && typeof native.credential === "object" ? (native.credential as Record<string, unknown>) : {};
+  for (const [from, to] of Object.entries(CREDENTIAL_KINDS) as [keyof typeof CREDENTIAL_KINDS, (typeof CREDENTIAL_KINDS)[keyof typeof CREDENTIAL_KINDS]][]) {
+    const byProvider = credential[from];
+    if (!byProvider || typeof byProvider !== "object") continue;
+    for (const [provider, n] of Object.entries(byProvider as Record<string, unknown>)) {
+      const by = countOf(n);
+      if (by) bump(`credential_${to}_${credentialCountName(provider)}`, consent, by);
+    }
+  }
 }
 
 let connectedProviders = new Set<CredentialName>();
@@ -266,7 +262,7 @@ export function noteCredentialProvidersConnected(providers: readonly string[]) {
 }
 
 export function takeVaultCounts() {
-  for (const name of connectedProviders) countFor(consentToken(), () => void (counts[`credential_provider_connected_${name}`] = 1));
+  for (const name of connectedProviders) if (!counts[`credential_provider_connected_${name}`]) bump(`credential_provider_connected_${name}`);
   const taken = counts;
   counts = empty();
   void pullVaultKeychainCounts();

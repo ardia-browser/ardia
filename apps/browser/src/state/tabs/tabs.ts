@@ -38,7 +38,7 @@ export type NewTabOptions = {
 };
 
 
-export type Successor = { id: string | null; above: boolean; shown: boolean };
+export type Successor = { id: string | null; side: "above" | "below"; beside: boolean; shown: boolean };
 export type UserClose = { successors: ReadonlyMap<string, Successor>; noted: (pick: Successor) => void; shows: (s: BrowserState, windowId: string, profileId: string, id: string) => boolean };
 export type CloseOptions = { lastClosesWindow?: boolean; keepTopApps?: boolean; unrecorded?: boolean; userClose?: UserClose };
 

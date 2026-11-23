@@ -27,11 +27,12 @@ function windowWith(mode, ...hosts) {
   return { w, ids };
 }
 
-const BOTH = ["previouslyActive", "tabAbove"];
+const BOTH = ["previouslyActive", "tabAbove", "tabBelow"];
+const NO_PICKS = { close_activated_tab_above: 0, close_tab_above_fallbacks: 0, close_activated_tab_below: 0, close_tab_below_fallbacks: 0 };
 
 test("the setting defaults to the previously active tab, syncs, is in config.json and in the daily settings snapshot", () => {
   assert.equal(SETTING_SPECS.afterClosingTab.default, "previouslyActive");
-  assert.deepEqual([...SETTING_SPECS.afterClosingTab.values], ["previouslyActive", "tabAbove"]);
+  assert.deepEqual([...SETTING_SPECS.afterClosingTab.values], ["previouslyActive", "tabAbove", "tabBelow"]);
   assert.equal(SETTING_SPECS.afterClosingTab.synced, true);
   assert.ok(isConfigSettingKey("afterClosingTab"));
   S().hydrate({});
@@ -50,6 +51,41 @@ test("Previously active tab keeps today's behaviour; Tab above shows the tab dir
     close(c);
     assert.equal(shown(w), expected, mode);
   }
+});
+
+test("Tab below shows the tab directly below, and the tab above when the closed tab was last", () => {
+  const { w, ids: [a, b] } = windowWith("tabBelow", "a", "b", "c", "d");
+  S().activate(a);
+  S().activate(b);
+  close(b);
+  assert.equal(shown(w), "c");
+  const last = windowWith("tabBelow", "a", "b", "c");
+  S().activate(last.ids[2]);
+  close(last.ids[2]);
+  assert.equal(shown(last.w), "b");
+});
+
+test("Tab below: a batch close picks once from below the bottommost closed tab", () => {
+  const { w, ids: [, b, c, d] } = windowWith("tabBelow", "a", "b", "c", "d", "e");
+  S().activate(c);
+  closeAll([b, c, d]);
+  assert.equal(shown(w), "e");
+});
+
+test("Tab below counts its picks and fallbacks apart from Tab above", async () => {
+  const { takeCloseActivationCounts } = await import("../telemetry/closeActivationCounts.ts");
+  client.loadChoice();
+  client.setSharing(true, "settings");
+  takeCloseActivationCounts();
+  const { w, ids: [t, a, b] } = windowWith("tabBelow", "t", "a", "b");
+  S().pinTabs([t], true);
+  S().activate(a);
+  close(a);
+  assert.equal(shown(w), "b");
+  close(b);
+  assert.equal(shown(w), "t", "no regular tab left, so today's pick");
+  assert.deepEqual(takeCloseActivationCounts(), { ...NO_PICKS, close_activated_tab_below: 1, close_tab_below_fallbacks: 1 });
+  client.setSharing(false, "settings");
 });
 
 test("Tab above: closing the first tab shows the tab below it", () => {
@@ -230,12 +266,12 @@ test("only a close from the tab in front counts toward Tab above telemetry, and 
   assert.equal(shown(w), "a");
   close(a);
   assert.equal(shown(w), "t", "no regular tab left, so today's pick");
-  assert.deepEqual(takeCloseActivationCounts(), { close_activated_tab_above: 1, close_tab_above_fallbacks: 1 });
+  assert.deepEqual(takeCloseActivationCounts(), { ...NO_PICKS, close_activated_tab_above: 1, close_tab_above_fallbacks: 1 });
   client.setSharing(false, "settings");
   const off = windowWith("tabAbove", "a", "b");
   S().activate(off.ids[1]);
   close(off.ids[1]);
-  assert.deepEqual(takeCloseActivationCounts(), { close_activated_tab_above: 0, close_tab_above_fallbacks: 0 });
+  assert.deepEqual(takeCloseActivationCounts(), NO_PICKS);
 });
 
 test("Tab above among open Top Apps shows the Top App beside the closed one, not the last regular tab", () => {
@@ -310,7 +346,7 @@ test("closing another profile's remembered tab counts nothing toward Tab above t
   assert.equal(S().windows[w].activeTabIds[other], x);
   takeCloseActivationCounts();
   closeAll([x]);
-  assert.deepEqual(takeCloseActivationCounts(), { close_activated_tab_above: 0, close_tab_above_fallbacks: 0 });
+  assert.deepEqual(takeCloseActivationCounts(), NO_PICKS);
   client.setSharing(false, "settings");
 });
 
@@ -464,14 +500,14 @@ test("a close from the socket, the CLI or launch actions never uses Tab above an
     runCommand({ command: "closeTab", arg: null, windowId: w }, user ? { user: you() } : { mayWrite: () => true });
     assert.equal(shown(w), expected, user ? "user" : "socket");
   }
-  assert.deepEqual(takeCloseActivationCounts(), { close_activated_tab_above: 1, close_tab_above_fallbacks: 0 }, "only the user close counts");
+  assert.deepEqual(takeCloseActivationCounts(), { ...NO_PICKS, close_activated_tab_above: 1 }, "only the user close counts");
   const { w, ids: [a, b, c, d] } = windowWith("tabAbove", "a", "b", "c", "d", "e");
   S().activate(a);
   S().activate(d);
   S().setSelection(w, [c, d]);
   runCommand({ command: "closeTab", arg: null, windowId: w }, { mayWrite: () => true });
   assert.equal(shown(w), "a", "a socket selection close keeps today's pick");
-  assert.deepEqual(takeCloseActivationCounts(), { close_activated_tab_above: 0, close_tab_above_fallbacks: 0 });
+  assert.deepEqual(takeCloseActivationCounts(), NO_PICKS);
   void b;
   client.setSharing(false, "settings");
 });
@@ -631,7 +667,7 @@ test("a Close Group you start reads consent before its guard waits, so turning s
   takeCloseActivationCounts();
   await closing;
   assert.equal(shown(w), "x");
-  assert.deepEqual(takeCloseActivationCounts(), { close_activated_tab_above: 0, close_tab_above_fallbacks: 0 });
+  assert.deepEqual(takeCloseActivationCounts(), NO_PICKS);
   client.setSharing(false, "settings");
   S().updateSettings({ warnBeforeClosingTabGroup: true });
 });
@@ -655,12 +691,12 @@ test("the tab menu's Close counts under the token taken when the menu opened, an
     menus.showMenu = real;
   }
   assert.equal(shown(w), "b");
-  assert.deepEqual(takeCloseActivationCounts(), { close_activated_tab_above: 0, close_tab_above_fallbacks: 0 }, "sharing was off when the menu opened");
+  assert.deepEqual(takeCloseActivationCounts(), NO_PICKS, "sharing was off when the menu opened");
   const again = windowWith("tabAbove", "a", "b", "c");
   S().activate(again.ids[2]);
   runCommand({ command: "closeTab", arg: null, windowId: again.w }, { user: { consent: null } });
   assert.equal(shown(again.w), "b");
-  assert.deepEqual(takeCloseActivationCounts(), { close_activated_tab_above: 0, close_tab_above_fallbacks: 0 }, "a native event without a token never samples one late");
+  assert.deepEqual(takeCloseActivationCounts(), NO_PICKS, "a native event without a token never samples one late");
   client.setSharing(false, "settings");
 });
 

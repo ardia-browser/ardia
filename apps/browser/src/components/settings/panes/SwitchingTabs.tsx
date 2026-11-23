@@ -21,11 +21,13 @@ const CTRL_TAB: { value: CtrlTabPreset; title: string; caption: string }[] = [
 
 const AFTER_CLOSING_DOWN: { value: Settings["afterClosingTab"]; title: string; caption: string }[] = [
   { value: "tabAbove", title: "Tab above", caption: "Goes to the tab right above it." },
+  { value: "tabBelow", title: "Tab below", caption: "Goes to the tab right below it." },
   { value: "previouslyActive", title: "Previously active tab", caption: "Goes back to the tab you used before, like Arc." },
 ];
 
 const AFTER_CLOSING_ACROSS: { value: Settings["afterClosingTab"]; title: string; caption: string }[] = [
   { value: "tabAbove", title: "Tab to the left", caption: "Goes to the tab to the left." },
+  { value: "tabBelow", title: "Tab to the right", caption: "Goes to the tab to the right." },
   { value: "previouslyActive", title: "Previously active tab", caption: "Goes back to the tab you used before, like Arc." },
 ];
 

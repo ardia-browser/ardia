@@ -60,6 +60,8 @@ const ZERO = {
   tab_strip_motion_overruns: 0,
   close_activated_tab_above: 0,
   close_tab_above_fallbacks: 0,
+  close_activated_tab_below: 0,
+  close_tab_below_fallbacks: 0,
 };
 
 const sharing = (on) => {
@@ -147,8 +149,10 @@ const EVERY_FIELD = [
   ["tab_strip_reveals_held_for_scroll", () => noteTabStripRevealHeldForScroll(), 1],
   ["tab_strip_commands_refused", () => noteTabStripCommandRefused(), 1],
   ["tab_strip_closes_after_select_ignored", () => noteTabStripCloseAfterSelect(), 1],
-  ["close_activated_tab_above", () => noteCloseActivation(client.consentToken(), "above"), 1],
-  ["close_tab_above_fallbacks", () => noteCloseActivation(client.consentToken(), "fallback"), 1],
+  ["close_activated_tab_above", () => noteCloseActivation(client.consentToken(), "above", true), 1],
+  ["close_tab_above_fallbacks", () => noteCloseActivation(client.consentToken(), "above", false), 1],
+  ["close_activated_tab_below", () => noteCloseActivation(client.consentToken(), "below", true), 1],
+  ["close_tab_below_fallbacks", () => noteCloseActivation(client.consentToken(), "below", false), 1],
 ];
 
 test("every tab strip count stays at zero while sharing is off, counts once sharing is on, and turning sharing off drops what was counted", () => {

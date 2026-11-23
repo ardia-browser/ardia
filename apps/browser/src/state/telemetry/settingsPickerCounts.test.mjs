@@ -22,6 +22,7 @@ const ZERO = {
   scroll_toolbar_picks_hide: 0,
   after_closing_tab_picks_recent: 0,
   after_closing_tab_picks_above: 0,
+  after_closing_tab_picks_below: 0,
   ctrl_tab_follows_chrome_step: 0,
   ctrl_tab_follows_chrome_switcher: 0,
 };
@@ -36,6 +37,7 @@ test("each picture picker counts its picks by the option chosen, and taking them
   useBrowser.getState().hydrate({});
   chooseAfterClosingTab("tabAbove");
   assert.equal(useBrowser.getState().settings.afterClosingTab, "tabAbove");
+  chooseAfterClosingTab("tabBelow");
   chooseAfterClosingTab("previouslyActive");
   assert.equal(useBrowser.getState().settings.afterClosingTab, "previouslyActive");
   assert.deepEqual(takeSettingsPickerCounts(), {
@@ -46,6 +48,7 @@ test("each picture picker counts its picks by the option chosen, and taking them
     command_bar_picks_centred: 1,
     scroll_toolbar_picks_keep: 1,
     after_closing_tab_picks_above: 1,
+    after_closing_tab_picks_below: 1,
     after_closing_tab_picks_recent: 1,
   });
   assert.deepEqual(takeSettingsPickerCounts(), ZERO);

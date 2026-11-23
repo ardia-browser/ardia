@@ -63,6 +63,7 @@ const TOP = [
   ["closing a tab", ["appearance.afterClosingTab"]],
   ["tab above", ["appearance.afterClosingTab"]],
   ["tab to the left", ["appearance.afterClosingTab"]],
+  ["tab below", ["appearance.afterClosingTab"]],
   ["tab closing", ["appearance.afterClosingTab"]],
   ["close behavior", ["appearance.afterClosingTab"]],
   ["address bar", ["appearance.addressBar"]],

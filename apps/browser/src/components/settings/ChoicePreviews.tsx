@@ -24,7 +24,7 @@ export function AfterClosingTabPreview({ mode, top, side }: { mode: Settings["af
       layout={top ? "top" : "side"}
       side={side}
       bars={top ? P.topTabRows : P.tabRows}
-      accentBar={mode === "tabAbove" ? 1 : 0}
+      accentBar={{ tabAbove: 1, tabBelow: 3, previouslyActive: 0 }[mode]}
       closedBar={2}
       look={look}
     />

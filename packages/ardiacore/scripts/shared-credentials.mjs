@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const upstream = "apple/password-manager-resources";
 const vendored = `${repo}/third_party/apple-password-manager-resources`;
+const ardiaPath = `${repo}/packages/ardiacore/scripts/shared-credentials-ardia.json`;
 const usage = `Refreshes the shared sign-in groups that password-manager ranking reads, from Apple's password-manager-resources.
 
   node packages/ardiacore/scripts/shared-credentials.mjs [ref]
@@ -18,6 +19,8 @@ source.json naming the commit. With --local, rebuilds from the copy already ther
 Keeps every "shared" group (each domain's logins are offered on the others) and every "from" -> "to" entry one-way
 (logins saved for a from domain are offered on a to domain, never the reverse); fromDomainsAreObsoleted doesn't
 change that. shared-credentials-historical.json is left out: Apple marks it for reuse warnings, not suggestions.
+Ardia's own entries, in the same format with a "why" each, live in packages/ardiacore/scripts/shared-credentials-ardia.json
+and stay apart (ardiaText); the run fails once Apple's list names one of their domains, so the supplement is dropped then.
 Writes packages/ardiacore/ios/VaultSharedSitesData.swift.`;
 
 const argument = process.argv[2];
@@ -74,31 +77,46 @@ const domains = (list, where) => {
   });
 };
 
-const lines = [];
-let shared = 0;
-let oneWay = 0;
-entries.forEach((entry, index) => {
-  const keys = Object.keys(entry).sort().join(",");
-  if (keys === "shared") {
-    const group = domains(entry.shared, `entry ${index} shared`);
-    if (group.length < 2) fail(`entry ${index} shares only ${group[0]}`);
-    lines.push(group.join(","));
-    shared += 1;
-  } else if (keys === "from,to" || keys === "from,fromDomainsAreObsoleted,to") {
-    const from = domains(entry.from, `entry ${index} from`);
-    const to = domains(entry.to, `entry ${index} to`);
-    if (from.some((domain) => to.includes(domain))) fail(`entry ${index} lists a domain on both sides`);
-    lines.push(`${from.join(",")}>${to.join(",")}`);
-    oneWay += 1;
-  } else {
-    fail(`entry ${index} has keys ${keys}`);
-  }
-});
+const compact = (list, name, allowed) => {
+  const lines = [];
+  let shared = 0;
+  let oneWay = 0;
+  list.forEach((entry, index) => {
+    const where = `${name} entry ${index}`;
+    const keys = Object.keys(entry).filter((key) => !allowed.has(key)).sort().join(",");
+    if (keys === "shared") {
+      const group = domains(entry.shared, `${where} shared`);
+      if (group.length < 2) fail(`${where} shares only ${group[0]}`);
+      lines.push(group.join(","));
+      shared += 1;
+    } else if (keys === "from,to" || keys === "from,fromDomainsAreObsoleted,to") {
+      const from = domains(entry.from, `${where} from`);
+      const to = domains(entry.to, `${where} to`);
+      if (from.some((domain) => to.includes(domain))) fail(`${where} lists a domain on both sides`);
+      lines.push(`${from.join(",")}>${to.join(",")}`);
+      oneWay += 1;
+    } else {
+      fail(`${where} has keys ${keys}`);
+    }
+  });
+  const joined = lines.join(";");
+  if (/["\\\n]/.test(joined)) fail(`${name}'s compact form holds a character Swift would need escaped`);
+  return { joined, shared, oneWay };
+};
 
-const joined = lines.join(";");
-if (/["\\\n]/.test(joined)) fail("the compact form holds a character Swift would need escaped");
+const apple = compact(entries, "apple", new Set());
+const supplement = JSON.parse(readFileSync(ardiaPath, "utf8"));
+if (!Array.isArray(supplement)) fail(`${ardiaPath} must hold a list`);
+supplement.forEach((entry, index) => {
+  if (typeof entry.why !== "string" || entry.why.trim() === "") fail(`ardia entry ${index} needs a why`);
+});
+const appleDomains = new Set(entries.flatMap((entry) => [...(entry.shared ?? []), ...(entry.from ?? []), ...(entry.to ?? [])]));
+const ardia = compact(supplement, "ardia", new Set(["why"]));
+const overlap = ardia.joined.split(/[;,>]/).filter((domain) => appleDomains.has(domain));
+if (overlap.length) fail(`Apple's list now covers ${overlap.join(", ")}: drop it from ${ardiaPath}`);
 writeFileSync(
   `${repo}/packages/ardiacore/ios/VaultSharedSitesData.swift`,
-  `enum VaultSharedSitesData {\n  static let commit = "${source.commit}"\n  static let text = "${joined}"\n}\n`,
+  `enum VaultSharedSitesData {\n  static let commit = "${source.commit}"\n  static let text = "${apple.joined}"\n  static let ardiaText = "${ardia.joined}"\n}\n`,
 );
-console.log(`shared-credentials: ${shared} shared groups and ${oneWay} one-way entries from ${upstream}@${source.commit}`);
+console.log(`shared-credentials: ${apple.shared} shared groups and ${apple.oneWay} one-way entries from ${upstream}@${source.commit}`);
+console.log(`shared-credentials: ${ardia.shared} shared groups and ${ardia.oneWay} one-way entries from Ardia's supplement`);

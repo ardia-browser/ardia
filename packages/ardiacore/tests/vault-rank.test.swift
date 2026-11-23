@@ -155,6 +155,58 @@ struct VaultSharedSitesTests {
   }
 }
 
+private let microsoftVault = [
+  login("personal", "Microsoft account", "sam@outlook.com", ["https://login.live.com"]),
+  login("xbox", "Xbox", "sam.x@outlook.com", ["https://www.xbox.com"]),
+  login("work", "Work", "sam@contoso.com", ["https://login.microsoftonline.com"]),
+  login("fake", "Microsoft", "sam@outlook.com", ["https://login.microsoftonline.co"]),
+  login("fakeSuffix", "Microsoft", "sam@outlook.com", ["https://login.live.com.evil.io"]),
+  login("learn", "Microsoft Learn", "dev@contoso.com", ["https://learn.microsoft.com"]),
+]
+
+@Suite("Ardia's Microsoft account supplement")
+struct VaultMicrosoftSupplementTests {
+  let catalog = VaultCatalog(microsoftVault, ownProvider: "ardia")
+
+  func recommend(_ origin: String) -> [String] {
+    ids(catalog.recommend(origin: origin, filter: .everyProfile, usage: .none, pageUsername: nil, remembered: nil))
+  }
+
+  @Test func `the supplement is kept apart from Apple's list and names nothing Apple's list does`() {
+    #expect(!VaultSharedSitesData.ardiaText.isEmpty)
+    let apple = Set(VaultSharedSitesData.text.split(whereSeparator: { ";,>".contains($0) }).map(String.init))
+    #expect(VaultSharedSitesData.ardiaText.split(whereSeparator: { ";,>".contains($0) }).allSatisfy { !apple.contains(String($0)) })
+  }
+
+  @Test func `a personal login saved for live.com is offered on login.microsoftonline.com, after the page's own`() {
+    let ranked = catalog.recommend(origin: "https://login.microsoftonline.com", filter: .everyProfile, usage: .none, pageUsername: nil, remembered: nil)
+    #expect(ids(ranked) == ["work", "xbox", "personal"])
+    #expect(ranked.first { $0.item.id == "personal" }?.reason == .shared)
+    #expect(ranked.first { $0.item.id == "personal" }?.site == "live.com")
+  }
+
+  @Test func `personal account sites share their logins, and a work login never reaches them`() {
+    #expect(recommend("https://login.live.com") == ["personal", "xbox"])
+    #expect(recommend("https://www.xbox.com") == ["xbox", "personal"])
+    #expect(recommend("https://outlook.live.com") == ["personal", "xbox"])
+    #expect(!recommend("https://account.microsoft.com").contains("work"))
+  }
+
+  @Test func `only account.microsoft.com joins, not the rest of microsoft.com`() {
+    #expect(recommend("https://account.microsoft.com") == ["learn", "xbox", "personal"])
+    #expect(recommend("https://learn.microsoft.com") == ["learn"])
+    #expect(!recommend("https://login.live.com").contains("learn"))
+  }
+
+  @Test func `look-alikes never match a Microsoft sign-in, and Google and YouTube stay apart`() {
+    #expect(!recommend("https://login.microsoftonline.com").contains("fake"))
+    #expect(!recommend("https://login.live.com").contains("fakeSuffix"))
+    #expect(recommend("https://login.microsoftonline.co") == ["fake"])
+    #expect(VaultSharedSites.sources(host: "accounts.google.com", site: "google.com").isEmpty)
+    #expect(VaultSharedSites.sources(host: "www.youtube.com", site: "youtube.com").isEmpty)
+  }
+}
+
 @Suite("Fill menu search")
 struct VaultSmartSearchTests {
   let catalog = VaultCatalog([

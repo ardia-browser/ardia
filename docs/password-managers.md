@@ -460,7 +460,14 @@ The fill menu's rows are ranked natively (`VaultCatalog+Rank.swift`, off the mai
   refreshed by `node packages/ardiacore/scripts/shared-credentials.mjs`). A `shared` group offers each site's logins on
   the others; a `from` → `to` entry offers the `from` sites' logins on the `to` sites only, never the reverse. A name
   in the list matches a login's or page's registrable domain or exact host, nothing looser, and Apple's
-  `-historical` file (reuse warnings only) is left out. Only when nothing else matches, a login with no website whose title names the site's
+  `-historical` file (reuse warnings only) is left out. Ardia adds one supplement, kept apart from Apple's copy in
+  `packages/ardiacore/scripts/shared-credentials-ardia.json` (same format, a `why` per entry, compiled to
+  `ardiaText`): the personal Microsoft account. Apple's current list has no Microsoft group, and a login saved for
+  live.com didn't show on login.microsoftonline.com. live.com, outlook.com, hotmail.com, xbox.com and
+  account.microsoft.com (that host only, since the rest of microsoft.com also serves work sign-in) share their logins;
+  they are offered one way on login.microsoftonline.com and office.com, which take personal and work or school accounts,
+  and a login saved there never goes back, since it may be a work account. The generator fails once Apple's list names
+  a supplement domain, so the supplement is dropped when Apple covers it. Only when nothing else matches, a login with no website whose title names the site's
   brand (`google` for accounts.google.com). Within each group, the username the page already shows (the earlier step
   of a two-step sign-in) pins its login first, then the login filled last on this site, then how often each was filled
   (halved every 30 days), then one saved or edited in the last 14 days, then the remembered account, then tier,

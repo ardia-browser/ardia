@@ -1,7 +1,7 @@
 import Foundation
 
 enum VaultSharedSites {
-  static let sourcesByPage: [String: [String]] = parse(VaultSharedSitesData.text)
+  static let sourcesByPage: [String: [String]] = parse(VaultSharedSitesData.text + ";" + VaultSharedSitesData.ardiaText)
 
   static func parse(_ text: String) -> [String: [String]] {
     var table: [String: [String]] = [:]

@@ -1,4 +1,4 @@
-import { Platform, ScrollView, StyleSheet } from "react-native";
+import { Dimensions, Platform, ScrollView, StyleSheet } from "react-native";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { Surfaces } from "../App";
 import { SettingsView } from "../components/settings/SettingsView";
@@ -99,6 +99,29 @@ onAndroid("Archive keeps the Material bottom sheet, with its top gap, corners an
   expect(sheetDragEnabled(root)).toBe(true);
   act(() => closeArchive());
   unmount(root);
+});
+
+onAndroid("the original design's Settings keep their 24 dp gap between sections", () => {
+  const classic = renderSurface(classicOnAndroid(<SettingsView />));
+  expect(flat(node(classic, "settingsPageContent")).gap).toBe(24);
+  unmount(classic);
+});
+
+onAndroid("the collapsed app bar title follows the list's latest offset when the font scale raises the medium title", () => {
+  const root = settings();
+  const list = node(root, "materialSettingsPage")!.findAll((found) => found.type === ScrollView)[0]!;
+  act(() => list.props.onScroll({ nativeEvent: { contentOffset: { x: 0, y: 60 } } }));
+  act(() => list.props.onScroll({ nativeEvent: { contentOffset: { x: 0, y: 200 } } }));
+  expect(node(root, "settingsTitle")!.props.children).toBe("Settings");
+  const window = Dimensions.get("window");
+  act(() => Dimensions.set({ window: { ...window, fontScale: 2 }, screen: Dimensions.get("screen") }));
+  try {
+    expect(flat(node(root, "materialMediumTitle")).height).toBe(84);
+    expect(node(root, "settingsTitle")!.props.children).toBe("Settings");
+  } finally {
+    act(() => Dimensions.set({ window, screen: Dimensions.get("screen") }));
+    unmount(root);
+  }
 });
 
 onAndroid("groups are Material 3 Expressive: rows as surfaceBright segments 2 dp apart, 20 dp outer corners and 4 dp inner ones, and no dividers", () => {

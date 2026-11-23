@@ -5,11 +5,12 @@ import { act, type ReactTestInstance } from "react-test-renderer";
 import { Surfaces } from "../App";
 import { DesignProvider, Portal, useDesign } from "../components/ui";
 import * as coverFocus from "../components/ui/coverFocus";
+import * as settingsReveal from "../components/settings/settingsReveal";
 import { MaterialBottomBar } from "../components/ui/MaterialBottomBar";
 import { SEEDED_SCHEMES } from "../lib/material/schemes";
 import { pages } from "../platform/pages";
 import { setDynamicScheme } from "../state/app/dynamicScheme";
-import { useBrowse } from "../state/browse/store";
+import { openArchive, useBrowse } from "../state/browse/store";
 import { closeSettings, openSettings, settingsScroll } from "../state/settings/nav";
 import { currentPreferences, usePreferences } from "../state/settings/store";
 import * as telemetry from "../state/telemetry/telemetry";
@@ -171,6 +172,61 @@ onAndroid("a Material You flip swaps Settings' rows without their entering or ex
   const flipped = content();
   act(() => list.props.onScroll({ nativeEvent: { contentOffset: { y: 90 } } }));
   expect(content()).toBe(flipped);
+  unmount(root);
+});
+
+onAndroid("Archive opened from full-screen Material Settings slides up as a sheet instead of appearing in place", () => {
+  usePreferences.setState({ materialYou: true });
+  const root = renderSurface(<Surfaces />);
+  act(() => openSettings());
+  for (let pass = 0; pass < 4; pass++) settle();
+  const sheet = fullSheet(root);
+  expect(getAnimatedStyle(sheet)).toMatchObject({ opacity: 1, transform: [{ translateY: 0 }] });
+  act(() => {
+    closeSettings();
+    openArchive();
+  });
+  act(() => jest.advanceTimersByTime(16));
+  const entering = getAnimatedStyle(fullSheet(root)) as { transform: [{ translateY: number }] };
+  expect(entering.transform[0].translateY).toBeGreaterThan(200);
+  for (let pass = 0; pass < 4; pass++) settle();
+  expect(getAnimatedStyle(fullSheet(root))).toMatchObject({ transform: [{ translateY: 0 }] });
+  act(() => useBrowse.setState({ sheet: null }));
+  unmount(root);
+});
+
+onAndroid("a Material You flip during Settings' entrance lands the new frame instead of jumping to a part-way slide", () => {
+  usePreferences.setState({ materialYou: true });
+  const root = renderSurface(<Surfaces />, { flushTimers: false });
+  act(() => openSettings());
+  act(() => jest.advanceTimersByTime(48));
+  const sheet = fullSheet(root);
+  expect((getAnimatedStyle(sheet) as { opacity: number }).opacity).toBeLessThan(1);
+  act(() => usePreferences.setState({ materialYou: false }));
+  act(() => jest.advanceTimersByTime(16));
+  expect(getAnimatedStyle(fullSheet(root))).toMatchObject({ transform: [{ translateY: 0 }] });
+  unmount(root);
+});
+
+onAndroid("turning Material You off brings the replacement switch into the list's view before focusing it", () => {
+  const reveal = jest.spyOn(settingsReveal, "revealInList");
+  const focus = jest.spyOn(coverFocus, "focusForScreenReader").mockImplementation(() => () => undefined);
+  usePreferences.setState({ materialYou: true });
+  const root = renderSurface(<Surfaces />);
+  act(() => openSettings());
+  settle();
+  const list = root.root.findAll((node) => node.props.testID === "settingsPage" && typeof node.type === "string")[0]!.findAll((node) => node.type === ScrollView)[0]!;
+  act(() => list.props.onLayout({ nativeEvent: { layout: { x: 0, y: 0, width: 393, height: 700 } } }));
+  act(() => list.props.onScroll({ nativeEvent: { contentOffset: { y: 260 } } }));
+  reveal.mockClear();
+  act(() => materialYouRow(root)!.props.onPress());
+  settle();
+  expect(reveal).toHaveBeenCalledTimes(1);
+  const [frame, target] = reveal.mock.calls[0]!;
+  expect(frame).toMatchObject({ scrollY: 260, viewport: 700 });
+  expect(frame.list).not.toBeNull();
+  expect(target).not.toBeNull();
+  expect(reveal.mock.invocationCallOrder[0]!).toBeLessThan(focus.mock.invocationCallOrder.at(-1)!);
   unmount(root);
 });
 

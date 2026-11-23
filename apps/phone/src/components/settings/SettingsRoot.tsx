@@ -18,6 +18,7 @@ import { setUsageSharing, useUsageSharing } from "../../state/telemetry/telemetr
 import { AppearanceRow, ColorRow, MatchMyMac } from "./AppearancePage";
 import { focusForScreenReader } from "../ui/coverFocus";
 import { BarButton, Group, IconTile, NavRow, PickerRow, SettingsPage, ToggleRow } from "./SettingsKit";
+import type { SettingsReveal } from "./settingsReveal";
 import { syncOffered } from "../../state/sync/offer";
 import { browseForMeOffered, refreshChatGPTConnected, useChatGPTConnected } from "../../state/browseForMe/store";
 import { browseForMeRowValue } from "../../state/browseForMe/copy";
@@ -54,10 +55,12 @@ export function SettingsRoot() {
   const redesigned = design === "redesigned";
   const material = design === "material";
   const materialSwitch = useRef<ViewInstance>(null);
+  const reveal = useRef<SettingsReveal>(null);
   const restoreSwitchFocus = useRef(false);
   useEffect(() => {
     if (!restoreSwitchFocus.current) return;
     restoreSwitchFocus.current = false;
+    reveal.current?.(materialSwitch.current);
     return focusForScreenReader(() => materialSwitch.current);
   }, [material]);
   const changeMaterialYou = (value: boolean) => {
@@ -76,7 +79,7 @@ export function SettingsRoot() {
     void refreshPageSummariesEnabled();
   }, []);
   return (
-    <SettingsPage title={destinationWords.settings} mediumAppBar onClose={material ? closeSettings : undefined} trailing={material ? undefined : <BarButton title={dismissWords.done} emphasized onPress={closeSettings} />}>
+    <SettingsPage title={destinationWords.settings} mediumAppBar revealRef={reveal} onClose={material ? closeSettings : undefined} trailing={material ? undefined : <BarButton title={dismissWords.done} emphasized onPress={closeSettings} />}>
       {syncOffered() ? (
         <Group>
           <SyncCard stacks={stacks} />

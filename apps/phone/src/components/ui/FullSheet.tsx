@@ -70,6 +70,7 @@ export function FullSheet<T extends string>({ sheet, progress, onDismiss, fullSc
   const touch = useSharedValue({ x: 0, y: 0, inList: false });
   const listTop = useSharedValue(0);
   const listPulls = useSharedValue(false);
+  const framedFullScreen = useRef(fullScreen);
   useEffect(() => {
     height.value = Math.max(1, window.height - top);
   }, [window.height, top]);
@@ -80,7 +81,9 @@ export function FullSheet<T extends string>({ sheet, progress, onDismiss, fullSc
     if (step.motion === "none") return;
     if (step.motion === "in") {
       scrollTop.value = 0;
-      if (step.fromHidden) offset.value = height.value;
+      const changesFrame = framedFullScreen.current !== fullScreen;
+      framedFullScreen.current = fullScreen;
+      if (step.fromHidden || changesFrame) offset.value = height.value;
       if (material) offset.value = materialMove(0, enter.easing, reduceMotion ? SHEET_REDUCED_MS : enter.durationMs);
       else offset.value = reduceMotion ? withTiming(0, { duration: SHEET_REDUCED_MS, easing: tabsCurve.easeOut }) : withSpring(0, tabsMotion.sheetRise);
       return;
@@ -104,6 +107,12 @@ export function FullSheet<T extends string>({ sheet, progress, onDismiss, fullSc
     const fallback = setTimeout(() => settle(true), HIDE_FALLBACK_MS);
     return () => clearTimeout(fallback);
   }, [sheet]);
+
+  useEffect(() => {
+    if (framedFullScreen.current === fullScreen) return;
+    framedFullScreen.current = fullScreen;
+    if (presence.current.target !== null) offset.value = 0;
+  }, [fullScreen]);
 
   useAnimatedReaction(
     () => sheetProgress(offset.value, height.value),

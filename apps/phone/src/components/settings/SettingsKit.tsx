@@ -1,5 +1,5 @@
-import { createContext, useContext, useEffect, useState, type ReactNode, type RefObject } from "react";
-import { ActivityIndicator, type GestureResponderEvent, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View, type StyleProp, type TextStyle, type ViewInstance } from "react-native";
+import { createContext, useCallback, useContext, useEffect, useImperativeHandle, useRef, useState, type ReactNode, type RefObject } from "react";
+import { ActivityIndicator, type GestureResponderEvent, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View, type ScrollViewInstance, type StyleProp, type TextStyle, type ViewInstance } from "react-native";
 import Animated, { FadeIn, FadeOut, LayoutAnimationConfig, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { isSettingsOpening, rememberSettingsScroll, settingsScroll, useSettingsNav } from "../../state/settings/nav";
@@ -7,12 +7,13 @@ import { MenuTrigger } from "../ui/MenuTrigger";
 import { MaterialBarButton, MaterialButtonRow, MaterialEmptyState, MaterialGroup, MaterialIconTile, MaterialMediumTitle, MaterialNavRow, MaterialPickerRow, MaterialSettingsAppBar, MaterialToggleRow, MaterialValueRow, materialMediumTitleHeight, materialSettingsListStyles } from "./MaterialSettingsKit";
 import { duration, LookBackdrop, settingsMotion, useSheetFrame, font, ink, settingsLayout, space, Symbol, tabsLayout, ToggleRow as SharedToggleRow, Tappable, smoothCorners, slotAround, controlSize, useDesign, useTheme, type MenuItem, type SymbolName } from "../ui";
 import { useMaterialTheme } from "../ui/materialTheme";
+import { revealInList, type SettingsReveal } from "./settingsReveal";
 
 export const SettingsHostedContext = createContext(false);
 
-type PageProps = { title: string; onBack?: () => void; onClose?: () => void; leading?: ReactNode; trailing?: ReactNode; children: ReactNode; scroll?: boolean; onRefresh?: () => Promise<unknown>; heroTitle?: boolean; mediumAppBar?: boolean; overlay?: ReactNode; dismissesKeyboard?: boolean };
+type PageProps = { title: string; onBack?: () => void; onClose?: () => void; leading?: ReactNode; trailing?: ReactNode; children: ReactNode; scroll?: boolean; onRefresh?: () => Promise<unknown>; heroTitle?: boolean; mediumAppBar?: boolean; overlay?: ReactNode; dismissesKeyboard?: boolean; revealRef?: RefObject<SettingsReveal | null> };
 
-export function SettingsPage({ title, onBack, onClose, leading, trailing, children, scroll = true, onRefresh, heroTitle = false, mediumAppBar = false, overlay, dismissesKeyboard = false }: PageProps) {
+export function SettingsPage({ title, onBack, onClose, leading, trailing, children, scroll = true, onRefresh, heroTitle = false, mediumAppBar = false, overlay, dismissesKeyboard = false, revealRef }: PageProps) {
   const design = useDesign();
   const material = design === "material";
   const theme = useTheme();
@@ -31,7 +32,13 @@ export function SettingsPage({ title, onBack, onClose, leading, trailing, childr
       }
     : null;
   const sheetList = frame?.list(refresh !== null);
+  const list = useRef<ScrollViewInstance>(null);
+  const viewport = useRef(0);
+  const lastY = useRef(startOffset.y);
+  const reveal = useCallback<SettingsReveal>((target) => revealInList({ list: list.current, scrollY: lastY.current, viewport: viewport.current }, target), []);
+  useImperativeHandle(revealRef, () => reveal, [reveal]);
   const [offset, setOffset] = useState(startOffset.y);
+  useEffect(() => setOffset(lastY.current), [mediumTitleHeight]);
   const collapsed = offset >= mediumTitleHeight;
   const [scrolled, setScrolled] = useState(startOffset.y > 0);
   const [heroAway, setHeroAway] = useState(false);
@@ -91,6 +98,7 @@ export function SettingsPage({ title, onBack, onClose, leading, trailing, childr
       )}
       {scroll ? (
         <ScrollView
+          ref={list}
           style={material ? [materialSettingsListStyles.list, { marginBottom: insets.bottom }] : { marginBottom: insets.bottom }}
           contentContainerStyle={
             material
@@ -111,10 +119,15 @@ export function SettingsPage({ title, onBack, onClose, leading, trailing, childr
             ) : undefined
           }
           {...sheetList}
+          onLayout={(event) => {
+            sheetList?.onLayout(event);
+            viewport.current = event.nativeEvent.layout.height;
+          }}
           scrollEventThrottle={16}
           onScroll={(event) => {
             if (isSettingsOpening(generation)) sheetList?.onScroll(event);
             const y = event.nativeEvent.contentOffset.y;
+            lastY.current = y;
             rememberSettingsScroll(title, y, generation);
             if (y > 0 !== scrolled) setScrolled(y > 0);
             if (mediumAppBar && (y >= mediumTitleHeight) !== collapsed) setOffset(y);
@@ -123,7 +136,7 @@ export function SettingsPage({ title, onBack, onClose, leading, trailing, childr
         >
           {material && mediumAppBar ? <MaterialMediumTitle title={title} height={mediumTitleHeight} collapsed={collapsed} /> : null}
           <LayoutAnimationConfig key={design} skipEntering skipExiting>
-            <View testID="settingsPageContent" collapsable={false}>
+            <View testID="settingsPageContent" collapsable={false} style={material ? null : styles.sections}>
               {children}
             </View>
           </LayoutAnimationConfig>
@@ -346,7 +359,8 @@ const styles = StyleSheet.create({
   back: slotAround(controlSize.hitTarget),
   barButton: { minHeight: controlSize.hitTarget, justifyContent: "center", paddingHorizontal: space.s },
   bold: { fontWeight: "600" },
-  content: { paddingTop: space.m, gap: space.xxl },
+  content: { paddingTop: space.m },
+  sections: { gap: space.xxl },
   fill: { flex: 1 },
   groupOuter: { paddingHorizontal: space.l },
   groupHeader: { paddingLeft: settingsLayout.rowInset, paddingBottom: space.s, fontWeight: "600" },

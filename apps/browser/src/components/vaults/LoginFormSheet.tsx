@@ -287,7 +287,7 @@ export function LoginFormSheet({ target, initialMode = "password" }: { target: L
       <SheetHeader icon={icon} title={titleOf(target, mode)} />
       {target.kind === "new" ? (
         <View style={MODE_ROW}>
-          <Segmented options={MODES} value={mode} onChange={(next) => (setMode(next), setProblem(""), setTried(false))} />
+          <Segmented fill options={MODES} value={mode} onChange={(next) => (setMode(next), setProblem(""), setTried(false))} />
         </View>
       ) : null}
       <View style={BODY}>
@@ -363,7 +363,7 @@ export function LoginFormSheet({ target, initialMode = "password" }: { target: L
       </View>
       <DialogActions>
         <Button title="Cancel" disabled={busy} onPress={closeSettingsSheet} />
-        <Button title="Save" kind="primary" busy={busy} onPress={() => void save()} />
+        <Button title="Save" kind="primary" busy={busy} disabled={!!blocker && blocker !== "duplicate"} onPress={() => void save()} />
       </DialogActions>
     </Dialog>
   );
@@ -380,7 +380,7 @@ function ProfileRow({ value, onChange }: { value: string; onChange: (id: string)
 }
 
 const BODY = { marginTop: space.xl } as const;
-const MODE_ROW = { marginTop: space.xl, alignItems: "center" } as const;
+const MODE_ROW = { marginTop: space.xl } as const;
 const PASSWORD_CELL = { flex: 1, height: VAULT_FORM.fieldHeight, justifyContent: "center" } as const;
 const PASSWORD = { flex: 1, height: VAULT_FORM.fieldHeight } as const;
 const PROBLEM = { flex: 1 } as const;

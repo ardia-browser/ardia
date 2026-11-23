@@ -841,8 +841,9 @@ as the authority, natively from the same verified manifest bytes the official st
   exited. Approval pages open only on the
   manifest's `signIn.approvalHosts`. Native owns all wording: the plugin returns problem codes.
 - **What the app does.** When such a plugin is on and its run is ready, `state/plugins/credentialProviders.ts` calls
-  `ArdiaPlugins.setCredentialProvider(name, true)` (`platform/plugins.ts`), and `false` once it's turned off or its
-  manifest changes. Remove is forgotten natively, once: `remove` wipes the provider (`forgetCredentialProvider`) before it deletes the files, and JS only sends a Save New Logins To that named it back to
+  `ArdiaPlugins.setCredentialProvider(name, true)` (`platform/plugins.ts`), and `false` when its manifest changes (its
+  sign-in is kept). Turning it off calls `forgetCredentialProvider`, which wipes its sealed cache, Touch ID copy and
+  sessions. Remove is forgotten natively, once: `remove` wipes the provider (`forgetCredentialProvider`) before it deletes the files, and JS only sends a Save New Logins To that named it back to
   Ardia. It passes the name only, never the contribution or a secret. The run
   starts when the plugin turns on and again whenever native asks (`onCredentialRunWanted`). The consent sheet adds what
   it reads and saves, which CLI it runs and for which verbs, that secret fields go to the CLI and not the plugin, and any

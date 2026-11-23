@@ -29,7 +29,7 @@ const listing = { name: "bitwarden", manifest, problems: [], hash: HASH, folderI
 const record = (enabled) => ({ enabled, approved: HASH, values: {}, applied: {} });
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-test("a credential provider is turned on natively once its run is ready, and off when it is turned off", async () => {
+test("a credential provider is turned on natively once its run is ready, unpinned when its copy changes and wiped when it is turned off", async () => {
   watchCredentialProviders();
   usePlugins.setState({ listings: { bitwarden: listing }, order: ["bitwarden"], records: { bitwarden: record(true) }, processes: { bitwarden: { state: "running", run: 7, since: 0 } } });
   assert.ok(markPluginReady("bitwarden", 7));
@@ -39,19 +39,26 @@ test("a credential provider is turned on natively once its run is ready, and off
   assert.ok(markPluginReady("bitwarden", 8));
   await tick();
   assert.deepEqual(toNative.at(-1), ["set", "bitwarden", true], "a new run, after a lock ended the old one, is pinned again");
+  usePlugins.setState({ listings: { bitwarden: { ...listing, hash: "c".repeat(64) } }, records: { bitwarden: { ...record(true), approved: "c".repeat(64) } } });
+  await tick();
+  assert.deepEqual(toNative.at(-1), ["set", "bitwarden", false], "a changed copy is only unpinned, its sign-in kept");
+  usePlugins.setState({ listings: { bitwarden: listing }, records: { bitwarden: record(true) }, processes: { bitwarden: { state: "running", run: 9, since: 0 } } });
+  assert.ok(markPluginReady("bitwarden", 9));
+  await tick();
   usePlugins.setState({ records: { bitwarden: record(false) } });
   await tick();
-  assert.deepEqual(toNative.at(-1), ["set", "bitwarden", false]);
-  assert.equal(toNative.filter(([kind]) => kind === "set").length, 3);
+  assert.deepEqual(toNative.at(-1), ["forget", "bitwarden"], "turning it off wipes its cache and sessions");
   assert.ok(wantedListeners.length > 0, "native can ask for a new run");
 });
 
 test("removing a credential provider leaves the wipe to native Remove, and a save target that named it goes back to Ardia", async () => {
+  const forgets = () => toNative.filter(([kind]) => kind === "forget").length;
+  const before = forgets();
   useBrowser.getState().updateSettings({ vaultSaveTarget: "bitwarden" });
   usePlugins.setState({ listings: { bitwarden: listing }, order: ["bitwarden"], records: { bitwarden: record(false) } });
   usePlugins.setState({ listings: {}, order: [], records: {} });
   for (let i = 0; i < 4; i++) await tick();
-  assert.ok(!toNative.some(([kind]) => kind === "forget"));
+  assert.equal(forgets(), before);
   assert.equal(useBrowser.getState().settings.vaultSaveTarget, "");
 });
 

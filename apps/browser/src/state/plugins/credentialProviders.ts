@@ -1,4 +1,4 @@
-import { onCredentialRunWanted, setCredentialProvider } from "../../platform/plugins";
+import { forgetCredentialProvider, onCredentialRunWanted, setCredentialProvider } from "../../platform/plugins";
 import { useBrowser } from "../browser/store";
 import { updateSettings } from "../settings/actions";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
@@ -45,6 +45,20 @@ function report(name: string, enabled: boolean, consent: ConsentToken | null) {
   );
 }
 
+const turnedOff = (s: Pick<PluginsStore, "listings" | "records">, name: string) =>
+  Object.hasOwn(s.listings, name) && !(Object.hasOwn(s.records, name) && s.records[name]!.enabled);
+
+function forgetTurnedOff(name: string, consent: ConsentToken | null) {
+  const what = `[plugins] Ardia couldn't wipe ${name}'s password manager after it was turned off`;
+  void forgetCredentialProvider(name).then(
+    (answer) => {
+      if (!answer.ok) return warnFor(consent, `${what}: ${answer.reason ?? "no reason given"}`);
+      removed(name);
+    },
+    (error: unknown) => warnFor(consent, what, error),
+  );
+}
+
 function ready(name: string, run: number, consent: ConsentToken | null) {
   const hash = providerHash(currentPlugins(), name);
   if (!hash) return;
@@ -58,7 +72,8 @@ export function syncCredentialProviders(consent: ConsentToken | null, s: Pick<Pl
   for (const [name, turned] of [...turnedOn]) {
     if (providerHash(s, name) === turned.hash) continue;
     turnedOn.delete(name);
-    report(name, false, consent);
+    if (turnedOff(s, name)) forgetTurnedOff(name, consent);
+    else report(name, false, consent);
   }
 }
 

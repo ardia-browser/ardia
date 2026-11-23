@@ -21,7 +21,7 @@ final class PluginHost {
 
   func attach(_ owner: AnyObject, send: @escaping Sink) {
     let id = ObjectIdentifier(owner)
-    queue.sync { sink = (id, send) }
+    queue.async { [self] in sink = (id, send) }
     prepareCredentialProviders()
     if quitObserver == nil {
       quitObserver = NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: nil) { [weak self] _ in

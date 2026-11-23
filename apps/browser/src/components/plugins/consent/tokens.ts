@@ -1,5 +1,6 @@
 import { curve, duration } from "../../ui/motion";
-import { concentric, radius, sheetWidth, space } from "../../ui/tokens";
+import { sheetWidth, space } from "../../ui/tokens";
+import { sheetGroupRadius } from "../../vaults/tokens";
 
 const INSET = space.xxl;
 const LIST_INSET = space.m;
@@ -9,7 +10,7 @@ export const CONSENT_SHEET = {
   inset: INSET,
   listInset: LIST_INSET,
   get groupRadius() {
-    return concentric(radius.sheet, LIST_INSET);
+    return sheetGroupRadius(LIST_INSET);
   },
   icon: { box: 52, glyph: 26 },
   iconFill: "#636366",

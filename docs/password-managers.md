@@ -1294,11 +1294,12 @@ working route is in no sheet at all; Settings › Passwords › Passkeys says wh
 - **Use passkeys from** lists "1Password App" while its system route works: modal requests go straight to the system
   route; autofill never opens Apple's sheet by itself (macOS has no browser conditional UI), so it behaves like Ask
   there and offers the "Passkey from 1Password…" row.
-- **Scale.** Candidates come from a native index by rpId per provider (`VaultPasskeyIndex`), built on the broker actor
-  when the provider's list changes and reused while the list is the same array; a lookup is one dictionary read
-  (`vault-passkeys.test.swift` builds 50,000 items with 3,125 passkeys and times both). JS gets only the rows for the
-  request. Message parsing, request and rpId checks, matching, key generation, signing and attestation parsing run off
-  the main thread; the main actor only routes and presents.
+- **Scale.** Candidates come from a native index by rpId (`VaultPasskeyIndex`), built as one part of the catalog's
+  parallel build (`VaultCatalog.passkeys`) over the same items, and reused while the catalog is; a lookup is one
+  dictionary read, and whether a manager's rows are delegated is decided at lookup (`vault-passkeys.test.swift` builds
+  50,000 items with 3,125 passkeys and times both). JS gets only the rows for the request. Message parsing, request and
+  rpId checks, the index, matching, key generation, signing and attestation parsing run off the main thread and assert
+  it in Debug builds (`VaultOffMain`); the main actor only routes and presents.
 
 ### What the person sees
 

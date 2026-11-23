@@ -599,35 +599,37 @@ struct VaultPasskeyIndexTests {
                      counter: counter)
   }
 
-  @Test func `a site's passkeys come from its bucket, sorted by account, marked delegated, without counters that moved`() {
+  @Test func `a site's passkeys come from its bucket, sorted by manager then account, without counters that moved`() async {
     let items = [
       Self.item("a", user: "zed@x.com", passkeys: [Self.passkey(1, rpId: "github.com")]),
       Self.item("b", user: "amy@x.com", passkeys: [Self.passkey(2, rpId: "github.com"), Self.passkey(3, rpId: "github.com", counter: 4)]),
-      Self.item("c", user: "amy@x.com", passkeys: [Self.passkey(4, rpId: "example.com"), VaultItemPasskey(credentialId: "+/=", rpId: "example.com", userName: "",
-                                                                                                           displayName: "", discoverable: true, counter: 0)]),
+      Self.item("c", user: "amy@x.com", passkeys: [Self.passkey(4, rpId: "example.com", user: "named")]),
+      VaultItem(provider: "bitwarden", id: "d", title: "d", username: "bo@x.com", urls: [], passkeys: [Self.passkey(5, rpId: "github.com")]),
     ]
-    let index = VaultPasskeyIndex(provider: "protonpass", items: items, delegated: true)
-    #expect(index.candidates(rpId: "github.com").map(\.userName) == ["amy@x.com", "zed@x.com"])
-    #expect(index.candidates(rpId: "github.com").allSatisfy { $0.delegated && $0.provider == "protonpass" })
-    #expect(index.candidates(rpId: "example.com").map(\.item) == ["c"])
-    #expect(index.candidates(rpId: "other.com").isEmpty)
-    #expect(index.count == 3)
+    let index = await Task.detached { VaultPasskeyIndex(items) }.value
+    #expect(index.entries(rpId: "github.com").map { "\($0.provider):\($0.userName)" } == ["bitwarden:bo@x.com", "protonpass:amy@x.com", "protonpass:zed@x.com"])
+    #expect(index.entries(rpId: "example.com").map(\.userName) == ["named"])
+    #expect(index.entries(rpId: "example.com").map(\.item) == ["c"])
+    #expect(index.entries(rpId: "other.com").isEmpty)
+    #expect(index.count == 4)
   }
 
-  @Test func `a large vault's lookup stays fast after one build`() {
+  @Test func `a large vault's lookup stays fast after one build`() async {
     let rpIds = (0..<2000).map { "site\($0).example" }
     let items = (0..<50_000).map { i -> VaultItem in
       let passkeys = i % 16 == 0 ? [Self.passkey(UInt8(i % 251), rpId: rpIds[i % rpIds.count], user: "user\(i)")] : []
       return Self.item("item\(i)", user: "user\(i)", passkeys: passkeys)
     }
-    let clock = ContinuousClock()
-    var index: VaultPasskeyIndex?
-    let built = clock.measure { index = VaultPasskeyIndex(provider: "protonpass", items: items, delegated: true) }
-    let lookups = clock.measure { for rpId in rpIds { _ = index!.candidates(rpId: rpId) } }
-    #expect(index!.count == 3125)
-    #expect(built < .seconds(2), "built \(built)")
-    #expect(lookups / rpIds.count < .milliseconds(1), "\(lookups / rpIds.count) per lookup")
-    print("passkey index: 50k items, \(index!.count) passkeys, built in \(built), \(lookups / rpIds.count) per lookup")
+    let measured = await Task.detached { () -> (Int, Duration, Duration) in
+      let clock = ContinuousClock()
+      var index: VaultPasskeyIndex?
+      let built = clock.measure { index = VaultPasskeyIndex(items) }
+      let lookups = clock.measure { for rpId in rpIds { _ = index!.entries(rpId: rpId) } }
+      return (index!.count, built, lookups)
+    }.value
+    #expect(measured.0 == 3125)
+    #expect(measured.1 < .seconds(2), "built \(measured.1)")
+    #expect(measured.2 / rpIds.count < .milliseconds(1), "\(measured.2 / rpIds.count) per lookup")
   }
 }
 

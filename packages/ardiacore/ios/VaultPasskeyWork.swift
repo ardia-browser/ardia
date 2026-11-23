@@ -5,6 +5,7 @@ enum VaultPasskeyWork {
   @concurrent static func matching(_ candidates: [VaultPasskeyCandidate], request: VaultPasskeyRequest, handlers: [String: VaultPasskeyHandler]) async
     -> (existing: [String], candidates: [VaultPasskeyCandidate])
   {
+    VaultOffMain.check()
     let usable = candidates.filter { candidate in
       guard candidate.delegated else { return true }
       if case .browserExtension = handlers[candidate.provider] { return true }
@@ -28,6 +29,7 @@ enum VaultPasskeyWork {
   }
 
   @concurrent static func newPasskey(rpId: String, origin: String, request: VaultPasskeyRequest) async -> MadePasskey {
+    VaultOffMain.check()
     let key = P256.Signing.PrivateKey()
     let passkey = VaultPasskey.made(rpId: rpId, origin: origin, userHandle: request.userId, userName: request.userName, displayName: request.displayName, key: key,
                                     at: Date().timeIntervalSince1970)
@@ -37,6 +39,7 @@ enum VaultPasskeyWork {
   @concurrent static func registration(site: VaultRelyingParty.Site, request: VaultPasskeyRequest, origin: String, key: P256.Signing.PrivateKey,
                                                    credentialId: Data, backedUp: Bool) async -> VaultSystemPasskeys.Answer
   {
+    VaultOffMain.check()
     let authData = VaultWebAuthn.authenticatorData(rpId: site.rpId, flags: VaultWebAuthn.flags(backedUp: backedUp), credentialId: credentialId,
                                                    publicKey: key.publicKey)
     let clientData = VaultWebAuthn.clientDataJSON(.create, challenge: request.challenge, origin: origin)
@@ -50,6 +53,7 @@ enum VaultPasskeyWork {
   @concurrent static func assertion(_ signer: VaultPasskeySigner, credentialId: String, rpId: String, request: VaultPasskeyRequest, origin: String,
                                                 backedUp: Bool) async -> [String: String]?
   {
+    VaultOffMain.check()
     let authData = VaultWebAuthn.authenticatorData(rpId: rpId, flags: VaultWebAuthn.flags(backedUp: backedUp))
     let clientData = VaultWebAuthn.clientDataJSON(.get, challenge: request.challenge, origin: origin)
     guard let signature = try? VaultWebAuthn.signature(signer.key, authenticatorData: authData, clientDataJSON: clientData) else { return nil }

@@ -66,6 +66,7 @@ struct VaultCatalog: Sendable {
   let listOrder: [Int]
   let built = VaultItemsRevision.next()
   let rank: VaultRankIndex
+  let passkeys: VaultPasskeyIndex
 
   init(_ items: [VaultItem], ownProvider: String) {
     VaultOffMain.check()
@@ -78,12 +79,15 @@ struct VaultCatalog: Sendable {
       var rank: VaultRankIndex?
       var listKeys: [ListKey] = []
       var listOrder: [Int] = []
+      var passkeys: VaultPasskeyIndex?
     }
     let parts = Parts()
-    DispatchQueue.concurrentPerform(iterations: 3) { part in
+    DispatchQueue.concurrentPerform(iterations: 4) { part in
       switch part {
       case 0:
         parts.sites = VaultSiteIndex(items.map(\.urls))
+      case 3:
+        parts.passkeys = VaultPasskeyIndex(items)
       case 1:
         let rankKeys = VaultRankIndex.keys(items)
         let searchKeys = rankKeys.map(Self.searchKey)
@@ -107,6 +111,7 @@ struct VaultCatalog: Sendable {
     rank = parts.rank!
     listKeys = parts.listKeys
     listOrder = parts.listOrder
+    passkeys = parts.passkeys!
   }
 
   static func collate(_ a: String, _ b: String) -> ComparisonResult {

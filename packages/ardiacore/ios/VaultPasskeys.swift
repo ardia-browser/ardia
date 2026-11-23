@@ -141,6 +141,7 @@ final class VaultPasskeys {
   }
 
   @concurrent nonisolated static func parse(_ json: String, kind: String, origin: String?) async -> Intake? {
+    VaultOffMain.check()
     guard let message = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any], let pageId = message["id"] as? String, isPageId(pageId)
     else { return nil }
     var intake = Intake(pageId: pageId)
@@ -502,6 +503,7 @@ final class VaultPasskeys {
   }
 
   @concurrent nonisolated static func candidates(rpId: String) async -> [VaultPasskeyCandidate] {
+    VaultOffMain.check()
     var found = await ArdiaVaultBackup.shared.passkeys().compactMap { id, passkey -> VaultPasskeyCandidate? in
       guard passkey.rpId == rpId, let raw = VaultBase64URL.decode(id) else { return nil }
       return VaultPasskeyCandidate(provider: ArdiaVault.id, credentialId: raw, item: nil, rpId: passkey.rpId, userName: passkey.userName,
@@ -513,6 +515,7 @@ final class VaultPasskeys {
   }
 
   @concurrent nonisolated static func signer(_ candidate: VaultPasskeyCandidate) async -> VaultPasskeySigner? {
+    VaultOffMain.check()
     guard !candidate.delegated else { return nil }
     if candidate.provider == ArdiaVault.id {
       guard let passkey = await ArdiaVaultBackup.shared.passkeys()[candidate.id], let key = passkey.signingKey, let handle = passkey.userHandleBytes else {
@@ -524,6 +527,7 @@ final class VaultPasskeys {
   }
 
   @concurrent nonisolated static func list() async -> [[String: Any]] {
+    VaultOffMain.check()
     var all = await ArdiaVaultBackup.shared.passkeys().map { id, passkey -> [String: Any] in
       var object: [String: Any] = ["id": id, "provider": ArdiaVault.id, "rpId": passkey.rpId, "userName": passkey.userName,
                                    "displayName": passkey.displayName, "createdAt": passkey.createdAt * 1000]

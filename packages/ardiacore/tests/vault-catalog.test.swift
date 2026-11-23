@@ -30,6 +30,15 @@ struct VaultCatalogTests {
 
   var catalog: VaultCatalog { VaultCatalog(items, ownProvider: "ardia") }
 
+  @Test func `one build indexes the logins and the passkeys their managers list, by rpId`() {
+    var proton = login("p", "WebAuthn", "sam", ["https://webauthn.io"], provider: "protonpass")
+    proton.passkeys = [VaultItemPasskey(credentialId: "AAAAAAAAAAAAAAAAAAAAAA", rpId: "webauthn.io", userName: "", displayName: "", discoverable: true, counter: 0)]
+    let built = VaultCatalog(items + [proton], ownProvider: "ardia")
+    #expect(built.passkeys.entries(rpId: "webauthn.io").map { "\($0.provider):\($0.item):\($0.userName)" } == ["protonpass:p:sam"])
+    #expect(built.passkeys.count == 1)
+    #expect(catalog.passkeys.count == 0)
+  }
+
   @Test func `a page's site items are every login under its registrable domain and nothing across a public suffix`() {
     #expect(Set(catalog.near("https://www.example.com").map(\.id)) == ["a", "b", "g"])
     #expect(catalog.near("https://alice.github.io").map(\.id) == ["d"])

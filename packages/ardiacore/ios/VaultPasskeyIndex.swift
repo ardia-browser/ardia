@@ -1,28 +1,33 @@
 import Foundation
 
-struct VaultPasskeyIndex: Sendable {
-  private var byRpId: [String: [VaultPasskeyCandidate]] = [:]
+struct VaultPasskeyEntry: Equatable, Sendable {
+  var provider: String
+  var item: String
+  var passkey: VaultItemPasskey
+  var userName: String
+}
 
-  init(provider: String, items: [VaultItem], delegated: Bool) {
+struct VaultPasskeyIndex: Sendable {
+  private var byRpId: [String: [VaultPasskeyEntry]] = [:]
+
+  init(_ items: [VaultItem]) {
+    VaultOffMain.check()
     for item in items {
       for passkey in item.passkeys ?? [] where passkey.counter == 0 {
-        guard let raw = VaultBase64URL.decode(passkey.credentialId) else { continue }
         byRpId[passkey.rpId, default: []].append(
-          VaultPasskeyCandidate(provider: provider, credentialId: raw, item: item.id, rpId: passkey.rpId,
-                                userName: passkey.userName.isEmpty ? item.username : passkey.userName, displayName: passkey.displayName,
-                                discoverable: passkey.discoverable, delegated: delegated))
+          VaultPasskeyEntry(provider: item.provider, item: item.id, passkey: passkey, userName: passkey.userName.isEmpty ? item.username : passkey.userName))
       }
     }
     for key in byRpId.keys { byRpId[key]?.sort(by: Self.ordered) }
   }
 
-  static func ordered(_ left: VaultPasskeyCandidate, _ right: VaultPasskeyCandidate) -> Bool {
-    (left.userName.lowercased(), left.id) < (right.userName.lowercased(), right.id)
+  static func ordered(_ left: VaultPasskeyEntry, _ right: VaultPasskeyEntry) -> Bool {
+    (left.provider, left.userName.lowercased(), left.passkey.credentialId) < (right.provider, right.userName.lowercased(), right.passkey.credentialId)
   }
 
   var count: Int { byRpId.values.reduce(0) { $0 + $1.count } }
 
-  func candidates(rpId: String) -> [VaultPasskeyCandidate] { byRpId[rpId] ?? [] }
+  func entries(rpId: String) -> [VaultPasskeyEntry] { byRpId[rpId] ?? [] }
 
-  var all: [VaultPasskeyCandidate] { byRpId.keys.sorted().flatMap { byRpId[$0]! } }
+  var all: [VaultPasskeyEntry] { byRpId.keys.sorted().flatMap { byRpId[$0]! } }
 }

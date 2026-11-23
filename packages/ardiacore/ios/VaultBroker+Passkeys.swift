@@ -10,29 +10,20 @@ extension VaultBroker {
     provider.capabilities.passkeysVia?.contains { $0.via == .browserExtension } == true && isReady(provider.id)
   }
 
-  func passkeyIndex(_ provider: any VaultProvider, delegated: Bool) -> VaultPasskeyIndex? {
-    guard let items = cachedItems[provider.id] else {
-      passkeyIndexes[provider.id] = nil
-      return nil
+  func passkeyCandidates(rpId: String?) async -> [VaultPasskeyCandidate] {
+    let catalog = await currentCatalog()
+    var delegatedOf: [String: Bool?] = [:]
+    let entries = rpId.map(catalog.passkeys.entries) ?? catalog.passkeys.all
+    return entries.compactMap { entry -> VaultPasskeyCandidate? in
+      guard entry.provider != ArdiaVault.id else { return nil }
+      if delegatedOf[entry.provider] == nil, let provider = VaultRegistry.provider(entry.provider) {
+        let holds = passkeyHolder(provider.id) != nil
+        delegatedOf[entry.provider] = .some(VaultPasskeyUse.delegated(holdsKeys: holds, listsDelegated: !holds && listsDelegatedPasskeys(provider)))
+      }
+      guard let delegated = delegatedOf[entry.provider] ?? nil, let raw = VaultBase64URL.decode(entry.passkey.credentialId) else { return nil }
+      return VaultPasskeyCandidate(provider: entry.provider, credentialId: raw, item: entry.item, rpId: entry.passkey.rpId, userName: entry.userName,
+                                   displayName: entry.passkey.displayName, discoverable: entry.passkey.discoverable, delegated: delegated)
     }
-    if let built = passkeyIndexes[provider.id], built.items == items {
-      passkeyIndexes[provider.id] = (items, built.index)
-      return built.index
-    }
-    let index = VaultPasskeyIndex(provider: provider.id, items: items, delegated: delegated)
-    passkeyIndexes[provider.id] = (items, index)
-    return index
-  }
-
-  func passkeyCandidates(rpId: String?) -> [VaultPasskeyCandidate] {
-    var found: [VaultPasskeyCandidate] = []
-    for provider in VaultRegistry.providers {
-      let holds = passkeyHolder(provider.id) != nil
-      guard let delegated = VaultPasskeyUse.delegated(holdsKeys: holds, listsDelegated: !holds && listsDelegatedPasskeys(provider)) else { continue }
-      guard let index = passkeyIndex(provider, delegated: delegated) else { continue }
-      found += rpId.map(index.candidates) ?? index.all
-    }
-    return found
   }
 
   func passkeyDelegates() -> [VaultPasskeyDelegate] {

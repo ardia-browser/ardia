@@ -3597,6 +3597,7 @@
       const passkeyContenders = { passkeyCreate: new PasskeyMap(), passkeyGet: new PasskeyMap() };
       const passkeyHandedOff = new PasskeyWeakSet();
       const passkeyDelegations = new WeakMap();
+      const passkeyInFlight = new PasskeyMap();
       const passkeyWeakMapGet = WeakMap.prototype.get;
       const passkeyWeakMapSet = WeakMap.prototype.set;
       const passkeyAssign = Object.assign;
@@ -3755,9 +3756,19 @@
         apply(passkeyMapDelete, passkeyPending, [id]);
         if (entry.ack) apply(passkeyClearTimer, window, [entry.ack]);
         if (entry.signal && entry.onAbort) apply(passkeyUnlisten, entry.signal, ["abort", entry.onAbort]);
+        entry.delegation = null;
+        apply(passkeyMapDelete, passkeyInFlight, [id]);
         return entry;
       };
+      const passkeyStackForged = () => {
+        try {
+          return apply(passkeyHasOwn, PasskeyStackError, ["prepareStackTrace"]);
+        } catch (e) {
+          return true;
+        }
+      };
       const passkeyExtensionCalling = () => {
+        if (passkeyStackForged()) return null;
         let stack = "";
         try {
           stack = String(new PasskeyStackError().stack || "");
@@ -3809,6 +3820,14 @@
         }
         return null;
       };
+      const passkeyReturnedClone = (kind, message) => {
+        const iterator = apply(passkeyMapValues, passkeyInFlight, []);
+        for (let step = apply(passkeyIterNext, iterator, []); !step.done; step = apply(passkeyIterNext, iterator, [])) {
+          const flight = step.value;
+          if (flight.kind === kind && flight.challenge === message.challenge && flight.entry.delegation === flight.token) return flight;
+        }
+        return null;
+      };
       const passkeyHandedOffAlready = (options) => {
         const marks = passkeyMarks(options);
         for (let i = 0; i < marks.length; i++) if (apply(passkeyWeakHas, passkeyHandedOff, [marks[i]])) return true;
@@ -3824,7 +3843,7 @@
           const request = { id, options: message, mediation, extensions: passkeyExtensionsFor(kind) };
           const json = serialize(request);
           if (json.length > PASSKEY_LONGEST_MESSAGE) return resolve(passkeyUnclaimed(original, self, [options], kind));
-          const entry = { id, resolve, reject, signal, onAbort: null, ack: 0, conditional: mediation === "conditional" };
+          const entry = { id, resolve, reject, signal, onAbort: null, ack: 0, conditional: mediation === "conditional", challenge: message.challenge };
           const settle = (work) => {
             try {
               resolve(work());
@@ -3849,6 +3868,7 @@
               const narrowed = apply(passkeyAssign, null, [{}, passkeyOwnOrNull(options, "publicKey")]);
               if (typeof allow === "string") narrowed.allowCredentials = [{ type: "public-key", id: passkeyDecode(allow) }];
               copy = apply(passkeyAssign, null, [{}, options, { publicKey: narrowed }]);
+              delete copy.mediation;
               const mark = { entry, token };
               apply(passkeyWeakMapSet, passkeyDelegations, [copy, mark]);
               apply(passkeyWeakMapSet, passkeyDelegations, [narrowed, mark]);
@@ -3858,13 +3878,13 @@
             }
             const ended = (outcome, finish) => (value) => {
               if (entry.delegation !== token || !passkeySettle(id)) return;
-              entry.delegation = null;
               send("passkeyDelegated", { id, outcome });
               finish(value);
             };
             const go = () => {
-              if (entry.delegation !== token) return;
+              if (entry.delegation !== token || apply(passkeyMapGet, passkeyPending, [id]) !== entry) return;
               passkeyLastDelegation = apply(passkeyNow, Date, []);
+              apply(passkeyMapSet, passkeyInFlight, [id, { entry, token, kind, challenge: entry.challenge }]);
               let settled;
               try {
                 settled = PasskeyPromise.resolve(apply(fn, self, [copy]));
@@ -3908,6 +3928,7 @@
           if (delegation) {
             if (delegation.entry.delegation === delegation.token) {
               delegation.entry.delegation = null;
+              apply(passkeyMapDelete, passkeyInFlight, [delegation.entry.id]);
               send("passkeyDelegated", { id: delegation.entry.id, outcome: "returned" });
             }
             return PasskeyPromise.reject(new PasskeyError("The operation either timed out or was not allowed.", "NotAllowedError"));
@@ -3931,6 +3952,13 @@
             message = null;
           }
           if (!message) return passkeyUnclaimed(target, self, args, kind);
+          const returned = passkeyReturnedClone(kind, message);
+          if (returned) {
+            returned.entry.delegation = null;
+            apply(passkeyMapDelete, passkeyInFlight, [returned.entry.id]);
+            send("passkeyDelegated", { id: returned.entry.id, outcome: "returned" });
+            return PasskeyPromise.reject(new PasskeyError("The operation either timed out or was not allowed.", "NotAllowedError"));
+          }
           return passkeyRun(target, self, options, kind, message, mediation, signal || null);
         });
       handlers.passkey = (message) => {

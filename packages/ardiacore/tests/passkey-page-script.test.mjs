@@ -529,3 +529,93 @@ test("a second hand-off within Proton's 500 ms window waits instead of being ref
   assert.equal(await pending, "proton-get");
   assert.equal(page.context.calls_proton.length, 2);
 });
+
+test("a page that forges an extension frame through Error.prepareStackTrace isn't recorded as that extension", () => {
+  for (const forge of [
+    `Error.prepareStackTrace = () => "Error\\n    at a (x)\\n    at b (x)\\n    at chrome-extension://${PROTON}/webauthn.js:1:1";`,
+    `Object.defineProperty(Error, "prepareStackTrace", { configurable: true, get: () => () => "Error\\n    at a (x)\\n    at b (x)\\n    at chrome-extension://${PROTON}/webauthn.js:1:1" });`,
+  ]) {
+    const page = makePage();
+    runInContext(`${forge} navigator.credentials.get = function posing() { return Promise.resolve("page"); };`, page.context, { filename: "https://evil.example/app.js" });
+    void page.credentials.get({ publicKey: { challenge: new Uint8Array([1]) } });
+    const sent = page.posted.find((p) => p.kind === "passkeyGet");
+    assert.equal(sent, undefined, "the page's own get shadows natively, so Ardia never lists it as a contender");
+    assert.equal(typeof Object.getOwnPropertyDescriptor(page.credentials, "get")?.value, "function");
+  }
+});
+
+test("a request that ends while its hand-off waits out Proton's 500 ms window never reaches the extension", async () => {
+  const ends = {
+    abort: (page, controller) => controller.abort(),
+    pagehide: (page) => page.fire("pagehide"),
+    timeout: (page) => page.tick(630000),
+  };
+  for (const [name, end] of Object.entries(ends)) {
+    const page = makePage();
+    installAs(page, PROTON, "proton");
+    page.context.decline_proton = true;
+    const controller = new AbortController();
+    const pending = page.credentials.get({ publicKey: { challenge: new Uint8Array([1]) }, signal: controller.signal });
+    pending.catch(() => {});
+    const sent = page.posted.find((p) => p.kind === "passkeyGet");
+    page.answer({ id: sent.data.id, ack: true });
+    page.answer({ id: sent.data.id, delegate: PROTON, allow: b64url([1]) });
+    await new Promise((resolve) => setImmediate(resolve));
+    page.context.decline_proton = false;
+    page.answer({ id: sent.data.id, delegate: PROTON, allow: b64url([1]) });
+    end(page, controller);
+    await assert.rejects(pending);
+    page.tick(600);
+    assert.equal(page.context.calls_proton.length, 1, `${name}: the held hand-off is dropped`);
+  }
+});
+
+test("a conditional request native holds stays pending until a menu pick, and the extension gets it as a modal request", async () => {
+  const page = makePage();
+  installAs(page, PROTON, "proton");
+  let settled = false;
+  const options = { publicKey: { challenge: new Uint8Array([1]) }, mediation: "conditional" };
+  const pending = page.credentials.get(options).finally(() => (settled = true));
+  const sent = page.posted.find((p) => p.kind === "passkeyGet");
+  page.answer({ id: sent.data.id, ack: true });
+  page.tick(10 * 60 * 1000);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(settled, false, "no timer ends a held conditional request");
+  assert.equal(page.originals.get.length, 0, "Chrome's conditional UI is never asked");
+  page.answer({ id: sent.data.id, delegate: PROTON, allow: b64url([7]) });
+  assert.equal(await pending, "proton-get");
+  assert.equal("mediation" in page.context.calls_proton[0], false);
+  assert.equal(options.mediation, "conditional");
+});
+
+test("an extension that clones the options before falling back is still recognised as a returned hand-off", async () => {
+  const page = makePage();
+  page.extension(
+    PROTON,
+    `(() => {
+      const store = navigator.credentials;
+      const original = store.get.bind(store);
+      globalThis.calls_clone = [];
+      store.get = function cloneGet(options) {
+        globalThis.calls_clone.push(options);
+        return original({ ...options, publicKey: { ...options.publicKey, challenge: new Uint8Array(options.publicKey.challenge) } });
+      };
+    })()`,
+  );
+  let settled = false;
+  const pending = page.credentials.get({ publicKey: { challenge: new Uint8Array([4, 2]) } }).finally(() => (settled = true));
+  const sent = page.posted.find((p) => p.kind === "passkeyGet");
+  page.answer({ id: sent.data.id, ack: true });
+  page.answer({ id: sent.data.id, delegate: PROTON, allow: b64url([7]) });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(page.context.calls_clone.length, 1);
+  assert.equal(settled, false);
+  assert.equal(page.posted.filter((p) => p.kind === "passkeyGet").length, 1, "no nested Ardia request");
+  assert.equal(page.originals.get.length, 0, "Chrome's window never opens");
+  assert.deepEqual(page.posted.filter((p) => p.kind === "passkeyDelegated").map((p) => p.data.outcome), ["returned"]);
+  const other = page.credentials.get({ publicKey: { challenge: new Uint8Array([9]) } });
+  assert.equal(page.posted.filter((p) => p.kind === "passkeyGet").length, 2, "a different request still reaches Ardia");
+  other.catch(() => {});
+  page.answer({ id: sent.data.id, error: "NotAllowedError" });
+  await assert.rejects(pending, { name: "NotAllowedError" });
+});

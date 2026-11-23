@@ -149,6 +149,8 @@ public class VaultsModule: Module {
 
   static let codesLimit = 500
 
+  static let longestQuery = 256
+
   static func count(_ value: Double?, otherwise: Int) -> Int {
     guard let value, value.isFinite else { return otherwise }
     return Int(min(max(value, 0), 100_000))
@@ -187,7 +189,16 @@ public class VaultsModule: Module {
       let query = try args.text("query")
       let limit = VaultsModule.count(try args.optionalDouble("limit"), otherwise: 100)
       let filter = try VaultsModule.profileFilter(args, managersOnly: false)
-      VaultsModule.answer(reply) { await VaultBroker.shared.searchItems(query, limit: limit, filter: filter) }
+      let origin = try args.optionalText("origin") ?? ""
+      let channel = try args.optionalText("channel")
+      VaultsModule.answer(reply) { await VaultBroker.shared.searchItems(String(query.prefix(VaultsModule.longestQuery)), origin: origin, limit: limit, filter: filter, channel: channel) }
+    },
+    "recommend": { args, reply in
+      let origin = try args.text("origin")
+      let filter = try VaultsModule.profileFilter(args, managersOnly: false)
+      let pageUsername = try args.optionalText("pageUsername").map { String($0.prefix(VaultsModule.longestQuery)) }
+      let remembered = try args.optionalText("remembered")
+      VaultsModule.answer(reply) { await VaultBroker.shared.recommend(origin: origin, filter: filter, pageUsername: pageUsername, remembered: remembered) }
     },
     "listItems": { args, reply in
       let query = try args.optionalText("query") ?? ""

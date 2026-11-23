@@ -36,7 +36,12 @@ export const claimChromeDropdownKinds = (tabId: string, kinds: ChromeDropdownSho
 export const refreshVault = (provider: string) => call("vaults.refresh", { provider });
 export const setArdiaProfiles = (ardiaProfiles: string[]) => call("vaults.refresh", { provider: "ardia", ardiaProfiles });
 export const vaultSiteItems = (origin: string) => call("vaults.siteItems", { origin });
-export const searchVaultItems = (query: string, limit: number, profile: string | null) => call("vaults.searchItems", { query, limit, ardiaProfile: profile });
+export const searchVaultItems = (query: string, limit: number, profile: string | null) =>
+  call("vaults.searchItems", { query, limit, ardiaProfile: profile }).then((found) => found.items);
+export const searchVaultItemsOn = (query: string, limit: number, profile: string | null, origin: string, channel: string) =>
+  call("vaults.searchItems", { query, limit, ardiaProfile: profile, origin, channel });
+export const recommendVaultItems = (origin: string, profile: string | null, pageUsername: string | null, remembered: string | null) =>
+  call("vaults.recommend", { origin, ardiaProfile: profile, pageUsername, remembered });
 export const vaultItemPage = ({ profile, ...args }: { query: string; offset: number; limit: number; managersOnly: boolean; profile: string | null }) =>
   call("vaults.listItems", { ...args, ardiaProfile: profile });
 export const vaultUsernames = (email: boolean, limit: number, profile: string | null) => call("vaults.usernames", { email, limit, ardiaProfile: profile });

@@ -1,6 +1,6 @@
 import type { VaultItem } from "@ardia/ardiacore";
 const isArdiaProvider = (provider: string) => provider === "ardia";
-import { searchItems, siteKey, siteLabel } from "../state/vaults/originMatch";
+import { rankItems, searchItems, siteKey, siteLabel, TIER } from "../state/vaults/originMatch";
 import { previousUsernames } from "../state/vaults/usernames";
 
 export const SITE_ITEMS_CAP = 500;
@@ -39,3 +39,12 @@ export function fakeListItems(items: readonly VaultItem[], args: { query?: strin
 
 export const fakeUsernames = (items: readonly VaultItem[], email: boolean, limit: number, profile: string | null | undefined) =>
   previousUsernames(forProfile(items, profile), { email, limit: Math.min(Math.max(limit, 0), 50) }).map((u) => u.item);
+
+export function fakeRecommend(items: readonly VaultItem[], origin: string, profile: string | null | undefined, pageUsername: string | null, remembered: string | null): VaultItem[] {
+  const ranked = rankItems(forProfile(fakeSiteItems(items, origin), profile), origin, remembered);
+  const wanted = pageUsername?.trim().toLowerCase() ?? "";
+  const pinned = wanted ? ranked.filter((r) => r.item.username.trim().toLowerCase() === wanted) : [];
+  const rest = ranked.filter((r) => !pinned.includes(r));
+  return [...pinned, ...rest].map(({ item, tier }) => ({ ...item, match: { tier, reason: tier >= TIER.sameHost ? ("origin" as const) : ("site" as const) } }));
+}
+

@@ -248,5 +248,6 @@ extension VaultBroker {
     snapshotAccounts[id] = nil
     VaultCacheWriter.shared.forget(id)
     VaultCache.delete(id, fromCloud: everywhere)
+    VaultUsage.shared.forget(provider: id)
   }
 }

@@ -2,7 +2,9 @@ import Foundation
 
 extension VaultBroker {
   func edit(provider providerId: String, id itemId: String, change raw: VaultLoginChange) async -> VaultEditResult {
-    await edit(provider: providerId, id: itemId, change: raw, origin: nil)
+    let result = await edit(provider: providerId, id: itemId, change: raw, origin: nil)
+    if let item = result.item { VaultUsage.shared.noteEdit(provider: item.provider, id: item.id) }
+    return result
   }
 
   func updatePassword(provider providerId: String, id itemId: String, origin: String, password: String) async -> VaultEditResult {

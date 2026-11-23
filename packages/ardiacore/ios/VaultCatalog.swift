@@ -41,15 +41,18 @@ struct VaultCatalog: Sendable {
   private let searchOrder: [Int]
   private let listKeys: [ListKey]
   private let listOrder: [Int]
+  let rank: VaultRankIndex
 
   init(_ items: [VaultItem], ownProvider: String) {
     VaultOffMain.check()
     self.items = items
     self.ownProvider = ownProvider
     sites = VaultSiteIndex(items.map(\.urls))
-    let searchKeys = items.map(Self.searchKey)
+    let rankKeys = VaultRankIndex.keys(items)
+    let searchKeys = rankKeys.map(Self.searchKey)
     self.searchKeys = searchKeys
     searchOrder = items.indices.sorted { searchKeys[$0].order < searchKeys[$1].order }
+    rank = VaultRankIndex(items, keys: rankKeys, order: searchOrder)
     let listKeys = items.map(Self.listKey)
     self.listKeys = listKeys
     listOrder = items.indices.sorted { a, b in
@@ -80,11 +83,10 @@ struct VaultCatalog: Sendable {
     (folded ? fold(query) : query.lowercased()).split(whereSeparator: { $0.isWhitespace }).map(String.init)
   }
 
-  private static func searchKey(_ item: VaultItem) -> SearchKey {
-    let title = fold(item.title)
-    let username = fold(item.username)
-    let hosts = item.urls.map { VaultOriginMatch.host(of: $0) ?? $0.lowercased() }
-    return SearchKey(title: title, haystack: ([title, username] + hosts).joined(separator: "\n"), order: "\(title)\u{0}\(username)")
+  private static func searchKey(_ key: VaultRankKey) -> SearchKey {
+    let title = String(decoding: key.title, as: UTF8.self)
+    let username = String(decoding: key.username, as: UTF8.self)
+    return SearchKey(title: title, haystack: ([title, username] + key.fullHosts).joined(separator: "\n"), order: "\(title)\u{0}\(username)")
   }
 
   static func withScheme(_ url: String) -> String {
@@ -140,6 +142,8 @@ struct VaultCatalog: Sendable {
       }
       .map { items[$0.0.item] }
   }
+
+  func sitesNear(_ origin: String) -> [Int] { sites.entries(near: origin) }
 
   func near(_ origin: String) -> [VaultItem] {
     Array(sites.entries(near: origin).prefix(Self.siteItemsLimit).map { items[$0] })

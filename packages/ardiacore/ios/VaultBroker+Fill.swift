@@ -60,6 +60,14 @@ extension VaultBroker {
   func fillValues(provider providerId: String, id itemId: String, fields: [String], origin: String, userChose: Bool, profile: String? = nil) async
     -> Result<VaultFillValues, VaultFillError>
   {
+    let result = await fillValuesNow(provider: providerId, id: itemId, fields: fields, origin: origin, userChose: userChose, profile: profile)
+    if case .success = result, !fields.allSatisfy({ $0 == "otp" }) { VaultUsage.shared.noteFill(profile: profile, origin: origin, provider: providerId, id: itemId) }
+    return result
+  }
+
+  private func fillValuesNow(provider providerId: String, id itemId: String, fields: [String], origin: String, userChose: Bool, profile: String?) async
+    -> Result<VaultFillValues, VaultFillError>
+  {
     if providerId == ArdiaVault.id {
       return await ArdiaVaultIndex.shared.fillValues(id: itemId, fields: fields, origin: origin, userChose: userChose, profile: profile)
     }
@@ -107,6 +115,14 @@ extension VaultBroker {
   }
 
   func save(provider providerId: String, origin: String, username: String, password: String, title: String?, profile: String? = nil) async
+    -> Result<VaultItem, VaultFillError>
+  {
+    let result = await saveNow(provider: providerId, origin: origin, username: username, password: password, title: title, profile: profile)
+    if case .success(let item) = result { VaultUsage.shared.noteEdit(provider: item.provider, id: item.id) }
+    return result
+  }
+
+  private func saveNow(provider providerId: String, origin: String, username: String, password: String, title: String?, profile: String?) async
     -> Result<VaultItem, VaultFillError>
   {
     if providerId == ArdiaVault.id {

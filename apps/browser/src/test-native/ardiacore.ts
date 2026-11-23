@@ -24,7 +24,7 @@ import type {
 import type { EventSubscription } from "expo-modules-core";
 import { nativeEvents, unfaked } from "./events";
 import { generatedVaultHandlers } from "./vaultGenerated";
-import { fakeListItems, fakeSearchItems, fakeSiteItems, fakeUsernames } from "./vaultQueries";
+import { fakeListItems, fakeRecommend, fakeSearchItems, fakeSiteItems, fakeUsernames } from "./vaultQueries";
 import type { AutofillToggle } from "../platform/autofill";
 
 
@@ -434,7 +434,7 @@ function withStrips<Fake extends FakeDomain>(fake: Fake): Fake {
 }
 
 type FakeVaultProvider = CallResult<"vaults.refresh">;
-type FakeVaultItem = CallResult<"vaults.searchItems">[number];
+type FakeVaultItem = CallResult<"vaults.searchItems">["items"][number];
 export const vaultFakes = {
   providers: [] as FakeVaultProvider[],
   dropdownClaims: [] as CallArgs<"vaults.claimChromeDropdowns">[],
@@ -786,7 +786,11 @@ const fakeModules = {
       },
       searchItems: ({ query, limit, ardiaProfile }) => {
         vaultFakes.searches.push(query);
-        return fakeSearchItems(unlockedVaultItems(), query, limit ?? 100, ardiaProfile);
+        return { items: fakeSearchItems(unlockedVaultItems(), query, limit ?? 100, ardiaProfile), revision: vaultFakes.itemsRevision };
+      },
+      recommend: ({ origin, ardiaProfile, pageUsername, remembered }) => {
+        const answer = () => ({ items: fakeRecommend(unlockedVaultItems(), origin, ardiaProfile, pageUsername ?? null, remembered ?? null), listed: listedVaultIds(), revision: vaultFakes.itemsRevision });
+        return vaultFakes.itemsGate ? vaultFakes.itemsGate.then(answer) : answer();
       },
       listItems: ({ ardiaProfile, ...args }) => ({ ...fakeListItems(unlockedVaultItems(), { ...args, profile: ardiaProfile }), revision: vaultFakes.itemsRevision }),
       usernames: ({ email, limit, ardiaProfile }) => fakeUsernames(unlockedVaultItems(), email, limit ?? 12, ardiaProfile),

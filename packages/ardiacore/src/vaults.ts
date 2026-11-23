@@ -73,9 +73,13 @@ export type VaultItem = {
   updatedAt?: number;
   profile?: string;
   passkey?: { requestId: string; credentialId: string };
+  match?: VaultItemMatch;
 };
 
+export type VaultItemMatch = { tier: number; reason: "origin" | "site" | "shared" | "brand"; site?: string };
+
 export type VaultSiteItems = { items: VaultItem[]; listed: VaultProviderId[]; revision: number };
+export type VaultItemSearch = { items: VaultItem[]; revision: number; cancelled?: boolean };
 export type VaultItemPage = { total: number; items: VaultItem[]; revision: number };
 export type VaultItemsStatus = { revision: number; listed: VaultProviderId[]; counts: Record<VaultProviderId, number> };
 

@@ -19,7 +19,7 @@ import type {
   CookieRemoval, PageCookie, PageEngine, PasskeyAccess, SiteData, SiteDataWritten, StorageChange, StorageItems, WebKitCount,
 } from "../webkit";
 import type { ChromeDropdownShown, DisplayMediaSource, OpenWindowRequest, VaultPasswordStyle, WebNotification } from "../pageTypes";
-import type { VaultPasskey, VaultPasskeyAnswer, VaultPasskeyDone, VaultPasskeyRequest, VaultAddTotpResult, VaultCreateLoginResult, VaultEditResult, VaultStandaloneCode, VaultStandaloneCodeAdded, VaultStandaloneCodeEdited, VaultCodeRead, VaultCodeSource, VaultCopyResult, VaultRemoveTotpResult, VaultGeneratedPassword, VaultGeneratedSaveResult, VaultItem, VaultItemPage, VaultItemsStatus, VaultSiteItems, VaultProviderId, VaultProviderState, VaultSecretField, VaultSyncResult, VaultTotp, VaultBackupStatus, VaultBackupChange, VaultBackupDeleteResult, VaultRestoreResult, VaultSignInAnswer, VaultSignInResult } from "../vaults";
+import type { VaultPasskey, VaultPasskeyAnswer, VaultPasskeyDone, VaultPasskeyRequest, VaultAddTotpResult, VaultCreateLoginResult, VaultEditResult, VaultStandaloneCode, VaultStandaloneCodeAdded, VaultStandaloneCodeEdited, VaultCodeRead, VaultCodeSource, VaultCopyResult, VaultRemoveTotpResult, VaultGeneratedPassword, VaultGeneratedSaveResult, VaultItem, VaultItemPage, VaultItemSearch, VaultItemsStatus, VaultSiteItems, VaultProviderId, VaultProviderState, VaultSecretField, VaultSyncResult, VaultTotp, VaultBackupStatus, VaultBackupChange, VaultBackupDeleteResult, VaultRestoreResult, VaultSignInAnswer, VaultSignInResult } from "../vaults";
 import type { BookmarksCalls, BookmarksEvents } from "./generated/bookmarks";
 import type { FaviconsCalls, FaviconsEvents } from "./generated/favicons";
 import type { HistoryCalls, HistoryEvents } from "./generated/history";
@@ -225,7 +225,8 @@ export type EngineCalls = BookmarksCalls & FaviconsCalls & HistoryCalls & {
   "vaults.claimChromeDropdowns": [{ tabId: string; kinds: ChromeDropdownShown[]; usernames: string[]; anyLogin?: boolean }, { hidden: boolean; showing: ChromeDropdownShown[]; logins: string[] }];
   "vaults.refresh": [{ provider: VaultProviderId; ardiaProfiles?: string[] }, VaultProviderState];
   "vaults.siteItems": [{ origin: string }, VaultSiteItems];
-  "vaults.searchItems": [{ query: string; limit?: number; ardiaProfile?: string | null }, VaultItem[]];
+  "vaults.searchItems": [{ query: string; limit?: number; ardiaProfile?: string | null; origin?: string; channel?: string }, VaultItemSearch];
+  "vaults.recommend": [{ origin: string; ardiaProfile?: string | null; pageUsername?: string | null; remembered?: string | null }, VaultSiteItems];
   "vaults.listItems": [{ query?: string; offset?: number; limit: number; managersOnly?: boolean; ardiaProfile?: string | null }, VaultItemPage];
   "vaults.usernames": [{ email: boolean; limit?: number; ardiaProfile?: string | null }, VaultItem[]];
   "vaults.itemsStatus": [{}, VaultItemsStatus];

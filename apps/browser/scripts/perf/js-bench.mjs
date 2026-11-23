@@ -413,6 +413,7 @@ const top = (counter, n = 6) =>
     .join(", ");
 
 export const isHarnessTimer = (name) => name.includes("pollDevEval") || name.includes("benchSettleStep") || name.includes("benchSleep") || name === "setInterval:anonymous";
+export const isTimerBatch = (name) => name === "JSTimers.callTimers";
 const harnessMs = (stats) => sum(Object.fromEntries(Object.entries(stats.timerMs ?? {}).filter(([k]) => isHarnessTimer(k))));
 
 function statLine(stats) {

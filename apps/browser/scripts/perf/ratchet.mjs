@@ -3,8 +3,8 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { isHarnessTimer } from "./js-bench.mjs";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { isHarnessTimer, isTimerBatch } from "./js-bench.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appDir = process.env.RATCHET_APP_DIR ? resolve(process.env.RATCHET_APP_DIR) : resolve(here, "../..");
@@ -38,7 +38,7 @@ function flattenStats(into, prefix, stats) {
     if (!counter) continue;
     let total = 0;
     for (const [name, value] of Object.entries(counter)) {
-      if (isHarnessTimer(name)) continue;
+      if (isHarnessTimer(name) || (k === "tasks" && isTimerBatch(name))) continue;
       add(into, `${prefix}.${k}.${name}`, value);
       total += value;
     }
@@ -447,7 +447,7 @@ export function instrPerRound(rounds = 10) {
   return Math.round((retired(rounds) - retired(0)) / rounds);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const [command, ...rest] = process.argv.slice(2);
   const { positional, flags } = parseArgs(rest);
   try {

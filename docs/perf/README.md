@@ -297,12 +297,19 @@ again shows up here at once: `switchTabs.subNotified` grows by the row count per
 - **noisy**: a group total that moves between runs because pages and timers finish at their own pace, with its median
   within 30% of its largest value. Its ceiling is the largest value plus 10%: it catches a regression, not a few
   percent. `lower` leaves these alone.
+- **timer batches**: a `tasks` total leaves out `JSTimers.callTimers`, the bridge task that runs due timers. The host
+  decides how many batches the same timers make (the patched React Native macOS timing wakes on the display link for a
+  timer due within two frames and on a sleep timer for a later one, and timers due together share a batch), so the count
+  differs between a MacBook and a Mac mini on one build: about 560 against 390 in `close`. The timers a batch runs stay gated
+  under `*.timers`, with the harness's own sleeps left out. The js-bench report still lists the batches and `taskMs`
+  still times them.
 - **micro**: builtin-call counts of `micro-bench.mjs counts` (omnibox keystrokes on the seed profile, sidebar, strip and
   group entries at 500 and 1000 tabs, group names). Exact: Node runs them with nothing else going on.
 - **instr**: instructions retired per round of `micro-bench.mjs instr`: the largest of 3 baseline measurements plus 4%.
-- Not gated: counts that wobble beyond that, which are the ones driven by how fast a page loads: `openClose` (20 tabs
-  loading), `startup` (a race against the rest of the launch; `launch` replaces it), and the byte count of the session
-  writes. They stay in the js-bench report.
+- Not gated: counts that wobble beyond that, which are the ones driven by how fast a page loads: the commits, store
+  updates and listener calls of `openClose` (20 tabs loading; its other totals are gated as noisy), `startup` (a race
+  against the rest of the launch; `launch` replaces it), and the byte count of the session writes. They stay in the
+  js-bench report.
 - A new component, task or timer that has no ceiling shows up in the group total's ceiling, not on its own: `check`
   lists the biggest counts without one.
 - The ceilings are for probe revision 2 and bench revision 4 (`perfProbe.ts` `PERF_PROBE_REVISION`, js-bench

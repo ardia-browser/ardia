@@ -20,6 +20,7 @@
     "@ardia/ardiacore": "workspace:*",
     "@ardia/import": "workspace:*",
     "@ardia/sync": "workspace:*",
+    "@ardia/plugin-sdk": "workspace:*",
     "expo": "~54.0.37",
     "expo-modules-core": "~3.0.29",
     "react": "19.1.4",

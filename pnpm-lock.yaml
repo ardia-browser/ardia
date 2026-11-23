@@ -202,6 +202,9 @@ importers:
       '@ardia/import':
         specifier: workspace:*
         version: link:../../packages/import
+      '@ardia/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
       '@ardia/shaders':
         specifier: workspace:*
         version: link:../../packages/shaders
@@ -424,6 +427,8 @@ importers:
       '@ardia/sync':
         specifier: workspace:*
         version: link:../sync
+
+  packages/hostapi: {}
 
   packages/import:
     dependencies:

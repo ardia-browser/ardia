@@ -3,7 +3,7 @@ import { Animated, StyleSheet, TextInput, View } from "react-native";
 import { space, Text, useTheme, withAlpha } from "../ui";
 import { crossfade } from "../ui/motion";
 import { font as typeScale, lineHeight, tabularNums } from "../ui/tokens";
-import { sheetGroupRadius, VAULT_SIGN_IN } from "./tokens";
+import { SHEET_INSET, SHEET_LIST_INSET, sheetGroupRadius, VAULT_SIGN_IN } from "./tokens";
 
 const FIELD_KEYS = [{ key: "Escape" }, { key: "Tab" }, { key: "Tab", shiftKey: true }];
 
@@ -109,7 +109,7 @@ export function SecretPlaceholder({ text }: { text: string }) {
   );
 }
 
-const SHEET_GROUP = { borderWidth: StyleSheet.hairlineWidth * 2, overflow: "hidden" } as const;
+const SHEET_GROUP = { borderWidth: StyleSheet.hairlineWidth * 2, overflow: "hidden", marginHorizontal: SHEET_LIST_INSET - SHEET_INSET } as const;
 export const LABEL_WIDTH = 116;
 export const ROW = { paddingHorizontal: space.l, paddingVertical: space.m, minHeight: 40, justifyContent: "center" } as const;
 export const ROW_LINE = { flexDirection: "row", alignItems: "center", gap: space.l } as const;

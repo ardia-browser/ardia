@@ -1,9 +1,9 @@
 import { curve, duration } from "../../ui/motion";
 import { sheetWidth, space } from "../../ui/tokens";
-import { sheetGroupRadius } from "../../vaults/tokens";
+import { SHEET_INSET, SHEET_LIST_INSET, sheetGroupRadius } from "../../vaults/tokens";
 
-const INSET = space.xxl;
-const LIST_INSET = space.m;
+const INSET = SHEET_INSET;
+const LIST_INSET = SHEET_LIST_INSET;
 
 export const CONSENT_SHEET = {
   size: "m",

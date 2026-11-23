@@ -1,6 +1,8 @@
 import { concentric, iconButton, POPOVER_WIDTH, radius, space } from "../ui/tokens";
 
-export const sheetGroupRadius = (inset: number = space.xxl) => Math.max(radius.control, concentric(radius.sheet, inset));
+export const SHEET_INSET = space.xxl;
+export const SHEET_LIST_INSET = space.m;
+export const sheetGroupRadius = (inset: number = SHEET_LIST_INSET) => Math.max(radius.control, concentric(radius.sheet, inset));
 
 const CREDENTIAL_ROW = 42;
 const FOOTER_ROW = 22;

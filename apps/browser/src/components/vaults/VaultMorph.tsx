@@ -1,8 +1,8 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { Animated, type LayoutChangeEvent } from "react-native";
+import { Animated, View, type LayoutChangeEvent } from "react-native";
 import { reduceMotion, useCrossfade } from "../ui";
 import { curve } from "../ui/motion";
-import { VAULT_SIGN_IN } from "./tokens";
+import { SHEET_INSET, SHEET_LIST_INSET, VAULT_SIGN_IN } from "./tokens";
 
 const Leaving = createContext(false);
 
@@ -34,18 +34,22 @@ export function Morph({ id, slide = 0, children }: { id: string; slide?: -1 | 0 
   const exiting = fade.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
   const exitingStyle = shift ? { opacity: exiting, transform: [{ translateX: fade.interpolate({ inputRange: [0, 1], outputRange: [0, -shift] }) }] } : { opacity: exiting };
   return (
-    <Animated.View style={sized ? { height, overflow: "hidden" } : undefined}>
+    <Animated.View style={[BLEED, sized ? { height, overflow: "hidden" } : undefined]}>
       <Animated.View onLayout={onLayout} style={[sized ? MORPH_CONTENT : undefined, entering]}>
-        {children}
+        <View style={INSET}>{children}</View>
       </Animated.View>
       {leaving ? (
         <Animated.View pointerEvents="none" importantForAccessibility="no-hide-descendants" style={[LEAVING, exitingStyle]}>
-          <Leaving.Provider value>{leaving}</Leaving.Provider>
+          <View style={INSET}>
+            <Leaving.Provider value>{leaving}</Leaving.Provider>
+          </View>
         </Animated.View>
       ) : null}
     </Animated.View>
   );
 }
 
+const BLEED = { marginHorizontal: SHEET_LIST_INSET - SHEET_INSET } as const;
+const INSET = { marginHorizontal: SHEET_INSET - SHEET_LIST_INSET } as const;
 const MORPH_CONTENT = { position: "absolute", left: 0, right: 0, top: 0 } as const;
 const LEAVING = { position: "absolute", left: 0, right: 0, top: 0 } as const;

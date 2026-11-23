@@ -47,19 +47,42 @@ struct VaultCatalog: Sendable {
     VaultOffMain.check()
     self.items = items
     self.ownProvider = ownProvider
-    sites = VaultSiteIndex(items.map(\.urls))
-    let rankKeys = VaultRankIndex.keys(items)
-    let searchKeys = rankKeys.map(Self.searchKey)
-    self.searchKeys = searchKeys
-    searchOrder = items.indices.sorted { searchKeys[$0].order < searchKeys[$1].order }
-    rank = VaultRankIndex(items, keys: rankKeys, order: searchOrder)
-    let listKeys = items.map(Self.listKey)
-    self.listKeys = listKeys
-    listOrder = items.indices.sorted { a, b in
-      let site = Self.collate(listKeys[a].site, listKeys[b].site)
-      if site != .orderedSame { return site == .orderedAscending }
-      return Self.collate(listKeys[a].username, listKeys[b].username) == .orderedAscending
+    final class Parts: @unchecked Sendable {
+      var sites = VaultSiteIndex([])
+      var searchKeys: [SearchKey] = []
+      var searchOrder: [Int] = []
+      var rank: VaultRankIndex?
+      var listKeys: [ListKey] = []
+      var listOrder: [Int] = []
     }
+    let parts = Parts()
+    DispatchQueue.concurrentPerform(iterations: 3) { part in
+      switch part {
+      case 0:
+        parts.sites = VaultSiteIndex(items.map(\.urls))
+      case 1:
+        let rankKeys = VaultRankIndex.keys(items)
+        let searchKeys = rankKeys.map(Self.searchKey)
+        let searchOrder = items.indices.sorted { searchKeys[$0].order < searchKeys[$1].order }
+        parts.searchKeys = searchKeys
+        parts.searchOrder = searchOrder
+        parts.rank = VaultRankIndex(items, keys: rankKeys, order: searchOrder)
+      default:
+        let listKeys = items.map(Self.listKey)
+        parts.listKeys = listKeys
+        parts.listOrder = items.indices.sorted { a, b in
+          let site = Self.collate(listKeys[a].site, listKeys[b].site)
+          if site != .orderedSame { return site == .orderedAscending }
+          return Self.collate(listKeys[a].username, listKeys[b].username) == .orderedAscending
+        }
+      }
+    }
+    sites = parts.sites
+    searchKeys = parts.searchKeys
+    searchOrder = parts.searchOrder
+    rank = parts.rank!
+    listKeys = parts.listKeys
+    listOrder = parts.listOrder
   }
 
   static func collate(_ a: String, _ b: String) -> ComparisonResult {

@@ -54,7 +54,7 @@ export const VAULT_TOUCH = {
 
 export const VAULT_SAVE = { fieldGap: 6, passwordHeight: 24, usernameWidth: 260 } as const;
 
-export const VAULT_CODE = { ring: 20, stroke: 2.5, expiringMs: 5000, sheetRing: 14, sheetStroke: 1.5, ringGap: space.s, rollMs: 260, rollShift: 9, litTrack: 0.4, litWarningContrast: 3, restTrack: { light: 0.25, dark: 0.14 } } as const;
+export const VAULT_CODE = { ring: 20, stroke: 2.5, expiringMs: 5000, sheetRing: 14, sheetStroke: 1.5, ringGap: space.s, rollMs: 260, rollShift: 9, litWarningContrast: 3, restTrack: { light: 0.25, dark: 0.14 } } as const;
 
 export const VAULT_BADGE = { s: { box: 16, glyph: 9 }, m: { box: 28, glyph: 14 }, l: { box: 36, glyph: 18 }, xl: { box: 52, glyph: 26 } } as const;
 

@@ -1,7 +1,6 @@
 import { createContext, memo, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { Animated, Pressable, StyleSheet, View } from "react-native";
 import { contrast, touchRetryInk, type VaultHighlight } from "../../state/vaults/highlight";
-import { mix } from "../../lib/color";
 import { FOOTER_KINDS, itemKey, type VaultRow } from "../../state/vaults/menuModel";
 import { loadVaultCode } from "../../state/vaults/codes";
 import { noteCodeUnavailable } from "../../state/vaults/fill";
@@ -47,19 +46,12 @@ export type Ink = { title: string; detail: string; icon: string; ground: string;
 
 export type VaultTouchState = { phase: VaultTouchPhase; retries: number };
 
-function litTrack(fill: string, on: string) {
-  const score = (track: string) => Math.min(contrast(track, fill), contrast(on, track));
-  const deep = mix(fill, on === ink.white ? ink.black : ink.white, VAULT_CODE.litTrack);
-  const soft = mix(fill, on, VAULT_CODE.litTrack);
-  return score(deep) >= score(soft) ? deep : soft;
-}
-
 function useInk(highlight: VaultHighlight | null, surface: string): Ink {
   const theme = useTheme();
   if (!highlight) return { title: theme.textPrimary, detail: withAlpha(theme.dark ? ink.white : ink.black, VAULT_MENU.detailAlpha), icon: theme.icon, ground: surface };
   const on = highlight.onLight ? ink.black : ink.white;
   const warning = contrast(theme.warning, highlight.fill) >= VAULT_CODE.litWarningContrast ? theme.warning : on;
-  return { title: on, detail: on, icon: on, ground: highlight.fill, ring: { arc: on, warning, track: litTrack(highlight.fill, on) } };
+  return { title: on, detail: on, icon: on, ground: highlight.fill, ring: { arc: on, warning, track: withAlpha(on, theme.dark ? VAULT_CODE.restTrack.dark : VAULT_CODE.restTrack.light) } };
 }
 
 export function RowShell({ label, height, compact, selected, plated, highlight, onHover, onPress, children }: { label: string; height: number; compact: boolean; selected: boolean; plated: boolean; highlight: VaultHighlight; onHover: () => void; onPress: () => void; children: (ink: Ink, lit: boolean) => ReactNode }) {

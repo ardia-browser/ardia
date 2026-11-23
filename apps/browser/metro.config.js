@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { getDefaultConfig, mergeConfig } = require("@react-native/metro-config");
+const { backedOnWindows } = require("../../packages/expo-windows/metroResolution");
 
 const projectRoot = __dirname;
 const workspaceRoot = path.resolve(projectRoot, "../..");
@@ -36,7 +37,8 @@ const config = mergeConfig(getDefaultConfig(projectRoot), {
       if (process.env.AC_REACT_PROFILING === "1" && moduleName.endsWith("/ReactNativeRenderer-prod")) {
         moduleName = moduleName.replace(/-prod$/, "-profiling");
       }
-      return context.resolveRequest(context, moduleName, platform);
+      const resolution = context.resolveRequest(context, moduleName, platform);
+      return platform === "windows" ? backedOnWindows(resolution, context.originModulePath) : resolution;
     },
   },
 });

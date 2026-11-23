@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { StyleSheet, View, type StyleProp, type ViewProps, type ViewStyle } from "react-native";
-import { GlassFill, ink, useGlass } from "../ui";
+import { BackedView, GlassFill, ink, useGlass } from "../ui";
 import { useTheme } from "../ui/theme";
 import { onboardingColorsOf } from "./tokens";
 
@@ -44,7 +44,7 @@ export function ChoiceCard({
   const borderColor = border ?? (selected ? (strong ? colors.title : colors.checkboxBorder) : colors.rowBorder);
   const surface = fill ?? (lit ? colors.button : colors.row);
   return (
-    <View
+    <BackedView
       {...rest}
       style={[
         {
@@ -69,6 +69,6 @@ export function ChoiceCard({
         </>
       ) : null}
       {children}
-    </View>
+    </BackedView>
   );
 }

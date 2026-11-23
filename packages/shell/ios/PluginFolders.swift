@@ -5,7 +5,7 @@ import Foundation
 struct PluginFolders {
   static let maxPlugins = 64
   static let manifestName = "plugin.json"
-  static let officialFolderName = "OfficialPlugins"
+  static let officialFolderName = PluginSandbox.officialFolderName
   private static let namePattern = try! NSRegularExpression(pattern: "^[a-z0-9][a-z0-9-]{0,39}$")
 
   static let legacyId = OfficialPin.legacyFolderId

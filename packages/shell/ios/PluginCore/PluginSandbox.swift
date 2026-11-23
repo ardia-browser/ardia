@@ -10,6 +10,8 @@ struct PluginSandbox {
   let program: String
   let network: Bool
 
+  static let officialFolderName = "OfficialPlugins"
+
   static let searchPath = ["/usr/bin", "/bin", "/usr/sbin", "/sbin", "/opt/homebrew/bin", "/usr/local/bin"]
 
   static let machAllowed = [
@@ -396,10 +398,12 @@ struct PluginSandbox {
     }
     let pluginsRoot = (configFolder as NSString).appendingPathComponent("plugins")
     let inPluginsRoot = Self.isInside(pluginFolder, pluginsRoot) && pluginFolder != pluginsRoot
+    let officialRoot = (appData as NSString).appendingPathComponent(Self.officialFolderName)
+    let inOfficialStore = Self.isInside(pluginFolder, officialRoot) && String(pluginFolder.dropFirst(officialRoot.count)).split(separator: "/").count == 2
     if pluginFolder == "/" || [home, configFolder, appData].contains(where: { Self.isInside($0, pluginFolder) }) {
       throw Refusal.unsafe("its folder takes in Ardia's data, its settings or your home folder")
     }
-    if (Self.isInside(pluginFolder, configFolder) || Self.isInside(pluginFolder, appData)) && !inPluginsRoot {
+    if (Self.isInside(pluginFolder, configFolder) || Self.isInside(pluginFolder, appData)) && !inPluginsRoot && !inOfficialStore {
       throw Refusal.unsafe("its folder is in Ardia's data or config folder")
     }
     if !Self.isInside(program, pluginFolder) && (Self.isInside(program, appData) || Self.isInside(program, configFolder)) {

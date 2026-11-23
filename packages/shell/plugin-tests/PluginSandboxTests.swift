@@ -60,6 +60,13 @@ final class PluginSandboxTests: XCTestCase {
     XCTAssertNotNil(refusal(sandbox(plugin: "/")))
   }
 
+  func testAnOfficialCopyInArdiasStoreRunsButNothingElseThereDoes() {
+    XCTAssertNil(refusal(sandbox(plugin: "\(data)/OfficialPlugins/bitwarden/\(String(repeating: "a", count: 64))")))
+    XCTAssertNotNil(refusal(sandbox(plugin: "\(data)/OfficialPlugins")))
+    XCTAssertNotNil(refusal(sandbox(plugin: "\(data)/OfficialPlugins/bitwarden")))
+    XCTAssertNotNil(refusal(sandbox(plugin: "\(data)/OfficialPlugins/bitwarden/copy/inner")))
+  }
+
   func testAProgramInArdiasDataIsRefusedUnlessItIsThePluginsOwn() {
     XCTAssertNotNil(refusal(sandbox(program: "\(data)/Chromium/Default/Cookies")))
     XCTAssertNil(refusal(sandbox(program: "\(plugin)/helper")))

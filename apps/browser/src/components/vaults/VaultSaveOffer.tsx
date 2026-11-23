@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Pressable, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { showMenu } from "../../state/app/system";
 import { useVaultLogins, useVaultSaveOffer } from "../../state/vaults/hooks";
 import { siteLabel } from "../../state/vaults/originMatch";
@@ -10,14 +10,15 @@ import { webviews } from "../../state/tabs/webviewHandles";
 import { Favicon } from "../favicon/Favicon";
 import { PromptBody } from "../site/Prompts";
 import { usePromptInputGuard, Well } from "../site/PromptParts";
-import { Box, Button, Expand, opacity, PanelCloseButton, Popover, POPOVER_WIDTH, PopoverValue, space, Text, usePopoverPresence, VaultPasswordField } from "../ui";
+import { Box, Button, Expand, opacity, PanelCloseButton, Popover, POPOVER_WIDTH, PopoverValue, radius, space, Text, usePopoverPresence, useTheme, VaultPasswordField } from "../ui";
 import { BrandBadge, useManagerName } from "./VaultParts";
 import { LabeledField, VaultUsernameField } from "./VaultUsernameField";
-import { VAULT_SAVE } from "./tokens";
+import { VAULT_SAVE, VAULT_SIGN_IN } from "./tokens";
 
 function SavePasswordField({ tabId, origin, seq, onLength, onFocusInside, onSubmit, onEscape }: { tabId: string; origin: string; seq: number; onLength: (length: number) => void; onFocusInside: () => void; onSubmit: () => void; onEscape: () => void }) {
   const [draft, setDraft] = useState<VaultPasswordDraft | null>(null);
   const [revealed, setRevealed] = useState(false);
+  const theme = useTheme();
   useEffect(() => {
     let live = true;
     setDraft(null);
@@ -34,7 +35,9 @@ function SavePasswordField({ tabId, origin, seq, onLength, onFocusInside, onSubm
   return (
     <LabeledField label="Password">
       <Box row gap="xs" center>
-        <VaultPasswordField draft={draft.token} revealed={revealed} style={PASSWORD} onEdit={(next) => (onFocusInside(), onLength(next))} onSubmit={() => (onFocusInside(), onSubmit())} onEscape={() => (onFocusInside(), onEscape())} />
+        <View style={[PASSWORD_BOX, { backgroundColor: theme.field, borderColor: theme.fieldBorder }]}>
+          <VaultPasswordField draft={draft.token} revealed={revealed} bordered={false} label="Password" style={PASSWORD} onEdit={(next) => (onFocusInside(), onLength(next))} onSubmit={() => (onFocusInside(), onSubmit())} onEscape={() => (onFocusInside(), onEscape())} />
+        </View>
         <Button variant="icon" icon={revealed ? "eye.slash" : "eye"} size="m" tooltip={revealed ? "Hide Password" : "Show Password"} onPress={() => setRevealed(!revealed)} />
       </Box>
     </LabeledField>
@@ -81,7 +84,7 @@ export function VaultSaveOffer({ tabId, right, top }: { tabId: string; right: nu
       <View>
         <PromptBody
           icons={["key.fill"]}
-          title={updating ? "Update Password?" : `Save Password for ${site}?`}
+          title={updating ? `Update Password for ${site}?` : `Save Password for ${site}?`}
           message={updating || offer.targets.length > 1 ? null : `Saves to ${target}`}
           detail={
             <>
@@ -157,4 +160,5 @@ const FILL = { flex: 1, minWidth: 0 } as const;
 const LEFT = { justifyContent: "flex-start" } as const;
 const BETWEEN = { justifyContent: "space-between" } as const;
 const DIMMED = { opacity: opacity.disabled } as const;
-const PASSWORD = { flex: 1, height: VAULT_SAVE.passwordHeight } as const;
+const PASSWORD_BOX = { flex: 1, height: VAULT_SAVE.passwordHeight, borderRadius: radius.control, borderWidth: StyleSheet.hairlineWidth * 2, paddingHorizontal: space.m, justifyContent: "center" } as const;
+const PASSWORD = { height: VAULT_SIGN_IN.secretHeight } as const;

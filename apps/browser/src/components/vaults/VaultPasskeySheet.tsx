@@ -26,6 +26,7 @@ function messageOf(sheet: PasskeySheet, site: string, targetName: string, touchI
   const check = touchID ? "Touch ID" : "your login password";
   if (sheet.kind === "get") return sheet.passkeys.length > 1 ? `Choose a passkey. You'll confirm with ${check}.` : `You'll confirm with ${check}.`;
   if (sheet.exists) return `You already have a passkey for ${accountLine(sheet)} on ${site}.`;
+  if (sheet.targets.length > 1) return null;
   if (sheet.private) return `Saves to ${targetName}, and stays there after this window closes. You'll sign in with ${check}.`;
   return touchID ? `Saves to ${targetName}. You'll sign in with Touch ID, no password needed.` : `Saves to ${targetName}. You'll sign in with your login password.`;
 }

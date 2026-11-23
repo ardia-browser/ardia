@@ -25,6 +25,7 @@ import { forgetPluginGestures } from "./gestures";
 import { sendValues } from "./channel";
 import { adoptLegacyInstalls, reconcilePrograms, removePrograms } from "./programs";
 import { isBundledRetiredRecord, noteRetiredRecords, RETIRED_OFFICIAL_PLUGINS } from "./retiredOfficial";
+import { ownValue } from "../../lib/decode";
 
 const MAX_PLUGINS = 64;
 
@@ -202,9 +203,9 @@ function closeChangedConsent() {
 
 export function consentTarget(name: string, official = false): PluginListing | undefined {
   const s = currentPlugins();
-  const listing = Object.hasOwn(s.listings, name) ? s.listings[name] : undefined;
+  const listing = ownValue(s.listings, name);
   if (!official && listing && !listing.official) return listing;
-  const candidate = Object.hasOwn(s.candidates, name) ? s.candidates[name] : undefined;
+  const candidate = ownValue(s.candidates, name);
   if (candidate?.manifest && candidate.hash) return candidate;
   if (official && !listing?.official) return undefined;
   if (listing?.legacy) return undefined;
@@ -296,7 +297,7 @@ export async function promoteCandidate(name: string, candidate: PluginListing, c
 
 export function turnOnApprovedPlugin(name: string): boolean {
   const s = currentPlugins();
-  const listing = Object.hasOwn(s.listings, name) ? s.listings[name] : undefined;
+  const listing = ownValue(s.listings, name);
   const before = recordOf(s, name);
   if (!listing?.manifest || before.enabled || !recordApproves(listing, before) || removing.has(name) || s.consent) return false;
   const consent = consentNow();
@@ -343,7 +344,7 @@ const secretsLeftReason = (name: string, secrets: SecretsCleared) =>
 type RemovalIdentity = { official: boolean; folderId: string | null };
 
 export function removalIdentity(name: string): RemovalIdentity {
-  const listed = Object.hasOwn(currentPlugins().listings, name) ? currentPlugins().listings[name] : undefined;
+  const listed = ownValue(currentPlugins().listings, name);
   const official = listed ? !!listed.official : !!currentPlugins().pinned?.some((p) => p.name === name) || Object.hasOwn(currentPlugins().candidates, name);
   return { official, folderId: listed?.folderId || null };
 }

@@ -5,8 +5,9 @@ import { ancestorIds, descendantIds, innermostGroupOf } from "../groups/groups";
 import { groupKeptOpen } from "../groups/closeGuard";
 import type { TabPlacement } from "../pins/placing";
 import { splitOf, splitRowPanes, withSplitRows } from "../splits/splits";
-import { eligibleKind, isEligibleTab, ownEntry } from "./automationWindows";
+import { eligibleKind, isEligibleTab } from "./automationWindows";
 import { OpError, store, type Anchor, type Changed, type Destination, type Space } from "./workspaceTargets";
+import { ownValue } from "../../lib/decode";
 
 export function keptOpen(g: TabGroup, what: string) {
   if (groupKeptOpen(g.id)) throw new OpError("refused", `Group ${g.id} is a shared folder; ${what} it in the sidebar.`);
@@ -100,7 +101,7 @@ const indexIn = (s: BrowserState, id: string) => s.windows[s.tabs[id]?.windowId 
 export function expectTabs(ids: string[], where: Space, placement?: TabPlacement) {
   const s = store();
   for (const id of ids) {
-    const t = ownEntry(s.tabs, id);
+    const t = ownValue(s.tabs, id);
     if (!t) fail(`tab ${id} is gone.`);
     if (t!.windowId !== where.windowId || t!.profileId !== where.profileId) fail(`tab ${id} isn't in window ${where.windowId}, profile ${where.profileId}.`);
     if (!placement) continue;
@@ -115,7 +116,7 @@ export function expectTabs(ids: string[], where: Space, placement?: TabPlacement
 }
 
 export function expectGroup(id: string, fields: Partial<Pick<TabGroup, "windowId" | "profileId" | "pinned" | "name" | "icon" | "color" | "collapsed">> & { parentId?: string | null; tabs?: string[] }) {
-  const g = ownEntry(store().groups, id);
+  const g = ownValue(store().groups, id);
   if (!g) return fail(`group ${id} is gone.`);
   const { parentId, tabs, ...rest } = fields;
   for (const [key, value] of Object.entries(rest)) if (value !== undefined && g[key as keyof TabGroup] !== value) fail(`group ${id}'s ${key} isn't what was asked.`);
@@ -124,7 +125,7 @@ export function expectGroup(id: string, fields: Partial<Pick<TabGroup, "windowId
 }
 
 export function expectGone(id: string) {
-  if (ownEntry(store().groups, id)) fail(`group ${id} is still there.`);
+  if (ownValue(store().groups, id)) fail(`group ${id} is still there.`);
 }
 
 export function expectUnpinned(ids: string[]) {

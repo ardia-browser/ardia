@@ -1,6 +1,6 @@
 import { isFields, type Fields } from "../../lib/decode";
 import { parseMatchPattern, type MatchSpec } from "../../lib/matchPattern";
-import { sha256 } from "../../lib/sha256";
+import { hexOf, sha256 } from "../../lib/sha256";
 import { MIN_IDLE_SECONDS, TAB_IDLE_EVENTS, USER_IDLE_EVENTS, isAutomationEvent, isDecideEvent, type DecideEvent } from "./eventNames";
 
 export const HOOKS_FILE = "hooks.json";
@@ -60,9 +60,7 @@ function canonicalJson(value: unknown): string {
   return JSON.stringify(value) ?? "null";
 }
 
-const hex = (bytes: Uint8Array) => Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-
-export const hookRevision = (raw: Fields) => hex(sha256(canonicalJson(raw))).slice(0, 32);
+export const hookRevision = (raw: Fields) => hexOf(sha256(canonicalJson(raw))).slice(0, 32);
 
 export function parseDuration(value: unknown): number | null {
   if (typeof value !== "string") return null;

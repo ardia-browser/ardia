@@ -2,7 +2,7 @@ import { withEntry } from "../browser/changes";
 import type { BrowserState } from "../browser/store";
 import { siteKey, siteName } from "../groups/groupNames";
 import { depthOf, innermostGroupOf } from "../groups/groups";
-import { activeTabId, isPinnedRow } from "../browser/model";
+import { activeTabId, isPinnedRow, pinHomeOf } from "../browser/model";
 import { placing } from "./placing";
 import { restoreSnapshots } from "./closedTabs";
 import { withRowsGrouped } from "./tabGrouping";
@@ -32,8 +32,6 @@ export type Tidied = {
   duplicates: number;
 };
 
-const homeOf = (t: Pick<Tab, "url" | "pinnedUrl">) => t.pinnedUrl || t.url;
-
 function foldersOf(s: Pick<BrowserState, "groups">, order: string[], windowId: string, profileId: string, scope: TidyScope): TabGroup[] {
   const at = new Map(order.map((id, i) => [id, i]));
   return Object.values(s.groups)
@@ -47,7 +45,7 @@ function folderSites(s: Pick<BrowserState, "tabs" | "groups">, g: TabGroup): str
   const direct = g.tabIds.filter((id) => innermostGroupOf(s.groups, id)?.id === g.id && s.tabs[id]);
   const counts = new Map<string, number>();
   for (const id of direct) {
-    const site = siteKey(homeOf(s.tabs[id]!));
+    const site = siteKey(pinHomeOf(s.tabs[id]!));
     if (site) counts.set(site, (counts.get(site) ?? 0) + 1);
   }
   const most = Math.max(0, ...counts.values());
@@ -74,9 +72,9 @@ export function tidyPlan(s: Pick<BrowserState, "tabs" | "groups" | "windows" | "
   const kept: Tab[] = [];
   for (const id of rows) {
     const t = s.tabs[id]!;
-    const home = homeOf(t);
+    const home = pinHomeOf(t);
     const inSplitRow = splitRowPanes(s, splitOf(s, id)).includes(id);
-    const twin = scope === "pins" && home && !inSplitRow ? (filed.find((f) => homeOf(f) && samePage(homeOf(f), home)) ?? kept.find((k) => samePage(homeOf(k), home))) : undefined;
+    const twin = scope === "pins" && home && !inSplitRow ? (filed.find((f) => pinHomeOf(f) && samePage(pinHomeOf(f), home)) ?? kept.find((k) => samePage(pinHomeOf(k), home))) : undefined;
     if (twin) closes.push({ tabId: id, keeperId: twin.id });
     else kept.push(t);
   }
@@ -90,7 +88,7 @@ export function tidyPlan(s: Pick<BrowserState, "tabs" | "groups" | "windows" | "
     const panes = splitRowPanes(s, splitOf(s, t.id));
     if (panes.includes(t.id) && panes.find((id) => keptIds.has(id)) !== t.id) continue;
     if (scope === "tabs" && panes.some((id) => !isLoose(s, id, scope))) continue;
-    const site = siteKey(homeOf(t));
+    const site = siteKey(pinHomeOf(t));
     if (!site) continue;
     const groupId = folderFor.get(site);
     if (groupId) files.push({ tabId: t.id, groupId });
@@ -99,7 +97,7 @@ export function tidyPlan(s: Pick<BrowserState, "tabs" | "groups" | "windows" | "
 
   const newGroups = [...loose.values()]
     .filter((same) => same.length >= 2)
-    .map((same) => ({ tabIds: same.map((t) => t.id), name: siteName(same.map((t) => ({ url: homeOf(t), title: t.title }))) }));
+    .map((same) => ({ tabIds: same.map((t) => t.id), name: siteName(same.map((t) => ({ url: pinHomeOf(t), title: t.title }))) }));
 
   return closes.length || files.length || newGroups.length ? { closes, files, newGroups } : null;
 }

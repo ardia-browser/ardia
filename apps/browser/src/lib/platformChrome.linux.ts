@@ -1,6 +1,7 @@
 import type { PopUpChrome, WindowButtonStyle, WindowChrome } from "./platformChrome";
 import { WINDOW_CHROME as WINDOWS_CHROME } from "./platformChrome.windows";
 import { BROWSER_BUTTON_LAYOUT, TRAFFIC_LIGHTS_WIDTH, WINDOW_CONTROLS, windowControlsWidth, type WindowButtonLayout } from "./windowButtonLayout";
+import { sameList } from "./lists";
 
 export { ADVANCED_PANE_SYMBOL, PANEL_FIELD_LIFT } from "./platformChrome.windows";
 
@@ -24,10 +25,8 @@ export const WINDOW_CHROME: WindowChrome = { ...NATIVE_BUTTONS_CHROME };
 
 export const WINDOW_BUTTON_STYLES: readonly WindowButtonStyle[] = ["native", "trafficLights", "hidden"];
 
-const sameButtons = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((button, i) => button === b[i]);
-
 const sameChrome = (a: WindowChrome, b: WindowChrome) =>
-  a.leadingWidth === b.leadingWidth && a.trailingWidth === b.trailingWidth && a.titleBarHeight === b.titleBarHeight && sameButtons(a.leadingButtons, b.leadingButtons) && sameButtons(a.trailingButtons, b.trailingButtons);
+  a.leadingWidth === b.leadingWidth && a.trailingWidth === b.trailingWidth && a.titleBarHeight === b.titleBarHeight && sameList(a.leadingButtons, b.leadingButtons) && sameList(a.trailingButtons, b.trailingButtons);
 
 export function applyWindowButtonStyle(style: WindowButtonStyle, layout: WindowButtonLayout = BROWSER_BUTTON_LAYOUT): boolean {
   const next = style === "native" ? nativeButtonsChrome(layout) : style === "trafficLights" ? TRAFFIC_LIGHTS_CHROME : HIDDEN_BUTTONS_CHROME;

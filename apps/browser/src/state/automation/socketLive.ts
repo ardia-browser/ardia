@@ -4,13 +4,13 @@ import type { GroupColor } from "../browser/types";
 import { connectedSourcesOf, deleteLiveFolder, manualRefresh, newProfileLiveFolder, openLiveItem, refreshFolderWhile } from "../live/engine";
 import { hideItems, live, markRead, setRepoHidden, unhide, updateFolder } from "../live/store";
 import type { CompletedItem, LiveFolder, LiveFolderKind, LiveItem, LiveSourceId } from "../live/types";
-import { ownEntry } from "./automationWindows";
 import type { MethodSpec, SocketCall } from "./socketCatalog";
 import { bool, id, ids, obj, oneOf, PAGE, PROFILE, text, WINDOW } from "./socketSchema";
 import { PAGE_BYTE_BUDGET } from "./socketWire";
 import { expect, now, page, profileArg, windowOrFocused } from "./socketTargets";
 import { OpError } from "./workspaceTargets";
 import { programControlOn } from "../app/programControlSetting";
+import { ownValue } from "../../lib/decode";
 
 const KINDS = ["pullRequests", "documents"] as const satisfies readonly LiveFolderKind[];
 const SOURCES_OF: Record<LiveFolderKind, readonly LiveSourceId[]> = { pullRequests: ["github", "bitbucket"], documents: ["notion", "confluence", "gdrive"] };
@@ -19,7 +19,7 @@ const COLORS = ["none", ...TAB_GROUP_COLORS] as const;
 const MAX_NAME = 200;
 
 function folderOf(folderId: unknown): LiveFolder {
-  const folder = ownEntry(live().folders, folderId);
+  const folder = ownValue(live().folders, folderId);
   if (!folder || isIncognitoProfile(folder.profileId)) throw new OpError("no_window", `There's no live folder ${String(folderId)}.`);
   return folder;
 }

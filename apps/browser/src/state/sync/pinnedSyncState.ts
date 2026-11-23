@@ -3,17 +3,13 @@ import { useBrowser, type BrowserState } from "../browser/store";
 import type { MainWindow } from "../browser/types";
 import { fromSync } from "../pins/pinOrderChoices";
 import { PIN_TAB } from "./pinRecords";
-import { isRegularWindow } from "../windows/small";
+import { isRegularWindow, regularWindows } from "../windows/small";
 
 export const store = () => useBrowser.getState();
 
 export type Window = MainWindow;
 
-
-
-export const openWindows = (s: BrowserState) => s.windowOrder.map((id) => s.windows[id]).filter(isRegularWindow);
-
-export const windowsHomeFirst = (s: BrowserState, home: Window | undefined) => (home ? [home, ...openWindows(s).filter((w) => w.id !== home.id)] : openWindows(s));
+export const windowsHomeFirst = (s: BrowserState, home: Window | undefined) => (home ? [home, ...regularWindows(s).filter((w) => w.id !== home.id)] : regularWindows(s));
 
 export const unpinnedRemotely = (recorded: (key: string) => boolean, remote: (key: string) => unknown) => (key: string) =>
   recorded(`${PIN_TAB}${key}`) && remote(`${PIN_TAB}${key}`) === null;

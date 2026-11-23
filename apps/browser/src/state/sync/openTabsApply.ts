@@ -7,15 +7,16 @@ import { removeTabs, withNewTab } from "../tabs/tabs";
 import { IDLE, withWake } from "../tabs/pageSession";
 import type { Tab, TabGroup } from "../browser/types";
 import { noteOpenTabsApplied } from "../telemetry/openTabSyncCounts";
-import { homeWindow, openWindows } from "./pinnedSyncState";
+import { homeWindow } from "./pinnedSyncState";
 import { localOpenTabs, syncedOpenTab } from "./openTabsLocal";
 import { OPEN_GROUP, OPEN_TAB, openGroupValue, openTabValue, type OpenGroupValue, type OpenTabValue } from "./openTabRecords";
+import { sameList } from "../../lib/lists";
+import { regularWindows } from "../windows/small";
 
 const store = () => useBrowser.getState();
 const MAX_GROUP_DEPTH = 32;
 
 const order = (a: string, z: string) => (a < z ? -1 : a > z ? 1 : 0);
-const sameList = (a: readonly string[], z: readonly string[]) => a.length === z.length && a.every((x, i) => x === z[i]);
 
 function synced(t: Tab, v: OpenTabValue): Tab {
   const unloaded = t.page.kind === "idle" || t.page.kind === "asleep";
@@ -38,7 +39,7 @@ function arrange(s: BrowserState, profileId: string, tabValues: Map<string, Open
   const windows = { ...s.windows };
   const touched: string[] = [];
   let edited = false;
-  for (const w of openWindows(s)) {
+  for (const w of regularWindows(s)) {
     const ranked = w.tabIds.filter((id) => {
       const t = s.tabs[id];
       return t?.profileId === profileId && syncedOpenTab(s, t, members) && tabValues.has(pinKeyOf(t));

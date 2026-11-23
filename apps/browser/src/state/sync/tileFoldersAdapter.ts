@@ -2,8 +2,9 @@ import type { Adapter, Extraction } from "../../platform/sync";
 import { tileFolderOf, withTileFolder } from "../pins/tileFolders";
 import type { Tab, TileFolder } from "../browser/types";
 import { PIN_TAB, FOLDER_NAME, syncedFolderId, syncedName, TILE_FOLDER, type FolderNameValue, type TileFolderValue } from "./pinRecords";
-import { commitPinnedEdit, homeWindow, openWindows, store, unpinnedRemotely, windowsHomeFirst } from "./pinnedSyncState";
+import { commitPinnedEdit, homeWindow, store, unpinnedRemotely, windowsHomeFirst } from "./pinnedSyncState";
 import { pinKeyOf, pinSection } from "../browser/model";
+import { regularWindows } from "../windows/small";
 
 const localFolders = new Map<string, Set<string>>();
 
@@ -61,7 +62,7 @@ export function tileFoldersAdapter(profileId: string): Adapter {
         return { id, name: name ?? (current?.id === id ? current.name : "") };
       };
       let tabs: Record<string, Tab> | null = null;
-      for (const w of openWindows(s)) {
+      for (const w of regularWindows(s)) {
         for (const id of w.tabIds) {
           const t = s.tabs[id];
           if (pinSection(t) !== "tile" || t!.profileId !== profileId) continue;

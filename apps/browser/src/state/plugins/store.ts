@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { PluginManifest, RowValue } from "../../lib/pluginManifest";
 import type { ConsentToken } from "../telemetry/choice";
 import type { OfficialPinned } from "../../platform/plugins";
+import { ownValue } from "../../lib/decode";
 
 export type PluginListing = {
   name: string;
@@ -86,9 +87,7 @@ export const usePlugins = create<PluginsStore>()(() => ({
 
 export const NO_RECORD: PluginRecord = { enabled: false, approved: null, values: {}, applied: {} };
 
-const ownRecord = (s: Pick<PluginsStore, "records">, name: string): PluginRecord | undefined => (Object.hasOwn(s.records, name) ? s.records[name] : undefined);
-
-export const recordOf = (s: Pick<PluginsStore, "records">, name: string): PluginRecord => ownRecord(s, name) ?? NO_RECORD;
+export const recordOf = (s: Pick<PluginsStore, "records">, name: string): PluginRecord => ownValue(s.records, name) ?? NO_RECORD;
 
 export const approvalMatches = (listing: Pick<PluginListing, "hash" | "legacyHash"> | undefined, approved: string | null | undefined): boolean =>
   !!approved && !!listing?.hash && (approved === listing.hash || (!!listing.legacyHash && approved === listing.legacyHash));
@@ -99,16 +98,16 @@ export const recordApproves = (listing: PluginListing | undefined, record: Plugi
 export const keepsInstalledFlag = (listing: PluginListing | undefined): boolean => !!listing?.official && !!listing.manifest?.alwaysOn;
 
 export function activeManifest(s: Pick<PluginsStore, "listings" | "records">, name: string): PluginManifest | null {
-  const listing = Object.hasOwn(s.listings, name) ? s.listings[name] : undefined;
-  const record = ownRecord(s, name);
+  const listing = ownValue(s.listings, name);
+  const record = ownValue(s.records, name);
   if (!listing?.manifest || !listing.hash || !record?.enabled || !recordApproves(listing, record)) return null;
   return listing.manifest;
 }
 
 export function consentListing(s: Pick<PluginsStore, "listings" | "candidates">, name: string, hash: string): PluginListing | undefined {
-  const candidate = Object.hasOwn(s.candidates, name) ? s.candidates[name] : undefined;
+  const candidate = ownValue(s.candidates, name);
   if (candidate?.hash === hash) return candidate;
-  return Object.hasOwn(s.listings, name) ? s.listings[name] : undefined;
+  return ownValue(s.listings, name);
 }
 
 export const webViewsOnline = (s: Pick<PluginsStore, "listings" | "records">, name: string): boolean => activeManifest(s, name)?.permissions.network === "*";
@@ -116,8 +115,8 @@ export const webViewsOnline = (s: Pick<PluginsStore, "listings" | "records">, na
 export const activeNames = (s: Pick<PluginsStore, "listings" | "records" | "order">) => s.order.filter((name) => activeManifest(s, name));
 
 export function needsReview(s: Pick<PluginsStore, "listings" | "records">, name: string): boolean {
-  const listing = Object.hasOwn(s.listings, name) ? s.listings[name] : undefined;
-  const record = ownRecord(s, name);
+  const listing = ownValue(s.listings, name);
+  const record = ownValue(s.records, name);
   return !!record?.enabled && !!listing?.hash && !recordApproves(listing, record);
 }
 

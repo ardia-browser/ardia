@@ -4,6 +4,7 @@ import { automationCommands, automationDecision, isCatalogCommand, variantsOf } 
 import { COMMANDS, LITTLE_ARDIA_PAGE_COMMANDS } from "../commands/commandCatalog";
 import { eligibleKind, isEligibleTab, lastFocusedEligibleWindow } from "./automationWindows";
 import { AUTOMATION_EVENTS, MIN_IDLE_SECONDS, NAMED_ONLY_EVENTS, type AutomationEventName } from "./eventNames";
+import { isFields } from "../../lib/decode";
 
 const PROTOCOL = 4;
 const MIN_CLIENT_PROTOCOL = 4;
@@ -22,8 +23,6 @@ export type Subscription = {
 };
 
 export const failure = (code: ErrorCode, message: string) => ({ error: { code, message } satisfies MethodError });
-
-const isFields = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 
 const MAX_ID_BYTES = 256;
 

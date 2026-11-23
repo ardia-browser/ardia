@@ -1,4 +1,5 @@
 import { deckLeading, deckPileScale, lerp, type DeckGeometry } from "./deckGeometry.ts";
+import { CARD_MOVE_RESPONSE, GLASS_FADE_MS } from "./sharedMotion.ts";
 
 export type PullTarget = {
   id: string;
@@ -27,8 +28,8 @@ export const DECK_PULL = {
   flickTravel: 16,
   back: 250,
   maxSpeed: 14,
-  landResponse: 0.15,
-  growResponse: 0.15,
+  landResponse: CARD_MOVE_RESPONSE,
+  growResponse: CARD_MOVE_RESPONSE,
   hurryResponse: 0.07,
   hurryLanding: 1 + 1e-6,
   settleEnergy: 1e-4,
@@ -41,7 +42,7 @@ export const DECK_PULL = {
   barClearance: 4,
   barReturnSlack: 8,
   fadeMs: 150,
-  barBackMs: 150,
+  barBackMs: GLASS_FADE_MS,
   barBackCapMs: 600,
   hitchMs: 50,
   growLostMs: 600,

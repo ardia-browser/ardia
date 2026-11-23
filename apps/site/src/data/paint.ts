@@ -19,6 +19,7 @@ export type BandName =
   | "dusk"
   | "plum"
   | "night"
+  | "latenight"
   | "midnight"
   | "midmorning"
   | "daylong"
@@ -36,6 +37,7 @@ export const BANDS: Record<BandName, Band> = {
   dusk: { stops: [["#e69b92", 0], ["#e09f91", 40], ["#dca0a3", 100]], dab: "var(--sun)" },
   plum: { stops: [["#4a3a69", 0], ["#473a68", 50], ["#433b68", 100]], dab: "var(--sun)" },
   night: { stops: [["#433b68", 0], ["#373d69", 40], ["#2c416c", 100]], dab: "var(--sun)" },
+  latenight: { stops: [["#2c416c", 0], ["#24365e", 45], ["#1d2b4c", 100]], dab: "var(--sun)" },
   midnight: { stops: [["#1d2b4c", 0], ["#121a2e", 40], ["#0d1424", 100]], dab: "var(--sun)" },
   midmorning: { stops: [["#e9ead8", 0], ["#f3e7cf", 40], ["#f2d39b", 100]], dab: "var(--forest)" },
   daylong: { stops: [["#e9ead8", 0], ["#f3e7cf", 22], ["#f2d39b", 70], ["#eab47f", 100]], dab: "var(--forest)" },

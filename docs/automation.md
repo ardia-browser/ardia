@@ -115,7 +115,7 @@ bookmark searches) and their fixed page title.
 - `workspace` `{"window"?, "profile"?, "usage"?}` and `apply` `{"ops": [...]}`: see Tabs and groups.
 - `offscreen` `{"tab"}` → `{"ok": true}`: takes a tab the ardia command opened, and that was never shown, out of
   its window and the sidebar into Ardia's automation window for that profile, where `ardia browse set viewport` may
-  size its page (`docs/cli.md` › Gated by the token policy). `refused` for the shown tab, one the command didn't
+  size its page (`docs/cli.md` › The engine's token connection). `refused` for the shown tab, one the command didn't
   open, one that has been shown, or a page Ardia couldn't move; `no_window` for an unknown or private tab. The tab
   never comes back: the command opens a new one to show the page.
 

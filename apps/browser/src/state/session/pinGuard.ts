@@ -3,7 +3,7 @@ import { isIncognitoProfile, pinKeyOf } from "../browser/model";
 import { parkWindowPins } from "../pins/parkedPins";
 import { isRegularWindow } from "../windows/small";
 import { isFields } from "../../lib/decode";
-import { readDocument, saveDocument } from "../../platform/documents";
+import { readDocument, documentExists, saveDocument } from "../../platform/documents";
 import type { ParkedPins } from "../browser/types";
 import { consentToken } from "../telemetry/client";
 import { noteSessionPinBackup, noteSessionPinBackupFailure } from "../telemetry/sessionWrites";
@@ -96,17 +96,27 @@ export const MAX_PIN_BACKUP_WAIT_MS = 60_000;
 
 export type PinCheck = { hold: false; commit: () => void } | { hold: true; againIn: number | null };
 export type PinGuard = ((s: PinState) => PinCheck) & { landing: () => Promise<void> | null };
-type Cover = { baseline: PinState; base: PinBackup[]; document: string; at: number; dropped: Map<string, number> };
+type Cover = { baseline: PinState; base: PinBackup[]; document: string | Promise<string>; at: number; dropped: Map<string, number> };
 
 const NOTHING: PinCheck = { hold: false, commit: () => {} };
 
 let besideCount = 0;
 
-function savedBackups(): { base: PinBackup[]; document: string } {
+function besideUnlessMissing(beside: string): string | Promise<string> {
+  const pick = (exists: boolean) => (exists ? beside : PINS_BACKUP_DOCUMENT);
+  try {
+    const exists = documentExists(PINS_BACKUP_DOCUMENT);
+    return typeof exists === "boolean" ? pick(exists) : exists.then(pick, () => beside);
+  } catch {
+    return beside;
+  }
+}
+
+function savedBackups(): { base: PinBackup[]; document: string | Promise<string> } {
   const beside = `pins-backup-${Date.now()}-${++besideCount}.json`;
   try {
     const json = readDocument(PINS_BACKUP_DOCUMENT);
-    if (!json) return { base: [], document: PINS_BACKUP_DOCUMENT };
+    if (!json) return { base: [], document: besideUnlessMissing(beside) };
     const raw: unknown = JSON.parse(json);
     return isFields(raw) && Array.isArray(raw.backups) ? { base: parsePinBackups(json), document: PINS_BACKUP_DOCUMENT } : { base: [], document: beside };
   } catch {
@@ -135,7 +145,9 @@ export function pinGuard(initial: PinState, saveAgain: (delay: number) => void):
     const consent = consentToken();
     let attempt: Promise<void>;
     try {
-      attempt = saveDocument(staged.document, coverJson(staged));
+      const json = coverJson(staged);
+      const { document } = staged;
+      attempt = typeof document === "string" ? saveDocument(document, json) : document.then((name) => saveDocument(staged.document = name, json));
     } catch (error) {
       attempt = Promise.reject(error);
     }
@@ -147,7 +159,7 @@ export function pinGuard(initial: PinState, saveAgain: (delay: number) => void):
         if (cover === staged) {
           const fresh = profiles.filter((p) => !landed.has(p));
           for (const p of fresh) landed.add(p);
-          if (fresh.length) noteSessionPinBackup(fresh.reduce((a, p) => a + (counts.get(p) ?? 0), 0), consent);
+          if (fresh.length) noteSessionPinBackup(fresh.reduce((a, p) => a + (counts.get(p) ?? 0), 0), consent, staged.document !== PINS_BACKUP_DOCUMENT);
         }
         saveAgain(0);
       },

@@ -1,4 +1,4 @@
-import { Platform, Text } from "react-native";
+import { Text } from "react-native";
 import * as Reanimated from "react-native-reanimated";
 import { act, type ReactTestRenderer } from "react-test-renderer";
 import { DeckBottomBar } from "../components/tabs/DeckBottomBar";
@@ -6,8 +6,6 @@ import { FullSheet, Sheet } from "../components/ui";
 import { FABRIC_CATCH_UP_MS, FabricCatchUp } from "../components/ui/FabricCatchUp";
 import { renderSurface, unmount } from "../../test/render/harness";
 
-const onAndroid = Platform.OS === "android" ? test : test.skip;
-const onIPhone = Platform.OS === "ios" ? test : test.skip;
 
 beforeEach(() => jest.useFakeTimers());
 afterEach(() => {
@@ -24,7 +22,7 @@ const containers = () => [
   { testID: "deckBarFabricCatchUp", node: <DeckBottomBar shown barCenterY={700} deckHeight={800} width={402} layout={{ span: { left: 24, right: 24 }, strip: null }} incognito={false} onQuery={() => undefined} /> },
 ];
 
-onAndroid("once a watched motion stops changing, the catch-up remounts its leaf one time, 120 ms after the last change, so Fabric learns where the moved controls are", () => {
+test("on both phones, once a watched motion stops changing, the catch-up remounts its leaf one time, 120 ms after the last change, so Fabric learns where the moved controls are", () => {
   const reactions: Array<(now: number, was: number | null) => void> = [];
   jest.spyOn(Reanimated, "useAnimatedReaction").mockImplementation((_prepare, react) => {
     reactions.push(react as (now: number, was: number | null) => void);
@@ -49,18 +47,10 @@ onAndroid("once a watched motion stops changing, the catch-up remounts its leaf 
   unmount(root);
 });
 
-onAndroid("the page menu's sheet, the full-height sheets and the deck's bottom bar each carry a catch-up while they're up", () => {
+test("on both phones, where Reanimated writes props straight to the views, the page menu's sheet, the full-height sheets and the deck's bottom bar each carry a catch-up while they're up", () => {
   for (const { testID, node } of containers()) {
     const root = renderSurface(node);
     expect(leaves(root, testID)).toHaveLength(1);
-    unmount(root);
-  }
-});
-
-onIPhone("iPhone draws no catch-up, since its animations already reach the shadow tree", () => {
-  for (const { testID, node } of containers()) {
-    const root = renderSurface(node);
-    expect(leaves(root, testID)).toHaveLength(0);
     unmount(root);
   }
 });

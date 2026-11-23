@@ -68,7 +68,7 @@ const usesPageA = [
   "fullscreen-pip", "autofill-suggestions", "images", "extension-surfaces", "frozen", "discard",
   "permission-prompt", "popup-blocked", "move-tab-slow-mount", "move-last-tab-slow-mount",
   "move-tab-closed-while-parked", "move-tab-to-window", "title-bar-close", "last-used-profile",
-  "webkit-tab", "webkit-move-tab", "webkit-zoom", "webkit-now-playing", "webkit-scroll", "webkit-js-reload",
+  "webkit-tab", "webkit-hidden-tab-uncovers", "webkit-move-tab", "webkit-zoom", "webkit-now-playing", "webkit-scroll", "webkit-js-reload",
   "window-close-before-reveal", "window-close-during-exit", "window-close-while-full-screen-restore-waits",
   "webkit-clearing-keeps-zoom", "webkit-private-session-ends-mid-transfer", "webkit-now-playing-frames",
   "page-view-calls", "tab-close-then-load", "tab-close-before-create", "tab-load-before-attach", "tab-create-interrupted-by-move", "tab-close-while-lent",
@@ -142,7 +142,7 @@ const attaching = argv[0] === "--attach";
 if (attaching) argv.shift();
 const keep = flag("--keep") || attaching;
 const audioOutputOf = (browserPid) => {
-  const utilities = execFileSync("ps", ["-A", "-ww", "-o", "ppid=,command="], { encoding: "utf8" }).split("\n")
+  const utilities = execFileSync("ps", ["-A", "-ww", "-o", "ppid=,command="], { encoding: "utf8", maxBuffer: 1 << 26 }).split("\n")
     .filter((line) => line.trim().split(/\s+/)[0] === String(browserPid) && line.includes("--type=utility"));
   if (!utilities.length) return null;
   return utilities.some((line) => line.includes(" --disable-audio-output")) ? "fake" : "speakers";
@@ -665,6 +665,36 @@ const openTab = async (url, title, background = false) => {
     await until("A shown", async () => (await state()).active === first.id);
   }
   return tab;
+};
+const captureWindow = (windowNumber, png) =>
+  execFileSync("/usr/bin/python3", ["-I", "-c", [
+    "import ctypes, ctypes.util, sys",
+    "cg = ctypes.cdll.LoadLibrary(ctypes.util.find_library('CoreGraphics'))",
+    "cf = ctypes.cdll.LoadLibrary(ctypes.util.find_library('CoreFoundation'))",
+    "io = ctypes.cdll.LoadLibrary('/System/Library/Frameworks/ImageIO.framework/ImageIO')",
+    "class R(ctypes.Structure): _fields_ = [(n, ctypes.c_double) for n in 'xywh']",
+    "cg.CGWindowListCreateImage.restype = ctypes.c_void_p",
+    "cg.CGWindowListCreateImage.argtypes = [R, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32]",
+    "image = cg.CGWindowListCreateImage(R(float('inf'), float('inf'), 0, 0), 8, int(sys.argv[1]), 1 | 8)",
+    "image or sys.exit('no image')",
+    "path = sys.argv[2].encode()",
+    "cf.CFURLCreateFromFileSystemRepresentation.restype = cf.CFStringCreateWithCString.restype = ctypes.c_void_p",
+    "cf.CFURLCreateFromFileSystemRepresentation.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_long, ctypes.c_bool]",
+    "cf.CFStringCreateWithCString.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_uint32]",
+    "io.CGImageDestinationCreateWithURL.restype = ctypes.c_void_p",
+    "io.CGImageDestinationCreateWithURL.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t, ctypes.c_void_p]",
+    "io.CGImageDestinationAddImage.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]",
+    "io.CGImageDestinationFinalize.argtypes = [ctypes.c_void_p]",
+    "url = cf.CFURLCreateFromFileSystemRepresentation(None, path, len(path), False)",
+    "dest = io.CGImageDestinationCreateWithURL(url, cf.CFStringCreateWithCString(None, b'public.png', 0x08000100), 1, None)",
+    "io.CGImageDestinationAddImage(dest, image, None)",
+    "io.CGImageDestinationFinalize(dest) or sys.exit('not written')",
+  ].join("\n"), String(windowNumber), png], { timeout: 20000 });
+const pngPixel = (png, fx, fy) => {
+  const [w, h] = execFileSync("ffprobe", ["-v", "error", "-show_entries", "stream=width,height", "-of", "csv=p=0", png], { encoding: "utf8" }).trim().split(",").map(Number);
+  const raw = execFileSync("ffmpeg", ["-loglevel", "error", "-i", png, "-f", "rawvideo", "-pix_fmt", "rgba", "-"], { maxBuffer: 1 << 28 });
+  const x = Math.round((w - 1) * fx), y = Math.round((h - 1) * fy);
+  return [...raw.subarray((y * w + x) * 4, (y * w + x) * 4 + 4)];
 };
 const closeTab = (id) => evalApp(`ac.store.getState().closeTab("${id}"); return true`);
 const shownAndMounted = async (id) => {
@@ -4112,30 +4142,6 @@ try {
       await pipByHand(tab.id);
       const shown = await until("the styled PiP window", async () => (await pipWindows())?.find((w) => w.video && w.styled && w.visible) ?? null, 5000);
       const pipAct = (action) => engine("tabs.devPictureInPictureAction", { action });
-      const captureWindow = (windowNumber, png) =>
-        execFileSync("/usr/bin/python3", ["-I", "-c", [
-          "import ctypes, ctypes.util, sys",
-          "cg = ctypes.cdll.LoadLibrary(ctypes.util.find_library('CoreGraphics'))",
-          "cf = ctypes.cdll.LoadLibrary(ctypes.util.find_library('CoreFoundation'))",
-          "io = ctypes.cdll.LoadLibrary('/System/Library/Frameworks/ImageIO.framework/ImageIO')",
-          "class R(ctypes.Structure): _fields_ = [(n, ctypes.c_double) for n in 'xywh']",
-          "cg.CGWindowListCreateImage.restype = ctypes.c_void_p",
-          "cg.CGWindowListCreateImage.argtypes = [R, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32]",
-          "image = cg.CGWindowListCreateImage(R(float('inf'), float('inf'), 0, 0), 8, int(sys.argv[1]), 1 | 8)",
-          "image or sys.exit('no image')",
-          "path = sys.argv[2].encode()",
-          "cf.CFURLCreateFromFileSystemRepresentation.restype = cf.CFStringCreateWithCString.restype = ctypes.c_void_p",
-          "cf.CFURLCreateFromFileSystemRepresentation.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_long, ctypes.c_bool]",
-          "cf.CFStringCreateWithCString.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_uint32]",
-          "io.CGImageDestinationCreateWithURL.restype = ctypes.c_void_p",
-          "io.CGImageDestinationCreateWithURL.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t, ctypes.c_void_p]",
-          "io.CGImageDestinationAddImage.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]",
-          "io.CGImageDestinationFinalize.argtypes = [ctypes.c_void_p]",
-          "url = cf.CFURLCreateFromFileSystemRepresentation(None, path, len(path), False)",
-          "dest = io.CGImageDestinationCreateWithURL(url, cf.CFStringCreateWithCString(None, b'public.png', 0x08000100), 1, None)",
-          "io.CGImageDestinationAddImage(dest, image, None)",
-          "io.CGImageDestinationFinalize(dest) or sys.exit('not written')",
-        ].join("\n"), String(windowNumber), png], { timeout: 20000 });
       const pixels = (png, scale) => {
         const [w, h] = execFileSync("ffprobe", ["-v", "error", "-show_entries", "stream=width,height", "-of", "csv=p=0", png], { encoding: "utf8" }).trim().split(",").map(Number);
         const raw = execFileSync("ffmpeg", ["-loglevel", "error", "-i", png, "-f", "rawvideo", "-pix_fmt", "rgba", "-"], { maxBuffer: 1 << 28 });
@@ -5790,6 +5796,49 @@ try {
       return { favicon: !!before.favicon, zoom, entries: entries?.length };
     } finally {
       await closeTab(id);
+      await evalApp(`ac.actions.switchToTab("${first.id}"); return true`);
+    }
+  });
+
+  await check("webkit-hidden-tab-uncovers", async () => {
+    const green = await openTab(`${base}/solid?c=00ff00&t=Green`, "Green");
+    let blue = null, red = null;
+    try {
+      blue = await webkitTab("/solid?c=0000ff&t=Blue", "Blue");
+      red = await webkitTab("/solid?c=ff0000&t=Red", "Red");
+      const windowNumber = await engine("tabs.devWindowNumber", { tabId: green.id });
+      const lit = (px, channel) => px[channel] >= 180 && px.slice(0, 3).every((v, i) => i === channel || v <= px[channel] * 0.6);
+      const shows = async (id, label, channel, expectedWebKitTabs) => {
+        await evalApp(`ac.actions.switchToTab(${q(id)}); return true`);
+        await until(`${label} shown`, async () => (await state()).active === id);
+        const png = join(scratch, `webkit-hidden-tab-uncovers-${label}.png`);
+        let seen = null;
+        await until(`${label} drawn in a capture`, async () => {
+          captureWindow(windowNumber, png);
+          seen = pngPixel(png, 0.7, 0.6);
+          return lit(seen, channel) || null;
+        }, 8000).catch(() => {
+          throw new Error(`${label} isn't on screen: the window shows ${JSON.stringify(seen)} where its page should be`);
+        });
+        let visibleWebKitTabs = -1;
+        await until(`${label} leaves ${expectedWebKitTabs} unhidden WebKitTab view(s)`, async () => {
+          const views = JSON.parse(await engine("windows.dev", { window: windowNumber, action: "tabviews" }));
+          visibleWebKitTabs = views.filter((v) => v.class.endsWith(".WebKitTab") || v.class === "WebKitTab").length;
+          return visibleWebKitTabs === expectedWebKitTabs;
+        }, 4000).catch(() => {
+          throw new Error(`${label} left ${visibleWebKitTabs} unhidden WebKitTab view(s), expected ${expectedWebKitTabs}`);
+        });
+        return seen;
+      };
+      const earlier = await shows(green.id, "the earlier Chromium tab", 1, 0);
+      const webkit = await shows(blue, "the earlier WebKit tab", 2, 1);
+      const later = await shows(red, "the later WebKit tab", 0, 1);
+      const back = await shows(green.id, "the Chromium tab again", 1, 0);
+      return { earlier, webkit, later, back };
+    } finally {
+      if (red) await closeTab(red);
+      if (blue) await closeTab(blue);
+      await closeTab(green.id);
       await evalApp(`ac.actions.switchToTab("${first.id}"); return true`);
     }
   });

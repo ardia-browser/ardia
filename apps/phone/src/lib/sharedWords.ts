@@ -30,6 +30,10 @@ export const pageWords = {
   untitledTab: actionWords.newTab,
 } as const;
 
+export const tabWords = {
+  notSaved: "Your latest tab changes aren't saved yet. Ardia keeps trying.",
+} as const;
+
 export const dismissWords = {
   done: "Done",
   cancel: "Cancel",

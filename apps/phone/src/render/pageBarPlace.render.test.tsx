@@ -39,7 +39,7 @@ test("in the original design the bar on screen takes this phone's rule: its cont
   const tab = currentTabs().open[0]!;
   const root = renderSurface(
     <DesignProvider design="original">
-      <BrowsingScreen tab={tab} />
+      <BrowsingScreen tabId={tab.id} />
     </DesignProvider>,
   );
   const bar = root.root.findAll((node) => node.type === BottomBar)[0]!;

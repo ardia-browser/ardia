@@ -13,6 +13,7 @@ import {
   snapshotIsCurrent,
   snapshotPage,
   storeNavigation,
+  type SnapshotTiming,
   storeTone,
   type PageEngineEvent,
   type PageState,
@@ -23,7 +24,7 @@ import { showOnboarding, useOnboarding } from "../onboarding/store";
 import { pageUi } from "../page/store";
 import { settingsNav } from "../settings/nav";
 import { refreshDefaultBrowser } from "../settings/defaultBrowser";
-import { forgetPosition, saveTabPosition, watchFrontScroll } from "./positions";
+import { forgetPosition, frontScrollCameToRest, saveTabPosition, watchFrontScroll } from "./positions";
 import { noteLocalChange, showSpace } from "../sync/store";
 import { spaceToShow, tabsInSpace } from "../tabs/spaces";
 import { currentPreferences, loadPreferences, setPreference } from "../settings/store";
@@ -38,7 +39,10 @@ import {
   closePrivateTabs,
   closeTabById,
   currentTabs,
+  flushTabWrites,
   loadTabs,
+  onTabWritesStalled,
+  tabWritesPending,
   openNewTab,
   reopenClosedTab,
   restoreArchivedTab,
@@ -56,6 +60,7 @@ import { copyText, pasteForGo } from "../../platform/system";
 import { pasteTap } from "../search/pasteRow";
 import { anyPicturePainted, noteSnapshotPageTop, noteSnapshotShown, pictureKey, picturePainted } from "../../lib/shownSnapshots";
 import { DECK_PULL } from "../../lib/deckPull";
+import { tabWords } from "../../lib/sharedWords";
 import { runOnUI } from "react-native-reanimated";
 import { showToast } from "../toasts/store";
 import { PRIVATE_PAGES_UNAVAILABLE, refuseIncognito } from "../tabs/privatePages";
@@ -74,9 +79,9 @@ import { syncOffered } from "../../platform/system";
 export type Surface = "start" | "browsing" | "deck";
 export type Sheet = "archive" | "spaces" | null;
 
-type BrowseState = { surface: Surface; sheet: Sheet; deckEntrance: string | null; frozenOrder: string[] | null; opening: string | null; openingCardWidth: number | null; veiled: string | null; covered: string | null; arriving: string | null; leaving: string | null };
+type BrowseState = { surface: Surface; sheet: Sheet; deckEntrance: string | null; frozenOrder: string[] | null; opening: string | null; openingCardWidth: number | null; veiled: string | null; covered: string | null; arriving: string | null; arrivalCover: string | null; openingCover: string | null; leaving: string | null };
 
-export const useBrowse = create<BrowseState>()(() => ({ surface: "start", sheet: null, deckEntrance: null, frozenOrder: null, opening: null, openingCardWidth: null, veiled: null, covered: null, arriving: null, leaving: null }));
+export const useBrowse = create<BrowseState>()(() => ({ surface: "start", sheet: null, deckEntrance: null, frozenOrder: null, opening: null, openingCardWidth: null, veiled: null, covered: null, arriving: null, arrivalCover: null, openingCover: null, leaving: null }));
 
 const lastVisits = new Map<string, Visit>();
 
@@ -100,12 +105,15 @@ export function startBrowser(beforeOpening: () => void = () => undefined) {
   archiveDueTabs();
   archiveTimer = setInterval(archiveDueTabs, AUTO_ARCHIVE_CHECK_MS);
   listenToPages(pageEvent);
-  watchFrontScroll(frontPageId, pictureScrolledOrQuietPage);
+  onTabWritesStalled(() => showToast(tabWords.notSaved, "warning"));
+  if (!SCROLL_REST_IS_REPORTED) watchFrontScroll(frontPageId, pictureScrolledOrQuietPage);
   if (!currentPreferences().hasFinishedOnboarding) showOnboarding();
   else if (currentPreferences().autoOpensKeyboard) presentSearch("home", "", useTabs.getState().incognito, null, "atRest");
 }
 
 let appActive = true;
+
+const SCROLL_REST_IS_REPORTED = Platform.OS === "ios";
 
 function frontPageId() {
   if (!appActive || useBrowse.getState().surface !== "browsing" || pageCovered()) return null;
@@ -132,6 +140,7 @@ const AUTO_ARCHIVE_CHECK_MS = 15 * 60_000;
 
 export function appBecameActive() {
   appActive = true;
+  if (tabWritesPending()) flushTabWrites();
   if (pruneExpiredArchive() > 0) loadArchive();
   if (archiveTimer) clearInterval(archiveTimer);
   archiveTimer = setInterval(archiveDueTabs, AUTO_ARCHIVE_CHECK_MS);
@@ -147,6 +156,7 @@ export function appWillResignActive() {
   archiveTimer = null;
   const selected = currentTabs().selectedId;
   if (selected) selectTabById(selected);
+  flushTabWrites();
   void savePageStates();
 }
 
@@ -222,7 +232,9 @@ export function beginOpeningTab(id: string, veiled = false, cardWidth: number | 
   setIncognito(isPrivateTab(currentTabs(), id));
   selectTabById(id);
   cancelArrivalWait();
-  useBrowse.setState({ opening: id, openingCardWidth: cardWidth, veiled: veiled ? id : null, covered: veiled ? id : null, arriving: null, leaving: null });
+  openingSeq += 1;
+  earlyCoverHides.delete(id);
+  useBrowse.setState({ opening: id, openingCardWidth: cardWidth, veiled: veiled ? id : null, covered: veiled ? id : null, openingCover: veiled ? `${OPENING_COVER_ID}-${openingSeq}` : null, arriving: null, leaving: null });
 }
 
 export function unveilOpeningPage(id: string) {
@@ -231,7 +243,36 @@ export function unveilOpeningPage(id: string) {
 
 const drawnWaiters = new Map<string, () => void>();
 
+const drawnPages = new Map<string, number | null>();
+
+export const notePageHosted = (id: string) => void drawnPages.delete(id);
+
+export const pageWasDrawn = (id: string) => drawnPages.has(id);
+
+export function documentWasDrawn(id: string) {
+  if (!drawnPages.has(id)) return false;
+  const drawn = drawnPages.get(id) ?? null;
+  const shown = pageNavigation(id)?.document;
+  return drawn === null || shown === undefined || drawn === shown;
+}
+
+const drawnListeners = new Map<string, Set<() => void>>();
+
+export function listenForPageDrawn(id: string, listener: () => void): () => void {
+  const listeners = drawnListeners.get(id) ?? new Set<() => void>();
+  listeners.add(listener);
+  drawnListeners.set(id, listeners);
+  return () => {
+    listeners.delete(listener);
+    if (!listeners.size && drawnListeners.get(id) === listeners) drawnListeners.delete(id);
+  };
+}
+
 export function whenPageDrawn(id: string, capMs: number, then: (drawn: boolean) => void): () => void {
+  if (drawnPages.has(id)) {
+    then(true);
+    return () => undefined;
+  }
   let called = false;
   const stop = () => {
     called = true;
@@ -249,7 +290,11 @@ export function whenPageDrawn(id: string, capMs: number, then: (drawn: boolean) 
   return stop;
 }
 
-export const pageDrawn = (id: string) => drawnWaiters.get(id)?.();
+export function pageDrawn(id: string, document?: number) {
+  drawnPages.set(id, document ?? null);
+  drawnWaiters.get(id)?.();
+  for (const listener of [...(drawnListeners.get(id) ?? [])]) listener();
+}
 
 export const OPENING_COVER_ID = "openingCover";
 
@@ -257,26 +302,59 @@ export const ARRIVAL_COVER_ID = "pagerArrivalCover";
 
 export type CoverHidden = "drawn" | "cap" | "lost";
 
-const coverWaiters = new Map<string, (reason: CoverHidden) => void>();
+type CoverWaiter = { cover: string | null; hidden: (reason: CoverHidden) => void };
 
-export function whenPageCoverHidden(id: string, capMs: number, then: (reason: CoverHidden) => void): () => void {
+const coverWaiters = new Map<string, CoverWaiter>();
+
+export function whenPageCoverHidden(id: string, capMs: number, then: (reason: CoverHidden) => void, cover: string | null = null): () => void {
+  const early = earlyCoverHides.get(id);
+  if (early && coverMatches(cover, early.cover, early.found)) {
+    earlyCoverHides.delete(id);
+    then(early.reason);
+    return () => undefined;
+  }
   let called = false;
   const stop = () => {
     called = true;
     clearTimeout(cap);
-    if (coverWaiters.get(id) === hidden) coverWaiters.delete(id);
+    if (coverWaiters.get(id) === waiter) coverWaiters.delete(id);
   };
   const hidden = (reason: CoverHidden) => {
     if (called) return;
     stop();
     then(reason);
   };
+  const waiter: CoverWaiter = { cover, hidden };
   const cap = setTimeout(() => hidden("lost"), capMs);
-  coverWaiters.set(id, hidden);
+  coverWaiters.set(id, waiter);
   return stop;
 }
 
-export const pageCoverHidden = (id: string, reason: "drawn" | "cap") => coverWaiters.get(id)?.(reason);
+const COVER_ACK_NEEDS_ID = Platform.OS === "ios";
+
+type EarlyCoverHide = { cover: string | undefined; reason: "drawn" | "cap"; found: boolean };
+
+const earlyCoverHides = new Map<string, EarlyCoverHide>();
+
+function coverMatches(expected: string | null, cover: string | undefined, found: boolean) {
+  if (expected === null) return true;
+  if (COVER_ACK_NEEDS_ID) return cover === expected && found;
+  return cover === undefined || cover === expected;
+}
+
+export function pageCoverHidden(id: string, reason: "drawn" | "cap", cover?: string, found = true) {
+  const waiter = coverWaiters.get(id);
+  if (!waiter) {
+    earlyCoverHides.set(id, { cover, reason, found });
+    return;
+  }
+  if (!coverMatches(waiter.cover, cover, found)) return;
+  waiter.hidden(reason);
+}
+
+let openingSeq = 0;
+
+let arrivalSeq = 0;
 
 const laidOutWaiters = new Map<string, (laidOut: boolean) => void>();
 
@@ -431,7 +509,7 @@ export function keepFrontPictureCurrent() {
   if (!id || useBrowse.getState().surface !== "browsing" || deckPullInFlight() || deckPullGrowing() !== null) return;
   if (!coverIsCapturable(loading.get(id) === false, pageCovered()) || !snapshotAllowed(id) || pictureIsCurrent(id)) return;
   labTrace(`PAGELAB snapshot ${id} taken while the page is quiet`);
-  void captureSnapshot(id);
+  void captureSnapshot(id, null, false, "quiet");
 }
 
 function latchDeckCapture(id: string, covered: boolean, pageTop: number | null, afterMotion: boolean) {
@@ -682,7 +760,7 @@ export const openSpaces = () => {
 };
 
 export function reopenArchived(tab: BrowserTab) {
-  restoreArchivedTab(tab);
+  if (!restoreArchivedTab(tab)) return;
   openTab(tab.id);
 }
 
@@ -721,11 +799,21 @@ export function arriveAtNeighbour(id: string) {
   cancelArrivalWait();
   useBrowse.setState({ frozenOrder: order });
   openTab(id);
-  useBrowse.setState({ covered: id, arriving: id });
-  stopArrivalWait = whenPageCoverHidden(id, ARRIVAL_COVER_LOST_MS, () => {
-    stopArrivalWait = null;
-    if (useBrowse.getState().arriving === id) useBrowse.setState({ arriving: null, covered: useBrowse.getState().covered === id ? null : useBrowse.getState().covered });
-  });
+  arrivalSeq += 1;
+  earlyCoverHides.delete(id);
+  const cover = `${ARRIVAL_COVER_ID}-${arrivalSeq}`;
+  useBrowse.setState({ covered: id, arriving: id, arrivalCover: cover });
+  stopArrivalWait = whenPageCoverHidden(
+    id,
+    ARRIVAL_COVER_LOST_MS,
+    (reason) => {
+      stopArrivalWait = null;
+      if (COVER_ACK_NEEDS_ID && reason !== "drawn" && !isPrivateTab(currentTabs(), id) && !useTabs.getState().incognito) countUsage("page_covers_capped");
+      const now = useBrowse.getState();
+      if (now.arriving === id && now.arrivalCover === cover) useBrowse.setState({ arriving: null, arrivalCover: null, covered: now.covered === id ? null : now.covered });
+    },
+    cover,
+  );
   noteTabSwiped(from, id);
 }
 
@@ -781,6 +869,7 @@ function pageEvent(event: PageEngineEvent) {
   else if (event.name === "page.state" && currentTabs().selectedId !== event.pageId) backgroundPageState(event.pageId, event.state);
   else if (event.name === "page.closeRequested") closeTabById(event.pageId);
   else if (event.name === "page.snapshotLanded") snapshotLanded(event.pageId, event.uri, event.generation);
+  else if (event.name === "page.scrollSettled") frontScrollCameToRest(event.pageId, event.y, frontPageId(), pictureScrolledOrQuietPage);
 }
 
 const loading = new Map<string, boolean>();
@@ -800,10 +889,23 @@ export function captureCurrentCover() {
   void captureSnapshot(id);
 }
 
-export async function captureSnapshot(id: string, pageTop: number | null = null, latched = false): Promise<boolean> {
+const exactCaptureStarted = new Map<string, number>();
+const publishedCaptureStarted = new Map<string, number>();
+let captureClock = 0;
+
+const captureIsStale = (id: string, startedAt: number, timing: SnapshotTiming) =>
+  (publishedCaptureStarted.get(id) ?? 0) > startedAt || (timing === "quiet" && (exactCaptureStarted.get(id) ?? 0) > startedAt);
+
+export async function captureSnapshot(id: string, pageTop: number | null = null, latched = false, timing: SnapshotTiming = "now"): Promise<boolean> {
   if (!latched && !snapshotAllowed(id)) return false;
   const countable = pictureCountable(id);
-  const taken = await snapshotPage(id, !latched);
+  const startedAt = ++captureClock;
+  if (timing === "now") exactCaptureStarted.set(id, startedAt);
+  const taken = await snapshotPage(id, !latched, timing);
+  if (captureIsStale(id, startedAt, timing)) {
+    labTrace(`PAGELAB snapshot ${id} dropped, a newer one was taken after it`);
+    return false;
+  }
   const counts = countable && pictureCountable(id);
   if (taken && isRefusedSnapshot(taken)) {
     pictureRefused(id, taken.refused, counts);
@@ -818,6 +920,7 @@ export async function captureSnapshot(id: string, pageTop: number | null = null,
   const tab = snapshot ? findTab(currentTabs(), id) : null;
   if (!snapshot || !tab) return false;
   const step = pictureCaptured(tab, snapshot.uri, snapshot.durable !== false, snapshot.generation);
+  if (step) publishedCaptureStarted.set(id, startedAt);
   if (step && tab.snapshotFileName !== step.show) {
     updateTabById(id, { snapshotFileName: step.show });
     showHiddenDeckThePicture(id);
@@ -888,7 +991,7 @@ function scheduleSnapshot(id: string, tries = SNAPSHOT_RETRIES) {
       if (!findTab(currentTabs(), id)) return;
       const selected = currentTabs().selectedId === id;
       if (selected && useBrowse.getState().surface !== "browsing") return;
-      if (snapshotAllowed(id)) void captureSnapshot(id);
+      if (snapshotAllowed(id)) void captureSnapshot(id, null, false, "quiet");
       else if (tries > 0) scheduleSnapshot(id, tries - 1);
     }, SNAPSHOT_SETTLE_MS),
   );
@@ -965,11 +1068,14 @@ useTabs.subscribe((tabs) => {
     hidesFromRecents = hides;
     void settled(() => setHidesFromRecents(hides), false);
   }
+  for (const id of drawnPages.keys()) if (!findTab(tabs, id)) drawnPages.delete(id);
   for (const id of [...lastVisits.keys(), ...loading.keys()]) {
     if (findTab(tabs, id)) continue;
     lastVisits.delete(id);
     loading.delete(id);
     forgetPosition(id);
+    exactCaptureStarted.delete(id);
+    publishedCaptureStarted.delete(id);
     clearTimeout(snapshotTimers.get(id));
     snapshotTimers.delete(id);
   }

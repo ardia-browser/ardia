@@ -1,5 +1,6 @@
 import ArdiaDesign
 import ExpoModulesCore
+import GameController
 import QuartzCore
 import SwiftUI
 import UIKit
@@ -35,6 +36,7 @@ final class SearchStageView: ExpoView {
   let onLift = EventDispatcher()
   let onReveal = EventDispatcher()
   let onSettled = EventDispatcher()
+  let onLanding = EventDispatcher()
 
   var shownProp = false
   private var appliedShown = false
@@ -56,44 +58,51 @@ final class SearchStageView: ExpoView {
   var corners = StageCorners()
   var cardPlace = StageCardPlace()
 
-  private let keyboardSentinel = UIView()
+  let keyboardSentinel = UIView()
   private var keyboard: StageKeyboardTracker?
   private var keyboardHeight: CGFloat = 0
   private(set) var reduceMotion = UIAccessibility.isReduceMotionEnabled
 
   private(set) var isShown = false
-  private(set) var isClosing = false
+  var isClosing = false
   private var isDeparting = false
   private var hasLanded = false
   private var isHoldingLift = false
   private var heldLift: CGFloat?
   private var dragOffset: CGFloat = 0
-  private var releaseVelocity: CGFloat = 0
+  var releaseVelocity: CGFloat = 0
   private var revealsContents = true
   private var hasRevealed = false
-  private var reportedLift: (lift: CGFloat, up: Bool)?
-  private var face: StageFace?
+  private var reportedLift: (lift: CGFloat, up: Bool, predicted: Bool)?
+  var face: StageFace?
   private var emergence: StageEmergence?
-  private var morph: StageMorph?
-  private var fadingMorph: StageMorph?
-  private var pendingFlight: CGFloat?
-  private var pendingFallback: Task<Void, Never>?
+  var morph: StageMorph?
+  var fadingMorph: StageMorph?
+  var pendingFlight: CGFloat?
+  var pendingFallback: Task<Void, Never>?
   private var landingTask: Task<Void, Never>?
   private var releaseTask: Task<Void, Never>?
-  private var settleTask: Task<Void, Never>?
+  var settleTask: Task<Void, Never>?
+  var arrivalTask: Task<Void, Never>?
+  var settledReported = false
   private var revealDeadline: Task<Void, Never>?
   private var revealHold: Task<Void, Never>?
   private var revealLink: CADisplayLink?
   private var rise: UIViewPropertyAnimator?
+  private var anticipatedLift: CGFloat?
+  var closingPath = "none"
+  private var anticipationTask: Task<Void, Never>?
+  private static var keyboardMemory: StageKeyboardMemory?
 
   private static let keyboardThreshold: CGFloat = 120
-  private static let keyboardWait: Duration = .milliseconds(220)
-  private static let keyboardGrace: Duration = .milliseconds(50)
+  static let keyboardGrace: Duration = .milliseconds(50)
+  private static let keyboardAnticipation: Duration = .milliseconds(600)
+  static let landingLead: TimeInterval = 0.05
   private static let contentDeadline: Duration = .milliseconds(250)
   private static let contentCap: Duration = .milliseconds(750)
-  private static let settlePoll: Duration = .milliseconds(16)
-  private static let settleDeadline: Duration = .milliseconds(1500)
-  private static let stillReleaseSpeed: CGFloat = 1
+  static let settlePoll: Duration = .milliseconds(16)
+  static let settleDeadline: Duration = .milliseconds(1500)
+  static let stillReleaseSpeed: CGFloat = 1
   private static let commandBarTuckedScale: CGFloat = 0.96
 
   required init(appContext: AppContext? = nil) {
@@ -118,7 +127,7 @@ final class SearchStageView: ExpoView {
       return
     }
     guard keyboard == nil else { return }
-    let tracker = StageKeyboardTracker(minimumHeight: Self.keyboardThreshold) { [weak self] height in self?.keyboardWillMove(to: height) }
+    let tracker = StageKeyboardTracker(minimumHeight: Self.keyboardThreshold, onMove: { [weak self] move in self?.keyboardWillMove(move) }, onUnchanged: { [weak self] height in self?.keyboardStayed(at: height) })
     tracker.start()
     keyboard = tracker
   }
@@ -131,9 +140,11 @@ final class SearchStageView: ExpoView {
 
   private func tearDown() {
     releaseStartWaiters()
+    stopAnticipating()
     landingTask?.cancel()
     releaseTask?.cancel()
     settleTask?.cancel()
+    arrivalTask?.cancel()
     revealHold?.cancel()
     stopWaitingForContent()
     cancelPendingFlight()
@@ -153,7 +164,7 @@ final class SearchStageView: ExpoView {
     reduceMotion = UIAccessibility.isReduceMotionEnabled
   }
 
-  private var panel: SearchStagePanelView? {
+  var panel: SearchStagePanelView? {
     subviews.lazy.compactMap { $0 as? SearchStagePanelView }.first
   }
 
@@ -186,7 +197,7 @@ final class SearchStageView: ExpoView {
     }
   }
 
-  private var keyboardUp: Bool { keyboardHeight > 0 }
+  var keyboardUp: Bool { keyboardHeight > 0 }
   private var trayHeight: CGFloat { panel?.bounds.height ?? 0 }
   private var isCommandBar: Bool { commandTop != nil }
   private var isUp: Bool { keyboardUp || (!isClosing && hasLanded) }
@@ -195,10 +206,16 @@ final class SearchStageView: ExpoView {
 
   private var liveLift: CGFloat {
     let restsWithoutKeyboard = hasLanded && !keyboardUp && !isClosing
-    return restsWithoutKeyboard ? max(keyboardHeight, safeBottom) : keyboardHeight
+    return restsWithoutKeyboard ? max(anticipatedLift ?? keyboardHeight, safeBottom) : keyboardHeight
   }
 
-  private var card: CGRect {
+  private func stopAnticipating() {
+    anticipationTask?.cancel()
+    anticipationTask = nil
+    anticipatedLift = nil
+  }
+
+  var card: CGRect {
     CGRect(x: cardPlace.cardInset, y: 0, width: (panel?.bounds.width ?? 0) - 2 * cardPlace.cardInset, height: max(trayHeight - cardPlace.cardGap, 0))
   }
 
@@ -239,6 +256,8 @@ final class SearchStageView: ExpoView {
     landingTask?.cancel()
     releaseTask?.cancel()
     settleTask?.cancel()
+    arrivalTask?.cancel()
+    stopAnticipating()
     dropMorph()
     endEmergence()
     let anchor = resolveAnchor()
@@ -262,6 +281,7 @@ final class SearchStageView: ExpoView {
     focusPending = focusNativeId != nil
     startWaitingForContent()
     startIfLaidOut()
+    DispatchQueue.main.async { [weak self] in self?.startIfLaidOut() }
   }
 
   private func startIfLaidOut() {
@@ -277,11 +297,51 @@ final class SearchStageView: ExpoView {
     focusField()
     releaseStartWaiters()
     guard !hasLanded else { return }
-    landingTask = Task { [weak self] in
-      try? await Task.sleep(for: Self.keyboardWait)
-      guard let self, !Task.isCancelled, isShown, !isClosing, !hasLanded else { return }
-      rise = move(.timing(reduceMotion ? Motion.stageReduced : Motion.riseCurve)) { [self] in self.hasLanded = true }
+    if focusNativeId != nil, !isCommandBar, let predicted = predictedKeyboardHeight {
+      anticipatedLift = predicted
+      anticipationTask = Task { [weak self] in
+        try? await Task.sleep(for: Self.keyboardAnticipation)
+        guard let self, !Task.isCancelled, self.isShown, !self.isClosing, self.anticipatedLift != nil, !self.keyboardUp else { return }
+        self.settleWithoutKeyboard()
+      }
     }
+    rise = move(.timing(reduceMotion ? Motion.stageReduced : Motion.riseCurve)) { [self] in self.hasLanded = true }
+  }
+
+  private var keyboardGeometry: StageKeyboardGeometry? {
+    guard let window, let scene = window.windowScene else { return nil }
+    return StageKeyboardGeometry(window: ObjectIdentifier(window), windowSize: window.bounds.size, orientation: scene.effectiveGeometry.interfaceOrientation)
+  }
+
+  private var predictedKeyboardHeight: CGFloat? {
+    guard GCKeyboard.coalesced == nil, let memory = Self.keyboardMemory, let geometry = keyboardGeometry, memory.geometry == geometry else { return nil }
+    return memory.height
+  }
+
+  private func stopRise() {
+    if let rise, rise.isRunning {
+      UIView.performWithoutAnimation { rise.stopAnimation(true) }
+    }
+    rise = nil
+  }
+
+  private func settleWithoutKeyboard() {
+    anticipationTask?.cancel()
+    anticipationTask = nil
+    guard anticipatedLift != nil else { return }
+    stopRise()
+    move(.spring(Motion.smoothSpring, velocity: 0)) { [self] in self.anticipatedLift = nil }
+  }
+
+  private func keyboardStayed(at height: CGFloat) {
+    guard window != nil, height == 0, isShown, !isClosing, anticipatedLift != nil else { return }
+    if searchFieldFocused { Self.keyboardMemory = nil }
+    settleWithoutKeyboard()
+  }
+
+  private var searchFieldFocused: Bool {
+    guard let id = focusNativeId, let field = Self.find(nativeId: id, in: self) as? CompletingFieldView else { return false }
+    return field.field.isFirstResponder
   }
 
   func holdLift() {
@@ -299,6 +359,9 @@ final class SearchStageView: ExpoView {
 
   func close(_ exit: Exit, velocity: CGFloat) {
     guard isShown, !isClosing else { return }
+    settledReported = false
+    if anticipatedLift != nil, !keyboardUp { heldLift = heldLift ?? liveLift }
+    stopAnticipating()
     landingTask?.cancel()
     releaseTask?.cancel()
     foldDragIntoStage()
@@ -306,6 +369,7 @@ final class SearchStageView: ExpoView {
     defer { releaseVelocity = 0 }
     let shownSurface = emergence.flatMap { emergence in panel.map { emergence.shownSurface(of: $0, card: card, in: self) } }
     endEmergence()
+    closingPath = exit.rawValue
     if exit == .morph, !reduceMotion, !isCommandBar {
       beginMorph(from: shownSurface)
     } else if exit == .depart, !reduceMotion {
@@ -326,14 +390,19 @@ final class SearchStageView: ExpoView {
         if slidesOut { dragOffset = max(dragOffset, travel) }
       }
     }
+    if exit == .morph, reduceMotion || isCommandBar { reportLanding(false, path: "morphSkipped") }
+    if PhoneTestBuild.isOn { traceOverAnchor("close \(exit.rawValue)") }
     watchSettling()
   }
 
   func finish() {
+    if PhoneTestBuild.isOn { traceOverAnchor("finish") }
     releaseStartWaiters()
+    stopAnticipating()
     landingTask?.cancel()
     releaseTask?.cancel()
     settleTask?.cancel()
+    arrivalTask?.cancel()
     stopWaitingForContent()
     handOffMorph()
     endEmergence()
@@ -361,104 +430,32 @@ final class SearchStageView: ExpoView {
     CATransaction.commit()
   }
 
-  private func watchSettling() {
-    settleTask?.cancel()
-    settleTask = Task { [weak self] in
-      guard let self else { return }
-      guard await StageSettlePoll.until(every: Self.settlePoll, within: Self.settleDeadline, { self.hasSettled }), isClosing else { return }
-      onSettled(["landed": morph?.hasDestination == true])
-    }
-  }
-
-  private func keyboardWillMove(to height: CGFloat) {
+  private func keyboardWillMove(_ move: StageKeyboardMove) {
     guard window != nil else { return }
+    let height = move.height
+    if height > 0, isShown, !isClosing, searchFieldFocused, let geometry = keyboardGeometry { Self.keyboardMemory = StageKeyboardMemory(height: height, geometry: geometry) }
+    stopAnticipating()
     keyboardHeight = height
     if isShown, keyboardUp, !isClosing, !hasLanded {
       landingTask?.cancel()
       hasLanded = true
     }
-    if let rise, rise.isRunning {
-      UIView.performWithoutAnimation { rise.stopAnimation(true) }
-    }
-    rise = nil
+    stopRise()
     if !isHoldingLift, let held = heldLift, abs(liveLift - held) < 2 {
       heldLift = nil
     }
-    keyboardSentinel.center.y = height
-    place()
-    if let velocity = pendingFlight, !keyboardUp { flyMorph(velocity: velocity) }
-  }
-
-  private func beginMorph(from shownSurface: StageMorph.Start?) {
-    guard let panel else { return }
-    morph = StageMorph(card: card, fieldCenter: fieldCenter, corners: corners, of: panel, in: self, look: look, from: shownSurface)
-    move(.immediate) { [self] in
-      isClosing = true
-      if !keyboardUp { morph?.appear() }
-    }
-    pendingFlight = releaseVelocity
-    DispatchQueue.main.async { [weak self] in self?.launchMorph() }
-  }
-
-  private func launchMorph() {
-    guard let velocity = pendingFlight else { return }
-    guard keyboardUp else {
-      flyMorph(velocity: velocity)
-      return
-    }
-    pendingFallback?.cancel()
-    pendingFallback = Task { [weak self] in
-      try? await Task.sleep(for: Self.keyboardGrace)
-      guard let self, !Task.isCancelled, let velocity = pendingFlight else { return }
-      flyMorph(velocity: velocity)
-    }
-  }
-
-  private func flyMorph(velocity: CGFloat) {
-    cancelPendingFlight()
-    guard let morph else { return }
-    guard let anchor = resolveAnchor() else {
-      morph.vanish()
-      hidePanelUnderMorph()
-      return
-    }
-    let target = convert(anchor.frame, from: nil)
-    if let panel { morph.restart(fromCard: card, of: panel, in: self) }
-    let carried = face.flatMap { $0.fits(anchor) ? $0 : nil }
-    if abs(velocity) < Self.stillReleaseSpeed, let clock = StageKeyboardClock(layer: keyboardSentinel.layer) {
-      morph.fly(to: target, style: anchor.style, carrying: carried, timing: clock.timing, duration: clock.duration, direct: landsDirectly)
+    if move.duration > 0 {
+      UIView.animate(withDuration: move.duration, delay: 0, options: [UIView.AnimationOptions(rawValue: move.curve << 16), .beginFromCurrentState, .allowUserInteraction], animations: { [self] in
+        self.keyboardSentinel.center.y = height
+        self.place()
+      })
     } else {
-      let distance = target.midY - morph.view.frame.midY
-      let timing = Motion.smoothSpring.stageTimingParameters(initialVelocity: Motion.relativeVelocity(velocity, over: distance))
-      morph.fly(to: target, style: anchor.style, carrying: carried, timing: timing, duration: Motion.smoothSpring.settlingDuration, direct: landsDirectly)
+      UIView.performWithoutAnimation {
+        self.keyboardSentinel.center.y = height
+        self.place()
+      }
     }
-    hidePanelUnderMorph()
-  }
-
-  private func cancelPendingFlight() {
-    pendingFallback?.cancel()
-    pendingFallback = nil
-    pendingFlight = nil
-  }
-
-  private func hidePanelUnderMorph() {
-    UIView.performWithoutAnimation { panel?.alpha = 0 }
-  }
-
-  private func handOffMorph() {
-    cancelPendingFlight()
-    fadingMorph?.remove()
-    fadingMorph = morph
-    morph?.handOff()
-    morph = nil
-  }
-
-  private func dropMorph() {
-    cancelPendingFlight()
-    morph?.remove()
-    morph = nil
-    fadingMorph?.remove()
-    fadingMorph = nil
+    if let velocity = pendingFlight, !keyboardUp { flyMorph(velocity: velocity) }
   }
 
   private func endEmergence() {
@@ -532,14 +529,14 @@ final class SearchStageView: ExpoView {
     }
   }
 
-  private enum Curve {
+  enum Curve {
     case immediate
     case spring(Spring, velocity: CGFloat)
     case timing(ArdiaDesign.MotionCurve)
   }
 
   @discardableResult
-  private func move(_ curve: Curve, _ changes: @escaping () -> Void) -> UIViewPropertyAnimator? {
+  func move(_ curve: Curve, _ changes: @escaping () -> Void) -> UIViewPropertyAnimator? {
     switch curve {
     case .immediate:
       UIView.performWithoutAnimation {
@@ -579,9 +576,10 @@ final class SearchStageView: ExpoView {
     accessibilityViewIsModal = isShown
     panel.accessibilityViewIsModal = isShown
     let up = isShown && isUp
-    if reportedLift?.lift != lift || reportedLift?.up != up {
-      reportedLift = (lift, up)
-      onLift(["lift": lift, "up": up])
+    let predicted = anticipatedLift != nil && !keyboardUp
+    if reportedLift?.lift != lift || reportedLift?.up != up || reportedLift?.predicted != predicted {
+      reportedLift = (lift, up, predicted)
+      onLift(["lift": lift, "up": up, "predicted": predicted])
     }
   }
 

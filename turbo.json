@@ -36,6 +36,18 @@
         "^build"
       ]
     },
+    "@ardia/hostapi#test": {
+      "dependsOn": [
+        "^build"
+      ],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/ardiacore/src/engine/**",
+        "$TURBO_ROOT$/packages/ardiacore/ios/*Module.swift",
+        "$TURBO_ROOT$/engine/ardiacore-linux/src/ardia/linux/ac_linux_contract.h",
+        "$TURBO_ROOT$/packages/expo-windows/src/engine/domains/forwarded.json"
+      ]
+    },
     "test:portable": {
       "dependsOn": [
         "^build"

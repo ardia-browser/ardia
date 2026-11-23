@@ -8,7 +8,7 @@ with ABSOLUTELY NO WARRANTY; see sections 15 and 16 of LICENSE.
 Ardia's own source files are licensed under the Apache License, Version 2.0 (see LICENSE.Apache-2.0). Apache-2.0 code
 may be combined into a GPL-3.0 work, so they keep that licence on their own.
 
-Corresponding Source: every release's notes on GitHub (https://github.com/mantrakp04/ardia/releases) link the
+Corresponding Source: every release's notes on GitHub (https://github.com/ardia-browser/ardia/releases) link the
 repository at that release's tag, with the engine's patch series and build scripts (engine/, docs/engine-build.md),
 and the release's ArdiaCore-<tree>-source.tar.xz, which holds the Helium sources the engine was built from and says
 where Chromium's source is.

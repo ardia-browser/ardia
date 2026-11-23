@@ -1,5 +1,6 @@
 import ArdiaBrowser
 import ExpoModulesCore
+import QuartzCore
 import UIKit
 import WebKit
 
@@ -14,6 +15,7 @@ struct SnapshotOptionsRecord: Record {
   @Field var maxWidth: Int? = nil
   @Field var quality: Int? = nil
   @Field var coveredInsets: [Double]? = nil
+  @Field var quiet: Bool = false
 }
 
 struct RequestAnswerRecord: Record {
@@ -28,6 +30,8 @@ public final class PageViewModule: Module {
     Name("ArdiaPhonePageView")
 
     Constant("obscuresInsets") { true }
+
+    Constant("reportsDrawn") { true }
 
     Events("onPageEngineEvent")
 
@@ -130,15 +134,20 @@ public final class PageViewModule: Module {
     }.runOnQueue(.main)
 
     AsyncFunction("endFind") { (pageID: String, promise: Promise) in
-      Self.main(promise) { await PhonePages.shared.endFind(pageID) }
+      Self.main(promise) {
+        FindPresentation.cancel(for: pageID)
+        await PhonePages.shared.endFind(pageID)
+      }
     }.runOnQueue(.main)
 
     AsyncFunction("presentSystemFind") { (pageID: String, text: String?) -> Bool in
       MainActor.assumeIsolated {
-        guard let page = PhonePages.shared.page(pageID), let interaction = page.webView?.findInteraction else { return false }
+        FindPresentation.current?.cancel()
+        guard let page = PhonePages.shared.page(pageID), let webView = page.webView, let interaction = webView.findInteraction else { return false }
         if let text { interaction.searchText = text }
         page.presentFindInPage()
-        return true
+        if !interaction.isFindNavigatorVisible { FindPresentation(pageID: pageID, webView: webView, interaction: interaction, generation: page.navigationGeneration).watch() }
+        return interaction.isFindNavigatorVisible
       }
     }.runOnQueue(.main)
 
@@ -183,6 +192,10 @@ public final class PageViewModule: Module {
       MainActor.assumeIsolated { PhonePages.shared.print(pageID) }
     }.runOnQueue(.main)
 
+    AsyncFunction("sharePage") { (pageID: String, address: String, title: String, promise: Promise) in
+      PageViewModule.main(promise) { await PhonePages.shared.share(pageID, address: address, title: title) }
+    }.runOnQueue(.main)
+
     AsyncFunction("translation") { () -> [String: Any?] in
       MainActor.assumeIsolated { PhonePages.shared.translation() }
     }.runOnQueue(.main)
@@ -224,7 +237,7 @@ public final class PageViewModule: Module {
     }.runOnQueue(.main)
 
     AsyncFunction("snapshot") { (pageID: String, options: SnapshotOptionsRecord, promise: Promise) in
-      Self.main(promise) { try await PhonePages.shared.snapshot(pageID, maxWidth: options.maxWidth, quality: options.quality) }
+      Self.main(promise) { try await PhonePages.shared.snapshot(pageID, maxWidth: options.maxWidth, quality: options.quality, quiet: options.quiet) }
     }.runOnQueue(.main)
 
     AsyncFunction("loadHtml") { (pageID: String, html: String, baseURL: String) in
@@ -251,9 +264,26 @@ public final class PageViewModule: Module {
       Self.main(promise) { await OffscreenCapture.capture(url: url, pageID: pageID, blocker: PhonePages.shared.engine.blocker) }
     }.runOnQueue(.main)
 
-    AsyncFunction("deleteSnapshots") { (pageID: String) in
+    AsyncFunction("deleteSnapshots") { (pageID: String, promise: Promise) in
+      let floor = PageSnapshots.deletionOrder()
       PageVisuals.shared.forget(pageID)
-      PageSnapshots.delete(pageID)
+      Task {
+        await PageSnapshots.delete(pageID, before: floor)
+        promise.resolve(nil)
+      }
+    }
+
+    AsyncFunction("deleteSnapshotsFor") { (pageIDs: [String], promise: Promise) in
+      let floor = PageSnapshots.deletionOrder()
+      for pageID in pageIDs { PageVisuals.shared.forget(pageID) }
+      Task {
+        await PageSnapshots.delete(pageIDs, before: floor)
+        promise.resolve(nil)
+      }
+    }
+
+    Function("snapshotsCommitted") { (entries: [String: String]) in
+      PageSnapshots.committed(entries)
     }
 
     Function("snapshotIsCurrent") { (pageID: String) -> Bool? in
@@ -428,6 +458,10 @@ public final class PageViewModule: Module {
         view.topClearance = max(CGFloat(clearance ?? 0), 0)
       }
 
+      Prop("coverNativeId") { (view: PageView, id: String?) in
+        view.coverNativeID = id
+      }
+
       Prop("obscuresSafeTop") { (view: PageView, follows: Bool?) in
         view.obscuresSafeTop = follows == true
       }
@@ -499,96 +533,5 @@ public final class PageViewModule: Module {
         promise.reject("ERR_PAGE", error.localizedDescription)
       }
     }
-  }
-}
-
-public final class BlockingModule: Module {
-  public func definition() -> ModuleDefinition {
-    Name("ArdiaPhoneBlocking")
-
-    Events("onBlockingEvent")
-
-    OnCreate {
-      onMain {
-        PhonePages.shared.blockingSink = { [weak self] event in self?.sendEvent("onBlockingEvent", event) }
-      }
-    }
-
-    OnDestroy {
-      onMain { PhonePages.shared.blockingSink = nil }
-    }
-
-    AsyncFunction("state") { () -> [String: Any?] in
-      MainActor.assumeIsolated { PhonePages.shared.blockingState() }
-    }.runOnQueue(.main)
-
-    AsyncFunction("setEnabled") { (enabled: Bool) in
-      MainActor.assumeIsolated { PhonePages.shared.engine.blocker.settings.isOn = enabled }
-    }.runOnQueue(.main)
-
-    AsyncFunction("setCategory") { (category: String, enabled: Bool) in
-      try MainActor.assumeIsolated {
-        let settings = PhonePages.shared.engine.blocker.settings
-        switch BlockingCategory(rawValue: category) {
-        case .ads: settings.blocksAds = enabled
-        case .trackers: settings.blocksTrackers = enabled
-        case .cookieBanners: settings.hidesCookieBanners = enabled
-        case nil: throw PagePayloads.badArgs("Unknown blocking category \(category)")
-        }
-      }
-    }.runOnQueue(.main)
-
-    AsyncFunction("isEnabledForSite") { (url: String, isPrivate: Bool?) -> Bool in
-      MainActor.assumeIsolated {
-        let settings = PhonePages.shared.engine.blocker.settings
-        return settings.isOn && !settings.isExempt(BrowserURL.host(of: url), isPrivate: isPrivate == true)
-      }
-    }.runOnQueue(.main)
-
-    AsyncFunction("setEnabledForSite") { (url: String, enabled: Bool, isPrivate: Bool?) -> String? in
-      MainActor.assumeIsolated {
-        guard let host = BrowserURL.host(of: url) else { return nil }
-        PhonePages.shared.engine.blocker.settings.setExempt(host, !enabled, isPrivate: isPrivate == true)
-        return host
-      }
-    }.runOnQueue(.main)
-
-    AsyncFunction("setListEnabled") { (id: String, enabled: Bool) in
-      MainActor.assumeIsolated { PhonePages.shared.engine.blocker.filterLists.setEnabled(id, enabled) }
-    }.runOnQueue(.main)
-
-    AsyncFunction("removeList") { (id: String) in
-      MainActor.assumeIsolated { PhonePages.shared.engine.blocker.filterLists.removeList(id) }
-    }.runOnQueue(.main)
-
-    AsyncFunction("updateLists") { (promise: Promise) in
-      PageViewModule.main(promise) { await PhonePages.shared.engine.blocker.refreshIfDue(force: true) }
-    }.runOnQueue(.main)
-
-    AsyncFunction("resetToDefaults") { (promise: Promise) in
-      PageViewModule.main(promise) { await PhonePages.shared.engine.blocker.filterLists.resetToDefaults() }
-    }.runOnQueue(.main)
-
-    AsyncFunction("addCustomList") { (url: String, promise: Promise) in
-      PageViewModule.main(promise) { () -> String in
-        guard let target = URL(string: url) else { throw PagePayloads.badArgs("Not a URL: \(url)") }
-        do {
-          return try await PhonePages.shared.engine.blocker.filterLists.addCustomList(url: target).id
-        } catch {
-          throw PagePayloads.error("ERR_FILTER_LIST", (error as? FilterListError)?.message ?? error.localizedDescription)
-        }
-      }
-    }.runOnQueue(.main)
-
-    AsyncFunction("setMyFilters") { (text: String, promise: Promise) in
-      PageViewModule.main(promise) { () -> [String: Any] in
-        let result = await PhonePages.shared.engine.blocker.filterLists.applyMyFilters(text)
-        return ["ruleCount": result.ruleCount, "skippedCount": result.skippedCount, "isTooLarge": false]
-      }
-    }.runOnQueue(.main)
-
-    AsyncFunction("blockedCount") { (pageID: String) -> Int? in
-      MainActor.assumeIsolated { PhonePages.shared.page(pageID)?.blockedResources.count }
-    }.runOnQueue(.main)
   }
 }

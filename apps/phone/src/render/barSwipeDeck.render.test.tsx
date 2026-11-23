@@ -35,7 +35,7 @@ afterEach(() => {
 const page = (design: Design) =>
   renderSurface(
     <DesignProvider design={design}>
-      <BrowsingScreen tab={currentTabs().open[0]!} />
+      <BrowsingScreen tabId={currentTabs().open[0]!.id} />
     </DesignProvider>,
   );
 

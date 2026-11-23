@@ -175,7 +175,7 @@ function stackFrames(error: unknown, keep: (file: string) => boolean): Exception
   return HEADERLESS_FRAME.test(stack.split("\n", 1)[0]!) ? parseStack(stack, 50, keep) : [];
 }
 
-const ARDIA_CODE = /^(?:native|(?:[^\s()?#:]*\/)?(?:InternalBytecode\.js|main\.jsbundle|index\.windows\.bundle|index\.bundle)|http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\/index\.bundle(?:\/\/&|\?)[^\s()\/]*|chrome:\/\/ardia\/[\w./-]+\.js)$/;
+const ARDIA_CODE = /^(?:native|index\.windows|(?:[^\s()?#:]*\/)?(?:InternalBytecode\.js|main\.jsbundle|index\.windows\.bundle|index\.bundle)|http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\/index\.bundle(?:\/\/&|\?)[^\s()\/]*|chrome:\/\/ardia\/[\w./-]+\.js)$/;
 const CODE_FUNCTION = /^(?:async |new )?[\w$.<>#:-]+(?: \[as [\w$]+\])?$/;
 
 export function errorFrames(error: unknown): ExceptionFrame[] {

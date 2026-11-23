@@ -1,4 +1,4 @@
-export const REPO_URL = "https://github.com/mantrakp04/ardia";
+export const REPO_URL = "https://github.com/ardia-browser/ardia";
 
 export const commitUrl = (sha: string) => `${REPO_URL}/commit/${sha}`;
 export const releaseUrl = (tag: string) => `${REPO_URL}/releases/tag/${encodeURIComponent(tag)}`;

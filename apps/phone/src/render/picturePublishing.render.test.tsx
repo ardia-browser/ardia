@@ -3,7 +3,7 @@ import { pages } from "../platform/pages";
 import * as browse from "../state/browse/store";
 import { readOpenTabs } from "../state/store/browserDatabase";
 import { browserDatabase } from "../state/store/database";
-import { currentTabs } from "../state/tabs/store";
+import { currentTabs, flushTabWrites } from "../state/tabs/store";
 import { withTabs } from "../../test/render/harness";
 
 type Listener = (event: { name: string; [key: string]: unknown }) => void;
@@ -34,7 +34,10 @@ afterEach(() => {
 
 const background = () => currentTabs().open.find((tab) => tab.id !== currentTabs().selectedId)!;
 const shown = (id: string) => currentTabs().open.find((tab) => tab.id === id)!.snapshotFileName;
-const saved = (id: string) => readOpenTabs(browserDatabase()).find((tab) => tab.id === id)!.snapshotFileName;
+const saved = (id: string) => {
+  flushTabWrites();
+  return readOpenTabs(browserDatabase()).find((tab) => tab.id === id)!.snapshotFileName;
+};
 const capture = (id: string, result: Record<string, unknown>) => {
   results.push({ path: "", width: 400, height: 800, ...result });
   return act(async () => browse.captureSnapshot(id));

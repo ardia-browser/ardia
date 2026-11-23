@@ -1574,6 +1574,16 @@
    "detected": false
   },
   {
+   "id": "engine-token-connection:ardia-browse",
+   "source": "socket",
+   "guard": "Engine token server: loopback only, a 32-byte token compared in constant time (ControlServer::Accepts) from the 0600 ArdiaControl.json, no Origin, RemoteDebuggingAllowed policy; then a full DevTools client by the owner's decision (#2807). TokenClient::FilterCommand keeps only framing: a JSON object with an integer id and string method, params an object, a known sessionId, one command per (session, id), 4096 waiting replies at most",
+   "checks": [
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_control.cc#Accepts",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_token_policy.cc#FilterCommand"
+   ],
+   "detected": false
+  },
+  {
    "id": "import:bookmarks",
    "source": "import",
    "guard": "Imported bookmarks keep their URLs; javascript: entries become bookmarklets as in Chrome (C4)",

@@ -10,7 +10,7 @@
 </p>
 
 <h3 align="center">
-  <a href="https://github.com/mantrakp04/ardia/releases/download/v0.2.48/Ardia-0.2.48.dmg">Download Ardia 0.2.48 for Mac</a>
+  <a href="https://github.com/ardia-browser/ardia/releases/download/v0.2.48/Ardia-0.2.48.dmg">Download Ardia 0.2.48 for Mac</a>
 </h3>
 
 <p align="center">
@@ -18,7 +18,7 @@
   Like your paint wet? <a href="https://ardia.dev/nightly">The nightly</a> has every fix the day it’s made, smudges and all.<br>
   Homebrew: <code>brew install ardia-browser/tap/ardia</code><br>
   On your phone: <a href="https://testflight.apple.com/join/yXHasDmr">iPhone (TestFlight)</a> · <a href="https://github.com/ardia-browser/ardia/releases/download/android-v1.0.2/Ardia-1.0.2.apk">Android (APK)</a><br>
-  <a href="https://ardia.dev">ardia.dev</a> · <a href="https://ardia.dev/release-notes">What’s new</a> · <a href="https://github.com/mantrakp04/ardia/releases">All releases</a> · <a href="https://discord.gg/TdhuXrbcA6">Discord</a>
+  <a href="https://ardia.dev">ardia.dev</a> · <a href="https://ardia.dev/release-notes">What’s new</a> · <a href="https://github.com/ardia-browser/ardia/releases">All releases</a> · <a href="https://discord.gg/TdhuXrbcA6">Discord</a>
 </p>
 
 <p align="center">
@@ -86,7 +86,7 @@ Not WebKit. Not Electron. Every window is Chrome’s own, so sites, extensions a
 | Intel Macs | Apple Silicon only. | ✗ No |
 
 <h3 align="center">
-  <a href="https://github.com/mantrakp04/ardia/releases/download/v0.2.48/Ardia-0.2.48.dmg">Download Ardia 0.2.48</a>
+  <a href="https://github.com/ardia-browser/ardia/releases/download/v0.2.48/Ardia-0.2.48.dmg">Download Ardia 0.2.48</a>
 </h3>
 
 <p align="center">

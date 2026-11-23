@@ -1,6 +1,7 @@
 import { Dimensions, Platform, StyleSheet } from "react-native";
 import { getAnimatedStyle } from "react-native-reanimated";
 import { act } from "react-test-renderer";
+import { getByGestureTestId } from "react-native-gesture-handler/jest-utils";
 import { DeckBar } from "../components/tabs/DeckBar";
 import { IncognitoChip } from "../components/tabs/DeckChrome";
 import { TabDeck } from "../components/tabs/TabDeck";
@@ -281,14 +282,23 @@ test("the bar's left button is an Incognito switch: Arc Search's two solid eyes,
   unmount(original);
 });
 
-test("the deck's Incognito switch is the search tray's toggled icon: it dims in place on the press with no spring, gives the bar haptic, keeps its 48-point glass and names Close Incognito Tabs for screen readers", () => {
+test("the deck's Incognito switch is the search tray's toggled icon: its eyes dim in place on the touch with no spring and its glass keeps full alpha, gives the bar haptic, keeps its 48-point glass and names Close Incognito Tabs for screen readers", () => {
   withPrivateTabs(2);
   const barPress = jest.spyOn(haptics, "barPress").mockImplementation(() => undefined);
   const root = deck();
   const toggle = incognitoSwitch(root)!;
   expect(root.root.findAll((node) => node.type === ToggleIconButton && node.props.testID === "deckBarIncognitoSwitch")).toHaveLength(1);
-  expect(StyleSheet.flatten(toggle.props.style({ pressed: true }))).toMatchObject({ width: 48, height: 48, opacity: press.iconOpacity });
-  expect(StyleSheet.flatten(toggle.props.style({ pressed: false })).opacity).toBeUndefined();
+  expect(StyleSheet.flatten(toggle.props.style)).toMatchObject({ width: 48, height: 48 });
+  expect(StyleSheet.flatten(toggle.props.style).opacity).toBeUndefined();
+  const eyes = root.root.findAll((node) => node.type === IncognitoEyes)[0]!;
+  let dimmed = eyes.parent;
+  while (dimmed && typeof dimmed.type !== "string") dimmed = dimmed.parent;
+  const touch = getByGestureTestId("toggleIconButton:Incognito") as unknown as { handlers: { onTouchesDown: (event: unknown, manager: unknown) => void; onTouchesUp: (event: unknown, manager: unknown) => void } };
+  const manager = { fail: () => undefined };
+  act(() => touch.handlers.onTouchesDown({ allTouches: [], changedTouches: [] }, manager));
+  expect(getAnimatedStyle(dimmed!).opacity).toBeCloseTo(press.iconOpacity, 5);
+  act(() => touch.handlers.onTouchesUp({ allTouches: [], changedTouches: [] }, manager));
+  expect(getAnimatedStyle(dimmed!).opacity).toBe(1);
   act(() => toggle.props.onPressIn());
   expect(barPress).toHaveBeenCalledTimes(1);
   const holdsGlass = (node: { findAll: (test: (inner: { props: { testID?: string } }) => boolean) => unknown[] }) => node.findAll((inner) => inner.props.testID === "deckBarIncognito").length > 0;

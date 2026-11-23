@@ -21,7 +21,9 @@ export function useTopStripLights(windowId: string, dock: Animated.Value, on: bo
 
 export type SidebarLights = { width: number; moving: boolean; peeking: boolean; fullscreen: boolean; lights: readonly [number, number]; right: boolean; peekAt: { left: number; top: number } };
 
-export function useSidebarLights(windowId: string, dock: Animated.Value, slide: Animated.Value, o: SidebarLights) {
+export function useSidebarLights(windowId: string, dock: Animated.Value, slide: Animated.Value, o: SidebarLights, onSlide: (value: number) => void = () => {}) {
+  const latestOnSlide = useRef(onSlide);
+  latestOnSlide.current = onSlide;
   const values = useRef({ dock: 1, slide: 0 });
   const apply = useRef<() => void>(() => {});
   const sent = useRef<ReturnType<typeof slidingCenter> | undefined>(undefined);
@@ -49,6 +51,7 @@ export function useSidebarLights(windowId: string, dock: Animated.Value, slide: 
     if (!o.peeking) return;
     const b = slide.addListener(({ value }) => {
       values.current.slide = value;
+      latestOnSlide.current(value);
       apply.current();
     });
     return () => slide.removeListener(b);

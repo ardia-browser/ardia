@@ -22,6 +22,7 @@ type SystemNative = {
   setHidesFromRecents?(hidden: boolean): Promise<boolean>;
   processStartedAt?(): number;
   launchBackdropShownAt?(): number | null;
+  launchInterfaceDrawn?(): void;
   restoredValue?(key: string): string | null;
   setRestorableValue?(key: string, value: string | null): void;
   labMemory?(): string | null;
@@ -47,6 +48,7 @@ export const system = {
   },
   processStartedAt: (): number | null => (native?.processStartedAt ? native.processStartedAt() : null),
   launchBackdropShownAt: (): number | null => native?.launchBackdropShownAt?.() ?? null,
+  launchInterfaceDrawn: (): void => native?.launchInterfaceDrawn?.(),
   displayCornerRadius: (): number | null => native?.displayCornerRadius?.() ?? null,
   setWidgetColorChoice: (choice: string | null): void => native?.setWidgetColorChoice?.(choice),
   takePendingCounts: (): Record<string, number> => native?.takePendingCounts?.() ?? {},

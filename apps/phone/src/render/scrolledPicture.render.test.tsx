@@ -10,13 +10,18 @@ import * as telemetry from "../state/telemetry/telemetry";
 import { withTabs } from "../../test/render/harness";
 
 let scrollY = 0;
+let reportedY = 0;
+let pageListener: ((event: unknown) => void) | null = null;
 let generation = 100;
 let counted: jest.SpyInstance;
 let snapshot: jest.SpyInstance;
 
 beforeAll(() => {
   jest.useFakeTimers();
-  jest.spyOn(pages, "addListener").mockImplementation(() => ({ remove: () => undefined }) as never);
+  jest.spyOn(pages, "addListener").mockImplementation((listener) => {
+    pageListener = listener as (event: unknown) => void;
+    return { remove: () => undefined } as never;
+  });
   browse.startBrowser();
 });
 
@@ -27,6 +32,7 @@ beforeEach(() => {
   useOnboarding.setState({ showing: false });
   browse.useBrowse.setState({ surface: "browsing", sheet: null, opening: null, veiled: null, covered: null, arriving: null, leaving: null });
   scrollY = 0;
+  reportedY = 0;
   jest.spyOn(pages, "scrollPosition").mockImplementation(async () => ({ y: scrollY, viewportWidth: 393, viewportHeight: 873, contentHeight: 9000 }));
   jest.spyOn(pages, "saveState").mockImplementation(async () => `state-at-${scrollY}`);
   snapshot = jest.spyOn(pages, "snapshot").mockImplementation(async (id: string) => {
@@ -48,8 +54,14 @@ const front = () => currentTabs().selectedId!;
 const picture = (id: string) => currentTabs().open.find((tab) => tab.id === id)!.snapshotFileName;
 const pageIs = (id: string, isLoading: boolean) => act(() => browse.pageStateChanged(id, { url: "https://www.theverge.com/", title: "The Verge", isLoading, isLive: true, canGoBack: false, canGoForward: false } as never));
 
+const SCROLL_REST_IS_REPORTED = Platform.OS === "ios";
+
 async function scrollWatchTicks(count: number) {
   for (let tick = 0; tick < count; tick++) {
+    if (SCROLL_REST_IS_REPORTED && scrollY !== reportedY) {
+      reportedY = scrollY;
+      await act(async () => pageListener?.({ name: "page.scrollSettled", pageId: front(), y: scrollY }));
+    }
     await act(async () => {
       jest.advanceTimersByTime(2000);
     });
@@ -215,4 +227,20 @@ test("a capture that finishes after Incognito came on isn't counted", async () =
   await scrollWatchTicks(2);
   expect(snapshot).toHaveBeenCalledTimes(Platform.OS === "android" ? 1 : 0);
   expect(counted).not.toHaveBeenCalledWith("page_pictures_scrolled");
+});
+
+test("on iPhone a resting scroll comes from the page's own report, not a poll, and its picture is asked for quietly, so the copy at a Tabs press stays the only one drawn on the spot", async () => {
+  if (!SCROLL_REST_IS_REPORTED) return;
+  const id = front();
+  pageIs(id, false);
+  await scrollWatchTicks(1);
+  snapshot.mockClear();
+  scrollY = 3200;
+  await act(async () => {
+    jest.advanceTimersByTime(10_000);
+  });
+  expect(snapshot).not.toHaveBeenCalled();
+  await scrollWatchTicks(1);
+  expect(snapshot).toHaveBeenCalledTimes(1);
+  expect(snapshot.mock.calls[0]![1]).toMatchObject({ quiet: true });
 });

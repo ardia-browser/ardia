@@ -71,4 +71,6 @@ export const openArchivedTab = (tab: BrowserTab) => reopenArchived(tab);
 
 export const deleteArchivedTab = (tab: BrowserTab) => deleteArchivedTabsById([tab.id]);
 
+export const deleteArchivedTabs = (tabs: readonly BrowserTab[]) => deleteArchivedTabsById(tabs.map((tab) => tab.id));
+
 export const shareUrl = (url: string, title: string) => quietly(() => shareLink(url, title));

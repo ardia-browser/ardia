@@ -1,0 +1,15 @@
+[package]
+name = "ardia-sync-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+default = ["rustcrypto"]
+rustcrypto = ["ardia-crypto/rustcrypto"]
+
+[dependencies]
+ardia-crypto.workspace = true
+base64.workspace = true
+zeroize.workspace = true

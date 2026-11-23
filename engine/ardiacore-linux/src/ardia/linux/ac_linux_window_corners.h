@@ -99,6 +99,8 @@ struct Box {
   int y = 0;
   int width = 0;
   int height = 0;
+
+  friend constexpr bool operator==(const Box&, const Box&) = default;
 };
 
 inline int ClampedFloor(double value) {
@@ -198,6 +200,54 @@ constexpr Corners CornersSharedWithPane(Box view, Box pane, Corners pane_radii) 
                  .lower_left = left && bottom ? pane_radii.lower_left : 0};
 }
 inline constexpr double kPageRadiusLimit = 4096.0;
+inline constexpr double kMaxViewportExtent = 32768.0;
+inline constexpr double kContentSnapEpsilon = 1e-3;
+
+struct BoxF {
+  double x = 0;
+  double y = 0;
+  double width = 0;
+  double height = 0;
+};
+
+inline std::optional<Box> ContentBoxInDip(BoxF content, BoxF visible, double zoom, Box pane,
+                                          std::optional<Box> previous = std::nullopt) {
+  if (!std::isfinite(content.x) || !std::isfinite(content.y) || !std::isfinite(content.width) ||
+      !std::isfinite(content.height) || !std::isfinite(visible.x) || !std::isfinite(visible.y) ||
+      !std::isfinite(visible.width) || !std::isfinite(visible.height) || !std::isfinite(zoom) || zoom <= 0 ||
+      content.width < 0 || content.height < 0 || visible.width < 0 || visible.height < 0) {
+    return std::nullopt;
+  }
+  const double scaled_x = content.x * zoom;
+  const double scaled_y = content.y * zoom;
+  const double scaled_width = content.width * zoom;
+  const double scaled_height = content.height * zoom;
+  if (!std::isfinite(scaled_x) || !std::isfinite(scaled_y) || !std::isfinite(scaled_width) ||
+      !std::isfinite(scaled_height) || std::abs(scaled_x) > kMaxViewportExtent ||
+      std::abs(scaled_y) > kMaxViewportExtent || scaled_width > kMaxViewportExtent ||
+      scaled_height > kMaxViewportExtent) {
+    return std::nullopt;
+  }
+  const bool clips_x = content.x < visible.x - kContentSnapEpsilon ||
+                       content.x + content.width > visible.x + visible.width + kContentSnapEpsilon;
+  const bool clips_y = content.y < visible.y - kContentSnapEpsilon ||
+                       content.y + content.height > visible.y + visible.height + kContentSnapEpsilon;
+  const auto axis = [](bool clips, double scaled_origin, double scaled_size, int pane_origin, int pane_size,
+                       std::optional<int> prior) -> std::pair<int, int> {
+    if (!clips) return {pane_origin, pane_size};
+    const int origin = std::min(ClampedFloor(scaled_origin + kContentSnapEpsilon), pane_origin);
+    const int span = ClampedSpan(origin, pane_origin + pane_size);
+    const int ceiled = ClampedCeil(std::max(0.0, scaled_size - kContentSnapEpsilon));
+    const int needed = std::max(ceiled, span);
+    if (prior && *prior >= needed && *prior <= ceiled + 1) return {origin, *prior};
+    return {origin, needed};
+  };
+  const auto [left, width] =
+      axis(clips_x, scaled_x, scaled_width, pane.x, pane.width, previous ? std::make_optional(previous->width) : std::nullopt);
+  const auto [top, height] =
+      axis(clips_y, scaled_y, scaled_height, pane.y, pane.height, previous ? std::make_optional(previous->height) : std::nullopt);
+  return Box{.x = left, .y = top, .width = width, .height = height};
+}
 
 inline std::optional<Corners> PageRadiiInDip(double upper_left, double upper_right, double lower_right,
                                              double lower_left, double zoom) {

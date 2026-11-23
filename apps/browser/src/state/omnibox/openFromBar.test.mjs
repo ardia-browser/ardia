@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
 const { activeTabId } = await import("../browser/model.ts");
-const { barSplitsFrom, dispositionFor, openFromBar } = await import("./openFromBar.ts");
+const { barSplitsFrom, dispositionFor, openFromBar, switchFromBar } = await import("./openFromBar.ts");
 const { setOpeningGate } = await import("../tabs/openingGate.ts");
 const { splitOf, splitTabIds } = await import("../splits/splits.ts");
 await import("../../test-native/index.ts");
@@ -92,4 +92,20 @@ test("⌥↩ splits only from a tab showing a page", () => {
   assert.equal(barSplitsFrom(a), true);
   assert.equal(barSplitsFrom(blank), false);
   assert.equal(barSplitsFrom("missing"), false);
+});
+
+test("a Switch to Tab row switches on ↩ and opens its address in a new tab on ⌘↩, from any bar", () => {
+  S().hydrate({});
+  const w = S().createWindow({ url: "https://mail.example.com/" });
+  const mail = S().windows[w].tabIds[0];
+  const bar = S().newTab(w, {});
+  const before = S().windows[w].tabIds.length;
+  switchFromBar(mail, "https://mail.example.com/#new", bar, dispositionFor({ metaKey: true }));
+  const tabs = S().windows[w].tabIds;
+  assert.equal(tabs.length, before + 1, "⌘↩ opens a tab");
+  const opened = tabs.find((id) => id !== mail && id !== bar);
+  assert.equal(S().tabs[opened].url, "https://mail.example.com/#new", "at the address in the row");
+  assert.notEqual(activeTabId(S(), w), mail, "without switching to the open tab");
+  switchFromBar(mail, "https://mail.example.com/", bar, dispositionFor({}));
+  assert.equal(activeTabId(S(), w), mail, "↩ switches");
 });

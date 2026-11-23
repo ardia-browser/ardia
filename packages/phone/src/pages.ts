@@ -72,6 +72,7 @@ type PagesNative = {
   download(pageId: string, url: string): Promise<void>;
   readableContent(pageId: string): Promise<ReadableContent | null>;
   print?(pageId: string): Promise<boolean>;
+  sharePage?(pageId: string, url: string, title: string): Promise<string | null>;
   summarizePage?(pageId: string): Promise<boolean>;
   dismissPageSummaries?(): Promise<void>;
   pageSummariesEnabled?(): Promise<boolean>;
@@ -82,14 +83,16 @@ type PagesNative = {
   translationUrl?(pageUrl: string): Promise<string | null>;
   confirmTranslation?(): Promise<void>;
   presentSystemFind?(pageId: string, text: string | null): Promise<boolean>;
-  snapshot(pageId: string, options: { maxWidth?: number; quality?: number; coveredInsets?: [number, number]; windowCopy?: boolean }): Promise<PageSnapshot | RefusedSnapshot | null>;
+  snapshot(pageId: string, options: { maxWidth?: number; quality?: number; coveredInsets?: [number, number]; windowCopy?: boolean; quiet?: boolean }): Promise<PageSnapshot | RefusedSnapshot | null>;
   loadHtml(pageId: string, html: string, baseUrl: string): Promise<void>;
   scrollPosition(pageId: string): Promise<PageScrollPosition | null>;
   evaluate(pageId: string, script: string): Promise<string | null>;
   discardBackgroundPages(keeping: string | null): Promise<void>;
   livePageIds(): Promise<string[]>;
   deleteSnapshots(pageId: string): Promise<void>;
+  deleteSnapshotsFor?(pageIds: string[]): Promise<void>;
   snapshotIsCurrent?(pageId: string): boolean | null;
+  snapshotsCommitted?(entries: Record<string, string>): void;
   saveState(pageId: string): Promise<string | null>;
   answerRequest(pageId: string, requestId: string, answer: PageRequestAnswer): Promise<boolean>;
   openPopup(pageId: string, popupId: string): Promise<boolean>;
@@ -168,6 +171,8 @@ export const pages = {
     native().revokeSitePermission?.(origin, permission ?? null) ?? Promise.resolve(false),
   print: (pageId: string): Promise<boolean> => native().print?.(pageId) ?? Promise.resolve(false),
   canPrint: (): boolean => typeof native().print === "function",
+  sharePage: (pageId: string, url: string, title: string): Promise<string | null> => native().sharePage?.(pageId, url, title) ?? Promise.resolve(null),
+  sharesWithPrint: (): boolean => typeof native().sharePage === "function",
   summarize: (pageId: string): Promise<boolean> => native().summarizePage?.(pageId) ?? Promise.resolve(false),
   canSummarize: (): boolean => typeof native().summarizePage === "function",
   dismissSummaries: (): Promise<void> => native().dismissPageSummaries?.() ?? Promise.resolve(),
@@ -182,12 +187,13 @@ export const pages = {
   confirmTranslation: (): Promise<void> => native().confirmTranslation?.() ?? Promise.resolve(),
   hasSystemFind: (): boolean => typeof native().presentSystemFind === "function",
   presentSystemFind: (pageId: string, text?: string): Promise<boolean> => native().presentSystemFind?.(pageId, text ?? null) ?? Promise.resolve(false),
-  snapshot: (pageId: string, options: { maxWidth?: number; quality?: number; coveredInsets?: PageToneInsets; windowCopy?: boolean } = {}) =>
+  snapshot: (pageId: string, options: { maxWidth?: number; quality?: number; coveredInsets?: PageToneInsets; windowCopy?: boolean; quiet?: boolean } = {}) =>
     native().snapshot(pageId, {
       maxWidth: options.maxWidth,
       quality: options.quality,
       coveredInsets: options.coveredInsets ? [options.coveredInsets.top, options.coveredInsets.bottom] : undefined,
       windowCopy: options.windowCopy,
+      ...(options.quiet ? { quiet: true } : {}),
     }),
   loadHtml: (pageId: string, html: string, baseUrl: string) => native().loadHtml(pageId, html, baseUrl),
   scrollPosition: (pageId: string) => native().scrollPosition(pageId),
@@ -195,7 +201,10 @@ export const pages = {
   discardBackgroundPages: (keeping?: string | null) => native().discardBackgroundPages(keeping ?? null),
   livePageIds: () => native().livePageIds(),
   deleteSnapshots: (pageId: string) => native().deleteSnapshots(pageId),
+  deletesSnapshotsTogether: (): boolean => typeof native().deleteSnapshotsFor === "function",
+  deleteSnapshotsFor: (pageIds: string[]) => native().deleteSnapshotsFor!(pageIds),
   snapshotIsCurrent: (pageId: string): boolean | null => native().snapshotIsCurrent?.(pageId) ?? null,
+  snapshotsCommitted: (entries: Record<string, string>): void => native().snapshotsCommitted?.(entries),
   saveState: (pageId: string) => native().saveState(pageId),
   answerRequest: (pageId: string, requestId: string, answer: PageRequestAnswer) => native().answerRequest(pageId, requestId, answer),
   openPopup: (pageId: string, popupId: string) => native().openPopup(pageId, popupId),

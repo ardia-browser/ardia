@@ -7,6 +7,7 @@ import { useCanReopen, useIncognito } from "../../state/tabs/hooks";
 import { actionWords } from "../../lib/sharedWords";
 import { BarPlusGlyph, capsule, ChromeSurface, controlSize, iconRoles, PressInPlace, rolesFor, smoothCorners, startLayout, Symbol, SystemGlyph, type MenuItem, type SymbolName } from "../ui";
 import { MenuTrigger } from "../ui/MenuTrigger";
+import { PressedGlyph } from "../ui/PressInPlace";
 
 const CIRCLE_SYSTEM_NAMES: Partial<Record<SymbolName, string>> = {
   ellipsis: "ellipsis",
@@ -46,6 +47,14 @@ export function FadingGlyphs({ fade, style, ...rest }: ViewProps & { fade?: Glyp
   return <Animated.View {...rest} style={fade ? [style, faded] : style} />;
 }
 
+function PressedFadingGlyphs({ fade, style, children, ...rest }: ViewProps & { fade?: GlyphFade }) {
+  return (
+    <FadingGlyphs {...rest} fade={fade} style={style}>
+      <PressedGlyph style={styles.centered}>{children}</PressedGlyph>
+    </FadingGlyphs>
+  );
+}
+
 export type GlassButtonFace = { kind: "circle" } | { kind: "rounded"; corner: number };
 
 const CIRCLE_FACE: GlassButtonFace = { kind: "circle" };
@@ -54,15 +63,15 @@ export function GlassCircleButton({ icon, label, testID, diameter = controlSize.
   const size = { width: diameter, height: diameter };
   const rounded = face.kind === "rounded";
   return (
-    <PressInPlace label={label} onPress={onPress} onPressIn={haptics.barPress} style={[styles.centered, size]}>
+    <PressInPlace label={label} onPress={onPress} onPressIn={haptics.barPress} dims="glyph" style={[styles.centered, size]}>
       <ChromeSurface testID={testID} shape={rounded ? "rounded" : "circle"} cornerRadius={rounded ? face.corner : capsule(diameter)} incognito={incognito} dark={dark} shown={glassShown} shownMs={glassShownMs} style={[styles.centered, size, rounded ? smoothCorners : null]}>
-        <FadingGlyphs testID={`${testID}Glyph`} pointerEvents="none" fade={glyphFade}>
+        <PressedFadingGlyphs testID={`${testID}Glyph`} pointerEvents="none" fade={glyphFade}>
           {CIRCLE_SYSTEM_NAMES[icon] ? (
             <SystemGlyph systemName={CIRCLE_SYSTEM_NAMES[icon]} pointSize={CIRCLE_SYSTEM_GLYPH} weight="medium" name={icon} size={startLayout.circleGlyph} color={rolesFor(dark).label} />
           ) : (
             <Symbol name={icon} size={startLayout.circleGlyph} color={rolesFor(dark).label} />
           )}
-        </FadingGlyphs>
+        </PressedFadingGlyphs>
       </ChromeSurface>
     </PressInPlace>
   );
@@ -79,11 +88,11 @@ export function PlusMenuButton({ width, label, testID, dark, incognito = false, 
   return (
     <MenuTrigger items={plusMenu(tabIncognito, canReopen)} trigger="longPress" haptic={menuOpenedHaptic} disabled={!menusShown} frost={frost} onOpen={() => onMenu?.(true)} onClose={() => onMenu?.(false)} place={place} style={size}>
       {({ onLongPress }) => (
-        <PressInPlace label={label} hint={PLUS_HINT} onPress={newTab} onLongPress={onLongPress ?? noop} onPressIn={haptics.barPress} style={size}>
+        <PressInPlace label={label} hint={PLUS_HINT} onPress={newTab} onLongPress={onLongPress ?? noop} onPressIn={haptics.barPress} dims="glyph" style={size}>
           <ChromeSurface testID={testID} shape={width === size.height ? "circle" : "capsule"} cornerRadius={capsule(size.height)} incognito={incognito} dark={dark} shown={glassShown} shownMs={glassShownMs} style={[styles.centered, size]}>
-            <FadingGlyphs testID={`${testID}Glyph`} pointerEvents="none" fade={glyphFade}>
+            <PressedFadingGlyphs testID={`${testID}Glyph`} pointerEvents="none" fade={glyphFade}>
               <BarPlusGlyph color={rolesFor(dark).label} />
-            </FadingGlyphs>
+            </PressedFadingGlyphs>
           </ChromeSurface>
         </PressInPlace>
       )}

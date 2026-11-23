@@ -99,6 +99,7 @@ export type WebKitCount =
   | "blockerUserFiltersIsolated"
   | "discard"
   | "discardWake"
+  | "backdropHidden"
   | "downloadSkipped"
   | "fallbackFind"
   | "faviconChanged"

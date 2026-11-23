@@ -13,6 +13,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "ardia-plugin-integration"
+version = "0.1.0"
+dependencies = [
+ "ardia-plugin-host",
+ "ardia-plugin-jail",
+ "libc",
+ "serde_json",
+]
+
+[[package]]
+name = "ardia-plugin-jail"
+version = "0.1.0"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "cc"
 version = "1.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

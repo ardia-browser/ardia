@@ -40,6 +40,7 @@ import { COLLAPSED_LIMIT, pinnedKeyAt, remoteTitle } from "../../state/sync/spac
 import { showAllDeviceTabs, toggleSpaceRow, useSpaceOpenFor } from "../../state/sync/spaceOpen";
 import { syncBanner, type BannerIcon } from "../../state/sync/syncRules";
 import { countUsage } from "../../state/telemetry/telemetry";
+import { prepareArchiveNextFrame } from "../../state/tabs/store";
 import { actionWords, destinationWords, syncWords } from "../../lib/sharedWords";
 import { DoneButton } from "../settings/ExpoSettingsDone";
 import { ExpoSettingsAction } from "../settings/ExpoSettingsParts";
@@ -55,6 +56,11 @@ const deviceSymbol = (kind: string, name: string) => (kind === "phone" ? "iphone
 const SPACE_ROW = [listRowBackground("transparent"), listRowSeparator("hidden"), listRowInsets({ top: 0, leading: L.rowInset, bottom: 0, trailing: L.rowInset })];
 
 const shareable = (url: string) => /^https?:\/\//i.test(url);
+
+function openPreparedArchive() {
+  openArchive();
+  prepareArchiveNextFrame();
+}
 const lookOf = (profile: SyncedProfile | null) => ({ color: profile?.color ?? null, icon: profile?.icon ?? null, themeColors: profile?.theme?.colors ?? [], themeDarkColors: profile?.theme?.darkColors ?? null });
 const shownColor = (color: { light: string; dark: string } | null, dark: boolean) => (color ? (dark ? color.dark : color.light) : null);
 
@@ -154,7 +160,7 @@ function SpacesHeader({ profiles, current, onSelect }: { profiles: SyncedProfile
       )}
       <Spacer />
       <HStack spacing={L.headerGap} modifiers={[dynamicTypeSize({ max: "xxxLarge" })]}>
-        <HeaderFace label={destinationWords.archive} onPress={openArchive}>
+        <HeaderFace label={destinationWords.archive} onPress={openPreparedArchive}>
           <Image systemName="archivebox" modifiers={modifierList(font({ textStyle: "body", weight: "medium" }), frame({ width: L.headerCircle, height: L.headerCircle }), ROUNDED_FACE)} />
         </HeaderFace>
         <DoneButton onDone={closeArchive} modifiers={modifierList(buttonStyle("plain"), font({ textStyle: "body", weight: "semibold" }), padding({ horizontal: L.page }), frame({ minWidth: L.headerCircle, minHeight: L.headerCircle }), ROUNDED_FACE)} />

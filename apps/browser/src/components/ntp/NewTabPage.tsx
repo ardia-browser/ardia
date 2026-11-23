@@ -28,9 +28,9 @@ const MARKS = {
 const MARK_SIZE = 100;
 const SUN_DELAY = 250;
 const MARK_LAYERS = [
-  { name: "sun", hidden: 56, delay: SUN_DELAY, spring: springs.smooth },
-  { name: "back", hidden: 40.5, delay: 170, spring: springs.smooth },
-  { name: "front", hidden: 34, delay: 80, spring: springs.smooth },
+  { name: "sun", hidden: 80, delay: SUN_DELAY, spring: springs.smooth },
+  { name: "back", hidden: 46, delay: 170, spring: springs.smooth },
+  { name: "front", hidden: 48, delay: 80, spring: springs.smooth },
 ] as const;
 const SUN_DRIFT = 6;
 const SUN_DRIFT_SPRING = springs.smooth;

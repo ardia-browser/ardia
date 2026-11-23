@@ -33,7 +33,7 @@ test("a page that lost its colours and is reloading keeps its last known colours
   act(() => storeTone(tab.id, { top: "#101820", bottom: "#203040" }));
   act(() => clearTone(tab.id));
   act(() => storeNavigation(tab.id, { isLive: true, isLoading: true, url: tab.url, title: tab.title, failure: null, progress: 0.2 } as unknown as PageState));
-  const root = renderSurface(<BrowsingScreen tab={tab} />, { flushTimers: false });
+  const root = renderSurface(<BrowsingScreen tabId={tab.id} />, { flushTimers: false });
   act(() => jest.advanceTimersByTime(2800));
   const painted = root.root.findAll((node) => typeof node.type === "string").map(colour);
   const shows = (hex: string, rgba: string) => painted.some((value) => value === hex || value === rgba);

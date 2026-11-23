@@ -21,7 +21,7 @@ afterEach(() => {
 
 test("the recent-tabs menu lists a tab with no title or host by its address on Android, as Compose does, and as New Tab on iPhone, as SwiftUI does", async () => {
   const selected = currentTabs().open.find((tab) => tab.id === currentTabs().selectedId)!;
-  const root = renderSurface(<BrowsingScreen tab={selected} />);
+  const root = renderSurface(<BrowsingScreen tabId={selected.id} />);
   const tabs = root.root.findAll((node) => node.props.accessibilityLabel === "Tabs" && typeof node.props.onLongPress === "function")[0]!;
   act(() => tabs.props.onLongPress());
   await act(async () => undefined);

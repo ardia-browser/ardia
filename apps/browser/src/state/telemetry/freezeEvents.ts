@@ -1,7 +1,7 @@
 import { freezeWatch, onFreeze, type FreezeFrame, type FreezeRecord } from "../../platform/freezeWatch";
 import { systemState } from "../../platform/performance";
 import { withDeadline } from "../../lib/deadline";
-import { activityDuring } from "../app/jobActivity";
+import { activityDuring, holdsMainThread } from "../app/jobActivity";
 import { useBrowser } from "../browser/store";
 import { useSync } from "../sync/engine";
 import { capture, stillValid, type ConsentToken } from "./client";
@@ -77,7 +77,9 @@ function heapFloor(): number | null {
 
 export async function reportFreeze(record: FreezeRecord, consent: ConsentToken | null) {
   const end = record.startedAt + record.durationMs;
-  const activity = activityDuring(record.startedAt, end);
+  const main = record.thread !== "js";
+  const activity = activityDuring(record.startedAt, end, Date.now(), main ? holdsMainThread : undefined);
+  const alongside = main ? activityDuring(record.startedAt, end, Date.now(), (a) => !holdsMainThread(a)) : null;
   if (activity !== "none") freezeWatch()?.annotate(record.id, activity);
   const epoch = freezeEpoch();
   if (!epoch || record.watchEpoch !== epoch || !stillValid(consent)) return;
@@ -102,6 +104,7 @@ export async function reportFreeze(record: FreezeRecord, consent: ConsentToken |
       gc_count: typeof record.gcCount === "number" && record.gcCount >= 0 ? record.gcCount : null,
       heap_mb_floor: heapFloor(),
       activity,
+      js_activity: alongside,
       tabs_floor: TAB_FLOORS.reduce((floor, step) => (tabs >= step ? step : floor), 0),
       windows: s.windowOrder.length,
       sync_on: useSync.getState().enabled,

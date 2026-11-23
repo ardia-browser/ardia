@@ -195,7 +195,7 @@ test("with both capabilities Report a Problem opens the sheet without recording,
       posts.push({ url, body: JSON.parse(body), headers });
       return url === FEEDBACK_URL
         ? { status: 201, body: JSON.stringify({ id: "r1", name: "Quiet Fox", upload_token: "tok" }), error: null }
-        : { status: 200, body: JSON.stringify({ id: "r1", issue_url: "https://github.com/mantrakp04/ardia/issues/77" }), error: null };
+        : { status: 200, body: JSON.stringify({ id: "r1", issue_url: "https://github.com/ardia-browser/ardia/issues/77" }), error: null };
     },
   });
   adoptHostReports(host);

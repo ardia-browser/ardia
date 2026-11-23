@@ -132,7 +132,7 @@ def refresh_holds(c):
     return n
 
 def refresh_reviews(c):
-    result = subprocess.run(['gh', 'pr', 'list', '-R', 'mantrakp04/ardia', '--state', 'open', '--limit', '1000',
+    result = subprocess.run(['gh', 'pr', 'list', '-R', 'ardia-browser/ardia', '--state', 'open', '--limit', '1000',
       '--json', 'number,title,url,isDraft,author'], check=True, capture_output=True, text=True)
     rows = [r for r in json.loads(result.stdout) if not r['isDraft'] and r['author'].get('login') != 'mantrakp04']
     n = len(rows)

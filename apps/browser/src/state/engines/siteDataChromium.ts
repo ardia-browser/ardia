@@ -6,6 +6,9 @@ import { useBrowser } from "../browser/store";
 import { engineProfile, isIncognitoProfile } from "../browser/model";
 import { tabEngine } from "./engines";
 import { chromiumCookie, webOrigin } from "./siteDataMerge";
+import type { ConsentToken } from "../telemetry/client";
+import { noteCookieJarRead } from "../telemetry/siteDataCounts";
+import { beginActivity } from "../app/jobActivity";
 
 type ChromiumPage = { page: WebViewHandle; origin: string | null };
 
@@ -110,16 +113,79 @@ async function writeEngineStorage(profile: string, origin: string, change: Stora
 
 export type ChromiumRead = { data: SiteData; page: WebViewHandle; pages: ChromiumPage[] };
 
-export async function readChromium(profile: string, domains: string[], origins: string[]): Promise<ChromiumRead | null> {
-  const pages = chromiumPages(profile);
-  for (const { page } of pages.slice(0, 3)) {
-    const reply = await pageRead(page, domains, []);
-    if (!reply?.cookies) continue;
-    const storage: SiteStorage = {};
-    await Promise.all(origins.map(async (o) => void (storage[o] = await chromiumStorage(profile, o, pages))));
-    return { data: { cookies: reply.cookies, storage }, page, pages };
+const COOKIE_READ_BATCH_MS = 25;
+const MAX_READ_DOMAINS = 64;
+
+type CookieJarRead = { cookies: PageCookie[]; page: WebViewHandle } | null;
+type CookieReader = { domains: string[]; consent: ConsentToken | null; done: (read: CookieJarRead) => void };
+type CookieReadBatch = { domains: Set<string>; readers: CookieReader[]; timer: ReturnType<typeof setTimeout> | null };
+
+const openCookieReads = new Map<string, CookieReadBatch>();
+
+const bareCookieDomain = (domain: string) => domain.toLowerCase().replace(/^\.+|\.+$/g, "");
+
+export function cookieCovered(domain: string, domains: readonly string[]): boolean {
+  const bare = bareCookieDomain(domain);
+  return !!bare && domains.some((wanted) => bare === wanted || bare.endsWith(`.${wanted}`));
+}
+
+const wantedDomains = (domains: readonly string[]) => [...new Set(domains.filter((d) => d.length).map((d) => d.toLowerCase()))].slice(0, MAX_READ_DOMAINS);
+
+const NO_SPAN = () => {};
+
+async function readCookieJar(profile: string, batch: CookieReadBatch) {
+  const began = Date.now();
+  const domains = [...batch.domains];
+  const span = () => (domains.length ? beginActivity("siteDataCarry") : NO_SPAN);
+  const pages = chromiumPages(profile).slice(0, 3);
+  let read: CookieJarRead = null;
+  for (const { page } of pages) {
+    const dispatched = span();
+    const reply = pageRead(page, domains, []);
+    dispatched();
+    const answer = await reply;
+    if (!answer?.cookies) continue;
+    read = { cookies: answer.cookies, page };
+    break;
   }
-  return null;
+  const handling = span();
+  try {
+    if (domains.length && pages.length) noteCookieJarRead(batch.readers.filter((r) => r.domains.length).map((r) => r.consent), read ? 1 : 0, Date.now() - began);
+    for (const reader of batch.readers) reader.done(read && { page: read.page, cookies: read.cookies.filter((c) => cookieCovered(c.domain, reader.domains)) });
+  } finally {
+    handling();
+  }
+}
+
+function sendCookieRead(profile: string, batch: CookieReadBatch) {
+  if (batch.timer) clearTimeout(batch.timer);
+  batch.timer = null;
+  if (openCookieReads.get(profile) === batch) openCookieReads.delete(profile);
+  void readCookieJar(profile, batch).catch(() => batch.readers.forEach((r) => r.done(null)));
+}
+
+function chromiumCookies(profile: string, domains: string[], urgent: boolean, consent: ConsentToken | null): Promise<CookieJarRead> {
+  const wanted = wantedDomains(domains);
+  return new Promise((done) => {
+    const open = openCookieReads.get(profile);
+    const joins = !!open && new Set([...open.domains, ...wanted]).size <= MAX_READ_DOMAINS;
+    const batch: CookieReadBatch = joins ? open! : { domains: new Set(), readers: [], timer: null };
+    for (const d of wanted) batch.domains.add(d);
+    batch.readers.push({ domains: wanted, consent, done });
+    if (urgent) return sendCookieRead(profile, batch);
+    if (joins) return;
+    openCookieReads.set(profile, batch);
+    batch.timer = setTimeout(() => sendCookieRead(profile, batch), COOKIE_READ_BATCH_MS);
+  });
+}
+
+export async function readChromium(profile: string, domains: string[], origins: string[], urgent = false, consent: ConsentToken | null = null): Promise<ChromiumRead | null> {
+  const read = await chromiumCookies(profile, domains, urgent, consent);
+  if (!read) return null;
+  const pages = chromiumPages(profile);
+  const storage: SiteStorage = {};
+  await Promise.all(origins.map(async (o) => void (storage[o] = await chromiumStorage(profile, o, pages))));
+  return { data: { cookies: read.cookies, storage }, page: read.page, pages };
 }
 
 export type Written = { cookies: number; removed: number; storage: number; landed: Set<string>; overQuota?: number };

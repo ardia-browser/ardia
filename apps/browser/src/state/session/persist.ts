@@ -14,7 +14,7 @@ import type { BrowserWindow, ClosedWindow, ParkedPins, Profile, SplitView, Tab }
 import { downloadSession, withoutRepeats } from "../downloads/downloadsSlice";
 import { anyDownloadProgress, withLiveProgress } from "../downloads/progress";
 import { noteDownloadHistoryWrite } from "../telemetry/downloadWork";
-import { noteSessionWrite } from "../telemetry/sessionWrites";
+import { noteSessionWrite, timeSessionSave } from "../telemetry/sessionWrites";
 import { saveBeforeQuit } from "../app/quit";
 import { landHeldPins, pinGuard, savedAfterPins } from "./pinGuard";
 import { noteSavedTopAppsMerged } from "../telemetry/topAppsSharing";
@@ -23,10 +23,9 @@ import { sessionWithCleanUpMinutes } from "../settings/cleanUpAfter";
 import { parseSettingsMeta, sessionWithNewTabLinksInLittleArdia, sessionWithSettingsMeta, sessionWithUnreadCountsOffByDefault } from "../settings/settings";
 import { sessionWithOwnTabMutes } from "../tabs/mute";
 import { isRegularWindow } from "../windows/small";
-import { sessionWithPinChoiceStamps } from "../pins/pinChoices";
+import { pinChoicesFromDisk, sessionWithPinChoiceStamps } from "../pins/pinChoices";
 import { isFields, isString, isStringList } from "../../lib/decode";
 import { pageFromDisk, pinFromDisk, splitsChecked, savedPage, sessionWithSplitSlots, sessionWithTabPages, sessionWithTabPins, slotsFromDisk } from "./savedShapes";
-import { beginActivity } from "../app/jobActivity";
 import { profilesKeepingLegacyDots } from "../profiles/switcherMark";
 import { profilesWithOwnLooks } from "../../lib/presetLook";
 
@@ -173,7 +172,7 @@ export function parseSession(json: string | null | undefined): SavedSession | nu
     closedTabs: rows(raw.closedTabs, closedTabOk),
     closedWindows: rows<ClosedWindow>(raw.closedWindows, tabListOk).map(splitsChecked).map(withoutSavedTabsShown),
     parkedPins: Object.fromEntries(Object.entries(byProfile<ParkedPins>(raw.parkedPins, parkedOk)).map(([p, park]) => [p, splitsChecked(park)])),
-    pinChoices: byProfile(raw.pinChoices),
+    pinChoices: pinChoicesFromDisk(raw.pinChoices),
     pinSync: byProfile(raw.pinSync),
     topAppsMerged: typeof raw.topAppsMerged === "string" ? raw.topAppsMerged : undefined,
     closedGroups: rows(raw.closedGroups, tabListOk),
@@ -335,10 +334,11 @@ export function startPersistence(overrides: LaunchOverrides = {}) {
     timer = undefined;
     if (frozen) return;
     const s = useBrowser.getState();
-    const done = beginActivity("sessionSave");
+    const done = timeSessionSave();
     let held = false;
     let againIn: number | null = null;
     for (const doc of DOCS.filter((d) => dirty.has(d))) {
+      if (doc.name === SESSION_DOCUMENT) done.sessionStarts();
       const json = doc.json(s);
       const saved = lastJson.get(doc.name) === json;
       const pins = !saved && doc.name === SESSION_DOCUMENT ? keepDroppedPins(s) : null;

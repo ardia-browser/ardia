@@ -58,3 +58,6 @@ packages/phone/ios/ArdiaTalk/.build/
 packages/phone/ios/ArdiaTalk/.swiftpm/
 __pycache__/
 apps/browser/sim-out/
+
+/packages/core-rs/target/
+/packages/plugin-broker/target/

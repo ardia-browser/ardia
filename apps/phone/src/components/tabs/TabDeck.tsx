@@ -103,6 +103,7 @@ import { tabGridMotion } from "./tabGridLayout";
 import { useDeckGrid } from "../../state/browse/deckGrid";
 import { deckPullGrowing, endDeckPull, growDeckPull, peekDeckPullEntrance, publishDeckStandby, showGrowingPage, takeDeckPullEntrance } from "../../state/browse/deckPull";
 import { DECK_PULL, pullTarget, stackPullTarget } from "../../lib/deckPull";
+import { glassFadeMs } from "../ui/motion";
 import { barSpanCenter } from "../../lib/bottomBarSpan";
 import { useBarGlyphFade, useDeckPulled } from "./deckPulled";
 
@@ -753,7 +754,7 @@ export const TabDeck = memo(function TabDeck() {
     stopDrawnWait.current = whenPageCoverHidden(id, COVER_LOST_MS, (reason) => {
       if (reason !== "drawn" && !tabs.get(id)?.isPrivate) countUsage("card_opens_waited");
       finishOpen(id);
-    });
+    }, useBrowse.getState().openingCover);
   };
   const openingCardGrowing = (id: string) => {
     if (openPath.current === "coveringCard") {
@@ -850,78 +851,10 @@ export const TabDeck = memo(function TabDeck() {
   const vertical = useSharedValue(false);
   const touchDown = useSharedValue({ x: 0, y: 0, absoluteX: 0, absoluteY: 0 });
   const scrollFrom = useSharedValue(0);
-  const barBand = { bottom: g.barCenterY - tabsLayout.barTouchClearance - g.height };
+  const tapFrom = useSharedValue({ x: 0, y: 0 });
+  const barBandBottom = g.barCenterY - tabsLayout.barTouchClearance - g.height;
   const deckBarTop = g.barCenterY - deckChromeLayout.barCircle / 2;
-  const pan = Gesture.Pan()
-    .withTestId("deckPan")
-    .enabled(!(pulls && reduceMotion && phase.kind === "closing"))
-    .hitSlop(barBand)
-    .minDistance(10)
-    .onBegin((e) => {
-      touchDown.value = { x: e.x, y: e.y, absoluteX: e.absoluteX, absoluteY: e.absoluteY };
-    })
-
-    .onStart((e) => {
-      const down = touchDown.value;
-      const card = deckCardAt(g, count, scroll.value, down.x, down.y, anchor, DECK_MOUNT_REACH);
-      if (measuresInteractions) runOnJS(beginInteraction)("deck scroll", INTERACTION_WINDOW_MS.deckScroll);
-      startScroll.value = scroll.value;
-      scrollFrom.value = e.absoluteX;
-      touching.value = true;
-      runOnJS(touchChanged)(true);
-      runOnJS(hideArchiveCard)();
-      if (deckDragKind(card, e.absoluteX - down.absoluteX, e.absoluteY - down.absoluteY) === "lift") {
-        vertical.value = true;
-        dragIndex.value = card;
-        dragLift.value = deckLift(e.absoluteY - down.absoluteY);
-        return;
-      }
-      vertical.value = false;
-    })
-    .onUpdate((e) => {
-      const down = touchDown.value;
-      if (vertical.value) {
-        dragLift.value = deckLift(e.absoluteY - down.absoluteY);
-        return;
-      }
-      scroll.value = deckScrollDuringDrag(g, startScroll.value, e.absoluteX - scrollFrom.value, count);
-    })
-    .onEnd((e) => {
-      if (vertical.value) {
-        touching.value = false;
-        const card = dragIndex.value;
-        if (deckShouldClose(e.absoluteY - touchDown.value.absoluteY, e.velocityY, g.cardHeight)) {
-          runOnJS(flickTick)();
-          const ids = orderIds.value;
-          const id = ids[card];
-          if (id !== undefined && !(id in leaving.value)) {
-            const spec = flySpec(card, ids.length, dragLift.value, e.velocityY);
-            const next = ids.filter((other) => other !== id);
-            const before = scroll.value;
-            const after = deckScrollAfterChange(ids, next, before, false);
-            shiftDeck(next, after, after - before, -1, false, reduceMotion, { id, spec });
-            runOnJS(flownOff)(id, card, spec, next, after);
-          }
-          runOnJS(touchChanged)(false);
-        } else {
-          dragLift.value = withSpring(0, tabsMotion.release, (finished) => {
-            if (finished) dragIndex.value = -1;
-            runOnJS(touchChanged)(false);
-          });
-        }
-        return;
-      }
-      const target = deckSettleTarget(g, scroll.value, e.velocityX, count);
-      const settled = () => {
-        "worklet";
-        touching.value = false;
-        runOnJS(setAnchor)(target);
-        runOnJS(touchChanged)(false);
-      };
-      scroll.value = reduceMotion
-        ? withTiming(target, { duration: tabsMotion.fade, easing: tabsCurve.easeOut }, settled)
-        : withSpring(target, { ...tabsMotion.settle, velocity: deckSettleVelocity(g, scroll.value, target, e.velocityX) }, settled);
-    });
+  const bottomRowTop = g.height - materialBottomRowCenter(insets.bottom) - materialSize.fab / 2 - MATERIAL_DECK.keyboardGap;
   const showCardMenu = (index: number, x: number, y: number, control?: Rect, opener?: RefObject<ViewInstance | null>) => {
     if (phase.kind !== "settled" || !order[index]) return;
     cancelCardFocus.current();
@@ -944,17 +877,6 @@ export const TabDeck = memo(function TabDeck() {
       () => latestActions.current.order.includes(id),
     );
   };
-  const longPress = Gesture.LongPress()
-    .withTestId("deckLongPress")
-    .enabled(!nativeMenus())
-    .hitSlop(barBand)
-    .minDuration(tabsMotion.longPress)
-    .onStart((e) => {
-      const card = deckCardAt(g, count, scroll.value, e.x, e.y, anchor, DECK_MOUNT_REACH);
-      if (card >= 0) runOnJS(showHeldCardMenu)(card, e.absoluteX, e.absoluteY);
-    });
-  const tapFrom = useSharedValue({ x: 0, y: 0 });
-  const bottomRowTop = g.height - materialBottomRowCenter(insets.bottom) - materialSize.fab / 2 - MATERIAL_DECK.keyboardGap;
   const closeFromX = (index: number) => {
     const id = order[index];
     if (!id || phase.kind !== "settled" || leavingIds.current.has(id)) return;
@@ -962,24 +884,130 @@ export const TabDeck = memo(function TabDeck() {
     if (!tabs.get(id)?.isPrivate) countUsage("card_close_tapped");
     close(index, 0);
   };
-  const tap = Gesture.Manual()
-    .withTestId("deckTap")
-    .hitSlop(barBand)
-    .onTouchesDown((e) => {
-      const touch = e.allTouches[0];
-      if (touch) tapFrom.value = { x: touch.x, y: touch.y };
-    })
-    .onTouchesUp((e, manager) => {
-      const touch = e.changedTouches[0];
-      if (touch && deckIsTap(touch.x - tapFrom.value.x, touch.y - tapFrom.value.y)) {
-        const closing = material ? materialCloseAt(g, count, scroll.value, touch.x, touch.y) : -1;
-        const card = deckCardAt(g, count, scroll.value, touch.x, touch.y, anchor, DECK_MOUNT_REACH);
-        if (closing >= 0) runOnJS(closeFromX)(closing);
-        else if (card >= 0) runOnJS(open)(card);
-        else if (redesigned || (material && touch.y < bottomRowTop)) runOnJS(dismissKeyboard)();
-      }
-      manager.fail();
-    });
+  const settleAnchor = (target: number) => {
+    if (deckWindow(target, count) !== deckWindow(anchor, count)) setAnchor(target);
+  };
+  const gestureActions = useRef({ order, open, flownOff, closeFromX, showHeldCardMenu, settleAnchor });
+  useLayoutEffect(() => {
+    gestureActions.current = { order, open, flownOff, closeFromX, showHeldCardMenu, settleAnchor };
+  });
+  const panEnabled = !(pulls && reduceMotion && phase.kind === "closing");
+  const longPressEnabled = !nativeMenus();
+  const deckGesture = useMemo(() => {
+    const barBand = { bottom: barBandBottom };
+    const withCard = (id: string, act: (at: number) => void) => {
+      const at = gestureActions.current.order.indexOf(id);
+      if (at >= 0) act(at);
+    };
+    const openCard = (id: string) => withCard(id, (at) => gestureActions.current.open(at));
+    const flyOff = (id: string, at: number, spec: DeckLeave, next: readonly string[], after: number) => gestureActions.current.flownOff(id, at, spec, next, after);
+    const closeCardFromX = (id: string) => withCard(id, (at) => gestureActions.current.closeFromX(at));
+    const holdCardMenu = (id: string, x: number, y: number) => withCard(id, (at) => gestureActions.current.showHeldCardMenu(at, x, y));
+    const anchorAt = (target: number) => gestureActions.current.settleAnchor(target);
+    const pan = Gesture.Pan()
+      .withTestId("deckPan")
+      .enabled(panEnabled)
+      .hitSlop(barBand)
+      .minDistance(10)
+      .onBegin((e) => {
+        touchDown.value = { x: e.x, y: e.y, absoluteX: e.absoluteX, absoluteY: e.absoluteY };
+      })
+      .onStart((e) => {
+        const down = touchDown.value;
+        const card = deckCardAt(g, count, scroll.value, down.x, down.y, anchor, DECK_MOUNT_REACH);
+        if (measuresInteractions) runOnJS(beginInteraction)("deck scroll", INTERACTION_WINDOW_MS.deckScroll);
+        startScroll.value = scroll.value;
+        scrollFrom.value = e.absoluteX;
+        touching.value = true;
+        runOnJS(touchChanged)(true);
+        runOnJS(hideArchiveCard)();
+        if (deckDragKind(card, e.absoluteX - down.absoluteX, e.absoluteY - down.absoluteY) === "lift") {
+          vertical.value = true;
+          dragIndex.value = card;
+          dragLift.value = deckLift(e.absoluteY - down.absoluteY);
+          return;
+        }
+        vertical.value = false;
+      })
+      .onUpdate((e) => {
+        const down = touchDown.value;
+        if (vertical.value) {
+          dragLift.value = deckLift(e.absoluteY - down.absoluteY);
+          return;
+        }
+        scroll.value = deckScrollDuringDrag(g, startScroll.value, e.absoluteX - scrollFrom.value, count);
+      })
+      .onEnd((e) => {
+        if (vertical.value) {
+          touching.value = false;
+          const card = dragIndex.value;
+          if (deckShouldClose(e.absoluteY - touchDown.value.absoluteY, e.velocityY, g.cardHeight)) {
+            runOnJS(flickTick)();
+            const ids = orderIds.value;
+            const id = ids[card];
+            if (id !== undefined && !(id in leaving.value)) {
+              const spec = flySpec(card, ids.length, dragLift.value, e.velocityY);
+              const next = ids.filter((other) => other !== id);
+              const before = scroll.value;
+              const after = deckScrollAfterChange(ids, next, before, false);
+              shiftDeck(next, after, after - before, -1, false, reduceMotion, { id, spec });
+              runOnJS(flyOff)(id, card, spec, next, after);
+            }
+            runOnJS(touchChanged)(false);
+          } else {
+            dragLift.value = withSpring(0, tabsMotion.release, (finished) => {
+              if (finished) dragIndex.value = -1;
+              runOnJS(touchChanged)(false);
+            });
+          }
+          return;
+        }
+        const target = deckSettleTarget(g, scroll.value, e.velocityX, count);
+        const settled = () => {
+          "worklet";
+          touching.value = false;
+          runOnJS(anchorAt)(target);
+          runOnJS(touchChanged)(false);
+        };
+        scroll.value = reduceMotion
+          ? withTiming(target, { duration: tabsMotion.fade, easing: tabsCurve.easeOut }, settled)
+          : withSpring(target, { ...tabsMotion.settle, velocity: deckSettleVelocity(g, scroll.value, target, e.velocityX) }, settled);
+      });
+    const longPress = Gesture.LongPress()
+      .withTestId("deckLongPress")
+      .enabled(longPressEnabled)
+      .hitSlop(barBand)
+      .minDuration(tabsMotion.longPress)
+      .onStart((e) => {
+        const card = deckCardAt(g, count, scroll.value, e.x, e.y, anchor, DECK_MOUNT_REACH);
+        const id = card >= 0 ? orderIds.value[card] : undefined;
+        if (id !== undefined) runOnJS(holdCardMenu)(id, e.absoluteX, e.absoluteY);
+      });
+    const tap = Gesture.Manual()
+      .withTestId("deckTap")
+      .hitSlop(barBand)
+      .onTouchesDown((e) => {
+        const touch = e.allTouches[0];
+        if (touch) tapFrom.value = { x: touch.x, y: touch.y };
+      })
+      .onTouchesUp((e, manager) => {
+        const touch = e.changedTouches[0];
+        if (touch && deckIsTap(touch.x - tapFrom.value.x, touch.y - tapFrom.value.y)) {
+          const closing = material ? materialCloseAt(g, count, scroll.value, touch.x, touch.y) : -1;
+          const card = deckCardAt(g, count, scroll.value, touch.x, touch.y, anchor, DECK_MOUNT_REACH);
+          const closingId = closing >= 0 ? orderIds.value[closing] : undefined;
+          const cardId = card >= 0 ? orderIds.value[card] : undefined;
+          if (closing >= 0) {
+            if (closingId !== undefined) runOnJS(closeCardFromX)(closingId);
+          } else if (card >= 0) {
+            if (cardId !== undefined) runOnJS(openCard)(cardId);
+          } else if (redesigned || (material && touch.y < bottomRowTop)) runOnJS(dismissKeyboard)();
+        }
+        manager.fail();
+      });
+    return Gesture.Race(pan, longPress, tap);
+  }, [g, count, anchor, reduceMotion, material, redesigned, bottomRowTop, barBandBottom, panEnabled, longPressEnabled, measuresInteractions]);
+  const idleGesture = useMemo(() => Gesture.Race(Gesture.Manual().enabled(false).onTouchesDown(ignoreTouch)), []);
 
   const cardMenuItems = (index: number): MenuItem[] => {
     const tab = tabs.get(order[index] ?? "");
@@ -1122,13 +1150,13 @@ export const TabDeck = memo(function TabDeck() {
           canScrollBackward={deckScrollActionTarget(anchor, count, "backward") !== null}
           onScrollAction={(direction) => {
             if (pulls && reduceMotion && phase.kind === "closing") return;
-            const target = deckScrollActionTarget(anchor, count, direction);
+            const target = deckScrollActionTarget(focusedIndex(scroll.value, count), count, direction);
             if (target === null) return;
-            setAnchor(target);
+            settleAnchor(target);
             scroll.value = reduceMotion ? withTiming(target, { duration: tabsMotion.fade }) : withSpring(target, tabsMotion.settle);
           }}
         >
-          <GestureDetector gesture={shown ? Gesture.Race(pan, longPress, tap) : Gesture.Race(Gesture.Manual().enabled(false).onTouchesDown(ignoreTouch))}>
+          <GestureDetector gesture={shown ? deckGesture : idleGesture}>
             <Animated.View testID="deckCards" style={[styles.touch, { height: g.height }, cardsStyle]} collapsable={false}>
               {containedCards(contained, { ids: shownIds, geometry: g, motion }, shownIds.map((id) => {
                 const flying = leavingCards.find((card) => card.id === id);
@@ -1342,7 +1370,7 @@ const HANDED_OVER_AWAY = 100_000;
 const CARD_LANDED = 0.02;
 const DECK_SCREEN_CORNER = iPhoneOr(() => DECK.displayCornerRadius, () => screenCornerRadius(DECK.displayCornerRadius));
 const CHROME_BACK: MotionCurve = { type: "timing", durationMs: 0 };
-const CHROME_GLASS_MS = 200;
+const CHROME_GLASS_MS = glassFadeMs;
 const PAGE_MOUNT_AFTER_GROWTH_MS = 34;
 
 const criticalSpringLandsMs = (response: number, within: number) => {
@@ -1357,6 +1385,7 @@ const DECK_GESTURE_REACH = 3;
 
 const DECK_MOUNT_REACH = DECK_RENDER_REACH + DECK_GESTURE_REACH;
 const deckCardMounted = (index: number, anchor: number) => Math.abs(index - anchor) <= DECK_MOUNT_REACH;
+const deckWindow = (at: number, count: number) => `${Math.max(0, at - DECK_MOUNT_REACH)}:${Math.min(count - 1, at + DECK_MOUNT_REACH)}:${at <= 0}:${at >= count - 1}`;
 const BACKDROP_LEAD = 1.4;
 const FLY_CLOCK_SPAN_MS = 600_000;
 const LEAVE_SLACK_MS = 34;

@@ -1,0 +1,1486 @@
+{
+  "sources": {
+    "swift": "run: packages/sync/ios/Core/RecoveryPhrase.swift on macOS 27.2, the reference the Rust core matches",
+    "linux": "run: engine/ardiacore-linux/src/ardia/linux/ac_linux_sync_crypto.cc, checked by tests/linux-sync/test_linux_sync.py",
+    "windows": "read from apps/browser/windows/Ardia/SyncPhrase.h (LCMapStringEx lowercase, GetStringTypeW C1_LOWER and C1_ALPHA per UTF-16 unit), not run",
+    "kotlin": "read from packages/phone/android/src/main/java/com/ardia/sync/core/RecoveryPhrase.kt (lowercase then Character.getType LOWERCASE_LETTER per code point), not run"
+  },
+  "cases": [
+    {
+      "name": "canonical",
+      "input": "awful supreme heart leopard seminar age lizard hand aware health coral muscle glance save uphold orient carbon people leopard outside describe neither health symbol",
+      "tokens": [
+        "awful",
+        "supreme",
+        "heart",
+        "leopard",
+        "seminar",
+        "age",
+        "lizard",
+        "hand",
+        "aware",
+        "health",
+        "coral",
+        "muscle",
+        "glance",
+        "save",
+        "uphold",
+        "orient",
+        "carbon",
+        "people",
+        "leopard",
+        "outside",
+        "describe",
+        "neither",
+        "health",
+        "symbol"
+      ],
+      "outcomes": {
+        "swift": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "kotlin": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "windows": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "linux": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        }
+      }
+    },
+    {
+      "name": "canonical sparse",
+      "input": "yellow abandon abandon abandon abandon abandon abandon abandon abandon among scale abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon advance wink",
+      "tokens": [
+        "yellow",
+        "abandon",
+        "abandon",
+        "abandon",
+        "abandon",
+        "abandon",
+        "abandon",
+        "abandon",
+        "abandon",
+        "among",
+        "scale",
+        "abandon",
+        "abandon",
+        "abandon",
+        "abandon",
+        "abandon",
+        "abandon",
+        "abandon",
+        "abandon",
+        "abandon",
+        "abandon",
+        "abandon",
+        "advance",
+        "wink"
+      ],
+      "outcomes": {
+        "swift": {
+          "entropy": "ff000000000000000000000000ff0000000000000000000000000000000000ff"
+        },
+        "kotlin": {
+          "entropy": "ff000000000000000000000000ff0000000000000000000000000000000000ff"
+        },
+        "windows": {
+          "entropy": "ff000000000000000000000000ff0000000000000000000000000000000000ff"
+        },
+        "linux": {
+          "entropy": "ff000000000000000000000000ff0000000000000000000000000000000000ff"
+        }
+      }
+    },
+    {
+      "name": "uppercase",
+      "input": "AWFUL SUPREME HEART LEOPARD SEMINAR AGE LIZARD HAND AWARE HEALTH CORAL MUSCLE GLANCE SAVE UPHOLD ORIENT CARBON PEOPLE LEOPARD OUTSIDE DESCRIBE NEITHER HEALTH SYMBOL",
+      "tokens": [
+        "awful",
+        "supreme",
+        "heart",
+        "leopard",
+        "seminar",
+        "age",
+        "lizard",
+        "hand",
+        "aware",
+        "health",
+        "coral",
+        "muscle",
+        "glance",
+        "save",
+        "uphold",
+        "orient",
+        "carbon",
+        "people",
+        "leopard",
+        "outside",
+        "describe",
+        "neither",
+        "health",
+        "symbol"
+      ],
+      "outcomes": {
+        "swift": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "kotlin": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "windows": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "linux": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        }
+      }
+    },
+    {
+      "name": "mixed case and extra whitespace",
+      "input": "  Awful\tSUPREME\n\nheart   leopard\r\nseminar age lizard hand aware health coral muscle glance save uphold orient carbon people leopard outside describe neither health symbol  \n",
+      "tokens": [
+        "awful",
+        "supreme",
+        "heart",
+        "leopard",
+        "seminar",
+        "age",
+        "lizard",
+        "hand",
+        "aware",
+        "health",
+        "coral",
+        "muscle",
+        "glance",
+        "save",
+        "uphold",
+        "orient",
+        "carbon",
+        "people",
+        "leopard",
+        "outside",
+        "describe",
+        "neither",
+        "health",
+        "symbol"
+      ],
+      "outcomes": {
+        "swift": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "kotlin": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "windows": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "linux": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        }
+      }
+    },
+    {
+      "name": "numbered list with punctuation",
+      "input": "1. awful, 2. supreme, 3. heart, 4. leopard, 5. seminar, 6. age, 7. lizard, 8. hand, 9. aware, 10. health, 11. coral, 12. muscle, 13. glance, 14. save, 15. uphold, 16. orient, 17. carbon, 18. people, 19. leopard, 20. outside, 21. describe, 22. neither, 23. health, 24. symbol,",
+      "tokens": [
+        "awful",
+        "supreme",
+        "heart",
+        "leopard",
+        "seminar",
+        "age",
+        "lizard",
+        "hand",
+        "aware",
+        "health",
+        "coral",
+        "muscle",
+        "glance",
+        "save",
+        "uphold",
+        "orient",
+        "carbon",
+        "people",
+        "leopard",
+        "outside",
+        "describe",
+        "neither",
+        "health",
+        "symbol"
+      ],
+      "outcomes": {
+        "swift": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "kotlin": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "windows": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "linux": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        }
+      }
+    },
+    {
+      "name": "hyphens and digits glued between words",
+      "input": "awful-supreme-heart-leopard-seminar-age-lizard-hand-aware-health-coral-muscle1glance2save2uphold2orient2carbon2people2leopard2outside2describe2neither2health2symbol",
+      "tokens": [
+        "awful",
+        "supreme",
+        "heart",
+        "leopard",
+        "seminar",
+        "age",
+        "lizard",
+        "hand",
+        "aware",
+        "health",
+        "coral",
+        "muscle",
+        "glance",
+        "save",
+        "uphold",
+        "orient",
+        "carbon",
+        "people",
+        "leopard",
+        "outside",
+        "describe",
+        "neither",
+        "health",
+        "symbol"
+      ],
+      "outcomes": {
+        "swift": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "kotlin": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "windows": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "linux": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        }
+      }
+    },
+    {
+      "name": "four-letter prefixes",
+      "input": "awfu supr hear leop semi age liza hand awar heal cora musc glan save upho orie carb peop leop outs desc neit heal symb",
+      "tokens": [
+        "awfu",
+        "supr",
+        "hear",
+        "leop",
+        "semi",
+        "age",
+        "liza",
+        "hand",
+        "awar",
+        "heal",
+        "cora",
+        "musc",
+        "glan",
+        "save",
+        "upho",
+        "orie",
+        "carb",
+        "peop",
+        "leop",
+        "outs",
+        "desc",
+        "neit",
+        "heal",
+        "symb"
+      ],
+      "outcomes": {
+        "swift": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "kotlin": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "windows": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "linux": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        }
+      }
+    },
+    {
+      "name": "five-letter prefixes",
+      "input": "awful supre heart leopa semin age lizar hand aware healt coral muscl glanc save uphol orien carbo peopl leopa outsi descr neith healt symbo",
+      "tokens": [
+        "awful",
+        "supre",
+        "heart",
+        "leopa",
+        "semin",
+        "age",
+        "lizar",
+        "hand",
+        "aware",
+        "healt",
+        "coral",
+        "muscl",
+        "glanc",
+        "save",
+        "uphol",
+        "orien",
+        "carbo",
+        "peopl",
+        "leopa",
+        "outsi",
+        "descr",
+        "neith",
+        "healt",
+        "symbo"
+      ],
+      "outcomes": {
+        "swift": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "kotlin": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "windows": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "linux": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        }
+      }
+    },
+    {
+      "name": "three-letter abbreviation",
+      "input": "awf supreme heart leopard seminar age lizard hand aware health coral muscle glance save uphold orient carbon people leopard outside describe neither health symbol",
+      "tokens": [
+        "awf",
+        "supreme",
+        "heart",
+        "leopard",
+        "seminar",
+        "age",
+        "lizard",
+        "hand",
+        "aware",
+        "health",
+        "coral",
+        "muscle",
+        "glance",
+        "save",
+        "uphold",
+        "orient",
+        "carbon",
+        "people",
+        "leopard",
+        "outside",
+        "describe",
+        "neither",
+        "health",
+        "symbol"
+      ],
+      "outcomes": {
+        "swift": {
+          "problem": "unknownWord",
+          "word": "awf"
+        },
+        "kotlin": {
+          "problem": "unknownWord",
+          "word": "awf"
+        },
+        "windows": {
+          "problem": "unknownWord",
+          "word": "awf"
+        },
+        "linux": {
+          "problem": "unknownWord",
+          "word": "awf"
+        }
+      }
+    },
+    {
+      "name": "word with extra letters",
+      "input": "awfully supreme heart leopard seminar age lizard hand aware health coral muscle glance save uphold orient carbon people leopard outside describe neither health symbol",
+      "tokens": [
+        "awfully",
+        "supreme",
+        "heart",
+        "leopard",
+        "seminar",
+        "age",
+        "lizard",
+        "hand",
+        "aware",
+        "health",
+        "coral",
+        "muscle",
+        "glance",
+        "save",
+        "uphold",
+        "orient",
+        "carbon",
+        "people",
+        "leopard",
+        "outside",
+        "describe",
+        "neither",
+        "health",
+        "symbol"
+      ],
+      "outcomes": {
+        "swift": {
+          "problem": "unknownWord",
+          "word": "awfully"
+        },
+        "kotlin": {
+          "problem": "unknownWord",
+          "word": "awfully"
+        },
+        "windows": {
+          "problem": "unknownWord",
+          "word": "awfully"
+        },
+        "linux": {
+          "problem": "unknownWord",
+          "word": "awfully"
+        }
+      }
+    },
+    {
+      "name": "23 words",
+      "input": "awful supreme heart leopard seminar age lizard hand aware health coral muscle glance save uphold orient carbon people leopard outside describe neither health",
+      "tokens": [
+        "awful",
+        "supreme",
+        "heart",
+        "leopard",
+        "seminar",
+        "age",
+        "lizard",
+        "hand",
+        "aware",
+        "health",
+        "coral",
+        "muscle",
+        "glance",
+        "save",
+        "uphold",
+        "orient",
+        "carbon",
+        "people",
+        "leopard",
+        "outside",
+        "describe",
+        "neither",
+        "health"
+      ],
+      "outcomes": {
+        "swift": {
+          "problem": "wordCount",
+          "count": 23
+        },
+        "kotlin": {
+          "problem": "wordCount",
+          "count": 23
+        },
+        "windows": {
+          "problem": "wordCount",
+          "count": 23
+        },
+        "linux": {
+          "problem": "wordCount",
+          "count": 23
+        }
+      }
+    },
+    {
+      "name": "25 words",
+      "input": "awful supreme heart leopard seminar age lizard hand aware health coral muscle glance save uphold orient carbon people leopard outside describe neither health symbol zoo",
+      "tokens": [
+        "awful",
+        "supreme",
+        "heart",
+        "leopard",
+        "seminar",
+        "age",
+        "lizard",
+        "hand",
+        "aware",
+        "health",
+        "coral",
+        "muscle",
+        "glance",
+        "save",
+        "uphold",
+        "orient",
+        "carbon",
+        "people",
+        "leopard",
+        "outside",
+        "describe",
+        "neither",
+        "health",
+        "symbol",
+        "zoo"
+      ],
+      "outcomes": {
+        "swift": {
+          "problem": "wordCount",
+          "count": 25
+        },
+        "kotlin": {
+          "problem": "wordCount",
+          "count": 25
+        },
+        "windows": {
+          "problem": "wordCount",
+          "count": 25
+        },
+        "linux": {
+          "problem": "wordCount",
+          "count": 25
+        }
+      }
+    },
+    {
+      "name": "swapped words fail the checksum",
+      "input": "supreme awful heart leopard seminar age lizard hand aware health coral muscle glance save uphold orient carbon people leopard outside describe neither health symbol",
+      "tokens": [
+        "supreme",
+        "awful",
+        "heart",
+        "leopard",
+        "seminar",
+        "age",
+        "lizard",
+        "hand",
+        "aware",
+        "health",
+        "coral",
+        "muscle",
+        "glance",
+        "save",
+        "uphold",
+        "orient",
+        "carbon",
+        "people",
+        "leopard",
+        "outside",
+        "describe",
+        "neither",
+        "health",
+        "symbol"
+      ],
+      "outcomes": {
+        "swift": {
+          "problem": "checksum"
+        },
+        "kotlin": {
+          "problem": "checksum"
+        },
+        "windows": {
+          "problem": "checksum"
+        },
+        "linux": {
+          "problem": "checksum"
+        }
+      }
+    },
+    {
+      "name": "empty",
+      "input": "",
+      "tokens": [],
+      "outcomes": {
+        "swift": {
+          "problem": "wordCount",
+          "count": 0
+        },
+        "kotlin": {
+          "problem": "wordCount",
+          "count": 0
+        },
+        "windows": {
+          "problem": "wordCount",
+          "count": 0
+        },
+        "linux": {
+          "problem": "wordCount",
+          "count": 0
+        }
+      }
+    },
+    {
+      "name": "only separators",
+      "input": " \t\n.,;1234567890",
+      "tokens": [],
+      "outcomes": {
+        "swift": {
+          "problem": "wordCount",
+          "count": 0
+        },
+        "kotlin": {
+          "problem": "wordCount",
+          "count": 0
+        },
+        "windows": {
+          "problem": "wordCount",
+          "count": 0
+        },
+        "linux": {
+          "problem": "wordCount",
+          "count": 0
+        }
+      }
+    },
+    {
+      "name": "no-break spaces",
+      "input": "awful supreme heart leopard seminar age lizard hand aware health coral muscle glance save uphold orient carbon people leopard outside describe neither health symbol",
+      "tokens": [
+        "awful",
+        "supreme",
+        "heart",
+        "leopard",
+        "seminar",
+        "age",
+        "lizard",
+        "hand",
+        "aware",
+        "health",
+        "coral",
+        "muscle",
+        "glance",
+        "save",
+        "uphold",
+        "orient",
+        "carbon",
+        "people",
+        "leopard",
+        "outside",
+        "describe",
+        "neither",
+        "health",
+        "symbol"
+      ],
+      "outcomes": {
+        "swift": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "kotlin": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "windows": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "linux": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        }
+      }
+    },
+    {
+      "name": "ideographic spaces",
+      "input": "awful　supreme　heart　leopard　seminar　age　lizard　hand　aware　health　coral　muscle　glance　save　uphold　orient　carbon　people　leopard　outside　describe　neither　health　symbol",
+      "tokens": [
+        "awful",
+        "supreme",
+        "heart",
+        "leopard",
+        "seminar",
+        "age",
+        "lizard",
+        "hand",
+        "aware",
+        "health",
+        "coral",
+        "muscle",
+        "glance",
+        "save",
+        "uphold",
+        "orient",
+        "carbon",
+        "people",
+        "leopard",
+        "outside",
+        "describe",
+        "neither",
+        "health",
+        "symbol"
+      ],
+      "outcomes": {
+        "swift": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "kotlin": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "windows": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "linux": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        }
+      }
+    },
+    {
+      "name": "byte order mark first",
+      "input": "﻿awful supreme heart leopard seminar age lizard hand aware health coral muscle glance save uphold orient carbon people leopard outside describe neither health symbol",
+      "tokens": [
+        "awful",
+        "supreme",
+        "heart",
+        "leopard",
+        "seminar",
+        "age",
+        "lizard",
+        "hand",
+        "aware",
+        "health",
+        "coral",
+        "muscle",
+        "glance",
+        "save",
+        "uphold",
+        "orient",
+        "carbon",
+        "people",
+        "leopard",
+        "outside",
+        "describe",
+        "neither",
+        "health",
+        "symbol"
+      ],
+      "outcomes": {
+        "swift": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "kotlin": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "windows": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "linux": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        }
+      }
+    },
+    {
+      "name": "zero-width space inside a word",
+      "input": "awf​ul supreme heart leopard seminar age lizard hand aware health coral muscle glance save uphold orient carbon people leopard outside describe neither health symbol",
+      "tokens": [
+        "awf",
+        "ul",
+        "supreme",
+        "heart",
+        "leopard",
+        "seminar",
+        "age",
+        "lizard",
+        "hand",
+        "aware",
+        "health",
+        "coral",
+        "muscle",
+        "glance",
+        "save",
+        "uphold",
+        "orient",
+        "carbon",
+        "people",
+        "leopard",
+        "outside",
+        "describe",
+        "neither",
+        "health",
+        "symbol"
+      ],
+      "outcomes": {
+        "swift": {
+          "problem": "wordCount",
+          "count": 25
+        },
+        "kotlin": {
+          "problem": "wordCount",
+          "count": 25
+        },
+        "windows": {
+          "problem": "wordCount",
+          "count": 25
+        },
+        "linux": {
+          "problem": "wordCount",
+          "count": 25
+        }
+      }
+    },
+    {
+      "name": "soft hyphen inside a word",
+      "input": "awf­ul supreme heart leopard seminar age lizard hand aware health coral muscle glance save uphold orient carbon people leopard outside describe neither health symbol",
+      "tokens": [
+        "awf",
+        "ul",
+        "supreme",
+        "heart",
+        "leopard",
+        "seminar",
+        "age",
+        "lizard",
+        "hand",
+        "aware",
+        "health",
+        "coral",
+        "muscle",
+        "glance",
+        "save",
+        "uphold",
+        "orient",
+        "carbon",
+        "people",
+        "leopard",
+        "outside",
+        "describe",
+        "neither",
+        "health",
+        "symbol"
+      ],
+      "outcomes": {
+        "swift": {
+          "problem": "wordCount",
+          "count": 25
+        },
+        "kotlin": {
+          "problem": "wordCount",
+          "count": 25
+        },
+        "windows": {
+          "problem": "wordCount",
+          "count": 25
+        },
+        "linux": {
+          "problem": "wordCount",
+          "count": 25
+        }
+      }
+    },
+    {
+      "name": "accented lowercase letter",
+      "input": "awfül supreme heart leopard seminar age lizard hand aware health coral muscle glance save uphold orient carbon people leopard outside describe neither health symbol",
+      "tokens": [
+        "awfül",
+        "supreme",
+        "heart",
+        "leopard",
+        "seminar",
+        "age",
+        "lizard",
+        "hand",
+        "aware",
+        "health",
+        "coral",
+        "muscle",
+        "glance",
+        "save",
+        "uphold",
+        "orient",
+        "carbon",
+        "people",
+        "leopard",
+        "outside",
+        "describe",
+        "neither",
+        "health",
+        "symbol"
+      ],
+      "outcomes": {
+        "swift": {
+          "problem": "unknownWord",
+          "word": "awfül"
+        },
+        "kotlin": {
+          "problem": "unknownWord",
+          "word": "awfül"
+        },
+        "windows": {
+          "problem": "unknownWord",
+          "word": "awfül"
+        },
+        "linux": {
+          "problem": "unknownWord",
+          "word": "awfül"
+        }
+      }
+    },
+    {
+      "name": "accented uppercase letter",
+      "input": "AWFÜL supreme heart leopard seminar age lizard hand aware health coral muscle glance save uphold orient carbon people leopard outside describe neither health symbol",
+      "tokens": [
+        "awfül",
+        "supreme",
+        "heart",
+        "leopard",
+        "seminar",
+        "age",
+        "lizard",
+        "hand",
+        "aware",
+        "health",
+        "coral",
+        "muscle",
+        "glance",
+        "save",
+        "uphold",
+        "orient",
+        "carbon",
+        "people",
+        "leopard",
+        "outside",
+        "describe",
+        "neither",
+        "health",
+        "symbol"
+      ],
+      "outcomes": {
+        "swift": {
+          "problem": "unknownWord",
+          "word": "awfül"
+        },
+        "kotlin": {
+          "problem": "unknownWord",
+          "word": "awfül"
+        },
+        "windows": {
+          "problem": "unknownWord",
+          "word": "awfül"
+        },
+        "linux": {
+          "problem": "unknownWord",
+          "word": "awfÜl"
+        }
+      }
+    },
+    {
+      "name": "decomposed accent after a word",
+      "input": "awfuĺ supreme heart leopard seminar age lizard hand aware health coral muscle glance save uphold orient carbon people leopard outside describe neither health symbol",
+      "tokens": [
+        "awful",
+        "supreme",
+        "heart",
+        "leopard",
+        "seminar",
+        "age",
+        "lizard",
+        "hand",
+        "aware",
+        "health",
+        "coral",
+        "muscle",
+        "glance",
+        "save",
+        "uphold",
+        "orient",
+        "carbon",
+        "people",
+        "leopard",
+        "outside",
+        "describe",
+        "neither",
+        "health",
+        "symbol"
+      ],
+      "outcomes": {
+        "swift": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "kotlin": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "windows": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "linux": {
+          "problem": "unknownWord",
+          "word": "awfuĺ"
+        }
+      }
+    },
+    {
+      "name": "emoji between words without spaces",
+      "input": "awful😀supreme heart leopard seminar age lizard hand aware health coral muscle glance save uphold orient carbon people leopard outside describe neither health symbol",
+      "tokens": [
+        "awful",
+        "supreme",
+        "heart",
+        "leopard",
+        "seminar",
+        "age",
+        "lizard",
+        "hand",
+        "aware",
+        "health",
+        "coral",
+        "muscle",
+        "glance",
+        "save",
+        "uphold",
+        "orient",
+        "carbon",
+        "people",
+        "leopard",
+        "outside",
+        "describe",
+        "neither",
+        "health",
+        "symbol"
+      ],
+      "outcomes": {
+        "swift": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "kotlin": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "windows": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "linux": {
+          "problem": "wordCount",
+          "count": 23
+        }
+      }
+    },
+    {
+      "name": "emoji between words with spaces",
+      "input": "awful 😀 supreme heart leopard seminar age lizard hand aware health coral muscle glance save uphold orient carbon people leopard outside describe neither health symbol",
+      "tokens": [
+        "awful",
+        "supreme",
+        "heart",
+        "leopard",
+        "seminar",
+        "age",
+        "lizard",
+        "hand",
+        "aware",
+        "health",
+        "coral",
+        "muscle",
+        "glance",
+        "save",
+        "uphold",
+        "orient",
+        "carbon",
+        "people",
+        "leopard",
+        "outside",
+        "describe",
+        "neither",
+        "health",
+        "symbol"
+      ],
+      "outcomes": {
+        "swift": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "kotlin": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "windows": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "linux": {
+          "problem": "wordCount",
+          "count": 25
+        }
+      }
+    },
+    {
+      "name": "CJK between words without spaces",
+      "input": "awful漢supreme heart leopard seminar age lizard hand aware health coral muscle glance save uphold orient carbon people leopard outside describe neither health symbol",
+      "tokens": [
+        "awful",
+        "supreme",
+        "heart",
+        "leopard",
+        "seminar",
+        "age",
+        "lizard",
+        "hand",
+        "aware",
+        "health",
+        "coral",
+        "muscle",
+        "glance",
+        "save",
+        "uphold",
+        "orient",
+        "carbon",
+        "people",
+        "leopard",
+        "outside",
+        "describe",
+        "neither",
+        "health",
+        "symbol"
+      ],
+      "outcomes": {
+        "swift": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "kotlin": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "windows": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "linux": {
+          "problem": "wordCount",
+          "count": 23
+        }
+      }
+    },
+    {
+      "name": "Cyrillic homoglyph",
+      "input": "аwful supreme heart leopard seminar age lizard hand aware health coral muscle glance save uphold orient carbon people leopard outside describe neither health symbol",
+      "tokens": [
+        "аwful",
+        "supreme",
+        "heart",
+        "leopard",
+        "seminar",
+        "age",
+        "lizard",
+        "hand",
+        "aware",
+        "health",
+        "coral",
+        "muscle",
+        "glance",
+        "save",
+        "uphold",
+        "orient",
+        "carbon",
+        "people",
+        "leopard",
+        "outside",
+        "describe",
+        "neither",
+        "health",
+        "symbol"
+      ],
+      "outcomes": {
+        "swift": {
+          "problem": "unknownWord",
+          "word": "аwful"
+        },
+        "kotlin": {
+          "problem": "unknownWord",
+          "word": "аwful"
+        },
+        "windows": {
+          "problem": "unknownWord",
+          "word": "аwful"
+        },
+        "linux": {
+          "problem": "unknownWord",
+          "word": "аwful"
+        }
+      }
+    },
+    {
+      "name": "fullwidth lowercase word",
+      "input": "ａｗｆｕｌ supreme heart leopard seminar age lizard hand aware health coral muscle glance save uphold orient carbon people leopard outside describe neither health symbol",
+      "tokens": [
+        "ａｗｆｕｌ",
+        "supreme",
+        "heart",
+        "leopard",
+        "seminar",
+        "age",
+        "lizard",
+        "hand",
+        "aware",
+        "health",
+        "coral",
+        "muscle",
+        "glance",
+        "save",
+        "uphold",
+        "orient",
+        "carbon",
+        "people",
+        "leopard",
+        "outside",
+        "describe",
+        "neither",
+        "health",
+        "symbol"
+      ],
+      "outcomes": {
+        "swift": {
+          "problem": "unknownWord",
+          "word": "ａｗｆｕｌ"
+        },
+        "kotlin": {
+          "problem": "unknownWord",
+          "word": "ａｗｆｕｌ"
+        },
+        "windows": {
+          "problem": "unknownWord",
+          "word": "ａｗｆｕｌ"
+        },
+        "linux": {
+          "problem": "unknownWord",
+          "word": "ａｗｆｕｌ"
+        }
+      }
+    },
+    {
+      "name": "fullwidth uppercase word",
+      "input": "ＡＷＦＵＬ supreme heart leopard seminar age lizard hand aware health coral muscle glance save uphold orient carbon people leopard outside describe neither health symbol",
+      "tokens": [
+        "ａｗｆｕｌ",
+        "supreme",
+        "heart",
+        "leopard",
+        "seminar",
+        "age",
+        "lizard",
+        "hand",
+        "aware",
+        "health",
+        "coral",
+        "muscle",
+        "glance",
+        "save",
+        "uphold",
+        "orient",
+        "carbon",
+        "people",
+        "leopard",
+        "outside",
+        "describe",
+        "neither",
+        "health",
+        "symbol"
+      ],
+      "outcomes": {
+        "swift": {
+          "problem": "unknownWord",
+          "word": "ａｗｆｕｌ"
+        },
+        "kotlin": {
+          "problem": "unknownWord",
+          "word": "ａｗｆｕｌ"
+        },
+        "windows": {
+          "problem": "unknownWord",
+          "word": "ａｗｆｕｌ"
+        },
+        "linux": {
+          "problem": "unknownWord",
+          "word": "ＡＷＦＵＬ"
+        }
+      }
+    },
+    {
+      "name": "mathematical bold word",
+      "input": "𝐚𝐰𝐟𝐮𝐥 supreme heart leopard seminar age lizard hand aware health coral muscle glance save uphold orient carbon people leopard outside describe neither health symbol",
+      "tokens": [
+        "𝐚𝐰𝐟𝐮𝐥",
+        "supreme",
+        "heart",
+        "leopard",
+        "seminar",
+        "age",
+        "lizard",
+        "hand",
+        "aware",
+        "health",
+        "coral",
+        "muscle",
+        "glance",
+        "save",
+        "uphold",
+        "orient",
+        "carbon",
+        "people",
+        "leopard",
+        "outside",
+        "describe",
+        "neither",
+        "health",
+        "symbol"
+      ],
+      "outcomes": {
+        "swift": {
+          "problem": "unknownWord",
+          "word": "𝐚𝐰𝐟𝐮𝐥"
+        },
+        "kotlin": {
+          "problem": "unknownWord",
+          "word": "𝐚𝐰𝐟𝐮𝐥"
+        },
+        "windows": {
+          "problem": "wordCount",
+          "count": 23
+        },
+        "linux": {
+          "problem": "unknownWord",
+          "word": "𝐚𝐰𝐟𝐮𝐥"
+        }
+      }
+    },
+    {
+      "name": "Turkish dotted capital I",
+      "input": "awful supreme heart leopard seminar age LİZARD hand aware health coral muscle glance save uphold orient carbon people leopard outside describe neither health symbol",
+      "tokens": [
+        "awful",
+        "supreme",
+        "heart",
+        "leopard",
+        "seminar",
+        "age",
+        "li",
+        "zard",
+        "hand",
+        "aware",
+        "health",
+        "coral",
+        "muscle",
+        "glance",
+        "save",
+        "uphold",
+        "orient",
+        "carbon",
+        "people",
+        "leopard",
+        "outside",
+        "describe",
+        "neither",
+        "health",
+        "symbol"
+      ],
+      "outcomes": {
+        "swift": {
+          "problem": "wordCount",
+          "count": 25
+        },
+        "kotlin": {
+          "problem": "wordCount",
+          "count": 25
+        },
+        "windows": {
+          "entropy": "10bb3da9402c3809a0b346104d44c0c8c62b7fbbb4e422745a014ec3b9285a8e"
+        },
+        "linux": {
+          "problem": "unknownWord",
+          "word": "lİzard"
+        }
+      }
+    },
+    {
+      "name": "German sharp s",
+      "input": "awfuß supreme heart leopard seminar age lizard hand aware health coral muscle glance save uphold orient carbon people leopard outside describe neither health symbol",
+      "tokens": [
+        "awfuß",
+        "supreme",
+        "heart",
+        "leopard",
+        "seminar",
+        "age",
+        "lizard",
+        "hand",
+        "aware",
+        "health",
+        "coral",
+        "muscle",
+        "glance",
+        "save",
+        "uphold",
+        "orient",
+        "carbon",
+        "people",
+        "leopard",
+        "outside",
+        "describe",
+        "neither",
+        "health",
+        "symbol"
+      ],
+      "outcomes": {
+        "swift": {
+          "problem": "unknownWord",
+          "word": "awfuß"
+        },
+        "kotlin": {
+          "problem": "unknownWord",
+          "word": "awfuß"
+        },
+        "windows": {
+          "problem": "unknownWord",
+          "word": "awfuß"
+        },
+        "linux": {
+          "problem": "unknownWord",
+          "word": "awfuß"
+        }
+      }
+    },
+    {
+      "name": "Greek capital word",
+      "input": "ΑΣΣ supreme heart leopard seminar age lizard hand aware health coral muscle glance save uphold orient carbon people leopard outside describe neither health symbol",
+      "tokens": [
+        "ασσ",
+        "supreme",
+        "heart",
+        "leopard",
+        "seminar",
+        "age",
+        "lizard",
+        "hand",
+        "aware",
+        "health",
+        "coral",
+        "muscle",
+        "glance",
+        "save",
+        "uphold",
+        "orient",
+        "carbon",
+        "people",
+        "leopard",
+        "outside",
+        "describe",
+        "neither",
+        "health",
+        "symbol"
+      ],
+      "outcomes": {
+        "swift": {
+          "problem": "unknownWord",
+          "word": "ασσ"
+        },
+        "kotlin": {
+          "problem": "unknownWord",
+          "word": "ασς"
+        },
+        "windows": {
+          "problem": "unknownWord",
+          "word": "ασσ"
+        },
+        "linux": {
+          "problem": "unknownWord",
+          "word": "ΑΣΣ"
+        }
+      }
+    }
+  ]
+}

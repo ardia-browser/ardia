@@ -73,6 +73,7 @@ public final class WebTab: DiscardablePage, Identifiable {
   public private(set) var pageZoom = 1.0
   public private(set) var isFindingInPage = false
   public private(set) var navigationGeneration = 0
+  public private(set) var hasCommittedLoad = true
   public var request: PageRequest?
   public let blockedResources = BlockedResourceCounter()
 
@@ -343,7 +344,10 @@ public final class WebTab: DiscardablePage, Identifiable {
       if let value = tab.progressThrottle.offer(view.estimatedProgress, at: .now) { tab.progress = value }
     }
     watch(\.isLoading) { tab, view in
-      if view.isLoading, !tab.isLoading { tab.navigationGeneration += 1 }
+      if view.isLoading, !tab.isLoading {
+        tab.navigationGeneration += 1
+        tab.hasCommittedLoad = false
+      }
       if tab.isLoading != view.isLoading { tab.isLoading = view.isLoading }
       if !view.isLoading {
         tab.progressThrottle.reset()
@@ -458,6 +462,7 @@ public final class WebTab: DiscardablePage, Identifiable {
   }
 
   fileprivate func didCommit() {
+    hasCommittedLoad = true
     capturingOrigins = [:]
     blockedResources.reset()
     scrollTracker.reset()

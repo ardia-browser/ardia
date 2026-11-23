@@ -72,7 +72,7 @@ Requirements: `openssl` and Node 22 or newer (for the built-in WebSocket client)
 | F27 | #37 | Onboarding starts once on a fresh profile and app services run once per launch |
 | F29 | #2391 | New Tab page and command bar disappear on the first frame after sidebar and Ctrl+Tab switches |
 | F30 | #2736 | Peeking the hidden sidebar never hides the page under it |
-| F31 | #3285 | Opening the hidden toolbar (a hover peek, the reveal a scroll up makes, a click on the strip, a peek revealed and collapsed again at once) and folding it away never hides the page under it |
+| F31 | #3285, #3630 | Opening the hidden toolbar (a hover peek, the reveal a scroll up makes, a click on the strip, a peek revealed and collapsed again at once) and folding it away never hides the page, never lets it protrude past the card bottom or drop its bottom corners, and clips `contentRect` without per-frame page resizes when `tab.viewportClip` is advertised |
 | F28 | #2341 | Sidebar rows and Top Apps tiles reorder by drag in a space the window switched to, not only the one it opened in |
 
 Each scenario's report lists its manual steps, such as touchpad pinch zoom, Web Store installs, popup placement and

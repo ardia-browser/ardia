@@ -258,7 +258,7 @@ test("Report a Problem opens one prefilled GitHub issue in the window that asked
   const before = tabsIn(first).length;
   assert.equal(runAppCommand(first, "reportProblem", capabilities), true);
   await waitFor(() => tabsIn(first).length > before);
-  const opened = tabsIn(first).filter((tab) => tabURL(tab).startsWith("https://github.com/mantrakp04/ardia/issues/new?body="));
+  const opened = tabsIn(first).filter((tab) => tabURL(tab).startsWith("https://github.com/ardia-browser/ardia/issues/new?body="));
   assert.equal(opened.length, 1);
   const body = decodeURIComponent(tabURL(opened[0]).split("?body=")[1]);
   assert.ok(body.startsWith(LINUX_REPORT_TEMPLATE), body);
@@ -275,7 +275,7 @@ test("Report a Problem from the check-in or the command bar reaches the same iss
     assert.ok(tabsIn(first).some((tab) => tabURL(tab).startsWith("https://feedback.example/new?text=What%20happened%3F")));
     appInfo.feedbackURL = "http://insecure.example/?q=%s";
     await openReport(first);
-    assert.ok(tabsIn(first).some((tab) => tabURL(tab).startsWith("https://github.com/mantrakp04/ardia/issues/new?body=")));
+    assert.ok(tabsIn(first).some((tab) => tabURL(tab).startsWith("https://github.com/ardia-browser/ardia/issues/new?body=")));
     const count = tabsIn(first).length;
     await openReport("settings");
     await openReport(null);

@@ -152,7 +152,7 @@ export const SELECTED_ROW_SHADOW_OFFSET: [number, number] = [0, 0.5];
 
 export const TILE_GLOW = { opacity: { dark: 0.15, light: 0.12 }, radius: 1.5, offset: [0, 0.5] as [number, number] };
 
-export const SIDEBAR_MOTION = { liveFold: duration.long, fold: duration.base, listSlide: 140, listFade: 100, hoverCardFade: 100 } as const;
+export const SIDEBAR_MOTION = { liveFold: duration.long, fold: duration.base, listSlide: 140, listFade: 100, listAppear: 140, hoverCardFade: 100 } as const;
 
 export const SLEEPING_TITLE_OPACITY = 0.6;
 

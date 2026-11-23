@@ -66,6 +66,7 @@ export type LegacyNative = {
   markImportedWith?(receipt: LegacyReceipt): Promise<void>;
   startFresh?(): Promise<void>;
   labSetUnusable?(on: boolean): void;
+  settledState?(): string;
   available?(): Promise<boolean>;
   imported?(): Promise<boolean>;
   markImported?(): Promise<void>;
@@ -174,5 +175,11 @@ export function legacyApis(native: LegacyNative | null) {
     },
   };
 
-  return { legacyImport, legacy, legacyLab };
+  const legacySettled = (): "none" | "imported" | "startedFresh" | "pending" | null => {
+    if (typeof native?.settledState !== "function") return null;
+    const state = native.settledState();
+    return state === "none" || state === "imported" || state === "startedFresh" ? state : "pending";
+  };
+
+  return { legacyImport, legacy, legacyLab, legacySettled };
 }

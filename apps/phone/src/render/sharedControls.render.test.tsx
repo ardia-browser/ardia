@@ -2,6 +2,8 @@ import { createRef } from "react";
 import { Platform, PlatformColor, StyleSheet, Text, View, type ViewInstance } from "react-native";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { getAnimatedStyle } from "react-native-reanimated";
+import { getByGestureTestId } from "react-native-gesture-handler/jest-utils";
+import { PressedGlyph } from "../components/ui/PressInPlace";
 import { ActionButton, EmptyState, FieldAccessory, LoadingLine, LoadingState, ModalOverlay, overlayInk, press, PressInPlace, Tappable, Toggle, ToggleIconButton, ToggleRow, useTheme, type Theme } from "../components/ui";
 import { renderSurface, unmount, updateSurface } from "../../test/render/harness";
 import { switchColors, SYSTEM_SWITCH_COLOR_NAMES } from "../components/ui/Toggle";
@@ -221,24 +223,50 @@ test("a modal overlay is modal and escapable while open, and dead to touch and h
   unmount(root);
 });
 
+type PressTouch = { handlers: { onTouchesDown: (event: unknown, manager: unknown) => void; onTouchesUp: (event: unknown, manager: unknown) => void; onFinalize?: (event: unknown, success: boolean) => void } };
+
+const pressTouch = (label: string) => getByGestureTestId(`pressInPlace:${label}`) as unknown as PressTouch;
+const touchManager = { fail: () => undefined, activate: () => undefined, begin: () => undefined, end: () => undefined };
+const faceOf = (root: ReturnType<typeof renderSurface>) => root.root.findAll((node) => node.props.testID === "pressInPlaceFace" && typeof node.type === "string")[0]!;
+const faceLook = (root: ReturnType<typeof renderSurface>) => ({ ...flat(faceOf(root).props.style), ...(getAnimatedStyle(faceOf(root)) as Record<string, unknown>) });
+
 for (const reduced of [false, true]) {
-  test(`a bar control answers the press in place with an immediate dim and never scales${reduced ? ", with Reduce Motion too" : ""}`, () => {
+  test(`a bar control answers the touch on the UI thread with an immediate dim and never scales${reduced ? ", with Reduce Motion too" : ""}`, () => {
     mockMotion.reduced = reduced;
     const root = renderSurface(
       <PressInPlace label="Tabs" onPress={() => undefined}>
         <View />
       </PressInPlace>,
     );
-    const control = pressableNamed(root, "Tabs");
-    const down = flat(control.props.children({ pressed: true }).props.style);
-    expect(down.opacity).toBe(press.iconOpacity);
-    expect(down.transform).toBeUndefined();
-    const up = flat(control.props.children({ pressed: false }).props.style);
-    expect(up.opacity).toBeUndefined();
-    expect(up.transform).toBeUndefined();
+    expect(faceLook(root).opacity).toBe(1);
+    act(() => pressTouch("Tabs").handlers.onTouchesDown({ allTouches: [], changedTouches: [] }, touchManager));
+    expect(faceLook(root).opacity).toBeCloseTo(press.iconOpacity, 5);
+    expect(faceLook(root).transform).toBeUndefined();
+    act(() => pressTouch("Tabs").handlers.onTouchesUp({ allTouches: [], changedTouches: [] }, touchManager));
+    expect(faceLook(root).opacity).toBe(1);
+    expect(faceLook(root).transform).toBeUndefined();
     unmount(root);
   });
 }
+
+test("a glass bar control dims only its glyph on contact, so the glass behind keeps full alpha and gives its own press", () => {
+  const root = renderSurface(
+    <PressInPlace label="New Tab" dims="glyph" onPress={() => undefined}>
+      <View testID="glassUnder">
+        <PressedGlyph testID="glyphOver">
+          <View />
+        </PressedGlyph>
+      </View>
+    </PressInPlace>,
+  );
+  const glyph = () => root.root.findAll((node) => node.props.testID === "glyphOver" && typeof node.type === "string")[0]!;
+  act(() => pressTouch("New Tab").handlers.onTouchesDown({ allTouches: [], changedTouches: [] }, touchManager));
+  expect(faceLook(root).opacity ?? 1).toBe(1);
+  expect((getAnimatedStyle(glyph()) as { opacity?: number }).opacity).toBeCloseTo(press.iconOpacity, 5);
+  act(() => pressTouch("New Tab").handlers.onTouchesUp({ allTouches: [], changedTouches: [] }, touchManager));
+  expect((getAnimatedStyle(glyph()) as { opacity?: number }).opacity).toBe(1);
+  unmount(root);
+});
 
 test("a disabled bar control does not dim on contact", () => {
   const root = renderSurface(
@@ -246,7 +274,8 @@ test("a disabled bar control does not dim on contact", () => {
       <View />
     </PressInPlace>,
   );
-  expect(flat(pressableNamed(root, "Back").props.children({ pressed: true }).props.style).opacity).toBeUndefined();
+  act(() => pressTouch("Back").handlers.onTouchesDown({ allTouches: [], changedTouches: [] }, touchManager));
+  expect(faceLook(root).opacity).toBe(1);
   unmount(root);
 });
 

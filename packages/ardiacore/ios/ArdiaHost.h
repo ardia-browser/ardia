@@ -59,6 +59,15 @@ NS_ASSUME_NONNULL_BEGIN
 
 @end
 
+@interface ArdiaHost (Thumbnails)
+
++ (void)displayMediaThumbnails:(NSArray<NSString *> *)sourceIds
+                     maxWidth:(double)maxWidth
+                    completion:(void (^)(NSDictionary<NSString *, NSString *> *found))completion
+    NS_SWIFT_NAME(displayMediaThumbnails(_:maxWidth:completion:));
+
+@end
+
 @interface ArdiaHost (NavigationDownloads)
 
 + (void)noteNavigationDownload:(NSString *)url profile:(NSString *)profile NS_SWIFT_NAME(noteNavigationDownload(_:profile:));

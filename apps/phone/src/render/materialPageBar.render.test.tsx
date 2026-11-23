@@ -70,7 +70,7 @@ const screen = () => {
   const tab = currentTabs().open[0]!;
   return renderSurface(
     <DesignProvider design="material">
-      <BrowsingScreen tab={tab} />
+      <BrowsingScreen tabId={tab.id} />
     </DesignProvider>,
     { flushTimers: false },
   );
@@ -369,7 +369,7 @@ onAndroid.each(["light", "dark"] as const)("Incognito keeps the page search bar 
   const tab = [...currentTabs().privates, ...currentTabs().open].find((one) => one.isPrivate)!;
   const root = renderSurface(
     <DesignProvider design="material">
-      <BrowsingScreen tab={tab} />
+      <BrowsingScreen tabId={tab.id} />
     </DesignProvider>,
     { flushTimers: false },
   );
@@ -451,9 +451,10 @@ onAndroid("the Material bar's + says New Tab, or New Incognito Tab on an Incogni
   expect(pressable(plain, "materialBarPlus").props.accessibilityLabel).toBe("New Tab");
   unmount(plain);
   const privateTab = { ...currentTabs().open[0]!, isPrivate: true };
+  useTabs.setState((state) => ({ open: state.open.map((other) => (other.id === privateTab.id ? privateTab : other)) }));
   const incognito = renderSurface(
     <DesignProvider design="material">
-      <BrowsingScreen tab={privateTab} />
+      <BrowsingScreen tabId={privateTab.id} />
     </DesignProvider>,
     { flushTimers: false },
   );

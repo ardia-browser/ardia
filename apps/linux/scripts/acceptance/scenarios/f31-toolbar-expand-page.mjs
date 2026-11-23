@@ -19,7 +19,9 @@ export default {
     const url = t.fixtures.url.page(1, "toolbar-expand");
     const { app, shell } = await startBrowser(t, { session: sessionSeed({ windows: [{ id: "main", urls: [url] }] }) });
     await shell.state(`s.activate(${js(TAB)}); s.setFocusedWindow(windowId); s.updateSettings({ hideToolbarWhileScrolling: true }); return true;`);
-    await app.pageLoaded(url);
+    const pageTarget = await app.pageLoaded(url);
+    const pageSession = await app.connect(pageTarget);
+    const hasViewportClip = await shell.eval(`window.__ardiaHost?.bootstrap?.capabilities?.includes("tab.viewportClip") === true`);
     await shell.waitState(`return s.settings.hideToolbarWhileScrolling === true;`, { label: "Hide toolbar while scrolling on" });
     const reveal = () => shell.eval(`(() => { const t = ardiaLinux.toolbar; const { [${js(TAB)}]: _, ...rest } = t.getState().scrolledDown; t.setState({ scrolledDown: rest }); return true; })()`);
     const scrollDown = () => shell.eval(`(() => { const t = ardiaLinux.toolbar; t.setState({ scrolledDown: { ...t.getState().scrolledDown, ${js(TAB)}: true }, peek: {} }); return true; })()`);
@@ -67,12 +69,38 @@ export default {
       await t.check(`the page is never hidden while the hidden toolbar opens by ${trigger} and folds away`, async () => {
         await move(await middle());
         await collapse();
+        await pageSession.send("Runtime.evaluate", {
+          expression: `(() => {
+            if (!window.__toolbarResizeInstalled) {
+              window.__toolbarResizeInstalled = true;
+              window.__toolbarResizes = [];
+              window.addEventListener("resize", () => window.__toolbarResizes.push(window.innerHeight));
+            }
+            window.__toolbarResizes.length = 0;
+          })()`,
+        });
         await shell.eval(`(() => {
-          const record = globalThis.toolbarExpandRecord = { sent: [], regionRequests: 0, modes: [], shownFor: [], stopped: false };
+          const slot = document.querySelector("[data-ardia-native-tab]");
+          let cardBottom = null;
+          for (let parent = slot?.parentElement; parent; parent = parent.parentElement) {
+            const style = getComputedStyle(parent);
+            if (style.overflowY !== "visible") { cardBottom = parent.getBoundingClientRect().bottom; break; }
+          }
+          const record = globalThis.toolbarExpandRecord = { sent: [], bottoms: [], radiiChecked: 0, radiiLost: 0, contentClips: 0, cardBottom, regionRequests: 0, modes: [], shownFor: [], stopped: false };
           const send = chrome.send.bind(chrome);
           chrome.send = (name, params) => {
             const call = name === "ardiaRequest" ? params?.[2] : undefined;
-            if (call?.method === "tab.viewport") record.sent.push(call.args.visible);
+            if (call?.method === "tab.viewport") {
+              record.sent.push(call.args.visible);
+              if (call.args.visible && call.args.rect) {
+                record.bottoms.push(call.args.rect.y + call.args.rect.height);
+                if (call.args.radii) {
+                  record.radiiChecked++;
+                  if (call.args.radii.lowerLeft <= 0 || call.args.radii.lowerRight <= 0) record.radiiLost++;
+                }
+                if (call.args.contentRect && call.args.contentRect.height > call.args.rect.height) record.contentClips++;
+              }
+            }
             if (call?.method === "shell.inputRegions" && Array.isArray(call.args?.overlays)) record.regionRequests++;
             return send(name, params);
           };
@@ -94,15 +122,28 @@ export default {
           await collapse();
         }
         const record = await shell.eval("(() => { const { stopped, ...r } = globalThis.toolbarExpandRecord; globalThis.toolbarExpandRecord.stopped = true; ardiaLinux.toolbar.setState({}); return r; })()");
+        const pageResizes = (await pageSession.send("Runtime.evaluate", { expression: "window.__toolbarResizes?.slice()", returnByValue: true })).result?.value;
+        record.pageResizes = pageResizes;
         await t.evidence(`viewports-${trigger}`, record);
         await t.screenshot(shell, `expanded-${trigger}`);
+        assert.ok(Array.isArray(pageResizes), `page resize recorder must report an array: ${js(pageResizes)}`);
         assert.deepEqual(record.modes.filter((mode) => mode !== "collapsed"), [...opened, ...opened], `the toolbar must open as ${opened.join(" then ")} twice: ${js(record.modes)}`);
         if (trigger === CUT_SHORT) assert.ok(record.shownFor.every((ms) => ms < SETTLED_OPEN_MS), `the opening must be cut short before it settles: ${js(record.shownFor)}`);
-        if (opened.join() === "shown") assert.ok(record.sent.length > 0, "the page moving down must reach the recorder as viewport requests");
+        if (opened.join() === "shown") {
+          assert.ok(record.sent.length > 0, "the page moving down must reach the recorder as viewport requests");
+          assert.ok(record.radiiChecked > 0, "viewport requests during toolbar motion must carry card corner radii");
+          if (hasViewportClip) {
+            assert.ok(record.contentClips > 0, "the shell must send contentRect while the page is clipped during the glide");
+            assert.ok(pageResizes.length <= 4, `two expand-and-collapse rounds must not resize the page per frame: ${js(pageResizes)}`);
+          }
+        }
+        assert.notEqual(record.cardBottom, null, "the clipping page card must be measurable on screen");
+        assert.ok(record.bottoms.every((bottom) => bottom <= record.cardBottom + 0.5), `the page protruded past the card bottom (${record.cardBottom}): ${js(record.bottoms)}`);
+        assert.equal(record.radiiLost, 0, "the card's bottom corner radii must stay intact while the toolbar moves");
         assert.ok(record.regionRequests > 0, "the shell's host requests must be read by the recorder");
         assert.ok(!record.sent.includes(false), `the page was hidden while the toolbar opened or folded: ${js(record.sent)}`);
         await shell.waitFor(PAGE_SHOWN, { timeout: 5000, label: "the page still shown after the expansions" });
-        return { viewports: record.sent.length, modes: record.modes };
+        return { viewports: record.sent.length, contentClips: record.contentClips, pageResizes: pageResizes.length, modes: record.modes };
       });
     }
   },

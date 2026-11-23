@@ -264,6 +264,82 @@ test("a page an overlay hosts is cut out of the overlay, and hit shapes take the
   assert.equal(h.registry.overlayAt(260, 70), true);
 });
 
+test("hosted pages keep pointer input when pageRectOf is the production clippedRectOf", async () => {
+  const { clippedRectOf } = await import("./hostViewport.ts");
+  const previous = globalThis.getComputedStyle;
+  const domBox = (rect) => ({ ...rect, left: rect.x, top: rect.y, right: rect.x + rect.width, bottom: rect.y + rect.height });
+  const styles = new Map();
+  globalThis.getComputedStyle = (el) => styles.get(el) ?? { overflowX: "visible", overflowY: "visible" };
+  try {
+    const peekCard = {
+      isConnected: true,
+      parentElement: null,
+      rect: { x: 250, y: 60, width: 500, height: 600 },
+      getBoundingClientRect() { return domBox(this.rect); },
+      contains(other) { return other === this || other === peekPage; },
+    };
+    const peekPage = {
+      isConnected: true,
+      parentElement: peekCard,
+      rect: { x: 300, y: 100, width: 400, height: 520 },
+      getBoundingClientRect() { return domBox(this.rect); },
+      contains(other) { return other === this; },
+    };
+    styles.set(peekCard, { overflowX: "hidden", overflowY: "hidden" });
+    const sent = [];
+    const queue = [];
+    const frames = [];
+    let now = 0;
+    const registry = createInputRegions({
+      send: (regions) => { sent.push(regions); return Promise.resolve(); },
+      viewport: () => ({ width: 1000, height: 800 }),
+      rectOf: (el) => el.rect,
+      pageRectOf: clippedRectOf,
+      receivesPointer: () => true,
+      watch: () => () => {},
+      animating: () => false,
+      conceal: () => {},
+      microtask: (run) => queue.push(run),
+      frame: (run) => frames.push(run),
+      frameTime: () => now,
+      timeout: () => 0,
+      clearTimeout: () => {},
+    });
+    registry.setPage(peekPage, true);
+    registry.addOverlay(peekCard);
+    while (queue.length) queue.shift()();
+    await Promise.resolve();
+    assert.equal(registry.overlayAt(500, 300), false, "hosted peek page keeps pointer input");
+    assert.equal(registry.overlayAt(260, 70), true, "overlay frame outside hosted page keeps overlay input");
+    assert.equal(sent.at(-1).overlays.reduce((sum, rect) => sum + rect.width * rect.height, 0), 500 * 600 - 400 * 520);
+    const cardClip = {
+      isConnected: true,
+      parentElement: null,
+      getBoundingClientRect: () => ({ x: 240, y: 48, left: 240, top: 48, right: 992, bottom: 692, width: 752, height: 644 }),
+    };
+    const protrudingPage = {
+      isConnected: true,
+      parentElement: cardClip,
+      getBoundingClientRect: () => ({ x: 240, y: 48, left: 240, top: 48, right: 992, bottom: 712, width: 752, height: 664 }),
+    };
+    globalThis.getComputedStyle = (element) =>
+      element === cardClip
+        ? { display: "block", visibility: "visible", opacity: "1", overflowX: "hidden", overflowY: "hidden" }
+        : { display: "block", visibility: "visible", opacity: "1", overflowX: "visible", overflowY: "visible" };
+    registry.setPage(peekPage, false);
+    registry.setPage(protrudingPage, true);
+    for (let step = 0; step < 3; step++) {
+      now += 16;
+      while (queue.length) queue.shift()();
+      for (const run of frames.splice(0)) run();
+      await Promise.resolve();
+    }
+    assert.deepEqual(sent.at(-1).pages, [{ x: 240, y: 48, width: 752, height: 644 }]);
+  } finally {
+    globalThis.getComputedStyle = previous;
+  }
+});
+
 test("hidden pages leave the page list, and an overlay already shown stays shown when it moves over a page", async () => {
   const h = harness();
   h.registry.setPage(page, true);

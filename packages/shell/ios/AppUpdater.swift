@@ -8,7 +8,7 @@ public final class AppUpdater: NSObject {
   static var feedOverride: String? {
     let config = LaunchConfig.shared
     if let feed = config.instance("updateFeed") ?? UserDefaults.standard.string(forKey: "ACUpdateFeedURL") { return feed }
-    return config.background ? "https://github.com/mantrakp04/ardia/releases/latest/download/appcast.xml" : nil
+    return config.background ? "https://github.com/ardia-browser/ardia/releases/latest/download/appcast.xml" : nil
   }
 
   static let channelDefaultsKey = "ACUpdateChannel"
@@ -147,7 +147,7 @@ public final class AppUpdater: NSObject {
 
   private static var aboutCredits: NSAttributedString {
     let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
-    let repository = "https://github.com/mantrakp04/ardia"
+    let repository = "https://github.com/ardia-browser/ardia"
     let centered = NSMutableParagraphStyle()
     centered.alignment = .center
     let plain: [NSAttributedString.Key: Any] = [

@@ -86,7 +86,7 @@ test("in landscape the deck's header and its bottom bar pad by the wider side in
 
 test("in landscape the page bar stays one centred row: the wider side inset on both sides, then the bars' own 24, leaving a 574-point address capsule on an 852 screen", () => {
   act(() => browse.useBrowse.setState({ surface: "browsing", sheet: null, deckEntrance: null, frozenOrder: null, opening: null }));
-  const root = redesigned(<BrowsingScreen tab={currentTabs().open[0]!} />);
+  const root = redesigned(<BrowsingScreen tabId={currentTabs().open[0]!.id} />);
   const bar = root.root.findAll((node) => node.type === FloatingBar)[0]!;
   let controls: ReactTestInstance | null = bar.parent;
   while (controls && (typeof controls.type !== "string" || flat(controls).bottom === undefined)) controls = controls.parent;
@@ -115,7 +115,7 @@ for (const pose of DUO_POSES) {
   test(`on the ${pose.name} Duo the page bar holds only the address capsule, ${pose.span.left} from the left to ${pose.span.right} from the right, with + at ${pose.plusY} and Tabs at ${pose.tabsY} from the bar's line in the strip, ${pose.stripX} across`, () => {
     onDuo(pose);
     act(() => browse.useBrowse.setState({ surface: "browsing", sheet: null, deckEntrance: null, frozenOrder: null, opening: null }));
-    const page = redesigned(<BrowsingScreen tab={currentTabs().open[0]!} />);
+    const page = redesigned(<BrowsingScreen tabId={currentTabs().open[0]!.id} />);
     const bar = page.root.findAll((node) => node.type === FloatingBar)[0]!;
     let controls: ReactTestInstance | null = bar.parent;
     while (controls && (typeof controls.type !== "string" || flat(controls).bottom === undefined)) controls = controls.parent;
@@ -173,7 +173,7 @@ for (const pose of DUO_POSES) {
 
 test("with no hinge the page bar keeps Tabs and + in its row", () => {
   act(() => browse.useBrowse.setState({ surface: "browsing", sheet: null, deckEntrance: null, frozenOrder: null, opening: null }));
-  const page = redesigned(<BrowsingScreen tab={currentTabs().open[0]!} />);
+  const page = redesigned(<BrowsingScreen tabId={currentTabs().open[0]!.id} />);
   const row = hosts(page, "floatingBar")[0]!;
   expect(holds(row, "floatingBarTabs")).toBe(true);
   expect(holds(row, "floatingBarPlus")).toBe(true);

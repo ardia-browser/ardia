@@ -3,6 +3,7 @@ import { Pressable, type StyleProp, type ViewInstance, type ViewStyle } from "re
 import { slopToReach, slotAround } from "./hitTarget";
 import { screenReaderActions } from "./screenReaderActions";
 import { usePressStyle } from "./pressFeedback";
+import { GlyphPressFace, type PressDims } from "./PressInPlace";
 import { Symbol } from "./Symbol";
 import type { SymbolName } from "./symbolPaths";
 import { glyphSlot } from "./tokens";
@@ -51,12 +52,14 @@ type ToggleIconButtonProps = SlotProps & {
   onPressIn?: () => void;
   onLongPress?: () => void;
   longPressLabel?: string;
+  dims?: PressDims;
   children: ReactNode;
 };
 
-export function ToggleIconButton({ checked, onChange, label, hint, role = "switch", disabled = false, visual = glyphSlot.icon, layout = "slot", style, testID, onPressIn, onLongPress, longPressLabel, children }: ToggleIconButtonProps) {
+export function ToggleIconButton({ checked, onChange, label, hint, role = "switch", disabled = false, visual = glyphSlot.icon, layout = "slot", style, testID, onPressIn, onLongPress, longPressLabel, dims = "button", children }: ToggleIconButtonProps) {
   const { box, slop } = slotPlacement(visual, layout);
   const longPressAction = onLongPress ? screenReaderActions([{ name: "longpress", label: longPressLabel, run: onLongPress }]) : {};
+  const dimsButton = dims === "button";
   const pressStyle = usePressStyle("icon", { disabled, style: [box, style] });
   return (
     <Pressable
@@ -71,9 +74,9 @@ export function ToggleIconButton({ checked, onChange, label, hint, role = "switc
       onPress={() => onChange(!checked)}
       onPressIn={onPressIn}
       onLongPress={onLongPress}
-      style={pressStyle}
+      style={dimsButton ? pressStyle : [box, style]}
     >
-      {children}
+      {dimsButton ? children : <GlyphPressFace testID={`toggleIconButton:${label}`} disabled={disabled}>{children}</GlyphPressFace>}
     </Pressable>
   );
 }

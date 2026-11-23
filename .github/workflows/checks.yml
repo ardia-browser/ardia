@@ -3,6 +3,7 @@ name: Checks
 on:
   pull_request:
     paths: &inputs
+      - ".gitattributes"
       - "apps/browser/**"
       - "apps/linux/**"
       - "apps/site/**"
@@ -63,6 +64,7 @@ jobs:
         with:
           filters: |
             code:
+              - ".gitattributes"
               - "apps/browser/**"
               - "apps/linux/**"
               - "apps/phone/scripts/**"
@@ -73,6 +75,7 @@ jobs:
               - "apps/site/src/data/heroFrames.mjs"
               - "packages/**"
               - "engine/ardiacore/src/**"
+              - "engine/ardiacore-linux/src/ardia/linux/ac_linux_contract.h"
               - "engine/patches/**"
               - "docs/engine-build.md"
               - "scripts/lib/**"

@@ -14,6 +14,7 @@ export type RegionDeps = {
   send: ((regions: HostInputRegions) => Promise<unknown>) | null;
   viewport: () => { width: number; height: number };
   rectOf: (element: Element) => Rect;
+  pageRectOf?: (element: Element) => Rect;
   receivesPointer: (element: Element) => boolean;
   watch: (element: Element, changed: () => void) => () => void;
   animating: (elements: readonly Element[]) => boolean;
@@ -100,12 +101,14 @@ export function createInputRegions(deps: RegionDeps) {
     for (const child of element.children) hitRects(child, out);
   };
 
+  const pageRectOf = deps.pageRectOf ?? deps.rectOf;
+
   const measurePages = () => {
     const window = { x: 0, y: 0, ...deps.viewport() };
     const areas: PageArea[] = [];
     for (const [slot, { visible, radii, cardRadii }] of pages) {
       if (!visible || !slot.isConnected) continue;
-      const clipped = intersection(deps.rectOf(slot), window);
+      const clipped = intersection(pageRectOf(slot), window);
       if (clipped) areas.push({ slot, rect: rounded(clipped), ...(radii ? { radii: radii() } : {}), ...(cardRadii ? { cardRadii: cardRadii() } : {}) });
     }
     return areas;
@@ -117,7 +120,7 @@ export function createInputRegions(deps: RegionDeps) {
       const rect = deps.rectOf(element);
       if (area(rect)) raw.push(rect);
     } else hitRects(element, raw);
-    const hosted = [...pages.keys()].filter((slot) => element.contains(slot)).map(deps.rectOf);
+    const hosted = [...pages.keys()].filter((slot) => element.contains(slot)).map((slot) => pageRectOf(slot));
     return raw.flatMap((rect) => hosted.reduce<Rect[]>((pieces, hole) => pieces.flatMap((piece) => subtract(piece, hole)), [rect])).map(rounded);
   };
 

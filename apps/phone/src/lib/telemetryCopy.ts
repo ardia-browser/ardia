@@ -102,6 +102,14 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         fields: ["page_pictures_blank", "page_pictures_hidden", "page_pictures_webkit", "page_pictures_scrolled"],
       },
       {
+        text: "In the same daily counts: how often Ardia couldn’t save your latest tab changes and told you it would keep trying, and how often the search panel opened before its suggestions were ready. Counts only, and never while browsing privately",
+        fields: ["tab_writes_stalled", "search_opens_cold"],
+      },
+      {
+        text: "In the same daily counts, on iPhone: how often a tab you swiped to kept its saved picture until a time limit instead of handing over to the page the moment it drew. Counts only, and never while browsing privately",
+        fields: ["page_covers_capped"],
+      },
+      {
         text: "In the same daily counts: how often you chose Custom in Settings › Appearance, and how many changes you made on its Theme page. Counts only, never the colors or settings you picked",
         fields: ["custom_theme_chosen", "theme_edits"],
       },

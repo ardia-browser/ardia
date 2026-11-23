@@ -18,7 +18,13 @@ export type HostPageReceiver = {
 };
 export type HostPageFactory = (claim: string, nativeId: () => number | undefined,
   rebound: (identity: { browserId: number; chromeTabId: number }) => void) => HostPageReceiver;
-export type TabViewport = { rect: { x: number; y: number; width: number; height: number }; visible: boolean; radii?: CornerRadii };
+export type TabViewport = {
+  rect: { x: number; y: number; width: number; height: number };
+  visible: boolean;
+  radii?: CornerRadii;
+  contentRect?: { x: number; y: number; width: number; height: number };
+};
+export const VIEWPORT_CLIP_CAPABILITY = "tab.viewportClip";
 
 const claims = new WeakMap<ArdiaHost, Map<string, HostTab>>();
 const CREATING_LOAD_MS = 2_000;
@@ -147,11 +153,14 @@ export class HostTab {
       const latest = this.nextViewport;
       this.nextViewport = undefined;
       if (!latest || this.disposed || !this.identity || claims.get(this.host)?.get(this.key) !== this) return;
-      const json = JSON.stringify(latest);
+      const host = this.host;
+      const effective: TabViewport = latest.contentRect && !hostSupports(VIEWPORT_CLIP_CAPABILITY, host)
+        ? { rect: latest.rect, visible: latest.visible, ...(latest.radii ? { radii: latest.radii } : {}) }
+        : latest;
+      const json = JSON.stringify(effective);
       if (json === this.lastViewport) return;
       this.lastViewport = json;
-      const args = { id: this.identity.browserId, claim: this.claim, ...latest };
-      const host = this.host;
+      const args = { id: this.identity.browserId, claim: this.claim, ...effective };
       const consent = consentToken();
       const sent = host ? new Promise<void>((resolve) => resolve(host.invoke("tab.viewport", args) as Promise<void>)) : invokeHost<void>("tab.viewport", args, host);
       return sent.catch((error) => {

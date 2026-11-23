@@ -116,7 +116,7 @@ export const HostExtensionWebView = forwardRef<WebViewHandle, HostExtensionWebVi
     const regions = inputRegions();
     if (!node || !regions || props.extensionHost !== "sidePanel") return;
     const visible = () => latest.current.visible !== false;
-    return watchPageBelowShell(node, regions, visible, () => view.current && { identity: true, disposed: view.current.disposed, viewport: (viewport) => view.current!.viewport({ ...viewport, radii: clipRadii(node) }) }, () => clipRadii(node));
+    return watchPageBelowShell(node, regions, visible, () => view.current && { identity: true, disposed: view.current.disposed, viewport: (viewport) => view.current!.viewport({ ...viewport, radii: clipRadii(node) }) }, () => clipRadii(node), undefined, undefined, false);
   }, []);
 
   return <View style={[props.style, { backgroundColor: "transparent" }]}><div ref={element} data-ardia-extension-view={props.extensionHost} style={{ position: "absolute", inset: 0 }} /></View>;

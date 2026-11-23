@@ -173,7 +173,7 @@ extension WebKitTab {
   }
 
   func applyBackdrop(_ color: NSColor?) {
-    safety.backdrop = color
+    safety.backdrop.color = color
     paintBackdrop()
   }
 
@@ -181,24 +181,27 @@ extension WebKitTab {
     if view.responds(to: NSSelectorFromString("_setObservedRenderingProgressEvents:")) {
       view.setValue(NSNumber(value: Self.firstPaintEvents), forKey: "observedRenderingProgressEvents")
     }
-    safety.awaitingFirstPaint = view.url == nil
+    safety.backdrop.awaitingFirstPaint = view.url == nil
     paintBackdrop()
   }
 
   private static let firstPaintEvents: UInt = 1 << 1 | 1 << 6
 
-  private func paintBackdrop() {
+  func paintBackdrop() {
     wantsLayer = true
-    layer?.backgroundColor = safety.backdrop?.cgColor
+    if window != nil, safety.backdrop.uncovers(layer?.backgroundColor, visible: visible) {
+      ArdiaEvents.emit("webKit.counted", data: ArdiaConsentStamp.begin().onto(["name": "backdropHidden"]))
+    }
+    layer?.backgroundColor = safety.backdrop.layerColor(visible: visible)
     guard let view = webView, view.responds(to: NSSelectorFromString("_setDrawsBackground:")) else { return }
-    let draws = !(safety.awaitingFirstPaint && safety.backdrop != nil)
+    let draws = safety.backdrop.pageDrawsBackground
     if (view.value(forKey: "drawsBackground") as? Bool) != draws { view.setValue(draws, forKey: "drawsBackground") }
   }
 
   @objc(_webView:renderingProgressDidChange:)
   func webViewRenderingProgressDidChange(_ webView: WKWebView, progressEvents: UInt) {
-    guard webView === self.webView, safety.awaitingFirstPaint, progressEvents & Self.firstPaintEvents != 0 else { return }
-    safety.awaitingFirstPaint = false
+    guard webView === self.webView, safety.backdrop.awaitingFirstPaint, progressEvents & Self.firstPaintEvents != 0 else { return }
+    safety.backdrop.awaitingFirstPaint = false
     paintBackdrop()
   }
 }

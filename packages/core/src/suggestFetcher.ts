@@ -4,7 +4,7 @@ type FetchResponse = { ok: boolean; text(): Promise<string> };
 export type FetchLike = (url: string, init: { signal: AbortSignal; engine?: SearchEngine }) => Promise<FetchResponse>;
 
 export type SuggestFetcher = {
-  request(engine: SearchEngine, query: string, onResult: (suggestions: string[], sites: RemoteSite[]) => void): void;
+  request(engine: SearchEngine, query: string, onResult: (suggestions: string[], sites: RemoteSite[]) => void, onFailed?: () => void): void;
   cancel(): void;
 };
 
@@ -39,7 +39,7 @@ export function createSuggestFetcher({
 
   return {
     cancel,
-    request(engine, query, onResult) {
+    request(engine, query, onResult, onFailed) {
       cancel();
       const url = suggestRequestUrl(engine, query);
       if (!url) return;
@@ -71,7 +71,11 @@ export function createSuggestFetcher({
                 onResult(suggestions.queries, suggestions.sites);
               }
             },
-            () => {},
+            () => {
+              if (controller.signal.aborted || current !== generation) return;
+              inFlight = undefined;
+              onFailed?.();
+            },
           );
       }, delay);
     },

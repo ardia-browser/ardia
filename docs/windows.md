@@ -655,6 +655,39 @@ is plain Chromium.
   has opened, so a profile that crashes Ardia at every start opens again on its own. Chromium's profile (bookmarks,
   history, passwords, cookies) isn't touched. #2097's recording (the app gone about 4 s after its window appears, at
   every launch after onboarding) is that shape; the launch log now kept in `Logs` says what ended it.
+- **Crash reports.** `ArdiaApp.crashReports(since)` lists the minidumps Chromium's crash handler (Crashpad) wrote after
+  `since` (milliseconds), so the telemetry owner's native-crash report (`reportNativeCrashes`, the same consent as the
+  Mac and Linux) can name what ended a run on the next launch. It used to answer an empty list, so a Windows crash left
+  no report (#3664). `CrashDumps.h` does the work and uses only the standard library, so a test compiles it on any
+  machine; `AppModule.h` picks the folders and builds the JS objects.
+  - Where: the profile's `Crashpad\reports` folder (`%LOCALAPPDATA%\Ardia\User Data` for an everyday instance, the
+    instance's data folder for a test instance, whose dumps then never reach the everyday profile). Files over 32 MB
+    and empty or damaged ones are skipped. Every dump newer than the asking time is read (Crashpad prunes the folder
+    itself), so a burst of helper dumps can't hide an older browser one; then the newest five from the browser process
+    and five from the others are kept, as on Linux. A file's time is converted with the file clock, so asking again from
+    a report's `fileTime` never returns that dump again. The walk runs on its own thread, so it never holds the UI thread.
+  - What is read: the minidump's header, exception stream, module list and process times (bounds-checked, nothing is
+    executed) and three of Crashpad's annotations, `ptype`, `ver` and `ardia-ver`; every other annotation, the stacks,
+    the memory and the thread contexts are never copied. A dump written without a crash (Crashpad's simulated-exception
+    code) or without an exception stream is skipped.
+  - What comes back (`CrashReport`): the process kind (`ptype`; none means the browser), `terminationNamespace`
+    `WIN32_EXCEPTION`, the exception as its Windows name (`EXCEPTION_ACCESS_VIOLATION`, `STATUS_STACK_BUFFER_OVERRUN`,
+    or `STATUS_XXXXXXXX` for a code with no name), for an access violation whether it read, wrote or executed, one
+    frame naming the faulting module's file name and the offset in it (`nvoglv64.dll` +`0x1234`, `???` when the
+    address is in no module or the name isn't a plain `.dll`, `.exe`, `.sys`, `.drv`, `.ocx` or `.cpl` file name), the seconds the process had run (the dump's time minus its start time), the engine
+    version for a helper process (kept only when it has the shape of a version), and the dump's time and its file's modification time. No folder or file path, URL, page title or user
+    name is returned, and the module name has its folder cut off. The parser also reads an `ardia-ver` annotation as the
+    browser's app version, but no Windows build writes one yet, so a browser report carries no version. A browser-process
+    crash may also never reach Crashpad at all; that is #3665.
+  - `ArdiaApp.devWriteCrashFixture(name, hex)` writes a dump into that folder for the self-check. It refuses unless the
+    instance is a test instance, and refuses any name but letters, digits and dashes before `.dmp`, and Windows'
+    reserved device names. It answers true or false,
+    never a path.
+  - Self-check (`appSystem.ts`, `sampleMinidump.ts`): the inert-calls check asks for reports newer than tomorrow and
+    expects none; two more write a GPU-process dump (access violation in `nvoglv64.dll`, uptime 3 s, an engine
+    version) and a browser dump (stack buffer overrun in `Ardia.exe`, an app version) and read each back through
+    `crashReports(0)`. `windowsCrashReports.test.mjs` compiles the same parser with the system C++ compiler and
+    checks the dumps the self-check builds, plus damaged, oversized, simulated and hostile ones.
 - A window closed while minimized keeps its restored place and size for the next launch (the frame event's restored
   bounds); it used to save the minimized frame and come back as a 480 x 360 window in the corner.
 - `scripts/windows/relaunch-check.ps1` (CI, after the installer check) installs the build and closes and reopens
@@ -1263,6 +1296,19 @@ When the cause is in the code (a stale engine pin needs a new engine release and
 Windows skips this version and ships with the next release. When only `windows-update` failed, the installers are on
 the release already: re-run that job alone (its re-run touches nothing else), or run the last line above on its
 `windows-release-*` artifacts, flattened into one folder as above.
+
+### Finding the source of a JS error
+
+The app runs Hermes bytecode with no debug info, so a frame of its own code in an error report is
+`index.windows`, line 1, with the bytecode offset as its column, and `$app_build` names the build. Every launch job
+that compiled the bundle (every release run) keeps the bundle's composed map as the artifact
+`windows-sourcemaps-<cpu>-build-<build>`, for 90 days on a release and 14 otherwise; the installer carries the same
+files in `sourcemaps\react`. To turn an offset back into source:
+
+```bash
+gh run download <run id> -R ardia-browser/ardia -n windows-sourcemaps-x64-build-<build> -D /tmp/maps-<build>
+printf '    at anonymous (address at index.windows:1:<offset>)\n' | npx metro-symbolicate /tmp/maps-<build>/index.windows.bundle.map
+```
 
 ## Test instances
 

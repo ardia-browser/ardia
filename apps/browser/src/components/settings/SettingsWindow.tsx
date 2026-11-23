@@ -9,7 +9,7 @@ import { preparePane, usePaneLoaded } from "../../state/settings/paneData";
 import { clearSettingsReveal, flashSetting, settingsSearchHost, useSettingsSearch } from "../../state/settings/searchState";
 import { anchorView } from "./anchors";
 import { findSetting, resolveSettingId, PANES, paneTitle } from "./settingsIndex";
-import { SettingsPaneContext } from "./Form";
+import { SettingsPaneContext, UnshownSettingsProvider } from "./Form";
 import { PageToolbar } from "../pages/PageLayout";
 import { SettingsSearchField, SettingsSearchResults } from "./SettingsSearch";
 import { AdvancedPane } from "./panes/Advanced";
@@ -22,7 +22,7 @@ import { ShortcutsPane } from "./panes/Shortcuts";
 import { TabsPane } from "./panes/Tabs";
 import { useSettingsSheet } from "../../state/settings/sheet";
 import { SettingsConsentSheet } from "../plugins/SettingsConsentSheet";
-import { goToSettingsPane, SETTINGS_WINDOW_ID, settingsBack, settingsForward, useSettingsNav, type SettingsPane, type SettingsPlace } from "../../state/settings/settingsWindows";
+import { claimSettingsOpenAt, goToSettingsPane, SETTINGS_WINDOW_ID, settingsBack, settingsForward, useSettingsNav, type SettingsPane, type SettingsPlace } from "../../state/settings/settingsWindows";
 import { closeProfileIconPickerIn } from "../../state/profiles/iconPicker";
 import { ProfileIconPicker } from "../profiles/ProfileIconPicker";
 import { settingsProfileFor } from "../../state/extensions/store";
@@ -44,12 +44,13 @@ const sidebarTop = () => (WINDOW_CHROME.leadingWidth ? TOOLBAR : space.ml);
 const TITLE_LEFT = SIDEBAR + 96;
 const CONTROLS_ROOM = WINDOW_CONTROLS.edge + windowControlsWidth() + WINDOW_CONTROLS.gap;
 const HOLD_CAP_MS = 250;
+const PREFETCH_DELAY_MS = 150;
 const REVEAL_MARGIN = 16;
 
 const shownKey = (s: SettingsPlace) => `${s.pane}:${s.profileId ?? ""}:${s.detail ?? ""}`;
 const pageKey = (s: SettingsPlace) => (s.pane === "profiles" && !s.detail ? "profiles::" : shownKey(s));
 
-function useShownPane(): SettingsPlace | null {
+function useShownPane(openedAt: number | null): SettingsPlace | null {
   const nav = useSettingsNav();
   const target = { pane: nav.pane, profileId: nav.profileId, detail: nav.detail };
   const key = shownKey(target);
@@ -60,33 +61,48 @@ function useShownPane(): SettingsPlace | null {
   useEffect(() => {
     if (ready) return setLast(target);
     void preparePane(target.pane, target.profileId);
-    const timer = setTimeout(() => setExpired(key), HOLD_CAP_MS);
+    const since = last ? null : openedAt;
+    const wait = since ? Math.max(0, HOLD_CAP_MS - (Date.now() - since)) : HOLD_CAP_MS;
+    const timer = setTimeout(() => setExpired(key), wait);
     return () => clearTimeout(timer);
   }, [key, ready]);
   return ready ? target : last;
 }
 
-function usePrefetchAllPanes(enabled: boolean) {
+function usePrefetchAllPanes(shown: SettingsPane | null) {
   useEffect(() => {
-    if (!enabled) return;
-    const timer = setTimeout(() => {
-      for (const p of PANES) void preparePane(p.id, null);
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [enabled]);
+    if (!shown) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const frame = requestAnimationFrame(() => {
+      timer = setTimeout(() => {
+        for (const p of PANES) if (p.id !== shown) void preparePane(p.id, null);
+      }, PREFETCH_DELAY_MS);
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      if (timer) clearTimeout(timer);
+    };
+  }, [!!shown]);
 }
 
 export function SettingsWindow() {
   const look = useSettingsColors();
   useWindowChrome();
   const nav = useSettingsNav();
-  const shown = useShownPane();
-  usePrefetchAllPanes(!!shown);
+  const [openedAt] = useState(claimSettingsOpenAt);
+  const shown = useShownPane(openedAt);
+  usePrefetchAllPanes(shown?.pane ?? null);
   const profileName = useProfile(shown?.profileId, (p) => p?.name);
   const pluginTitle = usePluginTitle(shown?.pane === "plugins" ? shown.detail : null);
   const title = shown ? (shown.pane === "profiles" && profileName ? profileName : shown.pane === "plugins" && pluginTitle ? pluginTitle : paneTitle(shown.pane)) : "";
   const sheet = useSettingsSheet((s) => s.sheet);
-  useEffect(() => trackSettingsSection(nav.pane), [nav.pane]);
+  const trackedOpen = useRef(false);
+  useEffect(() => {
+    if (!shown) return;
+    const since = trackedOpen.current ? null : openedAt;
+    trackedOpen.current = true;
+    trackSettingsSection(shown.pane, since ? Date.now() - since : undefined);
+  }, [shown?.pane]);
   useEffect(() => settingsSearchHost(), []);
   useEffect(() => markCaptionRegions(SETTINGS_WINDOW_ID, [[TITLE_LEFT, 0, CONTROLS_ROOM, TOOLBAR]]), []);
   useEffect(() => void setTrafficLightsCenter(SETTINGS_WINDOW_ID, [LIGHTS_CENTER[0], TOOLBAR / 2]), []);
@@ -129,6 +145,7 @@ export function SettingsWindow() {
   }, [key]);
 
   return (
+    <UnshownSettingsProvider>
     <View style={{ flex: 1, flexDirection: "row", backgroundColor: look.windowFill }}>
       <View style={{ width: SIDEBAR }}>
         <VisualEffect material="sidebar" blendingMode="behindWindow" style={StyleSheet.absoluteFill} />
@@ -179,6 +196,7 @@ export function SettingsWindow() {
       <WindowControls windowId={SETTINGS_WINDOW_ID} centerY={TOOLBAR / 2} size={WINDOW_CONTROLS.regular} />
       <LeadingWindowControls windowId={SETTINGS_WINDOW_ID} size={WINDOW_CONTROLS.regular} />
     </View>
+    </UnshownSettingsProvider>
   );
 }
 

@@ -136,7 +136,7 @@ export function MaterialPageMenuItems({ tabId, model, onTranslate, onFind = show
           <ListRow icon="arrowDownCircle" title={destinationWords.downloads} enabled onPress={() => openFromMenu("downloads")} />
         </Group>
         <Group>
-          {model.pageRows ? <SwitchRow which="nightShade" icon={model.nightShadeOn ? "moonFill" : "moon"} title="Night Shade" value={model.nightShadeOn} enabled={model.isWebPage} onChange={setNightShadeOn} /> : null}
+          {model.pageRows ? <SwitchRow which="nightShade" icon={model.nightShadeOn ? "moonFill" : "moon"} title="Night Shade" value={model.nightShadeOn} enabled={model.siteSwitches} onChange={setNightShadeOn} /> : null}
           {model.pageRows ? <ZoomRow model={model} large={large} /> : null}
           {model.pageRows ? <SwitchRow which="desktopSite" icon="desktop" title="Desktop Site" value={model.desktopSite} enabled={model.isWebPage} onChange={setDesktopSite} /> : null}
           {model.pageRows ? <ListRow icon="translate" title={model.translateTitle} enabled={model.translate} onPress={onTranslate} /> : null}
@@ -146,7 +146,7 @@ export function MaterialPageMenuItems({ tabId, model, onTranslate, onFind = show
               icon={model.blockersEnabled ? "handRaised" : "handRaisedSlash"}
               title={blockingWords.blockAdsAndTrackers}
               value={model.blockersEnabled}
-              enabled={model.isWebPage}
+              enabled={model.siteSwitches}
               supporting={model.blockedCount ? `${model.blockedCount} blocked` : null}
               onChange={setBlockersOn}
             />

@@ -1,13 +1,10 @@
 import type { AddressInput, SavedAddress, SavedCard } from "../autofill";
-import type { EngineBookmark, BookmarkOp } from "../bookmarks";
 import type { CastDialog, CastRoute, DeviceChooser } from "../media";
 import type { AddedFilterList, ContentBlockerState, ContentBlockerStats } from "../contentBlocker";
 import type {
   ActionPopupRequest, ActionState, ChromeSearchEngine, ExtensionActionChange, ExtensionInstallPrompt, ExtensionPackage, ExtensionsChange, ExtensionsLoadHealth, ExtensionsSyncApplied, ExtensionsSyncApply,
   ExtensionsSyncState, ExtensionSyncIntent, InstalledExtension, SidePanelRequest, TabsRequest,
 } from "../extensions";
-import type { HistoryChangedBatch, HistoryWireRow } from "../history";
-import type { FaviconImage } from "../favicons";
 import type { Download, DownloadSettings } from "../downloads";
 import type {
   BatterySaverMode, BatterySaverState, CliControlStatus, CursorRestore, CliTabTarget, EngineComponent, EngineInfo, EngineTask, HoverLostEpisode, MemorySaverRequest, PressLoopLongReport, MemorySaverState, PopupProtectedMedia, SystemState, WindowUnpaintedRecord,
@@ -22,12 +19,14 @@ import type {
   CookieRemoval, PageCookie, PageEngine, PasskeyAccess, SiteData, SiteDataWritten, StorageChange, StorageItems, WebKitCount,
 } from "../webkit";
 import type { DisplayMediaSource, OpenWindowRequest, WebNotification } from "../pageTypes";
+import type { BookmarksCalls, BookmarksEvents } from "./generated/bookmarks";
+import type { FaviconsCalls, FaviconsEvents } from "./generated/favicons";
+import type { HistoryCalls, HistoryEvents } from "./generated/history";
+import type { Done, Profile } from "./wire";
 
-type Profile = { profile: string };
-type Done = Record<string, never> | null;
 type VideoUpscalingState = { enabled: boolean; lowPower: boolean; thermalPressure: boolean; appActive: boolean; tabs: { tabId: number; allowed: boolean; capturing: boolean }[] };
 
-export type EngineCalls = {
+export type EngineCalls = BookmarksCalls & FaviconsCalls & HistoryCalls & {
   "engine.info": [{}, EngineInfo];
   "engine.components": [{}, EngineComponent[]];
   "engine.tasks": [{}, EngineTask[]];
@@ -148,6 +147,7 @@ export type EngineCalls = {
   "search.stopSuggest": [Profile & { id: number }, Done];
 
   "media.displayMediaSources": [{}, DisplayMediaSource[]];
+  "media.displayMediaThumbnails": [{ ids: string[]; width: number }, Record<string, string>];
   "media.screenRecordingAllowed": [{}, boolean];
   "media.requestScreenRecording": [{}, boolean];
   "media.selectDevice": [{ id: number; index: number }, null];
@@ -177,21 +177,6 @@ export type EngineCalls = {
   "contentBlocker.restoreElements": [{ profile: string; filters: string[] }, null];
   "contentBlocker.devFailNextMessage": [{}, null];
   "contentBlocker.devDelayNextLoad": [{ ms: number }, null];
-
-  "history.query": [Profile & { maxUrls: number; maxVisits: number }, { entries: (HistoryWireRow & { v: number[] })[] }];
-  "history.add": [Profile & { pages: { u: string; t: string; v: number[] }[]; toleranceMs: number }, { added: number }];
-  "history.import": [Profile & { rows: { u: string; t: string; n: number; l: number }[] }, Done];
-  "history.deleteUrls": [Profile & { urls: string[] }, Done];
-  "history.watch": [Profile, Done];
-
-  "bookmarks.tree": [Profile, { bar: EngineBookmark; other: EngineBookmark }];
-  "bookmarks.apply": [Profile & { ops: BookmarkOp[] }, { applied: number; skipped: number; invalid: string[] }];
-  "bookmarks.watch": [Profile, Done];
-  "bookmarks.exportHtml": [Profile, string | null];
-
-  "favicons.get": [Profile & { pages: string[]; icons: string[]; size: number }, { pages: Record<string, { png: string; icon: string }>; icons: Record<string, { png: string }> }];
-  "favicons.set": [Profile & { page: string; icon: string; png: string }, { stored: boolean }];
-  "favicons.fetch": [Profile & { url: string }, FaviconImage | null];
 
   "webView.setDisplayMediaPicker": [{ enabled: boolean }, null];
   "webView.setPeekModifier": [{ modifier: "alt" | "shift" | "off" }, null];
@@ -230,7 +215,7 @@ export type EngineCalls = {
   "webKit.requestPasskeyAccess": [{}, PasskeyAccess];
 };
 
-export type EngineEvents = {
+export type EngineEvents = BookmarksEvents & FaviconsEvents & HistoryEvents & {
   "engine.systemState": SystemState;
   "engine.cliControl": CliControlStatus;
   "engine.hoverLost": HoverLostEpisode;
@@ -259,8 +244,6 @@ export type EngineEvents = {
   "extensions.actionShortcut": ActionPopupRequest;
   "extensions.action": ExtensionActionChange;
   "extensions.sync": { profile: string } & ExtensionSyncIntent;
-  "history.changed": HistoryChangedBatch;
-  "bookmarks.changed": { profile: string };
   "profiles.loaded": { profile: string };
   "media.deviceChooser": DeviceChooser;
   "media.castDialog": CastDialog;

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { StyleSheet, View } from "react-native";
-import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withDelay, withTiming } from "react-native-reanimated";
-import { delay, duration, tabsCurve } from "./motion";
+import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming } from "react-native-reanimated";
+import { delay, duration, progressSpring, tabsCurve } from "./motion";
 import { useTheme } from "./theme";
 import { browseLayout } from "./tokens";
 
@@ -18,7 +18,7 @@ export function LoadingLine({ watch }: { watch: LoadWatch }) {
       if (isLoading) {
         if (loading !== true) alpha.value = withDelay(delay.progressReveal, withTiming(1, { duration: duration.progressFill, easing: tabsCurve.easeOut }));
         loading = true;
-        fraction.value = withTiming(Math.max(0.1, progress), { duration: duration.progressAdvance, easing: tabsCurve.easeOut });
+        fraction.value = withSpring(Math.max(0.1, progress), PROGRESS_CHASE);
         return;
       }
       if (loading === null) {
@@ -45,6 +45,8 @@ export function LoadingLine({ watch }: { watch: LoadWatch }) {
     </View>
   );
 }
+
+const PROGRESS_CHASE = progressSpring(duration.progressAdvance / 1000, 1);
 
 const styles = StyleSheet.create({
   track: { height: browseLayout.progressHeight, width: "100%" },

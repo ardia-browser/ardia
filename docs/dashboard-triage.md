@@ -126,8 +126,11 @@ The Site page's **Where they clicked Download** panel splits `download_clicked` 
 
 Performance › Freezes reads `app_freeze` over the last 7 days, grouped by `signature`: people (`uniqExact(distinct_id)`),
 freezes (`count()`), time frozen (`sum(freeze_ms)`), the most common thread and job, the latest version, and the top
-three frames from Ardia's own images (hover the place). Offsets symbolicate with the engine's uploaded symbols
-(`scripts/symbolicate-crash.sh`) and Hermes's with the release framework's local symbols.
+three frames from Ardia's own images. Frames read as function names wherever the build's symbols are published; hover
+a place to see each name with its raw offset. The summary line says how many places are named. The names come from
+`sandbox.ardia_frame_symbols`, which the hourly frame-naming job fills (`docs/symbolication.md`). Errors names the native
+frames of the crashes it shows the same way, and each crash row says how many native frames were named. Hermes frames
+stay raw.
 
 Android's Material You switch (Settings › General, off by default) is counted as `usage_counts.material_you_turned_on` and `material_you_turned_off`; `app_launched.material_colors` is `not_material` for launches with it off. The counts below are taken only with it on, except `find_closed_bar`.
 

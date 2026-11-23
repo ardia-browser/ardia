@@ -32,12 +32,14 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-const page = (design: Design, tab = currentTabs().open[0]!) =>
-  renderSurface(
+const page = (design: Design, tab = currentTabs().open[0]!) => {
+  useTabs.setState((state) => ({ open: state.open.map((other) => (other.id === tab.id ? tab : other)) }));
+  return renderSurface(
     <DesignProvider design={design}>
-      <BrowsingScreen tab={tab} />
+      <BrowsingScreen tabId={tab.id} />
     </DesignProvider>,
   );
+};
 
 const host = (root: ReturnType<typeof renderSurface>, testID: string) => root.root.findAll((node) => node.props.testID === testID && typeof node.type === "string")[0];
 
@@ -108,7 +110,7 @@ test("a page loaded over plain http shows a red open lock in place of its icon, 
 
 const pageViewModule = require("@ardia/phone-native/src/PageView") as typeof import("@ardia/phone-native/src/PageView");
 
-test("in the redesign the page runs full screen under the bar, told the top safe area and, on iPhone, the bar's 75 points as obscured insets (none on Android, whose bar collapses by default), the status bar's strip is laid over the page in the page's top colour, on iPhone a band in its bottom colour fades the page out under the bar (Android has no fade), and only the bar's pieces take touches", () => {
+test("in the redesign the page runs full screen under the bar, told the top safe area and, on iPhone, the bar's 75 points as obscured insets (none on Android, whose bar collapses by default), the status bar's strip is laid over the page in the page's top colour, nothing is painted between the page and the glass bar, and only the bar's pieces take touches", () => {
   jest.spyOn(pageViewModule, "pageObscuresInsets").mockImplementation(() => true);
   const covered = Platform.OS === "android" ? 75 + 34 + 8 - 21.5 : 75;
   const root = page("redesigned");
@@ -119,13 +121,7 @@ test("in the redesign the page runs full screen under the bar, told the top safe
   const strip = StyleSheet.flatten(host(root, "pageStatusStrip")!.props.style);
   expect(strip).toMatchObject({ position: "absolute", top: 0, left: 0, right: 0, height: 47 });
   expect(host(root, "pageStatusStrip")!.props.pointerEvents).toBe("none");
-  if (Platform.OS === "ios") {
-    const base = host(root, "pageBarBase")!;
-    expect(base.props.pointerEvents).toBe("none");
-    expect(StyleSheet.flatten(base.props.style).experimental_backgroundImage).toMatch(/^linear-gradient\(to bottom, #[0-9A-Fa-f]{6}00 0%/);
-  } else {
-    expect(host(root, "pageBarBase")).toBeUndefined();
-  }
+  expect(host(root, "pageBarBase")).toBeUndefined();
   let bar = host(root, "floatingBar")!.parent;
   while (bar && bar.props.pointerEvents === undefined) bar = bar.parent;
   expect(bar!.props.pointerEvents).toBe("box-none");

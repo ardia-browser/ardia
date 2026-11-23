@@ -3,6 +3,7 @@ import { activeTabId } from "../browser/model";
 import { capture, consentNow, isSharing, onConsentPeriodChange } from "./client";
 import { appInfo, percentile } from "./transport";
 import { jsStartedAt } from "./jsStart";
+import { launchCohortFields } from "./launchCohort";
 import { fieldTiming } from "../../platform/fieldTiming";
 import { isAsleep } from "../tabs/pageSession";
 import { NATIVE_REVEAL_COUNTS, forgetDroppedPress, nativePressTime, type Mark } from "./nativeRevealMarks";
@@ -192,7 +193,7 @@ export const ago = (ms: number) =>
 
 let launch: Launch | null = null;
 let launchSent = false;
-type PreviousLaunch = { lastLaunchAt: number | null; lastQuitAt: number | null; firstOfVersion: boolean | null };
+type PreviousLaunch = { lastLaunchAt: number | null; lastQuitAt: number | null; firstOfVersion: boolean | null; coldNth?: number | null; versionSince?: number | null };
 let previousLaunch: PreviousLaunch = { lastLaunchAt: null, lastQuitAt: null, firstOfVersion: null };
 
 let firstRootCommitted = false;
@@ -279,7 +280,7 @@ function sendLaunch(l: Launch, content: number | null, paints: number[]) {
     history: bucket(history, [[0, "0"], [99, "<100"], [999, "<1k"], [4999, "<5k"], [19_999, "<20k"], [99_999, "<100k"]], "100k+"),
     history_oldest: oldestVisit > 0 && oldestVisit <= l.t0 ? bucket(l.t0 - oldestVisit, [[30 * DAY, "<30d"], [91 * DAY, "<91d"], [365 * DAY, "<1y"], [3 * 365 * DAY, "<3y"]], "3y+") : null,
     cold: bootTime && lastLaunchAt ? lastLaunchAt < bootTime : null,
-    first_of_version: firstOfVersion,
+    first_of_version: firstOfVersion, ...launchCohortFields(previousLaunch, l.t0),
     update_prewarm: firstOfVersion ? (prewarm ? (prewarm.status === 0 ? "done" : "failed") : "none") : null,
     update_prewarm_ago: prewarm?.at ? ago(l.t0 - prewarm.at) : null,
     since_quit: lastQuitAt && (!lastLaunchAt || lastQuitAt >= lastLaunchAt) ? ago(l.t0 - lastQuitAt) : lastLaunchAt ? "unclean" : "unknown",

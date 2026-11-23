@@ -1,6 +1,6 @@
-import { Children, useState, type ReactNode } from "react";
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
-import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
+import { Children, useState, type ReactNode, type RefObject } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, type ScrollViewInstance, type ScrollViewProps } from "react-native";
+import Animated, { FadeIn, FadeOut, LayoutAnimationConfig } from "react-native-reanimated";
 import { copy } from "../../lib/platformCopy";
 import { actionWords, blockingWords, destinationWords } from "../../lib/sharedWords";
 import {
@@ -15,6 +15,7 @@ import {
   menuReload,
   menuStop,
   openInDefaultBrowser,
+  openLibraryInMenu,
   openSiteSettingsSheet,
   pinCurrentToMac,
   printCurrentPage,
@@ -24,6 +25,8 @@ import {
   setDesktopSite,
   setNightShadeOn,
   shareCurrentPage,
+  shareOffersPrint,
+  shareOverPageMenu,
   showFind,
   showReader,
   zoomIn,
@@ -48,6 +51,8 @@ function openFromMenu(section: LibrarySection) {
   openLibrary(section);
 }
 
+const libraryOpener = (systemSheet: boolean) => (systemSheet ? openLibraryInMenu : openFromMenu);
+
 const useAccessibilityText = () => useWindowDimensions().fontScale >= copy().menuLargeTextScale;
 
 type Action = { icon: SymbolName; label: string; enabled: boolean; onPress: () => void };
@@ -61,12 +66,19 @@ function inRows<T>(items: T[], perRow: number): T[][] {
 function useActionColumns(labels: readonly string[]) {
   const { width, fontScale } = useWindowDimensions();
   const [measured, setMeasured] = useState<number | null>(null);
-  const available = measured ?? width - pageMenuCards.padding * 2;
+  const estimated = width - pageMenuCards.padding * 2;
+  const available = measured ?? estimated;
   const columns = actionColumns(labels, available, pageMenuCards.tileGap, { fontSize: font.caption.fontSize, fontScale, advance: pageMenuCards.captionAdvance, maxLines: pageMenuCards.captionLines });
-  return { columns, measure: (next: number) => setMeasured((now) => (now === next ? now : next)) };
+  return { columns, measure: (next: number) => (next > 0 ? setMeasured((now) => (Math.abs((now ?? estimated) - next) < 0.5 ? now : next)) : undefined) };
 }
 
-export function PageMenuWords({ tabId, model, onTranslate }: { tabId: string; model: MenuModel; onTranslate: () => void }) {
+function MenuScroll({ scrollRef, ...props }: ScrollViewProps & { scrollRef?: RefObject<ScrollViewInstance | null> }) {
+  return scrollRef ? <ScrollView ref={scrollRef} {...props} /> : <SheetScrollView {...props} />;
+}
+
+type PageMenuWordsProps = { tabId: string; model: MenuModel; onTranslate: () => void; systemSheet?: boolean; scrollRef?: RefObject<ScrollViewInstance | null>; onContentHeight?: (height: number) => void };
+
+export function PageMenuWords({ tabId, model, onTranslate, systemSheet = false, scrollRef, onContentHeight }: PageMenuWordsProps) {
   const large = useAccessibilityText();
   const devices = useSendTargets(tabId);
   const offersSummary = usePageSummariesEnabled() && canSummarizePages();
@@ -74,12 +86,13 @@ export function PageMenuWords({ tabId, model, onTranslate }: { tabId: string; mo
     { icon: "docPlaintext", label: "Reader", enabled: model.tiles, onPress: showReader },
     { icon: "textMagnifyingglass", label: "Find on Page", enabled: model.find, onPress: showFind },
     { icon: iconRoles.copyLink, label: actionWords.copyLink, enabled: model.tiles, onPress: copyCurrentLink },
-    { icon: iconRoles.share, label: actionWords.share, enabled: model.tiles, onPress: shareCurrentPage },
+    { icon: iconRoles.share, label: actionWords.share, enabled: model.tiles, onPress: systemSheet ? shareOverPageMenu : shareCurrentPage },
   ];
+  const openSection = libraryOpener(systemSheet);
   const { columns, measure } = useActionColumns(actions.map((action) => action.label));
   const square = columns === actions.length;
   return (
-    <SheetScrollView testID="pageMenuWords" style={styles.scroll} contentContainerStyle={[styles.column, large ? styles.largeBottom : null]} bounces={false}>
+    <MenuScroll scrollRef={scrollRef} testID="pageMenuWords" style={styles.scroll} contentContainerStyle={[styles.column, large ? styles.largeBottom : null]} bounces={false} onContentSizeChange={onContentHeight ? (width, height) => (width > pageMenuCards.padding * 2 + 1 ? onContentHeight(height) : undefined) : undefined}>
       <NavigationBar tabId={tabId} model={model} large={large} />
       <View testID="pageMenuActions" style={styles.actionRows} onLayout={(event) => measure(event.nativeEvent.layout.width)}>
         {inRows(actions, columns).map((row, index) => (
@@ -94,28 +107,28 @@ export function PageMenuWords({ tabId, model, onTranslate }: { tabId: string; mo
         {offersSummary ? <Row icon="sparkles" title="Summarize Page" enabled={model.summarize} onPress={summarizeCurrentPage} /> : null}
         {model.isWebPage && devices.length ? <SendRow devices={devices} /> : null}
         {model.pageRows ? (
-          <ToggleRow which="blockers" icon={model.blockersEnabled ? "handRaised" : "handRaisedSlash"} title={blockingWords.blockAdsAndTrackers} value={model.blockersEnabled} enabled={model.isWebPage} detail={model.blockedCount} onChange={setBlockersOn} />
+          <ToggleRow which="blockers" icon={model.blockersEnabled ? "handRaised" : "handRaisedSlash"} title={blockingWords.blockAdsAndTrackers} value={model.blockersEnabled} enabled={model.siteSwitches} detail={model.blockedCount} onChange={setBlockersOn} />
         ) : null}
       </Group>
       <Group>
-        {model.pageRows ? <ToggleRow which="nightShade" icon={model.nightShadeOn ? "moonFill" : "moon"} title="Night Shade" value={model.nightShadeOn} enabled={model.isWebPage} onChange={setNightShadeOn} /> : null}
+        {model.pageRows ? <ToggleRow which="nightShade" icon={model.nightShadeOn ? "moonFill" : "moon"} title="Night Shade" value={model.nightShadeOn} enabled={model.siteSwitches} onChange={setNightShadeOn} /> : null}
         {model.pageRows ? <ZoomRow model={model} large={large} /> : null}
         {model.pageRows ? <ToggleRow which="desktopSite" icon="desktop" title="Desktop Site" value={model.desktopSite} enabled={model.isWebPage} onChange={setDesktopSite} /> : null}
         {model.pageRows ? <Row icon="translate" title={model.translateTitle} enabled={model.translate} onPress={onTranslate} /> : null}
-        {canPrintPages() ? <Row icon="printer" title="Print" enabled={model.print} onPress={printCurrentPage} /> : null}
+        {canPrintPages() && !shareOffersPrint() ? <Row icon="printer" title="Print" enabled={model.print} onPress={printCurrentPage} /> : null}
         <Row icon="gearshape" title="Site Settings" enabled onPress={openSiteSettingsSheet} />
       </Group>
       <Group>
-        <Row icon="clockArrow" title={destinationWords.history} enabled onPress={() => openFromMenu("history")} />
-        <Row icon="star" title={destinationWords.bookmarks} enabled onPress={() => openFromMenu("bookmarks")} />
-        <Row icon="arrowDownCircle" title={destinationWords.downloads} enabled onPress={() => openFromMenu("downloads")} />
+        <Row icon="clockArrow" title={destinationWords.history} enabled onPress={() => openSection("history")} />
+        <Row icon="star" title={destinationWords.bookmarks} enabled onPress={() => openSection("bookmarks")} />
+        <Row icon="arrowDownCircle" title={destinationWords.downloads} enabled onPress={() => openSection("downloads")} />
       </Group>
       {model.pageRows && model.offersDefaultBrowser ? (
         <Group>
           <Row icon="arrowUpForwardAppFill" title="Open in Default Browser" enabled onPress={openInDefaultBrowser} />
         </Group>
       ) : null}
-    </SheetScrollView>
+    </MenuScroll>
   );
 }
 
@@ -128,15 +141,17 @@ function NavigationBar({ tabId, model, large }: { tabId: string; model: MenuMode
   const titleStyle = usePressStyle("text", { style: large ? styles.titleBelow : styles.title });
   const titleButton = (
     <Pressable testID="pageMenuTitle" accessibilityRole="button" accessibilityLabel={shown} accessibilityHint="Edits the search" onPress={editPageQuery} style={titleStyle}>
-      <Animated.Text
-        key={shown}
-        entering={TITLE_IN}
-        exiting={TITLE_OUT}
-        style={[font.body, styles.titleText, large && !feedback ? styles.leading : styles.centered, feedback ? styles.feedback : null, { color: feedback ? theme.spaceAccentInk : theme.label }]}
-        numberOfLines={large ? 3 : feedback ? pageMenuCards.feedbackLines : 1}
-      >
-        {shown}
-      </Animated.Text>
+      <LayoutAnimationConfig skipEntering>
+        <Animated.Text
+          key={shown}
+          entering={TITLE_IN}
+          exiting={TITLE_OUT}
+          style={[font.body, styles.titleText, large && !feedback ? styles.leading : styles.centered, feedback ? styles.feedback : null, { color: feedback ? theme.spaceAccentInk : theme.label }]}
+          numberOfLines={large ? 3 : feedback ? pageMenuCards.feedbackLines : 1}
+        >
+          {shown}
+        </Animated.Text>
+      </LayoutAnimationConfig>
     </Pressable>
   );
   return (

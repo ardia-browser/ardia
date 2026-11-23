@@ -97,11 +97,11 @@ test("a sidebar row gets its leave when the pointer goes straight into a page, f
 });
 
 test("the meadow starts on the poster the Mac picks for the window's shape, dawn normally and morning with reduced motion", () => {
-  assert.equal(nearestMeadowPoster(1.6, false)?.file, "dawn-laptop-1917.webp");
-  assert.equal(nearestMeadowPoster(2, false)?.file, "dawn-wide-1766.webp");
-  assert.equal(nearestMeadowPoster(3, false)?.file, "dawn-wider-2196.webp");
+  assert.equal(nearestMeadowPoster(1.6, false)?.file, "dawn-laptop-1920.webp");
+  assert.equal(nearestMeadowPoster(2, false)?.file, "dawn-wide-1920.webp");
+  assert.equal(nearestMeadowPoster(3, false)?.file, "dawn-wider-2400.webp");
   assert.equal(nearestMeadowPoster(1, false)?.file, "dawn-mid-1600.webp");
-  assert.equal(nearestMeadowPoster(1.6, true)?.file, "morning-laptop-1493.webp");
+  assert.equal(nearestMeadowPoster(1.6, true)?.file, "morning-laptop-1625.webp");
   assert.deepEqual(Object.keys(MEADOW_POSTER_URLS).sort(), MEADOW_POSTERS.map((poster) => poster.file).sort());
   for (const url of Object.values(MEADOW_POSTER_URLS)) assert.match(url, /\/packages\/shaders\/ios\/Meadow\/(dawn|morning)-[a-z]+-\d+\.webp$/);
 });

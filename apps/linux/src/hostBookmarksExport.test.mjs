@@ -83,6 +83,10 @@ test("the shared bookmarks.exportHtml call is served locally until the engine ro
   const call = resolveHostModule(local.host, "ArdiaBookmarks", "call");
   assert.deepEqual(JSON.parse(await call("tree", "Work", "{}")), tree);
   assert.deepEqual(local.calls, [["bookmarks.tree", "Work", {}]]);
+  local.calls.length = 0;
+  await call("exportHtml", "Work", "{}").catch(() => {});
+  assert.equal(local.calls[0]?.[0], "bookmarks.tree");
+  assert.ok(local.calls.every(([name]) => name !== BOOKMARKS_EXPORT_CALL));
   const routed = rig({ capabilities: ["bookmarks.tree", BOOKMARKS_EXPORT_CALL] });
   routed.host.call = async (name, profile, args) => { routed.calls.push([name, profile, JSON.parse(args)]); return JSON.stringify("/chosen/Bookmarks.html"); };
   assert.equal(JSON.parse(await resolveHostModule(routed.host, "ArdiaBookmarks", "call")("exportHtml", "Work", "{}")), "/chosen/Bookmarks.html");

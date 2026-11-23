@@ -17,3 +17,10 @@ test("on Android Reanimated applies animated props straight to the views, so a d
   const app = json("../../package.json") as { reanimated?: { staticFeatureFlags?: Record<string, boolean> } };
   assert.equal(app.reanimated?.staticFeatureFlags?.ANDROID_SYNCHRONOUSLY_UPDATE_UI_PROPS, true);
 });
+
+test("on iPhone Reanimated applies transform, opacity and colour props straight to the views, so a deck scroll doesn't commit every card's style through Fabric", () => {
+  const defaults = json("../../node_modules/react-native-reanimated/src/featureFlags/staticFlags.json");
+  assert.ok("IOS_SYNCHRONOUSLY_UPDATE_UI_PROPS" in defaults);
+  const app = json("../../package.json") as { reanimated?: { staticFeatureFlags?: Record<string, boolean> } };
+  assert.equal(app.reanimated?.staticFeatureFlags?.IOS_SYNCHRONOUSLY_UPDATE_UI_PROPS, true);
+});

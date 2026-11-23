@@ -1,4 +1,4 @@
-REPO="mantrakp04/ardia"
+REPO="ardia-browser/ardia"
 REPO_URL="https://github.com/$REPO"
 LATEST_DOWNLOAD_URL="$REPO_URL/releases/latest/download"
 NIGHTLY_DMG_URL="$REPO_URL/releases/download/nightly/Ardia-Nightly.dmg"

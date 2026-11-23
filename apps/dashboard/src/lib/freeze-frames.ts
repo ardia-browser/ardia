@@ -1,13 +1,17 @@
-const OWN_FRAME = /^(Ardia|Chromium Framework|hermes)/;
+import { imageUuids, nativeFrame, type NativeFrame } from "./native-frames.ts";
 
-export function topOwnFrames(framesJson: string, limit = 3): string[] {
+const OWN_IMAGE = /^(Ardia|Chromium Framework|hermes)/;
+
+export function topOwnFrames(framesJson: string, imagesJson = "", limit = 3): NativeFrame[] {
   try {
-    const frames = JSON.parse(framesJson) as { function?: unknown; in_app?: unknown }[];
+    const frames = JSON.parse(framesJson) as { function?: unknown; module?: unknown; image_offset?: unknown }[];
+    if (!Array.isArray(frames)) return [];
+    const images = imageUuids(imagesJson);
     return frames
       .slice()
       .reverse()
-      .map((f) => (typeof f.function === "string" ? f.function : ""))
-      .filter((f) => OWN_FRAME.test(f))
+      .map((f) => nativeFrame(f, images))
+      .filter((f) => OWN_IMAGE.test(f.image || f.raw))
       .slice(0, limit);
   } catch {
     return [];

@@ -25,14 +25,20 @@ import { settingsMotion } from "./tokens";
 
 export const SettingsPaneContext = createContext<SettingsPane | null>(null);
 
-export function useUnshownSettings(): ReadonlySet<string> {
+const EMPTY_UNSHOWN: ReadonlySet<string> = new Set();
+const UnshownSettingsContext = createContext<ReadonlySet<string>>(EMPTY_UNSHOWN);
+
+export function UnshownSettingsProvider({ children }: { children: ReactNode }) {
   const top = useTabLayout() === "top";
   const syncOn = useSync((s) => s.enabled);
   const calendarAccess = useCalendar((s) => s.access === "fullAccess" || s.access === "fixture");
   const official = usePlugins((s) => officialNamesInSettings(officialPlugins(s)).join(" "));
   const ids = useSettings((s) => unshownSettings(s, { top, glass: liquidGlass, syncOn, calendarAccess, officialPlugins: official ? official.split(" ") : [] }));
-  return useMemo(() => new Set(ids ? ids.split("\n") : []), [ids]);
+  const unshown = useMemo(() => new Set(ids ? ids.split("\n") : []), [ids]);
+  return <UnshownSettingsContext.Provider value={unshown}>{children}</UnshownSettingsContext.Provider>;
 }
+
+export const useUnshownSettings = (): ReadonlySet<string> => useContext(UnshownSettingsContext);
 
 export function useHiddenSetting() {
   const unshown = useUnshownSettings();

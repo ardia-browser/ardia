@@ -34,10 +34,18 @@ index 253c2a49e4ed04ef7cce283ae905e218d438a007..90bdecb170c2aaf8848d1551727e1855
        onChange: true,
        onSelectionChange: true,
 diff --git a/Libraries/Components/TextInput/TextInput.js b/Libraries/Components/TextInput/TextInput.js
-index 1ae22ed66776941c33b2c0a78038b2b997506aa7..632a0f284e88e2d3034f3eeb50cf2acf3be6652e 100644
+index 1ae22ed66776941c33b2c0a78038b2b997506aa7..6d2be668a23e199bc587a493eee55b44dfbb0a7b 100644
 --- a/Libraries/Components/TextInput/TextInput.js
 +++ b/Libraries/Components/TextInput/TextInput.js
-@@ -247,7 +247,7 @@ function useTextInputStateSynchronization({
+@@ -208,6 +208,7 @@ function useTextInputStateSynchronization({
+ }): {
+   setLastNativeText: string => void,
+   setLastNativeSelection: LastNativeSelection => void,
++  knowsNativeSelection: boolean,
+ } {
+   const [lastNativeText, setLastNativeText] = useState<?Stringish>(props.value);
+   const [lastNativeSelectionState, setLastNativeSelection] =
+@@ -247,7 +248,7 @@ function useTextInputStateSynchronization({
        viewCommands.setTextAndSelection(
          inputRef.current,
          mostRecentEventCount,
@@ -46,6 +54,47 @@ index 1ae22ed66776941c33b2c0a78038b2b997506aa7..632a0f284e88e2d3034f3eeb50cf2acf
          selection?.start ?? -1,
          selection?.end ?? -1,
        );
+@@ -264,7 +265,11 @@ function useTextInputStateSynchronization({
+     viewCommands,
+   ]);
+ 
+-  return {setLastNativeText, setLastNativeSelection};
++  // [Ardia: whether a selection is kept to compare a selection prop against
++  const knowsNativeSelection =
++    lastNativeSelection.start !== -1 || lastNativeSelection.end !== -1;
++  // Ardia]
++  return {setLastNativeText, setLastNativeSelection, knowsNativeSelection};
+ }
+ 
+ /**
+@@ -439,7 +444,7 @@ function InternalTextInput(props: TextInputProps): React.Node {
+       : RCTSinglelineTextInputNativeCommands);
+ 
+   const [mostRecentEventCount, setMostRecentEventCount] = useState<number>(0);
+-  const {setLastNativeText, setLastNativeSelection} =
++  const {setLastNativeText, setLastNativeSelection, knowsNativeSelection} =
+     useTextInputStateSynchronization({
+       props,
+       inputRef,
+@@ -569,6 +574,18 @@ function InternalTextInput(props: TextInputProps): React.Node {
+       return;
+     }
+ 
++    // [Ardia: with no selection prop nothing reads the native selection, so a caret move sets no state and commits nothing; the first one after a controlled selection forgets it, so a later one is always sent
++    if (selection == null) {
++      if (knowsNativeSelection) {
++        setLastNativeSelection({
++          selection: {start: -1, end: -1},
++          mostRecentEventCount,
++        });
++      }
++      return;
++    }
++    // Ardia]
++
+     setLastNativeSelection({
+       selection: event.nativeEvent.selection,
+       mostRecentEventCount,
 diff --git a/Libraries/Image/RCTImageView.mm b/Libraries/Image/RCTImageView.mm
 index 879e36bc2483226756011b21948f2dd1760d7cf8..383f676c62b23f008964002aeb3940f1f55f8907 100644
 --- a/Libraries/Image/RCTImageView.mm
@@ -976,7 +1025,7 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..aee0e19607a58db55ddf0afc4f6d682b
  #import <React/RCTUtils.h>
  #import <React/UIView+React.h>
  
-@@ -17,8 +18,119 @@
+@@ -17,8 +18,140 @@
  
  #if TARGET_OS_OSX // [macOS
  
@@ -1037,7 +1086,28 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..aee0e19607a58db55ddf0afc4f6d682b
 +
 +@end
 +
-+@implementation RCTUIPlainPasteFieldEditor
++@implementation RCTUIPlainPasteFieldEditor {
++  NSUndoManager *_editingUndoManager;
++}
++
++- (NSUndoManager *)undoManager
++{
++  if (!self.window) {
++    return nil;
++  }
++  if (!_editingUndoManager) {
++    _editingUndoManager = [NSUndoManager new];
++  }
++  return _editingUndoManager;
++}
++
++- (void)viewDidMoveToWindow
++{
++  [super viewDidMoveToWindow];
++  if (!self.window) {
++    [_editingUndoManager removeAllActions];
++  }
++}
 +
 +- (void)paste:(id)sender
 +{
@@ -1096,7 +1166,7 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..aee0e19607a58db55ddf0afc4f6d682b
  @property (nonatomic, assign) UIEdgeInsets textContainerInset;
  @property (nonatomic, getter=isAutomaticTextReplacementEnabled) BOOL automaticTextReplacementEnabled;
  @property (nonatomic, getter=isAutomaticSpellingCorrectionEnabled) BOOL automaticSpellingCorrectionEnabled;
-@@ -29,7 +141,29 @@ @interface RCTUITextFieldCell : NSTextFieldCell
+@@ -29,7 +162,29 @@ @interface RCTUITextFieldCell : NSTextFieldCell
  
  @end
  
@@ -1127,7 +1197,7 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..aee0e19607a58db55ddf0afc4f6d682b
  
  - (NSRect)titleRectForBounds:(NSRect)rect
  {
-@@ -84,6 +218,8 @@ @implementation RCTUITextField {
+@@ -84,6 +239,8 @@ @implementation RCTUITextField {
  #if TARGET_OS_OSX // [macOS
    BOOL _isUpdatingPlaceholderText;
    NSArray<NSPasteboardType> *_readablePasteboardTypes;
@@ -1136,7 +1206,7 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..aee0e19607a58db55ddf0afc4f6d682b
  #endif // macOS]
  }
  
-@@ -155,6 +291,11 @@ - (BOOL)hasMarkedText
+@@ -155,6 +312,11 @@ - (BOOL)hasMarkedText
  	return ((NSTextView *)self.currentEditor).validAttributesForMarkedText ?: @[];
  }
  
@@ -1148,7 +1218,7 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..aee0e19607a58db55ddf0afc4f6d682b
  #endif // macOS]
  
  #pragma mark - Accessibility
-@@ -304,8 +445,110 @@ - (RCTUIColor*)cursorColor
+@@ -304,8 +466,110 @@ - (RCTUIColor*)cursorColor
  - (void)setFont:(UIFont *)font
  {
    ((RCTUITextFieldCell*)self.cell).font = font;
@@ -1259,7 +1329,7 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..aee0e19607a58db55ddf0afc4f6d682b
  - (UIFont *)font
  {
    return ((RCTUITextFieldCell*)self.cell).font;
-@@ -330,7 +573,9 @@ - (void)setPlaceholder:(NSString *)placeholder
+@@ -330,7 +594,9 @@ - (void)setPlaceholder:(NSString *)placeholder
  #if !TARGET_OS_OSX // [macOS]
    [super setPlaceholder:placeholder];
  #else // [macOS
@@ -1269,7 +1339,7 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..aee0e19607a58db55ddf0afc4f6d682b
  #endif // macOS]
    [self _updatePlaceholder];
  }
-@@ -385,6 +630,20 @@ - (void)_updatePlaceholder
+@@ -385,6 +651,20 @@ - (void)_updatePlaceholder
    _isUpdatingPlaceholderText = YES;
    self.placeholderAttributedString = [[NSAttributedString alloc] initWithString:self.placeholder ?: @""
  																	 attributes:[self _placeholderTextAttributes]];
@@ -1290,7 +1360,7 @@ index 137d0ee9f51616ea27c397a8bf595fe2c0ff5e91..aee0e19607a58db55ddf0afc4f6d682b
    _isUpdatingPlaceholderText = NO;
  #endif // macOS]
  }
-@@ -710,6 +969,9 @@ - (void)keyUp:(NSEvent *)event {
+@@ -710,6 +990,9 @@ - (void)keyUp:(NSEvent *)event {
  - (void)setReadablePasteBoardTypes:(NSArray<NSPasteboardType> *)readablePasteboardTypes
  {
    _readablePasteboardTypes = readablePasteboardTypes;

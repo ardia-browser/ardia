@@ -126,7 +126,7 @@ function holdCard(root: Root, design: Design, id: string) {
 
 function SelectedPage() {
   const tab = useSelectedTab();
-  return tab ? <BrowsingScreen tab={tab} /> : null;
+  return tab ? <BrowsingScreen tabId={tab.id} /> : null;
 }
 
 const page = (design: Design) =>

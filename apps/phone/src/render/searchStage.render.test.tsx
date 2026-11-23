@@ -32,7 +32,8 @@ type StageProps = {
   morphLook?: { usesGlass: boolean; panelTint: string; panelDark: boolean; classicPanel: string };
   onLift?: (lift: { lift: number; up: boolean }) => void;
   onReveal?: (reveal: { late: boolean }) => void;
-  onSettled?: (settled: { landed: boolean }) => void;
+  onSettled?: (settled: { landed: boolean; path?: string }) => void;
+  onLanding?: (landing: { lands: boolean; path: string }) => void;
 };
 
 const mockFaceTaken = { then: (taken: () => void) => taken() };
@@ -49,7 +50,7 @@ jest.mock("@ardia/phone-native", () => {
   const SearchStage = React.forwardRef((props: Record<string, unknown>, ref) => {
     React.useImperativeHandle(ref, () => mockStage, []);
     mockSeen.props = props as never;
-    const { onLift, onReveal, onSettled, morphLook, anchorNativeId, faceNativeId, commandTop, fieldCenter, shown, ...rest } = props;
+    const { onLift, onReveal, onSettled, onLanding, morphLook, anchorNativeId, faceNativeId, commandTop, fieldCenter, shown, ...rest } = props;
     return React.createElement(native.View, rest);
   });
   const CompletingField = React.forwardRef((props: Record<string, unknown>, ref) => {
@@ -98,7 +99,7 @@ type Root = ReturnType<typeof renderSurface>;
 const page = (withBar = true) => {
   const root = renderSurface(
     <DesignProvider design="redesigned">
-      {withBar ? <BrowsingScreen tab={currentTabs().open[0]!} /> : null}
+      {withBar ? <BrowsingScreen tabId={currentTabs().open[0]!.id} /> : null}
       <SearchTray />
     </DesignProvider>,
   );
@@ -246,7 +247,7 @@ onIPhone("nothing above the bar's glass fades: the capsule, the pill and the sid
   expect(glassOf(root, "floatingBarAddress").props).toMatchObject({ shown: true, shownMs: 0 });
 });
 
-onIPhone("the side buttons shrink 0.8 and slide 12 points out while search is open, and come back after it closes", () => {
+onIPhone("the side buttons slide 12 points out while search is open and come back on one clock with their glass, at once after it closes, with no squish", () => {
   const root = page();
   open();
   advance(200);
@@ -255,15 +256,18 @@ onIPhone("the side buttons shrink 0.8 and slide 12 points out while search is op
   expect(opacity(host(root, "floatingBarTabsGlyphs"))).toBe(0);
   expect(glassOf(root, "floatingBarTabs").props.shown).toBe(false);
   expect(glassOf(root, "floatingBarPlus").props.shown).toBe(false);
-  expect(Object.assign({}, ...leading.transform)).toEqual({ translateX: -12, scale: 0.8 });
-  expect(Object.assign({}, ...(getAnimatedStyle(host(root, "floatingBarTrailing")!) as { transform: Record<string, number>[] }).transform)).toEqual({ translateX: 12, scale: 0.8 });
+  expect(Object.assign({}, ...leading.transform)).toEqual({ translateX: -12 });
+  expect(Object.assign({}, ...(getAnimatedStyle(host(root, "floatingBarTrailing")!) as { transform: Record<string, number>[] }).transform)).toEqual({ translateX: 12 });
   expect(host(root, "floatingBarPlus")).toBeDefined();
   act(() => browse.cancelSearch());
-  advance(100);
-  expect(opacity(host(root, "floatingBarTabsGlyphs"))).toBe(0);
-  advance(800);
+  expect(glassOf(root, "floatingBarTabs").props).toMatchObject({ shown: true, shownMs: 150 });
+  advance(48);
+  const halfway = opacity(host(root, "floatingBarTabsGlyphs"));
+  expect(halfway).toBeGreaterThan(0.2);
+  expect(halfway).toBeLessThan(1);
+  advance(200);
   expect(opacity(host(root, "floatingBarTabsGlyphs"))).toBeCloseTo(1, 2);
-  expect(glassOf(root, "floatingBarTabs").props.shown).toBe(true);
+  expect((Object.assign({}, ...(getAnimatedStyle(host(root, "floatingBarLeading")!) as { transform: Record<string, number>[] }).transform) as { translateX: number }).translateX).toBeCloseTo(0, 5);
 });
 
 onIPhone("cancel lands the panel in the bar's pill, Go departs, and without a pill to land in it drops", () => {
@@ -281,6 +285,31 @@ onIPhone("cancel lands the panel in the bar's pill, Go departs, and without a pi
   open();
   act(() => browse.cancelSearch());
   expect(mockStage.close).toHaveBeenLastCalledWith("drop", 0);
+});
+
+onIPhone("when the stage says the cancelled panel has no pill to land in, the bar's pill and its glass come back at once with the side buttons instead of after the settle, the capsule's glass whole in that frame rather than materializing", () => {
+  const root = page();
+  open();
+  act(() => browse.cancelSearch());
+  expect(centreSeen(root)).toBe(0);
+  expect(glassOf(root, "floatingBarAddress").props.shown).toBe(false);
+  act(() => stage().onLanding?.({ lands: false, path: "anchorNotFound" }));
+  expect(glassOf(root, "floatingBarAddress").props).toMatchObject({ shown: true, shownMs: 0 });
+  expect(glassOf(root, "floatingBarTabs").props.shown).toBe(true);
+  advance(200);
+  expect(centreSeen(root)).toBe(1);
+  act(() => stage().onSettled?.({ landed: false, path: "anchorNotFound" }));
+  expect(centreSeen(root)).toBe(1);
+});
+
+onIPhone("a panel the stage flies into the pill keeps the bar's pill hidden until it lands", () => {
+  const root = page();
+  open();
+  act(() => browse.cancelSearch());
+  act(() => stage().onLanding?.({ lands: true, path: "anchored" }));
+  expect(centreSeen(root)).toBe(0);
+  act(() => stage().onSettled?.({ landed: true, path: "anchored" }));
+  expect(centreSeen(root)).toBe(1);
 });
 
 onIPhone("settling shows the pill at once with no fade, tells the stage to finish in that same hand-over, and only then unmounts the panel's content at low priority", () => {

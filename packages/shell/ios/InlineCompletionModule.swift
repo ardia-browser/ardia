@@ -28,8 +28,18 @@ public final class InlineCompletionModule: Module {
       editor.setSelectedRange(NSRange(location: typedLength, length: (completion as NSString).length))
       editor.scrollRangeToVisible(NSRange(location: 0, length: 0))
       editor.scrollRangeToVisible(NSRange(location: typedLength, length: 0))
+      InlineKeep.arm(editor, tag: tag, typedLength: typedLength, keeps: InlineKeep.fields.contains(tag) && !completion.isEmpty)
       return result
     }.runOnQueue(.main)
+
+    AsyncFunction("keepWhileTyping") { (tag: Int, on: Bool) in
+      InlineKeep.install()
+      if on { InlineKeep.fields.insert(tag) } else { InlineKeep.release(tag: tag) }
+    }.runOnQueue(.main)
+
+    Function("takeKept") { (tag: Int, start: Int, end: Int) -> [String] in
+      InlineKeep.take(tag: tag, start: start, end: end)
+    }
 
     AsyncFunction("copyFieldAs") { (shown: String?, url: String?) in
       FieldCopy.target = shown.flatMap { shown in url.map { (shown, $0) } }

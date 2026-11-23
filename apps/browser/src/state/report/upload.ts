@@ -6,7 +6,7 @@ export type FailureClass = "offline" | "storage" | "server" | "rate_limited" | "
 
 export const RETRY_DELAYS_MS = [2_000, 8_000] as const;
 
-export type Created = { id: string; name: string | null; token: string; uploadUrls: Record<string, string>; uploaded: string[] };
+export type Created = { id: string; name: string | null; token: string; uploadUrls: Record<string, string>; uploaded: string[]; declared?: Record<string, number> };
 
 export type Sent = { id: string; name: string | null; issueUrl: string | null; issueNumber: number | null; uploadMs: number; bytes: number; retries: number };
 
@@ -79,6 +79,18 @@ export function failureClass(status: number, json: unknown): FailureClass {
 
 export const isRetryable = (errorClass: FailureClass) => errorClass === "offline" || errorClass === "storage" || errorClass === "server";
 
+export type RestartReason = "expired" | "rejected" | "files_changed";
+
+export function restartReason(failed: Extract<UploadState, { phase: "failed" }>, files: ReportFile[]): RestartReason | null {
+  const created = failed.created;
+  if (!created) return null;
+  if (failed.errorClass === "expired") return "expired";
+  if (failed.errorClass === "rejected") return "rejected";
+  const declared = created.declared;
+  const unchanged = !!declared && Object.keys(declared).length === files.length && files.every((f) => declared[f.name] === f.bytes);
+  return unchanged ? null : "files_changed";
+}
+
 const sentence = (value: string) => (/[.!?]$/.test(value) ? value : `${value}.`);
 
 export function failureMessage(errorClass: FailureClass, status: number, json: unknown): string {
@@ -139,7 +151,8 @@ export async function sendReport(
     const id = text(answer.id);
     const token = text(answer.upload_token);
     if (!succeeded(reply.status) || !id || (files.length > 0 && !token)) return finish(failure("create", reply, attempts, null));
-    created = { id, name: text(answer.name), token: token ?? "", uploadUrls: uploadUrlsFrom(reply.json, endpoint.url, id, files), uploaded: [] };
+    const declared = Object.fromEntries(files.map((f) => [f.name, f.bytes]));
+    created = { id, name: text(answer.name), token: token ?? "", uploadUrls: uploadUrlsFrom(reply.json, endpoint.url, id, files), uploaded: [], declared };
   }
   const auth = { Authorization: `Bearer ${created.token}`, [endpoint.keyHeader]: endpoint.key };
   let done = files.filter((f) => created!.uploaded.includes(f.name)).reduce((sum, f) => sum + f.bytes, 0);

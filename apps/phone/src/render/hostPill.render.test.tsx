@@ -44,7 +44,7 @@ const page = (design: Design) => {
   scrolled("up");
   return renderSurface(
     <DesignProvider design={design}>
-      <BrowsingScreen tab={currentTabs().open[0]!} />
+      <BrowsingScreen tabId={currentTabs().open[0]!.id} />
     </DesignProvider>,
   );
 };
@@ -63,14 +63,20 @@ const moved = (node: ReactTestInstance) => {
 
 const expectPill = (root: Root, shown: boolean) => {
   if (!android) {
-    if (shown) expect(host(root, "hostPill")).toBeDefined();
-    else expect(host(root, "hostPill")).toBeUndefined();
+    const glass = root.root.findAll((node) => node.props.testID === "hostPill" && node.props.shown !== undefined && typeof node.type !== "string")[0]!;
+    expect(host(root, "hostPillFold")!.props.pointerEvents).toBe(shown ? "box-none" : "none");
+    expect(host(root, "hostPillFold")!.props.accessibilityElementsHidden).toBe(!shown);
+    expect(moved(host(root, "hostPillFold")!).opacity).toBe(1);
+    expect(glass.props.shown).toBe(shown);
+    expect(moved(host(root, "hostPillContent")!).opacity).toBeCloseTo(shown ? 1 : 0, 3);
     return;
   }
   expect(host(root, "hostPillFold")!.props.pointerEvents).toBe(shown ? "box-none" : "none");
   expect(host(root, "hostPillFold")!.props.accessibilityElementsHidden).toBe(!shown);
   expect(moved(host(root, "hostPillFold")!).opacity).toBe(shown ? 1 : 0);
 };
+
+const barGlass = (root: Root, testID: string) => root.root.findAll((node) => node.props.testID === testID && node.props.shown !== undefined && typeof node.type !== "string")[0]!.props.shown !== false;
 
 const showToolbar = (root: Root) => root.root.findAll((node) => node.props.accessibilityLabel === "Show Toolbar" && typeof node.props.onPress === "function")[0];
 
@@ -85,7 +91,9 @@ test("on iPhone's design, scrolling down with Collapse Bottom Bar on shrinks the
   expect(StyleSheet.flatten(host(root, "hostPillFold")!.props.style)).toMatchObject({ bottom: 0, height: 30, alignItems: "center" });
   expect(moved(host(root, "hostPillFold")!)).toEqual({ opacity: 1, translateY: 0, scale: 1 });
   const bar = moved(host(root, "floatingBarFold")!);
-  expect(bar.opacity).toBe(0);
+  expect(bar.opacity).toBe(android ? 0 : 1);
+  expect(moved(host(root, "floatingBarFoldGlyphs")!).opacity).toBe(android ? 1 : 0);
+  for (const id of ["floatingBarAddress", "floatingBarTabs", "floatingBarPlus"]) expect(barGlass(root, id)).toBe(android);
   expect(bar.scale).toBeCloseTo(0.62, 3);
   expect(bar.translateY).toBeCloseTo(24 * 0.38, 3);
   expect(host(root, "floatingBarFold")!.props.pointerEvents).toBe("none");
@@ -121,6 +129,8 @@ test("the pill reads Show Toolbar with the host as its value, and a tap on it br
   expect(moved(host(root, "floatingBarFold")!)).toEqual({ opacity: 1, translateY: 0, scale: 1 });
   expect(host(root, "floatingBarFold")!.props.pointerEvents).toBe("box-none");
   expectPill(root, false);
+  expect(moved(host(root, "floatingBarFoldGlyphs")!).opacity).toBe(1);
+  for (const id of ["floatingBarAddress", "floatingBarTabs", "floatingBarPlus"]) expect(barGlass(root, id)).toBe(true);
   scrolled("down");
   settle();
   expectPill(root, false);
@@ -192,7 +202,7 @@ test("Android's design keeps sliding its bar away with no pill", () => {
 });
 
 test("each phone runs its own design's collapse: the pill on iPhone, the slide on Android", () => {
-  const root = renderSurface(<BrowsingScreen tab={currentTabs().open[0]!} />);
+  const root = renderSurface(<BrowsingScreen tabId={currentTabs().open[0]!.id} />);
   scrolled("down");
   settle();
   expect(root.root.findAll((node) => node.type === HostPill)).toHaveLength(appDesign === "redesigned" ? 1 : 0);
@@ -254,5 +264,32 @@ test("the 30 point pill reaches the 44 point touch target without growing: a tap
   act(() => reachPress.props.onPress());
   settle();
   expect(host(root, "floatingBarFold")!.props.pointerEvents).toBe("box-none");
+  unmount(root);
+});
+
+test("on iPhone the bar's glass and the pill's glass cross over the moment the bar turns, however fast scrolls reverse, with no callback from an earlier fold left to flip them later", () => {
+  if (android) return;
+  const root = page("redesigned");
+  const pillGlass = () => root.root.findAll((node) => node.props.testID === "hostPill" && node.props.shown !== undefined && typeof node.type !== "string")[0]!.props;
+  const expectHandoff = (collapsed: boolean) => {
+    expect(pillGlass().shown).toBe(collapsed);
+    expect(pillGlass().shownMs).toBe(150);
+    for (const id of ["floatingBarAddress", "floatingBarTabs", "floatingBarPlus"]) expect(barGlass(root, id)).toBe(!collapsed);
+  };
+  expectHandoff(false);
+  scrolled("down");
+  expectHandoff(true);
+  for (let frame = 0; frame < 3; frame++) act(() => jest.advanceTimersByTime(16));
+  scrolled("up");
+  expectHandoff(false);
+  for (let frame = 0; frame < 3; frame++) act(() => jest.advanceTimersByTime(16));
+  scrolled("down");
+  expectHandoff(true);
+  settle();
+  expectHandoff(true);
+  scrolled("up");
+  expectHandoff(false);
+  settle();
+  expectHandoff(false);
   unmount(root);
 });

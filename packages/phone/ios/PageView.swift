@@ -32,18 +32,40 @@ final class PageView: ExpoView {
   var pullToRefresh = true
   private(set) var page: WebTab?
 
-  private weak var hostedWebView: WKWebView?
+  weak var hostedWebView: WKWebView?
   private var failedID: String?
   private var sampled: PageTone?
   private var sentTone: PageTone?
   private var sentState: NSDictionary?
   private var wasLoading = false
-  private var observing = 0
+  var observing = 0
   private var toneTask: Task<Void, Never>?
   private var scrollObservation: NSKeyValueObservation?
   private var contentSizeObservation: NSKeyValueObservation?
   private let sideMargins = UIView()
   private var lastScroll: TimeInterval = 0
+  private var scrollRestTask: Task<Void, Never>?
+  var drawnTask: Task<Void, Never>?
+  var drawnSent = false
+  var drawnDelivered = false
+  var drawnDocument: Int?
+  var coverHandedOver = false
+  weak var hiddenCover: UIView?
+  var hiddenCoverID: String?
+  var hiddenCoverWasHidden = false
+  var coverCapTask: Task<Void, Never>?
+  var coverRetryTask: Task<Void, Never>?
+  var coverNativeID: String? {
+    didSet { if coverNativeID != oldValue { MainActor.assumeIsolated { coverChanged() } } }
+  }
+  static let coverCap: Duration = .milliseconds(200)
+  static let coverRetryGap: Duration = .milliseconds(16)
+  static let coverRetries = 12
+  static let drawnProbeTries = 8
+  static let flatProbesAccepted = 3
+  static let drawnProbeGap: Duration = .milliseconds(50)
+  static let scrollRest: TimeInterval = 0.5
+  static let drawnProbeWidth: Double = 64
   private var madeGestures: PageGestures?
   private var madePinchWatcher: PagePinchWatcher?
   private var summaryLayer: PageSummaryLayer?
@@ -136,6 +158,8 @@ final class PageView: ExpoView {
     observing += 1
     toneTask?.cancel()
     toneTask = nil
+    forgetHostedWebView()
+    restoreHiddenCover()
     scrollObservation = nil
     contentSizeObservation = nil
     madeGestures?.detach()
@@ -157,6 +181,7 @@ final class PageView: ExpoView {
   private func host(_ webView: WKWebView?) {
     guard webView !== hostedWebView || webView?.superview !== self else { return }
     if let hostedWebView, hostedWebView.superview === self { hostedWebView.removeFromSuperview() }
+    if webView !== hostedWebView { forgetHostedWebView() }
     hostedWebView = webView
     scrollObservation = nil
     contentSizeObservation = nil
@@ -178,6 +203,22 @@ final class PageView: ExpoView {
       MainActor.assumeIsolated { self?.keepOffsetWithinContent() }
     }
     scheduleToneSample(after: .milliseconds(120))
+    reportDrawnSoon()
+  }
+
+  @MainActor
+  private func forgetHostedWebView() {
+    drawnTask?.cancel()
+    drawnTask = nil
+    drawnSent = false
+    drawnDelivered = false
+    drawnDocument = nil
+    coverCapTask?.cancel()
+    coverCapTask = nil
+    coverRetryTask?.cancel()
+    coverRetryTask = nil
+    scrollRestTask?.cancel()
+    scrollRestTask = nil
   }
 
   @MainActor
@@ -206,7 +247,13 @@ final class PageView: ExpoView {
     if !page.isLoading { madeGestures?.pageStoppedLoading() }
     if let session = summaryLayer?.presenter.session, !session.isCurrent(for: page) { dismissSummary(animated: false) }
     if window != nil, !isPrivate { PhoneHandoff.offer(page.url, title: page.title, from: self) } else { PhoneHandoff.withdraw(self) }
+    if let drawnDocument, drawnDocument != page.navigationGeneration {
+      drawnSent = false
+      drawnDelivered = false
+      self.drawnDocument = nil
+    }
     if wasLoading, !page.isLoading { scheduleToneSample(after: .milliseconds(250)) }
+    reportDrawnSoon()
     wasLoading = page.isLoading
     sendTone(theme: page.themeColor, underPage: page.underPageBackgroundColor)
     paintSideMargins()
@@ -227,6 +274,7 @@ final class PageView: ExpoView {
   private func scrollMoved() {
     keepOffsetWithinContent()
     lastScroll = CACurrentMediaTime()
+    scheduleScrollRest()
     guard toneTask == nil else { return }
     toneTask = Task { @MainActor [weak self] in
       while let self, !Task.isCancelled {
@@ -237,6 +285,26 @@ final class PageView: ExpoView {
       guard let self, !Task.isCancelled else { return }
       self.toneTask = nil
       await self.sampleTone()
+    }
+  }
+
+  @MainActor
+  private func scheduleScrollRest() {
+    guard scrollRestTask == nil, let webView = hostedWebView else { return }
+    let generation = observing
+    scrollRestTask = Task { @MainActor [weak self, weak webView] in
+      while let self, let webView, !Task.isCancelled, self.hostedWebView === webView {
+        let scroller = webView.scrollView
+        let quiet = CACurrentMediaTime() - self.lastScroll
+        let held = scroller.isTracking || scroller.isDecelerating || scroller.isZooming
+        if quiet >= PageView.scrollRest, !held { break }
+        try? await Task.sleep(for: .seconds(max(PageView.scrollRest - quiet, 0.1)))
+      }
+      guard let self, !Task.isCancelled else { return }
+      self.scrollRestTask = nil
+      guard let webView, self.shows(webView, since: generation), let pageID = self.registeredPageID else { return }
+      let scroller = webView.scrollView
+      PhonePages.shared.send(pageID, "page.scrollSettled", ["y": Double(scroller.contentOffset.y + scroller.adjustedContentInset.top)])
     }
   }
 
@@ -266,6 +334,9 @@ final class PageView: ExpoView {
     super.didMoveToWindow()
     guard window != nil else {
       MainActor.assumeIsolated {
+        forgetHostedWebView()
+        restoreHiddenCover()
+        coverHandedOver = false
         PhoneHandoff.withdraw(self)
         madePinchWatcher?.reset()
         dismissSummary(animated: false)
@@ -276,6 +347,7 @@ final class PageView: ExpoView {
       if let page, !isPrivate { PhoneHandoff.offer(page.url, title: page.title, from: self) }
       if let pageID, page != nil { _ = PhonePages.shared.activate(pageID) }
       scheduleToneSample(after: .milliseconds(120))
+      reportDrawnSoon()
     }
     if pinsSafeArea { applyObscuredInsets() }
   }
@@ -286,6 +358,7 @@ final class PageView: ExpoView {
     if pinsSafeArea { applyObscuredInsets() }
     MainActor.assumeIsolated {
       if let presenter = summaryLayer?.presenter, presenter.bottomInset != summaryBottomInset { presenter.bottomInset = summaryBottomInset }
+      reportDrawnSoon()
     }
   }
 

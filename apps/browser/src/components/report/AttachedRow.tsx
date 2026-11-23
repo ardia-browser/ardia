@@ -1,5 +1,5 @@
 import { Pressable, View } from "react-native";
-import { setAttach, setAttachedOpen, setPreview } from "../../state/report/actions";
+import { canAttachFiles, setAttach, setAttachedOpen, setPreview } from "../../state/report/actions";
 import type { AttachmentKey } from "../../state/report/form";
 import { useReport, useReportShallow } from "../../state/report/hooks";
 import { Box, Button, Checkbox, Divider, space, Symbol, Text, useHover, useTheme } from "../ui";
@@ -8,10 +8,11 @@ const shortAddress = (url: string) => url.replace(/^https?:\/\/(www\.)?/i, "").r
 
 export function useAttachedRows() {
   const { attach, local, pageAddress, systemLine } = useReportShallow((s) => ({ attach: s.draft.attach, local: s.local, pageAddress: s.pageAddress, systemLine: s.systemLine }));
-  const events = local?.lines ?? 0;
+  const files = canAttachFiles();
+  const events = files ? (local?.lines ?? 0) : 0;
   const rows: { key: AttachmentKey; title: string; detail: string; on: boolean; disabled?: boolean }[] = [
     { key: "system", title: "System info", detail: systemLine, on: attach.system },
-    { key: "errors", title: "Usage, errors and crashes, last 7 days", detail: local ? `${events} ${events === 1 ? "event" : "events"}` : "Reading…", on: attach.errors && events > 0, disabled: !events },
+    ...(files ? [{ key: "errors" as const, title: "Usage, errors and crashes, last 7 days", detail: local ? `${events} ${events === 1 ? "event" : "events"}` : "Reading…", on: attach.errors && events > 0, disabled: !events }] : []),
     { key: "settings", title: "Settings", detail: "No passwords or history", on: attach.settings },
     { key: "page", title: "Page address", detail: pageAddress ? shortAddress(pageAddress) : "No page open", on: attach.page && !!pageAddress, disabled: !pageAddress },
   ];

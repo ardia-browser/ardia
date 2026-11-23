@@ -1,0 +1,4 @@
+packages/ardiacore/src/engine/generated/** text eol=lf
+packages/ardiacore/ios/BookmarksCalls.swift text eol=lf
+packages/ardiacore/ios/FaviconsCalls.swift text eol=lf
+packages/ardiacore/ios/HistoryModule.swift text eol=lf

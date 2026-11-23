@@ -9,9 +9,9 @@ type Poster = (typeof posters)[number];
 type Size = { width: number; height: number };
 
 const DAWN: Record<string, ImageSourcePropType> = {
-  "dawn-wider-2196.webp": require("../windows/meadow/dawn-wider-2196.jpg"),
-  "dawn-wide-1766.webp": require("../windows/meadow/dawn-wide-1766.jpg"),
-  "dawn-laptop-1917.webp": require("../windows/meadow/dawn-laptop-1917.jpg"),
+  "dawn-wider-2400.webp": require("../windows/meadow/dawn-wider-2400.jpg"),
+  "dawn-wide-1920.webp": require("../windows/meadow/dawn-wide-1920.jpg"),
+  "dawn-laptop-1920.webp": require("../windows/meadow/dawn-laptop-1920.jpg"),
   "dawn-mid-1600.webp": require("../windows/meadow/dawn-mid-1600.jpg"),
 };
 

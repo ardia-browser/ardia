@@ -1,6 +1,7 @@
 import { createContext, useContext, useLayoutEffect, type RefObject } from "react";
 import { hostSupports, INPUT_REGIONS_METHOD, invokeHost, reportHostError, type ArdiaHost } from "./host.ts";
 import { createInputRegions, type InputRegionsRegistry, type RegionDeps, type RegionShape } from "./inputRegions.ts";
+import { clippedRectOf } from "./hostViewport.ts";
 import { createPageHoles, type PageHoles } from "./pageHoles.ts";
 import { startShellGlass } from "./shellGlass.ts";
 import { currentWindowCorners, onWindowCornersChanged } from "./windowDecorations.ts";
@@ -24,6 +25,7 @@ export function domRegionDeps(host: ArdiaHost): Omit<RegionDeps, "conceal"> {
       const { x, y, width, height } = element.getBoundingClientRect();
       return { x, y, width, height };
     },
+    pageRectOf: clippedRectOf,
     receivesPointer: (element) => getComputedStyle(element).pointerEvents !== "none",
     watch: (element, changed) => {
       const mutations = new MutationObserver(changed);

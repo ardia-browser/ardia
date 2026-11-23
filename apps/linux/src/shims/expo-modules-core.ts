@@ -36,7 +36,7 @@ export function emitNativeEvent(module: string, event: string, payload: unknown)
 const moduleValues: Record<string, Record<string, unknown>> = {
   ArdiaTranslate: { available: false, userLanguages: () => ["en"], languageName: (id: string) => id },
   ArdiaGlassEffect: { isLiquidGlass: () => true },
-  ArdiaShell: { readDocument: () => null, writeDocument: () => {}, removeDocument: () => {}, copyText: () => {} },
+  ArdiaShell: { readDocument: () => null, documentExists: () => false, writeDocument: () => {}, removeDocument: () => {}, copyText: () => {} },
   ArdiaSystem: { fileExists: () => false, hapticTick: () => {} },
 };
 
@@ -62,7 +62,7 @@ const inert = (module: string, key: string) => () => {
 
 const SHELL_PARTS = ["ArdiaAppWindows", "ArdiaFocus", "ArdiaMenus", "ArdiaDialogs"];
 const APP_PARTS = ["ArdiaUpdater", "ArdiaNotifications", "ArdiaScripting", "ArdiaDev"];
-const SHELL_DOCUMENT_METHODS = ["readDocument", "writeDocument", "saveDocument", "documentSaved", "removeDocument", "refreshDocument", "deleteDocument"];
+const SHELL_DOCUMENT_METHODS = ["readDocument", "documentExists", "writeDocument", "saveDocument", "documentSaved", "removeDocument", "refreshDocument", "deleteDocument"];
 
 export function hostModuleName(name: string, method?: string): string {
   if (SHELL_PARTS.includes(name)) return "ArdiaShell";

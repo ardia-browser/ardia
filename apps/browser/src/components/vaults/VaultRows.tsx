@@ -27,10 +27,9 @@ const LAYER = { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyC
 const DISC = { position: "absolute", width: VAULT_TOUCH.retryDisc, height: VAULT_TOUCH.retryDisc, borderRadius: capsule(VAULT_TOUCH.retryDisc) } as const;
 const TRAILING = { width: VAULT_MENU.touchID, height: VAULT_MENU.touchID, alignItems: "center", justifyContent: "center" } as const;
 const BUSY_SLOT = { position: "absolute", top: 0, bottom: 0, width: VAULT_MENU.touchID, alignItems: "center", justifyContent: "center" } as const;
-const CODE_SLOT = { width: VAULT_MENU.touchID, height: VAULT_MENU.touchID, alignItems: "center", justifyContent: "center" } as const;
-const RING_SLOT = { width: VAULT_CODE.ring, height: VAULT_CODE.ring, marginTop: VAULT_CODE.ringNudge } as const;
+const RING_SLOT = { width: VAULT_CODE.ring, height: VAULT_CODE.ring } as const;
+const RING_WAIT = { ...RING_SLOT, alignItems: "center", justifyContent: "center" } as const;
 const TITLE_ROW = { flexDirection: "row", alignItems: "center" } as const;
-const CODE_BLOCK = { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: VAULT_CODE.ringTextGap } as const;
 
 const TRY_AGAIN = "Try Again";
 
@@ -256,7 +255,7 @@ function RingSlot({ live, ink, paused }: { live: { expiresAt: number; period: nu
   );
 }
 
-function CodeLine({ tabId, seq, row, ink, busy }: { tabId: string; seq: number; row: Extract<VaultRow, { kind: "otp" }>; ink: Ink; busy: boolean }) {
+function CodeLine({ tabId, seq, row, ink, trailing }: { tabId: string; seq: number; row: Extract<VaultRow, { kind: "otp" }>; ink: Ink; trailing: ReactNode }) {
   const key = itemKey(row.item);
   const code = useVaultCode(key);
   const ticking = useContext(CodesTicking);
@@ -272,11 +271,9 @@ function CodeLine({ tabId, seq, row, ink, busy }: { tabId: string; seq: number; 
   return (
     <>
       <ItemTile provider={row.item.provider} ink={ink} />
-      <View style={CODE_BLOCK}>
-        <RingSlot live={live} ink={ink} paused={!ticking} />
-        <Lines title="" detail={row.item.username || row.item.title || itemSite(row.item.urls)} ink={ink} renderTitle={renderTitle} />
-      </View>
-      <View style={CODE_SLOT}>{!live || busy ? <ActivitySpinner style={SPINNER} /> : null}</View>
+      <Lines title="" detail={row.item.username || row.item.title || itemSite(row.item.urls)} ink={ink} renderTitle={renderTitle} />
+      {live ? <RingSlot live={live} ink={ink} paused={!ticking} /> : <View style={RING_WAIT}><ActivitySpinner style={SPINNER} /></View>}
+      {trailing}
     </>
   );
 }
@@ -328,7 +325,7 @@ function VaultRowViewOf({
       ));
     }
     case "otp":
-      return shell((ink) => <CodeLine tabId={tabId} seq={seq} row={row} ink={ink} busy={busy} />);
+      return shell((ink, lit) => <CodeLine tabId={tabId} seq={seq} row={row} ink={ink} trailing={trailing(ink, lit)} />);
     case "username":
       return shell((ink) => (
         <>

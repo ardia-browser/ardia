@@ -10,8 +10,8 @@ const VISIBLE_ROWS = 7;
 
 export const VAULT_MENU = {
   gap: space.xs,
-  minWidth: POPOVER_WIDTH.s,
-  maxWidth: 420,
+  minWidth: 280,
+  maxWidth: POPOVER_WIDTH.m,
   row: CREDENTIAL_ROW,
   compactRow: FOOTER_ROW,
   listPad: ROW_INSET,

@@ -1,4 +1,4 @@
-import { iconButton, POPOVER_WIDTH, space } from "../ui/tokens";
+import { concentric, iconButton, POPOVER_WIDTH, radius, space } from "../ui/tokens";
 
 const CREDENTIAL_ROW = 42;
 const FOOTER_ROW = 22;
@@ -12,14 +12,16 @@ export const VAULT_MENU = {
   maxWidth: 420,
   row: CREDENTIAL_ROW,
   compactRow: FOOTER_ROW,
-  listPad: space.m,
+  listPad: ROW_INSET,
   separatorGap: space.xs,
-  footerBottom: space.m,
+  footerBottom: ROW_INSET,
   rowInset: ROW_INSET,
   rowPadding: 10,
   footerPadding: FOOTER_TEXT_INSET - ROW_INSET,
   separatorInset: FOOTER_TEXT_INSET,
-  rowRadius: 5,
+  get rowRadius() {
+    return concentric(radius.panel, ROW_INSET);
+  },
   iconGap: space.l,
   touchID: 24,
   visibleRows: VISIBLE_ROWS,
@@ -65,7 +67,9 @@ export const VAULT_FORM = { field: FORM_FIELD, password: FORM_FIELD - 2 * (iconB
 export const VAULT_SIGN_IN = { ringOutsetX: 6, ringOutsetY: 4, ringRadius: 6, ringWidth: 3, ringAlpha: 0.5, secretInset: 2, tileIcon: 28, tileGlyph: 24, morphMs: 220, stepShift: 14, subtitleWidth: 340, popUpMin: 150, secretHeight: 22 } as const;
 
 export const VAULT_FIELD_BADGE = {
-  radius: VAULT_MENU.rowRadius,
+  get radius() {
+    return VAULT_MENU.rowRadius;
+  },
   glass: {
     fill: { light: "#FFFFFFB8", lightLit: "#FFFFFFE6", dark: "#3F3F3FB8", darkLit: "#4A4A4AE6" },
     edge: { light: "#0000001F", dark: "#FFFFFF24" },

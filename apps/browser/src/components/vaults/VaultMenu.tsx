@@ -88,7 +88,7 @@ export function SelectionPlate({ index, offsets, fill }: { index: number; offset
     return () => run.stop();
   }, [index, at]);
   if (at === undefined) return null;
-  return <Animated.View pointerEvents="none" style={{ ...PLATE, backgroundColor: fill, transform: [{ translateY: y }] }} />;
+  return <Animated.View pointerEvents="none" style={{ ...PLATE, borderRadius: VAULT_MENU.rowRadius, backgroundColor: fill, transform: [{ translateY: y }] }} />;
 }
 
 export function MenuSurface({ glass, children }: { glass: boolean; children: ReactNode }) {
@@ -270,7 +270,7 @@ function MenuPanel({ tabId, menu, zoom, area, onGone }: { tabId: string; menu: M
   );
 }
 
-const PLATE = { position: "absolute", top: VAULT_MENU.listPad, left: VAULT_MENU.rowInset, right: VAULT_MENU.rowInset, height: VAULT_MENU.row, borderRadius: VAULT_MENU.rowRadius } as const;
+const PLATE = { position: "absolute", top: VAULT_MENU.listPad, left: VAULT_MENU.rowInset, right: VAULT_MENU.rowInset, height: VAULT_MENU.row } as const;
 const FILL = { flex: 1 } as const;
 const SEARCH_ROW = { flexDirection: "row", alignItems: "center", gap: space.xs, height: VAULT_MENU.searchHeight, paddingHorizontal: VAULT_MENU.rowInset } as const;
 const LIST = { paddingTop: VAULT_MENU.listPad, paddingBottom: VAULT_MENU.separatorGap } as const;

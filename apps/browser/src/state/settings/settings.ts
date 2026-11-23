@@ -66,6 +66,7 @@ export const SETTING_SPECS = {
   commandBarHistory: flag(true, SYNCED),
   showSelectionSearch: flag(true, SYNCED),
   tabLayout: oneOf(["sidebar", "top"], "sidebar", SYNCED),
+  shrinkHorizontalTabs: flag(false, SYNCED),
   sidebarSide: oneOf(["left", "right"], "left", SYNCED),
   autoHideTabs: flag(false, SYNCED),
   hideToolbarWhileScrolling: flag(false, SYNCED),
@@ -335,7 +336,6 @@ function withoutUntouchedSetting(doc: SavedObject, key: string, oldDefault: unkn
 }
 
 export const sessionWithNewTabLinksInLittleArdia = (doc: SavedObject) => withoutUntouchedSetting(doc, "littleArdiaOpensNewTabLinks", false);
-
 export const sessionWithUnreadCountsOffByDefault = (doc: SavedObject) => withoutUntouchedSetting(doc, "showUnreadCounts", true);
 
 function windowsFollowingAutoHideTabs(s: Pick<BrowserState, "settings" | "windows">, patch: Partial<Settings>): Pick<BrowserState, "windows"> | {} {

@@ -1,6 +1,6 @@
 import type { StripDock, StripEntry, StripGroupEntry, StripMember } from "../../state/tabs/topStrip";
 import type { Dock } from "./model";
-import { COMPACT_CHIP, DOCK_GAP, GAP, MAX_CHIP, NEW_TAB_ROOM, PEEK_BORDER, PEEK_LEFT, PINNED_CELL, PINNED_SPACING, SELECTED_MIN_CHIP, SELECTED_STEPS, TITLE_MIN_CHIP, TITLED_CHIP, GROUP_TITLE_MAX, GROUP_TITLE_TIGHT } from "./tokens";
+import { CLOSE_MIN_CHIP, COMPACT_CHIP, DOCK_GAP, GAP, MAX_CHIP, NEW_TAB_ROOM, PEEK_BORDER, PEEK_LEFT, PINNED_CELL, PINNED_SPACING, SELECTED_MIN_CHIP, SELECTED_STEPS, TITLE_MIN_CHIP, TITLED_CHIP, GROUP_TITLE_MAX, GROUP_TITLE_TIGHT } from "./tokens";
 import { captionRoom, WINDOW_CHROME, type WindowChrome } from "../../lib/windowChrome";
 
 export const GROUP_MARGIN_LEFT = 3.5;
@@ -42,6 +42,7 @@ export function stripTabWidths(o: {
   titledMin: number;
   selectedMin: number;
   max: number;
+  shrinkTabs?: boolean;
 }): TabWidths {
   let room = o.pageWidth - o.dockWidth - o.plus - o.gap - o.fixed;
   for (const g of o.groups) {
@@ -64,6 +65,7 @@ export function stripTabWidths(o: {
       else lo = mid;
     }
     level = lo + 1e-6;
+    if (o.shrinkTabs) level = Math.floor(level * 2) / 2;
   }
   return { chip: halfPoint(at(level, o.min)), titled: halfPoint(at(level, o.titledMin)), selected: halfPoint(at(level, o.selectedShown ? selectedMin : o.min)) };
 }
@@ -138,7 +140,7 @@ export const tabsOf = (m: StripMember) => (m.kind === "tab" ? [m.id] : m.tabIds)
 export const CELL_STEP = PINNED_CELL + PINNED_SPACING;
 export const dockWidth = (cells: number) => cells * CELL_STEP - PINNED_SPACING;
 
-type StripMeasures = { groupChip: (groupId: string) => number | undefined; folderChip: (groupId: string) => number | undefined; needsTitle?: (tabId: string) => boolean };
+type StripMeasures = { groupChip: (groupId: string) => number | undefined; folderChip: (groupId: string) => number | undefined; needsTitle?: (tabId: string) => boolean; shrinkTabs?: boolean };
 type StripLayout = {
   chip: number;
   selected: number;
@@ -193,6 +195,7 @@ export function layoutStrip(entries: StripEntry[], activeId: string, pageWidth: 
     titledMin,
     selectedMin,
     max: MAX_CHIP,
+    shrinkTabs: measured.shrinkTabs,
   });
   const { chip, selected } = widths;
   const tabWidth = (tabId: string) => (tabId === wideId ? selected : needsTitle(tabId) ? widths.titled : chip) + (tabId === stretch?.tabId ? stretch.by : 0);
@@ -277,6 +280,7 @@ export function stripFit(entries: StripEntry[], activeId: string, pageWidth: num
   const roomy = SELECTED_STEPS.find((selected) => step(tightEnd, selected) <= limit && fits(selected));
   if (roomy !== undefined) return { selectedMin: roomy, titledMin: TITLED_CHIP, compactMin: COMPACT_CHIP };
   if (!least.compactShown && even()) return { selectedMin: tight, titledMin: TITLE_MIN_CHIP, compactMin: TITLE_MIN_CHIP };
+  if (measured.shrinkTabs) return { selectedMin: CLOSE_MIN_CHIP, titledMin: COMPACT_CHIP, compactMin: COMPACT_CHIP };
   return { selectedMin: tight, titledMin: TITLED_CHIP, compactMin: COMPACT_CHIP };
 }
 

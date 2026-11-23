@@ -4,7 +4,7 @@ import { runOnJS, useAnimatedReaction } from "react-native-reanimated";
 
 export const FABRIC_CATCH_UP_MS = 120;
 
-export const fabricLagsAnimations = Platform.OS === "android";
+export const fabricLagsAnimations = Platform.OS === "android" || Platform.OS === "ios";
 
 type Props = { motion: () => number; testID?: string };
 

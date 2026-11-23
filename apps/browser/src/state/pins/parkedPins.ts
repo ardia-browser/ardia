@@ -78,11 +78,12 @@ export function parkWindowPins(parked: Record<string, ParkedPins>, w: BrowserWin
   return next;
 }
 
-export function adoptParkedPins(s: BrowserState, windowId: string, profileId: string): BrowserState {
+export function adoptParkedPins(s: BrowserState, windowId: string, profileId: string, before: Pick<BrowserState, "tabs"> = s): BrowserState {
   const park = s.parkedPins[profileId];
   const w = s.windows[windowId];
   if (!park || !w || w.kind === "private" || !s.profiles[profileId]) return s;
   const tabs = { ...s.tabs };
+  const taken = (id: string) => !!tabs[id] || (before.tabs[id]?.profileId ?? profileId) !== profileId;
   const held = new Map(w.tabIds.map((id) => tabs[id]).filter((t): t is Tab => !!t?.pin && t.profileId === profileId).map((t) => [pinKeyOf(t), t.id]));
   const keyOf = new Map<string, string>();
   const tabOf = new Map<string, string>();
@@ -97,8 +98,8 @@ export function adoptParkedPins(s: BrowserState, windowId: string, profileId: st
     }
     const tab: Tab = {
       ...makeTab(windowId, profileId, snap.url, { ...snap, profileId, pin: groupId ? null : (snap.pin ?? TILE_PIN), pinnedUrl: home || null }),
-      ...(tabs[id] ? { id: newId("tab"), pinKey: id } : { id }),
-      page: withWake(ASLEEP, restoreFrom && !tabs[id] ? restoreId(restoreFrom) : undefined),
+      ...(taken(id) ? { id: newId("tab"), pinKey: id } : { id }),
+      page: withWake(ASLEEP, restoreFrom && !taken(restoreFrom) ? restoreId(restoreFrom) : undefined),
     };
     tabs[tab.id] = tab;
     added.push(tab.id);

@@ -401,7 +401,7 @@ static NSDictionary<NSString *, id> *OffscreenRefusal(NSString *reason) {
     [sources addObject:@{
       @"id" : [NSString stringWithFormat:@"screen:%u:0", display.unsignedIntValue],
       @"kind" : @"screen",
-      @"name" : screen.localizedName ?: [NSString stringWithFormat:@"Screen %lu", (unsigned long)index],
+      @"name" : screen.localizedName.length ? screen.localizedName : [NSString stringWithFormat:@"Screen %lu", (unsigned long)index],
       @"width" : @(screen.frame.size.width),
       @"height" : @(screen.frame.size.height),
     }];

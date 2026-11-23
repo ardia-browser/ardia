@@ -1,6 +1,4 @@
 import {
-  getContentBlocker,
-  isContentBlockerAllowed,
   type SiteSettingType,
   type SiteSettingValue,
   type SiteSettings,
@@ -37,7 +35,7 @@ import { SiteExtensions } from "./SiteExtensions";
 import { TranslateRows } from "./TranslateControls";
 import { ReaderLookRow, ReaderRow } from "./ReaderControls";
 import { ZoomStepper } from "./ZoomControls";
-import { blockerLabel, choiceTitle, featuredPermissions, permissionValue, readSiteSettings, setSitePermission, sitePermissionsFor, type SitePermission } from "../../state/site/siteControls";
+import { blockerLabel, choiceTitle, featuredPermissions, permissionValue, readSiteBlocker, readSiteSettings, setSitePermission, sitePermissionsFor, type SiteBlocker, type SitePermission } from "../../state/site/siteControls";
 import { isWebPageUrl } from "../../lib/url";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { DEVELOPER_BAR_IN_CORE, canChooseDeveloperMode, setDeveloperMode, useDeveloperMode } from "../../state/site/developerMode";
@@ -45,7 +43,6 @@ import { SiteSwitchRows } from "../plugins/SiteSwitchRows";
 import { ALL_UNREAD_TITLE, canChooseSiteUnread, isUnreadSiteHidden, setSiteUnreadShown, showUnreadCounts } from "../../state/tabs/unreadSites";
 
 type Expanded = "connection" | "more" | null;
-type Blocker = { enabled: boolean; allowed: boolean };
 
 export function SiteControlsPanel({
   tabId,
@@ -71,7 +68,7 @@ export function SiteControlsPanel({
   const developerMode = useDeveloperMode(tab?.url ?? "");
   const [settings, setSettings] = useState<SiteSettings | null>(null);
   const [featured, setFeatured] = useState<Set<SiteSettingType> | null>(null);
-  const [blocker, setBlocker] = useState<Blocker | null>(null);
+  const [blocker, setBlocker] = useState<SiteBlocker | null>(null);
   const [expanded, setExpanded] = useState<Expanded>(null);
   const [cleared, setCleared] = useState<string | null>(null);
   const shareTile = useRef<View>(null);
@@ -100,7 +97,7 @@ export function SiteControlsPanel({
       setSettings(s);
       setFeatured((f) => f ?? featuredPermissions(tabId, s, permissionList));
     });
-    void Promise.all([getContentBlocker(), isContentBlockerAllowed(host)]).then(([state, allowed]) => live && setBlocker({ enabled: state.enabled, allowed }));
+    void readSiteBlocker(host).then((b) => live && setBlocker(b));
     void webviews.get(tabId)?.getSecurityInfo().then((info) => live && info && patchPage(tabId, { security: info }));
     return () => {
       live = false;

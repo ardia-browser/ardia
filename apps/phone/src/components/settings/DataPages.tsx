@@ -82,7 +82,7 @@ export function AboutPage() {
       <Group footer={copy().privacy}>
         <LinkRow title="ardia.dev" icon="globe" url="https://ardia.dev" divider />
         <LinkRow title="Release Notes" icon="sparkles" url="https://ardia.dev/release-notes" divider />
-        <LinkRow title="Source Code" icon="code" url="https://github.com/mantrakp04/ardia" />
+        <LinkRow title="Source Code" icon="code" url="https://github.com/ardia-browser/ardia" />
       </Group>
       <Group>
         <NavRow title="Open Source Licenses" onPress={() => pushSettings({ page: "licenses" })} />
@@ -92,7 +92,7 @@ export function AboutPage() {
 }
 
 export const dataCredits = () => [
-  { name: "Ardia", use: copy().ardiaCredit, license: "Apache License 2.0", url: "https://github.com/mantrakp04/ardia" },
+  { name: "Ardia", use: copy().ardiaCredit, license: "Apache License 2.0", url: "https://github.com/ardia-browser/ardia" },
   { name: "EasyList", use: "The list behind Block Ads.", license: "CC BY-SA 3.0 or GPLv3", url: "https://easylist.to" },
   { name: "EasyPrivacy", use: "The list behind Block Trackers.", license: "CC BY-SA 3.0 or GPLv3", url: "https://easylist.to" },
   { name: "Fanboy’s Cookie Monster List", use: "The list behind Block Cookie Banners.", license: "CC BY-SA 3.0 or GPLv3", url: "https://secure.fanboy.co.nz" },

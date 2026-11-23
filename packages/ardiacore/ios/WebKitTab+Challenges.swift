@@ -22,8 +22,7 @@ final class WebKitTabSafety {
   var interstitial: WebKitInterstitial?
   var errorTitle = ""
   var pageColor: String?
-  var backdrop: NSColor?
-  var awaitingFirstPaint = false
+  var backdrop = WebKitPageBackdrop()
   let dialogs = WebKitPageDialogs()
   var blockedPopups: [String: BlockedPopup] = [:]
   var lastPopup = 0

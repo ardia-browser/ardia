@@ -70,7 +70,7 @@ onIos("Delete All asks main's question and clears; with nothing archived the she
 onIos("a row reopens its tab with the open-row tick, and main's swipe deletes it", async () => {
   const tick = jest.spyOn(haptics, "selection").mockImplementation(() => undefined);
   const open = jest.spyOn(tabMenus, "openArchivedTab").mockImplementation(() => undefined as never);
-  const remove = jest.spyOn(tabMenus, "deleteArchivedTab").mockImplementation(() => undefined as never);
+  const remove = jest.spyOn(tabMenus, "deleteArchivedTabs").mockImplementation(() => undefined as never);
   useTabs.setState({ archive: archived() });
   const root = renderSurface(<Surfaces />);
   await act(async () => browse.useBrowse.setState({ sheet: "archive" }));

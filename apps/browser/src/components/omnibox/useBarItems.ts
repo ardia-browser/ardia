@@ -22,6 +22,7 @@ export function useBarItems({
   selected,
   dropdown,
   opensTab,
+  switchToOpenTab,
   windowId,
   profileId,
   tabId,
@@ -36,6 +37,7 @@ export function useBarItems({
   selected: number;
   dropdown: boolean;
   opensTab: boolean;
+  switchToOpenTab: boolean;
   windowId: string;
   profileId: string;
   tabId: string;
@@ -51,6 +53,7 @@ export function useBarItems({
     currentUrl: currentUrl || undefined,
     scope,
     preventInline: suppressCompletion,
+    switchToOpenTab,
   });
   const start = useDropdownStart(dropdown && !edited && !scope, tabId, profileId);
   const idle = opensTab && !scope && !typed.trim();

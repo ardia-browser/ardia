@@ -1,4 +1,5 @@
-import { duration, spring } from "../ui/motion";
+import { Easing } from "react-native";
+import { curve, duration, spring } from "../ui/motion";
 import { concentric, iconButton, radius, space } from "../ui/tokens";
 
 export const TOP_STRIP_HEIGHT = 42;
@@ -75,6 +76,7 @@ export const DROP_GLOW_MS = duration.base;
 export const INCOMING_GAP_MS = duration.fast;
 export const FADE_IN_MS = duration.fast;
 export const TUCK_FADE_MS = 120;
+export const STRIP_MOTION = { slide: 200, appear: 140, fade: 100, slideEasing: Easing.out(Easing.quad), appearEasing: curve.cssEaseOut, fadeEasing: curve.cssEaseOut } as const;
 
 
 const REORDER_OMEGA = 90;

@@ -80,15 +80,7 @@ NSDictionary *CookieWrite(id raw) {
   completion(nil);
 }
 
-- (void)readSiteData:(NSDictionary *)request completion:(void (^)(NSDictionary *))completion {
-  NSArray<NSString *> *domains = Strings(request[@"domains"], 64);
-  NSMutableOrderedSet<NSString *> *origins = [NSMutableOrderedSet orderedSet];
-  for (NSString *text in Strings(request[@"origins"], kMaxSiteDataOrigins)) {
-    if (NSString *origin = WebOrigin(text)) [origins addObject:origin];
-  }
-  __block NSArray *cookies = nil;
-  NSMutableDictionary *storage = [NSMutableDictionary dictionary];
-  dispatch_group_t group = dispatch_group_create();
+- (void)readCookiesCovering:(NSArray<NSString *> *)domains group:(dispatch_group_t)group into:(void (^)(NSArray *))into {
   dispatch_group_enter(group);
   __weak ArdiaWebView *weakSelf = self;
   [self siteDataCall:@"Network.getAllCookies" params:nil done:^(NSDictionary *result, NSString *error) {
@@ -100,7 +92,7 @@ NSDictionary *CookieWrite(id raw) {
           if (![cookie isKindOfClass:NSDictionary.class] || cookie[@"partitionKey"] || [cookie[@"partitionKeyOpaque"] boolValue]) continue;
           if (Covered(cookie[@"domain"], domains)) [kept addObject:cookie];
         }
-        cookies = kept;
+        into(kept);
       }
       dispatch_group_leave(group);
     };
@@ -109,6 +101,18 @@ NSDictionary *CookieWrite(id raw) {
     if (!strongSelf) return take(nil);
     [strongSelf siteDataCall:@"Storage.getCookies" params:nil done:^(NSDictionary *fallback, NSString *fallbackError) { take(fallback); }];
   }];
+}
+
+- (void)readSiteData:(NSDictionary *)request completion:(void (^)(NSDictionary *))completion {
+  NSArray<NSString *> *domains = Strings(request[@"domains"], 64);
+  NSMutableOrderedSet<NSString *> *origins = [NSMutableOrderedSet orderedSet];
+  for (NSString *text in Strings(request[@"origins"], kMaxSiteDataOrigins)) {
+    if (NSString *origin = WebOrigin(text)) [origins addObject:origin];
+  }
+  __block NSArray *cookies = domains.count ? nil : @[];
+  NSMutableDictionary *storage = [NSMutableDictionary dictionary];
+  dispatch_group_t group = dispatch_group_create();
+  if (domains.count) [self readCookiesCovering:domains group:group into:^(NSArray *kept) { cookies = kept; }];
   for (NSString *origin in origins) {
     dispatch_group_enter(group);
     [self siteDataCall:@"DOMStorage.getDOMStorageItems" params:@{@"storageId" : StorageId(origin)} done:^(NSDictionary *result, NSString *error) {

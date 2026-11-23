@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useRef } from "react";
 import { StyleSheet } from "react-native";
 import { devRegister } from "../dev/devRegister";
 import { SwipeArea, type SwipeAreaHandle, type SwipeEvent } from "../ui";
@@ -9,7 +9,7 @@ import { TAB_SWIPE } from "./tokens";
 
 const STEPPING_PHASES = new Set<SwipeEvent["phase"]>(["began", "changed", "ended"]);
 
-export function TabSwipeArea({ windowId, surface }: { windowId: string; surface: TabSwipeSurface }) {
+export const TabSwipeArea = memo(function TabSwipeArea({ windowId, surface }: { windowId: string; surface: TabSwipeSurface }) {
   const on = useSettings((s) => s.swipeBetweenTabs) && PLATFORM_FEATURES.trackpadGestures;
   const area = useRef<SwipeAreaHandle>(null);
   const stepped = useRef(false);
@@ -33,7 +33,7 @@ export function TabSwipeArea({ windowId, surface }: { windowId: string; surface:
     }
   };
   return <SwipeArea ref={area} style={StyleSheet.absoluteFill} canSwipeBack canSwipeForward onSwipe={onSwipe} />;
-}
+});
 
 const devAreas = new Map<string, React.RefObject<SwipeAreaHandle | null>>();
 const received: object[] = [];

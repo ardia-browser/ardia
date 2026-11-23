@@ -295,7 +295,7 @@ final class GlassView: ExpoView {
       applyShape()
       return
     }
-    let appearing = applied?.shown == false && shown
+    let turning = applied.map { $0.shown != shown } ?? false
     applied = (tint, interactive, classic, tinted, shown, colors)
     let surface = { [self] in
       if classic {
@@ -311,12 +311,30 @@ final class GlassView: ExpoView {
         effectView.effect = shown ? glass : nil
       }
     }
-    if appearing, window != nil, shownDuration > 0, !UIAccessibility.isReduceMotionEnabled {
-      UIView.animate(withDuration: shownDuration, delay: 0, options: [.curveEaseOut, .beginFromCurrentState], animations: surface)
+    if turning, PhoneTestBuild.isOn { traceShown("turning") }
+    if turning, window != nil, shownDuration > 0, !UIAccessibility.isReduceMotionEnabled {
+      UIView.animate(withDuration: shownDuration, delay: 0, options: [shown ? .curveEaseOut : .curveEaseIn, .beginFromCurrentState], animations: surface) { [weak self] finished in
+        guard PhoneTestBuild.isOn else { return }
+        MainActor.assumeIsolated {
+          if let view = self { view.traceShown(finished ? "turned" : "interrupted") }
+        }
+      }
     } else {
       surface()
     }
     applyShape()
+  }
+
+  private func traceShown(_ moment: String) {
+    var shownAlpha = alpha
+    var hiddenBy = isHidden ? "self" : "none"
+    var ancestor = superview
+    while let view = ancestor {
+      shownAlpha *= view.alpha
+      if view.isHidden, hiddenBy == "none" { hiddenBy = view.accessibilityIdentifier ?? String(describing: type(of: view)) }
+      ancestor = view.superview
+    }
+    NSLog("PAGELAB glass native %@ %@ shown=%@ ms=%ld window=%@ alpha=%.2f shownAlpha=%.2f hiddenBy=%@ effect=%@ at=%.3f", accessibilityIdentifier ?? "-", moment, shown ? "yes" : "no", Int(shownDuration * 1000), window == nil ? "no" : "yes", alpha, shownAlpha, hiddenBy, effectView.effect == nil ? "none" : "glass", CACurrentMediaTime())
   }
 
   private func applyShape() {

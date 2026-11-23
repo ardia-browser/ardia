@@ -211,11 +211,142 @@ const ARC_HIDE = [
   [[0, 0], [0.017, 0.328], [0.034, 0.654], [0.05, 0.853], [0.075, 0.956], [0.092, 1]],
 ];
 
-test("Arc's peek slides in on its measured spring and leaves on its ease-in-out; its hide is a 100 ms ease-out", () => {
-  for (const motion of ARC_PEEK_IN) {
-    const rms = fitT0(motion, (t) => springAt(t, dm.ARC_PEEK_SPRING));
-    assert.ok(rms < 0.04, `peek in rms ${rms.toFixed(3)}`);
+const ARC_TRACED_SPRING = { response: 0.18, damping: 0.8 };
+const { Animated, animations } = await import("react-native");
+const { mount } = await import("../../test-hooks.mjs");
+const { usePeek } = await import("./usePeek.ts");
+
+function revealStartedBy(arc) {
+  const started = [];
+  const { timing, spring } = Animated;
+  Animated.timing = (value, config) => (started.push({ kind: "timing", ...config }), timing(value, config));
+  Animated.spring = (value, config) => (started.push({ kind: "spring", ...config }), spring(value, config));
+  const peek = mount(() => usePeek(true, arc));
+  try {
+    peek.value.show();
+  } finally {
+    Animated.timing = timing;
+    Animated.spring = spring;
+    peek.unmount();
   }
+  assert.equal(started.length, 1, "one animation starts the reveal");
+  return started[0];
+}
+
+function revealCurve(arc) {
+  const reveal = revealStartedBy(arc);
+  assert.equal(reveal.kind, "timing", `${arc ? "Arc" : "Dia"} layout: a timing curve, not a spring that can carry past its target`);
+  assert.equal(reveal.toValue, 1);
+  assert.equal(reveal.useNativeDriver, true);
+  assert.equal(typeof reveal.easing, "function");
+  assert.equal(reveal.easing(0), 0, "first frame starts at 0");
+  assert.equal(reveal.easing(1), 1, "final frame lands on 1");
+  const seconds = reveal.duration / 1000;
+  return { duration: reveal.duration, at: (t) => reveal.easing(Math.max(0, Math.min(1, t / seconds))) };
+}
+
+for (const arc of [true, false]) {
+  test(`${arc ? "Arc's" : "Dia's"} layout: the peek usePeek starts slides in on an ease-out over 150 ms that never passes its final width or pulls back (#3631: Arc's 1.5 % overshoot detached the panel from the window's edge)`, () => {
+    const { duration, at } = revealCurve(arc);
+    assert.equal(duration, dm.PEEK_IN_MS);
+    assert.equal(dm.PEEK_IN_MS, 150);
+    assert.equal(dm.PEEK_IN_MS, dm.ARC_PEEK_OUT_MS, "in as quickly as it leaves");
+    let last = 0;
+    for (let ms = 0; ms <= 400; ms++) {
+      const x = at(ms / 1000);
+      assert.ok(x >= last && x <= 1, `${ms} ms: ${x} after ${last}`);
+      last = x;
+    }
+    for (const hz of [60, 120]) {
+      const frames = Array.from({ length: Math.ceil((hz * duration) / 1000) + 2 }, (_, i) => at(i / hz));
+      assert.ok(Math.max(...frames) <= 1, `${hz} Hz: peak ${Math.max(...frames)}`);
+      assert.ok(frames.every((x, i) => i === 0 || x >= frames[i - 1]), `${hz} Hz: one way only`);
+    }
+    assert.ok(at(0.05) > 0.7, `most of the way in 50 ms: ${at(0.05)}`);
+    assert.ok(at(0.1) > 0.95, `all but a hair by 100 ms: ${at(0.1)}`);
+    assert.equal(at(duration / 1000), 1, "at rest when the slide ends, no tail");
+    const travel = 227.5 + 12;
+    const pastFinal = Math.max(...Array.from({ length: 400 }, (_, ms) => at(ms / 1000) * travel)) - travel;
+    assert.ok(pastFinal <= 0, `the panel never passes its final edge (${pastFinal} pt)`);
+  });
+
+  test(`${arc ? "Arc's" : "Dia's"} layout: the traffic lights in the peek ride the curve usePeek starts, never past their place in the panel, never back`, async () => {
+    const { slidingCenter } = await import("./useDockLights.ts");
+    const { at } = revealCurve(arc);
+    for (const right of [false, true]) {
+      const o = { width: 227.5, moving: false, peeking: true, fullscreen: false, lights: arc ? dm.ARC_LIGHTS_CENTER : dm.LIGHTS_CENTER, right, peekAt: DEFAULT_PEEK };
+      const rest = slidingCenter(o, 0, 1)[0];
+      let last = slidingCenter(o, 0, 0)[0];
+      for (let ms = 0; ms <= 400; ms += 1000 / 120) {
+        const [x] = slidingCenter(o, 0, at(ms / 1000));
+        assert.ok(last <= x && x <= rest, `${right ? "right" : "left"} ${ms.toFixed(1)} ms: ${x} after ${last}, rest ${rest}`);
+        last = x;
+      }
+      assert.equal(last, rest);
+    }
+  });
+}
+
+test("Arc's traced peek overshoots 1.5 %; ours keeps its pace up to there without passing 1", () => {
+  const { at } = revealCurve(true);
+  const arcPeak = Math.max(...ARC_PEEK_IN.flat().map(([, x]) => x));
+  assert.ok(arcPeak > 1.01, `Arc's traced peek overshoots (${arcPeak}), ours doesn't`);
+  const arcSpringPeak = Math.max(...Array.from({ length: 400 }, (_, i) => springAt(i / 1000, ARC_TRACED_SPRING)));
+  assert.ok(Math.abs(arcSpringPeak - arcPeak) < 0.002, `Arc's traced spring peaks with its traces: ${arcSpringPeak}`);
+  for (const motion of ARC_PEEK_IN) {
+    const rms = fitT0(motion.map(([t, x]) => [t, Math.min(x, 1)]), at);
+    assert.ok(rms < 0.04, `keeps Arc's pace up to its overshoot: rms ${rms.toFixed(3)}`);
+  }
+});
+
+test("a reveal that passes its final width is counted once, under the consent in force when that reveal began, also when it reverses a hide; a hide stops counting (#3631)", async (t) => {
+  const { mock } = await import("node:test");
+  const { useSidebarLights } = await import("./useDockLights.ts");
+  const { setConsentPeriod } = await import("../../state/telemetry/consentPeriod.ts");
+  const { takeDockCounts } = await import("../../state/telemetry/dockCounts.ts");
+  mock.timers.enable({ apis: ["setTimeout"] });
+  animations.held = true;
+  const opens = [];
+  const dock = new Animated.Value(0);
+  const view = mount(() => {
+    const peek = usePeek(true, true, () => false, () => {}, (bounce) => opens.push(bounce));
+    useSidebarLights("w1", dock, peek.slide, { width: 227.5, moving: false, peeking: peek.live, fullscreen: false, lights: dm.ARC_LIGHTS_CENTER, right: false, peekAt: DEFAULT_PEEK }, peek.sampleSlide);
+    return peek;
+  });
+  t.after(() => {
+    view.unmount();
+    animations.finish();
+    animations.held = false;
+    mock.timers.reset();
+    setConsentPeriod(false, null);
+  });
+  const frame = (value) => (animations.step(view.value.slide, value), view.value);
+  const hideNow = () => (view.value.hide(true), mock.timers.tick(0), assert.equal(view.value.leaving, true, "sliding away"));
+  takeDockCounts();
+  setConsentPeriod(true, "peek-first");
+  view.value.show();
+  frame(0.6);
+  hideNow();
+  frame(1.015);
+  assert.equal(takeDockCounts().sidebar_peeks_past_target, 0, "a frame after the hide began isn't the reveal's");
+  setConsentPeriod(false, null);
+  view.value.show();
+  frame(0.6);
+  hideNow();
+  setConsentPeriod(true, "peek-reversal");
+  view.value.show();
+  assert.deepEqual(opens, [false, true, true], "each reversal is a new reveal");
+  frame(1.015);
+  frame(1.01);
+  assert.equal(takeDockCounts().sidebar_peeks_past_target, 1, "counted once, under the consent taken as it reversed");
+  hideNow();
+  view.value.show();
+  setConsentPeriod(true, "peek-later");
+  frame(1.02);
+  assert.equal(takeDockCounts().sidebar_peeks_past_target, 0, "a reveal begun under an earlier consent period isn't counted in a later one");
+});
+
+test("Arc's peek leaves on its ease-in-out; its hide is a 100 ms ease-out", () => {
   const hide = (t) => (t <= 0 ? 0 : t >= dm.ARC_HIDE_MS / 1000 ? 1 : dm.easeOutCubic(t / (dm.ARC_HIDE_MS / 1000)));
   for (const motion of ARC_HIDE) {
     const rms = fitT0(motion, hide);
@@ -226,9 +357,6 @@ test("Arc's peek slides in on its measured spring and leaves on its ease-in-out;
   assert.equal(dm.easeInOutCubic(0), 0);
   assert.equal(dm.easeInOutCubic(0.5), 0.5);
   assert.equal(dm.easeInOutCubic(1), 1);
-  const peak = Math.max(...Array.from({ length: 400 }, (_, i) => springAt(i / 1000, dm.ARC_PEEK_SPRING)));
-  const arcPeak = Math.max(...ARC_PEEK_IN.flat().map(([, x]) => x));
-  assert.ok(Math.abs(peak - arcPeak) < 0.002, `the panel's overshoot ${peak}, Arc's ${arcPeak}`);
 });
 
 test("the peek stays off the window edge even when the page frame is zero, its corner nested in the window's", () => {

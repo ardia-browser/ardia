@@ -60,6 +60,7 @@ import {
 import { useSync } from "../../state/sync/store";
 import { useSelectedProfile, useSyncEnabled } from "../../state/sync/hooks";
 import { useTabs } from "../../state/tabs/store";
+import { usePageUi } from "../../state/page/store";
 import { ExpoClearDataPage } from "../settings/ExpoClearDataPage";
 import { actionWords } from "../../lib/sharedWords";
 import { DoneToolbarItem } from "../settings/ExpoSettingsDone";
@@ -78,16 +79,17 @@ const shareable = (url: string) => /^https?:\/\//i.test(url);
 
 export function ExpoLibrarySheet() {
   const open = useLibrary((s) => s.open);
+  const inPageMenu = usePageUi((s) => s.menuOpen && s.menuPage === "library");
   return (
     <Host testID="expoLibrarySheet" style={styles.anchor} pointerEvents="none">
-      <BottomSheet isPresented={open} onIsPresentedChange={(presented) => (presented ? undefined : closeLibrary())}>
+      <BottomSheet isPresented={open && !inPageMenu} onIsPresentedChange={(presented) => (presented ? undefined : closeLibrary())}>
         <LibraryNavigation />
       </BottomSheet>
     </Host>
   );
 }
 
-function LibraryNavigation() {
+export function LibraryNavigation() {
   const section = useLibrary((s) => s.section);
   const path = useLibrary((s) => s.path);
   const hasFiles = useLibrary((s) => s.files.length > 0);

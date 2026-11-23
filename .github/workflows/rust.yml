@@ -1,0 +1,142 @@
+name: Rust
+
+on:
+  pull_request:
+    paths: &rust
+      - "packages/core-rs/**"
+      - "packages/plugin-broker/**"
+      - "packages/shell/plugin-host/HostPrelude.swift"
+      - "packages/sync/tests/fixtures/**"
+      - "packages/sync/ios/Core/Wordlist.swift"
+      - "packages/phone/android/src/main/java/com/ardia/sync/core/Wordlist.kt"
+      - "apps/browser/windows/Ardia/SyncWordlist.h"
+      - "engine/ardiacore-linux/src/ardia/linux/ac_linux_sync_crypto.h"
+      - "engine/ardiacore-linux/src/ardia/linux/ac_linux_sync_crypto.cc"
+      - "engine/ardiacore-linux/src/ardia/linux/ac_linux_sync_wordlist.cc"
+      - "engine/ardiacore-linux/copies.tsv"
+      - ".github/workflows/rust.yml"
+  push:
+    branches: [main]
+    paths: *rust
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rust-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run: ${{ steps.vouch.outputs.run }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          sparse-checkout: .github
+      - id: vouch
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+        with:
+          retries: 3
+          script: |
+            const vouch = require(`${process.env.GITHUB_WORKSPACE}/.github/vouch/vouch.cjs`);
+            await vouch.gate({ github, context, core });
+
+  core:
+    name: core-rs (${{ matrix.os }})
+    needs: gate
+    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+        working-directory: packages/core-rs
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            packages/core-rs/target
+          key: core-rs-${{ runner.os }}-${{ hashFiles('packages/core-rs/rust-toolchain.toml', 'packages/core-rs/Cargo.lock') }}
+          restore-keys: core-rs-${{ runner.os }}-
+      - name: Toolchain
+        run: rustup toolchain install && rustup component add llvm-tools && rustc --version && cargo --version
+      - name: Format
+        run: cargo fmt --check
+      - name: Clippy
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+      - name: Test, vectors and header drift
+        run: cargo test --locked --all-features
+      - name: Release static library
+        run: cargo build --locked --release -p ardia-ffi
+      - name: The shared and static libraries export exactly the header's functions in every build
+        if: runner.os != 'Windows'
+        run: |
+          python3 -I tests/check_exports.py
+          for build in "--all-targets -p ardia-ffi" "--all-targets --all-features" "--workspace --all-targets --all-features"; do
+            echo "cargo build --release $build"
+            cargo build --locked --release $build
+            python3 -I tests/check_exports.py
+          done
+          cargo build --locked --release -p ardia-ffi
+      - name: C and C++ smoke against the static library
+        if: runner.os != 'Windows'
+        run: |
+          extra=""
+          if [ "$RUNNER_OS" = "Linux" ]; then extra="-lpthread -ldl -lm"; fi
+          cc -std=c11 -Wall -Wextra -Werror -pedantic -I include tests/c/smoke.c target/release/libardia_core.a $extra -o "$RUNNER_TEMP/ardia-core-smoke"
+          "$RUNNER_TEMP/ardia-core-smoke"
+          c++ -std=c++17 -Wall -Wextra -Werror -pedantic -I include tests/cpp/smoke.cc target/release/libardia_core.a $extra -o "$RUNNER_TEMP/ardia-core-smoke-cpp"
+          "$RUNNER_TEMP/ardia-core-smoke-cpp"
+      - name: Linux C++ sync against the shared vectors
+        if: runner.os == 'Linux'
+        env:
+          ARDIA_REQUIRE_LINUX_CROSSCHECK: "1"
+        run: |
+          dpkg -s libssl-dev >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev)
+          python3 -I tests/linux-sync/test_linux_sync.py -v
+
+  plugin-broker:
+    needs: gate
+    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+        working-directory: packages/plugin-broker
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            packages/plugin-broker/target
+          key: plugin-broker-${{ runner.os }}-${{ hashFiles('packages/core-rs/rust-toolchain.toml', 'packages/plugin-broker/Cargo.lock') }}
+          restore-keys: plugin-broker-${{ runner.os }}-
+      - name: Toolchain
+        run: rustup toolchain install 1.100.0 --profile minimal && rustup override set 1.100.0
+      - name: Build
+        run: cargo build --locked --all-targets
+      - name: Test
+        run: cargo test --locked --workspace --lib --bins

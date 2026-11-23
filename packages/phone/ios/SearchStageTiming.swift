@@ -19,9 +19,9 @@ nonisolated extension Motion {
   static let stageShadowIn = ArdiaDesign.MotionCurve.easeOut(duration: 0.15)
   static let stageFoldLag: Double = 1.0 / 60
   static let stageHandOff = ArdiaDesign.MotionCurve.easeOut(duration: 0.1)
-  static let stageRevealHold: Double = 0.25
-  static let stageRevealFieldDelay: Double = 0.06
-  static let stageRevealRowsDelay: Double = 0.09
+  static let stageRevealHold: Double = 0
+  static let stageRevealFieldDelay: Double = 0
+  static let stageRevealRowsDelay: Double = 0.03
   static let stageRevealCurve = ArdiaDesign.MotionCurve.easeOut(duration: 0.12)
   static let stageReduced = ArdiaDesign.MotionCurve.easeOut(duration: 0.2)
 }
@@ -87,25 +87,47 @@ enum StageSettlePoll {
   }
 }
 
+nonisolated struct StageKeyboardGeometry: Equatable {
+  let window: ObjectIdentifier
+  let windowSize: CGSize
+  let orientation: UIInterfaceOrientation
+}
+
+nonisolated struct StageKeyboardMemory {
+  let height: CGFloat
+  let geometry: StageKeyboardGeometry
+}
+
+nonisolated struct StageKeyboardMove {
+  let height: CGFloat
+  let duration: TimeInterval
+  let curve: UInt
+}
+
 @MainActor
 final class StageKeyboardTracker {
   private let minimumHeight: CGFloat
-  private let onMove: (CGFloat) -> Void
+  private let onMove: (StageKeyboardMove) -> Void
+  private let onUnchanged: (CGFloat) -> Void
   private var observers: [NSObjectProtocol] = []
   private var height: CGFloat = 0
 
-  init(minimumHeight: CGFloat, onMove: @escaping (CGFloat) -> Void) {
+  init(minimumHeight: CGFloat, onMove: @escaping (StageKeyboardMove) -> Void, onUnchanged: @escaping (CGFloat) -> Void) {
     self.minimumHeight = minimumHeight
     self.onMove = onMove
+    self.onUnchanged = onUnchanged
   }
 
   func start() {
     guard observers.isEmpty else { return }
     for name in [UIResponder.keyboardWillChangeFrameNotification, UIResponder.keyboardWillHideNotification] {
       let observer = NotificationCenter.default.addObserver(forName: name, object: nil, queue: nil) { [weak self] notification in
-        let end = (notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue
+        let info = notification.userInfo
+        let end = (info?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue
         let hiding = notification.name == UIResponder.keyboardWillHideNotification
-        MainActor.assumeIsolated { self?.keyboardWillMove(overlap: hiding ? 0 : Self.overlap(of: end)) }
+        let duration = (info?[UIResponder.keyboardAnimationDurationUserInfoKey] as? NSNumber)?.doubleValue ?? 0
+        let curve = (info?[UIResponder.keyboardAnimationCurveUserInfoKey] as? NSNumber)?.uintValue ?? UInt(UIView.AnimationCurve.easeInOut.rawValue)
+        MainActor.assumeIsolated { self?.keyboardWillMove(overlap: hiding ? 0 : Self.overlap(of: end), duration: duration, curve: curve) }
       }
       observers.append(observer)
     }
@@ -127,11 +149,14 @@ final class StageKeyboardTracker {
     return max(0, window.bounds.maxY - local.minY)
   }
 
-  private func keyboardWillMove(overlap: CGFloat) {
+  private func keyboardWillMove(overlap: CGFloat, duration: TimeInterval, curve: UInt) {
     let target = overlap > minimumHeight ? overlap : 0
-    guard target != height else { return }
+    guard target != height else {
+      onUnchanged(target)
+      return
+    }
     height = target
-    onMove(target)
+    onMove(StageKeyboardMove(height: target, duration: duration, curve: curve))
   }
 }
 

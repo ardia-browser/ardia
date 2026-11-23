@@ -18,6 +18,7 @@ export type MenuInput = {
   isDefaultBrowser?: boolean;
   canOfferDefaultBrowser?: boolean;
   translationLanguageName?: string | null;
+  siteKnown?: boolean;
 };
 
 export type MenuModel = {
@@ -39,6 +40,7 @@ export type MenuModel = {
   zoomIn: boolean;
   desktopSite: boolean;
   blockersEnabled: boolean;
+  siteSwitches: boolean;
   blockedCount: string | null;
   offersDefaultBrowser: boolean;
 };
@@ -76,6 +78,7 @@ export function menuModel(input: MenuInput): MenuModel {
     zoomIn: web && input.pageZoom < levels[levels.length - 1]! - 0.001,
     desktopSite: input.isDesktopSite,
     blockersEnabled: input.blockersEnabled,
+    siteSwitches: isWebPage && (input.siteKnown ?? true),
     blockedCount: input.blockersEnabled && input.blockedRequests > 0 ? grouped(input.blockedRequests) : null,
     offersDefaultBrowser: (input.canOfferDefaultBrowser ?? true) && !input.isDefaultBrowser,
   };

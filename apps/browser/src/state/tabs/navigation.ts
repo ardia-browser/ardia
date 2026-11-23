@@ -30,9 +30,9 @@ export function backClosesTab(s: BrowserState, tabId: string): boolean {
   return true;
 }
 
-export function canGoBack(tabId: string, live: Pick<TabLive, "canGoBack">): boolean {
+export function canGoBack(tabId: string, live: Pick<TabLive, "canGoBack">, s: BrowserState = store()): boolean {
   const page = pageOf(tabId);
-  return !page.newTabShown && (live.canGoBack || page.backToNewTab || !!page.engineBack || backClosesTab(store(), tabId));
+  return !page.newTabShown && (live.canGoBack || page.backToNewTab || !!page.engineBack || backClosesTab(s, tabId));
 }
 
 export function canGoForward(tabId: string, live: Pick<TabLive, "canGoForward">): boolean {

@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
 const model = await import("../browser/model.ts");
-const { liveReachesMenu, menuInputsChanged, menuState, trackedMenuState, HIDDEN_TAB_FIELDS_IN_MENU } = await import("./menuState.ts");
+const { liveReachesMenu, menuInputsChanged, menuLiveKey, menuState, pagesChangeMenu, trackedMenuState, HIDDEN_TAB_FIELDS_IN_MENU } = await import("./menuState.ts");
+const { patchPage, usePages } = await import("../tabs/pageState.ts");
 const { noRecordReads, trackedRecord } = await import("../browser/recordReads.ts");
 const { liveOf, onLiveChange, shownLiveOf } = await import("../tabs/tabLive.ts");
 const { focusedWindowOf } = await import("../windows/ui.ts");
@@ -12,12 +13,15 @@ const menuJson = (s) => JSON.stringify(menuState(s));
 
 function inputsChangedBy(step, reads) {
   const before = S();
+  const liveKey = menuLiveKey(before);
+  const pagesBefore = usePages.getState().pages;
   const live = new Set();
   const off = onLiveChange((id) => live.add(id));
   step();
   off();
   const after = S();
-  return menuInputsChanged(reads, after, before) || [...live].some((id) => liveReachesMenu(after, id));
+  const liveChanged = [...live].some((id) => liveReachesMenu(after, id)) && menuLiveKey(after) !== liveKey;
+  return menuInputsChanged(reads, after, before) || liveChanged || pagesChangeMenu(after, usePages.getState().pages, pagesBefore);
 }
 
 test("a store change the last menu build didn't read leaves the menu as it was, and one it read is caught", () => {
@@ -59,9 +63,9 @@ test("the reads cover every top-level field the menu used, including through its
   menuState(S(), (id) => (liveRead.push(id), liveOf(id)));
   assert.deepEqual(liveRead, [model.activeTabId(S(), focusedWindowOf(S()))]);
   for (const field of ["windows", "tabs", "settings", "closedTabs", "closedWindows", "closedGroups", "bookmarks", "profiles", "profileOrder", "downloads", "ui"]) {
-    assert.ok(reads.has(field), field);
+    assert.ok(reads.keys.has(field), field);
   }
-  assert.equal(reads.has("history"), false);
+  assert.equal(reads.keys.has("history"), false);
 });
 
 function menuChanges(step) {
@@ -101,7 +105,12 @@ test("whatever changes in tabs and their live state, a menu that isn't rebuilt i
   const windows = [S().createWindow({ url: "https://a.example/" }), S().createWindow({ url: "https://b.example/" })];
   for (const w of windows) for (let i = 0; i < 4; i++) S().newTab(w, { url: `https://${i}.example/`, background: true });
   let seed = 7;
-  const rand = (n) => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) % n;
+  const rand = (n) => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) % n;
+  };
   const pick = (list) => list[rand(list.length)];
   const steps = [
     (id) => S().updateTab(id, { title: `Title ${rand(5)}` }),
@@ -113,6 +122,15 @@ test("whatever changes in tabs and their live state, a menu that isn't rebuilt i
     (id) => S().updateTab(id, { pinnedUrl: pick([null, "https://a.example/"]) }),
     (id) => S().updateLive(id, { isLoading: !liveOf(id).isLoading }),
     (id) => S().updateLive(id, { canGoBack: !liveOf(id).canGoBack, canGoForward: !!rand(2) }),
+    (id) => S().updateLive(id, { themeColor: pick([null, "#123456", "#abcdef"]), playingAudio: !!rand(2) }),
+    (id) => {
+      const opener = pick([null, ...Object.keys(S().tabs)]);
+      S().updateTab(id, { openerId: opener, linkOpenerId: rand(2) ? opener : null });
+    },
+    (id) => patchPage(id, { status: pick(["", "Loading…", "https://x.example/"]), blocked: rand(3) }),
+    (id) => patchPage(id, { backToNewTab: !!rand(2) }),
+    (id) => patchPage(id, { newTabShown: rand(2) ? { url: "https://n.example/", title: "N", favicon: null } : null }),
+    (id) => patchPage(id, { engineBack: rand(2) ? { engine: "webkit", url: "https://e.example/" } : null }),
     (id) => S().activate(id),
     (id) => S().setSelection(S().tabs[id].windowId, [id, pick(S().windows[S().tabs[id].windowId].tabIds)]),
     (id) => S().setFocusedWindow(S().tabs[id].windowId),
@@ -120,12 +138,33 @@ test("whatever changes in tabs and their live state, a menu that isn't rebuilt i
     (id) => Object.keys(S().tabs).length > 6 && S().closeTab(id),
   ];
   let kept = 0;
+  const ran = new Set();
   for (let i = 0; i < 600; i++) {
-    const step = pick(steps);
+    const index = rand(steps.length);
+    ran.add(index);
+    const step = steps[index];
     const id = pick(Object.keys(S().tabs));
     if (!menuChanges(() => step(id))) kept++;
   }
+  assert.equal(ran.size, steps.length, `only ${ran.size} of ${steps.length} kinds of step ran`);
   assert.ok(kept > 100, `only ${kept} of 600 steps left the menu alone`);
+});
+
+test("what a load changes in the shown tab and the menu never shows leaves the menu alone", () => {
+  S().hydrate({});
+  const w = S().createWindow({ url: "https://a.example/" });
+  S().setFocusedWindow(w);
+  const shown = model.activeTabId(S(), w);
+  assert.equal(menuChanges(() => S().updateTab(shown, { favicon: "https://a.example/favicon.ico" })), false);
+  assert.equal(menuChanges(() => patchPage(shown, { status: "Loading…", blocked: 2 })), false);
+  assert.equal(menuChanges(() => S().updateLive(shown, { themeColor: "#123456" })), false);
+  assert.equal(menuChanges(() => S().updateTab(shown, { url: "file:///tmp/a.txt" })), true, "page commands follow the URL");
+  assert.equal(menuChanges(() => S().updateLive(shown, { isLoading: true })), true, "Stop turns on");
+  assert.equal(menuChanges(() => patchPage(shown, { backToNewTab: true })), true, "Back turns on to go back to the New Tab page");
+  patchPage(shown, { backToNewTab: false });
+  const opener = S().newTab(w, { url: "https://opener.example/", background: true });
+  S().updateTab(shown, { openerId: opener, linkOpenerId: null });
+  assert.equal(menuChanges(() => S().updateTab(shown, { linkOpenerId: opener })), true, "Back turns on to close the tab back to the page that opened it");
 });
 
 test("of a tab that isn't shown or selected, the menu reads only the fields a change is checked against, and none of its live state", () => {

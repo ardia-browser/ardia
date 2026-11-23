@@ -54,7 +54,8 @@ import { frontSheet } from "./state/settings/settingsRules";
 import { inkLayer, lightStatusIcons } from "./lib/statusInk";
 import { whenIdle } from "./lib/whenIdle";
 import { countUsage, reportLaunch, startTelemetry } from "./state/telemetry/telemetry";
-import { useIncognito, useSelectedTab } from "./state/tabs/hooks";
+import { useIncognito, useShownTabId } from "./state/tabs/hooks";
+import { markInterfaceDrawn } from "./platform/launch";
 import { syncOffered } from "./state/sync/offer";
 import { countDrawnMenu, countNativeMenu } from "./state/browse/menuCounts";
 import { browseForMeOffered } from "./state/browseForMe/offer";
@@ -90,6 +91,12 @@ export default function App() {
     const frame = requestAnimationFrame(() => void reportLaunch(Date.now()));
     return () => cancelAnimationFrame(frame);
   }, [ready]);
+  const drawnSomething = ready || importFailed;
+  useEffect(() => {
+    if (!drawnSomething) return;
+    const frame = requestAnimationFrame(markInterfaceDrawn);
+    return () => cancelAnimationFrame(frame);
+  }, [drawnSomething]);
   const dark = useDarkScheme();
   const look = useLook(PROFILE_PRESETS, DEFAULT_PROFILE_COLOR);
   useBaseSystemBars(dark);
@@ -136,17 +143,19 @@ onMaterialBackSwiped(() => {
 export function Surfaces() {
   const surface = useSurface();
   const sheet = useSheet();
-  const tab = useSelectedTab();
+  const tabId = useShownTabId();
   const opening = useOpeningTab();
   const leaving = useLeavingTab();
   const design = useDesign();
   const pageOverDeck = design === "redesigned";
-  const pageUnderDeck = surface === "deck" && tab !== null && (tab.id === opening || tab.id === leaving);
+  const pageUnderDeck = surface === "deck" && tabId !== null && (tabId === opening || tabId === leaving);
   const settingsOpen = useSettingsNav((s) => s.open);
   const onboarding = useOnboarding((s) => s.showing);
   const searching = useSearchOpen();
   const searchFromMenu = useSearchFromDockedMenu();
   const voice = useVoicePresented();
+  const voiceSeen = useLatch(voice);
+  const onboardingSeen = useLatch(onboarding);
   const sheetProgress = useSharedValue(0);
   const libraryOpen = useLibrary((s) => s.open);
   const material = useDesign() === "material";
@@ -162,13 +171,13 @@ export function Surfaces() {
   const incognitoScheme = useMaterialTheme(true).scheme;
   const behind = material && incognito ? incognitoScheme.surface : theme.backdrop[0];
   const lightIcons = settingsScreen && layer === "sheet" ? theme.dark : lightStatusIcons(layer, { cover: behind, surface: theme.canvas, deck: behind, incognito: incognito && !libraryCovers });
-  useEffect(goBackToStartIfEmpty, [tab, surface]);
+  useEffect(goBackToStartIfEmpty, [tabId, surface]);
   const duo = useScreenLayout((s) => s.layout.name === "wide" || s.layout.name === "split");
-  const deckMounted = useDeckStandby(surface, surface === "browsing" && tab !== null && opening === null && leaving === null && !searching && !voice && !onboarding && front === null && !settingsScreen, tab?.id ?? null);
-  const page = !duo && (surface === "browsing" || pageUnderDeck) && tab ? <BrowsingScreen tab={tab} /> : null;
+  const deckMounted = useDeckStandby(surface, surface === "browsing" && tabId !== null && opening === null && leaving === null && !searching && !voice && !onboarding && front === null && !settingsScreen, tabId);
+  const page = !duo && (surface === "browsing" || pageUnderDeck) && tabId ? <BrowsingScreen tabId={tabId} /> : null;
   const deck = !duo && deckMounted ? <TabDeck key="deck" /> : null;
-  const pageLayer = page && tab ? (
-    <PageLayer key="page" away={surface === "deck"} unseen={pageOverDeck && surface === "deck" && tab.id === opening && deckPullGrowing() !== tab.id}>
+  const pageLayer = page && tabId ? (
+    <PageLayer key="page" away={surface === "deck"} unseen={pageOverDeck && surface === "deck" && tabId === opening && deckPullGrowing() !== tabId}>
       {page}
     </PageLayer>
   ) : null;
@@ -199,10 +208,8 @@ export function Surfaces() {
       {SYSTEM_SHEETS ? <ExpoSpacesSheet /> : null}
       {SYSTEM_SHEETS ? <ExpoLibrarySheet /> : null}
       {material ? <MaterialLibrary /> : null}
-      <Layer covered={onboarding}>
-        <VoiceSearchView />
-      </Layer>
-      <OnboardingView />
+      <Layer covered={onboarding}>{voiceSeen ? <VoiceSearchView /> : null}</Layer>
+      {onboardingSeen ? <OnboardingView /> : null}
       <ToastHost />
       {lightIcons !== null ? <LayerInk key={layer} light={lightIcons} /> : null}
     </MaterialBarProvider>
@@ -273,19 +280,26 @@ function LayerInk({ light }: { light: boolean }) {
 
 const COVER_SETTLE_MS = 450;
 
+function useLatch(on: boolean) {
+  const [seen, setSeen] = useState(on);
+  if (on && !seen) setSeen(true);
+  return seen || on;
+}
+
 function Layer({ covered, muted = false, children }: { covered: boolean; muted?: boolean; children: ReactNode }) {
-  const [gone, setGone] = useState(covered);
+  const [settled, setSettled] = useState(covered);
   useEffect(() => {
-    if (!covered) {
-      setGone(false);
-      return;
-    }
-    const settle = setTimeout(() => setGone(true), COVER_SETTLE_MS);
-    return () => clearTimeout(settle);
+    if (!covered) return;
+    const settle = setTimeout(() => setSettled(true), COVER_SETTLE_MS);
+    return () => {
+      clearTimeout(settle);
+      setSettled(false);
+    };
   }, [covered]);
+  const parked = covered && settled;
   return (
     <View
-      style={[StyleSheet.absoluteFill, gone ? styles.gone : null]}
+      style={[StyleSheet.absoluteFill, parked ? styles.unseen : null]}
       pointerEvents={covered || muted ? "none" : "box-none"}
       collapsable={false}
       importantForAccessibility={covered || muted ? "no-hide-descendants" : "auto"}
@@ -298,7 +312,6 @@ function Layer({ covered, muted = false, children }: { covered: boolean; muted?:
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  gone: { display: "none" },
   unseen: { transform: [{ translateX: PAGE_UNSEEN_AWAY }] },
   canvasBack: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "#000000", alignItems: "center", justifyContent: "center" },
   canvas: { borderRadius: DUO_CANVAS.radius, borderCurve: "continuous", overflow: "hidden" },

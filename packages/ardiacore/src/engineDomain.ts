@@ -84,6 +84,10 @@ export type HoverLostEpisode = {
   coverWindow?: string;
   healed: boolean;
   healWorked: boolean | null;
+  healRefused?: string;
+  healRefusedLast?: string;
+  healRefusedWindow?: string;
+  otherWindowClicks?: number;
   endedBy: "hover" | "heal" | "appInactive" | "windowClosed";
   seconds: number;
   episode: number;
@@ -112,7 +116,9 @@ export type CliDragsEnded = { ownerGone: number; debuggerUnowned: number; native
 
 export type CliWindowlessPages = { given: number; missed: number };
 
-export type CliControlStatus = { dragsEnded?: CliDragsEnded; windowlessPages?: CliWindowlessPages } & (
+export type CliTokenCommands = Partial<Record<"accessibility" | "browser" | "dom" | "emulation" | "fetch" | "input" | "network" | "page" | "runtime" | "storage" | "target" | "other", number>>;
+
+export type CliControlStatus = { dragsEnded?: CliDragsEnded; windowlessPages?: CliWindowlessPages; tokenCommands?: CliTokenCommands } & (
   | { state: "external" }
   | ({ state: "off" | "starting" } & CliServer)
   | ({ state: "on"; port: number } & CliServer)

@@ -1,4 +1,5 @@
 import { takeTabLayoutCounts } from "./tabLayoutCounts";
+import { takeTabMotionCounts } from "./tabMotionCounts";
 import { onConsentPeriodChange } from "./choice";
 import { consentedCount, consentedMax } from "./consentedCount";
 
@@ -113,5 +114,6 @@ export function takeTabStripCounts() {
     tab_strip_reveals_held_for_scroll: revealsHeldForScroll.take(),
     tab_strip_commands_refused: commandsRefused.take(),
     ...takeTabLayoutCounts(),
+    ...takeTabMotionCounts(),
   };
 }

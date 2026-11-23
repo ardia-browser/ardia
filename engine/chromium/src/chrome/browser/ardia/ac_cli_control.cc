@@ -177,8 +177,6 @@ class ControlServer {
     g_ardia_devtools_token_server = &ServerChanged;
     g_ardia_devtools_active_target = &ActiveTarget;
     g_ardia_devtools_token_client = &TokenClientFor;
-    g_ardia_devtools_may_attach = &TokenClientMayAttach;
-    g_ardia_devtools_may_input = &TokenClientMayInput;
     terminating_ = browser_shutdown::AddAppTerminatingCallback(
         base::BindOnce(&ControlServer::Quit, base::Unretained(this)));
     if (PrefService* local_state = LocalState()) {
@@ -256,6 +254,7 @@ class ControlServer {
     status.Set("windowlessPages", base::DictValue()
                                       .Set("given", windowless.given)
                                       .Set("missed", windowless.missed));
+    status.Set("tokenCommands", TokenCommandTotals());
     if (ardiacore::TestFlag("nativeDragRefused")) {
       status.Set("nativeDragsRefused", true);
     }

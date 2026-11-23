@@ -22,7 +22,7 @@ const packagesDir = new URL("../../../../packages/", import.meta.url);
 const nativePackages = readdirSync(packagesDir).filter((name) => existsSync(new URL(`${name}/expo-module.config.json`, packagesDir)));
 
 const registrationsIn = (where, source) => {
-  const domain = source.match(/CallTable\(domain: "([a-zA-Z]+)"/)?.[1];
+  const domain = source.match(/CallTable\(domain: "([a-zA-Z]+)"/)?.[1] ?? source.match(/static let calls = ([a-z][a-zA-Z]*)CallTable\(/)?.[1];
   const found = [];
   const branches = [];
   let owner = null;

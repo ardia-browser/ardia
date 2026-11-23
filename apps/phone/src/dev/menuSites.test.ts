@@ -46,7 +46,7 @@ const SITES: Record<string, Over[]> = {
   "tabs/DeckBottomBar.tsx": ["frostable", "frostable"],
   "tabs/DeckCard.tsx": ["frostable", "frostable", "frostable"],
   "tabs/DeckHeader.tsx": ["frostable", "frostable"],
-  "tabs/ExpoArchive.tsx": ["system", "system", "system"],
+  "tabs/ExpoArchive.tsx": ["system", "system"],
   "tabs/MaterialDeckCard.tsx": ["frostable"],
   "tabs/MaterialDeckChrome.tsx": ["frostable", "frostable"],
   "tabs/TabDeck.tsx": ["frostable", "frostable", "frostable", "card", "frostable"],

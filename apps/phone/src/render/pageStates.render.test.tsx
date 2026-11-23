@@ -48,7 +48,7 @@ const crashed = { kind: "crashed", reason: null, title: "This Page Stopped Worki
 
 test("a loading page with no saved picture shows main's placeholder centred on the page: a 44 point icon, the title in headline and the host in subheadline", () => {
   const tab = currentTabs().open[0]!;
-  const root = renderSurface(<BrowsingScreen tab={tab} />, { flushTimers: false });
+  const root = renderSurface(<BrowsingScreen tabId={tab.id} />, { flushTimers: false });
   const placeholder = node(root, "pageLoadingPlaceholder")!;
   expect(style(placeholder)).toMatchObject({ position: "absolute", top: 0, bottom: 0, left: 0, right: 0, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 });
   expect(style(node(root, "pageLoadingContent")!)).toMatchObject({ alignItems: "center", gap: 12 });
@@ -63,7 +63,7 @@ test("a loading page with no saved picture shows main's placeholder centred on t
 
 test("the placeholder's contents wait main's delay, then fade in: 250 then 150 ms on both phones", () => {
   const tab = currentTabs().open[0]!;
-  const root = renderSurface(<BrowsingScreen tab={tab} />, { flushTimers: false });
+  const root = renderSurface(<BrowsingScreen tabId={tab.id} />, { flushTimers: false });
   const opacity = () => style(node(root, "pageLoadingContent")!).opacity;
   const [wait, fade] = [250, 150];
   expect(opacity()).toBe(0);
@@ -76,7 +76,7 @@ test("the placeholder's contents wait main's delay, then fade in: 250 then 150 m
 
 test("VoiceOver reads the placeholder as main's \"Loading <title>\" on iPhone; Android keeps Compose's silent cover", () => {
   const tab = currentTabs().open[0]!;
-  const root = renderSurface(<BrowsingScreen tab={tab} />, { flushTimers: false });
+  const root = renderSurface(<BrowsingScreen tabId={tab.id} />, { flushTimers: false });
   const placeholder = node(root, "pageLoadingPlaceholder")!;
   expect(placeholder.props.accessibilityLabel).toBe("Loading Site 0");
   expect(placeholder.props.accessible).toBe(onIPhone);
@@ -86,7 +86,7 @@ test("VoiceOver reads the placeholder as main's \"Loading <title>\" on iPhone; A
 
 test("a tab with a saved picture keeps the picture as its cover, not the placeholder", () => {
   const tab = withTab({ snapshotFileName: "file:///snapshots/t0.jpg" });
-  const root = renderSurface(<BrowsingScreen tab={tab} />, { flushTimers: false });
+  const root = renderSurface(<BrowsingScreen tabId={tab.id} />, { flushTimers: false });
   expect(node(root, "pageCover")).toBeDefined();
   expect(node(root, "pageLoadingPlaceholder")).toBeUndefined();
   expect(node(root, "pageCover")!.props.accessibilityElementsHidden).toBe(true);
@@ -95,7 +95,7 @@ test("a tab with a saved picture keeps the picture as its cover, not the placeho
 
 test("a page's theme colour fills the placeholder with main's ink, and a title that only repeats the host is left out", () => {
   const tab = withTab({ themeColorHex: "#1A73E8", title: "www.Site0.example" });
-  const root = renderSurface(<BrowsingScreen tab={tab} />, { flushTimers: false });
+  const root = renderSurface(<BrowsingScreen tabId={tab.id} />, { flushTimers: false });
   expect(style(node(root, "pageLoadingPlaceholder")!).backgroundColor).toBe("#1A73E8");
   expect(node(root, "pageLoadingTitle")).toBeUndefined();
   expect(style(node(root, "pageLoadingHost")!)).toMatchObject({ fontSize: 17, fontWeight: "600", color: "rgba(255,255,255,0.92)" });
@@ -118,7 +118,7 @@ test("main's PageTheme and distinctTitle rules", () => {
 test("on iPhone a failed page's Try Again is the shared action in main's filled large capsule: 50 points tall, 20 point sides, the system's secondary fill and no stroke; Android keeps an outlined one at the 44 point target", () => {
   const tab = currentTabs().open[0]!;
   storeNavigation(tab.id, navigation({ isLoading: false, failure: crashed }));
-  const root = renderSurface(<BrowsingScreen tab={tab} />, { flushTimers: false });
+  const root = renderSurface(<BrowsingScreen tabId={tab.id} />, { flushTimers: false });
   const retry = style(node(root, "pageFailureRetry")!);
   if (onIPhone) {
     expect(retry).toMatchObject({ minHeight: 50, paddingHorizontal: 20, borderRadius: 25, borderCurve: "continuous", backgroundColor: "rgba(120,120,128,0.16)", borderWidth: 0 });
@@ -137,7 +137,7 @@ test("a failed page fills with the neutral app surface, not the profile's colour
   storeNavigation(tab.id, navigation({ isLoading: false, failure: crashed }));
   const root = renderSurface(
     <DesignProvider design="redesigned">
-      <BrowsingScreen tab={tab} />
+      <BrowsingScreen tabId={tab.id} />
     </DesignProvider>,
     { flushTimers: false },
   );
@@ -149,7 +149,7 @@ test("a failed page fills with the neutral app surface, not the profile's colour
 test("while a retry loads, the failure stays on screen and Try Again is busy and takes no second press; it clears once the load ends", () => {
   const tab = currentTabs().open[0]!;
   act(() => storeNavigation(tab.id, navigation({ isLoading: false, failure: crashed })));
-  const root = renderSurface(<BrowsingScreen tab={tab} />, { flushTimers: false });
+  const root = renderSurface(<BrowsingScreen tabId={tab.id} />, { flushTimers: false });
   expect(node(root, "pageFailureRetry")!.props.accessibilityState).toMatchObject({ busy: false, disabled: false });
   act(() => storeNavigation(tab.id, navigation({ isLoading: true, failure: null })));
   expect(node(root, "pageFailure")).toBeDefined();
@@ -178,7 +178,7 @@ test("on iPhone's design an http page on a port shows the red open lock and the 
   act(() => storeNavigation(tab.id, navigation({ url: tab.url, isLoading: false, progress: 1, scrollDirection: "up" } as Partial<PageState>)));
   const root = renderSurface(
     <DesignProvider design="redesigned">
-      <BrowsingScreen tab={tab} />
+      <BrowsingScreen tabId={tab.id} />
     </DesignProvider>,
   );
   expect(text(node(root, "floatingBarHost"))).toBe("localhost");
@@ -200,7 +200,7 @@ test("a tab opened directly on an http address shows the red open lock from its 
   expect(usePages.getState().navigation[tab.id]).toBeUndefined();
   const root = renderSurface(
     <DesignProvider design="redesigned">
-      <BrowsingScreen tab={tab} />
+      <BrowsingScreen tabId={tab.id} />
     </DesignProvider>,
   );
   expect(node(root, "floatingBarNotSecure")).toBeDefined();
@@ -219,7 +219,7 @@ test("the lock sits in the site icon's own slot at the site icon's size, so the 
     act(() => storeNavigation(tab.id, navigation({ url, isLoading: false, progress: 1, scrollDirection: "up" } as Partial<PageState>)));
     const root = renderSurface(
       <DesignProvider design="redesigned">
-        <BrowsingScreen tab={tab} />
+        <BrowsingScreen tabId={tab.id} />
       </DesignProvider>,
     );
     if (insecure) expect(box(node(root, "floatingBarNotSecure"))).toMatchObject({ width: floatingBarLayout.siteIcon, height: floatingBarLayout.siteIcon });
@@ -243,9 +243,10 @@ test("the bar's icon slot for the four tabs: a normal secure page shows its favi
   ];
   for (const { url, isPrivate, shows, spoken } of cases) {
     const tab = { ...withTab({ url, title: "Page" }), isPrivate };
+    useTabs.setState((state) => ({ open: state.open.map((other) => (other.id === tab.id ? tab : other)) }));
     const root = renderSurface(
       <DesignProvider design="redesigned">
-        <BrowsingScreen tab={tab} />
+        <BrowsingScreen tabId={tab.id} />
       </DesignProvider>,
     );
     const bar = root.root.findAll((found) => found.props.testID === "floatingBarCentreGlyphs")[0]!;

@@ -3,6 +3,7 @@ import { nativeModule, type BangListReply } from "@ardia/shell";
 const Documents = nativeModule("ArdiaDocuments");
 
 export const readDocument = (name: string) => Documents.readDocument(name);
+export const documentExists = (name: string) => Documents.documentExists(name);
 export const writeDocument = (name: string, contents: string) => Documents.writeDocument(name, contents);
 export const saveDocument = (name: string, contents: string) => Documents.saveDocument(name, contents);
 export const documentSaved = (name: string) => Documents.documentSaved(name);

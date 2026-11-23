@@ -10,6 +10,6 @@ test("the cover shows unless the page is already live and settled with no saved 
   assert.equal(pageCoverNeeded({ isLive: true, isLoading: false }, true), true);
 });
 
-test("the cover waits at most four seconds, settles 150 ms on a page that was already loaded, and fades in 180 ms", () => {
-  assert.deepEqual(PAGE_COVER, { deadlineMs: 4_000, settleMs: 150, fadeMs: 180 });
+test("the cover waits at most four seconds, settles 150 ms on a page that was already loaded, fades in 180 ms, and on iPhone gives up waiting for a loaded page's draw after a second", () => {
+  assert.deepEqual(PAGE_COVER, { deadlineMs: 4_000, settleMs: 150, fadeMs: 180, paintDeadlineMs: 1_000 });
 });

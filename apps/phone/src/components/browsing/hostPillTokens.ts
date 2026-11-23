@@ -1,7 +1,8 @@
 import { floatingBarLayout, space } from "../ui";
+import { glassFadeMs } from "../ui/motion";
 
 export const hostPillLayout = {
-  glassMs: 200,
+  glassMs: glassFadeMs,
   height: 30,
   maxWidth: 240,
   sideInset: space.m,

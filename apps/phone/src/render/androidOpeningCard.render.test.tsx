@@ -8,7 +8,7 @@ import { BottomBar } from "../components/browsing/BottomBar";
 import { MaterialBottomBar } from "../components/ui/MaterialBottomBar";
 import { DECK_ARC, deckGeometry } from "../lib/deckGeometry";
 
-import { coverFrame } from "../components/tabs/DeckCard";
+import { coverFrame, OPENING_CARD_RESPONSE } from "../components/tabs/DeckCard";
 import { deckHeaderBottom } from "../components/tabs/DeckHeader";
 import { NO_LAUNCH_ARGUMENTS, parseLaunchArguments } from "../lib/launchArguments";
 import * as launchFlags from "../state/app/launchFlags";
@@ -47,7 +47,8 @@ jest.mock("../components/tabs/DeckCard", () => {
 
 const onAndroid = Platform.OS === "android" ? test : test.skip;
 
-const LANDS_MS = 167;
+const CRITICAL_LANDING_PHASE = 5.8339;
+const LANDS_MS = Math.round((CRITICAL_LANDING_PHASE * OPENING_CARD_RESPONSE * 1000) / (2 * Math.PI));
 const EXPANDED_Z = 100_000;
 
 let counted: jest.SpyInstance;
@@ -120,7 +121,7 @@ onAndroid("with ArdiaOpeningCard, the opening card mounts in the tap's own commi
   expect(to).toMatchObject({ translateX: 0, translateY: 0, cornerRadius: 0 });
   expect(frame.width * to.scale).toBeCloseTo(393, 5);
   expect(frame.height * to.scale).toBeCloseTo(873, 5);
-  expect(card.props.nativeID).toBe("openingCover");
+  expect(card.props.nativeID).toBe(useBrowse.getState().openingCover ?? "openingCover");
   expect(frame.borderWidth).toBeUndefined();
   expect(motionView(root, "openingCardEdge")!.props.from).toEqual({ opacity: 1 });
   expect(motionView(root, "openingCardEdge")!.props.to).toEqual({ opacity: 0 });
@@ -218,7 +219,7 @@ onAndroid("with ArdiaOpeningCard, the page view is handed the opening card to hi
   cardStops(root);
   advance(100);
   expect(useBrowse.getState().surface).toBe("deck");
-  expect(root.root.findAll((node) => node.props.coverNativeId === "openingCover" && typeof node.props.onPageCoverHidden === "function")).not.toHaveLength(0);
+  expect(root.root.findAll((node) => node.props.coverNativeId === useBrowse.getState().openingCover && typeof node.props.onPageCoverHidden === "function")).not.toHaveLength(0);
   reportCover(root);
   expect(useBrowse.getState()).toMatchObject({ surface: "browsing", opening: null, veiled: null, covered: null });
   expect(waited()).toBe(0);

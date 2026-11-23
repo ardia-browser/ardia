@@ -11,13 +11,13 @@ const HANDOFF_MS = 400;
 const HANDOFF_EASE = "cubic-bezier(0.37, 0, 0.63, 1)";
 
 export const MEADOW_POSTER_URLS: Record<string, string> = {
-  "dawn-wider-2196.webp": new URL("../../../../../../packages/shaders/ios/Meadow/dawn-wider-2196.webp", import.meta.url).href,
-  "dawn-wide-1766.webp": new URL("../../../../../../packages/shaders/ios/Meadow/dawn-wide-1766.webp", import.meta.url).href,
-  "dawn-laptop-1917.webp": new URL("../../../../../../packages/shaders/ios/Meadow/dawn-laptop-1917.webp", import.meta.url).href,
+  "dawn-wider-2400.webp": new URL("../../../../../../packages/shaders/ios/Meadow/dawn-wider-2400.webp", import.meta.url).href,
+  "dawn-wide-1920.webp": new URL("../../../../../../packages/shaders/ios/Meadow/dawn-wide-1920.webp", import.meta.url).href,
+  "dawn-laptop-1920.webp": new URL("../../../../../../packages/shaders/ios/Meadow/dawn-laptop-1920.webp", import.meta.url).href,
   "dawn-mid-1600.webp": new URL("../../../../../../packages/shaders/ios/Meadow/dawn-mid-1600.webp", import.meta.url).href,
-  "morning-wider-1709.webp": new URL("../../../../../../packages/shaders/ios/Meadow/morning-wider-1709.webp", import.meta.url).href,
-  "morning-wide-1375.webp": new URL("../../../../../../packages/shaders/ios/Meadow/morning-wide-1375.webp", import.meta.url).href,
-  "morning-laptop-1493.webp": new URL("../../../../../../packages/shaders/ios/Meadow/morning-laptop-1493.webp", import.meta.url).href,
+  "morning-wider-2208.webp": new URL("../../../../../../packages/shaders/ios/Meadow/morning-wider-2208.webp", import.meta.url).href,
+  "morning-wide-1766.webp": new URL("../../../../../../packages/shaders/ios/Meadow/morning-wide-1766.webp", import.meta.url).href,
+  "morning-laptop-1625.webp": new URL("../../../../../../packages/shaders/ios/Meadow/morning-laptop-1625.webp", import.meta.url).href,
   "morning-mid-1354.webp": new URL("../../../../../../packages/shaders/ios/Meadow/morning-mid-1354.webp", import.meta.url).href,
 };
 

@@ -8,7 +8,7 @@ public final class SearchStageModule: Module {
 
     View(SearchStageView.self) {
       ViewName("SearchStage")
-      Events("onLift", "onReveal", "onSettled")
+      Events("onLift", "onReveal", "onSettled", "onLanding")
       Prop("shown") { (view: SearchStageView, value: Bool?) in view.shownProp = value ?? false }
       Prop("anchorNativeId") { (view: SearchStageView, value: String?) in view.anchorNativeId = value }
       Prop("faceNativeId") { (view: SearchStageView, value: String?) in view.faceNativeId = value }

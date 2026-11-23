@@ -21,10 +21,14 @@ test("an Option resize is stamped when its live resize starts, and the count sen
   assert.match(resize, /ShellEvents\.send\(\.app, \(stamp \?\? ArdiaConsentStamp\.begin\(\)\)\.onto\(\["type": "centeredResize"\]\)\)/);
 });
 
-test("a window drag loop is stamped as it begins, before the loop runs", () => {
+test("a window drag is stamped as the press begins, before the loop runs, and every drag event carries that stamp", () => {
   const move = read("WindowMove.swift");
-  const begin = move.indexOf('ShellEvents.send(.app, ArdiaConsentStamp.begin().onto(["type": "windowDragLoop"]))');
-  assert.ok(begin > 0 && begin < move.indexOf("let start = screenPoint(event)"), "the drag loop is reported with the epoch from its start");
+  const begin = move.indexOf("let stamp = ArdiaConsentStamp.begin()");
+  assert.ok(begin > 0 && begin < move.indexOf("let start = screenPoint(event)"), "the drag is reported with the epoch from its press");
+  for (const type of ["windowDragLoop", "windowDragNative", "windowDragTakeover"]) {
+    assert.ok(move.includes(`ShellEvents.send(.app, stamp.onto(["type": "${type}"]))`), `${type} is sent with the press's stamp`);
+  }
+  assert.ok(!/ArdiaConsentStamp\.begin\(\)\.onto\(\["type": "windowDrag/.test(move), "no drag event takes a fresh stamp mid-drag");
 });
 
 test("a refused paste carries a consent stamp: the gate's epoch for input held in a hand-off, taken before any hop to the main thread", () => {

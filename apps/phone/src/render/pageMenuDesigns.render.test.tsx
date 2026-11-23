@@ -1,12 +1,13 @@
 import { useDefaultBrowser } from "../state/settings/defaultBrowser";
-import { Dimensions, StyleSheet } from "react-native";
+import { Dimensions, Platform, StyleSheet } from "react-native";
 import { act, type ReactTestRenderer } from "react-test-renderer";
 import "../platform/copy";
 import { pages } from "../platform/pages";
 import { PageMenu } from "../components/browsing/PageMenu";
+import { menuDetents } from "../components/browsing/SystemPageMenu";
 import { DesignProvider } from "../components/ui";
 import type { Design } from "../lib/design";
-import { openPageMenu } from "../state/page/actions";
+import { openPageMenu, pageMenuHidden } from "../state/page/actions";
 import { usePageUi } from "../state/page/store";
 import { setPageSummariesEnabled, usePageSummariesSwitch } from "../state/pageSummary/enabled";
 import { registerPageHandle, usePages } from "../state/pages/store";
@@ -339,11 +340,13 @@ test("a print asked for and then given up by reopening the menu doesn't run late
   unmount(root);
 });
 
-test("the redesign's Site Settings closes the menu and opens Settings at Site Settings, as main", async () => {
+test("the redesign's Site Settings closes the menu at once and opens Settings at Site Settings once the menu has gone, as main", async () => {
   const root = await openMenu("redesigned");
   await pressButton(root, "Site Settings");
   expect(usePageUi.getState().menuOpen).toBe(false);
   expect(usePageUi.getState().menuPage).toBe("main");
+  expect(useSettingsNav.getState().open).toBe(false);
+  act(() => pageMenuHidden());
   expect(useSettingsNav.getState().open).toBe(true);
   expect(useSettingsNav.getState().stack.at(-1)).toEqual({ page: "siteSettings" });
   unmount(root);
@@ -499,3 +502,62 @@ for (const design of ["redesigned", "original"] as const) {
     registerPageHandle("t0", null);
   });
 }
+
+const PRINT_ACTIVITY = "com.apple.UIKit.activity.Print";
+const onIPhone = Platform.OS === "ios";
+
+test("on iPhone, where Share carries Print like Safari's, the menu has no Print row; Android keeps it", async () => {
+  jest.spyOn(pages, "sharesWithPrint").mockReturnValue(true);
+  const root = await openMenu("redesigned");
+  const rows = wordRows(root);
+  if (onIPhone) {
+    expect(rows).not.toContain("Print");
+    expect(rows[rows.indexOf("Site Settings") - 1]).toMatch(/^Translate/);
+  } else {
+    expect(rows).toContain("Print");
+  }
+  unmount(root);
+});
+
+test("on iPhone, Share opens the page's own Share sheet, and a print made from it is counted as a print", async () => {
+  if (!onIPhone) return;
+  jest.spyOn(pages, "sharesWithPrint").mockReturnValue(true);
+  const shared = jest.spyOn(pages, "sharePage").mockResolvedValue(PRINT_ACTIVITY);
+  const root = await openMenu("redesigned");
+  await pressButton(root, "Share");
+  await act(async () => {
+    jest.advanceTimersByTime(1000);
+  });
+  expect(usePageUi.getState().menuOpen).toBe(false);
+  expect(shared).toHaveBeenCalledWith("t0", expect.stringMatching(/^https:\/\//), expect.any(String));
+  expect(counted).toHaveBeenCalledWith("pages_printed");
+  unmount(root);
+});
+
+test("a Share that ends in anything but Print, or a print from a private page, isn't counted as a print", async () => {
+  if (!onIPhone) return;
+  jest.spyOn(pages, "sharesWithPrint").mockReturnValue(true);
+  const shared = jest.spyOn(pages, "sharePage").mockResolvedValue("com.apple.UIKit.activity.CopyToPasteboard");
+  const root = await openMenu("redesigned");
+  await pressButton(root, "Share");
+  await act(async () => {
+    jest.advanceTimersByTime(1000);
+  });
+  expect(counted).not.toHaveBeenCalledWith("pages_printed");
+  unmount(root);
+  useTabs.setState((state) => ({ ...state, open: state.open.map((tab) => ({ ...tab, isPrivate: true })) }));
+  shared.mockResolvedValue(PRINT_ACTIVITY);
+  const again = await openMenu("redesigned");
+  await pressButton(again, "Share");
+  await act(async () => {
+    jest.advanceTimersByTime(1000);
+  });
+  expect(shared).toHaveBeenCalledTimes(2);
+  expect(counted).not.toHaveBeenCalledWith("pages_printed");
+  unmount(again);
+});
+
+test("the iPhone's page menu sheet is exactly as tall as the menu once measured, and the system's two heights before that", () => {
+  expect(menuDetents(null)).toEqual(["medium", "large"]);
+  expect(menuDetents(612)).toEqual([{ height: 612 }]);
+});

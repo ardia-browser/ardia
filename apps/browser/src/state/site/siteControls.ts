@@ -1,4 +1,5 @@
 import { getSiteSettings, setSiteSetting, WEBKIT_SITE_SETTINGS, type SiteSettings, type SiteSettingType, type SiteSettingValue } from "../../platform/siteSettings";
+import { getContentBlocker, isContentBlockerAllowed } from "../../platform/contentBlocker";
 import type { PageEngine } from "../../platform/tabs";
 import { currentLive, currentMuteState } from "../browser/current";
 import { setSiteMuted } from "../browser/actions";
@@ -71,7 +72,15 @@ export async function setSitePermission(
   return readSiteSettings(page.profile, page.origin, page.engine);
 }
 
-export function blockerLabel(blocker: { enabled: boolean; allowed: boolean } | null, blocked: number): string {
+export type SiteBlocker = { enabled: boolean; allowed: boolean };
+
+export async function readSiteBlocker(host: string): Promise<SiteBlocker | null> {
+  if (!PLATFORM_FEATURES.contentBlocker) return null;
+  const [state, allowed] = await Promise.all([getContentBlocker().catch(() => null), isContentBlockerAllowed(host).catch(() => false)]);
+  return state ? { enabled: state.enabled === true, allowed: allowed === true } : null;
+}
+
+export function blockerLabel(blocker: SiteBlocker | null, blocked: number): string {
   if (!blocker) return "…";
   if (!blocker.enabled) return "Off in Settings";
   if (blocker.allowed) return "Off for this site";

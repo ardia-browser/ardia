@@ -217,6 +217,7 @@
 #include "content/public/browser/render_widget_host_view.h"
 #include "content/public/browser/url_data_source.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/browser/web_contents_delegate.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/browser/web_ui.h"
 #include "content/public/browser/web_ui_controller.h"
@@ -288,6 +289,7 @@
 #include "ui/views/view_targeter_delegate.h"
 #include "ui/views/view_constants_aura.h"
 #include "ui/views/view_tracker.h"
+#include "ui/views/view_utils.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_observer.h"
 #include "ui/wm/core/window_modality_controller.h"
@@ -407,12 +409,85 @@ constexpr base::TimeDelta kShellCurtainSettle = base::Milliseconds(100);
 constexpr base::TimeDelta kShellCurtainLimit = base::Seconds(4);
 
 class ViewportView : public views::WebView {
- public:
   METADATA_HEADER(ViewportView, views::WebView)
 
  public:
-  explicit ViewportView(Profile* profile) : views::WebView(profile) {}
+  explicit ViewportView(Profile* profile) : views::WebView(profile) {
+    if (holder()->layer_managed_by_views()) {
+      SetPaintToLayer(ui::LAYER_NOT_DRAWN);
+      layer()->SetFillsBoundsOpaquely(false);
+    }
+  }
   ~ViewportView() override { SetWebContents(nullptr); }
+
+  void SetPaneBounds(const gfx::Rect& pane_bounds, const gfx::Rect& content_bounds) {
+    const gfx::Rect local(content_bounds.x() - pane_bounds.x(), content_bounds.y() - pane_bounds.y(),
+                          content_bounds.width(), content_bounds.height());
+    const bool wants_clip = !pane_bounds.IsEmpty() && local != gfx::Rect(pane_bounds.size());
+    const std::optional<gfx::Rect> next_content = wants_clip ? std::make_optional(local) : std::nullopt;
+    const bool content_changed = content_bounds_ != next_content;
+    const bool bounds_changed = bounds() != pane_bounds;
+    content_bounds_ = next_content;
+    if (bounds_changed) {
+      SetBoundsRect(pane_bounds);
+    } else if (content_changed) {
+      OnBoundsChanged(bounds());
+    }
+    if (content_changed || (wants_clip && bounds_changed)) {
+      holder()->DeprecatedLayoutImmediately();
+    }
+  }
+
+  bool ClipsContent() const { return content_bounds_.has_value(); }
+
+  void SyncClipLayout() { holder()->DeprecatedLayoutImmediately(); }
+
+  void ApplyCornerRadii(const gfx::RoundedCornersF& radii) {
+    if (ClipsContent()) {
+      if (holder()->layer_managed_by_views() && layer()) {
+        layer()->SetMasksToBounds(true);
+        layer()->SetRoundedCornerRadius(radii);
+        layer()->SetIsFastRoundedCorner(true);
+        holder()->SetNativeViewCornerRadii(gfx::RoundedCornersF());
+        return;
+      }
+      if (aura::Window* container = holder()->GetNativeViewContainer();
+          container && container != holder()->native_view() && container->layer()) {
+        container->layer()->SetRoundedCornerRadius(radii);
+        container->layer()->SetIsFastRoundedCorner(true);
+        holder()->SetNativeViewCornerRadii(gfx::RoundedCornersF());
+        return;
+      }
+      holder()->SetNativeViewCornerRadii(radii);
+      return;
+    }
+    if (holder()->layer_managed_by_views() && layer()) {
+      layer()->SetMasksToBounds(false);
+      layer()->SetRoundedCornerRadius(gfx::RoundedCornersF());
+    } else if (aura::Window* container = holder()->GetNativeViewContainer();
+               container && container != holder()->native_view() && container->layer()) {
+      container->layer()->SetRoundedCornerRadius(gfx::RoundedCornersF());
+    }
+    holder()->SetNativeViewCornerRadii(radii);
+  }
+
+ protected:
+  void OnBoundsChanged(const gfx::Rect& previous_bounds) override {
+    if (!content_bounds_ || CapturesFullscreen()) {
+      views::WebView::OnBoundsChanged(previous_bounds);
+      return;
+    }
+    holder()->SetNativeViewSize(gfx::Size());
+    holder()->SetBoundsRect(*content_bounds_);
+  }
+
+ private:
+  bool CapturesFullscreen() const {
+    return web_contents() && web_contents()->IsBeingCaptured() && !web_contents()->GetPreferredSize().IsEmpty() &&
+           web_contents()->GetDelegate() && web_contents()->GetDelegate()->IsFullscreenForTabOrPending(web_contents());
+  }
+
+  std::optional<gfx::Rect> content_bounds_;
 };
 
 BEGIN_METADATA(ViewportView)
@@ -996,7 +1071,7 @@ class TabBinding : public content::WebContentsObserver {
   bool transferable = false;
   bool temporary = false;
   content::WebContents* contents() const { return contents_; }
-  views::WebView* viewport() const { return viewport_; }
+  ViewportView* viewport() const { return viewport_; }
   base::DictValue Navigation() const;
   void ReportNavigation();
   ardiacore::LinuxPageState* page() const { return page_.get(); }
@@ -1016,9 +1091,9 @@ class TabBinding : public content::WebContentsObserver {
   base::WeakPtr<TabBinding> GetWeakPtr() { return weak_factory_.GetWeakPtr(); }
   void MoveTo(ShellHostView* owner);
   void Rebind(content::WebContents* contents);
-  void SetViewport(views::WebView* view) { viewport_ = view; }
-  views::WebView* devtools_viewport() const { return devtools_viewport_; }
-  void SetDevToolsViewport(views::WebView* view) { devtools_viewport_ = view; }
+  void SetViewport(ViewportView* view) { viewport_ = view; }
+  ViewportView* devtools_viewport() const { return devtools_viewport_; }
+  void SetDevToolsViewport(ViewportView* view) { devtools_viewport_ = view; }
   void RemoveViewports();
   void ResetPageCommands();
   void StartMedia();
@@ -1035,6 +1110,7 @@ class TabBinding : public content::WebContentsObserver {
   std::unique_ptr<DevToolsFrontendWatch> devtools_watch;
   bool devtools_had_focus = false;
   gfx::Rect pane_bounds;
+  gfx::Rect content_bounds;
   bool pane_visible = false;
   linux_window_corners::Corners pane_radii = linux_window_corners::kPageCardCorners;
   bool presented = false;
@@ -1085,8 +1161,8 @@ class TabBinding : public content::WebContentsObserver {
                        const std::string& link_wait);
   raw_ptr<ShellHostView> owner_;
   raw_ptr<content::WebContents> contents_;
-  raw_ptr<views::WebView> viewport_ = nullptr;
-  raw_ptr<views::WebView> devtools_viewport_ = nullptr;
+  raw_ptr<ViewportView> viewport_ = nullptr;
+  raw_ptr<ViewportView> devtools_viewport_ = nullptr;
   std::string key_;
   bool host_focusing_ = false;
   uint64_t contents_generation_ = 1;
@@ -3308,6 +3384,7 @@ base::DictValue ShellHostView::Bootstrap() const {
   capabilities.Append("shell.inputRegions");
   capabilities.Append("pip.attach");
   capabilities.Append("tab.adoptCopies");
+  capabilities.Append("tab.viewportClip");
   capabilities.Append("pip.viewport");
   capabilities.Append("pip.command");
   capabilities.Append("shell.glassRegions");
@@ -3456,9 +3533,14 @@ void ShellHostView::ClipPaneView(TabBinding* binding, views::WebView* view) {
 void ShellHostView::ClipViewport(views::WebView* view, const linux_window_corners::Corners& own) {
   if (!view || view->parent() != this) return;
   const gfx::Rect bounds = view->bounds();
-  view->holder()->SetNativeViewCornerRadii(RoundedCorners(linux_window_corners::ClipToWindow(
+  const gfx::RoundedCornersF radii = RoundedCorners(linux_window_corners::ClipToWindow(
       {.x = bounds.x(), .y = bounds.y(), .width = bounds.width(), .height = bounds.height()}, width(), height(),
-      window_corners_.value_or(linux_window_corners::Corners()), own)));
+      window_corners_.value_or(linux_window_corners::Corners()), own));
+  if (auto* viewport = views::AsViewClass<ViewportView>(view)) {
+    viewport->ApplyCornerRadii(radii);
+    return;
+  }
+  view->holder()->SetNativeViewCornerRadii(radii);
 }
 
 void ShellHostView::ShellPainted() {
@@ -5331,7 +5413,7 @@ void ShellHostView::HideDevToolsViewport(TabBinding* binding) {
 }
 
 void ShellHostView::LayoutPane(TabBinding* binding) {
-  views::WebView* page = binding->viewport();
+  ViewportView* page = binding->viewport();
   if (!browser_view_) return;
   content::WebContents* contents = binding->contents();
   BrowserWindowInterface* owner = OwnerOf(contents);
@@ -5359,14 +5441,19 @@ void ShellHostView::LayoutPane(TabBinding* binding) {
   gfx::Rect page_bounds = pane;
   if (devtools) ApplyDevToolsContentsResizingStrategy(strategy, pane, &tools_bounds, &page_bounds);
   const gfx::Vector2d origin = binding->pane_bounds.OffsetFromOrigin();
-  page->SetBoundsRect(page_bounds + origin);
-  page->SetVisible(visible);
+  const gfx::Rect page_rect = page_bounds + origin;
+  const gfx::Rect content_rect = devtools || binding->content_bounds.IsEmpty() ? page_rect : binding->content_bounds;
   if (visible) {
+    const bool attached = page->web_contents() == contents;
+    page->SetPaneBounds(page_rect, content_rect);
+    page->SetVisible(true);
     owner_view->GetActiveContentsWebView()->SetWebContents(nullptr);
     page->SetWebContents(contents);
+    if (!attached) page->SyncClipLayout();
     ClipPaneView(binding, page);
     ardiacore::NoteTabInShownSlot(contents);
   } else {
+    page->SetVisible(false);
     page->SetWebContents(nullptr);
   }
   views::WebView* tools = binding->devtools_viewport();
@@ -5378,8 +5465,9 @@ void ShellHostView::LayoutPane(TabBinding* binding) {
     }
   }
   if (!tools) {
-    tools = AddChildView(std::make_unique<ViewportView>(ProfileOf(contents->GetBrowserContext())));
-    binding->SetDevToolsViewport(tools);
+    ViewportView* created = AddChildView(std::make_unique<ViewportView>(ProfileOf(contents->GetBrowserContext())));
+    binding->SetDevToolsViewport(created);
+    tools = created;
     Restack();
   }
   const bool fresh = !binding->devtools_watch || binding->devtools_watch->web_contents() != devtools;
@@ -6243,10 +6331,34 @@ void ShellHostView::SetViewport(
       return std::move(done).Run(false, base::Value("Viewport radii must be four finite, nonnegative corners"));
     }
   }
+  std::optional<gfx::Rect> content_bounds;
+  if (const base::Value* given = args.Find("contentRect")) {
+    const base::DictValue* content = given->GetIfDict();
+    const std::optional<linux_window_corners::Box> prior =
+        binding->content_bounds.IsEmpty()
+            ? std::nullopt
+            : std::make_optional(linux_window_corners::Box{.x = binding->content_bounds.x(),
+                                                           .y = binding->content_bounds.y(),
+                                                           .width = binding->content_bounds.width(),
+                                                           .height = binding->content_bounds.height()});
+    const std::optional<linux_window_corners::Box> content_box =
+        content ? linux_window_corners::ContentBoxInDip(
+                      {.x = content->FindDouble("x").value_or(NAN),
+                       .y = content->FindDouble("y").value_or(NAN),
+                       .width = content->FindDouble("width").value_or(NAN),
+                       .height = content->FindDouble("height").value_or(NAN)},
+                      {.x = x, .y = y, .width = width, .height = height}, scale, box, prior)
+                : std::nullopt;
+    if (!content_box) {
+      return std::move(done).Run(false, base::Value("Viewport contentRect must be a finite, nonnegative rectangle"));
+    }
+    content_bounds = gfx::Rect(content_box->x, content_box->y, content_box->width, content_box->height);
+  }
   if (!binding->viewport()) {
     binding->SetViewport(AddChildView(std::make_unique<ViewportView>(ProfileOf(binding->contents()->GetBrowserContext()))));
   }
   binding->pane_bounds = bounds;
+  binding->content_bounds = content_bounds.value_or(bounds);
   binding->pane_visible = args.FindBool("visible").value_or(false) && !bounds.IsEmpty();
   if (radii) binding->pane_radii = *radii;
   LayoutPane(binding);
@@ -7925,9 +8037,12 @@ std::optional<gfx::PointF> ShellHostView::ShellPoint(const TabBinding& binding, 
   const double scale = blink::ZoomLevelToZoomFactor(zoom::ZoomController::GetZoomLevelForWebContents(shell()));
   if (!std::isfinite(scale) || scale <= 0) return std::nullopt;
   const gfx::Rect& pane = binding.pane_bounds;
-  const double x = std::clamp<double>(page_point.x(), 0, pane.width());
-  const double y = std::clamp<double>(page_point.y(), 0, pane.height());
-  return gfx::PointF((pane.x() + x) / scale, (pane.y() + y) / scale);
+  const bool tools_open = binding.devtools_viewport() && binding.devtools_viewport()->GetVisible();
+  const gfx::Point content_origin =
+      tools_open || binding.content_bounds.IsEmpty() ? pane.origin() : binding.content_bounds.origin();
+  const double x = std::clamp<double>(content_origin.x() + page_point.x(), pane.x(), pane.right());
+  const double y = std::clamp<double>(content_origin.y() + page_point.y(), pane.y(), pane.bottom());
+  return gfx::PointF(x / scale, y / scale);
 }
 
 std::optional<double> ShellHostView::PointerFromPageBottom(content::WebContents* contents) {

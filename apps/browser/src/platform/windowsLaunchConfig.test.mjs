@@ -101,3 +101,14 @@ test("an app folder the Windows workflow uploads has lost its test-build marker,
   }
   assert.ok(uploaded.beforeAnyHarness > 0 && uploaded.afterRemoval > 0, `the workflow uploads app folders: ${JSON.stringify(uploaded)}`);
 });
+
+test("a Windows build that compiled its bundle keeps the bytecode's source maps under its build number, 90 days for a release", () => {
+  const workflow = readFileSync(new URL("../../../../.github/workflows/windows.yml", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+  const step = workflow.split("\n      - ").find((s) => s.includes("name: windows-sourcemaps-"));
+  assert.ok(step, "a step uploads the source maps");
+  assert.match(step, /if: env\.PART == 'launch' && env\.COMPILED == 'true'/);
+  assert.match(step, /name: windows-sourcemaps-\$\{\{ env\.SLUG \}\}-build-\$\{\{ env\.BUILD \}\}/);
+  assert.match(step, /path: \$\{\{ env\.APP \}\}\/sourcemaps\/react/);
+  assert.match(step, /if-no-files-found: error/);
+  assert.match(step, /retention-days: \$\{\{ inputs\.version && 90 \|\| 14 \}\}/);
+});

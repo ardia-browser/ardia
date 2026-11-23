@@ -26,6 +26,9 @@ import {
   sendCurrentTab,
   openSiteSettings,
   openSiteSettingsRoute,
+  pageMenuPresentation,
+  releaseTranslationAsk,
+  type MenuPresentation,
   pageMenuHidden,
   setBlockersOn,
   setDesktopSite,
@@ -35,12 +38,14 @@ import {
   showDockedFind,
   showReader,
   summarizeCurrentPage,
-  translatePage,
+  askTranslation,
+  cancelTranslationAsk,
+  confirmTranslation,
   zoomIn,
   zoomOut,
 } from "../../state/page/actions";
-import { menuSwitchHint, translationAsks, type MenuModel, type MenuSwitch } from "../../state/page/pageMenu";
-import { useMenuDocked, useMenuModel, useMenuPage, useMenuTitle, useTitleFeedback, useTranslationConfirmed } from "../../state/page/hooks";
+import { menuSwitchHint, type MenuModel, type MenuSwitch } from "../../state/page/pageMenu";
+import { useMenuDocked, useMenuModel, useMenuPage, useMenuTitle, useTitleFeedback, useTranslationAsk } from "../../state/page/hooks";
 import type { MenuPage } from "../../state/page/store";
 import { SiteSettingsGroups } from "../settings/SitePages";
 import { useIsPinned, useSendTargets } from "../../state/sync/hooks";
@@ -48,13 +53,13 @@ import { useSearchFromDockedMenu, useSearchOpen, useSearchSession } from "../../
 import { cancelSearch } from "../../state/browse/store";
 import { useTab } from "../../state/tabs/hooks";
 import type { BrowserTab } from "../../state/tabs/tabModels";
-import { ConfirmDialog, settingsUIAvailable, FloatingMenu, font, iconRoles, MaterialIconButton, menuLayout, PressInPlace, shape, Sheet, slotSide, smoothCorners, space, stroke, Symbol, tabsMotion, ToggleRow as SharedToggleRow, useDesign, usePressStyle, useTheme, type PressKind, type SymbolName } from "../ui";
+import { ConfirmDialog, FloatingMenu, font, iconRoles, MaterialIconButton, menuLayout, PressInPlace, shape, Sheet, slotSide, smoothCorners, space, stroke, Symbol, tabsMotion, ToggleRow as SharedToggleRow, useDesign, usePressStyle, useTheme, type PressKind, type SymbolName } from "../ui";
 import { MaterialPageMenu, MaterialPageMenuItems, MaterialSiteSettingsContent, MaterialSiteSettingsHeader } from "./MaterialPageMenu";
 import { countSearchExpansion, MaterialSearchField, MaterialSearchResults, useMaterialSheetSearch } from "../search/MaterialSearchView";
 import { barAddress } from "./FloatingBar";
 import { PageMenuWords, usePageMenuInk } from "./PageMenuWords";
 import { classicPageMenu, pageMenuCards } from "./pageMenuTokens";
-import { SystemPageMenu } from "./SystemPageMenu";
+import { SystemPageMenu, usesSystemPageMenu } from "./SystemPageMenu";
 import { MaterialAddressContent } from "../ui/MaterialBottomBar";
 import { useMaterialTheme } from "../ui/materialTheme";
 import { MaterialSheet, useMaterialRipple } from "../ui/MaterialSurfaces";
@@ -65,13 +70,24 @@ import { usePageSummariesEnabled } from "../../state/pageSummary/enabled";
 const PAGE_MENU_LIST_HEIGHT_RATIO = 0.52;
 const countPageMenuExpansion = () => countUsage("site_settings_sheet_expanded");
 
-export function PageMenu({ tabId, open, onHidden }: { tabId: string; open: boolean; onHidden: () => void }) {
+type PageMenuProps = { tabId: string; open: boolean; onHidden: () => void };
+
+export function PageMenu(props: PageMenuProps) {
+  if (usesSystemPageMenu(useDesign())) return <SystemPageMenu tabId={props.tabId} open={props.open} onPresentation={(event) => presentSystemPageMenu(event, props.onHidden)} />;
+  return <DrawnPageMenu {...props} />;
+}
+
+function presentSystemPageMenu(event: MenuPresentation, onHidden: () => void) {
+  pageMenuPresentation(event);
+  if (event.phase === "dismiss") onHidden();
+}
+
+function DrawnPageMenu({ tabId, open, onHidden }: PageMenuProps) {
   const model = useMenuModel(tabId);
-  const [confirmsTranslation, setConfirmsTranslation] = useState(false);
+  const ask = useTranslationAsk();
   const tab = useTab(tabId);
   const isPrivate = tab?.isPrivate ?? false;
-  const confirmed = useTranslationConfirmed();
-  const translate = () => (translationAsks(isPrivate, confirmed) ? setConfirmsTranslation(true) : translatePage());
+  const translate = askTranslation;
   const page = useMenuPage();
   const docked = useMenuDocked();
   const design = useDesign();
@@ -81,18 +97,15 @@ export function PageMenu({ tabId, open, onHidden }: { tabId: string; open: boole
     onHidden();
     pageMenuHidden();
   };
-  const confirmation = confirmsTranslation ? (
+  const confirmation = ask ? (
     <ConfirmDialog
-      confirmation={{ title: "Translate with Google?", message: "Google will see this page’s address.", action: "Translate", destructive: false, run: translatePage }}
-      onClose={() => setConfirmsTranslation(false)}
+      confirmation={{ title: "Translate with Google?", message: "Google will see this page’s address.", action: "Translate", destructive: false, run: () => confirmTranslation(ask) }}
+      onClose={() => releaseTranslationAsk(ask)}
     />
   ) : null;
   const tappedAway = isPrivate ? undefined : () => countUsage("page_menu_tapped_away");
   if (design === "material" && docked) {
     return <DockedPageMenu tabId={tabId} tab={tab} model={model} page={page} open={open} onHidden={hidden} onTranslate={translate}>{confirmation}</DockedPageMenu>;
-  }
-  if (redesigned && Platform.OS === "ios" && settingsUIAvailable()) {
-    return <SystemPageMenu tabId={tabId} model={model} open={open} asksTranslation={confirmsTranslation} onAsksTranslationChange={setConfirmsTranslation} onTranslate={translate} onHidden={hidden} />;
   }
   if (redesigned) {
     return (
@@ -266,7 +279,7 @@ function MenuMain({ tabId, model, onTranslate }: { tabId: string; model: MenuMod
               icon={model.nightShadeOn ? "moonFill" : "moon"}
               title="Night Shade"
               value={model.nightShadeOn}
-              enabled={model.isWebPage}
+              enabled={model.siteSwitches}
               onChange={setNightShadeOn}
             />
             <ZoomRow percent={model.zoomPercent} canZoomOut={model.zoomOut} canZoomIn={model.zoomIn} enabled={model.isWebPage} stacked={large} />
@@ -278,7 +291,7 @@ function MenuMain({ tabId, model, onTranslate }: { tabId: string; model: MenuMod
               icon={model.blockersEnabled ? "handRaised" : "handRaisedSlash"}
               title={blockingWords.blockAdsAndTrackers}
               value={model.blockersEnabled}
-              enabled={model.isWebPage}
+              enabled={model.siteSwitches}
               detail={model.blockedCount}
               onChange={setBlockersOn}
             />

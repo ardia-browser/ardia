@@ -76,8 +76,8 @@ export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, 
   const pinnedGap = collapsed && !kept && !pinnedFold.moving ? 0 : layout.rowGap;
   const newTabButtonAtTop = useNewTabAtTop();
   const animated = current && !offScreen;
-  const motion = useListMotion(windowId, profileId, all, captured, animated, viewport, newTabButtonAtTop && inlineNewTab ? rowPitch() : 0);
-  const scope = useMemo(() => ({ slideBelow: motion.slideBelow }), [motion.slideBelow]);
+  const motion = useListMotion(windowId, profileId, all, captured, animated, viewport, newTabButtonAtTop && inlineNewTab ? rowPitch() : 0, () => ({ list: collapsed ? (kept ? [kept] : []) : pinned, base: regions.pinnedGroups - regions.list }));
+  const scope = useMemo(() => ({ slideBelow: motion.slideBelow, seenIn: motion.seenIn }), [motion.slideBelow, motion.seenIn]);
   if (geometry) geometry.current.newTabAtTop = newTabButtonAtTop && inlineNewTab;
   return (
     <ListMotionContext.Provider value={scope}>

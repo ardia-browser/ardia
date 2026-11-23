@@ -1,10 +1,12 @@
 import type { CornerRadii } from "../../hostExtensionView";
+import { clippedRectOf } from "../../hostViewport";
 
 const CORNERS = [["upperLeft", "TopLeft"], ["upperRight", "TopRight"], ["lowerRight", "BottomRight"], ["lowerLeft", "BottomLeft"]] as const;
 
 export function clipRadii(node: HTMLElement): CornerRadii {
   const radii: CornerRadii = { upperLeft: 0, upperRight: 0, lowerRight: 0, lowerLeft: 0 };
-  const box = node.getBoundingClientRect();
+  const clipped = clippedRectOf(node);
+  const box = { left: clipped.x, top: clipped.y, right: clipped.x + clipped.width, bottom: clipped.y + clipped.height };
   for (let parent = node.parentElement; parent; parent = parent.parentElement) {
     const style = getComputedStyle(parent);
     if (style.overflowX === "visible" && style.overflowY === "visible") continue;

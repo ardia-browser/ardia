@@ -14,6 +14,7 @@ import { isFields, isString } from "../../lib/decode";
 import { consentEpoch, consentNow, consentToken, counted, dismissAsk, onConsentPeriodChange, isSharing, loadChoice, NO_WATCH, resumeSession, save, savedChoice as saved, savedOff, sessionId, startNewSession, stillValid, useTelemetry, type ConsentToken } from "./choice";
 import { flushLocalNow, LOCAL_KEEP_DAYS, recordLocal } from "./localStore";
 import { COUNT_EVENTS } from "./countEvents";
+import { nextLaunchCohort } from "./launchCohort";
 import { context, environment, eventsBody, logsBody, resource, setEngineVersion } from "./requestContext";
 
 export { environment, resource };
@@ -308,6 +309,8 @@ type ClientSession = {
   lastLaunchAt: number | null;
   lastQuitAt: number | null;
   firstOfVersion: boolean;
+  coldNth: number | null;
+  versionSince: number | null;
   context: SavedContext | null;
 };
 
@@ -328,7 +331,7 @@ export function startClient(continuing = false): ClientSession {
     if (current.sharing) loadQueue();
     if (current.sessionOpen) save({ sessionOpen: true, sessionId: sessionId() });
     scheduleFlush(2_000);
-    return { previous: "clean", updatedFrom: null, lastLaunchAt: current.lastLaunchAt, lastQuitAt: current.lastQuitAt, firstOfVersion: false, context: current.context };
+    return { previous: "clean", updatedFrom: null, lastLaunchAt: current.lastLaunchAt, lastQuitAt: current.lastQuitAt, firstOfVersion: false, coldNth: null, versionSince: current.versionSince, context: current.context };
   }
   if (current.sharing) loadQueue();
   else {
@@ -340,14 +343,18 @@ export function startClient(continuing = false): ClientSession {
   const updatedFrom = current.lastVersion && current.lastVersion !== version ? current.lastVersion : null;
   const build = appInfo().appBuild;
   const firstOfVersion = current.lastVersion !== version || (current.lastBuild != null && current.lastBuild !== build);
-  const last = { lastLaunchAt: current.lastLaunchAt, lastQuitAt: current.lastQuitAt, firstOfVersion, context: current.context };
+  const startedAt = appInfo().processStart ?? Date.now();
+  const cohort = nextLaunchCohort(current, firstOfVersion, startedAt, appInfo().bootTime);
+  const last = { lastLaunchAt: current.lastLaunchAt, lastQuitAt: current.lastQuitAt, firstOfVersion, coldNth: cohort.coldNth, versionSince: cohort.versionSince, context: current.context };
   const crashFloor = Date.now() - LOCAL_KEEP_DAYS * 86_400_000;
   save({
     sessionOpen: true,
     sessionId: sessionId(),
     lastVersion: version,
     lastBuild: build,
-    lastLaunchAt: appInfo().processStart ?? Date.now(),
+    lastLaunchAt: startedAt,
+    versionSince: cohort.versionSince,
+    versionColdLaunches: cohort.versionColdLaunches,
     ...(!current.sharing && current.crashCursor < crashFloor ? { crashCursor: crashFloor } : {}),
   });
   scheduleFlush(previous === "unclean" ? 2_000 : 10_000);

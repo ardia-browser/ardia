@@ -225,6 +225,23 @@ test("the job a freeze overlapped most is its activity", () => {
   assert.equal(jobs.during("import", () => 41) + 1, 42);
 });
 
+test("a main-thread freeze is charged only to a job that holds the main thread; the JS job it ran beside is js_activity", async () => {
+  client.setSharing(true, "settings");
+  const save = jobs.beginActivity("sessionSave", Date.now() - 2000);
+  await reportFreeze(record({ thread: "main", samples: [{ state: 1, frames: frames(["Ardia", 0x5100], ["system", 0x1]) }] }));
+  const carry = jobs.beginActivity("siteDataCarry", Date.now() - 3200);
+  await reportFreeze(record({ thread: "main", samples: [{ state: 1, frames: frames(["Ardia", 0x5200], ["system", 0x1]) }] }));
+  await reportFreeze(record({ thread: "js", samples: [{ state: 1, frames: frames(["hermes", 0x5300], ["system", 0x1]) }] }));
+  carry();
+  save();
+  const [beside, held, js] = await sentFreezes();
+  assert.deepEqual([beside.freeze_thread, beside.activity, beside.js_activity], ["main", "none", "sessionSave"]);
+  assert.deepEqual([held.freeze_thread, held.activity, held.js_activity], ["main", "siteDataCarry", "sessionSave"]);
+  assert.deepEqual([js.freeze_thread, js.activity, js.js_activity], ["js", "siteDataCarry", null]);
+  assert.equal(jobs.holdsMainThread("sessionSave"), false);
+  assert.equal(jobs.holdsMainThread("siteDataCarry"), true);
+});
+
 test("more than 20 freezes in one day across restarts: 20 sent at most, and a signature sent today isn't sent again after the local ring wraps", async () => {
   client.setSharing(true, "settings");
   stub.docs.delete("freeze-sends.json");

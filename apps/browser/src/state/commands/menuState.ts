@@ -1,7 +1,7 @@
 import type { MenuBookmark, MenuState } from "../../platform/commands";
 import { engineBookmarkRoots, folderChildren, isBookmarked, isWithin, ROOT_TITLES } from "../bookmarks/bookmarks";
 import type { BrowserState } from "../browser/store";
-import { changedIds } from "../browser/changes";
+import { noRecordReads, recordReadsChanged, trackedRecord, type RecordReads } from "../browser/recordReads";
 import { activeTab, bookmarkProfileId, engineProfile, IDLE_LIVE, isPinnedRow, tabLabel, togglePinTitle, windowTitle, tabLayoutOf, tabsShownIn } from "../browser/model";
 import { switchableEngine, tabEngine } from "../engines/engines";
 import { readerState as readerFor, type ReaderState } from "../reader/reader";
@@ -12,6 +12,7 @@ import { canGoBack, canGoForward } from "../tabs/navigation";
 import { liveReachOf, shownLiveOf } from "../tabs/tabLive";
 import type { Bookmarks, BookmarkNode, Tab } from "../browser/types";
 import { isInternalTab } from "../pages/urls";
+import type { PageState } from "../tabs/pageState";
 import { muteState, muteTitle } from "../tabs/mute";
 import { sidebarMenuState } from "../sidebar/commands";
 import { LITTLE_ARDIA_DISABLED_COMMANDS, PAGE_COMMANDS, PAGE_COMMANDS_OFF_INTERNAL_PAGES, settingChecks, UNAVAILABLE_COMMANDS, WINDOW_COMMANDS } from "../commands/commandCatalog";
@@ -61,13 +62,31 @@ function bookmarkMenus(b: Bookmarks, engine: string): BookmarkMenus {
   return menus;
 }
 
-export function menuState(s: BrowserState, liveOfTab = (id: string) => shownLiveOf(s, id)): MenuState {
+function menuPage(s: BrowserState) {
   const focused = focusedWindowOf(s);
   const windowId = focused && s.windows[focused] ? focused : undefined;
-  const w = windowId ? s.windows[windowId] : undefined;
   const tab = windowId ? activeTab(s, windowId) : undefined;
   const peek = windowId ? peekTabId(s, windowId) : undefined;
-  const page = peek ? s.tabs[peek] : tab;
+  return { windowId, tab, peek, page: peek ? s.tabs[peek] : tab };
+}
+
+export function menuLiveKey(s: BrowserState): string {
+  const { page } = menuPage(s);
+  if (!page) return "";
+  const live = shownLiveOf(s, page.id);
+  return `${page.id}|${+live.isLoading}${+live.canGoBack}${+live.canGoForward}`;
+}
+
+const pageInMenu = (page: PageState | undefined) => (page?.newTabShown ? 1 : 0) | (page?.backToNewTab ? 2 : 0) | (page?.engineBack ? 4 : 0);
+
+export function pagesChangeMenu(s: BrowserState, next: Record<string, PageState>, prev: Record<string, PageState>): boolean {
+  const id = menuPage(s).page?.id;
+  return !!id && next[id] !== prev[id] && pageInMenu(next[id]) !== pageInMenu(prev[id]);
+}
+
+export function menuState(s: BrowserState, liveOfTab = (id: string) => shownLiveOf(s, id)): MenuState {
+  const { windowId, tab, peek, page } = menuPage(s);
+  const w = windowId ? s.windows[windowId] : undefined;
   const live = page ? liveOfTab(page.id) : IDLE_LIVE;
   const bookmarkProfile = bookmarkProfileId(s, w);
   const regularWindows = s.windowOrder.filter((id) => s.windows[id]!.kind !== "private" && s.windows[id]!.kind !== "small");
@@ -80,7 +99,7 @@ export function menuState(s: BrowserState, liveOfTab = (id: string) => shownLive
   else {
     if (!page?.url) disabled.push(...PAGE_COMMANDS);
     else if (isInternalTab(page)) disabled.push(...PAGE_COMMANDS_OFF_INTERNAL_PAGES);
-    if (!page || !canGoBack(page.id, live)) disabled.push("back");
+    if (!page || !canGoBack(page.id, live, s)) disabled.push("back");
     if (!page || !canGoForward(page.id, live)) disabled.push("forward");
     if (!live.isLoading) disabled.push("stop");
     if (w.kind === "private") disabled.push("moveTabToProfile", "moveTabToWindow", "switchProfile", "nextProfile", "previousProfile");
@@ -151,17 +170,19 @@ export function menuState(s: BrowserState, liveOfTab = (id: string) => shownLive
     extensions: extensionMenu(s, windowId) };
 }
 
-export type MenuReads = ReadonlySet<keyof BrowserState>;
+export type MenuReads = { keys: ReadonlySet<keyof BrowserState>; tabs: RecordReads };
 
 export function trackedMenuState(s: BrowserState): { state: MenuState; reads: MenuReads } {
-  const reads = new Set<keyof BrowserState>();
+  const keys = new Set<keyof BrowserState>();
+  const tabReads = noRecordReads();
+  const tabs = trackedRecord(s.tabs, tabReads);
   const tracked = new Proxy(s, {
     get(target, key, receiver) {
-      if (typeof key === "string") reads.add(key as keyof BrowserState);
-      return Reflect.get(target, key, receiver);
+      if (typeof key === "string") keys.add(key as keyof BrowserState);
+      return key === "tabs" ? tabs : Reflect.get(target, key, receiver);
     },
   });
-  return { state: menuState(tracked), reads };
+  return { state: menuState(tracked), reads: { keys, tabs: tabReads } };
 }
 
 export const HIDDEN_TAB_FIELDS_IN_MENU = ["id", "windowId", "profileId", "pin"] as const satisfies readonly (keyof Tab)[];
@@ -171,16 +192,6 @@ function shownOrSelected(s: BrowserState, tab: Tab): boolean {
   if (!w) return true;
   for (const profile in w.activeTabIds) if (w.activeTabIds[profile] === tab.id) return true;
   return peekTabId(s, tab.windowId) === tab.id || !!s.selection[tab.windowId]?.includes(tab.id);
-}
-
-function tabsChangedForMenu(s: BrowserState, prev: BrowserState): boolean {
-  for (const id of changedIds(s.tabs, prev.tabs)) {
-    const now = s.tabs[id];
-    const was = prev.tabs[id];
-    if (!now || !was || shownOrSelected(s, now)) return true;
-    for (const field of HIDDEN_TAB_FIELDS_IN_MENU) if (now[field] !== was[field]) return true;
-  }
-  return false;
 }
 
 export const liveReachesMenu = (s: BrowserState, tabId: string): boolean =>
@@ -208,9 +219,9 @@ export function extensionsChangeMenu(next: Record<string, InstalledExtension[]>,
 }
 
 export function menuInputsChanged(reads: MenuReads, s: BrowserState, prev: BrowserState): boolean {
-  for (const key of reads) {
+  for (const key of reads.keys) {
     if (s[key] === prev[key]) continue;
-    if (key !== "tabs" || tabsChangedForMenu(s, prev)) return true;
+    if (key !== "tabs" || recordReadsChanged(reads.tabs, s.tabs, prev.tabs)) return true;
   }
   return false;
 }

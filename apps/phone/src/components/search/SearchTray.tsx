@@ -23,7 +23,8 @@ import { idleScrub, SCRUB, scrubBegin, scrubEnd, scrubMove, type RowFrame, type 
 import { rowFade, rowsFadeEdge, rowsOverflow, wholeRowsHeight } from "../../lib/trayRows";
 import { haptics } from "../../state/app/haptics";
 import { refinedText, type TrayRow } from "../../state/search/omnibox";
-import { searchState, setSearchText, typeSearch } from "../../state/search/store";
+import { searchPresented, searchState, setSearchClearsPagePrefill, setSearchText, typeSearch, warmSearchWhenIdle } from "../../state/search/store";
+import { endSearchTiming, markSearchClosePhase, markSearchPhase } from "../../state/search/searchTiming";
 import { coverTray, followTrayBack, trayBackTravel, useTrayCovers } from "../../state/search/trayBack";
 import { useIncognito, useSelectedTab } from "../../state/tabs/hooks";
 import { useTabs } from "../../state/tabs/store";
@@ -83,6 +84,8 @@ function SearchPanelFace({ incognito, dark, panelRadius, corners }: { incognito:
     </View>
   );
 }
+
+const stagedContentLaidOut = () => markSearchPhase("laidOut");
 
 const clearPagePrefill = () => {
   const now = searchState();
@@ -180,6 +183,7 @@ function TrayLayer({ session, closing, onClosed }: LayerProps) {
   useLayoutEffect(() => {
     if (arcPanel && !closing) clearPagePrefill();
   }, []);
+  useLayoutEffect(() => setSearchClearsPagePrefill(arcPanel), [arcPanel]);
   const trayHeight = searchTrayHeight({ commandBarMaxHeight: command?.maxHeight ?? null, placement, place, fieldHeight, fontScale: window.fontScale, rowsHeight, windowHeight: window.height, safeTop: insets.top, resting });
   const extend = placement === "underKeyboard" ? window.height : 0;
   const closedOnPressIn = useRef(false);
@@ -522,8 +526,6 @@ function StagedTray() {
   const corners = place.corners;
   const trayHeight = searchTrayHeight({ commandBarMaxHeight: command?.maxHeight ?? null, placement, place, fieldHeight, fontScale: window.fontScale, rowsHeight, windowHeight: window.height, safeTop: insets.top, resting });
   const underKeyboard = place.underKeyboard;
-  const newTabPanelNow = useRef(!editsPage && arcPanel);
-  newTabPanelNow.current = !editsPage && arcPanel;
   const morphs = phoneLayout && !reduceMotion && command === null && pills > 0;
   live.current.morphs = morphs;
   const heightNow = useSharedValue(trayHeight);
@@ -542,12 +544,36 @@ function StagedTray() {
     if (heldRelease.current) clearTimeout(heldRelease.current);
     heldRelease.current = null;
   };
+
+  const presentStage = (presentation: number) => {
+    markSearchPhase("present");
+    live.current.presentation = presentation;
+    setPresentation(presentation);
+    if (!editsPage && searchPanelShown(phoneLayout, command !== null) && !useTabs.getState().incognito) countUsage("new_tab_search_opened");
+    setPresented(false);
+    const launch = searchState().arrival === "atRest";
+    void stage.current?.present().then(() => {
+      if (live.current.presentation !== presentation || live.current.closing) return;
+      if (launch) launchTrayUp();
+      markSearchPhase("presented");
+      setPresented(true);
+      stagePresented();
+      searchPresented(searchState().session);
+    });
+  };
+  const clearsPrefill = searchPanelShown(phoneLayout, command !== null);
+  useLayoutEffect(() => setSearchClearsPagePrefill(clearsPrefill), [clearsPrefill]);
+  useEffect(() => {
+    const keyboardRises = Keyboard.addListener("keyboardWillShow", () => markSearchPhase("keyboard"));
+    return () => keyboardRises.remove();
+  }, []);
+  useEffect(() => warmSearchWhenIdle(), []);
   useEffect(() => clearHeldRelease, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const now = live.current;
     if (open) {
-      if (now.mounted === null || now.closing) setPresentation((count) => count + 1);
+      const presents = now.mounted === null || now.closing;
       now.mounted = session;
       now.closing = false;
       now.revealed = false;
@@ -560,10 +586,12 @@ function StagedTray() {
       stageOpened();
       setStageMorphs(now.morphs);
       setStageShown(true);
+      if (presents) presentStage(now.presentation + 1);
       return;
     }
     if (now.mounted === null || now.closing) return;
     now.closing = true;
+    markSearchClosePhase("closing");
     clearHeldRelease();
     setClosing(true);
     setHoldsScroll(true);
@@ -573,19 +601,6 @@ function StagedTray() {
     stage.current?.close(stageExit(searchState().ending, now.morphs), velocity);
   }, [open, session]);
 
-  useEffect(() => {
-    live.current.presentation = presentation;
-    if (presentation === 0) return;
-    if (newTabPanelNow.current && !useTabs.getState().incognito) countUsage("new_tab_search_opened");
-    setPresented(false);
-    const launch = searchState().arrival === "atRest";
-    void stage.current?.present().then(() => {
-      if (live.current.presentation !== presentation || live.current.closing) return;
-      if (launch) launchTrayUp();
-      setPresented(true);
-      stagePresented();
-    });
-  }, [presentation]);
 
   const [handOver, setHandOver] = useState(0);
   useEffect(() => {
@@ -600,25 +615,33 @@ function StagedTray() {
     });
   }, [handOver]);
 
-  const settled = ({ landed }: { landed: boolean }) => {
+  const settled = ({ landed, path }: { landed: boolean; path?: string }) => {
     const now = live.current;
     if (!now.closing) return;
     now.closing = false;
     now.mounted = null;
+    markSearchClosePhase(`${landed ? "landed" : "settled"} ${path ?? "unknown"}`);
+    endSearchTiming();
     clearHeldRelease();
     stageSettled(landed);
     setHoldsScroll(false);
     setHandOver((count) => count + 1);
   };
 
+  const landing = ({ lands, path }: { lands: boolean; path: string }) => {
+    markSearchClosePhase(`${lands ? "flies" : "stays"} ${path}`);
+    if (!lands && live.current.closing) setStageMorphs(false);
+  };
+
   const revealed = ({ late }: { late: boolean }) => {
+    markSearchPhase(late ? "revealedLate" : "revealed");
     live.current.revealed = true;
     if (!live.current.closing) setHoldsScroll(false);
     if (late && !useTabs.getState().incognito) countUsage("search_reveals_late");
   };
 
   const lifted = (next: SearchStageLift) => {
-    if (next.up && next.lift > 0) knownLift = next.lift;
+    if (next.up && !next.predicted && next.lift > safeBottom) knownLift = next.lift;
     setLift((was) => (was.lift === next.lift && was.up === next.up ? was : next));
   };
   const dimUp = arcPanel ? !closing : lift.up;
@@ -626,9 +649,15 @@ function StagedTray() {
     dim.value = withTiming(dimUp ? 1 : 0, { duration: reduceMotion ? barReturnMotion.fadeMs : stageMotion.dimMs, easing: tabsCurve.easeOut });
   }, [dimUp]);
 
+  const sizesByRows = mounted !== null && placement === "aboveKeyboard";
+  const sizesByRowsNow = useRef(sizesByRows);
+  sizesByRowsNow.current = sizesByRows;
+  useEffect(() => {
+    if (sizesByRows && knownRowsHeight) setRowsHeight((was) => (Math.abs(was - knownRowsHeight) < 1 ? was : knownRowsHeight));
+  }, [sizesByRows]);
   const measuredRows = useCallback((height: number) => {
     knownRowsHeight = height;
-    setRowsHeight((was) => (Math.abs(was - height) < 1 ? was : height));
+    if (sizesByRowsNow.current) setRowsHeight((was) => (Math.abs(was - height) < 1 ? was : height));
   }, []);
 
   const measuredField = useCallback((height: number) => {
@@ -762,6 +791,7 @@ function StagedTray() {
       onLift={lifted}
       onReveal={revealed}
       onSettled={settled}
+      onLanding={landing}
     >
       <AnimatedPressable
         testID="trayDim"
@@ -786,6 +816,7 @@ function StagedTray() {
               key={presentation}
               style={command ? { marginLeft: command.left, width: command.width } : { paddingLeft: insets.left + place.cardInset, paddingRight: insets.right + place.cardInset, paddingBottom: place.cardGap }}
               testID="trayStagedContent"
+              onLayout={stagedContentLaidOut}
               {...closingGate(closing)}
             >
               <View testID="traySurface" style={[panelCornerStyle(panelRadius, corners), { height: trayHeight + underKeyboard, boxShadow: shadowCss("floating", incognito) }]}>
@@ -1100,7 +1131,7 @@ function TrayRows({ dismissDrag }: { dismissDrag: GestureType }) {
     setBottoms((known) => (known[index] === bottom ? known : Object.assign([...known], { [index]: bottom })));
   };
   const rowViews = rows.map((row, index) => (
-    <View key={index} onLayout={(event) => measure(index, event.nativeEvent.layout)}>
+    <View key={index} onLayout={arc ? undefined : (event) => measure(index, event.nativeEvent.layout)}>
       <SuggestionRow row={row} typed={typed} roles={theme} menu={trayRowActions(row)} onActivate={leaving.activate} onRefine={refine} onMenu={showMenu} />
     </View>
   ));
@@ -1113,7 +1144,7 @@ function TrayRows({ dismissDrag }: { dismissDrag: GestureType }) {
     );
   }
   return (
-    <Animated.View key="rows" testID={arc ? "searchPanelRows" : undefined} entering={resultsIn} exiting={resultsOut} style={styles.rows} onLayout={(event) => setRoom(event.nativeEvent.layout.height)}>
+    <Animated.View key="rows" testID={arc ? "searchPanelRows" : undefined} entering={resultsIn} exiting={resultsOut} style={styles.rows} onLayout={arc ? undefined : (event) => setRoom(event.nativeEvent.layout.height)}>
       {list ? (
         <GestureDetector gesture={list.drag}>
           <View style={styles.rows} collapsable={false}>

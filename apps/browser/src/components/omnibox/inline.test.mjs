@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildSuggestions } from "@ardia/core";
-import { acceptsCompletion, completionToWrite, fieldChange, previewFieldChange, settlesInline, withoutFirst } from "./inline.ts";
+import { acceptsCompletion, completionToWrite, fieldChange, keptTyping, previewFieldChange, settlesInline, withoutFirst } from "./inline.ts";
 
 const now = Date.UTC(2026, 8, 25);
 const history = [
@@ -287,4 +287,22 @@ test("Windows: the whole completion arriving as typed text is typing, not the ec
   const { PLATFORM_FEATURES: mac } = await import("../../lib/platformFeatures.ts");
   assert.equal(windows.inlineWritesEcho, false);
   assert.equal(mac.inlineWritesEcho, true);
+});
+
+test("a letter that matches the completion keeps it in place: the field's own report becomes the typed text and completion", () => {
+  const field = (typed, completion) => (start, end) => (start === typed.length && end === typed.length + completion.length ? { typed, completion } : null);
+  const kept = keptTyping("g", { start: 2, end: 9 }, field("gm", "ail.com"));
+  assert.deepEqual(kept, { typed: "gm", completion: "ail.com" });
+  assert.deepEqual(keptTyping("gm", { start: 4, end: 9 }, field("gmai", "l.com")), { typed: "gmai", completion: "l.com" }, "two letters at once");
+  assert.deepEqual(keptTyping("g", { start: 2, end: 10 }, field("gi", "thub.com")), { typed: "gi", completion: "thub.com" }, "the field's text wins over a completion the bar was still writing");
+});
+
+test("only a keep the field reported for this selection counts: a selection dragged inside the completion leaves the typed text alone", () => {
+  const none = () => null;
+  const field = (typed, completion) => (start, end) => (start === typed.length && end === typed.length + completion.length ? { typed, completion } : null);
+  assert.equal(keptTyping("g", { start: 2, end: 9 }, none), null, "the field kept nothing");
+  assert.equal(keptTyping("g", { start: 3, end: 9 }, field("gm", "ail.com")), null, "a different selection than the one the field kept");
+  assert.equal(keptTyping("g", { start: 2, end: 8 }, field("gm", "ail.com")), null, "not up to the end");
+  assert.equal(keptTyping("g", { start: 9, end: 9 }, field("gmail.com", "")), null, "the whole completion typed is a plain keystroke");
+  assert.equal(keptTyping("gm", { start: 2, end: 9 }, field("gm", "ail.com")), null, "the same selection again is no new letter");
 });

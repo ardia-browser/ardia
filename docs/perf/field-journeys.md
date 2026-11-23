@@ -99,6 +99,15 @@ value was read). Both, and `main_ms`, `startup_ms` and `chromium_ms`, come from 
 `launch_source` (`login_item`, `documents` when another app opened a link or file with Ardia, `user`; null before AppKit
 finished launching, nothing else ever sent), `appkit_will_finish_ms` and `appkit_did_finish_ms` (`NSApplicationWillFinishLaunching`
 and `NSApplicationDidFinishLaunching`, from process start) come from the first nightly after 0.2.47-nightly.4.
+`cold_nth` (`1`, `2`, `3+`: which cold launch of this version on this copy this is; null on a warm launch, and on every launch of a
+copy that updated before the field existed, until its next version) and `version_age` (`<1d`, `<2d`, `<4d`, `<7d`, `7d+`
+since this version's first launch on this copy, null under the same rule) come from the first nightly after 0.2.48 (#3650).
+Compare versions on matched cohorts, never on all cold launches: each copy's 1st cold launch of a version is its slowest
+(0.2.46: 2,431 ms `js_ms` p50, then 1,923, then 1,544 for the 3rd and later), and in a version's first days nearly every
+cold launch is a 1st one. That mix made 0.2.47, two days old, read about 1.1 s slower than a settled 0.2.46. Matched per copy,
+the gap was +347 ms, all before `engine_ms`. The dashboard's launch regression rows are warm launches
+(`cold` not `true`, `first_of_version = false`) and 1st cold launches (`cold_nth = 1`, `first_of_version = false`). Linux sends
+no boot time, so it has no `cold` or `cold_nth`: its warm row is every launch but a version's first, and it has no 1st-cold row.
 
 ### A session's payload
 

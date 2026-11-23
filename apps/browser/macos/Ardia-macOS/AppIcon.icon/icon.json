@@ -1,18 +1,28 @@
 {
-  "fill": {
-    "solid": "srgb:0.97647,0.96078,0.89020,1.00000"
-  },
   "groups": [
     {
+      "name": "sun",
       "layers": [
         {
+          "name": "sun",
           "glass": false,
-          "image-name": "sun.png",
-          "name": "sun"
+          "image-name-specializations": [
+            {
+              "value": "sun-light.png"
+            },
+            {
+              "appearance": "dark",
+              "value": "sun-dark.png"
+            },
+            {
+              "appearance": "tinted",
+              "value": "sun-tinted.png"
+            }
+          ]
         }
       ],
       "shadow": {
-        "kind": "neutral",
+        "kind": "none",
         "opacity": 0.5
       },
       "specular": false,
@@ -22,15 +32,28 @@
       }
     },
     {
+      "name": "front",
       "layers": [
         {
+          "name": "front",
           "glass": false,
-          "image-name": "front.png",
-          "name": "front"
+          "image-name-specializations": [
+            {
+              "value": "front-light.png"
+            },
+            {
+              "appearance": "dark",
+              "value": "front-dark.png"
+            },
+            {
+              "appearance": "tinted",
+              "value": "front-tinted.png"
+            }
+          ]
         }
       ],
       "shadow": {
-        "kind": "neutral",
+        "kind": "none",
         "opacity": 0.5
       },
       "specular": false,
@@ -40,15 +63,28 @@
       }
     },
     {
+      "name": "back",
       "layers": [
         {
+          "name": "back",
           "glass": false,
-          "image-name": "back.png",
-          "name": "back"
+          "image-name-specializations": [
+            {
+              "value": "back-light.png"
+            },
+            {
+              "appearance": "dark",
+              "value": "back-dark.png"
+            },
+            {
+              "appearance": "tinted",
+              "value": "back-tinted.png"
+            }
+          ]
         }
       ],
       "shadow": {
-        "kind": "neutral",
+        "kind": "none",
         "opacity": 0.5
       },
       "specular": false,
@@ -62,5 +98,44 @@
     "squares": [
       "macOS"
     ]
-  }
+  },
+  "fill-specializations": [
+    {
+      "value": {
+        "linear-gradient": [
+          "srgb:0.98431,0.96863,0.90980,1.00000",
+          "srgb:0.96471,0.94118,0.85490,1.00000"
+        ],
+        "orientation": {
+          "start": {
+            "x": 0.5,
+            "y": 0
+          },
+          "stop": {
+            "x": 0.5,
+            "y": 1
+          }
+        }
+      }
+    },
+    {
+      "appearance": "dark",
+      "value": {
+        "linear-gradient": [
+          "srgb:0.05882,0.09020,0.07843,1.00000",
+          "srgb:0.01569,0.02745,0.02353,1.00000"
+        ],
+        "orientation": {
+          "start": {
+            "x": 0.5,
+            "y": 0
+          },
+          "stop": {
+            "x": 0.5,
+            "y": 1
+          }
+        }
+      }
+    }
+  ]
 }

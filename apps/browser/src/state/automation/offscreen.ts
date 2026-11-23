@@ -1,4 +1,4 @@
-import { controlCloseOffscreenTabs, controlMoveOffscreen, controlOwnsTab } from "../../platform/control";
+import { controlCloseOffscreenTabs, controlMoveOffscreen, controlOwnsTab, controlStatus } from "../../platform/control";
 import { errorText } from "../../lib/errors";
 import { useBrowser } from "../browser/store";
 import { removeTabs } from "../tabs/tabs";
@@ -13,6 +13,7 @@ const CLOSE_AFTER_MS = 5000;
 
 let closing: ReturnType<typeof setTimeout> | null = null;
 let served = false;
+let connectedEpoch = 0;
 
 export async function offscreenMethod(params: Record<string, unknown>, serving: () => boolean = () => true): Promise<Body> {
   const unknown = Object.keys(params).filter((key) => key !== "tab");
@@ -38,14 +39,22 @@ export async function offscreenMethod(params: Record<string, unknown>, serving: 
 export function noteCliConnections(connections: number) {
   if (connections > 0) {
     served = true;
+    connectedEpoch++;
     if (closing) clearTimeout(closing);
     closing = null;
     return;
   }
   if (!served || closing) return;
+  const epoch = connectedEpoch;
   closing = setTimeout(() => {
     closing = null;
-    served = false;
-    void controlCloseOffscreenTabs().catch(() => {});
+    const closeUnlessReconnected = (live: number) => {
+      if (live > 0 || epoch !== connectedEpoch || closing) return;
+      served = false;
+      return controlCloseOffscreenTabs();
+    };
+    void controlStatus()
+      .then((status) => closeUnlessReconnected("connections" in status ? status.connections : 0), () => closeUnlessReconnected(0))
+      .catch(() => {});
   }, CLOSE_AFTER_MS);
 }

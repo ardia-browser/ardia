@@ -14,7 +14,7 @@ import { Group, Row, SectionHeader } from "../Form";
 import { setting } from "../settingsIndex";
 
 const APP = "Ardia";
-const REPOSITORY = "https://github.com/mantrakp04/ardia";
+const REPOSITORY = "https://github.com/ardia-browser/ardia";
 
 export function UpdatesSection() {
   const [state, reload] = useResource(updater);

@@ -1,1 +1,1 @@
-export const REPO = "mantrakp04/ardia";
+export const REPO = "ardia-browser/ardia";

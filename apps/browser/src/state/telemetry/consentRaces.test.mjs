@@ -151,6 +151,28 @@ test("F3 main-process work keeps the newest sample as its baseline when two read
   }
 });
 
+test("F3 a consent period change starts a new main-process baseline, so presses that brought Ardia forward before it aren't counted after it", async () => {
+  client.setSharing(true, "settings");
+  const app = stub.shellNativeModules.ArdiaApp;
+  const original = app.diagnosticsSample;
+  let sample = { cpuMs: 100, wakeups: 0, dragRegionActivatingPresses: 2 };
+  app.diagnosticsSample = async () => ({ ...sample });
+  mock.timers.enable({ apis: ["Date"], now: 5_000_000 });
+  try {
+    await diagnostics.takeMainProcessWork();
+    sample = { cpuMs: 200, wakeups: 0, dragRegionActivatingPresses: 9 };
+    offAndOn();
+    for (let i = 0; i < 20; i++) await turn();
+    mock.timers.tick(120_000);
+    sample = { cpuMs: 1400, wakeups: 0, dragRegionActivatingPresses: 10 };
+    const work = await diagnostics.takeMainProcessWork();
+    assert.equal(work.drag_region_activating_presses, 1);
+  } finally {
+    mock.timers.reset();
+    app.diagnosticsSample = original;
+  }
+});
+
 test("F4 a web notification received while sharing was off isn't reported as failed after sharing is turned on", async () => {
   client.setSharing(false, "settings");
   const S = () => useBrowser.getState();

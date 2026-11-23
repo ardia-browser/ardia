@@ -34,6 +34,14 @@ extension SearchStageView {
     return StageAnchor(id: id, frame: frame, style: view.traitCollection.userInterfaceStyle)
   }
 
+  var anchorMissReason: String {
+    guard let id = anchorNativeId else { return "noAnchorId" }
+    guard let root = window else { return "noWindow" }
+    guard let view = Self.find(nativeId: id, in: root) else { return "anchorNotFound" }
+    guard view.window != nil else { return "anchorOffWindow" }
+    return "anchorEmpty"
+  }
+
   func renderFace(of anchor: StageAnchor) -> StageFace? {
     guard let root = window, let view = Self.find(nativeId: faceNativeId ?? anchor.id, in: root), view.bounds.width > 0, view.bounds.height > 0 else { return nil }
     let size = anchor.frame.size
@@ -318,6 +326,7 @@ final class StageMorph {
   private var fades: [UIViewPropertyAnimator] = []
 
   private static let landedTolerance: CGFloat = 0.17
+  private static let visiblyLandedWithin: CGFloat = 8
 
   struct Start {
     var frame: CGRect
@@ -326,6 +335,11 @@ final class StageMorph {
 
   var hasDestination: Bool { destination != nil }
   var isShown: Bool { !view.isHidden }
+
+  var isVisiblyLanded: Bool {
+    guard let destination, let shown = view.layer.presentation()?.frame else { return false }
+    return Self.gap(between: shown, and: destination) <= Self.visiblyLandedWithin
+  }
 
   var isMoving: Bool {
     guard let flight, flight.isRunning || folding.contains(where: \.isRunning) else { return false }
@@ -344,8 +358,9 @@ final class StageMorph {
     stage.addSubview(view)
   }
 
-  func fly(to target: CGRect, style: UIUserInterfaceStyle, carrying face: StageFace?, timing: UITimingCurveProvider, duration: TimeInterval, direct: Bool = false) {
-    guard !hasFlown else { return }
+  @discardableResult
+  func fly(to target: CGRect, style: UIUserInterfaceStyle, carrying face: StageFace?, timing: UITimingCurveProvider, duration: TimeInterval, direct: Bool = false) -> TimeInterval {
+    guard !hasFlown else { return 0 }
     hasFlown = true
     destination = target
     appear()
@@ -364,7 +379,7 @@ final class StageMorph {
       travel.startAnimation()
       flight = travel
       folding = []
-      return
+      return duration
     }
     let start = view.frame
     let radius = view.radius
@@ -385,6 +400,8 @@ final class StageMorph {
     narrow.startAnimation(afterDelay: Motion.stageFoldLag + Motion.stageFold.time(toReach: Motion.stageFoldBeforeNarrowing))
     flight = travel
     folding = [fold, narrow]
+    let narrowing = Motion.stageFoldLag + Motion.stageFold.time(toReach: Motion.stageFoldBeforeNarrowing)
+    return max(duration, narrowing + Motion.stageWiden.settlingDuration)
   }
 
   func vanish() {
@@ -396,18 +413,8 @@ final class StageMorph {
   }
 
   func handOff() {
-    if let destination {
-      flight?.stopAnimation(true)
-      folding.forEach { $0.stopAnimation(true) }
-      UIView.performWithoutAnimation {
-        view.shape(to: destination, radius: corners.anchor(height: destination.height))
-        view.alpha = 0
-      }
-      DispatchQueue.main.async { self.remove() }
-      return
-    }
     let fade = Self.run(Motion.stageHandOff) { [view] in view.alpha = 0 }
-    fade.addCompletion { _ in self.remove() }
+    fade.addCompletion { [weak self] _ in self?.remove() }
   }
 
   func remove() {

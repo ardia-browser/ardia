@@ -239,7 +239,7 @@ and sent only when changed, progress at most 10 times a second, a held report fl
 | `mediaCommand`, `notificationAction` | done | |
 | `print`, `runPageCommand` | partial | Chrome's commands (print preview, save page, system print, caret browsing): dialogs in a hidden run |
 | `requestPictureInPicture`, `exitPictureInPicture` | partial | Through the page script with a user gesture; a PiP window shows on screen |
-| `resolveDisplayMedia`, `mediaCaptureSourceId` | partial | `mediaCaptureSourceId` is Chrome's (engine-proven); an app-picked source needs the engine to grant it to `getUserMedia` (CEF's `site::AllowDesktopCapture`), so pages keep Chrome's own picker for now |
+| `resolveDisplayMedia`, `mediaCaptureSourceId` | ✅ | The app shows its own share picker (`SharePicker.tsx`): a site calling `getDisplayMedia` raises `displayMediaRequest`, the app answers with `resolveDisplayMedia` and the chosen tab, window or screen, and `mediaCaptureSourceId` names a tab for `shareTabInstead` |
 | `resolvePasswordPrompt` | partial | save and dismiss |
 | `executeExtensionAction` | partial | Runs the action on the tab (activeTab granted); the app shows the popup (`extensionHost="popup"`); needs a visible window |
 | `resolveUnresponsive` | partial | See `onUnresponsive` |
@@ -274,7 +274,7 @@ over, `-[ArdiaCoreTab setTemporarySource:]`) is the tab a closed window's entry 
 | `releaseProfile` | partial | Destroys a private profile once no window shows it (engine-proven) |
 | `onPermissionDismissed` | partial | Wired; no check dismisses a prompt by navigating yet |
 | `onContentBlocker` | partial | Reported by the blocker's state changes; not asserted on its own |
-| `setDisplayMediaPicker`, `displayMediaSources` | partial | Kept, but pages keep Chrome's picker until the engine grants app-picked desktop sources; `displayMediaSources` lists screens and windows as CEF (no prompt) |
+| `setDisplayMediaPicker`, `displayMediaSources` | ✅ | The app's own picker runs in every page that asks to share (`setDisplayMediaPicker` turns Chrome's picker off); `displayMediaSources` lists screens and windows, `displayMediaThumbnails` returns base64 JPEG previews of them by source id (ScreenCaptureKit; empty in a hidden run). Linux and Windows keep Chrome's picker |
 | `devScrollZoom` | stubbed | CEF's test hook for its own pinch path; ArdiaCore's pinch is Chrome's |
 
 ## `ArdiaExtensions` (`packages/ardiacore/src/extensions.ts`)

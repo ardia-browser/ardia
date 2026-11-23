@@ -13,6 +13,7 @@ import { useAppearanceSummary } from "../../state/settings/appearance";
 import { usePreferences } from "../../state/settings/hooks";
 import { closeSettings, settingsRouteKey, type SettingsRoute } from "../../state/settings/nav";
 import { AUTO_ARCHIVE_INTERVALS, autoArchiveTitle, type AutoArchiveInterval } from "../../state/tabs/tabModels";
+import { prepareArchiveNextFrame } from "../../state/tabs/store";
 import { PHONE_SHARING_COPY } from "../../lib/telemetryCopy";
 import { setUsageSharing, useUsageSharing } from "../../state/telemetry/telemetry";
 import { contentMargins, modifierList, PROFILE_COLORS, settingsChrome, settingsLayout, SettingsIconTile, SettingsShortcuts, settingsSwitchStyle, settingsTint, settingsUIAvailable, useWarningInk, type ProfileColor } from "../ui";
@@ -71,7 +72,7 @@ export function ExpoSettingsRoot() {
           </Section>
         ) : null}
         <Section modifiers={[listRowBackground("clear"), listRowInsets({ top: 0, leading: 0, bottom: 0, trailing: 0 }), listSectionSpacing(TOP_SECTION_SPACING)]}>
-          <SettingsShortcuts shortcuts={syncOffered() ? SHORTCUTS : ARCHIVE_ONLY} onPress={(id) => leaveFor(id === "archive" ? openArchive : openSpaces)} />
+          <SettingsShortcuts shortcuts={syncOffered() ? SHORTCUTS : ARCHIVE_ONLY} onPress={(id) => leaveFor(id === "archive" ? openPreparedArchive : openSpaces)} />
         </Section>
         <Section title="General">
           <NavigationLink value={link({ page: "appearance" })}>
@@ -173,6 +174,11 @@ export function ExpoSettingsRoot() {
 function leaveFor(open: () => void) {
   closeSettings();
   open();
+}
+
+function openPreparedArchive() {
+  openArchive();
+  prepareArchiveNextFrame();
 }
 
 function SyncRow() {

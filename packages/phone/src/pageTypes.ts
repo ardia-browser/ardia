@@ -33,6 +33,7 @@ export type PageState = PageNavigationState & {
   blockedRequests: number;
   isLive: boolean;
   isPrivate: boolean;
+  document?: number;
 };
 
 export type PageTone = { top: string | null; bottom: string | null };
@@ -72,9 +73,9 @@ export type PageViewProps = ViewProps & {
   onPageState?: (state: PageState) => void;
   onPageTone?: (tone: PageTone) => void;
   onPageError?: (error: PageError) => void;
-  onPageDrawn?: () => void;
+  onPageDrawn?: (document?: number) => void;
   coverNativeId?: string;
-  onPageCoverHidden?: (reason: "drawn" | "cap", found: boolean) => void;
+  onPageCoverHidden?: (reason: "drawn" | "cap", found: boolean, cover?: string) => void;
 };
 
 export type PageViewHandle = {
@@ -153,7 +154,7 @@ export type PageSnapshot = {
   uri: string;
   width: number;
   height: number;
-  route?: "draw" | "windowCopy" | "screenCopy" | "engine";
+  route?: "draw" | "windowCopy" | "screenCopy" | "engine" | "quiet";
   bytes?: number;
   kept?: boolean;
   durable?: boolean;
@@ -205,6 +206,7 @@ export type PageEngineEvent =
   | { name: "page.summaryOpened"; pageId: string; trigger: PageSummaryTrigger; isPrivate: boolean }
   | { name: "page.summarySettled"; pageId: string; trigger: PageSummaryTrigger; outcome: PageSummaryOutcome; chatGPTFellBack?: boolean; geminiNanoMissing?: string | null; isPrivate: boolean }
   | { name: "page.snapshotLanded"; pageId: string; uri: string; generation: number }
+  | { name: "page.scrollSettled"; pageId: string; y: number }
   | { name: "page.externalAppMissing"; pageId: string; url: string }
   | { name: "page.desktop"; pageId: string; line: string }
   | { name: "pages.privateSessionEnded" };
@@ -213,8 +215,8 @@ export type PageEventPayload =
   | ({ name: "state" } & Partial<Omit<PageState, "url" | "title" | "progress" | "isLoading" | "canGoBack" | "canGoForward">> &
       Omit<PageNavigationState, "url"> & { url?: string })
   | { name: "tone"; top?: string; bottom?: string }
-  | { name: "drawn" }
-  | { name: "coverHidden"; reason: "drawn" | "cap"; found: boolean }
+  | { name: "drawn"; document?: number }
+  | { name: "coverHidden"; reason: "drawn" | "cap"; found: boolean; cover?: string }
   | { name: "swipedPastHistory"; direction: PageSwipeDirection }
   | ({ name: "error" } & PageError);
 

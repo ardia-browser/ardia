@@ -25,6 +25,7 @@ import { capBases, noteOrigin, needsCarry, profileOf, siteEntry, sourceIsNewer, 
 import { book, clearCount, clearsSettled, commitCount, committedSince, hostOf, inCommitLane, noteCommit, pushTimers, saveNow, saveSoon } from "./siteDataState";
 import { noteSiteDataBlockedCookies, noteSiteDataCarry, noteSiteDataOverQuota, noteSiteDataSkip, type SiteDataCarry } from "../telemetry/siteDataCounts";
 import type { ConsentToken } from "../telemetry/client";
+import { during } from "../app/jobActivity";
 
 const WEBKIT_PURGE_WINDOW_MS = 7 * 24 * 60 * 60_000;
 const BLOCK_CACHE_MS = 60_000;
@@ -140,8 +141,8 @@ async function withoutBlockedCookies(profile: string, chromium: Read["chromium"]
   return { chromium: keptChromium, webkit: keptWebKit, blocked, heldBack: jars.length - kept };
 }
 
-const readBoth = async (profile: string, { domains, origins, blocked }: BlockPlan): Promise<Read> => {
-  const [chromium, webkit] = await Promise.all([readChromium(profile, domains, origins), readWebKitSiteData(profile, domains, origins).catch(() => null)]);
+const readBoth = async (profile: string, { domains, origins, blocked }: BlockPlan, urgent: boolean, consent: ConsentToken | null): Promise<Read> => {
+  const [chromium, webkit] = await Promise.all([readChromium(profile, domains, origins, urgent, consent), readWebKitSiteData(profile, domains, origins).catch(() => null)]);
   return withoutBlockedCookies(profile, chromium, webkit, blocked);
 };
 
@@ -164,7 +165,7 @@ async function carryNow(profile: string, site: string, to: PageEngine, { origin,
   }
   if (!stillCurrent()) return NOTHING;
   const seen = commitCount(profile);
-  const early = await readBoth(profile, plan);
+  const early = await readBoth(profile, plan, urgent, consent);
   if (!stillCurrent()) return NOTHING;
   return inCommitLane(profile, urgent, async () => {
     const laneEpoch = settingsEpoch;
@@ -174,7 +175,7 @@ async function carryNow(profile: string, site: string, to: PageEngine, { origin,
       noteSiteDataSkip(fresh.stop, consent);
       return NOTHING;
     }
-    const read = fresh === plan && !committedSince(profile, seen, plan.domains, plan.origins) ? early : await readBoth(profile, fresh);
+    const read = fresh === plan && !committedSince(profile, seen, plan.domains, plan.origins) ? early : await readBoth(profile, fresh, urgent, consent);
     if (!settled()) return NOTHING;
     noteSiteDataBlockedCookies(read.heldBack, consent);
     return commitCarry(profile, site, to, { entry, origins: fresh.origins, domains: fresh.domains, read, cleared, stillCurrent: settled, consent });
@@ -241,8 +242,8 @@ async function commitCarry(profile: string, site: string, to: PageEngine, { entr
   const written = !writing
     ? { cookies: 0, removed: 0, storage: 0, landed: new Set<string>() }
     : to === "webkit"
-      ? await writeWebKit(profile, putCookies, dropCookies, storage)
-      : await writeChromium(profile, chromium, putCookies, dropCookies, storage, stillCurrent);
+      ? await during("siteDataCarry", () => writeWebKit(profile, putCookies, dropCookies, storage))
+      : await during("siteDataCarry", () => writeChromium(profile, chromium, putCookies, dropCookies, storage, stillCurrent));
   if (!written) {
     noteSiteDataSkip("failure", consent);
     return NOTHING;
@@ -303,7 +304,7 @@ async function storageWithoutChromiumPage(
   if (!merges.length || !stillCurrent()) return { ...NO_ENGINE_STORAGE, available };
   if (held) noteSiteDataSkip("untrustedDrops", consent);
   const writing = Object.keys(storage).length > 0;
-  const written = writing ? await writeChromiumStorageWithoutPage(profile, storage, stillCurrent) : { storage: 0, landed: new Set<string>(), overQuota: 0 };
+  const written = writing ? await during("siteDataCarry", () => writeChromiumStorageWithoutPage(profile, storage, stillCurrent)) : { storage: 0, landed: new Set<string>(), overQuota: 0 };
   if (writing) noteCommit(profile, [], Object.keys(storage));
   noteSiteDataOverQuota(written.overQuota, consent);
   if (clearCount(profile) !== cleared) return { ...NO_ENGINE_STORAGE, available };

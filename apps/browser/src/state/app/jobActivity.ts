@@ -1,5 +1,8 @@
-export const JOB_ACTIVITIES = ["sync", "sessionSave", "memoryTrim", "omniboxSuggest", "liveFolders", "historyApply", "import"] as const;
+export const JOB_ACTIVITIES = ["sync", "sessionSave", "memoryTrim", "omniboxSuggest", "liveFolders", "historyApply", "import", "siteDataCarry"] as const;
 export type JobActivity = (typeof JOB_ACTIVITIES)[number];
+
+const HOLDS_MAIN_THREAD: ReadonlySet<JobActivity> = new Set<JobActivity>(["sync", "import", "siteDataCarry"]);
+export const holdsMainThread = (activity: JobActivity) => HOLDS_MAIN_THREAD.has(activity);
 
 type Span = { activity: JobActivity; start: number; end: number | null };
 
@@ -29,10 +32,11 @@ export function during<T>(activity: JobActivity, run: () => T): T {
   return result;
 }
 
-export function activityDuring(start: number, end: number, now = Date.now()): JobActivity | "none" {
+export function activityDuring(start: number, end: number, now = Date.now(), counts: (activity: JobActivity) => boolean = () => true): JobActivity | "none" {
   let best: JobActivity | "none" = "none";
   let bestOverlap = 0;
   for (const span of spans) {
+    if (!counts(span.activity)) continue;
     const overlap = Math.min(end, span.end ?? now) - Math.max(start, span.start);
     if (overlap > bestOverlap) {
       bestOverlap = overlap;

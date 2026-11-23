@@ -21,4 +21,5 @@ export const normalizeState = (state: NativeState, isPrivate: boolean): PageStat
   blockedRequests: state.blockedRequests ?? 0,
   isLive: state.isLive ?? true,
   isPrivate: state.isPrivate ?? isPrivate,
+  ...(typeof state.document === "number" ? { document: state.document } : {}),
 });

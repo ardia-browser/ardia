@@ -12,8 +12,13 @@ import { BarPlusGlyph, capsule, chromeInk, chromeLayout, ChromeSurface, floating
 import { newTabLabel } from "./barWords";
 import { openPageMenuFrom } from "./pageMenuOpener";
 import { privateMark } from "../ui/IncognitoSpecs";
+import { PressedGlyph } from "../ui/PressInPlace";
+import { glassFadeMs } from "../ui/motion";
+import { useFoldGlyphs, type BarFoldLook } from "./HostPill";
+import { useGlassTrace } from "../../state/search/searchTiming";
 import { TabStack } from "./BottomBar";
-import { barReturnedToPage } from "../../state/browse/deckPull";
+import { barReturnedToPage, deckPull } from "../../state/browse/deckPull";
+import { FabricCatchUp } from "../ui/FabricCatchUp";
 import { useDeckOwnsBar } from "../../state/browse/hooks";
 import { usePageBusy } from "../../state/page/hooks";
 import { PullGhost, PullGlyphs } from "./PagePull";
@@ -35,6 +40,7 @@ type Props = {
   onAddress: () => void;
   onPlus: () => void;
   onMore: () => void;
+  fold?: BarFoldLook | null;
 };
 
 export type DuoBar = { stripLeft: number; stripTop: number; squeeze: DuoSqueeze | null; progress: SharedValue<number>; collapsed: boolean };
@@ -68,7 +74,7 @@ export function barAddress(tab: BrowserTab): BarAddress {
   };
 }
 
-export function FloatingBar({ tab, order, roles, dark, showsPlus, anchors = true, duo = null, onTabs, onTabsMenu, onStep, onAddress, onPlus, onMore }: Props) {
+export function FloatingBar({ tab, order, roles, dark, showsPlus, anchors = true, duo = null, fold = null, onTabs, onTabsMenu, onStep, onAddress, onPlus, onMore }: Props) {
   const ink = dark ? chromeInk.dark : chromeInk.light;
   const address = barAddress(tab);
   const menuButton = useRef<ViewInstance>(null);
@@ -80,7 +86,11 @@ export function FloatingBar({ tab, order, roles, dark, showsPlus, anchors = true
     wasHanded.current = handed;
   });
   const swaps = handed || wasHanded.current;
-  const back = swaps ? { ...returning, centreGlass: { shown: returning.centreGlass.shown && !handed, shownMs: 0 }, sidesGlass: { shown: returning.sidesGlass.shown && !handed, shownMs: 0 } } : returning;
+  const handedBack = swaps ? { ...returning, centreGlass: { shown: returning.centreGlass.shown && !handed, shownMs: 0 }, sidesGlass: { shown: returning.sidesGlass.shown && !handed, shownMs: 0 } } : returning;
+  const back = useFoldedGlass(handedBack, fold?.glass ?? true);
+  useGlassTrace("address", back.centreGlass);
+  useGlassTrace("sides", back.sidesGlass);
+  const centreFold = useFoldGlyphs(fold);
   const ids = anchors ? back.ids : null;
   const inStrip = duo !== null;
   const idle = useSharedValue(0);
@@ -98,12 +108,12 @@ export function FloatingBar({ tab, order, roles, dark, showsPlus, anchors = true
   const lockFade = useAnimatedStyle(() => ({ opacity: shut(progress.value) }));
   const leading = (
     <Animated.View testID="floatingBarLeading" collapsable={false} style={back.leading} pointerEvents={back.sidesShown ? "box-none" : "none"} importantForAccessibility={back.sidesShown ? "auto" : "no-hide-descendants"} accessibilityElementsHidden={!back.sidesShown}>
-      <FloatingTabsButton tab={tab} order={order} roles={roles} dark={dark} testID="floatingBarTabs" glass={back.sidesGlass} glyphs={back.leadingGlyphs} ghost={!handed} onTabs={onTabs} onTabsMenu={onTabsMenu} onStep={onStep} />
+      <FloatingTabsButton tab={tab} order={order} roles={roles} dark={dark} testID="floatingBarTabs" glass={back.sidesGlass} glyphs={back.leadingGlyphs} fold={fold} ghost={!handed} onTabs={onTabs} onTabsMenu={onTabsMenu} onStep={onStep} />
     </Animated.View>
   );
   const trailing = (
     <Animated.View testID="floatingBarTrailing" collapsable={false} style={[styles.circleHit, back.trailing]} pointerEvents={back.sidesShown ? "box-none" : "none"} importantForAccessibility={back.sidesShown ? "auto" : "no-hide-descendants"} accessibilityElementsHidden={!back.sidesShown}>
-      {showsPlus ? <FloatingPlusButton tab={tab} dark={dark} testID="floatingBarPlus" glass={back.sidesGlass} glyphs={back.trailingGlyphs} ghost={!handed} onPlus={onPlus} /> : null}
+      {showsPlus ? <FloatingPlusButton tab={tab} dark={dark} testID="floatingBarPlus" glass={back.sidesGlass} glyphs={back.trailingGlyphs} fold={fold} ghost={!handed} onPlus={onPlus} /> : null}
     </Animated.View>
   );
   return (
@@ -113,6 +123,7 @@ export function FloatingBar({ tab, order, roles, dark, showsPlus, anchors = true
       <Animated.View testID="floatingBarCentre" nativeID={ids?.anchor} collapsable={false} style={[styles.addressSlot, centreSqueeze]} pointerEvents={back.centreShown ? "box-none" : "none"} importantForAccessibility={back.centreShown ? "auto" : "no-hide-descendants"} accessibilityElementsHidden={!back.centreShown}>
       <ChromeSurface testID="floatingBarAddress" shape="capsule" cornerRadius={capsule(floatingBarLayout.control)} incognito={tab.isPrivate} dark={dark} barShadow={chromeLayout.barCastsShadow} shown={back.centreGlass.shown} shownMs={back.centreGlass.shownMs} style={[styles.address, squeeze ? styles.squeezes : null]}>
         <Animated.View testID="floatingBarCentreGlyphs" nativeID={ids?.face} collapsable={false} style={[styles.addressRow, back.centreGlyphs]}>
+        <Animated.View testID="floatingBarFoldGlyphs" collapsable={false} style={[styles.addressRow, centreFold]}>
         <PullGlyphs style={styles.addressRow}>
         <Animated.View testID="floatingBarAddressFade" collapsable={false} style={[styles.addressFade, addressFade]} pointerEvents={squeezed ? "none" : "box-none"} importantForAccessibility={squeezed ? "no-hide-descendants" : "auto"} accessibilityElementsHidden={squeezed}>
         <AddressFace address={address} dark={dark} testIDPrefix="floatingBar" style={styles.addressHit} onPress={onAddress} onPressIn={haptics.barPress} />
@@ -129,6 +140,7 @@ export function FloatingBar({ tab, order, roles, dark, showsPlus, anchors = true
         </PressInPlace>
         </PullGlyphs>
         </Animated.View>
+        </Animated.View>
         {handed ? null : (
           <PullGhost style={squeeze ? styles.ghostEnd : styles.ghostRow}>
             {squeeze ? (
@@ -144,6 +156,7 @@ export function FloatingBar({ tab, order, roles, dark, showsPlus, anchors = true
       </Animated.View>
       {inStrip ? null : trailing}
     </View>
+    {fold ? <BarMotionCatchUp fold={fold} /> : null}
     {inStrip ? (
       <Animated.View testID="floatingBarStrip" pointerEvents="box-none" style={[styles.strip, { left: duo.stripLeft, top: duo.stripTop }]}>
         {trailing}
@@ -154,10 +167,31 @@ export function FloatingBar({ tab, order, roles, dark, showsPlus, anchors = true
   );
 }
 
-type ButtonProps = { tab: BrowserTab; dark: boolean; testID: string; glass?: { shown: boolean; shownMs: number }; glyphs?: ComponentProps<typeof Animated.View>["style"]; ghost?: boolean };
+type ButtonProps = { tab: BrowserTab; dark: boolean; testID: string; glass?: { shown: boolean; shownMs: number }; glyphs?: ComponentProps<typeof Animated.View>["style"]; fold?: BarFoldLook | null; ghost?: boolean };
 
-export function FloatingTabsButton({ tab, order, roles, dark, testID, glass, glyphs, ghost = false, onTabs, onTabsMenu, onStep }: ButtonProps & { order: BrowserTab[]; roles: ColorRoles; onTabs: () => void; onTabsMenu: () => void; onStep: (delta: -1 | 1) => void }) {
+function BarMotionCatchUp({ fold }: { fold: BarFoldLook }) {
+  const progress = fold.progress;
+  const barMotionNow = () => {
+    "worklet";
+    return progress.value + deckPull.barBack.value + deckPull.shrink.value + deckPull.stage.value;
+  };
+  return <FabricCatchUp motion={barMotionNow} testID="floatingBarFabricCatchUp" />;
+}
+
+function useFoldedGlass<Back extends { centreGlass: { shown: boolean; shownMs: number }; sidesGlass: { shown: boolean; shownMs: number } }>(back: Back, unfolded: boolean): Back {
+  const was = useRef(unfolded);
+  const flips = was.current !== unfolded;
+  useEffect(() => {
+    was.current = unfolded;
+  }, [unfolded]);
+  if (unfolded && !flips) return back;
+  const fade = (glass: { shown: boolean; shownMs: number }) => ({ shown: glass.shown && unfolded, shownMs: flips ? glassFadeMs : glass.shownMs });
+  return { ...back, centreGlass: fade(back.centreGlass), sidesGlass: fade(back.sidesGlass) };
+}
+
+export function FloatingTabsButton({ tab, order, roles, dark, testID, glass, glyphs, fold = null, ghost = false, onTabs, onTabsMenu, onStep }: ButtonProps & { order: BrowserTab[]; roles: ColorRoles; onTabs: () => void; onTabsMenu: () => void; onStep: (delta: -1 | 1) => void }) {
   const count = order.length;
+  const foldGlyphs = useFoldGlyphs(fold);
   return (
     <TabsMenuTrigger order={order} onTabsMenu={onTabsMenu}>
       {({ onLongPress, screenReaderActions }) => (
@@ -174,12 +208,17 @@ export function FloatingTabsButton({ tab, order, roles, dark, testID, glass, gly
           onPress={onTabs}
           onPressIn={haptics.barPress}
           onLongPress={onLongPress}
+          dims="glyph"
           style={styles.circleHit}
         >
           <ChromeSurface testID={testID} shape="circle" cornerRadius={capsule(floatingBarLayout.control)} incognito={tab.isPrivate} dark={dark} barShadow={chromeLayout.barCastsShadow} shown={glass?.shown} shownMs={glass?.shownMs} style={styles.circle}>
             <PullGlyphs>
-              <Animated.View testID={`${testID}Glyphs`} pointerEvents="none" style={glyphs}>
-                <TabStack tabs={order.slice(-2)} roles={roles} />
+              <Animated.View collapsable={false} style={foldGlyphs}>
+                <PressedGlyph>
+                  <Animated.View testID={`${testID}Glyphs`} pointerEvents="none" style={glyphs}>
+                    <TabStack tabs={order.slice(-2)} roles={roles} />
+                  </Animated.View>
+                </PressedGlyph>
               </Animated.View>
             </PullGlyphs>
             {ghost ? (
@@ -194,14 +233,19 @@ export function FloatingTabsButton({ tab, order, roles, dark, testID, glass, gly
   );
 }
 
-export function FloatingPlusButton({ tab, dark, testID, glass, glyphs, ghost = false, onPlus }: ButtonProps & { onPlus: () => void }) {
+export function FloatingPlusButton({ tab, dark, testID, glass, glyphs, fold = null, ghost = false, onPlus }: ButtonProps & { onPlus: () => void }) {
   const ink = dark ? chromeInk.dark : chromeInk.light;
+  const foldGlyphs = useFoldGlyphs(fold);
   return (
-    <PressInPlace label={newTabLabel(tab.isPrivate)} onPress={onPlus} onPressIn={haptics.barPress} style={styles.circleHit}>
+    <PressInPlace label={newTabLabel(tab.isPrivate)} onPress={onPlus} onPressIn={haptics.barPress} dims="glyph" style={styles.circleHit}>
       <ChromeSurface testID={testID} shape="circle" cornerRadius={capsule(floatingBarLayout.control)} incognito={tab.isPrivate} dark={dark} barShadow={chromeLayout.barCastsShadow} shown={glass?.shown} shownMs={glass?.shownMs} style={styles.circle}>
         <PullGlyphs>
-          <Animated.View testID={`${testID}Glyphs`} pointerEvents="none" style={glyphs}>
-            <BarPlusGlyph testID={`${testID}Glyph`} color={ink.foreground} />
+          <Animated.View collapsable={false} style={foldGlyphs}>
+            <PressedGlyph>
+              <Animated.View testID={`${testID}Glyphs`} pointerEvents="none" style={glyphs}>
+                <BarPlusGlyph testID={`${testID}Glyph`} color={ink.foreground} />
+              </Animated.View>
+            </PressedGlyph>
           </Animated.View>
         </PullGlyphs>
         {ghost ? (

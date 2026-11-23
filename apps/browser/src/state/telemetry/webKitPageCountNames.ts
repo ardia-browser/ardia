@@ -50,6 +50,7 @@ export type WebKitCount =
   | "fullscreen"
   | "discard"
   | "discardWake"
+  | "backdropHidden"
   | "historyRestored"
   | "unresponsive"
   | "unresponsiveEnded"
@@ -107,6 +108,7 @@ export const WEBKIT_COUNTS = {
   fullscreen: "webKitFullscreens",
   discard: "webKitDiscards",
   discardWake: "webKitDiscardWakes",
+  backdropHidden: "webKitBackdropsHidden",
   historyRestored: "webKitHistoryRestores",
   unresponsive: "webKitUnresponsive",
   unresponsiveEnded: "webKitUnresponsiveEnded",

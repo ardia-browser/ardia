@@ -3,8 +3,8 @@ import { Img, staticFile } from "remotion";
 import { useStudioObject } from "../studio-objects-v6";
 import { useAspect } from "./kit";
 
-const MARK = { w: 931, h: 702 };
-const SUN = { x: 0.5623, y: 0.1724, r: 0.1316 };
+const MARK = { w: 822, h: 821 };
+const SUN = { x: 0.4994, y: 0.1809, r: 0.1807 };
 export const SUN_COLOR = "#E6BC62";
 const SET = 0.52;
 

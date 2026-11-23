@@ -11,5 +11,7 @@ export function windowsInlineCompletion(host: () => Pick<WindowsHostModule, "tex
       return composing === false ? SHOWN : NOT_WRITTEN;
     },
     async copyFieldAs() {},
+    async keepWhileTyping() {},
+    takeKept: () => [],
   };
 }

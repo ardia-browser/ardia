@@ -138,7 +138,7 @@ int main(int argc, char** argv) {
     assert(chrome.web_contents() == &p.frontend);
     p.binding->claim = "claim";
     chrome.SetWebContents(nullptr);
-    p.binding->viewport_ = p.host.AddChildView(std::make_unique<ViewportView>(0));
+    p.binding->viewport_ = p.host.AddChildView(std::make_unique<ViewportView>(nullptr));
     p.host.Show(p.binding, true);
     assert(p.tools() && p.tools()->GetVisible() && p.tools()->web_contents() == &p.frontend);
     assert(views::focus_manager.focused == p.tools() && p.frontend.focuses == 1);
@@ -235,6 +235,96 @@ int main(int argc, char** argv) {
     assert(views::focus_manager.focused == p.binding->viewport() && p.frontend.focuses == 2);
     return 0;
   }
+  if (mode == "clipped-content") {
+    Pane p;
+    p.binding->pane_radii = linux_window_corners::Corners{0, 0, 10, 10};
+    p.binding->pane_bounds = gfx::Rect(100, 70, 800, 580);
+    p.binding->content_bounds = gfx::Rect(100, 70, 800, 600);
+    p.binding->pane_visible = true;
+    p.host.LayoutPane(p.binding);
+    ViewportView* view = p.binding->viewport();
+    assert(view->bounds() == gfx::Rect(100, 70, 800, 580));
+    assert(view->ClipsContent());
+    assert(view->holder()->bounds() == gfx::Rect(0, 0, 800, 600));
+    assert(view->holder()->clip_installed);
+    assert(view->holder()->clip_rect == gfx::Rect(0, 0, 800, 580));
+    assert(view->layer() && view->layer()->masks_to_bounds);
+    assert(view->layer()->radii == gfx::RoundedCornersF(0, 0, 10, 10));
+    assert(view->holder()->applied_radii == gfx::RoundedCornersF());
+    assert((p.host.clipped_radii.back() == linux_window_corners::Corners{0, 0, 10, 10}));
+    const int base_before_move = view->base_bounds_changes;
+    p.binding->pane_bounds = gfx::Rect(100, 82, 800, 568);
+    p.binding->content_bounds = gfx::Rect(100, 82, 800, 600);
+    p.host.LayoutPane(p.binding);
+    assert(view->base_bounds_changes == base_before_move);
+    assert(view->holder()->bounds() == gfx::Rect(0, 0, 800, 600));
+    assert(view->holder()->clip_installed && view->holder()->clip_rect == gfx::Rect(0, 0, 800, 568));
+    assert(view->layer()->masks_to_bounds && view->layer()->radii == gfx::RoundedCornersF(0, 0, 10, 10));
+    p.binding->pane_bounds = gfx::Rect(100, 50, 800, 600);
+    p.binding->content_bounds = gfx::Rect(100, 50, 800, 600);
+    p.host.LayoutPane(p.binding);
+    assert(!view->ClipsContent());
+    assert(!view->holder()->clip_installed && view->holder()->clip_rect.IsEmpty());
+    assert(!view->layer()->masks_to_bounds && view->layer()->radii == gfx::RoundedCornersF());
+    assert(view->holder()->applied_radii == gfx::RoundedCornersF(0, 0, 10, 10));
+    p.binding->pane_bounds = gfx::Rect(100, 70, 800, 580);
+    p.binding->content_bounds = gfx::Rect(100, 70, 800, 600);
+    p.host.LayoutPane(p.binding);
+    assert(view->ClipsContent() && view->holder()->clip_installed);
+    p.binding->content_bounds = gfx::Rect(100, 70, 800, 580);
+    p.host.LayoutPane(p.binding);
+    assert(!view->ClipsContent() && !view->holder()->clip_installed);
+    assert(view->holder()->applied_radii == gfx::RoundedCornersF(0, 0, 10, 10));
+    p.binding->pane_bounds = gfx::Rect(100, 70, 800, 580);
+    p.binding->content_bounds = gfx::Rect(100, 70, 800, 600);
+    p.host.LayoutPane(p.binding);
+    assert(view->ClipsContent());
+    p.binding->pane_visible = false;
+    p.binding->content_bounds = gfx::Rect(100, 70, 800, 580);
+    p.host.LayoutPane(p.binding);
+    assert(!view->GetVisible() && !view->web_contents());
+    assert(view->ClipsContent() && view->holder()->bounds() == gfx::Rect(0, 0, 800, 600));
+    p.binding->pane_visible = true;
+    p.binding->content_bounds = gfx::Rect(100, 70, 800, 600);
+    p.host.LayoutPane(p.binding);
+    assert(view->ClipsContent() && view->holder()->clip_installed && view->holder()->clip_rect == gfx::Rect(0, 0, 800, 580));
+    p.binding->pane_visible = false;
+    p.host.LayoutPane(p.binding);
+    p.binding->pane_visible = true;
+    p.binding->pane_bounds = gfx::Rect(100, 50, 800, 600);
+    p.binding->content_bounds = gfx::Rect(100, 50, 800, 600);
+    p.host.LayoutPane(p.binding);
+    assert(!view->ClipsContent() && !view->holder()->clip_installed);
+    assert(view->holder()->applied_radii == gfx::RoundedCornersF(0, 0, 10, 10));
+    p.binding->pane_bounds = gfx::Rect(100, 70, 800, 580);
+    p.binding->content_bounds = gfx::Rect(100, 70, 800, 600);
+    p.Dock();
+    p.host.LayoutPane(p.binding);
+    assert(view->bounds() == gfx::Rect(100, 70, 500, 580));
+    assert(!view->ClipsContent() && view->holder()->bounds() == gfx::Rect(0, 0, 500, 580));
+    return 0;
+  }
+  if (mode == "clipped-content-unmanaged") {
+    views::manages_layers = false;
+    Pane p;
+    p.binding->pane_radii = linux_window_corners::Corners{0, 0, 10, 10};
+    p.binding->pane_bounds = gfx::Rect(100, 70, 800, 580);
+    p.binding->content_bounds = gfx::Rect(100, 70, 800, 600);
+    p.binding->pane_visible = true;
+    p.host.LayoutPane(p.binding);
+    ViewportView* view = p.binding->viewport();
+    assert(!view->layer());
+    assert(view->ClipsContent() && view->holder()->clip_installed);
+    assert(view->holder()->GetNativeViewContainer()->layer()->radii == gfx::RoundedCornersF(0, 0, 10, 10));
+    assert(view->holder()->applied_radii == gfx::RoundedCornersF());
+    p.binding->pane_bounds = gfx::Rect(100, 50, 800, 600);
+    p.binding->content_bounds = gfx::Rect(100, 50, 800, 600);
+    p.host.LayoutPane(p.binding);
+    assert(!view->ClipsContent() && !view->holder()->clip_installed);
+    assert(view->holder()->GetNativeViewContainer()->layer()->radii == gfx::RoundedCornersF());
+    assert(view->holder()->applied_radii == gfx::RoundedCornersF(0, 0, 10, 10));
+    return 0;
+  }
   assert(false);
 }
 '''
@@ -248,12 +338,16 @@ class PaneLayoutTests(unittest.TestCase):
             raise unittest.SkipTest('C++ compiler unavailable')
         host = HOST.read_text()
         watch = method(host, 'class DevToolsFrontendWatch') + ';' if 'class DevToolsFrontendWatch' in host else 'struct DevToolsFrontendWatch {};'
+        viewport_view = method(host, 'class ViewportView') + ';'
         methods = '\n'.join(method(host, signature) for signature in [
             'bool HoldsNativeView(', 'void ShellHostView::LayoutPane(', 'void ShellHostView::ClipPaneView(', 'void ShellHostView::OnDevToolsDockChanged(',
             'void ShellHostView::HideDevToolsViewport(', 'void TabBinding::WebContentsDestroyed(',
             'void TabBinding::FocusFromHost(', 'void TabBinding::OnWebContentsFocused('])
         methods = methods.replace('content::RenderWidgetHost*', 'void*')
-        code = FIXTURE.read_text().replace('#pragma once\n', '').replace('ARDIA_FRONTEND_WATCH', watch).replace('ARDIA_HOST_METHODS', methods)
+        code = (FIXTURE.read_text().replace('#pragma once\n', '')
+                .replace('ARDIA_VIEWPORT_VIEW', viewport_view)
+                .replace('ARDIA_FRONTEND_WATCH', watch)
+                .replace('ARDIA_HOST_METHODS', methods))
         cls.temp = tempfile.TemporaryDirectory(prefix='ardia-pane-layout-')
         cls.addClassCleanup(cls.temp.cleanup)
         root = pathlib.Path(cls.temp.name)
@@ -296,6 +390,12 @@ class PaneLayoutTests(unittest.TestCase):
 
     def test_taking_the_frontend_back_keeps_keyboard_focus_where_it_was(self):
         self.run_case('tab-return-focus')
+
+    def test_clipped_content_keeps_pane_bounds_and_falls_back_when_devtools_is_docked(self):
+        self.run_case('clipped-content')
+
+    def test_clipped_content_clears_container_corners_when_views_do_not_manage_layers(self):
+        self.run_case('clipped-content-unmanaged')
 
 if __name__ == '__main__':
     unittest.main()

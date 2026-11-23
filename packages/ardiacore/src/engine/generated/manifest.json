@@ -1,0 +1,103 @@
+{
+  "domains": {
+    "bookmarks": {
+      "kind": "engine",
+      "types": "packages/ardiacore/src/engine/generated/bookmarks.ts",
+      "swift": "packages/ardiacore/ios/BookmarksCalls.swift",
+      "calls": {
+        "tree": {
+          "service": "ac_bookmarks_tree",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "apply": {
+          "service": "ac_bookmarks_apply",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "watch": {
+          "service": "ac_bookmarks_watch",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "exportHtml": {
+          "service": "ac_bookmarks_export_html",
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        }
+      },
+      "events": [
+        "changed"
+      ]
+    },
+    "favicons": {
+      "kind": "engine",
+      "types": "packages/ardiacore/src/engine/generated/favicons.ts",
+      "swift": "packages/ardiacore/ios/FaviconsCalls.swift",
+      "calls": {
+        "get": {
+          "service": "ac_favicons_get",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "set": {
+          "service": "ac_favicons_set",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "fetch": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        }
+      },
+      "events": []
+    },
+    "history": {
+      "kind": "engine",
+      "types": "packages/ardiacore/src/engine/generated/history.ts",
+      "swift": "packages/ardiacore/ios/HistoryModule.swift",
+      "calls": {
+        "query": {
+          "service": "ac_history_query",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "add": {
+          "service": "ac_history_add",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "import": {
+          "service": "ac_history_import",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "deleteUrls": {
+          "service": "ac_history_delete_urls",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "watch": {
+          "service": "ac_history_watch",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        }
+      },
+      "events": [
+        "changed"
+      ]
+    }
+  }
+}

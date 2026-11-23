@@ -66,7 +66,8 @@ class WindowCornersTests(unittest.TestCase):
         clip = between(HOST, 'void ShellHostView::ClipViewport(views::WebView* view, const linux_window_corners::Corners& own) {', '\n}\n')
         self.assertIn('linux_window_corners::ClipToWindow(', clip)
         self.assertIn('width(), height(),', clip)
-        self.assertIn('window_corners_.value_or(linux_window_corners::Corners()), own)));', clip)
+        self.assertIn('window_corners_.value_or(linux_window_corners::Corners()), own));', clip)
+        self.assertIn('viewport->ApplyCornerRadii(radii);', clip)
         self.assertNotIn('kPageCardRadius', clip)
         pane = between(HOST, 'void ShellHostView::LayoutPane(TabBinding* binding) {', '\nvoid ShellHostView::KeepPaneFocus(')
         self.assertNotIn('RoundedCornersF(12.0f)', pane)
@@ -155,6 +156,11 @@ class WindowCornersTests(unittest.TestCase):
         self.assertLess(viewport.index('if (!radii) {\n      return std::move(done).Run(false,'), viewport.index('binding->pane_bounds = bounds;'))
         self.assertIn('  if (radii) binding->pane_radii = *radii;\n', viewport)
         self.assertLess(viewport.index('if (radii) binding->pane_radii = *radii;'), viewport.index('LayoutPane(binding);'))
+        self.assertIn('if (const base::Value* given = args.Find("contentRect")) {', viewport)
+        self.assertIn('linux_window_corners::ContentBoxInDip(', viewport)
+        self.assertLess(viewport.index('if (!content_box) {\n      return std::move(done).Run(false,'), viewport.index('binding->pane_bounds = bounds;'))
+        self.assertIn('  binding->content_bounds = content_bounds.value_or(bounds);\n', viewport)
+        self.assertIn('capabilities.Append("tab.viewportClip");', HOST)
 
     def test_a_viewport_rounds_out_from_doubles_and_windows_report_the_decision_the_frame_follows(self):
         viewport = between(HOST, 'void ShellHostView::SetViewport(', '\n}\n')

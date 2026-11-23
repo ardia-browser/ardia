@@ -173,6 +173,8 @@ if [ "$channel" = nightly ]; then
   [ "$size" = "$(stat -f %z "$dmg")" ] && echo "PASS  $url is $version's DMG" \
     || { echo "FAIL  $url is $version's DMG (size $size, expected $(stat -f %z "$dmg"))"; status=1; }
   to="$(curl -s -o /dev/null --max-time 15 -w '%{redirect_url}' https://ardia.dev/nightly || true)"
+  legacy_nightly_dmg_url="https://github.com/mantrakp04/ardia/releases/download/nightly/Ardia-Nightly.dmg"
+  [ "$to" = "$legacy_nightly_dmg_url" ] && to="$(curl -s -o /dev/null --max-time 15 -w '%{redirect_url}' "$legacy_nightly_dmg_url" || true)"
   [ "$to" = "$NIGHTLY_DMG_URL" ] && echo "PASS  https://ardia.dev/nightly leads there" \
     || { echo "FAIL  https://ardia.dev/nightly leads there (goes to ${to:-nothing}: deploy the site, infra/site/nginx.conf)"; status=1; }
 fi

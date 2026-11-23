@@ -10,7 +10,9 @@ import { useMedia, type TabShare } from "./media";
 import { useBrowserWhile, useStoreWhile } from "../tabs/tabWatch";
 
 export { getDisplayMediaSources, screenRecordingAllowed, type DisplayMediaAudio, type DisplayMediaSource } from "../../platform/media";
+export { getDisplayMediaThumbnails } from "../../platform/media";
 export { noteScreenRecordingMissing } from "../telemetry/usage";
+export { startSharePreviews } from "../telemetry/sharePreviewCounts";
 
 export function useShareFor(tabId: string): [string, TabShare] | null {
   const shares = useMedia((m) => m.tabShares);

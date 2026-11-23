@@ -5,6 +5,7 @@ import { domainCall, domainFunctions, domainsOf, reproduced, topicRouter } from 
 import { watchDownloads } from "../../../../packages/expo-windows/src/engine/domains/downloads.ts";
 import { readArgs } from "../../../../packages/expo-windows/src/engine/domains/calling.ts";
 import { privateWindowShown } from "../../../../packages/expo-windows/src/engine/privateWindows.ts";
+import { typeRows } from "../../../../packages/ardiacore/src/engine/apiRows.mjs";
 
 const repo = new URL("../../../../", import.meta.url);
 const read = (path) => readFileSync(new URL(path, repo), "utf8");
@@ -24,7 +25,7 @@ const sorted = (list) => [...list].sort();
 
 function macTables() {
   const tables = {};
-  for (const file of readdirSync(new URL(ios, repo)).filter((name) => name.endsWith("Module.swift"))) {
+  for (const file of readdirSync(new URL(ios, repo)).filter((name) => /(Module|Calls)\.swift$/.test(name))) {
     const text = read(ios + file);
     const domain = text.match(/CallTable\(domain: "([a-zA-Z]+)"/)?.[1];
     if (!domain || MAC_ONLY.has(domain)) continue;
@@ -573,11 +574,11 @@ test("the window list answers an empty list where the engine has none, so a call
 
 test("an event only the Windows host sends is declared apart from the Mac's, and Windows does send it", () => {
   const api = read("packages/ardiacore/src/engine/api.ts");
-  const bodyOf = (name) => api.slice(api.indexOf(`export type ${name} = {`), api.indexOf("\n};", api.indexOf(`export type ${name} = {`)));
-  const keysOf = (body) => [...body.matchAll(/^ {2}"([a-zA-Z]+\.[a-zA-Z]+)":/gm)].map((m) => m[1]);
-  const windowsOnly = keysOf(bodyOf("WindowsHostEvents"));
+  const manifest = JSON.parse(read("packages/ardiacore/src/engine/generated/manifest.json"));
+  const windowsOnly = [...typeRows(api, manifest, "WindowsHostEvents").rows];
   assert.ok(windowsOnly.length > 0);
-  const mac = new Set(keysOf(bodyOf("EngineEvents")));
+  const mac = typeRows(api, manifest, "EngineEvents").rows;
+  assert.ok(mac.has("history.changed"));
   const sent = readdirSync(new URL(windowsDomains + "../", repo)).filter((file) => /\.tsx?$/.test(file)).map((file) => read("packages/expo-windows/src/engine/" + file)).join("\n");
   for (const name of windowsOnly) {
     assert.equal(mac.has(name), false, `${name} is also in the Mac's events`);

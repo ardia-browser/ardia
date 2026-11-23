@@ -1,7 +1,7 @@
 import { hoverHeld } from "../app/transientUi";
 import { noteTabHoverCardShown } from "../telemetry/hoverCardCounts";
 import { consentToken } from "../telemetry/client";
-import { noteSidebarHoverHeld, noteSidebarScrolled } from "../telemetry/sidebarScrollCounts";
+import { noteSidebarHoverHeld, noteSidebarScrolled, noteSidebarTeardownHeld } from "../telemetry/sidebarScrollCounts";
 import { sidebarSliding, useDockMotion } from "../windows/dockMotion";
 import { cardReach, pointInRect, type Point, type Rect } from "./hoverAim";
 import { measureRow, setSidebarUi, sidebarUi, type Target } from "./sidebarUi";
@@ -253,6 +253,21 @@ export function noteRowsScrolled(windowId: string) {
 }
 
 export const forgetRowsScrolled = (windowId: string) => void scrolledAt.delete(windowId);
+
+export function whenRowsStill(windowId: string, run: () => void): () => void {
+  const consent = consentToken();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let held = false;
+  const check = () => {
+    const left = SCROLL_SETTLE_MS - stillFor(windowId);
+    if (left <= 0) return run();
+    if (!held) noteSidebarTeardownHeld(consent);
+    held = true;
+    timer = setTimeout(check, left);
+  };
+  check();
+  return () => clearTimeout(timer);
+}
 
 export function holdEnterWhileScrolling(windowId: string, row: object, enter: () => void): boolean {
   if (stillFor(windowId) >= SCROLL_SETTLE_MS) return false;

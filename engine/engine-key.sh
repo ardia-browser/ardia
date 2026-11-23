@@ -23,4 +23,4 @@ for arg in "$@"; do
   case "$arg" in -h | --help) awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0"; exit 0 ;; esac
 done
 command -v python3 >/dev/null || { echo "engine-key: python3 is required" >&2; exit 1; }
-exec python3 -I "$(cd "$(dirname "$0")" && pwd -P)/engine-key.py" "$@"
+exec python3 -I -B "$(cd "$(dirname "$0")" && pwd -P)/engine-key.py" "$@"

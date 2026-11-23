@@ -8,6 +8,7 @@ export {
   legacy,
   legacyImport,
   legacyLab,
+  legacySettled,
   type LegacyCounts,
   type LegacyData,
   type LegacyRead,

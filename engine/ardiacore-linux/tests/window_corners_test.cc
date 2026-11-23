@@ -197,6 +197,85 @@ int main() {
                                                  corners::kPageCardCorners) ==
                   corners::Corners{.upper_left = 0, .upper_right = 0, .lower_right = 12, .lower_left = 12});
   }
+  {
+    const corners::Box pane{.x = 240, .y = 32, .width = 752, .height = 660};
+    const corners::BoxF visible_rect{.x = 240.0, .y = 32.0, .width = 752.0, .height = 660.0};
+    const auto clipped = corners::ContentBoxInDip({.x = 240.0, .y = 32.0, .width = 752.0, .height = 680.0},
+                                                  visible_rect, 1.0, pane);
+    assert(clipped && *clipped == (corners::Box{.x = 240, .y = 32, .width = 752, .height = 680}));
+    for (const double zoom : {1.0, 1.1, 1.25, 1.5}) {
+      std::optional<corners::Box> prior = corners::EnclosingBox(240.0 * zoom, 29.0 * zoom, 992.0 * zoom, 691.0 * zoom);
+      const int steady_height = prior->height;
+      for (const double y : {29.01, 29.20, 30.0, 35.7, 41.2, 48.0}) {
+        const corners::Box visible = corners::EnclosingBox(240.0 * zoom, y * zoom, 992.0 * zoom, 691.0 * zoom);
+        const auto content = corners::ContentBoxInDip(
+            {.x = 240.0, .y = y, .width = 752.0, .height = 662.0},
+            {.x = 240.0, .y = y, .width = 752.0, .height = 691.0 - y}, zoom, visible, prior);
+        assert(content.has_value());
+        assert(content->x == visible.x && content->width == visible.width);
+        assert(content->y <= visible.y);
+        assert(content->y + content->height >= visible.y + visible.height);
+        assert(content->height == steady_height);
+        prior = content;
+      }
+      std::optional<corners::Box> collapse_prior;
+      int collapse_changes = 0;
+      for (const double y : {48.0, 41.2, 35.7, 30.0, 29.20, 29.01}) {
+        const corners::Box visible = corners::EnclosingBox(240.0 * zoom, y * zoom, 992.0 * zoom, 691.0 * zoom);
+        const auto content = corners::ContentBoxInDip(
+            {.x = 240.0, .y = y, .width = 752.0, .height = 662.0},
+            {.x = 240.0, .y = y, .width = 752.0, .height = 691.0 - y}, zoom, visible, collapse_prior);
+        assert(content.has_value());
+        assert(content->y <= visible.y && content->y + content->height >= visible.y + visible.height);
+        if (collapse_prior && content->height != collapse_prior->height) {
+          assert(content->height == collapse_prior->height + 1);
+          collapse_changes++;
+        }
+        collapse_prior = content;
+      }
+      assert(collapse_changes <= (zoom == 1.0 ? 0 : 1));
+      const corners::Box resized_pane = corners::EnclosingBox(240.0 * zoom, 48.0 * zoom, 992.0 * zoom, 750.0 * zoom);
+      const auto resized = corners::ContentBoxInDip(
+          {.x = 240.0, .y = 48.0, .width = 752.0, .height = 720.0},
+          {.x = 240.0, .y = 48.0, .width = 752.0, .height = 702.0}, zoom, resized_pane, prior);
+      assert(resized && resized->height > steady_height + 1);
+    }
+    const corners::Box narrowed_pane{.x = 240, .y = 32, .width = 751, .height = 660};
+    const auto narrowed = corners::ContentBoxInDip(
+        {.x = 240.0, .y = 32.0, .width = 751.0, .height = 680.0},
+        {.x = 240.0, .y = 32.0, .width = 751.0, .height = 660.0}, 1.0, narrowed_pane,
+        corners::Box{.x = 240, .y = 32, .width = 752, .height = 680});
+    assert(narrowed && *narrowed == (corners::Box{.x = 240, .y = 32, .width = 751, .height = 680}));
+    const corners::Box narrowed_zoomed_pane = corners::EnclosingBox(240.0 * 1.1, 32.0 * 1.1, 922.0 * 1.1, 691.0 * 1.1);
+    const auto narrowed_zoomed = corners::ContentBoxInDip(
+        {.x = 240.0, .y = 32.0, .width = 682.0, .height = 662.0},
+        {.x = 240.0, .y = 32.0, .width = 682.0, .height = 659.0}, 1.1, narrowed_zoomed_pane,
+        corners::Box{.x = narrowed_zoomed_pane.x,
+                     .y = narrowed_zoomed_pane.y,
+                     .width = narrowed_zoomed_pane.width + 1,
+                     .height = 730});
+    assert(narrowed_zoomed && narrowed_zoomed->width == narrowed_zoomed_pane.width && narrowed_zoomed->height == 730);
+    const auto shrank_two = corners::ContentBoxInDip(
+        {.x = 240.0, .y = 32.0, .width = 752.0, .height = 680.0},
+        {.x = 240.0, .y = 32.0, .width = 752.0, .height = 660.0}, 1.0, pane,
+        corners::Box{.x = 240, .y = 32, .width = 752, .height = 682});
+    assert(shrank_two && shrank_two->height == 680);
+    const auto encloses = corners::ContentBoxInDip(
+        {.x = 250.0, .y = 40.0, .width = 700.0, .height = 600.0}, visible_rect, 1.0, pane);
+    assert(encloses && *encloses == pane);
+    const corners::Box tall_pane{.x = 240, .y = 35, .width = 752, .height = 1016};
+    const corners::BoxF tall_visible{.x = 240.0, .y = 35.0, .width = 752.0, .height = 1016.0};
+    const auto jitter_up = corners::ContentBoxInDip(
+        {.x = 239.999985, .y = 35.0, .width = 752.000061, .height = 1022.000061}, tall_visible, 1.0, tall_pane);
+    assert(jitter_up && *jitter_up == (corners::Box{.x = 240, .y = 35, .width = 752, .height = 1022}));
+    const auto jitter_down = corners::ContentBoxInDip(
+        {.x = 240.0, .y = 35.0, .width = 751.999939, .height = 1021.999939}, tall_visible, 1.0, tall_pane);
+    assert(jitter_down && *jitter_down == (corners::Box{.x = 240, .y = 35, .width = 752, .height = 1022}));
+    assert(!corners::ContentBoxInDip({.x = std::nan(""), .y = 0, .width = 100, .height = 100}, visible_rect, 1.0, pane));
+    assert(!corners::ContentBoxInDip({.x = 0, .y = 0, .width = -1, .height = 100}, visible_rect, 1.0, pane));
+    assert(!corners::ContentBoxInDip({.x = 0, .y = 0, .width = 100, .height = 100}, visible_rect, 0.0, pane));
+    assert(!corners::ContentBoxInDip({.x = 0, .y = 0, .width = 50000.0, .height = 100}, visible_rect, 1.0, pane));
+  }
   std::puts("ok");
   return 0;
 }

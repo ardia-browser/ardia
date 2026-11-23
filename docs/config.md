@@ -150,7 +150,7 @@ stays off until that's decided.
 ### The command bar's start
 
 `settings.commandBarStart` sets what a new tab's command bar (⌘T, with New Tab opening the command bar) lists before
-you type. It has no Settings row: plugins (github.com/mantrakp04/ardia-plugins) and people write it here.
+you type. It has no Settings row: plugins (github.com/ardia-browser/plugins) and people write it here.
 
 ```json
 "commandBarStart": { "openTabs": { "hidePinned": true, "hideTopApps": true, "limit": 5 } }

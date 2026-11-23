@@ -9,11 +9,8 @@ ac_cli_owned_tabs.cc
 ac_cli_owned_tabs.h
 ac_cli_token_policy.cc
 ac_cli_token_policy.h
-ac_cli_token_policy_contexts.cc
 ac_cli_token_policy_events.cc
 ac_cli_token_policy_internal.h
-ac_cli_token_policy_methods.cc
-ac_cli_token_policy_web_targets.cc
 ac_cli_visible_tabs.cc
 ac_cli_visible_tabs.h
 ac_cookies.cc

@@ -58,7 +58,28 @@ reaches Ardia two ways (`docs/automation.md`, `docs/control-socket.md`):
 - **The control socket** (`ArdiaControl.sock`, mode 0600) carries the owner's methods. It has no token: the server
   only checks that the peer runs as the same user (`getpeereid`), so every process of that user is admitted.
 - **The engine's token connection** carries `ardia browse`. It listens on loopback with a token written to
-  `ArdiaControl.json`, which the user's own processes can read, and its token policy limits what that path can do.
+  `ArdiaControl.json`, which the user's own processes can read. It is a full DevTools client of the browser, the same
+  as a `--remote-debugging-port` client (the owner's decision, #2807): every CDP domain and method, every target
+  (`chrome://` and WebUI pages, extension pages, service workers, the browser target), every URL and browser context,
+  and local files, so `ardia browse upload` (`DOM.setFileInputFiles`), `download` and `wait --download`
+  (`Browser.setDownloadBehavior`), emulation on any tab, cookies, storage, request interception, screencasts and the
+  debugger all work. Events and replies pass through unchanged.
+
+  What still guards it is what keeps other users and web pages off the connection, not what a process running as
+  you may do: the token (32 random bytes per start, compared in constant time, only in the 0600 `ArdiaControl.json`),
+  loopback only, no `Origin` header (so no web page can open the socket), and the `RemoteDebuggingAllowed` policy. The
+  engine also keeps its bookkeeping: a command must be a JSON object with an integer `id` and a string `method`
+  (`params`, if present, an object; `sessionId` naming a session this connection attached), one command per
+  (session, id) until its reply, and at most 4096 waiting replies before the connection is closed. Showing a saved
+  password still asks for your Mac's login, as it does in the Passwords page, since that check runs in the browser,
+  not in DevTools. Plugin helpers can't read `ArdiaControl.json`: their sandbox denies the app's data folder and
+  LaunchServices (`docs/plugins.md`, #2857).
+
+  The engine records which tabs the command opened (`Target.createTarget`) for `ardia browse set viewport`'s
+  off-screen move and marks off-screen targets `ardiaOffscreen: true` in `Target.getTargets` and
+  `Target.getTargetInfo`. It never closes a tab on its own: off-screen tabs are closed by the app, through ArdiaCore's
+  normal close, 5 s after the last connection ends (`state/automation/offscreen.ts`). `ac_cli_control`'s status
+  counts commands by domain (`tokenCommands`), sent as `usage_counts.cli_cdp_commands_<domain>`.
 
 ## The contract
 

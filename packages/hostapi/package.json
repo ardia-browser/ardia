@@ -1,0 +1,12 @@
+{
+  "name": "@ardia/hostapi",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The host API schema: each engine domain's calls and events once, generating the TypeScript types, the Swift call tables and the manifest the hosts' drift tests read.",
+  "scripts": {
+    "generate": "node generate.mjs --write",
+    "typecheck": "tsrs -p .",
+    "test": "node --test generate.test.mjs hosts.test.mjs"
+  }
+}

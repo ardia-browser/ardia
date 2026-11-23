@@ -6,11 +6,16 @@ import UIKit
 @MainActor
 public enum LaunchBackdrop {
   static let contentDidAppear = Notification.Name("RCTContentDidAppearNotification")
-  static let holdAfterContent: TimeInterval = 0.1
+  static let holdAfterReady: TimeInterval = 0.05
   static let fadeOut: TimeInterval = 0.15
+  static let readyCap: Duration = .seconds(4)
 
   private static var host: UIHostingController<AnyView>?
   private static var observer: NSObjectProtocol?
+  private static var contentShown = false
+  private static var interfaceReady = false
+  private static var fading = false
+  private static var capTask: Task<Void, Never>?
   private nonisolated static let shown = OSAllocatedUnfairLock<Double?>(initialState: nil)
 
   nonisolated static func shownAtEpochMilliseconds() -> Double? {
@@ -19,6 +24,12 @@ public enum LaunchBackdrop {
 
   public static func install(in rootView: UIView) {
     guard host == nil else { return }
+    if let observer { NotificationCenter.default.removeObserver(observer) }
+    observer = nil
+    capTask?.cancel()
+    capTask = nil
+    contentShown = false
+    fading = false
     let host = UIHostingController(rootView: AnyView(LaunchProfileBackdrop(recalled: LaunchLook.recalled()).ignoresSafeArea()))
     host.view.backgroundColor = .clear
     host.view.frame = rootView.bounds
@@ -33,11 +44,32 @@ public enum LaunchBackdrop {
     }
   }
 
+  public static func interfaceDrawn() {
+    interfaceReady = true
+    if contentShown { fade() }
+  }
+
   private static func contentAppeared() {
     if let observer { NotificationCenter.default.removeObserver(observer) }
     observer = nil
-    guard let view = host?.view else { return }
-    UIView.animate(withDuration: fadeOut, delay: holdAfterContent, options: [.curveEaseOut]) {
+    contentShown = true
+    if interfaceReady {
+      fade()
+      return
+    }
+    capTask = Task { @MainActor in
+      try? await Task.sleep(for: readyCap)
+      guard !Task.isCancelled else { return }
+      fade()
+    }
+  }
+
+  private static func fade() {
+    capTask?.cancel()
+    capTask = nil
+    guard !fading, let view = host?.view else { return }
+    fading = true
+    UIView.animate(withDuration: fadeOut, delay: holdAfterReady, options: [.curveEaseOut]) {
       view.alpha = 0
     } completion: { _ in
       view.removeFromSuperview()

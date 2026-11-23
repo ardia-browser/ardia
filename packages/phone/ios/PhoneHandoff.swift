@@ -11,12 +11,11 @@ enum PhoneHandoff {
       withdraw(owner)
       return
     }
+    if let current = Self.activity, current.webpageURL == url, current.title == title, Self.owner === owner { return }
     let activity = Self.activity ?? NSUserActivity(activityType: NSUserActivityTypeBrowsingWeb)
-    if activity.webpageURL != url || activity.title != title || Self.owner !== owner {
-      activity.isEligibleForHandoff = true
-      activity.webpageURL = url
-      activity.title = title
-    }
+    activity.isEligibleForHandoff = true
+    activity.webpageURL = url
+    activity.title = title
     Self.activity = activity
     Self.owner = owner
     activity.becomeCurrent()

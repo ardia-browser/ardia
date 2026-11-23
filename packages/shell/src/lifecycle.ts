@@ -28,6 +28,8 @@ export type AppEvent =
   | { type: "littleArdiaGlobalShortcut" }
   | { type: "littleArdiaGlobalShortcutBehind" }
   | { type: "windowDragLoop"; epoch: string }
+  | { type: "windowDragNative"; epoch: string }
+  | { type: "windowDragTakeover"; epoch: string }
   | {
       type: "pasteRefused";
       reason: string;

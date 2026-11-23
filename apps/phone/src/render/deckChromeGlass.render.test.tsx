@@ -61,13 +61,13 @@ const frames = (count: number) => {
   for (let frame = 0; frame < count; frame++) act(() => jest.advanceTimersByTime(16));
 };
 
-test("where the system glass exists, no view above the deck's glass surfaces fades, their glass waits hidden through the entrance and materialises over 200 ms once the chrome comes in, and their glyphs carry the chrome's fade", () => {
+test("where the system glass exists, no view above the deck's glass surfaces fades, their glass waits hidden through the entrance and materialises over 150 ms once the chrome comes in, and their glyphs carry the chrome's fade", () => {
   withGlass(true);
   const root = enterDeck();
   expect(glasses(root)).toHaveLength(CHROME.length);
   for (const glass of glasses(root)) expect(fadingAncestors(glass)).toEqual([]);
   expect(glassShown(root)).toEqual(CHROME.map(() => false));
-  for (const glass of glasses(root)) expect(glass.props.shownMs).toBe(200);
+  for (const glass of glasses(root)) expect(glass.props.shownMs).toBe(150);
   for (const glyph of GLYPHS) expect(opacity(host(root, glyph))).toBe(0);
   expect(host(root, "deckRedesignedChrome").props.pointerEvents).toBe("none");
   expect(host(root, "deckRedesignedChrome").props.accessibilityElementsHidden).toBe(true);

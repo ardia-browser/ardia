@@ -8,7 +8,7 @@ import { setReportPlatform } from "../../browser/src/platform/report";
 import { ardiaHost, type ArdiaHost } from "./host.ts";
 import { hostReportPost, servesReportSheet } from "./hostReport.ts";
 
-export const LINUX_REPORT_URL = "https://github.com/mantrakp04/ardia/issues/new?body=%s";
+export const LINUX_REPORT_URL = "https://github.com/ardia-browser/ardia/issues/new?body=%s";
 export const LINUX_REPORT_TEMPLATE = "What happened?\n\n\nWhat did you expect?\n\n\n---\n";
 
 type ReportSource = "menu" | "check_in";

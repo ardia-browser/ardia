@@ -110,11 +110,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
       let root = makeContentView(id)
       ArdiaChromeWindowHost.embedRootView(root, in: chromeWindow)
       if !chromeWindow.isVisible {
-        chromeWindow.alphaValue = 0
-        entry.reveal = .waiting(then: [], entrance: small || options.animated ? !small || frame == nil : nil)
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.revealTimeout) { [weak self, weak entry] in
-          if let self, let entry { self.reveal(entry) }
-        }
+        entry.waitToReveal(entrance: small || options.animated ? !small || frame == nil : nil, timeout: Self.revealTimeout) { [weak self] in self?.reveal($0) }
       }
       entry.keepContentSized(in: root)
       entry.watchContent(of: root) { [weak self] entry, root in self?.contentAppeared(entry, root: root) }
@@ -313,8 +309,9 @@ final class WindowManager: NSObject, NSWindowDelegate {
     for name in [NSWindow.didMoveNotification, NSWindow.didResizeNotification] {
       NotificationCenter.default.addObserver(self, selector: #selector(auxFrameChanged(_:)), name: name, object: window)
     }
+    entry.waitToReveal(entrance: nil, timeout: Self.revealTimeout) { [weak self] in self?.reveal($0) }
     entry.keepContentSized(in: root)
-    entry.watchContent(of: root) { entry, root in entry.keepContentSized(in: root) }
+    entry.watchContent(of: root) { [weak self] entry, root in self?.contentAppeared(entry, root: root) }
     relayoutRoot(window)
     window.makeKeyAndOrderFront(nil)
   }

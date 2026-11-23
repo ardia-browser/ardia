@@ -25,6 +25,8 @@ import { edgeMaskAt, edgeStrength } from "./edgeFade";
 import { EdgeFadeMask } from "../ui/EdgeFadeMask";
 import { devRegister } from "../dev/devRegister";
 import { StripScrollContext, type StripScroll } from "./stripScroll";
+import { StripMotionContext, useStripMotion } from "./stripMotion";
+import { StripGhosts } from "./StripGhosts";
 import { COMPACT_CHIP, GROUP_TITLE_MAX, GROUP_TITLE_TIGHT, EDGE_FADE, EDGE_FADE_FLOOR, EDGE_FADE_ONSET, FLARE, GAP, NEW_TAB_ROOM, STRIP_SCROLL_ID } from "./tokens";
 
 type Wide = { tabId: string; slot: number };
@@ -122,6 +124,7 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
   const scrolled = useRef(0);
   const viewport = useRef(pageWidth + flare * 2);
   const content = useRef(0);
+  const motion = useStripMotion({ entries: parsed, top, dock, flare, end: pinned ? null : stripEnd(top) + GAP, viewport: viewport.current, offset: () => scrolled.current, windowId, enabled: current && !resting });
   const ownScrollUntil = useRef(0);
   const userScrollAt = useRef(-Infinity);
   const userScrolling = () => performance.now() - userScrollAt.current < USER_SCROLL_QUIET_MS;
@@ -280,6 +283,7 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
           <TintInk>
             <DockContext.Provider value={strip}>
               <StripScrollContext.Provider value={scroller}>
+              <StripMotionContext.Provider value={motion}>
               <Offstage.Provider value={!current}>
                 <Animated.View pointerEvents="box-none" style={{ flex: 1, marginLeft: clipLeft, marginRight: pinned ? flare + NEW_TAB_ROOM : 0, overflow: "hidden" }}>
                   <EdgeFadeMask pointerEvents="box-none" fadeWidth={EDGE_FADE} floor={EDGE_FADE_FLOOR} onset={EDGE_FADE_ONSET} style={StyleSheet.absoluteFill}>
@@ -305,6 +309,7 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
                       style={{ flex: 1 }}
                       contentContainerStyle={{ alignItems: "flex-start", gap: GAP, paddingLeft: flare, paddingRight: pinned ? Math.max(flare, GAP) : flare }}
                     >
+                      <StripGhosts />
                       {parsed.flatMap((e) => {
                         if (e.kind === "dock") return <PinnedDock key="dock" tabIds={e.ids} />;
                         const slot = slotIndex;
@@ -341,6 +346,7 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
                 </Animated.View>
                 {pinned ? <View pointerEvents="box-none" style={{ position: "absolute", top: 0, right: flare }}>{newTab}</View> : null}
               </Offstage.Provider>
+              </StripMotionContext.Provider>
               </StripScrollContext.Provider>
             </DockContext.Provider>
           </TintInk>

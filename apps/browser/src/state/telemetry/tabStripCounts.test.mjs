@@ -23,6 +23,8 @@ import {
   noteTextOnlyRow,
   takeTabStripCounts,
 } from "./tabStripCounts.ts";
+import { noteTabMotion } from "./tabMotionCounts.ts";
+const { consentToken } = await import("./client.ts");
 
 const ZERO = {
   tab_strip_group_toggles: 0,
@@ -43,6 +45,13 @@ const ZERO = {
   tab_strip_commands_refused: 0,
   tab_layout_switches_to_top: 0,
   tab_layout_switches_to_sidebar: 0,
+  sidebar_tab_open_motions: 0,
+  sidebar_tab_close_motions: 0,
+  sidebar_tab_motion_interrupts: 0,
+  tab_strip_open_motions: 0,
+  tab_strip_close_motions: 0,
+  tab_strip_motion_interrupts: 0,
+  tab_strip_motion_overruns: 0,
 };
 
 const sharing = (on) => {
@@ -144,4 +153,20 @@ test("every tab strip count stays at zero while sharing is off, counts once shar
     sharing(true);
     assert.equal(takeTabStripCounts()[field], 0, `${field} kept what was counted before sharing went off`);
   }
+});
+
+test("tab opens, closes, interrupts and overruns animated in the sidebar and the strip are counted apart, and only while sharing", () => {
+  sharing(false);
+  noteTabMotion(consentToken(), "strip", "open");
+  assert.deepEqual(takeTabStripCounts(), ZERO);
+  sharing(true);
+  noteTabMotion(consentToken(), "sidebar", "open", 2);
+  noteTabMotion(consentToken(), "sidebar", "close");
+  noteTabMotion(consentToken(), "sidebar", "interrupt");
+  noteTabMotion(consentToken(), "strip", "open");
+  noteTabMotion(consentToken(), "strip", "close", 3);
+  noteTabMotion(consentToken(), "strip", "interrupt");
+  noteTabMotion(consentToken(), "strip", "overrun");
+  assert.deepEqual(takeTabStripCounts(), { ...ZERO, sidebar_tab_open_motions: 2, sidebar_tab_close_motions: 1, sidebar_tab_motion_interrupts: 1, tab_strip_open_motions: 1, tab_strip_close_motions: 3, tab_strip_motion_interrupts: 1, tab_strip_motion_overruns: 1 });
+  assert.deepEqual(takeTabStripCounts(), ZERO);
 });

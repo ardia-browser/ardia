@@ -2,6 +2,7 @@ import ArdiaBrowser
 import CryptoKit
 import ExpoModulesCore
 import Foundation
+import LinkPresentation
 import Observation
 import SwiftData
 import UIKit
@@ -79,6 +80,7 @@ final class PhonePages {
     engine.downloads.onOutcome = { [weak self] outcome in self?.downloadFinished(outcome) }
     watchBlocking(generation: 0)
     watchShareRequests(generation: 0)
+    PageSnapshots.sweepPrivateLeftovers()
     Task {
       await blocker.prepare()
       await blocker.refreshIfDue()
@@ -148,6 +150,41 @@ final class PhonePages {
     controller.printInfo = info
     controller.printFormatter = webView.viewPrintFormatter()
     return controller.present(animated: true)
+  }
+
+  func share(_ pageID: String, address: String, title: String) async -> String? {
+    guard BrowserURL.isSyncable(address), let target = URL(string: address) else { return nil }
+    var items: [Any] = [SharedPageLink(url: target, title: title)]
+    if let webView = page(pageID)?.webView {
+      let info = UIPrintInfo.printInfo()
+      info.outputType = .general
+      info.jobName = title.isEmpty ? (BrowserURL.host(of: address) ?? address) : title
+      items.append(info)
+      items.append(webView.viewPrintFormatter())
+    }
+    let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
+    return await withCheckedContinuation { continuation in
+      let answer = ShareAnswer(continuation)
+      controller.completionWithItemsHandler = { activity, completed, _, _ in
+        guard completed || activity == nil else { return }
+        answer.give(completed ? activity?.rawValue : nil)
+      }
+      if !Self.presentAnchored(controller) { answer.give(nil) }
+    }
+  }
+
+  @discardableResult
+  static func presentAnchored(_ controller: UIViewController) -> Bool {
+    let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+    guard var top = scenes.flatMap(\.windows).first(where: \.isKeyWindow)?.rootViewController else { return false }
+    while let presented = top.presentedViewController, !presented.isBeingDismissed { top = presented }
+    if let popover = controller.popoverPresentationController {
+      popover.sourceView = top.view
+      popover.sourceRect = CGRect(x: top.view.bounds.midX, y: top.view.bounds.maxY, width: 0, height: 0)
+      popover.permittedArrowDirections = .down
+    }
+    top.present(controller, animated: true)
+    return true
   }
 
   func page(_ pageID: String) -> WebTab? {
@@ -262,10 +299,12 @@ final class PhonePages {
     await find.end()
   }
 
-  func snapshot(_ pageID: String, maxWidth: Int?, quality: Int?) async throws -> [String: Any]? {
+  func snapshot(_ pageID: String, maxWidth: Int?, quality: Int?, quiet: Bool = false) async throws -> [String: Any]? {
     let page = try require(pageID)
     guard let webView = page.webView, !webView.bounds.isEmpty else { return nil }
     guard PageSnapshots.isOnScreen(webView) else { return ["refused": "hidden"] }
+    let ticket = PageSnapshots.nextTicket()
+    let session = PageSnapshots.currentPrivateSession()
     let generation = visuals.generation(pageID)
     let hostBounds = webView.superview?.bounds ?? webView.bounds
     let pageFrame = Self.restingFrame(of: webView)
@@ -274,7 +313,15 @@ final class PhonePages {
     let width = min(margined ? wanted * pageFrame.width / hostBounds.width : wanted, pageFrame.width)
     let shot: UIImage
     let route: String
-    if let copied = PageSnapshots.screenCopy(of: webView, width: width), !PageSnapshots.isFlat(copied) {
+    if quiet {
+      guard let taken = await Self.quietCopy(of: webView, width: width) else { return nil }
+      guard Self.restingFrame(of: webView) == pageFrame, (webView.superview?.bounds ?? webView.bounds) == hostBounds else { return nil }
+      guard PageSnapshots.isOnScreen(webView) else { return ["refused": "hidden"] }
+      let flat = await PageSnapshots.isFlatAwayFromMain(taken)
+      guard !flat else { return ["refused": "blank"] }
+      shot = taken
+      route = "quiet"
+    } else if let copied = PageSnapshots.screenCopy(of: webView, width: width), !PageSnapshots.isFlat(copied) {
       shot = copied
       route = "screenCopy"
     } else {
@@ -289,10 +336,19 @@ final class PhonePages {
       route = "engine"
     }
     let image = margined ? Self.withSideMargins(shot, page: pageFrame, screen: hostBounds.size, color: page.underPageBackgroundColor ?? webView.underPageBackgroundColor ?? .black) : shot
-    guard var written = await PageSnapshots.write(pageID, image: image, isPrivate: page.isPrivate, quality: quality ?? 82) else { return nil }
+    guard tabIDs[pageID] == page.id, !quiet || visuals.generation(pageID) == generation else { return nil }
+    guard var written = await PageSnapshots.write(pageID, image: image, isPrivate: page.isPrivate, quality: quality ?? 82, ticket: ticket, session: session, priority: quiet ? .utility : .userInitiated) else { return nil }
     if tabIDs[pageID] == page.id { visuals.captured(pageID, generation: generation) }
     written["route"] = route
     return written
+  }
+
+  static func quietCopy(of webView: WKWebView, width: CGFloat) async -> UIImage? {
+    let configuration = WKSnapshotConfiguration()
+    configuration.afterScreenUpdates = false
+    let displayScale = max(webView.traitCollection.displayScale, 1)
+    configuration.snapshotWidth = NSNumber(value: Double(width * PageSnapshots.screenCopyScale / displayScale))
+    return try? await webView.takeSnapshot(configuration: configuration)
   }
 
   static func restingFrame(of view: UIView) -> CGRect {
@@ -495,5 +551,46 @@ extension PageVisuals {
 
   @Sendable private static func logNoLongerCurrent(_ pageID: String, _ change: Change, _ milliseconds: Int) {
     NSLog("PAGELAB snapshot %@ no longer current: page %@ %d ms after its capture", pageID, change.rawValue, milliseconds)
+  }
+}
+
+final class ShareAnswer: @unchecked Sendable {
+  private let lock = NSLock()
+  private var continuation: CheckedContinuation<String?, Never>?
+
+  init(_ continuation: CheckedContinuation<String?, Never>) {
+    self.continuation = continuation
+  }
+
+  func give(_ activity: String?) {
+    lock.lock()
+    let waiting = continuation
+    continuation = nil
+    lock.unlock()
+    waiting?.resume(returning: activity)
+  }
+}
+
+final class SharedPageLink: NSObject, UIActivityItemSource {
+  let url: URL
+  let title: String
+
+  init(url: URL, title: String) {
+    self.url = url
+    self.title = title
+  }
+
+  func activityViewControllerPlaceholderItem(_ activityViewController: UIActivityViewController) -> Any { url }
+
+  func activityViewController(_ activityViewController: UIActivityViewController, itemForActivityType activityType: UIActivity.ActivityType?) -> Any? { url }
+
+  func activityViewController(_ activityViewController: UIActivityViewController, subjectForActivityType activityType: UIActivity.ActivityType?) -> String { title }
+
+  func activityViewControllerLinkMetadata(_ activityViewController: UIActivityViewController) -> LPLinkMetadata? {
+    let metadata = LPLinkMetadata()
+    metadata.originalURL = url
+    metadata.url = url
+    metadata.title = title.isEmpty ? nil : title
+    return metadata
   }
 }

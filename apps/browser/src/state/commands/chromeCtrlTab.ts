@@ -75,6 +75,11 @@ async function look(consent: ConsentToken | null) {
 const showsChromeSettings = (s: BrowserState) => Object.keys(s.windows).some((windowId) => CHROME_SETTINGS.test(s.tabs[activeTabId(s, windowId) ?? ""]?.url ?? ""));
 
 let started = false;
+let watchShown: ((s: BrowserState) => void) | null = null;
+
+export function chromeCtrlTabStoreChanged(s: BrowserState, prev: BrowserState) {
+  if (watchShown && (s.tabs !== prev.tabs || s.windows !== prev.windows)) watchShown(s);
+}
 
 export function followChromeCtrlTab() {
   if (started) return;
@@ -95,7 +100,5 @@ export function followChromeCtrlTab() {
     shown = showsChromeSettings(useBrowser.getState());
   }, FIRST_LOOK_MS);
   onProfileLoaded(() => void (launched && look(consent)));
-  useBrowser.subscribeTo(["tabs", "windows"], (s, prev) => {
-    if (s.tabs !== prev.tabs || s.windows !== prev.windows) watch(showsChromeSettings(s));
-  });
+  watchShown = (s) => watch(showsChromeSettings(s));
 }

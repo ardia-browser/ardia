@@ -90,6 +90,8 @@ export type DiagnosticsSample = {
   wakeups?: number;
   dragRegionRebuilds?: number;
   dragRegionStalePresses?: number;
+  dragRegionScrollWaits?: number;
+  dragRegionActivatingPresses?: number;
 };
 
 type NativeFrame = { image: string; symbol?: string; symbolOffset?: number; offset?: number };

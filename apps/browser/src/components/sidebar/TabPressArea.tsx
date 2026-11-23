@@ -5,6 +5,8 @@ import { useSettings } from "../../state/browser/hooks";
 import { tabTitle } from "../../state/browser/model";
 import type { Tab } from "../../state/browser/types";
 import { middleClickTab } from "../../state/sidebar/clearTabs";
+import { pressStripClose } from "../../state/tabs/stripPress";
+import { workspaceSnapshot } from "../../state/browser/current";
 import { dismissHover } from "../../state/sidebar/hover";
 import { openTabMenu } from "../../state/sidebar/menus";
 import { clickHeldTabPress, holdTabPress, pressOutTabPress, type TabPress } from "../../state/sidebar/heldTabPress";
@@ -46,7 +48,7 @@ export function tabPressView({
 }: TabPressProps & { press: { current: TabPress | null }; inSplit: boolean; plainTooltip: boolean; onPressChange?: (pressed: boolean) => void }) {
   return (
     <ContextMenuArea
-      onMiddleClick={() => middleClickTab(tab.id)}
+      onMiddleClick={() => pressStripClose(windowId, tab.id, () => middleClickTab(tab.id), (tabId) => !!workspaceSnapshot().tabs[tabId])}
       onContextMenu={() => {
         dismissHover();
         void openTabMenu(windowId, tab);

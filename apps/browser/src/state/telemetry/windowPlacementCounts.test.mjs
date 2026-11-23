@@ -49,6 +49,29 @@ test("an hour with only drags Ardia moved itself still sends usage_counts with h
   assert.equal((await sentDragLoops()).length, before + 1, "an hour with no drag sends nothing more");
 });
 
+test("drags macOS moved and drags Ardia took over after asking macOS are counted apart from Ardia's own moves", async () => {
+  client.loadChoice();
+  client.setSharing(true, "onboarding");
+  const sentDrags = async () => {
+    await client.saveQueueNow();
+    const saved = JSON.parse(stub.docs.get("telemetry-queue.json") ?? '{"events":[]}');
+    return saved.events
+      .filter((e) => e.event === "usage_counts")
+      .map((e) => [e.properties.window_drags_native, e.properties.window_drag_takeovers, e.properties.window_drag_loops]);
+  };
+
+  stub.emitAppEvent({ type: "windowDragNative", epoch: client.consentEpoch() });
+  stub.emitAppEvent({ type: "windowDragNative", epoch: client.consentEpoch() });
+  stub.emitAppEvent({ type: "windowDragTakeover", epoch: client.consentEpoch() });
+  stub.emitAppEvent({ type: "windowDragLoop", epoch: client.consentEpoch() });
+  usage.sessionEnding();
+  assert.deepEqual((await sentDrags()).at(-1), [2, 1, 1]);
+
+  stub.emitAppEvent({ type: "windowDragNative", epoch: client.consentEpoch() });
+  usage.sessionEnding();
+  assert.deepEqual((await sentDrags()).at(-1), [1, 0, 0]);
+});
+
 test("an hour with only a window reopened maximized still sends usage_counts", async () => {
   client.loadChoice();
   client.setSharing(true, "onboarding");

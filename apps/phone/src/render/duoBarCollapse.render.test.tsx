@@ -1,4 +1,4 @@
-import { Dimensions, StyleSheet } from "react-native";
+import { Dimensions, Platform, StyleSheet } from "react-native";
 import { getAnimatedStyle } from "react-native-reanimated";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { BrowsingScreen } from "../components/browsing/BrowsingScreen";
@@ -59,7 +59,7 @@ const page = (tab: BrowserTab) => {
   scrolled(tab, "up");
   return renderSurface(
     <DesignProvider design="redesigned">
-      <BrowsingScreen tab={tab} />
+      <BrowsingScreen tabId={tab.id} />
     </DesignProvider>,
   );
 };
@@ -142,7 +142,10 @@ test("on the closed Duo with Collapse Bottom Bar on, scrolling down folds the ba
   expect(host(root, "hostPill")).toBeDefined();
   const fold = host(root, "floatingBarFold")!;
   expect(fold.props.pointerEvents).toBe("none");
-  expect(shown(fold).opacity).toBeCloseTo(0, 3);
+  const android = Platform.OS === "android";
+  expect(shown(fold).opacity ?? 1).toBeCloseTo(android ? 0 : 1, 3);
+  expect(shown(host(root, "floatingBarFoldGlyphs")!).opacity ?? 1).toBeCloseTo(android ? 1 : 0, 3);
+  for (const id of ["floatingBarAddress", "floatingBarTabs", "floatingBarPlus"]) expect(root.root.findAll((node) => node.props.testID === id && node.props.shown !== undefined && typeof node.type !== "string")[0]!.props.shown !== false).toBe(android);
   expect(fold.findAll((node) => node.props.testID === "floatingBarStrip").length).toBeGreaterThan(0);
   expect(Math.abs(shown(host(root, "floatingBarCentre")!).marginLeft ?? 0)).toBe(0);
   expect(lifted(host(root, "floatingBarStrip")!)).toBeCloseTo(0, 3);

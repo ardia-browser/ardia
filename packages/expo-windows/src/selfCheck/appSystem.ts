@@ -4,6 +4,7 @@ import { requireNativeModule } from "../modules";
 import type { AppModule, SystemModule, WindowsUpdateConstants, WindowsUpdateModule } from "../nativeModuleTypes";
 import { readBuild } from "../updater/manifest";
 import { expectTrue, type Check } from "./check";
+import { SAMPLE_GPU_MODULE, sampleMinidump, toHex } from "./sampleMinidump";
 
 const app = () => requireNativeModule<AppModule>("ArdiaApp");
 const system = () => requireNativeModule<SystemModule>("ArdiaSystem");
@@ -97,13 +98,51 @@ export const checks: Check[] = [
   {
     name: "ArdiaApp answers the inert calls",
     async run() {
-      const reports = await app().crashReports(0);
-      expectTrue(Array.isArray(reports) && reports.length === 0, `crashReports is ${JSON.stringify(reports)}`);
+      const reports = await app().crashReports(Date.now() + 86_400_000);
+      expectTrue(Array.isArray(reports) && reports.length === 0, `crashReports from the future is ${JSON.stringify(reports)}`);
       const icons = await app().appIcons(32);
       expectTrue(Array.isArray(icons), `appIcons is ${JSON.stringify(icons)}`);
       expectTrue((await app().appIcon()) === "", "appIcon is not empty");
       expectTrue(await app().isInDock().then(() => false, () => true), "isInDock answered instead of refusing");
       expectTrue((await app().openExternalURL("file:///C:/Windows")) === false, "openExternalURL accepted a file URL");
+    },
+  },
+  {
+    name: "ArdiaApp.crashReports reads the GPU process dump a crash leaves in the profile",
+    async run() {
+      const stem = `selfcheck-gpu-${Date.now().toString(36)}`;
+      const dump = sampleMinidump({ process: "gpu-process", engineVersion: "157.0.8103.50" });
+      expectTrue((await app().devWriteCrashFixture(`${stem}.dmp`, toHex(dump))) === true, "devWriteCrashFixture did not store the dump");
+      expectTrue((await app().devWriteCrashFixture(`..\\${stem}.dmp`, toHex(dump))) === false, "devWriteCrashFixture accepted a name with a path");
+      const reports = await app().crashReports(0);
+      const found = reports.filter((report) => report.incidentId === stem);
+      expectTrue(found.length === 1, `crashReports(0) has ${found.length} reports for the dump among ${reports.length}`);
+      const report = found[0];
+      if (report === undefined) throw new Error(`crashReports(0) has no report for the dump among ${reports.length}`);
+      expectTrue(report.process === "gpu", `process is ${JSON.stringify(report.process)}`);
+      expectTrue(report.terminationNamespace === "WIN32_EXCEPTION", `terminationNamespace is ${JSON.stringify(report.terminationNamespace)}`);
+      expectTrue(report.signal === "EXCEPTION_ACCESS_VIOLATION", `signal is ${JSON.stringify(report.signal)}`);
+      expectTrue(report.exceptionSubtype === "ACCESS_READ", `exceptionSubtype is ${JSON.stringify(report.exceptionSubtype)}`);
+      expectTrue(report.frames?.[0]?.image === SAMPLE_GPU_MODULE, `frames[0] is ${JSON.stringify(report.frames?.[0])}`);
+      expectTrue(report.uptimeSeconds === 3, `uptimeSeconds is ${JSON.stringify(report.uptimeSeconds)}`);
+      expectTrue(report.engineVersion === "157.0.8103.50", `engineVersion is ${JSON.stringify(report.engineVersion)}`);
+      expectTrue(report.time === 1_794_770_653_000, `time is ${JSON.stringify(report.time)}`);
+      expectTrue(report.frames.every((frame) => !/[\\/:]/.test(frame.image)) && !/Program Files|System32|DriverStore/i.test(JSON.stringify(report)), `a path leaked into ${JSON.stringify(report)}`);
+    },
+  },
+  {
+    name: "ArdiaApp.crashReports reads the browser process dump with the app version",
+    async run() {
+      const stem = `selfcheck-browser-${Date.now().toString(36)}`;
+      const dump = sampleMinidump({ appVersion: "1.4.2", code: 0xc0000409, address: 0x7ff600000000 + 0x400 });
+      expectTrue((await app().devWriteCrashFixture(`${stem}.dmp`, toHex(dump))) === true, "devWriteCrashFixture did not store the dump");
+      const report = (await app().crashReports(0)).find((entry) => entry.incidentId === stem);
+      expectTrue(report !== undefined, "crashReports(0) has no report for the dump");
+      expectTrue(report?.process === "browser", `process is ${JSON.stringify(report?.process)}`);
+      expectTrue(report?.signal === "STATUS_STACK_BUFFER_OVERRUN", `signal is ${JSON.stringify(report?.signal)}`);
+      expectTrue(report?.appVersion === "1.4.2", `appVersion is ${JSON.stringify(report?.appVersion)}`);
+      expectTrue(report?.engineVersion === undefined, `engineVersion is ${JSON.stringify(report?.engineVersion)}`);
+      expectTrue(report?.frames?.[0]?.image === "Ardia.exe", `frames[0] is ${JSON.stringify(report?.frames?.[0])}`);
     },
   },
   {

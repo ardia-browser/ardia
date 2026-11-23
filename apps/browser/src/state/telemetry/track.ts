@@ -43,7 +43,8 @@ export type CalendarConnectReport = { before: string; after: string; responsible
 export const trackCalendarConnect = (r: CalendarConnectReport, consent: ConsentToken | null) =>
   capture("calendar_connect", { before: r.before, after: r.after, responsible: r.responsible, errored: r.errored, settings_opened: r.settingsOpened, ms: Math.min(Math.max(0, Math.round(r.ms)), 600_000) }, consent);
 
-export const trackSettingsSection = (section: string) => capture("settings_section_opened", { section }, consentNow());
+export const trackSettingsSection = (section: string, openMs?: number) =>
+  capture("settings_section_opened", { section, ...(openMs !== undefined && openMs >= 0 && openMs < 60_000 ? { open_ms: Math.round(openMs) } : {}) }, consentNow());
 export const trackAutofillToggleKept = (toggle: AutofillToggle) => capture("autofill_toggle_kept", { toggle }, consentNow());
 
 const SAMPLE_EVERY = 5;

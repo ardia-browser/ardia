@@ -2,7 +2,7 @@
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../../.." && pwd)
-repo=${ARDIACORE_PREBUILT_REPO:-mantrakp04/ardia}
+repo=${ARDIACORE_PREBUILT_REPO:-ardia-browser/ardia}
 assets=${ARDIACORE_PREBUILT_ASSETS:-https://github.com/$repo/releases/download}
 table="$here/../prebuilt-engines.tsv"
 store="$root/apps/browser/build-ardiacore/prebuilt"

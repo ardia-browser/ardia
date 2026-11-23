@@ -102,7 +102,13 @@ test("the Reader's lead image clips with the continuous curve", async () => {
 
 const sizeOf = (root: Root) => {
   const paragraph = root.root.findAll((node) => typeof node.type === "string" && node.props.children === "One.")[0] as ReactTestInstance;
-  return { ...StyleSheet.flatten(paragraph.props.style), ...getAnimatedStyle(paragraph) }.fontSize as number;
+  return StyleSheet.flatten(paragraph.props.style).fontSize as number;
+};
+
+const scaleOf = (root: Root) => {
+  const text = root.root.findAll((node) => typeof node.type === "string" && node.props.testID === "readerText")[0] as ReactTestInstance;
+  const transform = ({ ...StyleSheet.flatten(text.props.style), ...getAnimatedStyle(text) }.transform ?? []) as { scale?: number }[];
+  return transform.find((step) => step.scale !== undefined)?.scale ?? 1;
 };
 
 test("with Reduce Motion the Reader fades in instead of sliding, and a text-size change lands at once instead of springing", async () => {
@@ -113,20 +119,24 @@ test("with Reduce Motion the Reader fades in instead of sliding, and a text-size
   act(() => usePreferences.setState({ readerStep: 4 } as never));
   act(() => jest.advanceTimersByTime(16));
   expect(sizeOf(root)).toBeCloseTo(readerBodySize(4), 3);
+  expect(scaleOf(root)).toBeCloseTo(1, 3);
   unmount(root);
 });
 
-test("without Reduce Motion the Reader slides up and a text-size change springs to its size", async () => {
+test("without Reduce Motion the Reader slides up, and a text-size change lays the text out once at its new size while the text springs there by scale", async () => {
   const root = await reader();
   const sheet = root.root.findAll((node) => node.props.testID === "readerView" && node.props.entering !== undefined)[0]!;
   expect(sheet.props.entering).toBeInstanceOf(SlideInDown);
   const before = sizeOf(root);
   act(() => usePreferences.setState({ readerStep: 4 } as never));
+  expect(sizeOf(root)).toBeCloseTo(readerBodySize(4), 3);
   act(() => jest.advanceTimersByTime(16));
-  expect(sizeOf(root)).toBeGreaterThan(before);
-  expect(sizeOf(root)).toBeLessThan(readerBodySize(4) - 0.01);
+  expect(sizeOf(root)).toBeCloseTo(readerBodySize(4), 3);
+  expect(scaleOf(root)).toBeGreaterThan(before / readerBodySize(4) - 0.001);
+  expect(scaleOf(root)).toBeLessThan(1 - 0.001);
   for (let frame = 0; frame < 60; frame++) act(() => jest.advanceTimersByTime(16));
   expect(sizeOf(root)).toBeCloseTo(readerBodySize(4), 3);
+  expect(scaleOf(root)).toBeCloseTo(1, 3);
   unmount(root);
 });
 

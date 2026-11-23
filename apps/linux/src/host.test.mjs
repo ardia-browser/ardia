@@ -129,6 +129,24 @@ test("documentSaved settles once the document's last write lands, and rejects wh
   await assert.rejects(documents.saved("session.json"), /disk full/);
 });
 
+test("a document the bootstrap left out counts as there unless the host reads it as missing (#3205)", async () => {
+  const stored = { "big.json": "x", "gone.json": null };
+  const { host, requests } = fixture(async (method, args) => {
+    if (!method.endsWith("readDocument")) return null;
+    const name = args.args[0];
+    if (name === "broken.json") throw Object.assign(new Error("The document could not be read"), { code: "ERR_DOCUMENT_READ" });
+    return stored[name] ?? null;
+  });
+  host.bootstrap.documents = { "prefs.json": "p" };
+  const documents = createHostDocuments(host);
+  assert.equal(await documents.exists("prefs.json"), true);
+  assert.equal(requests.length, 0, "a bootstrapped document needs no read");
+  assert.equal(documents.read("big.json"), null);
+  assert.equal(await documents.exists("big.json"), true, "readable but left out of the bootstrap");
+  assert.equal(await documents.exists("broken.json"), true, "present but unreadable");
+  assert.equal(await documents.exists("gone.json"), false, "missing");
+});
+
 test("a refresh that a local write overtakes keeps the write instead of the older stored copy", async () => {
   let disk = '{"v":0}';
   let answer;

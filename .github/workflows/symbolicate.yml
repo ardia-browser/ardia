@@ -1,0 +1,71 @@
+name: Name crash and freeze frames
+
+on:
+  schedule:
+    - cron: "23 * * * *"
+  workflow_dispatch:
+    inputs:
+      days:
+        description: Look back this many days of crashes and freezes
+        type: number
+        default: 14
+      dry_run:
+        description: Only print the names, write nothing
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: symbolicate-frames
+  cancel-in-progress: false
+
+jobs:
+  name-frames:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CLICKHOUSE_URL: ${{ secrets.TELEMETRY_CLICKHOUSE_URL }}
+      CLICKHOUSE_USER: reader
+      CLICKHOUSE_PASSWORD: ${{ secrets.TELEMETRY_CLICKHOUSE_READER_PASSWORD }}
+      TRIAGE_CLICKHOUSE_USER: sandbox
+      TRIAGE_CLICKHOUSE_PASSWORD: ${{ secrets.TELEMETRY_CLICKHOUSE_SANDBOX_PASSWORD }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - name: Secrets
+        id: secrets
+        run: |
+          if [ -z "$CLICKHOUSE_URL" ] || [ -z "$CLICKHOUSE_PASSWORD" ] || [ -z "$TRIAGE_CLICKHOUSE_PASSWORD" ]; then
+            echo "::notice::TELEMETRY_CLICKHOUSE_URL, TELEMETRY_CLICKHOUSE_READER_PASSWORD and TELEMETRY_CLICKHOUSE_SANDBOX_PASSWORD aren't all set, so frames aren't named (docs/symbolication.md)"
+            echo "ready=false" >>"$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >>"$GITHUB_OUTPUT"
+          fi
+      - if: steps.secrets.outputs.ready == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          sparse-checkout: scripts
+      - if: steps.secrets.outputs.ready == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24
+      - if: steps.secrets.outputs.ready == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: dist/frame-symbols/maps
+          key: frame-symbols-restore
+          restore-keys: frame-symbols-
+      - if: steps.secrets.outputs.ready == 'true'
+        name: Name the frames
+        env:
+          DAYS: ${{ inputs.days || 14 }}
+          DRY_RUN: ${{ inputs.dry_run && '--dry-run' || '' }}
+        run: |
+          command -v swift-demangle >/dev/null || echo "::notice::no swift-demangle on this runner: Swift names stay mangled"
+          node scripts/symbolicate-frames.mjs --days "$DAYS" $DRY_RUN
+      - if: always() && steps.secrets.outputs.ready == 'true' && hashFiles('dist/frame-symbols/maps/*.map.gz') != ''
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: dist/frame-symbols/maps
+          key: frame-symbols-${{ hashFiles('dist/frame-symbols/maps/*.map.gz') }}

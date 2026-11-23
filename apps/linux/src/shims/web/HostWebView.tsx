@@ -119,7 +119,7 @@ const HostTabWebView = forwardRef<WebViewHandle, WebViewProps>(function HostTabW
   return <View style={[props.style, { backgroundColor: "transparent" }]}><div ref={element} data-ardia-native-tab={key.current} style={{ position: "absolute", inset: 0 }} /></View>;
 });
 
-export function watchPageBelowShell(node: HTMLElement, regions: InputRegionsRegistry, visible: () => boolean, page: () => { identity?: unknown; disposed?: boolean; viewport(viewport: TabViewport): Promise<void> } | null, radii?: () => CornerRadii, covered?: () => void, cardRadii?: () => CornerRadii) {
+export function watchPageBelowShell(node: HTMLElement, regions: InputRegionsRegistry, visible: () => boolean, page: () => { identity?: unknown; disposed?: boolean; viewport(viewport: TabViewport): Promise<void> } | null, radii?: () => CornerRadii, covered?: () => void, cardRadii?: () => CornerRadii, clipToAncestors = true) {
   let last = "";
   let shown = false;
   let revision = 0;
@@ -141,7 +141,7 @@ export function watchPageBelowShell(node: HTMLElement, regions: InputRegionsRegi
       if (mine === revision) last = "";
       reportHostError(error);
     });
-  }, regions);
+  }, regions, clipToAncestors);
   return () => {
     revision++;
     stop();

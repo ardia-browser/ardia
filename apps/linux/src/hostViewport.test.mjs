@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { STACKED_PAGE, tabViewport, watchTabViewport } from "./hostViewport.ts";
+import { clippedRectOf, STACKED_PAGE, tabViewport, watchTabViewport } from "./hostViewport.ts";
 
 const GLOBALS = ["window", "document", "getComputedStyle", "ResizeObserver", "requestAnimationFrame", "cancelAnimationFrame", "MutationObserver"];
 const box = (x, y, width, height) => ({ x, y, width, height, left: x, top: y, right: x + width, bottom: y + height });
@@ -297,10 +297,80 @@ test("clipRadii gives a page the card's radius only at the corners it shares wit
     assert.deepEqual(clipRadii(page), { upperLeft: 0, upperRight: 0, lowerRight: 10, lowerLeft: 10 });
     const flush = { parentElement: card, getBoundingClientRect: () => box(240, 8, 752, 684) };
     assert.deepEqual(clipRadii(flush), { upperLeft: 10, upperRight: 10, lowerRight: 10, lowerLeft: 10 });
+    const protrudingGroup = { parentElement: card, getBoundingClientRect: () => box(240, 48, 752, 664) };
+    const protrudingPage = { parentElement: protrudingGroup, getBoundingClientRect: () => box(240, 48, 752, 664) };
+    styles.set(protrudingGroup, { overflowX: "visible", overflowY: "visible", getPropertyValue: () => "0px" });
+    assert.deepEqual(clippedRectOf(protrudingPage), { x: 240, y: 48, width: 752, height: 644 });
+    assert.deepEqual(clipRadii(protrudingPage), { upperLeft: 0, upperRight: 0, lowerRight: 10, lowerLeft: 10 });
     styles.set(card, rounded(0));
     assert.deepEqual(clipRadii(flush), { upperLeft: 0, upperRight: 0, lowerRight: 0, lowerLeft: 0 });
   } finally {
     globalThis.getComputedStyle = previous;
+  }
+});
+
+test("a page protruding below an overflow-hidden card reports the clipped pane rect and the unclipped contentRect", () => {
+  const card = { parentElement: null, getBoundingClientRect: () => box(240, 8, 752, 684) };
+  let pageBox = box(240, 48, 752, 664);
+  const page = { isConnected: true, parentElement: card, getBoundingClientRect: () => pageBox, contains: (node) => node === page };
+  const sampled = [];
+  const s = stage({
+    width: 1000,
+    height: 700,
+    elementFromPoint: (x, y) => {
+      sampled.push([x, y]);
+      return y < 692 ? page : {};
+    },
+  });
+  globalThis.getComputedStyle = (node) =>
+    node === card
+      ? { display: "block", visibility: "visible", opacity: "1", overflowX: "hidden", overflowY: "hidden" }
+      : { display: "block", visibility: "visible", opacity: "1", overflowX: "visible", overflowY: "visible" };
+  try {
+    const updates = [];
+    const stop = watchTabViewport(page, () => true, (update) => updates.push(update), cover());
+    assert.deepEqual(updates.at(-1), {
+      rect: { x: 240, y: 48, width: 752, height: 644 },
+      contentRect: { x: 240, y: 48, width: 752, height: 664 },
+      visible: true,
+    });
+    assert.ok(sampled.every(([, y]) => y <= 676), `bottom corner samples stay inside the clipped card: ${JSON.stringify(sampled)}`);
+    pageBox = box(240, 48, 752, 644);
+    s.mutate();
+    assert.deepEqual(updates.at(-1), { rect: { x: 240, y: 48, width: 752, height: 644 }, visible: true });
+    assert.equal("contentRect" in updates.at(-1), false);
+    stop();
+    const borderedWrap = { isConnected: true, parentElement: null, getBoundingClientRect: () => box(100, 50, 400, 300) };
+    const borderedChild = { isConnected: true, parentElement: borderedWrap, getBoundingClientRect: () => box(100, 50, 400, 320) };
+    globalThis.getComputedStyle = (node) =>
+      node === borderedWrap
+        ? { overflowX: "hidden", overflowY: "hidden", borderLeftWidth: "2px", borderTopWidth: "3px", borderRightWidth: "2px", borderBottomWidth: "4px" }
+        : { overflowX: "visible", overflowY: "visible" };
+    assert.deepEqual(clippedRectOf(borderedChild), { x: 102, y: 53, width: 396, height: 293 });
+    const panelUpdates = [];
+    pageBox = box(600, 48, 360, 644);
+    const panelWrap = { isConnected: true, parentElement: null, getBoundingClientRect: () => box(900, 48, 60, 644) };
+    const panel = { isConnected: true, parentElement: panelWrap, getBoundingClientRect: () => pageBox, contains: (node) => node === panel };
+    globalThis.getComputedStyle = (node) =>
+      node === panelWrap
+        ? { display: "block", visibility: "visible", opacity: "1", overflowX: "hidden", overflowY: "hidden" }
+        : { display: "block", visibility: "visible", opacity: "1", overflowX: "visible", overflowY: "visible" };
+    s.restore();
+    const panelStage = stage({ width: 1000, height: 700, elementFromPoint: () => panel });
+    globalThis.getComputedStyle = (node) =>
+      node === panelWrap
+        ? { display: "block", visibility: "visible", opacity: "1", overflowX: "hidden", overflowY: "hidden" }
+        : { display: "block", visibility: "visible", opacity: "1", overflowX: "visible", overflowY: "visible" };
+    try {
+      const stopPanel = watchTabViewport(panel, () => true, (update) => panelUpdates.push(update), cover(), false);
+      assert.deepEqual(panelUpdates.at(-1), { rect: { x: 600, y: 48, width: 360, height: 644 }, visible: true });
+      assert.equal("contentRect" in panelUpdates.at(-1), false);
+      stopPanel();
+    } finally {
+      panelStage.restore();
+    }
+  } finally {
+    s.restore();
   }
 });
 

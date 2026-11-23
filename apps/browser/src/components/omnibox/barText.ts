@@ -102,6 +102,9 @@ export function selectionTracker(initial: Selection, now = Date.now) {
     collapse() {
       current = { start: 0, end: 0 };
     },
+    rebase() {
+      before = current;
+    },
     beforeEdit: () => (now() - movedAt < CARET_WITH_KEY_MS ? before : current),
   };
 }

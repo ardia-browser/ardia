@@ -512,3 +512,8 @@ source_set("linux") {
     ]
   }
 }
+
+group("core_rs_tests") {
+  testonly = true
+  deps = [ "//ardia/core_rs:tests" ]
+}

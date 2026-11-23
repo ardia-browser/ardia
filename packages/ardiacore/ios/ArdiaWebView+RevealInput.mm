@@ -113,7 +113,8 @@ static BOOL InTabPage(id responder) {
   const BOOL button = (type & (kButtonDowns | kButtonUps | kButtonDrags)) != 0;
   if (!gOnScreenAhead && (!button || gPresses.Idle())) return NO;
   const BOOL lands = !(type & (kButtonUps | kButtonDrags));
-  const BOOL overCoveredPage = lands && gOnScreenAhead && [ArdiaWebView revealGapIn:event.window] && InTabPage(HitInWindow(event));
+  const BOOL activatesApp = (type & kButtonDowns) && !NSApp.isActive;
+  const BOOL overCoveredPage = lands && !activatesApp && gOnScreenAhead && [ArdiaWebView revealGapIn:event.window] && InTabPage(HitInWindow(event));
   if (!button) return overCoveredPage;
   const Press press = type & kButtonDowns ? Press::kDown : type & kButtonUps ? Press::kUp : Press::kDrag;
   return gPresses.Swallows((unsigned)event.buttonNumber, press, event.windowNumber, overCoveredPage);

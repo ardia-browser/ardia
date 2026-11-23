@@ -240,3 +240,33 @@ test("the shell's first load of the URL a tab was just created with is dropped, 
   const shim = readFileSync(new URL("./shims/web/HostWebView.tsx", import.meta.url), "utf8");
   assert.match(shim, /if \(property === "loadUrl"\) \{\n\s+args\[0\] = toEngineUrl\(args\[0\] as string\);\n\s+if \(current\.repeatsCreate\(args\[0\] as string\)\) return undefined;/);
 });
+
+test("tab.viewport forwards contentRect only when the engine advertises tab.viewportClip", async () => {
+  const withoutClip = nativeHost();
+  const { tab: legacy } = mount(withoutClip, { key: "legacy-clip" });
+  await legacy.ready;
+  await legacy.viewport({
+    rect: { x: 240, y: 48, width: 752, height: 644 },
+    contentRect: { x: 240, y: 48, width: 752, height: 664 },
+    visible: true,
+  });
+  const legacyCall = withoutClip.requests.find((request) => request.method === "tab.viewport");
+  assert.deepEqual(legacyCall.args.rect, { x: 240, y: 48, width: 752, height: 644 });
+  assert.equal("contentRect" in legacyCall.args, false);
+  legacy.dispose();
+
+  const withClip = nativeHost();
+  withClip.host.bootstrap.capabilities = ["tab.viewportClip"];
+  const { tab: capable } = mount(withClip, { key: "capable-clip" });
+  await capable.ready;
+  await capable.viewport({
+    rect: { x: 240, y: 48, width: 752, height: 644 },
+    contentRect: { x: 240, y: 48, width: 752, height: 664 },
+    visible: true,
+  });
+  const capableCall = withClip.requests.find((request) => request.method === "tab.viewport");
+  assert.deepEqual(capableCall.args.rect, { x: 240, y: 48, width: 752, height: 644 });
+  assert.deepEqual(capableCall.args.contentRect, { x: 240, y: 48, width: 752, height: 664 });
+  capable.dispose();
+  await settle();
+});

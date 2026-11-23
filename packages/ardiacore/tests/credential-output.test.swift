@@ -211,3 +211,38 @@ struct CredentialResultTests {
     #expect(CredentialWording.cleanedDetail("\u{1B}[31mfirst \u{202E}line token-abc\nsecond", secrets: ["token-abc"]) == "first line [hidden]")
   }
 }
+
+@Suite("Hostile CLI output")
+struct CredentialHostileOutputTests {
+  static func hostile() throws -> [(String, String)] {
+    let text = try #require(ProcessInfo.processInfo.environment["ARDIA_HOSTILE_INPUTS"], "the runner passes scripts/security/hostile-inputs.mjs")
+    let pairs = try #require(try JSONSerialization.jsonObject(with: Data(text.utf8)) as? [[String]])
+    return pairs.compactMap { $0.count == 2 ? ($0[0], $0[1]) : nil }
+  }
+
+  @Test func `a CLI's error line reaches Ardia's wording as one short visible line with the secrets it was given hidden`() throws {
+    let cases = try Self.hostile()
+    #expect(cases.count > 40)
+    let secret = "s3cret-master-value"
+    for (id, value) in cases {
+      let stderr = "Error: \(value) \(secret)\nsecond line \(secret)"
+      guard let detail = CredentialWording.cleanedDetail(stderr, secrets: [secret]) else { continue }
+      #expect(!detail.contains(secret), "\(id)")
+      #expect(detail.count <= CredentialLimits.detailLength, "\(id)")
+      #expect(!detail.unicodeScalars.contains { CredentialCatalogParser.isControlOrDirection($0) }, "\(id)")
+      #expect(!detail.contains("second line"), "\(id)")
+    }
+  }
+
+  @Test func `a plugin's error detail and reported account are cleaned the same way, whatever the CLI printed`() throws {
+    for (id, value) in try Self.hostile() {
+      let wire = try CredentialResults.wireError(["code": "failed", "problem": "failed", "detail": value])
+      if let detail = wire.detail {
+        #expect(detail.utf8.count <= CredentialLimits.detailLength, "\(id)")
+        #expect(!detail.unicodeScalars.contains { CredentialCatalogParser.isControlOrDirection($0) }, "\(id)")
+      }
+      let state = try CredentialResults.state(["state": "locked", "account": value])
+      if let account = state.account { #expect(!account.unicodeScalars.contains { CredentialCatalogParser.isControlOrDirection($0) }, "\(id)") }
+    }
+  }
+}

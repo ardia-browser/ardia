@@ -356,3 +356,38 @@ test("the release's original smuggled hide is refused at every layer", () => {
   assert.equal(MAC_WRITE_RULE.test(`${HOST}##${smuggled}`), false);
   assert.equal(LINUX_NATIVE_REFUSES.test(`${HOST}##${smuggled}`), true);
 });
+
+test("a credential plugin's verb request becomes only a checked argv: every hostile value is refused or lands as one inert token", async () => {
+  const { readCredentialContribution } = await import("@ardia/plugin-sdk/credential-manifest");
+  const { buildVerb, deniedCommand } = await import("@ardia/plugin-sdk/testing");
+  const manifest = JSON.parse(readFileSync(new URL("../../../tests/fixtures/plugins/credential-providers/bitwarden.json", import.meta.url), "utf8"));
+  const cli = readCredentialContribution(manifest).cli;
+  const session = { $secret: "h1" };
+  const requests = (value) => [
+    ["login.password", { email: value, password: session }],
+    ["login.password", { email: "sam@example.com", password: session, code: value }],
+    ["login.password", { email: "sam@example.com", password: session, method: value }],
+    ["get.item", { session, id: value }],
+    ["config.server.url", { url: value }],
+    ["status", { session: value }],
+    ...(typeof value === "string" ? [["get.item", { session, id: "11111111-2222-3333-4444-555555555555", [value]: "x" }]] : []),
+  ];
+  let launched = 0;
+  for (const { id, value } of HOSTILE_VALUES) {
+    for (const [verb, params] of requests(value)) {
+      const built = buildVerb(cli, verb, params, () => "session-value", null);
+      if (!("launch" in built)) {
+        assert.ok(built.code && built.message, `${id} via ${verb}: refused with a code`);
+        continue;
+      }
+      launched += 1;
+      for (const token of built.launch.argv) {
+        assert.ok(typeof token === "string" && !token.includes("\0") && !LINE_TERMINATORS.test(token), `${id} via ${verb}: ${show(token)}`);
+      }
+      assert.equal(deniedCommand("bw", built.launch.argv), null, `${id} via ${verb}`);
+    }
+  }
+  assert.ok(launched > 0, "allowed requests still launch, so the refusals aren't the only thing tested");
+  const valid = buildVerb(cli, "get.item", { session, id: "11111111-2222-3333-4444-555555555555" }, () => "session-value", null);
+  assert.ok("launch" in valid, "a well-formed request launches");
+});

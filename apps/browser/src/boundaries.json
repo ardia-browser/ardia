@@ -1561,6 +1561,29 @@
    "detected": false
   },
   {
+   "id": "plugin-credentials:channel",
+   "source": "plugin",
+   "guard": "Native ends every credentials line: only official runs the pin keeps may send them (PluginCredentialGate answers the rest), a credential run may use only hello, ready, result and credentials.*, verbs are built natively from the catalog's typed slots behind the deny list, handles are bound to one call and epoch, running CLIs are keyed natively, and results are re-checked and cleaned (CredentialResults); the app's reply and event never reach a credential run. Hostile values go through the TypeScript twin of the argv builder in hostileInputs.test.mjs, proven equal to native by credential-verbs.json",
+   "checks": [
+    "packages/shell/ios/PluginCore/PluginCredentialGate.swift#screen",
+    "packages/ardiacore/ios/CredentialRunEndpoint.swift#take",
+    "packages/ardiacore/ios/CredentialVerbLaunch.swift#build",
+    "packages/ardiacore/ios/CredentialResults.swift#wireError",
+    "packages/plugin-sdk/src/verbLaunch.ts#buildVerb"
+   ],
+   "detected": false
+  },
+  {
+   "id": "other-app:credential-cli-output",
+   "source": "other-app",
+   "guard": "A password manager's CLI output is parsed natively by the verb's output mode with byte caps, the secrets the verb consumed are redacted from everything returned, and a line shown in Ardia is the first visible line, control and direction characters dropped, at most 240 characters (CredentialWording.cleanedDetail); the shared hostile inputs run through it in packages/ardiacore/tests/credential-output.test.swift",
+   "checks": [
+    "packages/ardiacore/ios/CredentialVerbOutput.swift#report",
+    "packages/ardiacore/ios/CredentialWording.swift#cleanedDetail"
+   ],
+   "detected": false
+  },
+  {
    "id": "control-socket:accept",
    "source": "socket",
    "guard": "AF_UNIX, mode 0600, peer UID equal; every connection is the owner (D3)",

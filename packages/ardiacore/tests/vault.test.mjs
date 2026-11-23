@@ -1,5 +1,9 @@
 import test from "node:test";
 import { runSwiftTests } from "./swift-testing.mjs";
+import { HOSTILE_STRINGS } from "../../../scripts/security/hostile-inputs.mjs";
+
+const wellFormed = (text) => !/[\ud800-\udfff]/.test(text.replace(/[\ud800-\udbff][\udc00-\udfff]/g, ""));
+const HOSTILE_ENV = { ARDIA_HOSTILE_INPUTS: JSON.stringify(HOSTILE_STRINGS.filter((h) => wellFormed(h.value)).map((h) => [h.id, h.value])) };
 
 const suites = [
   ["vault-broker", ["-O"], ["VaultOriginMatch", "VaultPublicSuffixRules", "VaultCommand", "VaultCommandResult", "VaultLane", "VaultLockEpoch", "VaultState", "VaultCloudAccount"]],
@@ -33,6 +37,7 @@ for (const [name, flags, sources] of suites) {
   test(`the ${name} Swift Testing suite passes`, (t) => {
     runSwiftTests(t, `${name}-test`, [...sources.map((source) => `../ios/${source}.swift`), `./${name}.test.swift`], {
       flags: [...flags, "-swift-version", "6"],
+      env: name === "credential-output" ? HOSTILE_ENV : {},
     });
   });
 }

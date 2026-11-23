@@ -16,6 +16,7 @@ export type SecretLookup = (handle: SecretHandle) => string | null;
 
 const CODE_SLOT = new RegExp(CREDENTIAL_LIMITS.codeSlotPattern);
 const BREAKS = /[\n\r\0]/;
+const CONTROL_OR_DIRECTION = /[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]/;
 
 const refusal = (code: VerbRefusalCode, message: string): VerbRefusal => ({ code, message });
 
@@ -27,7 +28,7 @@ function jsonDepth(value: unknown, depth = 0): number {
 }
 
 export function httpsUrlProblem(value: string, allowLocalHttp: boolean): boolean {
-  if (utf8Length(value) > CREDENTIAL_LIMITS.urlSlotLength || /\s/.test(value) || BREAKS.test(value)) return true;
+  if (utf8Length(value) > CREDENTIAL_LIMITS.urlSlotLength || value.startsWith("-") || /\s/.test(value) || BREAKS.test(value) || CONTROL_OR_DIRECTION.test(value)) return true;
   const parts = urlParts(value);
   if (!parts || parts.userinfo) return true;
   if (parts.scheme === "https") return false;

@@ -8,7 +8,8 @@ const manifest = JSON.parse(read(MANIFEST));
 const domains = Object.entries(manifest.domains);
 const LINUX_ONLY_EVENTS = ["downloads.removed", "history.imported"];
 
-export function stripComments(source) {
+export function stripComments(written) {
+  const source = written.replace(/\\\r?\n/g, "");
   let out = "";
   for (let at = 0; at < source.length; ) {
     const two = source.slice(at, at + 2);
@@ -39,7 +40,28 @@ const between = (text, from, to) => {
   return text.slice(start, text.indexOf(to, start));
 };
 
-export const linuxEventNames = (header) => new Set([...between(stripComments(header), "EventName(std::string_view topic)", "\n}").matchAll(/"([\w.]+)"/g)].map((match) => match[1]));
+export function linuxEventNames(header) {
+  const body = between(stripComments(header), "EventName(std::string_view topic)", "\n}");
+  const opening = /for\s*\(\s*const\s+auto\s+name\s*:\s*\{/g;
+  const open = opening.exec(body);
+  if (!open || opening.exec(body)) throw new Error("EventName loops over exactly one braced list of topics");
+  const entry = /\s*"([^"\\\n]*)"\s*/y;
+  const separator = /,?\s*\}\s*\)|,/y;
+  const names = [];
+  let at = open.index + open[0].length;
+  for (;;) {
+    entry.lastIndex = at;
+    const name = entry.exec(body);
+    if (!name) throw new Error(`EventName's topic list has an entry the scan can't read: ${JSON.stringify(body.slice(at, at + 80))}`);
+    if (names.includes(name[1])) throw new Error(`EventName lists ${name[1]} twice`);
+    names.push(name[1]);
+    separator.lastIndex = entry.lastIndex;
+    const next = separator.exec(body);
+    if (!next) throw new Error(`EventName's topic list has an entry the scan can't read: ${JSON.stringify(body.slice(entry.lastIndex, entry.lastIndex + 80))}`);
+    at = separator.lastIndex;
+    if (next[0] !== ",") return new Set(names);
+  }
+}
 
 export function macForwarding(bridgeSource) {
   const source = stripComments(bridgeSource);
@@ -114,6 +136,26 @@ test("comments never count as table entries: a commented-out row is read as gone
   assert.throws(() => stripComments("a /* open"), /never closes/);
   const header = 'inline std::string_view EventName(std::string_view topic) {\n  for (const auto name : {"history.changed", /* "bookmarks.changed", */ "downloads.changed"}) {\n  // "extensions.sync"\n  }\n}\n';
   assert.deepEqual([...linuxEventNames(header)], ["history.changed", "downloads.changed"]);
+  assert.equal(stripComments('a // b \\\nc\nd'), "a \nd");
+  assert.equal(stripComments('a // b \\\r\nc\r\nd'), "a \nd");
+  const contract = read("engine/ardiacore-linux/src/ardia/linux/ac_linux_contract.h");
+  const loop = '  for (const auto name : {"history.changed",';
+  assert.ok(contract.includes(loop));
+  assert.throws(() => linuxEventNames(contract.replace(loop, `  // topics \\\n${loop}`)), /exactly one braced list/);
+});
+
+test("the EventName scan reads every topic however it's spelled and refuses what it can't read", () => {
+  const header = (list) => `inline std::string_view EventName(std::string_view topic) {\n  for (const auto name : {${list}}) {\n    if (topic == name) return name;\n  }\n  return {};\n}\n`;
+  assert.deepEqual([...linuxEventNames(header('"history.changed",\n   "downloads.test-extra", "a.b_c:d",'))], ["history.changed", "downloads.test-extra", "a.b_c:d"]);
+  assert.deepEqual([...linuxEventNames(header('"history.changed"'))], ["history.changed"]);
+  assert.throws(() => linuxEventNames(header('"history.changed", kExtraTopic')), /can't read/);
+  assert.throws(() => linuxEventNames(header('"history.changed" "downloads.changed"')), /can't read/);
+  assert.throws(() => linuxEventNames(header('"history.changed", "history.changed"')), /twice/);
+  assert.throws(() => linuxEventNames(header('"history.\\"changed"')), /can't read/);
+  const contract = read("engine/ardiacore-linux/src/ardia/linux/ac_linux_contract.h");
+  const extra = contract.replace('"downloads.removed"}', '"downloads.removed", "downloads.test-extra"}');
+  assert.notEqual(extra, contract);
+  assert.ok(linuxEventNames(extra).has("downloads.test-extra"));
   const bridgeSource = read("packages/ardiacore/ios/ArdiaEngineBridge.mm");
   const commented = bridgeSource.replace('@"extensions.action", ', '/* @"extensions.action", */ ');
   assert.notEqual(commented, bridgeSource);

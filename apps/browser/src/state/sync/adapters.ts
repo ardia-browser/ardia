@@ -2,7 +2,7 @@ import { deletePassword } from "../../platform/passwords";
 import { orWarn } from "../../lib/fallback";
 import { assignPositions, folderChildren, SyncNative, type Adapter, type SealedLogin } from "../../platform/sync";
 import { bookmarkRoots, bookmarkUuidFor, ensureRoots, isBookmarkUuid } from "../bookmarks/bookmarks";
-import { useBrowser } from "../browser/store";
+import { useBrowser, type BrowserState } from "../browser/store";
 import { engineProfile } from "../browser/model";
 import { profileOpened } from "../profiles/profileLoading";
 import { isPeekTab } from "../peek/peek";
@@ -60,10 +60,24 @@ export function deviceAdapter(deviceId: string, name: () => string, retired = fa
   };
 }
 
+const bookmarkTokens = new WeakMap<BrowserState["bookmarks"], Map<string, object>>();
+
+function bookmarksToken(profileId: string): object {
+  const s = store();
+  const engine = engineProfile(s, profileId);
+  const key = `${profileId}\n${engine}\n${s.bookmarksReady[engine] ? 1 : 0}`;
+  let byKey = bookmarkTokens.get(s.bookmarks);
+  if (!byKey) bookmarkTokens.set(s.bookmarks, (byKey = new Map()));
+  let token = byKey.get(key);
+  if (!token) byKey.set(key, (token = {}));
+  return token;
+}
+
 export function bookmarksAdapter(profileId: string): Adapter {
   const ready = () => !!store().bookmarksReady[engineProfile(store(), profileId)];
   return withSyncWorkCounts("bookmark", {
     prefix: BOOKMARK,
+    extractsOnlyFrom: () => bookmarksToken(profileId),
     extract: (base) => {
       if (!ready()) return null;
       const b = store().bookmarks;

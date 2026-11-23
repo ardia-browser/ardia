@@ -98,6 +98,7 @@ export interface Adapter {
   ): Extraction | null | Promise<Extraction | null>;
   apply(visible: Map<string, unknown>, changed: Set<string>, base: (key: string) => unknown, records: ApplyRecords): boolean | void | Promise<boolean | void>;
   editedAt?(value: unknown): number | undefined;
+  extractsOnlyFrom?(): object | undefined;
   adoptRemoteOnJoin?: boolean;
   publishAfterPull?: boolean;
 }

@@ -211,15 +211,19 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
     use fixtures you create. Dia's app bundle (binary, assets) may be read.
 - **Isolated builds/instances** (several agents build and run at once). Use your agent name `<you>`:
   - Build (with `run_in_background`): `scripts/agent/build-app --as <you>` (`--config Release`, `--force`; `--help`).
-    It builds into `apps/browser/build-<you>`, in parallel with other agents' builds, and prints only the errors,
-    the warnings count, the result and the .app path (full log in `build-<you>/build-app.log`). Keep your name: a
-    new derived data compiles everything (a few minutes), and a copy of someone else's does too (its paths differ).
-    A JS-only change needs no build: it says so and stops (`--force` builds). A new engine framework is staged
+    It prints only the errors, the warnings count, the result and the .app path (`app: …`; full log in
+    `build-<you>/build-app.log`). A JS-only change needs no build: it says so and stops (`--force` builds). Native
+    stamps already built on this Mac, in any worktree, come from the app cache as an APFS clone in seconds
+    (`scripts/agent/build-cache`; Release gets your JS bundled in). Otherwise a worktree with no build of its own
+    builds in a shared build slot (`~/ardia-scratch/build-slots/<n>`, synced file by file, so a tree near the slot's
+    last build compiles only what changed), and one that already has `build-<you>` keeps building there; `--plain`
+    forces that, `--slot` the slot. On a Mac outside the team's provisioning profile add `--adhoc`, and
+    `--prebuilt-engine` to use the published engine instead of a stale `~/chromium-build`. A new engine framework is staged
     under the chromium lock: `--release` your chromium take first, or it uses your take (`--as`).
     `/tmp/ac-<name>.holder` says who holds a lock. Every `scripts/agent` script takes `--help`.
     When the main session runs the build train (`scripts/agent/train serve`: one shared build of the tree), don't
     build yourself: `train request --as <you>`, then `train wait --as <you>` prints the app to run.
-  - Run: `scripts/agent/ac launch apps/browser/build-<you>/Build/Products/Debug/Ardia.app --data <scratch>/data`
+  - Run: `scripts/agent/ac launch <the app build-app printed> --data <scratch>/data`
     (hidden: `open -g -n`, `ARDIA_BACKGROUND=1`, its own data dir and DevTools port; prints the pid and port).
     `ac eval|page|quit|status` take that data dir (`--help`); scripts use `scripts/lib/instance.mjs` (`launch`,
     `attach`, `session`, `reporter`), whose pid is the DevTools port's listener, never a process-list diff

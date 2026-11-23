@@ -10,8 +10,11 @@ export class CdpError extends Error {
   }
 }
 
-export async function connectCdp(url, { timeout = 5000, commandTimeout = 10000, WebSocketImpl = globalThis.WebSocket } = {}) {
+export const CDP_CONNECT_TIMEOUT = 15000;
+
+export async function connectCdp(url, { timeout = CDP_CONNECT_TIMEOUT, commandTimeout = 10000, WebSocketImpl = globalThis.WebSocket, signal = currentSignal() } = {}) {
   if (typeof WebSocketImpl !== "function") throw new Error("This Node.js has no WebSocket client; use Node 22 or newer");
+  if (signal?.aborted) throw signal.reason;
   const socket = new WebSocketImpl(url);
   const pending = new Map();
   const listeners = new Map();
@@ -30,12 +33,19 @@ export async function connectCdp(url, { timeout = 5000, commandTimeout = 10000, 
     for (const handlers of listeners.values()) for (const handler of handlers) handler.closed?.(reason);
   };
   await new Promise((resolve, reject) => {
+    let forget = () => {};
     const timer = setTimeout(() => {
+      forget();
       reject(new Error(`CDP connection to ${url} timed out after ${timeout} ms`));
       try { socket.close(); } catch {}
     }, timeout);
-    socket.addEventListener("open", () => { clearTimeout(timer); resolve(); }, { once: true });
-    socket.addEventListener("error", (event) => { clearTimeout(timer); reject(new Error(`CDP connection to ${url} failed: ${event?.message ?? "error"}`)); }, { once: true });
+    forget = whenCancelled(signal, (reason) => {
+      clearTimeout(timer);
+      reject(reason);
+      try { socket.close(); } catch {}
+    });
+    socket.addEventListener("open", () => { clearTimeout(timer); forget(); resolve(); }, { once: true });
+    socket.addEventListener("error", (event) => { clearTimeout(timer); forget(); reject(new Error(`CDP connection to ${url} failed: ${event?.message ?? "error"}`)); }, { once: true });
   });
   socket.addEventListener("close", () => fail("socket closed"));
   socket.addEventListener("error", () => fail("socket error"));

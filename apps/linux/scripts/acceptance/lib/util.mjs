@@ -51,7 +51,7 @@ export async function until(test, { timeout = 15000, interval = 100, label = "co
     const reason = abort?.();
     if (reason) throw new Error(`${label} aborted: ${reason}`);
     try {
-      lastValue = await test();
+      lastValue = await test({ deadline });
       if (lastValue) return lastValue;
     } catch (error) {
       last = error;

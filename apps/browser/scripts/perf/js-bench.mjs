@@ -254,7 +254,7 @@ export function writeSwitches(dataDir, text) {
   writeFileSync(join(dataDir, "switches-cache.json"), JSON.stringify({ version: 1, switches }));
 }
 
-export async function launch(app, dataDir, port) {
+export async function launch(app, dataDir, port, extraEnv = {}) {
   const binary = binaryOf(realpathSync(app));
   writeSwitches(dataDir, process.env.ARDIA_SWITCHES);
   if (pidsOf(binary).length) throw new Error(`an instance of ${app} is already running`);
@@ -262,6 +262,7 @@ export async function launch(app, dataDir, port) {
   const env = appEnv(app, {
     ARDIA_BACKGROUND: "1", ARDIA_DATA_DIR: dataDir, ARDIA_REMOTE_DEBUGGING_PORT: String(port),
     ...(process.env.ARDIA_SWITCHES ? { ARDIA_SWITCHES: process.env.ARDIA_SWITCHES } : {}),
+    ...extraEnv,
   });
   execFileSync("open", ["-g", "-n", ...Object.entries(env).flatMap(([k, v]) => ["--env", `${k}=${v}`]), app]);
   for (let i = 0; i < 200; i++) {

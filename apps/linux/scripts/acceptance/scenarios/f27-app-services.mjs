@@ -18,8 +18,8 @@ async function onboardingDocument(scratch) {
 }
 
 async function regularShells(app, count) {
-  const shells = await until(async () => {
-    const list = (await app.shells()).filter((s) => s.ready && !s.utility);
+  const shells = await until(async ({ deadline }) => {
+    const list = (await app.shells({ deadline })).filter((s) => s.ready && !s.utility);
     return list.length >= count ? list : false;
   }, { timeout: 25000, label: `${count} browser renderers` });
   return Promise.all(shells.map((s) => app.shell(s.windowId)));

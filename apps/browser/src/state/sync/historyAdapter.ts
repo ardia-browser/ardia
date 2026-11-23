@@ -1,6 +1,6 @@
 import { addHistoryVisits, deleteHistoryUrls } from "../../platform/history";
 import type { Adapter } from "../../platform/sync";
-import { historyOf, historyViewOf, MAX_HISTORY, MAX_VISIT_TIMES, withHistoryList } from "../history/history";
+import { historyOf, historyViewOf, MAX_HISTORY, MAX_VISIT_TIMES, withHistoryList, type HistoryView } from "../history/history";
 import { useBrowser } from "../browser/store";
 import { engineProfile } from "../browser/model";
 import type { HistoryEntry } from "../browser/types";
@@ -56,6 +56,18 @@ function olderThan(view: readonly HistoryEntry[], since: number, keyOf: (e: Hist
   };
 }
 
+type ExtractedWindow = { since: number };
+const extractedWindows = new WeakMap<HistoryView, ExtractedWindow>();
+
+function windowToken(view: HistoryView | undefined, since: number): ExtractedWindow | undefined {
+  if (!view) return undefined;
+  const token = extractedWindows.get(view);
+  if (token && since >= token.since) return token;
+  const fresh = { since };
+  extractedWindows.set(view, fresh);
+  return fresh;
+}
+
 export function historyAdapter(profileId: string): Adapter {
   const ready = () => !!historyViewOf(store(), profileId)?.ready;
   const extracts = historyExtractsOf(profileId);
@@ -77,11 +89,15 @@ export function historyAdapter(profileId: string): Adapter {
   };
   return withSyncWorkCounts("history", {
     prefix: HISTORY,
+    extractsOnlyFrom: () => windowToken(historyViewOf(store(), profileId), Date.now() - HISTORY_WINDOW_MS),
     extract: (_base, _queued, _now, _known, _remote, _stamp, baseJson) => {
       if (!ready()) return null;
       const since = Date.now() - HISTORY_WINDOW_MS;
       const values = new Map<string, unknown>();
-      const { list: view, floor } = historyViewOf(store(), profileId)!;
+      const current = historyViewOf(store(), profileId)!;
+      const token = extractedWindows.get(current);
+      if (token) token.since = Math.max(token.since, since);
+      const { list: view, floor } = current;
       const extractedVisit = (e: HistoryEntry) => {
         let visit = extracts.visits.get(e);
         if (!visit) extracts.visits.set(e, (visit = { key: isWebPageUrl(e.url) ? `${HISTORY}${e.url}` : null, json: undefined, value: null }));

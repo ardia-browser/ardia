@@ -226,7 +226,19 @@ builds on; `programs.test.mjs` and `adoption.test.mjs` pin it.
   can neither approve nor cancel the newer one, and an old install adopted while the sheet is open closes it with
   `{ ok: true }`.
 - `PluginConsentSheet({ name, hash, onClosed })` (`components/plugins/PluginConsentSheet.tsx`) is the sheet itself, and
-  `usePluginConsent()` says which plugin's sheet is open.
+  `usePluginConsent()` says which plugin's sheet is open. It shows the plugin's icon (a password manager's own badge),
+  its name, an Official or plugins-folder line with the version, and its description, then every consent line grouped
+  under What It Can Reach, Safeguards and What It Does: a short title, an optional line under it, and chips for
+  commands, hosts, events and setting keys (`state/plugins/consentLine.ts`, `components/plugins/consent/`). Return
+  installs and Escape cancels. Settings › Plugins lists the same rows under the same groups on the plugin's page.
+- **Install progress stays in the sheet.** After Install (Update, Turn On) the footer follows the real install
+  (`state/plugins/consentInstall.ts`): **Installing…** with a bar (filling while a download reports its size,
+  otherwise an indeterminate sweep, an opacity pulse under Reduce Motion), **Adding ardia to your PATH…** while its
+  programs link, then **Installed** (**Updated**, **Turned On**) with a check, and the sheet closes itself after
+  900 ms (a folder plugin's Turn On closes at once). A failure shows its reason with **Close** and **Try Again**; Try
+  Again downloads an official plugin again in place (**Downloading…**) and asks a folder plugin for consent again.
+  Escape while it installs only hides the sheet: the install carries on, and the plugin's row in Settings › Plugins
+  shows it.
 
 ### Official plugins: where they're offered
 
@@ -645,8 +657,8 @@ Ardia never runs a plugin's program itself, with one exception for official plug
   and wrote `.zprofile` (`.bash_profile` for bash), so an adopted install already has its line where zsh and bash
   read it.
 - **Not sandboxed.** A program isn't a helper: you, or a program you use, run it from a shell, as you, so neither the
-  sandbox nor the plugin's other permissions apply to it, and the consent sheet says so ("Adds ardia to your PATH. It runs as you,
-  outside Ardia's sandbox", and "Adds ~/.local/bin to your PATH in your shell's login file"). It reaches Ardia the way any program does, while "Let the ardia command control Ardia" is on: the
+  sandbox nor the plugin's other permissions apply to it, and the consent sheet says so under What It Can Reach ("Adds ardia to your PATH", with "It runs as you,
+  outside Ardia's sandbox" under it, and "Adds ~/.local/bin to your PATH", with "In your shell's login file"). It reaches Ardia the way any program does, while "Let the ardia command control Ardia" is on: the
   control socket, which checks only that its peer runs as the same user, and the engine's token connection, whose token
   sits in `ArdiaControl.json` for the user's processes to read (`docs/cli.md`, `docs/control-socket.md`).
 
@@ -700,7 +712,7 @@ its manifest is the approved one; otherwise the profile reads as Ardia, and the 
 
 **Default.** A profile that never chose reads as Ardia, unless an official password-manager plugin is on, in which case
 it reads as that plugin. Turning on an official one also stores it on every profile that never chose (the consent sheet
-says how many, naming the plugin: "Moves 3 profiles that never picked a password manager to <title>"). No official
+says how many, naming the plugin: "Moves 3 profiles to <title>", with "They never picked a password manager" under it). No official
 password-manager plugin ships today: Apple Passwords was one in 0.2.47 and was retired once Apple approved Ardia for
 Apple Passwords itself (#3357). An installed plugin moves nobody: each profile picks it. Turning a plugin on never
 changes a profile that chose.
@@ -1089,7 +1101,7 @@ whichever profile the tab's window shows:
 - **Stays on its origin.** Its own files may navigate among themselves. Every other navigation is cancelled: a
   link, a `window.open`, a pop-up, a form post or a download never leaves the page, and a plugin page never opens a
   browser tab by itself. To open one, the page asks its helper, and a helper with the `commands` permission (shown on
-  the consent sheet as "Runs Ardia commands, like opening and closing tabs") opens it with `open`:
+  the consent sheet as "Runs Ardia commands", with "Like opening and closing tabs" under it) opens it with `open`:
 
   ```js
   document.addEventListener("click", (event) => {

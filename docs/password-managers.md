@@ -1294,7 +1294,8 @@ Settings › Profiles › <profile> › Passwords. On a Mac profile on Ardia it 
    an Off row instead); Turn On… turns the plugin back on with its approval on record (`turnOnApprovedPlugin`, the
    consent sheet only when that approval no longer matches), shows Turning On… until the provider registers, then
    opens its sign-in sheet, since turning it off wiped its cache and sessions. Add installs it with `installOfficialPlugin(name, { showSheet: false })`, so
-   the plugin consent sheet shows over this page, while an Installing… row with a spinner stands in the group. A
+   the plugin consent sheet shows over this page and, after Install, follows the install to Installed or a failure
+   with Try Again (`docs/plugins.md`), while an Installing… row with a spinner stands in the group. A
    failed install leaves the row with the reason in red, Try Again and Dismiss; a cancelled consent removes it
    quietly. Once the provider registers, its sign-in sheet opens (not when it is already connected). Rows fold in and
    out (`Expand`).

@@ -204,6 +204,8 @@ enum MainMenu {
       cmd(.openSplitPane),
       cmd(.focusNextPane),
       cmd(.focusPreviousPane),
+      cmd(.movePaneLeft),
+      cmd(.movePaneRight),
       bookmarkItem(NSMenuItem.separator()),
       bookmarkItem(sub("Show Bookmarks Bar", [
         cmd(.setBookmarksBar, arg: "always"),

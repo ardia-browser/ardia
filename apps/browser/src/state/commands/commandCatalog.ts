@@ -67,6 +67,8 @@ export const COMMANDS = {
   jumpToSelection: { title: "Jump to Selection", keys: ["⌘J"], ...pageInLittleArdia },
   focusNextPane: { title: "Focus Next Split Pane", keys: ["⌃⇧]", "⌃}"], ...offInLittleArdia },
   focusPreviousPane: { title: "Focus Previous Split Pane", keys: ["⌃⇧[", "⌃{"], ...offInLittleArdia },
+  movePaneLeft: { title: "Move Split Pane Left", keys: ["⌃⌥←"], ...offInLittleArdia },
+  movePaneRight: { title: "Move Split Pane Right", keys: ["⌃⌥→"], ...offInLittleArdia },
   toggleFullUrl: { title: "Show Full URL", symbol: "text.alignleft", toggles: "showFullUrl" },
   toggleJavaScriptFromAppleEvents: { title: "Allow JavaScript from Apple Events", toggles: "allowJavaScriptFromAppleEvents" },
   toggleAddressBar: { title: "Show Address Bar in Sidebar", ...offInLittleArdia },
@@ -219,7 +221,7 @@ export const PAGE_COMMANDS = commandsWhere((c) => c.scope === "page");
 export const PAGE_COMMANDS_OFF_INTERNAL_PAGES = commandsWhere((c) => c.scope === "page" && !c.onInternalPages);
 export const WINDOW_COMMANDS = commandsWhere((c) => c.scope !== undefined);
 export const LITTLE_ARDIA_DISABLED_COMMANDS = commandsWhere((c) => c.littleArdia === "off");
-export const SPLIT_VIEW_COMMANDS: readonly BrowserCommand[] = ["openSplitPane", "focusNextPane", "focusPreviousPane"];
+export const SPLIT_VIEW_COMMANDS: readonly BrowserCommand[] = ["openSplitPane", "focusNextPane", "focusPreviousPane", "movePaneLeft", "movePaneRight"];
 export const EXPORT_COMMANDS: readonly BrowserCommand[] = ["exportBookmarks"];
 export const WEBKIT_COMMANDS: readonly BrowserCommand[] = ["togglePageEngine"];
 export const HIDING_COMMANDS: readonly BrowserCommand[] = ["hideElement", "showHiddenElements"];

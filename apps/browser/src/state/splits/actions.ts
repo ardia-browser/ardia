@@ -5,8 +5,10 @@ import { menuShortcut } from "../commands/commandShortcuts";
 import { storeAction, useBrowser } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import { isStacked, MAX_SPLIT_PANES, type OpenPaneOptions, splitOf, type SplitSide, splitTabIds, splitTabIdsOf } from "./splits";
+import { horizontalNeighbor } from "./reorder";
 import { splitLane, type SplitLane, splitsOnRow } from "./lanes";
 import type { AdoptId } from "../browser/types";
+import type { ConsentToken } from "../telemetry/client";
 import { noteSplit } from "../telemetry/usage";
 import { returnFocusToPage } from "../sidebar/actions";
 
@@ -29,6 +31,26 @@ export function focusSplitPane(windowId: string, delta: 1 | -1) {
   const before = activeTabId(store(), windowId);
   store().focusPane(windowId, delta);
   if (activeTabId(store(), windowId) !== before) returnFocusToPage(windowId);
+}
+
+export function moveActiveSplitPane(windowId: string, delta: 1 | -1, consent?: ConsentToken | null): boolean {
+  const s = store();
+  const active = activeTabId(s, windowId);
+  const split = splitOf(s, active);
+  const target = active && split ? horizontalNeighbor(split, active, delta) : null;
+  if (!active || !target) return false;
+  s.swapPanes(active, target);
+  noteSplit("splitPaneKeyMoves", consent);
+  return true;
+}
+
+export function swapSplitPanes(a: string, b: string, consent?: ConsentToken | null): boolean {
+  const s = store();
+  const split = splitOf(s, a);
+  if (!split || a === b || !splitTabIds(split).includes(b)) return false;
+  s.swapPanes(a, b);
+  noteSplit("splitPaneDragMoves", consent);
+  return true;
 }
 
 function openAsTab(windowId: string, { url, adoptId, anchorTabId, background }: OpenPaneOptions): string | null {
@@ -107,8 +129,8 @@ export async function showSplitMenu(tabId: string) {
     { id: "add", title: horizontal ? "Add Vertical Split View" : "Add Horizontal Split View", symbol: horizontal ? "rectangle.split.2x1" : "rectangle.split.1x2", enabled: !full, ...menuShortcut("openSplitPane") },
     { id: "bottom", title: horizontal ? "Add Bottom Split" : "Add Right Split", symbol: horizontal ? "rectangle.bottomhalf.inset.filled" : "rectangle.righthalf.inset.filled", enabled: !full && !stacked },
     { separator: true },
-    { id: "left", title: horizontal ? "Move Pane Left" : "Move Pane Up", symbol: "rectangle.lefthalf.inset.filled.arrow.left", enabled: index > 0 },
-    { id: "right", title: horizontal ? "Move Pane Right" : "Move Pane Down", symbol: "rectangle.righthalf.inset.filled.arrow.right", enabled: index < splitTabIds(split).length - 1 },
+    { id: "left", title: horizontal ? "Move Pane Left" : "Move Pane Up", symbol: "rectangle.lefthalf.inset.filled.arrow.left", enabled: index > 0, ...(horizontal && !stacked ? menuShortcut("movePaneLeft") : {}) },
+    { id: "right", title: horizontal ? "Move Pane Right" : "Move Pane Down", symbol: "rectangle.righthalf.inset.filled.arrow.right", enabled: index < splitTabIds(split).length - 1, ...(horizontal && !stacked ? menuShortcut("movePaneRight") : {}) },
     { id: "flip", title: "Flip Split View", symbol: horizontal ? "arrow.left.arrow.right" : "arrow.up.arrow.down" },
     { id: "convert", title: horizontal ? "Convert to Vertical Split View" : "Convert to Horizontal Split View", symbol: horizontal ? "rectangle.split.1x2" : "rectangle.split.2x1" },
     { separator: true },

@@ -5,6 +5,7 @@ import { innermostGroupOf, leaveGroups, syncGroupOrder } from "../groups/groups"
 import { inPinnedContainer, isPinnedRow, newId, tabLayoutOf } from "../browser/model";
 import { placing } from "../pins/placing";
 import { crossesLane } from "./lanes";
+import { swappedPaneIds } from "./reorder";
 import { choose } from "../settings/settings";
 import { activated, apply, removeTabs, withNewTab } from "../tabs/tabs";
 import type { AdoptId, BrowserWindow, SplitSlot, SplitView, Tab } from "../browser/types";
@@ -21,6 +22,7 @@ export type SplitsSlice = {
   flipSplit(splitId: string): void;
   toggleSplitOrientation(splitId: string): void;
   movePane(tabId: string, delta: 1 | -1): void;
+  swapPanes(a: string, b: string): void;
   focusPane(windowId: string, delta: 1 | -1): void;
   toggleTabLayout(windowId: string): void;
 };
@@ -342,33 +344,23 @@ export const createSplitsSlice: StateCreator<BrowserState, [], [], SplitsSlice> 
     });
   },
 
-  flipSplit(splitId) {
-    set((s) => {
-      const split = s.splits[splitId];
-      if (!split) return {};
-      return { splits: { ...s.splits, [splitId]: { ...split, slots: [...split.slots].reverse() } } };
-    });
-  },
-
-  toggleSplitOrientation(splitId) {
-    set((s) => {
-      const split = s.splits[splitId];
-      if (!split) return {};
-      const orientation = split.orientation === "horizontal" ? "vertical" : "horizontal";
-      return { splits: { ...s.splits, [splitId]: { ...split, orientation } } };
-    });
-  },
+  flipSplit: (splitId) => set((s) => (s.splits[splitId] ? { splits: { ...s.splits, [splitId]: { ...s.splits[splitId]!, slots: [...s.splits[splitId]!.slots].reverse() } } } : {})),
+  toggleSplitOrientation: (splitId) => set((s) => (s.splits[splitId] ? { splits: { ...s.splits, [splitId]: { ...s.splits[splitId]!, orientation: s.splits[splitId]!.orientation === "horizontal" ? "vertical" : "horizontal" } } } : {})),
 
   movePane(tabId, delta) {
     set((s) => {
       const split = splitOf(s, tabId);
-      if (!split) return {};
-      const tabIds = [...splitTabIds(split)];
-      const i = tabIds.indexOf(tabId);
-      const j = i + delta;
-      if (j < 0 || j >= tabIds.length) return {};
-      [tabIds[i], tabIds[j]] = [tabIds[j]!, tabIds[i]!];
-      return { splits: { ...s.splits, [split.id]: withPaneIds(split, tabIds) } };
+      const ids = split ? splitTabIds(split) : null;
+      const target = ids?.[ids.indexOf(tabId) + delta];
+      const next = ids && target ? swappedPaneIds(ids, tabId, target) : null;
+      return split && next ? { splits: { ...s.splits, [split.id]: withPaneIds(split, next) } } : {};
+    });
+  },
+  swapPanes(a, b) {
+    set((s) => {
+      const split = splitOf(s, a);
+      const next = split ? swappedPaneIds(splitTabIds(split), a, b) : null;
+      return split && next ? { splits: { ...s.splits, [split.id]: withPaneIds(split, next) } } : {};
     });
   },
 

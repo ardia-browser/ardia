@@ -34,6 +34,8 @@ enum CommandTable {
     case jumpToSelection
     case focusNextPane
     case focusPreviousPane
+    case movePaneLeft
+    case movePaneRight
     case toggleFullUrl
     case toggleJavaScriptFromAppleEvents
     case toggleAddressBar
@@ -151,6 +153,8 @@ enum CommandTable {
     "jumpToSelection": "Jump to Selection",
     "focusNextPane": "Focus Next Split Pane",
     "focusPreviousPane": "Focus Previous Split Pane",
+    "movePaneLeft": "Move Split Pane Left",
+    "movePaneRight": "Move Split Pane Right",
     "toggleFullUrl": "Show Full URL",
     "toggleJavaScriptFromAppleEvents": "Allow JavaScript from Apple Events",
     "toggleAddressBar": "Show Address Bar in Sidebar",
@@ -266,6 +270,8 @@ enum CommandTable {
     "jumpToSelection": [("j", [.command])],
     "focusNextPane": [("]", [.control, .shift]), ("}", [.control])],
     "focusPreviousPane": [("[", [.control, .shift]), ("{", [.control])],
+    "movePaneLeft": [("\u{F702}", [.control, .option])],
+    "movePaneRight": [("\u{F703}", [.control, .option])],
     "toggleMinimalism": [("m", [.control, .command])],
     "zoomReset": [("0", [.command])],
     "zoomIn": [("+", [.command]), ("=", [.command])],

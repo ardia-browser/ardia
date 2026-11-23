@@ -41,7 +41,7 @@ import { tabEngine } from "../engines/engines";
 import { runReaderCommand } from "../reader/reader";
 import { goBack, goForward } from "../tabs/navigation";
 import { awaitsFirstPage } from "../tabs/pendingAddress";
-import { focusSplitPane, openSplitPane } from "../splits/actions";
+import { focusSplitPane, moveActiveSplitPane, openSplitPane } from "../splits/actions";
 import { switchTabLayout } from "../settings/actions";
 import { isAppCommand, settingChange, variantArg } from "./commandCatalog";
 import { APP_COMMAND_HANDLERS } from "./appCommands";
@@ -55,6 +55,7 @@ import { copyPageUrl, copySelectedTabUrls, jumpToSelection } from "../site/selec
 import { shareTab } from "../site/share";
 import { groupOf } from "../pins/tabGrouping";
 import { selectedTabIds } from "../pins/organize";
+import { consentToken } from "../telemetry/client";
 import { noteSelectionClosedByKey } from "../telemetry/usage";
 import { noteUrlCopied } from "../telemetry/urlCopies";
 import { newWindowProfile, originalProfile } from "../windows/small";
@@ -241,6 +242,11 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
     case "focusNextPane":
     case "focusPreviousPane":
       return focusSplitPane(windowId, command === "focusNextPane" ? 1 : -1);
+    case "movePaneLeft":
+    case "movePaneRight": {
+      const consent = consentToken();
+      return void moveActiveSplitPane(windowId, command === "movePaneLeft" ? -1 : 1, consent);
+    }
     case "toggleSidebar":
       return s.toggleSidebar(windowId);
     case "zoomIn":

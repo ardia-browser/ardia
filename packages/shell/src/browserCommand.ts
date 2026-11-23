@@ -31,6 +31,8 @@ export type BrowserCommand =
   | "jumpToSelection"
   | "focusNextPane"
   | "focusPreviousPane"
+  | "movePaneLeft"
+  | "movePaneRight"
   | "toggleFullUrl"
   | "toggleJavaScriptFromAppleEvents"
   | "toggleAddressBar"

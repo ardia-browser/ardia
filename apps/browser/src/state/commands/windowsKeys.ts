@@ -39,6 +39,8 @@ export const WINDOWS_KEYS: Readonly<Record<string, readonly (string | null)[]>> 
   openSplitPane: ["Ctrl+\\", null],
   focusNextPane: ["Alt+Shift+]", null],
   focusPreviousPane: ["Alt+Shift+[", null],
+  movePaneLeft: ["Ctrl+Alt+Left"],
+  movePaneRight: ["Ctrl+Alt+Right"],
   toggleBookmarksBar: ["Ctrl+Shift+B"],
   zoomReset: ["Ctrl+0"],
   zoomIn: ["Ctrl+Plus", "Ctrl+="],

@@ -37,6 +37,8 @@ export const AUTOMATION: Readonly<Record<BrowserCommand, AutomationDecision>> = 
   jumpToSelection: "run",
   focusNextPane: "run",
   focusPreviousPane: "run",
+  movePaneLeft: "run",
+  movePaneRight: "run",
   toggleFullUrl: "run",
   toggleJavaScriptFromAppleEvents: "leftOutSetting",
   toggleAddressBar: "run",

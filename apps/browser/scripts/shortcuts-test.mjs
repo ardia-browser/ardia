@@ -150,6 +150,8 @@ const shortcuts = [
   ["⌃⇧=", K("+", 24, "control", "shift"), { command: "openSplitPane" }, "⌃⇧="],
   ["⌃⇧]", K("}", 30, "control", "shift"), { command: "focusNextPane" }, "⌃⇧]"],
   ["⌃⇧[", K("{", 33, "control", "shift"), { command: "focusPreviousPane" }, "⌃⇧["],
+  ["⌃⌥←", K(F(0xf702), 123, "control", "option", "function"), { command: "movePaneLeft" }, "⌃⌥←"],
+  ["⌃⌥→", K(F(0xf703), 124, "control", "option", "function"), { command: "movePaneRight" }, "⌃⌥→"],
   ["⇧⌘B", cmd("B", 11, "shift"), { command: "toggleBookmarksBar" }, "⇧⌘B"],
   ["⌘0", cmd("0", 29), { command: "zoomReset" }, "⌘0"],
   ["⌘+", cmd("+", 24, "shift"), { command: "zoomIn" }, "⌘+"],

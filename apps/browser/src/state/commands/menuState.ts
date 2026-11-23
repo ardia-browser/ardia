@@ -8,6 +8,7 @@ import { readerState as readerFor, type ReaderState } from "../reader/reader";
 import { peekTabId } from "../peek/peek";
 import { canHideElements } from "../site/hiddenElements";
 import { splitOf } from "../splits/splits";
+import { horizontalNeighbor } from "../splits/reorder";
 import { canGoBack, canGoForward } from "../tabs/navigation";
 import { liveReachOf, shownLiveOf } from "../tabs/tabLive";
 import type { Bookmarks, BookmarkNode, Tab } from "../browser/types";
@@ -92,7 +93,12 @@ export function menuState(s: BrowserState, liveOfTab = (id: string) => shownLive
   const regularWindows = s.windowOrder.filter((id) => s.windows[id]!.kind !== "private" && s.windows[id]!.kind !== "small");
 
   const disabled: string[] = [];
-  if (!tab || !splitOf(s, tab.id)) disabled.push("focusNextPane", "focusPreviousPane");
+  const activeSplit = tab ? splitOf(s, tab.id) : undefined;
+  if (!activeSplit) disabled.push("focusNextPane", "focusPreviousPane", "movePaneLeft", "movePaneRight");
+  else {
+    if (!horizontalNeighbor(activeSplit, tab!.id, -1)) disabled.push("movePaneLeft");
+    if (!horizontalNeighbor(activeSplit, tab!.id, 1)) disabled.push("movePaneRight");
+  }
   if (w && tabLayoutOf(s, w.id) === "top") disabled.push("toggleAddressBar", "toggleSidebarSide");
   if (s.settings.minimalismMode) disabled.push("toggleAddressBar");
   if (!w) disabled.push(...WINDOW_COMMANDS);

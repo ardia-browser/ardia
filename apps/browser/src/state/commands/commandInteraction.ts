@@ -35,6 +35,8 @@ export const COMMAND_INTERACTION: Readonly<Record<BrowserCommand, CommandInterac
   jumpToSelection: "quiet",
   focusNextPane: "quiet",
   focusPreviousPane: "quiet",
+  movePaneLeft: "quiet",
+  movePaneRight: "quiet",
   toggleFullUrl: "quiet",
   toggleJavaScriptFromAppleEvents: "quiet",
   toggleAddressBar: "quiet",

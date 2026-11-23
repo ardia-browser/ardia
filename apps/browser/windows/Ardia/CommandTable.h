@@ -112,6 +112,8 @@ inline constexpr CommandRow kCommandRows[] = {
     {"openSplitPane", "Open Split Pane", "View", "ctrl+shift+=|ctrl+plus", "ctrl+\\|none"},
     {"focusNextPane", "Focus Next Split Pane", "View", "ctrl+shift+]|ctrl+}", "alt+shift+]|none"},
     {"focusPreviousPane", "Focus Previous Split Pane", "View", "ctrl+shift+[|ctrl+{", "alt+shift+[|none"},
+    {"movePaneLeft", "Move Split Pane Left", "View", "ctrl+option+left", "ctrl+alt+left"},
+    {"movePaneRight", "Move Split Pane Right", "View", "ctrl+option+right", "ctrl+alt+right"},
     {"setBookmarksBar:always", "Always", "View > Show Bookmarks Bar", "", "", RowInBookmarksMenu},
     {"setBookmarksBar:newTab", "On New Tab Only", "View > Show Bookmarks Bar", "", "", RowInBookmarksMenu},
     {"setBookmarksBar:never", "Never", "View > Show Bookmarks Bar", "", "", RowInBookmarksMenu},

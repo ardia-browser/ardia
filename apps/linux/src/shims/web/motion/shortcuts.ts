@@ -9,6 +9,7 @@ type Shortcut = { code: string; mods: Mod[]; command: BrowserCommand; arg?: stri
 const s = (code: string, mods: Mod[], command: BrowserCommand, extra: Partial<Shortcut> = {}): Shortcut => ({ code, mods, command, ...extra });
 
 const digits = Array.from({ length: 9 }, (_, i) => i + 1);
+const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 
 const SHORTCUTS: Shortcut[] = [
   s("Comma", ["cmd"], "openSettings"),
@@ -49,6 +50,8 @@ const SHORTCUTS: Shortcut[] = [
   s("Equal", ["ctrl", "shift"], "openSplitPane"),
   s("BracketRight", ["ctrl", "shift"], "focusNextPane"),
   s("BracketLeft", ["ctrl", "shift"], "focusPreviousPane"),
+  s("ArrowLeft", isMac ? ["ctrl", "alt"] : ["cmd", "alt"], "movePaneLeft"),
+  s("ArrowRight", isMac ? ["ctrl", "alt"] : ["cmd", "alt"], "movePaneRight"),
   s("KeyB", ["cmd", "shift"], "toggleBookmarksBar"),
   s("Digit0", ["cmd"], "zoomReset"),
   s("Equal", ["cmd"], "zoomIn"),
@@ -69,8 +72,7 @@ const SHORTCUTS: Shortcut[] = [
   s("ArrowRight", ["cmd"], "forward", { notInText: true }),
   s("BracketRight", ["cmd", "shift"], "nextTab", { reserved: true }),
   s("BracketLeft", ["cmd", "shift"], "previousTab", { reserved: true }),
-  s("ArrowRight", ["cmd", "alt"], "nextTab", { reserved: true }),
-  s("ArrowLeft", ["cmd", "alt"], "previousTab", { reserved: true }),
+  ...(isMac ? [s("ArrowRight", ["cmd", "alt"], "nextTab", { reserved: true }), s("ArrowLeft", ["cmd", "alt"], "previousTab", { reserved: true })] : []),
   s("PageDown", ["ctrl"], "nextTab", { reserved: true }),
   s("PageUp", ["ctrl"], "previousTab", { reserved: true }),
   s("ArrowDown", ["cmd", "alt"], "nextTab"),
@@ -90,8 +92,6 @@ const SHORTCUTS: Shortcut[] = [
   s("KeyL", ["cmd", "alt"], "downloads"),
   s("KeyM", ["cmd", "shift"], "openProfileMenu"),
 ];
-
-const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 
 const FALLBACK_SWAP: Partial<Record<Mod, Mod>> = isMac ? { cmd: "ctrl", ctrl: "alt" } : { cmd: "alt", ctrl: "alt" };
 

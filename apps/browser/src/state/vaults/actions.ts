@@ -1,4 +1,5 @@
 import {
+  answerVault,
   cancelVaultSignIn,
   configureVault,
   copyFromVault,
@@ -10,7 +11,8 @@ import {
   unlockVault,
   type VaultHandOn,
   type VaultProviderState,
-  type VaultSignInFields,
+  type VaultAnswer,
+  type VaultSignInRequest,
   type VaultSignInResult,
 } from "../../platform/vaults";
 import { openExternalURL } from "../../platform/app";
@@ -24,10 +26,10 @@ import { consentToken, type ConsentToken } from "../telemetry/choice";
 import { noteArdiaChoiceRecorded } from "../telemetry/vaultCounts";
 import { applyProviderState, clearVaultIndex, currentVaultProviders, loadAllVaultItems, loadVaultProviders, vaultManagerName, vaultProviderOf } from "./store";
 import { isArdiaProvider, passwordManagersOnly } from "./ardia";
-import { brandOf } from "./brands";
+import { restartProcess } from "../plugins/process";
 import { CANCELLED_SIGN_IN, FAILED_SIGN_IN, signInMessage, wasCancelled } from "./signInFlow";
 
-export type { VaultCopyField, VaultProviderState, VaultSignInFields, VaultSignInResult };
+export type { VaultAnswer, VaultCopyField, VaultProviderState, VaultSignInRequest, VaultSignInResult };
 
 function failure(provider: string, error: string): VaultSignInResult {
   const state = vaultProviderOf(provider);
@@ -76,8 +78,10 @@ async function withState(run: () => Promise<VaultProviderState>): Promise<VaultP
 
 export const unlockProvider = (provider: string, passwordEntry: string | null = null, handOn?: VaultHandOn, from: string | null = null, consent?: ConsentToken | null) =>
   withResult(provider, connectedFrom(handOn, from), consent === undefined ? consentToken() : consent, () => unlockVault(provider, passwordEntry, handOn));
-export const signInProvider = (provider: string, fields: VaultSignInFields, from: string | null = null, consent?: ConsentToken | null) =>
-  withResult(provider, connectedFrom(undefined, from), consent === undefined ? consentToken() : consent, () => signInVault(provider, fields));
+export const signInProvider = (provider: string, request: VaultSignInRequest, from: string | null = null, consent?: ConsentToken | null) =>
+  withResult(provider, connectedFrom(undefined, from), consent === undefined ? consentToken() : consent, () => signInVault(provider, request));
+export const answerProvider = (provider: string, answer: VaultAnswer, from: string | null = null, consent?: ConsentToken | null) =>
+  withResult(provider, connectedFrom(undefined, from), consent === undefined ? consentToken() : consent, () => answerVault(provider, answer));
 export const lockProvider = (provider: string) => withState(() => lockVault(provider));
 export const signOutProvider = (provider: string) => withState(() => signOutVault(provider));
 export const refreshProvider = (provider: string) => withState(() => refreshVault(provider));
@@ -103,7 +107,7 @@ export function openPasswordSettings(profileId: string | null = null) {
   openSettings("profiles", id && s.profiles[id] ? id : null, SETTINGS_DETAIL.passwords);
 }
 export const copyInstallCommand = (command: string) => copyText(command);
-export const installCommandOf = (p: VaultProviderState) => p.install?.command || brandOf(p.id).install;
+export const restartProvider = (plugin: string) => restartProcess(plugin);
 
 export function toastInTab(tabId: string, title: string, key: string, failed = false) {
   const windowId = useBrowser.getState().tabs[tabId]?.windowId;

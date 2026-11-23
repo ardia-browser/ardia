@@ -1,18 +1,15 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { StyleSheet, TextInput, View } from "react-native";
-import { useSettings } from "../../state/browser/hooks";
-import { updateSettings } from "../../state/settings/actions";
-import type { SignInField } from "../../state/vaults/signInFlow";
 import type { VaultSignInResult } from "../../state/vaults/actions";
 import { signInRequest, type SignInGoal, type SignInRequest } from "../../state/vaults/signInRequest";
-import { Button, Dialog, Group, PopUp, radius, space, Text, Toggle, useTheme, VaultPasswordField, type Option } from "../ui";
+import { Button, Dialog, Group, PopUp, radius, space, Text, useTheme, VaultPasswordField, type Option } from "../ui";
 import { font as typeScale, lineHeight } from "../ui/tokens";
 import { BrandBadge, useCopiedFlash } from "./VaultParts";
 import { Morph, useLeaving } from "./VaultMorph";
-import { FIELD, FormRow, PlainField, ROW, ROW_LINE, SecretPlaceholder } from "./VaultFormFields";
+import { FormRow, PlainField, ROW, ROW_LINE, SecretPlaceholder } from "./VaultFormFields";
 
 export { FieldError } from "./VaultFormFields";
-import { VAULT_BADGE } from "./tokens";
+import { VAULT_BADGE, VAULT_SIGN_IN } from "./tokens";
 
 export type FieldHandle = { focus: () => void };
 
@@ -64,12 +61,14 @@ export function SignInSheet({
   leading,
   primary,
   submitsFromSheet,
+  slide,
   children,
 }: {
   provider: string;
   title: string;
   subtitle?: string;
   step: string;
+  slide?: -1 | 0 | 1;
   onCancel: () => void;
   onSubmit: () => void;
   leading?: ReactNode;
@@ -94,7 +93,7 @@ export function SignInSheet({
         }}
       >
         <SheetHeader icon={<BrandBadge provider={provider} size="xl" />} title={title} subtitle={subtitle} />
-        <Morph id={step}>{children}</Morph>
+        <Morph id={step} slide={slide}>{children}</Morph>
         <View style={ACTIONS}>
           <Fragment key={`${step}-leading`}>{leading}</Fragment>
           <View style={ACTIONS_GAP} />
@@ -189,6 +188,8 @@ export function SecretRow({
   entry,
   onLength,
   autoFocus,
+  placeholder = "Required",
+  revealed,
   error,
   onSubmit,
   onCancel,
@@ -198,6 +199,8 @@ export function SecretRow({
 }: {
   label: string;
   entry: string;
+  placeholder?: string;
+  revealed?: boolean;
   onLength: (length: number) => void;
   autoFocus?: boolean;
   error?: string;
@@ -213,10 +216,11 @@ export function SecretRow({
   const [empty, setEmpty] = useState(true);
   return (
     <FormRow label={label} error={error} focused={focused && !leaving}>
-      {empty ? <SecretPlaceholder text="Required" /> : null}
+      {empty ? <SecretPlaceholder text={placeholder} /> : null}
       <VaultPasswordField
         ref={field}
         entry={entry}
+        revealed={revealed}
         bordered={false}
         label={label}
         onFocusChange={setFocused}
@@ -238,38 +242,9 @@ export function PopUpRow<T extends string>({ label, value, options, onChange, er
   return (
     <FormRow label={label} error={error}>
       <View style={POPUP}>
-        <PopUp value={value} options={options} onChange={onChange} minWidth={POPUP_MIN} />
+        <PopUp value={value} options={options} onChange={onChange} minWidth={VAULT_SIGN_IN.popUpMin} />
       </View>
     </FormRow>
-  );
-}
-
-export function TouchIdRow({ available }: { available: boolean }) {
-  const on = useSettings((s) => s.vaultTouchID);
-  if (!available) return null;
-  return (
-    <Form>
-      <View style={[ROW, ROW_LINE]}>
-        <Text style={TOGGLE_LABEL}>Unlock with Touch ID</Text>
-        <Toggle value={on} accessibilityLabel="Unlock with Touch ID" onChange={(v) => updateSettings({ vaultTouchID: v })} />
-      </View>
-    </Form>
-  );
-}
-
-export function NoteRow({ title, detail, trailing }: { title: string; detail?: string; trailing?: ReactNode }) {
-  return (
-    <View style={[ROW, ROW_LINE]}>
-      <View style={FIELD}>
-        <Text>{title}</Text>
-        {detail ? (
-          <Text size="small" tone="textSecondary" style={DETAIL}>
-            {detail}
-          </Text>
-        ) : null}
-      </View>
-      {trailing}
-    </View>
   );
 }
 
@@ -296,29 +271,17 @@ export function CommandRow({ command, onCopy }: { command: string; onCopy: () =>
   );
 }
 
-export function SheetLine({ children }: { children: ReactNode }) {
-  return (
-    <Text size="small" tone="textSecondary" style={LINE}>
-      {children}
-    </Text>
-  );
-}
-
-export function errorFor(field: SignInField, error: { field: SignInField | null; text: string }) {
+export function errorFor(field: string, error: { field: string | null; text: string }) {
   return error.field === field ? error.text : undefined;
 }
 
-const POPUP_MIN = 150;
 const HEADER = { alignItems: "center", paddingTop: space.xs } as const;
 const TITLE = { marginTop: space.ml, textAlign: "center" } as const;
 const HEADER_TILE = { width: VAULT_BADGE.xl.box, height: VAULT_BADGE.xl.box, borderRadius: radius.panel, borderWidth: StyleSheet.hairlineWidth * 2, alignItems: "center", justifyContent: "center" } as const;
-const SUBTITLE = { marginTop: space.xs, textAlign: "center", lineHeight: lineHeight.small, maxWidth: 340 } as const;
+const SUBTITLE = { marginTop: space.xs, textAlign: "center", lineHeight: lineHeight.small, maxWidth: VAULT_SIGN_IN.subtitleWidth } as const;
 const FORM_GAP = { marginTop: space.xl } as const;
-const TOGGLE_LABEL = { flex: 1 } as const;
 const POPUP = { alignItems: "flex-end" } as const;
-const SECRET = { height: 22, flex: 1 } as const;
-const DETAIL = { marginTop: space.xxs, lineHeight: lineHeight.small } as const;
+const SECRET = { height: VAULT_SIGN_IN.secretHeight, flex: 1 } as const;
 const COMMAND = { flex: 1, fontFamily: "Menlo", ...typeScale.small } as const;
-const LINE = { marginTop: space.xl, textAlign: "center", lineHeight: lineHeight.small } as const;
 const ACTIONS = { flexDirection: "row", alignItems: "center", gap: space.m, marginTop: space.xl } as const;
 const ACTIONS_GAP = { flex: 1 } as const;

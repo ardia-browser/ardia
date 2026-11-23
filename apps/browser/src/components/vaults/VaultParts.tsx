@@ -1,20 +1,22 @@
 import { useEffect, useRef, useState } from "react";
+import { isHexColor } from "../../lib/color";
 import { Animated, Image, StyleSheet, View } from "react-native";
 import type { VaultCopyOutcome } from "../../state/vaults/actions";
 import { brandAccent, brandOf } from "../../state/vaults/brands";
-import { useVaultProviders } from "../../state/vaults/hooks";
+import { useVaultProvider, useVaultProviders } from "../../state/vaults/hooks";
 import { NEUTRAL_BRAND_ACCENT } from "../../state/vaults/tokens";
 import { Button, capsule, Crossfade, curve, iconButton, ink, radius, Symbol, useTheme, withAlpha } from "../ui";
 import { VAULT_BADGE, VAULT_CODE, VAULT_MENU, VAULT_SETTINGS, VAULT_TILE_BADGE } from "./tokens";
 
-export function BrandBadge({ provider, size = "s", tooltip }: { provider: string; size?: keyof typeof VAULT_BADGE; tooltip?: string }) {
+export function BrandBadge({ provider, size = "s", tooltip, symbol, accent: given }: { provider: string; size?: keyof typeof VAULT_BADGE; tooltip?: string; symbol?: string; accent?: string }) {
   const theme = useTheme();
-  const accent = brandAccent(provider);
+  useVaultProvider(provider);
+  const accent = given && isHexColor(given) ? given : brandAccent(provider);
   const { box, glyph } = VAULT_BADGE[size];
   const solid = size !== "s";
   return (
     <View tooltip={tooltip} style={{ width: box, height: box, borderRadius: size === "xl" ? radius.panel : solid ? radius.tile : radius.control, backgroundColor: solid ? accent : withAlpha(accent, VAULT_MENU.badgeAlpha), alignItems: "center", justifyContent: "center" }}>
-      <Symbol name={brandOf(provider).symbol} size={glyph} weight="semibold" color={solid ? theme.onAccent : accent} style={{ width: box, height: box }} />
+      <Symbol name={symbol ?? brandOf(provider).symbol} size={glyph} weight="semibold" color={solid ? theme.onAccent : accent} style={{ width: box, height: box }} />
     </View>
   );
 }

@@ -21,6 +21,7 @@ export const useVaultTouchID = () => {
   const asks = useBrowser((s) => s.settings.vaultAskBeforeFilling);
   return available && asks;
 };
+export const useVaultBiometricsAvailable = () => useVaultBiometrics((s) => s.available);
 export const useVaultMenuGlass = () => useBrowser((s) => s.settings.vaultMenuGlass);
 const NO_ITEMS: Record<string, VaultItem[]> = {};
 

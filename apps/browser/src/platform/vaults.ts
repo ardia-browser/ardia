@@ -95,10 +95,21 @@ export const onPasskeyOffer = (listener: (request: VaultPasskeyRequest) => void)
 export const onPasskeyDone = (listener: (done: VaultPasskeyDone) => void) => on("vaults.passkeyDone", listener);
 export const onPasskeysChanged = (listener: () => void) => on("vaults.passkeysChanged", () => listener());
 
-export const signInVault = (provider: string, fields: VaultSignInFields) => signInToVault(provider, fields);
+export type CredentialProviderState = VaultProviderState;
+export type VaultNeeds = NonNullable<VaultProviderState["needs"]>;
+export type VaultNeedKind = VaultNeeds["kind"];
+export type VaultSignInMethodSpec = NonNullable<VaultProviderState["signIn"]>["methods"][number];
+export type VaultSignInFieldSpec = VaultSignInMethodSpec["fields"][number];
+export type VaultServerSpec = NonNullable<NonNullable<VaultProviderState["signIn"]>["servers"]>[number];
+export type VaultSignInRequest = { method: string; server?: string; values: Record<string, string>; secrets: Record<string, string> };
+export type VaultAnswer = { need: VaultNeedKind; value?: string; entryToken?: string; methodId?: string; accountId?: string };
+
+export const signInVault = (provider: string, request: VaultSignInRequest) => signInToVault(provider, request);
+export const answerVault = (provider: string, answer: VaultAnswer) => call("vaults.answer", { provider, ...answer });
 export const unlockVault = (provider: string, passwordEntry: string | null, handOn?: VaultHandOn) => unlockNativeVault(provider, passwordEntry, handOn);
 
-export const onVaultChanged = (listener: (state: VaultProviderState) => void) => on("vaults.changed", ({ provider }) => listener(provider));
+export const onVaultChanged = (listener: (state: VaultProviderState, removed: boolean) => void) => on("vaults.changed", ({ provider, removed }) => listener(provider, removed === true));
+export const onVaultApproval = (listener: (provider: string, url: string) => void) => on("vaults.openApproval", ({ provider, url }) => listener(provider, url));
 export const onVaultItemsChanged = (listener: (provider: string) => void) => on("vaults.itemsChanged", ({ provider }) => listener(provider));
 
 export type { VaultField, VaultFieldInset, VaultFieldKind, VaultFieldRect, VaultFillError, VaultFillField, VaultKeyPress, VaultPasswordDraft, VaultPasswordStyle, VaultSubmission, VaultTouchIDStatus } from "@ardia/ardiacore";

@@ -40,7 +40,8 @@ test("the copy reply maps to what the person is told", () => {
   assert.equal(copyOutcomeOf(null), "failed");
 });
 
-test("a refused copy says why, a declined one says nothing", () => {
+test("a refused copy says why, a declined one says nothing", async () => {
+  await setup();
   assert.equal(copyFailureMessage("copied", "password", "bitwarden"), "");
   assert.equal(copyFailureMessage("declined", "password", "bitwarden"), "");
   assert.equal(copyFailureMessage("locked", "username", "bitwarden"), "Unlock Bitwarden to copy the username.");

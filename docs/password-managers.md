@@ -481,18 +481,48 @@ comes next in `needs`: a password, a code (with `methods` to pick from, sent bac
 `passwordEntry` and `clientSecretEntry` name a native secret entry instead of the value (see Security model), and
 `unlockVault(provider, "entry-…")` resolves an entry the same way.
 
-The sign-in sheets in Settings › Profiles › <profile> › Passwords (`PasswordManagerSheets.tsx`, `BitwardenSheet.tsx`,
-`state/vaults/signInFlow.ts`, `servers.ts`, `brands.ts`, parts in `vaults/VaultSignInParts.tsx`) are still the
-bespoke per-vendor sheets, but nothing registers a provider for them now; they will be replaced by one generic
-sign-in sheet driven by the sign-in methods a plugin declares. What carries over is their shape: the manager's badge and name, an optional one-line status, grouped
-rows with a fixed label column, errors under the field that caused them (`state/vaults/signInFlow.ts`
-`placeSignInError`, else under the form), Cancel then the primary action on the right, and progress inside the
-primary button. Empty secret rows show a Required placeholder drawn in JS beside the native field, and the focused field gets an accent ring (the native field reports focus with `onFocusChange`). Steps cross-fade and the sheet's height follows its content (220 ms ease-in-out; fade only with
-Reduce Motion). Return submits, Escape cancels, Tab and Shift-Tab walk the fields. A missing CLI shows its install
-command with Copy and Check Again. Cancel, closing Settings, or replacing the sheet while a sign-in or unlock runs (or
-while a sign-in waits on a browser approval) cancels it natively, and an answer that lands after that is dropped
-(`signInRequest.ts`, `cancelProviderSignIn`). Telemetry: `vault_sign_ins`, `vault_sign_in_failures`,
-`vault_sign_in_two_step`, `vault_sign_ins_cancelled`, `vault_unlocks_typed`, `vault_unlock_failures`, `vault_cli_checks`.
+### The sign-in sheet
+
+One sheet signs in to every provider (`components/vaults/ProviderSignInSheet.tsx`, its follow-ups in
+`SignInNeeds.tsx`, rows in `SignInFields.tsx` and `VaultSignInParts.tsx`, opened by `showConnectSheet` in
+`settings/panes/PasswordManagerSheets.tsx`). Nothing in it is written for a vendor: the provider state carries the
+manager's `title`, `symbol` and `accent` (the badge, `state/vaults/brands.ts` reads them from the store), and its
+`signIn` descriptor (`methods`, `servers`, `unlockField`) from the verified manifest. `state/vaults/providerModel.ts`
+reads them; `signInFlow.ts` decides what Sign In sends and which error shows.
+
+- **Methods.** A segmented control picks the method only when there are several (Bitwarden: Email and Password, API
+  Key; Proton Pass: Sign In with Browser, Access Token). Rows a method doesn't use fold away and rows two methods
+  share (Bitwarden's Master Password) stay with what was typed. A `credentials` method's primary button is Sign In and
+  waits for every required field; a `desktopApproval` or `browserApproval` method's is Continue.
+- **Fields.** Every field has a fixed label column. A `secret` field is the native secure field
+  (`VaultPasswordField`, `OwnedSecretRow` owns its entry token); its typed value never reaches JS and the sign-in
+  sends `secrets: { <field id>: <entry token> }` beside `values` for the rest (`requestFor`). `masked: false` shows
+  the text and keeps the native path. Empty rows say Required or Optional; a `prefill: "account"` field starts with
+  the provider's last account.
+- **Servers.** A Server pop-up when the provider declares servers; the custom one slides in a Server URL row. A typed
+  address gets `https://` when it has no scheme, http is allowed only for localhost, 127.0.0.1 and [::1], and a user,
+  password, single-label host or over 2048 characters is refused under the field with "Enter the server as an https
+  address." before anything is sent (`servers.ts`). The sign-in sends a preset's id or the checked address as `server`.
+- **Waiting.** A desktop approval shows a spinner and "Approve Ardia in <app>." with Open <app>; a browser approval
+  shows "Approve in your browser." with Cancel. Native opens the approval page itself after its host check
+  (`vaults.openApproval` opens it in a tab). A `problem` pushed while waiting returns to the form with its message.
+- **Follow-ups.** A `needs` in the result or the pushed state slides the next step in inside the same sheet: a code
+  (a Method pop-up when there are several; a method with `sendsCode` asks Send Code first), a password (the
+  unlock field's title), an email, an account to pick, a declared field (`needs.field`), or an approval. Each answers
+  through `vaults.answer` (`answerProvider`); Back cancels the pending sign-in and returns to the form.
+- **Errors.** One line under the form in native wording (`problem.message`, or `error`); an unanswered call reads
+  "<Manager> didn't respond. Try again." A first request for a code is not an error; a wrong one is.
+- **Install.** A provider that is `notInstalled`, or whose `problem.code` says its CLI is too old, opens the install
+  step instead: the install (or update) command in mono with Copy, Install Guide and Check Again.
+- **Motion.** Steps cross-fade and slide 14 pt in the direction of travel while the sheet's height follows its content
+  (220 ms ease-in-out); rows fold in and out with `Expand`. Opacity and the slide run on the native driver; the height
+  is the one value Animated drives from JS, as everywhere else in the app. Reduce Motion keeps the fade and drops the
+  slide. Nothing animates while the sheet is still.
+- **Keys.** Return submits, Escape cancels, Tab and Shift-Tab walk the fields. Cancel, closing Settings, or replacing
+  the sheet while a sign-in runs or waits cancels it natively, and a late answer is dropped (`signInRequest.ts`,
+  `cancelProviderSignIn`). The unlock sheet asks for the unlock field only. Telemetry: `vault_sign_ins`,
+  `vault_sign_in_failures`, `vault_sign_in_two_step`, `vault_sign_ins_cancelled`, `vault_unlocks_typed`,
+  `vault_unlock_failures`, `vault_cli_checks`.
 
 `unlockVault(provider, null)` means Touch ID: the provider's stored Touch ID copy, its desktop app's approval, or the
 Mac owner check, whichever the provider uses.
@@ -1238,17 +1268,47 @@ fallback against created + used on the dashboard.
 
 Settings › Profiles › <profile> › Passwords. On a Mac profile on Ardia it shows, in order:
 
-1. **For All Profiles** (`PasswordManagers.tsx`, `ForAllProfilesSection`): a row per registered provider (none until
-   plugins register; Connect…, Unlock,
-   and a ⋯ menu with Lock, Export Passwords… and Sign Out…) and Sync; then Suggest, Ask before filling, Translucent
-   password menu, Offer to save new logins, Save new passwords automatically, Save new logins to, Use passkeys from,
-   Lock after, Lock when screen locks, Lock when Ardia quits, Keep generated passwords and the iCloud rows. These are
-   app-wide settings, shown on every Ardia profile's page.
-2. **Passwords**: Import passwords (CSV; codes in the file are kept too), Export passwords (Chrome's CSV,
+1. **Password Managers** (`PasswordManagers.tsx`, rows in `components/vaults/ManagerRows.tsx`, words in
+   `state/vaults/managerStatus.ts`): a row per registered provider with its badge, its name and one status line, and
+   the one control that moves it on, centred on the row:
+
+   | State | Status line | Control |
+   | --- | --- | --- |
+   | Unlocked | Connected as <account> (· <server> when it isn't the first) | ⋯ (Lock, Export Passwords…, Sign Out…, Show in Plugins) |
+   | Locked | Locked · <account> | Unlock, ⋯ |
+   | Signed out | Not signed in | Sign In… |
+   | Signing in (a pending `needs`) | Signing in… | Continue… |
+   | Not installed | Not installed, then the install command in mono with Copy (Copied for 1.5 s) | Check Again |
+   | CLI too old (`problem.code` `cliTooOld`) | the native line in amber, then the update command with Copy | Check Again |
+   | A `problem` (offline, an error) | its message in amber | the state's own control |
+   | Unavailable: crashed | Quit unexpectedly (red) | Restart when `canRestart` |
+   | Unavailable: updating | Updating… with a spinner | none |
+   | Unavailable: damaged | its message, else Damaged (red) | ⋯ |
+   | Unavailable: off | Off | Turn On… (Plugins) |
+
+   Sign Out confirms ("Sign Out of <Manager>?", "Ardia stops filling from it until you sign in again."). Sync follows
+   while a manager is unlocked. **Add Password Manager…** (trailing, under the group, shown while an official
+   credential provider isn't registered) lists them (`useOfficialCredentialProviders`, through
+   `state/vaults/managerCatalogue.ts`); Add installs it with `installOfficialPlugin(name, { showSheet: false })`, so
+   the plugin consent sheet shows over this page, while an Installing… row with a spinner stands in the group. A
+   failed install leaves the row with the reason in red, Try Again and Dismiss; a cancelled consent removes it
+   quietly. Once the provider registers, its sign-in sheet opens (not when it is already connected). Rows fold in and
+   out (`Expand`).
+2. **For All Profiles**: Suggest, Ask before filling, Translucent password menu, Offer to save new logins, Save new
+   passwords automatically, Save new logins to, Use passkeys from, Lock after, Lock when screen locks, Lock when Ardia
+   quits, Unlock with Touch ID (while a connected manager can use it and the Mac has Touch ID), Keep generated
+   passwords and the iCloud rows. These are app-wide settings, shown on every Ardia profile's page.
+3. **Passwords**: Import passwords (CSV; codes in the file are kept too), Export passwords (Chrome's CSV,
    `passwords.export`; `vaults.export` serves CLI managers only) and the Password manager apps help row.
-3. **Saved Passwords**, the merged list below, with New Password on its header.
-4. Generated Passwords, Passkeys and Verification Codes, each only when it has rows.
-5. Never Saved.
+4. **Saved Passwords**, the merged list below, with New Password on its header.
+5. Generated Passwords, Passkeys and Verification Codes, each only when it has rows.
+6. Never Saved.
+
+Every state above renders without native or a real CLI from the dev harness (`components/dev/vaultFixtures.ts`):
+`ac.vaultFixtures.showVaultScene(name)` holds fixture providers in the store (`showPreviewProviders`; native events and
+reloads are ignored until `endVaultPreview()`) and opens this page; `showVaultSheet(name)` opens the sign-in or unlock
+sheet in one of its steps; `showAddManagerScene()` the Add Password Manager list; `previewAppearance("light" | "dark")`
+switches the theme. `VAULT_SCENES` and `VAULT_SHEETS` name them all.
 
 Other profiles, and every profile on Linux and Windows, see the plain page: Passwords, the saved list and Never Saved.
 Rows on the sub-page are not search anchors (search opens the profile, not its sub-pages); the profile rows' keywords

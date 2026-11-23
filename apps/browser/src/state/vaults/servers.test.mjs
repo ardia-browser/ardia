@@ -1,28 +1,40 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { bitwardenServer, serverChoiceOf } from "./servers.ts";
+import { customServerURL, initialServer, serverLabel, serverValue } from "./servers.ts";
 
-test("a missing or malformed self-hosted address gives no server", () => {
-  assert.equal(bitwardenServer("self", ""), null);
-  assert.equal(bitwardenServer("self", "   "), null);
-  assert.equal(bitwardenServer("self", "not a url"), null);
-  assert.equal(bitwardenServer("self", "intranet"), null);
+const servers = [
+  { id: "us", title: "Bitwarden.com", custom: null },
+  { id: "eu", title: "Bitwarden.eu", url: "https://vault.bitwarden.eu", custom: null },
+  { id: "selfHosted", title: "Self-Hosted", custom: { title: "Server URL", placeholder: "vault.example.com" } },
+];
+
+test("a custom server is https, or http only on this Mac's loopback, and never carries a user or password", () => {
+  assert.equal(customServerURL("vault.example.com/"), "https://vault.example.com");
+  assert.equal(customServerURL("https://pw.example.org/vaultwarden"), "https://pw.example.org/vaultwarden");
+  assert.equal(customServerURL("http://localhost:8080"), "http://localhost:8080");
+  assert.equal(customServerURL("http://127.0.0.1:8080"), "http://127.0.0.1:8080");
+  assert.equal(customServerURL("http://[::1]:8080"), "http://[::1]:8080");
+  for (const refused of ["", "   ", "not a url", "intranet", "http://vault.example.com", "https://sam:pw@vault.example.com", "ftp://vault.example.com", `https://${"a".repeat(2050)}.com`]) {
+    assert.equal(customServerURL(refused), null, refused.slice(0, 40));
+  }
 });
 
-test("self-hosted addresses get https and lose trailing slashes", () => {
-  assert.equal(bitwardenServer("self", "vault.example.com/"), "https://vault.example.com");
-  assert.equal(bitwardenServer("self", "http://localhost:8080"), "http://localhost:8080");
-  assert.equal(bitwardenServer("self", "https://pw.example.org/vaultwarden"), "https://pw.example.org/vaultwarden");
+test("the sheet opens on the server the provider already uses, a preset by id or address, else the custom one with its address", () => {
+  assert.deepEqual(initialServer(servers, undefined), { id: "us", url: "" });
+  assert.deepEqual(initialServer(servers, "eu"), { id: "eu", url: "" });
+  assert.deepEqual(initialServer(servers, "https://vault.bitwarden.eu/"), { id: "eu", url: "" });
+  assert.deepEqual(initialServer(servers, "https://vault.example.com"), { id: "selfHosted", url: "https://vault.example.com" });
+  assert.deepEqual(initialServer([], "https://vault.example.com"), { id: "", url: "" });
+  assert.deepEqual(initialServer(servers.slice(0, 2), "https://vault.example.com"), { id: "us", url: "" });
 });
 
-test("the hosted regions map to their servers and back", () => {
-  assert.equal(bitwardenServer("us", "ignored"), null);
-  assert.equal(bitwardenServer("eu", ""), "https://vault.bitwarden.eu");
-  assert.equal(serverChoiceOf(undefined), "us");
-  assert.equal(serverChoiceOf("https://vault.bitwarden.com"), "us");
-  assert.equal(serverChoiceOf("https://vault.bitwarden.eu/"), "eu");
-  assert.equal(serverChoiceOf("https://vault.example.com"), "self");
-  assert.equal(serverChoiceOf("https://vault.bitwarden.com:443"), "us", "the default port is still the cloud");
-  assert.equal(serverChoiceOf("vault.bitwarden.eu:443/"), "eu");
-  assert.equal(serverChoiceOf("https://vault.bitwarden.com:8443"), "self");
+test("a sign-in sends a preset's id or the checked custom address, and the row names only a server that isn't the default", () => {
+  assert.equal(serverValue(servers, { id: "eu", url: "ignored" }), "eu");
+  assert.equal(serverValue(servers, { id: "selfHosted", url: "vault.example.com" }), "https://vault.example.com");
+  assert.equal(serverValue(servers, { id: "selfHosted", url: "http://vault.example.com" }), null);
+  assert.equal(serverValue([], { id: "", url: "" }), undefined);
+  assert.equal(serverLabel(servers, undefined), null);
+  assert.equal(serverLabel(servers, "us"), null);
+  assert.equal(serverLabel(servers, "eu"), "Bitwarden.eu");
+  assert.equal(serverLabel(servers, "https://vault.example.com:8443/"), "vault.example.com");
 });

@@ -2,40 +2,30 @@ import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { VAULT_SETTINGS } from "../../vaults/tokens";
 import { effectiveSource, sourceOptions, usePasskeyExtensions } from "../../../state/vaults/passkeySources";
-import { confirm, showMenu } from "../../../state/app/system";
-import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { useSettings } from "../../../state/browser/hooks";
 import { updateSettings } from "../../../state/settings/actions";
 import type { Settings } from "../../../state/settings/settings";
 import { VAULT_LOCK_MINUTES } from "../../../state/settings/vaultSettings";
 import { KEEP_GENERATED_OPTIONS } from "../../../state/vaults/generated";
-import { lockProvider, reloadProviders, signInError, signOutProvider, unlockProvider, type VaultProviderState } from "../../../state/vaults/actions";
-import { exportManagerPasswords } from "../../../state/vaults/export";
-import { useVaultProviders } from "../../../state/vaults/hooks";
+import { reloadProviders, type VaultProviderState } from "../../../state/vaults/actions";
+import { useVaultBiometricsAvailable, useVaultProviders } from "../../../state/vaults/hooks";
+import { useAddingManager, useManagerCatalogue } from "../../../state/vaults/managerCatalogue";
 import { passwordManagersOnly } from "../../../state/vaults/ardia";
 import { connectedSavers, preferredSaveTarget } from "../../../state/vaults/saveOffer";
 import { refreshVaultSyncStatus, syncedLine, syncVaultsNow, useVaultSync } from "../../../state/vaults/sync";
-import { Box, Button, PopUp, space, Toggle } from "../../ui";
+import { Button, PopUp, Toggle } from "../../ui";
 import { changeGuardedVaultSetting } from "../../../state/vaults/settingsGuard";
-import { BrandBadge } from "../../vaults/VaultParts";
+import { AddingRow, ProviderRow, TouchUnlockRow } from "../../vaults/ManagerRows";
+import { showAddManagerSheet } from "../../vaults/AddManagerSheet";
+import { FieldStack, type StackRow } from "../../vaults/SignInFields";
 import { Group, Row, SectionHeader } from "../Form";
-import { showConnectSheet, showUnlockSheet, UNLOCK_TITLES } from "./PasswordManagerSheets";
+import { showConnectSheet, showUnlockSheet } from "./PasswordManagerSheets";
 import { VaultICloudRows } from "./VaultICloudRows";
 import { VaultSuggestRow } from "./VaultSuggestRow";
 
 const LOCK_TITLES: Record<(typeof VAULT_LOCK_MINUTES)[number], string> = { 5: "5 Minutes", 15: "15 Minutes", 30: "30 Minutes", 60: "1 Hour", 0: "Never" };
 const LOCK_OPTIONS = VAULT_LOCK_MINUTES.map((m) => ({ value: String(m), title: LOCK_TITLES[m] }));
 const ASK = "ask";
-
-const SHORT_MESSAGE = 60;
-
-const unavailableLine = (message: string | null | undefined) => (message && message.length <= SHORT_MESSAGE ? message : "Unavailable");
-
-function stateLine(p: VaultProviderState): string | undefined {
-  const account = [p.account, p.server && p.capabilities.selfHosted ? p.server.replace(/^https?:\/\//, "") : null].filter(Boolean).join(" · ");
-  const status = p.state === "locked" ? "Locked" : p.state === "notInstalled" ? "Not Installed" : p.state === "unavailable" ? unavailableLine(p.message) : p.state === "signedOut" ? "Not Connected" : "";
-  return [account, status].filter(Boolean).join(" · ") || undefined;
-}
 
 const OWNER_CHECK_REFUSED = "Confirm it's you to change this setting.";
 const REFUSED_NOTE_MS = 4000;
@@ -87,41 +77,27 @@ function LockAfterRow() {
   );
 }
 
-function ProviderRow({ provider }: { provider: VaultProviderState }) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const unlock = async () => {
-    setBusy(true);
-    setError("");
-    const result = await unlockProvider(provider.id, null);
-    setBusy(false);
-    if (result.needs === "password") return showUnlockSheet(provider.id);
-    if (!result.ok) setError(signInError(result, provider.name));
-  };
-  const more = async () => {
-    const choice = await showMenu([
-      ...(provider.state === "unlocked" ? [{ id: "lock", title: "Lock", symbol: "lock" }] : []),
-      ...(provider.state === "unlocked" && PLATFORM_FEATURES.exportsBookmarksAndPasswords ? [{ id: "export", title: "Export Passwords…", symbol: "square.and.arrow.up" }] : []),
-      { separator: true },
-      { id: "signOut", title: "Sign Out…", symbol: "rectangle.portrait.and.arrow.right" },
-    ]);
-    if (choice === "lock") await lockProvider(provider.id);
-    if (choice === "export") setError(await exportManagerPasswords(provider.id));
-    if (choice !== "signOut") return;
-    const { confirmed } = await confirm({ title: `Sign Out of ${provider.name}?`, message: "Ardia won't fill from it until you connect again.", confirmTitle: "Sign Out" });
-    if (confirmed) await signOutProvider(provider.id);
-  };
+function ManagersGroup({ managers }: { managers: VaultProviderState[] }) {
+  const adding = useAddingManager();
+  const catalogue = useManagerCatalogue();
+  const sheets = { connect: (id: string) => showConnectSheet(id), unlock: (id: string) => showUnlockSheet(id) };
+  const shown = adding && !managers.some((p) => p.id === adding.name) ? adding : null;
+  const rows: StackRow[] = [
+    ...managers.map((p) => ({ key: p.id, render: () => <ProviderRow provider={p} sheets={sheets} /> })),
+    ...(shown ? [{ key: `adding-${shown.name}`, render: () => <AddingRow adding={shown} onReady={sheets.connect} /> }] : []),
+  ];
+  const syncs = managers.some((p) => p.state === "unlocked");
+  if (syncs) rows.push({ key: "sync", render: () => <SyncRow providers={managers} /> });
+  const canAdd = catalogue.some((e) => e.name !== adding?.name);
+  if (!rows.length && !canAdd) return null;
+  const add = canAdd ? (
+    <Button title="Add Password Manager…" disabled={adding?.phase === "installing" || adding?.phase === "starting"} onPress={() => showAddManagerSheet(sheets.connect)} />
+  ) : null;
   return (
-    <Row icon={<BrandBadge provider={provider.id} size="m" />} title={provider.name} description={error || stateLine(provider)}>
-      <Box row gap="s" center>
-        {provider.state === "locked" ? <Button title={busy ? "Unlocking…" : "Unlock"} reserve={UNLOCK_TITLES} disabled={busy} onPress={() => void unlock()} /> : null}
-        {isConnected(provider) ? (
-          <Button variant="icon" icon="ellipsis.circle" size="l" tooltip="More" onPress={() => void more()} />
-        ) : (
-          <Button title="Connect…" onPress={() => showConnectSheet(provider.id)} />
-        )}
-      </Box>
-    </Row>
+    <View>
+      <SectionHeader title="Password Managers" description={null} action={add} />
+      {rows.length ? <FieldStack rows={rows} gap={false} /> : null}
+    </View>
   );
 }
 
@@ -158,19 +134,12 @@ export function ForAllProfilesSection() {
   const targetOptions = [...(savers.length === 1 ? [] : [{ value: ASK, title: "Ask Each Time" }]), ...savers.map((p) => ({ value: p.id, title: p.name }))];
   const target = preferredSaveTarget(providers, saveTarget) || ASK;
   const fills = providers.some(isConnected);
-  const syncs = managers.some((p) => p.state === "unlocked");
+  const touchID = useVaultBiometricsAvailable() && managers.some((p) => isConnected(p) && p.capabilities.touchID);
   return (
     <View>
+      <ManagersGroup managers={managers} />
       <SectionHeader title="For All Profiles" description={null} />
-      {managers.length ? (
-        <Group>
-          {managers.map((p) => (
-            <ProviderRow key={p.id} provider={p} />
-          ))}
-          {syncs ? <SyncRow providers={managers} /> : null}
-        </Group>
-      ) : null}
-      <View style={managers.length ? GROUP_GAP : null}>
+      <View>
         <Group>
           {fills ? <VaultSuggestRow /> : null}
           {fills ? <GuardedToggle title="Ask before filling" setting="vaultAskBeforeFilling" /> : null}
@@ -195,6 +164,7 @@ export function ForAllProfilesSection() {
           <LockAfterRow />
           <GuardedToggle title="Lock when screen locks" setting="vaultLockOnScreenLock" />
           <GuardedToggle title="Lock when Ardia quits" setting="vaultLockOnQuit" />
+          {touchID ? <TouchUnlockRow /> : null}
           <Row title="Keep generated passwords">
             <PopUp value={String(keepGenerated)} options={KEEP_GENERATED_OPTIONS} onChange={(v) => updateSettings({ vaultKeepGenerated: Number(v) })} />
           </Row>
@@ -205,4 +175,3 @@ export function ForAllProfilesSection() {
   );
 }
 
-const GROUP_GAP = { marginTop: space.l } as const;

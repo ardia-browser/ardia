@@ -1,24 +1,23 @@
-import { BRAND_ACCENTS, NEUTRAL_BRAND_ACCENT } from "./tokens";
+import { isHexColor } from "../../lib/color";
+import { NEUTRAL_BRAND_ACCENT } from "./tokens";
+import { vaultProviderOf } from "./store";
+import { credential, titleOf } from "./providerModel";
+import { isArdiaProvider } from "./ardia";
 
-type VaultBrand = { id: string; name: string; symbol: string; install: string };
-
-const VAULT_BRANDS: readonly VaultBrand[] = [
-  { id: "ardia", name: "Ardia", symbol: "key.fill", install: "" },
-  { id: "1password", name: "1Password", symbol: "key.horizontal.fill", install: "brew install --cask 1password-cli" },
-  { id: "bitwarden", name: "Bitwarden", symbol: "shield.lefthalf.filled", install: "brew install bitwarden-cli" },
-  { id: "protonpass", name: "Proton Pass", symbol: "lock.shield.fill", install: "brew install protonpass/tap/pass-cli" },
-];
+type VaultBrand = { id: string; name: string; symbol: string; accent: string };
 
 const FALLBACK_SYMBOL = "key.fill";
+const ARDIA_NAME = "Ardia";
+const UNKNOWN_NAME = "Password Manager";
+const SYMBOL_NAME = /^[a-z0-9]+(\.[a-z0-9]+)*$/;
 
-export const brandOf = (id: string): VaultBrand => VAULT_BRANDS.find((b) => b.id === id) ?? { id, name: id, symbol: FALLBACK_SYMBOL, install: "" };
+export function brandOf(id: string): VaultBrand {
+  const state = vaultProviderOf(id);
+  const p = state ? credential(state) : null;
+  const name = p ? titleOf(p) : isArdiaProvider(id) ? ARDIA_NAME : UNKNOWN_NAME;
+  const symbol = p?.symbol && SYMBOL_NAME.test(p.symbol) ? p.symbol : FALLBACK_SYMBOL;
+  const accent = p?.accent && isHexColor(p.accent) ? p.accent : NEUTRAL_BRAND_ACCENT;
+  return { id, name, symbol, accent };
+}
 
-export const brandAccent = (id: string) => BRAND_ACCENTS[id] ?? NEUTRAL_BRAND_ACCENT;
-
-const brandRank = (id: string) => {
-  const at = VAULT_BRANDS.findIndex((b) => b.id === id);
-  return at < 0 ? VAULT_BRANDS.length : at;
-};
-
-export const byBrandOrder = <T extends { id: string; name: string }>(list: readonly T[]): T[] =>
-  [...list].sort((a, b) => brandRank(a.id) - brandRank(b.id) || a.name.localeCompare(b.name));
+export const brandAccent = (id: string) => brandOf(id).accent;

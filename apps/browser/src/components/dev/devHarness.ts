@@ -181,6 +181,9 @@ export function startDevHarness() {
     get vaultForms(): typeof import("../vaults/LoginFormSheet") & typeof import("../vaults/VerificationCodes") & typeof import("../../state/vaults/standaloneCodes") & typeof import("../../state/vaults/menu") & typeof import("../../state/vaults/fill") {
       return { ...require("../vaults/LoginFormSheet"), ...require("../vaults/VerificationCodes"), ...require("../../state/vaults/standaloneCodes"), ...require("../../state/vaults/menu"), ...require("../../state/vaults/fill") };
     },
+    get vaultFixtures(): typeof import("./vaultFixtures") {
+      return require("./vaultFixtures");
+    },
     get vaultStore(): typeof import("../../state/vaults/store") {
       return require("../../state/vaults/store");
     },

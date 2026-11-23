@@ -25,7 +25,7 @@ async function slowly(start) {
 }
 
 test("a sign-in cancelled while it runs leaves no signed-in state, even when its answer lands late", async () => {
-  const result = await slowly(() => actions.signInProvider("bitwarden", { email: "a@b.c" }));
+  const result = await slowly(() => actions.signInProvider("bitwarden", { method: "password", values: { email: "a@b.c" }, secrets: {} }));
   assert.equal(result.ok, false);
   assert.equal(actions.wasCancelled(result), true);
   assert.equal(store.vaultProviderOf("bitwarden")?.state, "signedOut");
@@ -42,7 +42,7 @@ test("a sign-in that isn't cancelled still applies its answer", async () => {
   native.vaultFakes.providers = [provider("signedOut")];
   store.clearVaultIndex();
   await store.loadVaultProviders();
-  const result = await actions.signInProvider("bitwarden", { email: "a@b.c" });
+  const result = await actions.signInProvider("bitwarden", { method: "password", values: { email: "a@b.c" }, secrets: {} });
   assert.equal(result.ok, true);
   assert.equal(store.vaultProviderOf("bitwarden")?.state, "unlocked");
 });
@@ -62,7 +62,7 @@ test("closing a sheet while its sign-in runs cancels it and drops the late answe
   native.vaultFakes.signInGate = new Promise((r) => (release = r));
   try {
     const sheet = signInRequest("bitwarden", "connected");
-    const running = sheet.run(() => actions.signInProvider("bitwarden", { email: "a@b.c" }));
+    const running = sheet.run(() => actions.signInProvider("bitwarden", { method: "password", values: { email: "a@b.c" }, secrets: {} }));
     sheet.close();
     release();
     assert.equal(await running, null);
@@ -104,7 +104,7 @@ test("a sheet waiting on the browser cancels on close, and one that's idle or do
   for (let i = 0; i < 5; i++) await Promise.resolve();
   assert.deepEqual(native.vaultFakes.cancelledSignIns, ["bitwarden"]);
   const done = signInRequest("bitwarden", "connected");
-  assert.equal((await done.run(() => actions.signInProvider("bitwarden", { email: "a@b.c" })))?.ok, true);
+  assert.equal((await done.run(() => actions.signInProvider("bitwarden", { method: "password", values: { email: "a@b.c" }, secrets: {} })))?.ok, true);
   done.keepWaiting(true);
   done.close();
   for (let i = 0; i < 5; i++) await Promise.resolve();

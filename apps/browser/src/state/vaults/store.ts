@@ -2,9 +2,10 @@ import { consentToken, type ConsentToken } from "../telemetry/choice";
 import { create } from "zustand";
 import { useBrowser } from "../browser/store";
 import { onAppEvent } from "../../platform/app";
-import { onVaultChanged, onVaultItemsChanged, vaultBiometrics, vaultItems, vaultProviders, type VaultItem, type VaultProviderState } from "../../platform/vaults";
-import { brandOf, byBrandOrder } from "./brands";
+import { openUrlFromSettings } from "../settings/settingsWindows";
+import { onVaultApproval, onVaultChanged, onVaultItemsChanged, vaultBiometrics, vaultItems, vaultProviders, type VaultItem, type VaultProviderState } from "../../platform/vaults";
 import { isArdiaProvider } from "./ardia";
+import { credential, titleOf } from "./providerModel";
 import { vaultsOnForProfile } from "./enabled";
 import { clearVaultCodes } from "./codes";
 import { forgetMissingVaultAccounts } from "./accounts";
@@ -35,7 +36,14 @@ const change = (patch: (s: VaultsState) => Partial<VaultsState>) => useVaults.se
 export const isConnected = (p: Pick<VaultProviderState, "state">) => p.state === "unlocked" || p.state === "locked";
 export const currentVaultProviders = () => vaults().providers;
 export const vaultProviderOf = (id: string) => vaults().providers.find((p) => p.id === id);
-export const vaultManagerName = (id: string) => vaultProviderOf(id)?.name ?? brandOf(id).name;
+const nameOf = (p: VaultProviderState) => titleOf(credential(p));
+const byBrandOrder = (list: readonly VaultProviderState[]) =>
+  [...list].sort((a, b) => Number(isArdiaProvider(b.id)) - Number(isArdiaProvider(a.id)) || nameOf(a).localeCompare(nameOf(b)));
+
+export const vaultManagerName = (id: string) => {
+  const p = vaultProviderOf(id);
+  return p ? nameOf(p) : isArdiaProvider(id) ? "Ardia" : "Password Manager";
+};
 export const anyVaultConnected = (profileId: string) => vaultsOnForProfile(profileId) && vaults().providers.some(isConnected);
 export function anyVaultConnectedForTab(tabId: string) {
   const tab = useBrowser.getState().tabs[tabId];
@@ -55,7 +63,24 @@ function dropItems(s: VaultsState, provider: string) {
   return { items, pending: forgetPending(s.pending, provider) };
 }
 
-export function applyProviderState(state: VaultProviderState) {
+let preview = false;
+
+export function showPreviewProviders(providers: VaultProviderState[] | null) {
+  preview = providers !== null;
+  change(() => ({ providers: byBrandOrder(providers ?? []) }));
+  if (!preview) void loadVaultProviders();
+}
+
+export const showingPreviewProviders = () => preview;
+
+function removeProvider(id: string) {
+  stateChangedAt.set(id, ++stateStamp);
+  change((s) => ({ providers: s.providers.filter((p) => p.id !== id), ...dropItems(s, id) }));
+}
+
+export function applyProviderState(state: VaultProviderState, removed = false) {
+  if (preview) return;
+  if (removed) return removeProvider(state.id);
   const before = vaultProviderOf(state.id);
   stateChangedAt.set(state.id, ++stateStamp);
   change((s) => {
@@ -78,6 +103,7 @@ const changedSince = (provider: string, stamp: number) => (stateChangedAt.get(pr
 export const loadVaultProviders = () => runLoadVaultProviders(consentToken());
 
 async function runLoadVaultProviders(consent: ConsentToken | null) {
+  if (preview) return;
   const asked = stateStamp;
   let listed: VaultProviderState[];
   try {
@@ -85,6 +111,7 @@ async function runLoadVaultProviders(consent: ConsentToken | null) {
   } catch {
     return;
   }
+  if (preview) return;
   change((s) => {
     const providers = byBrandOrder(
       listed.map((p) => {
@@ -161,6 +188,7 @@ export function startVaultIndex() {
   if (started) return;
   started = true;
   onVaultChanged(applyProviderState);
+  onVaultApproval((_, url) => openUrlFromSettings(url));
   onVaultItemsChanged((provider) => void loadVaultItems(provider, true));
   onAppEvent((e) => e.type === "lockedOrAsleep" && clearVaultIndex());
   void loadVaultProviders();

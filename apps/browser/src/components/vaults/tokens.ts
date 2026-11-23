@@ -62,7 +62,7 @@ const FORM_FIELD = 240;
 
 export const VAULT_FORM = { field: FORM_FIELD, password: FORM_FIELD - 2 * (iconButton.m.box + space.xs), fieldHeight: 24, codeTitle: 200, titleGlyph: 15 } as const;
 
-export const VAULT_SIGN_IN = { ringOutsetX: 6, ringOutsetY: 4, ringRadius: 6, ringWidth: 3, ringAlpha: 0.5, secretInset: 2, tileIcon: 28, tileGlyph: 24 } as const;
+export const VAULT_SIGN_IN = { ringOutsetX: 6, ringOutsetY: 4, ringRadius: 6, ringWidth: 3, ringAlpha: 0.5, secretInset: 2, tileIcon: 28, tileGlyph: 24, morphMs: 220, stepShift: 14, subtitleWidth: 340, popUpMin: 150, secretHeight: 22 } as const;
 
 export const VAULT_FIELD_BADGE = {
   radius: VAULT_MENU.rowRadius,

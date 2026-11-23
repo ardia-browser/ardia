@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { VaultAnswer } from "../../state/vaults/actions";
 import type { SignInField, VaultNeeds } from "../../state/vaults/providerModel";
 import { needLabel } from "../../state/vaults/signInFlow";
@@ -46,6 +46,11 @@ export function useNeedsStep({
     if (needs.methods?.length && !needs.methods.some((m) => m.id === method)) setMethod(needs.methods[0]!.id);
     if (needs.accounts?.length && !needs.accounts.some((a) => a.id === account)) setAccount(needs.accounts[0]!.id);
   }
+  useEffect(() => {
+    if (!error || busy) return;
+    const frame = requestAnimationFrame(() => chain.at(0).current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [error, busy]);
   const label = needLabel(needs, passwordTitle, field?.title ?? null);
   const secretNeed = needs.kind === "password" || (needs.kind === "field" && field?.type === "secret");
   const sendsFirst = needs.kind === "code" && !!needs.methods?.find((m) => m.id === method)?.sendsCode && !sent.has(method);

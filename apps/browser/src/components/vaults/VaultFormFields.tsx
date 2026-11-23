@@ -1,9 +1,9 @@
 import { useEffect, useRef, type ReactNode, type Ref } from "react";
-import { Animated, TextInput, View } from "react-native";
+import { Animated, StyleSheet, TextInput, View } from "react-native";
 import { space, Text, useTheme, withAlpha } from "../ui";
 import { crossfade } from "../ui/motion";
-import { font as typeScale, lineHeight } from "../ui/tokens";
-import { VAULT_SIGN_IN } from "./tokens";
+import { font as typeScale, lineHeight, tabularNums } from "../ui/tokens";
+import { sheetGroupRadius, VAULT_SIGN_IN } from "./tokens";
 
 const FIELD_KEYS = [{ key: "Escape" }, { key: "Tab" }, { key: "Tab", shiftKey: true }];
 
@@ -23,6 +23,11 @@ export function FormRow({ label, error, focused, invalid, children }: { label: s
       {error ? <FieldError text={error} /> : null}
     </View>
   );
+}
+
+export function SheetGroup({ children }: { children: ReactNode }) {
+  const theme = useTheme();
+  return <View style={[SHEET_GROUP, { borderRadius: sheetGroupRadius(), backgroundColor: theme.groupFill, borderColor: theme.groupBorder }]}>{children}</View>;
 }
 
 export function FieldError({ text, standalone }: { text: string; standalone?: boolean }) {
@@ -104,13 +109,14 @@ export function SecretPlaceholder({ text }: { text: string }) {
   );
 }
 
+const SHEET_GROUP = { borderWidth: StyleSheet.hairlineWidth * 2, overflow: "hidden" } as const;
 export const LABEL_WIDTH = 116;
 export const ROW = { paddingHorizontal: space.l, paddingVertical: space.m, minHeight: 40, justifyContent: "center" } as const;
 export const ROW_LINE = { flexDirection: "row", alignItems: "center", gap: space.l } as const;
 const LABEL = { width: LABEL_WIDTH } as const;
 export const FIELD = { flex: 1, minWidth: 0 } as const;
 const INPUT = { ...typeScale.body, width: "100%", paddingVertical: 0 } as const;
-const MONO = { fontFamily: "Menlo" } as const;
+const MONO = tabularNums;
 const ERROR_UNDER_FIELD = { marginTop: space.xs, marginLeft: LABEL_WIDTH + space.l } as const;
 const NOTE = { marginTop: space.ml, paddingHorizontal: space.l } as const;
 const ERROR_TEXT = { lineHeight: lineHeight.small } as const;

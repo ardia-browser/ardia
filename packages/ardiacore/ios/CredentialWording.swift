@@ -44,7 +44,7 @@ struct CredentialWording: Sendable {
     case "appUnreachable": return "Ardia couldn't reach \(title). Open it and try again."
     case "setupNeeded": return "Turn on Integrate with \(appName) in \(title), then try again."
     case "sessionLock": return "\(title) has a session lock on. Run \(program) session unlock in Terminal, then try again."
-    case "extraPassword": return "Your \(title) account has an extra password. Enter it and sign in again."
+    case "extraPassword": return "Enter your \(title) extra password too."
     case "finishInBrowser": return "Finish signing in in the tab Ardia opened."
     case "didntStart": return "\(title) didn't start signing in. Try again."
     case "premiumNeeded": return "One-time codes in \(title) need Premium."

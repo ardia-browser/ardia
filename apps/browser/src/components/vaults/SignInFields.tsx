@@ -3,27 +3,25 @@ import { View } from "react-native";
 import { ActivitySpinner, Divider, Expand, Group, space, Text, useListPresence, useSecretEntry } from "../ui";
 import { lineHeight } from "../ui/tokens";
 import { SecretRow, type FieldHandle } from "./VaultSignInParts";
+import { SheetGroup } from "./VaultFormFields";
 import { VAULT_SETTINGS, VAULT_SIGN_IN } from "./tokens";
 
 export type StackRow = { key: string; render: () => ReactNode };
 
-export function FieldStack({ rows, gap = true }: { rows: readonly StackRow[]; gap?: boolean }) {
+export function FieldStack({ rows, gap = true, inSheet = true }: { rows: readonly StackRow[]; gap?: boolean; inSheet?: boolean }) {
   const { list, drop } = useListPresence(rows, (row) => row.key);
   const firstShown = list.find((entry) => entry.present)?.key;
-  return (
-    <View style={gap ? STACK_GAP : undefined}>
-      <Group>
-        <View>
-          {list.map(({ key, item, present, appear }) => (
-            <Expand key={key} open={present} appear={appear} onClosed={() => drop(key)}>
-              {key !== firstShown ? <Divider thick inset="l" /> : null}
-              {item.render()}
-            </Expand>
-          ))}
-        </View>
-      </Group>
+  const stack = (
+    <View>
+      {list.map(({ key, item, present, appear }) => (
+        <Expand key={key} open={present} appear={appear} onClosed={() => drop(key)}>
+          {key !== firstShown ? <Divider thick inset="l" /> : null}
+          {item.render()}
+        </Expand>
+      ))}
     </View>
   );
+  return <View style={gap ? STACK_GAP : undefined}>{inSheet ? <SheetGroup>{stack}</SheetGroup> : <Group>{stack}</Group>}</View>;
 }
 
 export function OwnedSecretRow({

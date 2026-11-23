@@ -38,6 +38,13 @@ export function errorAfter(result: VaultSignInResult, name: string, asked: Vault
   return next?.message && next.message === message ? "" : message;
 }
 
+export function retriedStep(asked: VaultNeeds | null, next: VaultNeeds, error: string): { needs: VaultNeeds; error: string } {
+  if (!asked || asked.kind !== next.kind || next.kind === "approval" || asked.field !== next.field) return { needs: next, error };
+  const said = next.message && next.message !== asked.message ? next.message : "";
+  const methods = next.methods?.length ? next.methods : asked.methods;
+  return { needs: { ...next, ...(asked.message ? { message: asked.message } : {}), ...(methods?.length ? { methods } : {}) }, error: error || said };
+}
+
 export type Entries = { values: Record<string, string>; secretLengths: Record<string, number> };
 
 export const isFilled = (field: SignInField, entries: Entries) =>

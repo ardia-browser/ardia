@@ -9,7 +9,7 @@ import { installCheckError, signInMessage } from "../../../state/vaults/signInFl
 import { noteVaultCliCheck, noteVaultSignIn } from "../../../state/telemetry/vaultCounts";
 import { Button, useSecretEntry } from "../../ui";
 import { ProviderSignInSheet, type SignInPreview } from "../../vaults/ProviderSignInSheet";
-import { CommandRow, errorFor, FieldError as FieldErrorText, Form, SecretRow, SignInSheet, useFocusChain, useSignInRequest } from "../../vaults/VaultSignInParts";
+import { CommandRow, FieldError as FieldErrorText, Form, SecretRow, SignInSheet, useFocusChain, useSignInRequest } from "../../vaults/VaultSignInParts";
 
 export const showConnectSheet = (provider: string, preview?: SignInPreview) => showSettingsSheet(<ConnectSheet provider={provider} preview={preview} />);
 export const showUnlockSheet = (provider: string, preview?: { error?: string }) => showSettingsSheet(<UnlockSheet provider={provider} preview={preview} />);
@@ -114,7 +114,6 @@ function UnlockSheet({ provider: id, preview }: { provider: string; preview?: { 
           entry={password}
           autoFocus
           onLength={(n) => (setLength(n), error.text && setError(NO_ERROR))}
-          error={errorFor("password", error)}
           onSubmit={() => void unlock()}
           onCancel={closeSettingsSheet}
           handle={chain.at(0)}
@@ -122,6 +121,7 @@ function UnlockSheet({ provider: id, preview }: { provider: string; preview?: { 
           onTab={chain.move}
         />
       </Form>
+      {error.text ? <FieldErrorText text={error.text} standalone /> : null}
     </SignInSheet>
   );
 }

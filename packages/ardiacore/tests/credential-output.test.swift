@@ -208,6 +208,7 @@ struct CredentialResultTests {
     #expect(wording.sentence("failed", detail: "Server said no") == "Server said no")
     #expect(wording.sentence("failed") == "bw stopped with an error.")
     #expect(wording.sentence("wrongPassword", detail: "ignored") == "That master password isn't right.")
+    #expect(wording.sentence("extraPassword", field: "extraPassword") == "Enter your Fakewarden extra password too.")
     #expect(CredentialWording.cleanedDetail("\u{1B}[31mfirst \u{202E}line token-abc\nsecond", secrets: ["token-abc"]) == "first line [hidden]")
   }
 }

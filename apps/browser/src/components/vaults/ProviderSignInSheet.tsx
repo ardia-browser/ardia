@@ -5,7 +5,7 @@ import { closeSettingsSheet } from "../../state/settings/sheet";
 import { answerProvider, cancelProviderSignIn, openProviderApp, signInProvider, type VaultAnswer, type VaultSignInResult } from "../../state/vaults/actions";
 import { fieldNamed, methodsOf, serversOf, titleOf, unlockFieldOf, type CredentialProviderState, type SignInMethod, type VaultNeeds } from "../../state/vaults/providerModel";
 import { customServerURL, initialServer, serverValue, type ServerPick } from "../../state/vaults/servers";
-import { canSubmit, errorAfter, needsOf, requestFor, SERVER_REFUSED, submitTitle, waitingLine, type Entries } from "../../state/vaults/signInFlow";
+import { canSubmit, errorAfter, needsOf, requestFor, retriedStep, SERVER_REFUSED, submitTitle, waitingLine, type Entries } from "../../state/vaults/signInFlow";
 import { noteVaultSignIn, noteVaultTwoStep } from "../../state/telemetry/vaultCounts";
 import { Button, Segmented, space, useSecretEntries } from "../ui";
 import { FieldStack, OwnedSecretRow, WaitingNote, type StackRow } from "./SignInFields";
@@ -66,18 +66,31 @@ export function ProviderSignInSheet({ provider, preview }: { provider: Credentia
       return closeSettingsSheet();
     }
     const next = needsOf(result);
-    setError(errorAfter(result, name, asked));
+    const said = errorAfter(result, name, asked);
     if (next) {
       if (next.kind === "code" && asked?.kind !== "code") noteVaultTwoStep(consent);
+      const step = retriedStep(asked, next, said);
+      setError(step.error);
       setSlide(1);
-      setNeeds(next);
+      setNeeds(step.needs);
       return setPhase(next.kind === "approval" ? "waiting" : "needs");
     }
+    setError(said);
     noteVaultSignIn(false, false, false, consent);
     setSlide(-1);
     setNeeds(null);
     setPhase("form");
+    if (result.field) setFocusField({ id: result.field, at: Date.now() });
   };
+
+  const [focusField, setFocusField] = useState<{ id: string; at: number } | null>(null);
+  useEffect(() => {
+    if (!focusField || phase !== "form" || !method) return;
+    const at = method.fields.findIndex((f) => f.id === focusField.id);
+    if (at < 0) return;
+    const frame = requestAnimationFrame(() => chain.at(FIRST_FIELD + at).current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [focusField, phase]);
 
   const submit = async () => {
     if (busy || !method) return;
@@ -186,7 +199,6 @@ export function ProviderSignInSheet({ provider, preview }: { provider: Credentia
                     onChange={(url) => (setServer((now) => ({ ...now, url })), setServerError(""), edit())}
                     placeholder={chosen.custom!.placeholder}
                     autoFocus={!server.url}
-                    error={serverError || undefined}
                     handle={chain.at(0)}
                     index={0}
                     {...shared}
@@ -259,7 +271,7 @@ export function ProviderSignInSheet({ provider, preview }: { provider: Credentia
       ) : null}
       {serverRows.length ? <FieldStack rows={serverRows} /> : null}
       {fieldRows.length ? <FieldStack rows={fieldRows} /> : null}
-      {error ? <FieldError text={error} standalone /> : null}
+      {serverError || error ? <FieldError text={serverError || error} standalone /> : null}
     </SignInSheet>
   );
 }

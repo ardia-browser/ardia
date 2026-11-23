@@ -1,7 +1,8 @@
 import { View } from "react-native";
 import { closeSettingsSheet, showSettingsSheet } from "../../state/settings/sheet";
 import { addPasswordManager, useManagerCatalogue, type CatalogueEntry } from "../../state/vaults/managerCatalogue";
-import { Button, Dialog, DialogActions, DialogTitle, Divider, Group, Text, space } from "../ui";
+import { Button, Dialog, DialogActions, DialogTitle, Divider, Text, space } from "../ui";
+import { SheetGroup } from "./VaultFormFields";
 import { BrandBadge } from "./VaultParts";
 
 export const showAddManagerSheet = (onReady: (provider: string) => void) => showSettingsSheet(<AddManagerSheet onReady={onReady} />);
@@ -16,7 +17,7 @@ function AddManagerSheet({ onReady }: { onReady: (provider: string) => void }) {
     <Dialog width="s" onDismiss={closeSettingsSheet} onSubmit={closeSettingsSheet} animated>
       <DialogTitle>Add Password Manager</DialogTitle>
       <View style={LIST}>
-        <Group>
+        <SheetGroup>
           <View>
             {catalogue.map((entry, i) => (
               <View key={entry.name}>
@@ -31,7 +32,7 @@ function AddManagerSheet({ onReady }: { onReady: (provider: string) => void }) {
               </View>
             ))}
           </View>
-        </Group>
+        </SheetGroup>
       </View>
       <DialogActions>
         <Button title="Cancel" onPress={closeSettingsSheet} />

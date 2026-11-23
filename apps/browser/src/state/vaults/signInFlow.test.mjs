@@ -81,3 +81,17 @@ test("an expired typed unlock is counted next to the failure", async () => {
   assert.equal(counts.vault_unlock_entries_expired, 1);
   assert.equal(counts.vault_unlock_failures, 2);
 });
+
+test("a code the provider turned down keeps the step's instruction above and shows the refusal as the red line under the group", async () => {
+  const { retriedStep, errorAfter } = await import("./signInFlow.ts");
+  const asked = { kind: "code", message: "Enter the code from your authenticator app." };
+  const refused = { kind: "code", message: "That code didn't work. Try a new one." };
+  const result = { ok: false, error: "That code didn't work. Try a new one.", needs: "code", state: { id: "bitwarden", name: "Bitwarden", state: "signedOut", credential: { needs: refused } } };
+  const said = errorAfter(result, "Bitwarden", asked);
+  assert.deepEqual(retriedStep(asked, refused, said), { needs: { kind: "code", message: asked.message }, error: refused.message });
+  assert.deepEqual(retriedStep(asked, { kind: "code" }, "That code didn't work. Try a new one."), { needs: { kind: "code", message: asked.message }, error: "That code didn't work. Try a new one." }, "the fixture's shape lands the same");
+  const methods = [{ id: "0", title: "Authenticator App" }, { id: "1", title: "Email", sendsCode: true }];
+  assert.deepEqual(retriedStep({ ...asked, methods }, refused, said).needs.methods, methods, "the Method pop-up stays when the refusal doesn't list the methods again");
+  const next = { kind: "password", message: "Enter your master password." };
+  assert.deepEqual(retriedStep(asked, next, ""), { needs: next, error: "" }, "a new kind of step keeps its own instruction");
+});

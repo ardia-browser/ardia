@@ -2,11 +2,11 @@ import { Fragment, useEffect, useRef, useState, type ReactNode, type RefObject }
 import { StyleSheet, TextInput, View } from "react-native";
 import type { VaultSignInResult } from "../../state/vaults/actions";
 import { signInRequest, type SignInGoal, type SignInRequest } from "../../state/vaults/signInRequest";
-import { Button, Dialog, Group, PopUp, radius, space, Text, useTheme, VaultPasswordField, type Option } from "../ui";
+import { Button, Dialog, PopUp, radius, space, Text, useTheme, VaultPasswordField, type Option } from "../ui";
 import { font as typeScale, lineHeight } from "../ui/tokens";
 import { BrandBadge, useCopiedFlash } from "./VaultParts";
 import { Morph, useLeaving } from "./VaultMorph";
-import { FormRow, PlainField, ROW, ROW_LINE, SecretPlaceholder } from "./VaultFormFields";
+import { FormRow, PlainField, ROW, ROW_LINE, SecretPlaceholder, SheetGroup } from "./VaultFormFields";
 
 export { FieldError } from "./VaultFormFields";
 import { VAULT_BADGE, VAULT_SIGN_IN } from "./tokens";
@@ -129,7 +129,7 @@ export function HeaderTile({ children }: { children: ReactNode }) {
 export function Form({ children, gap = true }: { children: ReactNode; gap?: boolean }) {
   return (
     <View style={gap ? FORM_GAP : undefined}>
-      <Group>{children}</Group>
+      <SheetGroup>{children}</SheetGroup>
     </View>
   );
 }
@@ -271,11 +271,7 @@ export function CommandRow({ command, onCopy }: { command: string; onCopy: () =>
   );
 }
 
-export function errorFor(field: string, error: { field: string | null; text: string }) {
-  return error.field === field ? error.text : undefined;
-}
-
-const HEADER = { alignItems: "center", paddingTop: space.xs } as const;
+const HEADER = { alignItems: "center" } as const;
 const TITLE = { marginTop: space.ml, textAlign: "center" } as const;
 const HEADER_TILE = { width: VAULT_BADGE.xl.box, height: VAULT_BADGE.xl.box, borderRadius: radius.panel, borderWidth: StyleSheet.hairlineWidth * 2, alignItems: "center", justifyContent: "center" } as const;
 const SUBTITLE = { marginTop: space.xs, textAlign: "center", lineHeight: lineHeight.small, maxWidth: VAULT_SIGN_IN.subtitleWidth } as const;

@@ -102,7 +102,7 @@ function ManagersGroup({ managers }: { managers: VaultProviderState[] }) {
   return (
     <View>
       <SectionHeader title="Password Managers" description={null} action={add} />
-      {rows.length ? <FieldStack rows={rows} gap={false} /> : null}
+      {rows.length ? <FieldStack rows={rows} gap={false} inSheet={false} /> : null}
     </View>
   );
 }

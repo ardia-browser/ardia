@@ -150,7 +150,7 @@ export const VAULT_SHEETS: Record<string, SheetScene> = {
   signingIn: { provider: bitwarden({ account: ACCOUNT }), preview: { busy: true } },
   signInError: { provider: bitwarden({ account: ACCOUNT }), preview: { error: "The email or master password isn't right." } },
   needsCode: { provider: bitwarden(), preview: { phase: "needs", needs: { kind: "code", methods: CODE_METHODS, message: "Enter the code from your authenticator app." } } },
-  needsCodeWrong: { provider: bitwarden(), preview: { phase: "needs", needs: { kind: "code", methods: CODE_METHODS }, error: "That code isn't right. Try again." } },
+  needsCodeWrong: { provider: bitwarden(), preview: { phase: "needs", needs: { kind: "code", methods: CODE_METHODS, message: "Enter the code from your authenticator app." }, error: "That code didn't work. Try a new one." } },
   needsPassword: { provider: bitwarden(), preview: { phase: "needs", needs: { kind: "password" } } },
   needsEmail: { provider: bitwarden(), preview: { phase: "needs", needs: { kind: "email" } } },
   needsAccount: { provider: onePassword(), preview: { phase: "needs", needs: { kind: "account", accounts: [{ id: "a", title: "Personal" }, { id: "b", title: "Work" }] } } },

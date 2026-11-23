@@ -373,7 +373,7 @@ export function onPageSwipe(value: unknown, timestamp = performance.now() / 1000
   }
 }
 
-export function listenForPageSwipes(host: ArdiaHost | undefined = ardiaHost) {
+function listenForPageSwipes(host: ArdiaHost | undefined = ardiaHost) {
   return host?.onEvent((module, event, payload) => {
     if (module === "ArdiaShell" && event === "onPageSwipe") onPageSwipe(payload);
   });

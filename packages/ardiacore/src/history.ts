@@ -35,11 +35,11 @@ export function addHistoryVisits(profile: string, pages: { url: string; title: s
   return run;
 }
 
-export type HistoryImportRow = { url: string; title: string; visits: number; lastVisit: number };
+type HistoryImportRow = { url: string; title: string; visits: number; lastVisit: number };
 
-export type HistoryImportResult<R extends HistoryImportRow> = { written: R[]; batches: number; failures: unknown[] };
+type HistoryImportResult<R extends HistoryImportRow> = { written: R[]; batches: number; failures: unknown[] };
 
-export const HISTORY_IMPORT_BATCH_CHARS = 2 * 1024 * 1024;
+const HISTORY_IMPORT_BATCH_CHARS = 2 * 1024 * 1024;
 
 const historyImportWire = (r: HistoryImportRow) => ({ u: r.url, t: r.title, n: r.visits, l: r.lastVisit });
 

@@ -15,9 +15,9 @@ const DAWN: Record<string, ImageSourcePropType> = {
   "dawn-mid-1600.webp": require("../windows/meadow/dawn-mid-1600.jpg"),
 };
 
-export const WINDOWS_POSTERS = posters.filter((p) => p.state === "dawn" && Object.hasOwn(DAWN, p.file));
+const WINDOWS_POSTERS = posters.filter((p) => p.state === "dawn" && Object.hasOwn(DAWN, p.file));
 
-export const nearestPoster = (aspect: number): Poster | null => nearestOf(WINDOWS_POSTERS, aspect);
+const nearestPoster = (aspect: number): Poster | null => nearestOf(WINDOWS_POSTERS, aspect);
 
 export { posterFrame };
 

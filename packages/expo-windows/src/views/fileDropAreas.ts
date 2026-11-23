@@ -6,10 +6,9 @@ import { requireNativeModule } from "../modules";
 import type { FileDropModule } from "../nativeModuleTypes";
 
 export type { DropUpdate, DroppedItem };
-export type DropAccepts = NonNullable<FileDropAreaProps["accepts"]>;
-export type DropPhase = DropUpdate["phase"];
+type DropAccepts = NonNullable<FileDropAreaProps["accepts"]>;
 export type WindowDrop = DropUpdate & { windowId: string; area: string; windowX: number; windowY: number };
-export type WindowDrag = { windowId: string; phase: "enter" | "exit" };
+type WindowDrag = { windowId: string; phase: "enter" | "exit" };
 export type DropAreaFrame = { windowId: string; area: string; depth: number; x: number; y: number; width: number; height: number; accepts: DropAccepts; enabled: boolean };
 
 
@@ -46,7 +45,7 @@ function listen() {
   fileDrop().addListener("onWindowDrag", windowDragged);
 }
 
-export function windowIdOf(view: View | null, rootTag: number): string {
+function windowIdOf(view: View | null, rootTag: number): string {
   const cached = windowIdsByRoot.get(rootTag);
   if (cached) return cached;
   let fiber = (view as unknown as { __internalInstanceHandle?: Fiber | null } | null)?.__internalInstanceHandle ?? null;

@@ -17,7 +17,7 @@ const FAILURE_TITLES: Record<string, string> = {
 };
 const realClock: Clock = { now: () => Date.now(), schedule: (run, ms) => setTimeout(run, ms) };
 
-export type HostFiles = {
+type HostFiles = {
   fileExists(path: string): boolean;
   expect(path: string): void;
   setNotice(notice: Notice): void;

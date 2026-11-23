@@ -1,12 +1,12 @@
 import { withOpacity } from "./color";
 
-export const SHADOW_BLUR_PER_RADIUS = 2;
+const SHADOW_BLUR_PER_RADIUS = 2;
 export const MOST_SHADOW_RINGS = 10;
 const REACH_IN_DEVIATIONS = 2.5;
 
 export type ShadowSpec = { color: string; opacity: number; blur: number; x: number; y: number };
 export type Edges = { top: number; left: number; right: number; bottom: number };
-export type ShadowLayer = Edges & { position: "absolute"; borderRadius: number; borderWidth?: number; borderColor?: string; backgroundColor?: string };
+type ShadowLayer = Edges & { position: "absolute"; borderRadius: number; borderWidth?: number; borderColor?: string; backgroundColor?: string };
 
 const finiteOr = (value: unknown, fallback: number) => (typeof value === "number" && Number.isFinite(value) ? value : fallback);
 
@@ -31,7 +31,7 @@ export function shadowReach(blur: number): number {
   return (blur / 2) * REACH_IN_DEVIATIONS;
 }
 
-export function shadowRingCount(blur: number): number {
+function shadowRingCount(blur: number): number {
   return Math.max(1, Math.min(MOST_SHADOW_RINGS, Math.ceil(shadowReach(blur))));
 }
 

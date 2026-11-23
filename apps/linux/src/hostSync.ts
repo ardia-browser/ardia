@@ -42,13 +42,13 @@ export type SyncKeyStoreStatus = {
   passwords: boolean;
 };
 
-export type AuthorityClaim = { granted: boolean; leaseMs: number };
+type AuthorityClaim = { granted: boolean; leaseMs: number };
 
 const BASE32 = "abcdefghijklmnopqrstuvwxyz234567";
 const FALLBACK_DEVICE_NAME = "Linux";
 const SYNC_METHODS: ReadonlySet<string> = new Set(SYNC_CAPABILITIES);
 
-export function base32(bytes: Uint8Array): string {
+function base32(bytes: Uint8Array): string {
   let out = "";
   let buffer = 0;
   let bits = 0;
@@ -99,7 +99,7 @@ export function keyringMessage(status: SyncKeyStoreStatus | null, saving: boolea
 export const KEYRING_RETRY_MS = 3000;
 const KEYRING_CLOSED: ReadonlySet<string> = new Set(["locked", "unavailable"]);
 
-export type KeyringResumerIo = {
+type KeyringResumerIo = {
   locked(): boolean;
   status(): Promise<SyncKeyStoreStatus>;
   seen(status: SyncKeyStoreStatus): void;
@@ -167,12 +167,12 @@ export function presentSyncState<S extends { status: string; error: string | nul
 }
 
 export const HELD_LOGINS_DOCUMENT = "sync-held-logins.nns";
-export const SYNC_DOCUMENTS = ["sync.json", "sync-state.nns", "sync-journal.nns", HELD_LOGINS_DOCUMENT] as const;
+const SYNC_DOCUMENTS = ["sync.json", "sync-state.nns", "sync-journal.nns", HELD_LOGINS_DOCUMENT] as const;
 
-export type HeldLogin = { origin: string; username: string; sealed: string; replaced: string | null };
+type HeldLogin = { origin: string; username: string; sealed: string; replaced: string | null };
 type HeldByProfile = Record<string, Record<string, HeldLogin>>;
 
-export type HeldLoginsIo = {
+type HeldLoginsIo = {
   read(name: string): string | null;
   save(name: string, text: string): Promise<void>;
   remove(name: string): Promise<void>;
@@ -180,8 +180,8 @@ export type HeldLoginsIo = {
   open(sealed: string): Promise<string | null | undefined>;
 };
 
-export const HELD_LOGINS_LIMIT = 1000;
-export const HELD_LOGINS_MAX_BYTES = 4 * 1024 * 1024;
+const HELD_LOGINS_LIMIT = 1000;
+const HELD_LOGINS_MAX_BYTES = 4 * 1024 * 1024;
 
 const loginKey = (origin: string, username: string) => `${origin}\n${username}`;
 const isText = (value: unknown): value is string => typeof value === "string";
@@ -320,7 +320,7 @@ export function createHeldLogins(io: HeldLoginsIo, limits: { maxLogins?: number;
   };
 }
 
-export type HeldLogins = ReturnType<typeof createHeldLogins>;
+type HeldLogins = ReturnType<typeof createHeldLogins>;
 let heldLogins: HeldLogins | null = null;
 
 export function configureHeldLogins(store: HeldLogins | null) {
@@ -368,8 +368,8 @@ export async function whileResettingHeldLogins<T>(run: () => Promise<T>, began: 
   }
 }
 
-export const MAX_JOURNAL_PARTS = 1000;
-export const journalPartName = (n: number) => `sync-journal-${n}.nns`;
+const MAX_JOURNAL_PARTS = 1000;
+const journalPartName = (n: number) => `sync-journal-${n}.nns`;
 
 export async function refreshSyncDocuments(io: {
   refresh(name: string): Promise<boolean>;

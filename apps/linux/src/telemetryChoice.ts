@@ -27,7 +27,7 @@ export function parseChoiceChange(text: string | undefined): ChoiceChange | null
   return { ...change, placement: { ask_place: "new_tab_corner", ask_shown_tabs: placement.ask_shown_tabs } };
 }
 
-export type ChoiceShown = { sharing: boolean; decided: boolean; askDone: boolean };
+type ChoiceShown = { sharing: boolean; decided: boolean; askDone: boolean };
 
 export function shownAfter(change: ChoiceChange): Partial<ChoiceShown> | null {
   if (change.kind === "sharing") return { sharing: change.on, decided: true, askDone: true };

@@ -23,9 +23,9 @@ type Source = { key: string; filter: string; args: number[] };
 type Read = (queries: Query[]) => Promise<Rows[]>;
 type Icon = { icon: string; png: string };
 
-export const faviconKey = (page: string) => page.replace(/#.*$/, "");
+const faviconKey = (page: string) => page.replace(/#.*$/, "");
 
-export function urlParts(url: string): Parts | undefined {
+function urlParts(url: string): Parts | undefined {
   const separator = url.indexOf("://");
   if (separator < 0) return undefined;
   const scheme = url.slice(0, separator).toLowerCase();
@@ -71,7 +71,7 @@ export function urlParts(url: string): Parts | undefined {
   };
 }
 
-export function rootIconKey(url: string): string | undefined {
+function rootIconKey(url: string): string | undefined {
   const parts = urlParts(url);
   return parts && !parts.hasUser && parts.path === "/favicon.ico" && !parts.hasQuery && !parts.hasFragment ? parts.origin.rootKey : undefined;
 }
@@ -79,7 +79,7 @@ export function rootIconKey(url: string): string | undefined {
 const word = (bytes: Uint8Array, at: number) => ((bytes[at]! << 24) >>> 0) + (bytes[at + 1]! << 16) + (bytes[at + 2]! << 8) + bytes[at + 3]!;
 const chunkType = (bytes: Uint8Array, at: number) => String.fromCharCode(bytes[at + 4]!, bytes[at + 5]!, bytes[at + 6]!, bytes[at + 7]!);
 
-export function headerSize(head: Uint8Array): { width: number; height: number } | undefined {
+function headerSize(head: Uint8Array): { width: number; height: number } | undefined {
   if (head.length < PNG_HEADER_BYTES || !PNG_HEAD.every((b, i) => head[i] === b)) return undefined;
   const width = word(head, 16);
   const height = word(head, 20);

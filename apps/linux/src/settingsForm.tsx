@@ -27,7 +27,7 @@ export function SectionHeader(props: ComponentProps<typeof shared.SectionHeader>
   return <shared.SectionHeader {...props} />;
 }
 
-export const SettingsProfileWatch = createContext<((profileId: string) => void) | null>(null);
+const SettingsProfileWatch = createContext<((profileId: string) => void) | null>(null);
 
 export function useSettingsProfile(initial?: string | null) {
   const chosen = shared.useSettingsProfile(initial);

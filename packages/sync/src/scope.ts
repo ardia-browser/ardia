@@ -348,7 +348,7 @@ export async function compact(state: ScopeState, transport: Transport, scope: st
   return true;
 }
 
-export type CycleResult = { published: number; changed: number; pending: number; compacted: boolean; snapshotBytes: number };
+type CycleResult = { published: number; changed: number; pending: number; compacted: boolean; snapshotBytes: number };
 
 export async function syncScope(args: {
   scope: string;

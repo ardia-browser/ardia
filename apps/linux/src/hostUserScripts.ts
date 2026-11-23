@@ -1,6 +1,6 @@
 export const USER_SCRIPTS_LOCK = "ardia-user-scripts";
 
-export type UserScriptsLocks = {
+type UserScriptsLocks = {
   request(name: string, callback: () => Promise<void>): Promise<unknown>;
 };
 

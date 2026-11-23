@@ -1,8 +1,8 @@
 import { CLUSTER_MENU_BUTTON } from "./clusterMenu.ts";
 
 export type EditAction = "undo" | "redo" | "cut" | "copy" | "paste" | "pasteAndMatchStyle" | "selectAll";
-export type EditItem = { id: string; action: EditAction; title: string; key: string; modifiers: readonly ("command" | "shift")[] };
-export type EditField = Pick<HTMLInputElement, "focus" | "isConnected" | "selectionStart" | "selectionEnd" | "type" | "value" | "readOnly" | "disabled">;
+type EditItem = { id: string; action: EditAction; title: string; key: string; modifiers: readonly ("command" | "shift")[] };
+type EditField = Pick<HTMLInputElement, "focus" | "isConnected" | "selectionStart" | "selectionEnd" | "type" | "value" | "readOnly" | "disabled">;
 export type EditTarget = { kind: "page" } | { kind: "field"; field: EditField } | null;
 export type EditMenu = { disabled: ReadonlySet<string> };
 
@@ -17,7 +17,6 @@ export const EDIT_ITEMS: readonly EditItem[] = [
 ];
 
 const byId = new Map(EDIT_ITEMS.map((item) => [item.id, item]));
-export const editItem = (id: string) => byId.get(id);
 export const editActionOf = (id: string): EditAction | undefined => byId.get(id)?.action;
 
 const TEXT_FIELD = "textarea, input:not([type]), input[type=text], input[type=search], input[type=url], input[type=email], input[type=password], input[type=tel], input[type=number]";
@@ -58,7 +57,7 @@ export function editMenu(target: EditTarget, pageEdits: boolean): EditMenu | nul
   return { disabled };
 }
 
-export type FieldEditPort = {
+type FieldEditPort = {
   exec(command: string, value?: string): boolean;
   readClipboard(): Promise<string>;
 };

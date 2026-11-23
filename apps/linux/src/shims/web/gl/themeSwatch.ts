@@ -1,7 +1,7 @@
 import { oklab, type Vec4 } from "./colors.ts";
 
 export const SWATCH_SAMPLES = 16;
-export const SWATCH_REACH = 0.75;
+const SWATCH_REACH = 0.75;
 export const GRAIN_SIDE = 128;
 export const GRAIN_POINTS = GRAIN_SIDE / 2;
 

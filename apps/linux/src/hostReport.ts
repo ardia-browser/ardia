@@ -1,18 +1,18 @@
 import { hostSupports, invokeHost, type ArdiaHost } from "./host.ts";
 
-export const REPORT_FILES = "report.files";
-export const REPORT_SEND = "report.send";
+const REPORT_FILES = "report.files";
+const REPORT_SEND = "report.send";
 export const REPORT_EXPORT_FOLDER_KEY = "ardia.report.exportFolder";
 export const LOCAL_EVENTS_FILE = "local-events.jsonl.gz";
 
 const FILE_METHODS: ReadonlySet<string> = new Set(["draftDirectory", "fileSize", "removeFile", "gzipFile", "gzipText"]);
 const SEND_METHODS: ReadonlySet<string> = new Set(["upload", "post", "cancelUploads"]);
 
-export type FolderStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
-export type ReportFile = { path: string; bytes: number };
-export type ReportReply = { status: number; body: string; error?: string | null };
+type FolderStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+type ReportFile = { path: string; bytes: number };
+type ReportReply = { status: number; body: string; error?: string | null };
 
-export const servesReportFiles = (host: ArdiaHost | undefined) => !!host && hostSupports(REPORT_FILES, host);
+const servesReportFiles = (host: ArdiaHost | undefined) => !!host && hostSupports(REPORT_FILES, host);
 export const servesReportSheet = (host: ArdiaHost | undefined) => servesReportFiles(host) && hostSupports(REPORT_SEND, host!);
 
 export function hostReportMethod(host: ArdiaHost, method: string): ((...args: unknown[]) => Promise<unknown>) | undefined {

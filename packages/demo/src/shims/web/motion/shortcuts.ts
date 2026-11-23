@@ -118,7 +118,7 @@ const inText = () => !!(document.activeElement instanceof Element && document.ac
 
 const CODE_ALIASES: Record<string, string> = { NumpadEnter: "Enter", NumpadAdd: "Equal", NumpadSubtract: "Minus" };
 
-export function findShortcut(e: KeyboardEvent) {
+function findShortcut(e: KeyboardEvent) {
   const have = modsOf(e);
   const code = CODE_ALIASES[e.code] ?? e.code;
   const matches = (sc: Shortcut) => sc.code === code && sameMods(sc.mods, have);
@@ -174,5 +174,3 @@ if (typeof window !== "undefined") {
   window.addEventListener("pointerup", onPointerUp, true);
   window.addEventListener("blur", onBlur);
 }
-
-export const shortcutTable = () => [...SHORTCUTS, ...fallbacks].map(({ code, mods, command }) => ({ code, mods, command }));

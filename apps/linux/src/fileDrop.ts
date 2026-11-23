@@ -1,6 +1,6 @@
 import type { DroppedItem, DropUpdate } from "../../../packages/shell/src/system";
 
-export const MAX_DROPPED_URLS = 50;
+const MAX_DROPPED_URLS = 50;
 const MAX_DROP_TEXT = 8192;
 const DRAG_TYPES = new Set(["Files", "text/uri-list", "text/plain"]);
 
@@ -28,7 +28,7 @@ export const dragCount = (types: readonly string[], files: number) => (files > 0
 export const validFileUrl = (url: unknown): url is string => typeof url === "string" && /^file:\/\/\/[^/]/i.test(url) && url.length <= 16384;
 
 export type DropPoint = { x: number; y: number };
-export type DropPayload = { uriList: string; text: string; fileNames: string[] };
+type DropPayload = { uriList: string; text: string; fileNames: string[] };
 
 export type DropController = {
   over(point: DropPoint, count: number): void;

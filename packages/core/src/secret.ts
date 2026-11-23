@@ -2,9 +2,9 @@ export const SECRET_KINDS = ["password", "oauthToken", "oauthClientSecret", "api
 
 export type SecretKind = (typeof SECRET_KINDS)[number];
 
-export type SecretEscape = "json" | "text" | "telemetry" | "log" | "sync" | "socket";
+type SecretEscape = "json" | "text" | "telemetry" | "log" | "sync" | "socket";
 
-export type SecretEscapeMode = "throw" | "drop";
+type SecretEscapeMode = "throw" | "drop";
 
 export const REDACTED_SECRET = "<secret>";
 
@@ -129,7 +129,7 @@ export function withoutSecrets<T>(value: T, where: SecretEscape, seen = new Weak
 type IsAny<T> = 0 extends 1 & T ? true : false;
 type Shallower = [never, 0, 1, 2, 3, 4, 5];
 
-export type ContainsSecret<T, Depth extends number = 6> =
+type ContainsSecret<T, Depth extends number = 6> =
   IsAny<T> extends true
     ? false
     : [Depth] extends [never]

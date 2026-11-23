@@ -4,7 +4,7 @@ import { beginHooks, endHooks } from "./hooks";
 import type { PluginNode, PluginNodeType, SerializedHandler } from "./protocol";
 
 type Rendered = PluginNode | string;
-export type AnyHandler = (...args: unknown[]) => unknown;
+type AnyHandler = (...args: unknown[]) => unknown;
 
 export type HandlerTable = ReadonlyMap<string, AnyHandler>;
 type CreatedFiber = { parent: Fiber; slot: string; fiber: Fiber };

@@ -49,7 +49,7 @@ function isTrackingParam(name: string, hostname = ""): boolean {
 
 export type CleanedUrl = string & { readonly trackersStripped: unique symbol };
 export type LinkText = CleanedUrl | (string & { readonly linksTrackersStripped: unique symbol });
-export type CleanUrlReport = { readonly url: CleanedUrl; readonly removedTracker: boolean };
+type CleanUrlReport = { readonly url: CleanedUrl; readonly removedTracker: boolean };
 
 export function cleanUrlReport(url: string): CleanUrlReport {
   const unchanged = Object.freeze({ url: url as CleanedUrl, removedTracker: false });

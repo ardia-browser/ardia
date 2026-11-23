@@ -27,7 +27,7 @@ const shapedWindow = ({ incognito: _i, originalProfileId: _o, ...w }: StoredWind
 const keyedById = <T,>(list: unknown): Record<string, T> | undefined =>
   Array.isArray(list) ? Object.fromEntries(list.filter((v): v is T & { id: string } => !!v && typeof v === "object" && typeof (v as { id?: unknown }).id === "string").map((v) => [v.id, v])) : undefined;
 
-export function currentSessionShape(saved: HydrateData): HydrateData {
+function currentSessionShape(saved: HydrateData): HydrateData {
   const doc = { ...saved, tabs: Object.values(saved.tabs ?? {}), splits: Object.values(saved.splits ?? {}) } as unknown as SavedObject;
   const shaped = sessionWithSplitSlots(sessionWithTabPins(sessionWithTabPages(doc))) as unknown as HydrateData & { tabs: unknown; splits: unknown };
   return {
@@ -139,7 +139,7 @@ export const linuxSessionShape = (saved: HydrateData): HydrateData => {
   return migratedSession(sniffedSessionShape(saved), Math.max(stamped ?? SNIFFED_SESSION_VERSION, SNIFFED_SESSION_VERSION));
 };
 
-export const unmigratedSessionShape = (saved: HydrateData): HydrateData => sniffedSessionShape(saved);
+const unmigratedSessionShape = (saved: HydrateData): HydrateData => sniffedSessionShape(saved);
 const sessionOnDisk = (saved: HydrateData): HydrateData => withPinChoicesOnDisk(linuxSessionShape(saved), saved);
 
 const inClosingOrder = <T extends { closedAt: number }>(entries: T[]) => [...entries].sort((a, b) => a.closedAt - b.closedAt).slice(-MAX_CLOSED_WINDOWS);

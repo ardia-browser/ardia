@@ -96,7 +96,7 @@ export function idForKey(base64Key: string): string | undefined {
   return id;
 }
 
-export function iconPath(icons: unknown, size: number): string | undefined {
+function iconPath(icons: unknown, size: number): string | undefined {
   if (typeof icons === "string") return icons;
   if (!isFields(icons)) return undefined;
   let best: string | undefined;
@@ -156,7 +156,7 @@ async function dataUrl(desktop: Desktop, folder: string, relative: string | unde
 
 const dropUndefined = (fields: Fields): Fields => Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined));
 
-export async function readUnpacked(desktop: Desktop, folder: string, uiLocale = "en"): Promise<Fields> {
+async function readUnpacked(desktop: Desktop, folder: string, uiLocale = "en"): Promise<Fields> {
   const manifest = parsed(await desktop.readText(folder, joinPath(folder, "manifest.json"), LARGEST_JSON_BYTES).catch(() => null));
   if (!manifest) throw callError("ERR_ENGINE", "Manifest file is missing or unreadable");
   const messages = await messagesOf(desktop, folder, manifest, uiLocale);

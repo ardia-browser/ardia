@@ -6,9 +6,9 @@ import { invokeHost, reportHostError } from "./host.ts";
 import { engineProfile, isIncognitoProfile } from "../../browser/src/state/browser/model";
 import { offerSmallWindow, relayedSmallWindow, relaysSmallWindows, smallWindowFrame, smallWindowSeed, withdrawSmallWindow, type ScreenArea, type SeedStorage } from "./hostSmallWindows.ts";
 
-export type PrivateWindowSeed = { window: BrowserWindow; tabs: Record<string, Tab> };
+type PrivateWindowSeed = { window: BrowserWindow; tabs: Record<string, Tab> };
 type OpenOptions = Record<string, unknown> & { incognito?: boolean; profile?: string; kind?: string; frame?: unknown; size?: unknown };
-export type SmallWindowPort = { storage?: SeedStorage; screen?: () => ScreenArea | undefined };
+type SmallWindowPort = { storage?: SeedStorage; screen?: () => ScreenArea | undefined };
 const ownScreen = () => typeof screen === "undefined" ? undefined : screen as unknown as ScreenArea;
 
 const PRIVATE_SEED_LIMIT = 1024 * 1024;
@@ -137,7 +137,7 @@ export function withPrivateWindow(host: ArdiaHost, session: HydrateData): Hydrat
   };
 }
 
-export type ActiveProfileStore = {
+type ActiveProfileStore = {
   getState(): Pick<BrowserState, "windows" | "profiles">;
   subscribe(listener: (state: Pick<BrowserState, "windows" | "profiles">) => void): () => void;
 };

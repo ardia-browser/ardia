@@ -534,7 +534,7 @@ async function compact(state            , transport           , scope        , d
   return true;
 }
 
-                                                                                                                             
+                                                                                                                      
 
 async function syncScope(args   
                 
@@ -614,7 +614,7 @@ function recordsWith(state            , prefix        )                         
   return out;
 }
 
-                                                                      
+                                                               
 const touching = new WeakMap                              ();
 
 function trackTouchedKeys(state            )                                             {
@@ -710,7 +710,7 @@ __define("packages/sync/src/fileHealth.ts", function (exports, __require) {
   __export(exports, "pullSettled", () => pullSettled);
                                                   
 
-                                                                                                            
+                                                                                                     
 
 function noteFileHealth(state            , files             , now        , giveUp        ) {
   const setAside = (id        ) => state.files[id]?.k === "bad";
@@ -797,7 +797,7 @@ __define("packages/sync/src/scopeState.ts", function (exports, __require) {
 
                                                    
                                                            
-                                                   
+                                            
 
                                                                                                 
                             
@@ -1066,7 +1066,7 @@ const { fromLegacyUrl } = __require("packages/sync/src/companion/legacy.ts");
 const { buildView, dataOwner, defaultProfileId, liveProfiles } = __require("packages/sync/src/companion/view.ts");
 const { host, loaded, save, viewIsNew } = __require("packages/sync/src/companion/state.ts");
 
-                                                           
+                                                    
 
                           
                
@@ -1077,10 +1077,10 @@ const { host, loaded, save, viewIsNew } = __require("packages/sync/src/companion
                         
   
 
-                                                                                                                                 
-                                                                               
+                                                                                                                          
+                                                                        
 
-                           
+                    
                       
               
                        
@@ -1470,7 +1470,7 @@ function unionTimes(a          , b          )           {
 
 const keptTimes = (times          )           => (times.length > MAX_VISIT_TIMES ? unionTimes(times.filter((t) => Number.isFinite(t)), []) : times);
 
-                              
+                       
                                          
                      
                     
@@ -1558,7 +1558,7 @@ function historyAdapter(ctx                )          {
   };
 }
 
-                           
+                    
                 
                              
                     
@@ -1598,7 +1598,7 @@ function sendsAdapter(ctx             )          {
   };
 }
 
-                               
+                        
                 
                     
                           
@@ -1720,7 +1720,7 @@ const { folderChildren } = __require("packages/sync/src/folders.ts");
 const { lastVisitOf } = __require("packages/sync/src/companion/adapters.ts");
 const { themeOf } = __require("packages/sync/src/companion/theme.ts");
 
-                                                                                            
+                                            
 
 const MAX_HISTORY_ITEMS = 2_000;
 const MAX_BOOKMARK_DEPTH = 100;
@@ -1728,15 +1728,15 @@ const MAX_BOOKMARK_DEPTH = 100;
                             
                                                                                           
 
-                                                                                                                                        
-                                                                                                                          
-                                                                                             
-                                                                                
-                                                                                    
-                                                                                                                                   
+                                                                                                                                 
+                                                                                                                   
+                                                                                      
+                                                                         
+                                                                             
+                                                                                                                            
                                                                                                                                                             
-                                                                                            
-                           
+                                                                                     
+                    
                  
                
                        
@@ -1749,8 +1749,8 @@ const MAX_BOOKMARK_DEPTH = 100;
                             
                          
   
-                                                                                                                                                     
-                                                                                                                    
+                                                                                                                                              
+                                                                                                             
                                                                                                                         
 
 const str = (v         , fallback = "") => (typeof v === "string" ? v : fallback);
@@ -2125,9 +2125,9 @@ __define("packages/sync/src/companion/theme.ts", function (exports, __require) {
   __export(exports, "themeOf", () => themeOf);
                                                    
 
-                                                                                                            
-                                                                    
-                                                                                                                                                         
+                                                                                                     
+                                                             
+                                                                                                                                                  
                                                                                                                                                             
 
 function hex(n         ) {

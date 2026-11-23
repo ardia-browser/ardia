@@ -13,7 +13,7 @@ const FINISH_DEADLINE_MS = 60_000;
 
 type SavedFile = { url?: unknown; state?: unknown; path?: unknown };
 
-export type BookmarksExportPlatform = {
+type BookmarksExportPlatform = {
   download(html: string, name: string): { url: string; release(): void };
   wait(ms: number): Promise<void>;
   now(): number;
@@ -63,7 +63,7 @@ export async function exportBookmarksToDownloads(host: ArdiaHost, profile: strin
   }
 }
 
-export const pageDownloads: BookmarksExportPlatform = {
+const pageDownloads: BookmarksExportPlatform = {
   download(html, name) {
     const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
     const link = document.createElement("a");

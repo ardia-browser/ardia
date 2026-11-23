@@ -6,7 +6,7 @@ import { createPageHoles, type PageHoles } from "./pageHoles.ts";
 import { startShellGlass } from "./shellGlass.ts";
 import { currentWindowCorners, onWindowCornersChanged } from "./windowDecorations.ts";
 
-export const SHELL_ABOVE_CLASS = "ardia-shell-above";
+const SHELL_ABOVE_CLASS = "ardia-shell-above";
 const MOTION_EVENTS = ["transitionrun", "transitionend", "transitioncancel", "animationstart", "animationend", "animationcancel"] as const;
 
 let regions: InputRegionsRegistry | null = null;

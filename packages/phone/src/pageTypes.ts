@@ -127,9 +127,9 @@ export type PageRequestAnswer =
   | { type: "takePhoto" }
   | { type: "recordVideo" };
 
-export type PageSummaryTrigger = "pinch" | "menu";
+type PageSummaryTrigger = "pinch" | "menu";
 
-export type PageSummaryOutcome = "chatgpt" | "on_device" | "excerpts" | "failed";
+type PageSummaryOutcome = "chatgpt" | "on_device" | "excerpts" | "failed";
 
 export type PageSummaryProvider = "on_device" | "chatgpt";
 

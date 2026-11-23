@@ -42,7 +42,7 @@ const PER_PROFILE_PATHS: Readonly<Record<string, readonly string[]>> = {
   switchProfile: PROFILES_MENU,
   newLittleArdia: ["File", "New Little Ardia Window in Profile"],
 };
-export type ProfileNames = Readonly<Record<string, { name: string } | undefined>>;
+type ProfileNames = Readonly<Record<string, { name: string } | undefined>>;
 const profileRow = (id: string, profileNames: ProfileNames) => {
   const colon = id.indexOf(":");
   if (colon < 0) return null;
@@ -80,7 +80,7 @@ export function linuxBindings(overrides: ShortcutOverrides = {}, profiles: reado
   }));
 }
 
-export const UTILITY_SHORTCUT_COMMANDS: ReadonlySet<string> = new Set(["closeTab", "openSettings", "findInPage", "quit", "copyDiagnostics", "taskManager", ...BROWSER_WINDOW_COMMANDS]);
+const UTILITY_SHORTCUT_COMMANDS: ReadonlySet<string> = new Set(["closeTab", "openSettings", "findInPage", "quit", "copyDiagnostics", "taskManager", ...BROWSER_WINDOW_COMMANDS]);
 
 export const utilityBindings = (bindings: Binding[]) => bindings.filter((binding) => UTILITY_SHORTCUT_COMMANDS.has(binding.command));
 

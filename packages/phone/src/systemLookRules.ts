@@ -1,6 +1,6 @@
 export type SystemLookNow = { reduceMotion: boolean; reduceTransparency: boolean };
 
-export type SystemLookSource = {
+type SystemLookSource = {
   read: () => SystemLookNow | null;
   readLater: () => Promise<SystemLookNow>;
   watch: (changed: (now: SystemLookNow) => void) => () => void;

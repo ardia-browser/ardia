@@ -3,8 +3,8 @@ import { commandSpec, LINUX_STANDARD_ITEMS } from "./commandCatalog";
 import { EDIT_ITEMS, editActionOf, type EditAction, type EditMenu } from "./editCommands";
 
 type MenuModifier = "command" | "shift" | "option" | "control";
-export type AppMenuShortcuts = ReadonlyMap<string, { key: string; modifiers: readonly ShortcutModifier[] }>;
-export type AppMenuChoice =
+type AppMenuShortcuts = ReadonlyMap<string, { key: string; modifiers: readonly ShortcutModifier[] }>;
+type AppMenuChoice =
   | { kind: "window"; action: WindowAction }
   | { kind: "about" }
   | { kind: "updates"; restart: boolean }
@@ -19,7 +19,7 @@ const CHECK_FOR_UPDATES = "checkForUpdates";
 const RESTART_TO_UPDATE = "restartToUpdate";
 const QUIT = "std:quit:";
 const FULL_SCREEN = "std:toggleFullScreen:";
-export type AppMenuContext = { fullScreen?: boolean; edit?: EditMenu | null; updates?: "check" | "restart" | null };
+type AppMenuContext = { fullScreen?: boolean; edit?: EditMenu | null; updates?: "check" | "restart" | null };
 const separator: MenuItem = { separator: true };
 
 const commandTitle = (command: string, arg?: string) => {

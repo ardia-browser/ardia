@@ -12,12 +12,12 @@ const MAX_WRITE_SAMPLES = 4096;
 const SAVE_DEADLINE_MS = 30_000;
 const SAVE_POLL_MS = 100;
 const GATHER_TIMEOUT_MS = 1_000;
-export const TELEMETRY_LOCAL_CHANNEL = "ardia.linux.telemetry-local";
+const TELEMETRY_LOCAL_CHANNEL = "ardia.linux.telemetry-local";
 const FEATURE = "The local telemetry copy";
 
-export type Chunk = { key: number; day: string; text: string };
-export type ChunkChange<T> = { put: Chunk[]; remove: number[]; result: T };
-export type ChunkStore = {
+type Chunk = { key: number; day: string; text: string };
+type ChunkChange<T> = { put: Chunk[]; remove: number[]; result: T };
+type ChunkStore = {
   add(day: string, text: string): Promise<void>;
   all(): Promise<Chunk[]>;
   change<T>(plan: (chunks: Chunk[]) => ChunkChange<T>): Promise<T>;
@@ -26,7 +26,7 @@ export type ChunkStore = {
 
 const encoder = new TextEncoder();
 export const utf8Bytes = (text: string) => encoder.encode(text).length;
-export const utcDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+const utcDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 const lineAt = (line: string) => {
   const match = /^\{"at":(\d+)/.exec(line);
   return match ? Number(match[1]) : null;
@@ -52,7 +52,7 @@ function byDay(chunks: Chunk[]): DayLines[] {
   return [...days.values()].sort((a, b) => (a.day < b.day ? -1 : 1));
 }
 
-export type PrunePlan = { put: Chunk[]; remove: number[]; dropped: number; bytes: number; lines: number; files: number };
+type PrunePlan = { put: Chunk[]; remove: number[]; dropped: number; bytes: number; lines: number; files: number };
 
 export function planPrune(chunks: Chunk[], now: number, keepMs: number, maxBytes: number): PrunePlan {
   const cutoff = now - keepMs;
@@ -143,7 +143,7 @@ export function collectSince(chunks: Chunk[], since: number): { text: string; li
   return { text, lines };
 }
 
-export type TelemetryLocalDeps = {
+type TelemetryLocalDeps = {
   chunks: ChunkStore | null;
   writes: boolean;
   save(name: string, text: string): Promise<string | null>;
@@ -154,7 +154,7 @@ export type TelemetryLocalDeps = {
   report?(error: unknown): void;
 };
 
-export type TelemetryLocal = TelemetryLocalNative & { settled(): Promise<void> };
+type TelemetryLocal = TelemetryLocalNative & { settled(): Promise<void> };
 
 export function createTelemetryLocal(deps: TelemetryLocalDeps): TelemetryLocal {
   const clock = deps.clock ?? (() => performance.now());
@@ -244,7 +244,7 @@ type StoredChunk = { day: string; text: string };
 const isStoredChunk = (value: unknown): value is StoredChunk =>
   typeof value === "object" && value !== null && typeof (value as StoredChunk).day === "string" && typeof (value as StoredChunk).text === "string";
 
-export function indexedChunkStore(factory: IDBFactory): ChunkStore {
+function indexedChunkStore(factory: IDBFactory): ChunkStore {
   let opening: Promise<IDBDatabase> | null = null;
   const open = () => opening ??= new Promise<IDBDatabase>((resolve, reject) => {
     const request = factory.open(DATABASE, 1);
@@ -303,7 +303,7 @@ export function indexedChunkStore(factory: IDBFactory): ChunkStore {
   };
 }
 
-export type DownloadSaverDeps = {
+type DownloadSaverDeps = {
   begin(name: string, text: string): string;
   release(url: string): void;
   list(): Promise<unknown>;
@@ -353,9 +353,9 @@ function pageDownloads(host: ArdiaHost): DownloadSaverDeps {
   };
 }
 
-export type FlushChannel = { postMessage(message: unknown): void; onmessage: ((event: { data: unknown }) => void) | null };
+type FlushChannel = { postMessage(message: unknown): void; onmessage: ((event: { data: unknown }) => void) | null };
 
-export type FlushRelayDeps = {
+type FlushRelayDeps = {
   channel: FlushChannel;
   leading(): Promise<boolean>;
   flush(): Promise<void>;

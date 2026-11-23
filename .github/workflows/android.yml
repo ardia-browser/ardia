@@ -88,7 +88,7 @@ jobs:
   app:
     needs: [gate, route]
     if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
-    runs-on: ${{ github.run_attempt == '1' && needs.route.result == 'success' && needs.route.outputs.target == 'boat' && 'boat-large' || 'ubuntu-latest' }}
+    runs-on: boat-large
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

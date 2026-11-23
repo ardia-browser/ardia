@@ -143,7 +143,7 @@ jobs:
     name: checks (${{ matrix.name }})
     needs: [gate, route]
     if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
-    runs-on: ${{ github.run_attempt == '1' && needs.route.result == 'success' && needs.route.outputs.target == 'boat' && 'boat-large' || 'ubuntu-24.04' }}
+    runs-on: boat-large
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -185,7 +185,7 @@ jobs:
   package:
     needs: [gate, route]
     if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
-    runs-on: ${{ github.run_attempt == '1' && needs.route.result == 'success' && needs.route.outputs.target == 'boat' && 'boat-large' || 'ubuntu-24.04' }}
+    runs-on: boat-large
     timeout-minutes: 45
     env:
       ENGINE_MODE: ${{ inputs.engine || 'nearest' }}

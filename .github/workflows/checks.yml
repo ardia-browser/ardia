@@ -171,7 +171,7 @@ jobs:
     concurrency:
       group: checks-code-${{ github.ref }}
       cancel-in-progress: true
-    runs-on: ${{ github.run_attempt == '1' && needs.changes.result == 'success' && needs.changes.outputs.target == 'boat' && 'boat-large' || 'ubuntu-latest' }}
+    runs-on: boat-large
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -217,7 +217,7 @@ jobs:
     concurrency:
       group: checks-browser-${{ matrix.shard }}-${{ github.ref }}
       cancel-in-progress: true
-    runs-on: ${{ github.run_attempt == '1' && needs.changes.result == 'success' && needs.changes.outputs.target == 'boat' && 'boat-large' || 'ubuntu-latest' }}
+    runs-on: boat-large
     timeout-minutes: 15
     strategy:
       fail-fast: false

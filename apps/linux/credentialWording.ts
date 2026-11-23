@@ -13,11 +13,6 @@ export const CREDENTIAL_WORDING: readonly Wording[] = [
     : \`\${apps} For 1Password, add Ardia once: in the 1Password app, open Settings › Browser › Add Browser and choose Ardia.\`;`,
         `  return "Password manager extensions such as 1Password, Bitwarden, KeePassXC and Proton Pass install from the Chrome Web Store. Ardia doesn't set up their connection to a desktop app on Linux yet.";`,
       ],
-      [
-        "description={`Saved on this ${PLATFORM_TERMS.computer}, separately for each profile, and encrypted with ${PLATFORM_TERMS.passwordKey}.`}",
-        `description="Saved on this computer, separately for each profile, and encrypted by Chromium with a key from your system keyring when one answers. Storage on this computer, above, names the key in use."`,
-      ],
-      ["Unlock with ${PLATFORM_TERMS.deviceUnlock} to see them.", "Unlock with your system password to see them."],
     ],
   },
   {

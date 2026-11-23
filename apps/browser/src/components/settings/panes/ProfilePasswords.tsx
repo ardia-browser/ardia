@@ -1,24 +1,22 @@
 import {
-  deletePassword,
   exportPasswords,
   getNeverSavePasswordOrigins,
   listPasswords,
   setNeverSavePasswords,
-  updatePassword,
   type PasswordExportStatus,
   type SavedPassword,
 } from "../../../state/site/passwords";
 import { orWarn } from "../../../lib/fallback";
-import { confirm, copyText, systemInfo } from "../../../state/app/system";
-import { Box, Button, DialogActions, DialogTitle, SearchField, Sheet, space, Symbol, Text, TextField, Toggle } from "../../ui";
-import { useEffect, useRef, useState } from "react";
-import { View } from "react-native";
+import { systemInfo } from "../../../state/app/system";
+import { Box, Button, SearchField, Symbol, Text, Toggle } from "../../ui";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTheme } from "../../ui/theme";
-import { monoFace } from "../../ui/tokens";
 import { currentEngineProfile } from "../../../state/browser/current";
 import { plural } from "../../../state/browser/model";
-import { importPasswordsCsv, revealPassword, unlockPasswordsFor, usePasswordsUnlocked } from "../../../state/site/savedPasswords";
-import { hostLabel, matchesQuery } from "../../pages/PageLayout";
+import { importPasswordsCsv, unlockPasswordsFor, usePasswordsUnlocked } from "../../../state/site/savedPasswords";
+import { hostLabel } from "../../pages/PageLayout";
+import { showSaved, type SheetContext } from "./PasswordSheets";
+import { loginEntries, mergeSorted, savedEntries, useNarrowedEntries, useNextFrame, type SavedEntry } from "./savedEntries";
 import { Favicon } from "../../favicon/Favicon";
 import { Group, Row, SectionHeader } from "../Form";
 import { keptByExtensionNote } from "../keptByExtension";
@@ -27,13 +25,25 @@ import { autofillEnabled, autofillToggleAsked, passwordAutofill, setAutofillFor,
 import { useResource } from "../../../state/settings/resources";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
-import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/sheet";
+import { showSettingsSheet } from "../../../state/settings/sheet";
 import { goToSettingsPane, SETTINGS_DETAIL } from "../../../state/settings/settingsWindows";
 import { ProfileSubPage } from "./ProfileSubPage";
 import { useGrowingRows } from "../../../state/settings/growingRows";
 import { notePasswordListShown } from "../../../state/telemetry/exportCounts";
 import { useManagerPlugins, useProfilePasswordManager } from "../../../state/site/passwordManager";
 import { offerToSaveHandedOver, PasswordManagerRow } from "./PasswordManagerRow";
+import { GeneratedPasswordsSection } from "./GeneratedPasswords";
+import { ForAllProfilesSection } from "./PasswordManagers";
+import { useVaultLogins } from "../../../state/vaults/hooks";
+import { loadManagerItems } from "../../../state/vaults/store";
+import { vaultsSupported } from "../../../state/vaults/enabled";
+import { refreshArdiaManager } from "../../../state/vaults/ardiaManager";
+import { brandOf } from "../../../state/vaults/brands";
+import { BrandBadge } from "../../vaults/VaultParts";
+import { VaultLoginSheet } from "../../vaults/VaultLoginSheet";
+import { LoginFormSheet } from "../../vaults/LoginFormSheet";
+import { VerificationCodesSection } from "../../vaults/VerificationCodes";
+import { VAULT_SETTINGS } from "../../vaults/tokens";
 
 function passwordManagerAppsNote() {
   const apps = `1Password, Bitwarden, KeePassXC and Proton Pass extensions connect to their ${PLATFORM_TERMS.computer} apps.`;
@@ -58,7 +68,7 @@ export function PasswordsSection({ profileId }: { profileId: string }) {
       <Group>
         <PasswordManagerRow profileId={profileId} />
         <Row anchor="profiles.offerToSavePasswords" description={handedOver ?? keptByExtensionNote(autofill, passwordsAsked)}>
-          <Toggle value={!handedOver && autofill} disabled={!!handedOver} onChange={(v) => setPasswordAutofillFor(profile, v)} />
+          <Toggle value={!handedOver && autofill} disabled={!!handedOver} onChange={(v) => void setPasswordAutofillFor(profile, v).then(() => void (vaultsSupported && refreshArdiaManager()))} />
         </Row>
         <Row anchor="profiles.passwords" onPress={() => open(SETTINGS_DETAIL.passwords)} />
         <Row anchor="profiles.addresses" description={keptByExtensionNote(enabled?.addresses, addressesAsked)}>
@@ -74,6 +84,20 @@ export function PasswordsSection({ profileId }: { profileId: string }) {
   );
 }
 
+function savedRow(entry: SavedEntry, context: SheetContext) {
+  return (
+    <Row
+      key={entry.key}
+      icon={entry.url ? <Favicon url={entry.url} size={VAULT_SETTINGS.siteIcon} /> : <BrandBadge provider={entry.item?.provider ?? ""} />}
+      title={entry.site}
+      description={entry.username || "No username"}
+      onPress={() => (entry.saved ? showSaved(entry.saved, context) : showSettingsSheet(<VaultLoginSheet item={entry.item!} site={entry.site} />))}
+    >
+      {entry.item ? <BrandBadge provider={entry.item.provider} tooltip={brandOf(entry.item.provider).name} /> : null}
+    </Row>
+  );
+}
+
 export function PasswordsPage({ profileId }: { profileId: string }) {
   const theme = useTheme();
   const [list, setList] = useState<SavedPassword[] | null>(null);
@@ -83,9 +107,12 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
   const [exportStatus, setExportStatus] = useState("");
   const profile = currentEngineProfile(profileId);
   const unlocked = usePasswordsUnlocked(profile);
+  const choice = useProfilePasswordManager(profileId);
+  const ardia = vaultsSupported && choice === "ardia";
+  const logins = useVaultLogins({ enabled: ardia, managersOnly: true });
   const arrived = useRef(0);
 
-  const load = () => {
+  const load = useCallback(() => {
     void listPasswords(profile)
       .catch(orWarn<SavedPassword[]>([]))
       .then((passwords) => {
@@ -93,10 +120,13 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
         setList(passwords);
       });
     void getNeverSavePasswordOrigins(profile).catch(orWarn<string[]>([])).then(setNever);
-  };
+  }, [profile]);
   useEffect(() => {
     if (unlocked) load();
   }, [unlocked, profileId]);
+  useEffect(() => {
+    if (unlocked && ardia) void loadManagerItems();
+  }, [unlocked, ardia]);
   useEffect(() => {
     if (!list || !arrived.current) return;
     notePasswordListShown(list.length, performance.now() - arrived.current);
@@ -110,6 +140,7 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
       const skipped = result.skipped ? ` ${plural(result.skipped, "login")} couldn't be saved.` : "";
       setImportStatus(`Imported ${plural(result.saved, "password")}.${skipped}`);
       load();
+      if (ardia) void refreshArdiaManager();
     } catch (e) {
       setImportStatus(`Couldn't import that file: ${(e as Error).message}`);
     }
@@ -124,11 +155,21 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
     else setExportStatus("");
   };
 
-  const shown = (list ?? []).filter((p) => matchesQuery(query, p.origin, p.username));
-  const rows = useGrowingRows(shown.length, `${profile}|${query}`);
+  const saved = useMemo(() => savedEntries(list ?? []), [list]);
+  const fromManagers = useMemo(() => (ardia ? loginEntries(logins) : []), [ardia, logins]);
+  const entries = useMemo(() => mergeSorted(saved, fromManagers), [saved, fromManagers]);
+  const listQuery = useNextFrame(query);
+  const shown = useNarrowedEntries(entries, listQuery);
+  const rows = useGrowingRows(shown.length, `${profile}|${listQuery}`);
+  const context = useMemo<SheetContext>(() => ({ profile, list: list ?? [], ardia, onChanged: load }), [profile, list, ardia, load]);
+  const newLogin = (mode: "password" | "code") =>
+    showSettingsSheet(
+      <LoginFormSheet initialMode={mode} target={{ kind: "new", profileId, saved: list ?? [], onSaved: load, onShowExisting: (existing) => showSaved(existing, context) }} />,
+    );
 
   return (
     <ProfileSubPage>
+      {ardia ? <ForAllProfilesSection /> : null}
       <SectionHeader
         title="Passwords"
         description={`Saved on this ${PLATFORM_TERMS.computer}, separately for each profile, and encrypted with ${PLATFORM_TERMS.passwordKey}.`}
@@ -163,27 +204,19 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
       ) : (
         <>
           <SectionHeader
-            title={list ? plural(list.length, "Saved Password") : "Saved Passwords"}
-            action={<SearchField value={query} onChangeText={setQuery} placeholder="Search" width={200} />}
+            title={list ? plural(entries.length, "Saved Password") : "Saved Passwords"}
+            action={
+              <Box row gap="s" center>
+                {ardia ? <Button variant="icon" icon="plus" size="m" tooltip="New Password" onPress={() => newLogin("password")} /> : null}
+                <SearchField value={query} onChangeText={setQuery} placeholder="Search" width={200} />
+              </Box>
+            }
           />
-          <Group>
-            {list && shown.length === 0 ? (
-              <Row title={query ? "No passwords match" : "No saved passwords"} />
-            ) : (
-              shown.slice(0, rows).map((p) => (
-                <Row
-                  key={`${p.origin}|${p.username}`}
-                  icon={<Favicon url={p.origin} />}
-                  title={hostLabel(p.origin)}
-                  description={p.username || "(no username)"}
-                  onPress={() => showSettingsSheet(<PasswordSheet profile={profile} saved={p} onChanged={load} />)}
-                />
-              ))
-            )}
-          </Group>
+          <Group>{list && shown.length === 0 ? <Row title={listQuery ? "No passwords match" : "No saved passwords"} /> : shown.slice(0, rows).map((e) => savedRow(e, context))}</Group>
+          {ardia ? <ArdiaExtras query={listQuery} profile={profile} onNewCode={() => newLogin("code")} /> : null}
           {never.length > 0 && (
             <>
-              <SectionHeader title="Never saved" description="Sites where you chose “Never on This Site”." />
+              <SectionHeader title="Never Saved" description="Sites where you chose “Never on This Site”." />
               <Group>
                 {never.map((origin) => (
                   <Row key={origin} icon={<Favicon url={origin} />} title={hostLabel(origin)}>
@@ -199,118 +232,15 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
   );
 }
 
-function PasswordSheet({ profile, saved, onChanged }: { profile: string; saved: SavedPassword; onChanged: () => void }) {
-  const [username, setUsername] = useState(saved.username);
-  const [password, setPassword] = useState<string | null>(null);
-  const [revealed, setRevealed] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  const open = useRef(true);
-  const unlocked = usePasswordsUnlocked(profile);
-  useEffect(() => {
-    open.current = true;
-    return () => {
-      open.current = false;
-    };
-  }, []);
-  useEffect(() => void revealPassword(profile, saved.origin, saved.username).then(setPassword), []);
-  useEffect(() => {
-    if (unlocked) return;
-    setPassword(null);
-    closeSettingsSheet();
-  }, [unlocked]);
-
-  const save = async () => {
-    setError("");
-    setBusy(true);
-    const changed = await updatePassword(profile, saved.origin, saved.username, {
-      username: username !== saved.username ? username : undefined,
-      password: password ?? undefined,
-    }).catch(orWarn(false, "settings edit"));
-    if (changed) onChanged();
-    if (!open.current) return;
-    setBusy(false);
-    if (!changed) return setError("Couldn't confirm that the change was saved. It may still appear in the list in a moment.");
-    closeSettingsSheet();
-  };
-  const remove = async () => {
-    setBusy(true);
-    const { confirmed } = await confirm({
-      title: `Delete the password for ${hostLabel(saved.origin)}?`,
-      message: "You won't be able to sign in with it automatically any more.",
-      confirmTitle: "Delete",
-      destructive: true,
-    });
-    if (!confirmed) return setBusy(false);
-    await deletePassword(profile, saved.origin, saved.username).catch(orWarn(false, "settings delete"));
-    onChanged();
-    closeSettingsSheet();
-  };
-
+function ArdiaExtras({ query, profile, onNewCode }: { query: string; profile: string; onNewCode: () => void }): ReactNode {
   return (
-    <Sheet onClose={closeSettingsSheet}>
-      <DialogTitle icon={<Favicon url={saved.origin} size={20} />}>{hostLabel(saved.origin)}</DialogTitle>
-      <View style={SHEET_BODY}>
-        <Group>
-          <Row title="Website" description={saved.origin} />
-          <Row title="Username">
-            {editing ? (
-              <TextField value={username} onChangeText={setUsername} width={220} />
-            ) : (
-              <Box row gap="xs" style={CENTER}>
-                <Text selectable>{saved.username}</Text>
-                <Button variant="icon" icon="doc.on.doc" size="m" onPress={() => copyText(saved.username)} tooltip="Copy Username" />
-              </Box>
-            )}
-          </Row>
-          <Row title="Password">
-            {editing ? (
-              <TextField value={password ?? ""} onChangeText={setPassword} secure={!revealed} width={220} />
-            ) : (
-              <Box row gap="xs" style={CENTER}>
-                <Text selectable style={revealed ? monoFace() : undefined}>
-                  {password === null ? "…" : revealed ? password : "•".repeat(Math.min(password.length, 12))}
-                </Text>
-                <Button variant="icon" icon={revealed ? "eye.slash" : "eye"} size="m" onPress={() => setRevealed(!revealed)} tooltip={revealed ? "Hide" : "Show"} />
-                <Button variant="icon" icon="doc.on.doc" size="m" onPress={() => password && copyText(password)} tooltip="Copy Password" />
-              </Box>
-            )}
-          </Row>
-        </Group>
-        {error ? (
-          <Text size="caption" tone="destructive" style={ERROR}>
-            {error}
-          </Text>
-        ) : null}
-      </View>
-      <DialogActions leading={<Button title="Delete" kind="destructive" disabled={busy} onPress={() => void remove()} />}>
-        {editing ? (
-          <>
-            <Button
-              title="Cancel"
-              disabled={busy}
-              onPress={() => {
-                setError("");
-                setEditing(false);
-              }}
-            />
-            <Button title="Save" kind="primary" disabled={!password || busy} onPress={() => void save()} />
-          </>
-        ) : (
-          <>
-            <Button title="Edit" onPress={() => setEditing(true)} />
-            <Button title="Done" kind="primary" onPress={closeSettingsSheet} />
-          </>
-        )}
-      </DialogActions>
-    </Sheet>
+    <>
+      <GeneratedPasswordsSection query={query} profile={profile} />
+      <VerificationCodesSection query={query} onAdd={onNewCode} />
+    </>
   );
 }
 
 const HELP_ICON = { width: 20, height: 20 } as const;
 const LOCKED = { alignItems: "center", marginTop: settingsLayout.emptyTop } as const;
 const LOCK_ICON = { width: 36, height: 36 } as const;
-const SHEET_BODY = { marginTop: space.xl } as const;
-const ERROR = { marginTop: space.ml } as const;
-const CENTER = { alignItems: "center" } as const;

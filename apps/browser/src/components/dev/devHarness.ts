@@ -175,6 +175,12 @@ export function startDevHarness() {
     get syncSheets(): typeof import("../settings/panes/SyncSheets") {
       return require("../settings/panes/SyncSheets");
     },
+    get vaultSheets(): typeof import("../settings/panes/PasswordManagerSheets") & typeof import("../../state/settings/sheet") & typeof import("../vaults/LoginFormSheet") & { createElement: typeof createElement } {
+      return { ...require("../settings/panes/PasswordManagerSheets"), ...require("../../state/settings/sheet"), ...require("../vaults/LoginFormSheet"), createElement };
+    },
+    get vaultForms(): typeof import("../vaults/LoginFormSheet") & typeof import("../vaults/VerificationCodes") & typeof import("../../state/vaults/standaloneCodes") & typeof import("../../state/vaults/menu") & typeof import("../../state/vaults/fill") {
+      return { ...require("../vaults/LoginFormSheet"), ...require("../vaults/VerificationCodes"), ...require("../../state/vaults/standaloneCodes"), ...require("../../state/vaults/menu"), ...require("../../state/vaults/fill") };
+    },
     get vaultStore(): typeof import("../../state/vaults/store") {
       return require("../../state/vaults/store");
     },
@@ -202,6 +208,11 @@ export function startDevHarness() {
         ...require("../../state/downloads/downloadMenu"),
         ...require("../../platform/clipboard"),
       };
+    },
+    showVaultForm: (props: import("react").ComponentProps<typeof import("../vaults/LoginFormSheet").LoginFormSheet>) => {
+      const { showSettingsSheet } = require("../../state/settings/sheet") as typeof import("../../state/settings/sheet");
+      const { LoginFormSheet } = require("../vaults/LoginFormSheet") as typeof import("../vaults/LoginFormSheet");
+      showSettingsSheet(createElement(LoginFormSheet, props));
     },
     showCodeSheet: (code: import("../../state/vaults/types").VaultStandaloneCode) => {
       const { showSettingsSheet } = require("../../state/settings/sheet") as typeof import("../../state/settings/sheet");

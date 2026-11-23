@@ -49,6 +49,7 @@ export const LINUX_WORDING: readonly Wording[] = [
     file: "state/telemetry/copy.ts",
     replacements: [
       ...[PHRASES_ONLY_WITH.freezeWatch ?? []].flat().map((phrase): [string, string] => [phrase, ""]),
+      ["\"How many times Ardia's own logins were backed up to iCloud, how many backups failed or waited for iCloud Keychain, how many times the iCloud backup was deleted, how many passwords were updated from it, and how many restores ran, were declined, and how many logins they restored or couldn't, summed up once an hour. Never the logins, passwords or sites\",\n", ""],
       ["\"How many times password managers read a stored key from the keychain or from memory, skipped rewriting an unchanged one, and called the older login keychain, summed up once an hour. Never the keys or which manager\",\n", ""],
       ["how many tab changes this Mac sent,", "how many tab changes this computer sent,"],
       ["Sent to ardia.dev with a random ID made on this Mac, and kept", "Sent to ardia.dev with a random ID made on this computer, and kept"],

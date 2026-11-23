@@ -66,6 +66,7 @@ enum CredentialResults {
 
   static func cleanedDisplay(_ value: Any?, longest: Int) -> String? {
     guard let text = value as? String else { return nil }
+    if text.utf8.count <= longest, !CredentialCatalogParser.hasControlOrDirection(text) { return text }
     let visible = String(String.UnicodeScalarView(text.unicodeScalars.filter { !CredentialCatalogParser.isControlOrDirection($0) }))
     return CredentialVerbOutput.capped(visible, bytes: longest)
   }

@@ -156,6 +156,25 @@ do {
   close(r)
 }
 
+do {
+  var out = ControlOutput()
+  let count = 150_000
+  for n in 0..<count { _ = out.addKept(kept(200, n)) }
+  let started = Date()
+  let lines = drain(&out)
+  results["bigQueueDrainSeconds"] = Date().timeIntervalSince(started)
+  results["bigQueueInOrder"] = lines.count == count && lines.enumerated().allSatisfy { index, line in
+    String(decoding: line.prefix(24), as: UTF8.self).hasPrefix("{\"decide\":\"d\(index)\"")
+  }
+  results["bigQueueEmptied"] = out.isEmpty && out.bytes == 0
+}
+
+do {
+  let bytes = Array("ab\ncd\n\nef".utf8)
+  results["newlines"] = [ControlConnection.newline(in: bytes, from: 0), ControlConnection.newline(in: bytes, from: 3), ControlConnection.newline(in: bytes, from: 6),
+    ControlConnection.newline(in: bytes, from: 7), ControlConnection.newline(in: bytes, from: 99)].map { $0 ?? -1 }
+}
+
 let json = try! JSONSerialization.data(withJSONObject: results, options: [.sortedKeys])
 print(String(decoding: json, as: UTF8.self))
 `;
@@ -205,4 +224,14 @@ test("a connection that has to close finishes the line it started and leaves no 
   assert.equal(got.retireEndsOnNewline, true);
   assert.equal(got.retireAnnouncesClose, true);
   assert.equal(got.retireReportsDroppedReply, true, "the reply queued after it is reported unwritten");
+});
+
+test("a queue of 150,000 lines drains in order, all of it, in well under a second", { skip }, () => {
+  assert.equal(got.bigQueueInOrder, true);
+  assert.equal(got.bigQueueEmptied, true);
+  assert.ok(got.bigQueueDrainSeconds < 1, `draining took ${got.bigQueueDrainSeconds} s`);
+});
+
+test("a line ends at the next newline from where the scan starts", { skip }, () => {
+  assert.deepEqual(got.newlines, [2, 5, 6, -1, -1]);
 });

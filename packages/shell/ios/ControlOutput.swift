@@ -20,6 +20,8 @@ struct ControlOutput {
   }
 
   private var chunks: [Chunk] = []
+  private var head = 0
+  private static let compactAfter = 1024
   private var headStarted = false
   private var offset = 0
   private var headWritten = 0
@@ -30,9 +32,9 @@ struct ControlOutput {
   private(set) var dropped = 0
   private var finished: [Int] = []
 
-  var isEmpty: Bool { chunks.isEmpty }
+  var isEmpty: Bool { head == chunks.count }
   var midLine: Bool { headStarted && headWritten > 0 }
-  var waitingTickets: [Int] { chunks.map(\.ticket).filter { $0 > 0 } }
+  var waitingTickets: [Int] { chunks[head...].map(\.ticket).filter { $0 > 0 } }
 
   mutating func takeFinishedTickets() -> [Int] {
     defer { finished = [] }
@@ -68,7 +70,7 @@ struct ControlOutput {
 
   mutating func keepOnlyReplies() {
     var kept: [Chunk] = []
-    for (index, chunk) in chunks.enumerated() {
+    for (index, chunk) in chunks[head...].enumerated() {
       if chunk.kind == .reply || (index == 0 && midLine) {
         kept.append(chunk)
         continue
@@ -84,12 +86,13 @@ struct ControlOutput {
       headMarked = 0
     }
     chunks = kept
+    head = 0
     dropped = 0
   }
 
   mutating func keepOnlyHead() -> [Int] {
     guard midLine else { return [] }
-    let rest = chunks.dropFirst()
+    let rest = chunks[(head + 1)...]
     let unwritten = rest.map(\.ticket).filter { $0 > 0 }
     for chunk in rest {
       bytes -= chunk.data.count
@@ -103,9 +106,9 @@ struct ControlOutput {
   }
 
   mutating func write(to fd: Int32) -> WriteResult {
-    while !chunks.isEmpty {
+    while head < chunks.count {
       startHead()
-      let data = chunks[0].data
+      let data = chunks[head].data
       let written = data.withUnsafeBytes { raw -> Int in
         guard let base = raw.baseAddress else { return 0 }
         return Darwin.write(fd, base + offset, data.count - offset)
@@ -114,24 +117,31 @@ struct ControlOutput {
         if errno == EINTR { continue }
         return errno == EAGAIN || errno == EWOULDBLOCK ? .blocked : .failed
       }
-      if headWritten == 0 && chunks[0].kind == .event { waitingEvents -= 1 }
+      if headWritten == 0 && chunks[head].kind == .event { waitingEvents -= 1 }
       offset += written
       headWritten += written
       bytes -= written
-      if chunks[0].kind == .event { eventBytes -= written }
+      if chunks[head].kind == .event { eventBytes -= written }
       if offset == data.count {
-        if chunks[0].ticket > 0 { finished.append(chunks[0].ticket) }
-        chunks.removeFirst()
+        if chunks[head].ticket > 0 { finished.append(chunks[head].ticket) }
+        dropHead()
         offset = 0
         headWritten = 0
         headMarked = 0
         headStarted = false
       } else if offset >= Self.releaseWrittenBytes {
-        chunks[0].data = Data(data[(data.startIndex + offset)...])
+        chunks[head].data = Data(data[(data.startIndex + offset)...])
         offset = 0
       }
     }
     return .drained
+  }
+
+  private mutating func dropHead() {
+    head += 1
+    guard head == chunks.count || (head >= Self.compactAfter && head * 2 >= chunks.count) else { return }
+    chunks.removeFirst(head)
+    head = 0
   }
 
   private func hasRoom(_ count: Int) -> Bool { bytes + count + Self.markerRoom <= Self.maxBytes }
@@ -146,8 +156,8 @@ struct ControlOutput {
   }
 
   private mutating func dropOldestEvent() -> Bool {
-    guard let index = chunks.indices.first(where: { chunks[$0].kind == .event && !($0 == 0 && midLine) }) else { return false }
-    if index == 0 && headStarted {
+    guard let index = chunks.indices.dropFirst(head).first(where: { chunks[$0].kind == .event && !($0 == head && midLine) }) else { return false }
+    if index == head && headStarted {
       dropped += headMarked
       headMarked = 0
       headStarted = false
@@ -164,13 +174,13 @@ struct ControlOutput {
   private mutating func startHead() {
     guard !headStarted else { return }
     headStarted = true
-    guard chunks[0].kind == .event, dropped > 0 else { return }
-    let marked = Self.marking(chunks[0].data, dropped: dropped)
-    let grown = marked.count - chunks[0].data.count
+    guard chunks[head].kind == .event, dropped > 0 else { return }
+    let marked = Self.marking(chunks[head].data, dropped: dropped)
+    let grown = marked.count - chunks[head].data.count
     guard grown > 0, grown <= Self.markerRoom, marked.count <= Self.maxLine else { return }
     bytes += grown
     eventBytes += grown
-    chunks[0].data = marked
+    chunks[head].data = marked
     headMarked = dropped
     dropped = 0
   }

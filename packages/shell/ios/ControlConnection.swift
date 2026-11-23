@@ -233,13 +233,21 @@ final class ControlConnection {
     close()
   }
 
+  static func newline(in bytes: [UInt8], from start: Int) -> Int? {
+    guard start < bytes.count else { return nil }
+    return bytes.withUnsafeBufferPointer { buffer -> Int? in
+      guard let base = buffer.baseAddress, let found = memchr(base + start, 10, buffer.count - start) else { return nil }
+      return base.distance(to: found.assumingMemoryBound(to: UInt8.self))
+    }
+  }
+
   private func take(_ bytes: ArraySlice<UInt8>) {
     let scanFrom = input.count
     input.append(contentsOf: bytes)
     var lineStart = 0
     var index = scanFrom
     var consumed = false
-    while let newline = input[index...].firstIndex(of: 10) {
+    while let newline = Self.newline(in: input, from: index) {
       let length = newline - lineStart
       guard length <= Self.maxLine else { return retire() }
       pendingRequests += 1

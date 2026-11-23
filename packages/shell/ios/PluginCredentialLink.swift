@@ -4,14 +4,21 @@ import Foundation
 final class PluginCredentialLink: CredentialPluginLink, @unchecked Sendable {
   static let pacedBufferBytes = 8 << 20
   static let pendingBytes = 192 << 20
+  static let compactAfter = 4096
 
   private let queue: DispatchQueue
   private weak var process: PluginProcess?
   private let forwardLine: (PluginProcess, String) -> Void
   private let stop: (PluginProcess) -> Void
   private var pending: [Data] = []
+  private var pendingHead = 0
   private var budget = PluginPendingBudget(limit: PluginCredentialLink.pendingBytes)
-  private var finishing: [(remaining: Int, done: @Sendable (Bool) -> Void)] = []
+  private struct Finishing {
+    var remaining: Int
+    let done: @Sendable (Bool) -> Void
+  }
+
+  private var finishing: [Finishing] = []
   private var waiting = false
 
   init(queue: DispatchQueue, process: PluginProcess, forward: @escaping (PluginProcess, String) -> Void, stop: @escaping (PluginProcess) -> Void) {
@@ -42,7 +49,7 @@ final class PluginCredentialLink: CredentialPluginLink, @unchecked Sendable {
     queue.async { [self] in
       guard budget.admit(size) else { return then(false) }
       pending.append(contentsOf: framed)
-      finishing.append((pending.count, then))
+      finishing.append(Finishing(remaining: pending.count - pendingHead, done: then))
       pump()
     }
   }
@@ -50,6 +57,7 @@ final class PluginCredentialLink: CredentialPluginLink, @unchecked Sendable {
   private func pump() {
     guard let connection = process?.connection, !connection.closed else {
       pending = []
+      pendingHead = 0
       budget.reset()
       let done = finishing
       finishing = []
@@ -57,17 +65,25 @@ final class PluginCredentialLink: CredentialPluginLink, @unchecked Sendable {
       return
     }
     var sent = 0
-    while !pending.isEmpty, connection.bufferedBytes < Self.pacedBufferBytes {
-      let line = pending.removeFirst()
+    while pendingHead < pending.count, connection.bufferedBytes < Self.pacedBufferBytes {
+      let line = pending[pendingHead]
+      pendingHead += 1
       budget.release(line.count)
       connection.send(line)
       sent += 1
     }
     if sent > 0 {
-      finishing = finishing.map { ($0.remaining - sent, $0.done) }
+      for index in finishing.indices { finishing[index].remaining -= sent }
       let done = finishing.filter { $0.remaining <= 0 }
       finishing.removeAll { $0.remaining <= 0 }
       done.forEach { $0.done(true) }
+    }
+    if pendingHead == pending.count {
+      pending = []
+      pendingHead = 0
+    } else if pendingHead >= Self.compactAfter {
+      pending.removeFirst(pendingHead)
+      pendingHead = 0
     }
     guard !pending.isEmpty, !waiting else { return }
     waiting = true

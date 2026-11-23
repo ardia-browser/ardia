@@ -52,7 +52,8 @@ struct CredentialCatalogParser {
   static func textLength(_ text: String) -> Int { text.utf16.count }
 
   static func hasControlOrDirection(_ text: String) -> Bool {
-    text.unicodeScalars.contains(where: isControlOrDirection)
+    if text.utf8.allSatisfy({ $0 >= 0x20 && $0 < 0x7F }) { return false }
+    return text.unicodeScalars.contains(where: isControlOrDirection)
   }
 
   static func isControlOrDirection(_ scalar: Unicode.Scalar) -> Bool {

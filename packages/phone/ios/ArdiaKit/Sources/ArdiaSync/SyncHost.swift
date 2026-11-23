@@ -88,7 +88,7 @@ final class SyncHost {
   }
 
   private func read(scope: String, known: [String]) throws -> String {
-    let folder = vault.chainURL.appendingPathComponent(keys.scopeTag(scope), isDirectory: true)
+    let folder = vault.chainURL.appendingPathComponent(try keys.scopeTag(scope), isDirectory: true)
     if SyncFolderAccess.isDirectory(folder), SyncFolderAccess.coordinatedListing(folder, coordination: coordination) == nil {
       timedOut = true
       throw SyncCoordination.TimedOut()

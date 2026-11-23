@@ -675,6 +675,23 @@ test("a Windows build waiting at the gate starts with the iPhone one", async () 
   assert.deepEqual(github.named("actions.reRunWorkflow").map((call) => call.params.run_id), [900, 960]);
 });
 
+test("a fork build that ran, with its route job skipped, is not started again", async () => {
+  const built = [{ name: "gate", conclusion: "success" }, { name: "route", conclusion: "skipped" }, { name: "app", conclusion: "success" }];
+  const waiting = [{ name: "gate", conclusion: "success" }, { name: "route", conclusion: "skipped" }, { name: "package", conclusion: "skipped" }];
+  const github = fakeGithub({
+    runs: { s9: [runOf(9, 900)] },
+    androidRuns: { s9: [runOf(9, 950)] },
+    linuxRuns: { s9: [runOf(9, 970)] },
+    jobs: { 900: GATE_SKIPPED, 950: built, 970: waiting },
+  });
+  await invoke("run", {
+    github,
+    eventName: "pull_request_target",
+    payload: { action: "labeled", label: { name: "run-ci" }, pull_request: pr(9, "stranger", { sha: "s9" }) },
+  });
+  assert.deepEqual(github.named("actions.reRunWorkflow").map((call) => call.params.run_id), [900, 970]);
+});
+
 test("the run-ci label re-runs the skipped build of every gated workflow", async () => {
   const github = fakeGithub({
     runs: { s9: [runOf(9, 900)] },

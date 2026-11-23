@@ -1,3 +1,4 @@
+import { linkEdits, withEntry, withoutEntries } from "../browser/changes";
 import type { BrowserState } from "../browser/store";
 import { leaveGroups } from "../groups/groups";
 import { withShownTab } from "../groups/shownTabs";
@@ -118,7 +119,7 @@ export function activated(s: BrowserState, id: string, shareLivePins = true): Pa
   const ui = s.windowUi[w.id];
   const groups = withShownTab(s.groups, id);
   return {
-    tabs: { ...s.tabs, [id]: nextTab },
+    tabs: withEntry(s.tabs, id, nextTab),
     windows: { ...s.windows, [w.id]: window },
     ...(groups === s.groups ? {} : { groups }),
     ...(ui?.panel.open ? { windowUi: { ...s.windowUi, [w.id]: { ...ui, panel: { open: false, initialText: "" } } } } : {}),
@@ -163,7 +164,7 @@ export function removeTabs(s: BrowserState, ids: string[], record: boolean): Bro
     }
     windows[w.id] = { ...w, tabIds, activeTabIds };
   }
-  tabs = adoptOrphans(without(tabs, gone), s.tabs, gone);
+  tabs = adoptOrphans(withoutEntries(tabs, gone), s.tabs, gone);
 
   let next: BrowserState = {
     ...s,
@@ -192,14 +193,16 @@ function otherPane(s: BrowserState, closedId: string, gone: Set<string>): string
 
 function adoptOrphans(tabs: Record<string, Tab>, before: Record<string, Tab>, gone: Set<string>): Record<string, Tab> {
   let next = tabs;
+  const adopted: string[] = [];
   for (const t of Object.values(tabs)) {
     let opener = t.openerId;
     while (opener && gone.has(opener)) opener = before[opener]?.openerId ?? null;
     if (opener === t.openerId) continue;
     if (next === tabs) next = { ...tabs };
     next[t.id] = { ...t, openerId: opener === t.id ? null : opener };
+    adopted.push(t.id);
   }
-  return next;
+  return linkEdits(next, tabs, adopted);
 }
 
 export function unloadPinnedTabs(s: BrowserState, requested: string[], keepTopApps = false): BrowserState {
@@ -230,7 +233,7 @@ export function unloadPinnedTabs(s: BrowserState, requested: string[], keepTopAp
   }
   let next: BrowserState = {
     ...s,
-    tabs,
+    tabs: linkEdits(tabs, s.tabs, unloading),
     find: without(s.find, unloaded),
     splits: removeFromSplits(s.splits, new Set([...gone].filter((id) => !splitTabIdsOf(splitOf(s, id))?.every((pane) => gone.has(pane))))),
     selection: pruneSelection(s.selection, gone),
@@ -292,7 +295,7 @@ export function withNewTab(s: BrowserState, windowId: string, o: NewTabOptions =
   tab.pinnedUrl = tab.pin ? pinHome({ pinnedUrl: tab.pinnedUrl, url }, true) : tab.pinnedUrl || null;
   if (o.adoptId) tab.page = adoptedPage(o.adoptId);
   else if (o.wakeAdoptId) tab.page = { kind: "idle", wake: o.wakeAdoptId };
-  const tabs = { ...s.tabs, [tab.id]: tab };
+  const tabs = withEntry(s.tabs, tab.id, tab);
   const tabIds = [...w.tabIds];
   const at = o.index ?? (tab.pin ? pinnedInsertionIndex(s, w) : insertionIndex(s, w, tab, !!o.background));
   tabIds.splice(Math.min(at, tabIds.length), 0, tab.id);

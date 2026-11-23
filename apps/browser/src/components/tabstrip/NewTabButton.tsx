@@ -7,6 +7,8 @@ import { openNewTabInSplit } from "../../state/splits/actions";
 import { splitViewAvailable } from "../../state/splits/splits";
 import { newTab } from "../../state/tabs/actions";
 import { noteTabStripMenu } from "../../state/telemetry/usage";
+import { noteTabStripMenuPick } from "../../state/telemetry/tabStripCounts";
+import { consentToken } from "../../state/telemetry/client";
 import { useShortcutHint, withShortcut } from "../../state/commands/commandShortcuts";
 import { Button, useHover, type IconPalette } from "../ui";
 import { useTheme } from "../ui/theme";
@@ -49,7 +51,8 @@ export function NewTabButton({ windowId, geometry, pinned }: { windowId: string;
   };
   const openOverflow = () => {
     noteTabStripMenu("overflow");
-    void openOverflowMenu(windowId);
+    const consent = consentToken();
+    void openOverflowMenu(windowId, () => noteTabStripMenuPick(consent));
   };
   return (
     <Animated.View {...hoverProps} pointerEvents="box-none" style={{ marginTop: ITEM_TOP, flexDirection: "row", transform: [{ translateX: shift }] }}>

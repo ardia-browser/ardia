@@ -1,3 +1,4 @@
+import { withEntry } from "../browser/changes";
 import type { BrowserState } from "../browser/store";
 import type { Tab } from "../browser/types";
 import { findLast, isIncognitoProfile, navigationTo, pinKeyOf } from "../browser/model";
@@ -33,7 +34,7 @@ export function intoProfile(s: BrowserState, tabId: string, profileId: string): 
   const loaded = hasLoadedPage(tab);
   const moved: Tab = { ...tab, profileId, page: loaded ? loadedPage(navigationTo(tab.url)) : hasPage(tab) ? IDLE : withWake(tab.page, undefined), lastActiveAt: Date.now() };
   const pinChoices = tab.pin ? markPinned(next.pinChoices, profileId, { tabs: [pinKeyOf(moved)], placed: [pinKeyOf(moved)] }) : next.pinChoices;
-  const tabs = { ...next.tabs, [tabId]: moved };
+  const tabs = withEntry(next.tabs, tabId, moved);
   const index = Math.min(w.tabIds.indexOf(tabId), base.tabIds.length);
   const tabIds = [...base.tabIds];
   tabIds.splice(index, 0, tabId);

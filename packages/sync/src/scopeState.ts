@@ -82,6 +82,7 @@ export type ApplyRecords = {
   joined: boolean;
   held(): boolean;
   landed(key: string): void;
+  defer(key: string): void;
 };
 
 export interface Adapter {

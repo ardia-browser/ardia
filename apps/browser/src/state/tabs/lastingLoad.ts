@@ -6,13 +6,13 @@ import { shownLiveOf } from "./tabLive";
 
 const SHOW_AFTER_MS = 150;
 
-export function useLastingLoad(tabId: string) {
-  const loading = useTabLive(tabId, (live) => live.isLoading);
+export function useLastingLoad(tabId: string, watching = true) {
+  const loading = useTabLive(tabId, (live) => watching && live.isLoading);
   const [lasting, setLasting] = useState(false);
   const waiting = useRef(false);
   useEffect(() => {
     if (!loading) {
-      if (waiting.current) notePageOverlay("loadingSkipped");
+      if (waiting.current && watching) notePageOverlay("loadingSkipped");
       waiting.current = false;
       return;
     }

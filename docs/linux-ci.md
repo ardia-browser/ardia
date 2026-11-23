@@ -279,5 +279,8 @@ hand. The one-time setup is in [releasing.md](releasing.md#linux-package).
   skipped run. Pushes, manual runs and pull requests from a branch of this repository skip the gate and build at once:
   only people with write access push those branches, and the gate would only spend an `ubuntu-latest` slot to say so.
   A newer push cancels the run before it, on `main` too; manual runs are never cancelled.
+- **Runner.** A `route` job picks `ubuntu-24.04` or, when GitHub's runners are busy, Boat CI's `boat-large` for
+  `checks` and `package` ([ci-boat-overflow.md](ci-boat-overflow.md)). It is skipped for forks, and a skipped or failed
+  route job keeps both on `ubuntu-24.04`.
 - **No engine.** With no published engine for this commit's key or the 200 engine commits before it, `package` fails
   and says to publish one.

@@ -14,15 +14,19 @@ export { getDisplayMediaThumbnails } from "../../platform/media";
 export { noteScreenRecordingMissing } from "../telemetry/usage";
 export { startSharePreviews } from "../telemetry/sharePreviewCounts";
 
-export function useShareFor(tabId: string): [string, TabShare] | null {
-  const shares = useMedia((m) => m.tabShares);
-  const sharing = Object.keys(shares).length > 0;
+export type ShareFound = [string, TabShare];
+
+const sharesOf = (m: { tabShares: Record<string, TabShare> }) => m.tabShares;
+
+export function useShareFor(tabId: string, live = true): ShareFound | null {
+  const shares = useStoreWhile(useMedia, live, sharesOf);
+  const sharing = live && Object.keys(shares).length > 0;
   const profile = useBrowserWhile(sharing, (s) => {
     const tab = s.tabs[tabId];
     return tab && /^https?:|^file:/.test(tab.url) ? engineProfile(s, tab.profileId) : null;
   });
   const capturing = useStoreWhile(usePages, sharing, (p) => Object.keys(shares).filter((id) => p.pages[id]?.mediaAccess?.screen).join(","));
-  if (profile === null) return null;
+  if (!live || profile === null) return null;
   for (const capturer of capturing ? capturing.split(",") : []) {
     const share = shares[capturer];
     if (!share || share.dismissed[tabId]) continue;

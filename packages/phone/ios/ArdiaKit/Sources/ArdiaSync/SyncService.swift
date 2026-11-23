@@ -312,7 +312,7 @@ public final class SyncService {
   @discardableResult
   public func changeFolder(_ folder: URL) async -> ConnectResult {
     guard !isDemo else { return .connected }
-    guard meta.enabled, let deviceId = meta.deviceId, let entropy = keyStore.load(account: deviceId) else { return .keychainFailed }
+    guard meta.enabled, let deviceId = meta.deviceId, let entropy = keyStore.load(account: deviceId), entropy.count == 32 else { return .keychainFailed }
     guard let prepared = await Self.prepare(folder: folder, entropy: entropy) else { return .folderUnavailable }
     switch prepared.check {
     case .matches: break
@@ -704,7 +704,7 @@ public final class SyncService {
   }
 
   private func startOver(_ broken: SyncEngine) async {
-    guard self.engine === broken, let oldId = meta.deviceId, let entropy = keyStore.load(account: oldId),
+    guard self.engine === broken, let oldId = meta.deviceId, let entropy = keyStore.load(account: oldId), entropy.count == 32,
           let location = meta.folder, case .resolved(let grant, _) = SyncFolderAccess.resolve(location)
     else {
       set(\.phase, .stalled(Self.stalledMessage))
@@ -753,7 +753,7 @@ public final class SyncService {
   }
 
   private func retireAsGhost(_ oldId: String) async {
-    guard let entropy = keyStore.load(account: oldId), let location = meta.folder,
+    guard let entropy = keyStore.load(account: oldId), entropy.count == 32, let location = meta.folder,
           case .resolved(let grant, _) = SyncFolderAccess.resolve(location)
     else { return }
     let temporary = SyncKeys.newFileId()
@@ -771,7 +771,7 @@ public final class SyncService {
   private func finishPendingRetire(giveUp: Bool) async -> String? {
     guard let deviceId = meta.retiringDeviceId else { return nil }
     var landed = false
-    if let entropy = keyStore.load(account: deviceId), let location = meta.folder,
+    if let entropy = keyStore.load(account: deviceId), entropy.count == 32, let location = meta.folder,
        case .resolved(let grant, _) = SyncFolderAccess.resolve(location) {
       if let engine = try? SyncEngine(directory: files.directory, deviceId: deviceId, entropy: entropy, folder: grant, coordinationTimeout: coordinationTimeout, now: now) {
         do {

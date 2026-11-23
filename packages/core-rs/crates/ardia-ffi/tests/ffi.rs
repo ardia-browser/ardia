@@ -251,6 +251,75 @@ fn passwords_reproduce_the_vectors() {
 }
 
 #[test]
+fn the_caps_hold_what_swift_wrote_without_any() {
+    const {
+        assert!(ARDIA_MAX_PAYLOAD_BYTES >= 1024 * 1024 * 1024 && ARDIA_MAX_LABEL_BYTES >= 64 * 1024);
+        assert!(ARDIA_MAX_PASSWORD_FIELD_BYTES >= ARDIA_MAX_PAYLOAD_BYTES);
+        assert!(ARDIA_MAX_SEALED_PASSWORD_BYTES >= ARDIA_MAX_PASSWORD_FIELD_BYTES / 3 * 4 + 64);
+    };
+    let keys = Keys::new(&[0u8; 32]);
+    for size in [0usize, 1019, 1020, 1021, 4096] {
+        let payload = vec![7u8; size];
+        let mut out = Buf::new();
+        let status = unsafe {
+            ardia_sync_seal(
+                keys.0,
+                payload.as_ptr(),
+                size,
+                b"a".as_ptr(),
+                1,
+                b"b".as_ptr(),
+                1,
+                out.out(),
+            )
+        };
+        assert_eq!(status, ardia_status::Ok);
+        assert!(
+            out.bytes().len() - size <= ARDIA_MAX_SEALED_FILE_BYTES - ARDIA_MAX_PAYLOAD_BYTES,
+            "{size}"
+        );
+    }
+    let scope = "s".repeat(ARDIA_MAX_LABEL_BYTES);
+    let mut out = Buf::new();
+    let status = unsafe { ardia_sync_scope_tag(keys.0, scope.as_ptr(), scope.len(), out.out()) };
+    assert_eq!(status, ardia_status::Ok);
+    assert_eq!(out.bytes().len(), 26);
+    for size in [65_535usize, 65_536, 100_000] {
+        let password = "p".repeat(size);
+        let mut sealed = Buf::new();
+        let status = unsafe {
+            ardia_sync_seal_password(
+                keys.0,
+                password.as_ptr(),
+                size,
+                b"o".as_ptr(),
+                1,
+                b"u".as_ptr(),
+                1,
+                sealed.out(),
+            )
+        };
+        assert_eq!(status, ardia_status::Ok, "{size}");
+        let sealed = sealed.bytes();
+        let mut opened = Buf::new();
+        let status = unsafe {
+            ardia_sync_open_password(
+                keys.0,
+                sealed.as_ptr(),
+                sealed.len(),
+                b"o".as_ptr(),
+                1,
+                b"u".as_ptr(),
+                1,
+                opened.out(),
+            )
+        };
+        assert_eq!(status, ardia_status::Ok, "{size}");
+        assert_eq!(opened.bytes(), password.as_bytes(), "{size}");
+    }
+}
+
+#[test]
 fn every_input_has_a_size_cap_and_text_must_be_utf8() {
     let keys = Keys::new(&[0u8; 32]);
     let byte = [0u8; 1];

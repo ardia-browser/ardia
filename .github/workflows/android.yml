@@ -52,10 +52,66 @@ jobs:
             const vouch = require(`${process.env.GITHUB_WORKSPACE}/.github/vouch/vouch.cjs`);
             await vouch.gate({ github, context, core });
 
-  app:
-    needs: gate
-    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
+  route:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    outputs:
+      target: ${{ steps.target.outputs.target }}
+    steps:
+      - id: router
+        name: The router, from main
+        continue-on-error: true
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: refs/heads/main
+          path: .route
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /scripts/ci/
+            /.github/TEAM.td
+            /.github/vouch/vouch.cjs
+      - id: route
+        name: GitHub or Boat for the long jobs
+        if: steps.router.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BOAT_CI_LIMITS_KEY: ${{ secrets.BOAT_CI_LIMITS_KEY }}
+          BOAT_OVERFLOW: ${{ vars.BOAT_OVERFLOW }}
+          BOAT_OVERFLOW_REPOS: ${{ vars.BOAT_OVERFLOW_REPOS }}
+          BOAT_OVERFLOW_QUEUED: ${{ vars.BOAT_OVERFLOW_QUEUED }}
+          BOAT_OVERFLOW_BUSY: ${{ vars.BOAT_OVERFLOW_BUSY }}
+          BOAT_OVERFLOW_QUEUED_AGE: ${{ vars.BOAT_OVERFLOW_QUEUED_AGE }}
+          BOAT_OVERFLOW_DAY_STARTS: ${{ vars.BOAT_OVERFLOW_DAY_STARTS }}
+          BOAT_OVERFLOW_HOUR_STARTS: ${{ vars.BOAT_OVERFLOW_HOUR_STARTS }}
+          BOAT_OVERFLOW_MINUTE_STARTS: ${{ vars.BOAT_OVERFLOW_MINUTE_STARTS }}
+          BOAT_OVERFLOW_VM_HOURS: ${{ vars.BOAT_OVERFLOW_VM_HOURS }}
+          BOAT_OVERFLOW_SANDBOXES: ${{ vars.BOAT_OVERFLOW_SANDBOXES }}
+        run: node .route/scripts/ci/route-runner.mjs --fallback ubuntu-latest --jobs 1
+      - id: target
+        name: The runner the long jobs use
+        if: always()
+        env:
+          OUTCOME: ${{ steps.route.outcome }}
+          PICKED: ${{ steps.route.outputs.target }}
+        run: |
+          if [ "$OUTCOME" = success ] && [ "$PICKED" = boat ]; then
+            echo "target=boat" >> "$GITHUB_OUTPUT"
+          else
+            echo "target=github" >> "$GITHUB_OUTPUT"
+          fi
+
+  app:
+    needs: [gate, route]
+    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
+    runs-on: ${{ github.run_attempt == '1' && needs.route.result == 'success' && needs.route.outputs.target == 'boat' && 'boat-large' || 'ubuntu-latest' }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -71,6 +127,9 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+      - name: The Android SDK, on runners without GitHub's image
+        if: runner.environment != 'github-hosted'
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
       - id: gradle-key
         run: echo "key=gradle-phone-${{ hashFiles('apps/phone/android/gradle/wrapper/gradle-wrapper.properties', 'apps/phone/android/**/*.gradle', 'packages/phone/android/build.gradle', 'apps/phone/pnpm-lock.yaml') }}" >> "$GITHUB_OUTPUT"
       - id: gradle
@@ -85,6 +144,7 @@ jobs:
         run: |
           set -euo pipefail
           manager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$manager" ] || manager=$(command -v sdkmanager)
           yes | "$manager" --licenses > /dev/null || true
           "$manager" --install "platforms;android-37.0" "build-tools;37.0.0" "ndk;27.1.12297006" "cmake;3.22.1" > /dev/null
       - name: The phone app's dependencies

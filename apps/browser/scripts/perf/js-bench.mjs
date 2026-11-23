@@ -102,7 +102,8 @@ export function bundle(outDir, { profiling = false } = {}) {
     ],
     { cwd: appDir, stdio: ["ignore", "ignore", "inherit"], env: { ...process.env, ...(profiling ? { AC_REACT_PROFILING: "1" } : {}) } },
   );
-  const hermesc = join(appDir, "macos/Pods/hermes-engine/destroot/bin/hermesc");
+  const hermesc = [join(appDir, "macos/Pods/hermes-engine/destroot/bin/hermesc"), join(repo, "node_modules/react-native/sdks/hermesc/osx-bin/hermesc")].find(existsSync);
+  if (!hermesc) throw new Error("no hermesc: run pod install in apps/browser/macos, or link node_modules with scripts/agent/worktree-setup");
   execFileSync(hermesc, ["-emit-binary", "-max-diagnostic-width=80", "-O", "-out", hbc, js], { stdio: "inherit" });
   const sizes = { js: statSync(js).size, hbc: statSync(hbc).size, packages: packageSizes(js) };
   writeFileSync(join(outDir, "sizes.json"), JSON.stringify(sizes, null, 2));

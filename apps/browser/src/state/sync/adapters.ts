@@ -235,7 +235,10 @@ export function passwordsAdapter(profileId: string, logins: SealedPasswords = na
       let ok = true;
       for (const key of changed) {
         if (records.held()) return false;
-        if (passwordless.has(key)) continue;
+        if (passwordless.has(key)) {
+          records.defer(key);
+          continue;
+        }
         const v = passwordValue(visible.get(key));
         if (visible.has(key) && !v) return false;
         const have = local.get(key);

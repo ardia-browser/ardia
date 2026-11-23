@@ -1,5 +1,5 @@
 import type { BrowserState } from "../browser/store";
-import { changedIds } from "../browser/changes";
+import { changedIds, withEntry } from "../browser/changes";
 import { newId, pinSection, TILE_PIN } from "../browser/model";
 import { placing } from "./placing";
 import { sameTopApp } from "./topApps";
@@ -59,7 +59,7 @@ export function addToTileFolder(s: BrowserState, ids: string[], ontoId: string, 
   if (pinSection(onto) !== "tile") return s;
   const folder = tileFolderOf(onto) ?? { id: newId("tf"), name: "" };
   const moving = sameWindow(s, ids, onto!).filter((id) => id !== ontoId);
-  const next = tileFolderOf(onto) === folder ? s : { ...s, tabs: { ...s.tabs, [ontoId]: withTileFolder(onto!, folder) } };
+  const next = tileFolderOf(onto) === folder ? s : { ...s, tabs: withEntry(s.tabs, ontoId, withTileFolder(onto!, folder)) };
   if (!moving.length) return next;
   const last = folderMembers(next, onto!.windowId, folder.id, onto!.profileId).filter((id) => !moving.includes(id)).at(-1);
   const at = beforeId && !moving.includes(beforeId) ? beforeId : after(next, onto!.windowId, last, moving);

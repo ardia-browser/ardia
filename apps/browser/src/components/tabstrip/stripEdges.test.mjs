@@ -61,3 +61,17 @@ test("a drag scrolls the strip only near an edge it can scroll toward, faster th
   assert.equal(autoScrollSpeed(1090, view, 2000, 2000, 48, 14), 0);
   assert.equal(autoScrollSpeed(1053, view, 500, 2000, 48, 14), 1);
 });
+
+test("two overlapping drags keep chips shown until both have settled, whatever order they end in", async () => {
+  const { shownHolds } = await import("./stripScroll.ts");
+  const seen = [];
+  const hold = shownHolds((held) => seen.push(held));
+  const first = hold();
+  const second = hold();
+  first();
+  assert.deepEqual(seen, [true], "the first drag settling leaves the second's hold in place");
+  first();
+  assert.deepEqual(seen, [true], "a release given twice counts once");
+  second();
+  assert.deepEqual(seen, [true, false]);
+});

@@ -1,3 +1,4 @@
+import { withEntry } from "../browser/changes";
 import type { BrowserState } from "../browser/store";
 import { siteKey, siteName } from "../groups/groupNames";
 import { depthOf, innermostGroupOf } from "../groups/groups";
@@ -177,7 +178,7 @@ export function untidying(s: BrowserState, tidied: Tidied): BrowserState {
   }
   for (const [id, tabId] of now) {
     const home = tidied.homes[id];
-    if (id in tidied.homes && home && next.tabs[tabId]) next = { ...next, tabs: { ...next.tabs, [tabId]: { ...next.tabs[tabId]!, pinnedUrl: home } } };
+    if (id in tidied.homes && home && next.tabs[tabId]) next = { ...next, tabs: withEntry(next.tabs, tabId, { ...next.tabs[tabId]!, pinnedUrl: home }) };
   }
   return next;
 }

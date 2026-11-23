@@ -16,6 +16,7 @@ of the engine's ac_* calls in the sources Windows compiles) is copied to //ardia
 Usage: series_win.py apply --report TSV | layer | classify (CHROMIUM_SRC is the tree)
 """
 import argparse
+import io
 import os
 import re
 import shutil
@@ -39,6 +40,11 @@ WINDOWS_FROM_MAC_BLOCK = ('ac_reauth.cc',)
 WINDOWS_CONDITIONS = {'is_win': True, 'is_mac': False, 'is_linux': False, '!is_win': False, '!is_mac': True, '!is_linux': True}
 LAYER_ASSERT = re.compile(r'^assert\(is_mac( \|\| is_linux)?\)$', re.M)
 LAYER_BUILD = 'engine/chromium/src/chrome/browser/ardia/BUILD.gn'
+SERIES_REL = 'engine/patches/series'
+SERIES_WIN_REL = 'scripts/windows/engine/series-win'
+WIN_PATCHES_REL = 'scripts/windows/engine/patches'
+ENGINE_API_REL = 'apps/browser/windows/Ardia/EngineApi.h'
+KEY_INPUTS = os.path.join(HERE, 'key-inputs.json')
 MAC_FILE = re.compile(r'(\.mm$|_mac(_[a-z]+)?\.(cc|h)$|/mac/|cocoa|_apple\.(cc|h|mm)$|/apple/|keychain|\.icns$|\.car$)')
 
 
@@ -50,11 +56,35 @@ def where(path, line):
     return f'{os.path.relpath(path, REPO)}:{line}'
 
 
+def read_file(path, mode='r', **options):
+    with open(path, mode, **options) as f:
+        return f.read()
+
+
+def checkout_path(rel):
+    return os.path.join(REPO, *rel.split('/'))
+
+
+def checkout_text(rel):
+    path = checkout_path(rel)
+    if not os.path.isfile(path):
+        return None
+    with open(path) as f:
+        return f.read()
+
+
 def chromium_lines(path, tags=WINDOWS_TAGS):
     if not os.path.isfile(path):
         return []
+    with open(path) as f:
+        return series_lines(f.read(), path, tags)
+
+
+def series_lines(text, path, tags=WINDOWS_TAGS):
+    if text is None:
+        return []
     out = []
-    for n, raw in enumerate(open(path), 1):
+    for n, raw in enumerate(io.StringIO(text), 1):
         fields = raw.split('#', 1)[0].split()
         if not fields or fields[0] != 'chromium':
             continue
@@ -70,7 +100,7 @@ def chromium_lines(path, tags=WINDOWS_TAGS):
 
 def patch_files(path):
     files = []
-    for line in open(path, encoding='utf-8', errors='surrogateescape'):
+    for line in read_file(path, encoding='utf-8', errors='surrogateescape').splitlines(True):
         m = re.match(r'^\+\+\+ (?:b/)?(\S+)', line)
         if m and m.group(1) != '/dev/null' and m.group(1) not in files:
             files.append(m.group(1))
@@ -123,8 +153,8 @@ def layers(tree):
 
 
 def copy_if_changed(source, target):
-    data = open(source, 'rb').read()
-    if os.path.isfile(target) and open(target, 'rb').read() == data:
+    data = read_file(source, 'rb')
+    if os.path.isfile(target) and read_file(target, 'rb') == data:
         return 0
     os.makedirs(os.path.dirname(target), exist_ok=True)
     with open(target, 'wb') as f:
@@ -169,7 +199,7 @@ def chromium_layer(tree):
 
 def write_if_changed(path, text):
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    if os.path.isfile(path) and open(path, encoding='utf-8').read() == text:
+    if os.path.isfile(path) and read_file(path, encoding='utf-8') == text:
         return 0
     with open(path, 'w', encoding='utf-8') as f:
         f.write(text)
@@ -194,7 +224,7 @@ def patched_layer(work):
 
 
 def build_text():
-    return open(os.path.join(REPO, LAYER_BUILD), encoding='utf-8').read()
+    return read_file(os.path.join(REPO, LAYER_BUILD), encoding='utf-8')
 
 
 def line_of(text, needle):
@@ -274,7 +304,7 @@ def windows_sources(text):
     return found
 
 def launch_switches_source():
-    text = open(os.path.join(REPO, 'engine/ardiacore/src', LAUNCH_SWITCHES + '.cc'), encoding='utf-8').read()
+    text = read_file(os.path.join(REPO, 'engine/ardiacore/src', LAUNCH_SWITCHES + '.cc'), encoding='utf-8')
     signed = re.compile(r'bool SignedForDistribution\(\) \{\n.*?\n\}\n', re.S)
     mock = ('  if (!CommandLine().HasSwitch(os_crypt::switches::kUseMockKeychain)) {\n'
             '    return "not on the mock keychain";\n  }\n')
@@ -300,7 +330,7 @@ def engine_calls(layer):
             path = os.path.join(layer, rel)
             if not os.path.isfile(path):
                 raise InputError(f'{LAYER_BUILD}: Windows compiles `{rel}`, which is not in the layer')
-            text = open(path, encoding='utf-8').read()
+            text = read_file(path, encoding='utf-8')
             names.update(re.findall(r'^AC_(?:PROFILE|ARGS|ENGINE)_CALL\((ac_\w+)', text, re.M))
     return sorted(names)
 
@@ -325,13 +355,12 @@ def win_layer(tree):
         for name in files:
             path = os.path.join(root, name)
             wanted[os.path.relpath(path, source)] = path
-    wanted[os.path.join('public', 'EngineApi.h')] = os.path.join(
-        REPO, 'apps', 'browser', 'windows', 'Ardia', 'EngineApi.h')
+    wanted[os.path.join('public', 'EngineApi.h')] = checkout_path(ENGINE_API_REL)
     copied = 0
     for rel, path in wanted.items():
         dst = os.path.join(target, rel)
         os.makedirs(os.path.dirname(dst), exist_ok=True)
-        if not os.path.isfile(dst) or open(dst, 'rb').read() != open(path, 'rb').read():
+        if not os.path.isfile(dst) or read_file(dst, 'rb') != read_file(path, 'rb'):
             shutil.copyfile(path, dst)
             copied += 1
     names = engine_calls(os.path.join(tree, 'chrome', 'browser', 'ardia'))
@@ -350,19 +379,26 @@ def win_layer(tree):
     print(f'ardia/win: {len(wanted) + len(generated)} files, {len(names)} engine calls, {copied} changed')
 
 
-def skipped():
-    path = os.path.join(HERE, 'series-win')
-    if not os.path.isfile(path):
+def skip_names(text):
+    if text is None:
         return set()
-    return {l.split(None, 1)[1].strip() for l in (r.split('#', 1)[0].strip() for r in open(path))
+    return {l.split(None, 1)[1].strip() for l in (r.split('#', 1)[0].strip() for r in io.StringIO(text))
             if l.startswith('skip ')}
 
 
+def skipped():
+    return skip_names(checkout_text(SERIES_WIN_REL))
+
+
+def plan_patches(read):
+    skips = skip_names(read(SERIES_WIN_REL))
+    shared = [n for n in series_lines(read(SERIES_REL), checkout_path(SERIES_REL)) if n not in skips]
+    own = series_lines(read(SERIES_WIN_REL), checkout_path(SERIES_WIN_REL))
+    return [(n, f'engine/patches/{n}') for n in shared] + [(n, f'{WIN_PATCHES_REL}/{n}') for n in own]
+
+
 def names():
-    skips = skipped()
-    return [(n, os.path.join(PATCHES, n)) for n in chromium_lines(os.path.join(PATCHES, 'series'))
-            if n not in skips] + \
-        [(n, os.path.join(WIN_PATCHES, n)) for n in chromium_lines(os.path.join(HERE, 'series-win'))]
+    return [(n, checkout_path(rel)) for n, rel in plan_patches(checkout_text)]
 
 
 def state_path(tree):
@@ -371,7 +407,7 @@ def state_path(tree):
 
 def read_state(tree):
     path = state_path(tree)
-    return set(open(path).read().split()) if os.path.isfile(path) else set()
+    return set(read_file(path).split()) if os.path.isfile(path) else set()
 
 
 def record(tree, name):

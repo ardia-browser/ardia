@@ -1,3 +1,4 @@
+import { withEntry } from "../browser/changes";
 import type { StateCreator } from "zustand";
 import { startNavigation } from "./earlyNavigate";
 import { cloneId } from "./adoptIds";
@@ -95,10 +96,10 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
     const beside = w && options?.newTabCommand && !options.openerId ? newTabPlacement(get(), w, options.profileId) : undefined;
     let [next, id] = withNewTab(get(), windowId, beside ? { ...options, ...beside } : options);
     const typed = beside && navigationOf(next.tabs[id]);
-    if (typed) next = { ...next, tabs: { ...next.tabs, [id]: { ...next.tabs[id]!, engine: engineForUrl(next, typed.url) } } };
+    if (typed) next = { ...next, tabs: withEntry(next.tabs, id, { ...next.tabs[id]!, engine: engineForUrl(next, typed.url) }) };
     if (id && options?.openerId) next = groupWithOpener(next, id, options.openerId, !!options.background);
     else if (id && beside) {
-      next = { ...next, tabs: { ...next.tabs, [id]: { ...next.tabs[id]!, linkOpenerId: undefined } } };
+      next = { ...next, tabs: withEntry(next.tabs, id, { ...next.tabs[id]!, linkOpenerId: undefined }) };
       next = joinedWithCurrent(next, [id], beside.openerId);
     }
     set(next);
@@ -188,7 +189,7 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
     const page = switching ? loadedPage(navigation) : renavigated(tab, navigation);
     const { chromeOpened: _, ...typed } = tab;
     const navigated = userInitiated ? typed : tab;
-    set(apply(base, { tabs: { ...base.tabs, [id]: { ...navigated, openerId: base.tabs[id]!.openerId, page, url: tab.url || url, ...(engine ? { engine } : {}) } } }));
+    set(apply(base, { tabs: withEntry(base.tabs, id, { ...navigated, openerId: base.tabs[id]!.openerId, page, url: tab.url || url, ...(engine ? { engine } : {}) }) }));
     const ui = get().windowUi[tab.windowId];
     if (ui?.panel.open) get().closePanel(tab.windowId);
   },
@@ -203,7 +204,7 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
     const next = merge(tab, url !== undefined && url !== tab.url ? { ...onUrlChange(s, tab, url), ...change } : change);
     if (livePatch) stageLive(id, livePatch);
     try {
-      if (next !== tab) set((s) => ({ tabs: { ...s.tabs, [id]: next } }));
+      if (next !== tab) set((s) => ({ tabs: withEntry(s.tabs, id, next) }));
     } finally {
       drainLive();
     }

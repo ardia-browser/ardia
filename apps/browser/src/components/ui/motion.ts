@@ -105,18 +105,19 @@ export const hoverFade = {
 
 export type Fade = { duration: number; easing: EasingFunction; delay?: number };
 
-export function usePresence<T>(value: T | null, motion: { show: Fade; hide: Fade }) {
+export function usePresence<T>(value: T | null, motion: { show: Fade; hide: Fade }, enter = false) {
   const showing = value !== null;
   const last = useRef(value);
   if (showing) last.current = value;
   const [mounted, setMounted] = useState(showing);
   if (showing && !mounted) setMounted(true);
-  const appear = useRef(new Animated.Value(showing ? 1 : 0)).current;
-  const heading = useRef(showing);
+  const appear = useRef(new Animated.Value(showing && !enter ? 1 : 0)).current;
+  const heading = useRef(showing && !enter);
   useEffect(() => {
-    if (heading.current === showing) return;
+    const target = showing ? 1 : 0;
+    if (heading.current === showing && currentValue(appear) === target) return;
     heading.current = showing;
-    const run = Animated.timing(appear, { toValue: showing ? 1 : 0, ...(showing ? motion.show : motion.hide), useNativeDriver: true });
+    const run = Animated.timing(appear, { toValue: target, ...(showing ? motion.show : motion.hide), useNativeDriver: true });
     run.start(({ finished }) => finished && !showing && setMounted(false));
     return () => run.stop();
   }, [showing]);

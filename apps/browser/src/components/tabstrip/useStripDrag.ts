@@ -59,10 +59,16 @@ export function useStripDrag(item: StripDrag) {
     raiseView(tag, latest.current.levels ?? (latest.current.groupId ? 1 : 0), on);
     raised.current = on ? tag : null;
   };
+  const shownHold = useRef<(() => void) | null>(null);
+  const releaseShown = () => {
+    shownHold.current?.();
+    shownHold.current = null;
+  };
   const rest = () => {
     dx.setValue(0);
     setLook("rest");
     raise(false);
+    releaseShown();
   };
   const stopAutoScroll = () => {
     if (drag.current.frame) cancelAnimationFrame(drag.current.frame);
@@ -155,10 +161,12 @@ export function useStripDrag(item: StripDrag) {
     () => () => {
       stopAutoScroll();
       landSettle();
+      releaseShown();
       if (phase.current.kind !== "dragging") return;
       if (drag.current.crossed) latest.current.cross?.clear();
       settleRoom(latest.current.geometry);
       if (!latest.current.local) cancelTabDrag();
+      endHeldTabPress([], null);
     },
     [],
   );
@@ -185,6 +193,8 @@ export function useStripDrag(item: StripDrag) {
           drag.current = mine;
           phase.current = { kind: "dragging" };
           setLook("dragging");
+          releaseShown();
+          shownHold.current = latest.current.scroll?.holdShown() ?? null;
           if (latest.current.from >= 0) raise(true);
           latest.current.scroll?.measure((x, width) => {
             if (drag.current === mine) mine.viewport = [x, x + width];
@@ -243,10 +253,10 @@ export function useStripDrag(item: StripDrag) {
           });
         },
         onPanResponderTerminate: () => {
-          endHeldTabPress([], null);
           const local = latest.current.local;
           reset();
           if (!local) cancelTabDrag();
+          endHeldTabPress([], null);
         },
       }),
     [],

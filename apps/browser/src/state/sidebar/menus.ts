@@ -20,7 +20,7 @@ const store = () => useBrowser.getState();
 
 type OverflowChoice = { open: string } | { restore: string } | { cleaned: string };
 
-export async function openOverflowMenu(windowId: string) {
+export async function openOverflowMenu(windowId: string, onOpenTabPicked?: () => void) {
   const s = store();
   const w = s.windows[windowId];
   if (!w) return;
@@ -78,7 +78,10 @@ export async function openOverflowMenu(windowId: string) {
   ]);
   if (!choice) return;
   if (typeof choice !== "string") {
-    if ("open" in choice) switchToTab(choice.open);
+    if ("open" in choice) {
+      onOpenTabPicked?.();
+      switchToTab(choice.open);
+    }
     else if ("restore" in choice) s.restoreClosed(choice.restore, windowId);
     else s.restoreCleaned(choice.cleaned, windowId);
   } else if (choice === "search") setSidebarUi({ searchTabs: windowId });

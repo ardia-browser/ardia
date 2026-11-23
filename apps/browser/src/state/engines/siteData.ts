@@ -39,6 +39,8 @@ const tabSites = new Map<string, { site: string; at: number }[]>();
 const tabUrls = new Map<string, string>();
 let scanTimer: ReturnType<typeof setTimeout> | null = null;
 
+const scanSiteData = () => void scan();
+
 async function scan() {
   const consent = consentToken();
   const before = store();
@@ -113,7 +115,7 @@ export function startSiteData() {
       void watchWebKitSiteData(watching).catch(() => {});
     }
     if (s.tabs === prev.tabs || scanTimer) return;
-    scanTimer = setTimeout(() => void scan(), SCAN_DELAY_MS);
+    scanTimer = setTimeout(scanSiteData, SCAN_DELAY_MS);
   });
 }
 

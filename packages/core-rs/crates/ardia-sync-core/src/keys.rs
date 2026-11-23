@@ -1,4 +1,4 @@
-use ardia_crypto::{Backend, Crypto, KEY_BYTES};
+use ardia_crypto::{Backend, Crypto, Wiping, KEY_BYTES};
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
 use std::marker::PhantomData;
@@ -123,19 +123,25 @@ impl<C: Crypto> SyncKeysWith<C> {
     pub fn seal(&self, payload: &[u8], scope_tag: &str, file_id: &str) -> Result<Vec<u8>, Error> {
         let mut nonce = [0u8; NONCE_BYTES];
         C::fill_random(&mut nonce).map_err(|_| Error::Random)?;
-        let plain = framed(payload, PADDING)?;
-        let sealed = C::aes256gcm_seal(
+        let header = length_prefix(payload.len())?;
+        let length = LENGTH_BYTES + payload.len();
+        let padded = length + (PADDING - length % PADDING) % PADDING;
+        let start = MAGIC.len() + NONCE_BYTES;
+        let mut file = Zeroizing::new(Vec::with_capacity(start + padded + TAG_BYTES));
+        file.extend_from_slice(MAGIC);
+        file.extend_from_slice(&nonce);
+        file.extend_from_slice(&header);
+        file.extend_from_slice(payload);
+        file.resize(start + padded, 0);
+        C::aes256gcm_seal_in_place(
             &self.file_key,
             &nonce,
             &self.associated_data(scope_tag, file_id),
-            &plain,
+            &mut file,
+            start,
         )
         .map_err(|_| Error::Format)?;
-        let mut file = Vec::with_capacity(MAGIC.len() + NONCE_BYTES + sealed.len());
-        file.extend_from_slice(MAGIC);
-        file.extend_from_slice(&nonce);
-        file.extend_from_slice(&sealed);
-        Ok(file)
+        Ok(std::mem::take(&mut *file))
     }
 
     pub fn open(&self, file: &[u8], scope_tag: &str, file_id: &str) -> Result<Zeroizing<Vec<u8>>, Error> {
@@ -143,14 +149,15 @@ impl<C: Crypto> SyncKeysWith<C> {
             return Err(Error::Format);
         }
         let (nonce, sealed) = split_box(&file[MAGIC.len()..]);
-        let plain = C::aes256gcm_open(
+        let mut plain = Wiping(sealed.to_vec());
+        C::aes256gcm_open_in_place(
             &self.file_key,
             &nonce,
             &self.associated_data(scope_tag, file_id),
-            sealed,
+            &mut plain.0,
         )
         .map_err(|_| Error::Authentication)?;
-        Ok(Zeroizing::new(unframed(&plain)?.to_vec()))
+        Ok(Zeroizing::new(unframed(&plain.0)?.to_vec()))
     }
 
     pub fn seal_local(&self, payload: &[u8], file_id: &str) -> Result<Vec<u8>, Error> {

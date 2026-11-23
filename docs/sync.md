@@ -14,8 +14,18 @@ the folder takes the servers' place and devices pair by entering the recovery ph
 
 Code:
 - `packages/sync/ios/Core`: plain Swift, also built by `packages/sync/Package.swift`.
-  - `RecoveryPhrase.swift`: the phrase (BIP-39).
-  - `SyncCrypto.swift`: keys, the file format and names.
+  - `RecoveryPhrase.swift`: the phrase (BIP-39). Swift still splits the text into words exactly as it always has
+    (`CharacterSet.lowercaseLetters`), then hands the Rust core only those words, with any that can't be a list word
+    replaced by `x`, so trailing whitespace, letters Unicode tables disagree on and the core's 4 KB phrase cap never
+    change what restores; the unknown word shown is the user's own at the index the core reports.
+  - `SyncCrypto.swift`: `SyncKeys`, a thin wrapper over the Rust core's C ABI (`ArdiaCoreRS`): keys, the file format
+    and names. Passwords decode without dropping a second leading U+FEFF (the core drops the one Foundation did).
+    Every refusal throws, `scopeTag` included. Open failures are counted by code only while sharing is on, under the
+    consent period they happened in (`SyncKeys.consentEpoch`, set by `SyncModule` from `ArdiaEvents.consentEpoch`;
+    nothing sets it on the iPhone, so it never counts there).
+  - `Wordlist.swift`: the English list, kept for `test_sync.py`, `scripts/e2e.mjs` and the wordlist checks.
+  - `SealedLogins.swift`: this Mac's saved logins sealed for sync. A login that won't seal is listed as passwordless,
+    as Windows lists one whose password it can't read, so sync leaves its copy alone instead of reading a deletion.
   - `SyncVault.swift`: the folder, with file coordination and partial files.
   - `SyncKeyStore.swift`: Keychain.
   - `RecoveryKit.swift`: PDF, text sheet and QR code.
@@ -583,7 +593,13 @@ bookmark, settings, profile or group edit, and on Sync Now. A cycle:
     - `companion/companion.test.ts`: the iPhone's adapters and cycle.
   - `apps/phone/scripts/bundle-shared.mjs --check`: the iPhone's bundle of this code is up to date.
   - `scripts/legacy-migration-e2e.mjs`: the migration tool run end to end on a scratch install.
-- Rust core (`packages/core-rs`, not linked into any host yet): `ardia-sync-core` is this format and the recovery
+- Rust core (`packages/core-rs`; the Mac app and the iPhone link it, Linux and Windows still have their own C++):
+  `packages/core-rs/scripts/build-xcframework.sh` builds `ArdiaCoreRS.xcframework` (Mac, iPhone, simulator; release,
+  `panic = abort`, RustCrypto) into `packages/sync/ios/Frameworks`, untracked. The `ArdiaSync` podspec runs it at
+  `pod install` and vendors it, `packages/sync/Package.swift` takes it as a `binaryTarget` (so `swift test`, `ArdiaKit`
+  and `PhoneSync` link it), the iPhone's Podfile runs it before Xcode resolves its packages, and `scripts/agent/build-app`,
+  `apps/phone/scripts/build-sim-app` and `release-ios` run it before building. It does nothing while its inputs'
+  hash is unchanged. CI installs the toolchain with `.github/actions/core-rs-xcframework`. `ardia-sync-core` is this format and the recovery
   phrase once more, matching Swift byte for byte, behind `ardia-crypto` (RustCrypto under cargo, BoringSSL inside
   Chromium's GN build: [linux-port.md](linux-port.md) › The Rust sync core in the engine build) and a C ABI in `ardia-ffi` (`include/ardia_core.h`; ownership, caps and error rules in
   `packages/core-rs/ABI.md`). `cargo test` reproduces every byte in `sync-vectors`, opens the Swift and Kotlin

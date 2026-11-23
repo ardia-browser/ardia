@@ -14,6 +14,7 @@ import { dragGeometry, type DragGeometry } from "./stripGroups";
 import { ItemRow, useWebsiteBand } from "./TabChip";
 import { CHIP_LABEL_GAP, CHIP_PAD, GAP, TOP_STRIP_HEIGHT } from "./tokens";
 import { useStripDrag } from "./useStripDrag";
+import { useStripPick } from "./stripPick";
 import { StripScrollContext } from "./stripScroll";
 import { useStripCardHover } from "./StripHoverCard";
 import { useChipHover, useChipHovered } from "./reachableHover";
@@ -88,12 +89,14 @@ function SplitPart({ tabId, first, last, ink, width }: { tabId: string; first: b
   const hover = useChipHover();
   const card = useStripCardHover(windowId, tabId, drag.ref, hover);
   const struck = useStruckTitle(tabId);
+  const pick = useStripPick();
   if (!tab) return null;
   return (
     <Animated.View ref={drag.ref} {...drag.panHandlers} {...card} {...hover.hoverProps} style={{ ...(width === undefined ? { flex: 1 } : { width }), alignSelf: "stretch", opacity: drag.style.opacity }}>
       <TabPressArea
         windowId={windowId}
         tab={tab}
+        onSwitch={pick}
         style={PART_FILL}
         pressStyle={{ flex: 1, flexDirection: "row", alignItems: "center", paddingLeft: first ? CHIP_PAD.left : 0, paddingRight: last ? CHIP_PAD.right : 0 }}
       >

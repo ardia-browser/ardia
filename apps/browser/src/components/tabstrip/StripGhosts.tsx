@@ -20,7 +20,7 @@ export const StripGhosts = memo(function StripGhosts() {
   );
 });
 
-const GHOST_LAYER = { position: "absolute", left: 0, top: 0, width: 0, height: TOP_STRIP_HEIGHT, overflow: "visible" } as const;
+const GHOST_LAYER = { position: "absolute", left: 0, right: 0, top: 0, height: TOP_STRIP_HEIGHT } as const;
 
 const GhostChip = memo(function GhostChip({ ghost, motion }: { ghost: StripGhost; motion: StripMotion }) {
   const theme = useTheme();

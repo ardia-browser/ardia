@@ -159,6 +159,7 @@ const focus: Modules["ArdiaFocus"] = {
   takeEditKeyAcks: () => editKeyAcks.take(),
   takeInputSourceKeys: () => inputSourceKeys.take(),
   switcherPointerMoved: () => true,
+  takeHoverCounts: () => hoverCounts.take(),
   cancelFocusMove: () => Promise.resolve(),
   claimFocus: () => Promise.resolve(),
   pressesWithoutRelease: () => pressesWithoutRelease.count,
@@ -321,6 +322,7 @@ const dev: Modules["ArdiaDev"] = {
   devRunAppleScript: () => Promise.resolve({ ok: false, error: "no AppleScript in tests" }),
   devSnapshotWindow: () => Promise.resolve(false),
   devSetPointer: () => Promise.resolve(false),
+  devPointerSweep: () => Promise.resolve(null),
   devSetMouseButtons: () => Promise.resolve(false),
   devSidebarEdgePointer: () => Promise.resolve(false),
   devSidebarEdgeStats: () => Promise.resolve({}),
@@ -691,6 +693,15 @@ export const shellNativeModules: Modules = {
   ArdiaSystemSignals: systemSignalsModule,
   ArdiaTelemetryLocal: telemetryLocalModule,
   ArdiaReport: reportModule,
+};
+
+export const hoverCounts = {
+  pending: {} as Record<string, Record<string, number>>,
+  take() {
+    const taken = this.pending;
+    this.pending = {};
+    return taken;
+  },
 };
 
 export const inputSourceKeys = {

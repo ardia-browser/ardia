@@ -66,6 +66,7 @@ native_stamp() {
       packages/ardiacore/extensions \
       packages/ardiacore/scripts/signing engine/ardiacore/src/ardia/core/public patches pnpm-lock.yaml
     echo apps/browser/macos/Pods/Manifest.lock
+    echo packages/sync/ios/Frameworks/ArdiaCoreRS.xcframework.inputs
   ) | python3 -c '
 import hashlib, os, sys
 repo, framework = sys.argv[1], sys.argv[2]
@@ -82,6 +83,7 @@ print(h.hexdigest())
 ' "$repo" "$chromium_framework"
 }
 
+"$repo/packages/core-rs/scripts/build-xcframework.sh" >/dev/null || { echo "build-app: couldn't build ArdiaCoreRS.xcframework (packages/core-rs/scripts/build-xcframework.sh)" >&2; exit 1; }
 stamp=$(native_stamp) || { echo "build-app: couldn't hash the native files" >&2; exit 1; }
 if [[ -z "$force" && $config == Debug && -d "$app" && -f "$stamp_file" && "$(cat "$stamp_file")" == "$stamp" ]]; then
   echo "JS-only: Metro reloads it; no build needed (no native file changed since $app was built; --force builds anyway)"

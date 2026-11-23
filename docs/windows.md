@@ -894,7 +894,8 @@ is plain Chromium.
   CPU's zip with its SHA-256, `fetch-engine.ps1` downloads and checks it, and the Windows workflow assembles the app
   with it, launches it with the self-check (which then loads a page through the engine) and runs the tour's pages
   part. The release is a draft, so only the repository's own runs can fetch it; a fork's pull request skips those
-  steps. A new engine build is a new release and a new `prebuilt.json`, whose `source` is the commit it was built from.
+  steps. A new engine build is a new release and a new `prebuilt.json`, whose `source` is the commit it was built from
+  and `key` that commit's Windows engine key (`engine/engine-key.sh --platform win <source>`).
 - A tab opened with no address shows a committed `about:blank` until its first load, which replaces that entry, so
   the first real page reports `canGoBack: false` and Back never leads to a blank page (the Mac's "ahead blank" rule).
   `downloadNavigation`'s `committedUrl` is the tab's last committed page, empty while it has only that opening page.

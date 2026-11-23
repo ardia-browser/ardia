@@ -12,14 +12,14 @@ import { CONTROL_PILL_MOTION } from "./tokens";
 const PILL_HEIGHT = 32;
 const PILL_BOTTOM = 12;
 
-export function ControlPill({ style }: { style?: Animated.WithAnimatedValue<ViewStyle> }) {
+export function ControlPill({ style, enter = false }: { style?: Animated.WithAnimatedValue<ViewStyle>; enter?: boolean }) {
   const theme = useTheme();
   const shown = useControlIndicator((s) => s.shown);
   const caller = useControlIndicator((s) => s.caller);
   const icon = useAppIcon(caller?.app ?? null);
   const line = controlLine(caller);
   const compact = useSettings((s) => s.compactCliPill);
-  const { shown: mounted, appear } = usePresence(shown || null, CONTROL_PILL_MOTION);
+  const { shown: mounted, appear } = usePresence(shown || null, CONTROL_PILL_MOTION, enter);
   if (!mounted) return null;
   return (
     <Animated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, style]}>

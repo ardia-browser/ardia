@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 
 public final class SyncVault {
@@ -15,7 +14,7 @@ public final class SyncVault {
   }
 
   public var chainURL: URL { folder.appendingPathComponent(keys.chainTag, isDirectory: true) }
-  func scopeURL(_ scope: String) -> URL { chainURL.appendingPathComponent(keys.scopeTag(scope), isDirectory: true) }
+  func scopeURL(_ scope: String) throws -> URL { chainURL.appendingPathComponent(try keys.scopeTag(scope), isDirectory: true) }
 
   public func chainExists() -> Bool {
     var isDirectory: ObjCBool = false
@@ -29,13 +28,13 @@ public final class SyncVault {
   @discardableResult
   public func write(scope: String, payload: Data) throws -> String {
     let id = SyncKeys.newFileId()
-    try write(scope: scope, payload: payload, fileId: id, nonce: AES.GCM.Nonce())
+    try write(scope: scope, payload: payload, fileId: id)
     return id
   }
 
-  func write(scope: String, payload: Data, fileId id: String, nonce: AES.GCM.Nonce) throws {
-    let sealed = try keys.seal(payload, scopeTag: keys.scopeTag(scope), fileId: id, nonce: nonce)
-    let directory = scopeURL(scope)
+  func write(scope: String, payload: Data, fileId id: String) throws {
+    let sealed = try keys.seal(payload, scopeTag: try keys.scopeTag(scope), fileId: id)
+    let directory = try scopeURL(scope)
     try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
     let destination = directory.appendingPathComponent("\(id).\(Self.fileExtension)")
     let staging = try fileManager.url(for: .itemReplacementDirectory, in: .userDomainMask, appropriateFor: directory, create: true)
@@ -53,7 +52,7 @@ public final class SyncVault {
   }
 
   public func remove(scope: String, ids: [String]) throws {
-    let directory = scopeURL(scope)
+    let directory = try scopeURL(scope)
     var failed: [String] = []
     var firstError: Error?
     for id in ids {
@@ -97,7 +96,7 @@ public final class SyncVault {
 
   public func read(scope: String, skipping known: Set<String>) throws -> Listing {
     var listing = Listing()
-    let directory = scopeURL(scope)
+    let directory = try scopeURL(scope)
     let keysToRead: [URLResourceKey] = [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey, .contentModificationDateKey]
     let names: [String]
     do {
@@ -106,7 +105,7 @@ public final class SyncVault {
       return listing
     }
     let suffix = ".\(Self.fileExtension)"
-    let scopeTag = keys.scopeTag(scope)
+    let scopeTag = try keys.scopeTag(scope)
     var present = Set<String>()
     for name in names.sorted() {
       if name.hasPrefix("."), name.hasSuffix("\(suffix).icloud") {

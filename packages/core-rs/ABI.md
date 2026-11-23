@@ -30,6 +30,12 @@ Only nulls, lengths and contents. Nothing more:
   or a `NULL` output slot returns `ARDIA_STATUS_INVALID_ARGUMENT`.
 - A variable-length input over its cap (`ARDIA_MAX_*`) returns `ARDIA_STATUS_TOO_LARGE` before the pointer is read,
   so the cap wins over a `NULL` pointer: an over-cap length with a `NULL` pointer returns `ARDIA_STATUS_TOO_LARGE`.
+- The caps are there to refuse a wrong length, not to limit real data. A vault payload may be up to 1 GiB
+  (`ARDIA_MAX_PAYLOAD_BYTES`) and a sealed file that much plus 4 KiB, because the Swift that wrote most vaults had no
+  cap and sync's checkpoint holds every scope in one file. A password, its origin and its username may each be that
+  large too (`ARDIA_MAX_PASSWORD_FIELD_BYTES`), and a sealed password half as much again, since Swift sealed and
+  opened passwords of any length. Scopes and file ids may be up to 64 KiB (`ARDIA_MAX_LABEL_BYTES`). A caller that can't show the user an error must still handle `ARDIA_STATUS_TOO_LARGE`:
+  every refusal is a status, never an abort.
 - Entropy is a fixed-size input: exactly `ARDIA_ENTROPY_BYTES`. Any other length, shorter or longer, returns
   `ARDIA_STATUS_INVALID_ARGUMENT` in both `ardia_sync_keys_new` and `ardia_phrase_from_entropy`.
 - Text inputs that aren't UTF-8 return `ARDIA_STATUS_INVALID_ARGUMENT`.
@@ -45,7 +51,8 @@ Only nulls, lengths and contents. Nothing more:
   words, passwords or payloads; show the user's own input highlighted at `index` instead.
 - Secret results (opened payloads, passwords, entropy, phrases) are plain bytes, never JSON. Copy out what you need,
   then free the buffer.
-- `ardia_buf_free(&buf)` zeroes the bytes, frees them and resets the slot to `{NULL, 0}`. Freeing a reset slot or
+- `ardia_buf_free(&buf)` zeroes the bytes (with `memset_s` on Apple platforms, which the compiler may not remove, and
+  with `zeroize`'s volatile writes elsewhere), frees them and resets the slot to `{NULL, 0}`. Freeing a reset slot or
   passing `NULL` does nothing. Freeing another copy of a buffer that was already freed is a double free.
 - `ardia_sync_keys_new` writes a new handle that owns the derived keys and zeroes them when freed. A handle never
   changes after it's made, so threads may share it, but its free must be synchronized with every user.

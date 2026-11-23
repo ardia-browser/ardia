@@ -32,6 +32,7 @@ import { OfficialPluginsSection, usePluginsBelowOfficial } from "./OfficialPlugi
 import { useControlTurnedOff } from "../../../state/app/programControlSetting";
 import { useNeverChosenCount } from "../../../state/site/passwordManager";
 import { PasswordManagerDetails } from "./PasswordManagerPlugin";
+import { PluginConsentRows } from "./PluginConsentRows";
 
 export function PluginsPane({ detail }: SettingsPlace) {
   if (!PLATFORM_FEATURES.plugins) return <UnavailablePage />;
@@ -221,7 +222,6 @@ async function confirmRemove(name: string, title: string) {
 
 function PluginPage({ name }: { name: string }) {
   const controlOff = useControlTurnedOff();
-  const theme = useTheme();
   const listing = usePluginListing(name);
   const active = usePluginActive(name);
   const review = usePluginNeedsReview(name);
@@ -266,12 +266,7 @@ function PluginPage({ name }: { name: string }) {
       {m?.passwordManager && active ? <PasswordManagerDetails name={name} spec={m.passwordManager} /> : null}
       {m ? (
         <>
-          <SectionHeader title="What it gets" />
-          <Group>
-            {consentLines(m, { controlOff, official: !!listing.official && !active, movesProfiles }).map((line) => (
-              <Row key={line.text} title={line.text} icon={<Symbol name={line.icon} size={13} color={theme.icon} style={ICON} />} />
-            ))}
-          </Group>
+          <PluginConsentRows lines={consentLines(m, { controlOff, official: !!listing.official && !active, movesProfiles })} />
         </>
       ) : (
         <>

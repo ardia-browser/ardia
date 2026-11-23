@@ -40,9 +40,24 @@ export function ConsentSections({ lines }: { lines: readonly ConsentLine[] }) {
   );
 }
 
-function ConsentRow({ line, first }: { line: ConsentLine; first: boolean }) {
+export function ConsentChips({ items, code }: { items: readonly string[]; code: boolean }) {
   const theme = useTheme();
   const mono = monoFace();
+  return (
+    <View style={CHIPS}>
+      {items.map((item, index) => (
+        <View key={`${index}:${item}`} style={[CHIP, { backgroundColor: theme.chipFill }]}>
+          <Text size={code ? "tiny" : "caption"} tone="textSecondary" style={code ? mono : undefined}>
+            {item}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function ConsentRow({ line, first }: { line: ConsentLine; first: boolean }) {
+  const theme = useTheme();
   return (
     <View accessible accessibilityLabel={line.text} style={ROW}>
       {first ? null : <View pointerEvents="none" style={[DIVIDER, { backgroundColor: theme.divider }]} />}
@@ -56,17 +71,7 @@ function ConsentRow({ line, first }: { line: ConsentLine; first: boolean }) {
             {line.detail}
           </Text>
         ) : null}
-        {line.items ? (
-          <View style={CHIPS}>
-            {line.items.map((item, index) => (
-              <View key={`${index}:${item}`} style={[CHIP, { backgroundColor: theme.chipFill }]}>
-                <Text size={line.code ? "tiny" : "caption"} tone="textSecondary" style={line.code ? mono : undefined}>
-                  {item}
-                </Text>
-              </View>
-            ))}
-          </View>
-        ) : null}
+        {line.items ? <ConsentChips items={line.items} code={line.code === true} /> : null}
       </View>
     </View>
   );

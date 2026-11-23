@@ -482,6 +482,47 @@ hook(["void (*g_ardia_autofill_suggestions_shown)(\n",
       "    auto ardia_alive = GetWeakPtr();\n"], edit, HOOKS)
 PY
 
+hook "$src/chrome/browser/ui/autofill/autofill_popup_controller_impl.cc" "AutofillPopupControllerImpl claimed dropdowns" <<'PY'
+import re
+old_fn = "void AutofillPopupControllerImpl::Show(\n"
+decl = ("// Ardia: ArdiaCore (engine/ardiacore) keeps a dropdown its own fill menu claimed off screen.\n"
+        "bool (*g_ardia_autofill_suggestions_suppressed)(\n"
+        "    content::WebContents* web_contents,\n"
+        "    base::span<const Suggestion> suggestions) = nullptr;\n\n")
+def edit(s):
+    assert s.count(old_fn) == 1
+    start = s.index(old_fn)
+    body = s.index(") {\n", start) + len(") {\n")
+    found = re.search(r"std::vector<Suggestion>\s+(\w+)", s[start:body])
+    assert found, "Show's suggestions parameter"
+    check = ("  // Ardia: ArdiaCore\n"
+             "  if (g_ardia_autofill_suggestions_suppressed && IsRootPopup() && web_contents_ &&\n"
+             "      g_ardia_autofill_suggestions_suppressed(web_contents_.get(), " + found.group(1) + ")) {\n"
+             "    Hide(SuggestionHidingReason::kNoSuggestions);\n"
+             "    return;\n"
+             "  }\n")
+    s = s[:body] + check + s[body:]
+    return s.replace(old_fn, decl + old_fn)
+hook(["bool (*g_ardia_autofill_suggestions_suppressed)(\n",
+      "  if (g_ardia_autofill_suggestions_suppressed && IsRootPopup() && web_contents_ &&\n"], edit, HOOKS)
+PY
+
+hook "$src/chrome/browser/password_manager/chrome_password_manager_client.cc" "ChromePasswordManagerClient filling" <<'PY'
+old_fn = "bool ChromePasswordManagerClient::IsFillingEnabled(const GURL& url) const {\n"
+decl = ("// Ardia: ArdiaCore (engine/ardiacore) turns password filling off for a tab.\n"
+        "bool (*g_ardia_password_filling_allowed)(content::WebContents*) = nullptr;\n\n")
+check = ("  // Ardia: ArdiaCore\n"
+         "  if (g_ardia_password_filling_allowed && web_contents() &&\n"
+         "      !g_ardia_password_filling_allowed(web_contents())) {\n"
+         "    return false;\n"
+         "  }\n")
+def edit(s):
+    assert s.count(old_fn) == 1
+    return s.replace(old_fn, decl + old_fn + check)
+hook(["bool (*g_ardia_password_filling_allowed)(content::WebContents*) = nullptr;\n",
+      "      !g_ardia_password_filling_allowed(web_contents())) {\n"], edit, HOOKS)
+PY
+
 hook "$src/content/browser/renderer_host/render_widget_host_view_base.cc" "RenderWidgetHostViewBase" <<'PY'
 old_fn = "void RenderWidgetHostViewBase::CopyBackgroundColorIfPresentFrom(\n"
 decl = ("// Ardia: ArdiaCore (engine/ardiacore) has a translucent page background.\n"

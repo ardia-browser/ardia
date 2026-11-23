@@ -1,5 +1,7 @@
 #include "ardia/core/ac_autofill_trigger.h"
 
+#include "ardia/core/ac_autofill_fill.h"
+
 #include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/sys_string_conversions.h"
@@ -13,7 +15,12 @@
 #include "components/autofill/core/browser/foundations/scoped_autofill_managers_observation.h"
 #include "components/autofill/core/common/aliases.h"
 #include "components/autofill/core/common/unique_ids.h"
+#include "components/input/native_web_keyboard_event.h"
+#include "content/public/browser/global_routing_id.h"
 #include "content/public/browser/render_frame_host.h"
+#include "content/public/browser/render_widget_host.h"
+#include "third_party/blink/public/common/input/web_input_event.h"
+#include "ui/events/keycodes/keyboard_codes.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_user_data.h"
 #include "ardia/core/ac_hooks.h"
@@ -34,7 +41,21 @@ class FocusedField : public content::WebContentsUserData<FocusedField>,
  public:
   FocusedField(const FocusedField&) = delete;
   FocusedField& operator=(const FocusedField&) = delete;
-  ~FocusedField() override = default;
+  ~FocusedField() override { ClaimMenuKeys(false); }
+
+  void ClaimMenuKeys(bool claim) {
+    if (content::RenderFrameHost* held = content::RenderFrameHost::FromID(keys_frame_)) {
+      held->GetRenderWidgetHost()->RemoveKeyPressEventCallback(keys_);
+    }
+    keys_frame_ = content::GlobalRenderFrameHostId();
+    content::RenderFrameHost* frame = GetWebContents().GetFocusedFrame();
+    if (!claim || !frame) {
+      return;
+    }
+    keys_ = base::BindRepeating(&FocusedField::MenuKey, base::Unretained(this));
+    frame->GetRenderWidgetHost()->AddKeyPressEventCallback(keys_);
+    keys_frame_ = frame->GetGlobalId();
+  }
 
   bool Trigger(AutofillSuggestionTriggerSource source) {
     AutofillManager* manager = manager_.get();
@@ -51,6 +72,12 @@ class FocusedField : public content::WebContentsUserData<FocusedField>,
     return true;
   }
 
+  bool Fill(AutofillEntryKind kind, const std::string& guid) {
+    AutofillManager* manager = manager_.get();
+    return manager && FillAutofillEntry(&GetWebContents(), *manager, form_,
+                                        field_, kind, guid);
+  }
+
  private:
   friend class content::WebContentsUserData<FocusedField>;
 
@@ -65,25 +92,61 @@ class FocusedField : public content::WebContentsUserData<FocusedField>,
   void OnAfterFocusOnFormField(AutofillManager& manager,
                                FormGlobalId form,
                                FieldGlobalId field) override {
-    Focused(manager, field);
+    Focused(manager, form, field);
+    ReportAutofillField(&GetWebContents(), manager, form, field, false);
   }
   void OnAfterAskForValuesToFill(AutofillManager& manager,
                                  FormGlobalId form,
                                  FieldGlobalId field) override {
-    Focused(manager, field);
+    Focused(manager, form, field);
+    ReportAutofillField(&GetWebContents(), manager, form, field, true);
   }
   void OnAfterFocusOnNonFormField(AutofillManager& manager) override {
     if (manager_.get() == &manager) {
       manager_.reset();
+      ReportAutofillFieldLeft(&GetWebContents());
     }
   }
 
-  void Focused(AutofillManager& manager, FieldGlobalId field) {
+  void Focused(AutofillManager& manager, FormGlobalId form, FieldGlobalId field) {
     manager_ = manager.GetWeakPtr();
+    form_ = form;
     field_ = field;
   }
 
+  bool MenuKey(const input::NativeWebKeyboardEvent& event) {
+    if (event.GetType() != blink::WebInputEvent::Type::kRawKeyDown ||
+        event.GetModifiers() & blink::WebInputEvent::kKeyModifiers) {
+      return false;
+    }
+    NSString* key = nil;
+    switch (event.windows_key_code) {
+      case ui::VKEY_UP:
+        key = @"ArrowUp";
+        break;
+      case ui::VKEY_DOWN:
+        key = @"ArrowDown";
+        break;
+      case ui::VKEY_RETURN:
+        key = @"Enter";
+        break;
+      case ui::VKEY_ESCAPE:
+        key = @"Escape";
+        break;
+      case ui::VKEY_TAB:
+        key = @"Tab";
+        break;
+      default:
+        return false;
+    }
+    ReportAutofillMenuKey(&GetWebContents(), key);
+    return event.windows_key_code != ui::VKEY_TAB;
+  }
+
+  content::RenderWidgetHost::KeyPressEventCallback keys_;
+  content::GlobalRenderFrameHostId keys_frame_;
   base::WeakPtr<AutofillManager> manager_;
+  FormGlobalId form_;
   FieldGlobalId field_;
   autofill::ScopedAutofillManagersObservation observation_{this};
 
@@ -148,6 +211,19 @@ void TrackAutofillFocus(content::WebContents* contents) {
   if (client && !FocusedField::FromWebContents(contents)) {
     FocusedField::CreateForWebContents(contents, client);
   }
+}
+
+void ClaimAutofillMenuKeys(content::WebContents* contents, bool claim) {
+  if (auto* focused = contents ? FocusedField::FromWebContents(contents) : nullptr) {
+    focused->ClaimMenuKeys(claim);
+  }
+}
+
+bool FillFocusedAutofillEntry(content::WebContents* contents,
+                              AutofillEntryKind kind,
+                              const std::string& guid) {
+  auto* focused = contents ? FocusedField::FromWebContents(contents) : nullptr;
+  return focused && focused->Fill(kind, guid);
 }
 
 bool ShowAutofillSuggestions(content::WebContents* contents, bool passwords) {

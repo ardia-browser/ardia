@@ -253,6 +253,8 @@ ARDIACORE_EXPORT
 - (void)tab:(ArdiaCoreTab*)tab requestsActivation:(NSString*)reason;
 - (void)tab:(ArdiaCoreTab*)tab didChangePictureInPicture:(NSDictionary<NSString*, id>*)state;
 - (void)tab:(ArdiaCoreTab*)tab didShowAutofillSuggestions:(NSArray<NSDictionary<NSString*, NSString*>*>*)items;
+- (void)tab:(ArdiaCoreTab*)tab didFocusAutofillField:(NSDictionary<NSString*, id>*)field;
+- (void)tab:(ArdiaCoreTab*)tab didPressAutofillMenuKey:(NSString*)key;
 - (void)tab:(ArdiaCoreTab*)tab didBlockRequests:(int)count lastURL:(NSString*)url;
 - (NSArray<NSDictionary<NSString*, NSString*>*>*)tab:(ArdiaCoreTab*)tab
                          contextMenuItemsForSelection:(NSString*)text;
@@ -320,6 +322,8 @@ ARDIACORE_EXPORT
 @property(nonatomic) BOOL frozen;
 - (void)resolveUnresponsive:(BOOL)terminate;
 - (BOOL)showAutofillSuggestions:(BOOL)passwords;
+- (BOOL)fillAutofillEntry:(NSString*)guid kind:(NSString*)kind;
+- (void)claimAutofillMenuKeys:(BOOL)claim;
 @property(readonly, nullable) NSDictionary<NSString*, NSNumber*>* popupFeatures;
 @property(readonly) NSSize preferredSize;
 @end
@@ -385,6 +389,11 @@ ARDIACORE_EXPORT
 - (BOOL)shareThisTabInsteadFor:(ArdiaCoreTab*)capturer;
 - (BOOL)showCastDialog;
 - (BOOL)devShowBluetoothChooser:(BOOL)unauthorized;
+@end
+
+@interface ArdiaCoreTab (AutofillSuppression)
+@property(nonatomic, copy) NSSet<NSString*>* suppressedAutofillKinds;
+@property(nonatomic, copy, nullable) NSSet<NSString*>* suppressedAutofillLogins;
 @end
 
 @interface ArdiaCoreTab (Extensions)

@@ -118,9 +118,14 @@ namespace autofill {
 extern void (*g_ardia_autofill_suggestions_shown)(
     content::WebContents* web_contents,
     base::span<const Suggestion> suggestions);
+extern bool (*g_ardia_autofill_suggestions_suppressed)(
+    content::WebContents* web_contents,
+    base::span<const Suggestion> suggestions);
 }
 
 extern bool (*g_ardia_password_bubble)(content::WebContents* web_contents);
+
+extern bool (*g_ardia_password_filling_allowed)(content::WebContents* web_contents);
 
 extern bool (*g_ardia_device_chooser)(
     content::WebContents* contents,

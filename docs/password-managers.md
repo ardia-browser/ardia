@@ -1072,15 +1072,17 @@ so it always draws over the fill menu, which lives inside the window. It must ne
 - **Fields with a webauthn token.** A username field whose `autocomplete` includes `webauthn` (Google's Email or phone
   field, for conditional mediation) opens the menu on focus even when nothing is saved for the site, since Chrome would
   otherwise show its passkey-only dropdown there; other fields still open on focus only with something to offer.
-- **Until the engine hook ships** the claims close Chrome's dropdown with the Escape below as soon as it reports
-  itself, so it can show for a frame; the hook stops it before it is created.
-- **Engine hook (written, not yet built).** `engine/ardiacore/apply.sh` adds
+- **Engine hook (landed, needs the next engine build).** `engine/ardiacore/apply.sh` adds
   `g_ardia_autofill_suggestions_suppressed(WebContents*, span<const Suggestion>)` at the top of
   `AutofillPopupControllerImpl::Show` (root popups only), which hides the popup before it is created when it answers
-  true. ArdiaCore answers from the same kinds and usernames (`ac_autofill_suppress.mm`,
-  `ArdiaCoreTab.suppressedAutofillKinds` and `suppressedAutofillLogins`), which
-  `claimChromeDropdowns` sets when the framework has it. With it, Chrome's dropdown never draws at all and the Escape
-  path goes idle.
+  true, and `g_ardia_password_filling_allowed` in `ChromePasswordManagerClient::IsFillingEnabled`, answered false when a
+  tab claims every login. ArdiaCore answers from the claimed kinds and usernames (`ac_autofill_suppress.mm`,
+  `ArdiaCoreTab.suppressedAutofillKinds` and `suppressedAutofillLogins`), which `claimChromeDropdowns` sets when the
+  running framework answers `setSuppressedAutofillLogins:`. On an engine without it, the claims close Chrome's dropdown
+  with the Escape below as soon as it reports itself, so it can be drawn for a frame. Once an engine with the hook is
+  built, check on an Ardia profile that none of these ever draws: Google's Email or phone field (form-history entry
+  and Use Passkey from Another Device), a plain login field's saved logins and generated password, and an address or
+  card field while Ardia's address and card menu is active; and that a profile on None still gets all of them.
 - **Telemetry.** `vault_chrome_dropdowns_hidden` counts dropdowns closed; `vault_menu_yields_to_chrome` counts menus
   that gave way. After the engine hook ships, hidden counts should drop to near zero.
 
@@ -1481,4 +1483,4 @@ manager that can save, Ardia included, with the default first and checked: Save 
 CLI manager, else Ardia; Ardia saves into the profile Settings shows; without a username a sheet asks for one with the
 same suggestions), and Delete.
 
-The engine side of this (autofill menu fill and key routing, and Chrome dropdown suppression at the source) is kept unapplied in `docs/engine-pending/password-autofill-menu.patch`, so `engine/` matches a prebuilt engine and `build-app` keeps fetching it. To land it: apply the patch with `git apply`, build the engine (`docs/engine-build.md`), and commit both together.
+The engine side of this (autofill menu fill and key routing, and Chrome dropdown suppression at the source) is in `engine/ardiacore` (`ac_autofill_fill.mm`, `ac_autofill_trigger.mm`, `ac_autofill_suppress.mm` and the hooks in `apply.sh`), landed 2026-11-23 without a local engine build. The app feature-detects it (`ArdiaCoreTab` answers `setSuppressedAutofillKinds:`), so it runs on today's engine with the app-side fallback. Until the release or engine pipeline builds an engine for the new macOS engine key, a checkout without a Chromium tree builds against the last prebuilt engine with `packages/ardiacore/scripts/fetch-engine.sh --nearest`.

@@ -308,6 +308,21 @@ using ardiacore::NS;
   return ardiacore::ShowAutofillSuggestions(_contents, passwords);
 }
 
+- (void)claimAutofillMenuKeys:(BOOL)claim {
+  ardiacore::ClaimAutofillMenuKeys(_contents, claim);
+}
+
+- (BOOL)fillAutofillEntry:(NSString*)guid kind:(NSString*)kind {
+  if (!guid.length || !([kind isEqualToString:@"address"] || [kind isEqualToString:@"card"])) {
+    return NO;
+  }
+  return ardiacore::FillFocusedAutofillEntry(
+      _contents,
+      [kind isEqualToString:@"card"] ? ardiacore::AutofillEntryKind::kCard
+                                     : ardiacore::AutofillEntryKind::kAddress,
+      base::SysNSStringToUTF8(guid));
+}
+
 - (content::WebContents*)contents {
   return _contents;
 }

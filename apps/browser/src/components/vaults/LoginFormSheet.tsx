@@ -16,6 +16,7 @@ import { siteLabel } from "../../state/vaults/originMatch";
 import { codeLabels } from "../../state/vaults/standaloneCodesModel";
 import { createStandaloneCode, forgetSetupCode, readSetupCode } from "../../state/vaults/standaloneCodes";
 import { loadVaultItems } from "../../state/vaults/store";
+import { openInManager, opensItems } from "../../state/vaults/openInManager";
 import { GENERATOR_STYLES } from "../../state/vaults/menuModel";
 import { Box, Button, Dialog, DialogActions, Expand, Segmented, space, Symbol, Text, useTheme, VaultPasswordField } from "../ui";
 import { Favicon } from "../favicon/Favicon";
@@ -111,6 +112,8 @@ export function LoginFormSheet({ target, initialMode = "password" }: { target: L
   const [issuer, setIssuer] = useState("");
   const [codeWebsite, setCodeWebsite] = useState("");
   const [problem, setProblem] = useState("");
+  const [editFailed, setEditFailed] = useState(false);
+  const managerItem = target.kind === "manager" ? target.item : null;
   const [duplicate, setDuplicate] = useState<SavedPassword | null>(null);
   const [tried, setTried] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -135,6 +138,7 @@ export function LoginFormSheet({ target, initialMode = "password" }: { target: L
   const hadCode = target.kind === "ardia" ? target.hasCode : target.kind === "manager" ? target.item.hasTotp === true : false;
   const manager = useVaultProvider(target.kind === "manager" ? target.item.provider : "");
   const canCode = target.kind !== "manager" || manager?.capabilities.edit === true;
+  const openable = !!managerItem && !!manager && opensItems(manager);
   const passwordLength = draft?.length ?? 0;
   const lookup = target.kind === "manager" ? null : target.savedOn;
   const { shown: saved, loaded: savedAt } = useSavedOn(lookup, mode === "password" ? normalizeWebsite(website) : null);
@@ -239,6 +243,7 @@ export function LoginFormSheet({ target, initialMode = "password" }: { target: L
     }
     if (result?.error === "declined") return false;
     setProblem(result?.message ?? SAVE_ERRORS[result?.error ?? "failed"] ?? SAVE_ERRORS.failed!);
+    setEditFailed(target.kind === "manager");
     return false;
   };
 
@@ -364,6 +369,7 @@ export function LoginFormSheet({ target, initialMode = "password" }: { target: L
               {problem}
             </Text>
             {duplicate && target.kind !== "manager" ? <Button title="Show Password" onPress={() => target.onShowExisting(duplicate)} /> : null}
+            {editFailed && openable ? <Button title={`Open in ${manager.name}`} onPress={() => void openInManager(managerItem.provider, managerItem.id, manager.name).then((failure) => failure && setProblem(failure))} /> : null}
           </Box>
         </Expand>
       </View>

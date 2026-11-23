@@ -55,7 +55,8 @@ final class PluginVaultProvider: VaultPasskeyHolder, @unchecked Sendable {
     let offers = contribution.offers
     return VaultCapabilities(
       totp: offers("totp"), save: offers("save"), selfHosted: offers("selfHosted"), masterPassword: offers("masterPassword"), touchID: offers("touchID"),
-      addTotp: offers("addTotp"), edit: offers("edit"), desktopApproval: contribution.signIn.methods.first?.kind == .desktopApproval, passkeys: offers("passkeys"))
+      addTotp: offers("addTotp"), edit: offers("edit"), desktopApproval: contribution.signIn.methods.first?.kind == .desktopApproval, passkeys: offers("passkeys"),
+      opensItems: !contribution.appLinks.isEmpty)
   }
 
   var setup: VaultSetup? {
@@ -382,6 +383,12 @@ final class PluginVaultProvider: VaultPasskeyHolder, @unchecked Sendable {
     }
     guard let found, !found.isEmpty else { throw VaultError.notFound }
     return found
+  }
+
+  func itemLink(_ cli: VaultCLI, id item: String) async throws -> URL {
+    guard !contribution.appLinks.isEmpty, await handles("link") else { throw VaultError.unsupported }
+    let answer = await call("link", cli, ["id": item])
+    return try value(answer, handler: "link") { try CredentialResults.appLink($0, prefixes: contribution.appLinks) }
   }
 
   func revealed(_ cli: VaultCLI, id item: String) async throws -> VaultRevealed {

@@ -19,7 +19,7 @@ import type {
   CookieRemoval, PageCookie, PageEngine, PasskeyAccess, SiteData, SiteDataWritten, StorageChange, StorageItems, WebKitCount,
 } from "../webkit";
 import type { ChromeDropdownShown, DisplayMediaSource, OpenWindowRequest, VaultPasswordStyle, WebNotification } from "../pageTypes";
-import type { VaultPasskey, VaultPasskeyAnswer, VaultPasskeyDone, VaultPasskeyRequest, VaultAddTotpResult, VaultCreateLoginResult, VaultEditResult, VaultStandaloneCode, VaultStandaloneCodeAdded, VaultStandaloneCodeEdited, VaultCodeRead, VaultCodeSource, VaultCopyResult, VaultRemoveTotpResult, VaultGeneratedPassword, VaultGeneratedSaveResult, VaultItem, VaultItemPage, VaultItemSearch, VaultPaneRows, VaultItemsStatus, VaultSiteItems, VaultProviderId, VaultProviderState, VaultSecretField, VaultSyncResult, VaultTotp, VaultBackupStatus, VaultBackupChange, VaultBackupDeleteResult, VaultRestoreResult, VaultSignInAnswer, VaultSignInResult } from "../vaults";
+import type { VaultPasskey, VaultPasskeyAnswer, VaultPasskeyDone, VaultPasskeyRequest, VaultAddTotpResult, VaultCreateLoginResult, VaultEditResult, VaultOpenItemResult, VaultStandaloneCode, VaultStandaloneCodeAdded, VaultStandaloneCodeEdited, VaultCodeRead, VaultCodeSource, VaultCopyResult, VaultRemoveTotpResult, VaultGeneratedPassword, VaultGeneratedSaveResult, VaultItem, VaultItemPage, VaultItemSearch, VaultPaneRows, VaultItemsStatus, VaultSiteItems, VaultProviderId, VaultProviderState, VaultSecretField, VaultSyncResult, VaultTotp, VaultBackupStatus, VaultBackupChange, VaultBackupDeleteResult, VaultRestoreResult, VaultSignInAnswer, VaultSignInResult } from "../vaults";
 import type { BookmarksCalls, BookmarksEvents } from "./generated/bookmarks";
 import type { FaviconsCalls, FaviconsEvents } from "./generated/favicons";
 import type { HistoryCalls, HistoryEvents } from "./generated/history";
@@ -300,6 +300,7 @@ export type EngineCalls = BookmarksCalls & FaviconsCalls & HistoryCalls & {
   "vaults.deleteCode": [{ id: string }, { deleted: boolean; error?: "notFound" | "declined" | "failed" }];
   "vaults.passkeys": [{}, VaultPasskey[]];
   "vaults.deletePasskey": [{ id: string }, { deleted: boolean; error?: "notFound" | "declined" | "failed" }];
+  "vaults.openItem": [{ provider: VaultProviderId; id: string }, VaultOpenItemResult];
   "vaults.passkeyAnswer": [{ requestId: string; choice: string; target?: string }, VaultPasskeyAnswer];
   "vaults.setPasskeys": [{ source?: string; extensions?: { id: string; name: string; known?: boolean }[] }, Record<string, never>];
 };

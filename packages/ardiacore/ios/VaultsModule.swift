@@ -363,6 +363,19 @@ public class VaultsModule: Module {
       let token = try args.text("token")
       VaultsModule.answer(reply) { await VaultsModule.addTotp(provider: provider, id: id, token: token) }
     },
+    "openItem": { args, reply in
+      let provider = try VaultsModule.provider(args)
+      let id = try args.text("id")
+      VaultsModule.answer(reply) {
+        switch await VaultBroker.shared.itemLink(provider: provider, id: id) {
+        case .failure(let failure): return ["opened": false, "error": failure.rawValue]
+        case .success(let url):
+          let opened = await MainActor.run { NSWorkspace.shared.open(url) }
+          if opened { NSLog("[vaults] opened an item in its manager's app") }
+          return opened ? ["opened": true] : ["opened": false, "error": "failed"]
+        }
+      }
+    },
     "edit": { args, reply in
       let provider = try VaultsModule.provider(args)
       let id = try args.text("id")

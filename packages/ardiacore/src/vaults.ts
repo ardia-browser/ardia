@@ -6,7 +6,8 @@ export type VaultProviderId = "1password" | "bitwarden" | "protonpass" | (string
 export type VaultState = "notInstalled" | "signedOut" | "locked" | "unlocked" | "unavailable";
 export type VaultSecretField = "username" | "password";
 export type VaultCopyError = "locked" | "notFound" | "failed" | "originMismatch" | "insecure" | "notAuthorized" | "clipboard";
-export type VaultCapabilities = { totp: boolean; save: boolean; selfHosted: boolean; masterPassword: boolean; touchID: boolean; addTotp?: boolean; edit?: boolean; desktopApproval?: boolean; passkeys?: boolean };
+export type VaultCapabilities = { totp: boolean; save: boolean; selfHosted: boolean; masterPassword: boolean; touchID: boolean; addTotp?: boolean; edit?: boolean; desktopApproval?: boolean; passkeys?: boolean; opensItems?: boolean; passkeysVia?: VaultPasskeyDelegation[] };
+export type VaultPasskeyDelegation = { via: "system" } | { via: "extension"; extensions: string[] };
 export type VaultSetupKind = "desktopIntegration" | "browserSignIn" | "credentials";
 
 export type VaultProviderState = {
@@ -127,6 +128,7 @@ export type VaultGeneratedSaveResult = { saved: boolean; item?: VaultItem; error
 export type VaultAddTotpError = "locked" | "notFound" | "unsupported" | "invalid" | "expired" | "declined" | "failed";
 export type VaultAddTotpResult = { added: boolean; item?: VaultItem; error?: VaultAddTotpError; message?: string };
 export type VaultEditError = "locked" | "notFound" | "unsupported" | "invalid" | "declined" | "failed";
+export type VaultOpenItemResult = { opened: boolean; error?: "unsupported" | "locked" | "notFound" | "failed" };
 export type VaultEditResult = { edited: boolean; item?: VaultItem; error?: VaultEditError; message?: string };
 export type VaultRemoveTotpResult = { removed: boolean; error?: VaultAddTotpError };
 export type VaultCodeSource = "clipboard" | "image" | "page";

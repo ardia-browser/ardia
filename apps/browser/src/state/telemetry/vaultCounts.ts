@@ -54,6 +54,8 @@ const empty = () => ({
   vault_logins_restored: 0,
   vault_logins_restore_failed: 0,
   vault_logins_edited_manager: 0,
+  vault_items_opened_in_manager: 0,
+  vault_items_open_in_manager_failed: 0,
   vault_passwords_updated_from_offer: 0,
   vault_logins_created_settings: 0,
   vault_logins_created_with_code: 0,
@@ -160,6 +162,7 @@ export function noteLoginCreatedInSettings(withCode: boolean, consent?: ConsentT
   bump("vault_logins_created_settings", consent);
   if (withCode) bump("vault_logins_created_with_code", consent);
 }
+export const noteOpenedInManager = (opened: boolean, consent?: ConsentToken | null) => bump(opened ? "vault_items_opened_in_manager" : "vault_items_open_in_manager_failed", consent);
 export const noteArdiaLoginEdited = (consent?: ConsentToken | null) => bump("vault_logins_edited_ardia", consent);
 export const noteStandaloneCodeCreated = (consent?: ConsentToken | null) => bump("vault_codes_standalone_created", consent);
 export const noteStandaloneCodesImported = (count: number, consent?: ConsentToken | null) => bump("vault_codes_standalone_imported", consent, count);

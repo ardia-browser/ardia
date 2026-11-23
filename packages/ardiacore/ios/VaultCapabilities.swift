@@ -8,4 +8,5 @@ struct VaultCapabilities: Codable, Equatable, Sendable {
   var edit: Bool = false
   var desktopApproval: Bool = false
   var passkeys: Bool = false
+  var opensItems: Bool = false
 }

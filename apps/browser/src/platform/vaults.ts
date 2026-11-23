@@ -79,6 +79,7 @@ export const deleteGeneratedPassword = (id: string) => call("vaults.deleteGenera
 export const setGeneratedRetention = (days: number) => call("vaults.setGeneratedRetention", { days });
 export const addVaultTotp = (provider: string, id: string, token: string) => call("vaults.addTotp", { provider, id, token });
 export type VaultLoginEdit = { profile?: string; username?: string; passwordDraft?: string; url?: string; totp?: { token: string } | { remove: true } };
+export const openVaultItem = (provider: string, id: string) => call("vaults.openItem", { provider, id });
 export const editVaultLogin = (provider: string, id: string, edit: VaultLoginEdit) => call("vaults.edit", { provider, id, ...edit });
 export const setVaultCodeSetup = (enabled: boolean) => call("webView.setVaultCodeSetup", { enabled });
 export const removeVaultTotp = (provider: string, id: string) => call("vaults.removeTotp", { provider, id });

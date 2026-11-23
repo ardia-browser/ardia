@@ -12,6 +12,7 @@ import { Group, Row, SectionHeader } from "../settings/Form";
 import { WindowedRows } from "../settings/WindowedRows";
 import { BrandBadge, useManagerName } from "./VaultParts";
 import { VAULT_SETTINGS } from "./tokens";
+import { openInManager, useOpensItems } from "../../state/vaults/openInManager";
 import { SavedInRow, WebsiteRow } from "./VaultSheetRows";
 
 const COUNT = new Intl.NumberFormat();
@@ -89,6 +90,7 @@ export function PasskeySheet({ passkey }: { passkey: VaultPasskey }) {
   const running = useRef(false);
   const live = usePasskeys((s) => s.list?.find((p) => keyOf(p) === keyOf(passkey)) ?? null);
   const ardia = passkey.provider === "ardia";
+  const openable = useOpensItems(passkey.provider) && !!passkey.item;
   const remove = async () => {
     if (running.current) return;
     running.current = true;
@@ -150,7 +152,15 @@ export function PasskeySheet({ passkey }: { passkey: VaultPasskey }) {
           </Text>
         </Expand>
       </View>
-      <DialogActions leading={ardia ? <Button title="Delete" kind="destructive" disabled={busy} onPress={() => void remove()} /> : undefined}>
+      <DialogActions
+        leading={
+          ardia ? (
+            <Button title="Delete" kind="destructive" disabled={busy} onPress={() => void remove()} />
+          ) : openable ? (
+            <Button title={`Open in ${nameOf(passkey.provider)}`} onPress={() => void openInManager(passkey.provider, passkey.item!, nameOf(passkey.provider)).then((failure) => setProblem(failure ?? ""))} />
+          ) : undefined
+        }
+      >
         <Button title="Done" kind="primary" disabled={busy} onPress={closeSettingsSheet} />
       </DialogActions>
     </Dialog>

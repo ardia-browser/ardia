@@ -684,8 +684,13 @@ declare one, and each group of profiles that shares browser data picks at most o
 The plugin never sees a secret and never runs code in a page: the key, field detection and code detection are Ardia's
 own page script, switched on per profile from the manifest.
 
-**Choosing.** Settings › Profiles › Passwords › Password manager lists Ardia (Chrome's password manager, as before),
-each enabled password-manager plugin by its title, and None (when an extension handles logins). The choice is stored
+**Choosing.** Settings › Profiles › <profile> › Password manager lists Ardia, each enabled password-manager plugin by
+its title, and None (when an extension handles logins). On the Mac, Ardia is Ardia's own fill menu
+(`docs/password-managers.md`): the profile's saved passwords plus its connected credential providers as sources,
+with Touch ID, verification codes, passkeys, cards and the iCloud backup. When the profile has no source (Save and fill
+passwords off and no provider connected) it falls back to Chrome's dropdown. On Linux and Windows Ardia is Chrome's
+password manager. Leaving Ardia asks for the Mac owner first, and connecting a provider records Ardia for a profile
+that never chose, so an official plugin turned on later doesn't move it. The choice is stored
 on the profile as `ardia`, `none` or `plugin:<name>`; profiles that share browser data share it; a private window
 follows its profile's choice. A stored `plugin:<name>` counts only while the plugin loaded under that name is on and
 its manifest is the approved one; otherwise the profile reads as Ardia, and the stored choice comes back with it.
@@ -728,7 +733,8 @@ plugin can't hand them back to it with offer to save off. With no retired record
 written. Offer to save then comes back through the journal above.
 
 **Withdrawn at once.** Ardia pushes the whole set of profiles with a key (`passwords.setFieldProviders {session, generation,
-profiles: [{profile, fields, codeSetup}]}`) at launch and whenever it changes. Turning the plugin off, removing it or
+profiles: [{profile, fields, codeSetup, fill?}]}`, `fill` `"system"` for a plugin or `"menu"` for an Ardia profile
+with a source) at launch and whenever it changes. Turning the plugin off, removing it or
 changing its manifest pushes the set without its profiles before the plugin is reported off, so the key leaves every
 live page first. Each push has a new generation; native drops badge clicks, menu requests, code detections and token
 redemptions from an older one, and the verification code prompt closes on every push and on navigation.
@@ -742,8 +748,14 @@ filled into the page's own focused field. The menu route asks the top frame for 
 its answer within 200 ms. Between the page sampling which field has focus and Ardia opening the panel, focus can still
 move inside the page; the panel then fills whatever field macOS sees as focused, as Edit › AutoFill does.
 
-**Edit › AutoFill › Passwords…** in a profile whose manager is a `fill: "system"` plugin opens the macOS panel at the
-focused field (`passwords.showSystemPanel {tab, generation}`, in Chromium and WebKit tabs; a request from an older generation is refused as `stale`); otherwise Chrome's dropdown as before.
+**The key.** For a `fill: "system"` plugin the field-provider kit in the page script draws the key inside login and
+code fields and asks for the macOS panel when it's clicked (the native checks below, counted as
+`password_manager_panel_opens_badge` and `_refused_badge`), in Chromium and WebKit tabs. For an Ardia profile it draws
+nothing: the vault kit reports the focused field's geometry and Ardia draws its native badge above the page, which
+opens Ardia's fill menu.
+
+**Edit › AutoFill › Passwords…** (⌘\) in a profile whose manager is a `fill: "system"` plugin opens the macOS panel at the
+focused field (`passwords.showSystemPanel {tab, generation}`, in Chromium and WebKit tabs; a request from an older generation is refused as `stale`); on an Ardia profile with a source it opens Ardia's fill menu; otherwise Chrome's dropdown.
 
 **An otpauth link you click** still goes through the external-app prompt every link to another app gets, which shows
 the address in Ardia's own interface. That's base behaviour, unchanged; no plugin, log or count sees the address.
@@ -751,7 +763,9 @@ the address in Ardia's own interface. That's base behaviour, unchanged; no plugi
 **`fill: "tool"` (reserved, #1168).** For managers with their own vault (1Password, Bitwarden, Proton Pass). Not a
 normal tool: a host-only request the CLI and other plugins can never call, versioned, bound to the exact origin and
 form it fills, cancellable, with a consent line naming that the origin is sent to the plugin. The host would type the
-answer into that one field. Not built.
+answer into that one field. Not built. Those three managers come instead as credential providers: sources under the Ardia
+choice that feed Ardia's fill menu through Ardia's broker, so they never appear in the Password manager list. The
+broker's provider registry is empty until that contribution lands.
 
 #### Host extension points for credential providers
 

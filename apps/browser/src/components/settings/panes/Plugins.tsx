@@ -29,6 +29,7 @@ import { useTheme } from "../../ui/theme";
 import { PaneSubPage } from "./PaneSubPage";
 import { releaseOrphanedConsent } from "../../../state/plugins/consentSurface";
 import { removeWords } from "../../../state/plugins/removeWords";
+import { showPasswordManagerSettings } from "../../../state/plugins/passwordManagerLink";
 import { OfficialPluginsSection, usePluginsBelowOfficial } from "./OfficialPlugins";
 import { useControlTurnedOff } from "../../../state/app/programControlSetting";
 import { useNeverChosenCount } from "../../../state/site/passwordManager";
@@ -242,6 +243,7 @@ function PluginPage({ name }: { name: string }) {
         >
           <Toggle value={active} disabled={!m} asksFirst={!active} accessibilityLabel={`Turn on ${m?.title ?? name}`} onChange={(on) => setOn(name, on)} />
         </Row>
+        {m?.contributes.credentialProvider ? <Row title="Show in Passwords" onPress={() => showPasswordManagerSettings(name)} /> : null}
         {active && (m?.process || (m?.main && process)) ? (
           <Row title={m?.process ? "Its program" : "Its code"} description={m?.process ? m.process.run.join(" ") : typeof m?.main === "string" ? m.main : m?.main?.entry}>
             <Button title="Show Log" onPress={() => showPluginLog(name)} />

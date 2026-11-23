@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { View } from "react-native";
 import { VAULT_SETTINGS } from "../../vaults/tokens";
 import { effectiveSource, sourceOptions, usePasskeyExtensions } from "../../../state/vaults/passkeySources";
@@ -18,7 +18,9 @@ import { changeGuardedVaultSetting } from "../../../state/vaults/settingsGuard";
 import { AddingRow, OffRow, ProviderRow, TouchUnlockRow } from "../../vaults/ManagerRows";
 import { showAddManagerSheet } from "../../vaults/AddManagerSheet";
 import { FieldStack, type StackRow } from "../../vaults/SignInFields";
-import { Group, Row, SectionHeader } from "../Form";
+import { Anchor, Group, Row, SectionHeader } from "../Form";
+import type { SettingId } from "../settingsIndex";
+import { passwordManagerAnchor } from "../../../state/plugins/passwordManagerLink";
 import { showConnectSheet, showUnlockSheet } from "./PasswordManagerSheets";
 import { VaultICloudRows } from "./VaultICloudRows";
 import { VaultSuggestRow } from "./VaultSuggestRow";
@@ -84,8 +86,8 @@ function ManagersGroup({ managers }: { managers: VaultProviderState[] }) {
   const sheets = { connect: (id: string) => showConnectSheet(id), unlock: (id: string) => showUnlockSheet(id) };
   const shown = adding && !managers.some((p) => p.id === adding.name) ? adding : null;
   const rows: StackRow[] = [
-    ...managers.map((p) => ({ key: p.id, render: () => <ProviderRow provider={p} sheets={sheets} /> })),
-    ...off.filter((e) => e.name !== shown?.name).map((e) => ({ key: `off-${e.name}`, render: () => <OffRow entry={e} sheets={sheets} /> })),
+    ...managers.map((p) => ({ key: p.id, render: () => <ManagerAnchor name={p.plugin ?? p.id}><ProviderRow provider={p} sheets={sheets} /></ManagerAnchor> })),
+    ...off.filter((e) => e.name !== shown?.name).map((e) => ({ key: `off-${e.name}`, render: () => <ManagerAnchor name={e.name}><OffRow entry={e} sheets={sheets} /></ManagerAnchor> })),
     ...(shown ? [{ key: `adding-${shown.name}`, render: () => <AddingRow adding={shown} onReady={sheets.connect} /> }] : []),
   ];
   const syncs = managers.some((p) => p.state === "unlocked");
@@ -100,6 +102,14 @@ function ManagersGroup({ managers }: { managers: VaultProviderState[] }) {
       <SectionHeader title="Password Managers" description={null} action={add} />
       {rows.length ? <FieldStack rows={rows} gap={false} /> : null}
     </View>
+  );
+}
+
+function ManagerAnchor({ name, children }: { name: string; children: ReactNode }) {
+  return (
+    <Anchor id={passwordManagerAnchor(name) as SettingId} shape="row">
+      {children}
+    </Anchor>
   );
 }
 

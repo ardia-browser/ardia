@@ -19,6 +19,7 @@ import { useArchiveCard } from "../state/browse/archiveCard";
 import * as browse from "../state/browse/store";
 import { currentPreferences, setPreference } from "../state/settings/store";
 import { OFF_STATUS, useSync } from "../state/sync/store";
+import { useSettingsNav } from "../state/settings/nav";
 import * as telemetry from "../state/telemetry/telemetry";
 import { useTabs } from "../state/tabs/store";
 import { renderSurface, someTabs, unmount, withTabs, withMaterialYou } from "../../test/render/harness";
@@ -328,7 +329,7 @@ test("the deck's search row rises by the whole keyboard on Android, whose report
   expect(materialKeyboardLift(300, 34, "ios")).toBe(300 + MATERIAL_DECK.keyboardGap - 34 - 8);
 });
 
-onAndroid("the Material deck's More dropdown and Space dropdown open as Material 3 Expressive menus: grouped 16 dp containers on surfaceContainer (surfaceContainerHighest in dark), dynamic scheme colours, and a primary checkmark", () => {
+onAndroid("the Material deck's More dropdown and Space dropdown open as Material 3 Expressive menus: grouped 16 dp containers on surfaceContainer (surfaceContainerHighest in dark), dynamic scheme colours, and a primary checkmark", async () => {
   const space = (syncId: string, name: string) => ({
     syncId,
     name,
@@ -351,6 +352,9 @@ onAndroid("the Material deck's More dropdown and Space dropdown open as Material
       selectedProfileId: "work",
     },
   }));
+  const overlay = require("../components/ui/Overlay");
+  const frame = jest.spyOn(overlay, "useOverlayFrame").mockReturnValue(() => Promise.resolve({ x: 0, y: 0, width: 393, height: 873 }));
+  const anchor = jest.spyOn(overlay, "measureAnchor").mockResolvedValue({ x: 337, y: 52, width: 44, height: 44 });
   const root = deck();
   act(() => pressable(root, "materialDeckMore")!.props.onPress());
   act(() => jest.advanceTimersByTime(16));
@@ -360,14 +364,31 @@ onAndroid("the Material deck's More dropdown and Space dropdown open as Material
   for (const group of groups) expect(flat(group)).toMatchObject({ backgroundColor: LIGHT.surfaceContainer, borderRadius: 16, elevation: 3 });
   act(() => setDynamicScheme(WALLPAPER));
   expect(flat(hosts(root, "materialMenuGroup")[0])).toMatchObject({ backgroundColor: WALLPAPER.light.surfaceContainer });
-  act(() => root.root.findAll((node) => node.props.testID === "drawnMenuScrim" && typeof node.props.onPress === "function")[0]!.props.onPress());
+  const measureRows = () => act(() => root.root.findAll((node) => node.props.testID === "drawnMenuRows" && typeof node.props.onContentSizeChange === "function")[0]!.props.onContentSizeChange(200, 240));
+  const menuLayer = () => root.root.findAll((node) => typeof node.type === "string" && node.props.pointerEvents !== undefined && node.findAll((inner) => inner.props.testID === "materialMenu").length > 0).pop()!;
+  expect(menuLayer().props.pointerEvents).toBe("none");
+  for (let step = 0; step < 3; step++) await act(async () => undefined);
+  measureRows();
+  expect(menuLayer().props.pointerEvents).toBe("auto");
+  const settings = root.root.findAll((node) => node.props.accessibilityRole === "menuitem" && node.props.accessibilityLabel === "Settings" && typeof node.props.onPress === "function")[0]!;
+  act(() => settings.props.onPress());
+  expect(useSettingsNav.getState().open).toBe(true);
+  act(() => useSettingsNav.setState({ open: false, stack: [{ page: "root" }], popping: false }));
   act(() => jest.advanceTimersByTime(500));
 
   act(() => pressable(root, "materialDeckSpace")!.props.onPress());
   act(() => jest.advanceTimersByTime(16));
   expect(host(root, "materialMenu")).toBeDefined();
+  for (let step = 0; step < 3; step++) await act(async () => undefined);
+  measureRows();
+  expect(menuLayer().props.pointerEvents).toBe("auto");
   const spaceItems = root.root.findAll((node) => node.props.accessibilityRole === "menuitem" && typeof node.type === "string");
   expect(spaceItems.map((node) => node.props.accessibilityLabel)).toEqual(["Work", "Home"]);
   expect(spaceItems[0]!.props.accessibilityState).toMatchObject({ checked: true });
+  const checks = spaceItems[0]!.findAll((node) => node.props.name === "checkmark" && typeof node.props.color === "string");
+  expect(checks.length).toBeGreaterThan(0);
+  expect(checks[0]!.props.color).toBe(WALLPAPER.light.primary);
   unmount(root);
+  frame.mockRestore();
+  anchor.mockRestore();
 });

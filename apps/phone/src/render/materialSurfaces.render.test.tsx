@@ -1,13 +1,13 @@
 import { Dimensions, Platform, StyleSheet, Text } from "react-native";
 import { getAnimatedStyle } from "react-native-reanimated";
 import { act, type ReactTestInstance } from "react-test-renderer";
-import { ConfirmSheet, DesignProvider, Dialog, Menu, pointPlacer, Sheet, useTheme } from "../components/ui";
+import { ConfirmSheet, DesignProvider, Dialog, Menu, pointPlacer, Portal, Sheet, useTheme } from "../components/ui";
 import { rolesFromScheme } from "../components/ui/materialRoles";
 import { materialMenuFill, materialSheetMs } from "../components/ui/MaterialSurfaces";
 import { SEEDED_SCHEMES } from "../lib/material/schemes";
 import { setDynamicScheme } from "../state/app/dynamicScheme";
-import { currentPreferences, setPreference } from "../state/settings/store";
-import { renderSurface, unmount, withMaterialYou } from "../../test/render/harness";
+import { currentPreferences, setPreference, usePreferences } from "../state/settings/store";
+import { renderSurface, unmount, updateSurface, withMaterialYou } from "../../test/render/harness";
 
 withMaterialYou();
 
@@ -214,6 +214,38 @@ onAndroid("with reduced motion, a placed Material menu stays invisible until its
   mockMotion.reduced = false;
   expect(unmeasured).toBe(0);
   expect(measured).toBe(1);
+});
+
+onAndroid("a classic menu closing in a portal keeps the classic design when Material You turns on mid-exit", () => {
+  act(() => usePreferences.setState({ materialYou: false }));
+  const insets = jest.spyOn(safeArea, "useSafeAreaInsets").mockReturnValue({ top: 0, bottom: 0, left: 0, right: 0 });
+  const picker = (open: boolean) =>
+    open ? (
+      <Portal exitMs={1000}>
+        <Menu items={[{ label: "Ardia", onPress: () => undefined }]} place={{ top: 100, left: 20 }} onDismiss={() => undefined} />
+      </Portal>
+    ) : null;
+  const root = renderSurface(picker(true), { flushTimers: false });
+  updateSurface(root, picker(false));
+  act(() => usePreferences.setState({ materialYou: true }));
+  const drawnMaterial = root.root.findAll((node) => node.props.testID === "materialMenu" && typeof node.type === "string").length;
+  unmount(root);
+  insets.mockRestore();
+  expect(drawnMaterial).toBe(0);
+});
+
+onAndroid("opening a Material submenu scrolls its rows back to the top, so Back is in view", () => {
+  const insets = jest.spyOn(safeArea, "useSafeAreaInsets").mockReturnValue({ top: 0, bottom: 0, left: 0, right: 0 });
+  const items = [...Array.from({ length: 12 }, (_, index) => ({ label: `Row ${index}`, onPress: () => undefined })), { label: "More", children: [{ label: "Inside", onPress: () => undefined }] }];
+  const root = material(<Menu items={items} placer={pointPlacer({ x: 40, y: 120 }, { width: 360, height: 400 }, { top: 0, bottom: 0, left: 0, right: 0 }, 112)} onDismiss={() => undefined} />);
+  type Scrollable = { scrollTo: (to: { y: number; animated: boolean }) => void };
+  const rows = root.root.findAll((node) => node.props.testID === "drawnMenuRows" && typeof (node.instance as Partial<Scrollable> | null)?.scrollTo === "function")[0]!;
+  const scrolled = jest.spyOn(rows.instance as Scrollable, "scrollTo");
+  act(() => root.root.findAll((node) => node.props.accessibilityLabel === "More" && typeof node.props.onPress === "function")[0]!.props.onPress());
+  const calls = scrolled.mock.calls;
+  unmount(root);
+  insets.mockRestore();
+  expect(calls).toContainEqual([{ y: 0, animated: false }]);
 });
 
 onAndroid("a fixed trailing menu respects the right safe inset", async () => {

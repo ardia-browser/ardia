@@ -1,5 +1,5 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { BackHandler, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type StyleProp, type ViewStyle, type ViewInstance } from "react-native";
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { BackHandler, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type ScrollViewInstance, type StyleProp, type ViewStyle, type ViewInstance } from "react-native";
 import { lookIsNative } from "@ardia/phone-native";
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -89,8 +89,12 @@ function MaterialMenu({ items, place, placer, onDismiss, origin = "top", shown =
   const spot = placer ? placer(content ?? materialMenuHeight(rows, page !== null), side.current, width) : { place: place ?? {}, origin, maxHeight: undefined, shrink: undefined };
   if (revealed && placer && side.current === undefined) side.current = spot.origin.includes("top");
   const firstRow = useRef<ViewInstance>(null);
+  const rowsScroll = useRef<ScrollViewInstance>(null);
   const chosen = useRef(false);
   const openedWidth = useRef(window.width);
+  useLayoutEffect(() => {
+    rowsScroll.current?.scrollTo({ y: 0, animated: false });
+  }, [page]);
   useEffect(() => {
     if (openedWidth.current !== window.width) onDismiss();
   }, [window.width]);
@@ -101,7 +105,7 @@ function MaterialMenu({ items, place, placer, onDismiss, origin = "top", shown =
     if (!revealed || leaving) return;
     return focusForScreenReader(() => firstRow.current);
   }, [revealed, page, leaving]);
-  useMaterialBack(!leaving, { onCommit: () => (page ? backPage() : onDismiss()) });
+  useMaterialBack(!leaving, { onCommit: () => (page ? backPage() : onDismiss()), onSwipe: privately ? () => undefined : undefined });
   const opened = useSharedValue(reduceMotion ? 1 : 0);
   useEffect(() => {
     if (!revealed || leaving || reduceMotion) return;
@@ -142,7 +146,7 @@ function MaterialMenu({ items, place, placer, onDismiss, origin = "top", shown =
         accessibilityViewIsModal
         style={[materialStyles.menu, { transformOrigin: spot.origin }, spot.place, { width: Math.min(width, typeof spot.place.width === "number" ? spot.place.width : width) }, spot.maxHeight === undefined ? null : { maxHeight: spot.maxHeight }, revealed ? null : styles.unseen, enter]}
       >
-        <ScrollView testID="drawnMenuRows" keyboardShouldPersistTaps="handled" style={styles.scroll} contentContainerStyle={materialStyles.groups} bounces={false} overScrollMode="never" onContentSizeChange={(_width, height) => setContent(height)}>
+        <ScrollView ref={rowsScroll} testID="drawnMenuRows" keyboardShouldPersistTaps="handled" style={styles.scroll} contentContainerStyle={materialStyles.groups} bounces={false} overScrollMode="never" onContentSizeChange={(_width, height) => setContent(height)}>
           {groups.map((group, groupIndex) => (
             <View key={groupIndex} testID="materialMenuGroup" style={[materialStyles.menuGroup, { backgroundColor: fill }]}>
               {page && groupIndex === 0 ? (

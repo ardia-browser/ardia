@@ -1,10 +1,10 @@
 import { onWindowEvent, watchSidebarEdge } from "../../state/windows/nativeWindow";
-import { useEffect, useInsertionEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Animated, StyleSheet, View } from "react-native";
 import { switchOn } from "../../state/app/switches";
 import { useTheme } from "../ui/theme";
-import { curve, keepAttached, useGated } from "../ui/motion";
-import { Panel, reduceMotion, WindowBackdrop, WindowDragRegion } from "../ui";
+import { useGated } from "../ui/motion";
+import { PageCoverGate, Panel, WindowBackdrop, WindowDragRegion } from "../ui";
 import { useSidebarSide, useWindowFullScreen, useWindowId } from "../../state/browser/hooks";
 import { useSidebarDockState } from "../../state/windows/hooks";
 import { useShownSidebarWidth } from "../../state/sidebar/shownWidth";
@@ -23,16 +23,14 @@ import {
   noteSidebarPeekFrame,
   noteSidebarPeekRevealHeldBack,
   noteSidebarScreenEdge,
-  noteSidebarSlide,
 } from "../../state/telemetry/dockCounts";
 import { ProfileSwipe } from "./ProfileSwipe";
-import { ARC_HIDE_MS, DOCK_SLIDE, SHADOWS } from "./tokens";
+import { SHADOWS } from "./tokens";
 import {
   EDGE_ARMED,
   EDGE_DISARMED,
   PEEK_EDGE_STRIP,
   TAB_DRAG_EDGE_STRIP,
-  dockMove,
   dockState,
   dockedCardInset,
   edgeClosed,
@@ -50,56 +48,17 @@ import {
 import {
   ARC_LIGHTS_CENTER,
   devPeeks,
-  peekShown,
-  setDockMoving,
   setPeekLeaving,
   setPeekShown,
   useDockMotion,
 } from "../../state/windows/dockMotion";
 import { useTabDrag } from "../../state/drag/tabDrag";
 import { usePeek } from "./usePeek";
+import { useSidebarDock } from "./useSidebarDock";
 import { useEmptyWindowPeek } from "./useEmptyWindowPeek";
 import { useSidebarLights, useTopStripLights } from "./useDockLights";
 import { useCardFrame } from "./cardFrame";
 import { forgetSidebarDock, noteSidebarDock } from "./sidebarDockCheck";
-
-function useSidebarDock(open: boolean, animate: boolean, arc: boolean): { dock: Animated.Value; away: boolean } {
-  const windowId = useWindowId();
-  const dock = useRef(new Animated.Value(open ? 1 : 0)).current;
-  const was = useRef(open);
-  const [away, setAway] = useState(!open);
-  useInsertionEffect(() => keepAttached(dock), [dock]);
-  useEffect(() => {
-    if (was.current === open) return;
-    was.current = open;
-    const move = dockMove({ open, animated: animate && !reduceMotion() && switchOn("sidebarSlide"), arc, peekOut: peekShown(windowId) });
-    if (move === "jump") {
-      dock.stopAnimation();
-      dock.setValue(open ? 1 : 0);
-      setDockMoving(windowId, false);
-      setAway(!open);
-      return;
-    }
-    if (open) setAway(false);
-    setDockMoving(windowId, true);
-    let pastTarget = false;
-    const watch = dock.addListener(({ value }) => {
-      if (value > 1 || value < 0) pastTarget = true;
-    });
-    (move === "arcHide"
-      ? Animated.timing(dock, { toValue: 0, duration: ARC_HIDE_MS, easing: curve.enter, useNativeDriver: false })
-      : Animated.timing(dock, { toValue: open ? 1 : 0, ...DOCK_SLIDE, useNativeDriver: false })
-    ).start(({ finished }) => {
-      dock.removeListener(watch);
-      if (!finished) return;
-      noteSidebarSlide(pastTarget);
-      setDockMoving(windowId, false);
-      if (!open) setAway(true);
-    });
-  }, [open]);
-  useEffect(() => () => setDockMoving(windowId, false), []);
-  return { dock, away };
-}
 
 type Inset = { top: number; right: number; bottom: number; left: number };
 
@@ -351,48 +310,50 @@ function SidebarDock({
           }}
         />
       )}
-      <Animated.View
-        pointerEvents={moving || ((fullscreen || !open) && !holding) ? "none" : "box-none"}
-        style={{
-          position: "absolute",
-          ...(away ? { left: -10_000 } : { [edgeSide]: peeking ? peekAt.left : 0 }),
-          top: peeking ? peekAt.top : 0,
-          bottom: peeking ? peekAt.bottom : 0,
-          width,
-          transform: [{ translateX: restingPeek ? 0 : fullscreen ? -width * outward : slideOut }],
-        }}
-      >
-        <Animated.View style={[StyleSheet.absoluteFill, panelLayer]}>
-          {strip.current && (
-            <Animated.View
-              pointerEvents="none"
-              style={{ position: "absolute", top: 0, bottom: 0, [edgeSide]: -bleed, [right ? "left" : "right"]: 0, opacity: panelOn }}
-              onLayout={(e) => setPanelHeight(e.nativeEvent.layout.height)}
-            >
-              <Panel fill={theme.windowTint[0]} radius={peekAt.radius} shadow={SHADOWS.sidebarPeek} style={StyleSheet.absoluteFill} />
-              {peeking && (
-                <View style={[StyleSheet.absoluteFill, { borderRadius: peekAt.radius, overflow: "hidden" }]}>
-                  <WindowBackdrop
-                    vibrancy
-                    {...theme.backdrop}
-                    colors={theme.windowTint}
-                    grainOpacity={theme.grain}
-                    style={{
-                      position: "absolute",
-                      [edgeSide]: -peekAt.left,
-                      top: -peekAt.top,
-                      width: windowWidth + bleed,
-                      height: panelHeight + peekAt.top + peekAt.bottom,
-                    }}
-                  />
-                </View>
-              )}
-            </Animated.View>
-          )}
-          <View style={[{ flex: 1, paddingTop: controlsRow }, peeking ? { borderRadius: peekAt.radius, overflow: "hidden" } : null]}>{sidebar}</View>
-          <ResizeHandle windowId={windowId} />
+      <PageCoverGate covering={!away}>
+        <Animated.View
+          pointerEvents={moving || ((fullscreen || !open) && !holding) ? "none" : "box-none"}
+          style={{
+            position: "absolute",
+            ...(away ? { left: -10_000 } : { [edgeSide]: peeking ? peekAt.left : 0 }),
+            top: peeking ? peekAt.top : 0,
+            bottom: peeking ? peekAt.bottom : 0,
+            width,
+            transform: [{ translateX: restingPeek ? 0 : fullscreen ? -width * outward : slideOut }],
+          }}
+        >
+          <Animated.View style={[StyleSheet.absoluteFill, panelLayer]}>
+            {strip.current && (
+              <Animated.View
+                pointerEvents="none"
+                style={{ position: "absolute", top: 0, bottom: 0, [edgeSide]: -bleed, [right ? "left" : "right"]: 0, opacity: panelOn }}
+                onLayout={(e) => setPanelHeight(e.nativeEvent.layout.height)}
+              >
+                <Panel fill={theme.windowTint[0]} radius={peekAt.radius} shadow={SHADOWS.sidebarPeek} style={StyleSheet.absoluteFill} />
+                {peeking && (
+                  <View style={[StyleSheet.absoluteFill, { borderRadius: peekAt.radius, overflow: "hidden" }]}>
+                    <WindowBackdrop
+                      vibrancy
+                      {...theme.backdrop}
+                      colors={theme.windowTint}
+                      grainOpacity={theme.grain}
+                      style={{
+                        position: "absolute",
+                        [edgeSide]: -peekAt.left,
+                        top: -peekAt.top,
+                        width: windowWidth + bleed,
+                        height: panelHeight + peekAt.top + peekAt.bottom,
+                      }}
+                    />
+                  </View>
+                )}
+              </Animated.View>
+            )}
+            <View style={[{ flex: 1, paddingTop: controlsRow }, peeking ? { borderRadius: peekAt.radius, overflow: "hidden" } : null]}>{sidebar}</View>
+            <ResizeHandle windowId={windowId} />
+          </Animated.View>
         </Animated.View>
-      </Animated.View>
+      </PageCoverGate>
     </>
   );
 }

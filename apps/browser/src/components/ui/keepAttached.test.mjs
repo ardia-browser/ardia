@@ -69,6 +69,6 @@ test("a kept value's listeners and slide survive every style letting go, as in p
 });
 
 test("the sidebar's dock value is kept for as long as its layout lives", () => {
-  const dock = readFileSync(new URL("../window/SidebarDock.tsx", import.meta.url), "utf8");
+  const dock = readFileSync(new URL("../window/useSidebarDock.ts", import.meta.url), "utf8");
   assert.match(dock, /useInsertionEffect\(\(\) => keepAttached\(dock\), \[dock\]\);/);
 });

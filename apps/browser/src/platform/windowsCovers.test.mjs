@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { holesFor } from "../../../../packages/expo-windows/src/engine/covers.ts";
 
@@ -105,4 +106,11 @@ test("a surface told not to cover (a Peek hidden with its tab) cuts no hole, and
   await back.measure();
   assert.deepEqual(holesFor(page, coversIn(windowId), false), [[400, 80, 500, 400, 12]], "shown again, the hole is back");
   back.stop();
+});
+
+test("the sidebar covers the page only until it is hidden, so a close that doesn't animate leaves no holes where its rows were", () => {
+  const dock = readFileSync(new URL("../components/window/SidebarDock.tsx", import.meta.url), "utf8");
+  assert.match(dock, /const away = state === "fullscreen" \|\| state === "away";/, "away is the hidden sidebar, never a peeking one");
+  const gated = dock.match(/<PageCoverGate covering=\{!away\}>([\s\S]*?)<\/PageCoverGate>/)?.[1] ?? "";
+  for (const part of ["<Panel ", "{sidebar}", "<ResizeHandle "]) assert.ok(gated.includes(part), `${part} reports no rectangle once the sidebar is hidden`);
 });

@@ -589,7 +589,10 @@ is plain Chromium.
   the find bar, dialogs, toasts, the downloads bubble) reports its rectangle (`usePageCover`), and the page window gets
   a hole there, with the surface's corners. A surface inside a `ClipView` (the sidebar's and the tab strip's profile
   pages, which sit side by side and clip to one) reports only the part its clips show, so the next profile's rows,
-  parked beside the sidebar, cut nothing in the page (#1673). A translucent surface shows the card behind it in the hole, not the page.
+  parked beside the sidebar, cut nothing in the page (#1673). A hidden sidebar reports nothing (`PageCoverGate` in
+  `SidebarDock`), and a peeking one reports again: surfaces are measured while something animates, and a close that
+  jumps (Animation effects off) animates nothing, so its rows would keep their holes (#3363). A translucent surface
+  shows the card behind it in the hole, not the page.
   A `Surface` that only draws a gradient (`GradientFill`, the address field's load glow) reports no rectangle: it always
   sits inside a toolbar, sidebar or Little Ardia plate that does, and `windowsGradientFill.test.mjs` pins its callers.
   Gradients draw through `ArdiaMaterialGradient` (`GradientView.h`): `fillColors` at `fillStops` top to bottom, masked

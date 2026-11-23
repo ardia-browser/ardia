@@ -46,9 +46,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
+      actions: read
       contents: read
       pull-requests: read
     outputs:
+      target: ${{ steps.route.outputs.target }}
       code: ${{ steps.filter.outcome != 'success' || steps.filter.outputs.code == 'true' }}
       browser: ${{ steps.filter.outcome != 'success' || steps.filter.outputs.browser == 'true' }}
       repo: ${{ steps.filter.outcome != 'success' || steps.filter.outputs.repo == 'true' }}
@@ -138,6 +140,29 @@ jobs:
               - ".github/**"
               - "package.json"
               - ".nvmrc"
+      - name: The router, from main
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || (github.ref == 'refs/heads/main' && github.sha) || 'main' }}
+          path: .route
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /scripts/ci/
+            /.github/TEAM.td
+            /.github/vouch/vouch.cjs
+      - id: route
+        name: GitHub or Boat for the long jobs
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        timeout-minutes: 1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BOAT_CI_LIMITS_KEY: ${{ secrets.BOAT_CI_LIMITS_KEY }}
+          BOAT_OVERFLOW_VARS: ${{ toJSON(vars) }}
+        run: node .route/scripts/ci/route-runner.mjs --fallback ubuntu-latest --jobs 4
 
   check:
     name: typecheck, tests and Mac bundle
@@ -146,7 +171,7 @@ jobs:
     concurrency:
       group: checks-code-${{ github.ref }}
       cancel-in-progress: true
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.run_attempt == '1' && needs.changes.result == 'success' && needs.changes.outputs.target == 'boat' && 'boat-large' || 'ubuntu-latest' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -192,7 +217,7 @@ jobs:
     concurrency:
       group: checks-browser-${{ matrix.shard }}-${{ github.ref }}
       cancel-in-progress: true
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.run_attempt == '1' && needs.changes.result == 'success' && needs.changes.outputs.target == 'boat' && 'boat-large' || 'ubuntu-latest' }}
     timeout-minutes: 15
     strategy:
       fail-fast: false

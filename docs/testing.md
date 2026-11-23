@@ -80,6 +80,9 @@ holds the rest.
   runs. `scripts/ci/workflow-paths.test.mjs` keeps the trigger paths and the filters in step, follows the meadow
   check's site imports, and fails when a Linux fixture or a root test names a file its job doesn't start on. Each share restores the TSX it transpiled last time (`ardia-test-tsx-I-of-3-…`); only pushes to
   `main` save it, so pull requests add no caches. A newer push cancels the run before it, on `main` too.
+- When GitHub's runners are busy, the long jobs of `checks.yml`, `linux.yml` and `android.yml` move to Boat CI
+  (`boat-large`); the `which checks run` job or a `route` job decides, and each run's summary says why
+  ([ci-boat-overflow.md](ci-boat-overflow.md)).
 - `linux.yml` starts on what the Linux build and its fixture suites read (`apps/linux`, the shared UI and the desktop
   packages' sources, the engine sources, its scripts, and the few Mac files the parity fixtures compare against,
   which `workflow-paths.test.mjs` finds in the suites and checks), not on the rest of the Mac, iPhone, Android or

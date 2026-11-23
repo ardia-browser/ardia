@@ -61,6 +61,8 @@ const REVIEW_BOT_BLOCKS = [
 const CLOSING_REFERENCE = /(?:^|[^A-Za-z0-9_])(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?[^\S\n]+#(\d+)/gim;
 const GATED_WORKFLOWS = ["ios.yml", "android.yml", "linux.yml", "windows.yml", "mac.yml", "rust.yml"];
 const GATE_JOB = "gate";
+const ROUTE_JOB = "route";
+const NOT_BUILD_JOBS = [GATE_JOB, ROUTE_JOB];
 const TRUSTED_STATUSES = ["bot", "team", "collaborator", "vouched"];
 const WRITE_PERMISSIONS = ["admin", "write"];
 const COLLABORATOR_ASSOCIATIONS = ["OWNER", "MEMBER", "COLLABORATOR"];
@@ -551,7 +553,7 @@ async function rerunSkippedBuilds(session, pr, { waitForCompletion = false } = {
     });
     const gateSkippedTheBuild =
       jobs.some((job) => job.name === GATE_JOB && job.conclusion === "success") &&
-      jobs.some((job) => job.name !== GATE_JOB && job.conclusion === "skipped");
+      jobs.some((job) => !NOT_BUILD_JOBS.includes(job.name) && job.conclusion === "skipped");
     if (!gateSkippedTheBuild) continue;
     try {
       await write(session, () => github.rest.actions.reRunWorkflow({ ...repo, run_id: newest.id }));

@@ -25,7 +25,10 @@ test("a parsed contribution fills the defaults the host relies on", () => {
   const parsed = readCredentialContribution(minimal);
   assert.equal(parsed.symbol, "key.fill");
   assert.equal(parsed.readsOffline, true);
+  assert.deepEqual(parsed.passkeys, []);
+  const routes = [{ via: "system" }, { via: "extension", extensions: ["ghmbeldphafepmbegfdlkpapadhbakde"] }];
+  assert.deepEqual(readCredentialContribution({ ...minimal, passkeys: routes }).passkeys, routes);
   assert.deepEqual(parsed.signIn.methods[0].fields[0], { id: "token", title: "Token", type: "secret", optional: false, masked: true });
-  assert.deepEqual(parsed.cli.verbs.status, { argv: ["status"], slots: {}, env: [], stdin: null, timeoutMs: 30000, outputLimitBytes: 33554432, output: { mode: "json" }, signIn: false, unlocks: false, outlivesCall: false, hints: {} });
+  assert.deepEqual(parsed.cli.verbs.status, { argv: ["status"], slots: {}, env: [], stdin: null, timeoutMs: 30000, outputLimitBytes: 33554432, output: { mode: "json" }, signIn: false, unlocks: false, outlivesCall: false, argvSecrets: false, hints: {} });
   assert.throws(() => readCredentialContribution({ ...minimal, title: "" }), /title must be text of 1 to 40 characters/);
 });

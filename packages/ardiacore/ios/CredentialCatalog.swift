@@ -9,11 +9,29 @@ struct CredentialContribution: Sendable, Equatable {
   var readsOffline: Bool
   var approvalLastsSeconds: Int?
   var capabilities: [String]
+  var passkeyRoutes: [CredentialPasskeyRoute] = []
+  var appLinks: [String] = []
   var signIn: CredentialSignInSpec
   var cli: CredentialCliSpec
   var memoryMB: Int
 
   func offers(_ capability: String) -> Bool { capabilities.contains(capability) }
+}
+
+enum CredentialPasskeyRoute: Equatable, Sendable {
+  case system
+  case browserExtension([String])
+
+  static let names = ["system", "extension"]
+  static let mostRoutes = 2
+  static let mostExtensions = 4
+
+  var name: String {
+    switch self {
+    case .system: "system"
+    case .browserExtension: "extension"
+    }
+  }
 }
 
 struct CredentialSignInSpec: Sendable, Equatable {
@@ -121,6 +139,7 @@ struct CredentialVerb: Sendable, Equatable {
     case slot(String)
     case flagSlot(flag: String, slot: String)
     case flagWhen(flag: String, slot: String)
+    case secretArgument(prefix: String, slot: String)
   }
 
   enum SlotType: Sendable, Equatable {
@@ -181,6 +200,7 @@ struct CredentialVerb: Sendable, Equatable {
   var signIn: Bool
   var unlocks: Unlocks
   var outlivesCall: Bool
+  var argvSecrets = false
   var hints: [String: [String]]
   var hintOrder: [String]
 

@@ -207,6 +207,16 @@ struct CredentialRun {
 
 @Suite("Credential runs", .serialized)
 struct CredentialRunTests {
+  @Test func `a provider that declares app links must handle link, and one that doesn't needs no link`() throws {
+    var contribution = try CredentialRunFixture.contribution()
+    let wording = CredentialWording(title: contribution.title, program: contribution.cli.name, signIn: contribution.signIn)
+    let handlers = CredentialLimits.requiredHandlers + ["save", "edit", "configure"]
+    #expect(CredentialRunEndpoint.handlerProblem(handlers, contribution: contribution, wording: wording) == nil)
+    contribution.appLinks = ["https://start.1password.com/open/i?"]
+    #expect(CredentialRunEndpoint.handlerProblem(handlers, contribution: contribution, wording: wording) == wording.missingHandler("link"))
+    #expect(CredentialRunEndpoint.handlerProblem(handlers + ["link"], contribution: contribution, wording: wording) == nil)
+  }
+
   @Test func `hello answers the credentials protocol natively and ready is forwarded re-encoded`() async throws {
     let run = try await CredentialRun()
     let hello = try await run.link.reply(to: 1)

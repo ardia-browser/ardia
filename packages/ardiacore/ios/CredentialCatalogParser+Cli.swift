@@ -165,6 +165,7 @@ extension CredentialCatalogParser {
     let slots = readSlots(object["slots"], path, patterns: patterns)
     var used: Set<String> = []
     var argv: [CredentialVerb.Element] = []
+    let argvSecrets = flag(object["argvSecrets"], "\(path).argvSecrets", otherwise: false)
     if let list = object["argv"] as? [Any], (1...32).contains(list.count) {
       for (index, raw) in list.enumerated() {
         let at = "\(path).argv[\(index)]"
@@ -182,6 +183,14 @@ extension CredentialCatalogParser {
         }
         guard let element = raw as? [String: Any] else {
           problem("\(at) must be a plain token: no spaces, newlines, NUL or a lone --")
+          continue
+        }
+        if element["prefix"] != nil {
+          if let named = element["slot"] as? String { used.insert(named) }
+          if let secret = readSecretArgument(element, at, slots: slots, allowed: argvSecrets) {
+            used.insert(secret.slot)
+            argv.append(.secretArgument(prefix: secret.prefix, slot: secret.slot))
+          }
           continue
         }
         let flag = element["flag"] as? String
@@ -210,6 +219,7 @@ extension CredentialCatalogParser {
           problem("\(at).slot: \(slot) isn't one of this verb's slots")
           continue
         }
+        used.insert(slot)
         switch kind {
         case .secret:
           problem("\(at): a secret slot can't go in argv, where other programs see it")
@@ -227,6 +237,9 @@ extension CredentialCatalogParser {
       }
     } else {
       problem("\(path).argv must be a list of 1 to 32 tokens and slots")
+    }
+    if argvSecrets, !argv.contains(where: { if case .secretArgument = $0 { true } else { false } }) {
+      problem("\(path).argvSecrets is set, but no secret goes in argv")
     }
     let env = readEnv(object["env"], "\(path).env", slots: slots, names: &names)
     for entry in env { if case .secretSlot(let slot) = entry.source { used.insert(slot) } }
@@ -319,7 +332,30 @@ extension CredentialCatalogParser {
     }
     return CredentialVerb(
       id: id, argv: argv, slots: slots, env: env, stdin: stdin, timeoutMs: timeoutMs, outputLimitBytes: outputLimit, output: output, signIn: signIn,
-      unlocks: unlocks, outlivesCall: outlives, hints: hints, hintOrder: hintOrder)
+      unlocks: unlocks, outlivesCall: outlives, argvSecrets: argvSecrets, hints: hints, hintOrder: hintOrder)
+  }
+
+  static let argvPrefixPattern = #"^[\x20-\x7e]{0,63}=$"#
+
+  mutating func readSecretArgument(_ element: [String: Any], _ at: String, slots: [String: CredentialVerb.Slot], allowed: Bool) -> (prefix: String, slot: String)? {
+    guard element.keys.allSatisfy({ $0 == "slot" || $0 == "prefix" }) else {
+      problem("\(at) must be a token, { slot }, { flag, slot }, { flag, when } or { slot, prefix }")
+      return nil
+    }
+    guard let prefix = element["prefix"] as? String, Self.matches(Self.argvPrefixPattern, prefix) else {
+      problem("\(at).prefix must be 1 to 64 printable ASCII characters ending in =")
+      return nil
+    }
+    let name = element["slot"] as? String
+    guard let name, slots[name]?.type == .secret else {
+      problem("\(at).slot: \(name ?? "it") must be a secret slot of this verb")
+      return nil
+    }
+    guard allowed else {
+      problem("\(at): a secret goes in argv only with argvSecrets: true, since other programs on this Mac can read it while the command runs")
+      return nil
+    }
+    return (prefix, name)
   }
 
   static func literalDenial(program: String, argv: [CredentialVerb.Element], slots: [String: CredentialVerb.Slot]) -> CredentialLimits.DeniedMatch? {
@@ -331,6 +367,7 @@ extension CredentialCatalogParser {
         case .slot(let slot): return chosen?.slot == slot ? chosen!.value : placeholder
         case .flagSlot(let flag, _): return flag + "=" + placeholder
         case .flagWhen(let flag, _): return flag
+        case .secretArgument(let prefix, _): return prefix + placeholder
         }
       }
     }

@@ -123,11 +123,16 @@ function resolveSlots(cli: CredentialCli, verbId: string, verb: CredentialVerb, 
   return out;
 }
 
-function argvOf(cli: CredentialCli, verbId: string, verb: CredentialVerb, values: Resolved["values"]): string[] | VerbRefusal {
+function argvOf(cli: CredentialCli, verbId: string, verb: CredentialVerb, values: Resolved["values"], secrets: Resolved["secrets"]): string[] | VerbRefusal {
   const argv: string[] = [];
   for (const token of verb.argv) {
     if (typeof token === "string") argv.push(token);
-    else if ("when" in token) {
+    else if ("prefix" in token) {
+      const secret = secrets[token.slot];
+      if (secret === undefined) continue;
+      if (BREAKS.test(secret)) return refusal("bad_request", `${token.slot} for ${verbId} can't go in argv with NUL or a line break.`);
+      argv.push(`${token.prefix}${secret}`);
+    } else if ("when" in token) {
       if (values[token.when] === true) argv.push(token.flag);
     } else {
       const value = values[token.slot];
@@ -170,7 +175,7 @@ export function buildVerb(cli: CredentialCli, verbId: string, params: VerbParams
   if (!verb) return refusal("refused", `${cli.name} has no verb ${verbId}.`);
   const resolved = resolveSlots(cli, verbId, verb, params, secrets);
   if ("code" in resolved) return resolved;
-  const argv = argvOf(cli, verbId, verb, resolved.values);
+  const argv = argvOf(cli, verbId, verb, resolved.values, resolved.secrets);
   if ("code" in argv) return argv;
   const launch: FakeLaunch = { verb: verbId, argv, env: envOf(cli, verb, resolved.secrets, testFolder), stdin: stdinOf(verb, resolved), timeoutMs: verb.timeoutMs, signIn: verb.signIn };
   return { launch, verb, consumed: Object.values(resolved.secrets), jsonStrings: Object.values(resolved.jsons).flatMap((value) => stringsIn(value)) };

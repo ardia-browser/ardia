@@ -1,17 +1,18 @@
-import { CREDENTIAL_CAPABILITIES, CREDENTIAL_MEMORY_MB } from "./credentialConstants";
+import { CREDENTIAL_CAPABILITIES, CREDENTIAL_MEMORY_MB, CREDENTIAL_PASSKEY_ROUTES } from "./credentialConstants";
 import { cliOf } from "./credentialCliManifest";
-import { Checks, isFields, isPluginFile, P, SYMBOL, type Fields } from "./credentialManifestChecks";
-import type { CredentialContribution } from "./credentialManifestTypes";
+import { Checks, isFields, isPluginFile, P, SYMBOL, UNSAFE_TEXT, type Fields } from "./credentialManifestChecks";
+import type { CredentialContribution, CredentialPasskeyRoute } from "./credentialManifestTypes";
 import { signInOf } from "./credentialSignInManifest";
 import type { CredentialCapability } from "./credentialTypes";
 
 export { P as CREDENTIAL_PROVIDER_PATH } from "./credentialManifestChecks";
 export type * from "./credentialManifestTypes";
 
-const TOP_KEYS = ["title", "symbol", "icon", "accent", "readsOffline", "approvalLastsSeconds", "capabilities", "signIn", "cli"];
+const TOP_KEYS = ["title", "symbol", "icon", "accent", "readsOffline", "approvalLastsSeconds", "capabilities", "passkeys", "appLinks", "signIn", "cli"];
 const ACCENT = /^#[0-9A-Fa-f]{6}$/;
 const DEFAULT_SYMBOL = "key.fill";
-const LIMITS = { title: 40, capabilities: 8, approvalSeconds: 86400 } as const;
+const LIMITS = { title: 40, capabilities: 8, approvalSeconds: 86400, passkeyRoutes: 2, passkeyExtensions: 4, appLinks: 4 } as const;
+const APP_LINK = /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)+\/[^\s\u0000-\u001f\u007f]{0,190}$/;
 
 function capabilitiesOf(c: Checks, value: unknown): CredentialCapability[] {
   const raw = c.list(`${P}.capabilities`, value, 0, LIMITS.capabilities) ?? [];
@@ -22,6 +23,67 @@ function capabilitiesOf(c: Checks, value: unknown): CredentialCapability[] {
     else out.push(capability as CredentialCapability);
   });
   return out;
+}
+
+const EXTENSION_ID = /^[a-p]{32}$/;
+
+function passkeyRouteOf(c: Checks, path: string, value: unknown): CredentialPasskeyRoute | null {
+  const doc = c.object(path, value);
+  if (!doc) return null;
+  if (doc.via === "system") {
+    c.only(path, doc, ["via"]);
+    return { via: "system" };
+  }
+  if (doc.via !== "extension") {
+    c.add(`${path}.via must be one of ${CREDENTIAL_PASSKEY_ROUTES.join(", ")}`);
+    return null;
+  }
+  c.only(path, doc, ["via", "extensions"]);
+  const ids = doc.extensions;
+  const most = LIMITS.passkeyExtensions;
+  if (!Array.isArray(ids) || ids.length < 1 || ids.length > most || !ids.every((id) => typeof id === "string" && EXTENSION_ID.test(id))) {
+    c.add(`${path}.extensions must be a list of 1 to ${most} extension ids`);
+    return null;
+  }
+  if (new Set(ids).size !== ids.length) {
+    c.add(`${path}.extensions names an extension twice`);
+    return null;
+  }
+  return { via: "extension", extensions: ids as string[] };
+}
+
+function passkeysOf(c: Checks, value: unknown, capabilities: readonly CredentialCapability[]): CredentialPasskeyRoute[] {
+  if (value === undefined) return [];
+  const most = LIMITS.passkeyRoutes;
+  if (!Array.isArray(value) || value.length < 1 || value.length > most) {
+    c.add(`${P}.passkeys must be a list of 1 to ${most} routes`);
+    return [];
+  }
+  const routes: CredentialPasskeyRoute[] = [];
+  value.forEach((entry, i) => {
+    const route = passkeyRouteOf(c, `${P}.passkeys[${i}]`, entry);
+    if (!route) return;
+    if (routes.some((r) => r.via === route.via)) c.add(`${P}.passkeys has ${route.via} twice`);
+    else routes.push(route);
+  });
+  if (capabilities.includes("passkeys")) c.add(`${P}.passkeys: a provider keeps passkeys for Ardia (the passkeys capability) or has them used elsewhere (passkeys), not both`);
+  return routes;
+}
+
+function appLinksOf(c: Checks, value: unknown): string[] {
+  if (value === undefined) return [];
+  const most = LIMITS.appLinks;
+  if (!Array.isArray(value) || value.length < 1 || value.length > most) {
+    c.add(`${P}.appLinks must be a list of 1 to ${most} https address prefixes`);
+    return [];
+  }
+  const links: string[] = [];
+  value.forEach((link, i) => {
+    if (typeof link !== "string" || !APP_LINK.test(link) || UNSAFE_TEXT.test(link)) c.add(`${P}.appLinks[${i}] must be an https address prefix of at most 200 characters, with a path, like https://start.1password.com/open/i?`);
+    else if (links.includes(link)) c.add(`${P}.appLinks has ${link} twice`);
+    else links.push(link);
+  });
+  return links;
 }
 
 function lookOf(c: Checks, doc: Fields): { symbol: string; icon: string | null } {
@@ -54,12 +116,14 @@ function contributionOf(c: Checks, doc: Fields): CredentialContribution | null {
   const readsOffline = c.flag(`${P}.readsOffline`, doc.readsOffline, true);
   const approvalLastsSeconds = c.integer(`${P}.approvalLastsSeconds`, doc.approvalLastsSeconds, 1, LIMITS.approvalSeconds, null);
   const capabilities = capabilitiesOf(c, doc.capabilities);
+  const passkeys = passkeysOf(c, doc.passkeys, capabilities);
+  const appLinks = appLinksOf(c, doc.appLinks);
   const signIn = signInOf(c, doc.signIn);
   const cli = cliOf(c, doc.cli);
   if (capabilities.includes("selfHosted") && signIn && !signIn.servers.some((s) => s.custom)) c.add(`${P}.capabilities: selfHosted needs a custom server in ${P}.signIn.servers`);
   if (capabilities.includes("masterPassword") && isFields(doc.signIn) && doc.signIn.unlock === undefined) c.add(`${P}.capabilities: masterPassword needs ${P}.signIn.unlock`);
   if (!title || !signIn || !cli) return null;
-  return { title, ...look, accent, readsOffline, approvalLastsSeconds, capabilities, signIn, cli };
+  return { title, ...look, accent, readsOffline, approvalLastsSeconds, capabilities, passkeys, appLinks, signIn, cli };
 }
 
 export function closedPluginProblems(manifest: Fields): string[] {

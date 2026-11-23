@@ -17,7 +17,10 @@ export type CredentialHandlerName =
   | "addTotp"
   | "passkeys.list"
   | "passkeys.get"
-  | "passkeys.save";
+  | "passkeys.save"
+  | "link";
+
+export type CredentialPasskeyVia = "system" | "extension";
 
 export type CredentialCapability = "totp" | "save" | "edit" | "addTotp" | "passkeys" | "selfHosted" | "masterPassword" | "touchID";
 
@@ -60,6 +63,10 @@ export type ItemPage = { snapshot: string; items: readonly ListedItem[]; cursor?
 export type RevealField = "username" | "password" | "totp";
 
 export type RevealRequest = { id: string; fields: readonly RevealField[] };
+
+export type LinkRequest = { id: string };
+
+export type ItemLink = { url: string };
 
 export type RevealedTotp = { uri: string } | { code: string; period?: number };
 
@@ -277,6 +284,7 @@ export type CredentialProvider = {
   edit?: CredentialHandler<EditRequest, Item>;
   addTotp?: CredentialHandler<AddTotpRequest, Item>;
   passkeys?: PasskeyHandlers;
+  link?: CredentialHandler<LinkRequest, ItemLink>;
 };
 
 export type CredentialHello = { credentials: typeof CREDENTIALS_PROTOCOL };
@@ -329,6 +337,7 @@ export type HarnessInputs = {
   "passkeys.list": PasskeyListRequest;
   "passkeys.get": PasskeyGetRequest;
   "passkeys.save": PasskeySaveRequest;
+  link: LinkRequest;
 };
 
 export type HarnessAnswer = { ok: true; result: unknown } | { ok: false; error: WireCredentialError | { code: HostCredentialErrorCode } };

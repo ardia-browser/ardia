@@ -4,7 +4,7 @@ export type SlotType = "id" | "enum" | "flag" | "url" | "email" | "code" | "secr
 
 export type VerbSlot = { type: SlotType; optional: boolean; pattern?: string; values?: readonly string[]; allowLocalHttp?: boolean };
 
-export type ArgvToken = string | { slot: string } | { flag: string; slot: string } | { flag: string; when: string };
+export type ArgvToken = string | { slot: string } | { flag: string; slot: string } | { flag: string; when: string } | { slot: string; prefix: string };
 
 export type EnvEntry =
   | { name: string; literal: string }
@@ -29,6 +29,7 @@ export type CredentialVerb = {
   signIn: boolean;
   unlocks: VerbUnlocks;
   outlivesCall: boolean;
+  argvSecrets: boolean;
   hints: Readonly<Record<string, readonly string[]>>;
 };
 
@@ -61,6 +62,8 @@ export type CredentialSignIn = {
   approvalHosts: readonly string[];
 };
 
+export type CredentialPasskeyRoute = { via: "system" } | { via: "extension"; extensions: readonly string[] };
+
 export type CredentialContribution = {
   title: string;
   symbol: string;
@@ -69,6 +72,8 @@ export type CredentialContribution = {
   readsOffline: boolean;
   approvalLastsSeconds: number | null;
   capabilities: readonly CredentialCapability[];
+  passkeys: readonly CredentialPasskeyRoute[];
+  appLinks: readonly string[];
   signIn: CredentialSignIn;
   cli: CredentialCli;
 };

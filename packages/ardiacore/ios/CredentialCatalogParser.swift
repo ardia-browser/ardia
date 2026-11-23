@@ -12,13 +12,13 @@ struct CredentialCatalogParser {
   static let envNamePattern = #"^[A-Z][A-Z0-9_]{0,63}$"#
   static let verbIdPattern = #"^[a-z][A-Za-z0-9]*(\.[a-z][A-Za-z0-9]*){0,3}$"#
   static let flagPattern = #"^--[a-z][a-z0-9-]{0,40}$"#
-  static let contributionKeys: Set<String> = ["title", "symbol", "icon", "accent", "readsOffline", "approvalLastsSeconds", "capabilities", "signIn", "cli"]
+  static let contributionKeys: Set<String> = ["title", "symbol", "icon", "accent", "readsOffline", "approvalLastsSeconds", "capabilities", "passkeys", "appLinks", "signIn", "cli"]
   static let signInKeys: Set<String> = ["methods", "servers", "unlock", "approvalHosts"]
   static let methodKeys: Set<String> = ["id", "title", "kind", "fields", "twoStep", "appURL", "appTitle"]
   static let fieldKeys: Set<String> = ["id", "title", "type", "placeholder", "hint", "optional", "prefill", "masked"]
   static let serverKeys: Set<String> = ["id", "title", "custom"]
   static let cliKeys: Set<String> = ["name", "install", "minimumVersion", "patterns", "env", "onLock", "verbs"]
-  static let verbKeys: Set<String> = ["argv", "slots", "env", "stdin", "timeoutMs", "outputLimitBytes", "output", "signIn", "unlocks", "outlivesCall", "hints"]
+  static let verbKeys: Set<String> = ["argv", "slots", "env", "stdin", "timeoutMs", "outputLimitBytes", "output", "signIn", "unlocks", "outlivesCall", "argvSecrets", "hints"]
   static let slotKeys: Set<String> = ["type", "pattern", "values", "optional", "allowLocalHttp"]
 
   enum Outcome: Sendable {
@@ -157,6 +157,8 @@ struct CredentialCatalogParser {
     let readsOffline = flag(object["readsOffline"], "\(P).readsOffline", otherwise: true)
     let approvalLasts = whole(object["approvalLastsSeconds"], "\(P).approvalLastsSeconds", least: 1, most: 86400)
     let capabilities = readCapabilities(object["capabilities"])
+    let passkeyRoutes = readPasskeys(object["passkeys"], capabilities: capabilities)
+    let appLinks = readAppLinks(object["appLinks"])
     var signIn: CredentialSignInSpec?
     if let given = object["signIn"] as? [String: Any] { signIn = readSignIn(given) } else { problem("\(P).signIn must be an object") }
     var cli: CredentialCliSpec?
@@ -170,7 +172,7 @@ struct CredentialCatalogParser {
     guard let title, let signIn, let cli else { return nil }
     return CredentialContribution(
       plugin: name, title: title, symbol: icon == nil ? (symbol ?? "key.fill") : nil, icon: icon, accent: accent, readsOffline: readsOffline,
-      approvalLastsSeconds: approvalLasts, capabilities: capabilities, signIn: signIn, cli: cli, memoryMB: memoryMB)
+      approvalLastsSeconds: approvalLasts, capabilities: capabilities, passkeyRoutes: passkeyRoutes, appLinks: appLinks, signIn: signIn, cli: cli, memoryMB: memoryMB)
   }
 
   static func isPluginPng(_ text: String) -> Bool {
@@ -199,6 +201,84 @@ struct CredentialCatalogParser {
       seen.append(text)
     }
     return seen
+  }
+
+  static let appLinkPattern = #"^https://[a-z0-9-]+(\.[a-z0-9-]+)+/[^\s\x00-\x1f\x7f]{0,190}$"#
+  static let mostAppLinks = 4
+
+  mutating func readAppLinks(_ value: Any?) -> [String] {
+    let P = "\(Self.root).appLinks"
+    guard let value else { return [] }
+    guard let list = value as? [Any], (1...Self.mostAppLinks).contains(list.count) else {
+      problem("\(P) must be a list of 1 to \(Self.mostAppLinks) https address prefixes")
+      return []
+    }
+    var links: [String] = []
+    for (index, entry) in list.enumerated() {
+      guard let text = entry as? String, Self.matches(Self.appLinkPattern, text), !Self.hasControlOrDirection(text) else {
+        problem("\(P)[\(index)] must be an https address prefix of at most 200 characters, with a path, like https://start.1password.com/open/i?")
+        continue
+      }
+      if links.contains(text) {
+        problem("\(P) has \(text) twice")
+        continue
+      }
+      links.append(text)
+    }
+    return links
+  }
+
+  static let extensionIdPattern = #"^[a-p]{32}$"#
+
+  mutating func readPasskeys(_ value: Any?, capabilities: [String]) -> [CredentialPasskeyRoute] {
+    let P = "\(Self.root).passkeys"
+    guard let value else { return [] }
+    guard let list = value as? [Any], (1...CredentialPasskeyRoute.mostRoutes).contains(list.count) else {
+      problem("\(P) must be a list of 1 to \(CredentialPasskeyRoute.mostRoutes) routes")
+      return []
+    }
+    var routes: [CredentialPasskeyRoute] = []
+    for (index, entry) in list.enumerated() {
+      guard let route = readPasskeyRoute(entry, "\(P)[\(index)]") else { continue }
+      if routes.contains(where: { $0.name == route.name }) {
+        problem("\(P) has \(route.name) twice")
+        continue
+      }
+      routes.append(route)
+    }
+    if capabilities.contains("passkeys") {
+      problem("\(P): a provider keeps passkeys for Ardia (the passkeys capability) or has them used elsewhere (passkeys), not both")
+    }
+    return routes
+  }
+
+  mutating func readPasskeyRoute(_ value: Any, _ path: String) -> CredentialPasskeyRoute? {
+    guard let object = value as? [String: Any] else {
+      problem("\(path) must be an object")
+      return nil
+    }
+    switch object["via"] as? String {
+    case "system":
+      unknownKeys(object, allowed: ["via"]) { "\(path).\($0) isn't a key of \(path)" }
+      return .system
+    case "extension":
+      unknownKeys(object, allowed: ["via", "extensions"]) { "\(path).\($0) isn't a key of \(path)" }
+      let most = CredentialPasskeyRoute.mostExtensions
+      guard let list = object["extensions"] as? [Any], (1...most).contains(list.count),
+        case let ids = list.compactMap({ $0 as? String }), ids.count == list.count, ids.allSatisfy({ Self.matches(Self.extensionIdPattern, $0) })
+      else {
+        problem("\(path).extensions must be a list of 1 to \(most) extension ids")
+        return nil
+      }
+      guard Set(ids).count == ids.count else {
+        problem("\(path).extensions names an extension twice")
+        return nil
+      }
+      return .browserExtension(ids)
+    default:
+      problem("\(path).via must be one of \(CredentialPasskeyRoute.names.joined(separator: ", "))")
+      return nil
+    }
   }
 
   mutating func readSignIn(_ object: [String: Any]) -> CredentialSignInSpec? {

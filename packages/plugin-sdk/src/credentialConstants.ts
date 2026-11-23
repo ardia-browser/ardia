@@ -1,4 +1,4 @@
-import type { CredentialCapability, CredentialErrorCode, CredentialHandlerName, DeniedCommand, ProblemCode } from "./credentialTypes";
+import type { CredentialCapability, CredentialErrorCode, CredentialHandlerName, CredentialPasskeyVia, DeniedCommand, ProblemCode } from "./credentialTypes";
 
 export const CREDENTIALS_PROTOCOL = 1;
 export const CREDENTIALS_PROTOCOLS_SUPPORTED: readonly number[] = [1];
@@ -70,6 +70,7 @@ export const CREDENTIAL_DEADLINES_MS = {
   "passkeys.list": 120_000,
   "passkeys.get": 90_000,
   "passkeys.save": 300_000,
+  link: 30_000,
 } as const;
 
 export const VERB_TIMEOUTS_MS = { default: 30_000, least: 1_000, most: 900_000, killGrace: 2_000, drainGrace: 2_000 } as const;
@@ -112,11 +113,13 @@ export const GLOBAL_FLAGS: Readonly<Record<string, readonly string[]>> = {
 
 export const CLAIMED_PROGRAMS: readonly string[] = ["op", "bw", "pass-cli", "node"];
 
-export const CREDENTIAL_HANDLERS: readonly CredentialHandlerName[] = ["state", "signIn", "unlock", "signOut", "configure", "list", "reveal", "save", "edit", "addTotp", "passkeys.list", "passkeys.get", "passkeys.save"];
+export const CREDENTIAL_HANDLERS: readonly CredentialHandlerName[] = ["state", "signIn", "unlock", "signOut", "configure", "list", "reveal", "save", "edit", "addTotp", "passkeys.list", "passkeys.get", "passkeys.save", "link"];
 
 export const REQUIRED_CREDENTIAL_HANDLERS: readonly CredentialHandlerName[] = ["state", "signIn", "unlock", "signOut", "list", "reveal"];
 
 export const CREDENTIAL_CAPABILITIES: readonly CredentialCapability[] = ["totp", "save", "edit", "addTotp", "passkeys", "selfHosted", "masterPassword", "touchID"];
+
+export const CREDENTIAL_PASSKEY_ROUTES: readonly CredentialPasskeyVia[] = ["system", "extension"];
 
 export const CAPABILITY_HANDLERS: Readonly<Record<CredentialCapability, readonly (readonly CredentialHandlerName[])[]>> = {
   totp: [],

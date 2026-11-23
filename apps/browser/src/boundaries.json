@@ -1574,6 +1574,15 @@
    "detected": false
   },
   {
+   "id": "plugin-credentials:app-link",
+   "source": "plugin",
+   "guard": "A credential plugin's link for an item is opened only when the manifest declares app links: an https url under one of its appLinks prefixes, on that prefix's host, with no user info, spaces, control or direction characters, at most 2048 characters (CredentialResults.appLink); the shared hostile inputs run through it in packages/ardiacore/tests/credential-output.test.swift",
+   "checks": [
+    "packages/ardiacore/ios/CredentialResults.swift#appLink"
+   ],
+   "detected": false
+  },
+  {
    "id": "other-app:credential-cli-output",
    "source": "other-app",
    "guard": "A password manager's CLI output is parsed natively by the verb's output mode with byte caps, the secrets the verb consumed are redacted from everything returned, and a line shown in Ardia is the first visible line, control and direction characters dropped, at most 240 characters (CredentialWording.cleanedDetail); the shared hostile inputs run through it in packages/ardiacore/tests/credential-output.test.swift",

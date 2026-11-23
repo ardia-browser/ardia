@@ -589,6 +589,53 @@
                   ]
                 }
               },
+              "passkeys": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 2,
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "via": {
+                          "const": "system",
+                          "description": "The passkeys live in the manager's Mac app, which signs them as a macOS AutoFill provider"
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "via"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "via": {
+                          "const": "extension",
+                          "description": "The passkeys are signed by the manager's browser extension; Ardia lists them and hands the request to it"
+                        },
+                        "extensions": {
+                          "type": "array",
+                          "minItems": 1,
+                          "maxItems": 4,
+                          "uniqueItems": true,
+                          "items": {
+                            "type": "string",
+                            "pattern": "^[a-p]{32}$"
+                          }
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "via",
+                        "extensions"
+                      ]
+                    }
+                  ]
+                },
+                "description": "Where this manager's passkeys are signed when Ardia never holds their keys, in order of preference. Not with the passkeys capability"
+              },
               "signIn": {
                 "type": "object",
                 "properties": {

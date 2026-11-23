@@ -122,6 +122,24 @@ export const credentialProviderSchema: JsonSchema = {
       readsOffline: { ...bool, default: true },
       approvalLastsSeconds: { type: "integer", minimum: 1, maximum: 86400 },
       capabilities: { type: "array", maxItems: 8, uniqueItems: true, items: { enum: CAPABILITIES } },
+      passkeys: {
+        type: "array",
+        minItems: 1,
+        maxItems: 2,
+        items: {
+          anyOf: [
+            closed({ via: { const: "system", description: "The passkeys live in the manager's Mac app, which signs them as a macOS AutoFill provider" } }, ["via"]),
+            closed(
+              {
+                via: { const: "extension", description: "The passkeys are signed by the manager's browser extension; Ardia lists them and hands the request to it" },
+                extensions: { type: "array", minItems: 1, maxItems: 4, uniqueItems: true, items: { type: "string", pattern: "^[a-p]{32}$" } },
+              },
+              ["via", "extensions"],
+            ),
+          ],
+        },
+        description: "Where this manager's passkeys are signed when Ardia never holds their keys, in order of preference. Not with the passkeys capability",
+      },
       signIn,
       cli,
     },

@@ -211,6 +211,7 @@ public final class CredentialRunEndpoint: @unchecked Sendable {
       guard let options = CredentialLimits.capabilityHandlers[capability] else { continue }
       if !options.contains(where: { option in option.allSatisfy(handlers.contains) }) { return wording.unhandledCapability(capability) }
     }
+    if !contribution.appLinks.isEmpty, !handlers.contains("link") { return wording.missingHandler("link") }
     return nil
   }
 

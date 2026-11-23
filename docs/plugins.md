@@ -843,6 +843,31 @@ as the authority, natively from the same verified manifest bytes the official st
   becomes the session) or `stream`. Commands that run programs, write files, open servers or mint credentials
   (`op run`, `op inject`, `bw serve`, `bw send`, `pass-cli ssh-agent`, …) are refused whatever the catalog says, at parse
   and again at run time after skipping the CLI's global flags.
+- **A secret in argv, only when a verb opts in.** A secret normally goes in env or stdin. A verb that sets
+  `"argvSecrets": true` may put one secret slot in argv as `{ "slot": "password", "prefix": "password=" }`, which
+  renders as one argument, the prefix followed by the value (`op item edit <id> password=…`, the only way `op` sets a
+  field without a JSON template, which would erase the item's passkey). The prefix is a literal of 1 to 64 printable
+  ASCII characters ending in `=` (`one-time password[otp]=` is fine); the slot takes a handle, like any secret slot;
+  a value with NUL, CR or LF, or over 4 KB, is refused (`password for item.assign can't go in argv with NUL or a line
+  break.`), and without `argvSecrets` the element is a manifest problem. The value is redacted from everything the
+  verb returns, and Ardia never logs or echoes argv. **The trade-off:** while the command runs, any process of the same
+  user can read its arguments (`ps`), and so can whatever records process launches: MDM and EDR agents, Endpoint
+  Security clients, `log` and crash reports. Use it only where the CLI offers no other way, and keep every other
+  secret in env or stdin. The owner approved it for 1Password's password and code edits.
+- **Passkeys signed elsewhere.** `"passkeys": [{ "via": "extension", "extensions": ["<id>"] }, { "via": "system" }]`
+  says the manager signs its own passkeys and Ardia never holds their keys, in order of preference (1 or 2 routes,
+  each once; 1 to 4 Chrome extension ids). `system`: the manager's Mac app answers as a macOS AutoFill passkey
+  provider, through Ardia's system route (1Password). `extension`: the manager's browser extension signs; the plugin
+  lists metadata on its items' `passkeys` (credentialId as base64url of the raw id, rpId, userName, displayName,
+  counter 0) and Ardia hands the request to that extension (Proton Pass). Such a provider has no `passkeys.get` or
+  `passkeys.save`, and the list can't go with the `passkeys` capability, which is for managers that keep keys Ardia
+  signs with (`docs/password-managers.md` › Passkeys).
+- **Open in the manager's app.** `"appLinks": ["https://start.1password.com/open/i?"]` (1 to 4 https prefixes with a
+  path) and a `link` handler (`{ id }` → `{ url }`) let Ardia open an item in the manager's own app, offered as
+  Open in <Manager> when an edit fails or a passkey must be changed there. Native opens the url only if it starts with
+  a declared prefix, is https on that prefix's host, has no spaces or control characters and is at most 2048
+  characters. The link carries item ids, so it never goes to telemetry. A provider that declares `appLinks` without
+  `link` doesn't start (`1Password's plugin is missing link.`).
 - **Security model.** Native code owns every credentials line: call ids, handles, sessions, the binary locator and the
   argv builder are native, and the plugin's traffic never reaches React Native JS (the app sees only `ready`). Secrets
   you type go through Ardia's native secure field and reach the plugin only as single-use handles (`{"$secret": "h7"}`),
@@ -886,7 +911,7 @@ void defineCredentialProvider({
 ```
 
 - Handlers: `state`, `signIn`, `unlock`, `signOut`, `list` and `reveal` are required; `configure`, `save`, `edit`,
-  `addTotp` and `passkeys.{list,get,save}` back the capabilities that name them. `list` may return a plain array: the
+  `addTotp` and `passkeys.{list,get,save}` back the capabilities that name them, and `link` backs `appLinks`. `list` may return a plain array: the
   SDK pages it (960 KB pages, one snapshot).
 - `ctx.cli.verb(id, params, { timeoutMs?, onItem?, onLine? })` runs a catalog verb and resolves a `VerbResult`;
   `ctx.session`, `ctx.scratch`, `ctx.preferences` and `ctx.owner.confirm` are the host's. Throw `CredentialError.locked()`,

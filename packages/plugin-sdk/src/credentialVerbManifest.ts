@@ -4,11 +4,12 @@ import { Checks, isFields, KEY, KEY_RULE, P, type Fields } from "./credentialMan
 import type { ArgvToken, CredentialVerb, OutputMode, SlotType, VerbOutput, VerbSlot, VerbUnlocks } from "./credentialManifestTypes";
 import { deniedMatch, deniedName } from "./deniedCommands";
 
-const VERB_KEYS = ["argv", "slots", "env", "stdin", "timeoutMs", "outputLimitBytes", "output", "signIn", "unlocks", "outlivesCall", "hints"];
+const VERB_KEYS = ["argv", "slots", "env", "stdin", "timeoutMs", "outputLimitBytes", "output", "signIn", "unlocks", "outlivesCall", "argvSecrets", "hints"];
 const SLOT_TYPES: readonly SlotType[] = ["id", "enum", "flag", "url", "email", "code", "secret", "json"];
 const OUTPUT_MODES: readonly OutputMode[] = ["json", "lines", "lastLineSecret", "stream"];
 const LONG_OPTION = /^--[a-z][a-z0-9-]{0,40}$/;
 const PLAIN_TOKEN = /^[^\s\u0000-\u001f\u007f]{1,256}$/;
+const ARGV_PREFIX = /^[\x20-\x7e]{0,63}=$/;
 const LIMITS = { argv: 32, slots: 16, values: 16, value: 64, hints: 16, needles: 16, needle: 120 } as const;
 const DEFAULT_OUTPUT_BYTES = CREDENTIAL_LIMITS.defaultOutputBytes;
 
@@ -63,7 +64,17 @@ function slotInArgv(c: Checks, at: string, name: unknown, slots: Readonly<Record
   return name as string;
 }
 
-function argvTokenOf(c: Checks, at: string, element: unknown, slots: Readonly<Record<string, VerbSlot>>): ArgvToken | null {
+function secretArgOf(c: Checks, at: string, element: Fields, slots: Readonly<Record<string, VerbSlot>>, argvSecrets: boolean): ArgvToken | null {
+  if (Object.keys(element).some((k) => k !== "slot" && k !== "prefix")) return (c.add(`${at} must be a token, { slot }, { flag, slot }, { flag, when } or { slot, prefix }`), null);
+  if (typeof element.prefix !== "string" || !ARGV_PREFIX.test(element.prefix)) return (c.add(`${at}.prefix must be 1 to 64 printable ASCII characters ending in =`), null);
+  const slot = typeof element.slot === "string" && Object.hasOwn(slots, element.slot) ? slots[element.slot]! : null;
+  if (slot?.type !== "secret") return (c.add(`${at}.slot: ${String(element.slot)} must be a secret slot of this verb`), null);
+  if (!argvSecrets) return (c.add(`${at}: a secret goes in argv only with argvSecrets: true, since other programs on this Mac can read it while the command runs`), null);
+  return { slot: element.slot as string, prefix: element.prefix };
+}
+
+function argvTokenOf(c: Checks, at: string, element: unknown, slots: Readonly<Record<string, VerbSlot>>, argvSecrets: boolean): ArgvToken | null {
+  if (isFields(element) && element.prefix !== undefined) return secretArgOf(c, at, element, slots, argvSecrets);
   if (typeof element === "string") return PLAIN_TOKEN.test(element) && element !== "--" ? element : (c.add(`${at} must be a plain token: no spaces, newlines, NUL or a lone --`), null);
   if (!isFields(element)) return (c.add(`${at} must be a token, { slot }, { flag, slot } or { flag, when }`), null);
   const keys = Object.keys(element);
@@ -83,10 +94,10 @@ function argvTokenOf(c: Checks, at: string, element: unknown, slots: Readonly<Re
   return flag ? { flag, slot } : { slot };
 }
 
-function argvOf(c: Checks, path: string, value: unknown, slots: Readonly<Record<string, VerbSlot>>): ArgvToken[] {
+function argvOf(c: Checks, path: string, value: unknown, slots: Readonly<Record<string, VerbSlot>>, argvSecrets: boolean): ArgvToken[] {
   if (!Array.isArray(value) || value.length < 1 || value.length > LIMITS.argv) return (c.add(`${path} must be a list of 1 to ${LIMITS.argv} tokens and slots`), []);
   if (typeof value[0] !== "string") c.add(`${path}[0] must be a plain token, the subcommand`);
-  return value.flatMap((element, i) => argvTokenOf(c, `${path}[${i}]`, element, slots) ?? []);
+  return value.flatMap((element, i) => argvTokenOf(c, `${path}[${i}]`, element, slots, argvSecrets) ?? []);
 }
 
 function outputOf(c: Checks, path: string, value: unknown): VerbOutput {
@@ -131,7 +142,7 @@ function stdinOf(c: Checks, path: string, value: unknown, slots: Readonly<Record
 }
 
 function literalProblem(program: string, argv: readonly ArgvToken[]): string | null {
-  const tokens = argv.map((t) => (typeof t === "string" ? t : "flag" in t ? `${t.flag}=` : "\u0000slot"));
+  const tokens = argv.map((t) => (typeof t === "string" ? t : "flag" in t ? `${t.flag}=` : "prefix" in t ? `${t.prefix}\u0000` : "\u0000slot"));
   const denied = deniedMatch(program, tokens);
   return denied ? `${deniedName(program, denied)} is never allowed, since ${denied.why}` : null;
 }
@@ -149,7 +160,9 @@ export function verbOf(c: Checks, path: string, value: unknown, scope: VerbScope
   if (!doc) return null;
   c.only(path, doc, VERB_KEYS, "of a verb");
   const slots = slotsOf(c, `${path}.slots`, doc.slots, scope.patterns);
-  const argv = argvOf(c, `${path}.argv`, doc.argv, slots);
+  const argvSecrets = c.flag(`${path}.argvSecrets`, doc.argvSecrets, false);
+  const argv = argvOf(c, `${path}.argv`, doc.argv, slots, argvSecrets);
+  if (argvSecrets && !argv.some((t) => typeof t === "object" && "prefix" in t)) c.add(`${path}.argvSecrets is set, but no secret goes in argv`);
   const secretSlots = new Set(Object.entries(slots).flatMap(([name, s]) => (s.type === "secret" ? [name] : [])));
   const env = envOf(c, `${path}.env`, doc.env, { inCli: false, secretSlots, cliNames: scope.cliNames });
   const stdin = stdinOf(c, `${path}.stdin`, doc.stdin, slots);
@@ -172,5 +185,5 @@ export function verbOf(c: Checks, path: string, value: unknown, scope: VerbScope
   const hints = hintsOf(c, `${path}.hints`, doc.hints);
   const denied = scope.program ? literalProblem(scope.program, argv) : null;
   if (denied) c.add(`${path}: ${denied}`);
-  return { argv, slots, env, stdin, timeoutMs, outputLimitBytes, output, signIn, unlocks, outlivesCall, hints };
+  return { argv, slots, env, stdin, timeoutMs, outputLimitBytes, output, signIn, unlocks, outlivesCall, argvSecrets, hints };
 }

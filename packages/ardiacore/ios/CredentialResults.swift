@@ -256,6 +256,16 @@ enum CredentialResults {
     var totpPeriod: Int?
   }
 
+  static func appLink(_ value: Any?, prefixes: [String]) throws -> URL {
+    let table = try record(value)
+    guard let text = table["url"] as? String, text.utf8.count <= CredentialLimits.appLinkLength,
+      !text.unicodeScalars.contains(where: { $0.properties.isWhitespace || CredentialCatalogParser.isControlOrDirection($0) }),
+      prefixes.contains(where: text.hasPrefix), let url = URL(string: text), url.scheme == "https", url.user == nil, url.password == nil,
+      let host = url.host, prefixes.contains(where: { URL(string: $0)?.host == host })
+    else { throw Invalid() }
+    return url
+  }
+
   static func revealed(_ value: Any?) throws -> Revealed {
     let table = try record(value)
     var revealed = Revealed()

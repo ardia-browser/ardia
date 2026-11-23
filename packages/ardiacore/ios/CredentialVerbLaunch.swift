@@ -115,6 +115,7 @@ struct CredentialVerbLaunch: Sendable, Equatable {
       }
     }
     var argv: [String] = []
+    var argvSecretUses: [CredentialSecretUse] = []
     for element in verb.argv {
       switch element {
       case .token(let token): argv.append(token)
@@ -127,9 +128,16 @@ struct CredentialVerbLaunch: Sendable, Equatable {
         argv.append("\(flag)=\(value)")
       case .flagWhen(let flag, let slot):
         if flags[slot] == true { argv.append(flag) }
+      case .secretArgument(let prefix, let slot):
+        guard let use = secrets[slot] else { continue }
+        if breaksArgument(use.value) {
+          return .failure(CredentialRefusal(.badRequest, "\(slot) for \(verbId) can't go in argv with NUL or a line break."))
+        }
+        argv.append(prefix + use.value)
+        if !argvSecretUses.contains(use) { argvSecretUses.append(use) }
       }
     }
-    if let unsafe = argv.first(where: { $0 == "--" || $0.contains("\0") || $0.contains("\n") || $0.contains("\r") }) {
+    if let unsafe = argv.first(where: { $0 == "--" || breaksArgument($0) }) {
       return .failure(CredentialRefusal(.denied, unsafe == "--" ? "a lone -- is never allowed, since it passes arguments through." : "an argument with NUL or a newline is never allowed."))
     }
     if let denied = deniedCommand(program: cli.name, argv: argv) {
@@ -149,7 +157,7 @@ struct CredentialVerbLaunch: Sendable, Equatable {
       case .secretSlot: continue
       }
     }
-    var used: [CredentialSecretUse] = []
+    var used = argvSecretUses
     for entry in verb.env {
       switch entry.source {
       case .literal(let value): env.append((entry.name, value))
@@ -181,6 +189,10 @@ struct CredentialVerbLaunch: Sendable, Equatable {
       CredentialVerbLaunch(
         verb: verbId, argv: argv, env: env, stdin: stdin, timeoutMs: timeout, outputLimitBytes: verb.outputLimitBytes, signIn: verb.signIn, secrets: used,
         stdinTexts: stdinTexts, testFolders: folders))
+  }
+
+  static func breaksArgument(_ text: String) -> Bool {
+    text.unicodeScalars.contains { $0 == "\0" || $0 == "\n" || $0 == "\r" }
   }
 
   static func describe(_ type: CredentialVerb.SlotType) -> String {

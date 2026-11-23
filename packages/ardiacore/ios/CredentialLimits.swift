@@ -60,15 +60,17 @@ enum CredentialLimits {
 
   static let deadlines: [String: TimeInterval] = [
     "state": 45, "signIn": 180, "unlock": 120, "signOut": 30, "configure": 60, "list": 240, "reveal": 90, "save": 300, "edit": 300,
-    "addTotp": 300, "passkeys.list": 120, "passkeys.get": 90, "passkeys.save": 300,
+    "addTotp": 300, "passkeys.list": 120, "passkeys.get": 90, "passkeys.save": 300, "link": 30,
   ]
 
   static let verbTimeout = (standard: 30_000, least: 1_000, most: 900_000)
 
   static let handlers = [
-    "state", "signIn", "unlock", "signOut", "configure", "list", "reveal", "save", "edit", "addTotp", "passkeys.list", "passkeys.get", "passkeys.save",
+    "state", "signIn", "unlock", "signOut", "configure", "list", "reveal", "save", "edit", "addTotp", "passkeys.list", "passkeys.get", "passkeys.save", "link",
   ]
   static let requiredHandlers = ["state", "signIn", "unlock", "signOut", "list", "reveal"]
+
+  static let appLinkLength = 2048
 
   static let capabilities = ["totp", "save", "edit", "addTotp", "passkeys", "selfHosted", "masterPassword", "touchID"]
   static let capabilityHandlers: [String: [[String]]] = [

@@ -264,3 +264,35 @@ struct CredentialHostileOutputTests {
     }
   }
 }
+
+@Suite("An item's link into its manager's app")
+struct CredentialAppLinkTests {
+  static let prefixes = ["https://start.1password.com/open/i?"]
+
+  @Test func `a link under a declared prefix is the url Ardia opens`() throws {
+    let url = try CredentialResults.appLink(["url": "https://start.1password.com/open/i?a=ACC&v=VLT&i=ITEM&h=my.1password.com"], prefixes: Self.prefixes)
+    #expect(url.host == "start.1password.com")
+  }
+
+  @Test("A link Ardia won't open", arguments: [
+    "https://start.1password.com.evil.example/open/i?i=1", "https://evil.example/?https://start.1password.com/open/i?", "http://start.1password.com/open/i?i=1",
+    "onepassword://open/i?i=1", "https://start.1password.com/open/i?i=1\nX", "https://start.1password.com/open/i?i=1 2",
+    "https://user@start.1password.com/open/i?i=1", "https://start.1password.com/open/x?i=1",
+  ])
+  func refused(_ text: String) {
+    #expect(throws: CredentialResults.Invalid.self) { try CredentialResults.appLink(["url": text], prefixes: Self.prefixes) }
+  }
+
+  @Test func `a hostile link after a declared prefix is refused or opens as a clean https address on that host`() throws {
+    for (id, value) in try CredentialHostileOutputTests.hostile() {
+      guard let url = try? CredentialResults.appLink(["url": Self.prefixes[0] + value], prefixes: Self.prefixes) else { continue }
+      #expect(url.host == "start.1password.com", "\(id)")
+      #expect(!url.absoluteString.unicodeScalars.contains { $0.properties.isWhitespace || CredentialCatalogParser.isControlOrDirection($0) }, "\(id)")
+    }
+  }
+
+  @Test func `a link longer than Ardia opens is refused`() {
+    let long = Self.prefixes[0] + String(repeating: "a", count: CredentialLimits.appLinkLength)
+    #expect(throws: CredentialResults.Invalid.self) { try CredentialResults.appLink(["url": long], prefixes: Self.prefixes) }
+  }
+}

@@ -183,11 +183,8 @@ struct CredentialCatalogTests {
     ]
     #expect(Self.problems(Self.manifest(verbs: verbs)).sorted() == [
       "\(Self.P).cli.verbs.a.argv[1]: a secret slot can't go in argv, where other programs see it",
-      "\(Self.P).cli.verbs.a.slots.password isn't used in argv, env or stdin",
       "\(Self.P).cli.verbs.b.argv[1]: a json slot only goes in stdin",
-      "\(Self.P).cli.verbs.b.slots.item isn't used in argv, env or stdin",
       "\(Self.P).cli.verbs.c.argv[1]: a flag slot goes in a when",
-      "\(Self.P).cli.verbs.c.slots.on isn't used in argv, env or stdin",
     ].sorted())
   }
 
@@ -238,5 +235,59 @@ struct CredentialCatalogTests {
     #expect(contribution.memoryMB == 1024)
     #expect(contribution.symbol == "key.fill")
     #expect(contribution.cli.verbs.count == 10)
+  }
+}
+
+struct CredentialManifestFixture: @unchecked Sendable {
+  struct Case: @unchecked Sendable, CustomTestStringConvertible {
+    let why: String
+    let manifest: [String: Any]
+    let problems: [String]?
+
+    var testDescription: String { why }
+  }
+
+  static let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../../tests/fixtures/plugins/credential-manifests.json")
+
+  static func cases(_ group: String) throws -> [Case] {
+    let root = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+    return try #require(root[group] as? [[String: Any]]).map { raw in
+      Case(why: raw["why"] as? String ?? "", manifest: raw["manifest"] as? [String: Any] ?? [:], problems: raw["problems"] as? [String])
+    }
+  }
+
+  static func problems(_ manifest: [String: Any]) -> [String] {
+    if case .refused(let problems) = CredentialCatalogParser.parse(manifest: manifest) { return problems }
+    return []
+  }
+}
+
+@Suite("The shared credential manifest fixture, read natively")
+struct CredentialManifestFixtureTests {
+  @Test("An accepted manifest parses natively too", arguments: try CredentialManifestFixture.cases("accepted"))
+  func accepted(_ row: CredentialManifestFixture.Case) {
+    #expect(CredentialManifestFixture.problems(row.manifest) == [])
+  }
+
+  @Test("A rejected manifest gives the SDK's messages natively", arguments: try CredentialManifestFixture.cases("rejected").filter { ["passkey", "argv", "app link"].contains(where: $0.why.contains) })
+  func rejected(_ row: CredentialManifestFixture.Case) {
+    #expect(CredentialManifestFixture.problems(row.manifest) == row.problems)
+  }
+
+  @Test func `passkey routes keep their order and their extension ids`() throws {
+    let row = try #require(try CredentialManifestFixture.cases("accepted").first { $0.why.contains("through its extension, then the system") })
+    guard case .accepted(let contribution) = CredentialCatalogParser.parse(manifest: row.manifest) else {
+      Issue.record("refused")
+      return
+    }
+    #expect(contribution.passkeyRoutes == [.browserExtension(["ghmbeldphafepmbegfdlkpapadhbakde"]), .system])
+  }
+
+  @Test func `a secret placed in argv is listed for redaction, and the launch carries it as one element`() throws {
+    let fixture = try CredentialVerbFixture.shared()
+    let row = try #require(fixture.cases.first { $0.verb == "item.assign" && $0.launch != nil })
+    let launch = try fixture.build(row).get()
+    #expect(launch.secretValues == ["correct horse battery staple"])
+    #expect(launch.argv.filter { $0.contains("correct horse") } == ["password=correct horse battery staple"])
   }
 }

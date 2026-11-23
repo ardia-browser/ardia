@@ -12,6 +12,7 @@ import { startPageLinkCopies } from "../site/pageLinkCopy";
 import { startWebKitCounts } from "../telemetry/engineSwitchCounts";
 import { startNotificationResponses } from "./notificationResponses";
 import { startHandoff } from "./handoff";
+import { startReadyUpdate } from "./readyUpdate";
 import { startScripting } from "./scripting";
 import { startSiteData } from "../engines/siteData";
 import { noteReleaseNotesHeldForFirstRun } from "../telemetry/firstRunCounts";
@@ -28,6 +29,7 @@ export function startAppIntegration() {
   }
   startHandoff();
   startScripting();
+  startReadyUpdate();
   const updated = trackAppVersion();
   const firstRun = maybeStartOnboarding();
   if (updated && firstRun) noteReleaseNotesHeldForFirstRun();

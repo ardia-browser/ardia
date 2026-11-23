@@ -407,6 +407,21 @@ test("the app menu reads the engine fresh, so it offers Restart to Update after 
   assert.equal(engine.restarts, 1, "the menu's Restart to Update restarts");
 });
 
+test("the shared Restart to Update call restarts only into a ready update, and never checks or downloads", async () => {
+  const engine = fakeEngine({ kind: "deb" });
+  const window = harness({ engine });
+  await window.updater.methods.restartToUpdate();
+  assert.deepEqual([engine.restarts, window.seen.requests, engine.updates], [0, 0, []], "with nothing ready it does nothing");
+  await window.updater.check(false);
+  await settled(() => window.seen.ready.length === 1);
+  const requests = window.seen.requests;
+  await window.updater.methods.restartToUpdate();
+  assert.deepEqual([engine.restarts, window.seen.requests, engine.updates], [1, requests, ["0.2.46"]], "with an update ready it restarts into it");
+  const managedEngine = Object.assign(fakeEngine({ kind: "managed" }), { phase: "ready", version: "0.2.46", run: 1 });
+  await harness({ engine: managedEngine }).updater.methods.restartToUpdate();
+  assert.equal(managedEngine.restarts, 0, "an install a package manager owns is never restarted from here");
+});
+
 test("with automatic updates off, the automatic check offers the update once, and Update starts the same run", async () => {
   takeUpdateCounts();
   const engine = fakeEngine({ kind: "appimage" });

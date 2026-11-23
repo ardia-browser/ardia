@@ -9,12 +9,13 @@ export {
   type SystemInfo,
   type UpdaterState,
   type UpdateChannel,
+  type ReadyUpdate,
   type AppIcon,
   type HardwareInfo,
   type DiagnosticsSample,
 } from "@ardia/shell";
 import { call } from "@ardia/ardiacore";
-import { nativeModule, type AppEvent, type AppearanceMode, type OpenURLSource, type UpdateChannel } from "@ardia/shell";
+import { nativeModule, type AppEvent, type AppearanceMode, type OpenURLSource, type ReadyUpdate, type UpdateChannel } from "@ardia/shell";
 
 export type { AppEvent, OpenURLSource };
 
@@ -54,3 +55,5 @@ export const checkForUpdates = () => Updater.checkForUpdates();
 export const setAutomaticUpdateChecks = (on: boolean) => Updater.setAutomaticUpdateChecks(on);
 export const setAutomaticUpdateDownloads = (on: boolean) => Updater.setAutomaticUpdateDownloads(on);
 export const setUpdateChannel = (channel: UpdateChannel) => Updater.setUpdateChannel(channel);
+export const restartToUpdate = () => Updater.restartToUpdate();
+export const onReadyUpdate = (listener: (ready: ReadyUpdate | null) => void) => Updater.addListener("onReadyUpdate", (e) => listener(e.ready ?? null));

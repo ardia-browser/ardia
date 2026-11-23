@@ -19,7 +19,7 @@ import {
 } from "../../browser/src/state/telemetry/updateCounts.ts";
 import { consentToken, type ConsentToken } from "../../browser/src/state/telemetry/consentPeriod";
 
-export const UPDATE_METHODS = ["updaterState", "checkForUpdates", "setAutomaticUpdateChecks", "setAutomaticUpdateDownloads", "setUpdateChannel"] as const;
+export const UPDATE_METHODS = ["updaterState", "checkForUpdates", "setAutomaticUpdateChecks", "setAutomaticUpdateDownloads", "setUpdateChannel", "restartToUpdate"] as const;
 const RELEASES_METHOD = "ArdiaUpdates.releases";
 export const [, UPDATE_METHOD, STATUS_METHOD, CLAIM_METHOD, RESTART_METHOD] = SELF_UPDATE_METHODS;
 const KILL_SWITCHES_METHOD = "ArdiaShell.fetchKillSwitches";
@@ -357,6 +357,11 @@ export function linuxUpdater(deps: UpdateDeps) {
     setUpdateChannel: async (next: unknown) => {
       await remember({ channel: next === "nightly" ? "nightly" : "stable", notified: null });
       await check(true);
+    },
+    restartToUpdate: async () => {
+      const consent = consentToken();
+      const status = await engineStatus();
+      if (status?.phase === "ready" && installs(status.kind)) await restart(consent);
     },
   };
 

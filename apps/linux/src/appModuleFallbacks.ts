@@ -21,6 +21,7 @@ const APP_FALLBACKS: Record<string, Fallback> = {
   setAutomaticUpdateChecks: refuse("Automatic update checks"),
   setAutomaticUpdateDownloads: refuse("Automatic update downloads"),
   setUpdateChannel: refuse("The update channel"),
+  restartToUpdate: answer(undefined),
   setWindowActivity: refuse("Handoff"),
   share: (url, title, windowId, anchor) => shareLink(cleanUrl(text(url)), cleanLinkTitle(text(title), text(url)) || null, windowId as string | null, anchor as ShareAnchor | null),
   shareVia: (service, url, title, windowId) => shareLinkVia(service as string, cleanUrl(text(url)), cleanLinkTitle(text(title), text(url)) || null, windowId as string | null),

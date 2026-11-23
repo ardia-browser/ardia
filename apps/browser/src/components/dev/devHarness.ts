@@ -110,6 +110,9 @@ export function startDevHarness() {
     get toasts(): typeof import("../../state/app/toasts").useToasts {
       return require("../../state/app/toasts").useToasts;
     },
+    get readyUpdate(): typeof import("../../state/app/readyUpdate") {
+      return require("../../state/app/readyUpdate");
+    },
     get extensions(): typeof import("../../state/extensions/actions") {
       return { ...require("../../state/extensions/actions"), ...require("../../state/extensions/toolbarAnchors"), ...require("../../state/extensions/toolbarOrder") };
     },

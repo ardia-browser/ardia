@@ -7,6 +7,8 @@ import { lightsCenter, TOP_STRIP_LIGHTS_CENTER } from "../../state/windows/dockM
 import { useWindowChrome } from "../../state/windows/windowButtons";
 import { usePagerPages } from "../../state/windows/profilePager";
 import { DownloadsButton } from "../downloads/DownloadsButton";
+import { UpdateButton, useReadyUpdate } from "../updates/UpdateButton";
+import { UPDATE_BUTTON } from "../updates/tokens";
 import { useMinimalism } from "../../state/windows/layout";
 import { ProfileIndicator, useProfileIndicatorWidth } from "../profiles/ProfileIndicator";
 import { ClipView, ContextMenuArea, Panel, shadow, WindowDragRegion } from "../ui";
@@ -53,7 +55,8 @@ export function TopTabStrip({ width, floating = false, hidden = false, swipe = t
   const { pages } = usePagerPages(windowId);
   const minimal = useMinimalism();
   const profileChip = useProfileIndicatorWidth(PROFILE_ROOM, !minimal);
-  const controls = minimal ? profileChip : (profileChip ? profileChip + CONTROLS_GAP : 0) + DOWNLOADS_BOX;
+  const updateShown = !!useReadyUpdate() && !minimal;
+  const controls = minimal ? profileChip : (profileChip ? profileChip + CONTROLS_GAP : 0) + DOWNLOADS_BOX + (updateShown ? CONTROLS_GAP + UPDATE_BUTTON.box : 0);
   const fullScreen = useWindowFullScreen(windowId);
   const left = floating || fullScreen ? 8 : layout.trafficLightsWidth + LIGHTS_GAP;
   const room = stripCaptionRoom(floating, fullScreen);
@@ -83,6 +86,7 @@ export function TopTabStrip({ width, floating = false, hidden = false, swipe = t
             <TintInk>
               <ProfileIndicator room={PROFILE_ROOM} profileShown={!minimal} />
               {minimal ? null : <DownloadsButton windowId={windowId} />}
+              {updateShown ? <UpdateButton /> : null}
             </TintInk>
           </View>
         ) : null}

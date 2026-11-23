@@ -150,7 +150,7 @@ export function startUpdateChecks() {
   if (timer !== undefined) firstCheck = setTimeout(() => void check(false), FIRST_CHECK_AFTER_MS);
 }
 
-export const windowsUpdater: UpdaterNative = {
+export const windowsUpdater: Omit<UpdaterNative, "restartToUpdate" | "addListener"> = {
   async updaterState(): Promise<UpdaterState> {
     if (!native()) return { available: false };
     const current = identity();

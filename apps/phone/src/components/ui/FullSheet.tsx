@@ -38,15 +38,15 @@ type ListProps = {
   scrollEventThrottle: number;
 };
 
-type SheetFrame = { top: number; list: (refreshesOnPull: boolean) => ListProps };
+type SheetFrame = { top: number; fullScreen: boolean; list: (refreshesOnPull: boolean) => ListProps };
 
 const SheetFrameContext = createContext<SheetFrame | null>(null);
 
 export const useSheetFrame = (): SheetFrame | null => useContext(SheetFrameContext);
 
-type Props<T extends string> = { sheet: T | null; progress: SharedValue<number>; onDismiss: () => void; children: (shown: T) => ReactNode };
+type Props<T extends string> = { sheet: T | null; progress: SharedValue<number>; onDismiss: () => void; fullScreenSheet?: T | null; children: (shown: T) => ReactNode };
 
-export function FullSheet<T extends string>({ sheet, progress, onDismiss, children }: Props<T>) {
+export function FullSheet<T extends string>({ sheet, progress, onDismiss, fullScreenSheet = null, children }: Props<T>) {
   const insets = useSafeAreaInsets();
   const window = useWindowDimensions();
   const reduceMotion = useReduceMotion();
@@ -56,8 +56,11 @@ export function FullSheet<T extends string>({ sheet, progress, onDismiss, childr
   const shown = sheet ?? presenceShown(presence.current);
   const sheetView = useRef<ViewInstance>(null);
   useCoverFocus(sheetView, sheet === "settings");
-  const top = insets.top + (material && shown !== "settings" ? 0 : iPhoneOr(sheetLayout.iPhoneTopGap, sheetLayout.topGap));
+  const fullScreen = material && shown !== null && shown === fullScreenSheet;
+  const top = fullScreen ? 0 : insets.top + (material ? 0 : iPhoneOr(sheetLayout.iPhoneTopGap, sheetLayout.topGap));
   const bottomCorner = material ? 0 : iPhoneOr(screenCornerRadius(tabsLayout.displayCornerRadius), 0);
+  const enter = fullScreen ? materialMotion.sharedAxisIn : materialMotion.sheetEnter;
+  const exit = fullScreen ? materialMotion.sharedAxisOut : materialMotion.sheetExit;
   const [, redraw] = useState(0);
   const initialHeight = Math.max(1, window.height - top);
   const height = useSharedValue(initialHeight);
@@ -78,7 +81,7 @@ export function FullSheet<T extends string>({ sheet, progress, onDismiss, childr
     if (step.motion === "in") {
       scrollTop.value = 0;
       if (step.fromHidden) offset.value = height.value;
-      if (material) offset.value = materialMove(0, materialMotion.sheetEnter.easing, reduceMotion ? SHEET_REDUCED_MS : materialMotion.sheetEnter.durationMs);
+      if (material) offset.value = materialMove(0, enter.easing, reduceMotion ? SHEET_REDUCED_MS : enter.durationMs);
       else offset.value = reduceMotion ? withTiming(0, { duration: SHEET_REDUCED_MS, easing: tabsCurve.easeOut }) : withSpring(0, tabsMotion.sheetRise);
       return;
     }
@@ -93,7 +96,7 @@ export function FullSheet<T extends string>({ sheet, progress, onDismiss, childr
       "worklet";
       runOnJS(settle)(finished === true);
     };
-    if (material) offset.value = materialMove(height.value, materialMotion.sheetExit.easing, reduceMotion ? SHEET_REDUCED_MS : materialMotion.sheetExit.durationMs, settled);
+    if (material) offset.value = materialMove(height.value, exit.easing, reduceMotion ? SHEET_REDUCED_MS : exit.durationMs, settled);
     else
       offset.value = reduceMotion
         ? withTiming(height.value, { duration: SHEET_REDUCED_MS, easing: tabsCurve.easeInOut }, settled)
@@ -112,6 +115,8 @@ export function FullSheet<T extends string>({ sheet, progress, onDismiss, childr
   const drag = useMemo(
     () =>
       Gesture.Pan()
+        .withTestId("fullSheetDrag")
+        .enabled(!fullScreen)
         .manualActivation(true)
         .onTouchesDown((event) => {
           const first = event.allTouches[0];
@@ -139,12 +144,13 @@ export function FullSheet<T extends string>({ sheet, progress, onDismiss, childr
           if (sheetDismisses(offset.value, height.value, event.velocityY)) runOnJS(onDismiss)();
           else offset.value = material ? materialMove(0, "standard", materialDuration.short4) : withSpring(0, tabsMotion.sheetRise);
         }),
-    [onDismiss, top, material],
+    [onDismiss, top, material, fullScreen],
   );
 
   const frame = useMemo<SheetFrame>(
     () => ({
       top,
+      fullScreen,
       list: (refreshesOnPull) => ({
         scrollEventThrottle: 16,
         onScroll: (event) => {
@@ -156,11 +162,11 @@ export function FullSheet<T extends string>({ sheet, progress, onDismiss, childr
         },
       }),
     }),
-    [top],
+    [top, fullScreen],
   );
 
-  const scrim = useAnimatedStyle(() => ({ opacity: progress.value }));
-  const slide = useAnimatedStyle(() => ({ transform: [{ translateY: offset.value }] }));
+  const scrim = useAnimatedStyle(() => ({ opacity: fullScreen ? 0 : progress.value }));
+  const slide = useAnimatedStyle(() => (fullScreen ? { opacity: sheetProgress(offset.value, height.value), transform: [{ translateY: 0 }] } : { opacity: 1, transform: [{ translateY: offset.value }] }));
   const sheetMotionNow = () => {
     "worklet";
     return offset.value;
@@ -180,8 +186,10 @@ export function FullSheet<T extends string>({ sheet, progress, onDismiss, childr
           }}
           style={[
             styles.sheet,
-            { top, left: insets.left, right: insets.right, borderBottomLeftRadius: bottomCorner, borderBottomRightRadius: bottomCorner },
-            material ? { borderTopLeftRadius: materialShape.extraLarge, borderTopRightRadius: materialShape.extraLarge, backgroundColor: scheme.surfaceContainerLow } : null,
+            fullScreen
+              ? { top, left: 0, right: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, backgroundColor: scheme.surfaceContainer }
+              : { top, left: insets.left, right: insets.right, borderBottomLeftRadius: bottomCorner, borderBottomRightRadius: bottomCorner },
+            material && !fullScreen ? { borderTopLeftRadius: materialShape.extraLarge, borderTopRightRadius: materialShape.extraLarge, backgroundColor: scheme.surfaceContainerLow } : null,
             slide,
           ]}
         >

@@ -1884,12 +1884,19 @@ go back, and `app_launched.material_colors` (`not_material` while it is off) for
 
 ### Android motion and menu follow-up
 
-Settings keeps the same sheet and scroll view when Material You changes. The covered browser follows at lower
-render priority, and open menus keep their opening design through dismissal. Watch the existing
-`material_you_turned_on`, `material_you_turned_off` and drawn-menu usage counts; no new telemetry fields are sent.
+Settings keeps one container and one scroll view when Material You changes (#3559). `FullSheet` hosts Settings in
+both designs: with Material You on it presents it full screen (`fullScreenSheet`: no top gap, no corners, no drag,
+a shared-axis fade in and out), with the medium top app bar (`mediumAppBar` on the root page, the collapsing
+`MaterialMediumTitle`) and the header fill that changes once the list scrolls (`materialAppBarFill`: surfaceContainer
+at rest, surfaceContainerHigh scrolled), as the owner's design of 2026-11-20 (#2901) has it; with it off it is the
+usual sheet. Flipping the switch changes that frame in place, so the sheet doesn't slide up again, the scroll position
+stays and TalkBack focus returns to the switch. The covered browser follows at lower render priority, open menus keep
+their opening design through dismissal, and a scroll event from an earlier opening of Settings never reaches the new
+one's scroll memory or the sheet's drag guard. Watch the existing `material_you_turned_on`, `material_you_turned_off`
+and drawn-menu usage counts; no new telemetry fields are sent.
 
 - Android Settings subpages change instantly on push and Back. The top-level Settings sheet opens and dismisses
-  with its own motion. Material You uses a compact top bar with a Close button.
+  with its own motion. With Material You on, Settings is full screen with a Close button in its medium top app bar.
 - The Material tab switcher header is transparent, including in Incognito. The Tabs title and Space name use Material's 16 sp title style. The tab switcher still uses the existing `tabs_opened` count for new tabs.
 - With no open tabs, both Android designs show the same Ardia app icon on Start. Tap it to open Search. Sync
   setup is available in Settings. Watch `start_logo_taps` in `usage_counts` for how often people use the logo to

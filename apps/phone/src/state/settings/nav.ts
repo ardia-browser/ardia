@@ -28,9 +28,13 @@ export const useSettingsNav = create<SettingsNav>()(() => ({ generation: 0, open
 
 const scrolls = new Map<string, number>();
 
-export const rememberSettingsScroll = (page: string, y: number, generation: number) => {
+export const isSettingsOpening = (generation: number) => {
   const state = useSettingsNav.getState();
-  if (state.open && state.generation === generation) scrolls.set(page, y);
+  return state.open && state.generation === generation;
+};
+
+export const rememberSettingsScroll = (page: string, y: number, generation: number) => {
+  if (isSettingsOpening(generation)) scrolls.set(page, y);
 };
 
 export const settingsScroll = (page: string) => scrolls.get(page) ?? 0;

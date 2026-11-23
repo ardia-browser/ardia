@@ -1,10 +1,14 @@
-import { Platform, ScrollView, Text } from "react-native";
+import { Platform, ScrollView, StyleSheet, Text } from "react-native";
+import { getByGestureTestId } from "react-native-gesture-handler/jest-utils";
+import { getAnimatedStyle } from "react-native-reanimated";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { Surfaces } from "../App";
 import { DesignProvider, Portal, useDesign } from "../components/ui";
 import * as coverFocus from "../components/ui/coverFocus";
 import { MaterialBottomBar } from "../components/ui/MaterialBottomBar";
+import { SEEDED_SCHEMES } from "../lib/material/schemes";
 import { pages } from "../platform/pages";
+import { setDynamicScheme } from "../state/app/dynamicScheme";
 import { useBrowse } from "../state/browse/store";
 import { closeSettings, openSettings, settingsScroll } from "../state/settings/nav";
 import { currentPreferences, usePreferences } from "../state/settings/store";
@@ -37,6 +41,9 @@ type Root = ReturnType<typeof renderSurface>;
 const materialYouRow = (root: Root): ReactTestInstance | undefined =>
   root.root.findAll((node) => node.props.accessibilityLabel === "Material You" && node.props.accessibilityRole === "switch" && typeof node.props.onPress === "function")[0];
 const materialBars = (root: Root) => root.root.findAll((node) => node.type === MaterialBottomBar);
+const fullSheet = (root: Root) => root.root.findAll((node) => node.props.testID === "fullSheet" && typeof node.type === "string")[0]!;
+const hostById = (root: Root, id: string) => root.root.findAll((node) => node.props.testID === id && typeof node.type === "string")[0];
+const flat = (found: ReactTestInstance | undefined) => StyleSheet.flatten(found?.props.style) ?? {};
 const settle = () => {
   for (let frame = 0; frame < 30; frame++) act(() => jest.advanceTimersByTime(16));
 };
@@ -54,15 +61,26 @@ onAndroid("Material You is off by default: the page keeps main's bar, and Settin
 });
 
 onAndroid("turning Material You on changes the whole app at once, without a relaunch, and turning it off brings main's design back; each flip is counted", () => {
+  setDynamicScheme(null);
+  const scheme = SEEDED_SCHEMES.ardia.light;
   const root = renderSurface(<Surfaces />);
   act(() => openSettings());
-  settle();
-  const sheet = root.root.findAll((node) => node.props.testID === "fullSheet" && typeof node.type === "string")[0];
+  for (let pass = 0; pass < 4; pass++) settle();
+  const sheet = fullSheet(root);
+  const sheetTop = flat(sheet).top as number;
+  expect(sheetTop).toBeGreaterThan(40);
   const scroll = root.root.findAll((node) => node.props.testID === "settingsPage" && typeof node.type === "string")[0]!.findAll((node) => node.type === ScrollView)[0]!;
   act(() => scroll.props.onScroll({ nativeEvent: { contentOffset: { y: 120 } } }));
   act(() => materialYouRow(root)!.props.onPress());
+  expect(fullSheet(root)).toBe(sheet);
+  expect(flat(sheet)).toMatchObject({ top: 0, left: 0, right: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0 });
+  expect(getAnimatedStyle(sheet)).toMatchObject({ opacity: 1, transform: [{ translateY: 0 }] });
+  expect(flat(hostById(root, "materialTopAppBar"))).toMatchObject({ paddingTop: 40, backgroundColor: scheme.surfaceContainerHigh });
+  expect(hostById(root, "materialMediumTitle")).toBeDefined();
+  expect(hostById(root, "settingsTitle")!.props.children).toBe("Settings");
   settle();
-  expect(root.root.findAll((node) => node.props.testID === "fullSheet" && typeof node.type === "string")[0]).toBe(sheet);
+  expect(getAnimatedStyle(sheet)).toMatchObject({ opacity: 1, transform: [{ translateY: 0 }] });
+  expect(fullSheet(root)).toBe(sheet);
   expect(root.root.findAll((node) => node.props.testID === "settingsPage" && typeof node.type === "string")[0]!.findAll((node) => node.type === ScrollView)[0]!).toBe(scroll);
   expect(settingsScroll("Settings")).toBe(120);
   expect(currentPreferences().materialYou).toBe(true);
@@ -71,7 +89,11 @@ onAndroid("turning Material You on changes the whole app at once, without a rela
   expect(materialBars(root)).toHaveLength(1);
   expect(materialYouRow(root)).toBeDefined();
   act(() => materialYouRow(root)!.props.onPress());
+  expect(fullSheet(root)).toBe(sheet);
+  expect(flat(sheet).top).toBe(sheetTop);
+  expect(getAnimatedStyle(sheet)).toMatchObject({ opacity: 1, transform: [{ translateY: 0 }] });
   settle();
+  expect(getAnimatedStyle(sheet)).toMatchObject({ opacity: 1, transform: [{ translateY: 0 }] });
   expect(root.root.findAll((node) => node.props.testID === "settingsPage" && typeof node.type === "string")[0]!.findAll((node) => node.type === ScrollView)[0]!).toBe(scroll);
   expect(settingsScroll("Settings")).toBe(120);
   expect(currentPreferences().materialYou).toBe(false);
@@ -156,20 +178,38 @@ onAndroid("reopening Settings during dismissal starts a fresh scroll view at the
   unmount(root);
 });
 
-onAndroid("a final scroll event from the exiting Settings cannot seed the newly opened page", () => {
-  usePreferences.setState({ materialYou: true });
+type DragHandlers = { handlers: { onTouchesDown: (event: unknown, manager: unknown) => void; onTouchesMove: (event: unknown, manager: unknown) => void } };
+
+const dragsFromList = () => {
+  const drag = getByGestureTestId("fullSheetDrag") as unknown as DragHandlers;
+  const verdict = { activated: false, failed: false };
+  const manager = { activate: () => void (verdict.activated = true), fail: () => void (verdict.failed = true), end: () => undefined, begin: () => undefined };
+  const at = (y: number) => ({ id: 0, x: 200, y, absoluteX: 200, absoluteY: y });
+  act(() => {
+    drag.handlers.onTouchesDown({ allTouches: [at(400)], changedTouches: [at(400)] }, manager);
+    drag.handlers.onTouchesMove({ allTouches: [at(440)], changedTouches: [at(440)] }, manager);
+  });
+  return verdict;
+};
+
+onAndroid("a final scroll event from the exiting Settings cannot seed the newly opened page or block dragging the sheet down from its list", () => {
   const root = renderSurface(<Surfaces />);
   act(() => openSettings());
   settle();
   const settingsList = () => root.root.findAll((node) => node.props.testID === "settingsPage" && typeof node.type === "string")[0]!.findAll((node) => node.type === ScrollView)[0]!;
   const exitingOnScroll = settingsList().props.onScroll;
   act(() => exitingOnScroll({ nativeEvent: { contentOffset: { y: 240 } } }));
+  expect(dragsFromList()).toEqual({ activated: false, failed: true });
   act(() => closeSettings());
-  act(() => {
-    openSettings();
-    exitingOnScroll({ nativeEvent: { contentOffset: { y: 265 } } });
-  });
-  const offset = settingsList().props.contentOffset;
+  act(() => openSettings());
+  act(() => exitingOnScroll({ nativeEvent: { contentOffset: { y: 265 } } }));
+  settle();
+  expect(settingsList().props.contentOffset).toEqual({ x: 0, y: 0 });
+  expect(settingsScroll("Settings")).toBe(0);
+  expect(dragsFromList()).toEqual({ activated: true, failed: false });
+  const currentOnScroll = settingsList().props.onScroll;
+  act(() => currentOnScroll({ nativeEvent: { contentOffset: { y: 90 } } }));
+  expect(settingsScroll("Settings")).toBe(90);
+  expect(dragsFromList()).toEqual({ activated: false, failed: true });
   unmount(root);
-  expect(offset).toEqual({ x: 0, y: 0 });
 });

@@ -76,7 +76,7 @@ export function SettingsRoot() {
     void refreshPageSummariesEnabled();
   }, []);
   return (
-    <SettingsPage title={destinationWords.settings} onClose={material ? closeSettings : undefined} trailing={material ? undefined : <BarButton title={dismissWords.done} emphasized onPress={closeSettings} />}>
+    <SettingsPage title={destinationWords.settings} mediumAppBar onClose={material ? closeSettings : undefined} trailing={material ? undefined : <BarButton title={dismissWords.done} emphasized onPress={closeSettings} />}>
       {syncOffered() ? (
         <Group>
           <SyncCard stacks={stacks} />

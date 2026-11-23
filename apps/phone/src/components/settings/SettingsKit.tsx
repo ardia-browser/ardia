@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode, type Re
 import { ActivityIndicator, type GestureResponderEvent, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View, type StyleProp, type TextStyle, type ViewInstance } from "react-native";
 import Animated, { FadeIn, FadeOut, LayoutAnimationConfig, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { rememberSettingsScroll, settingsScroll, useSettingsNav } from "../../state/settings/nav";
+import { isSettingsOpening, rememberSettingsScroll, settingsScroll, useSettingsNav } from "../../state/settings/nav";
 import { MenuTrigger } from "../ui/MenuTrigger";
 import { MaterialBarButton, MaterialButtonRow, MaterialEmptyState, MaterialGroup, MaterialIconTile, MaterialMediumTitle, MaterialNavRow, MaterialPickerRow, MaterialSettingsAppBar, MaterialToggleRow, MaterialValueRow, materialMediumTitleHeight, materialSettingsListStyles } from "./MaterialSettingsKit";
 import { duration, LookBackdrop, settingsMotion, useSheetFrame, font, ink, settingsLayout, space, Symbol, tabsLayout, ToggleRow as SharedToggleRow, Tappable, smoothCorners, slotAround, controlSize, useDesign, useTheme, type MenuItem, type SymbolName } from "../ui";
@@ -32,6 +32,7 @@ export function SettingsPage({ title, onBack, onClose, leading, trailing, childr
   const sheetList = frame?.list(refresh !== null);
   const [offset, setOffset] = useState(startOffset.y);
   const collapsed = offset >= mediumTitleHeight;
+  const [scrolled, setScrolled] = useState(startOffset.y > 0);
   const [heroAway, setHeroAway] = useState(false);
   const titleShown = !heroTitle || heroAway;
   const titleOpacity = useSharedValue(titleShown ? 1 : 0);
@@ -52,7 +53,8 @@ export function SettingsPage({ title, onBack, onClose, leading, trailing, childr
           trailing={trailing}
           mediumAppBar={mediumAppBar}
           collapsed={collapsed}
-          topInset={frame ? 0 : insets.top}
+          scrolled={scrolled}
+          topInset={frame && !frame.fullScreen ? 0 : insets.top}
           leftInset={insets.left}
           rightInset={insets.right}
         />
@@ -110,9 +112,10 @@ export function SettingsPage({ title, onBack, onClose, leading, trailing, childr
           {...sheetList}
           scrollEventThrottle={16}
           onScroll={(event) => {
-            sheetList?.onScroll(event);
+            if (isSettingsOpening(generation)) sheetList?.onScroll(event);
             const y = event.nativeEvent.contentOffset.y;
             rememberSettingsScroll(title, y, generation);
+            if (y > 0 !== scrolled) setScrolled(y > 0);
             if (mediumAppBar && (y >= mediumTitleHeight) !== collapsed) setOffset(y);
             if (heroTitle) setHeroAway(y > settingsLayout.heroScrollThreshold);
           }}

@@ -15,6 +15,8 @@ const MEDIUM_TITLE_HEIGHT = 48;
 
 export const materialMediumTitleHeight = (fontScale: number) => Math.max(MEDIUM_TITLE_HEIGHT, Math.ceil(materialType.headlineMedium.lineHeight * fontScale) + 12);
 
+export const materialAppBarFill = (scheme: { surfaceContainer: string; surfaceContainerHigh: string }, scrolled: boolean) => (scrolled ? scheme.surfaceContainerHigh : scheme.surfaceContainer);
+
 type AppBarProps = {
   title: string;
   onBack?: () => void;
@@ -23,15 +25,16 @@ type AppBarProps = {
   trailing?: ReactNode;
   mediumAppBar: boolean;
   collapsed: boolean;
+  scrolled: boolean;
   topInset: number;
   leftInset: number;
   rightInset: number;
 };
 
-export function MaterialSettingsAppBar({ title, onBack, onClose, leading, trailing, mediumAppBar, collapsed, topInset, leftInset, rightInset }: AppBarProps) {
+export function MaterialSettingsAppBar({ title, onBack, onClose, leading, trailing, mediumAppBar, collapsed, scrolled, topInset, leftInset, rightInset }: AppBarProps) {
   const { scheme } = useMaterialTheme();
   return (
-    <View testID="materialTopAppBar" style={[styles.appBar, { paddingTop: topInset, paddingLeft: leftInset + 4, paddingRight: rightInset + 4, backgroundColor: scheme.surfaceContainer }]}>
+    <View testID="materialTopAppBar" style={[styles.appBar, { paddingTop: topInset, paddingLeft: leftInset + 4, paddingRight: rightInset + 4, backgroundColor: materialAppBarFill(scheme, scrolled) }]}>
       <View style={styles.appBarRow}>
         {onBack ? (
           <MaterialIconButton testID="materialSettingsBack" icon="arrowRight" flipped label="Back" ink={scheme.onSurface} onPress={onBack} />

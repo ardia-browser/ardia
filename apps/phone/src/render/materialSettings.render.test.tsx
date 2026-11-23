@@ -2,6 +2,7 @@ import { Platform, ScrollView, StyleSheet } from "react-native";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { Surfaces } from "../App";
 import { SettingsView } from "../components/settings/SettingsView";
+import { materialAppBarFill } from "../components/settings/MaterialSettingsKit";
 import { DesignProvider } from "../components/ui";
 import { SEEDED_SCHEMES } from "../lib/material/schemes";
 import { setDynamicScheme } from "../state/app/dynamicScheme";
@@ -10,6 +11,7 @@ import { closeSettings, openSettings, pushSettings, useSettingsNav } from "../st
 import { currentPreferences, loadPreferences, setPreference } from "../state/settings/store";
 import { classicOnAndroid, renderSurface, unmount, withTabs, withMaterialYou } from "../../test/render/harness";
 import { pages } from "../platform/pages";
+import { closeArchive, openArchive } from "../state/browse/store";
 
 withMaterialYou();
 
@@ -43,16 +45,26 @@ const settings = () =>
     </DesignProvider>,
   );
 
-onAndroid("Material Settings uses a compact top app bar inside a bottom sheet", () => {
+type Detected = { toGestureArray?: () => { config: { testId?: string; enabled?: boolean } }[] };
+const sheetDragEnabled = (root: Root) =>
+  root.root
+    .findAll((found) => typeof (found.props.gesture as Detected | undefined)?.toGestureArray === "function")
+    .flatMap((found) => (found.props.gesture as Required<Detected>).toGestureArray())
+    .filter((gesture) => gesture.config.testId === "fullSheetDrag")
+    .map((gesture) => gesture.config.enabled !== false)
+    .pop();
+
+onAndroid("Material Settings fills the screen with a 112 dp medium top app bar, no sheet gap, corners or drag", () => {
   const root = settings();
-  expect(flat(node(root, "fullSheet"))).toMatchObject({ top: 50, bottom: 0 });
+  expect(flat(node(root, "fullSheet"))).toMatchObject({ top: 0, left: 0, right: 0, bottom: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0, backgroundColor: LIGHT.surfaceContainer });
   expect(node(root, "fullSheet")!.props.accessibilityViewIsModal).toBe(true);
+  expect(sheetDragEnabled(root)).toBe(false);
   expect(flat(node(root, "materialSettingsPage")).backgroundColor).toBe(LIGHT.surfaceContainer);
   const bar = node(root, "materialTopAppBar")!;
-  expect(flat(bar).backgroundColor).toBe(LIGHT.surfaceContainer);
+  expect(flat(bar)).toMatchObject({ paddingTop: 40, backgroundColor: LIGHT.surfaceContainer });
   expect(flat(bar.findAll((found) => typeof found.type === "string" && flat(found).minHeight === 64)[0])).toMatchObject({ minHeight: 64 });
-  expect(node(root, "materialMediumTitle")).toBeUndefined();
-  expect(node(root, "settingsTitle")!.props.children).toBe("Settings");
+  expect(flat(node(root, "materialMediumTitle"))).toMatchObject({ height: 48, fontSize: 28, color: LIGHT.onSurface });
+  expect(node(root, "settingsTitle")!.props.children).toBeNull();
   const row = node(root, "materialSettingsRow:Search Engine")!;
   expect(flat(row).minHeight).toBeGreaterThanOrEqual(56);
   expect(pressable(root, "materialSettingsRow:Search Engine").props.android_ripple).toMatchObject({ borderless: false });
@@ -62,16 +74,30 @@ onAndroid("Material Settings uses a compact top app bar inside a bottom sheet", 
   unmount(root);
 });
 
-onAndroid("the Material Settings top bar keeps its color while scrolling", () => {
+onAndroid("the app bar takes surfaceContainerHigh once the list scrolls under it, as Material's top app bar does", () => {
   const root = settings();
   const list = node(root, "materialSettingsPage")!.findAll((found) => found.type === ScrollView)[0]!;
   act(() => list.props.onScroll({ nativeEvent: { contentOffset: { x: 0, y: 80 } } }));
-  expect(flat(node(root, "materialTopAppBar")).backgroundColor).toBe(LIGHT.surfaceContainer);
+  expect(flat(node(root, "materialTopAppBar")).backgroundColor).toBe(LIGHT.surfaceContainerHigh);
   expect(node(root, "settingsTitle")!.props.children).toBe("Settings");
   expect(flat(node(root, "settingsTitle"))).toMatchObject({ fontSize: 22 });
   act(() => list.props.onScroll({ nativeEvent: { contentOffset: { x: 0, y: 0 } } }));
-  expect(node(root, "settingsTitle")!.props.children).toBe("Settings");
+  expect(node(root, "settingsTitle")!.props.children).toBeNull();
   expect(flat(node(root, "materialTopAppBar")).backgroundColor).toBe(LIGHT.surfaceContainer);
+  expect(materialAppBarFill(LIGHT, false)).toBe(LIGHT.surfaceContainer);
+  unmount(root);
+});
+
+onAndroid("Archive keeps the Material bottom sheet, with its top gap, corners and drag", () => {
+  act(() => closeSettings());
+  act(() => jest.runOnlyPendingTimers());
+  act(() => openArchive());
+  const root = settings();
+  const sheet = flat(node(root, "fullSheet"));
+  expect(sheet.top).toBe(40);
+  expect(sheet.borderTopLeftRadius).toBe(28);
+  expect(sheetDragEnabled(root)).toBe(true);
+  act(() => closeArchive());
   unmount(root);
 });
 

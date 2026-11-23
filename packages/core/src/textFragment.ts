@@ -68,7 +68,9 @@ export function chooseTextFragment(context: SelectionContext): TextFragment | nu
   return { prefix: beforeWords.slice(-RANGE_WORDS).join(" "), start, end };
 }
 
-const encodeTerm = (s: string) => encodeURIComponent(s).replace(/-/g, "%2D");
+const wellFormed = (s: string) => s.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDFFF]/g, (unit) => (unit.length === 2 ? unit : "\uFFFD"));
+
+const encodeTerm = (s: string) => encodeURIComponent(wellFormed(s)).replace(/-/g, "%2D");
 
 function textDirective({ prefix, start, end, suffix }: TextFragment): string {
   const parts = [prefix && `${encodeTerm(prefix)}-`, encodeTerm(start), end && encodeTerm(end), suffix && `-${encodeTerm(suffix)}`];

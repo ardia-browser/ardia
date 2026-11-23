@@ -103,6 +103,8 @@ const MODULE_FALLBACKS: Record<string, Record<string, Fallback>> = {
     storageRead: answer({ status: "error", reason: "plugins aren't available on Linux yet" }),
     storageWrite: answer({ ok: false, reason: "plugins aren't available on Linux yet" }),
     readPluginFile: answer({ ok: false, reason: "plugins aren't available on Linux yet" }),
+    setCredentialProvider: answer({ ok: false, reason: "password manager plugins are Mac-only" }),
+    forgetCredentialProvider: answer({ ok: false, reason: "password manager plugins are Mac-only" }),
   },
   ArdiaAutomation: { start: answer({ state: "off", generation: 0, path: "", reason: "the control socket is unavailable on Linux" }), stop: answer(undefined) },
   ArdiaSystemSignals: {

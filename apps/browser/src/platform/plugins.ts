@@ -20,6 +20,7 @@ import {
   type PluginStartSpec,
   type PluginStorageReadResult,
 } from "@ardia/shell";
+import { PLATFORM_FEATURES } from "../lib/platformFeatures";
 
 export type {
   CredentialProviderResult,
@@ -75,6 +76,13 @@ export const writePluginStorage = (name: string, text: string) => Plugins().stor
 export const readPluginFile = (name: string, folderId: string, approved: string, path: string) => Plugins().readPluginFile(name, folderId, approved, path);
 export const onPluginLine = (listener: (e: PluginLine) => void) => Plugins().addListener("onLine", listener);
 export const onPluginExit = (listener: (e: PluginExit) => void) => Plugins().addListener("onExit", listener);
-export const setCredentialProvider = (name: string, enabled: boolean) => Plugins().setCredentialProvider(name, enabled);
-export const forgetCredentialProvider = (name: string) => Plugins().forgetCredentialProvider(name);
-export const onCredentialRunWanted = (listener: (e: CredentialRunWanted) => void) => Plugins().addListener("onCredentialRunWanted", listener);
+const credentialProvidersHere = () => PLATFORM_FEATURES.plugins;
+const credentialProvidersAbsent: CredentialProviderResult = { ok: false, reason: "password manager plugins are Mac-only" };
+const noCredentialRuns = { remove: () => {} };
+
+export const setCredentialProvider = (name: string, enabled: boolean): Promise<CredentialProviderResult> =>
+  credentialProvidersHere() ? Plugins().setCredentialProvider(name, enabled) : Promise.resolve(credentialProvidersAbsent);
+export const forgetCredentialProvider = (name: string): Promise<CredentialProviderResult> =>
+  credentialProvidersHere() ? Plugins().forgetCredentialProvider(name) : Promise.resolve(credentialProvidersAbsent);
+export const onCredentialRunWanted = (listener: (e: CredentialRunWanted) => void) =>
+  credentialProvidersHere() ? Plugins().addListener("onCredentialRunWanted", listener) : noCredentialRuns;

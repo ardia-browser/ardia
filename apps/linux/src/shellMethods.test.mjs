@@ -599,3 +599,17 @@ test("Linux never reports screenEdge: its edge watch peeks when the pointer leav
   const shell = readFileSync(new URL("./shims/web/motion/sidebarEdge.ts", import.meta.url), "utf8");
   assert.ok(!shell.includes("screenEdge"));
 });
+
+test("password manager plugins answer a clean refusal on Linux and their run events subscribe without failing", async () => {
+  const host = linuxHost();
+  for (const [method, args] of [["setCredentialProvider", ["bitwarden", true]], ["forgetCredentialProvider", ["bitwarden"]]]) {
+    const resolved = resolveHostModule(host, "ArdiaPlugins", method);
+    assert.equal(reachesNativeHostUnchecked(resolved), false);
+    const answer = await resolved(...args);
+    assert.equal(answer.ok, false);
+    assert.match(answer.reason, /Mac-only/);
+  }
+  const subscription = requireNativeModule("ArdiaPlugins").addListener("onCredentialRunWanted", () => assert.fail("no credential run on Linux"));
+  assert.equal(typeof subscription.remove, "function");
+  subscription.remove();
+});

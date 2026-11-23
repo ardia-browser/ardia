@@ -28,3 +28,17 @@ test("a profile's Passwords page shows the app-wide manager settings only while 
   assert.ok(flag, "the page decides from the profile's own choice");
   assert.match(page, new RegExp(`\\{${flag} \\? <ForAllProfilesSection`));
 });
+
+test("password manager plugins never reach native where plugins don't run, and their run events are a no-op there", async () => {
+  const linux = await import("../../lib/platformFeatures.linux.ts");
+  const windows = await import("../../lib/platformFeatures.windows.ts");
+  assert.equal(linux.PLATFORM_FEATURES.plugins, false);
+  assert.equal(windows.PLATFORM_FEATURES.plugins, false);
+  const bridge = source("../../platform/plugins.ts");
+  assert.match(bridge, /const credentialProvidersHere = \(\) => PLATFORM_FEATURES\.plugins;/);
+  for (const call of ["setCredentialProvider", "forgetCredentialProvider"]) {
+    assert.match(bridge, new RegExp(`export const ${call} = [^\\n]*\\n\\s+credentialProvidersHere\\(\\) \\? Plugins\\(\\)\\.${call}\\([^)]*\\) : Promise\\.resolve\\(credentialProvidersAbsent\\);`));
+  }
+  assert.match(bridge, /export const onCredentialRunWanted = [^\n]*\n\s+credentialProvidersHere\(\) \? Plugins\(\)\.addListener\("onCredentialRunWanted", listener\) : noCredentialRuns;/);
+  assert.match(source("../plugins/credentialProviders.ts"), /export function watchCredentialProviders\(\) \{\n\s+if \(watching \|\| !PLATFORM_FEATURES\.plugins\) return;/);
+});

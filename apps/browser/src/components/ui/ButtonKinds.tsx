@@ -40,18 +40,23 @@ export function StepperButtonView({ icon, onPress, width = stepperSize.width, he
               borderRadius: radii.control,
               alignItems: "center",
               justifyContent: "center",
-              borderWidth: StyleSheet.hairlineWidth * 2,
-              borderColor: theme.controlBorder,
             }}
           >
-            <HoverSwap shown={!disabled && (pressed || hovered)} rest={theme.control} color={pressed ? theme.controlPressed : theme.controlHover} radius={radii.control} underBorder={StyleSheet.hairlineWidth * 2} />
+            <HoverSwap shown={!disabled && (pressed || hovered)} rest={theme.control} color={pressed ? theme.controlPressed : theme.controlHover} radius={radii.control} />
             <ScaledGlyph scale={pressMotion.scale} size={12}><Symbol name={icon} size={10} weight="semibold" color={theme.icon} style={{ width: 12, height: 12 }} /></ScaledGlyph>
+            <ControlEdge color={theme.controlBorder} />
           </View>
         )}
       </Pressable>
     </View>
   );
 }
+
+function ControlEdge({ color }: { color: string }) {
+  return <View pointerEvents="none" style={[CONTROL_EDGE, { borderColor: color, borderRadius: radii.control }]} />;
+}
+
+const CONTROL_EDGE = { ...StyleSheet.absoluteFillObject, borderWidth: StyleSheet.hairlineWidth * 2 } as const;
 
 const CHIP_DIM = 0.85;
 
@@ -223,11 +228,9 @@ export function PushButtonView({ title, onPress, kind = "default", disabled, ico
               justifyContent: "center",
               gap: space.xs,
               backgroundColor: primary ? (pressed && !busy ? theme.formAccentPressed : theme.formAccent) : undefined,
-              borderWidth: plain || primary ? 0 : StyleSheet.hairlineWidth * 2,
-              borderColor: theme.controlBorder,
             }, scaleStyle]}
           >
-            {plain || primary ? null : <HoverSwap shown={!disabled && !busy && (pressed || hovered)} rest={theme.control} color={pressed ? theme.controlPressed : theme.controlHover} radius={radii.control} underBorder={StyleSheet.hairlineWidth * 2} />}
+            {plain || primary ? null : <HoverSwap shown={!disabled && !busy && (pressed || hovered)} rest={theme.control} color={pressed ? theme.controlPressed : theme.controlHover} radius={radii.control} />}
             {icon && !busy ? <Symbol name={icon} size={11} color={textColor} style={{ width: 13, height: 13 }} /> : null}
             {busyProp === undefined ? (
               <TitleSwap title={title} reserve={reserve} centersCapitals={!plain} style={textStyle} />
@@ -236,6 +239,7 @@ export function PushButtonView({ title, onPress, kind = "default", disabled, ico
                 <TitleSwap title={title} reserve={reserve} centersCapitals={!plain} style={textStyle} />
               </BusySwap>
             )}
+            {plain || primary ? null : <ControlEdge color={theme.controlBorder} />}
           </Animated.View>
         )}
       </Pressable>

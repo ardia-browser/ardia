@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { Animated, Pressable, View } from "react-native";
-import { Symbol, useHover } from "../ui";
+import { Symbol, useHover, tapActivates } from "../ui";
 import { useTheme } from "../ui/theme";
 import { WINDOW_CHROME, WINDOW_CONTROLS, windowButtonsChoosable, windowButtonsFor, windowControlsDrawn, windowControlsWidth, type WindowButton } from "../../lib/windowChrome";
 import { useWindowChrome } from "../../state/windows/windowButtons";
@@ -36,7 +36,7 @@ function ControlButton({ kind, width, height, radius, ink, onPress }: { kind: Ki
   const close = kind === "close";
   return (
     <View {...hoverProps}>
-      <Pressable focusable onPress={onPress} accessibilityRole="button" accessibilityLabel={LABEL[kind]}>
+      <Pressable focusable onPress={onPress} onAccessibilityTap={tapActivates(onPress)} accessibilityRole="button" accessibilityLabel={LABEL[kind]}>
         {({ pressed }) => (
           <View
             style={{

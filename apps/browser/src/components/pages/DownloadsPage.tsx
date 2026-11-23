@@ -14,7 +14,8 @@ import { downloadMenu } from "../../state/downloads/downloadMenu";
 import { downloadStatus } from "../../state/downloads/status";
 import { Box, Button, EmptyState, MouseArea, opacity, ProgressTrack, space, Text, useHover } from "../ui";
 import { hostLabel, matchesQuery, PAGE_WIDTH, PageHeader } from "./PageLayout";
-import { downloadCard, pageList, pageType } from "./tokens";
+import { DOWNLOADS_LIST } from "../downloads/tokens";
+import { downloadCard, pageList } from "./tokens";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
 
 export function DownloadsPage({ tabId }: { tabId: string }) {
@@ -33,8 +34,8 @@ export function DownloadsPage({ tabId }: { tabId: string }) {
       />
       {shown.length === 0 ? (
         <EmptyState
-          symbol="arrow.down.circle"
-          title={query ? "No search results found" : "Files you download appear here"}
+          symbol={query ? "magnifyingglass" : "arrow.down.circle"}
+          title={query ? "No results" : "Files you download appear here"}
         />
       ) : (
         <FlatList
@@ -72,7 +73,7 @@ function DownloadCard({ d: listed, windowId }: { d: Download; windowId: string }
                 lines={1}
                 weight="medium"
                 tone={exists ? "textPrimary" : "textSecondary"}
-                style={{ ...pageType.fileName, textDecorationLine: exists ? "none" : "line-through" }}
+                style={{ lineHeight: DOWNLOADS_LIST.nameLine, textDecorationLine: exists ? "none" : "line-through" }}
               >
                 {d.filename || "Preparing…"}
               </Text>
@@ -84,13 +85,12 @@ function DownloadCard({ d: listed, windowId }: { d: Download; windowId: string }
             </Pressable>
             {d.state === "downloading" && !blocked && (
               <ProgressTrack
-                value={Math.max(progress, downloadCard.progressMin)}
-                height={downloadCard.progressHeight}
+                value={Math.max(progress, DOWNLOADS_LIST.progressMin)}
                 tone={d.paused ? "textTertiary" : "accent"}
                 style={PROGRESS}
               />
             )}
-            <Text lines={1} size="small" tone={blocked ? "destructive" : "textSecondary"}>
+            <Text lines={1} size="caption" tone={blocked ? "destructive" : "textSecondary"} style={{ lineHeight: DOWNLOADS_LIST.statusLine }}>
               {downloadStatus(d, exists)}
             </Text>
           </View>

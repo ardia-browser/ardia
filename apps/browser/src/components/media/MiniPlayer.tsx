@@ -109,7 +109,7 @@ function TransportButton({
         {({ pressed }) => (
           <View style={{ width: box, height: 38, alignItems: "center", justifyContent: "center", opacity: hovered ? (pressed ? 0.82 : 1) : 0.6 }}>
             <Animated.View pointerEvents="none" style={pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : undefined}>
-              <Symbol name={icon} size={size} color={hex(tokens.label)} style={{ width: box, height: 38 }} />
+              <Symbol name={icon} size={size} color={hex(tokens.glyph)} style={{ width: box, height: 38 }} />
             </Animated.View>
           </View>
         )}
@@ -180,7 +180,7 @@ function AlbumArt({
         <Pressable onPress={onUnmute} onPressIn={unmuteMotion.onPressIn} onPressOut={unmuteMotion.onPressOut} tooltip="Unmute Site" style={{ position: "absolute", right: -5, bottom: -5 }}>
           <Animated.View pointerEvents="none" style={unmuteMotion.scale ? { transform: [{ scale: unmuteMotion.scale }] } : undefined}>
             <Dot size={20} color={tokens.background}>
-              <Symbol name="speaker.slash.fill" size={10} color={hex(tokens.label)} style={{ width: 16, height: 16 }} />
+              <Symbol name="speaker.slash.fill" size={10} color={hex(tokens.glyph)} style={{ width: 16, height: 16 }} />
             </Dot>
           </Animated.View>
         </Pressable>

@@ -16,7 +16,7 @@ import { BarButton, BarItem, ImportButton } from "./BarItem";
 import { measureRect, useEased, useSlide } from "./barMotion";
 import { openBarMenu } from "../../state/bookmarks/barMenus";
 import { useBarSize, useBookmarksBarHeight } from "./barSize";
-import { bookmarksBar, type BarSize } from "./tokens";
+import { bookmarkDrag, bookmarksBar, type BarSize } from "./tokens";
 
 export const BookmarksBar = memo(function BookmarksBar({ tabId, placeholder }: { tabId: string; placeholder?: boolean }) {
   const windowId = useWindowId();
@@ -266,9 +266,9 @@ function DropLine({ x, size, color }: { x: number | null; size: BarSize; color: 
         position: "absolute",
         top: bookmarksBar.dropLineInset,
         height: size.item - bookmarksBar.dropLineInset * 2,
-        width: bookmarksBar.dropLine,
-        marginLeft: -bookmarksBar.dropLine / 2,
-        borderRadius: bookmarksBar.dropLineRadius,
+        width: bookmarkDrag.line,
+        marginLeft: -bookmarkDrag.line / 2,
+        borderRadius: bookmarkDrag.lineRadius,
         backgroundColor: color,
         opacity: shown,
         transform: [{ translateX: left }],

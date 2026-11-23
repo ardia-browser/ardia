@@ -1,7 +1,7 @@
 import type { Suggestion } from "@ardia/core";
 import { memo } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import { Symbol, Text, useHover, useTheme } from "../ui";
+import { Symbol, Text, useHover, useTheme, tapActivates } from "../ui";
 import { GlassFill, useGlass } from "../ui/Glass";
 import { BAR_TYPE, GO_BUTTON } from "./tokens";
 
@@ -19,7 +19,7 @@ export const GoButton = memo(function GoButton({ label, enabled, onPress }: { la
   const text = theme[tone];
   return (
     <View {...hoverProps} style={{ marginLeft: GO_BUTTON.before }}>
-      <Pressable onPress={onPress} disabled={!enabled} accessibilityRole="button" accessibilityLabel={label}>
+      <Pressable onPress={onPress} onAccessibilityTap={!enabled ? undefined : tapActivates(onPress)} disabled={!enabled} accessibilityRole="button" accessibilityLabel={label}>
         {({ pressed }) => (
           <View
             style={{

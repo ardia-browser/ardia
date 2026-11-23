@@ -37,7 +37,7 @@ export function CrashReportDetails() {
         <IdentityRow />
       </Group>
       <KeptOnThisMac />
-      <SectionHeader title={SHARING_COPY.whatsSent} description={`Only while “${SHARING_COPY.toggle}” is on, except what’s under “Even with sharing off” and “${SHARING_COPY.keptOnThisMac}”.`} />
+      <SectionHeader title={SHARING_COPY.whatsSent} description={`Only while “${SHARING_COPY.toggle}” is on, except what's under “Even with sharing off” and “${SHARING_COPY.keptOnThisMac}”.`} />
       <WhatsSentGroups />
       <Text size="caption" tone="textTertiary" style={DETAILS_FOOTNOTE()}>
         {SHARING_COPY.footnote}
@@ -164,7 +164,7 @@ export function WhatsSentSheet() {
   useEffect(() => void refreshLegacyInstalls(), []);
   return (
     <Sheet size="l" onClose={closeSettingsSheet}>
-      <DialogTitle subtitle={`Only while “${SHARING_COPY.toggle}” is on, except what’s under “Even with sharing off”, “${SHARING_COPY.keptOnThisMac}” and “${PLUGIN_SENT_COPY.addedTitle}”.`}>{SHARING_COPY.whatsSent}</DialogTitle>
+      <DialogTitle subtitle={`Only while “${SHARING_COPY.toggle}” is on, except what's under “Even with sharing off”, “${SHARING_COPY.keptOnThisMac}” and “${PLUGIN_SENT_COPY.addedTitle}”.`}>{SHARING_COPY.whatsSent}</DialogTitle>
       <WhatsSentGroups />
       <DialogActions
         note={

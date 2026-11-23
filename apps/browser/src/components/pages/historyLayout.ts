@@ -5,8 +5,6 @@ import { historyRow } from "./tokens";
 const ROW = historyRow.height;
 const HEADER = historyRow.header;
 
-export const historyScroll = { lastAt: 0 };
-
 type Day = { label: string; offset: number };
 type Row = { entry: HistoryEntry; day: number; first: boolean; last: boolean; offset: number };
 export type Layout = { days: Day[]; rows: Row[]; height: number };

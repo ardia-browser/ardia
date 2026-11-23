@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Pressable, View } from "react-native";
 import type { PluginNode } from "../../lib/pluginProtocol";
-import { ActivitySpinner, Badge, Box, ContextMenuArea, layout, ListRow, Symbol, Text, useTheme } from "../ui";
+import { ActivitySpinner, Badge, Box, ContextMenuArea, layout, ListRow, Symbol, Text, useClosing, useLiveAction, useTheme } from "../ui";
 import { ActionMenuButton, useActionMenu } from "./SurfaceActions";
 import { Children, SurfaceIcon } from "./SurfaceBasics";
 import { SURFACE } from "./tokens";
@@ -30,11 +30,13 @@ export function SidebarSectionNode({ node }: { node: PluginNode }) {
   const collapsible = p.collapsible !== false && !!str(p.title);
   const [collapsed, setCollapsed] = useState(bool(p.defaultCollapsed));
   const title = str(p.title);
+  const closing = useClosing();
+  const live = useLiveAction();
   return (
     <Box gap="xxs">
       {title ? (
         <Box row gap="xs" padX="m" style={HEADER}>
-          <Pressable disabled={!collapsible} onPress={() => setCollapsed((c) => !c)} style={TITLE_PRESS}>
+          <Pressable disabled={!collapsible || closing} onPress={live(() => setCollapsed((c) => !c))} style={TITLE_PRESS}>
             {collapsible ? <Symbol name={collapsed ? "chevron.right" : "chevron.down"} size={SURFACE.chevron} weight="semibold" color={theme.textTertiary} style={CHEVRON} /> : null}
             <Text size="small" weight="semibold" tone="textSecondary" numberOfLines={1}>{title}</Text>
           </Pressable>
@@ -57,13 +59,15 @@ export function SidebarItemNode({ node, depth = 0 }: { node: PluginNode; depth?:
   const badge = str(p.badge);
   const role = fillToneOf(p.tone);
   const subtitle = str(p.subtitle);
+  const closing = useClosing();
+  const live = useLiveAction();
   return (
     <View>
-      <ContextMenuArea onContextMenu={actionsIn(p.actions).length ? () => void menu(p.actions) : undefined}>
+      <ContextMenuArea onContextMenu={actionsIn(p.actions).length ? live(() => void menu(p.actions)) : undefined}>
         <ListRow selected={bool(p.selected)} height={layout.rowHeight} onPress={() => (isHandlerRef(p.onPress) ? fire(p.onPress) : nested.length ? setOpen((o) => !o) : undefined)}>
           <View style={{ width: depth * SURFACE.indent }} />
           {nested.length ? (
-            <Pressable onPress={() => setOpen((o) => !o)}>
+            <Pressable disabled={closing} onPress={live(() => setOpen((o) => !o))}>
               <Symbol name={open ? "chevron.down" : "chevron.right"} size={SURFACE.chevron} weight="semibold" color={theme.textTertiary} style={CHEVRON} />
             </Pressable>
           ) : null}

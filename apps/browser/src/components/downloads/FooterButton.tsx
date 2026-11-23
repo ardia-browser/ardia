@@ -1,5 +1,5 @@
 import { Animated, Pressable, View } from "react-native";
-import { GlassFill, menuRowFill, PANEL, Symbol, Text, useGlass, useHover, useTheme } from "../ui";
+import { HoverFill, menuRowFill, PANEL, Symbol, Text, useClosing, useGlass, useHover, useLiveAction, useTheme, tapActivates } from "../ui";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
 import { DOWNLOADS_LIST } from "./tokens";
 
@@ -7,11 +7,13 @@ export function FooterButton({ title, onPress }: { title: string; onPress: () =>
   const theme = useTheme();
   const glass = useGlass();
   const { hovered, hoverProps } = useHover();
+  const closing = useClosing();
+  const live = useLiveAction();
   const pressMotion = usePressScaleMotion(true, buttonMotion.controlPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : undefined;
   return (
     <View {...hoverProps} style={{ paddingHorizontal: PANEL.rowInset }}>
-      <Pressable onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut}>
+      <Pressable disabled={closing} onPress={live(onPress)} onAccessibilityTap={tapActivates(live(onPress))} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} accessibilityRole="button">
         {({ pressed }) => (
           <Animated.View
             style={[{
@@ -20,10 +22,9 @@ export function FooterButton({ title, onPress }: { title: string; onPress: () =>
               borderRadius: PANEL.rowRadius,
               flexDirection: "row",
               alignItems: "center",
-              backgroundColor: glass || !(hovered || pressed) ? undefined : menuRowFill(theme, pressed),
             }, scaleStyle]}
           >
-            {glass && (hovered || pressed) ? <GlassFill radius={PANEL.rowRadius} state={pressed ? "pressed" : "lit"} /> : null}
+            <HoverFill shown={hovered || pressed} instant={pressed} color={menuRowFill(theme, pressed)} radius={PANEL.rowRadius} glass={glass ? (pressed ? "pressed" : "lit") : undefined} />
             <Text tone={hovered ? "textPrimary" : "textSecondary"} style={{ flex: 1 }}>
               {title}
             </Text>

@@ -1,16 +1,18 @@
 import { OutsidePressArea, showMenu, type MenuItem } from "@ardia/shell";
+import { tapActivates } from "./a11y";
 import { withIconNames } from "../../lib/activeLook";
 import { POP_UP_CHROME } from "../../lib/platformChrome";
-import { modifiersOf, type ClickModifiers } from "../../lib/keys";
 import { Symbol } from "./Symbol";
-import { useEffect, useRef, type Ref } from "react";
+import { type Ref } from "react";
 import { Animated, Pressable, StyleSheet, Text, TextInput, View, type DimensionValue, type StyleProp, type ViewStyle } from "react-native";
-import { buttonMotion, curve, duration, usePressScaleMotion } from "./motion";
+import { buttonMotion, usePressScaleMotion } from "./motion";
 import { useTheme } from "./theme";
-import { capsule, monoFace, opacity, perLook, proseLineHeight, radius, space, font as typeScale } from "./tokens";
+import { monoFace, opacity, perLook, proseLineHeight, radius, space, font as typeScale } from "./tokens";
 import { useHover } from "./useHover";
 import { useNativeForm } from "./nativeForm";
 import { useKeyDownEvents, type ExtraKeyProps } from "./fieldKeys";
+import { useLiveWhile, useClosing, useClosingField, useStillOpen } from "./Closing";
+import { useControlSize } from "./controlSize";
 
 const SEARCH_KEYS = [{ key: "Escape" }];
 const SEARCH_KEYS_WITH_ENTER = [{ key: "Escape" }, { key: "Enter" }, { key: "Enter", shiftKey: true }];
@@ -51,6 +53,9 @@ export function SearchField({
   const bare = look === "bare";
   const keyDownEvents = useKeyDownEvents(onArrow ? SEARCH_KEYS_WITH_ARROWS : onSubmit ? SEARCH_KEYS_WITH_ENTER : SEARCH_KEYS, extraKeys);
   const clearMotion = usePressScaleMotion(!!value && !bare, buttonMotion.iconPressScale);
+  const field = useClosingField(inputRef);
+  const closing = field.closing;
+  const live = useLiveWhile(closing);
   return (
     <View
       style={[
@@ -77,9 +82,10 @@ export function SearchField({
         <Symbol name="magnifyingglass" size={12} color={theme.textSecondary} style={{ width: 14, height: 14 }} />
       )}
       <TextInput
-        ref={inputRef}
+        ref={field.ref}
         value={value}
-        onChangeText={onChangeText}
+        onChangeText={live(onChangeText)}
+        editable={!closing}
         placeholder={placeholder}
         placeholderTextColor={bare ? theme.placeholder : theme.textTertiary}
         selectionColor={theme.selection}
@@ -88,19 +94,19 @@ export function SearchField({
         ardiaCentersCapitals
         onBlur={onBlur}
         keyDownEvents={keyDownEvents}
-        onKeyDown={(e) => {
+        onKeyDown={live((e) => {
           const { key, shiftKey } = e.nativeEvent;
           if (key === "Escape") (onEscape ?? (() => onChangeText("")))();
           else if (key === "Enter") onSubmit?.(!!shiftKey);
           else if (key === "ArrowDown") onArrow?.(1);
           else if (key === "ArrowUp") onArrow?.(-1);
           else if (onExtraKey?.(e.nativeEvent)) e.stopPropagation();
-        }}
+        })}
         style={{ flex: 1, ...(bare ? typeScale.title : typeScale.body), color: theme.textPrimary, paddingVertical: 0 }}
       />
       {value && !bare ? (
         <View tooltip="Clear">
-          <Pressable onPress={() => onChangeText("")} onPressIn={clearMotion.onPressIn} onPressOut={clearMotion.onPressOut}>
+          <Pressable disabled={closing} onPress={live(() => onChangeText(""))} onAccessibilityTap={tapActivates(live(() => onChangeText("")))} accessibilityRole="button" accessibilityLabel="Clear" onPressIn={clearMotion.onPressIn} onPressOut={clearMotion.onPressOut}>
             <Animated.View style={[CLEAR_GLYPH, clearMotion.scale ? { transform: [{ scale: clearMotion.scale }] } : null]}>
               <Symbol name="xmark.circle.fill" size={12} color={theme.textTertiary} style={CLEAR_GLYPH} />
             </Animated.View>
@@ -147,13 +153,17 @@ export function TextField({
   style?: StyleProp<ViewStyle>;
 }) {
   const theme = useTheme();
+  const sized = useControlSize();
   const keyDownEvents = useKeyDownEvents(onEscape ? ESCAPE_KEY : undefined, extraKeys);
+  const field = useClosingField();
+  const locked = disabled || field.closing;
+  const live = useLiveWhile(field.closing);
   return (
     <OutsidePressArea style={[{ width, opacity: disabled ? opacity.disabled : 1 }, style]}>
       <View
         style={{
-          height: multiline ? MULTILINE_HEIGHT : 24,
-          borderRadius: radius.control,
+          height: multiline ? MULTILINE_HEIGHT : sized.field,
+          borderRadius: sized.radius,
           justifyContent: multiline ? "flex-start" : "center",
           paddingHorizontal: space.m,
           paddingVertical: multiline ? space.m : 0,
@@ -163,9 +173,10 @@ export function TextField({
         }}
       >
         <TextInput
+          ref={field.ref}
           value={value}
-          onChangeText={disabled ? undefined : onChangeText}
-          editable={!disabled}
+          onChangeText={disabled ? undefined : live(onChangeText)}
+          editable={!locked}
           placeholder={placeholder}
           placeholderTextColor={theme.textTertiary}
           selectionColor={theme.selection}
@@ -177,13 +188,13 @@ export function TextField({
           ardiaCentersCapitals={!multiline}
           autoCorrect={mono ? false : undefined}
           spellCheck={mono ? false : undefined}
-          onSubmitEditing={disabled ? undefined : onSubmit}
+          onSubmitEditing={disabled ? undefined : live(onSubmit)}
           onBlur={onBlur}
           keyDownEvents={keyDownEvents}
-          onKeyDown={(e) => {
+          onKeyDown={live((e) => {
             if (e.nativeEvent.key === "Escape") onEscape?.();
             else if (onExtraKey?.(e.nativeEvent)) e.stopPropagation();
-          }}
+          })}
           style={[{ ...typeScale.body, color: theme.textPrimary, paddingVertical: 0 }, multiline && multilineText(), mono && monoFace()]}
         />
       </View>
@@ -214,6 +225,9 @@ export function PopUp<T extends string>({
   const theme = useTheme();
   const native = useNativeForm();
   const { hovered, hoverProps } = useHover();
+  const closing = useClosing();
+  const live = useLiveWhile(closing);
+  const stillOpen = useStillOpen(!closing);
   const pressMotion = usePressScaleMotion(!disabled && !native, buttonMotion.controlPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : null;
   const current = options.find((o) => o.value === value);
@@ -223,12 +237,13 @@ export function PopUp<T extends string>({
       ...(o.separatorBefore ? [{ separator: true as const }] : []),
       { id: o.value, title: o.title, checked: o.value === value },
     ]);
+    if (closing) return;
     const choice = await showMenu(withIconNames(items));
-    if (choice !== null && choice !== value) onChange(choice as T);
+    if (choice !== null && choice !== value && stillOpen()) onChange(choice as T);
   };
   return (
     <View {...hoverProps} style={{ opacity: disabled ? opacity.disabled : 1 }}>
-      <Pressable disabled={disabled} onPress={open} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} accessibilityRole="button" {...labelled}>
+      <Pressable disabled={disabled || closing} onPress={live(open)} onAccessibilityTap={disabled || closing ? undefined : tapActivates(live(open))} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} accessibilityRole="button" {...labelled}>
         {({ pressed }) =>
           native ? (
             <View style={[PLAIN_POPUP, { backgroundColor: pressed ? theme.controlPressed : hovered ? theme.controlHover : undefined }]}>
@@ -280,118 +295,3 @@ const POP_UP_TITLE = POP_UP_CHROME.growsToItsTitle ? ({ flexGrow: 1, flexShrink:
 const CLEAR_GLYPH = { width: 16, height: 16 } as const;
 const PLAIN_POPUP = { height: 22, maxWidth: 260, borderRadius: radius.control, paddingLeft: space.s, paddingRight: space.xxs, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: space.xs } as const;
 const PLAIN_POPUP_GLYPH = { width: 10, height: 14 } as const;
-
-const CHECK_RING = { s: { box: 14, glyph: 8 }, m: { box: 18, glyph: 10 } } as const;
-const CHECK_RING_BORDER = 1.5;
-
-export function Checkbox({
-  value,
-  onChange,
-  label,
-  disabled,
-  mixed,
-  look = "form",
-  size = "m",
-}: {
-  value: boolean;
-  onChange?: (value: boolean, modifiers?: ClickModifiers) => void;
-  label?: string;
-  disabled?: boolean;
-  mixed?: boolean;
-  look?: "form" | "ring";
-  size?: keyof typeof CHECK_RING;
-}) {
-  const theme = useTheme();
-  const on = value || mixed;
-  const pressMotion = usePressScaleMotion(!!onChange && !disabled, buttonMotion.iconPressScale);
-  const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : null;
-  if (look === "ring" && !onChange) return <RingCheck on={!!on} size={size} />;
-  if (look === "ring")
-    return (
-      <Pressable
-        disabled={disabled}
-        onPress={() => onChange?.(!value)}
-        onPressIn={pressMotion.onPressIn}
-        onPressOut={pressMotion.onPressOut}
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked: value, disabled }}
-        style={{ opacity: disabled ? opacity.disabled : 1 }}
-      >
-        <Animated.View style={[CHECK_RING_FRAME[size], scaleStyle]}>
-          <RingCheck on={!!on} size={size} />
-        </Animated.View>
-      </Pressable>
-    );
-  return (
-    <Pressable
-      disabled={disabled || !onChange}
-      onPress={(e) => onChange?.(!value, modifiersOf(e))}
-      onPressIn={pressMotion.onPressIn}
-      onPressOut={pressMotion.onPressOut}
-      style={{ flexDirection: "row", alignItems: "center", gap: space.m, opacity: disabled ? opacity.disabled : 1 }}
-    >
-      <Animated.View style={[CHECK_BOX_FRAME, scaleStyle]}>
-        <View
-          style={{
-            width: 14,
-            height: 14,
-            borderRadius: radius.control,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: on ? theme.formAccent : theme.control,
-            borderWidth: on ? 0 : StyleSheet.hairlineWidth * 2,
-            borderColor: theme.controlBorder,
-          }}
-        >
-          {on && <Symbol name={mixed && !value ? "minus" : "checkmark"} size={9} weight="bold" color={theme.onAccent} style={{ width: 14, height: 14 }} />}
-        </View>
-      </Animated.View>
-      {label ? <Text style={{ ...typeScale.body, color: theme.textPrimary }}>{label}</Text> : null}
-    </Pressable>
-  );
-}
-
-const CHECK_BOX_FRAME = { width: 14, height: 14, alignItems: "center", justifyContent: "center" } as const;
-const CHECK_RING_FRAME = { s: { width: 14, height: 14 }, m: { width: 18, height: 18 } } as const;
-
-function RingCheck({ on, size = "m" }: { on: boolean; size?: keyof typeof CHECK_RING }) {
-  const theme = useTheme();
-  const { box, glyph } = CHECK_RING[size];
-  const t = useRef(new Animated.Value(on ? 1 : 0)).current;
-  useEffect(() => {
-    Animated.timing(t, { toValue: on ? 1 : 0, duration: duration.base, easing: curve.enter, useNativeDriver: true }).start();
-  }, [on]);
-  return (
-    <View
-      style={{
-        width: box,
-        height: box,
-        borderRadius: capsule(box),
-        backgroundColor: theme.ringRadioFill,
-        borderWidth: CHECK_RING_BORDER,
-        borderColor: theme.ringRadioBorder,
-        alignItems: "center",
-        justifyContent: "center",
-        overflow: "hidden",
-      }}
-    >
-      <Animated.View
-        style={{
-          position: "absolute",
-          left: -CHECK_RING_BORDER,
-          top: -CHECK_RING_BORDER,
-          width: box,
-          height: box,
-          borderRadius: capsule(box),
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: theme.ringRadioOn,
-          opacity: t,
-          transform: [{ scale: t.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }],
-        }}
-      >
-        <Symbol name="checkmark" size={glyph} weight="bold" color={theme.onPrimary} style={{ width: box, height: box }} />
-      </Animated.View>
-    </View>
-  );
-}

@@ -182,7 +182,7 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
     publishUi({ status: "updated", error: null, pending });
   } catch (error) {
     if ((error as { code?: unknown } | null)?.code === "ERR_SYNC_FOLDER_UNREADABLE") {
-      publishUi({ status: "offline", error: "The sync folder can’t be read. Check that it’s still there and that Ardia can open it." });
+      publishUi({ status: "offline", error: "The sync folder can't be read. Check that it's still there and that Ardia can open it." });
     } else if (useSync.getState().status !== "locked") {
       warnFor(consent, "[sync] cycle failed", error);
       publishUi({ status: "stalled", error: errorText(error) });
@@ -258,15 +258,15 @@ function begin(folder: string, deviceId: string, joining: boolean) {
 
 export async function turnOnSync(folder: string, how?: TurnOnFolder): Promise<{ ok: true } | { error: string }> {
   const native = SyncNative;
-  if (!native) return { error: "Sync isn’t available in this build." };
+  if (!native) return { error: "Sync isn't available in this build." };
   await moveSettled();
   const deviceId = native.newDeviceId();
   try {
-    if (!(await native.createPhrase(deviceId))) return { error: `Couldn’t save the sync key in ${PLATFORM_TERMS.secretStore}.` };
+    if (!(await native.createPhrase(deviceId))) return { error: `Couldn't save the sync key in ${PLATFORM_TERMS.secretStore}.` };
     await native.createChain(folder);
   } catch (error) {
     await native.forget(deviceId);
-    return { error: `Couldn’t use that folder: ${errorText(error)}` };
+    return { error: `Couldn't use that folder: ${errorText(error)}` };
   }
   begin(folder, deviceId, false);
   noteTurnOn(how);

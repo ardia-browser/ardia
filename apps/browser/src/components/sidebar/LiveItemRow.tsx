@@ -11,7 +11,7 @@ import { useIsActiveIn, useLiveItemTab, useLiveTabOpen, useTabAwayFromPin } from
 import type { CloseControl } from "../../state/sidebar/closeControl";
 import { noteLiveRowHide } from "../../state/telemetry/liveHides";
 import { HoverSlot } from "../ui/HoverSlot";
-import { Badge, Button, ContextMenuArea, Dot, hairline, HoverFill, ink, radius, space, Symbol, Text, useHover, withAlpha } from "../ui";
+import { Badge, Button, ContextMenuArea, Dot, hairline, HoverFill, ink, radius, space, Symbol, Text, useHover, withAlpha, tapActivates } from "../ui";
 import { curve, liftSpring } from "../ui/motion";
 import { Squish, useSquish } from "../ui/Squish";
 import { hex, layout, useTheme } from "../ui/theme";
@@ -90,7 +90,7 @@ export function LiveItemRow({ folderId, item, windowId, inStack = false }: { fol
                 <View {...backToPin.hoverProps}>
                   {resettable ? (
                     <Pressable
-                      onPress={() => tabId && returnLiveTab(tabId)}
+                      onPress={() => tabId && returnLiveTab(tabId)} onAccessibilityTap={tapActivates(() => tabId && returnLiveTab(tabId))}
                       tooltip={withShortcut("Back to Pinned URL", backToPinHint)}
                       accessibilityRole="button"
                       accessibilityLabel="Back to Pinned URL"

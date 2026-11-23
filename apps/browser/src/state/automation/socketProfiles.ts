@@ -67,7 +67,7 @@ function setLook(params: Record<string, unknown>) {
   let theme: ReturnType<typeof sanitizeTheme> | undefined;
   if (params.theme === null) theme = null;
   else if (typeof params.theme === "string") {
-    if (!/^#[0-9a-fA-F]{6}$/.test(params.theme)) throw new OpError("bad_request", "theme is a #rrggbb colour, a theme object, or null.");
+    if (!/^#[0-9a-fA-F]{6}$/.test(params.theme)) throw new OpError("bad_request", "theme is a #rrggbb color, a theme object, or null.");
     theme = startingTheme(params.theme);
   } else if (params.theme !== undefined) {
     theme = sanitizeTheme(params.theme);
@@ -106,7 +106,7 @@ export const PROFILE_METHODS: MethodSpec[] = [
     name: "profiles.create",
     mutates: true,
     description: "Make a profile (space)",
-    params: obj({ name: text("Its name"), color: oneOf(COLORS, "Its colour"), icon: text("An emoji"), shareDataWith: id("A profile whose cookies, history and extensions it shares"), shareTopApps: bool("Share Top Apps with the default profile") }, ["name"]),
+    params: obj({ name: text("Its name"), color: oneOf(COLORS, "Its color"), icon: text("An emoji"), shareDataWith: id("A profile whose cookies, history and extensions it shares"), shareTopApps: bool("Share Top Apps with the default profile") }, ["name"]),
     result: "profile",
     run: createProfile,
   },
@@ -121,8 +121,8 @@ export const PROFILE_METHODS: MethodSpec[] = [
   {
     name: "profiles.setLook",
     mutates: true,
-    description: "Change a profile's colour and theme",
-    params: obj({ profile: PROFILE, color: oneOf(COLORS, "Its theme colour; switching brings back the edits you made to that colour"), theme: { type: ["string", "object", "null"], description: "An edit of the theme colour: a #rrggbb to start one from, a theme object as profiles.list shows, or null to reset the colour to its original" } }, ["profile"]),
+    description: "Change a profile's color and theme",
+    params: obj({ profile: PROFILE, color: oneOf(COLORS, "Its theme color; switching brings back the edits you made to that color"), theme: { type: ["string", "object", "null"], description: "An edit of the theme color: a #rrggbb to start one from, a theme object as profiles.list shows, or null to reset the color to its original" } }, ["profile"]),
     result: "profile",
     run: setLook,
   },

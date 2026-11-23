@@ -39,7 +39,7 @@ export function UnlockFooter({ flow }: { flow: ImportFlow }) {
       <Button title="Back" onPress={() => backTo(source.profiles.length > 1 || importsBySpaces(source) ? "profiles" : "choose")} />
       <Spacer />
       <Button title="Skip Encrypted Data" onPress={skipEncryptedData} />
-      <Button title={unlocking ? "Waiting for password..." : "Continue"} kind="primary" disabled={unlocking} onPress={() => void unlockAndImport()} />
+      <Button title={unlocking ? "Waiting for password…" : "Continue"} kind="primary" disabled={unlocking} onPress={() => void unlockAndImport()} />
     </>
   );
 }

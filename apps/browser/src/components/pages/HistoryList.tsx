@@ -1,9 +1,10 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import type { HistoryEntry } from "../../state/browser/types";
 import { type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent, ScrollView, View } from "react-native";
-import { assignSlots, historyScroll, rowAt, type Layout } from "./historyLayout";
+import { assignSlots, rowAt, type Layout } from "./historyLayout";
 import { DayHeader, HistoryRow } from "./HistoryRow";
-import { PAGE_WIDTH } from "./PageLayout";
+import { notePageScroll, PAGE_WIDTH } from "./PageLayout";
+import { revealOffset } from "./listCursor";
 import { historyRow, pageList } from "./tokens";
 
 const ROW = historyRow.height;
@@ -43,7 +44,7 @@ export function HistoryList({
   rendered.current = { rows, overscan, band };
   const [onScroll] = useState(() => (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     scrollY.current = e.nativeEvent.contentOffset.y;
-    historyScroll.lastAt = Date.now();
+    notePageScroll();
     const { rows, overscan, band } = rendered.current;
     if (rowAt(rows, scrollY.current - overscan) !== band) rerender((n) => n + 1);
   });
@@ -53,8 +54,8 @@ export function HistoryList({
     const row = cursor ? rows.find((r) => r.entry.url === cursor) : undefined;
     if (!row) return;
     const above = row.first ? HEADER : 0;
-    if (row.offset - above < scrollY.current) scroller.current?.scrollTo({ y: Math.max(0, row.offset - above), animated: false });
-    else if (row.offset + ROW > scrollY.current + viewport) scroller.current?.scrollTo({ y: row.offset + ROW - viewport, animated: false });
+    const y = revealOffset(row.offset - above, ROW + above, scrollY.current, viewport);
+    if (y !== null) scroller.current?.scrollTo({ y, animated: false });
   }, [cursor, viewport]);
 
   const top = Math.min(band, rows.length - 1);

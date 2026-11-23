@@ -87,11 +87,11 @@ export function keyringMessage(status: SyncKeyStoreStatus | null, saving: boolea
   if (store !== "secretService") return null;
   if (state === "unavailable")
     return saving
-      ? "Couldn’t save the sync key: no keyring is running. Start a Secret Service keyring, like GNOME Keyring or KWallet, and try again."
-      : "No keyring is running, so Ardia can’t read this device’s sync key. Start a Secret Service keyring, like GNOME Keyring or KWallet, or enter your recovery phrase.";
+      ? "Couldn't save the sync key: no keyring is running. Start a Secret Service keyring, like GNOME Keyring or KWallet, and try again."
+      : "No keyring is running, so Ardia can't read this device's sync key. Start a Secret Service keyring, like GNOME Keyring or KWallet, or enter your recovery phrase.";
   if (state === "locked")
     return saving
-      ? "Couldn’t save the sync key: your keyring is locked. Unlock it and try again."
+      ? "Couldn't save the sync key: your keyring is locked. Unlock it and try again."
       : "Your keyring is locked. Unlock it, or enter your recovery phrase to keep syncing.";
   return null;
 }
@@ -234,7 +234,7 @@ export function createHeldLogins(io: HeldLoginsIo, limits: { maxLogins?: number;
       await io.remove(HELD_LOGINS_DOCUMENT);
     } else {
       const sealed = await io.seal(JSON.stringify(next));
-      if (!sealed) throw new Error("Couldn’t seal the logins sync is holding");
+      if (!sealed) throw new Error("Couldn't seal the logins sync is holding");
       await io.save(HELD_LOGINS_DOCUMENT, sealed);
     }
     held = next;
@@ -343,7 +343,7 @@ export async function releaseHeldLoginIfGone(host: ArdiaHost, profile: string, o
 
 export class HeldLoginsResetError extends Error {
   constructor() {
-    super("Ardia couldn’t reset the passwords sync was holding, so it undid the change. Try again.");
+    super("Ardia couldn't reset the passwords sync was holding, so it undid the change. Try again.");
   }
 }
 

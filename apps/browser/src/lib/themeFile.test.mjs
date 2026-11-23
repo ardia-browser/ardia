@@ -29,10 +29,10 @@ test("a theme keeps its good roles and reports each bad one by file, appearance 
   });
   assert.deepEqual(problems, [
     "themes/nord.json: extra isn't a theme key (dark, light, type, metrics, layout, icons)",
-    "themes/nord.json: dark.panel must be a colour (#RGB, #RRGGBB, #RRGGBBAA, or rgb or rgba with r, g, b from 0 to 255 and a from 0 to 1)",
+    "themes/nord.json: dark.panel must be a color (#RGB, #RRGGBB, #RRGGBBAA, or rgb or rgba with r, g, b from 0 to 255 and a from 0 to 1)",
     "themes/nord.json: dark.tabSelectedShadowRadius must be a number from 0 to 100",
-    "themes/nord.json: dark.dark isn't a colour role",
-    "themes/nord.json: dark.made isn't a colour role",
+    "themes/nord.json: dark.dark isn't a color role",
+    "themes/nord.json: dark.made isn't a color role",
     "themes/nord.json: light.panelShadowOpacity must be a number from 0 to 1",
   ]);
 });
@@ -41,7 +41,7 @@ test("a theme file that doesn't parse gives no roles, so the caller keeps the la
   assert.equal(parse("{ dark: ").roles, null);
   assert.match(parse("{ dark: ").problems[0], /^themes\/nord\.json: isn't valid JSON/);
   assert.deepEqual(parse([]).problems, ["themes/nord.json: must be an object"]);
-  assert.deepEqual(parse({ dark: "#000" }).problems, ["themes/nord.json: dark must be an object of colour roles"]);
+  assert.deepEqual(parse({ dark: "#000" }).problems, ["themes/nord.json: dark must be an object of color roles"]);
 });
 
 test("the theme's roles replace Ardia's in the base palettes, and a role left out keeps Ardia's", () => {

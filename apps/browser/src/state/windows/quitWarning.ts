@@ -10,7 +10,7 @@ export const QUIT_WARNING = {
   title: "Are you sure you want to quit Ardia?",
   message: "Your windows and tabs will be restored the next time you open it.",
   confirmTitle: "Quit",
-  suppression: "Don’t ask again",
+  suppression: "Don't ask again",
 } as const;
 
 type QuitWarning = "notAsked" | "confirmed" | "cancelled";

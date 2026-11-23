@@ -25,7 +25,7 @@ import { useMedia, usePictureInPicture } from "../../state/media/media";
 import { openSettings, openSiteSettings } from "../../state/settings/settingsWindows";
 import { noteSiteControls } from "../../state/telemetry/usage";
 import { copyPageUrl } from "../../state/site/selection";
-import { clearSiteDataAfterConfirm, setSiteBlocking, siteOrigin } from "../../state/site/reloadMenu";
+import { confirmAndClearSiteData, setSiteBlocking, siteDataOutcome, siteOrigin } from "../../state/site/reloadMenu";
 import { canShare, shareTab } from "../../state/site/share";
 import { ActionTile, gridColumns, MoreButton, SettingRow, SITE_PANEL, TileRow } from "./SiteControlsParts";
 import { SectionLabel } from "../sidebar/SectionLabel";
@@ -123,9 +123,9 @@ export function SiteControlsPanel({
   };
   const clearData = async () => {
     if (!origin) return;
-    const n = await clearSiteDataAfterConfirm(tab, origin);
-    if (n === null) return;
-    setCleared(n ? `Cleared ${n} cookie${n === 1 ? "" : "s"} and site data` : "Cleared site data");
+    const cleared = await confirmAndClearSiteData(tab.profileId, origin, tab.windowId, tab.id);
+    if (cleared === null) return;
+    setCleared(siteDataOutcome(cleared));
   };
   const share = () =>
     shareTile.current?.measureInWindow((x, y, width, height) => {

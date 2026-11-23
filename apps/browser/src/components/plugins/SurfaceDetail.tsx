@@ -1,7 +1,7 @@
 import { Pressable } from "react-native";
 import type { PluginNode } from "../../lib/pluginProtocol";
 import { newTab } from "../../state/tabs/actions";
-import { ActivitySpinner, Box, Divider, Text } from "../ui";
+import { ActivitySpinner, Box, Divider, Text, useClosing, useLiveAction } from "../ui";
 import { ActionButtons } from "./SurfaceActions";
 import { Children, SurfaceIcon, SurfaceScroll } from "./SurfaceBasics";
 import { SurfaceMarkdown } from "./SurfaceMarkdown";
@@ -38,6 +38,8 @@ export function DetailNode({ node }: { node: PluginNode }) {
 
 function MetadataRow({ row }: { row: Record<string, unknown> }) {
   const { windowId } = useSurface();
+  const closing = useClosing();
+  const live = useLiveAction();
   const url = isWebUrl(row.url) ? row.url : null;
   const value = (
     <Box row gap="xs" style={VALUE}>
@@ -52,7 +54,7 @@ function MetadataRow({ row }: { row: Record<string, unknown> }) {
       <Text size="small" tone="textSecondary" style={LABEL}>
         {str(row.label) ?? ""}
       </Text>
-      {url ? <Pressable onPress={() => newTab(windowId, { url })}>{value}</Pressable> : value}
+      {url ? <Pressable disabled={closing} onPress={live(() => newTab(windowId, { url }))}>{value}</Pressable> : value}
     </Box>
   );
 }

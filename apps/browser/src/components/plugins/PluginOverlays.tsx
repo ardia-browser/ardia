@@ -4,7 +4,7 @@ import { useWindowId } from "../../state/browser/hooks";
 import { closePluginCommandView, closePluginPopover } from "../../state/plugins/actions";
 import { usePluginCommandView, usePluginInputBox, usePluginPopover, usePluginQuickPick, usePluginWindowEligible } from "../../state/plugins/hooks";
 import type { CommandView, Popover as PluginPopoverState } from "../../state/plugins/surfaces";
-import { Box, Button, Dialog, Divider, Popover, POPOVER_MARGIN, Symbol, Text, useTheme } from "../ui";
+import { Box, Button, Dialog, DialogTitle, Divider, Popover, POPOVER_MARGIN, Symbol, useTheme } from "../ui";
 import { PluginInputBox } from "./PluginInputBox";
 import { PluginQuickPick } from "./PluginQuickPick";
 import { PluginSurface } from "./PluginSurface";
@@ -50,9 +50,9 @@ function CommandSheet({ windowId, view }: { windowId: string; view: CommandView 
       >
       <Box row gap="m" padX="l" padY="m" style={HEADER}>
         <Symbol name={view.icon || "puzzlepiece"} size={OVERLAY.commandIcon} color={theme.icon} style={ICON} />
-        <Text weight="semibold" numberOfLines={1} style={FLEX}>
-          {view.title}
-        </Text>
+        <View style={FLEX}>
+          <DialogTitle>{view.title}</DialogTitle>
+        </View>
         <Button variant="close" look="panel" tooltip="Close" onPress={close} />
       </Box>
       <Divider />

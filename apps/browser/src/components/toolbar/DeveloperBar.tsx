@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { Animated, Image, Pressable, StyleSheet, View } from "react-native";
-import { Button, ContextMenuArea, Divider, monoFace, Text, WindowDragRegion } from "../ui";
+import { Button, ContextMenuArea, Divider, monoFace, Text, WindowDragRegion, tapActivates } from "../ui";
 import { ToolbarRowContext } from "../ui/toolbarRowContext";
 import { useEasedColor } from "../ui/toolbarColors";
 import { isLight } from "../../lib/color";
@@ -61,7 +61,7 @@ export const DeveloperBar = memo(function DeveloperBar({ tabId, windowId }: { ta
             tooltip="Site Controls"
           />
           <ContextMenuArea style={{ flex: 1 }} onContextMenu={() => void showUrlBarMenu(tab)}>
-            <Pressable accessibilityRole="button" accessibilityLabel="Edit Address" onPress={press("address", () => openBarFromDeveloperBar(windowId, tabId, tab.url))} style={{ flex: 1, height: ROW.button, justifyContent: "center", paddingLeft: DEVELOPER_BAR.urlGap, paddingRight: DEVELOPER_BAR.groupGap }}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Edit Address" onPress={press("address", () => openBarFromDeveloperBar(windowId, tabId, tab.url))} onAccessibilityTap={tapActivates(press("address", () => openBarFromDeveloperBar(windowId, tabId, tab.url)))} style={{ flex: 1, height: ROW.button, justifyContent: "center", paddingLeft: DEVELOPER_BAR.urlGap, paddingRight: DEVELOPER_BAR.groupGap }}>
               <Text numberOfLines={1} ellipsizeMode="middle" color={palette.text} style={[monoFace(), { fontSize: DEVELOPER_BAR.urlSize }]}>
                 {withoutUserInfo(tab.url)}
               </Text>

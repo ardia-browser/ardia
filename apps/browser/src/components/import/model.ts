@@ -26,7 +26,7 @@ const KIND_LOOK: Record<ImportKind, { title: string; icon: string }> = {
 export const KINDS: { kind: ImportKind; title: string; icon: string }[] = IMPORT_KINDS.map((kind) => ({ kind, ...KIND_LOOK[kind] }));
 export const kindTitle = (k: ImportKind) => KIND_LOOK[k].title;
 
-const DIA_NOT_SHARED = "Custom tab names, colours, spaces and folders stay in Dia: its AppleScript doesn't share them.";
+const DIA_NOT_SHARED = "Custom tab names, colors, spaces and folders stay in Dia: its AppleScript doesn't share them.";
 const DIA_ASKED = `${APP} asks Dia for its open and pinned tabs, opening it in the background if it isn't running.`;
 const DIA_READ = `${APP} reads Dia's sidebar from its own files, without opening Dia: spaces, folders, groups, split views and renamed tabs come over as they are.`;
 

@@ -1,25 +1,10 @@
-import { useTheme } from "../ui/theme";
 import { ink, space } from "../ui/tokens";
-
-const DARK = {
-  popupBorder: "rgba(255,255,255,0.16)",
-};
-
-const LIGHT: typeof DARK = {
-  popupBorder: "rgba(0,0,0,0.14)",
-};
-
-type ExtensionColors = typeof DARK;
-
-export function useExtensionColors(): ExtensionColors {
-  return useTheme().dark ? DARK : LIGHT;
-}
 
 export const EXTENSION_PAGE_BACKGROUND = ink.white;
 
 export const BADGE_FALLBACK_FILL = "#5F6368";
 
-export const SIDE_PANEL_HEADER_PAD_RIGHT = space.xs;
+export const SIDE_PANEL_HEADER = { height: 40, padLeft: space.l, padRight: space.xs, icon: 16 } as const;
 
 export const EXTENSION_ICON = 36;
 

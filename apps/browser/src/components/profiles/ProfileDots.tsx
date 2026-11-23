@@ -7,7 +7,7 @@ import { layout, useTheme } from "../ui/theme";
 import { useIsIncognito, useProfile, useSettings } from "../../state/browser/hooks";
 import { useProfileOrder, useProfileRecords } from "../../state/profiles/hooks";
 import { useNativePagerPosition, usePagerPages, type PagerPage } from "../../state/windows/profilePager";
-import { ContextMenuArea, useHover } from "../ui";
+import { ContextMenuArea, useHover, tapActivates } from "../ui";
 import { TooltipAbove } from "../ui/TooltipAbove";
 import { SIDEBAR_FOOTER_DOWNLOADS } from "../sidebar/geometry";
 import { switcherCellWidth, switcherIcons, SwitcherMark } from "./ProfileIcons";
@@ -106,7 +106,11 @@ function Dot({ id, windowId, icon, page, pos, offset, pan, lifted, reordering }:
             setPressed(true);
             noteSwitcherPress(windowId, id, !!icon);
             switchProfile(windowId, id, true);
-          }}
+          }} onAccessibilityTap={tapActivates(() => {
+            setPressed(true);
+            noteSwitcherPress(windowId, id, !!icon);
+            switchProfile(windowId, id, true);
+          })}
         >
           <View ref={target} style={{ width: cell, height: BAND, alignItems: "center", justifyContent: "center" }}>
             {holding ? (

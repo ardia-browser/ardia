@@ -174,6 +174,6 @@ test("two Macs with the same name are told apart: only the other one can be remo
     assert.equal(typeof at, "number");
     assert.equal(deviceDetail(other, (t) => (t === at ? "3 weeks ago" : "?")), `last synced 3 weeks ago · Ardia ${other.version} · ${other.os}`);
     assert.equal(other.os, "macOS 27.0");
-    assert.equal(deviceDetail({ lastSeen: null }, () => "?"), "hasn’t synced yet");
+    assert.equal(deviceDetail({ lastSeen: null }, () => "?"), "hasn't synced yet");
   });
 });

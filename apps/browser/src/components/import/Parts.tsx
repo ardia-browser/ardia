@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
-import { ActivityIndicator, Image, View } from "react-native";
+import { Image, View } from "react-native";
 import { useProfiles } from "../../state/browser/hooks";
-import { Button, Dot, PopUp, space, Symbol, Text, useTheme } from "../ui";
+import { ActivitySpinner, Button, Dot, PopUp, space, Symbol, Text, useTheme } from "../ui";
 import { SelectableCard } from "../settings/SelectableCard";
 import { APP } from "./model";
 import { importLayout, importType } from "./tokens";
@@ -14,7 +14,7 @@ export function Title({ title, subtitle, spinner }: { title: string; subtitle?: 
       </Text>
       {subtitle ? (
         <View style={{ flexDirection: "row", alignItems: "center", gap: space.m, marginTop: space.s }}>
-          {spinner && <ActivityIndicator size="small" />}
+          {spinner && <ActivitySpinner style={SPINNER} />}
           <Text tone="textSecondary" style={{ flex: 1, lineHeight: importType.bodyLine }}>
             {subtitle}
           </Text>
@@ -148,3 +148,5 @@ export function Handoff({ iconPath, symbol, lead, detail }: { iconPath?: string;
     </View>
   );
 }
+
+const SPINNER = { width: importLayout.spinner, height: importLayout.spinner } as const;

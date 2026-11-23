@@ -2,16 +2,15 @@ import { useEffect, useRef } from "react";
 import { Animated, type View } from "react-native";
 import type { MenuRect } from "../../state/bookmarks/folderMenus";
 import { SLIDE } from "../tabstrip/tokens";
-import { curve } from "../ui";
-import { bookmarksBar } from "./tokens";
+import { hoverFade } from "../ui/motion";
 
 export const measureRect = (view: View | null): Promise<MenuRect | null> =>
   new Promise((resolve) => (view ? view.measureInWindow((x, y, width, height) => resolve({ x, y, width, height })) : resolve(null)));
 
-export function useEased(on: boolean, inMs: number = bookmarksBar.hoverIn, outMs: number = bookmarksBar.hoverOut) {
+export function useEased(on: boolean) {
   const value = useRef(new Animated.Value(on ? 1 : 0)).current;
   useEffect(() => {
-    Animated.timing(value, { toValue: on ? 1 : 0, duration: on ? inMs : outMs, easing: curve.enter, useNativeDriver: false }).start();
+    Animated.timing(value, { toValue: on ? 1 : 0, ...(on ? hoverFade.show : hoverFade.hide), useNativeDriver: false }).start();
   }, [on]);
   return value;
 }

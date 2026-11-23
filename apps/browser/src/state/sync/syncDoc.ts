@@ -9,14 +9,14 @@ import { PLATFORM_TERMS } from "../../lib/platformTerms";
 type SyncTypeSpec = { title: string; description: string; profileData?: true };
 
 const SYNC_TYPES = {
-  bookmarks: { title: "Bookmarks", description: "Each synced profile’s bookmarks bar and other bookmarks.", profileData: true },
+  bookmarks: { title: "Bookmarks", description: "Each synced profile's bookmarks bar and other bookmarks.", profileData: true },
   history: { title: "History", description: "The last 90 days.", profileData: true },
-  tabs: { title: "Open Tabs", description: "Your other devices’ tabs in the tab overflow menu. All Open Tabs needs it on." },
+  tabs: { title: "Open Tabs", description: "Your other devices' tabs in the tab overflow menu. All Open Tabs needs it on." },
   pinned: { title: "Pinned Tabs and Groups", description: "Pinned tabs and pinned tab groups." },
   passwords: { title: "Passwords", description: `Saved passwords. Turning sync off never removes them from this ${PLATFORM_TERMS.computer}.`, profileData: true },
   extensions: {
     title: "Extensions",
-    description: "Extensions from the Chrome Web Store, whether they’re on, and whether they’re pinned.",
+    description: "Extensions from the Chrome Web Store, whether they're on, and whether they're pinned.",
     profileData: true,
   },
   settings: { title: "Settings", description: "Search engine, appearance, tab and keyboard settings." },

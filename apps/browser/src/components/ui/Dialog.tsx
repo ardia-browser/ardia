@@ -1,10 +1,11 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Animated, findNodeHandle, Pressable, StyleSheet, View, type DimensionValue, type StyleProp, type ViewStyle } from "react-native";
 import { curve, duration } from "./motion";
+import { ControlSizeContext } from "./controlSize";
 import { Panel } from "./Panel";
 import { Text } from "./Text";
 import { useTheme } from "./theme";
-import { perLook, proseLineHeight, radius, shadow, sheetWidth, space, type SheetSize, type Space } from "./tokens";
+import { perLook, proseLineHeight, radius, shadow, sheetWidth, space, type ControlSize, type SheetSize, type Space } from "./tokens";
 
 const CENTERED: StyleProp<ViewStyle> = [StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center" }];
 
@@ -18,6 +19,7 @@ export function Dialog({
   maxHeight,
   place,
   backdropCloses = true,
+  controls,
   children,
 }: {
   width: SheetSize;
@@ -29,6 +31,7 @@ export function Dialog({
   maxHeight?: DimensionValue;
   place?: Pick<ViewStyle, "top" | "left" | "right" | "bottom">;
   backdropCloses?: boolean;
+  controls?: ControlSize;
   children: ReactNode;
 }) {
   const theme = useTheme();
@@ -40,12 +43,13 @@ export function Dialog({
     if (animated) Animated.timing(appear, { toValue: 1, duration: duration.base, easing: curve.enter, useNativeDriver: true }).start();
     return () => restore.current?.();
   }, []);
+  const sized = controls ? <ControlSizeContext.Provider value={controls}>{children}</ControlSizeContext.Provider> : children;
   const content = onSubmit ? (
     <DialogKeys onDismiss={onDismiss} onSubmit={onSubmit} pad={pad}>
-      {children}
+      {sized}
     </DialogKeys>
   ) : (
-    children
+    sized
   );
   const padding = onSubmit ? undefined : space[pad];
   const surface = (

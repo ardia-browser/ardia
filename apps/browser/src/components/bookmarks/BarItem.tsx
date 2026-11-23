@@ -9,9 +9,9 @@ import { openImport } from "../../state/settings/settingsWindows";
 import { Favicon } from "../favicon/Favicon";
 import { useSidebarWidth } from "../../state/sidebar/hooks";
 import type { SidebarEdge } from "../../state/bookmarks/sidebarEdge";
-import { ContextMenuArea, MouseArea, Symbol, Text, useHover, useTheme } from "../ui";
+import { ContextMenuArea, HoverFill, MouseArea, Symbol, Text, useHover, useTheme, tapActivates } from "../ui";
 import { openBarMenu, openImportButtonMenu, type ClickMods } from "../../state/bookmarks/barMenus";
-import { bookmarksBar, type BarSize } from "./tokens";
+import { bookmarkDrag, bookmarksBar, type BarSize } from "./tokens";
 import { chipFrame } from "./chipFrame";
 import { measureRect, useEased, useSlide } from "./barMotion";
 import { useBarSize } from "./barSize";
@@ -27,7 +27,7 @@ export function useBookmarkDragResponder(
     let pressing = false;
     let last: [number, number] = [0, 0];
     return PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) => Math.hypot(g.dx, g.dy) > bookmarksBar.dragStart,
+      onMoveShouldSetPanResponder: (_, g) => Math.hypot(g.dx, g.dy) > bookmarkDrag.start,
       onPanResponderGrant: (_, g) => {
         pressing = true;
         last = [g.moveX || g.x0, g.moveY || g.y0];
@@ -132,7 +132,7 @@ export const BarButton = forwardRef<View, {
   const size = useBarSize();
   return (
     <View ref={ref} collapsable={false} {...hoverProps} tooltip={tooltip}>
-      <Pressable accessibilityRole="button" accessibilityLabel={title || tooltip} onPress={(e) => onPress(e.nativeEvent as unknown as ClickMods)}>
+      <Pressable accessibilityRole="button" accessibilityLabel={title || tooltip} onPress={(e) => onPress(e.nativeEvent as unknown as ClickMods)} onAccessibilityTap={tapActivates((e: { nativeEvent: unknown }) => onPress(e.nativeEvent as ClickMods))}>
         {({ pressed }) => (
           <Chip size={size} width={width} titled={!!title} hovered={hovered || active || dropRing} pressed={pressed || !!active} dropRing={dropRing}>
             <ChipIcon size={size} favicon={favicon} icon={icon} />
@@ -166,7 +166,6 @@ export function Chip({
   children: ReactNode;
 }) {
   const theme = useTheme();
-  const plate = useEased(hovered || pressed);
   const ring = useEased(dropRing);
   const shape = { borderRadius: size.radius, borderCurve: "continuous" } as const;
   return (
@@ -181,7 +180,7 @@ export function Chip({
         gap: size.titleGap,
       }}
     >
-      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, shape, { opacity: plate, backgroundColor: pressed ? theme.toolbarPressed : theme.toolbarHover }]} />
+      <HoverFill shown={!!hovered || !!pressed} instant={!!pressed} color={pressed ? theme.toolbarPressed : theme.toolbarHover} radius={size.radius} />
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, shape, { opacity: ring, borderWidth: bookmarksBar.dropRing, borderColor: theme.accent }]} />
       {children}
     </View>

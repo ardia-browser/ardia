@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Image, Pressable, View } from "react-native";
 import { CHECK_IN_COPY, useDefaultBrowserCheckIn } from "../../state/onboarding/defaultBrowserCheckIn";
-import { Box, IconTile, ink, space, Symbol, Text } from "../ui";
+import { Box, IconTile, ink, space, Symbol, Text, tapActivates } from "../ui";
 import { NtpCard, NtpCardSlot, NtpCardSurface, NtpCardTitle, useCardRetire } from "./NtpCard";
 import { useNtpColors } from "./tokens";
 
@@ -27,7 +27,7 @@ function Card({ leaving, onFeedback, onClose }: { leaving: null | (() => void); 
   return (
     <NtpCard appearDelay={300} leaving={leaving} onClose={onClose} lift pressed={pressed} style={FILL}>
       <Pressable
-        onPress={onFeedback}
+        onPress={onFeedback} onAccessibilityTap={tapActivates(onFeedback)}
         onPressIn={() => setPressed(true)}
         onPressOut={() => setPressed(false)}
         accessibilityRole="button"

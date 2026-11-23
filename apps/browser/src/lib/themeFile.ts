@@ -18,7 +18,7 @@ const CHANNEL = String.raw`\s*(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\s*`;
 const ALPHA = String.raw`\s*(0|1|0?\.\d+|1\.0+)\s*`;
 const COLOR_PATTERN = String.raw`^(?:#[0-9A-Fa-f]{3}|#[0-9A-Fa-f]{6}|#[0-9A-Fa-f]{8}|rgb\(${CHANNEL},${CHANNEL},${CHANNEL}\)|rgba\(${CHANNEL},${CHANNEL},${CHANNEL},${ALPHA}\))$`;
 const COLOR = new RegExp(COLOR_PATTERN);
-const COLOR_RULE = "a colour (#RGB, #RRGGBB, #RRGGBBAA, or rgb or rgba with r, g, b from 0 to 255 and a from 0 to 1)";
+const COLOR_RULE = "a color (#RGB, #RRGGBB, #RRGGBBAA, or rgb or rgba with r, g, b from 0 to 255 and a from 0 to 1)";
 
 export function themeColor(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -58,7 +58,7 @@ function checkedRole(kind: RoleKind, value: unknown): Checked {
   }
   if (kind.kind === "pair") {
     const pair = Array.isArray(value) && value.length === 2 ? value.map(themeColor) : null;
-    return pair?.[0] && pair[1] ? { value: [pair[0], pair[1]] } : { error: `must be two colours, each ${COLOR_RULE}` };
+    return pair?.[0] && pair[1] ? { value: [pair[0], pair[1]] } : { error: `must be two colors, each ${COLOR_RULE}` };
   }
   const { minimum, maximum } = kind;
   const inRange = typeof value === "number" && Number.isFinite(value) && (minimum === undefined || value >= minimum) && (maximum === undefined || value <= maximum);
@@ -82,13 +82,13 @@ export function parseThemeFile(file: string, text: string, defaults: RolePalette
     const given = doc[mode];
     if (given === undefined) continue;
     if (!isFields(given)) {
-      problems.push(`${file}: ${mode} must be an object of colour roles`);
+      problems.push(`${file}: ${mode} must be an object of color roles`);
       continue;
     }
     for (const [role, value] of Object.entries(given)) {
       const known = Object.hasOwn(defaults[mode], role) ? roleKind(role, defaults[mode][role]!) : null;
       if (!known) {
-        problems.push(`${file}: ${mode}.${role} isn't a colour role`);
+        problems.push(`${file}: ${mode}.${role} isn't a color role`);
         continue;
       }
       const checked = checkedRole(known, value);
@@ -107,7 +107,7 @@ export function mergedPalettes(defaults: RolePalettes, roles: ThemeRoles | null,
 function roleSchema(kind: RoleKind, value: RoleValue): JsonSchema {
   const color: JsonSchema = { type: "string", pattern: COLOR_PATTERN };
   if (kind.kind === "color") return { ...color, default: value };
-  if (kind.kind === "pair") return { type: "array", prefixItems: [color, color], minItems: 2, maxItems: 2, default: value, description: "Two colours: the top and bottom of the border" };
+  if (kind.kind === "pair") return { type: "array", prefixItems: [color, color], minItems: 2, maxItems: 2, default: value, description: "Two colors: the top and bottom of the border" };
   return { type: "number", ...(kind.minimum === undefined ? {} : { minimum: kind.minimum, maximum: kind.maximum }), default: value };
 }
 
@@ -123,7 +123,7 @@ function modeSchema(mode: ThemeMode, palette: RolePalette): JsonSchema {
 export function themeSchema(defaults: RolePalettes): object {
   return {
     $schema: JSON_SCHEMA_DIALECT,
-    description: "An Ardia theme: colour roles that replace Ardia's own, per appearance, and the type, metrics, layout and icons it draws with",
+    description: "An Ardia theme: color roles that replace Ardia's own, per appearance, and the type, metrics, layout and icons it draws with",
     type: "object",
     properties: { $schema: { type: "string" }, dark: modeSchema("dark", defaults.dark), light: modeSchema("light", defaults.light), ...lookSchemas() },
     additionalProperties: false,

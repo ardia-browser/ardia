@@ -29,7 +29,7 @@ const requestsFor = (f, method) => f.requests.filter((request) => request.method
 
 test("confirm preserves presentation, destructive label and checkbox on Cancel", async () => {
   const f = fixture();
-  const options = { title: "Delete Profile?", message: "Cannot undo", confirmTitle: "Delete Profile", cancelTitle: "Keep Profile", destructive: true, suppression: "Don’t ask me again", windowId: "a" };
+  const options = { title: "Delete Profile?", message: "Cannot undo", confirmTitle: "Delete Profile", cancelTitle: "Keep Profile", destructive: true, suppression: "Don't ask again", windowId: "a" };
   const work = f.dialogs.confirm(options);
   await turn();
   assert.deepEqual(f.requests[1].args[0], { dialogId: "dialog:test-identity-1:1", kind: "confirm", options });

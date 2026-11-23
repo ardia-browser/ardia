@@ -1,6 +1,6 @@
 import { displayHost, displayUrl, hostOf, type Suggestion } from "@ardia/core";
 import { memo } from "react";
-import { Image, Pressable, Text as NativeText, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text as NativeText, View } from "react-native";
 import { Button, Symbol, Text, useHover, useTheme, withAlpha, type Theme } from "../ui";
 import { Favicon } from "../favicon/Favicon";
 import { SELECTED_SUGGESTION_ALPHA, SUGGESTION } from "./tokens";
@@ -9,6 +9,8 @@ const ICON_BOX = { width: SUGGESTION.iconBox, height: SUGGESTION.iconBox } as co
 
 const selectedFill = (theme: Theme) =>
   theme.powerUpColor ? withAlpha(theme.powerUpColor, theme.dark ? SELECTED_SUGGESTION_ALPHA.dark : SELECTED_SUGGESTION_ALPHA.light) : theme.commandBarSelected;
+
+const rowFill = (theme: Theme, selected: boolean, hovered: boolean) => (selected ? selectedFill(theme) : hovered ? theme.commandBarHover : undefined);
 
 export function SuggestionIcon({ suggestion: s, color }: { suggestion: Suggestion; color?: string }) {
   const theme = useTheme();
@@ -119,34 +121,37 @@ const SuggestionRow = memo(
     return (
       <View {...hoverProps}>
         <Pressable onPress={() => actions.choose(s)}>
-          <View
-            style={{
-              height: SUGGESTION.height,
-              marginVertical: SUGGESTION.gapY,
-              borderRadius: SUGGESTION.radius,
-              flexDirection: "row",
-              alignItems: "center",
-              paddingHorizontal: SUGGESTION.padX,
-              gap: SUGGESTION.gap,
-              backgroundColor: selected ? selectedFill(theme) : hovered ? theme.commandBarHover : undefined,
-            }}
-          >
-            <SuggestionIcon suggestion={s} />
-            <Text lines={1} size="title" ardiaCentersCapitals style={{ flexShrink: 1 }}>
-              {title}
-              {accessory ? (
-                <NativeText style={{ color: theme.textSecondary }}>
-                  {" — "}
-                  {accessory}
-                </NativeText>
+          {({ pressed }) => (
+            <View
+              style={{
+                height: SUGGESTION.height,
+                marginVertical: SUGGESTION.gapY,
+                borderRadius: SUGGESTION.radius,
+                flexDirection: "row",
+                alignItems: "center",
+                paddingHorizontal: SUGGESTION.padX,
+                gap: SUGGESTION.gap,
+                backgroundColor: rowFill(theme, selected, hovered),
+              }}
+            >
+              {pressed ? <View pointerEvents="none" style={{ ...StyleSheet.absoluteFillObject, borderRadius: SUGGESTION.radius, backgroundColor: theme.popoverRowPressed }} /> : null}
+              <SuggestionIcon suggestion={s} />
+              <Text lines={1} size="title" ardiaCentersCapitals style={{ flexShrink: 1 }}>
+                {title}
+                {accessory ? (
+                  <NativeText style={{ color: theme.textSecondary }}>
+                    {" — "}
+                    {accessory}
+                  </NativeText>
+                ) : null}
+              </Text>
+              <View style={{ flex: 1 }} />
+              {hint && !removable ? <Text size="small" tone="textTertiary" ardiaCentersCapitals>{hint}</Text> : null}
+              {removable ? (
+                <Button variant="icon" icon="xmark" size="s" color={theme.textSecondary} tooltip="Remove from History" onPress={onRemove} />
               ) : null}
-            </Text>
-            <View style={{ flex: 1 }} />
-            {hint && !removable ? <Text size="small" tone="textTertiary" ardiaCentersCapitals>{hint}</Text> : null}
-            {removable ? (
-              <Button variant="icon" icon="xmark" size="s" color={theme.textSecondary} tooltip="Remove from History" onPress={onRemove} />
-            ) : null}
-          </View>
+            </View>
+          )}
         </Pressable>
       </View>
     );

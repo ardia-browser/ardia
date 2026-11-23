@@ -1,10 +1,12 @@
 import { VisualEffect } from "@ardia/shell";
+import { tapActivates } from "./a11y";
 import { Symbol } from "./Symbol";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Button } from "./Button";
 import { PANEL_CLOSE_GLYPH, PANEL_CLOSE_SIZE } from "./ButtonKinds";
-import { curve, duration } from "./motion";
+import { curve, duration, popoverMotionStyle } from "./motion";
+import { reduceMotion } from "./reduceMotion";
 import { surfaceTheme, useTheme } from "./theme";
 import { ThemeOverride } from "./ThemeOverride";
 import { concentric, font as typeScale, lineHeight, POPOVER_WIDTH, radius, shadow, space, typeFace, weight } from "./tokens";
@@ -12,6 +14,7 @@ import { useHover } from "./useHover";
 import { Panel, type PanelProps } from "./Panel";
 import { OutsidePressArea } from "./native";
 import { useGlass } from "./Glass";
+import { ClosingView, useLiveWhile, useClosing } from "./Closing";
 
 export const POPOVER_MARGIN = space.m;
 
@@ -68,6 +71,13 @@ export function usePopoverPresence(open: boolean) {
   return { shown: open || shown, closing: !open, onClosed: () => setShown(false) };
 }
 
+export function usePopoverPresenceOf<T>(value: T | null) {
+  const held = useRef(value);
+  if (value !== null) held.current = value;
+  const { shown, closing, onClosed } = usePopoverPresence(value !== null);
+  return { shown: shown ? held.current : null, closing, onClosed };
+}
+
 export type PanelPresence = { closing: boolean; onClosed: () => void };
 
 export function usePanelsPresence<K extends string>(open: string | null, kinds: readonly K[]): (kind: K) => PanelPresence | null {
@@ -97,17 +107,8 @@ export function usePopoverMotion(closing: boolean, onClosed?: () => void, ready 
 }
 
 export function usePopoverMotionStyle(appear: Animated.Value, origin: string | [number | string, number | string, number], upward = false) {
-  return useMemo(
-    () => ({
-      opacity: appear,
-      transformOrigin: origin,
-      transform: [
-        { scale: appear.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] }) },
-        { translateY: appear.interpolate({ inputRange: [0, 1], outputRange: upward ? [4, 0] : [-4, 0] }) },
-      ],
-    }),
-    [appear, origin, upward],
-  );
+  const reduced = reduceMotion() !== false;
+  return useMemo(() => popoverMotionStyle(appear, origin, upward, reduced), [appear, origin, upward, reduced]);
 }
 
 export function Popover({
@@ -138,17 +139,18 @@ export function Popover({
   const appear = usePopoverMotion(closing, onClosed);
   const motion = usePopoverMotionStyle(appear, right !== undefined ? "top right" : "top left");
   const [room, setRoom] = useState<number | null>(null);
+  const live = useLiveWhile(useClosing() || closing);
   return (
     <>
       {fitHeight && <View pointerEvents="none" style={StyleSheet.absoluteFill} onLayout={(e) => setRoom(e.nativeEvent.layout.height)} />}
-      {modal && onDismiss && !closing && <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss} />}
-      <Animated.View pointerEvents={closing ? "none" : "auto"} style={{ position: "absolute", top, right, left, width: typeof width === "number" ? width : POPOVER_WIDTH[width], ...motion }}>
-        <OutsidePressArea onOutsidePress={onDismiss && !closing ? onDismiss : undefined}>
+      {modal && onDismiss && !closing && <Pressable style={StyleSheet.absoluteFill} onPress={live(onDismiss)} />}
+      <ClosingView closing={closing} style={{ position: "absolute", top, right, left, width: typeof width === "number" ? width : POPOVER_WIDTH[width], ...motion }}>
+        <OutsidePressArea onOutsidePress={live(onDismiss)}>
           <PopoverSurface glass={glass}>
             {fitHeight ? <ScrollView showsVerticalScrollIndicator={false} style={room === null ? undefined : { maxHeight: Math.max(0, room - top - POPOVER_MARGIN) }}>{children}</ScrollView> : children}
           </PopoverSurface>
         </OutsidePressArea>
-      </Animated.View>
+      </ClosingView>
     </>
   );
 }
@@ -225,9 +227,11 @@ const VALUE_PAD = space.s;
 export function PopoverValue({ title, onPress, chevron = "chevron.up.chevron.down", tooltip }: { title: string; onPress: () => void; chevron?: string; tooltip?: string }) {
   const theme = useTheme();
   const { hovered, hoverProps } = useHover();
+  const closing = useClosing();
+  const live = useLiveWhile(closing);
   return (
     <View {...hoverProps} tooltip={tooltip} style={{ marginRight: -VALUE_PAD }}>
-      <Pressable onPress={onPress}>
+      <Pressable disabled={closing} onPress={live(onPress)} onAccessibilityTap={tapActivates(live(onPress))} accessibilityRole="button">
         <View style={{ flexDirection: "row", alignItems: "center", gap: space.xs, height: 22, paddingLeft: space.m, paddingRight: VALUE_PAD, borderRadius: radius.control, backgroundColor: hovered ? theme.toolbarHover : undefined }}>
           <Text style={{ fontSize: PANEL.valueSize, color: theme.textSecondary, ...typeFace() }}>{title}</Text>
           <Symbol name={chevron} size={9} weight={chevron === "chevron.down" ? "semibold" : undefined} color={theme.textSecondary} style={{ width: 8, height: 14 }} />

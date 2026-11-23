@@ -43,7 +43,7 @@ function Sheet({ state }: { state: EditorState }) {
   const heading = state.folder ? (node ? "Rename Folder" : "New Folder") : node ? "Edit Bookmark" : "Add Bookmark";
 
   return (
-    <Dialog width="s" pad="xl" onDismiss={close}>
+    <Dialog width="s" pad="xl" controls="large" onDismiss={close}>
       <DialogTitle>{heading}</DialogTitle>
       <FormField label="Name">
         <TextField value={title} onChangeText={setTitle} autoFocus selectOnFocus onSubmit={save} onEscape={close} />
@@ -60,7 +60,7 @@ function Sheet({ state }: { state: EditorState }) {
       )}
       <DialogActions>
         <Button title="Cancel" onPress={close} />
-        <Button title="Save" kind="primary" disabled={!valid} onPress={save} />
+        <Button title={state.folder && !node ? "Create" : "Save"} kind="primary" disabled={!valid} onPress={save} />
       </DialogActions>
     </Dialog>
   );

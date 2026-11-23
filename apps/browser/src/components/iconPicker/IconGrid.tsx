@@ -1,10 +1,10 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, FlatList, Pressable, View } from "react-native";
-import { Button, iconButton, radius, space, Symbol, Text } from "../ui";
+import { Animated, FlatList, Pressable, StyleSheet, View } from "react-native";
+import { Button, HoverFill, iconButton, radius, space, Symbol, Text, useClosing, useLiveAction, tapActivates, chosenButtonA11y } from "../ui";
 import { useTheme } from "../ui/theme";
 import { iconSymbol } from "../../lib/customIcon";
 import { sameIcon } from "../../lib/emoji";
-import { ICON_PICKER, iconPickerColors } from "./tokens";
+import { ICON_PICKER } from "./tokens";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
 import { perLook } from "../ui/tokens";
 
@@ -95,7 +95,7 @@ export function IconGrid({
         }
         ListEmptyComponent={
           <Text size="small" tone="textTertiary" style={NO_MATCHES}>
-            No matches
+            No results
           </Text>
         }
       />
@@ -124,20 +124,23 @@ const Cell = memo(function Cell({ icon, label, selected, onPress }: { icon: stri
   const symbol = iconSymbol(icon);
   const pressMotion = usePressScaleMotion(true, buttonMotion.iconPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : null;
+  const closing = useClosing();
+  const live = useLiveAction();
   return (
     <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ selected }}
-      onPress={() => onPress(icon)}
+      disabled={closing}
+      {...chosenButtonA11y(selected, label)}
+      onPress={live(() => onPress(icon))} onAccessibilityTap={tapActivates(live(() => onPress(icon)))}
       onPressIn={pressMotion.onPressIn}
       onPressOut={pressMotion.onPressOut}
     >
       <View
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
-        style={[CELL(), hovered || selected ? { backgroundColor: iconPickerColors(theme.dark).cellHover } : null]}
+        style={[CELL(), selected ? { backgroundColor: theme.rowSelected } : null]}
       >
+        <HoverFill shown={hovered && !selected} instant={selected} color={theme.rowHover} radius={radius.tile} />
+        {selected ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: radius.tile, borderWidth: ICON_PICKER.selectedRing, borderColor: theme.accent }]} /> : null}
         {symbol ? (
           <Animated.View style={[SYMBOL, scaleStyle]}>
             <Symbol name={symbol} size={ICON_PICKER.symbol} color={theme.icon} style={SYMBOL} />

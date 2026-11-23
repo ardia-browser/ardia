@@ -27,8 +27,8 @@ export const CALENDAR_WORDING: readonly Wording[] = [
     file: "components/live/CalendarPreview.tsx",
     replacements: [
       [
-        `<Button variant="text" look="link" title="Open System Settings" onPress={openCalendarPrivacy} />`,
-        `<Button variant="text" look="link" title="Try Again" onPress={() => void connectCalendar()} />`,
+        `<Button variant="text" look="link" tone="textPrimary" title="Open System Settings" onPress={openCalendarPrivacy} />`,
+        `<Button variant="text" look="link" tone="textPrimary" title="Try Again" onPress={() => void connectCalendar()} />`,
       ],
       [
         "Allow Ardia in System Settings › Privacy & Security › Calendars to see your meetings here.",

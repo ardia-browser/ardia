@@ -1,6 +1,6 @@
 import { duration } from "../ui/motion";
 import type { Theme } from "../ui/theme";
-import { capsule, font, space, withAlpha, type Space } from "../ui/tokens";
+import { font, space, withAlpha, type Space } from "../ui/tokens";
 
 type PagesColors = { rowSelected: string; dropTarget: string };
 
@@ -12,12 +12,12 @@ export function pagesColors(theme: Theme): PagesColors {
   let colors = byTheme.get(theme);
   if (!colors) {
     const rowSelected = withAlpha(theme.formAccent, theme.dark ? ROW_SELECTED_ALPHA.dark : ROW_SELECTED_ALPHA.light);
-    byTheme.set(theme, (colors = { rowSelected, dropTarget: withAlpha(theme.formAccent, DROP_TARGET_ALPHA) }));
+    byTheme.set(theme, (colors = { rowSelected, dropTarget: withAlpha(theme.accent, DROP_TARGET_ALPHA) }));
   }
   return colors;
 }
 
-export const pageType = { get fileName() { return font.body; }, get dayHeader() { return font.small; } } as const;
+export const pageType = { get dayHeader() { return font.small; } } as const;
 
 export const pageHeader = { sideWidth: 200, searchMaxWidth: 480 } as const;
 
@@ -29,11 +29,13 @@ export const pageToolbar: Record<"window" | "page" | "footer", { height: number;
 
 export const pageList = { endPad: 40 } as const;
 
-export const downloadCard = { iconSize: 36, textGap: space.xs, progressHeight: 3, progressTop: 3, progressMin: 0.03 } as const;
+export const downloadCard = { iconSize: 36, textGap: space.xs, progressTop: 3 } as const;
 
-export const historyRow = { height: 38, header: 44, headerInset: space.huge, timeWidth: 64, hostMaxWidth: 220, checkbox: 14, menuBox: 26, scrollSettleMs: duration.base } as const;
+export const historyRow = { height: 38, header: 44, headerInset: space.huge, timeWidth: 64, hostMaxWidth: 220, checkbox: 14 } as const;
 
-export const bookmarkList = { row: 36, treeWidth: 230, treeRow: 28, headerHeight: 40, dropLine: 2, dropLineRadius: capsule(2), folderIcon: 14, folderIconBox: 16, dragOpacity: 0.85 } as const;
+export const rowControls = { scrollSettleMs: duration.base } as const;
+
+export const bookmarkList = { row: 36, treeWidth: 230, treeRow: 28, headerHeight: 40, folderIcon: 14, folderIconBox: 16, dragOpacity: 0.85 } as const;
 
 export const undoToast = { visibleMs: 8000 } as const;
 

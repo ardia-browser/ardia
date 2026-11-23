@@ -84,7 +84,7 @@ export type WindowCloseDecision = { decision: "allow" | "cancel"; suppressWarnin
 const allow = (suppressWarning = false): WindowCloseDecision => ({ decision: "allow", suppressWarning });
 
 async function askToClose(windowId: string, ask: CloseAsk, closing?: string[]): Promise<WindowCloseDecision> {
-  const { confirmed, suppressed } = await ask({ ...closeWindowDialog(windowId, closing), suppression: "Don’t ask me again", windowId });
+  const { confirmed, suppressed } = await ask({ ...closeWindowDialog(windowId, closing), suppression: "Don't ask again", windowId });
   return { decision: confirmed ? "allow" : "cancel", suppressWarning: suppressed };
 }
 

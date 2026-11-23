@@ -1,6 +1,7 @@
 import { confirm } from "../../platform/dialogs";
 import { showMenu, type MenuItem } from "../../platform/menus";
 import { webviews } from "../../platform/webviews";
+import type { ClearSiteDataResult } from "../../platform/siteSettings";
 import { clearSiteDataEverywhere } from "../engines/siteData";
 import { getContentBlocker, isContentBlockerAllowed, setContentBlockerAllowed } from "../../platform/contentBlocker";
 import { menuSections } from "../app/menuSections";
@@ -33,21 +34,45 @@ export async function setSiteBlocking(tab: Pick<Tab, "id" | "windowId">, host: s
   return allowed;
 }
 
-export async function clearSiteDataAfterConfirm(tab: Pick<Tab, "id" | "windowId" | "profileId">, origin: string): Promise<number | null> {
+export type SiteDataCleared = ClearSiteDataResult | "failed" | null;
+
+const cookieCount = (cookies: number) => `${cookies} cookie${cookies === 1 ? "" : "s"}`;
+
+export const siteDataFailed = (cleared: ClearSiteDataResult | "failed") => cleared === "failed" || (cleared.cookies === false && !cleared.storage);
+
+export function siteDataOutcome(cleared: ClearSiteDataResult | "failed"): string {
+  if (cleared === "failed" || siteDataFailed(cleared)) return "Couldn't clear this site's data. Try again";
+  if (cleared.cookies === false) return "Cleared site data, but not its cookies. Try again";
+  if (!cleared.storage) return cleared.cookies ? `Cleared ${cookieCount(cleared.cookies)}, but not all site data. Try again` : "Couldn't clear all of this site's data. Try again";
+  return cleared.cookies ? `Cleared ${cookieCount(cleared.cookies)} and site data` : "Cleared site data";
+}
+
+export async function confirmAndClearSiteData(profileId: string, origin: string, windowId?: string, tabId?: string): Promise<SiteDataCleared> {
   const host = new URL(origin).hostname;
   const { confirmed } = await confirm({
     title: `Clear cookies and site data for ${host}?`,
     message: "You'll be signed out of this site, and its offline data will be deleted.",
     confirmTitle: "Clear",
     destructive: true,
-    windowId: tab.windowId,
+    windowId,
   });
   if (!confirmed) return null;
-  const profile = engineProfile(useBrowser.getState(), tab.profileId);
-  const result = await clearSiteDataEverywhere(profile, origin).catch(() => null);
-  const now = currentTab(tab.id);
-  if (now && now.profileId === tab.profileId && siteOrigin(now.url) === origin) void webviews.get(tab.id)?.reload();
-  return result && typeof result.cookies === "number" ? result.cookies : 0;
+  const profile = engineProfile(useBrowser.getState(), profileId);
+  const result = await clearSiteDataEverywhere(profile, origin).then(
+    (cleared): ClearSiteDataResult => cleared ?? { cookies: false, storage: false },
+    () => "failed" as const,
+  );
+  const now = tabId ? currentTab(tabId) : undefined;
+  if (tabId && now && now.profileId === profileId && siteOrigin(now.url) === origin && !siteDataFailed(result)) void webviews.get(tabId)?.reload();
+  return result;
+}
+
+export async function clearSiteDataAfterConfirm(tab: Pick<Tab, "id" | "windowId" | "profileId">, origin: string): Promise<number | null> {
+  const cleared = await confirmAndClearSiteData(tab.profileId, origin, tab.windowId, tab.id);
+  if (cleared === null) return null;
+  const whole = cleared !== "failed" && cleared.cookies !== false && cleared.storage;
+  showToast(tab.windowId, siteDataOutcome(cleared), undefined, { icon: whole ? "trash" : "exclamationmark.triangle" });
+  return cleared !== "failed" && typeof cleared.cookies === "number" ? cleared.cookies : 0;
 }
 
 type ReloadMenuState = { blocker: "on" | "off" | "offInSettings" | "unavailable" };

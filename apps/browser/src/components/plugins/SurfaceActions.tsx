@@ -9,15 +9,16 @@ import { COMMAND_KEY } from "../../state/commands/keyNotation";
 import { newTab } from "../../state/tabs/actions";
 import { consentToken } from "../../state/telemetry/client";
 import { notePlugin } from "../../state/telemetry/pluginCounts";
-import { Box, Button } from "../ui";
+import { Box, Button, useClosing } from "../ui";
 import { actionsIn, bool, isHandlerRef, isWebUrl, str, useSurface } from "./surfaceNodes";
 import { heldByArdia, menuKeyOf, panelShortcuts, ShortcutScopeContext, shortcutHint, useShortcutRegistration, type ShortcutScope, type SurfaceKeys } from "./surfaceShortcuts";
 
 export function useRunAction() {
   const { fire, windowId } = useSurface();
+  const closing = useClosing();
   return useCallback(
     (action: PluginNode | undefined, args: unknown[] = []): boolean => {
-      if (!action) return false;
+      if (!action || closing) return false;
       const { onAction, url, copy } = action.props;
       let ran = false;
       if (isWebUrl(url)) {
@@ -30,7 +31,7 @@ export function useRunAction() {
       if (isHandlerRef(onAction)) return fire(onAction, args) || ran;
       return ran;
     },
-    [fire, windowId],
+    [fire, windowId, closing],
   );
 }
 
@@ -77,15 +78,16 @@ export function SurfaceShortcutScope({ onKeys, children }: { onKeys?: (keys: Sur
 
 export function useActionMenu() {
   const run = useRunAction();
+  const closing = useClosing();
   return useCallback(
     async (panel: unknown) => {
       const actions = actionsIn(panel);
-      if (!actions.length) return;
+      if (!actions.length || closing) return;
       const shortcuts = panelShortcuts(actions);
       const chosen = await chooseFromMenu<number>(actions.map((a, index) => ({ value: index, title: str(a.props.title) ?? "Action", symbol: str(a.props.icon), ...menuKeyOf(shortcuts.get(a)) })));
       if (chosen !== null) run(actions[chosen]);
     },
-    [run],
+    [run, closing],
   );
 }
 

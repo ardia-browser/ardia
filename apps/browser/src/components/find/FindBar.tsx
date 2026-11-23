@@ -1,7 +1,7 @@
 import { useShortcutHint, withShortcut } from "../../state/commands/commandShortcuts";
 import { claimFocusTag, findFocus } from "../../state/focus/focusClaims";
 import { useEffect, useRef, useState } from "react";
-import { Animated, findNodeHandle, TextInput, View } from "react-native";
+import { findNodeHandle, TextInput, View } from "react-native";
 import { useTheme } from "../ui/theme";
 import { webviews } from "../../state/tabs/webviewHandles";
 import { useFind, useTab } from "../../state/browser/hooks";
@@ -9,15 +9,19 @@ import { currentTab } from "../../state/browser/current";
 import { setFind as setTabFind } from "../../state/windows/actions";
 import { closeFind, findStep, noteFind, submitRepeatsKey, takeFindFocusRequest } from "../../state/find/actions";
 import type { FindState } from "../../state/browser/types";
-import { Button, Divider, font, Panel, radius, shadow, space, Symbol, Text } from "../ui";
+import { Button, ClosingView, Divider, font, useLiveWhile, Panel, radius, shadow, space, Symbol, Text, usePopoverMotion, usePopoverMotionStyle, usePopoverPresenceOf, useStillOpen, whileOpen } from "../ui";
 import { replaceInField } from "../../state/site/selection";
-import { FIND_APPEAR, FIND_WIDTH } from "./tokens";
+import { FIND_WIDTH } from "./tokens";
 
 export function FindBar({ tabId }: { tabId: string }) {
+  return <FindBarPresence key={tabId} tabId={tabId} />;
+}
+
+function FindBarPresence({ tabId }: { tabId: string }) {
   const hasPage = useTab(tabId, (t) => !!t?.url);
   const find = useFind(tabId);
-  if (!find.open || !hasPage) return null;
-  return <FindBarPanel key={tabId} tabId={tabId} find={find} />;
+  const { shown, closing, onClosed } = usePopoverPresenceOf(find.open && hasPage ? find : null);
+  return shown ? <FindBarPanel tabId={tabId} find={shown} closing={closing} onClosed={onClosed} /> : null;
 }
 
 const FIND_KEYS = [
@@ -28,15 +32,15 @@ const FIND_KEYS = [
   { key: "Enter", altKey: true, shiftKey: true },
 ];
 
-function FindBarPanel({ tabId, find }: { tabId: string; find: FindState }) {
+function FindBarPanel({ tabId, find, closing, onClosed }: { tabId: string; find: FindState; closing: boolean; onClosed: () => void }) {
   const previousHint = useShortcutHint("findPrevious");
   const nextHint = useShortcutHint("findNext");
   const theme = useTheme();
   const input = useRef<TextInput>(null);
-  const appear = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.timing(appear, { toValue: 1, ...FIND_APPEAR, useNativeDriver: true }).start();
-  }, []);
+  const appear = usePopoverMotion(closing, onClosed);
+  const motion = usePopoverMotionStyle(appear, "top right");
+  const act = whileOpen(closing, useStillOpen(!closing));
+  const live = useLiveWhile(closing);
   useEffect(() => {
     if (!find.focusRequest) return;
     takeFindFocusRequest(tabId);
@@ -54,7 +58,7 @@ function FindBarPanel({ tabId, find }: { tabId: string; find: FindState }) {
     if (findNext && query) noteFind("stepped");
     void webviews.get(tabId)?.find(query, !backwards, findNext);
   };
-  const close = () => closeFind(tabId);
+  const close = act(() => closeFind(tabId));
   const [replacement, setReplacement] = useState("");
   const [note, setNote] = useState<{ text: string; error: boolean } | null>(null);
   useEffect(() => {
@@ -62,52 +66,53 @@ function FindBarPanel({ tabId, find }: { tabId: string; find: FindState }) {
     const timer = setTimeout(() => setNote(null), 2200);
     return () => clearTimeout(timer);
   }, [note]);
-  const replace = async (all: boolean) => {
+  const replace = act(async (all: boolean) => {
     if (!find.query) return;
     const { field, count } = await replaceInField(tabId, find.query, replacement, all);
     if (!field) return setNote({ text: "Not in a text field", error: true });
     if (all || !count) setNote({ text: count ? `${count} replaced` : "No matches", error: !count });
     run(false, find.query, false);
-  };
+  });
   const none = find.count === 0 && !!find.query;
 
   return (
-    <Animated.View
+    <ClosingView
+      closing={closing}
       style={{
         position: "absolute",
         top: space.ml,
         right: space.l,
-        opacity: appear,
-        transform: [{ translateY: appear.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }],
+        ...motion,
       }}
     >
-      <Panel radius={radius.panel} shadow={shadow.card} style={{ width: FIND_WIDTH }}>
+      <Panel radius={radius.panel} border={theme.popoverBorder} shadow={shadow.popover} style={{ width: FIND_WIDTH }}>
         <View style={{ height: 40, flexDirection: "row", alignItems: "center", paddingLeft: space.l, paddingRight: space.xs, gap: space.xxs }}>
           <Symbol name="magnifyingglass" size={13} color={theme.textSecondary} style={{ width: 16, height: 16, marginRight: space.xs }} />
           <TextInput
             ref={input}
             autoFocus
+            editable={!closing}
             value={find.query}
-            onChangeText={(query) => {
+            onChangeText={live(act((query: string) => {
               setFind({ query });
               run(false, query, false);
-            }}
+            }))}
             placeholder="Find on Page"
             placeholderTextColor={theme.placeholder}
             selectionColor={theme.selection}
             enableFocusRing={false}
-            onSubmitEditing={() => {
+            onSubmitEditing={live(() => {
               if (!submitRepeatsKey(enterAt.current, Date.now())) run(false);
-            }}
+            })}
             keyDownEvents={FIND_KEYS}
-            onKeyDown={(e) => {
+            onKeyDown={live(act((e) => {
               const { key, shiftKey, ctrlKey, metaKey } = e.nativeEvent;
               if (key === "Escape") close();
               else if (key === "Enter" && !ctrlKey && !metaKey) {
                 enterAt.current = Date.now();
                 run(!!shiftKey);
               }
-            }}
+            }))}
             style={{ flex: 1, ...font.title, color: theme.textPrimary, paddingVertical: 0 }}
           />
           {none ? (
@@ -125,8 +130,8 @@ function FindBarPanel({ tabId, find }: { tabId: string; find: FindState }) {
               </Text>
             </View>
           ) : null}
-          <Button variant="icon" icon="chevron.up" size="l" disabled={!find.count} onPress={() => findStep(tabId, true)} tooltip={withShortcut("Previous", previousHint)} />
-          <Button variant="icon" icon="chevron.down" size="l" disabled={!find.count} onPress={() => findStep(tabId, false)} tooltip={withShortcut("Next", nextHint)} />
+          <Button variant="icon" icon="chevron.up" size="l" disabled={!find.count} onPress={act(() => findStep(tabId, true))} tooltip={withShortcut("Previous", previousHint)} />
+          <Button variant="icon" icon="chevron.down" size="l" disabled={!find.count} onPress={act(() => findStep(tabId, false))} tooltip={withShortcut("Next", nextHint)} />
           <Divider vertical thick length={18} style={CLOSE_GAP} />
           <Button variant="icon" icon="xmark" size="l" onPress={close} tooltip="Done (Esc)" />
         </View>
@@ -136,14 +141,15 @@ function FindBarPanel({ tabId, find }: { tabId: string; find: FindState }) {
             <Symbol name="arrow.triangle.swap" size={12} color={theme.textSecondary} style={{ width: 16, height: 16, marginRight: space.xs }} />
             <TextInput
               value={replacement}
-              onChangeText={setReplacement}
+              editable={!closing}
+              onChangeText={live(act(setReplacement))}
               placeholder="Replace"
               placeholderTextColor={theme.placeholder}
               selectionColor={theme.selection}
               enableFocusRing={false}
-              onSubmitEditing={() => void replace(false)}
+              onSubmitEditing={live(() => void replace(false))}
               keyDownEvents={[{ key: "Escape" }]}
-              onKeyDown={(e) => e.nativeEvent.key === "Escape" && close()}
+              onKeyDown={live(act((e) => e.nativeEvent.key === "Escape" && close()))}
               style={{ flex: 1, ...font.title, color: theme.textPrimary, paddingVertical: 0 }}
             />
             {note && (
@@ -156,7 +162,7 @@ function FindBarPanel({ tabId, find }: { tabId: string; find: FindState }) {
           </View>
         )}
       </Panel>
-    </Animated.View>
+    </ClosingView>
   );
 }
 

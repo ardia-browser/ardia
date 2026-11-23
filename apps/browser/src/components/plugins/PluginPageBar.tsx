@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { Animated, Image, Pressable, StyleSheet, View } from "react-native";
-import { ContextMenuArea, Divider, monoFace, Text, WindowDragRegion } from "../ui";
+import { ContextMenuArea, Divider, monoFace, tapActivates, Text, WindowDragRegion } from "../ui";
 import { ToolbarRowContext } from "../ui/toolbarRowContext";
 import { useEasedColor } from "../ui/toolbarColors";
 import { useSitePalette } from "../toolbar/useSitePalette";
@@ -55,7 +55,7 @@ export const PluginPageBar = memo(function PluginPageBar({ tabId, windowId, matc
             {at < 0 ? (
               <View style={labelStyle}>{label}</View>
             ) : (
-              <Pressable accessibilityRole="button" accessibilityLabel="Edit Address" onPress={() => runHostAction("address", windowId, tabId)} style={labelStyle}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Edit Address" onPress={() => runHostAction("address", windowId, tabId)} onAccessibilityTap={tapActivates(() => runHostAction("address", windowId, tabId))} style={labelStyle}>
                 {label}
               </Pressable>
             )}

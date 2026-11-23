@@ -1,7 +1,7 @@
 import { StyleSheet } from "react-native";
 import { useTheme } from "../ui/theme";
 import { duration, springs } from "../ui/motion";
-import { display, font, ink, perLook, proseLineHeight, radius, tracking, weight } from "../ui/tokens";
+import { display, font, ink, perLook, proseLineHeight, tracking, weight } from "../ui/tokens";
 
 const dark = {
   cardFill: "#FFFFFF17",
@@ -13,7 +13,6 @@ const dark = {
   badge: "#FFFFFF14",
   badgeGlyph: "#FFFFFFCC",
   postcardTooltip: "rgba(255,255,255,0.18)",
-  releaseNotesScrim: "rgba(10,10,10,0.35)",
 };
 
 type NtpColors = typeof dark;
@@ -28,7 +27,6 @@ const light: NtpColors = {
   badge: "#0000000A",
   badgeGlyph: "#000000B3",
   postcardTooltip: "rgba(0,0,0,0.8)",
-  releaseNotesScrim: "rgba(255,255,255,0.35)",
 };
 
 export function useNtpColors(): NtpColors {
@@ -48,8 +46,6 @@ export const NTP_BAR: { radius: number; border: number; contentInset: number; sh
     { color: ink.black, opacity: 0.04, radius: 1, offset: [0, 2] },
   ],
 };
-
-export const PERSONALIZE_PANEL = { get radius() { return radius.sheet; }, spring: springs.smooth } as const;
 
 const NTP_TYPE = perLook(
   () =>

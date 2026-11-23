@@ -102,7 +102,7 @@ function SuggestionCard({ count, shift, cleanUp, everyDay, notNow, neverAgain }:
         <Button variant="pill" tone="chip" size="m" title="Auto Clean Up" onPress={everyDay} />
       </View>
       <View style={NEVER_AGAIN}>
-        <Button variant="text" look="panel" tone="textTertiary" hoverTone="textSecondary" title="Don’t show again" onPress={neverAgain} />
+        <Button variant="text" look="panel" tone="textTertiary" hoverTone="textSecondary" title="Don't show again" onPress={neverAgain} />
       </View>
     </View>
   );

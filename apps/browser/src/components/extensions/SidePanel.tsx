@@ -1,4 +1,4 @@
-import { Box, Button, Divider, Text, WebView, type WebViewHandle } from "../ui";
+import { Button, WebView, type WebViewHandle } from "../ui";
 import { useEffect, useRef, useState } from "react";
 import { Animated, Image, StyleSheet, View } from "react-native";
 import { useTheme } from "../ui/theme";
@@ -8,8 +8,8 @@ import { currentSettings } from "../../state/browser/current";
 import { updateSettings } from "../../state/settings/actions";
 import { DEFAULT_SETTINGS } from "../../state/settings/settings";
 import { openFromPage, pageProfileId } from "../../state/tabs/openFromPage";
-import { space } from "../ui/tokens";
-import { EXTENSION_PAGE_BACKGROUND, SIDE_PANEL_HEADER_PAD_RIGHT } from "./tokens";
+import { EXTENSION_PAGE_BACKGROUND, SIDE_PANEL_HEADER } from "./tokens";
+import { SidePanelHeader } from "./SidePanelHeader";
 import { closePanelCard, closeSidePanelOnTab, dropSidePanelCard, findExtension, panelKey, showExtensionMenu, shownReadyTab, takeSidePanelFocus, useExtensions, type SidePanel } from "../../state/extensions/actions";
 import { curve, duration } from "../ui/motion";
 import { GLYPH } from "../toolbar/tokens";
@@ -17,7 +17,6 @@ import { useResizeDrag } from "../sidebar/useResizeDrag";
 
 const MIN_WIDTH = 320;
 const MAX_WIDTH = 600;
-const HEADER = 40;
 
 const NO_CARDS: SidePanel[] = [];
 
@@ -111,11 +110,7 @@ function PanelCard({ windowId, panel, current, onWindowClose, onHiddenCrash }: {
       pointerEvents={current ? "auto" : "none"}
       style={{ ...StyleSheet.absoluteFillObject, opacity: current ? 1 : 0, borderRadius: cardRadius, overflow: "hidden", backgroundColor: theme.card }}
     >
-      <Box row gap="m" style={HEADER_ROW}>
-        {icon ? <Image source={{ uri: icon }} style={{ width: 16, height: 16 }} /> : null}
-        <Text numberOfLines={1} weight="medium" style={FLEX}>
-          {title}
-        </Text>
+      <SidePanelHeader icon={icon ? <Image source={{ uri: icon }} style={ICON} /> : null} title={title} onClose={() => closeSidePanelOnTab(windowId)}>
         <Button variant="icon"
           icon="ellipsis"
           glyph={GLYPH}
@@ -125,9 +120,7 @@ function PanelCard({ windowId, panel, current, onWindowClose, onHiddenCrash }: {
             if (found) void showExtensionMenu(windowId, found);
           }}
         />
-        <Button variant="icon" icon="xmark" glyph={GLYPH} weight="medium" tooltip="Close Side Panel" onPress={() => closeSidePanelOnTab(windowId)} />
-      </Box>
-      <Divider />
+      </SidePanelHeader>
       <View style={PAGE}>
         <WebView
           ref={web}
@@ -151,6 +144,5 @@ function PanelCard({ windowId, panel, current, onWindowClose, onHiddenCrash }: {
   );
 }
 
-const FLEX = { flex: 1 } as const;
-const HEADER_ROW = { height: HEADER, alignItems: "center", paddingLeft: space.l, paddingRight: SIDE_PANEL_HEADER_PAD_RIGHT } as const;
+const ICON = { width: SIDE_PANEL_HEADER.icon, height: SIDE_PANEL_HEADER.icon } as const;
 const PAGE = { flex: 1, backgroundColor: EXTENSION_PAGE_BACKGROUND } as const;

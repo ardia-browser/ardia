@@ -225,7 +225,7 @@ function ToolbarSection() {
             </Box>
             {minimal ? (
               <Text size="caption" tone="textTertiary" style={MENU_NOTE}>
-                {`Minimalism mode hides the address, so ${keyText("⌘L")} opens in the center while it’s on.`}
+                {`Minimalism mode hides the address, so ${keyText("⌘L")} opens in the center while it's on.`}
               </Text>
             ) : null}
           </FormField>

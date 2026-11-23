@@ -5,9 +5,9 @@ import { useBookmarks } from "../../state/bookmarks/hooks";
 import { openUrl } from "../../state/bookmarks/actions";
 import { plural } from "../../state/browser/model";
 import { Favicon } from "../favicon/Favicon";
-import { Button, ContextMenuArea, MouseArea, radius, space, Symbol, Text, useHover, useTheme } from "../ui";
-import { openBookmarkRowMenu } from "../../state/bookmarks/bookmarkMenus";
-import { hostLabel } from "./PageLayout";
+import { ContextMenuArea, MouseArea, radius, space, Symbol, Text, useTheme } from "../ui";
+import { bookmarkDrag } from "../bookmarks/tokens";
+import { hostLabel, RowMenuSlot, useRowControls } from "./PageLayout";
 import { bookmarkList, pagesColors } from "./tokens";
 import { perLook } from "../ui/tokens";
 
@@ -24,11 +24,11 @@ export function BookmarkRow({
   showPath,
   selected,
   highlighted,
+  keyboardRow,
   targetRef,
   onSelect,
   onOpenFolder,
-  onDelete,
-  menuSelection,
+  onMenu,
   onDragStart,
   onDragMove,
   onDragEnd,
@@ -40,11 +40,11 @@ export function BookmarkRow({
   showPath: boolean;
   selected: boolean;
   highlighted: boolean;
+  keyboardRow: boolean;
   targetRef: (v: View | null) => void;
   onSelect: (e: { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean }) => void;
-  onOpenFolder: (folder?: string) => void;
-  onDelete: () => void;
-  menuSelection: () => string[];
+  onOpenFolder: () => void;
+  onMenu: () => void;
   onDragStart: () => void;
   onDragMove: (x: number, y: number) => void;
   onDragEnd: (x: number, y: number) => void;
@@ -53,7 +53,7 @@ export function BookmarkRow({
   const colors = pagesColors(theme);
   const node = useBookmarks((b) => b.nodes[id]);
   const path = useBookmarks((b) => (showPath ? bookmarkAncestors(b, id).map((a) => a.title).reverse().join(" › ") : ""));
-  const { hovered, hoverProps } = useHover();
+  const { hovered, controlsShown, rowProps } = useRowControls(id, keyboardRow);
   const dy = useRef(new Animated.Value(0)).current;
   const [dragging, setDragging] = useState(false);
   const handlers = useRef({ onDragStart, onDragMove, onDragEnd });
@@ -61,7 +61,7 @@ export function BookmarkRow({
   const responder = useMemo(
     () =>
       PanResponder.create({
-        onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 4 || Math.abs(g.dx) > 8,
+        onMoveShouldSetPanResponder: (_, g) => Math.hypot(g.dx, g.dy) > bookmarkDrag.start,
         onPanResponderGrant: () => {
           setDragging(true);
           handlers.current.onDragStart();
@@ -86,24 +86,20 @@ export function BookmarkRow({
   if (!node) return null;
 
   const open = (mode: Parameters<typeof openUrl>[2]) => node.kind === "url" && openUrl(node.url, windowId, mode);
-  const menu = () => {
-    if (!selected) onSelect({});
-    return openBookmarkRowMenu(node, { windowId, profileId, showPath, selection: selected ? menuSelection() : [id], onOpenFolder, onDelete });
-  };
 
   return (
     <Animated.View
       ref={targetRef as never}
       {...responder.panHandlers}
-      {...hoverProps}
+      {...rowProps}
       style={{ position: "absolute", top, left: 0, right: 0, zIndex: dragging ? 10 : 0, opacity: dragging ? bookmarkList.dragOpacity : 1, transform: [{ translateY: dy }] }}
     >
-      <ContextMenuArea onContextMenu={() => void menu()}>
+      <ContextMenuArea onContextMenu={onMenu}>
         <MouseArea onMiddleClick={() => open("background")}>
-          <Pressable onPress={(e) => onSelect(e.nativeEvent as unknown as { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean })}>
+          <Pressable focusable={false} onPress={(e) => onSelect(e.nativeEvent as unknown as { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean })}>
             <View
               onDoubleClick={() => (node.kind === "folder" ? onOpenFolder() : void open("current"))}
-              style={[ROW_LOOK(), { backgroundColor: selected ? colors.rowSelected : highlighted ? colors.dropTarget : hovered ? theme.rowHover : undefined }]}
+              style={[ROW_LOOK(), { backgroundColor: selected ? colors.rowSelected : highlighted ? colors.dropTarget : hovered || keyboardRow ? theme.rowHover : undefined }]}
             >
               {node.kind === "url" ? (
                 <Favicon url={node.url} favicon={node.favicon} profileId={profileId} />
@@ -116,9 +112,7 @@ export function BookmarkRow({
               <Text lines={1} size="small" tone="textTertiary" style={DETAIL}>
                 {showPath ? path : node.kind === "url" ? hostLabel(node.url) : plural(node.children.length, "item")}
               </Text>
-              <View style={{ opacity: hovered ? 1 : 0 }}>
-                <Button variant="icon" icon="ellipsis" size="l" onPress={() => void menu()} tooltip="More actions" />
-              </View>
+              <RowMenuSlot shown={controlsShown} onPress={onMenu} />
             </View>
           </Pressable>
         </MouseArea>

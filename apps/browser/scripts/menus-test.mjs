@@ -566,12 +566,12 @@ try {
     assert.deepEqual(await run(`return st().profileOrder;`), ["default"]);
   });
 
-  await check("bookmarks page: a two-bookmark selection opens both, copies both, and Delete 2 Bookmarks reaches the page's delete", async () => {
+  await check("bookmarks page: a two-bookmark selection opens both, copies both, and Remove 2 Bookmarks reaches the page's delete", async () => {
     await run(`return home();`);
     const [b1, b2] = await run(`return [st().addBookmark({ profileId: "default", url: "${url("bm1")}", title: "BM1" }), st().addBookmark({ profileId: "default", url: "${url("bm2")}", title: "BM2" })];`);
     const open = `ac.menus.openBookmarkRowMenu(st().bookmarks.nodes[${JSON.stringify(b1)}], { windowId: "w1", profileId: "default", showPath: false, selection: ${JSON.stringify([b1, b2])}, onOpenFolder() {}, onDelete() { globalThis.__menusDeleted = (globalThis.__menusDeleted ?? 0) + 1; } })`;
     const menu = await choose(null, "openAll", { open });
-    assert.equal(itemsOf(menu, "delete").title, "Delete 2 Bookmarks");
+    assert.equal(itemsOf(menu, "delete").title, "Remove 2 Bookmarks");
     assert.equal(itemsOf(menu, "openAll").title, "Open 2 in New Tabs");
     await sleep(800);
     assert.deepEqual(await run(`return [byUrl("bm1").length, byUrl("bm2").length];`), [1, 1]);
@@ -581,7 +581,7 @@ try {
     assert.equal(await run(`return globalThis.__menusDeleted;`), 1);
   });
 
-  await check("bookmarks bar: Delete on a bar bookmark removes it", async () => {
+  await check("bookmarks bar: Remove Bookmark on a bar bookmark removes it", async () => {
     const id = await run(`return st().addBookmark({ profileId: "default", url: "${url("barbm")}", title: "BarBM" });`);
     await choose(null, "delete", { open: `ac.menus.openBarMenu("w1", "default", st().bookmarks.nodes[${JSON.stringify(id)}])` });
     assert.equal(await run(`return !!st().bookmarks.nodes[${JSON.stringify(id)}];`), false);

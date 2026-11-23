@@ -1,4 +1,4 @@
-import { WindowBackdrop, Box, Button, curve, duration, ink, Panel, proseLineHeight, radius as radii, reduceMotionKnown, space, Text, useHover, VisualEffect } from "../ui";
+import { WindowBackdrop, Box, Button, curve, duration, ink, Panel, proseLineHeight, radius as radii, reduceMotionKnown, space, Text, useHover, useTheme, VisualEffect, tapActivates } from "../ui";
 import { useEffect, useRef, useState } from "react";
 import { Animated, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { profileAccent } from "../ui/theme";
@@ -93,7 +93,7 @@ export function ReleaseNotesPostcard({ notes, size, onOpen, onDismiss }: { notes
             transform: [{ rotate: `${CARD.tilt}deg` }, { scale }],
           }}
         >
-          <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel="What's new in Ardia" style={FILL}>
+          <Pressable onPress={onOpen} onAccessibilityTap={tapActivates(onOpen)} accessibilityRole="button" accessibilityLabel="What's new in Ardia" style={FILL}>
             <Panel style={StyleSheet.absoluteFill} radius={CARD.radius} fill={ink.clear} border={null} shadow={postcard.cardShadow} />
             <Artwork notes={notes} radius={CARD.radius} titleSize={40} hidden={{ top: CARD.overhangTop, right: CARD.overhangRight }} />
           </Pressable>
@@ -112,7 +112,7 @@ export function ReleaseNotesPostcard({ notes, size, onOpen, onDismiss }: { notes
 function Tooltip({ text, onOpen, onClose }: { text: string; onOpen: () => void; onClose: () => void }) {
   const colors = useNtpColors();
   return (
-    <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel={text}>
+    <Pressable onPress={onOpen} onAccessibilityTap={tapActivates(onOpen)} accessibilityRole="button" accessibilityLabel={text}>
       <View style={TOOLTIP_PLATE()}>
         <VisualEffect material="contentBackground" blendingMode="withinWindow" cornerRadius={radii.control} style={StyleSheet.absoluteFill} />
         <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.postcardTooltip }]} />
@@ -145,7 +145,7 @@ function Artwork({ notes, radius, titleSize, hidden }: { notes: ReleaseNotes; ra
 }
 
 export function ReleaseNotesPage({ notes, size, onClose }: { notes: ReleaseNotes; size: { width: number; height: number }; onClose: () => void }) {
-  const colors = useNtpColors();
+  const theme = useTheme();
   const t = useRef(new Animated.Value(0)).current;
   const [closing, setClosing] = useState(false);
   useEffect(() => {
@@ -167,7 +167,7 @@ export function ReleaseNotesPage({ notes, size, onClose }: { notes: ReleaseNotes
     <Animated.View style={StyleSheet.absoluteFill} pointerEvents={closing ? "none" : "auto"}>
       <Animated.View style={[StyleSheet.absoluteFill, { opacity: t.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolate: "clamp" }) }]}>
         <VisualEffect material="hudWindow" blendingMode="withinWindow" style={StyleSheet.absoluteFill} />
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.releaseNotesScrim }]} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.scrim }]} />
         <Pressable style={StyleSheet.absoluteFill} onPress={close} accessibilityLabel="Close release notes" />
       </Animated.View>
       <View style={[StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center" }]} pointerEvents="box-none">

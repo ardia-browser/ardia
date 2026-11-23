@@ -5,6 +5,7 @@ import { calendarBlocked, connectCalendar, openCalendarPrivacy, refreshCalendar,
 import { isCalendarUrl, isMeeting, joinLink, joinTitle, relativeTime, timeRange, type CalendarEvent } from "../../state/live/meetings";
 import { useLive } from "../../state/live/store";
 import { useTab } from "../../state/browser/hooks";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { activate } from "../../state/tabs/actions";
 import { Box, Button, capsule, font, radius, space, Text, useHover, useTheme, weight } from "../ui";
 import { RefreshSpinner } from "../sidebar/RefreshSpinner";
@@ -18,7 +19,7 @@ import { perLook } from "../ui/tokens";
 export function useIsCalendarTab(tabId: string | null): boolean {
   const pinnedCalendar = useTab(tabId ?? undefined, (t) => !!t?.pin && isCalendarUrl(t.pinnedUrl ?? t.url));
   const on = useLive((s) => s.calendar.showPreview);
-  return pinnedCalendar && on;
+  return PLATFORM_FEATURES.calendar && pinnedCalendar && on;
 }
 
 const JOINABLE_BEFORE_MS = 10 * 60_000;
@@ -103,7 +104,7 @@ const SETTINGS_LINK = { alignSelf: "flex-start" } as const;
 function OpenSystemSettings() {
   return (
     <View style={SETTINGS_LINK}>
-      <Button variant="text" look="link" title="Open System Settings" onPress={openCalendarPrivacy} />
+      <Button variant="text" look="link" tone="textPrimary" title="Open System Settings" onPress={openCalendarPrivacy} />
     </View>
   );
 }

@@ -2,15 +2,19 @@ import { Symbol } from "./Symbol";
 import type { ReactNode } from "react";
 import { Pressable, Text, View, type GestureResponderEvent } from "react-native";
 import { Divider } from "./Divider";
-import { GlassFill, useGlass } from "./Glass";
+import { useGlass } from "./Glass";
+import { HoverFill } from "./HoverFill";
 import { PANEL } from "./Popover";
 import { useTheme, type Theme } from "./theme";
 import { opacity, space, typeFace } from "./tokens";
 import { useHover } from "./useHover";
+import { radioA11y, spaceActivates, tapActivates } from "./a11y";
+import { useLiveWhile, useClosing } from "./Closing";
 
 export const menuRowFill = (theme: Theme, pressed = false) => (pressed ? theme.popoverRowPressed : theme.rowHover);
 
 const RING_WIDTH = 1.5;
+const CHECK = { glyph: 11, slot: { width: 16, height: 16 } } as const;
 
 export function MenuRow({
   icon,
@@ -18,11 +22,13 @@ export function MenuRow({
   iconColor,
   title,
   detail,
+  detailColor,
   accessory,
   onPress,
   disabled,
   destructive,
   selected,
+  checked,
   minHeight = PANEL.rowHeight,
   ring,
   tooltip,
@@ -32,11 +38,13 @@ export function MenuRow({
   iconColor?: string;
   title: string;
   detail?: string;
+  detailColor?: string;
   accessory?: ReactNode;
   onPress?: (event: GestureResponderEvent) => void;
   disabled?: boolean;
   destructive?: boolean;
   selected?: boolean;
+  checked?: boolean;
   minHeight?: number;
   ring?: boolean;
   tooltip?: string;
@@ -44,10 +52,13 @@ export function MenuRow({
   const theme = useTheme();
   const glass = useGlass();
   const { hovered, hoverProps } = useHover();
+  const closing = useClosing();
+  const live = useLiveWhile(closing);
   const tint = destructive ? theme.destructive : theme.textPrimary;
+  const interactive = !!onPress && !disabled;
+  const marked = !!(selected || checked);
   const content = (pressed: boolean) => {
-    const lit = !!onPress && !disabled && (pressed || hovered);
-    const fill = lit ? menuRowFill(theme, pressed) : selected ? theme.rowSelected : undefined;
+    const lit = interactive && (pressed || hovered);
     return (
       <View
         style={{
@@ -59,12 +70,12 @@ export function MenuRow({
           alignItems: "center",
           gap: PANEL.iconGap,
           opacity: disabled ? opacity.disabled : 1,
-          backgroundColor: glass && lit ? undefined : fill,
+          backgroundColor: marked ? theme.rowSelected : undefined,
           borderWidth: ring ? RING_WIDTH : undefined,
           borderColor: ring ? theme.accent : undefined,
         }}
       >
-        {glass && lit ? <GlassFill radius={PANEL.rowRadius} state={pressed ? "pressed" : "lit"} /> : null}
+        {interactive ? <HoverFill shown={lit} instant={pressed} color={menuRowFill(theme, pressed)} radius={PANEL.rowRadius} glass={glass ? (pressed ? "pressed" : "lit") : undefined} /> : null}
         {leading ? (
           <View style={{ width: PANEL.iconSlot, height: PANEL.iconSlot, alignItems: "center", justifyContent: "center" }}>{leading}</View>
         ) : icon ? (
@@ -75,12 +86,13 @@ export function MenuRow({
             {title}
           </Text>
           {detail ? (
-            <Text numberOfLines={2} style={{ fontSize: PANEL.subtitleSize, color: theme.textSecondary, ...typeFace() }}>
+            <Text numberOfLines={2} style={{ fontSize: PANEL.subtitleSize, color: detailColor ?? theme.textSecondary, ...typeFace() }}>
               {detail}
             </Text>
           ) : null}
         </View>
         {accessory}
+        {checked === undefined ? null : checked ? <Symbol name="checkmark" size={CHECK.glyph} weight="semibold" color={theme.textPrimary} style={CHECK.slot} /> : <View style={CHECK.slot} />}
       </View>
     );
   };
@@ -90,9 +102,17 @@ export function MenuRow({
         {content(false)}
       </View>
     );
+  const choosable = checked !== undefined;
+  const active = !disabled && !closing;
   return (
     <View {...hoverProps} tooltip={tooltip}>
-      <Pressable onPress={onPress} disabled={disabled}>
+      <Pressable
+        onPress={live(onPress)} onAccessibilityTap={!active ? undefined : tapActivates(live(onPress))}
+        disabled={!active}
+        {...(choosable
+          ? { ...radioA11y(!!checked), onKeyDown: active ? live(spaceActivates((e) => onPress(e as unknown as GestureResponderEvent))) : undefined }
+          : { accessibilityRole: "button" as const, accessibilityState: selected === undefined ? { disabled: !!disabled } : { disabled: !!disabled, selected: !!selected } })}
+      >
         {({ pressed }) => content(pressed)}
       </Pressable>
     </View>

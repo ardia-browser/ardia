@@ -202,12 +202,12 @@ export const LIVE_METHODS: MethodSpec[] = [
   {
     name: "live.update",
     mutates: true,
-    description: "Rename a live folder or change its icon, colour, sources, filters and options",
+    description: "Rename a live folder or change its icon, color, sources, filters and options",
     params: obj({
       folder: FOLDER,
       name: text("Its name"),
       icon: { type: ["string", "null"], description: "An SF Symbol name or emoji; null for the default" },
-      color: { type: ["string", "null"], enum: [...COLORS, null], description: "Its colour; null for the default" },
+      color: { type: ["string", "null"], enum: [...COLORS, null], description: "Its color; null for the default" },
       collapsed: bool("Folded in the sidebar"),
       sources: { type: "array", items: oneOf(ALL_SOURCES, "A connected source"), minItems: 1, maxItems: 3, description: "Connected sources of its kind" },
       filters: obj({ authored: bool("Pull requests you opened"), reviewRequests: bool("Reviews asked of you") }),

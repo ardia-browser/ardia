@@ -3,7 +3,7 @@ import { ScrollView, View } from "react-native";
 import type { QuickPickItem } from "../../lib/pluginProtocol";
 import { resolveQuickPick } from "../../state/plugins/actions";
 import type { QuickPickRequest } from "../../state/plugins/surfaces";
-import { Badge, Box, Button, Dialog, EmptyState, ListRow, SearchField, Symbol, Text, useTheme } from "../ui";
+import { Badge, Box, Button, Dialog, DialogTitle, EmptyState, ListRow, SearchField, Symbol, Text, useTheme } from "../ui";
 import { usePluginTitle } from "../../state/plugins/hooks";
 import { OVERLAY, SURFACE } from "./tokens";
 import { fuzzyFilter, useRevealRow } from "./surfaceNodes";
@@ -39,9 +39,9 @@ export function PluginQuickPick({ request }: { request: QuickPickRequest }) {
       <Box gap="s">
         {options.title || pluginTitle ? (
           <Box row gap="s" padX="xs" style={CENTER}>
-            <Text weight="semibold" numberOfLines={1} style={FLEX}>
-              {options.title ?? pluginTitle}
-            </Text>
+            <View style={FLEX}>
+              <DialogTitle>{options.title ?? pluginTitle}</DialogTitle>
+            </View>
             {options.title && pluginTitle ? (
               <Text size="caption" tone="textTertiary">
                 {pluginTitle}
@@ -69,7 +69,7 @@ export function PluginQuickPick({ request }: { request: QuickPickRequest }) {
               </View>
             ))
           ) : (
-            <EmptyState symbol="magnifyingglass" title="No matches" />
+            <EmptyState symbol="magnifyingglass" title="No results" />
           )}
         </ScrollView>
         {many ? (

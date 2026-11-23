@@ -1,4 +1,5 @@
 import { Symbol } from "./Symbol";
+import { tapActivates } from "./a11y";
 import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Divider } from "./Divider";
@@ -7,11 +8,14 @@ import { lineHeight, radius, space, font as typeScale } from "./tokens";
 import { useHover } from "./useHover";
 import { HoverFill } from "./HoverFill";
 import { useNativeForm } from "./nativeForm";
+import { useLiveWhile, useClosing } from "./Closing";
 
 export function Row({ title, description, children, icon, onPress }: { title?: ReactNode; description?: ReactNode; children?: ReactNode; icon?: ReactNode; onPress?: () => void }) {
   const theme = useTheme();
   const { hovered, hoverProps } = useHover();
   const native = useNativeForm();
+  const closing = useClosing();
+  const live = useLiveWhile(closing);
   const body = (
     <View
       style={{
@@ -42,7 +46,7 @@ export function Row({ title, description, children, icon, onPress }: { title?: R
   if (!onPress) return body;
   return (
     <View {...hoverProps}>
-      <Pressable onPress={onPress}>{body}</Pressable>
+      <Pressable disabled={closing} onPress={live(onPress)} onAccessibilityTap={tapActivates(live(onPress))} accessibilityRole="button">{body}</Pressable>
     </View>
   );
 }

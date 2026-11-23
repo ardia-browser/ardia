@@ -1,10 +1,8 @@
 import {
-  clearSiteData,
   getSiteSettings,
   resetSiteSettings,
   setSiteSetting,
   setZoom,
-  type ClearSiteDataResult,
   type SiteSettings,
   type SiteSettingType,
   type SiteSettingValue,
@@ -13,6 +11,7 @@ import { useEffect, useState } from "react";
 import { currentEngineProfile } from "../../../state/browser/current";
 import { useSettings } from "../../../state/browser/hooks";
 import { effectiveSettingValue, offersSiteSetting } from "../../../state/site/siteControls";
+import { confirmAndClearSiteData, siteDataOutcome } from "../../../state/site/reloadMenu";
 import { Button, PopUp, Toggle } from "../../ui";
 import { Favicon } from "../../favicon/Favicon";
 import { Group, Row, SectionHeader } from "../Form";
@@ -139,6 +138,11 @@ export function SitePage({ profileId, origin }: { profileId: string; origin: str
     await setSiteSetting(profile, origin, type, value);
     changed();
   };
+  const clearData = async () => {
+    const cleared = await confirmAndClearSiteData(profileId, origin);
+    if (cleared === null) return;
+    setStatus(`${siteDataOutcome(cleared)}.`);
+  };
   const shown = SETTING_LABELS.filter(([type]) => settings?.[type] && offersSiteSetting(type));
 
   return (
@@ -169,14 +173,7 @@ export function SitePage({ profileId, origin }: { profileId: string; origin: str
           <Button title="Reset Permissions" onPress={() => void resetSiteSettings(profile, origin).then(changed)} />
         </Row>
         <Row title="Site data" description={status || "Cookies and storage this site keeps in this profile."}>
-          <Button
-            title="Clear Site Data"
-            onPress={() =>
-              void clearSiteData(profile, origin)
-                .catch((): ClearSiteDataResult => ({ cookies: false, storage: false }))
-                .then((r) => setStatus(r.cookies === false ? "Site data cleared." : `Cleared ${r.cookies} cookie${r.cookies === 1 ? "" : "s"} and site data.`))
-            }
-          />
+          <Button title="Clear Cookies and Site Data…" onPress={() => void clearData()} />
         </Row>
       </Group>
     </ProfileSubPage>

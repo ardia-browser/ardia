@@ -45,7 +45,7 @@ test("decideWindowClose returns the decision and checkbox without touching windo
   assert.deepEqual(await decideWindowClose(id, ask), { decision: "cancel", suppressWarning: true });
   assert.equal(asked.length, 1);
   assert.equal(asked[0].title, "Close 2 tabs?");
-  assert.equal(asked[0].suppression, "Don’t ask me again");
+  assert.equal(asked[0].suppression, "Don't ask again");
   assert.equal(asked[0].windowId, id);
   assert.deepEqual(await decideWindowClose(id, async () => ({ confirmed: true, suppressed: false })), { decision: "allow", suppressWarning: false });
   assert.equal(shape(), before);
@@ -143,7 +143,7 @@ test("a window close request with several tabs asks once; Cancel keeps it and th
     title: "Close 2 tabs?",
     message: "This window has 2 tabs open in your Personal profile.",
     confirmTitle: "Close All Tabs",
-    suppression: "Don’t ask me again",
+    suppression: "Don't ask again",
     windowId: id,
   }]);
   assert.deepEqual(S().windows[id].tabIds, tabs);

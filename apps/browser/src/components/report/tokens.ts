@@ -1,3 +1,5 @@
+import { space } from "../ui/tokens";
+
 export const REPORT = {
   thumbnail: { width: 112, height: 70 },
   player: { height: 300 },
@@ -7,4 +9,5 @@ export const REPORT = {
   labelWidth: 60,
   previewHeight: 520,
   recordDot: 8,
+  checkIndent: 14 + space.m,
 } as const;

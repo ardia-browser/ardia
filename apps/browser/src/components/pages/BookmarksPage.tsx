@@ -5,17 +5,21 @@ import { useTab } from "../../state/browser/hooks";
 import { currentBookmarks } from "../../state/browser/current";
 import { useBookmarkRoots, useBookmarks } from "../../state/bookmarks/hooks";
 import { plural } from "../../state/browser/model";
-import { moveBookmarks, openFolder, removeBookmarks, restoreBookmarks } from "../../state/bookmarks/actions";
-import { clickSelection, NO_SELECTION, rowWindow, selectAll, selectedInOrder, type ListSelection } from "../../state/bookmarks/bookmarkList";
+import { moveBookmarks, openFolder, openUrl, removeBookmarks, restoreBookmarks } from "../../state/bookmarks/actions";
+import { clickSelection, rowWindow, selectedInOrder } from "../../state/bookmarks/bookmarkList";
+import { NO_ROWS_SELECTED } from "../../state/history/historySelection";
 import { FolderTree } from "../bookmarks/FolderTree";
+import { bookmarkDrag } from "../bookmarks/tokens";
 import { Box, Button, Divider, EmptyState, radius, space, Text, Toast, useTheme } from "../ui";
-import { openOrganizeMenu } from "../../state/bookmarks/bookmarkMenus";
+import { openBookmarkRowMenu, openOrganizeMenu } from "../../state/bookmarks/bookmarkMenus";
 import { BookmarkRow } from "./BookmarkRow";
 import { listedBookmarks } from "./bookmarkResults";
 import { DropTargets } from "./dropTargets";
-import { PageHeader } from "./PageLayout";
+import { notePageScroll, PageHeader } from "./PageLayout";
+import { menuRows, revealOffset } from "./listCursor";
+import { useListCursor } from "./useListCursor";
 import { bookmarkList, pagesColors, undoToast } from "./tokens";
-import { COMMAND_KEY, commandHeld } from "../../state/commands/keyNotation";
+import { commandHeld } from "../../state/commands/keyNotation";
 
 
 type Target = { kind: "folder"; id: string } | { kind: "row"; id: string; index: number; folder: boolean };
@@ -28,7 +32,6 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
   const roots = useBookmarkRoots(profileId);
   const [folderId, setFolderId] = useState<string | null>(roots?.bar ?? null);
   const [query, setQuery] = useState("");
-  const [selection, setSelection] = useState<ListSelection>(NO_SELECTION);
   const [undo, setUndo] = useState<{ removed: RemovedBookmarks; count: number } | null>(null);
   const [undoClosing, setUndoClosing] = useState(false);
   const [drop, setDrop] = useState<Drop | null>(null);
@@ -38,25 +41,44 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
   useEffect(() => {
     if (!folderExists && roots) setFolderId(roots.bar);
   }, [folderExists, roots]);
-  useEffect(() => setSelection(NO_SELECTION), [folderId, query]);
 
   const folderTitle = useBookmarks((b) => (folderId ? (b.nodes[folderId]?.title ?? "") : ""));
   const ids = useBookmarks(useMemo(() => listedBookmarks(roots, folderId, query), [roots, folderId, query]));
   const searching = !!query.trim();
+  const { selection, setSelection, cursor, list, listProps, enter } = useListCursor(ids, {
+    open: (id) => {
+      const node = currentBookmarks().nodes[id];
+      if (node?.kind === "folder") openFolderAt(id);
+      else if (node) openUrl(node.url, windowId, "current");
+    },
+    menu: (id) => openRowMenu(id),
+    remove: () => remove(selected),
+  });
+  useEffect(() => setSelection(NO_ROWS_SELECTED), [folderId, query]);
   const selected = useMemo(() => selectedInOrder(ids, selection), [ids, selection]);
 
-  const list = useRef<View>(null);
   const select = (id: string, e: { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean }) => {
-    setSelection((current) => clickSelection(ids, current, id, { shiftKey: e.shiftKey, metaKey: commandHeld(e) }));
+    setSelection((current) => ({ ...clickSelection(ids, current, id, { shiftKey: e.shiftKey, metaKey: commandHeld(e) }), cursor: id }));
     list.current?.focus();
   };
 
   const remove = (doomed: string[]) => {
     if (!doomed.length) return;
     const removed = removeBookmarks(doomed);
-    setSelection(NO_SELECTION);
+    setSelection((current) => ({ ...current, selected: new Set() }));
     setUndo({ removed, count: removed.places.length });
     setUndoClosing(false);
+  };
+  const openFolderAt = (folder: string) => {
+    setQuery("");
+    setFolderId(folder);
+  };
+  const openRowMenu = (id: string) => {
+    const node = currentBookmarks().nodes[id];
+    if (!node) return;
+    const picked = menuRows(ids, selection, id);
+    if (!selection.selected.has(id)) select(id, {});
+    void openBookmarkRowMenu(node, { windowId, profileId, showPath: searching, selection: picked, onOpenFolder: (folder = id) => openFolderAt(folder), onDelete: () => remove(picked) });
   };
   const undoRemove = () => {
     if (!undo) return;
@@ -67,8 +89,17 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
   const [viewport, setViewport] = useState(800);
   const [scrollY, setScrollY] = useState(0);
   const onListLayout = useCallback((e: LayoutChangeEvent) => setViewport(Math.max(bookmarkList.row, Math.round(e.nativeEvent.layout.height))), []);
-  const onListScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => setScrollY(e.nativeEvent.contentOffset.y), []);
+  const onListScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    notePageScroll();
+    setScrollY(e.nativeEvent.contentOffset.y);
+  }, []);
   const shown = rowWindow(ids.length, bookmarkList.row, scrollY, viewport);
+  const scroller = useRef<ScrollView>(null);
+  useEffect(() => {
+    const index = cursor ? ids.indexOf(cursor) : -1;
+    const y = index < 0 ? null : revealOffset(index * bookmarkList.row, bookmarkList.row + 2 * LIST_CONTENT.padding, scrollY, viewport);
+    if (y !== null) scroller.current?.scrollTo({ y, animated: false });
+  }, [cursor, viewport]);
   useEffect(() => {
     if (!undo) return;
     const timer = setTimeout(() => setUndoClosing(true), undoToast.visibleMs);
@@ -109,7 +140,7 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
     selected.length > 0 ? (
       <>
         <Text size="small" tone="textSecondary">{`${selected.length} selected`}</Text>
-        <Button title="Delete" kind="primary" onPress={() => remove(selected)} />
+        <Button title="Remove" kind="primary" onPress={() => remove(selected)} />
       </>
     ) : (
       <Button variant="icon" icon="ellipsis.circle" onPress={() => void openOrganizeMenu(windowId, profileId, folderId)} tooltip="Organize" />
@@ -119,7 +150,7 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
 
   return (
     <View style={{ flex: 1 }}>
-      <PageHeader title="Bookmarks" query={query} onQuery={setQuery} actions={actions} />
+      <PageHeader title="Bookmarks" query={query} onQuery={setQuery} actions={actions} onArrow={enter} />
       <View style={BODY}>
         <ScrollView style={TREE} contentContainerStyle={TREE_CONTENT}>
           <FolderTree
@@ -153,22 +184,11 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
           {ids.length === 0 ? (
             <EmptyState
               symbol={searching ? "magnifyingglass" : "bookmark"}
-              title={searching ? "No search results found" : "This folder is empty"}
+              title={searching ? "No results" : "This folder is empty"}
             />
           ) : (
-            <View
-              ref={list}
-              focusable
-              enableFocusRing={false}
-              keyDownEvents={LIST_KEYS}
-              onKeyDown={(e) => {
-                const { key } = e.nativeEvent;
-                if (key === "Backspace" || key === "Delete") remove(selected);
-                else if (key === "a" && commandHeld(e.nativeEvent)) setSelection(selectAll(ids));
-              }}
-              style={LIST_KEYS_VIEW}
-            >
-              <ScrollView onLayout={onListLayout} onScroll={onListScroll} scrollEventThrottle={16} contentContainerStyle={LIST_CONTENT}>
+            <View {...listProps} style={LIST_KEYS_VIEW}>
+              <ScrollView ref={scroller} onLayout={onListLayout} onScroll={onListScroll} scrollEventThrottle={16} contentContainerStyle={LIST_CONTENT}>
                 <View style={{ height: ids.length * bookmarkList.row }}>
                   {ids.slice(shown.first, shown.end).map((id, offset) => {
                     const index = shown.first + offset;
@@ -182,21 +202,18 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
                         showPath={searching}
                         selected={selection.selected.has(id)}
                         highlighted={!!drop && "into" in drop && drop.into === id}
+                        keyboardRow={cursor === id}
                         targetRef={targets.ref(`row:${id}`, { kind: "row", id, index, folder: currentBookmarks().nodes[id]?.kind === "folder" })}
                         onSelect={(e) => select(id, e)}
-                        onOpenFolder={(folder = id) => {
-                          setQuery("");
-                          setFolderId(folder);
-                        }}
-                        onDelete={() => remove(selection.selected.has(id) ? selected : [id])}
-                        menuSelection={() => selected}
+                        onOpenFolder={() => openFolderAt(id)}
+                        onMenu={() => openRowMenu(id)}
                         onDragStart={() => onDragStart(id)}
                         onDragMove={onDragMove}
                         onDragEnd={onDragEnd}
                       />
                     );
                   })}
-                  {indicator !== null && <DropLine top={indicator * bookmarkList.row} color={theme.formAccent} />}
+                  {indicator !== null && <DropLine top={indicator * bookmarkList.row} color={theme.accent} />}
                 </View>
               </ScrollView>
             </View>
@@ -205,7 +222,7 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
       </View>
       {undo && (
         <Toast
-          title={`${plural(undo.count, "item")} deleted`}
+          title={`${plural(undo.count, "item")} removed`}
           action="Undo"
           onAction={undoRemove}
           closing={undoClosing}
@@ -217,10 +234,8 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
 }
 
 function DropLine({ top, color }: { top: number; color: string }) {
-  return <View style={[DROP_LINE, { top: top - bookmarkList.dropLine / 2, backgroundColor: color }]} />;
+  return <View style={[DROP_LINE, { top: top - bookmarkDrag.line / 2, backgroundColor: color }]} />;
 }
-
-const LIST_KEYS = [{ key: "Backspace" }, { key: "Delete" }, { key: "a", [COMMAND_KEY]: true }];
 
 const BODY = { flex: 1, flexDirection: "row", paddingHorizontal: space.xl, paddingBottom: space.xl, gap: space.xl } as const;
 const TREE = { width: bookmarkList.treeWidth, flexGrow: 0 } as const;
@@ -230,4 +245,4 @@ const LIST_HEADER = { height: bookmarkList.headerHeight, alignItems: "center" } 
 const LIST_TITLE = { flex: 1 } as const;
 const LIST_KEYS_VIEW = { flex: 1 } as const;
 const LIST_CONTENT = { padding: space.s } as const;
-const DROP_LINE = { position: "absolute", left: space.m, right: space.m, height: bookmarkList.dropLine, borderRadius: bookmarkList.dropLineRadius, zIndex: 5 } as const;
+const DROP_LINE = { position: "absolute", left: space.m, right: space.m, height: bookmarkDrag.line, borderRadius: bookmarkDrag.lineRadius, zIndex: 5 } as const;

@@ -146,7 +146,7 @@ export function SettingsSearchResults({ query }: { query: string }) {
   if (empty) {
     const combo = parseCombo(query);
     const subtitle = combo ? `No command or setting uses ${formatShortcut(combo)}.` : `Nothing matches “${query.trim()}”. Try a setting's name or a shorter word, like “dark” or “downloads”.`;
-    return <EmptyState symbol="magnifyingglass" title="No Results" subtitle={subtitle} />;
+    return <EmptyState symbol="magnifyingglass" title="No results" subtitle={subtitle} />;
   }
   return (
     <ScrollView

@@ -4,15 +4,15 @@ import { closeExtensionPopup } from "../../state/extensions/actions";
 import { MEASURE_POPUP_SCRIPT } from "../../state/extensions/popupSize";
 import { useShownPageId } from "../../state/peek/hooks";
 import { openFromPage, pageProfileId } from "../../state/tabs/openFromPage";
-import { curve, duration, PANEL, Panel, shadow, WebView, type WebViewHandle } from "../ui";
-import { EXTENSION_PAGE_BACKGROUND, useExtensionColors } from "./tokens";
+import { curve, duration, PANEL, Panel, shadow, useTheme, WebView, type WebViewHandle } from "../ui";
+import { EXTENSION_PAGE_BACKGROUND } from "./tokens";
 import { useCurrentInterfaceScale } from "../../state/settings/interfaceScale";
 
 const MIN = { width: 25, height: 25 };
 const MAX = { width: 800, height: 600 };
 
 export function ActionPopup({ windowId, pageProfile, url, anchor }: { windowId: string; pageProfile: string; extensionId: string; url: string; anchor: { x: number; y: number; width: number; height: number } }) {
-  const colors = useExtensionColors();
+  const theme = useTheme();
   const web = useRef<WebViewHandle>(null);
   const scale = useCurrentInterfaceScale();
   const [windowWidth, setWindowWidth] = useState(0);
@@ -72,7 +72,7 @@ export function ActionPopup({ windowId, pageProfile, url, anchor }: { windowId: 
           transform: [{ translateY: appear.interpolate({ inputRange: [0, 1], outputRange: [-4, 0] }) }],
         }}
       >
-        <Panel radius={PANEL.radius} border={colors.popupBorder} shadow={shadow.card} style={{ width, height }}>
+        <Panel radius={PANEL.radius} border={theme.popoverBorder} shadow={shadow.card} style={{ width, height }}>
           <View style={{ flex: 1, borderRadius: PANEL.radius, overflow: "hidden" }}>
             <WebView
               ref={web}

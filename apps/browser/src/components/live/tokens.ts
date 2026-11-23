@@ -6,9 +6,7 @@ const DARK = {
   pending: "#D29922",
   merged: "#A371F7",
   draft: "#8B949E",
-  conflict: "#DB6D28",
   ciTrack: "rgba(255,255,255,0.1)",
-  chip: "rgba(255,255,255,0.1)",
   badgeRing: "rgba(0,0,0,0.35)",
   avatarFill: "#4A4A4F",
 };
@@ -17,21 +15,19 @@ const LIGHT: typeof DARK = {
   pending: "#9A6700",
   merged: "#8250DF",
   draft: "#6E7781",
-  conflict: "#BC4C00",
   ciTrack: "rgba(0,0,0,0.08)",
-  chip: "rgba(0,0,0,0.06)",
   badgeRing: "rgba(255,255,255,0.8)",
   avatarFill: "#D5D5DA",
 };
 
-export type LiveColors = typeof DARK & { success: string; failure: string; now: string };
+export type LiveColors = typeof DARK & { success: string; failure: string; now: string; conflict: string };
 
 const liveColors = new WeakMap<Theme, LiveColors>();
 
 export function useLiveColors(): LiveColors {
   const theme = useTheme();
   let colors = liveColors.get(theme);
-  if (!colors) liveColors.set(theme, (colors = { ...(theme.dark ? DARK : LIGHT), success: theme.success, failure: theme.destructive, now: theme.destructive }));
+  if (!colors) liveColors.set(theme, (colors = { ...(theme.dark ? DARK : LIGHT), success: theme.success, failure: theme.destructive, now: theme.destructive, conflict: theme.warning }));
   return colors;
 }
 

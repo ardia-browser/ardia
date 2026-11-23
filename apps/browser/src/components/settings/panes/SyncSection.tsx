@@ -54,7 +54,7 @@ export function SyncSection() {
       <>
         <SectionHeader title="Sync" />
         <Group>
-          <Row anchor="general.sync" description="Sync isn’t available in this build." />
+          <Row anchor="general.sync" description="Sync isn't available in this build." />
         </Group>
       </>
     );

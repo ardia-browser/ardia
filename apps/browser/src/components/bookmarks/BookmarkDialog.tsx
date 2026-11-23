@@ -2,13 +2,14 @@ import { prompt } from "../../state/app/system";
 import { useEffect, useState } from "react";
 import { useSidebarOpen, useSidebarSide, useWindowId } from "../../state/browser/hooks";
 import { useSidebarWidth } from "../../state/sidebar/hooks";
-import { Button, Dialog, DialogActions, layout, Text, TextField } from "../ui";
+import { Button, Dialog, DialogActions, DialogTitle, layout, TextField } from "../ui";
 import { FormField } from "../settings/Form";
 import { addBookmarkFolder, addBookmarkTree, closeBookmarkDialog, moveBookmark, profileOfBookmark, removeBookmark, updateBookmark, useBookmarkDialog, type BookmarkDialogState } from "../../state/bookmarks/actions";
 import { useBookmarks } from "../../state/bookmarks/hooks";
 import { currentBookmarkRoots, currentBookmarks } from "../../state/browser/current";
 import { FolderPicker } from "./DialogParts";
-import { bookmarkDialog } from "./tokens";
+import { FolderTreeAction } from "./FolderTree";
+import { bookmarkDialog, folderPicker } from "./tokens";
 import { useToolbarRow } from "../toolbar/useToolbarRow";
 import { useSidebarField } from "../../state/sidebar/chrome";
 import { sidebarHeaderWithField } from "../sidebar/geometry";
@@ -73,6 +74,7 @@ function DialogPanel({ state }: { state: BookmarkDialogState }) {
     <Dialog
       width="xs"
       pad="xl"
+      controls="large"
       onDismiss={done}
       place={
         addressBar
@@ -82,14 +84,14 @@ function DialogPanel({ state }: { state: BookmarkDialogState }) {
           : { top: frame.inset + toolbarHeight - bookmarkDialog.belowToolbar, right: cardRight + bookmarkDialog.rightInset }
       }
     >
-      <Text weight="semibold">{heading}</Text>
+      <DialogTitle>{heading}</DialogTitle>
       <FormField label={state.kind === "allTabs" ? "Folder name" : "Name"}>
         <TextField value={name} onChangeText={setName} autoFocus selectOnFocus placeholder={state.kind === "allTabs" ? "Tabs" : "Name"} onSubmit={done} onEscape={done} />
       </FormField>
       <FormField label="Folder">
-        <FolderPicker profileId={profileId} selectedId={folderId} onSelect={setFolderId} />
+        <FolderPicker profileId={profileId} selectedId={folderId} onSelect={setFolderId} footer={<FolderTreeAction title="New Folder…" icon="plus" height={folderPicker.row} onPress={newFolder} />} />
       </FormField>
-      <DialogActions leading={<Button title="New Folder" onPress={newFolder} />}>
+      <DialogActions>
         {state.kind === "page" ? <Button title="Remove" onPress={remove} /> : <Button title="Cancel" onPress={close} />}
         <Button title={state.kind === "page" ? "Done" : "Save"} kind="primary" onPress={done} />
       </DialogActions>

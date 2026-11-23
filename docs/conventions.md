@@ -115,6 +115,7 @@ lib/                    pure helpers: url, color, time, keys
 | a menu-material panel with a scale-in | `Popover` (or `PopoverSurface` for the material alone); a panel placed by its own math uses `usePopoverMotion` + `usePopoverMotionStyle`; open/close state from `usePopoverPresence` |
 | a row in a popover or menu | `MenuRow` and `MenuSeparator` |
 | a `Surface` with a fill, corner radius, hairline border and shadow (cards, ghosts, HUDs) | `<Panel fill radius border shadow={level}>`; the level is a `ShadowLevel` from `tokens.ts` or the feature's `tokens.ts` |
+| a dialog whose buttons and fields should be the rounded 28 pt ones | `<Dialog controls="large">`: push `Button`s and `TextField`s inside read `controlSize` from `tokens.ts`; never set their height or radius by hand |
 | a centred modal over a scrim | `<Dialog width pad onDismiss>`; anchored to a spot with `place={{ top, right }}`; `Sheet` is the settings preset; `onSubmit` adds Escape/Enter keys, `restoreFocus` runs on close, `animated` fades it in |
 | a view kept mounted until its exit fade ends | `usePresence(value, { show, hide })` from `motion.ts` |
 | reduce motion | `reduceMotion()` and `reduceMotionKnown` from `components/ui` |
@@ -123,6 +124,12 @@ lib/                    pure helpers: url, color, time, keys
 | an on/off switch | `<Toggle>` (settings) or `<Toggle look="panel">` (popovers) |
 | a radio dot | `<Radio on look="form" \| "compact" \| "ring">` |
 | a colour swatch with a selection ring | `<Swatch selected ring fill>` (children instead of `fill` for a gradient) |
+| a row with a tick box beside a title or description | `<CheckTarget value onChange label>` around the row with `<CheckMark value>` as the indicator: one named checkbox, never a `Checkbox` inside a second pressable |
+| `accessibilityRole="radio"`, `"checkbox"` or `"switch"` written by hand | `{...radioA11y(checked, label)}`, `{...checkboxA11y(checked, disabled, label)}`, `{...switchA11y(on, disabled, label)}` with `onKeyDown={spaceActivates(press)}` (`ui/a11y.ts`): the state every platform reads, and Space activates it everywhere |
+| a pressable with a role and only `onPress` | add `onAccessibilityTap={tapActivates(press)}`, dropped while disabled: the Mac's accessibility Press action (`ui/nativePress.test.mjs` checks every role) |
+| a selected or checked row in a popover list | `MenuRow` with `selected` (a keyboard cursor: fill only) or `checked` (a choice: fill, the one check glyph in a reserved trailing column, radio state); selection stays visible under hover and press |
+| a panel kept mounted for its exit that turns off `pointerEvents` | `<ClosingView closing>` as its root (or `Popover`, which uses it); inside it every action handler goes through `const live = useLiveAction()` (`useLiveWhile(closing)` in the root itself): `onPress={live(press)}`. A closing panel hands the host no callback and a retained one checks the closing state when it runs (`ui/closingLive.test.mjs` pins the files) |
+| a list page's arrow-key cursor and row menu key | `useListCursor` and `useRowControls` (`components/pages`): History and Bookmarks share them |
 
 ## Coordinates: root points
 

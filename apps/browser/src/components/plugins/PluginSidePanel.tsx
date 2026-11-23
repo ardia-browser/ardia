@@ -4,10 +4,11 @@ import { useWindowId } from "../../state/browser/hooks";
 import { closePluginSidePanel, ensurePluginActivated } from "../../state/plugins/actions";
 import { usePluginManifest, usePluginRetainedSidePanels, usePluginSidePanel, usePluginWindowEligible } from "../../state/plugins/hooks";
 import type { SidePanel } from "../../state/plugins/surfaces";
-import { Box, Button, curve, Divider, duration, space, Symbol, Text, useTheme } from "../ui";
+import { Box, curve, duration, space, Symbol, Text, useTheme } from "../ui";
 import { useCardFrame } from "../window/cardFrame";
 import { useResizeDrag } from "../sidebar/useResizeDrag";
-import { GLYPH } from "../toolbar/tokens";
+import { SidePanelHeader } from "../extensions/SidePanelHeader";
+import { SIDE_PANEL_HEADER } from "../extensions/tokens";
 import { PluginFileView } from "./PluginFileView";
 import { PluginSurface } from "./PluginSurface";
 import { pluginFileUrl } from "./surfaceNodes";
@@ -88,14 +89,7 @@ function PanelCard({ windowId, panel, current, live }: { windowId: string; panel
   }, [activatesHost, panel.plugin, spec?.id]);
   return (
     <View pointerEvents={live ? "auto" : "none"} style={{ ...StyleSheet.absoluteFillObject, opacity: current ? 1 : 0, borderRadius: cardRadius, overflow: "hidden", backgroundColor: theme.card }}>
-      <Box row gap="m" style={HEADER}>
-        <Symbol name={icon} size={SURFACE.icon} color={theme.icon} style={ICON} />
-        <Text numberOfLines={1} weight="medium" style={FLEX}>
-          {title}
-        </Text>
-        <Button variant="icon" icon="xmark" glyph={GLYPH} weight="medium" tooltip="Close Side Panel" onPress={() => closePluginSidePanel(windowId, panel.plugin)} />
-      </Box>
-      <Divider />
+      <SidePanelHeader icon={<Symbol name={icon} size={SURFACE.icon} color={theme.icon} style={ICON} />} title={title} onClose={() => closePluginSidePanel(windowId, panel.plugin)} />
       <View style={FLEX}>
         {!spec ? (
           <Box pad="l">
@@ -114,7 +108,6 @@ function PanelCard({ windowId, panel, current, live }: { windowId: string; panel
 }
 
 const FLEX = { flex: 1 } as const;
-const HEADER = { height: SIDE_PANEL.header, alignItems: "center", paddingLeft: space.l, paddingRight: space.s } as const;
-const ICON = { width: SURFACE.iconBox, height: SURFACE.iconBox } as const;
+const ICON = { width: SIDE_PANEL_HEADER.icon, height: SIDE_PANEL_HEADER.icon } as const;
 const SURFACE_PAD = { flex: 1, padding: space.s } as const;
 const HANDLE = { position: "absolute", top: 0, bottom: 0, left: SIDE_PANEL.handleOffset, width: SIDE_PANEL.handle, cursor: "col-resize" } as const;

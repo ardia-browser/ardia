@@ -6,8 +6,11 @@ import { currentBookmarkRoots, currentBookmarks } from "../../state/browser/curr
 import { radius, space, Symbol, Text, useHover, useTheme } from "../ui";
 import { folderTree, folderTreeInk } from "./tokens";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
+import { chosenButtonA11y, tapActivates } from "../ui/a11y";
 
 type FolderRow = { id: string; title: string; depth: number; hasChildren: boolean };
+
+export type FolderTreeLook = "accent" | "soft";
 
 function useFolderRows(profileId: string, expanded: Set<string>): FolderRow[] {
   const roots = useBookmarkRoots(profileId);
@@ -42,12 +45,16 @@ export function FolderTree({
   selectedId,
   onSelect,
   rowHeight,
+  rowGap = 0,
+  look = "accent",
   wrapRow,
 }: {
   profileId: string;
   selectedId: string | null;
   onSelect: (id: string) => void;
   rowHeight: number;
+  rowGap?: number;
+  look?: FolderTreeLook;
   wrapRow?: (id: string, row: ReactNode) => ReactNode;
 }) {
   const [expanded, setExpanded] = useState(() => {
@@ -72,13 +79,14 @@ export function FolderTree({
     });
 
   return (
-    <View>
+    <View style={{ gap: rowGap }}>
       {rows.map((row) => {
         const content = (
           <FolderTreeRow
             key={row.id}
             row={row}
             height={rowHeight}
+            look={look}
             selected={row.id === selectedId}
             expanded={expanded.has(row.id)}
             onToggle={() => toggle(row.id)}
@@ -94,6 +102,7 @@ export function FolderTree({
 function FolderTreeRow({
   row,
   height,
+  look,
   selected,
   expanded,
   onToggle,
@@ -101,6 +110,7 @@ function FolderTreeRow({
 }: {
   row: FolderRow;
   height: number;
+  look: FolderTreeLook;
   selected: boolean;
   expanded: boolean;
   onToggle: () => void;
@@ -110,18 +120,20 @@ function FolderTreeRow({
   const { hovered, hoverProps } = useHover();
   const pressMotion = usePressScaleMotion(row.hasChildren, buttonMotion.iconPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : undefined;
+  const soft = look === "soft";
+  const filled = selected && !soft;
   return (
     <View {...hoverProps}>
-      <Pressable onPress={onSelect}>
+      <Pressable onPress={onSelect} onAccessibilityTap={tapActivates(onSelect)} {...chosenButtonA11y(selected, row.title)}>
         <View
           style={{
             height,
-            borderRadius: radius.control,
+            borderRadius: soft ? radius.tile : radius.control,
             flexDirection: "row",
             alignItems: "center",
             paddingLeft: folderTree.inset + row.depth * folderTree.indent,
-            paddingRight: space.m,
-            backgroundColor: selected ? theme.formAccent : hovered ? theme.rowHover : undefined,
+            paddingRight: soft ? folderTree.checkInset : space.m,
+            backgroundColor: selected ? (soft ? theme.rowSelected : theme.formAccent) : hovered ? theme.rowHover : undefined,
           }}
         >
           <Pressable
@@ -137,22 +149,53 @@ function FolderTreeRow({
                   name={expanded ? "chevron.down" : "chevron.right"}
                   size={folderTree.chevron}
                   weight="semibold"
-                  color={selected ? folderTreeInk.selectedChevron : theme.textSecondary}
+                  color={filled ? folderTreeInk.selectedChevron : theme.textSecondary}
                   style={CHEVRON}
                 />
               </Animated.View>
             ) : null}
           </Pressable>
-          <Symbol name="folder" size={folderTree.folderIcon} color={selected ? theme.onAccent : theme.icon} style={FOLDER_ICON} />
-          <Text lines={1} tone={selected ? "onAccent" : "textPrimary"} style={TITLE}>
+          <Symbol name="folder" size={folderTree.folderIcon} color={filled ? theme.onAccent : theme.icon} style={FOLDER_ICON} />
+          <Text lines={1} tone={filled ? "onAccent" : "textPrimary"} ardiaCentersCapitals style={TITLE}>
             {row.title}
           </Text>
+          {soft && selected ? <Symbol name="checkmark" size={folderTree.check} weight="semibold" color={theme.textPrimary} style={CHECK} /> : null}
         </View>
       </Pressable>
     </View>
   );
 }
 
+export function FolderTreeAction({ title, icon, height, onPress }: { title: string; icon: string; height: number; onPress: () => void }) {
+  const theme = useTheme();
+  const { hovered, hoverProps } = useHover();
+  return (
+    <View {...hoverProps}>
+      <Pressable onPress={onPress} onAccessibilityTap={tapActivates(onPress)} accessibilityRole="button" accessibilityLabel={title}>
+        {({ pressed }) => (
+          <View
+            style={{
+              height,
+              borderRadius: radius.tile,
+              flexDirection: "row",
+              alignItems: "center",
+              paddingLeft: folderTree.inset + folderTree.chevronBox,
+              paddingRight: space.m,
+              backgroundColor: pressed ? theme.popoverRowPressed : hovered ? theme.rowHover : undefined,
+            }}
+          >
+            <Symbol name={icon} size={folderTree.plus} weight="medium" color={theme.textSecondary} style={FOLDER_ICON} />
+            <Text lines={1} tone="textSecondary" ardiaCentersCapitals style={TITLE}>
+              {title}
+            </Text>
+          </View>
+        )}
+      </Pressable>
+    </View>
+  );
+}
+
 const CHEVRON = { width: folderTree.chevronBox, height: folderTree.chevronBox } as const;
+const CHECK = { width: folderTree.checkBox, height: folderTree.checkBox } as const;
 const FOLDER_ICON = { width: folderTree.folderBox, height: folderTree.folderBox } as const;
 const TITLE = { flex: 1, marginLeft: space.s } as const;

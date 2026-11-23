@@ -199,6 +199,9 @@ for (const id of Object.keys(s.find)) s.setFind(id, { open: false });
 ac.pages.clearDataRequest.setState({ windowId: null });
 ac.pages.bookmarkEditor.setState({ open: null });
 ac.pages.bookmarkDialog.setState({ open: null });
+ac.sidebarRows.setSidebarUi({ iconPicker: null });
+ac.pageState.setState({ popover: {} });
+ac.media.setState({ displayRequests: {} });
 s.setSelection(W, []);
 s.updateGroup("g1", { collapsed: false });
 for (const sp of Object.values(s.splits)) s.separateSplit(sp.id);
@@ -261,14 +264,26 @@ const STATES = [
   main("dia-dark-pinned-divider-hover", `st().pinTabs(["p3"], true, true); return settle(300).then(() => { ${DIVIDER_HOVER} });`),
   main("dia-dark-pinned-folded", `st().pinTabs(["p3"], true, true); st().updateProfile("default", { pinnedCollapsed: true }); return settle(300);`),
 ];
-const SETTINGS_PANES = ["general", "profiles", "sync", "tabs", "appearance", "privacy", "passwords", "autofill", "extensions", "search", "engines", "shortcuts", "liveFolders", "calendar", "advanced"];
-const stableFor = (pane) => (pane === "privacy" ? 12 : 1);
-for (const pane of SETTINGS_PANES)
-  STATES.push({ name: `settings-dark-${pane}`, window: "settings", body: `ac.openSettings(${JSON.stringify(pane)});`, keepOpen: true, stableFor: stableFor(pane) });
-STATES.push({ name: "settings-light-general", window: "settings", body: `st().updateSettings({ appearance: "light" }); ac.openSettings("general");`, keepOpen: true });
-for (const pane of ["tabs", "privacy", "search", "profiles"])
-  STATES.push({ name: `settings-light-${pane}`, window: "settings", body: `st().updateSettings({ appearance: "light" }); ac.openSettings(${JSON.stringify(pane)});`, keepOpen: true, stableFor: stableFor(pane) });
-STATES.push({ name: "settings-light-appearance", window: "settings", body: `st().updateSettings({ appearance: "light" }); ac.openSettings("appearance");`, keepOpen: true });
+const SWIFT = `Object.values(st().bookmarks.nodes).find((n) => n.kind === "url" && n.title === "Swift").id`;
+const PANELS = {
+  "site-controls": `st().activate("t1"); ac.pageState.setState({ popover: { t1: "siteControls" } });`,
+  "icon-picker": `ac.sidebarRows.setSidebarUi({ iconPicker: { kind: "group", id: "g1", windowId: W, anchor: { x: 20, y: 250, width: 20, height: 20 } } });`,
+  "bookmark-added": `st().activate("t1"); ac.pages.bookmarkDialog.setState({ open: { kind: "page", windowId: W, bookmarkId: ${SWIFT} } });`,
+  "share-picker": `st().activate("t1"); ac.media.setState({ displayRequests: { t1: { id: "share", origin: "https://meet.ardia.test", audio: null, sources: [{ id: "screen:1", kind: "screen", name: "Built-in Display", width: 3024, height: 1964 }, { id: "screen:2", kind: "screen", name: "Studio Display", width: 5120, height: 2880 }, { id: "window:1", kind: "window", name: "Notes", app: "Notes", width: 900, height: 600 }, { id: "window:2", kind: "window", name: "Roadmap", app: "Numbers", width: 1200, height: 800 }] } } });`,
+};
+for (const [panel, body] of Object.entries(PANELS)) {
+  STATES.push(main(`dia-dark-${panel}`, body));
+  STATES.push(main(`dia-light-${panel}`, `st().updateSettings({ appearance: "light" }); ${body}`));
+}
+const SETTINGS_PANES = ["general", "profiles", "tabs", "appearance", "automations", "plugins", "shortcuts", "advanced"];
+const PROFILE_DETAILS = ["sites", "passwords", "addresses", "cards", "otherEngines", "filterLists"];
+const LIGHT = `st().updateSettings({ appearance: "light" }); `;
+for (const [look, before] of [["dark", ""], ["light", LIGHT]]) {
+  for (const pane of SETTINGS_PANES)
+    STATES.push({ name: `settings-${look}-${pane}`, window: "settings", body: `${before}ac.openSettings(${JSON.stringify(pane)});`, keepOpen: true });
+  for (const detail of PROFILE_DETAILS)
+    STATES.push({ name: `settings-${look}-profile-${detail}`, window: "settings", body: `${before}ac.openSettings("profiles", "default", ${JSON.stringify(detail)});`, keepOpen: true });
+}
 
 async function capture(appPath, outDir) {
   outDir = resolve(outDir);

@@ -1,4 +1,4 @@
-import { Box, Button, capsule, ContextMenuArea, SlidingThumb, space, Text, useHover, useSlidingThumb } from "../../ui";
+import { Box, Button, capsule, ContextMenuArea, SlidingThumb, space, Text, useHover, useSlidingThumb, tapActivates } from "../../ui";
 import { hapticTick } from "../../../state/app/system";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Animated, PanResponder, Pressable, ScrollView, StyleSheet, View, type LayoutChangeEvent } from "react-native";
@@ -180,7 +180,7 @@ function ProfilePill({
       <ContextMenuArea onContextMenu={() => void openProfileItemMenu(profileId, "settings", SETTINGS_WINDOW_ID, anchor.current)}>
         <View {...hoverProps} ref={anchor} collapsable={false}>
           <Pressable
-            onPress={() => !selected && replaceSettingsPlace(profileId)}
+            onPress={() => !selected && replaceSettingsPlace(profileId)} onAccessibilityTap={tapActivates(() => !selected && replaceSettingsPlace(profileId))}
             accessibilityRole="tab"
             accessibilityState={{ selected }}
             accessibilityLabel={profile.name}

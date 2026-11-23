@@ -1,10 +1,12 @@
 import { Animated, Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
+import { chosenButtonA11y, tapActivates } from "./a11y";
 import { Symbol } from "./native";
 import { Text } from "./Text";
 import { useTheme } from "./theme";
 import { concentric, radius, space } from "./tokens";
 import { buttonMotion, usePressScaleMotion } from "./motion";
 import { SlidingThumb, useSlidingThumb } from "./SlidingThumb";
+import { useLiveAction, useClosing } from "./Closing";
 
 export type SegmentOption<T extends string> = { value: T; title: string; image?: string };
 
@@ -32,13 +34,14 @@ function Segment<T extends string>({ option, selected, fill, onPress, onLayout }
   const ink = selected ? theme.onAccent : theme.icon;
   const pressMotion = usePressScaleMotion(true, buttonMotion.controlPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : null;
+  const closing = useClosing();
+  const live = useLiveAction();
   return (
     <Pressable
+      disabled={closing}
       tooltip={option.image ? option.title : undefined}
-      accessibilityRole="button"
-      accessibilityLabel={option.title}
-      accessibilityState={{ selected }}
-      onPress={onPress}
+      {...chosenButtonA11y(selected, option.title)}
+      onPress={live(onPress)} onAccessibilityTap={tapActivates(live(onPress))}
       onPressIn={pressMotion.onPressIn}
       onPressOut={pressMotion.onPressOut}
       onLayout={onLayout}

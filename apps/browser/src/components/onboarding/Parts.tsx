@@ -3,7 +3,7 @@ import { Animated, Image, Pressable, View, type StyleProp, type ViewStyle } from
 import { useTheme } from "../ui/theme";
 import { IconRing } from "./GlassBacking";
 import type { TileTheme } from "../../state/favicons/tileTheme";
-import { Button, Checkbox, Dot, Text, useHover } from "../ui";
+import { Button, Checkbox, checkboxA11y, Dot, radioA11y, spaceActivates, Text, useClosing, useHover, useLiveAction, tapActivates } from "../ui";
 import { activeSteps, cancelOnboarding, useOnboarding, type OnboardingStep } from "../../state/onboarding/onboarding";
 import { useQuestions } from "../../state/onboarding/questions";
 import { curve } from "../ui/motion";
@@ -167,9 +167,11 @@ const SEGMENT = { height: 22, minWidth: 34, imageBox: 30, image: 26 } as const;
 function Segment({ title, image, selected, onPress }: { title: string; image?: string | null; selected: boolean; onPress: () => void }) {
   const colors = useOnboardingColors();
   const { hovered, hoverProps } = useHover();
+  const closing = useClosing();
+  const live = useLiveAction();
   return (
     <View {...hoverProps} tooltip={image ? title : undefined}>
-      <Pressable onPress={onPress} accessibilityRole="radio" accessibilityState={{ selected }} accessibilityLabel={title}>
+      <Pressable disabled={closing} focusable={!closing} onPress={live(onPress)} onAccessibilityTap={tapActivates(live(onPress))} onKeyDown={live(spaceActivates(onPress))} {...radioA11y(selected, title)}>
         {({ pressed }) => (
           <ChoiceCard
             mouseDownCanMoveWindow={false}
@@ -228,12 +230,14 @@ export function SelectTile({
 }) {
   const colors = useOnboardingColors();
   const { hovered, hoverProps } = useHover();
-  const state = role === "radio" ? { selected } : { checked: selected };
+  const a11y = role === "radio" ? radioA11y(selected, title) : checkboxA11y(selected, false, title);
   const ringed = selected && !!ring;
   const border = selected ? SELECTED_BORDER : CARD_BORDER;
+  const closing = useClosing();
+  const live = useLiveAction();
   return (
     <View {...hoverProps}>
-      <Pressable onPress={onPress} accessibilityRole={role} accessibilityState={state} accessibilityLabel={title}>
+      <Pressable disabled={closing} focusable={!closing} onPress={live(onPress)} onAccessibilityTap={tapActivates(live(onPress))} onKeyDown={live(spaceActivates(onPress))} {...a11y}>
         {({ pressed }) => (
           <ChoiceCard
             mouseDownCanMoveWindow={false}
@@ -254,7 +258,7 @@ export function SelectTile({
             </Text>
             {selected ? (
               <View pointerEvents="none" style={{ position: "absolute", top: TILE_CHECK_INSET, right: TILE_CHECK_INSET }}>
-                <Checkbox look="ring" size="s" value onChange={onPress} />
+                <Checkbox look="ring" size="s" value />
               </View>
             ) : null}
           </ChoiceCard>

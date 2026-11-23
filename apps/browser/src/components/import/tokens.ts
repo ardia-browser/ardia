@@ -1,11 +1,6 @@
 import { duration, springs } from "../ui/motion";
 import { display, proseLineHeight, radius, space } from "../ui/tokens";
 
-export const importColors = {
-  windowFill: { dark: "#1E1E1E", light: "#F4F4F4" },
-  monogramFallback: "#8E8E93",
-} as const;
-
 export const importType = {
   get heading() { return display.title; },
   get done() { return display.title; },
@@ -28,6 +23,8 @@ export const importLayout = {
   dropHeight: 130,
   textMax: 420,
   loadingTop: 80,
+  loadingSpinner: 20,
+  spinner: 14,
   doneTop: 40,
 } as const;
 

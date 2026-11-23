@@ -6,13 +6,15 @@ import { useReport, useReportOpenIn, useReportShallow } from "../../state/report
 import { canRecord } from "../../state/report/recording";
 import { isBusy, uploadFraction } from "../../state/report/upload";
 import { useTelemetry } from "../../state/telemetry/choice";
-import { Box, Button, Checkbox, Dialog, ProgressTrack, Segmented, space, Text, TextField } from "../ui";
+import { Box, Button, Dialog, ProgressTrack, Segmented, space, Text, TextField } from "../ui";
 import { AttachedRow } from "./AttachedRow";
+import { CheckMark, CheckTarget } from "../ui";
 import { RecordSection } from "./RecordSection";
 import { ReportPreview } from "./ReportPreview";
 import { SentView } from "./SentView";
 import { REPORT } from "./tokens";
 
+const WATCH_TITLE = "Help confirm the fix: share crash reports and usage for 14 days";
 const FOOTER_NOTE = "Your title and description become a public GitHub issue. Recordings, contact and details stay private.";
 
 export function ReportSheetHost() {
@@ -111,14 +113,17 @@ function Watch() {
   const sharing = useTelemetry((t) => t.sharing);
   const watch = useReport((s) => s.draft.watch);
   if (sharing) return null;
+  const ends = `Turns itself off on ${formatDay(watchEndDate(Date.now()))}.`;
   return (
-    <Box row gap="m" style={{ marginTop: space.l, alignItems: "flex-start" }}>
-      <Checkbox value={watch} onChange={setWatch} />
-      <View style={FLEX}>
-        <Text onPress={() => setWatch(!watch)}>Help confirm the fix: share crash reports and usage for 14 days</Text>
-        <Text size="small" tone="textSecondary">{`Turns itself off on ${formatDay(watchEndDate(Date.now()))}.`}</Text>
-      </View>
-    </Box>
+    <CheckTarget value={watch} onChange={setWatch} label={WATCH_TITLE} hint={ends} style={{ marginTop: space.l }}>
+      <Box row gap="m" style={{ alignItems: "flex-start" }}>
+        <CheckMark value={watch} />
+        <View style={FLEX}>
+          <Text>{WATCH_TITLE}</Text>
+          <Text size="small" tone="textSecondary">{ends}</Text>
+        </View>
+      </Box>
+    </CheckTarget>
   );
 }
 

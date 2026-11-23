@@ -102,6 +102,22 @@ export const hoverFade = {
   hide: { duration: 200, easing: curve.fade },
 } as const;
 
+export const popoverRise = { scale: 0.94, travel: 4 } as const;
+
+type PopoverOrigin = string | [number | string, number | string, number];
+
+export function popoverMotionStyle(appear: Animated.Value, origin: PopoverOrigin, upward: boolean, reduced: boolean) {
+  if (reduced) return { opacity: appear, transformOrigin: origin, transform: [] };
+  return {
+    opacity: appear,
+    transformOrigin: origin,
+    transform: [
+      { scale: appear.interpolate({ inputRange: [0, 1], outputRange: [popoverRise.scale, 1] }) },
+      { translateY: appear.interpolate({ inputRange: [0, 1], outputRange: upward ? [popoverRise.travel, 0] : [-popoverRise.travel, 0] }) },
+    ],
+  };
+}
+
 export type Fade = { duration: number; easing: EasingFunction; delay?: number };
 
 export function usePresence<T>(value: T | null, motion: { show: Fade; hide: Fade }, enter = false) {

@@ -4,7 +4,6 @@ import { useTheme, type Theme } from "../ui/theme";
 import { Box, MenuRow, PANEL, space, Text } from "../ui";
 import { ChipButton } from "./SiteControlsParts";
 import { Well } from "./PromptParts";
-import { connectionColor, useSiteTokens } from "./tokens";
 import { UI_LOCALE } from "../../lib/uiLocale";
 
 type Security = PageState["security"];
@@ -13,7 +12,7 @@ function connectionLook(security: Security, theme: Theme) {
   const level = security?.level ?? "none";
   if (level === "secure") return { level, chip: "Secure", icon: "lock.fill", color: undefined };
   if (level === "local" || level === "none") return { level, chip: "Local Page", icon: "info.circle", color: undefined };
-  if (level === "mixed") return { level, chip: "Not Fully Secure", icon: "lock.open.trianglebadge.exclamationmark.fill", color: connectionColor.caution };
+  if (level === "mixed") return { level, chip: "Not Fully Secure", icon: "lock.open.trianglebadge.exclamationmark.fill", color: theme.warning };
   return { level, chip: "Not Secure", icon: "lock.open.trianglebadge.exclamationmark.fill", color: theme.destructive };
 }
 
@@ -45,7 +44,6 @@ export function ConnectionRow({ security }: { security: Security }) {
 const CERTIFICATE_KEY_WIDTH = 82;
 
 export function CertificateDetails({ security }: { security: NonNullable<Security> }) {
-  const site = useSiteTokens();
   const cert = security.certificate!;
   const date = (ms: number) => new Date(ms).toLocaleDateString(UI_LOCALE, { year: "numeric", month: "short", day: "numeric" });
   const rows: [string, string][] = [
@@ -59,7 +57,7 @@ export function CertificateDetails({ security }: { security: NonNullable<Securit
   ];
   return (
     <View style={{ marginHorizontal: PANEL.inset, marginTop: space.xxs, marginBottom: space.xs }}>
-      <Well gap="xs" fill={site.certificateWell}>
+      <Well gap="xs">
       {rows.map(([k, v]) => (
         <Box key={k} row gap="m">
           <Text size="caption" tone="textSecondary" style={{ width: CERTIFICATE_KEY_WIDTH }}>

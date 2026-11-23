@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ComponentType, type Rea
 import type { PluginNode, SurfaceKind } from "../../lib/pluginProtocol";
 import { dispatchPluginSurfaceEvent, mountPluginSurface, nextSurfaceInstanceId, unmountPluginSurface } from "../../state/plugins/actions";
 import { usePluginSurfaceTree } from "../../state/plugins/hooks";
-import { ActivitySpinner, Box, Text } from "../ui";
+import { ActivitySpinner, Box, Text, useClosing } from "../ui";
 import {
   ActionNode,
   ActionPanelNode,
@@ -84,10 +84,11 @@ export function PluginSurface({
     void mountPluginSurface(plugin, instanceId, kind, windowId, context ?? {}, wireViewId);
     return () => unmountPluginSurface(plugin, instanceId, windowId);
   }, [plugin, instanceId, wireViewId, kind, windowId, contextKey]);
+  const closing = useClosing();
   const fire = useCallback(
     (ref: unknown, args: unknown[] = [], options: SurfaceFireOptions = {}) =>
-      isHandlerRef(ref) ? dispatchPluginSurfaceEvent(plugin, instanceId, windowId, ref.__handler, args, options) : false,
-    [plugin, instanceId, windowId],
+      !closing && isHandlerRef(ref) ? dispatchPluginSurfaceEvent(plugin, instanceId, windowId, ref.__handler, args, options) : false,
+    [plugin, instanceId, windowId, closing],
   );
   const dispatch = useMemo<SurfaceDispatch>(() => ({ plugin, surfaceId: instanceId, windowId, kind, fire, render: renderChild }), [plugin, instanceId, windowId, kind, fire]);
   return (

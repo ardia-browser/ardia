@@ -2,7 +2,7 @@ import { StyleSheet } from "react-native";
 import { curve, duration } from "../ui/motion";
 import { PANEL } from "../ui/Popover";
 import { useTheme } from "../ui/theme";
-import { iconButton, radius, space, tracking } from "../ui/tokens";
+import { iconButton, lineHeight, radius, space, tracking } from "../ui/tokens";
 
 const DARK = {
   bubbleTint: "rgba(38,38,38,0.3)",
@@ -23,7 +23,6 @@ const INK_INSET = PANEL.inset + 1;
 const HEADER_CAP_TOP = 7.5;
 const FOOTER_TEXT_DROP = 12;
 const ROW_BUTTON = iconButton.s.box;
-const PROGRESS_HEIGHT = 3;
 const PAD_TOP = INK_INSET - HEADER_CAP_TOP;
 const PAD_BOTTOM = INK_INSET - FOOTER_TEXT_DROP;
 
@@ -42,11 +41,15 @@ export const DOWNLOADS_LIST = {
   padTop: PAD_TOP,
   padBottom: PAD_BOTTOM,
   chrome: PAD_TOP + HEADER + StyleSheet.hairlineWidth + PANEL.separatorGap * 2 + PANEL.rowHeight + PAD_BOTTOM,
-  progressHeight: PROGRESS_HEIGHT,
   progressAbove: space.xs,
   progressBelow: space.xxs,
   progressMin: 0.03,
-  missingOpacity: 0.45,
+  get nameLine() {
+    return lineHeight.body;
+  },
+  get statusLine() {
+    return lineHeight.caption;
+  },
   placeDeadlineMs: 120,
 } as const;
 

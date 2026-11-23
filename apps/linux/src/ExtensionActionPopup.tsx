@@ -4,8 +4,8 @@ import type { WebViewHandle } from "@ardia-real/ardiacore";
 import { closeExtensionPopup } from "../../browser/src/state/extensions/actions";
 import { useShownPageId } from "../../browser/src/state/peek/hooks";
 import { openFromPage, pageProfileId } from "../../browser/src/state/tabs/openFromPage";
-import { curve, duration, PANEL, Panel, shadow } from "../../browser/src/components/ui";
-import { EXTENSION_PAGE_BACKGROUND, useExtensionColors } from "../../browser/src/components/extensions/tokens";
+import { curve, duration, PANEL, Panel, shadow, useTheme } from "../../browser/src/components/ui";
+import { EXTENSION_PAGE_BACKGROUND } from "../../browser/src/components/extensions/tokens";
 import type { NativeFrame } from "./hostExtensionView";
 import { HostExtensionWebView } from "./shims/web/HostExtensionWebView";
 import { useInputRegion } from "./shellAbove";
@@ -31,7 +31,7 @@ function useDevicePixelRatio() {
 }
 
 export function ActionPopup({ windowId, pageProfile, url, anchor }: { windowId: string; pageProfile: string; extensionId: string; url: string; anchor: { x: number; y: number; width: number; height: number } }) {
-  const colors = useExtensionColors();
+  const theme = useTheme();
   const web = useRef<WebViewHandle>(null);
   const panel = useRef<View & Element>(null);
   const screen = useWindowDimensions();
@@ -72,7 +72,7 @@ export function ActionPopup({ windowId, pageProfile, url, anchor }: { windowId: 
       <Pressable testID="ardia-extension-popup-dismiss" style={StyleSheet.absoluteFill} onPress={closeExtensionPopup} onLayout={(e) => setWindowWidth(e.nativeEvent.layout.width)} />
       <Animated.View ref={panel} testID="ardia-extension-popup" style={{ position: "absolute", ...box, opacity: appear, display: revealed ? "flex" : "none" }}>
         <GlassOptIn.Provider value={true}>
-          <Panel radius={PANEL.radius} border={colors.popupBorder} borderWidth={border} shadow={shadow.card} style={{ width: box.width, height: box.height }}>
+          <Panel radius={PANEL.radius} border={theme.popoverBorder} borderWidth={border} shadow={shadow.card} style={{ width: box.width, height: box.height }}>
             <View style={{ flex: 1, borderRadius: placement.radius, overflow: "hidden" }}>
               <HostExtensionWebView
                 ref={web}

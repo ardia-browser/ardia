@@ -8,7 +8,7 @@ import { useSplitRowPanes, useTabBadged } from "../../state/sidebar/hooks";
 import { muteTitle } from "../../state/tabs/mute";
 import { usePictureInPicture } from "../../state/media/media";
 import { HoverSlot } from "../ui/HoverSlot";
-import { ActivitySpinner, FadeLabel, HoverSwap, ink, OutsidePressArea, radius, sidebarFont, sidebarLineHeight, space, Symbol, typeFace, useHover, withAlpha } from "../ui";
+import { ActivitySpinner, FadeLabel, HoverSwap, ink, OutsidePressArea, radius, sidebarFont, sidebarLineHeight, space, Symbol, typeFace, useHover, withAlpha, tapActivates } from "../ui";
 import { isPinnedRow, tabTitle } from "../../state/browser/model";
 import { awayFromPin, rowAwayTitle } from "../../state/pins/organize";
 import { hidesRowIcon } from "../../state/pins/rowIcons";
@@ -119,7 +119,7 @@ export const TabRow = memo(function TabRow({
             <View {...(shown.pinnedUrl ? backToPin.hoverProps : null)} style={textOnly ? NO_SLOT : undefined}>
               {resettable ? (
                 <Pressable
-                  onPress={() => returnToPinnedUrl(shown.id)}
+                  onPress={() => returnToPinnedUrl(shown.id)} onAccessibilityTap={tapActivates(() => returnToPinnedUrl(shown.id))}
                   tooltip={withShortcut("Back to Pinned URL", backToPinHint)}
                   accessibilityRole="button"
                   accessibilityLabel="Back to Pinned URL"
@@ -211,7 +211,7 @@ function StatusIconButton({ icon, color, tooltip, onPress }: { icon: string; col
   const glyphFrame = { width: ROW_GLYPH.wide, height: ROW_GLYPH.box, alignItems: "center", justifyContent: "center" } as const;
   return (
     <Pressable
-      onPress={onPress}
+      onPress={onPress} onAccessibilityTap={tapActivates(onPress)}
       onPressIn={pressMotion.onPressIn}
       onPressOut={pressMotion.onPressOut}
       style={{ marginLeft: space.s }}

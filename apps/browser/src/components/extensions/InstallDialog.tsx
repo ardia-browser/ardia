@@ -1,11 +1,12 @@
 import { permissionWarnings } from "@ardia/core";
-import { Image, Pressable, ScrollView } from "react-native";
+import { Image, ScrollView } from "react-native";
 import { cancelInstall, closePinDialog, confirmInstall, setPinned, useWindowExtensions, type InstallRequest } from "../../state/extensions/actions";
 import { useExtensionProfile } from "../../state/extensions/hooks";
 import type { InstalledExtension } from "../../state/extensions/store";
 import { currentShownPageId } from "../../state/peek/actions";
 import { webviews } from "../../state/tabs/webviewHandles";
-import { Box, Button, Checkbox, Dialog, DialogActions, DialogTitle, Text } from "../ui";
+import { Box, Button, Dialog, DialogActions, DialogTitle, Text } from "../ui";
+import { CheckMark, CheckTarget } from "../ui";
 import { space } from "../ui/tokens";
 import { EXTENSION_ICON, PERMISSIONS_MAX_HEIGHT, PIN_LIST_MAX_HEIGHT } from "./tokens";
 
@@ -112,13 +113,13 @@ export function PinDialog({ windowId }: { windowId: string }) {
 
 function PinRow({ ext, onChange }: { ext: InstalledExtension; onChange: (pinned: boolean) => void }) {
   return (
-    <Pressable onPress={() => onChange(!ext.pinned)} style={PIN_ROW}>
-      <Checkbox value={ext.pinned} onChange={onChange} />
+    <CheckTarget value={ext.pinned} onChange={onChange} label={ext.name} style={PIN_ROW}>
+      <CheckMark value={ext.pinned} />
       <Image source={{ uri: ext.actionIcon || ext.icon }} style={{ width: 16, height: 16 }} />
       <Text numberOfLines={1} style={FLEX}>
         {ext.name}
       </Text>
-    </Pressable>
+    </CheckTarget>
   );
 }
 

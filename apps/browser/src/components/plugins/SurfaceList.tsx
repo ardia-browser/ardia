@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, View } from "react-native";
 import type { PluginNode } from "../../lib/pluginProtocol";
-import { ActivitySpinner, Badge, Box, ContextMenuArea, Divider, EmptyState, ListRow, SearchField, Text, useTheme } from "../ui";
+import { ActivitySpinner, Badge, Box, ContextMenuArea, Divider, EmptyState, ListRow, SearchField, Text, useLiveAction, useTheme } from "../ui";
 import { ActionMenuButton, useActionMenu, useRunAction } from "./SurfaceActions";
 import { SurfaceIcon } from "./SurfaceBasics";
 import { SURFACE } from "./tokens";
@@ -143,10 +143,11 @@ function SectionHeader({ title, subtitle }: { title?: string; subtitle?: string 
 
 function ItemRow({ node, selected, onPress }: { node: PluginNode; selected: boolean; onPress: () => void }) {
   const menu = useActionMenu();
+  const live = useLiveAction();
   const p = node.props;
   const subtitle = str(p.subtitle);
   return (
-    <ContextMenuArea onContextMenu={() => void menu(p.actions)}>
+    <ContextMenuArea onContextMenu={live(() => void menu(p.actions))}>
       <ListRow selected={selected} height={SURFACE.itemHeight} onPress={onPress}>
         <SurfaceIcon name={str(p.icon)} />
         <Box row gap="s" style={[FLEX, CENTER]}>

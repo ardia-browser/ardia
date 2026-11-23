@@ -1,14 +1,15 @@
 import { currentEngineProfile } from "../../state/browser/current";
 import { clearBrowsingData, type BrowsingDataType } from "../../state/profiles/profileData";
 import { useRef, useState } from "react";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 import { cacheKey, pruneEngineFavicons } from "../../state/favicons/favicons";
 import { isIncognitoProfile } from "../../state/browser/model";
 import { useProfileName, useProfileOrder } from "../../state/profiles/hooks";
 import { clearHistory, skipInRunningImports } from "../../state/history/actions";
 import { noteBrowsingDataCleared } from "../../state/telemetry/historyRemovalCounts";
 import { consentToken } from "../../state/telemetry/client";
-import { Box, Button, Checkbox, Dialog, DialogActions, DialogTitle, Group, PopUp, Row, space, Text } from "../ui";
+import { Box, Button, Dialog, DialogActions, DialogTitle, Group, PopUp, Row, space, Text } from "../ui";
+import { CheckMark, CheckTarget } from "../ui";
 import { clearDataDialog } from "./tokens";
 
 const RANGES = [
@@ -102,8 +103,8 @@ const ERROR = { marginTop: space.ml } as const;
 
 function Option({ value, onChange, disabled, title, subtitle }: { value: boolean; onChange: (v: boolean) => void; disabled: boolean; title: string; subtitle: string }) {
   return (
-    <Pressable disabled={disabled} onPress={() => onChange(!value)}>
-      <Row icon={<Checkbox value={value} onChange={onChange} disabled={disabled} />} title={title} description={subtitle} />
-    </Pressable>
+    <CheckTarget value={value} onChange={onChange} disabled={disabled} label={title} hint={subtitle}>
+      <Row icon={<CheckMark value={value} disabled={disabled} />} title={title} description={subtitle} />
+    </CheckTarget>
   );
 }

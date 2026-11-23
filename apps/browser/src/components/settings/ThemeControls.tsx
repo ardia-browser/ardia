@@ -1,9 +1,9 @@
 import { useRef, type ReactNode } from "react";
-import { StyleSheet, View, type GestureResponderEvent, type StyleProp, type ViewStyle } from "react-native";
+import { StyleSheet, View, type AccessibilityActionEvent, type GestureResponderEvent, type StyleProp, type ViewStyle } from "react-native";
 import { colorHex, flatColors, lookAngle, PAD_LIGHTNESS, padColor, stopLightness, themeGrainAlpha, themeLayerAlpha, themeUnderColor, withStopAt, withStopLightness, type ShownLook, type ThemeStop } from "../../lib/profileLook";
 import { snapPointToStart, trackPress } from "../../lib/presetLook";
 import type { ProfileTheme } from "../../state/browser/types";
-import { Box, capsule, Dot, ink, ProgressTrack, radius, tabularNums, Text, ThemeSwatch, useTheme } from "../ui";
+import { Box, capsule, Dot, ink, ProgressTrack, radius, tabularNums, Text, ThemeSwatch, useLiveAction, useTheme } from "../ui";
 import { MiniWindow } from "./MiniWindow";
 import { settingsInk, themePreview } from "./tokens";
 import { perLook } from "../ui/tokens";
@@ -19,9 +19,11 @@ const DIAL_BORDER = StyleSheet.hairlineWidth * 2;
 const DIAL_HUB = 5;
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+const STARTS_DRAG = () => true;
 
 export function DirectionDial({ angle, onChange }: { angle: number; onChange: (angle: number, settle: boolean) => void }) {
   const ui = useTheme();
+  const live = useLiveAction();
   const ref = useRef<View>(null);
   const centre = useRef({ x: 0, y: 0 });
   const measure = () => ref.current?.measureInWindow((x, y, width, height) => (centre.current = { x: x + width / 2, y: y + height / 2 }));
@@ -43,10 +45,10 @@ export function DirectionDial({ angle, onChange }: { angle: number; onChange: (a
         accessibilityLabel="Direction"
         accessibilityValue={{ text: `${Math.round(angle)}°` }}
         accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
-        onAccessibilityAction={(e) => step(e.nativeEvent.actionName === "increment" ? 1 : -1)}
+        onAccessibilityAction={live((e: AccessibilityActionEvent) => step(e.nativeEvent.actionName === "increment" ? 1 : -1))}
         tooltip="Drag to turn the gradient"
         style={{ width: DIAL, height: DIAL, borderRadius: capsule(DIAL), backgroundColor: ui.control, borderWidth: DIAL_BORDER, borderColor: ui.controlBorder }}
-        onStartShouldSetResponder={() => true}
+        onStartShouldSetResponder={live(STARTS_DRAG)}
         onResponderGrant={(e) => {
           measure();
           onChange(at(e), false);
@@ -104,6 +106,7 @@ export function ColorPad({
   onBegin?: () => void;
   start?: readonly ThemeStop[];
 }) {
+  const live = useLiveAction();
   const ref = useRef<View>(null);
   const origin = useRef({ x: 0, y: 0 });
   const dragging = useRef(0);
@@ -129,7 +132,7 @@ export function ColorPad({
       onLayout={measure}
       onMouseEnter={measure}
       style={{ width: PAD, height: PAD }}
-      onStartShouldSetResponder={() => true}
+      onStartShouldSetResponder={live(STARTS_DRAG)}
       onResponderGrant={(e) => {
         measure();
         const p = point(e);
@@ -274,6 +277,7 @@ function Track({
   tooltip?: string;
   snapTo?: number;
 }) {
+  const live = useLiveAction();
   const ref = useRef<View>(null);
   const frame = useRef({ x: 0, width: 0 });
   const measure = () => ref.current?.measureInWindow((x, _y, width) => (frame.current = { x, width }));
@@ -288,7 +292,7 @@ function Track({
       onMouseEnter={measure}
       tooltip={tooltip}
       style={{ paddingHorizontal: THUMB / 2 }}
-      onStartShouldSetResponder={() => true}
+      onStartShouldSetResponder={live(STARTS_DRAG)}
       onResponderGrant={(e) => {
         press.grant(frame.current.width);
         measure();

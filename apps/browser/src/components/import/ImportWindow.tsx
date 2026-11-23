@@ -1,6 +1,6 @@
 import { useEffect, type ComponentType } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, View } from "react-native";
-import { space, useTheme, VisualEffect, WindowDragRegion } from "../ui";
+import { ScrollView, StyleSheet, View } from "react-native";
+import { ActivitySpinner, space, VisualEffect, WindowDragRegion } from "../ui";
 import { PageToolbar } from "../pages/PageLayout";
 import { ChooseBody, ChooseFooter } from "./steps/ChooseStep";
 import { DoneBody, DoneFooter } from "./steps/DoneStep";
@@ -10,7 +10,8 @@ import { AccessBody, AccessFooter, SafariBody, SafariFooter } from "./steps/Safa
 import { UnlockBody, UnlockFooter } from "./steps/UnlockStep";
 import { startImport, useImportFlow, type ImportFlow, type ImportStepName } from "../../state/import/flow";
 import { useImportDevHandle } from "./importDevHandle";
-import { importColors, importLayout, importMotion } from "./tokens";
+import { importLayout, importMotion } from "./tokens";
+import { useSettingsColors } from "../settings/useSettingsColors";
 import { WINDOW_CONTROLS, windowControlsWidth } from "../../lib/windowChrome";
 import { markCaptionRegions } from "../../state/windows/controls";
 import { IMPORT_WINDOW_ID } from "../../state/settings/settingsWindows";
@@ -23,7 +24,7 @@ const CONTROLS_ROOM = WINDOW_CONTROLS.edge + windowControlsWidth(2) + WINDOW_CON
 type StepView = ComponentType<{ flow: ImportFlow }>;
 
 function Loading() {
-  return <ActivityIndicator style={{ marginTop: importLayout.loadingTop }} />;
+  return <ActivitySpinner style={LOADING} />;
 }
 
 const STEPS: Record<ImportStepName, { Body: StepView; Footer: StepView | null }> = {
@@ -38,7 +39,7 @@ const STEPS: Record<ImportStepName, { Body: StepView; Footer: StepView | null }>
 };
 
 export function ImportWindow() {
-  const theme = useTheme();
+  const look = useSettingsColors();
   useWindowChrome();
   const flow = useImportFlow();
   useEffect(() => startImport(importMotion.doneDelay), []);
@@ -46,7 +47,7 @@ export function ImportWindow() {
   useEffect(() => markCaptionRegions(IMPORT_WINDOW_ID, [[0, 0, CONTROLS_ROOM, importLayout.dragRegion]]), []);
   const { Body, Footer } = STEPS[flow.step.name];
   return (
-    <View style={{ flex: 1, backgroundColor: theme.dark ? importColors.windowFill.dark : importColors.windowFill.light }}>
+    <View style={{ flex: 1, backgroundColor: look.windowFill }}>
       <VisualEffect material="windowBackground" blendingMode="behindWindow" style={StyleSheet.absoluteFill} />
       <WindowDragRegion style={{ position: "absolute", left: 0, right: 0, top: 0, height: importLayout.dragRegion }} />
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: importLayout.padX, paddingTop: importLayout.padTop, paddingBottom: space.xxl }}>
@@ -60,3 +61,5 @@ export function ImportWindow() {
     </View>
   );
 }
+
+const LOADING = { width: importLayout.loadingSpinner, height: importLayout.loadingSpinner, marginTop: importLayout.loadingTop, alignSelf: "center" } as const;

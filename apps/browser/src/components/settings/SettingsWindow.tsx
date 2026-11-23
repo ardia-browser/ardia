@@ -221,7 +221,7 @@ function Pane(place: SettingsPlace): ReactNode {
 function SidebarItem({ title, icon, tint, selected, onPress }: { title: string; icon: string; tint: string; selected: boolean; onPress: () => void }) {
   return (
     <ListRow height={SIDEBAR_ITEM_HEIGHT} selected={selected} selectedTone="accent" onPress={onPress}>
-      <View style={[PANE_TILE, { backgroundColor: tint }]}>
+      <View style={[PANE_TILE, { backgroundColor: tint, borderRadius: paneTile.radius }]}>
         <Symbol name={icon} size={paneTile.symbol} weight="semibold" color={paneTints.ink} style={PANE_TILE_SYMBOL} />
       </View>
       <Text tone={selected ? "onAccent" : "textPrimary"} ardiaCentersCapitals>{title}</Text>
@@ -230,5 +230,5 @@ function SidebarItem({ title, icon, tint, selected, onPress }: { title: string; 
 }
 
 const SIDEBAR_ITEM_HEIGHT = 30;
-const PANE_TILE = { width: paneTile.size, height: paneTile.size, borderRadius: paneTile.radius, alignItems: "center", justifyContent: "center" } as const;
+const PANE_TILE = { width: paneTile.size, height: paneTile.size, alignItems: "center", justifyContent: "center" } as const;
 const PANE_TILE_SYMBOL = { width: paneTile.size, height: paneTile.size } as const;

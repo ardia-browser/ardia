@@ -1,10 +1,12 @@
 import { appUrlOrigin, urlForDisplay } from "@ardia/core";
 import { displayHostOf } from "../../lib/url";
-import type { ReactNode, Ref } from "react";
+import { markHoverProps } from "../../lib/hoverMarks";
+import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import { StyleSheet, View, type TextInput } from "react-native";
-import { Box, display, SearchField, space, Text, useTheme, WindowDragRegion } from "../ui";
-import { pageHeader, pageToolbar } from "./tokens";
+import { Box, Button, display, HoverSlot, iconButton, SearchField, space, Text, useOffstage, useTheme, WindowDragRegion } from "../ui";
+import { pageHeader, pageToolbar, rowControls } from "./tokens";
 import { perLook } from "../ui/tokens";
+import { keepActivationKeys } from "./listCursor";
 
 export const PAGE_WIDTH = 880;
 
@@ -57,7 +59,71 @@ const HEADER_ACTIONS = { width: pageHeader.sideWidth, justifyContent: "flex-end"
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-export const dayStart = (ms: number) => {
+export function RowMenuSlot({ shown, onPress }: { shown: boolean; onPress: () => void }) {
+  return <HoverSlot hovered={shown} width={iconButton.l.box} hover={<View onKeyDown={keepActivationKeys}><Button variant="icon" icon="ellipsis" size="l" focusable onPress={onPress} tooltip="More actions" /></View>} />;
+}
+
+const pageScroll = { lastAt: 0 };
+
+export function notePageScroll() {
+  pageScroll.lastAt = Date.now();
+}
+
+export function useFocusWithin(key: string) {
+  const latest = useRef(key);
+  latest.current = key;
+  const [focusedKey, setFocusedKey] = useState<string | null>(null);
+  const [focusProps] = useState(() => {
+    let blurTimer: ReturnType<typeof setTimeout> | undefined;
+    return {
+      onFocus: () => {
+        clearTimeout(blurTimer);
+        setFocusedKey(latest.current);
+      },
+      onBlur: () => {
+        clearTimeout(blurTimer);
+        blurTimer = setTimeout(() => setFocusedKey(null), 0);
+      },
+    };
+  });
+  return { focused: focusedKey === key, focusProps };
+}
+
+export function useRowControls(key: string, keyboardRow = false) {
+  const offstage = useOffstage();
+  const latest = useRef({ key, offstage });
+  latest.current = { key, offstage };
+  const settle = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
+  const [restingKey, setRestingKey] = useState<string | null>(null);
+  const { focused, focusProps } = useFocusWithin(key);
+  const [hoverProps] = useState(() => {
+    const rest = (hoveredRow: string) => {
+      const wait = pageScroll.lastAt + rowControls.scrollSettleMs - Date.now();
+      if (wait <= 0) setRestingKey(hoveredRow);
+      else settle.current = setTimeout(() => rest(hoveredRow), wait);
+    };
+    return markHoverProps({
+      onMouseEnter: () => {
+        clearTimeout(settle.current);
+        if (latest.current.offstage) return;
+        setHoveredKey(latest.current.key);
+        rest(latest.current.key);
+      },
+      onMouseLeave: () => {
+        clearTimeout(settle.current);
+        setHoveredKey(null);
+        setRestingKey(null);
+      },
+    });
+  });
+  useEffect(() => () => clearTimeout(settle.current), []);
+  const hovered = !offstage && hoveredKey === key;
+  const rowProps = useMemo(() => ({ ...hoverProps, ...focusProps }), [hoverProps, focusProps]);
+  return { hovered, controlsShown: (hovered && restingKey === key) || focused || keyboardRow, rowProps };
+}
+
+export const dayStart =(ms: number) => {
   const d = new Date(ms);
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 };

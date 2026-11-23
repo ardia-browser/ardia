@@ -42,7 +42,7 @@ import {
   type SyncRemote,
 } from "./syncAuthority.ts";
 
-const KEYCHAIN_ERROR = "Couldn’t save the sync key in your Keychain.";
+const KEYCHAIN_ERROR = "Couldn't save the sync key in your Keychain.";
 
 export const useSync = create<SyncUi>()(() => ({ ...engine.useSync.getState(), status: SyncNative ? "starting" : "unavailable" }));
 
@@ -130,7 +130,7 @@ function remoteFor(host: ArdiaHost): SyncRemote {
       }
       if ("error" in result && result.error === KEYCHAIN_ERROR) {
         keyStore = await syncKeyStoreStatus(host).catch(() => keyStore);
-        return { error: keyringMessage(keyStore, true) ?? "Couldn’t save the sync key in your keyring." };
+        return { error: keyringMessage(keyStore, true) ?? "Couldn't save the sync key in your keyring." };
       }
       return result;
     },
@@ -164,7 +164,7 @@ async function becomeAuthority(host: ArdiaHost) {
   try {
     await refreshSyncDocuments({ refresh: refreshDocument, remove: deleteDocument });
   } catch (error) {
-    useSync.setState({ status: "stalled", error: "Ardia couldn’t read this device’s sync files, so sync is paused to keep them." });
+    useSync.setState({ status: "stalled", error: "Ardia couldn't read this device's sync files, so sync is paused to keep them." });
     throw error;
   }
   await loadSyncDeviceName(host);
@@ -230,7 +230,7 @@ export const startSync = () => void startLinuxSync({ candidate: true, locks: typ
 const leading = () => !!authority?.isAuthority();
 
 function forward<T>(method: RemoteMethod, args: unknown[], timeoutMs?: number): Promise<T> {
-  if (!authority) return Promise.reject(new Error("Sync isn’t running in this window."));
+  if (!authority) return Promise.reject(new Error("Sync isn't running in this window."));
   return authority.call(method, args, timeoutMs) as Promise<T>;
 }
 
@@ -285,7 +285,7 @@ export async function syncNow(stillWanted: () => void = () => {}): Promise<boole
 }
 
 export async function turnOnSync(folder: string, how?: TurnOnFolder): Promise<{ ok: true } | { error: string }> {
-  if (!SyncNative) return { error: "Sync isn’t available in this build." };
+  if (!SyncNative) return { error: "Sync isn't available in this build." };
   try {
     return await forward("turnOnSync", [folder, how], INTERACTIVE_CALL_TIMEOUT_MS);
   } catch (error) {

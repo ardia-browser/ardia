@@ -66,7 +66,7 @@ export async function addSharedFolder(windowId: string) {
   const picked = await pickFolder(start, "Add Folder");
   if (!picked) return;
   const found = await resolveSharedFolder(picked).catch((error: unknown) => {
-    showToast(windowId, "Couldn’t add this folder", errorText(error), { icon: "exclamationmark.icloud" });
+    showToast(windowId, "Couldn't add this folder", errorText(error), { icon: "exclamationmark.icloud" });
     return null;
   });
   if (!found) return;
@@ -107,14 +107,14 @@ export async function shareFolder(windowId: string, groupId: string) {
     const state = useSharedFolders.getState().sync[folderRef(g.profileId, key)]?.state;
     if (state !== "synced" && state !== "waiting") {
       const why = useSharedFolders.getState().sync[folderRef(g.profileId, key)]?.error;
-      const reason = why ?? (state === "missing" ? "Its folder can’t be found any more. Stop syncing it, then share it again." : "Its links aren’t in the folder yet. Try again in a moment.");
-      return showToast(windowId, "Couldn’t share this folder yet", reason, { icon: "exclamationmark.icloud" });
+      const reason = why ?? (state === "missing" ? "Its folder can't be found any more. Stop syncing it, then share it again." : "Its links aren't in the folder yet. Try again in a moment.");
+      return showToast(windowId, "Couldn't share this folder yet", reason, { icon: "exclamationmark.icloud" });
     }
     const anchor = await measureRow(windowId, groupId);
     const url = fileUrlOf(folder.path);
     await sharePage(cleanUrl(url), cleanLinkTitle(groupLabel(store(), g), url) || null, windowId, anchor ? [anchor.x, anchor.y, anchor.width, anchor.height] : null);
   } catch (error) {
-    showToast(windowId, "Couldn’t share this folder", error instanceof Error ? error.message : String(error), { icon: "exclamationmark.icloud" });
+    showToast(windowId, "Couldn't share this folder", error instanceof Error ? error.message : String(error), { icon: "exclamationmark.icloud" });
   }
 }
 

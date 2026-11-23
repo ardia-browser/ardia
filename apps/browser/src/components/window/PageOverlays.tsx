@@ -34,7 +34,7 @@ import { useDeviceChooserOpen } from "../../state/site/deviceChoosers";
 import { useCast } from "../../state/media/cast";
 import { useHistoryMenu } from "../../state/tabs/navigation";
 import { usePageSelection } from "../../state/site/selection";
-import { BEHIND_NEW_TAB, OVERLAY, overlayBits, pageOverlays, useEligibleGate, useKeptOverlays } from "./overlayGate";
+import { BEHIND_NEW_TAB, OVERLAY, overlayBits, pageOverlays, useEligibleGate, useKeptOverlays, useKeptWhile } from "./overlayGate";
 
 export function PageOverlays({
   tabId,
@@ -61,6 +61,7 @@ export function PageOverlays({
 }) {
   const popover = usePages((s) => s.popover[tabId] ?? null);
   const panel = usePanelsPresence(popover, SITE_PANELS);
+  const blockedPopups = useKeptWhile(popover === "popups", popovers);
   const verificationCodes = usePluginChrome(PLUGIN_CHROME.verificationCodes);
   const sidebarRight = useSidebarSide(windowId) === "right";
   const anchor: PageAnchor = { toolbar: toolbar ? geometry : null, sidebarRight };
@@ -90,7 +91,7 @@ export function PageOverlays({
       {has("newTabNotice") && <NewTabNotice windowId={windowId} tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} enter={overlays.entersLater("newTabNotice")} />}
       {!newTabShown && has("externalApp") && <ExternalAppPrompt tabId={tabId} {...at("prompt", EXTERNAL_APP_WIDTH)} />}
       {!newTabShown && has("engineOffer") && <EngineOfferPrompt tabId={tabId} {...at("prompt", ENGINE_OFFER_WIDTH)} />}
-      {popovers && popover === "popups" && <BlockedPopupsPrompt tabId={tabId} {...at("siteButton", BLOCKED_POPUPS_WIDTH)} />}
+      {blockedPopups && <BlockedPopupsPrompt tabId={tabId} {...at("siteButton", BLOCKED_POPUPS_WIDTH)} />}
       {popovers && sitePanels(tabId, panel, (panelWidth) => at("siteButton", panelWidth))}
       {has("sharePicker") && <SharePicker tabId={tabId} paneWidth={width} />}
       {!newTabShown && has("deviceChooser") && <DeviceChooser tabId={tabId} {...at("prompt", DEVICE_CHOOSER_WIDTH)} />}
@@ -140,7 +141,7 @@ export function BesidePeekPopovers({ tabId, windowId, left, top, room }: { tabId
   const fit = (width: number) => ({ left: fitLeft(left, room, width), top });
   return (
     <>
-      {popover === "popups" && <BlockedPopupsPrompt tabId={tabId} {...fit(BLOCKED_POPUPS_WIDTH)} />}
+      <BlockedPopupsPrompt tabId={tabId} {...fit(BLOCKED_POPUPS_WIDTH)} />
       {sitePanels(tabId, panel, fit)}
       <HistoryPopover tabId={tabId} windowId={windowId} top={top} left={() => fitLeft(left, room, HISTORY_MENU_WIDTH)} />
     </>

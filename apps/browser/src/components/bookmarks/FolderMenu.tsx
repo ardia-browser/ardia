@@ -14,11 +14,11 @@ import { currentBookmarks } from "../../state/browser/current";
 import { openBarMenu } from "../../state/bookmarks/barMenus";
 import { modifiersOf } from "../../lib/keys";
 import { useSidebarWidth } from "../../state/sidebar/hooks";
-import { ContextMenuArea, menuRowFill, MenuSeparator, MouseArea, opacity, PANEL, PopoverSurface, Symbol, Text, usePopoverMotion, usePopoverMotionStyle, useTheme } from "../ui";
+import { ClosingView, ContextMenuArea, HoverFill, menuRowFill, MenuRow, MenuSeparator, MouseArea, PANEL, PopoverSurface, Symbol, Text, useClosing, useLiveAction, usePopoverMotion, usePopoverMotionStyle, useTheme, tapActivates } from "../ui";
 import { ChipIcon, useBookmarkDragResponder, type IconMetrics } from "./BarItem";
 import { measureRect, useEased, useSlide } from "./barMotion";
 import { useBarSize } from "./barSize";
-import { bookmarksBar, folderMenu, type BarSize } from "./tokens";
+import { bookmarkDrag, bookmarksBar, folderMenu, type BarSize } from "./tokens";
 
 const PAD = PANEL.rowInset;
 const FAVICON_LEFT = PANEL.rowInset + PANEL.rowPadding;
@@ -72,7 +72,7 @@ export function FolderMenu({ windowId, panel, layer, closing, onClosed }: { wind
   const lineY = slotHere === null ? null : menuLineY(ids, offsets, draggedHere, slotHere, row);
 
   const openChild = (id: string, sprung = false) =>
-    void measureRect(views.current.get(id) ?? null).then((anchor) => anchor && openFolderMenu(windowId, { parentId: id, fromIndex: 0, anchor, level: level + 1 }, { sprung }));
+    void measureRect(views.current.get(id) ?? null).then((anchor) => anchor && !latest.current.closing && !latest.current.retained && openFolderMenu(windowId, { parentId: id, fromIndex: 0, anchor, level: level + 1 }, { sprung }));
 
   const latest = useRef({ ids, place, closing, retained: panel.retained, openChild, row });
   latest.current = { ids, place, closing, retained: panel.retained, openChild, row };
@@ -96,8 +96,9 @@ export function FolderMenu({ windowId, panel, layer, closing, onClosed }: { wind
   );
 
   return (
-    <Animated.View
-      pointerEvents={closing || panel.retained ? "none" : "auto"}
+    <ClosingView
+      closing={closing || !!panel.retained}
+      pointerEvents={panel.retained ? "none" : "auto"}
       onLayout={(e) => setHeight(e.nativeEvent.layout.height)}
       style={{ position: "absolute", left: place.x - layer.x, top: place.y - layer.y, width: place.width, ...motion, ...(panel.retained ? HIDDEN : null) }}
     >
@@ -146,10 +147,10 @@ export function FolderMenu({ windowId, panel, layer, closing, onClosed }: { wind
             <MenuSeparator />
             {openAllItems(footer.links).map((item) =>
               "id" in item ? (
-                <ActionRow
+                <MenuRow
                   key={item.id}
-                  size={size}
-                  symbol={item.symbol}
+                  minHeight={size.menuRow}
+                  icon={item.symbol}
                   title={item.title}
                   onPress={() => {
                     closeFolderMenus();
@@ -158,9 +159,9 @@ export function FolderMenu({ windowId, panel, layer, closing, onClosed }: { wind
                 />
               ) : null,
             )}
-            <ActionRow
-              size={size}
-              symbol="sidebar.left"
+            <MenuRow
+              minHeight={size.menuRow}
+              icon="sidebar.left"
               title="Add to Sidebar as Group"
               disabled={!footer.group}
               onPress={() => {
@@ -171,7 +172,7 @@ export function FolderMenu({ windowId, panel, layer, closing, onClosed }: { wind
           </View>
         )}
       </PopoverSurface>
-    </Animated.View>
+    </ClosingView>
   );
 }
 
@@ -197,9 +198,9 @@ function MenuLine({ y }: { y: number | null }) {
         position: "absolute",
         left: FAVICON_LEFT,
         right: PANEL.inset,
-        top: -bookmarksBar.dropLine / 2,
-        height: bookmarksBar.dropLine,
-        borderRadius: bookmarksBar.dropLineRadius,
+        top: -bookmarkDrag.line / 2,
+        height: bookmarkDrag.line,
+        borderRadius: bookmarkDrag.lineRadius,
         backgroundColor: theme.accent,
         opacity: shown,
         transform: [{ translateY: top }],
@@ -210,33 +211,13 @@ function MenuLine({ y }: { y: number | null }) {
 
 function RowFrame({ size, children, plate = false, pressed = false, ring = false }: { size: BarSize; children: ReactNode; plate?: boolean; pressed?: boolean; ring?: boolean }) {
   const theme = useTheme();
-  const fill = useEased(plate || pressed);
   const ringOpacity = useEased(ring);
   const shape = { borderRadius: PANEL.rowRadius, borderCurve: "continuous" } as const;
   return (
     <View style={{ height: size.menuRow, marginHorizontal: PANEL.rowInset, paddingHorizontal: PANEL.rowPadding, flexDirection: "row", alignItems: "center", gap: PANEL.iconGap }}>
-      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, shape, { opacity: fill, backgroundColor: menuRowFill(theme, pressed) }]} />
+      <HoverFill shown={plate || pressed} instant={pressed} color={menuRowFill(theme, pressed)} radius={PANEL.rowRadius} />
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, shape, { opacity: ringOpacity, borderWidth: bookmarksBar.dropRing, borderColor: theme.accent }]} />
       {children}
-    </View>
-  );
-}
-
-function ActionRow({ size, symbol, title, onPress, disabled }: { size: BarSize; symbol?: string; title: string; onPress: () => void; disabled?: boolean }) {
-  const theme = useTheme();
-  const [hovered, setHovered] = useState(false);
-  return (
-    <View onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} style={disabled ? DISABLED : undefined} pointerEvents={disabled ? "none" : "auto"}>
-      <Pressable onPress={onPress}>
-        {({ pressed }) => (
-          <RowFrame size={size} plate={hovered} pressed={pressed}>
-            <View style={ICON_SLOT}>{symbol ? <Symbol name={symbol} size={PANEL.iconSize} color={theme.icon} style={ICON_SLOT} /> : null}</View>
-            <Text size="body" lines={1} style={TITLE}>
-              {title}
-            </Text>
-          </RowFrame>
-        )}
-      </Pressable>
     </View>
   );
 }
@@ -274,17 +255,23 @@ function FolderRow({
   const edge = useRef(sidebarEdge);
   edge.current = sidebarEdge;
   const shift = useSlide(offset);
+  const closing = useClosing();
+  const live = useLiveAction();
   const responder = useBookmarkDragResponder(view, () => ({ windowId, id, panel: panel.key, sidebarEdge: edge.current }), [windowId, id, panel.key]);
   useEffect(() => () => clearTimeout(hoverTimer.current), []);
+  useEffect(() => {
+    if (closing) clearTimeout(hoverTimer.current);
+  }, [closing]);
   if (!node) return null;
   const folder = node.kind === "folder";
   const enter = () => {
     setHovered(true);
     clearTimeout(hoverTimer.current);
-    if (anyDrag) return;
+    if (anyDrag || closing) return;
     hoverTimer.current = setTimeout(() => (folder ? onOpenChild(id) : closeMenusAbove(windowId, panel.level)), folderMenu.hoverOpenMs);
   };
   const press = (e: { metaKey?: boolean; shiftKey?: boolean; altKey?: boolean; middle?: boolean }) => {
+    if (closing) return;
     if (node.kind === "folder") return onOpenChild(id);
     const mode = openModeFor(e);
     if (mode !== "background") closeFolderMenus();
@@ -298,6 +285,8 @@ function FolderRow({
       }}
       collapsable={false}
       {...responder.panHandlers}
+      onStartShouldSetResponder={live(responder.panHandlers.onStartShouldSetResponder)}
+      onMoveShouldSetResponder={live(responder.panHandlers.onMoveShouldSetResponder)}
       onMouseEnter={enter}
       onMouseLeave={() => {
         setHovered(false);
@@ -305,10 +294,10 @@ function FolderRow({
       }}
       style={{ opacity: dragging ? 0 : 1, transform: [{ translateY: shift }] }}
     >
-      <ContextMenuArea onContextMenu={() => void openBarMenu(windowId, profileId, node)}>
-        <MouseArea onMiddleClick={(e) => press({ ...e, middle: true })}>
+      <ContextMenuArea onContextMenu={live(() => void openBarMenu(windowId, profileId, node))}>
+        <MouseArea onMiddleClick={live((e) => press({ ...e, middle: true }))}>
           <View tooltip={node.kind === "url" ? node.url : undefined}>
-            <Pressable accessibilityRole="menuitem" accessibilityLabel={node.title || (node.kind === "url" ? node.url : "")} onPress={(e) => press(modifiersOf(e))}>
+            <Pressable disabled={closing} accessibilityRole="menuitem" accessibilityLabel={node.title || (node.kind === "url" ? node.url : "")} onPress={live((e) => press(modifiersOf(e)))} onAccessibilityTap={tapActivates(live((e) => press(modifiersOf(e))))}>
               {({ pressed }) => (
                 <RowFrame size={size} plate={(hovered && !anyDrag) || open || dropInto} pressed={pressed} ring={dropInto}>
                   <View style={ICON_SLOT}>
@@ -332,4 +321,3 @@ const MENU_ICON: IconMetrics = { favicon: folderMenu.favicon, icon: PANEL.iconSi
 const ICON_SLOT = { width: PANEL.iconSlot, height: PANEL.iconSlot, alignItems: "center", justifyContent: "center" } as const;
 const TITLE = { flex: 1 } as const;
 const CHEVRON = { width: folderMenu.chevronBox, height: folderMenu.chevronBox } as const;
-const DISABLED = { opacity: opacity.disabled } as const;

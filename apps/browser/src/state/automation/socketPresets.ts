@@ -41,8 +41,8 @@ export const PRESET_METHODS: MethodSpec[] = [
   {
     name: "presets.apply",
     mutates: true,
-    description: "Apply a setup code as Settings › Apply a setup code does: layout and look settings, the window's profile colour and its pinned apps",
-    params: obj({ code: CODE, window: { ...WINDOW, description: "The window whose profile takes the colour and pinned apps; the focused one when left out" } }, ["code"]),
+    description: "Apply a setup code as Settings › Apply a setup code does: layout and look settings, the window's profile color and its pinned apps",
+    params: obj({ code: CODE, window: { ...WINDOW, description: "The window whose profile takes the color and pinned apps; the focused one when left out" } }, ["code"]),
     result: "{ok, window, lines}",
     run: apply,
   },

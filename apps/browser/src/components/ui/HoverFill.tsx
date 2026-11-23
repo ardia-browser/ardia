@@ -1,10 +1,17 @@
 import { memo, useMemo } from "react";
 import { Animated, StyleSheet } from "react-native";
+import { GlassFill, type GlassState } from "./Glass";
 import { useHoverFill } from "./motion";
 
-export const HoverFill = memo(function HoverFill({ shown, color, radius, instant = false }: { shown: boolean; color: string; radius: number; instant?: boolean }) {
+export const HoverFill = memo(function HoverFill({ shown, color, radius, instant = false, glass }: { shown: boolean; color: string; radius: number; instant?: boolean; glass?: GlassState }) {
   const opacity = useHoverFill(shown, instant);
   if (!opacity) return null;
+  if (glass)
+    return (
+      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity }]}>
+        <GlassFill radius={radius} state={glass} />
+      </Animated.View>
+    );
   return <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: radius, backgroundColor: color, opacity }]} />;
 });
 

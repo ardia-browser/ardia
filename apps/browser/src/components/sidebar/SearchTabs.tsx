@@ -2,7 +2,7 @@ import { displayUrl, fuzzyScore, hostOf } from "@ardia/core";
 import { useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, View, type TextInput } from "react-native";
 import { switchToTab } from "../../state/browser/actions";
-import { Divider, FadeLabel, font, ListRow, Panel, radius, SearchField, space, Symbol, Text } from "../ui";
+import { Divider, FadeLabel, ListRow, Panel, PANEL, radius, SearchField, space, Symbol, Text } from "../ui";
 import { useTheme } from "../ui/theme";
 import { useTabs } from "../../state/tabs/hooks";
 import { restoreClosed } from "../../state/windows/actions";
@@ -100,7 +100,7 @@ function SearchPanel({ windowId, windowWidth }: { windowId: string; windowWidth:
         <ScrollView ref={scroll} style={{ maxHeight: ROW * MAX_ROWS + 60 }} showsVerticalScrollIndicator={false}>
           {rows.length === 0 ? (
             <Text tone="textTertiary" style={NO_MATCH}>
-              No tabs match “{query.trim()}”
+              {query.trim() ? `No tabs match “${query.trim()}”` : "No tabs"}
             </Text>
           ) : null}
           {sections.map((section) =>
@@ -128,11 +128,11 @@ function ResultRow({ row, selected, onHover, onPress }: { row: Row; selected: bo
     <ListRow height={ROW} selected={selected} onPress={onPress} onHover={(hovered) => hovered && onHover()}>
         {row.kind === "closed" && row.group ? <FolderOrIcon icon={row.icon} open={false} color={row.group.color} /> : <TabIcon url={row.url} favicon={row.favicon} icon={row.icon} />}
         <View style={{ flex: 1, flexDirection: "row", alignItems: "center", minWidth: 0 }}>
-          <FadeLabel text={row.title} fontSize={font.title.fontSize} color={theme.textPrimary} style={{ flex: 3, height: 19 }} />
-          {row.url ? <FadeLabel text={`— ${displayUrl(row.url)}`} fontSize={font.title.fontSize} color={theme.textSecondary} style={{ flex: 2, height: 19, marginLeft: URL_LABEL_GAP }} /> : null}
+          <FadeLabel text={row.title} fontSize={PANEL.titleSize} color={theme.textPrimary} style={{ flex: 3, height: PANEL.titleLine }} />
+          {row.url ? <FadeLabel text={`— ${displayUrl(row.url)}`} fontSize={PANEL.titleSize} color={theme.textSecondary} style={{ flex: 2, height: PANEL.titleLine, marginLeft: URL_LABEL_GAP }} /> : null}
         </View>
         {detail ? (
-          <Text size="small" tone="textTertiary">
+          <Text size="caption" tone="textSecondary">
             {detail}
           </Text>
         ) : null}

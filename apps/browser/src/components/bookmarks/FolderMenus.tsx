@@ -5,7 +5,7 @@ import { useBookmarks } from "../../state/bookmarks/hooks";
 import { useBarDrag, watchBookmarkEscape } from "../../state/bookmarks/barDrag";
 import { closeFolderMenus, useFolderMenus, type FolderMenuPanel, type MenuRect } from "../../state/bookmarks/folderMenus";
 import { useActiveTabId, useWindowId } from "../../state/browser/hooks";
-import { OutsidePressArea, Panel, shadow, Text, useTheme } from "../ui";
+import { OutsidePressArea, Panel, shadow, Text, useLiveWhile, useTheme } from "../ui";
 import { ChipIcon } from "./BarItem";
 import { useEased } from "./barMotion";
 import { FolderMenu } from "./FolderMenu";
@@ -29,6 +29,7 @@ export function FolderMenus() {
   const shown = usePresence(panels);
   const activeTab = useActiveTabId();
   const open = panels.length > 0;
+  const live = useLiveWhile(!open);
   useEffect(() => {
     if (open) closeFolderMenus();
   }, [activeTab]);
@@ -47,7 +48,7 @@ export function FolderMenus() {
       }}
     >
       {shown.length > 0 && (
-        <OutsidePressArea pointerEvents="box-none" style={StyleSheet.absoluteFill} onOutsidePress={() => closeFolderMenus({ outside: true })}>
+        <OutsidePressArea pointerEvents="box-none" style={StyleSheet.absoluteFill} onOutsidePress={live(() => closeFolderMenus({ outside: true }))}>
           {shown.map(({ panel, closing }) => (
             <FolderMenu key={`${panel.level}:${panel.key}`} windowId={windowId} panel={panel} layer={layer} closing={closing} onClosed={() => shown.remove(panel)} />
           ))}

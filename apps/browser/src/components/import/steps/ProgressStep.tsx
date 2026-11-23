@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
-import { ActivityIndicator, Animated, View } from "react-native";
-import { Button, curve, space, Symbol, Text, useTheme } from "../../ui";
+import { Animated, View } from "react-native";
+import { ActivitySpinner, Button, curve, space, Symbol, Text, useTheme } from "../../ui";
 import { SelectableCard } from "../../settings/SelectableCard";
 import { cancelImport, type ImportFlow, type KindStatus } from "../../../state/import/flow";
 import { KINDS } from "../model";
@@ -15,7 +15,7 @@ export function ProgressBody({ flow }: { flow: ImportFlow }) {
     <>
       <Title title={`Importing from ${source?.name ?? "file"}`} subtitle={preparing > 1 ? `Preparing ${preparing} profiles` : "Preparing your profile"} spinner />
       <Text size="small" tone="textSecondary" style={{ marginBottom: space.l }}>
-        Hold on while we fetch your data...
+        Hold on while we fetch your data…
       </Text>
       <View style={{ gap: space.s }}>
         {KINDS.filter((k) => status[k.kind]).map((k, i) => (
@@ -60,7 +60,7 @@ function CategoryRow({ title, icon, status, index }: { title: string; icon: stri
           {title}
         </Text>
         {active ? (
-          <ActivityIndicator size="small" />
+          <ActivitySpinner style={SPINNER} />
         ) : status === "pending" ? null : (
           <Animated.View style={{ transform: [{ scale: check }] }}>
             <Symbol
@@ -77,3 +77,5 @@ function CategoryRow({ title, icon, status, index }: { title: string; icon: stri
 }
 
 const CATEGORY_ROW = { height: importLayout.categoryRow, paddingHorizontal: space.l, flexDirection: "row", alignItems: "center", gap: space.l } as const;
+
+const SPINNER = { width: importLayout.spinner, height: importLayout.spinner } as const;

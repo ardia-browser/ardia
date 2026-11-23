@@ -6,7 +6,7 @@ import { copyLinkItems, openAllItems, openLinkItems, runLinkChoice, type Link } 
 export async function confirmRemoveSelected(windowId: string): Promise<boolean> {
   const { confirmed } = await confirm({
     title: "Remove selected items?",
-    message: "Are you sure you want to delete these pages from your history?",
+    message: "Are you sure you want to remove these pages from your history?",
     confirmTitle: "Remove",
     destructive: true,
     windowId,

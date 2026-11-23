@@ -2,7 +2,7 @@ import { memo, useMemo } from "react";
 import { ScrollView, Text as NativeText, View, type TextStyle } from "react-native";
 import { parseMarkdown, type MarkdownBlock, type MarkdownListItem, type MarkdownSpan } from "../../lib/pluginMarkdown";
 import { newTab } from "../../state/tabs/actions";
-import { Box, Divider, monoFace, space, Text, useTheme, weight, type TypeSize } from "../ui";
+import { Box, Divider, monoFace, space, Text, useLiveAction, useTheme, weight, type TypeSize } from "../ui";
 import { SURFACE } from "./tokens";
 import { useSurface } from "./surfaceNodes";
 
@@ -96,6 +96,7 @@ function Spans({ spans }: { spans: MarkdownSpan[] }) {
 function Span({ span }: { span: MarkdownSpan }) {
   const theme = useTheme();
   const { windowId } = useSurface();
+  const live = useLiveAction();
   const url = span.url;
   if (!span.bold && !span.italic && !span.code && !url) return <>{span.text}</>;
   const style: TextStyle = {
@@ -107,7 +108,7 @@ function Span({ span }: { span: MarkdownSpan }) {
     ...(span.code ? monoFace() : null),
   };
   return (
-    <NativeText style={style} accessibilityRole={url ? "link" : undefined} onPress={url ? () => newTab(windowId, { url }) : undefined}>
+    <NativeText style={style} accessibilityRole={url ? "link" : undefined} onPress={url ? live(() => newTab(windowId, { url })) : undefined}>
       {span.text}
     </NativeText>
   );

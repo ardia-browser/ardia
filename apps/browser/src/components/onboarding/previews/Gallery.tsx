@@ -41,7 +41,7 @@ const MOCK_PAGES: MockState[][] = [
   [
     { label: "⌘L field, sidebar address", settings: { ...DIA, addressBar: "sidebar" }, accent: PLUM, focus: "cmdl-field" },
     { label: "⌘L field, toolbar address, dark", settings: { ...DIA, appearance: "dark" }, accent: PROFILE_COLORS.blue.swatch, focus: "cmdl-field" },
-    { label: "⌘L centred", settings: DIA, accent: PROFILE_COLORS.purple.swatch, focus: "cmdl-centred" },
+    { label: "⌘L centered", settings: DIA, accent: PROFILE_COLORS.purple.swatch, focus: "cmdl-centred" },
     { label: "Website color on", settings: DIA, accent: PLUM, focus: "sitecolor-on" },
   ],
 ];

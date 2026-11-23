@@ -4,7 +4,7 @@ import type { GroupColor } from "../browser/types";
 type GroupTint = Exclude<GroupColor, "none">;
 
 export const GROUP_COLORS: Record<GroupTint, { name: string; hex: string }> = {
-  grey: { name: "Grey", hex: "#8E8E93" },
+  grey: { name: "Gray", hex: "#8E8E93" },
   blue: { name: "Blue", hex: "#4C8DF6" },
   red: { name: "Red", hex: "#E5534B" },
   yellow: { name: "Yellow", hex: "#E3B341" },

@@ -38,7 +38,7 @@ const showInFolder = (showPath: boolean) => showPath && { id: "show", title: "Sh
 
 export function bookmarkRowMenuItems(target: RowMenuTarget): MenuItem[] {
   if (target.kind === "url")
-    return menuSections([...openLinkItems(), showInFolder(target.showPath)], copyLinkItems(), [{ id: "edit", title: "Edit…", symbol: "pencil" }], [{ id: "delete", title: "Delete", symbol: "trash" }]);
+    return menuSections([...openLinkItems(), showInFolder(target.showPath)], copyLinkItems(), [{ id: "edit", title: "Edit…", symbol: "pencil" }], [{ id: "delete", title: "Remove Bookmark", symbol: "trash" }]);
   if (target.kind === "folder")
     return menuSections(
       [
@@ -48,10 +48,10 @@ export function bookmarkRowMenuItems(target: RowMenuTarget): MenuItem[] {
         showInFolder(target.showPath),
       ],
       [{ id: "edit", title: "Rename…", symbol: "pencil" }],
-      [{ id: "delete", title: "Delete Folder", symbol: "trash" }],
+      [{ id: "delete", title: "Remove Folder", symbol: "trash" }],
     );
   return menuSections(openAllItems(target.links, target.links), copyLinkItems(target.links), [
-    { id: "delete", title: `Delete ${target.items} ${target.noun}`, symbol: "trash" },
+    { id: "delete", title: `Remove ${target.items} ${target.noun}`, symbol: "trash" },
   ]);
 }
 

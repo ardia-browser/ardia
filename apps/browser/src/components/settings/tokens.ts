@@ -1,5 +1,5 @@
 import { duration } from "../ui/motion";
-import { display, font, space } from "../ui/tokens";
+import { display, font, radius, space } from "../ui/tokens";
 
 const dark = {
   windowFill: "#1E1E1E",
@@ -95,7 +95,7 @@ export const paneTints = {
   ink: "#FFFFFF",
 } as const;
 
-export const paneTile = { size: 20, radius: 5, symbol: 11 } as const;
+export const paneTile = { size: 20, get radius() { return radius.control; }, symbol: 11 } as const;
 
 export const settingsLayout = { emptyTop: 40, sidebarWidth: 214, paneMaxWidth: 600, paneBottom: 40 } as const;
 

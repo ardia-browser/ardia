@@ -98,7 +98,7 @@ export async function closeGroup(groupId: string, { mayWrite, user }: CloseReque
       title: `Close “${groupLabel(s, group)}”?`,
       message: w.kind === "private" ? `Its ${tabs} close with it.` : `Its ${tabs} close with it. History › Recently Closed Groups brings it back.`,
       confirmTitle: "Close Group",
-      suppression: "Don’t ask me again",
+      suppression: "Don't ask again",
       windowId: w.id,
     });
     if (mayWrite && !mayWrite()) return;

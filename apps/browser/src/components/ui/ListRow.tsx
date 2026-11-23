@@ -1,9 +1,11 @@
 import { useRef, useState, type ReactNode } from "react";
+import { tapActivates } from "./a11y";
 import { markHoverProps } from "../../lib/hoverMarks";
 import { Pressable, View, type GestureResponderEvent } from "react-native";
 import { useTheme } from "./theme";
 import { radius, space } from "./tokens";
 import { HoverFill } from "./HoverFill";
+import { useLiveWhile, useClosing } from "./Closing";
 
 export type ListRowState = { hovered: boolean; pressed: boolean; selected: boolean };
 
@@ -25,6 +27,8 @@ export function ListRow({
   children: ReactNode | ((state: ListRowState) => ReactNode);
 }) {
   const theme = useTheme();
+  const closing = useClosing();
+  const live = useLiveWhile(closing);
   const [hovered, setHovered] = useState(false);
   const notify = useRef(onHover);
   notify.current = onHover;
@@ -42,7 +46,7 @@ export function ListRow({
   );
   return (
     <View {...hoverProps}>
-      <Pressable onPress={onPress} onPressIn={onPressIn}>
+      <Pressable disabled={closing} onPress={live(onPress)} onAccessibilityTap={tapActivates(live(onPress))} onPressIn={live(onPressIn)} accessibilityRole={onPress ? "button" : undefined}>
         {({ pressed }) => (
           <View
             style={{
@@ -52,10 +56,10 @@ export function ListRow({
               flexDirection: "row",
               alignItems: "center",
               gap: space.m,
-              backgroundColor: selected ? (selectedTone === "accent" ? theme.formAccent : theme.rowSelected) : undefined,
+              backgroundColor: !selected ? undefined : selectedTone !== "accent" ? theme.rowSelected : pressed && onPress ? theme.formAccentPressed : theme.formAccent,
             }}
           >
-            <HoverFill shown={hovered && !selected} instant={selected} color={theme.rowHover} radius={radius.tile} />
+            {selected && selectedTone === "accent" ? null : <HoverFill shown={hovered || (pressed && !!onPress)} instant={pressed && !!onPress} color={pressed && onPress ? theme.popoverRowPressed : theme.rowHover} radius={radius.tile} />}
             {typeof children === "function" ? children({ hovered, pressed, selected }) : children}
           </View>
         )}

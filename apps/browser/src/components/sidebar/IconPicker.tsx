@@ -5,6 +5,7 @@ import { useIconPickerCurrent, useIsPinnedRow } from "../../state/sidebar/hooks"
 import { hasOwnGroupIcon } from "../../state/groups/groupIcons";
 import { NO_ROW_ICON } from "../../state/pins/rowIcons";
 import { clampLeft, clampTop, IconPickerLayer, type PickerAction, type PickerSymbol } from "../iconPicker/IconPickerPanel";
+import { usePopoverPresenceOf, type PanelPresence } from "../ui";
 import { ICON_PICKER, ICON_PICKER_WIDTH } from "../iconPicker/tokens";
 import { useSidebarSide } from "../../state/browser/hooks";
 import type { SidebarSide } from "../../state/browser/model";
@@ -20,9 +21,9 @@ const SYMBOLS: PickerSymbol[] = [
 ].map((name) => ({ name }));
 
 export function IconPicker({ windowId, sidebarWidth }: { windowId: string; sidebarWidth: number }) {
-  const picker = useSidebarUi((u) => (u.iconPicker?.windowId === windowId ? u.iconPicker : null));
+  const { shown: picker, closing, onClosed } = usePopoverPresenceOf(useSidebarUi((u) => (u.iconPicker?.windowId === windowId ? u.iconPicker : null)));
   const side = useSidebarSide(windowId);
-  return picker ? <PickerPanel key={picker.id} picker={picker} sidebarWidth={sidebarWidth} side={side} /> : null;
+  return picker ? <PickerPanel key={picker.id} picker={picker} sidebarWidth={sidebarWidth} side={side} closing={closing} onClosed={onClosed} /> : null;
 }
 
 type Picker = NonNullable<ReturnType<typeof useSidebarUi.getState>["iconPicker"]>;
@@ -36,7 +37,7 @@ function besideSidebar(anchor: Picker["anchor"], sidebarWidth: number, side: Sid
   return anchor ? Math.min(sidebarWidth + sidebarGap, anchor.x + anchor.width + sidebarGap) : sidebarWidth + sidebarGap;
 }
 
-function PickerPanel({ picker, sidebarWidth, side }: { picker: Picker; sidebarWidth: number; side: SidebarSide }) {
+function PickerPanel({ picker, sidebarWidth, side, closing, onClosed }: { picker: Picker; sidebarWidth: number; side: SidebarSide } & PanelPresence) {
   const liveIcon = useLive((s) => (picker.kind === "live" ? s.folders[picker.id.split("|")[1] ?? ""]?.icon : null));
   const stored = useIconPickerCurrent(picker.kind, picker.id, liveIcon);
   const current = picker.kind === "group" && !hasOwnGroupIcon(stored) ? null : stored;
@@ -60,6 +61,8 @@ function PickerPanel({ picker, sidebarWidth, side }: { picker: Picker; sidebarWi
       actions={actions}
       onChoose={choose}
       onClose={close}
+      closing={closing}
+      onClosed={onClosed}
       placeIn={(height, room) => ({
         top: clampTop((anchor?.y ?? 60) - windowMargin, height, room),
         left: anchor ? clampLeft(besideSidebar(anchor, sidebarWidth, side, room.width), room) : besideSidebar(anchor, sidebarWidth, side, room.width),

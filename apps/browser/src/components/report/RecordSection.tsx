@@ -4,12 +4,16 @@ import { setAttachedOpen, setIncludePages, setTrace } from "../../state/report/a
 import { formatBytes, formatDuration, TRACE_MAX_SECONDS } from "../../state/report/form";
 import { useReport, useReportShallow, useReportWindowIsPrivate } from "../../state/report/hooks";
 import { discardRecording, startRecording } from "../../state/report/recording";
-import { ActivitySpinner, Box, Button, Checkbox, Dot, ink, radius, ReportVideo, space, Symbol, Text, useTheme } from "../ui";
+import { ActivitySpinner, Box, Button, Dot, ink, radius, ReportVideo, space, Symbol, Text, useTheme } from "../ui";
+import { CheckMark, CheckTarget } from "../ui";
 import { REPORT } from "./tokens";
 
 const RECORD_HINT = "Records this window, its Picture in Picture and the menus and prompts it opens. Never your other windows. Reports with a recording get fixed first.";
 const PAGES_WARNING =
   "Pages and Picture in Picture videos can show private things like email, messages or bank details. Only include them if nothing sensitive is on screen. Tab names, addresses and what Ardia itself shows about a page, like suggestions and media controls, always show. WebKit pages with audio or video, where streaming services play, stay black. You'll watch it before it's sent.";
+const LOCKED_NOTE = "Applies to the next recording";
+const PAGES_TITLE = "Include web pages";
+const TRACE_TITLE = "Record a performance trace";
 const PRIVATE_NOTE = "Pages always stay hidden when you record a private window. Tab names and addresses still show.";
 
 export function RecordSection() {
@@ -138,41 +142,47 @@ function TraceRow({ on, locked }: { on: boolean; locked: boolean }) {
             ? "The trace couldn't be recorded."
             : `Records what the engine does for up to ${TRACE_MAX_SECONDS} seconds while you record.`;
   return (
-    <Box row gap="m" style={TOP_ROW}>
-      <Checkbox value={on} onChange={setTrace} disabled={locked} />
-      <View style={FLEX}>
-        <Text>Record a performance trace</Text>
-        <Text size="small" tone={trace.phase === "failed" ? "destructive" : "textSecondary"}>
-          {status}
-        </Text>
-      </View>
-    </Box>
+    <CheckTarget value={on} onChange={setTrace} disabled={locked} label={TRACE_TITLE} hint={status}>
+      <Box row gap="m" style={TOP_ROW}>
+        <CheckMark value={on} disabled={locked} />
+        <View style={FLEX}>
+          <Text>{TRACE_TITLE}</Text>
+          <Text size="small" tone={trace.phase === "failed" ? "destructive" : "textSecondary"}>
+            {status}
+          </Text>
+        </View>
+      </Box>
+    </CheckTarget>
   );
 }
 
 function PagesChoice({ on, locked, privateWindow }: { on: boolean; locked: boolean; privateWindow: boolean }) {
   const theme = useTheme();
+  const note = privateWindow ? PRIVATE_NOTE : locked ? null : PAGES_WARNING;
   return (
     <Box row gap="m" style={TOP_ROW}>
-      <Checkbox value={on} onChange={setIncludePages} disabled={locked || privateWindow} />
       <View style={FLEX}>
-        <Text tone={locked ? "textSecondary" : "textPrimary"}>Include web pages</Text>
-        {privateWindow ? (
-          <Text size="small" tone="textSecondary" style={{ marginTop: space.xxs }}>
-            {PRIVATE_NOTE}
-          </Text>
-        ) : locked ? (
-          <Box row gap="xs" style={CENTER_ROW}>
+        <CheckTarget value={on} onChange={setIncludePages} disabled={locked || privateWindow} label={PAGES_TITLE} hint={note ?? LOCKED_NOTE}>
+          <Box row gap="m" style={TOP_ROW}>
+            <CheckMark value={on} disabled={locked || privateWindow} />
+            <View style={FLEX}>
+              <Text tone={locked ? "textSecondary" : "textPrimary"}>{PAGES_TITLE}</Text>
+              {note ? (
+                <Text size="small" tone="textSecondary" style={{ marginTop: space.xxs }}>
+                  {note}
+                </Text>
+              ) : null}
+            </View>
+          </Box>
+        </CheckTarget>
+        {note ? null : (
+          <Box row gap="xs" style={LOCKED_ROW}>
             <Symbol name="lock" size={10} color={theme.textTertiary} style={LOCK} />
             <Text size="small" tone="textSecondary">
-              Applies to the next recording ·
+              {`${LOCKED_NOTE} ·`}
             </Text>
             <Button variant="text" look="link" pad="none" title="Record again" onPress={() => void startRecording()} />
           </Box>
-        ) : (
-          <Text size="small" tone="textSecondary" style={{ marginTop: space.xxs }}>
-            {PAGES_WARNING}
-          </Text>
         )}
       </View>
       {on && !locked ? <Dot size={REPORT.recordDot} color={theme.warning} style={DOT} /> : null}
@@ -183,6 +193,7 @@ function PagesChoice({ on, locked, privateWindow }: { on: boolean; locked: boole
 const FLEX = { flex: 1 } as const;
 const FILL = { width: "100%", height: "100%" } as const;
 const CENTER_ROW = { alignItems: "center" } as const;
+const LOCKED_ROW = { alignItems: "center", marginLeft: REPORT.checkIndent } as const;
 const TOP_ROW = { alignItems: "flex-start" } as const;
 const ACTIONS = { marginTop: space.xs } as const;
 const SPINNER = { width: 14, height: 14 } as const;

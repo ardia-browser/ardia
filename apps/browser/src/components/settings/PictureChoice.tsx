@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Animated, Pressable, View } from "react-native";
-import { Box, Symbol, Text, useHover, useTheme } from "../ui";
+import { Box, radioA11y, spaceActivates, Symbol, Text, useHover, useTheme, tapActivates } from "../ui";
 import { SelectableCard } from "./SelectableCard";
 import { pictureChoice } from "./tokens";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
@@ -33,7 +33,7 @@ export function PictureChoice({
   const icon = size === "icon";
   return (
     <View {...hoverProps} style={icon ? { width: pictureChoice.iconWidth } : { flex: 1 }}>
-      <Pressable onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} tooltip={tooltip} accessibilityRole="radio" accessibilityState={{ selected }} accessibilityLabel={title} accessibilityHint={caption}>
+      <Pressable onPress={onPress} onAccessibilityTap={tapActivates(onPress)} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} tooltip={tooltip} {...radioA11y(selected, title)} onKeyDown={spaceActivates(onPress)} accessibilityHint={caption}>
         <Box gap="m" style={{ alignItems: "center" }}>
           <Animated.View style={[icon ? { width: pictureChoice.icon } : { width: "100%" }, scaleStyle]}>
             <SelectableCard

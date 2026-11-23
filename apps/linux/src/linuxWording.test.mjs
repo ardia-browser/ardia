@@ -46,7 +46,7 @@ const EXPECTED = [
   ["state/sync/syncDoc.ts", ["never removes them from this computer"], []],
   ["components/settings/panes/SyncSection.tsx", ["(This Computer)", "Just this computer so far", "Add them to this computer."], []],
   ["components/settings/panes/SyncSheets.tsx", ["This Computer Is Syncing", "Add them to this computer to sync", "Everything on this computer stays as it is."], []],
-  ["state/sync/engine.ts", ["keep syncing on this device", "Couldn’t save the sync key in your keyring."], []],
+  ["state/sync/engine.ts", ["keep syncing on this device", "Couldn't save the sync key in your keyring."], []],
   ["components/onboarding/SourceStep.tsx", ["Found on this computer"], []],
   ["state/import/runImport.ts", ["system keyring"], []],
   ["state/extensions/actions.ts", ["`The extension's folder stays on your computer.`"], ["stays on your ${PLATFORM_TERMS.computer}"]],

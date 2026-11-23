@@ -304,6 +304,13 @@ export type Space = keyof typeof space;
 
 export type Radius = keyof typeof radius;
 
+export const controlSize = {
+  regular: { button: 22, buttonPad: space.ml, field: 24, radius: "control" },
+  large: { button: 28, buttonPad: space.xl, field: 28, radius: "tile" },
+} as const satisfies Record<string, { button: number; buttonPad: number; field: number; radius: Radius }>;
+
+export type ControlSize = keyof typeof controlSize;
+
 export const concentric = (outer: number, inset: number) => Math.max(0, outer - inset);
 
 export const capsule = (height: number) => height / 2;

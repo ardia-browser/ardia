@@ -9,8 +9,8 @@ import { PLATFORM_TERMS } from "../../lib/platformTerms";
 function syncStatusText(sync: SharedFolderSync | undefined, path: string): string {
   if (!sync || sync.state === "syncing") return "Syncing…";
   if (sync.state === "waiting") return sync.waiting === 1 ? "Waiting for 1 link to download" : `Waiting for ${sync.waiting} links to download`;
-  if (sync.state === "missing") return `Can’t find the folder in ${folderLabel(path.split("/").slice(0, -1).join("/"))}`;
-  if (sync.state === "error") return `Can’t sync: ${sync.error ?? "unknown error"}`;
+  if (sync.state === "missing") return `Can't find the folder in ${folderLabel(path.split("/").slice(0, -1).join("/"))}`;
+  if (sync.state === "error") return `Can't sync: ${sync.error ?? "unknown error"}`;
   if (sync.state === "paused") return "Syncs when this profile is open";
   return `Synced with ${folderLabel(path)}`;
 }

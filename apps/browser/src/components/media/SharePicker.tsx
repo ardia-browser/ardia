@@ -12,7 +12,7 @@ import {
   type DisplayMediaSource,
 } from "../../state/media/screenShare";
 import { runningAppIcon } from "../../state/app/system";
-import { Badge, Symbol, Button, Checkbox, PANEL, PanelHeader, Popover, POPOVER_MARGIN, Segmented, Text, useHover } from "../ui";
+import { Badge, Symbol, Button, Checkbox, PANEL, PanelHeader, Popover, POPOVER_MARGIN, Segmented, tapActivates, Text, useHover } from "../ui";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Image, Pressable, ScrollView, View } from "react-native";
 import { useTheme } from "../ui/theme";
@@ -255,7 +255,7 @@ function ScreenRecordingNeeded() {
         To share a window or your entire screen, turn on Ardia in System Settings › Privacy & Security › Screen Recording, then quit and reopen Ardia.
       </Text>
       <View {...hoverProps}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Open System Settings" onPress={() => void askForScreenRecording()}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Open System Settings" onPress={() => void askForScreenRecording()} onAccessibilityTap={tapActivates(() => void askForScreenRecording())}>
           <Text size="small" weight="medium" tone="accent" style={{ textDecorationLine: hovered ? "underline" : "none" }}>
             Open System Settings
           </Text>
@@ -281,7 +281,7 @@ function SourceCard({ card, width, thumb, selected, onSelect, onShare }: { card:
   const preview = picture?.data ?? thumb;
   return (
     <View {...hoverProps} onDoubleClick={onShare}>
-      <Pressable accessibilityRole="button" accessibilityLabel={card.title} accessibilityState={{ selected }} onPress={onSelect}>
+      <Pressable accessibilityRole="button" accessibilityLabel={card.title} accessibilityState={{ selected }} onPress={onSelect} onAccessibilityTap={tapActivates(onSelect)}>
         <View
           style={{
             width,

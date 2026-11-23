@@ -49,8 +49,8 @@ export const profileRows = {
       section: "This profile",
       rows: {
         themeColor: {
-          title: "Colour",
-          description: "Pick a theme colour and edit it: colours, intensity, blur, noise and direction.",
+          title: "Color",
+          description: "Pick a theme color and edit it: colors, intensity, blur, noise and direction.",
           keywords: ["theme", "theme colour", "theme color", "color", "gradient", "custom theme", "custom colour", "edit theme", "reset theme", "intensity", "pass-through blur", "noise", "grain", "direction", "tint"],
         },
         syncThisProfile: {

@@ -88,7 +88,7 @@ function RecoveryKitSheet() {
               <Text size="small" style={UNDERLINE}>
                 another
               </Text>{" "}
-              device or to the cloud. You’ll need it if you lose access to this device.
+              device or to the cloud. You'll need it if you lose access to this device.
             </Text>
           </Box>
           {saved ? <Body>Saved to {saved.replace(/^\/Users\/[^/]+/, "~")}.</Body> : null}
@@ -119,13 +119,13 @@ const phraseError = (r: Awaited<ReturnType<typeof enterRecoveryPhrase>>): string
     case "checksum":
       return "This recovery phrase is not valid. Please check for typos.";
     case "mismatch":
-      return "This recovery phrase doesn’t match the synced data in this folder. Check the phrase, or choose the folder your other devices sync to.";
+      return "This recovery phrase doesn't match the synced data in this folder. Check the phrase, or choose the folder your other devices sync to.";
     case "noData":
-      return "There’s no synced data in this folder yet. Choose the folder your other devices sync to, or wait for it to finish downloading.";
+      return "There's no synced data in this folder yet. Choose the folder your other devices sync to, or wait for it to finish downloading.";
     case "keychain":
-      return `Couldn’t save the sync key in ${PLATFORM_TERMS.secretStore}.`;
+      return `Couldn't save the sync key in ${PLATFORM_TERMS.secretStore}.`;
     case "unavailable":
-      return "Sync isn’t available in this build.";
+      return "Sync isn't available in this build.";
   }
 };
 
@@ -301,8 +301,8 @@ function ConnectDeviceSheet() {
         <View style={syncCodeFrame(theme, qr !== null)}>{qr ? <Image source={{ uri: qr }} style={QR} /> : <Button title="Show Code" onPress={() => void recoveryQrCode().then(setQr)} />}</View>
         <Text size="small" tone="textSecondary" style={QR_NOTE()}>
           {PLATFORM_FEATURES.syncsWithPhone
-            ? "Click Show Code. On your iPhone, open Ardia, tap Sync With Mac, and scan the code. For another Mac, you can also scan it with your iPhone’s camera and paste the words there with Universal Clipboard."
-            : "Click Show Code, then scan it with your phone’s camera to copy the words and enter them on your other computer."}
+            ? "Click Show Code. On your iPhone, open Ardia, tap Sync With Mac, and scan the code. For another Mac, you can also scan it with your iPhone's camera and paste the words there with Universal Clipboard."
+            : "Click Show Code, then scan it with your phone's camera to copy the words and enter them on your other computer."}
         </Text>
       </Box>
       {words ? (
@@ -336,7 +336,7 @@ export function showStopSync() {
 function StopSheet() {
   return (
     <Sheet size="s" onClose={closeSettingsSheet}>
-      <DialogTitle subtitle={`Syncing will stop on this device. To re-enable sync, you’ll need another device that is currently syncing, or the recovery phrase from your Recovery Kit. Everything on this ${PLATFORM_TERMS.computer} stays as it is.`}>
+      <DialogTitle subtitle={`Syncing will stop on this device. To re-enable sync, you'll need another device that is currently syncing, or the recovery phrase from your Recovery Kit. Everything on this ${PLATFORM_TERMS.computer} stays as it is.`}>
         Stop Syncing This Device?
       </DialogTitle>
       <DialogActions leading={<Button title="Save Recovery Kit" onPress={() => showSettingsSheet(<RecoveryKitSheet />)} />}>
@@ -357,7 +357,7 @@ function DeleteDataSheet() {
   };
   return (
     <Sheet size="s" onClose={() => void finish(false)}>
-      <DialogTitle subtitle={`Would you also like to permanently delete your synced data from the sync folder? This will stop syncing on all your other devices too. To sync again, you’ll need to set up each device from scratch. Your data on each ${PLATFORM_TERMS.syncedComputer} stays.`}>
+      <DialogTitle subtitle={`Would you also like to permanently delete your synced data from the sync folder? This will stop syncing on all your other devices too. To sync again, you'll need to set up each device from scratch. Your data on each ${PLATFORM_TERMS.syncedComputer} stays.`}>
         Delete Sync Data?
       </DialogTitle>
       <View style={CHECK_TOP}>

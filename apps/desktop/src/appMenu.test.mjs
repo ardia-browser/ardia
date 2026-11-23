@@ -96,7 +96,16 @@ test("the Ardia, File, View and Help menus carry the Mac menu bar's entries in i
     "menu:Show Bookmarks Bar",
     "togglePinnedFold",
   ]);
-  assert.deepEqual(find(items, "menu:Split View").children.map((item) => item.id), ["openSplitPane", "focusNextPane", "focusPreviousPane"]);
+  assert.deepEqual(find(items, "menu:Split View").children.map((item) => item.id), [
+    "openSplitPane",
+    "openHorizontalSplitPane",
+    "focusNextPane",
+    "focusPreviousPane",
+    "movePaneLeft",
+    "movePaneRight",
+    "movePaneUp",
+    "movePaneDown",
+  ]);
   assert.equal(find(items, "setTabLayout:sidebarRight").title, "Sidebar on Right");
   assert.deepEqual(rows(items, "Help"), ["Report a Problem…", "Keyboard Shortcuts", "Tool Tour", "Video Tour", "Release Notes", "-", "Copy Diagnostics"]);
 });

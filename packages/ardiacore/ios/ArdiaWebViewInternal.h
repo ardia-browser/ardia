@@ -341,6 +341,7 @@ typedef NS_ENUM(NSInteger, ArdiaTransfer) {
                      origin:(nullable NSString *)verifiedOrigin
                         tab:(ArdiaCoreTab *)tab;
 - (void)noteVaultDocumentInFrame:(NSString *)frameId tab:(ArdiaCoreTab *)tab main:(BOOL)main origin:(nullable NSString *)verifiedOrigin;
+- (void)notePasskeyDocumentInFrame:(NSString *)frameId origin:(nullable NSString *)verifiedOrigin;
 @end
 
 @interface ArdiaWebView (PeekInternal)
@@ -400,6 +401,8 @@ NSString *VerifiedOrigin(NSString *origin);
 NSDictionary *_Nullable FieldProviderFor(NSString *_Nullable profile);
 NSString *FieldProviderJSON(NSString *_Nullable profile);
 BOOL FieldProviderFillsFromMenu(NSString *_Nullable profile);
+BOOL AnyFieldProviderFillsFromMenu();
+void RefreshPasskeysInPageScript();
 void NoteEvent(int browserId, NSString *name, NSDictionary *payload);
 void AcceptDrops(NSView *root, BOOL accept);
 NSView *PaneUnder(NSView *view, NSView *ancestor);

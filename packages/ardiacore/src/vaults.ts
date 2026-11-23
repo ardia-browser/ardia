@@ -5,7 +5,7 @@ export type VaultProviderId = "1password" | "bitwarden" | "protonpass" | (string
 export type VaultState = "notInstalled" | "signedOut" | "locked" | "unlocked" | "unavailable";
 export type VaultSecretField = "username" | "password";
 export type VaultCopyError = "locked" | "notFound" | "failed" | "originMismatch" | "insecure" | "notAuthorized" | "clipboard";
-export type VaultCapabilities = { totp: boolean; save: boolean; selfHosted: boolean; masterPassword: boolean; touchID: boolean; addTotp?: boolean; edit?: boolean; desktopApproval?: boolean };
+export type VaultCapabilities = { totp: boolean; save: boolean; selfHosted: boolean; masterPassword: boolean; touchID: boolean; addTotp?: boolean; edit?: boolean; desktopApproval?: boolean; passkeys?: boolean };
 export type VaultSetupKind = "desktopIntegration" | "browserSignIn" | "credentials";
 
 export type VaultProviderState = {

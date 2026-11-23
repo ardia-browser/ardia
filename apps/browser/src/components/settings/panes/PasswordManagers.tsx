@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { VAULT_SETTINGS } from "../../vaults/tokens";
+import { effectiveSource, sourceOptions, usePasskeyExtensions } from "../../../state/vaults/passkeySources";
 import { confirm, showMenu } from "../../../state/app/system";
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { useSettings } from "../../../state/browser/hooks";
@@ -149,6 +150,8 @@ export function ForAllProfilesSection() {
   const saveTarget = useSettings((s) => s.vaultSaveTarget);
   const saveOffer = useSettings((s) => s.vaultSaveOffer);
   const keepGenerated = useSettings((s) => s.vaultKeepGenerated);
+  const passkeySetting = useSettings((s) => s.vaultPasskeySource);
+  const passkeyExtensions = usePasskeyExtensions();
   useEffect(() => void reloadProviders(), []);
   const managers = passwordManagersOnly(providers);
   const savers = connectedSavers(providers);
@@ -177,6 +180,16 @@ export function ForAllProfilesSection() {
           {savers.length ? (
             <Row title="Save new logins to">
               <PopUp value={target} options={targetOptions} minWidth={VAULT_SETTINGS.savePopUp} onChange={(v) => updateSettings({ vaultSaveTarget: v === ASK ? "" : v })} />
+            </Row>
+          ) : null}
+          {passkeyExtensions.length ? (
+            <Row title="Use passkeys from" description="Which app answers when a site asks for a passkey.">
+              <PopUp
+                value={effectiveSource(passkeySetting, passkeyExtensions)}
+                options={sourceOptions(passkeyExtensions)}
+                minWidth={VAULT_SETTINGS.sourcePopUp}
+                onChange={(v) => updateSettings({ vaultPasskeySource: v })}
+              />
             </Row>
           ) : null}
           <LockAfterRow />

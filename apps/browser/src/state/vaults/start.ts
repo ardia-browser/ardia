@@ -8,6 +8,7 @@ import { startArdiaScope } from "./ardiaScope";
 import { startArdiaSources } from "./ardiaSources";
 import { startVaultIndex } from "./store";
 import { startStandaloneCodes } from "./standaloneCodes";
+import { startPasskeys } from "./passkeys";
 import { startVaultBackupWatch } from "./sync";
 import { startVaultCodeSetup } from "./totpSetup";
 import { startVaultWarming } from "./warm";
@@ -28,4 +29,5 @@ export function startVaults() {
   startVaultBackupWatch();
   startVaultWarming();
   startStandaloneCodes();
+  startPasskeys();
 }

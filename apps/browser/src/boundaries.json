@@ -251,7 +251,7 @@
    "id": "page-script-message-count:page_script.js",
    "source": "page",
    "guard": "Every send or post call in the page script, including those with a kind computed at run time; each literal kind has its own row and native receiver. The count changes when a send is added, so a new one gets reviewed",
-   "count": 48,
+   "count": 53,
    "checks": [
     "packages/ardiacore/ios/page_script.js"
    ]
@@ -395,7 +395,7 @@
    "id": "page-script-listener-count:page_script.js",
    "source": "page",
    "guard": "Every listener in the page script; each event type has its own row. The count changes when a listener is added, so a new one gets reviewed",
-   "count": 85,
+   "count": 88,
    "checks": [
     "packages/ardiacore/ios/page_script.js"
    ]
@@ -1713,6 +1713,43 @@
    "id": "page-script-listener:contextmenu",
    "source": "page",
    "guard": "notes which field a right-click landed on for Ardia's menu; fills still go through native checks"
+  },
+  {
+   "id": "chromium-page-message:passkeyCreate",
+   "source": "frame",
+   "guard": "Menu mode only, else handed to Chrome's own WebAuthn; a page id is checked, the rpId must match the verified origin, and every create asks for Touch ID or the Mac password",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+VaultPageMessages.mm",
+    "packages/ardiacore/ios/VaultPasskeys.swift"
+   ]
+  },
+  {
+   "id": "chromium-page-message:passkeyGet",
+   "source": "frame",
+   "guard": "Menu mode only, else handed to Chrome's own WebAuthn; a page id is checked, the rpId must match the verified origin, and every sign-in asks for Touch ID or the Mac password",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+VaultPageMessages.mm",
+    "packages/ardiacore/ios/VaultPasskeys.swift"
+   ]
+  },
+  {
+   "id": "chromium-page-message:passkeyCancel",
+   "source": "frame",
+   "guard": "Cancels only that frame's own pending request by its page id",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+VaultPageMessages.mm",
+    "packages/ardiacore/ios/VaultPasskeys.swift"
+   ]
+  },
+  {
+   "id": "page-script-listener:abort",
+   "source": "page",
+   "guard": "the page's own AbortSignal for a passkey request; it only cancels that request"
+  },
+  {
+   "id": "page-script-listener:readystatechange",
+   "source": "page",
+   "guard": "re-wraps navigator.credentials statics once the document loads; carries no data"
   }
  ]
 }

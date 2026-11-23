@@ -58,6 +58,12 @@ NSString *FieldProviderJSON(NSString *profile) {
 
 BOOL FieldProviderFillsFromMenu(NSString *profile) { return [FieldProviderFor(profile)[@"fill"] isEqual:kFillMenu]; }
 
+BOOL AnyFieldProviderFillsFromMenu() {
+  for (NSDictionary *provider in gFieldProviders.objectEnumerator)
+    if ([provider[@"fill"] isEqual:kFillMenu]) return YES;
+  return NO;
+}
+
 }
 
 namespace {
@@ -336,6 +342,7 @@ void OpenSystemPanel(NSView *page, void (^done)(NSDictionary *result)) {
   gFieldProviderGeneration = generation;
   gFieldProviders = providers;
   if (!changed) return YES;
+  RefreshPasskeysInPageScript();
   for (NSMutableDictionary *page in FieldProviderPages().objectEnumerator) {
     [page removeObjectForKey:@"focus"];
     [page removeObjectForKey:@"focusSeq"];

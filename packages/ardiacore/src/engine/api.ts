@@ -19,7 +19,7 @@ import type {
   CookieRemoval, PageCookie, PageEngine, PasskeyAccess, SiteData, SiteDataWritten, StorageChange, StorageItems, WebKitCount,
 } from "../webkit";
 import type { ChromeDropdownShown, DisplayMediaSource, OpenWindowRequest, VaultPasswordStyle, WebNotification } from "../pageTypes";
-import type { VaultAddTotpResult, VaultCreateLoginResult, VaultEditResult, VaultStandaloneCode, VaultStandaloneCodeAdded, VaultStandaloneCodeEdited, VaultCodeRead, VaultCodeSource, VaultCopyResult, VaultRemoveTotpResult, VaultGeneratedPassword, VaultGeneratedSaveResult, VaultItem, VaultProviderId, VaultProviderState, VaultSecretField, VaultSyncResult, VaultTotp, VaultBackupStatus, VaultBackupChange, VaultBackupDeleteResult, VaultRestoreResult } from "../vaults";
+import type { VaultPasskey, VaultPasskeyAnswer, VaultPasskeyDone, VaultPasskeyRequest, VaultAddTotpResult, VaultCreateLoginResult, VaultEditResult, VaultStandaloneCode, VaultStandaloneCodeAdded, VaultStandaloneCodeEdited, VaultCodeRead, VaultCodeSource, VaultCopyResult, VaultRemoveTotpResult, VaultGeneratedPassword, VaultGeneratedSaveResult, VaultItem, VaultProviderId, VaultProviderState, VaultSecretField, VaultSyncResult, VaultTotp, VaultBackupStatus, VaultBackupChange, VaultBackupDeleteResult, VaultRestoreResult } from "../vaults";
 import type { BookmarksCalls, BookmarksEvents } from "./generated/bookmarks";
 import type { FaviconsCalls, FaviconsEvents } from "./generated/favicons";
 import type { HistoryCalls, HistoryEvents } from "./generated/history";
@@ -282,6 +282,10 @@ export type EngineCalls = BookmarksCalls & FaviconsCalls & HistoryCalls & {
   "vaults.addCode": [{ token: string; label: string; issuer?: string; website?: string }, VaultStandaloneCodeAdded];
   "vaults.editCode": [{ id: string; label: string; website?: string }, VaultStandaloneCodeEdited];
   "vaults.deleteCode": [{ id: string }, { deleted: boolean; error?: "notFound" | "declined" | "failed" }];
+  "vaults.passkeys": [{}, VaultPasskey[]];
+  "vaults.deletePasskey": [{ id: string }, { deleted: boolean; error?: "notFound" | "declined" | "failed" }];
+  "vaults.passkeyAnswer": [{ requestId: string; choice: string; target?: string }, VaultPasskeyAnswer];
+  "vaults.setPasskeys": [{ source?: string; extensions?: { id: string; name: string; known?: boolean }[] }, Record<string, never>];
 };
 
 export type EngineEvents = BookmarksEvents & FaviconsEvents & HistoryEvents & {
@@ -322,6 +326,9 @@ export type EngineEvents = BookmarksEvents & FaviconsEvents & HistoryEvents & {
   "vaults.generatedChanged": Record<string, never>;
   "vaults.backupChanged": VaultBackupChange;
   "vaults.codesChanged": Record<string, never>;
+  "vaults.passkeyRequest": VaultPasskeyRequest;
+  "vaults.passkeyOffer": VaultPasskeyRequest;
+  "vaults.passkeyDone": VaultPasskeyDone;
   "vaults.passkeysChanged": Record<string, never>;
 };
 

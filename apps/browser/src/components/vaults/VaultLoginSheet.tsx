@@ -12,6 +12,8 @@ import { Group, Row } from "../settings/Form";
 import { itemUrl } from "./rowText";
 import { BrandBadge, CopyButton } from "./VaultParts";
 import { VAULT_SETTINGS } from "./tokens";
+import { passkeyOfLogin, usePasskeys } from "../../state/vaults/passkeys";
+import { PasskeySheet } from "./VaultPasskeys";
 
 export function VaultLoginSheet({ item, site }: { item: VaultItem; site: string }) {
   const provider = useVaultProvider(item.provider);
@@ -19,6 +21,7 @@ export function VaultLoginSheet({ item, site }: { item: VaultItem; site: string 
   const editable = provider?.state === "unlocked" && provider.capabilities.edit === true;
   const url = itemUrl(item);
   const [problem, setProblem] = useState("");
+  const passkey = usePasskeys((s) => passkeyOfLogin(s.list, url, item.username));
   const copy = (field: VaultCopyField) => async () => {
     const outcome = await copyFromManager(item.provider, item.id, field);
     setProblem(copyFailureMessage(outcome, field, item.provider));
@@ -42,6 +45,11 @@ export function VaultLoginSheet({ item, site }: { item: VaultItem; site: string 
               <CopyButton label="Password" onCopy={copy("password")} />
             </Box>
           </Row>
+          {passkey ? (
+            <Row title="Passkey" onPress={() => showSettingsSheet(<PasskeySheet passkey={passkey} />)}>
+              <Text tone="textSecondary">Saved</Text>
+            </Row>
+          ) : null}
           <Row title="Saved In" icon={<BrandBadge provider={item.provider} />}>
             <Text tone="textSecondary">{name}</Text>
           </Row>

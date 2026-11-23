@@ -3458,6 +3458,453 @@
     };
   } catch (e) {}
 
+  const passkeysOn = true;
+  try {
+    const passkeyStore = navigator.credentials;
+    const passkeyProto = passkeyStore && Object.getPrototypeOf(passkeyStore);
+    const passkeyCreate = passkeyProto && passkeyProto.create;
+    const passkeyGet = passkeyProto && passkeyProto.get;
+    if (isTop && passkeysOn && typeof passkeyCreate === "function" && typeof passkeyGet === "function") {
+      let passkeyKinds = null;
+      const passkeyKindsOf = () => {
+        if (passkeyKinds) return passkeyKinds;
+        const credential = window.PublicKeyCredential;
+        const attestation = window.AuthenticatorAttestationResponse;
+        const assertion = window.AuthenticatorAssertionResponse;
+        if (typeof credential !== "function" || typeof attestation !== "function" || typeof assertion !== "function") return null;
+        passkeyKinds = { credential: credential.prototype, attestation: attestation.prototype, assertion: assertion.prototype };
+        return passkeyKinds;
+      };
+      const PasskeyPromise = Promise;
+      const passkeyThen = Promise.prototype.then;
+      const PasskeyError = DOMException;
+      const PasskeyBytes = Uint8Array;
+      const PasskeyBuffer = ArrayBuffer;
+      const PasskeyMap = Map;
+      const passkeyMapGet = Map.prototype.get;
+      const passkeyMapSet = Map.prototype.set;
+      const passkeyMapDelete = Map.prototype.delete;
+      const passkeyMapValues = Map.prototype.values;
+      const passkeyIterNext = Object.getPrototypeOf(new Map().values()).next;
+      const passkeyIsView = ArrayBuffer.isView;
+      const passkeySlice = ArrayBuffer.prototype.slice;
+      const passkeyIsArray = Array.isArray;
+      const passkeyArraySlice = Array.prototype.slice;
+      const PASSKEY_HEX = "0123456789abcdef";
+      const { create: passkeyMake, defineProperty: passkeyDefine } = Object;
+      const passkeyHasOwn = Object.prototype.hasOwnProperty;
+      const passkeyFromCharCode = String.fromCharCode;
+      const passkeyCharCodeAt = String.prototype.charCodeAt;
+      const passkeyReplace = String.prototype.replace;
+      const passkeyBtoa = window.btoa;
+      const passkeyAtob = window.atob;
+      const passkeyTimer = window.setTimeout;
+      const passkeyClearTimer = window.clearTimeout;
+      const passkeyListen = EventTarget.prototype.addEventListener;
+      const passkeyUnlisten = EventTarget.prototype.removeEventListener;
+      const passkeyCrypto = window.crypto;
+      const passkeyRandom = passkeyCrypto && passkeyCrypto.getRandomValues;
+      const passkeyGetterOf = (proto, name) => {
+        const property = proto ? Object.getOwnPropertyDescriptor(proto, name) : null;
+        return property && property.get;
+      };
+      const passkeyAborted = passkeyGetterOf(window.AbortSignal && AbortSignal.prototype, "aborted");
+      const passkeyReason = passkeyGetterOf(window.AbortSignal && AbortSignal.prototype, "reason");
+      const passkeyViewBuffer = passkeyGetterOf(Object.getPrototypeOf(Uint8Array.prototype), "buffer");
+      const passkeyViewOffset = passkeyGetterOf(Object.getPrototypeOf(Uint8Array.prototype), "byteOffset");
+      const passkeyViewLength = passkeyGetterOf(Object.getPrototypeOf(Uint8Array.prototype), "byteLength");
+      const passkeyDataBuffer = passkeyGetterOf(window.DataView && DataView.prototype, "buffer");
+      const passkeyDataOffset = passkeyGetterOf(window.DataView && DataView.prototype, "byteOffset");
+      const passkeyDataLength = passkeyGetterOf(window.DataView && DataView.prototype, "byteLength");
+      const PASSKEY_ACK_MS = 3000;
+      const PASSKEY_LONGEST_WAIT_MS = 630000;
+      const PASSKEY_LONGEST_MESSAGE = 60000;
+      const PASSKEY_LONGEST_TEXT = 1024;
+      const PASSKEY_MOST_ITEMS = 64;
+      const passkeyPending = new PasskeyMap();
+      const PasskeyWeakSet = WeakSet;
+      const passkeyWeakAdd = WeakSet.prototype.add;
+      const passkeyWeakHas = WeakSet.prototype.has;
+      const passkeyMapKeys = Map.prototype.keys;
+      const passkeyExec = RegExp.prototype.exec;
+      const passkeySplit = String.prototype.split;
+      const passkeyWeakDelete = WeakSet.prototype.delete;
+      const PasskeyStackError = Error;
+      const passkeyContenders = { passkeyCreate: new PasskeyMap(), passkeyGet: new PasskeyMap() };
+      const passkeyHandedOff = new PasskeyWeakSet();
+      const PASSKEY_EXTENSION_FRAME = /^\s*at (?:.* \()?chrome-extension:\/\/([a-p]{32})\//;
+
+      const passkeyOwnOrNull = (o, name) => {
+        try {
+          return o[name];
+        } catch (e) {
+          return null;
+        }
+      };
+      const passkeyOwn = (o, name) => (o !== null && typeof o === "object" && apply(passkeyHasOwn, o, [name]) ? o[name] : undefined);
+      const passkeyRequestId = () => {
+        const bytes = new PasskeyBytes(16);
+        apply(passkeyRandom, passkeyCrypto, [bytes]);
+        let id = "";
+        for (let i = 0; i < bytes.length; i++) id += PASSKEY_HEX[bytes[i] >> 4] + PASSKEY_HEX[bytes[i] & 15];
+        return id;
+      };
+      const passkeyBytesOf = (source) => {
+        if (source instanceof PasskeyBuffer) return new PasskeyBytes(source);
+        if (apply(passkeyIsView, PasskeyBuffer, [source])) {
+          if (source instanceof DataView) return new PasskeyBytes(apply(passkeyDataBuffer, source, []), apply(passkeyDataOffset, source, []), apply(passkeyDataLength, source, []));
+          return new PasskeyBytes(apply(passkeyViewBuffer, source, []), apply(passkeyViewOffset, source, []), apply(passkeyViewLength, source, []));
+        }
+        throw new TypeError("not a BufferSource");
+      };
+      const passkeyEncode = (source) => {
+        const bytes = passkeyBytesOf(source);
+        let binary = "";
+        for (let i = 0; i < bytes.length; i += 4096) binary += apply(passkeyFromCharCode, null, apply(passkeyArraySlice, bytes, [i, i + 4096]));
+        const base64 = apply(passkeyBtoa, window, [binary]);
+        return apply(passkeyReplace, apply(passkeyReplace, apply(passkeyReplace, base64, [/\+/g, "-"]), [/\//g, "_"]), [/=+$/, ""]);
+      };
+      const passkeyDecode = (text) => {
+        if (typeof text !== "string") return null;
+        let base64 = apply(passkeyReplace, apply(passkeyReplace, text, [/-/g, "+"]), [/_/g, "/"]);
+        while (base64.length % 4) base64 += "=";
+        const binary = apply(passkeyAtob, window, [base64]);
+        const bytes = new PasskeyBytes(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = apply(passkeyCharCodeAt, binary, [i]);
+        return bytes.buffer;
+      };
+      const passkeyText = (value) => {
+        if (value === undefined) return undefined;
+        if (typeof value !== "string") throw new TypeError("not a string");
+        return value.length > PASSKEY_LONGEST_TEXT ? value.slice(0, PASSKEY_LONGEST_TEXT) : value;
+      };
+      const passkeyList = (value, each) => {
+        if (value === undefined || value === null) return undefined;
+        if (!passkeyIsArray(value) || value.length > PASSKEY_MOST_ITEMS) throw new TypeError("not a list");
+        const out = [];
+        for (let i = 0; i < value.length; i++) out.push(each(value[i]));
+        return out;
+      };
+      const passkeyDescriptor = (d) => ({ type: passkeyText(d && d.type), id: passkeyEncode(d && d.id) });
+      const passkeyCreation = (pk) => {
+        const rp = pk.rp || {};
+        const user = pk.user || {};
+        const selection = pk.authenticatorSelection;
+        const extensions = pk.extensions;
+        return {
+          challenge: passkeyEncode(pk.challenge),
+          rp: { id: passkeyText(rp.id), name: passkeyText(rp.name) },
+          user: { id: passkeyEncode(user.id), name: passkeyText(user.name), displayName: passkeyText(user.displayName) },
+          pubKeyCredParams: passkeyList(pk.pubKeyCredParams, (p) => ({ type: passkeyText(p && p.type), alg: typeof (p && p.alg) === "number" ? p.alg : null })),
+          timeout: typeof pk.timeout === "number" ? pk.timeout : undefined,
+          excludeCredentials: passkeyList(pk.excludeCredentials, passkeyDescriptor),
+          authenticatorSelection: selection ? { authenticatorAttachment: passkeyText(selection.authenticatorAttachment) } : undefined,
+          attestation: passkeyText(pk.attestation),
+          hints: passkeyList(pk.hints, passkeyText),
+          extensions: extensions ? { credProps: extensions.credProps === true } : undefined,
+        };
+      };
+      const passkeyAssertionOptions = (pk) => {
+        const extensions = pk.extensions;
+        return {
+          challenge: passkeyEncode(pk.challenge),
+          rpId: passkeyText(pk.rpId),
+          timeout: typeof pk.timeout === "number" ? pk.timeout : undefined,
+          allowCredentials: passkeyList(pk.allowCredentials, passkeyDescriptor),
+          hints: passkeyList(pk.hints, passkeyText),
+          extensions: extensions ? { appid: passkeyText(extensions.appid) } : undefined,
+        };
+      };
+      const passkeyValue = (target, name, value) => passkeyDefine(target, name, { value, enumerable: true, configurable: true });
+      const passkeyMethod = (target, name, fn) => passkeyDefine(target, name, { value: fn, configurable: true, writable: true });
+      const passkeyCopy = (buffer) => (buffer ? apply(passkeySlice, buffer, [0]) : null);
+      const passkeyExtensions = (raw) => {
+        const out = {};
+        const props = passkeyOwn(raw, "credProps");
+        if (props) out.credProps = { rk: passkeyOwn(props, "rk") === true };
+        if (passkeyOwn(raw, "appid") === false) out.appid = false;
+        return out;
+      };
+      const passkeyStrings = (raw) => {
+        const out = [];
+        if (passkeyIsArray(raw)) for (let i = 0; i < raw.length; i++) if (typeof raw[i] === "string") out.push(raw[i]);
+        return out;
+      };
+      const passkeyCredentialOf = (raw) => {
+        const made = passkeyOwn(raw, "kind") === "create";
+        const id = passkeyOwn(raw, "id");
+        if (typeof id !== "string") throw new TypeError("no id");
+        const texts = {};
+        const names = made ? ["clientDataJSON", "attestationObject", "authenticatorData", "publicKey"] : ["clientDataJSON", "authenticatorData", "signature", "userHandle"];
+        for (let i = 0; i < names.length; i++) {
+          const value = passkeyOwn(raw, names[i]);
+          texts[names[i]] = typeof value === "string" ? value : null;
+        }
+        const kinds = passkeyKindsOf();
+        const response = passkeyMake(kinds ? (made ? kinds.attestation : kinds.assertion) : Object.prototype);
+        const buffers = {};
+        for (let i = 0; i < names.length; i++) buffers[names[i]] = texts[names[i]] === null ? null : passkeyDecode(texts[names[i]]);
+        const extensionsRaw = passkeyOwn(raw, "extensions");
+        const algorithm = passkeyOwn(raw, "publicKeyAlgorithm");
+        const transports = passkeyStrings(passkeyOwn(raw, "transports"));
+        passkeyValue(response, "clientDataJSON", buffers.clientDataJSON);
+        if (made) {
+          passkeyValue(response, "attestationObject", buffers.attestationObject);
+          passkeyMethod(response, "getTransports", () => transports.slice());
+          passkeyMethod(response, "getAuthenticatorData", () => passkeyCopy(buffers.authenticatorData));
+          passkeyMethod(response, "getPublicKey", () => passkeyCopy(buffers.publicKey));
+          passkeyMethod(response, "getPublicKeyAlgorithm", () => (typeof algorithm === "number" ? algorithm : -7));
+        } else {
+          passkeyValue(response, "authenticatorData", buffers.authenticatorData);
+          passkeyValue(response, "signature", buffers.signature);
+          passkeyValue(response, "userHandle", buffers.userHandle);
+        }
+        const credential = passkeyMake(kinds ? kinds.credential : Object.prototype);
+        passkeyValue(credential, "id", id);
+        passkeyValue(credential, "rawId", passkeyDecode(id));
+        passkeyValue(credential, "type", "public-key");
+        passkeyValue(credential, "authenticatorAttachment", "platform");
+        passkeyValue(credential, "response", response);
+        passkeyMethod(credential, "getClientExtensionResults", () => passkeyExtensions(extensionsRaw));
+        passkeyMethod(credential, "toJSON", () => {
+          const json = made
+            ? { clientDataJSON: texts.clientDataJSON, attestationObject: texts.attestationObject, transports: transports.slice() }
+            : { clientDataJSON: texts.clientDataJSON, authenticatorData: texts.authenticatorData, signature: texts.signature };
+          if (made && texts.authenticatorData) json.authenticatorData = texts.authenticatorData;
+          if (made && texts.publicKey) json.publicKey = texts.publicKey;
+          if (made) json.publicKeyAlgorithm = typeof algorithm === "number" ? algorithm : -7;
+          if (!made && texts.userHandle) json.userHandle = texts.userHandle;
+          return { id, rawId: id, type: "public-key", authenticatorAttachment: "platform", response: json, clientExtensionResults: passkeyExtensions(extensionsRaw) };
+        });
+        return credential;
+      };
+      const passkeySettle = (id) => {
+        const entry = apply(passkeyMapGet, passkeyPending, [id]);
+        if (!entry) return null;
+        apply(passkeyMapDelete, passkeyPending, [id]);
+        if (entry.ack) apply(passkeyClearTimer, window, [entry.ack]);
+        if (entry.signal && entry.onAbort) apply(passkeyUnlisten, entry.signal, ["abort", entry.onAbort]);
+        return entry;
+      };
+      const passkeyExtensionCalling = () => {
+        let stack = "";
+        try {
+          stack = String(new PasskeyStackError().stack || "");
+        } catch (e) {}
+        const lines = apply(passkeySplit, stack, ["\n"]);
+        const caller = lines.length > 3 ? lines[3] : "";
+        const found = apply(passkeyExec, PASSKEY_EXTENSION_FRAME, [caller]);
+        return found ? found[1] : null;
+      };
+      const passkeyExtensionsFor = (kind) => {
+        const ids = [];
+        const iterator = apply(passkeyMapKeys, passkeyContenders[kind], []);
+        for (let step = apply(passkeyIterNext, iterator, []); !step.done; step = apply(passkeyIterNext, iterator, [])) ids[ids.length] = step.value;
+        return ids;
+      };
+      const passkeyTopContender = (kind) => {
+        const ids = passkeyExtensionsFor(kind);
+        return ids.length ? apply(passkeyMapGet, passkeyContenders[kind], [ids[ids.length - 1]]) : null;
+      };
+      const passkeyMarks = (options) => {
+        const marks = [];
+        if (options && typeof options === "object") {
+          marks[marks.length] = options;
+          const pk = passkeyOwnOrNull(options, "publicKey");
+          if (pk && typeof pk === "object") marks[marks.length] = pk;
+        }
+        return marks;
+      };
+      const passkeyHandOff = (fn, self, options) => {
+        const marks = passkeyMarks(options);
+        for (let i = 0; i < marks.length; i++) apply(passkeyWeakAdd, passkeyHandedOff, [marks[i]]);
+        const clear = () => {
+          for (let i = 0; i < marks.length; i++) apply(passkeyWeakDelete, passkeyHandedOff, [marks[i]]);
+        };
+        try {
+          const settled = PasskeyPromise.resolve(apply(fn, self, [options]));
+          apply(passkeyThen, settled, [clear, clear]);
+          return settled;
+        } catch (e) {
+          clear();
+          return PasskeyPromise.reject(e);
+        }
+      };
+      const passkeyHandedOffAlready = (options) => {
+        const marks = passkeyMarks(options);
+        for (let i = 0; i < marks.length; i++) if (apply(passkeyWeakHas, passkeyHandedOff, [marks[i]])) return true;
+        return false;
+      };
+      const passkeyUnclaimed = (target, self, args, kind) => {
+        const top = passkeyTopContender(kind);
+        return top ? passkeyHandOff(top, self, args[0]) : apply(target, self, args);
+      };
+      const passkeyRun = (original, self, options, kind, message, mediation, signal) =>
+        new PasskeyPromise((resolve, reject) => {
+          const id = passkeyRequestId();
+          const request = { id, options: message, mediation, extensions: passkeyExtensionsFor(kind) };
+          const json = serialize(request);
+          if (json.length > PASSKEY_LONGEST_MESSAGE) return resolve(passkeyUnclaimed(original, self, [options], kind));
+          const entry = { id, resolve, reject, signal, onAbort: null, ack: 0, conditional: mediation === "conditional" };
+          const settle = (work) => {
+            try {
+              resolve(work());
+            } catch (e) {
+              reject(e);
+            }
+          };
+          entry.fallback = () =>
+            settle(() => {
+              const top = passkeyTopContender(kind);
+              return top ? passkeyHandOff(top, self, options) : apply(original, self, [options]);
+            });
+          entry.chrome = () => settle(() => apply(original, self, [options]));
+          entry.extension = (extensionId) =>
+            settle(() => {
+              const fn = apply(passkeyMapGet, passkeyContenders[kind], [extensionId]);
+              return fn ? passkeyHandOff(fn, self, options) : apply(original, self, [options]);
+            });
+          if (signal) {
+            entry.onAbort = () => {
+              if (!passkeySettle(id)) return;
+              send("passkeyCancel", { id });
+              reject(apply(passkeyReason, signal, []) ?? new PasskeyError("The operation was aborted.", "AbortError"));
+            };
+            apply(passkeyListen, signal, ["abort", entry.onAbort, { once: true }]);
+          }
+          entry.ack = apply(passkeyTimer, window, [
+            () => {
+              const late = passkeySettle(id);
+              if (late) late.fallback();
+            },
+            PASSKEY_ACK_MS,
+          ]);
+          apply(passkeyMapSet, passkeyPending, [id, entry]);
+          if (kind === "passkeyCreate") send("passkeyCreate", request);
+          else send("passkeyGet", request);
+        });
+      const passkeyWrap = (original, kind) =>
+        asNative(original, (target, self, args) => {
+          const options = args[0];
+          if (passkeyHandedOffAlready(options)) return apply(target, self, args);
+          if (self !== passkeyStore) return apply(target, self, args);
+          let message = null;
+          let mediation;
+          let signal;
+          try {
+            const pk = options && typeof options === "object" ? options.publicKey : undefined;
+            const plain = !!pk && typeof pk === "object" && !(options.password || options.federated || options.identity || options.otp);
+            mediation = plain ? options.mediation : undefined;
+            signal = plain ? options.signal : undefined;
+            const usable =
+              plain &&
+              (mediation === undefined || typeof mediation === "string") &&
+              (signal === undefined || signal === null || (!!passkeyAborted && !apply(passkeyAborted, signal, [])));
+            if (usable) message = kind === "passkeyCreate" ? passkeyCreation(pk) : passkeyAssertionOptions(pk);
+          } catch (e) {
+            message = null;
+          }
+          if (!message) return passkeyUnclaimed(target, self, args, kind);
+          return passkeyRun(target, self, options, kind, message, mediation, signal || null);
+        });
+      handlers.passkey = (message) => {
+        const id = passkeyOwn(message, "id");
+        if (typeof id !== "string") return;
+        if (passkeyOwn(message, "ack") === true) {
+          const entry = apply(passkeyMapGet, passkeyPending, [id]);
+          if (entry && entry.ack) {
+            apply(passkeyClearTimer, window, [entry.ack]);
+            entry.ack = entry.conditional
+              ? 0
+              : apply(passkeyTimer, window, [
+                  () => {
+                    if (!passkeySettle(id)) return;
+                    send("passkeyCancel", { id });
+                    entry.reject(new PasskeyError("The operation either timed out or was not allowed.", "NotAllowedError"));
+                  },
+                  PASSKEY_LONGEST_WAIT_MS,
+                ]);
+          }
+          return;
+        }
+        const entry = passkeySettle(id);
+        if (!entry) return;
+        if (passkeyOwn(message, "fallback") === true) return entry.fallback();
+        if (passkeyOwn(message, "chrome") === true) return entry.chrome();
+        const extension = passkeyOwn(message, "extension");
+        if (typeof extension === "string") return entry.extension(extension);
+        const error = passkeyOwn(message, "error");
+        if (typeof error === "string") {
+          const name = error === "InvalidStateError" || error === "AbortError" ? error : "NotAllowedError";
+          return entry.reject(new PasskeyError(name === "InvalidStateError" ? "The authenticator was previously registered." : "The operation either timed out or was not allowed.", name));
+        }
+        try {
+          entry.resolve(passkeyCredentialOf(passkeyOwn(message, "credential")));
+        } catch (e) {
+          entry.reject(new PasskeyError("The operation either timed out or was not allowed.", "NotAllowedError"));
+        }
+      };
+      apply(passkeyListen, window, [
+        "pagehide",
+        () => {
+          const entries = [];
+          const iterator = apply(passkeyMapValues, passkeyPending, []);
+          for (let step = apply(passkeyIterNext, iterator, []); !step.done; step = apply(passkeyIterNext, iterator, [])) entries[entries.length] = step.value;
+          for (let i = 0; i < entries.length; i++) {
+            if (!passkeySettle(entries[i].id)) continue;
+            send("passkeyCancel", { id: entries[i].id });
+            entries[i].reject(new PasskeyError("The operation was aborted.", "AbortError"));
+          }
+        },
+      ]);
+      const passkeyTrap = (name, kind, wrapped) =>
+        passkeyDefine(passkeyProto, name, {
+          configurable: true,
+          enumerable: true,
+          get: () => wrapped,
+          set(value) {
+            const native = () => {
+              try {
+                passkeyDefine(this, name, { value, writable: true, configurable: true, enumerable: true });
+              } catch (e) {}
+            };
+            try {
+              const extension = passkeyExtensionCalling();
+              if (!extension) return native();
+              let label = "";
+              try {
+                label = typeof value === "function" ? String(value.name) : "";
+              } catch (e) {}
+              const restoring = value === wrapped || label === "bound " + name;
+              if (typeof value !== "function" || restoring) apply(passkeyMapDelete, passkeyContenders[kind], [extension]);
+              else if (!apply(passkeyMapGet, passkeyContenders[kind], [extension])) apply(passkeyMapSet, passkeyContenders[kind], [extension, value]);
+            } catch (e) {
+              native();
+            }
+          },
+        });
+      passkeyTrap("create", "passkeyCreate", passkeyWrap(passkeyCreate, "passkeyCreate"));
+      passkeyTrap("get", "passkeyGet", passkeyWrap(passkeyGet, "passkeyGet"));
+      let passkeyStaticsWrapped = false;
+      const passkeyWrapStatics = () => {
+        const credential = window.PublicKeyCredential;
+        if (passkeyStaticsWrapped || typeof credential !== "function") return;
+        passkeyStaticsWrapped = true;
+        passkeyKindsOf();
+        const conditional = credential.isConditionalMediationAvailable;
+        const platform = credential.isUserVerifyingPlatformAuthenticatorAvailable;
+        if (typeof conditional === "function") credential.isConditionalMediationAvailable = asNative(conditional, () => PasskeyPromise.resolve(true));
+        if (typeof platform === "function") credential.isUserVerifyingPlatformAuthenticatorAvailable = asNative(platform, () => PasskeyPromise.resolve(true));
+      };
+      passkeyWrapStatics();
+      if (!passkeyStaticsWrapped) {
+        apply(passkeyThen, PasskeyPromise.resolve(), [guard(passkeyWrapStatics)]);
+        apply(passkeyTimer, window, [guard(passkeyWrapStatics), 0]);
+        apply(passkeyListen, document, ["readystatechange", guard(passkeyWrapStatics)]);
+      }
+    }
+  } catch (e) {}
+
   handlers.config = (config) => {
     handlers.peekConfig({ modifier: config.peek, split: config.split, trace: config.peekTrace, otherSites: config.peekOtherSites });
     blockAutoplay = !!config.blockAutoplay;

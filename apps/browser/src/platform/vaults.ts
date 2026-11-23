@@ -18,6 +18,8 @@ import {
   type VaultBackupChange,
   type VaultPasswordStyle,
   type ChromeDropdownShown,
+  type VaultPasskeyDone,
+  type VaultPasskeyRequest,
 } from "@ardia/ardiacore";
 
 export type { VaultGeneratedPassword, VaultGeneratedSaveResult, VaultHandOn, VaultItem, VaultProviderState, VaultSignInFields, VaultSignInResult, VaultSyncResult, VaultTotp };
@@ -84,6 +86,13 @@ export const addStandaloneCode = (code: { token: string; label: string; issuer?:
 export const editStandaloneCode = (id: string, label: string, website: string) => call("vaults.editCode", website ? { id, label, website } : { id, label });
 export const deleteStandaloneCode = (id: string) => call("vaults.deleteCode", { id });
 export const onStandaloneCodesChanged = (listener: () => void) => on("vaults.codesChanged", () => listener());
+export const vaultPasskeys = () => call("vaults.passkeys", {});
+export const deleteVaultPasskey = (id: string) => call("vaults.deletePasskey", { id });
+export const answerPasskey = (requestId: string, choice: string, target?: string) => call("vaults.passkeyAnswer", target ? { requestId, choice, target } : { requestId, choice });
+export const setVaultPasskeys = (config: CallArgs<"vaults.setPasskeys">) => call("vaults.setPasskeys", config);
+export const onPasskeyRequest = (listener: (request: VaultPasskeyRequest) => void) => on("vaults.passkeyRequest", listener);
+export const onPasskeyOffer = (listener: (request: VaultPasskeyRequest) => void) => on("vaults.passkeyOffer", listener);
+export const onPasskeyDone = (listener: (done: VaultPasskeyDone) => void) => on("vaults.passkeyDone", listener);
 export const onPasskeysChanged = (listener: () => void) => on("vaults.passkeysChanged", () => listener());
 
 export const signInVault = (provider: string, fields: VaultSignInFields) => signInToVault(provider, fields);

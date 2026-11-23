@@ -11,6 +11,10 @@ using namespace ardia_runtime;
 
 static char kVaultCaptureKey;
 static void (^gGeneratedVaultSubmitHandler)(NSString *password, NSString *username, NSString *origin);
+static void (^gPasskeyHandler)(ArdiaWebView *view, NSString *kind, NSString *json, NSString *frameId, BOOL main, NSString *origin);
+static NSString *const kPasskeysOnLine = @"const passkeysOn = true;";
+static NSString *const kPasskeysOffLine = @"const passkeysOn = false;";
+static BOOL gPasskeysWanted = NO;
 
 ArdiaVaultCapture *ArdiaVaultCaptureOfTab(id tab) {
   if (!tab) return nil;
@@ -32,6 +36,20 @@ static NSString *VaultUsernameSource(NSDictionary *d) {
 }
 
 static BOOL VaultWebOrigin(NSString *origin) { return [origin hasPrefix:@"https://"] || [origin hasPrefix:@"http://"]; }
+
+namespace ardia_web_view {
+
+void RefreshPasskeysInPageScript() {
+  const BOOL on = gPasskeysWanted && AnyFieldProviderFillsFromMenu();
+  ArdiaCoreEngine *engine = ArdiaCoreEngine.sharedEngine;
+  NSString *script = engine.pageScript;
+  if (!script.length) return;
+  NSString *next = on ? [script stringByReplacingOccurrencesOfString:kPasskeysOffLine withString:kPasskeysOnLine]
+                      : [script stringByReplacingOccurrencesOfString:kPasskeysOnLine withString:kPasskeysOffLine];
+  if (![next isEqualToString:script]) engine.pageScript = next;
+}
+
+}
 
 @implementation ArdiaWebView (VaultPageMessages)
 
@@ -61,6 +79,9 @@ static BOOL VaultWebOrigin(NSString *origin) { return [origin hasPrefix:@"https:
     if (VaultWebOrigin(origin)) [self emit:@"vaultLoginPage" payload:@{@"frameId" : frameId, @"origin" : origin, @"main" : @(main)}];
   } else if ([kind isEqualToString:@"vaultLoginOutcome"] && dict && menuMode) {
     [self noteVaultLoginOutcome:dict tab:tab frame:frameId main:main origin:origin];
+  } else if (([kind isEqualToString:@"passkeyCreate"] || [kind isEqualToString:@"passkeyGet"] || [kind isEqualToString:@"passkeyCancel"]) && dict) {
+    if (gPasskeyHandler && menuMode) gPasskeyHandler(self, kind, json, frameId, main, origin);
+    else [self passPasskeyToChrome:dict kind:kind frame:frameId];
   } else if ([kind isEqualToString:@"vaultFilled"] && dict) {
     NSMutableArray<NSString *> *filled = [NSMutableArray array];
     for (id name in Field<NSArray>(dict, @"filled") ?: @[])
@@ -73,6 +94,10 @@ static BOOL VaultWebOrigin(NSString *origin) { return [origin hasPrefix:@"https:
 - (void)noteVaultDocumentInFrame:(NSString *)frameId tab:(ArdiaCoreTab *)tab main:(BOOL)main origin:(NSString *)verifiedOrigin {
   [ArdiaVaultCaptureOfTab(tab) forgetFrame:frameId];
   [self answerLanding:[ArdiaVaultCaptureOfTab(tab) noteDocumentInFrame:frameId main:main origin:VerifiedOrigin(verifiedOrigin)]];
+}
+
+- (void)notePasskeyDocumentInFrame:(NSString *)frameId origin:(NSString *)verifiedOrigin {
+  if (gPasskeyHandler) gPasskeyHandler(self, @"@document", @"{}", frameId, YES, VerifiedOrigin(verifiedOrigin));
 }
 
 - (void)noteVaultLoginOutcome:(NSDictionary *)dict tab:(ArdiaCoreTab *)tab frame:(NSString *)frameId main:(BOOL)main origin:(NSString *)origin {
@@ -212,6 +237,38 @@ static id VaultFieldInset(NSDictionary *raw) {
 
 + (void)setGeneratedVaultSubmitHandler:(void (^)(NSString *, NSString *, NSString *))handler {
   gGeneratedVaultSubmitHandler = [handler copy];
+}
+
++ (void)setPasskeyMessageHandler:(void (^)(ArdiaWebView *, NSString *, NSString *, NSString *, BOOL, NSString *))handler {
+  gPasskeyHandler = [handler copy];
+}
+
+- (void)passPasskeyToChrome:(NSDictionary *)dict kind:(NSString *)kind frame:(NSString *)frameId {
+  NSString *requestId = Text(dict, @"id", 64);
+  if ([kind isEqualToString:@"passkeyCancel"] || !requestId.length || !frameId.length || !_tab || _tab.closed) return;
+  [_tab callFrame:frameId kind:@"passkey" json:JSONText(@{@"id" : requestId, @"fallback" : @YES})];
+}
+
++ (void)setPasskeysInPageScript:(BOOL)on {
+  gPasskeysWanted = on;
+  RefreshPasskeysInPageScript();
+}
+
+- (BOOL)passkeyOriginIsCurrent:(NSString *)origin {
+  if (!_tab || _tab.closed || !origin.length) return NO;
+  NSDictionary *info = _tab.securityInfo;
+  NSString *level = [info[@"level"] isKindOfClass:NSString.class] ? info[@"level"] : nil;
+  NSString *current = [info[@"origin"] isKindOfClass:NSString.class] ? info[@"origin"] : OriginOf(_tab.url);
+  if (![current isEqualToString:origin]) return NO;
+  if ([origin hasPrefix:@"https://"]) return [level isEqualToString:@"secure"];
+  const BOOL localhost = [origin isEqualToString:@"http://localhost"] || [origin hasPrefix:@"http://localhost:"];
+  return localhost && ![level isEqualToString:@"certificateError"];
+}
+
+- (BOOL)answerPasskeyInFrame:(NSString *)frameId origin:(NSString *)origin json:(NSString *)json {
+  if (!frameId.length || !_tab || _tab.closed || (origin && ![self passkeyOriginIsCurrent:origin])) return NO;
+  [_tab callFrame:frameId kind:@"passkey" json:json];
+  return YES;
 }
 
 - (void)discardVaultLogin:(NSString *)origin {

@@ -776,6 +776,8 @@ const fakeModules = {
       },
       generate: () => ({ length: 20 }),
       setOptions: () => ({}),
+      setPasskeys: () => ({}),
+      passkeys: () => [],
       export: ({ provider }) => (vaultFakes.exports.push(provider), vaultFakes.nextExport),
       sync: () => {
         vaultFakes.syncs += 1;

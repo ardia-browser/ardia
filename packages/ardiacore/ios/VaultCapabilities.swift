@@ -7,4 +7,5 @@ struct VaultCapabilities: Codable, Equatable, Sendable {
   var addTotp: Bool = false
   var edit: Bool = false
   var desktopApproval: Bool = false
+  var passkeys: Bool = false
 }

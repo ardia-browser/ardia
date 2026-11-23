@@ -29,6 +29,7 @@ import { useSidebarSide } from "../../state/browser/hooks";
 import { VaultMenuHost } from "../vaults/VaultMenu";
 import { VaultFieldBadgeHost } from "../vaults/VaultFieldBadge";
 import { VaultSaveOffer } from "../vaults/VaultSaveOffer";
+import { VaultPasskeySheet } from "../vaults/VaultPasskeySheet";
 
 export function PageOverlays({
   tabId,
@@ -73,6 +74,7 @@ export function PageOverlays({
       {!newTabShown && <PermissionPrompt tabId={tabId} {...at("prompt", PERMISSION_PROMPT_WIDTH)} />}
       <PasswordPrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />
       <VaultSaveOffer tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />
+      <VaultPasskeySheet tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />
       <AutofillPrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />
       {verificationCodes && <VerificationCodeOffer tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />}
       <NewTabNotice windowId={windowId} tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />

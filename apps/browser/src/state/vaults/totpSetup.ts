@@ -132,7 +132,7 @@ export function startVaultCodeSetup() {
   };
   push();
   const stopVaults = useVaults.subscribe((s, prev) => s.providers !== prev.providers && push());
-  const stopBrowser = useBrowser.subscribe((s, prev) => {
+  const stopBrowser = useBrowser.subscribeTo(["tabs"], (s, prev) => {
     if (s.tabs === prev.tabs) return;
     for (const tabId of codes.keys()) if (!s.tabs[tabId]) codes.delete(tabId);
     forgetPicksOutside(s.tabs);

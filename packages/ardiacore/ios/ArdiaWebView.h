@@ -157,6 +157,11 @@ NS_ASSUME_NONNULL_BEGIN
     NS_SWIFT_NAME(setGeneratedVaultSubmitHandler(_:));
 - (void)discardVaultLogin:(NSString *)origin NS_SWIFT_NAME(discardVaultCapture(origin:));
 + (void)wipeVaultCaptures NS_SWIFT_NAME(wipeVaultCaptures());
++ (void)setPasskeyMessageHandler:(nullable void (^)(ArdiaWebView *view, NSString *kind, NSString *json, NSString *frameId, BOOL main,
+                                                    NSString *_Nullable origin))handler NS_SWIFT_NAME(setPasskeyMessageHandler(_:));
++ (void)setPasskeysInPageScript:(BOOL)on NS_SWIFT_NAME(setPasskeysInPageScript(_:));
+- (BOOL)passkeyOriginIsCurrent:(NSString *)origin NS_SWIFT_NAME(passkeyOriginIsCurrent(_:));
+- (BOOL)answerPasskeyInFrame:(NSString *)frameId origin:(nullable NSString *)origin json:(NSString *)json NS_SWIFT_NAME(answerPasskey(frame:origin:json:));
 @end
 
 @interface ArdiaWebView (FieldProviders)

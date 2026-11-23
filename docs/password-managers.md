@@ -915,8 +915,7 @@ passwords and each connected provider by name).
 
 | Choice | Fill UI | Key on the field | Save | Chrome's dropdown | Passkey wrapper |
 | --- | --- | --- | --- | --- | --- |
-| Ardia, with a source (Save and fill passwords on, or a CLI manager connected) | Ardia's fill menu | yes, opens the fill menu | Ardia's save popover | claimed by the menu | on |
-| Ardia, no source | Chrome's dropdown | no | Chrome's | as Chrome | off |
+| Ardia | Ardia's fill menu (its own empty state, Other Passwords… and Password Settings… when nothing is saved) | yes, opens the fill menu | Ardia's save popover, when Save and fill passwords is on or a CLI manager is connected | login and passkey claimed in every tab, form history while the menu is open | on |
 | A `fill: "system"` plugin | macOS Passwords panel | yes, opens the panel | off (`password-manager.json`) | as Chrome | off |
 | None | Chrome's dropdown | no | off | not claimed | off |
 
@@ -935,8 +934,14 @@ passwords and each connected provider by name).
   the key), no save or update offers or auto-save, no suggestions, code setup or code autofill, no command bar
   password commands, no Touch ID arming and no read-ahead. Its tabs never claim Chrome's dropdowns. Connected
   managers stay connected for the profiles still on Ardia; nothing is deleted, and iCloud sync and backup keep running.
-- **Ardia with Save and fill passwords off** (Chrome's `credentials_enable_service`): Chrome's login dropdown is
-  claimed in that profile's tabs whatever logins it holds, so none of Ardia's logins are offered.
+- **Ardia is the only password UI.** A profile on Ardia never falls back to Chrome's dropdown, even with no source
+  (Save and fill passwords off and no CLI manager connected): the fill menu opens with its own empty state, and Cmd-\
+  opens it instead of asking Chrome. `chromeDropdownPolicy` (`state/vaults/dropdownPolicy.ts`) claims Chrome's `login`
+  and `passkey` dropdowns in every tab of an Ardia profile, any login, with or without a menu open, so password and
+  username suggestions, generated passwords, Manage passwords and Use Passkey from Another Device never stay up.
+  Save and fill passwords off still means no offer to save (`ardiaSavesInTab`). Profiles on None or a plugin keep
+  Chrome's dropdowns. A page's conditional mediation (`navigator.credentials.get({mediation: "conditional"})`) stays
+  pending until a passkey is picked in Ardia's menu or the page aborts it.
 - **No fill on page load.** Ardia launches Chrome with the `fill-on-account-select` feature for every profile, in every
   build (`ArdiaHost+Launch.mm`), so Chrome never fills a saved login when a page loads: the person fills through
   Ardia's menu, the field key or Touch ID, as in Safari. That also closes silent fills into invisible forms. The
@@ -953,11 +958,9 @@ so it always draws over the fill menu, which lives inside the window. It must ne
 
 - **Claims.** Each tab holds a set of claimed kinds (`state/vaults/chromeDropdown.ts`,
   `claimChromeDropdowns(tabId, source, kinds, logins)`; claims from different sources are unioned, `[]` releases one).
-  The fill menu claims `login` and `history` while it is open, with the usernames of its login rows
-  (`state/vaults/menuDropdown.ts`), and re-claims when its rows change. A `login` claim covers a Chrome dropdown only
-  when every saved login in it (`kPasswordEntry`, `kAccountStoragePasswordEntry`, matched by username) is one of those
-  rows, so Chrome's dropdown is never hidden while it offers a login Ardia's menu doesn't show. Address and card fill can claim
-  `address` and `card` the same way once Ardia's menu fills them; until then Chrome's address and card dropdowns stay.
+  Every tab of an Ardia profile claims `login` (any login) and `passkey` (`state/vaults/dropdownPolicy.ts`); the fill
+  menu adds `history` while it is open (`state/vaults/menuDropdown.ts`). Ardia's address and card menu claims
+  `address` and `card` while it is active.
 - **Kinds.** Native sorts each suggestion Chrome reports (`tab:didShowAutofillSuggestions:`) by its type:
   `*Webauthn*`/`*Passkey*` is `passkey`, any other `*Password*` type is `login`, `kAutocompleteEntry` (form history) is `history`, `*CreditCard*`/`*Iban*` is `card`,
   `*Address*` is `address`, `kUndoOrClear` and separators don't count, and anything else (a site's datalist) is
@@ -968,13 +971,17 @@ so it always draws over the fill menu, which lives inside the window. It must ne
   app's tab id, so a claim made before the page exists holds. A claim also closes a
   claimed dropdown already on screen (`vaults.claimChromeDropdowns` answers `{hidden, showing}`), which covers Chrome's
   dropdown opening on focus before the menu.
-- **Who gives way.** With `other` in Chrome's dropdown, or a saved login the menu doesn't show, the menu closes for it
-  (unless it is busy), and a missed login refreshes Ardia's index (`vaults.refresh`). This is what happened with Save and
-  fill passwords off while another manager was locked: that switch is Chrome's `credentials_enable_service`, which stops offering to save but not Chrome's own fill, so Chrome kept offering the
-  saved login while Ardia's menu had only Unlock. Login and history dropdowns the menu covers close for it, even when
-  its only other row is Unlock. Siblings (a login for `home.example.com` on `server.example.com`) are login rows
-  labelled with their host, filled only when picked. An address or card dropdown closes when the
-  menu has a fill row, was asked for or is busy; otherwise the menu closes for it.
+- **Who gives way.** Only `other` (a site's own datalist) makes the menu close for Chrome's dropdown (unless it is
+  busy). Login, passkey and form-history dropdowns always close for it: the menu claims them with any login, and a
+  login Chrome lists that the menu lacks refreshes Ardia's index (`vaults.refresh`) instead of handing the field to
+  Chrome. Siblings (a login for `home.example.com` on `server.example.com`) are login rows labelled with their host,
+  filled only when picked. An address or card dropdown closes when the menu has a fill row, was asked for or is busy;
+  otherwise the menu closes for it, and Ardia's own address and card menu claims those kinds while it is active.
+- **Fields with a webauthn token.** A username field whose `autocomplete` includes `webauthn` (Google's Email or phone
+  field, for conditional mediation) opens the menu on focus even when nothing is saved for the site, since Chrome would
+  otherwise show its passkey-only dropdown there; other fields still open on focus only with something to offer.
+- **Until the engine hook ships** the claims close Chrome's dropdown with the Escape below as soon as it reports
+  itself, so it can show for a frame; the hook stops it before it is created.
 - **Engine hook (written, not yet built).** `engine/ardiacore/apply.sh` adds
   `g_ardia_autofill_suggestions_suppressed(WebContents*, span<const Suggestion>)` at the top of
   `AutofillPopupControllerImpl::Show` (root popups only), which hides the popup before it is created when it answers

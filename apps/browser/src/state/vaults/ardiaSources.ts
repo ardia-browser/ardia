@@ -2,8 +2,8 @@ import { useMemo } from "react";
 import type { VaultProviderState } from "../../platform/vaults";
 import { engineProfile } from "../browser/model";
 import { useBrowser } from "../browser/store";
-import { cached, load, onResourceChanged, useResource } from "../settings/resources";
-import { connectArdiaSource, passwordAutofill, refreshFieldProviders } from "../site/passwordManager";
+import { cached, load, useResource } from "../settings/resources";
+import { connectArdiaSource, passwordAutofill } from "../site/passwordManager";
 import { regularProfileId } from "../site/passwordManagerChoice";
 import { passwordManagersOnly } from "./ardia";
 import { isConnected, useVaults } from "./store";
@@ -13,10 +13,7 @@ export { vaultsSupported } from "./enabled";
 
 const connectedManagers = (providers: readonly VaultProviderState[]) => passwordManagersOnly(providers).filter(isConnected);
 
-const connectedKey = (providers: readonly VaultProviderState[]) =>
-  connectedManagers(providers)
-    .map((p) => p.id)
-    .join("\n");
+export const ardiaFillsInTab = (tabId: string): boolean => vaultsOnForTab(tabId);
 
 function savesAndFills(profile: string): boolean {
   const known = cached(passwordAutofill, [profile]);
@@ -24,12 +21,11 @@ function savesAndFills(profile: string): boolean {
   return known === true;
 }
 
-export const ardiaHasSource = (profile: string) => connectedManagers(useVaults.getState().providers).length > 0 || savesAndFills(profile);
-
-export function ardiaFillsInTab(tabId: string): boolean {
+export function ardiaSavesInTab(tabId: string): boolean {
   const s = useBrowser.getState();
   const tab = s.tabs[tabId];
-  return !!tab && vaultsOnForTab(tabId) && ardiaHasSource(engineProfile(s, regularProfileId(tab.profileId)));
+  if (!tab || !vaultsOnForTab(tabId)) return false;
+  return connectedManagers(useVaults.getState().providers).length > 0 || savesAndFills(engineProfile(s, regularProfileId(tab.profileId)));
 }
 
 let started = false;
@@ -37,11 +33,7 @@ let started = false;
 export function startArdiaSources() {
   if (started) return;
   started = true;
-  connectArdiaSource((profileId, profile) => vaultsOnForProfile(profileId) && ardiaHasSource(profile));
-  useVaults.subscribe((s, prev) => {
-    if (s.providers !== prev.providers && connectedKey(s.providers) !== connectedKey(prev.providers)) refreshFieldProviders();
-  });
-  onResourceChanged(passwordAutofill, refreshFieldProviders);
+  connectArdiaSource((profileId) => vaultsOnForProfile(profileId));
 }
 
 export type ArdiaSources = { saved: boolean; managers: string[] };

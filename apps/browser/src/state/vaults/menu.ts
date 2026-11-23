@@ -202,7 +202,7 @@ function offerNow(tabId: string, field: FieldSeen): boolean {
   const now = lastVaultField(tabId);
   if (!canOffer(tabId, now) || now.at !== field.at || vaultMenuOf(tabId) || declinedNow(tabId, now) || !now.main || !suggestOnFocus()) return true;
   if (isQuiet(tabId, now)) return true;
-  if (!hasMatchRow(rowsOfMenu(blankMenu(now, false, passwordProfileOfTab(tabId), tabId)))) return false;
+  if (!now.webauthn && !hasMatchRow(rowsOfMenu(blankMenu(now, false, passwordProfileOfTab(tabId), tabId)))) return false;
   openMenu(tabId, now, false);
   return true;
 }

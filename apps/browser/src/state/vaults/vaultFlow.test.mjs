@@ -334,7 +334,7 @@ test("Chrome's login or form-history dropdown under a menu with only unlock rows
     await settle();
     assert.ok(menu.vaultMenuOf(tabId), "Ardia's menu owns a login field");
     assert.equal(dropdownClaims()[0], "login,history,address,card,other", "Chrome's dropdown is closed");
-    assert.equal(dropdownClaims().at(-1), "history,login", "then the menu's own claim comes back");
+    assert.equal(dropdownClaims().at(-1), "history,login,passkey", "then the menu's own claim comes back");
     dropdowns.noteAutofillSuggestions(tabId, 1, ["login"], true);
     const counts = takeVaultCounts();
     assert.equal(counts.vault_chrome_dropdowns_hidden, 2);
@@ -378,20 +378,20 @@ test("a menu that opens over Chrome's login dropdown closes it, and closing the 
     menu.noteVaultField(tabId, field());
     await settle();
     await settle();
-    assert.deepEqual(dropdownClaims(tabId), ["history,login"]);
+    assert.deepEqual(dropdownClaims(tabId), ["history", "history,login,passkey"], "the focused login field claims form history, then the menu claims the rest");
     assert.deepEqual(native.vaultFakes.dropdownShowing, [], "a login dropdown with no saved logins in it went away");
     assert.ok(menu.vaultMenuOf(tabId));
     assert.equal(takeVaultCounts().vault_chrome_dropdowns_hidden, 1);
     menu.closeVaultMenu(tabId);
     await settle();
-    assert.deepEqual(dropdownClaims(tabId), ["history,login", ""]);
+    assert.deepEqual(dropdownClaims(tabId).at(-1), "history", "closing the menu leaves the field's own form-history claim");
   } finally {
     stop();
     menu.closeVaultMenu(tabId);
   }
 });
 
-test("a saved login Chrome offers that Ardia's menu lacks keeps Chrome's dropdown, and the menu gives way and refreshes Ardia", async () => {
+test("on an Ardia profile Chrome's login dropdown closes even when it offers a login Ardia's menu lacks, and Ardia's index refreshes", async () => {
   const { tabId } = await setup("locked");
   const stop = startMenusAndDropdowns();
   try {
@@ -401,14 +401,13 @@ test("a saved login Chrome offers that Ardia's menu lacks keeps Chrome's dropdow
     menu.noteVaultField(tabId, field({ kind: "username" }));
     await settle();
     await settle();
-    assert.equal(native.vaultFakes.dropdownClaims[0]?.usernames.length, 0, "the menu claims no saved login it can't show");
-    assert.deepEqual(native.vaultFakes.dropdownShowing, ["login"], "Chrome's dropdown stays");
-    assert.equal(menu.vaultMenuOf(tabId), null, "the menu gives way instead of covering it");
+    assert.equal(native.vaultFakes.dropdownClaims.find((c) => c.kinds.includes("login"))?.anyLogin, true, "the menu claims every login Chrome could offer");
+    assert.deepEqual(native.vaultFakes.dropdownShowing, [], "Chrome's dropdown closes");
+    assert.ok(menu.vaultMenuOf(tabId), "Ardia's menu stays");
     takeVaultCounts();
-    menu.openVaultMenuOnDemand(tabId);
     dropdowns.noteAutofillSuggestions(tabId, 2, ["login"], false, ["luke"]);
-    assert.equal(menu.vaultMenuOf(tabId), null, "even a menu asked for gives way to logins it can't show");
-    assert.equal(takeVaultCounts().vault_menu_yields_to_chrome, 1);
+    assert.ok(menu.vaultMenuOf(tabId), "a login only Chrome lists doesn't make the menu give way");
+    assert.equal(takeVaultCounts().vault_menu_yields_to_chrome, 0);
   } finally {
     native.vaultFakes.dropdownShowing = [];
     native.vaultFakes.dropdownLogins = [];
@@ -433,14 +432,41 @@ test("a login saved for a sibling host shows in Ardia's menu with its host, so C
     const sibling = open && menu.rowsOfMenu(open).find((r) => r.kind === "login");
     assert.equal(sibling?.item.urls[0], "https://home.leech.party");
     assert.equal(sibling?.userChose, true, "a sibling fills only when picked");
-    assert.deepEqual(native.vaultFakes.dropdownClaims.at(-1)?.usernames, ["luke"]);
-    assert.deepEqual(native.vaultFakes.dropdownShowing, [], "Chrome's dropdown closed: every login it offered is in the menu");
+    assert.deepEqual(native.vaultFakes.dropdownShowing, [], "Chrome's dropdown closed");
     assert.ok(menu.vaultMenuOf(tabId));
     dropdowns.noteAutofillSuggestions(tabId, 2, ["login"], false, ["luke", "other-user"]);
-    assert.equal(menu.vaultMenuOf(tabId), null, "one login Chrome offers that the menu lacks is enough to give way");
+    assert.ok(menu.vaultMenuOf(tabId), "Ardia's menu stays the only one");
   } finally {
     native.vaultFakes.dropdownShowing = [];
     native.vaultFakes.dropdownLogins = [];
+    stop();
+    menu.closeVaultMenu(tabId);
+  }
+});
+
+test("Chrome's passkey-only dropdown on a username webauthn field closes, and Ardia's menu opens on focus and stays", async () => {
+  const { tabId } = await setup();
+  native.vaultFakes.items = [];
+  await store.loadAllVaultItems(true);
+  const stop = startMenusAndDropdowns();
+  try {
+    native.vaultFakes.dropdownClaims.length = 0;
+    native.vaultFakes.dropdownShowing = ["history", "passkey"];
+    menu.noteVaultField(tabId, field({ kind: "username", origin: "https://accounts.example.com", webauthn: true, formHasPassword: false }));
+    await settle();
+    await settle();
+    assert.ok(menu.vaultMenuOf(tabId), "a webauthn field opens Ardia's menu on focus even with nothing saved for it");
+    assert.deepEqual(native.vaultFakes.dropdownShowing, [], "neither the typed-before email nor Use Passkey from Another Device stays up");
+    takeVaultCounts();
+    dropdowns.noteAutofillSuggestions(tabId, 2, ["history", "passkey"], false);
+    assert.ok(menu.vaultMenuOf(tabId), "the passkey dropdown doesn't make the menu give way");
+    assert.equal(takeVaultCounts().vault_menu_yields_to_chrome, 0);
+    menu.closeVaultMenu(tabId);
+    menu.noteVaultField(tabId, field({ kind: "username", origin: "https://accounts.example.com", frameId: "f9", webauthn: false, formHasPassword: false }));
+    await settle();
+    assert.equal(menu.vaultMenuOf(tabId), null, "a plain field with nothing to offer still waits to be asked");
+  } finally {
+    native.vaultFakes.dropdownShowing = [];
     stop();
     menu.closeVaultMenu(tabId);
   }

@@ -1,5 +1,5 @@
 import { consentToken, type ConsentToken } from "../telemetry/choice";
-import { ardiaFillsInTab, vaultsSupported } from "./ardiaSources";
+import { ardiaSavesInTab, vaultsSupported } from "./ardiaSources";
 import { create } from "zustand";
 import type { VaultItem, VaultProviderState, VaultSubmission } from "../../platform/vaults";
 import { webviews } from "../../platform/webviews";
@@ -188,7 +188,7 @@ const savingKey = (origin: string, username: string) => `${origin}\n${username.t
 export function vaultClaimsPasswordPrompt(tabId: string, prompt: { origin: string; state: string }, now = Date.now()): boolean {
   if (!vaultsSupported) return false;
   const claim = claims.get(tabId);
-  if (!claim || !ardiaFillsInTab(tabId) || now - claim.at > SAVE_OFFER_MS || !sameSite(claim.origin, prompt.origin)) return false;
+  if (!claim || !ardiaSavesInTab(tabId) || now - claim.at > SAVE_OFFER_MS || !sameSite(claim.origin, prompt.origin)) return false;
   return claim.offered || prompt.state === "save";
 }
 
@@ -200,7 +200,7 @@ function setOffer(tabId: string, offer: VaultSaveOffer | null) {
   if (offer) expiries.set(tabId, setTimeout(() => offerOf(tabId)?.seq === offer.seq && dismissVaultOffer(tabId), SAVE_OFFER_MS));
 }
 
-const stillWanted = (tabId: string) => !!useBrowser.getState().tabs[tabId] && ardiaFillsInTab(tabId);
+const stillWanted = (tabId: string) => !!useBrowser.getState().tabs[tabId] && ardiaSavesInTab(tabId);
 const discard = (tabId: string, origin: string) => void webviews.get(tabId)?.discardVaultCapture({ origin })?.catch(() => {});
 
 function claim(tabId: string, origin: string, offered: boolean) {
@@ -237,7 +237,7 @@ function showOffer(tabId: string, origin: string, captured: string, username: st
 }
 
 export async function noteVaultSubmitted(tabId: string, event: VaultSubmission) {
-  if (!ardiaFillsInTab(tabId)) return;
+  if (!ardiaSavesInTab(tabId)) return;
   const load = pageLoadOf(tabId), consent = consentToken();
   if (saving.has(savingKey(event.origin, event.username)) || seenJustNow(tabId, event, Date.now())) return;
   const signedIn = event.reportsOutcome ? waitForLogin(tabId, event.origin, consent) : Promise.resolve(true);

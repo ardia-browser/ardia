@@ -82,25 +82,22 @@ async function ardiaTab() {
   return w;
 }
 
-test("an Ardia profile with Save and Fill off and no manager connected gets no fill menu, no save offer and no Cmd-\\ menu", async () => {
+test("an Ardia profile with Save and Fill off and no manager connected keeps Ardia's own menu, never Chrome's, and offers no save", async () => {
   const w = await ardiaTab();
   storeResource(passwordAutofill, [""], false);
   menu.noteVaultField(tabId, field);
   await settle();
-  assert.equal(menu.vaultMenuOf(tabId), null);
-  assert.equal(menu.openVaultMenuOnDemand(tabId), false);
+  assert.equal(menu.openVaultMenuOnDemand(tabId), true, "Ardia's menu, with its own empty state, stands in for Chrome's");
+  menu.closeVaultMenu(tabId);
   assert.equal(offers.vaultClaimsPasswordPrompt(tabId, { origin: "https://github.com", state: "save" }), false);
   await offers.noteVaultSubmitted(tabId, { ...submitted, reportsOutcome: false });
-  assert.equal(offers.useVaultSaveOffers.getState()[tabId] ?? null, null);
+  assert.equal(offers.useVaultSaveOffers.getState()[tabId] ?? null, null, "Save and Fill off still means no offer to save");
   native.autofillFakes.suggestionsShown.length = 0;
   await requestAutofill(w, "passwords", tabId);
-  assert.deepEqual(native.autofillFakes.suggestionsShown, [tabId], "Cmd-\\ asks Chrome for its suggestions");
-  assert.equal(menu.vaultMenuOf(tabId), null);
-  storeResource(passwordAutofill, [""], true);
-  menu.noteVaultField(tabId, { ...field, frameId: "f2" });
-  await settle();
-  assert.equal(menu.openVaultMenuOnDemand(tabId), true, "with Save and Fill on, the menu opens");
+  assert.deepEqual(native.autofillFakes.suggestionsShown, [], "Cmd-\\ never asks Chrome for its suggestions on an Ardia profile");
+  assert.ok(menu.vaultMenuOf(tabId), "it opens Ardia's menu instead");
   menu.closeVaultMenu(tabId);
+  storeResource(passwordAutofill, [""], true);
 });
 
 test("a failed login after navigation counts in the consent period the submit arrived in", async () => {
@@ -129,4 +126,28 @@ test("native vault events count only in the consent period they were stamped in"
   await settle();
   counts = takeVaultCounts();
   assert.deepEqual([counts.vault_passkeys_used, counts.vault_backups], [1, 1]);
+});
+
+test("Chrome's login and passkey dropdowns are claimed on every tab of an Ardia profile, and left alone on profiles set to None or a plugin", async () => {
+  const { chromeDropdownPolicy, startChromeDropdownPolicy } = await import("./dropdownPolicy.ts");
+  assert.deepEqual(chromeDropdownPolicy(true), ["login", "passkey"]);
+  assert.deepEqual(chromeDropdownPolicy(false), []);
+  await ardiaTab();
+  S().updateProfile(work, { passwordManager: "none" });
+  const elsewhere = S().createWindow({ url: "https://github.com/login", profileId: work });
+  const noneTab = S().windows[elsewhere].tabIds[0];
+  native.vaultFakes.dropdownClaims.length = 0;
+  const stop = startChromeDropdownPolicy();
+  try {
+    await settle();
+    const claimsOf = (id) => native.vaultFakes.dropdownClaims.filter((c) => c.tabId === id).map((c) => `${c.kinds.join(",")}${c.anyLogin ? " any" : ""}`);
+    assert.deepEqual(claimsOf(tabId), ["login,passkey any"], "an Ardia profile's tab never shows Chrome's password or passkey dropdown, menu or not");
+    assert.deepEqual(claimsOf(noneTab), [], "a profile on None keeps Chrome's dropdowns");
+    S().updateProfile(work, { passwordManager: "ardia" });
+    await settle();
+    assert.deepEqual(claimsOf(noneTab), ["login,passkey any"], "switching that profile to Ardia claims them");
+  } finally {
+    stop();
+    S().updateProfile(work, { passwordManager: "none" });
+  }
 });

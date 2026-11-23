@@ -5,9 +5,10 @@ import { hasFillRow } from "./menuModel";
 import { refreshVault } from "../../platform/vaults";
 import { ARDIA_PROVIDER } from "./ardia";
 import { useVaults } from "./store";
+import { vaultsOnForTab } from "./enabled";
 import { noteChromeDropdownHidden, noteVaultMenuYieldedToChrome } from "../telemetry/vaultCounts";
 
-const VAULT_MENU_DROPDOWNS = ["login", "history"] as const;
+const VAULT_MENU_DROPDOWNS = ["login", "passkey", "history"] as const;
 const vaultReplacesDropdown = (kinds: readonly ChromeDropdownShown[]) => kinds.length > 0 && kinds.every((k) => VAULT_MENU_DROPDOWNS.some((own) => own === k));
 
 export function menuLogins(menu: VaultMenu): string[] {
@@ -21,18 +22,17 @@ export const coversChromeLogins = (menu: VaultMenu, logins: readonly string[]) =
   return logins.every((login) => own.has(login.trim().toLowerCase()));
 };
 
-function yieldToChrome(tabId: string, missedLogins: boolean, consent: ConsentToken | null) {
+function yieldToChrome(tabId: string, consent: ConsentToken | null) {
   noteVaultMenuYieldedToChrome(consent);
   dismissVaultMenu(tabId);
-  if (missedLogins) void refreshVault(ARDIA_PROVIDER).catch(() => null);
 }
 
 function settleWithChromeDropdown(tabId: string, menu: VaultMenu, kinds: readonly ChromeDropdownShown[], logins: readonly string[], consent: ConsentToken | null) {
   if (menu.busy) return void closeChromeDropdown(tabId, consent);
-  if (kinds.includes("other") || kinds.includes("passkey")) return yieldToChrome(tabId, false, consent);
-  if (kinds.includes("login") && !coversChromeLogins(menu, logins)) return yieldToChrome(tabId, true, consent);
+  if (kinds.includes("other")) return yieldToChrome(tabId, consent);
+  if (kinds.includes("login") && !coversChromeLogins(menu, logins)) void refreshVault(ARDIA_PROVIDER).catch(() => null);
   if (vaultReplacesDropdown(kinds) || menu.onDemand || hasFillRow(rowsOfMenu(menu))) return void closeChromeDropdown(tabId, consent);
-  yieldToChrome(tabId, false, consent);
+  yieldToChrome(tabId, consent);
 }
 
 export function noteAutofillSuggestions(tabId: string, count: number, kinds: readonly ChromeDropdownShown[] = [], hidden = false, logins: readonly string[] = []) {
@@ -44,9 +44,20 @@ export function noteAutofillSuggestions(tabId: string, count: number, kinds: rea
 
 async function claimForVaultMenu(tabId: string, consent: ConsentToken | null) {
   const menu = vaultMenuOf(tabId);
-  const { showing, logins } = await claimChromeDropdowns(tabId, "vaultMenu", menu ? VAULT_MENU_DROPDOWNS : [], menu ? menuLogins(menu) : [], consent);
+  const { showing, logins } = await claimChromeDropdowns(tabId, "vaultMenu", menu ? VAULT_MENU_DROPDOWNS : [], null, consent);
   const now = vaultMenuOf(tabId);
   if (now && now.seq === menu?.seq && showing.length) settleWithChromeDropdown(tabId, now, showing, logins, consent);
+}
+
+const FIELD_DROPDOWNS = ["history"] as const;
+const fieldClaims = new Set<string>();
+
+function claimForVaultField(tabId: string, focused: boolean, consent: ConsentToken | null) {
+  const owns = focused && vaultsOnForTab(tabId);
+  if (owns === fieldClaims.has(tabId)) return;
+  if (owns) fieldClaims.add(tabId);
+  else fieldClaims.delete(tabId);
+  void claimChromeDropdowns(tabId, "vaultField", owns ? FIELD_DROPDOWNS : [], null, consent);
 }
 
 export function startVaultMenuDropdowns() {
@@ -54,6 +65,10 @@ export function startVaultMenuDropdowns() {
     for (const tabId of tabIds) void claimForVaultMenu(tabId, consent);
   };
   const stopMenus = useVaultMenus.subscribe((s, prev) => {
+    if (s.fields !== prev.fields) {
+      const consent = consentToken();
+      for (const tabId of new Set([...Object.keys(s.fields), ...Object.keys(prev.fields)])) claimForVaultField(tabId, !!s.fields[tabId]?.focused, consent);
+    }
     if (s.menus !== prev.menus) claimOpenMenus(new Set([...Object.keys(s.menus), ...Object.keys(prev.menus)]), consentToken());
   });
   const stopItems = useVaults.subscribe((s, prev) => {

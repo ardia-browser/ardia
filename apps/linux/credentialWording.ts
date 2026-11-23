@@ -7,10 +7,9 @@ export const CREDENTIAL_WORDING: readonly Wording[] = [
     file: "components/settings/panes/ProfilePasswords.tsx",
     replacements: [
       [
-        `  const apps = \`1Password, Bitwarden, KeePassXC and Proton Pass extensions connect to their \${PLATFORM_TERMS.computer} apps.\`;
-  return systemInfo().inApplicationsFolder === false
-    ? \`\${apps} For 1Password, move Ardia to your Applications folder and reopen it (1Password only connects to browsers there), then in the 1Password app open Settings › Browser › Add Browser and choose it.\`
-    : \`\${apps} For 1Password, add Ardia once: in the 1Password app, open Settings › Browser › Add Browser and choose Ardia.\`;`,
+        `  return systemInfo().inApplicationsFolder === false
+    ? "For 1Password, move Ardia to Applications, then add it in its Settings › Browser."
+    : "Their extensions work here. For 1Password, add Ardia in its Settings › Browser.";`,
         `  return "Password manager extensions such as 1Password, Bitwarden, KeePassXC and Proton Pass install from the Chrome Web Store. Ardia doesn't set up their connection to a desktop app on Linux yet.";`,
       ],
     ],

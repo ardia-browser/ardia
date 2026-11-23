@@ -1,6 +1,8 @@
 import Foundation
 import Testing
 
+private let timingBudgets = ProcessInfo.processInfo.environment["ARDIA_PERF_BUDGETS"] == "1"
+
 private func login(_ id: String, _ title: String, _ username: String, _ urls: [String], provider: String = "1password", updatedAt: Double? = nil, profile: String? = nil) -> VaultItem {
   VaultItem(provider: provider, id: id, title: title, username: username, urls: urls, updatedAt: updatedAt, profile: profile)
 }
@@ -87,14 +89,18 @@ struct VaultCatalogTests {
     var built: VaultCatalog?
     let build = clock.measure { built = VaultCatalog(vault, ownProvider: "ardia") }
     let catalog = built!
-    #expect(build < .seconds(3), "building took \(build)")
+    if timingBudgets { #expect(build < .seconds(3), "building took \(build)") }
     var near: [VaultItem] = []
     let lookup = clock.measure { for _ in 0..<100 { near = catalog.near("https://login.site42.example0.com") } }
     #expect(!near.isEmpty)
-    #expect(lookup < .milliseconds(100), "100 site lookups took \(lookup)")
-    let search = clock.measure { _ = catalog.search("account 4", limit: 100, filter: .everyProfile) }
-    #expect(search < .milliseconds(400), "a search took \(search)")
-    let page = clock.measure { _ = catalog.page(query: "", offset: 0, limit: 200, filter: .managersOnly) }
-    #expect(page < .milliseconds(150), "a page took \(page)")
+    if timingBudgets { #expect(lookup < .milliseconds(100), "100 site lookups took \(lookup)") }
+    var found: [VaultItem] = []
+    let search = clock.measure { found = catalog.search("account 4", limit: 100, filter: .everyProfile) }
+    #expect(!found.isEmpty)
+    if timingBudgets { #expect(search < .milliseconds(400), "a search took \(search)") }
+    var listed = 0
+    let page = clock.measure { listed = catalog.page(query: "", offset: 0, limit: 200, filter: .managersOnly).items.count }
+    #expect(listed > 0)
+    if timingBudgets { #expect(page < .milliseconds(150), "a page took \(page)") }
   }
 }

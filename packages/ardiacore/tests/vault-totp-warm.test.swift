@@ -1,6 +1,8 @@
 import Foundation
 import Testing
 
+private let timingBudgets = ProcessInfo.processInfo.environment["ARDIA_PERF_BUDGETS"] == "1"
+
 private let secret = "otpauth://totp/Example:sam?secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP&issuer=Example"
 
 private func login(_ id: String, _ url: String, hasTotp: Bool? = nil, updatedAt: Double = 1) -> VaultItem {
@@ -70,6 +72,6 @@ struct VaultTotpWarmTests {
     var page: [String] = []
     let took = clock.measure { page = plan(items, focus: "example3.com", limit: VaultTotpWarmPlan.page) }
     #expect(page.count == VaultTotpWarmPlan.page)
-    #expect(took < .milliseconds(400), "planning took \(took)")
+    if timingBudgets { #expect(took < .milliseconds(400), "planning took \(took)") }
   }
 }

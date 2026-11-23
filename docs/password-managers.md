@@ -1284,12 +1284,16 @@ Settings › Profiles › <profile> › Passwords. On a Mac profile on Ardia it 
    | Unavailable: crashed | Quit unexpectedly (red) | Restart when `canRestart` |
    | Unavailable: updating | Updating… with a spinner | none |
    | Unavailable: damaged | its message, else Damaged (red) | ⋯ |
-   | Unavailable: off | Off | Turn On… (Plugins) |
+   | Unavailable: off | Off | Turn On… |
+   | Plugin installed but turned off (not registered; an `installed`, `enabled: false` catalogue entry) | Off | Turn On…, ⋯ (Show in Plugins) |
 
    Sign Out confirms ("Sign Out of <Manager>?", "Ardia stops filling from it until you sign in again."). Sync follows
    while a manager is unlocked. **Add Password Manager…** (trailing, under the group, shown while an official
-   credential provider isn't registered) lists them (`useOfficialCredentialProviders`, through
-   `state/vaults/managerCatalogue.ts`); Add installs it with `installOfficialPlugin(name, { showSheet: false })`, so
+   credential provider isn't installed) lists them (`useOfficialCredentialProviders`, through
+   `state/vaults/managerCatalogue.ts`, `managerOffers`: installed ones never show there, an installed one that's off is
+   an Off row instead); Turn On… turns the plugin back on with its approval on record (`turnOnApprovedPlugin`, the
+   consent sheet only when that approval no longer matches), shows Turning On… until the provider registers, then
+   opens its sign-in sheet, since turning it off wiped its cache and sessions. Add installs it with `installOfficialPlugin(name, { showSheet: false })`, so
    the plugin consent sheet shows over this page, while an Installing… row with a spinner stands in the group. A
    failed install leaves the row with the reason in red, Try Again and Dismiss; a cancelled consent removes it
    quietly. Once the provider registers, its sign-in sheet opens (not when it is already connected). Rows fold in and

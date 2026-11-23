@@ -26,7 +26,7 @@ function AddManagerSheet({ onReady }: { onReady: (provider: string) => void }) {
                   <Text style={TITLE} lines={1}>
                     {entry.title}
                   </Text>
-                  <Button title={entry.state === "installed" ? "Turn On" : "Add"} label={`Add ${entry.title}`} onPress={() => add(entry)} />
+                  <Button title="Add" label={`Add ${entry.title}`} onPress={() => add(entry)} />
                 </View>
               </View>
             ))}

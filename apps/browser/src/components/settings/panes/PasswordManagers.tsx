@@ -9,13 +9,13 @@ import { VAULT_LOCK_MINUTES } from "../../../state/settings/vaultSettings";
 import { KEEP_GENERATED_OPTIONS } from "../../../state/vaults/generated";
 import { reloadProviders, type VaultProviderState } from "../../../state/vaults/actions";
 import { useVaultBiometricsAvailable, useVaultProviders } from "../../../state/vaults/hooks";
-import { useAddingManager, useManagerCatalogue } from "../../../state/vaults/managerCatalogue";
+import { useAddingManager, useManagerCatalogue, useOffManagers } from "../../../state/vaults/managerCatalogue";
 import { passwordManagersOnly } from "../../../state/vaults/ardia";
 import { connectedSavers, preferredSaveTarget } from "../../../state/vaults/saveOffer";
 import { refreshVaultSyncStatus, syncedLine, syncVaultsNow, useVaultSync } from "../../../state/vaults/sync";
 import { Button, PopUp, Toggle } from "../../ui";
 import { changeGuardedVaultSetting } from "../../../state/vaults/settingsGuard";
-import { AddingRow, ProviderRow, TouchUnlockRow } from "../../vaults/ManagerRows";
+import { AddingRow, OffRow, ProviderRow, TouchUnlockRow } from "../../vaults/ManagerRows";
 import { showAddManagerSheet } from "../../vaults/AddManagerSheet";
 import { FieldStack, type StackRow } from "../../vaults/SignInFields";
 import { Group, Row, SectionHeader } from "../Form";
@@ -80,10 +80,12 @@ function LockAfterRow() {
 function ManagersGroup({ managers }: { managers: VaultProviderState[] }) {
   const adding = useAddingManager();
   const catalogue = useManagerCatalogue();
+  const off = useOffManagers();
   const sheets = { connect: (id: string) => showConnectSheet(id), unlock: (id: string) => showUnlockSheet(id) };
   const shown = adding && !managers.some((p) => p.id === adding.name) ? adding : null;
   const rows: StackRow[] = [
     ...managers.map((p) => ({ key: p.id, render: () => <ProviderRow provider={p} sheets={sheets} /> })),
+    ...off.filter((e) => e.name !== shown?.name).map((e) => ({ key: `off-${e.name}`, render: () => <OffRow entry={e} sheets={sheets} /> })),
     ...(shown ? [{ key: `adding-${shown.name}`, render: () => <AddingRow adding={shown} onReady={sheets.connect} /> }] : []),
   ];
   const syncs = managers.some((p) => p.state === "unlocked");

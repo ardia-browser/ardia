@@ -5,7 +5,7 @@ import { confirm, showMenu } from "../../state/app/system";
 import { openSettings } from "../../state/settings/settingsWindows";
 import { copyInstallCommand, lockProvider, refreshProvider, restartProvider, signInError, signOutProvider, unlockProvider, type VaultProviderState } from "../../state/vaults/actions";
 import { exportManagerPasswords } from "../../state/vaults/export";
-import { addPasswordManager, dismissAddingManager, type AddingManager } from "../../state/vaults/managerCatalogue";
+import { addPasswordManager, dismissAddingManager, turnOnPasswordManager, type AddingManager, type CatalogueEntry } from "../../state/vaults/managerCatalogue";
 import { managerStatus, type ManagerStatus } from "../../state/vaults/managerStatus";
 import { credential, titleOf, type CredentialProviderState } from "../../state/vaults/providerModel";
 import { ActivitySpinner, Box, Button, space, Text, Toggle } from "../ui";
@@ -92,7 +92,7 @@ export function ProviderRow({ provider, sheets }: { provider: VaultProviderState
     signIn: <Button title="Sign In…" onPress={() => sheets.connect(p.id)} />,
     continue: <Button title="Continue…" onPress={() => sheets.connect(p.id)} />,
     restart: <Button title="Restart" onPress={() => restartProvider(p.plugin ?? p.id)} />,
-    turnOn: <Button title="Turn On…" onPress={() => openSettings("plugins", null, p.plugin ?? p.id)} />,
+    turnOn: <Button title="Turn On…" onPress={() => void turnOnPasswordManager({ name: p.plugin ?? p.id, title: name, icon: p.symbol ?? "", accent: p.accent }, sheets.connect)} />,
     check: <Button title={busy ? "Checking…" : "Check Again"} reserve={CHECK_TITLES} disabled={busy} onPress={() => void check()} />,
     none: null,
   }[status.action];
@@ -117,7 +117,7 @@ export function AddingRow({ adding, onReady }: { adding: AddingManager; onReady:
     <Row
       icon={<BrandBadge provider={adding.name} size="m" symbol={adding.icon || undefined} accent={adding.accent} />}
       title={adding.title}
-      description={<StatusLine text={failed ? adding.reason : "Installing…"} tone={failed ? "destructive" : "textSecondary"} />}
+      description={<StatusLine text={failed ? adding.reason : adding.turningOn ? "Turning On…" : "Installing…"} tone={failed ? "destructive" : "textSecondary"} />}
     >
       <Box row gap="s" center>
         {failed ? (
@@ -128,6 +128,21 @@ export function AddingRow({ adding, onReady }: { adding: AddingManager; onReady:
         ) : (
           <ActivitySpinner style={SPINNER} />
         )}
+      </Box>
+    </Row>
+  );
+}
+
+export function OffRow({ entry, sheets }: { entry: CatalogueEntry; sheets: ManagerSheets }) {
+  const more = async () => {
+    const choice = await showMenu([{ id: "plugin", title: "Show in Plugins", symbol: "puzzlepiece.extension" }]);
+    if (choice === "plugin") openSettings("plugins", null, entry.name);
+  };
+  return (
+    <Row icon={<BrandBadge provider={entry.name} size="m" symbol={entry.icon || undefined} accent={entry.accent} />} title={entry.title} description={<StatusLine text="Off" tone="textSecondary" />}>
+      <Box row gap="s" center>
+        <Button title="Turn On…" label={`Turn On ${entry.title}`} onPress={() => void turnOnPasswordManager(entry, sheets.connect)} />
+        <Button variant="icon" icon="ellipsis.circle" size="l" tooltip="More" onPress={() => void more()} />
       </Box>
     </Row>
   );

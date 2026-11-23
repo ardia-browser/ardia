@@ -109,7 +109,7 @@ const CODE_METHODS = [
   { id: "3", title: "YubiKey" },
 ];
 
-type Scene = { providers: CredentialProviderState[]; adding?: AddingManager };
+type Scene = { providers: CredentialProviderState[]; adding?: AddingManager; catalogue?: CatalogueEntry[] };
 
 const unlocked = { state: "unlocked" as const, account: ACCOUNT };
 
@@ -131,6 +131,12 @@ export const VAULT_SCENES: Record<string, Scene> = {
   updating: { providers: [bitwarden({ state: "unavailable", unavailable: { reason: "updating", canRestart: false } })] },
   damaged: { providers: [bitwarden({ state: "unavailable", unavailable: { reason: "damaged", canRestart: false } })] },
   off: { providers: [onePassword({ state: "unavailable", unavailable: { reason: "off", canRestart: false } })] },
+  turnedOff: { providers: [onePassword(unlocked)], catalogue: CATALOGUE.map((e) => (e.name === "bitwarden" ? { ...e, state: "installed", enabled: false } : e)) },
+  turningOn: {
+    providers: [onePassword(unlocked)],
+    catalogue: CATALOGUE.map((e) => (e.name === "bitwarden" ? { ...e, state: "installed", enabled: false } : e)),
+    adding: { name: "bitwarden", title: "Bitwarden", icon: "shield.lefthalf.filled", accent: FIXTURE_ACCENTS.bitwarden, phase: "starting", reason: "", turningOn: true },
+  },
   offline: { providers: [protonPass({ ...unlocked, problem: { code: "offline", message: "Offline. Proton Pass fills again once you're back online." } })] },
   error: { providers: [bitwarden({ problem: { code: "failed", message: "Bitwarden couldn't reach its server. Check your connection." } })] },
 };
@@ -169,7 +175,7 @@ export function showVaultScene(name: string) {
   const scene = VAULT_SCENES[name];
   if (!scene) throw new Error(`No vault scene ${name}: ${Object.keys(VAULT_SCENES).join(", ")}`);
   closeSettingsSheet();
-  showPreviewCatalogue(CATALOGUE);
+  showPreviewCatalogue(scene.catalogue ?? CATALOGUE);
   showPreviewProviders(scene.providers as VaultProviderState[]);
   showPreviewAdding(scene.adding ?? null);
   openPasswordSettings(chooseArdiaHere());

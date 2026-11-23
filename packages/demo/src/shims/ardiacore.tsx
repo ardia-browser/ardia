@@ -133,7 +133,7 @@ for (const module of new Set([...Object.keys(ENGINE_ONLY), ...Object.keys(ANSWER
     },
   });
 
-export async function faviconsFor(_profile: string, pages: string[], _icons: string[] = []) {
+export async function faviconsFor(_profile: string, pages: string[], _icons: string[] = [], _size = 32) {
   const found = pages.flatMap((page) => {
     const uri = faviconFor(page);
     return uri ? [[page, { uri, icon: uri }] as const] : [];

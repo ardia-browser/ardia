@@ -16,6 +16,7 @@ import { isUtilityWindowId } from "../settings/settingsWindows";
 import { openingLightsCenter } from "../windows/layout";
 import { createWindowSync, type WindowPort } from "../windows/windowSync";
 import { closeLittleArdiaForAppLink, openExternalUrls } from "../littleArdia/actions";
+import { openWebApp } from "../webApps/webApps";
 import { noteIncomingLinksRefused } from "../telemetry/externalAppCounts";
 import { startUnclaimedEscape } from "../windows/unclaimedEscape";
 import { SMALL_LIGHTS_CENTER } from "../windows/small";
@@ -69,7 +70,10 @@ export function startNativeSync() {
   });
   startWindowCloseGuard();
   startExtensionsBridge();
-  onOpenURLs((urls, pointer, source, returnTo) => noteIncomingLinksRefused(openExternalUrls(urls, pointer, source, returnTo)));
+  onOpenURLs((urls, pointer, source, returnTo) => {
+    const rest = urls.filter((url) => !openWebApp(url));
+    if (rest.length) noteIncomingLinksRefused(openExternalUrls(rest, pointer, source, returnTo));
+  });
   onWindowRequest(({ request, profile, fromWindow }) => openFromWindowlessPage(request, profile, fromWindow));
   startUnclaimedEscape();
   startKeyboardFollows();

@@ -107,6 +107,7 @@ enum CommandTable {
     case autofill
     case openFile
     case savePage
+    case installApp
     case emailPageLocation
     case printWithSystemDialog
     case stop
@@ -229,6 +230,7 @@ enum CommandTable {
     "autofill:creditCard": "Credit Card…",
     "openFile": "Open File…",
     "savePage": "Save Page As…",
+    "installApp": "Install Page as App…",
     "emailPageLocation": "Email Page Location",
     "printWithSystemDialog": "Print Using System Dialog…",
     "stop": "Stop",

@@ -344,6 +344,7 @@ const system: Modules["ArdiaSystem"] = {
   setLaunchAtLogin: () => Promise.resolve(),
   fileExists: () => false,
   openFile: () => Promise.resolve(false),
+  installWebApp: () => Promise.resolve(null),
   revealFile: () => Promise.resolve(false),
   moveToTrash: () => Promise.resolve(false),
   fileIcon: () => Promise.resolve(null),

@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { test } from "node:test";
-const { TOOLBAR_ROWS } = await import("../../lib/toolbarRow.ts");
-const { edgeHandleCenter, edgeHandleOrigin, moveHandleTooltip, paneTopChrome, resolveMoveTarget, toolbarHandleCenter } = await import("./splitMove.ts");
+const { handleOrigin, moveHandleTooltip, paneTopChrome, resolveMoveTarget } = await import("./splitMove.ts");
 
 const row = { orientation: "horizontal", slots: [{ size: 1 / 3, tabId: "a" }, { size: 1 / 3, tabId: "b" }, { size: 1 / 3, tabId: "c" }] };
 const rowPanes = {
@@ -20,32 +19,27 @@ test("paneTopChrome clears pane toolbars, auto-hide strips, developer bars, plug
   assert.equal(paneTopChrome({ chrome: { kind: "none" }, toolbarHeight: 42, collapsed: false, topBarHeight: 32, shareBarHeight: 38 }), 70);
 });
 
-test("toolbarHandleCenter aligns with the Move button in the toolbar and edgeHandleOrigin centers at the top lip", () => {
+test("handleOrigin insets from the pane top-left below top chrome", () => {
   const rect = { x: 408, y: 0, width: 400, height: 700 };
-  const center = toolbarHandleCenter(rect, TOOLBAR_ROWS.regular, 0);
-  assert.ok(center.x > rect.x + rect.width - 120 && center.x < rect.x + rect.width - 60);
-  assert.equal(center.y, TOOLBAR_ROWS.regular.center);
-  const shifted = toolbarHandleCenter(rect, TOOLBAR_ROWS.regular, 96);
-  assert.equal(shifted.x, center.x - 96);
-  assert.deepEqual(edgeHandleOrigin(rect, 36), { x: 586, y: 36 });
-  assert.deepEqual(edgeHandleCenter(rect, 36), { x: 608, y: 51 });
+  assert.deepEqual(handleOrigin(rect, 0), { x: 416, y: 8 });
+  assert.deepEqual(handleOrigin(rect, 36), { x: 416, y: 44 });
 });
 
 test("resolveMoveTarget ignores micro-movements, hits any pane directly, holds outer targets past edges and gaps, and assists directional pulls", () => {
-  const startA = toolbarHandleCenter(rowPanes.a, TOOLBAR_ROWS.regular, 0);
+  const startA = { x: 19, y: 19 };
   assert.equal(resolveMoveTarget(row, rowPanes, "a", startA, 2, 1), null);
   assert.equal(resolveMoveTarget(row, rowPanes, "a", startA, -50, 0), null);
   assert.equal(resolveMoveTarget(row, rowPanes, "a", startA, 120, 0), "b");
-  assert.equal(resolveMoveTarget(row, rowPanes, "a", startA, 550, 0), "c");
+  assert.equal(resolveMoveTarget(row, rowPanes, "a", startA, 850, 0), "c");
   assert.equal(resolveMoveTarget(row, rowPanes, "a", startA, 1400, 0), "c");
   assert.equal(resolveMoveTarget(row, rowPanes, "a", startA, -400, 0), null);
   assert.equal(resolveMoveTarget(row, rowPanes, "a", startA, 0, -90), null);
 
-  const startB = toolbarHandleCenter(rowPanes.b, TOOLBAR_ROWS.regular, 0);
+  const startB = { x: 427, y: 19 };
   assert.equal(resolveMoveTarget(row, rowPanes, "b", startB, -100, 0), "a");
   assert.equal(resolveMoveTarget(row, rowPanes, "b", startB, 100, 0), "c");
 
-  const startC = toolbarHandleCenter(rowPanes.c, TOOLBAR_ROWS.regular, 0);
+  const startC = { x: 835, y: 19 };
   assert.equal(resolveMoveTarget(row, rowPanes, "c", startC, -100, 0), "b");
   assert.equal(resolveMoveTarget(row, rowPanes, "c", startC, -850, 0), "a");
   assert.equal(resolveMoveTarget(row, rowPanes, "c", startC, 120, 0), null);
@@ -54,10 +48,10 @@ test("resolveMoveTarget ignores micro-movements, hits any pane directly, holds o
 test("resolveMoveTarget handles vertical and nested stacked splits", () => {
   const column = { orientation: "vertical", slots: [{ size: 0.5, tabId: "top" }, { size: 0.5, tabId: "bottom" }] };
   const panes = { top: { x: 0, y: 0, width: 800, height: 340 }, bottom: { x: 0, y: 348, width: 800, height: 340 } };
-  assert.equal(resolveMoveTarget(column, panes, "top", { x: 400, y: 21 }, 120, 0), null);
-  assert.equal(resolveMoveTarget(column, panes, "top", { x: 400, y: 21 }, 0, 100), "bottom");
-  assert.equal(resolveMoveTarget(column, panes, "top", { x: 400, y: 21 }, 0, 800), "bottom");
-  assert.equal(resolveMoveTarget(column, panes, "bottom", { x: 400, y: 369 }, 0, -70), "top");
+  assert.equal(resolveMoveTarget(column, panes, "top", { x: 19, y: 19 }, 120, 0), null);
+  assert.equal(resolveMoveTarget(column, panes, "top", { x: 19, y: 19 }, 0, 100), "bottom");
+  assert.equal(resolveMoveTarget(column, panes, "top", { x: 19, y: 19 }, 0, 800), "bottom");
+  assert.equal(resolveMoveTarget(column, panes, "bottom", { x: 19, y: 367 }, 0, -70), "top");
 
   const stacked = { orientation: "horizontal", slots: [{ size: 0.5, tabId: "a" }, { size: 0.5, stack: ["b", "c"], stackSizes: [0.5, 0.5] }] };
   const stackedPanes = {
@@ -65,9 +59,9 @@ test("resolveMoveTarget handles vertical and nested stacked splits", () => {
     b: { x: 408, y: 0, width: 400, height: 346 },
     c: { x: 408, y: 354, width: 400, height: 346 },
   };
-  assert.equal(resolveMoveTarget(stacked, stackedPanes, "a", { x: 320, y: 21 }, 200, 420), "c");
-  assert.equal(resolveMoveTarget(stacked, stackedPanes, "c", { x: 720, y: 375 }, -400, 0), "a");
-  assert.equal(resolveMoveTarget(stacked, stackedPanes, "b", { x: 720, y: 21 }, 0, 340), "c");
+  assert.equal(resolveMoveTarget(stacked, stackedPanes, "a", { x: 19, y: 19 }, 500, 420), "c");
+  assert.equal(resolveMoveTarget(stacked, stackedPanes, "c", { x: 427, y: 373 }, -300, 0), "a");
+  assert.equal(resolveMoveTarget(stacked, stackedPanes, "b", { x: 427, y: 19 }, 0, 340), "c");
 });
 
 test("moveHandleTooltip adapts shortcut hints to horizontal, vertical, and stacked split topologies", () => {
@@ -75,10 +69,10 @@ test("moveHandleTooltip adapts shortcut hints to horizontal, vertical, and stack
   const horizontal = { orientation: "horizontal", slots: [{ size: 0.5, tabId: "a" }, { size: 0.5, tabId: "b" }] };
   const vertical = { orientation: "vertical", slots: [{ size: 0.5, tabId: "a" }, { size: 0.5, tabId: "b" }] };
   const stacked = { orientation: "horizontal", slots: [{ size: 0.5, tabId: "a" }, { size: 0.5, stack: ["b", "c"], stackSizes: [0.5, 0.5] }] };
-  assert.equal(moveHandleTooltip(horizontal, hints), "Drag to move split pane (⌃⌥← / ⌃⌥→)");
-  assert.equal(moveHandleTooltip(vertical, hints), "Drag to move split pane (⌃⌥↑ / ⌃⌥↓)");
-  assert.equal(moveHandleTooltip(stacked, hints), "Drag to move split pane (⌃⌥← / ⌃⌥→ / ⌃⌥↑ / ⌃⌥↓)");
-  assert.equal(moveHandleTooltip(horizontal, {}), "Drag to move split pane");
+  assert.equal(moveHandleTooltip(horizontal, hints), "Drag to move split pane · Right-click for actions (⌃⌥← / ⌃⌥→)");
+  assert.equal(moveHandleTooltip(vertical, hints), "Drag to move split pane · Right-click for actions (⌃⌥↑ / ⌃⌥↓)");
+  assert.equal(moveHandleTooltip(stacked, hints), "Drag to move split pane · Right-click for actions (⌃⌥← / ⌃⌥→ / ⌃⌥↑ / ⌃⌥↓)");
+  assert.equal(moveHandleTooltip(horizontal, {}), "Drag to move split pane · Right-click for actions");
 });
 
 test("split move icon loads the SVG directly with no PNG fallbacks", () => {
@@ -92,9 +86,12 @@ test("split move icon loads the SVG directly with no PNG fallbacks", () => {
   assert.doesNotMatch(iconSource, /\.png/);
 });
 
-test("over-page move handles only mount in toolbarless mode and never sit at the webpage top-left", () => {
+test("split move handle renders on hover at the top-left, opens the split actions menu on right-click, and cancels on Escape", () => {
   const handlesSource = readFileSync(new URL("./SplitMoveHandles.tsx", import.meta.url), "utf8");
-  assert.match(handlesSource, /const showEdgeHandles = chrome\.kind === "none";/);
-  assert.match(handlesSource, /edgeHandleOrigin\(rect, topChrome\)/);
+  assert.match(handlesSource, /handleOrigin\(rect, topChrome\)/);
+  assert.match(handlesSource, /const visible = \(hovered \|\| draggingThis\) && !obscured && !draggingAny;/);
+  assert.match(handlesSource, /<ContextMenuArea[\s\S]*captureDescendants[\s\S]*onContextMenu=\{openMenu\}/);
+  assert.match(handlesSource, /showSplitMenu\(cur\.tabId\)/);
   assert.match(handlesSource, /cancelSplitMoveDrag\(true,/);
+  assert.equal(existsSync(new URL("./SplitMoveButton.tsx", import.meta.url)), false);
 });

@@ -13,10 +13,10 @@ test("a window that isn't split keeps one toolbar above its panes, and each show
   assert.deepEqual(paneBar(card(), warm), { kind: "spacer" });
 });
 
-test("split panes and a window with a full-screen page keep a toolbar in each pane", () => {
-  assert.deepEqual(card({ split: true }), { kind: "pane", autoHide: false });
-  assert.deepEqual(paneBar(card({ split: true }), shown), { kind: "toolbar" });
-  assert.deepEqual(paneBar(card({ split: true }), warm), { kind: "spacer" });
+test("a window with a full-screen page keeps a toolbar on non-fullscreen panes, while split panes have no toolbar", () => {
+  assert.deepEqual(card({ split: true }), { kind: "none" });
+  assert.deepEqual(paneBar(card({ split: true }), shown), { kind: "none" });
+  assert.deepEqual(paneBar(card({ split: true }), warm), { kind: "none" });
   assert.deepEqual(card({ fullscreen: true }), { kind: "pane", autoHide: false });
   assert.deepEqual(paneBar(card({ fullscreen: true }), shown), { kind: "toolbar" });
 });
@@ -40,9 +40,10 @@ test("hide while scrolling: the window's bar follows the shown pane, which draws
   assert.deepEqual(paneBar(chrome, warm), { kind: "autoHide", bar: null });
 });
 
-test("hide while scrolling in a split: each pane hides its own bar", () => {
-  assert.deepEqual(paneBar(card({ split: true, hideWhileScrolling: true }), shown), { kind: "autoHide", bar: "pane" });
-  assert.deepEqual(paneBar(card({ split: true, hideWhileScrolling: true }), lingering), { kind: "autoHide", bar: "pane" });
+test("hide while scrolling in a split: split panes have no toolbar to hide", () => {
+  assert.deepEqual(card({ split: true, hideWhileScrolling: true }), { kind: "none" });
+  assert.deepEqual(paneBar(card({ split: true, hideWhileScrolling: true }), shown), { kind: "none" });
+  assert.deepEqual(paneBar(card({ split: true, hideWhileScrolling: true }), lingering), { kind: "none" });
 });
 
 test("a New Tab page lingering under the new tab keeps its band but doesn't take over the window's bar", () => {

@@ -22,7 +22,6 @@ import { copyPageUrl } from "../../state/site/selection";
 import { openSplitPane, pressClosePane, showSplitMenu } from "../../state/splits/actions";
 import { useSplitOrientation } from "../../state/splits/hooks";
 import { splitViewAvailable } from "../../state/splits/splits";
-import { SplitMoveButton } from "../split/SplitMoveButton";
 import { useEasedColor, type ToolbarPalette } from "../ui/toolbarColors";
 import { useSitePalette } from "./useSitePalette";
 import { setToolbarExtensionsWidth } from "../../state/windows/layout";
@@ -157,7 +156,6 @@ export const Toolbar = memo(function Toolbar({
         </View>
         {inSplit && (
           <View style={{ position: "absolute", top: at.top, right: trailing.splitRight + geometry.trailing, flexDirection: "row" }}>
-            <SplitMoveButton windowId={windowId} tabId={tabId} palette={palette} />
             <Button variant="icon" toolbar palette={palette} icon={splitOrientation === "vertical" ? "rectangle.split.1x2" : "rectangle.split.2x1"} look="row" onPress={splitMenu} tooltip="Split View" />
             <Button variant="icon" toolbar palette={palette} icon="xmark" look="row" weight="medium" onPress={closeThisPane} tooltip="Close Pane" />
           </View>

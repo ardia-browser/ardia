@@ -1,5 +1,4 @@
 import type { SplitView } from "../../state/browser/types";
-import { toolbarTrailing, type ToolbarRow } from "../../lib/toolbarRow";
 import { horizontalNeighbor, verticalNeighbor } from "../../state/splits/reorder";
 import { STRIP_HEIGHT } from "../../state/windows/toolbarAutoHide";
 import type { Rect } from "../window/geometry";
@@ -16,26 +15,8 @@ export function paneTopChrome(o: { chrome: CardChrome; toolbarHeight: number; co
   return share;
 }
 
-export function toolbarHandleCenter(rect: Rect, row: ToolbarRow, trailingRight = 0): Point {
-  const { splitRight } = toolbarTrailing(row, { pinnedWidth: 0, split: true });
-  return {
-    x: rect.x + rect.width - (splitRight + trailingRight + 2.5 * row.button),
-    y: rect.y + row.center,
-  };
-}
-
-export function edgeHandleOrigin(rect: Rect, topChrome: number): Point {
-  return {
-    x: rect.x + (rect.width - MOVE_HANDLE.edgeHitWidth) / 2,
-    y: rect.y + topChrome,
-  };
-}
-
-export function edgeHandleCenter(rect: Rect, topChrome: number): Point {
-  return {
-    x: rect.x + rect.width / 2,
-    y: rect.y + topChrome + MOVE_HANDLE.edgeNotchTop + MOVE_HANDLE.box / 2,
-  };
+export function handleOrigin(rect: Rect, topChrome: number, inset = MOVE_HANDLE.inset): Point {
+  return { x: rect.x + inset, y: rect.y + topChrome + inset };
 }
 
 const contains = (rect: Rect, x: number, y: number) => x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height;
@@ -103,5 +84,6 @@ export function moveHandleTooltip(split: Pick<SplitView, "orientation" | "slots"
       ? [hints.movePaneUp, hints.movePaneDown]
       : [hints.movePaneLeft, hints.movePaneRight];
   const present = keys.filter((k): k is string => !!k);
-  return present.length ? `Drag to move split pane (${present.join(" / ")})` : "Drag to move split pane";
+  const suffix = present.length ? ` (${present.join(" / ")})` : "";
+  return `Drag to move split pane · Right-click for actions${suffix}`;
 }

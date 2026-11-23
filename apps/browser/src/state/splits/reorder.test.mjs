@@ -144,7 +144,7 @@ test("swapping and cancelling split pane drags preserve slot sizes and record te
     assert.deepEqual(splitTabIds(S().splits[splitId]), [b, a]);
     assert.deepEqual(S().splits[splitId].slots.map((slot) => slot.size), [0.3, 0.7]);
 
-    beginSplitMoveDrag(w, a, "toolbar");
+    beginSplitMoveDrag(w, a, { x: 20, y: 20 });
     updateSplitMoveDrag(w, a, 20, 0, 4);
     cancelSplitMoveDrag(true, w);
     assert.deepEqual(splitTabIds(S().splits[splitId]), [b, a]);

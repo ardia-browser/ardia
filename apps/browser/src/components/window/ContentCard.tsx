@@ -214,19 +214,7 @@ export function ContentCard() {
       {split && !fullscreenTab && <SplitDividers split={split} dividers={dividers} width={size.width} height={size.height} />}
       {split && !fullscreenTab && activeRect && <SplitFocusRing rect={activeRect} origin={origin} windowShape={windowFullScreen ? null : windowShape} />}
       {size.width > 0 && split && !fullscreenTab && (
-        <SplitMoveHandles
-          windowId={windowId}
-          split={split}
-          panes={panes}
-          activeId={activeId}
-          chrome={chrome}
-          small={small}
-          toolbarRow={toolbarRow}
-          cardWidth={size.width}
-          captionRoom={captionRoom}
-          pageBars={pageBars}
-          cardRadius={frame.radius}
-        />
+        <SplitMoveHandles windowId={windowId} split={split} panes={panes} activeId={activeId} chrome={chrome} small={small} toolbarHeight={toolbarRow.height} pageBars={pageBars} cardRadius={frame.radius} />
       )}
       {size.width > 0 && popoversOverCard && origin && activeRect && peek !== undefined && (
         <BesidePeekPopovers

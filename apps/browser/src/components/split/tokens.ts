@@ -10,7 +10,6 @@ const DARK = {
   moveHandleHoverFill: "rgba(44,42,43,0.94)",
   moveHandleHoverBorder: "rgba(255,255,255,0.22)",
   moveHandleHoverIcon: "#FFFFFFF2",
-  moveNotch: "rgba(255,255,255,0.28)",
   moveSourceScrim: "rgba(0,0,0,0.14)",
 };
 
@@ -23,7 +22,6 @@ const LIGHT: typeof DARK = {
   moveHandleHoverFill: "rgba(255,255,255,0.96)",
   moveHandleHoverBorder: "rgba(0,0,0,0.18)",
   moveHandleHoverIcon: "#000000E6",
-  moveNotch: "rgba(0,0,0,0.22)",
   moveSourceScrim: "rgba(0,0,0,0.06)",
 };
 
@@ -38,11 +36,6 @@ export const MOVE_HANDLE = {
   box: 22,
   glyph: 12,
   inset: space.m,
-  edgeHitWidth: 44,
-  edgeHitHeight: 14,
-  edgeNotchWidth: 24,
-  edgeNotchHeight: 3,
-  edgeNotchTop: 4,
   dragSlop: 4,
   intentFraction: 0.28,
   intentCap: 96,

@@ -85,8 +85,7 @@ try {
   check("closing it: the toolbar shows the tab shown after it", closed.toolbars.length === 1 && closed.toolbars[0].tabId === closed.active && closed.active !== opened.id, JSON.stringify(closed));
 
   const split = await ac(`${S} S().createSplit(["a", "b"]); S().activate("a"); return wt.frames(6).then(() => wt.state());`);
-  const paneBars = split.auto.filter((t) => t.pane).map((t) => t.tabId).sort();
-  check("a split: each pane has its own toolbar, the window has none", split.auto.every((t) => t.pane) && paneBars.join() === "a,b", JSON.stringify(split.auto));
+  check("a split: panes have no toolbar and the window has none", split.toolbars.length === 0 && split.auto.length === 0, JSON.stringify({ toolbars: split.toolbars, auto: split.auto }));
   const unsplit = await ac(`${S} for (const id of Object.keys(S().splits)) S().separateSplit(id); S().activate("d"); return wt.frames(6).then(() => wt.state());`);
   check("out of the split: back to one window toolbar", unsplit.auto.length === 1 && !unsplit.auto[0].pane && unsplit.auto[0].tabId === "d", JSON.stringify(unsplit.auto));
 } catch (e) {

@@ -1,5 +1,6 @@
 import type { BrowserState } from "../browser/store";
 import { activeTabId, tabsShownIn } from "../browser/model";
+import { splitOf } from "../splits/splits";
 import { addressBarInSidebar, minimalismIn } from "../windows/layout";
 import { peekShown } from "../windows/dockMotion";
 import { usePages } from "../tabs/pageState";
@@ -16,7 +17,7 @@ export function addressFieldShown(s: BrowserState, windowId: string): boolean {
   if (!s.windows[windowId] || minimalismIn(s, windowId)) return false;
   if (addressBarInSidebar(s, windowId)) return tabsShownIn(s, windowId) || peekShown(windowId);
   const tabId = activeTabId(s, windowId);
-  return !!tabId && !!s.tabs[tabId]?.url && !usePages.getState().pages[tabId]?.fullscreen;
+  return !!tabId && !!s.tabs[tabId]?.url && !splitOf(s, tabId) && !usePages.getState().pages[tabId]?.fullscreen;
 }
 
 export const commandKeyPlacement = (s: BrowserState, windowId: string): BarPlacement =>

@@ -2,13 +2,10 @@ import { create } from "zustand";
 import { consentToken, type ConsentToken } from "../telemetry/client";
 import { noteSplitPaneDragCancel } from "../telemetry/splitReorderCounts";
 
-export type SplitMoveSource = "toolbar" | "edge";
-
 export type ActiveSplitMoveDrag = {
   windowId: string;
   tabId: string;
-  source: SplitMoveSource;
-  edgeStart: { x: number; y: number } | null;
+  start: { x: number; y: number };
   dx: number;
   dy: number;
   moved: boolean;
@@ -26,10 +23,10 @@ export function registerSplitMoveCommit(windowId: string, handler: CommitHandler
   else commitHandlers.delete(windowId);
 }
 
-export function beginSplitMoveDrag(windowId: string, tabId: string, source: SplitMoveSource, edgeStart: { x: number; y: number } | null = null) {
+export function beginSplitMoveDrag(windowId: string, tabId: string, start: { x: number; y: number }) {
   cancelled = false;
   useMoveDragStore.setState({
-    drag: { windowId, tabId, source, edgeStart, dx: 0, dy: 0, moved: false, consent: consentToken() },
+    drag: { windowId, tabId, start, dx: 0, dy: 0, moved: false, consent: consentToken() },
   });
 }
 

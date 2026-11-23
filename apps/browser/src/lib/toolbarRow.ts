@@ -35,7 +35,7 @@ export function toolbarTrailing(row: ToolbarRow, o: { pinnedWidth: number; split
   const inkGap = TOOLBAR_TRAILING.itemGap + 2 * iconInset;
   const splitInset = (row.button - TOOLBAR_TRAILING.splitGlyph) / 2;
   const splitRight = inkGap - splitInset;
-  const splitWidth = 3 * row.button;
+  const splitWidth = 2 * row.button;
   const splitInk = o.split ? splitRight + splitWidth - splitInset : 0;
   const nextInk = splitInk + inkGap;
   const splitLeft = o.split ? splitRight + splitWidth : 0;

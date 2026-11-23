@@ -72,6 +72,11 @@ test("with At the address or In the centre, a click on the address opens at the 
 test("⌘L in each layout", () => {
   let w = pageWindow({ commandBarPlacement: "field", addressBar: "toolbar" });
   assert.equal(commandKeyPlacement(S(), w), "field");
+  const second = S().newTab(w, { url: "https://example.org/", background: true });
+  const first = S().windows[w].tabIds[0];
+  S().createSplit([first, second]);
+  assert.equal(addressFieldShown(S(), w), false);
+  assert.equal(commandKeyPlacement(S(), w), "centredNoField");
   w = pageWindow({ commandBarPlacement: "field", addressBar: "sidebar", tabLayout: "sidebar", autoHideTabs: false });
   assert.equal(commandKeyPlacement(S(), w), "field");
   w = pageWindow({ commandBarPlacement: "field", addressBar: "sidebar", tabLayout: "sidebar", autoHideTabs: true });

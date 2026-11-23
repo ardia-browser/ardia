@@ -29,7 +29,7 @@ test("on Windows a card whose top row is shorter than the caption buttons starts
 });
 
 test("Linux starts with the Windows build's buttons at the trailing top and switches to the traffic lights at the leading top and back", async () => {
-  const linux = await import("./platformChrome.linux.ts");
+  const linux = await import("./platformChrome.desktop.ts");
   assert.deepEqual(linux.WINDOW_BUTTON_STYLES, ["native", "trafficLights", "hidden"]);
   assert.deepEqual(linux.WINDOW_CHROME, windows);
   assert.notEqual(linux.WINDOW_CHROME, windows, "switching on Linux never changes the Windows build's chrome");
@@ -44,7 +44,7 @@ test("Linux starts with the Windows build's buttons at the trailing top and swit
 });
 
 test("Linux with the window buttons hidden draws no caption buttons and keeps no room for them at either top corner", async () => {
-  const linux = await import("./platformChrome.linux.ts");
+  const linux = await import("./platformChrome.desktop.ts");
   const { windowControlsDrawn } = await import("./windowChrome.ts");
   for (const from of ["native", "trafficLights"]) {
     linux.applyWindowButtonStyle(from);
@@ -74,7 +74,7 @@ test("the Mac, Windows and the web demo offer no choice of window buttons", asyn
 });
 
 test("Linux's native buttons take the desktop's layout: room at each top corner for the buttons drawn there, the default matching Windows", async () => {
-  const linux = await import("./platformChrome.linux.ts");
+  const linux = await import("./platformChrome.desktop.ts");
   const { parseButtonLayout } = await import("./windowButtonLayout.ts");
   const { windowControlsDrawn } = await import("./windowChrome.ts");
   const chrome = (raw) => linux.nativeButtonsChrome(parseButtonLayout(raw));
@@ -98,7 +98,7 @@ test("Linux's native buttons take the desktop's layout: room at each top corner 
 });
 
 test("only the traffic lights count as traffic lights: the onboarding previews draw Mac dots for them, not for native buttons at the left", async () => {
-  const linux = await import("./platformChrome.linux.ts");
+  const linux = await import("./platformChrome.desktop.ts");
   const { parseButtonLayout } = await import("./windowButtonLayout.ts");
   const { trafficLightsDrawn } = await import("./windowChrome.ts");
   const left = linux.nativeButtonsChrome(parseButtonLayout("close,minimize,maximize:"));

@@ -30,7 +30,17 @@ export const windowRootWidth = (s: Pick<BrowserState, "windows">, windowId: stri
 
 export const onWindowRootSizes = (listener: () => void): (() => void) => useRootSizes.subscribe(listener);
 
-export const useMeasuredWindowRootSize = (windowId: string): RootSize | undefined => useRootSizes((sizes) => sizes[windowId]);
+export function onWindowRootSize(windowId: string, listener: (size: RootSize) => void): () => void {
+  let last: RootSize | undefined;
+  const read = () => {
+    const size = useRootSizes.getState()[windowId];
+    if (size && size !== last) listener((last = size));
+  };
+  read();
+  return useRootSizes.subscribe(read);
+}
+
+export const useWindowRootSize = (windowId: string): RootSize | undefined => useRootSizes((sizes) => sizes[windowId]);
 
 export function useWindowRootWidth(windowId: string): number | undefined {
   const frameWidth = useKeyed(watchWindowRecord, windowId, () => useBrowser.getState().windows[windowId]?.frame?.[2]);

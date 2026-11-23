@@ -1,0 +1,17 @@
+[package]
+name = "ardia-update-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+default = ["rustcrypto"]
+rustcrypto = ["ardia-crypto/rustcrypto"]
+
+[dependencies]
+ardia-crypto = { workspace = true, features = ["ed25519"] }
+
+[dev-dependencies]
+ed25519-dalek = { workspace = true }
+serde_json.workspace = true

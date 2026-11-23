@@ -152,7 +152,7 @@ A new secret: add its kind to `SECRET_KINDS`, brand it where it enters JS, revea
 source, canary and rows to the test.
 
 **Linux.** Sync runs in one window; the others forward their calls over a `BroadcastChannel`, which would clone a
-`Secret` into an empty object. `apps/linux/src/syncAuthority.ts` carries only the phrase argument of
+`Secret` into an empty object. `apps/desktop/src/syncAuthority.ts` carries only the phrase argument of
 `enterRecoveryPhrase` across, as its kind and text, and brands it again on arrival only in that position; a secret in
 any other argument is refused before it is sent (`hostSync.test.mjs`). The channel reaches every window of the app's
 own origin, as it did before secrets were branded; moving the phrase to a host route bound to the sync window is left

@@ -6,7 +6,7 @@ import { settingsSnapshot } from "../telemetry/settingsSnapshot.ts";
 import { startWindowButtonStyle, windowButtonStyleIn } from "../windows/windowButtons.ts";
 import { unshownSettings } from "../../components/settings/settingsIndex.ts";
 
-const linux = await import("../../lib/platformChrome.linux.ts");
+const linux = await import("../../lib/platformChrome.desktop.ts");
 
 test("window buttons default to native, stay on this device, sit in config files and in the daily settings snapshot", () => {
   assert.equal(DEFAULT_SETTINGS.windowButtons, "native");

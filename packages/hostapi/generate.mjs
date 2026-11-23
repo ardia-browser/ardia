@@ -15,17 +15,38 @@ export const MANIFEST = `${GENERATED_TS}manifest.json`;
 export const SWIFT = "packages/ardiacore/ios/";
 export const HOSTS = ["mac", "desktop", "windows"];
 const BINDINGS = { mac: new Set(["service", "custom", "absent"]), desktop: new Set(["route", "custom", "absent"]), windows: new Set(["service", "custom", "absent"]) };
+const EVENT_BINDINGS = new Set(["forward", "custom", "absent"]);
 const NAME = /^[a-z][a-zA-Z]*$/;
 const SERVICE = /^ac_[a-z][a-z_]*$/;
 const TYPE_NAME = /^[A-Z][A-Za-z0-9]*$/;
+const TOPIC = /^[a-z][a-zA-Z]*(\.[a-z][a-zA-Z]*)?$/;
+const CLIENT_PACKAGE = "packages/ardiacore/package.json";
+export const clientPackages = new Set(Object.keys(JSON.parse(readFileSync(ROOT + CLIENT_PACKAGE, "utf8")).dependencies ?? {}));
+const isRelative = (path) => path.startsWith("./") || path.startsWith("../");
 
 const capitalized = (name) => name[0].toUpperCase() + name.slice(1);
 const sortedKeys = (record) => Object.keys(record).sort();
+const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 
 export async function loadDomains() {
   const { domains } = await import(new URL("./schema/index.ts", import.meta.url).href);
   for (const [name, domain] of Object.entries(domains)) validate(name, domain);
+  validateTopics(domains);
   return domains;
+}
+
+export function validateTopics(domains) {
+  for (const host of HOSTS) {
+    const owners = new Map();
+    for (const [name, domain] of Object.entries(domains)) {
+      for (const [event, row] of Object.entries(domain.events ?? {})) {
+        if (eventBindingOf(row, host) !== "forward") continue;
+        const topic = row.topic ?? `${name}.${event}`;
+        if (owners.has(topic)) throw new Error(`schema ${name}: event ${event} and ${owners.get(topic)} both take engine topic ${topic} on ${host}, which forwards a topic as one event`);
+        owners.set(topic, `${name}.${event}`);
+      }
+    }
+  }
 }
 
 export function validate(name, domain) {
@@ -35,7 +56,7 @@ export function validate(name, domain) {
   if (!NAME.test(name)) fail("the domain's name is lowerCamelCase letters");
   if (domain.kind !== "engine") fail("kind is engine: JSON calls to ac_* services; positional module domains have no generator yet");
   for (const [path, names] of Object.entries(domain.imports ?? {})) {
-    if (!path.startsWith(".")) fail(`import ${path} is relative to the generated folder`);
+    if (!isRelative(path) && !clientPackages.has(path)) fail(`import ${path} is relative to the generated folder, or a package ${CLIENT_PACKAGE} depends on`);
     for (const type of names) if (!TYPE_NAME.test(type)) fail(`import ${type} from ${path} is a type name`);
   }
   for (const [verb, call] of Object.entries(domain.calls ?? {})) {
@@ -45,20 +66,32 @@ export function validate(name, domain) {
     if (call.desktop === undefined) fail(`${verb} says whether the desktop host routes it: desktop is route, custom or absent, never implied`);
     for (const host of HOSTS) if (call[host] !== undefined && !BINDINGS[host].has(call[host])) fail(`${verb}.${host} is one of ${[...BINDINGS[host]].join(", ")}`);
     if (call.service !== undefined && !SERVICE.test(call.service)) fail(`${verb}'s service is an ac_* call`);
+    if (call.routeField !== undefined && call.desktop !== "route") fail(`${verb}.routeField picks the field of the engine's reply a desktop route answers with, so it goes only with desktop: route`);
+    if (call.routeField !== undefined && (typeof call.routeField !== "string" || !NAME.test(call.routeField))) fail(`${verb}.routeField is a string: a lowerCamelCase field of the engine's reply, or "null" to answer null`);
     if (call.service === undefined && HOSTS.some((host) => passesStraight(call, host))) fail(`${verb}'s service is an ac_* call: a host passes it straight to the engine`);
   }
-  for (const [event, type] of Object.entries(domain.events ?? {})) {
+  for (const [event, row] of Object.entries(domain.events ?? {})) {
     if (!NAME.test(event)) fail(`event ${event} is lowerCamelCase letters`);
-    if (typeof type !== "string" || !type.trim()) fail(`event ${event} names its payload type`);
+    if (!isRecord(row)) fail(`event ${event} is { payload, desktop } with any mac or windows binding`);
+    if (typeof row.payload !== "string" || !row.payload.trim()) fail(`event ${event} names its payload type`);
+    if (row.desktop === undefined) fail(`event ${event} says whether the desktop host forwards it: desktop is forward, custom or absent, never implied`);
+    for (const host of HOSTS) if (row[host] !== undefined && !EVENT_BINDINGS.has(row[host])) fail(`event ${event}.${host} is one of ${[...EVENT_BINDINGS].join(", ")}`);
+    if (row.topic === undefined) continue;
+    if (typeof row.topic !== "string" || !TOPIC.test(row.topic)) fail(`event ${event}'s topic is the engine topic a host forwards, letters with at most one dot`);
+    if (row.topic === `${name}.${event}`) fail(`event ${event} leaves out topic when the engine topic is the event's own name`);
+    if (row.desktop === "forward") fail(`event ${event} is renamed from topic ${row.topic}, and the desktop host forwards a topic only under its own name`);
+    if (!HOSTS.some((host) => eventBindingOf(row, host) === "forward")) fail(`event ${event}'s topic is only for a host that forwards it`);
   }
 }
 
 export const bindingOf = (call, host) => call[host] ?? "service";
+export const eventBindingOf = (event, host) => event[host] ?? "forward";
 const passesStraight = (call, host) => bindingOf(call, host) === (host === "desktop" ? "route" : "service");
 
 function typescript(name, domain) {
   const lines = [];
-  for (const path of sortedKeys(domain.imports ?? {})) {
+  const paths = sortedKeys(domain.imports ?? {});
+  for (const path of [...paths.filter((path) => !isRelative(path)), ...paths.filter(isRelative)]) {
     lines.push(`import type { ${[...domain.imports[path]].sort().join(", ")} } from "${path}";`);
   }
   if (lines.length) lines.push("");
@@ -67,7 +100,7 @@ function typescript(name, domain) {
     return [`export type ${typeName} = {`, ...rows.map((row) => `  ${row}`), "};"];
   };
   const calls = Object.entries(domain.calls ?? {}).map(([verb, call]) => `"${name}.${verb}": [${call.args}, ${call.result}];`);
-  const events = Object.entries(domain.events ?? {}).map(([event, type]) => `"${name}.${event}": ${type};`);
+  const events = Object.entries(domain.events ?? {}).map(([event, row]) => `"${name}.${event}": ${row.payload};`);
   lines.push(...block(`${capitalized(name)}Calls`, calls), "", ...block(`${capitalized(name)}Events`, events));
   return `${lines.join("\n")}\n`;
 }
@@ -128,14 +161,22 @@ function manifest(domains) {
     const domain = domains[name];
     const calls = {};
     for (const [verb, call] of Object.entries(domain.calls ?? {})) {
-      calls[verb] = { ...(call.service === undefined ? {} : { service: call.service }), ...Object.fromEntries(HOSTS.map((host) => [host, bindingOf(call, host)])) };
+      calls[verb] = {
+        ...(call.service === undefined ? {} : { service: call.service }),
+        ...Object.fromEntries(HOSTS.map((host) => [host, bindingOf(call, host)])),
+        ...(call.routeField === undefined ? {} : { routeField: call.routeField }),
+      };
+    }
+    const events = {};
+    for (const [event, row] of Object.entries(domain.events ?? {})) {
+      events[event] = { topic: row.topic ?? `${name}.${event}`, ...Object.fromEntries(HOSTS.map((host) => [host, eventBindingOf(row, host)])) };
     }
     out.domains[name] = {
       kind: domain.kind,
       types: `${GENERATED_TS}${name}.ts`,
       swift: swiftPath(name, domain),
       calls,
-      events: Object.keys(domain.events ?? {}),
+      events,
     };
   }
   return `${JSON.stringify(out, null, 2)}\n`;
@@ -166,12 +207,10 @@ function previousManifest() {
   return previous;
 }
 
-const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
-
 function previousDomain(name, entry) {
   if (!NAME.test(name) || !isRecord(entry) || entry.kind !== "engine" || !isRecord(entry.calls)) return null;
-  const events = entry.events ?? [];
-  if (!Array.isArray(events) || !events.every((event) => typeof event === "string" && NAME.test(event))) return null;
+  const events = Array.isArray(entry.events) ? entry.events : isRecord(entry.events) ? Object.keys(entry.events) : entry.events === undefined ? [] : null;
+  if (events === null || !events.every((event) => typeof event === "string" && NAME.test(event))) return null;
   for (const [verb, call] of Object.entries(entry.calls)) {
     if (!NAME.test(verb) || !isRecord(call)) return null;
     if (call.service !== undefined && (typeof call.service !== "string" || !SERVICE.test(call.service))) return null;

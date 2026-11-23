@@ -6,6 +6,6 @@ Things to try:
 - The page menu (the chevron): Reader, Find on Page, Night Shade, Page Zoom.
 - Settings > Color: pick a color and check that the whole app follows it, in light and dark.
 - Make Ardia your default browser from Settings > Default Browser in Ardia, then open a link from another app.
-- If you use Ardia on a Mac: on the Mac, Settings > Sync > Connect Another Device shows a code. Scan it here, pick the Ardia Sync folder in iCloud Drive, and check that tabs show up on both.
+- If you use Ardia on a Mac: on the Mac, Settings > General > Sync > Connect Another Device shows a code. Scan it here, pick the Ardia Sync folder in iCloud Drive, and check that tabs show up on both.
 
 Send feedback with a screenshot from TestFlight, or shake the phone while the app is open.

@@ -19,10 +19,12 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/no_destructor.h"
 #include "base/one_shot_event.h"
@@ -303,31 +305,51 @@ class LinuxContentBlocker : public ProfileObserver, public content::WebContentsO
     return !leader_ && follows_.get() == leader && load_ == Load::kLoaded;
   }
 
-  void FollowAll() {
+  struct FollowCount : base::RefCounted<FollowCount> {
+    explicit FollowCount(base::OnceCallback<void(int)> done) : done(std::move(done)) {}
+    void Finished(bool ok) {
+      if (!ok) failed++;
+      if (--waiting == 0 && done) std::move(done).Run(failed);
+    }
+    base::OnceCallback<void(int)> done;
+    int waiting = 1;
+    int failed = 0;
+
+   private:
+    friend class base::RefCounted<FollowCount>;
+    ~FollowCount() = default;
+  };
+
+  void FollowAll(base::OnceCallback<void(int)> done = base::DoNothing()) {
     bool followers = false;
     for (auto& [profile, blocker] : All()) followers = followers || blocker->Follows(this);
-    if (!followers) return;
-    Call(Internal(controls::BlockerOp::kSettings), base::BindOnce([](base::WeakPtr<LinuxContentBlocker> leader, bool ok,
+    if (!followers) return std::move(done).Run(0);
+    Call(Internal(controls::BlockerOp::kSettings), base::BindOnce([](base::WeakPtr<LinuxContentBlocker> leader,
+                                                                     base::OnceCallback<void(int)> done, bool ok,
                                                                      base::Value settings) {
-      if (!leader) return;
+      if (!leader) return std::move(done).Run(1);
       std::optional<controls::BlockerSettings> parsed = ok ? controls::ParseBlockerSettings(settings) : std::nullopt;
       if (!parsed) {
         LOG(WARNING) << "Ardia content blocker: the default profile's settings can't be copied: "
                      << ErrorText(settings, "no settings to copy");
-        return;
+        return std::move(done).Run(1);
       }
+      auto count = base::MakeRefCounted<FollowCount>(std::move(done));
       for (auto& [profile, blocker] : All()) {
         if (!blocker->Follows(leader.get())) continue;
         controls::BlockerRequest follow = Internal(controls::BlockerOp::kFollow);
         follow.settings = *parsed;
-        blocker->Call(std::move(follow), base::BindOnce([](bool ok, base::Value result) {
+        count->waiting++;
+        blocker->Call(std::move(follow), base::BindOnce([](scoped_refptr<FollowCount> count, bool ok, base::Value result) {
           if (!ok) {
             LOG(WARNING) << "Ardia content blocker: an isolated profile didn't follow the default profile: "
                          << ErrorText(result, "no answer");
           }
-        }));
+          count->Finished(ok);
+        }, count));
       }
-    }, weak_factory_.GetWeakPtr()));
+      count->Finished(true);
+    }, weak_factory_.GetWeakPtr(), std::move(done)));
   }
 
   void Start() {
@@ -521,8 +543,18 @@ class LinuxContentBlocker : public ProfileObserver, public content::WebContentsO
     waiting_.erase(found);
     const bool failed = !value;
     const std::string* error_text = failed ? &error : nullptr;
-    const bool announce = !failed && controls::Mutates(call.request.op) && leader_;
-    Reply(std::move(done), controls::CompleteBlockerCall(call.request, value, error_text, version_));
+    const bool announce = !failed && controls::ChangedBlocker(call.request.op, value) && leader_;
+    auto reply = controls::CompleteBlockerCall(call.request, value, error_text, version_);
+    if (!failed && leader_ && controls::WaitsForFollowers(call.request.op)) {
+      if (announce) AnnounceChange();
+      FollowAll(base::BindOnce(
+          [](SiteControlsDone done, std::variant<base::Value, controls::Failure> reply, int failed_copies) {
+            Reply(std::move(done), controls::AfterFollowers(std::move(reply), failed_copies));
+          },
+          std::move(done), std::move(reply)));
+      return;
+    }
+    Reply(std::move(done), std::move(reply));
     if (announce) {
       AnnounceChange();
       FollowAll();

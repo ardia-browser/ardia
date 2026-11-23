@@ -75,7 +75,7 @@ export const SETTING_SPECS = {
   newTabOpens: oneOf(["page", "commandBar"], "page", SYNCED),
   newTabUrl: text("", SYNCED),
   warnBeforeClosingLastTab: flag(true, SYNCED),
-  afterClosingTab: oneOf(["previouslyActive", "tabAbove"], "previouslyActive", SYNCED),
+  afterClosingTab: oneOf(["previouslyActive", "tabAbove", "tabBelow"], "previouslyActive", SYNCED),
   keepTopAppsRunning: flag(false, SYNCED),
   tabReorderHaptics: flag(true, SYNCED),
   swipeBetweenTabs: flag(true, SYNCED),

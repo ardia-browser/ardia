@@ -107,8 +107,8 @@ export const appearanceRows = {
         },
         afterClosingTab: {
           title: "After closing a tab",
-          description: "Go back to the previously active tab, or to the tab above (or to the left across the top).",
-          keywords: ["close tab", "closing", "closing tab", "closing a tab", "tab closing", "tab close", "after closing", "after close", "close behavior", "close behaviour", "cmd w", "next tab", "previous tab", "tab above", "tab to the left", "neighbour", "neighbor", "adjacent", "adjacent tab", "last used", "previously active", "focus", "select", "activate", "mru", "arc", "chrome", "firefox"],
+          description: "Go back to the previously active tab, or to the tab above or below (to the left or right across the top).",
+          keywords: ["close tab", "closing", "closing tab", "closing a tab", "tab closing", "tab close", "after closing", "after close", "close behavior", "close behaviour", "cmd w", "next tab", "previous tab", "tab above", "tab to the left", "tab below", "tab to the right", "neighbour", "neighbor", "adjacent", "adjacent tab", "last used", "previously active", "focus", "select", "activate", "mru", "arc", "chrome", "firefox"],
         },
       },
     },

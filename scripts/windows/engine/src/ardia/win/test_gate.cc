@@ -3,15 +3,18 @@
 #include <windows.h>
 
 #include <algorithm>
+#include <initializer_list>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "base/base_paths_win.h"
 #include "base/files/file_path.h"
 #include "base/no_destructor.h"
 #include "base/path_service.h"
+#include "chrome/install_static/user_data_dir.h"
 
 namespace ardia_win {
 
@@ -102,20 +105,22 @@ bool Overlaps(std::wstring_view a, std::wstring_view b) {
   return WithinOrSame(a, b) || WithinOrSame(b, a);
 }
 
-std::wstring RealFolderClashOf(const std::vector<std::wstring>& canonical) {
+std::wstring RealFolderClashOf(const std::vector<std::wstring>& canonical,
+                               std::initializer_list<const wchar_t*> names) {
   for (int key : {base::DIR_LOCAL_APP_DATA, base::DIR_ROAMING_APP_DATA}) {
     base::FilePath folder;
     if (!base::PathService::Get(key, &folder) || folder.empty()) {
       return L"the real profile folder can't be resolved";
     }
-    std::optional<std::wstring> real =
-        CanonicalPath(folder.Append(FILE_PATH_LITERAL("Ardia")));
-    if (!real) {
-      return L"the real profile folder can't be resolved";
-    }
-    for (const std::wstring& mine : canonical) {
-      if (Overlaps(mine, *real)) {
-        return L"ARDIA_DATA_DIR is or overlaps the real profile folder";
+    for (const wchar_t* name : names) {
+      std::optional<std::wstring> real = CanonicalPath(folder.Append(name));
+      if (!real) {
+        return L"the real profile folder can't be resolved";
+      }
+      for (const std::wstring& mine : canonical) {
+        if (Overlaps(mine, *real)) {
+          return L"ARDIA_DATA_DIR is or overlaps the real profile folder";
+        }
       }
     }
   }
@@ -133,7 +138,7 @@ std::wstring RealFolderClash(const base::FilePath& data_dir) {
     }
     canonical.push_back(*resolved);
   }
-  return RealFolderClashOf(canonical);
+  return RealFolderClashOf(canonical, {L"Ardia", L"Ardia WebUI"});
 }
 
 std::vector<HANDLE>& HeldFolders() {
@@ -248,7 +253,67 @@ std::wstring HoldScratchFolders(const std::wstring& data_dir,
     return L"Chromium would open its folder by another path than the one "
            L"held (a junction, a short name or a mapped drive in the way)";
   }
-  return RealFolderClashOf(canonical);
+  return RealFolderClashOf(canonical, {L"Ardia", L"Ardia WebUI"});
+}
+
+bool SameFolder(const std::wstring& a, const std::wstring& b) {
+  if (a.empty() || b.empty()) {
+    return false;
+  }
+  const std::optional<std::wstring> first = CanonicalPath(base::FilePath(a));
+  const std::optional<std::wstring> second = CanonicalPath(base::FilePath(b));
+  return first && second && SameText(*first, *second);
+}
+
+base::FilePath AppDataRoot(const wchar_t* variable, int key) {
+  wchar_t value[MAX_PATH];
+  const DWORD length = ::GetEnvironmentVariableW(variable, value, MAX_PATH);
+  if (length > 0 && length < MAX_PATH) {
+    return base::FilePath(std::wstring(value, length));
+  }
+  base::FilePath folder;
+  return base::PathService::Get(key, &folder) ? folder : base::FilePath();
+}
+
+std::vector<std::optional<std::wstring>> ReactNativeFolders() {
+  std::vector<std::optional<std::wstring>> folders;
+  for (const auto& [variable, key] :
+       {std::pair(L"LOCALAPPDATA", static_cast<int>(base::DIR_LOCAL_APP_DATA)),
+        std::pair(L"APPDATA", static_cast<int>(base::DIR_ROAMING_APP_DATA))}) {
+    const base::FilePath base_folder = AppDataRoot(variable, key);
+    if (base_folder.empty()) {
+      folders.push_back(std::nullopt);
+      continue;
+    }
+    const base::FilePath root = base_folder.Append(FILE_PATH_LITERAL("Ardia"));
+    folders.push_back(CanonicalPath(root));
+    folders.push_back(CanonicalPath(root.Append(FILE_PATH_LITERAL("User Data"))));
+  }
+  return folders;
+}
+
+std::wstring ReactNativeFolderClash(const std::vector<std::wstring>& folders) {
+  const std::vector<std::optional<std::wstring>> theirs = ReactNativeFolders();
+  for (const std::wstring& folder : folders) {
+    std::optional<std::wstring> mine = CanonicalPath(base::FilePath(folder));
+    if (!mine) {
+      return L"the WebUI folder " + folder + L" can't be resolved";
+    }
+    if (install_static::WebUITreeHasLink(*mine, nullptr, nullptr)) {
+      return L"the WebUI folder " + folder +
+             L" holds a link or a folder that can't be listed";
+    }
+    for (const std::optional<std::wstring>& protected_folder : theirs) {
+      if (!protected_folder) {
+        return L"a React Native app folder can't be resolved";
+      }
+      if (Overlaps(*mine, *protected_folder)) {
+        return L"the WebUI folder " + folder +
+               L" resolves to the React Native app's " + *protected_folder;
+      }
+    }
+  }
+  return std::wstring();
 }
 
 }

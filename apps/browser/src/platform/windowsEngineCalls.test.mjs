@@ -5,7 +5,7 @@ import { domainCall, domainFunctions, domainsOf, reproduced, topicRouter } from 
 import { watchDownloads } from "../../../../packages/expo-windows/src/engine/domains/downloads.ts";
 import { readArgs } from "../../../../packages/expo-windows/src/engine/domains/calling.ts";
 import { privateWindowShown } from "../../../../packages/expo-windows/src/engine/privateWindows.ts";
-import { typeRows } from "../../../../packages/ardiacore/src/engine/apiRows.mjs";
+import { readManifest, typeRows } from "../../../../packages/ardiacore/src/engine/apiRows.mjs";
 
 const repo = new URL("../../../../", import.meta.url);
 const read = (path) => readFileSync(new URL(path, repo), "utf8");
@@ -14,7 +14,7 @@ const windowsDomains = "packages/expo-windows/src/engine/domains/";
 const engineSources = "engine/chromium/src/chrome/browser/ardia/";
 const rows = JSON.parse(read(`${windowsDomains}forwarded.json`));
 const MAC_ONLY = new Set(["swipe", "webKit"]);
-const WINDOWS_ONLY = { extensions: ["toolbarContext"] };
+const { domains: schemaDomains } = readManifest();
 const ENGINE_CALL = /^AC_(?:PROFILE|ARGS)_CALL\(\s*(ac_\w+)/gm;
 const windowsEngineCalls = new Set(
   read("scripts/windows/engine/accepted-layer-sources.txt")
@@ -103,7 +103,8 @@ test("Windows implements the Mac's call table and its platform-specific calls", 
   for (const [domain, table] of Object.entries(mac)) {
     const kinds = [Object.keys(rows.forwarded[domain] ?? {}), Object.keys(reproduced[domain] ?? {}), rows.missing[domain] ?? []];
     const onWindows = kinds.flat();
-    assert.deepEqual(sorted(onWindows), sorted([...table.verbs, ...(WINDOWS_ONLY[domain] ?? [])]), `${domain} has its expected verbs`);
+    const windowsOnly = Object.entries(schemaDomains[domain]?.calls ?? {}).filter(([, call]) => call.mac === "absent" && call.windows === "custom").map(([verb]) => verb);
+    assert.deepEqual(sorted(onWindows), sorted([...table.verbs, ...windowsOnly]), `${domain} has its expected verbs`);
     assert.equal(new Set(onWindows).size, onWindows.length, `${domain} answers each verb one way`);
   }
 });
@@ -453,6 +454,19 @@ test("engine.info answers from the engine host in the Mac's shape", async () => 
     chromeWindows: 0,
   });
   assert.deepEqual(engine.hosted, ["host.info"]);
+});
+
+test("favicons.peek reads through ac_favicons_peek, and an engine without it answers with ac_favicons_get as main did", async () => {
+  const args = { pages: ["https://a.example/"], icons: [], size: 32 };
+  const stored = { pages: { "https://a.example/": { png: ONE_PIXEL_PNG, icon: "https://a.example/favicon.ico" } }, icons: {} };
+  const current = fakeEngine((name) => (name === "ac_favicons_peek" ? JSON.stringify(stored) : '{"error":"unexpected"}'));
+  assert.deepEqual(await calling(current, "favicons")("peek", args, "work"), stored);
+  assert.deepEqual(current.calls.map((c) => c.name), ["ac_favicons_peek"]);
+  const older = fakeEngine((name) => (name === "ac_favicons_get" ? JSON.stringify(stored) : '{"error":"unknown call"}'));
+  assert.deepEqual(await calling(older, "favicons")("peek", args, "work"), stored);
+  assert.deepEqual(older.calls.map((c) => c.name), ["ac_favicons_peek", "ac_favicons_get"]);
+  const failing = fakeEngine(() => '{"error":"favicons not loaded"}');
+  await assert.rejects(calling(failing, "favicons")("peek", args, "work"), /favicons not loaded/);
 });
 
 test("favicons.fetch answers the icon Chromium stored for that address, with its size", async () => {

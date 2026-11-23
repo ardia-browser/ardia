@@ -72,7 +72,7 @@ holds the rest.
   picks the jobs from the change: `typecheck, tests and Mac bundle` (typecheck, the portable tests, the store
   simulator and the Mac bundle, Metro then Hermes) for the workspace code; the browser's tests in six shares
   (`--test-shard=I/6`) for what those tests read, which reaches past `apps/browser` into every package, the engine
-  sources, `apps/linux/src`, `scripts/{lib,security,windows}`, `tests/` and two docs; and `repository, vouch and
+  sources, `apps/desktop/src`, `scripts/{lib,security,windows}`, `tests/` and two docs; and `repository, vouch and
   stale tests` (`test:root`, no install) for `scripts/`, `engine/`, `.github/`, `.claude/`, the site, the release
   notes, `docs/dia-feature-parity.md` and any test file (for the promises lock and the parity citations). A
   docs-only change (other than the parity doc), phone-app, dashboard or videos change starts none of them, unless it
@@ -88,7 +88,7 @@ holds the rest.
 - When GitHub's runners are busy, the long jobs of `checks.yml`, `linux.yml` and `android.yml` move to Boat CI
   (`boat-large`); the `which checks run` job or a `route` job decides, and each run's summary says why
   ([ci-boat-overflow.md](ci-boat-overflow.md)).
-- `linux.yml` starts on what the Linux build and its fixture suites read (`apps/linux`, the shared UI and the desktop
+- `linux.yml` starts on what the Linux build and its fixture suites read (`apps/desktop`, the shared UI and the desktop
   packages' sources, the engine sources, its scripts, and the few Mac files the parity fixtures compare against,
   which `workflow-paths.test.mjs` finds in the suites and checks), not on the rest of the Mac, iPhone, Android or
   Windows native code; `windows.yml`

@@ -5,13 +5,14 @@ import subprocess
 import sys
 
 CORE = pathlib.Path(__file__).resolve().parents[1]
-HEADER = CORE / 'include/ardia_core.h'
+LIBRARIES = [('ardia_core', 'ardia_', 15), ('ardia_update', 'ardia_update_', 5),
+             ('ardia_import', 'ardia_import_', 3)]
 DARWIN = platform.system() == 'Darwin'
 FORBIDDEN = re.compile(r'nonce|fixture', re.I)
 
 
-def declared():
-    return sorted(set(re.findall(r'^[A-Za-z0-9_ *]*?\b(ardia_[a-z0-9_]+)\(', HEADER.read_text(), re.M)))
+def declared(header):
+    return sorted(set(re.findall(r'^[A-Za-z0-9_ *]*?\b(ardia_[a-z0-9_]+)\(', header.read_text(), re.M)))
 
 
 def llvm_nm():
@@ -44,9 +45,11 @@ def c_exports(library):
     return sorted(set(name for name in defined_globals(library, demangle=False) if name.startswith('ardia_')))
 
 
-def check(library, want):
+def check(library, want, prefix):
     problems = []
     got = c_exports(library)
+    if any(not name.startswith(prefix) for name in want):
+        problems.append(f'{library.name} declares functions outside {prefix}*: {want}')
     if got != want:
         problems.append(f'{library.name} exports {got}, the header declares {want}')
     forbidden = sorted(set(name for name in defined_globals(library, demangle=True) if FORBIDDEN.search(name)))
@@ -56,18 +59,22 @@ def check(library, want):
 
 
 def main():
-    want = declared()
-    if len(want) != 15:
-        print(f'the header declares {len(want)} functions, not 15: {want}', file=sys.stderr)
-        return 1
-    shared = CORE / ('target/release/libardia_core.dylib' if DARWIN else 'target/release/libardia_core.so')
-    static = CORE / 'target/release/libardia_core.a'
-    problems = check(shared, want) + check(static, want)
+    problems = []
+    summary = []
+    for name, prefix, count in LIBRARIES:
+        want = declared(CORE / f'include/{name}.h')
+        if len(want) != count:
+            print(f'include/{name}.h declares {len(want)} functions, not {count}: {want}', file=sys.stderr)
+            return 1
+        shared = CORE / (f'target/release/lib{name}.dylib' if DARWIN else f'target/release/lib{name}.so')
+        static = CORE / f'target/release/lib{name}.a'
+        problems += check(shared, want, prefix) + check(static, want, prefix)
+        summary.append(f'{shared.name} and {static.name} export exactly the {len(want)} functions of include/{name}.h')
     for problem in problems:
         print(problem, file=sys.stderr)
     if problems:
         return 1
-    print(f'{shared.name} and {static.name} export exactly the {len(want)} header functions and no fixture or nonce symbol')
+    print('; '.join(summary) + ', and no fixture or nonce symbol')
     return 0
 
 

@@ -10,6 +10,9 @@ import { SearchTabs } from "./SearchTabs";
 import { TabSwitcher } from "./TabSwitcher";
 import { useSidebarWidth } from "../../state/sidebar/hooks";
 import { sameSize, useSettled, type Size } from "../ui/useSettled";
+import { useSidebarUi } from "../../state/sidebar/sidebarUi";
+import { useMeetingAlert } from "../../state/live/alerts";
+import { onWindowRootSize } from "../../state/windows/rootSize";
 
 export function SidebarOverlays({ windowWidth }: { windowWidth: number }) {
   const windowId = useWindowId();
@@ -17,14 +20,29 @@ export function SidebarOverlays({ windowWidth }: { windowWidth: number }) {
   const [size, setSize] = useState({ width: 0, height: 0 });
   const settleSize = useSettled((next: Size) => setSize((prev) => (sameSize(prev, next) ? prev : next)));
   useEffect(startSidebarEffects, []);
+  useEffect(() => onWindowRootSize(windowId, settleSize), [windowId]);
   return (
-    <View pointerEvents="box-none" style={StyleSheet.absoluteFill} onLayout={(e) => settleSize({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}>
+    <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
       <HoverCard windowId={windowId} width={size.width} height={size.height} />
-      <MeetingAlert windowId={windowId} windowWidth={windowWidth} />
-      <IconPicker windowId={windowId} sidebarWidth={sidebarWidth} />
-      <ProfileIconPicker windowId={windowId} />
-      <SearchTabs windowId={windowId} windowWidth={windowWidth} />
-      <TabSwitcher windowId={windowId} windowWidth={windowWidth} windowHeight={size.height} />
+      <SidebarPopups windowId={windowId} windowWidth={windowWidth} windowHeight={size.height} sidebarWidth={sidebarWidth} />
     </View>
+  );
+}
+
+const ICON_PICKER = 1;
+const SEARCH_TABS = 2;
+const SWITCHER = 4;
+
+function SidebarPopups({ windowId, windowWidth, windowHeight, sidebarWidth }: { windowId: string; windowWidth: number; windowHeight: number; sidebarWidth: number }) {
+  const open = useSidebarUi((u) => (u.iconPicker?.windowId === windowId ? ICON_PICKER : 0) | (u.searchTabs === windowId ? SEARCH_TABS : 0) | (u.switcher?.windowId === windowId ? SWITCHER : 0));
+  const alert = useMeetingAlert((s) => !!s.event);
+  return (
+    <>
+      {alert ? <MeetingAlert windowId={windowId} windowWidth={windowWidth} /> : null}
+      {open & ICON_PICKER ? <IconPicker windowId={windowId} sidebarWidth={sidebarWidth} /> : null}
+      <ProfileIconPicker windowId={windowId} />
+      {open & SEARCH_TABS ? <SearchTabs windowId={windowId} windowWidth={windowWidth} /> : null}
+      {open & SWITCHER ? <TabSwitcher windowId={windowId} windowWidth={windowWidth} windowHeight={windowHeight} /> : null}
+    </>
   );
 }

@@ -25,6 +25,13 @@ int main() {
   assert(RoutePrivateCall("sites.settings", {true, true, true}) == ProfileError::kPrivateEnding);
   assert(RoutePrivateCall("sites.zoomLevels", {true, true, false}) == ProfileError::kPrivateEnding);
   assert(RoutePrivateCall("sites.zoomLevels", {false, true, true}) == ProfileError::kWindowMismatch);
+  assert(!ServesPrivateSession(kFaviconPeekCall));
+  assert(RouteFaviconPeek(true, false, ProfileKind::kDefault, true) == ProfileError::kNone);
+  assert(RouteFaviconPeek(true, false, ProfileKind::kIsolated, true) == ProfileError::kNone);
+  assert(RouteFaviconPeek(false, false, ProfileKind::kDefault, true) == ProfileError::kWindowMismatch);
+  assert(RouteFaviconPeek(true, true, ProfileKind::kDefault, true) == ProfileError::kPrivateEnding);
+  assert(RouteFaviconPeek(true, false, ProfileKind::kPrivate, true) == ProfileError::kPrivateService);
+  assert(RouteFaviconPeek(true, false, ProfileKind::kDefault, false) == ProfileError::kUnavailable);
   assert(EngineFailure("no private session").code == "ERR_PROFILE_ENDING");
   assert(EngineFailure("no engine data for a private profile").code == "ERR_PROFILE_PRIVATE");
   assert(EngineFailure("not for a private session").code == "ERR_ENGINE");

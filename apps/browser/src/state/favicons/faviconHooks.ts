@@ -1,6 +1,9 @@
-import { useEffect } from "react";
+import { useContext, useEffect } from "react";
 import { withoutFragment } from "../../lib/url";
-import { keyedWatch, recordWatch, useKeyed } from "../browser/keyedWatch";
+import { keyedWatch, recordWatch, useKeyed, watchWindowRecord } from "../browser/keyedWatch";
+import { WindowContext } from "../browser/hooks";
+import { useBrowser } from "../browser/store";
+import { keysFor, privateViewer } from "./faviconKeys";
 import { changedIds } from "../browser/changes";
 import type { IconTheme } from "../../platform/favicons";
 import { askFaviconTheme, EMPTY_ICONS, lookupOrder, resolveFavicon, useFavicons, watchMissingFavicon, type ResolvedFavicon } from "./favicons";
@@ -74,23 +77,35 @@ export function watchFaviconOf(url: string, src: string | null, listener: Listen
 
 export const watchFaviconTheme = (uri: string, listener: Listener): (() => void) => watchFaviconUri(uri, listener);
 
-export const useResolvedFaviconUri = (url: string, src?: string | null, profileId?: string): string | null =>
-  useKeyed(watchFaviconPage, pageKey(url, src), () => resolveFavicon(url, src, profileId)?.uri ?? null);
+export const useResolvedFaviconUri = (url: string, src?: string | null, profileId?: string, source?: string): string | null =>
+  useKeyed(watchFaviconPage, pageKey(url, src), () => resolveFavicon(url, src, profileId, source)?.uri ?? null);
 
-export function useFavicon(url: string, src?: string | null, profileId?: string): ResolvedFavicon | null {
+function sourceUnanswered(url: string, viewer: string | undefined, source: string | undefined): boolean {
+  if (!url || !source || !privateViewer(viewer) || source === viewer) return false;
+  const { profiles } = useFavicons.getState();
+  return !keysFor(viewer, source).some((key) => profiles[key]?.pages[withoutFragment(url)] !== undefined);
+}
+
+export function useFavicon(url: string, src?: string | null, profileId?: string, source?: string): ResolvedFavicon | null {
   const key = useKeyed(watchFaviconPage, pageKey(url, src), () => {
-    const found = resolveFavicon(url, src, profileId);
+    const found = resolveFavicon(url, src, profileId, source);
     return found ? `${found.profileId} ${found.uri}` : null;
   });
-  const missing = !!url && !key;
-  const order = missing ? lookupOrder(profileId).join(" ") : "";
-  useEffect(() => (missing ? watchMissingFavicon({ url, src, profileId }) : undefined), [missing, order, profileId, url, src]);
+  const waiting = useKeyed(watchFaviconPage, pageKey(url, src), () => sourceUnanswered(url, profileId, source));
+  const missing = !!url && (!key || waiting);
+  const order = missing ? lookupOrder(profileId, source).join(" ") : "";
+  useEffect(() => (missing ? watchMissingFavicon({ url, src, profileId, source }) : undefined), [missing, order, profileId, source, url, src]);
   const split = key?.indexOf(" ") ?? -1;
   return key ? { profileId: key.slice(0, split), uri: key.slice(split + 1) } : null;
 }
 
-export function useFaviconTheme(url: string, src?: string | null, profileId?: string): IconTheme | null | undefined {
-  const uri = useResolvedFaviconUri(url, src, profileId);
+export function usePrivateViewer(): string | undefined {
+  const windowId = useContext(WindowContext) ?? "";
+  return useKeyed(watchWindowRecord, windowId, () => privateViewer(useBrowser.getState().windows[windowId]?.profileId));
+}
+
+export function useFaviconTheme(url: string, src?: string | null, profileId?: string, source?: string): IconTheme | null | undefined {
+  const uri = useResolvedFaviconUri(url, src, profileId, source);
   const theme = useKeyed(watchFaviconUri, uri, () => (uri ? useFavicons.getState().themes[uri] : undefined));
   const pending = !!uri && theme === undefined;
   useEffect(() => {

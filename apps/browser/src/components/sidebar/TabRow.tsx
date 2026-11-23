@@ -4,7 +4,8 @@ import { toggleMute } from "../../state/browser/actions";
 import { hex, layout, useTheme } from "../ui/theme";
 import { useIsActiveTab, usePageProfileId, useTab, useWindow, useWindowId } from "../../state/browser/hooks";
 import { returnToPinnedUrl } from "../../state/pins/actions";
-import { useSplitRowPanes, useTabBadged } from "../../state/sidebar/hooks";
+import { useSplitRowPanes } from "../../state/sidebar/hooks";
+import { useTabHasBadges } from "../../state/media/tabBadges";
 import { muteTitle } from "../../state/tabs/mute";
 import { usePictureInPicture } from "../../state/media/media";
 import { HoverSlot } from "../ui/HoverSlot";
@@ -88,7 +89,7 @@ export const TabRow = memo(function TabRow({
   const { backToPinHint, quiet, plainTooltip } = useSidebarRowLook();
   const press = useRef<TabPress | null>(null);
   const unread = useTabUnread(tabId);
-  const badged = useTabBadged(tabId);
+  const badged = useTabHasBadges(tabId);
   const [unreadDrawn, setUnreadDrawn] = useState(false);
   const showsUnread = !!unread || unreadDrawn;
   const resettable = !!tab && (isPinnedRow(tab) || !tab.pin) && awayFromPin(tab);
@@ -132,7 +133,7 @@ export const TabRow = memo(function TabRow({
                     ) : (
                       <View>
                         <RowTabIcon tabId={shown.id} url={shown.url} favicon={shown.favicon} icon={shown.customIcon} profileId={shown.profileId} marks={iconMarks & ICON_MARKS} sleeping={!!(iconMarks & SLEEPING)} compact={quiet} />
-                        <TabBadges tabId={shown.id} />
+                        {badged ? <TabBadges tabId={shown.id} /> : null}
                       </View>
                     )}
                   </View>
@@ -140,12 +141,12 @@ export const TabRow = memo(function TabRow({
               ) : (
                 <>
                   <RowTabIcon tabId={shown.id} url={shown.url} favicon={shown.favicon} icon={shown.customIcon} profileId={shown.profileId} marks={iconMarks & ICON_MARKS} sleeping={!!(iconMarks & SLEEPING)} compact={quiet} />
-                  <TabBadges tabId={shown.id} />
+                  {badged ? <TabBadges tabId={shown.id} /> : null}
                 </>
               )}
             </View>
     );
-  }, [tab, iconMarks, quiet, resettable, resetting, textOnly, backToPinHint, resetInk, backToPin.hoverProps]);
+  }, [tab, badged, iconMarks, quiet, resettable, resetting, textOnly, backToPinHint, resetInk, backToPin.hoverProps]);
   if (!tab) return null;
   const title = resetting ? "Back to Pinned URL" : tab.customTitle ? tabTitle(tab) : titleWithoutUnread(tabTitle(tab), unread);
   const away = resettable && !resetting ? rowAwayTitle(tab) : null;

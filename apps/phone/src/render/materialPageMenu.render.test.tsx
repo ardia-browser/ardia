@@ -10,6 +10,7 @@ import { useBrowse } from "../state/browse/store";
 import { useLibrary } from "../state/library/store";
 import * as pageActions from "../state/page/actions";
 import { usePages } from "../state/pages/store";
+import { blocking } from "../platform/blocking";
 import { pages } from "../platform/pages";
 import { usePageSummariesSwitch } from "../state/pageSummary/enabled";
 import * as telemetry from "../state/telemetry/telemetry";
@@ -37,6 +38,8 @@ beforeEach(() => {
   useSettingsNav.setState({ open: false, stack: [{ page: "root" }], popping: false });
   useDefaultBrowser.setState({ status: { isDefault: false, canAsk: true } });
   jest.spyOn(pages, "listsSitePermissions").mockReturnValue(false);
+  jest.spyOn(pages, "nightShade").mockResolvedValue({ mode: "disabled" } as never);
+  jest.spyOn(blocking, "isEnabledForSite").mockResolvedValue(true);
 });
 
 afterEach(() => {

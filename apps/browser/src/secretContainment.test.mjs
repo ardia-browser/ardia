@@ -489,7 +489,7 @@ test("an unreadable Google sign-in fails without echoing the stored value", () =
 });
 
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
-const SCANNED = ["apps/browser/src", "apps/linux/src", "packages/core/src", "packages/sync/src", "packages/ardiacore/src", "packages/shell/src", "packages/import/src", "packages/phone/src"];
+const SCANNED = ["apps/browser/src", "apps/desktop/src", "packages/core/src", "packages/sync/src", "packages/ardiacore/src", "packages/shell/src", "packages/import/src", "packages/phone/src"];
 const SKIP = /\.test\.|\/secretSinkTypes\.ts$|\/test-native\/|\/node_modules\//;
 
 const WRAP_SITES = {
@@ -504,8 +504,8 @@ const WRAP_SITES = {
   "apps/browser/src/state/plugins/secrets.ts": ["pluginSecret"],
   "apps/browser/src/state/sync/recoveryKit.ts": ["syncPhrase"],
   "apps/browser/src/components/settings/panes/SyncSheets.tsx": ["syncPhrase"],
-  "apps/linux/src/syncEngine.ts": ["syncPhrase"],
-  "apps/linux/src/syncAuthority.ts": ["*"],
+  "apps/desktop/src/syncEngine.ts": ["syncPhrase"],
+  "apps/desktop/src/syncAuthority.ts": ["*"],
   "apps/browser/src/state/sync/engine.ts": ["syncPhrase"],
   "apps/browser/src/components/dev/devHarness.ts": ["syncPhrase"],
   "apps/browser/src/platform/automation.ts": ["devtoolsToken"],
@@ -519,10 +519,10 @@ const REVEAL_SINKS = {
   "apps/browser/src/state/sync/engine.ts": { calls: 2, why: "the native sync module unlocks with the recovery phrase" },
   "apps/browser/src/components/settings/panes/ProfilePasswords.tsx": { calls: 1, why: "the password sheet shows and edits the password the user unlocked" },
   "apps/browser/src/components/settings/panes/SyncSheets.tsx": { calls: 1, why: "Show Words displays the recovery phrase to the user" },
-  "apps/linux/src/importedPasswordSave.ts": { calls: 1, why: "Linux tells a CSV import handle, which its host resolves, from a typed password" },
-  "apps/linux/src/liveSources.ts": { calls: 2, why: "Linux's host exchanges Google's authorization code and PKCE verifier for tokens" },
+  "apps/desktop/src/importedPasswordSave.ts": { calls: 1, why: "Linux tells a CSV import handle, which its host resolves, from a typed password" },
+  "apps/desktop/src/liveSources.ts": { calls: 2, why: "Linux's host exchanges Google's authorization code and PKCE verifier for tokens" },
   "apps/browser/src/state/automation/socketDevtools.ts": { calls: 1, why: "control.devtoolsEndpoint writes the DevTools token on the reply line to the peer the socket admitted" },
-  "apps/linux/src/syncAuthority.ts": { calls: 1, why: "a Linux window hands the recovery phrase to the window that runs sync, over the app's own channel, and it is branded again on arrival" },
+  "apps/desktop/src/syncAuthority.ts": { calls: 1, why: "a Linux window hands the recovery phrase to the window that runs sync, over the app's own channel, and it is branded again on arrival" },
 };
 
 function sourceFiles() {

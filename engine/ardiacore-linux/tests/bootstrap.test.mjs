@@ -137,6 +137,13 @@ test("interactive credential requests get longer deadlines than ordinary request
   assert.deepEqual([...f.delays.values()], [30000, 180000, 900000, 180000, 180000, 30000, 30000]);
 });
 
+test("taking a trusted site out waits for every loaded profile to follow, past the ordinary deadline", () => {
+  const f = fixture();
+  void f.host.call("contentBlocker.removeAllowed", "", "{}");
+  void f.host.call("contentBlocker.setAllowed", "", "{}");
+  assert.deepEqual([...f.delays.values()], [90000, 30000]);
+});
+
 test("the bang list fetch outlives its native 60 s timeout", () => {
   const f = fixture();
   void f.host.invoke("ArdiaShell.fetchBangList", { args: [null] });

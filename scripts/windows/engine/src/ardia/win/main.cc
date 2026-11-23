@@ -20,14 +20,21 @@
 #include "ardia/win/kept_pages.h"
 #include "ardia/win/launch_guard.h"
 #include "ardia/win/test_gate.h"
+#include "ardia/win/webui/webui_mode.h"
+#include "ardia/win/webui/webui_shell.h"
+#include "base/base_paths.h"
+#include "base/base_paths_win.h"
 #include "base/base_switches.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/files/file_util.h"
 #include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/no_destructor.h"
+#include "base/path_service.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/process/launch.h"
 #include "base/process/process.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
@@ -565,6 +572,157 @@ void AddMainParts(ChromeBrowserMainParts* main_parts) {
   main_parts->AddParts(std::make_unique<MainParts>());
 }
 
+class WebUIMainParts : public ChromeBrowserMainExtraParts {
+ public:
+  WebUIMainParts() = default;
+  WebUIMainParts(const WebUIMainParts&) = delete;
+  WebUIMainParts& operator=(const WebUIMainParts&) = delete;
+  ~WebUIMainParts() override = default;
+
+  void PreEarlyInitialization() override {
+    KeepRealProfileClosed(base::CommandLine::ForCurrentProcess());
+  }
+
+  void PreBrowserStart() override {
+    KeepAlive() = std::make_unique<ScopedKeepAlive>(
+        KeepAliveOrigin::APP_CONTROLLER, KeepAliveRestartOption::DISABLED);
+    RegisterWebUIShell();
+  }
+
+  void PostBrowserStart() override {
+    NoteTestGate();
+    NoteLaunchGuard();
+    WriteLaunchLog("webui shell: --ardia-shell=webui; the React Native app is "
+                   "not loaded");
+    ClaimGuardUntilOwned(kClaimAttempts);
+    base::g_ardia_pre_translate_message = &WebUIShellPreTranslate;
+    OpenWebUIShell();
+  }
+
+  void PostMainMessageLoopRun() override {
+    base::g_ardia_pre_translate_message = nullptr;
+    CloseWebUIShell();
+    MarkExiting();
+    KeepAlive().reset();
+  }
+};
+
+void AddWebUIMainParts(ChromeBrowserMainParts* main_parts) {
+  main_parts->AddParts(std::make_unique<WebUIMainParts>());
+}
+
+bool WebUIRelaunched(const base::CommandLine& command_line,
+                     const base::FilePath& cur_dir) {
+  ClearExiting();
+  OpenWebUIShell();
+  return true;
+}
+
+std::wstring LocalAppDataDirectory() {
+  const std::wstring from_environment = Environment(L"LOCALAPPDATA");
+  if (!from_environment.empty()) {
+    return from_environment;
+  }
+  base::FilePath local;
+  if (!base::PathService::Get(base::DIR_LOCAL_APP_DATA, &local)) {
+    return std::wstring();
+  }
+  return local.value();
+}
+
+constexpr char kWebUIRelaunchedSwitch[] = "ardia-webui-relaunched";
+
+std::wstring WebUIAppData() {
+  return WebUIAppDataDirectory(Environment(L"ARDIA_DATA_DIR"),
+                               LocalAppDataDirectory());
+}
+
+void RefuseReactNativeFolders(const std::wstring& app_data,
+                              const std::wstring& user_data) {
+  const std::wstring clash = ReactNativeFolderClash({app_data, user_data});
+  if (clash.empty()) {
+    return;
+  }
+  LOG(ERROR) << "Ardia engine: " << base::WideToUTF8(clash)
+             << "; the WebUI shell is not starting";
+  base::Process::TerminateCurrentProcessImmediately(1);
+}
+
+void RefuseShellModeDisagreement(bool webui) {
+  const bool early = install_static::IsWebUIShellCommandLine(::GetCommandLineW());
+  const bool reparsed = WebUIShellRequested(
+      base::CommandLine::FromString(::GetCommandLineW()));
+  if (webui == early && reparsed == early) {
+    return;
+  }
+  LOG(ERROR) << "Ardia engine: install_static read the shell mode as "
+             << (early ? "webui" : "default") << " and Chromium as "
+             << (webui ? "webui" : "default") << "; not starting";
+  base::Process::TerminateCurrentProcessImmediately(1);
+}
+
+void RelaunchIntoWebUIProfile() {
+  const std::wstring app_data = WebUIAppData();
+  const std::wstring user_data = WebUIUserDataDirectory(app_data);
+  if (user_data.empty()) {
+    base::Process::TerminateCurrentProcessImmediately(1);
+  }
+  RefuseReactNativeFolders(app_data, user_data);
+  if (SameFolder(user_data, ChromiumUserDataDir())) {
+    return;
+  }
+  base::CommandLine relaunch = base::CommandLine::FromString(::GetCommandLineW());
+  base::FilePath program;
+  if (!base::PathService::Get(base::FILE_EXE, &program)) {
+    base::Process::TerminateCurrentProcessImmediately(1);
+  }
+  relaunch.SetProgram(program);
+  if (relaunch.HasSwitch(kWebUIRelaunchedSwitch)) {
+    LOG(ERROR) << "Ardia engine: the WebUI shell's profile folder was not "
+                  "taken after a relaunch; not starting";
+    base::Process::TerminateCurrentProcessImmediately(1);
+  }
+  relaunch.RemoveSwitch(switches::kUserDataDir);
+  relaunch.AppendSwitchNative(switches::kUserDataDir, user_data);
+  relaunch.AppendSwitch(kWebUIRelaunchedSwitch);
+  base::LaunchOptions options;
+  options.grant_foreground_privilege = true;
+  const base::Process child = base::LaunchProcess(relaunch, options);
+  base::Process::TerminateCurrentProcessImmediately(child.IsValid() ? 0 : 1);
+}
+
+void BeforeWebUIChromeMain(base::CommandLine* command_line) {
+  command_line->RemoveSwitch(kWebUIRelaunchedSwitch);
+  const std::wstring app_data = WebUIAppData();
+  const std::wstring user_data = WebUIUserDataDirectory(app_data);
+  if (user_data.empty() || !SameFolder(user_data, ChromiumUserDataDir())) {
+    LOG(ERROR) << "Ardia engine: the WebUI shell has no profile folder of its "
+                  "own; not starting";
+    base::Process::TerminateCurrentProcessImmediately(1);
+  }
+  RefuseReactNativeFolders(app_data, user_data);
+  SetAppDataDirectory(app_data);
+  base::CreateDirectory(base::FilePath(app_data));
+  RefuseReactNativeFolders(app_data, user_data);
+  GuardBrowserLaunch(user_data, command_line);
+  command_line->RemoveSwitch(switches::kUserDataDir);
+  command_line->AppendSwitchNative(switches::kUserDataDir, user_data);
+  command_line->RemoveSwitch(ardiacore::kDataDirSwitch);
+  command_line->AppendSwitchNative(ardiacore::kDataDirSwitch, app_data);
+  command_line->AppendSwitch(switches::kNoStartupWindow);
+  command_line->AppendSwitch(switches::kNoFirstRun);
+  command_line->AppendSwitch(switches::kNoDefaultBrowserCheck);
+  command_line->AppendSwitch(switches::kHideCrashRestoreBubble);
+  AddFeatures(command_line, switches::kDisableFeatures,
+              "CalculateNativeWinOcclusion");
+  if (Set(Environment(L"ARDIA_BACKGROUND"))) {
+    command_line->AppendSwitch(ardiacore::kBackgroundSwitch);
+    command_line->AppendSwitch(switches::kMuteAudio);
+  }
+  g_ardia_win_add_main_parts = &AddWebUIMainParts;
+  g_ardia_win_relaunched = &WebUIRelaunched;
+}
+
 bool KeepsWindowWithoutTabs(const BrowserWindowInterface* browser) {
   return Host::Get()->Keeps(browser);
 }
@@ -604,7 +762,16 @@ void BeforeChromeMain() {
     return;
   }
   command_line->RemoveSwitch(switches::kProcessType);
+  const bool webui = WebUIShellRequested(*command_line);
+  RefuseShellModeDisagreement(webui);
+  if (webui) {
+    RelaunchIntoWebUIProfile();
+  }
   DecideTestGate(command_line);
+  if (webui) {
+    BeforeWebUIChromeMain(command_line);
+    return;
+  }
   if (!AppLibraryPresent()) {
     return;
   }

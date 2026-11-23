@@ -9,9 +9,9 @@ import { pageToProfile } from "../windows/profilePager";
 import { profileNames, requestCreateProfile } from "../profiles/createProfileRequest";
 import { storeAction, useBrowser } from "./store";
 import { rootOf } from "../groups/groups";
-import { engineProfile, isIncognitoProfile, plural, resolveWindowId } from "./model";
+import { activeTabId, engineProfile, isIncognitoProfile, plural, resolveWindowId } from "./model";
 import { closesBesideKeptTopApps, lastTabOfWindow, leavesEmptyWindow } from "../omnibox/newTabBarPolicy";
-import { noteTopAppWindowClosedFromNewTab } from "../telemetry/tabSleepCounts";
+import { noteCloseWokeSleepingTab, noteTopAppWindowClosedFromNewTab } from "../telemetry/tabSleepCounts";
 import { groupLabel } from "../pins/tabGrouping";
 import { sharingProfiles } from "../profiles/profiles";
 import { closeWindowAnimated } from "../windows/closeAnimated";
@@ -27,6 +27,7 @@ import { focusedWindowOf } from "../windows/ui";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
 import { splitOf } from "../splits/splits";
 import { closeKind } from "../tabs/tabs";
+import { isSleeping } from "../tabs/sleepingTabs";
 import { noteSplit } from "../telemetry/usage";
 import { consentToken, stillValid } from "../telemetry/client";
 import { isPeekTab } from "../peek/peek";
@@ -81,7 +82,10 @@ export async function closeTab(tabId: string, { mayWrite, user }: CloseRequest =
     return closeWindowAnimated(w.id);
   }
   if (splitOf(now, tabId) && closeKind(now, tabId) === "close") noteSplit("splitPaneCloses", consent);
+  const front = activeTabId(now, w.id);
   commit(() => store().closeTab(tabId, close));
+  const next = activeTabId(store(), w.id);
+  if (front === tabId && next && next !== front && isSleeping(next)) noteCloseWokeSleepingTab(consent);
 }
 
 export async function closeGroup(groupId: string, { mayWrite, user }: CloseRequest = {}) {

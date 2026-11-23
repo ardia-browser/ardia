@@ -7,6 +7,10 @@ NS_ASSUME_NONNULL_BEGIN
        profile:(NSString *)profile
           args:(nullable NSString *)args
     completion:(void (^)(NSString *json))completion NS_SWIFT_NAME(call(_:profile:args:completion:));
++ (void)callLoaded:(NSString *)name
+       profile:(NSString *)profile
+          args:(nullable NSString *)args
+    completion:(void (^)(NSString *json))completion NS_SWIFT_NAME(callLoaded(_:profile:args:completion:));
 + (void)callWithSecret:(NSString *)name
                profile:(NSString *)profile
                   args:(NSMutableData *)args

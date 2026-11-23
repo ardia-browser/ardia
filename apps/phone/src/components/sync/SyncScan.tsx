@@ -3,7 +3,7 @@ import { ActivityIndicator, BackHandler, StyleSheet, Text, View, type ViewInstan
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { cameraErrorAccess, makeScanJudge, openCameraSettings, prepareCamera, type CameraAccess } from "../../state/sync/scan";
 import { haptics } from "../../state/app/haptics";
-import { SCAN_REJECTED } from "../../state/sync/syncRules";
+import { MAC_HINT, SCAN_REJECTED } from "../../state/sync/syncRules";
 import { copy } from "../../lib/platformCopy";
 import { actionWords, dismissWords, syncWords } from "../../lib/sharedWords";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
@@ -67,7 +67,7 @@ export function SyncScan({ onScan, onEnterWords, onCancel, inline = false, retur
                 <Text accessibilityRole="header" style={[font.title3, styles.bold, styles.white, styles.centered]}>
                   Scan the Code on Your Mac
                 </Text>
-                <Text style={[font.subheadline, styles.soft]}>In Ardia on your Mac, open Settings › Sync › Connect Another Device.</Text>
+                <Text style={[font.subheadline, styles.soft]}>{MAC_HINT}</Text>
               </View>
               <FinderCorners />
               {rejected ? (

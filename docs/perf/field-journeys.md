@@ -39,6 +39,7 @@ the start unless noted. All clocks are epoch ms on the same Mac: JS's `Date.now(
 | | `rn_ms` | → React Native starts loading the bundle (`launchApp`, after the early window and its first commit; from 0.2.46-nightly.7). `js_ms - rn_ms` is the bundle load, `rn_ms - engine_ms` the early window |
 | | `js_ms` | → the bundle's first module runs (`state/telemetry/jsStart.ts`) |
 | | `commit_ms` | → the first window's first React commit |
+| | `first_commit_ms` | the first window root's first render → that commit: how long the first commit took to build and mount (launch's first commit, `launch.firstCommitMounts` in the ratchet; from the release after 0.2.48) |
 | | `launch_ms` | → the first window's root effect (**unchanged** since 0.2.x, so old data stays comparable) |
 | | `content_ms` | → that first commit on screen |
 | | `usable_ms` | → the app answers at once: the first timer after the first commit that runs within 50 ms of being set (both the main and JS threads free), and not before `content_ms` |

@@ -2,11 +2,11 @@
 set -uo pipefail
 usage='usage: scripts/linux/ci-checks.sh [--part all|ui|engine] [--shard I/N] [--jobs N] [--logs DIR]
 
-Runs the Linux checks that need no engine: the apps/linux typecheck, host,
+Runs the Linux checks that need no engine: the apps/desktop typecheck, host,
 symbol, module-graph and acceptance self-tests, the UI build, the smoke gate
 unit tests, and the Python and Node fixture suites under engine/.
 
---part ui runs the apps/linux and scripts/linux checks, side by side.
+--part ui runs the apps/desktop and scripts/linux checks, side by side.
 --part engine runs the Python suites and the engine/ardiacore-linux modules,
 N at a time (default: the CPU count), each under a 10-minute deadline.
 --shard I/N keeps the engine part to every Nth Python suite and module,
@@ -74,12 +74,13 @@ mine() {
 }
 
 if [ "$part" != engine ]; then
-  start linux-typecheck pnpm --filter @ardia/linux typecheck
-  start linux-test-host pnpm --filter @ardia/linux test:host
-  start linux-test-symbols pnpm --filter @ardia/linux test:symbols
-  start linux-test-graph pnpm --filter @ardia/linux test:graph
-  start linux-acceptance-self-test pnpm --filter @ardia/linux acceptance:self-test
-  start linux-build pnpm --filter @ardia/linux build
+  start linux-typecheck pnpm --filter @ardia/desktop typecheck
+  start linux-test-host pnpm --filter @ardia/desktop test:host
+  start linux-test-symbols pnpm --filter @ardia/desktop test:symbols
+  start linux-test-graph pnpm --filter @ardia/desktop test:graph
+  start linux-acceptance-self-test pnpm --filter @ardia/desktop acceptance:self-test
+  start linux-build pnpm --filter @ardia/desktop build
+  start desktop-build-win pnpm --filter @ardia/desktop build:win
   start ardiacore-linux-bootstrap node --test engine/ardiacore-linux/tests/bootstrap.test.mjs
   start linux-smoke-gate node --test scripts/linux/smoke.test.mjs
   start linux-ubo-seed node --test scripts/linux/ubo-seed.test.mjs

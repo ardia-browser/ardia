@@ -27,12 +27,14 @@ const LOCAL_TLDS = new Set(["meta", "local", "localhost", "test", "internal", "l
 let registries: Set<string> | undefined;
 const knownTld = (tld: string) => LOCAL_TLDS.has(tld) || (registries ??= new Set(PSL_TLDS.split(/\s+/))).has(tld);
 
+const isIPv4 = (host: string) => /^(\d{1,3}\.){3}\d{1,3}$/.test(host) && host.split(".").every((octet) => Number(octet) <= 255);
+
 function isLocalHost(host: string): boolean {
   return (
     host === "localhost" ||
     !host.includes(".") ||
     host.startsWith("[") ||
-    /^(\d{1,3}\.){3}\d{1,3}$/.test(host) ||
+    isIPv4(host) ||
     /\.(local|localhost|test|internal|lan|home\.arpa)$/.test(host)
   );
 }
@@ -42,7 +44,7 @@ const isLabel = (part: string) => LABEL_CHARS.test(part) && part[0] !== "-" && !
 const isTld = (part: string) => (isLabel(part) && !/^\d/.test(part)) || /^xn--[a-z0-9-]+$/i.test(part);
 
 function isHostName(name: string): boolean {
-  if (name.toLowerCase() === "localhost" || /^\[[0-9a-f:.]+\]$/i.test(name) || /^(\d{1,3}\.){3}\d{1,3}$/.test(name)) return true;
+  if (name.toLowerCase() === "localhost" || /^\[[0-9a-f:.]+\]$/i.test(name) || isIPv4(name)) return true;
   const labels = name.split(".");
   return labels.length === 1 ? isLabel(name) : labels.slice(0, -1).every(isLabel) && isTld(labels.at(-1)!);
 }
@@ -90,7 +92,7 @@ function spacedAddress(input: string): SpacedAddress | null {
   const port = Number(host.port.slice(1));
   if (host.port && (port < 1 || port > 65535)) return null;
   const dotted = name.includes(".") && !/^[\d.]+$/.test(name);
-  const ip = name.startsWith("[") || /^(\d{1,3}\.){3}\d{1,3}$/.test(name);
+  const ip = name.startsWith("[") || isIPv4(name);
   const local = name === "localhost" || ip || (!!host.port && !(dotted && !isLocalHost(name) && (port === 80 || port === 443)));
   if (!dotted && !local) return null;
   const rest = input.slice(host.authority.length);

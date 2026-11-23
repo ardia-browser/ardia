@@ -47,6 +47,7 @@ inline constexpr Route kRoutes[] = {
     {"bookmarks.apply", "ac_bookmarks_apply", ""},
     {"bookmarks.watch", "ac_bookmarks_watch", ""},
     {"favicons.get", "ac_favicons_get", ""},
+    {"favicons.peek", "ac_favicons_peek", ""},
     {"favicons.set", "ac_favicons_set", ""},
     {"extensions.list", "ac_extensions_list", ""},
     {"extensions.install", "ac_extensions_install", ""},

@@ -11,6 +11,7 @@ chromium chromium-win-hosted-browser-windows.patch
 chromium chromium-win-child-window-activation.patch
 chromium chromium-win-app-in-browser-process.patch
 chromium chromium-win-install-names.patch
+chromium chromium-win-webui-user-data-dir.patch
 chromium chromium-win-hosted-page-fills-window.patch
 chromium chromium-win-hosted-no-browser-shortcuts.patch
 chromium chromium-win-relaunch-to-app.patch

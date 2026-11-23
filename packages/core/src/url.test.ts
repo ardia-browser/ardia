@@ -44,6 +44,18 @@ test("fixupUrl leaves searches alone: file names, emails, prose, unknown schemes
   assert.equal(fixupUrl("site.photography/about"), "https://site.photography/about");
 });
 
+test("four numbers are an IPv4 address only up to 255 each, as in Chrome: past that they search", () => {
+  for (const input of ["192.168.0.256", "256.1.1.1", "10.256.0.1", "10.0.256.1", "999.999.999.999", "192.168.0.256.", "192.168.0.256:8080", "10.0.0.300/admin", "192.168.0.256/a b"]) {
+    assert.equal(fixupUrl(input), null, input);
+    assert.equal(classifyPaste(input)?.kind, "search", input);
+    assert.equal(spacedAddressGuess(input), null, input);
+  }
+  for (const input of ["192.168.0.1.", "192.168.0.255", "255.255.255.255", "0.0.0.0", "10.0.0.30/admin", "192.168.0.1:8080"]) {
+    assert.equal(fixupUrl(input), `http://${input}`, input);
+  }
+  assert.equal(fixupUrl("http://192.168.0.256"), "http://192.168.0.256", "a typed scheme still opens");
+});
+
 test("fixupUrl opens an address with a space after its host, as Chrome does, and leaves prose with a slash alone", () => {
   assert.equal(fixupUrl("en.wikipedia.org/wiki/Jim Beam"), "https://en.wikipedia.org/wiki/Jim%20Beam");
   assert.equal(fixupUrl("github.com/search?q=a b"), "https://github.com/search?q=a%20b");

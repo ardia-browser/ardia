@@ -984,7 +984,11 @@ is plain Chromium.
 `search.suggest`, `search.stopSuggest` and `extensions.loadHealth` are forwarded to the engine
 (`ac_search_suggest`, `ac_search_suggest_stop`, `ac_extensions_load_health`) since `windows-engine-20261112-2`. When the
 Mac forwards a call the shipped Windows engine lacks, `forwarded.json` lists it under `awaitingEngine` and Windows
-answers it in TypeScript until a new engine build has it; none waits now.
+answers it in TypeScript until a new engine build has it; none waits now. `favicons.peek` (`ac_favicons_peek`, a private
+window's read-only lookup in a regular profile's icon store, #3837) is a custom call on the Mac too, so it isn't listed
+there: `domains/favicons.ts` asks `ac_favicons_peek` and, while the shipped engine answers `unknown call`, falls back
+to `ac_favicons_get` as main does, so private windows keep their icons; that marks the icon used in the regular
+profile's favicon database until the Windows engine has the export (#3881). A rebuilt engine needs no adapter change.
 
 Not in `forwarded.json` but also engine work: media next and previous track. The media controls send `mediaCommand`
 `next` or `previous` (`state/media/media.ts`), the Windows view passes it on as `tab.call`, and `MediaCommand` in
@@ -1519,6 +1523,309 @@ Decisions for Shivam:
 With the engine and owner items set aside, the app side has not reached parity yet: items 1 to 4, 9 and 10 are bugs a
 user hits, and 5 to 8 and 11 are visible differences from the Mac. Everything else in the table works or differs
 only where the engine, Windows itself or a decision stands in the way.
+
+## WebUI pilot (`--ardia-shell=webui`)
+
+Issue #3686, part of #3678 (Track 4 of the cross-platform design: Windows on the desktop host). The pilot asks whether
+Windows can drop React Native Windows and run the Linux model: Chromium is the app, and the shared desktop UI
+(`apps/desktop`, built in its Linux mode) is served from `chrome://ardia/`. It proves the hard parts on one window before any
+Linux patch is widened or the host is moved. Proven on 2026-11-23 in a fresh Windows 11 guest (`dockurr/windows` on
+a Boat VM, 1920×1080) with a Windows x64 engine and UI bundle built from this change on `main` at `5b1e984`: the
+real-input run (28 checks; 28 at 150% on the previous engine of this change, which differs only in the folder checks
+below), the junction check (31, every launch's real argv checked), the bridge's hostile-input check (11 checks over
+15 malformed requests, 6 bad arguments, 12 reserved tab URLs and 5 reserved navigations), the stale-document check
+(8), the close-cycle check (8 closes with pass-through regions active), the policy and cleanup-race check
+(`profile-edges.ps1`: a `UserDataDir` policy refused with its folder never created, and 3 of 3 launches opening while
+20,000 folders in the profile were being deleted; the engine before this round wrote Crashpad files into the policy
+folder and refused all 3 launches), the concurrent-runs check (`ports.ps1`) and
+`install_static_unittests --gtest_filter=UserDataDir.ArdiaShell*:UserDataDir.WebUITree*` (6 tests) all passed.
+
+### Selecting the shell and keeping real data out
+
+- `chrome.exe --ardia-shell=webui` turns it on. Without the switch nothing changes: `BeforeChromeMain` still finds
+  `ArdiaApp.dll` and starts React Native Windows.
+- Order in `BeforeChromeMain` (`main.cc`): the WebUI branch first makes sure Chromium will open the WebUI profile,
+  then the test gate runs (as for RNW), then the WebUI branch returns **before** the `ArdiaApp.dll` check. A WebUI start
+  never loads the app library, the RNW message hooks, the hosted-window frame or `AskBeforeDiscards`.
+- Its own folders: app data in `%LOCALAPPDATA%\Ardia WebUI` (a sibling of the RNW app's `%LOCALAPPDATA%\Ardia`, never
+  inside it) and Chromium's profile in `%LOCALAPPDATA%\Ardia WebUI\Chromium`. A test instance's `ARDIA_DATA_DIR` is
+  used as is (`<ARDIA_DATA_DIR>\Chromium`), so the test gate, CDP and scratch-folder rules are the RNW ones.
+- Chromium on Windows takes its profile folder from `install_static`, which `chrome_elf` computes from the process's
+  real command line before any Ardia code runs, and opens Crashpad's database there; changing `--user-data-dir` in
+  `BeforeChromeMain` does nothing (the first pilot run opened the wrong folder). So `chromium-win-webui-user-data-dir.patch`
+  (the one Windows patch the pilot adds, after `chromium-win-install-names.patch`) decides it in `install_static`:
+  with `--ardia-shell=webui` and no `--user-data-dir`, policy or `ARDIA_DATA_DIR` naming another folder, it picks
+  `%LOCALAPPDATA%\Ardia WebUI\Chromium`.
+- **Both stages read the switch the same way.** `install_static::IsWebUIShellCommandLine` repeats what
+  `base::CommandLine::ParseFromString` and `AppendSwitchesAndArguments` do in Chromium 158 (`base/command_line.cc`):
+  trim the whole command line with base's whitespace set, split it as `CommandLineToArgvW` does (`install_static`'s
+  `TokenizeCommandLineToArray`), skip the program, trim each argument, stop reading switches at `--`, take `--`, `-`
+  or `/` as a prefix, stop at `single-argument` compared case-sensitively before the name is lowercased (so
+  `--SINGLE-ARGUMENT` is an ordinary switch, as in base), lowercase the name, and let the last value win.
+  `install_static_unittests` runs the same 48 command lines through both parsers (`UserDataDir.ArdiaShell*`: trimming,
+  `--single-argument` in three cases, quotes, `=` and repeated switches) and checks the tokens against
+  `CommandLineToArgvW`. At startup `BeforeChromeMain` also asks both and exits with code 1 if they disagree
+  (`RefuseShellModeDisagreement`), so a spelling the two parsers read differently stops the engine instead of
+  opening one profile in the other's mode.
+- Whichever folder was chosen (command line, policy, `ARDIA_DATA_DIR` or that default) is resolved through the opened
+  handle of its nearest existing part (`GetFinalPathNameByHandle`, by volume GUID, so `\\?\`, 8.3, UNC
+  `\\localhost\C$`, `subst` and junction spellings all land on one path), before it is created and again after.
+  It is compared with the React Native app's folders resolved the same way: `%LOCALAPPDATA%\Ardia` and `%APPDATA%\Ardia`
+  and their `User Data` folders (followed wherever a junction moved them). If they are the same, one contains the
+  other, a folder can't be resolved, or the chosen folder can't be created, the process exits with code 1 there,
+  before Crashpad starts. There is no fallback: neither Chromium's default folder (the React Native app's) nor a
+  temporary one.
+- **No links inside the WebUI tree.** After the folder is created, `install_static` walks the whole profile tree
+  (`WebUITreeHasLink`: `FindFirstFileEx`, never following a link) and exits with code 1 if any file or folder in it
+  is a reparse point: a junction, a directory or file symlink, at any depth. Ardia's own check walks the WebUI
+  app-data folder with the same function. The pilot's tree is its own, so the walk is bounded, and it doesn't matter
+  where a link points: a stale link to an unrelated folder refuses too. The WebUI folder itself may still be a link
+  (a profile moved to another drive); its target is what gets compared above. Only a reparse attribute refuses.
+  A folder that disappears between being listed and being opened (`ERROR_FILE_NOT_FOUND`, `ERROR_PATH_NOT_FOUND`)
+  is skipped, so the running shell clearing its caches can't stop a second launch; so is a subfolder that answers
+  `ERROR_ACCESS_DENIED`, because a folder being deleted while something still holds it open answers exactly that,
+  and a folder in the user's own profile that the user can't list could only have been locked down by a process
+  running as the user, which is out of scope below. If the profile folder itself can't be listed for any reason
+  other than being gone, or a subfolder fails any other way, the walk can't vouch for the tree and the shell
+  refuses to start. `install_static_unittests` (`UserDataDir.WebUITreeWalk*`) checks a plain tree, a subfolder and
+  the root removed just before they're listed, and a directory symlink.
+- **No managed relocation.** If a `UserDataDir` policy is set (HKLM or HKCU, under the install's
+  `SOFTWARE\Policies` key that `install_static` reads), it moves the React Native app's profile and would also decide
+  the WebUI shell's, so the WebUI shell exits with code 1 in `install_static`, before Crashpad opens anything there.
+  The pilot doesn't support managed profile relocation.
+- After those checks `install_static` keeps a handle open on the profile folder for the life of the process, opened
+  with `FILE_LIST_DIRECTORY | SYNCHRONIZE` and sharing read and write but not delete, and hands Chromium the handle's
+  final path, not the spelling it was given. A handle with no access rights is left out of Windows' sharing check, so
+  it is the real access that makes the missing delete share hold: while the handle is open, renaming or deleting the
+  folder fails, and so does renaming the folder above it, because NTFS doesn't rename a folder with an open handle
+  inside.
+- **What is left.**
+  - Between resolving the folder and opening that handle (microseconds, before Crashpad or chrome.dll), and between
+    the tree walk and Chromium opening each file, another process could swap a parent folder or plant a link. Only a
+    process running as the same user can do that, and such a process can already write both profiles directly, so
+    the race gives it nothing it doesn't have. Closing it fully would mean handing Crashpad and Chromium an open
+    handle instead of a path, which is out of scope for the pilot.
+  - Links someone deliberately puts inside the React Native app's own profile pointing into the WebUI tree are out of
+    scope for the same reason: only a same-user process can make them, and the WebUI shell doesn't walk the React
+    Native profile at startup. The checks are there against mistakes and stale links, not against code already
+    running as the user.
+- If the folder Chromium will use is safe but isn't the WebUI one (an explicit `--user-data-dir`), the engine starts
+  itself again with the WebUI folder and exits (`RelaunchIntoWebUIProfile`, once: a second mismatch refuses to start).
+  Folders are compared by resolved path (`SameFolder`), not by spelling.
+- Ardia's own code checks again before Chromium opens the profile (`ReactNativeFolderClash`, the test gate's
+  `CanonicalPath`, with the same set of React Native folders and the link walk) and exits with code 1 on the same
+  conditions.
+- Checked in a throwaway Windows 11 guest by `scripts/windows/webui-pilot/junction.ps1`. It never touches the account's
+  own folders: every launch gets `LOCALAPPDATA` and `APPDATA` inside a run folder of its own under `C:\pilot\runs`,
+  marked with a `.pilot-run` file holding a fresh id, and the harness deletes only a folder whose marker names it
+  (links are unlinked first, never followed). Each launch starts suspended, the harness reads its real command line
+  back and splits it with `CommandLineToArgvW`, and a case counts only if the engine got exactly the arguments meant.
+  Each of these exits 1 with no window, and no file or folder in the React Native folder is added, removed or
+  changed: `Ardia WebUI` as a junction to `Ardia` (with the switch also spelled `--ARDIA-SHELL`, `-ardia-shell`,
+  `/ardia-shell`, `--Ardia-Shell`, padded with spaces, and after `--SINGLE-ARGUMENT`); `Ardia WebUI\Chromium` as a
+  junction to `Ardia\User Data`; a junction and a directory symlink at depth 1 (`Chromium\Default`) and at depth 3
+  (`Chromium\Default\Local Storage\leveldb`) into the React Native profile, a junction to an unrelated folder, a
+  file symlink to its `Local State`, and a junction beside `Chromium` in the app-data folder; `--user-data-dir`
+  pointing into `Ardia\User Data`, also spelled `\\?\…`, as its 8.3 short name and as `\\localhost\C$\…`;
+  `ARDIA_DATA_DIR` pointing at `Ardia`; `Ardia WebUI` made a file, so the profile folder can't be created; and
+  `Ardia\User Data` moved elsewhere behind a junction with `Ardia WebUI\Chromium` joined to the same place. The same
+  launch with none of these opens the window in `Ardia WebUI\Chromium` (also with the switch spelled upper case or
+  with one dash, and with a `--user-data-dir` that has a space in it), and `Ardia WebUI` can't be renamed while it
+  runs. With `ARDIA_TEST_PIN_PAUSE_MS` in a test build, `install_static` waits right after the pin, before chrome.dll
+  loads or Crashpad starts; renaming `Ardia WebUI\Chromium` or `Ardia WebUI` then fails, which shows the handle
+  alone holds the folder.
+- The WebUI shell's session (`session.json`) lives in its app-data folder, so the launch guard's recovery sets it aside
+  after unfinished starts as it does the React Native app's. A start counts as finished when the shell reports it has
+  painted (`ArdiaShell.shellPainted`); if the UI bundle's entry page can't be read, the engine says which folder it
+  looked in and quits instead of leaving a blank window.
+- The launch guard runs for the WebUI profile: `SetAppDataDirectory` points its facts, unfinished-start count,
+  restore-state recovery and launch log at the WebUI folder, and `GuardBrowserLaunch` waits on the WebUI profile's own
+  mutex, so a relaunch waits for the closing WebUI instance, never for the RNW one.
+- A second `--ardia-shell=webui` launch reaches the first through Chromium's process singleton (`g_ardia_win_relaunched`),
+  which raises the existing window instead of opening a Chromium browser window.
+
+### What the pilot is
+
+| File | What it does |
+| --- | --- |
+| `src/ardia/win/webui/webui_mode.{h,cc}` | the switch and the folder rules above |
+| `src/ardia/win/webui/webui_shell.{h,cc}` | the bridge bound to the live shell document as on Linux (`Trusted`: the shell's live primary main frame with the committed origin `chrome://ardia/`; `OwnsHandler`: the handler of that document's generation; a new document (a reload or a renderer swap) or a renderer exit retires the generation, which drops its pending replies (`DeliverReply`), its events and its pages; `OnJavascriptDisallowed` drops that handler's pending replies at once and retires the generation only if the handler no longer owns the live document; a page whose creation was asked by a retired document is never made and its profile never loaded; closing the window tears the shell down while its views are still alive (`TearDown`, from `OnWidgetDestroying` and before the widget is reset: the document is retired, pages, delegate, pass-through regions and the view pointers are cleared, and `ShellContents` deletes its children before its own state), so destroying the shell's WebContents can't call back into freed views; tab URLs pass one check (`AllowedPageUrl`) before any profile loads and again before a page navigates: no `javascript:`, no `chrome://ardia` in any spelling or behind `view-source:`, nothing that doesn't parse; a row in `boundaries.json`); one `views::Widget` (`ShellTreeHost`, a `DesktopWindowTreeHostWin` with Chrome's client-area insets; `ShellFrame`, a `views::FrameView` hit tester), the `chrome://ardia` WebUI config, data source and `ardiaRequest` handler, the transparent shell `WebView` above the page `WebView`s, input pass-through, page leases and navigation events, accelerators, `session.read`/`session.write`, `engine.call` for the 36 routes of `ac_linux_contract.h` through the Windows `ac_*` table |
+| `src/ardia/win/webui/webui_caption_script.h` | lines added to `host-bootstrap.js` that report the shell's maximize button rectangle (`ArdiaShell.setMaximizeButton`) |
+| `scripts/windows/assemble-webui.ps1` | engine + `apps/desktop/dist/linux` as `ardia-ui\` beside `chrome.exe`, the layout `scripts/linux/package.py` ships |
+| `scripts/windows/webui-pilot/` | the real-input run below (`run.ps1`, its helpers and test page), the stale-document check (`stale.ps1`), the hostile-input check at the bridge's sinks (`bridge.ps1`), the junction check (`junction.ps1`) and the close-cycle check (`close.ps1`), the policy and cleanup-race check (`profile-edges.ps1`) and the concurrent-runs check (`ports.ps1`); they track the processes they start and stop only those and their children, launch with `--remote-debugging-port=0` and read the port back from the run's own `DevToolsActivePort`, using it only while the process listening on it is one this run started, run each launch in its own marked folder under `C:\pilot\runs`, and delete only a folder whose `.pilot-run` marker names it |
+
+The frontend is `apps/desktop`'s Linux-mode production build (`pnpm -C apps/desktop build`), unchanged, with Linux wording; its `--mode win` build (#3972) has the Windows wording and is the next one to run here. Host calls the pilot doesn't answer
+resolve to `null` (and `engine.call`s outside the routes fail as unknown) and are logged once each as
+`webui shell: unhandled host call …`; the shell starts, renders and navigates with them.
+
+### Results
+
+`scripts/windows/webui-pilot/run.ps1` drives the window with `SendInput` (real pointer and keys, in the console
+session), reads state over CDP and Win32, and records the screen. Every check passed at both scales:
+
+| Check | 100% (96 dpi) | 150% (144 dpi) |
+| --- | --- | --- |
+| Shared UI from `chrome://ardia/` in a frameless window, DWM shadow and rounded corners | yes | yes |
+| `WM_NCHITTEST`: left, right, bottom, bottom-right outside the visible frame (native invisible borders) | 10, 11, 15, 17 | 10, 11, 15, 17 |
+| `WM_NCHITTEST`: top edge inside the client area, through the shell's `Chrome_RenderWidgetHostHWND` | 12 (`HTTOP`) | 12 |
+| `WM_NCHITTEST` over the shell's HTML maximize button | 9 (`HTMAXBUTTON`, via `HTTRANSPARENT` to the frame) | 9 |
+| Snap layouts flyout on hovering the shell's maximize button | shown | shown |
+| Typing an address in the shell, Enter: the page loads in the content area (`file:///…/form.html`) | yes | yes |
+| Click into the page's input, type: the keys land in the page | yes | yes |
+| Ctrl+L from the page: focus moves to the shell's field, the page keeps its text | yes | yes |
+| Click back into the page and type: keys land in the page again | yes | yes |
+| Resize from the right edge, the bottom-right corner, the top edge | yes | yes |
+| Drag the window by the sidebar (`ArdiaShell.startWindowMove`) | moved 135,87 for a 140,90 drag | same |
+| Drag to the screen's left edge: Aero Snap; drag out restores the size | yes | yes |
+| Win+Left (left half, full height), Win+Right (back), Win+Up (maximized), Win+Down (restored) | yes | yes |
+| Shell maximize button click toggles maximize | yes | yes |
+| Close button: every engine process gone | 0.6 s | 0.6 s |
+| Relaunch: the window comes back with the session's tab | yes | yes |
+| A second launch while running raises the same window, no second window | yes | yes |
+| Alt+F4 exits | yes | yes |
+
+Proofs (screenshots, two 105 s recordings, logs) are in the PR.
+
+Found on the way, and the fixes the desktop host needs too:
+
+- **Tear the shell down while its views are alive.** With `CLIENT_OWNS_WIDGET`, `~ShellContents` freed its pass-through
+  regions before `views::View` deleted the shell `WebView`, whose WebContents teardown reached `RetireRenderer` and
+  wrote into the freed vector. The engine before `TearDown` crashed on 12 of 12 closes with pass-through regions active
+  (`close.ps1`: exit `0x80000003` and a Crashpad dump each time, by `ArdiaShell.closeWindow` and by `WM_CLOSE`); with
+  it, 12 of 12 exit 0 with no dump. The desktop host owns its widget the same way and needs the same order.
+- **Running `install_static_unittests` on Windows** needs `icudtl.dat`, `dbghelp.dll`, `dbgcore.dll` and
+  `msdia140.dll` beside it and a process at normal priority (a scheduled task's background priority fails its start
+  check). Seven of Chromium's own `UserDataDir` tests fail there because they expect `Chromium\User Data` and the
+  `Chromium` policy key, which Helium and `chromium-win-install-names.patch` rename; the `UserDataDir.ArdiaShell*`
+  tests are the ones this change adds, and they pass.
+- **Pass-through needs a root `WindowTargeter` on Windows.** The Linux model (shell `WebView` above the page
+  `WebView`s, `WidgetDelegate::ShouldDescendIntoChildForEventHandling` skipping the shell where a page shows) was not
+  enough: `Widget::ShouldDescendIntoChildForEventHandling` then compares view and window layers
+  (`kNativeViewHostManagesLayers`), and clicks over the page landed on the widget's content window, reaching neither
+  web contents. A targeter on the content window (`ShellRootTargeter`) that explores a page's window directly when the
+  point is in a pass-through rectangle fixes it. The same applies to a `BrowserView`-hosted shell.
+- **The shell's child window is the `WebContentsViewAura`, not a `NativeViewHost` container**, with
+  `kNativeViewHostManagesLayers` on: Linux's `holder()->GetNativeViewContainer()` comparison never matches on Windows.
+- **`<windowsx.h>` must not be included next to Views**: its `IsMinimized`/`IsMaximized` macros rename
+  `Widget::IsMinimized` and break the link.
+- **`ArdiaShell.setWindowTitle` renames the HWND** to the page title; tools must find the window by process and class.
+
+### What compiled from the Linux host
+
+`series_win.py` now copies these `engine/ardiacore-linux` files into the Windows tree at `//ardia/linux`, and
+`//ardia/win` compiles them as they are. The list CI checks is `accepted-linux-sources.txt`; they are in the Windows
+key's `key-inputs.json`, so a change to one moves the Windows key too:
+
+| Linux file | Used as | What for |
+| --- | --- | --- |
+| `bootstrap.js` + `generate_bootstrap.py` | as is | the `chrome.send` bridge, `window.__ardiaHost` |
+| `ac_linux_contract.h` | as is | `kRoutes`: `engine.call` names to `ac_*` services |
+| `ac_linux_session.{h,cc}` | as is | `MergeLinuxSession` for `session.read`/`session.write` |
+| `ac_linux_policy.h` | as is | asset path validation |
+| `ac_linux_window_state.h` | as is | `ArdiaShell.windowState`/`windowButtonLayout` names |
+
+Rewritten for the pilot (each marks code the desktop host should own once, shared):
+
+| Linux code | Windows pilot | Why |
+| --- | --- | --- |
+| `ShellHostView` inside `BrowserView` (`ac_linux_host.cc`, 8,921 lines) | `ShellWindow` + `ShellContents` in a plain `views::Widget` | the host is one translation unit tied to 100+ Linux files and 35 Linux patches; the pilot needed none of them |
+| `ShellDataSource`, `ShellController`, `ShellConfig`, `ReadAsset`, `MimeType`, `AssetDirectory` | same code, copied | file-local in `ac_linux_host.cc`; move to `engine/ardiacore-desktop` as is |
+| `ViewportTargeter`, `ShellTransparency`, `SubtractFromRegion`, `PassesShellPoint`, `DoesIntersectRect`, `SetInputRegions` | same logic, plus `ShellRootTargeter` | see Results |
+| `HostMessageHandler` | `Handler` | same transport; the renderer-generation and lease bookkeeping is reduced to one window and generation `1` |
+| `linux_window::StartCaptionMove` | `WM_SYSCOMMAND SC_MOVE \| HTCAPTION`, only while the left button is down | Win32 move loop, Aero Snap included |
+| `chromium-linux-borderless-frame`, `-window-state` (GTK and Wayland frames) | `ShellTreeHost::GetClientAreaInsets`/`GetDwmFrameInsetsInPixels` + `ShellFrame::NonClientHitTest` + `WebUIShellPreTranslate` | Chrome's own Windows frame model: invisible native resize borders, top edge in the client, DWM shadow and rounded corners; `HTMAXBUTTON` presses are taken in the message pump and toggle maximize |
+
+**Compile probe** of the rest (`ARDIA_LINUX_COMPILE_PROBE=1` and `ardia_linux_compile_probe`, objects only, nothing
+linked; `docs/engine-build-windows.md`): of the 122 `.cc` files,
+**75 compile on Windows as they are** and 47 don't:
+
+| Why | Files |
+| --- | --- |
+| POSIX headers (`poll.h`, `unistd.h`, `dirent.h`, `dlfcn.h`, `sys/*`) | 18: `automation`, `calendar_eds`, `cli`, `config_core`, `control_core`, `desktop_core`, `import_keyring`, `import_readers`, `import_storage`, `memory_pressure`, `power`, `secret_text`, `self_update`, `sync`, `sync_keystore`, `sync_vault`, `system`, `user_scripts_store` |
+| POSIX types and calls (`uid_t`, `st_mtim`, `S_ISREG`, `mkdir`), mostly through `ac_linux_downloads.h` and `ac_linux_password_check.h` | 10: `downloads`, `file_drop`, `files`, `host`, `import_sessions`, `native_messaging`, `password_check`, `password_field`, `password_prompt`, `user_scripts` |
+| `base::FilePath` is UTF-16 on Windows (`value()` passed as `std::string`) | 7: `background_dialogs`, `import_service`, `live_service`, `profile_service`, `report`, `site_controls_service`, `sync_service`; likely also `download_service`, `extension_service` |
+| D-Bus | 2: `geoclue`, `system_signals` |
+| Needs a Linux-only patch or copy (`ISOLATED_WORLD_ID_ARDIA_PAGE` from `chromium-linux-page-agent`, `ac_test_media_route_provider.h` from `copies.tsv`, the `ac_engine_call` dlsym shim) | 4: `page_channel`, `web_store`, `cast`, `saved_history_engine` |
+| `base::FileDescriptorWatcher` | 1: `config` |
+| Other Linux-only APIs (`password_manager::kPasswordStore` switch, `GetAppOutput(argv)`, `ui::IndexFromPointFlags`) | 3: `credential_service`, `external_apps`, `typeahead_input` |
+
+The 75 that compile include the documents service (`document_reducer`, `documents`, `document_schema`,
+`document_service`), the page layer (`page_lease`, `page_state`, `page_status`, `page_commands`, `page_messages`,
+`page_media`, `page_prompts`, `page_evaluation`), prompts and dialogs (`dialogs`, `dialog_views`,
+`permission_prompts`, `password_prompts`, `autofill_prompts`), extensions (`extensions`, `extension_views`,
+`extension_keybindings`, `extension_shortcuts`), `crash_dumps(_core)`, `report_core`, `notifications(_core)`,
+`sync_crypto`, `sync_json`, `sync_wordlist`, `import_crypto`, `import_formats`, `import_secrets`, `import_zen`,
+`glass`, `pip_player`, `profiles`, `site_controls`, `live`, `telemetry`, `tab_policy`, `window_lifecycle`,
+`window_caption` and the rest. They compile, but most call hooks that Linux-only patches declare, so they won't link
+until those patches are widened.
+
+### Linux patches the pilot needed widened to Windows
+
+None: the pilot runs in a plain `views::Widget`. It adds one Windows patch of its own,
+`chromium-win-webui-user-data-dir.patch` (the profile folder, above). Hosting the shell in a
+`BrowserView` as Linux does will need these, by what they touch:
+
+| Patch | What it changes | For a BrowserView-hosted shell on Windows |
+| --- | --- | --- |
+| `chromium-ardia-linux-layer` | links the layer into `chrome`, calls it from `chrome_browser_main` and `chrome_main_delegate` | widen, or keep using `//ardia/win`'s existing `g_ardia_win_add_main_parts` hook (the pilot does) |
+| `chromium-linux-shell-above-input` | `BrowserView::ShouldDescendIntoChildForEventHandling` asks the host | widen as is (no Linux API); the pilot's widget delegate does the same |
+| `chromium-linux-background-windows`, `-companion-browsers`, `-window-minimum-size` | hidden companion browsers that hold a profile's tabs, minimum size | widen as is (Views and browser code) |
+| `chromium-linux-document-close` | defers browser close until the shell has sealed its documents | widen as is |
+| `chromium-linux-page-agent`, `-page-prompts`, `-page-status`, `-wheel-zoom`, `-unhandled-key`, `-private-links`, `-navigation-hold-hook`, `-autoplay-policy`, `-geolocation` | page channel, prompts drawn by the shell, status, zoom, keys, private links, autoplay | widen; the Windows autoplay patch (`chromium-win-autoplay-policy`, Blink commit parameter) is the one to keep |
+| `chromium-linux-devtools-authority`, `-devtools-open-tab` | devtools as tabs the shell owns | widen; `chromium-win-devtools-other-clients` overlaps |
+| `chromium-linux-auto-pip`, `-pip-placement`, `-pip-in-window`, `-media-player-pip` | picture in picture inside the window | widen as is |
+| `chromium-linux-action-popup-hook`, `-extension-keybindings`, `-settings-overrides`, `-web-store-uninstall` | extensions UI through the shell | widen; `-settings-overrides` touches a manifest feature list |
+| `chromium-linux-open-urls` | links from other apps reach the running shell | Windows has `g_ardia_win_relaunched` already (the pilot uses it) |
+| `chromium-linux-thin-scroll-bars`, `-glass-compositing` | overlay scroll bars, a transparent compositor for glass | widen `-thin-scroll-bars`; glass is DWM Mica on Windows instead |
+| `chromium-linux-frameless-utility-windows` | frameless settings and import windows | Windows: the same `ShellTreeHost`/`ShellFrame` the pilot uses |
+| `chromium-linux-window-state`, `-borderless-frame` | GTK and Wayland frame, tiling and decorations | Linux only; replaced by the pilot's DWM frame model |
+| `chromium-linux-native-messaging-hosts`, `-branding`, `-wayland-cursor-fallback`, `helium-branding-linux` | POSIX paths, Linux branding, Wayland | Linux only |
+
+### Blockers
+
+None fundamental. Views on Windows hosts the WebUI shell, a page below it, native resize and snap, and the snap
+layouts flyout over an HTML button. Open points:
+
+- **`HTMAXBUTTON` has no hover or press look.** Windows sends non-client messages for that rectangle, so the HTML
+  button gets no `mouseenter`/`mousedown`; the host should send `ArdiaShell` hover and press events so the shell can
+  draw them (Chrome draws its caption buttons in Views for the same reason).
+- **Asset containment is lexical**, as on Linux: a junction planted inside the installed `ardia-ui\` would be
+  followed. Only someone who can write to the install folder can do that; the desktop host should still read assets
+  through the opened file's final path.
+- **Private pages and private `engine.call`s are refused** in the pilot (a private page would trip
+  `ScopedProfileKeepAlive`'s check on an off-the-record profile).
+- **Pages are bare `WebContents`.** No tab helpers, `TabStripModel`, dialogs, permission prompts, downloads, popups or
+  devtools: that is what the companion-browser model of the Linux host (and its patches) gives.
+
+### Remaining work for the full desktop host
+
+In order, as the next PRs:
+
+1. `engine/ardiacore-desktop` with the platform-neutral half: the 75 Linux files that compile, plus the data source,
+   WebUI config, bridge, viewports and input regions out of `ac_linux_host.cc`, and `ShellRootTargeter`
+   (selector sets in `series_win.py` and the key tooling first, Track 2).
+2. The POSIX seams behind `ac_desktop_platform.h`: files and folders (`dirent`, `mkdir`, `stat`), process and pipe I/O
+   (`poll`, `GetAppOutput`), memory locking (`mman`) and file watching (`inotify` → `ReadDirectoryChangesW`), `uid_t`
+   checks (Windows ACLs), `FilePath` UTF-16 at the 9 call sites above. Windows delegates for secrets (DPAPI), calendar,
+   location, power, idle and session signals in place of D-Bus, libsecret and EDS.
+3. Widen to `IS_LINUX || IS_WIN` the Views and browser patches in the table, then host the shell in a `BrowserView`
+   with companion browsers as Linux does, keeping `ShellTreeHost`/`ShellFrame` as the Windows frame.
+4. The host calls the pilot stubs (logged as `unhandled host call` at start: `ArdiaShell.readDocument`/`writeDocument`,
+   `setActiveProfile`, `openWindow`, `setMenuBookmarks`, `setMenuState`, `shellPainted`, `ArdiaTabs.unclaimedTabs`/
+   `claimLaunchTab`, `tab.presentations`, `tab.command` `setMuted`/`evaluate`/`capturePicture`, and the `engine.call`s
+   `documents.watch`, `profiles.loaded`, `engine.info`, `downloads.list`, `engine.memorySaver`, `engine.systemState`,
+   `tabs.strips`, `search.setEngineName`, `webView.*`, `webKit.setFraudWarnings`, `profiles.ctrlTabMru`), then Track 3's
+   generated routes so the list stops being hand-kept.
+5. Windows wording (`--mode win`, `.win.ts`), Mica, the installer and the upgrade migration (Track 4's cutover), and a
+   CI job that runs `run.ps1`'s checks plus the Linux acceptance tour over CDP.
+
+Two RNW features the desktop host must carry over:
+
+1. **Crash reports** (#2442): the RNW app reads Crashpad minidumps itself (`apps/browser/windows/Ardia/CrashDumps.h`,
+   native API v25). On the desktop host this is `ac_linux_crash_dumps(_core)`, which already compiles on Windows; the
+   Crashpad database path and the dump format reader are Windows'.
+2. **Report a Problem** (#3666): Windows has no native uploader today. `ac_linux_report_core` compiles on Windows as
+   is; `ac_linux_report` needs its `FilePath` strings made UTF-16-safe.
 
 ## Order of work
 

@@ -113,6 +113,8 @@ class GlassView(context: Context, appContext: AppContext) : FrostView(context, a
 
     init {
         variant = "glass"
+        clipChildren = false
+        clipToPadding = false
         outlineProvider = object : ViewOutlineProvider() {
             override fun getOutline(view: View, outline: Outline) {
                 outline.setRoundRect(0, 0, view.width, view.height, radiusPx)

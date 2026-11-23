@@ -1661,6 +1661,16 @@
    "detected": false
   },
   {
+   "id": "import:chromium-bookmarks-rust",
+   "source": "import",
+   "guard": "Rust Chromium bookmarks parser behind libardia_import, not linked by any host yet: a Bookmarks file over 64 MiB is refused before it is read, RFC JSON only with at most 200 nested containers, 64 folder levels and 250,000 nodes; titles and URLs reach the tree verbatim and scheme policy stays with import:bookmarks; the shared hostile list runs through the static library",
+   "checks": [
+    "packages/core-rs/crates/ardia-import-core/src/chromium_bookmarks.rs",
+    "packages/core-rs/tests/import-bookmarks/test_import_bookmarks.py"
+   ],
+   "detected": false
+  },
+  {
    "id": "setup-code:apply",
    "source": "other-app",
    "guard": "Fixed schema of settings and catalog pins; values checked by updateSettings (C7: preview after apply)",
@@ -1714,6 +1724,20 @@
     "apps/browser/src/state/tabs/busyTabWatch.ts#freshOwners",
     "apps/browser/src/state/tabs/busyTabWatch.ts#toastName",
     "apps/browser/src/state/tabs/busyTabWatch.ts#stillBusyIn"
+   ],
+   "detected": false
+  },
+  {
+   "id": "windows-webui-bridge:ardiaRequest",
+   "source": "frame",
+   "guard": "Windows WebUI pilot (--ardia-shell=webui): ardiaRequest is taken only from the shell WebContents' live primary main frame whose committed origin is chrome://ardia/, by the handler bound to that document's generation; a new document (reload or renderer swap) or a renderer exit retires the generation, dropping its pending replies, events and pages, and a page asked for by a retired document is never created and its profile never loaded; OnJavascriptDisallowed drops that handler's pending replies at once and retires the generation only if the handler no longer owns the live document; requests of the wrong shape are dropped; tab URLs pass AllowedPageUrl before any profile loads and before each navigation, refusing javascript:, chrome://ardia in any spelling or behind view-source:, non-text URLs and anything unparsable; private profiles are refused; scripts/windows/webui-pilot/bridge.ps1 sends the hostile cases at the sinks in a Windows guest",
+   "checks": [
+    "scripts/windows/engine/src/ardia/win/webui/webui_shell.cc#Trusted",
+    "scripts/windows/engine/src/ardia/win/webui/webui_shell.cc#OwnsHandler",
+    "scripts/windows/engine/src/ardia/win/webui/webui_shell.cc#DeliverReply",
+    "scripts/windows/engine/src/ardia/win/webui/webui_shell.cc#CreatePageIn",
+    "scripts/windows/engine/src/ardia/win/webui/webui_shell.cc#StartPage",
+    "scripts/windows/engine/src/ardia/win/webui/webui_shell.cc#AllowedPageUrl"
    ],
    "detected": false
   }

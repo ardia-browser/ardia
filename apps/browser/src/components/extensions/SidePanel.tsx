@@ -14,6 +14,7 @@ import { closePanelCard, closeSidePanelOnTab, dropSidePanelCard, findExtension, 
 import { curve, duration } from "../ui/motion";
 import { GLYPH } from "../toolbar/tokens";
 import { useResizeDrag } from "../sidebar/useResizeDrag";
+import { useOpenedOnce } from "../ui/useOpenedOnce";
 
 const MIN_WIDTH = 320;
 const MAX_WIDTH = 600;
@@ -23,6 +24,11 @@ const NO_CARDS: SidePanel[] = [];
 
 export function ExtensionSidePanel() {
   const windowId = useWindowId();
+  const opened = useOpenedOnce(useExtensions((e) => !!e.sidePanels[windowId] || !!e.sidePanelCards[windowId]?.length));
+  return opened ? <SidePanels windowId={windowId} /> : null;
+}
+
+export function SidePanels({ windowId }: { windowId: string }) {
   const entry = useExtensions((e) => e.sidePanels[windowId]);
   const cards = useExtensions((e) => e.sidePanelCards[windowId] ?? NO_CARDS);
   const panel = entry && !entry.hidden ? entry : undefined;

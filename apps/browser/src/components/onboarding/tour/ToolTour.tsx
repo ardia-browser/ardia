@@ -25,7 +25,7 @@ export function ToolTour() {
   const windowId = useWindowId();
   const active = useTour((s) => s.windowId === windowId && s.stops.length > 0);
   const session = useTour((s) => s.session);
-  const { shown, appear: presence } = usePresence(active ? session : null, TOUR_PRESENCE);
+  const { shown, appear: presence } = usePresence(active ? session : null, TOUR_PRESENCE, true);
 
   if (shown === null) return null;
   return (

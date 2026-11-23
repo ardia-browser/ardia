@@ -350,6 +350,25 @@ static NSDictionary<NSString *, id> *OffscreenRefusal(NSString *reason) {
       for (ArdiaCoreTab *tab in [[window tabsForProfile:profile] copy]) [tab close];
 }
 
++ (NSDictionary<NSString *, id> *)cliHoldTabs:(NSArray<NSDictionary<NSString *, id> *> *)holds {
+  NSMutableArray<ArdiaCoreTab *> *tabs = [NSMutableArray array];
+  NSMutableArray<NSNumber *> *until = [NSMutableArray array];
+  NSMutableArray<NSString *> *ids = [NSMutableArray array];
+  for (NSDictionary<NSString *, id> *hold in holds) {
+    id tabId = hold[@"tabId"];
+    id ends = hold[@"until"];
+    if (![tabId isKindOfClass:NSString.class] || ![ends isKindOfClass:NSNumber.class]) continue;
+    if (ArdiaCoreTab *tab = ardia_host::TabWithAppTabId(tabId)) {
+      [tabs addObject:tab];
+      [until addObject:ends];
+      [ids addObject:tabId];
+    }
+  }
+  NSMutableIndexSet *placed = [NSMutableIndexSet indexSet];
+  NSInteger kept = [ArdiaCoreEngine holdTabsForCli:tabs until:until marked:placed];
+  return @{@"kept" : @(kept), @"marked" : [ids objectsAtIndexes:placed]};
+}
+
 + (void)cliTabTargets:(NSArray<NSString *> *)tabIds completion:(void (^)(NSDictionary<NSString *, id> *targets))completion {
   static NSMutableDictionary<NSString *, NSString *> *lastTarget;
   static NSMutableDictionary<NSString *, NSNumber *> *generations;

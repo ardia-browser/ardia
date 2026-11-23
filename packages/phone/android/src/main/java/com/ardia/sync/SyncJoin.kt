@@ -31,7 +31,7 @@ data class PhraseFooter(val text: String, val tone: Tone) {
 
 object SyncJoin {
     const val WORD_COUNT = RecoveryPhrase.WORD_COUNT
-    const val MAC_HINT = "On your Mac: Settings › Sync › Connect Another Device."
+    const val MAC_HINT = "On your Mac: Settings › General › Sync › Connect Another Device."
     const val SCAN_REJECTED = "Not an Ardia sync code."
 
     fun check(phrase: String): PhraseCheck {

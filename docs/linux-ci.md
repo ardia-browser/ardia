@@ -1,7 +1,7 @@
 # Linux CI
 
 Linux CI follows the Mac's prebuilt-engine model. Chromium is compiled only on a Linux builder. GitHub Actions fetches
-a published, checksum-verified engine, builds the current `apps/linux` UI, packages it and smoke-tests the package.
+a published, checksum-verified engine, builds the current `apps/desktop` UI, packages it and smoke-tests the package.
 Hosted CI never runs `gclient sync`, GN or a Chromium build.
 
 ## Pieces
@@ -10,7 +10,7 @@ Hosted CI never runs `gclient sync`, GN or a Chromium build.
 | --- | --- |
 | [`.github/workflows/linux.yml`](../.github/workflows/linux.yml) | Runs on pull requests and pushes to `main` that touch what the Linux build and its fixture suites read (not the Mac, iPhone, Android or Windows native code beyond the few files the parity fixtures compare against, which `scripts/ci/workflow-paths.test.mjs` checks), and by hand: a vouch `gate` job for pull requests from forks, then two `checks` jobs (the UI checks and the engine fixtures) and a `package` job on `ubuntu-24.04`. A pull request packages and smoke-tests the tarball alone unless it changes `scripts/linux`, the workflow or its setup action, or carries the `full-ci` label; pushes and manual runs also build, smoke-test and install the `.deb` and the AppImage |
 | [`.github/actions/linux-setup`](../.github/actions/linux-setup/action.yml) | Ubuntu packages for the fixtures (clang, dbus, NSS tools, gnome-keyring, PyGObject), Node 24, pnpm and `pnpm install --frozen-lockfile` |
-| [`scripts/linux/ci-checks.sh`](../scripts/linux/ci-checks.sh) | The engine-free checks. `--part ui` runs the `apps/linux` and `scripts/linux` checks side by side; `--part engine --shard I/N` runs every Nth Python suite and `engine/ardiacore-linux/tests` module, those in parallel, because the suite takes well over five minutes serially. With no options it runs everything |
+| [`scripts/linux/ci-checks.sh`](../scripts/linux/ci-checks.sh) | The engine-free checks. `--part ui` runs the `apps/desktop` and `scripts/linux` checks side by side; `--part engine --shard I/N` runs every Nth Python suite and `engine/ardiacore-linux/tests` module, those in parallel, because the suite takes well over five minutes serially. With no options it runs everything |
 | [`scripts/linux/publish-engine.sh`](../scripts/linux/publish-engine.sh) | Builder side: stages, strips and archives an engine from a Chromium out dir; `--upload` publishes it and adds its table row |
 | [`packages/ardiacore/prebuilt-engines-linux.tsv`](../packages/ardiacore/prebuilt-engines-linux.tsv) | `key<TAB>tag<TAB>sha256` for each Linux engine published in ardia-browser/ardia, and a fourth field, the key it was published under, when that engine's sources are this key's (rows carried over when the key changed) |
 | `packages/ardiacore/scripts/fetch-engine.sh --arch linux-x86_64` | Dispatches to [`scripts/linux/fetch-engine.sh`](../scripts/linux/fetch-engine.sh); the Mac path is unchanged |
@@ -112,7 +112,7 @@ package job red after almost every merge.
 ## Jobs
 
 - **`checks`.** It needs no engine. It runs:
-  - the `apps/linux` typecheck, host, symbol, module-graph and acceptance self-tests;
+  - the `apps/desktop` typecheck, host, symbol, module-graph and acceptance self-tests;
   - the UI build;
   - the Python and Node suites under `engine/patches/build/tests`, `engine/chromium/src/chrome/browser/ardia/tests` and
     `engine/ardiacore-linux/tests`.
@@ -121,7 +121,7 @@ package job red after almost every merge.
 - **`package`.** In order, it:
   1. reads the version from `MARKETING_VERSION` in the Xcode project, as `scripts/release.sh` does;
   2. fetches the engine (cached per engine key and table);
-  3. builds `apps/linux/dist`;
+  3. builds `apps/desktop/dist/linux`;
   4. fetches the `ardia` command pinned in `apps/browser/official-plugins.json` (its linux-x64 tarball, from
      ardia-browser/plugins' release, SHA-256 checked) and names it `ardia-cli-<version>-linux-x64.tar.gz` for the package
      (`scripts/release/official-plugins.py linux-cli`); until the pin is published it packages without the CLI, with a
@@ -204,7 +204,7 @@ it:
 
 1. checks the version's channel, `MARKETING_VERSION`, the notes file and a clean tree;
 2. fetches the exact engine (`--engine nearest`, an engine dir or a Chromium out dir make test builds);
-3. builds `apps/linux/dist`, the CLI and uBlock Origin;
+3. builds `apps/desktop/dist/linux`, the CLI and uBlock Origin;
 4. packages `Ardia-<version>-linux-x64.tar.xz` with `--version` and `--cli`, and the same tree as
    `Ardia-<version>-linux-x64.deb` (which needs `dpkg-deb` and `readelf`) and `Ardia-<version>-linux-x64.AppImage`;
 5. writes `ardia-bin-<version>.src.tar.gz`, the PKGBUILD and `.SRCINFO` pinned to that tarball by
@@ -269,7 +269,7 @@ hand. The one-time setup is in [releasing.md](releasing.md#linux-package).
 
 ## Triggers and gating
 
-- **When it runs.** On pull requests and pushes to `main` that touch what the Linux build reads: `apps/linux`,
+- **When it runs.** On pull requests and pushes to `main` that touch what the Linux build reads: `apps/desktop`,
   `apps/browser`, `plugins`, `packages`, `engine`, `scripts/linux`, `scripts/lib`, `scripts/agent/locked`,
   `infra/feedback/lib`, `patches`, the workspace manifests and lockfile, the Linux setup action and the workflow itself.
   Mac-only changes elsewhere skip it. It can still be started by hand, with `exact` to require this commit's engine.

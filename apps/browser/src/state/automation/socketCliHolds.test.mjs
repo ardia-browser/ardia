@@ -34,7 +34,7 @@ test("a tab the ardia command holds isn't put to sleep over the budget until the
   takeTabSleepCounts();
   assert.deepEqual(planOverBudget(S(), loaded, budget, now).sleep.sort(), [...ids].sort(), "both hidden tabs may sleep before the hold");
   const held = await ok("tabs.hold", { session: "a", tabs: [ids[0], "tab-nope"], seconds: 60 });
-  assert.deepEqual(held, { held: [ids[0]], gone: ["tab-nope"], seconds: 60 });
+  assert.deepEqual(held, { held: [ids[0]], gone: ["tab-nope"], seconds: 60, engineKeeps: true });
   const plan = planOverBudget(S(), loaded, budget, now);
   assert.deepEqual(plan.sleep, [ids[1]]);
   assert.deepEqual(plan.vetoed.find((v) => v.id === ids[0]), { id: ids[0], veto: "cliSession" });

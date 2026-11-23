@@ -15,7 +15,7 @@ import { TOOLBAR_TRAILING } from "../../lib/toolbarRow";
 import { isLight } from "../../lib/color";
 import { dropToolbarAnchor, setToolbarAnchor } from "../../state/extensions/toolbarAnchors";
 import { onInterfaceScaleSettled } from "../../state/settings/interfaceScale";
-import { useMeasuredWindowRootSize } from "../../state/windows/rootSize";
+import { useWindowRootSize } from "../../state/windows/rootSize";
 import type { Rect } from "../window/geometry";
 import {
   activateExtension,
@@ -97,7 +97,7 @@ function TabToolbarExtensions({
   const movable = reorderable && pinned.length > 1;
   const drag = useToolbarDrag(windowId);
   const [rowBounds, setRowBounds] = useState<Rect>();
-  const rootSize = useMeasuredWindowRootSize(Platform.OS === "windows" ? windowId : "");
+  const rootSize = useWindowRootSize(Platform.OS === "windows" ? windowId : "");
   const anchorLayout = buttonsVisible
     ? [rootSize?.width, rootSize?.height, paneBounds?.x, paneBounds?.y, paneBounds?.width, paneBounds?.height,
         rowBounds?.x, rowBounds?.y, rowBounds?.width, rowBounds?.height].join(":")

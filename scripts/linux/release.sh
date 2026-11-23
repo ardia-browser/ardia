@@ -4,7 +4,7 @@ usage='usage: scripts/linux/release.sh <version> [--engine exact|nearest|<dir>] 
 
 Builds the Linux x64 release of Ardia <version> (a -nightly.<n> version is a
 nightly), the Linux counterpart of scripts/release.sh: it fetches the engine,
-builds apps/linux/dist and the ardia CLI, prepares uBlock Origin, packages
+builds apps/desktop/dist/linux and the ardia CLI, prepares uBlock Origin, packages
 Ardia-<version>-linux-x64.tar.xz with lib/ardia/VERSION and the CLI, and the
 same build as Ardia-<version>-linux-x64.deb and .AppImage, writes
 ardia-bin-<version>.src.tar.gz (the Arch PKGBUILD and .SRCINFO pinned to that
@@ -28,7 +28,7 @@ publishes: it prints the gh release upload command for the assets.
                      $LINUX_UPDATE_KEY_FILE); without one the manifest is left
                      unsigned, and the Release workflow'"'"'s linux-sign job signs it
   --allow-dirty      build with uncommitted changes under apps/browser,
-                     apps/linux, packages, engine or scripts/linux
+                     apps/desktop, packages, engine or scripts/linux
                      (a test build, never a release)
   -h, --help         show this help
 
@@ -74,10 +74,10 @@ project_version=$(sed -n 's/.*MARKETING_VERSION = "\{0,1\}\([^";]*\)"\{0,1\};/\1
   || die "MARKETING_VERSION is '$project_version', not $version: the Linux release follows the macOS release of the same version"
 [ -f "docs/release-notes/$version.md" ] || die "no release notes: write docs/release-notes/$version.md first"
 
-dirty=$(git status --porcelain -- apps/browser apps/linux packages engine scripts/linux | grep -v ' apps/browser/build' || true)
+dirty=$(git status --porcelain -- apps/browser apps/desktop packages engine scripts/linux | grep -v ' apps/browser/build' || true)
 if [ -n "$dirty" ]; then
   echo "$dirty" >&2
-  [ "$allow_dirty" = 1 ] || die "uncommitted changes under apps/browser, apps/linux, packages, engine or scripts/linux (above)"
+  [ "$allow_dirty" = 1 ] || die "uncommitted changes under apps/browser, apps/desktop, packages, engine or scripts/linux (above)"
   warn "building with the uncommitted changes above: a test build, never a release"
 fi
 
@@ -157,9 +157,9 @@ else
   warn "the engine ($engine_label, Chromium ${chromium_version:-unknown}) isn't this commit's ${head_key:0:12}: a test build, not a release"
 fi
 
-echo "==> UI (apps/linux/dist)"
-pnpm --filter @ardia/linux build >"$out/ui-build.log" 2>&1 \
-  || { tail -20 "$out/ui-build.log" >&2; die "building apps/linux/dist failed ($out/ui-build.log)"; }
+echo "==> UI (apps/desktop/dist/linux)"
+pnpm --filter @ardia/desktop build >"$out/ui-build.log" 2>&1 \
+  || { tail -20 "$out/ui-build.log" >&2; die "building apps/desktop/dist/linux failed ($out/ui-build.log)"; }
 
 echo "==> ardia command (pinned in apps/browser/official-plugins.json)"
 python3 -I scripts/release/official-plugins.py ${OFFICIAL_PLUGINS_FROM:+--from "$OFFICIAL_PLUGINS_FROM"} linux-cli "$version" "$out/$cli_name" \
@@ -170,7 +170,7 @@ blocker=$(scripts/linux/fetch-ubo.sh 2>"$out/ubo.log") \
   || { tail -20 "$out/ubo.log" >&2; die "preparing uBlock Origin failed ($out/ubo.log)"; }
 
 echo "==> Package"
-python3 scripts/linux/package.py --out "$engine" --ui apps/linux/dist --content-blocker "$blocker" \
+python3 scripts/linux/package.py --out "$engine" --ui apps/desktop/dist/linux --content-blocker "$blocker" \
   --version "$version" --cli "$out/$cli_name" --destination "$out/$package_name" \
   --deb "$out/$deb_name" --appimage "$out/$appimage_name" >/dev/null
 srcpkg=$(mktemp -d)

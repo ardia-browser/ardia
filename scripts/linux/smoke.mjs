@@ -8,9 +8,9 @@ import { tmpdir } from "node:os";
 import { inflateSync } from "node:zlib";
 import { basename, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { SHELL_PREFIX, closeAllApps, killAllAppsNow, launchArdia, launchArguments, launchEnvironment } from "../../apps/linux/scripts/acceptance/lib/ardia.mjs";
-import { connectCdp, evaluate } from "../../apps/linux/scripts/acceptance/lib/cdp.mjs";
-import { errorText, js, nonce, until, withDeadline } from "../../apps/linux/scripts/acceptance/lib/util.mjs";
+import { SHELL_PREFIX, closeAllApps, killAllAppsNow, launchArdia, launchArguments, launchEnvironment } from "../../apps/desktop/scripts/acceptance/lib/ardia.mjs";
+import { connectCdp, evaluate } from "../../apps/desktop/scripts/acceptance/lib/cdp.mjs";
+import { errorText, js, nonce, until, withDeadline } from "../../apps/desktop/scripts/acceptance/lib/util.mjs";
 import { selfieKeys } from "./ubo-seed.mjs";
 
 export const USAGE = `Usage: node scripts/linux/smoke.mjs --package <Ardia-*linux-x64*.tar.xz|.deb|.AppImage> --results <dir> [--timeout-ms N] [--keep] [--allow-old-engine]

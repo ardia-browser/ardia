@@ -18,6 +18,8 @@ series_win.py takes them, and lists every problem with the file and line it come
   through $AC_MAC_BUILD_DIR, $AC_WIN_BUILD_DIR, $AC_REPO, the script's own folder, or a variable the script sets to
   a repository folder with `cd … && pwd`; other variables point into the Chromium build tree, outside the repository.
   Each path is judged by engine-key.py's own plan, so the declaration is normalized and excluded as the key does it.
+- the engine/ardiacore-linux files //ardia/win compiles as they are (the WebUI shell) all exist and are
+  accepted-linux-sources.txt, and linux-probe.gn still makes the compile probe's BUILD.gn.
 
 A change to an accepted list is accepted on purpose: run with --accept and commit the lists. --accept writes
 nothing and fails when any input can't be read.
@@ -44,6 +46,7 @@ import series_win as build
 
 ACCEPTED_PATCHES = os.path.join(build.HERE, 'accepted-patches.txt')
 ACCEPTED_SOURCES = os.path.join(build.HERE, 'accepted-layer-sources.txt')
+ACCEPTED_LINUX = os.path.join(build.HERE, 'accepted-linux-sources.txt')
 CALL = re.compile(r'^AC_(?:PROFILE|ARGS|ENGINE)_CALL\((ac_\w+)', re.M)
 
 
@@ -293,6 +296,18 @@ def declared_inputs(problems):
             problems.append(f'{where}: the Windows build lists {folder}, which no Windows key tree covers')
 
 
+def linux_sources(problems):
+    reused = attempt(problems, build.linux_reused)
+    if reused is None:
+        return None
+    for rel in reused:
+        if not os.path.isfile(os.path.join(build.LINUX_LAYER, rel)):
+            problems.append(f'{os.path.relpath(build.WIN_BUILD, build.REPO)}: //ardia/win compiles //ardia/linux/{rel}, '
+                            f'which is not in {os.path.relpath(build.LINUX_LAYER, build.REPO)}')
+    attempt(problems, lambda: build.linux_probe_build(build.files_under(build.LINUX_LAYER)))
+    return reused
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--accept', action='store_true')
@@ -305,8 +320,9 @@ def main():
     sources = layer_sources(problems)
     attempt(problems, build.launch_switches_source)
     declared_inputs(problems)
+    linux = linux_sources(problems)
     if args.accept:
-        if problems or sources is None:
+        if problems or sources is None or linux is None:
             for problem in problems:
                 print(f'FAIL {problem}')
             print('nothing accepted: the inputs could not be read, so the accepted lists are left as they were')
@@ -315,12 +331,17 @@ def main():
             f.write(''.join(f'{name}\n' for name in patches))
         with open(ACCEPTED_SOURCES, 'w') as f:
             f.write(''.join(f'{rel}\n' for rel in sources))
+        with open(ACCEPTED_LINUX, 'w') as f:
+            f.write(''.join(f'{rel}\n' for rel in linux))
     compare(problems, ACCEPTED_PATCHES, read_list(ACCEPTED_PATCHES), patches, 'the patches Windows applies')
     if sources is not None:
         compare(problems, ACCEPTED_SOURCES, read_list(ACCEPTED_SOURCES), sources, 'the layer sources Windows compiles')
+    if linux is not None:
+        compare(problems, ACCEPTED_LINUX, read_list(ACCEPTED_LINUX), linux, 'the Linux layer files Windows compiles')
     for problem in problems:
         print(f'FAIL {problem}')
-    print(f'{len(patches)} patches, {len(sources or [])} layer sources; {len(problems)} problem{"" if len(problems) == 1 else "s"}')
+    print(f'{len(patches)} patches, {len(sources or [])} layer sources, {len(linux or [])} Linux layer files; '
+          f'{len(problems)} problem{"" if len(problems) == 1 else "s"}')
     return 1 if problems else 0
 
 

@@ -5,7 +5,7 @@ on:
     paths: &inputs
       - ".gitattributes"
       - "apps/browser/**"
-      - "apps/linux/**"
+      - "apps/desktop/**"
       - "apps/site/**"
       - "apps/phone/scripts/**"
       - "apps/ios/**"
@@ -75,7 +75,7 @@ jobs:
             code:
               - ".gitattributes"
               - "apps/browser/**"
-              - "apps/linux/**"
+              - "apps/desktop/**"
               - "apps/phone/scripts/**"
               - "apps/site/src/assets/**"
               - "apps/site/src/scripts/meadowApp.ts"
@@ -100,8 +100,8 @@ jobs:
               - ".github/workflows/checks.yml"
             browser:
               - "apps/browser/**"
-              - "apps/linux/src/**"
-              - "apps/linux/package.json"
+              - "apps/desktop/src/**"
+              - "apps/desktop/package.json"
               - "apps/site/public/switches.json"
               - "packages/**"
               - "engine/ardiacore/src/**"
@@ -131,7 +131,7 @@ jobs:
               - "apps/ios/**"
               - "apps/site/**"
               - "apps/cli/**"
-              - "apps/linux/scripts/**"
+              - "apps/desktop/scripts/**"
               - "apps/browser/official-plugins.json"
               - "apps/browser/official-plugins-history.json"
               - "apps/browser/macos/Ardia.xcodeproj/project.pbxproj"

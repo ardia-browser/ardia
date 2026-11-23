@@ -8,6 +8,7 @@ import { insetRect, MENU_MARGIN, menuAt, menuHeight, menuOnTrigger, menuShrink, 
 import { useReduceMotion } from "./contrast";
 import { focusForScreenReader } from "./coverFocus";
 import { useDesign } from "./design";
+import { FabricCatchUp } from "./FabricCatchUp";
 import { LookFrost, SURFACES_FROST } from "./LookViews";
 import { MATERIAL_STATE } from "./materialRoles";
 import { MATERIAL_MENU_GROUP_GAP, materialMenuFill, materialMenuGroups, materialMenuHeight, materialMenuWidth, useMaterialBack } from "./MaterialSurfaces";
@@ -38,6 +39,14 @@ export const onDrawnMenuOpened = (handler: (privately: boolean) => void) => {
 };
 
 export const countDrawnMenuOpened = (privately = false) => drawnMenuOpened(privately);
+
+let drawnMenuActionChosen: (privately: boolean) => void = () => undefined;
+
+export const onDrawnMenuActionChosen = (handler: (privately: boolean) => void) => {
+  drawnMenuActionChosen = handler;
+};
+
+const MENU_SCALE_STEPS = 50;
 
 export type MenuPlacer = (height: number, keepBelow?: boolean, pageWidth?: number) => { place: ViewStyle; origin: string; maxHeight?: number; shrink?: { x: number; y: number } };
 
@@ -128,9 +137,14 @@ function MaterialMenu({ items, place, placer, onDismiss, origin = "top", shown =
     opacity: leaving ? opened.value : revealed ? Math.min(1, opened.value * 3) : 0,
     transform: [{ scaleY: 0.8 + 0.2 * opened.value }],
   }));
+  const openingScale = () => {
+    "worklet";
+    return Math.round(opened.value * MENU_SCALE_STEPS) / MENU_SCALE_STEPS;
+  };
   const choose = (action: () => void) => {
     if (chosen.current) return;
     chosen.current = true;
+    drawnMenuActionChosen(privately);
     onDismiss(true);
     action();
   };
@@ -212,6 +226,7 @@ function MaterialMenu({ items, place, placer, onDismiss, origin = "top", shown =
             </View>
           ))}
         </ScrollView>
+        {revealed && !leaving && !reduceMotion ? <FabricCatchUp motion={openingScale} testID="menuFabricCatchUp" /> : null}
       </Animated.View>
     </View>
   );
@@ -289,12 +304,17 @@ function ClassicMenu({ items, place, placer, onDismiss, dimmed = false, origin =
     const open = fromScale + (1 - fromScale) * opened.value;
     return { transform: [{ scaleX: open * (1 + (shrinkX - 1) * closed.value) }, { scaleY: open * (1 + (shrinkY - 1) * closed.value) }] };
   });
+  const openingScale = () => {
+    "worklet";
+    return Math.round(opened.value * MENU_SCALE_STEPS) / MENU_SCALE_STEPS;
+  };
   const dimStyle = useAnimatedStyle(() => ({ opacity: dim.value }));
   const fade = useAnimatedStyle(() => ({ opacity: glass.value }));
   const rowsFade = useAnimatedStyle(() => ({ opacity: shownContent.value }));
   const choose = (action: () => void) => {
     if (chosen.current) return;
     chosen.current = true;
+    drawnMenuActionChosen(privately);
     onDismiss(true);
     action();
   };
@@ -396,6 +416,7 @@ function ClassicMenu({ items, place, placer, onDismiss, dimmed = false, origin =
           </Animated.View>
           </ScrollView>
         </MenuMaterial>
+        {revealed && !leaving && !reduceMotion ? <FabricCatchUp motion={openingScale} testID="menuFabricCatchUp" /> : null}
       </Animated.View>
       </Animated.View>
     </View>

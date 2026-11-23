@@ -21,6 +21,7 @@ import { useStripPick } from "./stripPick";
 import { useStripCardHover } from "./StripHoverCard";
 import { useChipHover, useChipHovered } from "./reachableHover";
 import { TabPressArea } from "../sidebar/TabPressArea";
+import { refreshShownTile } from "../../state/sidebar/actions";
 
 export function PinnedDock({ tabIds }: { tabIds: string[] }) {
   const theme = useTheme();
@@ -105,7 +106,7 @@ function PinnedCell({ tabId, geometry, from }: { tabId: string; geometry: DragGe
           opacity: drag.crossed ? 0 : 1,
         }}
       >
-        <TabPressArea windowId={windowId} tab={tab} onSwitch={pick}>
+        <TabPressArea windowId={windowId} tab={tab} onSwitch={pick} onDoubleClick={(wasShown) => refreshShownTile(windowId, tabId, wasShown)}>
           {({ pressed }) => <PinnedFace tabId={tabId} active={active} hovered={hovered} pressed={pressed} frame="face" />}
         </TabPressArea>
       </View>

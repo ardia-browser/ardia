@@ -1,6 +1,6 @@
 # Linux acceptance suite
 
-`apps/linux/scripts/acceptance` runs headless acceptance scenarios against a packaged Linux Ardia. Each scenario
+`apps/desktop/scripts/acceptance` runs headless acceptance scenarios against a packaged Linux Ardia. Each scenario
 launches Ardia with throwaway profiles and checks a feature through the shell, the page and CDP. The suite prints one
 result per scenario as JSON:
 
@@ -13,8 +13,8 @@ No scenario runs in CI. The package job runs `scripts/linux/smoke.mjs` only (see
 ## Running it
 
 ```sh
-pnpm --filter @ardia/linux build
-pnpm --filter @ardia/linux acceptance -- <path to the packaged ardia executable> [apps/linux/dist]
+pnpm --filter @ardia/desktop build
+pnpm --filter @ardia/desktop acceptance -- <path to the packaged ardia executable> [apps/desktop/dist/linux]
 ```
 
 - **UI directory.** The second argument is optional. When given, the UI is loaded from it (`--ardia-ui-dir`);
@@ -32,7 +32,7 @@ Results go to stdout and to `<results>/results.json`. Each scenario writes its c
 `<results>/<id>/`. A failing scenario keeps its scratch profiles, including the browser log and `*-command.json` with
 the exact command line.
 
-`pnpm --filter @ardia/linux acceptance:self-test` tests the harness without an Ardia build: the CDP client against a
+`pnpm --filter @ardia/desktop acceptance:self-test` tests the harness without an Ardia build: the CDP client against a
 mock peer, the launch plumbing and shell driver against a mock host, the runner and its report, the classifiers, the
 fixture servers and certificates, and `scripts/linux/smoke.mjs`. When `/usr/bin/chromium` (or
 `ARDIA_ACCEPTANCE_CHROMIUM`) is installed, it also checks SPKI trust, resolver mapping, gated downloads, synthesized

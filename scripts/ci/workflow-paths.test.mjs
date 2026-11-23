@@ -150,7 +150,7 @@ test("Checks' code filter covers every site file the meadow check builds from", 
 });
 
 test("Linux starts on every repository file its fixture suites read", () => {
-  const suites = ["engine/ardiacore-linux/tests", "engine/patches/build/tests", "engine/chromium/src/chrome/browser/ardia/tests", "scripts/linux", "apps/linux/scripts"];
+  const suites = ["engine/ardiacore-linux/tests", "engine/patches/build/tests", "engine/chromium/src/chrome/browser/ardia/tests", "scripts/linux", "apps/desktop/scripts"];
   const files = suites.flatMap((dir) => filesUnder(dir, (name) => /\.(?:py|mjs|sh)$/.test(name)));
   const triggers = triggerPaths(workflow("linux.yml"), "pull_request");
   const named = repoPathsNamedIn(files);

@@ -6,6 +6,7 @@ on:
       - "engine/patches/**"
       - "engine/chromium/**"
       - "engine/ardiacore/**"
+      - "engine/ardiacore-linux/**"
       - "engine/engine-key.*"
       - "packages/ardiacore/prebuilt-engines.tsv"
       - "packages/ardiacore/prebuilt-engines-linux.tsv"

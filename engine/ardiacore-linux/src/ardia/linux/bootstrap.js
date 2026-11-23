@@ -39,6 +39,9 @@
     ["ArdiaCli.install", 330000],
     ["ArdiaShell.fetchBangList", 75000],
   ]);
+  const slowEngineCalls = new Map([
+    ["contentBlocker.removeAllowed", 90000],
+  ]);
 
   const request = (method, args, deadline = 30000) => {
     if (disposed) return Promise.reject(new Error("The browser UI has closed"));
@@ -93,7 +96,7 @@
         if (typeof name !== "string" || typeof profile !== "string" || (args !== null && typeof args !== "string")) {
           return Promise.reject(new TypeError("Invalid engine call"));
         }
-        return request("engine.call", { name, profile, args });
+        return request("engine.call", { name, profile, args }, slowEngineCalls.get(name));
       },
       invoke(method, args = {}) {
         if (typeof method !== "string" || !args || typeof args !== "object" || Array.isArray(args)) {

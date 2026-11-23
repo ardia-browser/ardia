@@ -17,30 +17,30 @@ public class WebViewModule: Module {
     }
   }
 
-  static let calls = CallTable(domain: "webView", handlers: [
-    "setDisplayMediaPicker": setting { ArdiaWebView.setDisplayMediaPicker(try $0.bool("enabled")) },
-    "setPeekModifier": setting { ArdiaWebView.setPeekModifier(try $0.text("modifier")) },
-    "setSplitLinkModifier": setting { ArdiaWebView.setSplitLinkModifier(try $0.text("modifier")) },
-    "setPeekOtherSiteTabs": setting { ArdiaWebView.setPeekOtherSiteTabs(try $0.strings("tabIds")) },
-    "setSelectionPopover": setting { args in
+  static let calls = webViewCallTable(
+    setDisplayMediaPicker: setting { ArdiaWebView.setDisplayMediaPicker(try $0.bool("enabled")) },
+    setPeekModifier: setting { ArdiaWebView.setPeekModifier(try $0.text("modifier")) },
+    setSplitLinkModifier: setting { ArdiaWebView.setSplitLinkModifier(try $0.text("modifier")) },
+    setPeekOtherSiteTabs: setting { ArdiaWebView.setPeekOtherSiteTabs(try $0.strings("tabIds")) },
+    setSelectionPopover: setting { args in
       let enabled = try args.bool("enabled")
       ArdiaWebView.setSelectionPopoverEnabled(enabled)
       WebKitPageGestures.selectionPopover = enabled
     },
-    "setBlockAutoplayEverywhere": setting { ArdiaWebView.setBlockAutoplayEverywhere(try $0.bool("enabled")) },
-    "setCommandScrollZoom": setting { ArdiaWebView.setCommandScrollZoomEnabled(try $0.bool("enabled")) },
-    "setLittleArdiaOpensNewTabLinks": setting { ArdiaWebView.setLittleArdiaOpensNewTabLinks(try $0.bool("enabled")) },
-    "setPopupsOpenAsTabs": setting { ArdiaWebView.setPopupsOpenAsTabs(try $0.bool("enabled")) },
-    "setAutoPictureInPicture": setting { ArdiaWebView.setAutoPictureInPictureEnabled(try $0.bool("enabled")) },
-    "setVideoUpscaling": setting { ArdiaWebView.setVideoUpscalingEnabled(try $0.bool("enabled")) },
-    "setVideoUpscalingTestConditions": setting { args in
+    setBlockAutoplayEverywhere: setting { ArdiaWebView.setBlockAutoplayEverywhere(try $0.bool("enabled")) },
+    setCommandScrollZoom: setting { ArdiaWebView.setCommandScrollZoomEnabled(try $0.bool("enabled")) },
+    setLittleArdiaOpensNewTabLinks: setting { ArdiaWebView.setLittleArdiaOpensNewTabLinks(try $0.bool("enabled")) },
+    setPopupsOpenAsTabs: setting { ArdiaWebView.setPopupsOpenAsTabs(try $0.bool("enabled")) },
+    setAutoPictureInPicture: setting { ArdiaWebView.setAutoPictureInPictureEnabled(try $0.bool("enabled")) },
+    setVideoUpscaling: setting { ArdiaWebView.setVideoUpscalingEnabled(try $0.bool("enabled")) },
+    setVideoUpscalingTestConditions: setting { args in
       var conditions: [String: NSNumber] = [:]
       for key in ["lowPower", "thermalPressure", "capturing"] { if let on = try args.optionalBool(key) { conditions[key] = NSNumber(value: on) } }
       ArdiaWebView.setVideoUpscalingTestConditions(conditions)
     },
-    "videoUpscalingState": { _, reply in reply.ok(ArdiaWebView.videoUpscalingState()) },
-    "takeContentDrift": { _, reply in reply.ok(ArdiaWebView.takeContentDrift()) },
-    "takeFirstPaintHolds": { _, reply in reply.ok(ArdiaWebView.takeFirstPaintHolds()) },
-  ])
+    videoUpscalingState: { _, reply in reply.ok(ArdiaWebView.videoUpscalingState()) },
+    takeContentDrift: { _, reply in reply.ok(ArdiaWebView.takeContentDrift()) },
+    takeFirstPaintHolds: { _, reply in reply.ok(ArdiaWebView.takeFirstPaintHolds()) }
+  )
 }
 

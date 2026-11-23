@@ -8,12 +8,12 @@ public class WindowsModule: Module {
     Self.calls.function
   }
 
-  static let calls = CallTable(domain: "windows", handlers: [
-    "list": { _, reply in reply.ok(ArdiaHost.chromeWindows) },
-    "dev": { args, reply in
+  static let calls = windowsCallTable(
+    list: { _, reply in reply.ok(ArdiaHost.chromeWindows) },
+    dev: { args, reply in
       let action = try args.text("action")
       guard let window = NSApp.window(withWindowNumber: try args.int("window")) else { return reply.ok("") }
       reply.ok(ArdiaChromeWindowHost.devAction(action, window: window) ?? "")
-    },
-  ])
+    }
+  )
 }

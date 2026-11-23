@@ -25,6 +25,8 @@ struct LaunchGuardFacts {
 
 std::wstring AppDataDirectory();
 
+void SetAppDataDirectory(const std::wstring& directory);
+
 std::wstring LaunchLogPath();
 
 void RotateLaunchLog();

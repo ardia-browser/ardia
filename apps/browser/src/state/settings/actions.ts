@@ -38,7 +38,7 @@ export function chooseCommandBarPlacement(commandBarPlacement: Settings["command
 
 export function chooseAfterClosingTab(afterClosingTab: Settings["afterClosingTab"]) {
   useBrowser.getState().updateSettings({ afterClosingTab });
-  noteSettingsPick("afterClosingTab", afterClosingTab === "tabAbove" ? "above" : "recent");
+  noteSettingsPick("afterClosingTab", ({ tabAbove: "above", tabBelow: "below", previouslyActive: "recent" } as const)[afterClosingTab]);
 }
 
 export function setMouseShortcut(id: string, button: Shortcut | null) {

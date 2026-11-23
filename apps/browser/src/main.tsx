@@ -82,6 +82,7 @@ if (__DEV__ || perfProbeEnabled) require("./components/dev/devHarness").startDev
 const devMountDelay = () => (__DEV__ ? ((globalThis as { acDevMountDelayMs?: number }).acDevMountDelayMs ?? 0) : 0);
 
 function Root({ windowId }: { windowId: string }) {
+  const [renderedAt] = useState(Date.now);
   const [delay] = useState(devMountDelay);
   const [held, setHeld] = useState(delay > 0);
   useEffect(() => {
@@ -89,7 +90,7 @@ function Root({ windowId }: { windowId: string }) {
     const timer = setTimeout(() => setHeld(false), delay);
     return () => clearTimeout(timer);
   }, []);
-  useLayoutEffect(() => launchCommitted(), []);
+  useLayoutEffect(() => launchCommitted(renderedAt), []);
   useLayoutEffect(() => noteWindowRoot(windowId), [windowId]);
   useEffect(() => {
     perfMark("firstWindow");

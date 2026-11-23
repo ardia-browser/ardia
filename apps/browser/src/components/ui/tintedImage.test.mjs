@@ -7,7 +7,7 @@ const { tintedImage, tintedImageKey } = await import("./TintedImage.tsx");
 
 const SRC = fileURLToPath(new URL("../../", import.meta.url));
 const REPO = fileURLToPath(new URL("../../../../../", import.meta.url));
-const ROOTS = [SRC, join(REPO, "packages"), join(REPO, "apps/linux/src")];
+const ROOTS = [SRC, join(REPO, "packages"), join(REPO, "apps/desktop/src")];
 
 function sources(dir, out = []) {
   for (const name of readdirSync(dir)) {

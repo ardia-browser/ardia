@@ -11,6 +11,7 @@ publish = false
 [workspace.dependencies]
 ardia-crypto = { path = "crates/ardia-crypto", default-features = false }
 ardia-sync-core = { path = "crates/ardia-sync-core", default-features = false }
+ardia-update-core = { path = "crates/ardia-update-core", default-features = false }
 aes-gcm = { version = "0.10", default-features = false, features = ["aes", "alloc", "zeroize"] }
 aes = { version = "0.8", features = ["zeroize"] }
 hkdf = "0.12"

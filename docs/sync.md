@@ -46,7 +46,7 @@ Code:
   - `sentTabsAdapter.ts` and `sentTabs.ts`: `send:` records, and opening the tabs sent to this Mac.
   - `openTabs.ts`, `openTabsApply.ts`, `openTabsLocal.ts`, `openTabCloses.ts` and `openTabRecords.ts`: a profile's
     regular tabs when it syncs all open tabs (`otab:`), and the closes that go out with them.
-- `apps/browser/src/components/settings/panes/Sync.tsx` and `SyncSheets.tsx`: Settings › Sync.
+- `apps/browser/src/components/settings/panes/SyncSection.tsx` and `SyncSheets.tsx`: Settings › General › Sync.
 
 ## Threat model
 
@@ -270,7 +270,7 @@ separated on the next publish.
 
 ## What syncs
 
-Per profile: each synced profile is its own scope, with its own opt-in (Settings › Sync ›
+Per profile: each synced profile is its own scope, with its own opt-in (Settings › General › Sync ›
 Profiles).
 - On joining, Personal pairs with the synced default profile and other profiles pair by name.
   - Pairing waits until the folder shows what to pair with: the synced default profile's record, or other profiles'
@@ -332,7 +332,7 @@ Profiles).
 
 ### All open tabs
 
-A profile can sync every open tab, not just its pinned ones, Arc-style: Settings › Sync › All Open Tabs, one switch per
+A profile can sync every open tab, not just its pinned ones, Arc-style: Settings › General › Sync › All Open Tabs, one switch per
 synced profile, or Settings › Profiles › the profile › Sync All Open Tabs. The switch is `Profile.syncTabs` and syncs as
 `ptab:`. Tab sync runs for a profile when it syncs on this Mac, its switch is on and What Syncs › Open Tabs is on here.
 It covers profiles that share another's data (tabs are each profile's own).
@@ -432,7 +432,7 @@ What Chrome Sync does for extensions, through our folder (`packages/sync/src/ext
   doesn't publish an extension it holds a record for until it has applied that record.
 - **Older Macs** (0.2.38, the 0.2.39 nightlies) keep `ext:` records in their replica and snapshots without
   applying them. A build whose engine lacks `ac_extensions_sync_*` publishes and applies nothing for extensions.
-- Settings › Sync › What Syncs › Extensions turns it off; a profile that shares another's data has its owner's
+- Settings › General › Sync › What Syncs › Extensions turns it off; a profile that shares another's data has its owner's
   extensions.
 
 ### Passwords
@@ -483,7 +483,7 @@ Saved passwords are Chrome's (its password manager).
 
 ## UX (from Dia's binary)
 
-Settings › Sync. Dia puts sync in Account › Sync, with the section icon
+Settings › General › Sync. Dia puts sync in Account › Sync, with the section icon
 `arrow.triangle.2.circlepath`.
 
 - **Off.** The row reads "Sync · Off", with **Turn On Sync** and **Enter Recovery Phrase…**. If
@@ -508,7 +508,7 @@ Settings › Sync. Dia puts sync in Account › Sync, with the section icon
     placeholder "Enter your 24-word recovery phrase", the "%d/%d words" counter, "too many
     words", and Connect / "Connecting…" / Cancel.
   - Once connected, the sheet says "This Mac Is Syncing" and lists the synced profiles this Mac lacks, each with Add
-    to This Mac, and Add All (Settings › Sync › Profiles offers the same). Until the profiles have paired it says
+    to This Mac, and Add All (Settings › General › Sync › Profiles offers the same). Until the profiles have paired it says
     "Looking for the profiles on your other devices…", with the files still downloading.
   - It also shows the folder the phrase is checked against, with Change….
 - **On.**
@@ -542,7 +542,7 @@ Settings › Sync. Dia puts sync in Account › Sync, with the section icon
   (`macbook.and.iphone`), a submenu per device (`iphone` for a phone, `laptopcomputer` or `desktopcomputer` for a
   Mac). Each lists "Recent Tabs"; picking one opens it in a new tab. The fallback name is "Unknown Device".
 - **Send to <device>** in a tab's menu sends it (see Sent tabs); with several devices it's **Send to Device**, a
-  submenu. Settings › Sync › Devices shows each device with its symbol.
+  submenu. Settings › General › Sync › Devices shows each device with its symbol.
 
 ## Cycle
 

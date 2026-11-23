@@ -335,13 +335,29 @@ bool WaitForExitingPredecessor(const std::wstring& key,
 
 }
 
+namespace {
+
+std::wstring& AppDataOverride() {
+  static base::NoDestructor<std::wstring> directory;
+  return *directory;
+}
+
+}
+
 std::wstring AppDataDirectory() {
+  if (!AppDataOverride().empty()) {
+    return AppDataOverride();
+  }
   const std::wstring requested = Trimmed(Environment(L"ARDIA_DATA_DIR"));
   if (!requested.empty()) {
     return requested;
   }
   const std::wstring local = LocalAppData();
   return local.empty() ? std::wstring() : Joined(local, L"Ardia");
+}
+
+void SetAppDataDirectory(const std::wstring& directory) {
+  AppDataOverride() = Trimmed(directory);
 }
 
 std::wstring LaunchLogPath() {

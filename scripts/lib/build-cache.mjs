@@ -848,18 +848,32 @@ export function syncTree(srcRepo, slot, manifest, { now = new Date() } = {}) {
   return { changed, removed, drifted: [...drifted], mismatched };
 }
 
-const NODE_MODULES_ROOTS = (root) => [
-  "node_modules",
-  ...["apps", "packages"].flatMap((d) => {
-    try {
-      if (fs.lstatSync(join(root, d)).isSymbolicLink()) throw new Error(`${join(root, d)} is a symlink: its node_modules aren't this tree's`);
-      return fs.readdirSync(join(root, d)).map((n) => `${d}/${n}/node_modules`);
-    } catch (e) {
-      if (e.code === "ENOENT") return [];
-      throw e;
-    }
-  }),
-].filter((rel) => {
+const NODE_MODULES_ROOTS = (root) => {
+  let base = null;
+  try {
+    base = fs.realpathSync(root) + "/";
+  } catch {}
+  return [
+    "node_modules",
+    ...["apps", "packages"].flatMap((d) => {
+      try {
+        if (fs.lstatSync(join(root, d)).isSymbolicLink()) throw new Error(`${join(root, d)} is a symlink: its node_modules aren't this tree's`);
+        return fs.readdirSync(join(root, d)).flatMap((n) => {
+          const entry = join(root, d, n);
+          if (fs.lstatSync(entry).isSymbolicLink()) {
+            try {
+              const target = fs.realpathSync(entry);
+              if (base && target.startsWith(base)) return [];
+            } catch {}
+          }
+          return [`${d}/${n}/node_modules`];
+        });
+      } catch (e) {
+        if (e.code === "ENOENT") return [];
+        throw e;
+      }
+    }),
+  ].filter((rel) => {
   const link = linkedAncestor(root, rel);
   if (link) throw new Error(`${link} is a symlink: its node_modules aren't this tree's`);
   try {
@@ -868,7 +882,8 @@ const NODE_MODULES_ROOTS = (root) => [
   } catch {
     return false;
   }
-});
+  });
+};
 
 export function escapingLinks(root, { deep = false, limit = 5 } = {}) {
   const found = [];

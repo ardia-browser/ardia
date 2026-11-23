@@ -4,7 +4,7 @@ Ardia runs one browser UI on three platforms today. Below the UI boundary it run
 
 | | macOS | Linux | Windows |
 | --- | --- | --- | --- |
-| UI runtime | React Native macOS | Chromium `chrome://ardia/` WebUI (`apps/linux`) | React Native Windows (`apps/browser/windows`, `packages/expo-windows`) |
+| UI runtime | React Native macOS | Chromium `chrome://ardia/` WebUI (`apps/desktop`) | React Native Windows (`apps/browser/windows`, `packages/expo-windows`) |
 | Host code | Swift pods + `engine/ardiacore` (Objective-C++) | `engine/ardiacore-linux` (C++) | RNW C++/WinRT modules + `scripts/windows/engine` (C++) |
 | JS → native | Expo modules, `CallTable` | `chrome.send("ardiaRequest")`, `kRoutes`, `ShellHostView::Invoke` | RNW turbo modules, `forwarded.json` |
 | Engine call registry | dlsym of `ac_*` | `gen_engine_dispatch.py` table | `series_win.py` `ac_calls.cc` |
@@ -29,6 +29,7 @@ packages/core-rs                          shared Rust core, C ABI (Track 1)
   ├─ ardia-sync-core                      vault format, keys, recovery phrase
   ├─ ardia-import-core                    browser data parsers
   ├─ ardia-update-core                    signed manifest checks
+  ├─ ardia-update-ffi                     its extern "C" + header until a platform calls it
   └─ ardia-ffi                            extern "C" + cbindgen header
 engine/chromium                           Chrome services as ac_* calls, all platforms (Track 2)
 engine/ardiacore-desktop                  WebUI host shared by Linux and Windows (Tracks 2, 4)
@@ -39,14 +40,14 @@ engine/ardiacore                          macOS: AppKit only
 
 ## Engine keys are the first constraint
 
-`engine/engine-key.py` hashes everything under `engine/`, minus what it can prove belongs to the other platform. It knows two platforms, and GN conditions it can't read (`is_win`, `is_linux || is_win`, `!is_win`) count toward both keys. A Mac key move means a Mac engine build, which runs only on the Mac mini's incremental tree, and a new framework for every agent's next build.
+`engine/engine-key.py` hashes everything under `engine/`, minus what it can prove belongs to other platforms. It knows three platforms: series selectors are `all` or platform sets (`linux,win`), and GN conditions on `is_mac`, `is_linux` and `is_win` joined by `!`, `&&` and `||` parse into the platforms they can hold on; any other condition counts toward every key. A Mac key move means a Mac engine build, which runs only on the Mac mini's incremental tree, and a new framework for every agent's next build.
 
 So the first change is tooling. It changes no artifact, and it must not move a published key:
 
 - **Additive, not a rewrite.** `series.py` and every shared `BUILD.gn` are hashed inputs, so editing the parser or a condition moves both keys (`engine-key.test.mjs` asserts exactly that for `series.py`). The Mac and Linux keys keep today's input projection unchanged. Windows is added beside them as a third projection with its own selector handling.
 - **History, not only HEAD.** Nearest-prebuilt lookup (`scripts/linux/fetch-engine.sh`, `mac.yml`) recomputes keys of published revisions with today's code. The test serializes the key inputs and `--paths` for HEAD and for every revision pinned in `prebuilt-engines*.tsv`, and requires them byte-identical before and after.
 - **A key for the build Windows actually runs.** `series_win.py` selects `all` and `mac` lines, applies its own ordered patches and skips, rewrites `BUILD.gn`, and copies inputs from outside `engine/` (`EngineApi.h`). The Windows key hashes that plan's materialized inputs. A test proves the old and new Windows plans produce the same inputs. `prebuilt.json` keeps its source commit for release provenance and gains the key.
-- **Then selector sets.** Once the three projections are pinned, series lines and layers can take `linux,win`, and GN conditions such as `is_linux || is_win` parse into platform sets. A new `linux,win` line moves the Linux and Windows keys only. The Linux syntax checker and the Windows GN checker learn the same selectors, and the AGENTS.md rule that kept Windows sources in `scripts/windows/engine` is retired.
+- **Then selector sets.** Once the three projections are pinned, series lines and layers can take `linux,win`, and GN conditions such as `is_linux || is_win` parse into platform sets. A new `linux,win` line moves the Linux and Windows keys only. The Linux syntax checker and the Windows GN checker learn the same selectors, and the AGENTS.md rule that kept Windows sources in `scripts/windows/engine` is retired. #3961 did the key and Windows half without moving a published key: `engine-key.py`, `series_win.py` and `check_inputs.py` read sets. `series.py` and the Linux port test (`test_linux_port.py`) are hashed by every key, so they learn sets in the first change that adds a set line or block, batched with an `engine/chromium` change that moves the Mac key anyway; until then `series.py` still refuses a set line, and the AGENTS.md rule stays.
 
 After that, the rule for every later change is:
 
@@ -64,8 +65,8 @@ After that, the rule for every later change is:
 **What moves.** Logic that has no OS in it and is written three times:
 
 - **Sync** (first). The vault format is already byte-compatible on macOS, Linux, Windows and Android: `NNS1` magic, HKDF-SHA256 info strings `file-key`, `name-key`, `password-key`, `password-nonce-key`, AES-256-GCM with the `NNS1 + "<chain>/<scope>/<file>"` associated data, u32be length + 1024-byte padding, the deterministic password nonce, base32 folder tags, BIP39 English with 4-letter prefixes (`docs/sync.md`). Rust replaces `SyncCrypto.swift`, `RecoveryPhrase.swift`, `Wordlist.swift`, `ac_linux_sync_{crypto,wordlist,json}.cc` and later the Kotlin copy. Keychain, libsecret and DPAPI key storage stay native.
-- **Import parsers.** Netscape HTML, CSV, Chromium bookmarks and search engines, SNSS sessions, Firefox and Zen session JSON, Arc and Dia sidebars, ZIP, Firefox key4/PBE/JWE, Chromium v10/v11 blobs once the key is known. The output is the existing `ImportResult` JSON. Discovery, the OS key unlock (Keychain safe storage, libsecret/KWallet, DPAPI), Safari Full Disk Access and SQLite snapshots stay native.
-- **Update manifest signatures.** Ed25519 over the manifest. Linux checks one today in a shell script; Windows checks only an unsigned SHA-256 and gets the check for the first time.
+- **Import parsers.** Netscape HTML, CSV, Chromium bookmarks and search engines, SNSS sessions, Firefox and Zen session JSON, Arc and Dia sidebars, ZIP, Firefox key4/PBE/JWE, Chromium v10/v11 blobs once the key is known. The output is the existing `ImportResult` JSON. Chromium bookmarks came first, in `ardia-import-core` behind its own `libardia_import` (`include/ardia_import.h`, outside every engine key until a host switches), with `tests/import-bookmarks-vectors.json` recording where Swift, Linux and Windows read differently today. Discovery, the OS key unlock (Keychain safe storage, libsecret/KWallet, DPAPI), Safari Full Disk Access and SQLite snapshots stay native.
+- **Update manifest signatures.** Ed25519 over the manifest. Linux checks one today in a shell script; Windows checks only an unsigned SHA-256 and gets the check for the first time. `ardia-update-core` verifies the Linux manifest with the helper's exact rules and the shared vectors in `packages/core-rs/tests/update-vectors.json` (#3963); its C ABI is `libardia_update` (`packages/core-rs/ABI.md`) until a platform calls it, so neither engine key moves before then.
 - **Plugin policy.** Fetch policy, URL parsing, archive and pin checks, storage limits and budgets out of `packages/shell/ios/PluginCore`, shared with `packages/plugin-broker`'s QuickJS host. This happens when the desktop host gets a plugin manager, not before. `packages/plugin-broker` joins the same CI job now so it stops rotting.
 
 **Not moved:** crash dump parsing (each platform's format differs, 56 shared lines on Linux) and config/document I/O (mostly file calls). They don't repay a boundary.
@@ -124,10 +125,13 @@ export const history = defineDomain({
 
 A call's bindings default to `service` on every host; a host that needs code says so (`mac: "custom"`, `desktop: "typed"`). `generate.mjs --write | --check` emits, byte for byte deterministic:
 
-- **TS:** `packages/ardiacore/src/engine/generated/<domain>.ts` (`<D>Calls`, `<D>Events`), merged into `EngineCalls`, and `generated/manifest.json`, which the existing drift tests (`api.test.mjs`, `test_contract.py`, `hostContract.test.mjs`) read instead of regex-parsing source.
+- **TS:** `packages/ardiacore/src/engine/generated/<domain>.ts` (`<D>Calls`, `<D>Events`), merged into `EngineCalls` (the `engine` domain's own types are imported as `EngineDomainCalls` and `EngineDomainEvents`), and `generated/manifest.json`, which the existing drift tests (`api.test.mjs`, `test_contract.py`, `hostContract.test.mjs`) read instead of regex-parsing source.
 - **Swift:** a fully service-backed domain gets its whole `<Domain>Module.swift`; a mixed one gets `<Domain>Calls.swift` with a handler table merged into `CallTable`.
 - **Desktop host:** `ac_desktop_routes.h` (routes, capabilities) and the `bootstrap.js` deadline map. Emitted once Track 2's desktop layer exists, so Linux and Windows share it from the start.
 - **No React Native Windows output.** Until the cutover, Windows only gets a check that `forwarded.json` agrees with the schema.
+- **Events** carry the same per-host bindings as calls (`forward`, `custom`, `absent`) and the engine `topic` when it differs from the event's name, so the Mac's `ForwardedTopics`, Linux's `EventName` and Windows' `topics` are each checked exactly against the schema.
+
+Every engine domain but `media` is in the schema, including those no host passes any call of straight to an `ac_*` service (autofill, contentBlocker, passwords, profiles, webKit, webView, windows): they are still `engine` domains, JSON calls through the module's `call`, with each host's code named by its `custom` bindings, and a domain's desktop `custom` calls are checked against the Linux host's native dispatch lists. A payload type may come from a package `packages/ardiacore` depends on (`@ardia/core`) as well as a relative path. `media` stays hand-wired in `api.ts` and `MediaModule.swift` until the next PR that moves the Linux engine key anyway: `engine/ardiacore-linux/tests/test_cast.py` reads its cast rows from `api.ts`, and that test is a Linux key input.
 
 Later the schema gains `module` domains (positional Expo functions: shell, sync, import, shaders) that emit the TS `*Native` interfaces and the desktop invoke table, with Swift bodies behind a generated protocol. The Rust core's FFI surface is described in the same schema when sync and import calls move.
 
@@ -163,7 +167,7 @@ Each item is one PR closing one issue. Items on one line can run in parallel.
 The order is built around two integration proofs, the Windows WebUI pilot and the Rust GN link, which run early and in parallel with the tooling.
 
 1. **Design** (this doc). **Engine key: an additive Windows projection**, Mac and Linux keys and their history unchanged. **Rust core: workspace, `ardia-crypto`, `ardia-sync-core`, `ardia-ffi`, vectors and the divergence table**, plus CI for it and `plugin-broker`. **Host API: schema, generator, `history`**, zero behavior change.
-2. **Proof: Rust GN link.** The `boringssl` backend as a GN `rust_static_library`, running the vectors on Chromium's toolchain (Linux engine build; nothing switches yet). **Proof: Windows WebUI pilot** behind `--ardia-shell=webui` (Windows engine build). **Engine key: selector sets** (`linux,win`). **Host API: bookmarks, favicons.**
+2. **Proof: Rust GN link.** The `boringssl` backend as a GN `rust_static_library`, running the vectors on Chromium's toolchain (Linux engine build; nothing switches yet). **Proof: Windows WebUI pilot** behind `--ardia-shell=webui` (Windows engine build). **Engine key: selector sets** (`linux,win`). **Host API: bookmarks, favicons**, then **the remaining service-backed domains** (downloads, engine, extensions, permissions, search, sites, tabs) with per-host event bindings and Linux route reply fields. **Host API: the custom-only engine domains** (autofill, contentBlocker, passwords, profiles, webKit, webView, windows) and package type imports; `media` follows with the next Linux engine key move.
 3. **macOS and iPhone link the Rust sync core** (Apple framework; Swift crypto and phrase deleted). **Linux links it** through GN (its C++ sync crypto and JSON deleted). **`engine/ardiacore-desktop` layer**, extracted against both hosts, with `ac_desktop_platform.h` and the Linux and Win delegates.
 4. **Windows desktop host completed** (Win delegate, wording, Mica, snap, CI job). **Generated desktop routes. Ed25519 update manifests.** **`apps/linux` → `apps/desktop`**, when Windows needs the platform folders.
 5. **Windows cutover** after a verified installed upgrade and rollback, then **RNW deletion**.

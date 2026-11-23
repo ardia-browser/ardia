@@ -132,6 +132,7 @@ source_set("core") {
     "ac_seams.mm",
     "ardiacore_api_internal.h",
     "ardiacore_engine.mm",
+    "ardiacore_engine_cli_holds.mm",
     "ardiacore_engine_idle_profiles.mm",
     "ardiacore_engine_tracing.mm",
     "ardiacore_hooks.mm",

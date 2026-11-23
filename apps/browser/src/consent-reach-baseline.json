@@ -48,7 +48,7 @@
     "apps/browser/src/state/telemetry/usage.ts": 1,
     "apps/browser/src/state/windows/closeAnimated.ts": 1,
     "apps/browser/src/state/windows/profilePager.ts": 1,
-    "apps/linux/src/hostSession.ts": 1
+    "apps/desktop/src/hostSession.ts": 1
   },
   "consentToken": {
     "apps/browser/src/components/settings/panes/FilterListsSheet.tsx": 1,
@@ -86,10 +86,10 @@
     "apps/browser/src/state/telemetry/transport.ts": 1,
     "apps/browser/src/state/telemetry/usage.ts": 4,
     "apps/browser/src/state/windows/windowClose.ts": 1,
-    "apps/linux/src/hostExtensionView.ts": 1,
-    "apps/linux/src/hostPolicies.ts": 1,
-    "apps/linux/src/hostTab.ts": 1,
-    "apps/linux/src/sandboxNotice.ts": 1
+    "apps/desktop/src/hostExtensionView.ts": 1,
+    "apps/desktop/src/hostPolicies.ts": 1,
+    "apps/desktop/src/hostTab.ts": 1,
+    "apps/desktop/src/platform/linux/sandboxNotice.ts": 1
   },
   "consentNow": {
     "apps/browser/src/state/report/actions.ts": 1,
@@ -101,7 +101,7 @@
     "apps/browser/src/state/telemetry/usage.ts": 3,
     "apps/browser/src/state/telemetry/watch.ts": 2,
     "apps/browser/src/state/windows/lastWindow.ts": 1,
-    "apps/linux/src/reportProblem.ts": 1
+    "apps/desktop/src/reportProblem.ts": 1
   },
   "console": {
     "apps/browser/src/lib/afterFirstWindow.ts": 1,
@@ -119,7 +119,6 @@
     "apps/browser/src/state/automation/omniboxHooks.ts": 1,
     "apps/browser/src/state/bookmarks/engineSync.ts": 1,
     "apps/browser/src/state/config/configFiles.ts": 1,
-    "apps/browser/src/state/favicons/favicons.ts": 1,
     "apps/browser/src/state/history/engineSync.ts": 1,
     "apps/browser/src/state/onboarding/onboardingDocument.ts": 1,
     "apps/browser/src/state/session/persist.ts": 1,
@@ -127,13 +126,13 @@
     "apps/browser/src/state/sync/sentTabs.ts": 1,
     "apps/browser/src/state/tabs/openingGate.ts": 1,
     "apps/browser/src/state/windows/launchLook.ts": 1,
-    "apps/linux/src/appServices.ts": 1,
-    "apps/linux/src/credentialPaneData.ts": 1,
-    "apps/linux/src/host.ts": 1,
-    "apps/linux/src/hostEvents.ts": 1,
-    "apps/linux/src/hostExtensionView.ts": 1,
-    "apps/linux/src/hostTab.ts": 1,
-    "apps/linux/src/hostTelemetry.ts": 1
+    "apps/desktop/src/appServices.ts": 1,
+    "apps/desktop/src/credentialPaneData.ts": 1,
+    "apps/desktop/src/host.ts": 1,
+    "apps/desktop/src/hostEvents.ts": 1,
+    "apps/desktop/src/hostExtensionView.ts": 1,
+    "apps/desktop/src/hostTab.ts": 1,
+    "apps/desktop/src/hostTelemetry.ts": 1
   },
   "queues": {
     "apps/browser/src/components/settings/panes/FilterListsSheet.tsx": 1,
@@ -185,9 +184,9 @@
     "apps/browser/src/state/windows/card.ts": 1,
     "apps/browser/src/state/windows/closeAnimated.ts": 1,
     "apps/browser/src/state/windows/windowClose.ts": 1,
-    "apps/linux/src/hostSession.ts": 1,
-    "apps/linux/src/liveDocumentClient.ts": 1,
-    "apps/linux/src/syncEngine.ts": 1
+    "apps/desktop/src/hostSession.ts": 1,
+    "apps/desktop/src/liveDocumentClient.ts": 1,
+    "apps/desktop/src/syncEngine.ts": 1
   },
   "unstampedEvents": {
     "packages/ardiacore/ios/ArdiaContentBlocker.mm | contentBlocker.changed": 2,
@@ -214,7 +213,7 @@
     "packages/shell/ios/SystemSignalsModule.swift | downloads.changed": 1
   },
   "arrivalStamps": {
-    "apps/linux/src/hostPageEvents.ts | pictureInPicture": 1
+    "apps/desktop/src/hostPageEvents.ts | pictureInPicture": 1
   },
   "unclearedCounters": {}
 }

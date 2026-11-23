@@ -19,29 +19,29 @@ public class PasswordsModule: Module {
     }.runOnQueue(.main)
   }
 
-  static let calls = CallTable(domain: "passwords", handlers: [
-    "list": { args, reply in ArdiaServices.listPasswords(profile: args.profile) { reply.service($0, $1) } },
-    "unlock": { args, reply in ArdiaServices.unlockPasswords(profile: args.profile) { reply.service($0, $1) } },
-    "reveal": { args, reply in
+  static let calls = passwordsCallTable(
+    list: { args, reply in ArdiaServices.listPasswords(profile: args.profile) { reply.service($0, $1) } },
+    unlock: { args, reply in ArdiaServices.unlockPasswords(profile: args.profile) { reply.service($0, $1) } },
+    reveal: { args, reply in
       ArdiaServices.password(profile: args.profile, origin: try args.text("origin"), username: try args.text("username")) { reply.service($0, $1) }
     },
-    "remove": { args, reply in
+    remove: { args, reply in
       ArdiaServices.deletePassword(profile: args.profile, origin: try args.text("origin"), username: try args.text("username")) { reply.service($0, $1) }
     },
-    "neverSaveOrigins": { args, reply in ArdiaServices.neverSaveOrigins(profile: args.profile) { reply.service($0, $1) } },
-    "allowSaving": { args, reply in ArdiaServices.allowSaving(profile: args.profile, origin: try args.text("origin")) { reply.service($0, $1) } },
-    "export": { args, reply in ArdiaServices.exportPasswords(profile: args.profile, path: nil) { reply.service($0, $1) } },
-    "autofillEnabled": { args, reply in
+    neverSaveOrigins: { args, reply in ArdiaServices.neverSaveOrigins(profile: args.profile) { reply.service($0, $1) } },
+    allowSaving: { args, reply in ArdiaServices.allowSaving(profile: args.profile, origin: try args.text("origin")) { reply.service($0, $1) } },
+    export: { args, reply in ArdiaServices.exportPasswords(profile: args.profile, path: nil) { reply.service($0, $1) } },
+    autofillEnabled: { args, reply in
       ArdiaServices.profileToggles(profile: args.profile, set: nil) { toggles, error in
         guard let toggles = toggles as? [String: Bool], let enabled = toggles["passwords"] else { return reply.service(nil, error ?? "no password setting") }
         reply.ok(enabled)
       }
     },
-    "setAutofillEnabled": { args, reply in
+    setAutofillEnabled: { args, reply in
       let enabled = try args.bool("enabled")
       ArdiaServices.profileToggles(profile: args.profile, set: ["passwords": NSNumber(value: enabled)]) { _, error in reply.service(nil, error) }
     },
-    "setFieldProviders": { args, reply in
+    setFieldProviders: { args, reply in
       let generation = try args.double("generation")
       let session = try args.text("session")
       let profiles = try args.dicts("profiles")
@@ -49,7 +49,7 @@ public class PasswordsModule: Module {
       if applied { WebKitHub.shared.transfers.liveTabs.forEach { $0.pushFieldProvider() } }
       reply.ok(["applied": applied])
     },
-    "showSystemPanel": { args, reply in
+    showSystemPanel: { args, reply in
       let tab = try args.text("tab")
       let generation = try args.optionalDouble("generation") ?? -1
       if let live = WebKitHub.shared.transfers.liveTab(tab) { return live.showSystemPanel(generation: generation) { reply.ok($0) } }
@@ -57,16 +57,16 @@ public class PasswordsModule: Module {
         reply.ok(["shown": false, "reason": "noTab"])
       }
     },
-    "showPanelHint": { args, reply in
+    showPanelHint: { args, reply in
       let tab = try args.text("tab")
       let label = try args.text("label")
       let side = try args.text("side")
       if let live = WebKitHub.shared.transfers.liveTab(tab) { return reply.ok(["shown": live.showFieldProviderHint(label: label, side: side)]) }
       reply.ok(["shown": ArdiaWebView.showFieldProviderHint(label, side: side, tab: tab)])
     },
-    "systemPanelAvailable": { _, reply in reply.ok(ArdiaWebView.systemPanelAvailability) },
-    "otpauthHandler": { _, reply in reply.ok(["app": ArdiaWebView.otpauthHandlerName as Any? ?? NSNull()]) },
-    "setUpVerificationCode": { args, reply in
+    systemPanelAvailable: { _, reply in reply.ok(ArdiaWebView.systemPanelAvailability) },
+    otpauthHandler: { _, reply in reply.ok(["app": ArdiaWebView.otpauthHandlerName as Any? ?? NSNull()]) },
+    setUpVerificationCode: { args, reply in
       let tab = try args.text("tab")
       let token = try args.text("token")
       let generation = try args.optionalDouble("generation") ?? -1
@@ -74,6 +74,6 @@ public class PasswordsModule: Module {
       if !ArdiaWebView.setUpVerificationCode(token, tab: tab, generation: generation, completion: { reply.ok($0) }) {
         reply.ok(["opened": false, "reason": "noTab"])
       }
-    },
-  ])
+    }
+  )
 }

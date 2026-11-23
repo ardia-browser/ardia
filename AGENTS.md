@@ -71,6 +71,12 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
 - **Pick the free Mac.** Before CPU-heavy work (Xcode or Chromium builds, full test runs, video renders), check the
   MacBook and the linked Mac mini for free CPU, RAM and disk and for the shorter queue of builds and runs, and use
   that one. Stay on it until it's short of resources while the other has room or a shorter queue; then move.
+- **Coordinate compute across running threads.** When blocked on compute (Boat VM start quota, a busy Chromium
+  builder, a Windows 11 QEMU guest, or a loaded Mac), inspect all running threads across both machines
+  (`t3_thread_list` with `includeSubagents: true`, plus `boat list`) and message the owning thread or subagent
+  (`t3_thread_send`) to hand off warm resources instead of waiting. Coordinators relay to their subagents to keep
+  a live builder or guest running across handoffs (skip `boat stop` when another thread is queued behind you),
+  pass its layout and lock state along, and stop it only once no thread needs it.
 - **Progress reports.** Keep them short and plain: what shipped, what's left, what needs the owner.
 - **Clean up.** Quit your test instances, stop the servers and background jobs you started, and never
   kill processes you didn't start.
@@ -106,7 +112,7 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
 ## Platforms
 One browser UI (`apps/browser/src` and `packages/*/src`) runs on three platforms, each with its own native layer and
 engine. A change to the shared UI reaches all three, so check the other two before calling it done: Linux's
-`pnpm -C apps/linux typecheck`, `test:graph` and `test:host`, and the Windows workflow, which runs on any pull
+`pnpm -C apps/desktop typecheck`, `test:graph` and `test:host` (each covers `--mode linux` and `--mode win`), and the Windows workflow, which runs on any pull
 request touching shared code. Copy that names Mac things (⌘, "macOS", the menu bar) needs its Linux and Windows
 wording. When the machine you're on isn't the platform you're changing, use a Boat VM (`boat` CLI, signed in) sized
 to the job: `--type small` (2 vCPU / 4 GB, half rate) for quick Linux scripts and unit tests, `--type default`
@@ -120,8 +126,11 @@ yours: the hidden-instance and focus rules are for the owner's Mac.
 - **macOS** is the main app: `apps/browser` (React Native macOS) on `engine/ardiacore` and the Mac engine. The rest
   of this file is written for it.
 - **Linux** (`docs/linux-port.md`): Chromium's own `chrome` is the app and serves the UI from `chrome://ardia/`;
-  `apps/linux` builds the shared components with Linux adapters (Vite aliases, checked by `test:graph`), and
-  `engine/ardiacore-linux` plus `engine/patches/chromium-linux-*.patch` are its native layer. The engine is built from
+  `apps/desktop` builds the shared components with desktop adapters (Vite aliases, checked by `test:graph`) as
+  `vite build --mode linux`, and `--mode win` builds the same UI for the coming Windows WebUI host. Linux-only code
+  sits in `src/platform/linux`, reached through `@platform/<name>` seams that resolve `<name>.linux.ts` or
+  `<name>.win.ts` before `<name>.desktop.ts`. `engine/ardiacore-linux` plus `engine/patches/chromium-linux-*.patch`
+  are Linux's native layer. The engine is built from
   source on a Boat builder VM (`scripts/linux/build.sh --apply`, incremental like the Mac's), published with
   `scripts/linux/publish-engine.sh --upload`, and pinned by a row in `packages/ardiacore/prebuilt-engines-linux.tsv`.
   Each platform has its own engine key (`engine/engine-key.sh --platform macos|linux`): a change only Linux builds
@@ -255,7 +264,7 @@ yours: the hidden-instance and focus rules are for the owner's Mac.
 
 ## Repo map
 `apps/browser` is the React Native macOS app; `apps/browser/windows` and `packages/expo-windows` are the Windows
-app (`docs/windows.md`), and `apps/linux` the Linux UI with `scripts/linux` for its build, packaging and engine. `scripts/windows` holds
+app (`docs/windows.md`), and `apps/desktop` the Linux UI (and the Windows WebUI build, `--mode win`) with `scripts/linux` for its build, packaging and engine. `scripts/windows` holds
 the Windows packaging, checks and engine build. The native Expo modules are in `packages/{ardiacore,shell,shaders,import,sync}`; `engine/chromium` is our Chrome-services code (the `ac_*` C calls) and `engine/ardiacore` ArdiaCore's window and tab layer
 (`engine/ardiacore-linux` on Linux),
 and `packages/core` holds the omnibox logic and its tests. `packages/demo` is the app on the web (the site's demo).

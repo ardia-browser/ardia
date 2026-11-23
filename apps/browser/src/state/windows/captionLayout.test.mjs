@@ -298,7 +298,7 @@ test("the layouts around #1973 keep their window buttons where they were", () =>
   }
 });
 
-const linux = await import("../../lib/platformChrome.linux.ts");
+const linux = await import("../../lib/platformChrome.desktop.ts");
 const { stripCaptionRoom } = await import("../../components/tabstrip/stripGroups.ts");
 
 test("on Linux with the traffic lights no layout keeps room or a place for drawn window buttons, as on the Mac", () => {

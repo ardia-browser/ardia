@@ -6,7 +6,7 @@ type Picks = {
   addressBar: "sidebar" | "toolbar";
   commandBar: "field" | "centred";
   scrollToolbar: "keep" | "hide";
-  afterClosingTab: "recent" | "above";
+  afterClosingTab: "recent" | "above" | "below";
 };
 
 const ZERO = {
@@ -20,6 +20,7 @@ const ZERO = {
   scroll_toolbar_picks_hide: 0,
   after_closing_tab_picks_recent: 0,
   after_closing_tab_picks_above: 0,
+  after_closing_tab_picks_below: 0,
   ctrl_tab_follows_chrome_step: 0,
   ctrl_tab_follows_chrome_switcher: 0,
 };

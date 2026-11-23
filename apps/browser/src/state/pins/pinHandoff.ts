@@ -101,9 +101,23 @@ async function handOff(copyId: string, commit: () => void, mayCommit: () => bool
   return still;
 }
 
-export const handOffPinPage = (copyId: string, commit: () => void) => (users > 0 ? void handOff(copyId, commit) : commit());
+const flights = new Map<string, Promise<boolean>>();
 
-export const requestPinHandOff = (copyId: string, mayCommit: () => boolean = () => true) => handOff(copyId, () => store().handOffPin(copyId), mayCommit);
+function tracked(copyId: string, run: () => Promise<boolean>) {
+  const copy = store().tabs[copyId];
+  const flight = run();
+  if (!copy) return flight;
+  const key = familyKeyOf(copy);
+  flights.set(key, flight);
+  void flight.then(() => flights.get(key) === flight && flights.delete(key));
+  return flight;
+}
+
+export const pinHandOffOf = (family: string) => flights.get(family);
+
+export const handOffPinPage = (copyId: string, commit: () => void) => (users > 0 ? void tracked(copyId, () => handOff(copyId, commit)) : commit());
+
+export const requestPinHandOff = (copyId: string, mayCommit: () => boolean = () => true) => tracked(copyId, () => handOff(copyId, () => store().handOffPin(copyId), mayCommit));
 
 export function startPinHandoff() {
   if (users++ === 0) stopWatching = useBrowser.subscribeTo(["windows", "windowUi", "tabs"], (s, prev) => {

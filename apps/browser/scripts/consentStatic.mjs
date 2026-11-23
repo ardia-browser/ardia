@@ -15,7 +15,7 @@ const NATIVE_FILE = /\.(?:mm|m|h|swift)$/;
 const EMIT = /\[ArdiaEvents\s+emit:\s*@"([^"]+)"|\bArdiaEvents\.emit\(\s*"([^"]+)"/g;
 const STAMP = /\bonto\s*[:(]/;
 const TAKE = /^take[A-Z]\w*$/;
-const PLATFORM_VARIANT = /\.(web|native|macos|ios|windows|linux)\.(tsx?)$/;
+const PLATFORM_VARIANT = /\.(web|native|macos|ios|windows|linux|win|desktop)\.(tsx?)$/;
 const DRAINS = [
   ["apps/browser/src/state/telemetry/usage.ts", ["emitCounts", "emitWindowUsage"]],
   ["apps/browser/src/state/telemetry/hourlyExtras.ts", ["takeHourlyExtras"]],
@@ -119,7 +119,7 @@ export function unstampedEmits(rel, text) {
 }
 
 export const arrivalStamps = () =>
-  walk("apps/linux/src", /^host\w*\.tsx?$/)
+  walk("apps/desktop/src", /^host\w*\.tsx?$/)
     .filter((rel) => !TEST_FILE.test(rel))
     .flatMap((rel) => [...readFileSync(join(ROOT, rel), "utf8").matchAll(/name !== "(\w+)"[^\n]*\n(?:[^\n]*\n){0,3}?[^\n]*epoch: consentEpoch\(\)/g)].map((m) => `${rel} | ${m[1]}`));
 
@@ -173,8 +173,8 @@ function drainedFunctions(program, files) {
   return seen;
 }
 
-export const COUNTER_SCOPE = /^apps\/(?:browser|linux)\/src\//;
-const LINUX_TELEMETRY = /^apps\/linux\/src\/\w*[Tt]elemetry\w*\.tsx?$/;
+export const COUNTER_SCOPE = /^apps\/(?:browser|desktop)\/src\//;
+const LINUX_TELEMETRY = /^apps\/desktop\/src\/\w*[Tt]elemetry\w*\.tsx?$/;
 export const telemetryModule = (rel) => TELEMETRY.test(rel) || LINUX_TELEMETRY.test(rel);
 
 export function unclearedCounters(program, files) {

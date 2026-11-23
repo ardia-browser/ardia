@@ -132,7 +132,7 @@ const ENGINE_VETOES: Readonly<Record<number, SleepVeto>> = {
   ...Object.fromEntries(ENGINE_KEPT_CODES.map((kept) => [kept.code, kept.veto])),
 };
 
-const ENGINE_ORDER: readonly SleepVeto[] = ["postedDocument", "beforeUnload", "typedInput", "download", "call", "pictureInPicture", "audible", "recentlyAudible", "recentlySeen", "shown", "notSleepable"];
+const ENGINE_ORDER: readonly SleepVeto[] = ["postedDocument", "beforeUnload", "typedInput", "download", "cliSession", "call", "pictureInPicture", "audible", "recentlyAudible", "recentlySeen", "shown", "notSleepable"];
 
 export function engineVeto(keptBy: readonly number[]): SleepVeto | null {
   if (!keptBy.length) return null;

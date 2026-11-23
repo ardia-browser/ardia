@@ -203,15 +203,19 @@ export const createGroupsSlice: StateCreator<BrowserState, [], [], GroupsSlice> 
       let groups = s.groups;
       const windows = { ...s.windows };
       const touched = new Set<string>();
+      const leaving = new Map<string, Set<string>>();
       for (const id of withSplitRows(s, tabIds)) {
         const g = innermostGroupOf(groups, id);
-        const w = g && windows[g.windowId];
-        if (!g || !w) continue;
+        if (g && windows[g.windowId]) leaving.set(g.id, (leaving.get(g.id) ?? new Set()).add(id));
+      }
+      for (const [groupId, out] of leaving) {
+        const g = groups[groupId]!;
+        const w = windows[g.windowId]!;
         touched.add(w.id);
-        const kept = g.tabIds.filter((x) => x !== id);
+        const kept = g.tabIds.filter((x) => !out.has(x));
         if (kept.length) {
-          const order = w.tabIds.filter((x) => x !== id);
-          order.splice(order.indexOf(kept.at(-1)!) + 1, 0, id);
+          const order = w.tabIds.filter((x) => !out.has(x));
+          insertAll(order, order.indexOf(kept.at(-1)!) + 1, w.tabIds.filter((x) => out.has(x)));
           windows[w.id] = { ...w, tabIds: order };
           groups = { ...groups, [g.id]: { ...g, tabIds: kept } };
         } else {

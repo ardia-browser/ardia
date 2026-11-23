@@ -8,7 +8,7 @@ const { WindowContext } = await import("../../state/browser/hooks.ts");
 const { usePages } = await import("../../state/tabs/pageState.ts");
 const { useExtensions } = await import("../../state/extensions/store.ts");
 const panels = await import("../../state/extensions/sidePanels.ts");
-const { ExtensionSidePanel } = await import("./SidePanel.tsx");
+const { SidePanels } = await import("./SidePanel.tsx");
 
 const S = () => useBrowser.getState();
 const EXT = { id: "ext", name: "Ext", enabled: true, pinned: true, hasAction: true, incognito: false, sidePanel: "panel.html" };
@@ -36,7 +36,7 @@ test("closing the panel with the X fades out the page that was showing instead o
   const renders = [];
   const mounted = mount(
     () => {
-      const tree = ExtensionSidePanel();
+      const tree = SidePanels({ windowId: w });
       renders.push(cardsIn(tree));
       return tree;
     },
@@ -74,7 +74,7 @@ test("a panel already hidden that then closes for the window doesn't bring back 
   const renders = [];
   const mounted = mount(
     () => {
-      const tree = ExtensionSidePanel();
+      const tree = SidePanels({ windowId: w });
       renders.push(cardsIn(tree));
       return tree;
     },
@@ -106,4 +106,26 @@ test("a panel already hidden that then closes for the window doesn't bring back 
   void mounted.value;
   const since = renders.slice(before);
   assert.ok(since.every((keys) => !keys.includes(keyA)), `A's closed page never comes back: ${JSON.stringify(since)}`);
+});
+
+test("a window mounts no side panel until one opens in it, and keeps it mounted after for the next close's fade", async () => {
+  const { ExtensionSidePanel } = await import("./SidePanel.tsx");
+  S().hydrate({});
+  const w = S().createWindow({ url: "a.com" });
+  const a = S().windows[w].tabIds[0];
+  usePages.setState({ ready: { [a]: 1 } });
+  useExtensions.setState({ lists: { "": [EXT] }, actions: {}, popup: null, sidePanels: {}, sidePanelCards: {} });
+  native.extensionAnswers.actionStates = async () => ({});
+  native.extensionAnswers.sidePanelUrl = async () => "chrome-extension://ext/panel.html?tabId=a";
+  const gate = mount(() => ExtensionSidePanel(), { contexts: [[WindowContext, w]] });
+  try {
+    assert.equal(gate.value, null);
+    await panels.openSidePanel(w, "ext");
+    assert.equal(gate.value?.type, SidePanels);
+    assert.equal(gate.value.props.windowId, w);
+    panels.closeSidePanel(w);
+    assert.equal(gate.value?.type, SidePanels, "stays mounted once opened");
+  } finally {
+    gate.unmount();
+  }
 });

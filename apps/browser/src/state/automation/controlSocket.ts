@@ -26,6 +26,7 @@ import { consentToken, type ConsentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
 import { controlTabTargets } from "../../platform/control";
 import { releaseAllCliHolds } from "../tabs/cliHolds";
+import { watchCliHoldsForEngine } from "./cliHoldsEngine";
 import { TAB_IDLE_EVENTS, USER_IDLE_EVENTS, type AutomationEventName } from "./eventNames";
 import { clientProtocolProblem, commands, failure, hello, parseRequest, parseSubscription, planRun, type RequestId, type Subscription } from "./automationMethods";
 import { changeSubscription, feedNeeds, stopFeed, updateFeed } from "./automationFeed";
@@ -296,6 +297,7 @@ function handleClose({ connection }: { connection: number }) {
 function listen() {
   if (listening) return;
   listening = true;
+  watchCliHoldsForEngine();
   onControlRequest((request) => {
     try {
       handleControlRequest(request);

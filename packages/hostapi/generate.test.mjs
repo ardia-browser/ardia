@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { loadDomains, MANIFEST, outputs, ROOT, validate } from "./generate.mjs";
+import { loadDomains, MANIFEST, outputs, ROOT, validate, validateTopics } from "./generate.mjs";
 
 const GENERATOR = fileURLToPath(new URL("./generate.mjs", import.meta.url));
 const runAt = (generator, ...args) => spawnSync(process.execPath, [generator, ...args], { encoding: "utf8" });
@@ -182,6 +182,9 @@ test("a desktop route may answer with one field of the engine's reply, or null, 
   assert.throws(() => validate("demo", domain({ watch: call({ routeField: "components", desktop: "custom" }) })), /goes only with desktop: route/);
   assert.throws(() => validate("demo", domain({ watch: call({ routeField: "Components" }) })), /lowerCamelCase field/);
   assert.throws(() => validate("demo", domain({ watch: call({ routeField: "" }) })), /lowerCamelCase field/);
+  for (const routeField of [null, ["components"], 0, true]) {
+    assert.throws(() => validate("demo", domain({ watch: call({ routeField }) })), /routeField is a string: .* or "null" to answer null/, JSON.stringify(routeField));
+  }
   const manifest = JSON.parse(outputs({ demo: domain({ watch: call(), tasks: call({ service: "ac_tasks_list", routeField: "tasks" }) }) }).get(MANIFEST)).domains.demo;
   assert.equal("routeField" in manifest.calls.watch, false);
   assert.equal(manifest.calls.tasks.routeField, "tasks");
@@ -210,4 +213,12 @@ test("an event renamed from its engine topic names the topic only when it differ
   assert.throws(() => validate("demo", withEvents({ changed: event({ topic: "demo changed", desktop: "custom" }) })), /engine topic/);
   const manifest = JSON.parse(outputs({ demo: withEvents({ changed: event({ topic: "demoChanged", desktop: "custom" }) }) }).get(MANIFEST)).domains.demo;
   assert.equal(manifest.events.changed.topic, "demoChanged");
+});
+
+test("a host forwards each engine topic as one event, so two events never claim the same topic", () => {
+  const renamed = event({ topic: "cliControl", desktop: "custom" });
+  assert.doesNotThrow(() => validateTopics({ engine: withEvents({ cliControl: renamed, systemState: event({ desktop: "custom", windows: "custom" }) }) }));
+  assert.throws(() => validateTopics({ engine: withEvents({ cliControl: renamed, systemState: event({ topic: "cliControl", desktop: "custom", mac: "custom" }) }) }), /both take engine topic cliControl on windows/);
+  assert.doesNotThrow(() => validateTopics({ engine: withEvents({ cliControl: renamed, systemState: event({ topic: "cliControl", desktop: "custom", mac: "custom", windows: "custom" }) }) }));
+  assert.throws(() => validateTopics({ demo: withEvents({ changed: event() }), other: withEvents({ changed: event({ topic: "demo.changed", desktop: "custom" }) }) }), /both take engine topic demo\.changed on mac/);
 });

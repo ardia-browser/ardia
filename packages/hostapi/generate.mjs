@@ -28,7 +28,22 @@ const isRecord = (value) => value !== null && typeof value === "object" && !Arra
 export async function loadDomains() {
   const { domains } = await import(new URL("./schema/index.ts", import.meta.url).href);
   for (const [name, domain] of Object.entries(domains)) validate(name, domain);
+  validateTopics(domains);
   return domains;
+}
+
+export function validateTopics(domains) {
+  for (const host of HOSTS) {
+    const owners = new Map();
+    for (const [name, domain] of Object.entries(domains)) {
+      for (const [event, row] of Object.entries(domain.events ?? {})) {
+        if (eventBindingOf(row, host) !== "forward") continue;
+        const topic = row.topic ?? `${name}.${event}`;
+        if (owners.has(topic)) throw new Error(`schema ${name}: event ${event} and ${owners.get(topic)} both take engine topic ${topic} on ${host}, which forwards a topic as one event`);
+        owners.set(topic, `${name}.${event}`);
+      }
+    }
+  }
 }
 
 export function validate(name, domain) {
@@ -49,7 +64,7 @@ export function validate(name, domain) {
     for (const host of HOSTS) if (call[host] !== undefined && !BINDINGS[host].has(call[host])) fail(`${verb}.${host} is one of ${[...BINDINGS[host]].join(", ")}`);
     if (call.service !== undefined && !SERVICE.test(call.service)) fail(`${verb}'s service is an ac_* call`);
     if (call.routeField !== undefined && call.desktop !== "route") fail(`${verb}.routeField picks the field of the engine's reply a desktop route answers with, so it goes only with desktop: route`);
-    if (call.routeField !== undefined && !NAME.test(call.routeField)) fail(`${verb}.routeField is a lowerCamelCase field of the engine's reply, or null to answer null`);
+    if (call.routeField !== undefined && (typeof call.routeField !== "string" || !NAME.test(call.routeField))) fail(`${verb}.routeField is a string: a lowerCamelCase field of the engine's reply, or "null" to answer null`);
     if (call.service === undefined && HOSTS.some((host) => passesStraight(call, host))) fail(`${verb}'s service is an ac_* call: a host passes it straight to the engine`);
   }
   for (const [event, row] of Object.entries(domain.events ?? {})) {

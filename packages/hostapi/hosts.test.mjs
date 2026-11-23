@@ -6,7 +6,49 @@ import { MANIFEST, ROOT } from "./generate.mjs";
 const read = (path) => readFileSync(ROOT + path, "utf8");
 const manifest = JSON.parse(read(MANIFEST));
 const domains = Object.entries(manifest.domains);
-const linuxContract = read("engine/ardiacore-linux/src/ardia/linux/ac_linux_contract.h");
+const LINUX_ONLY_EVENTS = ["downloads.removed", "history.imported"];
+
+export function stripComments(source) {
+  let out = "";
+  for (let at = 0; at < source.length; ) {
+    const two = source.slice(at, at + 2);
+    if (two === "//") {
+      const end = source.indexOf("\n", at);
+      at = end < 0 ? source.length : end;
+    } else if (two === "/*") {
+      const end = source.indexOf("*/", at + 2);
+      if (end < 0) throw new Error("a block comment never closes");
+      out += " ";
+      at = end + 2;
+    } else if (source[at] === '"' || source[at] === "'") {
+      const quote = source[at];
+      let end = at + 1;
+      while (end < source.length && source[end] !== quote) end += source[end] === "\\" ? 2 : 1;
+      out += source.slice(at, end + 1);
+      at = end + 1;
+    } else {
+      out += source[at++];
+    }
+  }
+  return out;
+}
+
+const between = (text, from, to) => {
+  const start = text.indexOf(from);
+  if (start < 0 || text.indexOf(from, start + 1) >= 0) throw new Error(`the source declares ${from} exactly once`);
+  return text.slice(start, text.indexOf(to, start));
+};
+
+export const linuxEventNames = (header) => new Set([...between(stripComments(header), "EventName(std::string_view topic)", "\n}").matchAll(/"([\w.]+)"/g)].map((match) => match[1]));
+
+export function macForwarding(bridgeSource) {
+  const source = stripComments(bridgeSource);
+  const topics = [...between(source, "*ForwardedTopics() {", "];").matchAll(/@"([^"]+)"/g)].map((match) => match[1]);
+  const renamed = new Map([...between(source, "NSString *AppEventOfTopic(", "\n}").matchAll(/isEqualToString:@"([^"]+)"\] \? @"([^"]+)"/g)].map((match) => [match[1], match[2]]));
+  return { topics, renamed };
+}
+
+const linuxContract = stripComments(read("engine/ardiacore-linux/src/ardia/linux/ac_linux_contract.h"));
 export function parseRoutes(header) {
   const opening = /\bkRoutes\[\]\s*=\s*\{/g;
   const open = opening.exec(header);
@@ -29,13 +71,9 @@ export function parseRoutes(header) {
 }
 
 const linuxRoutes = parseRoutes(linuxContract);
-const eventNamesBody = linuxContract.slice(linuxContract.indexOf("EventName(std::string_view topic)"), linuxContract.indexOf("\n}", linuxContract.indexOf("EventName(std::string_view topic)")));
-const linuxEvents = new Set([...eventNamesBody.matchAll(/"([\w.]+)"/g)].map((match) => match[1]));
+const linuxEvents = linuxEventNames(linuxContract);
 const windows = JSON.parse(read("packages/expo-windows/src/engine/domains/forwarded.json"));
-const bridge = read("packages/ardiacore/ios/ArdiaEngineBridge.mm");
-const between = (text, from, to) => text.slice(text.indexOf(from), text.indexOf(to, text.indexOf(from)));
-const macTopics = [...between(bridge, "ForwardedTopics()", "];").matchAll(/@"([^"]+)"/g)].map((match) => match[1]);
-const macRenamed = new Map([...between(bridge, "NSString *AppEventOfTopic(", "\n}").matchAll(/isEqualToString:@"([^"]+)"\] \? @"([^"]+)"/g)].map((match) => [match[1], match[2]]));
+const { topics: macTopics, renamed: macRenamed } = macForwarding(read("packages/ardiacore/ios/ArdiaEngineBridge.mm"));
 const generatedEvent = (name) => domains.some(([domain]) => name.startsWith(`${domain}.`));
 const eventsOf = (host, binding) => domains.flatMap(([domain, entry]) => Object.entries(entry.events).filter(([, event]) => event[host] === binding).map(([event, row]) => ({ name: `${domain}.${event}`, topic: row.topic })));
 
@@ -71,16 +109,33 @@ test("the Linux WebUI allowlist routes exactly each generated domain's desktop-r
   }
 });
 
-test("the Linux host forwards exactly each generated domain's desktop-forwarded events, under the same name", () => {
+test("comments never count as table entries: a commented-out row is read as gone", () => {
+  assert.equal(stripComments('a // "x.y"\nb /* @"z" */ c "/* kept */" \'/\''), 'a \nb   c "/* kept */" \'/\'');
+  assert.throws(() => stripComments("a /* open"), /never closes/);
+  const header = 'inline std::string_view EventName(std::string_view topic) {\n  for (const auto name : {"history.changed", /* "bookmarks.changed", */ "downloads.changed"}) {\n  // "extensions.sync"\n  }\n}\n';
+  assert.deepEqual([...linuxEventNames(header)], ["history.changed", "downloads.changed"]);
+  const bridgeSource = read("packages/ardiacore/ios/ArdiaEngineBridge.mm");
+  const commented = bridgeSource.replace('@"extensions.action", ', '/* @"extensions.action", */ ');
+  assert.notEqual(commented, bridgeSource);
+  assert.ok(macForwarding(bridgeSource).topics.includes("extensions.action"));
+  assert.ok(!macForwarding(commented).topics.includes("extensions.action"));
+  assert.ok(!macForwarding(bridgeSource.replace('@"extensions.action", ', '\n// @"extensions.action",\n')).topics.includes("extensions.action"));
+});
+
+test("the Linux host forwards exactly the desktop-forwarded events and its own Linux-only topics, nothing undeclared", () => {
   const forwarded = eventsOf("desktop", "forward");
-  for (const { name, topic } of forwarded) {
-    assert.equal(topic, name, `${name} reaches Linux under its own topic`);
-    assert.ok(linuxEvents.has(name), `EventName forwards ${name}`);
+  for (const { name, topic } of forwarded) assert.equal(topic, name, `${name} reaches Linux under its own topic`);
+  for (const name of LINUX_ONLY_EVENTS) {
+    const [domain, event] = name.split(".");
+    assert.equal(manifest.domains[domain]?.events[event], undefined, `${name} is Linux-only, so it isn't in the schema`);
   }
-  for (const [domain, entry] of domains) {
-    for (const [event, row] of Object.entries(entry.events)) {
-      if (row.desktop !== "forward") assert.ok(!linuxEvents.has(`${domain}.${event}`), `EventName forwards ${domain}.${event}, which the schema says the desktop host ${row.desktop === "custom" ? "emits itself" : "never sends"}`);
-    }
+  assert.deepEqual([...linuxEvents].sort(), [...forwarded.map(({ name }) => name), ...LINUX_ONLY_EVENTS].sort(), "EventName's topics");
+});
+
+test("each host forwards an engine topic as one event only", () => {
+  for (const host of ["mac", "desktop", "windows"]) {
+    const topics = eventsOf(host, "forward").map(({ topic }) => topic);
+    assert.deepEqual(topics.filter((topic, index) => topics.indexOf(topic) !== index), [], `${host} forwards a topic twice`);
   }
 });
 

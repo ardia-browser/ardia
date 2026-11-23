@@ -3,22 +3,23 @@ import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent, Scroll
 import { isPluginPath } from "../../lib/pluginChecks";
 import type { PluginNode } from "../../lib/pluginProtocol";
 import type { ColorRole, Space, TypeSize } from "../ui";
+import { isFields } from "../../lib/decode";
 
 type HandlerRef = { __handler: string };
 export type Child = PluginNode | string;
 
 export const isHandlerRef = (value: unknown): value is HandlerRef =>
-  typeof value === "object" && value !== null && !Array.isArray(value) && typeof (value as { __handler?: unknown }).__handler === "string";
+  isFields(value) && typeof value.__handler === "string";
 
 export const isNode = (value: unknown): value is PluginNode =>
-  typeof value === "object" && value !== null && !Array.isArray(value) && typeof (value as { type?: unknown }).type === "string" && Array.isArray((value as { children?: unknown }).children);
+  isFields(value) && typeof value.type === "string" && Array.isArray(value.children);
 
 export const str = (value: unknown): string | undefined => (typeof value === "string" && value ? value : typeof value === "number" && Number.isFinite(value) ? String(value) : undefined);
 export const num = (value: unknown): number | undefined => (typeof value === "number" && Number.isFinite(value) ? value : undefined);
 export const bool = (value: unknown): boolean => value === true;
 export const strings = (value: unknown): string[] => (Array.isArray(value) ? value.flatMap((v) => str(v) ?? []) : []);
 export const records = (value: unknown): Record<string, unknown>[] =>
-  Array.isArray(value) ? value.filter((v): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v)) : [];
+  Array.isArray(value) ? value.filter(isFields) : [];
 
 export function textOf(children: readonly Child[]): string {
   return children.map((c) => (typeof c === "string" ? c : textOf(c.children))).join("");

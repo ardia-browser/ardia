@@ -22,7 +22,7 @@ import { reportModule } from "./report";
 import { telemetryLocalModule } from "./telemetryLocal";
 import { windowGeometries, windowGeometryFakes } from "./windowGeometry";
 import officialPin from "../../official-plugins.json";
-import { sha256 } from "../lib/sha256";
+import { hexOf, sha256 } from "../lib/sha256";
 export { beginWindowControlTransition, finishStalledTransition, geometryWorld } from "./windowGeometry";
 
 type Modules = ShellNativeModules;
@@ -642,7 +642,6 @@ function derivedRegistry() {
     for (const program of plugin.reservedPrograms ?? []) if (declared[plugin.name]?.includes(program)) claims[program] ??= plugin.name;
   return { claims, failClosed: false, legacyOwners: [] };
 }
-const hexOf = (bytes: Uint8Array) => Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 export const officialLegacyHash = (text: string) => hexOf(sha256(`${text}\u0000bundled`));
 export function officialPinnedFromPin(): { name: string; version: string; folderId: string }[] {
   return (officialPin as { plugins: { name: string; version: string; artifacts: Record<string, { sha256?: string | null }> }[] }).plugins.flatMap((p) => {

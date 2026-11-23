@@ -10,6 +10,7 @@ import { noteSiteSwitch, noteSiteSwitchTypedOn } from "../telemetry/pageBarCount
 import { updateRecord } from "./lifecycle";
 import { activeManifest, activeNames, currentPlugins, NO_RECORD, recordOf, usePlugins, type PluginsStore } from "./store";
 import { valuesOf } from "./values";
+import { ownValue } from "../../lib/decode";
 
 type Plugins = Pick<PluginsStore, "listings" | "records" | "order">;
 
@@ -17,7 +18,7 @@ export function siteSwitchValue(s: Pick<PluginsStore, "records">, plugin: string
   const sites = recordOf(s, plugin).sites;
   if (!sites || !Object.hasOwn(sites, key)) return undefined;
   const values = sites[key]!;
-  return Object.hasOwn(values, origin) ? values[origin] : undefined;
+  return ownValue(values, origin);
 }
 
 export const pluginOrder = (s: Plugins): string[] => [...activeNames(s)].sort();

@@ -1,5 +1,5 @@
 import { installExtension as sharedInstallExtension } from "../../browser/src/platform/extensions";
-import { useExtensions } from "./extensionsStore";
+import { useExtensions } from "../../browser/src/state/extensions/store";
 import { followInstallFailures } from "./installRequestSheet";
 
 export * from "../../browser/src/platform/extensions";

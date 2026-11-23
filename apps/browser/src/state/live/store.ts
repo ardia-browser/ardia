@@ -4,6 +4,7 @@ import { noteLiveSave } from "../telemetry/workCounts";
 import { repoKey, stackMembers } from "./rows";
 import type { CompletedItem, CompletionState, FolderStatus, LiveAccount, LiveFolder, LiveFolderKind, LiveItem, LiveSourceId } from "./types";
 import { DEFAULT_COUNTDOWN_LEAD, keepDismissedNow, type DismissedNow } from "./meetings";
+import { sameList } from "../../lib/lists";
 
 type LiveConfig = {
   githubClientId: string;
@@ -239,8 +240,6 @@ function shownReposReleased(s: LiveState, folderId: string, fetchedSources: Set<
   return keptOut && still && still.length !== keptOut.length ? { repoHidden: { ...s.repoHidden, [folderId]: still } } : {};
 }
 
-const sameList = <T>(a: readonly T[], b: readonly T[]) => a.length === b.length && a.every((x, i) => x === b[i]);
-
 export function applyFetch(folderId: string, fetched: LiveItem[], gone: Record<string, CompletionState>, now = Date.now(), quiet: Set<string> = new Set(), fence?: unknown, fetchedSources: Set<LiveSourceId> = new Set()) {
   const intent: LivePersistenceIntent = { kind: "refresh", folderId, fence, completionIds: [] };
   setLive((s) => {
@@ -274,7 +273,7 @@ export function applyFetch(folderId: string, fetched: LiveItem[], gone: Record<s
     const unread = first ? [] : [...new Set([...(s.unread[folderId] ?? []), ...unreadFresh])].filter((id) => stillThere.has(id));
     return {
       items: sameList(merged, prev) ? s.items : { ...s.items, [folderId]: merged },
-      hidden: stillHidden.length === wasHidden.length && stillHidden.every((it, i) => it === wasHidden[i]) ? s.hidden : { ...s.hidden, [folderId]: stillHidden },
+      hidden: sameList(stillHidden, wasHidden) ? s.hidden : { ...s.hidden, [folderId]: stillHidden },
       known: fresh.length || !s.known[folderId] ? { ...s.known, [folderId]: [...known, ...fresh].slice(-MAX_KNOWN) } : s.known,
       unread: s.unread[folderId] && sameList(unread, s.unread[folderId]) ? s.unread : { ...s.unread, [folderId]: unread },
       completed: leaving.length || (s.completed[folderId] ?? []).length !== completed.length ? { ...s.completed, [folderId]: completed } : s.completed,

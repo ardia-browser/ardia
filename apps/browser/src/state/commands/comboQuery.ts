@@ -4,6 +4,7 @@ import { storedModifiers } from "./keyNotation";
 import { GLYPH_KEYS, MODIFIER_GLYPHS } from "./macGlyphs";
 import { FIRST_FUNCTION_KEY, ordered } from "./modifiers";
 import { sameShortcut, type Shortcut } from "./shortcuts";
+import { ownValue } from "../../lib/decode";
 
 type ComboWords = { modifiers: Readonly<Record<string, ShortcutModifier>>; keys: Readonly<Record<string, string>>; stored: (modifiers: readonly ShortcutModifier[]) => ShortcutModifier[] };
 
@@ -57,7 +58,7 @@ function modifierOf(token: string, words: ComboWords): ShortcutModifier | undefi
   const glyph = GLYPH_MODIFIERS.get(token);
   if (glyph) return glyph;
   const lower = token.toLowerCase();
-  return Object.hasOwn(words.modifiers, lower) ? words.modifiers[lower] : undefined;
+  return ownValue(words.modifiers, lower);
 }
 
 function keyOf(token: string, words: ComboWords): string | undefined {

@@ -7,6 +7,7 @@ import { removeTabs } from "../tabs/tabs";
 import { ASLEEP, hasPage } from "../tabs/pageSession";
 import type { LocalFolder } from "./local";
 import type { TargetEntry, TargetLevel } from "./tree";
+import { sameList } from "../../lib/lists";
 
 export const APPLIED_FIELDS = ["tabs", "groups", "windows", "windowOrder", "windowUi", "find", "splits", "selection", "closedTabs", "pinChoices"] as const;
 
@@ -23,8 +24,6 @@ export const EMPTY_FOLDER_URL = "about:blank";
 const EMPTY_FOLDER_TITLE = "Empty Folder";
 
 const isPlaceholder = (t: Tab | undefined) => !!t && !hasPage(t) && (!t.url || t.url === EMPTY_FOLDER_URL);
-
-const sameIds = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
 
 export function withFolder(s: BrowserState, groupId: string, level: TargetLevel, folder: LocalFolder): BrowserState {
   const root = s.groups[groupId];
@@ -120,7 +119,7 @@ export function withFolder(s: BrowserState, groupId: string, level: TargetLevel,
   const arranged = { ...window, tabIds: orderSections(ids, tabs, groups) };
   groups = syncGroupOrder(groups, arranged);
   const unchanged =
-    !dirty && sameIds(arranged.tabIds, window.tabIds) && Object.values(groups).every((g) => g.windowId !== windowId || sameIds(g.tabIds, s.groups[g.id]?.tabIds ?? []));
+    !dirty && sameList(arranged.tabIds, window.tabIds) && Object.values(groups).every((g) => g.windowId !== windowId || sameList(g.tabIds, s.groups[g.id]?.tabIds ?? []));
   if (unchanged) return s;
   const pinChoices = created.length ? markPinned(next.pinChoices, profileId, { placed: created }) : next.pinChoices;
   return { ...next, tabs, groups, windows: { ...next.windows, [windowId]: arranged }, pinChoices };

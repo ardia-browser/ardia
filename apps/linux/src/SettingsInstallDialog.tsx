@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { InstallDialogHost as SharedInstallDialogHost } from "../../browser/src/components/extensions/ExtensionOverlays";
-import { useExtensions } from "./extensionsStore";
+import { useExtensions } from "../../browser/src/state/extensions/store";
 import { followInstallRequest, leftoverInstallRequest, ownsInstallRequest } from "./installRequestSheet";
 
 export * from "../../browser/src/components/extensions/ExtensionOverlays";

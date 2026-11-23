@@ -2,14 +2,12 @@ import type { BrowserState } from "../browser/store";
 import { pinKeyOf } from "../browser/model";
 import { pinnedGroupMembers } from "../browser/structure";
 import { ancestorIds, innermostGroupOf } from "../groups/groups";
-import { isRegularWindow } from "../windows/small";
+import { isRegularWindow, regularWindows } from "../windows/small";
 import { peekTabIds } from "../peek/peek";
 import type { Tab, TabGroup } from "../browser/types";
 import { syncsAsOpenTab } from "./openTabRecords";
 
 type Members = ReadonlySet<string>;
-
-const regularWindows = (s: BrowserState) => s.windowOrder.map((id) => s.windows[id]).filter(isRegularWindow);
 
 export function regularOpenTab(s: BrowserState, t: Tab | undefined, pinnedMembers: Members = pinnedGroupMembers(s.groups)): t is Tab {
   return !!t && !t.pin && !t.liveItem && !pinnedMembers.has(t.id) && isRegularWindow(s.windows[t.windowId]) && !peekTabIds(s.peeks).has(t.id);

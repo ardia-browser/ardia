@@ -1,5 +1,6 @@
 import type { SplitView, TabGroup } from "./types";
 import { splitTabIds } from "../splits/splits";
+import { sameList } from "../../lib/lists";
 
 const groupIndexes = new WeakMap<Record<string, TabGroup>, Map<string, TabGroup>>();
 const splitIndexes = new WeakMap<Record<string, SplitView>, Map<string, SplitView[]>>();
@@ -41,8 +42,6 @@ export function splitIndex(splits: Record<string, SplitView>): Map<string, Split
   return index;
 }
 
-const same = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
-
 export function stableList(previous: string[] | undefined, next: string[]): string[] {
-  return previous && same(previous, next) ? previous : next;
+  return previous && sameList(previous, next) ? previous : next;
 }

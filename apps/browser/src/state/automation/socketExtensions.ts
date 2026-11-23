@@ -3,22 +3,20 @@ import { errorText } from "../../lib/errors";
 import { engineProfile } from "../browser/model";
 import { configureThenRead, freshExtensions, openInExtensionProfile } from "../extensions/actions";
 import type { InstalledExtension } from "../extensions/store";
-import { ownEntry } from "./automationWindows";
 import type { MethodSpec, SocketCall } from "./socketCatalog";
 import type { JsonSchema } from "../../lib/jsonSchema";
 import { bool, id, obj, oneOf, PROFILE, text } from "./socketSchema";
-import { now, profileArg } from "./socketTargets";
+import { engineArg, now, profileArg } from "./socketTargets";
 import { OpError } from "./workspaceTargets";
+import { ownValue } from "../../lib/decode";
 
 const SITE_ACCESS = ["allSites", "specificSites", "onClick"] as const;
 type SiteAccess = (typeof SITE_ACCESS)[number];
 const SITE_ACCESS_STATE: Record<SiteAccess, string> = { allSites: "ON_ALL_SITES", specificSites: "ON_SPECIFIC_SITES", onClick: "ON_CLICK" };
 
-const engineOf = (params: Record<string, unknown>) => engineProfile(now(), profileArg(params.profile));
-
 function stillThere(call: SocketCall, profileId: string, engine: string) {
   call.stillServing();
-  if (!ownEntry(now().profiles, profileId) || engineProfile(now(), profileId) !== engine) throw new OpError("no_window", `Profile ${profileId} closed before Ardia made the change, so nothing changed.`);
+  if (!ownValue(now().profiles, profileId) || engineProfile(now(), profileId) !== engine) throw new OpError("no_window", `Profile ${profileId} closed before Ardia made the change, so nothing changed.`);
 }
 
 const NO_FOLDER_INSTALLS = "installing an unpacked folder from the socket isn't supported; use Settings › Extensions › Load Unpacked";
@@ -77,7 +75,7 @@ async function configureExtension(params: Record<string, unknown>, call: SocketC
   const change = requestedChange(params);
   const expected = expectation(change);
   const profileId = profileArg(params.profile);
-  const engine = engineOf(params);
+  const engine = engineArg(params);
   const ext = (await loaded(engine)).find((x) => x.id === params.id);
   if (!ext) throw new OpError("no_window", `There's no extension ${String(params.id)} in that profile.`);
   checkedChange(ext, change);

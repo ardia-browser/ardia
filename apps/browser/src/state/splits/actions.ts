@@ -45,15 +45,25 @@ export function moveSplitPane(windowId: string, direction: SplitDirection, conse
   const active = activeTabId(store(), windowId);
   if (!active || !store().movePaneDirection(active, direction)) return false;
   reorderTick();
+  noteSplit("splitPaneKeyMoves", consent);
   noteSplitPaneMove("keyboard", consent);
   returnFocusToPage(windowId);
   return true;
 }
 
-export function swapSplitPanes(a: string, b: string, via: "drag" | "menu" = "drag"): boolean {
+export function moveActiveSplitPane(windowId: string, delta: 1 | -1, consent?: ConsentToken | null): boolean {
+  return moveSplitPane(windowId, delta < 0 ? "left" : "right", consent);
+}
+
+export function swapSplitPanes(a: string, b: string, viaOrConsent?: "drag" | "menu" | ConsentToken | null): boolean {
   if (!store().swapPanes(a, b)) return false;
-  if (via === "drag") reorderTick();
-  noteSplitPaneMove(via);
+  const via: "drag" | "menu" = viaOrConsent === "menu" ? "menu" : "drag";
+  const consent: ConsentToken | null | undefined = viaOrConsent === "drag" || viaOrConsent === "menu" ? undefined : viaOrConsent;
+  if (via === "drag") {
+    reorderTick();
+    noteSplit("splitPaneDragMoves", consent);
+  }
+  noteSplitPaneMove(via, consent);
   return true;
 }
 

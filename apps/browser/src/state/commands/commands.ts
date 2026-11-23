@@ -55,6 +55,7 @@ import { copyPageUrl, copySelectedTabUrls, jumpToSelection } from "../site/selec
 import { shareTab } from "../site/share";
 import { groupOf } from "../pins/tabGrouping";
 import { selectedTabIds } from "../pins/organize";
+import { consentToken } from "../telemetry/client";
 import { noteSelectionClosedByKey } from "../telemetry/usage";
 import { noteUrlCopied } from "../telemetry/urlCopies";
 import { newWindowProfile, originalProfile } from "../windows/small";
@@ -244,13 +245,13 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
     case "focusPreviousPane":
       return focusSplitPane(windowId, command === "focusNextPane" ? 1 : -1);
     case "movePaneLeft":
-      return void moveSplitPane(windowId, "left");
+      return void moveSplitPane(windowId, "left", consentToken());
     case "movePaneRight":
-      return void moveSplitPane(windowId, "right");
+      return void moveSplitPane(windowId, "right", consentToken());
     case "movePaneUp":
-      return void moveSplitPane(windowId, "up");
+      return void moveSplitPane(windowId, "up", consentToken());
     case "movePaneDown":
-      return void moveSplitPane(windowId, "down");
+      return void moveSplitPane(windowId, "down", consentToken());
     case "toggleSidebar":
       return s.toggleSidebar(windowId);
     case "zoomIn":

@@ -162,3 +162,16 @@ test("Email Page Location has no default shortcut, since Ctrl+Shift+I opens the 
   assert.equal(linuxBindings().some((binding) => binding.command === "emailPageLocation"), false);
   assert.equal(linuxBindings({ emailPageLocation: ["e", "command"] }).some((binding) => binding.command === "emailPageLocation"), true);
 });
+
+test("Ctrl+Alt+Left and Ctrl+Alt+Right bind to Move Split Pane Left and Right on Linux without colliding with profile cycling", () => {
+  const bindings = linuxBindings();
+  const left = keyboardCombo(event("ArrowLeft", { ctrlKey: true, altKey: true }));
+  const right = keyboardCombo(event("ArrowRight", { ctrlKey: true, altKey: true }));
+  assert.equal(commandAt(bindings, left.keyCode, left.flags)?.command, "movePaneLeft");
+  assert.equal(commandAt(bindings, right.keyCode, right.flags)?.command, "movePaneRight");
+  const items = linuxMenuShortcuts();
+  assert.deepEqual([...items.find((item) => item.id === "movePaneLeft").defaultModifiers].sort(), ["command", "option"]);
+  assert.deepEqual([...items.find((item) => item.id === "movePaneRight").defaultModifiers].sort(), ["command", "option"]);
+  assert.equal(items.find((item) => item.id === "nextProfile").key, "");
+  assert.equal(items.find((item) => item.id === "previousProfile").key, "");
+});

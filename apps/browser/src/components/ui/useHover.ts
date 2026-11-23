@@ -1,4 +1,4 @@
-import { createContext, useContext, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useRef, useState } from "react";
 import { markHoverProps } from "../../lib/hoverMarks";
 
 export const Offstage = createContext(false);
@@ -13,7 +13,8 @@ export function useHover() {
   latest.current = offstage;
   const [hovered, setHovered] = useState(false);
   const [hoverProps] = useState(() => markHoverProps({ onMouseEnter: () => setHovered(!latest.current), onMouseLeave: () => setHovered(false) }));
-  return { hovered: hovered && !offstage, hoverProps };
+  const clearHover = useCallback(() => setHovered(false), []);
+  return { hovered: hovered && !offstage, hoverProps, clearHover };
 }
 
 export function useTooltip(text: string | undefined) {

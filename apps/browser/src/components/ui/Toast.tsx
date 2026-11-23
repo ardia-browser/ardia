@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Animated, View } from "react-native";
 import { Button } from "./Button";
+import { ButtonSpinner } from "./ButtonKinds";
 import { curve, duration } from "./motion";
 import { Symbol } from "./native";
 import { Panel } from "./Panel";
@@ -11,6 +12,8 @@ import { radius, shadow, space, toastLayout } from "./tokens";
 const DOCK = { position: "absolute", left: 0, right: 0, bottom: toastLayout.bottom, alignItems: "center" } as const;
 const BODY = { paddingHorizontal: space.xl, paddingVertical: space.ml, flexDirection: "row", alignItems: "center", gap: space.ml, maxWidth: toastLayout.maxWidth } as const;
 const ICON = { width: 20, height: 20 } as const;
+const SPINNING = { ...ICON, alignItems: "center", justifyContent: "center" } as const;
+const TOAST_SPINNER = { box: 14, stroke: 2 } as const;
 const TEXT = { flexShrink: 1 } as const;
 const TOAST_FADE = { in: { duration: duration.base, easing: curve.enter }, out: { duration: duration.slow, easing: curve.exit } } as const;
 
@@ -18,6 +21,7 @@ export function Toast({
   title,
   message,
   icon,
+  loading = false,
   action,
   onAction,
   closing = false,
@@ -26,12 +30,14 @@ export function Toast({
   title: string;
   message?: string;
   icon?: string;
+  loading?: boolean;
   action?: string;
   onAction?: () => void;
   closing?: boolean;
   onClosed?: () => void;
 }) {
   const theme = useTheme();
+  const [widest, setWidest] = useState(0);
   const appear = useRef(new Animated.Value(0)).current;
   const closed = useRef(onClosed);
   closed.current = onClosed;
@@ -43,8 +49,25 @@ export function Toast({
   return (
     <View pointerEvents={action && !closing ? "box-none" : "none"} style={DOCK}>
       <Animated.View style={{ opacity: appear }}>
-        <Panel fill={theme.toastFill} border={theme.popoverBorder} radius={radius.panel} shadow={shadow.card} material="hudWindow" style={BODY}>
-          {icon ? <Symbol name={icon} size={15} color={theme.icon} style={ICON} /> : null}
+        <Panel
+          fill={theme.toastFill}
+          border={theme.popoverBorder}
+          radius={radius.panel}
+          shadow={shadow.card}
+          material="hudWindow"
+          style={widest ? { ...BODY, minWidth: widest } : BODY}
+          onLayout={(e) => {
+            const width = e.nativeEvent.layout.width;
+            if (width > widest) setWidest(width);
+          }}
+        >
+          {loading ? (
+            <View style={SPINNING}>
+              <ButtonSpinner color={theme.icon} box={TOAST_SPINNER.box} stroke={TOAST_SPINNER.stroke} />
+            </View>
+          ) : icon ? (
+            <Symbol name={icon} size={15} color={theme.icon} style={ICON} />
+          ) : null}
           <View style={TEXT}>
             <Text weight="semibold">{title}</Text>
             {message ? (

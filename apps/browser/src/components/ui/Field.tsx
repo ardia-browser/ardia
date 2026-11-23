@@ -10,13 +10,9 @@ import { useTheme } from "./theme";
 import { capsule, monoFace, opacity, perLook, proseLineHeight, radius, space, font as typeScale } from "./tokens";
 import { useHover } from "./useHover";
 import { useNativeForm } from "./nativeForm";
-import { useKeyDownEvents, type ExtraKeyProps } from "./fieldKeys";
+import { runTextFieldKey, searchFieldKeys, textFieldKeys, useKeyDownEvents, type ExtraKeyProps, type TextFieldKeyHandlers } from "./fieldKeys";
 
-const SEARCH_KEYS = [{ key: "Escape" }];
-const SEARCH_KEYS_WITH_ENTER = [{ key: "Escape" }, { key: "Enter" }, { key: "Enter", shiftKey: true }];
-const SEARCH_KEYS_WITH_ARROWS = [{ key: "Escape" }, { key: "Enter" }, { key: "Enter", shiftKey: true }, { key: "ArrowUp" }, { key: "ArrowDown" }];
 const BARE_SEARCH = { glyph: 13, glyphBox: 16 } as const;
-const ESCAPE_KEY = [{ key: "Escape" }];
 
 export function SearchField({
   value,
@@ -49,7 +45,7 @@ export function SearchField({
 }) {
   const theme = useTheme();
   const bare = look === "bare";
-  const keyDownEvents = useKeyDownEvents(onArrow ? SEARCH_KEYS_WITH_ARROWS : onSubmit ? SEARCH_KEYS_WITH_ENTER : SEARCH_KEYS, extraKeys);
+  const keyDownEvents = useKeyDownEvents(searchFieldKeys(!!onArrow, !!onSubmit), extraKeys);
   const clearMotion = usePressScaleMotion(!!value && !bare, buttonMotion.iconPressScale);
   return (
     <View
@@ -120,6 +116,10 @@ export function TextField({
   onSubmit,
   onEscape,
   onBlur,
+  onArrow,
+  onTab,
+  onFieldTab,
+  inputRef,
   selectOnFocus,
   multiline,
   mono,
@@ -129,7 +129,7 @@ export function TextField({
   style,
   extraKeys,
   onExtraKey,
-}: ExtraKeyProps & {
+}: ExtraKeyProps & TextFieldKeyHandlers & {
   value: string;
   onChangeText: (text: string) => void;
   placeholder?: string;
@@ -137,8 +137,8 @@ export function TextField({
   secure?: boolean;
   disabled?: boolean;
   onSubmit?: () => void;
-  onEscape?: () => void;
   onBlur?: () => void;
+  inputRef?: Ref<TextInput>;
   selectOnFocus?: boolean;
   multiline?: boolean;
   mono?: boolean;
@@ -147,7 +147,8 @@ export function TextField({
   style?: StyleProp<ViewStyle>;
 }) {
   const theme = useTheme();
-  const keyDownEvents = useKeyDownEvents(onEscape ? ESCAPE_KEY : undefined, extraKeys);
+  const keyHandlers = { onEscape, onArrow, onTab, onFieldTab };
+  const keyDownEvents = useKeyDownEvents(textFieldKeys(keyHandlers), extraKeys);
   return (
     <OutsidePressArea style={[{ width, opacity: disabled ? opacity.disabled : 1 }, style]}>
       <View
@@ -179,10 +180,10 @@ export function TextField({
           spellCheck={mono ? false : undefined}
           onSubmitEditing={disabled ? undefined : onSubmit}
           onBlur={onBlur}
+          ref={inputRef}
           keyDownEvents={keyDownEvents}
           onKeyDown={(e) => {
-            if (e.nativeEvent.key === "Escape") onEscape?.();
-            else if (onExtraKey?.(e.nativeEvent)) e.stopPropagation();
+            if (!runTextFieldKey(e.nativeEvent, keyHandlers) && onExtraKey?.(e.nativeEvent)) e.stopPropagation();
           }}
           style={[{ ...typeScale.body, color: theme.textPrimary, paddingVertical: 0 }, multiline && multilineText(), mono && monoFace()]}
         />

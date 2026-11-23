@@ -1,4 +1,11 @@
 export const CURATED = {
+  "123.rectangle": "T:123 M:numeric L:rectangle-ellipsis",
+  "clock.badge.checkmark": "T:clock-check M:clock-check-outline L:clock-check",
+  "chevron.backward": "L:chevron-left T:chevron-left P:caret-left I:nav-arrow-left M:chevron-left",
+  "exclamationmark.circle": "L:circle-alert T:alert-circle P:warning-circle I:warning-circle M:alert-circle-outline",
+  "key.horizontal.fill": "PF:key-fill M:key-variant TF:key L:key-round",
+  "lock.shield.fill": "PF:shield-check-fill M:shield-lock TF:shield-lock L:shield-check",
+  touchid: "PF:fingerprint-fill M:fingerprint T:fingerprint L:fingerprint P:fingerprint",
   "globe.americas.fill": "PF:globe-hemisphere-west-fill M:earth TF:world L:earth P:globe-hemisphere-west",
   "minus.circle": "L:circle-minus T:circle-minus P:minus-circle I:minus-circle M:minus-circle-outline",
   "pause": "L:pause T:player-pause P:pause I:pause M:pause",

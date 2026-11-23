@@ -98,6 +98,21 @@ export function bounceDip(pressedScale: number): number {
 
 export const usePressMotion = (): PressMotion => useSyncExternalStore(subscribePressMotion, pressMotionNow, pressMotionNow);
 
+export const reveal = {
+  grow: { duration: 200, easing: curve.enter },
+  shrink: { duration: duration.base, easing: curve.move },
+  fadeIn: { duration: duration.base, easing: curve.enter, delay: 40 },
+  fadeOut: { duration: duration.fast, easing: curve.exit },
+} as const;
+
+export const crossfade = { duration: duration.base, easing: curve.fade } as const;
+
+export const anchoredOpen = { duration: 160, easing: curve.enter, fromScale: 0.97 } as const;
+
+export const anchoredClose = { duration: 120, easing: curve.exit } as const;
+
+export const selectionSlide = { duration: 90, easing: curve.enter } as const;
+
 export const hoverFade = {
   show: { duration: 50, easing: curve.fade },
   hide: { duration: 200, easing: curve.fade },

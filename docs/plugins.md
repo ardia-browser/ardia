@@ -1211,9 +1211,13 @@ The daily settings snapshot has `plugins_installed`, `plugins_enabled` and, amon
 `plugins_with_main`, `plugins_with_menus`, `plugins_with_toolbar`, `plugins_with_sidebarViews`,
 `plugins_with_panels`, `plugins_with_omnibox`, `plugins_with_themes`, `plugins_with_siteSwitches`, `plugins_with_pageBar`.
 
-Credential providers count natively, by official name only (a name the signed pin keeps; anything else is dropped,
-never a plugin's own string): `credential_provider_connected_<name>` (0 or 1), `credential_calls_<name>`,
-`credential_call_failures_<name>` and `credential_verb_refusals_<name>`.
+Credential providers are counted per provider, `<name>` being `1password`, `bitwarden` or `protonpass` and any other
+plugin folded into `other` (never a plugin's own string): `credential_provider_connected_<name>` (1 when it was signed
+in, locked or unlocked, when the hour's counts were taken), and natively (`CredentialCounts`, pulled with
+`vaults.keychainCounts`) `credential_calls_<name>` (calls Ardia sent the plugin), `credential_call_failures_<name>`
+(calls that timed out, came back invalid, too large or stale, or failed for a reason other than locked, signed out or
+not found) and `credential_verb_refusals_<name>` (CLI requests Ardia refused). Watch failures against calls for a
+plugin regression, and refusals for a plugin asking for something its catalog doesn't allow.
 
 Page bars: hourly `plugin_page_bar_shown_<official|other>` (once per tab per document), `plugin_page_bar_press_<action>`
 (`site_controls`, `address`, `copy_link`, `console`, `network`, `inspect`, `extensions`, `split`),

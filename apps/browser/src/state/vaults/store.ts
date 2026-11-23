@@ -10,7 +10,7 @@ import { vaultsOnForProfile } from "./enabled";
 import { clearVaultCodes } from "./codes";
 import { forgetMissingVaultAccounts } from "./accounts";
 import { forgetPending, keepListedPending, type PendingTotp } from "./pendingTotp";
-import { noteStaleVaultProviderState } from "../telemetry/vaultCounts";
+import { noteCredentialProvidersConnected, noteStaleVaultProviderState } from "../telemetry/vaultCounts";
 
 type VaultsState = {
   providers: VaultProviderState[];
@@ -187,6 +187,10 @@ let started = false;
 export function startVaultIndex() {
   if (started) return;
   started = true;
+  useVaults.subscribe((s, prev) => {
+    if (s.providers === prev.providers) return;
+    noteCredentialProvidersConnected(s.providers.filter((p) => !!credential(p).plugin && (p.state === "unlocked" || p.state === "locked")).map((p) => p.id));
+  });
   onVaultChanged(applyProviderState);
   onVaultApproval((_, url) => openUrlFromSettings(url));
   onVaultItemsChanged((provider) => void loadVaultItems(provider, true));

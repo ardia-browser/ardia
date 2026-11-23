@@ -263,6 +263,7 @@ export type EngineCalls = BookmarksCalls & FaviconsCalls & HistoryCalls & {
       storeResealed?: number;
       storeSetAside?: number;
       storeKeyNotNoted?: number;
+      credential?: { calls?: Record<string, number>; callFailures?: Record<string, number>; verbRefusals?: Record<string, number> };
     },
   ];
   "vaults.listGenerated": [{}, VaultGeneratedPassword[]];

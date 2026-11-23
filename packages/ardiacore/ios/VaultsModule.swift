@@ -217,7 +217,7 @@ public class VaultsModule: Module {
         "storeNewerFormatKept": store.newerFormatKept, "storeUnreadableKept": store.unreadableKept,
         "storeKeyReadFailed": store.keyReadFailed, "staleWorkDropped": store.staleWorkDropped,
         "storeResealed": store.resealed, "storeSetAside": store.setAside, "storeKeyNotNoted": store.keyNotNoted,
-        "storeCloudNewerFormatKept": store.cloudNewerFormatKept,
+        "storeCloudNewerFormatKept": store.cloudNewerFormatKept, "credential": CredentialCounts.shared.take(),
       ])
     },
     "sync": { _, reply in VaultsModule.answer(reply) { await VaultBroker.shared.sync().jsonObject() } },

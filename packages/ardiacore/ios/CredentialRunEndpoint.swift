@@ -24,6 +24,16 @@ enum CredentialCallAnswer: @unchecked Sendable {
   case host(CredentialHostOutcome)
 }
 
+extension CredentialCallAnswer {
+  var isFailure: Bool {
+    switch self {
+    case .result: return false
+    case .error(let wire): return !["locked", "signedOut", "notFound"].contains(wire.code)
+    case .host(let outcome): return outcome != .cancelled
+    }
+  }
+}
+
 struct CredentialRequestId: @unchecked Sendable {
   let json: Any
 }
@@ -285,6 +295,7 @@ public final class CredentialRunEndpoint: @unchecked Sendable {
           open.deadline = expiry
           calls[callId] = open
           queue.asyncAfter(deadline: .now() + deadlineSeconds, execute: expiry)
+          CredentialCounts.shared.note(.call, plugin)
           send([
             "call": callId, "kind": CredentialLimits.callKind, "name": handler, "input": input, "deadline": Int(deadlineSeconds * 1000),
             "context": context(callId: callId, epoch: epoch),
@@ -326,6 +337,7 @@ public final class CredentialRunEndpoint: @unchecked Sendable {
 
   private func answer(_ callId: String, _ outcome: CredentialCallAnswer) {
     guard var open = calls.removeValue(forKey: callId) else { return }
+    if outcome.isFailure { CredentialCounts.shared.note(.callFailure, plugin) }
     open.deadline?.cancel()
     for serial in open.verbs {
       guard let running = verbs[serial], !running.verb.outlivesCall else { continue }
@@ -476,25 +488,25 @@ public final class CredentialRunEndpoint: @unchecked Sendable {
   }
 
   private func verb(id: CredentialRequestId, params: [String: Any]) {
-    guard let requestId = (id.json as? NSNumber)?.intValue else { return reply(id, refusal: CredentialRefusal(.badRequest, "A verb request needs a number id.")) }
+    guard let requestId = (id.json as? NSNumber)?.intValue else { return refuseVerb(id, CredentialRefusal(.badRequest, "A verb request needs a number id.")) }
     guard let open = openCall(params, id: id) else { return }
-    guard let verbId = params["verb"] as? String else { return reply(id, refusal: CredentialRefusal(.badRequest, "A verb request names its verb.")) }
+    guard let verbId = params["verb"] as? String else { return refuseVerb(id, CredentialRefusal(.badRequest, "A verb request names its verb.")) }
     let given = params["params"] as? [String: Any] ?? [:]
-    if params["params"] != nil, !(params["params"] is [String: Any]) { return reply(id, refusal: CredentialRefusal(.badRequest, "params must be an object.")) }
+    if params["params"] != nil, !(params["params"] is [String: Any]) { return refuseVerb(id, CredentialRefusal(.badRequest, "params must be an object.")) }
     let timeout = (params["timeoutMs"] as? NSNumber).flatMap { $0.doubleValue.isFinite ? Int($0.doubleValue) : nil }
     let built = CredentialVerbLaunch.build(
       cli: contribution.cli, verbId: verbId, params: given, requestedTimeoutMs: timeout, testFolderBase: host.testFolderBase(plugin),
       secret: { [self] handle in handles.value(handle, call: open.id, epoch: open.epoch) })
     let launch: CredentialVerbLaunch
     switch built {
-    case .failure(let refusal): return reply(id, refusal: refusal)
+    case .failure(let refusal): return refuseVerb(id, refusal)
     case .success(let made): launch = made
     }
     guard !verbs.values.contains(where: { $0.requestId == requestId }) else {
-      return reply(id, refusal: CredentialRefusal(.badRequest, "A command with id \(requestId) is already running."))
+      return refuseVerb(id, CredentialRefusal(.badRequest, "A command with id \(requestId) is already running."))
     }
     guard verbs.count < CredentialLimits.runningVerbs else {
-      return reply(id, refusal: CredentialRefusal(.overloaded, "\(contribution.title) has \(CredentialLimits.runningVerbs) commands running."))
+      return refuseVerb(id, CredentialRefusal(.overloaded, "\(contribution.title) has \(CredentialLimits.runningVerbs) commands running."))
     }
     guard let verb = contribution.cli.verb(verbId) else { return }
     guard let program = host.program(contribution.cli.name) else {
@@ -522,6 +534,11 @@ public final class CredentialRunEndpoint: @unchecked Sendable {
     if verb.signIn { host.startSigningIn(plugin, command)?.cancel() }
     if verb.outlivesCall { host.setSignInRun(plugin, CredentialSignInRun(state: .running)) }
     command.start { [weak self] result in self?.queue.async { self?.verbExited(serial, id: id, result: result) } }
+  }
+
+  private func refuseVerb(_ id: CredentialRequestId, _ refusal: CredentialRefusal) {
+    CredentialCounts.shared.note(.verbRefusal, plugin)
+    reply(id, refusal: refusal)
   }
 
   private func notLaunched(_ verb: CredentialVerb) -> [String: Any] {

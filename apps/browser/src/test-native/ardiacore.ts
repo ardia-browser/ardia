@@ -462,6 +462,7 @@ export const vaultFakes = {
   cancelledSignIns: [] as string[],
   ardiaProfiles: [] as string[][],
   warmed: [] as string[],
+  keychainCounts: { reads: 0, readsFromMemory: 0, writesSkipped: 0, loginKeychainCalls: 0 } as CallResult<"vaults.keychainCounts">,
 };
 const vaultState = (provider: string) => vaultFakes.providers.find((p) => p.id === provider)!;
 function setVaultState(provider: string, state: FakeVaultProvider["state"]) {
@@ -800,6 +801,11 @@ const fakeModules = {
       syncStatus: () => ({ ok: true, synced: [], failed: [], syncedAt: vaultFakes.syncedAt, iCloud: true }),
       warm: ({ origin }) => (vaultFakes.warmed.push(origin), {}),
       biometrics: () => ({ available: true }),
+      keychainCounts: () => {
+        const taken = vaultFakes.keychainCounts;
+        vaultFakes.keychainCounts = { reads: 0, readsFromMemory: 0, writesSkipped: 0, loginKeychainCalls: 0 };
+        return taken;
+      },
       cancelSignIn: ({ provider }) => (vaultFakes.cancelledSignIns.push(provider), vaultState(provider)),
       addTotp: (args) => {
         vaultFakes.addedTotps.push({ ...args });

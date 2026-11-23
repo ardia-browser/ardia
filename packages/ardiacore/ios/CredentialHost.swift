@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 struct CredentialProgram: Sendable, Equatable {
   var executable: String
@@ -68,5 +69,35 @@ extension CredentialHost {
   func sessionKey(_ provider: String) -> String? {
     guard let session = session(provider), !CredentialMarker.isMarker(session) else { return nil }
     return session
+  }
+}
+
+public final class CredentialCounts: Sendable {
+  public enum Kind: String, Sendable, CaseIterable {
+    case call = "calls"
+    case callFailure = "callFailures"
+    case verbRefusal = "verbRefusals"
+  }
+
+  public static let shared = CredentialCounts()
+  static let mostProviders = 16
+
+  private let counts = OSAllocatedUnfairLock(initialState: [Kind: [String: Int]]())
+
+  func note(_ kind: Kind, _ provider: String) {
+    counts.withLock { all in
+      var byProvider = all[kind] ?? [:]
+      guard byProvider[provider] != nil || byProvider.count < Self.mostProviders else { return }
+      byProvider[provider, default: 0] += 1
+      all[kind] = byProvider
+    }
+  }
+
+  public func take() -> [String: [String: Int]] {
+    let taken = counts.withLock { all -> [Kind: [String: Int]] in
+      defer { all = [:] }
+      return all
+    }
+    return Dictionary(uniqueKeysWithValues: Kind.allCases.map { ($0.rawValue, taken[$0] ?? [:]) })
   }
 }

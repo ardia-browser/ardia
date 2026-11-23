@@ -491,6 +491,24 @@ struct CredentialRunTests {
     #expect(await long.value == true)
   }
 
+  @Test func `calls, failed calls and refused verbs are counted per provider, and taking them resets`() async throws {
+    let run = try await CredentialRun()
+    _ = CredentialCounts.shared.take()
+    let open = try await run.open("list")
+    let refused = try await run.request("credentials.verb", ["call": open.call])
+    #expect((refused["error"] as? [String: Any])?["code"] as? String == "bad_request")
+    _ = try await run.request("result", ["call": open.call, "error": ["code": "failed", "problem": "failed"]])
+    _ = await open.answer.value
+    let fine = try await run.open("state")
+    try await run.finish(fine.call)
+    _ = await fine.answer.value
+    let counts = CredentialCounts.shared.take()
+    #expect(counts["calls"] == ["fakewarden": 2])
+    #expect(counts["callFailures"] == ["fakewarden": 1])
+    #expect(counts["verbRefusals"] == ["fakewarden": 1])
+    #expect(CredentialCounts.shared.take()["calls"] == [:])
+  }
+
   @Test func `a big listing streams one item per line before its reply`() async throws {
     let run = try await CredentialRun()
     let open = try await run.open("list")

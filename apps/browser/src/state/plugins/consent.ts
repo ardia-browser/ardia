@@ -3,6 +3,7 @@ import type { PasswordField } from "../../lib/pluginPasswordManager";
 import { pageBarConsent } from "../../lib/pluginPageBar";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
 import { contributionLines } from "./consentContributions";
+import { credentialProviderLines } from "./consentCredentials";
 
 export type ConsentLine = { icon: string; text: string };
 
@@ -63,7 +64,7 @@ export type ConsentContext = { controlOff?: boolean; official?: boolean; movesPr
 export const CONTROL_OFF_LINE = "Control is off, as you set it, and installing this leaves it off. To let programs drive Ardia, turn on “Let programs control Ardia” in Settings › Advanced";
 
 export function consentLines(m: PluginManifest, context: ConsentContext = {}): ConsentLine[] {
-  const lines: ConsentLine[] = [...runtimeLines(m), ...permissionLines(m)];
+  const lines: ConsentLine[] = [...runtimeLines(m), ...credentialProviderLines(m.contributes.credentialProvider), ...permissionLines(m)];
   if (m.permissions.control && context.controlOff) lines.push({ icon: "hand.raised.slash", text: CONTROL_OFF_LINE });
   const defaults = Object.keys(m.settings.defaults);
   if (defaults.length) lines.push({ icon: "slider.horizontal.3", text: `Changes these settings while it's on: ${defaults.join(", ")}` });

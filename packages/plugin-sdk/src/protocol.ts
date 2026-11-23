@@ -1,3 +1,5 @@
+export { CREDENTIAL_METHODS } from "./credentialMethods";
+
 export type Tone = "default" | "secondary" | "tertiary" | "accent" | "success" | "warning" | "destructive";
 
 export type Size = "caption" | "small" | "body" | "heading" | "title";
@@ -168,7 +170,7 @@ export type PluginWindowInfo = {
   tabs: PluginTabInfo[];
 };
 
-export type CallKind = "tool" | "command" | "omnibox" | "decide";
+export type CallKind = "tool" | "command" | "omnibox" | "decide" | "credentials";
 
 export type PluginCallMessage = {
   call: string;
@@ -203,6 +205,7 @@ export type ReadyParams = {
   omnibox: boolean;
   decide: string[];
   events: string[];
+  credentialProvider?: { handlers: string[] };
 };
 
 export const PLUGIN_PROTOCOL = 2;
@@ -243,6 +246,13 @@ export const HOST_METHODS = {
   programsRelink: "programs.relink",
   surfaceRender: "surface.render",
   surfaceClose: "surface.close",
+  credentialsVerb: "credentials.verb",
+  credentialsVerbCancel: "credentials.verb.cancel",
+  credentialsSignInCancel: "credentials.signIn.cancel",
+  credentialsTakeStored: "credentials.session.takeStored",
+  credentialsDropStored: "credentials.session.dropStored",
+  credentialsValuesSet: "credentials.values.set",
+  credentialsOwnerConfirm: "credentials.owner.confirm",
 } as const;
 
 export type HostMethod = (typeof HOST_METHODS)[keyof typeof HOST_METHODS];

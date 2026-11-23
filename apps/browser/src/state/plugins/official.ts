@@ -16,6 +16,7 @@ import { relinkPrograms } from "./programs";
 import { activeManifest, approvalMatches, currentPlugins, setOfficialFetch, usePlugins, type PluginListing, type PluginsStore } from "./store";
 
 export { COMING_SOON, OFFICIAL_CATALOGUE, OFFICIAL_NAMES, PRESELECTED_PLUGINS, officialCatalogue } from "./officialPin";
+export { officialCredentialProviders, useOfficialCredentialProviders, type OfficialCredentialProvider, type OfficialCredentialProviderState } from "./officialCredentials";
 
 export type OfficialPluginState = "available" | "installed" | "comingSoon" | "unsupported";
 export type OfficialPlugin = { name: string; title: string; blurb: string; icon: string; version: string | null; example: string | null; state: OfficialPluginState; update: string | null };

@@ -1,0 +1,588 @@
+{
+  "$schema": "https://raw.githubusercontent.com/ardia-browser/ardia/main/docs/plugin.schema.json",
+  "manifest": 2,
+  "name": "bitwarden",
+  "title": "Bitwarden",
+  "description": "Fills and saves logins, codes and passkeys from your Bitwarden vault.",
+  "version": "1.0.0",
+  "requires": "1.40.0",
+  "official": true,
+  "keywords": [
+    "bitwarden",
+    "vaultwarden",
+    "passwords",
+    "passkeys"
+  ],
+  "main": "dist/main.js",
+  "memoryMB": 1024,
+  "contributes": {
+    "credentialProvider": {
+      "title": "Bitwarden",
+      "symbol": "shield.lefthalf.filled",
+      "accent": "#175DDC",
+      "readsOffline": true,
+      "capabilities": [
+        "totp",
+        "save",
+        "edit",
+        "addTotp",
+        "passkeys",
+        "selfHosted",
+        "masterPassword",
+        "touchID"
+      ],
+      "signIn": {
+        "methods": [
+          {
+            "id": "password",
+            "title": "Email and Password",
+            "kind": "fields",
+            "twoStep": true,
+            "fields": [
+              {
+                "id": "email",
+                "title": "Email",
+                "type": "email",
+                "placeholder": "name@example.com",
+                "prefill": "account"
+              },
+              {
+                "id": "masterPassword",
+                "title": "Master Password",
+                "type": "secret"
+              }
+            ]
+          },
+          {
+            "id": "apiKey",
+            "title": "API Key",
+            "kind": "fields",
+            "fields": [
+              {
+                "id": "clientId",
+                "title": "Client ID",
+                "type": "secret",
+                "masked": false,
+                "placeholder": "user.…"
+              },
+              {
+                "id": "clientSecret",
+                "title": "Client Secret",
+                "type": "secret"
+              },
+              {
+                "id": "masterPassword",
+                "title": "Master Password",
+                "type": "secret"
+              }
+            ]
+          }
+        ],
+        "servers": [
+          {
+            "id": "us",
+            "title": "Bitwarden.com"
+          },
+          {
+            "id": "eu",
+            "title": "Bitwarden.eu"
+          },
+          {
+            "id": "selfHosted",
+            "title": "Self-Hosted",
+            "custom": {
+              "title": "Server URL",
+              "placeholder": "vault.example.com"
+            }
+          }
+        ],
+        "unlock": {
+          "field": "masterPassword"
+        }
+      },
+      "cli": {
+        "name": "bw",
+        "install": {
+          "command": "brew install bitwarden-cli",
+          "update": "brew upgrade bitwarden-cli",
+          "url": "https://bitwarden.com/help/cli/"
+        },
+        "minimumVersion": "2024.6.0",
+        "patterns": {
+          "guid": "^[0-9a-fA-F-]{36}$"
+        },
+        "env": [
+          {
+            "name": "BW_NOINTERACTION",
+            "literal": "true"
+          },
+          {
+            "name": "BITWARDENCLI_APPDATA_DIR",
+            "testFolder": ""
+          }
+        ],
+        "onLock": {
+          "verb": "lock",
+          "params": {
+            "session": {
+              "from": "session"
+            }
+          },
+          "skipWithTouchID": true
+        },
+        "verbs": {
+          "status": {
+            "argv": [
+              "status",
+              "--nointeraction"
+            ],
+            "slots": {
+              "session": {
+                "type": "secret",
+                "optional": true
+              }
+            },
+            "env": [
+              {
+                "name": "BW_SESSION",
+                "secretSlot": "session"
+              }
+            ],
+            "output": {
+              "mode": "json"
+            }
+          },
+          "login.password": {
+            "argv": [
+              "login",
+              {
+                "slot": "email"
+              },
+              "--passwordenv",
+              "ARDIA_BW_PASSWORD",
+              "--raw",
+              "--nointeraction",
+              {
+                "flag": "--method",
+                "slot": "method"
+              },
+              {
+                "flag": "--code",
+                "slot": "code"
+              }
+            ],
+            "slots": {
+              "email": {
+                "type": "email"
+              },
+              "password": {
+                "type": "secret"
+              },
+              "method": {
+                "type": "enum",
+                "values": [
+                  "0",
+                  "1",
+                  "3"
+                ],
+                "optional": true
+              },
+              "code": {
+                "type": "code",
+                "optional": true
+              }
+            },
+            "env": [
+              {
+                "name": "ARDIA_BW_PASSWORD",
+                "secretSlot": "password"
+              }
+            ],
+            "timeoutMs": 60000,
+            "signIn": true,
+            "output": {
+              "mode": "lastLineSecret"
+            },
+            "unlocks": {
+              "persistent": true
+            },
+            "hints": {
+              "alreadyLoggedIn": [
+                "already logged in"
+              ],
+              "noProvider": [
+                "no provider selected"
+              ],
+              "codeRequired": [
+                "code is required"
+              ],
+              "wrongCredentials": [
+                "username or password is incorrect",
+                "invalid master password",
+                "invalid_grant"
+              ],
+              "wrongCode": [
+                "two-step",
+                "invalid code",
+                "token"
+              ]
+            }
+          },
+          "login.apiKey": {
+            "argv": [
+              "login",
+              "--apikey",
+              "--nointeraction"
+            ],
+            "slots": {
+              "clientId": {
+                "type": "secret"
+              },
+              "clientSecret": {
+                "type": "secret"
+              }
+            },
+            "env": [
+              {
+                "name": "BW_CLIENTID",
+                "secretSlot": "clientId"
+              },
+              {
+                "name": "BW_CLIENTSECRET",
+                "secretSlot": "clientSecret"
+              }
+            ],
+            "timeoutMs": 60000,
+            "signIn": true,
+            "output": {
+              "mode": "lines"
+            },
+            "hints": {
+              "alreadyLoggedIn": [
+                "already logged in"
+              ],
+              "rejected": [
+                "incorrect",
+                "invalid_client",
+                "invalid api key"
+              ]
+            }
+          },
+          "unlock": {
+            "argv": [
+              "unlock",
+              "--passwordenv",
+              "ARDIA_BW_PASSWORD",
+              "--raw",
+              "--nointeraction"
+            ],
+            "slots": {
+              "password": {
+                "type": "secret"
+              }
+            },
+            "env": [
+              {
+                "name": "ARDIA_BW_PASSWORD",
+                "secretSlot": "password"
+              }
+            ],
+            "timeoutMs": 60000,
+            "signIn": true,
+            "output": {
+              "mode": "lastLineSecret"
+            },
+            "unlocks": {
+              "persistent": true
+            },
+            "hints": {
+              "signedOut": [
+                "you are not logged in",
+                "not logged in"
+              ],
+              "wrongPassword": [
+                "invalid master password",
+                "master password is required"
+              ]
+            }
+          },
+          "lock": {
+            "argv": [
+              "lock",
+              "--nointeraction"
+            ],
+            "slots": {
+              "session": {
+                "type": "secret",
+                "optional": true
+              }
+            },
+            "env": [
+              {
+                "name": "BW_SESSION",
+                "secretSlot": "session"
+              }
+            ],
+            "timeoutMs": 20000,
+            "output": {
+              "mode": "lines"
+            }
+          },
+          "logout": {
+            "argv": [
+              "logout",
+              "--nointeraction"
+            ],
+            "slots": {
+              "session": {
+                "type": "secret",
+                "optional": true
+              }
+            },
+            "env": [
+              {
+                "name": "BW_SESSION",
+                "secretSlot": "session"
+              }
+            ],
+            "output": {
+              "mode": "lines"
+            }
+          },
+          "config.server.us": {
+            "argv": [
+              "config",
+              "server",
+              "bitwarden.com",
+              "--nointeraction"
+            ],
+            "output": {
+              "mode": "lines"
+            },
+            "hints": {
+              "logoutRequired": [
+                "logout required"
+              ]
+            }
+          },
+          "config.server.eu": {
+            "argv": [
+              "config",
+              "server",
+              "https://vault.bitwarden.eu",
+              "--nointeraction"
+            ],
+            "output": {
+              "mode": "lines"
+            },
+            "hints": {
+              "logoutRequired": [
+                "logout required"
+              ]
+            }
+          },
+          "config.server.url": {
+            "argv": [
+              "config",
+              "server",
+              {
+                "slot": "url"
+              },
+              "--nointeraction"
+            ],
+            "slots": {
+              "url": {
+                "type": "url",
+                "allowLocalHttp": true
+              }
+            },
+            "output": {
+              "mode": "lines"
+            },
+            "hints": {
+              "logoutRequired": [
+                "logout required"
+              ]
+            }
+          },
+          "sync": {
+            "argv": [
+              "sync",
+              "--nointeraction"
+            ],
+            "slots": {
+              "session": {
+                "type": "secret"
+              }
+            },
+            "env": [
+              {
+                "name": "BW_SESSION",
+                "secretSlot": "session"
+              }
+            ],
+            "timeoutMs": 30000,
+            "output": {
+              "mode": "lines"
+            }
+          },
+          "list.items": {
+            "argv": [
+              "list",
+              "items",
+              "--nointeraction"
+            ],
+            "slots": {
+              "session": {
+                "type": "secret"
+              }
+            },
+            "env": [
+              {
+                "name": "BW_SESSION",
+                "secretSlot": "session"
+              }
+            ],
+            "timeoutMs": 90000,
+            "outputLimitBytes": 167772160,
+            "output": {
+              "mode": "json",
+              "items": "$"
+            }
+          },
+          "get.field": {
+            "argv": [
+              "get",
+              {
+                "slot": "field"
+              },
+              {
+                "slot": "id"
+              },
+              "--nointeraction"
+            ],
+            "slots": {
+              "session": {
+                "type": "secret"
+              },
+              "field": {
+                "type": "enum",
+                "values": [
+                  "username",
+                  "password",
+                  "totp"
+                ]
+              },
+              "id": {
+                "type": "id",
+                "pattern": "guid"
+              }
+            },
+            "env": [
+              {
+                "name": "BW_SESSION",
+                "secretSlot": "session"
+              }
+            ],
+            "output": {
+              "mode": "lines"
+            }
+          },
+          "get.item": {
+            "argv": [
+              "get",
+              "item",
+              {
+                "slot": "id"
+              },
+              "--nointeraction"
+            ],
+            "slots": {
+              "session": {
+                "type": "secret"
+              },
+              "id": {
+                "type": "id",
+                "pattern": "guid"
+              }
+            },
+            "env": [
+              {
+                "name": "BW_SESSION",
+                "secretSlot": "session"
+              }
+            ],
+            "output": {
+              "mode": "json"
+            }
+          },
+          "create.item": {
+            "argv": [
+              "create",
+              "item",
+              "--nointeraction"
+            ],
+            "slots": {
+              "session": {
+                "type": "secret"
+              },
+              "item": {
+                "type": "json"
+              }
+            },
+            "env": [
+              {
+                "name": "BW_SESSION",
+                "secretSlot": "session"
+              }
+            ],
+            "stdin": {
+              "slot": "item",
+              "encoding": "base64"
+            },
+            "timeoutMs": 60000,
+            "output": {
+              "mode": "json"
+            }
+          },
+          "edit.item": {
+            "argv": [
+              "edit",
+              "item",
+              {
+                "slot": "id"
+              },
+              "--nointeraction"
+            ],
+            "slots": {
+              "session": {
+                "type": "secret"
+              },
+              "id": {
+                "type": "id",
+                "pattern": "guid"
+              },
+              "item": {
+                "type": "json"
+              }
+            },
+            "env": [
+              {
+                "name": "BW_SESSION",
+                "secretSlot": "session"
+              }
+            ],
+            "stdin": {
+              "slot": "item",
+              "encoding": "base64"
+            },
+            "timeoutMs": 60000,
+            "output": {
+              "mode": "json"
+            }
+          }
+        }
+      }
+    }
+  }
+}

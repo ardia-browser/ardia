@@ -11,6 +11,7 @@ import { permissionsOf, type PluginPermissions } from "./pluginPermissions";
 import { storedRows, type RowValue, type SettingsSpec } from "./pluginRows";
 import { mainOf, sidecarOf, type MainSpec, type ProcessSpec, type ProgramSpec } from "./pluginRuntime";
 import type { PasswordManagerSpec } from "./pluginPasswordManager";
+import { closedPluginProblems, CREDENTIAL_MEMORY_MB, declaresCredentialProvider, DEFAULT_CREDENTIAL_MB } from "./pluginCredentialProvider";
 
 export { compareVersions } from "./versions";
 export { LIMITS, NAME_PATTERN, KEY_PATTERN, VERSION_PATTERN, SYMBOL_PATTERN, KEYWORD_PATTERN, isPluginPath, DEFAULT_MAIN_MB, DEFAULT_SIDECAR_MB } from "./pluginChecks";
@@ -21,6 +22,7 @@ export { MENU_SLOTS, PANEL_MODES, PAGE_PANEL_ID, CONTRIBUTES_KEYS, pagePanelOf, 
 export { STARTUP_EVENTS, ACTIVATION_PREFIXES, activationEventProblem, derivedActivationEvents, startsEagerly, urlActivationHosts } from "./pluginActivation";
 export { MANIFEST_MIGRATIONS } from "./pluginMigrations";
 export type { MainSpec, ProcessSpec, ProgramSpec } from "./pluginRuntime";
+export type { CredentialProviderSpec } from "./pluginCredentialProvider";
 
 export const MANIFEST_VERSION = 2;
 export const MANIFEST_FILE = "plugin.json";
@@ -139,7 +141,9 @@ export function checkManifest(raw: Fields, declaredManifest = MANIFEST_VERSION):
   const keywords = keywordsOf(c, raw.keywords);
   const telemetry = telemetryOf(c, raw.telemetry);
   const permissions = permissionsOf(c, raw.permissions);
-  const main = mainOf(c, raw.main, raw.memoryMB);
+  const closed = declaresCredentialProvider(raw);
+  if (closed) c.problems.push(...closedPluginProblems(raw));
+  const main = mainOf(c, raw.main, raw.memoryMB, closed ? { range: CREDENTIAL_MEMORY_MB, fallback: DEFAULT_CREDENTIAL_MB } : undefined);
   const sidecar = sidecarOf(c, "sidecar", raw.sidecar);
   const runtime = { main: main !== null || raw.main !== undefined, sidecar: sidecar !== null || raw.sidecar !== undefined };
   if (runtime.main && runtime.sidecar) c.problems.push("a plugin can declare main or sidecar, not both");
@@ -187,8 +191,8 @@ export function readManifest(text: string): ManifestRead {
   return { manifest, problems: problems.map((p) => `${MANIFEST_FILE}: ${legacy ? v1Problem(p) : p}`), newer: false };
 }
 
-export type Contribution = "settings" | "commands" | "page" | "process" | "programs" | "hooks" | "tools" | "passwordManager" | "main" | "menus" | "toolbar" | "sidebarViews" | "panels" | "omnibox" | "themes" | "siteSwitches" | "pageBar";
-export const CONTRIBUTIONS: readonly Contribution[] = ["settings", "commands", "page", "process", "programs", "hooks", "tools", "passwordManager", "main", "menus", "toolbar", "sidebarViews", "panels", "omnibox", "themes", "siteSwitches", "pageBar"];
+export type Contribution = "settings" | "commands" | "page" | "process" | "programs" | "hooks" | "tools" | "passwordManager" | "credentialProvider" | "main" | "menus" | "toolbar" | "sidebarViews" | "panels" | "omnibox" | "themes" | "siteSwitches" | "pageBar";
+export const CONTRIBUTIONS: readonly Contribution[] = ["settings", "commands", "page", "process", "programs", "hooks", "tools", "passwordManager", "credentialProvider", "main", "menus", "toolbar", "sidebarViews", "panels", "omnibox", "themes", "siteSwitches", "pageBar"];
 
 export function contributionsOf(m: PluginManifest): Contribution[] {
   const k = m.contributes;
@@ -201,6 +205,7 @@ export function contributionsOf(m: PluginManifest): Contribution[] {
     hooks: k.hooks.length > 0,
     tools: k.tools.length > 0,
     passwordManager: k.passwordManager !== null,
+    credentialProvider: k.credentialProvider !== null,
     main: m.main !== null,
     menus: MENU_SLOTS.some((slot) => k.menus[slot].length > 0),
     toolbar: k.toolbar.length > 0,

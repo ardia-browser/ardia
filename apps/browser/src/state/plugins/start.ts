@@ -10,6 +10,7 @@ import { watchPluginOmnibox } from "./omnibox";
 import { watchSurfaceRemounts } from "./surfaces";
 import { watchOfficialUpdates } from "./official";
 import { watchPageBarCommits } from "./pageBarCommits";
+import { watchCredentialProviders } from "./credentialProviders";
 
 let started = false;
 
@@ -21,6 +22,7 @@ export function startPlugins() {
   loadPluginRecords();
   startChannels();
   watchActivation();
+  watchCredentialProviders();
   watchSurfaceRemounts();
   watchPageContexts();
   registerPluginSocketMethods();

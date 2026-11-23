@@ -1,0 +1,116 @@
+{
+  "$schema": "https://raw.githubusercontent.com/ardia-browser/ardia/main/docs/plugin.schema.json",
+  "manifest": 2,
+  "name": "protonpass",
+  "title": "Proton Pass",
+  "description": "Fills and saves logins and codes from Proton Pass.",
+  "version": "1.0.0",
+  "requires": "1.40.0",
+  "official": true,
+  "keywords": ["proton", "proton pass", "pass-cli", "passwords"],
+  "main": "dist/main.js",
+  "memoryMB": 1024,
+  "contributes": {
+    "credentialProvider": {
+      "title": "Proton Pass",
+      "symbol": "lock.shield.fill",
+      "accent": "#6D4AFF",
+      "readsOffline": false,
+      "capabilities": ["totp", "save", "touchID"],
+      "signIn": {
+        "methods": [
+          {
+            "id": "browser",
+            "title": "Sign In with Browser",
+            "kind": "browserApproval",
+            "fields": [
+              { "id": "extraPassword", "title": "Extra Password", "type": "secret", "optional": true, "hint": "Only if your Proton Pass account has one" }
+            ]
+          },
+          {
+            "id": "token",
+            "title": "Access Token",
+            "kind": "fields",
+            "fields": [
+              { "id": "token", "title": "Access Token", "type": "secret", "placeholder": "Personal access token" },
+              { "id": "extraPassword", "title": "Extra Password", "type": "secret", "optional": true, "hint": "Only if your Proton Pass account has one" }
+            ]
+          }
+        ],
+        "approvalHosts": ["proton.me"]
+      },
+      "cli": {
+        "name": "pass-cli",
+        "install": { "command": "brew install protonpass/tap/pass-cli", "update": "brew upgrade pass-cli", "url": "https://protonpass.github.io/pass-cli/" },
+        "patterns": { "share": "^[A-Za-z0-9_=+-]{1,200}$", "item": "^[A-Za-z0-9_=+-]{1,200}$" },
+        "env": [
+          { "name": "PROTON_PASS_NO_UPDATE_CHECK", "literal": "1" },
+          { "name": "PROTON_PASS_DISABLE_TELEMETRY", "literal": "1" },
+          { "name": "PROTON_PASS_SESSION_DIR", "testFolder": "" },
+          { "name": "PROTON_PASS_KEY_PROVIDER", "testLiteral": "fs" }
+        ],
+        "verbs": {
+          "info": {
+            "argv": ["info", "--output=json"],
+            "output": { "mode": "json" },
+            "hints": {
+              "sessionLock": ["session is locked", "sessionlocked"],
+              "signedOut": ["requires an authenticated client", "session has been invalidated", "log in again", "not logged in", "no session"]
+            }
+          },
+          "login.browser": {
+            "argv": ["login"],
+            "slots": { "extraPassword": { "type": "secret", "optional": true } },
+            "env": [{ "name": "PROTON_PASS_EXTRA_PASSWORD", "secretSlot": "extraPassword" }],
+            "timeoutMs": 660000,
+            "signIn": true,
+            "outlivesCall": true,
+            "unlocks": true,
+            "output": { "mode": "stream" },
+            "hints": { "extraPassword": ["extra password"] }
+          },
+          "login.token": {
+            "argv": ["login"],
+            "slots": { "token": { "type": "secret" }, "extraPassword": { "type": "secret", "optional": true } },
+            "env": [
+              { "name": "PROTON_PASS_PERSONAL_ACCESS_TOKEN", "secretSlot": "token" },
+              { "name": "PROTON_PASS_EXTRA_PASSWORD", "secretSlot": "extraPassword" }
+            ],
+            "timeoutMs": 90000,
+            "signIn": true,
+            "unlocks": true,
+            "output": { "mode": "lines" },
+            "hints": { "rejected": ["invalid", "unauthorized", "expired"], "extraPassword": ["extra password"] }
+          },
+          "logout": { "argv": ["logout"], "output": { "mode": "lines" } },
+          "vault.list": { "argv": ["vault", "list", "--output=json"], "timeoutMs": 90000, "output": { "mode": "json" } },
+          "item.list": {
+            "argv": ["item", "list", { "flag": "--share-id", "slot": "share" }, "--filter-type=login", "--filter-state=active", "--output=json", { "flag": "--show-secrets", "when": "showSecrets" }],
+            "slots": { "share": { "type": "id", "pattern": "share" }, "showSecrets": { "type": "flag" } },
+            "timeoutMs": 90000,
+            "outputLimitBytes": 167772160,
+            "output": { "mode": "json", "items": "items" },
+            "hints": { "noShowSecrets": ["unknown option", "unknown command", "unrecognized option", "unexpected argument", "please update", "show-secrets", "show secrets"] }
+          },
+          "item.totp": {
+            "argv": ["item", "totp", { "flag": "--share-id", "slot": "share" }, { "flag": "--item-id", "slot": "item" }, "--field=totp", "--output=json"],
+            "slots": { "share": { "type": "id", "pattern": "share" }, "item": { "type": "id", "pattern": "item" } },
+            "output": { "mode": "json" }
+          },
+          "item.view": {
+            "argv": ["item", "view", { "flag": "--share-id", "slot": "share" }, { "flag": "--item-id", "slot": "item" }, "--output=json"],
+            "slots": { "share": { "type": "id", "pattern": "share" }, "item": { "type": "id", "pattern": "item" } },
+            "output": { "mode": "json" }
+          },
+          "item.create": {
+            "argv": ["item", "create", "login", { "flag": "--share-id", "slot": "share" }, "--from-template=-"],
+            "slots": { "share": { "type": "id", "pattern": "share" }, "template": { "type": "json" } },
+            "stdin": { "slot": "template", "encoding": "utf8" },
+            "timeoutMs": 60000,
+            "output": { "mode": "lines" }
+          }
+        }
+      }
+    }
+  }
+}

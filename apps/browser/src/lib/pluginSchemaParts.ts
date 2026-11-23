@@ -80,7 +80,7 @@ export const programsSchema: JsonSchema = {
 export const passwordManagerSchema: JsonSchema = {
   ...closed(
     {
-      fill: { enum: [...PASSWORD_FILLS], description: "system: macOS's Passwords panel fills the field. tool is reserved and refused for now" },
+      fill: { enum: [...PASSWORD_FILLS], description: "system: macOS's Passwords panel fills the field. Managers with their own vault are credential providers (contributes.credentialProvider)" },
       fields: { type: "array", minItems: PASSWORD_FIELD_COUNT[0], maxItems: PASSWORD_FIELD_COUNT[1], uniqueItems: true, items: { enum: [...PASSWORD_FIELDS] } },
       verificationCodeSetup: { enum: ["system"], description: "Offer to set up two-factor codes a page shows in the app macOS uses for otpauth links" },
       passkeys: { enum: ["system"], description: "Show the host's passkey status on the plugin's Settings page" },

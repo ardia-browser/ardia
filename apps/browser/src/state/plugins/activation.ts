@@ -27,7 +27,7 @@ const waiters = new Map<string, Set<Waiter>>();
 const readyListeners = new Set<(name: string, run: number) => void>();
 
 export const needsHost = (m: PluginManifest) => m.main !== null || m.sidecar !== null;
-export const runsEagerly = (m: PluginManifest) => needsHost(m) && (m.main === null || startsEagerly(m.activationEvents));
+export const runsEagerly = (m: PluginManifest) => needsHost(m) && (m.main === null || m.contributes.credentialProvider !== null || startsEagerly(m.activationEvents));
 export const shouldRun = (name: string, hash: string, m: PluginManifest) => runsEagerly(m) || activated.get(name) === hash;
 export const isActivated = (name: string) => activated.has(name);
 

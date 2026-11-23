@@ -8,6 +8,7 @@ import { MAX_WHEN_LENGTH } from "./pluginWhen";
 import { BUTTON_DIVIDER, HOST_ACTION_NAMES, PAGE_BAR_LIMITS, PAGE_BAR_LOOKS } from "./pluginPageBar";
 import { builtInFlags, closed, commandBase, key, name, openCommandProperties, passwordManagerSchema, pluginPath, processSchema, programsSchemaV2, rowSchema, symbol, textOf, toolsSchema } from "./pluginSchemaParts";
 import { legacyPluginBody } from "./pluginSchemaV1";
+import { credentialProviderSchema } from "./pluginCredentialSchema";
 import { MANIFEST_VERSION } from "./pluginManifest";
 
 export const PLUGIN_SCHEMA_FILE = "plugin.schema.json";
@@ -52,6 +53,7 @@ function contributes(hookNames: readonly string[]): JsonSchema {
     settings: closed({ defaults: { type: "object", description: "Ardia settings, as in config.json" }, rows: list(LIMITS.rows, rowSchema(["toggle", "text", "number", "choice", "secret"])) }),
     programs: programsSchemaV2,
     passwordManager: passwordManagerSchema,
+    credentialProvider: credentialProviderSchema,
     menus: closed(Object.fromEntries(MENU_SLOTS.map((slot) => [slot, list(LIMITS.menuItems, menuItem)]))),
     toolbar: list(LIMITS.toolbar, closed({ id: key, title: textOf(LIMITS.title), icon: symbol, command: name, view: key, tooltip: textOf(LIMITS.tooltip) }, ["id", "title", "icon"])),
     sidebarViews: list(LIMITS.sidebarViews, closed({ id: key, title: textOf(LIMITS.pageTitle), icon: symbol }, ["id", "title"])),

@@ -1,6 +1,6 @@
 {
   "name": "@ardia/plugin-sdk",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "type": "module",
   "main": "src/index.ts",
@@ -9,10 +9,13 @@
     ".": "./src/index.ts",
     "./jsx-runtime": "./src/jsxRuntime.ts",
     "./jsx-dev-runtime": "./src/jsxRuntime.ts",
-    "./protocol": "./src/protocol.ts"
+    "./protocol": "./src/protocol.ts",
+    "./credentials": "./src/credentials.ts",
+    "./testing": "./src/testing.ts",
+    "./credential-manifest": "./src/credentialManifest.ts"
   },
   "scripts": {
     "typecheck": "tsrs --noEmit",
-    "test": "node --no-warnings --import ../../apps/browser/src/test-loader.mjs --test src/*.test.mjs"
+    "test": "node --no-warnings --import ../../apps/browser/src/test-loader.mjs --test src/*.test.mjs templates/credential-provider/test/*.test.mjs"
   }
 }

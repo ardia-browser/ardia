@@ -17,7 +17,9 @@
       "@ardia/plugin-sdk": ["./src/index.ts"],
       "@ardia/plugin-sdk/jsx-runtime": ["./src/jsxRuntime.ts"],
       "@ardia/plugin-sdk/jsx-dev-runtime": ["./src/jsxRuntime.ts"],
-      "@ardia/plugin-sdk/protocol": ["./src/protocol.ts"]
+      "@ardia/plugin-sdk/protocol": ["./src/protocol.ts"],
+      "@ardia/plugin-sdk/credentials": ["./src/credentials.ts"],
+      "@ardia/plugin-sdk/testing": ["./src/testing.ts"]
     }
   },
   "include": ["src"]

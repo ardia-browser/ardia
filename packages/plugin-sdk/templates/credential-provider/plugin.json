@@ -1,0 +1,98 @@
+{
+  "$schema": "https://raw.githubusercontent.com/ardia-browser/ardia/main/docs/plugin.schema.json",
+  "manifest": 2,
+  "name": "vaultctl",
+  "title": "Vaultctl",
+  "description": "Fills logins and codes from a vaultctl vault.",
+  "version": "1.0.0",
+  "official": true,
+  "keywords": ["vaultctl", "passwords"],
+  "main": "dist/main.js",
+  "contributes": {
+    "credentialProvider": {
+      "title": "Vaultctl",
+      "symbol": "lock.rectangle.stack",
+      "accent": "#2F6FEB",
+      "capabilities": ["totp", "masterPassword"],
+      "signIn": {
+        "methods": [
+          {
+            "id": "password",
+            "title": "Email and Password",
+            "fields": [
+              { "id": "email", "title": "Email", "type": "email", "placeholder": "name@example.com", "prefill": "account" },
+              { "id": "password", "title": "Master Password", "type": "secret" }
+            ]
+          }
+        ],
+        "unlock": { "field": "password" }
+      },
+      "cli": {
+        "name": "vaultctl",
+        "install": { "command": "brew install vaultctl", "url": "https://example.com/vaultctl" },
+        "patterns": { "item": "^[A-Za-z0-9_-]{1,64}$" },
+        "env": [{ "name": "VAULTCTL_DATA_DIR", "testFolder": "" }],
+        "onLock": { "verb": "lock", "params": { "session": { "from": "session" } } },
+        "verbs": {
+          "status": {
+            "argv": ["status", "--json"],
+            "slots": { "session": { "type": "secret", "optional": true } },
+            "env": [{ "name": "VAULTCTL_SESSION", "secretSlot": "session" }],
+            "output": { "mode": "json" }
+          },
+          "login": {
+            "argv": ["login", { "slot": "email" }, "--password-stdin", "--raw"],
+            "slots": { "email": { "type": "email" }, "password": { "type": "secret" } },
+            "stdin": { "slot": "password", "encoding": "utf8" },
+            "timeoutMs": 60000,
+            "signIn": true,
+            "unlocks": { "persistent": true },
+            "output": { "mode": "lastLineSecret" },
+            "hints": { "wrongPassword": ["invalid master password", "incorrect password"] }
+          },
+          "unlock": {
+            "argv": ["unlock", "--password-stdin", "--raw"],
+            "slots": { "password": { "type": "secret" } },
+            "stdin": { "slot": "password", "encoding": "utf8" },
+            "timeoutMs": 60000,
+            "signIn": true,
+            "unlocks": { "persistent": true },
+            "output": { "mode": "lastLineSecret" },
+            "hints": { "wrongPassword": ["invalid master password", "incorrect password"], "signedOut": ["not logged in"] }
+          },
+          "lock": {
+            "argv": ["lock"],
+            "slots": { "session": { "type": "secret", "optional": true } },
+            "env": [{ "name": "VAULTCTL_SESSION", "secretSlot": "session" }],
+            "output": { "mode": "lines" }
+          },
+          "logout": {
+            "argv": ["logout"],
+            "slots": { "session": { "type": "secret", "optional": true } },
+            "env": [{ "name": "VAULTCTL_SESSION", "secretSlot": "session" }],
+            "output": { "mode": "lines" }
+          },
+          "list": {
+            "argv": ["list", "--json"],
+            "slots": { "session": { "type": "secret" } },
+            "env": [{ "name": "VAULTCTL_SESSION", "secretSlot": "session" }],
+            "timeoutMs": 90000,
+            "outputLimitBytes": 67108864,
+            "output": { "mode": "json", "items": "$" }
+          },
+          "get": {
+            "argv": ["get", { "slot": "field" }, { "slot": "id" }],
+            "slots": {
+              "session": { "type": "secret" },
+              "field": { "type": "enum", "values": ["username", "password", "totp"] },
+              "id": { "type": "id", "pattern": "item" }
+            },
+            "env": [{ "name": "VAULTCTL_SESSION", "secretSlot": "session" }],
+            "output": { "mode": "lines" },
+            "hints": { "notFound": ["not found"] }
+          }
+        }
+      }
+    }
+  }
+}

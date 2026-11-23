@@ -1,6 +1,7 @@
 import type { Fields } from "./decode";
 import { at, flag, KEY, KEY_RULE, KEYWORD, LIMITS, list, matching, NAME, object, only, pluginFile, symbolOf, text, unique, type Check } from "./pluginChecks";
 import { command, SPLIT_SIDES, tool, whenOf, type CommandSpec, type PageSide, type ToolSpec } from "./pluginCommands";
+import { credentialProviderOf, type CredentialProviderSpec } from "./pluginCredentialProvider";
 import { passwordManagerOf, type PasswordManagerSpec } from "./pluginPasswordManager";
 import { pageBarOf, siteSwitchesOf, type PageBarSpec, type SiteSwitchSpec } from "./pluginPageBar";
 import { settingsOf, type SettingsSpec } from "./pluginRows";
@@ -26,6 +27,7 @@ export type PluginContributions = {
   settings: SettingsSpec;
   programs: ProgramSpec[];
   passwordManager: PasswordManagerSpec | null;
+  credentialProvider: CredentialProviderSpec | null;
   menus: MenuContributions;
   toolbar: ToolbarItem[];
   sidebarViews: SidebarView[];
@@ -36,7 +38,7 @@ export type PluginContributions = {
   pageBar: PageBarSpec | null;
 };
 
-export const CONTRIBUTES_KEYS = ["commands", "tools", "hooks", "settings", "programs", "passwordManager", "menus", "toolbar", "sidebarViews", "panels", "omnibox", "themes", "siteSwitches", "pageBar"] as const;
+export const CONTRIBUTES_KEYS = ["commands", "tools", "hooks", "settings", "programs", "passwordManager", "credentialProvider", "menus", "toolbar", "sidebarViews", "panels", "omnibox", "themes", "siteSwitches", "pageBar"] as const;
 export const PAGE_PANEL_ID = "default";
 
 export const emptyMenus = (): MenuContributions => ({ tab: [], group: [] });
@@ -154,6 +156,7 @@ export function contributesOf(c: Check, value: unknown, hasMain: boolean): Plugi
   const pm: string[] = [];
   const passwordManager = passwordManagerOf(pm, doc.passwordManager);
   c.problems.push(...pm.map((p) => `${P}.${p}`));
+  const credentialProvider = credentialProviderOf(c.problems, doc.credentialProvider);
   const settings = settingsOf(c, `${P}.settings`, doc.settings);
   const siteSwitches = siteSwitchesOf(c, doc.siteSwitches);
   return {
@@ -163,6 +166,7 @@ export function contributesOf(c: Check, value: unknown, hasMain: boolean): Plugi
     settings,
     programs: parsed(c, "programs", doc.programs, LIMITS.programs, program, (p) => p.name, "programs"),
     passwordManager,
+    credentialProvider,
     menus: menusOf(c, doc.menus),
     toolbar: parsed(c, "toolbar", doc.toolbar, LIMITS.toolbar, toolbarItem, (t) => t.id, "toolbar items"),
     sidebarViews: parsed(c, "sidebarViews", doc.sidebarViews, LIMITS.sidebarViews, sidebarView, (v) => v.id, "sidebar views"),

@@ -38,6 +38,9 @@ page/index.html      a web page panel (optional), for a view JSX can't express
 
 `@ardia/plugin-sdk` (`packages/plugin-sdk`) is what main imports. It ships its own JSX runtime
 (`@ardia/plugin-sdk/jsx-runtime`), a fiber reconciler and hooks, with no React dependency, so a bundle stays small.
+A credential provider imports the slim entry `@ardia/plugin-sdk/credentials` instead, which carries the credentials
+runtime and helpers without the JSX runtime ([credentialProvider](#credentialprovider)); `@ardia/plugin-sdk/testing` is its
+test harness.
 
 ```tsx
 import { ardia, definePlugin, List, ActionPanel, Action, useState, useEffect } from "@ardia/plugin-sdk";
@@ -668,7 +671,7 @@ declare one, and each group of profiles that shares browser data picks at most o
   views no site of their own. So once the panel is on screen, Ardia shows a hint beside the key, on the side the panel
   doesn't cover: "Type github in Passwords to find this site", with the page's registrable domain label. It closes with
   the panel, when focus leaves the field or the page navigates, and a profile stops seeing it after closing it 3 times.
-  `tool` is reserved (below) and refused for now ("passwordManager.fill: tool isn't available yet; use system").
+  It is the only fill: managers with their own vault are [credential providers](#credentialprovider), not choices here.
 - `fields` (required, 1 or 2): which fields get the key: `login` (username, email and current password) and
   `oneTimeCode`.
 - `verificationCodeSetup` (`system`): when a page in a profile using this plugin shows an `otpauth://` link, or a QR code
@@ -760,12 +763,10 @@ focused field (`passwords.showSystemPanel {tab, generation}`, in Chromium and We
 **An otpauth link you click** still goes through the external-app prompt every link to another app gets, which shows
 the address in Ardia's own interface. That's base behaviour, unchanged; no plugin, log or count sees the address.
 
-**`fill: "tool"` (reserved, #1168).** For managers with their own vault (1Password, Bitwarden, Proton Pass). Not a
-normal tool: a host-only request the CLI and other plugins can never call, versioned, bound to the exact origin and
-form it fills, cancellable, with a consent line naming that the origin is sent to the plugin. The host would type the
-answer into that one field. Not built. Those three managers come instead as credential providers: sources under the Ardia
-choice that feed Ardia's fill menu through Ardia's broker, so they never appear in the Password manager list. The
-broker's provider registry is empty until that contribution lands.
+**`fill: "tool"` (retired, #1168).** It was reserved for managers with their own vault (1Password, Bitwarden, Proton
+Pass) and never built. Those come as [credential providers](#credentialprovider) instead: sources under the Ardia
+choice that feed Ardia's fill menu through Ardia's broker, so they never appear in the Password manager list. A
+manifest that still says `fill: "tool"` gets `passwordManager.fill must be system`.
 
 #### Host extension points for credential providers
 
@@ -775,6 +776,116 @@ What a password-manager plugin relies on, all host code a plugin can't reach pas
 native verbs in `PasswordsModule.swift` (`passwords.setFieldProviders`, `showSystemPanel`, `systemPanelAvailable`,
 `otpauthHandler`, `setUpVerificationCode`) and the page events `fieldProviderOpened {via, shown}` and
 `verificationCodeFound {token, main}`. A plugin adds none of these; its manifest switches them on.
+
+### credentialProvider
+
+Makes the plugin a credential provider: a source of logins inside Ardia's own password manager (the per-profile
+"Ardia" choice), the way 1Password, Bitwarden and Proton Pass plug in. It is never a `passwordManager` choice and never
+moves a profile's choice. Mac only (`PLATFORM_FEATURES.plugins`), and **official plugins only**: the three Ardia ships
+are `1password`, `bitwarden` and `protonpass`, and those names are kept for them by the signed pin. The full contract
+(every field, bound and message) is `contributes.credentialProvider` in `docs/plugin.schema.json`, parsed by
+`packages/plugin-sdk/src/credentialManifest.ts` (the app reads it through `lib/pluginCredentialProvider.ts`) and,
+as the authority, natively from the same verified manifest bytes the official store hash-checks.
+
+```json
+"main": "dist/main.js",
+"official": true,
+"contributes": {
+  "credentialProvider": {
+    "title": "Bitwarden", "symbol": "shield.lefthalf.filled", "accent": "#175DDC",
+    "capabilities": ["totp", "save", "edit", "passkeys", "selfHosted", "masterPassword", "touchID"],
+    "signIn": {
+      "methods": [{ "id": "password", "title": "Email and Password", "twoStep": true, "fields": [{ "id": "email", "title": "Email", "type": "email" }, { "id": "masterPassword", "title": "Master Password", "type": "secret" }] }],
+      "servers": [{ "id": "us", "title": "Bitwarden.com" }, { "id": "selfHosted", "title": "Self-Hosted", "custom": { "title": "Server URL" } }],
+      "unlock": { "field": "masterPassword" }
+    },
+    "cli": {
+      "name": "bw",
+      "install": { "command": "brew install bitwarden-cli", "url": "https://bitwarden.com/help/cli/" },
+      "patterns": { "guid": "^[0-9a-fA-F-]{36}$" },
+      "env": [{ "name": "BW_NOINTERACTION", "literal": "true" }, { "name": "BITWARDENCLI_APPDATA_DIR", "testFolder": "" }],
+      "onLock": { "verb": "lock", "params": { "session": { "from": "session" } }, "skipWithTouchID": true },
+      "verbs": {
+        "unlock": { "argv": ["unlock", "--passwordenv", "ARDIA_BW_PASSWORD", "--raw"], "slots": { "password": { "type": "secret" } }, "env": [{ "name": "ARDIA_BW_PASSWORD", "secretSlot": "password" }], "signIn": true, "output": { "mode": "lastLineSecret" }, "unlocks": { "persistent": true } },
+        "get.item": { "argv": ["get", "item", { "slot": "id" }], "slots": { "session": { "type": "secret" }, "id": { "type": "id", "pattern": "guid" } }, "env": [{ "name": "BW_SESSION", "secretSlot": "session" }], "output": { "mode": "json" } }
+      }
+    }
+  }
+}
+```
+
+- **A closed plugin.** It has `main` (no sidecar), `official: true`, no other `contributes` key, no `permissions` and no
+  `activationEvents`; `memoryMB` is 256 to 4096, 1024 by default. Each break is its own problem
+  (`contributes.commands: a credential provider contributes nothing else`). A copy that isn't official is listed with
+  `contributes.credentialProvider: Ardia runs password managers only from its official plugins`, and a plugin you add
+  under a kept name with `name: bitwarden is kept for Ardia's official Bitwarden plugin`.
+- **The verb catalog.** The plugin never builds a command line. `cli.verbs` maps each verb id (`list.items`) to an argv
+  template of literal tokens and typed slots: `id` (matching one of `cli.patterns`), `enum`, `flag` (only as
+  `{ "flag", "when" }`), `url` (https, or http to this Mac with `allowLocalHttp`), `email`, `code`, `secret` (filled only
+  from a handle, only in env or stdin) and `json` (stdin only). A slot with a flag renders as one `--flag=value`
+  token; a positional slot value may never start with `-`. Environment comes only from `literal`, `secretSlot`,
+  `testFolder` and `testLiteral` entries (the last two only in hidden test instances), after Ardia's own variables;
+  `DYLD_*`, `LD_*`, `NODE_*`, `*_PROXY`, `SSL_*`, `HOME`, `PATH`, `TMPDIR`, `XDG_*`, `OP_CONNECT_*` and `BITWARDENCLI_*`
+  are never passed (a `testFolder` excepted). Each verb has a timeout, an output cap and an output mode: `json` (with
+  `items` native splits a big array and sends one element at a time), `lines`, `lastLineSecret` (the key stays native and
+  becomes the session) or `stream`. Commands that run programs, write files, open servers or mint credentials
+  (`op run`, `op inject`, `bw serve`, `bw send`, `pass-cli ssh-agent`, …) are refused whatever the catalog says, at parse
+  and again at run time after skipping the CLI's global flags.
+- **Security model.** Native code owns every credentials line: call ids, handles, sessions, the binary locator and the
+  argv builder are native, and the plugin's traffic never reaches React Native JS (the app sees only `ready`). Secrets
+  you type go through Ardia's native secure field and reach the plugin only as single-use handles (`{"$secret": "h7"}`),
+  which it can put in a verb's `secret` slot; the values a verb consumed are redacted from everything it returns. Lock,
+  idle, sleep and screen lock end the plugin's run and every CLI it started, natively. Approval pages open only on the
+  manifest's `signIn.approvalHosts`. Native owns all wording: the plugin returns problem codes.
+- **What the app does.** When such a plugin is on and its run is ready, `state/plugins/credentialProviders.ts` calls
+  `ArdiaPlugins.setCredentialProvider(name, true)` (`platform/plugins.ts`), and `false` once it's turned off or its
+  manifest changes; Remove forgets it (`forgetCredentialProvider`), and a Save New Logins To that named it goes back to
+  Ardia. It passes the name only, never the contribution or a secret. The run
+  starts when the plugin turns on and again whenever native asks (`onCredentialRunWanted`). The consent sheet adds what
+  it reads and saves, which CLI it runs and for which verbs, that secret fields go to the CLI and not the plugin, and any
+  approval app, approval host or Touch ID it uses (`state/plugins/consentCredentials.ts`).
+- **The official catalogue.** `useOfficialCredentialProviders()` and its pure form `officialCredentialProviders(store,
+  supported?)` (`state/plugins/officialCredentials.ts`, re-exported by `official.ts`) list the pin entries that carry
+  `credentialPrograms`, as `{ name, title, blurb, icon, symbol, accent, state, enabled }` with `state` one of `available`,
+  `installed` (also while it's off, `enabled: false`, so Password Managers can offer Turn On…) and `unsupported`; `installOfficialPlugin(name)` installs one. A pin entry says which names it keeps with
+  `reservedProviders` and which programs its provider may run with `credentialPrograms`.
+
+#### Writing one
+
+Copy `packages/plugin-sdk/templates/credential-provider/` (a `plugin.json`, `src/provider.ts` with the handlers,
+`src/index.ts`, `build.mjs`, `test/provider.test.mjs`). A provider is one object passed to `defineCredentialProvider`
+from the slim entry `@ardia/plugin-sdk/credentials`, which bundles no JSX or UI code:
+
+```ts
+import { CredentialError, SignIn, defineCredentialProvider, json, verbs } from "@ardia/plugin-sdk/credentials";
+
+void defineCredentialProvider({
+  state: async (_input, ctx) => ({ state: ctx.session.current ? "unlocked" : "locked" }),
+  signIn: async ({ fields }, ctx) => {
+    const run = await ctx.cli.verb("login", { email: fields.email, password: fields.password });
+    return run.unlocked ? SignIn.done() : SignIn.failed("wrongCredentials");
+  },
+  unlock, signOut, list, reveal,
+});
+```
+
+- Handlers: `state`, `signIn`, `unlock`, `signOut`, `list` and `reveal` are required; `configure`, `save`, `edit`,
+  `addTotp` and `passkeys.{list,get,save}` back the capabilities that name them. `list` may return a plain array: the
+  SDK pages it (960 KB pages, one snapshot).
+- `ctx.cli.verb(id, params, { timeoutMs?, onItem?, onLine? })` runs a catalog verb and resolves a `VerbResult`;
+  `ctx.session`, `ctx.scratch`, `ctx.preferences` and `ctx.owner.confirm` are the host's. Throw `CredentialError.locked()`,
+  `signedOut()`, `notFound()`, `unsupported()` or `failed(problem, { detail })`; `verbs.check(result, hints, ctx.offline)`
+  maps a failed run to one of those. Helpers: `json`, `origins`, `totp` (RFC 6238, SHA-1/256/512, Steam), `base64url`,
+  `uuids`. `CREDENTIALS_PROTOCOL` is the credentials protocol version sent in `hello`.
+- **Testing.** `@ardia/plugin-sdk/testing` runs the real runtime against a fake host: `createCredentialHarness({
+  provider, manifest, cli, context })` with a fake CLI (`(launch) => ({ status, stdout, stderr })`), a virtual clock
+  (`advance(ms)`), typed handles (`secret(value)`), sessions, `lock()` and the native redaction; `buildVerbLaunch` is the TS
+  twin of the native argv builder (proven by `packages/ardiacore/tests/fixtures/credential-verbs.json`), and
+  `checkCredentialManifest(manifest)` returns the exact problems Ardia reports
+  (`tests/fixtures/plugins/credential-manifests.json` holds the shared cases).
+- **In a hidden instance.** Until the pin lists them, test with `ARDIA_TEST officialPin=<official-plugins.json>` (an
+  entry with `reservedProviders` and `credentialPrograms`) plus `ARDIA_INSTANCE officialPluginsFrom=<dir>` holding the
+  built artifact; the SHA-256 and the official checks are unchanged.
 
 ### siteSwitches
 
@@ -1050,6 +1161,9 @@ The control socket's protocol 4 adds `plugins`, `plugins.enable` (`{"waiting": t
   `state/sidebar/tabMenu.ts` (the tab menu), `state/config/configFiles.ts` (plugin themes),
   `state/automation/decideHooks.ts` (decide hooks after `hooks.json`).
 - `state/site/passwordManager*.ts`, `verificationCodes.ts`: the `passwordManager` contribution's host side.
+- `lib/pluginCredentialProvider.ts`, `lib/pluginCredentialSchema.ts` and `state/plugins/{credentialProviders,officialCredentials,consentCredentials}.ts`:
+  the `credentialProvider` contribution's JS side; its parser, runtime and test harness are in `packages/plugin-sdk`
+  (`credentialManifest.ts`, `credentialRuntime.ts`, `credentialTesting.ts`, `verbLaunch.ts`).
 - `lib/pluginPageBar.ts` and `state/plugins/{siteSwitches,typedAddresses,pageBarDocuments,pageBar,pageBarPanes,hostActions,pageBarCommits}.ts`:
   the `siteSwitches` and `pageBar` contributions' host side; `components/plugins/PluginPageBar.tsx`, `PageBarButtons.tsx`,
   `SiteSwitchRows.tsx` draw them.
@@ -1089,9 +1203,13 @@ in the local copy. Hourly `usage_counts`:
 
 The daily settings snapshot has `plugins_installed`, `plugins_enabled` and, among those on, how many use each part:
 `plugins_with_settings`, `plugins_with_commands`, `plugins_with_page`, `plugins_with_process`,
-`plugins_with_programs`, `plugins_with_hooks`, `plugins_with_tools`, `plugins_with_passwordManager`, and for v2
+`plugins_with_programs`, `plugins_with_hooks`, `plugins_with_tools`, `plugins_with_passwordManager`, `plugins_with_credentialProvider`, and for v2
 `plugins_with_main`, `plugins_with_menus`, `plugins_with_toolbar`, `plugins_with_sidebarViews`,
 `plugins_with_panels`, `plugins_with_omnibox`, `plugins_with_themes`, `plugins_with_siteSwitches`, `plugins_with_pageBar`.
+
+Credential providers count natively, by official name only (a name the signed pin keeps; anything else is dropped,
+never a plugin's own string): `credential_provider_connected_<name>` (0 or 1), `credential_calls_<name>`,
+`credential_call_failures_<name>` and `credential_verb_refusals_<name>`.
 
 Page bars: hourly `plugin_page_bar_shown_<official|other>` (once per tab per document), `plugin_page_bar_press_<action>`
 (`site_controls`, `address`, `copy_link`, `console`, `network`, `inspect`, `extensions`, `split`),

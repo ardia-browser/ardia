@@ -21,14 +21,18 @@ export function sidecarOf(c: Check, path: string, value: unknown): ProcessSpec |
   return { run: run as string[], memoryMB };
 }
 
-export function mainOf(c: Check, entry: unknown, memory: unknown): MainSpec | null {
+export type MemoryLimits = { range: readonly [number, number]; fallback: number };
+
+const MAIN_MEMORY: MemoryLimits = { range: LIMITS.memoryMB, fallback: DEFAULT_MAIN_MB };
+
+export function mainOf(c: Check, entry: unknown, memory: unknown, limits: MemoryLimits = MAIN_MEMORY): MainSpec | null {
   if (entry === undefined) {
     if (memory !== undefined) c.problems.push("memoryMB only goes with main");
     return null;
   }
   const file = pluginFile(c, "main", entry, "a JavaScript file inside the plugin's folder, like dist/index.js", undefined);
   if (file && !/\.(m?js|cjs)$/i.test(file)) c.problems.push("main must be a .js, .mjs or .cjs file");
-  const memoryMB = integer(c, "memoryMB", memory, LIMITS.memoryMB, DEFAULT_MAIN_MB);
+  const memoryMB = integer(c, "memoryMB", memory, limits.range, limits.fallback);
   return file ? { entry: file, memoryMB } : null;
 }
 

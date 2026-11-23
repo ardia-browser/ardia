@@ -4,6 +4,7 @@ import { DECIDE_EVENTS, PLUGIN_EVENTS } from "../automation/eventNames";
 import { checkedSettings } from "../config/configSettings";
 import type { Settings } from "../settings/settings";
 import type { PluginListing } from "./store";
+import { RESERVED_PROVIDERS } from "./officialPin";
 
 export const APPROVED_SETTINGS: readonly string[] = ["omniboxProviders", "launchActions"];
 
@@ -19,7 +20,7 @@ export const UNTABBED_EVENTS: ReadonlySet<string> = new Set([
   "user.active",
 ]);
 
-export type ProgramClaims = { claims: Readonly<Record<string, string>>; failClosed: boolean };
+export type ProgramClaims = { claims: Readonly<Record<string, string>>; failClosed: boolean; providers?: Readonly<Record<string, string>> };
 export const NO_CLAIMS: ProgramClaims = { claims: {}, failClosed: false };
 
 export const PLUGIN_RULES = { untabbedEvents: [...UNTABBED_EVENTS], approvedSettings: APPROVED_SETTINGS, decideEvents: [...DECIDE_EVENTS] };
@@ -32,6 +33,16 @@ export const LEGACY_OFFICIAL = "bundled";
 const OFFICIAL_FOLDER = /^official-[0-9a-f]{64}$/;
 
 export const isOfficialFolder = (folderId: string) => folderId === LEGACY_OFFICIAL || OFFICIAL_FOLDER.test(folderId);
+
+function providerProblems(m: PluginManifest, builtIn: boolean, registry: ProgramClaims): string[] {
+  if (builtIn) return [];
+  const reserved = { ...RESERVED_PROVIDERS, ...(registry.providers ?? {}) };
+  const keeper = Object.hasOwn(reserved, m.name) ? reserved[m.name] : undefined;
+  return [
+    ...(m.contributes.credentialProvider ? ["plugin.json: contributes.credentialProvider: Ardia runs password managers only from its official plugins"] : []),
+    ...(keeper ? [`plugin.json: name: ${m.name} is kept for Ardia's official ${keeper} plugin`] : []),
+  ];
+}
 
 export function appProblems(m: PluginManifest, settings: Settings, appVersion: string, folderId = "", registry: ProgramClaims = NO_CLAIMS): string[] {
   const problems: string[] = [];
@@ -55,6 +66,7 @@ export function appProblems(m: PluginManifest, settings: Settings, appVersion: s
     else if (p.claim && owner !== m.name) problems.push(`${at}.claim: ${p.name} isn't in the list of programs this Ardia reserves for its official plugins`);
   });
   for (const key of ["alwaysOn", "official", "autoInstall"] as const) if (m[key] && !builtIn) problems.push(`plugin.json: ${key} is only for Ardia's official plugins`);
+  problems.push(...providerProblems(m, builtIn, registry));
   if (m.autoInstall && !m.alwaysOn) problems.push("plugin.json: autoInstall needs alwaysOn");
   m.programs.forEach((p, i) => {
     if (p.afterUpdate.length && !builtIn) problems.push(`plugin.json: ${within}programs[${i}].afterUpdate is only for Ardia's official plugins`);

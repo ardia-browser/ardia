@@ -73,6 +73,7 @@ export function handlePluginLine({ name, run, launch, line }: PluginLine) {
   const manifest = activeManifest(currentPlugins(), name);
   const c = connectionFor(name, run);
   const request = parseRequest(line);
+  if (manifest?.contributes.credentialProvider && ("error" in request || request.method !== "ready")) return;
   if ("error" in request) return reply(c, request.id, { error: request.error });
   if (!manifest) return reply(c, request.id, failure("refused", "This plugin is off."));
   let body: Body | Promise<Body>;

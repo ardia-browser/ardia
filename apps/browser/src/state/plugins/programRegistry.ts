@@ -12,7 +12,9 @@ export function claimsOf(value: unknown): ProgramClaims {
   const entries = Object.entries(value.claims);
   if (!entries.every(([program, owner]) => isName(program) && isName(owner))) return UNREADABLE_CLAIMS;
   if (!Array.isArray(value.legacyOwners) || !value.legacyOwners.every(isName)) return UNREADABLE_CLAIMS;
-  return { claims: Object.fromEntries(entries) as Record<string, string>, failClosed: value.failClosed };
+  const providers = value.providers === undefined ? {} : isFields(value.providers) && Object.entries(value.providers).every(([name, title]) => isName(name) && typeof title === "string" && title.length <= 60) ? (value.providers as Record<string, string>) : null;
+  if (!providers) return UNREADABLE_CLAIMS;
+  return { claims: Object.fromEntries(entries) as Record<string, string>, failClosed: value.failClosed, ...(value.providers === undefined ? {} : { providers }) };
 }
 
 export const useProgramRegistry = create<{ failClosed: boolean }>()(() => ({ failClosed: false }));

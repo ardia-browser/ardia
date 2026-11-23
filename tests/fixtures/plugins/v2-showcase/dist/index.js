@@ -34,7 +34,14 @@
     programsStatus: "programs.status",
     programsRelink: "programs.relink",
     surfaceRender: "surface.render",
-    surfaceClose: "surface.close"
+    surfaceClose: "surface.close",
+    credentialsVerb: "credentials.verb",
+    credentialsVerbCancel: "credentials.verb.cancel",
+    credentialsSignInCancel: "credentials.signIn.cancel",
+    credentialsTakeStored: "credentials.session.takeStored",
+    credentialsDropStored: "credentials.session.dropStored",
+    credentialsValuesSet: "credentials.values.set",
+    credentialsOwnerConfirm: "credentials.owner.confirm"
   };
   function isSurfaceMessage(value) {
     if (typeof value !== "object" || value === null) return false;
@@ -878,7 +885,7 @@
     };
   }
 
-  var SDK_VERSION = "2.0.0";
+  var SDK_VERSION = "2.1.0";
   var DEFAULT_STOP_GRACE_MS = 5e3;
   function createSignal() {
     const listeners = new Set();

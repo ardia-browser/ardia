@@ -3,7 +3,6 @@ import { isFields } from "./decode";
 export const PASSWORD_FIELDS = ["login", "oneTimeCode"] as const;
 export type PasswordField = (typeof PASSWORD_FIELDS)[number];
 export const PASSWORD_FILLS = ["system"] as const;
-export const RESERVED_PASSWORD_FILLS = ["tool"] as const;
 export const PASSWORD_FIELD_COUNT = [1, 2] as const;
 export type PasswordManagerSpec = { fill: "system"; fields: PasswordField[]; verificationCodeSetup: "system" | null; passkeys: "system" | null };
 
@@ -19,8 +18,7 @@ function systemOnly(problems: string[], key: string, value: unknown): "system" |
 
 function fillOf(problems: string[], value: unknown): "system" | null {
   if (value === "system") return "system";
-  if ((RESERVED_PASSWORD_FILLS as readonly unknown[]).includes(value)) problems.push(`${PATH}.fill: ${String(value)} isn't available yet; use system`);
-  else problems.push(`${PATH}.fill must be system`);
+  problems.push(`${PATH}.fill must be system`);
   return null;
 }
 

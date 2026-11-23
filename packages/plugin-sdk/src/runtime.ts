@@ -14,7 +14,7 @@ import { PluginError, createRpc, errorMessage, isUnencodable, type Transport } f
 import { createSurfaceHost } from "./surfaces";
 import { createRegistry, disposable, type CallContext, type CancelSignal, type Disposable, type PluginDefinition, type Registry } from "./types";
 
-export const SDK_VERSION = "2.0.0";
+export const SDK_VERSION = "2.1.0";
 
 export type HostRuntimeOptions = { onError?: (error: unknown) => void; stopGraceMs?: number };
 

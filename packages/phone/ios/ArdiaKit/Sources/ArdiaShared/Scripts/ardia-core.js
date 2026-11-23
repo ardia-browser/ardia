@@ -183,6 +183,7 @@ __define("packages/core/src/index.ts", function (exports, __require) {
   __exportAll(exports, __require("packages/core/src/ingestKeys.ts"));
   __exportAll(exports, __require("packages/core/src/omnibox.ts"));
   __exportAll(exports, __require("packages/core/src/openTabs.ts"));
+  __export(exports, "pageKey", () => __require("packages/core/src/pageText.ts")["pageKey"]);
   __exportAll(exports, __require("packages/core/src/providerConfig.ts"));
   __exportAll(exports, __require("packages/core/src/providerNetwork.ts"));
   __exportAll(exports, __require("packages/core/src/providerRows.ts"));
@@ -195,6 +196,7 @@ __define("packages/core/src/index.ts", function (exports, __require) {
   __exportAll(exports, __require("packages/core/src/textFragment.ts"));
   __exportAll(exports, __require("packages/core/src/theme.ts"));
   __exportAll(exports, __require("packages/core/src/webStore.ts"));
+
 
 
 
@@ -2142,6 +2144,87 @@ function recentTabSuggestions(tabs                       , options              
 }
 
 });
+__define("packages/core/src/pageText.ts", function (exports, __require) {
+  __export(exports, "displayUrl", () => displayUrl);
+  __export(exports, "pageKey", () => pageKey);
+  __export(exports, "withRootSlash", () => withRootSlash);
+  __export(exports, "pageTexts", () => pageTexts);
+  __export(exports, "logVisits", () => logVisits);
+  __export(exports, "shownWordsOf", () => shownWordsOf);
+  __export(exports, "pageText", () => pageText);
+  __export(exports, "tabPageText", () => tabPageText);
+  __export(exports, "hostOfPage", () => hostOfPage);
+  __export(exports, "hostPart", () => hostPart);
+  __export(exports, "hostLowerOfPage", () => hostLowerOfPage);
+  __export(exports, "originOfPage", () => originOfPage);
+const { hostOf, urlForDisplay } = __require("packages/core/src/omnibox.ts");
+                                                        
+
+function displayUrl(url        )         {
+  return urlForDisplay(url).replace(/\/$/, "");
+}
+
+const pageKey = (url        ) => url.replace(/#.*$/, "").replace(/\/$/, "");
+
+const withRootSlash = (url        ) => url.replace(/^(https?:\/\/[^/?#]*)(?=[?#]|$)/i, "$1/");
+
+                        
+              
+              
+                
+                     
+                     
+                     
+                      
+                       
+                
+                         
+                     
+  
+
+const pageTexts = new WeakMap                  ();
+
+const logVisitsOf           = [];
+const logVisits = (visits        ) => (visits >= 0 && visits < 1024 && (visits | 0) === visits ? (logVisitsOf[visits] ??= Math.log2(1 + visits) * 8) : Math.log2(1 + visits) * 8);
+
+const NOT_WORD = /[^a-z0-9]+/g;
+const PLAIN_WORDS = /^[a-z0-9]+(?: [a-z0-9]+)*$/;
+const wordsOf = (lower        ) => (PLAIN_WORDS.test(lower) ? ` ${lower}` : ` ${lower}`.replace(NOT_WORD, " "));
+const shownWordsOf = (t          ) => (t.shownWords ??= wordsOf(t.shownLower));
+
+function pageText(row                                )           {
+  let text = pageTexts.get(row);
+  if (!text) {
+    const shown = displayUrl(row.url);
+    const shownLower = shown.toLowerCase();
+    const titleLower = row.title.toLowerCase();
+    text = { url: row.url, key: pageKey(row.url), shown, shownLower, titleLower, titleWords: wordsOf(titleLower) };
+    pageTexts.set(row, text);
+  }
+  return text;
+}
+
+const renamedTexts = new WeakMap                                                          ();
+
+function tabPageText(row                                                                         , listed           )           {
+  const text = pageText(row);
+  if (!row.customTitle) return text;
+  const kept = renamedTexts.get(row);
+  if (kept && kept.listed === listed) return kept.text;
+  const titles = [row.customTitle.toLowerCase(), text.titleLower];
+  if (listed && listed.titleLower !== text.titleLower) titles.push(listed.titleLower);
+  const titleLower = titles.join("\n");
+  const renamed = { ...(listed ?? text), titleLower, titleWords: wordsOf(titleLower) };
+  renamedTexts.set(row, { listed, text: renamed });
+  return renamed;
+}
+
+const hostOfPage = (t          ) => (t.host ??= hostOf(t.url));
+const hostPart = (shown        ) => /^[^/?#]*/.exec(shown) [0];
+const hostLowerOfPage = (t          ) => (t.hostLower ??= hostPart(t.shownLower));
+const originOfPage = (t          ) => (t.origin === undefined ? (t.origin = /^https?:\/\/[^/?#]+/i.exec(t.url)?.[0] ?? null) : t.origin);
+
+});
 __define("packages/core/src/providerConfig.ts", function (exports, __require) {
   __export(exports, "PROVIDER_CONFIG_LIMITS", () => PROVIDER_CONFIG_LIMITS);
   __export(exports, "PROVIDER_ENTRY_KEYS", () => PROVIDER_ENTRY_KEYS);
@@ -2435,87 +2518,6 @@ function globalProviderRows(sections                            , shown         
   }
   return out;
 }
-
-});
-__define("packages/core/src/pageText.ts", function (exports, __require) {
-  __export(exports, "displayUrl", () => displayUrl);
-  __export(exports, "pageKey", () => pageKey);
-  __export(exports, "withRootSlash", () => withRootSlash);
-  __export(exports, "pageTexts", () => pageTexts);
-  __export(exports, "logVisits", () => logVisits);
-  __export(exports, "shownWordsOf", () => shownWordsOf);
-  __export(exports, "pageText", () => pageText);
-  __export(exports, "tabPageText", () => tabPageText);
-  __export(exports, "hostOfPage", () => hostOfPage);
-  __export(exports, "hostPart", () => hostPart);
-  __export(exports, "hostLowerOfPage", () => hostLowerOfPage);
-  __export(exports, "originOfPage", () => originOfPage);
-const { hostOf, urlForDisplay } = __require("packages/core/src/omnibox.ts");
-                                                        
-
-function displayUrl(url        )         {
-  return urlForDisplay(url).replace(/\/$/, "");
-}
-
-const pageKey = (url        ) => url.replace(/#.*$/, "").replace(/\/$/, "");
-
-const withRootSlash = (url        ) => url.replace(/^(https?:\/\/[^/?#]*)(?=[?#]|$)/i, "$1/");
-
-                        
-              
-              
-                
-                     
-                     
-                     
-                      
-                       
-                
-                         
-                     
-  
-
-const pageTexts = new WeakMap                  ();
-
-const logVisitsOf           = [];
-const logVisits = (visits        ) => (visits >= 0 && visits < 1024 && (visits | 0) === visits ? (logVisitsOf[visits] ??= Math.log2(1 + visits) * 8) : Math.log2(1 + visits) * 8);
-
-const NOT_WORD = /[^a-z0-9]+/g;
-const PLAIN_WORDS = /^[a-z0-9]+(?: [a-z0-9]+)*$/;
-const wordsOf = (lower        ) => (PLAIN_WORDS.test(lower) ? ` ${lower}` : ` ${lower}`.replace(NOT_WORD, " "));
-const shownWordsOf = (t          ) => (t.shownWords ??= wordsOf(t.shownLower));
-
-function pageText(row                                )           {
-  let text = pageTexts.get(row);
-  if (!text) {
-    const shown = displayUrl(row.url);
-    const shownLower = shown.toLowerCase();
-    const titleLower = row.title.toLowerCase();
-    text = { url: row.url, key: pageKey(row.url), shown, shownLower, titleLower, titleWords: wordsOf(titleLower) };
-    pageTexts.set(row, text);
-  }
-  return text;
-}
-
-const renamedTexts = new WeakMap                                                          ();
-
-function tabPageText(row                                                                         , listed           )           {
-  const text = pageText(row);
-  if (!row.customTitle) return text;
-  const kept = renamedTexts.get(row);
-  if (kept && kept.listed === listed) return kept.text;
-  const titles = [row.customTitle.toLowerCase(), text.titleLower];
-  if (listed && listed.titleLower !== text.titleLower) titles.push(listed.titleLower);
-  const titleLower = titles.join("\n");
-  const renamed = { ...(listed ?? text), titleLower, titleWords: wordsOf(titleLower) };
-  renamedTexts.set(row, { listed, text: renamed });
-  return renamed;
-}
-
-const hostOfPage = (t          ) => (t.host ??= hostOf(t.url));
-const hostPart = (shown        ) => /^[^/?#]*/.exec(shown) [0];
-const hostLowerOfPage = (t          ) => (t.hostLower ??= hostPart(t.shownLower));
-const originOfPage = (t          ) => (t.origin === undefined ? (t.origin = /^https?:\/\/[^/?#]+/i.exec(t.url)?.[0] ?? null) : t.origin);
 
 });
 __define("packages/core/src/providerNetwork.ts", function (exports, __require) {

@@ -98,6 +98,11 @@ export const profileRows = {
           description: "Searches and pages from your history.",
           keywords: ["autocomplete", "show search suggestions", "history", "visited pages", "browsing history", "hide history", "autofill", "inline completion", "recent pages", "command bar", "omnibox", "suggest pages from history", "search suggestions", "history suggestions"],
         },
+        searchTabsInAllProfiles: {
+          title: "Find open tabs in all profiles",
+          description: "The command bar and Search Tabs also find your other profiles' tabs.",
+          keywords: ["profiles", "open tabs", "switch to tab", "command bar", "omnibox", "search tabs", "cross-profile", "other profiles"],
+        },
         showSelectionSearch: {
           title: "Search button on selected text",
           description: "Shows a Search button over text you select.",

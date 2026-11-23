@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 const { sessionWithTabPages, sessionWithTabPins } = await import("./savedShapes.ts");
-const { sessionWithSettingsMeta } = await import("../settings/settings.ts");
+const { sessionWithSettingsMeta } = await import("../settings/settingsMigrations.ts");
 const { sessionWithPinChoiceStamps } = await import("../pins/pinChoices.ts");
 const { Clock } = await import("@ardia/sync");
 

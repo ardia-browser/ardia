@@ -7,7 +7,7 @@ import type { SuggestionVia } from "@ardia/core";
 
 type SuggestionType = "history" | "bookmark" | "tab" | "url" | "search" | "calc" | "action" | "create" | "extension" | "provider" | "typed";
 
-type SuggestionLike = { kind: string; id?: string; tabId?: string; bookmarked?: boolean; visited?: boolean } | undefined;
+type SuggestionLike = { kind: string; id?: string; tabId?: string; tabProfile?: string; bookmarked?: boolean; visited?: boolean } | undefined;
 
 function suggestionType(s: SuggestionLike): SuggestionType {
   if (!s) return "typed";
@@ -36,7 +36,7 @@ export function commandBarPlacementLabel(panel: Pick<PanelState, "newTab" | "pla
 }
 
 export const trackSuggestionChosen = (s: SuggestionLike, via?: SuggestionVia) =>
-  capture("suggestion_chosen", { type: suggestionType(s), ...(s?.kind === "action" && s.id ? { command: s.id.split(":")[0] } : {}), ...(via ? { via } : {}) }, consentNow());
+  capture("suggestion_chosen", { type: suggestionType(s), ...(s?.kind === "page" && s.tabId ? { other_profile: s.tabProfile !== undefined } : {}), ...(s?.kind === "action" && s.id ? { command: s.id.split(":")[0] } : {}), ...(via ? { via } : {}) }, consentNow());
 
 type CalendarConnectReport = { before: string; after: string; responsible: string; errored: boolean; settingsOpened: boolean; ms: number };
 

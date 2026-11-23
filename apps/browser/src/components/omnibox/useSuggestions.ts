@@ -18,6 +18,8 @@ import { useSettings } from "../../state/browser/hooks";
 import { useBookmarkEngine, useBookmarks, useBookmarksShown } from "../../state/bookmarks/hooks";
 import { useSuggestionHistory } from "../../state/history/hooks";
 import { useTabs } from "../../state/tabs/hooks";
+import { useProfileRecords } from "../../state/profiles/hooks";
+import { searchedTabs, searchesAllProfiles, withTabProfiles } from "../../state/tabs/tabsInAllProfiles";
 import { defaultSearchEngine, searchEngines } from "../../state/settings/settings";
 import type { Bookmarks } from "../../state/browser/types";
 import { currentBarActions } from "../../state/omnibox/barActions";
@@ -90,8 +92,10 @@ export function useSuggestions({
   const extensions = useBarExtensions(windowId);
   const shortcuts = useSettings((st) => st.shortcuts);
   const menuBar = useMenuBarRevision();
+  const allProfiles = useSettings((st) => searchesAllProfiles(st.searchTabsInAllProfiles, profileId));
+  const profiles = useProfileRecords();
 
-  const tabs = useMemo(() => Object.values(allTabs).filter((t) => t.profileId === profileId), [allTabs, profileId]);
+  const tabs = useMemo(() => searchedTabs(allTabs, profileId, allProfiles), [allTabs, profileId, allProfiles]);
   const showBookmarks = useBookmarksShown();
   const bookmarkRows = useMemo(() => (showBookmarks ? engineBookmarks(bookmarks, bookmarkEngine) : NO_BOOKMARKS), [showBookmarks, bookmarks, bookmarkEngine]);
   const source = useMemo(() => ({ tabs, history, bookmarks: bookmarkRows }), [tabs, history, bookmarkRows]);
@@ -175,8 +179,8 @@ export function useSuggestions({
       providers,
     }));
     barFieldMarks.suggestions(performance.now() - started, text.length);
-    return built;
-  }, [active, text, query, source, engine, remoteList, remoteSites, windowId, extensions, shortcuts, menuBar, currentTabId, currentUrl, scope, preventInline, switchToOpenTab, remotePending, bangs, providers]);
+    return allProfiles ? withTabProfiles(built, allTabs, profileId, profiles) : built;
+  }, [active, text, query, source, engine, remoteList, remoteSites, windowId, extensions, shortcuts, menuBar, currentTabId, currentUrl, scope, preventInline, switchToOpenTab, remotePending, bangs, providers, allProfiles, allTabs, profileId, profiles]);
   const siteListed = !scope && remoteSites.some((site) => result.items.some((i) => i.kind === "page" && i.url === site.url && !i.tabId));
   useEffect(() => {
     if (siteListed) noteSiteSuggestionShown();

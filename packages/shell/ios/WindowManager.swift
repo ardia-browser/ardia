@@ -313,10 +313,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     entry.keepContentSized(in: root)
     entry.watchContent(of: root) { [weak self] entry, root in self?.contentAppeared(entry, root: root) }
     relayoutRoot(window)
-    window.orderFront(nil)
-    entry.whenRevealed { [weak self, weak entry, weak window] in
-      if let self, let entry, let window, self.managed[id] === entry, entry.window === window { window.makeKeyAndOrderFront(nil) }
-    }
+    window.makeKeyAndOrderFront(nil)
   }
   private static let auxFrameSaveDelay: TimeInterval = 0.3
 

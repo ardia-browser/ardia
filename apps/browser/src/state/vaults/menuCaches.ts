@@ -1,5 +1,5 @@
-import { searchVaultItems, vaultUsernames, type VaultItem } from "../../platform/vaults";
-import { changeVaults, loadSiteItems, NO_ITEMS, showingPreviewProviders, unlockedIdsOf, useVaults } from "./store";
+import { recommendVaultItems, searchVaultItems, searchVaultItemsOn, vaultUsernames, type VaultItem } from "../../platform/vaults";
+import { changeVaults, loadSiteItems, NO_ITEMS, showingPreviewProviders, unlockedIdsOf, useVaults, vaultSiteKey } from "./store";
 
 export const SEARCH_ROWS_ASKED = 100;
 const SEARCHES_KEPT = 8;
@@ -79,3 +79,78 @@ export function menuUsernamesNow(email: boolean, profile: string | null): readon
 
 export const loadMenuItems = (origin: string, usernames: { email: boolean; profile: string | null } | null) =>
   Promise.all([loadSiteItems(origin), usernames ? loadMenuUsernames(usernames.email, usernames.profile) : null]);
+
+export const TYPED_ROWS_ASKED = 20;
+
+type Recommended = { basis: unknown[]; items: readonly VaultItem[] | null; promise: Promise<readonly VaultItem[]> };
+const recommendations = new Map<string, Recommended>();
+const RECOMMENDATIONS_KEPT = 16;
+const recommendKeyOf = (origin: string, profile: string | null, pageUsername: string | null, remembered: string | null) =>
+  `${origin}\n${profile ?? ""}\n${pageUsername ?? ""}\n${remembered ?? ""}`;
+
+export function loadRecommended(origin: string, profile: string | null, pageUsername: string | null, remembered: string | null): Promise<readonly VaultItem[]> {
+  if (showingPreviewProviders()) return Promise.resolve(NO_ITEMS);
+  const key = recommendKeyOf(origin, profile, pageUsername, remembered);
+  const basis = basisOf(origin);
+  const known = recommendations.get(key);
+  if (known && sameBasis(known.basis, basis)) return known.promise;
+  const promise = recommendVaultItems(origin, profile, pageUsername, remembered).then(
+    ({ items }) => {
+      const unlocked = unlockedIdsOf(vaults().providers);
+      const kept = items.filter((item) => unlocked.has(item.provider));
+      if (!sameBasis(basisOf(origin), basis) || recommendations.get(key)?.promise !== promise) return kept;
+      recommendations.delete(key);
+      recommendations.set(key, { basis, items: kept, promise });
+      while (recommendations.size > RECOMMENDATIONS_KEPT) recommendations.delete(recommendations.keys().next().value!);
+      changeVaults(() => ({}));
+      return kept;
+    },
+    () => NO_ITEMS,
+  );
+  recommendations.set(key, { basis, items: null, promise });
+  return promise;
+}
+
+const basisOf = (origin: string): unknown[] => {
+  const s = vaults();
+  return [s.itemsStamp, s.providers, s.listed, s.sites[vaultSiteKey(origin)]];
+};
+const sameBasis = (a: readonly unknown[], b: readonly unknown[]) => a.length === b.length && a.every((v, i) => v === b[i]);
+
+export function recommendedNow(origin: string, profile: string | null, pageUsername: string | null, remembered: string | null): readonly VaultItem[] | null {
+  const known = recommendations.get(recommendKeyOf(origin, profile, pageUsername, remembered));
+  if (!known || !sameBasis(known.basis, basisOf(origin))) {
+    void loadRecommended(origin, profile, pageUsername, remembered);
+    return null;
+  }
+  return known.items;
+}
+
+type Typed = { query: string; stamp: number; items: readonly VaultItem[] };
+const typedShown = new Map<string, Typed>();
+const typedAsked = new Map<string, string>();
+
+export function typedResultsNow(channel: string, query: string, origin: string, profile: string | null): readonly VaultItem[] | null {
+  const shown = typedShown.get(channel);
+  const stamp = vaults().itemsStamp;
+  if (shown?.query === query && shown.stamp === stamp) return shown.items;
+  const key = `${query}\n${origin}\n${profile ?? ""}\n${stamp}`;
+  if (typedAsked.get(channel) !== key) {
+    typedAsked.set(channel, key);
+    void searchVaultItemsOn(query, TYPED_ROWS_ASKED, profile, origin, channel).then(
+      (found) => {
+        if (found.cancelled || typedAsked.get(channel) !== key) return;
+        const unlocked = unlockedIdsOf(vaults().providers);
+        typedShown.set(channel, { query, stamp, items: found.items.filter((item) => unlocked.has(item.provider)) });
+        changeVaults(() => ({}));
+      },
+      () => {},
+    );
+  }
+  return shown ? shown.items : null;
+}
+
+export function forgetTyped(channel: string) {
+  typedShown.delete(channel);
+  typedAsked.delete(channel);
+}

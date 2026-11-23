@@ -1908,6 +1908,8 @@
     let vaultFocused = null;
     let vaultFocusedInfo = null;
     let vaultMenuOpen = false;
+    let vaultFiltering = null;
+    const VAULT_LONGEST_TYPED = 256;
     let vaultMenuHighlighted = false;
     let vaultClearedSent = false;
     let vaultRectQueued = false;
@@ -1942,6 +1944,7 @@
         trailingTaken: !!look && look.trailingTaken,
         inset: look ? look.inset : null,
         webauthn: vaultHas(/(^|\s)webauthn(\s|$)/i, vaultAttr(el, "autocomplete") || ""),
+        stepUser: focused && info.kind === "password" && vaultStepUser && vaultNow() - vaultStepUser.at < VAULT_STEP_USERNAME_LIFETIME ? vaultStepUser.username : null,
       });
     };
     const vaultBlur = () => {
@@ -1949,6 +1952,7 @@
       const info = vaultFocusedInfo;
       vaultFocused = vaultFocusedInfo = null;
       vaultMenuOpen = vaultMenuHighlighted = false;
+      vaultFiltering = null;
       if (el && info) vaultReport(el, info, false);
     };
     const vaultStillFocused = (el) => !!el && vaultIsConnected(el) && !!apply(vaultClosest, el, [":focus"]);
@@ -2085,7 +2089,7 @@
       const label = vaultNodeTypeOf(vaultPressed) === 1 ? apply(vaultClosest, vaultPressed, ["label"]) : null;
       return !!label && vaultLabelControlOf(label) === el;
     };
-    const vaultSendKey = (key) => fieldProviders.menuMode() && send("vaultKey", { key });
+    const vaultSendKey = (key, text) => fieldProviders.menuMode() && send("vaultKey", typeof text === "string" ? { key, text } : { key });
     const vaultChoseField = (el) => vaultNow() - vaultTabAt <= VAULT_FOCUS_WINDOW || vaultPressedOn(el);
     const vaultSubmitFrom = (scope, trusted) => {
       if (!scope || !fieldProviders.menuMode()) return;
@@ -2330,6 +2334,12 @@
           return;
         }
         vaultClearedSent = false;
+        const filters = vaultFocusedInfo && vaultFocusedInfo.kind === "username" && (vaultMenuOpen || vaultFiltering === el);
+        if (filters) {
+          vaultFiltering = el;
+          vaultSendKey("Typed", vaultSlice(vaultValueOf(el), 0, VAULT_LONGEST_TYPED));
+          return;
+        }
         if (vaultMenuOpen) {
           vaultMenuOpen = vaultMenuHighlighted = false;
           vaultSendKey("Typed");
@@ -2372,7 +2382,10 @@
             apply(vaultPrevent, e, []);
             apply(vaultStopNow, e, []);
           }
-          if (passesToPage || key === "Escape") vaultMenuOpen = vaultMenuHighlighted = false;
+          if (passesToPage || key === "Escape") {
+            vaultMenuOpen = vaultMenuHighlighted = false;
+            vaultFiltering = null;
+          }
           vaultSendKey(key);
           if (key !== "Enter" || !passesToPage) return;
         }

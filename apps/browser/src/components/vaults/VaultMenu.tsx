@@ -114,6 +114,7 @@ export function MenuSurface({ glass, children }: { glass: boolean; children: Rea
 function MenuPanel({ tabId, menu, zoom, area, onGone }: { tabId: string; menu: MenuState; zoom: number; area: Area; onGone?: () => void }) {
   const leaving = !!onGone;
   const rows = useVaultMenuRows(menu);
+  const concealed = menu.hidden || (!!menu.typed && menu.mode === "matches" && rows.length === 0);
   const theme = useTheme();
   const fieldColor = useVaultMenus((s) => s.fields[tabId]?.brandColor ?? null);
   const pageColor = useTabLive(tabId, (l) => l.themeColor);
@@ -128,7 +129,7 @@ function MenuPanel({ tabId, menu, zoom, area, onGone }: { tabId: string; menu: M
   const scrollTop = useRef(0);
   const place = placement(menu, zoom, area, height);
   const still = reduceMotion() === true;
-  const ticking = useAppActive() && !menu.hidden && !leaving;
+  const ticking = useAppActive() && !concealed && !leaving;
   useEffect(() => {
     if (leaving || !height) return;
     const run = Animated.timing(appear, { toValue: 1, duration: anchoredOpen.duration, easing: anchoredOpen.easing, useNativeDriver: true });
@@ -170,7 +171,7 @@ function MenuPanel({ tabId, menu, zoom, area, onGone }: { tabId: string; menu: M
   const inFront = useWindowInFront(windowId);
   const shownSelected = inFront ? menu.selected : -1;
   const selectedRow = list[shownSelected];
-  const touchTarget = leaving || !touchIDReady || menu.hidden || !touchIDGlyphShown(menu.touch) || !isTouchRow(selectedRow) ? -1 : shownSelected;
+  const touchTarget = leaving || !touchIDReady || concealed || !touchIDGlyphShown(menu.touch) || !isTouchRow(selectedRow) ? -1 : shownSelected;
   useEffect(() => {
     if (!leaving && inFront && !menu.hovered && menu.mode === "matches") selectVaultRow(tabId, restingRowOf(menu));
   }, [inFront]);
@@ -203,10 +204,10 @@ function MenuPanel({ tabId, menu, zoom, area, onGone }: { tabId: string; menu: M
     />
   );
   const scale = appear.interpolate({ inputRange: [0, 1], outputRange: [anchoredOpen.fromScale, 1] });
-  const motion = menu.hidden ? { opacity: 0 } : still ? { opacity: appear } : { opacity: appear, transform: [{ scale }] };
+  const motion = concealed ? { opacity: 0 } : still ? { opacity: appear } : { opacity: appear, transform: [{ scale }] };
   return (
     <Animated.View
-      pointerEvents={menu.hidden || leaving ? "none" : "auto"}
+      pointerEvents={concealed || leaving ? "none" : "auto"}
       accessibilityRole="menu"
       accessibilityLabel={menu.mode === "search" ? "All Passwords" : `Passwords for ${site}`}
       onMouseEnter={leaving ? undefined : () => hoverVaultMenu(tabId, true)}

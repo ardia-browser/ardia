@@ -548,8 +548,8 @@ test("focusing a login field reports it with a top-frame rect, and blur reports 
   page.fire(user, "focusin");
   page.fire(user, "focusout");
   assert.deepEqual(page.of("vaultField"), [
-    { kind: "username", focused: true, rect: { x: 10, y: 20, width: 200, height: 30 }, formHasPassword: true, maxLength: 0, email: true, clicked: false, auto: true, darkField: false, brandColor: null, inset: { top: 0, bottom: 0, trailing: 0 }, rtl: false, trailingTaken: false, webauthn: false },
-    { kind: "username", focused: false, rect: null, formHasPassword: true, maxLength: 0, email: true, clicked: false, auto: false, darkField: null, brandColor: null, inset: null, rtl: false, trailingTaken: false, webauthn: false },
+    { kind: "username", focused: true, rect: { x: 10, y: 20, width: 200, height: 30 }, formHasPassword: true, maxLength: 0, email: true, clicked: false, auto: true, darkField: false, brandColor: null, inset: { top: 0, bottom: 0, trailing: 0 }, rtl: false, trailingTaken: false, webauthn: false, stepUser: null },
+    { kind: "username", focused: false, rect: null, formHasPassword: true, maxLength: 0, email: true, clicked: false, auto: false, darkField: null, brandColor: null, inset: null, rtl: false, trailingTaken: false, webauthn: false, stepUser: null },
   ]);
 });
 
@@ -610,7 +610,7 @@ test("subframes send no rect, and a first-step username field says the form has 
   const user = page.input({ type: "email", name: "identifier", id: "identifierId" });
   page.body.append(page.el("form", {}, user, new page.FakeButton({ type: "button", text: "Next" })));
   page.fire(user, "focusin");
-  assert.deepEqual(page.of("vaultField"), [{ kind: "username", focused: true, rect: null, formHasPassword: false, maxLength: 0, email: true, clicked: false, auto: true, darkField: null, brandColor: null, inset: null, rtl: false, trailingTaken: false, webauthn: false }]);
+  assert.deepEqual(page.of("vaultField"), [{ kind: "username", focused: true, rect: null, formHasPassword: false, maxLength: 0, email: true, clicked: false, auto: true, darkField: null, brandColor: null, inset: null, rtl: false, trailingTaken: false, webauthn: false, stepUser: null }]);
 });
 
 test("hidden, disabled, readonly, tiny, aria-hidden and search fields are ignored", () => {
@@ -708,15 +708,49 @@ test("while the menu is open the field's rect follows the page, and a removed fi
   assert.equal(page.frames.length, 0, "the watch stops once the field is gone");
 });
 
-test("typing in the field while the menu is open says Typed, not a dismissal, and gives Enter back to the page", () => {
+test("typing in a username field while the menu is open sends the text to filter it, and keeps sending while the filter hides the menu", () => {
   const page = makePage();
   const { user } = loginForm(page);
   page.fire(user, "focusin");
   page.handlers.vaultMenu({ open: true, highlighted: true });
   page.type(user, "j");
-  assert.deepEqual(page.of("vaultKey"), [{ key: "Typed" }]);
   const enter = page.fire(user, "keydown", { key: "Enter" });
+  assert.equal(enter.stopped, true, "Enter picks the highlighted filtered row");
+  page.handlers.vaultMenu({ open: true, highlighted: true });
+  page.type(user, "jo");
+  page.handlers.vaultMenu({ open: false });
+  page.type(user, "joq");
+  const hidden = page.fire(user, "keydown", { key: "Enter" });
+  assert.equal(hidden.stopped ?? false, false, "with nothing matching, Enter reaches the page");
+  page.fire(user, "focusout");
+  page.fire(user, "focusin");
+  page.type(user, "joqz");
+  assert.deepEqual(page.of("vaultKey"), [{ key: "Typed", text: "j" }, { key: "Enter" }, { key: "Typed", text: "jo" }, { key: "Typed", text: "joq" }]);
+});
+
+test("typing in a password field while the menu is open closes it and never sends what was typed", () => {
+  const page = makePage();
+  const { pass } = loginForm(page);
+  page.fire(pass, "focusin");
+  page.handlers.vaultMenu({ open: true, highlighted: true });
+  page.type(pass, fixtureSecret("hunter2-secret"));
+  assert.deepEqual(page.of("vaultKey"), [{ key: "Typed" }]);
+  const enter = page.fire(pass, "keydown", { key: "Enter" });
   assert.equal(enter.stopped ?? false, false, "Enter reaches the page");
+});
+
+test("a password step after a typed username names that username in its field report", () => {
+  const page = makePage({ origin: "https://login.example.com", path: "/signin" });
+  const user = page.input({ type: "email", name: "username" });
+  const step = page.el("form", { id: "step1" }, user);
+  page.body.append(step);
+  page.type(user, "me@site.org");
+  page.fire(user, "keydown", { key: "Enter" });
+  step.remove();
+  const pass = page.input({ type: "password", name: "password" });
+  page.body.append(page.el("form", { id: "step2" }, pass));
+  page.fire(pass, "focusin");
+  assert.equal(page.of("vaultField").at(-1).stepUser, "me@site.org");
 });
 
 test("a page without a visible login field never asks for its logins to be read ahead", () => {
@@ -1492,7 +1526,7 @@ test("emptying the focused field by hand says Cleared once per emptying, with th
   page.handlers.vaultMenu({ open: true });
   page.type(user, "");
   page.type(user, "d");
-  assert.deepEqual(page.of("vaultKey"), [{ key: "Cleared" }, { key: "Cleared" }, { key: "Cleared" }, { key: "Typed" }]);
+  assert.deepEqual(page.of("vaultKey"), [{ key: "Cleared" }, { key: "Cleared" }, { key: "Cleared" }, { key: "Typed", text: "d" }]);
 });
 
 test("deleting a generated password, even with the menu open again, says Cleared and keeps the menu's keys", () => {

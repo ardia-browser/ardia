@@ -13,7 +13,7 @@ import type { VaultMenu } from "./menuState";
 import { isSecureOrigin } from "./originMatch";
 import { passwordProfileOfTab } from "./ardia";
 import { anyVaultConnectedForTab, isVaultListed, refreshVaultBiometrics, useVaults } from "./store";
-import { loadMenuItems } from "./menuCaches";
+import { forgetTyped, loadMenuItems } from "./menuCaches";
 import { vaultsOnForTab } from "./enabled";
 import { fieldProviderFillOfTab } from "../site/fieldProviderModes";
 import { ardiaFillsInTab } from "./ardiaSources";
@@ -73,7 +73,12 @@ function tellPage(tabId: string, frameId: FrameId, open: boolean, highlighted = 
   });
 }
 
-const tellPageOfMenu = (tabId: string, menu: VaultMenu) => tellPage(tabId, menu.frameId, !menu.hidden, !menu.hidden && menu.selected >= 0);
+const filteredOut = (menu: VaultMenu) => !!menu.typed && menu.mode === "matches" && rowsOfMenu(menu).length === 0;
+
+const tellPageOfMenu = (tabId: string, menu: VaultMenu) => {
+  const open = !menu.hidden && !filteredOut(menu);
+  tellPage(tabId, menu.frameId, open, open && menu.selected >= 0);
+};
 
 export function resyncVaultPage(tabId: string, frameId: FrameId) {
   const menu = vaultMenuOf(tabId);
@@ -86,9 +91,13 @@ const keyAt = (rows: readonly VaultRow[], selected: number) => rows[selected]?.k
 function withSelection(menu: VaultMenu, chosen: boolean): VaultMenu {
   const rows = rowsOfMenu(menu);
   if (chosen) return { ...menu, selectedKey: keyAt(rows, menu.selected) };
+  if (menu.typed && menu.mode === "matches" && !menu.busy && (menu.selected < 0) !== (rows.length === 0)) {
+    const first = rows.length ? 0 : -1;
+    return { ...menu, selected: first, selectedKey: keyAt(rows, first) };
+  }
   if (menu.busy || keyAt(rows, menu.selected) === menu.selectedKey) return menu;
   const same = menu.selectedKey === null ? -1 : rows.findIndex((r) => r.key === menu.selectedKey);
-  const selected = same >= 0 ? same : menu.mode === "search" ? (rows.length && menu.selected >= 0 ? 0 : -1) : restingRow(rows, menu.remembered);
+  const selected = menu.typed && menu.mode === "matches" ? (rows.length ? 0 : -1) : same >= 0 ? same : menu.mode === "search" ? (rows.length && menu.selected >= 0 ? 0 : -1) : restingRow(rows, menu.remembered);
   return { ...menu, selected, selectedKey: keyAt(rows, selected) };
 }
 
@@ -97,7 +106,7 @@ export function patchVaultMenu(tabId: string, patch: Partial<VaultMenu>, onlySeq
   if (!menu || (onlySeq !== undefined && menu.seq !== onlySeq)) return;
   const next = withSelection({ ...menu, ...patch }, "selected" in patch);
   setMenu(tabId, next);
-  if (next.hidden !== menu.hidden || (!next.hidden && next.selected !== menu.selected)) tellPageOfMenu(tabId, next);
+  if (next.hidden !== menu.hidden || filteredOut(next) !== filteredOut(menu) || (!next.hidden && next.selected !== menu.selected)) tellPageOfMenu(tabId, next);
 }
 
 export { rowsOfMenu };
@@ -112,6 +121,7 @@ export const restingRowOf = (menu: VaultMenu) => restingRow(rowsOfMenu(menu), me
 export function closeVaultMenu(tabId: string, refocus = false) {
   const menu = vaultMenuOf(tabId);
   if (!menu) return;
+  forgetTyped(tabId);
   setMenu(tabId, null);
   searchFocused.delete(tabId);
   tellPage(tabId, menu.frameId, false);
@@ -134,6 +144,8 @@ const blankMenu = (field: FieldSeen, onDemand: boolean, profile: string | null =
   maxLength: field.maxLength ?? 0,
   mode: "matches",
   query: "",
+  typed: "",
+  pageUsername: field.stepUser ?? null,
   selected: -1,
   selectedKey: null,
   onDemand,
@@ -370,7 +382,7 @@ export function startVaultMenus() {
   const readyManagers = (s: VaultsNow) => s.providers.filter((p) => p.state === "locked" || isVaultListed(s, p.id)).length;
   const stopVaults = useVaults.subscribe((s, prev) => {
     if (readyManagers(s) > readyManagers(prev) || unlockedCount(s) > unlockedCount(prev)) offerToFocusedFields();
-    if (s.providers !== prev.providers || s.sites !== prev.sites || s.searches !== prev.searches || s.listed !== prev.listed || s.pending !== prev.pending) restOpenMenus();
+    if (s.providers !== prev.providers || s.sites !== prev.sites || s.searches !== prev.searches || s.listed !== prev.listed || s.pending !== prev.pending || s.revision !== prev.revision) restOpenMenus();
   });
   const stopPasskeys = usePasskeys.subscribe((s, prev) => s.offers !== prev.offers && restOpenMenus());
   return () => {

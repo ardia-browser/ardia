@@ -27,6 +27,7 @@ ArdiaVaultCapture *ArdiaVaultCaptureOfTab(id tab) {
 }
 
 static const NSUInteger kLongestVaultUsername = 1024;
+static const NSUInteger kLongestVaultTyped = 256;
 
 static NSArray<NSString *> *VaultKeys() { return @[ @"ArrowDown", @"ArrowUp", @"Enter", @"Escape", @"Tab", @"Typed", @"Cleared" ]; }
 
@@ -66,8 +67,10 @@ void RefreshPasskeysInPageScript() {
     [self noteVaultField:dict tab:tab frame:frameId main:main origin:origin];
   } else if ([kind isEqualToString:@"vaultKey"] && dict) {
     NSString *key = Text(dict, @"key", 16);
-    if (menuMode && VaultWebOrigin(origin) && [VaultKeys() containsObject:key ?: @""])
-      [self emit:@"vaultKey" payload:@{@"frameId" : frameId, @"key" : key}];
+    if (menuMode && VaultWebOrigin(origin) && [VaultKeys() containsObject:key ?: @""]) {
+      NSString *typed = [key isEqualToString:@"Typed"] ? Text(dict, @"text", kLongestVaultTyped) : nil;
+      [self emit:@"vaultKey" payload:typed ? @{@"frameId" : frameId, @"key" : key, @"text" : typed} : @{@"frameId" : frameId, @"key" : key}];
+    }
   } else if ([kind isEqualToString:@"vaultContext"] && dict) {
     if (menuMode && Flag(dict, @"field") && VaultWebOrigin(origin)) [ArdiaVaultCaptureOfTab(tab) noteFieldInFrame:frameId origin:origin main:main];
     [self noteVaultContext:dict frame:frameId main:main origin:origin];
@@ -160,7 +163,8 @@ static id VaultFieldInset(NSDictionary *raw) {
         @"brandColor" : brand ?: NSNull.null,
         @"trailingTaken" : @(rect && Flag(dict, @"trailingTaken")),
         @"inset" : rect ? VaultFieldInset(Field<NSDictionary>(dict, @"inset")) : NSNull.null,
-        @"webauthn" : @(Flag(dict, @"webauthn"))
+        @"webauthn" : @(Flag(dict, @"webauthn")),
+        @"stepUser" : (focused ? Text(dict, @"stepUser", kLongestVaultUsername) : nil) ?: NSNull.null
       }];
 }
 

@@ -448,6 +448,41 @@ that may never run on the main thread (catalog builds, sealed store reads and wr
 `VaultOffMain.check()`, which stops a debug build. `usage_counts` carries `vault_catalog_builds` and
 `vault_catalog_builds_slow` (over 250 ms): watch the slow share after a release.
 
+### Recommendations and search
+
+The fill menu's rows are ranked natively (`VaultCatalog+Rank.swift`, off the main and JS threads) and JS renders what
+`vaults.recommend` and `vaults.searchItems` return.
+
+- **Recommendations** (an empty field): first the page's own origin (exact or same host), then the rest of its
+  registrable domain (subdomains, then siblings), then logins for a site in the page's shared group
+  (`VaultSharedSites.swift`: google.com with youtube.com and gmail.com, the Microsoft, Apple, Amazon, Atlassian and
+  other sign-in groups), and only when nothing else matches, a login with no website whose title names the site's
+  brand (`google` for accounts.google.com). Within each group, the username the page already shows (the earlier step
+  of a two-step sign-in) pins its login first, then the login filled last on this site, then how often each was filled
+  (halved every 30 days), then one saved or edited in the last 14 days, then the remembered account, then tier,
+  username and title. Nothing crosses to an unrelated registrable domain except through a shared group, a login saved
+  for one host only (`host` or `exact`) never does, a look-alike (`g00gle.com`, `accounts.google.com.evil.io`) is its
+  own site, and a shared or brand row always needs a click and says which site it is for ("For youtube.com").
+- **Search** (typing in a username field while the menu is open, or Other Passwords): words are folded (case,
+  accents) and every word must match. A word scores 4 as a prefix of the username, the title or one of their words, 3
+  as a prefix of a host or host label, 2 anywhere in the username, title, vault name or hosts, and 1 within one edit
+  (a typo or a swap) of a word when it has 4 or more letters; typo matches fill in only when the exact ones don't fill
+  the rows. Rows sort by score, then the page's site (same host, same
+  site, shared group), then the most recent, then a stable order. Each keystroke supersedes the previous one per tab
+  (`VaultSearchLanes`), so a slow search is cancelled.
+- **Typing filter.** The page script sends the typed text (never a password field's) with `vaultKey` `Typed`. The menu
+  shows the matching logins with the first selected, hides while nothing matches (the page keeps the field's keys)
+  and comes back as the text matches again; clearing the field returns the site's rows. Escape, Tab, Enter or a blur
+  end the filter. WebKit tabs have no Ardia fill menu yet, so there is nothing to filter there.
+- **Usage signals** (`VaultUsage.swift`): the last login filled per site and profile, a decayed fill count and the
+  last save or edit, kept in the sealed store as `usage.vault` (this Mac only, never iCloud, never telemetry), written
+  off the caller's thread, pruned when an item leaves its list and dropped with its manager.
+- **Budget**, measured on a 50,000 login catalog (`vault-rank.test.swift`): optimized, a keystroke's search takes
+  7 ms at the median and 13 ms at p95, a recommendation 10 ms with 7,000 logins under one registrable domain. A debug
+  build is about eight times slower (50 ms and 110 ms), off the main and JS threads, and a newer keystroke cancels it.
+- **Telemetry**: `vault_pick_rank_1`, `vault_pick_rank_2`, `vault_pick_rank_3_to_5`, `vault_pick_rank_6_plus`,
+  `vault_pick_typed_rank_1` and `vault_pick_typed_rank_2_plus` count which row was picked; watch the rank 1 share.
+
 ## The JS surface
 
 Calls (`call("vaults.<name>", args)`, typed in `packages/ardiacore/src/engine/api.ts`):
@@ -457,7 +492,8 @@ Calls (`call("vaults.<name>", args)`, typed in `packages/ardiacore/src/engine/ap
 | `providers` | `{}` | `VaultProviderState[]` |
 | `refresh` | `{provider}` | `VaultProviderState` (drops the item cache, forces a sync on the next list) |
 | `siteItems` | `{origin}` | `{items, listed, revision}`: every login (Ardia's own, every profile, and each unlocked manager's) with a URL on the origin's site (same registrable domain, or the same host for an IP or localhost), at most 500; `listed` names the managers whose list is loaded |
-| `searchItems` | `{query, limit?, profile?}` | `VaultItem[]`: the fill menu's search (`originMatch.searchItems` rules and order), at most 200, Ardia's logins only for `profile` |
+| `searchItems` | `{query, limit?, ardiaProfile?, origin?, channel?}` | `{items, revision, cancelled?}`: ranked search (Recommendations and search above), at most 200, Ardia's logins only for `ardiaProfile`; an empty query lists by title; a newer call on the same `channel` cancels this one |
+| `recommend` | `{origin, ardiaProfile?, pageUsername?, remembered?}` | `{items, listed, revision}`: the fill menu's ranked rows for an empty field, each with `match: {tier, reason, site?}` (`origin`, `site`, `shared` or `brand`), at most 200 |
 | `listItems` | `{query?, offset?, limit, managersOnly?, profile?}` | `{total, items, revision}`: one page (at most 1000) of logins sorted by site, then username, filtered by every query word |
 | `usernames` | `{email, limit?, profile?}` | `VaultItem[]`: one login per username, most used first (emails first when `email`), at most 50 |
 | `itemsStatus` | `{}` | `{revision, listed, counts}` |

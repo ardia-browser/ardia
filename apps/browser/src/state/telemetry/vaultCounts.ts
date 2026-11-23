@@ -25,6 +25,12 @@ const empty = () => ({
   vault_menu_rows_built: 0,
   vault_menu_rows_slow: 0,
   vault_menu_opens_from_icon: 0,
+  vault_pick_rank_1: 0,
+  vault_pick_rank_2: 0,
+  vault_pick_rank_3_to_5: 0,
+  vault_pick_rank_6_plus: 0,
+  vault_pick_typed_rank_1: 0,
+  vault_pick_typed_rank_2_plus: 0,
   vault_guard_confirmed: 0,
   vault_guard_declined: 0,
   vault_codes_set_up_context_menu: 0,
@@ -122,6 +128,12 @@ export function noteVaultMenuRowsBuilt(ms: number, consent?: ConsentToken | null
 }
 
 export const noteVaultMenuOpenFromIcon = () => bump("vault_menu_opens_from_icon");
+
+export function noteVaultLoginPicked(index: number, typed: boolean, consent?: ConsentToken | null) {
+  if (index < 0) return;
+  if (typed) return bump(index === 0 ? "vault_pick_typed_rank_1" : "vault_pick_typed_rank_2_plus", consent);
+  bump(index === 0 ? "vault_pick_rank_1" : index === 1 ? "vault_pick_rank_2" : index < 5 ? "vault_pick_rank_3_to_5" : "vault_pick_rank_6_plus", consent);
+}
 
 export const noteVaultGuard = (confirmed: boolean, consent?: ConsentToken | null) => bump(confirmed ? "vault_guard_confirmed" : "vault_guard_declined", consent);
 

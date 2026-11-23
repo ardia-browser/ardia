@@ -8,7 +8,7 @@ import { MAX_SEARCH_ROWS, menuRows, suggestOf, SUGGEST_NOTHING, type MenuMode, t
 import { anyProfileOnArdia } from "./enabled";
 import { pendingFor } from "./pendingTotp";
 import { siteItemsNow, siteItemsOf, useVaults } from "./store";
-import { menuUsernamesNow, searchResultsNow } from "./menuCaches";
+import { menuUsernamesNow, recommendedNow, searchResultsNow, typedResultsNow } from "./menuCaches";
 import { currentCodeItems } from "./standaloneCodes";
 import { offeredPasskeys } from "./passkeyStore";
 
@@ -20,6 +20,8 @@ type RowInputs = {
   mode: MenuMode;
   origin: string;
   query: string;
+  typed?: string;
+  pageUsername?: string | null;
   noTotp: readonly string[];
   remembered: string | null;
   email: boolean;
@@ -45,7 +47,10 @@ function keyOf(menu: RowInputs, vaults: VaultsNow, suggest: VaultSuggest, now: n
   const passkeys = menu.webauthn && menu.mode === "matches" ? offeredPasskeys(menu.tabId, menu.origin) : null;
   const items = menu.mode === "search" ? searchResultsNow(menu.query, menu.profile) : (siteItemsNow(menu.origin), siteItemsOf(vaults, menu.origin));
   const usernames = menu.mode === "matches" && menu.field === "username" ? menuUsernamesNow(menu.email, menu.profile) : null;
-  return [vaults.providers, items, codes, pending, generated, menu.field, menu.mode, menu.origin, menu.query, menu.noTotp, menu.remembered, menu.email, menu.suggestOpen, menu.profile, passkeys, usernames, ...Object.values(suggest)];
+  const typing = menu.mode === "matches" && !!menu.typed && !!menu.tabId;
+  const typed = typing ? typedResultsNow(menu.tabId!, menu.typed!, menu.origin, menu.profile) : null;
+  const recommended = menu.mode === "matches" && !typing ? recommendedNow(menu.origin, menu.profile, menu.pageUsername ?? null, menu.remembered) : null;
+  return [vaults.providers, items, codes, pending, generated, menu.field, menu.mode, menu.origin, menu.query, menu.noTotp, menu.remembered, menu.email, menu.suggestOpen, menu.profile, passkeys, usernames, typing, typed, recommended, ...Object.values(suggest)];
 }
 
 const sameKey = (a: unknown[], b: unknown[]) => a.length === b.length && a.every((v, i) => v === b[i]);
@@ -74,6 +79,8 @@ export function rowsOfMenu(menu: RowInputs, vaults: VaultsNow = useVaults.getSta
     suggest,
     passkeys: (key[14] as ReturnType<typeof offeredPasskeys> | null) ?? undefined,
     usernames: key[15] ? itemsForProfile(key[15] as readonly VaultItem[], menu.profile) : undefined,
+    typed: key[16] ? ((key[17] as readonly VaultItem[] | null) ?? []) : undefined,
+    recommended: (key[18] as readonly VaultItem[] | null) ?? undefined,
   });
   noteVaultMenuRowsBuilt(performance.now() - started, consent);
   recent.unshift({ key, rows });

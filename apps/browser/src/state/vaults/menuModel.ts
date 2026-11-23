@@ -1,5 +1,5 @@
 import type { VaultFieldKind, VaultItem, VaultPasswordStyle, VaultProviderState } from "../../platform/vaults";
-import { fillsWithoutChoice, itemKey, rankItems, searchItems, TIER } from "./originMatch";
+import { fillsWithoutChoice, itemKey, itemTier, rankItems, searchItems, TIER, type MatchTier } from "./originMatch";
 import type { PendingTotp } from "./pendingTotp";
 import type { Settings } from "../settings/settings";
 import { MAX_PREVIOUS_USERNAMES, previousUsernames } from "./usernames";
@@ -49,6 +49,8 @@ type MenuInput = {
   suggest?: VaultSuggest;
   passkeys?: readonly VaultItem[];
   usernames?: readonly VaultItem[];
+  typed?: readonly VaultItem[];
+  recommended?: readonly VaultItem[];
 };
 
 export const MAX_CODE_ROWS = 4;
@@ -103,8 +105,13 @@ function unlockRows(input: MenuInput): VaultRow[] {
     .map((p): VaultRow => ({ key: `unlock:${p.id}`, kind: "unlock", provider: p.id, name: p.name }));
 }
 
+const rankedOf = (input: MenuInput, items: readonly VaultItem[]) =>
+  input.recommended
+    ? input.recommended.map((item) => ({ item, tier: (item.match?.tier ?? itemTier(item, input.origin)) as MatchTier }))
+    : rankItems(items, input.origin, input.remembered ?? null);
+
 function savedRows(input: MenuInput, items: readonly VaultItem[], suggest: VaultSuggest): VaultRow[] {
-  const ranked = rankItems(items, input.origin, input.remembered ?? null);
+  const ranked = rankedOf(input, items);
   if (input.field === "otp") return suggest.codes ? codeRows(input, ranked) : [];
   const rows = suggest.logins ? ranked.map((r) => loginRow(r.item, input.origin)) : [];
   if (input.field === "username" && suggest.usernames) rows.push(...usernameRows(input, items, rows));
@@ -123,6 +130,7 @@ export function menuRows(input: MenuInput): VaultRow[] {
     const kept = suggest.generated ? (input.generated ?? []).map((item): VaultRow => ({ key: `login:${itemKey(item)}`, kind: "login", item, userChose: true })) : [];
     return [...kept, ...searchItems(items, input.query, MAX_SEARCH_ROWS).map((item) => loginRow(item, input.origin))];
   }
+  if (input.typed) return suggest.logins ? input.typed.map((item) => loginRow(item, input.origin)) : [];
   if (input.field === "newPassword") {
     if (!suggest.newPasswords) return [OPEN_PASSWORDS];
     return [...(unlocked.size ? GENERATOR_STYLES.map(generateRow) : []), ...unlockRows(input), OPEN_PASSWORDS];

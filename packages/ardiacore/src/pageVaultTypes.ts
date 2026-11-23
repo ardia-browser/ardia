@@ -21,9 +21,10 @@ export type VaultField = {
   trailingTaken?: boolean;
   inset?: VaultFieldInset | null;
   webauthn?: boolean;
+  stepUser?: string;
 };
 export type VaultKey = "ArrowDown" | "ArrowUp" | "Enter" | "Escape" | "Tab" | "Typed" | "Cleared";
-export type VaultKeyPress = { frameId: string; key: VaultKey };
+export type VaultKeyPress = { frameId: string; key: VaultKey; text?: string };
 export type VaultUsernameSource = "form" | "step" | "page" | "nearby" | "";
 export type VaultSubmission = {
   frameId: string;

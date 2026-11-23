@@ -2,7 +2,7 @@ import { punycodeEncode } from "@ardia/core";
 import type { VaultItem } from "../../platform/vaults";
 import { PUBLIC_SUFFIX_RULES } from "./suffixes";
 
-type MatchTier = 0 | 1 | 2 | 3 | 4 | 5;
+export type MatchTier = 0 | 1 | 2 | 3 | 4 | 5;
 export const TIER = { none: 0, sibling: 1, subdomain: 2, www: 3, sameHost: 4, exact: 5 } as const;
 
 type Site = { scheme: "http" | "https"; host: string; port: string; portGiven: boolean; schemeGiven: boolean };

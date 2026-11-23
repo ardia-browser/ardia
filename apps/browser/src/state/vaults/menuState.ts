@@ -15,6 +15,8 @@ export type VaultMenu = {
   maxLength: number;
   mode: MenuMode;
   query: string;
+  typed: string;
+  pageUsername: string | null;
   selected: number;
   selectedKey: string | null;
   onDemand: boolean;

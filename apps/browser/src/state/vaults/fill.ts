@@ -2,7 +2,7 @@ import { useBrowser } from "../browser/store";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
 import type { VaultFillError, VaultFillField, VaultItem, VaultKeyPress, VaultPasswordStyle } from "../../platform/vaults";
 import { webviews } from "../../platform/webviews";
-import { noteStandaloneCodeFilled, noteVaultCodeAutofill, noteVaultCodeFilled, noteVaultEarlyClickIgnored, noteVaultFill } from "../telemetry/vaultCounts";
+import { noteStandaloneCodeFilled, noteVaultCodeAutofill, noteVaultCodeFilled, noteVaultEarlyClickIgnored, noteVaultFill, noteVaultLoginPicked } from "../telemetry/vaultCounts";
 import { isCodeItem } from "./standaloneCodesModel";
 import { unlockProvider, openPasswordSettings, wasCancelled } from "./actions";
 import { noteFilledUsername, rememberVaultAccount } from "./accounts";
@@ -26,6 +26,7 @@ import {
   vaultMenuOf,
   type VaultMenu,
 } from "./menu";
+import { filterVaultMenu } from "./menuTyping";
 import { menuKey, restingRow, soleRestingFill, type VaultRow } from "./menuModel";
 import { vaultMenuShownFor } from "./menuShown";
 import { rememberPending } from "./pendingTotp";
@@ -157,6 +158,7 @@ function activateRow(tabId: string, row: VaultRow, how: VaultFillHow, consent: C
   if (!how.explicit && menu.mode !== "search" && needsExplicitPick(row)) {
     return patchVaultMenu(tabId, { error: CLICK_TO_FILL, ...(how.touchID ? { touch: "off" as const } : {}) }, menu.seq);
   }
+  if (row.kind === "login" && menu.mode === "matches") noteVaultLoginPicked(rowsOfMenu(menu).filter((r) => r.kind === "login").indexOf(row), !!menu.typed, consent);
   const pickCode = row.kind === "login" ? takeCodePick(tabId, menu.seq) : null;
   if (pickCode && row.kind === "login") {
     dismissVaultMenu(tabId, true);
@@ -211,8 +213,15 @@ export function stepVaultMenu(tabId: string, key: string, how: VaultFillHow = BY
 export function noteVaultKey(tabId: string, event: VaultKeyPress) {
   const menu = vaultMenuOf(tabId);
   const ours = !!menu && menu.frameId === event.frameId;
-  if (event.key === "Typed") return void (ours && menu.mode !== "search" && dismissVaultMenu(tabId));
-  if (event.key === "Cleared") return noteVaultFieldCleared(tabId, event.frameId);
+  if (event.key === "Typed") {
+    if (!ours || menu.mode === "search") return;
+    if (typeof event.text === "string" && filterVaultMenu(tabId, event.text)) return;
+    return void dismissVaultMenu(tabId);
+  }
+  if (event.key === "Cleared") {
+    if (ours && menu.typed && filterVaultMenu(tabId, "")) return;
+    return noteVaultFieldCleared(tabId, event.frameId);
+  }
   if (!ours) {
     if (event.key === "ArrowDown") reopenVaultMenuFromKey(tabId, event.frameId);
     else resyncVaultPage(tabId, event.frameId);

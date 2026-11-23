@@ -12,6 +12,7 @@ import { Group, Row, SectionHeader } from "../settings/Form";
 import { useGrowingRows } from "../../state/settings/growingRows";
 import { BrandBadge, useManagerName } from "./VaultParts";
 import { VAULT_SETTINGS } from "./tokens";
+import { SavedInRow, WebsiteRow } from "./VaultSheetRows";
 
 const COUNT = new Intl.NumberFormat();
 const DATE = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
@@ -125,6 +126,7 @@ export function PasskeySheet({ passkey }: { passkey: VaultPasskey }) {
       </DialogTitle>
       <View style={BODY}>
         <Group>
+          <WebsiteRow url={siteOf(passkey)} />
           <Row title="Username">
             <Text numberOfLines={1} tone="textSecondary" selectable>
               {accountOf(passkey)}
@@ -137,19 +139,12 @@ export function PasskeySheet({ passkey }: { passkey: VaultPasskey }) {
               </Text>
             </Row>
           ) : null}
-          <Row title="Website">
-            <Text numberOfLines={1} tone="textSecondary" selectable>
-              {passkey.rpId}
-            </Text>
-          </Row>
           {passkey.createdAt ? (
             <Row title="Created">
               <Text tone="textSecondary">{DATE.format(new Date(passkey.createdAt))}</Text>
             </Row>
           ) : null}
-          <Row title="Saved In">
-            <Text tone="textSecondary">{nameOf(passkey.provider)}</Text>
-          </Row>
+          <SavedInRow provider={passkey.provider} name={nameOf(passkey.provider)} />
         </Group>
         {ardia ? null : (
           <Text size="caption" tone="textSecondary" style={NOTE}>

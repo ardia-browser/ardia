@@ -13,6 +13,9 @@ import { Group, Row } from "../Form";
 import { useVaultLogins } from "../../../state/vaults/hooks";
 import { ArdiaCodeRow } from "../../vaults/VaultCodeRows";
 import { LoginFormSheet } from "../../vaults/LoginFormSheet";
+import { SavedInRow, WebsiteRow } from "../../vaults/VaultSheetRows";
+import { ARDIA_PROVIDER } from "../../../state/vaults/ardia";
+import { brandOf } from "../../../state/vaults/brands";
 import { deleteLoginMessage } from "../../../state/vaults/deleteLogin";
 import { ardiaLoginDeleted, ardiaLoginOf, copySavedPassword } from "../../../state/vaults/ardiaCodes";
 
@@ -59,9 +62,7 @@ function ArdiaPasswordSheet({ profile, saved, list, onChanged, ardia }: { saved:
       <DialogTitle icon={<Favicon url={saved.origin} size={20} />}>{hostLabel(saved.origin)}</DialogTitle>
       <View style={SHEET_BODY}>
         <Group>
-          <Row title="Website">
-            <Text selectable>{hostLabel(saved.origin)}</Text>
-          </Row>
+          <WebsiteRow url={saved.origin} />
           <Row title="Username">
             <Box row gap="xs" style={CENTER}>
               <Text selectable>{saved.username || "No username"}</Text>
@@ -78,6 +79,7 @@ function ArdiaPasswordSheet({ profile, saved, list, onChanged, ardia }: { saved:
             </Box>
           </Row>
           {ardiaItem ? <ArdiaCodeRow item={ardiaItem} editing={false} onProblem={setError} /> : null}
+          <SavedInRow provider={ARDIA_PROVIDER} name={brandOf(ARDIA_PROVIDER).name} />
         </Group>
         {error ? (
           <Text size="caption" tone="destructive" style={ERROR}>
@@ -147,7 +149,7 @@ function PasswordSheet({ profile, saved, onChanged }: { profile: string; saved: 
       <DialogTitle icon={<Favicon url={saved.origin} size={20} />}>{hostLabel(saved.origin)}</DialogTitle>
       <View style={SHEET_BODY}>
         <Group>
-          <Row title="Website" description={saved.origin} />
+          <WebsiteRow url={saved.origin} />
           <Row title="Username">
             {editing ? (
               <TextField value={username} onChangeText={setUsername} width={220} />
@@ -171,6 +173,7 @@ function PasswordSheet({ profile, saved, onChanged }: { profile: string; saved: 
               </Box>
             )}
           </Row>
+          <SavedInRow provider={ARDIA_PROVIDER} name={brandOf(ARDIA_PROVIDER).name} />
         </Group>
         {error ? (
           <Text size="caption" tone="destructive" style={ERROR}>

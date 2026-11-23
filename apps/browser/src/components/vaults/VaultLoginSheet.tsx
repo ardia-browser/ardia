@@ -11,6 +11,7 @@ import { Favicon } from "../favicon/Favicon";
 import { Group, Row } from "../settings/Form";
 import { itemUrl } from "./rowText";
 import { BrandBadge, CopyButton } from "./VaultParts";
+import { SavedInRow, WebsiteRow } from "./VaultSheetRows";
 import { VAULT_SETTINGS } from "./tokens";
 import { passkeyOfLogin, usePasskeys } from "../../state/vaults/passkeys";
 import { PasskeySheet } from "./VaultPasskeys";
@@ -32,7 +33,7 @@ export function VaultLoginSheet({ item, site }: { item: VaultItem; site: string 
       <DialogTitle icon={url ? <Favicon url={url} size={VAULT_SETTINGS.siteIcon} /> : <BrandBadge provider={item.provider} />}>{site || item.title || name}</DialogTitle>
       <View style={SHEET_BODY}>
         <Group>
-          {url ? <Row title="Website" description={url} /> : null}
+          {url ? <WebsiteRow url={url} /> : null}
           <Row title="Username">
             <Box row gap="xs" style={CENTER}>
               <Text selectable>{item.username || "No Username"}</Text>
@@ -50,9 +51,7 @@ export function VaultLoginSheet({ item, site }: { item: VaultItem; site: string 
               <Text tone="textSecondary">Saved</Text>
             </Row>
           ) : null}
-          <Row title="Saved In" icon={<BrandBadge provider={item.provider} />}>
-            <Text tone="textSecondary">{name}</Text>
-          </Row>
+          <SavedInRow provider={item.provider} name={name} />
         </Group>
         <Expand open={!!problem}>
           <Text size="caption" tone="destructive" style={ERROR}>

@@ -6,7 +6,7 @@ import ExpoModulesCore
 public class AppModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ArdiaApp")
-    Constant("apiVersion") { () -> Int in 92 }
+    Constant("apiVersion") { () -> Int in 95 }
 
     OnCreate {
       DispatchQueue.main.async { AppIcons.restore() }
@@ -72,6 +72,7 @@ public class AppModule: Module {
         "feedbackEmail": Self.infoString("ACFeedbackEmail") as Any,
         "videoTourURL": Self.infoString("ACVideoTourURL") as Any,
         "releaseNotesURL": Self.infoString("ACReleaseNotesURL") as Any,
+        "engineMatch": Self.infoString("ArdiaEngineMatch") as Any,
         "isolatedInstance": config.isolated,
         "forceReleaseNotes": config.instanceFlag("releaseNotes"),
         "processStart": Self.processStart as Any,

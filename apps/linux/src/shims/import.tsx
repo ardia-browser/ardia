@@ -26,8 +26,3 @@ export const importBookmarksHTML: typeof real.importBookmarksHTML = linux ? linu
 export const importPasswordsCSV: typeof real.importPasswordsCSV = linux ? linux.importPasswordsCSV : real.importPasswordsCSV;
 export const chooseImportFile: typeof real.chooseImportFile = linux ? linux.chooseImportFile : real.chooseImportFile;
 export const readDiaTabs: typeof real.readDiaTabs = linux ? linux.readDiaTabs : real.readDiaTabs;
-
-export const writeImportedPasswords = (token: string, profile: string) =>
-  linux ? linux.writePasswords(token, profile) : Promise.reject(new ArdiaError("unsupported", "Password import needs the Linux host"));
-
-export const discardImportedPasswords = (token: string) => linux?.discardPasswords(token);

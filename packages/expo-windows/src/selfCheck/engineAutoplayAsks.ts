@@ -2,7 +2,7 @@ import { hostCall, leaveOffersFromUnheard } from "../engine/host";
 import { mountPage } from "../engine/pages";
 import { expectEqual, expectTrue, type Check } from "./check";
 import { click, evaluate, firstWindow, LEFT, listed, pause, RIGHT, show, until } from "./engineSleep";
-import { CTRL, DETACHED_MUTED_VIDEO, LOAD_MS, NEXT_LINK, PER_PAGE_COUNT, PLAY_BUTTON, SETTLE_MS, TOUCH_POINT, TRANSIENT_ACTIVATION_MS, blocked, countsOf, framed, held, loadedAt, mediaCommand, origin, played, playing, port, refusedThenStill, restore, setAutoplay, withMedia } from "./engineAutoplayKit";
+import { CTRL, DETACHED_MUTED_VIDEO, LOAD_MS, NEXT_LINK, PER_PAGE_COUNT, PLAY_BUTTON, SETTLE_MS, TOUCH_POINT, TRANSIENT_ACTIVATION_MS, blocked, countsOf, framed, loadedAt, mediaCommand, origin, played, playing, port, refusedThenStill, restore, setAutoplay, withMedia } from "./engineAutoplayKit";
 
 const raced = (media: string) =>
   `Promise.race([${media}.play().then(() => "played", (error) => error.name), new Promise((resolve) => setTimeout(() => resolve("pending"), 1500))]).then((result) => post("result", JSON.stringify(result)));`;

@@ -25,8 +25,8 @@ export const tabRows = {
         autoHideTabs: {
           title: "Auto-hide tabs",
           explained: true,
-          description: `Tabs slide away until you point at the window's edge. ${keyText("⌘S")} toggles them in one window.`,
-          keywords: ["hide tabs", "hide sidebar", "show sidebar", "toggle sidebar", "hide tab bar", "tab strip", "top tabs", "focus mode", "full screen", "zen"],
+          description: `Tabs slide away until you point at the edge. ${keyText("⌘S")} toggles.`,
+          keywords: ["hide tabs", "hide sidebar", "show sidebar", "toggle sidebar", "hide tab bar", "tab strip", "top tabs", "focus mode", "full screen", "zen", "window edge", "slide", "one window"],
         },
         hideToolbarWhileScrolling: {
           title: "Hide toolbar while scrolling",
@@ -58,8 +58,8 @@ export const tabRows = {
         keepTopAppsRunning: {
           title: "Keep Top Apps running when closed",
           explained: true,
-          description: `${keyText("⌘W")} switches away but keeps the page loaded, so notifications still arrive.`,
-          keywords: ["top apps", "pinned tiles", "favorites", "essentials", "cmd w", "close", "unload", "keep loaded", "keep running", "background", "arc"],
+          description: `${keyText("⌘W")} switches away but keeps the page loaded for notifications.`,
+          keywords: ["top apps", "pinned tiles", "favorites", "essentials", "cmd w", "close", "unload", "keep loaded", "keep running", "background", "arc", "notifications still arrive"],
         },
         closedTopAppTiles: {
           title: "Draw tiles for closed Top Apps",
@@ -88,8 +88,8 @@ export const tabRows = {
         },
         swipeBetweenTabs: {
           title: "Swipe between tabs",
-          description: "Swipe left or right with two fingers on the address bar to go to the tab above or below.",
-          keywords: ["swipe", "gesture", "trackpad", "two fingers", "next tab", "previous tab", "toolbar", "address bar", "scroll"],
+          description: "Swipe with two fingers on the address bar to change tabs.",
+          keywords: ["swipe", "gesture", "trackpad", "two fingers", "next tab", "previous tab", "toolbar", "address bar", "scroll", "left", "right", "tab above", "tab below"],
           shown: () => PLATFORM_FEATURES.trackpadGestures,
         },
         showTabHoverMenu: {
@@ -110,8 +110,8 @@ export const tabRows = {
         playingNowAcrossProfiles: {
           title: "Keep Playing now across profiles",
           explained: true,
-          description: "Media playing in one profile stays in the sidebar of every profile, like Arc's spaces.",
-          keywords: ["playing now", "now playing", "media card", "media controls", "sidebar player", "music", "spotify", "youtube", "spaces", "swipe", "follow", "persist", "every space", "all spaces", "arc"],
+          description: "Media playing in one profile shows in every profile's sidebar.",
+          keywords: ["playing now", "now playing", "media card", "media controls", "sidebar player", "music", "spotify", "youtube", "spaces", "swipe", "follow", "persist", "every space", "all spaces", "arc", "arc's spaces", "every profile"],
         },
         videoUpscaling: {
           title: "Video upscaling",
@@ -166,16 +166,16 @@ export const tabRows = {
         littleArdiaOpensNewTabLinks: {
           title: "Keep new-tab links inside a Little Ardia window",
           explained: true,
-          description: `A link in Little Ardia that would open a new tab loads right there. ${keyText("⌘")}-click still opens it behind.`,
-          keywords: ["target blank", "new tab", "links", "inside"],
+          description: `New-tab links load in place. ${keyText("⌘")}-click still opens behind.`,
+          keywords: ["target blank", "new tab", "links", "inside", "little ardia", "load right there", "behind", "command click"],
           shown: () => PLATFORM_FEATURES.keepsNewTabLinksInLittleArdia,
         },
         littleArdiaShortcutFromAnyApp: {
           title: "Shortcut opens Little Ardia from other apps",
           explained: true,
-          description: "New Little Ardia Window's shortcut opens Little Ardia while another app is in front. Off, that app keeps the shortcut.",
+          description: "Its shortcut works while another app is in front.",
           shown: () => PLATFORM_FEATURES.littleArdiaShortcutFromAnyApp,
-          keywords: ["global shortcut", "global hotkey", "hotkey", "shortcut", "any app", "other apps", "system wide", "option command n", "new little ardia window"],
+          keywords: ["global shortcut", "global hotkey", "hotkey", "shortcut", "any app", "other apps", "system wide", "option command n", "new little ardia window", "in front", "keeps the shortcut"],
         },
         peekLinksToOtherSites: {
           title: "Links to other sites open in",
@@ -198,8 +198,8 @@ export const tabRows = {
         peekButtons: {
           title: "Show Peek buttons",
           explained: true,
-          description: "Close, Open as Tab and Split View sit in the Peek's title bar, or float beside it on the left or right.",
-          keywords: ["peek", "buttons", "close", "expand", "split view", "left", "right", "side", "position", "arc", "zen", "glance"],
+          description: "Close, Open as Tab and Split View, in the title bar or beside it.",
+          keywords: ["peek", "buttons", "close", "expand", "split view", "left", "right", "side", "position", "arc", "zen", "glance", "open as tab", "title bar", "float", "beside"],
         },
       },
     },

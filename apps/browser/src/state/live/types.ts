@@ -47,7 +47,7 @@ export type PullRequestInfo = {
   stack?: { id: string; position: number; size: number };
 };
 
-export type DocumentInfo = {
+type DocumentInfo = {
   kind: string;
   editedBy: string | null;
   place: string | null;

@@ -1,13 +1,13 @@
 import { documentSaved, readDocument, writeDocument } from "../../platform/documents";
 import { isFields, type Fields } from "../../lib/decode";
 import { parseSaved, versionedJson } from "../../lib/savedDocument";
-import { KEY_PATTERN, NAME_PATTERN } from "../../lib/pluginManifest";
-import type { PluginRecord, SiteSwitchValues } from "./store";
+import { KEY_PATTERN, NAME_PATTERN, VERSION_PATTERN } from "../../lib/pluginManifest";
+import type { OfficialAutoUpdate, PluginRecord, SiteSwitchValues } from "./store";
 import { switchOrigin } from "../../lib/pluginPageBar";
 import { warnFor } from "../telemetry/consoleConsent";
 import type { ConsentToken } from "../telemetry/choice";
 
-export const PLUGINS_DOC = "plugins.json";
+const PLUGINS_DOC = "plugins.json";
 const VERSION = 1;
 const NAME = new RegExp(NAME_PATTERN);
 
@@ -27,7 +27,7 @@ function appliedOf(raw: unknown): PluginRecord["applied"] {
 
 const KEY = new RegExp(KEY_PATTERN);
 
-export function sitesOf(raw: unknown): SiteSwitchValues | null {
+function sitesOf(raw: unknown): SiteSwitchValues | null {
   if (!isFields(raw)) return null;
   const entries = Object.entries(raw).flatMap(([key, origins]): [string, Record<string, boolean>][] => {
     if (!KEY.test(key) || !isFields(origins)) return [];
@@ -35,6 +35,18 @@ export function sitesOf(raw: unknown): SiteSwitchValues | null {
     return kept.length ? [[key, Object.fromEntries(kept)]] : [];
   });
   return entries.length ? Object.fromEntries(entries) : null;
+}
+
+export const MAX_UPDATE_LINES = 24;
+const MAX_UPDATE_LINE = 600;
+const VERSION_TEXT = new RegExp(VERSION_PATTERN);
+
+const versionOf = (raw: unknown): string | null => (typeof raw === "string" && VERSION_TEXT.test(raw) ? raw : null);
+
+function updatedOf(raw: unknown): OfficialAutoUpdate | null {
+  if (!isFields(raw) || !Array.isArray(raw.added)) return null;
+  const added = raw.added.filter((line): line is string => typeof line === "string" && line.length > 0 && line.length <= MAX_UPDATE_LINE).slice(0, MAX_UPDATE_LINES);
+  return { from: versionOf(raw.from), to: versionOf(raw.to), added, ...(raw.runtime === true ? { runtime: true as const } : {}) };
 }
 
 export function parsePluginRecords(json: string | null): Record<string, PluginRecord> {
@@ -47,6 +59,8 @@ export function parsePluginRecords(json: string | null): Record<string, PluginRe
     out[name] = { enabled: raw.enabled === true && approved !== null, approved, values: valuesOf(raw.values), applied: appliedOf(raw.applied), ...(raw.controlGranted === true ? { controlGranted: true } : {}), ...(raw.installed === true ? { installed: true } : {}), ...(typeof raw.previous === "string" && HASH.test(raw.previous) ? { previous: raw.previous } : {}) };
     const sites = sitesOf(raw.sites);
     if (sites) out[name]!.sites = sites;
+    const updated = updatedOf(raw.updated);
+    if (updated) out[name]!.updated = updated;
   }
   return out;
 }

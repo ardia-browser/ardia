@@ -55,7 +55,7 @@ export function PageBarButtons({ windowId, tabId, document, buttons, palette, lo
         if (b === "|") return <Divider key={`divider-${i}`} vertical length={DEVELOPER_BAR.dividerLength} color={palette.divider} style={{ marginHorizontal: DEVELOPER_BAR.groupGap }} />;
         if (b === "address") return null;
         if (b === "extensions")
-          return <OverflowButton key={b} windowId={windowId} tabId={tabId} hidden={[]} palette={palette} slot={DEVELOPER_BAR_ANCHOR} asset={DEVELOPER_ICONS.extensions} glyph={DEVELOPER_BAR.extensionsGlyph} mayActivate={() => hostActionTarget("extensions", windowId, tabId, document)} onActivate={() => runHostAction("extensions", windowId, tabId)} />;
+          return <OverflowButton key={b} windowId={windowId} tabId={tabId} palette={palette} slot={DEVELOPER_BAR_ANCHOR} asset={DEVELOPER_ICONS.extensions} glyph={DEVELOPER_BAR.extensionsGlyph} mayActivate={() => hostActionTarget("extensions", windowId, tabId, document)} onActivate={() => runHostAction("extensions", windowId, tabId)} />;
         return (
           <Button
             key={b}

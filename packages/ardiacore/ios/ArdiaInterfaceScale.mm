@@ -201,11 +201,6 @@ CGFloat ContentTop(NSWindow *window) {
   return NSMakeSize(size.width * scale, size.height * scale);
 }
 
-+ (NSSize)rootSizeFromWindow:(NSSize)size {
-  const CGFloat scale = self.scale;
-  return NSMakeSize(size.width / scale, size.height / scale);
-}
-
 + (CGFloat)windowLengthFromRoot:(CGFloat)length {
   return length * self.scale;
 }

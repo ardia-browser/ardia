@@ -10,7 +10,7 @@ struct ControlOutput {
   static let maxIdBytes = 256
   static let releaseWrittenBytes = 65_536
 
-  enum WriteResult { case drained, blocked, failed }
+  enum WriteResult { case drained, lineDone, blocked, failed }
   enum Kind { case reply, kept, event }
 
   private struct Chunk {
@@ -102,7 +102,7 @@ struct ControlOutput {
     return unwritten
   }
 
-  mutating func write(to fd: Int32) -> WriteResult {
+  mutating func write(to fd: Int32, oneLine: Bool = false) -> WriteResult {
     while !chunks.isEmpty {
       startHead()
       let data = chunks[0].data
@@ -126,6 +126,7 @@ struct ControlOutput {
         headWritten = 0
         headMarked = 0
         headStarted = false
+        if oneLine && !chunks.isEmpty { return .lineDone }
       } else if offset >= Self.releaseWrittenBytes {
         chunks[0].data = Data(data[(data.startIndex + offset)...])
         offset = 0

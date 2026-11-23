@@ -40,6 +40,21 @@ for file in "$app_symbols" "$app_uuids"; do
   assets+=("$file")
 done
 echo "PASS  the app's symbols join the release"
+built="$dist/appcast.built.xml"
+[ -f "$built" ] || cp "$feed" "$built"
+delta_lines="$(appcast deltas "$built" "$version")" || die "couldn't read $version's deltas from $built"
+deltas=0
+while read -r from url length signature; do
+  [ -n "$from" ] || continue
+  name="${url##*/}"
+  delta="$dist/$name"
+  [ "$url" = "$REPO_URL/releases/download/v$version/$name" ] || die "$version's delta from build $from points at $url, not at v$version's release"
+  [ -f "$delta" ] || die "no $delta: the appcast lists it (in CI the sign job's release artifact carries the .delta files)"
+  [ "$length" = "$(stat -f %z "$delta")" ] || die "the appcast's length for $name is $length, the file is $(stat -f %z "$delta")"
+  assets+=("$delta")
+  deltas=$((deltas + 1))
+done <<<"$delta_lines"
+echo "PASS  $deltas Sparkle delta(s) join the release"
 "$root/scripts/release/check-packages.sh" "$dist" "$version" || die "the update zip or the DMG isn't laid out as installs expect (scripts/release/check-packages.sh)"
 linux="$dist/linux"
 if [ -d "$linux" ]; then
@@ -104,7 +119,7 @@ if [ -d "$windows" ]; then
 else
   echo "note: no $windows: the release ships without the Windows installers"
 fi
-item_channel="$(appcast channel "$feed" "$version")"
+item_channel="$(appcast channel "$built" "$version")"
 [ "$item_channel" = "$channel" ] || die "$version's item in $feed is on the $item_channel channel, not $channel"
 [ -f "$dist/release-notes.md" ] || die "no $dist/release-notes.md"
 if ! git -C "$root" ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null 2>&1; then
@@ -119,15 +134,15 @@ trap 'exit 130' INT TERM HUP
 take_lock "$version" "$dry" "$break_lock"
 stable_tag="$(latest_stable_tag)"
 
-built="$dist/appcast.built.xml"
-[ -f "$built" ] || cp "$feed" "$built"
 merged="$feed"
 [ "$dry" = 1 ] && merged="$work/appcast.xml"
-if download_live_feed "$stable_tag" "$work/live"; then
+if download_live_feed "$stable_tag" "$work/live" && node "$root/scripts/release/feed-check.mjs" "$work/live/appcast.xml" "$version"; then
   appcast merge "$work/live/appcast.xml" "$built" "$version" "$merged"
-else
-  echo "note: $stable_tag has no appcast.xml yet: $version starts it"
+elif [ "${PUBLISH_NEW_FEED:-0}" = 1 ] || [ "$dry" = 1 ]; then
+  echo "note: $stable_tag has no usable appcast.xml: $version starts the feed"
   cp "$built" "$merged"
+else
+  die "$stable_tag has no usable appcast.xml (missing, empty or not a whole Sparkle appcast), so publishing would start a feed without every earlier release: put the last good one back (docs/releasing.md › Feed recovery), or set PUBLISH_NEW_FEED=1 if $version really starts the feed"
 fi
 appcast check-above "$merged" "$version"
 if [ "$channel" = stable ]; then

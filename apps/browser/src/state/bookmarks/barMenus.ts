@@ -7,7 +7,7 @@ import { copyLinkItems, openAllItems, openLinkItems, runLinkChoice } from "./lin
 import { menuSections, type MenuKey } from "../app/menuSections";
 import { menuShortcut } from "../commands/commandShortcuts";
 import { useBrowser } from "../browser/store";
-import { activeTabId } from "../browser/model";
+import { bookmarksBarShownIn } from "./visibility";
 import { editBookmark } from "./edit";
 import { currentBookmarks } from "../browser/current";
 import type { BookmarkNode } from "../browser/types";
@@ -21,7 +21,7 @@ export async function openImportButtonMenu() {
   if (choice === "hide") updateSettings({ bookmarksImportDismissed: true });
 }
 
-export type BarMenuTarget = { kind: "url" } | { kind: "folder"; links: number; makesGroup: boolean; restoresArc: boolean } | null;
+type BarMenuTarget = { kind: "url" } | { kind: "folder"; links: number; makesGroup: boolean; restoresArc: boolean } | null;
 
 export function barMenuItems(
   target: BarMenuTarget,
@@ -30,15 +30,12 @@ export function barMenuItems(
   if (target?.kind === "url") return menuSections(openLinkItems(), copyLinkItems(), [{ id: "edit", title: "Edit…", symbol: "pencil" }], [{ id: "delete", title: "Delete", symbol: "trash" }]);
   if (target?.kind === "folder")
     return menuSections(
-      openAllItems(target.links),
       [
+        ...openAllItems(target.links, "All", { elsewhere: false }),
         { id: "addGroup", title: "Add to Sidebar as Group", symbol: "sidebar.left", enabled: target.makesGroup },
-        target.restoresArc && { id: "restoreArc", title: "Restore Arc Folders as Groups" },
+        target.restoresArc && { id: "restoreArc", title: "Restore Arc Folders as Groups", symbol: "arrow.uturn.backward" },
       ],
-      [
-        { id: "rename", title: "Rename…", symbol: "pencil" },
-        { id: "addFolder", title: "New Folder…", symbol: "folder.badge.plus" },
-      ],
+      [{ id: "rename", title: "Rename…", symbol: "pencil" }],
       [{ id: "delete", title: "Delete Folder", symbol: "trash" }],
     );
   return menuSections(
@@ -48,17 +45,12 @@ export function barMenuItems(
     ],
     [
       { id: "manage", title: "Manage Bookmarks", symbol: "book", ...keys("manageBookmarks") },
-      { id: "toggleBar", title: "Show Bookmarks Bar", checked: barShown, ...keys("toggleBookmarksBar") },
+      { id: "toggleBar", title: "Show Bookmarks Bar", symbol: "menubar.rectangle", checked: barShown, ...keys("toggleBookmarksBar") },
     ],
   );
 }
 
-function barShownIn(windowId: string) {
-  const s = useBrowser.getState();
-  const mode = s.settings.bookmarksBar;
-  const active = activeTabId(s, windowId);
-  return mode === "always" || (mode === "newTab" && !(active && s.tabs[active]?.url));
-}
+const barShownIn = (windowId: string) => bookmarksBarShownIn(useBrowser.getState(), windowId);
 
 export async function openBarMenu(windowId: string, profileId: string, node: BookmarkNode | null) {
   const s = useBrowser.getState();

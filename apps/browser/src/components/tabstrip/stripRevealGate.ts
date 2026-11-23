@@ -1,4 +1,4 @@
-export type SelectionReveal = "none" | "drop" | "wait" | "run";
+type SelectionReveal = "none" | "drop" | "wait" | "run";
 
 export function selectionReveal(revealed: string, activeId: string, heldClose: boolean, current: boolean, dragging: boolean, holding = false): SelectionReveal {
   if (revealed === activeId || heldClose) return "none";
@@ -6,7 +6,7 @@ export function selectionReveal(revealed: string, activeId: string, heldClose: b
   return current && !holding ? "run" : "wait";
 }
 
-export type FirstReveal = { shown: boolean; at: number; settling: boolean };
+type FirstReveal = { shown: boolean; at: number; settling: boolean };
 
 export const FIRST_REVEAL: FirstReveal = { shown: false, at: -Infinity, settling: false };
 
@@ -25,9 +25,9 @@ export function endSettling(state: FirstReveal): FirstReveal {
   return state.settling ? { ...state, settling: false } : state;
 }
 
-export type ScrollCommand = { from: number; to: number; animated: boolean; furthest: number; until: number };
+type ScrollCommand = { from: number; to: number; animated: boolean; furthest: number; until: number };
 
-export type ScrollIntent = { baseline: number; command: ScrollCommand | null };
+type ScrollIntent = { baseline: number; command: ScrollCommand | null };
 
 export const scrollIntentAt = (x: number): ScrollIntent => ({ baseline: x, command: null });
 
@@ -57,7 +57,7 @@ export function userTookOver(first: FirstReveal, activeId: string): { first: Fir
   return { first: endSettling(first), revealed: activeId };
 }
 
-export type PendingReveal = { tabId: string; scrolls: number };
+type PendingReveal = { tabId: string; scrolls: number };
 
 export function revealStillWanted(pending: PendingReveal, now: { tabId: string; scrolls: number; current: boolean; dragging: boolean }): boolean {
   return now.current && !now.dragging && now.tabId === pending.tabId && now.scrolls === pending.scrolls;

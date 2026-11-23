@@ -8,7 +8,7 @@ import { consentToken, type ConsentToken } from "../telemetry/choice";
 import { activeManifest, currentPlugins, usePlugins, type PluginsStore } from "./store";
 import { onProcessStopped, restartProcess, superviseProcess } from "./process";
 
-export const ACTIVATION_TIMEOUT_MS = 10_000;
+const ACTIVATION_TIMEOUT_MS = 10_000;
 
 export class PluginActivationError extends Error {
   readonly plugin: string;
@@ -26,10 +26,9 @@ const readyRuns = new Map<string, number>();
 const waiters = new Map<string, Set<Waiter>>();
 const readyListeners = new Set<(name: string, run: number) => void>();
 
-export const needsHost = (m: PluginManifest) => m.main !== null || m.sidecar !== null;
-export const runsEagerly = (m: PluginManifest) => needsHost(m) && (m.main === null || startsEagerly(m.activationEvents));
+const needsHost = (m: PluginManifest) => m.main !== null || m.sidecar !== null;
+const runsEagerly = (m: PluginManifest) => needsHost(m) && (m.main === null || startsEagerly(m.activationEvents));
 export const shouldRun = (name: string, hash: string, m: PluginManifest) => runsEagerly(m) || activated.get(name) === hash;
-export const isActivated = (name: string) => activated.has(name);
 
 export function onPluginReady(listener: (name: string, run: number) => void): () => void {
   readyListeners.add(listener);

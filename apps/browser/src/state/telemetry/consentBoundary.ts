@@ -2,6 +2,7 @@ import { setConsentEpoch } from "../../platform/focus";
 import { consentEpoch, onConsentPeriodChange } from "./choice";
 import { takeColdTabHoldCounts, takeContentDriftCounts, takeMainProcessWork } from "./diagnostics";
 import { takeFreezeCounts } from "./freezes";
+import { takeStopBreathing } from "./stopBreathing";
 import { resetLocalStoreMeters } from "./localStore";
 import { resetPostStats } from "./transport";
 
@@ -16,6 +17,7 @@ onConsentPeriodChange(() => {
   void takeContentDriftCounts().catch(() => null);
   void takeColdTabHoldCounts().catch(() => null);
   takeFreezeCounts(null);
+  takeStopBreathing();
 });
 
 export function watchConsentBoundary(drop: () => void) {

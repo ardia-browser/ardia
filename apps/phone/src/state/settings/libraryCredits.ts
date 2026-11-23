@@ -1,6 +1,7 @@
 import credits from "./credits.json";
+import { ANDROID_PORTED_CREDITS, type LibraryCredit } from "./portedCredits";
 
-export type LibraryCredit = { name: string; detail: string; license: string; url: string };
+export type { LibraryCredit } from "./portedCredits";
 
 export const IPHONE_NATIVE_CREDITS: LibraryCredit[] = [
   {
@@ -23,9 +24,10 @@ export const IPHONE_NATIVE_CREDITS: LibraryCredit[] = [
   },
 ];
 
+
 const androidNative = (): LibraryCredit[] => credits.native.map((library) => ({ name: library.name, detail: library.artifacts.join(", "), license: library.license, url: library.url }));
 
 export function libraryCredits(platform: "ios" | "android" | string): LibraryCredit[] {
-  const native = platform === "ios" ? IPHONE_NATIVE_CREDITS : androidNative();
+  const native = platform === "ios" ? IPHONE_NATIVE_CREDITS : [...androidNative(), ...ANDROID_PORTED_CREDITS];
   return [...native, ...credits.packages.map((pkg) => ({ name: pkg.name, detail: pkg.version, license: pkg.license, url: pkg.url }))];
 }

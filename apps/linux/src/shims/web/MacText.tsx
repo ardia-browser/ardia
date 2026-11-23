@@ -1,7 +1,7 @@
 import { createContext, forwardRef, useContext, type ComponentProps } from "react";
 import { StyleSheet, Text as WebText, type TextStyle } from "react-native-web";
 
-export const TEXT_METRICS = { lineHeightDelta: 0, bottomPad: 1, rightPad: 0.8 } as const;
+const TEXT_METRICS = { lineHeightDelta: 0, bottomPad: 1, rightPad: 0.8 } as const;
 
 const NORMAL_LINE_HEIGHT = 1.2;
 const Nested = createContext(false);

@@ -1,4 +1,4 @@
-export type PluginShortcutModifier = "control" | "option" | "shift" | "command";
+type PluginShortcutModifier = "control" | "option" | "shift" | "command";
 
 export type PluginShortcut = { key: string; control: boolean; option: boolean; shift: boolean };
 
@@ -6,7 +6,7 @@ export type ShortcutKeyEvent = { key?: string; metaKey?: boolean; ctrlKey?: bool
 
 export type ShortcutHandledKey = { key: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean };
 
-export type CommandFlag = "metaKey" | "ctrlKey";
+type CommandFlag = "metaKey" | "ctrlKey";
 
 const MODIFIER_WORDS: Record<string, PluginShortcutModifier> = {
   cmd: "command",
@@ -82,7 +82,7 @@ export function pluginShortcutText(s: PluginShortcut): string {
   return ["cmd", s.control && "ctrl", s.option && "opt", s.shift && "shift", s.key].filter(Boolean).join("+");
 }
 
-export function isRefusedShortcut(s: PluginShortcut & { command: boolean }): boolean {
+function isRefusedShortcut(s: PluginShortcut & { command: boolean }): boolean {
   if (!s.command) return true;
   if (s.shift && s.key.length === 1 && !/^[a-z]$/.test(s.key)) return true;
   return LIFECYCLE_KEYS.has(s.key) || RESERVED.has(pluginShortcutText(s));

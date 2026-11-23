@@ -3,7 +3,7 @@ import { ALL, useKeyed, watchSettings } from "../browser/keyedWatch";
 import { shownSidebarWidth, sidebarWidthLimit } from "../../lib/windowLayout";
 import { useWindowRootWidth, windowRootWidth } from "../windows/rootSize";
 
-export const windowWidthOf = (s: Pick<BrowserState, "windows">, windowId: string): number | undefined => windowRootWidth(s, windowId);
+const windowWidthOf = (s: Pick<BrowserState, "windows">, windowId: string): number | undefined => windowRootWidth(s, windowId);
 
 export const sidebarWidthIn = (s: BrowserState, windowId: string): number => shownSidebarWidth(s.settings.sidebarWidth, windowWidthOf(s, windowId));
 

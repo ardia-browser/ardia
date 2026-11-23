@@ -14,7 +14,7 @@ type Measured = {
 type Mounted = Measured & { isConnected: boolean; parentNode: unknown };
 type Viewport = { scrollX: number; scrollY: number };
 
-export type MountLayoutEvent = {
+type MountLayoutEvent = {
   nativeEvent: { layout: { x: number; y: number; width: number; height: number; left: number; top: number }; target: unknown };
   timeStamp: number;
 };

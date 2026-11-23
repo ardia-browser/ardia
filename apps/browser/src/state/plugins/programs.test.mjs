@@ -382,12 +382,29 @@ test("a plugin you added has its programs removed with it", async () => {
 test("what the command line gets, as Settings shows it", () => {
   const texts = consentLines(readManifest(CLI).manifest).map((l) => l.text);
   assert.deepEqual(texts, [
+    "Turns on control in Settings › Advanced. While it's on, any program you run, and the commands Ardia runs for it after updates, can fully control Ardia: every tab and page, your signed-in sites and their cookies, and uploads and downloads of any file on this Mac",
     "Adds ardia to your PATH. It runs as you, outside Ardia's sandbox",
     "After updates, runs ardia skills install --auto, ardia skills refresh",
     "Adds ~/.local/bin to your PATH in your shell's login file",
-    "Lets any program you run drive your tabs and pages, with your logins, while control is on in Settings › Advanced",
-  ], "four honest lines: the program, what runs after updates, the PATH line and control");
+  ], "four honest lines, full control first: control, the program, what runs after updates and the PATH line");
   assert.ok(!texts.some((t) => t.includes("in the background")), "a program-only plugin runs nothing in the background");
+});
+
+test("a plugin whose programs run as you says first that they can fully control Ardia, without asking for control", async () => {
+  const { fullControlLine, FULL_CONTROL_SUMMARY } = await import("./consent.ts");
+  const other = readManifest(OTHER).manifest;
+  const lines = consentLines(other).map((l) => l.text);
+  assert.equal(lines[0], "The other-tool command runs as you, so while control is on in Settings › Advanced, it can fully control Ardia: every tab and page, your signed-in sites and their cookies, and uploads and downloads of any file on this Mac");
+  assert.equal(fullControlLine(other)?.text, lines[0]);
+  assert.equal(FULL_CONTROL_SUMMARY, "Can fully control Ardia");
+  const cli = readManifest(CLI).manifest;
+  assert.ok(consentLines(cli, { controlOff: true })[0].text.startsWith("While control is on in Settings › Advanced, any program you run"), "an Off you chose stays off, so the line doesn't say it turns control on");
+  assert.ok(consentLines(cli, { installed: true })[0].text.startsWith("While control is on in Settings › Advanced, any program you run"), "an installed plugin's page describes the access it has, not what turning it on does");
+  const pair = readManifest(JSON.stringify({ manifest: 1, name: "pair", title: "Pair", programs: [{ name: "a", path: "bin/a", afterUpdate: [["sync"]] }, { name: "b", path: "bin/b" }] })).manifest;
+  assert.ok(fullControlLine(pair)?.text.startsWith("The a and b commands run as you, as do the commands Ardia runs for it after updates, so while control is on in Settings › Advanced, they can fully control Ardia"));
+  const sandboxed = readManifest(JSON.stringify({ manifest: 1, name: "boxed", title: "Boxed", main: "dist/index.js", permissions: { tabs: "read" } })).manifest;
+  assert.equal(fullControlLine(sandboxed), null, "a plugin that only runs in Ardia's sandbox can't read the control token");
+  assert.ok(!consentLines(sandboxed).some((l) => l.text.includes("fully control")));
 });
 
 test("the official catalogue, the onboarding picks and the anchor aliases come from the pin file", async () => {

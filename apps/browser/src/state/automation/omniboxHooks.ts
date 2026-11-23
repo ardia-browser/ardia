@@ -7,7 +7,7 @@ import type { HookSpec } from "./hookFile";
 import { activeHook, onHooksChanged, useHookRules } from "./hookRules";
 import { onServedHooksChanged, requestDecision, servedHooks } from "./decideSocket";
 
-export const MAX_PROVIDER_ROWS = 8;
+const MAX_PROVIDER_ROWS = 8;
 const TEXT_LIMIT = 2048;
 
 const registered = new Map<string, () => void>();

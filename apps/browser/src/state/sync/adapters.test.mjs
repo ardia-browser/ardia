@@ -1,3 +1,4 @@
+import { asSecret } from "@ardia/core";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
@@ -29,7 +30,7 @@ const sealedLogins = (read = stub.readLogins) => ({
     const [o, u, password] = JSON.parse(Buffer.from(sealed, "base64").toString());
     if (o !== origin || u !== username) return false;
     if (replacing && !(await passwords.deletePassword(profile, origin, username))) return false;
-    return passwords.savePassword(profile, origin, username, password);
+    return passwords.savePassword(profile, origin, username, asSecret("password", password));
   },
 });
 
@@ -1097,7 +1098,7 @@ test("passwords: saved on one Mac, changed or deleted on another; the newer edit
   const folder = new Folder();
   const a = new Device("devA", folder);
   const b = new Device("devB", folder);
-  const save = (d, origin, user, password) => d.with(() => passwords.savePassword("", origin, user, password));
+  const save = (d, origin, user, password) => d.with(() => passwords.savePassword("", origin, user, asSecret("password", password)));
   const remove = (d, origin, user) => d.with(() => passwords.deletePassword("", origin, user));
   const list = (d) => [...stub.passwordStores.get(d.id).values()].map((l) => `${l.url} ${l.username}=${l.password}`).sort();
   await save(a, "https://bank.example", "alice", "hunter2");
@@ -1106,7 +1107,7 @@ test("passwords: saved on one Mac, changed or deleted on another; the newer edit
   await syncAll([a, b]);
   assert.deepEqual(list(a), list(b));
   assert.deepEqual(list(b), ["https://bank.example alice=hunter2", "https://mail.example alice=m41l", "https://shop.example bob=sh0p"]);
-  await b.with(() => passwords.updatePassword("", "https://bank.example", "alice", { password: "correct horse" }));
+  await b.with(() => passwords.updatePassword("", "https://bank.example", "alice", { password: asSecret("password", "correct horse") }));
   await remove(b, "https://mail.example", "alice");
   await syncAll([b, a]);
   assert.deepEqual(list(a), ["https://bank.example alice=correct horse", "https://shop.example bob=sh0p"]);
@@ -1118,7 +1119,7 @@ test("passwords: a login whose read is still out when quitting begins isn't save
   const folder = new Folder();
   const a = new Device("devA", folder);
   const b = new Device("devB", folder);
-  await a.with(() => passwords.savePassword("", "https://bank.example", "alice", "hunter2"));
+  await a.with(() => passwords.savePassword("", "https://bank.example", "alice", asSecret("password", "hunter2")));
   await a.sync();
   let quitting = false;
   let armed = false;
@@ -1143,8 +1144,8 @@ test("passwords: a remote change saved in Chrome as quitting begins isn't sent b
   const folder = new Folder();
   const a = new Device("devA", folder);
   const b = new Device("devB", folder);
-  const save = (d, password) => d.with(() => passwords.savePassword("", "https://bank.example", "alice", password));
-  const change = (d, password) => d.with(() => passwords.updatePassword("", "https://bank.example", "alice", { password }));
+  const save = (d, password) => d.with(() => passwords.savePassword("", "https://bank.example", "alice", asSecret("password", password)));
+  const change = (d, password) => d.with(() => passwords.updatePassword("", "https://bank.example", "alice", { password: asSecret("password", password) }));
   const list = (d) => [...stub.passwordStores.get(d.id).values()].map((l) => `${l.username}=${l.password}`);
   await save(a, "one");
   await syncAll([a, b]);

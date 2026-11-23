@@ -1,6 +1,6 @@
 import { useBrowser } from "../browser/store";
 import type { PageEngine } from "../../platform/tabs";
-import { builtInEngine, engineMode, recommendedEngineFor, ruleFor, singleEngine, switchableEngine, tabEngine, type EngineMode } from "./engines";
+import { builtInEngine, engineMode, recommendedEngineFor, ruleFor, switchableEngine, tabEngine, type EngineMode } from "./engines";
 import { useRetiringPages } from "./engineSwap";
 import { useEngineModeSwitch } from "./actions";
 
@@ -11,8 +11,6 @@ export const useEngineRule = (url: string | undefined | null) => useBrowser((s) 
 export const useRecommendedEngine = (url: string | undefined | null) => useBrowser((s) => recommendedEngineFor(s, url));
 
 export const useStreamingSite = (url: string | undefined | null) => useBrowser((s) => !!builtInEngine(s, url));
-
-export const useSingleEngine = () => useBrowser((s) => singleEngine(s));
 
 export const useCanSwitchEngine = (url: string | undefined | null) => useBrowser((s) => switchableEngine(s, url));
 

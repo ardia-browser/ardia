@@ -151,7 +151,7 @@ export function useWebsiteBand(tabId: string) {
   return { palette, band: useEasedColor(palette.background) };
 }
 
-export function useChipWidth(width: number, animate: () => boolean) {
+function useChipWidth(width: number, animate: () => boolean) {
   const value = useRef(new Animated.Value(width)).current;
   const shown = useRef(width);
   useLayoutEffect(() => {

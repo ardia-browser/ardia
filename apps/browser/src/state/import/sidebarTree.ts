@@ -162,7 +162,7 @@ export function importArcSpace(profileId: string, space: SpaceSuggestion, favico
   return { tabs: pinned.tabs + today.tabs, bookmarks: 0, skipped: pinned.skipped };
 }
 
-export type ImportedDiaSpace = { tabs: number; skipped: number; groups: number; splits: number };
+type ImportedDiaSpace = { tabs: number; skipped: number; groups: number; splits: number };
 
 export function importDiaSpace(profileId: string, space: SpaceSuggestion, favicons?: ImportedFavicon[], consent?: ConsentToken | null): ImportedDiaSpace {
   const favorites = space.favorites ?? [];

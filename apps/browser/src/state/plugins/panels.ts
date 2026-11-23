@@ -6,7 +6,7 @@ import { ensurePluginActivated, pluginReadyRun } from "./activation";
 import { openPluginPage, panelPath } from "./pages";
 import { closePluginSidePanel, isSurfaceWindowEligible, openPluginSidePanel, usePluginSurfaces } from "./surfaces";
 
-export type PanelOutcome = { ok: true; tabId?: string } | { ok: false; reason: string };
+type PanelOutcome = { ok: true; tabId?: string } | { ok: false; reason: string };
 
 const INELIGIBLE = "Plugins don't run in private windows.";
 

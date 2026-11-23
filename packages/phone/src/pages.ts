@@ -1,3 +1,4 @@
+import type { CleanedTitle, CleanedUrl } from "@ardia/core/src/cleanUrl.ts";
 import { requireNativeModule } from "expo-modules-core";
 import { normalizeState } from "./normalize";
 import type {
@@ -39,7 +40,7 @@ export type OffscreenCapture = { fileName: string; path: string; title: string |
 
 export type SitePermissionKind = "camera" | "microphone" | "location";
 
-export type PageTranslationState = { language: string | null; languageName: string | null; confirmed: boolean };
+type PageTranslationState = { language: string | null; languageName: string | null; confirmed: boolean };
 
 export type SitePermissionGrant = { origin: string; host: string; permissions: SitePermissionKind[]; grantedAt: number };
 
@@ -72,7 +73,7 @@ type PagesNative = {
   download(pageId: string, url: string): Promise<void>;
   readableContent(pageId: string): Promise<ReadableContent | null>;
   print?(pageId: string): Promise<boolean>;
-  sharePage?(pageId: string, url: string, title: string): Promise<string | null>;
+  sharePage?(pageId: string, url: CleanedUrl, title: CleanedTitle): Promise<string | null>;
   summarizePage?(pageId: string): Promise<boolean>;
   dismissPageSummaries?(): Promise<void>;
   pageSummariesEnabled?(): Promise<boolean>;
@@ -171,7 +172,7 @@ export const pages = {
     native().revokeSitePermission?.(origin, permission ?? null) ?? Promise.resolve(false),
   print: (pageId: string): Promise<boolean> => native().print?.(pageId) ?? Promise.resolve(false),
   canPrint: (): boolean => typeof native().print === "function",
-  sharePage: (pageId: string, url: string, title: string): Promise<string | null> => native().sharePage?.(pageId, url, title) ?? Promise.resolve(null),
+  sharePage: (pageId: string, url: CleanedUrl, title: CleanedTitle): Promise<string | null> => native().sharePage?.(pageId, url, title) ?? Promise.resolve(null),
   sharesWithPrint: (): boolean => typeof native().sharePage === "function",
   summarize: (pageId: string): Promise<boolean> => native().summarizePage?.(pageId) ?? Promise.resolve(false),
   canSummarize: (): boolean => typeof native().summarizePage === "function",

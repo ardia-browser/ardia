@@ -236,7 +236,7 @@ export function reconcileConfig(launch = true) {
   if (read.status === "missing") name = null;
   else if (read.status !== "ok") problems.push(`${CONFIG_FILE}: ${READ_PROBLEMS[read.status]}`);
   else {
-    const config = readConfig(read.text, useBrowser.getState().settings);
+    const config = readConfig(read.text, useBrowser.getState().settings, useBrowser.getState().profileOrder);
     problems.push(...config.problems);
     if (launch && Object.keys(config.patch).length) useBrowser.getState().updateSettings(config.patch);
     if (config.theme !== undefined) name = config.theme;

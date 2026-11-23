@@ -7,4 +7,8 @@ export type DocumentsNative = {
   saveDocument(name: string, contents: string): Promise<void>;
   documentSaved(name: string): Promise<void>;
   removeDocument(name: string): void;
+  copyDocument(name: string, copyName: string): Promise<void>;
+  listDocuments(prefix: string): string[];
+  createDocument(name: string, contents: string): Promise<void>;
+  syncDocument(name: string): Promise<void>;
 };

@@ -50,6 +50,7 @@ export const LINUX_WORDING: readonly Wording[] = [
     replacements: [
       ...[PHRASES_ONLY_WITH.freezeWatch ?? []].flat().map((phrase): [string, string] => [phrase, ""]),
       ["how many tab changes this Mac sent,", "how many tab changes this computer sent,"],
+      ["while the Mac reported its memory running low or critically low,", "while the system reported its memory running low or critically low,"],
       ["Sent to ardia.dev with a random ID made on this Mac, and kept", "Sent to ardia.dev with a random ID made on this computer, and kept"],
       [`keptOnThisMac: "Kept on this Mac"`, `keptOnThisMac: "Kept on this computer"`],
       ["browsing data removed from this Mac and", "browsing data removed from this computer and"],
@@ -120,7 +121,7 @@ export const LINUX_WORDING: readonly Wording[] = [
       ["Bringing your last window back from the Dock or at launch", "Bringing your last window back from the taskbar or at launch"],
       ["How many times ⌘Y asked for the History", "How many times Ctrl+Y asked for the History"],
       [
-        "summed up once an hour, and when Ardia can't post one or the system refuses it: how long its title and message were, whether it asked for an icon and whether one was sent, what happened to the icon (one of a few fixed outcomes, such as it failed to download or the system refused it, with the system's error code for that), that it came through Ardia's notification page script, whether posting failed in Ardia itself and the kind of error it was, and the error code the system gave with which of a few known system error families it came from. Never the notification's text or which site",
+        "summed up once an hour, and when Ardia can't post one or the system refuses it: how long its title and message were, whether it asked for an icon and whether Ardia passed an icon to the notification handler, what happened to the icon (one of a few fixed outcomes, such as it failed to download, was too large to attach or the system refused it, with the system's error code for that; sent only with a failed post, so an icon dropped for its size from a notification that did show isn't counted), that it came through Ardia's notification page script, whether posting failed in Ardia itself and the kind of error it was, and the error code the system gave with which of a few known system error families it came from. Never the notification's text or which site",
         "summed up once an hour. Never the notification's text or which site",
       ],
     ],

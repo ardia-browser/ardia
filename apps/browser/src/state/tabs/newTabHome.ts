@@ -3,7 +3,7 @@ import { customNewTabUrl } from "../settings/settings";
 import { navigationOf } from "./pageSession";
 import { gateOpening, isGatedUrl, settleOpening } from "./openingGate";
 
-export type NewTabHome = {
+type NewTabHome = {
   url: string | undefined;
   replaced: boolean;
   cancelled: boolean;

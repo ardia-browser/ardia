@@ -3,7 +3,7 @@ import type { JsonSchema } from "../../lib/jsonSchema";
 import { THEME_NAME } from "../../lib/themeFile";
 import { CONFIG_EXCLUDED_KEYS, isConfigSettingKey } from "../settings/configAllowlist";
 import { SETTING_SPECS, searchEngines, type SettingKey, type Settings } from "../settings/settings";
-import { configShortcuts } from "./configShortcuts";
+import { configShortcuts, type ShortcutProfiles } from "./configShortcuts";
 import { parsePluginThemeKey } from "../plugins/themes";
 import { parseLaunchAction } from "../automation/launchActions";
 import { readProviderEntries } from "@ardia/core";
@@ -11,7 +11,7 @@ import { LEGACY_SWITCHER_ICONS_KEY } from "../profiles/switcherMark";
 
 export const CONFIG_FILE = "config.json";
 
-export type ConfigRead = { patch: Partial<Settings>; theme: string | null | undefined; problems: string[] };
+type ConfigRead = { patch: Partial<Settings>; theme: string | null | undefined; problems: string[] };
 
 const EXCLUDED: ReadonlySet<string> = new Set(CONFIG_EXCLUDED_KEYS);
 
@@ -28,7 +28,7 @@ const listed = (values: readonly unknown[]) => {
   return words.length > 1 ? `${words.slice(0, -1).join(", ")} or ${words.at(-1)}` : (words[0] ?? "");
 };
 
-export function describeSchema(schema: JsonSchema): string {
+function describeSchema(schema: JsonSchema): string {
   if (schema.enum) return `must be ${listed(schema.enum)}`;
   const types = Array.isArray(schema.type) ? schema.type : schema.type ? [schema.type] : [];
   const parts = types.map((type) => {
@@ -75,16 +75,16 @@ function withLinkKeysApart(values: Requested["values"], settings: Settings, prob
   values.splitLinkModifier = "altShift";
 }
 
-function requested(doc: Record<string, unknown>, settings: Settings): Requested {
+function requested(doc: Record<string, unknown>, settings: Settings, profileOrder: readonly string[] = []): Requested {
   const problems: string[] = [];
   const theme = themeOf(doc, problems);
   const given = Object.hasOwn(doc, "settings") ? doc.settings : {};
   if (!isFields(given)) return { values: {}, theme, problems: [...problems, `${CONFIG_FILE}: settings must be an object`] };
-  const checked = checkedSettings(CONFIG_FILE, given, settings);
+  const checked = checkedSettings(CONFIG_FILE, given, settings, { order: profileOrder, mustExist: false });
   return { values: checked.values, theme, problems: [...problems, ...checked.problems] };
 }
 
-export function checkedSettings(label: string, given: Record<string, unknown>, settings: Settings): Pick<Requested, "values" | "problems"> {
+export function checkedSettings(label: string, given: Record<string, unknown>, settings: Settings, profiles?: ShortcutProfiles): Pick<Requested, "values" | "problems"> {
   const problems: string[] = [];
   const values: Requested["values"] = {};
   for (const [key, value] of Object.entries(given)) {
@@ -98,7 +98,7 @@ export function checkedSettings(label: string, given: Record<string, unknown>, s
       continue;
     }
     if (key === "shortcuts") {
-      const result = configShortcuts(label, value, settings.shortcuts);
+      const result = configShortcuts(label, value, settings.shortcuts, profiles);
       problems.push(...result.problems);
       values.shortcuts = result.overrides;
       continue;
@@ -137,10 +137,10 @@ export function checkedSettings(label: string, given: Record<string, unknown>, s
   return { values, problems };
 }
 
-export function readConfig(text: string, settings: Settings): ConfigRead {
+export function readConfig(text: string, settings: Settings, profileOrder: readonly string[] = []): ConfigRead {
   const parsed = parsedConfig(text);
   if ("problem" in parsed) return { patch: {}, theme: undefined, problems: [parsed.problem] };
-  const { values, theme, problems } = requested(parsed.doc, settings);
+  const { values, theme, problems } = requested(parsed.doc, settings, profileOrder);
   const patch: Partial<Record<SettingKey, unknown>> = {};
   for (const [key, value] of Object.entries(values) as [SettingKey, unknown][]) if (!sameValue(value, settings[key])) patch[key] = value;
   return { patch: patch as Partial<Settings>, theme, problems };

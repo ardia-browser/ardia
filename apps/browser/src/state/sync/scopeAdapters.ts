@@ -72,7 +72,7 @@ function openTabsMode(doc: SyncDoc, profileId: string): OpenTabsMode {
   return link.tabsRetire ? "retire" : "off";
 }
 
-export function openTabCloses(doc: SyncDoc, scope: string): OpenTabCloses {
+function openTabCloses(doc: SyncDoc, scope: string): OpenTabCloses {
   return {
     keys: () => doc.tabCloses?.[scope] ?? [],
     settle: (keys) => {

@@ -44,3 +44,25 @@ test("an hour with only pinned tabs put to sleep still sends usage_counts, and t
   usage.sessionEnding();
   assert.equal((await usageCounts()).length, 2);
 });
+
+test("the sleep policy's counters only add up while sharing is on", async () => {
+  const { setConsentPeriod } = await import("./consentPeriod.ts");
+  const { noteSleepVeto, noteTabSleptOverBudget, noteMemoryPressure, noteBudgetSweep } = await import("./tabSleepCounts.ts");
+  const fields = ["sleep_kept_download", "tabs_slept_over_budget", "tabs_slept_under_memory_warning", "memory_pressure_criticals", "tabs_over_budget_skipped_loading"];
+  const noteAll = () => {
+    noteSleepVeto("download");
+    noteTabSleptOverBudget(undefined, "warning");
+    noteMemoryPressure("critical");
+    noteBudgetSweep(2, 0);
+  };
+  takeTabSleepCounts();
+  setConsentPeriod(false, null);
+  noteAll();
+  const off = takeTabSleepCounts();
+  assert.deepEqual(fields.map((f) => off[f]), [0, 0, 0, 0, 0], "nothing is kept while sharing is off");
+  setConsentPeriod(true, "sleep-counters-test");
+  noteAll();
+  const on = takeTabSleepCounts();
+  assert.deepEqual(fields.map((f) => on[f]), [1, 1, 1, 1, 2]);
+  setConsentPeriod(false, null);
+});

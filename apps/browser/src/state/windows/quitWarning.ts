@@ -13,7 +13,7 @@ export const QUIT_WARNING = {
   suppression: "Don’t ask again",
 } as const;
 
-export type QuitWarning = "notAsked" | "confirmed" | "cancelled";
+type QuitWarning = "notAsked" | "confirmed" | "cancelled";
 
 type Asking = { quitsWithLastWindow: boolean; background: boolean; warns: boolean; staysOpen: readonly string[] };
 

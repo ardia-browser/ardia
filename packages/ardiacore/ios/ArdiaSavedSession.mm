@@ -15,6 +15,35 @@ NSArray<NSDictionary *> *Dictionaries(id value) {
   return out;
 }
 
+bool AbsentOr(id value, Class kind) {
+  return !value || [value isKindOfClass:kind];
+}
+
+bool AbsentNullOr(id value, Class kind) {
+  return !value || value == NSNull.null || [value isKindOfClass:kind];
+}
+
+bool WindowWellTyped(id window) {
+  if (![window isKindOfClass:NSDictionary.class]) return false;
+  NSDictionary *w = window;
+  return [w[@"id"] isKindOfClass:NSString.class] && AbsentOr(w[@"profileId"], NSString.class) && AbsentOr(w[@"incognito"], NSNumber.class) &&
+         AbsentOr(w[@"kind"], NSString.class) && AbsentNullOr(w[@"frame"], NSArray.class) && AbsentOr(w[@"tabIds"], NSArray.class) &&
+         AbsentNullOr(w[@"display"], NSString.class) && AbsentOr(w[@"activeTabIds"], NSDictionary.class) &&
+         AbsentNullOr(w[@"sidebarOpen"], NSNumber.class) && AbsentNullOr(w[@"autoHideTabs"], NSNumber.class) &&
+         AbsentNullOr(w[@"tabLayout"], NSString.class);
+}
+
+bool EarlyLaunchFieldsWellTyped(NSDictionary *document) {
+  id windows = document[@"windows"];
+  if (windows && ![windows isKindOfClass:NSArray.class]) return false;
+  for (id window in windows ?: @[])
+    if (!WindowWellTyped(window)) return false;
+  return AbsentNullOr(document[@"settings"], NSDictionary.class) && AbsentNullOr(document[@"launchBackdrop"], NSDictionary.class) &&
+         AbsentNullOr(document[@"launchTab"], NSDictionary.class) && AbsentNullOr(document[@"focusedWindowId"], NSString.class) &&
+         AbsentNullOr(document[@"linkProfile"], NSString.class) && AbsentOr(document[@"tabs"], NSArray.class) &&
+         AbsentOr(document[@"groups"], NSArray.class) && AbsentOr(document[@"splits"], NSArray.class);
+}
+
 }
 
 @implementation ArdiaSavedSession
@@ -25,7 +54,7 @@ NSArray<NSDictionary *> *Dictionaries(id value) {
 
 + (instancetype)readFrom:(NSString *)directory {
   NSDictionary *document = [ArdiaSavedDocument read:@"session.json" in:directory oldest:0 newest:self.version];
-  return document ? [[self alloc] initWithDocument:document] : nil;
+  return document && EarlyLaunchFieldsWellTyped(document) ? [[self alloc] initWithDocument:document] : nil;
 }
 
 + (instancetype)atLaunch:(NSString *)directory {

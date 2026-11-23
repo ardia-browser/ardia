@@ -9,7 +9,7 @@ import { groupPath } from "../groups/groups";
 
 export { menuSections as sections } from "../app/menuSections";
 
-export type Choice = Extract<MenuItem, { id: string }>;
+type Choice = Extract<MenuItem, { id: string }>;
 
 export type Destination =
   | { kind: "profile"; profileId: string | null }
@@ -41,11 +41,7 @@ export function withAlternate(primary: Choice, alternate: Choice, commands: read
 }
 
 export function profileItems(s: BrowserState, isCurrent: (profileId: string) => boolean): DestinationItem[] {
-  return [
-    ...s.profileOrder.map((id) => ({ value: { kind: "profile" as const, profileId: id }, title: s.profiles[id]!.name, checked: isCurrent(id), enabled: !isCurrent(id) })),
-    sep,
-    { value: { kind: "profile", profileId: null }, title: "New Profile…" },
-  ];
+  return s.profileOrder.map((id) => ({ value: { kind: "profile" as const, profileId: id }, title: s.profiles[id]!.name, checked: isCurrent(id), enabled: !isCurrent(id) }));
 }
 
 export function windowItems(s: BrowserState, windowId: string): DestinationItem[] {

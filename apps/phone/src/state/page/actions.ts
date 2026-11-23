@@ -3,7 +3,8 @@ import { downloads, type DownloadEvent } from "../../platform/downloads";
 import { pages, type PageEngineEvent, type PageRequestAnswer } from "../../platform/pages";
 
 export type { ReadableContent } from "../../platform/pages";
-import { copyText, openExternal, preferredLanguage, pressHaptic, shareLink, successHaptic } from "../../platform/system";
+import { cleanLinkTitle, cleanUrl } from "@ardia/core/src/cleanUrl.ts";
+import { copyLink, openExternal, preferredLanguage, pressHaptic, shareLink, sharePageWithPrint, successHaptic } from "../../platform/system";
 import { cancelSearch, closeArchive, deckPullCommitted, openTab, showDeck, takeSheetFromSettings, useBrowse } from "../browse/store";
 import { display } from "../search/omnibox";
 import { prepareSearch, presentSearch, searchState } from "../search/store";
@@ -298,10 +299,10 @@ export const shareOverPageMenu = () => {
 
 async function shareFrom(tab: BrowserTab) {
   if (!shareOffersPrint()) {
-    await shareLink(tab.url, tab.title);
+    await shareLink(cleanUrl(tab.url), cleanLinkTitle(tab.title, tab.url));
     return;
   }
-  const activity = await pages.sharePage(tab.id, tab.url, tab.title);
+  const activity = await sharePageWithPrint(tab.id, cleanUrl(tab.url), cleanLinkTitle(tab.title, tab.url));
   if (activity === PRINT_ACTIVITY && !tab.isPrivate) countUsage("pages_printed");
 }
 
@@ -449,7 +450,7 @@ export function copyCurrentLink() {
   const tab = selectedTab();
   if (!tab || !isSyncableUrl(tab.url)) return;
   const link = linkToCopy(tab.url);
-  quietly(() => copyText(link.text));
+  quietly(() => copyLink(link.text));
   quietly(successHaptic);
   showTitleFeedback(link.acknowledgement);
 }
@@ -629,13 +630,13 @@ export function pressAction(press: Press, action: PressAction) {
     }
     case "copy": {
       const link = linkToCopy(plan.url);
-      quietly(() => copyText(link.text));
+      quietly(() => copyLink(link.text));
       quietly(successHaptic);
       showToast(link.acknowledgement, "link");
       return;
     }
     case "share":
-      quietly(() => shareLink(plan.url, ""));
+      quietly(() => shareLink(cleanUrl(plan.url), cleanLinkTitle("", plan.url)));
       return;
     case "download":
       quietly(() => pages.download(plan.pageId, plan.url));

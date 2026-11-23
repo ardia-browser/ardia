@@ -9,7 +9,6 @@ import { useBrowser, type BrowserState } from "../browser/store";
 import { useSettings, useWindowId } from "../browser/hooks";
 import { useWindowSettings } from "../browser/keyedWatch";
 import { onFullScreenExit } from "./fullScreenExits";
-import { useSettingValue } from "../tabs/tabWatch";
 import { captionClearTop, captionRoom, WINDOW_CHROME, WINDOW_CONTROLS, windowControlsWidth, type WindowChrome } from "../../lib/windowChrome";
 import { toolbarRowOf } from "../../lib/toolbarRow";
 import { SMALL_BAR_HEIGHT } from "./small";
@@ -17,7 +16,7 @@ import type { CaptionRegion } from "../../platform/windowControls";
 import { sidebarWidthIn } from "../sidebar/shownWidth";
 import { onWindowRootSizes, windowRootWidth } from "./rootSize";
 
-export { drawnWindowCornerRadius, frameCornerRadius, windowCornerRadius, windowFrame } from "../../platform/windows";
+export { drawnWindowCornerRadius, windowCornerRadius, windowFrame } from "../../platform/windows";
 export { onInterfaceScaleChange } from "../settings/interfaceScale";
 
 export const windowRootShape = (windowId: string): Promise<{ width: number; height: number; radius: number } | null> =>
@@ -126,8 +125,8 @@ export function sidebarCaptionRoom(s: BrowserState, windowId: string, chrome: Wi
   return captionRoom(0, 0, chrome);
 }
 
-export type WindowControlsHost = "toolbar" | "sidebar" | "strip" | "band";
-export type WindowControlsPlace = { centerY: number; size: number; host: WindowControlsHost };
+type WindowControlsHost = "toolbar" | "sidebar" | "strip" | "band";
+type WindowControlsPlace = { centerY: number; size: number; host: WindowControlsHost };
 
 export function windowControlsPlace(s: BrowserState, windowId: string, frame: number, chrome: WindowChrome = WINDOW_CHROME): WindowControlsPlace | null {
   const w = s.windows[windowId];
@@ -190,7 +189,7 @@ export function sidebarHeaderCollapsed(s: BrowserState, windowId: string, chrome
   return w.kind !== "private" && s.profileOrder.length < 2;
 }
 
-export const COLLAPSED_SIDEBAR_HEADER_MIN = 6;
+const COLLAPSED_SIDEBAR_HEADER_MIN = 6;
 
 export const collapsedSidebarHeader = (frame: number) => Math.max(frame, COLLAPSED_SIDEBAR_HEADER_MIN);
 
@@ -302,7 +301,7 @@ export function setCardAnchor(windowId: string, anchor: CardAnchor) {
   useCardAnchors.setState({ [windowId]: anchor });
 }
 
-export const useToolbarExtensionsWidths = create<Record<string, number>>()(() => ({}));
+const useToolbarExtensionsWidths = create<Record<string, number>>()(() => ({}));
 
 export function watchToolbarExtensionsWidth(windowId: string, listener: (width: number | undefined) => void): () => void {
   listener(useToolbarExtensionsWidths.getState()[windowId]);

@@ -22,7 +22,7 @@ const originOf = (url: string) => {
   }
 };
 
-export function trustedSuggestTemplate(engine: SearchEngine | undefined, profile: string): string | null {
+function trustedSuggestTemplate(engine: SearchEngine | undefined, profile: string): string | null {
   if (!engine) return null;
   const builtIn = BUILT_IN_ENGINES.find((e) => e.id === engine.id);
   if (builtIn) return builtIn.suggestUrl ?? null;
@@ -31,7 +31,7 @@ export function trustedSuggestTemplate(engine: SearchEngine | undefined, profile
   return typeof installed?.suggestUrl === "string" ? installed.suggestUrl : null;
 }
 
-export function suggestUrlAllowed(url: string, template: unknown): boolean {
+function suggestUrlAllowed(url: string, template: unknown): boolean {
   if (typeof template !== "string" || !template.includes("%s")) return false;
   const prefix = template.slice(0, template.indexOf("%s"));
   if (!/^https?:\/\/[^/?#\s]+[/?]/i.test(prefix) || !url.startsWith(prefix)) return false;

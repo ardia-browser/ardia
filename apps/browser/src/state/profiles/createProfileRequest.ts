@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { useBrowser } from "../browser/store";
 
 export type CreateProfilePreset = { name?: string; shareWith?: string };
-export type CreateProfileRequest = { windowId: string | null; preset: CreateProfilePreset; resolve: (id: string | null) => void };
+type CreateProfileRequest = { windowId: string | null; preset: CreateProfilePreset; resolve: (id: string | null) => void };
 
 export const useCreateProfileRequest = create<{ request: CreateProfileRequest | null; sheet: CreateProfileRequest | null }>()(() => ({
   request: null,

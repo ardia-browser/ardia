@@ -72,7 +72,7 @@ export const DeveloperBar = memo(function DeveloperBar({ tabId, windowId }: { ta
             {divider}
             <DeveloperToolsButtons tabId={tabId} palette={palette} look="row" glyph={DEVELOPER_BAR.glyph} />
             {divider}
-            <OverflowButton windowId={windowId} tabId={tabId} hidden={[]} palette={palette} slot={DEVELOPER_BAR_ANCHOR} asset={DEVELOPER_ICONS.extensions} glyph={DEVELOPER_BAR.extensionsGlyph} onActivate={() => noteDeveloperBarPress("extensions")} />
+            <OverflowButton windowId={windowId} tabId={tabId} palette={palette} slot={DEVELOPER_BAR_ANCHOR} asset={DEVELOPER_ICONS.extensions} glyph={DEVELOPER_BAR.extensionsGlyph} onActivate={() => noteDeveloperBarPress("extensions")} />
             {splitViewAvailable && (
               <Button variant="icon" toolbar palette={palette} asset={DEVELOPER_ICONS.split} glyph={DEVELOPER_BAR.glyph} look="row" onPress={press("split", () => void showSplitSidesMenu(tabId))} tooltip="Split View Options" />
             )}

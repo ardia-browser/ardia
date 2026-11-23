@@ -1,11 +1,5 @@
 // Copyright 2026 Ardia. Apache-2.0.
 
-#include <errno.h>
-#include <fcntl.h>
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
-
 #include <memory>
 #include <optional>
 #include <string>
@@ -19,13 +13,10 @@
 #include "base/command_line.h"
 #include "base/containers/span.h"
 #include "base/files/file_path.h"
-#include "base/files/file_util.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback.h"
 #include "base/json/json_writer.h"
 #include "base/no_destructor.h"
-#include "base/path_service.h"
-#include "base/posix/eintr_wrapper.h"
 #include "base/process/process_handle.h"
 #include "base/rand_util.h"
 #include "base/strings/string_number_conversions.h"
@@ -37,14 +28,15 @@
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
+#include "build/build_config.h"
 #include "ardia/core/ac_host_visibility.h"
 #include "ardia/core/ac_windowless_page.h"
+#include "chrome/browser/ardia/ac_cli_control_file.h"
 #include "chrome/browser/ardia/ac_cli_owned_tabs.h"
 #include "chrome/browser/ardia/ac_cli_token_policy.h"
 #include "chrome/browser/ardia/ac_engine.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/lifetime/termination_notification.h"
-#include "chrome/common/chrome_paths.h"
 #include "chrome/common/pref_names.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
@@ -61,24 +53,11 @@
 namespace ardia {
 namespace {
 
-constexpr char kControlFileName[] = "ArdiaControl.json";
 constexpr char kTopic[] = "cliControl";
 constexpr int kBacklog = 10;
 constexpr base::TimeDelta kStartDeadline = base::Seconds(5);
 constexpr char kPolicyError[] =
     "Remote debugging is turned off by your administrator.";
-
-base::Lock& PublishLock() {
-  static base::NoDestructor<base::Lock> lock;
-  return *lock;
-}
-
-uint64_t g_live_generation = 0;
-
-void SetLiveGeneration(uint64_t generation) {
-  base::AutoLock hold(PublishLock());
-  g_live_generation = generation;
-}
 
 class LoopbackSocketFactory : public content::DevToolsSocketFactory {
  public:
@@ -97,65 +76,6 @@ class LoopbackSocketFactory : public content::DevToolsSocketFactory {
     return nullptr;
   }
 };
-
-base::FilePath ControlFilePath() {
-  base::FilePath dir;
-  if (!base::PathService::Get(chrome::DIR_USER_DATA, &dir)) {
-    return base::FilePath();
-  }
-  return dir.Append(kControlFileName);
-}
-
-std::string ErrnoText() {
-  return base::ToLowerASCII(strerror(errno));
-}
-
-std::string WriteControlFile(const base::FilePath& path,
-                             const std::string& contents,
-                             uint64_t generation) {
-  if (path.empty()) {
-    return "Ardia has no data folder.";
-  }
-  const base::FilePath temp = path.DirName().Append(
-      "." + path.BaseName().value() + "." +
-      base::HexEncode(base::RandBytesAsVector(8)));
-  const int fd = HANDLE_EINTR(
-      open(temp.value().c_str(),
-           O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600));
-  if (fd < 0) {
-    return base::StrCat({"Couldn't write ", path.value(), ": ", ErrnoText()});
-  }
-  bool written = base::WriteFileDescriptor(fd, contents) && fsync(fd) == 0;
-  std::string error = written ? std::string() : ErrnoText();
-  if (IGNORE_EINTR(close(fd)) != 0 && written) {
-    written = false;
-    error = ErrnoText();
-  }
-  if (!written) {
-    unlink(temp.value().c_str());
-    return base::StrCat({"Couldn't write ", path.value(), ": ", error});
-  }
-  {
-    base::AutoLock hold(PublishLock());
-    if (g_live_generation != generation) {
-      unlink(temp.value().c_str());
-      return "The control server stopped.";
-    }
-    if (rename(temp.value().c_str(), path.value().c_str()) != 0) {
-      error = ErrnoText();
-      unlink(temp.value().c_str());
-      return base::StrCat({"Couldn't write ", path.value(), ": ", error});
-    }
-  }
-  return std::string();
-}
-
-void DeleteControlFile(const base::FilePath& path) {
-  if (!path.empty() && unlink(path.value().c_str()) != 0 && errno != ENOENT &&
-      errno != EISDIR && errno != EPERM) {
-    PLOG(ERROR) << "[ardia] can't delete " << path;
-  }
-}
 
 bool ServerStartedBySwitch() {
   return base::CommandLine::ForCurrentProcess()->HasSwitch(
@@ -186,8 +106,8 @@ class ControlServer {
                                       base::Unretained(this)));
     }
     if (!ServerStartedBySwitch()) {
-      FileRunner()->PostTask(FROM_HERE,
-                             base::BindOnce(&DeleteControlFile, file_path_));
+      FileRunner()->PostTask(
+          FROM_HERE, base::BindOnce(&DeleteStaleControlFile, file_path_));
     }
   }
 

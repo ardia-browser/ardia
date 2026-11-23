@@ -1,3 +1,4 @@
+import type { CleanedTitle, CleanedUrl } from "@ardia/core";
 export type AppIcon = { id: string; name: string; preview: string | null };
 
 export type LaunchConfig = {
@@ -29,6 +30,7 @@ export type SystemInfo = {
   feedbackEmail?: string | null;
   videoTourURL?: string | null;
   releaseNotesURL?: string | null;
+  engineMatch?: string | null;
   isolatedInstance?: boolean;
   forceReleaseNotes?: boolean;
   processStart?: number | null;
@@ -113,8 +115,8 @@ export type AppNative = {
   interfaceScaleRange(): [min: number, max: number];
   setInterfaceScale(scale: number): Promise<number>;
   setWindowActivity(windowId: string, url: string | null, title: string | null): Promise<void>;
-  share(url: string, title: string | null, windowId: string | null, anchor: ShareAnchor | null): Promise<void>;
-  shareVia(service: string, url: string, title: string | null, windowId: string | null): Promise<void>;
+  share(url: CleanedUrl, title: CleanedTitle | null, windowId: string | null, anchor: ShareAnchor | null): Promise<void>;
+  shareVia(service: string, url: CleanedUrl, title: CleanedTitle | null, windowId: string | null): Promise<void>;
   shareText(text: string, windowId: string | null, anchor: ShareAnchor | null): Promise<void>;
   isInDock(): Promise<boolean>;
   addToDock(): Promise<boolean>;

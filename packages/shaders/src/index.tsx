@@ -1,12 +1,11 @@
 import type { ThemeBackdropProps, ThemeTexture } from "@ardia/core";
 import { requireNativeModule, requireNativeViewManager } from "expo-modules-core";
-import type { ComponentType } from "react";
 import type { ViewProps } from "react-native";
 import { MEADOW_INK } from "./meadowPage/config";
 
 export const DIA_SPECTRUM = ["#0358F7", "#5092C7", "#E1E1FE", "#FFD400", "#FA3D1D", "#FD02F5"];
 
-export type Rect = { x: number; y: number; width: number; height: number };
+type Rect = { x: number; y: number; width: number; height: number };
 
 export type AreaLightPalette = "blue" | "red" | "pink" | "orange" | "yellow" | "green" | "purple";
 
@@ -88,7 +87,7 @@ export function meadowTextStyle({ tone, halo }: MeadowTone) {
   };
 }
 
-export type MeadowText = { fontSize: number; fontWeight: string; letterSpacing?: number; fontFamily?: string };
+type MeadowText = { fontSize: number; fontWeight: string; letterSpacing?: number; fontFamily?: string };
 
 export type MeadowMotion = { delay: number; duration: number; easing: string };
 

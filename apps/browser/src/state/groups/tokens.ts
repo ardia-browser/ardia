@@ -1,7 +1,7 @@
 import { TAB_GROUP_COLORS } from "@ardia/core";
 import type { GroupColor } from "../browser/types";
 
-export type GroupTint = Exclude<GroupColor, "none">;
+type GroupTint = Exclude<GroupColor, "none">;
 
 export const GROUP_COLORS: Record<GroupTint, { name: string; hex: string }> = {
   grey: { name: "Grey", hex: "#8E8E93" },

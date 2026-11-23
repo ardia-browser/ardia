@@ -2,7 +2,7 @@ import { AccessibilityInfo, Appearance, Platform } from "react-native";
 
 import { useLookBudgetProbe as nativeLookBudgetProbe, type SystemLook } from "@ardia/phone-native";
 
-export { lookBudget, type LookMode, type SystemLook } from "@ardia/phone-native";
+export { lookBudget, nativeGlassRender, systemLookNow, type LookMode, type SystemLook } from "@ardia/phone-native";
 
 export function useLookBudgetProbe(idle: boolean, system: SystemLook) {
   nativeLookBudgetProbe(idle, system);

@@ -1,6 +1,6 @@
 const PREFIX = { tab: "t:", group: "g:", split: "s:", live: "lf:", tileFolder: "tf:" } as const;
 
-export type EntryKind = keyof typeof PREFIX;
+type EntryKind = keyof typeof PREFIX;
 
 const KINDS = Object.keys(PREFIX) as EntryKind[];
 

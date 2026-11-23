@@ -29,6 +29,14 @@ on:
       - "scripts/lib/paths.sh"
       - "patches/**"
       - "pnpm-lock.yaml"
+      - "packages/shell/plugin-*/**"
+      - "packages/shell/Package.swift"
+      - "packages/import/tests/**"
+      - "packages/import/fixtures/**"
+      - "packages/import/Package.swift"
+      - "scripts/release/plugin-digest.py"
+      - "apps/browser/official-plugins.json"
+      - "apps/browser/official-plugins-history.json"
       - ".github/workflows/mac.yml"
   push:
     branches: [main]
@@ -69,10 +77,73 @@ jobs:
             const vouch = require(`${process.env.GITHUB_WORKSPACE}/.github/vouch/vouch.cjs`);
             await vouch.gate({ github, context, core });
 
+  changes:
+    name: which Mac jobs run
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      app: ${{ steps.filter.outcome != 'success' || steps.filter.outputs.app == 'true' }}
+      swift: ${{ steps.filter.outcome != 'success' || steps.filter.outputs.swift == 'true' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        if: github.event_name == 'push'
+        with:
+          persist-credentials: false
+      - id: filter
+        if: github.event_name != 'pull_request' || github.event.pull_request.changed_files < 3000
+        continue-on-error: true
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d
+        with:
+          filters: |
+            app:
+              - "apps/browser/macos/**"
+              - "apps/browser/package.json"
+              - "apps/browser/react-native.config.js"
+              - "package.json"
+              - "pnpm-workspace.yaml"
+              - "packages/ardiacore/ios/**"
+              - "packages/ardiacore/scripts/**"
+              - "packages/ardiacore/extensions/**"
+              - "packages/ardiacore/prebuilt-engines.tsv"
+              - "packages/shell/ios/**"
+              - "packages/shell/docktile/**"
+              - "packages/shell/plugin-host/**"
+              - "packages/shaders/ios/**"
+              - "packages/import/ios/**"
+              - "packages/sync/ios/**"
+              - "packages/sync/Sources/**"
+              - "packages/sync/Package.swift"
+              - "packages/core-rs/**"
+              - ".github/actions/core-rs-xcframework/**"
+              - "packages/*/expo-module.config.json"
+              - "engine/ardiacore/src/ardia/core/public/**"
+              - "engine/engine-key.sh"
+              - "engine/engine-key.py"
+              - "scripts/lib/paths.sh"
+              - "patches/**"
+              - "pnpm-lock.yaml"
+              - ".github/workflows/mac.yml"
+            swift:
+              - "packages/shell/ios/PluginCore/**"
+              - "packages/shell/ios/PluginProcess.swift"
+              - "packages/shell/plugin-*/**"
+              - "packages/shell/Package.swift"
+              - "packages/import/ios/Core/**"
+              - "packages/import/tests/**"
+              - "packages/import/fixtures/**"
+              - "packages/import/Package.swift"
+              - "scripts/release/plugin-digest.py"
+              - "apps/browser/official-plugins.json"
+              - "apps/browser/official-plugins-history.json"
+              - ".github/workflows/mac.yml"
+
   app:
     name: compile (Debug)
-    needs: gate
-    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
+    needs: [gate, changes]
+    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) && (needs.changes.result != 'success' || needs.changes.outputs.app == 'true') }}
     runs-on: xcode-27
     timeout-minutes: 75
     env:
@@ -89,7 +160,8 @@ jobs:
           xcrun --sdk macosx --show-sdk-version
       - id: engine-key
         run: echo "key=$(engine/engine-key.sh --platform macos)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+      - id: engine-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: apps/browser/build-ardiacore/prebuilt
           key: engine-${{ steps.engine-key.outputs.key }}
@@ -107,17 +179,12 @@ jobs:
           echo "ARDIACORE_FRAMEWORK=$framework" >> "$GITHUB_ENV"
           short=$(basename "$(dirname "$framework")")
           public=engine/ardiacore/src/ardia/core/public
+          line=$(packages/ardiacore/scripts/engine-match.sh resolve . "$(cat "$(dirname "$framework")/engine-match")")
           strict=true
-          if [ "$short" = "${ENGINE_KEY:0:12}" ]; then
+          if [ "$(packages/ardiacore/scripts/engine-match.sh get match "$line")" = exact ]; then
             echo "### Mac engine $short (exact)" >> "$GITHUB_STEP_SUMMARY"
           else
-            read -r -a key_paths <<<"$(engine/engine-key.sh --platform macos --paths | xargs)"
-            base=""
-            while read -r commit; do
-              candidate=$(engine/engine-key.sh --platform macos "$commit" 2>/dev/null || true)
-              if [ "${candidate:0:12}" = "$short" ]; then base=$commit; break; fi
-            done < <(git rev-list HEAD -- "${key_paths[@]}")
-            if [ -z "$base" ] || [ -n "$(git diff --no-renames --name-only "$base" HEAD -- "$public")" ]; then
+            if [ "$(packages/ardiacore/scripts/engine-match.sh get public "$line")" != same ]; then
               strict=false
               echo "::warning::compiling against engine $short, older than this commit's ${ENGINE_KEY:0:12}, and $public changed since: this run fails after the build"
             else
@@ -126,6 +193,12 @@ jobs:
             echo "### Mac engine $short (older than this commit's ${ENGINE_KEY:0:12}; strict: $strict)" >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "strict=$strict" >> "$GITHUB_OUTPUT"
+          echo "match=$(packages/ardiacore/scripts/engine-match.sh get match "$line")" >> "$GITHUB_OUTPUT"
+      - if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.engine.outcome == 'success' && steps.engine.outputs.match == 'exact' && steps.engine-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: apps/browser/build-ardiacore/prebuilt
+          key: engine-${{ steps.engine-key.outputs.key }}
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
@@ -174,6 +247,7 @@ jobs:
         id: build
         env:
           SKIP_BUNDLING: "1"
+          ARDIACORE_ALLOW_PUBLIC_MISMATCH: ${{ steps.engine.outputs.strict == 'false' && '1' || '' }}
         run: >-
           xcodebuild -workspace apps/browser/macos/Ardia.xcworkspace -scheme Ardia-macOS -configuration Debug
           -destination 'generic/platform=macOS' -derivedDataPath "$SCRATCH/dd"
@@ -204,3 +278,19 @@ jobs:
             apps/browser/macos/Pods
             ~/Library/Caches/CocoaPods
           key: ${{ steps.pods-key.outputs.key }}
+
+  swift:
+    name: plugin sandbox, archive and import Swift tests
+    needs: [gate, changes]
+    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) && (needs.changes.result != 'success' || needs.changes.outputs.swift == 'true') }}
+    runs-on: xcode-27
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Plugin core, its sandbox and the official archive reader
+        run: swift test --package-path packages/shell --scratch-path "$RUNNER_TEMP/shell" --filter ArdiaPluginCoreTests
+      - name: The import package, its zip reader included
+        if: ${{ !cancelled() }}
+        run: swift test --package-path packages/import --scratch-path "$RUNNER_TEMP/import"

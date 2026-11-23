@@ -10,7 +10,7 @@ import { useAddressBarInSidebar } from "../../state/windows/layout";
 import { useNewTabAtTop } from "../../state/sidebar/chrome";
 import { ClearDivider } from "./ClearDivider";
 import { DragScope, useDragController, useDragItem } from "./DragProvider";
-import { Fold, useFold } from "./Fold";
+import { Fold, FoldSettling, useFold } from "./Fold";
 import { SidebarEntry } from "./GroupBlock";
 import { GhostSlot, ListMotionContext, useListMotion } from "./ListMotion";
 import { PinnedGrid } from "./PinnedGrid";
@@ -26,6 +26,7 @@ import { PLUGIN_CHROME, usePluginChrome } from "../../state/plugins/chrome";
 import { sidebarTokens, TAB_ROW } from "./tokens";
 import { tailKey } from "./dragModel";
 import type { ListViewport } from "./listViewport";
+import { useLaunchGrowth } from "./useLaunchGrowth";
 
 type PageRowsProps = {
   windowId: string;
@@ -52,14 +53,22 @@ export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, 
   const { list: all } = useCapturedSidebarEntries(windowId, profileId, captured);
   const [mountedRows, setMountedRows] = useState(() => firstPaintEntriesNow(windowId, profileId, all, lazy));
   const [visited, setVisited] = useState(current);
-  if (current && !visited) setVisited(true);
+  const [lastRows, setLastRows] = useState(rows ?? 0);
+  if (rows !== undefined && rows !== lastRows) setLastRows(rows);
+  if (current && !visited) {
+    setVisited(true);
+    if (Math.min(lastRows, all.length) > mountedRows) setMountedRows(Math.min(lastRows, all.length));
+  }
   const cap = offScreen ? 0 : visited ? undefined : rows;
   const growing = cap === undefined && mountedRows < all.length;
+  const launch = useLaunchGrowth(windowId, { lazy, current, total: all.length, shownRows: Math.min(mountedRows, all.length), controller });
+  const lastBatch = cap === undefined && mountedRows === all.length;
+  const growNow = (growing || lastBatch) && !launch.holding;
   useEffect(() => {
-    if (!growing) return;
-    const frame = requestAnimationFrame(() => setMountedRows((n) => (n + ROWS_PER_FRAME >= all.length ? Infinity : n + ROWS_PER_FRAME)));
+    if (!growNow) return;
+    const frame = requestAnimationFrame(() => setMountedRows((n) => (n >= all.length ? Infinity : Math.min(all.length, n + ROWS_PER_FRAME))));
     return () => cancelAnimationFrame(frame);
-  }, [growing, mountedRows, all.length]);
+  }, [growNow, mountedRows, all.length]);
   const limit = cap ?? (growing ? mountedRows : undefined);
   const list = limit === undefined ? all : all.slice(0, limit);
   const pending = usePendingEntriesHeight(windowId, profileId, all, mountedRows, growing);
@@ -81,6 +90,7 @@ export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, 
   if (geometry) geometry.current.newTabAtTop = newTabButtonAtTop && inlineNewTab;
   return (
     <ListMotionContext.Provider value={scope}>
+      <FoldSettling.Provider value={growing || lastBatch}>
       <View>
         {isIncognitoProfile(profileId) ? <IncognitoBadge /> : null}
         {tiles.length ? (
@@ -119,6 +129,7 @@ export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, 
         <View
           ref={(v) => {
             controller?.regions.set("list", v);
+            launch.list.current = v;
           }}
           onLayout={(e) => void (regions.list = e.nativeEvent.layout.y)}
           removeClippedSubviews
@@ -141,6 +152,7 @@ export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, 
         {pluginViews && !offScreen && !isIncognitoProfile(profileId) ? <PluginSidebarViews windowId={windowId} /> : null}
         {current ? <CleanUpUpsell windowId={windowId} shift={motion.tail} /> : null}
       </View>
+      </FoldSettling.Provider>
     </ListMotionContext.Provider>
   );
 }

@@ -10,7 +10,6 @@ permissions:
   actions: write
   contents: write
   pull-requests: write
-  statuses: write
 
 jobs:
   cla:
@@ -24,15 +23,14 @@ jobs:
       group: cla-${{ (github.event_name == 'issue_comment' || github.event.action == 'closed') && github.run_id || github.event.pull_request.number }}
       cancel-in-progress: ${{ github.event_name == 'pull_request_target' && github.event.action != 'closed' }}
     steps:
-      - uses: contributor-assistant/github-action@ca4a40a7d1004f18d9960b404b97e5f30a505a08
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          path-to-signatures: signatures/cla-v1.json
-          path-to-document: https://github.com/mantrakp04/ardia/blob/main/CLA.md
-          branch: cla-signatures
-          allowlist: mantrakp04,dependabot[bot],github-actions[bot],posthog-eu[bot]
-          create-file-commit-message: Create the CLA signature file
-          signed-commit-message: $contributorName signed the CLA in $owner/$repo#$pullRequestNo
-          custom-notsigned-prcomment: Thanks for the pull request! Before it can be merged, please read the [Contributor License Agreement](https://github.com/mantrakp04/ardia/blob/main/CLA.md) and sign it by posting the comment below. You only sign once, and it covers all your contributions.
-          custom-allsigned-prcomment: Everyone on this pull request has signed the CLA. Thanks!
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          sparse-checkout: .github
+      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+        with:
+          retries: 3
+          script: |
+            const cla = require(`${process.env.GITHUB_WORKSPACE}/.github/cla/cla.cjs`);
+            await cla.run({ github, context, core });

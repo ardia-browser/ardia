@@ -1,8 +1,14 @@
+import { asSecret, type Secret } from "@ardia/core";
 import { SyncNative } from "../../platform/sync";
 
 export type { FolderInfo } from "../../platform/sync";
 
-export const recoveryWords = () => SyncNative?.recoveryWords();
+type RecoveryPhrase = Secret<"syncPhrase">;
+
+export async function recoveryWords(): Promise<RecoveryPhrase | null> {
+  const words = await SyncNative?.recoveryWords();
+  return words?.length ? asSecret("syncPhrase", words.join(" ")) : null;
+}
 
 let codeCounts = { sync_codes_shown: 0, sync_codes_declined: 0 };
 

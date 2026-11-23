@@ -54,7 +54,7 @@ export type SurfaceProps = ViewProps & {
   shadowOffset?: [number, number];
 };
 
-export const CA_SHADOW_BLUR = 2;
+const CA_SHADOW_BLUR = 2;
 
 export function Surface({ fill, fillColors, fillStops, fade, fadeStops, cornerRadius = 0, borderColor, borderWidth = 0, borderColors, shadowColor: color, shadowOpacity = 0, shadowRadius = 0, shadowOffset, style, children, ...props }: SurfaceProps) {
   const optedIn = useContext(GlassOptIn);
@@ -146,7 +146,7 @@ const RIM_ANGLES = [0, 1, 8.5, 25, 45, 65, 81.5, 89, 90];
 const RIM_DEPTHS = [0, 0.25, 0.75, 1.25, 1.75];
 const GLOW_BY_ANGLE: RimCurve = [[0, 1], [5, 0.9], [10, 0.8], [20, 0.7], [35, 0.6], [90, 0.6]];
 
-export const GLASS: { light: GlassLook; dark: GlassLook } = {
+const GLASS: { light: GlassLook; dark: GlassLook } = {
   light: {
     saturate: 1.8705,
     slope: 0.6098,

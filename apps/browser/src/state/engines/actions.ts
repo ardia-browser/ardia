@@ -281,7 +281,7 @@ const leftForChromium = (url: string | undefined | null) => webStorePage(url) ||
 
 const MODE_NAMES: Record<EngineMode, string> = { automatic: "Automatic", chromium: ENGINE_NAMES.chromium, webkit: ENGINE_NAMES.webkit };
 
-export function modeSwitchConfirm(mode: EngineMode, unsavedPages: number, windowId?: string) {
+function modeSwitchConfirm(mode: EngineMode, unsavedPages: number, windowId?: string) {
   const pages = unsavedPages === 1 ? "A page with unsaved changes reloads" : `${unsavedPages} pages with unsaved changes reload`;
   return { title: `Switch to ${MODE_NAMES[mode]}?`, message: `${pages}, so the changes may be lost.`, confirmTitle: `Switch to ${MODE_NAMES[mode]}`, cancelTitle: "Cancel", windowId };
 }

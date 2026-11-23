@@ -12,7 +12,7 @@ import { recentPluginGesture } from "./gestures";
 import { closePluginCommandView, closePluginPopover, closePluginSidePanel, isMountedSurface, mountedEntry, mountedInstancesOf, PROMPT_BUSY, setPluginSurfaceTree, showPluginInputBox, showPluginQuickPick, updatePluginToolbar, usePluginSurfaces } from "./surfaces";
 import { closePluginPanel, openPluginPanel, pluginPanel } from "./panels";
 
-export const TOAST_GAP_MS = 1500;
+const TOAST_GAP_MS = 1500;
 const SYMBOL = /^[a-z0-9.]{1,64}$/;
 
 type Caller = { name: string; run: number };

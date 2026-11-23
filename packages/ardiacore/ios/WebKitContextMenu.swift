@@ -78,10 +78,8 @@ struct WebKitMenuCommands {
 
   func copyAddress(_ url: URL?) {
     guard let url else { return }
-    let board = NSPasteboard.general
-    board.clearContents()
-    board.writeObjects([url as NSURL])
-    board.setString(url.absoluteString, forType: .string)
+    let request = WebKitCopiedAddresses.ask()
+    ArdiaEvents.emit("webKit.copyAddress", data: ArdiaConsentStamp.begin().onto(["url": url.absoluteString, "request": request]))
   }
 
   static let findMedia = """
@@ -220,9 +218,13 @@ final class WebKitContextMenu {
   private func addLinkItems() {
     let link = target.link
     add(WebKitMenuAction.item("Open Link in New Tab") { [run] in run.open(link, "background") })
-    add(WebKitMenuAction.item("Open Link in New Window") { [run] in run.open(link, "window") })
     add(WebKitMenuAction.item("Open Link in Split View") { [run] in run.open(link, "split") })
-    add(WebKitMenuAction.item("Open Link in Incognito Window") { [run] in run.open(link, "incognito") })
+    let openIn = NSMenuItem(title: "Open Link in", action: nil, keyEquivalent: "")
+    let places = NSMenu(title: "Open Link in")
+    places.addItem(WebKitMenuAction.item("New Window") { [run] in run.open(link, "window") })
+    places.addItem(WebKitMenuAction.item("Incognito Window") { [run] in run.open(link, "incognito") })
+    openIn.submenu = places
+    add(openIn)
     separate()
     add(take("DownloadLinkedFile", as: "Save Link As…"))
     add(WebKitMenuAction.item("Copy Link Address") { [run] in run.copyAddress(link) })
@@ -473,5 +475,26 @@ extension WebKitTab {
       DispatchQueue.main.async { owner.performActionForItem(at: index) }
     }
     return NSMenu()
+  }
+}
+
+enum WebKitCopiedAddresses {
+  private static var latest = 0
+  private static var latestAskedAt = 0
+
+  static func ask() -> Int {
+    latest += 1
+    latestAskedAt = NSPasteboard.general.changeCount
+    return latest
+  }
+
+  static func write(_ request: Int, _ address: String) -> Bool {
+    let board = NSPasteboard.general
+    guard request == latest, board.changeCount == latestAskedAt else { return false }
+    board.clearContents()
+    if let url = URL(string: address), url.scheme != nil { board.writeObjects([url as NSURL]) }
+    let wrote = board.setString(address, forType: .string)
+    latestAskedAt = board.changeCount
+    return wrote
   }
 }

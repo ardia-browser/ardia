@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import { ANDROID_PORTED_CREDITS, LIQUID_DOM_NOTICE } from "./portedCredits.ts";
 import { creditInputs, CREDITS_FILE, gradleArtifacts, importerBlock, nativeCredits, packageRoot, projectDocument, repositoryUrl } from "../../../test/credits.ts";
 
 test("the licenses page was generated from the current lockfile and the module's Gradle libraries", () => {
@@ -44,4 +45,13 @@ test("the app's importer comes from the project document, not pnpm's package man
 test("the lockfile section for one app ends where the next begins", () => {
   const lockfile = "importers:\n\n  apps/a:\n    dependencies:\n      x: 1\n\n  apps/phone:\n    dependencies:\n      y: 2\n\n  packages/z:\n    dependencies: {}\n\npackages:\n";
   assert.equal(importerBlock(lockfile, "apps/phone"), "  apps/phone:\n    dependencies:\n      y: 2\n");
+});
+
+test("Android ships liquid-dom's MIT notice in full, the same text as third_party/liquid-dom/LICENSE", () => {
+  const license = readFileSync(new URL("../../../../../third_party/liquid-dom/LICENSE", import.meta.url), "utf8").trimEnd();
+  assert.equal(LIQUID_DOM_NOTICE, license);
+  assert.match(LIQUID_DOM_NOTICE, /Copyright \(c\) 2026 Andras Prifer/);
+  assert.match(LIQUID_DOM_NOTICE, /Permission is hereby granted, free of charge/);
+  assert.deepEqual(ANDROID_PORTED_CREDITS.map((credit) => [credit.name, credit.license, credit.notice]), [["liquid-dom", "MIT", LIQUID_DOM_NOTICE]]);
+  assert.match(readFileSync(new URL("./libraryCredits.ts", import.meta.url), "utf8"), /\[\.\.\.androidNative\(\), \.\.\.ANDROID_PORTED_CREDITS\]/);
 });

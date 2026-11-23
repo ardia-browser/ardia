@@ -15,7 +15,7 @@ import { fetchRemoteRows } from "./remoteProvider";
 
 export type ActiveProvider = OmniboxProvider & { host?: string; template?: string; sendsInput: boolean };
 
-export type PendingProvider = { key: string; title: string; keyword: string | null; global: boolean; endpoint: string | null };
+type PendingProvider = { key: string; title: string; keyword: string | null; global: boolean; endpoint: string | null };
 
 type Built = { config: ProviderConfig; key: string };
 

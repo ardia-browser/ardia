@@ -5,7 +5,6 @@ import { systemInfo } from "../../../state/app/system";
 import { openUrls } from "../../../state/browser/actions";
 import { ActivitySpinner, Button, lineHeight, Segmented, space, Text, Toggle } from "../../ui";
 import { perLook } from "../../ui/tokens";
-import { SHARING_COPY } from "../../../state/telemetry/copy";
 import { engineVersion, followUpdater, setUpdaterPrefs, updater } from "../../../state/settings/paneData";
 import { checkNowControl, switchCheckLine, updaterBusy } from "../../../state/settings/updateStatus";
 import { useResource } from "../../../state/settings/resources";
@@ -45,7 +44,7 @@ export function UpdatesSection() {
       <SectionHeader title="Updates" description={live && !ready ? "Updates aren't set up for this build." : undefined} />
       <Group>
         {live && (
-          <Row anchor="general.autoUpdate" description={`${setting("general.autoUpdate").description} ${SHARING_COPY.updateChecks} ${SHARING_COPY.switchFile}`}>
+          <Row anchor="general.autoUpdate">
             <Toggle value={ready && live.automaticChecks && live.automaticDownloads} disabled={!ready} accessibilityLabel={setting("general.autoUpdate").title} onChange={setAutoInstall} />
           </Row>
         )}

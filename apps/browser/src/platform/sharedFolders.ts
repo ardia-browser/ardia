@@ -2,7 +2,7 @@ import { SharedFoldersNative, SyncNative, type ResolvedSharedFolder, type Shared
 
 export { SHARED_FOLDER_REFUSED } from "@ardia/sync";
 
-export type { ResolvedSharedFolder, SharedFolderIdentity, SharedFolderOp, SharedListing, SharedListingEntry, SharedListingLevel, SharedLocation } from "@ardia/sync";
+export type { ResolvedSharedFolder, SharedFolderIdentity, SharedFolderOp, SharedListingLevel } from "@ardia/sync";
 
 const Native = () => SharedFoldersNative!;
 

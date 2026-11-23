@@ -14,7 +14,7 @@ export function utf8(text: string): Uint8Array {
   return new Uint8Array(out);
 }
 
-export type QrCode = { size: number; dark(x: number, y: number): boolean };
+type QrCode = { size: number; dark(x: number, y: number): boolean };
 
 const rawModules = (version: number) => {
   let result = (16 * version + 128) * version + 64;

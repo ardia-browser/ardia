@@ -7,12 +7,12 @@ export const REPORT_KINDS = [
 
 export type ReportKind = (typeof REPORT_KINDS)[number]["value"];
 
-export const TITLE_MAX = 67;
-export const DESCRIPTION_MAX = 4000;
-export const CONTACT_MAX = 200;
-export const PAGE_ADDRESS_MAX = 2048;
-export const DIAGNOSTICS_MAX_BYTES = 64 * 1024;
-export const WATCH_DAYS = 14;
+const TITLE_MAX = 67;
+const DESCRIPTION_MAX = 4000;
+const CONTACT_MAX = 200;
+const PAGE_ADDRESS_MAX = 2048;
+const DIAGNOSTICS_MAX_BYTES = 64 * 1024;
+const WATCH_DAYS = 14;
 export const LOCAL_EVENTS_DAYS = 7;
 export const RECORDING_MAX_SECONDS = 60;
 export const TRACE_MAX_SECONDS = 30;
@@ -101,18 +101,18 @@ export function fallbackGraphemes(text: string): string[] {
   return out;
 }
 
-export function graphemes(text: string): string[] {
+function graphemes(text: string): string[] {
   if (intlSegmenter) return Array.from(intlSegmenter.segment(text), (s) => s.segment);
   return fallbackGraphemes(text);
 }
 
 export const characterCount = (text: string) => graphemes(text).length;
 
-export const codePointCount = (text: string) => Array.from(text).length;
+const codePointCount = (text: string) => Array.from(text).length;
 
-export const fitsLimit = (text: string, max: number) => text.length <= max || (codePointCount(text) <= max && characterCount(text) <= max);
+const fitsLimit = (text: string, max: number) => text.length <= max || (codePointCount(text) <= max && characterCount(text) <= max);
 
-export function clampCharacters(text: string, max: number): string {
+function clampCharacters(text: string, max: number): string {
   if (fitsLimit(text, max)) return text;
   let kept = "";
   let points = 0;
@@ -131,14 +131,14 @@ export const clampTitle = (text: string) => clampCharacters(text.replace(/[\u000
 export const clampDescription = (text: string) => clampCharacters(text, DESCRIPTION_MAX);
 export const clampContact = (text: string) => clampCharacters(text.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, " "), CONTACT_MAX);
 
-export type TitleCounter = { count: number; max: number; full: boolean; near: boolean };
+type TitleCounter = { count: number; max: number; full: boolean; near: boolean };
 
 export function titleCounter(title: string): TitleCounter {
   const count = characterCount(title);
   return { count, max: TITLE_MAX, full: count >= TITLE_MAX, near: count >= TITLE_MAX - 10 };
 }
 
-export type DraftProblem = "title" | "description" | "titleTooLong" | "descriptionTooLong" | "contactTooLong";
+type DraftProblem = "title" | "description" | "titleTooLong" | "descriptionTooLong" | "contactTooLong";
 
 export function draftProblems(draft: ReportDraft): DraftProblem[] {
   const problems: DraftProblem[] = [];
@@ -179,7 +179,7 @@ export function fieldProblem(problems: DraftProblem[], field: DraftField): { pro
 
 export type ReportFile = { name: string; path: string; bytes: number; type: string };
 
-export type PayloadContext = {
+type PayloadContext = {
   installId: string;
   sessionId: string | null;
   appVersion: string;

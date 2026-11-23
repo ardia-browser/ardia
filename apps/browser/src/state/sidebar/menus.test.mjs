@@ -5,7 +5,9 @@ const { useBrowser } = await import("../browser/store.ts");
 const { tabMenuItems } = await import("./tabMenu.ts");
 const { multiTabMenuItems } = await import("./multiTabMenu.ts");
 const { groupMenuItems } = await import("./groupMenu.ts");
-const { sidebarMenuItems } = await import("./sidebarMenu.ts");
+const { sidebarMenuItems, runBrowserLayoutChoice } = await import("./sidebarMenu.ts");
+const { appMenuItems } = await import("../app/appMenu.ts");
+const { tabLayoutOf } = await import("../browser/model.ts");
 const { tileFolderContextItems } = await import("./tileFolderUi.ts");
 const { addToTileFolder } = await import("../pins/tileFolders.ts");
 const { openTabMenu } = await import("./tabMenu.ts");
@@ -45,7 +47,9 @@ function render(items, depth = 0, open = () => false) {
 }
 
 const top = (items) => render(items);
-const sub = (items, id) => render(items.find((it) => it.id === id)?.children ?? []);
+const deep = (items) => render(items, 0, () => true);
+const child = (items, ...path) => path.reduce((list, id) => list.find((it) => it.id === id)?.children ?? [], items);
+const sub = (items, ...path) => render(child(items, ...path));
 
 function windowWith(...hosts) {
   S().hydrate({});
@@ -55,68 +59,72 @@ function windowWith(...hosts) {
   return { w, ids };
 }
 
-test("a shown tab's menu follows Dia's sections, and its hints are the keys that act on it", () => {
+test("a shown tab's menu: quick actions, then organize, customize and close, with the keys that act on it", () => {
   const { w, ids } = windowWith("a", "b", "c");
-  assert.deepEqual(top(tabMenuItems(S(), w, S().tabs[ids[2]])), [
-    "Move to Top Apps [pin]",
-    "Move to Pinned in Personal ⌥⇧⌘D",
-    "---",
-    "Open as Split [rectangle.split.2x1] ⌃⇧=",
-    "Duplicate [plus.square.on.square]",
-    "Open in WebKit",
-    "---",
-    "New Group with Tab [folder.badge.plus] ⌃⌘N",
-    "Move to Profile [person] ›",
-    "Move to Window [macwindow] ›",
-    "---",
-    "Add to Bookmarks… [bookmark] ⌘D",
-    "Add Bookmark to Folder ›",
-    "---",
+  assert.deepEqual(deep(tabMenuItems(S(), w, S().tabs[ids[2]])), [
     "Copy Link [link] ⇧⌘C",
     "Copy Link as Markdown [link] ⌥⇧⌘C (alt)",
-    "---",
-    "Rename… [pencil]",
-    "Change Icon… [photo]",
+    "Duplicate [plus.square.on.square]",
+    "Open in Split View [rectangle.split.2x1] ⌃⇧=",
     "Mute Tab [speaker.slash]",
     "Mute Site [speaker.slash] ⌥ (alt)",
     "---",
-    "Close [xmark] ⌘W",
-    "Close Other Tabs",
-    "Close Tabs Below (off)",
-    "Close Tabs Above ⌥ (alt)",
+    "Pin Tab [pin] ⌥⇧⌘D",
+    "Move to [arrow.up.forward.square] ›",
+    "  Top Apps [square.grid.2x2]",
+    "  ---",
+    "  New Group [folder.badge.plus] ⌃⌘N",
+    "  ---",
+    "  Profile [person] ›",
+    "    Personal ✓ (off)",
+    "  Window [macwindow] ›",
+    "    New Window",
+    "Bookmark Tab… [bookmark] ⌘D",
+    "---",
+    "Customize [slider.horizontal.3] ›",
+    "  Rename… [pencil]",
+    "  Change Icon… [photo]",
+    "  ---",
+    "  Open in WebKit [globe]",
+    "---",
+    "Close Tab [xmark] ⌘W",
+    "Close Tabs [xmark.square] ›",
+    "  Close Other Tabs",
+    "  Close Tabs Below (off)",
+    "  Close Tabs Above",
   ]);
 });
 
-test("a tab that isn't shown gets no hints, since the keys act on the shown tab", () => {
+test("a tab that isn't shown gets no hints, since the keys act on the shown tab, and Close Tabs Above is in plain sight", () => {
   const { w, ids } = windowWith("a", "b", "c");
-  const lines = top(tabMenuItems(S(), w, S().tabs[ids[0]]));
+  const lines = deep(tabMenuItems(S(), w, S().tabs[ids[0]]));
   assert.ok(lines.every((l) => !/[⌘⌃]/.test(l)), lines.join("\n"));
   assert.ok(lines.includes("Copy Link as Markdown [link] ⌥ (alt)"));
-  assert.ok(lines.includes("Close Tabs Below"));
-  assert.ok(lines.includes("Close Tabs Above ⌥ (alt) (off)"));
+  assert.ok(lines.includes("  Close Tabs Below"));
+  assert.ok(lines.includes("  Close Tabs Above (off)"));
 });
 
-test("destinations sit in submenus: profiles checked, other windows, bookmark folders", () => {
+test("destinations sit under Move to: profiles checked with no New Profile…, other windows, and no bookmark folder list", () => {
   const { w, ids } = windowWith("a", "b");
   S().createProfile({ name: "Work" });
   const other = S().createWindow({ url: "https://x.com/" });
   const items = tabMenuItems(S(), w, S().tabs[ids[1]]);
-  assert.deepEqual(sub(items, "moveToProfile"), ["Personal ✓ (off)", "Work", "---", "New Profile…"]);
-  assert.equal(sub(items, "moveToWindow").at(-1), "New Window");
-  assert.equal(sub(items, "moveToWindow").length, 3, `one other window: ${other}`);
-  assert.deepEqual(sub(items, "bookmarkTo"), ["Bookmarks Bar", "Other Bookmarks", "---", "New Folder…"]);
+  assert.deepEqual(sub(items, "moveTo", "moveToProfile"), ["Personal ✓ (off)", "Work"]);
+  assert.equal(sub(items, "moveTo", "moveToWindow").at(-1), "New Window");
+  assert.equal(sub(items, "moveTo", "moveToWindow").length, 3, `one other window: ${other}`);
+  assert.ok(!deep(items).some((l) => l.includes("Add Bookmark to Folder")));
 });
 
-test("a tab in a group leaves it from the menu, and Move to Group lists pinned groups under a header", () => {
+test("a tab in a group leaves it from Move to, and Move to › Group lists pinned groups under a header", () => {
   const { w, ids } = windowWith("a", "b", "c", "d");
   const pinned = S().groupTabs([ids[0]], { name: "Pinned One" });
   S().groupTabs([ids[1]], { name: "Work", pinned: false });
   S().groupTabs([ids[2]], { name: "Read", pinned: false });
   const items = tabMenuItems(S(), w, S().tabs[ids[2]]);
-  const lines = top(items);
+  const lines = sub(items, "moveTo");
   assert.ok(lines.includes("Remove from Group [folder.badge.minus]"));
-  assert.ok(!lines.some((l) => l.startsWith("New Group with Tab")));
-  assert.deepEqual(sub(items, "moveToGroup"), ["Pinned (off)", "Pinned One", "---", "Work"]);
+  assert.ok(!lines.some((l) => l.startsWith("New Group")));
+  assert.deepEqual(sub(items, "moveTo", "moveToGroup"), ["Pinned (off)", "Pinned One", "---", "Work"]);
   assert.ok(S().groups[pinned].pinned);
 });
 
@@ -124,56 +132,56 @@ test("a Top Apps tile with folders off has no New Folder…, and keeps Remove fr
   const { w, ids } = windowWith("a", "b");
   S().pinTabs([ids[0], ids[1]], true);
   S().updateSettings({ topAppFolders: false });
-  assert.equal(top(tabMenuItems(S(), w, S().tabs[ids[0]])).includes("New Folder… [folder.badge.plus]"), false);
+  assert.equal(sub(tabMenuItems(S(), w, S().tabs[ids[0]]), "moveTo").includes("New Folder… [folder.badge.plus]"), false);
   useBrowser.setState(addToTileFolder(S(), [ids[1]], ids[0]), true);
-  assert.equal(top(tabMenuItems(S(), w, S().tabs[ids[0]])).includes("Remove from Folder [folder.badge.minus]"), true);
+  assert.equal(sub(tabMenuItems(S(), w, S().tabs[ids[0]]), "moveTo").includes("Remove from Folder [folder.badge.minus]"), true);
 });
 
-test("a Top Apps tile: unpin first, folders instead of groups, Open in New Window, no close section", () => {
+test("a Top Apps tile: unpin, Move to Pinned or a folder, pinned URL edits under Customize, and no close section", () => {
   const { w, ids } = windowWith("a", "b");
   S().pinTabs([ids[0]], true);
   S().updateSettings({ topAppFolders: true });
-  assert.deepEqual(top(tabMenuItems(S(), w, S().tabs[ids[0]])), [
-    "Unpin from Top Apps [pin.slash]",
-    "Reset Pinned Tab [arrow.uturn.backward] (off)",
-    "Move to Pinned in Personal",
-    "Edit Pinned Page ›",
-    "---",
-    "Duplicate [plus.square.on.square]",
-    "Open in New Window [macwindow.badge.plus]",
-    "Open in WebKit",
-    "---",
-    "New Folder… [folder.badge.plus]",
-    "Move to Profile [person] ›",
-    "Move to Window [macwindow] ›",
-    "---",
-    "Add to Bookmarks… [bookmark]",
-    "Add Bookmark to Folder ›",
-    "---",
+  assert.deepEqual(deep(tabMenuItems(S(), w, S().tabs[ids[0]])), [
     "Copy Link [link]",
     "Copy Link as Markdown [link] ⌥ (alt)",
-    "---",
-    "Rename… [pencil]",
-    "Change Icon… [photo]",
+    "Duplicate [plus.square.on.square]",
     "Mute Tab [speaker.slash]",
     "Mute Site [speaker.slash] ⌥ (alt)",
-  ]);
-  assert.deepEqual(sub(tabMenuItems(S(), w, S().tabs[ids[0]]), "pinnedPage"), [
-    "Replace Pinned URL with Current (off)",
     "---",
-    "Edit Pinned URL…",
+    "Unpin from Top Apps [pin.slash]",
+    "Move to [arrow.up.forward.square] ›",
+    "  Pinned in Personal [pin]",
+    "  ---",
+    "  New Folder… [folder.badge.plus]",
+    "  ---",
+    "  Profile [person] ›",
+    "    Personal ✓ (off)",
+    "  Window [macwindow] ›",
+    "    New Window",
+    "Bookmark Tab… [bookmark]",
+    "---",
+    "Customize [slider.horizontal.3] ›",
+    "  Rename… [pencil]",
+    "  Change Icon… [photo]",
+    "  ---",
+    "  Replace Pinned URL with Current [pin] (off)",
+    "  Edit Pinned URL… [link]",
+    "  ---",
+    "  Open in WebKit [globe]",
   ]);
 });
 
 test("a pinned row offers Top Apps as its other place, and a pinned group's tab unpins out of the group", () => {
   const { w, ids } = windowWith("a", "b", "c");
   S().pinTabs([ids[0]], true, true);
-  const row = top(tabMenuItems(S(), w, S().tabs[ids[0]]));
-  assert.deepEqual(row.slice(0, 4), ["Unpin [pin.slash]", "Reset Pinned Tab [arrow.uturn.backward] (off)", "Move to Top Apps", "Edit Pinned Page ›"]);
+  const row = tabMenuItems(S(), w, S().tabs[ids[0]]);
+  assert.ok(top(row).includes("Unpin [pin.slash]"));
+  assert.equal(sub(row, "moveTo")[0], "Top Apps [square.grid.2x2]");
+  assert.ok(!top(row).some((l) => l.startsWith("Reset Pinned Tab")), "a pinned tab at its pinned page has nothing to reset");
   S().groupTabs([ids[1]], { name: "P" });
-  const member = top(tabMenuItems(S(), w, S().tabs[ids[1]]));
-  assert.deepEqual(member.slice(0, 3), ["Unpin [pin.slash]", "Reset Pinned Tab [arrow.uturn.backward] (off)", "Edit Pinned Page ›"]);
-  assert.ok(!member.some((l) => l.startsWith("Remove from Group") || l.startsWith("New Group with Tab") || l.startsWith("Close")));
+  const member = tabMenuItems(S(), w, S().tabs[ids[1]]);
+  assert.ok(top(member).includes("Unpin [pin.slash]"));
+  assert.ok(!deep(member).some((l) => l.includes("Remove from Group") || l.includes("New Group") || l.startsWith("Close")));
 });
 
 test("every hover card action is in the menu: Reset Pinned Tab once a pinned tab is away, Remove Bookmark on a saved page, Exit Picture in Picture", () => {
@@ -181,96 +189,96 @@ test("every hover card action is in the menu: Reset Pinned Tab once a pinned tab
   S().pinTabs([ids[0]], true);
   S().updateTab(ids[0], { url: "https://a.com/elsewhere" });
   const tile = top(tabMenuItems(S(), w, S().tabs[ids[0]]));
-  assert.equal(tile[1], "Reset Pinned Tab [arrow.uturn.backward]");
-  assert.ok(!sub(tabMenuItems(S(), w, S().tabs[ids[0]]), "pinnedPage").some((l) => l.startsWith("Back to Pinned URL") || l.startsWith("Reset")), "not twice");
+  assert.equal(tile[tile.indexOf("Unpin from Top Apps [pin.slash]") + 1], "Reset Pinned Tab [arrow.uturn.backward]");
+  assert.ok(sub(tabMenuItems(S(), w, S().tabs[ids[0]]), "customize").includes("Replace Pinned URL with Current [pin]"));
   S().toggleBookmark(S().windows[w].profileId, { url: S().tabs[ids[1]].url, title: "b", favicon: null });
   const saved = top(tabMenuItems(S(), w, S().tabs[ids[1]]));
-  const edit = saved.findIndex((l) => l.startsWith("Edit Bookmark… [bookmark.fill]"));
+  const edit = saved.indexOf("Edit Bookmark… [bookmark.fill]");
   assert.ok(edit > 0);
-  assert.equal(saved[edit + 1], "Remove Bookmark");
-  assert.ok(!saved.some((l) => l.startsWith("Add to Bookmarks")));
+  assert.equal(saved[edit + 1], "Remove Bookmark [minus.circle] ⌥ (alt)");
+  assert.ok(!saved.some((l) => l.startsWith("Bookmark Tab")));
   assert.ok(!saved.some((l) => l.startsWith("Exit Picture in Picture")));
   useMedia.setState((m) => ({ pipOpen: { ...m.pipOpen, [ids[1]]: "video" } }));
   assert.ok(top(tabMenuItems(S(), w, S().tabs[ids[1]])).includes("Exit Picture in Picture [pip.exit]"));
   useMedia.setState((m) => ({ pipOpen: {} }));
 });
 
-test("a split pane offers Remove from Split View in place of Open as Split", () => {
+test("a split pane offers Remove from Split View in place of Open in Split View, and Close Split View under Close Tabs", () => {
   const { w, ids } = windowWith("a", "b", "c");
   S().createSplit([ids[0], ids[1]]);
-  const lines = top(tabMenuItems(S(), w, S().tabs[ids[0]]));
+  const items = tabMenuItems(S(), w, S().tabs[ids[0]]);
+  const lines = top(items);
   assert.ok(lines.includes("Remove from Split View [rectangle.split.2x1.slash]"));
-  assert.ok(!lines.some((l) => l.startsWith("Open as Split")));
+  assert.ok(!lines.some((l) => l.startsWith("Open in Split View")));
+  assert.equal(sub(items, "closeTabs").at(-1), "Close Split View");
 });
 
-test("several tabs: counts in the titles, Move N Tabs to Profile, and Close N Tabs without ⌘W", () => {
+test("several tabs: counts in the titles, destinations under Move to, and Close N Tabs without ⌘W", () => {
   const { w, ids } = windowWith("a", "b", "c");
   S().groupTabs([ids[0]], { name: "G", pinned: false });
   assert.deepEqual(top(multiTabMenuItems(S(), w, [ids[0], ids[1]])), [
-    "Move 2 Tabs to Top Apps [pin]",
-    "Move 2 Tabs to Pinned in Personal",
-    "---",
-    "Duplicate 2 Tabs [plus.square.on.square]",
-    "---",
-    "New Group with 2 Tabs [folder.badge.plus] ⌃⌘N",
-    "Remove from Group [folder.badge.minus]",
-    "Move to Group [folder] ›",
-    "Move 2 Tabs to Profile [person] ›",
-    "Move to Window [macwindow] ›",
-    "---",
-    "Add 2 Tabs to Bookmarks Bar [bookmark]",
-    "Add 2 Tabs to Bookmarks Folder ›",
-    "---",
     "Copy 2 Links [link]",
     "Copy 2 Links as Markdown [link] ⌥ (alt)",
+    "Duplicate 2 Tabs [plus.square.on.square]",
+    "---",
+    "Pin 2 Tabs [pin]",
+    "New Group with 2 Tabs [folder.badge.plus] ⌃⌘N",
+    "Move to [arrow.up.forward.square] ›",
     "---",
     "Close 2 Tabs [xmark]",
-    "Close Other Tabs",
+    "Close Other Tabs [xmark.square]",
   ]);
+  assert.deepEqual(sub(multiTabMenuItems(S(), w, [ids[0], ids[1]]), "moveTo"), [
+    "Top Apps [square.grid.2x2]",
+    "---",
+    "Group [folder] ›",
+    "Remove from Group [folder.badge.minus]",
+    "---",
+    "Profile [person] ›",
+    "Window [macwindow] ›",
+    "---",
+    "Bookmarks Folder [bookmark] ›",
+  ]);
+  S().pinTabs([ids[0], ids[1]], true);
+  const tiles = multiTabMenuItems(S(), w, [ids[0], ids[1]]);
+  assert.ok(top(tiles).includes("Unpin 2 Tabs [pin.slash]"));
+  assert.equal(sub(tiles, "moveTo")[0], "Pinned in Personal [pin]");
 });
 
-test("a group header: pin, open, move, customise, copy, then the ways to end it", () => {
+test("a group header: new tab, copy, duplicate, then pin, Move to and Customize, then the ways to end it", () => {
   const { w, ids } = windowWith("a", "b", "c");
   const g = S().groupTabs([ids[1], ids[2]], { name: "G", pinned: false });
   assert.deepEqual(top(groupMenuItems(S(), w, g)), [
-    "Pin Group [pin]",
-    "---",
     "New Tab in Group [plus.app] ⌥⌘T",
-    "New Nested Group",
-    "Duplicate Group [plus.square.on.square]",
-    "---",
-    "Move to Profile [person] ›",
-    "Move to Window [macwindow] ›",
-    "---",
-    "Rename… [pencil]",
-    "Add Icon… [photo]",
-    "Color [paintpalette] ›",
-    "---",
     "Copy All Links [link]",
     "Copy All Links as Markdown [link] ⌥ (alt)",
+    "Duplicate Group [plus.square.on.square]",
     "---",
-    "Ungroup [folder.badge.minus]",
-    "Move to Bookmarks Bar [bookmark]",
+    "Pin Group [pin]",
+    "Move to [arrow.up.forward.square] ›",
+    "Customize [slider.horizontal.3] ›",
+    "---",
     "Sleep Tabs [moon.zzz] (off)",
-    "Close Group [xmark] ⌃⌘W",
-    "Delete Group [trash]",
+    "Ungroup [folder.badge.minus]",
+    "Close Group [xmark]",
+    "Delete Group [trash] ⌥ (alt)",
   ]);
+  assert.deepEqual(sub(groupMenuItems(S(), w, g), "moveTo"), ["Profile [person] ›", "Window [macwindow] ›", "Bookmarks Bar [bookmark]"]);
+  assert.deepEqual(sub(groupMenuItems(S(), w, g), "customize"), ["Rename… [pencil]", "Add Icon… [photo]", "Color [paintpalette] ›", "---", "New Nested Group [folder.badge.plus]"]);
   S().moveGroup(g, { pinned: true });
-  const pinned = top(groupMenuItems(S(), w, g));
-  assert.equal(pinned[0], "Unpin Group [pin.slash]");
-  assert.ok(!pinned.some((l) => l.startsWith("Move to Window")), "a pinned group is in every window already");
-  S().activate(ids[0]);
-  assert.ok(top(groupMenuItems(S(), w, g)).includes("Close Group [xmark]"), "⌃⌘W closes the shown tab's group, not this one");
+  const pinned = groupMenuItems(S(), w, g);
+  assert.ok(top(pinned).includes("Unpin Group [pin.slash]"));
+  assert.ok(!sub(pinned, "moveTo").some((l) => l.startsWith("Window")), "a pinned group is in every window already");
 });
 
 test("a group's colour menu: None, Neutral, the site's colour, then the palette; picking one sets it", async () => {
   const { w, ids } = windowWith("a", "b");
   const g = S().groupTabs([ids[1]], { name: "G", pinned: false });
   const items = groupMenuItems(S(), w, g);
-  assert.deepEqual(sub(items, "color").slice(0, 4), ["None", "Neutral ✓", "Match Site Color (off)", "---"]);
+  assert.deepEqual(sub(items, "customize", "color").slice(0, 4), ["None", "Neutral ✓", "Match Site Color (off)", "---"]);
   const shell = shellNativeModules.ArdiaMenus;
   const real = shell.showMenu;
-  shell.showMenu = (shown) => Promise.resolve(shown.find((it) => it.id === "color").children.find((it) => it.title === "Blue").id);
+  shell.showMenu = (shown) => Promise.resolve(shown.find((it) => it.id === "customize").children.find((it) => it.id === "color").children.find((it) => it.title === "Blue").id);
   try {
     await openGroupMenu(w, g);
   } finally {
@@ -283,7 +291,7 @@ test("Move to Window › New Window moves the tab to a new window", async () => 
   const { w, ids } = windowWith("a", "b");
   const shell = shellNativeModules.ArdiaMenus;
   const real = shell.showMenu;
-  shell.showMenu = (shown) => Promise.resolve(shown.find((it) => it.id === "moveToWindow").children.at(-1).id);
+  shell.showMenu = (shown) => Promise.resolve(shown.find((it) => it.id === "moveTo").children.find((it) => it.id === "moveToWindow").children.at(-1).id);
   try {
     await openTabMenu(w, S().tabs[ids[1]]);
   } finally {
@@ -293,36 +301,105 @@ test("Move to Window › New Window moves the tab to a new window", async () => 
   assert.equal(S().windowOrder.length >= 2, true);
 });
 
-test("the sidebar background menu: new things, then the sidebar toggles, Close All Tabs last", () => {
+test("the sidebar background menu: new things, Browser Layout, Close All Tabs last; no setup-only rows", () => {
   const { w, ids } = windowWith("a", "b");
-  assert.deepEqual(top(sidebarMenuItems(S(), w)), [
+  assert.deepEqual(deep(sidebarMenuItems(S(), w)), [
     "New Tab [plus.app] ⌘T",
-    "Reopen Closed Tab ⇧⌘T (off)",
+    "Reopen Closed Tab [clock.arrow.circlepath] ⇧⌘T (off)",
     "---",
     "New Group [folder.badge.plus]",
-    "New Live Folder ›",
+    "New Live Folder [bolt] ›",
+    "  Pull Requests [arrow.triangle.pull]",
+    "  Documents [doc.text]",
     "Add Shared Folder… [person.2]",
     "---",
-    "New Profile… [plus]",
-    "---",
-    "Bookmark All Tabs… [bookmark] ⇧⌘D",
-    "---",
-    "Collapse Pinned Tabs [rectangle.compress.vertical] (off)",
-    "Show Tabs in Sidebar [sidebar.left] ⇧⌘S ✓",
-    "Sidebar on Right [sidebar.right]",
-    "Auto-Hide Tabs ⌘S",
+    "Browser Layout [sidebar.left] ›",
+    "  Sidebar on Left [sidebar.left] ✓",
+    "  Sidebar on Right [sidebar.right]",
+    "  Top Tab Bar [menubar.rectangle] ⇧⌘S",
+    "  ---",
+    "  Address Bar in Toolbar [menubar.rectangle] ✓",
+    "  Address Bar in Sidebar [sidebar.left]",
+    "  Compact Toolbar [rectangle.compress.vertical]",
+    "  ---",
+    "  Auto-Hide Tabs [eye.slash] ⌘S",
+    "  Minimalism Mode [rectangle.leftthird.inset.filled] ⌃⌘M",
+    "  Bookmarks Bar [bookmark] ⇧⌘B",
     "---",
     "Close All Tabs [xmark] ⇧⌘K",
   ]);
   S().updateSettings({ sidebarSide: "right" });
-  assert.ok(top(sidebarMenuItems(S(), w)).includes("Sidebar on Right [sidebar.right] ✓"));
+  assert.ok(sub(sidebarMenuItems(S(), w), "browserLayout").includes("Sidebar on Right [sidebar.right] ✓"));
   S().updateSettings({ sidebarSide: "left" });
   S().closeTabs([ids[1]]);
-  assert.ok(top(sidebarMenuItems(S(), w)).includes("Reopen Closed Tab ⇧⌘T"));
+  assert.ok(top(sidebarMenuItems(S(), w)).includes("Reopen Closed Tab [clock.arrow.circlepath] ⇧⌘T"));
 });
 
-test("a Top Apps folder: unpin its tabs, rename, then remove the folder", () => {
-  assert.deepEqual(top(tileFolderContextItems(3)), ["Unpin 3 Tabs [pin.slash]", "---", "Rename… [pencil]", "---", "Remove Folder [folder.badge.minus]"]);
+test("Browser Layout moves the tabs between the sides and the top in one pick, and the address bar choices follow the layout", () => {
+  const { w } = windowWith("a");
+  const layout = () => sub(sidebarMenuItems(S(), w), "browserLayout");
+  runBrowserLayoutChoice(w, "layout:top");
+  assert.equal(tabLayoutOf(S(), w), "top");
+  assert.ok(layout().includes("Top Tab Bar [menubar.rectangle] ✓"));
+  assert.ok(layout().includes("Sidebar on Left [sidebar.left] ⇧⌘S"), "the layout toggle shortcut moves to the layout it switches to");
+  assert.ok(!layout().some((l) => l.startsWith("Address Bar in")), "with tabs on top the address bar is in the toolbar");
+  assert.ok(layout().includes("Compact Toolbar [rectangle.compress.vertical]"));
+  runBrowserLayoutChoice(w, "layout:sidebarRight");
+  assert.equal(tabLayoutOf(S(), w), "sidebar");
+  assert.equal(S().settings.sidebarSide, "right");
+  runBrowserLayoutChoice(w, "layout:top");
+  assert.ok(layout().includes("Sidebar on Right [sidebar.right] ⇧⌘S"));
+  runBrowserLayoutChoice(w, "layout:sidebarLeft");
+  assert.equal(S().settings.sidebarSide, "left");
+  assert.equal(tabLayoutOf(S(), w), "sidebar");
+  runBrowserLayoutChoice(w, "layout:addressSidebar");
+  assert.equal(S().settings.addressBar, "sidebar");
+  assert.ok(!layout().some((l) => l.startsWith("Compact Toolbar")), "no toolbar to compact once the address bar is in the sidebar");
+  runBrowserLayoutChoice(w, "layout:addressToolbar");
+  runBrowserLayoutChoice(w, "layout:minimalism");
+  assert.equal(S().settings.minimalismMode, true);
+  assert.ok(!layout().some((l) => l.startsWith("Address Bar in")), "minimalism suppresses the address bar placement choices");
+  assert.ok(!layout().some((l) => l.startsWith("Compact Toolbar")), "minimalism suppresses Compact Toolbar");
+  runBrowserLayoutChoice(w, "layout:addressSidebar");
+  assert.equal(S().settings.addressBar, "toolbar");
+  runBrowserLayoutChoice(w, "layout:minimalism");
+  S().updateSettings({ bookmarksBar: "always" });
+  const priv = S().createWindow({ kind: "private" });
+  assert.ok(!sub(sidebarMenuItems(S(), priv), "browserLayout").some((l) => l.startsWith("Bookmarks Bar")), "private windows hide the bookmarks bar row");
+  runBrowserLayoutChoice(priv, "layout:bookmarksBar");
+  assert.equal(S().settings.bookmarksBar, "always");
+  S().updateSettings({ bookmarksBar: "never" });
+  S().updateSettings({ showBookmarks: false });
+  assert.ok(!layout().some((l) => l.startsWith("Bookmarks Bar")), "bookmarks off, no bar row");
+  S().updateSettings({ showBookmarks: true });
+  const small = S().createWindow({ kind: "small", url: "https://small.example/" });
+  assert.ok(!appMenuItems(S(), small).some((it) => it.id === "browserLayout"), "Little Ardia omits Browser Layout from the app menu");
+  runBrowserLayoutChoice(small, "layout:sidebarRight");
+  assert.equal(S().settings.sidebarSide, "left");
+  runBrowserLayoutChoice(small, "layout:top");
+  assert.equal(tabLayoutOf(S(), w), "sidebar");
+  assert.equal(runBrowserLayoutChoice(w, "newTab"), false);
+});
+
+test("multi-select Move to › Top Apps converts pinned rows into Top Apps tiles", async () => {
+  const { w, ids } = windowWith("a", "b");
+  S().pinTabs(ids, true, true);
+  assert.equal(S().tabs[ids[0]].pin?.as, "row");
+  assert.equal(S().tabs[ids[1]].pin?.as, "row");
+  const shell = shellNativeModules.ArdiaMenus;
+  const real = shell.showMenu;
+  shell.showMenu = () => Promise.resolve("pinTiles");
+  try {
+    await openMultiMenu(w, ids);
+  } finally {
+    shell.showMenu = real;
+  }
+  assert.equal(S().tabs[ids[0]].pin?.as, "tile");
+  assert.equal(S().tabs[ids[1]].pin?.as, "tile");
+});
+
+test("a Top Apps folder: rename, then unpin its tabs or remove the folder", () => {
+  assert.deepEqual(top(tileFolderContextItems(3)), ["Rename… [pencil]", "---", "Unpin 3 Tabs [pin.slash]", "Remove Folder [folder.badge.minus]"]);
 });
 
 test("a rebound key moves the hint with it, and an alternate keeps its pair only while the keys match", () => {
@@ -349,7 +426,7 @@ async function whileMenuIsUp(open, meanwhile, choice) {
   }
 }
 
-test("Open as Split splits the tab the menu was opened on, even if another tab came to the front meanwhile", async () => {
+test("Open in Split View splits the tab the menu was opened on, even if another tab came to the front meanwhile", async () => {
   const { w, ids } = windowWith("a", "b", "c");
   await whileMenuIsUp(() => openTabMenu(w, S().tabs[ids[2]]), () => S().activate(ids[0]), "split");
   const split = Object.values(S().splits)[0];
@@ -392,13 +469,13 @@ test("the sidebar menu's Reopen Closed Tab is on only when there is something of
   S().newTab(other, { url: "https://w2.com/" });
   S().closeTabs([S().windows[other].tabIds[1]]);
   const reopen = () => top(sidebarMenuItems(S(), w)).find((l) => l.startsWith("Reopen Closed Tab"));
-  assert.equal(reopen(), "Reopen Closed Tab ⇧⌘T (off)", "only Work has a closed tab");
-  assert.ok(top(sidebarMenuItems(S(), other)).includes("Reopen Closed Tab ⇧⌘T"));
+  assert.equal(reopen(), "Reopen Closed Tab [clock.arrow.circlepath] ⇧⌘T (off)", "only Work has a closed tab");
+  assert.ok(top(sidebarMenuItems(S(), other)).includes("Reopen Closed Tab [clock.arrow.circlepath] ⇧⌘T"));
   S().closeTabs([ids[1]]);
-  assert.equal(reopen(), "Reopen Closed Tab ⇧⌘T");
+  assert.equal(reopen(), "Reopen Closed Tab [clock.arrow.circlepath] ⇧⌘T");
 });
 
-test("Open as Split on a tab that came to the front while its menu was up opens a New Tab beside it", async () => {
+test("Open in Split View on a tab that came to the front while its menu was up opens a New Tab beside it", async () => {
   const { w, ids } = windowWith("a", "b", "c");
   S().activate(ids[0]);
   await whileMenuIsUp(() => openTabMenu(w, S().tabs[ids[2]]), () => S().activate(ids[2]), "split");
@@ -408,7 +485,7 @@ test("Open as Split on a tab that came to the front while its menu was up opens 
   assert.equal(splitTabIdsOf(split).includes(ids[0]), false, "a isn't");
 });
 
-test("Open as Split on a background tab pairs it with the tab in front when the choice lands", async () => {
+test("Open in Split View on a background tab pairs it with the tab in front when the choice lands", async () => {
   const { w, ids } = windowWith("a", "b", "c");
   S().activate(ids[0]);
   await whileMenuIsUp(() => openTabMenu(w, S().tabs[ids[2]]), () => S().activate(ids[1]), "split");
@@ -497,6 +574,23 @@ test("Sleep Tab sleeps a pinned row, a Top App and a regular tab that Chrome kee
   await new Promise((resolve) => setImmediate(resolve));
   assert.ok(shownMeanwhile);
   assert.ok(!discarded.includes(late), "a tab shown while Chrome answered is not discarded");
+  webviews.clear();
+});
+
+test("Sleep Tab puts a page left by a form post, one with an unload prompt or one running a download to sleep when asked, but still keeps typed input", async () => {
+  const { w, ids } = windowWith("posted", "prompt", "downloading", "postedTyped", "front");
+  const [posted, prompt, downloading, postedTyped] = ids;
+  const discarded = [];
+  sleepableViews(ids, [], { [posted]: [100], [prompt]: [101, 7], [downloading]: [102], [postedTyped]: [100, 26] }, discarded);
+  takeTabSleepCounts();
+  for (const id of [posted, prompt, downloading, postedTyped]) {
+    await whileMenuIsUp(() => openTabMenu(w, S().tabs[id]), () => {}, "sleep");
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.deepEqual(discarded.sort(), [posted, prompt, downloading].sort(), "only automatic sleep is held back by these; the user's own Sleep Tab goes ahead");
+  const counts = takeTabSleepCounts();
+  assert.equal(counts.menu_sleeps_past_automatic, 3);
+  assert.equal(counts.menu_sleep_kept_reason, "typedInput", "typed text still keeps a posted page awake");
   webviews.clear();
 });
 

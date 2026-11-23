@@ -9,7 +9,7 @@ function pageAsPanel(page: unknown): unknown {
   return isFields(page) ? { id: PAGE_PANEL_ID, mode: "tab", ...page } : page;
 }
 
-export function contributesFromV1(doc: Fields): Fields {
+function contributesFromV1(doc: Fields): Fields {
   if (Object.hasOwn(doc, "contributes") || Object.hasOwn(doc, "sidecar") || Object.hasOwn(doc, "main")) return doc;
   const { permissions, process, page, ...rest } = doc;
   const contributes: Fields = {};

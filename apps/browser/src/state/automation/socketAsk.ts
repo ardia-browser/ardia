@@ -5,7 +5,7 @@ import { now } from "./socketTargets";
 import { OpError } from "./workspaceTargets";
 import { STOPPED, type SocketCall } from "./socketCatalog";
 
-export const UNSEEN = "Ardia would have to ask first, and nobody can see that question here (its window isn't on screen, or Ardia runs in the background)";
+const UNSEEN = "Ardia would have to ask first, and nobody can see that question here (its window isn't on screen, or Ardia runs in the background)";
 
 type Waiting = { connection: number; key: string; dismiss: () => void };
 

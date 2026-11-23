@@ -204,3 +204,7 @@ test("every website notification that reached the page script is counted once, t
   assert.equal(takeFocusFeatureCounts().web_notifications_from_shim, 1);
   assert.equal(takeFocusFeatureCounts().web_notifications_from_shim, 0);
 });
+
+test("an icon too large to attach is reported as such, not as other", () => {
+  assert.equal(webNotificationFailureProperties(SENT, { icon: "too_large", errorDomain: "UNErrorDomain", errorCode: 1 }).icon_status, "too_large");
+});

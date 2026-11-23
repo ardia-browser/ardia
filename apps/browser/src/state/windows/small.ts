@@ -12,6 +12,8 @@ export const isSmallWindow = (w: BrowserWindow | undefined): boolean => w?.kind 
 
 export const isRegularWindow = (w: BrowserWindow | undefined): w is MainWindow => w?.kind === "main";
 
+export const regularWindows = (s: Pick<BrowserState, "windows" | "windowOrder">) => s.windowOrder.map((id) => s.windows[id]).filter(isRegularWindow);
+
 export const isSmall = (s: Pick<BrowserState, "windows">, windowId?: string | null): boolean =>
   !!windowId && s.windows[windowId]?.kind === "small";
 

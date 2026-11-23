@@ -24,7 +24,7 @@ export function unclaimedAdoptId(offer: unknown): AdoptId | undefined {
 
 type ProfileState = { profiles: Record<string, Profile | undefined>; profileOrder: string[] };
 
-export function offeredProfile(s: ProfileState, w: BrowserWindow, engine: unknown): string | undefined {
+function offeredProfile(s: ProfileState, w: BrowserWindow, engine: unknown): string | undefined {
   if (typeof engine !== "string" || w.kind === "private") return w.profileId;
   const known = s as Parameters<typeof engineProfile>[0];
   if (engineProfile(known, w.profileId) === engine) return w.profileId;

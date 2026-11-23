@@ -40,7 +40,7 @@ NSArray<NSString *> *AppTestKeys() {
     @"pipSelfTest", @"pipHover", @"fakeFullScreenMs", @"shadersKeyWindow", @"peekStrict", @"peekMesh", @"peekReady", @"peekReduceMotion", @"peekSlow", @"importSecret", @"importDiaBundleId", @"importDiaWindows",
     @"cliInstallScript", @"legacySource", @"legacyCrashAfter", @"bangsUrl", @"onboarding", @"whatsNew", @"telemetry",
     @"liveMock", @"calendarFixture", @"appMenu", @"appDialog", @"loginsTimeout", @"screenRecording", @"systemLocationPermission", @"officialPin",
-    @"applePasswordsPanel", @"systemPanelRace",
+    @"applePasswordsPanel", @"systemPanelRace", @"controlDoorbell",
   ];
 }
 
@@ -243,10 +243,6 @@ BOOL SignedForDistribution() {
 
 - (BOOL)instanceFlag:(NSString *)key {
   return Truthy([self instance:key]);
-}
-
-- (NSNumber *)switchOverride:(NSString *)name {
-  return _switches[name];
 }
 
 - (NSDictionary<NSString *, NSNumber *> *)cachedSwitches {

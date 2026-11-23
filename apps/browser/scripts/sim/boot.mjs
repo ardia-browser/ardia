@@ -2,7 +2,7 @@ import { fileURLToPath } from "node:url";
 import { seededRandom } from "./rng.mjs";
 import { createWorld, installClock, installTimerLedger, loadModules } from "./world.mjs";
 
-export const DEFAULT_SRC = fileURLToPath(new URL("../../src/", import.meta.url));
+const DEFAULT_SRC = fileURLToPath(new URL("../../src/", import.meta.url));
 
 export async function boot({ src = DEFAULT_SRC, seed = 1 } = {}) {
   Math.random = seededRandom(seed ^ 0x5eed);

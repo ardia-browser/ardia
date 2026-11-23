@@ -15,7 +15,7 @@ const FIRST_LOOK_MS = 3000;
 const LOOK_AFTER_LEAVING_MS = 15000;
 const CHROME_SETTINGS = /^(chrome|ardia):\/\/settings(\/|$|\?|#)/;
 
-export type ChromeCtrlTab = Record<string, boolean>;
+type ChromeCtrlTab = Record<string, boolean>;
 
 export function presetFollowingChrome(seen: ChromeCtrlTab, now: ChromeCtrlTab, choice: CtrlTabChoice): CtrlTabPreset | null {
   let wanted: CtrlTabPreset | null = null;

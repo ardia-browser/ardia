@@ -8,6 +8,7 @@ import { blockedLink } from "../../state/live/github";
 import { newTab } from "../../state/tabs/actions";
 import { usePageProfileId, useTab } from "../../state/browser/hooks";
 import { useLiveActiveTab, useLiveStrays } from "../../state/sidebar/hooks";
+import { liveFolderKeep } from "../../state/sidebar/liveRows";
 import { openSettings } from "../../state/settings/settingsWindows";
 import { Badge, Button, ContextMenuArea, Dot, ink, space, Symbol, useHover } from "../ui";
 import { layout, useTheme } from "../ui/theme";
@@ -71,11 +72,7 @@ export const LiveFolderBlock = memo(function LiveFolderBlock({ folderId, windowI
     : [{ key: "note", node: <FolderNote folderId={folderId} windowId={windowId} /> }];
   for (const id of strays) entries.push({ key: `stray:${id}`, node: <TabRow tabId={id} /> });
   if (completed) entries.push({ key: "completed", node: <CompletedFooter folderId={folderId} windowId={windowId} /> });
-  const keep = !activeTab
-    ? null
-    : strays.includes(activeTab)
-      ? `stray:${activeTab}`
-      : (rows.find((r) => (r.kind === "item" && r.item.id === activeItem) || (r.kind === "stack" && r.items.some((i) => i.id === activeItem)))?.key ?? null);
+  const keep = liveFolderKeep(rows, strays, activeTab, activeItem);
 
   return (
     <Animated.View ref={wrapper.ref} style={wrapper.style}>

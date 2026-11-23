@@ -1,4 +1,4 @@
-export const DEV_EVAL_SCRIPT = "dev-eval.js";
+const DEV_EVAL_SCRIPT = "dev-eval.js";
 export const DEV_EVAL_RESULT = "dev-eval-result.json";
 
 const scriptId = (source: string | null) => source?.match(/^\/\/ *(\S+)/)?.[1];

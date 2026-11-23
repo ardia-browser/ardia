@@ -6,12 +6,12 @@ import { isUtilityWindowId, SETTINGS_WINDOW_ID } from "../settings/settingsWindo
 import { isSmall, mainWindowFor } from "../windows/small";
 import { isAppCommand, LITTLE_ARDIA_PAGE_COMMANDS } from "./commandCatalog";
 
-export const LITTLE_ARDIA_COMMANDS: ReadonlySet<string> = new Set(["closeTab", "focusCommandBar", "openFile", "switchProfile", "nextProfile", "previousProfile", "openProfileMenu"]);
+const LITTLE_ARDIA_COMMANDS: ReadonlySet<string> = new Set(["closeTab", "focusCommandBar", "openFile", "switchProfile", "nextProfile", "previousProfile", "openProfileMenu"]);
 
-export const peekHandles = (s: BrowserState, command: string, windowId: string) =>
+const peekHandles = (s: BrowserState, command: string, windowId: string) =>
   !!shownPeek(s, windowId) && (command === "openFile" || (command === "closeTab" && !s.windowUi[windowId]?.panel.open));
 
-export type CommandTarget =
+type CommandTarget =
   | { kind: "app" }
   | { kind: "missingTab" }
   | { kind: "utility"; windowId: string }

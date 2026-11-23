@@ -9,11 +9,11 @@ import type { Dock } from "./model";
 import type { DragGeometry } from "./stripGroups";
 import { band, createMotion, plan, shoot, type Plan, type Shot, type StripMotion } from "./stripSlides";
 
-export { NEW_TAB_SLOT, type StripGhost, type StripMotion, type StripSlide } from "./stripSlides";
+export { NEW_TAB_SLOT, type StripGhost, type StripMotion } from "./stripSlides";
 
 export const StripMotionContext = createContext<StripMotion | null>(null);
 
-export type StripMotionInput = { entries: StripEntry[]; top: DragGeometry; dock: Dock | null; flare: number; end: number | null; viewport: number; offset: () => number; windowId: string; enabled: boolean };
+type StripMotionInput = { entries: StripEntry[]; top: DragGeometry; dock: Dock | null; flare: number; end: number | null; viewport: number; offset: () => number; windowId: string; enabled: boolean };
 
 export function useStripMotion({ entries, top, dock, flare, end, viewport, offset, windowId, enabled }: StripMotionInput): StripMotion {
   const [own] = useState(createMotion);

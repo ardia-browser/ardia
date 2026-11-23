@@ -11,7 +11,7 @@ const STATE_MIGRATIONS: Migrations = { 0: unchanged };
 const REFRESH_EVERY_MS = 86_400_000;
 
 type RefreshState = { checkedAt: number };
-export type BangRefresh = { at: number; status: number | "skipped" | "failed"; result: "updated" | "unchanged" | "failed" | "fresh" };
+type BangRefresh = { at: number; status: number | "skipped" | "failed"; result: "updated" | "unchanged" | "failed" | "fresh" };
 
 let table: BangTable | null = null;
 let tableSource: "bundled" | "stored" | "fetched" | null = null;
@@ -81,9 +81,9 @@ export function mayBeBang(text: string): boolean {
   return BANG_WORD.test(words[0]!) || BANG_WORD.test(words[words.length - 1]!);
 }
 
-export const BANG_ENTER_TIMEOUT_MS = 1500;
+const BANG_ENTER_TIMEOUT_MS = 1500;
 
-export type BangSubmitter = { submit(text: string, commit: (url: string | null) => void): void; cancel(): void };
+type BangSubmitter = { submit(text: string, commit: (url: string | null) => void): void; cancel(): void };
 
 export function createBangSubmitter(load: () => Promise<BangTable> = loadBangs, timeoutMs = BANG_ENTER_TIMEOUT_MS): BangSubmitter {
   let current = 0;

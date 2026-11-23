@@ -27,7 +27,7 @@ function peekData(s: BrowserState, sourceId: string) {
 
 const splitTabs = (s: BrowserState, id: string) => s.splits[id]!.slots.flatMap((slot) => ("tabId" in slot ? [slot.tabId] : slot.stack));
 
-export function diffMore(s: BrowserState, prev: BrowserState, send: EventSend, wants: ReadonlySet<string>) {
+function diffMore(s: BrowserState, prev: BrowserState, send: EventSend, wants: ReadonlySet<string>) {
   if (s.windows !== prev.windows) {
     for (const id in s.windows) {
       const w = s.windows[id]!;

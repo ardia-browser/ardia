@@ -51,7 +51,7 @@ export function SelectionPopover({ tabId }: { tabId: string }) {
   );
 }
 
-export function SelectionBar({ tabId, selection, zoom, area, onShown, onHidden }: { tabId: string; selection: PageSelection; zoom: number; area: { width: number; height: number }; onShown: () => void; onHidden: () => void }) {
+function SelectionBar({ tabId, selection, zoom, area, onShown, onHidden }: { tabId: string; selection: PageSelection; zoom: number; area: { width: number; height: number }; onShown: () => void; onHidden: () => void }) {
   const [width, setWidth] = useState(0);
   const appear = useRef(new Animated.Value(0)).current;
   useEffect(() => {

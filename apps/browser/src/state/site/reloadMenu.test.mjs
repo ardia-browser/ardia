@@ -14,13 +14,18 @@ const render = (items, depth = 0) =>
     ...(i.children ? render(i.children, depth + 1) : []),
   ]);
 
-const SITE = ["Site Settings [gearshape] ›", "  Clear Cookies and Site Data… [trash]", "  ---", "  Site Controls…"];
-
-test("the reload button's menu: the site's ad blocker as a checkmark, then Site Settings with the actions Ardia has", () => {
-  assert.deepEqual(render(reloadMenuItems({ blocker: "on" })), ["✓ Block Ads & Trackers [hand.raised]", "---", ...SITE]);
-  assert.deepEqual(render(reloadMenuItems({ blocker: "off" }))[0], "Block Ads & Trackers [hand.raised]");
-  assert.deepEqual(render(reloadMenuItems({ blocker: "offInSettings" }))[0], "Block Ads & Trackers [hand.raised]");
-  assert.deepEqual(render(reloadMenuItems({ blocker: "unavailable" }))[0], "Block Ads & Trackers [hand.raised] (off)");
+test("the reload button's menu: Reload and Hard Reload with their keys, the site's ad blocker as a checkmark, then Clear Cookies and Site Data…", () => {
+  assert.deepEqual(render(reloadMenuItems({ blocker: "on" })), [
+    "Reload ⌘R [arrow.clockwise]",
+    "Hard Reload ⇧⌘R [arrow.triangle.2.circlepath]",
+    "---",
+    "✓ Block Ads & Trackers [hand.raised]",
+    "---",
+    "Clear Cookies and Site Data… [trash]",
+  ]);
+  assert.deepEqual(render(reloadMenuItems({ blocker: "off" }))[3], "Block Ads & Trackers [hand.raised]");
+  assert.deepEqual(render(reloadMenuItems({ blocker: "offInSettings" }))[3], "Block Ads & Trackers [hand.raised]");
+  assert.deepEqual(render(reloadMenuItems({ blocker: "unavailable" }))[3], "Block Ads & Trackers [hand.raised] (off)");
 });
 
 test("only web pages have a site to configure", () => {

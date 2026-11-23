@@ -14,6 +14,7 @@ import { consentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
 import { notePageFavicon, notePageFaviconFailed } from "../telemetry/pageFaviconCounts";
 import { fetchFailedBefore, forgetAsked, markAsked, noteFetchFailed, unmarkAsked } from "./askedFavicons";
+import { incognitoClosed, takeRequest, unheldBy, unheldIn } from "./privateLookups";
 
 type Icons = {
   pages: Record<string, string | null>;
@@ -157,6 +158,7 @@ function remember(key: string, page: string, src: string, uri: string) {
   const swapped = Date.now() - appearanceChangedAt < APPEARANCE_SWAP_MS;
   wrote(key, page);
   update(key, (icons) => {
+    if (incognitoClosed(key)) return icons;
     const previous = icons.pages[page];
     if (previous === uri && icons.srcs[src] === uri) return icons;
     let appearances = icons.appearances;
@@ -168,7 +170,7 @@ function remember(key: string, page: string, src: string, uri: string) {
   });
 }
 
-export type KnownFavicon = { page: string; icon: string; png: string };
+type KnownFavicon = { page: string; icon: string; png: string };
 
 const PNG_DATA_URI = "data:image/png;base64,";
 
@@ -310,15 +312,26 @@ export function watchMissingFavicon(w: Watcher) {
   };
 }
 
-const theming = new Set<string>();
+const theming = new Map<string, symbol>();
+const privateIconListeners = new Set<(unheld: (uri: string) => boolean) => void>();
+
+export const faviconHeld = (uri: string) => !unheldIn(useFavicons.getState().profiles)(uri);
+
+export function onPrivateIconsDropped(listener: (unheld: (uri: string) => boolean) => void) {
+  privateIconListeners.add(listener);
+  return () => void privateIconListeners.delete(listener);
+}
 
 export function askFaviconTheme(uri: string) {
-  if (theming.has(uri)) return;
-  theming.add(uri);
+  if (theming.has(uri) || !faviconHeld(uri)) return;
+  const request = Symbol(uri);
+  theming.set(uri, request);
   void iconTheme({ uri })
     .catch(() => null)
-    .then((found) => queue((f) => (f.themes[uri] === (found ?? null) ? f : { ...f, themes: capped(f.themes, uri, found ?? null) })))
-    .finally(() => theming.delete(uri));
+    .then((found) => {
+      if (!takeRequest(theming, uri, request) || !faviconHeld(uri)) return;
+      queue((f) => (f.themes[uri] === (found ?? null) ? f : { ...f, themes: capped(f.themes, uri, found ?? null) }));
+    });
 }
 
 function forget(key: string) {
@@ -368,7 +381,12 @@ export function startFavicons() {
       for (const t of Object.values(s.tabs)) open.add(t.profileId);
       queue((f) => {
         const gone = Object.keys(f.profiles).filter((id) => isIncognitoProfile(id) && !open.has(id));
-        return gone.length ? { ...f, profiles: Object.fromEntries(Object.entries(f.profiles).filter(([id]) => !gone.includes(id))) } : f;
+        if (!gone.length) return f;
+        const profiles = Object.fromEntries(Object.entries(f.profiles).filter(([id]) => !gone.includes(id)));
+        const unheld = unheldBy(Object.values(profiles));
+        for (const uri of [...theming.keys()].filter(unheld)) theming.delete(uri);
+        for (const listener of privateIconListeners) listener(unheld);
+        return { ...f, profiles, themes: Object.fromEntries(Object.entries(f.themes).filter(([uri]) => !unheld(uri))) };
       }, true);
     }
   });

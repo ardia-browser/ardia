@@ -34,7 +34,7 @@ test("changes for a profile it never showed, other events and malformed payloads
 test("a profile whose first extension listing failed in Settings still refreshes on its next change", async () => {
   const { load } = await import("../../browser/src/state/settings/resources.ts");
   const { extensionList } = await import("../../browser/src/state/settings/paneData.ts");
-  const { useExtensions } = await import("./extensionsStore.ts");
+  const { useExtensions } = await import("../../browser/src/state/extensions/store.ts");
   const warn = console.warn;
   console.warn = () => {};
   globalThis.acTestUserScripts = { engine: { list: async () => { throw new Error("engine busy"); } } };

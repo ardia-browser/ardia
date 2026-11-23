@@ -319,17 +319,23 @@ export const SplitToast = memo(function SplitToast({ windowId }: { windowId: str
   const toast = useToasts((s) => s.toasts[windowId] ?? null);
   const [shown, setShown] = useState(toast);
   const [closing, setClosing] = useState(false);
+  const [held, setHeld] = useState(false);
   if (toast && toast !== shown) {
     setShown(toast);
     setClosing(false);
   } else if (!toast && shown && !closing) setClosing(true);
   useEffect(() => {
-    if (!toast || toast.sticky) return;
-    const timer = setTimeout(() => setClosing(true), toast.action ? TOAST_ACTION_MS : TOAST_MS);
+    if (!toast || toast.sticky || (held && toast.secondary)) return;
+    const timer = setTimeout(() => setClosing(true), toast.holdMs ?? (toast.action ? TOAST_ACTION_MS : TOAST_MS));
     return () => clearTimeout(timer);
-  }, [toast?.id]);
+  }, [toast?.id, held && !!toast?.secondary]);
   if (!shown) return null;
-  const action = shown.action;
+  const { action, secondary } = shown;
+  const pick = (chosen: typeof action) => () => {
+    chosen?.run();
+    setShown(null);
+    hideToast(windowId, shown.id);
+  };
   return (
     <Toast
       key={shown.id}
@@ -337,11 +343,11 @@ export const SplitToast = memo(function SplitToast({ windowId }: { windowId: str
       message={shown.message ?? undefined}
       icon={shown.icon ?? "rectangle.split.3x1"}
       action={action?.title}
-      onAction={() => {
-        action?.run();
-        setShown(null);
-        hideToast(windowId, shown.id);
-      }}
+      onAction={pick(action)}
+      secondary={secondary?.title}
+      onSecondary={pick(secondary)}
+      onHeld={secondary ? setHeld : undefined}
+      titleLines={shown.titleLines}
       closing={closing}
       onClosed={() => {
         setShown(null);

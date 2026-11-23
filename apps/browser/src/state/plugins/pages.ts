@@ -11,9 +11,9 @@ import { activeManifest, currentPlugins, usePlugins, type PluginsStore } from ".
 import { eligibleKind, isEligibleTab } from "../automation/automationWindows";
 import { ensurePluginActivated, pluginReadyRun } from "./activation";
 
-export { isPagePath, pluginPageOf, pluginPagePath, pluginPageUrl };
+export { isPagePath, pluginPageOf, pluginPagePath };
 
-export type PageContext = { tabId: string; url: string; title: string };
+type PageContext = { tabId: string; url: string; title: string };
 type HandedContext = { plugin: string; approved: string; pageUrl: string; context: PageContext };
 
 export const usePluginPages = create<{ contexts: Record<string, HandedContext> }>()(() => ({ contexts: {} }));
@@ -32,7 +32,7 @@ export function pageContextOf(tabId: string): PageContext | null {
   return handed && isLive(handed, tabId) ? handed.context : null;
 }
 
-export function dropStalePageContexts() {
+function dropStalePageContexts() {
   const { contexts } = usePluginPages.getState();
   const stale = Object.keys(contexts).filter((tabId) => !isLive(contexts[tabId]!, tabId));
   if (!stale.length) return;
@@ -62,19 +62,19 @@ function withParam(url: string, key: string, value: string): string {
   return `${head}${head.includes("?") ? "&" : "?"}${key}=${encodeURIComponent(value)}${fragment}`;
 }
 
-export const PANEL_PARAM = "ardiaPanel";
+const PANEL_PARAM = "ardiaPanel";
 const PANEL_IN_PATH = new RegExp(`[?&]${PANEL_PARAM}=([A-Za-z0-9_-]{1,40})(?:&|$)`);
 
 export const panelOfPath = (path: string): string | null => PANEL_IN_PATH.exec(path)?.[1] ?? null;
 export const panelPath = (panelId: string) => `?${PANEL_PARAM}=${panelId}`;
-export const hasPagePanels = (m: PluginManifest | null | undefined) => !!m?.contributes.panels.some((p) => p.mode === "tab" || p.mode === "split");
+const hasPagePanels = (m: PluginManifest | null | undefined) => !!m?.contributes.panels.some((p) => p.mode === "tab" || p.mode === "split");
 
 function pagePanelAt(m: PluginManifest, path: string): PanelSpec | null {
   const panelId = panelOfPath(path);
   return (panelId ? m.contributes.panels.find((p) => p.id === panelId && (p.mode === "tab" || p.mode === "split")) : pagePanelOf(m.contributes.panels)) ?? null;
 }
 
-export function pageFileOf(m: PluginManifest, path: string): string | null {
+function pageFileOf(m: PluginManifest, path: string): string | null {
   return pagePanelAt(m, path)?.file ?? null;
 }
 

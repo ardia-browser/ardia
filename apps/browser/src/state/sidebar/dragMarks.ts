@@ -2,8 +2,8 @@ import { create, type StoreApi } from "zustand";
 import { keyedWatch, type KeyedWatch } from "../browser/keyedWatch";
 
 export type SplitHalfMark = { key: string; side: "left" | "right" };
-export type GhostShapeMark = { w: number; h: number };
-export type GhostPaneMark = GhostShapeMark & { x: number; y: number; corner: number };
+type GhostShapeMark = { w: number; h: number };
+type GhostPaneMark = GhostShapeMark & { x: number; y: number; corner: number };
 
 export type DragMarks = {
   sources: Set<string>;

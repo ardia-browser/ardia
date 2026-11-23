@@ -11,6 +11,12 @@ const WINDOW_BUTTON_CHOICES: Option<Settings["windowButtons"]>[] = [
   { value: "hidden", title: "Hidden" },
 ];
 
+const WINDOW_BUTTON_DESCRIPTIONS: Record<Settings["windowButtons"], string> = {
+  native: "Follows your desktop's button layout.",
+  trafficLights: "Close, minimize and maximize at the top left.",
+  hidden: "No window buttons; keeps the menu button in the header.",
+};
+
 export function WindowButtonsPicker() {
   const windowButtons = useSettings((s) => s.windowButtons);
   if (!windowButtonsChoosable) return null;
@@ -18,7 +24,7 @@ export function WindowButtonsPicker() {
     <>
       <SectionHeader title="Window buttons" />
       <Group>
-        <Row anchor="appearance.windowButtons">
+        <Row anchor="appearance.windowButtons" description={WINDOW_BUTTON_DESCRIPTIONS[windowButtons]}>
           <PopUp value={windowButtons} options={WINDOW_BUTTON_CHOICES} onChange={(v) => updateSettings({ windowButtons: v })} minWidth={180} />
         </Row>
       </Group>

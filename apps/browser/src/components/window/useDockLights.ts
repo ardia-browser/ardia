@@ -19,7 +19,7 @@ export function useTopStripLights(windowId: string, dock: Animated.Value, on: bo
   }, [windowId, dock, on, travel, open]);
 }
 
-export type SidebarLights = { width: number; moving: boolean; peeking: boolean; fullscreen: boolean; lights: readonly [number, number]; right: boolean; peekAt: { left: number; top: number } };
+type SidebarLights = { width: number; moving: boolean; peeking: boolean; fullscreen: boolean; lights: readonly [number, number]; right: boolean; peekAt: { left: number; top: number } };
 
 export function useSidebarLights(windowId: string, dock: Animated.Value, slide: Animated.Value, o: SidebarLights, onSlide: (value: number) => void = () => {}) {
   const latestOnSlide = useRef(onSlide);

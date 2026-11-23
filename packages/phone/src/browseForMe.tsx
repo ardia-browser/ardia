@@ -39,7 +39,7 @@ type BrowseForMeNative = {
   addListener(eventName: "onBrowseForMe", listener: (event: BrowseForMeEvent) => void): Subscription;
 };
 
-export const BROWSE_FOR_ME_MODULE = "ArdiaPhoneBrowseForMe";
+const BROWSE_FOR_ME_MODULE = "ArdiaPhoneBrowseForMe";
 
 const native = () => requireOptionalNativeModule<BrowseForMeNative>(BROWSE_FOR_ME_MODULE);
 

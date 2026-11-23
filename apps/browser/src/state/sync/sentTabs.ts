@@ -3,7 +3,7 @@ import { activeTabId, plural } from "../browser/model";
 import { switchToTab } from "../browser/actions";
 import { showToast } from "../app/toasts";
 import { isQuitting } from "../app/quit";
-import { flushPersistence } from "../session/persist";
+import { flushPersistence, sessionWritesBlocked } from "../session/persist";
 import { newBookmarkId as newUuid } from "../bookmarks/bookmarks";
 import { deviceKindOf, deviceLabel, deviceRecords, deviceSymbol, offersTabs } from "./devices";
 import { SEND, profileScope, type DeviceRecord, type SendRecord } from "./records";
@@ -52,7 +52,7 @@ function frontWindowShowing(s: BrowserState, profileId: string): string | undefi
 }
 
 export function deliverSentTabs(doc: SyncDoc, profileId: string, arrived: ReceivedSend[]): boolean {
-  if (isQuitting() || !useBrowser.getState().profiles[profileId]) return false;
+  if (isQuitting() || sessionWritesBlocked() || !useBrowser.getState().profiles[profileId]) return false;
   const app = doc.scopes[APP_SCOPE];
   const devices = app ? deviceRecords(app) : new Map<string, DeviceRecord>();
   const opened: ReceivedTab[] = [];

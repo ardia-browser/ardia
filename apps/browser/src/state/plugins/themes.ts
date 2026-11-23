@@ -2,9 +2,9 @@ import { parseThemeFile, type ParsedTheme, type RolePalettes } from "../../lib/t
 import { activeManifest, activeNames, currentPlugins, recordOf, type PluginsStore } from "./store";
 import { readFolderFile } from "./hostIo";
 
-export type PluginTheme = { plugin: string; pluginTitle: string; id: string; title: string; key: string };
+type PluginTheme = { plugin: string; pluginTitle: string; id: string; title: string; key: string };
 
-export const pluginThemeKey = (plugin: string, id: string) => `plugin:${plugin}/${id}`;
+const pluginThemeKey = (plugin: string, id: string) => `plugin:${plugin}/${id}`;
 
 export function parsePluginThemeKey(key: string): { plugin: string; id: string } | null {
   const found = /^plugin:([a-z0-9][a-z0-9-]{0,39})\/([A-Za-z0-9_-]{1,40})$/.exec(key);
@@ -18,7 +18,7 @@ export function pluginThemes(s: Pick<PluginsStore, "listings" | "records" | "ord
   });
 }
 
-export type PluginThemeLoad = { ok: true; theme: ParsedTheme } | { ok: false; reason: string };
+type PluginThemeLoad = { ok: true; theme: ParsedTheme } | { ok: false; reason: string };
 
 export async function loadPluginTheme(plugin: string, themeId: string, defaults: RolePalettes): Promise<PluginThemeLoad> {
   const s = currentPlugins();

@@ -12,7 +12,7 @@ public enum ChromiumSearchEngine {
 
   static func chosenGuid(_ prefs: [String: Any]) -> String? {
     let provider = prefs["default_search_provider"] as? [String: Any]
-    return ["guid", "synced_guid"].lazy.compactMap { nonEmpty(provider?[$0] as? String) }.first
+    return ["guid", "synced_guid"].lazy.compactMap { ChromiumAutofill.nonEmpty(provider?[$0] as? String) }.first
   }
 
   static func keyword(guid: String, webData: URL) throws -> ImportedSearchEngine? {
@@ -36,13 +36,8 @@ public enum ChromiumSearchEngine {
   }
 
   static func engine(name: String?, keyword: String?, url: String?, prepopulateId: Int?) -> ImportedSearchEngine? {
-    guard let url = nonEmpty(url)?.replacingOccurrences(of: "{searchTerms?}", with: "{searchTerms}"), url.contains("{searchTerms}") else { return nil }
-    return ImportedSearchEngine(name: nonEmpty(name) ?? "", keyword: nonEmpty(keyword) ?? "", url: url,
+    guard let url = ChromiumAutofill.nonEmpty(url)?.replacingOccurrences(of: "{searchTerms?}", with: "{searchTerms}"), url.contains("{searchTerms}") else { return nil }
+    return ImportedSearchEngine(name: ChromiumAutofill.nonEmpty(name) ?? "", keyword: ChromiumAutofill.nonEmpty(keyword) ?? "", url: url,
                                 prepopulateId: prepopulateId.flatMap { $0 > 0 ? $0 : nil })
-  }
-
-  static func nonEmpty(_ s: String?) -> String? {
-    guard let t = s?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty else { return nil }
-    return t
   }
 }

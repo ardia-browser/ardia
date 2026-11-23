@@ -280,6 +280,14 @@ function headOf(dir) {
   return r.status === 0 ? r.stdout.trim() : null;
 }
 
+function judgeSyncedEngine(manifest) {
+  const recorded = process.env.AC_ENGINE_RECORD;
+  if (!recorded) return;
+  const line = lib.judgeSyncedEngine(repo, recorded, manifest);
+  if (line !== process.env.ARDIACORE_ENGINE_MATCH) console.log(`build-cache: the synced tree's engine is "${line}", not the "${process.env.ARDIACORE_ENGINE_MATCH ?? ""}" judged before syncing; stamping that`);
+  process.env.ARDIACORE_ENGINE_MATCH = line;
+}
+
 function slotRun() {
   need("slot", "stamp", "config", "out", "framework");
   const slot = resolve(flags.slot);
@@ -300,6 +308,7 @@ function slotRun() {
     if (!mismatched.length) break;
     if (attempt === 3) throw new Error(`${mismatched.length} files kept changing while they were synced (${mismatched[0]})`);
   }
+  judgeSyncedEngine(manifest);
   const state = syncDeps(slot, lib.readSlotState(slot), manifest);
   const rust = lib.rustIdentity(tree);
   const localEnv = { ...process.env };
@@ -349,16 +358,30 @@ function slotRun() {
 }
 
 function engine() {
-  const key = engineKey();
+  const commit = pinnedCommit();
+  const key = engineKey(commit);
   const dir = join(cfg.cacheRoot, "engines", key.slice(0, 12));
   const framework = join(dir, "Chromium Framework.framework");
+  const fetchEngine = join(repo, "packages/ardiacore/scripts/fetch-engine.sh");
+  const record = join(dir, "engine-match");
+  if (lib.engineRecordNamesAnotherKey(record, key)) {
+    const discarded = `${dir}.discard-${process.pid}`;
+    fs.rmSync(discarded, { recursive: true, force: true });
+    fs.renameSync(dir, discarded);
+    fs.rmSync(discarded, { recursive: true, force: true });
+    console.error(`build-cache: ${dir} held an engine recorded for another key; fetching ${key.slice(0, 12)}'s again`);
+  }
   if (!fs.existsSync(join(dir, ".complete"))) {
-    const fetched = execFileSync(join(repo, "packages/ardiacore/scripts/fetch-engine.sh"), { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] }).trim();
+    const fetched = execFileSync(fetchEngine, { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"], env: { ...process.env, ARDIACORE_ENGINE_COMMIT: commit } }).trim();
+    if (!lib.engineRecordComplete(join(dirname(fetched), "engine-match"), key)) {
+      throw new Error(`fetch-engine.sh recorded another engine than ${key.slice(0, 12)}'s for ${fetched}; nothing was cached`);
+    }
     const tmp = `${dir}.tmp-${process.pid}`;
     fs.rmSync(tmp, { recursive: true, force: true });
     fs.mkdirSync(tmp, { recursive: true });
     const r = lib.cloneTree(fetched, join(tmp, "Chromium Framework.framework"));
     if (r.status !== 0) throw new Error(`copying the engine failed: ${r.stderr.trim()}`);
+    fs.copyFileSync(join(dirname(fetched), "engine-match"), join(tmp, "engine-match"));
     fs.writeFileSync(join(tmp, ".complete"), "");
     try {
       fs.renameSync(tmp, dir);
@@ -369,13 +392,24 @@ function engine() {
       throw new Error(`the engine store ${dir} is incomplete after fetching`);
     }
   }
+  if (!lib.engineRecordComplete(record, key)) {
+    const tmp = join(dir, `engine-match.tmp-${process.pid}`);
+    fs.writeFileSync(tmp, `${lib.describeEngineOffline(fetchEngine, key, commit)}\n`);
+    fs.renameSync(tmp, record);
+  }
   lib.touch(dir);
   lib.evict(cfg.cacheRoot, { maxBytes: cfg.maxBytes, maxEntries: cfg.maxEntries, keepEngines: cfg.keepEngines, graceMs: cfg.graceMs, protectEngines: [dir] });
   return framework;
 }
 
-function engineKey() {
-  const r = spawnSync(join(repo, "engine/engine-key.sh"), ["--platform", "macos"], { encoding: "utf8" });
+function pinnedCommit() {
+  const r = spawnSync("git", ["-C", repo, "rev-parse", "--verify", "HEAD^{commit}"], { encoding: "utf8" });
+  if (r.status !== 0) throw new Error(`${repo} has no commit to match a prebuilt engine to`);
+  return r.stdout.trim();
+}
+
+function engineKey(commit) {
+  const r = spawnSync(join(repo, "engine/engine-key.sh"), ["--platform", "macos", commit], { encoding: "utf8" });
   if (r.status !== 0) throw new Error("engine/engine-key.sh failed");
   return r.stdout.trim();
 }

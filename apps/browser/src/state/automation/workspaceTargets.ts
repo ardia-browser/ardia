@@ -5,10 +5,11 @@ import { ancestorIds, innermostGroupOf, rootOf } from "../groups/groups";
 import type { TabPlacement } from "../pins/placing";
 import { groupLabel } from "../pins/tabGrouping";
 import type { ErrorCode } from "./automationMethods";
-import { eligibleKind, isEligibleTab, lastFocusedEligibleWindow, ownEntry } from "./automationWindows";
+import { eligibleKind, isEligibleTab, lastFocusedEligibleWindow } from "./automationWindows";
 import type { GroupName, Op } from "./workspaceOps";
 import { iconName, isEligibleGroup } from "./workspaceTree";
 import { isTabBusy } from "./tabCalls";
+import { ownValue } from "../../lib/decode";
 
 export type Changed = { tabs?: string[]; groups?: string[] };
 
@@ -74,11 +75,11 @@ export function groupRef(results: OpResult[], ref: unknown, scope: () => NameSco
   const s = store();
   if (typeof ref === "string") {
     const at = refIndex(ref);
-    const id = at === null ? (ownEntry(s.groups, ref) ? ref : null) : results[at]?.group;
+    const id = at === null ? (ownValue(s.groups, ref) ? ref : null) : results[at]?.group;
     if (at !== null && !id) throw new OpError("bad_request", `${ref} made no group.`);
     if (id) {
       if (!isEligibleGroup(s, id)) throw new OpError("no_window", `There's no group ${id} the ardia command can use.`);
-      return ownEntry(s.groups, id)!;
+      return ownValue(s.groups, id)!;
     }
     return groupNamed(ref, scope());
   }
@@ -87,7 +88,7 @@ export function groupRef(results: OpResult[], ref: unknown, scope: () => NameSco
 
 export function labelled(groupId: string): Pick<OpResult, "group" | "label" | "icon"> {
   const s = store();
-  const g = ownEntry(s.groups, groupId);
+  const g = ownValue(s.groups, groupId);
   return g ? { group: groupId, label: groupLabel(s, g), icon: iconName(g.icon) } : { group: groupId };
 }
 
@@ -96,13 +97,13 @@ export type Anchor = { kind: "tab" | "group"; id: string; windowId: string; prof
 export function anchorRef(results: OpResult[], ref: string): Anchor {
   const at = refIndex(ref);
   const s = store();
-  const group = at === null ? (ownEntry(s.groups, ref) ? ref : null) : (results[at]?.group ?? null);
+  const group = at === null ? (ownValue(s.groups, ref) ? ref : null) : (results[at]?.group ?? null);
   if (group) {
     const g = groupRef(results, group);
     return { kind: "group", id: g.id, windowId: g.windowId, profileId: g.profileId };
   }
   const id = tabRef(results, ref);
-  const t = ownEntry(s.tabs, id)!;
+  const t = ownValue(s.tabs, id)!;
   return { kind: "tab", id, windowId: t.windowId, profileId: t.profileId };
 }
 
@@ -112,7 +113,7 @@ export function normalWindow(id: string): string {
 }
 
 export function profileOf(id: string): string {
-  if (!ownEntry(store().profiles, id) || isIncognitoProfile(id)) throw new OpError("no_window", `There's no profile ${id}.`);
+  if (!ownValue(store().profiles, id) || isIncognitoProfile(id)) throw new OpError("no_window", `There's no profile ${id}.`);
   return id;
 }
 
@@ -193,7 +194,7 @@ export function besideAnchor(asked: Anchor, after: boolean, moving: ReadonlySet<
   return { placement, windowId: anchor.windowId, profileId: anchor.profileId, anchor, after };
 }
 
-export function insideGroup(s: BrowserState, anchor: Anchor, group: TabGroup): boolean {
+function insideGroup(s: BrowserState, anchor: Anchor, group: TabGroup): boolean {
   if (anchor.kind === "tab") return group.tabIds.includes(anchor.id);
   return anchor.id !== group.id && ancestorIds(s.groups, anchor.id).includes(group.id);
 }

@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { cleanUrl } from "@ardia/core/src/cleanUrl.ts";
 import { settingsUI } from "@ardia/phone-native";
 import { PlatformColor, useWindowDimensions, View } from "react-native";
 import { Button, ContentUnavailableView, HStack, Image, Label, ProgressView, RNHostView, ShareLink, Spacer, Text, VStack } from "@expo/ui/swift-ui";
@@ -74,7 +75,7 @@ export function LinkMenuItems({ url, onCopy }: { url: string; onCopy: () => void
   return (
     <>
       <Button label={actionWords.copyLink} systemImage={sfName(iconRoles.copyLink)} onPress={onCopy} />
-      <ShareLink item={url}>
+      <ShareLink item={cleanUrl(url)}>
         <Label title={actionWords.share} systemImage={sfName(iconRoles.share)} />
       </ShareLink>
     </>

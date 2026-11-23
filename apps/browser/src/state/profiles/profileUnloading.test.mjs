@@ -18,6 +18,8 @@ const { startCast } = await import("../media/cast.ts");
 const { startHistory } = await import("../history/engineSync.ts");
 const { takeTabSleepCounts } = await import("../telemetry/tabSleepCounts.ts");
 const { pageAskedToClose } = await import("../tabs/pageEvents.ts");
+const { cliHoldsClockForTests, holdForCli, releaseAllCliHolds, releaseFromCli } = await import("../tabs/cliHolds.ts");
+const { setConsentPeriod } = await import("../telemetry/consentPeriod.ts");
 
 const S = () => useBrowser.getState();
 const MINUTE = 60_000;
@@ -45,6 +47,7 @@ profileUnloadingForTests(() => clock);
 startProfileUnloading();
 
 function launch(settings = {}) {
+  releaseAllCliHolds();
   stub.docs.delete("switches-cache.json");
   stub.launch.switches = {};
   reloadLaunchConfigForTests();
@@ -96,6 +99,67 @@ test("a profile no window shows is unloaded after the delay: its tabs wait to lo
   await until(() => callsFor("play", since).includes("history.query") && callsFor("play", since).includes("bookmarks.tree"), "its history and bookmarks read again");
   assert.equal(takeTabSleepCounts().unloaded_profiles_reopened, 1);
   for (const s of stops) s();
+  stop();
+});
+
+test("a profile with a tab an ardia command session holds stays loaded until the hold ends, then waits the full delay again", async () => {
+  const stop = launch();
+  setConsentPeriod(true, "profile-unloading-cli-hold");
+  await until(() => loading.profileOpened("play"), "the engine's loaded profiles");
+  stub.idleProfileUnloads.set("play", { status: "pending", tabs: ["t-play", "t-play-2"] });
+  let t = clock;
+  let leaseClock = 0;
+  profileUnloadingForTests(() => t);
+  cliHoldsClockForTests(() => leaseClock);
+  const since = stub.engineCalls.length;
+  await checkIdleProfiles(t);
+  holdForCli("session-a", ["t-play-2"], 300);
+  holdForCli("session-b", ["t-play-2"], 60);
+  t = clock + 5 * MINUTE;
+  leaseClock = 4 * MINUTE;
+  await checkIdleProfiles(t);
+  S().updateSettings({ sidebarWidth: 280 });
+  S().switchProfile("w1", "work");
+  t = clock + 9 * MINUTE;
+  await checkIdleProfiles(t);
+  assert.deepEqual(unloadCalls(since), [], "held past the delay, by the session whose hold is still running");
+  assert.equal(takeTabSleepCounts().profiles_kept_for_cli, 1, "counted once while it stays held");
+  t = clock + 10 * MINUTE;
+  releaseFromCli("session-a");
+  await checkIdleProfiles(clock + 15 * MINUTE - 1);
+  assert.deepEqual(unloadCalls(since), [], "the wait starts again when the hold ends");
+  await checkIdleProfiles(clock + 15 * MINUTE);
+  assert.deepEqual(unloadCalls(since), ["play"]);
+  setConsentPeriod(false, "profile-unloading-cli-hold");
+  cliHoldsClockForTests(() => performance.now());
+  profileUnloadingForTests(() => clock);
+  stop();
+});
+
+test("a profile whose hold came and went while another profile unloaded isn't unloaded by that same sweep, and a later hold a check sees counts once", async () => {
+  const stop = launch();
+  setConsentPeriod(true, "profile-unloading-cli-sweep");
+  await until(() => loading.profileOpened("play") && loading.profileOpened("work"), "the engine's loaded profiles");
+  let t = clock;
+  profileUnloadingForTests(() => t);
+  S().switchProfile("w1", "default");
+  await checkIdleProfiles(t);
+  t = clock + 5 * MINUTE;
+  stub.idleProfileUnloads.set("work", {
+    status: "pending", tabs: ["t-work"],
+    closing: () => { holdForCli("session-a", ["t-play"], 120); releaseFromCli("session-a"); },
+  });
+  stub.idleProfileUnloads.set("play", { status: "pending", tabs: ["t-play", "t-play-2"] });
+  const since = stub.engineCalls.length;
+  await checkIdleProfiles(t);
+  assert.deepEqual(unloadCalls(since), ["work"], "play's wait started again when its hold ended mid-sweep");
+  assert.equal(takeTabSleepCounts().profiles_kept_for_cli, 0, "no check saw that hold");
+  holdForCli("session-a", ["t-play"], 120);
+  await checkIdleProfiles(t + MINUTE);
+  assert.equal(takeTabSleepCounts().profiles_kept_for_cli, 1, "the hold the next check sees");
+  releaseFromCli("session-a");
+  setConsentPeriod(false, "profile-unloading-cli-sweep");
+  profileUnloadingForTests(() => clock);
   stop();
 });
 

@@ -6,10 +6,10 @@ import { warnFor } from "../telemetry/consoleConsent";
 import { isQuitting } from "../app/quit";
 import { usePlugins, type ProcessState } from "./store";
 
-export const RESTART_DELAYS_MS = [1000, 2000, 4000, 8000, 16000];
-export const CRASH_WINDOW_MS = 10 * 60_000;
+const RESTART_DELAYS_MS = [1000, 2000, 4000, 8000, 16000];
+const CRASH_WINDOW_MS = 10 * 60_000;
 export const CRASH_LIMIT = 5;
-export const STOP_GRACE_MS = 3000;
+const STOP_GRACE_MS = 3000;
 export const STOPPING_NOTICE_MS = 120;
 
 type Supervised = { hash: string; folderId: string; manifest: PluginManifest; failures: number[]; timer: ReturnType<typeof setTimeout> | null; token: number; startingRun: number | null; liveRun: number | null };
@@ -90,7 +90,7 @@ function stopNative(name: string, entry: Supervised, graceMs: number, consent: C
   return done;
 }
 
-export function startSpec(name: string, entry: Pick<Supervised, "manifest" | "folderId" | "hash">, launchToken: number): PluginStartSpec {
+function startSpec(name: string, entry: Pick<Supervised, "manifest" | "folderId" | "hash">, launchToken: number): PluginStartSpec {
   const m = entry.manifest;
   const base = { name, network: m.sidecar !== null && m.permissions.network !== false, folderId: entry.folderId, approved: entry.hash, page: m.contributes.panels.some((p) => !!p.file), launch: launchToken };
   if (m.main) return { ...base, runtime: "js", entry: m.main.entry, run: [], memoryMB: m.main.memoryMB };

@@ -5,7 +5,7 @@ import { onTelemetryRelay } from "./relay";
 
 type Counts = Record<string, number | boolean | string | null>;
 
-export type TopAppsSharingPath = "synced_record" | "link_profiles" | "linked_profile_created";
+type TopAppsSharingPath = "synced_record" | "link_profiles" | "linked_profile_created";
 
 const MAX_HELD = 16;
 const BEFORE_LOAD = "beforeLoad";
@@ -47,7 +47,7 @@ export const sharingStartedBySync = () => syncStarted > 0;
 
 export const noteSavedTopAppsMerged = (marker: string) => void (savedMerged = marker);
 
-export function topAppsSharingCounts(s: Pick<BrowserState, "profiles">) {
+function topAppsSharingCounts(s: Pick<BrowserState, "profiles">) {
   const profiles = Object.values(s.profiles);
   return { profile_count: profiles.length, sharing_profiles: profiles.filter((p) => p.shareTopApps).length };
 }

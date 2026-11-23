@@ -59,7 +59,7 @@ const REVIEW_BOT_BLOCKS = [
   /<!--\s*This is an auto-generated comment\b[^>]*-->[\s\S]*?(?:<!--\s*end of auto-generated comment\b[^>]*-->|$)/gi,
 ];
 const CLOSING_REFERENCE = /(?:^|[^A-Za-z0-9_])(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?[^\S\n]+#(\d+)/gim;
-const GATED_WORKFLOWS = ["ios.yml", "android.yml", "linux.yml", "windows.yml", "mac.yml", "rust.yml"];
+const GATED_WORKFLOWS = ["ios.yml", "android.yml", "linux.yml", "windows.yml", "mac.yml", "rust.yml", "engine-series.yml"];
 const GATE_JOB = "gate";
 const ROUTE_JOB = "route";
 const NOT_BUILD_JOBS = [GATE_JOB, ROUTE_JOB];
@@ -1005,6 +1005,7 @@ async function applyRules(session, given, { dryRun = false, around = {}, readAga
 async function evaluatePullRules(session, number, options = {}) {
   const facts = await readRulePull(session, number);
   if (!facts || facts.state !== "open" || !createdSinceRules(facts.createdAt)) return null;
+  if (!RULED_TIERS.includes(await tierOf(session, facts.login, facts.association))) return null;
   await settleMergeable(session, [facts]);
   return applyRules(session, facts, options);
 }
@@ -1020,8 +1021,8 @@ async function evaluateAuthorRules(session, pull, { closed }) {
     const change = await evaluatePullRules(session, number, { around });
     if (change) changes.push(change);
   };
-  if (!closed && createdSinceRules(pull.created_at)) await evaluate(pull.number);
   const tier = login ? await tierOf(session, login, pull.author_association) : null;
+  if (!closed && createdSinceRules(pull.created_at) && RULED_TIERS.includes(tier || "outsider")) await evaluate(pull.number);
   if (tier === "outsider") {
     const others = (await openPullsOf(session)).filter(
       (other) =>
@@ -1356,6 +1357,7 @@ async function run(args) {
   if (eventName === "pull_request_target" && PULL_RULE_ACTIONS.includes(action)) {
     const pull = payload.pull_request;
     if (pull.state !== "open" || !createdSinceRules(pull.created_at)) return null;
+    if (!RULED_TIERS.includes(await tierOf(session, loginOf(pull), pull.author_association))) return null;
     return evaluatePullRules(session, pull.number);
   }
   if (eventName === "issues" && (action === "opened" || action === "reopened")) {
@@ -1399,20 +1401,26 @@ async function gate(args) {
   if (context.eventName !== "pull_request") {
     decision = { run: true, reason: `A ${context.eventName} run always builds.` };
   } else {
-    const { data: pr } = await github.rest.pulls.get({ ...repo, pull_number: context.payload.pull_request.number });
     const runAttempt = Number(env.GITHUB_RUN_ATTEMPT || 1);
-    const actor = env.GITHUB_TRIGGERING_ACTOR || null;
-    const status = await statusOf(session, loginOf(pr), pr.author_association);
-    const labels = labelNames(pr);
-    const rerunByAPerson = runAttempt > 1 && Boolean(actor) && !actor.endsWith("[bot]");
-    const actorDecides = status === "unknown" && !labels.includes(RUN_CI) && rerunByAPerson;
-    decision = gateDecision({
-      status,
-      labels,
-      runAttempt,
-      actor,
-      actorPermission: actorDecides ? await permissionOf(session, actor) : "none",
-    });
+    const decide = async (pr) => {
+      const actor = env.GITHUB_TRIGGERING_ACTOR || null;
+      const status = await statusOf(session, loginOf(pr), pr.author_association);
+      const labels = labelNames(pr);
+      const rerunByAPerson = runAttempt > 1 && Boolean(actor) && !actor.endsWith("[bot]");
+      const actorDecides = status === "unknown" && !labels.includes(RUN_CI) && rerunByAPerson;
+      const outcome = gateDecision({
+        status,
+        labels,
+        runAttempt,
+        actor,
+        actorPermission: actorDecides ? await permissionOf(session, actor) : "none",
+      });
+      return { ...outcome, unvouched: status === "unknown" };
+    };
+    const live = async () => (await github.rest.pulls.get({ ...repo, pull_number: context.payload.pull_request.number })).data;
+    let outcome = await decide(runAttempt > 1 ? await live() : context.payload.pull_request);
+    if (runAttempt === 1 && outcome.unvouched) outcome = await decide(await live());
+    decision = { run: outcome.run, reason: outcome.reason };
   }
   core.setOutput("run", decision.run ? "true" : "false");
   core.info(decision.reason);

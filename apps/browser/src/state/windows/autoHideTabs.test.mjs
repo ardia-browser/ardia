@@ -3,7 +3,7 @@ import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
 const { tabsShownIn } = await import("../browser/model.ts");
 const { menuState } = await import("../commands/menuState.ts");
-const { sidebarMenuItems } = await import("../sidebar/sidebarMenu.ts");
+const { browserLayoutItems } = await import("../sidebar/sidebarMenu.ts");
 const { flushPersistence, loadSession, parseSession, startPersistence } = await import("../session/persist.ts");
 const { SESSION_DOCUMENT } = await import("../session/sessionDocument.ts");
 const { noteScroll, useToolbarAutoHide } = await import("./toolbarAutoHide.ts");
@@ -13,7 +13,7 @@ const stub = await import("../../test-native/index.ts");
 const S = () => useBrowser.getState();
 const shown = (id) => tabsShownIn(S(), id);
 const menuChecked = () => menuState(S()).checked.includes("toggleSidebar");
-const sidebarMenuChecked = (id) => !!sidebarMenuItems(S(), id).find((item) => item.id === "autoHide")?.checked;
+const sidebarMenuChecked = (id) => !!browserLayoutItems(S(), id).find((item) => item.id === "layout:autoHide")?.checked;
 const everySurface = (ids) => ({ setting: S().settings.autoHideTabs, windows: ids.map(shown), menu: menuChecked(), sidebarMenu: ids.map(sidebarMenuChecked) });
 const allShown = (ids) => ({ setting: false, windows: ids.map(() => true), menu: false, sidebarMenu: ids.map(() => false) });
 const allHidden = (ids) => ({ setting: true, windows: ids.map(() => false), menu: true, sidebarMenu: ids.map(() => true) });
@@ -228,10 +228,11 @@ test("the toggle count is this Mac's choices: ⌘S and Settings count, a value a
   assert.equal(takeAutoHideTabsChoices(), 0);
 });
 
-test("a saved session that disagreed with the setting is written back in line at launch, before anything else changes", () => {
+test("a saved session that disagreed with the setting is written back in line at launch, before anything else changes", async () => {
   stub.docs.clear();
   stub.docs.set(SESSION_DOCUMENT, session({ tabLayout: "top", autoHideTabs: false }, [false, true]));
   const stop = startPersistence();
+  await new Promise((resolve) => setTimeout(resolve, 0));
   flushPersistence();
   const saved = JSON.parse(stub.docs.get(SESSION_DOCUMENT));
   assert.deepEqual(saved.windows.map((w) => w.sidebarOpen), [true, true]);

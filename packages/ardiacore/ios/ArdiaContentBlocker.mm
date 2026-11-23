@@ -509,6 +509,23 @@ NSArray<NSString *> *Strings(id value) {
   });
 }
 
++ (void)removeAllowedHost:(NSString *)host completion:(void (^)(BOOL, BOOL, NSString *))completion {
+  NSString *script = @"trusted().then((t) => {"
+                      "  const host = %@;"
+                      "  if (!t.whitelist.includes(host) || (t.whitelistDefault || []).includes(host)) return false;"
+                      "  return send({what: 'setWhitelist', whitelist: t.whitelist.filter((d) => d !== host).join('\\n')}).then(() => true);"
+                      "})";
+  completion = [completion copy];
+  Call(kProfile, ScriptWith(script, @[ host.lowercaseString ]), ^(id removed, NSString *error) {
+    if (error) return completion(NO, NO, error);
+    const BOOL done = [removed isKindOfClass:NSNumber.class] && [removed boolValue];
+    void (^followed)(NSString *) = ^(NSString *followError) { completion(done, followError != nil, followError); };
+    if (!done) return FollowDefault(nil, followed);
+    Publish(@{@"host" : host.lowercaseString, @"allowed" : @NO, @"exact" : @YES});
+    Changed(nil, followed);
+  });
+}
+
 + (void)userFilters:(void (^)(NSDictionary<NSString *, id> *, NSString *))completion {
   NSString *script = @"send({what: 'readUserFilters'}).then((u) => ({content: typeof u.content === 'string' ? u.content : '', enabled: u.enabled !== false, trusted: !!u.trusted}))";
   Call(kProfile, script, ^(id value, NSString *error) {

@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { ClipView, ContextMenuArea, space, WindowDragRegion } from "../ui";
-import { layout, useTheme } from "../ui/theme";
+import { useTheme } from "../ui/theme";
 import { useSidebarHighContrast } from "../../state/sidebar/textLook";
 import { TintInk } from "../ui/TintInk";
 import { useWindowId, useWindowProfileId } from "../../state/browser/hooks";
@@ -11,7 +11,7 @@ import { closeAnchoredWhenControlsRowChanges } from "../../state/sidebar/control
 import { DownloadsButton } from "../downloads/DownloadsButton";
 import { profileIndicatorX, ProfileIndicator } from "../profiles/ProfileIndicator";
 import { useWindowChrome } from "../../state/windows/windowButtons";
-import { usePagerPages } from "../../state/windows/profilePager";
+import { pagerFor, usePagerPages, useSettledProfile, type PagerPage } from "../../state/windows/profilePager";
 import { PROFILE_DOTS_HEIGHT, ProfileDots, useProfileDotsShown } from "../profiles/ProfileDots";
 import { SidebarAddressRow, SidebarHeaderTools } from "./AddressBar";
 import { DragGhost } from "./DragGhost";
@@ -27,7 +27,7 @@ import { bottomFieldBand, SIDEBAR_FIELD, SIDEBAR_FIELD_BOTTOM, SIDEBAR_FOOTER_DO
 import { useNewTabAtTop, useSidebarField, useSidebarPart } from "../../state/sidebar/chrome";
 import { closeFolderPanel } from "../../state/sidebar/tileFolderUi";
 import { openSidebarMenu } from "../../state/sidebar/menus";
-import { GLOW_ROOM, rowPitch, type SidebarGeometry } from "./pageLayout";
+import { GLOW_ROOM, rowPitch, type PageSpot, type SidebarGeometry } from "./pageLayout";
 import { SidebarPage } from "./SidebarPage";
 import { sidebarText } from "./SidebarTextScope";
 import { SidebarRowLookContext, useSidebarRowLookSource } from "./rowLook";
@@ -110,23 +110,20 @@ export function Sidebar({ width }: { width: number }) {
               }}
               onLayout={(e) => setAvailable(e.nativeEvent.layout.height)}
             >
-              {pages.map((page) => (
-                  <SidebarPage
-                    key={page.id}
-                    profileId={page.id}
-                    slot={page.slot}
-                    paging={paging}
-                    width={width}
-                    current={page.id === current}
-                    resting={!!page.resting}
-                    canDock={canDock}
-                    height={Math.max(0, available - (field === "top" ? GLOW_ROOM : 0))}
-                    rows={page.id === current ? undefined : Math.ceil(available / rowPitch()) + 1}
-                    geometry={page.id === current ? geometry : undefined}
-                    onScrollView={onScrollView}
-                    onScrollY={onScrollY}
-                  />
-                ))}
+              <SidebarPages
+                windowId={windowId}
+                pages={pages}
+                paging={paging}
+                width={width}
+                current={current}
+                dragging={!!ghost}
+                canDock={canDock}
+                available={available}
+                topField={field === "top"}
+                geometry={geometry}
+                onScrollView={onScrollView}
+                onScrollY={onScrollY}
+              />
             </ClipView>
 
             <TintInk>
@@ -189,5 +186,71 @@ export function Sidebar({ width }: { width: number }) {
     </DragProvider>
   );
 }
+
+type SidebarPagesProps = {
+  windowId: string;
+  pages: PagerPage[];
+  paging: boolean;
+  width: number;
+  current: string;
+  dragging: boolean;
+  canDock: boolean;
+  available: number;
+  topField: boolean;
+  geometry: RefObject<SidebarGeometry>;
+  onScrollView: (view: ScrollView | null) => void;
+  onScrollY: (y: number) => void;
+};
+
+const SidebarPages = memo(function SidebarPages({ windowId, pages, paging, width, current, dragging, canDock, available, topField, geometry, onScrollView, onScrollY }: SidebarPagesProps) {
+  const settled = useSettledProfile(windowId, current);
+  const [spots] = useState(() => new Map<string, PageSpot>());
+  const claimed = useRef<PageSpot | null>(null);
+  const pager = pagerFor(windowId);
+  const waiting = settled !== current;
+  useLayoutEffect(() => {
+    if (dragging && waiting) pager.bypassHold();
+  }, [dragging, waiting, pager]);
+  const shown = dragging || !pages.some((page) => page.id === settled) ? current : settled;
+  const capRows = Math.ceil(available / rowPitch()) + 1;
+  useLayoutEffect(() => {
+    const spot = spots.get(current) ?? null;
+    if (spot === claimed.current) return;
+    if (claimed.current) claimed.current.owns = false;
+    claimed.current = spot;
+    if (!spot) {
+      onScrollView(null);
+      return;
+    }
+    spot.owns = true;
+    Object.assign(geometry.current, { viewport: spot.viewport, regions: spot.regions, tilesFixed: spot.tilesFixed, newTabAtTop: spot.newTabAtTop, edgeLift: spot.edgeLift, ownerShown: () => spot.shown });
+    onScrollView(spot.scroller);
+    onScrollY(spot.scrollY);
+    geometry.current.laidOut?.();
+  });
+  return (
+    <View pointerEvents={shown === current ? "box-none" : "none"} style={StyleSheet.absoluteFill}>
+      {pages.map((page) => (
+        <SidebarPage
+          key={page.id}
+          profileId={page.id}
+          slot={page.slot}
+          paging={paging}
+          width={width}
+          current={page.id === shown}
+          resting={!!page.resting}
+          canDock={canDock}
+          height={Math.max(0, available - (topField ? GLOW_ROOM : 0))}
+          rows={page.id === shown ? undefined : capRows}
+          geometry={page.id === shown ? geometry : undefined}
+          sharedGeometry={geometry}
+          spots={spots}
+          onScrollView={onScrollView}
+          onScrollY={onScrollY}
+        />
+      ))}
+    </View>
+  );
+});
 
 const GHOST_CLIP = { ...StyleSheet.absoluteFillObject, overflow: "hidden" } as const;

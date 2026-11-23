@@ -10,7 +10,6 @@ import {
   DEFAULTS,
   FORCE_LABEL,
   GithubReadError,
-  HttpError,
   LIMITS_URL,
   MAIN_REF,
   SETTING_NAMES,
@@ -21,6 +20,7 @@ import {
   main,
   makeFetchJson,
   overflowOf,
+  JOB_READS_FIRST,
   pressureOf,
   report,
   route,
@@ -331,16 +331,58 @@ const pressureWith = (fake, settings = settingsFrom({})) =>
 
 test("the GitHub read skips this run, reads the newest runs first and keeps two thirds of its budget for jobs", async () => {
   const queued = Array.from({ length: 150 }, (_, at) => runOf(at + 1, at));
-  const jobs = Object.fromEntries(queued.map((run) => [run.id, [job("queued", ["ubuntu-latest"], 1)]]));
+  const jobs = Object.fromEntries(queued.map((run) => [run.id, [job("in_progress", ["ubuntu-latest"], 1)]]));
   const fake = fakeFetch({ runs: { [CANONICAL_REPO]: { queued, in_progress: [runOf(999)] } }, jobs });
   const settings = { ...settingsFrom({}), repos: [CANONICAL_REPO] };
   const pressure = await pressureWith(fake, settings);
   const jobCalls = fake.calls.filter((call) => call.url.includes("/jobs"));
   assert.equal(fake.calls.length - jobCalls.length, 3);
   assert.equal(jobCalls.length, 20);
-  assert.deepEqual([pressure.runs, pressure.inspected, pressure.queued], [150, 20, 20]);
+  assert.deepEqual([pressure.runs, pressure.inspected, pressure.busy], [150, 20, 20]);
   assert.ok(!fake.calls.some((call) => call.url.includes("/runs/999/")), "this run's own jobs are not read");
   assert.deepEqual(jobCalls.slice(0, 3).map((call) => Number(call.url.match(/runs\/(\d+)\/jobs/)[1])), [1, 2, 3]);
+});
+
+test("the read stops after the newest runs when they already prove GitHub busy", async () => {
+  const newer = Array.from({ length: 40 }, (_, at) => runOf(at + 1, at));
+  const older = Array.from({ length: 40 }, (_, at) => runOf(at + 101, at + 50));
+  const jobs = Object.fromEntries([
+    ...newer.map((run) => [run.id, [job("queued", ["ubuntu-latest"], 1)]]),
+    ...older.map((run) => [run.id, [job("in_progress", ["ubuntu-latest"])]]),
+  ]);
+  const fake = fakeFetch({ runs: { [CANONICAL_REPO]: { queued: newer, in_progress: older } }, jobs });
+  const settings = { ...settingsFrom({}), repos: [CANONICAL_REPO] };
+  const pressure = await pressureWith(fake, settings);
+  const jobCalls = fake.calls.filter((call) => call.url.includes("/jobs"));
+  assert.equal(fake.calls.length - jobCalls.length, 2);
+  assert.deepEqual(jobCalls.map((call) => Number(call.url.match(/runs\/(\d+)\/jobs/)[1])), [1, 2, 3, 4]);
+  assert.ok(overflowOf(pressure, settings));
+  assert.deepEqual([pressure.runs, pressure.inspected, pressure.queued], [80, JOB_READS_FIRST, JOB_READS_FIRST]);
+});
+
+test("busy runners behind quiet newer runs are still found within the budget", async () => {
+  const quiet = Array.from({ length: 4 }, (_, at) => runOf(at + 1, at));
+  const busy = Array.from({ length: 2 }, (_, at) => runOf(at + 11, at + 100));
+  const jobs = {
+    ...Object.fromEntries(quiet.map((run) => [run.id, [job("queued", ["boat-large"])]])),
+    11: Array.from({ length: 20 }, () => job("in_progress", ["ubuntu-latest"])),
+    12: Array.from({ length: 20 }, () => job("in_progress", ["ubuntu-latest"])),
+  };
+  const fake = fakeFetch({ runs: { [CANONICAL_REPO]: { queued: quiet, in_progress: busy } }, jobs });
+  const settings = { ...settingsFrom({}), repos: [CANONICAL_REPO] };
+  const pressure = await pressureWith(fake, settings);
+  assert.equal(pressure.busy, 40);
+  assert.ok(overflowOf(pressure, settings));
+  assert.equal(pressure.inspected, 6);
+});
+test("a quiet GitHub is read in full: every run's jobs, within the budget", async () => {
+  const running = Array.from({ length: 6 }, (_, at) => runOf(at + 1, at));
+  const jobs = Object.fromEntries(running.map((run) => [run.id, [job("in_progress", ["ubuntu-latest"])]]));
+  const fake = fakeFetch({ runs: { [CANONICAL_REPO]: { in_progress: running } }, jobs });
+  const settings = { ...settingsFrom({}), repos: [CANONICAL_REPO] };
+  const pressure = await pressureWith(fake, settings);
+  assert.equal(fake.calls.length, 2 + 6);
+  assert.deepEqual([pressure.inspected, pressure.busy, pressure.queued], [6, 6, 0]);
 });
 
 test("run listings stop at a third of the budget", async () => {

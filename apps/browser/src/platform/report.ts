@@ -6,8 +6,8 @@ export type { RecordingResult, ReportEvent, UploadReply };
 let bound: ReturnType<typeof nativeModule<"ArdiaReport">> | null = null;
 const Report = () => (bound ??= nativeModule("ArdiaReport"));
 
-export type ReportPost = (url: string, body: string, headers: Record<string, string>, timeoutMs: number) => Promise<{ status: number; text: string }>;
-export type ReportPlatform = { recording: boolean; files: boolean; post: ReportPost };
+type ReportPost = (url: string, body: string, headers: Record<string, string>, timeoutMs: number) => Promise<{ status: number; text: string }>;
+type ReportPlatform = { recording: boolean; files: boolean; post: ReportPost };
 
 const postWithFetch: ReportPost = async (url, body, headers, timeoutMs) => {
   const abort = new AbortController();

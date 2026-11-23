@@ -4,10 +4,15 @@ param(
   [int]$Seconds = 25,
   [int]$SelfCheckSeconds = 300,
   [switch]$NoInput,
-  [ValidateSet("all", "launch", "gate")][string]$Part = "all"
+  [ValidateSet("all", "launch", "input", "gate")][string]$Part = "all"
 )
 
 $ErrorActionPreference = "Stop"
+if ($Part -eq "input" -and $NoInput) { throw "-Part input drives the app with real input, so it can't run with -NoInput" }
+$runsLaunch = $Part -in "all", "launch"
+$runsInput = $Part -in "all", "input"
+$runsGate = $Part -in "all", "gate"
+if ($Part -eq "input" -and -not (Test-Path -LiteralPath (Join-Path (Split-Path -Parent (Resolve-Path -LiteralPath $App).Path) "chrome.dll"))) { throw "-Part input drives pages, so it needs the app assembled with the engine; $App has no chrome.dll beside it" }
 . (Join-Path $PSScriptRoot "process-tree.ps1")
 New-Item -ItemType Directory -Force -Path $Out | Out-Null
 $testBuild = Join-Path (Split-Path -Parent (Resolve-Path -LiteralPath $App).Path) "Ardia.test-build"
@@ -449,7 +454,9 @@ function New-DataDirectory([string]$Name) {
   return $directory
 }
 
-if ($Part -ne "gate") {
+if ($runsLaunch -or $runsInput) {
+$env:ARDIA_BACKGROUND = ""
+if ($runsLaunch) {
 $env:ARDIA_DATA_DIR = New-DataDirectory "launch-data"
 $env:ARDIA_BACKGROUND = ""
 $process = Start-Process -FilePath $App -ArgumentList "--log-file=`"$log`"" -PassThru
@@ -472,6 +479,7 @@ elseif (-not (Select-String -Path $log -Pattern "\[ardia windows\] first window"
 else {
   $first = (Select-String -Path $log -Pattern "^\w+ (\d+) .*\[ardia windows\] first window" | Select-Object -First 1)
   if ($first) { Write-Host "First window rendered $($first.Matches[0].Groups[1].Value) ms after the process started." }
+}
 }
 
 $httpPagesPort = 9353
@@ -575,6 +583,7 @@ while (-not $httpPagesUp -and (Get-Date) -lt $httpPagesBy -and -not $httpPages.H
 if (-not $httpPagesUp) { $failures += "the loopback page server never listened on port $httpPagesPort" }
 $withEngineForEdge = Test-Path -LiteralPath (Join-Path (Split-Path -Parent (Resolve-Path -LiteralPath $App).Path) "chrome.dll")
 
+if ($runsLaunch) {
 $browserLog = Join-Path $Out "browser.log"
 Remove-Item -Force -ErrorAction SilentlyContinue $browserLog
 $env:ARDIA_DATA_DIR = New-DataDirectory "browser-data"
@@ -607,6 +616,7 @@ elseif (Select-String -Path $browserLog -Pattern "^(js-error|fatal|error) " -Qui
   $failures += "the launch with onboarding done has errors"
 }
 elseif (-not (Select-String -Path $browserLog -Pattern "\[ardia windows\] first window" -Quiet)) { $failures += "the browser window never rendered with onboarding done" }
+}
 
 function Start-PlacementRun([string]$Name) {
   $runLog = Join-Path $Out "placement-$Name.log"
@@ -695,7 +705,7 @@ function Test-WindowPlacementKept {
   return $notes
 }
 
-if (-not $NoInput) { Test-WindowPlacementKept | ForEach-Object { $failures += $_ } }
+if ($runsLaunch -and -not $NoInput) { Test-WindowPlacementKept | ForEach-Object { $failures += $_ } }
 
 function Get-PageEvents {
   if (-not (Test-Path -LiteralPath $httpPagesLog)) { return @() }
@@ -946,7 +956,7 @@ $env:ARDIA_DATA_DIR = New-DataDirectory "top-edge-data"
 $env:ARDIA_CONFIG_DIR = $env:ARDIA_DATA_DIR
 Set-Content -Path (Join-Path $env:ARDIA_DATA_DIR "onboarding.json") -Value '{"completedAt":1700000000000,"version":1}' -Encoding utf8NoBOM
 Set-Content -Path (Join-Path $env:ARDIA_DATA_DIR "config.json") -Value '{"settings":{"minimalismMode":true,"sidebarSide":"right","openLinksInLittleArdia":false,"developerModeSites":{"127.0.0.1":false}}}' -Encoding utf8NoBOM
-if ($withEngineForEdge -and -not $NoInput -and $httpPagesUp) {
+if ($runsLaunch -and $withEngineForEdge -and -not $NoInput -and $httpPagesUp) {
   $edge = Start-Process -FilePath $App -ArgumentList "--log-file=`"$edgeLog`"", "http://127.0.0.1:$httpPagesPort/hover" -PassThru
   $env:ARDIA_CONFIG_DIR = ""
   try {
@@ -965,7 +975,7 @@ if ($withEngineForEdge -and -not $NoInput -and $httpPagesUp) {
 }
 $env:ARDIA_CONFIG_DIR = ""
 
-if ($Part -ne "gate" -and $withEngineForEdge -and -not $NoInput -and $httpPagesUp) {
+if ($runsInput -and $withEngineForEdge -and -not $NoInput -and $httpPagesUp) {
   foreach ($layout in @(@{ Name = "sidebar-left"; Settings = '{"settings":{"openLinksInLittleArdia":false}}' }, @{ Name = "minimal-right"; Settings = '{"settings":{"minimalismMode":true,"sidebarSide":"right","openLinksInLittleArdia":false,"developerModeSites":{"127.0.0.1":false}}}' })) {
     $dragLog = Join-Path $Out "page-drag-$($layout.Name).log"
     $env:ARDIA_DATA_DIR = New-DataDirectory "page-drag-$($layout.Name)-data"
@@ -996,7 +1006,7 @@ if ($Part -ne "gate" -and $withEngineForEdge -and -not $NoInput -and $httpPagesU
 }
 $env:ARDIA_CONFIG_DIR = ""
 
-if ($Part -ne "gate" -and $withEngineForEdge -and -not $NoInput -and $httpPagesUp) {
+if ($runsInput -and $withEngineForEdge -and -not $NoInput -and $httpPagesUp) {
   if (-not ([System.Management.Automation.PSTypeName]"ArdiaSnapKeys").Type) {
     Add-Type @"
 using System;
@@ -1320,7 +1330,7 @@ public static class ArdiaSnapKeys {
   $env:ARDIA_CONFIG_DIR = ""
 }
 
-if ($Part -ne "gate" -and $withEngineForEdge -and -not $NoInput -and $httpPagesUp) {
+if ($runsInput -and $withEngineForEdge -and -not $NoInput -and $httpPagesUp) {
   $peekLog = Join-Path $Out "self-check-linkPeeks.log"
   $env:ARDIA_DATA_DIR = New-DataDirectory "link-peeks-data"
   $env:ARDIA_TEST = "selfCheckStage=linkPeeks,httpPages=$httpPagesPort"
@@ -1360,6 +1370,7 @@ if ($Part -ne "gate" -and $withEngineForEdge -and -not $NoInput -and $httpPagesU
   }
 }
 
+if ($runsLaunch) {
 $env:ARDIA_DATA_DIR = New-DataDirectory "self-check-data"
 $importFixtures = Join-Path $env:ARDIA_DATA_DIR "import-fixtures"
 $fixtureProfiles = Join-Path $PSScriptRoot "..\..\packages\import\fixtures\home\Library\Application Support"
@@ -1478,6 +1489,8 @@ if (Test-Path $checkLog) {
   $failures += "the self-check wrote no log"
 }
 }
+if (-not $httpPages.HasExited) { Stop-Process -Id $httpPages.Id -Force -ErrorAction SilentlyContinue }
+}
 
 function Invoke-LoginData([string]$Sql) {
   $database = Join-Path $env:ARDIA_DATA_DIR "Chromium\Default\Login Data"
@@ -1517,7 +1530,7 @@ function Invoke-SelfCheckStage([string]$Stage) {
   return ""
 }
 
-if ($Part -ne "gate" -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent (Resolve-Path -LiteralPath $App).Path) "chrome.dll"))) {
+if ($runsLaunch -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent (Resolve-Path -LiteralPath $App).Path) "chrome.dll"))) {
   $secondLogin = "https://ardia-self-check-two.example%"
   $otherKinds = "CREATE TEMP TABLE ardia_kinds AS SELECT * FROM logins WHERE signon_realm LIKE 'https://ardia-self-check-one.example%';" +
     " UPDATE ardia_kinds SET id = NULL, signon_realm = 'https://ardia-self-check-never.example/', origin_url = 'https://ardia-self-check-never.example/', username_value = '', password_value = X'', blacklisted_by_user = 1;" +
@@ -1539,7 +1552,7 @@ if ($Part -ne "gate" -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent
   }
 }
 
-if ($Part -ne "gate" -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent (Resolve-Path -LiteralPath $App).Path) "chrome.dll"))) {
+if ($runsLaunch -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent (Resolve-Path -LiteralPath $App).Path) "chrome.dll"))) {
   $warpLog = Join-Path $Out "self-check-warp.log"
   $env:ARDIA_TEST = "selfCheckOnly=meadow:,meadowWebGL=required"
   $warp = Start-Process -FilePath $App -ArgumentList "--self-check", "--ignore-gpu-blocklist", "--use-angle=d3d11-warp", "--log-file=`"$warpLog`"" -PassThru
@@ -1683,7 +1696,7 @@ function Test-ATestInstance([string]$DataDirectory, [string]$Case) {
   } finally { Stop-GateLaunch $run }
 }
 
-if ($Part -ne "launch") {
+if ($runsGate) {
 $gateData = New-DataDirectory "gate-scratch"
 $marker = Join-Path (Split-Path -Parent $gateApp) "Ardia.test-build"
 Remove-Item -Force -LiteralPath $marker
@@ -1719,5 +1732,6 @@ if ($failures.Count) {
   $failures | ForEach-Object { Write-Host "::error::$_" }
   exit 1
 }
-if ($Part -ne "gate") { Write-Host "The app launched, rendered its first window, stayed up for $Seconds s, and passed its self-check." }
-if ($Part -ne "launch") { Write-Host "The test gate refused what it must and let a test instance through." }
+if ($runsLaunch) { Write-Host "The app launched, rendered its first window, stayed up for $Seconds s, and passed its self-check." }
+if ($runsInput) { Write-Host "Real input dragged on pages, snapped windows with the Windows key and Shift+clicked links into peeks." }
+if ($runsGate) { Write-Host "The test gate refused what it must and let a test instance through." }

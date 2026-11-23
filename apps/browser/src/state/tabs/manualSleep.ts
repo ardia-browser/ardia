@@ -23,15 +23,16 @@ export function canSleep(s: BrowserState, id: string): boolean {
   return !!t && hasLoadedPage(t) && webviews.has(id) && !isSleeping(id) && tabEngine(s, id) === "chromium" && !visibleWith(s, id);
 }
 
-export type MenuSleep = { outcome: string; keptBy?: KeptAwakeReason; pastAutomatic?: boolean };
+type MenuSleep = { outcome: string; keptBy?: KeptAwakeReason; pastAutomatic?: boolean };
 
-export async function sleepAsked(id: string): Promise<MenuSleep> {
+export async function sleepAsked(id: string, stillWanted: () => boolean = () => true): Promise<MenuSleep> {
   const s = useBrowser.getState();
   if (!s.tabs[id]) return { outcome: "gone" };
   if (visibleWith(s, id)) return { outcome: "shown" };
   const view = webviews.get(id);
   if (!view) return { outcome: "already" };
   if (inUse(s, id)) return { outcome: "kept", keptBy: "playingOrSharing" };
+  if (!stillWanted()) return { outcome: "dropped" };
   const keptBy = await view.sleepIfHidden(0).catch(() => [-1]);
   if (!keptBy.length) return { outcome: "asleep" };
   if (!onlyAutomaticProtections(keptBy)) return { outcome: "kept", keptBy: keptAwakeReason(keptBy) };
@@ -39,6 +40,7 @@ export async function sleepAsked(id: string): Promise<MenuSleep> {
   if (!after.tabs[id] || webviews.get(id) !== view) return { outcome: "gone" };
   if (visibleWith(after, id)) return { outcome: "shown" };
   if (inUse(after, id)) return { outcome: "kept", keptBy: "playingOrSharing" };
+  if (!stillWanted()) return { outcome: "dropped" };
   const discarded = await view.discard().catch(() => "refused" as const);
   if (discarded === "already") return { outcome: "asleep" };
   return discarded === "discarded" ? { outcome: "asleep", pastAutomatic: true } : { outcome: "kept", keptBy: "other" };
@@ -60,6 +62,6 @@ export async function sleepTab(id: string, { mayWrite }: { mayWrite?: () => bool
 
 export async function sleepTabsFromMenu(ids: string[], from: "tab" | "group") {
   const consent = consentToken();
-  const results = await Promise.all(ids.map(sleepAsked));
+  const results = await Promise.all(ids.map((id) => sleepAsked(id)));
   noteTabsSleptFromMenu(from, results, consent);
 }

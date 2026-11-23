@@ -1,6 +1,6 @@
 type Unsubscribe = () => void;
 
-export type SlowJob = {
+type SlowJob = {
   every: number;
   run: () => void;
   needed?: () => boolean;

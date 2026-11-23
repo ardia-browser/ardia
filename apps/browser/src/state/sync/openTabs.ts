@@ -1,5 +1,5 @@
 import { assignPositions, canonical, dropBase, putBase, recordsWith, type Adapter, type Extraction, type HLC, type ScopeState } from "../../platform/sync";
-import { useBrowser, type BrowserState } from "../browser/store";
+import { useBrowser } from "../browser/store";
 import { pinKeyOf } from "../browser/model";
 import { fromSync } from "../pins/pinOrderChoices";
 import { noteOpenTabsPublished, noteOpenTabsWoke } from "../telemetry/openTabSyncCounts";

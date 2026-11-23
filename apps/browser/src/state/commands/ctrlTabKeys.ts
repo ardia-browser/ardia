@@ -3,9 +3,9 @@ import { comboKey, sameShortcut, storedShortcut, type ResolvedShortcuts, type Sh
 
 export type CtrlTabPreset = "step" | "switcher";
 export type CtrlTabChoice = CtrlTabPreset | "custom";
-export type CtrlTabCombos = { forward: Shortcut; backward: Shortcut };
+type CtrlTabCombos = { forward: Shortcut; backward: Shortcut };
 
-export const CTRL_TAB_PRESETS: readonly CtrlTabPreset[] = ["step", "switcher"];
+const CTRL_TAB_PRESETS: readonly CtrlTabPreset[] = ["step", "switcher"];
 
 const TAB = "\t";
 const PRESET_COMMANDS: Readonly<Record<CtrlTabPreset, { forward: string; backward: string }>> = {
@@ -40,7 +40,7 @@ export function ctrlTabChoiceOf(resolved: Held): CtrlTabChoice {
   return "custom";
 }
 
-export type CtrlTabCustomTarget = { combo: Shortcut } | { command: string };
+type CtrlTabCustomTarget = { combo: Shortcut } | { command: string };
 
 export function ctrlTabCustomTarget(resolved: Held): CtrlTabCustomTarget | null {
   const combos = ctrlTabCombos(resolved);

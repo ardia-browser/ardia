@@ -35,7 +35,7 @@ type MobileSuggestOptions = {
   scope?: SearchScope | null;
   now?: number;
 };
-export type MobileResolution = { kind: "url" | "search" | "bang"; url: string; query: string; engine: string };
+type MobileResolution = { kind: "url" | "search" | "bang"; url: string; query: string; engine: string };
 
 let source: SuggestionSource = { tabs: [], history: [], bookmarks: [] };
 let engines: SearchEngine[] = allEngines();

@@ -15,7 +15,7 @@ import { askWhereSeen, shownWindowId } from "./socketAsk";
 
 const COLORS = ["plum", "blue", "purple", "pink", "red", "orange", "yellow", "green", "neutral"] as const;
 
-export function profileRow(s: BrowserState, id: string) {
+function profileRow(s: BrowserState, id: string) {
   const p = s.profiles[id]!;
   return {
     id,

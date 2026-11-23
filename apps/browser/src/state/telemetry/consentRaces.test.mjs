@@ -103,6 +103,37 @@ test("F3 memory and settings snapshots started before sharing went off and on ag
   assert.equal(posted.some((body) => body.includes("perf_memory") || body.includes("settings_snapshot")), false);
 });
 
+test("a memory sample whose reads span sharing going off and on again leaves the new period's stop-button breathing seconds for the next sample", async () => {
+  const { noteStopBreathing, takeStopBreathing } = await import("./stopBreathing.ts");
+  client.setSharing(true, "onboarding");
+  takeStopBreathing();
+  globalThis.acTestTasks = () => [{ type: "browser", memory: 300 * 1_048_576 }];
+  const app = stub.shellNativeModules.ArdiaApp;
+  const original = app.diagnosticsSample;
+  let flipped = false;
+  const started = Date.now();
+  app.diagnosticsSample = async () => {
+    if (!flipped && Date.now() - started >= 1500) {
+      flipped = true;
+      offAndOn();
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
+    return original();
+  };
+  noteStopBreathing(true);
+  try {
+    await usage.devHourly();
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+  } finally {
+    app.diagnosticsSample = original;
+    globalThis.acTestTasks = undefined;
+    noteStopBreathing(false);
+  }
+  assert.equal(flipped, true);
+  assert.deepEqual(await queued("perf_memory"), []);
+  assert.ok(takeStopBreathing().stop_breathing_s >= 3);
+});
+
 test("F3 a crash read started while sharing was off doesn't send crashes from before sharing was turned on", async () => {
   client.setSharing(false, "settings");
   const app = stub.shellNativeModules.ArdiaApp;

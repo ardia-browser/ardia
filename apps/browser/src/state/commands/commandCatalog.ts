@@ -59,15 +59,25 @@ export const COMMANDS = {
   reload: { title: "Refresh", barTitle: "Reload Page", symbol: "arrow.clockwise", keys: ["⌘R"], ...pageInLittleArdia },
   forceReload: { title: "Force Refresh the Page", barTitle: "Force Reload Page", symbol: "arrow.clockwise", keys: ["⇧⌘R"], ...pageInLittleArdia },
   toggleTabLayout: { title: "Show Tabs in Sidebar", keys: ["⇧⌘S"], ...windowOffInLittleArdia },
+  setTabLayout: {
+    ...windowOffInLittleArdia,
+    variants: {
+      sidebarLeft: { title: "Sidebar on Left", symbol: "sidebar.left" },
+      sidebarRight: { title: "Sidebar on Right", symbol: "sidebar.right" },
+      top: { title: "Top Tab Bar", symbol: "menubar.rectangle" },
+    },
+  },
   toggleSidebarSide: { title: "Sidebar on Right", symbol: "sidebar.right", ...offInLittleArdia },
   toggleSidebar: { title: "Auto-Hide Tabs", symbol: "sidebar.left", keys: ["⌘S", "⇧⌘L", "⇧⌘F"], ...windowOffInLittleArdia },
+  toggleCompactToolbar: { title: "Compact Toolbar", symbol: "rectangle.compress.vertical", toggles: "compactToolbar", ...offInLittleArdia },
+  togglePinnedFold: { title: "Collapse Pinned Tabs", symbol: "rectangle.compress.vertical", ...windowOffInLittleArdia },
   openSplitPane: { title: "Open Split Pane", keys: ["⌃⇧=", "⌃+"], ...windowOffInLittleArdia },
   useSelectionForFind: { title: "Use Selection for Find", keys: ["⌘E"], ...pageInLittleArdia },
   findAndReplace: { title: "Find and Replace…", keys: ["⌥⌘F"], ...pageInLittleArdia },
   jumpToSelection: { title: "Jump to Selection", keys: ["⌘J"], ...pageInLittleArdia },
   focusNextPane: { title: "Focus Next Split Pane", keys: ["⌃⇧]", "⌃}"], ...offInLittleArdia },
   focusPreviousPane: { title: "Focus Previous Split Pane", keys: ["⌃⇧[", "⌃{"], ...offInLittleArdia },
-  toggleFullUrl: { title: "Show Full URL", symbol: "text.alignleft", toggles: "showFullUrl" },
+  toggleFullUrl: { title: "Show Full URL", symbol: "text.alignleft", toggles: "showFullUrl", ...offInLittleArdia },
   toggleJavaScriptFromAppleEvents: { title: "Allow JavaScript from Apple Events", toggles: "allowJavaScriptFromAppleEvents" },
   toggleAddressBar: { title: "Show Address Bar in Sidebar", ...offInLittleArdia },
   toggleMinimalism: { title: "Minimalism Mode", barTitle: "Toggle Minimalism Mode", symbol: "rectangle.leftthird.inset.filled", keys: ["⌃⌘M"], toggles: "minimalismMode", ...offInLittleArdia },
@@ -120,8 +130,8 @@ export const COMMANDS = {
   manageBookmarks: { title: "Manage Bookmarks", barTitle: "Bookmarks", symbol: "book", keys: ["⌥⌘B"] },
   exportBookmarks: { title: "Export Bookmarks…", symbol: "square.and.arrow.up" },
   bookmarkAllTabs: { title: "Bookmark All Tabs…", keys: ["⇧⌘D"], ...offInLittleArdia },
-  setBookmarksBar: { chooses: "bookmarksBar", variants: { always: { title: "Always" }, newTab: { title: "On New Tab Only" }, never: { title: "Never" } } },
-  toggleBookmarksBar: { title: "Toggle Bookmarks Bar", symbol: "menubar.rectangle", keys: ["⇧⌘B"] },
+  setBookmarksBar: { chooses: "bookmarksBar", variants: { always: { title: "Always" }, newTab: { title: "On New Tab Only" }, never: { title: "Never" } }, ...offInLittleArdia },
+  toggleBookmarksBar: { title: "Toggle Bookmarks Bar", symbol: "menubar.rectangle", keys: ["⇧⌘B"], ...offInLittleArdia },
   newTabInGroup: { title: "New Tab in Group", keys: ["⌥⌘T", "⌃⌘C"], ...windowOffInLittleArdia },
   newGroupWithTabs: { title: "New Group with Tab", symbol: "folder.badge.plus", keys: ["⌃⌘N", "⌃⌘P"], ...windowOffInLittleArdia },
   cleanUpTabs: { title: "Clean Up Tabs", symbol: "sparkles", keys: ["⌥⌘K"], ...windowOffInLittleArdia },
@@ -171,7 +181,7 @@ const SPECS: Readonly<Record<BrowserCommand, CommandSpec>> = COMMANDS;
 
 type Specs = typeof COMMANDS;
 export type AppCommand = { [C in BrowserCommand]: Specs[C] extends { app: true } ? C : never }[BrowserCommand];
-export type VariantOf<C extends BrowserCommand> = Specs[C] extends { variants: infer V } ? keyof V & string : never;
+type VariantOf<C extends BrowserCommand> = Specs[C] extends { variants: infer V } ? keyof V & string : never;
 
 export const STANDARD_ITEMS: Readonly<Record<string, { keys?: Keys }>> = {
   "std:quit:": { keys: ["⌘Q"] },
@@ -219,10 +229,10 @@ export const PAGE_COMMANDS = commandsWhere((c) => c.scope === "page");
 export const PAGE_COMMANDS_OFF_INTERNAL_PAGES = commandsWhere((c) => c.scope === "page" && !c.onInternalPages);
 export const WINDOW_COMMANDS = commandsWhere((c) => c.scope !== undefined);
 export const LITTLE_ARDIA_DISABLED_COMMANDS = commandsWhere((c) => c.littleArdia === "off");
-export const SPLIT_VIEW_COMMANDS: readonly BrowserCommand[] = ["openSplitPane", "focusNextPane", "focusPreviousPane"];
-export const EXPORT_COMMANDS: readonly BrowserCommand[] = ["exportBookmarks"];
-export const WEBKIT_COMMANDS: readonly BrowserCommand[] = ["togglePageEngine"];
-export const HIDING_COMMANDS: readonly BrowserCommand[] = ["hideElement", "showHiddenElements"];
+const SPLIT_VIEW_COMMANDS: readonly BrowserCommand[] = ["openSplitPane", "focusNextPane", "focusPreviousPane"];
+const EXPORT_COMMANDS: readonly BrowserCommand[] = ["exportBookmarks"];
+const WEBKIT_COMMANDS: readonly BrowserCommand[] = ["togglePageEngine"];
+const HIDING_COMMANDS: readonly BrowserCommand[] = ["hideElement", "showHiddenElements"];
 export const UNAVAILABLE_COMMANDS: ReadonlySet<string> = new Set([
   ...(splitViewAvailable ? [] : SPLIT_VIEW_COMMANDS),
   ...(PLATFORM_FEATURES.exportsBookmarksAndPasswords ? [] : EXPORT_COMMANDS),

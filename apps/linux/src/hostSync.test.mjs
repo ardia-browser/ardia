@@ -208,6 +208,26 @@ test("opening a keyring that was locked at launch resumes sync once from the sto
   assert.equal(resumed, 1);
 });
 
+test("a recovery phrase entered in another window reaches the sync window as a branded secret", async (t) => {
+  const { asSecret, isSecret, reveal } = await import("@ardia/core");
+  const channelName = `sync-${Math.random()}`;
+  const lease = nativeLease();
+  const engines = [];
+  const a = renderer("a", { candidate: true, lease, engines, channelName });
+  const settings = renderer("settings", { candidate: false, lease, engines, channelName });
+  t.after(() => { a.authority.stop(); settings.authority.stop(); });
+  await tick(80);
+  assert.deepEqual(await settings.authority.call("enterRecoveryPhrase", ["/home/tux/Sync", asSecret("syncPhrase", PHRASE)]), { ok: true });
+  const [folder, phrase] = a.calls.at(-1).args;
+  assert.equal(folder, "/home/tux/Sync");
+  assert.ok(isSecret(phrase));
+  assert.equal(phrase.kind, "syncPhrase");
+  assert.equal(reveal(phrase), PHRASE);
+  await settings.authority.call("setOpenTabsSynced", ["work", { relayedSecret: "syncPhrase", value: PHRASE }]);
+  assert.equal(isSecret(a.calls.at(-1).args[1]), false, "only the phrase argument of enterRecoveryPhrase is branded on arrival");
+  await assert.rejects(settings.authority.call("setOpenTabsSynced", ["work", asSecret("syncPhrase", PHRASE)]), TypeError);
+});
+
 test("one renderer runs sync, the others mirror it and forward their actions, and it fails over when that window closes", async (t) => {
   const channelName = `sync-${Math.random()}`;
   const lease = nativeLease();

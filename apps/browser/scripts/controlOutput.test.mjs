@@ -156,6 +156,48 @@ do {
   close(r)
 }
 
+do {
+  var out = ControlOutput()
+  _ = out.addReply(reply(100, id: 1), ticket: 0)
+  _ = out.addReply(reply(100, id: 2), ticket: 0)
+  let (w, r) = pair()
+  results["oneLineStopsAfterALine"] = out.write(to: w, oneLine: true) == .lineDone
+  results["oneLineDrainsTheLast"] = out.write(to: w, oneLine: true) == .drained
+  close(w); close(r)
+}
+
+do {
+  let (w, r) = pair(sendBuffer: 8192)
+  let queue = DispatchQueue(label: "test-expiry")
+  var expired = false
+  var connection: ControlConnection!
+  connection = ControlConnection(id: 4, fd: w, queue: queue, onLine: { _, _ in }, onClose: { _ in }, onWritten: { tickets in
+    if tickets.contains(1) { expired = true }
+  }, mayWrite: { c in
+    guard !expired else {
+      c.retire()
+      return false
+    }
+    return true
+  })
+  let head = reply(200_000, id: 1)
+  queue.sync {
+    connection.open()
+    connection.reply(head, ticket: 1)
+    connection.reply(reply(100, id: 2), ticket: 2)
+  }
+  var got = Data()
+  var buffer = [UInt8](repeating: 0, count: 65536)
+  while true {
+    let n = read(r, &buffer, buffer.count)
+    if n <= 0 { break }
+    got.append(contentsOf: buffer[0..<n])
+  }
+  results["expiredApprovalStopsTheNextLine"] = got == head
+  results["expiredApprovalClosesTheConnection"] = queue.sync { connection.closed }
+  close(r)
+}
+
 let json = try! JSONSerialization.data(withJSONObject: results, options: [.sortedKeys])
 print(String(decoding: json, as: UTF8.self))
 `;
@@ -198,6 +240,13 @@ test("the dropped marker always fits: it's written behind full replies, and a fu
 test("an event over the line is dropped and counted; a reply over it becomes an error for the same id", { skip }, () => {
   assert.equal(got.oversizedEventDropped, true);
   assert.equal(got.oversizedReplyAnswersError, true);
+});
+
+test("the writer stops after each line, and a line queued behind a slow reader never starts once the peer may no longer be written to", { skip }, () => {
+  assert.equal(got.oneLineStopsAfterALine, true);
+  assert.equal(got.oneLineDrainsTheLast, true);
+  assert.equal(got.expiredApprovalStopsTheNextLine, true, "the line it had started goes out whole, the one queued behind it never starts");
+  assert.equal(got.expiredApprovalClosesTheConnection, true);
 });
 
 test("a connection that has to close finishes the line it started and leaves no partial line", { skip }, () => {

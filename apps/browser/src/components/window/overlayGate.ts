@@ -48,14 +48,14 @@ export const overlayCount = (bits: number): number => {
   return count;
 };
 
-export type ShownOverlays = { previous: number; atShow: number; opened: number };
+type ShownOverlays = { previous: number; atShow: number; opened: number };
 
 export function nextShownOverlays(was: ShownOverlays | null, shown: number): ShownOverlays {
   if (!was) return { previous: shown, atShow: overlayCount(shown), opened: 0 };
   return { previous: shown, atShow: 0, opened: overlayCount(shown & ~was.previous) };
 }
 
-export type KeptOverlays = { has: (overlay: Overlay) => boolean; entersLater: (overlay: Overlay) => boolean };
+type KeptOverlays = { has: (overlay: Overlay) => boolean; entersLater: (overlay: Overlay) => boolean };
 
 export function useKeptOverlays(on: number, shown: number): KeptOverlays {
   const atShow = useRef(on).current;
@@ -96,11 +96,11 @@ export function useKeptWhile(on: boolean, alive: boolean): boolean {
   return kept;
 }
 
-export type EligibleGate = { mounted: boolean; enter: boolean; armed: boolean };
+type EligibleGate = { mounted: boolean; enter: boolean; armed: boolean };
 
 const CLOSED_GATE: EligibleGate = { mounted: false, enter: false, armed: false };
 
-export function nextEligibleGate(gate: EligibleGate, on: boolean, eligible: boolean): EligibleGate {
+function nextEligibleGate(gate: EligibleGate, on: boolean, eligible: boolean): EligibleGate {
   if (!eligible) return CLOSED_GATE;
   if (gate.mounted) return gate;
   if (on) return { mounted: true, enter: gate.armed, armed: gate.armed };

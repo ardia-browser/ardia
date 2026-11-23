@@ -24,7 +24,7 @@ const settle = async () => {
 const cli = (version, extra = {}) =>
   JSON.stringify({ manifest: 1, name: "cli", title: "Command Line", version, alwaysOn: true, official: true, icon: "terminal.fill", permissions: ["control"], programs: [{ name: "ardia", path: "bin/ardia" }], ...extra });
 const OLD = cli("0.4.0");
-const NEW = cli("0.5.0", { description: "Drive Ardia from your terminal or an agent." });
+const NEW = cli("0.5.0", { description: "Drive Ardia from your terminal or an agent.", permissions: ["control", "tabs"] });
 const PINNED = { name: "cli", version: "0.5.0", folderId: `official-${"5".repeat(64)}` };
 const LEGACY = { name: "cli", status: "ok", official: true, legacy: true, folderId: "bundled", text: OLD };
 const OLD_RECEIPT = manifestHash(OLD, "bundled");
@@ -86,7 +86,10 @@ test("online, a replacement whose plugin.json changed waits for your approval: t
   assert.ok(activeManifest(P(), "cli"));
   assert.deepEqual(host.unlinks, [], "nothing came off PATH");
   assert.equal(officialPlugins(P(), true, () => false)[0].update, "0.5.0", "Settings offers the update to review");
-  assert.equal(takePluginCounts().official_updates_waiting, 1);
+  const waiting = takePluginCounts();
+  assert.equal(waiting.official_updates_waiting, 1);
+  assert.equal(waiting.official_update_prompts_permissions, 1, "counted by why it needs review");
+  assert.equal(waiting.official_updates_auto, 0);
   await lifecycle.rescanPlugins(consentToken());
   await settle();
   assert.equal(takePluginCounts().official_updates_waiting, 0, "counted once");

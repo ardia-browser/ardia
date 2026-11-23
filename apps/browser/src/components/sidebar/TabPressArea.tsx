@@ -13,6 +13,7 @@ import { clickHeldTabPress, endPressGesture, holdTabPress, pressOutTabPress, typ
 import { tabPressTag } from "../../state/tabs/tabReveal";
 import { useInSplit } from "../../state/windows/card";
 import { ContextMenuArea } from "../ui";
+import { consentToken } from "../../state/telemetry/client";
 
 type TabPressProps = {
   windowId: string;
@@ -50,7 +51,10 @@ export function tabPressView({
 }: TabPressProps & { press: { current: TabPress | null }; inSplit: boolean; plainTooltip: boolean; onPressChange?: (pressed: boolean) => void }) {
   return (
     <ContextMenuArea
-      onMiddleClick={() => pressStripClose(windowId, tab.id, () => middleClickTab(tab.id), (tabId) => !!workspaceSnapshot().tabs[tabId])}
+      onMiddleClick={() => {
+        const user = { consent: consentToken() };
+        pressStripClose(windowId, tab.id, () => middleClickTab(tab.id, user), (tabId) => !!workspaceSnapshot().tabs[tabId]);
+      }}
       onContextMenu={() => {
         dismissHover();
         void openTabMenu(windowId, tab);

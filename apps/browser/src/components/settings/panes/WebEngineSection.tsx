@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { View } from "react-native";
 import { resolveInput } from "@ardia/core";
 import { defaultEngine, ENGINE_NAMES, PROTECTED_VIDEO_SITES, RECOMMENDED_ENGINE, siteOf, type PageEngine } from "../../../state/engines/engines";
@@ -143,7 +143,7 @@ function EnginesDifferSheet() {
         <Group>
           <Row
             title="Separate sign-ins"
-            description="Each engine keeps its own cookies and site data in every profile. With Bring sign-ins along on, a site's cookies and saved data follow it to the other engine; other offline data stays put."
+            description="Each engine keeps its own cookies; Bring sign-ins along copies them on switch."
           />
           <PasskeyAccessRow waiting={PASSKEYS_WAITING} />
           <Row title={ABOUT_ENGINES_TITLE} description="How Automatic picks an engine, and what WebKit pages can't do." onPress={() => showWebKitLimits("enginesPane")} />

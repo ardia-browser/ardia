@@ -7,11 +7,11 @@ import { onProcessStopped } from "./process";
 import { activeManifest, currentPlugins } from "./store";
 import { invokePluginCall } from "./tools";
 
-export const PLUGIN_DECIDE_TIMEOUT_MS = 250;
+const PLUGIN_DECIDE_TIMEOUT_MS = 250;
 
-export type PluginVerdict = { plugin: string; verdict: unknown };
+type PluginVerdict = { plugin: string; verdict: unknown };
 
-export const decideTimeoutFor = (event: DecideEvent) => Math.min(PLUGIN_DECIDE_TIMEOUT_MS, DECIDE_DEADLINE_MS[event]);
+const decideTimeoutFor = (event: DecideEvent) => Math.min(PLUGIN_DECIDE_TIMEOUT_MS, DECIDE_DEADLINE_MS[event]);
 
 export function pluginsDeciding(event: string): string[] {
   const s = currentPlugins();

@@ -94,6 +94,8 @@ globalThis.acTestNativeModules = { ArdiaPasswords: moduleFor("ArdiaPasswords"), 
 const originalConsole = { log: console.log, warn: console.warn, error: console.error };
 Object.assign(console, { log: capture, warn: capture, error: capture });
 const passwords = await import("../../browser/src/platform/passwords.ts");
+const { asSecret, reveal } = await import("@ardia/core");
+const revealed = (secret) => (secret === null ? null : reveal(secret));
 const autofill = await import("../../browser/src/platform/autofill.ts");
 
 const reset = () => {
@@ -122,9 +124,9 @@ test("listing, removing and settings use the generic domain route with macOS-sha
 test("secret operations travel only through typed native methods and never the generic route", async () => {
   reset();
   assert.equal(await passwords.unlockPasswords(""), true);
-  assert.equal(await passwords.getPassword("", "https://example.test", "me"), PASSWORD);
-  assert.equal(await passwords.savePassword("", "https://new.test", "you", NEW_PASSWORD), true);
-  assert.equal(await passwords.updatePassword("", "https://new.test", "you", { password: `${NEW_PASSWORD}!` }), true);
+  assert.equal(revealed(await passwords.getPassword("", "https://example.test", "me")), PASSWORD);
+  assert.equal(await passwords.savePassword("", "https://new.test", "you", asSecret("password", NEW_PASSWORD)), true);
+  assert.equal(await passwords.updatePassword("", "https://new.test", "you", { password: asSecret("password", `${NEW_PASSWORD}!`) }), true);
   assert.deepEqual(await passwords.exportPasswords(""), { status: "succeeded", path: "/tmp/scratch/Ardia Passwords.csv" });
   assert.equal(await autofill.saveCard("", { name: "Ada", expMonth: 4, expYear: 2031 }, "4000000000000002"), "card-2");
   assert.equal(await autofill.revealCardNumber("", "card-1"), CARD);
@@ -161,7 +163,7 @@ for (const outcome of ["denied", "cancelled", "expired"]) {
     assert.equal(await passwords.getPassword("", "https://example.test", "me"), null);
     assert.equal(await autofill.revealCardNumber("", "card-1"), null);
     assert.deepEqual(await passwords.exportPasswords(""), { status: "reauthFailed" });
-    await assert.rejects(passwords.updatePassword("", "https://example.test", "me", { password: NEW_PASSWORD }), { code: "ERR_REAUTH_DENIED" });
+    await assert.rejects(passwords.updatePassword("", "https://example.test", "me", { password: asSecret("password", NEW_PASSWORD) }), { code: "ERR_REAUTH_DENIED" });
     assert.equal(native.passwords.find((p) => p.username === "me").password, PASSWORD);
   });
 }

@@ -11,7 +11,6 @@ import { webviews } from "../../state/tabs/webviewHandles";
 import { currentEngineProfile } from "../../state/browser/current";
 import { useMuteState } from "../../state/tabs/hooks";
 import { openFind } from "../../state/find/actions";
-import { updateSettings } from "../../state/settings/actions";
 import { useCanSwitchEngine, useEngineRule, usePageEngine, useRecommendedEngine, useStreamingSite } from "../../state/engines/hooks";
 import { useSettings, useTab } from "../../state/browser/hooks";
 import { isIncognitoProfile, tabLabel } from "../../state/browser/model";
@@ -62,7 +61,6 @@ export function SiteControlsPanel({
   const tab = useTab(tabId);
   const security = usePage(tabId, (p) => p.security);
   const blocked = usePage(tabId, (p) => p.blocked);
-  const showFullUrl = useSettings((s) => s.showFullUrl);
   const unreadCounts = useSettings((s) => s.showUnreadCounts);
   const unreadHidden = useSettings((s) => isUnreadSiteHidden(s, tab?.url ?? ""));
   const developerMode = useDeveloperMode(tab?.url ?? "");
@@ -307,11 +305,6 @@ export function SiteControlsPanel({
                 <MenuRow icon="app.badge" title={ALL_UNREAD_TITLE} detail="All sites" accessory={<Toggle look="panel" value={false} onChange={showUnreadCounts} />} />
               )
             ) : null}
-            <MenuRow
-              icon="text.alignleft"
-              title="Show Full URL"
-              accessory={<Toggle look="panel" value={showFullUrl} onChange={(v) => updateSettings({ showFullUrl: v })} />}
-            />
           </>
         ) : null}
 

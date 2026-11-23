@@ -8,7 +8,7 @@ const RECHECKED = new Set(["none", "outside", "match"]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const IDENTIFIER = /^\w+$/;
 
-export const createTable = (db) => `CREATE TABLE IF NOT EXISTS ${db}.${TABLE}
+const createTable = (db) => `CREATE TABLE IF NOT EXISTS ${db}.${TABLE}
 (
     uuid String,
     offset UInt64,
@@ -21,7 +21,7 @@ export const createTable = (db) => `CREATE TABLE IF NOT EXISTS ${db}.${TABLE}
 ENGINE = ReplacingMergeTree(resolved_at)
 ORDER BY (uuid, offset)`;
 
-export const EVENTS_SQL = `SELECT DISTINCT
+const EVENTS_SQL = `SELECT DISTINCT
     if(event = 'app_freeze', 'freeze', 'crash') AS kind,
     if(event = 'app_freeze', properties['freeze_images'], properties['crash_images']) AS images,
     if(event = 'app_freeze', properties['freeze_frames'], properties['$exception_list']) AS frames
@@ -98,7 +98,7 @@ export function clickhouse({ url, user, password, fetch = globalThis.fetch }) {
   };
 }
 
-export const jsonLines = (text) => text.split("\n").filter(Boolean).map((line) => JSON.parse(line));
+const jsonLines = (text) => text.split("\n").filter(Boolean).map((line) => JSON.parse(line));
 
 export async function run({ reader, sandbox, db = "sandbox", store, days = 14, dryRun = false, now = Date.now(), log = () => {} }) {
   if (!Number.isInteger(days) || days < 1 || days > 90) throw new Error("--days takes a whole number from 1 to 90");

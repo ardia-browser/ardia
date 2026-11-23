@@ -52,5 +52,11 @@ download_live_feed() {
     || { echo "error: couldn't list $tag's assets" >&2; exit 1; }
   grep -qx appcast.xml <<<"$names" || return 1
   mkdir -p "$dir"
-  gh release download "$tag" -R "$REPO" -p appcast.xml -D "$dir" --clobber
+  local attempt
+  for attempt in 1 2 3; do
+    gh release download "$tag" -R "$REPO" -p appcast.xml -D "$dir" --clobber && return 0
+    [ "$attempt" = 3 ] || sleep 5
+  done
+  echo "error: $tag lists appcast.xml but it wouldn't download: merging onto an older feed would drop what shipped since" >&2
+  exit 1
 }

@@ -18,7 +18,7 @@ const WORDS = [
 const words = (n) => Array.from({ length: n }, () => pick(WORDS)).join(" ");
 const title = (n) => words(n).replace(/^\w/, (c) => c.toUpperCase());
 
-export function buildSeed(origin, appVersion = "", { tabsOrigin = origin, activeDelayMs = 0 } = {}) {
+export function buildSeed(origin, appVersion = "", { tabsOrigin = origin, activeDelayMs = 0, tabs: tabCount = 200 } = {}) {
   const now = Date.now();
   const profiles = {
     default: { id: "default", name: "Personal", color: "plum", icon: null, createdAt: 0 },
@@ -65,7 +65,7 @@ export function buildSeed(origin, appVersion = "", { tabsOrigin = origin, active
     for (; i < count; i++) ids.push(tab(profileId, i).id);
     return ids;
   };
-  const personal = layoutProfile("default", 158, 8, [5, 5]);
+  const personal = layoutProfile("default", Math.max(30, tabCount - 42), 8, [5, 5]);
   const work = layoutProfile("work", 42, 4, [4]);
   const active = { default: personal[20], work: work[10] };
   for (const [p, id] of Object.entries(active)) {

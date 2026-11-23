@@ -2,7 +2,7 @@ import type { WindowsNative } from "@ardia/shell";
 import { requireNativeModule, requireOptionalNativeModule } from "expo-modules-core";
 import { DEV_EVAL_RESULT, watchDevEval } from "../lib/devEval";
 
-export const NATIVE_API_VERSION = 92;
+export const NATIVE_API_VERSION = 95;
 
 const app = requireOptionalNativeModule<{ apiVersion?: unknown; windowsApiVersion?: unknown }>("ArdiaApp");
 const version = (value: unknown) => (typeof value === "number" ? value : 0);

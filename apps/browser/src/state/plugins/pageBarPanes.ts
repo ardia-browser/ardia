@@ -9,10 +9,11 @@ import { pageBarFor, sameMatch, type PageBarMatch, type PageBarPane } from "./pa
 import { usePageDocuments } from "./pageBarDocuments";
 import { usePlugins } from "./store";
 import { usePages } from "../tabs/pageState";
+import { ownValue } from "../../lib/decode";
 
 export type PageBars = Record<string, PageBarMatch>;
 
-export const usePageBarPanes = create<Record<string, PageBars>>()(() => ({}));
+const usePageBarPanes = create<Record<string, PageBars>>()(() => ({}));
 
 export type PaneLayoutFacts = Pick<PageBarPane, "tabId" | "visible" | "lingering" | "warm" | "covered" | "mounted" | "documentFullscreen">;
 
@@ -74,7 +75,7 @@ export function usePageBars(windowId: string, panes: PaneLayoutFacts[], window: 
   const plugins = usePlugins(useShallow((s) => ({ listings: s.listings, records: s.records, order: s.order })));
   const newTab = usePages(useShallow((p) => ids.map((id) => !!p.pages[id]?.newTabShown)));
   const crashed = usePages(useShallow((p) => ids.map((id) => !!p.pages[id]?.crashed)));
-  const docs = usePageDocuments(useShallow((d) => ids.map((id) => (Object.hasOwn(d, id) ? d[id] : undefined))));
+  const docs = usePageDocuments(useShallow((d) => ids.map((id) => (ownValue(d, id)))));
   const bars = useMemo(() => {
     const out: PageBars = {};
     const documents = Object.fromEntries(ids.flatMap((id, i) => (docs[i] ? [[id, docs[i]!]] : [])));

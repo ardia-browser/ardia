@@ -121,6 +121,9 @@ final class NotificationHub: NSObject, UNUserNotificationCenterDelegate {
         DispatchQueue.main.async { completion(result) }
       }
     }
+    if let raw = options.icon, raw.utf8.count > Self.maxIconDataUriBytes {
+      return deliver(NotificationIcon(status: "too_large", errorCode: nil))
+    }
     guard let icon = options.icon.flatMap(URL.init(string:)) else {
       return deliver(options.icon == nil ? .absent : NotificationIcon(status: "invalid_url", errorCode: nil))
     }
@@ -135,6 +138,9 @@ final class NotificationHub: NSObject, UNUserNotificationCenterDelegate {
     center.removePendingNotificationRequests(withIdentifiers: ids)
   }
 
+  static let maxIconDataUriBytes = 1_049_600
+  static let maxIconBytes = 786_432
+
   private func attachment(from url: URL, id: String, completion: @escaping (UNNotificationAttachment?, NotificationIcon) -> Void) {
     let make = { (file: URL) in
       do {
@@ -144,23 +150,35 @@ final class NotificationHub: NSObject, UNUserNotificationCenterDelegate {
         completion(nil, NotificationIcon(status: "attachment_rejected", errorCode: (error as NSError).code))
       }
     }
-    if url.isFileURL { return make(url) }
-    URLSession.shared.dataTask(with: url) { data, response, error in
-      guard let data, !data.isEmpty else {
-        let outcome = NotificationIcon(status: error == nil ? "empty" : "download_failed", errorCode: (error as NSError?)?.code)
-        return DispatchQueue.main.async { completion(nil, outcome) }
-      }
-      let ext = (response?.mimeType == "image/png" || url.absoluteString.hasPrefix("data:image/png")) ? "png"
-        : (response?.suggestedFilename as NSString?)?.pathExtension.nonEmpty ?? "png"
-      let file = FileManager.default.temporaryDirectory.appendingPathComponent("ac-notification-\(id).\(ext)")
-      do {
-        try data.write(to: file)
-        DispatchQueue.main.async { make(file) }
-      } catch {
-        let outcome = NotificationIcon(status: "write_failed", errorCode: (error as NSError).code)
-        DispatchQueue.main.async { completion(nil, outcome) }
-      }
-    }.resume()
+    if url.isFileURL {
+      guard (url.host ?? "").isEmpty || url.host == "localhost" else { return completion(nil, NotificationIcon(status: "invalid_url", errorCode: nil)) }
+      return make(url)
+    }
+    guard url.scheme?.lowercased() == "data", url.absoluteString.prefix(11).lowercased() == "data:image/" else {
+      return completion(nil, NotificationIcon(status: "invalid_url", errorCode: nil))
+    }
+    let raw = url.absoluteString
+    let header = raw.firstIndex(of: ",").map { raw[..<$0] } ?? raw[...]
+    let payloadBytes = max(0, raw.utf8.count - header.utf8.count - 1)
+    let decodedBound = header.lowercased().hasSuffix(";base64") ? payloadBytes / 4 * 3 : payloadBytes
+    guard raw.utf8.count <= Self.maxIconDataUriBytes, decodedBound <= Self.maxIconBytes else {
+      return completion(nil, NotificationIcon(status: "too_large", errorCode: nil))
+    }
+    guard let data = try? Data(contentsOf: url), !data.isEmpty else {
+      return completion(nil, NotificationIcon(status: "empty", errorCode: nil))
+    }
+    guard data.count <= Self.maxIconBytes else {
+      return completion(nil, NotificationIcon(status: "too_large", errorCode: nil))
+    }
+    let subtype = url.absoluteString.dropFirst("data:image/".count).prefix { $0 != ";" && $0 != "," }.lowercased()
+    let ext = ["jpeg": "jpg", "jpg": "jpg", "gif": "gif", "heic": "heic", "tiff": "tiff", "webp": "webp"][subtype] ?? "png"
+    let file = FileManager.default.temporaryDirectory.appendingPathComponent("ac-notification-\(id).\(ext)")
+    do {
+      try data.write(to: file)
+      make(file)
+    } catch {
+      completion(nil, NotificationIcon(status: "write_failed", errorCode: (error as NSError).code))
+    }
   }
 
   func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {

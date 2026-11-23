@@ -6,6 +6,7 @@ type Picks = {
   addressBar: "sidebar" | "toolbar";
   commandBar: "field" | "centred";
   scrollToolbar: "keep" | "hide";
+  afterClosingTab: "recent" | "above";
 };
 
 const ZERO = {
@@ -17,13 +18,21 @@ const ZERO = {
   command_bar_picks_centred: 0,
   scroll_toolbar_picks_keep: 0,
   scroll_toolbar_picks_hide: 0,
+  after_closing_tab_picks_recent: 0,
+  after_closing_tab_picks_above: 0,
   ctrl_tab_follows_chrome_step: 0,
   ctrl_tab_follows_chrome_switcher: 0,
 };
 
 type Field = keyof typeof ZERO;
 
-const FIELD_PREFIX: { [P in keyof Picks]: string } = { ctrlTab: "ctrl_tab_picks", addressBar: "address_bar_picks", commandBar: "command_bar_picks", scrollToolbar: "scroll_toolbar_picks" };
+const FIELD_PREFIX: { [P in keyof Picks]: string } = {
+  ctrlTab: "ctrl_tab_picks",
+  addressBar: "address_bar_picks",
+  commandBar: "command_bar_picks",
+  scrollToolbar: "scroll_toolbar_picks",
+  afterClosingTab: "after_closing_tab_picks",
+};
 
 let counts = { ...ZERO };
 

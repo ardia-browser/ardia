@@ -65,7 +65,16 @@ export function PillButtonView(props: PillProps) {
     const chipHeight = props.height ?? pillHeight[size ?? "m"];
     return (
       <View {...hoverProps}>
-        <Pressable onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut}>
+        <Pressable
+          onPress={onPress}
+          onPressIn={pressMotion.onPressIn}
+          onPressOut={pressMotion.onPressOut}
+          accessibilityRole="button"
+          accessibilityLabel={title}
+          onAccessibilityTap={onPress}
+          onFocus={props.onFocusChange ? () => props.onFocusChange?.(true) : undefined}
+          onBlur={props.onFocusChange ? () => props.onFocusChange?.(false) : undefined}
+        >
           {({ pressed }) => {
             const look = pillLook(theme, tone, primary, pressed, hovered);
             const rest = pillLook(theme, tone, primary, false, false);

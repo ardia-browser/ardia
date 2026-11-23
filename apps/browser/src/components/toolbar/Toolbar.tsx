@@ -19,7 +19,7 @@ import { useHistoryAvailability } from "../../state/tabs/navigation";
 import { toggleBookmarkOfTab } from "../../state/bookmarks/actions";
 import { useBookmarksShown } from "../../state/bookmarks/hooks";
 import { copyPageUrl } from "../../state/site/selection";
-import { closePane, openSplitPane, showSplitMenu } from "../../state/splits/actions";
+import { openSplitPane, pressClosePane, showSplitMenu } from "../../state/splits/actions";
 import { splitViewAvailable } from "../../state/splits/splits";
 import { useEasedColor, type ToolbarPalette } from "../ui/toolbarColors";
 import { useSitePalette } from "./useSitePalette";
@@ -116,7 +116,7 @@ export const Toolbar = memo(function Toolbar({
   });
   const toggleTabs = useCallback(() => toggleSidebar(windowId), [windowId]);
   const splitMenu = useCallback(() => showSplitMenu(tabId), [tabId]);
-  const closeThisPane = useCallback(() => closePane(tabId), [tabId]);
+  const closeThisPane = useCallback(() => pressClosePane(tabId), [tabId]);
   const at = useMemo(() => {
     const top = row.center - row.button / 2;
     const place = (center: number | null) => ({ position: "absolute" as const, top, left: (center ?? 0) - row.button / 2 });

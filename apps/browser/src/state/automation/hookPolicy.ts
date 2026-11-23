@@ -1,9 +1,9 @@
-import { sha256 } from "../../lib/sha256";
+import { hexOf, sha256 } from "../../lib/sha256";
 import { formatUrl, hostWithPort, originOf, urlParts, webUrl } from "../../lib/urlParts";
 import { isApproved, type ApprovalRule } from "./approvals";
 import type { HookSpec, Rewrite } from "./hookFile";
 
-export const SAFE_LAUNCH_ACTIONS: ReadonlySet<string> = new Set([
+const SAFE_LAUNCH_ACTIONS: ReadonlySet<string> = new Set([
   "newTab",
   "newWindow",
   "newLittleArdia",
@@ -17,7 +17,7 @@ export const SAFE_LAUNCH_ACTIONS: ReadonlySet<string> = new Set([
 
 const STRIPPING_TEMPLATES = new Set(["{origin}{path}", "{origin}{path}{hash}"]);
 
-export const DOWNLOADS_FOLDER = "~/Downloads";
+const DOWNLOADS_FOLDER = "~/Downloads";
 
 export const isInsideDownloads = (folder: string) => folder === DOWNLOADS_FOLDER || folder.startsWith(`${DOWNLOADS_FOLDER}/`);
 
@@ -43,12 +43,10 @@ export const isHookActive = (hook: HookSpec) => {
   return !approval || isApproved(approval.key);
 };
 
-const hex = (bytes: Uint8Array) => Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-
 export function launchActionApproval(entry: string): ApprovalRule | null {
   const [id] = entry.split(":");
   if (SAFE_LAUNCH_ACTIONS.has(id!)) return null;
-  return { key: `launchAction:${hex(sha256(entry)).slice(0, 32)}`, kind: "launchAction", name: `launchActions: ${entry}`, summary: `Runs ${entry} each time Ardia starts` };
+  return { key: `launchAction:${hexOf(sha256(entry)).slice(0, 32)}`, kind: "launchAction", name: `launchActions: ${entry}`, summary: `Runs ${entry} each time Ardia starts` };
 }
 
 export function applyTemplate(template: string, href: string): string | null {

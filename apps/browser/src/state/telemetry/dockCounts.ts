@@ -21,7 +21,7 @@ const NONE = {
   sidebar_thin_frame_peeks: 0,
 };
 
-export const QUICK_PEEK_CLOSE_MS = 500;
+const QUICK_PEEK_CLOSE_MS = 500;
 export const FRAME_UNDER_OLD_PEEK_GAP = 4;
 let counts = { ...NONE };
 

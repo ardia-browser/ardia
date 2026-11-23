@@ -3,7 +3,6 @@ import type { WindowsHostModule } from "./nativeModuleTypes";
 import { installAnimation } from "./animation";
 import { watchRelaunches } from "./engine/relaunch";
 import { openLaunchLinks } from "./launchLinks";
-import { requireNativeModule } from "./modules";
 import { runSelfCheck } from "./selfCheck";
 import { endByClosingTheLastWindow } from "./selfCheck/lastWindow";
 import { installTextFocusReport } from "./textFocus";

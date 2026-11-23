@@ -50,6 +50,9 @@ test("config.schema.json lists the allowlist with defaults, shortcuts by command
   assert.match(shortcuts.description, /cmd\+shift\+t/);
   assert.equal(accepts(shortcuts, { newTab: "cmd+t", reopenClosedTab: "" }), true);
   assert.equal(accepts(shortcuts, { notACommand: "cmd+t" }), false);
+  assert.equal(accepts(shortcuts, { "switchProfile:default": "alt+1", "newLittleArdia:p-1-2": "" }), true);
+  assert.equal(accepts(shortcuts, { "switchProfile:": "alt+1" }), false);
+  assert.equal(accepts(shortcuts, { "switchProfile:default": 1 }), false);
   assert.equal(accepts(schema.properties.theme, "nord"), true);
   assert.equal(accepts(schema.properties.theme, null), true);
   assert.equal(accepts(schema.properties.theme, "Nord!"), false);

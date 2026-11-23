@@ -1,7 +1,6 @@
 import { Button, ListRow, NativeFormContext, space, Symbol, Text, VisualEffect, WindowDragRegion } from "../ui";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
-import { useTheme } from "../ui/theme";
 import { useProfile } from "../../state/browser/hooks";
 import { usePluginTitle } from "../../state/plugins/hooks";
 import { trackSettingsSection } from "../../state/telemetry/track";
@@ -233,4 +232,3 @@ function SidebarItem({ title, icon, tint, selected, onPress }: { title: string; 
 const SIDEBAR_ITEM_HEIGHT = 30;
 const PANE_TILE = { width: paneTile.size, height: paneTile.size, borderRadius: paneTile.radius, alignItems: "center", justifyContent: "center" } as const;
 const PANE_TILE_SYMBOL = { width: paneTile.size, height: paneTile.size } as const;
-

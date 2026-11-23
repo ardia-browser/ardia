@@ -8,4 +8,8 @@ export const writeDocument = (name: string, contents: string) => Documents.write
 export const saveDocument = (name: string, contents: string) => Documents.saveDocument(name, contents);
 export const documentSaved = (name: string) => Documents.documentSaved(name);
 export const removeDocument = (name: string) => Documents.removeDocument(name);
+export const syncDocument = (name: string): Promise<void> => Documents.syncDocument(name);
+export const createDocument = (name: string, contents: string): Promise<void> => Documents.createDocument(name, contents);
+export const listDocuments = (prefix: string): string[] => Documents.listDocuments(prefix);
+export const copyDocument = (name: string, copyName: string) => Documents.copyDocument(name, copyName);
 export const fetchBangList = (etag: string | null): Promise<BangListReply> => nativeModule("ArdiaShell").fetchBangList(etag);

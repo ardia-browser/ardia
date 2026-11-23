@@ -189,7 +189,7 @@ test("a failed install whose sheet stayed open shows its error in that sheet", (
 
 test("the Linux install adapter ties a failed unpacked install's error back to the request it came from", async () => {
   const { installExtension } = await import("./extensionInstalls.ts");
-  const { useExtensions } = await import("./extensionsStore.ts");
+  const { useExtensions } = await import("../../browser/src/state/extensions/store.ts");
   const ready = { ...request("settings", "adapter"), pkg: { name: "adapter", path: "/tmp/adapter" } };
   useExtensions.setState({ install: ready });
   const stop = followInstallRequest(useExtensions, "settings", () => {});

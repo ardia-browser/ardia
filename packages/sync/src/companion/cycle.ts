@@ -21,7 +21,7 @@ import { fromLegacyUrl } from "./legacy.ts";
 import { buildView, dataOwner, defaultProfileId, liveProfiles, type View } from "./view.ts";
 import { host, loaded, save, viewIsNew, type CompanionState } from "./state.ts";
 
-export type ChainStatus = "ok" | "missing" | "unavailable";
+type ChainStatus = "ok" | "missing" | "unavailable";
 
 export type CycleInput = {
   name: string;
@@ -32,10 +32,10 @@ export type CycleInput = {
   fetchedDue?: string[];
 };
 
-export type Received = { profile: string; key: string; u: string; t: string; from: string; fromName: string | null; at: number };
-export type Removal = { profile: string; urls: string[]; unassigned: boolean };
+type Received = { profile: string; key: string; u: string; t: string; from: string; fromName: string | null; at: number };
+type Removal = { profile: string; urls: string[]; unassigned: boolean };
 
-export type CycleOutput = {
+type CycleOutput = {
   status: ChainStatus;
   view?: View;
   received: Received[];

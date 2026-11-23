@@ -1,7 +1,7 @@
 import { onConsentPeriodChange, stillValid, type ConsentToken } from "./choice";
 import { consentOrNow, countFor } from "./countFor";
 
-export type DragsEnded = { ownerGone: number; debuggerUnowned: number; nativeRefused: number };
+type DragsEnded = { ownerGone: number; debuggerUnowned: number; nativeRefused: number };
 
 const KINDS = ["ownerGone", "debuggerUnowned", "nativeRefused"] as const;
 const none = (): DragsEnded => ({ ownerGone: 0, debuggerUnowned: 0, nativeRefused: 0 });

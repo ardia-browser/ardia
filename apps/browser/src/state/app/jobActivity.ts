@@ -1,5 +1,5 @@
-export const JOB_ACTIVITIES = ["sync", "sessionSave", "memoryTrim", "omniboxSuggest", "liveFolders", "historyApply", "import", "siteDataCarry"] as const;
-export type JobActivity = (typeof JOB_ACTIVITIES)[number];
+const JOB_ACTIVITIES = ["sync", "sessionSave", "memoryTrim", "omniboxSuggest", "liveFolders", "historyApply", "import", "siteDataCarry"] as const;
+type JobActivity = (typeof JOB_ACTIVITIES)[number];
 
 const HOLDS_MAIN_THREAD: ReadonlySet<JobActivity> = new Set<JobActivity>(["sync", "import", "siteDataCarry"]);
 export const holdsMainThread = (activity: JobActivity) => HOLDS_MAIN_THREAD.has(activity);

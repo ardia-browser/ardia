@@ -15,7 +15,7 @@ import { runBarAction, runBarExtension } from "../../state/omnibox/runBar";
 import { createBangSubmitter, mayBeBang } from "../../state/omnibox/bangs";
 import { traceOmnibox, useOmniboxDriver } from "./devDriver";
 import { claimFocusTag, commandBarFocus, heroBarFocus } from "../../state/focus/focusClaims";
-import { registerHeroBar, saveNtpQuery, type BarDismissal, type BarSnapshot } from "../../state/omnibox/barState";
+import { registerHeroBar, saveNtpQuery, type BarDismissal, type BarSnapshot, type HeroBarFocus } from "../../state/omnibox/barState";
 import { barSplitsFrom, openFromBar, otherOpenTabs, switchFromBar, type Disposition } from "../../state/omnibox/openFromBar";
 import { openFromNewTabBar } from "../../state/omnibox/newTabBar";
 import { isBookmarklet, runBookmarklet } from "../../state/bookmarks/bookmarklets";
@@ -39,7 +39,6 @@ import { markNewTabBar } from "../../state/omnibox/newTabMarks";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { usePreviewSelection } from "./usePreviewSelection";
 
-export { PANEL_TEXT_LEFT } from "./tokens";
 
 type Variant = "panel" | "hero" | "sidebar";
 
@@ -112,9 +111,9 @@ export function Omnibox({
   };
   useEffect(() => {
     if (!hero) return;
-    const focus = () => {
+    const focus = (mode: HeroBarFocus) => {
       focusField();
-      dispatch({ kind: "select", selection: { start: 0, end: fieldText.current.length } });
+      dispatch({ kind: "select", selection: mode === "restore" ? selection.current : { start: 0, end: fieldText.current.length } });
     };
     const unregister = registerHeroBar(windowId, tabId, focus);
     return () => {

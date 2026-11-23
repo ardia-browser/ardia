@@ -18,7 +18,6 @@ test("a finished download: Open and Show in Finder, Copy Link, then Remove from 
     "Show in Finder [folder]",
     "---",
     "Copy Link [link]",
-    "Show All Downloads [arrow.down.circle]",
     "---",
     "Remove from List [minus.circle]",
     "Move to Trash [trash]",
@@ -28,7 +27,6 @@ test("a finished download: Open and Show in Finder, Copy Link, then Remove from 
     "Show in Finder [folder] (off)",
     "---",
     "Copy Link [link]",
-    "Show All Downloads [arrow.down.circle]",
     "---",
     "Remove from List [minus.circle]",
   ]);

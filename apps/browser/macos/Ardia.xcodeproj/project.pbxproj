@@ -314,6 +314,7 @@
 			inputFileListPaths = (
 			);
 			inputPaths = (
+				"$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)",
 			);
 			name = "Build Dock Tile Plug-in, embed ArdiaCore, bundle the CLI installer";
 			outputFileListPaths = (

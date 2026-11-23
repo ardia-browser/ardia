@@ -21,6 +21,20 @@ test("an email link carries the title as its subject and the address as its body
   assert.equal(mailtoLink("https://ardia.dev/", null), "mailto:?subject=https%3A%2F%2Fardia.dev%2F&body=https%3A%2F%2Fardia.dev%2F");
 });
 
+test("an email's subject never carries the trackers its body was cleaned of, whatever title the page had", async () => {
+  const tracked = "https://shop.example/item?id=7&utm_source=mail";
+  const seen = surface("email");
+  await appModuleFallback(host, "ArdiaApp", "share")(tracked, tracked, "w1", null);
+  await appModuleFallback(host, "ArdiaApp", "shareVia")("email", tracked, ` ${tracked}\n`, "w1");
+  await appModuleFallback(host, "ArdiaApp", "shareVia")("email", tracked, "https://other.example/?gclid=1&q=2", "w1");
+  const clean = encodeURIComponent("https://shop.example/item?id=7");
+  assert.deepEqual(seen.opened.map(([url]) => url), [
+    `mailto:?subject=${clean}&body=${clean}`,
+    `mailto:?subject=${clean}&body=${clean}`,
+    `mailto:?subject=${encodeURIComponent("https://other.example/?q=2")}&body=${clean}`,
+  ]);
+});
+
 test("Share offers Copy Link and Email Link for a web page and only Copy Link for a file", () => {
   assert.deepEqual(linkShareItems("https://ardia.dev").map((item) => item.title), ["Copy Link", "Email Link"]);
   assert.deepEqual(linkShareItems("file:///home/me/links").map((item) => item.title), ["Copy Link"]);

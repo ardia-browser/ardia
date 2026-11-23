@@ -232,7 +232,7 @@ function setCards(windowId: string, cards: SidePanelCard[]) {
 
 export const sidePanelCards = (windowId: string) => useExtensions.getState().sidePanelCards[windowId] ?? NO_CARDS;
 
-export function refreshSidePanelCards(windowId: string) {
+function refreshSidePanelCards(windowId: string) {
   const shown = useExtensions.getState().sidePanels[windowId];
   const visible = shown && !shown.hidden ? shown : undefined;
   const before = sidePanelCards(windowId);
@@ -244,7 +244,7 @@ export function refreshSidePanelCards(windowId: string) {
   if (next.length !== before.length || next.some((card, i) => card !== before[i])) setCards(windowId, next);
 }
 
-export function settleSidePanelTabs(windowId: string) {
+function settleSidePanelTabs(windowId: string) {
   const entry = useExtensions.getState().sidePanels[windowId];
   if (entry && !entry.hidden && entry.tabId && !panelTabOpen(windowId, entry.tabId)) return hideSidePanel(windowId);
   refreshSidePanelCards(windowId);

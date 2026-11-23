@@ -3,7 +3,7 @@ import { hostSupports, invokeHost, type ArdiaHost } from "./host.ts";
 import { parseMinidump, type Minidump, type MinidumpModule } from "./minidump.ts";
 
 export const CRASH_DUMPS = "crash.dumps";
-export type CrashDumpEntry = { id: string; time: number };
+type CrashDumpEntry = { id: string; time: number };
 
 const PER_PROCESS_KIND = 5;
 const READ_AT_MOST = 16;
@@ -75,7 +75,7 @@ function decodeBase64(text: string): Uint8Array {
   return bytes;
 }
 
-export function newestPerKind(reports: CrashReport[]): CrashReport[] {
+function newestPerKind(reports: CrashReport[]): CrashReport[] {
   const sorted = [...reports].sort((a, b) => a.fileTime - b.fileTime);
   const browser = sorted.filter((report) => report.process === "browser").slice(-PER_PROCESS_KIND);
   const helpers = sorted.filter((report) => report.process !== "browser").slice(-PER_PROCESS_KIND);

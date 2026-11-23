@@ -8,7 +8,7 @@ export const MEADOW_LAST_READ_MS = 200;
 
 type Cancel = () => void;
 
-export type MeadowSessionDeps = {
+type MeadowSessionDeps = {
   now(): number;
   later(ms: number, run: () => void): Cancel;
   every(ms: number, run: () => void): Cancel;
@@ -21,7 +21,7 @@ export type MeadowSessionDeps = {
   log(line: string): void;
 };
 
-export type MeadowPhase = "booting" | "opening" | "live" | "closing" | "closed" | "fallen";
+type MeadowPhase = "booting" | "opening" | "live" | "closing" | "closed" | "fallen";
 
 export type MeadowSession = {
   phase(): MeadowPhase;

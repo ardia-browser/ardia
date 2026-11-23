@@ -2,16 +2,16 @@ import { create } from "zustand";
 import { hostSupports, invokeHost, reportHostError, type ArdiaHost } from "./host.ts";
 import { parseFrame, type PlayerFrame, type Rect } from "./pipGeometry.ts";
 
-export const PIP_ATTACH = "pip.attach";
-export const PIP_VIEWPORT = "pip.viewport";
-export const PIP_COMMAND = "pip.command";
-export const PIP_FRAME_DOCUMENT = "pip-player.json";
+const PIP_ATTACH = "pip.attach";
+const PIP_VIEWPORT = "pip.viewport";
+const PIP_COMMAND = "pip.command";
+const PIP_FRAME_DOCUMENT = "pip-player.json";
 export const SKIP_SECONDS = 10;
 
 const SKIP_DEAD_BAND_HALF_WIDTH = 40;
 const CLICK_SLOP = 3;
 
-export type PlayerPosition = { current: number; duration: number | null; rate: number; at: number };
+type PlayerPosition = { current: number; duration: number | null; rate: number; at: number };
 export type PlayerState = {
   player: number;
   tab: number;
@@ -22,7 +22,7 @@ export type PlayerState = {
   natural: { width: number; height: number };
   position: PlayerPosition | null;
 };
-export type PlayerLeaving = { player: number; fade: number };
+type PlayerLeaving = { player: number; fade: number };
 
 export const usePipPlayer = create<{ state: PlayerState | null; leaving: PlayerLeaving | null; frame: PlayerFrame | null }>(() => ({ state: null, leaving: null, frame: null }));
 

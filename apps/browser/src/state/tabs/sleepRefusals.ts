@@ -1,6 +1,8 @@
-export type KeptAwakeReason = "playingOrSharing" | "audio" | "pictureInPicture" | "capturing" | "device" | "devTools" | "typedInput" | "noPage" | "other";
+import { ENGINE_KEPT_CODES } from "./engineKeptCodes";
 
-const OVERRIDDEN_BY_ASKING: ReadonlySet<number> = new Set([6, 7, 13, 14, 23, 25]);
+export type KeptAwakeReason = "playingOrSharing" | "audio" | "pictureInPicture" | "capturing" | "device" | "devTools" | "typedInput" | "postedDocument" | "beforeUnload" | "download" | "noPage" | "other";
+
+const OVERRIDDEN_BY_ASKING: ReadonlySet<number> = new Set([6, 7, 13, 14, 23, 25, ...ENGINE_KEPT_CODES.filter((kept) => kept.userMayOverride).map((kept) => kept.code)]);
 
 const REASONS: Readonly<Record<number, KeptAwakeReason>> = {
   [-1]: "noPage",
@@ -16,6 +18,7 @@ const REASONS: Readonly<Record<number, KeptAwakeReason>> = {
   24: "devTools",
   26: "typedInput",
   27: "typedInput",
+  ...Object.fromEntries(ENGINE_KEPT_CODES.map((kept) => [kept.code, kept.menu])),
 };
 
 export const onlyAutomaticProtections = (keptBy: readonly number[]) => keptBy.length > 0 && keptBy.every((r) => OVERRIDDEN_BY_ASKING.has(r));

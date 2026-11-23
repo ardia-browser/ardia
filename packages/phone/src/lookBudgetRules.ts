@@ -14,7 +14,7 @@ export const LOOK_BUDGET = {
 
 export type FrameSample = { totals: number[]; deadlines: number[]; refreshMs?: number; windowMs?: number; foreignFrames?: number; waits?: number[]; tickMs?: number; mainThreadMs?: number; droppedReports?: number; sceneWorkerMs?: number; mainThreadMessages?: number; longestMessages?: string[]; sceneCount?: number; blendCount?: number; foreignViews?: string[] };
 
-export type Judgement = {
+type Judgement = {
   conclusive: boolean;
   over: boolean;
   frames: number;
@@ -41,7 +41,7 @@ export type Judgement = {
   blendCount?: number;
 };
 
-export type BudgetVerdict = "unknown" | "pass" | "fail";
+type BudgetVerdict = "unknown" | "pass" | "fail";
 
 export type BudgetState = {
   version: string;
@@ -63,10 +63,10 @@ const median = (values: readonly number[]) => {
   return sorted.length % 2 === 1 ? sorted[middle]! : (sorted[middle - 1]! + sorted[middle]!) / 2;
 };
 
-export const refreshInterval = (displayMs: number | undefined): number | undefined =>
+const refreshInterval = (displayMs: number | undefined): number | undefined =>
   displayMs === undefined || !(displayMs > 0) ? undefined : Math.min(displayMs, LOOK_BUDGET.slowestRefreshMs);
 
-export function frameDeadline(ownMs: number, refreshMs: number | undefined): number {
+function frameDeadline(ownMs: number, refreshMs: number | undefined): number {
   if (refreshMs === undefined) return ownMs;
   return ownMs > 0 && ownMs <= refreshMs * LOOK_BUDGET.latchSlack ? ownMs : refreshMs;
 }
@@ -151,7 +151,7 @@ export function parseState(text: string | null | undefined): BudgetState | null 
   }
 }
 
-export type ProbeDeps = {
+type ProbeDeps = {
   sample: (millis: number) => Promise<FrameSample | null>;
   schedule: (run: () => void, millis: number) => () => void;
   record: (sample: FrameSample, attempt: ProbeAttempt) => void;

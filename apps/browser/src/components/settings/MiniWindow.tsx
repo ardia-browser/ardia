@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
 import { StyleSheet, View, type DimensionValue } from "react-native";
-import { capsule, radius } from "../ui";
+import { capsule, ink, radius } from "../ui";
 import { miniWindow, type MiniWindowGeometry } from "./tokens";
 
-export type MiniWindowLook = { window: string; bar: string; page: string; field?: string; accent?: string; edge?: string };
+export type MiniWindowLook = { window: string; bar: string; page: string; field?: string; accent?: string; edge?: string; closed?: string };
 
-export type MiniWindowSize = keyof typeof miniWindow;
+type MiniWindowSize = keyof typeof miniWindow;
 
 const FAINT_ALPHA = "59";
 const OVERLAY = { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" } as const;
@@ -17,6 +17,7 @@ export function MiniWindow({
   bars = 3,
   accentBar,
   faintBar,
+  closedBar,
   field,
   fieldLit,
   look,
@@ -30,6 +31,7 @@ export function MiniWindow({
   bars?: number | readonly number[];
   accentBar?: number;
   faintBar?: number;
+  closedBar?: number;
   field?: "side" | "toolbar";
   fieldLit?: boolean;
   look: MiniWindowLook;
@@ -40,6 +42,10 @@ export function MiniWindow({
   const g = miniWindow[size];
   const widths = typeof bars === "number" ? Array.from({ length: bars }, () => 1) : bars;
   const barColor = (i: number) => (look.accent && i === accentBar ? look.accent : look.accent && i === faintBar ? `${look.accent}${FAINT_ALPHA}` : look.bar);
+  const barFill = (i: number) =>
+    i === closedBar
+      ? { backgroundColor: ink.clear, borderWidth: 1, borderStyle: "dashed" as const, borderColor: look.closed ?? look.bar }
+      : { backgroundColor: barColor(i) };
   const fieldEdge = look.accent && fieldLit !== false ? look.accent : undefined;
   const fieldStyle = (height: number) => ({
     height,
@@ -54,14 +60,14 @@ export function MiniWindow({
         <View style={{ width: g.side, gap: g.barGap, paddingTop: field === "side" ? g.sideFieldTop : g.sideTop }}>
           {field === "side" && <View style={fieldStyle(g.sideField)} />}
           {widths.map((w, i) => (
-            <View key={i} style={{ width: `${w * 100}%` as DimensionValue, height: g.bar, borderRadius: capsule(g.bar), backgroundColor: barColor(i) }} />
+            <View key={i} style={[{ width: `${w * 100}%` as DimensionValue, height: g.bar, borderRadius: capsule(g.bar) }, barFill(i)]} />
           ))}
         </View>
       )}
       {layout === "top" && (
         <View style={{ height: g.tab, flexDirection: "row", gap: g.barGap, paddingLeft: g.tabsLeft }}>
           {widths.map((w, i) => (
-            <View key={i} style={{ flex: w, borderRadius: chromeRadius(g, g.tab), backgroundColor: barColor(i) }} />
+            <View key={i} style={[{ flex: w, borderRadius: chromeRadius(g, g.tab) }, barFill(i)]} />
           ))}
         </View>
       )}

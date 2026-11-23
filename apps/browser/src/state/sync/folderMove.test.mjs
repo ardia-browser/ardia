@@ -1,3 +1,4 @@
+import { asSecret } from "@ardia/core";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -347,7 +348,7 @@ test("a recovery phrase or a Turn On asked for during a move waits for it, so th
   native.enterPhrase = async () => ({ ok: true });
   try {
     const moving = engine.moveSyncFolder("/home/someone/Nextcloud/Ardia Sync");
-    assert.ok("ok" in (await engine.enterRecoveryPhrase("/elsewhere", "words")));
+    assert.ok("ok" in (await engine.enterRecoveryPhrase("/elsewhere", asSecret("syncPhrase", "words"))));
     assert.deepEqual(await moving, { ok: "moved" });
     assert.equal(engine.useSync.getState().folder, "/elsewhere");
     const movingAgain = engine.moveSyncFolder("/home/someone/Dropbox/Ardia Sync");

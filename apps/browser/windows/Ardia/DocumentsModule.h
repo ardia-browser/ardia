@@ -12,6 +12,7 @@
 #include <map>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -204,6 +205,58 @@ inline DWORD ReplaceAtomically(std::filesystem::path const &target, std::string_
   return failure == ERROR_SUCCESS ? ERROR_WRITE_FAULT : failure;
 }
 
+inline std::wstring LongPath(std::filesystem::path const &path) noexcept {
+  try {
+    std::wstring text = std::filesystem::path(path).make_preferred().lexically_normal().wstring();
+    if (text.rfind(L"\\\\?\\", 0) == 0) return text;
+    if (text.rfind(L"\\\\", 0) == 0) return L"\\\\?\\UNC\\" + text.substr(2);
+    return L"\\\\?\\" + text;
+  } catch (...) {
+    return path.wstring();
+  }
+}
+
+inline DWORD CopyAtomically(std::filesystem::path const &from, std::filesystem::path const &to) noexcept {
+  std::wstring source = LongPath(from);
+  std::wstring target = LongPath(to);
+  std::wstring temp = LongPath(std::filesystem::path(TempSibling(to)));
+  if (!CopyFileW(source.c_str(), temp.c_str(), TRUE)) return GetLastError();
+  DWORD failure = ERROR_SUCCESS;
+  HANDLE file = CreateFileW(temp.c_str(), GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+  if (file == INVALID_HANDLE_VALUE) {
+    failure = GetLastError();
+  } else {
+    if (!FlushFileBuffers(file)) failure = GetLastError();
+    CloseHandle(file);
+  }
+  if (failure == ERROR_SUCCESS && !MoveFileExW(temp.c_str(), target.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) failure = GetLastError();
+  if (failure != ERROR_SUCCESS) DeleteFileW(temp.c_str());
+  return failure;
+}
+
+inline DWORD CreateExclusively(std::filesystem::path const &target, std::string_view bytes) noexcept {
+  std::wstring temp = LongPath(std::filesystem::path(TempSibling(target)));
+  HANDLE file = CreateFileW(temp.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+  if (file == INVALID_HANDLE_VALUE) return GetLastError();
+  DWORD failure = ERROR_SUCCESS;
+  size_t offset = 0;
+  while (offset < bytes.size()) {
+    DWORD chunk = static_cast<DWORD>(std::min<size_t>(bytes.size() - offset, 1u << 20));
+    DWORD wrote = 0;
+    if (!WriteFile(file, bytes.data() + offset, chunk, &wrote, nullptr) || wrote == 0) {
+      failure = GetLastError();
+      if (failure == ERROR_SUCCESS) failure = ERROR_WRITE_FAULT;
+      break;
+    }
+    offset += wrote;
+  }
+  if (failure == ERROR_SUCCESS && !FlushFileBuffers(file)) failure = GetLastError();
+  CloseHandle(file);
+  if (failure == ERROR_SUCCESS && !MoveFileExW(temp.c_str(), LongPath(target).c_str(), MOVEFILE_WRITE_THROUGH)) failure = GetLastError();
+  if (failure != ERROR_SUCCESS) DeleteFileW(temp.c_str());
+  return failure;
+}
+
 inline bool RemoveFile(std::filesystem::path const &path) noexcept {
   if (DeleteFileW(path.c_str())) return true;
   DWORD error = GetLastError();
@@ -211,6 +264,9 @@ inline bool RemoveFile(std::filesystem::path const &path) noexcept {
 }
 
 }
+
+inline constexpr char kDocumentExists[] = "ERR_DOCUMENT_EXISTS";
+inline constexpr char kDocumentGone[] = "ERR_DOCUMENT_GONE";
 
 class DocumentStore {
  public:
@@ -334,6 +390,115 @@ class DocumentStore {
     std::filesystem::path path = *url;
     Queue().Async([path, key, waiters = std::move(waiters)]() { FinishRemove(path, key, waiters, 0); });
     return true;
+  }
+
+  static void Copy(std::string_view name, std::string_view copyName, Done done) noexcept {
+    auto source = Url(name);
+    auto target = Url(copyName);
+    if (!source || !target || *source == *target) {
+      done(std::string("Invalid document name"));
+      return;
+    }
+    std::filesystem::path from = *source;
+    std::filesystem::path to = *target;
+    Queue().Async([from, to, done]() {
+      std::optional<std::string> message;
+      {
+        std::unique_lock<std::timed_mutex> writing(State().writing, std::chrono::seconds(10));
+        if (!writing.owns_lock()) {
+          message = std::string("The documents are busy");
+        } else if (GetFileAttributesW(Files::LongPath(from).c_str()) == INVALID_FILE_ATTRIBUTES) {
+          DWORD error = GetLastError();
+          message = error == ERROR_FILE_NOT_FOUND ? std::string(kDocumentGone) : Paths::Utf8(Files::ErrorText(error));
+        } else if (DWORD failure = Files::CopyAtomically(from, to); failure != ERROR_SUCCESS) {
+          message = Paths::Utf8(Files::ErrorText(failure));
+        }
+      }
+      try {
+        done(message);
+      } catch (...) {
+      }
+    });
+  }
+
+  static void Sync(std::string_view name, Done done) noexcept {
+    auto url = Url(name);
+    if (!url) {
+      done(std::string("Invalid document name"));
+      return;
+    }
+    std::filesystem::path target = *url;
+    Queue().Async([target, done]() {
+      std::optional<std::string> message;
+      {
+        std::unique_lock<std::timed_mutex> writing(State().writing, std::chrono::seconds(10));
+        if (!writing.owns_lock()) {
+          message = std::string("The documents are busy");
+        } else {
+          HANDLE file = CreateFileW(Files::LongPath(target).c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+          if (file == INVALID_HANDLE_VALUE) {
+            DWORD error = GetLastError();
+            message = error == ERROR_FILE_NOT_FOUND ? std::string(kDocumentGone) : Paths::Utf8(Files::ErrorText(error));
+          } else {
+            if (!FlushFileBuffers(file)) message = Paths::Utf8(Files::ErrorText(GetLastError()));
+            CloseHandle(file);
+          }
+        }
+      }
+      try {
+        done(message);
+      } catch (...) {
+      }
+    });
+  }
+
+  static void Create(std::string_view name, std::string contents, Done done) noexcept {
+    auto url = Url(name);
+    if (!url) {
+      done(std::string("Invalid document name"));
+      return;
+    }
+    std::filesystem::path target = *url;
+    Queue().Async([target, contents = std::move(contents), done]() {
+      std::optional<std::string> message;
+      {
+        std::unique_lock<std::timed_mutex> writing(State().writing, std::chrono::seconds(10));
+        if (!writing.owns_lock()) {
+          message = std::string("The documents are busy");
+        } else if (DWORD failure = Files::CreateExclusively(target, contents); failure == ERROR_ALREADY_EXISTS || failure == ERROR_FILE_EXISTS) {
+          message = std::string(kDocumentExists);
+        } else if (failure != ERROR_SUCCESS) {
+          message = Paths::Utf8(Files::ErrorText(failure));
+        }
+      }
+      try {
+        done(message);
+      } catch (...) {
+      }
+    });
+  }
+
+  static std::vector<std::string> List(std::string_view prefix) noexcept {
+    std::vector<std::string> names;
+    try {
+      std::wstring wanted = Paths::Wide(prefix);
+      std::set<std::wstring> found;
+      std::error_code error;
+      std::filesystem::directory_iterator end;
+      for (std::filesystem::directory_iterator it(Paths::DataDirectory(), error); !error && it != end; it.increment(error)) {
+        std::error_code kind;
+        if (!it->is_regular_file(kind) || kind || it->is_symlink(kind)) continue;
+        std::wstring name = it->path().filename().wstring();
+        if (!name.empty() && name[0] != L'.' && name.rfind(wanted, 0) == 0) found.insert(name);
+      }
+      {
+        std::lock_guard<std::mutex> guard(State().mutex);
+        for (auto const &entry : State().removing) found.erase(entry.first);
+      }
+      for (auto const &name : found) names.push_back(Paths::Utf8(name));
+    } catch (...) {
+    }
+    return names;
   }
 
   static void FinishRemove(std::filesystem::path const &path, std::wstring const &key, std::vector<Done> const &waiters, int attempt) noexcept {
@@ -493,10 +658,38 @@ struct DocumentsModule {
     DocumentStore::WhenSaved(name, Settle(promise));
   }
 
+  REACT_METHOD(createDocument)
+  void createDocument(std::string name, std::string contents, winrt::Microsoft::ReactNative::ReactPromise<void> promise) noexcept {
+    DocumentStore::Create(name, std::move(contents), SettleCoded(promise, "ERR_CREATE_DOCUMENT"));
+  }
+
+  REACT_SYNC_METHOD(listDocuments)
+  std::vector<std::string> listDocuments(std::string prefix) noexcept { return DocumentStore::List(prefix); }
+
+  REACT_METHOD(copyDocument)
+  void copyDocument(std::string name, std::string copyName, winrt::Microsoft::ReactNative::ReactPromise<void> promise) noexcept {
+    DocumentStore::Copy(name, copyName, SettleCoded(promise, "ERR_COPY_DOCUMENT"));
+  }
+
+  REACT_METHOD(syncDocument)
+  void syncDocument(std::string name, winrt::Microsoft::ReactNative::ReactPromise<void> promise) noexcept {
+    DocumentStore::Sync(name, SettleCoded(promise, "ERR_SYNC_DOCUMENT"));
+  }
+
   REACT_SYNC_METHOD(removeDocument)
   bool removeDocument(std::string name) noexcept { return DocumentStore::Remove(name); }
 
  private:
+  static DocumentStore::Done SettleCoded(winrt::Microsoft::ReactNative::ReactPromise<void> const &promise, std::string fallback) noexcept {
+    return [promise, fallback](std::optional<std::string> const &error) {
+      if (!error) return promise.Resolve();
+      winrt::Microsoft::ReactNative::ReactError failure;
+      failure.Code = *error == kDocumentExists || *error == kDocumentGone ? *error : fallback;
+      failure.Message = *error;
+      promise.Reject(failure);
+    };
+  }
+
   static DocumentStore::Done Settle(winrt::Microsoft::ReactNative::ReactPromise<void> const &promise) noexcept {
     return [promise](std::optional<std::string> const &error) {
       if (!error) return promise.Resolve();

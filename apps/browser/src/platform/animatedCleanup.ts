@@ -25,7 +25,7 @@ export function deferCancellationsDuringDetach(animation: Ending, value: Detachi
   };
 }
 
-export function detachAnimatedPropsInCommit(): string | null {
+function detachAnimatedPropsInCommit(): string | null {
   try {
     const flags: FeatureFlags = require("react-native/src/private/featureflags/ReactNativeFeatureFlags");
     if (typeof flags.scheduleAnimatedCleanupInMicrotask !== "function") return "React Native has no scheduleAnimatedCleanupInMicrotask flag";

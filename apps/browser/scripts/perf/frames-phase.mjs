@@ -2,6 +2,7 @@ import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { median } from "./median.mjs";
 
 const CAP_LOG = process.env.AC_CPU_CAP_LOG;
 const capRunning = () => spawnSync("pgrep", ["-f", "scripts/agent/cpu-cap"]).status === 0;
@@ -20,12 +21,6 @@ const capPauses = (from, app, pid) => {
   }
 };
 
-const median = (xs) => {
-  const s = xs.filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
-  if (!s.length) return NaN;
-  const m = s.length >> 1;
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-};
 
 export function framesLibrary(toolDir, here) {
   const lib = join(toolDir, "acframes.dylib");

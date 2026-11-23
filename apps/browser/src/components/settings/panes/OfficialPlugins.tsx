@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { View } from "react-native";
 import { copyText } from "../../../state/app/system";
-import { installOfficialPlugin, UNSAVED, type OfficialPlugin } from "../../../state/plugins/actions";
-import { useOfficialFetch, useOfficialPlugins, usePluginConsent, usePluginOrder, usePluginPrograms, usePluginUnsaved } from "../../../state/plugins/hooks";
+import { FULL_CONTROL_SUMMARY, installOfficialPlugin, UNSAVED, type OfficialPlugin } from "../../../state/plugins/actions";
+import { useOfficialFetch, useOfficialPlugins, usePluginConsent, usePluginFullControl, usePluginOrder, usePluginPrograms, usePluginUnsaved } from "../../../state/plugins/hooks";
 import { installedLabel, isOffered, officialInSettings, officialTitle, officialView, wasCancelled, type OfficialAttempt } from "../../../state/plugins/officialView";
 import { OFFICIAL_LEGACY_PROGRAMS } from "../../../state/plugins/officialPin";
 import { refreshLegacyInstalls, useLegacyInstalls } from "../../../state/plugins/programRegistry";
@@ -73,6 +73,7 @@ function OfficialPluginRow({ plugin }: { plugin: OfficialPlugin }) {
   const legacy = useLegacyInstalls((s) => s.owners.includes(plugin.name));
   const olderProgram = legacy && Object.hasOwn(OFFICIAL_LEGACY_PROGRAMS, plugin.name) ? OFFICIAL_LEGACY_PROGRAMS[plugin.name]! : null;
   const view = officialView(plugin, programs, attempt, fetch, olderProgram);
+  const fullControl = usePluginFullControl(plugin.name) ? FULL_CONTROL_SUMMARY : null;
   const offered = isOffered(plugin);
   useEffect(() => {
     if (offered) noteOfficialPlugin("settings", "shown", plugin.name);
@@ -96,7 +97,7 @@ function OfficialPluginRow({ plugin }: { plugin: OfficialPlugin }) {
       description={
         view.note === "comingSoon" ? undefined : (
           <Text selectable={view.failed} lines={view.failed ? undefined : 2} size="caption" tone={view.failed ? "destructive" : "textSecondary"} style={LINE}>
-            {view.status ?? plugin.blurb}
+            {[fullControl, view.status ?? plugin.blurb].filter(Boolean).join(" · ")}
           </Text>
         )
       }

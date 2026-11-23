@@ -18,7 +18,7 @@ export type HistorySlice = {
   importCleanedTabs(entries: ClosedTab[]): { added: number; already: number };
 };
 
-export type HistoryImportOutcome = { added: number; batches: number; failedBatches: number };
+type HistoryImportOutcome = { added: number; batches: number; failedBatches: number };
 
 export const MAX_HISTORY = 100_000;
 export const MAX_VISIT_TIMES = 50;

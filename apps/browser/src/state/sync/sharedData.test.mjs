@@ -1,3 +1,4 @@
+import { asSecret } from "@ardia/core";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -93,7 +94,7 @@ test("a profile that shares data on one Mac shares the same profile's data on th
   await b.with(async () => {
     S().createProfile({ name: "Home" });
     engineB.startSync();
-    assert.ok("ok" in (await engineB.enterRecoveryPhrase("/sync", "words")));
+    assert.ok("ok" in (await engineB.enterRecoveryPhrase("/sync", asSecret("syncPhrase", "words"))));
     await engineB.syncNow();
     await engineB.syncNow();
 
@@ -133,7 +134,7 @@ test("adding a profile whose owner isn't on this Mac adds the owner too, sharing
 
   await c.with(async () => {
     engineC.startSync();
-    assert.ok("ok" in (await engineC.enterRecoveryPhrase("/sync", "words")));
+    assert.ok("ok" in (await engineC.enterRecoveryPhrase("/sync", asSecret("syncPhrase", "words"))));
     await engineC.syncNow();
     await engineC.syncNow();
     const homework = engineC.useSync.getState().remoteProfiles.find((p) => p.name === "Homework");
@@ -174,7 +175,7 @@ async function join(mac, engine, before = () => {}) {
   await mac.with(async () => {
     before();
     engine.startSync();
-    assert.ok("ok" in (await engine.enterRecoveryPhrase("/sync", "words")));
+    assert.ok("ok" in (await engine.enterRecoveryPhrase("/sync", asSecret("syncPhrase", "words"))));
     await engine.syncNow();
     await engine.syncNow();
   });

@@ -1,4 +1,4 @@
-export type WindowFrame = [number, number, number, number];
+type WindowFrame = [number, number, number, number];
 export type WorkArea = { availWidth: number; availHeight: number };
 
 export const isWindowFrame = (value: unknown): value is WindowFrame => Array.isArray(value) && value.length === 4 && value.every(Number.isFinite);

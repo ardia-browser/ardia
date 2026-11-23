@@ -153,6 +153,8 @@ const PARAMS = (f) => ({
   "sites.reset": { origin: "https://site.example" },
   "sites.clearData": { site: "site.example" },
   "sites.setZoom": { host: "site.example", zoom: 1.5 },
+  "sites.allowAds": { site: "site.example" },
+  "sites.blockAds": { site: "site.example" },
   "extensions.setEnabled": { id: "a".repeat(32), enabled: false },
   "extensions.setPinned": { id: "a".repeat(32), pinned: true },
   "extensions.reload": { id: "a".repeat(32) },

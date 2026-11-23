@@ -1,9 +1,10 @@
-import { call, inputIdleSeconds, on, type BatterySaverMode, type CursorRestore, type EngineTask, type HoverLostEpisode, type MemorySaverMode, type MemorySaverRequest, type PressLoopLongReport, type PopupProtectedMedia, type SystemState, type WindowUnpaintedRecord } from "@ardia/ardiacore";
+import { call, inputIdleSeconds, on, type BatterySaverMode, type ChildProcessCpu, type CursorRestore, type EngineTask, type HoverLostEpisode, type MemorySaverMode, type MemorySaverRequest, type PressLoopLongReport, type PopupProtectedMedia, type SystemState, type WindowUnpaintedRecord } from "@ardia/ardiacore";
 
 export { inputIdleSeconds };
-export type { EngineTask, HoverLostEpisode, MemorySaverMode, PressLoopLongReport, PopupProtectedMedia, SystemState, WindowUnpaintedRecord };
+export type { ChildProcessCpu, EngineTask, HoverLostEpisode, MemorySaverMode, PressLoopLongReport, PopupProtectedMedia, SystemState, WindowUnpaintedRecord };
 
 export const listTasks = () => call("engine.tasks");
+export const childProcessCpu = () => call("engine.childProcessCpu");
 export const systemState = () => call("engine.systemState");
 export const onSystemState = (listener: (state: SystemState) => void) => on("engine.systemState", listener);
 export const onHoverLost = (listener: (episode: HoverLostEpisode) => void) => on("engine.hoverLost", listener);

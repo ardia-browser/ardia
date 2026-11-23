@@ -1,7 +1,7 @@
 import { listTasks, type EngineTask } from "../../platform/performance";
 import type { FolderNode, GroupNode, TabNode, Workspace } from "./workspaceTree";
 
-export type TabUsage = { pid: number | null; cpu: number | null; memory: number | null };
+type TabUsage = { pid: number | null; cpu: number | null; memory: number | null };
 
 const FIRST_SAMPLE_MS = 2200;
 const SAMPLER_KEPT_MS = 12000;
@@ -12,7 +12,7 @@ let lastRead = 0;
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export function usageByTab(tasks: EngineTask[]): Map<string, TabUsage> {
+function usageByTab(tasks: EngineTask[]): Map<string, TabUsage> {
   const usage = new Map<string, TabUsage>();
   for (const t of tasks) {
     const own: TabUsage = {

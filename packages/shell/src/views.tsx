@@ -57,6 +57,10 @@ export type ActivitySpinnerProps = ViewProps;
 
 export const ActivitySpinner = requireNativeViewManager<ActivitySpinnerProps>("ArdiaActivitySpinner");
 
+export type BreatheProps = ViewProps & { running: boolean; cycleMs: number; opacityRange: readonly [number, number]; scaleRange: readonly [number, number] };
+
+export const Breathe = requireNativeViewManager<BreatheProps>("ArdiaBreathe");
+
 export type FolderIconProps = ViewProps & {
   open: boolean;
   stroke?: string;
@@ -223,7 +227,7 @@ export type FieldGlowLook = {
   line: number;
   floor: number;
 };
-export type FieldGlowProps = ViewProps & { glowId: string; radius: number; look: FieldGlowLook };
+type FieldGlowProps = ViewProps & { glowId: string; radius: number; look: FieldGlowLook };
 export type FieldGlowNative = {
   show(id: string, timings: number[]): void;
   progress(id: string, progress: number, still: boolean): void;

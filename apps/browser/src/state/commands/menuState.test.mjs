@@ -279,3 +279,88 @@ test("an extension list fetched again with what the menu shows unchanged doesn't
   assert.equal(extensionsChangeMenu({ p1: [ext, { ...ext, id: "def" }] }, before), true);
   assert.equal(extensionsChangeMenu({}, before), true);
 });
+
+test("private windows disable Bookmarks Bar commands in menuState and ignore them in runCommand", async () => {
+  const { runCommand } = await import("./commands.ts");
+  S().hydrate({});
+  S().updateSettings({ bookmarksBar: "never" });
+  const priv = S().createWindow({ kind: "private", url: "https://private.example/" });
+  S().setFocusedWindow(priv);
+  const state = menuState(S());
+  assert.ok(state.disabled.includes("setBookmarksBar"));
+  assert.ok(state.disabled.includes("toggleBookmarksBar"));
+  runCommand({ command: "setBookmarksBar", arg: "always", windowId: priv });
+  assert.equal(S().settings.bookmarksBar, "never");
+  runCommand({ command: "toggleBookmarksBar", arg: null, windowId: priv });
+  assert.equal(S().settings.bookmarksBar, "never");
+});
+
+test("Browser Layout menu bar commands switch tab placement in one pick, gate Compact Toolbar, and expose Collapse/Expand Pinned Tabs", async () => {
+  const { runCommand } = await import("./commands.ts");
+  S().hydrate({});
+  const w = S().createWindow({ url: "https://a.example/" });
+  const tabId = model.activeTabId(S(), w);
+  S().setFocusedWindow(w);
+  assert.ok(menuState(S()).checked.includes("setTabLayout:sidebarLeft"));
+  assert.ok(menuState(S()).disabled.includes("togglePinnedFold"));
+  assert.ok(!menuState(S()).disabled.includes("toggleCompactToolbar"));
+  runCommand({ command: "setTabLayout", arg: "top", windowId: w });
+  assert.equal(model.tabLayoutOf(S(), w), "top");
+  assert.ok(menuState(S()).checked.includes("setTabLayout:top"));
+  runCommand({ command: "setTabLayout", arg: "sidebarRight", windowId: w });
+  assert.equal(model.tabLayoutOf(S(), w), "sidebar");
+  assert.equal(S().settings.sidebarSide, "right");
+  assert.ok(menuState(S()).checked.includes("setTabLayout:sidebarRight"));
+  S().updateSettings({ addressBar: "sidebar" });
+  assert.ok(menuState(S()).disabled.includes("toggleCompactToolbar"));
+  runCommand({ command: "toggleCompactToolbar", arg: null, windowId: w });
+  assert.equal(S().settings.compactToolbar, false);
+  S().updateSettings({ addressBar: "toolbar" });
+  runCommand({ command: "toggleCompactToolbar", arg: null, windowId: w });
+  assert.equal(S().settings.compactToolbar, true);
+  assert.ok(menuState(S()).checked.includes("toggleCompactToolbar"));
+  S().pinTabs([tabId], true, true);
+  assert.ok(!menuState(S()).disabled.includes("togglePinnedFold"));
+  runCommand({ command: "togglePinnedFold", arg: null, windowId: w });
+  assert.equal(menuState(S()).titles.togglePinnedFold, "Expand Pinned Tabs");
+  runCommand({ command: "togglePinnedFold", arg: null, windowId: w });
+  assert.equal(menuState(S()).titles.togglePinnedFold, undefined);
+});
+
+test("Little Ardia direct command dispatch ignores Browser Layout commands", async () => {
+  const { runCommand } = await import("./commands.ts");
+  S().hydrate({});
+  const main = S().createWindow({ url: "https://a.example/" });
+  const tabId = model.activeTabId(S(), main);
+  S().pinTabs([tabId], true, true);
+  const small = S().createWindow({ kind: "small", url: "https://little.example/" });
+  S().setFocusedWindow(small);
+  runCommand({ command: "setTabLayout", arg: "top", windowId: small });
+  runCommand({ command: "setTabLayout", arg: "sidebarRight", windowId: small });
+  runCommand({ command: "toggleCompactToolbar", arg: null, windowId: small });
+  runCommand({ command: "toggleFullUrl", arg: null, windowId: small });
+  runCommand({ command: "togglePinnedFold", arg: null, windowId: small });
+  runCommand({ command: "toggleMinimalism", arg: null, windowId: small });
+  assert.ok(menuState(S()).disabled.includes("toggleFullUrl"));
+  assert.equal(model.tabLayoutOf(S(), main), "sidebar");
+  assert.equal(S().settings.sidebarSide, "left");
+  assert.equal(S().settings.compactToolbar, false);
+  assert.equal(S().settings.showFullUrl, false);
+  assert.equal(S().settings.minimalismMode, false);
+  assert.equal(!!S().profiles.default.pinnedCollapsed, false);
+});
+
+test("Collapse Pinned Tabs stays disabled when a pinned group holds only a hidden empty tab", async () => {
+  const { pinnedFoldMenuItem } = await import("../sidebar/pinnedFold.ts");
+  S().hydrate({});
+  S().updateSettings({ newTabOpens: "commandBar" });
+  const w = S().createWindow({ url: "https://a.example/" });
+  const blank = S().newTab(w, { url: "", background: true });
+  S().groupTabs([blank], { name: "Empty", pinned: true });
+  S().setFocusedWindow(w);
+  assert.deepEqual(pinnedFoldMenuItem(S(), w), []);
+  assert.ok(menuState(S()).disabled.includes("togglePinnedFold"));
+  S().updateTab(blank, { url: "https://real.example/" });
+  assert.equal(pinnedFoldMenuItem(S(), w).length, 1);
+  assert.ok(!menuState(S()).disabled.includes("togglePinnedFold"));
+});

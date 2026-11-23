@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 
 const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
 const ROW = /^\s*(\d+)\s+(\d+)\s+\w{3}\s+(\w{3})\s+(\d+)\s+(\d\d):(\d\d):(\d\d)\s+(\d{4})\s+(.*)$/;
@@ -25,7 +25,7 @@ export function descendants(root, table = processTable()) {
 
 export const insideApp = (command, app) => command.startsWith(`${app.replace(/\/+$/, "")}/Contents/`);
 
-export const sameProcess = (a, b) => !!a && !!b && a.pid === b.pid && a.started === b.started && a.command === b.command;
+const sameProcess = (a, b) => !!a && !!b && a.pid === b.pid && a.started === b.started && a.command === b.command;
 
 export function launchedTree(pid, app, table = processTable()) {
   const root = table.find((p) => p.pid === pid);
@@ -61,4 +61,18 @@ export async function stopTree(tree, app, { graceMs = 10_000, pollMs = 100 } = {
   const left = survivors(tree, app, table);
   for (const entry of left) signalIfSame(entry, "SIGKILL", table);
   return left.map((p) => p.pid);
+}
+
+export function processRows() {
+  return execFileSync("ps", ["-axww", "-o", "pid=,ppid=,command="], { encoding: "utf8", maxBuffer: 64 << 20 })
+    .split("\n").map((l) => l.trim().match(/^(\d+)\s+(\d+)\s+(.*)$/)).filter(Boolean)
+    .map(([, pid, ppid, command]) => ({ pid: +pid, ppid: +ppid, command }));
+}
+
+export function kindOf(command) {
+  const type = command.match(/--type=(\S+)/)?.[1];
+  if (!type) return /crashpad_handler/.test(command) ? "crashpad" : "browser";
+  if (type === "utility") return `utility:${command.match(/--utility-sub-type=([\w.]+)/)?.[1]?.split(".")[0] ?? "?"}`;
+  if (type === "renderer" && command.includes("--extension-process")) return "extension";
+  return type;
 }

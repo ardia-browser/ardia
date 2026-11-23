@@ -40,7 +40,7 @@ export type SearchScope = {
 
 export type KeywordProvider = { id: string; title: string; keyword: string; host?: string; url?: string };
 
-export type ScopeSources = {
+type ScopeSources = {
   engines: readonly SearchEngine[];
   sites?: readonly SiteSearch[];
   hosts?: readonly string[];
@@ -112,14 +112,14 @@ export type SiteSearchKeyState = {
   scopeFrom: string;
 };
 
-export type SiteSearchKeyModifiers = { shiftKey?: boolean; altKey?: boolean; metaKey?: boolean; ctrlKey?: boolean };
+type SiteSearchKeyModifiers = { shiftKey?: boolean; altKey?: boolean; metaKey?: boolean; ctrlKey?: boolean };
 
-export type SiteSearchKey =
+type SiteSearchKey =
   | { kind: "enter"; scope: SearchScope; from: string }
   | { kind: "leave"; text: string }
   | { kind: "accept"; text: string };
 
-export type KeywordBySpace = { keyword: string; from: string };
+type KeywordBySpace = { keyword: string; from: string };
 
 export function keywordBySpace(typed: string, next: string): KeywordBySpace | null {
   if (!typed.trim() || /\s$/.test(typed) || next !== `${typed} `) return null;

@@ -32,6 +32,7 @@ object UsageConsent {
 
 object PendingCounts {
     const val TABS_SENT = "tabs_sent"
+    const val GLASS_SHADERS_FAILED = "glass_shaders_failed"
     const val NIGHT_SHADE_VERDICTS_REUSED = "night_shade_verdicts_reused"
     const val NIGHT_SHADE_VERDICTS_LEARNED = "night_shade_verdicts_learned"
     const val NIGHT_SHADE_VERDICTS_CORRECTED = "night_shade_verdicts_corrected"
@@ -67,6 +68,11 @@ object PendingCounts {
         if (window == null || UsageConsent.window(context) != window) return@synchronized
         store(context).add(field, by)
         Unit
+    }
+
+    fun glassShaderFailures(app: Context, write: (() -> Unit) -> Unit = { work -> kotlin.concurrent.thread(name = "ardia-glass-count") { work() } }): () -> Unit = {
+        val window = UsageConsent.window(app)
+        if (window != null) write { add(app, GLASS_SHADERS_FAILED, window) }
     }
 
     fun peek(context: Context): Map<String, Int> = synchronized(this) { store(context).all() }

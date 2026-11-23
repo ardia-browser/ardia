@@ -1247,9 +1247,11 @@
   {
    "id": "socket-family:sites",
    "source": "socket",
-   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner)",
+   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner); ad blocker sites through siteOf (a plain lowercase host: no scheme, port, path, wildcard or line break) and, to be trusted, oneSiteOf (Chromium's registrable domain: no public suffix, private section included, and no IP) before they reach uBlock's trusted list",
    "checks": [
-    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem"
+    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem",
+    "apps/browser/src/state/automation/socketSites.ts#siteOf",
+    "apps/browser/src/state/automation/socketSites.ts#oneSiteOf"
    ],
    "findings": [
     "D3"
@@ -1547,9 +1549,19 @@
    "detected": false
   },
   {
+   "id": "plugin-update:official-auto",
+   "source": "plugin",
+   "guard": "An official update's manifest is approved without a sheet only when the installed copy and the download are the pin's verified copies and every field but cosmetic text is identical to the approved manifest (a first command-bar-only main excepted); anything else, unknown or malformed keeps the prompt",
+   "checks": [
+    "apps/browser/src/state/plugins/officialUpdate.ts#updateWithin",
+    "apps/browser/src/state/plugins/official.ts#officialUpdateVerdict"
+   ],
+   "detected": false
+  },
+  {
    "id": "plugin-install:official",
    "source": "native",
-   "guard": "Official copies checked against the signed pin on every lookup; one verified snapshot is unpacked (Swift tests in packages/shell/plugin-tests)",
+   "guard": "Official copies checked against the signed pin on every lookup; one verified snapshot is unpacked within caps of 512 MB downloaded, 1 GB unpacked, 100 times the download and 200 times an entry's compressed size past 4 MB, 20,000 entries and 32 levels (Swift tests in packages/shell/plugin-tests)",
    "checks": [
     "packages/shell/ios/PluginCore/OfficialTrust.swift",
     "packages/shell/ios/PluginCore/OfficialArchive.swift"
@@ -1561,11 +1573,26 @@
    "detected": false
   },
   {
+   "id": "plugin-process:sandbox",
+   "source": "plugin",
+   "guard": "Every helper and the JavaScript host start under a deny-default Seatbelt profile: system libraries, the plugin's own folder and program, its data folder, descriptor 3 and the network only when granted; the JavaScript host can't fork or start programs (Swift tests in packages/shell/plugin-tests)",
+   "checks": [
+    "packages/shell/ios/PluginCore/PluginSandbox.swift#profile",
+    "packages/shell/ios/PluginProcess.swift#spawn"
+   ],
+   "detected": false
+  },
+  {
    "id": "control-socket:accept",
    "source": "socket",
-   "guard": "AF_UNIX, mode 0600, peer UID equal; every connection is the owner (D3)",
+   "guard": "AF_UNIX, mode 0600 in a data folder you own that no one else can write, with no macOS access list letting anyone else in and not on a volume that ignores ownership, with no ancestor someone else could swap, held open by descriptor for the lock, cleanup and a post-bind inode check (PrivateFolder); peer UID equal; then the peer's audit token (LOCAL_PEERTOKEN) is resolved with Security.framework: a hardened program signed with Ardia's own Team ID is the owner, anything else waits on the doorbell (Allow Once, 30 minutes, Always, Don't Allow) or a saved approval keyed by Team ID + identifier or path + cdhash, and is refused on a timeout, when its peer leaves or when nobody can see the question. Test instances keep the same-user rule unless ARDIA_TEST controlDoorbell (D3: a same-user process can still exec the bundled ardia or its runtime, and still reads the token connection's ArdiaControl.json). Swift tests in packages/shell/controlpeer-tests",
    "checks": [
-    "packages/shell/ios/ControlSocket.swift"
+    "packages/shell/ios/ControlSocket.swift",
+    "packages/shell/ios/ControlPeerCore/ControlPeer.swift",
+    "packages/shell/ios/ControlPeerCore/ControlPeerPolicy.swift",
+    "packages/shell/ios/ControlPeerCore/ControlDoorbell.swift",
+    "packages/shell/ios/ControlPeerCore/ControlApprovals.swift",
+    "packages/shell/ios/ControlPeerCore/PrivateFolder.swift"
    ],
    "findings": [
     "D3",
@@ -1574,11 +1601,26 @@
    "detected": false
   },
   {
+   "id": "control-socket:devtools-endpoint",
+   "source": "socket",
+   "guard": "control.devtoolsEndpoint hands the engine's DevTools port, token and generation only to a connection the control socket admitted (peer UID, then on macOS the bundled ardia, Team-signed code or a doorbell approval; same-user test instances as for every method). Native checks again on the socket queue, before and after reading, that the connection is still open and its approval live (ControlSocket.admits), drops any reply to a connection whose approval ran out (ControlSocket.reply), and checks the approval again before the writer starts each line (ControlConnection mayWrite), so a line queued behind a slow reader never starts after the approval ends. The token is read from the engine's dedicated ac_cli_devtools_endpoint call when the engine has it (callForSecretReply, bytes wiped), never from the shared ac_cli_control status, else from ArdiaControl.json opened O_NOFOLLOW, required a regular file of the user's with no group or other bits and no access list letting others in (PrivateFolder.privateFile), at most 64 KiB, whose port, generation and pid match the running server (DevtoolsEndpoint.read); it must be 16 to 256 base64url characters. Refused while control is off, at arrival and again after the read; turning control off cuts native off synchronously (ControlSocket.cutOff, one lock shared by the writer, replies, admission and the token read) before the asynchronous stop; where the socket has no doorbell (Linux, Windows) the method is unlisted and answers unknown_method. In JS it is a Secret of kind devtoolsToken from the moment it arrives (platform/automation.ts) and is revealed only on that one reply line (socketDevtools.devtoolsEndpointLine). Swift tests in packages/shell/controlpeer-tests, JS in socketDevtools.test.mjs (the shared hostile-input corpus as params, param names, own prototype keys and request ids, checked at the native read and the reply line) and secretContainment.test.mjs",
+   "checks": [
+    "packages/shell/ios/ControlPeerCore/DevtoolsEndpoint.swift",
+    "packages/shell/ios/ControlSocket.swift",
+    "apps/browser/src/state/automation/socketDevtools.ts#devtoolsEndpointMethod",
+    "apps/browser/src/platform/automation.ts#controlDevtoolsEndpoint"
+   ],
+   "detected": false
+  },
+  {
    "id": "engine-token-connection:ardia-browse",
    "source": "socket",
-   "guard": "Engine token server: loopback only, a 32-byte token compared in constant time (ControlServer::Accepts) from the 0600 ArdiaControl.json, no Origin, RemoteDebuggingAllowed policy; then a full DevTools client by the owner's decision (#2807). TokenClient::FilterCommand keeps only framing: a JSON object with an integer id and string method, params an object, a known sessionId, one command per (session, id), 4096 waiting replies at most",
+   "guard": "Engine token server: loopback only; before the token is read, anything a browser sends (Origin, Sec-Fetch-Site, Sec-Fetch-Dest) or a Host other than 127.0.0.1:<port> or localhost:<port> is refused (ArdiaRequestIsFromProgram), so no page, extension, service worker or DNS-rebound name in a browser that sends Fetch Metadata (Chromium, Firefox 90+, Safari 16.4+) reaches it, and an older Safari top-level GET still needs the token and can't read the answer; a 32-byte token compared in constant time (ControlServer::Accepts) from the 0600 ArdiaControl.json, published through one open descriptor of a folder no other user owns or can write, with no macOS access list naming anyone but you and not on a volume that ignores ownership (UnsafeControlFolder), the file stripped of inherited ACLs and checked 0600 (OnlyOwnerCanRead); RemoteDebuggingAllowed policy; then a full DevTools client by the owner's decision (#2807). TokenClient::FilterCommand keeps only framing: a JSON object with an integer id and string method, params an object, a known sessionId, one command per (session, id), 4096 waiting replies at most",
    "checks": [
     "engine/chromium/src/chrome/browser/ardia/ac_cli_control.cc#Accepts",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_control_file.cc#UnsafeControlFolder",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_control_file.cc#OnlyOwnerCanRead",
+    "engine/patches/chromium-devtools-control-token.patch#ArdiaRequestIsFromProgram",
     "engine/chromium/src/chrome/browser/ardia/ac_cli_token_policy.cc#FilterCommand"
    ],
    "detected": false
@@ -1607,9 +1649,10 @@
   {
    "id": "import:files",
    "source": "import",
-   "guard": "Native readers in packages/import (profile roots, ZIP sizes, extension metadata; C11, C12)",
+   "guard": "Native readers in packages/import (profile roots, ZIP sizes, extension metadata; C11, C12); a ZIP holds at most 10,000 entries, 1 GB an entry and 4 GB in all, no entry past 200 times its compressed size above 4 MB, members that run past the file or share bytes are refused, every member is inflated exactly and its CRC checked, and its links and traversing names are never read",
    "checks": [
-    "packages/import/ios/Core/Discovery.swift"
+    "packages/import/ios/Core/Discovery.swift",
+    "packages/import/ios/Core/ZipArchive.swift"
    ],
    "findings": [
     "C11",
@@ -1639,6 +1682,38 @@
    "findings": [
     "D8",
     "D9"
+   ],
+   "detected": false
+  },
+  {
+   "id": "webkit-event:copyAddress",
+   "source": "page",
+   "guard": "WebKit's page menu sends the link, image or media address the page holds as an app-wide event with a native request number; only a non-empty string with an integer request is passed on, after cleanUrlReport strips tracking parameters, and native writes it only for its latest request while the pasteboard is unchanged since that menu action",
+   "checks": [
+    "apps/browser/src/state/site/pageLinkCopy.ts#copyLinkFromPageMenu",
+    "packages/ardiacore/ios/WebKitContextMenu.swift#WebKitCopiedAddresses"
+   ],
+   "detected": false
+  },
+  {
+   "id": "engine-call:childProcessCpu",
+   "source": "native",
+   "guard": "The app's own renderer child processes only (proc_listpids by parent pid, extension renderers left out), read with proc_pid_rusage on a background queue; a pid whose parent or start time changed during the read is dropped. JS takes only rows whose pid, start time and CPU time are finite non-negative numbers (validReadings); readings of a reused pid or more than 25 s apart start over",
+   "checks": [
+    "packages/ardiacore/ios/ChildProcessCpu.swift#sample",
+    "apps/browser/src/state/tabs/busyProcesses.ts#validReadings",
+    "apps/browser/src/state/tabs/busyProcesses.ts#readHeat"
+   ],
+   "detected": false
+  },
+  {
+   "id": "engine-call:tasks:busyTabWatch",
+   "source": "native",
+   "guard": "Chrome's task manager rows: only a numeric pid and string tab ids are read; a tab id must be the store's own key (Object.hasOwn), private tabs are never named, ownership is read again right before a warning and again before Sleep acts, and a page title reaches the toast only through toastName (controls, line breaks and lone surrogates removed, 24 characters)",
+   "checks": [
+    "apps/browser/src/state/tabs/busyTabWatch.ts#freshOwners",
+    "apps/browser/src/state/tabs/busyTabWatch.ts#toastName",
+    "apps/browser/src/state/tabs/busyTabWatch.ts#stillBusyIn"
    ],
    "detected": false
   }

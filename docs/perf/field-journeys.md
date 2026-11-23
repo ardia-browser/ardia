@@ -43,6 +43,7 @@ the start unless noted. All clocks are epoch ms on the same Mac: JS's `Date.now(
 | | `content_ms` | → that first commit on screen |
 | | `usable_ms` | → the app answers at once: the first timer after the first commit that runs within 50 ms of being set (both the main and JS threads free), and not before `content_ms` |
 | | `tab_request_ms`, `tab_commit_ms`, `tab_paint_ms` | → the restored active tab's load asked for, committed, first contentful paint |
+| | `sidebar_rows_later`, `sidebar_rows_ms`, `sidebar_rows_release` | sidebar rows still unmounted when the launch's first content reached the screen (rows grow as usual until then; 0 for a short list), that moment → all of them mounted (null when a window closed first), and what let the first restored window's rows in: `loaded` (its restored page finished loading), `nopage` (250 ms; no web page to wait for, such as History), `deadline` (1 s), `scroll`, `drag`, `profile` (its profile changed), `reveal` (a tab picked by shortcut or search was revealed), `late` (a sidebar first shown 3 s or more after JS started holds nothing). `state/sidebar/launchRows.ts`; from the first nightly after #3768 |
 | J2 new tab (`perf_journeys`) | `j2_js` | ⌘T (or the New Tab button) → JS has the new tab |
 | | `j2_commit` | → the new tab's command bar committed |
 | | `j2_shown` | → that commit on screen |

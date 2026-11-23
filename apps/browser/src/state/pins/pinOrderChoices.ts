@@ -30,7 +30,7 @@ function groupsReordered(s: BrowserState, prev: BrowserState): boolean {
   return false;
 }
 
-export function noteOrderChoices(s: BrowserState, prev: BrowserState) {
+function noteOrderChoices(s: BrowserState, prev: BrowserState) {
   if (writingFromSync()) return;
   if (!groupsReordered(s, prev) && Object.values(s.windows).every((w) => w.tabIds === prev.windows[w.id]?.tabIds)) return;
   const homesBefore = homes(prev);

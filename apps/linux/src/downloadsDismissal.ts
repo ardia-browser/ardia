@@ -9,7 +9,7 @@ const TEXT_ENTRY = "input, textarea, [contenteditable=''], [contenteditable='tru
 
 type Target = Pick<EventTarget, "addEventListener" | "removeEventListener">;
 
-export type DownloadsDismissal = {
+type DownloadsDismissal = {
   target: Target;
   inside: (node: EventTarget | null) => boolean;
   onInsidePress: () => void;

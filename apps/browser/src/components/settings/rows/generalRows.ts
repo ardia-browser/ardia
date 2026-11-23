@@ -4,7 +4,6 @@ import { keyText } from "../../../state/commands/keyText";
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 
-const inSidebar = (_: unknown, env: SettingsEnv) => !env.top;
 const syncOn = (_: unknown, env: SettingsEnv) => !!env.syncOn;
 const blockerOffered = () => PLATFORM_FEATURES.contentBlocker;
 

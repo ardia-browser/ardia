@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { PSL_TLDS } from "./tlds.ts";
 import { domainToASCII } from "node:url";
-import { cleanUrl, cleanUrlReport } from "./cleanUrl.ts";
+import { cleanLinkTitle, cleanUrl, cleanUrlReport, linkLines, markdownLink } from "./cleanUrl.ts";
 import { displayHost, hostSpoofReason, punycodeEncode } from "./idn.ts";
 import { breadcrumb, classifyPaste, fixupUrl, resolveInput, sameAddress, spacedAddressGuess, urlForDisplay } from "./omnibox.ts";
 import { displayUrl } from "./suggest.ts";
@@ -315,4 +315,104 @@ test("sameAddress folds only ASCII case in the host, and default ports and the r
   assert.ok(sameAddress("https://BÜCHER.de:443/a", "https://XN--BCHER-KVA.de/a"));
   assert.ok(sameAddress("https://ﾌﾞｯｸ.jp/a", "https://xn--pckwb0c.jp/a"));
   assert.ok(!sameAddress("https://example.com/A", "https://example.com/a"));
+});
+
+test("a Markdown link never shows trackers in its label, and its destination parses back to the clean address", () => {
+  assert.equal(markdownLink("", "https://example.com/a)b?utm_source=mail"), "[https://example.com/a)b](https://example.com/a\\)b)");
+  assert.equal(markdownLink("https://x.example/?fbclid=1", "https://x.example/?fbclid=1"), "[https://x.example/](https://x.example/)");
+  assert.equal(markdownLink("example.com", "https://www.example.com/?utm_source=mail"), "[example.com](https://www.example.com/)");
+  assert.equal(markdownLink("Fish", "https://e.example/?q=fish&copy;&utm_source=x"), "[Fish](https://e.example/?q=fish&amp;copy;)");
+  assert.equal(markdownLink("Fish", "https://e.example/a b?q=fish&copy;&x=1"), "[Fish](<https://e.example/a b?q=fish&amp;copy;&x=1>)");
+  assert.equal(markdownLink("Plain", "https://e.example/?a=1&b=2&fbclid=3"), "[Plain](https://e.example/?a=1&b=2)");
+  assert.equal(markdownLink("Doc", "https://e.example/doc(1)?token=abc(123)&gclid=x"), "[Doc](https://e.example/doc\\(1\\)?token=abc\\(123\\))");
+  assert.equal(markdownLink("Shop [sale] \\o/", "https://shop.example/p (1)?id=7&gclid=x"), "[Shop \\[sale\\] \\\\o/](<https://shop.example/p (1)?id=7>)");
+  assert.equal(markdownLink("Tab", "https://e.example/<x>"), "[Tab](<https://e.example/\\<x\\>>)");
+  assert.equal(markdownLink("Tab", "https://e.example/a\\b"), "[Tab](https://e.example/a\\\\b)");
+  assert.equal(markdownLink("Tab", "https://e.example/a\nb"), "[Tab](https://e.example/a%0Ab)");
+});
+
+test("a cleaner report can't be rewritten after the fact, and link lists are bulleted only for Markdown with several links", () => {
+  const report = cleanUrlReport("https://shop.example/item?id=7&utm_source=mail");
+  assert.ok(Object.isFrozen(report));
+  assert.throws(() => {
+    // @ts-expect-error
+    report.url = "https://shop.example/item?id=7&utm_source=mail";
+  });
+  const one = cleanUrl("https://a.example/?utm_source=x");
+  const two = markdownLink("B", "https://b.example/?fbclid=1");
+  assert.equal(linkLines([one, two], true), "- https://a.example/\n- [B](https://b.example/)");
+  assert.equal(linkLines([one, two], false), "https://a.example/\n[B](https://b.example/)");
+  assert.equal(linkLines([two], true), "[B](https://b.example/)");
+});
+
+const LABEL_MARKUP = new Set(["\\", "[", "]", "*", "_", "`", "<", ">", "~"]);
+
+function renderedLabel(source: string): string {
+  let text = "";
+  for (let i = 0; i < source.length; i++) {
+    const character = source[i]!;
+    if (character === "\\") {
+      const next = source[i + 1] ?? "";
+      assert.match(next, /[!-/:-@[-`{-~]/, `a backslash that escapes nothing in ${JSON.stringify(source)}`);
+      text += next;
+      i++;
+    } else if (character === "&") {
+      const entity = /^&(#?[A-Za-z0-9]+);/.exec(source.slice(i));
+      if (!entity) text += "&";
+      else {
+        assert.equal(entity[1], "amp", `an entity that would render as another character in ${JSON.stringify(source)}`);
+        text += "&";
+        i += entity[0].length - 1;
+      }
+    } else {
+      assert.ok(!LABEL_MARKUP.has(character), `unescaped ${character} would render as markup in ${JSON.stringify(source)}`);
+      assert.doesNotMatch(character, /[\r\n\u2028\u2029]/, `a line break in ${JSON.stringify(source)}`);
+      text += character;
+    }
+  }
+  return text;
+}
+
+function readMarkdownLink(markdown: string): { label: string; destination: string } {
+  const link = /^\[((?:\\.|[^\\\]])*)\]\((<(?:\\.|[^\\>\n])*>|(?:\\.|[^\\()\s])*)\)$/.exec(markdown);
+  assert.ok(link, `not one CommonMark inline link: ${JSON.stringify(markdown)}`);
+  const raw = link[2]!;
+  const destination = (raw.startsWith("<") ? raw.slice(1, -1) : raw).replace(/\\([()<>\\])/g, "$1").replace(/&amp;/g, "&");
+  return { label: renderedLabel(link[1]!), destination };
+}
+
+test("every Markdown link reads back as one link whose destination is the clean address and whose label sits on one line", () => {
+  const titles = ["https://other.example/p?ref=1&utm_campaign=z", "Line one\n\nLine two", "A\r\nB\u2028C\u2029D", "\n\n", "Shop [sale] \\o/", "", "Plain", "*literal*", "snake_case_title", "`code`", "<b>bold</b>", "~~gone~~", "AT&T &copy; &#169;", "!\\[img]"];
+  const urls = [
+    "https://e.example/a?utm_source=x",
+    "https://e.example/doc(1)?token=abc(123)&gclid=x",
+    "https://e.example/p (1)?q=fish&copy;&x=1",
+    "https://e.example/<x>?a=1&#38;b",
+    "https://e.example/a\\b?fbclid=1",
+  ];
+  for (const title of titles)
+    for (const url of urls) {
+      const { label, destination } = readMarkdownLink(markdownLink(title, url));
+      assert.equal(destination, cleanUrl(url), `${JSON.stringify(title)} ${url}`);
+      const shown = title.replace(/\s*[\r\n\u2028\u2029]+\s*/g, " ").trim();
+      assert.equal(label, !shown || shown === url ? cleanUrl(url) : cleanUrl(shown), JSON.stringify(title));
+    }
+});
+
+test("a link title that is a tracked address loses its trackers, and any other title only its line breaks", () => {
+  const url = "https://shop.example/item?id=7&utm_source=mail";
+  assert.equal(cleanLinkTitle(url, url), "https://shop.example/item?id=7");
+  assert.equal(cleanLinkTitle(`  ${url}\n`, url), "https://shop.example/item?id=7");
+  assert.equal(cleanLinkTitle("https://other.example/p?ref=1&utm_campaign=z", url), "https://other.example/p?ref=1");
+  assert.equal(cleanLinkTitle("Shop\n\nItem ?utm_source=x", url), "Shop Item ?utm_source=x");
+  assert.equal(cleanLinkTitle("Item & more", url), "Item & more");
+  for (const empty of ["", "  \n ", null, undefined]) assert.equal(cleanLinkTitle(empty, url), "");
+});
+
+test("a title that is the page's tracked address with whitespace around it is labelled with the clean address", () => {
+  const url = "https://shop.example/item?id=7&utm_source=mail";
+  assert.equal(markdownLink(`  ${url}\n`, url), "[https://shop.example/item?id=7](https://shop.example/item?id=7)");
+  assert.equal(markdownLink(`\t${url} `, url), "[https://shop.example/item?id=7](https://shop.example/item?id=7)");
+  assert.equal(markdownLink(`${url}#reviews`, url), "[https://shop.example/item?id=7#reviews](https://shop.example/item?id=7)");
+  assert.equal(markdownLink("https://shop.example/?gclid=1", "https://shop.example/"), "[https://shop.example/](https://shop.example/)");
 });

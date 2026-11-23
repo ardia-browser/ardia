@@ -1,4 +1,4 @@
-export const FRAMEABLE_HOSTS = [
+const FRAMEABLE_HOSTS = [
   "en.wikipedia.org",
   "www.wikipedia.org",
   "en.wiktionary.org",

@@ -19,15 +19,16 @@ const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const { parseVouchedList } = createRequire(import.meta.url)("../../.github/vouch/vouch.cjs");
 
 export const CANONICAL_REPO = "ardia-browser/ardia";
-export const MAIN_BRANCH = "main";
+const MAIN_BRANCH = "main";
 export const MAIN_REF = `refs/heads/${MAIN_BRANCH}`;
 export const FORCE_LABEL = "boat-ci";
 export const BOAT_LABEL = "boat-large";
-export const BOAT_MACHINE = "large";
+const BOAT_MACHINE = "large";
 export const LIMITS_URL = "https://boat.dev/api/v1/limits";
-export const GITHUB_API = "https://api.github.com";
-export const REQUEST_TIMEOUT_MS = 5000;
-export const ROUTE_DEADLINE_MS = 25000;
+const GITHUB_API = "https://api.github.com";
+const REQUEST_TIMEOUT_MS = 5000;
+const ROUTE_DEADLINE_MS = 25000;
+export const JOB_READS_FIRST = 4;
 
 export const DEFAULTS = {
   mode: "auto",
@@ -43,9 +44,9 @@ export const DEFAULTS = {
   maxRequests: 30,
 };
 
-export const LINUX_LABELS = ["ubuntu-latest", "ubuntu-24.04", "ubuntu-22.04", "ubuntu-24.04-arm", "ubuntu-22.04-arm"];
-export const WINDOWS_LABELS = ["windows-latest", "windows-2025", "windows-2022", "windows-11-arm"];
-export const MAC_LABELS = [
+const LINUX_LABELS = ["ubuntu-latest", "ubuntu-24.04", "ubuntu-22.04", "ubuntu-24.04-arm", "ubuntu-22.04-arm"];
+const WINDOWS_LABELS = ["windows-latest", "windows-2025", "windows-2022", "windows-11-arm"];
+const MAC_LABELS = [
   "macos-latest",
   "macos-26",
   "macos-15",
@@ -78,7 +79,7 @@ const MODE_SETTING = "BOAT_OVERFLOW";
 const REPOS_SETTING = "BOAT_OVERFLOW_REPOS";
 export const SETTING_NAMES = [MODE_SETTING, REPOS_SETTING, ...Object.values(NUMBER_SETTINGS)];
 
-export class HttpError extends Error {
+class HttpError extends Error {
   constructor(status, url) {
     super(`HTTP ${status} from ${new URL(url).host}${new URL(url).pathname}`);
     this.status = status;
@@ -267,7 +268,6 @@ export async function githubPressure({ fetchJson, token, settings, ownRepo, ownR
     }
   }
   const newest = [...runs.values()].sort((a, b) => b.created - a.created);
-  const inspected = newest.filter(() => spend("jobs"));
   const jobsOf = async (run) => {
     const jobs = [];
     for (let page = 1; ; page += 1) {
@@ -282,12 +282,16 @@ export async function githubPressure({ fetchJson, token, settings, ownRepo, ownR
       if (data.jobs.length < 100 || jobs.length >= total || !spend("jobs")) return jobs;
     }
   };
-  const jobLists = await Promise.all(inspected.map(jobsOf));
-  return {
-    ...pressureOf([...new Map(jobLists.flat().map((job) => [job.id, job])).values()], { now, queuedAge: settings.queuedAge }),
-    runs: runs.size,
-    inspected: inspected.length,
+  const seen = new Map();
+  const measured = () => pressureOf([...seen.values()], { now, queuedAge: settings.queuedAge });
+  let inspected = 0;
+  const readJobs = async (batch) => {
+    inspected += batch.length;
+    for (const jobs of await Promise.all(batch.map(jobsOf))) for (const job of jobs) seen.set(job.id, job);
   };
+  await readJobs(newest.slice(0, JOB_READS_FIRST).filter(() => spend("jobs")));
+  if (!overflowOf(measured(), settings)) await readJobs(newest.slice(JOB_READS_FIRST).filter(() => spend("jobs")));
+  return { ...measured(), runs: runs.size, inspected };
 }
 
 const decision = (target, reason, facts = {}) => ({ target, reason, ...facts });

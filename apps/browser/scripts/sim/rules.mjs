@@ -1,6 +1,6 @@
 import { pinKeysOf } from "./world.mjs";
 
-export function structureProblems(world, s) {
+function structureProblems(world, s) {
   const problems = [];
   const isIncognito = world.modules.model.isIncognitoProfile ?? (() => false);
   const owner = new Map();
@@ -45,7 +45,7 @@ export function structureProblems(world, s) {
   return problems;
 }
 
-export function sessionShape(s, sectioned = (ids) => ids) {
+function sessionShape(s, sectioned = (ids) => ids) {
   const sortById = (list) => [...list].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   return {
     profiles: [...s.profileOrder],

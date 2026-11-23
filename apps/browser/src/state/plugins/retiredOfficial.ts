@@ -1,4 +1,5 @@
 import type { PluginRecord } from "./store";
+import { ownValue } from "../../lib/decode";
 
 export const RETIRED_OFFICIAL_PLUGINS: Readonly<Record<string, readonly string[]>> = {
   "apple-passwords": ["d8476938b3d33c28cb5494dd4fe670accce05a3f61b1d458c737a8f43505824e"],
@@ -13,7 +14,7 @@ export const isBundledRetiredRecord = (name: string, record: PluginRecord | unde
 
 export function noteRetiredRecords(before: Record<string, PluginRecord>, after: Record<string, PluginRecord>) {
   for (const name of Object.keys(RETIRED_OFFICIAL_PLUGINS)) {
-    const record = Object.hasOwn(before, name) ? before[name] : undefined;
-    if (isBundledRetiredRecord(name, record) && !isBundledRetiredRecord(name, Object.hasOwn(after, name) ? after[name] : undefined)) retiredThisLaunch.set(name, record!);
+    const record = ownValue(before, name);
+    if (isBundledRetiredRecord(name, record) && !isBundledRetiredRecord(name, ownValue(after, name))) retiredThisLaunch.set(name, record!);
   }
 }

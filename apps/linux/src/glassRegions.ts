@@ -3,17 +3,17 @@ import { intersection, type Rect } from "./inputRegions.ts";
 
 export const GLASS_METHOD = "shell.glassRegions";
 export const GLASS_MODULE = "ArdiaGlass";
-export const GLASS_BLUR = 24;
+const GLASS_BLUR = 24;
 export const GLASS_MAX_REGIONS = 64;
 export const STABLE_FRAMES = 2;
 export const AFTERIMAGE_MS = 250;
 
 export type GlassGeometry = { rect: Rect; radii: CornerRadii; opacity: number; scale?: number };
-export type GlassRegion = { id: string; rect: Rect; radii: CornerRadii; blur: number; opacity: number };
-export type GlassUpdate = { generation: number; regions: GlassRegion[] };
+type GlassRegion = { id: string; rect: Rect; radii: CornerRadii; blur: number; opacity: number };
+type GlassUpdate = { generation: number; regions: GlassRegion[] };
 export type GlassApplied = { generation: number; available: boolean; accepted: string[] };
 
-export type GlassDeps = {
+type GlassDeps = {
   send: ((update: GlassUpdate) => Promise<GlassApplied>) | null;
   measure: (element: Element) => GlassGeometry | null;
   apply: (element: Element, translucent: boolean) => void;

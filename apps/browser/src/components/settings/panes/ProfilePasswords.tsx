@@ -1,3 +1,4 @@
+import { asSecret, reveal } from "@ardia/core";
 import {
   deletePassword,
   exportPasswords,
@@ -214,7 +215,7 @@ function PasswordSheet({ profile, saved, onChanged }: { profile: string; saved: 
       open.current = false;
     };
   }, []);
-  useEffect(() => void revealPassword(profile, saved.origin, saved.username).then(setPassword), []);
+  useEffect(() => void revealPassword(profile, saved.origin, saved.username).then((secret) => setPassword(secret && reveal(secret))), []);
   useEffect(() => {
     if (unlocked) return;
     setPassword(null);
@@ -226,7 +227,7 @@ function PasswordSheet({ profile, saved, onChanged }: { profile: string; saved: 
     setBusy(true);
     const changed = await updatePassword(profile, saved.origin, saved.username, {
       username: username !== saved.username ? username : undefined,
-      password: password ?? undefined,
+      password: password ? asSecret("password", password) : undefined,
     }).catch(orWarn(false, "settings edit"));
     if (changed) onChanged();
     if (!open.current) return;

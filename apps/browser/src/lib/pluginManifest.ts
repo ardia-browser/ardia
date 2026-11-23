@@ -6,7 +6,6 @@ import { SPLIT_SIDES, type CommandSpec } from "./pluginCommands";
 import { contributesOf, MENU_SLOTS, pagePanelOf, type PluginContributions } from "./pluginContributions";
 import { activationEventsOf, derivedActivationEvents } from "./pluginActivation";
 import { MANIFEST_MIGRATIONS, v1Problem } from "./pluginMigrations";
-import { ANY_HOST } from "./pluginNetwork";
 import { permissionsOf, type PluginPermissions } from "./pluginPermissions";
 import { storedRows, type RowValue, type SettingsSpec } from "./pluginRows";
 import { mainOf, sidecarOf, type MainSpec, type ProcessSpec, type ProgramSpec } from "./pluginRuntime";
@@ -23,10 +22,10 @@ export { MANIFEST_MIGRATIONS } from "./pluginMigrations";
 export type { MainSpec, ProcessSpec, ProgramSpec } from "./pluginRuntime";
 
 export const MANIFEST_VERSION = 2;
-export const MANIFEST_FILE = "plugin.json";
+const MANIFEST_FILE = "plugin.json";
 
-export type PageSpec = { title: string; icon: string; source: { file: string } };
-export type TelemetryDisclosure = { title: string; items: string[] };
+type PageSpec = { title: string; icon: string; source: { file: string } };
+type TelemetryDisclosure = { title: string; items: string[] };
 
 export type PluginManifest = {
   manifest: number;
@@ -127,7 +126,7 @@ function pageOf(k: PluginContributions): PageSpec | null {
   return panel?.file ? { title: panel.title, icon: panel.icon, source: { file: panel.file } } : null;
 }
 
-export function checkManifest(raw: Fields, declaredManifest = MANIFEST_VERSION): { manifest: PluginManifest | null; problems: string[] } {
+function checkManifest(raw: Fields, declaredManifest = MANIFEST_VERSION): { manifest: PluginManifest | null; problems: string[] } {
   const c: Check = { problems: [] };
   only(c, "", raw, TOP_KEYS);
   const name = matching(c, "name", raw.name, NAME, NAME_RULE);
@@ -217,5 +216,3 @@ export function contributionsOf(m: PluginManifest): Contribution[] {
 export function defaultValues(m: PluginManifest): Record<string, RowValue> {
   return Object.fromEntries(storedRows(m.settings).map((r) => [r.key, r.default]));
 }
-
-export const networkLabel = (p: PluginPermissions): string => (p.network === false ? "none" : p.network === ANY_HOST ? "any" : p.network.join(", "));

@@ -191,7 +191,8 @@ abstract class LookView(context: Context, appContext: AppContext) : ExpoView(con
 
     open fun update() = invalidate()
 
-    private var reportedFailure = false
+    internal var drawFailures = 0
+        private set
 
     final override fun onDraw(canvas: Canvas) = drawSafely(canvas)
 
@@ -203,8 +204,8 @@ abstract class LookView(context: Context, appContext: AppContext) : ExpoView(con
         } catch (failure: Exception) {
             canvas.restoreToCount(saved)
             fillBounds(canvas, fallbackColor())
-            if (!reportedFailure) {
-                reportedFailure = true
+            drawFailures += 1
+            if (drawFailures == 1) {
                 android.util.Log.w("PAGELAB", "PAGELAB look ${javaClass.simpleName} could not draw at ${width}x$height and fell back to a flat colour: ${failure.javaClass.simpleName}: ${failure.message}")
             }
         }
@@ -1496,6 +1497,7 @@ class FrostSourceView(context: Context, appContext: AppContext) : ExpoView(conte
         val node = recorder ?: RenderNode("ardiaFrostSource").also { recorder = it }
         LookActivity.sourceRecordings += 1
         node.setPosition(0, 0, width, height)
+        node.setUseCompositingLayer(holdsPage, null)
         val recording = node.beginRecording(width, height)
         try {
             super.dispatchDraw(recording)
@@ -1520,6 +1522,12 @@ internal object FrostPage {
     }
 
     enum class Path { Live, Solid, Fallback, Tinted }
+
+    fun wantsSource(choice: Choice?, onlyBackdropUnder: Boolean, blurOverBackdrop: Boolean, holdsPage: Boolean, pageMode: FrostSources.PageMode): Boolean = when {
+        holdsPage && pageMode == FrostSources.PageMode.Solid -> false
+        choice == null -> !(onlyBackdropUnder && !blurOverBackdrop)
+        else -> choice.path == Path.Live || choice.reason == SOURCE_NOT_DRAWN
+    }
 
     data class Choice(val path: Path, val reason: String)
 
@@ -1547,8 +1555,8 @@ internal object FrostPage {
         !hasSource -> Choice(Path.Fallback, "no source")
         !hardware -> Choice(Path.Fallback, "software canvas")
         insideSource -> Choice(Path.Fallback, "inside its own source")
-        !sourceHasContent -> Choice(Path.Fallback, SOURCE_NOT_DRAWN)
         holdsPage && pageMode == FrostSources.PageMode.Solid -> Choice(Path.Solid, "page under the frost, solid page mode")
+        !sourceHasContent -> Choice(Path.Fallback, SOURCE_NOT_DRAWN)
         holdsPage -> Choice(Path.Live, "page under the frost, redrawn every frame")
         else -> Choice(Path.Live, "no page under the frost")
     }
@@ -1606,6 +1614,7 @@ open class FrostView(context: Context, appContext: AppContext) : LookView(contex
     private var blurNode: RenderNode? = null
     private var effectRadius = -1f
     private var effectSaturation = -1f
+    private var effectLens: RenderEffect? = null
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val bounds = RectF()
     private val clip = Path()
@@ -1666,19 +1675,30 @@ open class FrostView(context: Context, appContext: AppContext) : LookView(contex
     internal var layerHeight = 0
         private set
 
-    internal fun forgetLayer() {
+    internal open fun lensReach(): Float = 0f
+
+    internal open fun pageLive(): Boolean = false
+
+    internal open fun solidFill(dark: Boolean): Int? = null
+
+    internal open fun lensEffect(marginPx: Float, scale: Float): RenderEffect? = null
+
+    internal open fun forgetLayer() {
         blurNode?.discardDisplayList()
         blurNode = null
         effectRadius = -1f
         effectSaturation = -1f
+        effectLens = null
         layerWidth = 0
         layerHeight = 0
     }
 
+    private fun effectivePageMode(): FrostSources.PageMode = if (pageLive()) FrostSources.PageMode.Live else FrostSources.pageMode
+
     internal fun wantsSource(): Boolean {
         if (!canBlur()) return false
-        val choice = lastChoice ?: return !(FrostSources.find(source)?.holdsOnlyBackdrop == true && !LookSwitch.blurOverBackdrop(context))
-        return choice.path == FrostPage.Path.Live || choice.reason == FrostPage.SOURCE_NOT_DRAWN
+        val from = FrostSources.find(source)
+        return FrostPage.wantsSource(lastChoice, onlyBackdropUnder = from?.holdsOnlyBackdrop == true, blurOverBackdrop = LookSwitch.blurOverBackdrop(context), holdsPage = from?.holdsPage == true, pageMode = effectivePageMode())
     }
 
     private var reportedFinding: String? = null
@@ -1714,7 +1734,7 @@ open class FrostView(context: Context, appContext: AppContext) : LookView(contex
             hardware = canvas.isHardwareAccelerated,
             insideSource = from != null && isInside(from),
             holdsPage = blurs && from?.holdsPage == true,
-            pageMode = FrostSources.pageMode,
+            pageMode = effectivePageMode(),
             lookOff = lookIsOff,
             onScreen = onScreen(),
         )
@@ -1724,8 +1744,8 @@ open class FrostView(context: Context, appContext: AppContext) : LookView(contex
             val layerNode = blurNode ?: RenderNode("ardiaFrost").also { blurNode = it }
             val blur = style.blurRadius.value * density
             val scale = FrostScale.of(blur)
-            applyEffect(layerNode, blur / scale, style.saturation)
-            val margin = ceil(blur * 2)
+            val margin = LiquidGlassRules.marginPx(blur, lensReach())
+            applyEffect(layerNode, blur / scale, style.saturation, lensEffect(margin, scale))
             val offset = offsetTo(from)
             lastOffset = offset
             val dx = (offset shr 32).toInt()
@@ -1758,7 +1778,7 @@ open class FrostView(context: Context, appContext: AppContext) : LookView(contex
             if (blurNode != null) forgetLayer()
             removeCallbacks(refresh)
             paint.style = Paint.Style.FILL
-            paint.color = style.fallback.resolve(dark).toArgb()
+            paint.color = solidFill(dark) ?: style.fallback.resolve(dark).toArgb()
             canvas.drawPath(clip, paint)
         }
         style.edge?.let { edge ->
@@ -1825,20 +1845,20 @@ open class FrostView(context: Context, appContext: AppContext) : LookView(contex
         }
     }
 
-    private fun applyEffect(layerNode: RenderNode, radius: Float, saturation: Float) {
+    private fun applyEffect(layerNode: RenderNode, radius: Float, saturation: Float, lens: RenderEffect?) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
-        if (radius == effectRadius && saturation == effectSaturation) return
+        if (radius == effectRadius && saturation == effectSaturation && lens === effectLens) return
         effectRadius = radius
         effectSaturation = saturation
+        effectLens = lens
         val blur = RenderEffect.createBlurEffect(radius, radius, Shader.TileMode.CLAMP)
-        layerNode.setRenderEffect(
-            if (saturation == 1f) {
-                blur
-            } else {
-                val matrix = android.graphics.ColorMatrix().apply { setSaturation(saturation) }
-                RenderEffect.createChainEffect(RenderEffect.createColorFilterEffect(android.graphics.ColorMatrixColorFilter(matrix)), blur)
-            },
-        )
+        val frosted = if (saturation == 1f) {
+            blur
+        } else {
+            val matrix = android.graphics.ColorMatrix().apply { setSaturation(saturation) }
+            RenderEffect.createChainEffect(RenderEffect.createColorFilterEffect(android.graphics.ColorMatrixColorFilter(matrix)), blur)
+        }
+        layerNode.setRenderEffect(if (lens == null) frosted else RenderEffect.createChainEffect(lens, frosted))
     }
 
     private fun offsetTo(from: View): Long {

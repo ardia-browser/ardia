@@ -22,7 +22,7 @@ export function useScreen<K extends keyof Settings>(keys: readonly K[]) {
   return { values, base, mock: { ...base, ...values } as Settings };
 }
 
-export function useAccent() {
+function useAccent() {
   const windowId = useOnboarding((s) => s.windowId);
   return useWindowProfileValue(windowId ?? "", (p) => (p?.theme ? themeAccent(p.theme) : (PROFILE_COLORS[p?.color ?? "plum"] ?? PROFILE_COLORS.plum).swatch));
 }

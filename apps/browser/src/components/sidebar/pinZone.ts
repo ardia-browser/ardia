@@ -1,6 +1,6 @@
 export const TILE_GAP = 6;
-export const MIN_TILE = 50;
-export const BALANCED_MAX_COLUMNS = 4;
+const MIN_TILE = 50;
+const BALANCED_MAX_COLUMNS = 4;
 export const PIN_ZONE_HYSTERESIS = 6;
 
 type Area = { x: number; y: number; w: number };

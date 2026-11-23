@@ -11,7 +11,7 @@ import { CLIPPED_STRING_CHARS } from "./socketWire";
 import { OpError } from "./workspaceTargets";
 
 export const HISTORY_SCAN = 20_000;
-export const MAX_RAW_HISTORY_ROWS = 200_000;
+const MAX_RAW_HISTORY_ROWS = 200_000;
 
 type Visited = { url: string; title: string; visits: number; lastVisit: number };
 type Read = { rows: Visited[]; scanLimited: boolean; webTotal: number | null };

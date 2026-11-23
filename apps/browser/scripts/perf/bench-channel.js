@@ -28,6 +28,9 @@ const ac = {
   get preload() {
     return require("../../src/state/tabs/prewarm");
   },
+  get tabLive() {
+    return require("../../src/state/tabs/tabLive");
+  },
   pause(ms) {
     pausedUntil = Date.now() + ms;
   },

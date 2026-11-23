@@ -12,6 +12,7 @@ import { hostLiveClient, LIVE_CAPABILITIES } from "../../../apps/linux/src/hostL
 import { linuxLiveSources } from "../../../apps/linux/src/liveSources.ts";
 import { live, setAccount } from "../../../apps/browser/src/state/live/store.ts";
 import { LiveError } from "../../../apps/browser/src/state/live/types.ts";
+import { asSecret } from "../../../packages/core/src/secret.ts";
 
 const TOOL = process.env.LIVE_HOST_TOOL;
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "fixtures/live-contract");
@@ -249,7 +250,7 @@ test("Confluence: an API token connects to the site and CQL search maps the expa
 });
 
 test("Google Drive: the documented code exchange connects, files map, and a refresh reply without a refresh token keeps the stored one", async () => {
-  await linux.connectGoogle(CREDENTIALS.googleClient, CREDENTIALS.googleSecret, CREDENTIALS.googleCode, CREDENTIALS.googleVerifier, REDIRECT);
+  await linux.connectGoogle(CREDENTIALS.googleClient, CREDENTIALS.googleSecret, asSecret("oauthToken", CREDENTIALS.googleCode), asSecret("oauthToken", CREDENTIALS.googleVerifier), REDIRECT);
   assert.equal(live().accounts.gdrive.login, "emma@acme.example");
   const exchange = Object.fromEntries(new URLSearchParams(requests.find((r) => r.host === "oauth2.googleapis.com").body));
   assert.deepEqual([exchange.grant_type, exchange.redirect_uri, exchange.code], ["authorization_code", REDIRECT, CREDENTIALS.googleCode]);

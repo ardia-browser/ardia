@@ -3,7 +3,6 @@ import {
   playIntroMusic,
   setIntroMusicMuted,
   stopIntroMusic,
-  type IntroMusicCues,
   introMusicMuted,
   introStartDelayMs,
   saveIntroMusicMuted,

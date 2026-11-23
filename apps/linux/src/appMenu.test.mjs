@@ -77,20 +77,38 @@ test("the Ardia, File, View and Help menus carry the Mac menu bar's entries in i
   assert.deepEqual(find(items, "std:quit:"), { id: "std:quit:", title: "Quit Ardia", key: "q", modifiers: ["command", "shift"] });
   const file = rows(items, "File");
   assert.deepEqual(file.slice(0, 4), ["New Tab", "New Tab in Group", "New Window", "New Incognito Window"]);
-  assert.deepEqual(file.slice(-5), ["Save Page As…", "Share", "Email Page Location", "Print…", "Print Using System Dialog…"]);
+  assert.deepEqual(file.slice(-4), ["Save Page As…", "Share", "Print…", "Print Using System Dialog…"]);
+  assert.ok(!file.includes("Email Page Location"), "Share › Email Link covers it, as on the Mac");
   assert.deepEqual(find(items, "newIncognitoWindow").key, "n");
   assert.deepEqual(top(items, "File").children.find((item) => item.title === "Share").children.map((item) => [item.id, item.title]), [["share:via:copy", "Copy Link"], ["share:via:email", "Email Link"]]);
-  const view = top(items, "View").children.map((item) => item.id);
-  assert.equal(view.indexOf("toggleSidebarSide"), view.indexOf("toggleSidebar") + 1);
-  assert.equal(find(items, "toggleSidebarSide").title, "Sidebar on Right");
+  const layout = find(items, "menu:Browser Layout").children.map((item) => ("separator" in item ? "-" : item.id));
+  assert.deepEqual(layout, [
+    "setTabLayout:sidebarLeft",
+    "setTabLayout:sidebarRight",
+    "setTabLayout:top",
+    "-",
+    "toggleAddressBar",
+    "toggleCompactToolbar",
+    "toggleFullUrl",
+    "-",
+    "toggleSidebar",
+    "toggleMinimalism",
+    "menu:Show Bookmarks Bar",
+    "togglePinnedFold",
+  ]);
+  assert.deepEqual(find(items, "menu:Split View").children.map((item) => item.id), ["openSplitPane", "focusNextPane", "focusPreviousPane"]);
+  assert.equal(find(items, "setTabLayout:sidebarRight").title, "Sidebar on Right");
   assert.deepEqual(rows(items, "Help"), ["Report a Problem…", "Keyboard Shortcuts", "Tool Tour", "Video Tour", "Release Notes", "-", "Copy Diagnostics"]);
 });
 
-test("sharing is disabled where the page can't be shared, and the sidebar side shows its check", () => {
-  const items = appMenuItems(state({ disabled: ["share"], checked: ["toggleSidebarSide"] }));
+test("sharing is disabled where the page can't be shared, tab layout shows its check, and disabled pinned fold hides", () => {
+  const items = appMenuItems(state({ disabled: ["share", "togglePinnedFold", "setBookmarksBar", "toggleBookmarksBar"], checked: ["setTabLayout:sidebarRight"] }));
   assert.equal(find(items, "share:via:copy").enabled, false);
   assert.equal(find(items, "share:via:email").enabled, false);
-  assert.equal(find(items, "toggleSidebarSide").checked, true);
+  assert.equal(find(items, "setTabLayout:sidebarRight").checked, true);
+  assert.equal(find(items, "togglePinnedFold"), undefined);
+  assert.equal(find(items, "setBookmarksBar:always").enabled, false);
+  assert.equal(find(items, "toggleBookmarksBar").enabled, false);
 });
 
 test("leaving entries out never leaves a doubled or dangling separator", () => {
@@ -99,9 +117,9 @@ test("leaving entries out never leaves a doubled or dangling separator", () => {
 });
 
 test("a command the host can't carry out is left out of the menu instead of doing nothing", () => {
-  assert.ok(find(appMenuItems(state()), "emailPageLocation"));
-  const items = appMenuItems(state(), new Map(), new Set(["emailPageLocation"]));
-  assert.equal(find(items, "emailPageLocation"), undefined);
+  assert.ok(find(appMenuItems(state()), "printWithSystemDialog"));
+  const items = appMenuItems(state(), new Map(), new Set(["printWithSystemDialog"]));
+  assert.equal(find(items, "printWithSystemDialog"), undefined);
   assert.ok(find(top(items, "File").children, "print"));
 });
 
@@ -153,4 +171,11 @@ test("the Ardia menu checks for updates, or restarts to finish one, only where u
   assert.deepEqual(ardia({ updates: "restart" }).slice(0, 2), ["About Ardia", "Restart to Update"]);
   assert.deepEqual(appMenuChoice("checkForUpdates"), { kind: "updates", restart: false });
   assert.deepEqual(appMenuChoice("restartToUpdate"), { kind: "updates", restart: true }, "the item picked decides whether Ardia restarts, not what finished while the menu was open");
+});
+
+test("Move to Profile lists the profiles only, and the Tabs and Extensions menus leave setup rows to Settings", () => {
+  const items = appMenuItems(state());
+  assert.deepEqual(find(items, "menu:Move to Profile").children.map((item) => item.title), ["Personal", "Work"]);
+  assert.equal(find(items, "menu:Add Bookmark to Folder"), undefined);
+  assert.deepEqual(rows(items, "Extensions"), ["uBlock", "-", "Manage Extensions…", "Add Extension…"]);
 });

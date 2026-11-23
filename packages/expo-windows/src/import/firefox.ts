@@ -3,7 +3,7 @@ import { entries, join, rowsOf, type ImportHost } from "./host";
 import { folder, fromUnixMicros, ImportFailure, link, type BookmarkNode, type BookmarkRole, type ImportedTab, type OpenTabs, type TabGroup } from "./model";
 import { readRows } from "./sqlite";
 
-export type FirefoxProfile = { name: string; path: string; isDefault: boolean };
+type FirefoxProfile = { name: string; path: string; isDefault: boolean };
 
 const LARGEST_SESSION_BYTES = 64 << 20;
 
@@ -97,7 +97,7 @@ export async function firefoxSessionFile(host: ImportHost, profile: string): Pro
 type Json = Record<string, unknown>;
 const records = (value: unknown): Json[] => (Array.isArray(value) ? value.filter((v): v is Json => typeof v === "object" && v !== null) : []);
 
-export function firefoxSession(json: unknown): OpenTabs {
+function firefoxSession(json: unknown): OpenTabs {
   const windows = records((json as Json | null)?.windows);
   if (!Array.isArray((json as Json | null)?.windows)) throw new ImportFailure("unreadable", "Session store has no windows");
   const tabs: ImportedTab[] = [];

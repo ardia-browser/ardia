@@ -42,7 +42,7 @@ import { createServer } from "node:http";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { INJECTION_ENTITLEMENTS, prepareApp } from "../../../../scripts/lib/app-copy.mjs";
-import { launch } from "../../../../scripts/lib/instance.mjs";
+import { launch, sleep } from "../../../../scripts/lib/instance.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const [command, ...rest] = process.argv.slice(2);
@@ -55,7 +55,6 @@ for (let i = 0; i < rest.length; i++) {
   else if (rest[i] === "--side-app") flags["side-app"].push(rest[++i]);
   else flags[rest[i].slice(2)] = rest[++i];
 }
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const quantile = (xs, q) => {
   const s = xs.filter(Number.isFinite).sort((a, b) => a - b);
   if (!s.length) return NaN;

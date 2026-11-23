@@ -39,7 +39,7 @@ export type PluginContributions = {
 export const CONTRIBUTES_KEYS = ["commands", "tools", "hooks", "settings", "programs", "passwordManager", "menus", "toolbar", "sidebarViews", "panels", "omnibox", "themes", "siteSwitches", "pageBar"] as const;
 export const PAGE_PANEL_ID = "default";
 
-export const emptyMenus = (): MenuContributions => ({ tab: [], group: [] });
+const emptyMenus = (): MenuContributions => ({ tab: [], group: [] });
 
 const P = "contributes";
 

@@ -7,6 +7,7 @@ import {
   onControlClose,
   onControlRequest,
   onControlWritten,
+  cutOffControlSocket,
   replyOnControlSocket,
   startControlSocket,
   stopControlSocket,
@@ -24,6 +25,7 @@ import { automationWindows, type AutomationWindow } from "./automationWindows";
 import { consentToken, type ConsentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
 import { controlTabTargets } from "../../platform/control";
+import { releaseAllCliHolds } from "../tabs/cliHolds";
 import { TAB_IDLE_EVENTS, USER_IDLE_EVENTS, type AutomationEventName } from "./eventNames";
 import { clientProtocolProblem, commands, failure, hello, parseRequest, parseSubscription, planRun, type RequestId, type Subscription } from "./automationMethods";
 import { changeSubscription, feedNeeds, stopFeed, updateFeed } from "./automationFeed";
@@ -42,8 +44,11 @@ import { dropAllHistoryHandles, dropHistoryHandles } from "./historyHandles";
 import { dropLateResults, forgetTabCalls } from "./tabCalls";
 import { backgroundInstance } from "../app/appSettings";
 import { programControlOn } from "../app/programControlSetting";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
+import { startPeerDoorbell } from "./peerDoorbell";
+import { CONTROL_OFF, DEVTOOLS_ENDPOINT, devtoolsEndpointLine, devtoolsEndpointMethod, isDevtoolsEndpoint, refuseDevtoolsEndpoint } from "./socketDevtools";
 
-export const useControlSocket = create<{ status: ControlSocketStatus | null }>()(() => ({ status: null }));
+const useControlSocket = create<{ status: ControlSocketStatus | null }>()(() => ({ status: null }));
 
 let generation: number | null = null;
 let applied = false;
@@ -88,7 +93,7 @@ function deliver(name: AutomationEventName, data: Record<string, unknown>, time 
   if (plain.length) broadcastOnControlSocket(plain, fittedEvent(name, time, redactedEventData(data), consent));
 }
 
-export type FeedConsumer = { subscriptions: () => Iterable<Subscription>; deliver: (name: AutomationEventName, data: Record<string, unknown>, time: number) => void };
+type FeedConsumer = { subscriptions: () => Iterable<Subscription>; deliver: (name: AutomationEventName, data: Record<string, unknown>, time: number) => void };
 
 const consumers = new Map<string, FeedConsumer>();
 
@@ -133,7 +138,7 @@ export function handleControlRequest({ connection, generation: tagged, line }: C
   const request = parseRequest(line);
   if ("error" in request) return send(connection, request.id, { error: request.error });
   const { id, method, params } = request;
-  if (tagged !== generation || !controlOn()) return send(connection, id, failure("failed", "Control is off."));
+  if (tagged !== generation || !controlOn()) return send(connection, id, method === DEVTOOLS_ENDPOINT ? refuseDevtoolsEndpoint("control_off", consentToken()) : failure("failed", CONTROL_OFF));
   openConnections.add(connection);
   const ticket = method === "run" ? ++nextTicket : 0;
   const caller = callers.get(connection);
@@ -151,7 +156,7 @@ export function handleControlRequest({ connection, generation: tagged, line }: C
   const family = familyOf(method);
   const consent = consentToken();
   const reply = (settled: Body) => {
-    const line = replyLine(id, settled, method, consent);
+    const line = method === DEVTOOLS_ENDPOINT && "result" in settled && isDevtoolsEndpoint(settled.result) ? devtoolsEndpointLine(id, settled.result) : replyLine(id, settled, method, consent);
     const failedResult = "result" in settled && typeof settled.result === "object" && settled.result !== null && (settled.result as { ok?: unknown }).ok === false;
     noteSocketCall(family, "error" in settled || failedResult || line.startsWith(`{"id":${JSON.stringify(id)},"error":`), consent);
     const replay = takeIdleReplay(connection);
@@ -167,7 +172,7 @@ export function handleControlRequest({ connection, generation: tagged, line }: C
   else reply(body);
 }
 
-export async function windowsWithTargets(windows: AutomationWindow[]): Promise<AutomationWindow[]> {
+async function windowsWithTargets(windows: AutomationWindow[]): Promise<AutomationWindow[]> {
   const ids = windows.flatMap((w) => w.tabs.map((t) => t.id));
   const targets = ids.length ? await controlTabTargets(ids).catch(() => null) : {};
   if (!targets) return windows;
@@ -260,6 +265,8 @@ function answerAs(origin: Pick<SocketOrigin, "segment">, connection: number, met
     }
     case "run":
       return runMethod(params, backgroundInstance, stillOn);
+    case DEVTOOLS_ENDPOINT:
+      return devtoolsEndpointMethod(connection, stillOn, () => generation === serving && controlOn(), consentToken());
   }
   const area = runSpec(spec, params, servingWhile(stillOn, connection));
   if (area) return area;
@@ -298,6 +305,7 @@ function listen() {
   });
   onControlClose(handleClose);
   onControlWritten(({ tickets }) => runWritten(tickets));
+  if (PLATFORM_FEATURES.controlDoorbell) startPeerDoorbell();
 }
 
 async function start(consent: ConsentToken | null) {
@@ -316,6 +324,7 @@ async function stop() {
   dismissSocketAsks();
   dropAllHistoryHandles();
   forgetTabCalls();
+  releaseAllCliHolds();
   noteSocketServing(false);
   void capturePageMenus(false).catch(() => undefined);
   subscriptions.clear();
@@ -333,11 +342,13 @@ function sync() {
   applied = on;
   const consent = consentToken();
   if (!on) {
+    cutOffControlSocket();
     openConnections.clear();
     generation = null;
     dismissSocketAsks();
     dropAllHistoryHandles();
     forgetTabCalls();
+    releaseAllCliHolds();
     noteSocketServing(false);
     void capturePageMenus(false).catch(() => undefined);
     stopResponders();

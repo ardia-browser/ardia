@@ -16,14 +16,14 @@ export const HOST_ACTION_NAMES = Object.keys(HOST_ACTIONS) as HostAction[];
 export const BUTTON_DIVIDER = "|";
 export type PageBarButton = HostAction | typeof BUTTON_DIVIDER;
 export const PAGE_BAR_LOOKS = ["stripes"] as const;
-export type PageBarLook = (typeof PAGE_BAR_LOOKS)[number];
+type PageBarLook = (typeof PAGE_BAR_LOOKS)[number];
 
 export const PAGE_BAR_LIMITS = { siteSwitches: 4, buttons: 16, switchTitle: 40 } as const;
 
 export type SiteSwitchSpec = { key: string; title: string; icon: string };
 export type PageBarSpec = { look: PageBarLook; when: { siteSwitch: string | null; localAddresses: string | null }; buttons: PageBarButton[] };
 
-export const isHostAction = (value: unknown): value is HostAction => typeof value === "string" && Object.hasOwn(HOST_ACTIONS, value);
+const isHostAction = (value: unknown): value is HostAction => typeof value === "string" && Object.hasOwn(HOST_ACTIONS, value);
 
 type RowRef = { key: string; type: string };
 

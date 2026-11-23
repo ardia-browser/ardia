@@ -749,12 +749,12 @@ test("the run-ci label re-runs that pull request's skipped build; other labels d
   assert.deepEqual(other.calls, []);
 });
 
-async function gateFor({ author, labels = [], attempt = 1, actor, permissions = {}, github: given }) {
+async function gateFor({ author, labels = [], payloadLabels = labels, association, attempt = 1, actor, permissions = {}, github: given }) {
   const github = given || fakeGithub({ permissions, pulls: [pr(42, author, { labels })] });
   const { core, result } = await invoke("gate", {
     github,
     eventName: "pull_request",
-    payload: { pull_request: pr(42, author) },
+    payload: { pull_request: pr(42, author, { labels: payloadLabels, association }) },
     env: { GITHUB_RUN_ATTEMPT: String(attempt), GITHUB_TRIGGERING_ACTOR: actor || author },
   });
   assert.equal(core.outputs.run, result.run ? "true" : "false");
@@ -781,9 +781,35 @@ test("the gate skips an unvouched author and says how to start the build", async
   assert.match(core.summaries[0], /run-ci/);
 });
 
-test("the gate passes an unvouched author's pull request labelled run-ci, read from the API", async () => {
+test("the gate passes an unvouched author's pull request labelled run-ci", async () => {
   const { result } = await gateFor({ author: "stranger", labels: ["run-ci"] });
   assert.equal(result.run, true);
+});
+
+test("the gate's first attempt reads the payload and calls no API for a trusted or denounced author; a re-run reads the labels again", async () => {
+  for (const author of ["alice", "shivamhwp", "renovate[bot]", "mallory"]) {
+    const github = fakeGithub({ pulls: [pr(42, author)] });
+    await gateFor({ author, association: "CONTRIBUTOR", github });
+    assert.deepEqual(github.calls, [], author);
+  }
+  const labelledSince = fakeGithub({ pulls: [pr(42, "stranger", { labels: ["run-ci"], association: "CONTRIBUTOR" })] });
+  const { result } = await gateFor({ author: "stranger", payloadLabels: [], attempt: 2, actor: "stranger", github: labelledSince });
+  assert.equal(result.run, true);
+  assert.deepEqual(labelledSince.calls.map((call) => call.name), ["pulls.get"]);
+});
+
+test("a run-ci label in the event is confirmed live, so a maintainer who took it off is obeyed", async () => {
+  const removed = fakeGithub({ pulls: [pr(42, "stranger", { association: "CONTRIBUTOR" })] });
+  const { result } = await gateFor({ author: "stranger", association: "CONTRIBUTOR", payloadLabels: ["run-ci"], github: removed });
+  assert.equal(result.run, false);
+  assert.deepEqual(removed.calls.map((call) => call.name), ["pulls.get"]);
+});
+
+test("a run-ci label added after the event, while the run waited in the queue, still lets the first attempt build", async () => {
+  const added = fakeGithub({ pulls: [pr(42, "stranger", { labels: ["run-ci"], association: "CONTRIBUTOR" })] });
+  const { result } = await gateFor({ author: "stranger", association: "CONTRIBUTOR", labels: ["run-ci"], payloadLabels: [], github: added });
+  assert.equal(result.run, true);
+  assert.deepEqual(added.calls.map((call) => call.name), ["pulls.get"]);
 });
 
 test("the gate passes a re-run started by a user with write or admin", async () => {
@@ -1080,6 +1106,30 @@ test("the team and bots get no rule labels and no status, whatever they send", a
     assert.deepEqual(ruleWrites(github), [], login);
     assert.deepEqual(github.named("issues.createComment"), [], login);
   }
+});
+
+test("a push or edit to a team or bot pull request costs no API call", async () => {
+  for (const login of ["shivamhwp", "MantraKP04", "renovate[bot]"]) {
+    const pull = fresh(62, login, { mergeable: ["UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN"] });
+    const github = fakeGithub({ pulls: [pull] });
+    for (const action of ["synchronize", "edited", "ready_for_review", "converted_to_draft"]) await event(github, action, pull);
+    assert.deepEqual(github.calls, [], login);
+  }
+});
+
+test("an outsider's push reads the pull request once and their open pull requests once, and writes only what changed", async () => {
+  const pull = fresh(63, "stranger", { association: "CONTRIBUTOR", labels: [vouch.READY], bugFix: { state: "SUCCESS", description: "A linked issue is labelled bug", targetUrl: "https://github.com/acme/ardia/blob/main/CONTRIBUTING.md#pull-requests" } });
+  const github = fakeGithub({ pulls: [pull], issues: [BUG] });
+  await event(github, "synchronize", pull);
+  assert.deepEqual(github.calls.map((call) => call.name), ["graphql.VouchRulePull", "pulls.list"]);
+});
+
+test("a team pull request's opened event reads no rules for itself and never waits on mergeable", async () => {
+  const pull = fresh(65, "shivamhwp", { mergeable: ["UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN"], linked: [] });
+  const github = fakeGithub({ pulls: [pull] });
+  await event(github, "opened", pull);
+  assert.deepEqual(github.named("graphql.VouchRulePull"), []);
+  assert.deepEqual(github.named("graphql.VouchMergeable"), []);
 });
 
 test("a denounced author's new pull request is closed as before and gets no rule labels", async () => {

@@ -5,7 +5,7 @@ import Foundation
 struct PluginFolders {
   static let maxPlugins = 64
   static let manifestName = "plugin.json"
-  static let officialFolderName = "OfficialPlugins"
+  static let officialFolderName = PluginSandbox.officialFolderName
   private static let namePattern = try! NSRegularExpression(pattern: "^[a-z0-9][a-z0-9-]{0,39}$")
 
   static let legacyId = OfficialPin.legacyFolderId
@@ -79,10 +79,6 @@ struct PluginFolders {
     if folderId == Self.legacyId { return legacyFolder(name).map { ($0, Self.legacyId) } }
     if OfficialPin.sha(ofFolderId: folderId) != nil { return officialCopy(name, folderId: folderId).map { ($0.path, folderId) } }
     return lexicalFolder(name).map { ($0, nil) }
-  }
-
-  func isOfficial(_ name: String, folderId: String) -> Bool {
-    folderId == Self.legacyId ? legacyFolder(name) != nil : officialCopy(name, folderId: folderId) != nil
   }
 
   func approvedFolder(_ name: String, folderId: String, approved: String) -> Result<OpenedFolder, FolderRefusal> {

@@ -44,7 +44,7 @@ export function featuredPermissions(tabId: string, settings: SiteSettings, list:
   return new Set(list.filter((p) => !settings[p.type]?.isDefault || inUse[p.type]).map((p) => p.type));
 }
 
-export type SiteSound = { siteMuted: boolean; soundBlocked: boolean };
+type SiteSound = { siteMuted: boolean; soundBlocked: boolean };
 
 const autoplayBlockedByDefault = (type: SiteSettingType, settings: SiteSettings | null) =>
   type === "autoplay" && !!settings?.autoplay?.isDefault && useBrowser.getState().settings.blockAutoplayEverywhere;

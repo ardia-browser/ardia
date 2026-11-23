@@ -57,7 +57,7 @@ export const placedCopies = (s: BrowserState, tabIds: string[], profileId: strin
 
 export const movesAcrossProfiles = (s: BrowserState, tabIds: string[], profileId: string) => movable(s, tabIds).some((t) => arriving(s, t, profileId));
 
-export type ProfileDrop = { state: BrowserState; placed: Record<string, string> };
+type ProfileDrop = { state: BrowserState; placed: Record<string, string> };
 
 export function droppedInProfile(before: BrowserState, tabIds: string[], profileId: string, drop: Drop): ProfileDrop {
   const none = { state: before, placed: {} };

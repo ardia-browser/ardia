@@ -1,7 +1,7 @@
 import type { ArdiaHost } from "./host";
 import { cached } from "../../browser/src/state/settings/resources";
 import { extensionList } from "../../browser/src/state/settings/paneData";
-import { useExtensions } from "./extensionsStore";
+import { useExtensions } from "../../browser/src/state/extensions/store";
 
 export const settingsShowsExtensions = (profile: string) =>
   Object.hasOwn(useExtensions.getState().lists, profile) || cached(extensionList, [profile]) !== undefined;

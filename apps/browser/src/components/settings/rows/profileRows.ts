@@ -14,8 +14,8 @@ export const profileRows = {
         profiles: {
           title: "Profiles",
           explained: true,
-          description: `Pick a profile in the bar to change its settings. Drag to reorder. ${keyText("⌃1")}–${keyText("⌃9")} switch between them.`,
-          keywords: ["create profile", "new profile", "delete profile", "reorder", "work", "personal"],
+          description: `Pick one to edit it; drag to reorder. ${keyText("⌃1")}–${keyText("⌃9")} switch.`,
+          keywords: ["create profile", "new profile", "delete profile", "reorder", "work", "personal", "drag", "switch profiles", "profile settings"],
         },
       },
     },
@@ -110,8 +110,8 @@ export const profileRows = {
       rows: {
         passwordManager: {
           title: "Password manager",
-          description: "Ardia's own, a password manager plugin, or none when an extension handles logins.",
-          keywords: ["password manager", "passwords app", "passkeys", "verification codes", "2fa", "one time code", "autofill passwords"],
+          description: "Ardia's own, a plugin, or none for an extension.",
+          keywords: ["password manager", "passwords app", "passkeys", "verification codes", "2fa", "one time code", "autofill passwords", "password manager plugin", "extension", "logins", "none"],
           shown: () => PLATFORM_FEATURES.systemPasswordManagers && PLATFORM_FEATURES.plugins,
         },
         offerToSavePasswords: {

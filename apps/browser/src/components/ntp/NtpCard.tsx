@@ -1,6 +1,6 @@
 import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { Animated, StyleSheet, View, type ViewStyle } from "react-native";
-import { Box, Button, curve, duration, Panel, radius, shadow, springs, Text, useHover } from "../ui";
+import { Box, Button, curve, duration, Panel, radius, shadow, Text, useHover } from "../ui";
 import { liftSpring } from "../ui/motion";
 import { NTP_CARD, useNtpColors } from "./tokens";
 import { PeekCoversCards } from "./peekClearance";

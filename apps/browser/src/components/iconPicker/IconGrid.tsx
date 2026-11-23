@@ -8,7 +8,7 @@ import { ICON_PICKER, iconPickerColors } from "./tokens";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
 import { perLook } from "../ui/tokens";
 
-export type GridIcon = { icon: string; label: string };
+type GridIcon = { icon: string; label: string };
 export type GridSection = { title: string | null; symbol?: string; icons: GridIcon[] };
 type GridRow = { key: string; title: string } | { key: string; icons: GridIcon[] };
 

@@ -7,11 +7,11 @@ import { fileURLToPath } from "node:url";
 
 export const MARKER = ".ardia-linked-deps.json";
 export const GUARD_FILE = ".pnpmfile.cjs";
-export const NEVER_INDEX = ".metadata_never_index";
+const NEVER_INDEX = ".metadata_never_index";
 export const CACHE_STAMP = "deps.json";
 export const USERS_DIR = ".users";
-export const LINKED_DOT_ENTRIES = new Set([".bin"]);
-export const WORKSPACE_SCOPE = "@ardia";
+const LINKED_DOT_ENTRIES = new Set([".bin"]);
+const WORKSPACE_SCOPE = "@ardia";
 const MARKER_VERSION = 2;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -110,7 +110,7 @@ function insideReal(realRoot, target) {
   }
 }
 
-export function checkedProject(root, project) {
+function checkedProject(root, project) {
   if (typeof project !== "string") throw new Error(`workspace project ${JSON.stringify(project)} isn't a path`);
   const resolved = path.resolve(root, project);
   const relative = path.relative(root, resolved);
@@ -188,7 +188,7 @@ export function installInputs(root, runtime = runtimeOf()) {
   return { files, runtime, projects, lockfile: lockfile.toString("utf8") };
 }
 
-export function readEntries(dir) {
+function readEntries(dir) {
   let entries;
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -241,7 +241,7 @@ export function planLinks({ sourceRoot, worktreeRoot, project, entries, exists =
   return { ops, warnings };
 }
 
-export function markerOf(worktree) {
+function markerOf(worktree) {
   const state = markerState(worktree);
   if (state.absent) return null;
   const file = path.join(worktree, "node_modules", MARKER);
@@ -263,7 +263,7 @@ function writeJsonAtomic(file, value) {
   fs.renameSync(partial, file);
 }
 
-export function ownInstallDirs(worktree, projects, replace) {
+function ownInstallDirs(worktree, projects, replace) {
   const dirs = projects.map((project) => path.join(worktree, project, "node_modules")).filter((dir) => lstatOrNull(dir));
   if (dirs.length && !replace) {
     const what = lstatOrNull(dirs[0]).isSymbolicLink() ? "is a link to a whole node_modules" : "is its own install";
@@ -319,11 +319,11 @@ function blocked() {
 module.exports = { hooks: { preResolution: blocked, readPackage: blocked } };
 `;
 
-export function isOurGuard(text) {
+function isOurGuard(text) {
   return text !== null && text.includes(`throw new Error("${GUARD_SIGNATURE}")`);
 }
 
-export function checkGuardSlot(worktree) {
+function checkGuardSlot(worktree) {
   const tracked = spawnSync("git", ["-C", worktree, "ls-files", "--error-unmatch", GUARD_FILE], { stdio: "ignore" }).status === 0;
   if (tracked) throw new Error(`${worktree} tracks its own ${GUARD_FILE}, so its pnpm install can't be blocked; link it by hand or not at all`);
   const file = path.join(worktree, GUARD_FILE);
@@ -404,7 +404,7 @@ function excludeFromGit(worktree, names) {
   return file;
 }
 
-export function dropNeverIndex(dir) {
+function dropNeverIndex(dir) {
   const file = path.join(dir, NEVER_INDEX);
   if (fs.existsSync(dir) && !fs.existsSync(file)) {
     fs.writeFileSync(file, "");
@@ -413,12 +413,12 @@ export function dropNeverIndex(dir) {
   return false;
 }
 
-export function defaultCacheRoot() {
+function defaultCacheRoot() {
   return path.resolve(process.env.ARDIA_DEPS_CACHE || path.join(os.homedir(), "ardia-scratch", "deps.noindex"));
 }
 
 
-export function pnpmInstall(staging) {
+function pnpmInstall(staging) {
   const log = path.join(staging, "install.log");
   const out = fs.openSync(log, "w");
   const result = spawnSync("pnpm", ["install", "--frozen-lockfile", "--prefer-offline", "--package-import-method=clone-or-copy", "--reporter=append-only"], { cwd: staging, stdio: ["ignore", out, out] });
@@ -476,7 +476,7 @@ export function buildCache({ worktree, cacheRoot, install = pnpmInstall, runtime
   }
 }
 
-export function underPodLock(args) {
+function underPodLock(args) {
   const result = spawnSync(lockedScript, ["pod", "--wait", "500", "--", process.execPath, self, ...args], { stdio: ["ignore", "inherit", "inherit"] });
   if (result.status !== 0) throw new Error(`${args[0]} under scripts/agent/locked pod failed (exit ${result.status ?? result.error?.code})`);
 }
@@ -730,7 +730,7 @@ export function liveKeys(cacheRoot) {
   return live;
 }
 
-export function checkedAge(days) {
+function checkedAge(days) {
   if (typeof days !== "number" || !Number.isFinite(days) || days < 0) throw new Error(`--older-than takes a number of days, 0 or more (got ${days})`);
   return days;
 }

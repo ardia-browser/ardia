@@ -1,7 +1,18 @@
 let quitting = false;
 
 export const isQuitting = () => quitting;
-export const setQuitting = (on: boolean) => void (quitting = on);
+const quittingListeners = new Set<(on: boolean) => void>();
+
+export function onQuittingChanged(listener: (on: boolean) => void) {
+  quittingListeners.add(listener);
+  return () => void quittingListeners.delete(listener);
+}
+
+export function setQuitting(on: boolean) {
+  if (quitting === on) return;
+  quitting = on;
+  for (const listener of [...quittingListeners]) listener(on);
+}
 
 const quitSaves = new Set<() => Promise<void>>();
 const reportFailure = (error: unknown) => console.warn("[quit] a save before quitting failed", error);

@@ -2,7 +2,7 @@ export type WindowButton = "menu" | "minimize" | "maximize" | "close";
 
 export type WindowButtonLayout = { leading: readonly WindowButton[]; trailing: readonly WindowButton[] };
 
-export type WindowButtonSide = "right" | "left" | "both" | "none";
+type WindowButtonSide = "right" | "left" | "both" | "none";
 
 export const WINDOW_CONTROLS = { edge: 12, gap: 3, button: 30, regular: 30, small: 28, band: 26, strip: 18 } as const;
 
@@ -10,7 +10,7 @@ export const windowControlsWidth = (count = 3) => (count > 0 ? count * WINDOW_CO
 
 export const TRAFFIC_LIGHTS_WIDTH = 78;
 
-export const DESKTOP_BUTTON_LAYOUT_FALLBACK = ":minimize,maximize,close";
+const DESKTOP_BUTTON_LAYOUT_FALLBACK = ":minimize,maximize,close";
 
 const BUTTON_OF = new Map<string, WindowButton>([["minimize", "minimize"], ["maximize", "maximize"], ["close", "close"]]);
 
@@ -32,7 +32,7 @@ export function parseButtonLayout(raw: string | null | undefined): WindowButtonL
 
 export const BROWSER_BUTTON_LAYOUT: WindowButtonLayout = parseButtonLayout(DESKTOP_BUTTON_LAYOUT_FALLBACK);
 
-export type WindowButtonsAllowed = { menu?: boolean; minimizable?: boolean; maximizable?: boolean };
+type WindowButtonsAllowed = { menu?: boolean; minimizable?: boolean; maximizable?: boolean };
 
 export const windowButtonsFor = (buttons: readonly WindowButton[], { menu = true, minimizable = true, maximizable = true }: WindowButtonsAllowed): WindowButton[] =>
   buttons.filter((button) => (button === "menu" ? menu : button === "minimize" ? minimizable : button === "maximize" ? maximizable : true));

@@ -59,14 +59,26 @@ test("each way of switching counts one switch in its direction, and Settings cou
 
   const menus = shellNativeModules.ArdiaMenus;
   const real = menus.showMenu;
-  menus.showMenu = () => Promise.resolve("tabLayout");
-  try {
-    await openSidebarMenu(w);
-  } finally {
-    menus.showMenu = real;
-  }
+  const pick = async (id) => {
+    menus.showMenu = () => Promise.resolve(id);
+    try {
+      await openSidebarMenu(w);
+    } finally {
+      menus.showMenu = real;
+    }
+  };
+  await pick("layout:top");
   assert.equal(tabLayoutOf(S(), w), "top");
   assert.deepEqual(takeTabLayoutCounts(), { tab_layout_switches_to_top: 1, tab_layout_switches_to_sidebar: 0 });
+  await pick("layout:top");
+  assert.deepEqual(takeTabLayoutCounts(), { tab_layout_switches_to_top: 0, tab_layout_switches_to_sidebar: 0 }, "picking the layout already shown switches nothing");
+  await pick("layout:sidebarRight");
+  assert.equal(tabLayoutOf(S(), w), "sidebar");
+  assert.equal(S().settings.sidebarSide, "right");
+  assert.deepEqual(takeTabLayoutCounts(), { tab_layout_switches_to_top: 0, tab_layout_switches_to_sidebar: 1 });
+  await pick("layout:top");
+  S().updateSettings({ sidebarSide: "left" });
+  takeTabLayoutCounts();
 
   chooseTabLayout("sidebar");
   assert.equal(tabLayoutOf(S(), w), "sidebar");

@@ -25,6 +25,7 @@
 #include "ardia/core/ac_browser_window.h"
 #include "ardia/core/ac_desktop_capture.h"
 #include "ardia/core/ac_device_chooser.h"
+#include "ardia/core/ac_discard_veto.h"
 #include "ardia/core/ac_extension_shortcuts.h"
 #include "ardia/core/ac_extension_view.h"
 #include "ardia/core/ac_host_visibility.h"
@@ -186,6 +187,7 @@ void InstallChromeHooks() {
   g_ardia_omits_from_session_service = &OmitsFromSessionService;
   g_ardia_viewless_browsers = true;
   InstallWindowlessPageGeometry();
+  InstallDiscardVeto();
   ardia::InstallCliVisibleTabs();
   if (TestFlag("nativeDragRefused")) {
     ui::ArdiaRefuseDragSessionInitiation();

@@ -4,7 +4,6 @@ import { notePlugin, notePluginTimes } from "../telemetry/pluginCounts";
 import { consentToken, type ConsentToken } from "../telemetry/consentPeriod";
 import { onConsentPeriodChange } from "../telemetry/choice";
 import { warnFor } from "../telemetry/consoleConsent";
-import { userTurnedControlOff } from "../app/programControlSetting";
 import { programsBlocked, refreshLegacyInstalls, REGISTRY_UNREADABLE } from "./programRegistry";
 import { activeManifest, currentPlugins, usePlugins, type ProgramsState } from "./store";
 
@@ -24,8 +23,6 @@ function setPrograms(name: string, state: ProgramsState | null) {
 function programNames(name: string): string[] {
   return requested.get(name) ?? currentPlugins().listings[name]?.manifest?.programs.map((p) => p.name) ?? [];
 }
-
-export const userRefusedControl = userTurnedControlOff;
 
 async function link(name: string, consent?: ConsentToken | null) {
   const s = currentPlugins();
@@ -148,10 +145,6 @@ function retryAdoption(name: string, consent: ConsentToken | null): "retrying" |
   return "retrying";
 }
 
-export function resetAdoptionForTests() {
-  adoptionChecked = false;
-}
-
 export async function adoptLegacyInstalls(consent: ConsentToken | null): Promise<boolean> {
   const s = currentPlugins();
   if (adoptionChecked || !s.order.length) return false;
@@ -163,7 +156,7 @@ export async function adoptLegacyInstalls(consent: ConsentToken | null): Promise
   return false;
 }
 
-export type OwnProgramsStatus = { state: "none" | "linking" | "linked" | "failed"; linked: string[]; failed: { name: string; reason: string }[]; binDir: string | null };
+type OwnProgramsStatus = { state: "none" | "linking" | "linked" | "failed"; linked: string[]; failed: { name: string; reason: string }[]; binDir: string | null };
 
 export function programsStatus(name: string): OwnProgramsStatus {
   const s = currentPlugins();

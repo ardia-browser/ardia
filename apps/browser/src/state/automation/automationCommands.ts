@@ -2,7 +2,7 @@ import type { BrowserCommand } from "../../platform/commands";
 import { COMMANDS, commandBarTitle, UNAVAILABLE_COMMANDS } from "../commands/commandCatalog";
 import { isConfigSettingKey } from "../settings/configAllowlist";
 
-export type AutomationDecision = "run" | "endsApp" | "changesEngine" | "leftOutSetting" | "control" | "needsArgument" | "needsPerson";
+type AutomationDecision = "run" | "endsApp" | "changesEngine" | "leftOutSetting" | "control" | "needsArgument" | "needsPerson";
 
 export const AUTOMATION: Readonly<Record<BrowserCommand, AutomationDecision>> = {
   newTab: "run",
@@ -29,8 +29,11 @@ export const AUTOMATION: Readonly<Record<BrowserCommand, AutomationDecision>> = 
   reload: "run",
   forceReload: "run",
   toggleTabLayout: "run",
+  setTabLayout: "run",
   toggleSidebar: "run",
   toggleSidebarSide: "run",
+  toggleCompactToolbar: "run",
+  togglePinnedFold: "run",
   openSplitPane: "run",
   useSelectionForFind: "run",
   findAndReplace: "run",
@@ -140,7 +143,7 @@ export const variantsOf = (command: BrowserCommand): string[] | null => {
   return variants ? Object.keys(variants) : null;
 };
 
-export type AutomationCommand = { id: BrowserCommand; title: string; scope: string | null; variants: string[] | null };
+type AutomationCommand = { id: BrowserCommand; title: string; scope: string | null; variants: string[] | null };
 
 export function automationCommands(): AutomationCommand[] {
   return (Object.keys(SPECS) as BrowserCommand[])

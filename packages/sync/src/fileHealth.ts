@@ -1,6 +1,6 @@
 import type { ScopeState } from "./scopeState.ts";
 
-export type PulledFiles = { read: string[]; unreadable: string[]; pending: string[]; present: Set<string> };
+type PulledFiles = { read: string[]; unreadable: string[]; pending: string[]; present: Set<string> };
 
 export function noteFileHealth(state: ScopeState, files: PulledFiles, now: number, giveUp: number) {
   const setAside = (id: string) => state.files[id]?.k === "bad";

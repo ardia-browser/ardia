@@ -1,7 +1,8 @@
+import type { CleanedTitle, CleanedUrl } from "@ardia/core";
 import type { MenuItem } from "@ardia-real/shell";
 
 export type ShareAnchor = readonly [number, number, number, number];
-export type ShareSurface = {
+type ShareSurface = {
   menu(items: MenuItem[], at?: { x: number; y: number }): Promise<string | null>;
   copy(text: string): void;
   openInActivePage(url: string, windowId: string | null): boolean;
@@ -18,14 +19,14 @@ const unavailable = () => Object.assign(new Error("Sharing is unavailable in thi
 const mailable = (url: string) => /^https?:/i.test(url);
 const below = (anchor: ShareAnchor | null | undefined) => anchor ? { x: anchor[0], y: anchor[1] + anchor[3] + 4 } : undefined;
 
-export const mailtoLink = (url: string, title?: string | null) => `mailto:?subject=${encodeURIComponent(title || url)}&body=${encodeURIComponent(url)}`;
+export const mailtoLink = (url: CleanedUrl, title?: CleanedTitle | null) => `mailto:?subject=${encodeURIComponent(title || url)}&body=${encodeURIComponent(url)}`;
 
 export const linkShareItems = (url: string, prefix = ""): MenuItem[] => [
   { id: `${prefix}${COPY}`, title: "Copy Link", symbol: "link" },
   ...(mailable(url) ? [{ id: `${prefix}${EMAIL}`, title: "Email Link", symbol: "envelope" }] : []),
 ];
 
-export const textShareItems = (): MenuItem[] => [{ id: COPY, title: "Copy", symbol: "doc.on.doc" }];
+const textShareItems = (): MenuItem[] => [{ id: COPY, title: "Copy", symbol: "doc.on.doc" }];
 
 export const withShareMenus = (items: MenuItem[]): MenuItem[] => items.map((item) => {
   if ("separator" in item) return item;
@@ -37,14 +38,14 @@ export function openMailLink(url: string, windowId: string | null = null): boole
   return /^mailto:/i.test(url) && !!surface?.openInActivePage(url, windowId);
 }
 
-export async function shareLinkVia(service: string, url: string, title: string | null, windowId: string | null): Promise<void> {
+export async function shareLinkVia(service: string, url: CleanedUrl, title: CleanedTitle | null, windowId: string | null): Promise<void> {
   if (!surface) throw unavailable();
   if (service === COPY) return surface.copy(url);
   if (service === EMAIL && mailable(url) && surface.openInActivePage(mailtoLink(url, title), windowId)) return;
   throw unavailable();
 }
 
-export async function shareLink(url: string, title: string | null, windowId: string | null, anchor?: ShareAnchor | null): Promise<void> {
+export async function shareLink(url: CleanedUrl, title: CleanedTitle | null, windowId: string | null, anchor?: ShareAnchor | null): Promise<void> {
   if (!surface) throw unavailable();
   const choice = await surface.menu(linkShareItems(url), below(anchor));
   if (choice) await shareLinkVia(choice, url, title, windowId);

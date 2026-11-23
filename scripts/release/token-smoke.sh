@@ -11,7 +11,7 @@ cli="${2:?$usage}"
 metro="${3:-}"
 case "$app" in /Applications/*) echo "error: never an installed app" >&2; exit 1 ;; esac
 root="$(cd "$(dirname "$0")/../.." && pwd -P)"
-work="$(cd "$(mktemp -d /tmp/ac-token.XXXXXX)" && pwd -P)"
+work="$(cd "$(mktemp -d "${AC_SCRATCH_TMP:-/tmp}/ac-token.XXXXXX")" && pwd -P)"
 data="$work/d"
 mkdir -p "$data"
 pid=""

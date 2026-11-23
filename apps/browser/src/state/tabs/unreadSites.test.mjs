@@ -9,7 +9,7 @@ const { DEFAULT_SETTINGS } = await import("../settings/settings.ts");
 
 const S = () => useBrowser.getState();
 const label = (id) => tabUnread(id)?.label ?? null;
-const unreadItem = (w, id) => tabMenuItems(S(), w, S().tabs[id]).find((i) => i.id === "siteUnread" || i.id === "allUnread")?.title ?? null;
+const unreadItem = (w, id) => (tabMenuItems(S(), w, S().tabs[id]).find((i) => i.id === "customize")?.children ?? []).find((i) => i.id === "siteUnread" || i.id === "allUnread")?.title ?? null;
 
 const setup = ({ on = true } = {}) => {
   S().hydrate({});

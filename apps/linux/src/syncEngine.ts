@@ -1,3 +1,4 @@
+import { asSecret, type Secret } from "@ardia/core";
 import { create } from "zustand";
 import * as engine from "../../browser/src/state/sync/engine";
 import type { DataType, SendTarget, SyncUi } from "../../browser/src/state/sync/syncDoc";
@@ -81,7 +82,7 @@ function resumeWhenKeyringOpens(host: ArdiaHost) {
       keyStore = status;
       if (keyringMessage(status, false) !== shown) engine.useSync.setState({});
     },
-    resume: () => engine.enterRecoveryPhrase(engine.useSync.getState().folder ?? "", ""),
+    resume: () => engine.enterRecoveryPhrase(engine.useSync.getState().folder ?? "", asSecret("syncPhrase", "")),
   });
   keyringWatch = watchLockedSync(engine.useSync, tick, KEYRING_RETRY_MS);
 }
@@ -133,10 +134,10 @@ function remoteFor(host: ArdiaHost): SyncRemote {
       }
       return result;
     },
-    enterRecoveryPhrase: (folder: string, text: string) => {
+    enterRecoveryPhrase: (folder: string, phrase: Secret<"syncPhrase">) => {
       const begins = enterPhraseBegins(engine.useSync.getState());
       return whileResettingHeldLogins(
-        () => engine.enterRecoveryPhrase(folder, text),
+        () => engine.enterRecoveryPhrase(folder, phrase),
         (result) => begins && "ok" in result,
         () => engine.stopSync(),
       ).catch((error: unknown) => {
@@ -218,7 +219,7 @@ export const linuxSyncHooks = {
   role: () => authority?.role() ?? "unavailable",
   heldLogins: () => heldLoginsStatus(),
   turnOnSync: (folder: string) => turnOnSync(folder),
-  enterRecoveryPhrase: (folder: string, text: string) => enterRecoveryPhrase(folder, text),
+  enterRecoveryPhrase: (folder: string, text: string) => enterRecoveryPhrase(folder, asSecret("syncPhrase", text)),
   stopSync: (options?: { deleteData?: boolean }) => stopSync(options),
   syncNow: () => syncNow(),
   setTypeSynced: (type: DataType, enabled: boolean) => setTypeSynced(type, enabled),
@@ -292,11 +293,11 @@ export async function turnOnSync(folder: string, how?: TurnOnFolder): Promise<{ 
   }
 }
 
-export async function enterRecoveryPhrase(folder: string, text: string): Promise<PhraseResult | { error: "unavailable" }> {
+export async function enterRecoveryPhrase(folder: string, phrase: Secret<"syncPhrase">): Promise<PhraseResult | { error: "unavailable" }> {
   if (!SyncNative) return { error: "unavailable" };
   const consent = consentToken();
   try {
-    return await forward("enterRecoveryPhrase", [folder, text], INTERACTIVE_CALL_TIMEOUT_MS);
+    return await forward("enterRecoveryPhrase", [folder, phrase], INTERACTIVE_CALL_TIMEOUT_MS);
   } catch (error) {
     warnFor(consent, "[ardia linux] sync", error instanceof Error ? error.message : error);
     return { error: "unavailable" };

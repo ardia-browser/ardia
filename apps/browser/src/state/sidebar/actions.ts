@@ -1,13 +1,13 @@
 import { foreignWriteHooks } from "../browser/foreignWriteHooks";
-import { cleanUrl, markdownLink } from "@ardia/core";
-import { copyText } from "../../platform/clipboard";
+import { cleanUrlReport, linkLines, markdownLink } from "@ardia/core";
+import { copyLink } from "../../platform/clipboard";
 import { prompt } from "../../platform/dialogs";
 import { updateFolder } from "../live/store";
 import { useBrowser } from "../browser/store";
 import { webviews } from "../../platform/webviews";
 import { focusHeroBar } from "../omnibox/barState";
 import { ancestorIds } from "../groups/groups";
-import { activeTabId, bookmarkProfileId, inPinnedContainer, pinSection, tabLayoutOf, tabsShownIn, tabTitle, viewTabIds } from "../browser/model";
+import { activeTabId, bookmarkProfileId, inPinnedContainer, ownTabTitle, pinSection, tabLayoutOf, tabsShownIn, tabTitle } from "../browser/model";
 import { anchorOutdated, type ClickMods } from "../drag/drops";
 import { selectedTabIds } from "../pins/organize";
 import { groupLabel, groupOf } from "../pins/tabGrouping";
@@ -126,9 +126,10 @@ export function newGroupWithSelection(windowId: string, ids = selectedTabIds(sto
 export function copyUrls(ids: string[], markdown: boolean) {
   const tabs = ids.map((id) => store().tabs[id]).filter((t): t is Tab => !!t?.url);
   if (!tabs.length) return;
-  const lines = tabs.map((t) => (markdown ? markdownLink(tabTitle(t), t.url) : cleanUrl(t.url)));
-  copyText(markdown && lines.length > 1 ? lines.map((l) => `- ${l}`).join("\n") : lines.join("\n"));
-  for (const t of tabs) noteUrlCopied(awaitsFirstPage(t.id));
+  const reports = tabs.map((t) => cleanUrlReport(t.url));
+  const lines = tabs.map((t, i) => (markdown ? markdownLink(ownTabTitle(t), t.url) : reports[i]!.url));
+  copyLink(linkLines(lines, markdown));
+  tabs.forEach((t, i) => noteUrlCopied(awaitsFirstPage(t.id), reports[i]!.removedTracker));
 }
 
 export async function bookmarkTabs(windowId: string, ids: string[], folder: BookmarkFolderChoice) {
@@ -158,13 +159,3 @@ export async function editPinnedPage(windowId: string, tabId: string) {
   });
   if (url) store().setPinnedUrl(tabId, url.includes("://") ? url : `https://${url}`);
 }
-
-export function muteAll(windowId: string, muted: boolean) {
-  store().setMuted(viewTabIds(store(), windowId), muted);
-}
-
-export const allMuted = (windowId: string) => {
-  const s = store();
-  const view = viewTabIds(s, windowId).filter((id) => s.tabs[id]!.url);
-  return view.length > 0 && view.every((id) => s.tabs[id]!.muted);
-};

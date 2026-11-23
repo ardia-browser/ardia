@@ -1,3 +1,4 @@
+import { cleanLinkTitle, cleanUrl } from "@ardia/core";
 import { withEntry } from "../browser/changes";
 import { confirm, pickFolder } from "../../platform/dialogs";
 import { sharePage } from "../../platform/share";
@@ -110,7 +111,8 @@ export async function shareFolder(windowId: string, groupId: string) {
       return showToast(windowId, "Couldn’t share this folder yet", reason, { icon: "exclamationmark.icloud" });
     }
     const anchor = await measureRow(windowId, groupId);
-    await sharePage(fileUrlOf(folder.path), groupLabel(store(), g) || null, windowId, anchor ? [anchor.x, anchor.y, anchor.width, anchor.height] : null);
+    const url = fileUrlOf(folder.path);
+    await sharePage(cleanUrl(url), cleanLinkTitle(groupLabel(store(), g), url) || null, windowId, anchor ? [anchor.x, anchor.y, anchor.width, anchor.height] : null);
   } catch (error) {
     showToast(windowId, "Couldn’t share this folder", error instanceof Error ? error.message : String(error), { icon: "exclamationmark.icloud" });
   }

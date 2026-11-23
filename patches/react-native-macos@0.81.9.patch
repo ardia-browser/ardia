@@ -2106,8 +2106,199 @@ index 3edcc9670a8ccb5eef44524e78445117d2416ed8..1f7951f616996941706f11b380c12051
    _sendIdleEvents = sendIdleEvents;
    if (sendIdleEvents) {
      [self startTimers];
+diff --git a/React/Modules/RCTLayoutAnimation.h b/React/Modules/RCTLayoutAnimation.h
+index f95d6a8..a91c9fb 100644
+--- a/React/Modules/RCTLayoutAnimation.h
++++ b/React/Modules/RCTLayoutAnimation.h
+@@ -31,4 +31,12 @@
+ 
+ - (void)performAnimations:(void (^)(void))animations withCompletionBlock:(void (^)(BOOL completed))completionBlock;
+ 
++#if TARGET_OS_OSX // [macOS
++// [Ardia: a view's frame update runs on Core Animation: the frame is set once and its layer glides there. Ardia]
++- (void)ardia_glideView:(RCTPlatformView *)view toFrame:(CGRect)frame withCompletionBlock:(void (^)(BOOL completed))completionBlock;
++// [Ardia: a view hit-tests at its final frame while it glides there, so until it lands a press on it would reach a row
++// drawn somewhere else: a moving view, and the part of a clipping view its glide hasn't uncovered yet, take no hits. Ardia]
++RCT_EXTERN BOOL RCTArdiaGlideHidesHit(CALayer *layer, CGPoint point);
++#endif // macOS]
++
+ @end
+diff --git a/React/Modules/RCTLayoutAnimation.m b/React/Modules/RCTLayoutAnimation.m
+index 64e697c..4ac22f5 100644
+--- a/React/Modules/RCTLayoutAnimation.m
++++ b/React/Modules/RCTLayoutAnimation.m
+@@ -8,8 +8,36 @@
+ #import "RCTLayoutAnimation.h"
+ 
+ #import "RCTConvert.h"
++#if TARGET_OS_OSX // [macOS
++#import "UIView+React.h"
++#endif // macOS]
++
++#if TARGET_OS_OSX // [macOS
++// [Ardia: glides in flight, counted from the animations themselves, so hits stay off until the render server has
++// actually finished them, however late a slow commit started them. Ardia]
++static NSInteger ArdiaGlidesInFlight;
++
++@interface ArdiaGlideEnd : NSObject <CAAnimationDelegate>
++@end
+ 
+-@implementation RCTLayoutAnimation
++@implementation ArdiaGlideEnd
++- (void)animationDidStart:(CAAnimation *)animation
++{
++}
++
++- (void)animationDidStop:(CAAnimation *)animation finished:(BOOL)finished
++{
++  ArdiaGlidesInFlight = MAX(0, ArdiaGlidesInFlight - 1);
++}
++@end
++
++#endif // macOS]
++
++@implementation RCTLayoutAnimation {
++#if TARGET_OS_OSX // [macOS
++  NSArray<NSNumber *> *_ardiaControlPoints;
++#endif // macOS]
++}
+ 
+ #if !TARGET_OS_OSX // [macOS]
+ static UIViewAnimationCurve _currentKeyboardAnimationCurve;
+@@ -118,6 +146,14 @@ - (instancetype)initWithDuration:(NSTimeInterval)duration config:(NSDictionary *
+     }
+ 
+     _animationType = [RCTConvert RCTAnimationType:config[@"type"]];
++#if TARGET_OS_OSX // [macOS
++    // [Ardia: a curve as a cubic Bézier's two control points, `controlPoints: [x1, y1, x2, y2]`, as Easing.bezier takes
++    // them, so a layout glide can follow the same curve as the JS animations beside it. Ardia]
++    NSArray *points = [RCTConvert NSArray:config[@"controlPoints"]];
++    if (points.count == 4) {
++      _ardiaControlPoints = points;
++    }
++#endif // macOS]
+ #if !TARGET_OS_OSX // [macOS]
+     if (_animationType == RCTAnimationTypeSpring) {
+       _springDamping = [RCTConvert CGFloat:config[@"springDamping"]];
+@@ -129,6 +165,116 @@ - (instancetype)initWithDuration:(NSTimeInterval)duration config:(NSDictionary *
+   return self;
+ }
+ 
++#if TARGET_OS_OSX // [macOS
++// [Ardia: a layout animation on macOS ran each frame on the main thread: NSAnimationContext's implicit frame animation
++// is AppKit's NSAnimationManager setting every moving view's frame, and redrawing it, on each display refresh, so a
++// sidebar folder that moved 500 rows below it dropped frames. A glide sets the final frame at once, which is where the
++// view lays out, hit-tests and hovers from then on, and adds additive animations from where its layer was to its layer,
++// which the render server plays with no further work from the app. Ardia]
++BOOL RCTArdiaGlideHidesHit(CALayer *layer, CGPoint point)
++{
++  if (layer == nil || ArdiaGlidesInFlight == 0) {
++    return NO;
++  }
++  BOOL gliding = NO;
++  for (NSString *key in layer.animationKeys) {
++    if ([key hasPrefix:@"ardia.glide."]) {
++      gliding = YES;
++      break;
++    }
++  }
++  CALayer *shown = gliding ? layer.presentationLayer : nil;
++  if (shown == nil) {
++    return NO;
++  }
++  if (fabs(shown.position.x - layer.position.x) > 0.5 || fabs(shown.position.y - layer.position.y) > 0.5) {
++    return YES;
++  }
++  return layer.masksToBounds && (point.x > shown.bounds.size.width || point.y > shown.bounds.size.height);
++}
++
++- (CAMediaTimingFunction *)ardia_timingFunction
++{
++  if (_ardiaControlPoints) {
++    return [CAMediaTimingFunction functionWithControlPoints:_ardiaControlPoints[0].floatValue
++                                                           :_ardiaControlPoints[1].floatValue
++                                                           :_ardiaControlPoints[2].floatValue
++                                                           :_ardiaControlPoints[3].floatValue];
++  }
++  return [CAMediaTimingFunction functionWithName:CAMediaTimingFunctionNameFromRCTAnimationType(_animationType)];
++}
++
++- (void)ardia_glideView:(RCTPlatformView *)view toFrame:(CGRect)frame withCompletionBlock:(void (^)(BOOL completed))completionBlock
++{
++  static NSUInteger glides;
++  CALayer *layer = view.layer;
++  if (layer == nil || _duration <= 0 || _delay > 0) {
++    [self performAnimations:^{
++      [view reactSetFrame:frame];
++    }
++        withCompletionBlock:completionBlock];
++    return;
++  }
++  CGRect fromFrame = view.frame;
++  CGPoint fromPosition = layer.position;
++  CGSize fromSize = layer.bounds.size;
++  [view reactSetFrame:frame];
++  CGPoint toPosition = layer.position;
++  CGSize toSize = layer.bounds.size;
++  CGFloat dx = fromPosition.x - toPosition.x;
++  CGFloat dy = fromPosition.y - toPosition.y;
++  if (dx == 0 && dy == 0) {
++    CGRect toFrame = view.frame;
++    dx = CGRectGetMinX(fromFrame) - CGRectGetMinX(toFrame);
++    dy = CGRectGetMinY(fromFrame) - CGRectGetMinY(toFrame);
++    if (view.superview != nil && !view.superview.isFlipped) {
++      dy = -dy;
++    }
++  }
++  CGFloat dw = fromSize.width - toSize.width;
++  CGFloat dh = fromSize.height - toSize.height;
++  if (dx == 0 && dy == 0 && dw == 0 && dh == 0) {
++    completionBlock(YES);
++    return;
++  }
++  // [Ardia: no CATransaction of its own: committing one per view flushed the window's display cycle, its whole layout
++  // included, once for every view that moved. Ardia]
++  CAMediaTimingFunction *timing = [self ardia_timingFunction];
++  static ArdiaGlideEnd *ends;
++  if (ends == nil) {
++    ends = [ArdiaGlideEnd new];
++  }
++  NSString *key = [NSString stringWithFormat:@"ardia.glide.%lu", (unsigned long)++glides];
++  if (dx != 0 || dy != 0) {
++    CABasicAnimation *move = [CABasicAnimation animationWithKeyPath:@"position"];
++    move.fromValue = [NSValue valueWithPoint:NSMakePoint(dx, dy)];
++    move.toValue = [NSValue valueWithPoint:NSZeroPoint];
++    move.additive = YES;
++    move.duration = _duration;
++    move.timingFunction = timing;
++    move.fillMode = kCAFillModeBackwards;
++    move.delegate = ends;
++    ArdiaGlidesInFlight++;
++    [layer addAnimation:move forKey:[key stringByAppendingString:@".position"]];
++  }
++  if (dw != 0 || dh != 0) {
++    CABasicAnimation *size = [CABasicAnimation animationWithKeyPath:@"bounds.size"];
++    size.fromValue = [NSValue valueWithSize:NSMakeSize(dw, dh)];
++    size.toValue = [NSValue valueWithSize:NSZeroSize];
++    size.additive = YES;
++    size.duration = _duration;
++    size.timingFunction = timing;
++    size.fillMode = kCAFillModeBackwards;
++    size.delegate = ends;
++    ArdiaGlidesInFlight++;
++    [layer addAnimation:size forKey:[key stringByAppendingString:@".size"]];
++  }
++  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(_duration * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
++    completionBlock(YES);
++  });
++}
++#endif // macOS]
++
+ - (void)performAnimations:(void (^)(void))animations withCompletionBlock:(void (^)(BOOL completed))completionBlock
+ {
+ #if !TARGET_OS_OSX // [macOS]
 diff --git a/React/Modules/RCTUIManager.mm b/React/Modules/RCTUIManager.mm
-index 7f1aeff436b8a51514254b72d1fb1fd1ee3b1553..73a9a9893d6700ebcbd7bdfc963116cf27478aef 100644
+index 7f1aeff..e0ccd89 100644
 --- a/React/Modules/RCTUIManager.mm
 +++ b/React/Modules/RCTUIManager.mm
 @@ -7,6 +7,9 @@
@@ -2135,7 +2326,24 @@ index 7f1aeff436b8a51514254b72d1fb1fd1ee3b1553..73a9a9893d6700ebcbd7bdfc963116cf
  }
  
  @synthesize bridge = _bridge;
-@@ -1321,7 +1332,8 @@ - (void)flushUIBlocksWithCompletion:(void (^)(void))completion
+@@ -817,12 +828,16 @@ - (RCTViewManagerUIBlock)uiBlockWithLayoutUpdateForRootView:(RCTRootShadowView *
+             withCompletionBlock:completion];
+ 
+       } else if (updatingLayoutAnimation) {
++#if TARGET_OS_OSX // [macOS
++        [updatingLayoutAnimation ardia_glideView:view toFrame:frame withCompletionBlock:completion]; // [Ardia: a frame update glides on Core Animation. Ardia]
++#else // macOS]
+         // Animate view update
+         [updatingLayoutAnimation
+               performAnimations:^{
+                 [view reactSetFrame:frame];
+               }
+             withCompletionBlock:completion];
++#endif // [macOS]
+ 
+       } else {
+         // Update without animation
+@@ -1321,7 +1336,8 @@ - (void)flushUIBlocksWithCompletion:(void (^)(void))completion
  
    // Execute the previously queued UI blocks
    RCTProfileBeginFlowEvent();
@@ -2145,7 +2353,7 @@ index 7f1aeff436b8a51514254b72d1fb1fd1ee3b1553..73a9a9893d6700ebcbd7bdfc963116cf
      RCTProfileEndFlowEvent();
      RCT_PROFILE_BEGIN_EVENT(RCTProfileTagAlways, @"-[UIManager flushUIBlocks]", (@{
                                @"count" : [@(previousPendingUIBlocks.count) stringValue],
-@@ -1332,7 +1344,48 @@ - (void)flushUIBlocksWithCompletion:(void (^)(void))completion
+@@ -1332,7 +1348,48 @@ - (void)flushUIBlocksWithCompletion:(void (^)(void))completion
      RCT_PROFILE_END_EVENT(RCTProfileTagAlways, @"");
  
      RCTExecuteOnUIManagerQueue(completion);
@@ -2195,7 +2403,7 @@ index 7f1aeff436b8a51514254b72d1fb1fd1ee3b1553..73a9a9893d6700ebcbd7bdfc963116cf
  }
  
  - (void)setNeedsLayout
-@@ -1458,11 +1511,28 @@ - (void)_dispatchPropsDidChangeEvents
+@@ -1458,11 +1515,28 @@ - (void)_dispatchPropsDidChangeEvents
      }
  
      // Return frame coordinates in window
@@ -2245,10 +2453,18 @@ index 152e76da136756ebc962ece4cc84e84df7cfce0e..4e38bf09796d31dfc63cf79a081e40ea
   * Hide subviews if they are outside the view bounds.
   * This is an optimisation used predominantly with RKScrollViews
 diff --git a/React/Views/RCTView.m b/React/Views/RCTView.m
-index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..fd0adb49bb259a5c00e4f2f0aab1f9f003c9a671 100644
+index 0a4efc1..887cd1d 100644
 --- a/React/Views/RCTView.m
 +++ b/React/Views/RCTView.m
-@@ -136,13 +136,157 @@ static NSString *RCTRecursiveAccessibilityLabel(RCTUIView *view) // [macOS]
+@@ -19,6 +19,7 @@
+ #import "RCTBorderDrawing.h"
+ #import "RCTFocusChangeEvent.h" // [macOS]
+ #import "RCTI18nUtil.h"
++#import "RCTLayoutAnimation.h" // [macOS]
+ #import "RCTLocalizedString.h"
+ #import "RCTLog.h"
+ #import "RCTRootContentView.h" // [macOS]
+@@ -136,13 +137,157 @@ - (RCTPlatformView *)react_findClipView // [macOS]
    return str;
  }
  
@@ -2406,7 +2622,17 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..fd0adb49bb259a5c00e4f2f0aab1f9f0
  #endif // macOS]
    NSMutableDictionary<NSString *, NSDictionary *> *accessibilityActionsNameMap;
    NSMutableDictionary<NSString *, NSDictionary *> *accessibilityActionsLabelMap;
-@@ -245,6 +389,14 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithCoder : unused)
+@@ -240,11 +385,24 @@ - (RCTPlatformView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event // [macOS
+   if (!canReceiveTouchEvents) {
+     return nil;
+   }
++#if TARGET_OS_OSX // [macOS
++  if (RCTArdiaGlideHidesHit(self.layer, point)) { // [Ardia: no hits on a view still gliding to its frame. Ardia]
++    return nil;
++  }
++#endif // macOS]
+ 
+   // `hitSubview` is the topmost subview which was hit. The hit point can
    // be outside the bounds of `view` (e.g., if -clipsToBounds is NO).
    RCTPlatformView *hitSubview = nil; // [macOS]
    BOOL isPointInside = [self pointInside:point withEvent:event];
@@ -2421,7 +2647,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..fd0adb49bb259a5c00e4f2f0aab1f9f0
    BOOL needsHitSubview = !(_pointerEvents == RCTPointerEventsNone || _pointerEvents == RCTPointerEventsBoxOnly);
    if (needsHitSubview && (![self clipsToBounds] || isPointInside)) {
      // Take z-index into account when calculating the touch target.
-@@ -784,58 +936,109 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithCoder : unused)
+@@ -784,58 +942,109 @@ - (void)viewDidMoveToWindow
    // scroll event occurs either due to trackpad/gesture based scrolling or a scrollwheel event
    // both of which would not cause the mouseExited to be invoked.
  
@@ -2564,7 +2790,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..fd0adb49bb259a5c00e4f2f0aab1f9f0
      }
    }
  }
-@@ -943,28 +1146,63 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithCoder : unused)
+@@ -943,28 +1152,63 @@ - (void)react_updateClippedSubviewsWithClipRect:(CGRect)clipRect relativeToView:
  
  - (void)setRemoveClippedSubviews:(BOOL)removeClippedSubviews
  {
@@ -2628,7 +2854,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..fd0adb49bb259a5c00e4f2f0aab1f9f0
  }
  
  - (void)layoutSubviews
-@@ -1196,12 +1434,42 @@ static CGFloat RCTDefaultIfNegativeTo(CGFloat defaultValue, CGFloat x)
+@@ -1196,12 +1440,42 @@ - (void)reactSetFrame:(CGRect)frame
    // be rendered as a stretchable image, we'll need to re-render.
    // TODO: detect up-front if re-rendering is necessary
    CGSize oldSize = self.bounds.size;
@@ -2671,7 +2897,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..fd0adb49bb259a5c00e4f2f0aab1f9f0
  - (void)displayLayer:(CALayer *)layer
  {
    if (CGSizeEqualToSize(layer.bounds.size, CGSizeZero)) {
-@@ -1248,17 +1516,8 @@ static CGFloat RCTDefaultIfNegativeTo(CGFloat defaultValue, CGFloat x)
+@@ -1248,17 +1522,8 @@ - (void)displayLayer:(CALayer *)layer
    RCTUIColor *backgroundColor = _backgroundColor;
  #endif // macOS]
  
@@ -2691,7 +2917,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..fd0adb49bb259a5c00e4f2f0aab1f9f0
  
    if (useIOSBorderRendering) {
      layer.cornerRadius = cornerRadii.topLeftHorizontal;
-@@ -1293,9 +1552,10 @@ static CGFloat RCTDefaultIfNegativeTo(CGFloat defaultValue, CGFloat x)
+@@ -1293,9 +1558,10 @@ - (void)displayLayer:(CALayer *)layer
    layer.contents = (id)image.CGImage;
    layer.contentsScale = image.scale;
  #else // [macOS
@@ -2703,7 +2929,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..fd0adb49bb259a5c00e4f2f0aab1f9f0
  #endif // macOS]
    layer.needsDisplayOnBoundsChange = YES;
    layer.magnificationFilter = kCAFilterNearest;
-@@ -1514,6 +1774,20 @@ setBorderColor() setBorderColor(Top) setBorderColor(Right) setBorderColor(Bottom
+@@ -1514,6 +1780,20 @@ - (BOOL)acceptsFirstResponder
  	return [self focusable] || [super acceptsFirstResponder];
  }
  
@@ -2724,7 +2950,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..fd0adb49bb259a5c00e4f2f0aab1f9f0
  - (void)updateTrackingAreas
  {
    BOOL hasMouseHoverEvent = self.onMouseEnter || self.onMouseLeave;
-@@ -1522,32 +1796,614 @@ setBorderColor() setBorderColor(Top) setBorderColor(Right) setBorderColor(Bottom
+@@ -1522,32 +1802,614 @@ - (void)updateTrackingAreas
    if (!wouldRecreateIdenticalTrackingArea) {
      if (_trackingArea) {
        [self removeTrackingArea:_trackingArea];
@@ -2754,19 +2980,19 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..fd0adb49bb259a5c00e4f2f0aab1f9f0
 +      if (_hasMouseOver) {
 +        [RCTView ardia_markHoverDirty]; // [Ardia: hover follows layout: the resized view may have left the pointer. Ardia]
 +      }
-     }
-   }
- 
++    }
++  }
++
 +  // [Ardia: hover follows layout: the views the check looks at. Ardia]
 +  if (hasMouseHoverEvent) {
 +    if (ArdiaHoverViews == nil) {
 +      ArdiaHoverViews = [NSHashTable weakObjectsHashTable];
-+    }
+     }
 +    [ArdiaHoverViews addObject:self];
 +  } else {
 +    [ArdiaHoverViews removeObject:self];
-+  }
-+
+   }
+ 
    [super updateTrackingAreas];
  }
  
@@ -2998,7 +3224,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..fd0adb49bb259a5c00e4f2f0aab1f9f0
 +
 +#if DEBUG
 ++ (void)ardia_setPointerOverride:(NSValue *)screenPoint
- {
++{
 +  ArdiaPointerOverride = screenPoint;
 +  [self ardia_markHoverDirty];
 +}
@@ -3067,7 +3293,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..fd0adb49bb259a5c00e4f2f0aab1f9f0
 +}
 +
 ++ (void)ardia_checkHover
-+{
+ {
 +#if DEBUG
 +  ArdiaHoverPasses++;
 +#endif
@@ -3343,7 +3569,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..fd0adb49bb259a5c00e4f2f0aab1f9f0
    [self sendMouseEventWithBlock:self.onMouseLeave
                     locationInfo:[self locationInfoFromEvent:event]
                    modifierFlags:event.modifierFlags
-@@ -1768,7 +2624,7 @@ setBorderColor() setBorderColor(Top) setBorderColor(Right) setBorderColor(Bottom
+@@ -1768,7 +2630,7 @@ - (BOOL)handleKeyboardEvent:(NSEvent *)event {
    static const char kRCTViewKeyboardEventEmittedKey = 0;
    NSNumber *emitted = objc_getAssociatedObject(event, &kRCTViewKeyboardEventEmittedKey);
    BOOL alreadyEmitted = [emitted boolValue];
@@ -3352,7 +3578,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..fd0adb49bb259a5c00e4f2f0aab1f9f0
      [_eventDispatcher sendEvent:keyboardEvent];
      objc_setAssociatedObject(event, &kRCTViewKeyboardEventEmittedKey, @(YES), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
    }
-@@ -1794,3 +2650,19 @@ setBorderColor() setBorderColor(Top) setBorderColor(Right) setBorderColor(Bottom
+@@ -1794,3 +2656,19 @@ - (void)keyUp:(NSEvent *)event {
  #endif // macOS]
  
  @end

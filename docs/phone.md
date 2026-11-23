@@ -1317,6 +1317,61 @@ pictures; fade views; look views) and the parts applied so far. Parts accumulate
 - `restore`: everything put back.
 JavaScript re-renders can put a prop back, so apply a part on the settled deck and measure right away.
 
+## Liquid Glass on Android
+
+Android's glass is the native `Glass` (`GlassView.kt`), the default since 2026-11-23; the drawn `Frost` fallback in
+`look.tsx` stays only for a build without the native look module. Every glass surface goes through `ChromeSurface` or
+`LookGlass`: the page bar's circles and address capsule, the host pill, the deck's `···`, switcher and bottom bar, the
+start page's buttons, Reader's buttons, toasts and the Duo toolbar. Menus and confirmations stay Android's solid
+Material ("Decided by the owner (2026-11-19)"). The Compose `GlassCircleButton` (Settings pieces) keeps its solid
+look surface: it has no frost source to refract.
+
+- **What each glass samples.** A frost can't draw the source it sits inside, and every `ChromeSurface` named the
+  `surfaces` source that wraps the whole app, so until this change the native Glass logged
+  `path=fallback (inside its own source)` and never blurred. `GlassSource` (`LookViews.tsx`) now names a source that
+  holds what is under the glass and not the glass itself: the page bar and host pill sample `page` (the page stack),
+  the deck's chrome `deck` (its backdrop), the start page's buttons `start` (its spaces and mark). Anything else keeps
+  `surfaces`. A frost over a page in the solid page mode never asks its source to record, so the page under the bar
+  is never recorded without `ArdiaGlassOverPage` (it used to be asked once while the source had not drawn yet).
+  Known gap: the Duo layouts' toolbar and sidebar glass sit inside `surfaces` and so draw the solid fill and rim, never
+  the lens.
+- **The lens.** A port of liquid-dom's glass shader (MIT, Andras Prifer, https://github.com/AndrewPrifer/liquid-dom;
+  `LiquidGlass.kt`, credited in NOTICE and the Licences page). Across a bezel (14 dp, at most 30 % of the shorter
+  side) the surface rises on liquid-dom's convex squircle profile; its normal comes from the shape's distance field
+  and that profile's slope (capped at 5.67, about 80°), and `refract()` bends a straight-down ray through it per
+  colour channel (IOR 1.5, ± 0.04 dispersion for the colour fringe). The backdrop moves by the refracted ray's xy/z
+  times the surface height (9 dp of glass plus the bezel's height), capped at the largest shift `maxShiftDp` finds,
+  about 8 dp. It is an AGSL `RuntimeShader` chained as a `RenderEffect` after the frost's blur and saturation on the
+  frost's downscaled layer, so it samples the blurred backdrop as liquid-dom does, and the layer's margin is at least
+  that shift. The effect is rebuilt only when the shape, size or margin changes. It runs wherever the glass is on the
+  frost's Live path: the start page's buttons and any glass over a live source.
+- **The rim.** liquid-dom's white specular: two lights, from the top left and the opposite side, a 1.25 dp band fading
+  inward, power 2, added at 50 % (35 % in dark). It is drawn at full resolution over the glass's clip, after the tint,
+  as a second `RuntimeShader`, so it stays sharp, and it draws on every glass from Android 13, lens or not, except
+  where the glass draws the flat fill: Classic, `ArdiaFlatGlass`, the look switched off and a phone over the look
+  budget.
+- **A shader that fails.** Each shader is built through its own slot (`ShaderSlot`, `GlassShaders`): if the lens
+  can't be built the glass keeps the plain blur, if the rim can't it is skipped, and either is tried once per launch
+  and logged once (`PAGELAB look glass … shader failed`). The rounded frost or fill always draws; LookView's square
+  draw-safety fallback is no longer what a shader failure looks like.
+- **Over a page.** The page bar's glass keeps the solid page mode: it fills with the app's chrome fill (#FFFFFF, or
+  #1E1B1D in dark), tinted and rimmed, with nothing recorded. Recording the page live under the bar cost the F4 three
+  times the janky frames, and it was the recording, not the lens: ten swipes on a Wikipedia page, `dumpsys gfxinfo`,
+  before this change 3.05 and 3.16 % janky (p50 10 ms, p90 13 to 14, p99 25 to 26); the page recorded live with the
+  lens 9.0 and 10.2 % (p50 13 to 14, p90 24 to 25, p99 38 to 40); the same without the lens (`ArdiaFlatGlass`) 11.1 %;
+  the default now 2.96 % (10 / 14 / 27) on a warm run. The lab flag `ArdiaGlassOverPage` records the page live and
+  refracts it, for comparison. When it does, the page source draws through a compositing layer: without one the
+  bar's four glass layers each ran the WebView's draw again and the page went white.
+- **Left out of the port.** The smooth union between neighbouring shapes (each `Glass` is one shape), the refraction of
+  content inside the glass, the reflection sample along the rim and liquid-dom's blurred displacement field. Corners
+  stay circular, as the view's clip and outline are.
+- **Where it runs.** Android 13 and later. Android 12 draws the plain frost, below 12 the flat fill. Classic and
+  Reduce Transparency draw the solid Classic surface in the app's chrome fill; a phone over the look budget or with
+  the look off draws the flat fill. `ArdiaFlatGlass` keeps the frost and drops the lens and rim.
+  `app_launched.glass_render` reports the best of these the phone can draw at launch, not what each surface drew.
+- **Not seen yet.** The M3 (offline during this pass), Android 12 and 13 phones, TalkBack over the new sources, and
+  the Duo layouts.
+
 ## The look's budget
 
 The look (the deck's moving blobs and the frosts) must cost a phone no more than it can carry. A phone measures
@@ -1690,7 +1745,7 @@ Events (service `ardia-phone`, `$lib` `ardia-phone-telemetry`, tags `app: phone`
 | Event | Fields | When |
 | --- | --- | --- |
 | `sharing_turned_on` | `source` (settings, onboarding) | turning sharing on |
-| `app_launched` | `legacy_import` (imported, started_fresh, none), `legacy_import_failures` (failed tries before the app opened), `look_mode` (full, no_blur, no_motion, neither: the look this launch shows, after the look's budget and the system's Reduce Motion and Reduce Transparency), `interface_style` (match_mac, glass, classic) and `color_scheme` (match_mac, system, light, dark): the redesign's Appearance choices, and `material_colors` (wallpaper, profile, fallback, not_material): where Android's Material design took its colours, from the wallpaper, from a picked profile colour, or from Ardia's own palette on phones that give none; not_material on iPhone and in the original design, and `color_choice` (match_mac, preset, custom): the colour row's choice | each launch with sharing on |
+| `app_launched` | `legacy_import` (imported, started_fresh, none), `legacy_import_failures` (failed tries before the app opened), `look_mode` (full, no_blur, no_motion, neither: the look this launch shows, after the look's budget and the system's Reduce Motion and Reduce Transparency), `interface_style` (match_mac, glass, classic) and `color_scheme` (match_mac, system, light, dark): the redesign's Appearance choices, and `material_colors` (wallpaper, profile, fallback, not_material): where Android's Material design took its colours, from the wallpaper, from a picked profile colour, or from Ardia's own palette on phones that give none; not_material on iPhone and in the original design, and `color_choice` (match_mac, preset, custom): the colour row's choice, and `glass_render` (lens, frost, solid, classic, native, none): the best glass this phone can draw this launch, not what each surface drew (the page bar stays solid even on a `lens` phone): on Android the Liquid Glass lens and rim (Android 13+), plain frost (Android 12 or `ArdiaFlatGlass`) or without blur (below Android 12, over the look budget or with the look off), and otherwise Classic (Classic or Reduce Transparency), iPhone's own glass, or none in Material You | each launch with sharing on |
 | `perf_launch` | `launch_ms`, `js_ms` | each launch, once the module gives the process start (`ArdiaPhoneSystem.processStartedAt()`, epoch ms) |
 | `perf_backdrop` | `backdrop_ms` | each launch on iPhone, once the native launch backdrop has shown (`system.launchBackdropShownAt()`, epoch ms on the process start's clock) |
 | `perf_launch_tray` | `tray_ms` | each launch with Auto-Open Keyboard on, once the launch tray is up (process start on `ArdiaPhoneSystem.processStartedAt()`'s clock) |
@@ -1763,8 +1818,10 @@ Every count and timing the phone can send, for the owner to read as one set and 
 | `browse_chatgpt_fallbacks` | Browse for Me on Expo | How often a connected ChatGPT plan fails to answer; a jump after a release, or against `browse_answers_chatgpt`, means the Responses call or the token refresh broke |
 | `custom_theme_chosen`, `theme_edits`, `app_launched.color_choice` | the custom profile theme on the phone (2026-11-22) | How many testers make a theme of their own and how many keep it. `color_choice` = custom gives the share of launches on a custom theme. `theme_edits` against `custom_theme_chosen` shows whether people shape the theme or leave the starting one. Edits with no custom launches afterwards mean the theme doesn't stick: it fails to save, or people go back to a preset |
 | `material_you_turned_on`, `material_you_turned_off` | the Material You switch in Android Settings (the owner, 2026-11-20) | How many testers try Material You and how many go back. Read `off` against `on`: a share near one means it is tried and dropped. `app_launched.material_colors` says how many launches run with it on |
+| `app_launched.glass_render` | Liquid Glass on Android (the owner, 2026-11-23) | The best glass each Android launch can draw, a capability, not what each surface drew: `lens` (Android 13+), `frost` (Android 12 or `ArdiaFlatGlass`), `solid` (below 12, over the look budget or the look off). A growing `solid` share among Android 13+ phones means the look budget is turning the glass down; `classic` counts Classic and Reduce Transparency, `native` iPhone and `none` Material You |
 | `card_close_tapped` | the × on a card in Android's Material deck | Whether people close tabs with the card's own button rather than a flick; zero across Android testers after a release means the × stopped closing cards, or its tap zone opens the card instead |
 | `material_back_swiped` | a predictive back swipe on Android's Material sheets, dialogs, menus and library | Whether people swipe back out of Material surfaces; zero across Android testers after a release means the swipe stopped reaching them, or Back goes to the wrong surface |
+| `glass_shaders_failed` | Liquid Glass on Android (CodeRabbit on #3759: a lens refused mid-session still reported `lens` at launch) | Counted natively and drained with the pending counts: each time Android refused to build the lens or rim shader, so that glass drew plain frost until the app next came back to the foreground and tried again. `app_launched.glass_render` can't see this, since it's read before any glass draws. Any count on Android 13+ phones means a GPU or driver rejects the AGSL; compare it with the `lens` launches |
 | `night_shade_verdicts_reused`, `night_shade_verdicts_learned`, `night_shade_verdicts_corrected` | Night Shade's cached verdicts on Android (a tester's report: yahoo.com loaded white until half way) | Counted natively and drained with the pending counts, never for private tabs. `reused` is a page load, with Night Shade not off, whose site's verdict was already known, so the shade was decided before the first paint; `learned` is a site measured for the first time, whose first load can still shade late; `corrected` is a site whose verdict changed, so that load showed the old one until `DOMContentLoaded`. Read `reused` against `learned` for the hit rate, which should climb as testers revisit sites; a `corrected` share that grows means the measurement disagrees with itself between loads |
 
 ## What is left before the Expo app replaces both native apps
@@ -1904,7 +1961,7 @@ go back, and `app_launched.material_colors` (`not_material` while it is off) for
 - One design on both phones: Android takes main's iPhone redesign too ("the same look on Android and iPhone … keep one design, not two"). Plan: flip Android to the redesign, run both suites and an Android phone pass, then delete the classic design and its tests in one commit, so there is never a third state. Where a platform has a native element it uses its own: on iPhone the system context menus with lift and blur and the action sheets, behind one JavaScript component. Android draws its menus instead ("Decided by the owner (2026-11-19)"). Android's native needs for the redesign are with the Android agent:
   - Done: Print (7b4330166), the sync-cycle flag (c095acaec), and the site permissions kept, listed and revoked (91d934628).
   - Done: the Downloads list, with preview, share and delete, refusing anything outside the app's own files in Download/ (76285c87c).
-  - Done: `Glass` with Classic, its shapes, tint and `shown` fade, and the Mac's synced look (045dea52d). It's behind the lab launch flag `ArdiaNativeGlass` until a phone run compares it with today's drawn surfaces.
+  - Done: `Glass` with Classic, its shapes, tint and `shown` fade, and the Mac's synced look (045dea52d). Since 2026-11-23 it is Android's default glass, with a Liquid Glass lens and rim light on Android 13 and later (the owner: "port liquid-dom and add liquid glass for Android as well; switch the native liquid glass placeholder"); see "Liquid Glass on Android". The lab flag `ArdiaNativeGlass` is gone; `ArdiaFlatGlass` turns the lens and rim off and `ArdiaGlassOverPage` refracts the page under the bar, for comparison.
   - Done: the page under the bar, Android's way: the page stops at the bars and the page view paints the bands they cover in the bars' own colours, from iPhone's `obscuredInsets` and a new `obscuredColors` (177dfa936; "Deliberately different").
   - Done: every toolkit piece iPhone's Expo UI screens name, in Compose (ddec03ae1): `SettingsShortcuts`, `SpaceTitle`, `SpacePageDots`, `GlassCircleButton`, `PinnedTiles`, `FullScreenCover` and `FilterTextEditor`, the `spaceBackdrop`, `minListRowHeight` and `navigationBarBackButtonHidden` modifiers, and `spaceMenuSymbol`, `spaceSymbol` and `spaceColor`.
   - Undone: Android's own menus and confirmations behind `MenuTrigger` and `confirmInSheet`, a PopupMenu and an AlertDialog (e42837edd), were removed with the owner's decision of 2026-11-19; Android draws its menus and action sheets.
@@ -2536,7 +2593,7 @@ Not audited at all: Compose's `SyncSetupContent` internals inside onboarding.
   including imported values, win. iPhone keeps its existing default and spring. Android keeps the 30 dp host pill
   mounted but hidden from touch and accessibility while expanded. Collapse and expand run iPhone's fold on
   iPhone's spring (0.26 s, no bounce): the bar shrinks to 62 % into the pill as the pill grows out of it, and the
-  pill's surface fades with it, since Android has no glass to fade. On Android the bar and the pill cast no shadow:
+  pill's surface fades with it: Android's glass is a view the app draws, so it can sit under a fade. On Android the bar and the pill cast no shadow:
   inside the folds' hardware layers a shadow was cut flat at the pill's edges, and without the layers the shadows laid
   a grey strip the bar's height across the page (POCO F4, 2026-11-20). Remove animations snaps to the endpoint. The page's
   direction update no longer waits for a second effect to choose the toolbar state. Tapping the pill expands it;
@@ -3012,7 +3069,7 @@ touch:
 - `ArdiaWithoutPrivatePages` (Android only) makes the page engine act as on a WebView without multi-profile support,
   so Incognito is refused with its "Update Android System WebView for Incognito" toast;
 - motion captures, demo only: `BrowsePagerFreeze <fraction>`, `BrowsePagerScript`, `BrowseLoadFreeze <progress>`;
-- the lab's own flags, such as `ArdiaOneContainerScroll`, `ArdiaOpeningCard`, `ArdiaNativeGlass` and `ArdiaRedesign` (Android draws the redesigned design, for checking the page under the bar before it becomes Android's default).
+- the lab's own flags, such as `ArdiaOneContainerScroll`, `ArdiaOpeningCard`, `ArdiaFlatGlass` (Android's glass as plain frost, without the Liquid Glass lens and rim, for comparing the two), `ArdiaGlassOverPage` (the page bar's glass records and refracts the page, which costs the F4 about three times the janky frames) and `ArdiaRedesign` (Android draws the redesigned design, for checking the page under the bar before it becomes Android's default).
 
 Flags take `--ez` (or any string but false, no and 0); everything else can be `--es`. The list is `LaunchArguments.kt`
 (`packages/phone/android/src/main/java/com/ardia/appmodel`).

@@ -5,7 +5,7 @@ import { useTheme } from "./theme";
 import { ink, opacity } from "./tokens";
 import { useNativeForm } from "./nativeForm";
 
-export type SwitchLook = {
+type SwitchLook = {
   width: number;
   height: number;
   knob: number;

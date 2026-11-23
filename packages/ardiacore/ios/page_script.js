@@ -2426,6 +2426,18 @@
       apply(vaultDispatch, el, [new VaultInputEvent("input", { bubbles: true, composed: true, inputType: "insertReplacementText", data: value })]);
       apply(vaultDispatch, el, [new VaultEvent("change", { bubbles: true, composed: true })]);
     };
+    const vaultPutText = (el, value) => {
+      if (vaultIsTextArea(el)) {
+        apply(vaultTextAreaValue.set, el, [value]);
+      } else {
+        apply(vaultFocusOn, el, []);
+        if (!vaultExecCommand || !apply(vaultExecCommand, document, ["insertText", false, value])) return false;
+      }
+      vaultFilledByUs.add(el);
+      if (vaultIsTextArea(el)) apply(vaultDispatch, el, [new VaultInputEvent("input", { bubbles: true, composed: true, inputType: "insertReplacementText", data: value })]);
+      apply(vaultDispatch, el, [new VaultEvent("change", { bubbles: true, composed: true })]);
+      return true;
+    };
     const vaultSpread = (run, value, steps, touched) => {
       for (let i = 0; i < value.length; i++) {
         vaultAdd(steps, { el: run[i], value: value[i] });
@@ -2602,8 +2614,21 @@
     });
 
     const VAULT_CONTEXT_VALUES = ["username", "password", "newPassword", "otp"];
+    const VAULT_CONTEXT_TYPES = ["text", "email", "tel", "url", "password", "search", ""];
+    const vaultTextAreaProto = vaultProtoOf("HTMLTextAreaElement");
+    const VaultTextAreaElement = vaultTextAreaProto ? globalThis.HTMLTextAreaElement : null;
+    const vaultTextAreaValue = vaultTextAreaProto ? Object.getOwnPropertyDescriptor(vaultTextAreaProto, "value") : null;
+    const vaultTextAreaReadOnly = vaultGetterOf(vaultTextAreaProto, "readOnly");
+    const vaultEditable = vaultGetterOf(vaultProtoOf("HTMLElement"), "isContentEditable");
+    const vaultExecCommand = typeof document.execCommand === "function" ? document.execCommand : null;
+    const vaultIsTextArea = (el) => !!VaultTextAreaElement && !!el && typeof el === "object" && apply(vaultHasInstance, VaultTextAreaElement, [el]);
+    const vaultIsEditableText = (el) => !!el && typeof el === "object" && !vaultIsInput(el) && !vaultIsTextArea(el) && apply(vaultHasInstance, HTMLElement, [el]) && vaultEditable(el) === true;
     let vaultContextField = null;
-    const vaultContextUsable = (el) => vaultUsable(el) && vaultIncludes(VAULT_EDITABLE_TYPES, vaultTypeOf(el));
+    const vaultContextUsable = (el) => {
+      if (vaultIsInput(el)) return vaultUsable(el) && vaultIncludes(VAULT_CONTEXT_TYPES, vaultTypeOf(el));
+      if (vaultIsTextArea(el)) return !vaultTextAreaReadOnly(el) && !vaultHidden(el);
+      return vaultIsEditableText(el) && !vaultHidden(el);
+    };
     const vaultContextGuess = (el, info) => {
       if (info) return info.kind === "newPassword" ? "password" : info.kind;
       if (vaultIsPassword(el)) return "password";
@@ -2614,12 +2639,12 @@
       vaultGuard((e) => {
         if (!e.isTrusted) return;
         const el = vaultTargetOf(e);
-        if (!vaultIsInput(el) || !vaultContextUsable(el)) {
+        if (!vaultContextUsable(el)) {
           vaultContextField = null;
           return send("vaultContext", { field: false });
         }
-        const info = vaultKindOf(el);
-        const maxLength = apply(vaultMaxLengthOf, el, []);
+        const info = vaultIsInput(el) ? vaultKindOf(el) : null;
+        const maxLength = vaultIsInput(el) ? apply(vaultMaxLengthOf, el, []) : 0;
         vaultContextField = el;
         send("vaultContext", {
           field: true,
@@ -2639,9 +2664,15 @@
       const names = vaultFilter(VAULT_CONTEXT_VALUES, (name) => vaultFillable(message[name]));
       if (!names.length) return null;
       const name = names[0];
-      if (names.length > 1 || (name === "newPassword" && vaultIsPassword(el))) return vaultFill(message, el, vaultKindOf(el));
+      const input = vaultIsInput(el);
+      if (input && (names.length > 1 || (name === "newPassword" && vaultIsPassword(el)))) return vaultFill(message, el, vaultKindOf(el));
       const value = message[name];
       const fill = { filled: vaultAdd(vaultList(), name), touched: vaultList(), scope: el, anchor: el, inputs: vaultAdd(vaultList(), el), steps: vaultList(), origin: message.origin };
+      if (!input) {
+        if (!vaultPutText(el, value)) return null;
+        vaultAdd(fill.touched, el);
+        return fill;
+      }
       const run = name === "otp" ? vaultSplitRunOf(el) : null;
       if (run && value.length <= run.length) {
         fill.inputs = run;

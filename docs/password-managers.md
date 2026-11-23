@@ -737,8 +737,10 @@ when the CLI reports locked or signed out.
   `contextMenuModel`); a login whose every choice is unchecked leaves the right-click list, a manager's Unlock row
   stays only while something it unlocks is still offered, and Other Passwords… (an explicit search) always lists every
   login. With Saved Logins and Verification Codes both off, the right-click menu has no Autofill ▸.
-- **Right-click Autofill.** Right-clicking any text input (`contextmenu`, captured per frame by the page script, which
-  keeps that element as the frame's context field and posts `vaultContext`) adds Autofill ▸ to the page's context
+- **Right-click Autofill.** Right-clicking any editable text field (an input of type text, email, tel, url, password,
+  search or none, a textarea, or rich text that is `contentEditable`; never number, date, color, file, range, or a
+  read-only, disabled or hidden field) (`contextmenu`, captured per frame by the page script, which keeps that element as
+  the frame's context field and posts `vaultContext`) adds Autofill ▸ to the page's context
   menu right after the editing commands (after Select All, else at the top): one submenu per matching login (the fill
   menu's ranking, at most 8, titled with the account and the site, and the manager when two share a title) with
   Username, Password and Verification Code (only when `hasTotp` is true), then Unlock Passwords… while a manager is

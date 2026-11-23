@@ -252,6 +252,13 @@ function makePage({ origin = "https://example.com", path = "/login", top = true,
     focus() {
       focused.push(this);
     }
+    get isContentEditable() {
+      for (let n = this; n; n = n.parentNode) {
+        const value = n.attrs && n.attrs.contenteditable;
+        if (value !== undefined) return value !== "false";
+      }
+      return false;
+    }
     click() {
       this.clicks = (this.clicks || 0) + 1;
       this.dispatchEvent(new FakeEvent("click", { bubbles: true, cancelable: true }));
@@ -300,6 +307,24 @@ function makePage({ origin = "https://example.com", path = "/login", top = true,
       return "readonly" in this.attrs;
     }
   }
+  class FakeTextArea extends FakeHTMLElement {
+    constructor(attrs = {}) {
+      super("textarea", attrs);
+      this.raw = attrs.value ?? "";
+    }
+    get value() {
+      return this.raw;
+    }
+    set value(v) {
+      this.raw = String(v);
+    }
+    get disabled() {
+      return "disabled" in this.attrs;
+    }
+    get readOnly() {
+      return "readonly" in this.attrs;
+    }
+  }
   class FakeButton extends FakeHTMLElement {
     constructor(attrs = {}) {
       super("button", attrs);
@@ -323,6 +348,12 @@ function makePage({ origin = "https://example.com", path = "/login", top = true,
     }
     elementFromPoint(x, y) {
       return hits.at ? hits.at(x, y) : null;
+    }
+    execCommand(command, _ui, value) {
+      const target = focused.at(-1);
+      if (command !== "insertText" || !target) return false;
+      target.inserted = (target.inserted || "") + value;
+      return true;
     }
   }
   const document = new FakeDocument();
@@ -396,6 +427,7 @@ function makePage({ origin = "https://example.com", path = "/login", top = true,
     location,
     Date: { now: () => clock.now },
     HTMLInputElement: FakeInput,
+    HTMLTextAreaElement: FakeTextArea,
     HTMLFormElement: FakeForm,
     HTMLElement: FakeHTMLElement,
     Element: FakeElement,
@@ -417,6 +449,7 @@ function makePage({ origin = "https://example.com", path = "/login", top = true,
   };
   const exports = whole ? wholeScript(context, win, location, clock, sent) : runInNewContext(`${kitInMenuMode}\n${vaultBlock}\n;({ vaultClassify, vaultTokens, fieldProviders })`, context);
   const input = (attrs) => new FakeInput(attrs);
+  const textarea = (attrs) => new FakeTextArea(attrs);
   const el = (tag, attrs, ...kids) => (tag === "form" ? new FakeForm(attrs) : new FakeHTMLElement(tag, attrs)).append(...kids);
   const pathOf = (target) => {
     const path = [];
@@ -440,7 +473,7 @@ function makePage({ origin = "https://example.com", path = "/login", top = true,
     fire(field, "input", extra);
   };
   const of = (kind) => sent.filter((m) => m.kind === kind).map((m) => m.data);
-  return { context, styleReads, ...exports, KeyboardEvent: FakeKeyboardEvent, hits, FakeInput, sent, of, frames, runFrames, advance, clock, location, focused, document, html, body, input, el, fire, type, handlers, FakeButton, FakeEvent, win, selection };
+  return { context, styleReads, ...exports, KeyboardEvent: FakeKeyboardEvent, hits, FakeInput, sent, of, frames, runFrames, advance, clock, location, focused, document, html, body, input, textarea, el, fire, type, handlers, FakeButton, FakeEvent, win, selection };
 }
 
 const ORIGIN = "https://example.com";
@@ -1860,6 +1893,46 @@ test("right-clicking a plain input that isn't a login field reports it and a con
   page.handlers.vaultFill({ id: "c2", origin: "https://example.com", password: fixtureSecret("secret"), context: true });
   assert.equal(nickname.value, fixtureSecret("secret"), "the password goes into the right-clicked field too");
   assert.equal(city.value, "");
+});
+
+test("right-click Autofill reaches every editable text field, textareas and rich text included, and skips fields where text makes no sense", () => {
+  const page = makePage({ path: "/compose" });
+  const notes = page.textarea({ name: "notes" });
+  const editor = page.el("div", { contenteditable: "true" });
+  const paragraph = page.el("p", { text: "Hello" });
+  editor.append(paragraph);
+  const search = page.input({ type: "search", name: "q" });
+  const blocked = [
+    page.input({ type: "number", name: "age" }),
+    page.input({ type: "date", name: "born" }),
+    page.input({ type: "color", name: "tint" }),
+    page.input({ type: "range", name: "volume" }),
+    page.input({ type: "file", name: "upload" }),
+    page.input({ type: "text", name: "locked", readonly: "" }),
+    page.input({ type: "text", name: "off", disabled: "" }),
+    page.textarea({ name: "frozen", readonly: "" }),
+    page.el("div", { contenteditable: "false" }),
+  ];
+  page.body.append(page.el("form", {}, notes, editor, search, ...blocked));
+  for (const target of [notes, paragraph, search]) {
+    page.fire(target, "contextmenu");
+    assert.equal(page.of("vaultContext").at(-1).field, true, `${target.tag} gets the Autofill submenu`);
+    assert.equal(page.of("vaultContext").at(-1).kind, null, "a plain field isn't a login field");
+  }
+  for (const target of blocked) {
+    page.fire(target, "contextmenu");
+    assert.deepEqual(page.of("vaultContext").at(-1), { field: false }, `${target.attrs.type || target.tag} ${target.attrs.name || ""} gets none`);
+  }
+  page.fire(notes, "contextmenu");
+  page.handlers.vaultFill({ id: "t1", origin: ORIGIN, username: "octo", context: true });
+  assert.equal(notes.value, "octo", "a textarea takes the value like an input");
+  assert.deepEqual(notes.dispatched, ["input", "change"]);
+  page.fire(paragraph, "contextmenu");
+  page.handlers.vaultFill({ id: "t2", origin: ORIGIN, username: "octo", context: true });
+  assert.equal(paragraph.inserted, "octo", "rich text gets it typed in at the caret");
+  page.handlers.vaultFill({ id: "t3", origin: "https://evil.example", username: "octo", context: true });
+  assert.equal(paragraph.inserted, "octo", "the origin check still holds");
+  assert.deepEqual(page.of("vaultFilled").map((f) => f.filled), [["username"], ["username"], []]);
 });
 
 test("a right-click on another input doesn't move where the open menu's fill lands", () => {

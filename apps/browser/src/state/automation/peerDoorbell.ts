@@ -58,7 +58,7 @@ const OUTCOME_FIELDS: Partial<Record<ControlPeerOutcome, DoorbellOutcome>> = {
   unsaved: "unsaved",
 };
 
-export type DoorbellDeps = {
+type DoorbellDeps = {
   choose: (options: ChooseOptions) => Promise<{ choice: number; unshown?: boolean }>;
   answer: (ask: number, outcome: ControlPeerAnswer) => Promise<boolean>;
   dismiss: (key: string) => Promise<void>;

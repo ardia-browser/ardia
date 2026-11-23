@@ -51,7 +51,7 @@ export const openCalendarPrivacy = () => void openExternalURL("x-apple.systempre
 
 export const calendarBlocked = (access: CalendarData["access"]) => access === "denied" || access === "restricted" || access === "writeOnly";
 
-export function calendarRequestFailure(access: CalendarAuthorization, request: Pick<CalendarAccessRequest, "error" | "responsible"> | null): string | null {
+function calendarRequestFailure(access: CalendarAuthorization, request: Pick<CalendarAccessRequest, "error" | "responsible"> | null): string | null {
   if (access === "fullAccess") return null;
   if (access === "restricted") return `Calendar access is restricted on this Mac, by Screen Time or your organization. If you can change it, allow Ardia in ${CALENDARS_PRIVACY}.`;
   if (access === "writeOnly") return `Ardia can only add events to your calendars. Choose Full Access for Ardia in ${CALENDARS_PRIVACY}.`;

@@ -4,7 +4,7 @@ import type { ProfileTheme, ThemeColor, ThemeLook, ThemeMode, ThemeTexture } fro
 
 type Json = Record<string, unknown>;
 
-export const MAX_ARC_THEME_JSON = 64 * 1024;
+const MAX_ARC_THEME_JSON = 64 * 1024;
 
 const obj = (v: unknown): Json | null => (v && typeof v === "object" && !Array.isArray(v) ? (v as Json) : null);
 const payload = (v: unknown): unknown => obj(v)?._0;

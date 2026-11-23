@@ -8,7 +8,7 @@ import { OpError } from "./workspaceTargets";
 
 const MAX_DEPTH = 64;
 export const TREE_MAX_ITEMS = 5000;
-export const TREE_MAX_BYTES = 1024 * 1024;
+const TREE_MAX_BYTES = 1024 * 1024;
 
 type TreeBudget = { items: number; bytes: number; truncated: boolean };
 

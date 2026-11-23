@@ -3,7 +3,7 @@ import { newLinkId, weblocText } from "../../lib/webloc";
 import { MANIFEST, manifestText, nameOfFile, uniqueFileName, type BaseEntry, type Dropped, type TargetEntry, type TargetLevel } from "./tree";
 import { weave } from "./merge";
 
-export type Planned = { ops: SharedFolderOp[]; base: BaseEntry[] };
+type Planned = { ops: SharedFolderOp[]; base: BaseEntry[] };
 
 type Pass = { identityOnly: boolean; needsIdentity: boolean; ids: Map<string, string>; seen: Set<string> };
 

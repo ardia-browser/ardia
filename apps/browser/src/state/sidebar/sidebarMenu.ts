@@ -19,7 +19,7 @@ import { minimalismIn } from "../windows/layout";
 
 const store = () => useBrowser.getState();
 
-export const BROWSER_LAYOUT_MENU_ID = "browserLayout";
+const BROWSER_LAYOUT_MENU_ID = "browserLayout";
 
 export function browserLayoutItems(s: BrowserState, windowId: string): MenuItem[] {
   const w = s.windows[windowId];

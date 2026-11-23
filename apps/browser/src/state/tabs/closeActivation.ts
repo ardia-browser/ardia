@@ -16,10 +16,10 @@ import { stripEntries, type StripMember } from "./stripEntries";
 import { withSharedFamily } from "../pins/pinShare";
 import { keptWithTopApp, successorKey, type CloseOptions, type Successor } from "./tabs";
 
-export type VisibleSection = "topApps" | "pinned" | "regular";
-export type VisibleRow = { ids: string[]; section: VisibleSection };
+type VisibleSection = "topApps" | "pinned" | "regular";
+type VisibleRow = { ids: string[]; section: VisibleSection };
 
-export const activatesTabAbove = (s: Pick<BrowserState, "settings">) => s.settings.afterClosingTab === "tabAbove";
+const activatesTabAbove = (s: Pick<BrowserState, "settings">) => s.settings.afterClosingTab === "tabAbove";
 
 function entryRows(s: BrowserState, windowId: string, profileId: string, entry: string): string[][] {
   const { kind, id } = parseEntry(entry);
@@ -109,7 +109,7 @@ function successorFor(s: BrowserState, windowId: string, profileId: string, acti
   return { id: latest(s, rows.flatMap((row) => row.ids).filter(fallback)) ?? null, above: false };
 }
 
-export function pickSuccessors(s: BrowserState, ids: string[], keepTopApps = s.settings.keepTopAppsRunning): Map<string, Successor> {
+function pickSuccessors(s: BrowserState, ids: string[], keepTopApps = s.settings.keepTopAppsRunning): Map<string, Successor> {
   const out = new Map<string, Successor>();
   if (!activatesTabAbove(s)) return out;
   const requested = ids.filter((id) => s.tabs[id]);

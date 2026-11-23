@@ -39,7 +39,7 @@ import { closedWindowOf, withoutLastWindowMarks } from "./closedWindow";
 import type { Drop } from "../drag/drops";
 import { droppedInProfile, intoProfile } from "./profileMoves";
 
-export type CreateWindowOptions = {
+type CreateWindowOptions = {
   profileId?: string;
   kind?: WindowKind;
   url?: string;
@@ -54,7 +54,7 @@ export type CreateWindowOptions = {
 
 export type CloseWindowOptions = { keepsLastWindow?: boolean };
 
-export type MoveOptions = { background?: boolean };
+type MoveOptions = { background?: boolean };
 
 export type WindowsSlice = {
   windows: Record<string, BrowserWindow>;
@@ -91,7 +91,7 @@ function lastProfileAfterClosing(s: BrowserState, id: string): string | null {
   return linkProfileOf(s, next ? s.windows[next] : undefined) ?? s.ui.lastProfileId;
 }
 
-export function moveTabsInto(s: BrowserState, ids: string[], targetId: string): BrowserState {
+function moveTabsInto(s: BrowserState, ids: string[], targetId: string): BrowserState {
   const target = s.windows[targetId];
   if (!target || isSmallWindow(target)) return s;
   const moving = ids

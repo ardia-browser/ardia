@@ -14,11 +14,11 @@ const NOTHING_REMOVED: Removed = () => new Set();
 
 export type ProfileRecord = { n: string; c: Profile["color"]; i: string | null; d?: true; o?: true; th?: ProfileTheme | null };
 
-export type ProfileThemeRecord = { t: ProfileTheme } | { preset: true };
+type ProfileThemeRecord = { t: ProfileTheme } | { preset: true };
 
-export type ThemeAngleRecord = { a?: number; d?: number };
+type ThemeAngleRecord = { a?: number; d?: number };
 
-export const themeAngleKey = (syncId: string) => `${PROFILE_THEME}${syncId}:angle`;
+const themeAngleKey = (syncId: string) => `${PROFILE_THEME}${syncId}:angle`;
 
 function withoutAngles({ angle: _angle, dark, ...theme }: ProfileTheme): ProfileTheme {
   if (!dark) return theme;
@@ -41,7 +41,7 @@ export function themeFromRecord(record: unknown, angles?: unknown): Pick<Profile
   return { theme: sanitizeTheme({ ...look, angle: a, ...(look.dark ? { dark: { ...look.dark, angle: d } } : {}) }) };
 }
 
-export function legacyThemeOf(record: ProfileRecord): Pick<Profile, "theme"> | null {
+function legacyThemeOf(record: ProfileRecord): Pick<Profile, "theme"> | null {
   const theme = record.th ? sanitizeTheme(record.th) : null;
   return theme ? { theme } : null;
 }

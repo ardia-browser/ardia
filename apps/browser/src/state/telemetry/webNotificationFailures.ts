@@ -5,7 +5,7 @@ import { errorType } from "./sanitize";
 
 export const WEB_NOTIFICATION_FAILED = "web_notification_failed";
 
-export type SentWebNotification = {
+type SentWebNotification = {
   titleLength: number;
   bodyLength: number;
   iconRequested: boolean;

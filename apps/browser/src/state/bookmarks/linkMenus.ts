@@ -7,7 +7,7 @@ import { splitViewAvailable } from "../splits/splits";
 
 export type Link = { url: string; title?: string | null };
 
-export const OPEN_SYMBOLS = { tab: "plus.app", window: "macwindow.badge.plus", incognito: "eyeglasses", split: "rectangle.split.2x1" } as const;
+const OPEN_SYMBOLS = { tab: "plus.app", window: "macwindow.badge.plus", incognito: "eyeglasses", split: "rectangle.split.2x1" } as const;
 
 export function openLinkItems({ split = true }: { split?: boolean } = {}): MenuItem[] {
   return [

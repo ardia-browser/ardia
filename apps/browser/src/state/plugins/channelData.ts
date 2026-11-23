@@ -24,9 +24,9 @@ import { deletePluginSecret, getPluginSecret, setPluginSecret, type SecretOutcom
 import { storageDelete, storageGet, storageKeys, storageSet, type StorageOutcome } from "./storage";
 
 export const FETCH_LIMITS = { headers: 50, headerBytes: 8 * 1024, bodyBytes: 512 * 1024, timeoutMs: [1000, 60_000], defaultTimeoutMs: 30_000 } as const;
-export const PAGE_TEXT_LIMIT = 200_000;
-export const READ_PAGE_DEADLINE_MS = 3000;
-export const MAX_REPLY_BYTES = 960 * 1024;
+const PAGE_TEXT_LIMIT = 200_000;
+const READ_PAGE_DEADLINE_MS = 3000;
+const MAX_REPLY_BYTES = 960 * 1024;
 
 const METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
 const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,64}$/;

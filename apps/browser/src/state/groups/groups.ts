@@ -16,7 +16,7 @@ import type { CloseOptions } from "../tabs/tabs";
 
 export { ancestorIds, canNest, commonGroup, depthOf, depthsIn, descendantIds, groupPath, innermostGroupOf, nestGroups, reparent, rootOf, rootsIn, withParent } from "./groupNesting";
 
-export type GroupTabsOptions = { pinned?: boolean; name?: string };
+type GroupTabsOptions = { pinned?: boolean; name?: string };
 
 export type GroupsSlice = {
   groups: Record<string, TabGroup>;

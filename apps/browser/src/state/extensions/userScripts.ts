@@ -17,12 +17,12 @@ import { consentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
 import { programControlOn } from "../app/programControlSetting";
 
-export type ScriptsOutcome = { ok: true } | { disabled: true } | { removed: true } | { error: string };
+type ScriptsOutcome = { ok: true } | { disabled: true } | { removed: true } | { error: string };
 type Status = { generation: number; profiles: Record<string, ScriptsOutcome> };
 
 const enabled = () => programControlOn(useBrowser.getState());
 
-export function scriptsTargets(s: Pick<BrowserState, "profileOrder" | "profiles">): Map<string, string[]> {
+function scriptsTargets(s: Pick<BrowserState, "profileOrder" | "profiles">): Map<string, string[]> {
   const targets = new Map<string, string[]>();
   const taken = new Map<string, number>();
   for (const id of s.profileOrder) {

@@ -324,7 +324,7 @@ export function startBookmarks() {
   };
 }
 
-export function editedUnopened(before: Bookmarks, s: Pick<BrowserState, "bookmarks" | "profiles">): string[] {
+function editedUnopened(before: Bookmarks, s: Pick<BrowserState, "bookmarks" | "profiles">): string[] {
   const unopened = engineProfiles(s).filter((engine) => !profileOpened(engine));
   if (!unopened.length || before.nodes === s.bookmarks.nodes) return [];
   const byRoot = new Map<string, string>();

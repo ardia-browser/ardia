@@ -19,7 +19,7 @@ import { expect, now, profileArg, tabOf, windowOf, windowOrFocused } from "./soc
 import { openableUrl } from "./workspaceOps";
 import { OpError } from "./workspaceTargets";
 
-export function tabRow(s: BrowserState, tabId: string) {
+function tabRow(s: BrowserState, tabId: string) {
   const t = s.tabs[tabId]!;
   const live = liveOf(tabId);
   return {

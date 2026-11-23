@@ -82,5 +82,4 @@ export const oneOf = (values: readonly string[], description: string): JsonSchem
 export const WINDOW = id("A window id from windows");
 export const TAB = id("A tab id from windows or tabs.list");
 export const PROFILE = id("A profile id from profiles.list; the default profile when left out");
-export const NO_PARAMS = obj({});
 export const PAGE = { limit: int("At most this many items (default 100)", 1, 1000), offset: int("Skip this many items first (default 0)", 0) };

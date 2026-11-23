@@ -2,7 +2,7 @@ import { externalAppCounts } from "../../platform/externalAppCounts";
 
 const counts = { allowed: 0, allowedAlways: 0, declined: 0 };
 
-export type ExternalAppOutcome = keyof typeof counts;
+type ExternalAppOutcome = keyof typeof counts;
 
 export const noteExternalApp = (outcome: ExternalAppOutcome) => void (counts[outcome] += 1);
 

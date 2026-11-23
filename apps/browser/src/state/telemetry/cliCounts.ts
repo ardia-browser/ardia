@@ -2,16 +2,16 @@ import { onConsentPeriodChange, stillValid, type ConsentToken } from "./choice";
 import { consentOrNow, countFor } from "./countFor";
 import { SOCKET_FAMILIES, type SocketFamily } from "../automation/socketCatalog";
 
-export const TOKEN_COMMAND_DOMAINS = ["accessibility", "browser", "dom", "emulation", "fetch", "input", "network", "page", "runtime", "storage", "target", "other"] as const;
-export type TokenCommandDomain = (typeof TOKEN_COMMAND_DOMAINS)[number];
+const TOKEN_COMMAND_DOMAINS = ["accessibility", "browser", "dom", "emulation", "fetch", "input", "network", "page", "runtime", "storage", "target", "other"] as const;
+type TokenCommandDomain = (typeof TOKEN_COMMAND_DOMAINS)[number];
 type TokenCommandTotals = Partial<Record<TokenCommandDomain, number>>;
 
 export type CliInstallReason = "auto" | "settings" | "upgrade";
 
-export const DOORBELL_OUTCOMES = ["once", "half_hour", "always", "deny", "unshown", "timeout", "left", "stopped", "unsaved"] as const;
+const DOORBELL_OUTCOMES = ["once", "half_hour", "always", "deny", "unshown", "timeout", "left", "stopped", "unsaved"] as const;
 export type DoorbellOutcome = (typeof DOORBELL_OUTCOMES)[number];
 
-export const DEVTOOLS_ENDPOINT_OUTCOMES = ["given", "control_off", "unsupported", "server_off", "unreadable", "stale", "left"] as const;
+const DEVTOOLS_ENDPOINT_OUTCOMES = ["given", "control_off", "unsupported", "server_off", "unreadable", "stale", "left"] as const;
 export type DevtoolsEndpointOutcome = (typeof DEVTOOLS_ENDPOINT_OUTCOMES)[number];
 
 const NONE = {

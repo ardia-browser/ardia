@@ -7,7 +7,7 @@ import { startPromptEvents } from "./socketPrompts";
 import { startSurfaceEvents } from "./socketSurfaces";
 import type { Subscription } from "./automationMethods";
 
-export type FeedNeeds = { events: Set<AutomationEventName>; tabIdle: Set<number>; userIdle: Set<number> };
+type FeedNeeds = { events: Set<AutomationEventName>; tabIdle: Set<number>; userIdle: Set<number> };
 
 type Family = { key: string; stop: () => void };
 

@@ -10,7 +10,6 @@ import type { BrowserState } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import { peekTabId } from "../peek/peek";
 import { splitOf, splitTabIdsOf } from "../splits/splits";
-import { hostOf } from "@ardia/core";
 import { capture } from "../telemetry/client";
 import { nativeConsent } from "../telemetry/nativeConsent";
 import { noteMediaPositionReport, noteNowPlayingLoopRestart } from "../telemetry/mediaCardCounts";
@@ -185,9 +184,9 @@ export function resumeCommands(before: Session | undefined, after: NowPlaying | 
 
 export const hasTrackControls = (session: Session) => session.actions.includes("nexttrack") || session.actions.includes("previoustrack");
 
-export const SKIP_SECONDS = 15;
+const SKIP_SECONDS = 15;
 
-export function skipBy(tabId: string, session: Session, seconds: number) {
+function skipBy(tabId: string, session: Session, seconds: number) {
   const now = Date.now();
   const position = Math.max(0, Math.min(session.duration ?? Infinity, positionOf(session, now) + seconds));
   applyNowPlaying(tabId, { ...session, position, timestamp: now });
@@ -209,7 +208,7 @@ export const transportIcons = (session: Session) =>
     ? { back: "backward.end.fill", ahead: "forward.end.fill", backTip: "Play Previous Track", aheadTip: "Play Next Track" }
     : { back: `gobackward.${SKIP_SECONDS}`, ahead: `goforward.${SKIP_SECONDS}`, backTip: `Skip back ${SKIP_SECONDS} seconds`, aheadTip: `Skip ahead ${SKIP_SECONDS} seconds` };
 
-export function isTabShown(s: BrowserState, tabId: string, profileId?: string): boolean {
+function isTabShown(s: BrowserState, tabId: string, profileId?: string): boolean {
   const windowId = s.tabs[tabId]?.windowId;
   if (!windowId) return false;
   const active = activeTabId(s, windowId, profileId);

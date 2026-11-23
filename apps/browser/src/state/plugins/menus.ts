@@ -6,12 +6,12 @@ import type { ConsentToken } from "../telemetry/choice";
 import { activeManifest, activeNames, currentPlugins, type PluginsStore } from "./store";
 import { runPluginCommand, type CommandContext } from "./commands";
 
-export const PLUGIN_MENU_PREFIX = "plugin-menu:";
-export const SUBMENU_AFTER = 2;
+const PLUGIN_MENU_PREFIX = "plugin-menu:";
+const SUBMENU_AFTER = 2;
 
 export type PluginMenuContext = { when: WhenContext; data?: CommandContext };
 
-export const pluginMenuChoice = (slot: MenuSlot, plugin: string, command: string) => `${PLUGIN_MENU_PREFIX}${slot}/${plugin}/${command}`;
+const pluginMenuChoice = (slot: MenuSlot, plugin: string, command: string) => `${PLUGIN_MENU_PREFIX}${slot}/${plugin}/${command}`;
 export const isPluginMenuChoice = (id: string | null | undefined): id is string => typeof id === "string" && id.startsWith(PLUGIN_MENU_PREFIX);
 
 export function pluginMenuItems(slot: MenuSlot, context: PluginMenuContext, s: Pick<PluginsStore, "listings" | "records" | "order"> = currentPlugins()): MenuItem[] {
@@ -29,7 +29,7 @@ export function pluginMenuItems(slot: MenuSlot, context: PluginMenuContext, s: P
   return out;
 }
 
-export function parsePluginMenuChoice(choice: string): { slot: MenuSlot; plugin: string; command: string } | null {
+function parsePluginMenuChoice(choice: string): { slot: MenuSlot; plugin: string; command: string } | null {
   if (!isPluginMenuChoice(choice)) return null;
   const [slot, plugin, command, ...extra] = choice.slice(PLUGIN_MENU_PREFIX.length).split("/");
   return slot && plugin && command && !extra.length ? { slot: slot as MenuSlot, plugin, command } : null;

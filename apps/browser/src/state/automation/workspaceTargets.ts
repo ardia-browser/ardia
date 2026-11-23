@@ -193,7 +193,7 @@ export function besideAnchor(asked: Anchor, after: boolean, moving: ReadonlySet<
   return { placement, windowId: anchor.windowId, profileId: anchor.profileId, anchor, after };
 }
 
-export function insideGroup(s: BrowserState, anchor: Anchor, group: TabGroup): boolean {
+function insideGroup(s: BrowserState, anchor: Anchor, group: TabGroup): boolean {
   if (anchor.kind === "tab") return group.tabIds.includes(anchor.id);
   return anchor.id !== group.id && ancestorIds(s.groups, anchor.id).includes(group.id);
 }

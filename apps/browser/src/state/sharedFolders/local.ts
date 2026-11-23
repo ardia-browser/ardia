@@ -16,7 +16,7 @@ export type LocalFolder = {
 
 export const linkUrl = (t: Tab) => t.pinnedUrl || t.url;
 
-export const linkName = (t: Tab, known: string | undefined) => t.customTitle?.trim() || known || t.title.trim() || displayHostOf(linkUrl(t)) || "Link";
+const linkName = (t: Tab, known: string | undefined) => t.customTitle?.trim() || known || t.title.trim() || displayHostOf(linkUrl(t)) || "Link";
 
 export const groupName = (g: TabGroup) => g.name.trim() || "Folder";
 

@@ -2,7 +2,7 @@ import { appUrlOrigin, displayHost } from "@ardia/core";
 import { singleLine } from "../../lib/singleLine";
 import type { BrowserState } from "./store";
 import { DEFAULT_PROFILE_ID } from "../settings/settings";
-import type { BrowserWindow, Navigation, Profile, Tab, TabGroup, TabLive, TabPin, TabSnapshot } from "./types";
+import type { BrowserWindow, Navigation, Profile, Tab, TabLive, TabPin, TabSnapshot } from "./types";
 import { pinnedGroupMembers } from "./structure";
 
 
@@ -95,7 +95,7 @@ export const samePin = (a: TabPin | null | undefined, b: TabPin | null | undefin
 export const pinnedSectionTitle = (s: BrowserState, tab: Pick<Tab, "profileId"> | undefined) => `Pinned in ${s.profiles[tab?.profileId ?? ""]?.name ?? "Profile"}`;
 export const togglePinTitle = (tab: Pick<Tab, "pin"> | undefined) => (isPinnedRow(tab) ? "Unpin" : tab?.pin ? "Unpin from Top Apps" : "Move to Top Apps");
 
-export type PinSection = "tile" | "row" | "none";
+type PinSection = "tile" | "row" | "none";
 export const pinSection = (t: Pick<Tab, "pin"> | undefined): PinSection => t?.pin?.as ?? "none";
 
 export function inPinnedContainer(s: Pick<BrowserState, "tabs" | "groups">, id: string): boolean {

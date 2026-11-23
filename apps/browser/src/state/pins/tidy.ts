@@ -13,7 +13,7 @@ import { samePage } from "../../lib/url";
 import { isRegularWindow } from "../windows/small";
 import { hiddenEmptyCard } from "../omnibox/newTabBarPolicy";
 
-export type TidyPlan = {
+type TidyPlan = {
   closes: { tabId: string; keeperId: string }[];
   files: { tabId: string; groupId: string }[];
   newGroups: { tabIds: string[]; name: string }[];
@@ -183,7 +183,7 @@ export function untidying(s: BrowserState, tidied: Tidied): BrowserState {
   return next;
 }
 
-export type PinStates = Record<string, TabPin["as"] | null>;
+type PinStates = Record<string, TabPin["as"] | null>;
 
 export const pinStatesOf = (s: Pick<BrowserState, "tabs">, tidied: Tidied): PinStates =>
   Object.fromEntries(Object.keys(tidied.homes).map((id) => [id, s.tabs[id]?.pin?.as ?? null]));

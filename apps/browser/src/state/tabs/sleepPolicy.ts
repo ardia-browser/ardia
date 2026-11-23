@@ -1,7 +1,7 @@
 import { ENGINE_KEPT_CODES } from "./engineKeptCodes";
 
 export type MemoryPressure = "normal" | "warning" | "critical";
-export type SleepMode = "moderate" | "balanced" | "maximum";
+type SleepMode = "moderate" | "balanced" | "maximum";
 
 export type SleepRules = { tabs: number; hiddenMs: number; pressure: MemoryPressure; perTick: number; everyMs: number };
 
@@ -42,7 +42,7 @@ export const MINUTE = 60_000;
 export const RECENTLY_SEEN_MS = 10 * MINUTE;
 export const RECENTLY_AUDIBLE_MS = MINUTE;
 export const FREQUENT_SWITCHES = 15;
-export const SLEEPS_PER_TICK = 4;
+const SLEEPS_PER_TICK = 4;
 
 const GIB = 2 ** 30;
 const MODES: Record<SleepMode, { floor: number; perGib: number; hiddenMs: number }> = {
@@ -66,7 +66,7 @@ export function sleepRules(settings: { memorySaver: boolean; memorySaverMode: st
   return { tabs: Math.max(mode.floor, Math.round((sys.physicalMemory / GIB) * mode.perGib)), hiddenMs: mode.hiddenMs, pressure, perTick: SLEEPS_PER_TICK, everyMs: MINUTE };
 }
 
-export const warmViewCap = (pressure: MemoryPressure) => WARM_VIEWS[pressure];
+const warmViewCap = (pressure: MemoryPressure) => WARM_VIEWS[pressure];
 
 export function warmOrder(neighbours: readonly string[], successor: string | undefined): string[] {
   return successor && !neighbours.includes(successor) ? [successor, ...neighbours] : [...neighbours];
@@ -82,7 +82,7 @@ export function capWarmPanes(order: readonly string[], panesOf: (id: string) => 
   return panes.length > cap ? panes.slice(0, cap) : panes;
 }
 
-export const seenWindowMs = (rules: Pick<SleepRules, "hiddenMs" | "pressure">) => (rules.pressure === "normal" ? Math.max(rules.hiddenMs, RECENTLY_SEEN_MS) : rules.hiddenMs);
+const seenWindowMs = (rules: Pick<SleepRules, "hiddenMs" | "pressure">) => (rules.pressure === "normal" ? Math.max(rules.hiddenMs, RECENTLY_SEEN_MS) : rules.hiddenMs);
 
 export function sleepVeto(tab: TabSleepFacts, now: number, rules: Pick<SleepRules, "hiddenMs" | "pressure">): SleepVeto | null {
   if (!tab.sleepable) return "notSleepable";

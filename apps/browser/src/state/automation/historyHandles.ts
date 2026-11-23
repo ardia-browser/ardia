@@ -14,9 +14,9 @@ function randomHandle(taken: Map<string, HistoryPage>): string {
   }
 }
 
-export type HandleScope = { connection: number; serving: () => boolean };
+type HandleScope = { connection: number; serving: () => boolean };
 
-export class AbandonedRequest extends Error {}
+class AbandonedRequest extends Error {}
 
 export function historyHandle(scope: HandleScope, page: HistoryPage): string {
   if (!scope.serving()) throw new AbandonedRequest("The connection closed or control went off before the search finished, so it was dropped.");

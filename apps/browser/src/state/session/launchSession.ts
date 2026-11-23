@@ -27,7 +27,7 @@ export const DOWNLOADS_VERSION = 3;
 const DOWNLOADS_MIGRATIONS: Migrations = { 0: unchanged, 1: unchanged, 2: downloadsWithStagingPathOnly };
 
 export type LaunchOverrides = { restoreSession?: boolean };
-export type LoadedSession = HydrateData & { windowsAgainstAutoHideTabs: number };
+type LoadedSession = HydrateData & { windowsAgainstAutoHideTabs: number };
 
 type SavedDownloads = { list: Download[]; staged: { id: string; staging: NonNullable<Download["staging"]> }[]; droppedPrivate: boolean; rejected: boolean };
 const NO_DOWNLOADS: SavedDownloads = { list: [], staged: [], droppedPrivate: false, rejected: false };

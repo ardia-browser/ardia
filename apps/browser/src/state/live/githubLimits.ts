@@ -1,14 +1,14 @@
-export const RESERVE_RATIO = 0.1;
+const RESERVE_RATIO = 0.1;
 export const FALLBACK_COOLDOWN_MS = 30_000;
-export const MAX_FALLBACK_COOLDOWN_MS = 15 * 60_000;
-export const GITHUB_CONCURRENCY = 4;
+const MAX_FALLBACK_COOLDOWN_MS = 15 * 60_000;
+const GITHUB_CONCURRENCY = 4;
 
 export type HeaderReader = { get(name: string): string | null };
 
 type Quota = { limit: number; remaining: number; resetAt: number };
 type Pause = { attempt: number; retryAt: number };
 
-export function quotaFromHeaders(headers: HeaderReader): Quota | null {
+function quotaFromHeaders(headers: HeaderReader): Quota | null {
   const limit = Number(headers.get("x-ratelimit-limit") ?? NaN);
   const remaining = Number(headers.get("x-ratelimit-remaining") ?? NaN);
   const reset = Number(headers.get("x-ratelimit-reset") ?? NaN);
@@ -27,7 +27,7 @@ export function retryAtFromHeaders(headers: HeaderReader | null, now: number): n
   return Number.isFinite(reset) && reset > now ? reset : undefined;
 }
 
-export const fallbackCooldownMs = (attempt: number) => Math.min(FALLBACK_COOLDOWN_MS * 2 ** Math.max(0, attempt - 1), MAX_FALLBACK_COOLDOWN_MS);
+const fallbackCooldownMs = (attempt: number) => Math.min(FALLBACK_COOLDOWN_MS * 2 ** Math.max(0, attempt - 1), MAX_FALLBACK_COOLDOWN_MS);
 
 export function namesRateLimit(text: unknown): boolean {
   return typeof text === "string" && /rate limit|abuse detection mechanism/i.test(text);

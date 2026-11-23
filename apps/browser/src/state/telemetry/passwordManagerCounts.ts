@@ -3,9 +3,9 @@ import type { PasswordManagerKind } from "../site/passwordManagerChoice";
 import type { ConsentToken } from "./choice";
 import { consentOrNow, countFor } from "./countFor";
 
-export type PanelOpener = "badge" | "menu";
+type PanelOpener = "badge" | "menu";
 type PanelRefusal = NonNullable<FieldProviderOpened["reason"]>;
-export type VerificationCodeStep = "offered" | "accepted" | "failed";
+type VerificationCodeStep = "offered" | "accepted" | "failed";
 
 const PANEL_FIELDS: Record<PanelOpener, [shown: string, refused: string]> = {
   badge: ["password_manager_panel_opens_badge", "password_manager_panel_refused_badge"],
@@ -36,7 +36,7 @@ const RESTORE_FIELDS: Record<"restored" | "failed", string> = {
   failed: "password_manager_offer_to_save_restore_failures",
 };
 
-export type PanelHintStep = "shown" | "dismissed";
+type PanelHintStep = "shown" | "dismissed";
 const HINT_FIELDS: Record<PanelHintStep, string> = {
   shown: "password_manager_panel_hints_shown",
   dismissed: "password_manager_panel_hints_dismissed",

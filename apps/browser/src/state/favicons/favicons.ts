@@ -170,7 +170,7 @@ function remember(key: string, page: string, src: string, uri: string) {
   });
 }
 
-export type KnownFavicon = { page: string; icon: string; png: string };
+type KnownFavicon = { page: string; icon: string; png: string };
 
 const PNG_DATA_URI = "data:image/png;base64,";
 

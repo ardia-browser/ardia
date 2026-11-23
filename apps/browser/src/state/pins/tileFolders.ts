@@ -5,7 +5,7 @@ import { placing } from "./placing";
 import { sameTopApp } from "./topApps";
 import type { ParkedPins, Tab, TileFolder } from "../browser/types";
 
-export const FOLDER_CELL = "folder:";
+const FOLDER_CELL = "folder:";
 export const folderCell = (folderId: string) => `${FOLDER_CELL}${folderId}`;
 export const folderIdOfCell = (key: string): string | null => (key.startsWith(FOLDER_CELL) ? key.slice(FOLDER_CELL.length) : null);
 

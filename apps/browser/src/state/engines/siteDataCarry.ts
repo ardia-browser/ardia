@@ -51,7 +51,7 @@ export function liveTabs(s = store()): Live[] {
   return out;
 }
 
-export const openIn = (profile: string, site: string, engine: PageEngine) => liveTabs().some((l) => l.profile === profile && l.site === site && l.engine === engine);
+const openIn = (profile: string, site: string, engine: PageEngine) => liveTabs().some((l) => l.profile === profile && l.site === site && l.engine === engine);
 
 const blockCache = new Map<string, { at: number; blocked: boolean }>();
 let settingsEpoch = 0;
@@ -77,7 +77,7 @@ async function cookiesBlocked(profile: string, origin: string): Promise<boolean>
   return blocked;
 }
 
-export type CarryOptions = { origin?: string | null; stillWanted?: () => boolean; urgent?: boolean; consent: ConsentToken | null };
+type CarryOptions = { origin?: string | null; stillWanted?: () => boolean; urgent?: boolean; consent: ConsentToken | null };
 
 type UnderWay = { carry: Promise<SiteDataCarry>; wanted: () => boolean; urgent: boolean };
 

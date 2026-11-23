@@ -17,7 +17,7 @@ export type LiveSource = {
   warning?(): LiveError | null;
 };
 
-export type FetchOptions = { interactive?: boolean };
+type FetchOptions = { interactive?: boolean };
 
 async function secret(source: LiveSourceId): Promise<LiveToken> {
   const value = await getSecret(source);

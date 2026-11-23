@@ -18,12 +18,12 @@ import { keepAsideGate, rollingBackups, writeGate, type WriteGate } from "./sess
 import { consentToken } from "../telemetry/consentPeriod";
 import { isRegularWindow } from "../windows/small";
 import { savedPage } from "./savedShapes";
-import { SESSION_MIGRATIONS, SESSION_VERSION } from "./savedSession";
+import { SESSION_VERSION } from "./savedSession";
 import { DOWNLOADS_DOCUMENT, DOWNLOADS_VERSION, hydrateAtLaunch, wholeBackup, type LaunchOverrides } from "./launchSession";
 
 export { parseSession, SESSION_MIGRATIONS, SESSION_VERSION } from "./savedSession";
 
-export { loadSession, type LaunchOverrides } from "./launchSession";
+export { loadSession } from "./launchSession";
 
 const SAVE_DELAY_MS = 800;
 const COSMETIC_SAVE_DELAY_MS = 10_000;

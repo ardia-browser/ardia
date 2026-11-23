@@ -52,9 +52,9 @@ export function switchToTab(tabId: string) {
   if (tab.windowId !== focusedWindowOf(store())) focus(tab.windowId);
 }
 
-export const writesFor = (mayWrite?: () => boolean) => (mayWrite ? (write: () => void) => write() : foreignWriteHooks.around);
+const writesFor = (mayWrite?: () => boolean) => (mayWrite ? (write: () => void) => write() : foreignWriteHooks.around);
 
-export type CloseRequest = { mayWrite?: () => boolean; user?: ByUser };
+type CloseRequest = { mayWrite?: () => boolean; user?: ByUser };
 
 export async function closeTab(tabId: string, { mayWrite, user }: CloseRequest = {}) {
   const commit = writesFor(mayWrite);

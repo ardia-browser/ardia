@@ -7,7 +7,7 @@ import { groupOf } from "../pins/tabGrouping";
 import { focusedWindowOf } from "../windows/ui";
 
 export type AutomationWindowKind = "normal" | "little";
-export type AutomationTab = { id: string; url: string; title: string; profile: string; active: boolean; pinned: boolean; group: string | null };
+type AutomationTab = { id: string; url: string; title: string; profile: string; active: boolean; pinned: boolean; group: string | null };
 export type AutomationWindow = { id: string; kind: AutomationWindowKind; focused: boolean; profile: string; profileName: string; tabs: AutomationTab[] };
 
 type Snapshot = Pick<BrowserState, "windows" | "windowOrder" | "tabs" | "peeks" | "groups" | "profiles" | "ui">;

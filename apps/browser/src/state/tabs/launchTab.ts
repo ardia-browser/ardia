@@ -5,7 +5,7 @@ import { engineProfile } from "../browser/model";
 import { isRegularWindow, lastActiveProfile } from "../windows/small";
 import { wakeOf } from "./pageSession";
 
-export type LaunchTab = { id: string; url: string; profile: string };
+type LaunchTab = { id: string; url: string; profile: string };
 
 export const earlyLaunchTabOn = () => switchOn("launchTab");
 

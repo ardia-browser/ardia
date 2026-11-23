@@ -16,7 +16,7 @@ export const ENTRY_TAB_FIELDS = ["pin", "liveItem", "profileId", "url", "page"] 
 const placesAlike = (a: Tab | undefined, b: Tab | undefined) =>
   a === b || (!!a && !!b && a.pin === b.pin && a.liveItem === b.liveItem && a.profileId === b.profileId && !a.url === !b.url && hasPage(a) === hasPage(b));
 
-export function sameEntryTabs(tabs: BrowserState["tabs"], was: BrowserState["tabs"]): boolean {
+function sameEntryTabs(tabs: BrowserState["tabs"], was: BrowserState["tabs"]): boolean {
   if (tabs === was) return true;
   for (const id of changedIds(tabs, was)) if (!placesAlike(tabs[id], was[id])) return false;
   return true;

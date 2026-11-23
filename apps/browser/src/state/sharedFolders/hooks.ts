@@ -2,7 +2,7 @@ import { useBrowser } from "../browser/store";
 import { pinKeyOf } from "../browser/model";
 import { folderRef, useSharedFolders } from "./store";
 
-export type SharedFolderMark = "shared" | "waiting" | "error";
+type SharedFolderMark = "shared" | "waiting" | "error";
 
 export function useSharedFolderMark(groupId: string): SharedFolderMark | null {
   const ref = useBrowser((s) => {

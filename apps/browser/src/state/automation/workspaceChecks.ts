@@ -64,7 +64,7 @@ export function noSplitTiles(s: BrowserState, panes: string[], placement: TabPla
   if (paired) throw new OpError("bad_request", `Tab ${paired} is in a split, whose panes pin together as rows, so it can't go ${where}.`);
 }
 
-export type GroupSection = { parentId: string | null; pinned: boolean };
+type GroupSection = { parentId: string | null; pinned: boolean };
 
 export function groupSection(s: BrowserState, dest: Destination | undefined, fallback: GroupSection, askedPinned: unknown, own: ReadonlySet<string> = new Set()): GroupSection {
   const ref = dest?.anchor?.id;

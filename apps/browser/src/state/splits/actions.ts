@@ -69,7 +69,7 @@ export function dropTabIntoSplit(tabId: string, targetTabId: string, side: Split
   return openSplitPane(target.windowId, { tabId, anchorTabId: targetTabId, side });
 }
 
-export type RowSplitDrop = { adopted: SplitLane | null };
+type RowSplitDrop = { adopted: SplitLane | null };
 
 export function dropTabOnRow(tabId: string, rowTabId: string, side: "left" | "right"): RowSplitDrop | null {
   const s = store();
@@ -87,7 +87,7 @@ export function dropTabOnRow(tabId: string, rowTabId: string, side: "left" | "ri
   return { adopted: now && splitLane(now) !== splitLane(tab) ? splitLane(now) : null };
 }
 
-export function closePane(tabId: string, user: ByUser) {
+function closePane(tabId: string, user: ByUser) {
   void closeTab(tabId, { user });
 }
 
@@ -100,7 +100,7 @@ export function closeSplitView(splitId: string, user: ByUser) {
   store().closeTabs(splitTabIds(split), userClose(splitTabIds(split), user));
 }
 
-export function splitMenuItems(tabId: string): MenuItem[] {
+function splitMenuItems(tabId: string): MenuItem[] {
   const s = store();
   const split = splitOf(s, tabId);
   if (!split || !s.tabs[tabId]) return [];

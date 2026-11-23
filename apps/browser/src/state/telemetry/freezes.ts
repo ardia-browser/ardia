@@ -2,7 +2,7 @@ import { freezeWatch, type StallTally } from "../../platform/freezeWatch";
 import { experimentOn } from "../../platform/killSwitches";
 import { isSharing, onConsentPeriodChange, stillValid, type ConsentToken } from "./choice";
 
-export const STALL_BUCKETS = ["250_500ms", "500ms_1s", "1_2s", "2_5s", "5_10s", "over_10s"] as const;
+const STALL_BUCKETS = ["250_500ms", "500ms_1s", "1_2s", "2_5s", "5_10s", "over_10s"] as const;
 const HEAP_FLOORS_MB = [0, 64, 128, 256, 512, 1024, 2048];
 const HANG_BUCKETS = [
   [5_000, "under_5s"],
@@ -52,7 +52,7 @@ export function heapFloorMb(bytes: number): number {
 
 const whole = (n: unknown) => (typeof n === "number" && Number.isFinite(n) && n > 0 ? Math.round(n) : 0);
 
-export function stallFields(thread: "main" | "js", tally: StallTally | null | undefined): Record<string, number> {
+function stallFields(thread: "main" | "js", tally: StallTally | null | undefined): Record<string, number> {
   const fields: Record<string, number> = {};
   STALL_BUCKETS.forEach((bucket, i) => (fields[`${thread}_stall_${bucket}`] = whole(tally?.buckets?.[i])));
   fields[`${thread}_stall_longest_ms`] = whole(tally?.longestMs);
@@ -71,7 +71,7 @@ export const freezeEpoch = () => epoch;
 
 const newEpoch = () => 1 + Math.floor(Math.random() * 0x7fff_fffe);
 
-export function setFreezeConsent(sharing: boolean) {
+function setFreezeConsent(sharing: boolean) {
   epoch = sharing ? newEpoch() : 0;
   if (watching) freezeWatch()?.setConsentEpoch(epoch);
   gcBase = sharing ? gcTotals() : null;

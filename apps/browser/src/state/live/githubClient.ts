@@ -8,8 +8,8 @@ export const LIST_SHARED_MS = 30_000;
 export const DETAILS_FRESH_MS = 10 * 60_000;
 export const PENDING_FRESH_MS = 60_000;
 
-export type GraphqlPayload = { query: string; variables: Record<string, unknown> };
-export type GithubSend = (scope: string, payload: GraphqlPayload, onHeaders: (headers: HeaderReader) => void) => Promise<unknown>;
+type GraphqlPayload = { query: string; variables: Record<string, unknown> };
+type GithubSend = (scope: string, payload: GraphqlPayload, onHeaders: (headers: HeaderReader) => void) => Promise<unknown>;
 
 type Reply = { data?: { rateLimit?: RateLimitInfo | null } | null; errors?: { type?: string; message: string }[] };
 type Listed = Listing & { keys: Map<string, string | null>; blocked: LiveError | null };
@@ -200,4 +200,3 @@ export function createGithubClient(send: GithubSend, clock: () => number = Date.
   return { fetchFolder, resolveGone, viewer, pausedUntil, warning };
 }
 
-export type GithubClient = ReturnType<typeof createGithubClient>;

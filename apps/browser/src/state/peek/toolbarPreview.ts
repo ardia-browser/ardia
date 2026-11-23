@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type PeekToolbarPreview = { tabId: string; sourceId: string };
+type PeekToolbarPreview = { tabId: string; sourceId: string };
 
 export const usePeekToolbarPreview = create<Record<string, PeekToolbarPreview>>()(() => ({}));
 

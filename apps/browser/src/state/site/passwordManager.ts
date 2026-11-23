@@ -29,13 +29,13 @@ import { closeVerificationCodePrompts, offerVerificationCode } from "./verificat
 import { followMode, forgetHeldOffOutside, forgetPendingOfferToSave, offerToSaveHeldOffSomewhere, passwordAutofill, pendingOfferToSave, startOfferToSave, watchPendingOfferToSave, writeOfferToSave } from "./offerToSave";
 
 export { forgetPendingOfferToSave, passwordAutofill };
-export { profilesSharingData, type FieldProviderHint, type FieldProviderOpened, type ManagerPlugin, type PasswordManagerChoice, type VerificationCodeFound };
+export { type FieldProviderHint, type FieldProviderOpened, type VerificationCodeFound };
 
 
 const browser = () => useBrowser.getState();
 const pluginsView = () => usePlugins.getState();
 
-export const currentManagerPlugins = () => managerPlugins(pluginsView());
+const currentManagerPlugins = () => managerPlugins(pluginsView());
 
 export const currentPasswordManager = (profileId: string): PasswordManagerChoice => profilePasswordManager(browser(), currentManagerPlugins(), profileId);
 
@@ -94,7 +94,7 @@ const choseAwayFromArdia = (s: BrowserState) => Object.values(s.profiles).some((
 
 let heldOffAtStart: boolean | null = null;
 
-export function passwordManagerInUse(): boolean {
+function passwordManagerInUse(): boolean {
   if (currentManagerPlugins().length > 0 || choseAwayFromArdia(browser())) return true;
   heldOffAtStart ??= offerToSaveHeldOffSomewhere();
   return heldOffAtStart;

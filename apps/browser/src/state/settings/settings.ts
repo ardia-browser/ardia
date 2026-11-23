@@ -189,7 +189,7 @@ export const SETTING_KEYS = Object.keys(SETTING_SPECS) as SettingKey[];
 
 export type Settings = { -readonly [K in SettingKey]: Specs[K]["default"] };
 export type SettingsMeta = { chosen: string[]; inferred: string[] };
-export const NO_SETTINGS_META: SettingsMeta = { chosen: [], inferred: [] };
+const NO_SETTINGS_META: SettingsMeta = { chosen: [], inferred: [] };
 
 export type BatterySaverWhen = Settings["batterySaverWhen"];
 export type PeekModifier = Settings["peekModifier"];
@@ -199,7 +199,7 @@ export type SplitLinkModifier = Settings["splitLinkModifier"];
 export const splitLinkModifierOf = (settings: Pick<Settings, "peekModifier" | "splitLinkModifier">): SplitLinkModifier =>
   settings.splitLinkModifier === "alt" && settings.peekModifier === "alt" ? "altShift" : settings.splitLinkModifier;
 
-export function withLinkKeysApart(settings: Settings, patch: Partial<Settings>): Partial<Settings> {
+function withLinkKeysApart(settings: Settings, patch: Partial<Settings>): Partial<Settings> {
   if ((patch.peekModifier ?? settings.peekModifier) !== "alt" || (patch.splitLinkModifier ?? settings.splitLinkModifier) !== "alt") return patch;
   return "splitLinkModifier" in patch && !("peekModifier" in patch) ? { ...patch, peekModifier: "shift" } : { ...patch, splitLinkModifier: "altShift" };
 }

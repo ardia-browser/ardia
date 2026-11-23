@@ -9,7 +9,7 @@ let folds = 0;
 let stutters = 0;
 let overruns = 0;
 
-export type FoldTiming = { end: (finished: boolean) => void };
+type FoldTiming = { end: (finished: boolean) => void };
 
 const UNTIMED: FoldTiming = { end: () => {} };
 

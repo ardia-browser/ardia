@@ -9,7 +9,6 @@ export {
   listPasswords,
   savePassword,
   setNeverSavePasswords,
-  setPasswordAutofill,
   unlockPasswords,
   updatePassword,
   type PasswordExportStatus,

@@ -5,7 +5,7 @@ import { useBrowser } from "../browser/store";
 import { isIncognitoProfile } from "../browser/model";
 import { isPeekTab } from "../peek/peek";
 import { takeTypedAddress } from "./typedAddresses";
-import { consentNow, type ConsentToken } from "../telemetry/choice";
+import type { ConsentToken } from "../telemetry/choice";
 import { noteSiteSwitch, noteSiteSwitchTypedOn } from "../telemetry/pageBarCounts";
 import { updateRecord } from "./lifecycle";
 import { activeManifest, activeNames, currentPlugins, NO_RECORD, recordOf, usePlugins, type PluginsStore } from "./store";
@@ -22,7 +22,7 @@ export function siteSwitchValue(s: Pick<PluginsStore, "records">, plugin: string
 
 export const pluginOrder = (s: Plugins): string[] => [...activeNames(s)].sort();
 
-export type SiteSwitchRow = { plugin: string; key: string; title: string; icon: string; on: boolean };
+type SiteSwitchRow = { plugin: string; key: string; title: string; icon: string; on: boolean };
 
 export function siteSwitchRows(s: Plugins, url: string): SiteSwitchRow[] {
   const origin = switchOrigin(url);

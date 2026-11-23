@@ -3,7 +3,7 @@ import { formatUrl, hostWithPort, originOf, urlParts, webUrl } from "../../lib/u
 import { isApproved, type ApprovalRule } from "./approvals";
 import type { HookSpec, Rewrite } from "./hookFile";
 
-export const SAFE_LAUNCH_ACTIONS: ReadonlySet<string> = new Set([
+const SAFE_LAUNCH_ACTIONS: ReadonlySet<string> = new Set([
   "newTab",
   "newWindow",
   "newLittleArdia",
@@ -17,7 +17,7 @@ export const SAFE_LAUNCH_ACTIONS: ReadonlySet<string> = new Set([
 
 const STRIPPING_TEMPLATES = new Set(["{origin}{path}", "{origin}{path}{hash}"]);
 
-export const DOWNLOADS_FOLDER = "~/Downloads";
+const DOWNLOADS_FOLDER = "~/Downloads";
 
 export const isInsideDownloads = (folder: string) => folder === DOWNLOADS_FOLDER || folder.startsWith(`${DOWNLOADS_FOLDER}/`);
 

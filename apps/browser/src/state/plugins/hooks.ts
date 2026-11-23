@@ -2,7 +2,6 @@ import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { surfaceKey, usePluginSurfaces, type PluginSurfacesStore, type SidePanel } from "./surfaces";
 import { pluginToolbarItems } from "./toolbar";
-import { pluginThemes } from "./themes";
 import { activeManifest, activeNames, consentListing, currentPlugins, needsReview, recordOf, usePlugins, webViewsOnline, type PluginsStore } from "./store";
 import { pageContextOf, pageViewUrl, shownContext, usePluginPages } from "./pages";
 import { useBrowser } from "../browser/store";
@@ -61,7 +60,6 @@ export const usePluginToolbarItems = () => {
   return useMemo(() => pluginToolbarItems(plugins, surfaces), [plugins, surfaces]);
 };
 export const usePluginSurfaceTree = (plugin: string, surfaceId: string) => usePluginSurfaces((s) => s.trees[surfaceKey(plugin, surfaceId)] ?? null);
-export const usePluginToolbarState = (plugin: string, itemId: string) => usePluginSurfaces((s) => s.toolbarState[surfaceKey(plugin, itemId)] ?? null);
 export const usePluginSidePanel = (windowId: string) => usePluginSurfaces((s) => s.sidePanels[windowId] ?? null);
 const NO_SIDE_PANELS: SidePanel[] = [];
 export const usePluginRetainedSidePanels = (windowId: string) => usePluginSurfaces((s) => s.retainedSidePanels[windowId] ?? NO_SIDE_PANELS);
@@ -73,8 +71,4 @@ export const usePluginInputBox = () => usePluginSurfaces((s) => s.inputBox);
 export const usePluginSidebarViews = () => {
   const plugins = usePlugins(useShallow((s: PluginsStore) => ({ listings: s.listings, records: s.records, order: s.order })));
   return useMemo(() => activeNames(plugins).flatMap((plugin) => activeManifest(plugins, plugin)!.contributes.sidebarViews.map((v) => ({ ...v, plugin }))), [plugins]);
-};
-export const usePluginThemes = () => {
-  const plugins = usePlugins(useShallow((s: PluginsStore) => ({ listings: s.listings, records: s.records, order: s.order })));
-  return useMemo(() => pluginThemes(plugins), [plugins]);
 };

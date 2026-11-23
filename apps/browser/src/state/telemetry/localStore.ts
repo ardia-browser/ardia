@@ -2,10 +2,10 @@ import { appendLocal, appendLocalNow, clearLocal, configureLocal, exportLocalFor
 
 export const LOCAL_MAX_BYTES = 8 * 1_048_576;
 export const LOCAL_KEEP_DAYS = 7;
-export const LOCAL_FLUSH_MS = 10_000;
+const LOCAL_FLUSH_MS = 10_000;
 const MAX_BUFFER_LINES = 2_000;
 const MAX_BUFFER_CHARS = 1_000_000;
-export const MAX_LINE_CHARS = 256_000;
+const MAX_LINE_CHARS = 256_000;
 const MAX_FLUSH_SAMPLES = 1_000;
 
 const utcDay = (at: number) => new Date(at).toISOString().slice(0, 10);
@@ -19,7 +19,7 @@ let configured = false;
 
 const meter = { lines: 0, chars: 0, oversize: 0, flushes: 0, flushMs: [] as number[], bufferedMax: 0, failures: 0 };
 
-export type LocalKind = "event" | "log";
+type LocalKind = "event" | "log";
 
 function ensureConfigured() {
   if (configured) return;

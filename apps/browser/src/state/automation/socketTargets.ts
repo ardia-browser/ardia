@@ -7,8 +7,6 @@ import { withinBudget } from "./socketWire";
 
 export const now = (): BrowserState => useBrowser.getState();
 
-export const optText = (value: unknown): string | undefined => (typeof value === "string" ? value : undefined);
-
 export function tabOf(id: unknown): Tab {
   const s = now();
   if (typeof id !== "string" || !isEligibleTab(s, id)) throw new OpError("no_window", `There's no tab ${String(id)} the ardia command can use.`);

@@ -8,15 +8,15 @@ export type FolderRow =
   | { kind: "header"; key: string; title: string }
   | { kind: "more"; key: string; section: string; count: number };
 
-export const SECTION_TITLES: Record<PullRequestSection, string | null> = {
+const SECTION_TITLES: Record<PullRequestSection, string | null> = {
   authored: null,
   review: "Review Requests",
   team: "Team Review Requests",
 };
 
-export const PAGE_SIZE = 8;
+const PAGE_SIZE = 8;
 
-export type LiveTabPlace = "row" | "stray" | "hidden";
+type LiveTabPlace = "row" | "stray" | "hidden";
 
 export const repoKey = (it: LiveItem) => (it.pr ? `${it.source}:${it.pr.repo}` : null);
 

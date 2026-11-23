@@ -181,7 +181,7 @@ const SPECS: Readonly<Record<BrowserCommand, CommandSpec>> = COMMANDS;
 
 type Specs = typeof COMMANDS;
 export type AppCommand = { [C in BrowserCommand]: Specs[C] extends { app: true } ? C : never }[BrowserCommand];
-export type VariantOf<C extends BrowserCommand> = Specs[C] extends { variants: infer V } ? keyof V & string : never;
+type VariantOf<C extends BrowserCommand> = Specs[C] extends { variants: infer V } ? keyof V & string : never;
 
 export const STANDARD_ITEMS: Readonly<Record<string, { keys?: Keys }>> = {
   "std:quit:": { keys: ["⌘Q"] },
@@ -229,10 +229,10 @@ export const PAGE_COMMANDS = commandsWhere((c) => c.scope === "page");
 export const PAGE_COMMANDS_OFF_INTERNAL_PAGES = commandsWhere((c) => c.scope === "page" && !c.onInternalPages);
 export const WINDOW_COMMANDS = commandsWhere((c) => c.scope !== undefined);
 export const LITTLE_ARDIA_DISABLED_COMMANDS = commandsWhere((c) => c.littleArdia === "off");
-export const SPLIT_VIEW_COMMANDS: readonly BrowserCommand[] = ["openSplitPane", "focusNextPane", "focusPreviousPane"];
-export const EXPORT_COMMANDS: readonly BrowserCommand[] = ["exportBookmarks"];
-export const WEBKIT_COMMANDS: readonly BrowserCommand[] = ["togglePageEngine"];
-export const HIDING_COMMANDS: readonly BrowserCommand[] = ["hideElement", "showHiddenElements"];
+const SPLIT_VIEW_COMMANDS: readonly BrowserCommand[] = ["openSplitPane", "focusNextPane", "focusPreviousPane"];
+const EXPORT_COMMANDS: readonly BrowserCommand[] = ["exportBookmarks"];
+const WEBKIT_COMMANDS: readonly BrowserCommand[] = ["togglePageEngine"];
+const HIDING_COMMANDS: readonly BrowserCommand[] = ["hideElement", "showHiddenElements"];
 export const UNAVAILABLE_COMMANDS: ReadonlySet<string> = new Set([
   ...(splitViewAvailable ? [] : SPLIT_VIEW_COMMANDS),
   ...(PLATFORM_FEATURES.exportsBookmarksAndPasswords ? [] : EXPORT_COMMANDS),

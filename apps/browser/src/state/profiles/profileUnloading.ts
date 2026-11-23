@@ -47,7 +47,7 @@ export function closedByUnload(tabId: string): boolean {
 
 const unloadable = (profile: string) => profile !== PERSONAL && !isIncognitoProfile(profile);
 
-export function cliHeldEngineProfiles(s: BrowserState): string[] {
+function cliHeldEngineProfiles(s: BrowserState): string[] {
   return [...new Set(tabsHeldByCli().flatMap((id) => (s.tabs[id] ? [engineProfile(s, s.tabs[id]!.profileId)] : [])))];
 }
 
@@ -70,7 +70,7 @@ function noteKeptForCli(s: BrowserState, consent: ReturnType<typeof consentToken
   }
 }
 
-export function applyUnload(profile: string, result: Unload) {
+function applyUnload(profile: string, result: Unload) {
   const s = store();
   const shown = shownEngineProfiles(s).includes(profile);
   for (const id of result.tabs) {

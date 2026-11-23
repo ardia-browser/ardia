@@ -2,9 +2,9 @@ import { parseSaved, versionedJson } from "../../lib/savedDocument";
 import { readDocument, writeDocument } from "../../platform/documents";
 import { utcDay } from "./daily";
 
-export const FREEZE_SENDS_DOC = "freeze-sends.json";
-export const FREEZE_SENDS_VERSION = 1;
-export const MAX_FREEZES_PER_DAY = 20;
+const FREEZE_SENDS_DOC = "freeze-sends.json";
+const FREEZE_SENDS_VERSION = 1;
+const MAX_FREEZES_PER_DAY = 20;
 const SIGNATURE = /^[0-9a-z_]{1,16}$/;
 
 type Sends = { day: string; sent: number; signatures: string[] };

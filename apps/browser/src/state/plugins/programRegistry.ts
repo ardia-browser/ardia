@@ -3,7 +3,7 @@ import { legacyProgramsInstalled, programRegistry } from "../../platform/plugins
 import { isFields } from "../../lib/decode";
 import { type ProgramClaims } from "./appChecks";
 
-export const UNREADABLE_CLAIMS: ProgramClaims = { claims: {}, failClosed: true };
+const UNREADABLE_CLAIMS: ProgramClaims = { claims: {}, failClosed: true };
 
 const isName = (value: unknown): value is string => typeof value === "string" && /^[a-z0-9][a-z0-9-]{0,39}$/.test(value);
 

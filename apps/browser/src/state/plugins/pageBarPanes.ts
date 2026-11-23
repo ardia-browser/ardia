@@ -12,7 +12,7 @@ import { usePages } from "../tabs/pageState";
 
 export type PageBars = Record<string, PageBarMatch>;
 
-export const usePageBarPanes = create<Record<string, PageBars>>()(() => ({}));
+const usePageBarPanes = create<Record<string, PageBars>>()(() => ({}));
 
 export type PaneLayoutFacts = Pick<PageBarPane, "tabId" | "visible" | "lingering" | "warm" | "covered" | "mounted" | "documentFullscreen">;
 

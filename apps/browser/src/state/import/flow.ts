@@ -8,13 +8,13 @@ import type { ExtensionListing } from "./extensionListing";
 import { importModule } from "./importApi";
 
 export type KindStatus = "pending" | "active" | "done" | "failed";
-export type ImportStatus = Partial<Record<ImportKind, KindStatus>>;
-export type ImportFailure = { kind: ImportKind; profiles: string[] };
-export type FoundExtensions = { profileId: string; list: ImportedExtension[]; opened: boolean; listing: ExtensionListing | null };
+type ImportStatus = Partial<Record<ImportKind, KindStatus>>;
+type ImportFailure = { kind: ImportKind; profiles: string[] };
+type FoundExtensions = { profileId: string; list: ImportedExtension[]; opened: boolean; listing: ExtensionListing | null };
 export type EngineNotice = { name: string; offered: boolean; engine: ImportedSearchEngine };
-export type ImportResults = { counts: ImportCounts; failures: ImportFailure[]; notes: string[]; extensions: FoundExtensions; searchEngine?: EngineNotice };
+type ImportResults = { counts: ImportCounts; failures: ImportFailure[]; notes: string[]; extensions: FoundExtensions; searchEngine?: EngineNotice };
 
-export type ImportStep =
+type ImportStep =
   | { name: "loading" }
   | { name: "choose"; error: string | null }
   | { name: "profiles" }

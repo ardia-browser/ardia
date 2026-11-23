@@ -33,7 +33,7 @@ const REFUSALS: Record<Exclude<DevtoolsEndpointOutcome, "given">, [ErrorCode, st
   left: ["failed", "The connection closed before the token was ready."],
 };
 
-export type DevtoolsEndpointBody = { result: DevtoolsEndpoint } | ReturnType<typeof failure>;
+type DevtoolsEndpointBody = { result: DevtoolsEndpoint } | ReturnType<typeof failure>;
 
 export function refuseDevtoolsEndpoint(outcome: Exclude<DevtoolsEndpointOutcome, "given">, consent: ConsentToken | null): ReturnType<typeof failure> {
   noteDevtoolsEndpoint(outcome, consent);

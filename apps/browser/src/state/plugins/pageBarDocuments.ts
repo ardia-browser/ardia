@@ -3,13 +3,13 @@ import { pageBarsWanted } from "./chrome";
 import { consumeTypedAddress } from "./siteSwitches";
 import { dropAllTypedAddresses, dropTypedAddress } from "./typedAddresses";
 
-export const DOCUMENT_SETTLE_MS = 300;
+const DOCUMENT_SETTLE_MS = 300;
 
 export type PageDocument = { url: string; at: number; agrees: boolean; settled: boolean };
 
 export const usePageDocuments = create<Record<string, PageDocument>>()(() => ({}));
 
-export type DocumentReporter = object;
+type DocumentReporter = object;
 
 const timers = new Map<string, ReturnType<typeof setTimeout>>();
 const reporters = new Map<string, DocumentReporter>();

@@ -12,7 +12,7 @@ import { callTool } from "./tools";
 
 const nameOf = (params: Record<string, unknown>) => (typeof params.name === "string" ? params.name : null);
 
-export function pluginList() {
+function pluginList() {
   const s = currentPlugins();
   return s.order.map((name) => {
     const listing = s.listings[name]!;

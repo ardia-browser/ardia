@@ -22,12 +22,11 @@ import { clearPluginSurfaces } from "./surfaces";
 import { clearPluginSecrets, type SecretsCleared } from "./secrets";
 import { closePluginStorage, reopenPluginStorage } from "./storage";
 import { forgetPluginGestures } from "./gestures";
-import { dropCalls } from "./tools";
 import { sendValues } from "./channel";
 import { adoptLegacyInstalls, reconcilePrograms, removePrograms } from "./programs";
 import { isBundledRetiredRecord, noteRetiredRecords, RETIRED_OFFICIAL_PLUGINS } from "./retiredOfficial";
 
-export const MAX_PLUGINS = 64;
+const MAX_PLUGINS = 64;
 
 const READ_PROBLEMS: Record<Exclude<PluginFolderEntry["status"], "ok">, string> = {
   missing: "The folder has no plugin.json",
@@ -44,7 +43,7 @@ const officialFlags = (e: PluginFolderEntry): Partial<PluginListing> => ({
   ...(e.ignoresUserFolder ? { ignoresUserFolder: true } : {}),
 });
 
-export function listingsOf(entries: PluginFolderEntry[], registry: ProgramClaims = NO_CLAIMS): PluginListing[] {
+function listingsOf(entries: PluginFolderEntry[], registry: ProgramClaims = NO_CLAIMS): PluginListing[] {
   const settings = useBrowser.getState().settings;
   const version = systemInfo().appVersion;
   return entries
@@ -56,7 +55,7 @@ export function listingsOf(entries: PluginFolderEntry[], registry: ProgramClaims
     }));
 }
 
-export function candidatesOf(entries: PluginFolderEntry[], registry: ProgramClaims = NO_CLAIMS): PluginListing[] {
+function candidatesOf(entries: PluginFolderEntry[], registry: ProgramClaims = NO_CLAIMS): PluginListing[] {
   const settings = useBrowser.getState().settings;
   const version = systemInfo().appVersion;
   return entries.flatMap((e) => {
@@ -125,9 +124,9 @@ function forgetRemoved(consent: ConsentToken | null) {
   }
 }
 
-export const WITHDRAW_DEADLINE_MS = 1000;
+const WITHDRAW_DEADLINE_MS = 1000;
 
-export function withdrawBefore(next: PluginsCommit, consent: ConsentToken | null): Promise<void> | null {
+function withdrawBefore(next: PluginsCommit, consent: ConsentToken | null): Promise<void> | null {
   const waits = withdrawalsFor(next).map((w) => w.then(() => "done" as const, () => "done" as const));
   if (!waits.length) return null;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -140,7 +139,7 @@ export function withdrawBefore(next: PluginsCommit, consent: ConsentToken | null
 
 const listingsByName = (listings: PluginListing[]) => Object.fromEntries(listings.map((l) => [l.name, l]));
 
-export function applyListings(given: PluginListing[], consent: ConsentToken | null, candidates?: PluginListing[]) {
+function applyListings(given: PluginListing[], consent: ConsentToken | null, candidates?: PluginListing[]) {
   const records = currentPlugins().records;
   const listings = given.filter((l) => keptLegacy(l, records));
   const byName = listingsByName(listings);
@@ -341,7 +340,7 @@ export const isRemoving = (name: string) => removing.has(name);
 const secretsLeftReason = (name: string, secrets: SecretsCleared) =>
   `Its files are removed, but ${secrets.remaining.length === 1 ? "1 secret is" : secrets.remaining.length ? `${secrets.remaining.length} secrets are` : "its secrets may be"} still in your Keychain, under ardia.plugin.${name}. Delete them in Keychain Access.`;
 
-export type RemovalIdentity = { official: boolean; folderId: string | null };
+type RemovalIdentity = { official: boolean; folderId: string | null };
 
 export function removalIdentity(name: string): RemovalIdentity {
   const listed = Object.hasOwn(currentPlugins().listings, name) ? currentPlugins().listings[name] : undefined;

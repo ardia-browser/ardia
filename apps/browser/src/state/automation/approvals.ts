@@ -3,7 +3,7 @@ import { readDocument, writeDocument } from "../../platform/documents";
 import { isFields } from "../../lib/decode";
 import { parseSaved, versionedJson } from "../../lib/savedDocument";
 
-export type ApprovalKind = "program" | "rewrite" | "route" | "folder" | "omnibox" | "omniboxProvider" | "launchAction";
+type ApprovalKind = "program" | "rewrite" | "route" | "folder" | "omnibox" | "omniboxProvider" | "launchAction";
 export type ApprovalSource = "hooks.json" | "config.json" | "omnibox";
 export type ApprovalRule = { key: string; kind: ApprovalKind; name: string; summary: string };
 type Approved = ApprovalRule & { at: number };

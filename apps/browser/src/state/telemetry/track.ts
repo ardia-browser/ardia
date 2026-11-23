@@ -5,7 +5,7 @@ import type { PanelState } from "../browser/types";
 import type { AutofillToggle } from "../../platform/autofill";
 import type { SuggestionVia } from "@ardia/core";
 
-export type SuggestionType = "history" | "bookmark" | "tab" | "url" | "search" | "calc" | "action" | "create" | "extension" | "provider" | "typed";
+type SuggestionType = "history" | "bookmark" | "tab" | "url" | "search" | "calc" | "action" | "create" | "extension" | "provider" | "typed";
 
 type SuggestionLike = { kind: string; id?: string; tabId?: string; bookmarked?: boolean; visited?: boolean } | undefined;
 
@@ -26,7 +26,7 @@ function suggestionType(s: SuggestionLike): SuggestionType {
   }
 }
 
-export type CommandBarPlacementLabel = "field" | "centred" | "centred_no_field" | "new_tab";
+type CommandBarPlacementLabel = "field" | "centred" | "centred_no_field" | "new_tab";
 
 export function commandBarPlacementLabel(panel: Pick<PanelState, "newTab" | "placement">): CommandBarPlacementLabel {
   if (panel.newTab) return "new_tab";
@@ -38,7 +38,7 @@ export function commandBarPlacementLabel(panel: Pick<PanelState, "newTab" | "pla
 export const trackSuggestionChosen = (s: SuggestionLike, via?: SuggestionVia) =>
   capture("suggestion_chosen", { type: suggestionType(s), ...(s?.kind === "action" && s.id ? { command: s.id.split(":")[0] } : {}), ...(via ? { via } : {}) }, consentNow());
 
-export type CalendarConnectReport = { before: string; after: string; responsible: string; errored: boolean; settingsOpened: boolean; ms: number };
+type CalendarConnectReport = { before: string; after: string; responsible: string; errored: boolean; settingsOpened: boolean; ms: number };
 
 export const trackCalendarConnect = (r: CalendarConnectReport, consent: ConsentToken | null) =>
   capture("calendar_connect", { before: r.before, after: r.after, responsible: r.responsible, errored: r.errored, settings_opened: r.settingsOpened, ms: Math.min(Math.max(0, Math.round(r.ms)), 600_000) }, consent);
@@ -54,7 +54,7 @@ let keystrokes = 0;
 
 onConsentPeriodChange(() => (keystrokes = 0));
 
-export type OmniboxKey = { at: number; consent: ConsentToken | null };
+type OmniboxKey = { at: number; consent: ConsentToken | null };
 
 export const newOmniboxKey = (): OmniboxKey => ({ at: 0, consent: null });
 

@@ -114,7 +114,7 @@ export function setRowsCovered(windowId: string, on: boolean) {
 
 export const rowsCovered = (windowId: string) => covered.has(windowId);
 
-export type PanelDraw = { open: boolean; newTab: boolean; centred: boolean; hasActiveTab: boolean; sidebarAnchor: boolean };
+type PanelDraw = { open: boolean; newTab: boolean; centred: boolean; hasActiveTab: boolean; sidebarAnchor: boolean };
 
 export const panelCoversRows = (p: PanelDraw) => p.open && p.hasActiveTab && !p.newTab && !p.centred && p.sidebarAnchor;
 
@@ -146,7 +146,7 @@ async function show(windowId: string, target: Target, mine: number) {
   if (target.kind === "tab" || target.kind === "folder") noteTabHoverCardShown(consent);
 }
 
-export function hoverEnter(windowId: string, target: Target) {
+function hoverEnter(windowId: string, target: Target) {
   if (suppressed || hoverHeld(windowId) || sliding(windowId)) return;
   stop("show", "hide", "aim");
   card.waiting = null;
@@ -158,7 +158,7 @@ export function hoverEnter(windowId: string, target: Target) {
   start("show", () => void show(windowId, target, mine));
 }
 
-export function hoverLeave(from?: unknown, now = false) {
+function hoverLeave(from?: unknown, now = false) {
   if (card.held || (typeof from === "string" && from !== owner?.id)) return;
   owner = null;
   ticket++;
@@ -167,7 +167,7 @@ export function hoverLeave(from?: unknown, now = false) {
   else start("hide", hideCard);
 }
 
-export const keepHover = () => stop("hide", "aim");
+const keepHover = () => stop("hide", "aim");
 
 export function holdHover(on: boolean) {
   if (on === card.held) return;

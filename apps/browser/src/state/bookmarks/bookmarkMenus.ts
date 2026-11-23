@@ -29,7 +29,7 @@ export async function openOrganizeMenu(windowId: string, profileId: string, fold
   if (choice === "export") void exportBookmarksFromWindow(windowId);
 }
 
-export type RowMenuTarget =
+type RowMenuTarget =
   | { kind: "url"; showPath: boolean }
   | { kind: "folder"; links: number; makesGroup: boolean; restoresArc: boolean; showPath: boolean }
   | { kind: "several"; links: number; items: number; noun: string };

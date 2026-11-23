@@ -10,7 +10,7 @@ import { OpError } from "./workspaceTargets";
 
 const ORIENTATIONS = ["horizontal", "vertical"] as const;
 
-export function splitRow(s: BrowserState, v: SplitView) {
+function splitRow(s: BrowserState, v: SplitView) {
   return {
     id: v.id,
     window: v.windowId,

@@ -5,7 +5,7 @@ import { GLYPH_KEYS, MODIFIER_GLYPHS } from "./macGlyphs";
 import { FIRST_FUNCTION_KEY, ordered } from "./modifiers";
 import { sameShortcut, type Shortcut } from "./shortcuts";
 
-export type ComboWords = { modifiers: Readonly<Record<string, ShortcutModifier>>; keys: Readonly<Record<string, string>>; stored: (modifiers: readonly ShortcutModifier[]) => ShortcutModifier[] };
+type ComboWords = { modifiers: Readonly<Record<string, ShortcutModifier>>; keys: Readonly<Record<string, string>>; stored: (modifiers: readonly ShortcutModifier[]) => ShortcutModifier[] };
 
 const LAST_COMBO_FUNCTION_KEY = 24;
 const SEPARATORS = /[\s+-]+/;
@@ -51,7 +51,7 @@ const KEY_WORDS: Readonly<Record<string, string>> = {
 
 const SAME_KEYS: Readonly<Record<string, string>> = { "\u007f": "\u0008", "\u0003": "\r" };
 
-export const PLATFORM_COMBO_WORDS: ComboWords = { modifiers: COMBO_MODIFIER_WORDS, keys: COMBO_PLATFORM_KEYS, stored: storedModifiers };
+const PLATFORM_COMBO_WORDS: ComboWords = { modifiers: COMBO_MODIFIER_WORDS, keys: COMBO_PLATFORM_KEYS, stored: storedModifiers };
 
 function modifierOf(token: string, words: ComboWords): ShortcutModifier | undefined {
   const glyph = GLYPH_MODIFIERS.get(token);

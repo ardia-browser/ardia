@@ -1,14 +1,14 @@
 import type { PageEngine } from "../../platform/tabs";
 import type { Base } from "./siteDataMerge";
 
-export type SiteEntry = {
+type SiteEntry = {
   at: Partial<Record<PageEngine, number>>;
   carried: Partial<Record<PageEngine, number>>;
   origins: string[];
   hops: string[];
 };
 
-export type ProfileLedger = { sites: Record<string, SiteEntry>; cookies: Base; storage: Record<string, Base> };
+type ProfileLedger = { sites: Record<string, SiteEntry>; cookies: Base; storage: Record<string, Base> };
 export type Ledger = Record<string, ProfileLedger>;
 
 const MAX_SITES = 400;
@@ -21,7 +21,7 @@ const TOUCH_STEP_MS = 5_000;
 const EMPTY: SiteEntry = { at: {}, carried: {}, origins: [], hops: [] };
 const other = (engine: PageEngine): PageEngine => (engine === "webkit" ? "chromium" : "webkit");
 
-export const emptyProfile = (): ProfileLedger => ({ sites: {}, cookies: {}, storage: {} });
+const emptyProfile = (): ProfileLedger => ({ sites: {}, cookies: {}, storage: {} });
 
 export function profileOf(ledger: Ledger, profile: string): ProfileLedger {
   return (ledger[profile] ??= emptyProfile());

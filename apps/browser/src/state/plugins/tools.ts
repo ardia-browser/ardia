@@ -5,16 +5,16 @@ import { consentToken, type ConsentToken } from "../telemetry/choice";
 import { activeManifest, currentPlugins } from "./store";
 import { ensurePluginActivated, pluginReadyRun } from "./activation";
 
-export const MAX_CALLS_PER_PLUGIN = 16;
-export const MAX_TOOL_JSON = 1 << 20;
+const MAX_CALLS_PER_PLUGIN = 16;
+const MAX_TOOL_JSON = 1 << 20;
 
-export type ToolCaller = { kind: "command" } | { kind: "socket" } | { kind: "plugin"; plugin: string } | { kind: "host" };
+type ToolCaller = { kind: "command" } | { kind: "socket" } | { kind: "plugin"; plugin: string } | { kind: "host" };
 
-export const SOCKET_CALLER_ON_WIRE = "cli";
+const SOCKET_CALLER_ON_WIRE = "cli";
 
-export const wireCaller = (caller: ToolCaller) => (caller.kind === "socket" ? { kind: SOCKET_CALLER_ON_WIRE } : caller);
+const wireCaller = (caller: ToolCaller) => (caller.kind === "socket" ? { kind: SOCKET_CALLER_ON_WIRE } : caller);
 export type ToolOutcome = { ok: true; result: unknown } | { ok: false; code: "refused" | "failed" | "bad_request"; message: string };
-export type PluginCall =
+type PluginCall =
   | { kind: "tool"; tool: string; input: unknown }
   | { kind: "command"; command: string; context: Record<string, unknown> }
   | { kind: "omnibox"; provider: string; query: string }
@@ -31,7 +31,7 @@ let seq = 0;
 const failed = (code: Extract<ToolOutcome, { ok: false }>["code"], message: string): ToolOutcome => ({ ok: false, code, message });
 const CANCELLED = failed("failed", "The call was cancelled before the plugin answered.");
 
-export function runningRun(plugin: string): number | null {
+function runningRun(plugin: string): number | null {
   const p = currentPlugins().processes[plugin];
   return p?.state === "running" ? p.run : null;
 }

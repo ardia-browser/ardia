@@ -6,7 +6,7 @@ import { settingsSnapshot } from "../telemetry/settingsSnapshot";
 import type { ReportDraft } from "./form";
 import { PLATFORM_IDS, PLATFORM_TERMS } from "../../lib/platformTerms";
 
-export type SystemDetails = Record<string, string | number | null>;
+type SystemDetails = Record<string, string | number | null>;
 
 export async function systemDetails(): Promise<SystemDetails> {
   const app = systemInfo();

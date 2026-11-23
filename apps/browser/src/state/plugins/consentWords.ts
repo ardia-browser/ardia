@@ -1,6 +1,6 @@
 import { consentListing, type PluginRecord, type PluginsStore } from "./store";
 
-export type ConsentVerb = "install" | "update" | "turnOn";
+type ConsentVerb = "install" | "update" | "turnOn";
 
 export const CONSENT_WORDS: Readonly<Record<ConsentVerb, { title: string; button: string }>> = {
   install: { title: "Install", button: "Install" },

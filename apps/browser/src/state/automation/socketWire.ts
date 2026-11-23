@@ -49,8 +49,8 @@ function summary(value: unknown): Record<string, unknown> {
   return kept;
 }
 
-export type WireBody = { result: unknown } | { error: unknown };
-export type WireMethod = { mutates: boolean; narrow?: string } | undefined;
+type WireBody = { result: unknown } | { error: unknown };
+type WireMethod = { mutates: boolean; narrow?: string } | undefined;
 
 const TOO_BIG = (narrow: string) => `The reply would be over 1 MiB, the most a line can carry; ${narrow}.`;
 

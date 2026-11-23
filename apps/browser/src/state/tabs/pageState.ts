@@ -11,7 +11,7 @@ import type {
 import type { ExternalAppRequest } from "../../platform/siteSettings";
 import type { PermissionRequest } from "../../platform/permissions";
 
-export type VerificationCodeOffer = { token: string; app: string; host: string; generation: number };
+type VerificationCodeOffer = { token: string; app: string; host: string; generation: number };
 import { create } from "zustand";
 import { useBrowser } from "../browser/store";
 import { recordWatch, useKeyed } from "../browser/keyedWatch";

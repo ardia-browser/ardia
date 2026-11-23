@@ -67,7 +67,7 @@ export const originOfLogin = (url: string) => {
   return ORIGIN.exec(absolute)?.[0] ?? "";
 };
 
-export type PasswordImport = { saved: number; skipped: number } | "cancelled";
+type PasswordImport = { saved: number; skipped: number } | "cancelled";
 
 export async function importPasswordsCsv(profile: string): Promise<PasswordImport> {
   const mod = importModule();

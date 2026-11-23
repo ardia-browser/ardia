@@ -33,7 +33,7 @@ export function workspaceMethod(params: Record<string, unknown>): Body | Promise
   );
 }
 
-export type ApplyResult = {
+type ApplyResult = {
   ok: boolean;
   applied: number;
   results: (OpResult & { op: string })[];

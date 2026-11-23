@@ -9,8 +9,8 @@ import { PLUGIN_EVENTS } from "../automation/eventNames";
 import { PLUGIN_SCHEMA_FILE, pluginSchemaJson } from "../../lib/pluginSchema";
 import { PLUGIN_RULES } from "../plugins/appChecks";
 
-export const CONFIG_SCHEMA_FILE = "config.schema.json";
-export const THEME_SCHEMA_FILE = "theme.schema.json";
+const CONFIG_SCHEMA_FILE = "config.schema.json";
+const THEME_SCHEMA_FILE = "theme.schema.json";
 const CONFIG_THEME_PATTERN = "^(?:[a-z0-9][a-z0-9_-]*|plugin:[a-z0-9][a-z0-9-]{0,39}/[A-Za-z0-9_-]{1,40})$";
 
 function shortcutsSchema(): JsonSchema {

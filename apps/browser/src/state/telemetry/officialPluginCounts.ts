@@ -8,8 +8,8 @@ export const OFFICIAL_SURFACES = ["onboarding", "settings"] as const;
 export const OFFICIAL_EVENTS = ["shown", "installed", "skipped", "failed"] as const;
 export const OFFICIAL_COUNTED_NAMES: readonly string[] = OFFICIAL_NAMES;
 
-export type OfficialSurface = (typeof OFFICIAL_SURFACES)[number];
-export type OfficialEvent = (typeof OFFICIAL_EVENTS)[number];
+type OfficialSurface = (typeof OFFICIAL_SURFACES)[number];
+type OfficialEvent = (typeof OFFICIAL_EVENTS)[number];
 
 const countedName = (name: string): string => (OFFICIAL_COUNTED_NAMES.includes(name) ? name.replace(/-/g, "_") : "other");
 

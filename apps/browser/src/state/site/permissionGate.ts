@@ -1,5 +1,5 @@
 export type PermissionAsk = { id: string; tabId: string | null; origin: string; permissions: string[] };
-export type PermissionGate = (request: PermissionAsk, signal: AbortSignal) => "deny" | "ask" | Promise<"deny" | "ask">;
+type PermissionGate = (request: PermissionAsk, signal: AbortSignal) => "deny" | "ask" | Promise<"deny" | "ask">;
 
 let gate: PermissionGate | null = null;
 

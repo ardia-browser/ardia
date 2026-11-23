@@ -1,7 +1,7 @@
 export const CLI_HOLD_DEFAULT_S = 120;
 export const CLI_HOLD_MAX_S = 300;
 export const CLI_HOLD_MAX_TABS = 32;
-export const CLI_HOLD_MAX_SESSIONS = 4;
+const CLI_HOLD_MAX_SESSIONS = 4;
 
 type Lease = { tabs: ReadonlySet<string>; until: number; ends: ReturnType<typeof setTimeout> };
 
@@ -41,7 +41,7 @@ function endWhenDue(session: string) {
   else if (drop(session)) changed();
 }
 
-export type HoldOutcome = { started: string[] } | { refused: string };
+type HoldOutcome = { started: string[] } | { refused: string };
 
 export function holdForCli(session: string, tabIds: readonly string[], seconds = CLI_HOLD_DEFAULT_S): HoldOutcome {
   const now = clock();

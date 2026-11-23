@@ -6,7 +6,7 @@ import { OpError } from "./workspaceTargets";
 
 export const STOPPED = "Control was turned off before Ardia made the change, so nothing changed.";
 
-export type SocketBody = { result: unknown } | { error: MethodError };
+type SocketBody = { result: unknown } | { error: MethodError };
 
 export type SocketCall = { connection: number; serving: () => boolean; stillServing: () => void };
 
@@ -20,7 +20,7 @@ export type MethodSpec = {
   hidden?: boolean;
 };
 
-export type MethodEntry = { name: string; area: string; mutates: boolean; description: string; params: JsonSchema; result: string };
+type MethodEntry = { name: string; area: string; mutates: boolean; description: string; params: JsonSchema; result: string };
 
 export type ConnectionAccess = "owner" | "plugin";
 
@@ -63,7 +63,7 @@ const FAMILY_OF_AREA: Record<string, SocketFamily> = {
   menus: "menus",
 };
 
-export const areaOf = (name: string) => name.split(".")[0]!;
+const areaOf = (name: string) => name.split(".")[0]!;
 export const familyOf = (name: string): SocketFamily => ownField(FAMILY_OF_AREA, areaOf(name)) ?? "core";
 
 const core = (name: string, mutates: boolean, description: string, result: string, params: JsonSchema = obj({})): MethodSpec => ({ name, mutates, description, params, result });
@@ -72,7 +72,7 @@ const NULLABLE_ID = { type: ["string", "null"] } as const satisfies JsonSchema;
 const SECONDS: JsonSchema = { type: "array", items: { type: "integer" }, description: "Idle thresholds in whole seconds" };
 const PLUGIN_NAME = obj({ name: { type: "string", description: "A plugin name from plugins" } }, ["name"]);
 
-export const CORE_METHODS: MethodSpec[] = [
+const CORE_METHODS: MethodSpec[] = [
   core("hello", false, "Protocol handshake; send it first with your protocol", "{app, version, protocol, minClientProtocol}", {
     type: "object",
     properties: { protocol: { type: "integer" }, caller: { type: "object", description: "{name, app} of the program calling" } },

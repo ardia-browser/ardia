@@ -43,7 +43,7 @@ const pinnedRowIn = (t: BrowserState["tabs"][string] | undefined, profileId: str
 const inPinnedGroupOf = (s: Pick<BrowserState, "groups">, id: string, profileId: string) =>
   Object.values(s.groups).some((g) => g.pinned && g.profileId === profileId && g.tabIds.includes(id));
 
-export function enteredPinnedSection(s: Pick<BrowserState, "tabs" | "groups">, prev: Pick<BrowserState, "tabs" | "groups">, profileId: string): boolean {
+function enteredPinnedSection(s: Pick<BrowserState, "tabs" | "groups">, prev: Pick<BrowserState, "tabs" | "groups">, profileId: string): boolean {
   if (s.groups === prev.groups)
     return changedIds(s.tabs, prev.tabs).some((id) => !!prev.tabs[id] && pinnedRowIn(s.tabs[id], profileId) && !pinnedRowIn(prev.tabs[id], profileId) && !inPinnedGroupOf(s, id, profileId));
   const before = pinnedSectionTabs(prev, profileId);
@@ -51,7 +51,7 @@ export function enteredPinnedSection(s: Pick<BrowserState, "tabs" | "groups">, p
   return false;
 }
 
-export function expandOnPin(s: BrowserState, prev: BrowserState) {
+function expandOnPin(s: BrowserState, prev: BrowserState) {
   if (s.tabs === prev.tabs && s.groups === prev.groups) return;
   for (const id of s.profileOrder) if (pinnedCollapsed(s, id) && enteredPinnedSection(s, prev, id)) setPinnedCollapsed(id, false);
 }

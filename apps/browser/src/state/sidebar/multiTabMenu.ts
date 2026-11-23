@@ -21,7 +21,7 @@ export function closeSelectionByKey(windowId: string, user: ByUser | undefined):
   return ids.length;
 }
 
-export function multiTabMenuFacts(s: BrowserState, windowId: string, ids: string[]) {
+function multiTabMenuFacts(s: BrowserState, windowId: string, ids: string[]) {
   const tabs = ids.map((id) => s.tabs[id]!);
   const chosen = new Set(ids);
   return {

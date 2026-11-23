@@ -2,7 +2,7 @@ import { create } from "zustand";
 
 type Toast = { id: number; title: string; message?: string } & ToastOptions;
 type ToastAction = { title: string; run(): void };
-export type ToastOptions = { icon?: string; action?: ToastAction; secondary?: ToastAction; key?: string; sticky?: boolean; holdMs?: number; titleLines?: number };
+type ToastOptions = { icon?: string; action?: ToastAction; secondary?: ToastAction; key?: string; sticky?: boolean; holdMs?: number; titleLines?: number };
 export const useToasts = create<{ toasts: Record<string, Toast | null> }>()(() => ({ toasts: {} }));
 let toastSeq = 0;
 export function showToast(windowId: string, title: string, message?: string, options?: ToastOptions) {

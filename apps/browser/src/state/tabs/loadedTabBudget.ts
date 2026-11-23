@@ -22,7 +22,7 @@ import { liveOf, onLiveChange } from "./tabLive";
 import { countSwitches, forgetSwitchesExcept, switchesOf } from "./tabSwitches";
 import { heldByCli } from "./cliHolds";
 
-export type LoadedTabBudget = Pick<SleepRules, "tabs" | "hiddenMs"> & Partial<SleepRules>;
+type LoadedTabBudget = Pick<SleepRules, "tabs" | "hiddenMs"> & Partial<SleepRules>;
 
 const SWEEP_MS = MINUTE;
 const PRESSURE_TICK_MS = 5_000;
@@ -53,7 +53,7 @@ const awakeOf = (s: BrowserState, loaded: Iterable<string>) => [...loaded].filte
 
 const lastAudibleAt = new Map<string, number>();
 
-export function sleepFacts(s: BrowserState, id: string, shown: ReadonlySet<string>, seenAt: ReadonlyMap<string, number>, askAgainAt: ReadonlyMap<string, number>): TabSleepFacts {
+function sleepFacts(s: BrowserState, id: string, shown: ReadonlySet<string>, seenAt: ReadonlyMap<string, number>, askAgainAt: ReadonlyMap<string, number>): TabSleepFacts {
   const tab = s.tabs[id]!;
   return {
     id,
@@ -198,7 +198,7 @@ export function noteTabGone(tabId: string) {
   sleptAt.delete(tabId);
 }
 
-export function noteAudibleEnded(tabId: string, now = Date.now()) {
+function noteAudibleEnded(tabId: string, now = Date.now()) {
   lastAudibleAt.set(tabId, now);
 }
 

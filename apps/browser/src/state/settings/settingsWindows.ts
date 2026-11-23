@@ -88,7 +88,7 @@ export function openSettings(pane?: SettingsPane, profileId?: string | null, det
 
 export const openSiteSettings = (origin: string, profileId: string) => openSettings("profiles", profileId, SETTINGS_DETAIL.site(origin));
 
-export const useImportRequest = create<{ source: string | null }>()(() => ({ source: null }));
+const useImportRequest = create<{ source: string | null }>()(() => ({ source: null }));
 
 export function takePreferredImportSource() {
   const { source } = useImportRequest.getState();

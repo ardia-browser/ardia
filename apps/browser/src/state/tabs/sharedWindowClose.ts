@@ -13,7 +13,7 @@ import { noteWindowClosePinsKept } from "../telemetry/windowPlacementCounts";
 
 type KeepsTabs = (w: BrowserWindow | undefined) => boolean;
 
-export function sharedElsewhere(s: BrowserState, t: Tab, keepsTabs: KeepsTabs = isRegularWindow): boolean {
+function sharedElsewhere(s: BrowserState, t: Tab, keepsTabs: KeepsTabs = isRegularWindow): boolean {
   if (!sharedListTab(s, t)) return false;
   const key = pinKeyOf(t);
   return Object.values(s.tabs).some((x) => x.id !== t.id && x.windowId !== t.windowId && x.profileId === t.profileId && pinKeyOf(x) === key && keepsTabs(s.windows[x.windowId]));

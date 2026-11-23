@@ -27,7 +27,7 @@ export function parseControlCaller(raw: unknown): ControlCaller | null {
   return name ? { name, app: cleanApp(fields.app) } : null;
 }
 
-export type ControlLine = { lead: string; name: string; rest: string };
+type ControlLine = { lead: string; name: string; rest: string };
 
 export function controlLine(caller: ControlCaller | null): ControlLine {
   if (!caller) return { lead: "A program", name: "", rest: " is controlling Ardia" };

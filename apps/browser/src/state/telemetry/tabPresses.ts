@@ -3,7 +3,7 @@ import { capture, consentToken, stillValid, onConsentPeriodChange, type ConsentT
 import { takeHoverCardCounts } from "./hoverCardCounts";
 import { percentile } from "./transport";
 
-export type TabPressEnd = "click" | "dragClick" | "drag";
+type TabPressEnd = "click" | "dragClick" | "drag";
 
 export type TabPressDrop = "no_release" | "not_dragged" | "no_start" | "start_mismatch";
 
@@ -187,7 +187,7 @@ export const noteDragBegan = (drag: object) => void startedIn.set(drag, period);
 
 export const noteDragWithoutDrop = (drag?: object) => void (ofThisPeriod(drag) && tally.drags_without_drop++);
 
-export type SidebarDropKind = "gap" | "split_left" | "split_right" | "split_pinned" | "split_unpinned" | "tile" | "other_profile" | "profile_icon";
+type SidebarDropKind = "gap" | "split_left" | "split_right" | "split_pinned" | "split_unpinned" | "tile" | "other_profile" | "profile_icon";
 
 export const noteSidebarDrop = (kind: SidebarDropKind, drag?: object) => void (ofThisPeriod(drag) && tally[`drops_${kind}`]++);
 

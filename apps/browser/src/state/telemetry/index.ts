@@ -23,10 +23,9 @@ import { watchFreezes } from "./freezeEvents";
 import { watchSecretDrops } from "./secretDrops";
 
 export { installErrorReporting };
-export { telemetryIdentity, reportIdentity, resetAnonymousId, type ReportIdentity, type TelemetryIdentity } from "./identity";
-export { startWatch, stopWatch, watchStatus, WATCH_DAYS, type WatchStatus } from "./watch";
-export { localEventsSince, exportLocalCopy } from "./localStore";
-export { diagnosticsSnapshot, type DiagnosticsSnapshot } from "./diagnosticsSnapshot";
+export { telemetryIdentity, reportIdentity, resetAnonymousId } from "./identity";
+export { startWatch, stopWatch, watchStatus } from "./watch";
+export { localEventsSince } from "./localStore";
 
 export function startTelemetry({ continuing = false }: { continuing?: boolean } = {}) {
   watchSecretDrops();

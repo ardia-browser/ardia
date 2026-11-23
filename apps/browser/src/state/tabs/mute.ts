@@ -10,7 +10,7 @@ export type MuteState = "site" | "tab" | null;
 type SiteMutes = Pick<BrowserState, "settings" | "privateSiteMutes">;
 type MutedTab = Pick<Tab, "url" | "windowId" | "profileId" | "muted">;
 
-export function isHostMuted(s: SiteMutes, tab: Pick<Tab, "windowId" | "profileId">, host: string): boolean {
+function isHostMuted(s: SiteMutes, tab: Pick<Tab, "windowId" | "profileId">, host: string): boolean {
   const own = isIncognitoProfile(tab.profileId) ? s.privateSiteMutes[tab.windowId]?.[host] : undefined;
   return own ?? s.settings.mutedSites.includes(host);
 }

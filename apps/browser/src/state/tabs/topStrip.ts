@@ -12,7 +12,7 @@ import { chooseFromMenu, type ChoiceItem } from "../app/menuChoice";
 import { parseEntry } from "../sidebar/entryKey";
 import { splitTabIdsOf } from "../splits/splits";
 
-export function tuckTarget(s: BrowserState, windowId: string, profileId: string, groupId: string): string | undefined {
+function tuckTarget(s: BrowserState, windowId: string, profileId: string, groupId: string): string | undefined {
   const members = new Set(s.groups[groupId]?.tabIds ?? []);
   let best: string | undefined;
   for (const id of viewTabIds(s, windowId, profileId)) {
@@ -53,7 +53,7 @@ export const useStripEntries = (windowId: string, profileId: string) => useBrows
 
 const titleNeedsMemo = new Map<string, { tabs: BrowserState["tabs"]; order: string[] | undefined; signature: string }>();
 
-export function titleNeedsSignature(s: BrowserState, windowId: string, profileId: string): string {
+function titleNeedsSignature(s: BrowserState, windowId: string, profileId: string): string {
   const key = `${windowId}|${profileId}`;
   const order = s.windows[windowId]?.tabIds;
   const cached = titleNeedsMemo.get(key);
@@ -126,7 +126,7 @@ export function moveInGroup(groupId: string, beforeId: string | null) {
   s.dropTabs([], resolveDrop(s, { kind: "group", groupId }, { zone: s.groups[groupId]?.pinned ? "pinnedRows" : "list", beforeId }));
 }
 
-export type StoreMark = object;
+type StoreMark = object;
 export const storeMark = (): StoreMark => useBrowser.getState();
 export const storeChangedSince = (mark: StoreMark) => useBrowser.getState() !== mark;
 

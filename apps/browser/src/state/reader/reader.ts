@@ -23,10 +23,6 @@ const CALL_DEADLINE_MS = 4000;
 export const useReader = create<Record<string, ReaderState | undefined>>()(() => ({}));
 export const readerState = (tabId: string): ReaderState => useReader.getState()[tabId] ?? NONE;
 export const useReaderState = (tabId: string): ReaderState => useReader((s) => s[tabId] ?? NONE);
-export const readerAvailable = (tabId: string) => {
-  const state = readerState(tabId);
-  return state.active || state.available;
-};
 
 const set = (tabId: string, state: ReaderState | undefined) => useReader.setState({ [tabId]: state });
 const readable = (url: string | undefined) => !!url && /^(https?|file):/i.test(url);

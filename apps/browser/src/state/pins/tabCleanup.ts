@@ -48,9 +48,9 @@ export function clearedTabIds(s: BrowserState, windowId: string): string[] {
   return ids.filter((id) => !kept.has(id));
 }
 
-export const CLEAN_UP_AFTER_MS = 12 * 60 * 60 * 1000;
+const CLEAN_UP_AFTER_MS = 12 * 60 * 60 * 1000;
 export const MAX_CLEANED = 100;
-export const HIDDEN_REPLACES_CLEANED_AFTER_MS = 24 * 60 * 60 * 1000;
+const HIDDEN_REPLACES_CLEANED_AFTER_MS = 24 * 60 * 60 * 1000;
 
 function windowFingerprint(s: BrowserState, windowId: string): string {
   const w = s.windows[windowId];
@@ -71,7 +71,7 @@ function windowFingerprint(s: BrowserState, windowId: string): string {
   return [...tabs, "", ...groups, "", ...splits].join("\n");
 }
 
-export function undoable(before: BrowserState, after: BrowserState, windowId: string, profileId: string, entries: ClosedTab[]): ClearedTabs {
+function undoable(before: BrowserState, after: BrowserState, windowId: string, profileId: string, entries: ClosedTab[]): ClearedTabs {
   return {
     windowId,
     entries,
@@ -173,7 +173,7 @@ export function hiddenProfileIdsIn(s: BrowserState, windowId: string): string[] 
   return [...new Set((s.windows[windowId]?.tabIds ?? []).flatMap((id) => s.tabs[id]?.profileId ?? []))].filter((id) => id !== shown);
 }
 
-export function hiddenCleanedRoom(s: BrowserState, windowId: string, now = Date.now()): number {
+function hiddenCleanedRoom(s: BrowserState, windowId: string, now = Date.now()): number {
   const list = cleanedTabsFor(s, windowId);
   const young = list.findIndex((c) => now - c.closedAt < HIDDEN_REPLACES_CLEANED_AFTER_MS);
   return Math.max(0, MAX_CLEANED - list.length + (young === -1 ? list.length : young));
@@ -213,7 +213,7 @@ export function nextCleanUpAt(s: BrowserState, windowId: string, inactiveForMs: 
   return next;
 }
 
-export function abandonedNewTabs(s: BrowserState, windowId: string): string[] {
+function abandonedNewTabs(s: BrowserState, windowId: string): string[] {
   const w = s.windows[windowId];
   if (!w) return [];
   const selected = new Set(Object.values(w.activeTabIds));

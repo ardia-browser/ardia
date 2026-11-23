@@ -21,7 +21,7 @@ function stillThere(call: SocketCall, profileId: string, engine: string) {
   if (!ownEntry(now().profiles, profileId) || engineProfile(now(), profileId) !== engine) throw new OpError("no_window", `Profile ${profileId} closed before Ardia made the change, so nothing changed.`);
 }
 
-export const NO_FOLDER_INSTALLS = "installing an unpacked folder from the socket isn't supported; use Settings › Extensions › Load Unpacked";
+const NO_FOLDER_INSTALLS = "installing an unpacked folder from the socket isn't supported; use Settings › Extensions › Load Unpacked";
 
 async function install(params: Record<string, unknown>, call: SocketCall) {
   if (params.folder !== undefined) throw new OpError("refused", NO_FOLDER_INSTALLS);
@@ -45,7 +45,7 @@ function requestedChange(params: Record<string, unknown>): Change {
   return { userScripts: params.userScripts as boolean };
 }
 
-export const SPECIFIC_SITES_REFUSED = "changing to specific sites needs engine support";
+const SPECIFIC_SITES_REFUSED = "changing to specific sites needs engine support";
 
 function checkedChange(ext: InstalledExtension, change: Change) {
   if (!ext.mayModify) throw new OpError("refused", `${ext.name} is installed by policy, so it can't be changed.`);

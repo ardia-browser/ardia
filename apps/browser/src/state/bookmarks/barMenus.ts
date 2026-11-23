@@ -21,7 +21,7 @@ export async function openImportButtonMenu() {
   if (choice === "hide") updateSettings({ bookmarksImportDismissed: true });
 }
 
-export type BarMenuTarget = { kind: "url" } | { kind: "folder"; links: number; makesGroup: boolean; restoresArc: boolean } | null;
+type BarMenuTarget = { kind: "url" } | { kind: "folder"; links: number; makesGroup: boolean; restoresArc: boolean } | null;
 
 export function barMenuItems(
   target: BarMenuTarget,

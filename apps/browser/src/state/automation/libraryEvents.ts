@@ -56,7 +56,7 @@ function ownersOfBookmark(s: BrowserState, id: string): string[] {
   });
 }
 
-export function bookmarkChanges(s: BrowserState, prev: BrowserState) {
+function bookmarkChanges(s: BrowserState, prev: BrowserState) {
   const byProfile = new Map<string, { added: string[]; changed: string[]; removed: string[] }>();
   for (const id of changedIds(s.bookmarks.nodes, prev.bookmarks.nodes)) {
     const next = s.bookmarks.nodes[id];
@@ -85,7 +85,7 @@ const downloadData = (d: Download, change: "added" | "updated" | "removed") => (
 
 const sameDownload = (a: Download, b: Download) => a.state === b.state && a.paused === b.paused && !!a.dangerous === !!b.dangerous && awaitsKeep(a) === awaitsKeep(b) && a.filename === b.filename && a.path === b.path;
 
-export function downloadChanges(s: BrowserState, prev: BrowserState) {
+function downloadChanges(s: BrowserState, prev: BrowserState) {
   const own = (state: BrowserState) => new Map(state.downloads.filter((d) => downloadSession(state, d) === null).map((d) => [d.id, d]));
   const next = own(s);
   const was = own(prev);
@@ -101,7 +101,7 @@ export function downloadChanges(s: BrowserState, prev: BrowserState) {
 
 const PROFILE_KEYS = ["name", "color", "icon", "theme", "dataId", "pinnedCollapsed", "shareTopApps", "syncTabs"] as const;
 
-export function profileChanges(s: BrowserState, prev: BrowserState) {
+function profileChanges(s: BrowserState, prev: BrowserState) {
   const out: Record<string, unknown>[] = [];
   for (const id of changedIds(s.profiles, prev.profiles)) {
     if (isIncognitoProfile(id)) continue;

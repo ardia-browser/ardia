@@ -56,8 +56,8 @@ function chosenSuccessor(s: BrowserState, close: UserClose | undefined, w: Brows
   close!.noted(pick);
   return standingSuccessor(s, close, w.id, profileId, removing);
 }
-export type CloseKind = "close" | "unload" | "removePin";
-export type CloseIntent = { kind: CloseKind; ids: string[] };
+type CloseKind = "close" | "unload" | "removePin";
+type CloseIntent = { kind: CloseKind; ids: string[] };
 
 export function closeKind(s: BrowserState, tabId: string): CloseKind {
   if (!inPinnedContainer(s, tabId)) return "close";
@@ -222,7 +222,7 @@ function adoptOrphans(tabs: Record<string, Tab>, before: Record<string, Tab>, go
   return linkEdits(next, tabs, adopted);
 }
 
-export function unloadPinnedTabs(s: BrowserState, requested: string[], keepTopApps = false, close?: UserClose): BrowserState {
+function unloadPinnedTabs(s: BrowserState, requested: string[], keepTopApps = false, close?: UserClose): BrowserState {
   const asked = requested.filter((id) => inPinnedContainer(s, id));
   const withTopApp = (id: string) => withPinnedPanes(s, [id]).some((pane) => isTopApp(s.tabs[pane]));
   const switchedAway = keepTopApps ? withPinnedPanes(s, asked.filter(withTopApp)) : [];

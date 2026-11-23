@@ -17,9 +17,9 @@ import { adoptExactApproval, ALREADY_ASKING, consentTarget, isRemoving, updateRe
 import { relinkPrograms } from "./programs";
 import { activeManifest, approvalMatches, currentPlugins, recordOf, setOfficialFetch, usePlugins, type PluginListing, type PluginsStore } from "./store";
 
-export { COMING_SOON, OFFICIAL_CATALOGUE, OFFICIAL_NAMES, PRESELECTED_PLUGINS, officialCatalogue } from "./officialPin";
+export { COMING_SOON, OFFICIAL_CATALOGUE, PRESELECTED_PLUGINS, officialCatalogue } from "./officialPin";
 
-export type OfficialPluginState = "available" | "installed" | "comingSoon" | "unsupported";
+type OfficialPluginState = "available" | "installed" | "comingSoon" | "unsupported";
 export type OfficialPlugin = { name: string; title: string; blurb: string; icon: string; version: string | null; example: string | null; state: OfficialPluginState; update: string | null };
 type ComingSoon = (typeof COMING_SOON)[number];
 type OfficialView = Pick<PluginsStore, "listings" | "records" | "order"> & Partial<Pick<PluginsStore, "pinned" | "candidates">>;
@@ -147,7 +147,7 @@ function needsFetch(name: string): boolean {
   return officialListing(s, name)?.folderId !== pinned.folderId;
 }
 
-export function fetchOfficialCandidate(name: string, consent: ConsentToken | null, quiet = false): Promise<InstallResult & { code?: string }> {
+function fetchOfficialCandidate(name: string, consent: ConsentToken | null, quiet = false): Promise<InstallResult & { code?: string }> {
   if (!needsFetch(name)) return Promise.resolve({ ok: true });
   const running = inFlight.get(name);
   if (running) return running;
@@ -177,7 +177,7 @@ export function cancelOfficialInstall(name: string) {
   if (inFlight.has(name)) cancelOfficialPluginFetch(name);
 }
 
-export type InstallOptions = { showSheet?: boolean; onConsent?: (id: number) => void; alive?: () => boolean };
+type InstallOptions = { showSheet?: boolean; onConsent?: (id: number) => void; alive?: () => boolean };
 
 export const isOfficialName = (s: Pick<PluginsStore, "listings" | "candidates" | "pinned">, name: string) =>
   !!officialListing(s, name) || !!candidateOf(s, name) || !!pinnedOf(s, name);
@@ -305,7 +305,7 @@ function promoteWithRetry(name: string, candidate: PluginListing, consent: Conse
   });
 }
 
-export function reconcileOfficial(consent: ConsentToken | null, now = Date.now()) {
+function reconcileOfficial(consent: ConsentToken | null, now = Date.now()) {
   if (!PLATFORM_FEATURES.plugins) return;
   const s = currentPlugins();
   for (const pinned of s.pinned ?? []) {

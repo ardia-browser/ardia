@@ -37,7 +37,7 @@ import { userClose } from "../tabs/closeActivation";
 
 const store = () => useBrowser.getState();
 
-export function tabMenuFacts(s: BrowserState, windowId: string, tab: Tab) {
+function tabMenuFacts(s: BrowserState, windowId: string, tab: Tab) {
   const list = viewTabIds(s, windowId).filter((id) => !inPinnedContainer(s, id));
   const housed = inPinnedContainer(s, tab.id);
   const index = list.indexOf(tab.id);

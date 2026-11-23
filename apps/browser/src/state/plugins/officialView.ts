@@ -6,9 +6,9 @@ export const wasCancelled = (result: InstallResult) => !result.ok && result.canc
 
 export type OfficialAttempt = { state: "asking" } | { state: "installing" } | { state: "failed"; reason: string } | null;
 
-export type OfficialAction = "install" | "again" | "update" | null;
+type OfficialAction = "install" | "again" | "update" | null;
 
-export type OfficialView = {
+type OfficialView = {
   shown: boolean;
   note: "installed" | "comingSoon" | null;
   status: string | null;
@@ -23,7 +23,7 @@ export const installedLabel = (plugin: OfficialPlugin) => (plugin.version ? `Ins
 
 const HIDDEN: OfficialView = { shown: false, note: null, status: null, failed: false, busy: false, action: null, opens: false, firstCommand: null };
 
-export function downloadStatus(fetch: OfficialFetch | undefined): string | null {
+function downloadStatus(fetch: OfficialFetch | undefined): string | null {
   if (fetch?.state === "promoting") return "Installing…";
   if (fetch?.state !== "fetching") return null;
   return fetch.total > 0 ? `Downloading… ${Math.min(100, Math.floor((fetch.received / fetch.total) * 100))}%` : "Downloading…";
@@ -51,7 +51,7 @@ function installedView(plugin: OfficialPlugin, programs: ProgramsState | undefin
   return base;
 }
 
-export const olderInstallLine = (plugin: OfficialPlugin, program: string) => `An older ${program} is installed. Install ${officialTitle(plugin)} to update it.`;
+const olderInstallLine = (plugin: OfficialPlugin, program: string) => `An older ${program} is installed. Install ${officialTitle(plugin)} to update it.`;
 
 export function officialView(plugin: OfficialPlugin, programs: ProgramsState | undefined, attempt: OfficialAttempt, fetch?: OfficialFetch, olderProgram: string | null = null): OfficialView {
   if (plugin.state === "unsupported") return HIDDEN;

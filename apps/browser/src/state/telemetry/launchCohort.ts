@@ -1,5 +1,5 @@
-export type SavedCohort = { lastLaunchAt: number | null; versionSince: number | null; versionColdLaunches: number | null };
-export type LaunchCohort = { versionSince: number | null; versionColdLaunches: number | null; coldNth: number | null };
+type SavedCohort = { lastLaunchAt: number | null; versionSince: number | null; versionColdLaunches: number | null };
+type LaunchCohort = { versionSince: number | null; versionColdLaunches: number | null; coldNth: number | null };
 
 export function nextLaunchCohort(saved: SavedCohort, firstOfVersion: boolean, startedAt: number, bootTime: number | null | undefined): LaunchCohort {
   const cold = bootTime != null && saved.lastLaunchAt != null ? saved.lastLaunchAt < bootTime : null;

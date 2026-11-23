@@ -4,7 +4,7 @@ import type { Tab } from "../browser/types";
 import { useBrowser } from "../browser/store";
 import { isIncognitoProfile } from "../browser/model";
 
-export type UnreadSiteSettings = Pick<Settings, "showUnreadCounts" | "unreadHiddenSites">;
+type UnreadSiteSettings = Pick<Settings, "showUnreadCounts" | "unreadHiddenSites">;
 
 const HOST_CACHE_LIMIT = 512;
 const hosts = new Map<string, string>();
@@ -51,4 +51,3 @@ export function toggleSiteUnread(tabId: string) {
   setSiteUnreadShown(tab.url, isUnreadSiteHidden(useBrowser.getState().settings, tab.url));
 }
 
-export const hiddenUnreadSiteCount = (settings: UnreadSiteSettings): number => settings.unreadHiddenSites?.length ?? 0;

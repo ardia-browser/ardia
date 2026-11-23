@@ -6,9 +6,9 @@ import { fitsOnLine } from "./socketWire";
 import { noteSocketLineShrunk } from "../telemetry/cliCounts";
 import type { ConsentToken } from "../telemetry/client";
 
-export const MAX_PENDING_DECISIONS = 64;
-export const MAX_PENDING_PER_CONNECTION = 16;
-export const MAX_SERVED_HOOKS = 100;
+const MAX_PENDING_DECISIONS = 64;
+const MAX_PENDING_PER_CONNECTION = 16;
+const MAX_SERVED_HOOKS = 100;
 
 type Responder = { connection: number; generation: number; served: Map<string, string> };
 type Pending = {
@@ -84,7 +84,7 @@ function sendLine(connection: number, line: string) {
   }
 }
 
-export const decideLine = (id: string, event: string, hook: HookSpec, deadlineMs: number, data: Record<string, unknown>) =>
+const decideLine = (id: string, event: string, hook: HookSpec, deadlineMs: number, data: Record<string, unknown>) =>
   JSON.stringify({ decide: id, event, hook: hook.name, revision: hook.revision, deadline: deadlineMs, time: Date.now(), data });
 
 export function requestDecision(hook: HookSpec, event: string, data: Record<string, unknown>, deadlineMs: number, signal?: AbortSignal, consent: ConsentToken | null = null): Promise<unknown> {

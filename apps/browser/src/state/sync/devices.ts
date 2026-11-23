@@ -2,7 +2,7 @@ import { visible, type ScopeState } from "../../platform/sync";
 import { DEVICE, RECEIVES_TABS, deviceRecord, recordId, type DeviceKind, type DeviceRecord } from "./records";
 import type { SyncedDevice } from "./syncDoc";
 
-export const PHONE_SEEN_MS = 30 * 86_400_000;
+const PHONE_SEEN_MS = 30 * 86_400_000;
 
 export const deviceKindOf = (record: { k?: unknown } | null | undefined): DeviceKind => (record?.k === "phone" ? "phone" : "mac");
 

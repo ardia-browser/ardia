@@ -3,7 +3,7 @@ import { confirmConsentRequest, dismissConsentRequest } from "./lifecycle";
 import { currentPlugins, type PluginsStore } from "./store";
 
 type ConsentRequest = NonNullable<PluginsStore["consent"]>;
-export type ConsentOwner = "onboarding" | "settings";
+type ConsentOwner = "onboarding" | "settings";
 
 let onboarding: { id: number; alive: () => boolean; windowId: string | null } | null = null;
 
@@ -60,9 +60,6 @@ export function confirmConsentAs(owner: ConsentOwner, id: number): boolean {
 }
 
 export const dismissConsentAs = (owner: ConsentOwner, id: number): boolean => owns(owner, id) && dismissConsentRequest(id);
-
-export const ownsConsent = owns;
-
 
 export function releaseOnboardingConsent(): boolean {
   const consent = currentPlugins().consent;

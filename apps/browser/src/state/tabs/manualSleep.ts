@@ -23,7 +23,7 @@ export function canSleep(s: BrowserState, id: string): boolean {
   return !!t && hasLoadedPage(t) && webviews.has(id) && !isSleeping(id) && tabEngine(s, id) === "chromium" && !visibleWith(s, id);
 }
 
-export type MenuSleep = { outcome: string; keptBy?: KeptAwakeReason; pastAutomatic?: boolean };
+type MenuSleep = { outcome: string; keptBy?: KeptAwakeReason; pastAutomatic?: boolean };
 
 export async function sleepAsked(id: string, stillWanted: () => boolean = () => true): Promise<MenuSleep> {
   const s = useBrowser.getState();

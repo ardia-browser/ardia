@@ -2,21 +2,21 @@ import type { ImportedExtension, ImportedExtensionSkip } from "../../platform/im
 
 export type ExtensionGroup = { sourceProfile: string; profileId: string; list: ImportedExtension[] };
 
-export type ListedExtension = { id: string; name: string; webStoreUrl: string; offInSource: boolean; pinnedInSource: boolean };
+type ListedExtension = { id: string; name: string; webStoreUrl: string; offInSource: boolean; pinnedInSource: boolean };
 
 export type ExtensionTarget = { profileId: string; profileName: string; extensions: ListedExtension[] };
 
-export type LeftOutReason = ImportedExtensionSkip | "installed";
-export type LeftOutExtension = { name: string; reason: LeftOutReason };
+type LeftOutReason = ImportedExtensionSkip | "installed";
+type LeftOutExtension = { name: string; reason: LeftOutReason };
 
 export type ExtensionListing = { targets: ExtensionTarget[]; leftOut: LeftOutExtension[]; storeOpened: boolean };
 
-export const LEFT_OUT_REASONS: readonly LeftOutReason[] = ["installed", "manifestV2", "unpacked", "policy", "external", "notWebStore"];
+const LEFT_OUT_REASONS: readonly LeftOutReason[] = ["installed", "manifestV2", "unpacked", "policy", "external", "notWebStore"];
 
 const WEB_STORE_DETAIL = "https://chromewebstore.google.com/detail/";
 const EXTENSION_ID = /^[a-p]{32}$/;
 
-export const readsInstallSource = (e: ImportedExtension) => typeof e.enabled === "boolean";
+const readsInstallSource = (e: ImportedExtension) => typeof e.enabled === "boolean";
 
 const listed = (e: ImportedExtension): ListedExtension => ({
   id: e.id,

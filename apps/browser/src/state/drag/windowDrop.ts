@@ -71,7 +71,7 @@ export function openDroppedUrls(windowId: string, profileId: string, placement: 
   return ids;
 }
 
-export type DroppedEntry = { kind: "file"; url: string } | { kind: "url"; url: string } | { kind: "text"; text: string };
+type DroppedEntry = { kind: "file"; url: string } | { kind: "url"; url: string } | { kind: "text"; text: string };
 
 export function droppedInputs(items: DroppedEntry[]): string[] {
   return items.flatMap((item) => {
@@ -81,7 +81,7 @@ export function droppedInputs(items: DroppedEntry[]): string[] {
   });
 }
 
-export function showsNewTab(s: BrowserState, tabId: string): boolean {
+function showsNewTab(s: BrowserState, tabId: string): boolean {
   const tab = s.tabs[tabId];
   if (!tab || tab.url) return false;
   const shown = activeTabId(s, tab.windowId);

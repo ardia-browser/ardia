@@ -25,7 +25,7 @@ function merged({ entries, profileId, privateContext }: Context, registered: rea
   return [...own, ...programs.map((p): ActiveProvider => ({ ...p, query: p.query.bind(p), sendsInput: true }))];
 }
 
-export const activeProviders = (windowId: string): ActiveProvider[] =>
+const activeProviders = (windowId: string): ActiveProvider[] =>
   merged(contextOf(useBrowser.getState(), windowId), useRegisteredProviders.getState().list);
 
 export const providerKeywords = (windowId: string) => keywordProviders(activeProviders(windowId));

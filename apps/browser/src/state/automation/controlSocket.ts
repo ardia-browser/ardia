@@ -48,7 +48,7 @@ import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { startPeerDoorbell } from "./peerDoorbell";
 import { CONTROL_OFF, DEVTOOLS_ENDPOINT, devtoolsEndpointLine, devtoolsEndpointMethod, isDevtoolsEndpoint, refuseDevtoolsEndpoint } from "./socketDevtools";
 
-export const useControlSocket = create<{ status: ControlSocketStatus | null }>()(() => ({ status: null }));
+const useControlSocket = create<{ status: ControlSocketStatus | null }>()(() => ({ status: null }));
 
 let generation: number | null = null;
 let applied = false;
@@ -93,7 +93,7 @@ function deliver(name: AutomationEventName, data: Record<string, unknown>, time 
   if (plain.length) broadcastOnControlSocket(plain, fittedEvent(name, time, redactedEventData(data), consent));
 }
 
-export type FeedConsumer = { subscriptions: () => Iterable<Subscription>; deliver: (name: AutomationEventName, data: Record<string, unknown>, time: number) => void };
+type FeedConsumer = { subscriptions: () => Iterable<Subscription>; deliver: (name: AutomationEventName, data: Record<string, unknown>, time: number) => void };
 
 const consumers = new Map<string, FeedConsumer>();
 
@@ -172,7 +172,7 @@ export function handleControlRequest({ connection, generation: tagged, line }: C
   else reply(body);
 }
 
-export async function windowsWithTargets(windows: AutomationWindow[]): Promise<AutomationWindow[]> {
+async function windowsWithTargets(windows: AutomationWindow[]): Promise<AutomationWindow[]> {
   const ids = windows.flatMap((w) => w.tabs.map((t) => t.id));
   const targets = ids.length ? await controlTabTargets(ids).catch(() => null) : {};
   if (!targets) return windows;

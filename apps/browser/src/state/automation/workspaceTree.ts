@@ -55,13 +55,13 @@ export type Space = {
   tabs: (TabNode | GroupNode)[];
 };
 
-export type WorkspaceWindow = { id: string; kind: AutomationWindowKind; focused: boolean; profile: string; profileName: string; activeTab: string | null; spaces: Space[] };
+type WorkspaceWindow = { id: string; kind: AutomationWindowKind; focused: boolean; profile: string; profileName: string; activeTab: string | null; spaces: Space[] };
 
 export type Workspace = { profiles: { id: string; name: string }[]; windows: WorkspaceWindow[] };
 
 type Snapshot = Pick<BrowserState, "windows" | "windowOrder" | "tabs" | "peeks" | "groups" | "profiles" | "profileOrder" | "splits" | "ui">;
 
-export const colorName = (color: GroupColor | null): string => color ?? "neutral";
+const colorName = (color: GroupColor | null): string => color ?? "neutral";
 
 export const iconName = (icon: string | null): string | null => (icon === NO_GROUP_ICON || icon === NO_ROW_ICON ? "none" : icon);
 

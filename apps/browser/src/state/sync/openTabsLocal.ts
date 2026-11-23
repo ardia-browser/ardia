@@ -21,7 +21,7 @@ export const syncedOpenTab = (s: BrowserState, t: Tab | undefined, pinnedMembers
 export const holdsOpenTabs = (s: BrowserState, profileId: string) =>
   Object.values(s.windows).some((w) => isRegularWindow(w) && (w.profileId === profileId || w.tabIds.some((id) => s.tabs[id]?.profileId === profileId)));
 
-export type LocalOpenTabs = { synced: { key: string; tab: Tab }[]; byKey: Map<string, Tab[]>; held: Set<string>; pinned: Set<string> };
+type LocalOpenTabs = { synced: { key: string; tab: Tab }[]; byKey: Map<string, Tab[]>; held: Set<string>; pinned: Set<string> };
 
 export function localOpenTabs(s: BrowserState, profileId: string): LocalOpenTabs {
   const members = pinnedGroupMembers(s.groups);

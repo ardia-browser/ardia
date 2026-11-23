@@ -9,7 +9,7 @@ import { telemetryRelay } from "./relay";
 
 export type { AnonymousAvatar };
 
-export type TelemetryIdentity = { installId: string | null; sessionId: string; name: string | null; avatar: AnonymousAvatar | null };
+type TelemetryIdentity = { installId: string | null; sessionId: string; name: string | null; avatar: AnonymousAvatar | null };
 
 export function telemetryIdentity(): TelemetryIdentity {
   const { installId } = savedChoice();

@@ -5,7 +5,7 @@ import { repoKey, stackMembers } from "./rows";
 import type { CompletedItem, CompletionState, FolderStatus, LiveAccount, LiveFolder, LiveFolderKind, LiveItem, LiveSourceId } from "./types";
 import { DEFAULT_COUNTDOWN_LEAD, keepDismissedNow, type DismissedNow } from "./meetings";
 
-export type LiveConfig = {
+type LiveConfig = {
   githubClientId: string;
   bitbucketUser: string;
   confluenceSite: string;
@@ -13,7 +13,7 @@ export type LiveConfig = {
   googleClientId: string;
 };
 
-export type CalendarSettings = {
+type CalendarSettings = {
   alertLead: string;
   alertCondition: "always" | "activeOnly";
   showPreview: boolean;
@@ -23,7 +23,7 @@ export type CalendarSettings = {
   prompted: boolean;
 };
 
-export type MeetingGroup = {
+type MeetingGroup = {
   groupId: string;
   callTabId: string;
   occurrence: string | null;
@@ -54,9 +54,9 @@ type LiveState = {
   dismissedNow: DismissedNow;
 };
 
-export const DEFAULT_CONFIG: LiveConfig = { githubClientId: "", bitbucketUser: "", confluenceSite: "", confluenceEmail: "", googleClientId: "" };
+const DEFAULT_CONFIG: LiveConfig = { githubClientId: "", bitbucketUser: "", confluenceSite: "", confluenceEmail: "", googleClientId: "" };
 
-export const DEFAULT_CALENDAR: CalendarSettings = {
+const DEFAULT_CALENDAR: CalendarSettings = {
   alertLead: "1",
   alertCondition: "always",
   showPreview: true,
@@ -137,7 +137,7 @@ export const liveRefreshClaims = { begin: (folderId: string) => persistence.begi
 export const beginLiveRefresh = (folderId: string) => liveRefreshClaims.begin(folderId);
 export const flushLive = () => persistence.flush();
 
-export const FOLDER_DEFAULTS: Record<LiveFolderKind, { name: string; sources: LiveSourceId[] }> = {
+const FOLDER_DEFAULTS: Record<LiveFolderKind, { name: string; sources: LiveSourceId[] }> = {
   pullRequests: { name: "Pull Requests", sources: ["github"] },
   documents: { name: "Documents", sources: ["notion"] },
 };

@@ -78,7 +78,7 @@ export function takePluginCounts() {
   return taken;
 }
 
-export function pluginsSetting(installed: number, active: readonly PluginManifest[]): Record<string, string> {
+function pluginsSetting(installed: number, active: readonly PluginManifest[]): Record<string, string> {
   const used = Object.fromEntries(CONTRIBUTIONS.map((c) => [`plugins_with_${c}`, 0]));
   for (const m of active) for (const c of contributionsOf(m)) used[`plugins_with_${c}`]! += 1;
   return {

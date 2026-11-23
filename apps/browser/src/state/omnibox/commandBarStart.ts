@@ -4,8 +4,8 @@ import type { TabPin } from "../browser/types";
 
 export type CommandBarStart = { openTabs?: { hidePinned?: boolean; hideTopApps?: boolean; limit?: number } };
 
-export const COMMAND_BAR_START_MAX_TABS = 20;
-export const DEFAULT_COMMAND_BAR_TABS = 8;
+const COMMAND_BAR_START_MAX_TABS = 20;
+const DEFAULT_COMMAND_BAR_TABS = 8;
 
 const OPEN_TAB_KEYS = new Set(["hidePinned", "hideTopApps", "limit"]);
 

@@ -45,7 +45,7 @@ import { startCaptionRegionSync } from "../windows/captionRegions";
 const QUIT_SAVES_WAIT_MS = 3_000;
 
 
-export const shellWindowPort: WindowPort = {
+const shellWindowPort: WindowPort = {
   open(id, options, lightsCenter) {
     if (options.maximized) noteWindowReopenedMaximized();
     void setTrafficLightsCenter(id, lightsCenter);

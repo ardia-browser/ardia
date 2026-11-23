@@ -18,7 +18,7 @@ export type UploadState =
   | { phase: "sent"; sent: Sent }
   | { phase: "failed"; stage: FailedStage; message: string; created: Created | null; errorClass: FailureClass; status: number; attempts: number };
 
-export type JsonReply = { status: number; json: unknown };
+type JsonReply = { status: number; json: unknown };
 
 export type UploadDeps = {
   postJson(url: string, body: unknown, headers: Record<string, string>): Promise<JsonReply>;
@@ -28,7 +28,7 @@ export type UploadDeps = {
   sleep(ms: number): Promise<void>;
 };
 
-export type Endpoint = { url: string; key: string; keyHeader: string };
+type Endpoint = { url: string; key: string; keyHeader: string };
 
 const object = (value: unknown): Record<string, unknown> => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
 const text = (value: unknown): string | null => (typeof value === "string" && value ? value : null);
@@ -40,7 +40,7 @@ export function resolveUrl(base: string, path: string): string {
   return `${base.replace(/[?#].*$/, "").replace(/\/[^/]*$/, "")}/${path}`;
 }
 
-export function reportPath(endpoint: string, id: string, suffix: string): string {
+function reportPath(endpoint: string, id: string, suffix: string): string {
   return `${endpoint.replace(/\/+$/, "")}/${encodeURIComponent(id)}/${suffix}`;
 }
 
@@ -77,7 +77,7 @@ export function failureClass(status: number, json: unknown): FailureClass {
   return "server";
 }
 
-export const isRetryable = (errorClass: FailureClass) => errorClass === "offline" || errorClass === "storage" || errorClass === "server";
+const isRetryable = (errorClass: FailureClass) => errorClass === "offline" || errorClass === "storage" || errorClass === "server";
 
 export type RestartReason = "expired" | "rejected" | "files_changed";
 

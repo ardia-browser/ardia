@@ -201,7 +201,7 @@ export async function openLiveFolderMenu(windowId: string, folderId: string) {
   else if (choice === "delete") deleteLiveFolder(folderId, { consent });
 }
 
-export function liveItemMenuItems(windowId: string, folderId: string, item: LiveItem, tabId: string | null): MenuItem[] {
+function liveItemMenuItems(windowId: string, folderId: string, item: LiveItem, tabId: string | null): MenuItem[] {
   const unread = !!live().unread[folderId]?.includes(item.id);
   const shown = !!tabId && activeTabId(useBrowser.getState(), windowId) === tabId;
   return sections(

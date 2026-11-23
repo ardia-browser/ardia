@@ -11,7 +11,7 @@ import { awaitsKeep } from "./status";
 import { noteUncleanedUrlCopied } from "../telemetry/urlCopies";
 import { consentToken } from "../telemetry/client";
 
-export type DownloadMenuState = { held: boolean; downloading: boolean; paused: boolean; opensWhenDone: boolean; fileExists: boolean };
+type DownloadMenuState = { held: boolean; downloading: boolean; paused: boolean; opensWhenDone: boolean; fileExists: boolean };
 
 export function downloadMenuItems(d: DownloadMenuState): MenuItem[] {
   const lead: MenuItem[] = d.held

@@ -13,7 +13,7 @@ const PLUGIN_CHOICE = /^plugin:[a-z0-9][a-z0-9-]{0,39}$/;
 
 export const pluginChoice = (name: string): PasswordManagerChoice => `${PLUGIN_PREFIX}${name}` as PasswordManagerChoice;
 export const choicePlugin = (choice: string): string | null => (choice.startsWith(PLUGIN_PREFIX) ? choice.slice(PLUGIN_PREFIX.length) : null);
-export const isPasswordManagerChoice = (value: unknown): value is PasswordManagerChoice =>
+const isPasswordManagerChoice = (value: unknown): value is PasswordManagerChoice =>
   value === "ardia" || value === "none" || (typeof value === "string" && PLUGIN_CHOICE.test(value));
 export const choiceKind = (choice: PasswordManagerChoice): PasswordManagerKind => (choice === "ardia" || choice === "none" ? choice : "plugin");
 
@@ -47,12 +47,12 @@ export function storedPasswordManager(s: ChoiceState, profileId: string): Passwo
     .find(isPasswordManagerChoice);
 }
 
-export function defaultPasswordManager(plugins: readonly ManagerPlugin[]): PasswordManagerChoice {
+function defaultPasswordManager(plugins: readonly ManagerPlugin[]): PasswordManagerChoice {
   const builtIn = plugins.find((p) => p.builtIn);
   return builtIn ? pluginChoice(builtIn.name) : "ardia";
 }
 
-export function effectivePasswordManager(stored: PasswordManagerChoice | undefined, plugins: readonly ManagerPlugin[]): PasswordManagerChoice {
+function effectivePasswordManager(stored: PasswordManagerChoice | undefined, plugins: readonly ManagerPlugin[]): PasswordManagerChoice {
   if (!PLATFORM_FEATURES.systemPasswordManagers) return "ardia";
   if (stored === undefined) return defaultPasswordManager(plugins);
   const name = choicePlugin(stored);
@@ -73,9 +73,9 @@ export function neverChosenProfiles(s: ChoiceState): string[] {
     .filter((id) => storedPasswordManager(s, id) === undefined);
 }
 
-export type ProviderState = ChoiceState & Pick<Parameters<typeof engineProfile>[0], "profiles">;
+type ProviderState = ChoiceState & Pick<Parameters<typeof engineProfile>[0], "profiles">;
 
-export type FieldProviderEntry = { profile: string; fields: ManagerPlugin["spec"]["fields"]; codeSetup: boolean };
+type FieldProviderEntry = { profile: string; fields: ManagerPlugin["spec"]["fields"]; codeSetup: boolean };
 
 export function fieldProviderSet(s: ProviderState, plugins: readonly ManagerPlugin[]): { providers: FieldProviderEntry[]; key: string } {
   const byEngine = new Map<string, { entry: FieldProviderEntry; by: string }>();
@@ -88,8 +88,6 @@ export function fieldProviderSet(s: ProviderState, plugins: readonly ManagerPlug
   const sorted = [...byEngine.values()].sort((a, b) => (a.entry.profile < b.entry.profile ? -1 : a.entry.profile > b.entry.profile ? 1 : 0));
   return { providers: sorted.map((x) => x.entry), key: JSON.stringify(sorted) };
 }
-
-export const fieldProviders = (s: ProviderState, plugins: readonly ManagerPlugin[]) => fieldProviderSet(s, plugins).providers;
 
 export function passwordManagerProfileCounts(s: ChoiceState, plugins: readonly ManagerPlugin[]): Record<string, string> {
   const counts: Record<PasswordManagerKind, number> = { ardia: 0, none: 0, plugin: 0 };

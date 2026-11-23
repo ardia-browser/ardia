@@ -20,13 +20,10 @@ test("the shared consent sheet tells you which never-chosen profiles a built-in 
   assert.ok(lines.some((text) => /^Moves 1 profile to .+\. It never picked a password manager$/.test(text)), lines.join("\n"));
 });
 
-test("Settings lists what a plugin gets in the sheet's groups and rows, with its own sentence-case headers", async () => {
-  const { groupedConsent, CONSENT_SETTINGS_TITLES } = await import("../../state/plugins/consentLine.ts");
+test("the sheet and Settings list what a plugin gets in the same groups and rows, under sentence-case headers like the rest of Settings", async () => {
+  const { groupedConsent } = await import("../../state/plugins/consentLine.ts");
   const lines = consentLines(manifest, { official: true, movesProfiles: 0 });
-  const sheetGroups = groupedConsent(lines);
-  const settingsGroups = groupedConsent(lines, CONSENT_SETTINGS_TITLES);
-  assert.deepEqual(settingsGroups.map((g) => g.group), sheetGroups.map((g) => g.group));
-  assert.deepEqual(settingsGroups.map((g) => g.lines), sheetGroups.map((g) => g.lines), "the same rows in the same order");
+  const settingsGroups = groupedConsent(lines);
   for (const g of settingsGroups) assert.equal(g.title, g.title[0] + g.title.slice(1).toLowerCase(), `${g.title} is sentence case`);
   assert.deepEqual(settingsGroups.map((g) => g.title), ["What it does"]);
   assert.ok(settingsGroups[0].lines.every((l) => l.detail && !l.title.includes(l.detail)), "each row keeps its title and its detail apart");

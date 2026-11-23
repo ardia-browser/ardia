@@ -1,11 +1,16 @@
 import { curve, duration } from "../../ui/motion";
-import { sheetWidth, space } from "../../ui/tokens";
+import { concentric, radius, sheetWidth, space } from "../../ui/tokens";
 
 const INSET = space.xxl;
+const LIST_INSET = space.m;
 
 export const CONSENT_SHEET = {
   size: "m",
   inset: INSET,
+  listInset: LIST_INSET,
+  get groupRadius() {
+    return concentric(radius.sheet, LIST_INSET);
+  },
   icon: { box: 52, glyph: 26 },
   iconFill: "#636366",
   iconSheen: 0.14,
@@ -31,12 +36,11 @@ export const CONSENT_SHEET = {
   chipPadY: space.xxs,
   footerGap: space.xl,
   footerHeight: 22,
-  reasonLines: 2,
   bar: { width: 180, height: 4, segment: 0.32, track: 0.1, trackContrast: 0.2 },
   statusGlyph: 14,
   statusBox: 16,
   maxHeight: "96%",
-  fade: space.xxxl,
+  fade: space.xl,
   fadeBands: 8,
   width: sheetWidth.m - 2 * INSET,
 } as const;

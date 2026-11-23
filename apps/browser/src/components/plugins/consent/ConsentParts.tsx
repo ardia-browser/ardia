@@ -29,7 +29,7 @@ export function ConsentSections({ lines }: { lines: readonly ConsentLine[] }) {
           <Text size="small" weight="semibold" tone="textSecondary" accessibilityRole="header" style={SECTION_TITLE}>
             {section.title}
           </Text>
-          <View style={[GROUP, { backgroundColor: theme.groupFill, borderColor: border }]}>
+          <View style={[GROUP, { backgroundColor: theme.groupFill, borderColor: border, borderRadius: C.groupRadius }]}>
             {section.lines.map((line, index) => (
               <ConsentRow key={`${index}:${line.text}`} line={line} first={index === 0} />
             ))}
@@ -150,7 +150,7 @@ const SHEEN = { position: "absolute", top: 0, left: 0, right: 0, height: C.icon.
 const ICON_GLYPH = { width: C.icon.box, height: C.icon.box } as const;
 const SECTIONS = { gap: C.sectionGap } as const;
 const SECTION_TITLE = { paddingHorizontal: C.rowPadX, marginBottom: C.sectionTitleGap } as const;
-const GROUP = { borderRadius: radius.panel, borderWidth: StyleSheet.hairlineWidth * 2, overflow: "hidden" } as const;
+const GROUP = { borderWidth: StyleSheet.hairlineWidth * 2, overflow: "hidden" } as const;
 const ROW = { flexDirection: "row", alignItems: "flex-start", gap: C.rowGap, paddingHorizontal: C.rowPadX, paddingVertical: C.rowPadY } as const;
 const DIVIDER = { position: "absolute", top: 0, right: 0, left: C.rowPadX + C.rowIcon.box + C.rowGap, height: StyleSheet.hairlineWidth } as const;
 const ROW_ICON = { width: C.rowIcon.box, alignItems: "center" } as const;

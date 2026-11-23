@@ -10,9 +10,7 @@ export type ConsentLine = {
   text: string;
 };
 
-export const CONSENT_GROUP_TITLES: Readonly<Record<ConsentGroup, string>> = { reaches: "What It Can Reach", limits: "Safeguards", does: "What It Does" };
-
-export const CONSENT_SETTINGS_TITLES: Readonly<Record<ConsentGroup, string>> = { reaches: "What it can reach", limits: "Safeguards", does: "What it does" };
+export const CONSENT_GROUP_TITLES: Readonly<Record<ConsentGroup, string>> = { reaches: "What it can reach", limits: "Safeguards", does: "What it does" };
 
 export const CONSENT_GROUP_ORDER: readonly ConsentGroup[] = ["reaches", "limits", "does"];
 
@@ -26,5 +24,5 @@ export function consentLine(group: ConsentGroup, icon: string, title: string, mo
   return { icon, group, title, text, ...(more.detail ? { detail: more.detail } : {}), ...(items ? { items, ...(more.code ? { code: true } : {}) } : {}) };
 }
 
-export const groupedConsent = (lines: readonly ConsentLine[], titles: Readonly<Record<ConsentGroup, string>> = CONSENT_GROUP_TITLES) =>
-  CONSENT_GROUP_ORDER.map((group) => ({ group, title: titles[group], lines: lines.filter((l) => l.group === group) })).filter((g) => g.lines.length > 0);
+export const groupedConsent = (lines: readonly ConsentLine[]) =>
+  CONSENT_GROUP_ORDER.map((group) => ({ group, title: CONSENT_GROUP_TITLES[group], lines: lines.filter((l) => l.group === group) })).filter((g) => g.lines.length > 0);

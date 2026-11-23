@@ -1,6 +1,6 @@
 import { Fragment } from "react";
 import { View } from "react-native";
-import { CONSENT_SETTINGS_TITLES, groupedConsent, type ConsentLine } from "../../../state/plugins/consentLine";
+import { groupedConsent, type ConsentLine } from "../../../state/plugins/consentLine";
 import { ConsentChips } from "../../plugins/consent/ConsentParts";
 import { Symbol, Text } from "../../ui";
 import { useTheme } from "../../ui/theme";
@@ -9,7 +9,7 @@ import { Group, Row, SectionHeader } from "../Form";
 
 export function PluginConsentRows({ lines }: { lines: readonly ConsentLine[] }) {
   const theme = useTheme();
-  return groupedConsent(lines, CONSENT_SETTINGS_TITLES).map((section) => (
+  return groupedConsent(lines).map((section) => (
     <Fragment key={section.group}>
       <SectionHeader title={section.title} />
       <Group>

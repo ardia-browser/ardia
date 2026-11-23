@@ -186,12 +186,13 @@ function List({ changed, lines }: { changed: boolean; lines: ConsentLine[] }) {
     const next = { ...metrics.current, ...patch };
     metrics.current = next;
     setAbove(next.offset > 0);
-    setBelow(next.content - next.frame - next.offset > 1);
+    setBelow(next.content - next.frame - next.offset > C.fade + 1);
   };
   return (
     <View style={LIST_AREA}>
       <ScrollView
         style={LIST}
+        contentContainerStyle={LIST_CONTENT}
         scrollEventThrottle={16}
         onScroll={(e) => measure({ offset: Math.max(0, e.nativeEvent.contentOffset.y) })}
         onLayout={(e) => measure({ frame: e.nativeEvent.layout.height })}
@@ -270,18 +271,22 @@ function Footer({
           </Text>
         </>
       ) : (
-        <>
-          <Symbol name="exclamationmark.triangle.fill" size={C.statusGlyph} color={theme.warning} style={STATUS_ICON} />
-          <Text size="small" tone="textSecondary" lines={C.reasonLines} selectable style={GROW}>
-            {phase.reason}
-          </Text>
-          <Ring on={selected === "cancel"} color={theme.formAccent}>
-            <Button title="Close" onPress={onClose} />
-          </Ring>
-          <Ring on={selected === "install"} color={theme.formAccent}>
-            <Button title="Try Again" kind="primary" onPress={onRetry} />
-          </Ring>
-        </>
+        <View style={FAILED}>
+          <View style={REASON}>
+            <Symbol name="exclamationmark.triangle.fill" size={C.statusGlyph} color={theme.warning} style={STATUS_ICON} />
+            <Text size="small" tone="textSecondary" selectable style={GROW}>
+              {phase.reason}
+            </Text>
+          </View>
+          <View style={BUTTONS}>
+            <Ring on={selected === "cancel"} color={theme.formAccent}>
+              <Button title="Close" onPress={onClose} />
+            </Ring>
+            <Ring on={selected === "install"} color={theme.formAccent}>
+              <Button title="Try Again" kind="primary" onPress={onRetry} />
+            </Ring>
+          </View>
+        </View>
       )}
     </Animated.View>
   );
@@ -298,9 +303,13 @@ const NAME = { textAlign: "center", marginTop: C.headerGap } as const;
 const META = { flexDirection: "row", alignItems: "center", gap: C.metaGap * 2, marginTop: C.metaGap } as const;
 const SEAL = { width: C.seal + C.metaGap, height: C.seal + C.metaGap, transform: [{ translateY: -C.sealLift }] } as const;
 const DESCRIPTION = { textAlign: "center", marginTop: C.descriptionGap } as const;
-const LIST_AREA = { flexShrink: 1, marginTop: C.listGap } as const;
+const LIST_AREA = { flexShrink: 1, marginTop: C.listGap, marginHorizontal: C.listInset - C.inset } as const;
 const LIST = { flexGrow: 0, flexShrink: 1 } as const;
+const LIST_CONTENT = { paddingBottom: C.fade } as const;
 const CHANGED = { paddingHorizontal: C.rowPadX } as const;
-const FOOTER = { flexDirection: "row", alignItems: "center", gap: C.rowGap, minHeight: C.footerHeight, marginTop: C.footerGap } as const;
+const FOOTER = { flexDirection: "row", alignItems: "center", gap: C.rowGap, minHeight: C.footerHeight } as const;
 const GROW = { flex: 1 } as const;
+const FAILED = { flex: 1, gap: C.footerGap } as const;
+const REASON = { flexDirection: "row", alignItems: "flex-start", gap: C.rowGap } as const;
+const BUTTONS = { flexDirection: "row", justifyContent: "flex-end", gap: C.rowGap } as const;
 const STATUS_ICON = { width: C.statusBox, height: C.statusBox } as const;

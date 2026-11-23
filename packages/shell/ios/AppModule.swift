@@ -40,7 +40,7 @@ public class AppModule: Module {
 
     AsyncFunction("appIcons") { (size: Double) -> [[String: Any]] in
       AppIcons.variants.map { ["id": $0.id, "name": $0.name, "preview": AppIcons.preview($0.id, size: size) as Any] }
-    }.runOnQueue(AppIcons.previewQueue)
+    }.runOnQueue(.main)
     AsyncFunction("appIcon") { () -> String in AppIcons.current }.runOnQueue(.main)
     AsyncFunction("setAppIcon") { (id: String) in AppIcons.set(id, announce: !LaunchConfig.shared.isolated) }.runOnQueue(.main)
 

@@ -103,6 +103,7 @@ export function SettingsWindow() {
     trackSettingsSection(shown.pane, openedAt ? Date.now() - openedAt : undefined);
   }, [shown?.pane]);
   useEffect(() => settingsSearchHost(), []);
+  useEffect(() => () => void consumeSettingsOpenAt(), []);
   useEffect(() => markCaptionRegions(SETTINGS_WINDOW_ID, [[TITLE_LEFT, 0, CONTROLS_ROOM, TOOLBAR]]), []);
   useEffect(() => void setTrafficLightsCenter(SETTINGS_WINDOW_ID, [LIGHTS_CENTER[0], TOOLBAR / 2]), []);
   const scroller = useRef<ScrollView>(null);

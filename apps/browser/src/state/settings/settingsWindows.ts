@@ -81,7 +81,7 @@ export function openSettings(pane?: SettingsPane, profileId?: string | null, det
     goToSettingsPane(pane, profileId ?? null, detail ?? null);
   }
   const nav = useSettingsNav.getState();
-  pendingOpenAt = Date.now();
+  pendingOpenAt ??= Date.now();
   openListeners.forEach((listener) => listener(nav.pane, nav.profileId));
   void openWindow(SETTINGS_WINDOW_ID, { kind: "settings", title: "Settings" });
 }

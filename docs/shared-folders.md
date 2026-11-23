@@ -25,9 +25,19 @@ Arc had shared folders; Dia has none, so this is an Ardia extra (`docs/dia-featu
   while links wait for iCloud to download, and `exclamationmark.icloud` in `destructive` when the directory is
   missing or a write failed (`components/sidebar/SharedFolderMark.tsx`).
 - Removing a shared folder from the sidebar (Delete, Close from the menu, ⌃⌘W or the close control, Ungroup, Unpin,
-  Move to Bookmarks Bar, Move to Profile) asks first, and
+  Move to Bookmarks Bar, Move to Profile, dragging it out of Pinned or into another folder) asks first, and
   says the directory stays with every link and with the people it's shared with. It only unbinds; Ardia never
-  deletes the directory.
+  deletes the directory. If the row a drag was dropped before closes or leaves that section while it asks, Remove
+  moves nothing and the folder stays shared (`dropTargetInPlace` in `state/groups/keptFolderDrops.ts`).
+- Dragging a shared folder's last link out doesn't remove the folder: it keeps an "Empty Folder" row and stays shared,
+  and the link's file leaves the directory as any link dragged out does (`state/groups/emptyFolder.ts`). The row
+  itself can't be dragged out. A window's last tab dropped on another window takes its folder along, link and all.
+- A tab torn out of a shared folder is still that link until it is pinned or grouped outside it: then it takes a pin
+  key of its own (`state/pins/keptFolderCopies.ts`, from the pin mirror, which every path goes through), so the
+  folder keeps its link and file. A tab dropped on a split doesn't take the other panes across the edge of a shared
+  folder or of a folder in it (`apartAtKeptFolderEdge`); dragging a whole split row takes every pane it shows.
+- A shared folder and the folders in it stay with one link left, also one made by ⌘-click, which otherwise
+  ungroups at one tab (`leaveGroups` in `state/groups/groups.ts`). Only drops add the Empty Folder row.
 - Shared folders are per profile: the binding is the profile's, so each profile has its own.
 
 ## Files

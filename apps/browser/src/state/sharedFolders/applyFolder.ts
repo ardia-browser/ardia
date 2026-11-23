@@ -1,6 +1,7 @@
 import type { BrowserState } from "../browser/store";
 import type { Tab, TabGroup } from "../browser/types";
 import { activeTabId, makeTab, newId } from "../browser/model";
+import { emptyFolderRow, isEmptyFolderRow } from "../groups/emptyFolder";
 import { nestGroups, orderSections, syncGroupOrder } from "../groups/groups";
 import { markPinned } from "../pins/pinChoices";
 import { removeTabs } from "../tabs/tabs";
@@ -19,11 +20,6 @@ function keysIn(level: TargetLevel, links: Set<string>, dirs: Set<string>) {
 
 const hasLink = (level: TargetLevel): boolean => level.entries.some((e) => e.kind === "link" || hasLink(e.level));
 
-export const EMPTY_FOLDER_URL = "about:blank";
-const EMPTY_FOLDER_TITLE = "Empty Folder";
-
-const isPlaceholder = (t: Tab | undefined) => !!t && !hasPage(t) && (!t.url || t.url === EMPTY_FOLDER_URL);
-
 const sameIds = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
 
 export function withFolder(s: BrowserState, groupId: string, level: TargetLevel, folder: LocalFolder): BrowserState {
@@ -36,7 +32,7 @@ export function withFolder(s: BrowserState, groupId: string, level: TargetLevel,
   keysIn(level, links, dirs);
   const shown = activeTabId(s, windowId);
   const goneLinks = [...folder.tabOf].filter(([key]) => !links.has(key)).map(([, id]) => id);
-  const blanks = hasLink(level) ? (folder.others.get(groupId) ?? []).filter((id) => isPlaceholder(s.tabs[id]) && id !== shown) : [];
+  const blanks = hasLink(level) ? (folder.others.get(groupId) ?? []).filter((id) => isEmptyFolderRow(s.tabs[id]) && id !== shown) : [];
   const released = goneLinks.filter((id) => hasPage(s.tabs[id]!) || id === shown);
   const removed = [...goneLinks.filter((id) => !released.includes(id)), ...blanks];
   let dirty = goneLinks.length + blanks.length > 0;
@@ -101,7 +97,7 @@ export function withFolder(s: BrowserState, groupId: string, level: TargetLevel,
   const leftover = root.tabIds.filter((id) => tabs[id] && !inPlace.has(id) && !released.includes(id) && !removed.includes(id));
   let members = [...placed, ...leftover];
   if (!members.length) {
-    const blank: Tab = { ...makeTab(windowId, profileId, EMPTY_FOLDER_URL, { title: EMPTY_FOLDER_TITLE, customTitle: EMPTY_FOLDER_TITLE }), page: ASLEEP };
+    const blank = emptyFolderRow(windowId, profileId);
     tabs[blank.id] = blank;
     members = [blank.id];
     dirty = true;

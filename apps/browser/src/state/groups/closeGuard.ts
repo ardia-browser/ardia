@@ -1,3 +1,6 @@
+import type { ConsentToken } from "../telemetry/consentPeriod";
+import type { BrowserState } from "../browser/store";
+
 type CloseGuard = (windowId: string, groupId: string) => Promise<boolean>;
 
 let guard: CloseGuard = async () => true;
@@ -6,8 +9,18 @@ export const guardGroupClose = (check: CloseGuard) => void (guard = check);
 
 export const groupCloseAllowed = (windowId: string, groupId: string) => guard(windowId, groupId);
 
-let kept: (groupId: string) => boolean = () => false;
+type KeptCheck = (groupId: string, s?: Pick<BrowserState, "groups">) => boolean;
 
-export const keepGroupsOpen = (check: (groupId: string) => boolean) => void (kept = check);
+let kept: KeptCheck = () => false;
 
-export const groupKeptOpen = (groupId: string) => kept(groupId);
+export const keepGroupsOpen = (check: KeptCheck) => void (kept = check);
+
+export const groupKeptOpen: KeptCheck = (groupId, s) => kept(groupId, s);
+
+type DropNote = (answer: "asked" | "confirmed", consent: ConsentToken | null) => void;
+
+let dropNote: DropNote = () => {};
+
+export const countKeptGroupDrops = (note: DropNote) => void (dropNote = note);
+
+export const noteKeptGroupDrop: DropNote = (answer, consent) => dropNote(answer, consent);

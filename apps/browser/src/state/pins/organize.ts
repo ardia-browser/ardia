@@ -9,6 +9,9 @@ import { placing, type TabPlacement } from "./placing";
 import { pinnedGroupMembers } from "../browser/structure";
 import { samePage } from "../../lib/url";
 import { pinHome } from "./pinHomes";
+import { dropOnceAllowed, dropTargetInPlace, keptFolderLeavingPinned } from "../groups/keptFolderDrops";
+import { withoutEmptyFolderRows } from "../groups/emptyFolder";
+import { foreignWriteHooks } from "../browser/foreignWriteHooks";
 
 export type OrganizeSlice = {
   selection: Record<string, string[]>;
@@ -120,8 +123,21 @@ export const createOrganizeSlice: StateCreator<BrowserState, [], [], OrganizeSli
     set((s) => placing(s, ids, placement));
   },
 
-  dropTabs(ids, drop) {
+  dropTabs(dragged, drop) {
     const s = get();
+    const ids = drop.type === "group" ? dragged : withoutEmptyFolderRows(s, dragged);
+    if (dragged.length && !ids.length) return false;
+    const leaving = keptFolderLeavingPinned(s, drop);
+    if (leaving) {
+      const move = () => {
+        const now = get();
+        if (keptFolderLeavingPinned(now, drop) !== leaving || !dropTargetInPlace(now, drop)) return false;
+        foreignWriteHooks.around(() => set(dropping(now, ids, drop)));
+        return true;
+      };
+      void dropOnceAllowed(s.groups[leaving]!.windowId, leaving, move);
+      return false;
+    }
     const next = dropping(s, ids, drop);
     if (next === s) return false;
     set(next);

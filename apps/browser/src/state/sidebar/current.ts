@@ -1,5 +1,5 @@
 import { useBrowser } from "../browser/store";
-import { movingTabIds, resolveDrop, type DragSource, type DropSpot } from "../drag/drops";
+import { movingTabIds, resolveDrop, type DragSource, type Drop, type DropSpot } from "../drag/drops";
 import { descendantIds } from "../groups/groups";
 import { cleanUpCandidates } from "../pins/tabCleanup";
 import { sharedTabsIn, sharesTabs } from "../tabs/tabShare";
@@ -8,6 +8,7 @@ import { splitsOnRow } from "../splits/lanes";
 import { splitOf } from "../splits/splits";
 import { isRegularWindow } from "../windows/small";
 import { isIncognitoProfile } from "../browser/model";
+import { keptFolderLeavingPinned } from "../groups/keptFolderDrops";
 
 const store = () => useBrowser.getState();
 
@@ -38,6 +39,8 @@ export function profileBeside(profileId: string, step: -1 | 1): string | null {
 export const splitIdOfNow = (tabId: string) => splitOf(store(), tabId)?.id ?? null;
 
 export const shownProfileOf = (windowId: string) => store().windows[windowId]?.profileId ?? null;
+
+export const dropWaitsForAnswerNow = (drop: Drop) => !!keptFolderLeavingPinned(store(), drop);
 
 export const splitsOnRowNow = (tabId: string, rowTabId: string) => splitsOnRow(store(), tabId, rowTabId);
 

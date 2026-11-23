@@ -4,7 +4,8 @@ import { activeTabId, pinSection, viewTabIds } from "../browser/model";
 import { selectedTabIds } from "../pins/organize";
 import { canMoveGroup, movingGroup, type GroupPlacement } from "../pins/tabGrouping";
 import { placing, type TabPlacement } from "../pins/placing";
-import { splitOf } from "../splits/splits";
+import { splitOf, withSplitRows } from "../splits/splits";
+import { withEmptiedFoldersKept } from "../groups/emptyFolder";
 import { addToTileFolder, tileFolderOf } from "../pins/tileFolders";
 import { entryKey } from "../sidebar/entryKey";
 
@@ -100,13 +101,13 @@ export function resolveDrop(s: Pick<BrowserState, "groups">, source: DragSource,
 export function dropping(s: BrowserState, ids: string[], drop: Drop): BrowserState {
   switch (drop.type) {
     case "tabs":
-      return placing(s, ids, drop.placement);
+      return withEmptiedFoldersKept(s, placing(s, ids, drop.placement), new Set(withSplitRows(s, ids)));
     case "group": {
       const moved = movingGroup(s, drop.groupId, drop.placement);
       return Object.keys(moved).length ? { ...s, ...moved } : s;
     }
     case "folder":
-      return addToTileFolder(s, ids, drop.ontoId, drop.beforeId);
+      return withEmptiedFoldersKept(s, addToTileFolder(s, ids, drop.ontoId, drop.beforeId), new Set(withSplitRows(s, ids)));
     default:
       return s;
   }

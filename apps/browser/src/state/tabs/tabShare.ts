@@ -10,6 +10,7 @@ import { pinnedGroupMembers } from "../browser/structure";
 import { isRegularWindow } from "../windows/small";
 import { splitTabIds, withPaneIds } from "../splits/splits";
 import { isPeekTab, peekTabIds } from "../peek/peek";
+import { keptFolderOf } from "../groups/emptyFolder";
 
 type Section = ReturnType<typeof sectionOf>;
 
@@ -94,7 +95,7 @@ export function pagesIntoSplits(s: BrowserState, prev: BrowserState): BrowserSta
       const holderId = holderOfPage(t);
       if (!t || !holderId || !(sharedListTab(next, t) || (was && sharedListTab(prev, was)))) continue;
       const holder = next.tabs[holderId];
-      if (!holder || holder.pin || !hasPage(holder) || holder.windowId === t.windowId || holder.profileId !== t.profileId || pinKeyOf(holder) !== pinKeyOf(t) || inSplit(next, holder.id)) continue;
+      if (!holder || holder.pin || keptFolderOf(next, holder.id) || !hasPage(holder) || holder.windowId === t.windowId || holder.profileId !== t.profileId || pinKeyOf(holder) !== pinKeyOf(t) || inSplit(next, holder.id)) continue;
       next = swapPlaces(next, holder.id, t.id);
       next = removeTabs(keepShownProfile(next, holder.windowId, [t.id]), [t.id], false);
     }

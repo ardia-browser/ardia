@@ -7,6 +7,7 @@ import { installDroppedCrx } from "../extensions/crxDrop";
 import { activeTabId } from "../browser/model";
 import { splitOf, splitTabIdsOf } from "../splits/splits";
 import { currentInterfaceScale } from "../settings/interfaceScale";
+import { withoutEmptyFolderRows } from "../groups/emptyFolder";
 
 const NEW_WINDOW_GRAB = { x: 90, y: 70 };
 
@@ -37,7 +38,7 @@ export function windowUnder(s: BrowserState, source: string, x: number, y: numbe
 }
 
 export function dropTabsOutside(
-  tabIds: string[],
+  dragged: string[],
   source: string,
   x: number,
   y: number,
@@ -46,6 +47,7 @@ export function dropTabsOutside(
 ): string | null {
   const s = useBrowser.getState();
   const from = s.windows[source];
+  const tabIds = withoutEmptyFolderRows(s, dragged);
   if (!from || from.kind === "private" || !tabIds.length) return null;
   const { overWindow } = windowUnder(s, source, x, y, live);
   if (overWindow) {

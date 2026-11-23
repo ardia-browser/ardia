@@ -10,6 +10,7 @@ import { orderSections } from "../groups/groups";
 import { dropping, type Drop } from "../drag/drops";
 import { isRegularWindow } from "./small";
 import { adoptParkedPins } from "../pins/parkedPins";
+import { withEmptiedFoldersKept } from "../groups/emptyFolder";
 
 function sharedTopAppCopy(s: BrowserState, tab: Tab, profileId: string): string | undefined {
   if (!isTopApp(tab) || !topAppsShared(s, tab.profileId, profileId)) return undefined;
@@ -68,7 +69,9 @@ export function droppedInProfile(before: BrowserState, tabIds: string[], profile
   const tabs = movable(s, tabIds);
   const copies = placedCopies(s, tabIds, profileId);
   const placed = tabs.map((t) => copies[t.id] ?? t.id);
-  let next = tabs.reduce((acc, t) => (arriving(s, t, profileId) ? intoProfile(acc, t.id, profileId) : acc), s);
+  const leaving = tabs.filter((t) => arriving(s, t, profileId));
+  let next = leaving.reduce((acc, t) => intoProfile(acc, t.id, profileId), s);
+  next = withEmptiedFoldersKept(s, next, new Set(leaving.map((t) => t.id)));
   next = dropping(next, placed, drop);
   const last = findLast(placed, (id) => next.tabs[id]?.profileId === profileId);
   return { state: last ? apply(next, activated(next, last)) : next, placed: copies };

@@ -140,6 +140,24 @@ test("a pin another Mac published under the app's old name arrives with today's"
   assert.equal(b.with(() => S().tabs.oldpin?.pinnedUrl), "ardia://history");
 });
 
+test("a pin that took its own key isn't taken for the pin whose key is its tab id", async () => {
+  const folder = new Folder();
+  const b = new Device("devB", folder);
+  const apart = b.with(() => {
+    const w = S().createWindow({ url: "https://b-home.example/" });
+    const id = S().newTab(w, { url: "https://apart.example/", background: true });
+    S().pinTabs([id], true);
+    S().updateTab(id, { pinKey: "apart-key" });
+    return id;
+  });
+  const h = new Clock("devA").tick();
+  const value = { g: null, u: "https://original.example/", t: null, i: null, ti: "Original", pos: "V" };
+  folder.files.set("log1", { scope: "p", payload: JSON.stringify({ v: 1, kind: "log", device: "devA", seq: 1, at: Date.now(), ops: [{ k: `pin:t:${apart}`, h, v: value }] }) });
+  await b.sync();
+  assert.deepEqual(area(b), ["apart:tile", "original:tile"]);
+  assert.equal(b.with(() => S().tabs[apart].pinKey), "apart-key");
+});
+
 const previousVersion = () => [previous.pinnedRowsAdapter("default"), previous.pinnedAdapter("default")];
 
 const memberOf = (device, key) =>

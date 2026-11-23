@@ -2,7 +2,7 @@ import { layout } from "../ui/theme";
 import { Animated, type View } from "react-native";
 import { NO_DROP } from "../../state/drag/drops";
 import { dropTabs } from "../../state/pins/actions";
-import { dragHomeOf, movingTabsFrom, profileBeside, splitIdOfNow } from "../../state/sidebar/current";
+import { dropWaitsForAnswerNow, dragHomeOf, movingTabsFrom, profileBeside, splitIdOfNow } from "../../state/sidebar/current";
 import type { TabPlacement } from "../../state/pins/placing";
 import { SLIDE } from "../tabstrip/tokens";
 import { beginTabDrag, cancelTabDrag, endTabDrag, setDragPicture, updateTabDrag } from "../../state/drag/tabDrag";
@@ -253,7 +253,7 @@ export class DragController extends DragTargeting {
     const { sources, drop, ghost, measured, into, home, shown, overProfile, gapKey } = session;
     const crossed = !!home && shown !== home.profileId;
     const toIcon = commit && measured && !!home && !!overProfile && overProfile !== home.profileId ? overProfile : null;
-    const elsewhere = crossed || !!toIcon;
+    const elsewhere = crossed || !!toIcon, waits = commit && !elsewhere && dropWaitsForAnswerNow(drop);
     const splitDrop = commit && !toIcon ? endTabDrag() : (cancelTabDrag(), false);
     const marks = dragMarksOf(this.marks);
     const leftPanel = sources[0]?.section === "folder" && marks.folderAway;
@@ -263,7 +263,7 @@ export class DragController extends DragTargeting {
     };
     const spot =
       !splitDrop && !elsewhere && measured && ghost && sources.length === 1 && sources[0]!.kind !== "tile" && sources[0]!.section !== "folder" && !into && drop.type !== "split" && drop.type !== "folder"
-        ? this.landingSpot(commit ? drop : NO_DROP)
+        ? this.landingSpot(commit && !waits ? drop : NO_DROP)
         : null;
     const dragged = sources.flatMap((i) => i.tabIds);
     const dropped = commit && !splitDrop && measured && sources.length > 0;
@@ -282,9 +282,9 @@ export class DragController extends DragTargeting {
       else if (made?.adopted === "list") noteSidebarDrop("split_unpinned", session);
     } else if (dropped) {
       const kind = marks.tile ? "tile" : gapKey ? "gap" : null;
-      if (kind && drop.type !== "none") noteSidebarDrop(kind, session);
+      if (kind && drop.type !== "none" && !waits) noteSidebarDrop(kind, session);
       dropTabs(dragged, drop);
-      if (drop.sequence) arrangeLive(drop.sequence);
+      if (drop.sequence && !waits) arrangeLive(drop.sequence);
     }
     this.reset();
     settled?.();

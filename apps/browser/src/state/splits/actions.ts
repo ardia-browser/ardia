@@ -9,6 +9,7 @@ import { splitLane, type SplitLane, splitsOnRow } from "./lanes";
 import type { AdoptId } from "../browser/types";
 import { noteSplit } from "../telemetry/usage";
 import { returnFocusToPage } from "../sidebar/actions";
+import { keptFolderOf, withoutEmptyFolderRows } from "../groups/emptyFolder";
 
 const store = () => useBrowser.getState();
 
@@ -61,8 +62,8 @@ export function openLinkInSplit(sourceTabId: string, url: string, adoptId?: Adop
 
 export function dropTabIntoSplit(tabId: string, targetTabId: string, side: SplitSide): string | null {
   const target = store().tabs[targetTabId];
-  if (!target || tabId === targetTabId) return null;
-  return openSplitPane(target.windowId, { tabId, anchorTabId: targetTabId, side });
+  if (!target || tabId === targetTabId || !withoutEmptyFolderRows(store(), [tabId]).length) return null;
+  return openSplitPane(target.windowId, { tabId, anchorTabId: targetTabId, side, dropped: true });
 }
 
 export type RowSplitDrop = { adopted: SplitLane | null };
@@ -75,7 +76,7 @@ export function dropTabOnRow(tabId: string, rowTabId: string, side: "left" | "ri
   const split = splitOf(s, rowTabId);
   const panes = splitTabIdsOf(split);
   if (panes?.includes(tabId)) return null;
-  const rowPanes = panes?.filter((id) => s.tabs[id] && splitLane(s.tabs[id]!) === splitLane(row));
+  const rowPanes = panes?.filter((id) => s.tabs[id] && splitLane(s.tabs[id]!) === splitLane(row) && keptFolderOf(s, id) === keptFolderOf(s, rowTabId));
   const anchor = rowPanes?.length ? (side === "left" ? rowPanes[0]! : rowPanes.at(-1)!) : rowTabId;
   const stacked = split?.orientation === "vertical";
   if (!dropTabIntoSplit(tabId, anchor, stacked ? (side === "left" ? "top" : "bottom") : side)) return null;

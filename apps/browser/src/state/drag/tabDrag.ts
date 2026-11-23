@@ -11,6 +11,7 @@ import { splitOf, type SplitSide, splitTabIdsOf, splitViewAvailable } from "../s
 import { dropTabIntoSplit } from "../splits/actions";
 import { dropTabsOutside, rootPointIn, screenPoint, windowUnder } from "./windowDrop";
 import { dropTabsOnBar, followTabDragOnBar } from "../bookmarks/barDrag";
+import { outsideKeptFolders } from "../groups/emptyFolder";
 
 export type DropTarget = { tabId: string; side: SplitSide };
 type Insert = { windowId: string; beforeId: string | null };
@@ -217,7 +218,11 @@ export function endTabDrag(): boolean {
   const asked: { frame: [number, number, number, number] | null } = { frame: null };
   const moved = dropTabsOutside(tabIds, windowId, x, y, (frame) => (asked.frame = frame), session.liveFrame);
   dragPreview.end(asked.frame ? moved : null, asked.frame);
-  if (moved && moved === overWindow && insertBefore !== undefined) useBrowser.getState().placeTabs(tabIds, { pinned: false, beforeId: insertBefore });
+  if (moved && moved === overWindow && insertBefore !== undefined) {
+    const s = useBrowser.getState();
+    const inserted = s.windows[windowId] ? tabIds : outsideKeptFolders(s, tabIds);
+    s.dropTabs(inserted, { type: "tabs", placement: { pinned: false, beforeId: insertBefore } });
+  }
   if (moved) focus(moved);
   return true;
 }

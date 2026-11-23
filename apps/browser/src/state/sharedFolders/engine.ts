@@ -173,7 +173,7 @@ let checkTimer: ReturnType<typeof setTimeout> | undefined;
 export function startSharedFolders() {
   if (!sharedFoldersAvailable()) return;
   guardGroupClose(confirmRemovingShared);
-  keepGroupsOpen((groupId) => !!sharedFolderOfGroup(store(), groupId));
+  keepGroupsOpen((groupId, s = store()) => !!sharedFolderOfGroup(s, groupId));
   saveBeforeQuit(saveFoldersNow);
   watchBound();
   useSharedFolders.subscribe((s, prev) => {

@@ -5,16 +5,14 @@ import { createSharedFolder, discardSharedFolder, identityOf, resolveSharedFolde
 import { errorText } from "../../lib/errors";
 import { bindingAt, boundAt } from "./bindings";
 import { useBrowser, type BrowserState } from "../browser/store";
-import type { Tab } from "../browser/types";
-import { isIncognitoProfile, makeTab, newId, pinKeyOf } from "../browser/model";
+import { isIncognitoProfile, newId, pinKeyOf } from "../browser/model";
 import { pinnedGroupMembers } from "../browser/structure";
 import { insertAll, nestGroups, orderSections, syncGroupOrder } from "../groups/groups";
 import { markPinned } from "../pins/pinChoices";
 import { groupLabel } from "../pins/tabGrouping";
-import { ASLEEP } from "../tabs/pageSession";
 import { isRegularWindow } from "../windows/small";
 import { measureRow } from "../sidebar/sidebarUi";
-import { EMPTY_FOLDER_URL } from "./applyFolder";
+import { emptyFolderRow } from "../groups/emptyFolder";
 import { syncFolderAfterNow, syncFolderNow } from "./engine";
 import { bindFolder, bindFolderIfUnbound, folderRef, sharedFolderOf, unbindFolder, useSharedFolders } from "./store";
 import { canShareGroup, sharedFolderOfGroup } from "./removal";
@@ -41,7 +39,7 @@ export function withSharedGroup(s: BrowserState, windowId: string, name: string)
   const w = s.windows[windowId];
   if (!isRegularWindow(w)) return [s, ""];
   const profileId = w.profileId;
-  const tab: Tab = { ...makeTab(windowId, profileId, EMPTY_FOLDER_URL, { title: "Empty Folder", customTitle: "Empty Folder" }), page: ASLEEP };
+  const tab = emptyFolderRow(windowId, profileId);
   const id = newId("g");
   const groups = nestGroups({
     ...s.groups,

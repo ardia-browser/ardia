@@ -38,6 +38,7 @@ import { focusedWindowOf } from "./ui";
 import { closedWindowOf, withoutLastWindowMarks } from "./closedWindow";
 import type { Drop } from "../drag/drops";
 import { droppedInProfile, intoProfile } from "./profileMoves";
+import { withKeptFoldersMovedAlong, withoutEmptyFolderRows } from "../groups/emptyFolder";
 
 export type CreateWindowOptions = {
   profileId?: string;
@@ -122,7 +123,7 @@ export function moveTabsInto(s: BrowserState, ids: string[], targetId: string): 
     const recent = src.tabIds.map((t) => next.tabs[t]!).sort((a, b) => b.lastActiveAt - a.lastActiveAt)[0];
     if (recent) next = apply(next, activated(next, src.activeTabIds[recent.profileId] ?? recent.id));
   }
-  return settleMovedPins(s, next, moving.map((t) => t.id), targetId);
+  return withKeptFoldersMovedAlong(s, settleMovedPins(s, next, moving.map((t) => t.id), targetId), targetId);
 }
 
 function placeMovedTabs(s: BrowserState, windowId: string, ids: string[], joinable: Set<string>): BrowserState {
@@ -302,8 +303,10 @@ export const createWindowsSlice: StateCreator<BrowserState, [], [], WindowsSlice
     if (next !== s) set(background ? next : apply(next, activated(next, tabId)));
   },
 
-  dropTabsInProfile(tabIds, profileId, drop) {
+  dropTabsInProfile(dragged, profileId, drop) {
     const s = get();
+    const tabIds = withoutEmptyFolderRows(s, dragged);
+    if (!tabIds.length) return null;
     const { state: next, placed } = droppedInProfile(s, tabIds, profileId, drop);
     if (next === s) return null;
     set(next);

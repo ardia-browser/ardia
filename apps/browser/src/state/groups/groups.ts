@@ -7,7 +7,8 @@ import { groupLabel, movingGroup, withGroup, withRowsGrouped } from "../pins/tab
 import { withSplitRows } from "../splits/splits";
 import { removeTabs, withNewTab } from "../tabs/tabs";
 import type { BrowserWindow, ClosedGroup, ClosedGroupInfo, GroupColor, Tab, TabGroup } from "../browser/types";
-import { depthsIn, descendantIds, innermostGroupOf, nestGroups, reparent } from "./groupNesting";
+import { ancestorIds, depthsIn, descendantIds, innermostGroupOf, nestGroups, reparent } from "./groupNesting";
+import { groupKeptOpen } from "./closeGuard";
 import { withShownTab, withoutShownTabs } from "./shownTabs";
 import { pinnedGroupMembers } from "../browser/structure";
 import { newTabHome } from "../tabs/newTabHome";
@@ -97,10 +98,13 @@ export function leaveGroups(groups: Record<string, TabGroup>, ids: Set<string>, 
   for (const g of Object.values(groups)) {
     const tabIds = keep?.has(g.id) ? g.tabIds : g.tabIds.filter((id) => !ids.has(id));
     if (tabIds.length === g.tabIds.length) next[g.id] = g;
-    else if (tabIds.length > (g.autoUngroup && !g.pinnedOpenerId ? 1 : 0)) next[g.id] = { ...g, tabIds };
+    else if (tabIds.length > 1 || (tabIds.length === 1 && staysWithOneTab(groups, g))) next[g.id] = { ...g, tabIds };
   }
   return reparent(next, groups);
 }
+
+const staysWithOneTab = (groups: Record<string, TabGroup>, g: TabGroup) =>
+  !g.autoUngroup || !!g.pinnedOpenerId || [g.id, ...ancestorIds(groups, g.id)].some((id) => groupKeptOpen(id));
 
 type GroupInfo = ClosedGroupInfo;
 

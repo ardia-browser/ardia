@@ -1,4 +1,5 @@
 import { pressesWithoutRelease, pressRepeated } from "../../platform/focus";
+import { countKeptGroupDrops } from "../groups/closeGuard";
 import { capture, consentToken, stillValid, onConsentPeriodChange, type ConsentToken } from "./client";
 import { takeHoverCardCounts } from "./hoverCardCounts";
 import { percentile } from "./transport";
@@ -29,6 +30,8 @@ const empty = () => ({
   drops_tile: 0,
   drops_other_profile: 0,
   drops_profile_icon: 0,
+  drops_shared_folder_asked: 0,
+  drops_shared_folder_confirmed: 0,
   drag_profile_switches: 0,
   drag_profile_holds: 0,
   drag_profile_edge_holds: 0,
@@ -190,6 +193,12 @@ export const noteDragWithoutDrop = (drag?: object) => void (ofThisPeriod(drag) &
 export type SidebarDropKind = "gap" | "split_left" | "split_right" | "split_pinned" | "split_unpinned" | "tile" | "other_profile" | "profile_icon";
 
 export const noteSidebarDrop = (kind: SidebarDropKind, drag?: object) => void (ofThisPeriod(drag) && tally[`drops_${kind}`]++);
+
+export function noteSharedFolderDrop(answer: "asked" | "confirmed", consent: ConsentToken | null) {
+  if (stillValid(consent)) tally[`drops_shared_folder_${answer}` as const]++;
+}
+
+countKeptGroupDrops(noteSharedFolderDrop);
 
 export type DragProfileHold = "icon" | "edge";
 

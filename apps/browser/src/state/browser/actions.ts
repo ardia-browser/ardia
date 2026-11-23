@@ -34,6 +34,7 @@ import { noteTabClosedByUser } from "../sync/openTabCloses";
 import type { Drop } from "../drag/drops";
 import { movesAcrossProfiles } from "../windows/profileMoves";
 import { noteSidebarDrop } from "../telemetry/tabPresses";
+import { withoutEmptyFolderRows } from "../groups/emptyFolder";
 
 const store = () => useBrowser.getState();
 
@@ -192,7 +193,8 @@ export async function moveTabsToProfile(tabIds: string[], target: string | null,
   });
 }
 
-export async function dropTabsInProfile(tabIds: string[], target: string, drop: Drop, home: string, onIcon: boolean): Promise<Record<string, string> | null> {
+export async function dropTabsInProfile(dragged: string[], target: string, drop: Drop, home: string, onIcon: boolean): Promise<Record<string, string> | null> {
+  const tabIds = withoutEmptyFolderRows(store(), dragged);
   const move = tabsMove(tabIds);
   if (!move) return null;
   const consent = consentToken();

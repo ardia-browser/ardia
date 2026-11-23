@@ -75,7 +75,7 @@ export function applyPinned(profileId: string, visible: Map<string, unknown>, ch
     if (id !== key) keyOfLocal.set(id, key);
     return id;
   };
-  const tid = (key: string) => local(tabOfKey, (id) => !!s.tabs[id] && s.tabs[id]!.profileId !== profileId, key);
+  const tid = (key: string) => local(tabOfKey, (id) => !!s.tabs[id] && (s.tabs[id]!.profileId !== profileId || pinKeyOf(s.tabs[id]!) !== id), key);
   const gid = (key: string) => local(groupOfKey, (id) => !!s.groups[id] && (s.groups[id]!.profileId !== profileId || !s.groups[id]!.pinned), key);
   const pinKeyField = (id: string) => (keyOfLocal.has(id) ? { pinKey: keyOfLocal.get(id)! } : {});
   const pins = new Map<string, PinValue>();

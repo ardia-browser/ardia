@@ -35,6 +35,7 @@
 #include "chrome/browser/ardia/ac_cli_owned_tabs.h"
 #include "chrome/browser/ardia/ac_cli_token_policy.h"
 #include "chrome/browser/ardia/ac_engine.h"
+#include "chrome/browser/ardia/ac_sensitive_args.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/lifetime/termination_notification.h"
 #include "chrome/common/pref_names.h"
@@ -205,6 +206,22 @@ class ControlServer {
     return status;
   }
 
+  std::string EndpointJSON() const {
+    base::DictValue endpoint;
+    if (ServerStartedBySwitch() || state_ != State::kRunning ||
+        token_.empty()) {
+      endpoint.Set("state", "off");
+    } else {
+      endpoint.Set("port", port_);
+      endpoint.Set("generation", static_cast<int>(generation_));
+      endpoint.Set("token", token_);
+    }
+    std::string json = base::WriteJson(endpoint).value_or("{}");
+    base::Value written(std::move(endpoint));
+    Cleanse(written);
+    return json;
+  }
+
  private:
   static PrefService* LocalState() {
     return g_browser_process ? g_browser_process->local_state() : nullptr;
@@ -311,7 +328,9 @@ class ControlServer {
       base::DictValue file;
       file.Set("port", port);
       file.Set("browser", std::string(browser_path));
+#if !BUILDFLAG(IS_MAC)
       file.Set("token", token_);
+#endif
       file.Set("pid", static_cast<int>(base::GetCurrentProcId()));
       file.Set("generation", static_cast<int>(generation_));
       FileRunner()->PostTaskAndReplyWithResult(
@@ -458,6 +477,12 @@ AC_ARGS_CALL(ac_cli_control) {
     server.Disable();
   }
   out.Send(server.Status());
+}
+
+AC_ARGS_CALL(ac_cli_devtools_endpoint) {
+  ardia::Reply out = call.TakeReply();
+  std::string json = ardia::ControlServer::Get().EndpointJSON();
+  out.SendSecretJSON(json);
 }
 
 AC_ARGS_CALL(ac_cli_owns_tab) {

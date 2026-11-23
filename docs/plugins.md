@@ -716,7 +716,8 @@ Ardia never runs a plugin's program itself, with one exception for official plug
   sandbox nor the plugin's other permissions apply to it, and the consent sheet says so ("Adds ardia to your PATH. It runs as you,
   outside Ardia's sandbox", and "Adds ~/.local/bin to your PATH in your shell's login file"). It reaches Ardia the way any program does, while "Let the ardia command control Ardia" is on: the
   control socket, which checks only that its peer runs as the same user, and the engine's token connection, whose token
-  sits in `ArdiaControl.json` for the user's processes to read (`docs/cli.md`, `docs/control-socket.md`). Nothing can
+  the socket hands to the programs it lets in (on Linux it also sits in `ArdiaControl.json` for the user's processes to
+  read; `docs/cli.md`, `docs/control-socket.md`). Nothing can
   hold a program running as you to less, so a plugin with programs says so first, whether or not it asks for `control`
   ("The <name> command runs as you, so while control is on in Settings › Advanced, it can fully control Ardia: …",
   or "…, as do the commands Ardia runs for it after updates" for `afterUpdate`), and its row in Settings › Plugins says "Can fully

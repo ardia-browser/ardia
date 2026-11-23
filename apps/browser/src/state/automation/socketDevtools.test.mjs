@@ -105,12 +105,11 @@ test("control turned off while native reads the token: nothing is sent", async (
   await controlOn();
 });
 
-test("a server that isn't on, an unreadable or out-of-date token, and a host without the call each fail with their own outcome", async () => {
+test("a server that isn't on, an unreadable token, and a host without the call each fail with their own outcome", async () => {
   await fresh();
   const cases = [
     [{ problem: "off" }, "server_off", "failed"],
     [{ problem: "unreadable" }, "unreadable", "failed"],
-    [{ problem: "stale" }, "stale", "failed"],
     [{ problem: "something new" }, "unreadable", "failed"],
     [{ port: 1, generation: 1 }, "unreadable", "failed"],
     [{ port: "1", generation: 1, token: TOKEN }, "unreadable", "failed"],

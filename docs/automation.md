@@ -63,11 +63,11 @@ Issue #717. Config files and themes are `docs/config.md`; page scripting over CD
   across stop and start); one that takes over 10 s is refused. When the JS bridge changes (a reload), its open asks
   end and Ardia takes their sheets away natively.
   What it doesn't stop: a process of the user's can still run the bundled `ardia` (or its signed runtime) itself and
-  get in as it does, can still read `ArdiaControl.json` for the token connection until the engine stops writing the token there (the
-  socket's `control.devtoolsEndpoint` hands it only to programs let in, and the command will move to it;
-  `docs/control-socket.md` › The DevTools token), and can write its
-  own entry into `ArdiaControlApprovals.json` (the file is the user's, and its entries carry no signature). The doorbell is
-  so a program never drives Ardia without the user seeing its name, not a wall against malware running as the user.
+  get in as it does, and can write its own entry into `ArdiaControlApprovals.json` (the file is the user's, and its
+  entries carry no signature). It can't take the token connection's token from `ArdiaControl.json` on macOS: the
+  engine doesn't write it there, and the socket's `control.devtoolsEndpoint` hands it only to programs let in
+  (`docs/control-socket.md` › The DevTools token). The doorbell is so a program never drives Ardia without the user
+  seeing its name, not a wall against malware running as the user.
 - **Test instances keep the old rule.** A test instance (a build not signed for distribution with a scratch
   `ARDIA_DATA_DIR`, `docs/agent-brief.md` › Launch variables) admits every process of the user, as before, so agents'
   and tests' clients keep working against hidden instances. `ARDIA_TEST controlDoorbell` gives one the doorbell to
@@ -467,8 +467,8 @@ Hooks that answer before something happens, with a deadline after which Ardia do
   answer leaves the file where it is. Folders cross the bridge as `~/…`.
   **Trust boundary.** The checks stop a swapped or linked file from being moved in place of the download; they don't
   stop a process running as the same user that already holds a writable descriptor or a hard link to the file from
-  rewriting it after the check. Such a process is outside what Ardia defends against: it can already read
-  `ArdiaControl.json` and drive the browser.
+  rewriting it after the check. Such a process is outside what Ardia defends against: it can already drive the
+  browser (it can run the bundled `ardia`, and on Linux read the token connection's token from `ArdiaControl.json`).
   Code: `state/automation/downloadHooks.ts`.
 - **Floods.** At most 64 pending decisions (16 per runner connection), 200 hooks and 50 rewrite rules per hook; the
   runner runs at most 16 decide programs at once (4 per hook) and gives up at the deadline. Command hooks run at

@@ -62,8 +62,9 @@ reaches Ardia two ways (`docs/automation.md`, `docs/control-socket.md`):
   checks that the peer runs as the same user (`getpeereid`) and, on macOS, who the program is: a hardened program
   signed with Ardia's Team ID (the bundled `ardia` and anything else Ardia ships) gets in at once, and any other
   program waits for you to allow it in the doorbell Ardia shows (`docs/automation.md` › Who the program is). Linux and test instances admit every process of the user.
-- **The engine's token connection** carries `ardia browse`. It listens on loopback with a token written to
-  `ArdiaControl.json`, which the user's own processes can read. It is a full DevTools client of the browser, the same
+- **The engine's token connection** carries `ardia browse`. It listens on loopback with a token the command asks
+  the control socket for (on Linux, where the socket has no doorbell, it reads it from `ArdiaControl.json`, which
+  the user's own processes can read). It is a full DevTools client of the browser, the same
   as a `--remote-debugging-port` client (the owner's decision, #2807): every CDP domain and method, every target
   (`chrome://` and WebUI pages, extension pages, service workers, the browser target), every URL and browser context,
   and local files, so `ardia browse upload` (`DOM.setFileInputFiles`), `download` and `wait --download`
@@ -71,12 +72,13 @@ reaches Ardia two ways (`docs/automation.md`, `docs/control-socket.md`):
   debugger all work. Events and replies pass through unchanged.
 
   The control socket's `control.devtoolsEndpoint` hands out the port and token, only to programs the socket admitted
-  (the doorbell's rule, `docs/control-socket.md` › The DevTools token). The command doesn't use it yet. Next it will,
-  falling back to `ArdiaControl.json` only on an `unknown_method` reply to that request; after that the engine stops
-  writing the token into the file, so the file no longer lets a program skip the doorbell.
+  (the doorbell's rule, `docs/control-socket.md` › The DevTools token). The command asks there first (ardia-browser/plugins#112),
+  falling back to `ArdiaControl.json` only on an `unknown_method` reply to that request or when it can't reach the
+  socket. On macOS the engine no longer writes the token into the file, so the file doesn't let a program skip the
+  doorbell.
 
   What still guards it is what keeps other users and web pages off the connection, not what a process running as
-  you may do: the token (32 random bytes per start, compared in constant time, kept in the 0600 `ArdiaControl.json` and handed by
+  you may do: the token (32 random bytes per start, compared in constant time, kept in the 0600 `ArdiaControl.json` on Linux only, and handed by
   the control socket's `control.devtoolsEndpoint` to programs it admitted, which keep it until the token connection
   restarts),
   loopback only, and nothing a browser sends: a request with an `Origin`, `Sec-Fetch-Site` or `Sec-Fetch-Dest` header, or

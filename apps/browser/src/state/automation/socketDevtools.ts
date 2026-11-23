@@ -29,7 +29,6 @@ const REFUSALS: Record<Exclude<DevtoolsEndpointOutcome, "given">, [ErrorCode, st
   unsupported: ["unknown_method", `There's no method ${DEVTOOLS_ENDPOINT} on this Ardia; read the token from ArdiaControl.json.`],
   server_off: ["failed", "The DevTools token connection isn't running."],
   unreadable: ["failed", "Ardia couldn't read the DevTools token."],
-  stale: ["failed", "The DevTools token connection restarted while Ardia read it; ask again."],
   left: ["failed", "The connection closed before the token was ready."],
 };
 

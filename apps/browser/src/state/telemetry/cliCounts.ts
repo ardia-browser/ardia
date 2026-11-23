@@ -11,7 +11,7 @@ export type CliInstallReason = "auto" | "settings" | "upgrade";
 const DOORBELL_OUTCOMES = ["once", "half_hour", "always", "deny", "unshown", "timeout", "left", "stopped", "unsaved"] as const;
 export type DoorbellOutcome = (typeof DOORBELL_OUTCOMES)[number];
 
-const DEVTOOLS_ENDPOINT_OUTCOMES = ["given", "control_off", "unsupported", "server_off", "unreadable", "stale", "left"] as const;
+const DEVTOOLS_ENDPOINT_OUTCOMES = ["given", "control_off", "unsupported", "server_off", "unreadable", "left"] as const;
 export type DevtoolsEndpointOutcome = (typeof DEVTOOLS_ENDPOINT_OUTCOMES)[number];
 
 const NONE = {

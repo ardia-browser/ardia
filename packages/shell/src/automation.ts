@@ -25,6 +25,6 @@ export type AutomationNative = {
   cutOff?(): boolean;
 };
 
-export const DEVTOOLS_ENDPOINT_PROBLEMS = ["off", "unreadable", "stale", "left"] as const;
+export const DEVTOOLS_ENDPOINT_PROBLEMS = ["off", "unreadable", "left"] as const;
 export type DevtoolsEndpointProblem = (typeof DEVTOOLS_ENDPOINT_PROBLEMS)[number];
 export type NativeDevtoolsEndpoint = { port: number; generation: number; token: string } | { problem: DevtoolsEndpointProblem };

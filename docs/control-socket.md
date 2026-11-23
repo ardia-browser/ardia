@@ -585,27 +585,25 @@ generation it was given and asks again when a connection is refused.
   Like every request, this one is abandoned when its peer stops writing (› A request lives only while its connection
   and consent do): keep the write side open until the reply arrives. It then answers `failed` "The connection closed
   before the token was ready." if anything is still written.
-- **Where it comes from.** The engine call `ac_cli_devtools_endpoint` when the engine has it (it answers
-  `{port, generation, token}` through `ArdiaEngineBridge.callForSecretReply`, whose bytes are wiped after parsing);
-  the engine's shared status (`ac_cli_control`, which also feeds `cliControl` events and JS state) is never trusted to
-  carry the token. Until the engine has that call, `ArdiaControl.json`, read by the app only if it is a regular file
-  of the user's with no group or other bits and no access list letting anyone else in, not a link, at most 64 KiB, and
-  its `port`, `generation` and `pid` match the running server (`ControlPeerCore/DevtoolsEndpoint.swift`). A server
-  that stops just after the read leaves a token that opens nothing; the next connection fails and the client asks
-  again.
-- **Errors.** `failed` when the token connection isn't running, the token can't be read, or the server restarted
-  while Ardia read it (ask again). Where the socket has no doorbell (Linux and Windows today) the method isn't listed
-  and answers `unknown_method`, as an Ardia older than it does. A command that reads the token from here should fall
+- **Where it comes from.** Only the engine call `ac_cli_devtools_endpoint`, which answers `{port, generation, token}`
+  while the token connection runs (`{state: "off"}` otherwise) through `ArdiaEngineBridge.callForSecretReply`, whose
+  bytes are wiped after parsing. The engine's shared status (`ac_cli_control`, which also feeds `cliControl` events and
+  JS state) never carries the token, and on macOS `ArdiaControl.json` doesn't either: it holds the port, browser path,
+  pid and generation only, and the app never reads it. Linux still writes the token into the file, because its socket
+  has no doorbell and the command reads the token there. A server that stops just after the read leaves a token that
+  opens nothing; the next connection fails and the client asks again.
+- **Errors.** `failed` when the token connection isn't running or the token can't be read. Where the socket has no
+  doorbell (Linux and Windows today) the method isn't listed and answers `unknown_method`, as an Ardia older than it does. A command that reads the token from here should fall
   back to the file only on an `unknown_method` reply carrying its own request's `id`; a `refused` line with `id: null`
   is the doorbell turning the program away, and the file isn't a way around that.
 - **Containment.** In JS the token is a `Secret` of kind `devtoolsToken` from the moment it crosses from native
   (`platform/automation.ts`), revealed only on that one reply line (`socketDevtools.ts`); JSON, text, telemetry,
   logs and every other reply or event drop it (`secretContainment.test.mjs`).
-- **Rollout.** The command doesn't ask for it yet: it reads `ArdiaControl.json`. Next, the command asks here and falls
-  back to the file as above; then the engine stops writing the token into the file.
+- **Rollout.** The command asks here first and falls back to the file as above (ardia-browser/plugins#112); on macOS
+  the file has no token any more, so there it has nothing to fall back to.
 - **Telemetry.** `usage_counts.cli_socket_devtools_endpoint_<outcome>`: `given` (read and handed to the socket to
   write; a peer that leaves or loses its approval at that moment may not receive it), `control_off`, `unsupported`,
-  `server_off`, `unreadable`, `stale`, `left`. Never the token, the port or which program asked.
+  `server_off`, `unreadable`, `left`. Never the token, the port or which program asked.
 
 ## Secrets
 

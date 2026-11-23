@@ -128,17 +128,7 @@ final class ControlSocket {
       guard admits(connection) else { return done(["problem": "left"]) }
       DispatchQueue.main.async { [weak self] in
         ArdiaEngineBridge.callForSecretReply(DevtoolsEndpoint.engineCall, profile: "", timeout: Self.endpointDeadline) { reply in
-          if let reply {
-            self?.answerEndpoint(connection, done) { DevtoolsEndpoint.read(engineReply: reply) }
-            return
-          }
-          DispatchQueue.main.async {
-            ArdiaEngineBridge.call("ac_cli_control", profile: "", args: "{}") { json in
-              self?.answerEndpoint(connection, done) {
-                DevtoolsEndpoint.read(status: (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any] ?? [:])
-              }
-            }
-          }
+          self?.answerEndpoint(connection, done) { reply.map(DevtoolsEndpoint.read(engineReply:)) ?? .failure(.unreadable) }
         }
       }
     }

@@ -316,7 +316,7 @@ framework.
   repo copy only; `apply.sh` replaces the tree's.
 - **Chromium's files we replace.** A file under `engine/chromium/src` outside `chrome/browser/ardia` replaces
   Chromium's at the same path (`apply.sh --paths` lists them; `series.py` counts each as the layer's). Only Chromium's
-  logo, by Ardia's (`docs/brand/ardia/build.py` writes them): binary files a patch can't carry. Linux builds read
+  logo, by Ardia's (exported by hand from the icon's source, `docs/brand/ardia/README.md`): binary files a patch can't carry. Linux builds read
   their window icons from `chromium/linux/` and `default_100_percent/chromium/linux/` instead, so
   `engine/ardiacore-linux/apply.sh` copies the same logos over Helium's there on every series apply. What it copies
   from outside its own `src` is listed once, in `engine/ardiacore-linux/copies.tsv` (`<source><TAB><target>`), which

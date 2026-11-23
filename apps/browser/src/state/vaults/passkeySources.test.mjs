@@ -54,3 +54,14 @@ test("a manager's Mac app is a choice while its system route works, and the choi
   assert.equal(sources.effectiveSource("provider:1password", [], systems), "provider:1password");
   assert.equal(sources.effectiveSource("provider:1password", [], []), "ask");
 });
+
+test("an extension a signed-in manager's plugin declares as its passkey route counts as a passkey manager", async () => {
+  const { declaredPasskeyExtensions } = await import("./passkeySources.ts");
+  const STANDIN = "gclahlmfjopfnalpgahbimlfhdpckfje";
+  const declared = declaredPasskeyExtensions([
+    { id: "protonpass", capabilities: { passkeysVia: [{ via: "extension", extensions: [STANDIN] }, { via: "system" }] } },
+    { id: "1password", capabilities: { passkeysVia: [{ via: "system" }] } },
+    { id: "bitwarden", capabilities: { passkeys: true } },
+  ]);
+  assert.deepEqual([...declared], [STANDIN]);
+});

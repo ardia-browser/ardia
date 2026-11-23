@@ -1,6 +1,8 @@
 import { setVaultPasskeys } from "../../platform/vaults";
 import { useBrowser } from "../browser/store";
 import { useExtensions, type InstalledExtension } from "../extensions/store";
+import type { VaultProviderState } from "../../platform/vaults";
+import { useVaults } from "./store";
 
 export type PasskeyVendor = "proton" | "onepassword" | "bitwarden" | "dashlane" | "nordpass" | "keeper" | "lastpass" | "other";
 
@@ -83,12 +85,16 @@ export function noteObservedExtensions(ids: readonly string[]) {
   if (added.length) updateSettings({ vaultPasskeyExtensions: [...settings.vaultPasskeyExtensions, ...added].slice(-64) });
 }
 
+export const declaredPasskeyExtensions = (providers: readonly VaultProviderState[]) =>
+  new Set(providers.flatMap((p) => (p.capabilities.passkeysVia ?? []).flatMap((r) => (r.via === "extension" ? r.extensions : []))));
+
 let sent = "";
 
 function sendConfig() {
   const { settings } = useBrowser.getState();
   const lists = useExtensions.getState().lists;
-  const extensions = enabledExtensions(lists).map(({ id, name }) => ({ id, name, known: id in KNOWN_PASSKEY_EXTENSIONS }));
+  const declared = declaredPasskeyExtensions(useVaults.getState().providers);
+  const extensions = enabledExtensions(lists).map(({ id, name }) => ({ id, name, known: id in KNOWN_PASSKEY_EXTENSIONS || declared.has(id) }));
   const setting = settings.vaultPasskeySource;
   const source = providerOfSource(setting) ? setting : effectiveSource(setting, passkeyExtensions(lists, settings.vaultPasskeyExtensions));
   const payload = { source, extensions };
@@ -111,5 +117,8 @@ export function startPasskeySources() {
   });
   useExtensions.subscribe((s, prev) => {
     if (s.lists !== prev.lists) sendConfig();
+  });
+  useVaults.subscribe((s, prev) => {
+    if (s.providers !== prev.providers) sendConfig();
   });
 }

@@ -251,6 +251,8 @@ final class VaultPasskeys {
         self.finish(entry, answer: ["chrome": true], outcome: .fallback, via: "chrome")
       case .asIfAbsent:
         self.finish(entry, answer: ["fallback": true], outcome: .fallback)
+      case .hold:
+        entry.ready = true
       case .extensionId(let id):
         self.finish(entry, answer: ["extension": id], outcome: .handedOff, via: id)
       case .choose(let ardia, let extensions):
@@ -270,6 +272,8 @@ final class VaultPasskeys {
     case .extensionId(let id):
       reply(view, frame: frame, origin: origin, pageId: pageId, ["extension": id])
       emitDone(tabId: tabId, requestId: "", outcome: .handedOff, via: id)
+    case .hold:
+      acknowledge(view, frame: frame, origin: origin, pageId: pageId)
     case .ardia, .asIfAbsent, .choose, .system:
       fallBack(view, frame: frame, origin: origin, pageId: pageId, count: true)
     }
@@ -393,11 +397,11 @@ final class VaultPasskeys {
       return await create(entry)
     case .get:
       guard let candidate = entry.candidates.first(where: { $0.id == choice }) else { return ["ok": false, "error": "invalid"] }
-      if candidate.delegated {
-        guard case .browserExtension(let id) = entry.handlers[candidate.provider] else { return ["ok": false, "error": "invalid"] }
-        return handOff(entry, view: view, provider: candidate.provider, extensionId: id, allow: candidate.id)
+      switch VaultPasskeyUse.of(candidate, handler: entry.handlers[candidate.provider]) {
+      case .handOff(let id): return handOff(entry, view: view, provider: candidate.provider, extensionId: id, allow: candidate.id)
+      case .refuse: return ["ok": false, "error": "invalid"]
+      case .sign: return await assert(entry, candidate: candidate)
       }
-      return await assert(entry, candidate: candidate)
     }
   }
 

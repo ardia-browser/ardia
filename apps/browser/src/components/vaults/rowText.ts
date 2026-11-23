@@ -27,6 +27,7 @@ function plainLines(item: LoginItem, site: string) {
   if (item.match?.reason === "shared" && item.match.site) return { title: item.username || item.title || item.match.site, detail: `For ${item.match.site}` };
   if (item.match?.reason === "brand") return { title: item.username || item.title, detail: item.username ? `${item.title}, no website` : "No website" };
   const where = hostOnPage(item.urls, site) || site;
+  if (item.passkey?.system) return { title: `Passkey from ${brandOf(item.provider).name}…`, detail: where };
   if (item.passkey) return { title: item.username || item.title || where, detail: `Passkey for ${where}` };
   return { title: item.username || item.title || where, detail: item.username || item.title ? where : "" };
 }

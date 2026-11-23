@@ -41,3 +41,23 @@ test("telemetry counts a system route as system, and only a delegated extension'
   assert.deepEqual(routeOfDone({ outcome: "extension", via: PROTON }), { via: "extension:proton", delegated: null });
   assert.deepEqual(routeOfDone({ outcome: "used", via: undefined }), { via: undefined, delegated: null });
 });
+
+test("an autofill offer with the system route adds one 1Password row to the fill menu, which skips Touch ID and names who answers", async () => {
+  const { passkeyItemsOf } = await import("./passkeyStore.ts");
+  const { loginLines } = await import("../../components/vaults/rowText.ts");
+  const { isTouchRow } = await import("./touchID.ts");
+  const offer = {
+    tabId: "t1", requestId: "r1", kind: "get", conditional: true, origin: "https://github.com", rpId: "github.com", system: true, private: false,
+    passkeys: [{ id: "a1", provider: "ardia", rpId: "github.com", userName: "sam", displayName: "" }],
+    delegates: [{ provider: "1password", via: "system" }, { provider: "protonpass", via: "extension" }],
+  };
+  const items = passkeyItemsOf(offer);
+  assert.deepEqual(items.map((i) => i.passkey.credentialId), ["a1", "delegate:1password"]);
+  const row = items[1];
+  assert.deepEqual(row.passkey, { requestId: "r1", credentialId: "delegate:1password", delegated: true, system: true });
+  const { brandOf } = await import("./brands.ts");
+  assert.deepEqual(loginLines(row, "github.com"), { title: `Passkey from ${brandOf("1password").name}…`, detail: "github.com" });
+  assert.equal(isTouchRow({ key: "k", kind: "login", item: row, userChose: false }), false);
+  assert.equal(isTouchRow({ key: "k", kind: "login", item: items[0], userChose: false }), true);
+  assert.deepEqual(passkeyItemsOf({ ...offer, delegates: [{ provider: "protonpass", via: "extension" }] }).map((i) => i.passkey.credentialId), ["a1"]);
+});

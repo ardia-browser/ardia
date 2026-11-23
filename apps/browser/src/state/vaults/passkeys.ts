@@ -178,7 +178,8 @@ export async function pickPasskeyFromMenu(tabId: string, menu: VaultMenu, row: V
   const result = await answerPasskey(passkey.requestId, passkey.credentialId).catch((): VaultPasskeyAnswer => ({ ok: false, error: "failed" }));
   if (vaultMenuOf(tabId)?.seq !== menu.seq) return;
   if (result.ok) return dismissVaultMenu(tabId);
-  patchVaultMenu(tabId, { busy: null, error: errorText(result.error), touch: "off" }, menu.seq);
+  const error = result.error === "failed" && result.provider ? troubleText("systemFailed", false, brandOf(result.provider).name, siteLabel(menu.origin)) : errorText(result.error);
+  patchVaultMenu(tabId, { busy: null, error, touch: "off" }, menu.seq);
 }
 
 export const deletePasskey = (id: string) => runDeletePasskey(id, consentToken());

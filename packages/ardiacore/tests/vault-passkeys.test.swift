@@ -480,7 +480,13 @@ struct PasskeyRouteCase: Sendable, CustomTestStringConvertible {
     .init(why: "extension default takes autofill too", setting: "ext:\(proton)", conditional: true, route: .extensionId(proton)),
     .init(why: "a default extension that's gone means ask", setting: "ext:\(other)", route: .choose(ardia: true, extensions: [proton])),
     .init(why: "Chrome default", setting: "chrome", route: .chrome),
-    .init(why: "Chrome default takes autofill", setting: "chrome", conditional: true, route: .chrome),
+    .init(why: "Chrome's dropdown never shows on Ardia's profiles, so a Chrome default leaves autofill waiting", setting: "chrome", conditional: true,
+          route: .hold),
+    .init(why: "with nothing anywhere, autofill waits instead of opening Chrome's dropdown", setting: "ask", conditional: true, extensions: [], has: false,
+          route: .hold),
+    .init(why: "an autofill request Ardia can't take waits too", setting: "ask", conditional: true, extensions: [], can: false, route: .hold),
+    .init(why: "Proton listed with nothing for this site waits instead of reaching Chrome", setting: "ask", conditional: true, has: false,
+          delegated: [proton], route: .hold),
     .init(why: "ask keeps autofill in Ardia's menu", setting: "ask", conditional: true, route: .ardia),
     .init(why: "Ardia keeps autofill", setting: "ardia", conditional: true, route: .ardia),
     .init(why: "with nothing in Ardia, autofill is left to the page's own order", setting: "ask", conditional: true, extensions: [proton, other], has: false,
@@ -492,10 +498,12 @@ struct PasskeyRouteCase: Sendable, CustomTestStringConvertible {
           system: ["1password"], route: .system("1password")),
     .init(why: "a system provider as the default also saves there", setting: "provider:1password", create: true, extensions: [], system: ["1password"],
           route: .system("1password")),
-    .init(why: "autofill can't go to the system, so a system default behaves like Ask", setting: "provider:1password", conditional: true, extensions: [],
+    .init(why: "autofill never opens Apple's sheet by itself, so a system default behaves like Ask", setting: "provider:1password", conditional: true,
+          extensions: [], system: ["1password"], route: .ardia),
+    .init(why: "with nothing in Ardia, a system provider's autofill is its row in Ardia's menu", setting: "provider:1password", conditional: true,
+          extensions: [], has: false, system: ["1password"], route: .ardia),
+    .init(why: "under Ask, a system provider's row alone keeps autofill in Ardia's menu", setting: "ask", conditional: true, extensions: [], has: false,
           system: ["1password"], route: .ardia),
-    .init(why: "with nothing in Ardia, a system default's autofill is left to the page", setting: "provider:1password", conditional: true, extensions: [],
-          has: false, system: ["1password"], route: .asIfAbsent),
     .init(why: "a system default whose route is unavailable means ask", setting: "provider:1password", extensions: [], has: false, route: .asIfAbsent),
     .init(why: "a request Ardia can't take never goes to the system", setting: "provider:1password", extensions: [], can: false, system: ["1password"],
           route: .asIfAbsent),
@@ -507,8 +515,8 @@ struct PasskeyRouteCase: Sendable, CustomTestStringConvertible {
           route: .choose(ardia: true, extensions: [other])),
     .init(why: "a listed extension as the default keeps autofill in Ardia's menu", setting: "ext:\(proton)", conditional: true, delegated: [proton],
           route: .ardia),
-    .init(why: "a listed extension with nothing listed here still takes autofill", setting: "ext:\(proton)", conditional: true, has: false, delegated: [proton],
-          route: .extensionId(proton)),
+    .init(why: "a listed extension as the default with nothing listed here waits, never Chrome's dropdown", setting: "ext:\(proton)", conditional: true,
+          has: false, delegated: [proton], route: .hold),
     .init(why: "a listed extension as the default takes a modal request straight", setting: "ext:\(proton)", delegated: [proton], route: .extensionId(proton)),
   ]
 }
@@ -620,5 +628,38 @@ struct VaultPasskeyIndexTests {
     #expect(built < .seconds(2), "built \(built)")
     #expect(lookups / rpIds.count < .milliseconds(1), "\(lookups / rpIds.count) per lookup")
     print("passkey index: 50k items, \(index!.count) passkeys, built in \(built), \(lookups / rpIds.count) per lookup")
+  }
+}
+
+@Suite("Passkeys a manager signs itself")
+struct VaultDelegatedPasskeyTests {
+  static let proton = PasskeyRouteCase.proton
+
+  func candidate(delegated: Bool, provider: String = "protonpass") -> VaultPasskeyCandidate {
+    VaultPasskeyCandidate(provider: provider, credentialId: Data([7, 7, 7]), item: "item1", rpId: "webauthn.io", userName: "sam", displayName: "",
+                          discoverable: true, delegated: delegated)
+  }
+
+  @Test func `a provider that holds keys never lists delegated rows, one that lists metadata only always does`() {
+    #expect(VaultPasskeyUse.delegated(holdsKeys: true, listsDelegated: true) == false)
+    #expect(VaultPasskeyUse.delegated(holdsKeys: true, listsDelegated: false) == false)
+    #expect(VaultPasskeyUse.delegated(holdsKeys: false, listsDelegated: true) == true)
+    #expect(VaultPasskeyUse.delegated(holdsKeys: false, listsDelegated: false) == nil)
+  }
+
+  @Test("A delegated row is handed to its extension and never signed by Ardia", arguments: [
+    (VaultPasskeyHandler?.some(.browserExtension(proton)), VaultPasskeyUse.handOff(proton)),
+    (VaultPasskeyHandler?.some(.system), VaultPasskeyUse.refuse),
+    (VaultPasskeyHandler?.none, VaultPasskeyUse.refuse),
+  ])
+  func delegatedUse(handler: VaultPasskeyHandler?, use: VaultPasskeyUse) {
+    #expect(VaultPasskeyUse.of(candidate(delegated: true), handler: handler) == use)
+  }
+
+  @Test func `a key holder's or Ardia's row is signed, whatever handler its provider has`() {
+    for provider in ["ardia", "bitwarden"] {
+      #expect(VaultPasskeyUse.of(candidate(delegated: false, provider: provider), handler: .browserExtension(Self.proton)) == .sign)
+      #expect(VaultPasskeyUse.of(candidate(delegated: false, provider: provider), handler: nil) == .sign)
+    }
   }
 }

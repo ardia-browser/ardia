@@ -20,6 +20,23 @@ enum VaultPasskeyHandler: Equatable, Sendable {
   case browserExtension(String)
 }
 
+enum VaultPasskeyUse: Equatable, Sendable {
+  case sign
+  case handOff(String)
+  case refuse
+
+  static func of(_ candidate: VaultPasskeyCandidate, handler: VaultPasskeyHandler?) -> VaultPasskeyUse {
+    guard candidate.delegated else { return .sign }
+    if case .browserExtension(let id) = handler { return .handOff(id) }
+    return .refuse
+  }
+
+  static func delegated(holdsKeys: Bool, listsDelegated: Bool) -> Bool? {
+    if holdsKeys { return false }
+    return listsDelegated ? true : nil
+  }
+}
+
 struct VaultPasskeyDelegate: Equatable, Sendable {
   var provider: String
   var name: String
@@ -78,6 +95,7 @@ enum VaultPasskeyRoute: Equatable, Sendable {
   case extensionId(String)
   case system(String)
   case choose(ardia: Bool, extensions: [String])
+  case hold
 
   struct Input: Sendable {
     var source: VaultPasskeySource
@@ -92,26 +110,35 @@ enum VaultPasskeyRoute: Equatable, Sendable {
 
   static func decide(_ input: Input) -> VaultPasskeyRoute {
     let ardiaOffers = input.ardiaCan && (input.creating || input.ardiaHasPasskeys)
-    let systemRows = input.ardiaCan && !input.conditional ? input.systemProviders : []
+    let systemRows = input.ardiaCan ? input.systemProviders : []
     let sheetOffers = ardiaOffers || !systemRows.isEmpty
+    let open = input.extensions.filter { !input.delegatedExtensions.contains($0) }
     var source = input.source
     if case .extensionId(let id) = source, !input.extensions.contains(id) { source = .ask }
+    if input.conditional { return decideConditional(source: source, sheetOffers: sheetOffers, open: open, delegated: input.delegatedExtensions) }
     if case .provider(let id) = source {
       if systemRows.contains(id) { return .system(id) }
       source = .ask
     }
-    if case .extensionId(let id) = source {
-      if input.conditional, ardiaOffers, input.delegatedExtensions.contains(id) { return .ardia }
-      return .extensionId(id)
-    }
-    let open = input.extensions.filter { !input.delegatedExtensions.contains($0) }
+    if case .extensionId(let id) = source { return .extensionId(id) }
     guard !open.isEmpty else {
       if source == .chrome { return .chrome }
       return sheetOffers ? .ardia : .asIfAbsent
     }
     if source == .chrome { return .chrome }
-    if input.conditional { return ardiaOffers ? .ardia : .asIfAbsent }
     if source == .ardia, sheetOffers { return .ardia }
     return .choose(ardia: sheetOffers, extensions: open)
+  }
+
+  private static func decideConditional(source: VaultPasskeySource, sheetOffers: Bool, open: [String], delegated: [String]) -> VaultPasskeyRoute {
+    switch source {
+    case .chrome:
+      return .hold
+    case .extensionId(let id) where !delegated.contains(id):
+      return .extensionId(id)
+    default:
+      if sheetOffers { return .ardia }
+      return open.isEmpty ? .hold : .asIfAbsent
+    }
   }
 }

@@ -74,7 +74,7 @@ export type VaultItem = {
   favorite?: boolean;
   updatedAt?: number;
   profile?: string;
-  passkey?: { requestId: string; credentialId: string; delegated?: boolean };
+  passkey?: { requestId: string; credentialId: string; delegated?: boolean; system?: boolean };
   match?: VaultItemMatch;
 };
 

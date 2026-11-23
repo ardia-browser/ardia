@@ -27,14 +27,8 @@ extension VaultBroker {
   func passkeyCandidates(rpId: String?) -> [VaultPasskeyCandidate] {
     var found: [VaultPasskeyCandidate] = []
     for provider in VaultRegistry.providers {
-      let delegated: Bool
-      if passkeyHolder(provider.id) != nil {
-        delegated = false
-      } else if listsDelegatedPasskeys(provider) {
-        delegated = true
-      } else {
-        continue
-      }
+      let holds = passkeyHolder(provider.id) != nil
+      guard let delegated = VaultPasskeyUse.delegated(holdsKeys: holds, listsDelegated: !holds && listsDelegatedPasskeys(provider)) else { continue }
       guard let index = passkeyIndex(provider, delegated: delegated) else { continue }
       found += rpId.map(index.candidates) ?? index.all
     }

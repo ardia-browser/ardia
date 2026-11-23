@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { VaultItem, VaultPasskey, VaultPasskeyRequest } from "../../platform/vaults";
+import { systemRowId } from "./passkeyTarget";
 
 export type PasskeySheet = VaultPasskeyRequest & {
   seq: number;
@@ -28,16 +29,22 @@ const offerItems = new WeakMap<VaultPasskeyRequest, VaultItem[]>();
 export function passkeyItemsOf(offer: VaultPasskeyRequest): VaultItem[] {
   const known = offerItems.get(offer);
   if (known) return known;
+  const urls = [`https://${offer.rpId}`];
   const items = offer.passkeys.map(
     (p): VaultItem => ({
       provider: p.provider,
       id: `passkey:${p.id}`,
       title: p.userName || p.displayName || offer.rpId,
       username: p.userName || p.displayName,
-      urls: [`https://${offer.rpId}`],
+      urls,
       passkey: p.delegated ? { requestId: offer.requestId, credentialId: p.id, delegated: true } : { requestId: offer.requestId, credentialId: p.id },
     }),
   );
+  for (const d of offer.delegates ?? []) {
+    if (d.via !== "system") continue;
+    const credentialId = systemRowId(d.provider);
+    items.push({ provider: d.provider, id: `passkey:${credentialId}`, title: "", username: "", urls, passkey: { requestId: offer.requestId, credentialId, delegated: true, system: true } });
+  }
   offerItems.set(offer, items);
   return items;
 }

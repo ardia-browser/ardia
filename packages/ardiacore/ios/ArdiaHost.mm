@@ -77,6 +77,11 @@ NSMutableDictionary<NSString *, NSDictionary *> *gInstallPrompts = [NSMutableDic
 
 }
 
+@interface ArdiaCoreTab (AutofillMenu)
+- (BOOL)fillAutofillEntry:(NSString *)guid kind:(NSString *)kind;
+- (void)claimAutofillMenuKeys:(BOOL)claim;
+@end
+
 @implementation ArdiaHost
 
 static void (^gQuitCancelledHandler)(void);
@@ -204,6 +209,18 @@ static void (^gQuitCancelledHandler)(void);
 + (BOOL)showAutofillSuggestions:(NSString *)tabId passwords:(BOOL)passwords {
   ArdiaCoreTab *tab = ardia_host::TabWithAppTabId(tabId);
   return [tab showAutofillSuggestions:passwords];
+}
+
++ (BOOL)fillAutofillEntry:(NSString *)tabId kind:(NSString *)kind id:(NSString *)entryId {
+  ArdiaCoreTab *tab = ardia_host::TabWithAppTabId(tabId);
+  if (![tab respondsToSelector:@selector(fillAutofillEntry:kind:)]) return NO;
+  return [tab fillAutofillEntry:entryId kind:kind];
+}
+
++ (void)claimAutofillMenuKeys:(NSString *)tabId claim:(BOOL)claim {
+  ArdiaCoreTab *tab = ardia_host::TabWithAppTabId(tabId);
+  if (![tab respondsToSelector:@selector(claimAutofillMenuKeys:)]) return;
+  [tab claimAutofillMenuKeys:claim];
 }
 
 + (void)deviceChooser:(int)chooserId select:(int)index {

@@ -1,4 +1,4 @@
-import type { AddressInput, SavedAddress, SavedCard } from "../autofill";
+import type { AddressInput, AutofillFieldEvent, AutofillFillResult, CardReveal, SavedAddress, SavedCard } from "../autofill";
 import type { CastDialog, CastRoute, DeviceChooser } from "../media";
 import type { AddedFilterList, ContentBlockerState, ContentBlockerStats } from "../contentBlocker";
 import type {
@@ -123,6 +123,10 @@ export type EngineCalls = BookmarksCalls & FaviconsCalls & HistoryCalls & {
   "autofill.cards": [Profile, { cards: SavedCard[] }];
   "autofill.remove": [Profile & { id: string }, { ok: true }];
   "autofill.cardNumber": [Profile & { id: string }, { number?: string | null }];
+  "autofill.revealCard": [Profile & { id: string; entry: string }, CardReveal];
+  "autofill.copyCard": [{ entry: string }, { copied: boolean; clearsAfter?: number }];
+  "autofill.fill": [{ tabId: string; kind: "address" | "card"; id: string }, AutofillFillResult];
+  "autofill.claimMenuKeys": [{ tabId: string; claim: boolean }, null];
   "autofill.showSuggestions": [{ tabId: string; passwords: boolean }, boolean];
 
   "extensions.list": [Profile, { extensions: InstalledExtension[] }];
@@ -330,6 +334,8 @@ export type EngineEvents = BookmarksEvents & FaviconsEvents & HistoryEvents & {
   "vaults.passkeyOffer": VaultPasskeyRequest;
   "vaults.passkeyDone": VaultPasskeyDone;
   "vaults.passkeysChanged": Record<string, never>;
+  "autofill.field": AutofillFieldEvent;
+  "autofill.menuKey": { tabId: string; key: "ArrowUp" | "ArrowDown" | "Enter" | "Escape" | "Tab"; epoch?: string };
 };
 
 export type WindowsHostEvents = {

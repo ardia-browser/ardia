@@ -21,6 +21,7 @@ const windowsEngineCalls = new Set(
     .filter((name) => name.endsWith(".cc"))
     .flatMap((name) => [...read(engineSources + name).matchAll(ENGINE_CALL)].map((match) => match[1])),
 );
+const WINDOWS_ONLY = { autofill: ["cardNumber"] };
 const sorted = (list) => [...list].sort();
 
 function macTables() {
@@ -101,9 +102,12 @@ test("every verb of the Mac's tables is forwarded, reproduced or listed as missi
   assert.deepEqual(domainsOf(rows), sorted(Object.keys(mac)));
   for (const [domain, table] of Object.entries(mac)) {
     const kinds = [Object.keys(rows.forwarded[domain] ?? {}), Object.keys(reproduced[domain] ?? {}), rows.missing[domain] ?? []];
-    const onWindows = kinds.flat();
+    const onWindows = kinds.flat().filter((verb) => !WINDOWS_ONLY[domain]?.includes(verb));
     assert.deepEqual(sorted(onWindows), sorted(table.verbs), `${domain} has the Mac's verbs`);
     assert.equal(new Set(onWindows).size, onWindows.length, `${domain} answers each verb one way`);
+  }
+  for (const [domain, verbs] of Object.entries(WINDOWS_ONLY)) {
+    for (const verb of verbs) assert.ok(!mac[domain].verbs.includes(verb) && typeof reproduced[domain]?.[verb] === "function", `${domain}.${verb} is the plain path the Mac's secure fields replace`);
   }
 });
 

@@ -12,6 +12,7 @@ const suites = [
   ["vault-secret-entries", [], ["VaultSecretEntries"]],
   ["vault-touch-scopes", [], ["VaultTouchGrants"]],
   ["vault-store", [], ["VaultSealed", "VaultSealedFolder", "VaultStoreKeyPlan", "VaultKeyRing", "VaultSecretShelf", "VaultTouchGrants", "VaultOwnerPrompt", "VaultGeneratedStore", "VaultExportFile"]],
+  ["autofill-card", [], ["AutofillCardNumber"]],
 ];
 
 for (const [name, flags, sources] of suites) {

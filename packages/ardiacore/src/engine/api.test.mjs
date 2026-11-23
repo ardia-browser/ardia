@@ -66,6 +66,14 @@ test("a checkout with CRLF line endings reads the same rows as LF", () => {
   }
 });
 
+const PLAIN_PLATFORM_CALLS = new Set(["autofill.cardNumber"]);
+
+test("the Mac never answers a call that hands a card number to JS; only Linux and Windows, which have no secure entries, keep it", () => {
+  const autofill = native("AutofillModule.swift");
+  assert.doesNotMatch(autofill, /^ {4}"cardNumber": /m);
+  assert.match(autofill, /^ {4}"revealCard": /m);
+});
+
 test("every call in api.ts has a handler in its domain's Swift call table, and nothing else does", () => {
   const swift = new Set();
   for (const file of nativeFiles.filter((f) => /(Module|Calls)\.swift$/.test(f))) {
@@ -74,7 +82,7 @@ test("every call in api.ts has a handler in its domain's Swift call table, and n
     if (!domain) continue;
     for (const [, verb] of text.matchAll(/^ {4}"([a-zA-Z]+)": /gm)) swift.add(`${domain}.${verb}`);
   }
-  assert.deepEqual(sorted(swift), sorted(typeRows(api, manifest, "EngineCalls").rows));
+  assert.deepEqual(sorted(swift), sorted([...typeRows(api, manifest, "EngineCalls").rows].filter((call) => !PLAIN_PLATFORM_CALLS.has(call))));
 });
 
 test("Preload pages loads its profile first, so a profile that isn't open yet is read and written, not skipped", () => {

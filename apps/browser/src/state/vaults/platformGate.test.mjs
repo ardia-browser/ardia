@@ -17,6 +17,7 @@ test("without password managers nothing starts, nothing opens and no profile is 
   assert.match(source("./enabled.ts"), /export const vaultsSupported = PLATFORM_FEATURES\.systemPasswordManagers;/);
   assert.match(source("./enabled.ts"), /if \(!vaultsSupported \|\| !p\.scanned\) return false;/);
   assert.match(source("./start.ts"), /export function startVaults\(\) \{\n\s+if \(!vaultsSupported\) return;/);
+  assert.match(source("../autofill/fieldMenu.ts"), /export function noteAutofillField\(event: AutofillFieldEvent\) \{\n\s+if \(!vaultsSupported\) return;/);
   assert.match(source("./saveOffer.ts"), /export function vaultClaimsPasswordPrompt\(.*\): boolean \{\n\s+if \(!vaultsSupported\) return false;/, "Chrome's own save prompt stays where there are no password managers");
 });
 

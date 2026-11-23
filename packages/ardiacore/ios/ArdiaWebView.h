@@ -233,6 +233,10 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)removeSharedImages;
 @end
 
+@interface ArdiaWebView (Autofill)
++ (nullable NSString *)autofillFieldPinOfTab:(NSString *)tabId NS_SWIFT_NAME(autofillFieldPin(ofTab:));
+@end
+
 @interface ArdiaWebView (VaultContextMenu)
 + (void)setVaultContextAutofill:(BOOL)autofill
                      generators:(NSArray<NSDictionary<NSString *, id> *> *)generators

@@ -256,7 +256,8 @@ NSString *StoreFolder(NSString *profile, NSString *extensionId, id version) {
 
 + (void)revealCardNumber:(NSString *)cardId profile:(NSString *)profile reply:(ArdiaServiceReply)reply {
   [self callBase:@"ac_autofill_card_number" profile:profile args:@{@"id" : cardId ?: @""} completion:Answering(reply, ^id(NSDictionary *result) {
-    return [result[@"number"] isKindOfClass:NSString.class] ? @{@"number" : result[@"number"]} : @{};
+    if ([result[@"number"] isKindOfClass:NSString.class]) return @{@"number" : result[@"number"]};
+    return @{@"authenticated" : @([result[@"authenticated"] boolValue])};
   })];
 }
 

@@ -12,6 +12,7 @@
       "SitesModule",
       "PasswordsModule",
       "AutofillModule",
+      "AutofillCardNumberFieldModule",
       "ExtensionsModule",
       "SearchModule",
       "MediaModule",

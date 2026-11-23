@@ -1,12 +1,12 @@
 import { Fragment, useContext } from "react";
-import { Animated, View } from "react-native";
+import { Animated } from "react-native";
 import { Surface } from "../ui";
 import { useTheme } from "../ui/theme";
 import type { useEasedColor } from "../ui/toolbarColors";
 import { FloatingStrip } from "./context";
 import { CHIP_HAIRLINE, FLARE, ITEM_HEIGHT, ITEM_TOP, RIM_HEIGHT, RIM_WIDTH, STRIP_COLORS, tabRadius, TAB_TOP, TOP_STRIP_HEIGHT } from "./tokens";
 
-export type Fill = string | ReturnType<typeof useEasedColor>;
+type Fill = string | ReturnType<typeof useEasedColor>;
 
 type Size = number | Animated.Value | Animated.AnimatedAddition<number>;
 const plus = (size: Size, k: number): Size => (typeof size === "number" ? size + k : Animated.add<number>(size, k));

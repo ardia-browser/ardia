@@ -297,6 +297,4 @@ function PluginPage({ name }: { name: string }) {
   );
 }
 
-const LINE = { flex: 1 } as const;
 const ICON = { width: 18, height: 18 } as const;
-const TITLE_ICON = { width: 28, height: 28 } as const;

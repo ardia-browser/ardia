@@ -3,7 +3,7 @@ import type { PlatformFeatures } from "../../lib/platformFeatures";
 
 export type SourceCandidate = { id: Exclude<BrowserSourceId, "fresh">; name: string; app: string; importId?: string; onlyWhenFound?: boolean; listedOnly?: boolean };
 
-export const SOURCE_CANDIDATES: SourceCandidate[][] = [
+const SOURCE_CANDIDATES: SourceCandidate[][] = [
   [{ id: "arc", name: "Arc", app: "/Applications/Arc.app" }],
   [{ id: "dia", name: "Dia", app: "/Applications/Dia.app" }],
   [{ id: "chrome", name: "Chrome", app: "/Applications/Google Chrome.app" }],

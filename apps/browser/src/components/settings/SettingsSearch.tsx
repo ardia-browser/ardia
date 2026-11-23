@@ -31,12 +31,12 @@ import { useProfileOrder } from "../../state/profiles/hooks";
 import { shortcutItems } from "../../state/settings/paneData";
 import { useResource } from "../../state/settings/resources";
 
-export type SettingsHit = SearchHit<SettingEntry>;
-export type CommandKeyHit = { item: MenuShortcut; keys: string };
+type SettingsHit = SearchHit<SettingEntry>;
+type CommandKeyHit = { item: MenuShortcut; keys: string };
 
 const KEY_SEARCH_SETTLE_MS = 1000;
 
-export function useCommandKeyHits(query: string): CommandKeyHit[] {
+function useCommandKeyHits(query: string): CommandKeyHit[] {
   const combo = useMemo(() => parseCombo(query), [query]);
   const overrides = useSettings((s) => s.shortcuts);
   const profileOrder = useProfileOrder();

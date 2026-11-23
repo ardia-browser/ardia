@@ -17,7 +17,7 @@ export function HoverSlot({ width = HOVER_SLOT_WIDTH, ...props }: SlotProps & { 
   return width === "content" ? <ContentHoverSlot {...props} /> : hoverSlotView({ ...props, width });
 }
 
-export function hoverSlotView({ hovered, hover, width = HOVER_SLOT_WIDTH, reserve = "always", align = "end", children, style }: SlotProps & { width?: number }) {
+function hoverSlotView({ hovered, hover, width = HOVER_SLOT_WIDTH, reserve = "always", align = "end", children, style }: SlotProps & { width?: number }) {
   const showHover = hovered && hover != null && hover !== false;
   const hasChildren = children != null && children !== false;
   if (reserve === "hover" && !showHover && !hasChildren && style === undefined) return null;

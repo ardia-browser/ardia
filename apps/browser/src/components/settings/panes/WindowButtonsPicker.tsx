@@ -11,7 +11,7 @@ const WINDOW_BUTTON_CHOICES: Option<Settings["windowButtons"]>[] = [
   { value: "hidden", title: "Hidden" },
 ];
 
-export const WINDOW_BUTTON_DESCRIPTIONS: Record<Settings["windowButtons"], string> = {
+const WINDOW_BUTTON_DESCRIPTIONS: Record<Settings["windowButtons"], string> = {
   native: "Follows your desktop's button layout.",
   trafficLights: "Close, minimize and maximize at the top left.",
   hidden: "No window buttons; keeps the menu button in the header.",

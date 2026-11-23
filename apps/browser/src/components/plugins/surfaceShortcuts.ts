@@ -21,7 +21,7 @@ export type ShortcutScope = SurfaceKeys & {
   register: (id: string, depth: number, bindings: readonly ShortcutBinding<PluginNode>[] | null) => void;
 };
 
-export const NO_SURFACE_KEYS: SurfaceKeys = { keys: [], press: () => false };
+const NO_SURFACE_KEYS: SurfaceKeys = { keys: [], press: () => false };
 
 export const ShortcutScopeContext = createContext<ShortcutScope>({ ...NO_SURFACE_KEYS, depth: 0, register: () => {} });
 
@@ -40,7 +40,7 @@ export function useShortcutRegistration(actions: readonly PluginNode[]) {
   useEffect(() => () => register(id, 0, null), [register, id]);
 }
 
-export const ardiaShortcutOf = (s: PluginShortcut): Shortcut => ({ key: pluginShortcutKeyChar(s), modifiers: storedModifiers(pluginShortcutModifiers(s)) });
+const ardiaShortcutOf = (s: PluginShortcut): Shortcut => ({ key: pluginShortcutKeyChar(s), modifiers: storedModifiers(pluginShortcutModifiers(s)) });
 
 export const heldByArdia = (s: PluginShortcut): boolean => commandsHolding(ardiaShortcutOf(s)).length > 0;
 

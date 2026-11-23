@@ -4,7 +4,7 @@ import { isPluginPath } from "../../lib/pluginChecks";
 import type { PluginNode } from "../../lib/pluginProtocol";
 import type { ColorRole, Space, TypeSize } from "../ui";
 
-export type HandlerRef = { __handler: string };
+type HandlerRef = { __handler: string };
 export type Child = PluginNode | string;
 
 export const isHandlerRef = (value: unknown): value is HandlerRef =>

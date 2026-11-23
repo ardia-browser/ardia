@@ -63,7 +63,7 @@ function misplaced(c: Check, path: string, doc: Fields, type: RowType) {
   for (const [key, types] of Object.entries(belongs)) if (doc[key] !== undefined && !types.includes(type)) c.problems.push(`${path}.${key} only goes with type ${types.join(" or ")}`);
 }
 
-export function row(c: Check, path: string, value: unknown): RowSpec | null {
+function row(c: Check, path: string, value: unknown): RowSpec | null {
   const doc = object(c, path, value);
   if (!doc) return null;
   only(c, path, doc, ROW_KEYS);

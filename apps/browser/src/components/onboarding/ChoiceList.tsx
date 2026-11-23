@@ -10,7 +10,7 @@ const REPLAY_LENGTH = 1700;
 
 export type ChoiceOption<T> = { value: T; preview: PreviewId; title: string; subtitle: string };
 
-export type MockFocus = { focus: PreviewId | null; hover: (id: PreviewId, on: boolean) => void; replay: (id: PreviewId) => void };
+type MockFocus = { focus: PreviewId | null; hover: (id: PreviewId, on: boolean) => void; replay: (id: PreviewId) => void };
 
 export function useMockFocus(resetKey: unknown): MockFocus {
   const [hovered, setHovered] = useState<PreviewId | null>(null);

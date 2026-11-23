@@ -23,7 +23,7 @@ export type PageSpot = {
   scroller: ScrollView | null;
 };
 
-export type PageLayoutInput = {
+type PageLayoutInput = {
   tiles: number;
   previewed: number;
   dockRoom: number;

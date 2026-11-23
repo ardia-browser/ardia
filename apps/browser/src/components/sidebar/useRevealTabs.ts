@@ -8,7 +8,7 @@ import { flushFolds, foldsFilling } from "./foldFlush";
 import { releaseLaunchRows } from "../../state/sidebar/launchRows";
 import { REVEAL_ROW_MARGIN } from "./tokens";
 
-export type RevealScroll = { y: number; animated: boolean };
+type RevealScroll = { y: number; animated: boolean };
 
 export function revealScrollFor(row: { y: number; height: number }, at: { top: number; viewport: number; edgeLift?: number }, animated: boolean): RevealScroll | null {
   const { top, viewport, edgeLift = 0 } = at;

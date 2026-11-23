@@ -16,7 +16,7 @@ export function fieldNodes(node: PluginNode, out: PluginNode[] = []): PluginNode
 
 export const optionValue = (value: unknown): string | undefined => (typeof value === "string" ? value : str(value));
 
-export const selectValues = (field: PluginNode): string[] => records(field.props.options).flatMap((o) => optionValue(o.value) ?? []);
+const selectValues = (field: PluginNode): string[] => records(field.props.options).flatMap((o) => optionValue(o.value) ?? []);
 
 export const shownSelectValue = (field: PluginNode, value: FormValue): string => {
   const allowed = selectValues(field);

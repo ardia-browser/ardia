@@ -62,7 +62,7 @@ const MARQUEE_PASSES_AT_REST = 1;
 export const SIDEBAR_PLAYER_HEIGHT = ROW_HEIGHT + 8;
 export const SIDEBAR_PLAYER_GROWTH = GROWTH;
 
-export type PlayerMotion = {
+type PlayerMotion = {
   progress: Animated.Value;
   overhang: Animated.Value;
   listClip: Animated.AnimatedMultiplication<number>;

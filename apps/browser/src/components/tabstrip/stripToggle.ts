@@ -13,7 +13,7 @@ export function groupChipWidth(frame: number | undefined, natural: number | unde
 
 export const memberClipEdge = (pill: number) => pill - CLIP_TAIL;
 
-export type MemberFrame = { left: number; shown: number; content: number };
+type MemberFrame = { left: number; shown: number; content: number };
 
 export function revealedMembers(start: number, offsets: readonly number[], widths: readonly number[], pill: number): MemberFrame[] {
   const edge = memberClipEdge(pill);

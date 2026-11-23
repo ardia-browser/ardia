@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 
-export type ExtraKey = { key: string; metaKey?: boolean; ctrlKey?: boolean; altKey?: boolean; shiftKey?: boolean };
+type ExtraKey = { key: string; metaKey?: boolean; ctrlKey?: boolean; altKey?: boolean; shiftKey?: boolean };
 
 export type ExtraKeyProps = { extraKeys?: readonly ExtraKey[]; onExtraKey?: (pressed: ExtraKey) => boolean };
 

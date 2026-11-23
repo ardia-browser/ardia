@@ -5,7 +5,7 @@ export const SIDEBAR_MAX_WIDTH = 400;
 
 export const MIN_WINDOW_WIDTH = 500;
 
-export const SIDEBAR_PAGE_ROOM = MIN_WINDOW_WIDTH - DEFAULT_SIDEBAR_WIDTH;
+const SIDEBAR_PAGE_ROOM = MIN_WINDOW_WIDTH - DEFAULT_SIDEBAR_WIDTH;
 
 export const sidebarWidthLimit = (windowWidth: number | null | undefined): number =>
   windowWidth ? Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, Math.floor(windowWidth - SIDEBAR_PAGE_ROOM))) : SIDEBAR_MAX_WIDTH;

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { approveAutomationRule, removeAutomationRule, useAutomationRules, type AutomationRuleRow } from "../../../state/automation/approvalRows";
 import { Button } from "../../ui";
-import { Group, Row, SectionHeader } from "../Form";
+import { Row } from "../Form";
 import { setting } from "../settingsIndex";
 
 function RuleRow({ rule, pending }: { rule: AutomationRuleRow; pending: boolean }) {
@@ -21,14 +21,4 @@ export function useAutomationRuleRows(): ReactNode[] {
     ...pending.map((rule) => <RuleRow key={rule.key} rule={rule} pending />),
     ...approved.map((rule) => <RuleRow key={rule.key} rule={rule} pending={false} />),
   ];
-}
-
-export function AutomationRules() {
-  const rows = useAutomationRuleRows();
-  return (
-    <>
-      <SectionHeader anchor="advanced.automationRules" />
-      <Group of="advanced.automationRules">{rows}</Group>
-    </>
-  );
 }

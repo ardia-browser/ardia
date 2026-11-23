@@ -2,7 +2,7 @@ import type { Selection } from "./inline";
 
 export const REVERT_WINDOW_MS = 3000;
 
-export type RevertWatch = {
+type RevertWatch = {
   first: string | null;
   firstAt: number;
   heard: string;
@@ -12,7 +12,7 @@ export type RevertWatch = {
   spent: boolean;
 };
 
-export type RevertRead = { text: string; watch: RevertWatch; caret: number | null; restored: { at: number; text: string } | null };
+type RevertRead = { text: string; watch: RevertWatch; caret: number | null; restored: { at: number; text: string } | null };
 
 export const freshRevertWatch = (): RevertWatch => ({ first: null, firstAt: 0, heard: "", typedOnly: true, lost: null, shown: "", spent: false });
 

@@ -1,7 +1,7 @@
 import { useLayoutEffect, useReducer, useRef, useState } from "react";
 import { noteRowsHeldUnderPointer } from "../../state/telemetry/inlineCompletionCounts";
 
-export type SteadyList<V> = { key: string; value: V };
+type SteadyList<V> = { key: string; value: V };
 
 const sameRows = <T,>(a: T[], b: T[], rowKey: (row: T) => string) => a.length === b.length && a.every((row, i) => rowKey(row) === rowKey(b[i]!));
 

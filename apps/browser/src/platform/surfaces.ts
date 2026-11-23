@@ -1,6 +1,6 @@
 import { nativeModule, type OpenSurface, type SurfaceEvent, type SurfaceItem } from "@ardia/shell";
 
-export type { OpenSurface, SurfaceEvent, SurfaceItem };
+export type { OpenSurface, SurfaceItem };
 
 const Menus = () => nativeModule("ArdiaMenus");
 

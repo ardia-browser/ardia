@@ -8,7 +8,7 @@ export const CARD_BORDER = StyleSheet.hairlineWidth * 2;
 export const SELECTED_BORDER = 1.5;
 const DASHED_BORDER = 1;
 
-export type ChoiceCardProps = Omit<ViewProps, "style"> & {
+type ChoiceCardProps = Omit<ViewProps, "style"> & {
   radius: number;
   selected?: boolean;
   hovered?: boolean;

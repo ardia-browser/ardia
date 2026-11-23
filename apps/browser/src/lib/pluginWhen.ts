@@ -1,6 +1,6 @@
-export const WHEN_KEYS = ["urlHost", "urlScheme", "isPinned", "isInGroup", "isSplit", "isActive", "tabCount"] as const;
-export type WhenKey = (typeof WHEN_KEYS)[number];
-export type WhenValue = string | number | boolean;
+const WHEN_KEYS = ["urlHost", "urlScheme", "isPinned", "isInGroup", "isSplit", "isActive", "tabCount"] as const;
+type WhenKey = (typeof WHEN_KEYS)[number];
+type WhenValue = string | number | boolean;
 export type WhenContext = Partial<Record<WhenKey, WhenValue>>;
 
 export const MAX_WHEN_LENGTH = 200;
@@ -10,7 +10,7 @@ const MAX_GLOB = 128;
 type Literal = { kind: "literal"; value: WhenValue };
 type Key = { kind: "key"; key: WhenKey };
 type Operand = Literal | Key;
-export type WhenExpr =
+type WhenExpr =
   | Operand
   | { kind: "not"; of: WhenExpr }
   | { kind: "and" | "or"; left: WhenExpr; right: WhenExpr }
@@ -18,7 +18,7 @@ export type WhenExpr =
 
 type Token = { type: "op"; value: string } | { type: "string"; value: string } | { type: "number"; value: number } | { type: "word"; value: string };
 
-export type WhenParse = { ok: true; expr: WhenExpr } | { ok: false; problem: string };
+type WhenParse = { ok: true; expr: WhenExpr } | { ok: false; problem: string };
 
 const OPERATORS = ["&&", "||", "==", "!=", "~=", "!", "(", ")"];
 const WORD = /[A-Za-z_]/;

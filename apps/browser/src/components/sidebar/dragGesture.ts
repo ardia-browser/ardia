@@ -3,7 +3,7 @@ import { TAB_CLICK_SLOP } from "../../state/sidebar/heldTabPress";
 
 type Travel = Pick<PanResponderGestureState, "dx" | "dy">;
 
-export type DragGestureTarget = {
+type DragGestureTarget = {
   begin: (x: number, y: number) => void;
   move: (x: number, y: number) => void;
   end: (commit: boolean) => void;

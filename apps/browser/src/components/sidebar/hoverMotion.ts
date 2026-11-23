@@ -12,7 +12,7 @@ const fade = curve.fade;
 
 const HoverCardFrameContext = createContext<HoverCardFrame>({ side: "left", windowWidth: 0, sidebarEdge: 0 });
 export const HoverCardFrameProvider = HoverCardFrameContext.Provider;
-export const useHoverCardFrame = () => useContext(HoverCardFrameContext);
+const useHoverCardFrame = () => useContext(HoverCardFrameContext);
 
 export function useHoverCardOrigin(anchor: Anchor) {
   const frame = useHoverCardFrame();
@@ -24,7 +24,7 @@ function createMotion() {
   return { opacity, style: { opacity } };
 }
 
-export const hoverCardMotions = new Map<string, ReturnType<typeof createMotion>>();
+const hoverCardMotions = new Map<string, ReturnType<typeof createMotion>>();
 
 export function useHoverCardMotion<T>(key: string, target: T | null) {
   const [motion] = useState(createMotion);

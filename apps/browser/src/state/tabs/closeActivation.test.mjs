@@ -785,6 +785,28 @@ test("Tab below whose pick closes while Close Group's prompt is open takes the n
   assert.equal(shown(w), "c");
 });
 
+test("a Close Group whose Tab below pick closes during its prompt counts a fallback, not a pick", async () => {
+  const { closeGroup } = await import("../browser/actions.ts");
+  const { takeCloseActivationCounts } = await import("../telemetry/closeActivationCounts.ts");
+  const dialogs = shellNativeModules.ArdiaDialogs;
+  const real = dialogs.confirm;
+  client.loadChoice();
+  client.setSharing(true, "settings");
+  takeCloseActivationCounts();
+  const { w, ids: [, g1, b] } = windowWith("tabBelow", "a", "g1", "b");
+  const g = S().createGroup([g1], { name: "G" });
+  S().activate(g1);
+  dialogs.confirm = async () => (S().closeTab(b), { confirmed: true, suppressed: false });
+  try {
+    await closeGroup(g, { user: you() });
+  } finally {
+    dialogs.confirm = real;
+  }
+  assert.equal(shown(w), "a", "nothing left below, so the tab above");
+  assert.deepEqual(takeCloseActivationCounts(), { ...NO_PICKS, close_tab_below_fallbacks: 1 });
+  client.setSharing(false, "settings");
+});
+
 test("a tab that joins the group while Close Group waits is never kept as the next tab; an unchanged group still picks it", async () => {
   const { closeGroup } = await import("../browser/actions.ts");
   for (const [joins, expected] of [[false, "a"], [true, "d"]]) {

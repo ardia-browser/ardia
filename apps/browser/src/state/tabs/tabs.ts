@@ -53,8 +53,9 @@ export function standingSuccessor(s: BrowserState, close: UserClose | undefined,
 function chosenSuccessor(s: BrowserState, close: UserClose | undefined, w: BrowserWindow, profileId: string, removing: ReadonlySet<string>): string | undefined {
   const pick = close?.successors.get(successorKey(w.id, profileId));
   if (!pick) return undefined;
-  close!.noted(pick);
-  return standingSuccessor(s, close, w.id, profileId, removing);
+  const standing = standingSuccessor(s, close, w.id, profileId, removing);
+  close!.noted({ ...pick, beside: pick.beside && !!standing });
+  return standing;
 }
 type CloseKind = "close" | "unload" | "removePin";
 type CloseIntent = { kind: CloseKind; ids: string[] };

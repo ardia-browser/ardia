@@ -17,9 +17,7 @@ export function saveLine(route: PasskeyRoute, name: string, check: string, priva
   return check === "Touch ID" ? `Saves to ${name}. You'll sign in with Touch ID, no password needed.` : `Saves to ${name}. You'll sign in with your login password.`;
 }
 
-export function signInLine(route: PasskeyRoute, name: string, check: string, many: boolean): string {
-  const choose = many ? "Choose a passkey. " : "";
-  if (route === "system") return `${choose}macOS will ask ${name} for your passkey.`;
-  if (route === "extension") return `${choose}${name} will ask you to confirm.`;
-  return `${choose}You'll confirm with ${check}.`;
+export function signInLine(route: PasskeyRoute, name: string, check: string): string {
+  if (route === "system" || route === "extension") return `${name} will ask you to confirm.`;
+  return `You'll confirm with ${check}.`;
 }

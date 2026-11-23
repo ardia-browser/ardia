@@ -68,9 +68,9 @@ export function delegatedManagers(providers: readonly VaultProviderState[], rout
 export const systemSources = (managers: readonly DelegatedManager[]) => managers.filter((m) => m.via === "system" && m.status === "ready");
 
 export function delegatedLine(manager: DelegatedManager): string {
-  if (manager.via === "extension") return manager.status === "ready" ? `Sign in through the ${manager.extension} extension. Ardia lists them when a site asks.` : `They sign in through the ${manager.name} extension, which is off or missing.`;
-  if (manager.status === "ready") return `In the ${manager.name} app. Ardia offers them through macOS when a site asks.`;
-  if (manager.status === "denied") return `Off: turn Ardia on in System Settings › Privacy & Security › Passkeys Access for Web Browsers.`;
+  if (manager.via === "extension") return manager.status === "ready" ? `They sign in through the ${manager.extension} extension.` : `They need the ${manager.name} extension, which is off or not installed.`;
+  if (manager.status === "ready") return `They sign in through the ${manager.name} app.`;
+  if (manager.status === "denied") return "Turn on Ardia in System Settings › Privacy & Security › Passkeys Access for Web Browsers.";
   if (manager.status === "needsRelease") return "Only Ardia's signed release from ardia.dev can reach them.";
   return "Checking whether macOS lets Ardia use them…";
 }

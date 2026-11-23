@@ -32,7 +32,7 @@ test("when no route works, Settings says why in one line and the sheets offer no
   const [denied] = delegatedManagers([onePassword()], "denied", []);
   assert.match(delegatedLine(denied), /Passkeys Access for Web Browsers/);
   const [off] = delegatedManagers([manager("protonpass", "Proton Pass", "unlocked", [{ via: "extension", extensions: [PROTON] }])], "available", []);
-  assert.equal(delegatedLine(off), "They sign in through the Proton Pass extension, which is off or missing.");
+  assert.equal(delegatedLine(off), "They need the Proton Pass extension, which is off or not installed.");
 });
 
 test("telemetry counts a system route as system, and only a delegated extension's final answers as delegated", () => {

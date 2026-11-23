@@ -95,14 +95,16 @@ export function PasskeysSection({ query }: { query: string }) {
       <SectionHeader title={shown.length ? `${COUNT.format(shown.length)} Passkey${shown.length === 1 ? "" : "s"}` : "Passkeys"} />
       {shown.length ? <Group>{shown.length > ANIMATED_ROWS ? <WindowedPasskeyRows passkeys={shown} /> : <AnimatedPasskeyRows passkeys={shown} />}</Group> : null}
       {delegated.length ? (
-        <Group>
-          {delegated.map((m, i) => (
-            <View key={m.id}>
-              {i > 0 ? <Divider thick inset="l" /> : null}
-              <DelegatedRow manager={m} />
-            </View>
-          ))}
-        </Group>
+        <View style={shown.length ? GROUP_GAP : undefined}>
+          <Group>
+            {delegated.map((m, i) => (
+              <View key={m.id}>
+                {i > 0 ? <Divider thick inset="l" /> : null}
+                <DelegatedRow manager={m} />
+              </View>
+            ))}
+          </Group>
+        </View>
       ) : null}
     </Expand>
   );
@@ -195,5 +197,6 @@ export function PasskeySheet({ passkey }: { passkey: VaultPasskey }) {
 }
 
 const BODY = { marginTop: space.xl } as const;
+const GROUP_GAP = { marginTop: space.l } as const;
 const DETAIL = { marginTop: space.xxs } as const;
 const NOTE = { marginTop: space.ml } as const;

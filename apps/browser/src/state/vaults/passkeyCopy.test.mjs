@@ -10,9 +10,10 @@ test("the save line names who asks: macOS for the system route, the extension fo
 });
 
 test("a delegated sign-in never promises Ardia's Touch ID", () => {
-  assert.equal(signInLine("system", "1Password", "Touch ID", false), "macOS will ask 1Password for your passkey.");
-  assert.equal(signInLine("extension", "Proton Pass", "Touch ID", true), "Choose a passkey. Proton Pass will ask you to confirm.");
-  assert.equal(signInLine("ardia", "Ardia", "your login password", false), "You'll confirm with your login password.");
+  assert.equal(signInLine("system", "1Password", "Touch ID"), "1Password will ask you to confirm.");
+  assert.equal(signInLine("extension", "Proton Pass", "Touch ID"), "Proton Pass will ask you to confirm.");
+  assert.equal(signInLine("ardia", "Ardia", "Touch ID"), "You'll confirm with Touch ID.");
+  assert.equal(signInLine("ardia", "Ardia", "your login password"), "You'll confirm with your login password.");
 });
 
 test("a hand-off that came back says what happened and what to do, never sends the person to Chrome", () => {

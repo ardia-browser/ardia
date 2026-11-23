@@ -6,7 +6,8 @@ import { answerPasskeySheet, choosePasskeyTarget, selectPasskey, usePasskeys, ty
 import type { VaultPasskey } from "../../state/vaults/types";
 import { PromptBody } from "../site/Prompts";
 import { usePromptInputGuard, Well } from "../site/PromptParts";
-import { Box, Button, Expand, PanelCloseButton, Popover, POPOVER_WIDTH, PopoverValue, space, Symbol, Text, usePopoverPresence, useTheme } from "../ui";
+import { Box, Button, Expand, PanelCloseButton, Popover, POPOVER_WIDTH, PopoverValue, radius, space, Symbol, Text, usePopoverPresence, useTheme } from "../ui";
+import { selectableCard } from "../settings/tokens";
 import { useManagerName, VaultAppIcon } from "./VaultParts";
 import { useSiteTokens } from "../site/tokens";
 import { usePasskeyExtensions } from "../../state/vaults/passkeySources";
@@ -38,7 +39,7 @@ function messageOf(sheet: PasskeySheet, site: string, targetName: string, target
   const check = touchID ? "Touch ID" : "your login password";
   if (sheet.kind === "get") {
     const { route, provider } = selectedRoute(sheet);
-    return signInLine(route, nameOf(provider), check, sheet.passkeys.length + systemRowsOf(sheet).length > 1);
+    return signInLine(route, nameOf(provider), check);
   }
   if (sheet.exists) return `You already have a passkey for ${accountLine(sheet)} on ${site}.`;
   if (sheet.targets.length > 1 && (targetRoute === "ardia" || targetRoute === "holder")) return null;
@@ -50,58 +51,14 @@ function PasskeyTile({ provider }: { provider: string }) {
   return <VaultAppIcon provider="" symbol="key.fill" neutral badge={{ provider, ground: well }} />;
 }
 
-function PasskeyRow({ passkey, selected, many, onPress }: { passkey: VaultPasskey; selected: boolean; many: boolean; onPress: () => void }) {
+function ChoiceRow({ tile, title, detail, selected, many, onPress }: { tile: ReactNode; title: string; detail: string; selected: boolean; many: boolean; onPress: () => void }) {
   const theme = useTheme();
-  const nameOf = useManagerName();
+  const { well, tilePressed } = useSiteTokens();
+  const chosen = many && selected;
   return (
-    <Pressable onPress={onPress} disabled={!many}>
-      <Well>
-        <Box row gap="ml" center style={LEFT}>
-          <PasskeyTile provider={passkey.provider} />
-          <View style={FILL}>
-            <Text lines={1} size="small" weight="medium">
-              {accountLine(passkey)}
-            </Text>
-            <Text lines={1} size="caption" tone="textSecondary">
-              {passkey.displayName && passkey.displayName !== passkey.userName ? passkey.displayName : `Passkey in ${nameOf(passkey.provider)}`}
-            </Text>
-          </View>
-          {many ? <Symbol name={selected ? "checkmark.circle.fill" : "circle"} size={15} color={selected ? theme.accent : theme.textTertiary} /> : null}
-        </Box>
-      </Well>
-    </Pressable>
-  );
-}
-
-function SystemRow({ provider, selected, many, onPress }: { provider: string; selected: boolean; many: boolean; onPress: () => void }) {
-  const theme = useTheme();
-  const nameOf = useManagerName();
-  return (
-    <Pressable onPress={onPress} disabled={!many}>
-      <Well>
-        <Box row gap="ml" center style={LEFT}>
-          <PasskeyTile provider={provider} />
-          <View style={FILL}>
-            <Text lines={1} size="small" weight="medium">
-              {`Use a passkey from ${nameOf(provider)}`}
-            </Text>
-            <Text lines={1} size="caption" tone="textSecondary">
-              {`Saved in the ${nameOf(provider)} app`}
-            </Text>
-          </View>
-          {many ? <Symbol name={selected ? "checkmark.circle.fill" : "circle"} size={15} color={selected ? theme.accent : theme.textTertiary} /> : null}
-        </Box>
-      </Well>
-    </Pressable>
-  );
-}
-
-function SourceRow({ tile, title, detail, onPress }: { tile: ReactNode; title: string; detail: string; onPress: () => void }) {
-  const theme = useTheme();
-  return (
-    <Pressable onPress={onPress}>
-      <Well>
-        <Box row gap="ml" center style={LEFT}>
+    <Pressable onPress={onPress} disabled={!many} accessibilityRole={many ? "radio" : undefined} accessibilityState={many ? { selected } : undefined} accessibilityLabel={`${title}, ${detail}`}>
+      {({ pressed }) => (
+        <View style={[CHOICE, { borderRadius: radius.tile, borderWidth: RING(chosen), borderColor: theme.formAccent, paddingHorizontal: space.ml - RING(chosen), paddingVertical: space.m - RING(chosen), backgroundColor: pressed && many ? tilePressed : chosen ? `${theme.formAccent}${selectableCard.selectedAlpha}` : well }]}>
           {tile}
           <View style={FILL}>
             <Text lines={1} size="small" weight="medium">
@@ -111,9 +68,45 @@ function SourceRow({ tile, title, detail, onPress }: { tile: ReactNode; title: s
               {detail}
             </Text>
           </View>
-          <Symbol name="chevron.right" size={12} color={theme.textTertiary} />
-        </Box>
-      </Well>
+          {many ? <Symbol name={selected ? "checkmark.circle.fill" : "circle"} size={16} color={selected ? theme.formAccent : theme.textTertiary} style={RADIO} /> : null}
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+function PasskeyRow({ passkey, selected, many, onPress }: { passkey: VaultPasskey; selected: boolean; many: boolean; onPress: () => void }) {
+  const nameOf = useManagerName();
+  const detail = passkey.displayName && passkey.displayName !== passkey.userName ? passkey.displayName : `Passkey in ${nameOf(passkey.provider)}`;
+  return <ChoiceRow tile={<PasskeyTile provider={passkey.provider} />} title={accountLine(passkey)} detail={detail} selected={selected} many={many} onPress={onPress} />;
+}
+
+function SystemRow({ provider, selected, many, onPress }: { provider: string; selected: boolean; many: boolean; onPress: () => void }) {
+  const nameOf = useManagerName();
+  return <ChoiceRow tile={<PasskeyTile provider={provider} />} title={`Use a passkey from ${nameOf(provider)}`} detail={`Saved in the ${nameOf(provider)} app`} selected={selected} many={many} onPress={onPress} />;
+}
+
+function SourceRow({ tile, title, detail, onPress }: { tile: ReactNode; title: string; detail: string; onPress: () => void }) {
+  const theme = useTheme();
+  const { tilePressed } = useSiteTokens();
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${title}, ${detail}`}>
+      {({ pressed }) => (
+        <Well fill={pressed ? tilePressed : undefined}>
+          <Box row gap="ml" center style={LEFT}>
+            {tile}
+            <View style={FILL}>
+              <Text lines={1} size="small" weight="medium">
+                {title}
+              </Text>
+              <Text lines={1} size="caption" tone="textSecondary">
+                {detail}
+              </Text>
+            </View>
+            <Symbol name="chevron.right" size={12} color={theme.textTertiary} style={CHEVRON} />
+          </Box>
+        </Well>
+      )}
     </Pressable>
   );
 }
@@ -268,6 +261,10 @@ export function VaultPasskeySheet({ tabId, right, top }: { tabId: string; right:
 }
 
 const FILL = { flex: 1, minWidth: 0 } as const;
+const RADIO = { width: 18, height: 18 } as const;
+const CHEVRON = { width: 12, height: 12 } as const;
+const CHOICE = { flexDirection: "row", alignItems: "center", gap: space.ml } as const;
+const RING = (chosen: boolean) => (chosen ? selectableCard.selectedBorder : 0);
 const LEFT = { justifyContent: "flex-start" } as const;
 const BETWEEN = { justifyContent: "space-between" } as const;
 const SAVE_TITLES = ["Save", "Saving…", "OK"] as const;

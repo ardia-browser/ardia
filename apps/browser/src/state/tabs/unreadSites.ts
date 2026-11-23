@@ -3,7 +3,9 @@ import type { Settings } from "../settings/settings";
 import type { Tab } from "../browser/types";
 import { useBrowser } from "../browser/store";
 import { isIncognitoProfile } from "../browser/model";
-import { cachedHostOf } from "../../lib/url";
+import { cachedHostLookup } from "../../lib/url";
+
+const cachedHostOf = cachedHostLookup();
 
 export type UnreadSiteSettings = Pick<Settings, "showUnreadCounts" | "unreadHiddenSites">;
 

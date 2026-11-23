@@ -4,7 +4,9 @@ import type { Tab } from "../browser/types";
 import { isIncognitoProfile, without } from "../browser/model";
 import { hostOf } from "@ardia/core";
 import { isString, listOf } from "../../lib/decode";
-import { cachedHostOf } from "../../lib/url";
+import { cachedHostLookup } from "../../lib/url";
+
+const cachedHostOf = cachedHostLookup();
 
 export type MuteState = "site" | "tab" | null;
 

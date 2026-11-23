@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 const { isFields, ownValue } = await import("./decode.ts");
 
-test("fields are plain objects, never null or a list", () => {
+test("fields are any non-null, non-list object, class instances included", () => {
   assert.equal(isFields({}), true);
+  assert.equal(isFields(new Date(0)), true);
   assert.equal(isFields(Object.create(null)), true);
   for (const value of [null, undefined, [], "x", 1, true]) assert.equal(isFields(value), false, String(value));
 });

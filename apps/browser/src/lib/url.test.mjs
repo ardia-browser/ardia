@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-const { cachedHostOf, pageHostLabel, urlTrail } = await import("./url.ts");
+const { cachedHostLookup, pageHostLabel, urlTrail } = await import("./url.ts");
 const { hostOf } = await import("@ardia/core");
 
 const rest = { hovered: false, showFullUrl: false };
@@ -41,6 +41,7 @@ test("a local file shows File and its decoded path on hover or with Show Full UR
 });
 
 test("a cached host is the same host hostOf reads, the first time and after", () => {
+  const cachedHostOf = cachedHostLookup();
   for (const url of ["https://www.example.com/a", "HTTP://Example.COM:8080/x", "about:blank", "", "not a url", "file:///Users/me/a.html"]) {
     assert.equal(cachedHostOf(url), hostOf(url), url);
     assert.equal(cachedHostOf(url), hostOf(url), url);

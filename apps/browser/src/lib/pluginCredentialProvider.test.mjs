@@ -40,12 +40,12 @@ test("a credential provider loads only from an official copy, and its name is ke
 
 test("the consent sheet names what each official provider reads, runs and opens", () => {
   const lines = (name) => consentLines(read(official[name]).manifest).map((l) => `${l.icon} ${l.text}`);
-  assert.deepEqual(lines("bitwarden").slice(1, 6), [
+  assert.deepEqual(lines("bitwarden").slice(0, 5), [
     "key.fill Reads and saves logins and passkeys in Bitwarden",
-    "terminal.fill Runs bw on your Mac, outside Ardia's sandbox, only for: status, login, unlock, lock, logout, config server, sync, list items, get, create item and edit item",
-    "lock.shield What you type in its secret fields goes to bw, never to the plugin",
-    "globe Gets a site's address when you save a login or passkey for it",
-    "touchid Can keep Bitwarden unlocked with Touch ID, holding its session in your Keychain",
+    "terminal.fill Runs bw on your Mac, only for these commands: status, login, unlock, lock, logout, config server, sync, list items, get, create item and edit item. Outside Ardia's sandbox",
+    "globe Gets a site's address. When you save a login or passkey for it",
+    "touchid Can keep Bitwarden unlocked with Touch ID. Its session stays in your Keychain",
+    "lock.shield Your secrets go only to bw. What you type in its secret fields never reaches the plugin",
   ]);
   assert.ok(lines("1password").includes("checkmark.shield Asks 1Password to approve Ardia when you sign in"));
   assert.ok(lines("protonpass").includes("safari Opens proton.me in a new tab when you sign in"));

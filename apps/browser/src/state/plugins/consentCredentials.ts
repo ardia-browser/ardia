@@ -1,26 +1,26 @@
 import { hasSecretField, verbWords, type CredentialProviderSpec } from "../../lib/pluginCredentialProvider";
+import { consentLine, listed, type ConsentLine } from "./consentLine";
 
-type Line = { icon: string; text: string };
-
-const listed = (items: readonly string[]) => (items.length <= 1 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`);
-
-function readsLine(spec: CredentialProviderSpec): Line {
+function readsLine(spec: CredentialProviderSpec): ConsentLine {
   const caps = spec.capabilities;
   const saves = caps.includes("save") || caps.includes("edit");
-  const text = caps.includes("passkeys") ? `Reads and saves logins and passkeys in ${spec.title}` : saves ? `Reads and saves logins in ${spec.title}` : `Reads logins in ${spec.title}`;
-  return { icon: "key.fill", text };
+  const what = caps.includes("passkeys") ? "Reads and saves logins and passkeys" : saves ? "Reads and saves logins" : "Reads logins";
+  return consentLine("reaches", "key.fill", `${what} in ${spec.title}`);
 }
 
-export function credentialProviderLines(spec: CredentialProviderSpec | null): Line[] {
+export function credentialProviderLines(spec: CredentialProviderSpec | null): ConsentLine[] {
   if (!spec) return [];
   const caps = spec.capabilities;
   const program = spec.cli.name;
-  const lines: Line[] = [readsLine(spec), { icon: "terminal.fill", text: `Runs ${program} on your Mac, outside Ardia's sandbox, only for: ${listed(verbWords(spec))}` }];
-  if (hasSecretField(spec)) lines.push({ icon: "lock.shield", text: `What you type in its secret fields goes to ${program}, never to the plugin` });
-  if (caps.includes("passkeys")) lines.push({ icon: "globe", text: "Gets a site's address when you save a login or passkey for it" });
-  else if (caps.includes("save")) lines.push({ icon: "globe", text: "Gets a site's address when you save a login for it" });
-  for (const app of new Set(spec.signIn.methods.flatMap((m) => (m.kind === "desktopApproval" && m.appTitle ? [m.appTitle] : [])))) lines.push({ icon: "checkmark.shield", text: `Asks ${app} to approve Ardia when you sign in` });
-  if (spec.signIn.approvalHosts.length) lines.push({ icon: "safari", text: `Opens ${listed(spec.signIn.approvalHosts)} in a new tab when you sign in` });
-  if (caps.includes("touchID") && caps.includes("masterPassword")) lines.push({ icon: "touchid", text: `Can keep ${spec.title} unlocked with Touch ID, holding its session in your Keychain` });
+  const lines: ConsentLine[] = [
+    readsLine(spec),
+    consentLine("reaches", "terminal.fill", `Runs ${program} on your Mac, only for these commands`, { items: verbWords(spec), code: true, detail: "Outside Ardia's sandbox" }),
+  ];
+  if (hasSecretField(spec)) lines.push(consentLine("limits", "lock.shield", `Your secrets go only to ${program}`, { detail: "What you type in its secret fields never reaches the plugin" }));
+  if (caps.includes("passkeys")) lines.push(consentLine("reaches", "globe", "Gets a site's address", { detail: "When you save a login or passkey for it" }));
+  else if (caps.includes("save")) lines.push(consentLine("reaches", "globe", "Gets a site's address", { detail: "When you save a login for it" }));
+  for (const app of new Set(spec.signIn.methods.flatMap((m) => (m.kind === "desktopApproval" && m.appTitle ? [m.appTitle] : [])))) lines.push(consentLine("reaches", "checkmark.shield", `Asks ${app} to approve Ardia when you sign in`));
+  if (spec.signIn.approvalHosts.length) lines.push(consentLine("reaches", "safari", `Opens ${listed(spec.signIn.approvalHosts)} in a new tab when you sign in`));
+  if (caps.includes("touchID") && caps.includes("masterPassword")) lines.push(consentLine("reaches", "touchid", `Can keep ${spec.title} unlocked with Touch ID`, { detail: "Its session stays in your Keychain" }));
   return lines;
 }

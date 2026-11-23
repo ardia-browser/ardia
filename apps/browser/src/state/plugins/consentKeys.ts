@@ -4,7 +4,7 @@ export type ConsentKeyState = { selected: ConsentButton | null; spaceDown: boole
 
 export type ConsentKeyPress = { key: string; shiftKey?: boolean; altKey?: boolean; ctrlKey?: boolean; metaKey?: boolean };
 
-export const CONSENT_KEYS = [{ key: "Escape" }, { key: "Tab" }, { key: "Tab", shiftKey: true }, { key: " " }];
+export const CONSENT_KEYS = [{ key: "Escape" }, { key: "Enter" }, { key: "Tab" }, { key: "Tab", shiftKey: true }, { key: " " }];
 
 export const CONSENT_KEYS_UP = [{ key: " " }];
 
@@ -14,6 +14,7 @@ export function consentKeyDown(state: ConsentKeyState, e: ConsentKeyPress, canIn
   const none = { state, press: null };
   if (e.altKey || e.ctrlKey || e.metaKey) return none;
   if (e.key === "Escape") return e.shiftKey ? none : { state, press: "cancel" };
+  if (e.key === "Enter") return e.shiftKey || !canInstall ? none : { state, press: "install" };
   if (e.key === " ") {
     if (e.shiftKey || state.spaceDown) return none;
     const press = state.selected === "install" && !canInstall ? null : state.selected;

@@ -383,9 +383,9 @@ test("what the command line gets, as Settings shows it", () => {
   const texts = consentLines(readManifest(CLI).manifest).map((l) => l.text);
   assert.deepEqual(texts, [
     "Adds ardia to your PATH. It runs as you, outside Ardia's sandbox",
-    "After updates, runs ardia skills install --auto, ardia skills refresh",
-    "Adds ~/.local/bin to your PATH in your shell's login file",
-    "Lets any program you run drive your tabs and pages, with your logins, while control is on in Settings › Advanced",
+    "Runs these after each update: ardia skills install --auto and ardia skills refresh",
+    "Adds ~/.local/bin to your PATH. In your shell's login file",
+    "Lets any program you run drive your tabs and pages. With your logins, while control is on in Settings › Advanced",
   ], "four honest lines: the program, what runs after updates, the PATH line and control");
   assert.ok(!texts.some((t) => t.includes("in the background")), "a program-only plugin runs nothing in the background");
 });

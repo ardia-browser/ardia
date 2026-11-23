@@ -152,7 +152,8 @@ test("the Settings row says Install… for every official plugin, the sheet take
   const sheet = readFileSync(new URL("../../components/plugins/PluginConsentSheet.tsx", import.meta.url), "utf8");
   assert.match(row, /<Button title="Install…"/);
   assert.doesNotMatch(row, /Turn On|<Toggle/);
-  assert.match(sheet, /CONSENT_WORDS\[useConsentVerb\(name, hash\)\]/);
+  assert.match(sheet, /useConsentVerb\(name, hash\)/);
+  assert.match(sheet, /CONSENT_WORDS\[verb\]/);
   assert.match(sheet, /\{`\$\{words\.title\} \$\{m\?\.title \?\? name\}\?`\}/);
   assert.match(sheet, /<Button title=\{words\.button\}/);
 });

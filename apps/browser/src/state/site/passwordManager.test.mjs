@@ -67,7 +67,7 @@ test("before any password manager plugin is on, every profile keeps Ardia's mana
 test("the consent sheet names the reach and, for a built-in plugin, how many profiles move", () => {
   const m = P().listings["system-passwords"].manifest;
   const lines = consentLines(m, { official: true, movesProfiles: pm.neverChosenCount() }).map((l) => l.text);
-  assert.ok(lines.includes("Moves 3 profiles that never picked a password manager to Test Passwords"), lines.join("\n"));
+  assert.ok(lines.includes("Moves 3 profiles to Test Passwords. They never picked a password manager"), lines.join("\n"));
   assert.ok(lines.some((l) => l.startsWith("Shows a key in login and verification code fields on every site")));
   assert.ok(lines.some((l) => l.startsWith("Offers to set up two-factor codes")));
   assert.ok(!lines.some((l) => /passkey/i.test(l)), "the passkeys key adds no line: the plugin can't use passkeys, and Ardia's own access lives in Settings › Engines");

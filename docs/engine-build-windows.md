@@ -17,8 +17,8 @@ fetched under, so a new file there would make Mac or Linux builds miss their pre
 
 The Windows engine has its own key, `engine/engine-key.sh --platform win` (`windows` too), beside the Mac's and Linux's,
 which it leaves as they were. It hashes what `scripts/windows/engine/key-inputs.json` declares this build reads: the
-patches it applies, in order (the `all` and `mac` lines of `engine/patches/series` less `series-win`'s skips, then
-`series-win`'s own), `engine/chromium/src`, `engine/patches/build` and `series.py`, the ArdiaCore headers and launch
+patches it applies, in order (the lines of `engine/patches/series` for every platform or naming `mac` or `win`, less
+`series-win`'s skips, then `series-win`'s own), `engine/chromium/src`, `engine/patches/build` and `series.py`, the ArdiaCore headers and launch
 switches it copies, the offline game, `scripts/windows/engine` (less `check_inputs.py`, `*_test.py` and
 `prebuilt.json`), the app's `EngineApi.h` and the files the resource lists brand with. A Linux-only line, the Linux
 layer or the rest of `engine/ardiacore` leaves it alone. The resource lists themselves are required and can't be
@@ -237,7 +237,15 @@ On the Windows tree (2026-11-10): `pins` and `guard` pass, 356 patches applied w
 strictly with `git apply` and else with `patch`'s fuzz. It records a failure and goes on, and writes
 `~/chromium-build-win/logs/series-win.tsv`. `series-win` today: three skips and 21 Windows-only patches ([Windows-only patches](#windows-only-patches)).
 A shared `chromium` line may end in a platform tag since the Linux port: untagged lines are for every platform, and
-Windows takes those and the `mac` ones (the set it started from), never `linux`.
+Windows takes those and the `mac` ones (the set it started from), never `linux`. A tag can name several platforms
+joined by commas (`linux,win`); Windows takes a line whose platforms include `mac` or `win`. A `layer` line Windows would
+select (untagged, `all`, or naming `win`) is refused, here and by the Windows key, until `series_win.py` runs series
+layers; `engine/chromium` is the exception, since `series_win.py` copies it itself. The layer's `BUILD.gn` conditions are
+read the same way: `is_mac`, `is_linux` and `is_win` joined by `!`, `&&`, `||` and parentheses, read token by token, so
+wrapped conditions, `else if` and `else`, and comments or strings holding braces are followed as GN reads them; any
+other condition, `ardia_sources` changed by anything but a list of names (`=` replaces it, `+=` adds) or inside a call's block
+(a scope of its own in GN), `sources` written inside a `foreach` loop (which may run any number of times), a source spelled
+with `$` or `\`, brackets that don't pair, or a line holding a Mac-only entry and anything else stops the build.
 The layers:
 
 - `engine/chromium/apply.sh` runs as is. Its `chrome/browser/ardia` (the `ac_*` C API) then builds on Windows from a

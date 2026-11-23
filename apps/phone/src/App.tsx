@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useLayoutEffect, useState, type ReactNode } from "react";
+import { startTransition, useDeferredValue, useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 import { FrameProbe } from "./components/perf/FrameProbe";
 import { countRender, interactionPerfEnabled } from "./state/app/interactionPerf";
 import { AppState, BackHandler, Platform, StyleSheet, useWindowDimensions, View } from "react-native";
@@ -19,10 +19,10 @@ import { ExpoLibrarySheet } from "./components/library/ExpoLibrary";
 import { MaterialLibrary } from "./components/library/MaterialLibrary";
 import { LibraryView } from "./components/library/LibraryView";
 import { closeLibrary, useLibrary } from "./state/library/store";
-import { MaterialSettingsScreen, SettingsView } from "./components/settings/SettingsView";
+import { SettingsView } from "./components/settings/SettingsView";
 import { SpacesView } from "./components/sync/SpacesView";
 import { ToastHost } from "./components/toasts/ToastHost";
-import { followDesign, tabsMotion, useDesign, useTheme, DEFAULT_PROFILE_COLOR, FrostSource, FullSheet, OverlayHost, PROFILE_PRESETS, onDrawnMenuOpened, onNativeMenuOpened, ProfileLookContext, Shade, SheetBackground, SURFACES_FROST } from "./components/ui";
+import { DesignProvider, followDesign, tabsMotion, useDesign, useTheme, DEFAULT_PROFILE_COLOR, FrostSource, FullSheet, OverlayHost, PROFILE_PRESETS, onDrawnMenuActionChosen, onDrawnMenuOpened, onNativeMenuOpened, ProfileLookContext, Shade, SheetBackground, SURFACES_FROST } from "./components/ui";
 import { useLook } from "./state/sync/hooks";
 import { startSettingsSources } from "./state/settings/actions";
 import { startSync } from "./state/sync/actions";
@@ -57,7 +57,7 @@ import { countUsage, reportLaunch, startTelemetry } from "./state/telemetry/tele
 import { useIncognito, useShownTabId } from "./state/tabs/hooks";
 import { markInterfaceDrawn } from "./platform/launch";
 import { syncOffered } from "./state/sync/offer";
-import { countDrawnMenu, countNativeMenu } from "./state/browse/menuCounts";
+import { countDrawnMenu, countDrawnMenuAction, countNativeMenu } from "./state/browse/menuCounts";
 import { browseForMeOffered } from "./state/browseForMe/offer";
 import { pageSummaryChoiceOffered } from "./state/pageSummary/store";
 import { listenForBrowseForMe } from "./state/browseForMe/events";
@@ -88,7 +88,10 @@ export default function App() {
   const importFailed = useBoot((s) => s.failures > 0);
   useEffect(() => {
     if (!ready) return;
-    const frame = requestAnimationFrame(() => void reportLaunch(Date.now()));
+    const frame = requestAnimationFrame(() => {
+      if (Platform.OS === "android") followDynamicScheme();
+      void reportLaunch(Date.now());
+    });
     return () => cancelAnimationFrame(frame);
   }, [ready]);
   const drawnSomething = ready || importFailed;
@@ -135,6 +138,7 @@ function applyDesign(design: Design) {
 
 onNativeMenuOpened(countNativeMenu);
 onDrawnMenuOpened(countDrawnMenu);
+if (Platform.OS === "android") onDrawnMenuActionChosen(countDrawnMenuAction);
 
 onMaterialBackSwiped(() => {
   if (!useTabs.getState().incognito) countUsage("material_back_swiped");
@@ -147,8 +151,7 @@ export function Surfaces() {
   const opening = useOpeningTab();
   const leaving = useLeavingTab();
   const design = useDesign();
-  const pageOverDeck = design === "redesigned";
-  const pageUnderDeck = surface === "deck" && tabId !== null && (tabId === opening || tabId === leaving);
+  const material = design === "material";
   const settingsOpen = useSettingsNav((s) => s.open);
   const onboarding = useOnboarding((s) => s.showing);
   const searching = useSearchOpen();
@@ -158,22 +161,26 @@ export function Surfaces() {
   const onboardingSeen = useLatch(onboarding);
   const sheetProgress = useSharedValue(0);
   const libraryOpen = useLibrary((s) => s.open);
-  const material = useDesign() === "material";
-  const settingsScreen = material && settingsOpen && !SYSTEM_SHEETS;
   const libraryCovers = material && libraryOpen;
   const systemSheet = SYSTEM_SHEETS && (settingsOpen || libraryOpen || sheet === "archive" || sheet === "spaces");
-  const front = settingsScreen ? null : frontSheet(settingsOpen && !SYSTEM_SHEETS, SYSTEM_SHEETS && (sheet === "archive" || sheet === "spaces") ? null : sheet, libraryOpen && !SYSTEM_SHEETS && !libraryCovers);
-  const sheetCovers = front !== null || systemSheet || settingsScreen;
+  const front = frontSheet(settingsOpen && !SYSTEM_SHEETS, SYSTEM_SHEETS && (sheet === "archive" || sheet === "spaces") ? null : sheet, libraryOpen && !SYSTEM_SHEETS && !libraryCovers);
+  const sheetCovers = front !== null || systemSheet;
+  const deferredDesign = useDeferredValue(design);
+  const backgroundDesign = sheetCovers ? deferredDesign : design;
+  const backgroundMaterial = backgroundDesign === "material";
+  const pageOverDeck = backgroundDesign === "redesigned";
+  const pageUnderDeck = surface === "deck" && tabId !== null && (tabId === opening || tabId === leaving);
   const theme = useTheme();
   countRender("Surfaces");
   const incognito = useIncognito();
   const layer = inkLayer({ onboarding, voice, sheet: sheetCovers, searching: searching || libraryCovers, surface });
   const incognitoScheme = useMaterialTheme(true).scheme;
   const behind = material && incognito ? incognitoScheme.surface : theme.backdrop[0];
-  const lightIcons = settingsScreen && layer === "sheet" ? theme.dark : lightStatusIcons(layer, { cover: behind, surface: theme.canvas, deck: behind, incognito: incognito && !libraryCovers });
+  const settingsFullScreen = material && front === "settings";
+  const lightIcons = settingsFullScreen && layer === "sheet" ? theme.dark : lightStatusIcons(layer, { cover: behind, surface: theme.canvas, deck: behind, incognito: incognito && !libraryCovers });
   useEffect(goBackToStartIfEmpty, [tabId, surface]);
   const duo = useScreenLayout((s) => s.layout.name === "wide" || s.layout.name === "split");
-  const deckMounted = useDeckStandby(surface, surface === "browsing" && tabId !== null && opening === null && leaving === null && !searching && !voice && !onboarding && front === null && !settingsScreen, tabId);
+  const deckMounted = useDeckStandby(surface, surface === "browsing" && tabId !== null && opening === null && leaving === null && !searching && !voice && !onboarding && front === null, tabId);
   const page = !duo && (surface === "browsing" || pageUnderDeck) && tabId ? <BrowsingScreen tabId={tabId} /> : null;
   const deck = !duo && deckMounted ? <TabDeck key="deck" /> : null;
   const pageLayer = page && tabId ? (
@@ -182,26 +189,29 @@ export function Surfaces() {
     </PageLayer>
   ) : null;
   return (
-    <MaterialBarProvider enabled={material && !duo}>
+    <>
       <LandscapeCount />
-      <SheetBackground progress={sheetProgress}>
-        <Layer covered={onboarding || voice} muted={sheetCovers || libraryCovers}>
-          <Shade shaded={searching && !(material && searchFromMenu)}>
-            <FrostSource name={SURFACES_FROST} style={StyleSheet.absoluteFill} pointerEvents="box-none" collapsable={false}>
-              {duo && surface !== "start" ? <DuoBrowsing /> : null}
-              {pageOverDeck ? [deck, pageLayer] : [pageLayer, deck]}
-              {surface === "start" ? <StartScreen /> : null}
-              {material ? <PersistentMaterialBar /> : null}
-            </FrostSource>
-          </Shade>
-          <SearchTray />
-        </Layer>
-      </SheetBackground>
+      <DesignProvider design={backgroundDesign}>
+        <SheetBackground progress={sheetProgress}>
+          <MaterialBarProvider enabled={backgroundMaterial && !duo}>
+            <Layer covered={onboarding || voice} muted={sheetCovers || libraryCovers}>
+              <Shade shaded={searching && !(backgroundMaterial && searchFromMenu)}>
+                <FrostSource name={SURFACES_FROST} style={StyleSheet.absoluteFill} pointerEvents="box-none" collapsable={false}>
+                  {duo && surface !== "start" ? <DuoBrowsing /> : null}
+                  {pageOverDeck ? [deck, pageLayer] : [pageLayer, deck]}
+                  {surface === "start" ? <StartScreen /> : null}
+                  {backgroundMaterial ? <PersistentMaterialBar /> : null}
+                </FrostSource>
+              </Shade>
+              <SearchTray />
+            </Layer>
+          </MaterialBarProvider>
+        </SheetBackground>
+      </DesignProvider>
       <Layer covered={onboarding || voice}>
-        <FullSheet sheet={front} progress={sheetProgress} onDismiss={front === "settings" ? closeSettings : front === "library" ? closeLibrary : closeArchive}>
+        <FullSheet sheet={front} fullScreenSheet="settings" progress={sheetProgress} onDismiss={front === "settings" ? closeSettings : front === "library" ? closeLibrary : closeArchive}>
           {(shown) => (shown === "settings" ? <SettingsView /> : shown === "library" ? <LibraryView /> : shown === "archive" ? <ArchiveView /> : <SpacesView />)}
         </FullSheet>
-        {settingsScreen ? <MaterialSettingsScreen /> : null}
       </Layer>
       {SYSTEM_SHEETS ? <ExpoSettingsSheet /> : null}
       {SYSTEM_SHEETS ? <ExpoArchiveSheet /> : null}
@@ -212,7 +222,7 @@ export function Surfaces() {
       {onboardingSeen ? <OnboardingView /> : null}
       <ToastHost />
       {lightIcons !== null ? <LayerInk key={layer} light={lightIcons} /> : null}
-    </MaterialBarProvider>
+    </>
   );
 }
 

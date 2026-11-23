@@ -7,14 +7,21 @@ import { useBrowser } from "../browser/store";
 import { webviews } from "../../platform/webviews";
 import { focusHeroBar } from "../omnibox/barState";
 import { ancestorIds } from "../groups/groups";
-import { activeTabId, bookmarkProfileId, inPinnedContainer, ownTabTitle, pinSection, tabLayoutOf, tabsShownIn, tabTitle } from "../browser/model";
+import { activeTabId, bookmarkProfileId, familyKeyOf, inPinnedContainer, ownTabTitle, pinSection, tabLayoutOf, tabsShownIn, tabTitle } from "../browser/model";
 import { anchorOutdated, type ClickMods } from "../drag/drops";
 import { selectedTabIds } from "../pins/organize";
 import { groupLabel, groupOf } from "../pins/tabGrouping";
 import type { Tab } from "../browser/types";
 import { awaitsFirstPage } from "../tabs/pendingAddress";
 import { noteUrlCopied } from "../telemetry/urlCopies";
-import { noteRangeSelect } from "../telemetry/tabPresses";
+import { noteRangeSelect, noteTileDoubleClick, type TileDoubleClick } from "../telemetry/tabPresses";
+import { samePage } from "../../lib/url";
+import { liveOf, shownLiveOf } from "../tabs/tabLive";
+import { withLivePage } from "../tabs/livePage";
+import { consentToken, type ConsentToken } from "../telemetry/client";
+import { holderOfPage } from "../tabs/pageSession";
+import { holderOf } from "../pins/pinShare";
+import { pinHandOffOf } from "../pins/pinHandoff";
 import { noteTextOnlyRow } from "../telemetry/tabStripCounts";
 import { NO_ROW_ICON } from "../pins/rowIcons";
 import type { BookmarkFolderChoice } from "./menuParts";
@@ -46,9 +53,61 @@ export function toggleBookmarkInWindow(windowId: string, page: { url: string; ti
   s.toggleBookmark(bookmarkProfileId(s, s.windows[windowId]), page);
 }
 
-export function returnShownTabToPinnedUrl(windowId: string, tabId: string) {
+const PIN_ARRIVAL_DEADLINE_MS = 3000;
+
+export function refreshShownTile(windowId: string, tabId: string, wasShown: boolean) {
   const s = store();
-  if (activeTabId(s, windowId) === tabId) s.returnToPinnedUrl(tabId);
+  const tab = s.tabs[tabId];
+  if (!tab || tab.windowId !== windowId) return;
+  const consent = consentToken();
+  if (holderOf(s, tabId)) return void whenPinLands(windowId, familyKeyOf(tab)).then((landed) => landed && refreshShownPage(windowId, landed, false, consent));
+  if (activeTabId(s, windowId) === tabId) refreshShownPage(windowId, tabId, wasShown, consent);
+}
+
+function whenPinLands(windowId: string, family: string): Promise<string | null> {
+  const flight = pinHandOffOf(family);
+  if (!flight) return Promise.resolve(null);
+  const before = activeTabId(store(), windowId);
+  return new Promise((done) => {
+    let settled = false;
+    let stop = () => {};
+    const finish = (landed: string | null) => {
+      if (settled) return;
+      settled = true;
+      stop();
+      clearTimeout(deadline);
+      done(landed);
+    };
+    const deadline = setTimeout(() => finish(null), PIN_ARRIVAL_DEADLINE_MS);
+    stop = useBrowser.subscribe((now) => {
+      const shown = activeTabId(now, windowId);
+      const tab = shown ? now.tabs[shown] : undefined;
+      if (shown && tab && familyKeyOf(tab) === family && !holderOfPage(tab)) finish(shown);
+      else if (shown !== before) finish(null);
+    });
+    void flight.then((landed) => landed || finish(null));
+  });
+}
+
+function refreshShownPage(windowId: string, tabId: string, wasShown: boolean, consent: ConsentToken | null) {
+  const s = store();
+  const tab = s.tabs[tabId];
+  if (!tab || activeTabId(s, windowId) !== tabId) return;
+  if (tab.pinnedUrl && !samePage(tab.url, tab.pinnedUrl)) {
+    noteTileDoubleClick("return", consent);
+    return s.returnToPinnedUrl(tabId);
+  }
+  if (!wasShown || !tab.url || shownLiveOf(s, tabId).isLoading) return noteTileDoubleClick("fresh", consent);
+  const outcome = (what: TileDoubleClick) => noteTileDoubleClick(what, consent);
+  void withLivePage(tabId, (page, pageId) => {
+    if (liveOf(pageId).isLoading) return outcome("fresh");
+    return Promise.resolve()
+      .then(() => page.reload())
+      .then(
+        () => outcome("reload"),
+        () => outcome("missed"),
+      );
+  }).then((reached) => reached || outcome("missed"));
 }
 
 export async function startRename(windowId: string, target: Target) {

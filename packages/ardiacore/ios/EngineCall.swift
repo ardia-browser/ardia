@@ -102,6 +102,10 @@ struct CallTable {
     }.runOnQueue(.main)
   }
 
+  func dropping(_ verbs: Set<String>) -> CallTable {
+    CallTable(domain: domain, handlers: handlers.filter { !verbs.contains($0.key) })
+  }
+
   func forwardEvents(to module: Module) -> AnyDefinition {
     OnCreate { [domain, weak module] in
       ArdiaEvents.setSender({ [weak module] name, data in module?.sendEvent(domain, ["name": name, "data": data]) }, forDomain: domain)
@@ -124,6 +128,12 @@ enum EngineCall {
   static func passing(_ name: String) -> CallHandler {
     { args, reply in
       ArdiaEngineBridge.call(name, profile: args.profile, args: args.json) { reply.engine($0) }
+    }
+  }
+
+  static func passingLoaded(_ name: String) -> CallHandler {
+    { args, reply in
+      ArdiaEngineBridge.callLoaded(name, profile: args.profile, args: args.json) { reply.engine($0) }
     }
   }
 

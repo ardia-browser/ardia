@@ -1,0 +1,1270 @@
+{
+  "format": "ardia-linux-update 1",
+  "keys": {
+    "other": "00e3c56b91ab0a017174b96645eaf928366cdbae1e87fd21bf86661d86f3e7ef",
+    "release": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7"
+  },
+  "manifests": [
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "deb install, all three formats",
+      "outcome": {
+        "name": "Ardia-0.2.48-linux-x64.deb",
+        "sha256": "cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9",
+        "size": 1000
+      },
+      "parse": {
+        "name": "Ardia-0.2.48-linux-x64.deb",
+        "sha256": "cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9",
+        "size": 1000
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "7a7cca2c5ace246230c6cdcdf5b52cf9be9b2d5a768836f9083f8aaf91d042f30ab779ad28e4d562eb979ccf51035a611dccad5435c2589bffdcbd5245a09d09",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "tarball",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "tarball install, all three formats",
+      "outcome": {
+        "name": "Ardia-0.2.48-linux-x64.tar.xz",
+        "sha256": "10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66",
+        "size": 2000
+      },
+      "parse": {
+        "name": "Ardia-0.2.48-linux-x64.tar.xz",
+        "sha256": "10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66",
+        "size": 2000
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "7a7cca2c5ace246230c6cdcdf5b52cf9be9b2d5a768836f9083f8aaf91d042f30ab779ad28e4d562eb979ccf51035a611dccad5435c2589bffdcbd5245a09d09",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "appimage",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "AppImage install, all three formats",
+      "outcome": {
+        "name": "Ardia-0.2.48-linux-x64.AppImage",
+        "sha256": "86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a",
+        "size": 3000
+      },
+      "parse": {
+        "name": "Ardia-0.2.48-linux-x64.AppImage",
+        "sha256": "86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a",
+        "size": 3000
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "7a7cca2c5ace246230c6cdcdf5b52cf9be9b2d5a768836f9083f8aaf91d042f30ab779ad28e4d562eb979ccf51035a611dccad5435c2589bffdcbd5245a09d09",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "appimage",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 5\n",
+      "name": "only an AppImage, AppImage install",
+      "outcome": {
+        "name": "Ardia-0.2.48-linux-x64.AppImage",
+        "sha256": "86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a",
+        "size": 5
+      },
+      "parse": {
+        "name": "Ardia-0.2.48-linux-x64.AppImage",
+        "sha256": "86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a",
+        "size": 5
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "3c313533c2dd7cbd657228a27d44650e5d1eecc10c928d14682127c7824e97eea51d6a60cfd336eddcdde58e4ded039735656b09b8067020bdd2f3ff4cef9104",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48-nightly.3\ndeb Ardia-0.2.48-nightly.3-linux-x64.deb 47e46a100d6f74ab576a82b25678961f32331ace1c00fb0c5f0c62f7552c5298 1000\ntarball Ardia-0.2.48-nightly.3-linux-x64.tar.xz 81beddc8c090cc84f44148749188135cd3365c4df092f864c814fe6711392834 2000\nappimage Ardia-0.2.48-nightly.3-linux-x64.AppImage 1596b8f4cdabfd0a06987be8dbfadf67ea9fa11508f796c341f26f8376ba9a00 3000\n",
+      "name": "nightly over the previous stable",
+      "outcome": {
+        "name": "Ardia-0.2.48-nightly.3-linux-x64.deb",
+        "sha256": "47e46a100d6f74ab576a82b25678961f32331ace1c00fb0c5f0c62f7552c5298",
+        "size": 1000
+      },
+      "parse": {
+        "name": "Ardia-0.2.48-nightly.3-linux-x64.deb",
+        "sha256": "47e46a100d6f74ab576a82b25678961f32331ace1c00fb0c5f0c62f7552c5298",
+        "size": 1000
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "4a4d003f0937867d45783941bd12c05277ce6f2bbec8b9077fb4eea445da656f8d31c68d8fb275af61d08814595a0a93b562b778dd1d183e52a2e17e08e36107",
+      "signatureValid": true,
+      "version": "0.2.48-nightly.3"
+    },
+    {
+      "installed": "0.2.48-nightly.3",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "stable over its own nightly",
+      "outcome": {
+        "name": "Ardia-0.2.48-linux-x64.deb",
+        "sha256": "cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9",
+        "size": 1000
+      },
+      "parse": {
+        "name": "Ardia-0.2.48-linux-x64.deb",
+        "sha256": "cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9",
+        "size": 1000
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "7a7cca2c5ace246230c6cdcdf5b52cf9be9b2d5a768836f9083f8aaf91d042f30ab779ad28e4d562eb979ccf51035a611dccad5435c2589bffdcbd5245a09d09",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.48-nightly.9",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48-nightly.10\ndeb Ardia-0.2.48-nightly.10-linux-x64.deb b5530a848feba1ca574fa9a989f66304d551d3521f204822f1b8524f2532b138 1000\ntarball Ardia-0.2.48-nightly.10-linux-x64.tar.xz dde42e5a6908d2c1ca432ace602ee4f3752cbdf061e58563d286040ea1b59335 2000\nappimage Ardia-0.2.48-nightly.10-linux-x64.AppImage 7bea98177db9aa028caa8ae62f42d95bdaca93504f20023c453afcc2ce937853 3000\n",
+      "name": "nightly over the previous nightly",
+      "outcome": {
+        "name": "Ardia-0.2.48-nightly.10-linux-x64.deb",
+        "sha256": "b5530a848feba1ca574fa9a989f66304d551d3521f204822f1b8524f2532b138",
+        "size": 1000
+      },
+      "parse": {
+        "name": "Ardia-0.2.48-nightly.10-linux-x64.deb",
+        "sha256": "b5530a848feba1ca574fa9a989f66304d551d3521f204822f1b8524f2532b138",
+        "size": 1000
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "36179f3f219724e874888f6c4b58d4818fe1622305070774f2d96bbd8067508c76b24ddffef11715cb765b9c177fc8a63eb90c65b4fac29641aba52728d6e30d",
+      "signatureValid": true,
+      "version": "0.2.48-nightly.10"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 536870912\n",
+      "name": "a package of exactly 512 MiB",
+      "outcome": {
+        "name": "Ardia-0.2.48-linux-x64.deb",
+        "sha256": "cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9",
+        "size": 536870912
+      },
+      "parse": {
+        "name": "Ardia-0.2.48-linux-x64.deb",
+        "sha256": "cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9",
+        "size": 536870912
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "3b18ff938f0cdc71173412095a563e35a6b4daf28f84eb7d2ea3b37833f736a5fdbbd38a2ec88ed7f1ebc063ca7c9e19bf44d5f70953d89988d9aeb919456403",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3\n",
+      "name": "no line for this kind",
+      "outcome": {
+        "error": "kind"
+      },
+      "parse": {
+        "error": "kind"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "152868137be2f2e2682c9a378b07e1c470eb8862935771a63f10b47ac3bdc52e72a3b47086e1d866852d8bfbe82f890a77c8a3c1177773926c27dd9abb64a60a",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\n",
+      "name": "no package lines at all",
+      "outcome": {
+        "error": "kind"
+      },
+      "parse": {
+        "error": "kind"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "0387076e2ea0a22ee9dcbe88c953d7a59cf7e03151d1fc42029be2da9e471671bb7a5ae0d71240bba98d565fb3935f691974f01407d3e9a688e8ccdc60a1fd04",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1001\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "tampered size",
+      "outcome": {
+        "error": "signature"
+      },
+      "parse": {
+        "name": "Ardia-0.2.48-linux-x64.deb",
+        "sha256": "cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9",
+        "size": 1001
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "7a7cca2c5ace246230c6cdcdf5b52cf9be9b2d5a768836f9083f8aaf91d042f30ab779ad28e4d562eb979ccf51035a611dccad5435c2589bffdcbd5245a09d09",
+      "signatureValid": false,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb 79bc1184e21ea7c695d4021e299935c11d7d22258fc53c13661392fd49adfc11 1000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "tampered digest",
+      "outcome": {
+        "error": "signature"
+      },
+      "parse": {
+        "name": "Ardia-0.2.48-linux-x64.deb",
+        "sha256": "79bc1184e21ea7c695d4021e299935c11d7d22258fc53c13661392fd49adfc11",
+        "size": 1000
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "7a7cca2c5ace246230c6cdcdf5b52cf9be9b2d5a768836f9083f8aaf91d042f30ab779ad28e4d562eb979ccf51035a611dccad5435c2589bffdcbd5245a09d09",
+      "signatureValid": false,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion  0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "tampered and malformed",
+      "outcome": {
+        "error": "signature"
+      },
+      "parse": {
+        "error": "manifest"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "7a7cca2c5ace246230c6cdcdf5b52cf9be9b2d5a768836f9083f8aaf91d042f30ab779ad28e4d562eb979ccf51035a611dccad5435c2589bffdcbd5245a09d09",
+      "signatureValid": false,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "one flipped signature bit",
+      "outcome": {
+        "error": "signature"
+      },
+      "parse": {
+        "name": "Ardia-0.2.48-linux-x64.deb",
+        "sha256": "cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9",
+        "size": 1000
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "7a7cca2c5ace246230c6cccdf5b52cf9be9b2d5a768836f9083f8aaf91d042f30ab779ad28e4d562eb979ccf51035a611dccad5435c2589bffdcbd5245a09d09",
+      "signatureValid": false,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "signed by another key",
+      "outcome": {
+        "error": "signature"
+      },
+      "parse": {
+        "name": "Ardia-0.2.48-linux-x64.deb",
+        "sha256": "cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9",
+        "size": 1000
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "27c361ecf4b21852afd6d906894b9e25469caceef47131e48d0c41de308b2f1948d0511373ba2dac15de2ef94bbeb3851521de0bb9e750f2c3cffa95e57f7200",
+      "signatureValid": false,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "a 63-byte signature",
+      "outcome": {
+        "error": "signature"
+      },
+      "parse": {
+        "name": "Ardia-0.2.48-linux-x64.deb",
+        "sha256": "cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9",
+        "size": 1000
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "7a7cca2c5ace246230c6cdcdf5b52cf9be9b2d5a768836f9083f8aaf91d042f30ab779ad28e4d562eb979ccf51035a611dccad5435c2589bffdcbd5245a09d",
+      "signatureValid": false,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "a 65-byte signature",
+      "outcome": {
+        "error": "signature"
+      },
+      "parse": {
+        "name": "Ardia-0.2.48-linux-x64.deb",
+        "sha256": "cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9",
+        "size": 1000
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "7a7cca2c5ace246230c6cdcdf5b52cf9be9b2d5a768836f9083f8aaf91d042f30ab779ad28e4d562eb979ccf51035a611dccad5435c2589bffdcbd5245a09d0900",
+      "signatureValid": false,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "an empty signature",
+      "outcome": {
+        "error": "signature"
+      },
+      "parse": {
+        "name": "Ardia-0.2.48-linux-x64.deb",
+        "sha256": "cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9",
+        "size": 1000
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "",
+      "signatureValid": false,
+      "version": "0.2.48"
+    },
+    {
+      "helper": {
+        "name": "Ardia-0.2.48-linux-x64.deb",
+        "sha256": "cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9",
+        "size": 1000
+      },
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "small-order key with its trivial signature",
+      "openssl": true,
+      "outcome": {
+        "error": "signature"
+      },
+      "parse": {
+        "name": "Ardia-0.2.48-linux-x64.deb",
+        "sha256": "cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9",
+        "size": 1000
+      },
+      "publicKey": "0100000000000000000000000000000000000000000000000000000000000000",
+      "signature": "01000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "signatureValid": false,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.48",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "the installed version again",
+      "outcome": {
+        "error": "notNewer"
+      },
+      "parse": {
+        "name": "Ardia-0.2.48-linux-x64.deb",
+        "sha256": "cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9",
+        "size": 1000
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "7a7cca2c5ace246230c6cdcdf5b52cf9be9b2d5a768836f9083f8aaf91d042f30ab779ad28e4d562eb979ccf51035a611dccad5435c2589bffdcbd5245a09d09",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.48",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.47\ndeb Ardia-0.2.47-linux-x64.deb 0a95b5ba14486466483d3bf3f9b35b58bc193de0ea205310dfff2383e06a4fc3 1000\ntarball Ardia-0.2.47-linux-x64.tar.xz e38f4f000a36f9c134b9325f190631e207401988e2b3c7cc5e5a141a4fd028f0 2000\nappimage Ardia-0.2.47-linux-x64.AppImage 1cac93afebdaed35c50fa0a7e15a2bf16619d203ae1409a1cba273858213f001 3000\n",
+      "name": "a downgrade",
+      "outcome": {
+        "error": "notNewer"
+      },
+      "parse": {
+        "name": "Ardia-0.2.47-linux-x64.deb",
+        "sha256": "0a95b5ba14486466483d3bf3f9b35b58bc193de0ea205310dfff2383e06a4fc3",
+        "size": 1000
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "7d02b8fbe26016d3d3d9f391b063f222d23d6355d4883801ededbb97f8deadcb28a6ecc2ce8f1cfdc07bb45c39ce37f6ee4f5d93b7e3333ef20f2ef9e2ac360d",
+      "signatureValid": true,
+      "version": "0.2.47"
+    },
+    {
+      "installed": "0.2.48",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48-nightly.9\ndeb Ardia-0.2.48-nightly.9-linux-x64.deb da85af80c8ec305ace7f82a1c00168c5b2fdaae40f702e4c4eeadd52ac4858c2 1000\ntarball Ardia-0.2.48-nightly.9-linux-x64.tar.xz cf9ed6d71e4177880e8c087edd82dc9da8f64fb34667ef4f3791038741aa388f 2000\nappimage Ardia-0.2.48-nightly.9-linux-x64.AppImage 9d9fd289aae50c8c939e86b21a2b967934f9c3c8ec76435c5264b3263fa4a2eb 3000\n",
+      "name": "a nightly of the installed stable",
+      "outcome": {
+        "error": "notNewer"
+      },
+      "parse": {
+        "name": "Ardia-0.2.48-nightly.9-linux-x64.deb",
+        "sha256": "da85af80c8ec305ace7f82a1c00168c5b2fdaae40f702e4c4eeadd52ac4858c2",
+        "size": 1000
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "cea5c7ce9d9aee44987881ae3be3bf1b0b54638356ef8cc96dcfba410bb708f6f230ad73e301a823a55adeb5cb9684131ff79afc21e27ec89df3e7cf76a7410d",
+      "signatureValid": true,
+      "version": "0.2.48-nightly.9"
+    },
+    {
+      "installed": "0.2.48-nightly.3",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48-nightly.2\ndeb Ardia-0.2.48-nightly.2-linux-x64.deb 24dd534ce2ac99dfec8411c08c4c3bf35f21c678c94fa4b113df746f7560a658 1000\ntarball Ardia-0.2.48-nightly.2-linux-x64.tar.xz ab94257cfb7773c5f5fb8755d8ebb814d947b6ea66ff25e2eb4ab14d9054686e 2000\nappimage Ardia-0.2.48-nightly.2-linux-x64.AppImage 485073a1b727e0986d4f31f58a04464bdc49f3d111e46d2bdf517bc2def1e822 3000\n",
+      "name": "an older nightly",
+      "outcome": {
+        "error": "notNewer"
+      },
+      "parse": {
+        "name": "Ardia-0.2.48-nightly.2-linux-x64.deb",
+        "sha256": "24dd534ce2ac99dfec8411c08c4c3bf35f21c678c94fa4b113df746f7560a658",
+        "size": 1000
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "df3ccbc233c3c5e5d4642727869f59c7e14d2ab5e18903cbabc07b2ed6c19df2ae125396d8f7a0d0e725ae2c278dc00bbc0d855d0f79f11cd196245d79e01507",
+      "signatureValid": true,
+      "version": "0.2.48-nightly.2"
+    },
+    {
+      "installed": "0.2.48",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.048\ndeb Ardia-0.2.048-linux-x64.deb 4b0c43a05dd9e8c711d25c1cb0b732a54e70f80aad3947f2f3023f9d3ae66630 1000\ntarball Ardia-0.2.048-linux-x64.tar.xz ed6c5aef6a4eb48d1d77dac41c5227e5c31597276d304047a72593ad4227cf0f 2000\nappimage Ardia-0.2.048-linux-x64.AppImage 84017cf1dbf03a2ee9cc0ffc80b15b850ccade57df04d64c7002eab17594f46e 3000\n",
+      "name": "the same version with leading zeros",
+      "outcome": {
+        "error": "notNewer"
+      },
+      "parse": {
+        "name": "Ardia-0.2.048-linux-x64.deb",
+        "sha256": "4b0c43a05dd9e8c711d25c1cb0b732a54e70f80aad3947f2f3023f9d3ae66630",
+        "size": 1000
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "837d76fe9e4451c0b7d07800dd31a11af5c9bb2d6a012a9a25bc9ebe79a88a51a1b02c9b3c2fe5fdaeb4319e606c0582ef9284d8b76c96d69f7e7e6aeff93704",
+      "signatureValid": true,
+      "version": "0.2.048"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.49\ndeb Ardia-0.2.49-linux-x64.deb 79bc1184e21ea7c695d4021e299935c11d7d22258fc53c13661392fd49adfc11 1000\ntarball Ardia-0.2.49-linux-x64.tar.xz d259fcb41c82dc8438d25ae2e24232609da086865bfc3d4465097dc2cee06db8 2000\nappimage Ardia-0.2.49-linux-x64.AppImage c884f83ccafc0643f09870e64ecccfc3cf57f075933cd658b0605b5b487f0fb5 3000\n",
+      "name": "a manifest for another version",
+      "outcome": {
+        "error": "manifest"
+      },
+      "parse": {
+        "error": "manifest"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "57a9016e408f9ab6cce2c2e50a3c186c0cbcad5d80f196e1752c1fb8cb423fd1c1c84ac35beea845d327b99fa16360d1e212be41d6f8c69f283b7abf8d504c09",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 2\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "format 2",
+      "outcome": {
+        "error": "manifest"
+      },
+      "parse": {
+        "error": "manifest"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "8430e45acfad23b581f033251f19016a8ef822a3a7f7ea402e816ba5995b39abbc33406284f1bcdab1652eab3d64f46415bbfaf8089eef2f9d2efc19fce8b205",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000",
+      "name": "no trailing newline",
+      "outcome": {
+        "error": "manifest"
+      },
+      "parse": {
+        "error": "manifest"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "493e06ffabb390625ddf7149f3fa9ba08a9d9ff715e6d2836dee81bdb2bb49cc052d39e7231ffe909e97419379c3dd20e669de4c03b3ac4b349a1497add58d04",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\r\nversion 0.2.48\r\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000\r\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\r\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\r\n",
+      "name": "CRLF line endings",
+      "outcome": {
+        "error": "manifest"
+      },
+      "parse": {
+        "error": "manifest"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "ac6a44bba848c9dec82956ad762d970e2d026166b8a705cf35c9596f2e072bcd459b6f12bcb0dcae7b836062b094ae83a2a9ab657e9b3bb8512aeb96b7b9d40d",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000\n\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "a blank line between packages",
+      "outcome": {
+        "error": "manifest"
+      },
+      "parse": {
+        "error": "manifest"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "28f22fdac7e8bf0a698dd687955009ee8b2cc5fe8fe12e61fe3f60aac5da9c03f85dafd161e959741212a22142c733d4db3248d9a37af989a39113cadb429603",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n\n",
+      "name": "a trailing blank line",
+      "outcome": {
+        "error": "manifest"
+      },
+      "parse": {
+        "error": "manifest"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "94a3838cdcbca570de6f1112caac7fe40e79069d9942e9a1fe7677656e28be7c11bacab6ec564928e2645841cf6947ca701a77f9d522caf592039c3cbc316809",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1\n",
+      "name": "packages out of order",
+      "outcome": {
+        "error": "manifest"
+      },
+      "parse": {
+        "error": "manifest"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "afc7d56700dab61a2156fc8d06cf0521c39a492cd260acfa44375022eaff3f9f436a122c86399d365e669e9fe474870f89e10f4afb301a9682807b7897b4980a",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1\n",
+      "name": "the deb line twice",
+      "outcome": {
+        "error": "manifest"
+      },
+      "parse": {
+        "error": "manifest"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "ebf663118425523caff287e4ad8c8706db80c2c2644c701e9a090b16882d8bc44abd9aa692494558bb192ce8552b3012c395dc52eeda5ed49cc1190c1b06060c",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.47-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "a package named for another version",
+      "outcome": {
+        "error": "manifest"
+      },
+      "parse": {
+        "error": "manifest"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "3c025f430d26613c45667846edf908c3af84931106f0e0e241e4f20fe729447b65dc3f8359fd8e8a1cb560a2cd16650c16957b33610058750aab61ad81a0430e",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-arm64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "an arm64 package name",
+      "outcome": {
+        "error": "manifest"
+      },
+      "parse": {
+        "error": "manifest"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "788e728184021e5e5c874142a432b0554f43cee01db20b2e03bd9498def28ebdf12b70d14aa2412fa62aa6dfd4b7b5c04d6fe71a978016d9ad659ae332d4cd0b",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb ../Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "a path in the package name",
+      "outcome": {
+        "error": "manifest"
+      },
+      "parse": {
+        "error": "manifest"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "6248a4612e4cc0a3f8b122adcc639d5496405c38657d98a45a02a58958c1f15de9e839f89ba77b93287419ba959c0e1720380f3993c9d73e21e6bb1db8051000",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb CDE3195DB7AE31AA7EB42E7A780D698BC747BD597D34CFFF7046721589AC59F9 1000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "an uppercase digest",
+      "outcome": {
+        "error": "manifest"
+      },
+      "parse": {
+        "error": "manifest"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "8173046f84fc9f55991bcac561a5442f9aea8b12c86864009ead847b5421e37995321724b9a48984390850788d87303d0eb2dc809c9ac2067b77a006143c2205",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb de3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "a 63-character digest",
+      "outcome": {
+        "error": "manifest"
+      },
+      "parse": {
+        "error": "manifest"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "3666a8cf70b0f0946bac4e46717c948d73636f6e3b763606781bc11a40d9af1103aa4f603de31607f0e25c926e0487f9058ac99ae38a5f8546094980afd3550c",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 0\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "a zero size",
+      "outcome": {
+        "error": "manifest"
+      },
+      "parse": {
+        "error": "manifest"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "d535e431f434c18c0d025f3bf345aa7df808ad2dcd370edb713c24e9896b4de7a838e052826edd69b928f61842d86885a53043ceaa7891bb790c5afe7264b305",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 01000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "a size with a leading zero",
+      "outcome": {
+        "error": "manifest"
+      },
+      "parse": {
+        "error": "manifest"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "806fc78db602eaba5e55036487bee9200f92d2ecad6af069fa242b0a3d576d097e9b4bad1de70fdd763d6729ed114cea9efb747b0091c0e77dcc2e3ec1db6b04",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 +1000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "a signed size",
+      "outcome": {
+        "error": "manifest"
+      },
+      "parse": {
+        "error": "manifest"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "9ca1fcba615683f861ac013e01fd20ee2021854167dfa51c82fc902f1f127cb61d0a8f80d2bd266b1f0d042a07623984202e6fb77013ca5149129517bd1e8a0d",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "tarball",
+      "linuxPolicy": {
+        "name": "Ardia-0.2.48-linux-x64.tar.xz",
+        "size": 2
+      },
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 536870913\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2\n",
+      "name": "another format over 512 MiB, tarball install",
+      "outcome": {
+        "error": "manifest"
+      },
+      "parse": {
+        "error": "manifest"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "05c74e138951e20924a01efd76dfe7963d4d1824022af0368fba27cb6efad5b5c87de183f436e80b1b3cfe5d2410d0f781c73786a72243c1a74c176f7dcb9404",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "linuxPolicy": {
+        "error": "tooLarge"
+      },
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 536870913\n",
+      "name": "this format over 512 MiB",
+      "outcome": {
+        "error": "manifest"
+      },
+      "parse": {
+        "error": "manifest"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "afa847270cf40cd0a7527a0cd56a2a56b672e0234b1dfaacc819d4f5f9abb289a86b8a69063d35e99d58b546f02ca191938dd410b821c02eacbc620399d08809",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "linuxPolicy": {
+        "error": "tooLarge"
+      },
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 10000000000\n",
+      "name": "an eleven-digit size",
+      "outcome": {
+        "error": "manifest"
+      },
+      "parse": {
+        "error": "manifest"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "8a02428444a74aea6ba68de3fcb5662ea00770d6737b9d1059bf2b4c039e643e9af0954ef261152215465c37ff7cda4f1f2623db7f73195f0b44caf91dac3d05",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb  Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "two spaces between fields",
+      "outcome": {
+        "error": "manifest"
+      },
+      "parse": {
+        "error": "manifest"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "5b00eedff6d9a0572e667bf8d1ed11444b597e2cc057a9d606678dcad1e009675884ac6e1c0f2a8c02b6ac18302124d8880f1cb09ae102ba7b08bb63f810ab09",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb\tArdia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "a tab between fields",
+      "outcome": {
+        "error": "manifest"
+      },
+      "parse": {
+        "error": "manifest"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "2258e8b69886293ef693a011695c020503b0d0f94d519849e334dfe1746282db1c34d57f37695ee0194fb53bbfaeb3509e26dbb263e4fb6d9c1c4d8946d5820e",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000 \ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "a trailing space",
+      "outcome": {
+        "error": "manifest"
+      },
+      "parse": {
+        "error": "manifest"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "b864b36563d6cabd3de47db97c264f224b43736f932c32890080932f00c6dc3ee396540ab91243973370910f10b249fe6f71bc7ee0d56dc15027360979f25a04",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\nrpm Ardia-0.2.48-linux-x64.rpm efa7c7528e33bac64714c93d1f939d8299be549e4f2b83bec88369cf5158901f 1\n",
+      "name": "an rpm line",
+      "outcome": {
+        "error": "manifest"
+      },
+      "parse": {
+        "error": "manifest"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "d1c34a2f3cfe75323bf81db04f48857ed3de8c488de3478c6c812e5f5d65f0590eaa5a1cf9aed634f46006060807d131cfc3de6e7052ce37d936434780805207",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48-beta.1\ndeb Ardia-0.2.48-beta.1-linux-x64.deb e78ab7e6ec3866305d880ead473d633bfb176f5162d8b210483659ce682cc6d4 1000\ntarball Ardia-0.2.48-beta.1-linux-x64.tar.xz 0831bf651d0f2a4f1652b33a84303cef322b466ef55ff3b663ac966c3d5ebd96 2000\nappimage Ardia-0.2.48-beta.1-linux-x64.AppImage 7ffae3562ee437ff1870618842c9a736a1fbacc5547f0e48f6a17ecac6bf4afd 3000\n",
+      "name": "a beta version line",
+      "outcome": {
+        "error": "manifest"
+      },
+      "parse": {
+        "error": "manifest"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "fc47523fa84fead21200e3bc59e8cbbd0ce3276f72a6288047080a5e3c4bd89887dedbcb1e5557a27de6558e4f910ba743d9ec777e787ab572f011828d06d200",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "no version line",
+      "outcome": {
+        "error": "manifest"
+      },
+      "parse": {
+        "error": "manifest"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "e3ac7b434a0fa5e71c2dadc1437fdfb9749cd64e0abdcfd87ce38b8d8aa020ee383c49598da8e6038814f842ef791cc4ea421a52253a98bd5d6ebf4b88857e05",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000\u0000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "a NUL byte",
+      "outcome": {
+        "error": "manifest"
+      },
+      "parse": {
+        "error": "manifest"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "6c28b48ea48fbbec4c85bcee27e87cdde0e806ff295227ba2a2c167b84105f767ab1024e61c93e46569df0a4e573657b165008a3e249a4c6aa92c78a76e0b70d",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardía-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "non-ASCII in a name",
+      "outcome": {
+        "error": "manifest"
+      },
+      "parse": {
+        "error": "manifest"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "974f5e685222682018bb05caf014883c5c60e1e29b6ddecdf9ab3b5815ec37a42f08b776289bf19d38d36dc70112573ee0a8e5379c2a9c5f5bd209ab2d37b50f",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\n",
+      "name": "the header alone",
+      "outcome": {
+        "error": "manifest"
+      },
+      "parse": {
+        "error": "manifest"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "519841eb328ecc6c5343f4cbfcf00811ff37fb735398f850a86dc9d2061a74627425b7cfd3d565ce98e9259b4241fc2cae9f907199fe1515095225805bb0d90d",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "",
+      "name": "an empty manifest",
+      "outcome": {
+        "error": "manifest"
+      },
+      "parse": {
+        "error": "manifest"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "e9b3206e273e4120729912b338f69ed0e4e0ffdd86da5c0feb227b16d22944711cfabb847bde04e3b72ad145bebc3a37bdae7dcfef628e06840fcebbd554b509",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "helper": {
+        "error": "manifest"
+      },
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx",
+      "name": "4097 bytes",
+      "outcome": {
+        "error": "tooLarge"
+      },
+      "parse": {
+        "error": "tooLarge"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "acee714742a4b1db4830d7dc65e6fd6f7c08053ab5e4d7872a8c9b1d0f955dfc5e378abab74efd60804cfa006054da8df52a8e41a592fcb51563775b9bc03901",
+      "signatureValid": true,
+      "version": "0.2.48"
+    },
+    {
+      "helper": {
+        "error": "manifest"
+      },
+      "installed": "0.2.47",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx",
+      "name": "4097 bytes with a bad signature",
+      "outcome": {
+        "error": "tooLarge"
+      },
+      "parse": {
+        "error": "tooLarge"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "acee714742a4b1db4830d6dc65e6fd6f7c08053ab5e4d7872a8c9b1d0f955dfc5e378abab74efd60804cfa006054da8df52a8e41a592fcb51563775b9bc03901",
+      "signatureValid": false,
+      "version": "0.2.48"
+    },
+    {
+      "helper": {
+        "error": "manifest"
+      },
+      "installed": "0.2.47",
+      "kind": "deb",
+      "linuxPolicy": {
+        "name": "Ardia-1000000000.0.0-linux-x64.deb",
+        "size": 1000
+      },
+      "manifest": "ardia-linux-update 1\nversion 1000000000.0.0\ndeb Ardia-1000000000.0.0-linux-x64.deb 342526f3e0a763fa864f0038cdc0d285c1821101fe72e51e96a5cd12f23c070d 1000\ntarball Ardia-1000000000.0.0-linux-x64.tar.xz dc514d379a23c559a4172b52a2b1796c3064e201e5aa9cb559c2ea9c66bb52d4 2000\nappimage Ardia-1000000000.0.0-linux-x64.AppImage 0859135a8c721e3d29eff50f0aaa9e512ac560840fda2dd9979b22b6259add18 3000\n",
+      "name": "a ten-digit version part",
+      "outcome": {
+        "error": "version"
+      },
+      "parse": {
+        "error": "version"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "e74d22436460b6d428be64f13d2657b0d2b2fe4b2c5e7ef2dabc63aa91f04a94167947067f2d55fcd4cc821cfc5a318aa7c8e27c664743f0d733497a790dc90e",
+      "signatureValid": true,
+      "version": "1000000000.0.0"
+    },
+    {
+      "helper": {
+        "error": "manifest"
+      },
+      "installed": "0.2.47",
+      "kind": "deb",
+      "linuxPolicy": {
+        "error": "manifest"
+      },
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "a malformed requested version",
+      "outcome": {
+        "error": "version"
+      },
+      "parse": {
+        "error": "version"
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "7a7cca2c5ace246230c6cdcdf5b52cf9be9b2d5a768836f9083f8aaf91d042f30ab779ad28e4d562eb979ccf51035a611dccad5435c2589bffdcbd5245a09d09",
+      "signatureValid": true,
+      "version": "latest"
+    },
+    {
+      "helper": {
+        "error": "kind"
+      },
+      "installed": "0.2.47-beta",
+      "kind": "deb",
+      "manifest": "ardia-linux-update 1\nversion 0.2.48\ndeb Ardia-0.2.48-linux-x64.deb cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9 1000\ntarball Ardia-0.2.48-linux-x64.tar.xz 10317fa7d688d18697dca9bf143efbba9f07af18ebb6590307782459f0240f66 2000\nappimage Ardia-0.2.48-linux-x64.AppImage 86a3ea70f1cc738fa332e14d087a25247917fb7d88bef063ca71a29aeeb63b9a 3000\n",
+      "name": "a malformed installed version",
+      "outcome": {
+        "error": "version"
+      },
+      "parse": {
+        "name": "Ardia-0.2.48-linux-x64.deb",
+        "sha256": "cde3195db7ae31aa7eb42e7a780d698bc747bd597d34cfff7046721589ac59f9",
+        "size": 1000
+      },
+      "publicKey": "2012cb90ca60e8e5d8daf66e2272d2233e0486d557e8c66141ed8920177d7eb7",
+      "signature": "7a7cca2c5ace246230c6cdcdf5b52cf9be9b2d5a768836f9083f8aaf91d042f30ab779ad28e4d562eb979ccf51035a611dccad5435c2589bffdcbd5245a09d09",
+      "signatureValid": true,
+      "version": "0.2.48"
+    }
+  ],
+  "offers": [
+    {
+      "candidate": "0.2.48",
+      "channel": "stable",
+      "installed": "0.2.47",
+      "outcome": "ok"
+    },
+    {
+      "candidate": "0.2.48",
+      "channel": "nightly",
+      "installed": "0.2.47",
+      "outcome": "ok"
+    },
+    {
+      "candidate": "0.2.48-nightly.1",
+      "channel": "nightly",
+      "installed": "0.2.47",
+      "outcome": "ok"
+    },
+    {
+      "candidate": "0.2.48-nightly.1",
+      "channel": "stable",
+      "installed": "0.2.47",
+      "outcome": "channel"
+    },
+    {
+      "candidate": "0.2.48",
+      "channel": "stable",
+      "installed": "0.2.48-nightly.7",
+      "outcome": "ok"
+    },
+    {
+      "candidate": "0.2.48-nightly.8",
+      "channel": "nightly",
+      "installed": "0.2.48-nightly.7",
+      "outcome": "ok"
+    },
+    {
+      "candidate": "0.2.48-nightly.7",
+      "channel": "nightly",
+      "installed": "0.2.48-nightly.7",
+      "outcome": "notNewer"
+    },
+    {
+      "candidate": "0.2.48-nightly.6",
+      "channel": "nightly",
+      "installed": "0.2.48-nightly.7",
+      "outcome": "notNewer"
+    },
+    {
+      "candidate": "0.2.47",
+      "channel": "stable",
+      "installed": "0.2.48-nightly.1",
+      "outcome": "notNewer"
+    },
+    {
+      "candidate": "0.2.48",
+      "channel": "stable",
+      "installed": "0.2.48",
+      "outcome": "notNewer"
+    },
+    {
+      "candidate": "0.2.47",
+      "channel": "nightly",
+      "installed": "0.2.48",
+      "outcome": "notNewer"
+    },
+    {
+      "candidate": "0.2.48-beta.1",
+      "channel": "nightly",
+      "installed": "0.2.47",
+      "outcome": "version"
+    },
+    {
+      "candidate": "0.2.48",
+      "channel": "stable",
+      "installed": "",
+      "outcome": "version"
+    }
+  ],
+  "versions": {
+    "ascending": [
+      "0.0.0",
+      "0.0.1",
+      "0.1.0",
+      "0.2.9",
+      "0.2.10",
+      "0.2.47",
+      "0.2.48-nightly.0",
+      "0.2.48-nightly.1",
+      "0.2.48-nightly.9",
+      "0.2.48-nightly.10",
+      "0.2.48",
+      "0.2.49-nightly.1",
+      "0.2.49",
+      "0.10.0",
+      "1.0.0-nightly.1",
+      "1.0.0",
+      "2.0.0",
+      "999999999.999999999.999999999-nightly.999999999",
+      "999999999.999999999.999999999"
+    ],
+    "equal": [
+      [
+        "1.2.3",
+        "01.2.3"
+      ],
+      [
+        "0.2.48",
+        "0.2.048"
+      ],
+      [
+        "0.2.48-nightly.3",
+        "0.2.48-nightly.03"
+      ]
+    ],
+    "invalid": [
+      {
+        "acceptedBy": [],
+        "version": ""
+      },
+      {
+        "acceptedBy": [],
+        "version": "0.2"
+      },
+      {
+        "acceptedBy": [],
+        "version": "0.2.48.1"
+      },
+      {
+        "acceptedBy": [],
+        "version": "v0.2.48"
+      },
+      {
+        "acceptedBy": [],
+        "version": " 0.2.48"
+      },
+      {
+        "acceptedBy": [],
+        "version": "0.2.48 "
+      },
+      {
+        "acceptedBy": [],
+        "version": "0.2.48\n"
+      },
+      {
+        "acceptedBy": [],
+        "version": "0.2.48-beta.1"
+      },
+      {
+        "acceptedBy": [],
+        "version": "0.2.48-nightly"
+      },
+      {
+        "acceptedBy": [],
+        "version": "0.2.48-nightly."
+      },
+      {
+        "acceptedBy": [],
+        "version": "0.2.48-nightly.1.2"
+      },
+      {
+        "acceptedBy": [],
+        "version": "0.2.48-Nightly.1"
+      },
+      {
+        "acceptedBy": [],
+        "version": "0.2.48-nightly.-1"
+      },
+      {
+        "acceptedBy": [],
+        "version": "0.2.48+build"
+      },
+      {
+        "acceptedBy": [],
+        "version": "0..48"
+      },
+      {
+        "acceptedBy": [],
+        "version": "-1.2.3"
+      },
+      {
+        "acceptedBy": [],
+        "version": "0.2.4８"
+      },
+      {
+        "acceptedBy": [
+          "linuxPolicy",
+          "linuxReleases"
+        ],
+        "version": "1000000000.0.0"
+      },
+      {
+        "acceptedBy": [
+          "linuxPolicy",
+          "linuxReleases"
+        ],
+        "version": "0.2.48-nightly.1000000000"
+      },
+      {
+        "acceptedBy": [],
+        "version": "0.2.48-"
+      },
+      {
+        "acceptedBy": [],
+        "version": "0x1.2.3"
+      }
+    ],
+    "valid": [
+      {
+        "channel": "stable",
+        "version": "0.0.0"
+      },
+      {
+        "channel": "stable",
+        "version": "0.2.48"
+      },
+      {
+        "channel": "nightly",
+        "version": "0.2.48-nightly.0"
+      },
+      {
+        "channel": "nightly",
+        "version": "0.2.48-nightly.3"
+      },
+      {
+        "channel": "stable",
+        "version": "01.2.3"
+      },
+      {
+        "channel": "nightly",
+        "version": "999999999.999999999.999999999-nightly.999999999"
+      }
+    ]
+  }
+}

@@ -43,6 +43,7 @@ const testGlobals = globalThis as {
   acTestCliControl?: (on: boolean | null) => Promise<CliControlStatus> | undefined;
   acTestCliActive?: (tabId: string | null) => Promise<CliControlStatus> | undefined;
   acTestCliTargets?: (tabId: string) => CliTabTarget | undefined;
+  acTestCliHeld?: (tabs: { tabId: string; until: number }[]) => { kept: number; marked?: string[] } | Promise<{ kept: number; marked?: string[] }> | undefined;
   acTestCliOwns?: (tabId: string) => { owned: boolean; shown: boolean };
   acTestCliMoveOffscreen?: (tabId: string) => { ok: boolean; reason?: string };
   acTestCliCloseOffscreen?: () => void;
@@ -459,6 +460,10 @@ const fakeModules = {
       cliOwnsTab: ({ tabId }) => testGlobals.acTestCliOwns?.(tabId) ?? { owned: false, shown: false },
       cliMoveOffscreen: ({ tabId }) => testGlobals.acTestCliMoveOffscreen?.(tabId) ?? { ok: false },
       cliCloseOffscreenTabs: () => (testGlobals.acTestCliCloseOffscreen?.(), null),
+      setCliHeldTabs: async ({ tabs }) => {
+        const answer = (await testGlobals.acTestCliHeld?.(tabs)) ?? { kept: 0 };
+        return { kept: answer.kept, marked: answer.marked ?? tabs.filter((t) => t.until > Date.now()).map((t) => t.tabId) };
+      },
       cliTabTargets: ({ tabIds }) => Object.fromEntries(tabIds.map((id) => [id, testGlobals.acTestCliTargets?.(id) ?? { targetId: null, pageGeneration: 0 }])),
     },
     { inputIdleSeconds: () => 3600 },

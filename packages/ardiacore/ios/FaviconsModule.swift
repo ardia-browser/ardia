@@ -7,5 +7,7 @@ public class FaviconsModule: Module {
     Self.calls.function
   }
 
-  static let calls = faviconsCallTable(fetch: { args, reply in ArdiaFavicons.fetch(try args.text("url"), profile: args.profile, name: nil) { reply.ok($0) } })
+  static let calls = faviconsCallTable(
+    peek: EngineCall.passingLoaded("ac_favicons_peek"),
+    fetch: { args, reply in ArdiaFavicons.fetch(try args.text("url"), profile: args.profile, name: nil) { reply.ok($0) } })
 }

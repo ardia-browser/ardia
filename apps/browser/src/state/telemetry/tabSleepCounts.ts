@@ -5,7 +5,7 @@ import { consentOrNow, countFor } from "./countFor";
 import type { KeptAwakeReason } from "../tabs/sleepRefusals";
 import type { MemoryPressure, SleepVeto } from "../tabs/sleepPolicy";
 
-const none = () => ({ captureIndicatorsCleared: 0, mediaCardsCleared: 0, pinnedTabsSleptByMemorySaver: 0, tabsSleptOverBudget: 0, tabsSleptOverBudgetReopened: 0, tabsOverBudgetSkippedLoading: 0, tabsOverBudgetAsksPassedOn: 0, topAppsKeptRunning: 0, topAppWindowsClosedFromNewTab: 0, topAppsUnloadedFromMenu: 0, tabsSleptFromMenu: 0, groupsSleptFromMenu: 0, menuSleepsKeptAwake: 0, menuSleepsPastAutomatic: 0, menuSleepKeptReason: null as KeptAwakeReason | null, sleepVetoes: {} as Partial<Record<SleepVeto, number>>, cliTabsHeld: 0, profilesKeptForCli: 0, tabsSleptUnderWarning: 0, tabsSleptUnderCritical: 0, memoryWarnings: 0, memoryCriticals: 0 });
+const none = () => ({ captureIndicatorsCleared: 0, mediaCardsCleared: 0, pinnedTabsSleptByMemorySaver: 0, tabsSleptOverBudget: 0, tabsSleptOverBudgetReopened: 0, tabsOverBudgetSkippedLoading: 0, tabsOverBudgetAsksPassedOn: 0, topAppsKeptRunning: 0, topAppWindowsClosedFromNewTab: 0, topAppsUnloadedFromMenu: 0, tabsSleptFromMenu: 0, groupsSleptFromMenu: 0, menuSleepsKeptAwake: 0, menuSleepsPastAutomatic: 0, menuSleepKeptReason: null as KeptAwakeReason | null, sleepVetoes: {} as Partial<Record<SleepVeto, number>>, cliTabsHeld: 0, profilesKeptForCli: 0, chromeDiscardsKeptForCli: 0, tabsSleptUnderWarning: 0, tabsSleptUnderCritical: 0, memoryWarnings: 0, memoryCriticals: 0 });
 
 let pending = none();
 
@@ -42,6 +42,10 @@ export function noteSleepVeto(veto: SleepVeto, consent?: ConsentToken | null) {
 
 export function noteProfileKeptForCli(consent?: ConsentToken | null) {
   countFor(consentOrNow(consent), () => void pending.profilesKeptForCli++);
+}
+
+export function noteChromeDiscardsKeptForCli(tabs: number, consent?: ConsentToken | null) {
+  if (tabs > 0) countFor(consentOrNow(consent), () => void (pending.chromeDiscardsKeptForCli += tabs));
 }
 
 export function noteCliTabsHeld(tabs: number, consent?: ConsentToken | null) {
@@ -144,6 +148,7 @@ export function takeTabSleepCounts() {
     ...vetoCounts(taken.sleepVetoes),
     cli_tabs_held: taken.cliTabsHeld,
     profiles_kept_for_cli: taken.profilesKeptForCli,
+    chrome_discards_kept_for_cli: taken.chromeDiscardsKeptForCli,
     tabs_slept_under_memory_warning: taken.tabsSleptUnderWarning,
     tabs_slept_under_memory_critical: taken.tabsSleptUnderCritical,
     memory_pressure_warnings: taken.memoryWarnings,

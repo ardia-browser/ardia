@@ -6,7 +6,7 @@ import { test } from "node:test";
 import ts from "typescript";
 
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
-const SCOPES = ["apps/browser/src", "apps/linux/src"];
+const SCOPES = ["apps/browser/src", "apps/desktop/src"];
 const TELEMETRY_DIR = "apps/browser/src/state/telemetry";
 const TELEMETRY = /^apps\/browser\/src\/state\/telemetry\//;
 const BASELINE = JSON.parse(readFileSync(new URL("./consent-baseline.json", import.meta.url), "utf8"));

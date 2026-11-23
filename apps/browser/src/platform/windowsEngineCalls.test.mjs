@@ -446,6 +446,19 @@ test("engine.info answers from the engine host in the Mac's shape", async () => 
   assert.deepEqual(engine.hosted, ["host.info"]);
 });
 
+test("favicons.peek reads through ac_favicons_peek, and an engine without it answers with ac_favicons_get as main did", async () => {
+  const args = { pages: ["https://a.example/"], icons: [], size: 32 };
+  const stored = { pages: { "https://a.example/": { png: ONE_PIXEL_PNG, icon: "https://a.example/favicon.ico" } }, icons: {} };
+  const current = fakeEngine((name) => (name === "ac_favicons_peek" ? JSON.stringify(stored) : '{"error":"unexpected"}'));
+  assert.deepEqual(await calling(current, "favicons")("peek", args, "work"), stored);
+  assert.deepEqual(current.calls.map((c) => c.name), ["ac_favicons_peek"]);
+  const older = fakeEngine((name) => (name === "ac_favicons_get" ? JSON.stringify(stored) : '{"error":"unknown call"}'));
+  assert.deepEqual(await calling(older, "favicons")("peek", args, "work"), stored);
+  assert.deepEqual(older.calls.map((c) => c.name), ["ac_favicons_peek", "ac_favicons_get"]);
+  const failing = fakeEngine(() => '{"error":"favicons not loaded"}');
+  await assert.rejects(calling(failing, "favicons")("peek", args, "work"), /favicons not loaded/);
+});
+
 test("favicons.fetch answers the icon Chromium stored for that address, with its size", async () => {
   const url = "https://a.example/favicon.ico";
   const engine = fakeEngine(() => JSON.stringify({ pages: {}, icons: { [url]: { png: ONE_PIXEL_PNG } } }));

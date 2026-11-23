@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { useEffect, useRef } from "react";
+import { Pressable, StyleSheet, Text, useWindowDimensions, View, type ViewInstance } from "react-native";
 import Animated, { FadeIn, FadeOut, LayoutAnimationConfig } from "react-native-reanimated";
 import { refreshDefaultBrowser, useDefaultBrowser } from "../../state/settings/defaultBrowser";
 import { offersDefaultBrowser } from "../../state/settings/settingsRules";
@@ -16,7 +16,9 @@ import { controlRadius, duration, font, materialYouOffered, settingsLayout, sett
 import { PHONE_SHARING_COPY } from "../../lib/telemetryCopy";
 import { setUsageSharing, useUsageSharing } from "../../state/telemetry/telemetry";
 import { AppearanceRow, ColorRow, MatchMyMac } from "./AppearancePage";
+import { focusForScreenReader } from "../ui/coverFocus";
 import { BarButton, Group, IconTile, NavRow, PickerRow, SettingsPage, ToggleRow } from "./SettingsKit";
+import type { SettingsReveal } from "./settingsReveal";
 import { syncOffered } from "../../state/sync/offer";
 import { browseForMeOffered, refreshChatGPTConnected, useChatGPTConnected } from "../../state/browseForMe/store";
 import { browseForMeRowValue } from "../../state/browseForMe/copy";
@@ -52,6 +54,19 @@ export function SettingsRoot() {
   const design = useDesign();
   const redesigned = design === "redesigned";
   const material = design === "material";
+  const materialSwitch = useRef<ViewInstance>(null);
+  const reveal = useRef<SettingsReveal>(null);
+  const restoreSwitchFocus = useRef(false);
+  useEffect(() => {
+    if (!restoreSwitchFocus.current) return;
+    restoreSwitchFocus.current = false;
+    reveal.current?.(materialSwitch.current);
+    return focusForScreenReader(() => materialSwitch.current);
+  }, [material]);
+  const changeMaterialYou = (value: boolean) => {
+    restoreSwitchFocus.current = true;
+    setMaterialYou(value);
+  };
   const dynamicColors = wallpaperColorsEnabled(usePreferences((p) => p.colorChoice), usePreferences((p) => p.dynamicColors));
   const chatGPT = useChatGPTConnected();
   const summaryProvider = usePageSummaryProvider();
@@ -64,7 +79,7 @@ export function SettingsRoot() {
     void refreshPageSummariesEnabled();
   }, []);
   return (
-    <SettingsPage title={destinationWords.settings} mediumAppBar onClose={material ? closeSettings : undefined} trailing={material ? undefined : <BarButton title={dismissWords.done} emphasized onPress={closeSettings} />}>
+    <SettingsPage title={destinationWords.settings} mediumAppBar revealRef={reveal} onClose={material ? closeSettings : undefined} trailing={material ? undefined : <BarButton title={dismissWords.done} emphasized onPress={closeSettings} />}>
       {syncOffered() ? (
         <Group>
           <SyncCard stacks={stacks} />
@@ -115,7 +130,7 @@ export function SettingsRoot() {
           </>
         )}
         {material ? null : <View style={[styles.divider, { backgroundColor: theme.separator }]} />}
-        {materialYouOffered() ? <ToggleRow title="Material You" icon="handDrawFill" tint={settingsTint.nightShade} value={material} divider onChange={setMaterialYou} /> : null}
+        {materialYouOffered() ? <ToggleRow buttonRef={materialSwitch} title="Material You" icon="handDrawFill" tint={settingsTint.nightShade} value={material} divider onChange={changeMaterialYou} /> : null}
         <NavRow title="Site Settings" icon="globe" tint={settingsTint.neutral} divider onPress={() => pushSettings({ page: "siteSettings" })} />
         {offersDefault ? <NavRow title="Default Browser" icon="safariFill" tint={settingsTint.defaultBrowser} divider onPress={() => pushSettings({ page: "defaultBrowser" })} /> : null}
         <PickerRow title="Open App Links In" icon="arrowUpForwardAppFill" tint={settingsTint.appLinks} options={APP_LINKS} selected={appLinks} onSelect={setAppLinks} />

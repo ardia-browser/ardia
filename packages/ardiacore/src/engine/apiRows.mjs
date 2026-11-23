@@ -34,33 +34,37 @@ export function typeRows(source, manifest, name) {
     throw new Error(`${name} is an exported, non-generic type alias: \`export type ${name} = HistoryCalls & {\``);
   }
   const parts = ts.isIntersectionTypeNode(alias.type) ? [...alias.type.types] : [alias.type];
-  const literal = parts.at(-1);
-  if (!literal || !ts.isTypeLiteralNode(literal)) {
-    throw new Error(`${name}'s row literal ends its type: \`};\` with nothing after it, as \`export type ${name} = HistoryCalls & { … };\``);
-  }
-  const operandNodes = parts.slice(0, -1);
+  const literal = ts.isTypeLiteralNode(parts.at(-1)) ? parts.at(-1) : null;
+  const operandNodes = literal ? parts.slice(0, -1) : parts;
   for (const node of operandNodes) {
     if (!ts.isTypeReferenceNode(node) || !ts.isIdentifier(node.typeName) || node.typeArguments) {
-      throw new Error(`${name} is generated domains and one row literal, as \`export type ${name} = HistoryCalls & {\`: got ${JSON.stringify(node.getText(file))}`);
+      throw new Error(`${name} is generated domains and at most one row literal, last, as \`export type ${name} = HistoryCalls & { … };\`: got ${JSON.stringify(node.getText(file))}`);
     }
   }
   const kind = name.endsWith("Calls") ? "calls" : "events";
   const generated = new Map(Object.entries(manifest.domains).map(([domain, entry]) => [`${capitalized(domain)}${capitalized(kind)}`, { domain, entry }]));
-  const operands = operandNodes.map((node) => node.typeName.text);
-  for (const operand of operands) {
-    const found = generated.get(operand);
-    if (!found) continue;
-    const imported = file.statements.some((statement) => ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier) && statement.moduleSpecifier.text === `./generated/${found.domain}` && statement.importClause?.namedBindings && ts.isNamedImports(statement.importClause.namedBindings) && statement.importClause.namedBindings.elements.some((element) => element.name.text === operand && (element.propertyName ?? element.name).text === operand));
-    const shadowed = file.statements.some((statement) => (ts.isTypeAliasDeclaration(statement) || ts.isInterfaceDeclaration(statement) || ts.isClassDeclaration(statement) || ts.isEnumDeclaration(statement) || ts.isModuleDeclaration(statement)) && statement.name?.text === operand);
-    if (!imported || shadowed) throw new Error(`${name} composes ${operand}, which must be imported as is from ./generated/${found.domain} and not declared in api.ts`);
-  }
+  const importsOf = (local) => file.statements.filter((statement) => ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier) && statement.importClause?.namedBindings && ts.isNamedImports(statement.importClause.namedBindings))
+    .flatMap((statement) => statement.importClause.namedBindings.elements.filter((element) => element.name.text === local).map((element) => ({ from: statement.moduleSpecifier.text, imported: (element.propertyName ?? element.name).text })));
+  const declaredHere = (local) => file.statements.some((statement) => (ts.isTypeAliasDeclaration(statement) || ts.isInterfaceDeclaration(statement) || ts.isClassDeclaration(statement) || ts.isEnumDeclaration(statement) || ts.isModuleDeclaration(statement)) && statement.name?.text === local);
+  const resolved = operandNodes.map((node) => {
+    const local = node.typeName.text;
+    const bindings = importsOf(local);
+    if (bindings.length > 1) throw new Error(`${name} composes ${local}, which api.ts imports ${bindings.length} times; a generated domain's type is imported once`);
+    const binding = bindings[0] ?? null;
+    const typeName = generated.has(binding?.imported) ? binding.imported : local;
+    const found = generated.get(typeName);
+    if (!found) throw new Error(`${name} composes ${local}, which isn't a generated domain's ${kind}`);
+    if (binding?.from !== `./generated/${found.domain}` || binding.imported !== typeName || declaredHere(local)) {
+      throw new Error(`${name} composes ${local}, which must be imported from ./generated/${found.domain} as its ${typeName}, once, and not declared in api.ts`);
+    }
+    return { typeName, ...found };
+  });
+  const operands = resolved.map(({ typeName }) => typeName);
   const rows = [];
-  for (const operand of operands) {
-    const found = generated.get(operand);
-    if (!found) throw new Error(`${name} composes ${operand}, which isn't a generated domain's ${kind}`);
-    const verbs = kind === "calls" ? Object.keys(found.entry.calls) : found.entry.events;
-    rows.push(...verbs.map((verb) => `${found.domain}.${verb}`));
+  for (const { domain, entry } of resolved) {
+    const verbs = Object.keys(kind === "calls" ? entry.calls : entry.events);
+    rows.push(...verbs.map((verb) => `${domain}.${verb}`));
   }
-  const hand = literalRows(name, literal, file);
+  const hand = literal ? literalRows(name, literal, file) : [];
   return { operands, hand, rows: new Set([...rows, ...hand]) };
 }

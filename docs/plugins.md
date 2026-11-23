@@ -643,7 +643,7 @@ Ardia never runs a plugin's program itself, with one exception for official plug
   anywhere else, is left alone and the plugin's page says so ("~/.local/bin/ardia is someone else's; remove it to use
   this one"); a link into another plugin's store names that plugin. Two plugins that are on never share a command.
 - **Leases.** A program that wants its version kept while it runs writes `<its version folder>/.leases/<pid>` at start
-  and removes it at exit (the folder above `bin/`; the `ardia` command does, in Rust and in Python). A lease counts
+  and removes it at exit (the folder above `bin/`; the `ardia` command does). A lease counts
   while that process runs and started no later than the lease's modification time, so a reused process id pins
   nothing; others are cleared. Ardia keeps `current`, `previous` and every leased version, and deletes the rest each
   time it links or unlinks, holding `Programs/.<plugin>.lock` while it does, so two Ardias never sweep or link the same
@@ -1080,7 +1080,7 @@ the installed app's); `enable`, `disable` and `call` need Ardia running with CLI
 - `ardia plugins check [NAME|PATH]`: checks manifests.
 
 `check` and `install` hold a manifest to what the app accepts, using the `plugin.schema.json` Ardia wrote for that data
-folder, else the one the `ardia` command ships with (`ardia_cli/schemas/`); settings defaults need Ardia's
+folder, else the one built into the `ardia` command (`plugins/cli/ts/assets/` in ardia-browser/plugins); settings defaults need Ardia's
 `config.schema.json`, and without it a manifest that sets any is refused as unchecked: a version 0 manifest is migrated first and a newer
 version than `plugin.schema.json` knows is refused; then the schema (rows included), the settings defaults against
 `config.schema.json`, and the rules a schema can't state (a command's tool exists, `context` needs `tabs`, a page is a file, names are unique, …), with the app's own lists from the schema's `x-ardia-rules` (events that need

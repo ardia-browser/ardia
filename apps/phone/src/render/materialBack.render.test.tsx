@@ -1,7 +1,7 @@
 import { predictiveBack, type PredictiveBackHandlers } from "@ardia/phone-native";
 import { Platform, Text } from "react-native";
 import { act } from "react-test-renderer";
-import { Dialog, DesignProvider, Sheet } from "../components/ui";
+import { Dialog, DesignProvider, Menu, Sheet } from "../components/ui";
 import { backSwipe, materialSheetBackOffset, onMaterialBackSwiped } from "../components/ui/MaterialSurfaces";
 import { renderSurface, unmount, withMaterialYou } from "../../test/render/harness";
 
@@ -113,6 +113,24 @@ onAndroid("a committed back swipe that moved counts once; a 3-button Back, which
   swipe.progress(0);
   swipe.commit();
   expect(counted).toHaveBeenCalledTimes(1);
+});
+
+onAndroid("a back swipe out of a menu opened privately counts nothing, while the same swipe out of a normal menu counts once", () => {
+  const counted = jest.fn();
+  onMaterialBackSwiped(counted);
+  const swipeOut = (privately: boolean) => {
+    const dismissed = jest.fn();
+    const root = material(<Menu items={[{ label: "Close Incognito Tabs", destructive: true, onPress: () => undefined }]} place={{ top: 100, left: 20 }} privately={privately} onDismiss={dismissed} />);
+    act(() => top().onProgress?.(0.6, "left"));
+    act(() => top().onCommit?.());
+    expect(dismissed).toHaveBeenCalledTimes(1);
+    unmount(root);
+  };
+  swipeOut(true);
+  expect(counted).not.toHaveBeenCalled();
+  swipeOut(false);
+  expect(counted).toHaveBeenCalledTimes(1);
+  onMaterialBackSwiped(() => undefined);
 });
 
 onAndroid("the sheet's drag-to-dismiss lives on its handle, so a tall sheet's content scrolls instead of dragging the sheet", () => {

@@ -1,0 +1,41 @@
+{
+  "name": "@ardia/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --mode linux",
+    "dev:win": "vite --mode win",
+    "build": "vite build --mode linux",
+    "build:win": "vite build --mode win",
+    "preview": "vite preview --mode linux",
+    "typecheck": "tsrs -p . && tsrs -p tsconfig.win.json",
+    "test:host": "node scripts/host-tests.mjs linux win",
+    "test:symbols": "node --experimental-strip-types --test src/shims/web/symbols/render.test.mjs",
+    "test:graph": "node --test scripts/module-graph.test.mjs scripts/windowsPaths.test.mjs",
+    "fixture:csp": "node scripts/host-csp-fixture.mjs",
+    "fixture:csp:check": "node scripts/host-csp-check.mjs",
+    "acceptance": "node scripts/acceptance/run.mjs",
+    "acceptance:self-test": "node --test --test-concurrency=1 scripts/acceptance/tests/*.test.mjs"
+  },
+  "dependencies": {
+    "@ardia/core": "workspace:*",
+    "@ardia/ardiacore": "workspace:*",
+    "@ardia/import": "workspace:*",
+    "@ardia/shaders": "workspace:*",
+    "@ardia/shell": "workspace:*",
+    "@ardia/sync": "workspace:*",
+    "react": "19.1.4",
+    "react-dom": "19.1.4",
+    "react-native-web": "^0.21.1",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "@types/react": "~19.1.10",
+    "@types/react-dom": "~19.1.7",
+    "@vitejs/plugin-react": "^5.0.4",
+    "rollup-plugin-visualizer": "^6.0.4",
+    "typescript": "~5.9.2",
+    "vite": "^7.1.9"
+  }
+}

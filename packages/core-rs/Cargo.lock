@@ -65,6 +65,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "ardia-import-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ardia-import-ffi"
+version = "0.1.0"
+dependencies = [
+ "ardia-import-core",
+ "cbindgen",
+ "serde",
+ "serde_json",
+ "zeroize",
+]
+
+[[package]]
 name = "ardia-sync-core"
 version = "0.1.0"
 dependencies = [
@@ -82,6 +101,25 @@ dependencies = [
  "base64",
  "serde_json",
  "zeroize",
+]
+
+[[package]]
+name = "ardia-update-core"
+version = "0.1.0"
+dependencies = [
+ "ardia-crypto",
+ "ed25519-dalek",
+ "serde_json",
+]
+
+[[package]]
+name = "ardia-update-ffi"
+version = "0.1.0"
+dependencies = [
+ "ardia-crypto",
+ "ardia-update-core",
+ "cbindgen",
+ "serde_json",
 ]
 
 [[package]]

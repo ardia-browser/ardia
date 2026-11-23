@@ -303,7 +303,7 @@ The first stable release after that creates `ardia-bin` on the AUR. To create it
 `scripts/linux/arch/publish-aur.sh <the latest stable> --package <its tarball>` with `AUR_SSH_KEY_FILE` set to the key.
 
 The script refuses what `release.sh` refuses: a missing notes file or one whose frontmatter doesn't read, a
-`MARKETING_VERSION` other than `<version>`, and uncommitted changes (here under `apps/browser`, `apps/linux`,
+`MARKETING_VERSION` other than `<version>`, and uncommitted changes (here under `apps/browser`, `apps/desktop`,
 `plugins`, `packages`, `engine` or `scripts/linux`). It uses the exact Linux engine for HEAD's Linux engine key
 (`engine/engine-key.sh --platform linux`), published in ardia-browser/ardia. Without one the `linux` job fails and the macOS release
 ships alone; build the engine, then run `scripts/linux/release.sh <version>` on a Linux machine at the release commit

@@ -9,7 +9,7 @@ const upscalingHeader = read(`${core}ac_video_upscaling.h`);
 const media = read(`${core}ac_tab_bridge_media.mm`);
 const engine = read(`${core}ardiacore_engine.mm`);
 const module = read("../ios/WebViewModule.swift");
-const api = read("../src/engine/api.ts");
+const webViewCalls = read("../src/engine/generated/webView.ts");
 
 const body = (text, start) => {
   const from = text.indexOf(start);
@@ -50,6 +50,6 @@ test("the test-only capture condition and the per-tab capturing state reach the 
   assert.match(upscaling, /@"capturing" : @\(Capturing\(contents\)\)/);
   assert.match(engine, /conditions\[@"capturing"\]/);
   assert.match(module, /for key in \["lowPower", "thermalPressure", "capturing"\]/);
-  assert.match(api, /"webView\.setVideoUpscalingTestConditions": \[\{[^}]*capturing\?: boolean[^}]*\}, null\]/);
-  assert.match(api, /tabs: \{ tabId: number; allowed: boolean; capturing: boolean \}\[\]/);
+  assert.match(webViewCalls, /"webView\.setVideoUpscalingTestConditions": \[\{[^}]*capturing\?: boolean[^}]*\}, null\]/);
+  assert.match(webViewCalls, /tabs: \{ tabId: number; allowed: boolean; capturing: boolean \}\[\]/);
 });

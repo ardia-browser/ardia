@@ -13,6 +13,14 @@ export const favicons = defineDomain({
       service: "ac_favicons_get",
       desktop: "route",
     },
+    peek: {
+      args: "Profile & { pages: string[]; icons: string[]; size: number }",
+      result: "{ pages: Record<string, { png: string; icon: string }>; icons: Record<string, { png: string }> }",
+      service: "ac_favicons_peek",
+      desktop: "route",
+      mac: "custom",
+      windows: "custom",
+    },
     set: {
       args: "Profile & { page: string; icon: string; png: string }",
       result: "{ stored: boolean }",

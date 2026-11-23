@@ -9,7 +9,7 @@ import { pressStripClose } from "../../state/tabs/stripPress";
 import { workspaceSnapshot } from "../../state/browser/current";
 import { dismissHover } from "../../state/sidebar/hover";
 import { openTabMenu } from "../../state/sidebar/menus";
-import { clickHeldTabPress, endPressGesture, holdTabPress, pressOutTabPress, type TabPress } from "../../state/sidebar/heldTabPress";
+import { clickHeldTabPress, endPressGesture, holdTabPress, pressOutTabPress, type TabPress, type TileDoubleClick } from "../../state/sidebar/heldTabPress";
 import { tabPressTag } from "../../state/tabs/tabReveal";
 import { useInSplit } from "../../state/windows/card";
 import { ContextMenuArea } from "../ui";
@@ -24,6 +24,7 @@ type TabPressProps = {
   hitSlop?: Insets;
   selected?: boolean;
   onSwitch?: () => void;
+  onDoubleClick?: TileDoubleClick;
   children: ReactNode | ((state: { pressed: boolean }) => ReactNode);
 };
 
@@ -43,6 +44,7 @@ export function tabPressView({
   hitSlop,
   selected = false,
   onSwitch,
+  onDoubleClick,
   children,
   press,
   inSplit,
@@ -68,7 +70,7 @@ export function tabPressView({
           press.current = holdTabPress(windowId, tab.id, e, before);
           if (press.current !== before && press.current.switched) onSwitch?.();
         }}
-        onPress={(e) => clickHeldTabPress(windowId, tab.id, e, press.current)}
+        onPress={(e) => clickHeldTabPress(windowId, tab.id, e, press.current, onDoubleClick)}
         onPressOut={(e) => {
           onPressChange?.(false);
           pressOutTabPress(press.current, e);

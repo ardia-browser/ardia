@@ -1,19 +1,27 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { ActivityIndicator, type GestureResponderEvent, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View, type StyleProp, type TextStyle } from "react-native";
+import { createContext, useCallback, useContext, useEffect, useImperativeHandle, useRef, useState, type ReactNode, type RefObject } from "react";
+import { ActivityIndicator, type GestureResponderEvent, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View, type ScrollViewInstance, type StyleProp, type TextStyle, type ViewInstance } from "react-native";
 import Animated, { FadeIn, FadeOut, LayoutAnimationConfig, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { rememberSettingsScroll, settingsScroll } from "../../state/settings/nav";
+import { isSettingsOpening, rememberSettingsScroll, settingsScroll, useSettingsNav } from "../../state/settings/nav";
 import { MenuTrigger } from "../ui/MenuTrigger";
-import { MaterialBarButton, MaterialButtonRow, MaterialEmptyState, MaterialGroup, MaterialIconTile, MaterialNavRow, MaterialPickerRow, MaterialSettingsPage, MaterialToggleRow, MaterialValueRow } from "./MaterialSettingsKit";
-import { duration, LookBackdrop, settingsMotion, useSheetFrame, font, ink, settingsLayout, space, Symbol, tabsLayout, ToggleRow as SharedToggleRow, useDesign, useTheme, type MenuItem, type SymbolName, Tappable, smoothCorners, slotAround, controlSize } from "../ui";
+import { MaterialBarButton, MaterialButtonRow, MaterialEmptyState, MaterialGroup, MaterialIconTile, MaterialMediumTitle, MaterialNavRow, MaterialPickerRow, MaterialSettingsAppBar, MaterialToggleRow, MaterialValueRow, materialMediumTitleHeight, materialSettingsListStyles } from "./MaterialSettingsKit";
+import { duration, LookBackdrop, settingsMotion, useSheetFrame, font, ink, settingsLayout, space, Symbol, tabsLayout, ToggleRow as SharedToggleRow, Tappable, smoothCorners, slotAround, controlSize, useDesign, useTheme, type MenuItem, type SymbolName } from "../ui";
+import { useMaterialTheme } from "../ui/materialTheme";
+import { revealInList, type SettingsReveal } from "./settingsReveal";
 
 export const SettingsHostedContext = createContext(false);
 
-type PageProps = { title: string; onBack?: () => void; onClose?: () => void; leading?: ReactNode; trailing?: ReactNode; children: ReactNode; scroll?: boolean; onRefresh?: () => Promise<unknown>; heroTitle?: boolean; mediumAppBar?: boolean; overlay?: ReactNode; dismissesKeyboard?: boolean };
+type PageProps = { title: string; onBack?: () => void; onClose?: () => void; leading?: ReactNode; trailing?: ReactNode; children: ReactNode; scroll?: boolean; onRefresh?: () => Promise<unknown>; heroTitle?: boolean; mediumAppBar?: boolean; overlay?: ReactNode; dismissesKeyboard?: boolean; revealRef?: RefObject<SettingsReveal | null> };
 
-function ClassicSettingsPage({ title, onBack, leading, trailing, children, scroll = true, onRefresh, heroTitle = false, overlay, dismissesKeyboard = false }: PageProps) {
+export function SettingsPage({ title, onBack, onClose, leading, trailing, children, scroll = true, onRefresh, heroTitle = false, mediumAppBar = false, overlay, dismissesKeyboard = false, revealRef }: PageProps) {
+  const design = useDesign();
+  const material = design === "material";
   const theme = useTheme();
+  const { scheme } = useMaterialTheme();
   const insets = useSafeAreaInsets();
+  const { fontScale } = useWindowDimensions();
+  const mediumTitleHeight = materialMediumTitleHeight(fontScale);
+  const [generation] = useState(() => useSettingsNav.getState().generation);
   const [startOffset] = useState(() => ({ x: 0, y: settingsScroll(title) }));
   const frame = useSheetFrame();
   const [refreshing, setRefreshing] = useState(false);
@@ -24,6 +32,15 @@ function ClassicSettingsPage({ title, onBack, leading, trailing, children, scrol
       }
     : null;
   const sheetList = frame?.list(refresh !== null);
+  const list = useRef<ScrollViewInstance>(null);
+  const viewport = useRef(0);
+  const lastY = useRef(startOffset.y);
+  const reveal = useCallback<SettingsReveal>((target) => revealInList({ list: list.current, scrollY: lastY.current, viewport: viewport.current }, target), []);
+  useImperativeHandle(revealRef, () => reveal, [reveal]);
+  const [offset, setOffset] = useState(startOffset.y);
+  useEffect(() => setOffset(lastY.current), [mediumTitleHeight]);
+  const collapsed = offset >= mediumTitleHeight;
+  const [scrolled, setScrolled] = useState(startOffset.y > 0);
   const [heroAway, setHeroAway] = useState(false);
   const titleShown = !heroTitle || heroAway;
   const titleOpacity = useSharedValue(titleShown ? 1 : 0);
@@ -33,9 +50,23 @@ function ClassicSettingsPage({ title, onBack, leading, trailing, children, scrol
   const titleStyle = useAnimatedStyle(() => ({ opacity: titleOpacity.value }));
   const hosted = useContext(SettingsHostedContext);
   return (
-    <View style={StyleSheet.absoluteFill}>
-      <LookBackdrop />
-      {hosted ? (
+    <View testID={material ? "materialSettingsPage" : undefined} style={[StyleSheet.absoluteFill, material ? { backgroundColor: scheme.surfaceContainer } : null]}>
+      {material ? null : <LookBackdrop />}
+      {material ? (
+        <MaterialSettingsAppBar
+          title={title}
+          onBack={onBack}
+          onClose={onClose}
+          leading={leading}
+          trailing={trailing}
+          mediumAppBar={mediumAppBar}
+          collapsed={collapsed}
+          scrolled={scrolled}
+          topInset={frame && !frame.fullScreen ? 0 : insets.top}
+          leftInset={insets.left}
+          rightInset={insets.right}
+        />
+      ) : hosted ? (
         leading || trailing ? (
           <View testID="settingsHostedActions" style={styles.hostedActions}>
             <View style={styles.topSide}>{leading}</View>
@@ -43,48 +74,81 @@ function ClassicSettingsPage({ title, onBack, leading, trailing, children, scrol
           </View>
         ) : null
       ) : (
-      <View style={[styles.top, { paddingTop: frame ? 0 : insets.top }]}>
-        <View style={styles.topSide}>
-          {onBack ? (
-            <Tappable kind="icon" label="Back" onPress={onBack} style={styles.back}>
-              <Symbol name="chevronLeft" size={22} color={theme.formAccent} />
-            </Tappable>
-          ) : null}
-          {leading}
+        <View style={[styles.top, { paddingTop: frame ? 0 : insets.top }]}>
+          <View style={styles.topSide}>
+            {onBack ? (
+              <Tappable kind="icon" label="Back" onPress={onBack} style={styles.back}>
+                <Symbol name="chevronLeft" size={22} color={theme.formAccent} />
+              </Tappable>
+            ) : null}
+            {leading}
+          </View>
+          <Animated.Text
+            testID="settingsTitle"
+            accessibilityRole="header"
+            accessibilityElementsHidden={!titleShown}
+            importantForAccessibility={titleShown ? "auto" : "no-hide-descendants"}
+            style={[font.body, styles.bold, styles.title, { color: theme.label }, titleStyle]}
+            numberOfLines={1}
+          >
+            {title}
+          </Animated.Text>
+          <View style={[styles.topSide, styles.end]}>{trailing}</View>
         </View>
-        <Animated.Text
-          testID="settingsTitle"
-          accessibilityRole="header"
-          accessibilityElementsHidden={!titleShown}
-          importantForAccessibility={titleShown ? "auto" : "no-hide-descendants"}
-          style={[font.body, styles.bold, styles.title, { color: theme.label }, titleStyle]}
-          numberOfLines={1}
-        >
-          {title}
-        </Animated.Text>
-        <View style={[styles.topSide, styles.end]}>{trailing}</View>
-      </View>
       )}
       {scroll ? (
         <ScrollView
-          style={{ marginBottom: insets.bottom }}
-          contentContainerStyle={[styles.content, { paddingBottom: space.huge }]}
+          ref={list}
+          style={material ? [materialSettingsListStyles.list, { marginBottom: insets.bottom }] : { marginBottom: insets.bottom }}
+          contentContainerStyle={
+            material
+              ? [materialSettingsListStyles.content, mediumAppBar ? materialSettingsListStyles.mediumContent : null, { paddingLeft: insets.left, paddingRight: insets.right }]
+              : [styles.content, { paddingBottom: space.huge }]
+          }
           contentOffset={startOffset}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode={dismissesKeyboard ? "on-drag" : "none"}
-          refreshControl={refresh ? <RefreshControl refreshing={refreshing} onRefresh={refresh} /> : undefined}
+          refreshControl={
+            refresh ? (
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={refresh}
+                colors={material ? [scheme.primary] : undefined}
+                progressBackgroundColor={material ? scheme.surfaceContainerHigh : undefined}
+              />
+            ) : undefined
+          }
           {...sheetList}
+          onLayout={(event) => {
+            sheetList?.onLayout(event);
+            viewport.current = event.nativeEvent.layout.height;
+          }}
           scrollEventThrottle={16}
           onScroll={(event) => {
-            sheetList?.onScroll(event);
-            rememberSettingsScroll(title, event.nativeEvent.contentOffset.y);
-            if (heroTitle) setHeroAway(event.nativeEvent.contentOffset.y > settingsLayout.heroScrollThreshold);
+            if (isSettingsOpening(generation)) sheetList?.onScroll(event);
+            const y = event.nativeEvent.contentOffset.y;
+            lastY.current = y;
+            rememberSettingsScroll(title, y, generation);
+            if (y > 0 !== scrolled) setScrolled(y > 0);
+            if (mediumAppBar && (y >= mediumTitleHeight) !== collapsed) setOffset(y);
+            if (heroTitle) setHeroAway(y > settingsLayout.heroScrollThreshold);
           }}
         >
-          {children}
+          {material && mediumAppBar ? <MaterialMediumTitle title={title} height={mediumTitleHeight} collapsed={collapsed} /> : null}
+          <LayoutAnimationConfig key={design} skipEntering skipExiting>
+            <View testID="settingsPageContent" collapsable={false} style={material ? null : styles.sections}>
+              {children}
+            </View>
+          </LayoutAnimationConfig>
         </ScrollView>
       ) : (
-        <View style={[styles.fill, { paddingBottom: insets.bottom }]}>{children}</View>
+        <View style={[styles.fill, { paddingBottom: insets.bottom }]}>
+          <LayoutAnimationConfig key={design} skipEntering skipExiting>
+            <View testID="settingsPageContent" collapsable={false} style={styles.fill}>
+              {children}
+            </View>
+          </LayoutAnimationConfig>
+        </View>
       )}
       {overlay}
     </View>
@@ -172,10 +236,10 @@ function ClassicNavRow({ title, icon, tint, value, divider, onPress }: RowBase &
   );
 }
 
-function ClassicToggleRow({ title, icon, tint, divider, value, onChange, detail }: RowBase & { value: boolean; onChange: (value: boolean) => void; detail?: string }) {
+function ClassicToggleRow({ title, icon, tint, divider, value, onChange, detail, buttonRef }: RowBase & { value: boolean; onChange: (value: boolean) => void; detail?: string; buttonRef?: RefObject<ViewInstance | null> }) {
   return (
     <View>
-      <SharedToggleRow label={title} detail={detail} detailInset={icon ? settingsLayout.tile + settingsLayout.labelGap : 0} value={value} onChange={onChange} style={styles.row}>
+      <SharedToggleRow buttonRef={buttonRef} label={title} detail={detail} detailInset={icon ? settingsLayout.tile + settingsLayout.labelGap : 0} value={value} onChange={onChange} style={styles.row}>
         <Label title={title} icon={icon} tint={tint} />
       </SharedToggleRow>
       {divider ? <Divider /> : null}
@@ -246,10 +310,6 @@ function ClassicEmptyState({ title, message, icon }: { title: string; message: s
   );
 }
 
-export function SettingsPage(props: Parameters<typeof ClassicSettingsPage>[0]) {
-  return useDesign() === "material" ? <MaterialSettingsPage {...props} /> : <ClassicSettingsPage {...props} />;
-}
-
 export function BarButton(props: Parameters<typeof ClassicBarButton>[0]) {
   return useDesign() === "material" ? <MaterialBarButton {...props} /> : <ClassicBarButton {...props} />;
 }
@@ -299,7 +359,8 @@ const styles = StyleSheet.create({
   back: slotAround(controlSize.hitTarget),
   barButton: { minHeight: controlSize.hitTarget, justifyContent: "center", paddingHorizontal: space.s },
   bold: { fontWeight: "600" },
-  content: { paddingTop: space.m, gap: space.xxl },
+  content: { paddingTop: space.m },
+  sections: { gap: space.xxl },
   fill: { flex: 1 },
   groupOuter: { paddingHorizontal: space.l },
   groupHeader: { paddingLeft: settingsLayout.rowInset, paddingBottom: space.s, fontWeight: "600" },

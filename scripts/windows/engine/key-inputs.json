@@ -2,7 +2,7 @@
   "series": "engine/patches/series",
   "series_win": "scripts/windows/engine/series-win",
   "win_patches": "scripts/windows/engine/patches",
-  "series_tags": ["all", "mac"],
+  "series_tags": ["all", "mac", "win"],
   "trees": [
     "engine/chromium/src",
     "engine/patches/build",

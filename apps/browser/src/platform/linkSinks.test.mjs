@@ -27,7 +27,7 @@ const packageSources = readdirSync(join(root, "packages")).flatMap((name) => {
     return [];
   }
 });
-const files = [...sources("apps/browser/src"), ...sources("apps/linux/src"), ...sources("apps/phone/src"), ...packageSources].map((path) => ({
+const files = [...sources("apps/browser/src"), ...sources("apps/desktop/src"), ...sources("apps/phone/src"), ...packageSources].map((path) => ({
   path: relative(root, join(root, path)).split(sep).join("/"),
   text: readFileSync(join(root, path), "utf8"),
 }));
@@ -35,7 +35,7 @@ const FIXTURES = new Set(["apps/browser/src/platform/linkSinkTypeChecks.ts", "ap
 const callersOf = (pattern) => files.filter((f) => !FIXTURES.has(f.path) && pattern.test(f.text)).map((f) => f.path).sort();
 
 test("the sources scanned cover the Mac, Linux and phone UI and the shared packages", () => {
-  for (const path of ["apps/browser/src/platform/clipboard.ts", "apps/phone/src/platform/system.ts", "apps/linux/src/linkShareSurface.ts", "packages/core/src/cleanUrl.ts"])
+  for (const path of ["apps/browser/src/platform/clipboard.ts", "apps/phone/src/platform/system.ts", "apps/desktop/src/linkShareSurface.ts", "packages/core/src/cleanUrl.ts"])
     assert.ok(files.some((f) => f.path === path), path);
 });
 

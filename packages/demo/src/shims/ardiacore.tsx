@@ -141,6 +141,8 @@ export async function faviconsFor(_profile: string, pages: string[], _icons: str
   return { pages: new Map(found), icons: new Map<string, string>() };
 }
 
+export const peekFavicons = faviconsFor;
+
 export async function fetchFavicon(url: string, _profile: string, _page?: string): Promise<FaviconImage | null> {
   return { uri: url, width: 32, height: 32 };
 }

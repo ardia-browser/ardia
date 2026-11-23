@@ -3,6 +3,8 @@ import { Dimensions, Platform, StyleSheet } from "react-native";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import "../platform/copy";
 import { PageMenu } from "../components/browsing/PageMenu";
+import { blocking } from "../platform/blocking";
+import { pages } from "../platform/pages";
 import * as pageActions from "../state/page/actions";
 import { usePages } from "../state/pages/store";
 import { useSettingsNav } from "../state/settings/nav";
@@ -25,6 +27,8 @@ beforeEach(() => {
   useBrowse.setState({ surface: "browsing", sheet: null });
   useSettingsNav.setState({ open: false, stack: [{ page: "root" }], popping: false });
   useDefaultBrowser.setState({ status: { isDefault: false, canAsk: true } });
+  jest.spyOn(pages, "nightShade").mockResolvedValue({ mode: "disabled" } as never);
+  jest.spyOn(blocking, "isEnabledForSite").mockResolvedValue(true);
 });
 
 afterEach(() => {

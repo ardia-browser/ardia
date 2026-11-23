@@ -36,7 +36,7 @@ export function HostPill({ tab, dark, shown, anchors = false, contentStyle, onEx
     <Animated.View testID="hostPillCentre" nativeID={ids?.anchor} collapsable={false} pointerEvents={back.centreShown ? "box-none" : "none"} importantForAccessibility={back.centreShown ? "auto" : "no-hide-descendants"} accessibilityElementsHidden={!back.centreShown}>
     <Pressable testID="hostPillReach" accessible={false} importantForAccessibility="no" onPress={onExpand} onPressIn={pressIn} onPressOut={pressOut} style={styles.reach} />
     <ChromeSurface testID="hostPill" shape="capsule" cornerRadius={capsule(hostPillLayout.height)} incognito={tab.isPrivate} dark={dark} barShadow={chromeLayout.barCastsShadow && glassShown} shown={glassShown} shownMs={Platform.OS === "android" ? 0 : centreFlips ? back.centreGlass.shownMs : hostPillLayout.glassMs} style={styles.pill}>
-      <Animated.View testID="hostPillCentreGlyphs" collapsable={false} style={back.centreGlyphs}>
+      <Animated.View testID="hostPillCentreGlyphs" collapsable={false} style={[styles.content, back.centreGlyphs]}>
       <Animated.View testID="hostPillContent" nativeID={ids?.face} collapsable={false} style={[styles.content, contentStyle]}>
       <Pressable testID="hostPillButton" accessibilityRole="button" accessibilityLabel="Show Toolbar" accessibilityValue={{ text: spokenAddress(address) }} accessibilityState={{ busy }} onPress={onExpand} onPressIn={pressIn} onPressOut={pressOut} style={[styles.hit, pressedLook("text", pressed, false, rowPressed)]}>
         {address.isPrivate ? <Symbol name={privateMark} size={hostPillLayout.siteIcon * hostPillLayout.privateSymbolShare} color={ink.secondary} /> : null}

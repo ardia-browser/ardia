@@ -39,6 +39,9 @@ export const history = defineDomain({
     },
   },
   events: {
-    changed: "HistoryChangedBatch",
+    changed: {
+      payload: "HistoryChangedBatch",
+      desktop: "forward",
+    },
   },
 });

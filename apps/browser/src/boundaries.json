@@ -1661,6 +1661,16 @@
    "detected": false
   },
   {
+   "id": "import:chromium-bookmarks-rust",
+   "source": "import",
+   "guard": "Rust Chromium bookmarks parser behind libardia_import, not linked by any host yet: a Bookmarks file over 64 MiB is refused before it is read, RFC JSON only with at most 200 nested containers, 64 folder levels and 250,000 nodes; titles and URLs reach the tree verbatim and scheme policy stays with import:bookmarks; the shared hostile list runs through the static library",
+   "checks": [
+    "packages/core-rs/crates/ardia-import-core/src/chromium_bookmarks.rs",
+    "packages/core-rs/tests/import-bookmarks/test_import_bookmarks.py"
+   ],
+   "detected": false
+  },
+  {
    "id": "setup-code:apply",
    "source": "other-app",
    "guard": "Fixed schema of settings and catalog pins; values checked by updateSettings (C7: preview after apply)",

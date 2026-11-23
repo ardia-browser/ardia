@@ -75,6 +75,16 @@ export function tabsHeldByCli(): string[] {
   return [...new Set([...leases.values()].flatMap((lease) => (lease.until > now ? [...lease.tabs] : [])))];
 }
 
+export function cliHoldsLeft(wallNow = Date.now()): { tabId: string; until: number }[] {
+  const now = clock();
+  const left = new Map<string, number>();
+  for (const lease of leases.values()) {
+    if (lease.until <= now) continue;
+    for (const tabId of lease.tabs) left.set(tabId, Math.max(left.get(tabId) ?? 0, lease.until - now));
+  }
+  return [...left].map(([tabId, ms]) => ({ tabId, until: wallNow + ms }));
+}
+
 export function releaseAllCliHolds(): void {
   if (leases.size === 0) return;
   for (const session of [...leases.keys()]) drop(session);

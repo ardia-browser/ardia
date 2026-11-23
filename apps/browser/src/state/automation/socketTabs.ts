@@ -7,12 +7,14 @@ import { splitOf } from "../splits/splits";
 import { withLivePage } from "../tabs/livePage";
 import { goBackAsking, goForwardAsking } from "../tabs/navigation";
 import { liveOf } from "../tabs/tabLive";
-import { CLI_HOLD_DEFAULT_S, CLI_HOLD_MAX_S, CLI_HOLD_MAX_TABS, holdForCli, releaseFromCli } from "../tabs/cliHolds";
+import { CLI_HOLD_DEFAULT_S, CLI_HOLD_MAX_S, CLI_HOLD_MAX_TABS, heldByCli, holdForCli, releaseFromCli } from "../tabs/cliHolds";
 import type { JsonSchema } from "../../lib/jsonSchema";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { noteCliTabsHeld } from "../telemetry/tabSleepCounts";
 import { recentlyClosedIn } from "../windows/recentlyClosedList";
 import { eligibleKind, isEligibleTab, shownPage, windowTabIds } from "./automationWindows";
 import type { MethodSpec, SocketCall } from "./socketCatalog";
+import { cliHoldsPushed } from "./cliHoldsEngine";
 import { askWhereSeen } from "./socketAsk";
 import { bool, id, ids, int, obj, PROFILE, TAB, text, WINDOW } from "./socketSchema";
 import { expect, now, profileArg, tabOf, windowOf, windowOrFocused } from "./socketTargets";
@@ -138,7 +140,7 @@ function closedClear(params: Record<string, unknown>) {
   return { cleared: listed };
 }
 
-function holdTabs(params: Record<string, unknown>) {
+async function holdTabs(params: Record<string, unknown>) {
   const s = now();
   const asked = [...new Set(params.tabs as string[])];
   const held = asked.filter((tab) => isEligibleTab(s, tab));
@@ -146,10 +148,17 @@ function holdTabs(params: Record<string, unknown>) {
   const outcome = holdForCli(params.session as string, held, seconds);
   if ("refused" in outcome) throw new OpError("refused", outcome.refused);
   noteCliTabsHeld(outcome.started.length);
-  return { held, gone: asked.filter((tab) => !held.includes(tab)), seconds };
+  const gone = asked.filter((tab) => !held.includes(tab));
+  if (!PLATFORM_FEATURES.vetoesChromeDiscardsForCli) return { held, gone, seconds };
+  const marked = await cliHoldsPushed();
+  return { held, gone, seconds, engineKeeps: marked !== null && held.every((tab) => marked.has(tab) && heldByCli(tab)) };
 }
 
-const releaseTabs = (params: Record<string, unknown>) => ({ released: releaseFromCli(params.session as string) });
+async function releaseTabs(params: Record<string, unknown>) {
+  const released = releaseFromCli(params.session as string);
+  if (PLATFORM_FEATURES.vetoesChromeDiscardsForCli) await cliHoldsPushed();
+  return { released };
+}
 
 const HOLD_SESSION: JsonSchema = { type: "string", pattern: "^[A-Za-z0-9._-]{1,64}$", description: "The holding session's own name; each session's holds are its own" };
 
@@ -158,9 +167,9 @@ export const TAB_METHODS: MethodSpec[] = [
   {
     name: "tabs.hold",
     mutates: false,
-    description: `Keep tabs an ardia command session is using loaded: Ardia's own tab budget doesn't put them to sleep and their profile isn't unloaded as idle for the next seconds (default ${CLI_HOLD_DEFAULT_S}, at most ${CLI_HOLD_MAX_S}); Chromium's own discarding still keeps them only while a debugger is attached. Each call replaces the session's held tabs; call again before the time ends to keep holding, and tabs.release ends it sooner`,
+    description: `Keep tabs an ardia command session is using loaded: Ardia's own tab budget doesn't put them to sleep and their profile isn't unloaded as idle for the next seconds (default ${CLI_HOLD_DEFAULT_S}, at most ${CLI_HOLD_MAX_S}); on macOS Chromium's own discarding keeps them too, and elsewhere only while a debugger is attached. Each call replaces the session's held tabs; call again before the time ends to keep holding, and tabs.release ends it sooner`,
     params: obj({ session: HOLD_SESSION, tabs: ids("Tab ids from windows or tabs.list; they replace what this session held", CLI_HOLD_MAX_TABS), seconds: int("How long to hold them", 1, CLI_HOLD_MAX_S) }, ["session", "tabs"]),
-    result: "{held, gone, seconds}",
+    result: "{held, gone, seconds, engineKeeps?}",
     run: holdTabs,
   },
   { name: "tabs.release", mutates: false, description: "Let the tabs a session held with tabs.hold sleep again as Memory Saver decides", params: obj({ session: HOLD_SESSION }, ["session"]), result: "{released}", run: releaseTabs },

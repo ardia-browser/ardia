@@ -1,9 +1,8 @@
-import { Children, createContext, useContext, useState, type ReactNode } from "react";
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Children, createContext, useContext, useState, type ReactNode, type RefObject } from "react";
+import { ActivityIndicator, StyleSheet, Text, View, type ViewInstance } from "react-native";
+import { Pressable } from "react-native-gesture-handler";
 import { withAlpha } from "../../lib/color";
-import { rememberSettingsScroll, settingsScroll } from "../../state/settings/nav";
-import { MaterialIconButton, Symbol, ToggleTrack, useSheetFrame, type SymbolName } from "../ui";
+import { MaterialIconButton, Symbol, ToggleTrack, type SymbolName } from "../ui";
 import { MATERIAL_STATE } from "../ui/materialRoles";
 import { MaterialDialog, useMaterialRipple } from "../ui/MaterialSurfaces";
 import { useMaterialTheme } from "../ui/materialTheme";
@@ -14,76 +13,58 @@ const AVATAR = 40;
 const RADIO = 20;
 const MEDIUM_TITLE_HEIGHT = 48;
 
-type PageProps = { title: string; onBack?: () => void; onClose?: () => void; leading?: ReactNode; trailing?: ReactNode; children: ReactNode; scroll?: boolean; onRefresh?: () => Promise<unknown>; mediumAppBar?: boolean; overlay?: ReactNode; dismissesKeyboard?: boolean };
+export const materialMediumTitleHeight = (fontScale: number) => Math.max(MEDIUM_TITLE_HEIGHT, Math.ceil(materialType.headlineMedium.lineHeight * fontScale) + 12);
 
 export const materialAppBarFill = (scheme: { surfaceContainer: string; surfaceContainerHigh: string }, scrolled: boolean) => (scrolled ? scheme.surfaceContainerHigh : scheme.surfaceContainer);
 
-export function MaterialSettingsPage({ title, onBack, onClose, leading, trailing, children, scroll = true, onRefresh, mediumAppBar = false, overlay, dismissesKeyboard = false }: PageProps) {
+type AppBarProps = {
+  title: string;
+  onBack?: () => void;
+  onClose?: () => void;
+  leading?: ReactNode;
+  trailing?: ReactNode;
+  mediumAppBar: boolean;
+  collapsed: boolean;
+  scrolled: boolean;
+  topInset: number;
+  leftInset: number;
+  rightInset: number;
+};
+
+export function MaterialSettingsAppBar({ title, onBack, onClose, leading, trailing, mediumAppBar, collapsed, scrolled, topInset, leftInset, rightInset }: AppBarProps) {
   const { scheme } = useMaterialTheme();
-  const insets = useSafeAreaInsets();
-  const { fontScale } = useWindowDimensions();
-  const mediumTitleHeight = Math.max(MEDIUM_TITLE_HEIGHT, Math.ceil(materialType.headlineMedium.lineHeight * fontScale) + 12);
-  const frame = useSheetFrame();
-  const [startOffset] = useState(() => ({ x: 0, y: settingsScroll(title) }));
-  const [scrolled, setScrolled] = useState(startOffset.y > 0);
-  const [offset, setOffset] = useState(startOffset.y);
-  const collapsed = offset >= mediumTitleHeight;
-  const [refreshing, setRefreshing] = useState(false);
-  const refresh = onRefresh
-    ? () => {
-        setRefreshing(true);
-        void onRefresh().finally(() => setRefreshing(false));
-      }
-    : null;
-  const sheetList = frame?.list(refresh !== null);
   return (
-    <View testID="materialSettingsPage" style={[StyleSheet.absoluteFill, { backgroundColor: scheme.surfaceContainer }]}>
-      <View testID="materialTopAppBar" style={[styles.appBar, { paddingTop: frame ? 0 : insets.top, paddingLeft: insets.left + 4, paddingRight: insets.right + 4, backgroundColor: materialAppBarFill(scheme, scrolled) }]}>
-        <View style={styles.appBarRow}>
-          {onBack ? (
-            <MaterialIconButton testID="materialSettingsBack" icon="arrowRight" flipped label="Back" ink={scheme.onSurface} onPress={onBack} />
-          ) : onClose ? (
-            <MaterialIconButton testID="materialSettingsClose" icon="xmark" label={dismissWords.close} ink={scheme.onSurface} onPress={onClose} />
-          ) : null}
-          {leading}
-          <Text testID="settingsTitle" accessibilityRole="header" numberOfLines={1} style={[materialType.titleLarge, styles.title, { color: scheme.onSurface, paddingLeft: onBack || onClose || leading ? 0 : 12 }]} accessibilityElementsHidden={mediumAppBar && !collapsed} importantForAccessibility={mediumAppBar && !collapsed ? "no" : "auto"}>
-            {!mediumAppBar || collapsed ? title : null}
-          </Text>
-          {trailing}
-        </View>
+    <View testID="materialTopAppBar" style={[styles.appBar, { paddingTop: topInset, paddingLeft: leftInset + 4, paddingRight: rightInset + 4, backgroundColor: materialAppBarFill(scheme, scrolled) }]}>
+      <View style={styles.appBarRow}>
+        {onBack ? (
+          <MaterialIconButton testID="materialSettingsBack" icon="arrowRight" flipped label="Back" ink={scheme.onSurface} onPress={onBack} />
+        ) : onClose ? (
+          <MaterialIconButton testID="materialSettingsClose" icon="xmark" label={dismissWords.close} ink={scheme.onSurface} onPress={onClose} />
+        ) : null}
+        {leading}
+        <Text testID="settingsTitle" accessibilityRole="header" numberOfLines={1} style={[materialType.titleLarge, styles.title, { color: scheme.onSurface, paddingLeft: onBack || onClose || leading ? 0 : 12 }]} accessibilityElementsHidden={mediumAppBar && !collapsed} importantForAccessibility={mediumAppBar && !collapsed ? "no" : "auto"}>
+          {!mediumAppBar || collapsed ? title : null}
+        </Text>
+        {trailing}
       </View>
-      {scroll ? (
-        <ScrollView
-          style={[styles.list, { marginBottom: insets.bottom }]}
-          contentContainerStyle={[styles.content, mediumAppBar ? styles.mediumContent : null, { paddingLeft: insets.left, paddingRight: insets.right }]}
-          contentOffset={startOffset}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode={dismissesKeyboard ? "on-drag" : "none"}
-          refreshControl={refresh ? <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[scheme.primary]} progressBackgroundColor={scheme.surfaceContainerHigh} /> : undefined}
-          {...sheetList}
-          scrollEventThrottle={16}
-          onScroll={(event) => {
-            sheetList?.onScroll(event);
-            const y = event.nativeEvent.contentOffset.y;
-            rememberSettingsScroll(title, y);
-            if (y > 0 !== scrolled) setScrolled(y > 0);
-            if (mediumAppBar && (y >= mediumTitleHeight) !== collapsed) setOffset(y);
-          }}
-        >
-          {mediumAppBar ? (
-            <Text testID="materialMediumTitle" accessibilityRole="header" numberOfLines={1} importantForAccessibility={collapsed ? "no" : "auto"} style={[materialType.headlineMedium, styles.mediumTitle, { height: mediumTitleHeight, color: scheme.onSurface }]}>
-              {title}
-            </Text>
-          ) : null}
-          {children}
-        </ScrollView>
-      ) : (
-        <View style={[styles.fill, { paddingBottom: insets.bottom }]}>{children}</View>
-      )}
-      {overlay}
     </View>
   );
 }
+
+export function MaterialMediumTitle({ title, height, collapsed }: { title: string; height: number; collapsed: boolean }) {
+  const { scheme } = useMaterialTheme();
+  return (
+    <Text testID="materialMediumTitle" accessibilityRole="header" numberOfLines={1} importantForAccessibility={collapsed ? "no" : "auto"} style={[materialType.headlineMedium, styles.mediumTitle, { height, color: scheme.onSurface }]}>
+      {title}
+    </Text>
+  );
+}
+
+export const materialSettingsListStyles = {
+  list: { flex: 1 },
+  content: { paddingTop: 8, paddingBottom: 32 },
+  mediumContent: { paddingTop: 0 },
+} as const;
 
 export function MaterialBarButton({ title, onPress, emphasized, enabled = true }: { title: string; onPress: () => void; emphasized?: boolean; enabled?: boolean }) {
   const { scheme } = useMaterialTheme();
@@ -168,10 +149,10 @@ export function MaterialNavRow({ title, icon, value, onPress }: RowBase & { valu
   );
 }
 
-export function MaterialToggleRow({ title, icon, value, onChange, detail }: RowBase & { value: boolean; onChange: (value: boolean) => void; detail?: string }) {
+export function MaterialToggleRow({ title, icon, value, onChange, detail, buttonRef }: RowBase & { value: boolean; onChange: (value: boolean) => void; detail?: string; buttonRef?: RefObject<ViewInstance | null> }) {
   const ripple = useMaterialRipple();
   return (
-    <Pressable testID={`materialSettingsRow:${title}`} accessibilityRole="switch" accessibilityLabel={title} accessibilityHint={detail} accessibilityState={{ checked: value }} android_ripple={ripple} onPress={() => onChange(!value)} style={rowStyle(detail)}>
+    <Pressable ref={buttonRef} testID={`materialSettingsRow:${title}`} accessibilityRole="switch" accessibilityLabel={title} accessibilityHint={detail} accessibilityState={{ checked: value }} android_ripple={ripple} onPress={() => onChange(!value)} style={rowStyle(detail)}>
       <View style={styles.rowInner} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
         <MaterialSettingsLeading icon={icon} />
         <ItemText title={title} supporting={detail} />
@@ -266,9 +247,6 @@ const styles = StyleSheet.create({
   mediumTitle: { paddingHorizontal: 16 },
   emphasized: { fontWeight: "700" },
   textButton: { minHeight: materialSize.touchTarget - 8, minWidth: materialSize.touchTarget, paddingHorizontal: 12, marginHorizontal: 4, borderRadius: materialShape.full, overflow: "hidden", alignItems: "center", justifyContent: "center" },
-  list: { flex: 1 },
-  content: { paddingTop: 8, paddingBottom: 32 },
-  mediumContent: { paddingTop: 0 },
   fill: { flex: 1 },
   group: { paddingTop: 16, marginHorizontal: 16 },
   header: { paddingHorizontal: 16, paddingBottom: 8 },

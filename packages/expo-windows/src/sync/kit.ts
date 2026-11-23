@@ -6,7 +6,7 @@ export const KIT_TEXT_NAME = "Ardia Recovery Kit.txt";
 export const HIDDEN_WORDS: readonly string[] = Array(24).fill("••••••");
 
 const INTRO = "If you don’t have access to the computer on which you first turned on sync, you can still get your synced data on another computer:";
-const STEPS = ["Open Ardia › Settings › Sync, and choose the same sync folder.", "Click Enter Recovery Phrase.", "Paste the 24 words below."];
+const STEPS = ["Open Ardia › Settings › General › Sync, and choose the same sync folder.", "Click Enter Recovery Phrase.", "Paste the 24 words below."];
 const WARNING =
   "Keep this kit somewhere safe, like a password manager or a printed copy. Anyone with these words and your sync folder can read your synced data. Ardia can’t recover the words for you: there’s no server and no other copy.";
 const CODE_TITLE = "Moving to a new computer?";

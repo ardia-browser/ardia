@@ -287,7 +287,9 @@ writeDocument(DOC, versionedJson(data, VERSION));
 
 - Components are `PascalCase.tsx`; every other module is `camelCase.ts`. Tests sit next to the code as
   `camelCase.test.mjs` (or `PascalCase.test.mjs` for a component). A platform's twin of a file adds its suffix:
-  `.macos`, `.ios`, `.windows`, `.linux`, `.web`, `.native`. `apps/linux` resolves `.linux.*` ahead of `.web.*`.
+  `.macos`, `.ios`, `.windows`, `.linux`, `.win`, `.desktop`, `.web`, `.native`. `apps/desktop` resolves `.linux.*`
+  (`--mode linux`) or `.win.*` (`--mode win`), then `.desktop.*` (the Chromium desktop host, shared by both), ahead
+  of `.web.*`.
 - At most 400 lines per TS/TSX file (`apps/browser/src`, `packages/*/src`), 600 per native file (`packages/*/ios`,
   `engine/ardiacore/src`, `engine/chromium/src`). Tests, fixtures and generated files (`packages/core/src/bangList.ts`,
   `packages/demo/src/shims/web/symbols/data.ts`, `apps/browser/src/lib/emojiData.ts` from `apps/browser/scripts/emoji-data.mjs`)

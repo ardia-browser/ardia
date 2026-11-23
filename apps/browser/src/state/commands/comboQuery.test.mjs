@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { bindsCombo, commandsBoundTo, parseCombo } from "./comboQuery.ts";
 import { formatShortcut, parseShortcut } from "./shortcuts.ts";
-import * as linuxWords from "./comboWords.linux.ts";
+import * as linuxWords from "./comboWords.desktop.ts";
 import * as windowsWords from "./comboWords.windows.ts";
 import { windowsModifiers } from "./windowsKeys.ts";
 

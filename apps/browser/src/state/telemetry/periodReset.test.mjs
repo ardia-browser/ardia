@@ -70,8 +70,8 @@ test("2 telemetry state that resets at a consent change listens for any change o
     readdirSync(new URL(dir, root), { withFileTypes: true }).flatMap((entry) =>
       entry.isDirectory() ? (entry.name === "node_modules" ? [] : walk(`${dir}${entry.name}/`)) : /\.tsx?$/.test(entry.name) && !/\.test\./.test(entry.name) ? [`${dir}${entry.name}`] : [],
     );
-  const listeners = new Set(["apps/browser/src/state/telemetry/choice.ts", "apps/browser/src/state/telemetry/watchNotice.ts", "apps/linux/src/hostTelemetry.ts"]);
-  const offenders = [...walk("apps/browser/src/"), ...walk("apps/linux/src/")]
+  const listeners = new Set(["apps/browser/src/state/telemetry/choice.ts", "apps/browser/src/state/telemetry/watchNotice.ts", "apps/desktop/src/hostTelemetry.ts"]);
+  const offenders = [...walk("apps/browser/src/"), ...walk("apps/desktop/src/")]
     .filter((path) => !listeners.has(path))
     .filter((path) => /useTelemetry\.subscribe\(/.test(readFileSync(new URL(path, root), "utf8")));
   assert.deepEqual(offenders, []);

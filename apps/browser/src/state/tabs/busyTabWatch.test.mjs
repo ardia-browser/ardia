@@ -482,7 +482,7 @@ test("the CPU read needs native API 94, so an older build refuses this JavaScrip
   const version = Number(/export const NATIVE_API_VERSION = (\d+);/.exec(js)?.[1]);
   assert.ok(version >= 94, `NATIVE_API_VERSION is ${version}`);
   assert.equal(Number(/Constant\("apiVersion"\) \{ \(\) -> Int in (\d+) \}/.exec(swift)?.[1]), version);
-  assert.match(readFileSync(new URL("../../../../../packages/ardiacore/ios/EngineModule.swift", import.meta.url), "utf8"), /"childProcessCpu":/);
+  assert.match(readFileSync(new URL("../../../../../packages/ardiacore/ios/EngineCalls.swift", import.meta.url), "utf8"), /"childProcessCpu": childProcessCpuHandler,/);
 });
 
 test("the busy average covers exactly the last two minutes: never before two minutes of readings, never counting CPU from before them", () => {

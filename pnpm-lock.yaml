@@ -264,7 +264,7 @@ importers:
         specifier: ~5.9.2
         version: 5.9.3
 
-  apps/linux:
+  apps/desktop:
     dependencies:
       '@ardia/ardiacore':
         specifier: workspace:*

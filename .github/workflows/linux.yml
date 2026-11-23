@@ -3,6 +3,8 @@ name: Linux
 on:
   pull_request:
     paths: &linux
+      - "apps/desktop/**"
+      - "apps/linux"
       - "apps/linux/**"
       - "apps/browser/src/**"
       - "apps/browser/assets/**"
@@ -287,7 +289,7 @@ jobs:
             echo "### Linux engine ${selected:0:12} (older than this commit's ${ENGINE_KEY:0:12})" >> "$GITHUB_STEP_SUMMARY"
           fi
           { echo "ENGINE=$engine"; echo "PACKAGE_NAME=Ardia-linux-x64-$label"; } >> "$GITHUB_ENV"
-      - run: pnpm --filter @ardia/linux build
+      - run: pnpm --filter @ardia/desktop build
       - name: ardia command (pinned)
         run: |
           set -euo pipefail
@@ -309,7 +311,7 @@ jobs:
             formats+=(deb AppImage)
             extra+=(--deb "$RUNNER_TEMP/dist/$PACKAGE_NAME.deb" --appimage "$RUNNER_TEMP/dist/$PACKAGE_NAME.AppImage")
           fi
-          python3 scripts/linux/package.py --out "$ENGINE" --ui apps/linux/dist --content-blocker "$blocker" \
+          python3 scripts/linux/package.py --out "$ENGINE" --ui apps/desktop/dist/linux --content-blocker "$blocker" \
             --version "$VERSION" $CLI_ARGS --destination "$RUNNER_TEMP/dist/$PACKAGE_NAME.tar.xz" "${extra[@]}"
           for built in "${formats[@]}"; do
             (cd "$RUNNER_TEMP/dist" && sha256sum "$PACKAGE_NAME.$built" > "$PACKAGE_NAME.$built.sha256")

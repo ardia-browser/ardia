@@ -13,7 +13,7 @@ const SCANNED = [
   "apps/browser/macos",
   "apps/browser/windows",
   "apps/browser/official-plugins.json",
-  "apps/linux/src",
+  "apps/desktop/src",
   "packages/ardiacore",
   "packages/core",
   "packages/core-rs",

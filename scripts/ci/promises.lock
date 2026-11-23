@@ -104,7 +104,7 @@ issue	hash	file	test
 2175	d6b508e688b36e0f	apps/browser/src/state/session/pinGuard.test.mjs	closing the only window that showed a profile keeps its pins on disk, and they come back after a relaunch (#2175)
 2175	1fad76de25a23588	apps/browser/src/state/windows/windowClose.test.mjs	with sharing on, a profile handed to the open window keeps its pinned tabs and pinned folders (#2175)
 2245	73e18a6e4be80bc4	apps/browser/src/state/extensions/extensions.test.mjs	Add on an install prompt the engine no longer holds says so in the dialog, and Cancel on one rejects nothing
-2245	fe17442fdad3de61	apps/linux/src/pageFocus.test.mjs	focusIfUnfocused gives the page the keyboard unless a shell field has it, and answers whether it did
+2245	fe17442fdad3de61	apps/desktop/src/pageFocus.test.mjs	focusIfUnfocused gives the page the keyboard unless a shell field has it, and answers whether it did
 2260	cb2884a57b51a848	apps/browser/src/state/sync/scopeWrites.test.mjs	a sync record or base is written only through putRecord, dropRecord, putBase and dropBase, so the cycle's journal sees every change
 2492	f666f5d810bba18b	apps/browser/src/state/tabs/tabs.test.mjs	tabs closed together come back to their places, from ⇧⌘T or Recently Closed in any order (#2492)
 2572	80a3ca73b2bdbcc1	apps/browser/src/state/commands/menuState.test.mjs	the menu state tells the shell whether links from other apps open in Little Ardia
@@ -140,7 +140,7 @@ issue	hash	file	test
 3205	2185c70adfdfea16	apps/browser/src/state/session/pinGuard.test.mjs	a pins-backup.json that exists but the store can't read is not replaced, and the new backup goes beside it (#3205)
 3205	5ba1390307eb8244	apps/browser/src/state/session/pinGuard.test.mjs	when the store answers whether pins-backup.json exists only later, as Linux does, an unreadable one is still kept (#3205)
 3205	363ad3b5579c4d87	apps/browser/src/state/session/pinGuard.test.mjs	with no pins-backup.json at all, the first backup still takes the primary name (#3205)
-3205	3f19ecfb1fef4401	apps/linux/src/host.test.mjs	a document the bootstrap left out counts as there unless the host reads it as missing (#3205)
+3205	3f19ecfb1fef4401	apps/desktop/src/host.test.mjs	a document the bootstrap left out counts as there unless the host reads it as missing (#3205)
 3211	1cab25b0929973db	apps/browser/src/components/sidebar/selectedRow.test.mjs	a row measurement that lands after the tracker stops installs no watch
 3211	ffbf2e91c29b0f9a	apps/browser/src/components/sidebar/selectedRow.test.mjs	coming back to a page whose pill still shows re-attaches the icon watch
 3211	e37a21befe9ff89b	apps/browser/src/components/sidebar/selectedRow.test.mjs	moving the hidden pill's tab out of its group, at the same window index, still brings the pill
@@ -164,6 +164,6 @@ issue	hash	file	test
 3528	c3d274eae97453b1	apps/browser/src/components/tabstrip/stripWidths.test.mjs	closing a middle tab and then the last one at the same spot widens the new last tab only to the closed tab's edge, so its × stays under the pointer
 3528	fe11d5a673b7a83e	apps/browser/src/components/tabstrip/stripWidths.test.mjs	closing the last tab while the pointer stays widens the new last tab into the freed room, so its × is under the pointer and the left edge stays put
 3562	ae49d1c8c48d95d1	apps/browser/src/state/reader/readerPage.test.mjs	the reader page draws no text size or font controls, and nothing it draws changes the look
-3588	ad2b5cdf87c4f8bd	apps/linux/src/readerService.test.mjs	every browser window starts the shared reader service, as the Mac app does
+3588	ad2b5cdf87c4f8bd	apps/desktop/src/readerService.test.mjs	every browser window starts the shared reader service, as the Mac app does
 3631	cda635e9398a7543	apps/browser/src/components/window/dockMotion.test.mjs	${arc ? "Arc's" : "Dia's"} layout: the peek usePeek starts slides in on an ease-out over 150 ms that never passes its final width or pulls back (#3631: Arc's 1.5 % overshoot detached the panel from the window's edge)
 3649	848a05e22c2b4b62	apps/browser/src/platform/commandBarFieldEditor.test.mjs	the command bar's field editor keeps its undo to its own editing session, so ⌘Z never reaches a closed field's text

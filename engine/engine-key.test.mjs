@@ -934,3 +934,267 @@ test(
     assert.match(excluded.stderr, /reads scripts\/windows\/engine\/ardia_resources_win\.txt, which the key inputs exclude/)
   }),
 )
+
+const selectorCases = [
+  ['linux,win', { macos: false, linux: true, win: true }],
+  ['win', { macos: false, linux: false, win: true }],
+  ['mac,win', { macos: true, linux: false, win: true }],
+  ['mac,linux', { macos: true, linux: true, win: true }],
+  ['mac,linux,win', { macos: true, linux: true, win: true }],
+  ['win,linux', { macos: false, linux: true, win: true }],
+]
+
+for (const [selector, expected] of selectorCases) {
+  test(
+    `a series line for ${selector} and its patch change ${moved(expected)}`,
+    withFixture(({ keys, write, change }) => {
+      const before = keys()
+      write('engine/patches/chromium-set.patch', 'set\n')
+      const listed = change('engine/patches/series', series.replace('chromium chromium-linux-only.patch linux\n', `chromium chromium-linux-only.patch linux\nchromium chromium-set.patch ${selector}\n`))
+      assertKeys(before, listed, expected)
+      assertKeys(listed, change('engine/patches/chromium-set.patch', 'set, changed\n'), expected)
+    }),
+  )
+}
+
+test(
+  'a series line for linux,win dirties the --paths of the Linux and Windows keys only',
+  withFixture((fx) => {
+    fx.write('engine/patches/chromium-set.patch', 'set\n')
+    fx.change('engine/patches/series', series.replace('chromium chromium-linux-only.patch linux\n', 'chromium chromium-linux-only.patch linux\nchromium chromium-set.patch linux,win\n'))
+    for (const platform of ['macos', 'linux', 'win']) assert.equal(fx.dirty(platform), '', platform)
+    appendFileSync(join(fx.root, 'engine/patches/chromium-set.patch'), 'uncommitted\n')
+    assert.equal(fx.dirty('macos'), '')
+    assert.notEqual(fx.dirty('linux'), '')
+    assert.notEqual(fx.dirty('win'), '')
+    assert.ok(fx.pathspecs('macos').includes(':(exclude)engine/patches/chromium-set.patch'))
+  }),
+)
+
+test(
+  'retagging a shared patch linux,win drops it from the macOS key only',
+  withFixture(({ keys, change }) => {
+    const before = keys()
+    assertKeys(before, change('engine/patches/series', series.replace('chromium chromium-shared.patch\n', 'chromium chromium-shared.patch linux,win\n')), { macos: true, linux: false, win: false })
+  }),
+)
+
+for (const selector of ['windows', 'linux,', ',win', 'linux,linux', 'all,win', 'linux;win', 'Linux']) {
+  test(
+    `a series selector ${selector} has no key on any platform`,
+    withFixture(({ write, commit, run }) => {
+      write('engine/patches/series', series.replace('chromium chromium-linux-only.patch linux', `chromium chromium-linux-only.patch ${selector}`))
+      assert.throws(() => commit())
+      for (const platform of ['macos', 'linux', 'win']) {
+        const refused = run(['--platform', platform])
+        assert.notEqual(refused.status, 0, platform)
+        assert.match(refused.stderr, /unknown platform/, platform)
+      }
+    }),
+  )
+}
+
+test(
+  'a layer for linux,win counts in the Linux key, never the macOS key, and has no Windows key until Windows runs series layers',
+  withFixture(({ root, key, write, git, run, pathspecs, dirty }) => {
+    const before = { macos: key('macos'), linux: key('linux') }
+    write('engine/ardiacore-desktop/apply.sh', '#!/usr/bin/env bash\n')
+    write('engine/ardiacore-desktop/src/ardia/desktop/host.cc', 'desktop host\n')
+    write('engine/patches/series', `${series}layer engine/ardiacore-desktop linux,win\n`)
+    git('add', '-A')
+    git('commit', '-q', '-m', 'a desktop layer')
+    const added = { macos: key('macos'), linux: key('linux') }
+    assert.equal(added.macos, before.macos)
+    assert.notEqual(added.linux, before.linux)
+    const refused = run(['--platform', 'win'])
+    assert.notEqual(refused.status, 0)
+    assert.match(refused.stderr, /engine\/ardiacore-desktop` is a layer for win, and the Windows build runs no series layer yet/)
+    assert.ok(pathspecs('macos').includes(':(exclude)engine/ardiacore-desktop'))
+    assert.ok(!pathspecs('linux').some((spec) => spec.includes('ardiacore-desktop')))
+    appendFileSync(join(root, 'engine/ardiacore-desktop/src/ardia/desktop/host.cc'), 'uncommitted\n')
+    assert.equal(dirty('macos'), '')
+    assert.notEqual(dirty('linux'), '')
+    git('add', '-A')
+    git('commit', '-q', '-m', 'edit the desktop layer')
+    assert.equal(key('macos'), added.macos)
+    assert.notEqual(key('linux'), added.linux)
+  }),
+)
+
+test(
+  'a layer for win alone stays out of the macOS and Linux keys',
+  withFixture(({ key, write, git }) => {
+    const before = { macos: key('macos'), linux: key('linux') }
+    write('engine/ardiacore-win/apply.sh', '#!/usr/bin/env bash\n')
+    write('engine/ardiacore-win/src/ardia/win/host.cc', 'windows host\n')
+    write('engine/patches/series', `${series}layer engine/ardiacore-win win\n`)
+    git('add', '-A')
+    git('commit', '-q', '-m', 'a windows layer')
+    assert.deepEqual({ macos: key('macos'), linux: key('linux') }, before)
+    write('engine/ardiacore-win/src/ardia/win/host.cc', 'windows host, changed\n')
+    git('add', '-A')
+    git('commit', '-q', '-m', 'edit the windows layer')
+    assert.deepEqual({ macos: key('macos'), linux: key('linux') }, before)
+  }),
+)
+
+const gnSetCases = [
+  ['is_linux || is_win', 'ac_desktop.cc', { macos: false, linux: true, win: true }],
+  ['!is_mac', 'ac_not_mac.cc', { macos: false, linux: true, win: true }],
+  ['is_win', 'ac_win_only.cc', { macos: false, linux: false, win: true }],
+  ['!is_linux', 'ac_not_linux_set.cc', { macos: true, linux: false, win: true }],
+  ['is_mac || is_win', 'ac_mac_or_win.cc', { macos: true, linux: false, win: true }],
+  ['is_mac || is_linux', 'ac_posix.cc', { macos: true, linux: true, win: true }],
+  ['!(is_mac || is_linux)', 'ac_neither.cc', { macos: false, linux: false, win: true }],
+  ['is_linux && use_ozone', 'ac_ozone.cc', { macos: false, linux: true, win: true }],
+  ['(is_linux || is_win) && !is_win', 'ac_grouped.cc', { macos: false, linux: true, win: true }],
+  ['!(is_linux && use_ozone)', 'ac_not_ozone.cc', { macos: true, linux: true, win: true }],
+  ['is_mac == use_ozone', 'ac_compared.cc', { macos: true, linux: true, win: true }],
+  ['defined(invoker.mac) && is_mac', 'ac_defined.cc', { macos: true, linux: false, win: true }],
+  ['is_linux ||', 'ac_unreadable.cc', { macos: true, linux: true, win: true }],
+  ['enable_desktop', 'ac_flag.cc', { macos: true, linux: true, win: true }],
+]
+
+const nestedSetCases = [
+  ['ac_nested_win.cc', 'is_linux || is_win', 'is_win', { macos: false, linux: false, win: true }],
+  ['ac_nested_flag.cc', 'is_linux || is_win', 'use_ozone', { macos: false, linux: true, win: true }],
+]
+
+test(
+  'a unit under a GN platform set counts for exactly the platforms that build it',
+  withFixture(({ root, write, commit, change }) => {
+    let blocks = ''
+    for (const [condition, unit] of gnSetCases) {
+      blocks += `if (${condition}) {\n  ardia_sources += [ "${unit}" ]\n}\n\n`
+      write(`${ardia}/${unit}`, `${unit}\n`)
+    }
+    for (const [unit, outer, inner] of nestedSetCases) {
+      blocks += `if (${outer}) {\n  if (${inner}) {\n    ardia_sources += [ "${unit}" ]\n  }\n}\n\n`
+      write(`${ardia}/${unit}`, `${unit}\n`)
+    }
+    write(`${ardia}/BUILD.gn`, readFileSync(join(root, ardia, 'BUILD.gn'), 'utf8').replace('source_set("ardia") {', `${blocks}source_set("ardia") {`))
+    let before = commit('platform sets')
+    for (const [, unit, expected] of gnSetCases) {
+      const after = change(`${ardia}/${unit}`, `${unit}, changed\n`)
+      assertKeys(before, after, expected)
+      before = after
+    }
+    for (const [unit, , , expected] of nestedSetCases) {
+      const after = change(`${ardia}/${unit}`, `${unit}, changed\n`)
+      assertKeys(before, after, expected)
+      before = after
+    }
+  }),
+)
+
+test(
+  'a unit under is_linux || is_win leaves the macOS --paths clean and dirties the Linux and Windows ones',
+  withFixture((fx) => {
+    fx.write(`${ardia}/ac_desktop.cc`, 'desktop\n')
+    fx.change(`${ardia}/BUILD.gn`, readFileSync(join(fx.root, ardia, 'BUILD.gn'), 'utf8').replace('source_set("ardia") {', 'if (is_linux || is_win) {\n  ardia_sources += [ "ac_desktop.cc" ]\n}\n\nsource_set("ardia") {'))
+    assert.ok(fx.pathspecs('macos').includes(`:(exclude)${ardia}/ac_desktop.cc`))
+    appendFileSync(join(fx.root, ardia, 'ac_desktop.cc'), 'uncommitted\n')
+    assert.equal(fx.dirty('macos'), '')
+    assert.notEqual(fx.dirty('linux'), '')
+    assert.notEqual(fx.dirty('win'), '')
+  }),
+)
+
+test(
+  'a parenthesis inside a GN string or comment never hides a later block from the scan',
+  withFixture(({ root, write, commit, change }) => {
+    const units = ['ac_quoted.cc', 'ac_escaped.cc', 'ac_commented.cc']
+    for (const unit of units) write(`${ardia}/${unit}`, `${unit}\n`)
+    const blocks = [
+      'if (is_linux || is_win) {\n  ardia_sources += [ "ac_quoted.cc", "ac_escaped.cc", "ac_commented.cc" ]\n}\n',
+      'if (is_mac && marker == "(") {\n  ardia_sources += [ "ac_quoted.cc" ]\n}\n',
+      'if (is_mac && marker == "\\"(") {\n  ardia_sources += [ "ac_escaped.cc" ]\n}\n',
+      'if (is_mac  # (\n) {\n  ardia_sources += [ "ac_commented.cc" ]\n}\n',
+    ].join('\n')
+    write(`${ardia}/BUILD.gn`, readFileSync(join(root, ardia, 'BUILD.gn'), 'utf8').replace('source_set("ardia") {', `${blocks}\nsource_set("ardia") {`))
+    let before = commit('blocks with parentheses in strings and comments')
+    for (const unit of units) {
+      const after = change(`${ardia}/${unit}`, `${unit}, changed\n`)
+      assertKeys(before, after, { macos: true, linux: true, win: true })
+      before = after
+    }
+  }),
+)
+
+test(
+  'a BUILD.gn whose condition never closes counts every unit it names for every platform',
+  withFixture(({ write, commit, change, pathspecs }) => {
+    write(`${ardia}/lost/lost_linux.cc`, 'lost\n')
+    write(`${ardia}/lost/BUILD.gn`, 'if (is_linux) {\n  sources = [ "lost_linux.cc" ]\n}\n\nif (is_mac && (use_ozone\n')
+    const before = commit('a condition that never closes')
+    assert.ok(!pathspecs('macos').includes(`:(exclude)${ardia}/lost/lost_linux.cc`))
+    assertKeys(before, change(`${ardia}/lost/lost_linux.cc`, 'lost, changed\n'), { macos: true, linux: true, win: true })
+  }),
+)
+
+for (const line of ['layer engine/ardiacore-desktop', 'layer engine/ardiacore-desktop all', 'layer engine/ardiacore-desktop mac,linux,win', 'layer engine/ardiacore-desktop win']) {
+  test(
+    `\`${line}\` has no Windows key, since the Windows build runs no series layer but engine/chromium`,
+    withFixture(({ key, write, git, run }) => {
+      write('engine/ardiacore-desktop/apply.sh', '#!/usr/bin/env bash\n')
+      write('engine/ardiacore-desktop/src/ardia/desktop/host.cc', 'desktop host\n')
+      write('engine/patches/series', `${series}${line}\n`)
+      git('add', '-A')
+      git('commit', '-q', '-m', line)
+      const refused = run(['--platform', 'win'])
+      assert.notEqual(refused.status, 0)
+      assert.match(refused.stderr, /engine\/ardiacore-desktop` is a layer for win, and the Windows build runs no series layer yet but engine\/chromium/)
+      assert.match(key('macos'), /^[0-9a-f]{40}$/)
+      assert.match(key('linux'), /^[0-9a-f]{40}$/)
+    }),
+  )
+}
+
+for (const [name, interpolated] of [
+  ['a unit suffix', '"${prefix}.cc"'],
+  ['a bare variable', '"$unit"'],
+  ['a braced variable', '"${unit}"'],
+  ['a source-root path', '"//chrome/browser/ardia/${prefix}_mac.mm"'],
+]) {
+  test(
+    `a source named by interpolation with ${name} under is_mac keeps every unit in the macOS key`,
+    withFixture(({ root, write, commit, change }) => {
+      write(`${ardia}/ac_desktop.cc`, 'desktop\n')
+      const blocks = `if (is_linux || is_win) {\n  ardia_sources += [ "ac_desktop.cc" ]\n}\n\nif (is_mac) {\n  ardia_sources += [ ${interpolated} ]\n}\n\n`
+      write(`${ardia}/BUILD.gn`, readFileSync(join(root, ardia, 'BUILD.gn'), 'utf8').replace('source_set("ardia") {', `${blocks}source_set("ardia") {`))
+      const before = commit('an interpolated mac source')
+      assertKeys(before, change(`${ardia}/ac_desktop.cc`, 'desktop, changed\n'), { macos: true, linux: true, win: true })
+      assertKeys(before, change(`${ardia}/ac_external_apps_linux.cc`, 'linux external apps, changed\n'), { macos: true, linux: true, win: true })
+    }),
+  )
+}
+
+test(
+  'an interpolated path that cannot name a unit leaves the platform sets alone',
+  withFixture(({ root, write, commit, change }) => {
+    write(`${ardia}/ac_desktop.cc`, 'desktop\n')
+    const blocks = 'if (is_linux || is_win) {\n  ardia_sources += [ "ac_desktop.cc" ]\n}\n\nif (is_mac) {\n  outputs = [ "$target_gen_dir/ac_dispatch.inc", "${root_gen_dir}/ac_header.h" ]\n}\n\n'
+    write(`${ardia}/BUILD.gn`, readFileSync(join(root, ardia, 'BUILD.gn'), 'utf8').replace('source_set("ardia") {', `${blocks}source_set("ardia") {`))
+    const before = commit('generated outputs under is_mac')
+    assertKeys(before, change(`${ardia}/ac_desktop.cc`, 'desktop, changed\n'), { macos: false, linux: true, win: true })
+  }),
+)
+
+for (const [name, interpolated, expected] of [
+  ['a suffix finished after the interpolation', '"${stem}c"', { macos: true, linux: true, win: true }],
+  ['a hex escape', '"ac_desktop.c$0x63"', { macos: true, linux: true, win: true }],
+  ['an interpolated directory and a unit name', '"$target_gen_dir/ac_generated.cc"', { macos: true, linux: true, win: true }],
+  ['a header after the interpolation', '"${stem}.h"', { macos: false, linux: true, win: true }],
+  ['a generated include', '"$target_gen_dir/ac_dispatch.inc"', { macos: false, linux: true, win: true }],
+]) {
+  test(
+    `an interpolated source under is_mac with ${name} ${expected.macos ? 'keeps' : 'leaves'} a linux,win unit ${expected.macos ? 'in' : 'out of'} the macOS key`,
+    withFixture(({ root, write, commit, change }) => {
+      write(`${ardia}/ac_desktop.cc`, 'desktop\n')
+      const blocks = `if (is_linux || is_win) {\n  ardia_sources += [ "ac_desktop.cc" ]\n}\n\nif (is_mac) {\n  ardia_sources += [ ${interpolated} ]\n}\n\n`
+      write(`${ardia}/BUILD.gn`, readFileSync(join(root, ardia, 'BUILD.gn'), 'utf8').replace('source_set("ardia") {', `${blocks}source_set("ardia") {`))
+      const before = commit('an interpolated mac source')
+      assertKeys(before, change(`${ardia}/ac_desktop.cc`, 'desktop, changed\n'), expected)
+    }),
+  )
+}

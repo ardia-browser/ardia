@@ -12,3 +12,5 @@ export const POP_UP_CHROME: PopUpChrome = { indicator: "chevronDown", growsToIts
 export const ADVANCED_PANE_SYMBOL = "slider.horizontal.2.square";
 
 export const PANEL_FIELD_LIFT = -3;
+
+export const REFRESH_ARROW_RING_OFFSET = { x: 0.45, y: 0.6 } as const;

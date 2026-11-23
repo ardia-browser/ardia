@@ -106,7 +106,7 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
 ## Platforms
 One browser UI (`apps/browser/src` and `packages/*/src`) runs on three platforms, each with its own native layer and
 engine. A change to the shared UI reaches all three, so check the other two before calling it done: Linux's
-`pnpm -C apps/linux typecheck`, `test:graph` and `test:host`, and the Windows workflow, which runs on any pull
+`pnpm -C apps/desktop typecheck`, `test:graph` and `test:host` (each covers `--mode linux` and `--mode win`), and the Windows workflow, which runs on any pull
 request touching shared code. Copy that names Mac things (⌘, "macOS", the menu bar) needs its Linux and Windows
 wording. When the machine you're on isn't the platform you're changing, use a Boat VM (`boat` CLI, signed in) sized
 to the job: `--type small` (2 vCPU / 4 GB, half rate) for quick Linux scripts and unit tests, `--type default`
@@ -120,8 +120,11 @@ yours: the hidden-instance and focus rules are for the owner's Mac.
 - **macOS** is the main app: `apps/browser` (React Native macOS) on `engine/ardiacore` and the Mac engine. The rest
   of this file is written for it.
 - **Linux** (`docs/linux-port.md`): Chromium's own `chrome` is the app and serves the UI from `chrome://ardia/`;
-  `apps/linux` builds the shared components with Linux adapters (Vite aliases, checked by `test:graph`), and
-  `engine/ardiacore-linux` plus `engine/patches/chromium-linux-*.patch` are its native layer. The engine is built from
+  `apps/desktop` builds the shared components with desktop adapters (Vite aliases, checked by `test:graph`) as
+  `vite build --mode linux`, and `--mode win` builds the same UI for the coming Windows WebUI host. Linux-only code
+  sits in `src/platform/linux`, reached through `@platform/<name>` seams that resolve `<name>.linux.ts` or
+  `<name>.win.ts` before `<name>.desktop.ts`. `engine/ardiacore-linux` plus `engine/patches/chromium-linux-*.patch`
+  are Linux's native layer. The engine is built from
   source on a Boat builder VM (`scripts/linux/build.sh --apply`, incremental like the Mac's), published with
   `scripts/linux/publish-engine.sh --upload`, and pinned by a row in `packages/ardiacore/prebuilt-engines-linux.tsv`.
   Each platform has its own engine key (`engine/engine-key.sh --platform macos|linux`): a change only Linux builds
@@ -178,7 +181,7 @@ yours: the hidden-instance and focus rules are for the owner's Mac.
 - **Instrument what you ship.** Every feature and fix ships with the telemetry that shows it working in the field
   and catches its regression: a use count for a feature, a counter or timing on the path a fix touched, an error
   event where it used to fail. Add it to an existing event before inventing a new one (`apps/browser/src/state/telemetry`,
-  `plugins/cli/ardia_cli/telemetry.py` in ardia-browser/plugins). It stays inside the consent model: sharing on only, counts, timings, enums and
+  `plugins/cli/ts/src/telemetry.ts` in ardia-browser/plugins). It stays inside the consent model: sharing on only, counts, timings, enums and
   flags, never URLs, page content, titles or free text. List new events and fields in the "What's Sent" copy, and
   say in the commit and the parity row what to watch on the dashboard. Skip it only when nothing measurable exists,
   and say so.
@@ -255,7 +258,7 @@ yours: the hidden-instance and focus rules are for the owner's Mac.
 
 ## Repo map
 `apps/browser` is the React Native macOS app; `apps/browser/windows` and `packages/expo-windows` are the Windows
-app (`docs/windows.md`), and `apps/linux` the Linux UI with `scripts/linux` for its build, packaging and engine. `scripts/windows` holds
+app (`docs/windows.md`), and `apps/desktop` the Linux UI (and the Windows WebUI build, `--mode win`) with `scripts/linux` for its build, packaging and engine. `scripts/windows` holds
 the Windows packaging, checks and engine build. The native Expo modules are in `packages/{ardiacore,shell,shaders,import,sync}`; `engine/chromium` is our Chrome-services code (the `ac_*` C calls) and `engine/ardiacore` ArdiaCore's window and tab layer
 (`engine/ardiacore-linux` on Linux),
 and `packages/core` holds the omnibox logic and its tests. `packages/demo` is the app on the web (the site's demo).

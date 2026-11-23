@@ -1,6 +1,7 @@
-import { Platform, ScrollView, StyleSheet } from "react-native";
+import { Dimensions, Platform, ScrollView, StyleSheet } from "react-native";
 import { act, type ReactTestInstance } from "react-test-renderer";
-import { MaterialSettingsScreen, SettingsView } from "../components/settings/SettingsView";
+import { Surfaces } from "../App";
+import { SettingsView } from "../components/settings/SettingsView";
 import { materialAppBarFill } from "../components/settings/MaterialSettingsKit";
 import { DesignProvider } from "../components/ui";
 import { SEEDED_SCHEMES } from "../lib/material/schemes";
@@ -10,6 +11,7 @@ import { closeSettings, openSettings, pushSettings, useSettingsNav } from "../st
 import { currentPreferences, loadPreferences, setPreference } from "../state/settings/store";
 import { classicOnAndroid, renderSurface, unmount, withTabs, withMaterialYou } from "../../test/render/harness";
 import { pages } from "../platform/pages";
+import { closeArchive, openArchive } from "../state/browse/store";
 
 withMaterialYou();
 
@@ -39,18 +41,27 @@ const flat = (found: ReactTestInstance | undefined) => StyleSheet.flatten(found?
 const settings = () =>
   renderSurface(
     <DesignProvider design="material">
-      <MaterialSettingsScreen />
+      <Surfaces />
     </DesignProvider>,
   );
 
-onAndroid("Material Settings fills the screen with a 112 dp medium top app bar and no sheet scrim or grip", () => {
+type Detected = { toGestureArray?: () => { config: { testId?: string; enabled?: boolean } }[] };
+const sheetDragEnabled = (root: Root) =>
+  root.root
+    .findAll((found) => typeof (found.props.gesture as Detected | undefined)?.toGestureArray === "function")
+    .flatMap((found) => (found.props.gesture as Required<Detected>).toGestureArray())
+    .filter((gesture) => gesture.config.testId === "fullSheetDrag")
+    .map((gesture) => gesture.config.enabled !== false)
+    .pop();
+
+onAndroid("Material Settings fills the screen with a 112 dp medium top app bar, no sheet gap, corners or drag", () => {
   const root = settings();
-  expect(flat(node(root, "materialSettingsScreen"))).toMatchObject(StyleSheet.absoluteFill);
-  expect(node(root, "materialScrim")).toBeUndefined();
-  expect(node(root, "materialSheetGrip")).toBeUndefined();
+  expect(flat(node(root, "fullSheet"))).toMatchObject({ top: 0, left: 0, right: 0, bottom: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0, backgroundColor: LIGHT.surfaceContainer });
+  expect(node(root, "fullSheet")!.props.accessibilityViewIsModal).toBe(true);
+  expect(sheetDragEnabled(root)).toBe(false);
   expect(flat(node(root, "materialSettingsPage")).backgroundColor).toBe(LIGHT.surfaceContainer);
   const bar = node(root, "materialTopAppBar")!;
-  expect(flat(bar).backgroundColor).toBe(LIGHT.surfaceContainer);
+  expect(flat(bar)).toMatchObject({ paddingTop: 40, backgroundColor: LIGHT.surfaceContainer });
   expect(flat(bar.findAll((found) => typeof found.type === "string" && flat(found).minHeight === 64)[0])).toMatchObject({ minHeight: 64 });
   expect(flat(node(root, "materialMediumTitle"))).toMatchObject({ height: 48, fontSize: 28, color: LIGHT.onSurface });
   expect(node(root, "settingsTitle")!.props.children).toBeNull();
@@ -65,15 +76,52 @@ onAndroid("Material Settings fills the screen with a 112 dp medium top app bar a
 
 onAndroid("the app bar takes surfaceContainerHigh once the list scrolls under it, as Material's top app bar does", () => {
   const root = settings();
-  const list = root.root.findAll((found) => found.type === ScrollView)[0]!;
+  const list = node(root, "materialSettingsPage")!.findAll((found) => found.type === ScrollView)[0]!;
   act(() => list.props.onScroll({ nativeEvent: { contentOffset: { x: 0, y: 80 } } }));
   expect(flat(node(root, "materialTopAppBar")).backgroundColor).toBe(LIGHT.surfaceContainerHigh);
   expect(node(root, "settingsTitle")!.props.children).toBe("Settings");
   expect(flat(node(root, "settingsTitle"))).toMatchObject({ fontSize: 22 });
   act(() => list.props.onScroll({ nativeEvent: { contentOffset: { x: 0, y: 0 } } }));
   expect(node(root, "settingsTitle")!.props.children).toBeNull();
+  expect(flat(node(root, "materialTopAppBar")).backgroundColor).toBe(LIGHT.surfaceContainer);
   expect(materialAppBarFill(LIGHT, false)).toBe(LIGHT.surfaceContainer);
   unmount(root);
+});
+
+onAndroid("Archive keeps the Material bottom sheet, with its top gap, corners and drag", () => {
+  act(() => closeSettings());
+  act(() => jest.runOnlyPendingTimers());
+  act(() => openArchive());
+  const root = settings();
+  const sheet = flat(node(root, "fullSheet"));
+  expect(sheet.top).toBe(40);
+  expect(sheet.borderTopLeftRadius).toBe(28);
+  expect(sheetDragEnabled(root)).toBe(true);
+  act(() => closeArchive());
+  unmount(root);
+});
+
+onAndroid("the original design's Settings keep their 24 dp gap between sections", () => {
+  const classic = renderSurface(classicOnAndroid(<SettingsView />));
+  expect(flat(node(classic, "settingsPageContent")).gap).toBe(24);
+  unmount(classic);
+});
+
+onAndroid("the collapsed app bar title follows the list's latest offset when the font scale raises the medium title", () => {
+  const root = settings();
+  const list = node(root, "materialSettingsPage")!.findAll((found) => found.type === ScrollView)[0]!;
+  act(() => list.props.onScroll({ nativeEvent: { contentOffset: { x: 0, y: 60 } } }));
+  act(() => list.props.onScroll({ nativeEvent: { contentOffset: { x: 0, y: 200 } } }));
+  expect(node(root, "settingsTitle")!.props.children).toBe("Settings");
+  const window = Dimensions.get("window");
+  act(() => Dimensions.set({ window: { ...window, fontScale: 2 }, screen: Dimensions.get("screen") }));
+  try {
+    expect(flat(node(root, "materialMediumTitle")).height).toBe(84);
+    expect(node(root, "settingsTitle")!.props.children).toBe("Settings");
+  } finally {
+    act(() => Dimensions.set({ window, screen: Dimensions.get("screen") }));
+    unmount(root);
+  }
 });
 
 onAndroid("groups are Material 3 Expressive: rows as surfaceBright segments 2 dp apart, 20 dp outer corners and 4 dp inner ones, and no dividers", () => {

@@ -110,6 +110,10 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         fields: ["tab_writes_stalled", "search_opens_cold"],
       },
       {
+        text: "In the same daily counts, on Android with Material You: how often the tab switcher offered its Archive suggestion again when you came back from your Incognito tabs. Counts only",
+        fields: ["archive_card_reoffers"],
+      },
+      {
         text: "In the same daily counts, on iPhone: how often a tab you swiped to kept its saved picture until a time limit instead of handing over to the page the moment it drew. Counts only, and never while browsing privately",
         fields: ["page_covers_capped"],
       },
@@ -120,6 +124,10 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
       {
         text: "In the same daily counts, on Android: how often the phone refused to draw the Liquid Glass lens or its rim light, so the glass fell back to plain frost. Counts only",
         fields: ["glass_shaders_failed"],
+      },
+      {
+        text: "In the same daily counts, on Android: how many actions you chose in menus Ardia draws, never which action or while browsing privately",
+        fields: ["drawn_menu_actions_chosen"],
       },
       {
         text: "In the same daily counts, on Android: how often you tapped the Ardia logo on the start page to search. Counts only, and never while browsing privately",

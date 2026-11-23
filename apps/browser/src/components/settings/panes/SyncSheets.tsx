@@ -293,7 +293,7 @@ function ConnectDeviceSheet() {
   return (
     <Sheet size="l" onClose={closeSettingsSheet}>
       <DialogTitle
-        subtitle={`On your other ${PLATFORM_TERMS.syncedComputer}, open Ardia › Settings › Sync and choose the same sync folder. Then click Enter Recovery Phrase and enter the 24 words of your recovery phrase.`}
+        subtitle={`On your other ${PLATFORM_TERMS.syncedComputer}, open Ardia › Settings › General › Sync and choose the same sync folder. Then click Enter Recovery Phrase and enter the 24 words of your recovery phrase.`}
       >
         Connect Another Device
       </DialogTitle>

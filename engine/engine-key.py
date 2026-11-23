@@ -20,8 +20,16 @@ PATCH_DIR = 'engine/patches'
 COPIES = 'copies.tsv'
 UNITS = ('.c', '.cc', '.cpp', '.m', '.mm')
 PLATFORMS = {'mac': 'mac', 'macos': 'mac', 'linux': 'linux', 'win': 'win', 'windows': 'win'}
-OTHER = {'mac': 'linux', 'linux': 'mac'}
-GN_PLATFORMS = {'is_mac': 'mac', 'is_linux': 'linux'}
+ENGINES = frozenset(('mac', 'linux', 'win'))
+NO_ENGINE = frozenset()
+OTHERS = {'mac': ('linux', 'win'), 'linux': ('mac', 'win')}
+PARSER_SELECTORS = ('all', 'mac', 'linux')
+LEAVES_OUT = {'mac': 'linux', 'linux': 'mac', 'win': 'mac'}
+GN_PLATFORMS = {'is_mac': 'mac', 'is_linux': 'linux', 'is_win': 'win'}
+GN_TOKEN = r'\s*(\|\||&&|==|!=|<=|>=|[!()<>,\[\]]|"(?:[^"\\]|\\.)*"|[A-Za-z_][A-Za-z0-9_.]*|-?[0-9]+)'
+GN_COMPARISONS = ('==', '!=', '<', '>', '<=', '>=')
+WINDOWS_OWN_LAYERS = ('engine/chromium',)
+GN_INTERPOLATION = r'\$(\{[^}]*\}|0x[0-9A-Fa-f]{2}|[A-Za-z_][A-Za-z0-9_]*)'
 CHECKOUT = pathlib.Path(__file__).resolve().parents[1]
 WIN_ROOT = 'scripts/windows/engine'
 WIN_DECLARATIONS = 'scripts/windows/engine/key-inputs.json'
@@ -29,7 +37,7 @@ WIN_DECLARATIONS_V1 = 'engine/engine-key.win-v1.json'
 WIN_FIRST = '991f98e9e7d382e41eee9646b94d937834bee0d2'
 WIN_FIELDS = {'series': str, 'series_win': str, 'win_patches': str, 'series_tags': list, 'trees': list, 'files': list,
               'resource_lists': list, 'excluded': list, 'excluded_patterns': list}
-SERIES_SELECTORS = ('all', 'mac', 'linux')
+SERIES_SELECTORS = ('all', 'mac', 'linux', 'win')
 
 
 class Problem(Exception):
@@ -114,11 +122,30 @@ def series_module():
     return module
 
 
+def selector_engines(selector):
+    if selector == 'all':
+        return ENGINES
+    names = selector.split(',')
+    return frozenset(names) if len(set(names)) == len(names) and set(names) <= ENGINES else None
+
+
+def series_for(text, platform):
+    lines = text.split(b'\n')
+    for number, raw in enumerate(lines):
+        fields = raw.split(b'#', 1)[0].split()
+        if len(fields) != 3 or fields[2].decode('utf-8', 'surrogateescape') in PARSER_SELECTORS:
+            continue
+        engines = selector_engines(fields[2].decode('utf-8', 'surrogateescape'))
+        if engines is not None:
+            lines[number] = b' '.join((*fields[:2], b'all' if platform in engines else LEAVES_OUT[platform].encode()))
+    return b'\n'.join(lines)
+
+
 def read_series(tree, text, platform, module):
     with tempfile.TemporaryDirectory(prefix='engine-key-') as scratch:
         patches = pathlib.Path(scratch, PATCH_DIR)
         patches.mkdir(parents=True)
-        (patches / 'series').write_bytes(text)
+        (patches / 'series').write_bytes(series_for(text, platform))
         for path in tree.files():
             if path.startswith(PATCH_DIR + '/') and path.endswith('.patch') and '/' not in path[len(PATCH_DIR) + 1:]:
                 (patches / path[len(PATCH_DIR) + 1:]).write_bytes(b'')
@@ -150,8 +177,124 @@ def read_copies(tree, layer):
     return copies
 
 
-def gn_strings(text):
-    stack, pending, index, length = ['all'], None, 0, len(text)
+class GnCondition:
+    def __init__(self, text):
+        self.tokens, self.at, rest = [], 0, text.strip()
+        while rest:
+            match = re.match(GN_TOKEN, rest)
+            if not match:
+                raise ValueError(text)
+            self.tokens.append(match.group(1))
+            rest = rest[match.end():]
+
+    def peek(self):
+        return self.tokens[self.at] if self.at < len(self.tokens) else None
+
+    def take(self):
+        token = self.peek()
+        if token is None:
+            raise ValueError('the condition ends early')
+        self.at += 1
+        return token
+
+    def whole(self):
+        value = self.either()
+        if self.peek() is not None:
+            raise ValueError(f'unexpected {self.peek()}')
+        return value
+
+    def either(self):
+        true, false = self.both()
+        while self.peek() == '||':
+            self.take()
+            more_true, more_false = self.both()
+            true, false = true | more_true, false & more_false
+        return true, false
+
+    def both(self):
+        true, false = self.negated()
+        while self.peek() == '&&':
+            self.take()
+            more_true, more_false = self.negated()
+            true, false = true & more_true, false | more_false
+        return true, false
+
+    def negated(self):
+        if self.peek() == '!':
+            self.take()
+            true, false = self.negated()
+            return false, true
+        value = self.atom()
+        if self.peek() in GN_COMPARISONS:
+            self.take()
+            self.atom()
+            return ENGINES, ENGINES
+        return value
+
+    def atom(self):
+        token = self.take()
+        if token == '(':
+            value = self.either()
+            if self.take() != ')':
+                raise ValueError('unbalanced parentheses')
+            return value
+        if token in GN_PLATFORMS:
+            engine = frozenset((GN_PLATFORMS[token],))
+            return engine, ENGINES - engine
+        if token == 'true':
+            return ENGINES, NO_ENGINE
+        if token == 'false':
+            return NO_ENGINE, ENGINES
+        if token[0].isalnum() or token[0] in '_"-':
+            if self.peek() == '(':
+                self.take()
+                depth = 1
+                while depth:
+                    depth += {'(': 1, ')': -1}.get(self.take(), 0)
+            return ENGINES, ENGINES
+        raise ValueError(f'unexpected {token}')
+
+
+def gn_engines(condition):
+    try:
+        return GnCondition(condition).whole()[0]
+    except ValueError:
+        return ENGINES
+
+
+class GnLost(Exception):
+    pass
+
+
+def gn_string_end(text, index):
+    cursor = index + 1
+    while cursor < len(text) and text[cursor] != '"':
+        cursor += 2 if text[cursor] == '\\' else 1
+    return cursor
+
+
+def gn_condition_end(text, opening):
+    depth, cursor = 0, opening
+    while cursor < len(text):
+        char = text[cursor]
+        if char == '"':
+            cursor = gn_string_end(text, cursor)
+        elif char == '#':
+            end = text.find('\n', cursor)
+            cursor = len(text) if end < 0 else end
+            continue
+        elif char == '(':
+            depth += 1
+        elif char == ')':
+            depth -= 1
+            if depth == 0:
+                return cursor
+        cursor += 1
+    raise GnLost(opening)
+
+
+def gn_strings(text, flat=False):
+    stack, pending, index, length = [ENGINES], None, 0, len(text)
     while index < length:
         char = text[index]
         if char == '#':
@@ -173,19 +316,14 @@ def gn_strings(text):
         word = re.match(r'[A-Za-z_][A-Za-z0-9_]*', text[index:index + 64])
         if word and (index == 0 or not (text[index - 1].isalnum() or text[index - 1] == '_')):
             name = word.group(0)
-            if name == 'if':
-                opening = text.find('(', index)
-                depth, cursor = 0, opening
-                while cursor < length:
-                    if text[cursor] == '(':
-                        depth += 1
-                    elif text[cursor] == ')':
-                        depth -= 1
-                        if depth == 0:
-                            break
-                    cursor += 1
-                condition = text[opening + 1:cursor].strip()
-                pending = stack[-1] if stack[-1] != 'all' else GN_PLATFORMS.get(condition, 'all')
+            if name == 'if' and not flat:
+                opening = index + len(name)
+                while opening < length and text[opening] in ' \t\r\n':
+                    opening += 1
+                if opening >= length or text[opening] != '(':
+                    raise GnLost(index)
+                cursor = gn_condition_end(text, opening)
+                pending = stack[-1] & gn_engines(text[opening + 1:cursor])
                 index = cursor + 1
                 continue
             if name == 'else':
@@ -213,21 +351,37 @@ def gn_sources(value, base, roots, files):
     return [posixpath.normpath(posixpath.join(base, value))], False
 
 
-def platform_units(tree):
-    listed = {'mac': set(), 'linux': set(), 'all': set()}
+def interpolated_unit(value):
+    if '$' not in value:
+        return False
+    tail = re.split(GN_INTERPOLATION, value)[-1]
+    extension = re.search(r'\.[A-Za-z0-9_+-]+$', tail)
+    return extension is None or extension.group(0) in UNITS
+
+
+def foreign_units(tree, platform):
+    built_for, anywhere = {}, NO_ENGINE
     files = set(tree.files())
     roots = source_roots(files)
     for path in sorted(files):
         if not path.startswith('engine/') or posixpath.basename(path) != 'BUILD.gn':
             continue
         base = posixpath.dirname(path)
-        for context, value in gn_strings(tree.read(path).decode('utf-8', 'surrogateescape')):
+        text = tree.read(path).decode('utf-8', 'surrogateescape')
+        try:
+            strings = list(gn_strings(text))
+        except GnLost:
+            strings = list(gn_strings(text, flat=True))
+        for context, value in strings:
+            if interpolated_unit(value):
+                anywhere |= context
+                continue
             if not value.endswith(UNITS):
                 continue
             sources, ambiguous = gn_sources(value, base, roots, files)
-            listed['all' if ambiguous else context].update(sources)
-    shared = listed['all']
-    return {'mac': listed['mac'] - listed['linux'] - shared, 'linux': listed['linux'] - listed['mac'] - shared}
+            for source in sources:
+                built_for[source] = built_for.get(source, NO_ENGINE) | (ENGINES if ambiguous else context)
+    return {path for path, engines in built_for.items() if platform not in engines | anywhere}
 
 
 class Plan:
@@ -238,7 +392,7 @@ class Plan:
         if text is not None:
             module = series_module()
             self.steps = read_series(tree, text, platform, module)
-            theirs = read_series(tree, text, OTHER[platform], module)
+            theirs = [step for other in OTHERS[platform] for step in read_series(tree, text, other, module)]
             for kind, name in theirs:
                 if (kind, name) in self.steps:
                     continue
@@ -255,7 +409,7 @@ class Plan:
         missing = [path for path in self.borrowed if tree.read(path) is None]
         if missing:
             raise Problem(f'a layer copies {", ".join(sorted(set(missing)))}, which is not there')
-        self.foreign_units = platform_units(tree)[OTHER[platform]]
+        self.foreign_units = foreign_units(tree, platform)
         self.lent = set(self.borrowed)
 
     def counts(self, path):
@@ -314,16 +468,25 @@ def chromium_names(text, origin, tags):
     names = []
     for number, raw in enumerate((text or '').split('\n'), 1):
         fields = raw.split('#', 1)[0].split()
-        if not fields or fields[0] != 'chromium':
+        if not fields or fields[0] not in ('chromium', 'layer'):
             continue
         if len(fields) not in (2, 3):
-            raise Problem(f'{origin}:{number}: expected `chromium <patch> [{"|".join(SERIES_SELECTORS)}]`: {raw.strip()}')
+            raise Problem(f'{origin}:{number}: expected `{fields[0]} <name> [all|<platform>[,<platform>…]]`, platforms '
+                          f'{", ".join(sorted(ENGINES))}: {raw.strip()}')
         tag = fields[2] if len(fields) == 3 else 'all'
-        if tag not in SERIES_SELECTORS:
-            raise Problem(f'{origin}:{number}: unknown platform `{tag}`; the series knows {", ".join(SERIES_SELECTORS)}')
+        engines = selector_engines(tag)
+        if engines is None:
+            raise Problem(f'{origin}:{number}: unknown platform `{tag}`; the series knows all, or one or more of '
+                          f'{", ".join(sorted(ENGINES))} joined by commas')
+        if fields[0] == 'layer':
+            if 'win' in engines and fields[1] not in WINDOWS_OWN_LAYERS:
+                raise Problem(f'{origin}:{number}: `{fields[1]}` is a layer for win, and the Windows build runs no series '
+                              f'layer yet but {", ".join(WINDOWS_OWN_LAYERS)}: teach series_win.py to apply it, or select '
+                              'platforms without win')
+            continue
         if not safe_relative(fields[1]) or '/' in fields[1]:
             raise Problem(f'{origin}:{number}: `{fields[1]}` is not a patch file name')
-        if tag in tags:
+        if (tag == 'all' and 'all' in tags) or (tag != 'all' and any(engine in tags for engine in engines)):
             names.append(fields[1])
     return names
 

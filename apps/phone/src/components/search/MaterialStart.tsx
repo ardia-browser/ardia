@@ -12,6 +12,7 @@ import { ArdiaLogo, Backdrop, browseLayout, MaterialIconButton, useReduceMotion,
 import { MaterialBottomBar } from "../ui/MaterialBottomBar";
 import { useMaterialTheme } from "../ui/materialTheme";
 import { materialBottomBar, materialDuration, materialMotion, materialMove, materialSize, materialType } from "../ui/materialTokens";
+import { StartMark } from "./StartSpaces";
 import { reducedMotionMs } from "../ui/motion";
 import type { MaterialScheme } from "../../lib/material/schemes";
 import { actionWords, destinationWords } from "../../lib/sharedWords";
@@ -67,14 +68,14 @@ export function MaterialStart() {
       </Animated.View>
       <Animated.View
         testID="materialStartCenter"
-        pointerEvents="none"
+        pointerEvents={hasTabs || searching ? "none" : "box-none"}
         collapsable={false}
         importantForAccessibility={searching ? "no-hide-descendants" : "auto"}
         accessibilityElementsHidden={searching}
         style={[styles.center, { paddingLeft: side, paddingRight: side }, fade]}
       >
-        <View pointerEvents="none" style={styles.logo}>
-          <ArdiaLogo width={browseLayout.logoWidth} />
+        <View pointerEvents="box-none" style={styles.logo}>
+          {hasTabs ? <ArdiaLogo width={browseLayout.logoWidth} /> : <StartMark incognito={incognito} />}
           {incognito ? <Text style={[materialType.titleMedium, { color: ink }]}>You’re browsing Incognito</Text> : null}
         </View>
       </Animated.View>

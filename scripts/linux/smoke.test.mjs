@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { launchArguments, launchEnvironment } from "../../apps/linux/scripts/acceptance/lib/ardia.mjs";
+import { launchArguments, launchEnvironment } from "../../apps/desktop/scripts/acceptance/lib/ardia.mjs";
 import { ASSERTIONS, SCRIPT_NAME, SCRIPT_TITLE_PREFIX, UNKNOWN_WINDOW_ERROR, USAGE, USER_SCRIPTS_CAPABILITIES, VERSION_PATTERN, WINDOW_STATE_CAPABILITIES, windowStateProblems, windowStateSupport, windowStateVerdict, appVersionVerdict, cliControlSupport, cliTarball, debLayoutProblems, privateFolder, packageFormat, formatTable, installerRanAgain, launchRefusal, packageStagedFiles, parseArgs, pipeLaunchArguments, splitPipeMessages, summarize, uboSeedProblems, uboTuningProblems, userScriptSource } from "./smoke.mjs";
 
 test("the package checks are named in the usage and keep the original eight first", () => {

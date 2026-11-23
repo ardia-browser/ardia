@@ -4,6 +4,7 @@ import { join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 import ts from "typescript";
 import { ROOT, TELEMETRY, TEST_FILE, arrivalStamps, declOf, nativeEventSections, queueSection, relOf, unclearedCounters, walk } from "./consentStatic.mjs";
+import { DESKTOP_MODES, platformSuffixes } from "../../desktop/desktopModes.ts";
 
 const HELP = `Usage: node apps/browser/scripts/consentReach.mjs [--report | --write | --help]
 
@@ -23,7 +24,7 @@ export const BASELINE_PATH = join(ROOT, "apps/browser/src/consent-reach-baseline
 const CONSENT_BASELINE = join(ROOT, "apps/browser/src/consent-baseline.json");
 const REACH_SECTIONS = ["noter", "consentToken", "consentNow", "console"];
 export const SECTIONS = [...REACH_SECTIONS, "queues", "unstampedEvents", "arrivalStamps", "unclearedCounters"];
-const SCOPE = /^apps\/(?:browser|linux)\/src\//;
+const SCOPE = /^apps\/(?:browser|desktop)\/src\//;
 const LATER = new Set(["setTimeout", "setInterval", "requestAnimationFrame", "queueMicrotask", "setImmediate"]);
 const PROMISE = new Set(["then", "catch", "finally"]);
 const LISTENER = /^(?:on[A-Z]\w*|addListener|addEventListener|subscribe|subscribeTo)$/;
@@ -32,11 +33,20 @@ const NOTER = /^(?:note|count|track)[A-Z]/;
 const SINK_NAME = /^(?:capture|queueLog|warnFor|errorFor|counted|stillValid|(?:note|count|track)[A-Z]\w*)$/;
 const CONSENT_TYPE = /\bConsentToken\b/;
 
-function buildProgram() {
+export { DESKTOP_MODES };
+
+export const platformSeams = (mode, platform = join(ROOT, "apps/desktop/src/platform")) => ({
+  "@platform/*": platformSuffixes(mode).flatMap((suffix) => [`${platform}/*${suffix}.ts`, `${platform}/*${suffix}.tsx`]),
+});
+
+export const desktopModuleSuffixes = (mode) => [...platformSuffixes(mode), ".web", ""];
+
+function buildProgram(mode, moduleSuffixes) {
   const dir = join(ROOT, "apps/browser");
   const config = ts.parseJsonConfigFileContent(ts.readConfigFile(join(dir, "tsconfig.json"), ts.sys.readFile).config, ts.sys, dir);
-  const linux = walk("apps/linux/src", /\.tsx?$/).filter((rel) => !TEST_FILE.test(rel)).map((rel) => join(ROOT, rel));
-  return ts.createProgram([...config.fileNames, ...linux], { ...config.options, noEmit: true });
+  const desktop = walk("apps/desktop/src", /\.tsx?$/).filter((rel) => !TEST_FILE.test(rel)).map((rel) => join(ROOT, rel));
+  const paths = { ...config.options.paths, ...platformSeams(mode) };
+  return ts.createProgram([...config.fileNames, ...desktop], { ...config.options, paths, ...(moduleSuffixes ? { moduleSuffixes } : {}), noEmit: true });
 }
 
 function activityListeners() {
@@ -203,18 +213,30 @@ export function reachSinks(program, files, listeners) {
   for (const call of calls) {
     if (!chains.get(call).prefix.some((fn) => reached.has(fn))) continue;
     const kind = sinkOf(call);
-    if (kind) sinks.push({ kind, rel: relOf(call), line: call.getSourceFile().getLineAndCharacterOfPosition(call.getStart()).line + 1 });
+    if (kind) sinks.push({ kind, rel: relOf(call), line: call.getSourceFile().getLineAndCharacterOfPosition(call.getStart()).line + 1, start: call.getStart() });
   }
   return { reached: reached.size, sinks };
+}
+
+export function reachSinksAcross(programs, listeners) {
+  const sinks = new Map();
+  let reached = 0;
+  for (const program of programs) {
+    const result = reachSinks(program, scopeFiles(program), listeners);
+    reached = Math.max(reached, result.reached);
+    for (const sink of result.sinks) sinks.set(`${sink.kind}|${sink.rel}|${sink.start}`, sink);
+  }
+  return { reached, sinks: [...sinks.values()] };
 }
 
 const bump = (section, key, n = 1) => void (section[key] = (section[key] ?? 0) + n);
 
 export function analyze() {
-  const program = buildProgram();
+  const programs = [buildProgram("linux"), ...DESKTOP_MODES.map((mode) => buildProgram(mode, desktopModuleSuffixes(mode)))];
+  const [program] = programs;
   const files = scopeFiles(program);
   const found = Object.fromEntries(SECTIONS.map((s) => [s, {}]));
-  const { reached, sinks } = reachSinks(program, files, activityListeners());
+  const { reached, sinks } = reachSinksAcross(programs, activityListeners());
   for (const sink of sinks) bump(found[sink.kind], sink.rel);
   for (const rel of queueSection(files)) bump(found.queues, rel);
   for (const key of nativeEventSections()) bump(found.unstampedEvents, key);

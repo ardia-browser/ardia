@@ -2,6 +2,7 @@ import { pressesWithoutRelease, pressRepeated } from "../../platform/focus";
 import { capture, consentToken, stillValid, onConsentPeriodChange, type ConsentToken } from "./client";
 import { takeHoverCardCounts } from "./hoverCardCounts";
 import { percentile } from "./transport";
+import { consentOrNow, countFor } from "./countFor";
 
 type TabPressEnd = "click" | "dragClick" | "drag";
 
@@ -51,6 +52,10 @@ const empty = () => ({
   range_selects: 0,
   range_from_shown: 0,
   page_refused: 0,
+  tile_double_returns: 0,
+  tile_double_reloads: 0,
+  tile_double_fresh: 0,
+  tile_double_missed: 0,
 });
 let tally = empty();
 let pending = false;
@@ -180,6 +185,12 @@ export function notePagePress(tabId: string) {
   const ms = Date.now() - last.at;
   if (ms >= 0 && ms < PAGE_CLICK_WINDOW_MS && toPageClick.length < MAX_SAMPLES) toPageClick.push(ms);
 }
+
+export type TileDoubleClick = "return" | "reload" | "fresh" | "missed";
+
+const TILE_DOUBLE_FIELD = { return: "tile_double_returns", reload: "tile_double_reloads", fresh: "tile_double_fresh", missed: "tile_double_missed" } as const;
+
+export const noteTileDoubleClick = (what: TileDoubleClick, consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void tally[TILE_DOUBLE_FIELD[what]]++);
 
 export const notePagePressRefused = () => void tally.page_refused++;
 

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""Our series on a Windows tree: the `chromium` lines of engine/patches/series that are for every platform or tagged
-`mac` (Windows started from the Mac's set; `linux` lines are never applied), then those of
+"""Our series on a Windows tree: the `chromium` lines of engine/patches/series that are for every platform or whose
+platforms include `mac` or `win` (Windows started from the Mac's set; `linux` lines are never applied, `linux,win`
+lines are; a `layer` line it would select, untagged or naming win, is refused until this script runs series layers,
+engine/chromium aside), then those of
 scripts/windows/engine/series-win (when it exists; its patches in scripts/windows/engine/patches,
 and its `skip <patch>` lines leave a patch of engine/patches/series out), each applied strictly (git apply), else with patch's fuzz.
 A patch that fails is recorded and the rest still run. Each patch that goes in is written to .series-win-applied beside
@@ -34,10 +36,18 @@ LAUNCH_SWITCHES = 'ardia/core/ac_launch_switches'
 LAYER_PATCH = os.path.join(HERE, 'ardia-layer-win.patch')
 LAYER_OVERLAY = os.path.join(HERE, 'src', 'chrome', 'browser', 'ardia')
 MAC_LAYER_LINE = re.compile(r'(\.mm"|"pip/|"ac_external_apps\.h")')
-WINDOWS_TAGS = ('all', 'mac')
-SERIES_TAGS = ('all', 'mac', 'linux')
+LIST_ENTRY_LINE = re.compile(r'^\s*"[^"$\\]*",?\s*$')
+GN_PAIRS = {'(': ')', '[': ']', '{': '}'}
+ENGINES = ('mac', 'linux', 'win')
+WINDOWS_TAGS = ('all', 'mac', 'win')
+SERIES_TAGS = ('all',) + ENGINES
 WINDOWS_FROM_MAC_BLOCK = ('ac_reauth.cc',)
-WINDOWS_CONDITIONS = {'is_win': True, 'is_mac': False, 'is_linux': False, '!is_win': False, '!is_mac': True, '!is_linux': True}
+GN_PLATFORMS = {'is_mac': False, 'is_linux': False, 'is_win': True}
+GN_TOKEN = re.compile(r'\s*(\|\||&&|[!()]|[A-Za-z_][A-Za-z0-9_]*)')
+WINDOWS_OWN_LAYERS = ('engine/chromium',)
+GN_LEXEME = re.compile(r'\s+|#[^\n]*|"(?:[^"\\\n]|\\.)*"|[A-Za-z_][A-Za-z0-9_]*|[0-9]+|\+=|-=|==|!=|<=|>=|&&|\|\||[{}\[\](),.=<>!+-]')
+GN_NAME = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
+GN_BINARY = ('+', '-', '==', '!=', '<', '>', '<=', '>=', '&&', '||')
 LAYER_ASSERT = re.compile(r'^assert\(is_mac( \|\| is_linux)?\)$', re.M)
 LAYER_BUILD = 'engine/chromium/src/chrome/browser/ardia/BUILD.gn'
 SERIES_REL = 'engine/patches/series'
@@ -80,20 +90,35 @@ def chromium_lines(path, tags=WINDOWS_TAGS):
         return series_lines(f.read(), path, tags)
 
 
+def selector_tags(selector):
+    if selector == 'all':
+        return ('all',)
+    names = selector.split(',')
+    return tuple(names) if len(set(names)) == len(names) and all(name in ENGINES for name in names) else None
+
+
 def series_lines(text, path, tags=WINDOWS_TAGS):
     if text is None:
         return []
     out = []
     for n, raw in enumerate(io.StringIO(text), 1):
         fields = raw.split('#', 1)[0].split()
-        if not fields or fields[0] != 'chromium':
+        if not fields or fields[0] not in ('chromium', 'layer'):
             continue
         if len(fields) not in (2, 3):
-            raise InputError(f'{where(path, n)}: expected `chromium <patch> [{"|".join(SERIES_TAGS)}]`: {raw.strip()}')
-        tag = fields[2] if len(fields) == 3 else 'all'
-        if tag not in SERIES_TAGS:
-            raise InputError(f'{where(path, n)}: unknown platform `{tag}`; this script knows {", ".join(SERIES_TAGS)}')
-        if tag in tags:
+            raise InputError(f'{where(path, n)}: expected `{fields[0]} <name> [all|<platform>[,<platform>…]]`, platforms '
+                             f'{", ".join(ENGINES)}: {raw.strip()}')
+        line_tags = selector_tags(fields[2] if len(fields) == 3 else 'all')
+        if line_tags is None:
+            raise InputError(f'{where(path, n)}: unknown platform `{fields[2]}`; this script knows all, or one or more of '
+                             f'{", ".join(ENGINES)} joined by commas')
+        if fields[0] == 'layer':
+            if ('all' in line_tags or 'win' in line_tags) and fields[1] not in WINDOWS_OWN_LAYERS:
+                raise InputError(f'{where(path, n)}: `{fields[1]}` is a layer for win, and this script runs no series layer '
+                                 f'yet but {", ".join(WINDOWS_OWN_LAYERS)}: teach it to apply the layer, or select '
+                                 'platforms without win')
+            continue
+        if any(tag in tags for tag in line_tags):
             out.append(fields[1])
     return out
 
@@ -244,13 +269,19 @@ def ardia_build_file():
     if len(asserts) != 1:
         raise InputError(f'{where(os.path.join(REPO, LAYER_BUILD), line_of(text, "assert("))}: the Windows build needs one '
                          f'`assert(is_mac)` or `assert(is_mac || is_linux)` to turn into `assert(is_win)`')
-    for needle, what in (('ardia_sources = [\n', 'the shared source list'),
-                         ('source_set("ardia") {\n', 'the layer target'),
+    if not re.search(r'^ardia_sources = \[', text, re.M):
+        raise InputError(f'{where(os.path.join(REPO, LAYER_BUILD), 1)}: the Windows build needs the shared source list '
+                         '(`ardia_sources = [` at the top level)')
+    for needle, what in (('source_set("ardia") {\n', 'the layer target'),
                          ('config("exports_config")', 'the exports config it cuts at'),
                          ('    "//ardia/core:hooks",\n', 'the hooks dependency it drops'),
                          ('    "//ardia/core:launch_switches",\n', 'the launch switches dependency it replaces')):
         once(text, needle, what)
     text = LAYER_ASSERT.sub('assert(is_win)', text)
+    for number, line in enumerate(text.splitlines(), 1):
+        if MAC_LAYER_LINE.search(line) and not LIST_ENTRY_LINE.match(line):
+            raise InputError(f'{where(os.path.join(REPO, LAYER_BUILD), number)}: the Windows build drops Mac-only sources a list '
+                             f'entry at a time, and this line holds more than one entry: {line.strip()}')
     text = ''.join(line for line in text.splitlines(True) if not MAC_LAYER_LINE.search(line))
     text = text.replace('    "//ardia/core:hooks",\n', '')
     text = text.replace('    "//ardia/core:launch_switches",\n', '    "//ardia/win:launch_switches",\n')
@@ -259,49 +290,255 @@ def ardia_build_file():
     return text[:text.index('config("exports_config")')].rstrip() + '\n'
 
 
+def windows_takes(condition):
+    tokens, index, condition = [], 0, condition.strip()
+    while index < len(condition):
+        match = GN_TOKEN.match(condition, index)
+        if not match:
+            return None
+        tokens.append(match.group(1))
+        index = match.end()
+
+    def either(at):
+        value, at = both(at)
+        while at < len(tokens) and tokens[at] == '||':
+            more, at = both(at + 1)
+            value = None if value is None or more is None else value or more
+        return value, at
+
+    def both(at):
+        value, at = negated(at)
+        while at < len(tokens) and tokens[at] == '&&':
+            more, at = negated(at + 1)
+            value = None if value is None or more is None else value and more
+        return value, at
+
+    def negated(at):
+        if at < len(tokens) and tokens[at] == '!':
+            value, at = negated(at + 1)
+            return None if value is None else not value, at
+        if at < len(tokens) and tokens[at] == '(':
+            value, at = either(at + 1)
+            if at >= len(tokens) or tokens[at] != ')':
+                raise ValueError(condition)
+            return value, at + 1
+        if at < len(tokens) and tokens[at] in GN_PLATFORMS:
+            return GN_PLATFORMS[tokens[at]], at + 1
+        raise ValueError(condition)
+
+    try:
+        value, at = either(0)
+    except ValueError:
+        return None
+    return value if at == len(tokens) else None
+
+
+class GnReader:
+    def __init__(self, text):
+        self.text, self.tokens, self.at, self.found, self.listed, self.scopes = text, [], 0, [], [], []
+        index, line = 0, 1
+        while index < len(text):
+            match = GN_LEXEME.match(text, index)
+            if not match:
+                self.fail(line, f'a character it can\'t read: {text[index:index + 20]!r}')
+            lexeme = match.group(0)
+            if not lexeme.isspace() and not lexeme.startswith('#'):
+                self.tokens.append((lexeme, line, index, match.end()))
+            line += lexeme.count('\n')
+            index = match.end()
+
+    def fail(self, line, what):
+        raise InputError(f'{where(os.path.join(REPO, LAYER_BUILD), line)}: the Windows build can\'t read {what}')
+
+    def peek(self, ahead=0):
+        at = self.at + ahead
+        return self.tokens[at][0] if at < len(self.tokens) else None
+
+    def line(self):
+        return self.tokens[min(self.at, len(self.tokens) - 1)][1] if self.tokens else 1
+
+    def take(self, expected=None):
+        if self.at >= len(self.tokens):
+            self.fail(self.line(), f'the end of the file where it expected {expected or "more"}')
+        token = self.tokens[self.at]
+        if expected is not None and token[0] != expected:
+            self.fail(token[1], f'`{token[0]}` where it expected `{expected}`')
+        self.at += 1
+        return token
+
+    def sources(self):
+        self.block(True, False)
+        return self.found
+
+    def block(self, active, closed):
+        while True:
+            token = self.peek()
+            if token is None:
+                if closed:
+                    self.fail(self.line(), 'a block that never closes')
+                return
+            if token == '}':
+                if not closed:
+                    self.fail(self.line(), 'a `}` that closes nothing')
+                self.take()
+                return
+            self.statement(active)
+
+    def statement(self, active):
+        name, line, _, _ = self.take()
+        if name == 'if':
+            return self.conditional(active, line)
+        if not GN_NAME.match(name) or name in ('else', 'true', 'false'):
+            self.fail(line, f'a statement starting with `{name}`')
+        if self.peek() == '(':
+            self.group('(', ')')
+            if self.peek() == '{':
+                self.take('{')
+                self.scopes.append(name)
+                self.block(active, True)
+                self.scopes.pop()
+            return
+        while self.peek() in ('.', '['):
+            if self.take()[0] == '.':
+                self.take()
+            else:
+                self.expression()
+                self.take(']')
+        operator = self.peek()
+        if operator not in ('=', '+=', '-='):
+            self.fail(line, f'`{name}` followed by `{operator}`')
+        self.take()
+        value = self.expression()
+        if name == 'ardia_sources':
+            if self.scopes:
+                self.fail(line, f'`ardia_sources {operator}` inside the block of `{self.scopes[-1]}(...)`, a scope of its own '
+                                'that GN drops when it closes; change the list outside it')
+            if operator == '-=' or value[0] != 'list':
+                self.fail(line, f'`ardia_sources {operator}` with anything but a list of names; it can\'t follow sources '
+                                'taken out of the list')
+            if active:
+                self.listed = self.names(value[1], line) if operator == '=' else self.listed + self.names(value[1], line)
+        elif name == 'sources' and 'foreach' in self.scopes:
+            self.fail(line, f'`sources {operator}` inside a `foreach(...)` loop, which may run any number of times; list the '
+                            'sources outside it')
+        elif name == 'sources' and active:
+            if operator == '=' and value == ('name', 'ardia_sources'):
+                self.found.extend(self.listed)
+                return
+            if operator == '+=' and value[0] == 'list':
+                self.found.extend(self.names(value[1], line))
+                return
+            self.fail(line, f'`sources {operator}` here: it only follows `sources = ardia_sources` and `sources += [...]`')
+
+    def names(self, listed, line):
+        spelled = [name for name in listed if '$' in name or '\\' in name]
+        if spelled:
+            self.fail(line, f'a source spelled with $ or \\ ({", ".join(spelled)}); name each source as it is')
+        return list(listed)
+
+    def conditional(self, active, line):
+        taken = self.condition(line)
+        self.take('{')
+        self.block(active and taken, True)
+        settled = taken
+        while self.peek() == 'else':
+            self.take()
+            if self.peek() == 'if':
+                branch_line = self.take()[1]
+                taken = self.condition(branch_line)
+                self.take('{')
+                self.block(active and not settled and taken, True)
+                settled = settled or taken
+                continue
+            self.take('{')
+            self.block(active and not settled, True)
+            return
+
+    def condition(self, line):
+        first = self.at + 1
+        self.group('(', ')')
+        inner = self.tokens[first:self.at - 1]
+        shown = self.text[inner[0][2]:inner[-1][3]] if inner else ''
+        taken = windows_takes(' '.join(token[0] for token in inner))
+        if taken is None:
+            raise InputError(f'{where(os.path.join(REPO, LAYER_BUILD), line)}: the Windows build can\'t tell whether it takes '
+                             f'`if ({shown})`; it reads {", ".join(GN_PLATFORMS)} joined by !, &&, || and parentheses')
+        return taken
+
+    def group(self, opening, closing):
+        self.take(opening)
+        waiting = [closing]
+        while waiting:
+            token, line, _, _ = self.take()
+            if token in GN_PAIRS:
+                waiting.append(GN_PAIRS[token])
+            elif token in GN_PAIRS.values():
+                expected = waiting.pop()
+                if token != expected:
+                    self.fail(line, f'`{token}` where it expected `{expected}` to close a bracket')
+
+    def expression(self):
+        value = self.unary()
+        while self.peek() in GN_BINARY:
+            self.take()
+            self.unary()
+            value = ('other',)
+        return value
+
+    def unary(self):
+        if self.peek() in ('!', '-'):
+            self.take()
+            self.unary()
+            return ('other',)
+        return self.primary()
+
+    def primary(self):
+        token, line, _, _ = self.take()
+        if token == '[':
+            names, plain = [], True
+            while self.peek() != ']':
+                item = self.expression()
+                if item[0] == 'string':
+                    names.append(item[1])
+                else:
+                    plain = False
+                if self.peek() == ',':
+                    self.take()
+                elif self.peek() != ']':
+                    self.fail(self.line(), f'`{self.peek()}` inside a list')
+            self.take(']')
+            return ('list', names) if plain else ('other',)
+        if token == '(':
+            self.expression()
+            self.take(')')
+            return ('other',)
+        if token == '{':
+            self.scopes.append('{')
+            self.block(False, True)
+            self.scopes.pop()
+            return ('other',)
+        if token.startswith('"'):
+            return ('string', token[1:-1])
+        if token.isdigit():
+            return ('other',)
+        if not GN_NAME.match(token):
+            self.fail(line, f'`{token}` where it expected a value')
+        value = ('name', token)
+        while self.peek() in ('(', '.', '['):
+            if self.peek() == '(':
+                self.group('(', ')')
+            elif self.take()[0] == '.':
+                self.take()
+            else:
+                self.expression()
+                self.take(']')
+            value = ('other',)
+        return value
+
+
 def windows_sources(text):
-    found, blocks, listing = [], [], None
-    for n, line in enumerate(text.splitlines(), 1):
-        stripped = line.strip()
-        if listing is not None:
-            if stripped == ']':
-                listing = None
-                continue
-            name = re.match(r'^"([^"]+)",?$', stripped)
-            if not name:
-                raise InputError(f'{where(os.path.join(REPO, LAYER_BUILD), n)}: a source list entry the Windows build can\'t read: {stripped}')
-            if listing:
-                found.append(name.group(1))
-            continue
-        if re.match(r'^ardia_sources \+?= \[$', stripped):
-            listing = all(blocks)
-            continue
-        if re.match(r'^ardia_sources\s*-=', stripped):
-            raise InputError(f'{where(os.path.join(REPO, LAYER_BUILD), n)}: the Windows build can\'t follow sources taken out '
-                             f'of the list: `{stripped}`')
-        assigned = re.match(r'^sources\s*(\+=|-=|=)\s*(.+)$', stripped)
-        if assigned and all(blocks):
-            operator, value = assigned.groups()
-            if operator == '+=' and value == '[':
-                listing = True
-                continue
-            if not (operator == '=' and value == 'ardia_sources'):
-                raise InputError(f'{where(os.path.join(REPO, LAYER_BUILD), n)}: the Windows build only follows '
-                                 f'`sources = ardia_sources` and `sources += [...]`, not `{stripped}`')
-        if stripped.startswith('}') and stripped != '}':
-            raise InputError(f'{where(os.path.join(REPO, LAYER_BUILD), n)}: the Windows build can\'t read `{stripped}`')
-        if stripped == '}':
-            blocks.pop()
-            continue
-        condition = re.match(r'^if \((.+)\) \{$', stripped)
-        if condition:
-            if condition.group(1) not in WINDOWS_CONDITIONS:
-                raise InputError(f'{where(os.path.join(REPO, LAYER_BUILD), n)}: the Windows build can\'t tell whether it takes '
-                                 f'`if ({condition.group(1)})`; known: {", ".join(WINDOWS_CONDITIONS)}')
-            blocks.append(WINDOWS_CONDITIONS[condition.group(1)])
-        elif stripped.endswith('{'):
-            blocks.append(True)
-    return found
+    return GnReader(text).sources()
+
 
 def launch_switches_source():
     text = read_file(os.path.join(REPO, 'engine/ardiacore/src', LAUNCH_SWITCHES + '.cc'), encoding='utf-8')

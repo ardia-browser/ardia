@@ -2583,6 +2583,19 @@ class HostMessageHandler : public content::WebUIMessageHandler,
       }
       const auto* route = ardiacore::linux_contract::FindRoute(name);
       if (!route) return Fail(id, "ERR_UNKNOWN_CALL", "This call is unavailable on Linux");
+      if (name == ardiacore::linux_private_services::kFaviconPeekCall) {
+        Profile* page = host_->page_profile();
+        Profile* source = ardiacore::LinuxProfile(profile);
+        const bool loaded = source && !source->IsOffTheRecord() && !source->ShutdownStarted();
+        const auto error = ardiacore::linux_private_services::RouteFaviconPeek(
+            page && page->IsOffTheRecord(), page && page->ShutdownStarted(), profile_name->kind, loaded);
+        if (error != ardiacore::linux_profiles::ProfileError::kNone) return ProfileFail(id, error);
+        const std::string path = source->GetPath().value();
+        const std::string service(route->service);
+        ac_engine_call(service.c_str(), path.c_str(), json.c_str(), Replied,
+                       new EngineReply{name, weak_factory_.GetWeakPtr(), id, path});
+        return;
+      }
       if (private_request) {
         return ProfileFail(id, ardiacore::linux_profiles::ProfileError::kPrivateService);
       }

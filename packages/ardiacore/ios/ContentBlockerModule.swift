@@ -16,48 +16,48 @@ public class ContentBlockerModule: Module {
     }
   }
 
-  static let calls = CallTable(domain: "contentBlocker", handlers: [
-    "state": { _, reply in ArdiaContentBlocker.state { reply.ok($0) } },
-    "setEnabled": { args, reply in ArdiaContentBlocker.setEnabled(try args.bool("enabled"), completion: settled(reply)) },
-    "setListEnabled": { args, reply in
+  static let calls = contentBlockerCallTable(
+    state: { _, reply in ArdiaContentBlocker.state { reply.ok($0) } },
+    setEnabled: { args, reply in ArdiaContentBlocker.setEnabled(try args.bool("enabled"), completion: settled(reply)) },
+    setListEnabled: { args, reply in
       ArdiaContentBlocker.setList(try args.text("id"), enabled: try args.bool("enabled"), completion: settled(reply))
     },
-    "addList": { args, reply in
+    addList: { args, reply in
       ArdiaContentBlocker.addList(try args.text("url")) { added, error in
         if let error { return reply.fail("ERR_CONTENT_BLOCKER", error) }
         reply.ok(added ?? [:])
       }
     },
-    "removeList": { args, reply in ArdiaContentBlocker.removeList(try args.text("id"), completion: settled(reply)) },
-    "isAllowed": { args, reply in ArdiaContentBlocker.isAllowed(host: try args.text("host")) { reply.ok($0) } },
-    "setAllowed": { args, reply in
+    removeList: { args, reply in ArdiaContentBlocker.removeList(try args.text("id"), completion: settled(reply)) },
+    isAllowed: { args, reply in ArdiaContentBlocker.isAllowed(host: try args.text("host")) { reply.ok($0) } },
+    setAllowed: { args, reply in
       ArdiaContentBlocker.setAllowed(try args.bool("allowed"), host: try args.text("host"), completion: settled(reply))
     },
-    "removeAllowed": { args, reply in
+    removeAllowed: { args, reply in
       ArdiaContentBlocker.removeAllowed(host: try args.text("host")) { removed, followFailed, error in
         if let error { return reply.fail(followFailed ? "ERR_PARTIAL" : "ERR_CONTENT_BLOCKER", error) }
         reply.ok(["removed": removed])
       }
     },
-    "hiddenElements": { args, reply in
+    hiddenElements: { args, reply in
       ArdiaContentBlocker.hiddenElements(profile: args.profile) { filters, error in
         if let error { return reply.fail("ERR_CONTENT_BLOCKER", error) }
         reply.ok(filters ?? [])
       }
     },
-    "hideElements": { args, reply in
+    hideElements: { args, reply in
       ArdiaContentBlocker.hideElements(try args.strings("filters"), profile: args.profile, completion: settled(reply))
     },
-    "restoreElements": { args, reply in
+    restoreElements: { args, reply in
       ArdiaContentBlocker.restoreElements(try args.strings("filters"), profile: args.profile, completion: settled(reply))
     },
-    "devFailNextMessage": { _, reply in
+    devFailNextMessage: { _, reply in
       ArdiaContentBlocker.devFailNextMessage()
       reply.ok()
     },
-    "devDelayNextLoad": { args, reply in
+    devDelayNextLoad: { args, reply in
       ArdiaContentBlocker.devDelayNextLoad(try args.double("ms"))
       reply.ok()
-    },
-  ])
+    }
+  )
 }

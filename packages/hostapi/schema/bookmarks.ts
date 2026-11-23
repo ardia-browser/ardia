@@ -35,6 +35,9 @@ export const bookmarks = defineDomain({
     },
   },
   events: {
-    changed: "{ profile: string }",
+    changed: {
+      payload: "{ profile: string }",
+      desktop: "forward",
+    },
   },
 });

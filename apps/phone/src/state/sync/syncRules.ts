@@ -2,7 +2,7 @@ import type { ConnectResult, PhraseCheck, SyncedDevice, SyncedProfile, SyncedVie
 import { copy } from "../../lib/platformCopy.ts";
 import { syncWords } from "../../lib/sharedWords.ts";
 
-export const MAC_HINT = "On your Mac: Settings › Sync › Connect Another Device.";
+export const MAC_HINT = "On your Mac: Settings › General › Sync › Connect Another Device.";
 export const YOUR_MAC = "Your Mac";
 export const JUST_NOW_MS = 60_000;
 

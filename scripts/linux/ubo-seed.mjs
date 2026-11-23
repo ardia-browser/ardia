@@ -3,9 +3,9 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { launchArdia } from "../../apps/linux/scripts/acceptance/lib/ardia.mjs";
-import { connectCdp, evaluate } from "../../apps/linux/scripts/acceptance/lib/cdp.mjs";
-import { until } from "../../apps/linux/scripts/acceptance/lib/util.mjs";
+import { launchArdia } from "../../apps/desktop/scripts/acceptance/lib/ardia.mjs";
+import { connectCdp, evaluate } from "../../apps/desktop/scripts/acceptance/lib/cdp.mjs";
+import { until } from "../../apps/desktop/scripts/acceptance/lib/util.mjs";
 
 const USAGE = `usage: node scripts/linux/ubo-seed.mjs --chrome FILE --ui DIR --blocker DIR [--timeout-ms N]
 
@@ -18,7 +18,7 @@ seed into an empty profile when the profile's languages select no list the seed
 lacks. Run it on the staged copy package.py makes, never on the vendor copy.
 
   --chrome FILE     the engine's chrome executable
-  --ui DIR          the shell UI bundle (apps/linux/dist)
+  --ui DIR          the shell UI bundle (apps/desktop/dist/linux)
   --blocker DIR     the staged uBlock Origin directory to seed
   --timeout-ms N    deadline for uBlock Origin to save its engine (default 240000)`;
 

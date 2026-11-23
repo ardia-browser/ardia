@@ -10,18 +10,26 @@
 #
 # A macOS or Linux key covers engine/, apps/browser/assets/offline-game and its pipeline, minus what the platform never
 # builds:
-#   - the lines engine/patches/series marks for the other platform, read by engine/patches/series.py's own parser, with
-#     their patches and layers. The series counts as the lines that apply, so a line for the other platform changes
-#     neither key of this one;
-#   - the translation units a BUILD.gn under engine/ lists only inside `if (is_mac)` or `if (is_linux)` for the other
-#     platform;
+#   - the lines engine/patches/series marks only for other platforms, with their patches and layers. A selector is `all`
+#     or platforms joined by commas (`linux`, `win`, `linux,win`); each set is reduced to what it means for the platform
+#     keyed and the series is then read by engine/patches/series.py's own parser. The series counts as the lines that
+#     apply, so a line for other platforms changes no key of this one;
+#   - the translation units a BUILD.gn under engine/ lists only inside blocks this platform never builds: conditions on
+#     is_mac, is_linux and is_win joined by !, && and || are read as the platforms they can hold on (`if (is_linux ||
+#     is_win)` and `if (!is_mac)` leave the macOS key), any other name can hold anywhere, and an else block counts as the
+#     block around it. A source named by interpolation (`"${prefix}.cc"`, `"${stem}c"`, `"$unit"`) could be any unit
+#     unless what follows its last interpolation ends in an extension no unit has (`.h`, `.inc`), so it keeps every
+#     unit in the keys of the platforms its block holds on, and a BUILD.gn whose conditions can't be scanned
+#     counts every unit it names for every platform;
 #   - engine/engine-key.* and engine/patches/build/tests, tooling the build never reads.
 # The files a layer of this platform copies in (its copies.tsv, source and target per line) count even when they live in
 # the other platform's layer or outside engine/.
 #
 # A Windows key (win, or windows) covers what scripts/windows/engine/key-inputs.json declares the Windows build reads, read
 # as data from the commit keyed (--paths: from the working tree), never run: the patches it applies, in order
-# (engine/patches/series' `all` and `mac` lines less series-win's skips, then series-win's own), its trees
+# (engine/patches/series' lines for every platform or naming mac or win, less series-win's skips, then series-win's
+# own; a series layer Windows would select, untagged or naming win, has no key until the Windows build runs series
+# layers, engine/chromium aside, which it copies itself), its trees
 # (engine/chromium/src, engine/patches/build, the offline game, scripts/windows/engine less its checks, tests and
 # prebuilt.json), its files (series.py, the ArdiaCore headers and launch switches it copies, the app's EngineApi.h) and
 # the resource lists, required and never excluded, with the sources they name. A commit without key-inputs.json is

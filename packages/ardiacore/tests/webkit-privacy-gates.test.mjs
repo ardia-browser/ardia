@@ -54,7 +54,7 @@ test("WebKit's process-wide notification policy follows every profile's decision
   assert.ok(body(notifications, "func forgetProfile(_ profile: String)").includes("announceShared"), "forgetting a profile recomputes what WebKit is told");
   assert.ok(body(notifications, "func attachWorkers(to store: WKWebsiteDataStore, profile: String)").includes("announceShared"), "a profile that starts using WebKit recomputes what WebKit is told");
   const sites = source("SitesModule.swift");
-  assert.ok(body(sites, '"reset": { args, reply in').includes("notifications.refresh"), "Reset to Ask refreshes WebKit's answer");
-  assert.ok(body(sites, '"setSetting": { args, reply in').includes("notifications.refresh"));
+  assert.ok(body(sites, 'reset: { args, reply in').includes("notifications.refresh"), "Reset to Ask refreshes WebKit's answer");
+  assert.ok(body(sites, 'setSetting: { args, reply in').includes("notifications.refresh"));
   assert.match(source("WebKitModule.swift"), /args\.values\["keys"\] == nil \? nil : Set\(try args\.strings\("keys"\)\)/);
 });

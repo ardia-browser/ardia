@@ -15,14 +15,14 @@ The acceptance suite is in [linux-acceptance.md](linux-acceptance.md) and CI in 
 
 | Path | What |
 | --- | --- |
-| `apps/linux` | The Linux UI entry point. Vite builds it from the shared `apps/browser` components into `apps/linux/dist`. It holds the Linux adapters (native modules, WebView, menus, window controls, wording transforms) and the acceptance suite. |
+| `apps/desktop` | The desktop UI entry point, shared by Linux and the coming Windows WebUI host. `vite build --mode linux` builds it from the shared `apps/browser` components into `apps/desktop/dist/linux` (`--mode win` into `dist/win`). It holds the desktop adapters (native modules, WebView, menus, window controls) and the acceptance suite; Linux-only code (tiling, the GTK button layout, keyring and polkit wording, the EDS calendar, the tarball self-update, the sandbox notice) sits in `src/platform/linux`, reached through `@platform/<name>` seams that resolve `<name>.linux.ts` or `<name>.win.ts` before `<name>.desktop.ts`. |
 | `engine/ardiacore-linux` | The Aura host and every Linux-only native service (`src/ardia/linux/ac_linux_*`), the content blocker's bridge page, and their tests. It is the Linux patch-series layer. |
 | `engine/chromium/src/chrome/browser/ardia` | The shared engine services (`ac_*`), the `ardia` command's token server (`ac_cli_control.cc`, `ac_cli_token_policy*`) included. Linux-only parts are `ac_reauth_linux.*`, `pip/ac_pip_linux.cc` and `pip/ac_pip_hyprland.*`, behind `is_linux` in `BUILD.gn`. |
 | `engine/patches/chromium-linux-*.patch` | Chromium hooks the Linux host needs. They are selected with `linux` in `engine/patches/series`. |
 | `scripts/linux` | Build, package, install, engine publish and fetch, smoke gate, CI checks, the polkit policy and the Arch `PKGBUILD`. |
 | `.github/workflows/linux.yml` | The Linux workflow ([linux-ci.md](linux-ci.md)). |
 
-`packages/demo` (the ardia.dev web demo) has no Linux code and nothing under `apps/linux` imports it.
+`packages/demo` (the ardia.dev web demo) has no Linux code and nothing under `apps/desktop` imports it.
 
 ## Architecture
 
@@ -51,7 +51,7 @@ The acceptance suite is in [linux-acceptance.md](linux-acceptance.md) and CI in 
 - **CSP.** The shell's policy is `default-src 'none'`, `script-src 'self'`, `connect-src 'none'`, `frame-src 'none'`,
   `object-src 'none'`, `form-action 'none'`, and `trusted-types ardia-symbols`. The UI can't reach the network.
   Search suggestions, live folders, favicons, import and telemetry all go through native services. The one Trusted Types policy
-  renders the generated icon markup (`apps/linux/src/shims/web/Symbol.tsx`).
+  renders the generated icon markup (`apps/desktop/src/shims/web/Symbol.tsx`).
 - **The bridge.** `window.__ardiaHost` is defined by the generated `bootstrap.js` before any Vite module runs. Its
   bootstrap reports `appBuild: "linux-host"`. A request is accepted only when `ShellHostView::Trusted()` holds:
   - it comes from the host's own shell `WebContents`;
@@ -71,7 +71,7 @@ The acceptance suite is in [linux-acceptance.md](linux-acceptance.md) and CI in 
   The dispatcher routes only generated, known service names, and `AC_ENGINE_ABI_VERSION` stays 2. Unknown names
   answer `ERR_UNKNOWN_CALL`. The bootstrap lists the capabilities a host serves, and Settings hides rows whose backend
   is absent rather than showing a control that fails.
-- **Mac-only modules.** These answer from `apps/linux/src/appModuleFallbacks.ts`, either with an honest empty value or
+- **Mac-only modules.** These answer from `apps/desktop/src/appModuleFallbacks.ts`, either with an honest empty value or
   with `ERR_UNAVAILABLE`.
 - **Page options without a backend.** The shared UI mirrors a few settings to the engine at every launch
   (`webView.setVideoUpscaling`, `setCommandScrollZoom`, `setDisplayMediaPicker`, `setPeekOtherSiteTabs`,
@@ -249,7 +249,7 @@ The acceptance suite is in [linux-acceptance.md](linux-acceptance.md) and CI in 
   - 256 refusals mute that document.
 - **Evaluation.** `evaluate` runs only fixed, hash-pinned operations, and anything else gets
   `ERR_PAGE_EVALUATION_REFUSED`.
-  - `apps/linux/scripts/page-operations.mjs --write` generates the table (`ac_linux_page_operations.h`) from the shared
+  - `apps/desktop/scripts/page-operations.mjs --write` generates the table (`ac_linux_page_operations.h`) from the shared
     sources; `--check` and `pageOperations.test.mjs` fail when it is stale.
   - Reader view uses six of them. `readerCheck`, `readerState` and `readerHide` are fixed texts. `readerToggle`,
     `readerOpen` and `readerSetLook` pin everything before the look and a fixed suffix after it. The host accepts only
@@ -441,13 +441,13 @@ fake device, "Ardia Test Sink", and records routes without sending anything anyw
   - `platform/livePersistence.ts` (the default writes `live.json` with the same 800 ms debounce as before);
   - `decideWindowClose`/`decideLastTabClose` factored out of `state/windows/windowClose.ts`;
   - test ids on the extension popup.
-- **Linux overrides.** Linux replaces shared modules through its own Vite aliases (`apps/linux/vite.config.ts`).
-  Its wording transforms (`linuxWording.ts`, `credentialWording.ts`, `syncWording.ts`, `calendarWording.ts`) rewrite
+- **Linux overrides.** Linux replaces shared modules through its own Vite aliases (`apps/desktop/vite.config.ts`).
+  Its wording transforms (`src/platform/linux/wording/`: `linuxWording.ts`, `credentialWording.ts`, `syncWording.ts`, `calendarWording.ts`) rewrite
   exact strings at build time and fail the build when a shared string they replace changes. Mac wording can't ship on
   Linux, and the Linux copy can't drift silently.
 - **Engine fetch.** `packages/ardiacore/scripts/fetch-engine.sh --arch linux-x86_64` dispatches to
   `scripts/linux/fetch-engine.sh`; without `--arch` the Mac path is unchanged.
-- **Proof.** `pnpm --filter @ardia/linux test:graph` asserts that the Linux production module graph loads nothing
+- **Proof.** `pnpm --filter @ardia/desktop test:graph` asserts that the Linux production module graph loads nothing
   from `packages/demo` and only the Linux adapters it means to.
 
 ## Building on Linux
@@ -567,11 +567,11 @@ any AUR package.
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm --filter @ardia/linux build
+pnpm --filter @ardia/desktop build
 source engine/patches/build/env.sh
 python3 scripts/linux/package.py \
   --out "$CB/chromium_git/chromium/src/out/$GN_OUT_CONFIGS" \
-  --ui apps/linux/dist \
+  --ui apps/desktop/dist/linux \
   --content-blocker "$(scripts/linux/fetch-ubo.sh)" \
   --destination "$CB/artifacts/ardia-linux-$AC_TARGET_CPU.tar.xz"
 ```
@@ -633,7 +633,7 @@ command ([linux-ci.md](linux-ci.md) › Linux releases).
   - `share/polkit-1/actions/dev.ardia.linux.policy`;
   - `share/apparmor.d/ardia`, the AppArmor profile `install.sh` installs on Ubuntu;
   - `install.sh`.
-- **Running it.** Run the extracted `bin/ardia`. A raw build-tree `chrome` needs `--ardia-ui-dir apps/linux/dist`.
+- **Running it.** Run the extracted `bin/ardia`. A raw build-tree `chrome` needs `--ardia-ui-dir apps/desktop/dist/linux`.
   Test with a throwaway `--user-data-dir` and keep the sandbox on.
 - **Installing.** `sudo ./ardia/install.sh` installs under `/usr`. It also accepts `--prefix /opt/ardia` and
   `--destdir <staging root>`.
@@ -758,12 +758,12 @@ CI builds packages from a prebuilt engine instead of compiling Chromium; see [li
 These checks need no Chromium tree. `scripts/linux/ci-checks.sh` runs all of them:
 
 ```bash
-pnpm --filter @ardia/linux typecheck
-pnpm --filter @ardia/linux test:host
-pnpm --filter @ardia/linux test:symbols
-pnpm --filter @ardia/linux test:graph
-pnpm --filter @ardia/linux acceptance:self-test
-pnpm --filter @ardia/linux build
+pnpm --filter @ardia/desktop typecheck
+pnpm --filter @ardia/desktop test:host
+pnpm --filter @ardia/desktop test:symbols
+pnpm --filter @ardia/desktop test:graph
+pnpm --filter @ardia/desktop acceptance:self-test
+pnpm --filter @ardia/desktop build
 python3 -m unittest discover -s engine/patches/build/tests
 python3 -m unittest discover -s engine/chromium/src/chrome/browser/ardia/tests
 python3 -m unittest discover -s engine/ardiacore-linux/tests
@@ -788,7 +788,7 @@ Against a built package:
 
 ```bash
 node scripts/linux/smoke.mjs --package <ardia-linux-x64.tar.xz> --results <dir>
-pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
+pnpm --filter @ardia/desktop acceptance -- <extracted>/ardia/bin/ardia
 ```
 
 - **Smoke gate.** Twelve checks: libraries resolve; the shell renders the packaged UI; the bootstrap reports
@@ -948,7 +948,7 @@ Rust standard library. Nothing in `ac_linux_*` calls it yet.
     close, move and float windows from the keyboard, and Omarchy leaves GTK's layout at GNOME's default. The engine's
     `desktop` (the browser's `XDG_CURRENT_DESKTOP`) decides, a colon list read without case: Hyprland, sway, niri, i3,
     river, dwl, bspwm, awesome, qtile, xmonad, dwm, herbstluftwm and Regolith (`Regolith:GNOME`, i3 or sway inside)
-    (`apps/linux/src/tilingDesktop.ts`). There the effective layout is empty (`desktopButtonLayout` in
+    (`apps/desktop/src/platform/linux/tilingDesktop.ts`). There the effective layout is empty (`desktopButtonLayout` in
     `state/windows/windowButtons.ts`, from the `tiling` flag `desktopButtonLayout.ts` sets and remembers), whatever
     GTK reports, and floating windows follow it too, as Hyprland draws no titlebar on them either. The window's
     `tiled` state can't decide it: Hyprland 0.56 reports every window, half-width and floating ones included, as
@@ -963,7 +963,7 @@ Rust standard library. Nothing in `ac_linux_*` calls it yet.
   - **Traffic lights.** Settings › Appearance › Window buttons (`windowButtons`: `native` by default, `trafficLights`
     or `hidden`; kept on this device, in the config file and in the daily settings snapshot) brings back the
     Mac's lights at the top left instead, with the Mac's layouts: no `…` (the hamburger stays in the header), the
-    sidebar header's tools after the lights, and nothing kept clear at the top right. `lib/platformChrome.linux.ts`
+    sidebar header's tools after the lights, and nothing kept clear at the top right. `lib/platformChrome.desktop.ts`
     holds both chromes and `applyWindowButtonStyle` swaps the one `WINDOW_CHROME` object in place;
     `state/windows/windowButtons.ts` applies it after hydrate and on every store change, subscribed before anything
     renders, so every window, Settings included, switches at once without a relaunch. Shared code reads the chrome
@@ -980,7 +980,7 @@ Rust standard library. Nothing in `ac_linux_*` calls it yet.
     edge and nothing is kept clear at the top right. The menu is the header's hamburger, the same one full screen
     uses, and the sidebar header never collapses while it is the menu's only home. Dragging empty chrome and
     double-clicking it work as with the other styles, through the shell's drag regions.
-  - `lib/platformChrome.linux.ts` starts from the Windows `WINDOW_CHROME`. `platform/windowControls.ts` is swapped for
+  - `lib/platformChrome.desktop.ts` starts from the Windows `WINDOW_CHROME`. `platform/windowControls.ts` is swapped for
     `hostWindowControls.ts`: minimize and maximize call `ArdiaShell.minimizeWindow` and `toggleMaximizeWindow`, and
     caption regions are a no-op because the shell's own drag regions move the window. Close goes straight to the
     shell's close coordinator (`captionControls.ts`, swapped in for `WindowControls.tsx`'s close), so a window with
@@ -1111,14 +1111,14 @@ Rust standard library. Nothing in `ac_linux_*` calls it yet.
     (`X11Extension::RefreshDecorationInsets`).
   - Known limits: sway and niri are expected to honour the client-side request (not measured here), so there Ardia
     keeps Chromium's frame. `windowCornerRadius` and `drawnWindowCornerRadius` still answer a fixed 19 on Linux
-    (`apps/linux/src/shellMethods.ts`): the shared page-card geometry reads them synchronously for every window, so the
+    (`apps/desktop/src/shellMethods.ts`): the shared page-card geometry reads them synchronously for every window, so the
     settings snapshot's `window_corner_radius` reports that, not the frame's radius.
 - **Menu button.** Linux has no global menu bar, so a menu button stands in for the Mac one: usually the `…` beside the
   window buttons, and a hamburger in the header while they're hidden (full screen or the setting) or the traffic lights
   are chosen (Window controls above). It lists Ardia,
   File, Edit, View, Tabs, Bookmarks, History, Extensions, Window and Help as submenus built from the same menu
   state the Mac menu bar uses (checks, disabled commands, dynamic titles, bookmarks, recently closed entries, profiles
-  and extensions), labelled with the effective Linux shortcuts (`apps/linux/src/appMenu.ts`). Items run through the
+  and extensions), labelled with the effective Linux shortcuts (`apps/desktop/src/appMenu.ts`). Items run through the
   shared command path; Close Window, Minimize and Maximize call the native window operations. App commands Linux runs
   itself (`LINUX_APP_COMMANDS` in `appServices.ts`) are kept from the shared handler so they run once. Mac-only entries
   (Services, Hide, Spelling, Substitutions, Speech, Transformations, the WebKit page engine, JavaScript from Apple
@@ -1161,7 +1161,7 @@ Rust standard library. Nothing in `ac_linux_*` calls it yet.
   - Closing the last browser window closes them too, so Ardia quits instead of living on behind a lone Settings
     window.
 - **Shortcuts.**
-  - Linux owns its shortcut catalog (`apps/linux/src/commandCatalog.ts`, `shortcuts.ts`). The same effective bindings
+  - Linux owns its shortcut catalog (`apps/desktop/src/commandCatalog.ts`, `shortcuts.ts`). The same effective bindings
     fill Settings › Keyboard Shortcuts and drive the native key handler at the window's Aura root, so a focused page
     and the shell dispatch the same commands.
   - Bindings match physical key codes, with a logical fallback, so layouts such as German don't remap Ctrl+Z.
@@ -1471,7 +1471,7 @@ Rust standard library. Nothing in `ac_linux_*` calls it yet.
 - **Scope.** State and mode are app-wide local state. The site list goes to every loaded regular profile, and private
   profiles are refused.
 - **Startup.** Helium's `memory-saving-by-default.patch` applies on Linux, and the app pushes its setting at launch.
-- **Tests.** `engine/ardiacore-linux/tests/test_memory_saver.py` and `apps/linux/src/hostCapabilities.test.mjs`.
+- **Tests.** `engine/ardiacore-linux/tests/test_memory_saver.py` and `apps/desktop/src/hostCapabilities.test.mjs`.
 - **Tab protection.** Unknown protection state counts as protected. `unsavedInput: null` protects a tab.
 - **Loaded tab budget.** The shared budget (`state/tabs/loadedTabBudget.ts`) asks a hidden tab to sleep through its
   WebView handle's `sleepIfHidden(seconds)`, the `sleepIfHidden` tab command (`ac_linux_tab_sleep.cc`). As on the Mac,
@@ -1499,7 +1499,7 @@ Linux reads calendars from Evolution Data Server, which GNOME Online Accounts, G
   - One 90 s deadline per `objects` request.
   - A calendar that times out is skipped for two minutes.
   - Each calendar reports its own status, so one expired account doesn't hide the others.
-- **Adapter.** `apps/linux/src/hostCalendar.ts` and `calendarIcs.ts` parse iCalendar and expand RRULE, RDATE, EXDATE
+- **Adapter.** `apps/desktop/src/platform/linux/hostCalendar.ts` and `calendarIcs.ts` parse iCalendar and expand RRULE, RDATE, EXDATE
   and RECURRENCE-ID in the event's zone. They resolve TZIDs from IANA names, embedded VTIMEZONEs or EDS
   `GetTimezone`. A rule stops at 50,000 periods, and one refresh shares a 750 ms expansion budget. Truncated events are
   reported, not dropped.
@@ -1555,7 +1555,7 @@ Linux reads calendars from Evolution Data Server, which GNOME Online Accounts, G
     `ArdiaTabs`/`unclaimed` events. A new renderer has to ask again, and gets again any tab an earlier renderer was
     told about but never bound. After a shell crash that can add a second sidebar entry for a background tab the
     crashed shell had saved, which is preferred over a tab nobody can see.
-  - `apps/linux/src/unclaimedTabs.ts` opens each one in its own window, selected only if the extension asked for
+  - `apps/desktop/src/unclaimedTabs.ts` opens each one in its own window, selected only if the extension asked for
     `active` and the tab is still Chrome's active tab.
   - A window Chrome makes (`chrome.windows.create`) is marked `chromeMade` in its bootstrap and lists its tabs in
     `adoptTabs`. `initialHostSession` seeds the window with them instead of a blank tab, and the window is saved like
@@ -1579,7 +1579,7 @@ Linux reads calendars from Evolution Data Server, which GNOME Online Accounts, G
 
 - **Native requests.** GitHub, Bitbucket, Notion, Confluence and Google Drive are reached from the browser process
   (`ac_linux_live.cc`, `ac_linux_live_service.cc`), never by renderer `fetch`. The shell keeps `connect-src 'none'`.
-  - The Linux UI swaps the shared `state/live/sources.ts` and `net.ts` for `apps/linux/src/liveSources.ts` and
+  - The Linux UI swaps the shared `state/live/sources.ts` and `net.ts` for `apps/desktop/src/liveSources.ts` and
     `liveNet.ts`. These ask for fixed operations through `ArdiaLive.request`, `connect`, `cancel` and `disconnect`.
   - Native code builds every URL and adds the credential.
   - A GitHub GraphQL query must be read-only.
@@ -1663,13 +1663,13 @@ Linux reads calendars from Evolution Data Server, which GNOME Online Accounts, G
   - A 24-word BIP-39 phrase.
 - **Writes.** Files are staged `O_EXCL|O_NOFOLLOW` at 0600, fsynced, then published with
   `renameat2(RENAME_NOREPLACE)`. Everything below the chosen folder is opened with `openat`.
-- **Folder.** Linux has no cloud drive to default to, so Settings › Sync › Turn On… asks where the folder goes
+- **Folder.** Linux has no cloud drive to default to, so Settings › General › Sync › Turn On… asks where the folder goes
   (`PLATFORM_FEATURES.defaultCloudDrive` is false): the chooser opens in the home folder, and the folder picked gets an
   `Ardia Sync` folder inside it unless it is already named that or already holds sync data
   (`state/sync/folderMove.ts` `syncFolderAt`). A picked folder that holds sync data goes to Enter Recovery Phrase
   instead of starting a second chain. The engine still reports `$HOME/Ardia Sync`, or `--ardia-sync-folder`, as
   `defaultPath`, which the chooser starts beside and nothing creates. Once a folder is chosen, Turn On uses it.
-- **Moving.** While Sync is on, Settings › Sync › Sync Folder › Move… (also Advanced… › Move Sync Folder…) moves it
+- **Moving.** While Sync is on, Settings › General › Sync › Sync Folder › Move… (also Advanced… › Move Sync Folder…) moves it
   (`PLATFORM_FEATURES.movesSyncFolder`). The sync window holds its cycles, then: a folder inside the current folder or
   holding it, or one with another phrase's data, is refused; so is a folder that can't be written; a folder that
   already holds this phrase's chain and every file of the old one is only pointed at; otherwise the files of this
@@ -1760,7 +1760,7 @@ It works as on the Mac ([cli.md](cli.md), [automation.md](automation.md)); what 
     settles `off` ("The control socket was stopped while it started."), never with a stale generation.
 - **Installer** (`ac_linux_cli.cc`, a port of `CliInstaller.swift`). `ArdiaCli.installedVersion` is the basename of the
   `current` link in `${ARDIA_CLI_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/ardia/cli}`. The bootstrap carries it
-  (`nativeModules.ArdiaCli`) so the shared code can read it synchronously, and `apps/linux/src/hostCli.ts` keeps it
+  (`nativeModules.ArdiaCli`) so the shared code can read it synchronously, and `apps/desktop/src/hostCli.ts` keeps it
   current from installs and the `onInstalledVersion` event.
   - `ArdiaCli.install` runs `/bin/sh lib/ardia/cli/ardia-cli-install.sh --version <VERSION> [--sha256 <digest>]` from
     the temp folder with stdin on `/dev/null`. It gets the browser's environment minus every `ARDIA_*` variable, plus
@@ -1787,10 +1787,10 @@ It works as on the Mac ([cli.md](cli.md), [automation.md](automation.md)); what 
   `ardia config set|unset|edit` and `ardia theme new|use` reach a running Ardia. `ArdiaConfig.readFile`, `watch` and
   `writeSchemas` are native (`ac_linux_config_core.cc` for the files and the inotify watcher, `ac_linux_config.cc`
   for the threads and the windows), with the Mac's limits; the schemas go to `<user data dir>/config-schema/` and into
-  the config folder when it exists. `apps/linux/src/hostConfig.ts` keeps each window's reads so the shared code can
+  the config folder when it exists. `apps/desktop/src/hostConfig.ts` keeps each window's reads so the shared code can
   read synchronously, and refreshes them on the host's `onFilesChanged` before it raises `onChange`. An engine that
   doesn't advertise the three methods keeps the old answers (no folder, nothing watched).
-- **UI.** `apps/linux` turns the Settings rows on from the host's capabilities (`cliControl` needs the three engine
+- **UI.** `apps/desktop` turns the Settings rows on from the host's capabilities (`cliControl` needs the three engine
   calls and the four `ArdiaAutomation` methods; `cliInstall` needs both `ArdiaCli` methods), so an older engine still
   hides them. `startCliControl` runs in every window, Settings included, so the pill and the Settings note follow the
   server. The shared UI has no onboarding step for the command; it is offered in Settings › Advanced.
@@ -2009,7 +2009,7 @@ Both are ports of the Mac's native code (`ArdiaWebView+Peek.mm`, `ArdiaWebView+T
   (`ac_linux_appearance.h`, `ac_linux_system.cc`). Both native themes recompute and notify, so browser windows,
   their pages, the shell and Incognito pages all get `prefers-color-scheme` from it without a reload. The shell's
   `isDarkAppearance` asks the engine (`ArdiaShell.isDarkAppearance`), and while the engine applies the mode the
-  shell's own `prefers-color-scheme` query is the effective appearance (`apps/linux/src/hostAppearance.ts`).
+  shell's own `prefers-color-scheme` query is the effective appearance (`apps/desktop/src/hostAppearance.ts`).
   A profile whose Chrome `browser.theme.color_scheme2` pref is not System still wins over it for its regular pages.
 - **`ArdiaApp.hardwareInfo`** answers the Mac's `{chip, gpu?, memoryGB, displays, maxScale, hardwareDecode}`
   (`ac_linux_hardware.h`): the chip from `base::SysInfo::CPUModelName`, read off the UI thread; memory from
@@ -2306,7 +2306,7 @@ These were open at the time of the PR.
 - **Field timing.** `platform/fieldTiming.ts` binds the macOS-only `NativeModules.ACFieldTiming`, which is undefined
   on Linux, so `journeys.ts` threw `Cannot read properties of undefined (reading 'lastInput')` from a store update and
   Enter in a new tab's address bar did nothing (Fedora 44, wlroots). Linux replaces the module with
-  `apps/linux/src/fieldTiming.ts`, which reports no timing data (`lastInput` is `[0, 0]`, `drain` is empty), so the
+  `apps/desktop/src/fieldTiming.ts`, which reports no timing data (`lastInput` is `[0, 0]`, `drain` is empty), so the
   field journeys send no samples from Linux. UI only; the engine key is unchanged.
 - **Settings rows without a backend are hidden**, each until the host advertises its capability
   (`unavailableSettingIds` in `hostCapabilities.ts`): Zoom with Ctrl and the mouse wheel

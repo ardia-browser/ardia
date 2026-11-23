@@ -1,0 +1,3 @@
+[workspace]
+members = ["crypto", "update"]
+resolver = "2"

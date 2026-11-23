@@ -121,7 +121,7 @@ function MaterialMenu({ items, place, placer, onDismiss, origin = "top", shown =
     });
   }, [leaving]);
   const enter = useAnimatedStyle(() => ({
-    opacity: leaving ? opened.value : Math.min(1, opened.value * 3),
+    opacity: leaving ? opened.value : revealed ? Math.min(1, opened.value * 3) : 0,
     transform: [{ scaleY: 0.8 + 0.2 * opened.value }],
   }));
   const choose = (action: () => void) => {

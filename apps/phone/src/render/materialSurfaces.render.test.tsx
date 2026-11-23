@@ -1,4 +1,5 @@
 import { Dimensions, Platform, StyleSheet, Text } from "react-native";
+import { getAnimatedStyle } from "react-native-reanimated";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { ConfirmSheet, DesignProvider, Dialog, Menu, pointPlacer, Sheet, useTheme } from "../components/ui";
 import { rolesFromScheme } from "../components/ui/materialRoles";
@@ -198,6 +199,21 @@ onAndroid("a Material submenu with nothing but dividers still shows its Back row
   expect(root.root.findAll((node) => node.props.accessibilityLabel === "Stay" && typeof node.props.onPress === "function").length).toBeGreaterThan(0);
   unmount(root);
   insets.mockRestore();
+});
+
+onAndroid("with reduced motion, a placed Material menu stays invisible until its rows are measured, then shows at once", () => {
+  mockMotion.reduced = true;
+  const insets = jest.spyOn(safeArea, "useSafeAreaInsets").mockReturnValue({ top: 0, bottom: 0, left: 0, right: 0 });
+  const root = material(<Menu items={[{ label: "Stay", onPress: () => undefined }]} placer={pointPlacer({ x: 40, y: 120 }, { width: 360, height: 800 }, { top: 0, bottom: 0, left: 0, right: 0 }, 112)} onDismiss={() => undefined} />);
+  const unmeasured = getAnimatedStyle(host(root, "materialMenu")!).opacity;
+  act(() => root.root.findAll((node) => node.props.testID === "drawnMenuRows" && typeof node.props.onContentSizeChange === "function")[0]!.props.onContentSizeChange(200, 64));
+  act(() => jest.advanceTimersByTime(32));
+  const measured = getAnimatedStyle(host(root, "materialMenu")!).opacity;
+  unmount(root);
+  insets.mockRestore();
+  mockMotion.reduced = false;
+  expect(unmeasured).toBe(0);
+  expect(measured).toBe(1);
 });
 
 onAndroid("a fixed trailing menu respects the right safe inset", async () => {

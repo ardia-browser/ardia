@@ -13,9 +13,9 @@ import { useTab, useWindowId, useWindowProfileId } from "../../state/browser/hoo
 import { useCardFrame } from "../window/cardFrame";
 import type { Size } from "../ui/useSettled";
 import { overPeek } from "../../state/windows/dockMotion";
-import { zoneHit, zoneRect, type ZoneStage } from "./splitDrop";
+import { DROP_SIDES, isHorizontalSide, zoneHit, zoneRect, type ZoneStage } from "./splitDrop";
 import { setDropTarget, setOnPage, setTargetResolver, useTabDrag } from "../../state/drag/tabDrag";
-import { splitViewAvailable } from "../../state/splits/splits";
+import { splitViewAvailable, type SplitSide } from "../../state/splits/splits";
 import { FOCUS_RING, SPLIT_MOTION, splitColors, TOAST_ACTION_MS, TOAST_MS, ZONE_ACCENT_ALPHA, ZONE_DASH_INSET, ZONE_SLIDE_MS, zoneDashRadius, zoneRadius } from "./tokens";
 
 export function SplitDividers({ split, dividers, width, height }: { split: SplitView; dividers: Divider[]; width: number; height: number }) {
@@ -181,7 +181,7 @@ export function DropTargets({ panes, origin }: { panes: Record<string, Rect>; or
   const draggedProfile = useTab(dragging ?? undefined, (t) => t?.profileId);
   const windowProfile = useWindowProfileId();
   const foreign = !!dragging && draggedProfile !== windowProfile;
-  const full = Object.keys(panes).length >= 3;
+  const full = Object.keys(panes).length >= 3 && !(dragging && dragging in panes);
   const fallback = useDragFallbackPane(dragging, panes, windowId);
   const candidates = useMemo((): [string, Rect][] => {
     if (fallback && dragging) return [[fallback, panes[dragging]!]];
@@ -233,7 +233,7 @@ export function DropTargets({ panes, origin }: { panes: Record<string, Rect>; or
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       {mounted.flatMap(([tabId, rect]) =>
-        (["left", "right"] as const).map((side) => (
+        DROP_SIDES.map((side) => (
           <DropZone
             key={`${tabId}${side}`}
             pane={rect}
@@ -241,6 +241,7 @@ export function DropTargets({ panes, origin }: { panes: Record<string, Rect>; or
             shown={shown}
             stage={target?.tabId === tabId && target.side === side ? "active" : grown ? "grown" : "rest"}
             pointerX={px}
+            pointerY={py}
             onHidden={() => setMounted([])}
           />
         )),
@@ -251,9 +252,16 @@ export function DropTargets({ panes, origin }: { panes: Record<string, Rect>; or
 
 const ZONE_SPRING = { ...SPLIT_MOTION.zoneSpring, useNativeDriver: false } as const;
 
-function DropZone({ pane, side, shown, stage, pointerX, onHidden }: { pane: Rect; side: "left" | "right"; shown: boolean; stage: ZoneStage; pointerX: number; onHidden(): void }) {
+const ZONE_META: Record<SplitSide, { icon: string; label: string; shortLabel: string }> = {
+  left: { icon: "rectangle.lefthalf.filled", label: "Add left split", shortLabel: "Left split" },
+  right: { icon: "rectangle.righthalf.filled", label: "Add right split", shortLabel: "Right split" },
+  top: { icon: "rectangle.tophalf.filled", label: "Add top split", shortLabel: "Top split" },
+  bottom: { icon: "rectangle.bottomhalf.filled", label: "Add bottom split", shortLabel: "Bottom split" },
+};
+
+function DropZone({ pane, side, shown, stage, pointerX, pointerY, onHidden }: { pane: Rect; side: SplitSide; shown: boolean; stage: ZoneStage; pointerX: number; pointerY: number; onHidden(): void }) {
   const theme = useTheme();
-  const rect = zoneRect(pane, side, stage, pointerX);
+  const rect = zoneRect(pane, side, stage, pointerX, pointerY);
   const [anim] = useState(() => ({ x: new Animated.Value(rect.x), y: new Animated.Value(rect.y), w: new Animated.Value(rect.width), h: new Animated.Value(rect.height) }));
   const glow = useRef(new Animated.Value(0)).current;
   const slide = useRef(new Animated.Value(0)).current;
@@ -274,10 +282,22 @@ function DropZone({ pane, side, shown, stage, pointerX, onHidden }: { pane: Rect
       ({ finished }) => finished && !shown && onHidden(),
     );
   }, [shown]);
-  const away = side === "left" ? -(rect.x - pane.x + rect.width) : pane.x + pane.width - rect.x;
+  const horizontal = isHorizontalSide(side);
+  const away =
+    side === "left"
+      ? -(rect.x - pane.x + rect.width)
+      : side === "right"
+        ? pane.x + pane.width - rect.x
+        : side === "top"
+          ? -(rect.y - pane.y + rect.height)
+          : pane.y + pane.height - rect.y;
+  const offset = slide.interpolate({ inputRange: [0, 1], outputRange: [away, 0] });
   const dark = theme.dark;
   const colors = splitColors(dark);
   const rest = colors.zoneRest;
+  const { icon, label, shortLabel } = ZONE_META[side];
+  const inline = !horizontal && rect.height < 100;
+  const text = rect.width < 130 ? shortLabel : label;
   return (
     <Animated.View
       style={{
@@ -290,9 +310,11 @@ function DropZone({ pane, side, shown, stage, pointerX, onHidden }: { pane: Rect
         borderWidth: 0.5,
         borderColor: colors.zoneBorder,
         backgroundColor: glow.interpolate({ inputRange: [0, 1], outputRange: [colors.zoneFill, withAlpha(theme.accent, dark ? ZONE_ACCENT_ALPHA.dark : ZONE_ACCENT_ALPHA.light)] }),
+        flexDirection: inline ? "row" : "column",
         alignItems: "center",
         justifyContent: "center",
-        transform: [{ translateX: slide.interpolate({ inputRange: [0, 1], outputRange: [away, 0] }) }],
+        paddingHorizontal: ZONE_DASH_INSET + space.xs,
+        transform: [horizontal ? { translateX: offset } : { translateY: offset }],
       }}
     >
       <OverPage radius={zoneRadius()} />
@@ -309,8 +331,10 @@ function DropZone({ pane, side, shown, stage, pointerX, onHidden }: { pane: Rect
           borderColor: active ? theme.accent : colors.zoneDash,
         }}
       />
-      <Symbol name={side === "left" ? "rectangle.lefthalf.filled" : "rectangle.righthalf.filled"} size={18} color={active ? theme.accent : rest} style={{ width: 24, height: 20 }} />
-      <Text weight="semibold" color={active ? theme.accent : rest} style={{ marginTop: space.l }}>{side === "left" ? "Add left split" : "Add right split"}</Text>
+      <Symbol name={icon} size={18} color={active ? theme.accent : rest} style={{ width: 24, height: 20 }} />
+      <Text numberOfLines={1} weight="semibold" color={active ? theme.accent : rest} style={inline ? { marginLeft: space.m } : { marginTop: space.l }}>
+        {text}
+      </Text>
     </Animated.View>
   );
 }

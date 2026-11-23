@@ -120,9 +120,14 @@ textarea:focus,
   display: flex;
 }
 
+.ardia-pointer-drag iframe {
+  pointer-events: none !important;
+}
+
 .ardia-menu {
   position: fixed;
   z-index: 10000;
+  box-sizing: border-box;
   padding: 5px;
   border-radius: 10px;
   background: rgba(246, 246, 246, 0.78);

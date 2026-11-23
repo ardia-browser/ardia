@@ -177,12 +177,21 @@ function clipAtBorderBox(style: unknown) {
   return [style, BORDER_BOX_CLIP];
 }
 
-export const MacView = forwardRef<unknown, MacProps>(function MacView(props, ref) {
+export const MacView = forwardRef<unknown, MacProps & { onTouchStart?: (e: unknown) => void; onMouseDown?: (e: unknown) => void }>(function MacView(props, ref) {
   const { node, domHover } = useMacBehaviour(props);
+  const touchMouse = props.onTouchStart
+    ? {
+        onMouseDown: (e: unknown) => {
+          props.onMouseDown?.(e);
+          props.onTouchStart?.(e);
+        },
+      }
+    : null;
   return (
     <BaseView
       {...strip(props)}
       {...domHover}
+      {...touchMouse}
       style={clipAtBorderBox(props.style)}
       ref={(value: HTMLElement | null) => {
         node.current = value;
@@ -197,18 +206,63 @@ const ARROW = { cursor: "default" };
 const TEXT_ENTRY = "input, textarea, [contenteditable='true']";
 
 type PressableStyle = unknown | ((state: unknown) => unknown);
+type PressHandler = (e: { nativeEvent?: Record<string, unknown> }) => void;
 
-export const MacPressable = forwardRef<unknown, MacProps & { style?: PressableStyle; onMouseDown?: (e: MouseEvent) => void }>(function MacPressable(props, ref) {
+function withModifiers(e: { nativeEvent?: Record<string, unknown> }) {
+  const raw = e?.nativeEvent;
+  const p = currentPointer();
+  if (!raw || !p) return e;
+  if (raw.altKey === p.altKey && raw.ctrlKey === p.ctrlKey) return e;
+  const nativeEvent = Object.create(raw, {
+    altKey: { value: p.altKey, enumerable: true },
+    ctrlKey: { value: p.ctrlKey, enumerable: true },
+  });
+  return Object.create(e, { nativeEvent: { value: nativeEvent, enumerable: true } });
+}
+
+export const MacPressable = forwardRef<
+  unknown,
+  MacProps & {
+    disabled?: boolean;
+    style?: PressableStyle;
+    onMouseDown?: (e: MouseEvent) => void;
+    onPress?: PressHandler;
+    onPressIn?: PressHandler;
+    onPressOut?: PressHandler;
+  }
+>(function MacPressable(props, ref) {
   const { node, domHover } = useMacBehaviour(props);
+  const latestPress = useRef(props);
+  latestPress.current = props;
+  const downAt = useRef<[number, number] | null>(null);
+  const wantsPress = !!props.onPress;
+  useEffect(() => {
+    const el = node.current;
+    if (!el || !wantsPress) return;
+    const onClick = (e: MouseEvent) => {
+      if (!e.altKey || e.button !== 0 || latestPress.current.disabled) return;
+      const start = downAt.current;
+      downAt.current = null;
+      if (start && Math.hypot(e.clientX - start[0], e.clientY - start[1]) > 10) return;
+      e.stopPropagation();
+      latestPress.current.onPress?.({ nativeEvent: e as unknown as Record<string, unknown> });
+    };
+    el.addEventListener("click", onClick);
+    return () => el.removeEventListener("click", onClick);
+  }, [wantsPress]);
   const focusable = props.focusable === true;
   const style = props.style;
   return (
     <BasePressable
       {...strip(props)}
       {...domHover}
+      onPress={props.onPress && ((e: { nativeEvent?: Record<string, unknown> }) => props.onPress?.(withModifiers(e)))}
+      onPressIn={props.onPressIn && ((e: { nativeEvent?: Record<string, unknown> }) => props.onPressIn?.(withModifiers(e)))}
+      onPressOut={props.onPressOut && ((e: { nativeEvent?: Record<string, unknown> }) => props.onPressOut?.(withModifiers(e)))}
       tabIndex={props.tabIndex ?? (focusable ? 0 : -1)}
       style={typeof style === "function" ? (state: unknown) => [ARROW, (style as (s: unknown) => unknown)(state)] : [ARROW, style]}
       onMouseDown={(e: { nativeEvent: MouseEvent; target: EventTarget; preventDefault: () => void }) => {
+        downAt.current = [e.nativeEvent.clientX, e.nativeEvent.clientY];
         props.onMouseDown?.(e.nativeEvent);
         if (!focusable && !(e.target instanceof Element && e.target.closest(TEXT_ENTRY))) e.preventDefault();
       }}

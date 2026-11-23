@@ -21,6 +21,61 @@ function readSameOrigin(frame: HTMLIFrameElement): { url: string; title: string 
 
 const isBlank = (url: string) => !url || url === "about:blank";
 
+type FrameFocusEntry = { frame: () => HTMLIFrameElement | null; visible: () => boolean; selected: () => boolean; focus: () => void };
+
+const focusEntries = new Set<FrameFocusEntry>();
+let focusInstalled = false;
+let focusPoll: ReturnType<typeof setInterval> | null = null;
+let lastFocusedFrame: HTMLIFrameElement | null = null;
+
+function notifyActiveFrame() {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLIFrameElement)) {
+    lastFocusedFrame = null;
+    stopFocusPoll();
+    return;
+  }
+  const changed = active !== lastFocusedFrame;
+  lastFocusedFrame = active;
+  for (const entry of focusEntries) {
+    if (entry.frame() !== active || !entry.visible()) continue;
+    if (changed || !entry.selected()) entry.focus();
+    break;
+  }
+  syncFocusPoll();
+}
+
+function stopFocusPoll() {
+  if (!focusPoll) return;
+  clearInterval(focusPoll);
+  focusPoll = null;
+}
+
+function syncFocusPoll() {
+  let visibleCount = 0;
+  for (const entry of focusEntries) if (entry.visible() && entry.frame()) visibleCount++;
+  const need = visibleCount > 1 && document.activeElement instanceof HTMLIFrameElement;
+  if (need && !focusPoll) focusPoll = setInterval(notifyActiveFrame, 80);
+  else if (!need) stopFocusPoll();
+}
+
+function watchFrameFocus(entry: FrameFocusEntry) {
+  if (!focusInstalled && typeof window !== "undefined") {
+    focusInstalled = true;
+    window.addEventListener("blur", notifyActiveFrame);
+    window.addEventListener("focus", () => {
+      lastFocusedFrame = null;
+      stopFocusPoll();
+    });
+  }
+  focusEntries.add(entry);
+  syncFocusPoll();
+  return () => {
+    focusEntries.delete(entry);
+    syncFocusPoll();
+  };
+}
+
 type Page = { url: string; key: number };
 
 export const WebView = forwardRef<WebViewHandle, WebViewProps>(function WebView(props, ref) {
@@ -159,6 +214,23 @@ export const WebView = forwardRef<WebViewHandle, WebViewProps>(function WebView(
   }, []);
 
   const visible = props.visible !== false;
+  const selected = props.selected !== false;
+
+  useEffect(() => {
+    if (!visible) return;
+    return watchFrameFocus({
+      frame: () => frame.current,
+      visible: () => latest.current.visible !== false,
+      selected: () => latest.current.selected !== false,
+      focus: () => latest.current.onPageFocus?.(),
+    });
+  }, [visible]);
+
+  useEffect(() => {
+    syncFocusPoll();
+    if (!selected && frame.current && document.activeElement === frame.current) window.focus();
+  }, [selected, framedUrl]);
+
   return (
     <View style={[props.style, { overflow: "hidden", backgroundColor: "#FFFFFF" }, !visible && { opacity: 0, pointerEvents: "none" }]}>
       <div ref={frameHost} inert={!visible} style={{ position: "absolute", inset: 0, display: framedUrl ? "block" : "none" }} />

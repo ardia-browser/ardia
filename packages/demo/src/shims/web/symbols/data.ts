@@ -355,6 +355,8 @@ const BODIES: readonly string[] = [
   "<path d=\"M229.66,114.34l-96-96a8,8,0,0,0-11.32,0l-96,96A8,8,0,0,0,32,128H72v80a16,16,0,0,0,16,16h80a16,16,0,0,0,16-16V128h40a8,8,0,0,0,5.66-13.66ZM176,112a8,8,0,0,0-8,8v88H88V120a8,8,0,0,0-8-8H51.31L128,35.31,204.69,112Z\"/>",
   "<path d=\"M24.77 16.03A8.78 8.78 0 1 1 15.6 7.23L19.97 7.04\" fill=\"none\"/><path d=\"M15.57 2.41L19.97 7.04L15.57 11.67\" fill=\"none\" transform=\"rotate(-2.59 19.97 7.04)\"/>",
   "<circle cx=\"16\" cy=\"16\" r=\"10.96\"/><path d=\"M9.78 12.91L22.22 12.91\"/><path d=\"M11.48 16.8L20.52 16.8\"/><path d=\"M13.28 20.69L18.72 20.69\"/>",
+  "<rect x=\"3.25\" y=\"6.05\" width=\"25.5\" height=\"19.9\" rx=\"2.3\"/><path d=\"M3.25 16V23.65A2.3 2.3 0 0 0 5.55 25.95H26.45A2.3 2.3 0 0 0 28.75 23.65V16Z\" fill=\"currentColor\"/>",
+  "<rect x=\"3.07\" y=\"6.08\" width=\"25.85\" height=\"19.85\" rx=\"2.36\"/><path d=\"M3.07 16V8.43A2.36 2.36 0 0 1 5.43 6.08H26.57A2.36 2.36 0 0 1 28.93 8.43V16Z\" fill=\"currentColor\"/>",
 ];
 
 const ENCODED: Record<string, readonly EncodedLayer[]> = {
@@ -597,6 +599,7 @@ const ENCODED: Record<string, readonly EncodedLayer[]> = {
   "questionmark.circle": [[247,24,0,1,0,[[1.0969,1,-0.0112,0.0113,0.0657,0,1],[1.0969,1,-0.0028,0.0019,0.0845,0,1],[1.0894,1,0.0038,-0.0047,0.1025,0,1],[1.0856,1,0.0066,-0.0094,0.1138,0,1],[1.0819,1.0025,0.015,-0.0169,0.1318,0,1]]]],
   "quote.bubble.fill": [[248,24,1,1,0,[[1.1595,1.035,-0.0075,-0.0423,0.0728,0,1],[1.2045,1.03,-0.0028,-0.0498,0.048,0,1],[1.2045,1.0325,0.0122,-0.0629,0.066,0,1],[1.2345,1.03,0.0159,-0.032,0.0518,0,1],[1.2645,1.0125,-0.0159,-0.0339,0.054,0,1]]],[249,32,1,0,0,[[1.05,1.035,-0.0094,-0.0984,0.0105,0,1],[0.96,1.1,0,-0.12,0.027,0,1],[1.0162,1.0625,0.0066,-0.1294,0.0308,0,1],[1.005,1.08,0.015,-0.0975,0.039,0,1],[1.0163,1.0825,-0.015,-0.105,0.039,0,1]]]],
   "record.circle": [[250,24,1,1,0,[[1.2104,0.995,-0.0094,0.0094,0,0,1],[1.2104,1,-0.0019,0.0019,0.0023,0,1],[1.2085,1,0.0038,-0.0037,0.0075,0,1],[1.2104,1,0.0094,-0.0094,0.0135,0,1],[1.201,1,0.0169,-0.0169,0.0375,0,1]]]],
+  "rectangle.bottomhalf.filled": [[351,32,0,1,0,[[1.3465,1.015,-0.0056,0.0075,0.0485,0,1],[1.3333,1.01,-0.0019,-0.0075,0.077,0,1],[1.324,1.01,0.0019,-0.0103,0.0868,0,1],[1.324,1.01,0.0038,-0.0075,0.0868,0,1],[1.3146,1.005,0.0056,0.0188,0.11,0,1]]]],
   "rectangle.bottomhalf.inset.filled": [[251,32,0,1,0,[[1.3296,1.0075,-0.0037,-0.0169,0.0695,0,1],[1.3258,1,-0.0019,0.0056,0.0808,0,1],[1.3108,1.01,0,-0.0019,0.0928,0,1],[1.2977,0.9975,0.0019,0,0.1145,0,1],[1.2921,1,0.0038,-0.0075,0.1243,0,1]]]],
   "rectangle.compress.vertical": [[252,24,1,1,0,[[1.428,1.0425,-0.0171,0.0105,0.0008,0,1],[1.488,1.0375,-0.0096,0.0368,0.0023,0,1],[1.4899,1.0375,0.0091,0.0368,0.0053,0,1],[1.4974,1.0375,0.0241,0.0321,0.0068,0,1],[1.548,1.0575,-0.004,0.0218,0.0053,0,1]]]],
   "rectangle.expand.vertical": [[253,24,0,1,0,[[1.3267,1.01,-0.0016,0.0016,0.0657,0,1],[1.3229,0.99,0.0096,-0.0077,0.0778,0,1],[1.3454,0.9825,-0.0185,0.0223,0.0958,0,1],[1.3604,0.975,-0.0054,0.0073,0.0853,0,1],[1.3942,0.9825,0.004,-0.0068,0.0958,0,1]]]],
@@ -616,6 +619,7 @@ const ENCODED: Record<string, readonly EncodedLayer[]> = {
   "rectangle.split.2x1.slash": [[267,32,0,1,0,[[1.3596,1,0.0038,0.0019,0.0657,0,1],[1.3333,1,-0.0187,-0.0187,0.0808,0,1],[1.3183,1,-0.0187,0.0159,0.0935,0,1],[1.3165,1,0.0319,0.0075,0.113,0,1],[1.3108,0.995,0.0337,0.0038,0.1243,0,1]]],[268,32,0,1,0.06,[[1.9499,1,0.0037,-0.0038,0.0597,0,1],[1.978,1,-0.0178,-0.0188,0.0778,0,1],[2.0193,1,-0.0291,-0.0038,0.0785,0,1],[1.9705,1,0.0188,-0.0009,0.08,0,1],[1.9855,1,0.0075,-0.0216,0.0868,0,1]]]],
   "rectangle.split.3x1": [[269,32,0,1,0,[[1.3408,0.9925,-0.0028,-0.0188,0.068,0,1],[1.3333,0.99,0,0.0141,0.083,0,1],[1.3221,0.99,0.0019,0.0037,0.0995,0,1],[1.3146,0.9825,0.0019,0.0028,0.1138,0,1],[1.3108,0.9825,0.0056,-0.0028,0.122,0,1]]]],
   "rectangle.stack": [[270,32,0,1,0,[[1.2113,1.0075,0.0169,0.0938,0.0687,0,1],[1.2,1,0.0141,0.0919,0.0793,0,1],[1.1925,1,0.0188,0.0909,0.095,0,1],[1.1831,1,-0.0187,0.1172,0.1145,0,1],[1.1719,0.9975,-0.0122,0.1069,0.128,0,1]]],[271,32,0,1,0,[[1.1869,0.98,0.0197,-0.27,0.062,0,1],[1.2319,0.96,0.0141,-0.27,0.068,0,1],[1.2656,0.9225,0.0197,-0.27,0.0673,0,1],[1.1981,0.9725,-0.0169,-0.2691,0.068,0,1],[1.2619,0.9225,-0.0169,-0.2662,0.0695,0,1]]]],
+  "rectangle.tophalf.filled": [[352,32,0,1,0,[[1.3258,1.0075,-0.0047,0.0019,0.068,0,1],[1.3258,1,-0.0009,-0.0075,0.077,0,1],[1.3221,1,0.0009,-0.0225,0.0875,0,1],[1.3258,1,0.0028,-0.0262,0.0853,0,1],[1.3033,1.01,0.0028,-0.0009,0.0928,0,1]]]],
   "rectangle.topthird.inset.filled": [[344,32,0,1,0,[[1.339,1.005,-0.0066,0,0.065,0,1],[1.3315,1,-0.0028,-0.0066,0.0785,0,1],[1.3127,1.005,0.0009,-0.0084,0.0988,0,1],[1.3015,1.005,0.0047,-0.0141,0.1115,0,1],[1.2977,0.99,0.0047,0.0159,0.128,0,1]]]],
   "return": [[272,24,0,1,0,[[1.6536,1.0775,0.0368,-0.0867,0.0792,0,1],[1.6667,1.05,0.0471,-0.0632,0.0972,0,1],[1.6742,1.055,0.0171,-0.0632,0.1093,0,1],[1.6892,1.07,0.0283,-0.0632,0.119,0,1],[1.7136,1.075,0.0396,-0.0707,0.1378,0,1]]]],
   "safari": [[273,24,0,1,0,[[1.0969,1,-0.0112,0.0113,0.0672,0,1],[1.0969,1,-0.0019,0.0028,0.0845,0,1],[1.0894,1,0.0056,-0.0037,0.1003,0,1],[1.0856,1,0.0084,-0.0084,0.1108,0,1],[1.0838,0.9975,0.015,-0.0159,0.1258,0,1]]]],
@@ -952,6 +956,7 @@ const NUDGES: Record<string, string> = {
   "questionmark.circle": "ccg8cceag8cdg9cdg9cdg9cdcdcdcdcdcdcdcc8gcceb8hcd8hcd8hcd8hcdcdcdcdcdcdcdcc8gccea8gcd8hcd8hcd8hcdcdcdcdcdcdcdcc8gccea8hcd8hcd8hcd8hcdcdcdcdcdcdcd",
   "quote.bubble.fill": "fcbgfcaacggccg8ccf9cdg9cacbccccbdcebecagfc9abg7cbg8ccg8ccg9c9cacacbcbccceabd7997bd79cc88cc98db97a6a6bdbdcc5ch9dda8cefcb8gcd7hbe7aafegehdjccbdbea",
   "record.circle": "ccg8cceag8ccg8ccg8ccg8cccccccccccccccc8gccea8gcc8gcc8gcc8gcccccccccccccccc8gccea8gcc8gcc8gcc8gcccccccccccccccc8gccea8gcc8gcc8gcc8gcccccccccccccc",
+  "rectangle.bottomhalf.filled": "9ceda88ebdfacd9a9begbcfhc9eebgcdadbe9bdcag8ebdf9cd8a9aefabffcgddadcb9bac9adaaf8caaffcb8798eca9fdcdeabbc898a998d8ac8bb9gcc89d9ce9b5f9c9e5b6ca9aaa",
   "rectangle.bottomhalf.inset.filled": "9feba8ceecb8gdd99ee9befb8bacbcdcdff79eecafddfbc78cd99ce9befa9aabbccbecfe9eeaaeddfbcf8bd79cf8bcf999aabacbebfc9deaaedcface8bdfabe7bbf898a9b9d9eafa",
   "rectangle.compress.vertical": "fdb8fb99beg9cdg7cahdd9hcaaa8bfcdcbd9ecaffa98be88cc8eca9dd89ba9a7bdbbc9c7ecaf7a98be78bb8fca8cc89b99afadbb3a4f9degabcgfec9gcdf9aeeagfbgaafbeccdafg",
   "rectangle.expand.vertical": "ffbbfe9cca8ech9cdf9adea9agbfceccdbeahde8aad8fdc8gbd7iaedb8fbh9i7j5dbe9f79dd7abc8fec9gcdf9aeda8fbga97beccdae89degabdgfec98cdeaaedbgfb99afbdcceafg",
@@ -971,6 +976,7 @@ const NUDGES: Record<string, string> = {
   "rectangle.split.2x1.slash": "cefbdefbahedcghbmfaifeegfgheidbcejgiccg7ecg9aeg9eci8gbcehafdgai9k6ddgbi99dd8abd97ec98c58ab6ea97c9a993fdd6b6a9d68bbd97fba9d5g9cfec98d9bb94fdd7c8a",
   "rectangle.split.3x1": "9ecba7ddgab8gcd8abe8bdfa8a9aabccdbe59fdbafdefcb77cd89de9bdfa7aacbbcddeee9eebafddfbbf9ce89ce9bcf98aaabbcbdcfd9edbafccfbbg8cdg8de9ade99aaabbcbdcec",
   "rectangle.stack": "8cd8b9d6f4c88bd699f3a7617796a4c261609ce7aad77cb88ad6a773a66a8795a2c14665c9h4d6g4bag3c6h0f3c7g0e4f0h0j0c1e0g0b9gde6g4b9g3d6h9e4b6h1d4f1g7b4d1f0g0",
+  "rectangle.tophalf.filled": "9cdca98fbdface9a9befacfhc8ddaeccadae9cedai8gbefbcg9c9cehaefjcjegbhcf9fah9edebj8hbfgkch8d9eeiaffjcleibjcg9ibj9cdbag8fbdghde9i9jeebbgfdgedcdciajbk",
   "rectangle.topthird.inset.filled": "9cecaa9fbdgacf9a9begbcegd9edbfcc9dbe9cecah9fbdf8be9a9adfbdggchdebfdd9dae9cecah9fbdfice8c8begacfhcidfafcd9eaf9aeaae9caagfcb9g9gecb8fccdeabace9faf",
   "return": "ec98e4gaa8f4a8f4b8f4b8f4f4g4g4h3h4h0hbd8ibc9e7icf8k3g7l3i7e2f3g2h2i2j2k2gbd7hcc9e7jbf7cah6c3i6e2f2g2h1i1j2k1gbe7abc9e7bbf7dah6dai6eafah2i1j1c1d1",
   "safari": "ccg8cceag8ccg8ccg8ccg8cccccccccccccccc8gccea8gcc8gcc8gcc8gcccccccccccccccc8gccea8gcc8gcc8gcc8gcccccccccccccccc8gccea8gcc8gcc8gcc8gcccccccccccccc",

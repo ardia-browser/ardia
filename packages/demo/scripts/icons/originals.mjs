@@ -21,6 +21,8 @@ const ghost = (o) => ` fill="currentColor" stroke="none" opacity="${f(o)}"`;
 function halfRect(cx, cy, w, h, r, side) {
   const x0 = cx - w / 2, x1 = cx + w / 2, y0 = cy - h / 2, y1 = cy + h / 2;
   if (side === "left") return `<path d="M${f(cx)} ${f(y0)}H${f(x0 + r)}A${f(r)} ${f(r)} 0 0 0 ${f(x0)} ${f(y0 + r)}V${f(y1 - r)}A${f(r)} ${f(r)} 0 0 0 ${f(x0 + r)} ${f(y1)}H${f(cx)}Z"${FILL}/>`;
+  if (side === "top") return `<path d="M${f(x0)} ${f(cy)}V${f(y0 + r)}A${f(r)} ${f(r)} 0 0 1 ${f(x0 + r)} ${f(y0)}H${f(x1 - r)}A${f(r)} ${f(r)} 0 0 1 ${f(x1)} ${f(y0 + r)}V${f(cy)}Z"${FILL}/>`;
+  if (side === "bottom") return `<path d="M${f(x0)} ${f(cy)}V${f(y1 - r)}A${f(r)} ${f(r)} 0 0 0 ${f(x0 + r)} ${f(y1)}H${f(x1 - r)}A${f(r)} ${f(r)} 0 0 0 ${f(x1)} ${f(y1 - r)}V${f(cy)}Z"${FILL}/>`;
   return `<path d="M${f(cx)} ${f(y0)}H${f(x1 - r)}A${f(r)} ${f(r)} 0 0 1 ${f(x1)} ${f(y0 + r)}V${f(y1 - r)}A${f(r)} ${f(r)} 0 0 1 ${f(x1 - r)} ${f(y1)}H${f(cx)}Z"${FILL}/>`;
 }
 
@@ -77,6 +79,16 @@ export const ORIGINALS = {
     paint: "stroke",
     params: FRAME,
     make: (p) => rr(C, C, p.W, p.H, p.r) + halfRect(C, C, p.W, p.H, p.r, "left"),
+  },
+  "rectangle.tophalf.filled": {
+    paint: "stroke",
+    params: FRAME,
+    make: (p) => rr(C, C, p.W, p.H, p.r) + halfRect(C, C, p.W, p.H, p.r, "top"),
+  },
+  "rectangle.bottomhalf.filled": {
+    paint: "stroke",
+    params: FRAME,
+    make: (p) => rr(C, C, p.W, p.H, p.r) + halfRect(C, C, p.W, p.H, p.r, "bottom"),
   },
   "rectangle.righthalf.inset.filled": {
     paint: "stroke",

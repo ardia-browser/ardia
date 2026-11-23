@@ -265,7 +265,8 @@ export const createSplitsSlice: StateCreator<BrowserState, [], [], SplitsSlice> 
     if (!w || !anchor || anchor.windowId !== windowId) return { ok: false, reason: "invalid" };
     const existing = splitOf(s, anchor.id);
     const replaced = o.inPlaceOf && o.inPlaceOf !== anchor.id && existing && splitTabIds(existing).includes(o.inPlaceOf) ? o.inPlaceOf : undefined;
-    if (existing && splitTabIds(existing).length >= MAX_SPLIT_PANES && !replaced) return { ok: false, reason: "max" };
+    const sameSplit = !!o.tabId && !!existing && splitTabIds(existing).includes(o.tabId);
+    if (existing && splitTabIds(existing).length >= MAX_SPLIT_PANES && !replaced && !sameSplit) return { ok: false, reason: "max" };
 
     let tabId = o.tabId;
     if (tabId) {

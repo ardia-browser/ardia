@@ -162,11 +162,37 @@ final class VaultTouchIDView: ExpoView {
     host.contentFilters = [filter]
   }
 
+  private struct Prepared: @unchecked Sendable {
+    let context: LAContext
+    let usable: Bool
+    let problem: LAError.Code?
+  }
+
+  private static let preparing = DispatchQueue(label: "dev.ardia.vaults.touch-id", qos: .userInitiated)
+
   private func start() {
     stop()
     let mine = generation
-    let context = LAContext()
-    context.localizedFallbackTitle = ""
+    phase = .listening
+    listeningSince = ProcessInfo.processInfo.systemUptime
+    let background = LaunchConfig.shared.background
+    Self.preparing.async { [weak self] in
+      let context = LAContext()
+      context.localizedFallbackTitle = ""
+      var problem: NSError?
+      let usable = background || context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &problem)
+      let prepared = Prepared(context: context, usable: usable, problem: problem.flatMap { LAError.Code(rawValue: $0.code) })
+      DispatchQueue.main.async {
+        MainActor.assumeIsolated {
+          guard let self, mine == self.generation, self.phase == .listening else { return prepared.context.invalidate() }
+          self.listen(prepared, mine)
+        }
+      }
+    }
+  }
+
+  private func listen(_ prepared: Prepared, _ mine: Int) {
+    let context = prepared.context
     let glyph = LAAuthenticationView(context: context, controlSize: .small)
     glyph.translatesAutoresizingMaskIntoConstraints = true
     host.addSubview(glyph)
@@ -175,15 +201,11 @@ final class VaultTouchIDView: ExpoView {
     host.frame = bounds
     fitGlyph()
     hideAppleGlyph()
-    phase = .listening
-    listeningSince = ProcessInfo.processInfo.systemUptime
     let config = LaunchConfig.shared
     if config.background { return simulate(mine, scenario: config.testValue("touchID")) }
-    var problem: NSError?
-    guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &problem) else {
-      let code = problem.flatMap { LAError.Code(rawValue: $0.code) }
-      NSLog("[vaults] touch id can't be used (code %ld)", code?.rawValue ?? 0)
-      return end(code == .biometryLockout ? .lockout : .unavailable)
+    guard prepared.usable else {
+      NSLog("[vaults] touch id can't be used (code %ld)", prepared.problem?.rawValue ?? 0)
+      return end(prepared.problem == .biometryLockout ? .lockout : .unavailable)
     }
     emit(.ready)
     context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: "fill your password") { [weak self] granted, error in

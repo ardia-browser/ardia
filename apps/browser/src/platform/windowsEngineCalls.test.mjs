@@ -69,7 +69,7 @@ const calling = (engine, domain) => {
 const mac = macTables();
 
 test("the scan finds the Mac's call tables", () => {
-  assert.equal(Object.keys(mac).length, 17);
+  assert.equal(Object.keys(mac).length, 18);
   assert.ok(Object.values(mac).flatMap((table) => Object.keys(table.passing)).length >= 19);
 });
 

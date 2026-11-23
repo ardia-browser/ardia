@@ -4,8 +4,9 @@ import { forwardRef, useImperativeHandle, useRef } from "react";
 import type { NativeSyntheticEvent } from "react-native";
 import { ArdiaError, ardiaError } from "@ardia/core";
 import { deliverPageEvent, isPageEventProp, pageEventOf, type NativeProps, type PageEvent } from "./pageEvents";
-import type { DiscardOutcome, DiscardRefusal, WebViewHandle, WebViewNativeHandle, WebViewProps } from "./pageTypes";
+import type { DiscardOutcome, DiscardRefusal, VaultFillResult, VaultPasswordDraft, VaultSaveResult, WebViewHandle, WebViewNativeHandle, WebViewProps } from "./pageTypes";
 import type { ChromiumSiteDataReply, PageCookie } from "./webkit";
+import type { VaultEditResult } from "./vaults";
 
 const NativeWebView = requireNativeViewManager<NativeProps>("ArdiaWebView");
 let NativeWebKitView: typeof NativeWebView | undefined;
@@ -88,6 +89,22 @@ export function webViewHandle(native: { readonly current: WebViewNativeHandle | 
     discard: (options) => call<DiscardOutcome>("refused", (n) => n.discard(options?.unload ?? false)),
     sleepIfHidden: (seconds) => call<DiscardRefusal[]>([NO_PAGE_TO_DISCARD], (n) => n.sleepIfHidden(seconds)),
     setFrozen: (frozen) => call(undefined, (n) => n.setFrozen(frozen)),
+    fillFromVault: (r) =>
+      call<VaultFillResult>({ filled: [], error: "failed" }, (n) =>
+        n.fillFromVault(r.frameId, r.origin, r.provider, r.id, r.fields, r.userChose ?? false, r.submit === true, r.target ?? null),
+      ),
+    fillGeneratedPassword: (r) =>
+      call<Pick<VaultFillResult, "filled">>({ filled: [] }, (n) =>
+        n.fillGeneratedPassword(r.frameId, r.origin, r.style ?? "strong", r.maxLength ?? null, r.target ?? null),
+      ),
+    setVaultContextMenu: (r) => call(undefined, (n) => n.setVaultContextMenu(r.frameId, r.origin, r.menu)),
+    setVaultCodeMenu: (r) => call(undefined, (n) => n.setVaultCodeMenu(r.token, r.menu)),
+    setVaultMenu: (r) => call(undefined, (n) => n.setVaultMenu(r.frameId, r.open, r.open && r.highlighted)),
+    saveToVault: (r) =>
+      call<VaultSaveResult>({ saved: false, error: "failed" }, (n) => n.saveToVault(r.provider, r.origin, r.title ?? null, r.username ?? null)),
+    updateVaultPassword: (r) => call<VaultEditResult>({ edited: false, error: "failed" }, (n) => n.updateVaultPassword(r.provider, r.id, r.origin)),
+    discardVaultCapture: (r) => call(undefined, (n) => n.discardVaultCapture(r.origin)),
+    stageVaultPassword: (r) => call<VaultPasswordDraft>({ token: "", length: 0 }, (n) => n.stageVaultPassword(r.origin)),
   };
 }
 

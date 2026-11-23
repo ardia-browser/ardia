@@ -193,6 +193,11 @@ Launch with `scripts/agent/ac launch <app> --data <dir> [--instance K=V] [--test
 - **`systemPanelRace`**: right after sending the Passwords command, runs AppKit's
   `_showOrHideAutoFillForCurrentTextInputContextIfAppropriate` at once, while Ardia is still active: the ordering that
   lost the panel before the hold. Use it with a visible instance to check the panel still shows.
+- **`touchID=granted`**, **`vaultCloudDirectory=<dir>`**, **`vaultSyncedKey=<file>`** (Ardia's password manager,
+  `docs/password-managers.md`): the fill menu's Touch ID row acts as if touched in background
+  mode; the iCloud backup and its synced key go to scratch paths instead of iCloud Drive and iCloud Keychain. Pair them
+  with `applePasswordsPanel` and a `fill: "system"` plugin (the `tests/fixtures/plugins/password-manager` fixture) to
+  walk a profile from Ardia to that plugin and back.
 - **`appDialog`**: `confirm` and `prompt` write their options (and `kind`) to `<data dir>/dialog.json` and answer from
   `dialog.json.pick` (deleted): `confirm` (with `,suppress` to tick the suppression box) or anything else to cancel; a
   prompt's answer is the text, empty to cancel. With no pick file they run as usual (background mode cancels).

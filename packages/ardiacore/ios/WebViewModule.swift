@@ -27,6 +27,10 @@ public class WebViewModule: Module {
       ArdiaWebView.setSelectionPopoverEnabled(enabled)
       WebKitPageGestures.selectionPopover = enabled
     },
+    "setVaultContextMenu": setting { args in
+      ArdiaWebView.setVaultContextMenu(autofill: try args.bool("autofill"), generators: try args.dicts("generate"),
+                                       anyField: try args.optionalBool("generateAnyField") ?? false)
+    },
     "setBlockAutoplayEverywhere": setting { ArdiaWebView.setBlockAutoplayEverywhere(try $0.bool("enabled")) },
     "setCommandScrollZoom": setting { ArdiaWebView.setCommandScrollZoomEnabled(try $0.bool("enabled")) },
     "setLittleArdiaOpensNewTabLinks": setting { ArdiaWebView.setLittleArdiaOpensNewTabLinks(try $0.bool("enabled")) },

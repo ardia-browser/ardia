@@ -1,4 +1,4 @@
-import type { DiscardOutcome, DiscardRefusal, NavigationEntry, PageCookie, SecurityInfo, WebViewNativeHandle } from "@ardia/ardiacore";
+import type { DiscardOutcome, DiscardRefusal, NavigationEntry, PageCookie, SecurityInfo, VaultEditResult, VaultFillResult, VaultPasswordDraft, VaultSaveResult, WebViewNativeHandle } from "@ardia/ardiacore";
 import { noteMissing } from "../missing";
 import { EngineError } from "./host";
 
@@ -31,6 +31,15 @@ export const NOT_ON_WINDOWS_YET = {
   siteData: answeredWithoutWindows("siteData", null),
   armElementPick: answeredWithoutWindows("armElementPick", null),
   takeElementPick: answeredWithoutWindows("takeElementPick", false),
+  fillFromVault: answeredWithoutWindows("fillFromVault", { filled: [], error: "failed" } satisfies VaultFillResult),
+  fillGeneratedPassword: answeredWithoutWindows("fillGeneratedPassword", { filled: [] } satisfies Pick<VaultFillResult, "filled">),
+  setVaultContextMenu: answeredWithoutWindows("setVaultContextMenu", undefined),
+  setVaultCodeMenu: answeredWithoutWindows("setVaultCodeMenu", undefined),
+  setVaultMenu: answeredWithoutWindows("setVaultMenu", undefined),
+  saveToVault: answeredWithoutWindows("saveToVault", { saved: false, error: "failed" } satisfies VaultSaveResult),
+  updateVaultPassword: answeredWithoutWindows("updateVaultPassword", { edited: false, error: "failed" } satisfies VaultEditResult),
+  discardVaultCapture: answeredWithoutWindows("discardVaultCapture", undefined),
+  stageVaultPassword: answeredWithoutWindows("stageVaultPassword", { token: "", length: 0 } satisfies VaultPasswordDraft),
 } satisfies Partial<EnginePageView>;
 
 const badReply = (method: string, field: string) => Object.assign(new EngineError(`the engine's ${method} answered a ${field} of the wrong type`), { code: "ERR_BAD_REPLY" });

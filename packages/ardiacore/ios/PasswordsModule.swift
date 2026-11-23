@@ -9,24 +9,44 @@ public class PasswordsModule: Module {
     AsyncFunction("save") { (profile: String, origin: String, username: String, password: String, promise: Promise) in
       ArdiaServices.savePassword(profile: profile, origin: origin, username: username, password: password) {
         CallReply(promise: promise).service($0, $1)
+        if $1 == nil { ArdiaVaultIndex.noteChanged(profile: profile, origin: origin, username: username, renamed: nil, removed: false) }
+        ArdiaVaultBackup.noteChangeSoon()
       }
     }.runOnQueue(.main)
 
     AsyncFunction("update") {
       (profile: String, origin: String, username: String, newUsername: String?, newPassword: String?, promise: Promise) in
       ArdiaServices.updatePassword(profile: profile, origin: origin, username: username, newUsername: newUsername,
-                                   newPassword: newPassword) { CallReply(promise: promise).service($0, $1) }
+                                   newPassword: newPassword) {
+        CallReply(promise: promise).service($0, $1)
+        if $1 == nil, let newUsername, newUsername != username {
+          ArdiaVaultIndex.noteChanged(profile: profile, origin: origin, username: username, renamed: newUsername, removed: false)
+        }
+        ArdiaVaultBackup.noteChangeSoon()
+      }
     }.runOnQueue(.main)
   }
 
   static let calls = CallTable(domain: "passwords", handlers: [
     "list": { args, reply in ArdiaServices.listPasswords(profile: args.profile) { reply.service($0, $1) } },
-    "unlock": { args, reply in ArdiaServices.unlockPasswords(profile: args.profile) { reply.service($0, $1) } },
+    "unlock": { args, reply in
+      ArdiaServices.unlockPasswords(profile: args.profile) { value, error in
+        if error == nil, (value as? [String: Any])?["unlocked"] as? Bool == true { VaultOwnerCheck.noteConfirmed() }
+        reply.service(value, error)
+      }
+    },
     "reveal": { args, reply in
       ArdiaServices.password(profile: args.profile, origin: try args.text("origin"), username: try args.text("username")) { reply.service($0, $1) }
     },
     "remove": { args, reply in
-      ArdiaServices.deletePassword(profile: args.profile, origin: try args.text("origin"), username: try args.text("username")) { reply.service($0, $1) }
+      let profile = args.profile
+      let origin = try args.text("origin")
+      let username = try args.text("username")
+      ArdiaServices.deletePassword(profile: profile, origin: origin, username: username) {
+        reply.service($0, $1)
+        if $1 == nil { ArdiaVaultIndex.noteChanged(profile: profile, origin: origin, username: username, renamed: nil, removed: true) }
+        ArdiaVaultBackup.noteChangeSoon()
+      }
     },
     "neverSaveOrigins": { args, reply in ArdiaServices.neverSaveOrigins(profile: args.profile) { reply.service($0, $1) } },
     "allowSaving": { args, reply in ArdiaServices.allowSaving(profile: args.profile, origin: try args.text("origin")) { reply.service($0, $1) } },
@@ -39,7 +59,10 @@ public class PasswordsModule: Module {
     },
     "setAutofillEnabled": { args, reply in
       let enabled = try args.bool("enabled")
-      ArdiaServices.profileToggles(profile: args.profile, set: ["passwords": NSNumber(value: enabled)]) { _, error in reply.service(nil, error) }
+      ArdiaServices.profileToggles(profile: args.profile, set: ["passwords": NSNumber(value: enabled)]) { _, error in
+        reply.service(nil, error)
+        Task { _ = await ArdiaVaultIndex.shared.refreshState(explicit: true) }
+      }
     },
     "setFieldProviders": { args, reply in
       let generation = try args.double("generation")

@@ -6,6 +6,7 @@ import { readApi, readManifest, typeRows } from "./apiRows.mjs";
 const ios = new URL("../../ios/", import.meta.url);
 const nativeFiles = readdirSync(ios).filter((f) => /\.(swift|mm)$/.test(f));
 const native = (file) => readFileSync(new URL(file, ios), "utf8");
+const src = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 
 const api = readApi().replace(/\r\n/g, "\n");
 const manifest = readManifest();
@@ -104,4 +105,10 @@ test("every event in api.ts is emitted natively under that name, and nothing els
   const renamed = new Map([...between("NSString *AppEventOfTopic(", "\n}").matchAll(/isEqualToString:@"([^"]+)"\] \? @"([^"]+)"/g)].map((m) => [m[1], m[2]]));
   for (const [, topic] of between("ForwardedTopics()", "];").matchAll(/@"([^"]+)"/g)) emitted.add(renamed.get(topic) ?? topic);
   assert.deepEqual(sorted(emitted), sorted(typeRows(api, manifest, "EngineEvents").rows));
+});
+
+test("no call handler reads the profile from its JSON arguments, since call() sends it on its own", () => {
+  assert.match(src("./call.ts"), /const \{ profile = "", \.\.\.rest \}/, "call() moves profile out of the arguments");
+  const readers = nativeFiles.filter((f) => /args\.(text|optionalText|bool|optionalBool)\("profile"\)/.test(native(f)));
+  assert.deepEqual(readers, [], "these read a profile that never arrives; use args.profile");
 });

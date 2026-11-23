@@ -13,6 +13,8 @@ const sourcesIn = (folder) =>
 
 const ASKED_BY = ["packages/shell/src/", "packages/ardiacore/src/", "packages/shaders/src/", "packages/import/src/", "packages/sync/src/"];
 const DRAWN_AS_NOTHING_ON_WINDOWS = ["ArdiaFieldGlow", "ArdiaMeadow", "ArdiaPlugins", "ArdiaPowerUp", "ArdiaReport", "ArdiaWebKit"];
+const PASSWORD_MANAGER_VIEWS = ["ArdiaAutofillCardField", "ArdiaVaultPasswordField", "ArdiaVaults"];
+const passwordManagersOnWindows = () => /systemPasswordManagers: true\b/.test(read("apps/browser/src/lib/platformFeatures.windows.ts"));
 
 const asked = () => {
   const names = new Set();
@@ -28,7 +30,8 @@ const known = () => {
 
 test("every native view the shared UI asks for is one Windows draws, or one it is listed as drawing nothing for", () => {
   const drawn = known();
-  const unanswered = asked().filter((name) => !drawn.has(name) && !DRAWN_AS_NOTHING_ON_WINDOWS.includes(name));
+  assert.equal(passwordManagersOnWindows(), false, "the password manager views are left out only while Windows hides password managers");
+  const unanswered = asked().filter((name) => !drawn.has(name) && !DRAWN_AS_NOTHING_ON_WINDOWS.includes(name) && !PASSWORD_MANAGER_VIEWS.includes(name));
   assert.deepEqual(unanswered, [], "a view the Mac added: without a Windows view it draws an empty box");
   assert.deepEqual(DRAWN_AS_NOTHING_ON_WINDOWS.filter((name) => drawn.has(name)), [], "listed as drawing nothing, but Windows draws it");
   assert.ok(asked().length > 20);

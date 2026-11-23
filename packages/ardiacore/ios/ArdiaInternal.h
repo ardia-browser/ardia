@@ -34,6 +34,8 @@ NSString *_Nullable AppTabIdOf(ArdiaCoreTab *_Nullable tab);
 id AppTabIdValue(ArdiaCoreTab *_Nullable tab);
 ArdiaCoreTab *_Nullable TabWithAppTabId(NSString *_Nullable tabId);
 NSString *_Nullable AppTabIdContaining(NSView *_Nullable view);
+void ApplyChromeDropdownClaim(ArdiaCoreTab *_Nullable tab, NSString *_Nullable tabId);
+NSDictionary<NSString *, id> *NoteChromeDropdown(ArdiaCoreTab *_Nullable tab, NSString *tabId, NSArray<NSDictionary<NSString *, NSString *> *> *items);
 void HoldUntilHosted(ArdiaCoreTab *tab, NSString *event, NSDictionary *payload);
 void ReleaseHeldEvents(ArdiaCoreTab *tab);
 void DropHeldEvent(NSString *event, NSString *eventId);

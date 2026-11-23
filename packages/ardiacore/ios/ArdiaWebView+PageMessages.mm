@@ -5,6 +5,7 @@
 #import "ArdiaHost.h"
 #import "ArdiaPictureInPicture.h"
 #import "ArdiaServices.h"
+#import "ArdiaVaultCapture.h"
 
 #import <objc/runtime.h>
 #import <os/log.h>
@@ -342,6 +343,7 @@ static NSMutableSet<NSString *> *SameSiteFramesOf(ArdiaCoreTab *tab) {
   [ScriptFramesOf(_tab) removeObject:frameId];
   [SameSiteFramesOf(_tab) removeObject:frameId];
   [_reports.exclusiveFrames removeObject:frameId];
+  [ArdiaVaultCaptureOfTab(_tab) forgetFrame:frameId];
 }
 
 - (void)pushFieldProvider {

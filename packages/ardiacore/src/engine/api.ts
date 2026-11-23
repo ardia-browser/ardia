@@ -18,7 +18,8 @@ import type { LinkRoute, TabStripCommand, TabStripTransaction, WindowRequest } f
 import type {
   CookieRemoval, PageCookie, PageEngine, PasskeyAccess, SiteData, SiteDataWritten, StorageChange, StorageItems, WebKitCount,
 } from "../webkit";
-import type { DisplayMediaSource, OpenWindowRequest, WebNotification } from "../pageTypes";
+import type { ChromeDropdownShown, DisplayMediaSource, OpenWindowRequest, VaultPasswordStyle, WebNotification } from "../pageTypes";
+import type { VaultAddTotpResult, VaultCreateLoginResult, VaultEditResult, VaultStandaloneCode, VaultStandaloneCodeAdded, VaultStandaloneCodeEdited, VaultCodeRead, VaultCodeSource, VaultCopyResult, VaultRemoveTotpResult, VaultGeneratedPassword, VaultGeneratedSaveResult, VaultItem, VaultProviderId, VaultProviderState, VaultSecretField, VaultSyncResult, VaultTotp, VaultBackupStatus, VaultBackupChange, VaultBackupDeleteResult, VaultRestoreResult } from "../vaults";
 import type { BookmarksCalls, BookmarksEvents } from "./generated/bookmarks";
 import type { FaviconsCalls, FaviconsEvents } from "./generated/favicons";
 import type { HistoryCalls, HistoryEvents } from "./generated/history";
@@ -183,6 +184,7 @@ export type EngineCalls = BookmarksCalls & FaviconsCalls & HistoryCalls & {
   "webView.setSplitLinkModifier": [{ modifier: "alt" | "altShift" }, null];
   "webView.setPeekOtherSiteTabs": [{ tabIds: string[] }, null];
   "webView.setSelectionPopover": [{ enabled: boolean }, null];
+  "webView.setVaultContextMenu": [{ autofill: boolean; generate: { style: string; title: string }[]; generateAnyField?: boolean }, null];
   "webView.setBlockAutoplayEverywhere": [{ enabled: boolean }, null];
   "webView.setCommandScrollZoom": [{ enabled: boolean }, null];
   "webView.setLittleArdiaOpensNewTabLinks": [{ enabled: boolean }, null];
@@ -213,6 +215,72 @@ export type EngineCalls = BookmarksCalls & FaviconsCalls & HistoryCalls & {
   "webKit.passkeyAccess": [{}, PasskeyAccess];
   "webKit.notificationAction": [{ id: string; action: "click" | "close" }, null];
   "webKit.requestPasskeyAccess": [{}, PasskeyAccess];
+
+  "vaults.providers": [{}, VaultProviderState[]];
+  "vaults.claimChromeDropdowns": [{ tabId: string; kinds: ChromeDropdownShown[]; usernames: string[]; anyLogin?: boolean }, { hidden: boolean; showing: ChromeDropdownShown[]; logins: string[] }];
+  "vaults.refresh": [{ provider: VaultProviderId; ardiaProfiles?: string[] }, VaultProviderState];
+  "vaults.items": [{ provider?: VaultProviderId }, VaultItem[]];
+  "vaults.lock": [{ provider: VaultProviderId }, VaultProviderState];
+  "vaults.signOut": [{ provider: VaultProviderId }, VaultProviderState];
+  "vaults.configure": [{ provider: VaultProviderId; server?: string | null }, VaultProviderState];
+  "vaults.cancelSignIn": [{ provider: VaultProviderId }, VaultProviderState];
+  "vaults.copy": [{ provider: VaultProviderId; id: string; field: VaultSecretField }, VaultCopyResult];
+  "vaults.totp": [{ provider: VaultProviderId; id: string }, VaultTotp | null];
+  "vaults.generate": [{ style?: VaultPasswordStyle; maxLength?: number }, { length: number }];
+  "vaults.setOptions": [
+    { idleLockMinutes: number; touchID: boolean; askBeforeFilling: boolean; iCloudSync: boolean; lockOnQuit: boolean; lockOnScreenLock: boolean },
+    Record<string, never>,
+  ];
+  "vaults.export": [{ provider: VaultProviderId; profile?: string }, { saved: boolean; count: number; declined?: boolean }];
+  "vaults.sync": [{}, VaultSyncResult];
+  "vaults.syncStatus": [{}, VaultSyncResult];
+  "vaults.warm": [{ origin: string }, Record<string, never>];
+  "vaults.backupStatus": [{ profiles: string[] }, VaultBackupStatus];
+  "vaults.restoreBackup": [{ profiles: string[] }, VaultRestoreResult];
+  "vaults.updateFromBackup": [{ profiles: string[] }, VaultRestoreResult];
+  "vaults.deleteBackup": [{}, VaultBackupDeleteResult];
+  "vaults.resumeBackup": [{}, Record<string, never>];
+  "vaults.biometrics": [{}, { available: boolean }];
+  "vaults.keychainCounts": [
+    {},
+    {
+      reads: number;
+      readsFromMemory: number;
+      writesSkipped: number;
+      loginKeychainCalls: number;
+      storeLegacyMigrated?: number;
+      storeNewerFormatKept?: number;
+      storeCloudNewerFormatKept?: number;
+      storeUnreadableKept?: number;
+      storeKeyReadFailed?: number;
+      staleWorkDropped?: number;
+      storeResealed?: number;
+      storeSetAside?: number;
+      storeKeyNotNoted?: number;
+    },
+  ];
+  "vaults.listGenerated": [{}, VaultGeneratedPassword[]];
+  "vaults.copyGenerated": [{ id: string }, VaultCopyResult];
+  "vaults.saveGenerated": [{ id: string; provider: VaultProviderId; username?: string; profile?: string }, VaultGeneratedSaveResult];
+  "vaults.deleteGenerated": [{ id: string }, { deleted: boolean }];
+  "vaults.setGeneratedRetention": [{ days: number }, Record<string, never>];
+  "vaults.addTotp": [{ provider: VaultProviderId; id: string; token: string }, VaultAddTotpResult];
+  "vaults.edit": [{ provider: VaultProviderId; id: string; profile?: string; username?: string; passwordDraft?: string; url?: string; totp?: { token: string } | { remove: true } }, VaultEditResult];
+  "vaults.removeTotp": [{ provider: VaultProviderId; id: string }, VaultRemoveTotpResult];
+  "vaults.readCode": [{ source: VaultCodeSource; origin?: string; tabId?: string }, VaultCodeRead];
+  "vaults.forgetCode": [{ token: string }, Record<string, never>];
+  "vaults.copyCode": [{ provider: VaultProviderId; id: string }, VaultCopyResult];
+  "vaults.ardiaLoginChanged": [{ profile: string; origin: string; username: string; to?: string | null }, boolean];
+  "vaults.importCodes": [{ profile: string; path: string }, { imported: number; standalone?: number }];
+  "vaults.dropTouchGrant": [{}, Record<string, never>];
+  "vaults.copyConcealed": [{ text: string }, VaultCopyResult];
+  "vaults.newPasswordDraft": [{ style?: VaultPasswordStyle }, { token: string; length: number }];
+  "vaults.dropPasswordDraft": [{ token: string }, Record<string, never>];
+  "vaults.createLogin": [{ website: string; username?: string; passwordDraft: string; profile?: string; codeToken?: string }, VaultCreateLoginResult];
+  "vaults.codes": [{}, VaultStandaloneCode[]];
+  "vaults.addCode": [{ token: string; label: string; issuer?: string; website?: string }, VaultStandaloneCodeAdded];
+  "vaults.editCode": [{ id: string; label: string; website?: string }, VaultStandaloneCodeEdited];
+  "vaults.deleteCode": [{ id: string }, { deleted: boolean; error?: "notFound" | "declined" | "failed" }];
 };
 
 export type EngineEvents = BookmarksEvents & FaviconsEvents & HistoryEvents & {
@@ -248,6 +316,12 @@ export type EngineEvents = BookmarksEvents & FaviconsEvents & HistoryEvents & {
   "media.deviceChooser": DeviceChooser;
   "media.castDialog": CastDialog;
   "media.castRoutes": { profile: string; routes: CastRoute[] };
+  "vaults.changed": { provider: VaultProviderState };
+  "vaults.itemsChanged": { provider: VaultProviderId };
+  "vaults.generatedChanged": Record<string, never>;
+  "vaults.backupChanged": VaultBackupChange;
+  "vaults.codesChanged": Record<string, never>;
+  "vaults.passkeysChanged": Record<string, never>;
 };
 
 export type WindowsHostEvents = {

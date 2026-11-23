@@ -16,7 +16,7 @@ const chromiumView = files(/^ArdiaWebView.*\.mm$/).map(native);
 const chromiumEmitters = files(/\.mm$/).map(native);
 const webKitTab = files(/^WebKitTab.*\.swift$/).map(native);
 const pageScript = native("page_script.js");
-const messageReceivers = ["ArdiaWebView+PageMessages.mm", "ArdiaWebView+Peek.mm"].map(native);
+const messageReceivers = ["ArdiaWebView+PageMessages.mm", "ArdiaWebView+VaultPageMessages.mm", "ArdiaWebView+Peek.mm"].map(native);
 
 const WEBKIT_ONLY_EVENTS = new Set(["mediaFault", "focusRestore"]);
 const WINDOWS_ENGINE_ONLY_EVENTS = new Set(["autoplayBlocked"]);

@@ -112,8 +112,17 @@ test("a call Windows has no engine for yet answers what the Mac answers when it 
     siteData: null,
     armElementPick: null,
     takeElementPick: false,
+    fillFromVault: { filled: [], error: "failed" },
+    fillGeneratedPassword: { filled: [] },
+    setVaultContextMenu: undefined,
+    setVaultCodeMenu: undefined,
+    setVaultMenu: undefined,
+    saveToVault: { saved: false, error: "failed" },
+    updateVaultPassword: { edited: false, error: "failed" },
+    discardVaultCapture: undefined,
+    stageVaultPassword: { token: "", length: 0 },
   };
   assert.deepEqual(Object.keys(NOT_ON_WINDOWS_YET).sort(), Object.keys(expected).sort());
-  for (const [method, answer] of Object.entries(expected)) assert.equal(await NOT_ON_WINDOWS_YET[method]("x", 1), answer, method);
+  for (const [method, answer] of Object.entries(expected)) assert.deepEqual(await NOT_ON_WINDOWS_YET[method]("x", 1), answer, method);
   for (const method of Object.keys(expected)) assert.ok(missingOnWindows().includes(`<ArdiaWebView>.${method}`), method);
 });

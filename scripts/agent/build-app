@@ -1,12 +1,18 @@
 #!/bin/bash
 # Builds the app into your own derived data, quietly: the full log goes to a file, and you see only what you need.
 #
-#   scripts/agent/build-app [--as NAME] [--config Debug|Release] [--force] [--wait SECS]
+#   scripts/agent/build-app [--as NAME] [--config Debug|Release] [--sign team|dev|adhoc] [--force] [--wait SECS]
 #   scripts/agent/build-app -h | --help
 #
 # --as NAME     your agent name (default: $AC_LOCKED_AS, else "dev"). Builds into apps/browser/build-NAME, and is
 #               passed to `locked` so a chromium take of yours covers the engine staging.
 # --config      Debug (default) or Release.
+# --sign        team (default: the project's team profile, with the keychain access group), dev (your own Apple
+#               Development identity, no profile and no entitlements: macos/DevSigned.xcconfig; the signature stays the
+#               same across rebuilds, so the keychain's Always Allow sticks) or adhoc (macos/AdHoc.xcconfig). dev uses
+#               $ARDIA_DEV_SIGN_IDENTITY (a SHA-1 or name from `security find-identity -v -p codesigning`), else the
+#               first Apple Development identity. $ARDIA_BUILD_SIGN sets the default. An XCODE_XCCONFIG_FILE you set
+#               yourself wins over both.
 # --force       build even when no native file changed.
 # --wait SECS   how long to wait for a pod install, or for another build into the same derived data (default 1500).
 #
@@ -30,7 +36,7 @@ usage() {
   exit 64
 }
 
-name=${AC_LOCKED_AS:-dev} config=Debug force="" wait=1500
+name=${AC_LOCKED_AS:-dev} config=Debug force="" wait=1500 sign=${ARDIA_BUILD_SIGN:-team}
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -h | --help) help ;;
@@ -40,6 +46,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --as) name="$2" ;;
     --config) config="$2" ;;
+    --sign) sign="$2" ;;
     --wait) wait="$2" ;;
     *) echo "build-app: unknown option $1" >&2; usage ;;
   esac
@@ -47,14 +54,28 @@ while [[ $# -gt 0 ]]; do
 done
 [[ "$config" == Debug || "$config" == Release ]] || { echo "build-app: --config is Debug or Release" >&2; usage; }
 [[ "$name" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "build-app: --as takes letters, digits, . _ -" >&2; usage; }
+[[ "$sign" == team || "$sign" == dev || "$sign" == adhoc ]] || { echo "build-app: --sign is team, dev or adhoc" >&2; usage; }
 
 repo=$(cd "$(dirname "$0")/../.." && pwd)
 . "$repo/scripts/lib/paths.sh"
 app_dir="$repo/apps/browser"
+settings=()
+if [[ -z "${XCODE_XCCONFIG_FILE:-}" ]]; then
+  case "$sign" in
+    adhoc) export XCODE_XCCONFIG_FILE="$app_dir/macos/AdHoc.xcconfig" ;;
+    dev)
+      identity=${ARDIA_DEV_SIGN_IDENTITY:-$(security find-identity -v -p codesigning | awk -F'"' '/"Apple Development: / { split($1, f, " "); print f[2]; exit }')}
+      [[ -n "$identity" ]] || { echo "build-app: --sign dev found no Apple Development identity (security find-identity -v -p codesigning)" >&2; exit 1; }
+      export XCODE_XCCONFIG_FILE="$app_dir/macos/DevSigned.xcconfig"
+      settings=("ARDIA_DEV_SIGN_IDENTITY=$identity")
+      ;;
+  esac
+fi
 dd="$app_dir/build-$name"
 log="$dd/build-app.log"
 app="$dd/Build/Products/$config/Ardia.app"
-stamp_file="$dd/.ac-native-stamp-$config"
+signing=${XCODE_XCCONFIG_FILE:+-$(basename "$XCODE_XCCONFIG_FILE" .xcconfig)}
+stamp_file="$dd/.ac-native-stamp-$config$signing"
 
 native_stamp() {
   (
@@ -96,7 +117,7 @@ echo "build-app: $config into ${dd#"$repo"/} (log: ${log#"$repo"/})"
   cd "$app_dir" &&
     "$repo/scripts/agent/locked" xcodebuild --wait "$wait" --as "$name" -- \
       xcodebuild -workspace macos/Ardia.xcworkspace -scheme Ardia-macOS -derivedDataPath "$dd" \
-      -destination 'platform=macOS,arch=arm64' -configuration "$config" -hideShellScriptEnvironment build
+      -destination 'platform=macOS,arch=arm64' -configuration "$config" -hideShellScriptEnvironment ${settings[@]+"${settings[@]}"} build
 ) >"$log" 2>&1
 status=$?
 elapsed=$(($(date +%s) - start))

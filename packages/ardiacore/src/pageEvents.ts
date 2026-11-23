@@ -2,6 +2,7 @@ import { toAppUrl } from "@ardia/core";
 import type { NativeSyntheticEvent } from "react-native";
 import type { ExternalAppRequest } from "./permissions";
 import type {
+  ChromeDropdownEvent,
   ActivateRequest,
   AppBadge,
   AutofillPrompt,
@@ -37,6 +38,10 @@ import type {
   ProtectedMediaRequest,
   ScrollState,
   SecurityInfo,
+  VaultCodeAction,
+  VaultCodeFound,
+  VaultContextAction,
+  VaultContextField,
   VerificationCodeFound,
   WebNotification,
   WebViewProps,
@@ -92,6 +97,11 @@ type NativeEvents = {
   onAutofillPrompt: AutofillPrompt | { id: number; closed: true };
   onExternalApp: ExternalAppRequest;
   onPreferredSize: { width: number; height: number };
+  onVaultContext: VaultContextField;
+  onVaultContextAction: VaultContextAction;
+  onVaultCode: VaultCodeFound;
+  onVaultCodeAction: VaultCodeAction;
+  onAutofillSuggestions: ChromeDropdownEvent;
   onTransferRefused: { from: string };
   onAppBadge: AppBadge;
   onFieldProviderOpened: FieldProviderOpened;
@@ -154,6 +164,11 @@ const PAGE_EVENTS = {
   onAutofillPrompt: "autofillPrompt",
   onExternalApp: "externalApp",
   onPreferredSize: "preferredSize",
+  onVaultContext: "vaultContext",
+  onVaultContextAction: "vaultContextAction",
+  onVaultCode: "vaultCode",
+  onVaultCodeAction: "vaultCodeAction",
+  onAutofillSuggestions: "autofillSuggestions",
   onTransferRefused: "transferRefused",
   onAppBadge: "appBadge",
   onFieldProviderOpened: "fieldProviderOpened",
@@ -213,6 +228,11 @@ const unwrap: { [K in Handlers]: (e: NativeEvents[K]) => Parameters<NonNullable<
   onAutofillPrompt: (e) => ("closed" in e ? [null, e.id] : [e, e.id]),
   onExternalApp: (e) => [e],
   onPreferredSize: (e) => [e],
+  onVaultContext: (e) => [e],
+  onVaultContextAction: (e) => [e],
+  onVaultCode: (e) => [e],
+  onVaultCodeAction: (e) => [e],
+  onAutofillSuggestions: (e) => [e.count, e.kinds ?? [], e.hidden ?? false, e.logins ?? []],
   onTransferRefused: (e) => [e.from],
   onAppBadge: (e) => [e],
   onFieldProviderOpened: (e) => [

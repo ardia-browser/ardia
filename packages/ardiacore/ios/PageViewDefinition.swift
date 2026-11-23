@@ -2,6 +2,9 @@ import AppKit
 import ExpoModulesCore
 
 enum PageViewDefinition {
+  private static let contextMenuTarget = "contextMenu"
+  private static let longestGeneratedPassword = 4096.0
+
   static func of<V: PageTabHost>(_ viewType: V.Type) -> ViewDefinition<V> {
     View(viewType) {
       Events(PageEvents.channel)
@@ -114,6 +117,43 @@ enum PageViewDefinition {
       AsyncFunction("mediaCaptureSourceId") { (view: V) -> String? in view.page.mediaCaptureSourceId }.runOnQueue(.main)
       AsyncFunction("notificationAction") { (view: V, id: String, action: String) in
         view.page.notificationAction(id, action: action)
+      }.runOnQueue(.main)
+
+      AsyncFunction("fillFromVault") {
+        (view: V, frameId: String, origin: String, provider: String, id: String, fields: [String], userChose: Bool?, submit: Bool?, target: String?,
+         promise: Promise) in
+        view.page.fillFromVault(
+          frameId: frameId, origin: origin, provider: provider, id: id, fields: fields, userChose: userChose ?? false, submit: submit ?? false,
+          contextMenu: target == contextMenuTarget
+        ) { promise.resolve($0) }
+      }.runOnQueue(.main)
+      AsyncFunction("fillGeneratedPassword") {
+        (view: V, frameId: String, origin: String, style: String?, maxLength: Double?, target: String?, promise: Promise) in
+        let limit = maxLength.flatMap { $0.isFinite && $0 > 0 ? Int(min($0, longestGeneratedPassword)) : nil }
+        view.page.fillGeneratedPassword(
+          frameId: frameId, origin: origin, style: style ?? "", maxLength: limit, contextMenu: target == contextMenuTarget
+        ) { promise.resolve($0) }
+      }.runOnQueue(.main)
+      AsyncFunction("setVaultContextMenu") { (view: V, frameId: String, origin: String, menu: [String: Any]) in
+        view.page.setVaultContextMenu(frameId: frameId, origin: origin, menu: menu)
+      }.runOnQueue(.main)
+      AsyncFunction("setVaultCodeMenu") { (view: V, token: String, menu: [String: Any]) in
+        view.page.setVaultCodeMenu(token: token, menu: menu)
+      }.runOnQueue(.main)
+      AsyncFunction("setVaultMenu") { (view: V, frameId: String, open: Bool, highlighted: Bool) in
+        view.page.setVaultMenu(frameId: frameId, open: open, highlighted: highlighted)
+      }.runOnQueue(.main)
+      AsyncFunction("saveToVault") { (view: V, provider: String, origin: String, title: String?, username: String?, promise: Promise) in
+        view.page.saveToVault(provider: provider, origin: origin, title: title, username: username) { promise.resolve($0) }
+      }.runOnQueue(.main)
+      AsyncFunction("updateVaultPassword") { (view: V, provider: String, id: String, origin: String, promise: Promise) in
+        view.page.updateVaultPassword(provider: provider, id: id, origin: origin) { promise.resolve($0) }
+      }.runOnQueue(.main)
+      AsyncFunction("discardVaultCapture") { (view: V, origin: String) in
+        view.page.discardVaultCapture(origin: origin)
+      }.runOnQueue(.main)
+      AsyncFunction("stageVaultPassword") { (view: V, origin: String) -> [String: Any] in
+        view.page.stageVaultPassword(origin: origin)
       }.runOnQueue(.main)
 
       AsyncFunction("resolveUnresponsive") { (view: V, terminate: Bool) in view.page.resolveUnresponsive(terminate: terminate) }

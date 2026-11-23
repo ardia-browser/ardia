@@ -40,6 +40,7 @@ final class CallArgs {
   func dict(_ key: String) throws -> [String: Any] { try required(key, "an object") }
   func dicts(_ key: String) throws -> [[String: Any]] { try required(key, "a list of objects") }
   func strings(_ key: String) throws -> [String] { try required(key, "a list of strings") }
+  func optionalStrings(_ key: String) throws -> [String]? { try optional(key, "a list of strings") }
 
   func choice<Choice: RawRepresentable>(_ key: String, _: Choice.Type = Choice.self) throws -> Choice where Choice.RawValue == String {
     let raw = try text(key)

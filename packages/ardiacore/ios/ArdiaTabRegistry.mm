@@ -27,8 +27,10 @@ constexpr int64_t kOfferSeconds = 30;
 @implementation ArdiaTabRegistry
 
 + (void)setView:(ArdiaWebView *)view forTab:(ArdiaCoreTab *)tab {
-  if (view) [Views() setObject:view forKey:tab];
-  else [Views() removeObjectForKey:tab];
+  if (view) {
+    [Views() setObject:view forKey:tab];
+    ardia_host::ApplyChromeDropdownClaim(tab, view.transferKey);
+  } else [Views() removeObjectForKey:tab];
 }
 
 + (ArdiaWebView *)viewForTab:(ArdiaCoreTab *)tab {

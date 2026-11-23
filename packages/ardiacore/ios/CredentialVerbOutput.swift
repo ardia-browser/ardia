@@ -22,6 +22,27 @@ enum CredentialVerbOutput {
     return cleaned
   }
 
+  static func mayHold(_ raw: Data, _ secrets: [String]) -> Bool {
+    guard !secrets.isEmpty else { return false }
+    if contains(raw, Data(#"\u"#.utf8)) { return true }
+    return secrets.contains { secret in
+      let plain = Data(secret.utf8)
+      let escaped = encoded(secret).map { Data($0.dropFirst().dropLast()) } ?? plain
+      let slashed = Data(secret.replacingOccurrences(of: "/", with: #"\/"#).utf8)
+      return contains(raw, plain) || contains(raw, escaped) || contains(raw, slashed)
+    }
+  }
+
+  static func contains(_ haystack: Data, _ needle: Data) -> Bool {
+    guard !needle.isEmpty else { return true }
+    return haystack.withUnsafeBytes { hay in
+      needle.withUnsafeBytes { wanted in
+        guard let hayBase = hay.baseAddress, let wantedBase = wanted.baseAddress else { return false }
+        return memmem(hayBase, hay.count, wantedBase, wanted.count) != nil
+      }
+    }
+  }
+
   static func redact(json value: Any, _ secrets: [String]) -> Any {
     guard !secrets.isEmpty else { return value }
     if let text = value as? String { return redact(text, secrets) }
@@ -108,7 +129,7 @@ enum CredentialVerbOutput {
       switch verb.output {
       case .json(let itemsAt):
         if let parsed = VaultJSON.parse(result.stdout) {
-          let cleaned = redact(json: parsed, secrets)
+          let cleaned = mayHold(result.stdout, secrets) ? redact(json: parsed, secrets) : parsed
           if let itemsAt, let split = splitItems(cleaned, at: itemsAt) {
             var notifications: [String] = []
             for (index, element) in split.elements.enumerated() {

@@ -89,6 +89,23 @@ struct CredentialVerbOutputTests {
     #expect(lines.reply["lines"] as? [String] == ["one [hidden]", "two"])
   }
 
+  @Test("A secret is hidden however the CLI escaped it in its JSON", arguments: [
+    #"[{"note":"ab/cd+ef=gh-0123"}]"#, #"[{"note":"ab\/cd+ef=gh-0123"}]"#, #"[{"note":"\u0061b/cd+ef=gh-0123"}]"#,
+  ])
+  func escapedSecret(stdout: String) throws {
+    let secret = "ab/cd+ef=gh-0123"
+    let report = CredentialVerbOutput.report(Self.result(stdout), verb: Self.verb(.json(items: "$")), launch: Self.launch(secrets: [secret]), verbOf: 1)
+    let item = try Self.parsed(try #require(report.notifications.first))["item"] as? [String: Any]
+    #expect(item?["note"] as? String == "[hidden]")
+  }
+
+  @Test func `output that can't hold a secret comes through untouched`() throws {
+    let report = CredentialVerbOutput.report(Self.result(#"[{"title":"Café","note":"nothing"}]"#), verb: Self.verb(.json(items: "$")), launch: Self.launch(), verbOf: 1)
+    let item = try Self.parsed(try #require(report.notifications.first))["item"] as? [String: Any]
+    #expect(item?["title"] as? String == "Café")
+    #expect(item?["note"] as? String == "nothing")
+  }
+
   @Test func `stderr hides the plaintext a json stdin carried, from six characters up`() {
     let report = CredentialVerbOutput.report(
       Self.result("", stderr: "rejected item hunter22 for site abc", status: 1), verb: Self.verb(.json(items: nil)),

@@ -145,6 +145,18 @@ test("a visited bookmark is found by its own name as well as by the page's title
   assert.deepEqual(page("builder", [{ url, title: "", favicon: null }]), row("Builder Dashboard"));
 });
 
+test("a bookmark's name labels only the row that opens the bookmark's own address, and still finds the page open in a renamed tab", () => {
+  const base = "https://app.example.org/";
+  const visited = [...history, { url: `${base}#/a`, title: "Dashboard", favicon: null, visits: 3, lastVisit: now - 9000 }];
+  const rowsFor = (q: string) => buildSuggestions(q, { tabs: [], history: visited, bookmarks: [{ url: `${base}#/b`, title: "All Embeddables", favicon: null }] }, { now }).items.filter((i) => i.kind === "page");
+  assert.ok(!rowsFor("all embe").some((i) => i.kind === "page" && i.title === "All Embeddables" && i.url !== `${base}#/b`), "no row named after #/b opens #/a");
+  assert.equal(rowsFor("dashboard")[0]?.kind === "page" && rowsFor("dashboard")[0]?.title, "Dashboard");
+  const url = "https://app.example.org/d/42";
+  const source = { tabs: [{ id: "t1", url, title: "Builder Dashboard", favicon: null, customTitle: "Work board" }], history: [...history, { url, title: "Builder Dashboard", favicon: null, visits: 3, lastVisit: now - 9000 }], bookmarks: [{ url, title: "All Embeddables", favicon: null }] };
+  const found = buildSuggestions("all embe", source, { now }).items.find((i) => i.kind === "page");
+  assert.equal(found?.kind === "page" && found.tabId, "t1", "the renamed tab is found by the bookmark's name");
+});
+
 test("open tabs are marked so the bar can switch to them, except the bar's own tab", () => {
   const tabs = [{ id: "t1", url: "https://github.com/pulls", title: "Pull requests", favicon: null }];
   const { items } = buildSuggestions("pull", { tabs, history }, { now });

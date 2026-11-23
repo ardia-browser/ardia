@@ -68,7 +68,7 @@ function advance(b: Builder, bookmarks: readonly BookmarkRow[], deadline: number
     const text = pageText(h);
     if (!b.byKey.has(text.key)) {
       const mark = base.byKey.get(text.key);
-      const named = mark?.title && mark.text.titleLower !== text.titleLower ? mark.text : undefined;
+      const named = mark?.title && mark.text.titleLower !== text.titleLower && withRootSlash(mark.url) === withRootSlash(h.url) ? mark.text : undefined;
       let c = historyCandidates.get(h);
       if (!c || c.bookmarked !== !!mark || c.named !== named) {
         c = { url: h.url, title: named ? mark!.title : h.title, pageTitle: named ? h.title : undefined, favicon: h.favicon, visits: h.visits, lastVisit: h.lastVisit, logVisits: logVisits(h.visits), bookmarked: !!mark, text, named };
@@ -179,7 +179,7 @@ export function tabsOver(pool: Pool, tabs: readonly TabRow[], currentTabId?: str
       extra.push({ url: t.url, title: t.customTitle, pageTitle: t.title, renamed: true, favicon: t.favicon, visits: 0, lastVisit: 0, logVisits: 0, fresh: true, bookmarked: false, tabId: t.id, text: tabPageText(t) });
     } else {
       renamed.add(key);
-      extra.push({ url: t.url, title: t.customTitle, renamed: true, favicon: t.favicon ?? listed.favicon, visits: listed.visits, lastVisit: listed.lastVisit, logVisits: listed.logVisits, bookmarked: listed.bookmarked, tabId: t.id, text: tabPageText(t, listed.text) });
+      extra.push({ url: t.url, title: t.customTitle, renamed: true, favicon: t.favicon ?? listed.favicon, visits: listed.visits, lastVisit: listed.lastVisit, logVisits: listed.logVisits, bookmarked: listed.bookmarked, tabId: t.id, text: tabPageText(t, listed.text), named: listed.named });
     }
   }
   const result = { pool, currentTabId, rows: tabs.slice(), tabIds, extra, renamed };

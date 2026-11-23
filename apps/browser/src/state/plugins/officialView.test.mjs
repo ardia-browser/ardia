@@ -11,10 +11,10 @@ const sharingFor = (t) => {
 };
 const { useBrowser } = await import("../browser/store.ts");
 const { startPlugins } = await import("./start.ts");
-const { usePlugins } = await import("./store.ts");
+const { setOfficialFetch, usePlugins } = await import("./store.ts");
 const lifecycle = await import("./lifecycle.ts");
 const { installOfficialPlugin, officialPlugins } = await import("./official.ts");
-const { installedLabel, isOffered, officialView, wasCancelled } = await import("./officialView.ts");
+const { downloadStatus, installedLabel, isOffered, officialView, wasCancelled } = await import("./officialView.ts");
 const { noteOfficialPlugin, officialPluginField, takeOfficialPluginCounts, OFFICIAL_COUNTED_NAMES, OFFICIAL_EVENTS, OFFICIAL_SURFACES } = await import("../telemetry/officialPluginCounts.ts");
 const { takeHourlyExtras } = await import("../telemetry/hourlyExtras.ts");
 const { WHATS_SENT } = await import("../telemetry/copy.ts");
@@ -75,6 +75,46 @@ test("an installed plugin whose command isn't on PATH says why and offers Retry"
   assert.deepEqual([refused.failed, refused.action, refused.status], [true, "again", "Not on your PATH: ardia is someone else's command"]);
   const bare = officialView(plugin("installed"), undefined, null);
   assert.deepEqual([bare.note, bare.status, bare.action], ["installed", null, null]);
+});
+
+test("a download in progress reads like the Downloads list: bytes so far, then the time left once a second has passed", () => {
+  const fetching = (received, total, startedAt = 0, startedFrom = 0) => ({ state: "fetching", received, total, startedAt, startedFrom });
+  assert.equal(downloadStatus(fetching(0, 0), 5000), "Downloading…");
+  assert.equal(downloadStatus(fetching(0, 29_000_000), 5000), "Downloading…");
+  assert.equal(downloadStatus(fetching(4_000_000, 29_000_000), 500), "Downloading… 4.0 MB of 29 MB");
+  assert.equal(downloadStatus(fetching(12_000_000, 29_000_000), 6000), "Downloading… 12 MB of 29 MB — 9 sec left");
+  assert.equal(downloadStatus(fetching(12_000_000, 29_000_000, 1000), 7000), "Downloading… 12 MB of 29 MB — 9 sec left");
+  assert.equal(downloadStatus(fetching(1_000_000, 290_000_000), 1000), "Downloading… 1.0 MB of 290 MB — 5 min left");
+  assert.equal(downloadStatus(fetching(29_000_000, 29_000_000), 6000), "Downloading… 29 MB of 29 MB");
+  assert.equal(downloadStatus(fetching(28_700_000, 29_050_000), 6000), "Downloading… 29 MB of 29 MB", "no time left once the sizes read the same");
+  assert.equal(downloadStatus(fetching(31_000_000, 29_000_000), 6000), "Downloading… 29 MB of 29 MB");
+  assert.equal(downloadStatus(fetching(12_000_000, 0), 6000), "Downloading… 12 MB");
+  assert.equal(downloadStatus(fetching(20_000_000, 29_000_000, 0, 14_000_000), 6000), "Downloading… 20 MB of 29 MB — 9 sec left", "speed counts only what arrived since this attempt began");
+  assert.equal(downloadStatus(fetching(14_000_000, 29_000_000, 0, 14_000_000), 6000), "Downloading… 14 MB of 29 MB");
+  assert.equal(downloadStatus({ state: "promoting" }), "Installing…");
+  assert.equal(downloadStatus({ state: "failed", reason: "x", code: "failed" }), null);
+  assert.equal(downloadStatus(undefined), null);
+  const row = officialView(plugin("available"), undefined, null, fetching(12_000_000, 29_000_000, Date.now() - 6000));
+  assert.deepEqual([row.busy, row.action, row.status], [true, null, "Downloading… 12 MB of 29 MB — 9 sec left"]);
+});
+
+test("the fetch keeps the time it started across progress events, and a new fetch starts a new clock", () => {
+  usePlugins.setState({ fetches: {} });
+  setOfficialFetch("cli", { state: "fetching", received: 0, total: 0 });
+  const startedAt = usePlugins.getState().fetches.cli.startedAt;
+  assert.ok(Math.abs(startedAt - Date.now()) < 1000);
+  usePlugins.setState({ fetches: { cli: { ...usePlugins.getState().fetches.cli, startedAt: 42 } } });
+  setOfficialFetch("cli", { state: "fetching", received: 10, total: 100 });
+  assert.deepEqual(usePlugins.getState().fetches.cli, { state: "fetching", received: 10, total: 100, startedAt: 42, startedFrom: 0 });
+  setOfficialFetch("cli", { state: "fetching", received: 60, total: 100 });
+  assert.equal(usePlugins.getState().fetches.cli.startedAt, 42, "a resumed download keeps counting from where it was");
+  setOfficialFetch("cli", { state: "fetching", received: 5, total: 100 });
+  assert.notEqual(usePlugins.getState().fetches.cli.startedAt, 42, "a download that starts over starts a new clock");
+  assert.equal(usePlugins.getState().fetches.cli.startedFrom, 5);
+  setOfficialFetch("cli", null);
+  setOfficialFetch("cli", { state: "fetching", received: 0, total: 0 });
+  assert.notEqual(usePlugins.getState().fetches.cli.startedAt, 42);
+  setOfficialFetch("cli", null);
 });
 
 test("only a plugin that can still be chosen counts as offered", () => {

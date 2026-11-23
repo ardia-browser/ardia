@@ -793,6 +793,12 @@ final class OfficialPluginsTests: XCTestCase {
     try Data("not gzip".utf8).write(to: URL(fileURLWithPath: "\(root)/plain.tar.gz"))
     let other = "\(root)/stage-plain"
     XCTAssertEqual(mkdir(other, 0o700), 0)
-    XCTAssertEqual(unpack("\(root)/plain.tar.gz", into: other), "the download isn't a gzip file")
+    XCTAssertEqual(unpack("\(root)/plain.tar.gz", into: other), "the download is damaged", "what isn't gzip is read as brotli, and refused")
+    var header = try Data(contentsOf: URL(fileURLWithPath: archive))
+    header[3] = 0xe0
+    try header.write(to: URL(fileURLWithPath: "\(root)/flags.tar.gz"))
+    let flags = "\(root)/stage-flags"
+    XCTAssertEqual(mkdir(flags, 0o700), 0)
+    XCTAssertEqual(unpack("\(root)/flags.tar.gz", into: flags), "the download isn't a gzip file")
   }
 }

@@ -15,13 +15,20 @@ function compiled(path) {
   return path;
 }
 
-function fixtures(programs) {
+function fixtures(programs, format = "gz") {
   const work = mkdtempSync(join(tmpdir(), "ac-signatures-src-"));
   const out = mkdtempSync(join(tmpdir(), "ac-signatures-"));
   mkdirSync(join(work, "cli", "bin"), { recursive: true });
   writeFileSync(join(work, "cli", "plugin.json"), "{}");
   for (const [name, make] of Object.entries(programs)) make(join(work, "cli", "bin", name));
-  execFileSync("tar", ["-czf", join(out, "cli-plugin-9.9.9-macos-arm64.tar.gz"), "-C", work, "cli"], { env: { ...process.env, COPYFILE_DISABLE: "1" } });
+  const env = { ...process.env, COPYFILE_DISABLE: "1" };
+  if (format === "br") {
+    const tarred = execFileSync("tar", ["-cf", "-", "-C", work, "cli"], { env, maxBuffer: 64 << 20 });
+    const packed = execFileSync("swift", [join(root, "scripts/release/brotli.swift"), "encode"], { input: tarred, maxBuffer: 64 << 20 });
+    writeFileSync(join(out, "cli-plugin-9.9.9-macos-arm64.tar.br"), packed);
+  } else {
+    execFileSync("tar", ["-czf", join(out, "cli-plugin-9.9.9-macos-arm64.tar.gz"), "-C", work, "cli"], { env });
+  }
   return out;
 }
 
@@ -76,4 +83,23 @@ test("files that aren't Mach-O are left alone, and a folder with no pinned macOS
   assert.equal(status, 0, out);
   assert.match(out, /PASS {2}cli-plugin-9\.9\.9: no Mach-O files/);
   assert.notEqual(check(mkdtempSync(join(tmpdir(), "ac-signatures-empty-"))).status, 0);
+});
+
+test("a brotli tarball is read like a gzip one", { skip: !onMac }, () => {
+  const dir = fixtures({ adhoc: (path) => execFileSync("codesign", ["--force", "--sign", "-", compiled(path)]) }, "br");
+  const { status, out } = check(dir);
+  assert.equal(status, 0, out);
+  assert.match(out, /WARN {2}cli\/bin\/adhoc is ad hoc signed/);
+  assert.match(out, /WARNING {2}cli-plugin-9\.9\.9: 1 of 1 Mach-O files aren't Developer ID signed/);
+});
+
+test("a gzip and a brotli tarball of the same name are each read alone", { skip: !onMac }, () => {
+  const adhoc = (path) => execFileSync("codesign", ["--force", "--sign", "-", compiled(path)]);
+  const dir = fixtures({ first: adhoc, second: adhoc });
+  const brotli = fixtures({ only: adhoc }, "br");
+  copyFileSync(join(brotli, "cli-plugin-9.9.9-macos-arm64.tar.br"), join(dir, "cli-plugin-9.9.9-macos-arm64.tar.br"));
+  const { status, out } = check(dir);
+  assert.equal(status, 0, out);
+  assert.match(out, /cli-plugin-9\.9\.9: 2 of 2 Mach-O files/);
+  assert.match(out, /cli-plugin-9\.9\.9: 1 of 1 Mach-O files/, "the brotli scan counts only what its own tarball holds");
 });

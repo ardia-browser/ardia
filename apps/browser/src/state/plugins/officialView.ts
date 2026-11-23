@@ -1,3 +1,4 @@
+import { bytesProgress, formatBytes, formatTimeLeft } from "../../lib/transferText";
 import type { InstallResult } from "./installWaiters";
 import type { OfficialPlugin } from "./official";
 import type { OfficialFetch, ProgramsState } from "./store";
@@ -23,10 +24,20 @@ export const installedLabel = (plugin: OfficialPlugin) => (plugin.version ? `Ins
 
 const HIDDEN: OfficialView = { shown: false, note: null, status: null, failed: false, busy: false, action: null, opens: false, firstCommand: null };
 
-export function downloadStatus(fetch: OfficialFetch | undefined): string | null {
+const TIME_LEFT_AFTER_MS = 1000;
+
+export function downloadStatus(fetch: OfficialFetch | undefined, now = Date.now()): string | null {
   if (fetch?.state === "promoting") return "Installing…";
   if (fetch?.state !== "fetching") return null;
-  return fetch.total > 0 ? `Downloading… ${Math.min(100, Math.floor((fetch.received / fetch.total) * 100))}%` : "Downloading…";
+  if (fetch.received <= 0) return "Downloading…";
+  const received = fetch.total > 0 ? Math.min(fetch.received, fetch.total) : fetch.received;
+  const progress = `Downloading… ${bytesProgress(received, fetch.total)}`;
+  const elapsedMs = now - fetch.startedAt;
+  const gained = received - Math.min(fetch.startedFrom, received);
+  const looksDone = formatBytes(received) === formatBytes(fetch.total);
+  if (fetch.total <= 0 || looksDone || elapsedMs < TIME_LEFT_AFTER_MS || gained <= 0) return progress;
+  const bytesPerSecond = gained / (elapsedMs / 1000);
+  return `${progress} — ${formatTimeLeft((fetch.total - received) / bytesPerSecond)}`;
 }
 
 function installedView(plugin: OfficialPlugin, programs: ProgramsState | undefined, attempt: OfficialAttempt, fetch: OfficialFetch | undefined): OfficialView {

@@ -43,11 +43,12 @@ check() {
   if [ "$2" = 1 ]; then echo "PASS  $1"; else echo "FAIL  $1${3:+  ($3)}"; status=1; fi
 }
 
+unpacked="$work/pinned"
+"$root/scripts/release/untar-plugin.sh" "$fixtures/$file" "$unpacked"
 approved="$(python3 -I -c '
-import hashlib, sys, tarfile
-with tarfile.open(sys.argv[1], "r:gz") as packed:
-    manifest = packed.extractfile("cli/plugin.json").read()
-print(hashlib.sha256(manifest + b"\0official-" + sys.argv[2].encode()).hexdigest())' "$fixtures/$file" "$sha")"
+import hashlib, sys
+manifest = open(sys.argv[1], "rb").read()
+print(hashlib.sha256(manifest + b"\0official-" + sys.argv[2].encode()).hexdigest())' "$unpacked/cli/plugin.json" "$sha")"
 
 launch() {
   local which="${4:-$app}"
@@ -113,7 +114,7 @@ stop
 
 planted="$work/planted"
 mkdir -p "$planted/d/OfficialPlugins/cli" "$planted/bin" "$planted/src"
-tar -xzf "$fixtures/$file" -C "$planted/src"
+cp -R "$unpacked/cli" "$planted/src/cli"
 printf 'planted' >>"$planted/src/cli/bin/ardia"
 (cd "$planted/src" && COPYFILE_DISABLE=1 tar -czf "$planted/planted.tar.gz" cli)
 planted_sha="$(shasum -a 256 "$planted/planted.tar.gz" | cut -d' ' -f1)"

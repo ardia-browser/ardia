@@ -17,8 +17,15 @@ const NONE = {
   program_link_failures: 0,
   program_unlinks: 0,
   program_links_kept: 0,
+  official_program_links: 0,
+  official_program_link_ms: 0,
   official_fetches: 0,
   official_fetch_failures: 0,
+  official_fetches_reused: 0,
+  official_fetches_timed: 0,
+  official_fetch_ms: 0,
+  official_fetch_resumes: 0,
+  official_verify_ms: 0,
   official_fetch_offline: 0,
   official_verify_failures: 0,
   official_migrations_kept: 0,
@@ -60,6 +67,8 @@ export const notePlugin = (what: PluginCount, consent?: ConsentToken | null) => 
 export const notePluginTimes = (what: PluginCount, times: number, consent?: ConsentToken | null) => {
   if (Number.isSafeInteger(times) && times > 0) countFor(consentOrNow(consent), () => void (counts[what] += times));
 };
+
+export const notePluginMs = (what: PluginCount, ms: number, step: number, consent?: ConsentToken | null) => notePluginTimes(what, Math.round(ms / step) * step, consent);
 
 export function takePluginCounts() {
   const taken = counts;

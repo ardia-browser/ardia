@@ -1549,10 +1549,11 @@
   {
    "id": "plugin-install:official",
    "source": "native",
-   "guard": "Official copies checked against the signed pin on every lookup; one verified snapshot is unpacked (Swift tests in packages/shell/plugin-tests)",
+   "guard": "Official copies checked against the signed pin on every lookup; one verified snapshot is unpacked, gzip or brotli; a resumed download is joined before its SHA-256 is checked (Swift tests in packages/shell/plugin-tests)",
    "checks": [
     "packages/shell/ios/PluginCore/OfficialTrust.swift",
-    "packages/shell/ios/PluginCore/OfficialArchive.swift"
+    "packages/shell/ios/PluginCore/OfficialArchive.swift",
+    "packages/shell/ios/PluginCore/OfficialDownload.swift"
    ],
    "findings": [
     "D1",

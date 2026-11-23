@@ -216,6 +216,7 @@ test("one click: Install on the sheet installs it, links ardia adopting the old 
   reset();
   takePluginCounts();
   host.linkResult = { ok: true, linked: ["ardia"], refused: {}, binDir: "/home/.local/bin", adopted: true };
+  host.linkDelayMs = 60;
   const done = installOfficialPlugin("cli", { showSheet: false });
   assert.deepEqual({ name: P().consent.name, hash: P().consent.hash }, { name: "cli", hash: P().listings.cli.hash });
   assert.ok(lifecycle.enablePlugin("cli", P().consent.hash));
@@ -233,9 +234,11 @@ test("one click: Install on the sheet installs it, links ardia adopting the old 
   assert.equal(officialPlugins(P(), true, hidden)[0].state, "installed");
   const counts = takePluginCounts();
   assert.equal(counts.program_links, 1);
+  assert.ok(counts.official_program_link_ms >= 50 && counts.official_program_link_ms % 10 === 0, `official_program_link_ms ${counts.official_program_link_ms}`);
   assert.equal(counts.program_adoptions, 1);
   assert.equal(counts.plugin_enables, 1);
   host.linkResult = null;
+  host.linkDelayMs = 0;
 });
 
 test("an official plugin has the same off switch and Remove as any other: off unlinks, on relinks with no new consent, Remove keeps its data and offers Install again", async () => {

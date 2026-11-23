@@ -190,6 +190,23 @@ final class OfficialVerification {
 
   private let lock = NSLock()
   private var verified: [String: (stamp: Stamp, digest: String, checked: Date)] = [:]
+  private var payloadBySha: [String: String] = [:]
+
+  func remember(sha: String, top: String, payloadDigest: String) {
+    lock.lock()
+    payloadBySha["\(sha)\u{0}\(top)"] = payloadDigest
+    lock.unlock()
+  }
+
+  private func expectedPayload(archive: String, sha: String, top: String, scratch: String) -> String? {
+    lock.lock()
+    let known = payloadBySha["\(sha)\u{0}\(top)"]
+    lock.unlock()
+    if let known { return OfficialArchive.sha256(file: archive) == sha ? known : nil }
+    guard let computed = OfficialArchive.verifiedPayloadDigest(archive: archive, sha: sha, top: top, scratch: scratch) else { return nil }
+    remember(sha: sha, top: top, payloadDigest: computed)
+    return computed
+  }
 
   private static func stamp(_ path: String) -> [Int64]? {
     var info = stat()
@@ -227,7 +244,7 @@ final class OfficialVerification {
       return known.digest
     }
     lock.unlock()
-    guard let expected = OfficialArchive.verifiedPayloadDigest(archive: archive, sha: sha, top: top, scratch: scratch),
+    guard let expected = expectedPayload(archive: archive, sha: sha, top: top, scratch: scratch),
       PluginPrograms.payloadDigest(copy, keepingCaches: true, skippingReserved: false) == expected
     else {
       lock.lock()
@@ -244,6 +261,7 @@ final class OfficialVerification {
   func forget() {
     lock.lock()
     verified.removeAll()
+    payloadBySha.removeAll()
     lock.unlock()
   }
 }

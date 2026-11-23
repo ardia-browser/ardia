@@ -4,7 +4,7 @@ import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
 import { experimentOn } from "../../platform/killSwitches";
 import { cancelOfficialPluginFetch, fetchOfficialPlugin, onOfficialFetchProgress, type OfficialFetchResult } from "../../platform/plugins";
-import { notePlugin } from "../telemetry/pluginCounts";
+import { notePlugin, notePluginMs, notePluginTimes } from "../telemetry/pluginCounts";
 import { consentToken, type ConsentToken } from "../telemetry/consentPeriod";
 import { warnFor } from "../telemetry/consoleConsent";
 import { openSettings } from "../settings/settingsWindows";
@@ -161,6 +161,13 @@ export function fetchOfficialCandidate(name: string, consent: ConsentToken | nul
         const reason = FETCH_REASONS[result.code];
         if (!quiet) setOfficialFetch(name, result.code === "cancelled" ? null : { state: "failed", code: result.code, reason });
         return result.code === "cancelled" ? { ok: false, reason, cancelled: true, code: result.code } : { ok: false, reason, code: result.code };
+      }
+      if (result.reused) notePlugin("official_fetches_reused", consent);
+      else if (result.timings) {
+        notePlugin("official_fetches_timed", consent);
+        notePluginMs("official_fetch_ms", result.timings.downloadMs, 100, consent);
+        notePluginMs("official_verify_ms", result.timings.verifyMs, 10, consent);
+        notePluginTimes("official_fetch_resumes", result.timings.resumes, consent);
       }
       await rescanPlugins(consent);
       if (!quiet) setOfficialFetch(name, null);

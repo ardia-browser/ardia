@@ -1,23 +1,7 @@
+import { bytesProgress, formatBytes, formatTimeLeft } from "../../lib/transferText";
 import type { Download } from "./actions";
 
 export const awaitsKeep = (d: Pick<Download, "state" | "dangerous">) => d.state === "downloading" && d.dangerous === true;
-
-function formatBytes(n: number) {
-  if (n < 0) return "";
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let i = 0;
-  while (n >= 1000 && i < units.length - 1) {
-    n /= 1000;
-    i++;
-  }
-  return `${n < 10 && i > 0 ? n.toFixed(1) : Math.round(n)} ${units[i]}`;
-}
-
-function formatDuration(seconds: number) {
-  if (seconds < 60) return `${Math.max(1, Math.round(seconds))} sec left`;
-  if (seconds < 3600) return `${Math.round(seconds / 60)} min left`;
-  return `${Math.round(seconds / 3600)} hr left`;
-}
 
 export function dangerWarning(d: Download, short = false) {
   if (d.url.startsWith("http:")) return short ? "Blocked: not secure" : "Insecure download blocked";
@@ -29,9 +13,9 @@ export function downloadStatus(d: Download, exists = true) {
   if (d.state === "failed") return "Failed to Download";
   if (d.state === "cancelled") return "Cancelled";
   if (awaitsKeep(d)) return dangerWarning(d);
-  const progress = d.total > 0 ? `${formatBytes(d.received)} of ${formatBytes(d.total)}` : formatBytes(d.received);
+  const progress = bytesProgress(d.received, d.total);
   if (d.paused) return `${progress} — Paused`;
   if (d.speed <= 0) return progress;
   const withSpeed = `${progress}, ${formatBytes(d.speed)}/s`;
-  return d.total > 0 ? `${withSpeed} — ${formatDuration((d.total - d.received) / d.speed)}` : withSpeed;
+  return d.total > 0 ? `${withSpeed} — ${formatTimeLeft((d.total - d.received) / d.speed)}` : withSpeed;
 }

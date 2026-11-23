@@ -1,6 +1,6 @@
 import { linkPluginPrograms, setAfterUpdateQuitConsent, sweepPluginPrograms, takeAfterUpdateQuitStops, unlinkPluginPrograms, type PluginProgramsResult } from "../../platform/plugins";
 import { errorText } from "../../lib/errors";
-import { notePlugin, notePluginTimes } from "../telemetry/pluginCounts";
+import { notePlugin, notePluginMs, notePluginTimes } from "../telemetry/pluginCounts";
 import { consentToken, type ConsentToken } from "../telemetry/consentPeriod";
 import { onConsentPeriodChange } from "../telemetry/choice";
 import { warnFor } from "../telemetry/consoleConsent";
@@ -33,6 +33,7 @@ async function link(name: string, consent?: ConsentToken | null) {
   const manifest = activeManifest(s, name)!;
   const hash = listing.hash!;
   const builtIn = !!listing.official && !listing.legacy;
+  const startedAt = Date.now();
   const request = ++requests;
   requested.set(name, manifest.programs.map((p) => p.name));
   setPrograms(name, { state: "linking", hash, request });
@@ -53,6 +54,10 @@ async function link(name: string, consent?: ConsentToken | null) {
     return;
   }
   notePlugin(Object.keys(result.refused).length ? "program_link_failures" : "program_links", consent);
+  if (builtIn && !Object.keys(result.refused).length) {
+    notePlugin("official_program_links", consent);
+    notePluginMs("official_program_link_ms", Date.now() - startedAt, 10, consent);
+  }
   if (result.kept && Object.keys(result.refused).length) notePlugin("program_links_kept", consent);
   const adoption = adoptionOf(result);
   if (adoption === "adopted") notePlugin("program_adoptions", consent);

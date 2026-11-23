@@ -1,21 +1,15 @@
 import ArdiaCore
 import Foundation
 
-final class OfficialPluginFetch: NSObject, URLSessionDownloadDelegate {
+final class OfficialPluginFetch {
   static let shared = OfficialPluginFetch()
   static let idleTimeout: TimeInterval = 60
   static let deadline: TimeInterval = 900
   static let progressEvent = "onOfficialFetch"
-  private static let offlineCodes: Set<URLError.Code> = [
-    .notConnectedToInternet, .networkConnectionLost, .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed, .timedOut, .internationalRoamingOff,
-    .dataNotAllowed, .secureConnectionFailed,
-  ]
 
   private struct Running {
     let generation: Int
     var task: URLSessionDownloadTask?
-    let finish: (Result<URL, Failure>) -> Void
-    var reported: Int64 = 0
   }
 
   struct Failure: Error {
@@ -29,16 +23,9 @@ final class OfficialPluginFetch: NSObject, URLSessionDownloadDelegate {
   private var waiters: [String: [([String: Any]) -> Void]] = [:]
   private var generation = 0
   private let work = DispatchQueue(label: "ardia.official-plugins", qos: .userInitiated)
-  private lazy var session: URLSession = {
-    let configuration = URLSessionConfiguration.ephemeral
-    configuration.timeoutIntervalForRequest = Self.idleTimeout
-    configuration.timeoutIntervalForResource = Self.deadline
-    configuration.httpCookieStorage = nil
-    configuration.urlCache = nil
-    configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
-    configuration.waitsForConnectivity = false
-    return URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
-  }()
+  private lazy var downloads = OfficialDownload(idleTimeout: Self.idleTimeout, deadline: Self.deadline) { name, received, total in
+    PluginHost.shared.emit(Self.progressEvent, ["name": name, "received": received, "total": total])
+  }
 
   func fetch(_ name: String, done: @escaping ([String: Any]) -> Void) {
     lock.lock()
@@ -50,7 +37,7 @@ final class OfficialPluginFetch: NSObject, URLSessionDownloadDelegate {
     generation += 1
     let mine = generation
     waiters[name] = [done]
-    running[name] = Running(generation: mine, task: nil, finish: { _ in })
+    running[name] = Running(generation: mine, task: nil)
     lock.unlock()
     work.async { self.run(name, generation: mine) }
   }
@@ -83,6 +70,10 @@ final class OfficialPluginFetch: NSObject, URLSessionDownloadDelegate {
     settle(name, ["ok": false, "code": failure.code, "reason": failure.reason])
   }
 
+  private static func milliseconds(since start: DispatchTime) -> Int {
+    Int((DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000)
+  }
+
   private func run(_ name: String, generation mine: Int) {
     guard let folders = PluginFolders.current() else { return fail(name, Failure(code: "failed", reason: "Ardia has no data folder")) }
     guard let pin = PluginFolders.officialPin(), let entry = pin.entry(name) else {
@@ -95,29 +86,37 @@ final class OfficialPluginFetch: NSObject, URLSessionDownloadDelegate {
     }
     guard let scratch = store.makeScratch(name, prefix: ".fetch-") else { return fail(name, Failure(code: "failed", reason: "its download folder couldn't be made")) }
     let archive = URL(fileURLWithPath: (scratch as NSString).appendingPathComponent(entry.file))
-    let fetched: Result<Void, Failure>
+    let downloadStart = DispatchTime.now()
+    let fetched: Result<OfficialDownload.Fetched, Failure>
     if LaunchConfig.shared.isolated, let source = LaunchConfig.shared.instance(OfficialPin.sourceKey) {
       fetched = copyLocal(source, file: entry.file, to: archive)
     } else {
       fetched = download(name, entry.url, to: archive, generation: mine)
     }
-    if case .failure(let failure) = fetched {
+    let downloadMs = Self.milliseconds(since: downloadStart)
+    let got: OfficialDownload.Fetched
+    switch fetched {
+    case .failure(let failure):
       PluginPrograms.discard(scratch)
       return fail(name, failure)
+    case .success(let done): got = done
     }
     guard isCurrent(name, mine) else {
       PluginPrograms.discard(scratch)
       return fail(name, Failure(code: "cancelled", reason: "Cancelled."))
     }
+    let verifyStart = DispatchTime.now()
     let published = OfficialInstaller.verifyAndPublish(entry, archive: archive.path, scratch: scratch, store: store, registry: registry)
     PluginPrograms.discard(scratch)
     switch published {
     case .failure(let failure): fail(name, Failure(code: failure.code, reason: failure.reason))
-    case .success(let made): settle(name, ["ok": true, "candidate": PluginFolders.candidate(made.manifest, folderId: made.copy.folderId, version: entry.version)])
+    case .success(let made):
+      let timings: [String: Any] = ["downloadMs": downloadMs, "verifyMs": Self.milliseconds(since: verifyStart), "bytes": got.bytes, "resumes": got.resumes]
+      settle(name, ["ok": true, "candidate": PluginFolders.candidate(made.manifest, folderId: made.copy.folderId, version: entry.version), "timings": timings])
     }
   }
 
-  private func copyLocal(_ source: String, file: String, to archive: URL) -> Result<Void, Failure> {
+  private func copyLocal(_ source: String, file: String, to archive: URL) -> Result<OfficialDownload.Fetched, Failure> {
     let folder = source.hasPrefix("file://") ? (URL(string: source)?.path ?? "") : source
     let path = (folder as NSString).appendingPathComponent(file)
     var info = stat()
@@ -125,44 +124,25 @@ final class OfficialPluginFetch: NSObject, URLSessionDownloadDelegate {
     guard Int64(info.st_size) <= OfficialArchive.maxDownload else { return .failure(Failure(code: "verify", reason: "\(file) is over \(OfficialArchive.maxDownload >> 20) MB")) }
     do {
       try FileManager.default.copyItem(at: URL(fileURLWithPath: path), to: archive)
-      return .success(())
+      return .success(OfficialDownload.Fetched(bytes: Int64(info.st_size), resumes: 0))
     } catch {
       return .failure(Failure(code: "failed", reason: "\(file) couldn't be copied (\(error.localizedDescription))"))
     }
   }
 
-  private func download(_ name: String, _ url: URL, to archive: URL, generation mine: Int) -> Result<Void, Failure> {
-    let finished = DispatchSemaphore(value: 0)
-    var outcome: Result<URL, Failure> = .failure(Failure(code: "failed", reason: "the download didn't finish"))
-    var request = URLRequest(url: url)
-    request.setValue("Ardia", forHTTPHeaderField: "User-Agent")
-    let task = session.downloadTask(with: request)
-    lock.lock()
-    guard running[name]?.generation == mine, !cancelled.contains(name) else {
-      lock.unlock()
-      return .failure(Failure(code: "cancelled", reason: "Cancelled."))
-    }
-    running[name] = Running(generation: mine, task: task, finish: { result in
-      if case .success(let temporary) = result {
-        do {
-          try FileManager.default.moveItem(at: temporary, to: archive)
-        } catch {
-          outcome = .failure(Failure(code: "failed", reason: "the download couldn't be kept (\(error.localizedDescription))"))
-          finished.signal()
-          return
-        }
-      }
-      outcome = result
-      finished.signal()
-    })
-    lock.unlock()
-    task.taskDescription = name
-    task.resume()
-    if finished.wait(timeout: .now() + Self.deadline + 30) == .timedOut {
-      task.cancel()
-      return .failure(Failure(code: "offline", reason: "the download took too long"))
-    }
-    return outcome.map { _ in () }
+  private func download(_ name: String, _ url: URL, to archive: URL, generation mine: Int) -> Result<OfficialDownload.Fetched, Failure> {
+    let result = downloads.fetch(
+      name, from: url, to: archive, deadline: Self.deadline,
+      isCancelled: { [weak self] in !(self?.isCurrent(name, mine) ?? false) },
+      started: { [weak self] task in
+        guard let self else { return false }
+        self.lock.lock()
+        defer { self.lock.unlock() }
+        guard self.running[name]?.generation == mine, !self.cancelled.contains(name) else { return false }
+        self.running[name]?.task = task
+        return true
+      })
+    return result.mapError { Failure(code: $0.code, reason: $0.reason) }
   }
 
   static func promote(_ name: String, folderId: String, approved: String) -> [String: Any] {
@@ -171,56 +151,5 @@ final class OfficialPluginFetch: NSObject, URLSessionDownloadDelegate {
       return ["ok": false, "reason": problem]
     }
     return ["ok": true]
-  }
-
-  private func take(_ task: URLSessionTask) -> Running? {
-    guard let name = task.taskDescription else { return nil }
-    lock.lock()
-    defer { lock.unlock() }
-    guard let found = running[name], found.task === task else { return nil }
-    return found
-  }
-
-  func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
-    guard let found = take(downloadTask) else { return }
-    if let response = downloadTask.response as? HTTPURLResponse, response.statusCode != 200 {
-      return found.finish(.failure(Failure(code: "failed", reason: "the server answered \(response.statusCode)")))
-    }
-    let kept = location.deletingLastPathComponent().appendingPathComponent("ardia-official-\(UUID().uuidString)")
-    do {
-      try FileManager.default.moveItem(at: location, to: kept)
-      found.finish(.success(kept))
-    } catch {
-      found.finish(.failure(Failure(code: "failed", reason: "the download couldn't be kept")))
-    }
-  }
-
-  func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
-    guard let name = downloadTask.taskDescription else { return }
-    if totalBytesWritten > OfficialArchive.maxDownload || totalBytesExpectedToWrite > OfficialArchive.maxDownload {
-      downloadTask.cancel()
-      return
-    }
-    lock.lock()
-    let step = max(totalBytesExpectedToWrite / 50, 1 << 20)
-    let due = running[name].map { totalBytesWritten - $0.reported >= step } ?? false
-    if due { running[name]?.reported = totalBytesWritten }
-    lock.unlock()
-    if due { PluginHost.shared.emit(Self.progressEvent, ["name": name, "received": totalBytesWritten, "total": max(totalBytesExpectedToWrite, 0)]) }
-  }
-
-  func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
-    completionHandler(request.url?.scheme == "https" ? request : nil)
-  }
-
-  func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-    guard let error, let found = take(task) else { return }
-    let urlError = error as? URLError
-    if urlError?.code == .cancelled {
-      let tooBig = task.countOfBytesReceived > OfficialArchive.maxDownload || task.countOfBytesExpectedToReceive > OfficialArchive.maxDownload
-      return found.finish(.failure(tooBig ? Failure(code: "verify", reason: "the download is over \(OfficialArchive.maxDownload >> 20) MB") : Failure(code: "cancelled", reason: "Cancelled.")))
-    }
-    let offline = urlError.map { Self.offlineCodes.contains($0.code) } ?? false
-    found.finish(.failure(Failure(code: offline ? "offline" : "failed", reason: error.localizedDescription)))
   }
 }

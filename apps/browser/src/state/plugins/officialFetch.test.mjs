@@ -7,7 +7,7 @@ const { startPlugins } = await import("./start.ts");
 const { usePlugins, activeManifest } = await import("./store.ts");
 const lifecycle = await import("./lifecycle.ts");
 const { manifestHash } = await import("./appChecks.ts");
-const { officialPlugins, installOfficialPlugin, pendingOfficialRetries, resetOfficialUpdatesForTests, FETCH_REASONS } = await import("./official.ts");
+const { officialPlugins, installOfficialPlugin, fetchOfficialCandidate, pendingOfficialRetries, resetOfficialUpdatesForTests, FETCH_REASONS } = await import("./official.ts");
 const { programsKeptAtLaunch } = await import("./programs.ts");
 const { takePluginCounts } = await import("../telemetry/pluginCounts.ts");
 const { setConsentPeriod, consentToken } = await import("../telemetry/consentPeriod.ts");
@@ -380,4 +380,32 @@ test("Remove hands native the folder identity it saw, so a folder swapped in mea
   const removed = await lifecycle.removePlugin("mine", undefined, lifecycle.removalIdentity("mine"));
   assert.equal(removed.ok, true);
   assert.deepEqual(host.removeFolderIds, ["3:3"]);
+});
+
+test("a finished download counts its time, its check time and its resumes; a copy already on disk counts as reused with no time", async () => {
+  const fresh = async () => {
+    usePlugins.setState({ records: {}, candidates: {}, fetches: {}, consent: null });
+    stub.docs.set("plugins.json", JSON.stringify({ version: 1, plugins: {} }));
+    reload();
+    host.folders = [];
+    await lifecycle.rescanPlugins(consentToken());
+    await settle();
+  };
+  await fresh();
+  takePluginCounts();
+  host.officialArtifacts.cli = NEW;
+  host.officialFetchOk.cli = { timings: { downloadMs: 2345, verifyMs: 87, bytes: 29_000_000, resumes: 2 } };
+  assert.deepEqual(await fetchOfficialCandidate("cli", consentToken()), { ok: true });
+  let counts = takePluginCounts();
+  assert.deepEqual([counts.official_fetches, counts.official_fetches_timed, counts.official_fetch_ms, counts.official_verify_ms, counts.official_fetch_resumes, counts.official_fetches_reused], [1, 1, 2300, 90, 2, 0]);
+  await fresh();
+  host.officialFetchOk.cli = { reused: true };
+  assert.deepEqual(await fetchOfficialCandidate("cli", consentToken()), { ok: true });
+  counts = takePluginCounts();
+  assert.deepEqual([counts.official_fetches, counts.official_fetches_timed, counts.official_fetch_ms, counts.official_verify_ms, counts.official_fetch_resumes, counts.official_fetches_reused], [1, 0, 0, 0, 0, 1]);
+  await fresh();
+  delete host.officialFetchOk.cli;
+  assert.deepEqual(await fetchOfficialCandidate("cli", consentToken()), { ok: true });
+  counts = takePluginCounts();
+  assert.deepEqual([counts.official_fetches, counts.official_fetches_timed, counts.official_fetch_ms, counts.official_fetches_reused], [1, 0, 0, 0], "an older native build sends no timings");
 });

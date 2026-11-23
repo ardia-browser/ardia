@@ -118,9 +118,15 @@ is the only source of which version may be fetched.
 - **Install** (Settings › Plugins, onboarding, or `plugins.enable` on the socket) fetches first, then asks. Native code
   (`OfficialPluginFetch.swift`, `PluginCore/OfficialInstaller.swift`) does the following:
   - downloads the pinned `macos-arm64` asset with an ephemeral `URLSession`: https only, at most 512 MB, idle timeout
-    60 s, deadline 15 min. It goes into a private scratch folder under `OfficialPlugins/<name>/.fetch-*`.
+    60 s, deadline 15 min. It goes into a private scratch folder under `OfficialPlugins/<name>/.fetch-*`
+    (`PluginCore/OfficialDownload.swift`). A download the connection drops after bytes arrived is picked up again
+    with a range request, up to 3 times (after 1, 2 and 4 s); a server that won't resume is asked for the whole file
+    again, and a connection that never starts fails at once. The SHA-256 check below covers the joined bytes.
   - refuses the download unless its SHA-256 is the pinned one.
-  - unpacks it with its own gzip and tar reader. Only files and folders are accepted, all under `<name>/`: no links,
+  - unpacks it with its own tar reader, from gzip (`.tar.gz`) or brotli (`.tar.br`, Apple's Compression framework,
+    macOS 12 and later). gzip is told by its magic bytes and anything else is read as brotli, which has none; only
+    bytes whose SHA-256 is pinned are ever unpacked. Brotli packs Command Line 0.6.0 into 19.6 MB against gzip's
+    29 MB and unpacks about as fast; older Ardias pin the `.tar.gz`, so a release publishes both. Only files and folders are accepted, all under `<name>/`: no links,
     devices, `..`, absolute paths, duplicates or PAX `size`/`linkpath` overrides, and the expanded tree is capped.
   - requires the unpacked `plugin.json` to be the pinned name and version, claiming only programs the pin reserves
     for it.
@@ -144,6 +150,10 @@ is the only source of which version may be fetched.
     and the release-script tests run it, so a pin bump has to add the release it replaces.
   - Each lookup re-checks the stamps of the download and of every file in the copy, the digests are recomputed whenever
     one changed, and promotion always re-checks from scratch.
+  - The expected payload digest is a function of the download's bytes alone, so it's worked out once per SHA-256 (while
+    unpacking, on a fetch) and kept in memory. A fresh check still hashes the whole download against its pinned SHA-256
+    and the whole copy against that digest; it only skips decompressing the download again (about 270 ms for Command
+    Line, three times per install).
   - A replaced or damaged copy isn't listed as official, can't be promoted, and can't be linked. Linking stages the
     program copy and refuses it unless its digest is that same one.
 - **Then consent.** That copy is a *candidate*: the scan lists it apart from the active plugins (`candidates` in the
@@ -1062,6 +1072,12 @@ in the local copy. Hourly `usage_counts`:
   still running at quit whose whole process group left on TERM, or was killed after the 1 s grace; tallied natively
   at quit, only while sharing is on and tagged with that sharing period, and counted at the next launch only in the
   same period).
+- Official plugin downloads: `official_fetches`, `official_fetch_failures`, `official_fetch_offline`,
+  `official_verify_failures`, `official_fetches_reused` (a copy already downloaded was used), `official_fetches_timed` (a download that finished
+  and carried its timings, the denominator for the two times below), `official_fetch_ms`
+  (download time, each rounded to 100 ms, resumes included), `official_verify_ms` (SHA-256 check, unpack and publish,
+  each rounded to 10 ms), `official_fetch_resumes` (a dropped download picked up again), `official_program_links` (an official plugin's
+  successful PATH link) and `official_program_link_ms` (how long each took, rounded to 10 ms).
 - v2: `plugin_activations` (main started by an activation event), `plugin_activation_failures`,
   `plugin_surface_renders` (a native view committed), `plugin_panel_opens`, `plugin_toolbar_runs`,
   `plugin_menu_runs`, `plugin_action_shortcuts` (an action run by its declared shortcut), `plugin_omnibox_queries`,

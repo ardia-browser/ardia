@@ -509,6 +509,7 @@ export const pluginHost = {
   officialArtifacts: {} as Record<string, string>,
   officialFetchResults: {} as Record<string, { ok: false; code: "offline" | "failed" | "verify" | "cancelled" | "unsupported"; reason: string }>,
   officialFetchGate: null as null | Promise<void>,
+  officialFetchOk: {} as Record<string, { reused?: boolean; timings?: { downloadMs: number; verifyMs: number; bytes: number; resumes: number } }>,
   officialFetchLog: [] as string[],
   officialCancels: [] as string[],
   promotes: [] as { name: string; folderId: string; approved: string }[],
@@ -534,6 +535,7 @@ export const pluginHost = {
   afterUpdateQuitConsent: null as null | string,
   legacyInstalled: [] as string[],
   registry: null as null | { claims: Record<string, string>; failClosed: boolean; legacyOwners: string[] },
+  linkDelayMs: 0,
   linkResult: null as null | { ok: false; reason?: string; stale?: true } | { ok: true; linked: string[]; refused: Record<string, string>; binDir: string; adopted: boolean },
   startResult: null as null | { ok: false; reason: string },
   removeGate: null as null | Promise<void>,
@@ -592,6 +594,7 @@ const plugins: Modules["ArdiaPlugins"] = {
   remove: async (name, official, folderId) => (await pluginHost.removeGate, pluginHost.removeFolderIds.push(folderId), pluginHost.removed.push(official ? `official:${name}` : name), (pluginHost.folders = pluginHost.folders.filter((f) => f.name !== name)), { ok: true }),
   linkPrograms: async (spec) => {
     pluginHost.links.push({ ...spec, programs: spec.programs.map((p) => ({ ...p })) });
+    if (pluginHost.linkDelayMs) await new Promise((resolve) => setTimeout(resolve, pluginHost.linkDelayMs));
     if (pluginHost.linkResult) return pluginHost.linkResult;
     return { ok: true, linked: spec.programs.map((p) => p.name), refused: {}, binDir: "/home/.local/bin", adopted: false };
   },
@@ -625,7 +628,7 @@ const plugins: Modules["ArdiaPlugins"] = {
     const at = pluginHost.folders.findIndex((f) => f.name === name);
     if (at < 0) pluginHost.folders.push({ name, status: "missing", official: true, candidateOnly: true, candidate });
     else pluginHost.folders[at] = { ...pluginHost.folders[at]!, candidate };
-    return { ok: true, candidate };
+    return { ok: true, candidate, ...pluginHost.officialFetchOk[name] };
   },
   cancelOfficialFetch: (name) => void pluginHost.officialCancels.push(name),
   promoteOfficial: async (name, folderId, approved) => {

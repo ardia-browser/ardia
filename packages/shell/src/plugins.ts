@@ -18,7 +18,8 @@ export type PluginFolderEntry = {
 export type OfficialCandidate = { folderId: string; text: string; legacyHash: string; version: string };
 export type OfficialPinned = { name: string; version: string; folderId: string };
 export type OfficialFetchCode = "offline" | "failed" | "verify" | "cancelled" | "unsupported";
-export type OfficialFetchResult = { ok: true; candidate: OfficialCandidate; reused?: boolean } | { ok: false; code: OfficialFetchCode; reason: string };
+export type OfficialFetchTimings = { downloadMs: number; verifyMs: number; bytes: number; resumes: number };
+export type OfficialFetchResult = { ok: true; candidate: OfficialCandidate; reused?: boolean; timings?: OfficialFetchTimings } | { ok: false; code: OfficialFetchCode; reason: string };
 export type OfficialFetchProgress = { name: string; received: number; total: number };
 
 export type PluginProgramsSpec = {

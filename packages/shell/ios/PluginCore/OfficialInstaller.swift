@@ -21,9 +21,10 @@ enum OfficialInstaller {
     }
     let stageFolder = open(stage, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
     guard stageFolder >= 0 else { return refuse(Failure(code: "failed", reason: "its folder couldn't be opened")) }
-    let unpacked = OfficialArchive.unpack(held.fd, top: entry.name, into: stageFolder, scratch: scratch)
+    let unpacked = OfficialArchive.unpackWithDigest(held.fd, top: entry.name, into: stageFolder, scratch: scratch)
     close(stageFolder)
-    if let problem = unpacked { return refuse(Failure(code: "verify", reason: problem)) }
+    if let problem = unpacked.problem { return refuse(Failure(code: "verify", reason: problem)) }
+    if let payloadDigest = unpacked.payloadDigest { OfficialVerification.shared.remember(sha: held.sha, top: entry.name, payloadDigest: payloadDigest) }
     guard let opened = PluginFiles.openFolder(stage) else { return refuse(Failure(code: "verify", reason: "its folder can't be read")) }
     let read = PluginFiles.readManifest(in: opened)
     opened.close()

@@ -15,12 +15,20 @@ export type PluginListing = {
   ignoresUserFolder?: boolean;
 };
 
-export type OfficialFetch = { state: "fetching"; received: number; total: number } | { state: "promoting" } | { state: "failed"; reason: string; code: string };
+type OfficialFetchProgressState = { state: "fetching"; received: number; total: number };
+type OfficialFetchSettled = { state: "promoting" } | { state: "failed"; reason: string; code: string };
 
-export function setOfficialFetch(name: string, state: OfficialFetch | null) {
+export type OfficialFetch = (OfficialFetchProgressState & { startedAt: number; startedFrom: number }) | OfficialFetchSettled;
+
+export function setOfficialFetch(name: string, state: OfficialFetchProgressState | OfficialFetchSettled | null) {
   usePlugins.setState((s) => {
     const fetches = { ...s.fetches };
-    if (state) fetches[name] = state;
+    const before = Object.hasOwn(fetches, name) ? fetches[name] : undefined;
+    if (state?.state === "fetching") {
+      const continues = before?.state === "fetching" && state.received >= before.received;
+      fetches[name] = continues ? { ...state, startedAt: before.startedAt, startedFrom: before.startedFrom } : { ...state, startedAt: Date.now(), startedFrom: state.received };
+    }
+    else if (state) fetches[name] = state;
     else delete fetches[name];
     return { fetches };
   });

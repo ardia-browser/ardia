@@ -25,7 +25,7 @@ import { over } from "../../lib/color";
 import { anchoredClose, anchoredOpen, Divider, Expand, ink, liquidGlass, reduceMotion, Text, useTheme, VaultTouchID } from "../ui";
 import { NetworkBadge } from "../site/Autofill";
 import { MenuSurface, placement, SelectionPlate, useLeavingMenu, useWholeList } from "../vaults/VaultMenu";
-import { Lines, RowShell, Trailing, type Ink, type RowLayer, type VaultTouchState } from "../vaults/VaultRows";
+import { Lines, PlateTouch, RowShell, Trailing, type Ink, type RowLayer, type VaultTouchState } from "../vaults/VaultRows";
 import { VAULT_MENU } from "../vaults/tokens";
 import { addressSymbol } from "./AutofillParts";
 import { VaultAppIcon } from "../vaults/VaultParts";
@@ -211,7 +211,7 @@ function MenuPanel({ tabId, menu, area, onGone }: { tabId: string; menu: Autofil
       plated={index < list.length}
       layer={layer}
       highlight={highlight}
-      touch={index === touchTarget && (layer === "lit" || index >= list.length) ? touch : null}
+      touch={index === touchTarget && index >= list.length ? touch : null}
       busy={menu.busy === row.key}
       reserve={touchIDReady}
       onHover={() => menu.selected !== index && selectAutofillRow(tabId, index)}
@@ -254,14 +254,17 @@ function MenuPanel({ tabId, menu, area, onGone }: { tabId: string; menu: Autofil
             offsets={offsets}
             fill={highlight.fill}
             accessory={
-              touchTarget >= 0 ? (
-                <VaultTouchID
-                  key={menu.touchRearms}
-                  armed={touchArmed}
-                  grantScope={touchScopeOfAutofill(tabId, selectedRow)}
-                  onStatus={(status) => noteAutofillTouchStatus(tabId, menu.seq, status)}
-                  style={TOUCH_ID_SIZE}
-                />
+              touchTarget >= 0 && touchTarget < list.length ? (
+                <>
+                  <PlateTouch touch={touch} highlight={highlight} />
+                  <VaultTouchID
+                    key={menu.touchRearms}
+                    armed={touchArmed}
+                    grantScope={touchScopeOfAutofill(tabId, selectedRow)}
+                    onStatus={(status) => noteAutofillTouchStatus(tabId, menu.seq, status)}
+                    style={TOUCH_ID_OVER}
+                  />
+                </>
               ) : null
             }
           >
@@ -292,6 +295,7 @@ const TOUCH_ID_SIZE = {
   width: VAULT_MENU.touchID,
   height: VAULT_MENU.touchID,
 } as const;
+const TOUCH_ID_OVER = { position: "absolute", top: 0, left: 0, ...TOUCH_ID_SIZE } as const;
 const SEPARATOR = { marginHorizontal: VAULT_MENU.separatorInset } as const;
 const ERROR = {
   paddingHorizontal: VAULT_MENU.separatorInset,

@@ -169,7 +169,7 @@ function TouchGlyph({ touch, ink, fill }: { touch: VaultTouchState; ink: Ink; fi
     <Animated.View style={{ ...TRAILING, transform: still ? [] : [{ translateX }] }}>
       <Animated.View style={{ ...LAYER, opacity: check.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }}>
         {retry && red.disc ? <View style={{ ...DISC, backgroundColor: red.disc }} /> : null}
-        <Symbol name="touchid" size={VAULT_MENU.touchID} color={retry ? red.glyph : ink.title} style={TOUCH_ID} />
+        <Symbol name="touchid" weight="regular" size={VAULT_MENU.touchID} color={retry ? red.glyph : ink.title} style={TOUCH_ID} />
       </Animated.View>
       <Animated.View style={{ ...LAYER, opacity: check, transform: still ? [] : [{ scale: checkScale }] }}>
         <Symbol name="checkmark.circle.fill" size={VAULT_MENU.touchID} color={ink.title} style={TOUCH_ID} />
@@ -202,6 +202,11 @@ function BusyOverlay({ busy, compact = false }: { busy: boolean; compact?: boole
       <ActivitySpinner style={SPINNER} />
     </View>
   ) : null;
+}
+
+export function PlateTouch({ touch, highlight }: { touch: VaultTouchState; highlight: VaultHighlight }) {
+  const lit = useInk(highlight, highlight.surface);
+  return <TouchGlyph touch={touch} ink={lit} fill={highlight.fill} />;
 }
 
 export function Trailing({ busy, touch, ink, fill, reserve }: { busy: boolean; touch: VaultTouchState | null; ink: Ink; fill: string | null; reserve: boolean }) {

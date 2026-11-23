@@ -14,7 +14,7 @@ import { over } from "../../lib/color";
 import { useSettings, useTab, useTabLive } from "../../state/browser/hooks";
 import { anchoredClose, anchoredOpen, Button, Divider, Expand, GlassFill, ink, liquidGlass, PANEL, Panel, POPOVER_MARGIN, PopoverSurface, reduceMotion, SearchField, selectionSlide, shadow, space, Text, useTheme, VaultTouchID, withAlpha } from "../ui";
 import { twinLogins } from "./rowText";
-import { CodesTicking, rowHeight, VaultRowView, type RowLayer } from "./VaultRows";
+import { CodesTicking, PlateTouch, rowHeight, VaultRowView, type RowLayer } from "./VaultRows";
 import { VAULT_MENU } from "./tokens";
 
 type Area = { width: number; height: number };
@@ -196,7 +196,7 @@ function MenuPanel({ tabId, menu, zoom, area, onGone }: { tabId: string; menu: M
       layer={layer}
       reserveTrailing={touchIDReady}
       highlight={highlight}
-      touch={index === touchTarget && (layer === "lit" || index >= list.length) ? touch : null}
+      touch={index === touchTarget && index >= list.length ? touch : null}
       busy={menu.busy === row.key}
       onHover={() => menu.selected !== index && selectVaultRow(tabId, index)}
       onPress={() => clickVaultRow(tabId, row)}
@@ -251,7 +251,14 @@ function MenuPanel({ tabId, menu, zoom, area, onGone }: { tabId: string; menu: M
                 index={shownSelected}
                 offsets={offsets}
                 fill={highlight.fill}
-                accessory={touchTarget >= 0 ? <VaultTouchID key={menu.touchRearms} armed={touchArmed} grantScope={touchScopeOf(tabId, menu)} onStatus={(status) => noteVaultTouchStatus(tabId, menu.seq, status)} style={TOUCH_ID_SIZE} /> : null}
+                accessory={
+                  touchTarget >= 0 && touchTarget < list.length ? (
+                    <>
+                      <PlateTouch touch={touch} highlight={highlight} />
+                      <VaultTouchID key={menu.touchRearms} armed={touchArmed} grantScope={touchScopeOf(tabId, menu)} onStatus={(status) => noteVaultTouchStatus(tabId, menu.seq, status)} style={TOUCH_ID_OVER} />
+                    </>
+                  ) : null
+                }
               >
                 {list.map((row, i) => view(row, i, "lit"))}
               </SelectionPlate>
@@ -292,6 +299,7 @@ const FILL = { flex: 1 } as const;
 const SEARCH_ROW = { flexDirection: "row", alignItems: "center", gap: space.xs, height: VAULT_MENU.searchHeight, paddingHorizontal: VAULT_MENU.rowInset } as const;
 const LIST = { paddingTop: VAULT_MENU.listPad, paddingBottom: VAULT_MENU.separatorGap } as const;
 const TOUCH_ID_SIZE = { width: VAULT_MENU.touchID, height: VAULT_MENU.touchID } as const;
+const TOUCH_ID_OVER = { position: "absolute", top: 0, left: 0, ...TOUCH_ID_SIZE } as const;
 const LIST_ALONE = { paddingVertical: VAULT_MENU.listPad } as const;
 const SEPARATOR = { marginHorizontal: VAULT_MENU.separatorInset } as const;
 const EMPTY = { height: VAULT_MENU.compactRow, justifyContent: "center", paddingHorizontal: VAULT_MENU.separatorInset, marginTop: VAULT_MENU.listPad, marginBottom: VAULT_MENU.separatorGap } as const;

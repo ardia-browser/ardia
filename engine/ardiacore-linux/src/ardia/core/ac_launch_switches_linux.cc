@@ -306,6 +306,11 @@ bool BackgroundInstance() {
   return CommandLine().HasSwitch(kBackgroundSwitch);
 }
 
+bool LinuxIsolatedInstance() {
+  if (CommandLine().HasSwitch(switches::kUserDataDir)) return true;
+  return !base::Environment::Create()->GetVar("ARDIA_DATA_DIR").value_or("").empty();
+}
+
 std::optional<std::string> InstanceValue(std::string_view key) {
   const std::string name = "ardia-" + std::string(key);
   if (!CommandLine().HasSwitch(name)) {

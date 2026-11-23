@@ -1940,7 +1940,9 @@ thread. The reply shapes are the Mac's (`packages/shell/ios/SystemModule.swift`,
   its relatives, `devtools`, `filesystem`, and Chromium's own external-protocol blocklist).
 - **Background instances** run no tool, write no entry and open no app: the default browser calls answer false,
   `setLaunchAtLogin` resolves without changing anything and `openExternalURL` answers false. The login status is still
-  read.
+  read. `setLaunchAtLogin` also resolves without changing anything in an isolated instance (`--user-data-dir` or
+  `ARDIA_DATA_DIR`, `ardiacore::LinuxIsolatedInstance()`), since the autostart entry is the installed Ardia's. Test: `engine/ardiacore-linux/tests/test_login_item_isolated.py`
+  (it also reads the Mac's `SystemModule.swift`).
 
 ### Links from other apps
 

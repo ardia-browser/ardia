@@ -47,6 +47,10 @@ public class SystemModule: Module {
         NSLog("ArdiaSystem: background instance, not changing launch at login")
         return
       }
+      if LaunchConfig.shared.isolated {
+        NSLog("ArdiaSystem: isolated instance, not changing launch at login")
+        return
+      }
       if enabled {
         try SMAppService.mainApp.register()
       } else {

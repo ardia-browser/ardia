@@ -274,6 +274,10 @@ void LinuxSystemInvoke(std::string_view method, const base::ListValue& args, Don
       LOG(INFO) << "Ardia background instance: not changing launch at login";
       return std::move(done).Run(true, base::Value());
     }
+    if (LinuxIsolatedInstance()) {
+      LOG(INFO) << "Ardia isolated instance: not changing launch at login";
+      return std::move(done).Run(true, base::Value());
+    }
     Worker()->PostTaskAndReplyWithResult(
         FROM_HERE, base::BindOnce(&ChangeLaunchAtLogin, CurrentInstall(), args[0].GetBool()),
         base::BindOnce([](Done done, desktop::LoginChange change) {

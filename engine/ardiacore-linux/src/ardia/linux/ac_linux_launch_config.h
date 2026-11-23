@@ -49,6 +49,8 @@ const LinuxCliEnvironment& LinuxCli();
 
 const LinuxDesktopEnvironment& LinuxDesktop();
 
+bool LinuxIsolatedInstance();
+
 base::FilePath LinuxConfigFolder(const base::FilePath& user_data_directory);
 
 base::DictValue LinuxLaunchConfig(const base::FilePath& data_directory,

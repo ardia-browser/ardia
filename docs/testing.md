@@ -271,7 +271,9 @@ Launch with `scripts/agent/ac launch <app> --data <dir> [--instance K=V] [--test
 - **Other:** macOS re-auth prompts never show; requests are refused unless `ARDIA_TEST` `reauth=granted` in a build that
   honours it (above). Nothing system-wide changes: Set as Default (onboarding, whose checkbox starts unticked, and
   Settings), Chrome's own default browser, scheme and file type setters, Add to Dock and Launch at Login are no-ops
-  that log a line (`ArdiaSystem`, `chromium-background-instance-no-default-handlers.patch`).
+  that log a line (`ArdiaSystem`, `chromium-background-instance-no-default-handlers.patch`). Launch at Login is also
+  a no-op in any instance with a scratch `ARDIA_DATA_DIR`, hidden or not, on the Mac and Linux as on Windows: the login
+  item is keyed by bundle id, so a test copy would change the installed Ardia's.
 
 A scratch `ARDIA_DATA_DIR` holds Chrome's user data and the app's documents, its defaults, keychain items and
 Sparkle state (`packages/shell/ios/ArdiaIsolation.m`); Chrome gets `--use-mock-keychain`; update checks are off without

@@ -36,3 +36,5 @@ export function applyWindowButtonStyle(style: WindowButtonStyle, layout: WindowB
 }
 
 export const POP_UP_CHROME: PopUpChrome = { indicator: "accentUpDown", growsToItsTitle: false };
+
+export const REFRESH_ARROW_RING_OFFSET = { x: 0.35, y: 0.6 } as const;

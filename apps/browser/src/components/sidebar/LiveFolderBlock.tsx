@@ -22,6 +22,7 @@ import { useGroupHover } from "./hoverController";
 import { useHoverFade } from "./hoverMotion";
 import { Squish, useSquish } from "../ui/Squish";
 import { iconButton } from "../ui/tokens";
+import { REFRESH_ARROW_RING_OFFSET } from "../../lib/platformChrome";
 import { openLiveFolderMenu } from "../../state/sidebar/liveMenus";
 import { registerRow } from "../../state/sidebar/sidebarUi";
 import { LiveFolderIcon } from "./LiveFolderIcon";
@@ -41,6 +42,9 @@ const HEADER_ROOM = { marginHorizontal: LIVE_FOLDER_HEADER_MARGIN } as const;
 const BOX_ROOM = { paddingVertical: GROUP_BORDER, paddingHorizontal: LIVE_FOLDER_BOX_PAD } as const;
 const REFRESH_SLOT = { minWidth: iconButton.s.box, alignSelf: "stretch", flexDirection: "row", alignItems: "center", justifyContent: "flex-end" } as const;
 const REFRESH_OVER = { position: "absolute", top: 0, bottom: 0, right: 0, flexDirection: "row", alignItems: "center" } as const;
+const SPINNER_BOX = { width: TAB_ROW.closeSlot, height: TAB_ROW.closeSlot, alignItems: "center", justifyContent: "center" } as const;
+const SPINNER_PIVOT = { transform: [{ translateX: REFRESH_ARROW_RING_OFFSET.x }, { translateY: REFRESH_ARROW_RING_OFFSET.y }] };
+const SPINNER_GLYPH = { width: 14, height: 14, transform: [{ translateX: -REFRESH_ARROW_RING_OFFSET.x }, { translateY: -REFRESH_ARROW_RING_OFFSET.y }] };
 
 export const LiveFolderBlock = memo(function LiveFolderBlock({ folderId, windowId }: { folderId: string; windowId: string }) {
   const tokens = useSidebarTokens();
@@ -189,10 +193,12 @@ function RefreshButton({ spinning, tooltip, onPress }: { spinning: boolean; tool
   const theme = useTheme();
   if (!spinning) return <Button variant="icon" icon="arrow.clockwise" size="s" weight="semibold" onPress={onPress} tooltip={tooltip} />;
   return (
-    <View tooltip={tooltip} style={{ width: TAB_ROW.closeSlot, height: TAB_ROW.closeSlot, alignItems: "center", justifyContent: "center" }}>
-      <RefreshSpinner>
-        <Symbol name="arrow.clockwise" size={10} weight="semibold" color={theme.textSecondary} style={{ width: 14, height: 14 }} />
-      </RefreshSpinner>
+    <View tooltip={tooltip} style={SPINNER_BOX}>
+      <View style={SPINNER_PIVOT}>
+        <RefreshSpinner>
+          <Symbol name="arrow.clockwise" size={10} weight="semibold" color={theme.textSecondary} style={SPINNER_GLYPH} />
+        </RefreshSpinner>
+      </View>
     </View>
   );
 }

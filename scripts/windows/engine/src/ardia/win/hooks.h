@@ -5,6 +5,7 @@
 #include <optional>
 
 #include "base/win/windows_types.h"
+#include "chrome/browser/ui/extensions/extension_popup_types.h"
 #include "ui/base/window_open_disposition.h"
 
 namespace base {
@@ -19,6 +20,11 @@ class GURL;
 class BrowserView;
 class BrowserWidget;
 class ChromeBrowserMainParts;
+class Profile;
+
+namespace extensions {
+class Extension;
+}
 
 namespace blink::mojom {
 class WindowFeatures;
@@ -58,6 +64,16 @@ extern bool (*g_ardia_win_open_as_offer)(
     const blink::mojom::WindowFeatures& features);
 
 extern void (*g_ardia_win_offer_inserted)();
+
+extern BrowserWindowInterface* (*g_ardia_win_active_extension_browser)(
+    Profile& profile,
+    bool include_incognito);
+extern std::optional<bool> (*g_ardia_win_extension_browser_active)(
+    BrowserWindowInterface& browser);
+extern std::optional<bool> (*g_ardia_win_show_action_popup)(
+    BrowserWindowInterface& browser,
+    const extensions::Extension& extension,
+    ShowPopupCallback& callback);
 
 extern std::unique_ptr<RenderViewContextMenuBase> (*g_ardia_win_context_menu)(
     content::RenderFrameHost& render_frame_host,

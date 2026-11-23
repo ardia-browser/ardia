@@ -46,13 +46,17 @@ class PopupAnchor : public views::View {
 
   const std::string& extension_id() const { return extension_id_; }
 
+  bool ContainsScreenPoint(POINT screen) const {
+    return ::ScreenToClient(parent_, &screen) &&
+           rect_.Contains(gfx::Point(screen.x, screen.y));
+  }
+
   bool HasPrimaryPress() const {
     const int button =
         ::GetSystemMetrics(SM_SWAPBUTTON) ? VK_RBUTTON : VK_LBUTTON;
-    POINT cursor;
-    return (::GetAsyncKeyState(button) & 0x8000) && ::GetCursorPos(&cursor) &&
-           ::ScreenToClient(parent_, &cursor) &&
-           rect_.Contains(gfx::Point(cursor.x, cursor.y));
+    POINT screen;
+    return (::GetAsyncKeyState(button) & 0x8000) && ::GetCursorPos(&screen) &&
+           ContainsScreenPoint(screen);
   }
 
   gfx::Rect GetAnchorBoundsInScreen() const override {
@@ -73,20 +77,6 @@ class PopupAnchor : public views::View {
 BEGIN_METADATA(PopupAnchor)
 END_METADATA
 
-gfx::Rect AnchorInClient(HWND parent, const base::DictValue* anchor) {
-  RECT client{};
-  if (!::GetClientRect(parent, &client) || !anchor) {
-    return gfx::Rect(client.right, 0, 1, 1);
-  }
-  const double scale = ::GetDpiForWindow(parent) / 96.0;
-  const auto pixels = [anchor, scale](const char* field) {
-    return base::ClampRound(anchor->FindDouble(field).value_or(0) * scale);
-  };
-  gfx::Rect rect(pixels("x"), pixels("y"), pixels("width"), pixels("height"));
-  rect.Intersect(gfx::Rect(client.right, client.bottom));
-  return rect.IsEmpty() ? gfx::Rect(client.right, 0, 1, 1) : rect;
-}
-
 views::BubbleDialogDelegate* AnchoredPopup(views::ViewTracker& anchor) {
   if (!anchor.view()) {
     return nullptr;
@@ -97,6 +87,21 @@ views::BubbleDialogDelegate* AnchoredPopup(views::ViewTracker& anchor) {
   return widget && !widget->IsClosed() ? dialog : nullptr;
 }
 
+}
+
+gfx::Rect ExtensionActionAnchorInClient(HWND parent,
+                                       const base::DictValue* anchor) {
+  RECT client{};
+  if (!anchor || !::GetClientRect(parent, &client)) {
+    return {};
+  }
+  const double scale = ::GetDpiForWindow(parent) / 96.0;
+  const auto pixels = [anchor, scale](const char* field) {
+    return base::ClampRound(anchor->FindDouble(field).value_or(0) * scale);
+  };
+  gfx::Rect rect(pixels("x"), pixels("y"), pixels("width"), pixels("height"));
+  rect.Intersect(gfx::Rect(client.right, client.bottom));
+  return rect;
 }
 
 const char* OpenOrRunExtensionAction(BrowserWindowInterface& browser,
@@ -142,40 +147,72 @@ const char* OpenOrRunExtensionAction(BrowserWindowInterface& browser,
       break;
   }
 
+  ShowPopupCallback callback;
+  gfx::Rect location =
+      ExtensionActionAnchorInClient(parent, args.FindDict("anchor"));
+  if (location.IsEmpty()) {
+    RECT client{};
+    ::GetClientRect(parent, &client);
+    location = gfx::Rect(client.right, 0, 1, 1);
+  }
+  return ShowExtensionActionPopup(
+             browser, contents, *extension, parent, location, anchor, callback)
+             ? "nativePopup"
+             : "none";
+}
+
+bool ShowExtensionActionPopup(BrowserWindowInterface& browser,
+                              content::WebContents& contents,
+                              const extensions::Extension& extension,
+                              HWND parent,
+                              const gfx::Rect& location,
+                              views::ViewTracker& anchor,
+                              ShowPopupCallback& callback) {
+  auto* context = contents.GetBrowserContext();
+  auto* registry = extensions::ExtensionRegistry::Get(context);
+  if (!registry || !registry->enabled_extensions().Contains(extension.id()) ||
+      (context->IsOffTheRecord() &&
+       !extensions::util::IsIncognitoEnabled(extension.id(), context))) {
+    return false;
+  }
+  auto* manager = extensions::ExtensionActionManager::Get(context);
+  auto* action = manager ? manager->GetExtensionAction(extension) : nullptr;
+  const int tab_id = sessions::SessionTabHelper::IdForTab(&contents).id();
+  const GURL url = action ? action->GetPopupUrl(tab_id) : GURL();
+  if (!url.is_valid()) {
+    return false;
+  }
   auto* window = browser.GetWindow();
   auto* widget =
       window ? views::Widget::GetWidgetForNativeView(window->GetNativeWindow())
              : nullptr;
   auto* view = widget ? widget->GetContentsView() : nullptr;
   if (!view) {
-    return "none";
-  }
-  const GURL url = action->GetPopupUrl(tab_id);
-  if (!url.is_valid()) {
-    return "none";
+    return false;
   }
   auto host = extensions::ExtensionViewHostFactory::CreatePopupHost(
-      *extension, url, &browser);
+      extension, url, &browser);
   if (!host) {
-    return "none";
+    return false;
   }
   if (!anchor.view()) {
     anchor.SetView(view->AddChildView(std::make_unique<PopupAnchor>()));
   }
   auto* popup_anchor = static_cast<PopupAnchor*>(anchor.view());
-  popup_anchor->SetLocation(
-      parent, AnchorInClient(parent, args.FindDict("anchor")), *id);
+  popup_anchor->SetLocation(parent, location, extension.id());
   ExtensionPopup::ShowPopup(&browser, std::move(host),
                             views::BubbleAnchor(popup_anchor),
                             views::BubbleBorder::TOP_RIGHT,
-                            PopupShowAction::kShow, ShowPopupCallback());
-  auto* popup = AnchoredPopup(anchor);
-  if (!popup) {
-    return "none";
+                            PopupShowAction::kShow, std::move(callback));
+  if (auto* popup = AnchoredPopup(anchor)) {
+    popup->SetUseAnchorWindowBounds(false);
+    popup->SizeToContents();
   }
-  popup->SetUseAnchorWindowBounds(false);
-  popup->SizeToContents();
-  return "nativePopup";
+  return true;
+}
+
+bool HasExtensionActionPopup(views::ViewTracker& anchor) {
+  return AnchoredPopup(anchor) != nullptr;
 }
 
 void CloseExtensionActionPopup(views::ViewTracker& anchor) {
@@ -184,16 +221,32 @@ void CloseExtensionActionPopup(views::ViewTracker& anchor) {
   }
 }
 
-void DismissExtensionActionPopup(views::ViewTracker& anchor,
-                                 HWND previous,
-                                 bool mouse_activated) {
+void ClosePendingExtensionActionPopup(views::ViewTracker& anchor) {
+  if (auto* popup = AnchoredPopup(anchor);
+      popup && !popup->GetWidget()->IsVisible()) {
+    popup->GetWidget()->Close();
+  }
+}
+
+void DismissExtensionActionPopup(views::ViewTracker& anchor, HWND previous) {
   auto* popup = AnchoredPopup(anchor);
   if (!popup || !previous ||
       views::HWNDForWidget(popup->GetWidget()) != previous) {
     return;
   }
-  if (mouse_activated &&
-      static_cast<PopupAnchor*>(anchor.view())->HasPrimaryPress()) {
+  if (static_cast<PopupAnchor*>(anchor.view())->HasPrimaryPress()) {
+    return;
+  }
+  popup->GetWidget()->Close();
+}
+
+void DismissExtensionActionPopupForPress(views::ViewTracker& anchor,
+                                        POINT screen,
+                                        bool primary) {
+  auto* popup = AnchoredPopup(anchor);
+  if (!popup || (primary &&
+                 static_cast<PopupAnchor*>(anchor.view())->ContainsScreenPoint(
+                     screen))) {
     return;
   }
   popup->GetWidget()->Close();

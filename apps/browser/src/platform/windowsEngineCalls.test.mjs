@@ -14,6 +14,7 @@ const windowsDomains = "packages/expo-windows/src/engine/domains/";
 const engineSources = "engine/chromium/src/chrome/browser/ardia/";
 const rows = JSON.parse(read(`${windowsDomains}forwarded.json`));
 const MAC_ONLY = new Set(["swipe", "webKit"]);
+const WINDOWS_ONLY = { extensions: ["toolbarContext"] };
 const ENGINE_CALL = /^AC_(?:PROFILE|ARGS)_CALL\(\s*(ac_\w+)/gm;
 const windowsEngineCalls = new Set(
   read("scripts/windows/engine/accepted-layer-sources.txt")
@@ -53,8 +54,8 @@ function fakeEngine(reply = () => "{}") {
       return "null";
     },
     hosted: [],
-    host: async (verb, args = {}) => {
-      engine.hosted.push({ verb, args });
+    host: async (verb, args = {}, windowId) => {
+      engine.hosted.push(windowId ? { verb, args, windowId } : { verb, args });
       return {};
     },
   };
@@ -97,14 +98,22 @@ test("every verb the Mac passes straight to the engine goes to the same engine c
   }
 });
 
-test("every verb of the Mac's tables is forwarded, reproduced or listed as missing on Windows, and nothing else is", () => {
+test("Windows implements the Mac's call table and its platform-specific calls", () => {
   assert.deepEqual(domainsOf(rows), sorted(Object.keys(mac)));
   for (const [domain, table] of Object.entries(mac)) {
     const kinds = [Object.keys(rows.forwarded[domain] ?? {}), Object.keys(reproduced[domain] ?? {}), rows.missing[domain] ?? []];
     const onWindows = kinds.flat();
-    assert.deepEqual(sorted(onWindows), sorted(table.verbs), `${domain} has the Mac's verbs`);
+    assert.deepEqual(sorted(onWindows), sorted([...table.verbs, ...(WINDOWS_ONLY[domain] ?? [])]), `${domain} has its expected verbs`);
     assert.equal(new Set(onWindows).size, onWindows.length, `${domain} answers each verb one way`);
   }
+});
+
+test("the extension toolbar sends the selected tab and button bounds to its shell window", async () => {
+  const engine = fakeEngine();
+  const extensions = calling(engine, "extensions");
+  const anchors = { abcd: { x: 320, y: 8, width: 30, height: 30 } };
+  assert.equal(await extensions("toolbarContext", { windowId: "shell-1", tabId: "tab-2", anchors }), null);
+  assert.deepEqual(engine.hosted, [{ verb: "extensions.toolbarContext", args: { key: "tab-2", anchors }, windowId: "shell-1" }]);
 });
 
 test("a verb the Mac passes to an engine call Windows doesn't build is missing on Windows", () => {

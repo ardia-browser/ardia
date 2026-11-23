@@ -34,6 +34,10 @@ async function run(engine: Engine, name: string, args: Args, sent: Fields, event
 }
 
 export const extensionCalls: Handlers = {
+  toolbarContext: async (args, engine) => {
+    await engine.host("extensions.toolbarContext", { key: args.text("tabId"), anchors: args.dict("anchors") }, args.text("windowId"));
+    return ok();
+  },
   list: async (args, engine) => {
     const { extensions } = await served(engine, "ac_extensions_list", originalProfile(args.profile));
     if (!Array.isArray(extensions)) throw callError("ERR_ENGINE", "Unexpected extension list");

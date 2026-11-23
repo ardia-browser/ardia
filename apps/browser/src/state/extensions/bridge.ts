@@ -8,7 +8,7 @@ import { reportExtensionsLoaded } from "./loadHealth";
 import { watchExtensionInstallFailures } from "./crxDrop";
 import { onSyncedExtensionChange } from "../sync/extensions";
 import { openRequestedTab } from "./tabsRequests";
-import { pruneToolbarAnchors, toolbarAnchor } from "./toolbarAnchors";
+import { pruneToolbarAnchors, syncWindowsToolbarContexts, toolbarAnchor } from "./toolbarAnchors";
 import { startWebStoreIntegration } from "./webStore";
 import * as state from "./actions";
 import {
@@ -42,9 +42,11 @@ export function startExtensionsBridge() {
     }
   };
   loadProfiles(useBrowser.getState());
-  useBrowser.subscribeTo(["windows", "tabs"], (s, prev) => {
+  syncWindowsToolbarContexts(useBrowser.getState());
+  useBrowser.subscribeTo(["windows", "tabs", "peeks"], (s, prev) => {
     if (s.windows !== prev.windows) loadProfiles(s);
     if (s.windows !== prev.windows || s.tabs !== prev.tabs) pruneToolbarAnchors(s);
+    syncWindowsToolbarContexts(s, prev);
   });
 
   startActionStates();

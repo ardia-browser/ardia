@@ -69,7 +69,7 @@ struct CredentialWording: Sendable {
     case "outdated": return "This \(program) is too old, so update it and try again."
     case "cancelled": return handler == "signIn" || handler == "unlock" ? "Signing in to \(title) was cancelled." : "\(program) was stopped."
     default:
-      if let detail, !detail.isEmpty { return detail }
+      if let detail, let first = detail.first { return first.uppercased() + detail.dropFirst() }
       return "\(program) stopped with an error."
     }
   }

@@ -22,7 +22,7 @@ extension VaultPasskeys {
     case "done":
       let created = entry.request.kind == .create
       finish(entry, answer: nil, outcome: created ? .created : .used, via: handing.extensionId)
-      if created { Task { await VaultBroker.shared.refetchItems(handing.provider) } }
+      if created { Self.refetchAfterSave(handing.provider) }
     case "rejected":
       finish(entry, answer: nil, outcome: .refused, via: handing.extensionId)
     case "returned":
@@ -31,6 +31,17 @@ extension VaultPasskeys {
       entry.choosing = false
       start(entry)
     default: break
+    }
+  }
+
+  static let savedListingDelays: [Duration] = [.zero, .seconds(5), .seconds(30)]
+
+  static func refetchAfterSave(_ provider: String) {
+    Task.detached(priority: .utility) {
+      for delay in savedListingDelays {
+        if delay > .zero { try? await Task.sleep(for: delay) }
+        await VaultBroker.shared.refetchItems(provider)
+      }
     }
   }
 

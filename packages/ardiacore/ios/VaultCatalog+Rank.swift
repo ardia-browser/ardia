@@ -168,14 +168,16 @@ extension VaultCatalog {
   struct Page: Sendable {
     let host: String
     let site: String
-    let group: Int?
+    let shared: [String]
+    let sharedSet: Set<String>
     let brand: String?
 
     init?(_ origin: String) {
       guard let host = VaultOriginMatch.host(of: origin) else { return nil }
       self.host = VaultRankIndex.bareHost(host)
       site = VaultOriginMatch.siteKey(host)
-      group = VaultSharedSites.group(of: site)
+      shared = VaultSharedSites.sources(host: self.host, site: site)
+      sharedSet = Set(shared)
       let label = site.split(separator: ".").first.map(String.init) ?? site
       brand = label.count >= 3 && site.contains(".") && label.allSatisfy({ $0.isLetter || $0.isNumber }) ? label : nil
     }
@@ -183,7 +185,7 @@ extension VaultCatalog {
     func relevance(_ key: VaultRankKey) -> Int {
       if key.hostNames.contains(host) { return 3 }
       if key.siteKeys.contains(site) { return 2 }
-      if let group, key.siteKeys.contains(where: { VaultSharedSites.group(of: $0) == group }) { return 1 }
+      if !sharedSet.isEmpty, key.siteKeys.contains(where: sharedSet.contains) || key.hostNames.contains(where: sharedSet.contains) { return 1 }
       return 0
     }
   }
@@ -288,12 +290,12 @@ extension VaultCatalog {
       approximated.insert(index)
       candidates.append(Candidate(index: index, tier: nested ? .subdomain : .sibling, reason: .site, site: nil, host: host, scheme: "https"))
     }
-    if let group = page.group {
-      for domain in VaultSharedSites.groups[group] where domain != page.site {
-        for index in sitesNear("https://\(domain)") where seen.insert(index).inserted && filter.keeps(items[index], own: ownProvider) {
-          guard rank.keys[index].siteKeys.contains(domain), !VaultMatchTier.blocksShared(items[index]) else { continue }
-          candidates.append(Candidate(index: index, tier: .sibling, reason: .shared, site: domain, host: domain, scheme: "https"))
-        }
+    for domain in page.shared {
+      for index in sitesNear("https://\(domain)") where !seen.contains(index) && filter.keeps(items[index], own: ownProvider) {
+        let key = rank.keys[index]
+        guard key.siteKeys.contains(domain) || key.hostNames.contains(domain), !VaultMatchTier.blocksShared(items[index]) else { continue }
+        seen.insert(index)
+        candidates.append(Candidate(index: index, tier: .sibling, reason: .shared, site: domain, host: domain, scheme: "https"))
       }
     }
     if candidates.isEmpty, let brand = page.brand {

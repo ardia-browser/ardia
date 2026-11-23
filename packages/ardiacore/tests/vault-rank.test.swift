@@ -31,12 +31,10 @@ struct VaultRecommendTests {
     (catalog ?? self.catalog).recommend(origin: origin, filter: .everyProfile, usage: usage, pageUsername: pageUsername, remembered: remembered)
   }
 
-  @Test func `the page's own origin comes first, then the rest of its registrable domain, then its shared group`() {
+  @Test func `the page's own origin comes first, then the rest of its registrable domain`() {
     let ranked = recommend("https://accounts.google.com")
-    #expect(ids(ranked) == ["exact", "root", "mail", "tube"])
-    #expect(ranked.map(\.reason) == [.origin, .site, .site, .shared])
-    #expect(ranked.last?.site == "youtube.com", "a shared suggestion says which site it is for")
-    #expect(ranked.last?.tier == .sibling, "a shared suggestion always needs a choice")
+    #expect(ids(ranked) == ["exact", "root", "mail"], "Apple's list doesn't group google.com with youtube.com")
+    #expect(ranked.map(\.reason) == [.origin, .site, .site])
   }
 
   @Test func `a look-alike or a lookalike suffix never matches the real site, and the real site never matches them`() {
@@ -64,7 +62,7 @@ struct VaultRecommendTests {
   @Test func `what was filled here leads its group, then how often, but never lifts a login past a better match`() {
     let usage = VaultUsageSignals(lastHere: "1password/mail", frequency: ["1password/root": 3, "1password/tube": 50], recentlyEdited: [])
     let ranked = recommend("https://accounts.google.com", usage: usage)
-    #expect(ids(ranked) == ["exact", "mail", "root", "tube"])
+    #expect(ids(ranked) == ["exact", "mail", "root"])
   }
 
   @Test func `the username the page already shows pins its login above everything on the site`() {
@@ -78,6 +76,82 @@ struct VaultRecommendTests {
       login("c", "Site 2", "sam", ["https://example.com/other"]),
     ], ownProvider: "ardia")
     #expect(ids(recommend("https://example.com", in: twice)) == ["a", "c"])
+  }
+}
+
+private let sharedVault = [
+  login("store", "Steam", "sam", ["https://store.steampowered.com"]),
+  login("community", "Steam Community", "sam.c", ["https://steamcommunity.com"]),
+  login("communityHost", "Steam Community", "host.only", ["https://steamcommunity.com"], urlMatch: ["host"]),
+  login("behance", "Behance", "pat", ["https://www.behance.net"]),
+  login("adobe", "Adobe", "pat.a", ["https://account.adobe.com"]),
+  login("trello", "Trello", "kim", ["https://trello.com"]),
+  login("atlassianId", "Atlassian", "kim.a", ["https://id.atlassian.com"]),
+  login("fakeCommunity", "Steam Community", "sam", ["https://steamcommunity.co"]),
+  login("fakeSuffix", "Steam", "sam", ["https://steampowered.com.evil.io"]),
+  login("fakeAdobe", "Behance", "pat", ["https://behance.net.example.org"]),
+]
+
+@Suite("Shared sign-in groups from Apple's list")
+struct VaultSharedSitesTests {
+  let catalog = VaultCatalog(sharedVault, ownProvider: "ardia")
+
+  func recommend(_ origin: String) -> [VaultRanked] {
+    catalog.recommend(origin: origin, filter: .everyProfile, usage: .none, pageUsername: nil, remembered: nil)
+  }
+
+  @Test func `the vendored list comes from a pinned commit of Apple's file`() {
+    #expect(VaultSharedSitesData.commit.count == 40 && VaultSharedSitesData.commit.allSatisfy(\.isHexDigit))
+    #expect(VaultSharedSites.sourcesByPage["steampowered.com"]?.contains("steamcommunity.com") == true)
+    #expect(VaultSharedSites.sourcesByPage["google.com"] == nil && VaultSharedSites.sourcesByPage["youtube.com"] == nil)
+    #expect(VaultSharedSites.sourcesByPage.values.allSatisfy { !$0.isEmpty })
+  }
+
+  @Test func `a shared group offers its logins both ways, after the page's own site, and says which site each is for`() {
+    let onStore = recommend("https://store.steampowered.com")
+    #expect(ids(onStore) == ["store", "community"])
+    #expect(onStore.map(\.reason) == [.origin, .shared])
+    #expect(onStore.last?.site == "steamcommunity.com")
+    #expect(onStore.last?.tier == .sibling, "a shared suggestion always needs a choice")
+    let busy = VaultUsageSignals(lastHere: nil, frequency: ["1password/community": 50], recentlyEdited: [])
+    #expect(ids(catalog.recommend(origin: "https://store.steampowered.com", filter: .everyProfile, usage: busy, pageUsername: "sam.c", remembered: nil)) == ["store", "community"],
+            "fills and the page's username never lift a shared login past the site's own")
+    let onCommunity = recommend("https://steamcommunity.com")
+    #expect(ids(onCommunity).contains("store") && onCommunity.first { $0.item.id == "store" }?.reason == .shared)
+  }
+
+  @Test func `a one-way entry offers the from site's logins on the to site, never the reverse`() {
+    let onAdobe = recommend("https://www.adobe.com")
+    #expect(ids(onAdobe) == ["adobe", "behance"])
+    #expect(onAdobe.last?.reason == .shared && onAdobe.last?.site == "behance.net")
+    #expect(ids(recommend("https://www.behance.net")) == ["behance"])
+    #expect(ids(recommend("https://id.atlassian.com")) == ["atlassianId", "trello"])
+    #expect(ids(recommend("https://trello.com")) == ["trello"])
+  }
+
+  @Test func `a host named in the list matches only that host, not the rest of its registrable domain`() {
+    #expect(!ids(recommend("https://start.atlassian.com")).contains("trello"))
+  }
+
+  @Test func `look-alikes and host-only logins never cross through a group`() {
+    for origin in ["https://store.steampowered.com", "https://steamcommunity.com"] {
+      let found = ids(recommend(origin))
+      #expect(!found.contains("fakeCommunity") && !found.contains("fakeSuffix"))
+    }
+    #expect(!ids(recommend("https://store.steampowered.com")).contains("communityHost"))
+    #expect(!ids(recommend("https://www.adobe.com")).contains("fakeAdobe"))
+    #expect(ids(recommend("https://steamcommunity.co")) == ["fakeCommunity"])
+    #expect(ids(recommend("https://steampowered.com.evil.io")) == ["fakeSuffix"])
+  }
+
+  @Test func `search lifts a group's logins on the page's site, one-way entries only on the to site`() {
+    let creative = VaultCatalog([
+      login("behance", "Creative", "a", ["https://www.behance.net"], updatedAt: 1), login("adobe", "Creative", "b", ["https://account.adobe.com"], updatedAt: 2),
+      login("other", "Creative", "c", ["https://creative.example.org"], updatedAt: 9),
+    ], ownProvider: "ardia")
+    let search = { (origin: String) in creative.smartSearch("creative", origin: origin, limit: 5, filter: .everyProfile)?.map(\.id) ?? [] }
+    #expect(search("https://www.adobe.com") == ["adobe", "behance", "other"])
+    #expect(search("https://www.behance.net") == ["behance", "other", "adobe"])
   }
 }
 

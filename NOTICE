@@ -31,5 +31,8 @@ Ardia builds on and ships third-party software under its own licenses, including
   https://huggingface.co/gradium/phonon-voices (Apache-2.0), run through Gradium's ptts package (MIT or Apache-2.0),
   https://github.com/gradium-ai/xn-ptts: the iPhone's Talk to Me voice, downloaded from
   https://github.com/ardia-browser/ardia-voices when Talk to Me is turned on
+- password-manager-resources by Apple Inc. (MIT, see third_party/apple-password-manager-resources/LICENSE.md),
+  https://github.com/apple/password-manager-resources: its shared-credentials list, vendored at the commit named in
+  third_party/apple-password-manager-resources/source.json and compiled into packages/ardiacore/ios/VaultSharedSitesData.swift
 - The EFF Short Wordlist 1 by the Electronic Frontier Foundation (CC BY 3.0 US,
   https://www.eff.org/dice): the memorable password words in packages/ardiacore/ios/VaultWordList.swift

@@ -454,15 +454,19 @@ The fill menu's rows are ranked natively (`VaultCatalog+Rank.swift`, off the mai
 `vaults.recommend` and `vaults.searchItems` return.
 
 - **Recommendations** (an empty field): first the page's own origin (exact or same host), then the rest of its
-  registrable domain (subdomains, then siblings), then logins for a site in the page's shared group
-  (`VaultSharedSites.swift`: google.com with youtube.com and gmail.com, the Microsoft, Apple, Amazon, Atlassian and
-  other sign-in groups), and only when nothing else matches, a login with no website whose title names the site's
+  registrable domain (subdomains, then siblings), then logins from sites that share the page's sign-in
+  (`VaultSharedSites.swift`, reading `VaultSharedSitesData.swift`: Apple's `quirks/shared-credentials.json` from
+  password-manager-resources, vendored with its commit in `third_party/apple-password-manager-resources` and
+  refreshed by `node packages/ardiacore/scripts/shared-credentials.mjs`). A `shared` group offers each site's logins on
+  the others; a `from` → `to` entry offers the `from` sites' logins on the `to` sites only, never the reverse. A name
+  in the list matches a login's or page's registrable domain or exact host, nothing looser, and Apple's
+  `-historical` file (reuse warnings only) is left out. Only when nothing else matches, a login with no website whose title names the site's
   brand (`google` for accounts.google.com). Within each group, the username the page already shows (the earlier step
   of a two-step sign-in) pins its login first, then the login filled last on this site, then how often each was filled
   (halved every 30 days), then one saved or edited in the last 14 days, then the remembered account, then tier,
   username and title. Nothing crosses to an unrelated registrable domain except through a shared group, a login saved
   for one host only (`host` or `exact`) never does, a look-alike (`g00gle.com`, `accounts.google.com.evil.io`) is its
-  own site, and a shared or brand row always needs a click and says which site it is for ("For youtube.com").
+  own site, and a shared or brand row always needs a click and says which site it is for ("For steamcommunity.com").
 - **Search** (typing in a username field while the menu is open, or Other Passwords): words are folded (case,
   accents) and every word must match. A word scores 4 as a prefix of the username, the title or one of their words, 3
   as a prefix of a host or host label, 2 anywhere in the username, title, vault name or hosts, and 1 within one edit

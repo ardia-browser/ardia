@@ -1,0 +1,7 @@
+{
+  "repository": "https://github.com/apple/password-manager-resources",
+  "path": "quirks/shared-credentials.json",
+  "commit": "6c0cedf7b5664cfc41bcc0a0d9e59325d0468271",
+  "committed": "2026-11-19T19:56:17Z",
+  "license": "MIT"
+}

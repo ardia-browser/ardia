@@ -28,6 +28,7 @@ using namespace ardia_host;
 static void TryEarlyLittleWindow();
 
 static NSMutableDictionary<NSString *, NSDictionary *> *gLaunchURLSenders;
+
 static bool gReplayingLaunchURLs;
 
 static NSString *const kHoldIncomingLinksDefault = @"ArdiaHoldIncomingLinks";
@@ -415,6 +416,8 @@ void StartEarlyWindow() {
             dirError.localizedDescription.UTF8String ?: "");
     return 1;
   }
+  if (ardia_host::HandOffToRunningInstance(gDataDirectory, argc, argv, config.background)) return 0;
+  ardia_host::ReopenWhenRelaunched(gDataDirectory);
   ardia_host::InstallTestCrashGuard(scratch && config.background ? scratch : nil);
   ardia_host::InstallActivationGuardsEarly();
   ardia_host::PrepareContentBlocker();

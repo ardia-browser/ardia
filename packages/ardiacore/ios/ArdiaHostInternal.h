@@ -29,5 +29,7 @@ void LinksArrived(NSArray<NSURL *> *urls);
 void ReplayLaunchURLs(NSArray<NSURL *> *urls);
 void StartLaunchTab();
 void StartEarlyWindow();
+bool HandOffToRunningInstance(NSString *chromiumDirectory, int argc, char **argv, bool background);
+void ReopenWhenRelaunched(NSString *chromiumDirectory);
 
 }

@@ -24,6 +24,7 @@ import { passwordManagerAnchor } from "../../../state/plugins/passwordManagerLin
 import { showConnectSheet, showUnlockSheet } from "./PasswordManagerSheets";
 import { VaultICloudRows } from "./VaultICloudRows";
 import { VaultSuggestRow } from "./VaultSuggestRow";
+import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 
 const LOCK_TITLES: Record<(typeof VAULT_LOCK_MINUTES)[number], string> = { 5: "5 Minutes", 15: "15 Minutes", 30: "30 Minutes", 60: "1 Hour", 0: "Never" };
 const LOCK_OPTIONS = VAULT_LOCK_MINUTES.map((m) => ({ value: String(m), title: LOCK_TITLES[m] }));
@@ -157,7 +158,7 @@ export function ForAllProfilesSection() {
       <SectionHeader title="For All Profiles" description={null} />
       <View>
         <Group>
-          {fills ? <VaultSuggestRow /> : null}
+          {fills || PLATFORM_FEATURES.deliveredCodes ? <VaultSuggestRow /> : null}
           {fills ? <GuardedToggle title="Ask before filling" setting="vaultAskBeforeFilling" /> : null}
           {fills ? <SettingSwitch title="Translucent password menu" setting="vaultMenuGlass" /> : null}
           {fills ? <SettingSwitch title="Selection returns to the top when the pointer leaves" setting="vaultMenuSelectionReturns" /> : null}

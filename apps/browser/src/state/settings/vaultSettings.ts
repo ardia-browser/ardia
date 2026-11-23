@@ -8,6 +8,7 @@ export const VAULT_SETTING_SPECS = {
   vaultSuggestOnFocus: flag(true, SYNCED),
   vaultSuggestLogins: flag(true, SYNCED),
   vaultSuggestCodes: flag(true, SYNCED),
+  vaultSuggestDeliveredCodes: flag(false),
   vaultSuggestUsernames: flag(true, SYNCED),
   vaultSuggestNewPasswords: flag(true, SYNCED),
   vaultSuggestGenerated: flag(true, SYNCED),

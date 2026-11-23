@@ -456,6 +456,8 @@ export const vaultFakes = {
   removedTotps: [] as CallArgs<"vaults.removeTotp">[],
   nextRemoveTotp: null as CallResult<"vaults.removeTotp"> | null,
   codeReads: [] as CallArgs<"vaults.readCode">[],
+  deliveredTurns: [] as boolean[],
+  delivered: { access: "off", codes: [] } as CallResult<"vaults.deliveredCodes">,
   nextCodeRead: { error: "none" } as CallResult<"vaults.readCode">,
   forgottenCodes: [] as string[],
   loginChanges: [] as CallArgs<"vaults.ardiaLoginChanged">[],
@@ -872,6 +874,12 @@ const fakeModules = {
         if (next) return next;
         vaultFakes.items = vaultFakes.items.map((i) => (i.provider === args.provider && i.id === args.id ? { ...i, hasTotp: false } : i));
         return { removed: true };
+      },
+      deliveredCodes: () => vaultFakes.delivered,
+      setDeliveredCodes: ({ enabled }) => {
+        vaultFakes.deliveredTurns.push(enabled);
+        vaultFakes.delivered = enabled ? { ...vaultFakes.delivered, access: "on" } : { access: "off", codes: [] };
+        return vaultFakes.delivered;
       },
       readCode: (args) => (vaultFakes.codeReads.push({ ...args }), vaultFakes.nextCodeRead),
       forgetCode: ({ token }) => (vaultFakes.forgottenCodes.push(token), {}),

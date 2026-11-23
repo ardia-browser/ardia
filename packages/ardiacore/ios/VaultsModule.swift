@@ -263,7 +263,8 @@ public class VaultsModule: Module {
       VaultsModule.answer(reply) { await VaultBroker.shared.copy(id, item: item, field: field).jsonObject() }
     },
     "totp": { args, reply in
-      let id = try VaultsModule.provider(args)
+      let given = try args.text("provider")
+      let id = try given == VaultDeliveredCodes.provider ? given : VaultsModule.provider(args)
       let item = try args.text("id")
       VaultsModule.answer(reply) { await VaultBroker.shared.totp(id, item: item)?.jsonObject() }
     },
@@ -274,6 +275,14 @@ public class VaultsModule: Module {
       }
       VaultsModule.answer(reply) { await VaultBroker.shared.codes(for: Array(keys.prefix(VaultsModule.codesLimit))) }
     },
+    "deliveredCodes": { _, reply in
+      VaultsModule.answer(reply) { await VaultDeliveredCodes.shared.state(rescan: true).jsonObject() }
+    },
+    "setDeliveredCodes": { args, reply in
+      let enabled = try args.bool("enabled")
+      VaultsModule.answer(reply) { await VaultDeliveredCodes.shared.setEnabled(enabled).jsonObject() }
+    },
+    "openFullDiskAccess": { _, reply in VaultsModule.answer(reply) { await VaultDeliveredCodes.openFullDiskAccess() } },
     "biometrics": { _, reply in reply.ok(["available": VaultOwnerCheck.biometricsAvailable]) },
     "keychainCounts": { _, reply in
       let counts = VaultKeychain.takeCounts()

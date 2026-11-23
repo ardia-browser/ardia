@@ -136,6 +136,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface ArdiaWebView (VaultPageMessages)
 - (nullable NSString *)vaultOriginOfFrame:(NSString *)frameId NS_SWIFT_NAME(vaultOrigin(ofFrame:));
+- (nullable NSString *)vaultTopOrigin NS_SWIFT_NAME(vaultTopOrigin());
 - (void)fillVaultFrame:(NSString *)frameId
                 origin:(NSString *)origin
                 values:(NSDictionary<NSString *, NSString *> *)values

@@ -56,10 +56,10 @@ export function useCopiedFlash(): [boolean, () => void] {
   return [copied, () => (setCopied(true), setFlashes((n) => n + 1))];
 }
 
-export function VaultAppIcon({ provider, symbol, neutral, badge }: { provider: string; symbol?: string; neutral?: boolean; badge?: { provider: string; ground: string } }) {
+export function VaultAppIcon({ provider, symbol, neutral, fill: tint, badge }: { provider: string; symbol?: string; neutral?: boolean; fill?: string; badge?: { provider: string; ground: string } }) {
   const theme = useTheme();
   const { box, glyph, radius: corner } = VAULT_MENU.icon;
-  const fill = neutral ? NEUTRAL_BRAND_ACCENT : brandAccent(provider);
+  const fill = tint ?? (neutral ? NEUTRAL_BRAND_ACCENT : brandAccent(provider));
   const edge = theme.dark ? withAlpha(ink.white, VAULT_MENU.iconEdge.dark) : withAlpha(ink.black, VAULT_MENU.iconEdge.light);
   const tile = (
     <View style={{ width: box, height: box, borderRadius: corner, backgroundColor: fill, borderWidth: StyleSheet.hairlineWidth, borderColor: edge, alignItems: "center", justifyContent: "center", overflow: "hidden" }}>

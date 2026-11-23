@@ -193,6 +193,10 @@ static id VaultFieldInset(NSDictionary *raw) {
   return [ArdiaVaultCaptureOfTab(_tab) originOfFrame:frameId];
 }
 
+- (NSString *)vaultTopOrigin {
+  return [ArdiaVaultCaptureOfTab(_tab) topOrigin];
+}
+
 - (void)fillVaultFrame:(NSString *)frameId
                 origin:(NSString *)origin
                 values:(NSDictionary<NSString *, NSString *> *)values

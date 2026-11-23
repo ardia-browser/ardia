@@ -58,6 +58,11 @@ export const VAULT_SAVE = { fieldGap: 6, passwordHeight: 24, usernameWidth: 260 
 
 export const VAULT_CODE = { ring: 20, stroke: 2.5, expiringMs: 5000, sheetRing: 14, sheetStroke: 1.5, ringGap: space.s, rollMs: 260, rollShift: 9, litWarningContrast: 3, restTrack: { light: 0.25, dark: 0.14 } } as const;
 
+export const VAULT_DELIVERED = {
+  tint: { messages: { light: "#34C759", dark: "#30D158" }, mail: { light: "#007AFF", dark: "#0A84FF" } },
+  symbol: { messages: "message.fill", mail: "envelope.fill" },
+} as const;
+
 export const VAULT_BADGE = { s: { box: 16, glyph: 9 }, m: { box: 28, glyph: 14 }, l: { box: 36, glyph: 18 }, xl: { box: 52, glyph: 26 } } as const;
 
 export const VAULT_SETTINGS = { paneGround: { light: "#F2F2F2", dark: "#1E1E1E" }, commandMinHeight: 32, commandBorder: 1, spinner: 14, copiedMs: 1500, siteIcon: 20, sourcePopUp: 200, savePopUp: 150 } as const;

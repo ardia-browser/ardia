@@ -1,4 +1,6 @@
 import { View } from "react-native";
+import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
+import { DeliveredCodesOption } from "./DeliveredCodesOption";
 import { useSettings } from "../../../state/browser/hooks";
 import { updateSettings } from "../../../state/settings/actions";
 import type { Settings } from "../../../state/settings/settings";
@@ -18,6 +20,7 @@ function SuggestCheckbox({ label, settingKey, disabled, nested }: { label: strin
 
 export function VaultSuggestRow() {
   const newPasswords = useSettings((s) => s.vaultSuggestNewPasswords);
+  const codes = useSettings((s) => s.vaultSuggestCodes);
   return (
     <Row
       title="Suggest"
@@ -29,6 +32,7 @@ export function VaultSuggestRow() {
           <View style={LIST}>
             <SuggestCheckbox label="Saved logins" settingKey="vaultSuggestLogins" />
             <SuggestCheckbox label="Verification codes" settingKey="vaultSuggestCodes" />
+            {PLATFORM_FEATURES.deliveredCodes ? <DeliveredCodesOption disabled={!codes} /> : null}
             <SuggestCheckbox label="Previous usernames" settingKey="vaultSuggestUsernames" />
             <SuggestCheckbox label="New passwords" settingKey="vaultSuggestNewPasswords" />
             <SuggestCheckbox label="New passwords in any text field" settingKey="vaultContextGenerate" disabled={!newPasswords} nested />

@@ -2,6 +2,7 @@ import type { VaultPasswordStyle } from "../../state/vaults/types";
 import { brandOf } from "../../state/vaults/brands";
 import type { VaultRow } from "../../state/vaults/menuModel";
 import { siteKey, siteLabel } from "../../state/vaults/originMatch";
+import { deliveredLines, isDeliveredItem } from "../../state/vaults/deliveredCodesModel";
 
 const withScheme = (url: string) => (!url || /^[a-z][a-z0-9+.-]*:\/\//i.test(url) ? url : `https://${url}`);
 export const itemUrl = (item: { urls: readonly string[] }) => withScheme(item.urls[0] ?? "");
@@ -54,6 +55,10 @@ export function rowLabel(row: VaultRow, site: string, twin = false): string {
       return [title, detail, brandOf(row.item.provider).name].filter(Boolean).join(", ");
     }
     case "otp":
+      if (isDeliveredItem(row.item)) {
+        const { source, from, age } = deliveredLines(row.item.delivered, Date.now(), site);
+        return ["Verification Code", source, from, age].filter(Boolean).join(", ");
+      }
       return `Verification Code, ${row.item.username || row.item.title || itemSite(row.item.urls)}`;
     case "username":
       return `${row.username}, Used Before`;

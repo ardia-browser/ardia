@@ -9,6 +9,7 @@ import { useBrowser } from "../browser/store";
 import { useGeneratedPasswords } from "./generated";
 import { codePageTab, frontPageTab } from "./ardiaCodes";
 import { useStandaloneCodes } from "./standaloneCodes";
+import { useDeliveredCodes } from "./deliveredCodes";
 import { usePasskeys } from "./passkeyStore";
 import { PENDING_TOTP_MS } from "./pendingTotp";
 export { useGeneratedFillable, useKeptGeneratedPasswords } from "./generatedFill";
@@ -49,6 +50,7 @@ export function useVaultMenuRows(menu: VaultMenu) {
   useBrowser((s) => Object.values(suggestOf(s.settings)).join());
   useGeneratedPasswords((s) => (menu.mode === "search" ? s.list : null));
   useStandaloneCodes((s) => (menu.field === "otp" ? s.items : null));
+  useDeliveredCodes((s) => (menu.field === "otp" ? s.items : null));
   usePasskeys((s) => (menu.tabId ? s.offers[menu.tabId] : undefined));
   usePendingExpiry(menu.tabId);
   return rowsOfMenu(menu);

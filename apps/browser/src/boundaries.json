@@ -1584,6 +1584,41 @@
    "detected": false
   },
   {
+   "id": "other-app:delivered-code-messages",
+   "source": "other-app",
+   "guard": "Messages' chat.db is opened read-only only while JS has turned codes from messages on (native starts off every launch), for rows from the last 10 minutes that someone else sent; attributedBody is read by a bounded typedstream parser that only takes the string bytes and never unarchives objects; the extractor looks at 2,048 characters with capped keyword, refusal and candidate counts and clamped windows, yields only a 4 to 10 character ASCII code, and needs an automated-looking message from a personal sender; senders are cleaned of control and format characters and cut to 120 (hostile inputs and a timing bound in packages/ardiacore/tests/vault-delivered.test.swift)",
+   "checks": [
+    "packages/ardiacore/ios/VaultDeliveredSources.swift#VaultMessagesReader",
+    "packages/ardiacore/ios/VaultDeliveredSources.swift#VaultTypedStreamText",
+    "packages/ardiacore/ios/VaultDeliveredExtractor.swift#extract",
+    "packages/ardiacore/ios/VaultDeliveredExtractor.swift#cleanedSender"
+   ],
+   "detected": false
+  },
+  {
+   "id": "other-app:delivered-code-mail",
+   "source": "other-app",
+   "guard": "Mail's newest Envelope Index is opened read-only for the subject, summary and sender of mail received in the last 10 minutes, not deleted and not in Junk, Spam or Trash; it never yields a domain-bound code, and the sender's domain is only a ranking hint; then the same extractor and sender cleaning as Messages",
+   "checks": [
+    "packages/ardiacore/ios/VaultDeliveredSources.swift#VaultMailReader",
+    "packages/ardiacore/ios/VaultDeliveredSources.swift#isInbox",
+    "packages/ardiacore/ios/VaultDeliveredExtractor.swift#extract"
+   ],
+   "detected": false
+  },
+  {
+   "id": "other-app:delivered-code-fill",
+   "source": "other-app",
+   "guard": "A code from a message fills only a secure frame. A domain-bound code (Messages only, last line @domain #code, optional %iframe) needs the tab's verified top-level origin (ArdiaVaultCapture topOrigin) on the bound site, and fills that site's frames or, with %iframe, frames of the iframe site; with no known top-level origin it never fills, whatever the person chose. An unbound code fills only when the person picked it. Codes never leave native except the fill and vaults.totp, live 10 minutes and are dropped once filled",
+   "checks": [
+    "packages/ardiacore/ios/VaultDeliveredCodes.swift#fills",
+    "packages/ardiacore/ios/VaultDeliveredCodes.swift#fillCode",
+    "packages/ardiacore/ios/ArdiaWebView+PageTab.swift#fillDeliveredCode",
+    "packages/ardiacore/ios/ArdiaVaultCapture.mm#topOrigin"
+   ],
+   "detected": false
+  },
+  {
    "id": "control-socket:accept",
    "source": "socket",
    "guard": "AF_UNIX, mode 0600, peer UID equal; every connection is the owner (D3)",

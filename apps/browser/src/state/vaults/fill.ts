@@ -2,8 +2,10 @@ import { useBrowser } from "../browser/store";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
 import type { VaultFillError, VaultFillField, VaultItem, VaultKeyPress, VaultPasswordStyle } from "../../platform/vaults";
 import { webviews } from "../../platform/webviews";
-import { noteStandaloneCodeFilled, noteVaultCodeAutofill, noteVaultCodeFilled, noteVaultEarlyClickIgnored, noteVaultFill, noteVaultLoginPicked } from "../telemetry/vaultCounts";
+import { noteDeliveredCodeFilled, noteStandaloneCodeFilled, noteVaultCodeAutofill, noteVaultCodeFilled, noteVaultEarlyClickIgnored, noteVaultFill, noteVaultLoginPicked } from "../telemetry/vaultCounts";
 import { isCodeItem } from "./standaloneCodesModel";
+import { deliveredFillError, isDeliveredItem } from "./deliveredCodesModel";
+import { refreshDeliveredCodes } from "./deliveredCodes";
 import { unlockProvider, openPasswordSettings, wasCancelled } from "./actions";
 import { noteFilledUsername, rememberVaultAccount } from "./accounts";
 import { prefetchVaultCode } from "./codes";
@@ -90,12 +92,19 @@ async function fillItem(tabId: string, menu: VaultMenu, row: VaultRow, item: Vau
   if (result.error === "notAuthorized") {
     return patchVaultMenu(tabId, { busy: null, error: how.touchID ? TOUCH_ID_EXPIRED : null, touch: "off" }, menu.seq);
   }
+  const delivered = isDeliveredItem(item) ? item.delivered : null;
   if (result.error) {
-    if (result.error === "locked" || result.error === "notFound") void loadVaultItems(item.provider, true);
-    const text = result.error === "notFound" && menu.field === "otp" ? NO_CODE : fillErrorText(result.error, item.provider);
+    if (delivered) void refreshDeliveredCodes();
+    else if (result.error === "locked" || result.error === "notFound") void loadVaultItems(item.provider, true);
+    const text = (delivered && deliveredFillError(result.error)) || (result.error === "notFound" && menu.field === "otp" ? NO_CODE : fillErrorText(result.error, item.provider));
     return patchVaultMenu(tabId, { busy: null, error: text, touch: "off" }, menu.seq);
   }
   if (!result.filled.length) return patchVaultMenu(tabId, { busy: null, error: NOTHING_FILLED, touch: "off" }, menu.seq);
+  if (delivered) {
+    noteVaultCodeFilled(consent);
+    noteDeliveredCodeFilled(delivered.source, consent);
+    return finishFill(tabId, menu);
+  }
   rememberVaultAccount(menu.origin, item, consent);
   if (menu.field !== "otp") noteFilledUsername(tabId, menu.origin, item.username);
   else {

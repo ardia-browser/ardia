@@ -6,7 +6,7 @@ import { useBrowser } from "../browser/store";
 import { rememberedVaultAccount } from "./accounts";
 import { shownTabIds } from "../tabs/shownTabs";
 import { rowsOfMenu, type VaultsNow } from "./menuRowsOf";
-import { prefetchVaultCodes } from "./codes";
+import { codesAloneOffer, loadingFor, noteOfferedCodes, prefetchCodesOf, watchDeliveredCodes } from "./menuCodes";
 import { forgetClosedVaultSaves, forgetVaultPageSaves } from "./saveOffer";
 import { hasMatchRow, restingRow, type VaultRow } from "./menuModel";
 import type { VaultMenu } from "./menuState";
@@ -179,14 +179,10 @@ function openMenu(tabId: string, field: FieldSeen, onDemand: boolean) {
   return opened.seq;
 }
 
-function prefetchCodesOf(menu: VaultMenu) {
-  if (menu.field !== "otp") return;
-  prefetchVaultCodes(rowsOfMenu(menu).flatMap((row) => (row.kind === "otp" ? [row.item] : [])));
-}
-
 const suggestOnFocus = () => useBrowser.getState().settings.vaultSuggestOnFocus;
 
-const canOffer = (tabId: string, field: FieldSeen | null): field is FieldSeen => !!field?.focused && !!field.rect && isSecureOrigin(field.origin) && anyVaultConnectedForTab(tabId) && ardiaFillsInTab(tabId);
+const canOffer = (tabId: string, field: FieldSeen | null, asked = false): field is FieldSeen =>
+  !!field?.focused && !!field.rect && isSecureOrigin(field.origin) && ((anyVaultConnectedForTab(tabId) && ardiaFillsInTab(tabId)) || codesAloneOffer(tabId, field, asked));
 
 function offerNow(tabId: string, field: FieldSeen, consent: ConsentToken | null): boolean {
   const now = lastVaultField(tabId);
@@ -199,7 +195,7 @@ function offerNow(tabId: string, field: FieldSeen, consent: ConsentToken | null)
 }
 
 const loadItemsFor = (tabId: string, field: FieldSeen) =>
-  loadMenuItems(field.origin, field.kind === "username" ? { email: !!field.email, profile: passwordProfileOfTab(tabId) } : null);
+  loadingFor(field.kind, () => loadMenuItems(field.origin, field.kind === "username" ? { email: !!field.email, profile: passwordProfileOfTab(tabId) } : null));
 
 async function offerOnFocus(tabId: string, field: FieldSeen, consent: ConsentToken | null) {
   noteFieldOffered(tabId, field.at, consent);
@@ -212,7 +208,7 @@ async function offerOnFocus(tabId: string, field: FieldSeen, consent: ConsentTok
 
 function openOnDemand(tabId: string, field: FieldSeen) {
   hearFieldAgain(tabId);
-  if (!canOffer(tabId, field)) return false;
+  if (!canOffer(tabId, field, true)) return false;
   const menu = vaultMenuOf(tabId);
   if (menu && menu.frameId === field.frameId && menu.field === field.kind) {
     tellPageOfMenu(tabId, menu);
@@ -390,9 +386,13 @@ export function startVaultMenus() {
     if (s.providers !== prev.providers || s.sites !== prev.sites || s.searches !== prev.searches || s.listed !== prev.listed || s.pending !== prev.pending || s.revision !== prev.revision) restOpenMenus();
   });
   const stopPasskeys = usePasskeys.subscribe((s, prev) => s.offers !== prev.offers && restOpenMenus());
+  const stopDelivered = watchDeliveredCodes(restOpenMenus, () => useVaultMenus.getState().fields, offerToFocusedField);
+  const stopOffered = useVaultMenus.subscribe((s, prev) => s.menus !== prev.menus && noteOfferedCodes(s.menus, prev.menus, consentToken()));
   return () => {
     stopTabs();
     stopVaults();
     stopPasskeys();
+    stopDelivered();
+    stopOffered();
   };
 }

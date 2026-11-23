@@ -3,6 +3,7 @@ import { fillsWithoutChoice, itemKey, itemTier, rankItems, searchItems, TIER, ty
 import type { PendingTotp } from "./pendingTotp";
 import type { Settings } from "../settings/settings";
 import { MAX_PREVIOUS_USERNAMES, previousUsernames } from "./usernames";
+import { deliveredFirst, isDeliveredItem, type DeliveredItem } from "./deliveredCodesModel";
 
 export type VaultRow =
   | { key: string; kind: "generate"; style: VaultPasswordStyle; spare?: boolean }
@@ -17,16 +18,17 @@ export type VaultRow =
 
 export type MenuMode = "matches" | "search";
 
-export type VaultSuggest = { logins: boolean; codes: boolean; usernames: boolean; newPasswords: boolean; generated: boolean };
+export type VaultSuggest = { logins: boolean; codes: boolean; delivered: boolean; usernames: boolean; newPasswords: boolean; generated: boolean };
 
-export const SUGGEST_EVERYTHING: VaultSuggest = { logins: true, codes: true, usernames: true, newPasswords: true, generated: true };
-export const SUGGEST_NOTHING: VaultSuggest = { logins: false, codes: false, usernames: false, newPasswords: false, generated: false };
+export const SUGGEST_EVERYTHING: VaultSuggest = { logins: true, codes: true, delivered: true, usernames: true, newPasswords: true, generated: true };
+export const SUGGEST_NOTHING: VaultSuggest = { logins: false, codes: false, delivered: false, usernames: false, newPasswords: false, generated: false };
 
-type SuggestSettings = Pick<Settings, "vaultSuggestLogins" | "vaultSuggestCodes" | "vaultSuggestUsernames" | "vaultSuggestNewPasswords" | "vaultSuggestGenerated">;
+type SuggestSettings = Pick<Settings, "vaultSuggestLogins" | "vaultSuggestCodes" | "vaultSuggestDeliveredCodes" | "vaultSuggestUsernames" | "vaultSuggestNewPasswords" | "vaultSuggestGenerated">;
 
 export const suggestOf = (s: SuggestSettings): VaultSuggest => ({
   logins: s.vaultSuggestLogins,
   codes: s.vaultSuggestCodes,
+  delivered: s.vaultSuggestCodes && s.vaultSuggestDeliveredCodes,
   usernames: s.vaultSuggestUsernames,
   newPasswords: s.vaultSuggestNewPasswords,
   generated: s.vaultSuggestGenerated,
@@ -46,6 +48,7 @@ type MenuInput = {
   suggestOpen?: boolean;
   generated?: readonly VaultItem[];
   codes?: readonly VaultItem[];
+  delivered?: readonly DeliveredItem[];
   suggest?: VaultSuggest;
   passkeys?: readonly VaultItem[];
   usernames?: readonly VaultItem[];
@@ -70,8 +73,14 @@ const SUGGEST: VaultRow = { key: "suggest", kind: "suggest" };
 const OPEN_PASSWORDS: VaultRow = { key: "openPasswords", kind: "openPasswords" };
 
 const isOwnFillRow = (r: VaultRow) => r.kind === "login" || r.kind === "otp" || r.kind === "username" || (r.kind === "generate" && !r.spare);
-export const hasMatchRow = (rows: readonly VaultRow[]) => rows.some((r) => isOwnFillRow(r) || r.kind === "unlock");
+const opensByItself = (r: VaultRow) => isOwnFillRow(r) && !(r.kind === "otp" && r.userChose && isDeliveredItem(r.item));
+export const hasMatchRow = (rows: readonly VaultRow[]) => rows.some((r) => opensByItself(r) || r.kind === "unlock");
 export const hasFillRow = (rows: readonly VaultRow[]) => rows.some(isOwnFillRow);
+
+function deliveredRows(input: MenuInput): VaultRow[] {
+  const shown = (input.delivered ?? []).filter((item) => !input.noTotp.has(itemKey(item)));
+  return deliveredFirst(shown, input.origin).map(({ item, userChose }): VaultRow => ({ key: `otp:${itemKey(item)}`, kind: "otp", item, pending: false, userChose }));
+}
 
 function codeRows(input: MenuInput, ranked: ReturnType<typeof rankItems>): VaultRow[] {
   const out: VaultRow[] = [];
@@ -112,7 +121,7 @@ const rankedOf = (input: MenuInput, items: readonly VaultItem[]) =>
 
 function savedRows(input: MenuInput, items: readonly VaultItem[], suggest: VaultSuggest): VaultRow[] {
   const ranked = rankedOf(input, items);
-  if (input.field === "otp") return suggest.codes ? codeRows(input, ranked) : [];
+  if (input.field === "otp") return [...(suggest.delivered ? deliveredRows(input) : []), ...(suggest.codes ? codeRows(input, ranked) : [])];
   const rows = suggest.logins ? ranked.map((r) => loginRow(r.item, input.origin)) : [];
   if (input.field === "username" && suggest.usernames) rows.push(...usernameRows(input, items, rows));
   return rows;

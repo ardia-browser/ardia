@@ -178,8 +178,8 @@ export function startDevHarness() {
     get vaultSheets(): typeof import("../settings/panes/PasswordManagerSheets") & typeof import("../../state/settings/sheet") & typeof import("../vaults/LoginFormSheet") & { createElement: typeof createElement } {
       return { ...require("../settings/panes/PasswordManagerSheets"), ...require("../../state/settings/sheet"), ...require("../vaults/LoginFormSheet"), createElement };
     },
-    get vaultForms(): typeof import("../vaults/LoginFormSheet") & typeof import("../vaults/VerificationCodes") & typeof import("../../state/vaults/standaloneCodes") & typeof import("../../state/vaults/menu") & typeof import("../../state/vaults/fill") {
-      return { ...require("../vaults/LoginFormSheet"), ...require("../vaults/VerificationCodes"), ...require("../../state/vaults/standaloneCodes"), ...require("../../state/vaults/menu"), ...require("../../state/vaults/fill") };
+    get vaultForms(): typeof import("../vaults/LoginFormSheet") & typeof import("../vaults/VerificationCodes") & typeof import("../../state/vaults/standaloneCodes") & typeof import("../../state/vaults/menu") & typeof import("../../state/vaults/fill") & typeof import("../../state/vaults/deliveredCodes") & typeof import("../../state/vaults/menuCodes") & typeof import("../../state/vaults/enabled") {
+      return { ...require("../vaults/LoginFormSheet"), ...require("../vaults/VerificationCodes"), ...require("../../state/vaults/standaloneCodes"), ...require("../../state/vaults/menu"), ...require("../../state/vaults/fill"), ...require("../../state/vaults/deliveredCodes"), ...require("../../state/vaults/menuCodes"), ...require("../../state/vaults/enabled") };
     },
     get vaultFixtures(): typeof import("./vaultFixtures") {
       return require("./vaultFixtures");

@@ -18,6 +18,10 @@ const suites = [
   ["vault-off-main", ["-DDEBUG"], ["VaultOffMain"]],
   ["vault-totp-warm", ["-O"], ["VaultTotpWarm", "VaultTotpSecret", "VaultTotp", "VaultTotpURI", "VaultCacheSnapshot", "VaultItem", "VaultJSON", "VaultError", "VaultOriginMatch", "VaultPublicSuffixRules"]],
   ["vault-cache-writer", [], ["VaultCacheWriter", "VaultCacheSnapshot", "VaultItem", "VaultJSON", "VaultError"]],
+  ["vault-delivered", [], [
+    "VaultDeliveredExtractor", "VaultDeliveredSources", "VaultDeliveredCodes", "VaultOffMain", "VaultOriginMatch", "VaultPublicSuffixRules", "VaultTotp",
+    "VaultTotpSecret", "VaultFillError", "VaultJSON", "VaultError", "./fixtures/delivered/VaultDeliveredFixtures.swift",
+  ]],
   ["vault-revealed-field", [], ["VaultRevealedFieldEditor"]],
   ["vault-secret-entries", [], ["VaultSecretEntries"]],
   ["vault-touch-scopes", [], ["VaultTouchGrants"]],
@@ -41,9 +45,9 @@ const suites = [
 
 for (const [name, flags, sources] of suites) {
   test(`the ${name} Swift Testing suite passes`, (t) => {
-    runSwiftTests(t, `${name}-test`, [...sources.map((source) => `../ios/${source}.swift`), `./${name}.test.swift`], {
+    runSwiftTests(t, `${name}-test`, [...sources.map((source) => (source.startsWith("./") ? source : `../ios/${source}.swift`)), `./${name}.test.swift`], {
       flags: [...flags, "-swift-version", "6"],
-      env: name === "credential-output" ? HOSTILE_ENV : {},
+      env: name === "credential-output" || name === "vault-delivered" ? HOSTILE_ENV : {},
     });
   });
 }

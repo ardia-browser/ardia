@@ -7,6 +7,12 @@ extension VaultBroker {
     var wanted: [String: Set<String>] = [:]
     for key in keys { wanted[key.provider, default: []].insert(key.id) }
     for (id, ids) in wanted {
+      if id == VaultDeliveredCodes.provider {
+        for item in ids {
+          if let code = await VaultDeliveredCodes.shared.totp(id: item) { codes["\(id)/\(item)"] = code.jsonObject() } else { none.append("\(id)/\(item)") }
+        }
+        continue
+      }
       if id == ArdiaVault.id {
         for item in ids {
           if let code = await ArdiaVaultIndex.shared.totp(id: item) { codes["\(id)/\(item)"] = code.jsonObject() } else { none.append("\(id)/\(item)") }

@@ -20,6 +20,7 @@ import {
   type ChromeDropdownShown,
   type VaultPasskeyDone,
   type VaultPasskeyRequest,
+  type DeliveredCodes,
 } from "@ardia/ardiacore";
 
 export type { VaultGeneratedPassword, VaultGeneratedSaveResult, VaultHandOn, VaultItem, VaultProviderState, VaultSignInFields, VaultSignInResult, VaultSyncResult, VaultTotp };
@@ -100,6 +101,11 @@ export const addStandaloneCode = (code: { token: string; label: string; issuer?:
 export const editStandaloneCode = (id: string, label: string, website: string) => call("vaults.editCode", website ? { id, label, website } : { id, label });
 export const deleteStandaloneCode = (id: string) => call("vaults.deleteCode", { id });
 export const onStandaloneCodesChanged = (listener: () => void) => on("vaults.codesChanged", () => listener());
+export type { DeliveredCode, DeliveredCodeAccess, DeliveredCodes, DeliveredCodeSource } from "@ardia/ardiacore";
+export const deliveredCodes = () => call("vaults.deliveredCodes", {});
+export const setDeliveredCodes = (enabled: boolean) => call("vaults.setDeliveredCodes", { enabled });
+export const openFullDiskAccess = () => call("vaults.openFullDiskAccess", {});
+export const onDeliveredCodesChanged = (listener: (state: DeliveredCodes) => void) => on("vaults.deliveredCodesChanged", listener);
 export const vaultPasskeys = () => call("vaults.passkeys", {});
 export const deleteVaultPasskey = (id: string) => call("vaults.deletePasskey", { id });
 export const answerPasskey = (requestId: string, choice: string, target?: string) => call("vaults.passkeyAnswer", target ? { requestId, choice, target } : { requestId, choice });

@@ -63,6 +63,13 @@ const empty = () => ({
   vault_codes_standalone_deleted: 0,
   vault_codes_standalone_copied: 0,
   vault_codes_standalone_filled: 0,
+  vault_codes_delivered_offered_messages: 0,
+  vault_codes_delivered_offered_mail: 0,
+  vault_codes_delivered_filled_messages: 0,
+  vault_codes_delivered_filled_mail: 0,
+  vault_codes_delivered_turned_off: 0,
+  vault_codes_delivered_turned_on_needs_access: 0,
+  vault_codes_delivered_turned_on: 0,
   vault_passkeys_created: 0,
   vault_passkeys_used: 0,
   vault_passkeys_fallback: 0,
@@ -166,6 +173,12 @@ export const noteStandaloneCodesImported = (count: number, consent?: ConsentToke
 export const noteStandaloneCodeDeleted = (consent?: ConsentToken | null) => bump("vault_codes_standalone_deleted", consent);
 export const noteStandaloneCodeCopied = (consent?: ConsentToken | null) => bump("vault_codes_standalone_copied", consent);
 export const noteStandaloneCodeFilled = (consent?: ConsentToken | null) => bump("vault_codes_standalone_filled", consent);
+
+const DELIVERED_ACCESS_FIELD = { off: "vault_codes_delivered_turned_off", needsAccess: "vault_codes_delivered_turned_on_needs_access", on: "vault_codes_delivered_turned_on" } as const;
+
+export const noteDeliveredCodeOffered = (source: "messages" | "mail", consent?: ConsentToken | null) => bump(`vault_codes_delivered_offered_${source}`, consent);
+export const noteDeliveredCodeFilled = (source: "messages" | "mail", consent?: ConsentToken | null) => bump(`vault_codes_delivered_filled_${source}`, consent);
+export const noteDeliveredCodesToggled = (access: keyof typeof DELIVERED_ACCESS_FIELD, consent?: ConsentToken | null) => bump(DELIVERED_ACCESS_FIELD[access], consent);
 const PASSKEY_FIELD = {
   created: "vault_passkeys_created",
   used: "vault_passkeys_used",

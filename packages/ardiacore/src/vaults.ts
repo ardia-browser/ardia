@@ -120,6 +120,10 @@ export type VaultSignInFields = {
 export type VaultCopyResult = { copied: boolean; declined?: boolean; error?: VaultCopyError; clearsAfter: number };
 
 export type VaultTotp = { code: string; period: number; expiresAt: number; next?: string };
+export type DeliveredCodeSource = "messages" | "mail";
+export type DeliveredCodeAccess = "off" | "needsAccess" | "on";
+export type DeliveredCode = { id: string; source: DeliveredCodeSource; sender: string; site: string | null; bound: boolean; receivedAt: number; expiresAt: number };
+export type DeliveredCodes = { access: DeliveredCodeAccess; codes: DeliveredCode[] };
 
 export type VaultGeneratedPassword = { id: string; origin: string; username: string; createdAt: number; submitted: boolean };
 

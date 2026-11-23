@@ -21,6 +21,7 @@ extension VaultBroker {
 
   func totp(_ id: String, item: String) async -> VaultTotp? {
     if id == ArdiaVault.id { return await ArdiaVaultIndex.shared.totp(id: item) }
+    if id == VaultDeliveredCodes.provider { return await VaultDeliveredCodes.shared.totp(id: item) }
     guard let provider = VaultRegistry.provider(id), case .success(let code) = await totpCode(provider, item: item) else { return nil }
     return code
   }
@@ -70,6 +71,10 @@ extension VaultBroker {
   {
     if providerId == ArdiaVault.id {
       return await ArdiaVaultIndex.shared.fillValues(id: itemId, fields: fields, origin: origin, userChose: userChose, profile: profile)
+    }
+    if providerId == VaultDeliveredCodes.provider {
+      return await VaultDeliveredCodes.shared.fillCode(id: itemId, fields: fields, origin: origin, top: nil, userChose: userChose)
+        .map { VaultFillValues(values: ["otp": $0], touched: false) }
     }
     guard let provider = VaultRegistry.provider(providerId) else { return .failure(.notFound) }
     guard VaultOriginMatch.isSecure(origin) else { return .failure(.insecure) }

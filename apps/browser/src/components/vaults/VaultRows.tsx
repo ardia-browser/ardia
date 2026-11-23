@@ -10,7 +10,9 @@ import { ActivitySpinner, capsule, curve, ink, reduceMotion, springs, Symbol, ta
 import { CodeDigits } from "./CodeDigits";
 import { useCrossfade } from "./rowMotion";
 import { CountdownRing, VaultAppIcon, type RingInk } from "./VaultParts";
-import { VAULT_CODE, VAULT_MENU, VAULT_TOUCH } from "./tokens";
+import { VAULT_CODE, VAULT_DELIVERED, VAULT_MENU, VAULT_TOUCH } from "./tokens";
+import { isDeliveredItem, type DeliveredItem } from "../../state/vaults/deliveredCodesModel";
+import { DeliveredDetail, useAgeClock } from "./DeliveredDetail";
 import { GENERATOR_COPY, itemSite, loginLines, rowLabel } from "./rowText";
 
 export const CodesTicking = createContext(true);
@@ -27,6 +29,7 @@ const BUSY_SLOT = { position: "absolute", top: 0, bottom: 0, width: VAULT_MENU.t
 const RING_SLOT = { width: VAULT_CODE.ring, height: VAULT_CODE.ring } as const;
 const RING_WAIT = { ...RING_SLOT, alignItems: "center", justifyContent: "center" } as const;
 const TITLE_ROW = { flexDirection: "row", alignItems: "center" } as const;
+const DETAIL_ROW = { flexDirection: "row", alignItems: "center", minWidth: 0 } as const;
 
 const TRY_AGAIN = "Try Again";
 
@@ -117,15 +120,16 @@ function Swap({ from, to, showTo, color, size, weight, mono }: { from: string; t
   );
 }
 
-type LinesProps = { title: string; detail?: string; ink: Ink; mono?: boolean; strong?: boolean; tryAgain?: boolean; renderTitle?: (ink: Ink) => ReactNode };
+type LinesProps = { title: string; detail?: string; ink: Ink; mono?: boolean; strong?: boolean; tryAgain?: boolean; renderTitle?: (ink: Ink) => ReactNode; renderDetail?: (ink: Ink) => ReactNode };
 
-function LinesIn({ title, detail, ink, mono, strong, tryAgain, renderTitle }: LinesProps) {
+function LinesIn({ title, detail, ink, mono, strong, tryAgain, renderTitle, renderDetail }: LinesProps) {
   const weight = strong || detail ? "medium" : undefined;
   const swapTitle = !!tryAgain && !detail;
   return (
     <>
       {renderTitle ? <View style={TITLE_ROW}>{renderTitle(ink)}</View> : <Swap from={title} to={swapTitle ? TRY_AGAIN : title} showTo={swapTitle} color={ink.title} weight={weight} mono={mono} />}
-      {detail ? <Swap from={detail} to={tryAgain ? TRY_AGAIN : detail} showTo={!!tryAgain} color={ink.detail} size="caption" /> : null}
+      {renderDetail ? <View style={DETAIL_ROW}>{renderDetail(ink)}</View> : null}
+      {detail && !renderDetail ? <Swap from={detail} to={tryAgain ? TRY_AGAIN : detail} showTo={!!tryAgain} color={ink.detail} size="caption" /> : null}
     </>
   );
 }
@@ -224,7 +228,16 @@ function RingSlot({ live, ink, paused }: { live: { expiresAt: number; period: nu
   return <View style={RING_SLOT}>{live ? <CountdownRing key={live.expiresAt} expiresAt={live.expiresAt} period={live.period} paused={paused} colors={ink.ring} /> : null}</View>;
 }
 
-function CodeLine({ tabId, seq, row, ink, trailing }: { tabId: string; seq: number; row: Extract<VaultRow, { kind: "otp" }>; ink: Ink; trailing: ReactNode }) {
+type CodeRow = Extract<VaultRow, { kind: "otp" }>;
+
+function DeliveredCodeLine({ tabId, seq, row, code, page, ink, trailing }: { tabId: string; seq: number; row: CodeRow; code: DeliveredItem["delivered"]; page: string; ink: Ink; trailing: ReactNode }) {
+  const now = useAgeClock(code.receivedAt, useContext(CodesTicking));
+  const theme = useTheme();
+  const tile = <VaultAppIcon provider="" symbol={VAULT_DELIVERED.symbol[code.source]} fill={VAULT_DELIVERED.tint[code.source][theme.dark ? "dark" : "light"]} />;
+  return <CodeLine tabId={tabId} seq={seq} row={row} ink={ink} trailing={trailing} tile={tile} countdown={false} renderDetail={(layer) => <DeliveredDetail code={code} now={now} page={page} ink={layer} />} />;
+}
+
+function CodeLine({ tabId, seq, row, ink, trailing, tile, renderDetail, countdown = true }: { tabId: string; seq: number; row: CodeRow; ink: Ink; trailing: ReactNode; tile?: ReactNode; renderDetail?: (ink: Ink) => ReactNode; countdown?: boolean }) {
   const key = itemKey(row.item);
   const code = useVaultCode(key);
   const ticking = useContext(CodesTicking);
@@ -239,9 +252,9 @@ function CodeLine({ tabId, seq, row, ink, trailing }: { tabId: string; seq: numb
   const renderTitle = (layer: Ink) => <CodeDigits owner={key} code={live} color={layer.title} weight="medium" />;
   return (
     <>
-      <ItemTile provider={row.item.provider} ink={ink} />
-      <Lines title="" detail={row.item.username || row.item.title || itemSite(row.item.urls)} ink={ink} renderTitle={renderTitle} />
-      {live ? <RingSlot live={live} ink={ink} paused={!ticking} /> : <View style={RING_WAIT}><ActivitySpinner style={SPINNER} /></View>}
+      {tile ?? <ItemTile provider={row.item.provider} ink={ink} />}
+      <Lines title="" detail={row.item.username || row.item.title || itemSite(row.item.urls)} ink={ink} renderTitle={renderTitle} renderDetail={renderDetail} />
+      {live ? countdown ? <RingSlot live={live} ink={ink} paused={!ticking} /> : null : <View style={RING_WAIT}><ActivitySpinner style={SPINNER} /></View>}
       {trailing}
     </>
   );
@@ -298,6 +311,10 @@ function VaultRowViewOf({
       ));
     }
     case "otp":
+      if (isDeliveredItem(row.item)) {
+        const code = row.item.delivered;
+        return shell((ink, lit) => <DeliveredCodeLine tabId={tabId} seq={seq} row={row} code={code} page={site} ink={ink} trailing={trailing(ink, lit)} />);
+      }
       return shell((ink, lit) => <CodeLine tabId={tabId} seq={seq} row={row} ink={ink} trailing={trailing(ink, lit)} />);
     case "username":
       return shell((ink) => (

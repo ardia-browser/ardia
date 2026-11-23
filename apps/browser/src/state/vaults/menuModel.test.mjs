@@ -165,7 +165,7 @@ test("username fields add usernames used before after the matching logins, email
   assert.ok(!kinds(menuRows({ ...base, items })).includes("username"), "password fields don't list usernames");
 });
 
-const ALL = { logins: true, codes: true, usernames: true, newPasswords: true, generated: true };
+const ALL = { logins: true, codes: true, delivered: true, usernames: true, newPasswords: true, generated: true };
 
 test("Saved Logins off hides login rows and their unlock rows, but keeps usernames used before and Other Passwords", () => {
   const providers = [provider("bitwarden"), provider("protonpass", "locked")];
@@ -201,11 +201,13 @@ test("Generated Passwords off leaves the kept ones out of Other Passwords", () =
   assert.deepEqual(kinds(menuRows({ ...base, mode: "search", items, generated, suggest: { ...ALL, generated: false } })), ["login:a"]);
 });
 
-test("every Suggest checkbox starts on, and each maps to its own kind", async () => {
+test("every Suggest checkbox starts on except Codes from Messages and Mail, and each maps to its own kind", async () => {
   const { DEFAULT_SETTINGS } = await import("../settings/settings.ts");
   const { suggestOf } = await import("./menuModel.ts");
-  assert.deepEqual(suggestOf(DEFAULT_SETTINGS), ALL);
+  assert.deepEqual(suggestOf(DEFAULT_SETTINGS), { ...ALL, delivered: false }, "reading Messages and Mail waits for the person to opt in");
+  assert.deepEqual(suggestOf({ ...DEFAULT_SETTINGS, vaultSuggestDeliveredCodes: true }), ALL);
   assert.equal(DEFAULT_SETTINGS.vaultContextGenerate, false, "generating into any text field stays off");
   assert.equal(DEFAULT_SETTINGS.vaultSuggestOnFocus, true);
-  assert.deepEqual(suggestOf({ ...DEFAULT_SETTINGS, vaultSuggestCodes: false, vaultSuggestGenerated: false }), { ...ALL, codes: false, generated: false });
+  assert.deepEqual(suggestOf({ ...DEFAULT_SETTINGS, vaultSuggestCodes: false, vaultSuggestGenerated: false }), { ...ALL, delivered: false, codes: false, generated: false });
+  assert.equal(suggestOf({ ...DEFAULT_SETTINGS, vaultSuggestDeliveredCodes: true, vaultSuggestCodes: false }).delivered, false, "Codes from Messages and Mail sits under Verification codes and goes off with it");
 });

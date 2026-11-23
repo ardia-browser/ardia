@@ -92,6 +92,12 @@ static void DropOldest(NSMutableDictionary<NSString *, NSDictionary *> *entries)
   return _frameOrigins[frameId];
 }
 
+- (NSString *)topOrigin {
+  if (_mainOrigin.length) return _mainOrigin;
+  NSString *latest = _lastDocument[@"origin"];
+  return latest.length ? latest : nil;
+}
+
 - (void)forgetFrame:(NSString *)frameId {
   if (!frameId) return;
   if ([frameId isEqualToString:_mainFrame ?: @""]) {

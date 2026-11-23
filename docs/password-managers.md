@@ -931,6 +931,47 @@ when the CLI reports locked or signed out.
   host of the login's URL on the page's site (the page's own host when the login has it), so subdomain logins read
   apart.
 
+### Codes from Messages and Mail
+
+One-time codes that arrive in Messages or Mail show in Ardia's fill menu on a code field, like Safari's From Messages.
+Off by default: Settings › Profiles › <profile> › Passwords › Suggest › Codes from Messages and Mail
+(`vaultSuggestDeliveredCodes`, per Mac, not synced; nested under Verification Codes and off with it; macOS only,
+`PLATFORM_FEATURES.deliveredCodes`). Native reads only messages from the last 5 minutes on this Mac, with Full Disk
+Access, and keeps only the code, in memory, for 5 minutes; the message itself is never kept, shown or sent. The setting
+shows no status line except "Ardia needs Full Disk Access to read Messages and Mail." with Open Privacy & Security…
+while access is missing. The contract and the native side are the `vaults.deliveredCodes` rows in The JS surface.
+
+- **JS store** (`state/vaults/deliveredCodes.ts`, model in `deliveredCodesModel.ts`): `{access, items}` from
+  `vaults.deliveredCodesChanged`, `vaults.deliveredCodes` and `vaults.setDeliveredCodes`. The payload is checked
+  (`liveDelivered`): only `access: "on"` keeps codes, malformed and expired ones are dropped, newest first. One timer
+  drops each code at its `expiresAt` without waiting for native. Each `DeliveredCode` becomes a `VaultItem` with
+  `provider: "delivered"`, the sender as title, `https://<site>` as its url and the code under `delivered`. A code that
+  leaves the list forgets its fetched digits. Toggling the setting calls `vaults.setDeliveredCodes`; an otp menu opening
+  (or about to open on focus) calls `vaults.deliveredCodes`, which rescans; a code arriving while a code field is focused
+  offers the menu there.
+- **Rows** (`menuModel.ts` `deliveredRows`): on otp fields in the matches list only, before the saved code rows: codes
+  whose site is the page's registrable site first, then newest, at most 3. A code bound to another site never shows,
+  since it can never fill there. Only a bound code on the page's site has `userChose: false`; unbound codes need a click (never the resting fill, never Return or Touch ID unasked).
+  They never show in search, on login fields, or once `vaults.totp` answers null for them.
+- **Row look** (`VaultRows.tsx` `DeliveredCodeLine`): the code row's layout (`CodeDigits` and the Touch ID column, but no
+  countdown ring: the row simply leaves at `vaults.totp`'s `expiresAt`, 5 minutes after the message) with the source as the tile: `message.fill` on Messages green or
+  `envelope.fill` on Mail blue. The detail line is the site, "for <site>" when the code names another site, or the
+  sender when it names none, then " · now" / " · 2 min ago"; the site shrinks before the age does. The VoiceOver label
+  says "From Messages" or "From Mail". No motion beyond the code row's.
+- **First frame**: a new delivered code's digits come through the same batched `vaults.codesFor` as other code rows
+  (`VaultBroker.codes(for:)` answers `delivered/…` from `VaultDeliveredCodes.shared.totp`), and the store adds the item
+  only once they are in `useVaultCodes`, so the row never appears with a spinner. Native scans, SQLite reads and the
+  extractor call `VaultOffMain.check()`; only `openFullDiskAccess`'s `NSWorkspace` call runs on main.
+- **When the menu opens**: on focus only for a code bound to the page's site, even with no password manager connected
+  (the profile must use Ardia). A click on the code field opens it for any delivered code. The Suggest settings row
+  shows on macOS even with no manager connected, so the option is reachable when codes are the only source.
+- **Fill**: `fillItem` with `provider: "delivered"`, `fields: ["totp"]`. `originMismatch` reads "This code was sent
+  for another site, so it wasn't filled.", `notFound` "This code has expired."; a delivered fill remembers no account.
+- **Telemetry** (`usage_counts`): `vault_codes_delivered_offered_<messages|mail>` (per row each time an otp menu opens, counted from the menus store),
+  `vault_codes_delivered_filled_<messages|mail>` (also counted in `vault_codes_filled`), and on a toggle
+  `vault_codes_delivered_turned_off`, `…_turned_on` and `…_turned_on_needs_access`. Watch filled against offered, and
+  `turned_on_needs_access` against `turned_on` for how many stop at Full Disk Access.
+
 ## Ardia as a manager
 
 Ardia's own store is a manager like the others (`ArdiaVaultIndex`), so a person who uses only Ardia gets the fill menu,
@@ -1362,6 +1403,61 @@ checks the same entitlement at run time. Untested until then.
 because nothing applied), `vault_passkeys_refused` (Not Now, Cancel, timed out), `vault_passkeys_failed`,
 `vault_passkeys_deleted`. Watch used against created (a passkey that's never used means sign-in isn't finding it), and
 fallback against created + used on the dashboard.
+
+## Codes from Messages and Mail
+
+One-time codes that arrive by text or email show up in the fill menu on code fields, behind the `vaultSuggestDeliveredCodes`
+setting (off by default). Ardia reads the two databases with Full Disk Access; there's no
+other way in, since Messages and Mail have no API for it.
+
+- **Sources** (`packages/ardiacore/ios/VaultDeliveredSources.swift`). Messages: `~/Library/Messages/chat.db`, rows of
+  `message` joined to `handle` with `is_from_me = 0`, `item_type = 0` and `date` (Apple-epoch nanoseconds) in the last
+  5 minutes. The body is `text`, or for newer messages `attributedBody`, which `VaultTypedStreamText` reads by finding
+  the archived NSString and taking its length-prefixed UTF-8 bytes; it never unarchives objects, so a message can't
+  make Ardia instantiate a class. Mail: the newest `~/Library/Mail/V*/MailData/Envelope Index`, `messages` joined to
+  `subjects`, `summaries`, `addresses` and `mailboxes`, `date_received` (Unix seconds) in the last 5 minutes,
+  `deleted = 0`, and not in a Junk, Spam, Trash, Bin or Deleted mailbox.
+  Each scan opens the database with `SQLITE_OPEN_READONLY` and `PRAGMA query_only`, a 150 ms busy timeout and at most
+  60 rows, then closes it. Columns are checked with `PRAGMA table_info` first, so an unfamiliar schema reads as nothing.
+- **Extraction** (`VaultDeliveredExtractor.swift`, pure). In Messages only, a last line `@example.com #123456`
+  (optionally ` %iframe.example`) binds the code to that domain; a malformed one gives no code. Mail never binds.
+  Otherwise the extractor reads the first 2,048 characters: a keyword must sit close to a 4 to 8 digit code
+  (`123 456`, `123-456` and `G-123456` included) or a 6 to 8 character uppercase code with a digit: 48 characters for
+  strong words (verification, OTP, passcode, 验证码 and the like in about twenty languages), 32 for code words, 8 for
+  PIN and TAN, 30 for letter codes. Numbers joined to other digits by `. , : / -` or a space, next to a currency sign
+  or code, a unit, `#`, `@`, `+` or `*`, or inside a link are refused, and so are numbers that have a word like order,
+  ref, account, customer, member, invoice, ticket or booking in the same sentence, within 4 characters, nearer than the
+  keyword, or when the keyword is in another sentence. Messages about bookings, deliveries and promotions give
+  nothing. A personal-looking sender (a full phone number or a mailbox provider address) needs a strong word or a
+  "don't share" or "expires" line. Two codes equally close give nothing. Keyword, refusal and candidate counts and
+  every look-around window are capped, so a hostile 8 KB message takes well under 50 ms. The site hint is the bound
+  domain, the Mail sender's registrable domain (not for mailbox providers) or the one domain the text names, and it
+  only ranks rows.
+- **Store** (`VaultDeliveredCodes.swift`, an actor). Entries live in memory for 5 minutes from receipt, at most 10,
+  deduplicated by code; they're dropped at expiry, after a fill (`ArdiaWebView+PageTab.swift` reports a filled `otp`)
+  and when the setting turns off. A message that gave a code once is never read again. Native starts off on every launch and
+  stores nothing; JS sends `vaults.setDeliveredCodes` at startup and on every settings change. Access is `off`, `needsAccess`
+  (an `open` or `opendir` fails with EPERM or EACCES) or `on`; a missing database is `on`. While access is missing,
+  turning it on or opening System Settings polls every 2 s for 3 minutes.
+- **Watching.** A `DispatchSource` vnode watch on each database and its `-wal`; a change rescans after 250 ms, and
+  `vaults.deliveredCodes` rescans when the last scan is over 2 s old. A deleted or renamed file is watched again on
+  the next scan.
+- **Calls.** `vaults.deliveredCodes {}` and `vaults.setDeliveredCodes {enabled}` answer `DeliveredCodes`
+  (`{access, codes}`, newest first), the event `vaults.deliveredCodesChanged` carries the same on every change, and
+  `vaults.openFullDiskAccess {}` opens Privacy & Security > Full Disk Access. `DeliveredCode` (`@ardia/ardiacore`) has
+  `id` (`delivered.<random>`), `source`, `sender`, `site`, `bound`, `receivedAt` and `expiresAt`, never the code or
+  the text. Provider `delivered`: `vaults.totp` gives `{code, period: 300, expiresAt}`; `fillFromVault` with
+  `fields: ["totp"]` fills a secure frame only (`ArdiaWebView+PageTab.swift#fillDeliveredCode`). A bound code needs
+  the tab's verified top-level origin (`ArdiaVaultCapture topOrigin`: the main frame's field origin, else its latest
+  document) on the bound site; it then fills frames of the bound site, or with `%iframe` frames of the iframe site.
+  With no known top-level origin, or anywhere else, it gives `originMismatch` whatever `userChose` says. An unbound code
+  needs `userChose`.
+- **Privacy.** Message text, senders and codes are never logged or sent in telemetry; text exists only for the
+  extractor call.
+- **Testing.** `packages/ardiacore/tests/vault-delivered.test.swift` (run by `node --test tests/vault.test.mjs` in
+  `packages/ardiacore`) covers extraction, origin rules, the store, both readers against generated databases and
+  access detection. A test instance reads `ARDIA_TEST=deliveredMessages=<chat.db>,deliveredMail=<Envelope Index>` instead of the real paths;
+  `packages/ardiacore/tests/fixtures/delivered/make-fixtures.sh` writes fake ones with current dates (`--help`).
 
 ## The Passwords sub-page
 

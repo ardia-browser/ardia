@@ -17,6 +17,10 @@ extension ArdiaWebView: PageTab {
     guard let frameOrigin = vaultOrigin(ofFrame: frameId), frameOrigin == origin else {
       return completion(["filled": [String](), "error": VaultFillError.originMismatch.rawValue])
     }
+    if provider == VaultDeliveredCodes.provider {
+      return fillDeliveredCode(frameId: frameId, origin: frameOrigin, id: id, fields: fields, userChose: contextMenu || userChose,
+                               contextMenu: contextMenu, completion)
+    }
     Task { @MainActor in
       let profile = ArdiaHost.baseProfile(of: self.profile)
       let result = await VaultOwnerCheck.$fillTab.withValue(self.vaultTabId) {
@@ -28,6 +32,22 @@ extension ArdiaWebView: PageTab {
         completion(["filled": [String](), "error": error.rawValue])
       case .success(let fill):
         self.fillVault(frame: frameId, origin: frameOrigin, values: fill.values, submit: submit && fill.touched, contextMenu: contextMenu) { filled in
+          completion(["filled": filled])
+        }
+      }
+    }
+  }
+
+  func fillDeliveredCode(frameId: String, origin: String, id: String, fields: [String], userChose: Bool, contextMenu: Bool,
+                         _ completion: @escaping ([String: Any]) -> Void) {
+    let top = vaultTopOrigin()
+    Task { @MainActor in
+      switch await VaultDeliveredCodes.shared.fillCode(id: id, fields: fields, origin: origin, top: top, userChose: userChose) {
+      case .failure(let error):
+        completion(["filled": [String](), "error": error.rawValue])
+      case .success(let code):
+        self.fillVault(frame: frameId, origin: origin, values: ["otp": code], submit: false, contextMenu: contextMenu) { filled in
+          if filled.contains("otp") { Task { await VaultDeliveredCodes.shared.filled(id: id) } }
           completion(["filled": filled])
         }
       }

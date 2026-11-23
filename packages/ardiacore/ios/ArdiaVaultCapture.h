@@ -8,6 +8,7 @@ FOUNDATION_EXPORT const NSTimeInterval kArdiaVaultLandingWait;
 
 - (void)noteFieldInFrame:(NSString *)frameId origin:(NSString *)origin main:(BOOL)main;
 - (nullable NSString *)originOfFrame:(NSString *)frameId;
+- (nullable NSString *)topOrigin;
 - (void)forgetFrame:(NSString *)frameId;
 
 - (BOOL)keepLogin:(NSString *)username password:(NSString *)password origin:(NSString *)origin;

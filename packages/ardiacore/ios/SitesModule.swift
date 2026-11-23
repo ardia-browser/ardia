@@ -18,40 +18,37 @@ public class SitesModule: Module {
     }
   }
 
-  static let calls = CallTable(domain: "sites", handlers: [
-    "settings": { args, reply in
+  static let calls = sitesCallTable(
+    settings: { args, reply in
       try engine(args).siteSettings(profile: args.profile, origin: try args.text("origin")) { reply.service($0, $1) }
     },
-    "setSetting": { args, reply in
+    setSetting: { args, reply in
       let origin = try args.text("origin")
       let type = try args.text("type")
       try engine(args).setSiteSetting(profile: args.profile, origin: origin, type: type, value: try args.text("value"))
       if type == "notifications" { WebKitHub.shared.notifications.refresh(profile: args.profile, origin: origin) }
       reply.ok()
     },
-    "origins": { args, reply in ArdiaServices.siteSettingsOrigins(profile: args.profile) { reply.service($0, $1) } },
-    "reset": { args, reply in
+    origins: { args, reply in ArdiaServices.siteSettingsOrigins(profile: args.profile) { reply.service($0, $1) } },
+    reset: { args, reply in
       let origin = try args.text("origin")
       ArdiaServices.resetSiteSettings(profile: args.profile, origin: origin)
       WebKitHub.shared.notifications.refresh(profile: args.profile, origin: origin)
       reply.ok()
     },
-    "clearData": { args, reply in
+    clearData: { args, reply in
       try engine(args).clearSiteData(profile: args.profile, origin: try args.text("origin")) { reply.service($0, $1) }
     },
-    "readStorage": EngineCall.passing("ac_local_storage_read"),
-    "writeStorage": EngineCall.passing("ac_local_storage_write"),
-    "registrableDomains": EngineCall.passing("ac_registrable_domains"),
-    "zoomLevels": { args, reply in ArdiaServices.zoomLevels(profile: args.profile) { reply.service($0, $1) } },
-    "setZoom": { args, reply in
+    zoomLevels: { args, reply in ArdiaServices.zoomLevels(profile: args.profile) { reply.service($0, $1) } },
+    setZoom: { args, reply in
       ArdiaServices.setZoom(try args.double("zoom"), profile: args.profile, host: try args.text("host"))
       reply.ok()
     },
-    "preloadPages": { args, reply in
+    preloadPages: { args, reply in
       ArdiaServices.preloadPages(profile: args.profile) { reply.service($0, $1) }
     },
-    "setPreloadPages": { args, reply in
+    setPreloadPages: { args, reply in
       ArdiaServices.setPreloadPages(try args.bool("on"), profile: args.profile) { reply.service($0, $1) }
-    },
-  ])
+    }
+  )
 }

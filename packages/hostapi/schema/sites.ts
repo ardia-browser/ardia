@@ -1,0 +1,97 @@
+import { defineDomain } from "../define.ts";
+
+export const sites = defineDomain({
+  kind: "engine",
+  imports: {
+    "../wire": ["Profile"],
+    "../../siteSettings": ["ClearSiteDataResult", "SiteSettingType", "SiteSettingValue", "SiteSettings"],
+    "../../webkit": ["PageEngine", "StorageItems"],
+  },
+  calls: {
+    settings: {
+      args: "Profile & { origin: string; engine: PageEngine }",
+      result: "SiteSettings",
+      desktop: "custom",
+      mac: "custom",
+      windows: "custom",
+    },
+    setSetting: {
+      args: "Profile & { origin: string; type: SiteSettingType; value: SiteSettingValue; engine: PageEngine }",
+      result: "null",
+      desktop: "custom",
+      mac: "custom",
+      windows: "custom",
+    },
+    origins: {
+      args: "Profile",
+      result: "string[]",
+      desktop: "custom",
+      mac: "custom",
+      windows: "custom",
+    },
+    reset: {
+      args: "Profile & { origin: string }",
+      result: "null",
+      desktop: "custom",
+      mac: "custom",
+      windows: "custom",
+    },
+    clearData: {
+      args: "Profile & { origin: string; engine: PageEngine }",
+      result: "ClearSiteDataResult",
+      desktop: "custom",
+      mac: "custom",
+      windows: "custom",
+    },
+    zoomLevels: {
+      args: "Profile",
+      result: "Record<string, number>",
+      desktop: "custom",
+      mac: "custom",
+      windows: "custom",
+    },
+    readStorage: {
+      args: "Profile & { origin: string }",
+      result: "{ items: StorageItems | null }",
+      service: "ac_local_storage_read",
+      desktop: "absent",
+      windows: "absent",
+    },
+    writeStorage: {
+      args: "Profile & { origin: string; set: StorageItems; remove: string[] }",
+      result: "{ written: number }",
+      service: "ac_local_storage_write",
+      desktop: "absent",
+      windows: "absent",
+    },
+    registrableDomains: {
+      args: "Profile & { hosts: string[] }",
+      result: "{ domains: string[] }",
+      service: "ac_registrable_domains",
+      desktop: "absent",
+      windows: "absent",
+    },
+    setZoom: {
+      args: "Profile & { host: string; zoom: number }",
+      result: "null",
+      desktop: "custom",
+      mac: "custom",
+      windows: "custom",
+    },
+    preloadPages: {
+      args: "Profile",
+      result: "boolean",
+      desktop: "absent",
+      mac: "custom",
+      windows: "absent",
+    },
+    setPreloadPages: {
+      args: "Profile & { on: boolean }",
+      result: "null",
+      desktop: "absent",
+      mac: "custom",
+      windows: "absent",
+    },
+  },
+  events: {},
+});

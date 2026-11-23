@@ -32,12 +32,20 @@ const linuxRoutes = parseRoutes(linuxContract);
 const eventNamesBody = linuxContract.slice(linuxContract.indexOf("EventName(std::string_view topic)"), linuxContract.indexOf("\n}", linuxContract.indexOf("EventName(std::string_view topic)")));
 const linuxEvents = new Set([...eventNamesBody.matchAll(/"([\w.]+)"/g)].map((match) => match[1]));
 const windows = JSON.parse(read("packages/expo-windows/src/engine/domains/forwarded.json"));
+const bridge = read("packages/ardiacore/ios/ArdiaEngineBridge.mm");
+const between = (text, from, to) => text.slice(text.indexOf(from), text.indexOf(to, text.indexOf(from)));
+const macTopics = [...between(bridge, "ForwardedTopics()", "];").matchAll(/@"([^"]+)"/g)].map((match) => match[1]);
+const macRenamed = new Map([...between(bridge, "NSString *AppEventOfTopic(", "\n}").matchAll(/isEqualToString:@"([^"]+)"\] \? @"([^"]+)"/g)].map((match) => [match[1], match[2]]));
+const generatedEvent = (name) => domains.some(([domain]) => name.startsWith(`${domain}.`));
+const eventsOf = (host, binding) => domains.flatMap(([domain, entry]) => Object.entries(entry.events).filter(([, event]) => event[host] === binding).map(([event, row]) => ({ name: `${domain}.${event}`, topic: row.topic })));
 
 test("the scans find the hosts' tables", () => {
   assert.ok(domains.length > 0);
   assert.ok(linuxRoutes.length > 30);
   assert.ok(linuxEvents.size > 3);
   assert.ok(Object.keys(windows.forwarded).length > 5);
+  assert.ok(macTopics.length > 3);
+  assert.ok(macRenamed.size > 0);
 });
 
 test("the kRoutes scan reads rows however they're wrapped and refuses what it can't read or a name routed twice", () => {
@@ -57,26 +65,42 @@ test("the Linux WebUI allowlist routes exactly each generated domain's desktop-r
     const routed = linuxRoutes.filter((route) => route.name.startsWith(`${domain}.`)).sort((a, b) => a.name.localeCompare(b.name));
     const schema = Object.entries(entry.calls)
       .filter(([, call]) => call.desktop === "route")
-      .map(([verb, call]) => ({ name: `${domain}.${verb}`, service: call.service, field: "" }))
+      .map(([verb, call]) => ({ name: `${domain}.${verb}`, service: call.service, field: call.routeField ?? "" }))
       .sort((a, b) => a.name.localeCompare(b.name));
     assert.deepEqual(routed, schema, `kRoutes' ${domain} rows`);
   }
 });
 
-test("the Linux host forwards every generated domain's events under the same name", () => {
+test("the Linux host forwards exactly each generated domain's desktop-forwarded events, under the same name", () => {
+  const forwarded = eventsOf("desktop", "forward");
+  for (const { name, topic } of forwarded) {
+    assert.equal(topic, name, `${name} reaches Linux under its own topic`);
+    assert.ok(linuxEvents.has(name), `EventName forwards ${name}`);
+  }
   for (const [domain, entry] of domains) {
-    for (const event of entry.events) assert.ok(linuxEvents.has(`${domain}.${event}`), `EventName forwards ${domain}.${event}`);
+    for (const [event, row] of Object.entries(entry.events)) {
+      if (row.desktop !== "forward") assert.ok(!linuxEvents.has(`${domain}.${event}`), `EventName forwards ${domain}.${event}, which the schema says the desktop host ${row.desktop === "custom" ? "emits itself" : "never sends"}`);
+    }
   }
 });
 
-test("Windows forwards exactly each generated domain's service-backed calls to the same engine call, and its events by name", () => {
+test("the Mac forwards exactly each generated domain's Mac-forwarded engine topics, under the event's name", () => {
+  const forwarded = eventsOf("mac", "forward");
+  const generatedTopics = macTopics.filter((topic) => generatedEvent(macRenamed.get(topic) ?? topic));
+  assert.deepEqual([...generatedTopics].sort(), forwarded.map(({ topic }) => topic).sort());
+  for (const { name, topic } of forwarded) assert.equal(macRenamed.get(topic) ?? topic, name, `the Mac emits topic ${topic} as ${name}`);
+});
+
+test("Windows forwards exactly each generated domain's service-backed calls to the same engine call, and its forwarded events from their engine topics", () => {
   for (const [domain, entry] of domains) {
     const forwarded = Object.fromEntries(Object.entries(entry.calls).filter(([, call]) => call.windows === "service").map(([verb, call]) => [verb, call.service]));
     assert.deepEqual(windows.forwarded[domain] ?? {}, forwarded, `forwarded.json's ${domain} rows`);
     const absent = Object.entries(entry.calls).filter(([, call]) => call.windows === "absent").map(([verb]) => verb).sort();
     assert.deepEqual([...(windows.missing[domain] ?? [])].sort(), absent, `forwarded.json's missing ${domain} verbs`);
-    for (const event of entry.events) assert.equal(windows.topics[`${domain}.${event}`], `${domain}.${event}`, `Windows forwards ${domain}.${event}`);
   }
+  const forwarded = Object.fromEntries(eventsOf("windows", "forward").map(({ name, topic }) => [topic, name]));
+  const generatedTopics = Object.fromEntries(Object.entries(windows.topics).filter(([, name]) => generatedEvent(name)));
+  assert.deepEqual(generatedTopics, forwarded, "forwarded.json's topics for generated domains");
 });
 
 test("the Mac's call table for each domain is the generated one: each service-backed call passes to its service and each custom one to its module's handler", () => {
@@ -93,7 +117,7 @@ test("the Mac's call table for each domain is the generated one: each service-ba
 
 test("a domain the Mac serves partly by hand builds its module's table from the generated one", () => {
   const mixed = domains.filter(([, entry]) => entry.swift.endsWith("Calls.swift"));
-  assert.deepEqual(mixed.map(([domain]) => domain).sort(), ["bookmarks", "favicons"]);
+  assert.deepEqual(mixed.map(([domain]) => domain).sort(), ["bookmarks", "downloads", "engine", "extensions", "favicons", "permissions", "search", "sites", "tabs"]);
   for (const [domain, entry] of mixed) {
     const module = read(entry.swift.replace(/Calls\.swift$/, "Module.swift"));
     assert.match(module, new RegExp(`static let calls = ${domain}CallTable\\(`), `${domain}'s module`);

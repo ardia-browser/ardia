@@ -30,9 +30,394 @@
           "windows": "custom"
         }
       },
-      "events": [
-        "changed"
-      ]
+      "events": {
+        "changed": {
+          "topic": "bookmarks.changed",
+          "mac": "forward",
+          "desktop": "forward",
+          "windows": "forward"
+        }
+      }
+    },
+    "downloads": {
+      "kind": "engine",
+      "types": "packages/ardiacore/src/engine/generated/downloads.ts",
+      "swift": "packages/ardiacore/ios/DownloadsCalls.swift",
+      "calls": {
+        "cancel": {
+          "service": "ac_downloads_command",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom",
+          "routeField": "null"
+        },
+        "pause": {
+          "service": "ac_downloads_command",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom",
+          "routeField": "null"
+        },
+        "resume": {
+          "service": "ac_downloads_command",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom",
+          "routeField": "null"
+        },
+        "keep": {
+          "service": "ac_downloads_command",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom",
+          "routeField": "null"
+        },
+        "settings": {
+          "service": "ac_downloads_settings",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "setSettings": {
+          "service": "ac_downloads_set_settings",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        }
+      },
+      "events": {
+        "changed": {
+          "topic": "downloads.changed",
+          "mac": "custom",
+          "desktop": "forward",
+          "windows": "custom"
+        }
+      }
+    },
+    "engine": {
+      "kind": "engine",
+      "types": "packages/ardiacore/src/engine/generated/engine.ts",
+      "swift": "packages/ardiacore/ios/EngineCalls.swift",
+      "calls": {
+        "info": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "components": {
+          "service": "ac_components_list",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom",
+          "routeField": "components"
+        },
+        "tasks": {
+          "service": "ac_tasks_list",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom",
+          "routeField": "tasks"
+        },
+        "childProcessCpu": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "beginTracing": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "endTracing": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "isTracing": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "systemState": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "batterySaver": {
+          "service": "ac_battery_saver",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "memorySaver": {
+          "service": "ac_memory_saver",
+          "mac": "service",
+          "desktop": "custom",
+          "windows": "service"
+        },
+        "validateKeepActiveSite": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "trimMemory": {
+          "service": "ac_memory_trim",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "openTaskManager": {
+          "service": "ac_task_manager_open",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "cliControlStatus": {
+          "service": "ac_cli_control",
+          "mac": "service",
+          "desktop": "custom",
+          "windows": "service"
+        },
+        "setCliControl": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "setCliActiveTab": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "cliTabTargets": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "setCliHeldTabs": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "cliOwnsTab": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "cliMoveOffscreen": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "cliCloseOffscreenTabs": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        }
+      },
+      "events": {
+        "systemState": {
+          "topic": "engine.systemState",
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "cliControl": {
+          "topic": "cliControl",
+          "mac": "forward",
+          "desktop": "custom",
+          "windows": "forward"
+        },
+        "hoverLost": {
+          "topic": "engine.hoverLost",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "popupProtectedMedia": {
+          "topic": "engine.popupProtectedMedia",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "devToolsKeyKept": {
+          "topic": "engine.devToolsKeyKept",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "cursorRestored": {
+          "topic": "engine.cursorRestored",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "windowUnpainted": {
+          "topic": "engine.windowUnpainted",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "pressLoopLong": {
+          "topic": "engine.pressLoopLong",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        }
+      }
+    },
+    "extensions": {
+      "kind": "engine",
+      "types": "packages/ardiacore/src/engine/generated/extensions.ts",
+      "swift": "packages/ardiacore/ios/ExtensionsCalls.swift",
+      "calls": {
+        "list": {
+          "service": "ac_extensions_list",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom"
+        },
+        "inspectUnpacked": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "install": {
+          "service": "ac_extensions_install",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom"
+        },
+        "installCrx": {
+          "service": "ac_extensions_install_crx",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom"
+        },
+        "setEnabled": {
+          "service": "ac_extensions_set_enabled",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom"
+        },
+        "uninstall": {
+          "service": "ac_extensions_uninstall",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom"
+        },
+        "reload": {
+          "service": "ac_extensions_reload",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom"
+        },
+        "configure": {
+          "service": "ac_extensions_configure",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom"
+        },
+        "chooseFolder": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "resolveInstallPrompt": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "actionStates": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "sidePanelUrl": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "watchActions": {
+          "service": "ac_extensions_watch_actions",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "syncState": {
+          "service": "ac_extensions_sync_state",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "syncApply": {
+          "service": "ac_extensions_sync_apply",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "loadHealth": {
+          "service": "ac_extensions_load_health",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        }
+      },
+      "events": {
+        "changed": {
+          "topic": "extensions.changed",
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "tabs": {
+          "topic": "extensions.tabs",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "installPrompt": {
+          "topic": "extensions.installPrompt",
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "installFailed": {
+          "topic": "extensions.installFailed",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "sidePanel": {
+          "topic": "extensions.sidePanel",
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "actionPopup": {
+          "topic": "extensions.actionPopup",
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "actionShortcut": {
+          "topic": "extensions.actionShortcut",
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "action": {
+          "topic": "extensions.action",
+          "mac": "forward",
+          "desktop": "forward",
+          "windows": "forward"
+        },
+        "sync": {
+          "topic": "extensions.sync",
+          "mac": "forward",
+          "desktop": "forward",
+          "windows": "forward"
+        }
+      }
     },
     "favicons": {
       "kind": "engine",
@@ -57,7 +442,7 @@
           "windows": "custom"
         }
       },
-      "events": []
+      "events": {}
     },
     "history": {
       "kind": "engine",
@@ -95,9 +480,257 @@
           "windows": "service"
         }
       },
-      "events": [
-        "changed"
-      ]
+      "events": {
+        "changed": {
+          "topic": "history.changed",
+          "mac": "forward",
+          "desktop": "forward",
+          "windows": "forward"
+        }
+      }
+    },
+    "permissions": {
+      "kind": "engine",
+      "types": "packages/ardiacore/src/engine/generated/permissions.ts",
+      "swift": "packages/ardiacore/ios/PermissionsCalls.swift",
+      "calls": {
+        "resolve": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "resolveExternalApp": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "externalAppAllowances": {
+          "service": "ac_external_apps_allowances",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom",
+          "routeField": "allowances"
+        },
+        "removeExternalAppAllowance": {
+          "service": "ac_external_apps_remove",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom",
+          "routeField": "null"
+        },
+        "devExternalLaunches": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        }
+      },
+      "events": {
+        "requested": {
+          "topic": "permissions.requested",
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "dismissed": {
+          "topic": "permissions.dismissed",
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        }
+      }
+    },
+    "search": {
+      "kind": "engine",
+      "types": "packages/ardiacore/src/engine/generated/search.ts",
+      "swift": "packages/ardiacore/ios/SearchCalls.swift",
+      "calls": {
+        "engines": {
+          "service": "ac_search_engines_list",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom"
+        },
+        "setEngineName": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "suggest": {
+          "service": "ac_search_suggest",
+          "mac": "service",
+          "desktop": "absent",
+          "windows": "service"
+        },
+        "stopSuggest": {
+          "service": "ac_search_suggest_stop",
+          "mac": "service",
+          "desktop": "absent",
+          "windows": "service"
+        }
+      },
+      "events": {}
+    },
+    "sites": {
+      "kind": "engine",
+      "types": "packages/ardiacore/src/engine/generated/sites.ts",
+      "swift": "packages/ardiacore/ios/SitesCalls.swift",
+      "calls": {
+        "settings": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "setSetting": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "origins": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "reset": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "clearData": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "zoomLevels": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "readStorage": {
+          "service": "ac_local_storage_read",
+          "mac": "service",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "writeStorage": {
+          "service": "ac_local_storage_write",
+          "mac": "service",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "registrableDomains": {
+          "service": "ac_registrable_domains",
+          "mac": "service",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "setZoom": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "preloadPages": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "setPreloadPages": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        }
+      },
+      "events": {}
+    },
+    "tabs": {
+      "kind": "engine",
+      "types": "packages/ardiacore/src/engine/generated/tabs.ts",
+      "swift": "packages/ardiacore/ios/TabsCalls.swift",
+      "calls": {
+        "routeLinkTabs": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "stripCommand": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "strips": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "lastTabPolicy": {
+          "service": "ac_tabs_last_tab_policy",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "reportCommits": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "devBrowserId": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "devEvents": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "devWindowNumber": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "devFocusPage": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "devPagePhase": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "devClosePage": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "devPictureInPicture": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "devPictureInPictureAction": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "devPostPeekMouseUp": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "devScrollZoom": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        }
+      },
+      "events": {
+        "strips": {
+          "topic": "tabs.strips",
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        }
+      }
     }
   }
 }

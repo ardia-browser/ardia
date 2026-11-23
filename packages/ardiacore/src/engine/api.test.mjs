@@ -11,6 +11,7 @@ const api = readApi().replace(/\r\n/g, "\n");
 const manifest = readManifest();
 const capitalized = (name) => name[0].toUpperCase() + name.slice(1);
 const sorted = (set) => [...set].sort();
+const GENERATED_EVENTS = "BookmarksEvents & DownloadsEvents & EngineDomainEvents & ExtensionsEvents & FaviconsEvents & HistoryEvents & PermissionsEvents & SearchEvents & SitesEvents & TabsEvents";
 
 test("api.ts takes each generated domain's calls and events from packages/hostapi and restates none of them", () => {
   const calls = typeRows(api, manifest, "EngineCalls");
@@ -19,17 +20,18 @@ test("api.ts takes each generated domain's calls and events from packages/hostap
   assert.deepEqual(sorted(events.operands), sorted(Object.keys(manifest.domains).map((domain) => `${capitalized(domain)}Events`)));
   for (const domain of Object.keys(manifest.domains)) {
     const name = capitalized(domain);
-    assert.match(api, new RegExp(`^import type \\{ ${name}Calls, ${name}Events \\} from "\\./generated/${domain}";$`, "m"));
+    const as = (kind) => (`${name}${kind}` === `Engine${kind}` ? `${name}${kind} as ${name}Domain${kind}` : `${name}${kind}`);
+    assert.match(api, new RegExp(`^import type \\{ ${as("Calls")}, ${as("Events")} \\} from "\\./generated/${domain}";$`, "m"));
     for (const key of [...calls.hand, ...events.hand]) assert.ok(!key.startsWith(`${domain}.`), `${key} comes from the schema, not a hand row`);
   }
 });
 
 test("a type composed from anything but generated domains and one row literal is refused, and every member of the literal is read as a row or refused, so no row escapes the parity checks", () => {
-  const head = "export type EngineEvents = BookmarksEvents & FaviconsEvents & HistoryEvents & {";
+  const head = `export type EngineEvents = ${GENERATED_EVENTS} & {`;
   assert.ok(api.includes(head));
   const extra = `type Extra = {\n  "tabs.windowRequest": { id: string };\n};\n\n`;
-  assert.throws(() => typeRows(extra + api.replace(head, "export type EngineEvents = Extra & BookmarksEvents & FaviconsEvents & HistoryEvents & {"), manifest, "EngineEvents"), /Extra, which isn't a generated domain/);
-  assert.throws(() => typeRows(api.replace(head, "export type EngineEvents = BookmarksEvents & FaviconsEvents & (HistoryEvents) & {"), manifest, "EngineEvents"), /generated domains and one row literal/);
+  assert.throws(() => typeRows(extra + api.replace(head, `export type EngineEvents = Extra & ${GENERATED_EVENTS} & {`), manifest, "EngineEvents"), /Extra, which isn't a generated domain/);
+  assert.throws(() => typeRows(api.replace(head, `export type EngineEvents = ${GENERATED_EVENTS.replace("HistoryEvents", "(HistoryEvents)")} & {`), manifest, "EngineEvents"), /generated domains and one row literal/);
   const tail = api.indexOf("\n};\n", api.indexOf(head));
   assert.throws(() => typeRows(`${api.slice(0, tail)}\n} & Extra;\n${api.slice(tail + 4)}`, manifest, "EngineEvents"), /ends its type/);
   assert.throws(() => typeRows(api.replace(head, `${head}\n  ...Extra,`), manifest, "EngineEvents"), /only rows/);
@@ -42,17 +44,23 @@ test("a type composed from anything but generated domains and one row literal is
     assert.throws(() => typeRows(api.replace(row, `${row} ${extra}`), manifest, "EngineEvents"), /only rows/, extra);
   }
   assert.throws(() => typeRows(api.replace(row, `${row}\n${row}`), manifest, "EngineEvents"), /twice/);
-  assert.throws(() => typeRows(api.replace(head, 'export type EngineEvents<HistoryEvents = { "history.undeclared": unknown }> = BookmarksEvents & FaviconsEvents & HistoryEvents & {'), manifest, "EngineEvents"), /non-generic/);
+  assert.throws(() => typeRows(api.replace(head, `export type EngineEvents<HistoryEvents = { "history.undeclared": unknown }> = ${GENERATED_EVENTS} & {`), manifest, "EngineEvents"), /non-generic/);
   assert.throws(() => typeRows(api.replace(head, head.replace("export ", "")) + "\nexport type { EngineEvents };\n", manifest, "EngineEvents"), /2 times|exported/);
   assert.throws(() => typeRows(api.replace(head, head.replace("export ", "")), manifest, "EngineEvents"), /exported/);
   const historyImport = 'import type { HistoryCalls, HistoryEvents } from "./generated/history";';
   assert.ok(api.includes(historyImport));
-  assert.throws(() => typeRows(api.replace(historyImport, `${"/"}* ${historyImport} *${"/"}\nimport type { HistoryCalls } from "./generated/history";\ntype HistoryEvents = { "history.undeclared": unknown };`), manifest, "EngineEvents"), /imported as is/);
-  assert.throws(() => typeRows(api.replace(historyImport, 'import type { HistoryCalls, HistoryCalls as HistoryEvents } from "./generated/history";'), manifest, "EngineEvents"), /imported as is/);
+  assert.throws(() => typeRows(api.replace(historyImport, `${"/"}* ${historyImport} *${"/"}\nimport type { HistoryCalls } from "./generated/history";\ntype HistoryEvents = { "history.undeclared": unknown };`), manifest, "EngineEvents"), /must be imported from \.\/generated\/history as its HistoryEvents/);
+  assert.throws(() => typeRows(api.replace(historyImport, 'import type { HistoryCalls, HistoryCalls as HistoryEvents } from "./generated/history";'), manifest, "EngineEvents"), /must be imported from \.\/generated\/history as its HistoryEvents/);
+  const engineImport = 'import type { EngineCalls as EngineDomainCalls, EngineEvents as EngineDomainEvents } from "./generated/engine";';
+  assert.ok(api.includes(engineImport));
+  assert.deepEqual(sorted(typeRows(api, manifest, "EngineEvents").operands).filter((operand) => operand.startsWith("Engine")), ["EngineEvents"]);
+  assert.throws(() => typeRows(api.replace(engineImport, 'import type { EngineCalls as EngineDomainCalls, EngineCalls as EngineDomainEvents } from "./generated/engine";'), manifest, "EngineEvents"), /isn't a generated domain's events/);
+  assert.throws(() => typeRows(api.replace(engineImport, 'import type { EngineCalls as EngineDomainCalls, EngineEvents as EngineDomainEvents } from "./generated/tabs";'), manifest, "EngineEvents"), /must be imported from \.\/generated\/engine/);
+  assert.throws(() => typeRows(`${api}\nimport type { HistoryEvents as EngineDomainEvents } from "./generated/history";\n`, manifest, "EngineEvents"), /once/);
 });
 
 test("a payload whose own keys look like rows doesn't count as a row", () => {
-  const head = "export type EngineEvents = BookmarksEvents & FaviconsEvents & HistoryEvents & {";
+  const head = `export type EngineEvents = ${GENERATED_EVENTS} & {`;
   const nested = api.replace(head, `${head}\n  "bookmarks.nested": { "ui.label": string; 'x.y': number };`);
   const { hand } = typeRows(nested, manifest, "EngineEvents");
   assert.ok(hand.includes("bookmarks.nested"));
@@ -90,8 +98,8 @@ test("Preload pages loads its profile first, so a profile that isn't open yet is
     assert.match(body, /ardia_host::WithProfile\(/, `${signature} loads the profile before using it`);
     assert.match(body, /reply\(nil, @"/, `${signature} answers an error when the profile can't be loaded`);
   }
-  assert.match(sites, /"preloadPages": \{ args, reply in\s*ArdiaServices\.preloadPages\(profile: args\.profile\) \{ reply\.service\(\$0, \$1\) \}/);
-  assert.match(sites, /"setPreloadPages": \{ args, reply in\s*ArdiaServices\.setPreloadPages\(try args\.bool\("on"\), profile: args\.profile\) \{ reply\.service\(\$0, \$1\) \}/);
+  assert.match(sites, /\bpreloadPages: \{ args, reply in\s*ArdiaServices\.preloadPages\(profile: args\.profile\) \{ reply\.service\(\$0, \$1\) \}/);
+  assert.match(sites, /\bsetPreloadPages: \{ args, reply in\s*ArdiaServices\.setPreloadPages\(try args\.bool\("on"\), profile: args\.profile\) \{ reply\.service\(\$0, \$1\) \}/);
 });
 
 test("every event in api.ts is emitted natively under that name, and nothing else is", () => {

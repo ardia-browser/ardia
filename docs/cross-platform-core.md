@@ -124,10 +124,11 @@ export const history = defineDomain({
 
 A call's bindings default to `service` on every host; a host that needs code says so (`mac: "custom"`, `desktop: "typed"`). `generate.mjs --write | --check` emits, byte for byte deterministic:
 
-- **TS:** `packages/ardiacore/src/engine/generated/<domain>.ts` (`<D>Calls`, `<D>Events`), merged into `EngineCalls`, and `generated/manifest.json`, which the existing drift tests (`api.test.mjs`, `test_contract.py`, `hostContract.test.mjs`) read instead of regex-parsing source.
+- **TS:** `packages/ardiacore/src/engine/generated/<domain>.ts` (`<D>Calls`, `<D>Events`), merged into `EngineCalls` (the `engine` domain's own types are imported as `EngineDomainCalls` and `EngineDomainEvents`), and `generated/manifest.json`, which the existing drift tests (`api.test.mjs`, `test_contract.py`, `hostContract.test.mjs`) read instead of regex-parsing source.
 - **Swift:** a fully service-backed domain gets its whole `<Domain>Module.swift`; a mixed one gets `<Domain>Calls.swift` with a handler table merged into `CallTable`.
 - **Desktop host:** `ac_desktop_routes.h` (routes, capabilities) and the `bootstrap.js` deadline map. Emitted once Track 2's desktop layer exists, so Linux and Windows share it from the start.
 - **No React Native Windows output.** Until the cutover, Windows only gets a check that `forwarded.json` agrees with the schema.
+- **Events** carry the same per-host bindings as calls (`forward`, `custom`, `absent`) and the engine `topic` when it differs from the event's name, so the Mac's `ForwardedTopics`, Linux's `EventName` and Windows' `topics` are each checked exactly against the schema.
 
 Later the schema gains `module` domains (positional Expo functions: shell, sync, import, shaders) that emit the TS `*Native` interfaces and the desktop invoke table, with Swift bodies behind a generated protocol. The Rust core's FFI surface is described in the same schema when sync and import calls move.
 
@@ -163,7 +164,7 @@ Each item is one PR closing one issue. Items on one line can run in parallel.
 The order is built around two integration proofs, the Windows WebUI pilot and the Rust GN link, which run early and in parallel with the tooling.
 
 1. **Design** (this doc). **Engine key: an additive Windows projection**, Mac and Linux keys and their history unchanged. **Rust core: workspace, `ardia-crypto`, `ardia-sync-core`, `ardia-ffi`, vectors and the divergence table**, plus CI for it and `plugin-broker`. **Host API: schema, generator, `history`**, zero behavior change.
-2. **Proof: Rust GN link.** The `boringssl` backend as a GN `rust_static_library`, running the vectors on Chromium's toolchain (Linux engine build; nothing switches yet). **Proof: Windows WebUI pilot** behind `--ardia-shell=webui` (Windows engine build). **Engine key: selector sets** (`linux,win`). **Host API: bookmarks, favicons.**
+2. **Proof: Rust GN link.** The `boringssl` backend as a GN `rust_static_library`, running the vectors on Chromium's toolchain (Linux engine build; nothing switches yet). **Proof: Windows WebUI pilot** behind `--ardia-shell=webui` (Windows engine build). **Engine key: selector sets** (`linux,win`). **Host API: bookmarks, favicons**, then **the remaining service-backed domains** (downloads, engine, extensions, permissions, search, sites, tabs) with per-host event bindings and Linux route reply fields.
 3. **macOS and iPhone link the Rust sync core** (Apple framework; Swift crypto and phrase deleted). **Linux links it** through GN (its C++ sync crypto and JSON deleted). **`engine/ardiacore-desktop` layer**, extracted against both hosts, with `ac_desktop_platform.h` and the Linux and Win delegates.
 4. **Windows desktop host completed** (Win delegate, wording, Mica, snap, CI job). **Generated desktop routes. Ed25519 update manifests.** **`apps/linux` → `apps/desktop`**, when Windows needs the platform folders.
 5. **Windows cutover** after a verified installed upgrade and rollback, then **RNW deletion**.

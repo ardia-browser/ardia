@@ -1,4 +1,11 @@
 packages/ardiacore/src/engine/generated/** text eol=lf
 packages/ardiacore/ios/BookmarksCalls.swift text eol=lf
+packages/ardiacore/ios/DownloadsCalls.swift text eol=lf
+packages/ardiacore/ios/EngineCalls.swift text eol=lf
+packages/ardiacore/ios/ExtensionsCalls.swift text eol=lf
 packages/ardiacore/ios/FaviconsCalls.swift text eol=lf
 packages/ardiacore/ios/HistoryModule.swift text eol=lf
+packages/ardiacore/ios/PermissionsCalls.swift text eol=lf
+packages/ardiacore/ios/SearchCalls.swift text eol=lf
+packages/ardiacore/ios/SitesCalls.swift text eol=lf
+packages/ardiacore/ios/TabsCalls.swift text eol=lf

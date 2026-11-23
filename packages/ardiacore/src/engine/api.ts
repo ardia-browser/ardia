@@ -2,85 +2,31 @@ import type { CleanedUrl } from "@ardia/core";
 import type { AddressInput, SavedAddress, SavedCard } from "../autofill";
 import type { CastDialog, CastRoute, DeviceChooser } from "../media";
 import type { AddedFilterList, ContentBlockerState, ContentBlockerStats } from "../contentBlocker";
-import type {
-  ActionPopupRequest, ActionState, ChromeSearchEngine, ExtensionActionChange, ExtensionInstallPrompt, ExtensionPackage, ExtensionsChange, ExtensionsLoadHealth, ExtensionsSyncApplied, ExtensionsSyncApply,
-  ExtensionsSyncState, ExtensionSyncIntent, InstalledExtension, SidePanelRequest, TabsRequest,
-} from "../extensions";
-import type { Download, DownloadSettings } from "../downloads";
-import type {
-  BatterySaverMode, BatterySaverState, ChildProcessCpu, CliControlStatus, CursorRestore, CliTabTarget, EngineComponent, EngineInfo, EngineTask, HoverLostEpisode, MemorySaverRequest, PressLoopLongReport, MemorySaverState, PopupProtectedMedia, SystemState, WindowUnpaintedRecord,
-} from "../engineDomain";
-import type { ExternalAppAllowance, PermissionRequest, PermissionResult } from "../permissions";
 import type { BrowsingDataType } from "../profiles";
 import type { ChromeWindowState } from "../windows";
 import type { FieldProviderProfile, PasswordExportStatus, SavedPassword, SystemPanelResult, VerificationCodeSetupResult } from "../passwords";
-import type { ClearSiteDataResult, SiteSettings, SiteSettingType, SiteSettingValue } from "../siteSettings";
-import type { LinkRoute, TabStripCommand, TabStripTransaction, WindowRequest } from "../tabs";
+import type { WindowRequest } from "../tabs";
 import type {
-  CookieRemoval, PageCookie, PageEngine, PasskeyAccess, SiteData, SiteDataWritten, StorageChange, StorageItems, WebKitCount,
+  CookieRemoval, PageCookie, PasskeyAccess, SiteData, SiteDataWritten, StorageChange, WebKitCount,
 } from "../webkit";
 import type { DisplayMediaSource, OpenWindowRequest, WebNotification } from "../pageTypes";
 import type { BookmarksCalls, BookmarksEvents } from "./generated/bookmarks";
+import type { DownloadsCalls, DownloadsEvents } from "./generated/downloads";
+import type { EngineCalls as EngineDomainCalls, EngineEvents as EngineDomainEvents } from "./generated/engine";
+import type { ExtensionsCalls, ExtensionsEvents } from "./generated/extensions";
 import type { FaviconsCalls, FaviconsEvents } from "./generated/favicons";
 import type { HistoryCalls, HistoryEvents } from "./generated/history";
-import type { Done, Profile } from "./wire";
+import type { PermissionsCalls, PermissionsEvents } from "./generated/permissions";
+import type { SearchCalls, SearchEvents } from "./generated/search";
+import type { SitesCalls, SitesEvents } from "./generated/sites";
+import type { TabsCalls, TabsEvents } from "./generated/tabs";
+import type { Profile } from "./wire";
 
 type VideoUpscalingState = { enabled: boolean; lowPower: boolean; thermalPressure: boolean; appActive: boolean; tabs: { tabId: number; allowed: boolean; capturing: boolean }[] };
 
-export type EngineCalls = BookmarksCalls & FaviconsCalls & HistoryCalls & {
-  "engine.info": [{}, EngineInfo];
-  "engine.components": [{}, EngineComponent[]];
-  "engine.tasks": [{}, EngineTask[]];
-  "engine.childProcessCpu": [{}, ChildProcessCpu[]];
-  "engine.beginTracing": [{}, boolean];
-  "engine.endTracing": [{ keep: boolean }, string | null];
-  "engine.isTracing": [{}, boolean];
-  "engine.systemState": [{}, SystemState];
-  "engine.batterySaver": [{ mode: BatterySaverMode }, BatterySaverState];
-  "engine.memorySaver": [MemorySaverRequest, MemorySaverState];
-  "engine.validateKeepActiveSite": [{ site: string }, { valid: boolean }];
-  "engine.trimMemory": [{}, { ok: boolean }];
-  "engine.openTaskManager": [{}, { ok: boolean }];
-  "engine.cliControlStatus": [{}, CliControlStatus];
-  "engine.setCliControl": [{ on: boolean }, CliControlStatus];
-  "engine.setCliActiveTab": [{ tabId: string | null }, CliControlStatus];
-  "engine.cliTabTargets": [{ tabIds: string[] }, Record<string, CliTabTarget>];
-  "engine.setCliHeldTabs": [{ tabs: { tabId: string; until: number }[] }, { kept: number; marked: string[] }];
-  "engine.cliOwnsTab": [{ tabId: string }, { owned: boolean; shown: boolean }];
-  "engine.cliMoveOffscreen": [{ tabId: string }, { ok: boolean; reason?: string }];
-  "engine.cliCloseOffscreenTabs": [{}, Done];
-
-  "tabs.routeLinkTabs": [{ urls: string[] }, LinkRoute];
-  "tabs.stripCommand": [{ id: number; command: TabStripCommand }, null];
-  "tabs.strips": [{}, TabStripTransaction];
-  "tabs.lastTabPolicy": [{}, { closesWindow: boolean }];
-  "tabs.reportCommits": [{ on: boolean }, null];
-  "tabs.devBrowserId": [{ tabId: string }, number];
-  "tabs.devEvents": [{ tabId: string }, { name: string; payload: unknown }[]];
-  "tabs.devWindowNumber": [{ tabId: string }, number];
-  "tabs.devFocusPage": [{ tabId: string }, boolean];
-  "tabs.devPagePhase": [{ tabId: string }, "waiting" | "creating" | "attached" | "closing" | null];
-  "tabs.devClosePage": [{ tabId: string }, boolean];
-  "tabs.devPictureInPicture": [{}, unknown[]];
-  "tabs.devPictureInPictureAction": [{ action: string }, string];
-  "tabs.devPostPeekMouseUp": [{ keys: string; tabId: string }, boolean];
-  "tabs.devScrollZoom": [{ steps: Record<string, unknown>[]; tabId?: string }, number[]];
-
+export type EngineCalls = BookmarksCalls & DownloadsCalls & EngineDomainCalls & ExtensionsCalls & FaviconsCalls & HistoryCalls & PermissionsCalls & SearchCalls & SitesCalls & TabsCalls & {
   "windows.list": [{}, ChromeWindowState[]];
   "windows.dev": [{ window: number; action: string }, string];
-
-  "downloads.cancel": [{ id: string }, null];
-  "downloads.pause": [{ id: string }, null];
-  "downloads.resume": [{ id: string }, null];
-  "downloads.keep": [{ id: string }, null];
-  "downloads.settings": [Profile, DownloadSettings];
-  "downloads.setSettings": [Profile & Partial<Pick<DownloadSettings, "folder" | "askWhereToSave">>, DownloadSettings];
-
-  "permissions.resolve": [{ id: string; result: PermissionResult; remember: boolean }, null];
-  "permissions.resolveExternalApp": [{ id: string; open: boolean; remember: boolean }, null];
-  "permissions.externalAppAllowances": [Profile, ExternalAppAllowance[]];
-  "permissions.removeExternalAppAllowance": [Profile & { origin: string; scheme: string }, null];
-  "permissions.devExternalLaunches": [{}, Record<string, unknown>[]];
 
   "profiles.loaded": [{}, { profiles: string[] }];
   "profiles.ctrlTabMru": [{}, { profiles: Record<string, boolean> }];
@@ -88,19 +34,6 @@ export type EngineCalls = BookmarksCalls & FaviconsCalls & HistoryCalls & {
   "profiles.unloadIdle": [Profile, { status: "released" | "pending" | "busy"; tabs: string[]; heldBy?: string }];
   "profiles.deleteData": [Profile, { remaining: string[] }];
   "profiles.clearBrowsingData": [Profile & { types: BrowsingDataType[]; since: number | null }, null];
-
-  "sites.settings": [Profile & { origin: string; engine: PageEngine }, SiteSettings];
-  "sites.setSetting": [Profile & { origin: string; type: SiteSettingType; value: SiteSettingValue; engine: PageEngine }, null];
-  "sites.origins": [Profile, string[]];
-  "sites.reset": [Profile & { origin: string }, null];
-  "sites.clearData": [Profile & { origin: string; engine: PageEngine }, ClearSiteDataResult];
-  "sites.zoomLevels": [Profile, Record<string, number>];
-  "sites.readStorage": [Profile & { origin: string }, { items: StorageItems | null }];
-  "sites.writeStorage": [Profile & { origin: string; set: StorageItems; remove: string[] }, { written: number }];
-  "sites.registrableDomains": [Profile & { hosts: string[] }, { domains: string[] }];
-  "sites.setZoom": [Profile & { host: string; zoom: number }, null];
-  "sites.preloadPages": [Profile, boolean];
-  "sites.setPreloadPages": [Profile & { on: boolean }, null];
 
   "passwords.list": [Profile, { passwords: SavedPassword[] }];
   "passwords.unlock": [Profile, { unlocked: boolean }];
@@ -126,28 +59,6 @@ export type EngineCalls = BookmarksCalls & FaviconsCalls & HistoryCalls & {
   "autofill.remove": [Profile & { id: string }, { ok: true }];
   "autofill.cardNumber": [Profile & { id: string }, { number?: string | null }];
   "autofill.showSuggestions": [{ tabId: string; passwords: boolean }, boolean];
-
-  "extensions.list": [Profile, { extensions: InstalledExtension[] }];
-  "extensions.inspectUnpacked": [{ path: string }, ExtensionPackage];
-  "extensions.install": [Profile & { path: string }, { id: string }];
-  "extensions.installCrx": [Profile & { path: string }, { id: string }];
-  "extensions.setEnabled": [Profile & { id: string; enabled: boolean }, { ok: true }];
-  "extensions.uninstall": [Profile & { id: string }, { ok: true }];
-  "extensions.reload": [Profile & { id: string }, { ok: true }];
-  "extensions.configure": [Profile & { id: string; options: Record<string, unknown> }, { ok: true }];
-  "extensions.chooseFolder": [{}, string | null];
-  "extensions.resolveInstallPrompt": [Profile & { requestId: string; accepted: boolean }, null];
-  "extensions.actionStates": [Profile & { tabId: string; ids: string[] }, Record<string, ActionState>];
-  "extensions.sidePanelUrl": [Profile & { tabId: string; extensionId: string }, string | null];
-  "extensions.watchActions": [Profile, Done];
-  "extensions.syncState": [Profile, ExtensionsSyncState];
-  "extensions.syncApply": [Profile & ExtensionsSyncApply, ExtensionsSyncApplied];
-  "extensions.loadHealth": [Profile, ExtensionsLoadHealth];
-
-  "search.engines": [Profile, { list: { engines: ChromeSearchEngine[] } }];
-  "search.setEngineName": [{ name: string; keyword?: string; url?: string }, null];
-  "search.suggest": [Profile & { url: string; id: number }, { status: number; body?: string; netError?: number; stopped?: true }];
-  "search.stopSuggest": [Profile & { id: number }, Done];
 
   "media.displayMediaSources": [{}, DisplayMediaSource[]];
   "media.displayMediaThumbnails": [{ ids: string[]; width: number }, Record<string, string>];
@@ -181,7 +92,6 @@ export type EngineCalls = BookmarksCalls & FaviconsCalls & HistoryCalls & {
   "contentBlocker.restoreElements": [{ profile: string; filters: string[] }, null];
   "contentBlocker.devFailNextMessage": [{}, null];
   "contentBlocker.devDelayNextLoad": [{ ms: number }, null];
-
   "webView.setDisplayMediaPicker": [{ enabled: boolean }, null];
   "webView.setPeekModifier": [{ modifier: "alt" | "shift" | "off" }, null];
   "webView.setSplitLinkModifier": [{ modifier: "alt" | "altShift" }, null];
@@ -220,19 +130,7 @@ export type EngineCalls = BookmarksCalls & FaviconsCalls & HistoryCalls & {
   "webKit.requestPasskeyAccess": [{}, PasskeyAccess];
 };
 
-export type EngineEvents = BookmarksEvents & FaviconsEvents & HistoryEvents & {
-  "engine.systemState": SystemState;
-  "engine.cliControl": CliControlStatus;
-  "engine.hoverLost": HoverLostEpisode;
-  "engine.popupProtectedMedia": PopupProtectedMedia;
-  "engine.devToolsKeyKept": { epoch: string };
-  "engine.cursorRestored": CursorRestore;
-  "engine.windowUnpainted": WindowUnpaintedRecord;
-  "engine.pressLoopLong": PressLoopLongReport;
-  "tabs.strips": TabStripTransaction;
-  "downloads.changed": Download;
-  "permissions.requested": PermissionRequest;
-  "permissions.dismissed": { id: string };
+export type EngineEvents = BookmarksEvents & DownloadsEvents & EngineDomainEvents & ExtensionsEvents & FaviconsEvents & HistoryEvents & PermissionsEvents & SearchEvents & SitesEvents & TabsEvents & {
   "webKit.counted": { name: WebKitCount; epoch?: string };
   "webKit.copyAddress": { url: string; request: number; epoch?: string };
   "webKit.siteDataWanted": { id: string; profile: string; origin: string; epoch?: string };
@@ -241,15 +139,6 @@ export type EngineEvents = BookmarksEvents & FaviconsEvents & HistoryEvents & {
   "webKit.notificationClose": { id: string };
   "webKit.openWindow": OpenWindowRequest & { profile: string };
   "contentBlocker.changed": ContentBlockerStats;
-  "extensions.changed": ExtensionsChange;
-  "extensions.tabs": TabsRequest;
-  "extensions.installPrompt": ExtensionInstallPrompt;
-  "extensions.installFailed": { message: string; tabId: string | null };
-  "extensions.sidePanel": SidePanelRequest;
-  "extensions.actionPopup": ActionPopupRequest;
-  "extensions.actionShortcut": ActionPopupRequest;
-  "extensions.action": ExtensionActionChange;
-  "extensions.sync": { profile: string } & ExtensionSyncIntent;
   "profiles.loaded": { profile: string };
   "media.deviceChooser": DeviceChooser;
   "media.castDialog": CastDialog;

@@ -32,7 +32,7 @@ export function passkeyItemsOf(offer: VaultPasskeyRequest): VaultItem[] {
       title: p.userName || p.displayName || offer.rpId,
       username: p.userName || p.displayName,
       urls: [`https://${offer.rpId}`],
-      passkey: { requestId: offer.requestId, credentialId: p.id },
+      passkey: p.delegated ? { requestId: offer.requestId, credentialId: p.id, delegated: true } : { requestId: offer.requestId, credentialId: p.id },
     }),
   );
   offerItems.set(offer, items);

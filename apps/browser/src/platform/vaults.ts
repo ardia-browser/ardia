@@ -26,7 +26,7 @@ export type { VaultGeneratedPassword, VaultGeneratedSaveResult, VaultHandOn, Vau
 export type { VaultBackupChange, VaultBackupStatus, VaultRestoreResult } from "@ardia/ardiacore";
 export type { ChromeDropdownKind, ChromeDropdownShown } from "@ardia/ardiacore";
 export type { VaultCreateLoginResult, VaultStandaloneCode, VaultStandaloneCodeAdded, VaultStandaloneCodeEdited } from "@ardia/ardiacore";
-export type { VaultPasskey, VaultPasskeyAnswer, VaultPasskeyDone, VaultPasskeyOutcome, VaultPasskeyRequest } from "@ardia/ardiacore";
+export type { VaultPasskey, VaultPasskeyAnswer, VaultPasskeyDelegate, VaultPasskeyDone, VaultPasskeyNotice, VaultPasskeyOutcome, VaultPasskeyRequest } from "@ardia/ardiacore";
 
 export type VaultCopyField = VaultSecretField;
 export type { VaultPaneRow, VaultPaneRows } from "@ardia/ardiacore";

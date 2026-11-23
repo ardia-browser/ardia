@@ -12,6 +12,9 @@ import { useSiteTokens } from "../site/tokens";
 import { usePasskeyExtensions } from "../../state/vaults/passkeySources";
 import { VAULT_MENU } from "./tokens";
 import { refreshVaultBiometrics, useVaultBiometrics } from "../../state/vaults/store";
+import { useVaultProviders } from "../../state/vaults/hooks";
+import { routeOfTarget, systemRowId, type PasskeyRoute } from "../../state/vaults/passkeyTarget";
+import { saveLine, signInLine } from "../../state/vaults/passkeyCopy";
 
 const hostOf = (origin: string) => origin.replace(/^[a-z]+:\/\//, "").replace(/:\d+$/, "");
 
@@ -22,13 +25,24 @@ function titleOf(sheet: PasskeySheet, site: string) {
   return sheet.exists ? "Passkey Already Saved" : `Save a Passkey for ${site}?`;
 }
 
-function messageOf(sheet: PasskeySheet, site: string, targetName: string, touchID: boolean) {
+const systemRowsOf = (sheet: PasskeySheet) => (sheet.kind === "get" ? (sheet.delegates ?? []).filter((d) => d.via === "system") : []);
+
+function selectedRoute(sheet: PasskeySheet): { route: PasskeyRoute; provider: string } {
+  const system = systemRowsOf(sheet).find((d) => systemRowId(d.provider) === sheet.selected);
+  if (system) return { route: "system", provider: system.provider };
+  const passkey = sheet.passkeys.find((p) => p.id === sheet.selected);
+  return { route: passkey?.delegated ? "extension" : "ardia", provider: passkey?.provider ?? "ardia" };
+}
+
+function messageOf(sheet: PasskeySheet, site: string, targetName: string, targetRoute: PasskeyRoute, touchID: boolean, nameOf: (id: string) => string) {
   const check = touchID ? "Touch ID" : "your login password";
-  if (sheet.kind === "get") return sheet.passkeys.length > 1 ? `Choose a passkey. You'll confirm with ${check}.` : `You'll confirm with ${check}.`;
+  if (sheet.kind === "get") {
+    const { route, provider } = selectedRoute(sheet);
+    return signInLine(route, nameOf(provider), check, sheet.passkeys.length + systemRowsOf(sheet).length > 1);
+  }
   if (sheet.exists) return `You already have a passkey for ${accountLine(sheet)} on ${site}.`;
-  if (sheet.targets.length > 1) return null;
-  if (sheet.private) return `Saves to ${targetName}, and stays there after this window closes. You'll sign in with ${check}.`;
-  return touchID ? `Saves to ${targetName}. You'll sign in with Touch ID, no password needed.` : `Saves to ${targetName}. You'll sign in with your login password.`;
+  if (sheet.targets.length > 1 && (targetRoute === "ardia" || targetRoute === "holder")) return null;
+  return saveLine(targetRoute, targetName, check, sheet.private);
 }
 
 function PasskeyTile({ provider }: { provider: string }) {
@@ -50,6 +64,29 @@ function PasskeyRow({ passkey, selected, many, onPress }: { passkey: VaultPasske
             </Text>
             <Text lines={1} size="caption" tone="textSecondary">
               {passkey.displayName && passkey.displayName !== passkey.userName ? passkey.displayName : `Passkey in ${nameOf(passkey.provider)}`}
+            </Text>
+          </View>
+          {many ? <Symbol name={selected ? "checkmark.circle.fill" : "circle"} size={15} color={selected ? theme.accent : theme.textTertiary} /> : null}
+        </Box>
+      </Well>
+    </Pressable>
+  );
+}
+
+function SystemRow({ provider, selected, many, onPress }: { provider: string; selected: boolean; many: boolean; onPress: () => void }) {
+  const theme = useTheme();
+  const nameOf = useManagerName();
+  return (
+    <Pressable onPress={onPress} disabled={!many}>
+      <Well>
+        <Box row gap="ml" center style={LEFT}>
+          <PasskeyTile provider={provider} />
+          <View style={FILL}>
+            <Text lines={1} size="small" weight="medium">
+              {`Use a passkey from ${nameOf(provider)}`}
+            </Text>
+            <Text lines={1} size="caption" tone="textSecondary">
+              {`Saved in the ${nameOf(provider)} app`}
             </Text>
           </View>
           {many ? <Symbol name={selected ? "checkmark.circle.fill" : "circle"} size={15} color={selected ? theme.accent : theme.textTertiary} /> : null}
@@ -92,13 +129,16 @@ function PasskeyChooser({ sheet, site, choose }: { sheet: PasskeySheet; site: st
   const installed = usePasskeyExtensions();
   const iconOf = (id: string) => installed.find((e) => e.id === id)?.icon;
   const count = sheet.kind === "get" ? sheet.passkeys.length : 0;
+  const systemNames = (sheet.delegates ?? []).filter((d) => d.via === "system").map((d) => d.provider);
+  const nameOf = useManagerName();
+  const getDetail = count ? `${count} passkey${count === 1 ? "" : "s"} for ${site}` : systemNames.length ? `Passkeys from ${systemNames.map(nameOf).join(", ")}` : `0 passkeys for ${site}`;
   return (
     <Box gap="s">
       {sheet.ardia !== false ? (
         <SourceRow
           tile={<PasskeyTile provider="ardia" />}
           title="Ardia"
-          detail={sheet.kind === "create" ? `Save it in Ardia, with ${touchID ? "Touch ID" : "your login password"}` : `${count} passkey${count === 1 ? "" : "s"} for ${site}`}
+          detail={sheet.kind === "create" ? `Save it in Ardia, with ${touchID ? "Touch ID" : "your login password"}` : getDetail}
           onPress={() => choose("source:ardia")}
         />
       ) : null}
@@ -124,11 +164,14 @@ export function VaultPasskeySheet({ tabId, right, top }: { tabId: string; right:
   const guard = usePromptInputGuard(sheet?.seq);
   const nameOf = useManagerName();
   const touchID = useVaultBiometrics((s) => s.available);
+  const providers = useVaultProviders();
   useEffect(() => refreshVaultBiometrics(), [sheet?.seq]);
   if (!sheet) return null;
   const site = siteLabel(sheet.origin);
   const host = hostOf(sheet.origin);
   const targetName = nameOf(sheet.target);
+  const targetRoute = routeOfTarget(sheet.target, providers, sheet.delegates);
+  const systemRows = systemRowsOf(sheet);
   const pickTarget = async () => {
     const choice = await showMenu(sheet.targets.map((id) => ({ id, title: nameOf(id), checked: id === sheet.target })));
     if (choice) choosePasskeyTarget(tabId, choice);
@@ -145,7 +188,7 @@ export function VaultPasskeySheet({ tabId, right, top }: { tabId: string; right:
     if (choice === "system" || choice === "other") answer(choice);
     else if (choice?.startsWith("source:ext:")) answer(choice as `source:${string}`);
   };
-  const many = sheet.kind === "get" && sheet.passkeys.length > 1;
+  const many = sheet.kind === "get" && sheet.passkeys.length + systemRows.length > 1;
   const primaryTitle = sheet.kind === "get" ? (sheet.busy ? "Signing In…" : "Continue") : sheet.exists ? "OK" : sheet.busy ? "Saving…" : "Save";
   const primary = () => answer(sheet.kind === "get" ? "use" : sheet.exists ? "existing" : "save");
   return (
@@ -154,7 +197,7 @@ export function VaultPasskeySheet({ tabId, right, top }: { tabId: string; right:
         <PromptBody
           icons={["person.badge.key"]}
           title={sheet.choose ? (sheet.kind === "get" ? `Sign In to ${site} With…` : `Save a Passkey for ${site} In…`) : titleOf(sheet, site)}
-          message={sheet.choose ? (sheet.kind === "get" ? "Choose where your passkey is." : "Choose where to keep it.") : messageOf(sheet, site, targetName, touchID)}
+          message={sheet.choose ? (sheet.kind === "get" ? "Choose where your passkey is." : "Choose where to keep it.") : messageOf(sheet, site, targetName, targetRoute, touchID, nameOf)}
           detail={
             <>
               {sheet.choose ? (
@@ -163,6 +206,15 @@ export function VaultPasskeySheet({ tabId, right, top }: { tabId: string; right:
                 <Box gap="s">
                   {sheet.passkeys.map((p) => (
                     <PasskeyRow key={p.id} passkey={p} selected={p.id === sheet.selected} many={many} onPress={guard(() => selectPasskey(tabId, p.id))} />
+                  ))}
+                  {systemRows.map((d) => (
+                    <SystemRow
+                      key={d.provider}
+                      provider={d.provider}
+                      selected={systemRowId(d.provider) === sheet.selected}
+                      many={many}
+                      onPress={guard(() => selectPasskey(tabId, systemRowId(d.provider)))}
+                    />
                   ))}
                 </Box>
               ) : (

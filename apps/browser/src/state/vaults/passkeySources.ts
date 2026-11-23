@@ -20,6 +20,10 @@ export const ARDIA_SOURCE = "ardia";
 export const CHROME_SOURCE = "chrome";
 export const extensionSource = (id: string) => `ext:${id}`;
 export const extensionOfSource = (source: string) => (source.startsWith("ext:") ? source.slice(4) : null);
+export const providerSource = (id: string) => `provider:${id}`;
+export const providerOfSource = (source: string) => (source.startsWith("provider:") ? source.slice("provider:".length) : null);
+
+export type SystemSource = { id: string; name: string };
 
 export const passkeyVendorOf = (id: string): PasskeyVendor => KNOWN_PASSKEY_EXTENSIONS[id] ?? "other";
 
@@ -44,18 +48,21 @@ export function passkeyExtensions(lists: Readonly<Record<string, readonly Instal
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
 }
 
-export function effectiveSource(setting: string, available: readonly PasskeyExtension[]): string {
+export function effectiveSource(setting: string, available: readonly PasskeyExtension[], systems: readonly SystemSource[] = []): string {
   const extension = extensionOfSource(setting);
   if (extension) return available.some((e) => e.id === extension) ? setting : ASK_SOURCE;
+  const provider = providerOfSource(setting);
+  if (provider) return systems.some((m) => m.id === provider) ? setting : ASK_SOURCE;
   return setting === ARDIA_SOURCE || setting === CHROME_SOURCE ? setting : ASK_SOURCE;
 }
 
 export type SourceOption = { value: string; title: string };
 
-export function sourceOptions(available: readonly PasskeyExtension[]): SourceOption[] {
+export function sourceOptions(available: readonly PasskeyExtension[], systems: readonly SystemSource[] = []): SourceOption[] {
   return [
     { value: ASK_SOURCE, title: "Ask Each Time" },
     { value: ARDIA_SOURCE, title: "Ardia" },
+    ...systems.map((m) => ({ value: providerSource(m.id), title: `${m.name} App` })),
     ...available.map((e) => ({ value: extensionSource(e.id), title: e.name })),
     { value: CHROME_SOURCE, title: "Chrome (Security Key or Phone)" },
   ];
@@ -82,7 +89,8 @@ function sendConfig() {
   const { settings } = useBrowser.getState();
   const lists = useExtensions.getState().lists;
   const extensions = enabledExtensions(lists).map(({ id, name }) => ({ id, name, known: id in KNOWN_PASSKEY_EXTENSIONS }));
-  const source = effectiveSource(settings.vaultPasskeySource, passkeyExtensions(lists, settings.vaultPasskeyExtensions));
+  const setting = settings.vaultPasskeySource;
+  const source = providerOfSource(setting) ? setting : effectiveSource(setting, passkeyExtensions(lists, settings.vaultPasskeyExtensions));
   const payload = { source, extensions };
   const key = JSON.stringify(payload);
   if (key === sent) return;

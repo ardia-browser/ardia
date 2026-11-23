@@ -15,7 +15,7 @@ export function armVaultTouchID(tabId: string, menuSeq: number | null) {
 
 export const touchIDGlyphShown = (phase: VaultTouchPhase) => phase !== "unavailable" && phase !== "lockout";
 
-export const isTouchRow = (row: VaultRow | undefined): row is VaultRow => !!row;
+export const isTouchRow = (row: VaultRow | undefined): row is VaultRow => !!row && !(row.kind === "login" && row.item.passkey?.delegated);
 
 const usesOwnerGrant = (row: VaultRow) =>
   row.kind === "login" || row.kind === "otp" || (row.kind === "unlock" && !!vaultProviderOf(row.provider)?.touchUnlock);

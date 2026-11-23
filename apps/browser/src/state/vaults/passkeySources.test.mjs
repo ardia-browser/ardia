@@ -42,3 +42,15 @@ test("telemetry names a known extension's vendor and everything else other", () 
   assert.equal(sources.passkeyVendorOf("aeblfdkhhhdcdjpifhhbdiojplfjncoa"), "onepassword");
   assert.equal(sources.passkeyVendorOf(UNKNOWN), "other");
 });
+
+test("a manager's Mac app is a choice while its system route works, and the choice falls back to Ask when it doesn't", () => {
+  const systems = [{ id: "1password", name: "1Password" }];
+  assert.deepEqual(sources.sourceOptions([], systems).map((o) => [o.value, o.title]), [
+    ["ask", "Ask Each Time"],
+    ["ardia", "Ardia"],
+    ["provider:1password", "1Password App"],
+    ["chrome", "Chrome (Security Key or Phone)"],
+  ]);
+  assert.equal(sources.effectiveSource("provider:1password", [], systems), "provider:1password");
+  assert.equal(sources.effectiveSource("provider:1password", [], []), "ask");
+});

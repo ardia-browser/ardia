@@ -15,12 +15,14 @@ import {
   type VaultPasskeyDone,
   type VaultPasskeyRequest,
 } from "../../platform/vaults";
-import { notePasskeyChooser, notePasskeyDeleted, notePasskeyOutcome } from "../telemetry/vaultCounts";
+import { notePasskeyChooser, notePasskeyDelegated, notePasskeyDeleted, notePasskeyOutcome } from "../telemetry/vaultCounts";
+import { troubleText } from "./passkeyCopy";
+import { siteLabel } from "./originMatch";
 import { noteObservedExtensions, passkeyVendorOf, startPasskeySources } from "./passkeySources";
 import { dismissVaultMenu, patchVaultMenu, vaultMenuOf, type VaultMenu } from "./menu";
 import type { VaultRow } from "./menuModel";
 import { usePasskeys, type PasskeySheet } from "./passkeyStore";
-import { holdsPasskeys, passkeyTarget } from "./passkeyTarget";
+import { delegatesPasskeys, holdsPasskeys, passkeyTarget, providerOfSystemRow, systemRowId } from "./passkeyTarget";
 import { useBrowser } from "../browser/store";
 import { brandOf } from "./brands";
 import { currentVaultProviders } from "./store";
@@ -44,9 +46,15 @@ function refreshMenuOf(tabId: string) {
 function noteRequest(request: VaultPasskeyRequest, consent: ConsentToken | null) {
   noteObservedExtensions((request.extensions ?? []).map((e) => e.id));
   if (request.choose) notePasskeyChooser(consent);
-  const selected = request.passkeys[0]?.id ?? null;
-  const { target, targets, note } = passkeyTarget(currentVaultProviders(), useBrowser.getState().settings.vaultSaveTarget, (id) => brandOf(id).name);
-  const sheet: PasskeySheet = { ...request, seq: ++sheetSeq, selected, busy: false, error: null, target, targets, targetNote: note };
+  const systemRows = (request.delegates ?? []).filter((d) => d.via === "system");
+  const selected = request.passkeys[0]?.id ?? (systemRows[0] ? systemRowId(systemRows[0].provider) : null);
+  const delegates = request.kind === "create" ? (request.delegates ?? []) : [];
+  const { target, targets, note } = passkeyTarget(currentVaultProviders(), useBrowser.getState().settings.vaultSaveTarget, (id) => brandOf(id).name, delegates);
+  const notice = request.notice;
+  if (notice) notePasskeyDelegated(notice.kind === "returned" ? "extension" : "system", notice.kind === "returned" ? "returned" : "failed", consent);
+  const error = notice ? troubleText(notice.kind, request.kind === "create", brandOf(notice.provider).name, siteLabel(request.origin)) : null;
+  const picked = notice && targets.includes(notice.provider) ? notice.provider : target;
+  const sheet: PasskeySheet = { ...request, seq: ++sheetSeq, selected, busy: false, error, target: picked, targets, targetNote: notice ? null : note };
   usePasskeys.setState((s) => ({ sheets: { ...s.sheets, [request.tabId]: sheet } }));
 }
 
@@ -58,11 +66,18 @@ function noteOffer(request: VaultPasskeyRequest) {
 
 const isExtensionId = (id: string) => /^[a-p]{32}$/.test(id);
 
+export function routeOfDone(done: Pick<VaultPasskeyDone, "outcome" | "via">): { via: string | undefined; delegated: "system" | "extension" | null } {
+  if (done.via?.startsWith("system:")) return { via: "system", delegated: "system" };
+  if (!done.via || !isExtensionId(done.via)) return { via: done.via, delegated: null };
+  const delegated = done.outcome === "created" || done.outcome === "used" || done.outcome === "refused" ? "extension" : null;
+  return { via: `extension:${passkeyVendorOf(done.via)}`, delegated };
+}
+
 function noteDone(done: VaultPasskeyDone, consent: ConsentToken | null) {
-  const direct = !done.via || !isExtensionId(done.via);
-  const via = direct ? done.via : `extension:${passkeyVendorOf(done.via!)}`;
-  if (!direct) noteObservedExtensions([done.via!]);
-  notePasskeyOutcome(done.outcome, via, consent);
+  const route = routeOfDone(done);
+  if (done.via && isExtensionId(done.via)) noteObservedExtensions([done.via]);
+  notePasskeyOutcome(done.outcome, route.via, consent);
+  if (route.delegated) notePasskeyDelegated(route.delegated, done.outcome === "refused" ? (route.delegated === "system" ? "cancelled" : "rejected") : done.outcome, consent);
   if (!done.requestId) return;
   const before = usePasskeys.getState();
   usePasskeys.setState((s) => ({ sheets: withoutRequest(s.sheets, done.requestId), offers: withoutRequest(s.offers, done.requestId) }));
@@ -100,7 +115,10 @@ export function startPasskeys() {
   onPasskeyOffer(noteOffer);
   onPasskeyDone((done) => noteDone(done, nativeConsent(done)));
   onPasskeysChanged(() => void loadPasskeys());
-  onVaultItemsChanged((provider) => holdsPasskeys(currentVaultProviders().find((p) => p.id === provider)) && provider !== "ardia" && void loadPasskeys());
+  onVaultItemsChanged((provider) => {
+    const found = currentVaultProviders().find((p) => p.id === provider);
+    if (provider !== "ardia" && (holdsPasskeys(found) || delegatesPasskeys(found))) void loadPasskeys();
+  });
   void loadPasskeys();
 }
 
@@ -124,21 +142,32 @@ export const selectPasskey = (tabId: string, id: string) => {
 
 const errorText = (error: VaultPasskeyAnswer["error"]) => (error === "gone" ? GONE : error === "declined" || error === "busy" ? null : FAILED);
 
-export async function answerPasskeySheet(tabId: string, choice: "save" | "existing" | "use" | "cancel" | "other" | "system" | `source:${string}`) {
+type SheetChoice = "save" | "existing" | "use" | "cancel" | "other" | "system" | `source:${string}`;
+
+export const answerPasskeySheet = (tabId: string, choice: SheetChoice) => runAnswerPasskeySheet(tabId, choice, consentToken());
+
+async function runAnswerPasskeySheet(tabId: string, choice: SheetChoice, consent: ConsentToken | null) {
   const sheet = usePasskeys.getState().sheets[tabId];
   if (!sheet || sheet.busy) return;
   const picked = choice === "use" ? sheet.selected : choice;
   if (!picked) return;
+  const systemPick = providerOfSystemRow(picked) ?? (choice === "save" && (sheet.delegates ?? []).some((d) => d.provider === sheet.target && d.via === "system") ? sheet.target : null);
   const quiet = choice === "cancel" || choice === "other" || choice.startsWith("source:");
   if (!quiet) patchSheet(tabId, sheet.seq, { busy: true, error: null });
   const target = choice === "save" ? sheet.target : undefined;
   const result = await answerPasskey(sheet.requestId, picked, target).catch((): VaultPasskeyAnswer => ({ ok: false, error: "failed" }));
   if (result.ok) return;
+  if (systemPick && (result.error === "declined" || result.error === "failed")) notePasskeyDelegated("system", result.error === "declined" ? "cancelled" : "failed", consent);
   if (result.error === "gone") {
     usePasskeys.setState((s) => ({ sheets: withoutRequest(s.sheets, sheet.requestId) }));
     return;
   }
-  const failure = result.error === "unavailable" ? `${brandOf(sheet.target).name} is locked. Unlock it, or save to Ardia.` : result.message || errorText(result.error);
+  const failure =
+    result.error === "failed" && result.provider
+      ? troubleText("systemFailed", sheet.kind === "create", brandOf(result.provider).name, siteLabel(sheet.origin))
+      : result.error === "unavailable"
+        ? `${brandOf(sheet.target).name} is locked. Unlock it, or save to Ardia.`
+        : result.message || errorText(result.error);
   patchSheet(tabId, sheet.seq, { busy: false, error: failure });
 }
 

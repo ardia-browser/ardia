@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { View } from "react-native";
 import { VAULT_SETTINGS } from "../../vaults/tokens";
 import { effectiveSource, sourceOptions, usePasskeyExtensions } from "../../../state/vaults/passkeySources";
+import { delegatedManagers, systemSources, useSystemRouteWatch } from "../../../state/vaults/passkeyRoutes";
 import { useSettings } from "../../../state/browser/hooks";
 import { updateSettings } from "../../../state/settings/actions";
 import type { Settings } from "../../../state/settings/settings";
@@ -144,6 +145,8 @@ export function ForAllProfilesSection() {
   const keepGenerated = useSettings((s) => s.vaultKeepGenerated);
   const passkeySetting = useSettings((s) => s.vaultPasskeySource);
   const passkeyExtensions = usePasskeyExtensions();
+  const systemRoute = useSystemRouteWatch();
+  const passkeySystems = systemSources(delegatedManagers(providers, systemRoute, passkeyExtensions));
   useEffect(() => void reloadProviders(), []);
   const managers = passwordManagersOnly(providers);
   const savers = connectedSavers(providers);
@@ -168,11 +171,11 @@ export function ForAllProfilesSection() {
               <PopUp value={target} options={targetOptions} minWidth={VAULT_SETTINGS.savePopUp} onChange={(v) => updateSettings({ vaultSaveTarget: v === ASK ? "" : v })} />
             </Row>
           ) : null}
-          {passkeyExtensions.length ? (
+          {passkeyExtensions.length || passkeySystems.length ? (
             <Row title="Use passkeys from" description="Which app answers when a site asks for a passkey.">
               <PopUp
-                value={effectiveSource(passkeySetting, passkeyExtensions)}
-                options={sourceOptions(passkeyExtensions)}
+                value={effectiveSource(passkeySetting, passkeyExtensions, passkeySystems)}
+                options={sourceOptions(passkeyExtensions, passkeySystems)}
                 minWidth={VAULT_SETTINGS.sourcePopUp}
                 onChange={(v) => updateSettings({ vaultPasskeySource: v })}
               />

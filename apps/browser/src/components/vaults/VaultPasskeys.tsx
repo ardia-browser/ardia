@@ -13,6 +13,9 @@ import { WindowedRows } from "../settings/WindowedRows";
 import { BrandBadge, useManagerName } from "./VaultParts";
 import { VAULT_SETTINGS } from "./tokens";
 import { openInManager, useOpensItems } from "../../state/vaults/openInManager";
+import { delegatedLine, delegatedManagers, openPasskeyAccessSettings, useSystemRouteWatch, type DelegatedManager } from "../../state/vaults/passkeyRoutes";
+import { usePasskeyExtensions } from "../../state/vaults/passkeySources";
+import { useVaultProviders } from "../../state/vaults/hooks";
 import { SavedInRow, WebsiteRow } from "./VaultSheetRows";
 
 const COUNT = new Intl.NumberFormat();
@@ -71,14 +74,36 @@ function AnimatedPasskeyRows({ passkeys }: { passkeys: readonly VaultPasskey[] }
   );
 }
 
+function DelegatedRow({ manager }: { manager: DelegatedManager }) {
+  return (
+    <Row icon={<BrandBadge provider={manager.id} />} title={`Passkeys in ${manager.name}`} description={delegatedLine(manager)}>
+      {manager.status === "denied" ? <Button title="Open System Settings" onPress={openPasskeyAccessSettings} /> : null}
+    </Row>
+  );
+}
+
 export function PasskeysSection({ query }: { query: string }) {
   const list = usePasskeys((s) => s.list);
+  const providers = useVaultProviders();
+  const extensions = usePasskeyExtensions();
+  const route = useSystemRouteWatch();
   useEffect(() => void loadPasskeys(), []);
   const shown = useMemo(() => matchingPasskeys(list ?? [], query), [list, query]);
+  const delegated = query ? [] : delegatedManagers(providers, route, extensions);
   return (
-    <Expand open={shown.length > 0}>
-      <SectionHeader title={`${COUNT.format(shown.length)} Passkey${shown.length === 1 ? "" : "s"}`} />
-      <Group>{shown.length > ANIMATED_ROWS ? <WindowedPasskeyRows passkeys={shown} /> : <AnimatedPasskeyRows passkeys={shown} />}</Group>
+    <Expand open={shown.length > 0 || delegated.length > 0}>
+      <SectionHeader title={shown.length ? `${COUNT.format(shown.length)} Passkey${shown.length === 1 ? "" : "s"}` : "Passkeys"} />
+      {shown.length ? <Group>{shown.length > ANIMATED_ROWS ? <WindowedPasskeyRows passkeys={shown} /> : <AnimatedPasskeyRows passkeys={shown} />}</Group> : null}
+      {delegated.length ? (
+        <Group>
+          {delegated.map((m, i) => (
+            <View key={m.id}>
+              {i > 0 ? <Divider thick inset="l" /> : null}
+              <DelegatedRow manager={m} />
+            </View>
+          ))}
+        </Group>
+      ) : null}
     </Expand>
   );
 }
@@ -143,7 +168,9 @@ export function PasskeySheet({ passkey }: { passkey: VaultPasskey }) {
         </Group>
         {ardia ? null : (
           <Text size="caption" tone="textSecondary" style={NOTE}>
-            Ardia signs in with this passkey. Change or delete it in {nameOf(passkey.provider)}.
+            {passkey.delegated
+              ? `${nameOf(passkey.provider)} signs in with this passkey through its extension. Change or delete it in ${nameOf(passkey.provider)}.`
+              : `Ardia signs in with this passkey. Change or delete it in ${nameOf(passkey.provider)}.`}
           </Text>
         )}
         <Expand open={!!problem} gap={space.ml}>

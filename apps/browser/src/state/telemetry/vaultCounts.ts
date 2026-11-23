@@ -82,6 +82,15 @@ const empty = () => ({
   vault_passkeys_via_extension_lastpass: 0,
   vault_passkeys_via_extension_other: 0,
   vault_passkey_chooser_shown: 0,
+  vault_passkeys_via_system_provider: 0,
+  vault_passkeys_system_provider_used: 0,
+  vault_passkeys_system_provider_created: 0,
+  vault_passkeys_system_provider_cancelled: 0,
+  vault_passkeys_system_provider_failed: 0,
+  vault_passkeys_extension_delegate_used: 0,
+  vault_passkeys_extension_delegate_created: 0,
+  vault_passkeys_extension_delegate_returned: 0,
+  vault_passkeys_extension_delegate_rejected: 0,
   vault_sign_ins: 0,
   vault_sign_in_failures: 0,
   vault_sign_in_two_step: 0,
@@ -180,6 +189,7 @@ const PASSKEY_FIELD = {
 const PASSKEY_VIA = {
   ardia: "vault_passkeys_via_ardia",
   chrome: "vault_passkeys_via_chrome",
+  system: "vault_passkeys_via_system_provider",
   "extension:proton": "vault_passkeys_via_extension_proton",
   "extension:onepassword": "vault_passkeys_via_extension_onepassword",
   "extension:bitwarden": "vault_passkeys_via_extension_bitwarden",
@@ -194,6 +204,14 @@ export const notePasskeyOutcome = (outcome: string, via: string | undefined, con
   if (field) bump(field, consent);
   const route = via ? PASSKEY_VIA[via as keyof typeof PASSKEY_VIA] : undefined;
   if (route) bump(route, consent);
+};
+const DELEGATED_FIELD = {
+  system: { used: "vault_passkeys_system_provider_used", created: "vault_passkeys_system_provider_created", cancelled: "vault_passkeys_system_provider_cancelled", failed: "vault_passkeys_system_provider_failed" },
+  extension: { used: "vault_passkeys_extension_delegate_used", created: "vault_passkeys_extension_delegate_created", returned: "vault_passkeys_extension_delegate_returned", rejected: "vault_passkeys_extension_delegate_rejected" },
+} as const;
+export const notePasskeyDelegated = (route: "system" | "extension", outcome: string, consent?: ConsentToken | null) => {
+  const field = (DELEGATED_FIELD[route] as Record<string, VaultCountField>)[outcome];
+  if (field) bump(field, consent);
 };
 export const notePasskeyChooser = (consent?: ConsentToken | null) => bump("vault_passkey_chooser_shown", consent);
 export const notePasskeyDeleted = (consent?: ConsentToken | null) => bump("vault_passkeys_deleted", consent);

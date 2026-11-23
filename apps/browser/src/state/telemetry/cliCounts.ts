@@ -26,6 +26,8 @@ const NONE = {
   cli_settings_install_failures: 0,
   windowless_pages_given_geometry: 0,
   windowless_pages_missing_geometry: 0,
+  cli_visible_holds_started: 0,
+  cli_visible_holds_ended_before_start: 0,
   cli_socket_call_failures: 0,
   cli_socket_lines_shrunk: 0,
   cli_socket_password_manager_refusals: 0,
@@ -44,6 +46,7 @@ const FIELDS = {
 
 let counts = { ...NONE };
 let windowlessSeen = { given: 0, missed: 0 };
+let visibleHoldsSeen = { started: 0, endedBeforeStart: 0 };
 let tokenCommandsSeen: Record<TokenCommandDomain, number> = Object.fromEntries(TOKEN_COMMAND_DOMAINS.map((domain) => [domain, 0])) as Record<TokenCommandDomain, number>;
 
 export const noteCliInstall = (reason: CliInstallReason, ok: boolean, consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void counts[FIELDS[reason][ok ? 0 : 1]]++);
@@ -67,9 +70,11 @@ export const noteCliAutoEnabled = () => void counts.cli_auto_enables++;
 
 let windowlessBaselineStale = false;
 let tokenCommandsBaselineStale = false;
+let visibleHoldsBaselineStale = false;
 onConsentPeriodChange(() => {
   windowlessBaselineStale = true;
   tokenCommandsBaselineStale = true;
+  visibleHoldsBaselineStale = true;
 });
 
 export function noteWindowlessPages(totals: { given: number; missed: number } | undefined, consent?: ConsentToken | null) {
@@ -103,9 +108,30 @@ export function noteTokenCommands(totals: TokenCommandTotals | undefined, consen
   if (sent.some(([, delta]) => delta)) countFor(token, () => sent.forEach(([domain, delta]) => (counts[`cli_cdp_commands_${domain}`] += delta)));
 }
 
-export function noteEngineCliTotals(status: { windowlessPages?: { given: number; missed: number }; tokenCommands?: TokenCommandTotals }, consent: ConsentToken) {
+export function noteVisibleHolds(totals: { started: number; endedBeforeStart: number } | undefined, consent?: ConsentToken | null) {
+  if (!totals) return;
+  const token = consentOrNow(consent);
+  const fresh = stillValid(token) && !visibleHoldsBaselineStale;
+  if (stillValid(token)) visibleHoldsBaselineStale = false;
+  const started = Number(totals.started) || 0, endedBeforeStart = Number(totals.endedBeforeStart) || 0;
+  const newlyStarted = fresh ? Math.max(0, started - visibleHoldsSeen.started) : 0;
+  const newlyEnded = fresh ? Math.max(0, endedBeforeStart - visibleHoldsSeen.endedBeforeStart) : 0;
+  visibleHoldsSeen = { started: Math.max(started, visibleHoldsSeen.started), endedBeforeStart: Math.max(endedBeforeStart, visibleHoldsSeen.endedBeforeStart) };
+  if (newlyStarted || newlyEnded) {
+    countFor(token, () => {
+      counts.cli_visible_holds_started += newlyStarted;
+      counts.cli_visible_holds_ended_before_start += newlyEnded;
+    });
+  }
+}
+
+export function noteEngineCliTotals(
+  status: { windowlessPages?: { given: number; missed: number }; tokenCommands?: TokenCommandTotals; visibleHolds?: { started: number; endedBeforeStart: number } },
+  consent: ConsentToken,
+) {
   noteWindowlessPages(status.windowlessPages, consent);
   noteTokenCommands(status.tokenCommands, consent);
+  noteVisibleHolds(status.visibleHolds, consent);
 }
 
 export function takeCliCounts() {

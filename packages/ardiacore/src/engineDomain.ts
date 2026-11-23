@@ -122,9 +122,11 @@ type CliDragsEnded = { ownerGone: number; debuggerUnowned: number; nativeRefused
 
 type CliWindowlessPages = { given: number; missed: number };
 
+type CliVisibleHolds = { started: number; endedBeforeStart: number };
+
 type CliTokenCommands = Partial<Record<"accessibility" | "browser" | "dom" | "emulation" | "fetch" | "input" | "network" | "page" | "runtime" | "storage" | "target" | "other", number>>;
 
-export type CliControlStatus = { dragsEnded?: CliDragsEnded; windowlessPages?: CliWindowlessPages; tokenCommands?: CliTokenCommands } & (
+export type CliControlStatus = { dragsEnded?: CliDragsEnded; windowlessPages?: CliWindowlessPages; tokenCommands?: CliTokenCommands; visibleHolds?: CliVisibleHolds } & (
   | { state: "external" }
   | ({ state: "off" | "starting" } & CliServer)
   | ({ state: "on"; port: number } & CliServer)

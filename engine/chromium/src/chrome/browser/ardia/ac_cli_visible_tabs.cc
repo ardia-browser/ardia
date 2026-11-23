@@ -2,6 +2,7 @@
 
 #include "chrome/browser/ardia/ac_cli_visible_tabs.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <map>
 #include <string>
@@ -14,6 +15,7 @@
 #include "base/location.h"
 #include "base/memory/weak_ptr.h"
 #include "base/no_destructor.h"
+#include "base/numerics/clamped_math.h"
 #include "chrome/browser/ardia/ac_cli_token_policy.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -43,6 +45,21 @@ std::map<const void*, VisibleHold>& Holds() {
   return *holds;
 }
 
+struct HoldTotals {
+  base::ClampedNumeric<int> started;
+  base::ClampedNumeric<int> ended_before_start;
+};
+
+HoldTotals& Totals() {
+  static HoldTotals totals;
+  return totals;
+}
+
+std::map<const void*, VisibleHold>::iterator FindHold(uint64_t id) {
+  return std::ranges::find_if(
+      Holds(), [id](const auto& entry) { return entry.second.id == id; });
+}
+
 uint64_t NextHoldId() {
   static uint64_t last = 0;
   return ++last;
@@ -64,9 +81,10 @@ bool IsTabTarget(content::DevToolsAgentHost* host) {
          type == content::DevToolsAgentHost::kTypeTab;
 }
 
-void StartHold(const void* session, uint64_t id) {
-  auto it = Holds().find(session);
-  if (it == Holds().end() || it->second.id != id) {
+void StartHold(uint64_t id) {
+  auto it = FindHold(id);
+  if (it == Holds().end()) {
+    Totals().ended_before_start++;
     return;
   }
   content::WebContents* contents = it->second.contents.get();
@@ -76,10 +94,13 @@ void StartHold(const void* session, uint64_t id) {
   }
   base::ScopedClosureRunner capture = contents->IncrementCapturerCount(
       gfx::Size(), kStayHidden, kStayAwake, kIsActivity);
-  it = Holds().find(session);
-  if (it != Holds().end() && it->second.id == id) {
-    it->second.capture = std::move(capture);
+  it = FindHold(id);
+  if (it == Holds().end()) {
+    Totals().ended_before_start++;
+    return;
   }
+  it->second.capture = std::move(capture);
+  Totals().started++;
 }
 
 void SessionAttached(content::DevToolsAgentHostClient* root_client,
@@ -97,7 +118,7 @@ void SessionAttached(content::DevToolsAgentHostClient* root_client,
   Holds().insert_or_assign(
       session, VisibleHold{id, contents->GetWeakPtr(), {}});
   content::GetUIThreadTaskRunner({})->PostTask(
-      FROM_HERE, base::BindOnce(&StartHold, session, id));
+      FROM_HERE, base::BindOnce(&StartHold, id));
 }
 
 void SessionDetached(const void* session) {
@@ -110,6 +131,12 @@ void SessionDetached(const void* session) {
       base::DoNothingWithBoundArgs(std::move(node.mapped().capture)));
 }
 
+}
+
+base::DictValue CliVisibleHoldTotals() {
+  return base::DictValue()
+      .Set("started", static_cast<int>(Totals().started))
+      .Set("endedBeforeStart", static_cast<int>(Totals().ended_before_start));
 }
 
 void InstallCliVisibleTabs() {

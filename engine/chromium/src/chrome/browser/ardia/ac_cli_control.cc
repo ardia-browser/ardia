@@ -34,6 +34,7 @@
 #include "chrome/browser/ardia/ac_cli_control_file.h"
 #include "chrome/browser/ardia/ac_cli_owned_tabs.h"
 #include "chrome/browser/ardia/ac_cli_token_policy.h"
+#include "chrome/browser/ardia/ac_cli_visible_tabs.h"
 #include "chrome/browser/ardia/ac_engine.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/lifetime/termination_notification.h"
@@ -175,6 +176,7 @@ class ControlServer {
                                       .Set("given", windowless.given)
                                       .Set("missed", windowless.missed));
     status.Set("tokenCommands", TokenCommandTotals());
+    status.Set("visibleHolds", CliVisibleHoldTotals());
     if (ardiacore::TestFlag("nativeDragRefused")) {
       status.Set("nativeDragsRefused", true);
     }

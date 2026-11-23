@@ -7,7 +7,7 @@ const client = await import("./client.ts");
 client.loadChoice();
 client.setSharing(true, "settings");
 after(() => client.setSharing(false, "settings"));
-const { noteTokenCommands, noteWindowlessPages, takeCliCounts } = await import("./cliCounts.ts");
+const { noteTokenCommands, noteVisibleHolds, noteWindowlessPages, takeCliCounts } = await import("./cliCounts.ts");
 
 const windowless = (counts) => [counts.windowless_pages_given_geometry, counts.windowless_pages_missing_geometry];
 
@@ -57,4 +57,31 @@ test("an expired token counts nothing, and the next valid reading only sets the 
   assert.equal(takeCliCounts().cli_cdp_commands_dom, 0);
   noteTokenCommands({ dom: 118 }, client.consentNow());
   assert.equal(takeCliCounts().cli_cdp_commands_dom, 3);
+});
+
+const holds = (counts) => [counts.cli_visible_holds_started, counts.cli_visible_holds_ended_before_start];
+
+test("the engine's running totals of visible holds turn into counts since the last take, out of order or not", () => {
+  noteVisibleHolds(undefined, client.consentNow());
+  noteVisibleHolds({ started: 0, endedBeforeStart: 0 }, client.consentNow());
+  takeCliCounts();
+  noteVisibleHolds({ started: 4, endedBeforeStart: 1 });
+  noteVisibleHolds({ started: 3, endedBeforeStart: 1 });
+  noteVisibleHolds({ started: 6, endedBeforeStart: 2 });
+  assert.deepEqual(holds(takeCliCounts()), [6, 2]);
+  assert.deepEqual(holds(takeCliCounts()), [0, 0]);
+});
+
+test("visible hold totals read without consent, or in an earlier sharing period, count nothing", () => {
+  noteVisibleHolds({ started: 10, endedBeforeStart: 3 }, null);
+  assert.deepEqual(holds(takeCliCounts()), [0, 0]);
+  const old = client.consentNow();
+  client.setSharing(false, "settings");
+  client.setSharing(true, "settings");
+  noteVisibleHolds({ started: 12, endedBeforeStart: 4 }, old);
+  assert.deepEqual(holds(takeCliCounts()), [0, 0]);
+  noteVisibleHolds({ started: 13, endedBeforeStart: 4 }, client.consentNow());
+  assert.deepEqual(holds(takeCliCounts()), [0, 0]);
+  noteVisibleHolds({ started: 15, endedBeforeStart: 5 }, client.consentNow());
+  assert.deepEqual(holds(takeCliCounts()), [2, 1]);
 });

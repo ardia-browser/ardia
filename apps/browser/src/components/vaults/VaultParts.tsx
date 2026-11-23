@@ -137,7 +137,7 @@ export function CountdownRing({ expiresAt, period, paused = false, size = VAULT_
     <View style={{ width: size, height: size }}>
       <View style={{ position: "absolute", width: size, height: size, borderRadius: capsule(size), borderWidth: stroke, borderColor: ring.track }} />
       <View style={{ ...clip, left: size / 2 }}>
-        <Animated.View style={{ ...half([QUARTER, QUARTER + HALF_SPAN, QUARTER + HALF_SPAN]), left: -size / 2 }} />
+        <Animated.View style={{ ...half([QUARTER, QUARTER + HALF_SPAN, QUARTER + HALF_SPAN]), left: -size / 2, opacity: progress.interpolate({ inputRange: [0, HALF_DRAINED, HALF_DRAINED + DRAINED_EDGE, 1], outputRange: [1, 1, 0, 0] }) }} />
       </View>
       <View style={{ ...clip, left: 0 }}>
         <Animated.View style={{ ...half([QUARTER + HALF_SPAN, QUARTER + HALF_SPAN, QUARTER + 2 * HALF_SPAN]), left: 0 }} />
@@ -146,4 +146,6 @@ export function CountdownRing({ expiresAt, period, paused = false, size = VAULT_
   );
 }
 
+const HALF_DRAINED = 0.5;
+const DRAINED_EDGE = 0.001;
 const COPY_GLYPH = { width: iconButton.m.box, height: iconButton.m.box } as const;

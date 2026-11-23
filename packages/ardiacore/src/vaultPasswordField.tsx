@@ -1,5 +1,5 @@
 import { requireNativeModule, requireNativeViewManager } from "expo-modules-core";
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { NativeSyntheticEvent, ViewProps } from "react-native";
 
 export type VaultPasswordFieldProps = ViewProps & {
@@ -47,6 +47,27 @@ export function useSecretEntry() {
   const [token] = useState(newSecretEntry);
   useEffect(() => () => dropSecretEntry(token), [token]);
   return token;
+}
+
+export function useSecretEntries() {
+  const [held] = useState(() => new Map<string, string>());
+  useEffect(() => () => held.forEach(dropSecretEntry), [held]);
+  return useMemo(
+    () => ({
+      entryFor(id: string) {
+        const known = held.get(id);
+        if (known) return known;
+        const fresh = newSecretEntry();
+        held.set(id, fresh);
+        return fresh;
+      },
+      dropAll() {
+        held.forEach(dropSecretEntry);
+        held.clear();
+      },
+    }),
+    [held],
+  );
 }
 
 export const VaultPasswordField = forwardRef<VaultPasswordFieldHandle, VaultPasswordFieldProps>(function VaultPasswordField({ onEdit, onTab, onFocusChange, ...props }, ref) {

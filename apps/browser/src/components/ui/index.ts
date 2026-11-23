@@ -65,6 +65,7 @@ export {
   drawnSymbol,
   Symbol,
   ThemeSwatch,
+  useSecretEntries,
   useSecretEntry,
   CardNumberField,
   VaultPasswordField,

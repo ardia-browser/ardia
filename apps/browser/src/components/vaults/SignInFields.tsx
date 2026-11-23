@@ -29,9 +29,11 @@ export function FieldStack({ rows, gap = true }: { rows: readonly StackRow[]; ga
 export function OwnedSecretRow({
   fieldId,
   onEntry,
+  heldEntry,
   ...row
-}: Omit<Parameters<typeof SecretRow>[0], "entry"> & { fieldId: string; onEntry: (fieldId: string, entry: string | null) => void }) {
-  const entry = useSecretEntry();
+}: Omit<Parameters<typeof SecretRow>[0], "entry"> & { fieldId: string; onEntry: (fieldId: string, entry: string | null) => void; heldEntry?: string }) {
+  const owned = useSecretEntry();
+  const entry = heldEntry ?? owned;
   const report = useRef(onEntry);
   report.current = onEntry;
   useEffect(() => {

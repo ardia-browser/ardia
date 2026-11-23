@@ -65,6 +65,8 @@ test("asking for a code isn't an error, a wrong code is, and waiting for the bro
   assert.equal(errorAfter(failed("That code isn't right.", { state: { needs: code } }), "Bitwarden", code), "That code isn't right.");
   assert.equal(errorAfter(failed(undefined, { state: { needs: { kind: "password" } } }), "Bitwarden", code), "");
   assert.equal(errorAfter(failed("Opened", { state: { needs: { kind: "approval" } } }), "Bitwarden", null), "");
+  const said = "Enter your two-step login code.";
+  assert.equal(errorAfter(failed(said, { state: { needs: { ...code, message: said } } }), "Bitwarden", null), "", "the step's own line already says it");
   assert.equal(errorAfter(failed("cancelled"), "Bitwarden", code), "");
 });
 

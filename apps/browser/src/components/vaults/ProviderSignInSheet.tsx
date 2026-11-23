@@ -7,7 +7,7 @@ import { fieldNamed, methodsOf, serversOf, titleOf, unlockFieldOf, type Credenti
 import { customServerURL, initialServer, serverValue, type ServerPick } from "../../state/vaults/servers";
 import { canSubmit, errorAfter, needsOf, requestFor, SERVER_REFUSED, submitTitle, waitingLine, type Entries } from "../../state/vaults/signInFlow";
 import { noteVaultSignIn, noteVaultTwoStep } from "../../state/telemetry/vaultCounts";
-import { Button, Segmented, space } from "../ui";
+import { Button, Segmented, space, useSecretEntries } from "../ui";
 import { FieldStack, OwnedSecretRow, WaitingNote, type StackRow } from "./SignInFields";
 import { useNeedsStep } from "./SignInNeeds";
 import { FieldError, PopUpRow, SignInSheet, TextRow, useFocusChain, useSignInRequest } from "./VaultSignInParts";
@@ -33,6 +33,7 @@ export function ProviderSignInSheet({ provider, preview }: { provider: Credentia
   const [values, setValues] = useState<Record<string, string>>(() => preview?.values ?? prefilled(methods, provider.account));
   const [lengths, setLengths] = useState<Record<string, number>>({});
   const tokens = useRef<Record<string, string>>({});
+  const held = useSecretEntries();
   const [phase, setPhase] = useState<SignInPhase>(preview?.phase ?? (provider.needs ? "needs" : "form"));
   const [needs, setNeeds] = useState<VaultNeeds | null>(preview?.needs ?? provider.needs ?? null);
   const [slide, setSlide] = useState<-1 | 1>(1);
@@ -106,6 +107,8 @@ export function ProviderSignInSheet({ provider, preview }: { provider: Credentia
 
   const back = () => {
     void cancelProviderSignIn(provider.id);
+    held.dropAll();
+    setLengths({});
     setSlide(-1);
     setBusy(false);
     setNeeds(null);
@@ -204,6 +207,7 @@ export function ProviderSignInSheet({ provider, preview }: { provider: Credentia
         render: () => (
           <OwnedSecretRow
             fieldId={field.id}
+            heldEntry={held.entryFor(field.id)}
             onEntry={(id, entry) => {
               if (entry) tokens.current[id] = entry;
               else delete tokens.current[id];

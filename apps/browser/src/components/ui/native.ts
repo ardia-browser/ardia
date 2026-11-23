@@ -33,6 +33,6 @@ export { drawnSymbol, Symbol, type SymbolProps } from "./Symbol";
 
 export { CardNumberField, type CardNumberFieldHandle } from "@ardia/ardiacore";
 
-export { SwipeArea, useSecretEntry, VaultPasswordField, VaultTouchID, WebView, type SwipeAreaHandle, type SwipeEvent, type VaultPasswordFieldHandle, type WebViewHandle } from "@ardia/ardiacore";
+export { SwipeArea, useSecretEntries, useSecretEntry, VaultPasswordField, VaultTouchID, WebView, type SwipeAreaHandle, type SwipeEvent, type VaultPasswordFieldHandle, type WebViewHandle } from "@ardia/ardiacore";
 
 export { DIA_SPECTRUM, Meadow, meadowTextStyle, PowerUp, ThemeSwatch, WindowBackdrop, type MeadowIntro, type MeadowIntroEvent, type MeadowTone } from "@ardia/shaders";

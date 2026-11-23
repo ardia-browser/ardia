@@ -19,10 +19,11 @@ test("a custom server is https, or http only on this Mac's loopback, and never c
   }
 });
 
-test("the sheet opens on the server the provider already uses, a preset by id or address, else the custom one with its address", () => {
+test("the sheet opens on the server the provider already uses, a preset by id, title or address, else the custom one with its address", () => {
   assert.deepEqual(initialServer(servers, undefined), { id: "us", url: "" });
   assert.deepEqual(initialServer(servers, "eu"), { id: "eu", url: "" });
   assert.deepEqual(initialServer(servers, "https://vault.bitwarden.eu/"), { id: "eu", url: "" });
+  assert.deepEqual(initialServer(servers, "Bitwarden.com"), { id: "us", url: "" }, "native reports a preset by its title");
   assert.deepEqual(initialServer(servers, "https://vault.example.com"), { id: "selfHosted", url: "https://vault.example.com" });
   assert.deepEqual(initialServer([], "https://vault.example.com"), { id: "", url: "" });
   assert.deepEqual(initialServer(servers.slice(0, 2), "https://vault.example.com"), { id: "us", url: "" });

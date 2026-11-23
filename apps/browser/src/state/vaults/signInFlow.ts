@@ -34,7 +34,8 @@ export function errorAfter(result: VaultSignInResult, name: string, asked: Vault
   if (next && !asked && !result.error) return "";
   if (next && asked && next.kind !== asked.kind && !result.error) return "";
   if (next?.kind === "approval") return "";
-  return signInMessage(result, name);
+  const message = signInMessage(result, name);
+  return next?.message && next.message === message ? "" : message;
 }
 
 export type Entries = { values: Record<string, string>; secretLengths: Record<string, number> };

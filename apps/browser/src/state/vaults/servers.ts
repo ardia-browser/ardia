@@ -38,7 +38,7 @@ export function initialServer(servers: readonly SignInServer[], current: string 
   if (!first) return { id: "", url: "" };
   const now = current?.trim() ?? "";
   if (!now) return { id: first.id, url: "" };
-  const preset = servers.find((s) => s.id === now || (s.url && comparable(s.url) === comparable(now)));
+  const preset = servers.find((s) => !s.custom && (s.id === now || s.title.toLowerCase() === now.toLowerCase() || (s.url && comparable(s.url) === comparable(now))));
   if (preset) return { id: preset.id, url: "" };
   const custom = servers.find((s) => s.custom);
   return custom && hostOf(customServerURL(now) ?? "") ? { id: custom.id, url: now } : { id: first.id, url: "" };

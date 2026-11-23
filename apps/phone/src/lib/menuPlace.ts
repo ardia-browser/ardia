@@ -45,9 +45,13 @@ export function menuOnTrigger(anchor: Rect, host: Rect, room: Rect, width: numbe
   const x = clamp(trailing ? anchor.x + anchor.width - inset - width : anchor.x + inset, roomLeft, roomRight - width);
   const belowTop = clearAnchor ? anchorBottom : anchor.y;
   const aboveBottom = clearAnchor ? anchor.y : anchorBottom;
-  const below = keepBelow ?? (belowTop + height <= roomBottom || aboveBottom - height < roomTop);
-  const y = clamp(below ? belowTop : aboveBottom - height, roomTop, roomBottom - height);
-  return { left: x - host.x, top: y - host.y, height, origin: `${trailing ? "right" : "left"} ${below ? "top" : "bottom"}` };
+  const spaceBelow = roomBottom - belowTop;
+  const spaceAbove = aboveBottom - roomTop;
+  const fitsNeither = height > spaceBelow && height > spaceAbove;
+  const below = keepBelow ?? (clearAnchor && fitsNeither ? spaceBelow >= spaceAbove : height <= spaceBelow || height > spaceAbove);
+  const fitted = clearAnchor ? Math.min(height, below ? spaceBelow : spaceAbove) : height;
+  const y = clamp(below ? belowTop : aboveBottom - fitted, roomTop, roomBottom - fitted);
+  return { left: x - host.x, top: y - host.y, height: fitted, origin: `${trailing ? "right" : "left"} ${below ? "top" : "bottom"}` };
 }
 
 export const MENU_SMALL_CONTROL = 64;

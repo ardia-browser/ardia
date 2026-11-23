@@ -131,7 +131,8 @@ function MaterialMenu({ items, place, placer, onDismiss, origin = "top", shown =
     action();
   };
   const firstEnabled = page ? -1 : rows.findIndex((item) => typeof item === "object" && !("heading" in item) && !item.disabled);
-  const groups = materialMenuGroups(rows);
+  const rowGroups = materialMenuGroups(rows);
+  const groups = page && rowGroups.length === 0 ? [[]] : rowGroups;
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents={revealed && !leaving ? "auto" : "none"} collapsable={false} accessibilityElementsHidden={!revealed || leaving} importantForAccessibility={revealed && !leaving ? "auto" : "no-hide-descendants"}>
       <Pressable testID="drawnMenuScrim" {...SCRIM_ACCESSIBILITY} style={[StyleSheet.absoluteFill, { backgroundColor: ink.clear }]} onPress={() => onDismiss()} />

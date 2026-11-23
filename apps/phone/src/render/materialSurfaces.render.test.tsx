@@ -187,6 +187,19 @@ onAndroid("in dark, drawn menus sit on surfaceContainerHighest, a tone above the
   insets.mockRestore();
 });
 
+onAndroid("a Material submenu with nothing but dividers still shows its Back row, which returns to the first page", () => {
+  const insets = jest.spyOn(safeArea, "useSafeAreaInsets").mockReturnValue({ top: 0, bottom: 0, left: 0, right: 0 });
+  const items = [{ label: "More", children: ["divider" as const] }, { label: "Stay", onPress: () => undefined }];
+  const root = material(<Menu items={items} placer={pointPlacer({ x: 40, y: 120 }, { width: 360, height: 800 }, { top: 0, bottom: 0, left: 0, right: 0 }, 112)} onDismiss={() => undefined} />);
+  const press = (label: string) => act(() => root.root.findAll((node) => node.props.accessibilityLabel === label && typeof node.props.onPress === "function")[0]!.props.onPress());
+  press("More");
+  expect(root.root.findAll((node) => node.props.testID === "materialMenuGroup" && typeof node.type === "string")).toHaveLength(1);
+  press("Back, More");
+  expect(root.root.findAll((node) => node.props.accessibilityLabel === "Stay" && typeof node.props.onPress === "function").length).toBeGreaterThan(0);
+  unmount(root);
+  insets.mockRestore();
+});
+
 onAndroid("a fixed trailing menu respects the right safe inset", async () => {
   const overlay = require("../components/ui/Overlay");
   const insets = jest.spyOn(safeArea, "useSafeAreaInsets").mockReturnValue({ top: 0, bottom: 0, left: 0, right: 40 });

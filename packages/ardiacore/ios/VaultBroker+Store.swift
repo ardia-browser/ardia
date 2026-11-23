@@ -34,7 +34,10 @@ extension VaultBroker {
       return await pullFromCloud(id)
     }
     guard fromHere, cloudAccepts(id) != nil else { return }
-    _ = await VaultCloud.perform { VaultCache.reconcile(id, account: nil) }
+    _ = await VaultCloud.perform {
+      VaultCacheWriter.shared.settle(id)
+      return VaultCache.reconcile(id, account: nil)
+    }
   }
 
   var lastSyncedAt: Double? {
@@ -163,7 +166,7 @@ extension VaultBroker {
     guard cachedItems[id] != nil else { return }
     snapshotAccounts[id] = snapshotAccounts[id] ?? cacheAccount(states[id])
     guard let snapshot = memorySnapshot(id) else { return }
-    VaultCache.save(id, snapshot, toCloud: toCloud)
+    VaultCacheWriter.shared.save(id, snapshot, toCloud: toCloud)
   }
 
   func restoreFromDisk(_ id: String) {
@@ -174,7 +177,10 @@ extension VaultBroker {
   func pullFromCloud(_ id: String) async {
     let ticket = epochs.ticket(id)
     guard VaultCloud.shared.isOn, let account = cloudAccepts(id) else { return }
-    let pulled = await VaultCloud.perform { VaultCache.reconcile(id, account: account).adopted }
+    let pulled = await VaultCloud.perform {
+      VaultCacheWriter.shared.settle(id)
+      return VaultCache.reconcile(id, account: account).adopted
+    }
     guard let pulled, epochs.isCurrent(ticket), !gate.closed.contains(id), storeOpen || sessions.session(id) != nil,
       cloudAccepts(id) == account
     else { return }
@@ -240,6 +246,7 @@ extension VaultBroker {
   func forgetSnapshot(_ id: String, everywhere: Bool = false) {
     dropItems(id, announce: true)
     snapshotAccounts[id] = nil
+    VaultCacheWriter.shared.forget(id)
     VaultCache.delete(id, fromCloud: everywhere)
   }
 }

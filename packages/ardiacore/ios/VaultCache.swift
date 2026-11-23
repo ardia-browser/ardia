@@ -104,3 +104,7 @@ enum VaultCache {
 
   static func markExcludedFromBackup(_ url: URL) { VaultSealedFolder.excludeFromBackup(url) }
 }
+
+extension VaultCacheWriter {
+  static let shared = VaultCacheWriter { VaultCache.save($0, $1, toCloud: $2) }
+}

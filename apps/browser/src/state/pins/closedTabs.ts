@@ -2,7 +2,7 @@ import type { BrowserState } from "../browser/store";
 import { ancestorIds, closedGroupInfo, descendantIds, innermostGroupOf, insertAll, nestGroups, orderSections, placeGroups, rejoinGroups, syncGroupOrder } from "../groups/groups";
 import { inPinnedContainer, newId, snapshotTab, viewTabIds } from "../browser/model";
 import { pendingRestore, restoreId } from "../tabs/adoptIds";
-import { activated, apply, removeTabs, standingSuccessor, successorKey, withNewTab, type UserClose } from "../tabs/tabs";
+import { activated, apply, removeTabs, resolvedSuccessor, successorKey, withNewTab, type UserClose } from "../tabs/tabs";
 import { groupLabel, withGroup } from "./tabGrouping";
 import type { BrowserWindow, ClosedGroup, ClosedTab, ClosedWindow, NestedGroupSnapshot, Tab, TabGroup } from "../browser/types";
 import { isAsleep } from "../tabs/pageSession";
@@ -67,7 +67,7 @@ function showAboveGroup(before: BrowserState, s: BrowserState, g: TabGroup, user
   const w = s.windows[g.windowId];
   const was = before.windows[g.windowId]?.activeTabIds[g.profileId];
   if (!w || !was || !g.tabIds.includes(was)) return s;
-  const chosen = standingSuccessor(before, userClose, w.id, g.profileId, new Set(g.tabIds));
+  const chosen = resolvedSuccessor(before, userClose, w.id, g.profileId, was, new Set(g.tabIds))?.id;
   if (chosen && w.activeTabIds[g.profileId] === chosen) return s;
   const order = viewTabIds(before, g.windowId, g.profileId).filter((id) => !inPinnedContainer(before, id));
   const at = order.indexOf(g.tabIds[0]!);

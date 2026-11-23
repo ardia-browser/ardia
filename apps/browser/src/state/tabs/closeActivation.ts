@@ -135,5 +135,7 @@ export function userClose(ids: string[], { consent }: ByUser, options: CloseOpti
   const successors = pickSuccessors(useBrowser.getState(), ids, options.keepTopApps);
   const noted = (pick: Successor) => void (pick.shown && noteCloseActivation(consent, pick.side, pick.beside));
   const shows = (s: BrowserState, windowId: string, profileId: string, id: string) => visibleRows(s, windowId, profileId).some((row) => row.ids.includes(id));
-  return { ...options, userClose: { successors, noted, shows } };
+  const fallback = (s: BrowserState, windowId: string, profileId: string, activeId: string, removing: ReadonlySet<string>, side: Side) =>
+    successorFor(s, windowId, profileId, activeId, removing, [...removing], options.keepTopApps ?? s.settings.keepTopAppsRunning, side)?.id ?? undefined;
+  return { ...options, userClose: { successors, noted, shows, fallback } };
 }

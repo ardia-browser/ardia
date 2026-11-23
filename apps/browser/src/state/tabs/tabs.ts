@@ -39,23 +39,42 @@ export type NewTabOptions = {
 
 
 export type Successor = { id: string | null; side: "above" | "below"; beside: boolean; shown: boolean };
-export type UserClose = { successors: ReadonlyMap<string, Successor>; noted: (pick: Successor) => void; shows: (s: BrowserState, windowId: string, profileId: string, id: string) => boolean };
+export type UserClose = {
+  successors: ReadonlyMap<string, Successor>;
+  noted: (pick: Successor) => void;
+  shows: (s: BrowserState, windowId: string, profileId: string, id: string) => boolean;
+  fallback: (s: BrowserState, windowId: string, profileId: string, activeId: string, removing: ReadonlySet<string>, side: Successor["side"]) => string | undefined;
+};
 export type CloseOptions = { lastClosesWindow?: boolean; keepTopApps?: boolean; unrecorded?: boolean; userClose?: UserClose };
 
 export const successorKey = (windowId: string, profileId: string) => `${windowId}|${profileId}`;
 
-export function standingSuccessor(s: BrowserState, close: UserClose | undefined, windowId: string, profileId: string, removing: ReadonlySet<string>): string | undefined {
+function standingSuccessor(s: BrowserState, close: UserClose | undefined, windowId: string, profileId: string, removing: ReadonlySet<string>): string | undefined {
   const id = close?.successors.get(successorKey(windowId, profileId))?.id;
   const t = id && !removing.has(id) ? s.tabs[id] : undefined;
   return t && t.windowId === windowId && t.profileId === profileId && (!inPinnedContainer(s, t.id) || hasPage(t)) && close!.shows(s, windowId, profileId, t.id) ? t.id : undefined;
 }
 
-function chosenSuccessor(s: BrowserState, close: UserClose | undefined, w: BrowserWindow, profileId: string, removing: ReadonlySet<string>): string | undefined {
-  const pick = close?.successors.get(successorKey(w.id, profileId));
+export function resolvedSuccessor(
+  s: BrowserState,
+  close: UserClose | undefined,
+  windowId: string,
+  profileId: string,
+  activeId: string,
+  removing: ReadonlySet<string>,
+): { pick: Successor; id: string | undefined; stood: boolean } | undefined {
+  const pick = close?.successors.get(successorKey(windowId, profileId));
   if (!pick) return undefined;
-  const standing = standingSuccessor(s, close, w.id, profileId, removing);
-  close!.noted({ ...pick, beside: pick.beside && !!standing });
-  return standing;
+  const standing = standingSuccessor(s, close, windowId, profileId, removing);
+  if (standing) return { pick, id: standing, stood: true };
+  return { pick, id: close!.fallback(s, windowId, profileId, activeId, removing, pick.side), stood: false };
+}
+
+function chosenSuccessor(s: BrowserState, close: UserClose | undefined, w: BrowserWindow, profileId: string, activeId: string, removing: ReadonlySet<string>): string | undefined {
+  const resolved = resolvedSuccessor(s, close, w.id, profileId, activeId, removing);
+  if (!resolved) return undefined;
+  close!.noted({ ...resolved.pick, beside: resolved.pick.beside && resolved.stood });
+  return resolved.id;
 }
 type CloseKind = "close" | "unload" | "removePin";
 type CloseIntent = { kind: CloseKind; ids: string[] };
@@ -176,7 +195,7 @@ export function removeTabs(s: BrowserState, ids: string[], record: boolean, clos
       if (!gone.has(activeId)) continue;
       const before = w.tabIds.filter((id) => s.tabs[id]?.profileId === profileId);
       const left = withoutTopApps(s, before.filter((id) => !gone.has(id)));
-      const next = chosenSuccessor(s, close, w, profileId, gone) ?? otherPane(s, activeId, gone) ?? closeSuccessor(s, activeId, before, left);
+      const next = chosenSuccessor(s, close, w, profileId, activeId, gone) ?? otherPane(s, activeId, gone) ?? closeSuccessor(s, activeId, before, left);
       if (next) activeTabIds[profileId] = next;
       else delete activeTabIds[profileId];
     }
@@ -262,7 +281,7 @@ function unloadPinnedTabs(s: BrowserState, requested: string[], keepTopApps = fa
       if (!gone.has(activeId)) continue;
       const shown = profileId === w.profileId;
       if (shown && leaving.has(activeId) && runningInFront(activeId)) noteTopAppsKeptRunning(1);
-      const chosen = chosenSuccessor(s, close, w, profileId, closing);
+      const chosen = chosenSuccessor(s, close, w, profileId, activeId, closing);
       const nextRow = chosen ?? (withTopApp(activeId) ? undefined : (otherPane(s, activeId, closing) ?? lastLivePinnedTab(s, w, activeId, closing, true)));
       let replacement = nextRow ?? lastRegularTab(s, w, activeId, closing) ?? lastLivePinnedTab(s, w, activeId, closing, keepTopApps);
       if (!replacement) [next, replacement] = withNewTab(next, w.id, { profileId, background: !shown });

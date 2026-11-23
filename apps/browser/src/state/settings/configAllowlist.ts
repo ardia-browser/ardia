@@ -13,12 +13,14 @@ export const CONFIG_SETTING_KEYS: readonly SettingKey[] = [
   "bookmarksImportDismissed", "appearance", "addressBar", "compactToolbar", "addressBarButtons", "borderlessMode", "tabCornerRadius", "minimalismMode", "pageFrame", "pageFrameZeroInFullScreen", "pageFrameZeroWhenTabsHidden", "commandBarPlacement", "spacesFollowAppearance", "adaptTextToColor",
   "showProfileDots", "compactCliPill", "shortcuts", "mouseShortcuts", "openLinksInLittleArdia", "littleArdiaOpensNewTabLinks", "littleArdiaShortcutFromAnyApp", "littleArdiaSize",
   "omniboxProviders", "launchActions", "commandBarStart", "pressMotion", "folderStyle", "liveFolderIcon", "readerTextSize", "readerFont",
+  "vaultSuggestOnFocus", "vaultSuggestLogins", "vaultSuggestCodes", "vaultSuggestUsernames", "vaultSuggestNewPasswords", "vaultSuggestGenerated", "vaultMenuGlass", "vaultSaveOffer", "vaultAutoSave", "vaultContextGenerate", "vaultSaveTarget", "vaultPasskeySource",
 ];
 
 export const CONFIG_EXCLUDED_KEYS: readonly SettingKey[] = [
   "customSearchUrl", "newTabUrl", "customSearchEngines", "extensionSearchEngines", "allowJavaScriptFromAppleEvents", "cliControl", "defaultProfileId",
   "engineMode", "pageEngine", "websiteEngines", "protectedVideoInWebKit", "offerWebKitForProtectedVideo", "engineSwitchKeepsPage",
   "engineSwitchAsksAboutUnsavedWork", "engineSwitchCarriesSiteData", "webKitFraudWarnings",
+  "vaultAskBeforeFilling", "vaultIdleLockMinutes", "vaultICloudSync", "vaultLockOnQuit", "vaultLockOnScreenLock", "vaultPasskeyExtensions", "vaultTouchID", "vaultKeepGenerated",
 ];
 
 const ALLOWED: ReadonlySet<string> = new Set(CONFIG_SETTING_KEYS);

@@ -20,34 +20,22 @@ import { noteAutoHideTabsChosen } from "../telemetry/autoHideTabsChoices";
 import { READER_FONTS, READER_SIZE_NAMES } from "../reader/tokens";
 import { noteMinimalismToggled } from "../telemetry/minimalismCounts";
 import { checkedSettingsPatch, keptSettingsPatch } from "./settingsPatch";
+import { flag, fraction, isWidth, oneOf, shaped, STRING_LIST, SYNCED, text, width, WIDTH } from "./settingSpecs";
+import { VAULT_SETTING_SPECS } from "./vaultSettings";
+
+export type { SettingSpec } from "./settingSpecs";
 
 export const DEFAULT_PROFILE_ID = "default";
 
-export type SettingSpec<T> = { default: T; valid: (value: unknown) => boolean; synced: boolean; schema: JsonSchema; values?: readonly T[] };
-
-const SYNCED = true;
-
 const isPlain = (v: unknown): v is Record<string, unknown> => isFields(v) && [Object.prototype, null].includes(Object.getPrototypeOf(v));
 const isRecordOf = (v: unknown, item: (x: unknown) => boolean) => isPlain(v) && Object.values(v).every(item);
-const isWidth = (v: unknown) => typeof v === "number" && Number.isFinite(v) && v > 0;
 const hasStrings = (v: unknown, keys: readonly string[]) => isFields(v) && keys.every((k) => isString(v[k]));
 
-const STRING_LIST: JsonSchema = { type: "array", items: { type: "string" } };
-const WIDTH: JsonSchema = { type: "number", exclusiveMinimum: 0 };
 const engineRecords = (keys: string[]): JsonSchema => ({
   type: "array",
   items: { type: "object", properties: Object.fromEntries(keys.map((k) => [k, { type: "string" }])), required: keys },
 });
 const recordOf = (item: JsonSchema): JsonSchema => ({ type: "object", additionalProperties: item });
-
-const flag = (d: boolean, synced = false): SettingSpec<boolean> => ({ default: d, valid: (v) => typeof v === "boolean", synced, schema: { type: "boolean" } });
-const text = (d: string, synced = false): SettingSpec<string> => ({ default: d, valid: isString, synced, schema: { type: "string" } });
-const width = (d: number): SettingSpec<number> => ({ default: d, valid: isWidth, synced: false, schema: WIDTH });
-const fraction = (d: number, synced = false): SettingSpec<number> => ({ default: d, valid: (v) => typeof v === "number" && v >= 0 && v <= 1, synced, schema: { type: "number", minimum: 0, maximum: 1 } });
-const oneOf = <const V extends readonly string[]>(values: V, d: V[number], synced = false): SettingSpec<V[number]> & { values: V } => ({
-  default: d, values, valid: (v) => values.includes(v as string), synced, schema: { type: "string", enum: values },
-});
-const shaped = <T,>(d: T, valid: (v: unknown) => boolean, schema: JsonSchema, synced = false): SettingSpec<T> => ({ default: d, valid, synced, schema });
 
 export const SETTING_SPECS = {
   warnBeforeQuitting: flag(false, SYNCED),
@@ -179,6 +167,7 @@ export const SETTING_SPECS = {
   omniboxProviders: shaped<ProviderEntry[]>([], isProviderEntryList, PROVIDERS_SCHEMA),
   readerTextSize: oneOf(READER_SIZE_NAMES, "medium", SYNCED),
   readerFont: oneOf(READER_FONTS, "serif", SYNCED),
+  ...VAULT_SETTING_SPECS,
 };
 
 type Specs = typeof SETTING_SPECS;

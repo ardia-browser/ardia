@@ -54,3 +54,11 @@ export function useAllLoaded(needed: Needed[]): boolean {
 }
 
 export const loadAll = (needed: Needed[]) => Promise.allSettled(needed.map(([r, args]) => load(r, args as never[])));
+
+export function onResourceChanged<A extends unknown[], T>(r: Resource<A, T>, listener: () => void): () => void {
+  const prefix = JSON.stringify([r.name]).slice(0, -1);
+  const ours = (key: string) => key.startsWith(`${prefix},`) || key === `${prefix}]`;
+  return useCache.subscribe((s, prev) => {
+    for (const key of Object.keys(s)) if (ours(key) && s[key] !== prev[key]) return listener();
+  });
+}

@@ -70,7 +70,7 @@ export const noteOfferToSaveRestore = (restored: boolean, consent?: ConsentToken
 
 export const notePanelHint = (step: PanelHintStep) => bump(HINT_FIELDS[step]);
 
-export const notePasswordManagerChosen = (kind: PasswordManagerKind) => bump(CHOICE_FIELDS[kind]);
+export const notePasswordManagerChosen = (kind: PasswordManagerKind, consent?: ConsentToken | null) => bump(CHOICE_FIELDS[kind], consent);
 
 export function takePasswordManagerCounts(): Record<string, number> {
   const taken = Object.fromEntries(FIELDS.map((field) => [field, counts[field] ?? 0]));

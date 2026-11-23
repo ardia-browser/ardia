@@ -6,6 +6,7 @@ import type { ExternalAppRequest } from "../../platform/siteSettings";
 import { currentEngineProfile, currentTab } from "../browser/current";
 import { noteExternalApp } from "../telemetry/externalAppCounts";
 import { noteExternalAppRequest } from "../telemetry/track";
+import { vaultClaimsPasswordPrompt } from "../vaults/saveOffer";
 
 async function shouldPromptForPopups(profile: string, origin: string): Promise<boolean> {
   try {
@@ -30,7 +31,7 @@ export const passwordPromptId = (prompt: PasswordPrompt) => passwordPromptIds.ge
 
 export function showPasswordPrompt(tabId: string, prompt: PasswordPrompt) {
   if (prompt.state !== "saved") passwordPromptIds.set(prompt, `pw${++passwordPromptSerial}`);
-  patchPage(tabId, { passwordPrompt: prompt.state === "saved" ? null : prompt });
+  patchPage(tabId, { passwordPrompt: prompt.state === "saved" || vaultClaimsPasswordPrompt(tabId, prompt) ? null : prompt });
 }
 
 export function showAutofillPrompt(tabId: string, prompt: AutofillPrompt | null, id: number) {

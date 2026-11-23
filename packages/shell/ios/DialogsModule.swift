@@ -30,11 +30,13 @@ public class DialogsModule: Module {
       alert.addButton(withTitle: options.confirmTitle)
       alert.addButton(withTitle: options.cancelTitle)
       if options.destructive { alert.buttons.first?.hasDestructiveAction = true }
+      let escapeMonitor = options.cancelIsDefault ? DialogsModule.makeCancelDefault(alert) : nil
       if let suppression = options.suppression {
         alert.showsSuppressionButton = true
         alert.suppressionButton?.title = suppression
       }
       let answer = { (response: NSApplication.ModalResponse) in
+        if let escapeMonitor { NSEvent.removeMonitor(escapeMonitor) }
         DialogsModule.shownOnly.removeAll { $0.alert === alert }
         promise.resolve([
           "confirmed": response == .alertFirstButtonReturn,
@@ -94,6 +96,20 @@ public class DialogsModule: Module {
       if let current { panel.directoryURL = URL(fileURLWithPath: current, isDirectory: true) }
       panel.begin { response in promise.resolve(response == .OK ? panel.url?.path : nil) }
     }.runOnQueue(.main)
+  }
+
+  static let escapeKeyCode: UInt16 = 53
+
+  static func makeCancelDefault(_ alert: NSAlert) -> Any? {
+    guard alert.buttons.count == 2 else { return nil }
+    let cancel = alert.buttons[1]
+    alert.buttons[0].keyEquivalent = ""
+    cancel.keyEquivalent = "\r"
+    return NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak alert, weak cancel] event in
+      guard event.keyCode == DialogsModule.escapeKeyCode, let window = alert?.window, event.window === window else { return event }
+      cancel?.performClick(nil)
+      return nil
+    }
   }
 
   static func alert(title: String, message: String) -> NSAlert {

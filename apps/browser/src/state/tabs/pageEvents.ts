@@ -8,6 +8,7 @@ import { revealToolbar } from "../windows/toolbarAutoHide";
 import { noteCaptureIndicatorCleared, noteMediaCardCleared } from "../telemetry/tabSleepCounts";
 import { setNowPlaying, useMedia } from "../media/media";
 import { patchPage, pageOf, setPopover } from "./pageState";
+import { forgetVaultPage } from "../vaults/menu";
 import { isQuitting } from "../app/quit";
 import { closeTabNow } from "./actions";
 import { closedByUnload } from "../profiles/profileUnloading";
@@ -19,6 +20,7 @@ export function leftPage(tabId: string, url: string, previousPage: string, engin
   dismissPermissions(tabId);
   setPopover(tabId, null);
   setPageSelection(tabId, null);
+  forgetVaultPage(tabId);
   clearEngineOffer(tabId);
   forgetVerificationCodes(tabId);
   patchPage(tabId, { popups: [], passwordPrompt: null, crashed: null, status: "" });

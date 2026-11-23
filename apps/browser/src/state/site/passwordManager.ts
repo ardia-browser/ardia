@@ -22,13 +22,17 @@ import {
   profilesSharingData,
   regularProfileId,
   storedPasswordManager,
+  type ArdiaSource,
+  type FieldProviderFill,
   type ManagerPlugin,
   type PasswordManagerChoice,
 } from "./passwordManagerChoice";
 import { closeVerificationCodePrompts, offerVerificationCode } from "./verificationCodes";
+import { modesOf, useFieldProviderModes } from "./fieldProviderModes";
 import { followMode, forgetHeldOffOutside, forgetPendingOfferToSave, offerToSaveHeldOffSomewhere, passwordAutofill, pendingOfferToSave, startOfferToSave, watchPendingOfferToSave, writeOfferToSave } from "./offerToSave";
 
 export { forgetPendingOfferToSave, passwordAutofill };
+export { fieldProviderFillOfTab, useFieldProviderFillOfTab } from "./fieldProviderModes";
 export { profilesSharingData, type FieldProviderHint, type FieldProviderOpened, type ManagerPlugin, type PasswordManagerChoice, type VerificationCodeFound };
 
 
@@ -83,9 +87,9 @@ export const neverChosenCount = () => neverChosenProfiles(browser()).length;
 
 let engage = () => {};
 
-export function choosePasswordManager(profileId: string, manager: PasswordManagerChoice) {
+export function choosePasswordManager(profileId: string, manager: PasswordManagerChoice, consent?: ConsentToken | null) {
   const s = browser();
-  notePasswordManagerChosen(choiceKind(manager));
+  notePasswordManagerChosen(choiceKind(manager), consent);
   engage();
   for (const id of profilesSharingData(s, profileId)) s.updateProfile(id, { passwordManager: manager });
 }
@@ -95,7 +99,7 @@ const choseAwayFromArdia = (s: BrowserState) => Object.values(s.profiles).some((
 let heldOffAtStart: boolean | null = null;
 
 export function passwordManagerInUse(): boolean {
-  if (currentManagerPlugins().length > 0 || choseAwayFromArdia(browser())) return true;
+  if (ardiaSource || currentManagerPlugins().length > 0 || choseAwayFromArdia(browser())) return true;
   heldOffAtStart ??= offerToSaveHeldOffSomewhere();
   return heldOffAtStart;
 }
@@ -190,8 +194,19 @@ function want(key: string) {
   return wanted;
 }
 
+let ardiaSource: ArdiaSource | undefined;
+let resync: (() => void) | null = null;
+
+export function connectArdiaSource(source: ArdiaSource) {
+  ardiaSource = source;
+  engage();
+  resync?.();
+}
+
+export const refreshFieldProviders = () => resync?.();
+
 function pushProviders(plugins: readonly ManagerPlugin[], consent: ConsentToken | null, again = false): Promise<void> {
-  const { providers, key } = fieldProviderSet(browser(), plugins);
+  const { providers, key } = fieldProviderSet(browser(), plugins, ardiaSource);
   if (!again && key === pushed && inFlight === null) return Promise.resolve();
   const target = want(key);
   if (!again && inFlight === key) return target.confirmed;
@@ -211,6 +226,7 @@ function pushProviders(plugins: readonly ManagerPlugin[], consent: ConsentToken 
     pushed = key;
     attempts = 0;
     clearTimeout(retry);
+    useFieldProviderModes.setState({ modes: modesOf(providers) });
     target.confirm();
   };
   void setFieldProviders(sent, providers).then(
@@ -340,6 +356,7 @@ export function startPasswordManager() {
   };
   engage = () => begin(true);
 
+  resync = syncModes;
   usePlugins.subscribe((s, prev) => {
     const changed = s.listings !== prev.listings || s.records !== prev.records || s.order !== prev.order;
     if (changed) keepRetired();

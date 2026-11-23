@@ -5,6 +5,7 @@ const { SETTING_KEYS, SETTING_SPECS } = await import("../settings/settings.ts");
 const { CONFIG_SETTING_KEYS, CONFIG_EXCLUDED_KEYS } = await import("../settings/configAllowlist.ts");
 const { configSchema, schemaFiles } = await import("./configSchema.ts");
 const { shortcutCatalog } = await import("./configShortcuts.ts");
+const { GUARDED_VAULT_SETTINGS } = await import("../vaults/settingsGuard.ts");
 const { parseThemeFile, themeSchema } = await import("../../lib/themeFile.ts");
 const { colorRoles } = await import("../../components/ui/tokens.ts");
 
@@ -20,10 +21,17 @@ test("every setting is either on the config allowlist or deliberately left out, 
   for (const key of SETTING_KEYS) assert.ok(allowed.has(key) !== excluded.has(key), `${key} must be in exactly one list`);
   assert.equal(allowed.size + excluded.size, SETTING_KEYS.length, "no stale names in either list");
   assert.deepEqual([...excluded].sort(), [
-    "allowJavaScriptFromAppleEvents", "cliControl", "customSearchEngines", "customSearchUrl", "defaultProfileId", "engineMode", "engineSwitchAsksAboutUnsavedWork",
-    "engineSwitchCarriesSiteData", "engineSwitchKeepsPage", "extensionSearchEngines", "newTabUrl", "offerWebKitForProtectedVideo", "pageEngine",
-    "protectedVideoInWebKit", "webKitFraudWarnings", "websiteEngines",
+    "allowJavaScriptFromAppleEvents", "cliControl", "customSearchEngines", "customSearchUrl", "defaultProfileId", "engineMode",
+    "engineSwitchAsksAboutUnsavedWork", "engineSwitchCarriesSiteData", "engineSwitchKeepsPage", "extensionSearchEngines", "newTabUrl",
+    "offerWebKitForProtectedVideo", "pageEngine", "protectedVideoInWebKit", "vaultAskBeforeFilling", "vaultICloudSync", "vaultIdleLockMinutes",
+    "vaultKeepGenerated", "vaultLockOnQuit", "vaultLockOnScreenLock", "vaultPasskeyExtensions", "vaultTouchID", "webKitFraudWarnings",
+    "websiteEngines",
   ]);
+});
+
+test("config files can't weaken the vault locks the owner check guards, keep unlock keys for Touch ID, or keep generated passwords longer", () => {
+  const excluded = new Set(CONFIG_EXCLUDED_KEYS);
+  for (const key of [...GUARDED_VAULT_SETTINGS, "vaultTouchID", "vaultKeepGenerated"]) assert.ok(excluded.has(key), `${key} must stay out of config.json`);
 });
 
 test("each setting's schema and its validator agree on its default and on every sample", () => {

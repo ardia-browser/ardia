@@ -21,6 +21,7 @@ import { FrozenPage } from "./FrozenPage";
 import { setCardAnchor, setUrlAnchor, useAddressBarInSidebar, useCardCaptionRoom, useMinimalism, usePageFrameInset, useTabLayout, watchToolbarExtensionsWidth, onFullScreenLeft, onInterfaceScaleChange, windowRootShape } from "../../state/windows/layout";
 import { startSelectionTools } from "../../state/site/selection";
 import { startPasswordManager } from "../../state/site/passwordManager";
+import { startArdiaChoice } from "../../state/site/ardiaChoice";
 import { startMedia } from "../../state/media/pip";
 import { urlFieldRight } from "../toolbar/Toolbar";
 import { WindowToolbar } from "../toolbar/WindowToolbar";
@@ -71,6 +72,7 @@ export function ContentCard() {
   useEffect(startMedia, []);
   useEffect(startSelectionTools, []);
   useEffect(startPasswordManager, []);
+  useEffect(startArdiaChoice, []);
   useEffect(startPeeks, []);
   const peekId = usePeekOpenedFrom(activeId ?? "");
   const peekFullscreen = !!peekId && fullscreenTab === peekId;

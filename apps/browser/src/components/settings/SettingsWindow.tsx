@@ -22,7 +22,7 @@ import { ShortcutsPane } from "./panes/Shortcuts";
 import { TabsPane } from "./panes/Tabs";
 import { useSettingsSheet } from "../../state/settings/sheet";
 import { SettingsConsentSheet } from "../plugins/SettingsConsentSheet";
-import { consumeSettingsOpenAt, currentSettingsOpenAt, goToSettingsPane, SETTINGS_WINDOW_ID, settingsBack, settingsForward, useSettingsNav, type SettingsPane, type SettingsPlace } from "../../state/settings/settingsWindows";
+import { claimSettingsOpenAt, goToSettingsPane, SETTINGS_WINDOW_ID, settingsBack, settingsForward, useSettingsNav, type SettingsPane, type SettingsPlace } from "../../state/settings/settingsWindows";
 import { closeProfileIconPickerIn } from "../../state/profiles/iconPicker";
 import { ProfileIconPicker } from "../profiles/ProfileIconPicker";
 import { settingsProfileFor } from "../../state/extensions/store";
@@ -50,7 +50,7 @@ const REVEAL_MARGIN = 16;
 const shownKey = (s: SettingsPlace) => `${s.pane}:${s.profileId ?? ""}:${s.detail ?? ""}`;
 const pageKey = (s: SettingsPlace) => (s.pane === "profiles" && !s.detail ? "profiles::" : shownKey(s));
 
-function useShownPane(): SettingsPlace | null {
+function useShownPane(openedAt: number | null): SettingsPlace | null {
   const nav = useSettingsNav();
   const target = { pane: nav.pane, profileId: nav.profileId, detail: nav.detail };
   const key = shownKey(target);
@@ -61,8 +61,8 @@ function useShownPane(): SettingsPlace | null {
   useEffect(() => {
     if (ready) return setLast(target);
     void preparePane(target.pane, target.profileId);
-    const openedAt = last ? null : currentSettingsOpenAt();
-    const wait = openedAt ? Math.max(0, HOLD_CAP_MS - (Date.now() - openedAt)) : HOLD_CAP_MS;
+    const since = last ? null : openedAt;
+    const wait = since ? Math.max(0, HOLD_CAP_MS - (Date.now() - since)) : HOLD_CAP_MS;
     const timer = setTimeout(() => setExpired(key), wait);
     return () => clearTimeout(timer);
   }, [key, ready]);
@@ -89,7 +89,8 @@ export function SettingsWindow() {
   const look = useSettingsColors();
   useWindowChrome();
   const nav = useSettingsNav();
-  const shown = useShownPane();
+  const [openedAt] = useState(claimSettingsOpenAt);
+  const shown = useShownPane(openedAt);
   usePrefetchAllPanes(shown?.pane ?? null);
   const profileName = useProfile(shown?.profileId, (p) => p?.name);
   const pluginTitle = usePluginTitle(shown?.pane === "plugins" ? shown.detail : null);
@@ -98,12 +99,11 @@ export function SettingsWindow() {
   const trackedOpen = useRef(false);
   useEffect(() => {
     if (!shown) return;
-    const openedAt = trackedOpen.current ? null : consumeSettingsOpenAt();
+    const since = trackedOpen.current ? null : openedAt;
     trackedOpen.current = true;
-    trackSettingsSection(shown.pane, openedAt ? Date.now() - openedAt : undefined);
+    trackSettingsSection(shown.pane, since ? Date.now() - since : undefined);
   }, [shown?.pane]);
   useEffect(() => settingsSearchHost(), []);
-  useEffect(() => () => void consumeSettingsOpenAt(), []);
   useEffect(() => markCaptionRegions(SETTINGS_WINDOW_ID, [[TITLE_LEFT, 0, CONTROLS_ROOM, TOOLBAR]]), []);
   useEffect(() => void setTrafficLightsCenter(SETTINGS_WINDOW_ID, [LIGHTS_CENTER[0], TOOLBAR / 2]), []);
   const scroller = useRef<ScrollView>(null);

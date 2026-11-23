@@ -10,6 +10,7 @@ import { useTheme } from "../ui/theme";
 import { ink, radius } from "../ui/tokens";
 import { useControlTurnedOff } from "../../state/app/programControlSetting";
 import { useNeverChosenCount } from "../../state/site/passwordManager";
+import { BrandBadge } from "../vaults/VaultParts";
 
 type ConsentRequest = NonNullable<PluginsStore["consent"]>;
 
@@ -18,6 +19,14 @@ export function PluginConsentSheet({ request, onCancel, onConfirm, onClosed }: {
   const { id, name, hash } = request;
   const listing = useConsentListing(name, hash);
   const m = listing?.manifest;
+  const provider = m?.contributes.credentialProvider ?? null;
+  const titleIcon = provider ? (
+    <View style={TITLE_ICON}>
+      <BrandBadge provider={name} size="m" symbol={provider.symbol ?? undefined} accent={provider.accent ?? undefined} />
+    </View>
+  ) : (
+    <Symbol name={m?.icon ?? "puzzlepiece.fill"} size={22} color={theme.icon} style={TITLE_ICON} />
+  );
   const controlOff = useControlTurnedOff();
   const movesProfiles = useNeverChosenCount();
   const words = CONSENT_WORDS[useConsentVerb(name, hash)];
@@ -52,7 +61,7 @@ export function PluginConsentSheet({ request, onCancel, onConfirm, onClosed }: {
         }}
         style={KEYS}
       >
-        <DialogTitle icon={<Symbol name={m?.icon ?? "puzzlepiece.fill"} size={22} color={theme.icon} style={TITLE_ICON} />} subtitle={m?.description || undefined}>
+        <DialogTitle icon={titleIcon} subtitle={m?.description || undefined}>
           {`${words.title} ${m?.title ?? name}?`}
         </DialogTitle>
         <ScrollView style={LINES}>

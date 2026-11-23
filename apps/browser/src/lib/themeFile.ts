@@ -3,8 +3,8 @@ import { JSON_SCHEMA_DIALECT, type JsonSchema } from "./jsonSchema";
 import { toHex } from "./color";
 import { LOOK_KEYS, lookSchemas, parseLookBlocks, type LookBlocks } from "./themeLook";
 
-export type RoleValue = string | number | boolean | readonly [string, string];
-export type RolePalette = Readonly<Record<string, RoleValue>>;
+type RoleValue = string | number | boolean | readonly [string, string];
+type RolePalette = Readonly<Record<string, RoleValue>>;
 export type RolePalettes = { readonly dark: RolePalette; readonly light: RolePalette };
 export type BasePalette = RolePalettes & { readonly revision: number };
 export type ThemeRoles = { readonly dark: Readonly<Record<string, RoleValue>>; readonly light: Readonly<Record<string, RoleValue>> };
@@ -16,7 +16,7 @@ export const THEME_MODES: readonly ThemeMode[] = ["dark", "light"];
 
 const CHANNEL = String.raw`\s*(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\s*`;
 const ALPHA = String.raw`\s*(0|1|0?\.\d+|1\.0+)\s*`;
-export const COLOR_PATTERN = String.raw`^(?:#[0-9A-Fa-f]{3}|#[0-9A-Fa-f]{6}|#[0-9A-Fa-f]{8}|rgb\(${CHANNEL},${CHANNEL},${CHANNEL}\)|rgba\(${CHANNEL},${CHANNEL},${CHANNEL},${ALPHA}\))$`;
+const COLOR_PATTERN = String.raw`^(?:#[0-9A-Fa-f]{3}|#[0-9A-Fa-f]{6}|#[0-9A-Fa-f]{8}|rgb\(${CHANNEL},${CHANNEL},${CHANNEL}\)|rgba\(${CHANNEL},${CHANNEL},${CHANNEL},${ALPHA}\))$`;
 const COLOR = new RegExp(COLOR_PATTERN);
 const COLOR_RULE = "a colour (#RGB, #RRGGBB, #RRGGBBAA, or rgb or rgba with r, g, b from 0 to 255 and a from 0 to 1)";
 
@@ -42,7 +42,7 @@ function numberRange(role: string): { minimum?: number; maximum?: number } {
   return {};
 }
 
-export function roleKind(role: string, value: RoleValue): RoleKind | null {
+function roleKind(role: string, value: RoleValue): RoleKind | null {
   if (typeof value === "string") return { kind: "color" };
   if (typeof value === "number") return { kind: "number", ...numberRange(role) };
   if (Array.isArray(value)) return { kind: "pair" };

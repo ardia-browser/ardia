@@ -4,7 +4,7 @@ import { isHostPattern } from "./pluginNetwork";
 
 export const STARTUP_EVENTS = ["*", "onStartupFinished"] as const;
 export const ACTIVATION_PREFIXES = ["onCommand", "onView", "onPanel", "onToolbar", "onOmnibox", "onMenu", "onEvent", "onUrl"] as const;
-export type ActivationPrefix = (typeof ACTIVATION_PREFIXES)[number];
+type ActivationPrefix = (typeof ACTIVATION_PREFIXES)[number];
 
 const EVENT_NAME = /^[a-z][a-zA-Z]*(\.[a-z][a-zA-Z]*)+$/;
 

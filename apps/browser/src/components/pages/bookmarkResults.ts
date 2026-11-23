@@ -11,7 +11,7 @@ function searchTextOf(node: BookmarkNode) {
   return text;
 }
 
-export function matchingBookmarks(b: Bookmarks, roots: BookmarkRootIds, query: string): string[] {
+function matchingBookmarks(b: Bookmarks, roots: BookmarkRootIds, query: string): string[] {
   const words = queryWords(query);
   const ids: string[] = [];
   const walk = (folderId: string) => {

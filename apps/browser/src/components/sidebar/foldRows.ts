@@ -2,9 +2,9 @@ export const FOLD_ROWS_PER_FRAME = 4;
 
 export type FoldMount = { collapsed: boolean; shown: number };
 
-export type FoldRow = { key: string; ghost?: boolean };
+type FoldRow = { key: string; ghost?: boolean };
 
-export type FoldSlotPlan = { kind: "row"; index: number; inReach: boolean } | { kind: "spacer"; key: string; height: number };
+type FoldSlotPlan = { kind: "row"; index: number; inReach: boolean } | { kind: "spacer"; key: string; height: number };
 
 export const foldReach = (windowHeight: number, padTop: number) => Math.max(0, windowHeight - padTop);
 

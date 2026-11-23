@@ -2,7 +2,7 @@ import { type ReactNode, useMemo } from "react";
 import { Animated } from "react-native";
 import { bouncePressMotion, usePressMotion, usePressScaleMotion } from "./motion";
 
-export type SquishKind = "row" | "tile";
+type SquishKind = "row" | "tile";
 
 const SQUISH_SCALE: Record<SquishKind, number> = { row: bouncePressMotion.rowPressScale, tile: bouncePressMotion.tilePressScale };
 

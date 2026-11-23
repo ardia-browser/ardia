@@ -64,7 +64,7 @@ type TextProps = {
   label?: string;
 };
 
-export type PillSize = "m" | "l" | "xl";
+type PillSize = "m" | "l" | "xl";
 
 export type PillProps = { variant: "pill"; onPress: () => void; title: string; primary?: boolean; size?: PillSize } & ({ tone?: "prompt"; disabled?: boolean } | { tone: "chip"; icon?: string; height?: number; onFocusChange?: (focused: boolean) => void });
 

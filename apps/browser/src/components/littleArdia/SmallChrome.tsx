@@ -14,7 +14,7 @@ import { insecureLevel } from "../toolbar/Toolbar";
 import { SMALL_BAR_HEIGHT } from "../../state/windows/small";
 
 export const SMALL_INSET = CARD_INSET;
-export { SMALL_BAR_BUTTON, SMALL_BAR_GAP, SMALL_FIELD_GAP, SMALL_WINDOW_FRAME, smallWindowRadius } from "./tokens";
+export { SMALL_BAR_BUTTON, SMALL_WINDOW_FRAME, smallWindowRadius } from "./tokens";
 const HOST = { flexShrink: 0, maxWidth: "60%" } as const;
 const FLEX = { flex: 1 } as const;
 
@@ -99,4 +99,3 @@ export function PageLabel({ tab, hovered = false, label }: { tab: Tab; hovered?:
     </View>
   );
 }
-

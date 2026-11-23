@@ -1,5 +1,5 @@
 import { asSecret, type Secret } from "@ardia/core";
-import { DEVTOOLS_ENDPOINT_PROBLEMS, nativeModule, type ControlApprovals, type DevtoolsEndpointProblem, type ControlPeerAnswer, type ControlPeerAsk, type ControlPeerOutcome, type ControlRequest, type ControlSocketStatus } from "@ardia/shell";
+import { DEVTOOLS_ENDPOINT_PROBLEMS, nativeModule, type ControlApprovals, type DevtoolsEndpointProblem, type ControlPeerAnswer, type ControlPeerAsk, type ControlPeerOutcome, type ControlRequest } from "@ardia/shell";
 
 export type { ControlApproval, ControlApprovals, ControlPeerAnswer, ControlPeerAsk, ControlPeerOutcome, ControlRequest, ControlSocketStatus } from "@ardia/shell";
 
@@ -21,7 +21,7 @@ export const controlApprovals = async (): Promise<ControlApprovals> => (await Au
 export const revokeControlApproval = async (key: string) => (await Automation().revokeApproval?.(key)) ?? false;
 
 export type DevtoolsEndpoint = { port: number; generation: number; token: Secret<"devtoolsToken"> };
-export type DevtoolsEndpointRead = DevtoolsEndpoint | { problem: DevtoolsEndpointProblem | "unsupported" };
+type DevtoolsEndpointRead = DevtoolsEndpoint | { problem: DevtoolsEndpointProblem | "unsupported" };
 
 const knownProblem = (problem: unknown): DevtoolsEndpointProblem => (DEVTOOLS_ENDPOINT_PROBLEMS as readonly unknown[]).includes(problem) ? (problem as DevtoolsEndpointProblem) : "unreadable";
 

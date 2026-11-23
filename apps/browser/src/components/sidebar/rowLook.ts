@@ -6,7 +6,7 @@ import { useMinimalism } from "../../state/windows/layout";
 import { useSettings } from "../../state/browser/hooks";
 import { selectedTabGlow, useTheme, type SelectedTabGlowLevel } from "../ui/theme";
 
-export type SidebarRowLook = { glow: SelectedTabGlowLevel; backToPinHint: string | undefined; closeTabHint: string | undefined; quiet: boolean; plainTooltip: boolean };
+type SidebarRowLook = { glow: SelectedTabGlowLevel; backToPinHint: string | undefined; closeTabHint: string | undefined; quiet: boolean; plainTooltip: boolean };
 
 export const SidebarRowLookContext = createContext<SidebarRowLook>({ glow: DEFAULT_SETTINGS.selectedTabGlow, backToPinHint: undefined, closeTabHint: undefined, quiet: false, plainTooltip: !DEFAULT_SETTINGS.showTabHoverMenu });
 

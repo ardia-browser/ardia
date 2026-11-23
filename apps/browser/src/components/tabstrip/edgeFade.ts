@@ -1,6 +1,6 @@
 import { EDGE_FADE, EDGE_FADE_FLOOR, EDGE_FADE_ONSET } from "./tokens";
 
-export type EdgeStrength = { left: number; right: number };
+type EdgeStrength = { left: number; right: number };
 
 const ramp = (x: number) => Math.max(0, Math.min(1, x));
 

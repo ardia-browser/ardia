@@ -1,7 +1,7 @@
 import type { ToolbarMode } from "../../state/windows/toolbarAutoHide";
 
 export type MotionValue = "page" | "laid" | "bar" | "fade";
-export type MotionStep = {
+type MotionStep = {
   set: Partial<Record<MotionValue, number>>;
   glide: Partial<Record<MotionValue, number>>;
   show: boolean;

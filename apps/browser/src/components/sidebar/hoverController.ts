@@ -24,7 +24,7 @@ import { useMedia, usePinnedWithMediaControls } from "../../state/media/media";
 
 export type AwaySource = { away: () => boolean; subscribe: (changed: () => void) => () => void };
 
-export const NEVER_AWAY: AwaySource = { away: () => false, subscribe: () => () => {} };
+const NEVER_AWAY: AwaySource = { away: () => false, subscribe: () => () => {} };
 
 export const FoldedAway = createContext<AwaySource>(NEVER_AWAY);
 

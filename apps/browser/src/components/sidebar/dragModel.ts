@@ -34,7 +34,7 @@ export type Item = ItemSpec & {
 
 export type Drop = StoreDrop & { sequence?: string[] };
 
-export const blockKind = (i: Item) => i.kind === "row" || i.kind === "group" || i.kind === "live" || i.kind === "split";
+const blockKind = (i: Item) => i.kind === "row" || i.kind === "group" || i.kind === "live" || i.kind === "split";
 export const pinnedBlock = (i: Item) => (i.section === "pinnedRows" || i.section === "pinnedGroups") && !i.parentGroup && blockKind(i);
 export const boxed = (i: Item): i is Extract<Item, { kind: "group" | "live" }> => i.kind === "group" || i.kind === "live";
 export const isGroupItem = (i: Item): i is Extract<Item, { kind: "group" }> => i.kind === "group";

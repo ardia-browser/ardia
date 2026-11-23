@@ -1,4 +1,4 @@
-export type DotDrag = { shift: number; to: number };
+type DotDrag = { shift: number; to: number };
 
 const lefts = (widths: number[]) => widths.map((_, i) => widths.slice(0, i).reduce((sum, w) => sum + w, 0));
 

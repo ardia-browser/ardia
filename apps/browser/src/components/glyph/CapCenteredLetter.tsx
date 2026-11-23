@@ -5,11 +5,11 @@ import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { snappedToGrid } from "../../lib/interfaceScale";
 import { currentInterfaceScale } from "../../state/settings/interfaceScale";
 
-export type LineMetrics = { ascender: number; capHeight: number };
+type LineMetrics = { ascender: number; capHeight: number };
 
 const lineMetricsByFont = new Map<string, LineMetrics>();
 
-export function useLineMetrics(key: string) {
+function useLineMetrics(key: string) {
   const [, remeasured] = useState(0);
   const metrics = lineMetricsByFont.get(key);
   const onTextLayout = (e: TextLayoutEvent) => {

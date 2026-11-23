@@ -20,7 +20,7 @@ export function historyMenuLeft(anchor: PageAnchor, underButton: number, paneWid
   return fitLeft(anchor.toolbar ? underButton : sidebarEdgeWant(anchor.sidebarRight), paneWidth, width);
 }
 
-export type PeekSpanLike = readonly [from: number, to: number];
+type PeekSpanLike = readonly [from: number, to: number];
 
 export function besidePeekSpan(peek: PeekSpanLike, cardLeft: number, cardWidth: number, pane: Rect): { left: number; room: number } {
   const peekFromRight = peek[0] !== -Infinity;

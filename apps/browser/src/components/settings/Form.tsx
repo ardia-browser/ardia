@@ -62,7 +62,7 @@ export function Group({ children, of }: { children: ReactNode; of?: SettingId })
   return <PlainGroup>{rows}</PlainGroup>;
 }
 
-export type AnchorShape = "row" | "card";
+type AnchorShape = "row" | "card";
 
 const ANCHOR_RADIUS: Record<AnchorShape, number> = { get row() { return radii.control; }, get card() { return radii.panel; } };
 

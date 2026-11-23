@@ -9,7 +9,7 @@ export type Searchable = {
 };
 
 export type SearchRange = { start: number; end: number };
-export type SearchNote = { text: string; ranges: SearchRange[] };
+type SearchNote = { text: string; ranges: SearchRange[] };
 export type SearchHit<T extends Searchable = Searchable> = {
   entry: T;
   score: number;
@@ -33,7 +33,7 @@ function foldChar(c: string): string {
   return folded.length === 1 ? folded : c.toLowerCase().length === 1 ? c.toLowerCase() : c;
 }
 
-export function fold(raw: string): Folded {
+function fold(raw: string): Folded {
   let text = "";
   const source: number[] = [];
   for (let i = 0; i < raw.length; i++) {
@@ -60,7 +60,7 @@ export function fold(raw: string): Folded {
   return { raw, text, source, starts };
 }
 
-export const normalize = (text: string) => fold(text).text;
+const normalize = (text: string) => fold(text).text;
 
 export function editDistance(a: string, b: string, limit: number): number {
   if (Math.abs(a.length - b.length) > limit) return limit + 1;
@@ -362,7 +362,7 @@ export function search<T extends Searchable>(index: Prepared<T>[], query: string
     .map(({ entry, score, tier, title, section, note }) => ({ entry, score, tier, title, section, ...(note ? { note } : {}) }));
 }
 
-export type SearchTextPart = { text: string; highlighted: boolean };
+type SearchTextPart = { text: string; highlighted: boolean };
 
 export function splitByRanges(text: string, ranges: SearchRange[]): SearchTextPart[] {
   const parts: SearchTextPart[] = [];

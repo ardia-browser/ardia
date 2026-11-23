@@ -8,8 +8,8 @@ export const lined = (glow: readonly GradientStop[], height: number): GradientSt
   const lineTop = 1 - FIELD_LOAD.line / height;
   return [...glow.map(([at, alpha]) => [at * lineTop, alpha] as const), [lineTop, 1], [1, 1]];
 };
-export const TAIL_GLOW: GradientStop[] = FIELD_LOAD.glow.map(([at, alpha]) => [at, Math.min(alpha, FIELD_LOAD.tailCeiling)]);
-export const CAP_GLOW: GradientStop[] = FIELD_LOAD.glow.map(([at, alpha]) => [at, alpha - Math.min(alpha, FIELD_LOAD.tailCeiling)]);
+const TAIL_GLOW: GradientStop[] = FIELD_LOAD.glow.map(([at, alpha]) => [at, Math.min(alpha, FIELD_LOAD.tailCeiling)]);
+const CAP_GLOW: GradientStop[] = FIELD_LOAD.glow.map(([at, alpha]) => [at, alpha - Math.min(alpha, FIELD_LOAD.tailCeiling)]);
 export const fadingPast = (body: number, front: number, falloff: readonly number[]): GradientStop[] => [
   [0, 1],
   ...falloff.map((alpha, i) => [(body + (front * i) / (falloff.length - 1)) / (body + front), alpha] as const),
@@ -20,7 +20,7 @@ export const frontOf = (width: number) => {
   return { tail: FIELD_LOAD.tail * scale, cap: FIELD_LOAD.cap * scale };
 };
 
-export type FieldLoadPlates = { tail: { stops: GradientStop[]; fade: GradientStop[]; extra: number }; cap: { stops: GradientStop[]; fade: GradientStop[]; extra: number }; comet: { stops: GradientStop[]; fade: GradientStop[]; extra: number } };
+type FieldLoadPlates = { tail: { stops: GradientStop[]; fade: GradientStop[]; extra: number }; cap: { stops: GradientStop[]; fade: GradientStop[]; extra: number }; comet: { stops: GradientStop[]; fade: GradientStop[]; extra: number } };
 
 export function fieldLoadPlates(width: number, height: number): FieldLoadPlates {
   const { tail, cap } = frontOf(width);

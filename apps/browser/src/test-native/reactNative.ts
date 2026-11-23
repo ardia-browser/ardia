@@ -187,7 +187,7 @@ export const Animated = {
   multiply: (a: Readable, b: Readable) => combined(() => read(a) * read(b)),
 };
 
-export const layoutAnimations: unknown[] = [];
+const layoutAnimations: unknown[] = [];
 
 export const LayoutAnimation = {
   Types: { spring: "spring", linear: "linear", easeInEaseOut: "easeInEaseOut", easeIn: "easeIn", easeOut: "easeOut", keyboard: "keyboard" },

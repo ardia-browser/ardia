@@ -8,9 +8,9 @@ import { FIELD_LOAD } from "./tokens";
 
 const { motion } = FIELD_LOAD;
 
-export type LoadValues = { filled: Animated.Value; opacity: Animated.Value; comet: Animated.Value };
+type LoadValues = { filled: Animated.Value; opacity: Animated.Value; comet: Animated.Value };
 
-export function animatedSink({ filled, opacity, comet }: LoadValues, front: () => Front): LoadSink {
+function animatedSink({ filled, opacity, comet }: LoadValues, front: () => Front): LoadSink {
   let leave: Animated.CompositeAnimation | null = null;
   opacity.setValue(0);
   return {

@@ -5,7 +5,7 @@ import { miniWindow, type MiniWindowGeometry } from "./tokens";
 
 export type MiniWindowLook = { window: string; bar: string; page: string; field?: string; accent?: string; edge?: string; closed?: string };
 
-export type MiniWindowSize = keyof typeof miniWindow;
+type MiniWindowSize = keyof typeof miniWindow;
 
 const FAINT_ALPHA = "59";
 const OVERLAY = { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" } as const;

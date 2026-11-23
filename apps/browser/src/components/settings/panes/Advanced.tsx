@@ -144,7 +144,7 @@ function PerformanceSection() {
 
 const viaPlugin = PLATFORM_FEATURES.plugins;
 
-export function programsLine(programs: ProgramsState | undefined): string {
+function programsLine(programs: ProgramsState | undefined): string {
   if (programs?.state === "linked") {
     const refused = Object.entries(programs.refused).map(([name, reason]) => `${name}: ${reason}`);
     if (refused.length) return refused.join("; ");

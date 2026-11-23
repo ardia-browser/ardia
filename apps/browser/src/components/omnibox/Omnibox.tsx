@@ -39,7 +39,6 @@ import { markNewTabBar } from "../../state/omnibox/newTabMarks";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { usePreviewSelection } from "./usePreviewSelection";
 
-export { PANEL_TEXT_LEFT } from "./tokens";
 
 type Variant = "panel" | "hero" | "sidebar";
 

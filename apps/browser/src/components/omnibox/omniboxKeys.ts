@@ -30,7 +30,7 @@ export const barKeyDownEvents = (scopeAsksForBackspace: boolean, removable: bool
 
 export type BarKeyEvent = { nativeEvent: { key: string; metaKey?: boolean; altKey?: boolean; shiftKey?: boolean; ctrlKey?: boolean } };
 
-export type BarKeyContext = {
+type BarKeyContext = {
   bar: ReturnType<typeof useBarText>;
   hero: boolean;
   shownCompletion: string;

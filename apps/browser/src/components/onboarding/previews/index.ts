@@ -1,4 +1,4 @@
-export { PREVIEW_IDS, type PreviewId } from "../../../state/onboarding/previewIds";
+export { type PreviewId } from "../../../state/onboarding/previewIds";
 export { MockWindow } from "./MockWindow";
 export { StylePreview } from "./StylePreview";
 

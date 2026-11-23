@@ -23,7 +23,6 @@ import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/s
 import { replaceSettingsPlace, SETTINGS_WINDOW_ID } from "../../../state/settings/settingsWindows";
 import { prompt, showMenu } from "../../../state/app/system";
 import { perLook } from "../../ui/tokens";
-import { useProfile } from "../../../state/browser/hooks";
 import { ProfileSubPage } from "./ProfileSubPage";
 
 type SiteAccess = "allSites" | "specificSites" | "onClick";
@@ -99,7 +98,6 @@ export function ExtensionPage({ profileId, extensionId }: { profileId: string; e
   const profile = currentEngineProfile(profileId);
   const list = useExtensionList(profile);
   const [loaded] = useResource(extensionList, profile);
-  const name = useProfile(profileId, (p) => p?.name ?? "Profile");
   const ext = list.find((x) => x.id === extensionId);
   const gone = !ext && loaded !== undefined;
   useEffect(() => {

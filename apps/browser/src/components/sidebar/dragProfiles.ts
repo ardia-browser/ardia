@@ -5,7 +5,7 @@ import { type Frame, inside, measure } from "./dragModel";
 
 export const PROFILE_HOLD_MS = 500;
 export const EDGE_HOLD_MS = 550;
-export const EDGE_BAND = 16;
+const EDGE_BAND = 16;
 
 export type Edge = "left" | "right";
 

@@ -10,7 +10,7 @@ const PROP_NAME = /^[A-Za-z][A-Za-z0-9]{0,39}$/;
 const SYMBOL = /^[a-z0-9.]{1,64}$/;
 const UNSAFE = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f‪-‮⁦-⁩]/g;
 
-export type NodeCheck = { ok: true; tree: PluginNode } | { ok: false; problem: string };
+type NodeCheck = { ok: true; tree: PluginNode } | { ok: false; problem: string };
 
 type Budget = { nodes: number; bytes: number };
 

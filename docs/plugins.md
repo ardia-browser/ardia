@@ -856,7 +856,9 @@ as the authority, natively from the same verified manifest bytes the official st
   secret in env or stdin. The owner approved it for 1Password's password and code edits.
   A provider whose catalog has an `argvSecrets` verb gets an edit's `password` and `totp.set` and `addTotp`'s `uri`
   as single-use handles (`SealedEditRequest`, `SealedAddTotpRequest`), so its JS never sees the new value and can only
-  put it in a secret slot; every other provider keeps getting plain values for the JSON it writes to stdin.
+  put it in a secret slot; every other provider keeps getting plain values for the JSON it writes to stdin. A value
+  that can't be sealed (over 4096 bytes, or too many in one call) is refused before the plugin is called, with
+  "That's too long for <Manager>'s command line. Make the change in <Manager>.", so the sheet offers Open in <Manager>.
 - **Passkeys signed elsewhere.** `"passkeys": [{ "via": "extension", "extensions": ["<id>"] }, { "via": "system" }]`
   says the manager signs its own passkeys and Ardia never holds their keys, in order of preference (1 or 2 routes,
   each once; 1 to 4 Chrome extension ids). `system`: the manager's Mac app answers as a macOS AutoFill passkey

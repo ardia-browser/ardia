@@ -76,5 +76,4 @@ export const readPluginFile = (name: string, folderId: string, approved: string,
 export const onPluginLine = (listener: (e: PluginLine) => void) => Plugins().addListener("onLine", listener);
 export const onPluginExit = (listener: (e: PluginExit) => void) => Plugins().addListener("onExit", listener);
 export const setCredentialProvider = (name: string, enabled: boolean) => Plugins().setCredentialProvider(name, enabled);
-export const forgetCredentialProvider = (name: string) => Plugins().forgetCredentialProvider(name);
 export const onCredentialRunWanted = (listener: (e: CredentialRunWanted) => void) => Plugins().addListener("onCredentialRunWanted", listener);

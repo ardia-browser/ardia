@@ -1,4 +1,4 @@
-import { forgetCredentialProvider, onCredentialRunWanted, setCredentialProvider } from "../../platform/plugins";
+import { onCredentialRunWanted, setCredentialProvider } from "../../platform/plugins";
 import { useBrowser } from "../browser/store";
 import { updateSettings } from "../settings/actions";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
@@ -17,22 +17,16 @@ const isInstalledProvider = (s: Pick<PluginsStore, "listings">, name: string) =>
   return !!listing?.official && !!listing.manifest?.contributes.credentialProvider;
 };
 
-function forget(name: string, consent: ConsentToken | null) {
-  void forgetCredentialProvider(name).then(
-    (answer) => {
-      if (!answer.ok) return warnFor(consent, `[plugins] Ardia couldn't forget ${name}'s password manager: ${answer.reason ?? "no reason given"}`);
-      if (useBrowser.getState().settings.vaultSaveTarget === name) updateSettings({ vaultSaveTarget: "" });
-    },
-    (error: unknown) => warnFor(consent, `[plugins] Ardia couldn't forget ${name}'s password manager`, error),
-  );
+function removed(name: string) {
+  if (useBrowser.getState().settings.vaultSaveTarget === name) updateSettings({ vaultSaveTarget: "" });
 }
 
-export function forgetRemovedProviders(consent: ConsentToken | null, s: Pick<PluginsStore, "listings" | "records"> = currentPlugins()) {
+export function dropRemovedSaveTargets(s: Pick<PluginsStore, "listings" | "records"> = currentPlugins()) {
   for (const name of Object.keys(s.listings)) if (isInstalledProvider(s, name)) installed.add(name);
   for (const name of [...installed]) {
     if (Object.hasOwn(s.listings, name) || Object.hasOwn(s.records, name)) continue;
     installed.delete(name);
-    forget(name, consent);
+    removed(name);
   }
 }
 
@@ -83,7 +77,7 @@ export function watchCredentialProviders() {
     if (s.listings === prev.listings && s.records === prev.records) return;
     const consent = consentToken();
     syncCredentialProviders(consent, s);
-    forgetRemovedProviders(consent, s);
+    dropRemovedSaveTargets(s);
   });
   try {
     onCredentialRunWanted(({ name }) => wanted(name, consentToken()));

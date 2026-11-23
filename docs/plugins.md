@@ -835,11 +835,13 @@ as the authority, natively from the same verified manifest bytes the official st
   argv builder are native, and the plugin's traffic never reaches React Native JS (the app sees only `ready`). Secrets
   you type go through Ardia's native secure field and reach the plugin only as single-use handles (`{"$secret": "h7"}`),
   which it can put in a verb's `secret` slot; the values a verb consumed are redacted from everything it returns. Lock,
-  idle, sleep and screen lock end the plugin's run and every CLI it started, natively. Approval pages open only on the
+  idle, sleep and screen lock end the plugin's run and every CLI it started, natively; that exit comes to JS with
+  `intended: true` (any run Ardia stopped itself, unless it went over its memory), so the supervisor leaves it exited with
+  no back-off and no crash count, and the next credential call asks for a new run. Approval pages open only on the
   manifest's `signIn.approvalHosts`. Native owns all wording: the plugin returns problem codes.
 - **What the app does.** When such a plugin is on and its run is ready, `state/plugins/credentialProviders.ts` calls
   `ArdiaPlugins.setCredentialProvider(name, true)` (`platform/plugins.ts`), and `false` once it's turned off or its
-  manifest changes; Remove forgets it (`forgetCredentialProvider`), and a Save New Logins To that named it goes back to
+  manifest changes. Remove is forgotten natively, once: `remove` wipes the provider (`forgetCredentialProvider`) before it deletes the files, and JS only sends a Save New Logins To that named it back to
   Ardia. It passes the name only, never the contribution or a secret. The run
   starts when the plugin turns on and again whenever native asks (`onCredentialRunWanted`). The consent sheet adds what
   it reads and saves, which CLI it runs and for which verbs, that secret fields go to the CLI and not the plugin, and any

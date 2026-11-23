@@ -45,12 +45,12 @@ test("a credential provider is turned on natively once its run is ready, and off
   assert.ok(wantedListeners.length > 0, "native can ask for a new run");
 });
 
-test("removing a credential provider forgets it natively, and a save target that named it goes back to Ardia", async () => {
+test("removing a credential provider leaves the wipe to native Remove, and a save target that named it goes back to Ardia", async () => {
   useBrowser.getState().updateSettings({ vaultSaveTarget: "bitwarden" });
   usePlugins.setState({ listings: { bitwarden: listing }, order: ["bitwarden"], records: { bitwarden: record(false) } });
   usePlugins.setState({ listings: {}, order: [], records: {} });
   for (let i = 0; i < 4; i++) await tick();
-  assert.deepEqual(toNative.at(-1), ["forget", "bitwarden"]);
+  assert.ok(!toNative.some(([kind]) => kind === "forget"));
   assert.equal(useBrowser.getState().settings.vaultSaveTarget, "");
 });
 

@@ -9,7 +9,7 @@ const domains = Object.entries(manifest.domains);
 const LINUX_ONLY_EVENTS = ["downloads.removed", "history.imported"];
 
 export function stripComments(written) {
-  const source = written.replace(/\\\r?\n/g, "");
+  const source = written.replace(/\\[ \t]*\r?\n/g, "");
   let out = "";
   for (let at = 0; at < source.length; ) {
     const two = source.slice(at, at + 2);
@@ -138,10 +138,13 @@ test("comments never count as table entries: a commented-out row is read as gone
   assert.deepEqual([...linuxEventNames(header)], ["history.changed", "downloads.changed"]);
   assert.equal(stripComments('a // b \\\nc\nd'), "a \nd");
   assert.equal(stripComments('a // b \\\r\nc\r\nd'), "a \nd");
+  assert.equal(stripComments('a // b \\ \t\nc\nd'), "a \nd");
+  assert.equal(stripComments('a // b \\\t \r\nc\r\nd'), "a \nd");
   const contract = read("engine/ardiacore-linux/src/ardia/linux/ac_linux_contract.h");
   const loop = '  for (const auto name : {"history.changed",';
   assert.ok(contract.includes(loop));
   assert.throws(() => linuxEventNames(contract.replace(loop, `  // topics \\\n${loop}`)), /exactly one braced list/);
+  assert.throws(() => linuxEventNames(contract.replace(loop, `  // topics \\ \t\n${loop}`)), /exactly one braced list/);
 });
 
 test("the EventName scan reads every topic however it's spelled and refuses what it can't read", () => {

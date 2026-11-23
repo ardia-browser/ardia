@@ -187,6 +187,9 @@ export function startDevHarness() {
     get vaultPerf(): typeof import("./vaultPerf") {
       return require("./vaultPerf");
     },
+    get passkeyFixtures(): typeof import("./passkeyFixtures") {
+      return require("./passkeyFixtures");
+    },
     get vaultStore(): typeof import("../../state/vaults/store") {
       return require("../../state/vaults/store");
     },

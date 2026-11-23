@@ -19,6 +19,9 @@ type PasskeysState = {
 
 export const usePasskeys = create<PasskeysState>()(() => ({ sheets: {}, offers: {}, list: null }));
 
+export const previewPasskeySheet = (sheet: PasskeySheet) => usePasskeys.setState((s) => ({ sheets: { ...s.sheets, [sheet.tabId]: sheet } }));
+export const endPasskeySheetPreview = () => usePasskeys.setState({ sheets: {} });
+
 const NONE: VaultItem[] = [];
 const offerItems = new WeakMap<VaultPasskeyRequest, VaultItem[]>();
 

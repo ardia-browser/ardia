@@ -13,7 +13,8 @@ export const SettingsHostedContext = createContext(false);
 type PageProps = { title: string; onBack?: () => void; onClose?: () => void; leading?: ReactNode; trailing?: ReactNode; children: ReactNode; scroll?: boolean; onRefresh?: () => Promise<unknown>; heroTitle?: boolean; mediumAppBar?: boolean; overlay?: ReactNode; dismissesKeyboard?: boolean };
 
 export function SettingsPage({ title, onBack, onClose, leading, trailing, children, scroll = true, onRefresh, heroTitle = false, mediumAppBar = false, overlay, dismissesKeyboard = false }: PageProps) {
-  const material = useDesign() === "material";
+  const design = useDesign();
+  const material = design === "material";
   const theme = useTheme();
   const { scheme } = useMaterialTheme();
   const insets = useSafeAreaInsets();
@@ -121,10 +122,20 @@ export function SettingsPage({ title, onBack, onClose, leading, trailing, childr
           }}
         >
           {material && mediumAppBar ? <MaterialMediumTitle title={title} height={mediumTitleHeight} collapsed={collapsed} /> : null}
-          {children}
+          <LayoutAnimationConfig key={design} skipEntering skipExiting>
+            <View testID="settingsPageContent" collapsable={false}>
+              {children}
+            </View>
+          </LayoutAnimationConfig>
         </ScrollView>
       ) : (
-        <View style={[styles.fill, { paddingBottom: insets.bottom }]}>{children}</View>
+        <View style={[styles.fill, { paddingBottom: insets.bottom }]}>
+          <LayoutAnimationConfig key={design} skipEntering skipExiting>
+            <View testID="settingsPageContent" collapsable={false} style={styles.fill}>
+              {children}
+            </View>
+          </LayoutAnimationConfig>
+        </View>
       )}
       {overlay}
     </View>

@@ -1,6 +1,6 @@
 import { Platform, ScrollView, StyleSheet, Text } from "react-native";
 import { getByGestureTestId } from "react-native-gesture-handler/jest-utils";
-import { getAnimatedStyle } from "react-native-reanimated";
+import { getAnimatedStyle, LayoutAnimationConfig } from "react-native-reanimated";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { Surfaces } from "../App";
 import { DesignProvider, Portal, useDesign } from "../components/ui";
@@ -143,6 +143,34 @@ test("a menu portal retains its opening design through its exit", () => {
   expect(root.root.findAll((node) => node.props.testID === "portalDesign")[0]!.props.children).toBe("material");
   act(() => jest.advanceTimersByTime(400));
   expect(root.root.findAll((node) => node.props.testID === "portalDesign")).toHaveLength(0);
+  unmount(root);
+});
+
+onAndroid("a Material You flip swaps Settings' rows without their entering or exiting animations, inside the same scroll view, and leaves later crossfades alone", () => {
+  const root = renderSurface(<Surfaces />);
+  act(() => openSettings());
+  settle();
+  const scrollView = () => root.root.findAll((node) => node.props.testID === "settingsPage" && typeof node.type === "string")[0]!.findAll((node) => node.type === ScrollView)[0]!;
+  const content = () => scrollView().findAll((node) => node.props.testID === "settingsPageContent" && typeof node.type === "string")[0]!;
+  const config = () => scrollView().findAll((node) => node.type === LayoutAnimationConfig)[0]!;
+  const list = scrollView();
+  const before = content();
+  const beforeConfig = config();
+  expect(beforeConfig.props).toMatchObject({ skipEntering: true, skipExiting: true });
+  expect(beforeConfig.findAll((node) => node === before)).toHaveLength(1);
+  act(() => list.props.onScroll({ nativeEvent: { contentOffset: { y: 60 } } }));
+  expect(content()).toBe(before);
+  expect(config()).toBe(beforeConfig);
+  act(() => materialYouRow(root)!.props.onPress());
+  settle();
+  expect(scrollView()).toBe(list);
+  expect(config()).not.toBe(beforeConfig);
+  expect(config().props).toMatchObject({ skipEntering: true, skipExiting: true });
+  expect(content()).not.toBe(before);
+  expect(settingsScroll("Settings")).toBe(60);
+  const flipped = content();
+  act(() => list.props.onScroll({ nativeEvent: { contentOffset: { y: 90 } } }));
+  expect(content()).toBe(flipped);
   unmount(root);
 });
 

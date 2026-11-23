@@ -762,11 +762,27 @@ test("closing or deleting a group whose only other tab is an unloaded pin does w
       const g = S().createGroup([g1], { name: "G" });
       closeAll([p]);
       S().activate(g1);
-      S()[action](g, mode === "tabAbove" ? userClose(S().groups[g].tabIds, you()) : undefined);
+      S()[action](g, mode === "previouslyActive" ? undefined : userClose(S().groups[g].tabIds, you()));
       results.push([shown(w), S().tabs[p].page.kind === "asleep"]);
     }
-    assert.deepEqual(results[1], results[0], `${action}: Tab above matches Previously active`);
+    assert.deepEqual(results.slice(1), [results[0], results[0]], `${action}: Tab above and Tab below match Previously active`);
   }
+});
+
+test("Tab below whose pick closes while Close Group's prompt is open takes the next row below the group", async () => {
+  const { closeGroup } = await import("../browser/actions.ts");
+  const dialogs = shellNativeModules.ArdiaDialogs;
+  const real = dialogs.confirm;
+  const { w, ids: [, g1, b] } = windowWith("tabBelow", "a", "g1", "b", "c");
+  const g = S().createGroup([g1], { name: "G" });
+  S().activate(g1);
+  dialogs.confirm = async () => (S().closeTab(b), { confirmed: true, suppressed: false });
+  try {
+    await closeGroup(g, { user: you() });
+  } finally {
+    dialogs.confirm = real;
+  }
+  assert.equal(shown(w), "c");
 });
 
 test("a tab that joins the group while Close Group waits is never kept as the next tab; an unchanged group still picks it", async () => {

@@ -228,6 +228,7 @@ function OverviewControls({ scheme, search, incognito, privateCount = 0, onClose
         items={plusMenuItems(incognito, canReopen)}
         trigger="longPress"
         frost={null}
+        privately={incognito}
         haptic={menuOpenedHaptic}
         disabled={!menusShown}
         onOpen={() => onMenu(true)}

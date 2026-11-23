@@ -1,12 +1,13 @@
 import { Dimensions, Platform, StyleSheet, Text } from "react-native";
+import { getAnimatedStyle } from "react-native-reanimated";
 import { act, type ReactTestInstance } from "react-test-renderer";
-import { DesignProvider, Dialog, Sheet, useTheme } from "../components/ui";
+import { ConfirmSheet, DesignProvider, Dialog, Menu, pointPlacer, Portal, Sheet, useTheme } from "../components/ui";
 import { rolesFromScheme } from "../components/ui/materialRoles";
 import { materialMenuFill, materialSheetMs } from "../components/ui/MaterialSurfaces";
 import { SEEDED_SCHEMES } from "../lib/material/schemes";
 import { setDynamicScheme } from "../state/app/dynamicScheme";
-import { currentPreferences, setPreference } from "../state/settings/store";
-import { renderSurface, unmount, withMaterialYou } from "../../test/render/harness";
+import { currentPreferences, setPreference, usePreferences } from "../state/settings/store";
+import { renderSurface, unmount, updateSurface, withMaterialYou } from "../../test/render/harness";
 
 withMaterialYou();
 
@@ -128,6 +129,20 @@ onAndroid("a dialog in the material design is Material's: surfaceContainerHigh, 
   unmount(root);
 });
 
+onAndroid("a ConfirmSheet in the material design follows Material 3 AlertDialog: dynamic surfaceContainerHigh, 28 dp corners, elevation, headlineSmall title, primary Cancel and error destructive action", () => {
+  const dismissed = jest.fn();
+  const root = material(<ConfirmSheet confirmation={{ title: "Close All Tabs?", message: "They stay in your Archive.", action: "Close All", run: () => undefined }} onClose={dismissed} />);
+  expect(flat(host(root, "drawnActionSheet"))).toMatchObject({ backgroundColor: LIGHT.surfaceContainerHigh, borderRadius: 28, elevation: 3 });
+  const texts = root.root.findAll((node) => node.type === Text);
+  expect(flat(texts.find((node) => node.props.children === "Close All Tabs?"))).toMatchObject({ fontSize: 24, color: LIGHT.onSurface });
+  expect(flat(texts.find((node) => node.props.children === "Cancel")).color).toBe(LIGHT.primary);
+  expect(flat(texts.find((node) => node.props.children === "Close All")).color).toBe(LIGHT.error);
+  act(() => setDynamicScheme(WALLPAPER));
+  expect(flat(host(root, "drawnActionSheet")).backgroundColor).toBe(WALLPAPER.light.surfaceContainerHigh);
+  expect(flat(root.root.findAll((node) => node.type === Text).find((node) => node.props.children === "Cancel")).color).toBe(WALLPAPER.light.primary);
+  unmount(root);
+});
+
 onAndroid("in landscape the material sheet stays inside the side insets and is at most 640 dp wide, centred", () => {
   const window = Dimensions.get("window");
   Dimensions.set({ window: { ...window, width: 852, height: 393 }, screen: { ...window, width: 852, height: 393 } });
@@ -158,4 +173,92 @@ onAndroid("in dark, drawn menus sit on surfaceContainerHighest, a tone above the
   expect(materialMenuFill(dark, true)).toBe(dark.surfaceContainerHighest);
   expect(materialMenuFill(dark, true)).not.toBe(dark.surfaceContainerHigh);
   expect(materialMenuFill(LIGHT, false)).toBe(LIGHT.surfaceContainer);
+});
+
+(Platform.OS === "android" ? test.each([360, 250]) : test.skip.each([360, 250]))("a wider Material submenu stays inside a %i dp screen", (screenWidth) => {
+  const insets = jest.spyOn(safeArea, "useSafeAreaInsets").mockReturnValue({ top: 0, bottom: 0, left: 0, right: 0 });
+  const items = [{ label: "More", children: [{ label: "A much longer submenu action label", onPress: () => undefined }] }];
+  const root = material(<Menu items={items} placer={pointPlacer({ x: screenWidth - 20, y: 120 }, { width: screenWidth, height: 800 }, { top: 0, bottom: 0, left: 0, right: 0 }, 112)} onDismiss={() => undefined} />);
+  const rows = root.root.findAll((node) => node.props.accessibilityLabel === "More" && typeof node.props.onPress === "function");
+  act(() => rows[0]!.props.onPress());
+  const panel = flat(host(root, "materialMenu"));
+  expect(panel.width).toBe(Math.min(280, screenWidth - 16));
+  expect(Number(panel.left) + Number(panel.width)).toBeLessThanOrEqual(screenWidth - 8);
+  unmount(root);
+  insets.mockRestore();
+});
+
+onAndroid("a Material submenu with nothing but dividers still shows its Back row, which returns to the first page", () => {
+  const insets = jest.spyOn(safeArea, "useSafeAreaInsets").mockReturnValue({ top: 0, bottom: 0, left: 0, right: 0 });
+  const items = [{ label: "More", children: ["divider" as const] }, { label: "Stay", onPress: () => undefined }];
+  const root = material(<Menu items={items} placer={pointPlacer({ x: 40, y: 120 }, { width: 360, height: 800 }, { top: 0, bottom: 0, left: 0, right: 0 }, 112)} onDismiss={() => undefined} />);
+  const press = (label: string) => act(() => root.root.findAll((node) => node.props.accessibilityLabel === label && typeof node.props.onPress === "function")[0]!.props.onPress());
+  press("More");
+  expect(root.root.findAll((node) => node.props.testID === "materialMenuGroup" && typeof node.type === "string")).toHaveLength(1);
+  press("Back, More");
+  expect(root.root.findAll((node) => node.props.accessibilityLabel === "Stay" && typeof node.props.onPress === "function").length).toBeGreaterThan(0);
+  unmount(root);
+  insets.mockRestore();
+});
+
+onAndroid("with reduced motion, a placed Material menu stays invisible until its rows are measured, then shows at once", () => {
+  mockMotion.reduced = true;
+  const insets = jest.spyOn(safeArea, "useSafeAreaInsets").mockReturnValue({ top: 0, bottom: 0, left: 0, right: 0 });
+  const root = material(<Menu items={[{ label: "Stay", onPress: () => undefined }]} placer={pointPlacer({ x: 40, y: 120 }, { width: 360, height: 800 }, { top: 0, bottom: 0, left: 0, right: 0 }, 112)} onDismiss={() => undefined} />);
+  const unmeasured = getAnimatedStyle(host(root, "materialMenu")!).opacity;
+  act(() => root.root.findAll((node) => node.props.testID === "drawnMenuRows" && typeof node.props.onContentSizeChange === "function")[0]!.props.onContentSizeChange(200, 64));
+  act(() => jest.advanceTimersByTime(32));
+  const measured = getAnimatedStyle(host(root, "materialMenu")!).opacity;
+  unmount(root);
+  insets.mockRestore();
+  mockMotion.reduced = false;
+  expect(unmeasured).toBe(0);
+  expect(measured).toBe(1);
+});
+
+onAndroid("a classic menu closing in a portal keeps the classic design when Material You turns on mid-exit", () => {
+  act(() => usePreferences.setState({ materialYou: false }));
+  const insets = jest.spyOn(safeArea, "useSafeAreaInsets").mockReturnValue({ top: 0, bottom: 0, left: 0, right: 0 });
+  const picker = (open: boolean) =>
+    open ? (
+      <Portal exitMs={1000}>
+        <Menu items={[{ label: "Ardia", onPress: () => undefined }]} place={{ top: 100, left: 20 }} onDismiss={() => undefined} />
+      </Portal>
+    ) : null;
+  const root = renderSurface(picker(true), { flushTimers: false });
+  updateSurface(root, picker(false));
+  act(() => usePreferences.setState({ materialYou: true }));
+  const drawnMaterial = root.root.findAll((node) => node.props.testID === "materialMenu" && typeof node.type === "string").length;
+  unmount(root);
+  insets.mockRestore();
+  expect(drawnMaterial).toBe(0);
+});
+
+onAndroid("opening a Material submenu scrolls its rows back to the top, so Back is in view", () => {
+  const insets = jest.spyOn(safeArea, "useSafeAreaInsets").mockReturnValue({ top: 0, bottom: 0, left: 0, right: 0 });
+  const items = [...Array.from({ length: 12 }, (_, index) => ({ label: `Row ${index}`, onPress: () => undefined })), { label: "More", children: [{ label: "Inside", onPress: () => undefined }] }];
+  const root = material(<Menu items={items} placer={pointPlacer({ x: 40, y: 120 }, { width: 360, height: 400 }, { top: 0, bottom: 0, left: 0, right: 0 }, 112)} onDismiss={() => undefined} />);
+  type Scrollable = { scrollTo: (to: { y: number; animated: boolean }) => void };
+  const rows = root.root.findAll((node) => node.props.testID === "drawnMenuRows" && typeof (node.instance as Partial<Scrollable> | null)?.scrollTo === "function")[0]!;
+  const scrolled = jest.spyOn(rows.instance as Scrollable, "scrollTo");
+  act(() => root.root.findAll((node) => node.props.accessibilityLabel === "More" && typeof node.props.onPress === "function")[0]!.props.onPress());
+  const calls = scrolled.mock.calls;
+  unmount(root);
+  insets.mockRestore();
+  expect(calls).toContainEqual([{ y: 0, animated: false }]);
+});
+
+onAndroid("a fixed trailing menu respects the right safe inset", async () => {
+  const overlay = require("../components/ui/Overlay");
+  const insets = jest.spyOn(safeArea, "useSafeAreaInsets").mockReturnValue({ top: 0, bottom: 0, left: 0, right: 40 });
+  const frame = jest.spyOn(overlay, "useOverlayFrame").mockReturnValue(() => Promise.resolve({ x: 0, y: 0, width: 250, height: 800 }));
+  const { FloatingMenu } = require("../components/ui");
+  const root = material(<FloatingMenu items={[{ label: "Delete All Downloads", icon: "trash", onPress: () => undefined }]} place={{ top: 100, right: 8 }} onDismiss={() => undefined} />);
+  await act(async () => {});
+  const panel = flat(host(root, "materialMenu"));
+  unmount(root);
+  insets.mockRestore();
+  frame.mockRestore();
+  expect(panel.width).toBe(194);
+  expect(250 - Number(panel.right)).toBeLessThanOrEqual(250 - 40 - 8);
 });

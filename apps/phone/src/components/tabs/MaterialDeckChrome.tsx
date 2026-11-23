@@ -65,8 +65,8 @@ export function MaterialDeckTopBar({ safeTop, safeSide, incognito, privateCount,
   const { syncEnabled, spaces, current, spaceItems } = useDeckSpaces();
   const side = safeSide + MATERIAL_DECK.barSide;
   const below = safeTop + materialSize.topAppBar;
-  const menu = { trigger: "tap" as const, fixedOrder: true, haptic: menuOpenedHaptic, disabled: !menusShown, onOpen: () => onMenu(true), onClose: () => onMenu(false) };
-  const moreItems = deckMoreMenuItems({ syncEnabled, canReopen, hasTabs, onCloseAll });
+  const menu = { trigger: "tap" as const, fixedOrder: true, haptic: menuOpenedHaptic, disabled: !menusShown, privately: incognito, onOpen: () => onMenu(true), onClose: () => onMenu(false) };
+  const moreItems = deckMoreMenuItems({ syncEnabled, canReopen, hasTabs, onCloseAll, material: true });
   const title = current?.name ?? "Tabs";
   return (
     <Animated.View testID="materialDeckTopBar" pointerEvents="box-none" style={[styles.topBar, { paddingTop: safeTop, height: safeTop + materialSize.topAppBar, paddingHorizontal: side }, chromeStyle]}>

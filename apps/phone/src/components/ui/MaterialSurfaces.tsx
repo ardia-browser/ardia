@@ -424,15 +424,23 @@ export type MaterialMenuEntry =
   | { heading: string };
 
 const MENU_WIDTH_STEP = 56;
-const MATERIAL_MENU_GROUP_GAP = 4;
+export const MATERIAL_MENU_GROUP_GAP = 4;
+const MENU_GROUP_PADDING = 8;
+const MENU_HEADING_HEIGHT = 36;
 const MENU_MIN_WIDTH = 112;
 const MENU_MAX_WIDTH = 280;
 const LABEL_CHAR_WIDTH = 8;
 
-export function materialMenuWidth(entries: readonly MaterialMenuEntry[]): number {
+type MaterialMenuWidthEntry =
+  | { label: string; icon?: SymbolName; checked?: boolean; submenu?: boolean; children?: readonly unknown[] }
+  | "divider"
+  | { heading: string };
+
+export function materialMenuWidth(entries: readonly MaterialMenuWidthEntry[]): number {
   const widest = entries.reduce((most, entry) => {
     if (entry === "divider" || "heading" in entry) return most;
-    const icons = (entry.icon ? materialSize.icon + 12 : 0) + (entry.submenu || ("checked" in entry && entry.checked) ? materialSize.icon + 12 : 0);
+    const trailing = entry.submenu || entry.children !== undefined || entry.checked === true;
+    const icons = (entry.icon ? materialSize.icon + 12 : 0) + (trailing ? materialSize.icon + 12 : 0);
     return Math.max(most, 24 + icons + entry.label.length * LABEL_CHAR_WIDTH);
   }, 0);
   return Math.min(MENU_MAX_WIDTH, Math.max(MENU_MIN_WIDTH, Math.ceil(widest / MENU_WIDTH_STEP) * MENU_WIDTH_STEP));
@@ -440,8 +448,8 @@ export function materialMenuWidth(entries: readonly MaterialMenuEntry[]): number
 
 export const materialMenuFill = (scheme: { surfaceContainer: string; surfaceContainerHighest: string }, dark: boolean) => (dark ? scheme.surfaceContainerHighest : scheme.surfaceContainer);
 
-export function materialMenuGroups(entries: readonly MaterialMenuEntry[]): { entry: MaterialMenuEntry; index: number }[][] {
-  const groups: { entry: MaterialMenuEntry; index: number }[][] = [[]];
+export function materialMenuGroups<T>(entries: readonly (T | "divider")[]): { entry: T; index: number }[][] {
+  const groups: { entry: T; index: number }[][] = [[]];
   entries.forEach((entry, index) => {
     if (entry === "divider") {
       if (groups[groups.length - 1]!.length) groups.push([]);
@@ -450,6 +458,17 @@ export function materialMenuGroups(entries: readonly MaterialMenuEntry[]): { ent
     groups[groups.length - 1]!.push({ entry, index });
   });
   return groups.filter((group) => group.length > 0);
+}
+
+export function materialMenuHeight(entries: readonly MaterialMenuWidthEntry[], hasBack = false): number {
+  const groups = materialMenuGroups(entries);
+  const groupCount = Math.max(groups.length, hasBack ? 1 : 0);
+  const rowsHeight = groups.reduce(
+    (sum, group) => sum + MENU_GROUP_PADDING + group.reduce((groupSum, { entry }) => groupSum + ("heading" in entry ? MENU_HEADING_HEIGHT : materialSize.touchTarget), 0),
+    0,
+  );
+  const backHeight = hasBack ? (groups.length === 0 ? MENU_GROUP_PADDING : 0) + materialSize.touchTarget : 0;
+  return rowsHeight + backHeight + Math.max(0, groupCount - 1) * MATERIAL_MENU_GROUP_GAP;
 }
 
 export function MaterialMenuPanel({ entries, place, panel }: { entries: MaterialMenuEntry[]; place: ViewStyle; panel?: React.RefObject<ViewInstance | null> }) {
@@ -465,7 +484,6 @@ export function MaterialMenuPanel({ entries, place, panel }: { entries: Material
       {materialMenuGroups(entries).map((group, groupIndex) => (
         <View key={groupIndex} testID="materialMenuGroup" style={[styles.menuGroup, { backgroundColor: materialMenuFill(scheme, dark) }]}>
           {group.map(({ entry, index }) => {
-            if (entry === "divider") return null;
             if ("heading" in entry)
               return (
                 <Text key={`h${index}`} style={[materialType.titleSmall, styles.menuHeading, { color: scheme.onSurfaceVariant }]}>

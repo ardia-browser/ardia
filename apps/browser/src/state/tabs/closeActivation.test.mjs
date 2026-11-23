@@ -1009,3 +1009,79 @@ test("Close Group's fallback never crosses into another profile's tabs", async (
     dialogs.confirm = real;
   }
 });
+
+test("when Close Group falls back with only collapsed groups left, it reveals only one collapsed group in both layouts", async () => {
+  const { closeGroup } = await import("../browser/actions.ts");
+  const { takeCloseActivationCounts } = await import("../telemetry/closeActivationCounts.ts");
+  const dialogs = shellNativeModules.ArdiaDialogs;
+  const real = dialogs.confirm;
+  client.loadChoice();
+  client.setSharing(true, "settings");
+  try {
+    for (const layout of ["sidebar", "top"]) {
+      for (const mode of ["tabBelow", "tabAbove"]) {
+        takeCloseActivationCounts();
+        const hosts = mode === "tabBelow" ? ["j1", "g1", "b", "h1"] : ["h1", "b", "g1", "j1"];
+        const { w, ids } = windowWith(mode, ...hosts);
+        S().updateSettings({ tabLayout: layout });
+        const [j1, g1, b, h1] = mode === "tabBelow" ? [ids[0], ids[1], ids[2], ids[3]] : [ids[3], ids[2], ids[1], ids[0]];
+        const groupJ = S().createGroup([j1], { name: "J" });
+        const g = S().createGroup([g1], { name: "G" });
+        const groupH = S().createGroup([h1], { name: "H" });
+        S().activate(h1);
+        S().activate(j1);
+        S().activate(g1);
+        S().updateGroup(groupJ, { collapsed: true });
+        S().updateGroup(groupH, { collapsed: true });
+        dialogs.confirm = async () => (S().closeTab(b), { confirmed: true, suppressed: false });
+        await closeGroup(g, { user: you() });
+        const [expectedTab, untouchedGroup] = mode === "tabBelow" ? ["j1", groupH] : ["h1", groupJ];
+        assert.equal(shown(w), expectedTab, `${layout} ${mode}`);
+        assert.equal(S().groups[untouchedGroup].shownTabIds, undefined, `${layout} ${mode}: other collapsed group stays hidden`);
+        const expectedCounts = mode === "tabBelow" ? { ...NO_PICKS, close_tab_below_fallbacks: 1 } : { ...NO_PICKS, close_tab_above_fallbacks: 1 };
+        assert.deepEqual(takeCloseActivationCounts(), expectedCounts, `${layout} ${mode}: counts one fallback`);
+      }
+    }
+  } finally {
+    dialogs.confirm = real;
+    S().updateSettings({ tabLayout: "sidebar" });
+    client.setSharing(false, "settings");
+  }
+});
+
+test("Close Group counts a fallback when its pick closes during confirmation and the close lands on a New Tab", async () => {
+  const { closeGroup } = await import("../browser/actions.ts");
+  const { takeCloseActivationCounts } = await import("../telemetry/closeActivationCounts.ts");
+  const dialogs = shellNativeModules.ArdiaDialogs;
+  const real = dialogs.confirm;
+  client.loadChoice();
+  try {
+    client.setSharing(true, "settings");
+    for (const mode of ["tabBelow", "tabAbove"]) {
+      takeCloseActivationCounts();
+      const hosts = mode === "tabBelow" ? ["g1", "b"] : ["b", "g1"];
+      const { w, ids } = windowWith(mode, ...hosts);
+      const [g1, b] = mode === "tabBelow" ? [ids[0], ids[1]] : [ids[1], ids[0]];
+      const g = S().createGroup([g1], { name: "G" });
+      S().activate(g1);
+      dialogs.confirm = async () => (S().closeTab(b), { confirmed: true, suppressed: false });
+      await closeGroup(g, { user: you() });
+      const active = activeTabId(S(), w);
+      assert.ok(active && S().tabs[active], `${mode}: window stays open on a New Tab`);
+      assert.equal(S().tabs[active].url, "", `${mode}: landed on a New Tab`);
+      const expectedCounts = mode === "tabBelow" ? { ...NO_PICKS, close_tab_below_fallbacks: 1 } : { ...NO_PICKS, close_tab_above_fallbacks: 1 };
+      assert.deepEqual(takeCloseActivationCounts(), expectedCounts, `${mode}: counts one fallback`);
+    }
+    client.setSharing(false, "settings");
+    const { w, ids: [g1, b] } = windowWith("tabBelow", "g1", "b");
+    const g = S().createGroup([g1], { name: "G" });
+    S().activate(g1);
+    dialogs.confirm = async () => (client.setSharing(true, "settings"), takeCloseActivationCounts(), S().closeTab(b), { confirmed: true, suppressed: false });
+    await closeGroup(g, { user: you() });
+    assert.equal(S().tabs[activeTabId(S(), w)].url, "");
+    assert.deepEqual(takeCloseActivationCounts(), NO_PICKS, "honors consent captured before confirmation");
+  } finally {
+    dialogs.confirm = real;
+    client.setSharing(false, "settings");
+  }
+});

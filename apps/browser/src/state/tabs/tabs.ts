@@ -55,7 +55,7 @@ function standingSuccessor(s: BrowserState, close: UserClose | undefined, window
   return t && t.windowId === windowId && t.profileId === profileId && (!inPinnedContainer(s, t.id) || hasPage(t)) && close!.shows(s, windowId, profileId, t.id) ? t.id : undefined;
 }
 
-export function resolvedSuccessor(
+function resolvedSuccessor(
   s: BrowserState,
   close: UserClose | undefined,
   windowId: string,
@@ -75,6 +75,13 @@ function chosenSuccessor(s: BrowserState, close: UserClose | undefined, w: Brows
   if (!resolved) return undefined;
   close!.noted({ ...resolved.pick, beside: resolved.pick.beside && resolved.stood });
   return resolved.id;
+}
+
+export function withFallbackNewTab(s: BrowserState, w: BrowserWindow, closing: ReadonlySet<string>, close?: UserClose): BrowserState {
+  const active = w.activeTabIds[w.profileId];
+  const pick = active && closing.has(active) ? close?.successors.get(successorKey(w.id, w.profileId)) : undefined;
+  if (pick) close!.noted({ ...pick, beside: false });
+  return withNewTab(s, w.id)[0];
 }
 type CloseKind = "close" | "unload" | "removePin";
 type CloseIntent = { kind: CloseKind; ids: string[] };
@@ -125,7 +132,7 @@ export function closingTabs(s: BrowserState, ids: string[], { lastClosesWindow =
     const keptRunning = keepTopApps && view.some((id) => !goneIds.has(id) && runningKept(next, id));
     if (!shown.length || !view.every((id) => goneIds.has(id) || isAsleep(next.tabs[id]) || (keptRunning && keptWithTopApp(next, id)))) continue;
     const keepsWindow = (keptRunning && !shown.every((id) => isEmptyCardTab(next, next.tabs[id]))) || !lastClosesWindow || leavesEmptyWindow(shown.length > 1 ? removeTabs(next, shown.slice(1), false) : next, shown[0]!);
-    if (keepsWindow) next = withNewTab(next, w.id)[0];
+    if (keepsWindow) next = withFallbackNewTab(next, w, goneIds, userClose);
     else closedWindows.add(w.id);
   }
   const removed = gone.filter((id) => !closedWindows.has(next.tabs[id]!.windowId));
@@ -165,7 +172,13 @@ export function activated(s: BrowserState, id: string, shareLivePins = true): Pa
 
 export const apply = (s: BrowserState, patch: Partial<BrowserState>): BrowserState => ({ ...s, ...patch });
 
-export function removeTabs(s: BrowserState, ids: string[], record: boolean, close?: UserClose): BrowserState {
+export function removeTabs(
+  s: BrowserState,
+  ids: string[],
+  record: boolean,
+  close?: UserClose,
+  groupFallback?: (windowId: string, profileId: string) => string | undefined,
+): BrowserState {
   const gone = new Set(ids.filter((id) => s.tabs[id]));
   if (gone.size === 0) return s;
   const now = Date.now();
@@ -195,7 +208,7 @@ export function removeTabs(s: BrowserState, ids: string[], record: boolean, clos
       if (!gone.has(activeId)) continue;
       const before = w.tabIds.filter((id) => s.tabs[id]?.profileId === profileId);
       const left = withoutTopApps(s, before.filter((id) => !gone.has(id)));
-      const next = chosenSuccessor(s, close, w, profileId, activeId, gone) ?? otherPane(s, activeId, gone) ?? closeSuccessor(s, activeId, before, left);
+      const next = chosenSuccessor(s, close, w, profileId, activeId, gone) ?? groupFallback?.(w.id, profileId) ?? otherPane(s, activeId, gone) ?? closeSuccessor(s, activeId, before, left);
       if (next) activeTabIds[profileId] = next;
       else delete activeTabIds[profileId];
     }

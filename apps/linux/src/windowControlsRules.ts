@@ -1,14 +1,14 @@
 import { LIGHTS_CENTER, lightsPlaceOffWindow } from "../../browser/src/state/windows/dockMotion";
 import { WINDOW_CONTROLS, windowControlsWidth } from "../../browser/src/lib/windowChrome";
 
-export type LinuxControlsState = { pageFullScreen: boolean; hidden: boolean; utility: boolean; windowMenu: boolean; shown?: boolean };
+type LinuxControlsState = { pageFullScreen: boolean; hidden: boolean; utility: boolean; windowMenu: boolean; shown?: boolean };
 
 export const windowButtonsRendered = ({ placed, pageFullScreen }: { placed: boolean; pageFullScreen: boolean }): boolean => placed && !pageFullScreen;
 
 export const trafficLightsShown = ({ style, pageFullScreen, windowFullScreen }: { style: string; pageFullScreen: boolean; windowFullScreen: boolean }): boolean =>
   style === "trafficLights" && !pageFullScreen && !windowFullScreen;
 
-export type LeadingPlace = { center: readonly [number, number]; trailing: boolean };
+type LeadingPlace = { center: readonly [number, number]; trailing: boolean };
 
 export const leadingButtonsShown = ({ count, pageFullScreen, windowFullScreen, place }: { count: number; pageFullScreen: boolean; windowFullScreen: boolean; place: LeadingPlace }): boolean =>
   count > 0 && !pageFullScreen && !windowFullScreen && !lightsPlaceOffWindow(place);

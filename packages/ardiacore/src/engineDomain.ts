@@ -118,11 +118,11 @@ export type PressLoopLongReport = { loop: string; inner: string; open: boolean; 
 
 export type CliTabTarget = { targetId: string | null; pageGeneration: number };
 
-export type CliDragsEnded = { ownerGone: number; debuggerUnowned: number; nativeRefused: number; sourceGone?: number };
+type CliDragsEnded = { ownerGone: number; debuggerUnowned: number; nativeRefused: number; sourceGone?: number };
 
-export type CliWindowlessPages = { given: number; missed: number };
+type CliWindowlessPages = { given: number; missed: number };
 
-export type CliTokenCommands = Partial<Record<"accessibility" | "browser" | "dom" | "emulation" | "fetch" | "input" | "network" | "page" | "runtime" | "storage" | "target" | "other", number>>;
+type CliTokenCommands = Partial<Record<"accessibility" | "browser" | "dom" | "emulation" | "fetch" | "input" | "network" | "page" | "runtime" | "storage" | "target" | "other", number>>;
 
 export type CliControlStatus = { dragsEnded?: CliDragsEnded; windowlessPages?: CliWindowlessPages; tokenCommands?: CliTokenCommands } & (
   | { state: "external" }

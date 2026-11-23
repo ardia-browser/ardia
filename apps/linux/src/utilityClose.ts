@@ -1,7 +1,7 @@
 import { isLinuxUtility } from "./session";
 
 export type WindowCloseRequest = { windowId: string; rendererGeneration: string; closeGeneration: string };
-export type CloseBarrierHooks = {
+type CloseBarrierHooks = {
   quiesce(request: WindowCloseRequest): void;
   drain(): Promise<number>;
   acknowledge(request: WindowCloseRequest, watermark: number): Promise<void>;

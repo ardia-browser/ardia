@@ -16,7 +16,7 @@ const dialogs = () => requireNativeModule<Pick<DialogsModule, "openCount" | "sho
 const windows = () => requireNativeModule<Pick<WindowsNative, "windowIds">>("ArdiaAppWindows");
 const settled = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-const pageLoads = (key: string, title: string, withinMs: number) =>
+export const pageLoads = (key: string, title: string, withinMs: number) =>
   new Promise<boolean>((resolve) => {
     const watching = onEngineTopic("tab", (event: TabEvent) => {
       if (event.key !== key || event.name !== "navigation") return;

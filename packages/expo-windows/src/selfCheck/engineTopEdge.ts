@@ -1,19 +1,12 @@
-import type { WindowsNative } from "@ardia/shell";
 import { engineAvailable, hostCall } from "../engine/host";
-import { requireNativeModule } from "../modules";
 import { expectEqual, expectTrue, type Check } from "./check";
+import { firstWindow } from "./engineSleep";
 
 const EDGE_KEY = "self-check-top-edge";
 const EDGE_URL = "data:text/html,<title>top edge</title><p>a page that reaches the window's top edge</p>";
 const PLACE = { unit: "px", x: 0, y: 0, width: 400, height: 200 };
 
 type Hit = { hit?: unknown; appHit?: unknown };
-
-const firstWindow = async () => {
-  const ids = await requireNativeModule<Pick<WindowsNative, "windowIds">>("ArdiaAppWindows").windowIds();
-  expectTrue(ids.length > 0, "no window is open to host a page");
-  return ids[0]!;
-};
 
 const hitAt = (x: number, y: number) => hostCall<Hit>("tab.hitTest", { key: EDGE_KEY, x, y });
 

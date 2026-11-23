@@ -55,7 +55,7 @@ export type BookmarkItem = { key: string; title: string; url: string | null; add
 
 export type SyncedHistoryItem = { url: string; title: string; visits: number; lastVisit: number };
 
-export type SyncedProfileTheme = { colors: string[]; darkColors: string[] | null; mode?: "auto" | "light" | "dark"; look?: ThemeLook | null; dark?: ThemeLook | null };
+type SyncedProfileTheme = { colors: string[]; darkColors: string[] | null; mode?: "auto" | "light" | "dark"; look?: ThemeLook | null; dark?: ThemeLook | null };
 
 export type SyncedProfile = {
   syncId: string;

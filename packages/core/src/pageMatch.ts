@@ -1,7 +1,7 @@
 import type { Candidate, Pool } from "./candidatePool.ts";
 import { shownWordsOf, type PageText } from "./pageText.ts";
 
-export type Query = {
+type Query = {
   q: string;
   segmentStarts: [string, string] | null;
   word: boolean;

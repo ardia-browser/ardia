@@ -17,7 +17,7 @@ export type RouteChannel = {
   removeEventListener(type: "message", listener: (event: { data: RouteMessage }) => void): void;
 };
 
-export type RouteTimers = { after(run: () => void, ms: number): unknown; cancel(handle: unknown): void };
+type RouteTimers = { after(run: () => void, ms: number): unknown; cancel(handle: unknown): void };
 
 const realTimers: RouteTimers = {
   after: (run, ms) => setTimeout(run, ms),

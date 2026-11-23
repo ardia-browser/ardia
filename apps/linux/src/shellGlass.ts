@@ -1,24 +1,21 @@
 import { createContext, useLayoutEffect, useSyncExternalStore, type RefObject } from "react";
 import { parseColor } from "../../browser/src/lib/color";
 import { hostSupports, invokeHost, reportHostError, type ArdiaHost } from "./host.ts";
-import { createGlassRegions, GLASS_BLUR, GLASS_METHOD, GLASS_MODULE, type GlassApplied, type GlassGeometry, type GlassRegistry } from "./glassRegions.ts";
+import { createGlassRegions, GLASS_METHOD, GLASS_MODULE, type GlassApplied, type GlassGeometry, type GlassRegistry } from "./glassRegions.ts";
 import { intersection, type Rect } from "./inputRegions.ts";
 
 export const GlassOptIn = createContext(false);
 export const GlassInside = createContext(false);
 
-export const GLASS_ATTRIBUTE = "data-ardia-glass";
-export const GLASS_ID_ATTRIBUTE = "data-ardia-glass-id";
-export const VISUAL_EFFECT_ATTRIBUTE = "data-ardia-visual-effect";
-export const GLASS_DIAGNOSTIC_CLASS = "ardia-glass-diagnostic";
-export const GLASS_TINT_SHARE = 0.85;
-export const GLASS_FILL_PROPERTY = "--ardia-glass-fill";
-export const GLASS_BACKDROP = `blur(${GLASS_BLUR}px) saturate(180%)`;
+const GLASS_ATTRIBUTE = "data-ardia-glass";
+const GLASS_ID_ATTRIBUTE = "data-ardia-glass-id";
+const VISUAL_EFFECT_ATTRIBUTE = "data-ardia-visual-effect";
+const GLASS_TINT_SHARE = 0.85;
+const GLASS_FILL_PROPERTY = "--ardia-glass-fill";
 
 const MOTION_EVENTS = ["transitionrun", "animationstart"] as const;
 
 let registry: GlassRegistry | null = null;
-export const shellGlass = () => registry;
 
 const availabilityListeners = new Set<() => void>();
 const announceAvailability = () => {
@@ -29,9 +26,9 @@ const subscribeAvailability = (listener: () => void) => {
   return () => void availabilityListeners.delete(listener);
 };
 const glassAvailable = () => registry?.available() ?? false;
-export const useGlassAvailable = () => useSyncExternalStore(subscribeAvailability, glassAvailable, glassAvailable);
+const useGlassAvailable = () => useSyncExternalStore(subscribeAvailability, glassAvailable, glassAvailable);
 
-export function glassFill(fill: string) {
+function glassFill(fill: string) {
   const parsed = parseColor(fill);
   if (!parsed) return fill;
   const [r, g, b, a] = parsed;
@@ -45,7 +42,7 @@ const box = (element: Element): Rect => {
   return { x: r.left, y: r.top, width: r.width, height: r.height };
 };
 
-export function measureGlass(element: Element): GlassGeometry | null {
+function measureGlass(element: Element): GlassGeometry | null {
   if (!element.isConnected) return null;
   const own = getComputedStyle(element);
   if (own.visibility === "hidden") return null;

@@ -1,27 +1,27 @@
 export type Rect = { x: number; y: number; width: number; height: number };
 export type Point = { x: number; y: number };
-export type Corner = "topLeft" | "topRight" | "bottomLeft" | "bottomRight";
+type Corner = "topLeft" | "topRight" | "bottomLeft" | "bottomRight";
 export type PlayerFrame = { corner: Corner; dx: number; dy: number; width: number };
 export type Handle = { x: -1 | 0 | 1; y: -1 | 0 | 1 };
 
 export const PLAYER_INSET = 10;
-export const PLAYER_MIN_WIDTH = 200;
-export const PLAYER_DEFAULT_WIDTH = { fraction: 0.28, min: 240, max: 480 };
+const PLAYER_MIN_WIDTH = 200;
+const PLAYER_DEFAULT_WIDTH = { fraction: 0.28, min: 240, max: 480 };
 export const PLAYER_RADIUS = 6;
-export const FLING_SPEED = 350;
-export const FLING_ANGLE = Math.PI / 4;
-export const SPRING = { response: 0.9, damping: 0.9, settle: 0.2 };
-export const CORNERS: readonly Corner[] = ["topLeft", "topRight", "bottomLeft", "bottomRight"];
+const FLING_SPEED = 350;
+const FLING_ANGLE = Math.PI / 4;
+const SPRING = { response: 0.9, damping: 0.9, settle: 0.2 };
+const CORNERS: readonly Corner[] = ["topLeft", "topRight", "bottomLeft", "bottomRight"];
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
 export const aspectOf = (width: number, height: number) => (width > 0 && height > 0 ? width / height : 16 / 9);
 
-export function defaultWidth(area: Rect) {
+function defaultWidth(area: Rect) {
   return clamp(Math.round(area.width * PLAYER_DEFAULT_WIDTH.fraction), PLAYER_DEFAULT_WIDTH.min, PLAYER_DEFAULT_WIDTH.max);
 }
 
-export function sizeFor(width: number, aspect: number, area: Rect) {
+function sizeFor(width: number, aspect: number, area: Rect) {
   const maxWidth = Math.max(1, area.width - 2 * PLAYER_INSET);
   const maxHeight = Math.max(1, area.height - 2 * PLAYER_INSET);
   let fitted = clamp(width, Math.min(PLAYER_MIN_WIDTH, maxWidth), maxWidth);
@@ -134,11 +134,3 @@ export function handleAt(point: Point, rect: Rect, edge = 8): Handle | null {
 }
 
 export const outside = (point: Point, viewport: { width: number; height: number }) => point.x < 0 || point.y < 0 || point.x >= viewport.width || point.y >= viewport.height;
-
-export function intersect(a: Rect, b: Rect): Rect | null {
-  const x = Math.max(a.x, b.x);
-  const y = Math.max(a.y, b.y);
-  const right = Math.min(a.x + a.width, b.x + b.width);
-  const bottom = Math.min(a.y + a.height, b.y + b.height);
-  return right > x && bottom > y ? { x, y, width: right - x, height: bottom - y } : null;
-}

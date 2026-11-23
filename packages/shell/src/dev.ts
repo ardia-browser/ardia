@@ -1,7 +1,7 @@
 import type { IntroMusicCues } from "./app";
 
-export type SidebarEdgeStats = { wakes?: { global: number; local: number }; global?: boolean; local?: boolean; watched?: number };
-export type KeyTiming = { due: number; handled: number; drawn: number };
+type SidebarEdgeStats = { wakes?: { global: number; local: number }; global?: boolean; local?: boolean; watched?: number };
+type KeyTiming = { due: number; handled: number; drawn: number };
 export type KeyPress = {
   key: string;
   keyCode: number;
@@ -30,7 +30,7 @@ export type KeyPressResult = {
 export type Click = { x: number; y: number; in?: "window" | "page"; label?: string; queued?: boolean; asKey?: boolean; wait?: number };
 export type ClickResult = { hit?: string; root?: [number, number]; at?: number; firstResponder?: string; firstResponderOnClick?: string; firstResponderAfter?: string; error?: string };
 
-export type PointerSweep = {
+type PointerSweep = {
   y: number;
   x0: number;
   x1: number;
@@ -44,7 +44,7 @@ export type PointerSweep = {
   scrollFirst?: boolean;
   scroll?: { everyMs: number; gestureMs?: number; delta?: number; momentumMs?: number; sign?: number; elastic?: boolean; at?: number } | null;
 };
-export type PointerSweepResult = {
+type PointerSweepResult = {
   ticks: [number, number, number, number][];
   enters: number;
   exits: number;

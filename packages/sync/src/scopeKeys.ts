@@ -18,7 +18,7 @@ export function recordsWith(state: ScopeState, prefix: string): [string, SyncRec
   return out;
 }
 
-export type TouchedKeys = { records: Set<string>; base: Set<string> };
+type TouchedKeys = { records: Set<string>; base: Set<string> };
 const touching = new WeakMap<ScopeState, Set<TouchedKeys>>();
 
 export function trackTouchedKeys(state: ScopeState): { touched: TouchedKeys; stop: () => void } {

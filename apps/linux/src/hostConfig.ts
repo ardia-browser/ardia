@@ -10,7 +10,7 @@ type ConfigCache = { reads: Map<string, ConfigFileRead>; generation: number; cha
 
 const caches = new WeakMap<ArdiaHost, ConfigCache>();
 
-export const hostReadsConfig = (host: ArdiaHost) => CONFIG_METHODS.every((method) => hostSupports(method, host));
+const hostReadsConfig = (host: ArdiaHost) => CONFIG_METHODS.every((method) => hostSupports(method, host));
 
 function decoded(value: unknown): ConfigFileRead {
   const read = value as { status?: unknown; text?: unknown } | null;

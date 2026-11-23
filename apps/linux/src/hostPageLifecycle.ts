@@ -68,7 +68,7 @@ function dropPage(tabId: string) {
   });
 }
 
-export function keepMountedPage(tabId: string) {
+function keepMountedPage(tabId: string) {
   pendingDepartures.get(tabId)?.();
 }
 

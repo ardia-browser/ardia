@@ -4,21 +4,21 @@ import type { NavigationState, WebViewProps } from "../../../packages/ardiacore/
 import type { PageResetReason } from "./hostPageLifecycle";
 import { consentEpoch } from "../../browser/src/state/telemetry/client";
 
-export type PageLeaseMetadata = {
+type PageLeaseMetadata = {
   claim: string;
   rendererGeneration: string;
   bindingGeneration: string;
   documentEpoch: string;
 };
-export type PageDelivery = PageLeaseMetadata & { type: "pageEvent"; sequence: number; event: PageEvent };
-export type PageCreationState = { lease: PageLeaseMetadata; snapshot: { watermark: number; events: PageEvent[] } };
-export type PageRebinding = PageCreationState & { browserId: number; chromeTabId: number };
-export type PageLifecycle = PageLeaseMetadata & { type: "pageLifecycle"; sequence: number } & (
+type PageDelivery = PageLeaseMetadata & { type: "pageEvent"; sequence: number; event: PageEvent };
+type PageCreationState = { lease: PageLeaseMetadata; snapshot: { watermark: number; events: PageEvent[] } };
+type PageRebinding = PageCreationState & { browserId: number; chromeTabId: number };
+type PageLifecycle = PageLeaseMetadata & { type: "pageLifecycle"; sequence: number } & (
   { action: "reset"; reason: "document" | "provisional" } |
   { action: "snapshot"; reason?: "document" | "restore"; events: PageEvent[] } |
   { action: "rebind"; creation: PageRebinding }
 );
-export type PageRebound = (identity: { browserId: number; chromeTabId: number }) => void;
+type PageRebound = (identity: { browserId: number; chromeTabId: number }) => void;
 
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
 const generation = (value: unknown): value is string => typeof value === "string" && /^[1-9][0-9]{0,19}$/.test(value) && BigInt(value) <= 18446744073709551615n;

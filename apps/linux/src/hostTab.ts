@@ -8,9 +8,9 @@ import { noteLinuxPageViewportRejected } from "../../browser/src/state/telemetry
 import { errorFor } from "../../browser/src/state/telemetry/logs";
 
 export type HostTabEvent = { type: string; [key: string]: unknown };
-export type HostTabIdentity = { browserId: number; chromeTabId: number; state?: unknown };
-export type HostTabOptions = { key: string; profile?: string; url?: string; adoptId?: string; temporary?: boolean };
-export type HostPageReceiver = {
+type HostTabIdentity = { browserId: number; chromeTabId: number; state?: unknown };
+type HostTabOptions = { key: string; profile?: string; url?: string; adoptId?: string; temporary?: boolean };
+type HostPageReceiver = {
   receive(module: string, id: string, payload: unknown): boolean;
   install(value: unknown): boolean;
   captureRequest(): (() => boolean) | null;
@@ -24,14 +24,14 @@ export type TabViewport = {
   radii?: CornerRadii;
   contentRect?: { x: number; y: number; width: number; height: number };
 };
-export const VIEWPORT_CLIP_CAPABILITY = "tab.viewportClip";
+const VIEWPORT_CLIP_CAPABILITY = "tab.viewportClip";
 
 const claims = new WeakMap<ArdiaHost, Map<string, HostTab>>();
 const CREATING_LOAD_MS = 2_000;
 const ADOPTED_LIVE = ["tab", "ardiacore"];
 const ADOPTED_AS_COPIES = ["restore", "clone"];
 
-export function nativeAdoptId(adoptId: string | undefined, host: ArdiaHost): string | undefined {
+function nativeAdoptId(adoptId: string | undefined, host: ArdiaHost): string | undefined {
   const kind = adoptId?.slice(0, Math.max(0, adoptId.indexOf(":")));
   if (!adoptId || !kind) return undefined;
   if (ADOPTED_LIVE.includes(kind)) return adoptId;

@@ -19,8 +19,8 @@ const SCAN_BYTES = 0x10000n;
 const MAX_COUNT = 4096;
 
 export type MinidumpModule = { base: bigint; size: number; path: string; buildId: string | null };
-export type MinidumpException = { signal: number; code: number; threadId: number };
-export type MinidumpFrame = { module: MinidumpModule | null; address: bigint };
+type MinidumpException = { signal: number; code: number; threadId: number };
+type MinidumpFrame = { module: MinidumpModule | null; address: bigint };
 
 export type Minidump = {
   time: number;
@@ -189,7 +189,7 @@ function memory(reader: Reader, threadList: number | undefined, memoryList: numb
   return regions;
 }
 
-export function moduleAt(list: MinidumpModule[], address: bigint) {
+function moduleAt(list: MinidumpModule[], address: bigint) {
   return list.find((module) => address >= module.base && address < module.base + BigInt(module.size)) ?? null;
 }
 

@@ -36,8 +36,6 @@ const LOCAL_FILES: Record<string, string> = { "html.spec.whatwg.org": "html.spec
 
 const base = () => (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? "/";
 
-export const FAVICON_HOSTS = Object.keys(REMOTE_FAVICONS);
-
 export const remoteFaviconFor = (url: string) => REMOTE_FAVICONS[hostOf(url)] ?? null;
 
 export function faviconFor(url: string) {

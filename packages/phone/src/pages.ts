@@ -40,7 +40,7 @@ export type OffscreenCapture = { fileName: string; path: string; title: string |
 
 export type SitePermissionKind = "camera" | "microphone" | "location";
 
-export type PageTranslationState = { language: string | null; languageName: string | null; confirmed: boolean };
+type PageTranslationState = { language: string | null; languageName: string | null; confirmed: boolean };
 
 export type SitePermissionGrant = { origin: string; host: string; permissions: SitePermissionKind[]; grantedAt: number };
 

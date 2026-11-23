@@ -2,7 +2,7 @@ import type { HLC } from "./hlc.ts";
 
 export type Origin = [device: string, seq: number];
 export type SyncRecord = { h: HLC; v: unknown; o: Origin };
-export type Op = { k: string; h: HLC; v: unknown };
+type Op = { k: string; h: HLC; v: unknown };
 
 export type LogFile = { v: 1; kind: "log"; device: string; seq: number; at: number; ops: Op[] };
 export type SnapshotFile = {

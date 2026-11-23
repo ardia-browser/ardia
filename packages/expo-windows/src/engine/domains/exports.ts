@@ -1,6 +1,6 @@
 import { callError, ok, originalProfile, served, type Desktop, type Engine, type Fields, type Handler, type Handlers } from "./calling";
 
-export const PASSWORD_FILE_WARNING = "Anyone who can open this file can read your passwords.";
+const PASSWORD_FILE_WARNING = "Anyone who can open this file can read your passwords.";
 export const EXPORT_ANSWER_MS = 120_000;
 
 const TIMED_OUT = Symbol("timed out");

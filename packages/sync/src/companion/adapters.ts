@@ -76,7 +76,7 @@ function unionTimes(a: number[], b: number[]): number[] {
 
 const keptTimes = (times: number[]): number[] => (times.length > MAX_VISIT_TIMES ? unionTimes(times.filter((t) => Number.isFinite(t)), []) : times);
 
-export type HistoryContext = {
+type HistoryContext = {
   visits: (LocalVisit & { p: string })[];
   profiles: string[];
   state: ScopeState;
@@ -164,7 +164,7 @@ export function historyAdapter(ctx: HistoryContext): Adapter {
   };
 }
 
-export type SendContext = {
+type SendContext = {
   scope: string;
   sends: () => PendingSend[];
   acks: () => Ack[];
@@ -204,7 +204,7 @@ export function sendsAdapter(ctx: SendContext): Adapter {
   };
 }
 
-export type BookmarkContext = {
+type BookmarkContext = {
   scope: string;
   state: ScopeState;
   ops: () => BookmarkOp[];

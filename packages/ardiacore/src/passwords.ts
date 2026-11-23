@@ -3,11 +3,11 @@ import { nativeModule } from "./nativeModules";
 
 export type SavedPassword = { origin: string; username: string; created: number; modified: number };
 export type PasswordExportStatus = "succeeded" | "cancelled" | "writeFailed" | "reauthFailed" | "inProgress";
-export type FieldProviderField = "login" | "oneTimeCode";
+type FieldProviderField = "login" | "oneTimeCode";
 export type FieldProviderProfile = { profile: string; fields: FieldProviderField[]; codeSetup: boolean };
-export type SystemPanelRefusal = "noTab" | "noProvider" | "stale" | "hidden" | "notFocused" | "unavailable" | "notKey" | "notEditing" | "throttled" | "refused" | "noPanel" | "tabGone";
+type SystemPanelRefusal = "noTab" | "noProvider" | "stale" | "hidden" | "notFocused" | "unavailable" | "notKey" | "notEditing" | "throttled" | "refused" | "noPanel" | "tabGone";
 export type SystemPanelResult = { shown: boolean; reason?: SystemPanelRefusal };
-export type VerificationCodeRefusal = "noTab" | "unknownToken" | "stale" | "navigated" | "noProvider" | "frameGone" | "handlerChanged" | "failed";
+type VerificationCodeRefusal = "noTab" | "unknownToken" | "stale" | "navigated" | "noProvider" | "frameGone" | "handlerChanged" | "failed";
 export type VerificationCodeSetupResult = { opened: boolean; reason?: VerificationCodeRefusal };
 
 const Passwords = nativeModule("ArdiaPasswords");

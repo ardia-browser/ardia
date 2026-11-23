@@ -2,7 +2,7 @@ import type { DomainModule } from "@ardia/ardiacore";
 import type { AppNative, WindowsNative } from "@ardia/shell";
 import { TurboModuleRegistry } from "react-native";
 import type { AppWindowsModule, EngineHostModule } from "../nativeModuleTypes";
-import { engineAvailable, engineCallJson, hostCall, onEngineTopic, removeProfileFolder } from "../engine/host";
+import { engineAvailable, engineCallJson, hostCall, onEngineTopic } from "../engine/host";
 import { requireNativeModule } from "../modules";
 import { expectEqual, expectTrue, type Check } from "./check";
 import { popupChecks } from "./enginePopups";

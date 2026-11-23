@@ -8,7 +8,7 @@ import type { AppWindowsModule } from "./nativeModuleTypes";
 
 type Press = { nativeEvent: { pageX: number; pageY: number } };
 
-export type DragOptions = Pick<WindowDragRegionProps, "onRegionDoubleClick" | "clickable" | "onRegionClick"> &
+type DragOptions = Pick<WindowDragRegionProps, "onRegionDoubleClick" | "clickable" | "onRegionClick"> &
   Required<Pick<WindowDragRegionProps, "titleBarDoubleClick">> & { claims?: (press: Press) => boolean };
 
 type LatestOptions = { current: DragOptions };
@@ -39,7 +39,7 @@ let titleBandPresses: EventSubscription | null = null;
 
 const takesPressItself = (options: DragOptions) => options.clickable === true || options.onRegionDoubleClick !== undefined || !options.titleBarDoubleClick;
 
-export function makeDragHandlers(rootTag: number, latest: LatestOptions) {
+function makeDragHandlers(rootTag: number, latest: LatestOptions) {
   let lastPress = 0;
   let lastPressAt: [number, number] = [0, 0];
   let pressedAt: [number, number] | null = null;
@@ -183,7 +183,7 @@ export const WindowDragRegion = forwardRef<View, WindowDragRegionProps>(function
   return createElement(View as ComponentType<Record<string, unknown>>, { ...rest, ref, ...handlers });
 });
 
-export const inTitleBand = (press: Press) => press.nativeEvent.pageY <= TITLE_BAND_HEIGHT;
+const inTitleBand = (press: Press) => press.nativeEvent.pageY <= TITLE_BAND_HEIGHT;
 
 export function TitleBandDrag({ children }: { children?: ReactNode }) {
   const rootTag = useContext(RootTagContext) as unknown as number;

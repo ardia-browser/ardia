@@ -20,7 +20,7 @@ if (!last || last.w !== now.w || last.h !== now.h) {
   if (document.body) ro.observe(document.body);
 }`;
 
-export type PopupSize = { width: number; height: number };
+type PopupSize = { width: number; height: number };
 
 export class PopupSizeWaiters {
   private latest: PopupSize | null = null;

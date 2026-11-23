@@ -11,7 +11,7 @@ import { windowButtonsRendered } from "./windowControlsRules";
 
 export * from "../../browser/src/state/windows/layout";
 
-export const trailingButtonsRendered = (s: BrowserState, windowId: string, pageFullScreen: boolean, chrome: WindowChrome = WINDOW_CHROME): boolean =>
+const trailingButtonsRendered = (s: BrowserState, windowId: string, pageFullScreen: boolean, chrome: WindowChrome = WINDOW_CHROME): boolean =>
   windowButtonsRendered({ placed: chrome.trailingWidth > 0 && windowControlsPlace(s, windowId, pageFrameIn(s, windowId), chrome) !== null, pageFullScreen });
 
 export const menuBesideWindowButtons = (s: BrowserState, windowId: string, pageFullScreen: boolean, chrome: WindowChrome = WINDOW_CHROME): boolean =>

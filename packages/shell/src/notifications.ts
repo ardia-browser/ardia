@@ -1,6 +1,6 @@
 import type { EventSubscription } from "expo-modules-core";
 
-export type NotificationPermission = "granted" | "denied" | "notDetermined" | "provisional";
+type NotificationPermission = "granted" | "denied" | "notDetermined" | "provisional";
 
 export type NotificationOptions = {
   id?: string;
@@ -16,7 +16,7 @@ export type NotificationOptions = {
   data?: Record<string, unknown>;
 };
 
-export type NotificationIconStatus = "none" | "attached" | "invalid_url" | "download_failed" | "empty" | "write_failed" | "attachment_rejected" | "too_large";
+type NotificationIconStatus = "none" | "attached" | "invalid_url" | "download_failed" | "empty" | "write_failed" | "attachment_rejected" | "too_large";
 
 export type NotificationPostResult = {
   id?: string;

@@ -2,7 +2,7 @@ import type { CleanedTitle, CleanedUrl } from "@ardia/core";
 import type { MenuItem } from "@ardia-real/shell";
 
 export type ShareAnchor = readonly [number, number, number, number];
-export type ShareSurface = {
+type ShareSurface = {
   menu(items: MenuItem[], at?: { x: number; y: number }): Promise<string | null>;
   copy(text: string): void;
   openInActivePage(url: string, windowId: string | null): boolean;
@@ -26,7 +26,7 @@ export const linkShareItems = (url: string, prefix = ""): MenuItem[] => [
   ...(mailable(url) ? [{ id: `${prefix}${EMAIL}`, title: "Email Link", symbol: "envelope" }] : []),
 ];
 
-export const textShareItems = (): MenuItem[] => [{ id: COPY, title: "Copy", symbol: "doc.on.doc" }];
+const textShareItems = (): MenuItem[] => [{ id: COPY, title: "Copy", symbol: "doc.on.doc" }];
 
 export const withShareMenus = (items: MenuItem[]): MenuItem[] => items.map((item) => {
   if ("separator" in item) return item;

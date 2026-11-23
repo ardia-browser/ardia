@@ -41,18 +41,18 @@ if (store.queued.length) post("result", JSON.stringify(store.queued.shift()));
 else store.waiting = (id) => post("result", JSON.stringify(id));
 `;
 
-export type HostPageScript = { command: string; args: unknown[]; map?: (result: unknown) => unknown; failed?: () => unknown };
+type HostPageScript = { command: string; args: unknown[]; map?: (result: unknown) => unknown; failed?: () => unknown };
 
 export const WEB_STORE_RETRY_MS = 1000;
 
 const superseded = (answer: unknown) => !!answer && typeof answer === "object" && (answer as { superseded?: unknown }).superseded === true;
 
-export function webStoreAnswer(answer: unknown): unknown {
+function webStoreAnswer(answer: unknown): unknown {
   if (superseded(answer)) return new Promise(() => {});
   return typeof answer === "string" ? answer : null;
 }
 
-export function webStoreFailed(): Promise<null> {
+function webStoreFailed(): Promise<null> {
   return new Promise((resolve) => setTimeout(() => resolve(null), WEB_STORE_RETRY_MS));
 }
 

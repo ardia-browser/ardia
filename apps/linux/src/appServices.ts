@@ -22,18 +22,18 @@ import { BROWSER_COMMAND_CHANNEL, BROWSER_WINDOW_COMMANDS, regularFocusOrder, ro
 
 export const APP_LAUNCH_LOCK = "ardia.linux.app-launch";
 export const APP_LAUNCH_MARK = "ardia.linux.app-launch";
-export const ONBOARDING_DOCUMENT = "onboarding.json";
+const ONBOARDING_DOCUMENT = "onboarding.json";
 export const FRESH_PROFILE_DOCUMENT = "linux-fresh-profile.json";
 export const LAUNCH_STEPS = ["version", "onboarding", "releaseNotes", "defaultBrowserOffer"] as const;
 
-export type LaunchStep = (typeof LAUNCH_STEPS)[number] | "versionUpdated";
-export type LaunchLocks = { request(name: string, callback: () => Promise<void>): Promise<unknown> };
-export type LaunchMarks = { setItem(key: string, value: string): void };
-export type LaunchRecord = { done(): Promise<ReadonlySet<string>>; complete(step: LaunchStep): Promise<unknown> };
+type LaunchStep = (typeof LAUNCH_STEPS)[number] | "versionUpdated";
+type LaunchLocks = { request(name: string, callback: () => Promise<void>): Promise<unknown> };
+type LaunchMarks = { setItem(key: string, value: string): void };
+type LaunchRecord = { done(): Promise<ReadonlySet<string>>; complete(step: LaunchStep): Promise<unknown> };
 export type LaunchClaim = "ran" | "alreadyDone" | "failed" | "unavailable";
-export type DocumentPresence = "present" | "absent" | "unknown";
-export type OnboardingEvidence = { onboarding: DocumentPresence; freshProfile: DocumentPresence; savedSession: boolean };
-export type StoredDocumentReader = (name: string) => Promise<string | null>;
+type DocumentPresence = "present" | "absent" | "unknown";
+type OnboardingEvidence = { onboarding: DocumentPresence; freshProfile: DocumentPresence; savedSession: boolean };
+type StoredDocumentReader = (name: string) => Promise<string | null>;
 
 const report = (error: unknown) => console.warn("[ardia linux] app services", error);
 
@@ -48,7 +48,7 @@ export function hostLaunchRecord(host: ArdiaHost): LaunchRecord | undefined {
   };
 }
 
-export const hostStoredDocument = (host: ArdiaHost): StoredDocumentReader => async (name) => {
+const hostStoredDocument = (host: ArdiaHost): StoredDocumentReader => async (name) => {
   const contents = await invokeHost<unknown>("ArdiaShell.readDocument", { args: [name] }, host);
   if (contents === null || typeof contents === "string") return contents;
   throw new Error(`Unexpected stored document reply for ${name}`);
@@ -208,7 +208,7 @@ export function runAppCommand(windowId: string, command: CommandEvent["command"]
   return false;
 }
 
-export const FULL_SCREEN_COMMAND = "toggleFullScreen";
+const FULL_SCREEN_COMMAND = "toggleFullScreen";
 
 export const UTILITY_APP_COMMANDS: ReadonlySet<string> = new Set(["copyDiagnostics", "taskManager", QUIT_COMMAND]);
 
@@ -216,7 +216,7 @@ export const LINUX_APP_COMMANDS: ReadonlySet<string> = new Set(["reportProblem",
 
 const routeChannel = () => typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(BROWSER_COMMAND_CHANNEL) as unknown as RouteChannel;
 
-export async function routeUtilityCommand(windowId: string, command: CommandEvent["command"], channel: RouteChannel | null) {
+async function routeUtilityCommand(windowId: string, command: CommandEvent["command"], channel: RouteChannel | null) {
   const ran = channel ? await routeToBrowserWindow({ channel, command }) : null;
   if (!ran) showToast(windowId, "No browser window to show this in", "Open a browser window, then try again.");
   return ran;

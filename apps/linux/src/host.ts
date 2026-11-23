@@ -3,7 +3,7 @@ import type { HydrateData } from "../../browser/src/state/browser/store";
 import type { BrowserWindow, Tab } from "../../browser/src/state/browser/types";
 import type { UnclaimedTab } from "./unclaimedTabs.ts";
 
-export type HostListener = (module: string, event: string, payload: unknown) => void;
+type HostListener = (module: string, event: string, payload: unknown) => void;
 export type ArdiaHost = {
   bootstrap: {
     windowId: string;

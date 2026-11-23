@@ -46,12 +46,12 @@ export const SELF_UPDATE_METHODS = ["ArdiaUpdates.installKind", "ArdiaUpdates.up
 
 export const LINKS_FROM_OTHER_APPS = "ArdiaShell.onOpenURLs";
 export const DICTATION_METHOD = "ArdiaShell.startDictation";
-export const FULL_SCREEN_METHOD = "ArdiaShell.toggleFullScreen";
+const FULL_SCREEN_METHOD = "ArdiaShell.toggleFullScreen";
 export const FULL_SCREEN_ITEM = "std:toggleFullScreen:";
-export const PAGE_EDIT_COMMAND = "tab.edit";
+const PAGE_EDIT_COMMAND = "tab.edit";
 export const UNLOAD_IDLE_PROFILES_CALL = "profiles.unloadIdle";
-export const BLOCK_AUTOPLAY_EVERYWHERE_CALL = "webView.setBlockAutoplayEverywhere";
-export const HIDDEN_ELEMENTS_CALLS = ["contentBlocker.hiddenElements", "contentBlocker.hideElements", "contentBlocker.restoreElements"] as const;
+const BLOCK_AUTOPLAY_EVERYWHERE_CALL = "webView.setBlockAutoplayEverywhere";
+const HIDDEN_ELEMENTS_CALLS = ["contentBlocker.hiddenElements", "contentBlocker.hideElements", "contentBlocker.restoreElements"] as const;
 
 export function linuxCapabilities(host: ArdiaHost | undefined = ardiaHost): LinuxCapabilities {
   const has = (...methods: string[]) => !!host && methods.every((method) => hostSupports(method, host));

@@ -1,7 +1,6 @@
 import { requireNativeViewManager } from "expo-modules-core";
 import { forwardRef, useImperativeHandle, useRef } from "react";
 import type { ViewProps } from "react-native";
-import { nativeModule } from "./nativeModules";
 
 export type PeekRect = { x: number; y: number; width: number; height: number };
 
@@ -18,9 +17,9 @@ export type PeekStageGeometry = {
   fullscreen: boolean;
 };
 
-export type PeekStagePhase = "idle" | "waiting" | "entering" | "open" | "gesture" | "settling" | "closing" | "promoting" | "finished";
-export type PeekEntrance = "genie" | "affine" | "fade";
-export type PeekMeshFallback = "switch" | "class" | "selector" | "encoding" | "layout" | "setter" | "constant" | "interpolation" | "construction" | "exception" | "invalid" | "test";
+type PeekStagePhase = "idle" | "waiting" | "entering" | "open" | "gesture" | "settling" | "closing" | "promoting" | "finished";
+type PeekEntrance = "genie" | "affine" | "fade";
+type PeekMeshFallback = "switch" | "class" | "selector" | "encoding" | "layout" | "setter" | "constant" | "interpolation" | "construction" | "exception" | "invalid" | "test";
 
 export type PeekStageState = {
   generation: number;
@@ -30,8 +29,8 @@ export type PeekStageState = {
   readyTimedOut: boolean;
   fallback?: PeekMeshFallback;
 };
-export type PeekStageDone = { generation: number; outcome: "closed" | "promoted" };
-export type PeekStagePinch = { generation: number; outcome: "open" | "close" | "stay" };
+type PeekStageDone = { generation: number; outcome: "closed" | "promoted" };
+type PeekStagePinch = { generation: number; outcome: "open" | "close" | "stay" };
 
 export type PeekStageHandle = {
   begin(generation: number, animated?: boolean): Promise<boolean>;
@@ -39,7 +38,7 @@ export type PeekStageHandle = {
   promote(generation: number): Promise<boolean>;
 };
 
-export type PeekStageProps = ViewProps & {
+type PeekStageProps = ViewProps & {
   geometry: PeekStageGeometry;
   reduceMotion: boolean;
   gestures: boolean;
@@ -62,11 +61,6 @@ export type PeekStageNative = {
   devState(windowId: string): Promise<Record<string, unknown>[]>;
   devPageFrames(windowId: string): Promise<{ tabId: string; browserId: number; visible: boolean; inPeek: boolean; frame: PeekRect }[]>;
 };
-
-const PeekStageModule = nativeModule("ArdiaPeekStage");
-
-export const devPeekState = (windowId: string) => PeekStageModule.devState(windowId);
-export const devPeekPageFrames = (windowId: string) => PeekStageModule.devPageFrames(windowId);
 
 export const PeekStage = forwardRef<PeekStageHandle, PeekStageProps>(function PeekStage({ onPeekState, onPeekDone, onPeekPinch, ...props }, ref) {
   const native = useRef<PeekStageHandle>(null);

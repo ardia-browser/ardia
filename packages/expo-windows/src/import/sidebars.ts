@@ -10,11 +10,11 @@ export const ARC_SIDEBAR_FILE = `${ARC_DIR}\\StorableSidebar.json`;
 
 const LARGEST_SIDEBAR_BYTES = 64 << 20;
 
-export const arcSidebarPath = (host: ImportHost) => join(host.localAppData, ARC_SIDEBAR_FILE);
+const arcSidebarPath = (host: ImportHost) => join(host.localAppData, ARC_SIDEBAR_FILE);
 
 export const arcFilePath = (host: ImportHost, ...name: string[]) => join(host.localAppData, ARC_DIR, ...name);
 
-export const arcSpaceNames = (sidebar: ArcSidebar | null | undefined) => new Map((sidebar?.spaces ?? []).map((s) => [s.id, s.name]));
+const arcSpaceNames = (sidebar: ArcSidebar | null | undefined) => new Map((sidebar?.spaces ?? []).map((s) => [s.id, s.name]));
 
 export async function readArcRouting(host: ImportHost, sidebar: ArcSidebar | null): Promise<ArcRouting> {
   const raw = await host.readTextWithin(arcFilePath(host), arcFilePath(host, ARC_ROUTING_FILE), ROUTING_BYTES).catch(() => null);
@@ -36,7 +36,7 @@ async function arcExtraKinds(host: ImportHost, sidebar: ArcSidebar | null): Prom
   return kinds;
 }
 
-export async function loadArcSidebar(host: ImportHost): Promise<ArcSidebar> {
+async function loadArcSidebar(host: ImportHost): Promise<ArcSidebar> {
   const raw = await host.readTextWithin(arcFilePath(host), arcSidebarPath(host), LARGEST_SIDEBAR_BYTES).catch(() => null);
   if (raw == null) throw new ImportFailure("notFound", "No Arc sidebar data");
   return parseArcSidebar(raw);
@@ -44,7 +44,7 @@ export async function loadArcSidebar(host: ImportHost): Promise<ArcSidebar> {
 
 const pinnedCount = (space: SpaceSuggestion) => space.pinned.reduce((n, node) => n + linkCount(node), 0);
 
-export function spaceSummaries(spaces: SpaceSuggestion[], containers?: Map<number, string>): SpaceSummary[] {
+function spaceSummaries(spaces: SpaceSuggestion[], containers?: Map<number, string>): SpaceSummary[] {
   return spaces.map((s) => {
     const containerName = s.container !== undefined ? containers?.get(s.container) : undefined;
     return {

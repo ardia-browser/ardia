@@ -1,4 +1,4 @@
-export type NativeListener = (event: unknown) => void;
+type NativeListener = (event: unknown) => void;
 
 export function createNativeEvents() {
   const listeners = new Map<string, Set<{ listener: NativeListener }>>();

@@ -5,7 +5,7 @@ export const LIVE_CAPABILITIES = ["ArdiaLive.request", "ArdiaLive.connect", "Ard
 
 export const UNAVAILABLE_MESSAGE = "Live folder services are unavailable in this Linux host";
 
-export type LinuxLiveErrorKind = LiveErrorKind | "keyringLocked" | "keyringUnavailable";
+type LinuxLiveErrorKind = LiveErrorKind | "keyringLocked" | "keyringUnavailable";
 
 const KINDS: Record<string, LinuxLiveErrorKind> = {
   ERR_LIVE_SIGNED_OUT: "signedOut",
@@ -16,7 +16,7 @@ const KINDS: Record<string, LinuxLiveErrorKind> = {
   ERR_LIVE_KEYRING_UNAVAILABLE: "keyringUnavailable",
 };
 
-export type LiveCallOptions = { signal?: AbortSignal };
+type LiveCallOptions = { signal?: AbortSignal };
 
 export type LiveClient = {
   available(): boolean;

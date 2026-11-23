@@ -96,6 +96,7 @@ struct CredentialWording: Sendable {
   var undeclaredApproval: String { "\(title) asked to open an address it doesn't declare." }
   var notRunning: String { "\(title) isn't running. Restart it in Settings." }
   var damaged: String { "This copy of \(title) is damaged. Reinstall it." }
+  var secretTooLong: String { "That's too long for \(title)'s command line. Make the change in \(title)." }
   var keptPasskeyMismatch: String { "\(title) didn't keep the passkey." }
   var typeAgain: String { "Type your \(title) \(fieldTitle(nil)) again." }
 

@@ -220,12 +220,17 @@ enum CredentialResults {
 
   static func passkey(_ value: Any) throws -> VaultItemPasskey {
     let table = try record(value)
-    guard let counter = number(table["counter"]), counter >= 0, counter == counter.rounded() else { throw Invalid() }
+    guard let counter = signCount(table["counter"]) else { throw Invalid() }
     return VaultItemPasskey(
       credentialId: try identifier(table["credentialId"], longest: 512), rpId: try identifier(table["rpId"], longest: 253),
       userName: cleanedDisplay(table["userName"], longest: CredentialLimits.passkeyNameLength) ?? "",
       displayName: cleanedDisplay(table["displayName"], longest: CredentialLimits.passkeyNameLength) ?? "", discoverable: bool(table["discoverable"]) ?? true,
-      counter: Int(counter))
+      counter: counter)
+  }
+
+  static func signCount(_ value: Any?) -> Int? {
+    guard let counter = number(value), counter >= 0, counter <= Double(UInt32.max), counter == counter.rounded() else { return nil }
+    return Int(counter)
   }
 
   static func page(_ value: Any?, provider: String) throws -> CredentialPage {
@@ -291,10 +296,10 @@ enum CredentialResults {
     let key = try record(table["privateKey"])
     guard key["format"] as? String == "pkcs8", let der = key["der"] as? String, let privateKey = VaultBase64URL.decode(der),
       let handleText = table["userHandle"] as? String, let userHandle = VaultBase64URL.decode(handleText), (1...64).contains(userHandle.count),
-      let counter = number(table["counter"])
+      let counter = signCount(table["counter"])
     else { throw Invalid() }
     return CredentialPasskeyKey(
       credentialId: try identifier(table["credentialId"], longest: 512), rpId: try identifier(table["rpId"], longest: 253), privateKey: privateKey,
-      userHandle: userHandle, counter: Int(counter))
+      userHandle: userHandle, counter: counter)
   }
 }

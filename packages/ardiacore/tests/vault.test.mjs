@@ -36,12 +36,13 @@ const suites = [
     "VaultState", "VaultWebAuthn", "VaultOriginMatch", "VaultPublicSuffixRules", "VaultCapabilities", "VaultInstall", "VaultSetup", "VaultSetupKind",
     "VaultProviderState", "VaultSignInFields", "VaultSignInFields+JSON", "VaultSignInResult", "VaultSignInNeed", "VaultMethod", "VaultField",
     "VaultNewLogin", "VaultLoginEdit", "VaultTotp", "VaultTotpSecret", "VaultTotpURI", "VaultMessages", "VaultNetwork", "VaultSecretEntries",
-  ]],
+  ], ["credential-passkeys"]],
 ];
 
-for (const [name, flags, sources] of suites) {
+for (const [name, flags, sources, alongside = []] of suites) {
   test(`the ${name} Swift Testing suite passes`, (t) => {
-    runSwiftTests(t, `${name}-test`, [...sources.map((source) => `../ios/${source}.swift`), `./${name}.test.swift`], {
+    const tests = [name, ...alongside].map((suite) => `./${suite}.test.swift`);
+    runSwiftTests(t, `${name}-test`, [...sources.map((source) => `../ios/${source}.swift`), ...tests], {
       flags: [...flags, "-swift-version", "6"],
       env: name === "credential-output" ? HOSTILE_ENV : {},
     });

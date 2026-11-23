@@ -410,11 +410,21 @@ final class PluginVaultProvider: VaultPasskeyHolder, @unchecked Sendable {
 
   private func itemCall(_ handler: String, _ cli: VaultCLI, _ input: @escaping @Sendable ((String) -> Any?) -> [String: Any]?) async throws -> VaultItem {
     let handled = sendsSecretHandles
+    if handled, !Self.sealable(input) { throw VaultError.failed(wording.secretTooLong) }
     let answer = await call(handler, cli) { builder in
       input { value -> Any? in handled ? builder.handle(value) : value } ?? [:]
     }
     if case .result(let raw, _) = answer, raw is NSNull { throw VaultError.failed(wording.sentence("savedNotReturned", handler: handler)) }
     return try value(answer, handler: handler) { try CredentialResults.item($0, provider: id) }
+  }
+
+  static func sealable(_ input: ((String) -> Any?) -> [String: Any]?) -> Bool {
+    var minted = 0
+    return input { value -> Any? in
+      guard minted < CredentialLimits.handlesPerCall, value.utf8.count <= CredentialLimits.secretBytes else { return nil }
+      minted += 1
+      return value
+    } != nil
   }
 
   static func addTotpInput(id item: String, uri: String, viaEdit: Bool, secret: (String) -> Any?) -> [String: Any]? {

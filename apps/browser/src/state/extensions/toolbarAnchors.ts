@@ -1,3 +1,5 @@
+import { Platform } from "react-native";
+import { call } from "../../platform/engine";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import { shownPageId } from "../peek/peek";
@@ -10,6 +12,7 @@ const toolbarAnchors = new Map<string, AnchorEntry>();
 const queuedToolbarContexts = new Set<string>();
 export const DEVELOPER_BAR_ANCHOR = "developerBar";
 const anchorKey = (windowId: string, tabId: string, slot: string) => `${windowId}|${tabId}|${slot}`;
+const isExtensionButton = (slot: string) => slot !== "*" && slot !== DEVELOPER_BAR_ANCHOR;
 
 const MEASURE_WAIT_MS = 100;
 const OFF_TOOLBAR: Anchor = { x: 100_000, y: 13, width: 28, height: 28 };
@@ -22,11 +25,10 @@ function queueToolbarContext(windowId: string) {
     const s = useBrowser.getState();
     if (!s.windows[windowId]) return;
     const tabId = shownPageId(s, windowId) ?? "";
-    const anchors: Record<string, Anchor> = Object.fromEntries(
-      [...toolbarAnchors.values()]
-        .filter((entry) => entry.windowId === windowId && entry.tabId === tabId && entry.slot !== "*" && entry.slot !== DEVELOPER_BAR_ANCHOR)
-        .map((entry) => [entry.slot, entry.anchor]),
-    );
+    const anchors: Record<string, Anchor> = {};
+    for (const entry of toolbarAnchors.values()) {
+      if (entry.windowId === windowId && entry.tabId === tabId && isExtensionButton(entry.slot)) anchors[entry.slot] = entry.anchor;
+    }
     void call("extensions.toolbarContext", { windowId, tabId, anchors }).catch(() => {});
   });
 }
@@ -42,14 +44,15 @@ export function setToolbarAnchor(windowId: string, tabId: string, slot: string, 
   const key = anchorKey(windowId, tabId, slot);
   const last = toolbarAnchors.get(key)?.anchor;
   toolbarAnchors.set(key, { windowId, tabId, slot, anchor, measure });
-  if (!last || last.x !== anchor.x || last.y !== anchor.y || last.width !== anchor.width || last.height !== anchor.height) queueToolbarContext(windowId);
+  if (isExtensionButton(slot) && (!last || last.x !== anchor.x || last.y !== anchor.y || last.width !== anchor.width || last.height !== anchor.height))
+    queueToolbarContext(windowId);
 }
 
 export function dropToolbarAnchor(windowId: string, tabId: string, slot: string, anchor: Anchor) {
   const key = anchorKey(windowId, tabId, slot);
   if (toolbarAnchors.get(key)?.anchor === anchor) {
     toolbarAnchors.delete(key);
-    queueToolbarContext(windowId);
+    if (isExtensionButton(slot)) queueToolbarContext(windowId);
   }
 }
 
@@ -81,5 +84,3 @@ export async function toolbarAnchor(windowId: string, extensionId: string, tabId
   else if (fresh.x !== cached.x || fresh.y !== cached.y) noteToolbarAnchor("moved", consent);
   return fresh ?? cached;
 }
-import { Platform } from "react-native";
-import { call } from "../../platform/engine";

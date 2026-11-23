@@ -15,8 +15,7 @@ import { TOOLBAR_TRAILING } from "../../lib/toolbarRow";
 import { isLight } from "../../lib/color";
 import { dropToolbarAnchor, setToolbarAnchor } from "../../state/extensions/toolbarAnchors";
 import { onInterfaceScaleSettled } from "../../state/settings/interfaceScale";
-import { useBrowser } from "../../state/browser/store";
-import { onWindowRootSizes, windowRootSize } from "../../state/windows/rootSize";
+import { useMeasuredWindowRootSize } from "../../state/windows/rootSize";
 import type { Rect } from "../window/geometry";
 import {
   activateExtension,
@@ -98,6 +97,11 @@ function TabToolbarExtensions({
   const movable = reorderable && pinned.length > 1;
   const drag = useToolbarDrag(windowId);
   const [rowBounds, setRowBounds] = useState<Rect>();
+  const rootSize = useMeasuredWindowRootSize(Platform.OS === "windows" ? windowId : "");
+  const anchorLayout = buttonsVisible
+    ? [rootSize?.width, rootSize?.height, paneBounds?.x, paneBounds?.y, paneBounds?.width, paneBounds?.height,
+        rowBounds?.x, rowBounds?.y, rowBounds?.width, rowBounds?.height].join(":")
+    : null;
   useEffect(() => () => endToolbarDrag(windowId), [windowId]);
   if (!pinned.length && !overflow && !routes.length) return <EmptyAnchor windowId={windowId} tabId={tabId} top={top} right={right} />;
   const reorder: Reorder | undefined = movable
@@ -123,7 +127,7 @@ function TabToolbarExtensions({
       {pinned.length ? (
         <View style={{ width: pinned.length * pitch - GAP, height: pitch - GAP }}>
           {paintOrder(pinned, drag?.id).map(({ ext, index }) => (
-            <ExtensionButton key={ext.id} ext={ext} index={index} pitch={pitch} reorder={reorder} windowId={windowId} tabId={tabId} ready={ready} palette={palette} onActivate={onActivate} anchorVisible={buttonsVisible} paneBounds={paneBounds} rowBounds={rowBounds} />
+            <ExtensionButton key={ext.id} ext={ext} index={index} pitch={pitch} reorder={reorder} windowId={windowId} tabId={tabId} ready={ready} palette={palette} onActivate={onActivate} anchorLayout={anchorLayout} />
           ))}
         </View>
       ) : null}
@@ -142,13 +146,13 @@ function EmptyAnchor({ windowId, tabId, top, right }: { windowId: string; tabId:
   return <View ref={ref} pointerEvents="none" style={{ position: "absolute", top, right, width: button, height: button }} onLayout={() => void measure()} />;
 }
 
-function useAnchor(windowId: string, tabId: string, slot: string, visible = true, paneBounds?: Rect, rowBounds?: Rect) {
+function useAnchor(windowId: string, tabId: string, slot: string, layout?: string | null) {
   const ref = useRef<View>(null);
   const [owner] = useState(() => ({ windowId, tabId, slot }));
   const mine = useRef<Anchor | null>(null);
   const measurement = useRef(0);
   const actionable = useRef(true);
-  actionable.current = Platform.OS !== "windows" || visible;
+  actionable.current = Platform.OS !== "windows" || layout !== null;
   useEffect(
     () => () => {
       if (mine.current) dropToolbarAnchor(owner.windowId, owner.tabId, owner.slot, mine.current);
@@ -172,24 +176,12 @@ function useAnchor(windowId: string, tabId: string, slot: string, visible = true
     });
   useEffect(() => onInterfaceScaleSettled(() => void measure()), [owner]);
   useEffect(() => {
-    if (Platform.OS !== "windows") return;
-    const forget = () => {
-      ++measurement.current;
-      if (mine.current) dropToolbarAnchor(owner.windowId, owner.tabId, owner.slot, mine.current);
-      mine.current = null;
-    };
-    forget();
-    if (!visible) return;
-    void measure();
-    let size = windowRootSize(useBrowser.getState(), owner.windowId);
-    return onWindowRootSizes(() => {
-      const next = windowRootSize(useBrowser.getState(), owner.windowId);
-      if (next?.width === size?.width && next?.height === size?.height) return;
-      size = next;
-      forget();
-      void measure();
-    });
-  }, [owner, visible, paneBounds?.x, paneBounds?.y, paneBounds?.width, paneBounds?.height, rowBounds]);
+    if (Platform.OS !== "windows" || layout === undefined) return;
+    ++measurement.current;
+    if (mine.current) dropToolbarAnchor(owner.windowId, owner.tabId, owner.slot, mine.current);
+    mine.current = null;
+    if (layout !== null) void measure();
+  }, [owner, layout]);
   return { ref, measure };
 }
 
@@ -234,13 +226,13 @@ function useReorderResponder(id: string, index: number, reorder: Reorder | undef
   );
 }
 
-function ExtensionButton({ ext, index, pitch, reorder, windowId, tabId, ready, palette, onActivate, anchorVisible, paneBounds, rowBounds }: { ext: InstalledExtension; index: number; pitch: number; reorder?: Reorder; windowId: string; tabId: string; ready: boolean; palette: ToolbarPalette; onActivate?: () => void; anchorVisible: boolean; paneBounds?: Rect; rowBounds?: Rect }) {
+function ExtensionButton({ ext, index, pitch, reorder, windowId, tabId, ready, palette, onActivate, anchorLayout }: { ext: InstalledExtension; index: number; pitch: number; reorder?: Reorder; windowId: string; tabId: string; ready: boolean; palette: ToolbarPalette; onActivate?: () => void; anchorLayout: string | null }) {
   const fetched = useExtensions((e) => (ready ? e.actions[tabId] : undefined));
   const held = useRef<ActionState | undefined>(undefined);
   if (fetched) held.current = fetched[ext.id];
   const state = held.current;
   const open = useExtensions((e) => e.popup?.windowId === windowId && e.popup.extensionId === ext.id);
-  const { ref, measure } = useAnchor(windowId, tabId, ext.id, anchorVisible, paneBounds, rowBounds);
+  const { ref, measure } = useAnchor(windowId, tabId, ext.id, anchorLayout);
   const badge = state?.badgeText ?? "";
   const dimmed = state ? !state.enabled : false;
   const title = state?.title || ext.actionTitle || ext.name;

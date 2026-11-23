@@ -95,10 +95,13 @@ enum PluginProcessTree {
 }
 
 final class PluginFamily {
+  static let longestInterval: TimeInterval = 16
+
   let root: pid_t
   private(set) var members: Set<PluginProcessMember> = []
   private let queue: DispatchQueue
   private let interval: TimeInterval
+  private var currentInterval: TimeInterval
   private var forks: DispatchSourceProcess?
   private var timer: DispatchSourceTimer?
   private var samplePending = false
@@ -107,6 +110,7 @@ final class PluginFamily {
     self.root = root
     self.queue = queue
     self.interval = interval
+    currentInterval = interval
   }
 
   func start() {
@@ -115,11 +119,22 @@ final class PluginFamily {
     forks.activate()
     self.forks = forks
     let timer = DispatchSource.makeTimerSource(queue: queue)
-    timer.schedule(deadline: .now() + interval, repeating: interval)
-    timer.setEventHandler { [weak self] in self?.sample() }
+    timer.setEventHandler { [weak self] in self?.tick() }
     timer.activate()
     self.timer = timer
     sample()
+    schedule()
+  }
+
+  private func schedule() {
+    timer?.schedule(deadline: .now() + currentInterval)
+  }
+
+  private func tick() {
+    let before = members
+    sample()
+    currentInterval = members == before ? min(currentInterval * 2, max(interval, Self.longestInterval)) : interval
+    schedule()
   }
 
   private func requestSample() {
@@ -129,6 +144,8 @@ final class PluginFamily {
       guard let self else { return }
       self.samplePending = false
       self.sample()
+      self.currentInterval = self.interval
+      self.schedule()
     }
   }
 

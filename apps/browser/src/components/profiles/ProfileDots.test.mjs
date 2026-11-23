@@ -4,6 +4,7 @@ import { test } from "node:test";
 import { mount } from "../../test-hooks.mjs";
 import { switcherIcons, switcherCellWidth } from "./ProfileIcons.tsx";
 import { useBrowser } from "../../state/browser/store.ts";
+import { markDrag, noDragMarks } from "../../state/sidebar/dragMarks.ts";
 import { pagerFor } from "../../state/windows/profilePager.ts";
 
 const nodeRequire = createRequire(import.meta.url);
@@ -62,4 +63,46 @@ test("production row uses its window selection and available room beside Downloa
   assert.equal(marks()[9].icon, emojis[9]);
   for (const id of ids) s().updateProfile(id, { switcherDot: true });
   assert.ok(marks().every((p) => p.icon === null));
+});
+
+test("holding over a compact profile keeps it under the same pointer when it becomes active", (t) => {
+  const s = () => useBrowser.getState();
+  const ids = emojis.map((_, i) => `drag-profile-${i}`);
+  const target = 4;
+  const width = 220;
+  s().hydrate({ profiles: Object.fromEntries(ids.map((id, i) => [id, { id, name: id, icon: i === target ? null : emojis[i], color: "plum", createdAt: i }])), profileOrder: ids });
+  const windowId = s().createWindow({ profileId: ids[0] });
+  const row = mount(() => ProfileDots({ windowId, width, besideDownloads: true }));
+  t.after(() => {
+    row.unmount();
+    markDrag(noDragMarks, { sources: new Set() });
+  });
+
+  const marks = () => row.value.props.children.props.children.map((child) => child.props);
+  const cells = () => marks().map((p) => p.cell);
+  const frames = () => {
+    const sizes = cells();
+    let left = (width + row.value.props.style.paddingLeft - sizes.reduce((sum, size) => sum + size, 0)) / 2;
+    return sizes.map((size) => {
+      const frame = [left, left + size];
+      left += size;
+      return frame;
+    });
+  };
+  const before = frames();
+  const pointer = (before[target][0] + before[target][1]) / 2;
+  const pointedProfile = () => frames().findIndex(([left, right]) => pointer >= left && pointer < right);
+  assert.equal(pointedProfile(), target);
+  markDrag(noDragMarks, { sources: new Set(["tab"]) });
+  assert.deepEqual(frames(), before);
+  s().switchProfile(windowId, ids[target]);
+  assert.ok(marks().every((p) => p.icon === null));
+  assert.equal(pointedProfile(), target);
+  assert.deepEqual(frames(), before);
+  s().switchProfile(windowId, ids[7]);
+  assert.equal(marks()[7].icon, emojis[7]);
+  assert.deepEqual(frames(), before);
+  markDrag(noDragMarks, { sources: new Set() });
+  assert.equal(cells()[0], 12);
+  assert.equal(cells()[7], 26);
 });

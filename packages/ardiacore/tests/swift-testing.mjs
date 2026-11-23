@@ -20,6 +20,7 @@ export function swiftTesting() {
 
 export function runSwiftTests(t, name, sources, { env = {}, flags = [] } = {}) {
   const kit = swiftTesting();
+  if (kit.missing && process.env.ARDIA_SWIFT_TESTING === "required") assert.fail(kit.missing);
   if (kit.missing) return t.skip(kit.missing);
   const dir = mkdtempSync(join(tmpdir(), `ardia-${name}-`));
   try {

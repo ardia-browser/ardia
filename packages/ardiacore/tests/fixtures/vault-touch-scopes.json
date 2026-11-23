@@ -1,0 +1,29 @@
+{
+  "scopes": [
+    { "kind": "fill", "parts": { "provider": "bitwarden", "item": "6b9c1f0e-3a1d-4f7e-9a51-2c1d0b7e4a10", "origin": "https://accounts.example.com", "tab": "tab-7" }, "scope": "fill\nbitwarden\n6b9c1f0e-3a1d-4f7e-9a51-2c1d0b7e4a10\nhttps://accounts.example.com\ntab-7" },
+    { "kind": "fill", "parts": { "provider": "1password", "item": "ue4v3u3gm5b7c2khvbuq7wqx3a", "origin": "https://xn--bcher-kva.example:8443", "tab": "12" }, "scope": "fill\n1password\nue4v3u3gm5b7c2khvbuq7wqx3a\nhttps://xn--bcher-kva.example:8443\n12" },
+    { "kind": "fill", "parts": { "provider": "ardia", "item": "Default/https://a.example/me", "origin": "http://localhost:3000", "tab": "t" }, "scope": "fill\nardia\nDefault/https://a.example/me\nhttp://localhost:3000\nt" },
+    { "kind": "unlock", "parts": { "provider": "bitwarden" }, "scope": "unlock\nbitwarden" },
+    { "kind": "unlock", "parts": { "provider": "protonpass" }, "scope": "unlock\nprotonpass" },
+    { "kind": "passkey", "parts": { "request": "req-41", "credential": "AQIDBAUGBwgJCgsMDQ4PEA" }, "scope": "passkey\nreq-41\nAQIDBAUGBwgJCgsMDQ4PEA" },
+    { "kind": "card", "parts": { "card": "card-3f2a", "tab": "tab-7" }, "scope": "autofill-card\ncard-3f2a\ntab-7" }
+  ],
+  "takes": [
+    { "granted": "fill\nbitwarden\nitem\nhttps://a.example\nt1", "wanted": "fill\nbitwarden\nitem\nhttps://a.example\nt1", "taken": true, "why": "the touched fill uses its own grant" },
+    { "granted": "fill\nbitwarden\nitem\nhttps://a.example\nt1", "wanted": "fill\nbitwarden\nitem\nhttps://a.example\nt2", "taken": false, "why": "another tab can't use it" },
+    { "granted": "fill\nbitwarden\nitem\nhttps://a.example\nt1", "wanted": "fill\nbitwarden\nitem\nhttps://evil.a.example\nt1", "taken": false, "why": "another origin can't use it" },
+    { "granted": "fill-hand-on\nbitwarden\nhttps://a.example\nt1", "wanted": "fill\nbitwarden\nitem\nhttps://a.example\nt1", "taken": true, "why": "an unlock from the menu fills a login on that menu's site and tab" },
+    { "granted": "fill-hand-on\nbitwarden\nhttps://a.example\nt1", "wanted": "fill\nbitwarden\nitem\nhttps://a.example\nt2", "taken": false, "why": "an unlock hand-on never reaches another tab" },
+    { "granted": "fill-hand-on\nbitwarden\nhttps://a.example\nt1", "wanted": "fill\nbitwarden\nitem\nhttps://b.example\nt1", "taken": false, "why": "an unlock hand-on never reaches another site" },
+    { "granted": "fill-hand-on\nbitwarden\nhttps://a.example\nt1", "wanted": "fill\nprotonpass\nitem\nhttps://a.example\nt1", "taken": false, "why": "an unlock hand-on stays with its manager" },
+    { "granted": "fill-hand-on\nbitwarden\nhttps://a.example\nt1", "wanted": "fill\nbitwarden\n\nhttps://a.example\nt1", "taken": false, "why": "an unlock hand-on never covers a fill with no item" },
+    { "granted": "fill-hand-on\nbitwarden\nhttps://a.example\nt1", "wanted": "fill\nbitwarden\nitem\nhttps://a.example\nt1\nextra", "taken": false, "why": "an unlock hand-on never covers a scope with more parts than a fill" },
+    { "granted": "fill-hand-on\nbitwarden\nhttps://a.example\nt1", "wanted": "fill-hand-on\nbitwarden\nhttps://a.example\nt1", "taken": false, "why": "an unlock hand-on is not itself a fill" },
+    { "granted": "fill-hand-on\nbitwarden\nhttps://a.example\nt1", "wanted": "unlock\nbitwarden", "taken": false, "why": "a hand-on doesn't unlock" },
+    { "granted": "fill\nbitwarden", "wanted": "fill\nbitwarden\nany\nhttps://b.example\nt9", "taken": false, "why": "a hand-on with no site or tab fills nothing" },
+    { "granted": "unlock\nbitwarden", "wanted": "unlock\nbitwarden", "taken": true, "why": "an unlock touch unlocks its manager" },
+    { "granted": "unlock\nbitwarden", "wanted": "fill\nbitwarden\nitem\nhttps://a.example\nt1", "taken": false, "why": "an unlock touch doesn't fill" },
+    { "granted": "autofill-card\ncard-1\nt1", "wanted": "autofill-card\ncard-1\nt2", "taken": false, "why": "a card touch stays in its tab" },
+    { "granted": "passkey\nreq-1\ncred-1", "wanted": "passkey\nreq-2\ncred-1", "taken": false, "why": "a passkey touch answers only its own request" }
+  ]
+}

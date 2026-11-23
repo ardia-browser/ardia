@@ -94,9 +94,11 @@ function ManagersGroup({ managers }: { managers: VaultProviderState[] }) {
   if (syncs) rows.push({ key: "sync", render: () => <SyncRow providers={managers} /> });
   const canAdd = catalogue.some((e) => e.name !== adding?.name);
   if (!rows.length && !canAdd) return null;
-  const add = canAdd ? (
-    <Button title="Add Password Manager…" disabled={adding?.phase === "installing" || adding?.phase === "starting"} onPress={() => showAddManagerSheet(sheets.connect)} />
-  ) : null;
+  const add = (
+    <View pointerEvents={canAdd ? "auto" : "none"} accessibilityElementsHidden={!canAdd} importantForAccessibility={canAdd ? "auto" : "no-hide-descendants"} style={canAdd ? undefined : HELD_PLACE}>
+      <Button title="Add Password Manager…" disabled={!canAdd || adding?.phase === "installing" || adding?.phase === "starting"} onPress={() => showAddManagerSheet(sheets.connect)} />
+    </View>
+  );
   return (
     <View>
       <SectionHeader title="Password Managers" description={null} action={add} />
@@ -104,6 +106,8 @@ function ManagersGroup({ managers }: { managers: VaultProviderState[] }) {
     </View>
   );
 }
+
+const HELD_PLACE = { opacity: 0 } as const;
 
 function ManagerAnchor({ name, children }: { name: string; children: ReactNode }) {
   return (

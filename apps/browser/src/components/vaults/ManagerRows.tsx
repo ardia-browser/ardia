@@ -7,8 +7,9 @@ import { copyInstallCommand, lockProvider, refreshProvider, restartProvider, sig
 import { exportManagerPasswords } from "../../state/vaults/export";
 import { addPasswordManager, dismissAddingManager, turnOnPasswordManager, type AddingManager, type CatalogueEntry } from "../../state/vaults/managerCatalogue";
 import { managerStatus, type ManagerStatus } from "../../state/vaults/managerStatus";
+import { groupGround, readableInk } from "../../state/vaults/readableInk";
 import { credential, titleOf, type CredentialProviderState } from "../../state/vaults/providerModel";
-import { ActivitySpinner, Box, Button, space, Text, Toggle } from "../ui";
+import { ActivitySpinner, Box, Button, space, Text, Toggle, useTheme } from "../ui";
 import { useSettings } from "../../state/browser/hooks";
 import { updateSettings } from "../../state/settings/actions";
 import { font as typeScale, lineHeight } from "../ui/tokens";
@@ -23,8 +24,10 @@ const CHECK_TITLES = ["Check Again", "Checking…"] as const;
 export type ManagerSheets = { connect: (provider: string) => void; unlock: (provider: string) => void };
 
 function StatusLine({ text, tone }: { text: string; tone: ManagerStatus["tone"] }) {
+  const theme = useTheme();
+  const warning = tone === "warning" ? readableInk(theme.warning, groupGround(theme.groupFill, theme.dark ? VAULT_SETTINGS.paneGround.dark : VAULT_SETTINGS.paneGround.light), theme.textPrimary) : null;
   return (
-    <Text size="caption" tone={tone} style={STATUS}>
+    <Text size="caption" tone={tone} style={warning ? [STATUS, { color: warning }] : STATUS}>
       {text}
     </Text>
   );

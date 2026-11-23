@@ -58,7 +58,7 @@ export const VAULT_CODE = { ring: 20, stroke: 2.5, expiringMs: 5000, sheetRing: 
 
 export const VAULT_BADGE = { s: { box: 16, glyph: 9 }, m: { box: 28, glyph: 14 }, l: { box: 36, glyph: 18 }, xl: { box: 52, glyph: 26 } } as const;
 
-export const VAULT_SETTINGS = { commandMinHeight: 32, commandBorder: 1, spinner: 14, copiedMs: 1500, siteIcon: 20, sourcePopUp: 200, savePopUp: 150 } as const;
+export const VAULT_SETTINGS = { paneGround: { light: "#F2F2F2", dark: "#1E1E1E" }, commandMinHeight: 32, commandBorder: 1, spinner: 14, copiedMs: 1500, siteIcon: 20, sourcePopUp: 200, savePopUp: 150 } as const;
 
 const FORM_FIELD = 240;
 

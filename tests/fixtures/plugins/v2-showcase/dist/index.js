@@ -1592,7 +1592,7 @@ ${stats.description}` : `# ${repo}`,
                   { label: "Stars", text: formatCount(stats.stars), icon: "star" },
                   { label: "Forks", text: formatCount(stats.forks), icon: "tuningfork" },
                   { label: "Open issues", text: String(stats.openIssues) },
-                  { label: "Language", text: stats.language ?? "—" }
+                  { label: "Language", text: stats.language ?? "Unknown" }
                 ] : []
               }
             ),

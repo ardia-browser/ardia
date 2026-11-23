@@ -21,8 +21,6 @@ enum OfficialArchive {
   }
 
   static let maxDownload = Limits.standard.download
-  static let maxExpanded = Limits.standard.expanded
-  static let maxEntries = Limits.standard.entries
   static let maxDepth = Limits.standard.depth
 
   struct Inflation {

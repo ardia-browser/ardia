@@ -323,11 +323,6 @@ final class PluginProcess: PluginRun {
     queue.asyncAfter(deadline: .now() + .milliseconds(max(0, graceMs)), execute: item)
   }
 
-  func killNow() {
-    guard !exited else { return }
-    signalFamily(SIGKILL)
-  }
-
   func terminateForQuit(within seconds: TimeInterval) {
     guard !exited else { return }
     family?.sample()

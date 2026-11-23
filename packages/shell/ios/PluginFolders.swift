@@ -81,10 +81,6 @@ struct PluginFolders {
     return lexicalFolder(name).map { ($0, nil) }
   }
 
-  func isOfficial(_ name: String, folderId: String) -> Bool {
-    folderId == Self.legacyId ? legacyFolder(name) != nil : officialCopy(name, folderId: folderId) != nil
-  }
-
   func approvedFolder(_ name: String, folderId: String, approved: String) -> Result<OpenedFolder, FolderRefusal> {
     guard let source = source(name, folderId: folderId) else { return .failure(FolderRefusal(reason: "it has no folder")) }
     return PluginFiles.approvedFolder(source.path, folderId: folderId, approved: approved, identity: source.identity)

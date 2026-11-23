@@ -48,7 +48,6 @@ class WebViewPageHistoryGuardTest {
     private class FakeHistoryWebView(context: Context) : WebView(context) {
         var canGoBackResult = true
         var fakeHeight = 800
-        var fakeContentHeight = 3000
 
         override fun canGoBackOrForward(steps: Int): Boolean = if (steps < 0) canGoBackResult else false
 
@@ -58,10 +57,7 @@ class WebViewPageHistoryGuardTest {
 
         override fun goBackOrForward(steps: Int) = Unit
 
-        override fun getContentHeight(): Int = fakeContentHeight
-
-        @Deprecated("Deprecated in Java")
-        override fun getScale(): Float = 1f
+        override fun canScrollVertically(direction: Int): Boolean = true
     }
 
     @Before

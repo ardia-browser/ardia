@@ -859,8 +859,20 @@ TEST_F(ArdiaCoreRsVectorsTest, InputsOverTheCapsAreRefused) {
   ardia_sync_keys* none = nullptr;
   EXPECT_EQ(ardia_sync_keys_new(Ptr("short"), 5, &none), ARDIA_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(none, nullptr);
-  EXPECT_EQ(keys.Open(std::string(ARDIA_MAX_SEALED_FILE_BYTES + 1, 'x'), "local", "f").status,
+  const std::string entropy(32, '\1');
+  ardia_sync_keys* raw = nullptr;
+  ASSERT_EQ(ardia_sync_keys_new(Ptr(entropy), entropy.size(), &raw), ARDIA_STATUS_OK);
+  const uint8_t byte = 0;
+  Buf too_big_file;
+  EXPECT_EQ(ardia_sync_open(raw, &byte, ARDIA_MAX_SEALED_FILE_BYTES + 1, Ptr("local"), 5, Ptr("f"), 1, too_big_file.out()),
             ARDIA_STATUS_TOO_LARGE);
+  Buf too_big_payload;
+  EXPECT_EQ(ardia_sync_seal(raw, &byte, ARDIA_MAX_PAYLOAD_BYTES + 1, Ptr("local"), 5, Ptr("f"), 1, too_big_payload.out()),
+            ARDIA_STATUS_TOO_LARGE);
+  ardia_sync_keys_free(raw);
+  static_assert(ARDIA_MAX_PAYLOAD_BYTES >= 1024ull * 1024 * 1024);
+  static_assert(ARDIA_MAX_LABEL_BYTES >= 64 * 1024);
+  EXPECT_EQ(keys.ScopeTag(std::string(ARDIA_MAX_LABEL_BYTES, 's')).size(), 26u);
   EXPECT_EQ(keys.Open("NNS1", std::string(ARDIA_MAX_LABEL_BYTES + 1, 'a'), "f").status, ARDIA_STATUS_TOO_LARGE);
   EXPECT_EQ(PhraseToEntropy(std::string(ARDIA_MAX_PHRASE_BYTES + 1, 'a')).status, ARDIA_STATUS_TOO_LARGE);
   EXPECT_EQ(VaultList("{\"names\":[],\"extra\":1}").status, ARDIA_STATUS_INVALID_ARGUMENT);

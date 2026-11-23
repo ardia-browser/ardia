@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
-import { after, before, describe, it } from "node:test";
-import { CdpError, connectCdp, evaluate } from "../lib/cdp.mjs";
+import http from "node:http";
+import { once } from "node:events";
+import { after, before, describe, it, mock as testMock } from "node:test";
+import { CDP_CONNECT_TIMEOUT, CdpError, connectCdp, evaluate } from "../lib/cdp.mjs";
 import { withSignal } from "../lib/util.mjs";
 import { startMockCdp } from "./mock-cdp.mjs";
 
@@ -81,5 +83,61 @@ describe("CDP client", () => {
 
   it("fails fast when nothing listens", async () => {
     await assert.rejects(connectCdp("ws://127.0.0.1:9/devtools/browser/x", { timeout: 2000 }), /failed|timed out/);
+  });
+
+  it("waits 15 s by default for the DevTools socket to open", async () => {
+    assert.equal(CDP_CONNECT_TIMEOUT, 15000);
+    class SilentSocket extends EventTarget {
+      constructor(url) { super(); this.url = url; this.closedByClient = false; SilentSocket.last = this; }
+      close() { this.closedByClient = true; }
+      send() {}
+    }
+    testMock.timers.enable({ apis: ["setTimeout"] });
+    try {
+      let settled = null;
+      const connecting = connectCdp("ws://127.0.0.1:1/devtools/browser/slow", { WebSocketImpl: SilentSocket }).then(() => { settled = "open"; }, (error) => { settled = error; });
+      testMock.timers.tick(14999);
+      await Promise.resolve();
+      assert.equal(settled, null);
+      assert.equal(SilentSocket.last.closedByClient, false);
+      testMock.timers.tick(1);
+      await connecting;
+      assert.match(settled.message, /timed out after 15000 ms/);
+      assert.equal(SilentSocket.last.closedByClient, true);
+    } finally {
+      testMock.timers.reset();
+    }
+  });
+
+  it("closes the socket and rejects when the signal aborts during the handshake", async () => {
+    let socket = null;
+    class SilentSocket extends EventTarget {
+      constructor() { super(); this.closedByClient = false; socket = this; }
+      close() { this.closedByClient = true; }
+      send() {}
+    }
+    const controller = new AbortController();
+    const reason = new Error("check stopped");
+    const connecting = connectCdp("ws://127.0.0.1:1/devtools/browser/slow", { WebSocketImpl: SilentSocket, signal: controller.signal });
+    controller.abort(reason);
+    await assert.rejects(connecting, (error) => error === reason);
+    assert.equal(socket.closedByClient, true);
+    await assert.rejects(connectCdp("ws://127.0.0.1:1/devtools/browser/slow", { WebSocketImpl: SilentSocket, signal: controller.signal }), (error) => error === reason);
+  });
+
+  it("still rejects promptly with an explicit short timeout when the upgrade never answers", async () => {
+    const sockets = new Set();
+    const server = http.createServer();
+    server.on("upgrade", (request, socket) => { sockets.add(socket); socket.on("error", () => {}); });
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    try {
+      const started = Date.now();
+      await assert.rejects(connectCdp(`ws://127.0.0.1:${server.address().port}/devtools/browser/stuck`, { timeout: 200 }), /timed out after 200 ms/);
+      assert.ok(Date.now() - started < 2000);
+    } finally {
+      for (const socket of sockets) socket.destroy();
+      await new Promise((resolve) => server.close(() => resolve()));
+    }
   });
 });

@@ -11,6 +11,7 @@ const scratchPath = join(tmpdir(), "ardia-sync-swiftpm");
 const NEW_ID = "com.ardia.browser";
 
 function tool() {
+  execFileSync(join(pkg, "../core-rs/scripts/build-xcframework.sh"), { stdio: ["ignore", "ignore", "inherit"] });
   execFileSync("swift", ["build", "--product", "legacy-migration", "--scratch-path", scratchPath], { cwd: pkg, stdio: ["ignore", "ignore", "inherit"] });
   const bin = execFileSync("swift", ["build", "--product", "legacy-migration", "--scratch-path", scratchPath, "--show-bin-path"], { cwd: pkg }).toString().trim();
   return join(bin, "legacy-migration");

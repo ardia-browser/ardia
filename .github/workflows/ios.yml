@@ -15,6 +15,8 @@ on:
       - "apps/phone/patches/**"
       - "apps/phone/pnpm-workspace.yaml"
       - "packages/sync/**"
+      - "packages/core-rs/**"
+      - ".github/actions/core-rs-xcframework/**"
       - "packages/core/**"
       - ".github/workflows/ios.yml"
   push:
@@ -32,6 +34,8 @@ on:
       - "apps/phone/patches/**"
       - "apps/phone/pnpm-workspace.yaml"
       - "packages/sync/**"
+      - "packages/core-rs/**"
+      - ".github/actions/core-rs-xcframework/**"
       - "packages/core/**"
       - ".github/workflows/ios.yml"
 
@@ -100,6 +104,7 @@ jobs:
         with:
           path: apps/phone/ios/Pods
           key: phone-pods-${{ hashFiles('apps/phone/ios/Podfile.lock', 'apps/phone/pnpm-lock.yaml') }}
+      - uses: ./.github/actions/core-rs-xcframework
       - name: The Expo app's dependencies and Pods
         run: |
           set -euo pipefail
@@ -146,6 +151,7 @@ jobs:
             .ci/sync
           key: swiftpm-xcode-27.1-${{ github.sha }}
           restore-keys: swiftpm-xcode-27.1-
+      - uses: ./.github/actions/core-rs-xcframework
       - name: The JavaScriptCore bundles match their TypeScript
         run: node apps/phone/scripts/bundle-shared.mjs --check
       - name: ArdiaKit tests

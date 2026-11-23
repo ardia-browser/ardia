@@ -1,10 +1,10 @@
-use aes_gcm::aead::{Aead, KeyInit, Payload};
-use aes_gcm::{Aes256Gcm, Key, Nonce};
+use aes_gcm::aead::{Aead, AeadInPlace, KeyInit, Payload};
+use aes_gcm::{Aes256Gcm, Key, Nonce, Tag};
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
 use zeroize::Zeroizing;
 
-use crate::{Crypto, CryptoError, DIGEST_BYTES, KEY_BYTES, NONCE_BYTES};
+use crate::{Crypto, CryptoError, DIGEST_BYTES, KEY_BYTES, NONCE_BYTES, TAG_BYTES};
 
 pub struct RustCrypto;
 
@@ -48,6 +48,35 @@ impl Crypto for RustCrypto {
             .decrypt(Nonce::from_slice(nonce), Payload { msg: sealed, aad })
             .map(Zeroizing::new)
             .map_err(|_| CryptoError::Authentication)
+    }
+
+    fn aes256gcm_seal_in_place(
+        key: &[u8; KEY_BYTES],
+        nonce: &[u8; NONCE_BYTES],
+        aad: &[u8],
+        buffer: &mut Vec<u8>,
+        start: usize,
+    ) -> Result<(), CryptoError> {
+        let tag = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key))
+            .encrypt_in_place_detached(Nonce::from_slice(nonce), aad, &mut buffer[start..])
+            .map_err(|_| CryptoError::Length)?;
+        buffer.extend_from_slice(&tag);
+        Ok(())
+    }
+
+    fn aes256gcm_open_in_place(
+        key: &[u8; KEY_BYTES],
+        nonce: &[u8; NONCE_BYTES],
+        aad: &[u8],
+        buffer: &mut Vec<u8>,
+    ) -> Result<(), CryptoError> {
+        let body = buffer.len().checked_sub(TAG_BYTES).ok_or(CryptoError::Authentication)?;
+        let tag = Tag::clone_from_slice(&buffer[body..]);
+        Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key))
+            .decrypt_in_place_detached(Nonce::from_slice(nonce), aad, &mut buffer[..body], &tag)
+            .map_err(|_| CryptoError::Authentication)?;
+        buffer.truncate(body);
+        Ok(())
     }
 
     fn fill_random(out: &mut [u8]) -> Result<(), CryptoError> {

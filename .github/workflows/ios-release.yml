@@ -260,6 +260,7 @@ jobs:
           path: apps/phone/ios/Pods
           key: phone-pods-${{ hashFiles('apps/phone/ios/Podfile.lock', 'apps/phone/pnpm-lock.yaml') }}
           restore-keys: phone-pods-
+      - uses: ./.github/actions/core-rs-xcframework
       - name: The Expo app's dependencies and Pods
         run: |
           set -euo pipefail

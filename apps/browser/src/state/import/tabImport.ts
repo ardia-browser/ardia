@@ -1,3 +1,4 @@
+import { withEntry } from "../browser/changes";
 import type { BookmarkNode as ImportedNode, ImportedFavicon, ImportedTab } from "../../platform/importModule";
 import { isWebPageUrl, withoutFragment } from "../../lib/url";
 import { ROW_PIN } from "../browser/model";
@@ -91,7 +92,7 @@ export function importTabsWithSplits(
       index: after ? next.windows[windowId]!.tabIds.indexOf(after) + 1 : t.pinned && t.row ? pinnedAreaEnd(next, windowId) : undefined,
     });
     if (!id) continue;
-    next = { ...made, tabs: { ...made.tabs, [id]: { ...made.tabs[id]!, page: IDLE } } };
+    next = { ...made, tabs: withEntry(made.tabs, id, { ...made.tabs[id]!, page: IDLE }) };
     ids.push(id);
     if (!t.pinned) unpinned.push(id);
     if (t.splitId) panes.set(t.splitId, [...(panes.get(t.splitId) ?? []), id]);

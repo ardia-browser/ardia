@@ -1,0 +1,32 @@
+{
+  "series": "engine/patches/series",
+  "series_win": "scripts/windows/engine/series-win",
+  "win_patches": "scripts/windows/engine/patches",
+  "series_tags": ["all", "mac"],
+  "trees": [
+    "engine/chromium/src",
+    "engine/patches/build",
+    "apps/browser/assets/offline-game",
+    "apps/browser/assets/offline-game-pipeline",
+    "scripts/windows/engine"
+  ],
+  "files": [
+    "engine/patches/series.py",
+    "apps/browser/windows/Ardia/EngineApi.h",
+    "engine/ardiacore/src/ardia/core/ac_hooks.h",
+    "engine/ardiacore/src/ardia/core/ac_content_hooks.h",
+    "engine/ardiacore/src/ardia/core/ac_host_visibility.h",
+    "engine/ardiacore/src/ardia/core/ac_launch_switches.cc",
+    "engine/ardiacore/src/ardia/core/ac_launch_switches.h"
+  ],
+  "resource_lists": [
+    "engine/patches/build/ardia_resources.txt",
+    "scripts/windows/engine/ardia_resources_win.txt"
+  ],
+  "excluded": [
+    "engine/patches/build/tests",
+    "scripts/windows/engine/check_inputs.py",
+    "scripts/windows/engine/prebuilt.json"
+  ],
+  "excluded_patterns": ["scripts/windows/engine/*_test.py"]
+}

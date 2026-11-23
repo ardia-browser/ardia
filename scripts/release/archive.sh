@@ -22,6 +22,9 @@ echo "==> Content blocker"
 "$ardiacore/scripts/hsts-preload.sh"
 [ -f "$ardiacore/vendor/hsts-preload/hosts/subdomains.hosts" ] || die "the HSTS preload list isn't built ($ardiacore/scripts/hsts-preload.sh)"
 
+echo "==> Rust core"
+"$root/packages/core-rs/scripts/build-xcframework.sh" >&2 || die "ArdiaCoreRS.xcframework didn't build (packages/core-rs/scripts/build-xcframework.sh)"
+
 echo "==> Archive"
 (cd "$root/apps/browser" && ARDIACORE_FRAMEWORK="$framework" "$root/scripts/agent/locked" pod --wait 1800 -- \
   "$root/scripts/agent/locked" xcodebuild --wait 1800 -- xcodebuild -workspace macos/Ardia.xcworkspace -scheme Ardia-macOS \

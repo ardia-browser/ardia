@@ -9,7 +9,8 @@ let package = Package(
     .executable(name: "legacy-migration", targets: ["LegacyMigrationTool"]),
   ],
   targets: [
-    .target(name: "ArdiaSyncCore", path: "ios/Core"),
+    .binaryTarget(name: "ArdiaCoreRS", path: "ios/Frameworks/ArdiaCoreRS.xcframework"),
+    .target(name: "ArdiaSyncCore", dependencies: ["ArdiaCoreRS"], path: "ios/Core"),
     .executableTarget(name: "LegacyMigrationTool", dependencies: ["ArdiaSyncCore"], path: "tools/legacy-migration"),
     .testTarget(name: "ArdiaSyncCoreTests", dependencies: ["ArdiaSyncCore"], path: "tests", exclude: ["fixtures"]),
   ]

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-const { groupLayout, layoutStrip, MEMBERS_INSET, nameGrowth, stripOverflow, withOverflowCounts, withoutTabs } = await import("./stripGroups.ts");
+const { groupLayout, layoutStrip, MEMBERS_INSET, nameGrowth, stripFit } = await import("./stripGroups.ts");
 const { groupChipWidth, revealedMembers, toggleFrame } = await import("./stripToggle.ts");
 const { GAP, GROUP_TITLE_MAX, GROUP_TITLE_TIGHT, TITLE_MIN_CHIP } = await import("./tokens.ts");
 
@@ -25,9 +25,9 @@ const PAGE = 1020;
 const loose = ["notes", "cloud", "party", "cli", "act"];
 
 function laidOut(entries) {
-  const fit = stripOverflow(entries, "act", PAGE, measures, null);
-  const layout = layoutStrip(withoutTabs(entries, fit.hidden), "act", PAGE, withOverflowCounts(measures, entries, fit.hidden), null, undefined, "act", fit.selectedMin, fit.titledMin, fit.compactMin);
-  return { fit, layout, width: (id) => (fit.hidden.has(id) ? 0 : layout.tabWidth(id)) };
+  const fit = stripFit(entries, "act", PAGE, measures, null);
+  const layout = layoutStrip(entries, "act", PAGE, measures, null, undefined, "act", fit.selectedMin, fit.titledMin, fit.compactMin);
+  return { fit, layout, width: (id) => layout.tabWidth(id) };
 }
 
 const FRAMES = Array.from({ length: 13 }, (_, i) => i / 12);
@@ -55,20 +55,19 @@ test("opening a group whose folders were measured while it was closed: every fra
   assert.deepEqual(previous.map((m) => m.shown), widths, "every member is whole at the end");
 });
 
-test("opening a group decides the loose tabs once: each changes tier at most once, on the first frame, and none of them disappears mid-way", () => {
+test("opening a group decides the loose tabs once: each changes tier at most once, on the first frame, and every one stays drawn", () => {
   const before = laidOut(strip(true));
   const after = laidOut(strip(false));
-  const tier = (w) => (w === 0 ? "menu" : w < TITLE_MIN_CHIP ? "favicon" : "titled");
+  const tier = (w) => (w < TITLE_MIN_CHIP ? "favicon" : "titled");
   for (const id of loose) {
     const seen = new Set();
     for (const t of FRAMES.slice(1)) {
-      const drawn = after.fit.hidden.has(id) ? 0 : toggleFrame(before.width(id), after.width(id), t);
+      const drawn = toggleFrame(before.width(id), after.width(id), t);
       seen.add(tier(after.width(id)));
-      if (!after.fit.hidden.has(id)) assert.ok(drawn > 0, `${id} is drawn at ${t}`);
+      assert.ok(drawn > 0, `${id} is drawn at ${t}`);
     }
     assert.equal(seen.size, 1, `${id} keeps one tier through the open`);
   }
-  assert.ok(loose.every((id) => !before.fit.hidden.has(id)), "nothing is in the menu while the group is closed");
 });
 
 test("a group's chip width comes from its icon, its measured name and the name cap, never from how wide its pill is drawn", () => {

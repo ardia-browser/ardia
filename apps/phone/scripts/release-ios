@@ -142,6 +142,7 @@ if [ -n "${RELEASE_COMPILATION_CACHE_CAS_PATH:-}" ]; then
   extra_build_settings=("COMPILATION_CACHE_ENABLE_CACHING=YES" "COMPILATION_CACHE_CAS_PATH=$RELEASE_COMPILATION_CACHE_CAS_PATH")
 fi
 [ "$unsigned" = 0 ] || signing=(CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO)
+"$root/packages/core-rs/scripts/build-xcframework.sh"
 run_logged archive xcodebuild archive \
   -workspace "$phoneIos/Ardia.xcworkspace" -scheme Ardia -configuration Release \
   -destination "generic/platform=iOS" \

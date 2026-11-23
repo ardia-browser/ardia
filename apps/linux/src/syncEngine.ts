@@ -350,6 +350,7 @@ function refreshSendTargets() {
 export const onTabsReceived = engine.onTabsReceived;
 export const takeSnapshotWrites = engine.takeSnapshotWrites;
 export const takeOpenTabSyncCounts = engine.takeOpenTabSyncCounts;
+export const syncCore = (): "rust" | "native" => "native";
 
 export function sendTargets(profileId: string): SendTarget[] {
   return leading() ? engine.sendTargets(profileId) : relayedTargets[profileId] ?? [];

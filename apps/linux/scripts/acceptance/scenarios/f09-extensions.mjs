@@ -210,7 +210,7 @@ export default {
       if ((await shell.activeTabId()) !== clicked) throw new Error("an inactive extension tab took the selection");
       const known = (await app.shells()).map((s) => s.windowId);
       const created = await evaluate(sw, `chrome.windows.create({ url: ${js(opened("window"))} }).then((w) => w.id)`);
-      const id = await until(async () => (await app.shells()).find((s) => s.ready && !s.utility && !known.includes(s.windowId))?.windowId ?? false,
+      const id = await until(async ({ deadline }) => (await app.shells({ deadline })).find((s) => s.ready && !s.utility && !known.includes(s.windowId))?.windowId ?? false,
         { timeout: 20000, label: "the extension's window renderer" });
       const other = await app.shell(id);
       const urls = await other.waitState(`const w = s.windows[windowId]; const urls = (w?.tabIds ?? []).map((t) => s.tabs[t]?.url); return urls.includes(${js(opened("window"))}) && urls;`,

@@ -459,17 +459,23 @@ internal class WebViewPage(
             if (event.actionMasked == MotionEvent.ACTION_DOWN) {
                 lastTouchX = event.x
                 lastTouchY = event.y
+                scrollTracker.touched(event.rawY.toDouble())
                 if (isNavigatingHistory) {
                     isNavigatingHistory = false
                     mainHandler.removeCallbacks(clearHistoryNavigationRunnable)
                     scrollTracker.snapTo(web.scrollY.toDouble())
                 }
             }
+            if (event.actionMasked == MotionEvent.ACTION_MOVE) scrollTracker.dragged(event.rawY.toDouble())
+            if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) scrollTracker.released()
             false
         }
         web.setOnLongClickListener { longPressed(web) }
         web.setOnScrollChangeListener { _, _, scrollY, _, _ -> scrolled(web, scrollY) }
-        web.addOnLayoutChangeListener { view, left, top, right, bottom, _, _, _, _ -> engine.notePageSize(view, right - left, bottom - top) }
+        web.addOnLayoutChangeListener { view, left, top, right, bottom, _, oldTop, _, oldBottom ->
+            engine.notePageSize(view, right - left, bottom - top)
+            if (bottom - top != oldBottom - oldTop) scrollTracker.resized(SystemClock.uptimeMillis())
+        }
         installNightShade(web, mutableState.value.url)
         if (engine.supportsDocumentStartScripts && engine.supportsMessageListener) {
             WebViewCompat.addDocumentStartJavaScript(web, TouchScrollers.script, setOf("*"))
@@ -959,8 +965,6 @@ internal class WebViewPage(
     internal fun scrolled(web: WebView, scrollY: Int) {
         if (web !== webView) return
         val atTop = scrollY <= 1
-        @Suppress("DEPRECATION")
-        val contentHeight = web.contentHeight * web.scale.toDouble()
         if (isNavigatingHistory) {
             scrollTracker.snapTo(scrollY.toDouble())
             val current = mutableState.value
@@ -969,7 +973,7 @@ internal class WebViewPage(
             }
             return
         }
-        val direction = scrollTracker.offer(scrollY.toDouble(), contentHeight, web.height.toDouble())
+        val direction = scrollTracker.offer(scrollY.toDouble(), !web.canScrollVertically(1), SystemClock.uptimeMillis())
         val current = mutableState.value
         if (atTop == current.isScrolledToTop && (direction == null || direction == current.scrollDirection)) return
         update { it.copy(isScrolledToTop = atTop, scrollDirection = direction ?: it.scrollDirection) }

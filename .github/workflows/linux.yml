@@ -106,11 +106,67 @@ jobs:
             const vouch = require(`${process.env.GITHUB_WORKSPACE}/.github/vouch/vouch.cjs`);
             await vouch.gate({ github, context, core });
 
+  route:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    outputs:
+      target: ${{ steps.target.outputs.target }}
+    steps:
+      - id: router
+        name: The router, from main
+        continue-on-error: true
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: refs/heads/main
+          path: .route
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /scripts/ci/
+            /.github/TEAM.td
+            /.github/vouch/vouch.cjs
+      - id: route
+        name: GitHub or Boat for the long jobs
+        if: steps.router.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BOAT_CI_LIMITS_KEY: ${{ secrets.BOAT_CI_LIMITS_KEY }}
+          BOAT_OVERFLOW: ${{ vars.BOAT_OVERFLOW }}
+          BOAT_OVERFLOW_REPOS: ${{ vars.BOAT_OVERFLOW_REPOS }}
+          BOAT_OVERFLOW_QUEUED: ${{ vars.BOAT_OVERFLOW_QUEUED }}
+          BOAT_OVERFLOW_BUSY: ${{ vars.BOAT_OVERFLOW_BUSY }}
+          BOAT_OVERFLOW_QUEUED_AGE: ${{ vars.BOAT_OVERFLOW_QUEUED_AGE }}
+          BOAT_OVERFLOW_DAY_STARTS: ${{ vars.BOAT_OVERFLOW_DAY_STARTS }}
+          BOAT_OVERFLOW_HOUR_STARTS: ${{ vars.BOAT_OVERFLOW_HOUR_STARTS }}
+          BOAT_OVERFLOW_MINUTE_STARTS: ${{ vars.BOAT_OVERFLOW_MINUTE_STARTS }}
+          BOAT_OVERFLOW_VM_HOURS: ${{ vars.BOAT_OVERFLOW_VM_HOURS }}
+          BOAT_OVERFLOW_SANDBOXES: ${{ vars.BOAT_OVERFLOW_SANDBOXES }}
+        run: node .route/scripts/ci/route-runner.mjs --fallback ubuntu-24.04 --jobs 3
+      - id: target
+        name: The runner the long jobs use
+        if: always()
+        env:
+          OUTCOME: ${{ steps.route.outcome }}
+          PICKED: ${{ steps.route.outputs.target }}
+        run: |
+          if [ "$OUTCOME" = success ] && [ "$PICKED" = boat ]; then
+            echo "target=boat" >> "$GITHUB_OUTPUT"
+          else
+            echo "target=github" >> "$GITHUB_OUTPUT"
+          fi
+
   checks:
     name: checks (${{ matrix.name }})
-    needs: gate
+    needs: [gate, route]
     if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.run_attempt == '1' && needs.route.result == 'success' && needs.route.outputs.target == 'boat' && 'boat-large' || 'ubuntu-24.04' }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -123,8 +179,23 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/linux-setup
+      - id: chromium
+        name: A stock Chromium, on runners without GitHub's image
+        if: runner.environment != 'github-hosted'
+        uses: browser-actions/setup-chrome@48ad923757ca74d66703209fe939badbdf80f2f4
+        with:
+          chrome-version: stable
+          install-dependencies: true
       - name: Stock Chromium
-        run: echo "$(readlink -f /usr/bin/chromium) $(/usr/bin/chromium --version)"
+        env:
+          INSTALLED: ${{ steps.chromium.outputs.chrome-path }}
+        run: |
+          chromium=/usr/bin/chromium
+          if [ -n "$INSTALLED" ]; then
+            chromium="$INSTALLED"
+            echo "ARDIA_ACCEPTANCE_CHROMIUM=$chromium" >> "$GITHUB_ENV"
+          fi
+          echo "$(readlink -f "$chromium") $("$chromium" --version)"
       - run: scripts/linux/ci-checks.sh --part ${{ matrix.part }} --shard ${{ matrix.shard }} --logs "$RUNNER_TEMP/checks"
       - if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -135,9 +206,9 @@ jobs:
           retention-days: 14
 
   package:
-    needs: gate
+    needs: [gate, route]
     if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.run_attempt == '1' && needs.route.result == 'success' && needs.route.outputs.target == 'boat' && 'boat-large' || 'ubuntu-24.04' }}
     timeout-minutes: 45
     env:
       ENGINE_MODE: ${{ inputs.engine || 'nearest' }}

@@ -1,12 +1,12 @@
 import { memo, useContext, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { Animated, type NativeScrollEvent, type NativeSyntheticEvent, type ScrollView, StyleSheet, View } from "react-native";
 import { PageProfileContext, useWindowId } from "../../state/browser/hooks";
-import { tabDragging } from "../../state/drag/tabDrag";
+import { tabDragging, useTabDrag } from "../../state/drag/tabDrag";
 import { useShownTabIdFor, useStripEntries, useStripTitleNeeds } from "../../state/tabs/topStrip";
 import { setMeasuredWidth, useMeasuredWidths } from "../../state/windows/measuredWidths";
 import { dismissStripHoverIn, stripPageOffstage } from "../../state/tabs/stripHover";
 import { onTabPressEnd, tabPressHeld } from "../../state/sidebar/heldTabPress";
-import { noteTabStripChipsMeasured, noteTabStripCompact, noteTabStripReadable, noteTabStripHeldClose, noteTabStripHeldCloseStretch, noteTabStripOverflow, noteTabStripTabsInOverflow, noteTabStripRevealAfterPress, noteTabStripRevealHeldForScroll, noteTabStripScrolled, noteTabStripTitledTabs } from "../../state/telemetry/tabStripCounts";
+import { noteTabStripChipsMeasured, noteTabStripCompact, noteTabStripReadable, noteTabStripHeldClose, noteTabStripHeldCloseStretch, noteTabStripOverflow, noteTabStripRevealAfterPress, noteTabStripRevealHeldForScroll, noteTabStripScrolled, noteTabStripTitledTabs } from "../../state/telemetry/tabStripCounts";
 import { Offstage } from "../ui/useHover";
 import { usePageStyle } from "../../state/windows/profilePager";
 import { ThemeScope } from "../window/ThemeScope";
@@ -17,23 +17,23 @@ import { chipKey, folderKey, nameKey, type Strip } from "./model";
 import { NewTabButton } from "./NewTabButton";
 import { PinnedDock } from "./PinnedDock";
 import { SplitChip } from "./SplitChip";
-import { heldWideTab, keyedWidths, namesStayTight, layoutDock, layoutStrip, newTabPinned, overflowIn, revealOffset, stripOverflow, withActiveShown, tabsOf, withOverflowCounts, withoutTabs, type DragGeometry, type Stretch, type StripOverflow, type TabWidths } from "./stripGroups";
+import { heldWideTab, keyedWidths, namesStayTight, layoutDock, layoutStrip, newTabPinned, revealOffset, stripFit, tabsOf, type DragGeometry, type Stretch, type StripFit, type TabWidths } from "./stripGroups";
 import { groupChipWidth } from "./stripToggle";
 import { StripGroup } from "./StripGroup";
 import { DraggableChip } from "./TabChip";
-import { edgeMaskAt, edgeStrength } from "./edgeFade";
 import { EdgeFadeMask } from "../ui/EdgeFadeMask";
-import { devRegister } from "../dev/devRegister";
-import { StripScrollContext, type StripScroll } from "./stripScroll";
+import { useStripDevRegistry } from "./stripDevRegistry";
+import { shownHolds, StripScrollContext, type StripScroll } from "./stripScroll";
 import { StripMotionContext, useStripMotion } from "./stripMotion";
 import { StripGhosts } from "./StripGhosts";
+import { commandScroll, endSettling, userTookOver, FIRST_REVEAL, firstOverflowReveal, observeScroll, revealStillWanted, scrollIntentAt, selectionReveal } from "./stripRevealGate";
 import { COMPACT_CHIP, GROUP_TITLE_MAX, GROUP_TITLE_TIGHT, EDGE_FADE, EDGE_FADE_FLOOR, EDGE_FADE_ONSET, FLARE, GAP, NEW_TAB_ROOM, STRIP_SCROLL_ID } from "./tokens";
 
 type Wide = { tabId: string; slot: number };
-type Hold = { widths: TabWidths; end: number; tailEdge?: number; wide: Wide; needsTitle: (tabId: string) => boolean; overflow: StripOverflow };
+type Hold = { widths: TabWidths; end: number; tailEdge?: number; wide: Wide; needsTitle: (tabId: string) => boolean; fit: StripFit };
 
 const USER_SCROLL_QUIET_MS = 200;
-const OWN_SCROLL_MS = 80;
+const OWN_SCROLL_MS = 250;
 const OWN_ANIMATED_SCROLL_MS = 600;
 
 const stripEnd = ({ slots, lefts }: DragGeometry) => (slots.length ? lefts.at(-1)! + slots.at(-1)!.width : 0);
@@ -58,6 +58,7 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
   const dockEntry = entries.find((e) => e.kind === "dock");
   const dock = useMemo(() => layoutDock(dockEntry), [dockEntry]);
   const pointerIn = useRef(false);
+  const stripKey = `${windowId}|${profileId}`;
   const held = useRef<Hold | null>(null);
   const last = useRef<Omit<Hold, "needsTitle" | "tailEdge"> & { count: number; pageWidth: number; lastSlot: string | undefined }>(null);
   const closedTo = useRef("");
@@ -66,7 +67,7 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
   const closedWhileIn = pointerIn.current && !!last.current && count < last.current.count;
   const heldClose = closedWhileIn && !!held.current;
   if (closedWhileIn && last.current) {
-    held.current ??= { widths: last.current.widths, end: last.current.end, wide: last.current.wide, needsTitle: shownNeeds.current, overflow: last.current.overflow };
+    held.current ??= { widths: last.current.widths, end: last.current.end, wide: last.current.wide, needsTitle: shownNeeds.current, fit: last.current.fit };
     const lastSlot = last.current.lastSlot;
     const stillThere = (e: (typeof entries)[number]) => (e.kind === "dock" ? e.ids.includes(lastSlot!) || [...e.members.values()].some((ids) => ids.includes(lastSlot!)) : e.kind === "group" ? e.members.some((m) => tabsOf(m).includes(lastSlot!)) : tabsOf(e).includes(lastSlot!));
     if (lastSlot && !entries.some(stillThere)) held.current.tailEdge = last.current.end;
@@ -76,36 +77,29 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
   if (held.current && last.current && count > last.current.count) held.current.tailEdge = undefined;
   const needsTitle = held.current?.needsTitle ?? liveNeeds;
   shownNeeds.current = needsTitle;
-  const holding = held.current ? heldWideTab(entries, held.current.wide, held.current.overflow.hidden) : null;
+  const holding = held.current ? heldWideTab(entries, held.current.wide) : null;
   const wideId = holding?.tabId ?? activeId;
   const tightNames = useRef(false);
   const measuresAt = (tight: boolean) => ({ groupChip: chipsAt(tight), folderChip, needsTitle });
   let measures = measuresAt(tightNames.current);
-  const heldFit = held.current ? withActiveShown(held.current.overflow, activeId) : null;
-  const activeReturned = !!held.current && heldFit !== held.current.overflow;
-  let fit = heldFit ?? stripOverflow(entries, activeId, pageWidth, measures, dock, wideId);
+  let fit = held.current?.fit ?? stripFit(entries, activeId, pageWidth, measures, dock, wideId);
   if (!held.current) {
-    const tight = namesStayTight(tightNames.current, fit, () => stripOverflow(entries, activeId, pageWidth, measuresAt(false), dock, wideId));
+    const tight = namesStayTight(tightNames.current, fit, () => stripFit(entries, activeId, pageWidth, measuresAt(false), dock, wideId));
     if (tight !== tightNames.current) {
       tightNames.current = tight;
       measures = measuresAt(tight);
-      fit = stripOverflow(entries, activeId, pageWidth, measures, dock, wideId);
+      fit = stripFit(entries, activeId, pageWidth, measures, dock, wideId);
     }
   }
   const chipOf = measures.groupChip;
-  const overflow = fit.hidden;
-  const parsed = withoutTabs(entries, overflow);
-  const groupOverflow = new Map(entries.flatMap((e) => (e.kind === "group" ? [[e.id, overflowIn(e, overflow)] as const] : [])));
-  const counted = withOverflowCounts(measures, entries, overflow);
-  const layoutWith = (stretch: Stretch | null) => layoutStrip(parsed, activeId, pageWidth, counted, dock, activeReturned ? undefined : held.current?.widths, wideId, fit.selectedMin, fit.titledMin, fit.compactMin, stretch);
+  const layoutWith = (stretch: Stretch | null) => layoutStrip(entries, activeId, pageWidth, measures, dock, held.current?.widths, wideId, fit.selectedMin, fit.titledMin, fit.compactMin, stretch);
   const unstretched = layoutWith(null);
   const toTail = held.current?.tailEdge === undefined ? 0 : Math.max(0, held.current.tailEdge - stripEnd(unstretched.top));
-  const tail = toTail > 0 ? parsed.filter((e) => e.kind !== "dock").at(-1) : undefined;
+  const tail = toTail > 0 ? entries.filter((e) => e.kind !== "dock").at(-1) : undefined;
   const stretch = tail?.kind === "tab" ? { tabId: tail.id, by: toTail } : null;
   const { chip, selected, widths, tabWidth, top, memberWidth, spanOf: spanInStrip, tabsEnd, tabsShrink } = stretch ? layoutWith(stretch) : unstretched;
-  if (held.current && activeReturned) held.current = { ...held.current, overflow: fit, widths };
   const animateWidths = !held.current && !!last.current && last.current.count === count && last.current.pageWidth === pageWidth;
-  last.current = { count, pageWidth, widths, overflow: fit, end: stripEnd(top), lastSlot: top.slots.at(-1)?.tabIds[0], wide: { tabId: wideId, slot: Math.max(0, top.slots.findIndex((s) => s.tabIds.includes(wideId))) } };
+  last.current = { count, pageWidth, widths, fit, end: stripEnd(top), lastSlot: top.slots.at(-1)?.tabIds[0], wide: { tabId: wideId, slot: Math.max(0, top.slots.findIndex((s) => s.tabIds.includes(wideId))) } };
   const spare = held.current ? Math.max(0, held.current.end - stripEnd(top)) : 0;
   const pinned = newTabPinned(chip, tabsEnd + spare, pageWidth, tabsShrink);
   const newTab = <NewTabButton windowId={windowId} geometry={top} pinned={pinned} />;
@@ -124,13 +118,15 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
   const scrolled = useRef(0);
   const viewport = useRef(pageWidth + flare * 2);
   const content = useRef(0);
-  const motion = useStripMotion({ entries: parsed, top, dock, flare, end: pinned ? null : stripEnd(top) + GAP, viewport: viewport.current, offset: () => scrolled.current, windowId, enabled: current && !resting });
-  const ownScrollUntil = useRef(0);
+  const motion = useStripMotion({ entries, top, dock, flare, end: pinned ? null : stripEnd(top) + GAP, viewport: viewport.current, offset: () => scrolled.current, windowId, enabled: current && !resting });
+  const intent = useRef(scrollIntentAt(0));
+  const offsetNow = useRef(0);
+  const userScrolls = useRef(0);
   const userScrollAt = useRef(-Infinity);
   const userScrolling = () => performance.now() - userScrollAt.current < USER_SCROLL_QUIET_MS;
   const scrollStrip = (x: number, animated: boolean) => {
+    intent.current = commandScroll(offsetNow.current, x, animated, performance.now() + (animated ? OWN_ANIMATED_SCROLL_MS : OWN_SCROLL_MS));
     scrolled.current = x;
-    ownScrollUntil.current = performance.now() + (animated ? OWN_ANIMATED_SCROLL_MS : OWN_SCROLL_MS);
     scroll.current?.scrollTo({ x, animated });
   };
   const keepInRange = () => {
@@ -142,50 +138,50 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
   const [clipBack] = useState(() => Animated.multiply(clipLeft, -1));
   const onStage = useRef(current);
   onStage.current = current;
+  const [shownHeld, setShownHeld] = useState(false);
+  const stripDragging = useRef(false);
+  const stripDrag = () => tabDragging() || stripDragging.current;
+  const dragHeld = (held: boolean) => {
+    stripDragging.current = held;
+    setShownHeld(held);
+    if (!held) void (latestFirstReveal.current(), release());
+  };
+  const [holdShown] = useState(() => shownHolds((held) => dragHeld(held)));
   const [scroller] = useState<StripScroll>(() => ({
     active: () => onStage.current,
     offset: () => scrolled.current,
     max: () => Math.max(0, content.current - viewport.current),
     scrollTo: (x) => scrollStrip(x, false),
+    holdShown,
     measure: (done) => scroll.current?.getNativeScrollRef()?.measureInWindow((x, _y, width) => done(x + clipShown.current, width - clipShown.current)),
   }));
-  const stripTabIds = () => parsed.flatMap((e) => (e.kind === "dock" ? e.ids : e.kind === "group" ? e.members.flatMap(tabsOf) : tabsOf(e)));
-  const latestTabIds = useRef(stripTabIds);
-  latestTabIds.current = stripTabIds;
-  const chipsUnderMask = () => {
-    const box = viewport.current - clipShown.current;
-    const strength = edgeStrength(scrolled.current, viewport.current, content.current);
-    return latestTabIds.current().map((id) => {
-      const span = latestSpan.current(id);
-      if (!span) return { id, start: -1e6, end: -1e6, centre: -1e6, opacity: 1 };
-      const start = span[0];
-      const end = span[0] + span[1];
-      const centre = (start + end) / 2;
-      return { id, start, end, centre, opacity: edgeMaskAt(centre - scrolled.current - clipShown.current, box, strength) };
-    });
-  };
-  useEffect(
-    () =>
-      devRegister("topStripPages", `${windowId}|${profileId}`, {
-        current: () => current,
-        fadeWidth: EDGE_FADE,
-        scroll: () => ({ x: scrolled.current, viewport: viewport.current, content: content.current }),
-        chips: chipsUnderMask,
-        scrollTo: (x: number) => scroller.scrollTo(x),
-      }),
-    [windowId, profileId, current],
-  );
+  useStripDevRegistry(stripKey, current, {
+    tabIds: () => entries.flatMap((e) => (e.kind === "dock" ? e.ids : e.kind === "group" ? e.members.flatMap(tabsOf) : tabsOf(e))),
+    span: (tabId) => latestSpan.current(tabId),
+    scrolled,
+    viewport,
+    content,
+    clipShown,
+    scroller,
+  });
   const latestScroll = useRef((_: NativeSyntheticEvent<NativeScrollEvent>) => {});
   latestScroll.current = (e) => {
     const now = performance.now();
-    if (Math.abs(e.nativeEvent.contentOffset.x - scrolled.current) >= 1) {
-      dismissStripHoverIn(windowId);
-      if (now > ownScrollUntil.current) {
-        userScrollAt.current = now;
-        noteTabStripScrolled(now);
-      }
+    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+    const x = contentOffset.x;
+    if (Math.abs(x - offsetNow.current) >= 1) dismissStripHoverIn(windowId);
+    const step = observeScroll(intent.current, x, offsetNow.current, contentSize.width - layoutMeasurement.width, now);
+    intent.current = step.intent;
+    if (step.user) {
+      userScrollAt.current = now;
+      userScrolls.current++;
+      const took = userTookOver(firstReveal.current, activeId);
+      firstReveal.current = took.first;
+      revealed.current = took.revealed;
+      noteTabStripScrolled(stripKey, now);
     }
-    scrolled.current = e.nativeEvent.contentOffset.x;
+    offsetNow.current = x;
+    scrolled.current = x;
     const clip = scrolled.current < 0.5 ? 0 : flare;
     if (clip !== clipShown.current) {
       clipShown.current = clip;
@@ -200,6 +196,10 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
   const latestSpan = useRef(spanOf);
   latestSpan.current = spanOf;
   const revealed = useRef(activeId);
+  const latestActive = useRef(activeId);
+  latestActive.current = activeId;
+  const firstReveal = useRef(FIRST_REVEAL);
+  const measuring = chipFrames.includes(undefined) || nameWidths.includes(undefined) || folderWidths.includes(undefined);
   const reveal = (tabId: string, animated: boolean) => {
     const span = latestSpan.current(tabId);
     const x = span && revealOffset(span[0] - flare, span[1], scrolled.current, viewport.current - flare, EDGE_FADE + GAP);
@@ -207,18 +207,61 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
   };
   const latestReveal = useRef(() => {});
   latestReveal.current = () => {
-    if (!current || !activeId || tabDragging()) return;
+    if (!current || !activeId || stripDrag()) return;
     if (userScrolling()) noteTabStripRevealHeldForScroll();
     else reveal(activeId, false);
   };
+  const firstAfterPress = useRef<(() => void) | null>(null);
+  const revealOnFirstOverflow = () => {
+    const pressHeld = tabPressHeld(windowId);
+    if (pressHeld && !firstAfterPress.current) {
+      const stop = onTabPressEnd(windowId, () => {
+        firstAfterPress.current = null;
+        latestFirstReveal.current();
+      });
+      firstAfterPress.current = stop;
+    }
+    const step = firstOverflowReveal(firstReveal.current, {
+      current,
+      activeId,
+      dragging: stripDrag(),
+      pressHeld,
+      overflows: content.current > viewport.current + 0.5,
+      measuring,
+      userScrollAt: userScrollAt.current,
+      now: performance.now(),
+    });
+    firstReveal.current = step.state;
+    if (step.reveal) latestReveal.current();
+  };
+  const latestFirstReveal = useRef(revealOnFirstOverflow);
+  latestFirstReveal.current = revealOnFirstOverflow;
+  useEffect(() => () => firstAfterPress.current?.(), []);
+  useEffect(
+    () =>
+      useTabDrag.subscribe((now, before) => {
+        if (now.phase !== "idle" && before.phase === "idle") firstReveal.current = endSettling(firstReveal.current);
+        if (now.phase === "idle" && before.phase !== "idle") latestFirstReveal.current();
+      }),
+    [],
+  );
+  useEffect(revealOnFirstOverflow, [current]);
   useEffect(() => {
-    if (revealed.current === activeId || (held.current && closedTo.current === activeId)) return;
-    revealed.current = activeId;
-    if (!current || !activeId || tabDragging()) return;
+    const step = selectionReveal(revealed.current, activeId, !!held.current && closedTo.current === activeId, current, tabDragging(), stripDragging.current);
+    if (step === "drop") revealed.current = activeId;
+    if (step !== "run") return;
     let frame = 0;
     let quiet: ReturnType<typeof setTimeout> | undefined;
+    const pending = { tabId: activeId, scrolls: userScrolls.current };
     const now = () => {
-      if (!userScrolling()) return reveal(activeId, true);
+      if (!revealStillWanted(pending, { tabId: latestActive.current, scrolls: userScrolls.current, current: onStage.current, dragging: stripDrag() })) {
+        if (onStage.current && latestActive.current === activeId && !stripDragging.current) revealed.current = activeId;
+        return;
+      }
+      if (!userScrolling()) {
+        revealed.current = activeId;
+        return reveal(activeId, true);
+      }
       noteTabStripRevealHeldForScroll();
       quiet = setTimeout(now, USER_SCROLL_QUIET_MS);
     };
@@ -227,7 +270,8 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
     if (tabPressHeld(windowId)) {
       noteTabStripRevealAfterPress();
       unsubscribe = onTabPressEnd(windowId, () => {
-        if (!tabDragging()) later();
+        if (tabDragging()) revealed.current = activeId;
+        else later();
       });
     } else later();
     return () => {
@@ -258,13 +302,10 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
     if (current && pinned) noteTabStripOverflow(count);
   }, [current, pinned, count]);
   useEffect(() => {
-    if (current && overflow.size) noteTabStripTabsInOverflow(overflow.size);
-  }, [current, overflow.size]);
-  useEffect(() => {
     if (heldClose) noteTabStripHeldClose();
     if (heldClose && stretch) noteTabStripHeldCloseStretch();
   }, [count]);
-  const titledTabs = compact ? parsed.reduce((n, e) => n + (e.kind === "dock" ? 0 : (e.kind === "group" ? e.members.flatMap(tabsOf) : tabsOf(e)).filter(needsTitle).length), 0) : 0;
+  const titledTabs = compact ? entries.reduce((n, e) => n + (e.kind === "dock" ? 0 : (e.kind === "group" ? e.members.flatMap(tabsOf) : tabsOf(e)).filter(needsTitle).length), 0) : 0;
   useEffect(() => {
     if (titledTabs) noteTabStripTitledTabs(titledTabs);
   }, [titledTabs]);
@@ -293,6 +334,7 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
                       horizontal
                       testID={STRIP_SCROLL_ID}
                       disableScrollViewPanResponder
+                      removeClippedSubviews={!shownHeld}
                       showsHorizontalScrollIndicator={false}
                       scrollEventThrottle={16}
                       onLayout={(e) => {
@@ -304,13 +346,14 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
                       onContentSizeChange={(width) => {
                         content.current = width;
                         keepInRange();
+                        revealOnFirstOverflow();
                       }}
                       onScroll={onScroll}
                       style={{ flex: 1 }}
                       contentContainerStyle={{ alignItems: "flex-start", gap: GAP, paddingLeft: flare, paddingRight: pinned ? Math.max(flare, GAP) : flare }}
                     >
                       <StripGhosts />
-                      {parsed.flatMap((e) => {
+                      {entries.flatMap((e) => {
                         if (e.kind === "dock") return <PinnedDock key="dock" tabIds={e.ids} />;
                         const slot = slotIndex;
                         const before = gap(slotIndex++);
@@ -329,8 +372,8 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
                               onChipFrame={(width) => setMeasuredWidth(chipKey(e.id), width)}
                               memberWidth={memberWidth}
                               folderMeasured={(groupId) => folderChip(groupId) !== undefined}
-                              overflowCount={groupOverflow.get(e.id) ?? 0}
                               tightName={tightNames.current}
+                              clipMembers={!shownHeld}
                             />,
                           ];
                         if (e.kind === "split")

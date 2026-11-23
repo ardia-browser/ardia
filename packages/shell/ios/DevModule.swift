@@ -262,6 +262,10 @@ public class DevModule: Module {
       return true
     }.runOnQueue(.main)
 
+    AsyncFunction("devPointerSweep") { (windowId: String, spec: [String: Any], promise: Promise) in
+      DevPointerSweep.start(windowId: windowId, spec: spec, promise: promise)
+    }.runOnQueue(.main)
+
     AsyncFunction("devSidebarEdgePointer") { (windowId: String, x: Double, y: Double, on: Bool) -> Bool in
       guard on else {
         SidebarEdgeWatcher.shared.pointerOverride = nil

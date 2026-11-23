@@ -9,6 +9,7 @@ pub mod phrase;
 pub mod vault;
 pub mod wordlist;
 
+pub use ardia_crypto::wipe;
 pub use base32::{base32_encode, is_tag, TAG_LENGTH};
 pub use error::{Error, PhraseError};
 pub use keys::{

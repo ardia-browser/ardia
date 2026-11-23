@@ -143,7 +143,8 @@ Chromium tree downloads the prebuilt engine matching its macOS engine key instea
 macos`: one hash of every file the framework is built from, which is `engine/` but for Linux's lines of
 `engine/patches/series` (read with `series.py`'s parser), their patches and layer, and the translation units a
 `BUILD.gn` lists only under `is_linux`, plus `apps/browser/assets/offline-game` with its pipeline; a Linux-only change
-keeps the key, and Linux has its own; `packages/ardiacore/scripts/fetch-engine.sh`,
+keeps the key, and Linux has its own, as Windows does (`--platform win`, the inputs `scripts/windows/engine/key-inputs.json`
+declares; `docs/engine-build-windows.md`), which adds nothing to the other two; `packages/ardiacore/scripts/fetch-engine.sh`,
 published with each release whose engine changed; `docs/releasing.md`). After an engine change, rebuild incrementally
 with `scripts/agent/engine-build` and the next app build picks it up. Don't call `autoninja` directly for that: the
 script caps siso's parallel jobs by RAM, and siso's defaults ran ~150 mojom generators at once and ran this 32 GB Mac out

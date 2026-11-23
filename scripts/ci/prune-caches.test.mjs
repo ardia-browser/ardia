@@ -105,11 +105,13 @@ test("a drop prefix deletes its caches on every branch and leaves keys that only
     cache(2, "ardia-test-tsx-8-of-8-aaa-2", "refs/pull/12/merge", "2026-11-02T00:00:00Z"),
     cache(3, "ardia-test-tsx-1-of-3-aaa-sha", MAIN, "2026-11-03T00:00:00Z"),
     cache(4, "ardia-test-tsx-3-of-3-aaa-sha", "refs/heads/feature", "2026-11-04T00:00:00Z"),
+    cache(5, "ardia-test-tsx-1-of-6-aaa-sha", MAIN, "2026-11-05T00:00:00Z"),
+    cache(6, "ardia-test-tsx-6-of-6-aaa-sha", "refs/heads/feature", "2026-11-06T00:00:00Z"),
   ];
-  const dropPrefixes = Array.from({ length: 8 }, (_, index) => `ardia-test-tsx-${index + 1}-of-8-`);
+  const dropPrefixes = [8, 3].flatMap((total) => Array.from({ length: total }, (_, index) => `ardia-test-tsx-${index + 1}-of-${total}-`));
   const doomed = plan({ caches, openPulls: [12], newestOnly: [], dropPrefixes });
-  assert.deepEqual(doomed.map((item) => item.id).sort(), [1, 2]);
-  assert.match(doomed[0].why, /no workflow makes ardia-test-tsx-\d-of-8- caches any more/);
+  assert.deepEqual(doomed.map((item) => item.id).sort(), [1, 2, 3, 4]);
+  for (const item of doomed) assert.match(item.why, /no workflow makes ardia-test-tsx-\d-of-[38]- caches any more/);
 });
 
 test("a cache that is already gone counts as freed, and one failed delete does not stop the rest", () => {

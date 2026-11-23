@@ -6,8 +6,8 @@
 # The bundle comes from an export of REV (default HEAD at start, see bundle-export.ts), so edits and commits in the
 # working tree during the build don't reach it; the export is deleted afterwards. The native app is built from the
 # working tree with JS bundling skipped, and cached once in $ARDIA_SIM_CACHE (default /tmp/ardia-phone/.sim-native)
-# under a hash of its inputs (apps/phone/ios with its Podfile.lock, packages/phone/ios, ArdiaKit, app.json, the
-# module config, the lockfile and patches). When that hash is unchanged the cached app is copied, the commit's
+# under a hash of its inputs (apps/phone/ios with its Podfile.lock, packages/phone/ios, ArdiaKit, the sync core and its
+# Rust crates, app.json, the module config, the lockfile and patches). When that hash is unchanged the cached app is copied, the commit's
 # bundle is compiled into it with Hermes and the copy is re-signed ad hoc; otherwise xcodebuild runs first, through
 # scripts/agent/locked. Writes $ARDIA_APK_DIR/<name>.app (default /tmp/ardia-phone) and <name>.txt beside it; the app
 # logs "ARDIA build <commit> dirty: … from the …; native …" at launch.
@@ -50,7 +50,7 @@ needsFree() {
 }
 needsFree 4 "a bundle over the cached native app"
 started=$(date +%s)
-nativePaths=(apps/phone/ios packages/phone/ios apps/phone/app.json packages/phone/expo-module.config.json apps/phone/pnpm-lock.yaml apps/phone/pnpm-workspace.yaml patches)
+nativePaths=(apps/phone/ios packages/phone/ios packages/sync/ios packages/sync/Package.swift packages/core-rs apps/phone/app.json packages/phone/expo-module.config.json apps/phone/pnpm-lock.yaml apps/phone/pnpm-workspace.yaml patches)
 nativeHash() {
   (cd "$root" && git ls-files -z -co --exclude-standard -- "${nativePaths[@]}" | sort -z | while IFS= read -r -d '' file; do
     [ -f "$file" ] && printf '%s %s\n' "$(git hash-object -- "$file")" "$file"
@@ -94,6 +94,7 @@ if [ ! -d "$cachedApp" ] || [ "$(cat "$cache/native.hash" 2>/dev/null)" != "$has
   echo "native inputs $hashBefore differ from the cached build: running xcodebuild"
   rm -rf "$cachedApp" "$cache/native.hash"
   export LANG=en_US.UTF-8
+  "$root/packages/core-rs/scripts/build-xcframework.sh"
   (cd "$root" && scripts/agent/locked xcodebuild --wait 540 --as build-sim-app -- xcodebuild -workspace apps/phone/ios/Ardia.xcworkspace -scheme Ardia -configuration Release -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$cache/dd" ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= PROVISIONING_PROFILE_SPECIFIER= ARDIA_TEST_BUILD=YES SKIP_BUNDLING=1 build) > "$work/xcodebuild.log" 2>&1 || {
     grep -E "error:|BUILD FAILED" "$work/xcodebuild.log" | head -20 >&2
     echo "xcodebuild failed; its log was $work/xcodebuild.log" >&2

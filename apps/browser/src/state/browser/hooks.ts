@@ -106,6 +106,7 @@ export function useTabLive<T>(tabId: string | undefined, select?: (live: TabLive
 }
 
 export const useFind = (tabId: string | undefined): FindState => useBrowser((s) => (tabId && s.find[tabId]) || CLOSED_FIND);
+export const useFindOpen = (tabId: string): boolean => useBrowser((s) => !!s.find[tabId]?.open);
 
 export function useWindowUi() {
   const id = useWindowId();

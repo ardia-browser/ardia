@@ -19,6 +19,8 @@ ardia_kit = Pathname.new(File.join(__dir__, '..', '..', '..', 'packages', 'phone
 phone_sync = Pathname.new(File.join(__dir__, '..', '..', '..', 'packages', 'phone', 'ios', 'PhoneSync')).cleanpath
 ardia_talk = Pathname.new(File.join(__dir__, '..', '..', '..', 'packages', 'phone', 'ios', 'ArdiaTalk')).cleanpath
 
+system(File.join(__dir__, '..', '..', '..', 'packages', 'core-rs', 'scripts', 'build-xcframework.sh'), exception: true)
+
 publish_changed = '"${PODS_ROOT}/../publish-changed.sh"'
 
 publish_codegen_by_change = lambda do |installer|

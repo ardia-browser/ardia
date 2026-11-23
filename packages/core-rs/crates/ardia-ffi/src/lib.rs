@@ -8,15 +8,15 @@ use std::slice;
 use ardia_sync_core::{phrase, vault, Error, PhraseError, SyncKeys};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use zeroize::{Zeroize, Zeroizing};
+use zeroize::Zeroizing;
 
 pub const ARDIA_ABI_VERSION: u32 = 1;
 pub const ARDIA_ENTROPY_BYTES: usize = 32;
-pub const ARDIA_MAX_PAYLOAD_BYTES: usize = 32 * 1024 * 1024;
-pub const ARDIA_MAX_SEALED_FILE_BYTES: usize = 64 * 1024 * 1024;
-pub const ARDIA_MAX_LABEL_BYTES: usize = 512;
-pub const ARDIA_MAX_PASSWORD_FIELD_BYTES: usize = 65535;
-pub const ARDIA_MAX_SEALED_PASSWORD_BYTES: usize = 131072;
+pub const ARDIA_MAX_PAYLOAD_BYTES: usize = 1024 * 1024 * 1024;
+pub const ARDIA_MAX_SEALED_FILE_BYTES: usize = ARDIA_MAX_PAYLOAD_BYTES + 4096;
+pub const ARDIA_MAX_LABEL_BYTES: usize = 64 * 1024;
+pub const ARDIA_MAX_PASSWORD_FIELD_BYTES: usize = ARDIA_MAX_PAYLOAD_BYTES;
+pub const ARDIA_MAX_SEALED_PASSWORD_BYTES: usize = ARDIA_MAX_PAYLOAD_BYTES + ARDIA_MAX_PAYLOAD_BYTES / 2;
 pub const ARDIA_MAX_PHRASE_BYTES: usize = 4096;
 pub const ARDIA_MAX_LISTING_JSON_BYTES: usize = 16 * 1024 * 1024;
 
@@ -118,10 +118,24 @@ fn write(out: &mut ardia_buf, data: &[u8]) {
     if data.is_empty() {
         return;
     }
-    let mut boxed = vec![0u8; data.len()].into_boxed_slice();
-    boxed.copy_from_slice(data);
+    hand_over(out, data.to_vec());
+}
+
+fn hand_over(out: &mut ardia_buf, data: Vec<u8>) {
+    let boxed = data.into_boxed_slice();
     out.len = boxed.len();
     out.ptr = Box::into_raw(boxed).cast::<u8>();
+}
+
+fn give(out: &mut ardia_buf, mut data: Zeroizing<Vec<u8>>) {
+    if data.is_empty() {
+        return;
+    }
+    if data.len() == data.capacity() {
+        hand_over(out, std::mem::take(&mut *data));
+    } else {
+        write(out, &data);
+    }
 }
 
 unsafe fn run(out: *mut ardia_buf, body: impl FnOnce() -> Outcome) -> ardia_status {
@@ -133,7 +147,7 @@ unsafe fn run(out: *mut ardia_buf, body: impl FnOnce() -> Outcome) -> ardia_stat
     }
     match body() {
         Ok(data) => {
-            write(out, &data);
+            give(out, data);
             ardia_status::Ok
         }
         Err(failure) => {
@@ -156,7 +170,7 @@ pub unsafe extern "C" fn ardia_buf_free(buf: *mut ardia_buf) {
     };
     if !buf.ptr.is_null() {
         let mut boxed = unsafe { Box::from_raw(ptr::slice_from_raw_parts_mut(buf.ptr, buf.len)) };
-        boxed.zeroize();
+        ardia_sync_core::wipe(&mut boxed);
     }
     buf.ptr = ptr::null_mut();
     buf.len = 0;

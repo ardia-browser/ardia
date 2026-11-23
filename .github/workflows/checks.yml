@@ -46,9 +46,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
+      actions: read
       contents: read
       pull-requests: read
     outputs:
+      target: ${{ steps.target.outputs.target }}
       code: ${{ steps.filter.outcome != 'success' || steps.filter.outputs.code == 'true' }}
       browser: ${{ steps.filter.outcome != 'success' || steps.filter.outputs.browser == 'true' }}
       repo: ${{ steps.filter.outcome != 'success' || steps.filter.outputs.repo == 'true' }}
@@ -131,6 +133,8 @@ jobs:
               - "packages/shaders/scripts/meadow.mjs"
               - "apps/browser/assets/offline-game/**"
               - "apps/browser/assets/offline-game-pipeline/**"
+              - "apps/browser/windows/Ardia/EngineApi.h"
+              - "apps/browser/windows/Ardia/Ardia.ico"
               - "engine/**"
               - "docs/release-notes/**"
               - "infra/site/**"
@@ -138,6 +142,51 @@ jobs:
               - ".github/**"
               - "package.json"
               - ".nvmrc"
+      - id: router
+        name: The router, from main
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: refs/heads/main
+          path: .route
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /scripts/ci/
+            /.github/TEAM.td
+            /.github/vouch/vouch.cjs
+      - id: route
+        name: GitHub or Boat for the long jobs
+        if: steps.router.outcome == 'success' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        continue-on-error: true
+        timeout-minutes: 1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BOAT_CI_LIMITS_KEY: ${{ secrets.BOAT_CI_LIMITS_KEY }}
+          BOAT_OVERFLOW: ${{ vars.BOAT_OVERFLOW }}
+          BOAT_OVERFLOW_REPOS: ${{ vars.BOAT_OVERFLOW_REPOS }}
+          BOAT_OVERFLOW_QUEUED: ${{ vars.BOAT_OVERFLOW_QUEUED }}
+          BOAT_OVERFLOW_BUSY: ${{ vars.BOAT_OVERFLOW_BUSY }}
+          BOAT_OVERFLOW_QUEUED_AGE: ${{ vars.BOAT_OVERFLOW_QUEUED_AGE }}
+          BOAT_OVERFLOW_DAY_STARTS: ${{ vars.BOAT_OVERFLOW_DAY_STARTS }}
+          BOAT_OVERFLOW_HOUR_STARTS: ${{ vars.BOAT_OVERFLOW_HOUR_STARTS }}
+          BOAT_OVERFLOW_MINUTE_STARTS: ${{ vars.BOAT_OVERFLOW_MINUTE_STARTS }}
+          BOAT_OVERFLOW_VM_HOURS: ${{ vars.BOAT_OVERFLOW_VM_HOURS }}
+          BOAT_OVERFLOW_SANDBOXES: ${{ vars.BOAT_OVERFLOW_SANDBOXES }}
+        run: node .route/scripts/ci/route-runner.mjs --fallback ubuntu-latest --jobs 7
+      - id: target
+        name: The runner the long jobs use
+        if: always()
+        env:
+          OUTCOME: ${{ steps.route.outcome }}
+          PICKED: ${{ steps.route.outputs.target }}
+        run: |
+          if [ "$OUTCOME" = success ] && [ "$PICKED" = boat ]; then
+            echo "target=boat" >> "$GITHUB_OUTPUT"
+          else
+            echo "target=github" >> "$GITHUB_OUTPUT"
+          fi
 
   check:
     name: typecheck, tests and Mac bundle
@@ -146,7 +195,7 @@ jobs:
     concurrency:
       group: checks-code-${{ github.ref }}
       cancel-in-progress: true
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.run_attempt == '1' && needs.changes.result == 'success' && needs.changes.outputs.target == 'boat' && 'boat-large' || 'ubuntu-latest' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -186,18 +235,18 @@ jobs:
           ls -l "$RUNNER_TEMP/main.hbc"
 
   browser:
-    name: browser tests, share ${{ matrix.shard }} of 3
+    name: browser tests, share ${{ matrix.shard }} of 6
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.browser == 'true') }}
     concurrency:
       group: checks-browser-${{ matrix.shard }}-${{ github.ref }}
       cancel-in-progress: true
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.run_attempt == '1' && needs.changes.result == 'success' && needs.changes.outputs.target == 'boat' && 'boat-large' || 'ubuntu-latest' }}
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4, 5, 6]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -213,8 +262,8 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: apps/browser/node_modules/.cache/ardia-test-tsx
-          key: ardia-test-tsx-${{ matrix.shard }}-of-3-${{ hashFiles('apps/browser/src/test-loader.mjs', 'pnpm-lock.yaml') }}-${{ github.sha }}
-          restore-keys: ardia-test-tsx-${{ matrix.shard }}-of-3-${{ hashFiles('apps/browser/src/test-loader.mjs', 'pnpm-lock.yaml') }}-
+          key: ardia-test-tsx-${{ matrix.shard }}-of-6-${{ hashFiles('apps/browser/src/test-loader.mjs', 'pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: ardia-test-tsx-${{ matrix.shard }}-of-6-${{ hashFiles('apps/browser/src/test-loader.mjs', 'pnpm-lock.yaml') }}-
       - name: The uBlock Origin release ubo.sh pins
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -222,14 +271,14 @@ jobs:
           key: ublock-${{ hashFiles('packages/ardiacore/scripts/ubo.sh') }}
       - name: This share of the browser's tests
         env:
-          NODE_OPTIONS: --test-shard=${{ matrix.shard }}/3
+          NODE_OPTIONS: --test-shard=${{ matrix.shard }}/6
         run: pnpm --filter @ardia/browser test
       - name: Keep the TSX for the next run on main
         if: ${{ !cancelled() && github.event_name == 'push' && steps.tsx.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: apps/browser/node_modules/.cache/ardia-test-tsx
-          key: ardia-test-tsx-${{ matrix.shard }}-of-3-${{ hashFiles('apps/browser/src/test-loader.mjs', 'pnpm-lock.yaml') }}-${{ github.sha }}
+          key: ardia-test-tsx-${{ matrix.shard }}-of-6-${{ hashFiles('apps/browser/src/test-loader.mjs', 'pnpm-lock.yaml') }}-${{ github.sha }}
 
   repo:
     name: repository, vouch and stale tests

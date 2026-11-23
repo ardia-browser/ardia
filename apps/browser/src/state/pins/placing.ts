@@ -1,3 +1,4 @@
+import { linkEdits } from "../browser/changes";
 import type { BrowserState } from "../browser/store";
 import { ancestorIds, innermostGroupOf, insertAll, leaveGroups, nestGroups, orderSections, placeGroups, reparent, syncGroupOrder } from "../groups/groups";
 import { isIncognitoProfile, isPinnedRow, pinKeyOf, ROW_PIN, samePin, TILE_PIN } from "../browser/model";
@@ -84,7 +85,7 @@ export function placing(s: BrowserState, ids: string[], p: TabPlacement): Browse
   let tabIds = placeGroups(rest, groups, w.id);
   tabIds = orderSections(tabIds, tabs, groups);
   const window: BrowserWindow = { ...w, tabIds };
-  return { ...s, tabs, pinChoices, pinSync, groups: syncGroupOrder(groups, window), windows: { ...s.windows, [w.id]: window } };
+  return { ...s, tabs: linkEdits(tabs, s.tabs, moving), pinChoices, pinSync, groups: syncGroupOrder(groups, window), windows: { ...s.windows, [w.id]: window } };
 }
 
 function withHomesOf(s: BrowserState, before: BrowserState, ids: string[]): BrowserState {
@@ -92,7 +93,7 @@ function withHomesOf(s: BrowserState, before: BrowserState, ids: string[]): Brow
   if (!kept.length) return s;
   const tabs = { ...s.tabs };
   for (const id of kept) tabs[id] = { ...tabs[id]!, pinnedUrl: before.tabs[id]!.pinnedUrl };
-  return { ...s, tabs };
+  return { ...s, tabs: linkEdits(tabs, s.tabs, kept) };
 }
 
 export function groupingOnto(s: BrowserState, ids: string[], targetId: string): [BrowserState, string] {

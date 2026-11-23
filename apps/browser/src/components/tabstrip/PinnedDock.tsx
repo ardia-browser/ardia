@@ -17,6 +17,7 @@ import { dockWidth, dropIndex, type DragGeometry } from "./stripGroups";
 import { TabChip } from "./TabChip";
 import { CHIP_HAIRLINE, DOCK_GAP, GAP, ITEM_HEIGHT, ITEM_TOP, MAX_CHIP, PINNED_CELL, PINNED_FACE_INSET, pinnedFaceRadius, PINNED_SPACING, tabRadius, TOP_STRIP_HEIGHT } from "./tokens";
 import { useStripDrag } from "./useStripDrag";
+import { useStripPick } from "./stripPick";
 import { useStripCardHover } from "./StripHoverCard";
 import { useChipHover, useChipHovered } from "./reachableHover";
 import { TabPressArea } from "../sidebar/TabPressArea";
@@ -63,6 +64,7 @@ export function PinnedDock({ tabIds }: { tabIds: string[] }) {
 
 function PinnedCell({ tabId, geometry, from }: { tabId: string; geometry: DragGeometry; from: number }) {
   const windowId = useWindowId();
+  const pick = useStripPick();
   const tab = useTab(tabId);
   const active = useIsActiveTab(tabId);
   const hover = useChipHover();
@@ -103,7 +105,7 @@ function PinnedCell({ tabId, geometry, from }: { tabId: string; geometry: DragGe
           opacity: drag.crossed ? 0 : 1,
         }}
       >
-        <TabPressArea windowId={windowId} tab={tab}>
+        <TabPressArea windowId={windowId} tab={tab} onSwitch={pick}>
           {({ pressed }) => <PinnedFace tabId={tabId} active={active} hovered={hovered} pressed={pressed} frame="face" />}
         </TabPressArea>
       </View>

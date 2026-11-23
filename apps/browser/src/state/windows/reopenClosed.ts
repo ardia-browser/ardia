@@ -1,3 +1,4 @@
+import { withEntry } from "../browser/changes";
 import type { BrowserState } from "../browser/store";
 import { rejoinGroups } from "../groups/groups";
 import { withShownTab } from "../groups/shownTabs";
@@ -97,7 +98,7 @@ export function restoreTab(s: BrowserState, entry: ClosedTab, requested?: string
   if (tile) {
     const unloaded = !hasPage(tile);
     const tabs = unloaded
-      ? { ...s.tabs, [tile.id]: { ...tile, url: entry.tab.url, title: entry.tab.title, favicon: entry.tab.favicon, muted: entry.tab.muted, page: adoptedPage(restoreId(entry.restoreFrom ?? tile.id)) } }
+      ? withEntry(s.tabs, tile.id, { ...tile, url: entry.tab.url, title: entry.tab.title, favicon: entry.tab.favicon, muted: entry.tab.muted, page: adoptedPage(restoreId(entry.restoreFrom ?? tile.id)) })
       : s.tabs;
     const next: BrowserState = { ...s, closedTabs, tabs };
     return apply(next, activated(next, tile.id));

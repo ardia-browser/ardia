@@ -145,7 +145,7 @@ final class FakeMac {
   }
 
   func scopeFolder(_ scope: String) -> URL {
-    vault.chainURL.appendingPathComponent(keys.scopeTag(scope), isDirectory: true)
+    vault.chainURL.appendingPathComponent(try! keys.scopeTag(scope), isDirectory: true)
   }
 
   func logs(_ scope: String, device: String) -> [(seq: Int, json: String)] {

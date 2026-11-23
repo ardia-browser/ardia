@@ -6,8 +6,14 @@ on:
       - "engine/patches/**"
       - "engine/chromium/**"
       - "engine/ardiacore/**"
+      - "engine/engine-key.*"
+      - "packages/ardiacore/prebuilt-engines.tsv"
+      - "packages/ardiacore/prebuilt-engines-linux.tsv"
       - "scripts/windows/engine/**"
       - "apps/browser/windows/Ardia/EngineApi.h"
+      - "apps/browser/windows/Ardia/Ardia.ico"
+      - "apps/browser/assets/offline-game/**"
+      - "apps/browser/assets/offline-game-pipeline/**"
       - ".github/workflows/windows-engine-inputs.yml"
   push:
     branches: [main]
@@ -24,12 +30,20 @@ concurrency:
 jobs:
   inputs:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+          fetch-depth: 0
       - name: The shared engine inputs still make a Windows engine build
         run: python3 scripts/windows/engine/check_inputs.py
       - name: The check refuses to accept what it could not read
         run: python3 scripts/windows/engine/check_inputs_test.py
+      - name: prebuilt.json pins the Windows engine key of its source commit
+        run: python3 scripts/windows/engine/prebuilt_test.py
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24
+      - name: The macOS and Linux keys of this tree and of the published engines' revisions are the two-platform code's
+        run: node --test --test-name-pattern="two-platform code" engine/engine-key.test.mjs

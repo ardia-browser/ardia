@@ -1,5 +1,5 @@
 import { devRegister } from "../dev/devRegister";
-import { SwipeArea, type SwipeAreaHandle, type SwipeEvent, concentric, POPOVER_MARGIN, radius, space, Surface, Symbol, Text, VisualEffect } from "../ui";
+import { SwipeArea, type SwipeAreaHandle, type SwipeEvent, concentric, radius, space, Surface, Symbol, Text, VisualEffect } from "../ui";
 import { swipeHaptic } from "../../state/app/system";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, StyleSheet, View } from "react-native";
@@ -8,9 +8,7 @@ import { spring as springOf, springSpec, type SpringSpec } from "../ui/motion";
 import { SHADOWS, SWIPE_CONFIRMED_WASH, SWIPE_MOTION, SWIPE_PILL_SPRING, windowColors } from "./tokens";
 import { useTab } from "../../state/browser/hooks";
 import { Favicon, NewTabIcon } from "../favicon/Favicon";
-import { HISTORY_MENU_WIDTH, underButton, HistoryPopover } from "./HistoryPopover";
 import { goBack, goForward, goToHistoryItem, historyFavicons, historyItems, openHistoryMenu, useHistoryAvailability, useHistoryMenu, type HistoryItem } from "../../state/tabs/navigation";
-import { historyMenuLeft, type PageAnchor } from "./pageAnchors";
 import { useSwipeClose } from "./swipeClose";
 import {
   CAPSULE_INSET,
@@ -40,16 +38,6 @@ function spring(value: Animated.Value, toValue: number, spec: SpringSpec, native
 
 const rowsAboveSelected = (count: number, selected: number) => count - 1 - selected;
 const listTop = (height: number, count: number, selected: number) => height / 2 - ROW / 2 - LIST_PAD - rowsAboveSelected(count, selected) * ROW;
-
-export function NavigationOverlays({ tabId, windowId, anchor, paneWidth, historyMenu }: { tabId: string; windowId: string; anchor: PageAnchor; paneWidth: number; historyMenu: boolean }) {
-  const historyLeft = (direction: -1 | 1) => historyMenuLeft(anchor, underButton(direction < 0 ? anchor.toolbar?.back ?? 0 : anchor.toolbar?.forward ?? 0), paneWidth, HISTORY_MENU_WIDTH);
-  return (
-    <>
-      <SwipeOverlay tabId={tabId} />
-      {historyMenu && <HistoryPopover tabId={tabId} windowId={windowId} top={POPOVER_MARGIN} left={historyLeft} />}
-    </>
-  );
-}
 
 type Shown = { direction: "back" | "forward"; confirmed: boolean; list: HistoryItem[] | null; selected: number };
 

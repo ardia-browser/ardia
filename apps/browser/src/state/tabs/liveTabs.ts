@@ -1,8 +1,9 @@
+import { withEntry } from "../browser/changes";
 import { TAB_GROUP_COLORS } from "@ardia/core";
 import type { StripGroup, StripState, StripTab } from "../../platform/tabs";
 import type { BrowserState } from "../browser/store";
 import type { TabGroup } from "../browser/types";
-import { rootOf } from "../groups/groups";
+import { depthOf, rootOf } from "../groups/groups";
 import { engineProfile } from "../browser/model";
 import { forgetOpeners, switchKeepsOpeners } from "./openers";
 import { groupOf, withGroup } from "../pins/tabGrouping";
@@ -18,10 +19,32 @@ import { orderSections } from "../groups/groups";
 type Keyed = StripTab & { key: string };
 const known = (s: BrowserState, t: StripTab | undefined): t is Keyed => !!t?.key && !!s.tabs[t.key] && !isPeekTab(s, t.key);
 
-const chromeGroupOf = (s: BrowserState, key: string | undefined) => {
-  const g = groupOf(s, key);
-  return g && rootOf(s.groups, g.id);
-};
+let indexedGroups: BrowserState["groups"] | null = null;
+let rootGroupOfTab = new Map<string, TabGroup>();
+
+function rootGroupsByTab(groups: BrowserState["groups"]): Map<string, TabGroup> {
+  if (groups === indexedGroups) return rootGroupOfTab;
+  const innermost = new Map<string, { id: string; depth: number }>();
+  for (const g of Object.values(groups)) {
+    const depth = g.parentId ? depthOf(groups, g.id) : 0;
+    for (const tabId of g.tabIds) {
+      const best = innermost.get(tabId);
+      if (!best || depth > best.depth) innermost.set(tabId, { id: g.id, depth });
+    }
+  }
+  const roots = new Map<string, TabGroup>();
+  const rootOfGroup = new Map<string, TabGroup | undefined>();
+  innermost.forEach(({ id }, tabId) => {
+    if (!rootOfGroup.has(id)) rootOfGroup.set(id, rootOf(groups, id));
+    const root = rootOfGroup.get(id);
+    if (root) roots.set(tabId, root);
+  });
+  indexedGroups = groups;
+  rootGroupOfTab = roots;
+  return roots;
+}
+
+const chromeGroupOf = (s: BrowserState, key: string | undefined) => (key ? rootGroupsByTab(s.groups).get(key) : undefined);
 
 const madeByChrome = (s: BrowserState, key: string) => isAdoptKind(adoptOf(s.tabs[key]), "tab");
 const CHROME_COLORS = new Set<string>(TAB_GROUP_COLORS);
@@ -51,7 +74,7 @@ export function chromeChanged(
   for (const t of now) if (movedIn(t)) s = intoWindow(s, t.key, home!);
 
   const followed = now.filter((t) => (stayed(t) || taken.has(t.key)) && !pending.arranged.has(t.key));
-  const weight = (t: Keyed) => (groupOf(s, t.key) ? 2 : 1);
+  const weight = (t: Keyed) => (chromeGroupOf(s, t.key) ? 2 : 1);
   const kept = new Set([
     ...keptOrder(followed.filter(stayed), (t) => was.get(t.browser)!.index, weight).map((t) => t.key),
     ...pending.arranged,
@@ -170,16 +193,30 @@ export function groupStep(s: BrowserState, strip: StripState, bound: GroupBindin
   if (!reportsGroups(strip)) return null;
   const tabs = strip.tabs.filter((t): t is Keyed => known(s, t) && !t.pinned && !s.tabs[t.key]!.pin);
   const looks = new Map((strip.groups ?? []).map((g) => [g.id, g]));
-  const tokenOf = (id: string) => [...bound].find(([token, g]) => g === id && looks.has(token))?.[0];
+  const tokens = new Map<string, string>();
+  bound.forEach((g, token) => {
+    if (looks.has(token) && !tokens.has(g)) tokens.set(g, token);
+  });
+  const tokenOf = (id: string) => tokens.get(id);
   const strays = tabs.filter((t) => t.group && t.group !== (chromeGroupOf(s, t.key) ? tokenOf(chromeGroupOf(s, t.key)!.id) : undefined));
   if (strays.length) return { keys: strays.map((t) => t.key), group: null };
-  const storeGroups = [...new Set(tabs.map((t) => chromeGroupOf(s, t.key)).filter((g) => !!g))];
-  for (const g of storeGroups) {
-    const keys = tabs.filter((t) => chromeGroupOf(s, t.key)?.id === g!.id).map((t) => t.key);
-    const token = tokenOf(g!.id);
-    const look = { title: g!.name, color: chromeColor(g!.color), collapsed: g!.collapsed };
-    if (!token) return { keys, group: "new", ...look, makes: g!.id };
-    const missing = tabs.filter((t) => keys.includes(t.key) && t.group !== token).map((t) => t.key);
+  const roots = new Set<TabGroup>();
+  const members = new Map<string, Keyed[]>();
+  for (const t of tabs) {
+    const g = chromeGroupOf(s, t.key);
+    if (!g) continue;
+    roots.add(g);
+    const list = members.get(g.id);
+    if (list) list.push(t);
+    else members.set(g.id, [t]);
+  }
+  for (const g of roots) {
+    const inGroup = members.get(g.id)!;
+    const keys = inGroup.map((t) => t.key);
+    const token = tokenOf(g.id);
+    const look = { title: g.name, color: chromeColor(g.color), collapsed: g.collapsed };
+    if (!token) return { keys, group: "new", ...look, makes: g.id };
+    const missing = inGroup.filter((t) => t.group !== token).map((t) => t.key);
     if (missing.length) return { keys: missing, group: token };
     const now = looks.get(token)!;
     if (now.title !== look.title || now.color !== look.color || now.collapsed !== look.collapsed) return { keys, group: token, ...look };
@@ -263,7 +300,7 @@ function intoWindow(s: BrowserState, key: string, to: string): BrowserState {
   let next = removeTabs(s, [key], false);
   const w = next.windows[to];
   if (!w) return s;
-  const tabs = { ...next.tabs, [key]: { ...tab, windowId: to } };
+  const tabs = withEntry(next.tabs, key, { ...tab, windowId: to });
   next = {
     ...next,
     tabs,

@@ -1,3 +1,4 @@
+import { linkEdits } from "../browser/changes";
 import type { BrowserState } from "../browser/store";
 import { withShownTab } from "../groups/shownTabs";
 import { inPinnedContainer } from "../browser/model";
@@ -86,7 +87,7 @@ export function forgetOpeners(s: BrowserState, windowId: string, profileId: stri
   if (!ids?.length) return s;
   const tabs = { ...s.tabs };
   for (const id of ids) tabs[id] = { ...tabs[id]!, openerId: null };
-  return { ...s, tabs };
+  return { ...s, tabs: linkEdits(tabs, s.tabs, ids) };
 }
 
 export function switchKeepsOpeners(s: BrowserState, from: string, to: string): boolean {

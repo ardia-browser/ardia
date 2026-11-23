@@ -4215,9 +4215,10 @@ This was `docs/ios.md`'s, for main's SwiftUI app; since the clean-up the workflo
   ("Default browser on iPhone" above); `default_browser=false` (`--no-default-browser`) builds without it. iOS
   answers `UIApplication.isDefault(.webBrowser)` four times a year, so `DefaultBrowserStatus` keeps the last answer and asks only on returning from the Settings button or after 100
   days; a web link from another app also proves it.
-- **Export compliance.** The only encryption is Apple's own (CryptoKit's AES-GCM, HKDF and HMAC for sync, and HTTPS),
-  which Apple counts as exempt, so `ITSAppUsesNonExemptEncryption` is false and a build needs no compliance code.
-  Adding a cryptography library, or an algorithm of our own, changes that answer.
+- **Export compliance.** Sync's AES-GCM, HKDF and HMAC run in the Rust core (`packages/core-rs`, RustCrypto), not
+  CryptoKit; everything else is Apple's own (HTTPS, CryptoKit hashes). `ITSAppUsesNonExemptEncryption` is still false,
+  which assumed Apple's encryption only: the owner decides whether the Rust core changes that answer before the next
+  TestFlight upload.
 
 #### Launch arguments on iPhone
 

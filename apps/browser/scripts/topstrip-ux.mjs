@@ -312,7 +312,7 @@ const nativeOf = (frame) => ac.engine.call("windows.list").then((ws) => {
   return found ? found.window : null;
 });
 const classify = (h) => /_NSTheme/.test(h) ? "L" : /^ArdiaShell\\.WindowDragRegion/.test(h) ? "D" : /^(RCTScrollContentView|NSClipView)/.test(h) ? "S" : /^NativeWidgetMac/.test(h) ? "E"
-  : /FileDragView/.test(h) ? "T" : /^(RCTView < )+ArdiaShell\\.ContextMenuArea < ArdiaShell\\.FileDropView/.test(h) ? "X" : "I";
+  : /^(RCTView < )+ArdiaShell\\.ContextMenuArea < ArdiaShell\\.FileDropView/.test(h) ? "X" : /FileDragView|^RCTView < RCTView < ArdiaShell\\.ContextMenuArea < /.test(h) ? "T" : "I";
 const hitRow = (n, width, y) => {
   const xs = []; for (let x = 0; x < width; x++) xs.push(x);
   const out = [];
@@ -396,11 +396,11 @@ function analyse(img, scale, data, width) {
     }
     return out;
   };
-  const tabRuns = runs((c) => c === "T");
+  const hitTabRuns = runs((c) => c === "T");
   const dragRuns = runs((c, x) => (c === "D" || c === "S") && x >= lightsEnd);
   const dragMaxPt = Math.max(0, ...dragRuns.map(([a, b]) => b - a));
   const deadPt = codes.split("").filter((c, x) => c === "X" && x >= lightsEnd).length;
-  const buttonRuns = runs((c) => c === "I").filter(([a, b]) => b - a >= 14 && a > lightsEnd);
+  const hitButtonRuns = runs((c) => c === "I").filter(([a, b]) => b - a >= 14 && a > lightsEnd);
 
   const W = Math.round(width);
   const bgRow = [];
@@ -437,6 +437,11 @@ function analyse(img, scale, data, width) {
     favs.push({ tabId, x: minX, w, h, count, full: w >= 13 && h >= 13 && count >= 150 });
   }
   const favOf = new Map(favs.map((f) => [f.tabId, f]));
+  const lastTabRun = hitTabRuns.reduce((last, [a, b], i) => (favs.some((f) => f.full && f.x + 8 >= a && f.x + 8 < b) ? i : last), -1);
+  const tabRuns = hitTabRuns.filter((_, i) => i <= lastTabRun);
+  const tabButtonRuns = hitTabRuns.slice(lastTabRun + 1).slice(-2);
+  const edgeRuns = hitTabRuns.filter((r) => !tabButtonRuns.includes(r));
+  const buttonRuns = [...hitButtonRuns, ...tabButtonRuns.filter(([a, b]) => b - a >= 14)].sort((p, q) => p[0] - q[0]);
   const loose = data.loose;
   const withFav = loose.filter((t) => data.favicons[t] && !data.discarded.includes(t) && !sharedColour(t));
   const shown = withFav.filter((t) => favOf.get(t)?.full);
@@ -448,7 +453,7 @@ function analyse(img, scale, data, width) {
   const hardClips = favs.filter((f) => !f.full && f.count >= 16).length;
 
   const runOf = (x) => tabRuns.find(([a, b]) => x >= a && x < b);
-  const scrollRuns = runs((c) => c === "T" || c === "S");
+  const scrollRuns = runs((c, x) => (c === "T" || c === "S") && !tabButtonRuns.some(([a, b]) => x >= a && x < b));
   const viewport = scrollRuns.length ? [Math.min(...scrollRuns.map((r) => r[0])), Math.max(...scrollRuns.map((r) => r[1]))] : [0, 0];
   const inkWidth = (a, b, startX) => {
     let first = -1, last = -1, maxInk = 0;
@@ -500,7 +505,7 @@ function analyse(img, scale, data, width) {
     const hidden = side === "L" ? hiddenL : hiddenR;
     if (!hidden) return null;
     const edge = side === "L" ? viewport[0] : viewport[1];
-    const peek = tabRuns.find(([a, b]) => (side === "L" ? a <= edge + 1 : b >= edge - 1));
+    const peek = edgeRuns.find(([a, b]) => (side === "L" ? a <= edge + 1 : b >= edge - 1));
     if (!peek) return 0;
     const a = side === "L" ? edge : edge - 8;
     const shows = inkWidth(peek[0], peek[1], peek[0]).maxInk >= 40 || favs.some((f) => f.count >= 16 && f.x < peek[1] && f.x + f.w > peek[0]);

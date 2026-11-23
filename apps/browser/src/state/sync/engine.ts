@@ -34,6 +34,7 @@ const CYCLE_MS = 15_000;
 const AFTER_EDIT_MS = 3_000;
 
 export const useSync = create<SyncUi>()(() => emptyUi(SyncNative ? "off" : "unavailable"));
+export const syncCore = () => SyncNative?.core ?? "native";
 
 export const currentSyncFolder = () => useSync.getState().folder;
 

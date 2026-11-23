@@ -23,11 +23,12 @@ import {
 } from "../../../state/plugins/actions";
 import { usePluginActive, usePluginListing, usePluginNeedsReview, usePluginProcess, usePluginPrograms, usePluginRecord, usePluginUnsaved, usePluginValues } from "../../../state/plugins/hooks";
 import { goToSettingsPane, SETTINGS_WINDOW_ID, type SettingsPlace } from "../../../state/settings/settingsWindows";
-import { Button, PopUp, Symbol, TextField, Toggle } from "../../ui";
+import { Button, PopUp, space, Symbol, TextField, Toggle } from "../../ui";
 import { Group, Row, SectionHeader } from "../Form";
 import { useTheme } from "../../ui/theme";
 import { PaneSubPage } from "./PaneSubPage";
 import { releaseOrphanedConsent } from "../../../state/plugins/consentSurface";
+import { removeWords } from "../../../state/plugins/removeWords";
 import { OfficialPluginsSection, usePluginsBelowOfficial } from "./OfficialPlugins";
 import { useControlTurnedOff } from "../../../state/app/programControlSetting";
 import { useNeverChosenCount } from "../../../state/site/passwordManager";
@@ -278,15 +279,18 @@ function PluginPage({ name }: { name: string }) {
           </Group>
         </>
       )}
-      <Group>
-        <Row title="Remove" description={listing.official ? "Removes its download and its commands on your PATH. Its data stays." : `Moves the plugin to the ${PLATFORM_TERMS.trash}.`}>
-          <Button title="Remove…" kind="destructive" onPress={() => void confirmRemove(name, m?.title ?? name)} />
-        </Row>
-      </Group>
+      <View style={APART}>
+        <Group>
+          <Row title="Remove" description={removeWords(m, !!listing.official).row}>
+            <Button title="Remove…" kind="destructive" onPress={() => void confirmRemove(name, m?.title ?? name)} />
+          </Row>
+        </Group>
+      </View>
     </PaneSubPage>
   );
 }
 
 const LINE = { flex: 1 } as const;
+const APART = { marginTop: space.xxl } as const;
 const ICON = { width: 18, height: 18 } as const;
 const TITLE_ICON = { width: 28, height: 28 } as const;

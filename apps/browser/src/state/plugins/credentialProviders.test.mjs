@@ -101,3 +101,15 @@ test("an official plugin that isn't installed yet takes its title, blurb and bad
   assert.deepEqual(rows.map((p) => [p.name, p.title, p.blurb, p.icon, p.state]), pin.plugins.map((p) => [p.name, p.title, p.blurb, p.icon, "available"]));
   assert.deepEqual(officialCredentialProviders(state, true).map((p) => [p.name, p.symbol, p.accent]), pin.plugins.map((p) => [p.name, p.symbol, p.accent]), "the badge's symbol and accent too");
 });
+
+test("Remove says what it does for the plugin in front of you: a password manager signs out and loses its saved copy, never PATH commands it doesn't have", async () => {
+  const { removeWords } = await import("./removeWords.ts");
+  const provider = removeWords(listing.manifest, true);
+  assert.match(provider.row, /signs it out and deletes its saved copy of your logins/);
+  assert.match(provider.alert, /Your logins stay in Bitwarden\.$/);
+  for (const words of [provider.row, provider.alert]) assert.doesNotMatch(words, /PATH|data stays|secrets stay/);
+  const cli = removeWords({ programs: [{ name: "ardia" }], contributes: { credentialProvider: null } }, true);
+  assert.match(cli.row, /commands on your PATH\. Its data stays\.$/);
+  assert.doesNotMatch(removeWords({ programs: [], contributes: { credentialProvider: null } }, true).row, /PATH/);
+  assert.match(removeWords(listing.manifest, false).alert, /data .*deleted/);
+});

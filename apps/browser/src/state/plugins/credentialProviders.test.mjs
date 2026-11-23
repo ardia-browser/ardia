@@ -18,6 +18,7 @@ const { readManifest } = await import("../../lib/pluginManifest.ts");
 const { usePlugins } = await import("./store.ts");
 const { useBrowser } = await import("../browser/store.ts");
 const { markPluginReady } = await import("./activation.ts");
+const { superviseProcess, processExited, stopProcess } = await import("./process.ts");
 const { watchCredentialProviders } = await import("./credentialProviders.ts");
 const { officialCredentialProviders } = await import("./officialCredentials.ts");
 
@@ -63,4 +64,23 @@ test("the official catalogue lists credential providers from the pin, installed 
   const off = officialCredentialProviders({ ...base, listings: { bitwarden: listing }, order: ["bitwarden"], records: { bitwarden: record(false) } }, true);
   assert.deepEqual(off.map((p) => [p.state, p.enabled]), [["installed", false]], "installed but off stays listed so the row can offer Turn On");
   assert.equal(officialCredentialProviders(base, false)[0].state, "unsupported");
+});
+
+test("a run native asks for while the locked run is still winding down starts once that run has exited", async () => {
+  watchCredentialProviders();
+  usePlugins.setState({ listings: { bitwarden: listing }, order: ["bitwarden"], records: { bitwarden: record(true) }, processes: {} });
+  superviseProcess("bitwarden", HASH, manifest, listing.folderId, null);
+  for (let i = 0; i < 6; i++) await tick();
+  const first = usePlugins.getState().processes.bitwarden;
+  assert.equal(first.state, "running");
+  assert.ok(markPluginReady("bitwarden", first.run));
+  for (const listener of wantedListeners) listener({ name: "bitwarden" });
+  assert.equal(usePlugins.getState().processes.bitwarden.run, first.run, "the old run still looks ready, so nothing starts yet");
+  processExited({ name: "bitwarden", run: first.run, status: null, signal: 9, overMemory: false, requested: true });
+  for (let i = 0; i < 6; i++) await tick();
+  const next = usePlugins.getState().processes.bitwarden;
+  assert.equal(next.state, "running");
+  assert.notEqual(next.run, first.run);
+  assert.ok(markPluginReady("bitwarden", next.run));
+  stopProcess("bitwarden", null, 0);
 });

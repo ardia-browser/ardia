@@ -61,6 +61,8 @@ struct OfficialPin: Equatable {
     return title.isEmpty ? owner : title
   }
 
+  static func forgetsOnRemove(_ name: String, known: Bool, pin: OfficialPin?) -> Bool { known || pin?.reservedProviders[name] != nil }
+
   var providerTitles: [String: String] {
     Dictionary(uniqueKeysWithValues: reservedProviders.keys.compactMap { name in providerTitle(name).map { (name, $0) } })
   }

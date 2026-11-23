@@ -64,6 +64,13 @@ struct PluginCredentialPinTests {
     #expect([other.title, other.accent] == ["", ""])
   }
 
+  @Test func `removing a reserved password manager wipes its data even after it was turned off`() throws {
+    let pin = try #require(Self.pin([Self.plugin("bitwarden", title: "Bitwarden", providers: ["bitwarden"], programs: ["bw"]), Self.plugin("cli")]))
+    #expect(OfficialPin.forgetsOnRemove("bitwarden", known: false, pin: pin))
+    #expect(!OfficialPin.forgetsOnRemove("cli", known: false, pin: pin))
+    #expect(OfficialPin.forgetsOnRemove("cli", known: true, pin: nil))
+  }
+
   @Test func `two official plugins can't reserve the same provider name`() {
     #expect(Self.pin([Self.plugin("a", providers: ["vault"]), Self.plugin("b", providers: ["vault"])]) == nil)
     #expect(Self.pin([Self.plugin("a", providers: ["Not A Name"])]) == nil)
@@ -91,6 +98,7 @@ struct PluginCredentialGateTests {
     #"{"id":3,"method":"credentials.verb","params":{"call":"v1","verb":"status"}}"#,
     #"{"id":"x","method":"credentials.session.takeStored","params":{"call":"v1"}}"#,
     #"{"id": 9, "method": "credentials"}"#,
+    #"{"id":10,"method":"\u0063redentials.verb","params":{"call":"v1"}}"#,
   ])
   func refused(_ line: String) throws {
     guard case .reply(let reply) = PluginCredentialGate.screen(line) else {
@@ -104,6 +112,7 @@ struct PluginCredentialGateTests {
 
   @Test func `a result for a call id only native mints is dropped, never forwarded`() {
     #expect(PluginCredentialGate.screen(#"{"id":4,"method":"result","params":{"call":"v12","result":{"password":"x"}}}"#) == .drop)
+    #expect(PluginCredentialGate.screen(#"{"id":4,"method":"result","params":{"\u0063all":"v12","result":{"password":"x"}}}"#) == .drop)
   }
 
   @Test("Ordinary lines pass on to the app", arguments: [
@@ -155,16 +164,29 @@ struct PluginRedactingSinkTests {
 
 @Suite("How a plugin's exit is reported")
 struct PluginExitReportTests {
-  @Test func `a run the host ended, as a lock ends a password manager's run, is an intended exit and no crash`() {
+  @Test func `a run the host ended, as a lock ends a password manager's run, is reported as requested and no crash`() {
     let killed = PluginExitReport.payload(name: "bitwarden", run: 3, status: nil, signal: SIGKILL, overMemory: false, stopRequested: true)
-    #expect(killed["intended"] as? Bool == true)
+    #expect(killed["requested"] as? Bool == true)
     #expect(killed["signal"] as? Int == Int(SIGKILL))
     #expect(!PluginExitReport.crashed(stopRequested: true, overMemory: false))
   }
 
   @Test func `a run that died on its own or went over its memory is a crash`() {
-    #expect(PluginExitReport.payload(name: "bitwarden", run: 3, status: 1, signal: nil, overMemory: false, stopRequested: false)["intended"] as? Bool == false)
-    #expect(PluginExitReport.payload(name: "bitwarden", run: 3, status: nil, signal: SIGKILL, overMemory: true, stopRequested: true)["intended"] as? Bool == false)
+    #expect(PluginExitReport.payload(name: "bitwarden", run: 3, status: 1, signal: nil, overMemory: false, stopRequested: false)["requested"] as? Bool == false)
+    #expect(PluginExitReport.crashed(stopRequested: true, overMemory: true))
     #expect(PluginExitReport.crashed(stopRequested: false, overMemory: false))
+  }
+}
+
+@Suite("What a password manager's run may keep waiting to send")
+struct PluginPendingBudgetTests {
+  @Test func `a batch past the budget is refused whole, and sent lines free their room`() {
+    var budget = PluginPendingBudget(limit: 100)
+    let first = budget.admit(60)
+    let over = budget.admit(41)
+    #expect(first && !over && budget.bytes == 60)
+    budget.release(30)
+    let after = budget.admit(70)
+    #expect(after && budget.bytes == 100)
   }
 }

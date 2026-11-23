@@ -163,7 +163,7 @@ export function processExited(exit: PluginExit, now = Date.now()) {
   const state = usePlugins.getState().processes[exit.name];
   if (!entry || state?.state !== "running" || state.run !== exit.run) return;
   stopped(exit.name);
-  const clean = !exit.overMemory && (exit.intended === true || (exit.status === 0 && exit.signal === null));
+  const clean = !exit.overMemory && (exit.requested === true || (exit.status === 0 && exit.signal === null));
   if (clean) return setProcess(exit.name, { state: "exited" });
   notePlugin("plugin_process_crashes", consent);
   entry.failures = [...entry.failures.filter((t) => now - t < CRASH_WINDOW_MS), now];

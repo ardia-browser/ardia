@@ -11,7 +11,7 @@ enum PluginCredentialGate {
   static let nativeCallPattern = #"^v[1-9][0-9]{0,15}$"#
 
   static func screen(_ line: String) -> Verdict {
-    guard line.contains("credentials") || line.contains("\"call\"") else { return .forward }
+    guard line.contains("credentials") || line.contains("\"call\"") || line.contains("\\") else { return .forward }
     guard let message = (try? JSONSerialization.jsonObject(with: Data(line.utf8))) as? [String: Any] else { return .forward }
     let method = message["method"] as? String
     if let method, method == "credentials" || method.hasPrefix("credentials.") {

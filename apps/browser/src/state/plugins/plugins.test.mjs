@@ -216,7 +216,7 @@ test("a clean exit isn't restarted, and an old run's exit is ignored", async () 
 test("a run Ardia ended itself, as a lock ends a password manager's run, is no crash: no back-off and no crash count", async () => {
   const run = await enabled();
   takePluginCounts();
-  processExited({ name: "example", run, status: null, signal: 9, overMemory: false, intended: true });
+  processExited({ name: "example", run, status: null, signal: 9, overMemory: false, requested: true });
   assert.equal(P().processes.example.state, "exited");
   assert.equal(takePluginCounts().plugin_process_crashes ?? 0, 0);
   lifecycle.disablePlugin("example");

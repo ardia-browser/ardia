@@ -49,12 +49,25 @@ final class PluginRuns<Run: PluginRun> {
 enum PluginExitReport {
   static func crashed(stopRequested: Bool, overMemory: Bool) -> Bool { !stopRequested || overMemory }
 
-  static func intended(stopRequested: Bool, overMemory: Bool) -> Bool { !crashed(stopRequested: stopRequested, overMemory: overMemory) }
-
   static func payload(name: String, run: Int, status: Int32?, signal: Int32?, overMemory: Bool, stopRequested: Bool) -> [String: Any] {
     [
       "name": name, "run": run, "status": status.map { Int($0) } ?? NSNull(), "signal": signal.map { Int($0) } ?? NSNull(), "overMemory": overMemory,
-      "intended": intended(stopRequested: stopRequested, overMemory: overMemory),
+      "requested": stopRequested,
     ]
   }
+}
+
+struct PluginPendingBudget {
+  let limit: Int
+  private(set) var bytes = 0
+
+  mutating func admit(_ size: Int) -> Bool {
+    guard size <= limit - bytes else { return false }
+    bytes += size
+    return true
+  }
+
+  mutating func release(_ size: Int) { bytes = max(0, bytes - size) }
+
+  mutating func reset() { bytes = 0 }
 }

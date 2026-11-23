@@ -836,8 +836,9 @@ as the authority, natively from the same verified manifest bytes the official st
   you type go through Ardia's native secure field and reach the plugin only as single-use handles (`{"$secret": "h7"}`),
   which it can put in a verb's `secret` slot; the values a verb consumed are redacted from everything it returns. Lock,
   idle, sleep and screen lock end the plugin's run and every CLI it started, natively; that exit comes to JS with
-  `intended: true` (any run Ardia stopped itself, unless it went over its memory), so the supervisor leaves it exited with
-  no back-off and no crash count, and the next credential call asks for a new run. Approval pages open only on the
+  `requested: true` (any run Ardia asked to stop), so the supervisor leaves it exited with no back-off and no crash count
+  (unless it went over its memory), and a run native asks for while the old one is still winding down starts once it has
+  exited. Approval pages open only on the
   manifest's `signIn.approvalHosts`. Native owns all wording: the plugin returns problem codes.
 - **What the app does.** When such a plugin is on and its run is ready, `state/plugins/credentialProviders.ts` calls
   `ArdiaPlugins.setCredentialProvider(name, true)` (`platform/plugins.ts`), and `false` once it's turned off or its

@@ -167,7 +167,7 @@ final class PluginHost {
   func reply(_ name: String, run: Int, _ line: String) {
     let data = Self.framed(line)
     queue.async { [self] in
-      guard let process = runs.current[name], process.run == run else { return }
+      guard let process = runs.current[name], process.run == run, process.credential == nil else { return }
       process.connection?.reply(data, ticket: 0)
     }
   }
@@ -183,13 +183,14 @@ final class PluginHost {
   func event(_ name: String, run: Int, _ line: String) {
     let data = Self.framed(line)
     queue.async { [self] in
-      guard let process = runs.current[name], process.run == run else { return }
+      guard let process = runs.current[name], process.run == run, process.credential == nil else { return }
       process.connection?.event(data)
     }
   }
 
   func remove(_ name: String, official: Bool, folderId: String?, done: @escaping (String?) -> Void) {
-    if CredentialPluginHost.shared.enabledPlugins[name] != nil || PluginCredentialProviders.saved()[name] != nil {
+    let known = CredentialPluginHost.shared.enabledPlugins[name] != nil || PluginCredentialProviders.saved()[name] != nil
+    if OfficialPin.forgetsOnRemove(name, known: known, pin: PluginFolders.officialPin()) {
       forgetCredentialProvider(name) { _ in }
     }
     queue.async { [self] in

@@ -5,12 +5,14 @@ import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
 import { warnFor } from "../telemetry/consoleConsent";
 import { ensurePluginActivated, onPluginReady, pluginReadyRun } from "./activation";
+import { onProcessStopped } from "./process";
 import { activeManifest, currentPlugins, usePlugins, type PluginsStore } from "./store";
 
 type Turned = { hash: string; run: number };
 
 const turnedOn = new Map<string, Turned>();
 const installed = new Set<string>();
+const wantedAfterStop = new Set<string>();
 
 const isInstalledProvider = (s: Pick<PluginsStore, "listings">, name: string) => {
   const listing = Object.hasOwn(s.listings, name) ? s.listings[name] : undefined;
@@ -61,7 +63,8 @@ export function syncCredentialProviders(consent: ConsentToken | null, s: Pick<Pl
 }
 
 function wanted(name: string, consent: ConsentToken | null) {
-  if (!providerHash(currentPlugins(), name) || pluginReadyRun(name) !== null) return;
+  if (!providerHash(currentPlugins(), name)) return;
+  if (pluginReadyRun(name) !== null) return void wantedAfterStop.add(name);
   void ensurePluginActivated(name, "credentials").catch((error: unknown) => warnFor(consent, `[plugins] ${name} didn't start for its password manager`, error));
 }
 
@@ -72,7 +75,15 @@ let watching = false;
 export function watchCredentialProviders() {
   if (watching || !PLATFORM_FEATURES.plugins) return;
   watching = true;
-  onPluginReady((name, run) => ready(name, run, consentToken()));
+  onPluginReady((name, run) => {
+    wantedAfterStop.delete(name);
+    ready(name, run, consentToken());
+  });
+  onProcessStopped((name) => {
+    if (!wantedAfterStop.delete(name)) return;
+    const consent = consentToken();
+    void Promise.resolve().then(() => wanted(name, consent));
+  });
   usePlugins.subscribe((s, prev) => {
     if (s.listings === prev.listings && s.records === prev.records) return;
     const consent = consentToken();

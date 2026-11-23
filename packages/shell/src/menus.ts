@@ -21,7 +21,7 @@ export type MenuItem =
       share?: boolean;
     };
 
-export type MenuPickEvent = { command: "menu.pick"; arg: string };
+type MenuPickEvent = { command: "menu.pick"; arg: string };
 
 export type MenuEntry = { id: string; title: string; current?: boolean };
 export type MenuBookmark = { id: string; title: string; url?: string; children?: MenuBookmark[] };
@@ -50,7 +50,7 @@ export type MenuState = {
   mouseShortcuts?: Record<string, string[]>;
 };
 
-export type MenuBookmarkKey = "bookmarkFolders" | "recentBookmarks" | "bookmarksBar" | "otherBookmarks";
+type MenuBookmarkKey = "bookmarkFolders" | "recentBookmarks" | "bookmarksBar" | "otherBookmarks";
 
 export type SurfaceItem = {
   path: number[];

@@ -1,11 +1,11 @@
-export type PluginThemeRoles = { scheme: "light" | "dark"; roles: Readonly<Record<string, unknown>> };
+type PluginThemeRoles = { scheme: "light" | "dark"; roles: Readonly<Record<string, unknown>> };
 
 const ROLE_NAME = /^[A-Za-z][A-Za-z0-9]{0,47}$/;
 const SAFE_VALUE = /^[#A-Za-z0-9(),.%\s/+-]{1,96}$/;
 const UNSAFE_WORDS = /(url|expression|image|var|attr|env)\s*\(/i;
 const MAX_ROLES = 256;
 
-export const cssRoleName = (role: string) => `--ardia-${role.replace(/[A-Z]/g, (ch) => `-${ch.toLowerCase()}`).replace(/[^a-z0-9-]/g, "")}`;
+const cssRoleName = (role: string) => `--ardia-${role.replace(/[A-Z]/g, (ch) => `-${ch.toLowerCase()}`).replace(/[^a-z0-9-]/g, "")}`;
 
 export function cssRoleValue(value: unknown): string | null {
   if (typeof value === "number") return Number.isFinite(value) ? String(value) : null;
@@ -15,7 +15,7 @@ export function cssRoleValue(value: unknown): string | null {
   return text;
 }
 
-export function pluginThemeVariables(roles: Readonly<Record<string, unknown>>): [string, string][] {
+function pluginThemeVariables(roles: Readonly<Record<string, unknown>>): [string, string][] {
   const out: [string, string][] = [];
   for (const [role, value] of Object.entries(roles)) {
     if (out.length >= MAX_ROLES) break;

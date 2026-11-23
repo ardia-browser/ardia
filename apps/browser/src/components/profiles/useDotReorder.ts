@@ -10,7 +10,7 @@ const DRAG_START_DISTANCE = 4;
 
 const settle = (value: Animated.Value, toValue: number) => Animated.timing(value, { toValue, duration: duration.base, easing: curve.enter, useNativeDriver: true });
 
-export type DotReorder = { dragging: string | null; offsetOf(id: string): Animated.Value; panFor(id: string): PanResponderInstance };
+type DotReorder = { dragging: string | null; offsetOf(id: string): Animated.Value; panFor(id: string): PanResponderInstance };
 
 export function useDotReorder(ids: string[], widths: number[]): DotReorder {
   const offsets = useRef(new Map<string, Animated.Value>()).current;

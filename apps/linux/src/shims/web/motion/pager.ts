@@ -9,9 +9,9 @@ const REST_DISPLACEMENT = 0.003;
 const REST_SPEED = 0.1;
 const HISTORY_WINDOW = 0.1;
 
-export const rubberBand = (value: number, dimension: number) => (1 - 1 / ((value * RUBBER_COEFFICIENT) / dimension + 1)) * dimension;
+const rubberBand = (value: number, dimension: number) => (1 - 1 / ((value * RUBBER_COEFFICIENT) / dimension + 1)) * dimension;
 
-export type PagerPhase = PagerSnapshot["phase"];
+type PagerPhase = PagerSnapshot["phase"];
 export type PagerInput = "prepare" | "abandon" | "began" | "changed" | "ended" | "cancelled";
 
 export type PagerArea = {

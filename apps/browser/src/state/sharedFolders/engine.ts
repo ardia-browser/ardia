@@ -166,7 +166,7 @@ function watchBound() {
   watchSharedFolders(paths);
 }
 
-export const syncAllFolders = () => boundFolders().forEach(({ profileId, key }) => schedule(profileId, key, 0));
+const syncAllFolders = () => boundFolders().forEach(({ profileId, key }) => schedule(profileId, key, 0));
 
 let checkTimer: ReturnType<typeof setTimeout> | undefined;
 

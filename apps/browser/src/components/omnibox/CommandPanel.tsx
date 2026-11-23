@@ -1,6 +1,6 @@
 import { OutsidePressArea } from "../ui";
 import { useEffect } from "react";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet } from "react-native";
 import { hex, useTheme } from "../ui/theme";
 import { useSidebarSide, useWindowId, useWindowUi } from "../../state/browser/hooks";
 import { useActiveTabIdWhile } from "../../state/omnibox/hooks";

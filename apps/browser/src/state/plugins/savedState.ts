@@ -7,7 +7,7 @@ import { switchOrigin } from "../../lib/pluginPageBar";
 import { warnFor } from "../telemetry/consoleConsent";
 import type { ConsentToken } from "../telemetry/choice";
 
-export const PLUGINS_DOC = "plugins.json";
+const PLUGINS_DOC = "plugins.json";
 const VERSION = 1;
 const NAME = new RegExp(NAME_PATTERN);
 
@@ -27,7 +27,7 @@ function appliedOf(raw: unknown): PluginRecord["applied"] {
 
 const KEY = new RegExp(KEY_PATTERN);
 
-export function sitesOf(raw: unknown): SiteSwitchValues | null {
+function sitesOf(raw: unknown): SiteSwitchValues | null {
   if (!isFields(raw)) return null;
   const entries = Object.entries(raw).flatMap(([key, origins]): [string, Record<string, boolean>][] => {
     if (!KEY.test(key) || !isFields(origins)) return [];
@@ -43,7 +43,7 @@ const VERSION_TEXT = new RegExp(VERSION_PATTERN);
 
 const versionOf = (raw: unknown): string | null => (typeof raw === "string" && VERSION_TEXT.test(raw) ? raw : null);
 
-export function updatedOf(raw: unknown): OfficialAutoUpdate | null {
+function updatedOf(raw: unknown): OfficialAutoUpdate | null {
   if (!isFields(raw) || !Array.isArray(raw.added)) return null;
   const added = raw.added.filter((line): line is string => typeof line === "string" && line.length > 0 && line.length <= MAX_UPDATE_LINE).slice(0, MAX_UPDATE_LINES);
   return { from: versionOf(raw.from), to: versionOf(raw.to), added, ...(raw.runtime === true ? { runtime: true as const } : {}) };

@@ -12,7 +12,7 @@ import { arrangeLive } from "../../state/sidebar/pinnedOrder";
 import { suppressHover } from "../../state/sidebar/hover";
 import { closeFolderPanel } from "../../state/sidebar/tileFolderUi";
 import { dragMarksOf, markDrag } from "../../state/sidebar/dragMarks";
-import { boxed, type Drop, EDGE, type Item, measure, spring, tabCell, tailKey } from "./dragModel";
+import { boxed, type Drop, type Item, measure, spring, tabCell, tailKey } from "./dragModel";
 import { DragTargeting } from "./dragTargeting";
 import { edgeAt, edgeStep } from "./dragProfiles";
 import { type DragSession, newDragSession } from "./dragGeometry";
@@ -63,17 +63,18 @@ export class DragController extends DragTargeting {
     this.beforeMeasure?.();
     const lead = tabCell(item) ? item.tabIds[0] : undefined;
     const moving = lead ? movingTabsFrom(lead) : [];
-    const sources = moving.length > 1 ? [...this.items.values()].filter((i) => tabCell(i) && i.tabIds.some((id) => moving.includes(id))) : [item];
     this.stopTimers();
-    const session = (this.session = newDragSession(sources, { x, y }, this.scrollY));
+    const session = (this.session = newDragSession(this.sourcesOf(item, moving), { x, y }, this.scrollY));
     noteDragBegan(session);
     session.shown = this.profile;
-    const crossing = sources.every((i) => tabCell(i) && i.section !== "folder");
-    session.home = crossing ? dragHomeOf([...new Set(sources.flatMap((i) => i.tabIds))]) : null;
     this.token = {};
     suppressHover(true);
     session.escapable = true;
     captureEscape("sidebarDrag", true);
+    if (this.foldsPending() && !(await this.foldsSettled(() => this.session === session))) return;
+    const sources = (session.sources = this.sourcesOf(item, moving));
+    const crossing = sources.every((i) => tabCell(i) && i.section !== "folder");
+    session.home = crossing ? dragHomeOf([...new Set(sources.flatMap((i) => i.tabIds))]) : null;
     let seq = 0;
     if (tabCell(item)) {
       const single = sources.length === 1 ? (item.tabIds[0] ?? null) : null;
@@ -140,8 +141,11 @@ export class DragController extends DragTargeting {
   }
 
   protected async measureAll(session: DragSession, current: () => boolean): Promise<boolean> {
+    const pass = ++session.measures;
+    if (this.foldsPending() && !(await this.foldsSettled(current))) return false;
     const scrollY = this.scrollY;
     const items = [...this.items.values()];
+    const held = items.map((i) => i.held ?? 0);
     const regions = [...this.regions];
     const [rootFrame, viewport, frames, regionFrames, profileFrames] = await Promise.all([
       measure(this.root),
@@ -150,11 +154,11 @@ export class DragController extends DragTargeting {
       Promise.all(regions.map(async ([name, view]) => [name, await measure(view)] as const)),
       session.home ? this.profiles.measured() : null,
     ]);
-    if (!current()) return false;
+    if (!current() || session.measures !== pass) return false;
     this.rootFrame = rootFrame ?? this.rootFrame;
     session.viewport = viewport;
     session.startScrollY = scrollY;
-    items.forEach((i, k) => ([i.frame, i.headerFrame] = frames[k]!));
+    items.forEach((i, k) => this.items.get(i.key) === i && (i.held ?? 0) === held[k] && ([i.frame, i.headerFrame] = frames[k]!));
     for (const [name, frame] of regionFrames) session.regionFrames.set(name, frame);
     session.gridBase = items.some((i) => i.kind === "tile") ? (session.regionFrames.get("tiles") ?? null) : null;
     session.gridGrowth = 0;
@@ -194,8 +198,7 @@ export class DragController extends DragTargeting {
     markDrag(this.marks, { dropInto: null, split: null, tile: null, row: null, pane: null, pins: false, pinCount: 0, pinBefore: null, folderTarget: null, folderAway: false });
     session.regionFrames.clear();
     session.closedInFrames = !!session.home && session.shown === session.home.profileId;
-    const run = ++session.measures;
-    if (!(await this.measureAll(session, () => this.session === session && session.measures === run))) return;
+    if (!(await this.measureAll(session, () => this.session === session))) return;
     session.measured = true;
     this.move(session.pointer.x, session.pointer.y);
   }
@@ -362,26 +365,11 @@ export class DragController extends DragTargeting {
     const container = ref.kind === "tail" ? [...this.items.values()].find((i) => i !== source && i.kind !== "tail" && i.frame && i.section === ref.section && i.parentGroup === ref.parentGroup) : ref;
     const home = target ? null : this.at(source.frame, this.still(source));
     if (home) return Promise.resolve({ x: home.x, y: home.y });
+    const held = ref.held;
     return Promise.all([measure(ref.view), emptied ? measure(group!.view) : null]).then(([f, gone]) => {
-      if (!f) return null;
+      if (!f || this.items.get(ref.key) !== ref || ref.held !== held) return null;
       return { x: container?.frame?.x ?? f.x, y: f.y - closing - (gone ? gone.h + layout.rowGap : 0) + (ref.kind === "tail" ? layout.rowGap : 0) };
     });
-  }
-
-  protected autoScroll(y: number | null) {
-    const session = this.drag;
-    const v = session.viewport;
-    const speed = !v || y === null ? 0 : y < v.y + EDGE ? -Math.ceil((v.y + EDGE - y) / 4) : y > v.y + v.h - EDGE ? Math.ceil((y - (v.y + v.h - EDGE)) / 4) : 0;
-    clearInterval(session.scrollTimer);
-    session.scrollTimer = undefined;
-    if (!speed || !this.scroll) return;
-    session.scrollTimer = setInterval(() => {
-      const next = Math.max(0, this.scrollY + speed);
-      if (next === this.scrollY) return;
-      this.scroll?.scrollTo({ y: next, animated: false });
-      this.scrollY = next;
-      this.retarget();
-    }, 16);
   }
 
   protected ghostX(x: number): number {

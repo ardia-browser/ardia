@@ -3,7 +3,7 @@ import { ensureInstallId } from "./installId";
 import { NO_WATCH, save, savedChoice } from "./choice";
 import { telemetryRelay } from "./relay";
 
-export const WATCH_DAYS = 14;
+const WATCH_DAYS = 14;
 const DAY_MS = 86_400_000;
 const CHECK_EVERY_MS = 60 * 60_000;
 
@@ -12,7 +12,7 @@ const monotonicNow = () => (typeof performance !== "undefined" && typeof perform
 let lastMonotonic: number | null = null;
 let timer: ReturnType<typeof setTimeout> | undefined;
 
-export type WatchStatus = { report: string; until: number; turnedSharingOn: boolean } | null;
+type WatchStatus = { report: string; until: number; turnedSharingOn: boolean } | null;
 
 export function watchStatus(): WatchStatus {
   const s = savedChoice();

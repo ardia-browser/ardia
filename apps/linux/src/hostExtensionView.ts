@@ -3,9 +3,9 @@ import { hostProfile, hostSupports, invokeHost } from "./host.ts";
 import { consentToken } from "../../browser/src/state/telemetry/client";
 import { errorFor } from "../../browser/src/state/telemetry/logs";
 
-export type ExtensionViewKind = "popup" | "sidePanel";
+type ExtensionViewKind = "popup" | "sidePanel";
 export type ExtensionViewEvent = { type: string; [key: string]: unknown };
-export type ExtensionViewport = { rect: { x: number; y: number; width: number; height: number }; visible: boolean; radii?: CornerRadii };
+type ExtensionViewport = { rect: { x: number; y: number; width: number; height: number }; visible: boolean; radii?: CornerRadii };
 export type CornerRadii = { upperLeft: number; upperRight: number; lowerRight: number; lowerLeft: number };
 export type PopupPlacement = {
   anchor: { right: number; top: number };
@@ -17,14 +17,14 @@ export type PopupPlacement = {
   decoratedScale?: number;
 };
 export type NativeFrame = { x: number; y: number; width: number; height: number; radius: number; scale: number; reveal: boolean; serial: number };
-export type ExtensionViewOptions = { kind: ExtensionViewKind; url: string; profile?: string };
+type ExtensionViewOptions = { kind: ExtensionViewKind; url: string; profile?: string };
 
 export const EXTENSION_VIEW_MODULE = "ArdiaExtensionView";
 
-export type FocusWitness = { current: () => readonly unknown[]; now: () => number };
+type FocusWitness = { current: () => readonly unknown[]; now: () => number };
 type FocusRequest = { owner: readonly unknown[]; at: number };
 
-export const DEFERRED_FOCUS_MS = 1500;
+const DEFERRED_FOCUS_MS = 1500;
 
 const shellFocus: FocusWitness = {
   current: () => (typeof document === "undefined" ? [] : [document.activeElement, document.hasFocus()]),

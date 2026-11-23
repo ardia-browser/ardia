@@ -5,7 +5,7 @@ import { DEFAULT_PROFILE } from "../profiles/profiles";
 import { sanitizeSplits, splitTabIds } from "../splits/splits";
 import { orderSections } from "../groups/groups";
 
-export type LayoutInput = {
+type LayoutInput = {
   profiles?: Record<string, Profile>;
   windows?: Record<string, BrowserWindow>;
   windowOrder?: string[];

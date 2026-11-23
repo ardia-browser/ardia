@@ -5,7 +5,7 @@ import { onWindowChromeChange } from "../../lib/windowChrome";
 
 type Readable<S> = { getState(): S; subscribe(listener: (s: S, prev: S) => void): () => void };
 type Listener = () => void;
-export type WakeAll = true;
+type WakeAll = true;
 export type Changes<S> = (s: S, prev: S, wake: (key: string) => void) => WakeAll | void;
 export type KeyedWatch = (key: string, listener: Listener) => () => void;
 
@@ -72,7 +72,7 @@ export const watchWindowSettings: KeyedWatch = (key, listener) => {
 };
 export const useWindowSettings = <T,>(windowId: string, read: (s: BrowserState) => T): T => useKeyed(watchWindowSettings, windowId, () => read(useBrowser.getState()));
 export const ALL = "";
-export const watchFocusedWindowSettings = keyedWatch(browser, (s: BrowserState, prev: BrowserState) =>
+const watchFocusedWindowSettings = keyedWatch(browser, (s: BrowserState, prev: BrowserState) =>
   s.settings !== prev.settings || s.windows !== prev.windows || s.windowOrder !== prev.windowOrder || s.ui.focusOrder !== prev.ui.focusOrder ? true : undefined,
 );
 export const useWindowOrFocusedSettings = <T,>(windowId: string | null | undefined, read: (s: BrowserState) => T): T =>

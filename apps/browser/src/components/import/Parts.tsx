@@ -58,7 +58,7 @@ export function TargetPicker({ target, onChange }: { target: string; onChange: (
   );
 }
 
-export function SettingsSteps({ steps, openTitle, onOpen, onRecheck }: { steps: string[]; openTitle: string; onOpen: () => void; onRecheck: () => void }) {
+function SettingsSteps({ steps, openTitle, onOpen, onRecheck }: { steps: string[]; openTitle: string; onOpen: () => void; onRecheck: () => void }) {
   return (
     <>
       <View style={{ gap: space.ml, marginBottom: space.xl }}>

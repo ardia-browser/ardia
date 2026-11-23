@@ -222,7 +222,7 @@ export const closeOnArt = { rest: "rgba(255,255,255,0.1)", hover: "rgba(255,255,
 
 export const arcSelectedFill = { dark: "rgba(255,255,255,0.24)", light: "rgba(255,255,255,0.8)" } as const;
 
-export type SiteToolbarRoles = {
+type SiteToolbarRoles = {
   text: string;
   secondary: string;
   icon: string;

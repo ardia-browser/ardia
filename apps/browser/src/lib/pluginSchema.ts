@@ -12,7 +12,7 @@ import { MANIFEST_VERSION } from "./pluginManifest";
 
 export const PLUGIN_SCHEMA_FILE = "plugin.schema.json";
 
-export type PluginRules = { untabbedEvents: readonly string[]; approvedSettings: readonly string[]; decideEvents?: readonly string[] };
+type PluginRules = { untabbedEvents: readonly string[]; approvedSettings: readonly string[]; decideEvents?: readonly string[] };
 
 const when: JsonSchema = { type: "string", pattern: `^[\\s\\S]{1,${MAX_WHEN_LENGTH}}$`, description: "Shows only when this holds, like urlHost == \"github.com\" && !isPinned" };
 const list = (max: number, items: JsonSchema, description?: string): JsonSchema => ({ type: "array", maxItems: max, items, ...(description ? { description } : {}) });

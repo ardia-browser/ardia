@@ -20,8 +20,8 @@ import { createEndLedger, setTelemetrySettle } from "./telemetrySettle.ts";
 import { parseChoiceChange, shownAfter } from "./telemetryChoice.ts";
 import { applyChoiceDurably, followerChoiceSaved } from "./telemetryChoiceApply.ts";
 
-export const TELEMETRY_POST = "ArdiaTelemetry.post";
-export const TELEMETRY_STEP = "telemetry";
+const TELEMETRY_POST = "ArdiaTelemetry.post";
+const TELEMETRY_STEP = "telemetry";
 const STATE_DOC = "telemetry.json";
 const TELEMETRY_DOCUMENTS = [STATE_DOC, "telemetry-queue.json", DAILY_DOC];
 const END_TIMEOUT_MS = 2_000;
@@ -30,7 +30,7 @@ const WINDOW_USAGE_MS = 60 * 60 * 1000;
 
 const report = (error: unknown) => console.warn("[ardia linux] telemetry", error);
 
-export function hostTelemetrySend(host: ArdiaHost) {
+function hostTelemetrySend(host: ArdiaHost) {
   return async (body: string) => {
     const reply = await invokeHost<{ status?: unknown } | null>(TELEMETRY_POST, { args: [body, APP_INGEST_KEY] }, host);
     const status = reply?.status;
@@ -52,7 +52,7 @@ async function continuesSession(host: ArdiaHost): Promise<boolean> {
 
 type ErrorTarget = { addEventListener(type: "error" | "unhandledrejection", listener: (event: { error?: unknown; message?: unknown; reason?: unknown }) => void): void };
 
-export function watchUncaughtErrors(target: ErrorTarget, reportError: typeof captureException = captureException) {
+function watchUncaughtErrors(target: ErrorTarget, reportError: typeof captureException = captureException) {
   target.addEventListener("error", (event) => reportError(event.error ?? event.message, "onerror"));
   target.addEventListener("unhandledrejection", (event) => reportError(event.reason, "onunhandledrejection"));
 }
@@ -71,7 +71,7 @@ async function saveState() {
   await documentSaved(STATE_DOC).catch(report);
 }
 
-export async function handleTelemetryOp(op: TelemetryOp, arg?: string): Promise<unknown> {
+async function handleTelemetryOp(op: TelemetryOp, arg?: string): Promise<unknown> {
   if (op === "choice") {
     const change = parseChoiceChange(arg);
     if (!change) throw Object.assign(new Error("The telemetry choice isn't one this build knows"), { code: "ERR_TELEMETRY_CHOICE" });
@@ -186,7 +186,7 @@ export function startHostTelemetry(options: { host: ArdiaHost; candidate: boolea
   return current;
 }
 
-export async function settleHostTelemetry(endsSession: boolean): Promise<string | null> {
+async function settleHostTelemetry(endsSession: boolean): Promise<string | null> {
   if (!leadership) return null;
   if (!endsSession || !leadership.leading()) emitWindowUsage(consentNow());
   if (endsSession) {
@@ -197,7 +197,7 @@ export async function settleHostTelemetry(endsSession: boolean): Promise<string 
   return null;
 }
 
-export async function reopenHostTelemetry(token: string) {
+async function reopenHostTelemetry(token: string) {
   await leadership?.request("reopen", END_TIMEOUT_MS, token).catch(report);
 }
 

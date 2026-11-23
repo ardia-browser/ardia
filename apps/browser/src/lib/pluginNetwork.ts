@@ -1,5 +1,5 @@
 export const ANY_HOST = "*";
-export const MAX_HOST_LENGTH = 253;
+const MAX_HOST_LENGTH = 253;
 
 const LABEL = /^(?!-)[a-z0-9-]{1,63}(?<!-)$/;
 const IPV4 = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;

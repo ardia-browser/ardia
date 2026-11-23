@@ -97,7 +97,7 @@ export function dispatchPluginSurfaceEvent(plugin: string, surfaceId: string, wi
   return sendSurfaceMessage(plugin, { surface: "event", surfaceId, handlerId, args: Array.isArray(args) ? args : [args] });
 }
 
-export const mountedSurfaces = (plugin: string) => [...mounted.values()].filter((m) => m.plugin === plugin);
+const mountedSurfaces = (plugin: string) => [...mounted.values()].filter((m) => m.plugin === plugin);
 
 export const isMountedSurface = (plugin: string, surfaceId: string) => mounted.has(surfaceKey(plugin, surfaceId));
 
@@ -251,7 +251,7 @@ export function dropHiddenRetainedSidePanels(plugin: string) {
   usePluginSurfaces.setState((now) => ({ retainedSidePanels, sidePanels, trees: droppedTrees.size ? without(now.trees, (_v, k) => !droppedTrees.has(k)) : now.trees }));
 }
 
-export function dropWindowPluginSurfaces(windowId: string) {
+function dropWindowPluginSurfaces(windowId: string) {
   const { quickPick, inputBox } = usePluginSurfaces.getState();
   if (quickPick?.windowId === windowId) resolveQuickPick(quickPick.id, null);
   if (inputBox?.windowId === windowId) resolveInputBox(inputBox.id, null);

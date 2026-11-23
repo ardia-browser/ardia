@@ -59,6 +59,12 @@ const TOP = [
   ["tab switcher", ["appearance.ctrlTab"]],
   ["switch tabs", ["appearance.ctrlTab"]],
   ["recent tabs", ["appearance.ctrlTab"]],
+  ["after closing a tab", ["appearance.afterClosingTab"]],
+  ["closing a tab", ["appearance.afterClosingTab"]],
+  ["tab above", ["appearance.afterClosingTab"]],
+  ["tab to the left", ["appearance.afterClosingTab"]],
+  ["tab closing", ["appearance.afterClosingTab"]],
+  ["close behavior", ["appearance.afterClosingTab"]],
   ["address bar", ["appearance.addressBar"]],
   ["url bar", ["appearance.addressBar"]],
   ["command bar", ["appearance.commandBarPlacement"]],
@@ -185,6 +191,14 @@ test("rows named by the query stay apart even when they share a place", () => {
   assert.ok(tabs.length >= 2, "several Layout rows say tabs in their names");
   assert.equal(first("command line"), "plugins.cli");
   assert.equal(first("devtools"), "advanced.ardiaCommand");
+});
+
+test("a lower-tier named row in the same section does not suppress a higher-tier unnamed match", () => {
+  const hits = search(SETTINGS_INDEX, "switch tabs");
+  assert.equal(hits[0]?.entry.id, "appearance.ctrlTab");
+  assert.ok(hits[0].tier > (hits.find((h) => h.entry.id === "appearance.afterClosingTab")?.tier ?? -1));
+  assert.equal(first("check for updates"), "general.autoUpdate");
+  assert.equal(first("corner radius"), "appearance.tabCornerRadius");
 });
 
 test("a pane's name finds that pane's rows", () => {

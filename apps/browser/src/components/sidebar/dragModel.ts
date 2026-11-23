@@ -29,11 +29,12 @@ export type Item = ItemSpec & {
   size: Animated.Value;
   frame: Frame | null;
   headerFrame: Frame | null;
+  held?: number;
 };
 
 export type Drop = StoreDrop & { sequence?: string[] };
 
-export const blockKind = (i: Item) => i.kind === "row" || i.kind === "group" || i.kind === "live" || i.kind === "split";
+const blockKind = (i: Item) => i.kind === "row" || i.kind === "group" || i.kind === "live" || i.kind === "split";
 export const pinnedBlock = (i: Item) => (i.section === "pinnedRows" || i.section === "pinnedGroups") && !i.parentGroup && blockKind(i);
 export const boxed = (i: Item): i is Extract<Item, { kind: "group" | "live" }> => i.kind === "group" || i.kind === "live";
 export const isGroupItem = (i: Item): i is Extract<Item, { kind: "group" }> => i.kind === "group";
@@ -55,7 +56,7 @@ type ItemLook = { source: boolean; landing: boolean; clipped: boolean; inFold: b
 export function dragItemStyle(item: Item, { source, landing, clipped, inFold, rowGap, tailOffset }: ItemLook) {
   const horizontal = item.kind === "tile";
   return {
-    ...(horizontal ? null : { marginTop: item.kind === "tail" ? tailOffset : item.gap }),
+    ...(horizontal ? null : { marginTop: item.kind === "tail" ? tailOffset : item.gap, flexShrink: 0 }),
     ...(source
       ? horizontal
         ? { opacity: 0 }

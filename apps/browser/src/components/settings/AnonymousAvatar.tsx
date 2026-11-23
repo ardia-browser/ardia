@@ -4,7 +4,7 @@ import { capsule, ThemeSwatch } from "../ui";
 
 const channel = (hex: string, at: number) => parseInt(hex.slice(at, at + 2), 16) / 255;
 
-export function avatarColors(avatar: Avatar): number[] {
+function avatarColors(avatar: Avatar): number[] {
   return avatar.colors.flatMap((hex) => [channel(hex, 1), channel(hex, 3), channel(hex, 5), 1]);
 }
 

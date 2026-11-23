@@ -13,10 +13,10 @@ import { isPopupWindowId, onPopupWindowClosed, openPopupWindow, popupOpenerKey, 
 import { dropKeptFollow, keepFollow, spendKeptFollow } from "./keptFollow";
 import { handPopupAsTab } from "./popupsAsTabs";
 
-export type PageListener = (name: string, data: unknown) => void;
+type PageListener = (name: string, data: unknown) => void;
 export type PageRect = Omit<CoverRect, "radius">;
 export type PageShape = PageRect & { radius: number; holes: number[][] };
-export type PageStart = { url?: string; profile?: string; adopt?: string; windowId: string };
+type PageStart = { url?: string; profile?: string; adopt?: string; windowId: string };
 
 type ShowArgs = { key: string; visible: boolean } & Partial<PageShape>;
 

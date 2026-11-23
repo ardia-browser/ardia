@@ -1,9 +1,9 @@
 import { copyDocument, createDocument, documentExists, listDocuments, readDocument, removeDocument, syncDocument } from "../../platform/documents";
 import { consentToken, type ConsentToken } from "../telemetry/consentPeriod";
-import { isFields, isString } from "../../lib/decode";
+import { isFields } from "../../lib/decode";
 import { readSaved, readSavedValue, type Migrations, type SavedObject, type SavedProblem } from "../../lib/savedDocument";
 
-export type UnusableReason = SavedProblem | "unreadable" | "rows";
+type UnusableReason = SavedProblem | "unreadable" | "rows";
 export type FoundDocument =
   | { state: "missing" }
   | { state: "usable"; text: string; doc: SavedObject; from: number }
@@ -53,9 +53,9 @@ export function usableSessionValue(value: unknown, version: number, migrations: 
 
 let asideCount = 0;
 
-export const asideName = (name: string, now = Date.now()) => `${name.replace(/\.json$/, "")}-unreadable-${now}-${++asideCount}.json`;
+const asideName = (name: string, now = Date.now()) => `${name.replace(/\.json$/, "")}-unreadable-${now}-${++asideCount}.json`;
 
-export function keepCopy(name: string, copy: string): Promise<void> {
+function keepCopy(name: string, copy: string): Promise<void> {
   try {
     return Promise.resolve(copyDocument(name, copy));
   } catch (error) {
@@ -63,14 +63,14 @@ export function keepCopy(name: string, copy: string): Promise<void> {
   }
 }
 
-export type WriteCheck = { hold: false } | { hold: true; againIn: number | null };
+type WriteCheck = { hold: false } | { hold: true; againIn: number | null };
 export type WriteGate = { check: () => WriteCheck; landing: () => Promise<void> | null; open: () => boolean; tryNow: () => void };
 
-export const GATE_RETRY_MS = 2_000;
-export const MAX_GATE_RETRY_MS = 60_000;
-export const GATE_TIMEOUT_MS = 30_000;
+const GATE_RETRY_MS = 2_000;
+const MAX_GATE_RETRY_MS = 60_000;
+const GATE_TIMEOUT_MS = 30_000;
 const OPEN: WriteCheck = { hold: false };
-export const monotonicNow = () => performance.now();
+const monotonicNow = () => performance.now();
 
 function bounded(attempt: Promise<void>): Promise<void> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -133,7 +133,7 @@ export function writeGate(task: () => Promise<void>, saveAgain: (delay: number) 
   };
 }
 
-export const documentGone = (error: unknown) => isFields(error) && error.code === "ERR_DOCUMENT_GONE";
+const documentGone = (error: unknown) => isFields(error) && error.code === "ERR_DOCUMENT_GONE";
 
 export function keepAsideGate(
   name: string,
@@ -159,8 +159,8 @@ export function keepAsideGate(
 
 export const DAILY_BACKUP = "session-backup-";
 export const MIGRATION_BACKUP = "session-premigration-";
-export const DAILY_BACKUPS_KEPT = 7;
-export const MIGRATION_BACKUPS_KEPT = 3;
+const DAILY_BACKUPS_KEPT = 7;
+const MIGRATION_BACKUPS_KEPT = 3;
 export const BACKUP_EVERY_MS = 24 * 60 * 60_000;
 export const BACKUP_RETRY_MS = 5 * 60_000;
 const CREATE_ATTEMPTS = 5;
@@ -207,7 +207,7 @@ function readBackup({ name, seq }: BackupName): BackupFile | null {
 
 const plausible = (at: number, now: number) => at <= now + BACKUP_EVERY_MS;
 
-export function orderedBackups(prefixes: readonly string[], now = Date.now()): BackupFile[] {
+function orderedBackups(prefixes: readonly string[], now = Date.now()): BackupFile[] {
   const files = prefixes.flatMap(backupNames).map(readBackup).filter((b): b is BackupFile => b !== null);
   return files.sort((a, b) => Number(plausible(b.at, now)) - Number(plausible(a.at, now)) || b.at - a.at || b.seq - a.seq);
 }
@@ -230,8 +230,8 @@ export function sessionBackups<T>(parse: (doc: SavedObject) => T | null, version
   return usable;
 }
 
-export type RollingBackups = { afterSave: (sessionJson: string, now?: number) => void; beforeMigration: (sessionText: string, now?: number) => Promise<void> };
-export type BackupRules = { whole: (session: unknown) => boolean; recovering: () => boolean; written: (beforeMigration: boolean, consent: ConsentToken | null) => void };
+type RollingBackups = { afterSave: (sessionJson: string, now?: number) => void; beforeMigration: (sessionText: string, now?: number) => Promise<void> };
+type BackupRules = { whole: (session: unknown) => boolean; recovering: () => boolean; written: (beforeMigration: boolean, consent: ConsentToken | null) => void };
 
 const nextSeq = (prefix: string) => backupNames(prefix).reduce((top, b) => Math.max(top, b.seq), 0) + 1;
 
@@ -243,7 +243,7 @@ function createOnce(name: string, json: string): Promise<void> {
   }
 }
 
-export const nameTaken = (error: unknown) => isFields(error) && error.code === "ERR_DOCUMENT_EXISTS";
+const nameTaken = (error: unknown) => isFields(error) && error.code === "ERR_DOCUMENT_EXISTS";
 
 async function createFresh(prefix: string, json: string, first = nextSeq(prefix)): Promise<string> {
   let seq = first;

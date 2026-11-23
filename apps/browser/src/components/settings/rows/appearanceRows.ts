@@ -105,6 +105,11 @@ export const appearanceRows = {
           description: "Step through your tabs in order, or open the recent tabs switcher.",
           keywords: ["ctrl tab", "control tab", "alt tab", "tab switcher", "switch tabs", "switching tabs", "recent tabs", "recently used", "last tab", "previous tab", "next tab", "cycle tabs", "mru", "tabbing", "arc", "dia", "chrome"],
         },
+        afterClosingTab: {
+          title: "After closing a tab",
+          description: "Go back to the previously active tab, or to the tab above (or to the left across the top).",
+          keywords: ["close tab", "closing", "closing tab", "closing a tab", "tab closing", "tab close", "after closing", "after close", "close behavior", "close behaviour", "cmd w", "next tab", "previous tab", "tab above", "tab to the left", "neighbour", "neighbor", "adjacent", "adjacent tab", "last used", "previously active", "focus", "select", "activate", "mru", "arc", "chrome", "firefox"],
+        },
       },
     },
     {

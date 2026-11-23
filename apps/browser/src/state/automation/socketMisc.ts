@@ -1,4 +1,3 @@
-import { engineProfile } from "../browser/model";
 import { mediaCommand, useMedia } from "../media/media";
 import { useSync } from "../sync/engine";
 import { deletePassword, listPasswords } from "../site/passwords";
@@ -6,7 +5,7 @@ import { listAddresses, listCards } from "../../platform/autofill";
 import { isEligibleTab } from "./automationWindows";
 import type { MethodSpec, SocketCall } from "./socketCatalog";
 import { obj, oneOf, PROFILE, TAB, text } from "./socketSchema";
-import { expect, now, profileArg, tabOf } from "./socketTargets";
+import { engineArg, expect, now, profileArg, tabOf } from "./socketTargets";
 import { OpError } from "./workspaceTargets";
 import { currentManagerPlugin } from "../site/passwordManager";
 import { noteSocketPasswordManagerRefused } from "../telemetry/cliCounts";
@@ -60,8 +59,6 @@ function syncStatus() {
   };
 }
 
-const engineOf = (params: Record<string, unknown>) => engineProfile(now(), profileArg(params.profile));
-
 function ardiaKeepsPasswords(params: Record<string, unknown>) {
   const plugin = currentManagerPlugin(profileArg(params.profile));
   if (!plugin) return;
@@ -71,18 +68,18 @@ function ardiaKeepsPasswords(params: Record<string, unknown>) {
 
 function passwordsList(params: Record<string, unknown>) {
   ardiaKeepsPasswords(params);
-  return listPasswords(engineOf(params));
+  return listPasswords(engineArg(params));
 }
 
 async function autofillList(params: Record<string, unknown>) {
-  const engine = engineOf(params);
+  const engine = engineArg(params);
   const [addresses, cards] = await Promise.all([listAddresses(engine), listCards(engine)]);
   return { addresses, cards: cards.map((c) => ({ id: c.id, name: c.name ?? null, network: c.network, last4: c.last4, expMonth: c.expMonth ?? null, expYear: c.expYear ?? null, created: c.created, modified: c.modified })) };
 }
 
 async function removePassword(params: Record<string, unknown>, call: SocketCall) {
   ardiaKeepsPasswords(params);
-  const engine = engineOf(params);
+  const engine = engineArg(params);
   const known = (await listPasswords(engine)).some((p) => p.origin === params.origin && p.username === params.username);
   if (!known) throw new OpError("no_window", "There's no saved login with that origin and username.");
   call.stillServing();

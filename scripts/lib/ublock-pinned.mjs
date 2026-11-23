@@ -8,9 +8,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const uboScript = readFileSync(join(ROOT, "packages/ardiacore/scripts/ubo.sh"), "utf8");
 
-export const UBLOCK_VERSION = /^UBO_VERSION="([^"]+)"/m.exec(uboScript)[1];
-export const UBLOCK_SHA256 = /^UBO_SHA256="([0-9a-f]{64})"/m.exec(uboScript)[1];
-export const UBLOCK_CACHE = join(ROOT, "apps/browser/node_modules/.cache/ublock");
+const UBLOCK_VERSION = /^UBO_VERSION="([^"]+)"/m.exec(uboScript)[1];
+const UBLOCK_SHA256 = /^UBO_SHA256="([0-9a-f]{64})"/m.exec(uboScript)[1];
+const UBLOCK_CACHE = join(ROOT, "apps/browser/node_modules/.cache/ublock");
 export const HIDING_CLEANUP = /^hiding_cleanup = r'''\n([\s\S]*?)^'''$/m.exec(uboScript)?.[1];
 
 const ZIP = `uBlock0_${UBLOCK_VERSION}.chromium.zip`;

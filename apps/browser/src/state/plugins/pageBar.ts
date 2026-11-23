@@ -23,7 +23,7 @@ export type PageBarPane = {
 
 export type PageBarMatch = { plugin: string; official: boolean; spec: PageBarSpec; url: string; at: number; superseded: number };
 
-export type PageBarState = { plugins: Pick<PluginsStore, "listings" | "records" | "order">; documents: Record<string, PageDocument> };
+type PageBarState = { plugins: Pick<PluginsStore, "listings" | "records" | "order">; documents: Record<string, PageDocument> };
 
 export function pageBarPaneEligible(p: PageBarPane): boolean {
   if (!p.visible || p.lingering || p.warm || p.covered || !p.mounted || !p.live || p.frozen || p.newTabShown) return false;

@@ -20,7 +20,7 @@ function restoreGroup(groups: Record<string, TabGroup>, g: Omit<TabGroup, "tabId
   return [{ ...groups, [id]: { ...g, id, tabIds } }, id];
 }
 
-export function shownProfile(s: BrowserState, windowId: string | undefined, profileId: string | undefined): boolean {
+function shownProfile(s: BrowserState, windowId: string | undefined, profileId: string | undefined): boolean {
   return !windowId || profileId === s.windows[windowId]!.profileId;
 }
 

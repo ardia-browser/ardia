@@ -214,7 +214,7 @@ if [[ $mode == plain ]]; then
     cd "$app_dir" &&
       "$repo/scripts/agent/locked" xcodebuild --wait "$wait" --as "$name" -- \
         xcodebuild -workspace macos/Ardia.xcworkspace -scheme Ardia-macOS -derivedDataPath "$dd" \
-        -destination 'platform=macOS,arch=arm64' -configuration "$config" -hideShellScriptEnvironment \
+        -destination 'platform=macOS,arch=arm64' ARCHS=arm64 -configuration "$config" -hideShellScriptEnvironment \
         ${settings[@]+"${settings[@]}"} build
   ) >>"$log" 2>&1
   status=$?
@@ -258,7 +258,7 @@ else
           "$cache_tool" slot-run --repo "$repo" --slot "$slot" --stamp "${stamp:-none}" --config "$config" --out "$prebuilt_out" \
           "${slot_args[@]}" -- \
           -workspace macos/Ardia.xcworkspace -scheme Ardia-macOS -derivedDataPath "$slot_dd" \
-          -destination 'platform=macOS,arch=arm64' -configuration "$config" -hideShellScriptEnvironment \
+          -destination 'platform=macOS,arch=arm64' ARCHS=arm64 -configuration "$config" -hideShellScriptEnvironment \
           ${settings[@]+"${settings[@]}"} ${compile_cache[@]+"${compile_cache[@]}"} build
     ) >"$log" 2>&1
     status=$?

@@ -12,17 +12,17 @@ export type SidebarTextSize = (typeof SIDEBAR_TEXT_SIZES)[number];
 const SIDEBAR_TEXT_SCALE: Record<SidebarTextSize, number> = { default: 1, large: 15 / 13, larger: 17 / 13 };
 
 export type TypeSizeName = keyof typeof TYPE_SIZES;
-export type WeightName = keyof typeof WEIGHTS;
+type WeightName = keyof typeof WEIGHTS;
 export type FontWeight = "100" | "200" | "300" | "400" | "500" | "600" | "700" | "800" | "900";
-export type RadiusName = keyof typeof RADII;
-export type RowMetrics = { -readonly [K in keyof typeof ROW_METRICS]: number };
+type RadiusName = keyof typeof RADII;
+type RowMetrics = { -readonly [K in keyof typeof ROW_METRICS]: number };
 
-export const CHROME_PARTS = ["pinned", "newTab", "addressField", "navButtons", "sidebarButton", "downloads", "profile"] as const;
+const CHROME_PARTS = ["pinned", "newTab", "addressField", "navButtons", "sidebarButton", "downloads", "profile"] as const;
 export type ChromePart = (typeof CHROME_PARTS)[number];
-export const PLACES = ["top", "bottom"] as const;
+const PLACES = ["top", "bottom"] as const;
 export type Place = (typeof PLACES)[number];
 
-export const THEME_RADII = { row: "chrome", pinned: "pinned", tile: "tile", control: "control", toolbar: "toolbar", panel: "panel", sheet: "sheet" } as const satisfies Record<string, RadiusName>;
+const THEME_RADII = { row: "chrome", pinned: "pinned", tile: "tile", control: "control", toolbar: "toolbar", panel: "panel", sheet: "sheet" } as const satisfies Record<string, RadiusName>;
 type ThemeRadius = keyof typeof THEME_RADII;
 
 export type ThemeLook = {
@@ -46,7 +46,7 @@ type Fields = { [key: string]: unknown };
 const FONT_WEIGHTS: readonly FontWeight[] = ["100", "200", "300", "400", "500", "600", "700", "800", "900"];
 export const SYMBOL_PATTERN = "^[a-z0-9]+(\\.[a-z0-9]+)*$";
 const SYMBOL = new RegExp(SYMBOL_PATTERN);
-export const FAMILY_PATTERN = "^\\S(.{0,62}\\S)?$";
+const FAMILY_PATTERN = "^\\S(.{0,62}\\S)?$";
 const FAMILY = new RegExp(FAMILY_PATTERN);
 
 type Spec =
@@ -298,7 +298,7 @@ export function withSidebarText(look: ThemeLook, size: SidebarTextSize): ThemeLo
   return scaled;
 }
 
-export type LookUse = { type: boolean; metrics: boolean; layout: boolean; icons: boolean; hidden: number; moved: number; iconOverrides: number };
+type LookUse = { type: boolean; metrics: boolean; layout: boolean; icons: boolean; hidden: number; moved: number; iconOverrides: number };
 
 export function lookUse(blocks: LookBlocks | null | undefined): LookUse {
   const look = resolveLook(blocks);

@@ -1,4 +1,4 @@
-export type WindowDragOptions = {
+type WindowDragOptions = {
   titleBarDoubleClick: boolean;
   clickable: boolean;
   onRegionClick?: () => void;

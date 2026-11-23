@@ -20,7 +20,7 @@ import {
 import { consentToken } from "../../browser/src/state/telemetry/consentPeriod";
 import { warnFor } from "../../browser/src/state/telemetry/consoleConsent";
 
-export const CALENDAR_CONSENT_DOCUMENT = "linux-calendar.json";
+const CALENDAR_CONSENT_DOCUMENT = "linux-calendar.json";
 export const CALENDAR_CAPABILITIES = ["ArdiaCalendar.status", "ArdiaCalendar.requestAccess", "ArdiaCalendar.sources", "ArdiaCalendar.objects", "ArdiaCalendar.timezones"] as const;
 const DEFAULT_COLOR = "#8E8E93";
 const EXPANSION_BUDGET_MS = 750;
@@ -28,18 +28,18 @@ const STATUSES: ReadonlySet<string> = new Set(["notDetermined", "fullAccess", "r
 const READ_ONLY_BACKENDS = new Set(["webcal", "contacts", "weather"]);
 const ACCOUNT_FALLBACK: Record<string, string> = { local: "On This Computer", webcal: "On The Web", contacts: "Contacts", weather: "Weather" };
 
-export type EdsSourceData = Record<string, Record<string, string>>;
-export type EdsSource = { uid: string; calendar: boolean; data: EdsSourceData };
+type EdsSourceData = Record<string, Record<string, string>>;
+type EdsSource = { uid: string; calendar: boolean; data: EdsSourceData };
 type CalendarObjects = { status: string; message: string; objects?: unknown[]; truncated?: boolean };
-export type CalendarRefreshReport = { truncatedCalendars: string[]; truncatedEvents: string[]; skippedObjects: number; failedCalendars: string[] };
+type CalendarRefreshReport = { truncatedCalendars: string[]; truncatedEvents: string[]; skippedObjects: number; failedCalendars: string[] };
 type KnownCalendar = SystemCalendar & { emails: string[] };
 
-export type LinuxCalendar = Pick<CalendarNative, "authorizationStatus" | "requestAccess" | "calendars" | "events"> & {
+type LinuxCalendar = Pick<CalendarNative, "authorizationStatus" | "requestAccess" | "calendars" | "events"> & {
   message(): string;
   lastRefresh(): CalendarRefreshReport;
 };
 
-export function consentGranted(host: ArdiaHost): boolean {
+function consentGranted(host: ArdiaHost): boolean {
   try {
     const saved = JSON.parse(host.bootstrap.documents?.[CALENDAR_CONSENT_DOCUMENT] ?? "null") as { version?: unknown; connected?: unknown } | null;
     return saved?.version === 1 && saved.connected === true;
@@ -108,7 +108,7 @@ function participant(p: IcsProperty, emails: Set<string>): CalendarParticipant {
   };
 }
 
-export function eventFields(event: IcsComponent, calendar: KnownCalendar): Omit<SystemCalendarEvent, "start" | "end" | "allDay" | "occurrence"> {
+function eventFields(event: IcsComponent, calendar: KnownCalendar): Omit<SystemCalendarEvent, "start" | "end" | "allDay" | "occurrence"> {
   const emails = new Set(calendar.emails);
   const organizer = property(event, "ORGANIZER");
   const attendees = properties(event, "ATTENDEE")
@@ -131,7 +131,7 @@ export function eventFields(event: IcsComponent, calendar: KnownCalendar): Omit<
   };
 }
 
-export function zoneLookup(inline: Map<string, IcsComponent>, fetched: Map<string, string | null>): (tzid: string) => Zone | null {
+function zoneLookup(inline: Map<string, IcsComponent>, fetched: Map<string, string | null>): (tzid: string) => Zone | null {
   const cache = new Map<string, Zone | null>();
   return (tzid) => {
     if (cache.has(tzid)) return cache.get(tzid)!;
@@ -146,7 +146,7 @@ export function zoneLookup(inline: Map<string, IcsComponent>, fetched: Map<strin
   };
 }
 
-export function parseObjects(objects: unknown[]): { components: IcsComponent[]; skipped: number } {
+function parseObjects(objects: unknown[]): { components: IcsComponent[]; skipped: number } {
   const components: IcsComponent[] = [];
   let skipped = 0;
   for (const object of objects) {
@@ -160,7 +160,7 @@ export function parseObjects(objects: unknown[]): { components: IcsComponent[]; 
   return { components, skipped };
 }
 
-export function calendarEvents(components: IcsComponent[], calendar: KnownCalendar, start: number, end: number, fetched = new Map<string, string | null>(), budget?: ExpansionBudget): SystemCalendarEvent[] {
+function calendarEvents(components: IcsComponent[], calendar: KnownCalendar, start: number, end: number, fetched = new Map<string, string | null>(), budget?: ExpansionBudget): SystemCalendarEvent[] {
   const lookup = zoneLookup(inlineZones(components), fetched);
   return occurrences(veventsOf(components), start, end, lookup, budget).map((found) => ({
     ...eventFields(found.event, calendar),
@@ -171,14 +171,14 @@ export function calendarEvents(components: IcsComponent[], calendar: KnownCalend
   }));
 }
 
-export function missingTzids(components: IcsComponent[]): string[] {
+function missingTzids(components: IcsComponent[]): string[] {
   const inline = inlineZones(components);
   return [...referencedTzids(components)].filter((tzid) => !inline.has(tzid) && !ianaName(tzid));
 }
 
 const calendarError = (code: string, message: string) => Object.assign(new Error(message), { code });
 
-export function createLinuxCalendar(host: ArdiaHost): LinuxCalendar {
+function createLinuxCalendar(host: ArdiaHost): LinuxCalendar {
   const supported = CALENDAR_CAPABILITIES.every((method) => hostSupports(method, host));
   let status: CalendarAuthorization = !supported ? "restricted" : consentGranted(host) ? "fullAccess" : "notDetermined";
   let message = supported ? "" : "This Ardia engine was built without the Linux calendar service";

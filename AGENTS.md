@@ -178,7 +178,7 @@ yours: the hidden-instance and focus rules are for the owner's Mac.
 - **Instrument what you ship.** Every feature and fix ships with the telemetry that shows it working in the field
   and catches its regression: a use count for a feature, a counter or timing on the path a fix touched, an error
   event where it used to fail. Add it to an existing event before inventing a new one (`apps/browser/src/state/telemetry`,
-  `plugins/cli/ardia_cli/telemetry.py` in ardia-browser/plugins). It stays inside the consent model: sharing on only, counts, timings, enums and
+  `plugins/cli/ts/src/telemetry.ts` in ardia-browser/plugins). It stays inside the consent model: sharing on only, counts, timings, enums and
   flags, never URLs, page content, titles or free text. List new events and fields in the "What's Sent" copy, and
   say in the commit and the parity row what to watch on the dashboard. Skip it only when nothing measurable exists,
   and say so.

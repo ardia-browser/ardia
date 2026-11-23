@@ -2,7 +2,7 @@ import { reveal, type Secret } from "@ardia/core";
 import { mapBitbucket, mapConfluence, mapDrive, mapNotion, type BitbucketPR, type BitbucketStatuses, type ConfluenceSearch, type DriveFiles, type NotionSearch, type NotionUsers } from "../../browser/src/state/live/documents";
 import { createGithubClient } from "../../browser/src/state/live/githubClient";
 import { live, setAccount, updateConfig } from "../../browser/src/state/live/store";
-import { LiveError, type CompletionState, type LiveAccount, type LiveFolder, type LiveItem, type LiveSourceId } from "../../browser/src/state/live/types";
+import { LiveError, type CompletionState, type LiveAccount, type LiveFolder, type LiveSourceId } from "../../browser/src/state/live/types";
 import { hostLiveClient, type LiveClient } from "./hostLive.ts";
 
 import type { DeviceFlow, LiveSource } from "../../browser/src/state/live/sources";

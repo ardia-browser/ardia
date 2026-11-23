@@ -3,7 +3,7 @@ import { isFields } from "./decode";
 export const PASSWORD_FIELDS = ["login", "oneTimeCode"] as const;
 export type PasswordField = (typeof PASSWORD_FIELDS)[number];
 export const PASSWORD_FILLS = ["system"] as const;
-export const RESERVED_PASSWORD_FILLS = ["tool"] as const;
+const RESERVED_PASSWORD_FILLS = ["tool"] as const;
 export const PASSWORD_FIELD_COUNT = [1, 2] as const;
 export type PasswordManagerSpec = { fill: "system"; fields: PasswordField[]; verificationCodeSetup: "system" | null; passkeys: "system" | null };
 

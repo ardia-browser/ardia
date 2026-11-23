@@ -15,7 +15,7 @@ const shaped = (key: SettingKey, value: unknown, then: () => Checked): Checked =
 const needsWebKit = (key: SettingKey, value: unknown, then: () => Checked): Checked =>
   shaped(key, value, () => (PLATFORM_FEATURES.webKit || sameValue(value, DEFAULT_SETTINGS[key]) ? then() : { problem: `${key}: ${NO_WEBKIT}` }));
 
-export const typedSite = (typed: string) => siteOf(SCHEME.test(typed.trim()) ? typed.trim() : resolveInput(typed.trim(), ""));
+const typedSite = (typed: string) => siteOf(SCHEME.test(typed.trim()) ? typed.trim() : resolveInput(typed.trim(), ""));
 
 function websiteEngines(value: unknown): Checked {
   const rules: Settings["websiteEngines"] = {};
@@ -46,7 +46,7 @@ function customSearchUrl(value: unknown, settings: Settings, requested: Record<s
   return { patch: { customSearchUrl: url } };
 }
 
-export const SOCKET_SETTING_RULES: Partial<Record<SettingKey, Rule>> = {
+const SOCKET_SETTING_RULES: Partial<Record<SettingKey, Rule>> = {
   pageEngine: (value) => shaped("pageEngine", value, () => (value === "webkit" && !PLATFORM_FEATURES.webKit ? { problem: `pageEngine: ${NO_WEBKIT}` } : { patch: { pageEngine: value as Settings["pageEngine"] } })),
   websiteEngines: (value) => needsWebKit("websiteEngines", value, () => websiteEngines(value)),
   protectedVideoInWebKit: (value) => needsWebKit("protectedVideoInWebKit", value, () => ({ patch: { protectedVideoInWebKit: value as boolean } })),

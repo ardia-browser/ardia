@@ -99,7 +99,7 @@ export function instrumentStore(world, { trackReads = false, keepUnsubscribed = 
   return probe;
 }
 
-export function serviceStarts(srcDir) {
+function serviceStarts(srcDir) {
   let main;
   try {
     main = readFileSync(`${srcDir}/main.tsx`, "utf8");

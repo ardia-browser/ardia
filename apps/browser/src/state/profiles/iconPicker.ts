@@ -4,7 +4,7 @@ import { currentProfile } from "../browser/current";
 import { chooseIcon } from "./actions";
 import type { ProfileMenuPlace } from "./profileMenu";
 
-export type IconPickerAnchor = { x: number; y: number; width: number; height: number };
+type IconPickerAnchor = { x: number; y: number; width: number; height: number };
 export type ProfileIconPicker = { profileId: string; windowId: string; place: ProfileMenuPlace; anchor: IconPickerAnchor | null };
 
 export const useProfileIconPicker = create<{ picker: ProfileIconPicker | null }>()(() => ({ picker: null }));

@@ -34,9 +34,7 @@ export const useSettingsSearch = create<SearchUi>()(() => ({
   shortcutsQuery: "",
 }));
 
-export const settingsSectionKey = (pane: SettingsPane, section: string) => `${pane}\u0000${section}`;
-
-export const sectionRevealed = (s: Pick<SearchUi, "revealedSections" | "previewSection">, key: string) => s.revealedSections.includes(key) || s.previewSection === key;
+const settingsSectionKey = (pane: SettingsPane, section: string) => `${pane}\u0000${section}`;
 
 let emptyNoted = false;
 

@@ -1,16 +1,16 @@
 import { roundedRect, type FloatingHole } from "./pageHoles.ts";
 import type { Rect } from "./pipGeometry.ts";
 
-export type HoleNode = { parentElement: HoleNode | null; children: ArrayLike<HoleNode> };
+type HoleNode = { parentElement: HoleNode | null; children: ArrayLike<HoleNode> };
 
-export type HoleDeps<N extends HoleNode> = {
+type HoleDeps<N extends HoleNode> = {
   rectOf: (node: N) => Rect;
   paints: (node: N) => boolean;
   managed: (node: N) => boolean;
   clippedElsewhere: (node: N) => boolean;
 };
 
-export type HolePlan<N> = { clip: N[]; hosts: N[] };
+type HolePlan<N> = { clip: N[]; hosts: N[] };
 
 const meets = (a: Rect, b: Rect) => a.width > 0 && a.height > 0 && a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
@@ -40,7 +40,7 @@ export function planHoles<N extends HoleNode>(roots: readonly N[], hole: Rect, k
 
 const FAR = 100000;
 
-export function holeClip(local: Rect, radius: number) {
+function holeClip(local: Rect, radius: number) {
   return `path(evenodd, "M${-FAR} ${-FAR}H${FAR}V${FAR}H${-FAR}Z ${roundedRect(local, radius)}")`;
 }
 
@@ -62,7 +62,7 @@ export function hitRects(element: Element, receives: (element: Element) => boole
 
 const transparent = (color: string) => !color || color === "transparent" || /^rgba\(.*,\s*0\)$/.test(color);
 
-export function domHoleDeps(isLayer: (element: Element) => boolean, mine: (element: Element) => boolean): HoleDeps<HTMLElement & HoleNode> {
+function domHoleDeps(isLayer: (element: Element) => boolean, mine: (element: Element) => boolean): HoleDeps<HTMLElement & HoleNode> {
   return {
     rectOf: (element) => {
       const { x, y, width, height } = element.getBoundingClientRect();
@@ -74,12 +74,12 @@ export function domHoleDeps(isLayer: (element: Element) => boolean, mine: (eleme
   };
 }
 
-export type PlayerHoleTarget = {
+type PlayerHoleTarget = {
   setFloating(hole: FloatingHole | null, hosts?: readonly HTMLElement[]): void;
   isLayer(element: Element): boolean;
 };
 
-export type FrameClock = { request: (run: () => void) => number; cancel: (frame: number) => void };
+type FrameClock = { request: (run: () => void) => number; cancel: (frame: number) => void };
 
 export function nextFrameRunner(run: () => void, clock: FrameClock = { request: (next) => requestAnimationFrame(next), cancel: (frame) => cancelAnimationFrame(frame) }) {
   let pending: number | null = null;

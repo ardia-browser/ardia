@@ -84,19 +84,19 @@ export const arcGlyphEmoji = (icon: string | undefined): string | undefined => (
 
 export const arcSpaceEmoji = (space: SpaceLook): string | undefined => space.emoji || arcGlyphEmoji(space.icon);
 
-export const takesArcGlyph = (space: SpaceLook) => !space.emoji && !!space.icon;
+const takesArcGlyph = (space: SpaceLook) => !space.emoji && !!space.icon;
 
 export function withArcGlyph<T extends SpaceLook>(space: T): T {
   return takesArcGlyph(space) ? { ...space, emoji: arcGlyphEmoji(space.icon) } : space;
 }
 
-export type ArcHomes = { spaces: ReadonlyMap<string, string>; named: (name: string) => string | undefined; fallback: string };
+type ArcHomes = { spaces: ReadonlyMap<string, string>; named: (name: string) => string | undefined; fallback: string };
 
 function homeOf(to: Pick<ArcLinkDestination, "spaceId" | "spaceName">, homes: ArcHomes): string | undefined {
   return (to.spaceId && homes.spaces.get(to.spaceId)) || (to.spaceName ? homes.named(to.spaceName) : undefined);
 }
 
-export function arcLinkTarget(to: ArcLinkDestination, homes: ArcHomes): AirTrafficTarget | null {
+function arcLinkTarget(to: ArcLinkDestination, homes: ArcHomes): AirTrafficTarget | null {
   if (to.kind === "mostRecent") return { profileId: null, open: "tab" };
   if (!to.spaceId) return to.kind === "littleArc" ? { profileId: null, open: "littleArdia" } : null;
   const home = homeOf(to, homes);
@@ -114,8 +114,8 @@ export const arcRuleId = (id: string) => (ARC_RULE_ID.test(id) ? `arc-${id}` : n
 
 const ARC_ARCHIVE_READ = 1500;
 
-export type SettingOutcome = "none" | "applied" | "kept" | "unresolved" | "unsaved" | "same";
-export type RoutingImported = { rules: number; already: number; skipped: number; unsaved: number; fallback: SettingOutcome };
+type SettingOutcome = "none" | "applied" | "kept" | "unresolved" | "unsaved" | "same";
+type RoutingImported = { rules: number; already: number; skipped: number; unsaved: number; fallback: SettingOutcome };
 
 function settingSet(key: SettingKey): boolean {
   const { settings, settingsMeta } = useBrowser.getState();
@@ -165,7 +165,7 @@ async function settleUntouched<K extends SettingKey>(key: K, value: Settings[K])
   return savedSetting({ [key]: value });
 }
 
-export type ArchiveImported = { tabs: number; already: number; overQuota: number; unresolved: number; dropped: number; cleanUp: SettingOutcome };
+type ArchiveImported = { tabs: number; already: number; overQuota: number; unresolved: number; dropped: number; cleanUp: SettingOutcome };
 
 export async function importArcArchive(archive: ArcArchive, homes: ArcHomes, now = Date.now()): Promise<ArchiveImported> {
   const have = keptCleanedKeys(useBrowser.getState());

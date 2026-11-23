@@ -4,9 +4,9 @@ const STREAM_EXCEPTION = 6;
 const STREAM_MISC_INFO = 15;
 const STREAM_CRASHPAD = 0x43500001;
 
-export type SampleModule = { base: number; size: number; path: string };
+type SampleModule = { base: number; size: number; path: string };
 
-export type SampleDump = {
+type SampleDump = {
   time?: number;
   created?: number;
   process?: string;

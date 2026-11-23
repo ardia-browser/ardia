@@ -1,5 +1,6 @@
 import { memo } from "react";
 import { Pressable, StyleSheet, Text, useWindowDimensions, View, type TextStyle } from "react-native";
+import { Pressable as GesturePressable } from "react-native-gesture-handler";
 import { queryPrefixLength, type TrayRow } from "../../state/search/omnibox";
 import { countRender } from "../../state/app/interactionPerf";
 import type { Design } from "../../lib/design";
@@ -65,18 +66,19 @@ export const SuggestionRow = memo(function SuggestionRow({ row, typed, roles, in
       </View>
     );
   }
+  const RowPressable = material ? GesturePressable : Pressable;
   return (
-    <Pressable
+    <RowPressable
       accessibilityRole="button"
       android_ripple={material ? ripple : undefined}
       onPress={() => onActivate(row)}
-      onLongPress={(event) => onMenu(row, { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY })}
+      onLongPress={(event: { nativeEvent: { pageX: number; pageY: number } }) => onMenu(row, { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY })}
       delayLongPress={tabsMotion.longPress}
       {...screenReaderActions(menuActions)}
       style={({ pressed }) => [rowStyle, !material && pressed && highlightsPress ? { backgroundColor: roles.rowHighlight } : null]}
     >
       {content}
-    </Pressable>
+    </RowPressable>
   );
 });
 

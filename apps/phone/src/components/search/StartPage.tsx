@@ -10,7 +10,7 @@ import { useSyncEnabled } from "../../state/sync/hooks";
 import { countUsage } from "../../state/telemetry/telemetry";
 import { useHasTabs, useIncognito } from "../../state/tabs/hooks";
 import { actionWords, destinationWords } from "../../lib/sharedWords";
-import { chromeLayout, controlSize, space, startLayout, startMotion, tabsCurve, tabsLayout, useReduceMotion, useTheme, type SymbolName } from "../ui";
+import { chromeLayout, controlSize, FrostSource, GlassSource, space, START_FROST, startLayout, startMotion, tabsCurve, tabsLayout, useReduceMotion, useTheme, type SymbolName } from "../ui";
 import { StartCircleButton } from "./StartBarButtons";
 import { PlusMenuButton } from "../tabs/ChromeButtons";
 import { StartMark, StartSpaces, startBarCenterY, type StartGeometry } from "./StartSpaces";
@@ -56,10 +56,13 @@ export function StartPage() {
   );
   return (
     <View testID="startPage" style={StyleSheet.absoluteFill}>
-      <StartSpaces geometry={geometry} dark={dark} incognito={incognito} interactive={!trayUp} />
-      <Animated.View testID="startContent" {...hidden} style={[styles.mark, { paddingBottom: height - barTop }, contentStyle]}>
-        <StartMark incognito={incognito} />
-      </Animated.View>
+      <FrostSource name={START_FROST} style={StyleSheet.absoluteFill} pointerEvents="box-none" collapsable={false}>
+        <StartSpaces geometry={geometry} dark={dark} incognito={incognito} interactive={!trayUp} />
+        <Animated.View testID="startContent" {...hidden} style={[styles.mark, { paddingBottom: height - barTop }, contentStyle]}>
+          <StartMark incognito={incognito} />
+        </Animated.View>
+      </FrostSource>
+      <GlassSource name={START_FROST}>
       <Animated.View testID="startBar" {...hidden} style={[styles.bar, { top: barTop, paddingLeft: barSpan.left, paddingRight: barSpan.right }, strip?.ends ? styles.barEnds : null, barStyle]}>
         {strip ? null : tabs}
         {strip ? null : plus}
@@ -75,6 +78,7 @@ export function StartPage() {
           </Animated.View>
         </>
       ) : null}
+      </GlassSource>
     </View>
   );
 }

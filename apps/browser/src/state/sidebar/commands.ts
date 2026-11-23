@@ -16,6 +16,7 @@ import { PINNED_FOLD_TITLES, pinnedCollapsed, togglePinnedFold } from "./pinnedF
 import { setSidebarUi } from "./sidebarUi";
 import { tidy } from "./tidyUi";
 import { switcherStep } from "./switcher";
+import type { ByUser } from "../tabs/closeActivation";
 
 function hasCollapsiblePinned(s: BrowserState, w: BrowserState["windows"][string] | undefined): boolean {
   if (!w || !s.profiles[w.profileId] || tabLayoutOf(s, w.id) !== "sidebar") return false;
@@ -31,7 +32,7 @@ function hasCollapsiblePinned(s: BrowserState, w: BrowserState["windows"][string
   return false;
 }
 
-export function runSidebarCommand(command: BrowserCommand, arg: string | null, windowId: string): boolean {
+export function runSidebarCommand(command: BrowserCommand, arg: string | null, windowId: string, user?: ByUser): boolean {
   const s = useBrowser.getState();
   const tabId = activeTabId(s, windowId);
   switch (command) {
@@ -49,7 +50,7 @@ export function runSidebarCommand(command: BrowserCommand, arg: string | null, w
       cleanUpWithUndo(windowId);
       return true;
     case "closeAllTabs":
-      closeAllTabs(windowId);
+      closeAllTabs(windowId, user);
       return true;
     case "tidyPins":
       tidy(windowId, "pins");

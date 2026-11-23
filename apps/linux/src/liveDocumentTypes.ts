@@ -11,7 +11,7 @@ export type DocumentSnapshot = {
   incarnations: Record<string, string>;
   generations: Record<string, number>;
 };
-export type FieldOperation = { type: "field"; target: "folder" | "calendar" | "config" | "account" | "meetingGroup" | "expandedStack" | "dismissedNow"; id?: string; incarnation?: string; field: string; expected: unknown; value: unknown };
+type FieldOperation = { type: "field"; target: "folder" | "calendar" | "config" | "account" | "meetingGroup" | "expandedStack" | "dismissedNow"; id?: string; incarnation?: string; field: string; expected: unknown; value: unknown };
 export type DocumentOperation = FieldOperation
   | { type: "create"; id: string; incarnation: string; value: unknown }
   | { type: "delete"; id: string; incarnation: string }
@@ -20,7 +20,6 @@ export type DocumentOperation = FieldOperation
   | { type: "entry"; target: "items" | "hidden" | "repoHidden" | "completed"; id: string; incarnation: string; key: string; expected: unknown; value: unknown }
   | { type: "claim"; id: string; incarnation: string }
   | { type: "refresh"; id: string; incarnation: string; generation: number; owner: string; operations: DocumentOperation[]; orders?: Partial<Record<"items" | "hidden" | "completed", string[]>> };
-export type DocumentCommit = { document: "live.json"; epoch: string; requestId: string; observedRevision: number; operations: DocumentOperation[] };
 export type DocumentReply = { status: "committed" | "conflict"; reason?: "notOwner"; superseded?: boolean; snapshot: DocumentSnapshot; requestId: string };
 export type DocumentChange = { snapshot: DocumentSnapshot; clientId: string; requestId: string };
 export const documentError = (code: string, message: string) => Object.assign(new Error(message), { code });

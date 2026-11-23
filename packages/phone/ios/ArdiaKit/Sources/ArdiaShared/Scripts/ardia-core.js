@@ -64,7 +64,7 @@ if (typeof scope.URL === "undefined") scope.URL = HostURL;
                              
                
   
-                                                                                                               
+                                                                                                        
 
 let source                   = { tabs: [], history: [], bookmarks: [] };
 let engines                 = allEngines();
@@ -374,7 +374,7 @@ function appUrlOrigin(url        )                {
   return parts ? `${APP_SCHEME}://${parts.host}` : null;
 }
 
-                         
+                  
                                        
                                                 
                       
@@ -949,7 +949,7 @@ function convert(input        )                                         {
   return { value: (amount * a.factor) / b.factor, unit: b.label };
 }
 
-                                                                                 
+                                                                          
 
 function calculate(raw        )                     {
   const expression = raw.trim().replace(/^=\s*/, "").replace(/\s*=\s*\??$/, "");
@@ -1027,7 +1027,7 @@ function isTrackingParam(name        , hostname = "")          {
 
                                                                                
                                                                                                  
-                                                                                            
+                                                                                     
 
 function cleanUrlReport(url        )                 {
   const unchanged = Object.freeze({ url: url              , removedTracker: false });
@@ -1298,7 +1298,7 @@ const { cleanUrl } = __require("packages/core/src/cleanUrl.ts");
 const { displayHost, punycodeEncode } = __require("packages/core/src/idn.ts");
 const { PSL_TLDS } = __require("packages/core/src/tlds.ts");
 
-                                                                                                                  
+                                                                                                           
 
 const URL_PARTS = /^([a-z][a-z0-9+.-]*):\/\/(?:[^@/?#]*@)?(\[[^\]]*\]|[^:/?#]*)(?::(\d+))?([^?#]*)(\?[^#]*)?(#.*)?$/i;
 
@@ -1729,7 +1729,7 @@ const DANGEROUS = new RegExp(
   "u",
 );
 
-                         
+                  
              
                          
                
@@ -1977,7 +1977,7 @@ const { matchActions } = __require("packages/core/src/fuzzy.ts");
                    
   
 
-                                                                   
+                                                            
 
 const NONE                = { rows: [], exact: false };
 const MIN_PARTIAL_QUERY = 3;
@@ -2112,7 +2112,7 @@ const SITE_INGEST_KEY = "ak_site_6b26588b3764ae7d0f6d63d7";
 
 const INGEST_KEY_HEADER = "X-Ardia-Key";
 
-                                                  
+                                           
 
 const INGEST_KEYS                                         = {
   app: APP_INGEST_KEY,
@@ -2626,7 +2626,7 @@ const providerApprovalKey = (definition         ) => `omnibox-provider:${sha256H
 });
 __define("packages/core/src/quickCreate.ts", function (exports, __require) {
   __export(exports, "matchQuickCreate", () => matchQuickCreate);
-                           
+                    
              
                 
               
@@ -2682,13 +2682,13 @@ __define("packages/core/src/secret.ts", function (exports, __require) {
   __export(exports, "onSecretEscape", () => onSecretEscape);
   __export(exports, "secretsDropped", () => secretsDropped);
   __export(exports, "withoutSecrets", () => withoutSecrets);
-const SECRET_KINDS = ["password", "oauthToken", "oauthClientSecret", "apiToken", "pluginSecret", "syncPhrase"]         ;
+const SECRET_KINDS = ["password", "oauthToken", "oauthClientSecret", "apiToken", "pluginSecret", "syncPhrase", "devtoolsToken"]         ;
 
                                                        
 
-                                                                                     
+                                                                              
 
-                                                
+                                         
 
 const REDACTED_SECRET = "<secret>";
 
@@ -2813,7 +2813,7 @@ function withoutSecrets   (value   , where              , seen = new WeakSet    
                                                
                                            
 
-                                                         
+                                                  
                        
            
                              
@@ -2883,7 +2883,7 @@ const POPULAR_SITE_SEARCHES                        = [
 
                                                                                                           
 
-                            
+                     
                                    
                                 
                             
@@ -2955,14 +2955,14 @@ function offeredSiteSearch(typed        , completion        , sources           
                     
   
 
-                                                                                                                    
+                                                                                                             
 
-                           
+                    
                                                        
                                    
                                      
 
-                                                               
+                                                        
 
 function keywordBySpace(typed        , next        )                        {
   if (!typed.trim() || /\s$/.test(typed) || next !== `${typed} `) return null;
@@ -3540,7 +3540,7 @@ __define("packages/core/src/pageMatch.ts", function (exports, __require) {
                                                           
 const { shownWordsOf } = __require("packages/core/src/pageText.ts");
 
-                     
+              
             
                                          
                 
@@ -3797,7 +3797,7 @@ __define("packages/core/src/textFragment.ts", function (exports, __require) {
   __export(exports, "chooseTextFragment", () => chooseTextFragment);
   __export(exports, "withTextFragment", () => withTextFragment);
 
-                                                                                             
+                                                                                      
 
                                 
                    
@@ -4285,7 +4285,7 @@ __define("packages/core/src/webStore.ts", function (exports, __require) {
   __export(exports, "isExtensionId", () => isExtensionId);
   __export(exports, "webStoreExtensionId", () => webStoreExtensionId);
   __export(exports, "permissionWarnings", () => permissionWarnings);
-                                                                                        
+                                                                                 
 
 const isExtensionId = (s        ) => /^[a-p]{32}$/.test(s);
 

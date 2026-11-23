@@ -23,7 +23,6 @@ import { bindLiveToBrowser, forgetAllLive } from "../tabs/tabLive";
 import { settle, SettleDidNotConverge } from "./settle";
 import { transactional, type SubscribeTo } from "./transaction";
 import { actionsApart } from "./actionsApart";
-import type { BrowserWindow, Tab } from "./types";
 import { createUiSlice, type UiSlice } from "../windows/ui";
 import { createDownloadsSlice, type DownloadsSlice } from "../downloads/downloadsSlice";
 import { createWindowsSlice, type WindowsSlice } from "../windows/windows";
@@ -183,7 +182,6 @@ const createdBrowser = create<BrowserState>()(actionsApart(transactions.middlewa
 export const useBrowser = createdBrowser as UseBoundStore<StoreApi<BrowserState>> & { subscribeTo: SubscribeTo<BrowserState> };
 bindLiveToBrowser(useBrowser, transactions.afterTransactionIdempotent);
 
-export type { CreateWindowOptions } from "../windows/windows";
 
 type StoreActions = { [K in keyof BrowserState as BrowserState[K] extends (...args: never[]) => unknown ? K : never]: BrowserState[K] };
 

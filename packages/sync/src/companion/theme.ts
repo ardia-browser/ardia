@@ -1,8 +1,8 @@
 import type { ScopeState } from "../scopeState.ts";
 
-export type ViewThemeStop = { color: { r: number; g: number; b: number; a: number }; x: number; y: number };
-export type ViewThemeTexture = "grain" | "sand" | "denim" | "tweed";
-export type ViewThemeLook = { stops: ViewThemeStop[]; intensity: number; grain: number; texture: ViewThemeTexture; translucency: number; angle: number };
+type ViewThemeStop = { color: { r: number; g: number; b: number; a: number }; x: number; y: number };
+type ViewThemeTexture = "grain" | "sand" | "denim" | "tweed";
+type ViewThemeLook = { stops: ViewThemeStop[]; intensity: number; grain: number; texture: ViewThemeTexture; translucency: number; angle: number };
 export type ViewTheme = { colors: string[]; darkColors: string[] | null; mode: "auto" | "light" | "dark"; look: ViewThemeLook; dark: ViewThemeLook | null };
 
 function hex(n: unknown) {

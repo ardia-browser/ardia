@@ -230,14 +230,16 @@ test("a signal is forwarded to each lane, which finishes its own cleanup before 
   const dir = mkdtempSync(join(tmpdir(), "ratchet-forward-"));
   const ready = join(dir, "ready");
   const cleaned = join(dir, "cleaned");
+  const forwarded = join(dir, "forwarded");
   const grandchildFile = join(dir, "grandchild");
-  const lane = `require("fs").writeFileSync(${JSON.stringify(ready)}, String(process.pid)); process.on("SIGINT", () => setTimeout(() => { require("fs").writeFileSync(${JSON.stringify(cleaned)}, "1"); process.exit(130); }, 300)); setInterval(() => {}, 1000);`;
+  const lane = `require("fs").writeFileSync(${JSON.stringify(ready)}, String(process.pid)); process.on("SIGINT", () => (require("fs").writeFileSync(${JSON.stringify(forwarded)}, "1"), setTimeout(() => { require("fs").writeFileSync(${JSON.stringify(cleaned)}, "1"); process.exit(130); }, 300))); setInterval(() => {}, 1000);`;
   const grandchild = `require("fs").writeFileSync(${JSON.stringify(grandchildFile)}, String(process.pid)); ${STUBBORN}`;
   const bundler = `require("child_process").execFileSync(process.execPath, ["-e", ${JSON.stringify(grandchild)}], { stdio: "ignore" });`;
   const { ratchet, exited } = ratchetHarness([{ script: lane, lane: true }, { script: bundler, lane: false }]);
   const lanePid = await waitForFile(ready);
   const grandchildPid = await waitForFile(grandchildFile);
   ratchet.kill("SIGINT");
+  await waitForFile(forwarded);
   ratchet.kill("SIGTERM");
   assert.equal(await exited, 130);
   assert.ok(existsSync(cleaned), "the ratchet exited before the lane finished its cleanup");

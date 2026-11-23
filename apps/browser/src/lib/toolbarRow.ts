@@ -25,7 +25,7 @@ export const TOOLBAR_TRAILING = { itemGap: 2, extensionIcon: 16, splitGlyph: 15 
 
 export const fieldInsetOf = (row: ToolbarRow) => urlFieldOf(row).top;
 
-export const fieldAloneInsetOf = (row: ToolbarRow, cardRadius: number) => {
+const fieldAloneInsetOf = (row: ToolbarRow, cardRadius: number) => {
   const top = fieldInsetOf(row);
   return top + row.fieldRadius >= cardRadius ? top : cardRadius - row.fieldRadius;
 };

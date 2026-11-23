@@ -37,6 +37,7 @@ All of them are in `apps/browser/scripts/perf/`.
 | `bookmark-move-bench.mjs` | Node | A Bookmarks page drag of a selection into another folder: CPU time of the store update and of the diff sent to Chrome, and how many ops it sends (`--each` and `--slice`/`--flat` time older code). No app needed. |
 | `ratchet.mjs`, `ratchet.json` | ratchet | Ceilings on counts that can only go down, and the commands that check, lower and rebuild them. |
 | `ratchet-app.js`, `ops.mjs` | ratchet | The `launch` scenario the ratchet adds to js-bench, and the builtin-call counter micro-bench uses. |
+| `median.mjs`, `processes.mjs` | shared | The median the app benches and the gate report (session-save-bench keeps its own upper-middle sample), and the process-table helpers (a launched app's process tree, Chromium process kinds) the benches and the gate share. |
 
 Every bench that runs a copy of the app (js-bench, render-bench, census, native-bench, tab-actions) makes it with
 `prepareApp` in `scripts/lib/app-copy.mjs`: an APFS clone with the bundle swapped in, re-signed with the original's identity

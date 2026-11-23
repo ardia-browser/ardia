@@ -127,7 +127,7 @@ export function asksBeforeClosingLastTab(windowId: string) {
   return !!w && s.settings.warnBeforeClosingLastTab && w.kind !== "private" && unpinnedOpenTabIds(windowId).length > 0;
 }
 
-export const unpinnedOpenTabIds = (windowId: string) => {
+const unpinnedOpenTabIds = (windowId: string) => {
   const s = useBrowser.getState();
   return (s.windows[windowId]?.tabIds ?? []).filter((id) => !inPinnedContainer(s, id) && !isEmptyCardTab(s, s.tabs[id]));
 };

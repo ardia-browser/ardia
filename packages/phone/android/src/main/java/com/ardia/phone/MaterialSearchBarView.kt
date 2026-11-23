@@ -7,6 +7,7 @@ import android.os.SystemClock
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -44,9 +45,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.InterceptPlatformTextInput
 import androidx.compose.ui.platform.PlatformTextInputMethodRequest
@@ -461,13 +470,43 @@ private fun MaterialSearchBarContent(
                                 checkedContentColor = scheme.onPrimaryContainer,
                             ),
                         ) {
-                            Icon(
-                                imageVector = ArdiaSymbols.eyeglasses,
-                                contentDescription = if (incognito) "Deactivate Incognito" else "Activate Incognito",
-                                modifier = Modifier.size(20.dp),
-                            )
+                            SearchIncognitoEyes(incognito, if (incognito) scheme.onPrimaryContainer else inkVariant)
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchIncognitoEyes(incognito: Boolean, ink: Color) {
+    val label = if (incognito) "Deactivate Incognito" else "Activate Incognito"
+    Canvas(Modifier.size(26.dp).semantics { contentDescription = label }) {
+        scale(size.width / 24f, size.height / 24f, pivot = Offset.Zero) {
+            val onLight = ink.luminance() < 0.18f
+            for (center in listOf(7f, 17f)) {
+                if (incognito) {
+                    val eye = Path().apply {
+                        fillType = PathFillType.EvenOdd
+                        addOval(Rect(center - 4.2f, 5.8f, center + 4.2f, 18.2f))
+                        moveTo(center - 3.2f, 14f)
+                        quadraticTo(center, 18.6f, center + 3.2f, 14f)
+                        quadraticTo(center, 16.7f, center - 3.2f, 14f)
+                        close()
+                    }
+                    drawPath(eye, ink)
+                } else {
+                    val topLeft = Offset(center - 3.5f, 6.5f)
+                    val outlineSize = Size(7f, 11f)
+                    if (onLight) {
+                        drawOval(Color.White, topLeft, outlineSize)
+                        drawOval(ink, topLeft, outlineSize, style = Stroke(1.4f))
+                    } else {
+                        drawOval(ink, Offset(center - 4.2f, 5.8f), Size(8.4f, 12.4f))
+                    }
+                    drawCircle(if (onLight) ink else Color(0xff1c1d22), 2.5f, Offset(center - 1.4f, 12.6f))
+                    drawCircle(if (onLight) Color.White else ink, 0.6f, Offset(center - 2.2f, 11.7f))
                 }
             }
         }

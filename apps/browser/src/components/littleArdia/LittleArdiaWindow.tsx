@@ -32,7 +32,7 @@ import { HistoryButton } from "../toolbar/NavButtons";
 import { NAV_HINTS, useShortcutHints } from "../../state/commands/commandShortcuts";
 import { toolbarPalette } from "../ui/toolbarColors";
 import { useHistoryAvailability } from "../../state/tabs/navigation";
-import { LITTLE_ARDIA_PINCH, LITTLE_ARDIA_SWIPE_CLOSE, SMALL_FIELD_MAX_WIDTH, smallBarRow } from "./tokens";
+import { LITTLE_ARDIA_PINCH, LITTLE_ARDIA_SWIPE_CLOSE, smallBarRow } from "./tokens";
 import { perLook } from "../ui/tokens";
 import { keyText } from "../../state/commands/keyText";
 

@@ -20,6 +20,7 @@ import { liveOf, onLiveChange } from "../tabs/tabLive";
 import { capturing, whenCaptureEndsUnderHiddenCompleted } from "./captureEnds";
 import { during } from "../app/jobActivity";
 import { scrubTokens } from "../telemetry/sanitize";
+import { userClose, type ByUser } from "../tabs/closeActivation";
 
 const INTERVAL_MS: Record<LiveFolderKind, number> = { pullRequests: 3 * 60_000, documents: 10 * 60_000 };
 const STALE_ON_FOCUS_MS = 60_000;
@@ -279,10 +280,10 @@ export function returnLiveTab(tabId: string) {
   useBrowser.getState().returnToPinnedUrl(tabId);
 }
 
-export function deleteLiveFolder(folderId: string) {
+export function deleteLiveFolder(folderId: string, user?: ByUser) {
   const s = useBrowser.getState();
   const tabs = Object.values(s.tabs).filter((t) => t.liveItem?.folderId === folderId).map((t) => t.id);
-  if (tabs.length) s.closeTabs(tabs);
+  if (tabs.length) s.closeTabs(tabs, user ? userClose(tabs, user) : {});
   removeFolder(folderId);
 }
 

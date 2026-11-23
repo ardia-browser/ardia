@@ -1,6 +1,6 @@
 import type { BrowserCommand } from "../../platform/commands";
 
-export type CommandInteraction = "quiet" | "interactive" | "asksWhen";
+type CommandInteraction = "quiet" | "interactive" | "asksWhen";
 
 export const COMMAND_INTERACTION: Readonly<Record<BrowserCommand, CommandInteraction>> = {
   newTab: "quiet",

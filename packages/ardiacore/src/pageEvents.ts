@@ -98,7 +98,7 @@ type NativeEvents = {
   onFieldProviderHint: { state?: string };
   onVerificationCodeFound: VerificationCodeFound;
 };
-export type Handlers = keyof NativeEvents;
+type Handlers = keyof NativeEvents;
 export type PageEvent = { name: string; data: unknown };
 export type NativeProps = Omit<WebViewProps, Handlers> & { pageEvents: string[]; onPageEvent: (e: NativeSyntheticEvent<PageEvent>) => void };
 

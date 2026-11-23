@@ -4,7 +4,7 @@ import { pageBarConsent } from "../../lib/pluginPageBar";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
 import { contributionLines } from "./consentContributions";
 
-export type ConsentLine = { icon: string; text: string };
+type ConsentLine = { icon: string; text: string };
 
 const FIELD_WORDS: Record<PasswordField, string> = { login: "login", oneTimeCode: "verification code" };
 
@@ -76,7 +76,7 @@ function permissionLines(m: PluginManifest): ConsentLine[] {
   return lines;
 }
 
-export type ConsentContext = { controlOff?: boolean; official?: boolean; movesProfiles?: number; installed?: boolean };
+type ConsentContext = { controlOff?: boolean; official?: boolean; movesProfiles?: number; installed?: boolean };
 
 export const CONTROL_OFF_LINE = "Control is off, as you set it, and installing this leaves it off. To let programs drive Ardia, turn on “Let programs control Ardia” in Settings › Advanced";
 

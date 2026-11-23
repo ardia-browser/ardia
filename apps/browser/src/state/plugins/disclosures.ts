@@ -3,7 +3,7 @@ import { activeManifest, usePlugins, type PluginsStore } from "./store";
 import { OFFICIAL_CATALOGUE, OFFICIAL_TELEMETRY } from "./officialPin";
 import { useLegacyInstalls } from "./programRegistry";
 
-export type PluginDisclosure = { plugin: string; pluginTitle: string; title: string; items: string[]; official: boolean };
+type PluginDisclosure = { plugin: string; pluginTitle: string; title: string; items: string[]; official: boolean };
 
 const pinnedTitle = (name: string) => OFFICIAL_CATALOGUE.find((p) => p.name === name)?.title ?? name;
 

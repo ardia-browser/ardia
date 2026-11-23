@@ -7,9 +7,10 @@ import { tabDragOutside } from "../../state/drag/tabDrag";
 import { dragMarksOf, markDrag, type SplitHalfMark } from "../../state/sidebar/dragMarks";
 import { folderPanel } from "../../state/sidebar/tileFolderUi";
 import { overPins, pinGrid, pinGridHeight } from "./pinZone";
-import { boxed, type Drop, FOLDER_HOLD_MS, ROOM_SPRING, SPLIT_REST_SLOP, folderOf, inside, type Item, pinnedBlock, spring } from "./dragModel";
+import { boxed, type Drop, EDGE, FOLDER_HOLD_MS, ROOM_SPRING, SPLIT_REST_SLOP, folderOf, inside, type Item, pinnedBlock, tabCell } from "./dragModel";
 import { aimAt, type Pointing } from "./dragZones";
 import { DragGeometry } from "./dragGeometry";
+import { flushFolds, foldsFilling } from "./foldFlush";
 import { reorderTick } from "../../state/drag/reorderTick";
 import { entryKey } from "../../state/sidebar/entryKey";
 import { previewPaneSlot } from "./splitPaneGeometry";
@@ -60,7 +61,27 @@ export class DragTargeting extends DragGeometry {
     return siblings[siblings.indexOf(row) + 1]?.key === gapKey;
   }
 
-  protected room: { progress: Animated.Value; listener: string } | null = null;
+  protected room: { progress: Animated.Value; listener: string; moves: { value: Animated.Value; from: number; to: number }[] } | null = null;
+  windowId: string | null = null;
+
+  protected foldsPending() {
+    return foldsFilling(this.windowId);
+  }
+
+  protected async foldsSettled(current: () => boolean) {
+    await flushFolds(this.windowId!);
+    return current();
+  }
+
+  protected sourcesOf(item: Item, moving: string[]): Item[] {
+    return moving.length > 1 ? [...this.items.values()].filter((i) => tabCell(i) && i.tabIds.some((id) => moving.includes(id))) : [item];
+  }
+
+  releaseGap(item: Item) {
+    if (this.room) this.room.moves = this.room.moves.filter((m) => m.value !== item.gap);
+    item.gap.stopAnimation();
+    item.gap.setValue(0);
+  }
 
   protected stopRoom() {
     const room = this.room;
@@ -84,14 +105,14 @@ export class DragTargeting extends DragGeometry {
     if (!this.crossed) for (const s of sources) if (s.kind !== "tile") add(s.size, 0);
     if (!moves.length) return;
     const progress = new Animated.Value(0);
-    const listener = progress.addListener(({ value }) => {
-      for (const m of moves) m.value.setValue(m.from + (m.to - m.from) * value);
+    const room = (this.room = { progress, listener: "", moves });
+    room.listener = progress.addListener(({ value }) => {
+      for (const m of room.moves) m.value.setValue(m.from + (m.to - m.from) * value);
     });
-    const room = (this.room = { progress, listener });
     Animated.spring(progress, { toValue: 1, ...ROOM_SPRING }).start(({ finished }) => {
       if (this.room !== room) return;
       this.stopRoom();
-      if (finished) for (const m of moves) m.value.setValue(m.to);
+      if (finished) for (const m of room.moves) m.value.setValue(m.to);
     });
   }
 
@@ -108,6 +129,22 @@ export class DragTargeting extends DragGeometry {
       hold.ready = target.key;
       this.retarget();
     }, FOLDER_HOLD_MS);
+  }
+
+  protected autoScroll(y: number | null) {
+    const session = this.drag;
+    const v = session.viewport;
+    const speed = !v || y === null ? 0 : y < v.y + EDGE ? -Math.ceil((v.y + EDGE - y) / 4) : y > v.y + v.h - EDGE ? Math.ceil((y - (v.y + v.h - EDGE)) / 4) : 0;
+    clearInterval(session.scrollTimer);
+    session.scrollTimer = undefined;
+    if (!speed || !this.scroll) return;
+    session.scrollTimer = setInterval(() => {
+      const next = Math.max(0, this.scrollY + speed);
+      if (next === this.scrollY) return;
+      this.scroll?.scrollTo({ y: next, animated: false });
+      this.scrollY = next;
+      this.retarget();
+    }, 16);
   }
 
   protected retarget() {

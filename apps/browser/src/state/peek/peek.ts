@@ -12,11 +12,11 @@ import { pinnedGroupMembers } from "../browser/structure";
 import { orderSections } from "../groups/groups";
 import { withoutFragment } from "../../lib/url";
 
-export type PeekPoint = { x: number; y: number };
+type PeekPoint = { x: number; y: number };
 export type SiteLanding = { host: string; until: number; then: "tab" | "source" };
 export type Peek = { tabId: string; sourceId: string; sourcePage: string; from: PeekPoint | null; landing?: SiteLanding };
-export type PeekOptions = { adoptId?: AdoptId; landing?: SiteLanding };
-export type PeekToTabOptions = { activate?: boolean; sourceId?: string };
+type PeekOptions = { adoptId?: AdoptId; landing?: SiteLanding };
+type PeekToTabOptions = { activate?: boolean; sourceId?: string };
 
 export type PeekSlice = {
   peeks: Record<string, Peek>;

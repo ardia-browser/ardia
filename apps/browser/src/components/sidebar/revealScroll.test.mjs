@@ -304,3 +304,98 @@ test("a reveal while the launch holds this window's rows lets them in before it 
   watching();
   launch.resetLaunchRowsForTests();
 });
+
+test("a tab reveal finishes the folds still filling in, so the row it scrolls to is mounted", async () => {
+  const { fillingFold } = await import("./foldFlush.ts");
+  const ids = S().windows[w].tabIds;
+  const g = { current: { viewport: 300, regions: { pinnedGroups: 0, list: 0 }, newTabAtTop: false, tilesFixed: false } };
+  const watching = startRevealTabs(w, { current: { scrollTo() {} } }, { current: 0 }, g);
+  runFrames();
+  S().activate(ids[0]);
+  runFrames();
+  let flushed = 0;
+  const stop = fillingFold(w, () => {
+    flushed++;
+    stop();
+  });
+  S().activate(ids[45]);
+  runFrames();
+  stop();
+  watching();
+  assert.equal(flushed, 1);
+});
+
+test("a reveal that has to scroll waits for the window's folds to finish first, and one already in view doesn't touch them", async () => {
+  const { fillingFold } = await import("./foldFlush.ts");
+  const ids = S().windows[w].tabIds;
+  const asked = [];
+  const g = { current: { viewport: 300, regions: { pinnedGroups: 0, list: 0 }, newTabAtTop: false, tilesFixed: false } };
+  const watching = startRevealTabs(w, { current: { scrollTo: (move) => asked.push(move) } }, { current: 0 }, g);
+  runFrames();
+  S().activate(ids[0]);
+  runFrames();
+  asked.length = 0;
+  let flushed = 0;
+  const other = fillingFold("another-window", () => flushed++);
+  let stop = fillingFold(w, () => {
+    flushed++;
+    stop();
+  });
+  S().activate(ids[1]);
+  runFrames();
+  assert.equal(flushed, 0, "a row already in view needs no flush, here or in another window");
+  S().activate(ids[45]);
+  runFrames();
+  assert.equal(flushed, 1);
+  assert.equal(asked.length, 0, "the scroll waits for the fold to finish");
+  for (let i = 0; i < 4; i++) {
+    await Promise.resolve();
+    runFrames();
+  }
+  await new Promise((done) => setTimeout(done, 0));
+  assert.equal(asked.length, 1);
+  other();
+  watching();
+});
+
+test("R5-S2/S3: a reveal deferred behind a flush redoes its sums afterwards, and gives up after a newer pick, a scroll or a close", async () => {
+  const { fillingFold } = await import("./foldFlush.ts");
+  const ids = S().windows[w].tabIds;
+  const settle = async () => {
+    for (let i = 0; i < 6; i++) {
+      await Promise.resolve();
+      runFrames();
+    }
+    await new Promise((done) => setTimeout(done, 0));
+  };
+  const run = async ({ moveList = 0, between = () => false } = {}) => {
+    const asked = [];
+    const at = { current: 0 };
+    const g = { current: { viewport: 300, regions: { pinnedGroups: 0, list: 0 }, newTabAtTop: false, tilesFixed: false } };
+    const watching = startRevealTabs(w, { current: { scrollTo: (move) => asked.push(move) } }, at, g);
+    runFrames();
+    S().activate(ids[0]);
+    runFrames();
+    asked.length = 0;
+    const stop = fillingFold(w, () => {
+      g.current.regions.list = moveList;
+      stop();
+    });
+    S().activate(ids[45]);
+    runFrames();
+    const closed = between({ at, watching });
+    await settle();
+    if (!closed) watching();
+    return asked;
+  };
+  const still = await run();
+  assert.equal(still.length, 1);
+  const moved = await run({ moveList: 500 });
+  assert.equal(moved.length, 1);
+  assert.equal(moved[0].y, still[0].y + 500, "the scroll is worked out once the fold has settled");
+  assert.equal((await run({ between: () => (S().activate(ids[2]), false) })).filter((m) => m.y === still[0].y).length, 0, "a newer pick wins");
+  assert.equal((await run({ between: ({ at }) => ((at.current = 40), false) })).length, 0, "the user's scroll wins");
+  assert.equal((await run({ between: ({ watching }) => (watching(), true) })).length, 0, "a closed window scrolls nothing");
+  S().activate(ids[0]);
+  runFrames();
+});

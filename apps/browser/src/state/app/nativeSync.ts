@@ -45,7 +45,7 @@ import { startCaptionRegionSync } from "../windows/captionRegions";
 const QUIT_SAVES_WAIT_MS = 3_000;
 
 
-export const shellWindowPort: WindowPort = {
+const shellWindowPort: WindowPort = {
   open(id, options, lightsCenter) {
     if (options.maximized) noteWindowReopenedMaximized();
     void setTrafficLightsCenter(id, lightsCenter);
@@ -65,7 +65,8 @@ export function startNativeSync() {
   cancelAbandonedFocusMoves();
   onCommand((e) => {
     if (e.mouseButton) noteMouseShortcutRun(e.mouseButton, nativeConsent(e));
-    settlingCommandFocus(e, runCommand);
+    const user = { consent: nativeConsent(e) };
+    settlingCommandFocus(e, (event) => runCommand(event, { user }));
   });
   startWindowCloseGuard();
   startExtensionsBridge();

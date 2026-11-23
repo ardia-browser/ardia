@@ -15,8 +15,8 @@ test("a scroll counts once, its updates more than 34 ms apart count as stutters,
   noteNewTabDocked(true);
   noteNewTabDocked(false);
   noteNewTabDocked(true);
-  assert.deepEqual(takeSidebarResizeCounts(), { sidebar_resizes: 0, sidebar_scrolls: 2, sidebar_scroll_stalls: 1, sidebar_scroll_held_hovers: 1, sidebar_scroll_held_teardowns: 1, sidebar_new_tab_docks: 2, sidebar_new_tab_undocks: 1 });
-  assert.deepEqual(takeSidebarResizeCounts(), { sidebar_resizes: 0, sidebar_scrolls: 0, sidebar_scroll_stalls: 0, sidebar_scroll_held_hovers: 0, sidebar_scroll_held_teardowns: 0, sidebar_new_tab_docks: 0, sidebar_new_tab_undocks: 0 });
+  assert.deepEqual(takeSidebarResizeCounts(), { sidebar_resizes: 0, sidebar_scrolls: 2, sidebar_scroll_stalls: 1, sidebar_scroll_held_hovers: 1, sidebar_scroll_held_teardowns: 1, sidebar_new_tab_docks: 2, sidebar_new_tab_undocks: 1, sidebar_folds: 0, sidebar_fold_stutters: 0, sidebar_fold_overruns: 0 });
+  assert.deepEqual(takeSidebarResizeCounts(), { sidebar_resizes: 0, sidebar_scrolls: 0, sidebar_scroll_stalls: 0, sidebar_scroll_held_hovers: 0, sidebar_scroll_held_teardowns: 0, sidebar_new_tab_docks: 0, sidebar_new_tab_undocks: 0, sidebar_folds: 0, sidebar_fold_stutters: 0, sidebar_fold_overruns: 0 });
   setConsentPeriod(false, null);
   noteSidebarTeardownHeld();
   assert.equal(takeSidebarResizeCounts().sidebar_scroll_held_teardowns, 0);

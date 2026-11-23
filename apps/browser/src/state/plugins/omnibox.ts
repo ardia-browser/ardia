@@ -8,17 +8,17 @@ import { warnFor } from "../telemetry/consoleConsent";
 import { activeManifest, currentPlugins, usePlugins } from "./store";
 import { invokePluginCall } from "./tools";
 
-export const OMNIBOX_TIMEOUT_MS = 1500;
-export const OMNIBOX_LIMITS = { rows: 8, title: 120, subtitle: 200, badge: 20, query: 500 } as const;
+const OMNIBOX_TIMEOUT_MS = 1500;
+const OMNIBOX_LIMITS = { rows: 8, title: 120, subtitle: 200, badge: 20, query: 500 } as const;
 
 const UNSAFE = /[\u0000-\u001f\u007f-\u009f؜‎‏‪-‮⁦-⁩]/g;
 const SYMBOL = /^[a-z0-9.]{1,64}$/;
 
-export const pluginProviderId = (plugin: string, id: string) => `plugin:${plugin}:${id}`;
+const pluginProviderId = (plugin: string, id: string) => `plugin:${plugin}:${id}`;
 
 const cleanText = (value: unknown, max: number) => (typeof value === "string" ? value.replace(UNSAFE, "").trim().slice(0, max) : "");
 
-export function sanitizedRows(result: unknown): ProviderRow[] {
+function sanitizedRows(result: unknown): ProviderRow[] {
   const raw = Array.isArray(result) ? result : isFields(result) && Array.isArray(result.suggestions) ? result.suggestions : [];
   const rows: ProviderRow[] = [];
   for (const value of raw) {
@@ -57,7 +57,7 @@ function providerFor(plugin: string, spec: OmniboxSpec): OmniboxProvider & { glo
 
 const registered = new Map<string, { revision: string; unregister: () => void }>();
 
-export function reconcilePluginOmnibox(consent: ConsentToken | null) {
+function reconcilePluginOmnibox(consent: ConsentToken | null) {
   const s = currentPlugins();
   const wanted = new Map<string, { plugin: string; spec: OmniboxSpec; revision: string }>();
   for (const plugin of s.order) {
@@ -79,8 +79,6 @@ export function reconcilePluginOmnibox(consent: ConsentToken | null) {
     }
   }
 }
-
-export const registeredPluginProviders = () => [...registered.keys()];
 
 let watching = false;
 

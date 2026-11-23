@@ -2,14 +2,17 @@ import { onConsentPeriodChange, stillValid, type ConsentToken } from "./choice";
 import { consentOrNow, countFor } from "./countFor";
 import { SOCKET_FAMILIES, type SocketFamily } from "../automation/socketCatalog";
 
-export const TOKEN_COMMAND_DOMAINS = ["accessibility", "browser", "dom", "emulation", "fetch", "input", "network", "page", "runtime", "storage", "target", "other"] as const;
-export type TokenCommandDomain = (typeof TOKEN_COMMAND_DOMAINS)[number];
+const TOKEN_COMMAND_DOMAINS = ["accessibility", "browser", "dom", "emulation", "fetch", "input", "network", "page", "runtime", "storage", "target", "other"] as const;
+type TokenCommandDomain = (typeof TOKEN_COMMAND_DOMAINS)[number];
 type TokenCommandTotals = Partial<Record<TokenCommandDomain, number>>;
 
 export type CliInstallReason = "auto" | "settings" | "upgrade";
 
-export const DOORBELL_OUTCOMES = ["once", "half_hour", "always", "deny", "unshown", "timeout", "left", "stopped", "unsaved"] as const;
+const DOORBELL_OUTCOMES = ["once", "half_hour", "always", "deny", "unshown", "timeout", "left", "stopped", "unsaved"] as const;
 export type DoorbellOutcome = (typeof DOORBELL_OUTCOMES)[number];
+
+const DEVTOOLS_ENDPOINT_OUTCOMES = ["given", "control_off", "unsupported", "server_off", "unreadable", "stale", "left"] as const;
+export type DevtoolsEndpointOutcome = (typeof DEVTOOLS_ENDPOINT_OUTCOMES)[number];
 
 const NONE = {
   cli_pill_shows: 0,
@@ -28,6 +31,7 @@ const NONE = {
   cli_socket_password_manager_refusals: 0,
   cli_socket_doorbells_shown: 0,
   ...(Object.fromEntries(DOORBELL_OUTCOMES.map((outcome) => [`cli_socket_doorbell_${outcome}`, 0])) as Record<`cli_socket_doorbell_${DoorbellOutcome}`, number>),
+  ...(Object.fromEntries(DEVTOOLS_ENDPOINT_OUTCOMES.map((outcome) => [`cli_socket_devtools_endpoint_${outcome}`, 0])) as Record<`cli_socket_devtools_endpoint_${DevtoolsEndpointOutcome}`, number>),
   ...(Object.fromEntries(SOCKET_FAMILIES.map((family) => [`cli_socket_calls_${family}`, 0])) as Record<`cli_socket_calls_${SocketFamily}`, number>),
   ...(Object.fromEntries(TOKEN_COMMAND_DOMAINS.map((domain) => [`cli_cdp_commands_${domain}`, 0])) as Record<`cli_cdp_commands_${TokenCommandDomain}`, number>),
 };
@@ -57,6 +61,8 @@ export const noteSocketPasswordManagerRefused = (consent: ConsentToken | null) =
   countFor(consentOrNow(consent), () => void counts.cli_socket_password_manager_refusals++);
 export const noteDoorbellShown = (consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void counts.cli_socket_doorbells_shown++);
 export const noteDoorbellOutcome = (outcome: DoorbellOutcome, consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void counts[`cli_socket_doorbell_${outcome}`]++);
+export const noteDevtoolsEndpoint = (outcome: DevtoolsEndpointOutcome, consent?: ConsentToken | null) =>
+  countFor(consentOrNow(consent), () => void counts[`cli_socket_devtools_endpoint_${outcome}`]++);
 export const noteCliAutoEnabled = () => void counts.cli_auto_enables++;
 
 let windowlessBaselineStale = false;

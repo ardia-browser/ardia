@@ -8,7 +8,7 @@ import type { LaunchArguments } from "./launchLinks/addresses";
 import type { SyncContract, VaultNative } from "./sync/vault";
 import type { DropAreaFrame } from "./views/fileDropAreas";
 
-export type WindowFade = {
+type WindowFade = {
   animates: boolean;
   exists: boolean;
   visible?: boolean;
@@ -19,11 +19,11 @@ export type WindowFade = {
   pageWindows?: number;
 };
 
-export type DragRegions = { rootTag: number; scale: number; nonClient: boolean; kind: string; titleBand: string; maximized: boolean; titleBarHeight: number; caption: number[][]; passthrough: number[][] };
+type DragRegions = { rootTag: number; scale: number; nonClient: boolean; kind: string; titleBand: string; maximized: boolean; titleBarHeight: number; caption: number[][]; passthrough: number[][] };
 
-export type SidebarEdgeWatch = { running: boolean; windows: string[] };
+type SidebarEdgeWatch = { running: boolean; windows: string[] };
 
-export type AppWindowsOnWindows = {
+type AppWindowsOnWindows = {
   quit(): Promise<void>;
   requestClose(id: string): Promise<void>;
   setPageFullScreen(windowId: string, on: boolean): Promise<unknown>;
@@ -39,9 +39,9 @@ export type AppWindowsOnWindows = {
 
 export type AppWindowsModule = WindowsNative & WindowControlsNative & AppWindowsOnWindows;
 
-export type DropTargetReport = { ole: boolean; registered: boolean; windows: number; replaced: number; areas: number; childClasses: string[] };
+type DropTargetReport = { ole: boolean; registered: boolean; windows: number; replaced: number; areas: number; childClasses: string[] };
 
-export type FileDropOnWindows = {
+type FileDropOnWindows = {
   setDropArea(frame: DropAreaFrame): void;
   removeDropArea(windowId: string, area: string): void;
   addListener(event: "onWindowDrop" | "onWindowDrag", listener: (payload: unknown) => void): EventSubscription;
@@ -55,7 +55,7 @@ export type MenusModule = MenusNative & { activeShortcuts(): Promise<Record<stri
 
 export type NotificationsModule = NotificationsNative & { notificationCenterPath(): string };
 
-export type DefaultBrowserState = { progId: string; command: string | null; registeredHere: boolean; http: string | null; https: string | null; page: string; isDefault: boolean };
+type DefaultBrowserState = { progId: string; command: string | null; registeredHere: boolean; http: string | null; https: string | null; page: string; isDefault: boolean };
 
 export type SystemModule = SystemNative & { defaultBrowserState(): DefaultBrowserState };
 
@@ -114,7 +114,7 @@ export type DialogsModule = DialogsNative & {
 
 export type SystemSignalsModule = SystemSignalsNative & { powerState(): PowerReading };
 
-export type SyncFolderState = Pick<FolderInfo, "exists" | "writable" | "hasSyncData">;
+type SyncFolderState = Pick<FolderInfo, "exists" | "writable" | "hasSyncData">;
 
 export type WindowsSyncModule = TurboModule &
   VaultNative &

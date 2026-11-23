@@ -50,5 +50,5 @@ export async function showAppMenu(windowId: string) {
   const choice = await showMenu(appMenuItems(useBrowser.getState(), windowId));
   if (!choice || runBrowserLayoutChoice(windowId, choice, consent)) return;
   if (choice === CHECK_FOR_UPDATES) return void checkForUpdates();
-  runCommand({ command: choice as Listed, arg: null, windowId });
+  runCommand({ command: choice as Listed, arg: null, windowId }, { user: { consent } });
 }

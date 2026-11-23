@@ -8,8 +8,8 @@ type Link = { readonly from: number; readonly ids: readonly string[] };
 type KeyOrder = { readonly base: ReadonlyMap<string, number>; readonly appended: readonly string[]; readonly dropped: number };
 
 export const LINKS_KEPT = 8;
-export const LINKED_IDS_MAX = 256;
-export const APPENDED_KEPT = 64;
+const LINKED_IDS_MAX = 256;
+const APPENDED_KEPT = 64;
 
 const stamps = new WeakMap<object, number>();
 const chains = new WeakMap<object, readonly Link[]>();

@@ -4,7 +4,7 @@ import { activeTabId } from "../browser/model";
 import { navigationOf } from "../tabs/pageSession";
 import { onLiveChange } from "../tabs/tabLive";
 
-export const GESTURE_WINDOW_MS = 30_000;
+const GESTURE_WINDOW_MS = 30_000;
 
 export type Gesture = { id: number; windowId: string; tabId: string | null; doc: string | null; at: number };
 

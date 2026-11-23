@@ -11,6 +11,7 @@ import { Box, Button, space, Text, Toggle } from "../../ui";
 import { Favicon } from "../../favicon/Favicon";
 import { Group, Row, SectionHeader } from "../Form";
 import { ConnectAccountSheet } from "./ConnectAccountSheet";
+import { consentToken } from "../../../state/telemetry/client";
 
 const ACCOUNTS: LiveSourceId[] = ["github", "bitbucket", "notion", "confluence", "gdrive"];
 
@@ -60,7 +61,7 @@ function FolderGroup({ folder, profileName }: { folder: LiveFolder; profileName:
       <Row title={folder.name} description={`${profileName} · ${folder.sources.map((s) => SOURCES[s].name).join(", ")} · ${statusText(folder.id)}`}>
         <Box row gap="s">
           <Button title="Refresh" onPress={() => void manualRefresh(folder.id)} />
-          <Button title="Delete" kind="destructive" onPress={() => deleteLiveFolder(folder.id)} />
+          <Button title="Delete" kind="destructive" onPress={() => deleteLiveFolder(folder.id, { consent: consentToken() })} />
         </Box>
       </Row>
       {folder.kind === "pullRequests"

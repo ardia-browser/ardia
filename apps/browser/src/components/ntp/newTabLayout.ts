@@ -1,7 +1,7 @@
 export const DIA_OFFSET = 1;
 export const MARK_ABOVE_BAR = 84.1;
-export const HEADING_GAP_ABOVE_MARK = 12;
-export const HEADING_EDGE = 16;
+const HEADING_GAP_ABOVE_MARK = 12;
+const HEADING_EDGE = 16;
 
 const CENTRE_LIFT = 158;
 const MIN_CENTRED_TOP = 100;
@@ -12,7 +12,7 @@ export function newTabBarTop(height: number, under: number, headingHeight = 0): 
   return Math.max(centred, under + headingTopReserve(headingHeight));
 }
 
-export function headingTopReserve(headingHeight: number): number {
+function headingTopReserve(headingHeight: number): number {
   return headingHeight ? HEADING_EDGE + headingHeight + HEADING_GAP_ABOVE_MARK + MARK_ABOVE_BAR : 0;
 }
 

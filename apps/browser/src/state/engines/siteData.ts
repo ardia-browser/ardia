@@ -11,7 +11,7 @@ import { noteSiteDataGate } from "../telemetry/siteDataCounts";
 import { consentToken } from "../telemetry/client";
 import { nativeConsent } from "../telemetry/nativeConsent";
 
-export { carriesSiteData, carryForTab, carryRecentSites, carrySite, type CarryOptions } from "./siteDataCarry";
+export { carriesSiteData, carryForTab, carryRecentSites, carrySite } from "./siteDataCarry";
 export { clearSiteDataEverywhere, forgetSiteDataProfile, whileClearingSiteData } from "./siteDataState";
 
 const GATE_DEADLINE_MS = 450;

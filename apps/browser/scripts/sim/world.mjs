@@ -32,7 +32,7 @@ export const ACTION_WEIGHTS = {
   quitRelaunch: 1,
 };
 
-export const PICKS_PER_STEP = 4;
+const PICKS_PER_STEP = 4;
 
 export function installClock() {
   const clock = { now: Date.UTC(2026, 10, 20, 12) };
@@ -40,7 +40,7 @@ export function installClock() {
   return clock;
 }
 
-export const VIRTUAL_TIMER_MS = 20;
+const VIRTUAL_TIMER_MS = 20;
 
 const shortTimers = [];
 

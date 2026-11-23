@@ -9,12 +9,12 @@ import { OpError } from "./workspaceTargets";
 import { runMethod } from "./controlSocket";
 import { backgroundInstance } from "../app/appSettings";
 
-export const NO_SUCH_MENU = "There's no open menu with that id; menus.open lists them.";
-export const CAPTURED_PICK_NEEDS_ENGINE =
+const NO_SUCH_MENU = "There's no open menu with that id; menus.open lists them.";
+const CAPTURED_PICK_NEEDS_ENGINE =
   "A captured page menu is listed only: picking from it waits for engine support that runs the item for the frame the menu came from (runContextMenuCommand in ac_context_menu.mm).";
-export const PRIVATE_WINDOW_OPEN = "A private window is open, so the ardia command doesn't use the menu bar until it closes.";
-export const NATIVE_ITEMS_NEED_VISIBLE = "A background Ardia runs no native menu item (Minimize, Zoom and the like), and run refuses every command there, so menus.runBar runs nothing in it.";
-export const DYNAMIC_ROW_REFUSED = "That row stands for a menu built from open windows, profiles, pages or history, which the ardia command doesn't read or run.";
+const PRIVATE_WINDOW_OPEN = "A private window is open, so the ardia command doesn't use the menu bar until it closes.";
+const NATIVE_ITEMS_NEED_VISIBLE = "A background Ardia runs no native menu item (Minimize, Zoom and the like), and run refuses every command there, so menus.runBar runs nothing in it.";
+const DYNAMIC_ROW_REFUSED = "That row stands for a menu built from open windows, profiles, pages or history, which the ardia command doesn't read or run.";
 
 const privateOpen = (s: BrowserState) => Object.values(s.windows).some((w) => w.kind === "private");
 
@@ -34,7 +34,7 @@ function catalogItem(items: SurfaceItem[], ref: string): SurfaceItem | undefined
   return undefined;
 }
 
-export function visibleSurface(s: BrowserState, surface: OpenSurface): (Omit<OpenSurface, "window" | "tab"> & { window: string; tab: string | null }) | null {
+function visibleSurface(s: BrowserState, surface: OpenSurface): (Omit<OpenSurface, "window" | "tab"> & { window: string; tab: string | null }) | null {
   if (surface.kind !== "page" || surface.captured !== true) return null;
   const window = surface.window;
   const tab = surface.tab;

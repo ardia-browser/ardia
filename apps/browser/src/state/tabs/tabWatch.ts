@@ -133,23 +133,6 @@ export function useLookValue<T>(profileId: string, look: Look<T>): T {
   return useSyncExternalStore(watchLooks, get);
 }
 
-type Settings = BrowserState["settings"];
-
-function settingSnapshot<T>(select: (settings: Settings) => T): () => T {
-  let seen: { settings: Settings; value: T } | null = null;
-  return () => {
-    const settings = useBrowser.getState().settings;
-    if (seen && seen.settings === settings) return seen.value;
-    seen = { settings, value: select(settings) };
-    return seen.value;
-  };
-}
-
-export function useSettingValue<T>(select: (settings: Settings) => T): T {
-  const get = useMemo(() => settingSnapshot(select), [select]);
-  return useSyncExternalStore(watchLooks, get);
-}
-
 export function useStoreWhile<S, T>(store: Readable<S>, live: boolean, select: (s: S) => T): T {
   return useSyncExternalStore(live ? subscribeOf(store) : inert, () => select(store.getState()));
 }

@@ -10,16 +10,16 @@ import { canShare, shareTab } from "../site/share";
 import { copyPageUrl } from "../site/selection";
 import type { Tab } from "../browser/types";
 
-export async function clipboardPasteAction(): Promise<PasteAction | null> {
+async function clipboardPasteAction(): Promise<PasteAction | null> {
   return classifyPaste(await readText());
 }
 
-export function pasteMenuItem(action: PasteAction | null): MenuItem[] {
+function pasteMenuItem(action: PasteAction | null): MenuItem[] {
   if (!action) return [];
   return [{ id: "pasteAndGo", title: action.kind === "go" ? "Paste and Go" : "Paste and Search", symbol: action.kind === "go" ? "arrow.right.circle" : "magnifyingglass" }];
 }
 
-export function pasteTarget(action: PasteAction): string {
+function pasteTarget(action: PasteAction): string {
   return action.kind === "go" ? action.url : searchUrl(defaultSearchEngine(currentSettings()), action.query);
 }
 
@@ -59,7 +59,7 @@ export function fieldMenuItems({ paste, hasSelection, hasText }: { paste: PasteA
   );
 }
 
-export type FieldMenuPick = { kind: "go"; url: string } | { kind: "edit"; text: string; caret: number } | { kind: "selectAll" } | null;
+type FieldMenuPick = { kind: "go"; url: string } | { kind: "edit"; text: string; caret: number } | { kind: "selectAll" } | null;
 
 export function copyFieldSelection(value: string, start: number, end: number, fullUrl: string | null) {
   if (fullUrl && start === 0 && end === value.length) return copyUncleanedUrl(fullUrl);

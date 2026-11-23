@@ -3,7 +3,7 @@ import { SyncNative } from "../../platform/sync";
 
 export type { FolderInfo } from "../../platform/sync";
 
-export type RecoveryPhrase = Secret<"syncPhrase">;
+type RecoveryPhrase = Secret<"syncPhrase">;
 
 export async function recoveryWords(): Promise<RecoveryPhrase | null> {
   const words = await SyncNative?.recoveryWords();

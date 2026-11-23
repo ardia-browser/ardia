@@ -796,6 +796,7 @@ export const accentGlowCss = (accent: string) => {
 const dynamicColor = (light: string, dark: string) => ({ dynamic: { light, dark } });
 
 export const nativeClassicChrome = {
+  fill: dynamicColor(chromeInk.light.surface, chromeInk.dark.surface),
   edgeWidth: stroke.chrome,
   edge: dynamicColor(chromeInk.light.edge, chromeInk.dark.edge),
   shadowRadius: nativeShadowRadius("control"),

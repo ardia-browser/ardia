@@ -58,6 +58,7 @@ const VETO_FIELDS: Partial<Record<SleepVeto, string>> = {
   typedInput: "sleep_kept_typed_input",
   postedDocument: "sleep_kept_posted_document",
   beforeUnload: "sleep_kept_before_unload",
+  download: "sleep_kept_download",
   other: "sleep_kept_other",
 };
 

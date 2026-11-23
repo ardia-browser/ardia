@@ -59,7 +59,7 @@ export function onProfilesUnloaded(listener: (engines: string[]) => void): () =>
   });
 }
 
-export const loadsProfilesWhenOpened = (s: Pick<BrowserState, "settings">) => s.settings.loadProfilesWhenOpened && switchOn("lazyProfiles");
+const loadsProfilesWhenOpened = (s: Pick<BrowserState, "settings">) => s.settings.loadProfilesWhenOpened && switchOn("lazyProfiles");
 
 export function startProfileLoading(): () => void {
   const s = useBrowser.getState();

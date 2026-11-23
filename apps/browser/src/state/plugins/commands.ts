@@ -19,12 +19,12 @@ import { notePluginGesture } from "./gestures";
 import { openPluginPanel } from "./panels";
 import { openPluginCommandView } from "./surfaces";
 
-export const PLUGIN_ACTION_PREFIX = "plugin:";
-export const COMMAND_TIMEOUT_MS = 30_000;
+const PLUGIN_ACTION_PREFIX = "plugin:";
+const COMMAND_TIMEOUT_MS = 30_000;
 const MESSAGE_LIMIT = 200;
 const PAGE_ACTION = ":page";
 
-export function windowWhenContext(windowId: string, s: BrowserState = useBrowser.getState()): WhenContext {
+function windowWhenContext(windowId: string, s: BrowserState = useBrowser.getState()): WhenContext {
   const tabId = activeTabId(s, windowId);
   const tab = tabId ? s.tabs[tabId] : undefined;
   const parts = tab ? urlParts(tab.url) : null;

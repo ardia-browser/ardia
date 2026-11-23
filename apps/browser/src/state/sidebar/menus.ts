@@ -9,6 +9,7 @@ import { setSidebarUi } from "./sidebarUi";
 import { cleanUpWithUndo, closeAllTabs } from "./clearTabs";
 import { sections, sep } from "./menuParts";
 import { clearableRecentlyClosed, closedWindowTitle } from "../windows/recentlyClosedList";
+import { consentToken } from "../telemetry/client";
 
 export { openTabMenu } from "./tabMenu";
 export { openGroupMenu } from "./groupMenu";
@@ -19,6 +20,7 @@ const store = () => useBrowser.getState();
 type OverflowChoice = { open: string } | { restore: string } | { cleaned: string };
 
 export async function openOverflowMenu(windowId: string, onOpenTabPicked?: () => void) {
+  const consent = consentToken();
   const s = store();
   const w = s.windows[windowId];
   if (!w) return;
@@ -81,5 +83,5 @@ export async function openOverflowMenu(windowId: string, onOpenTabPicked?: () =>
   else if (choice === "restoreAll") s.restoreCleaned(undefined, windowId);
   else if (choice === "clearClosed") s.clearRecentlyClosed(windowId);
   else if (choice === "clean") cleanUpWithUndo(windowId);
-  else if (choice === "closeAll") closeAllTabs(windowId);
+  else if (choice === "closeAll") closeAllTabs(windowId, { consent });
 }

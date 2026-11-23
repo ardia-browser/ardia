@@ -3,7 +3,7 @@ import { consentOrNow, countFor } from "./countFor";
 
 const counts = { opened: 0, folded: 0 };
 
-export type SwipeHistoryListStep = keyof typeof counts;
+type SwipeHistoryListStep = keyof typeof counts;
 
 export const noteSwipeHistoryList = (step: SwipeHistoryListStep, consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void (counts[step] += 1));
 

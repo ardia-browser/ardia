@@ -7,8 +7,8 @@ import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { navigationOf } from "./pageSession";
 import { onLiveChange, shownLiveOf } from "./tabLive";
 
-export const NEW_TAB_KEPT_MAX_MS = 1500;
-export const NEW_TAB_DROP_AFTER_LOAD_MS = 100;
+const NEW_TAB_KEPT_MAX_MS = 1500;
+const NEW_TAB_DROP_AFTER_LOAD_MS = 100;
 
 type Load = { seq: number; ended: boolean };
 const loads = new Map<string, Load>();

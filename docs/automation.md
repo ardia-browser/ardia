@@ -63,7 +63,9 @@ Issue #717. Config files and themes are `docs/config.md`; page scripting over CD
   across stop and start); one that takes over 10 s is refused. When the JS bridge changes (a reload), its open asks
   end and Ardia takes their sheets away natively.
   What it doesn't stop: a process of the user's can still run the bundled `ardia` (or its signed runtime) itself and
-  get in as it does, can still read `ArdiaControl.json` for the token connection (`docs/cli.md`), and can write its
+  get in as it does, can still read `ArdiaControl.json` for the token connection until the engine stops writing the token there (the
+  socket's `control.devtoolsEndpoint` hands it only to programs let in, and the command will move to it;
+  `docs/control-socket.md` › The DevTools token), and can write its
   own entry into `ArdiaControlApprovals.json` (the file is the user's, and its entries carry no signature). The doorbell is
   so a program never drives Ardia without the user seeing its name, not a wall against malware running as the user.
 - **Test instances keep the old rule.** A test instance (a build not signed for distribution with a scratch

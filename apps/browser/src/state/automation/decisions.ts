@@ -94,7 +94,7 @@ export function traceOpening(url: string): OpeningTrace {
   return { by: "none" };
 }
 
-export type LinkSource = SourceInfo;
+type LinkSource = SourceInfo;
 export type LinkVerdict = { drop: true } | LinkRoute;
 type LinkRoute = { profileId: string | null; open: OpenAs | null; windowId: string | null; groupKey: string | null };
 
@@ -184,12 +184,12 @@ export function decidePermission(request: { tabId: string | null; origin: string
   return verdict ?? "ask";
 }
 
-export function downloadFolderAllowed(folder: string, approvedFolders: readonly string[]): boolean {
+function downloadFolderAllowed(folder: string, approvedFolders: readonly string[]): boolean {
   if (!folder.startsWith("~/") || folder.split("/").some((part) => part === ".." || part === "." || part === "")) return false;
   return isInsideDownloads(folder) || approvedFolders.some((f) => folder === f || folder.startsWith(`${f}/`));
 }
 
-export type FinishedDownload = { url: string; filename: string; mimeType: string; size: number; path: string; profile: string | null };
+type FinishedDownload = { url: string; filename: string; mimeType: string; size: number; path: string; profile: string | null };
 
 const originOf = (url: string) => {
   const parts = urlParts(url);

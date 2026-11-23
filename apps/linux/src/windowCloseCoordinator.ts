@@ -5,11 +5,11 @@ import type { DialogSuspension } from "./hostDialogs";
 import { validCloseRequest, closeIdentity, type WindowCloseRequest } from "./utilityClose";
 
 type CloseAnswer = Awaited<ReturnType<DialogsNative["confirm"]>>;
-export type AbortableAsk = (options: ConfirmOptions, signal: AbortSignal) => Promise<CloseAnswer>;
+type AbortableAsk = (options: ConfirmOptions, signal: AbortSignal) => Promise<CloseAnswer>;
 export type DrainReply = { accepted?: boolean; endsSession?: boolean } | null | undefined;
 export type DecideClose = (windowId: string, reason: ManagedCloseReason, ask?: DialogsNative["confirm"]) => Promise<WindowCloseDecision>;
 
-export type WindowCloseCoordinatorHooks = {
+type WindowCloseCoordinatorHooks = {
   windowId: string;
   utility: boolean;
   decide: DecideClose;

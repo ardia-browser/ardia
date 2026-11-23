@@ -16,23 +16,24 @@ import { afterPluginScan } from "./scanListeners";
 import { adoptExactApproval, ALREADY_ASKING, consentTarget, isRemoving, updateRecord, promoteCandidate, requestPluginConsent, rescanPlugins } from "./lifecycle";
 import { relinkPrograms } from "./programs";
 import { activeManifest, approvalMatches, currentPlugins, recordOf, setOfficialFetch, usePlugins, type PluginListing, type PluginsStore } from "./store";
+import { ownValue } from "../../lib/decode";
 
-export { COMING_SOON, OFFICIAL_CATALOGUE, OFFICIAL_NAMES, PRESELECTED_PLUGINS, officialCatalogue } from "./officialPin";
+export { COMING_SOON, OFFICIAL_CATALOGUE, PRESELECTED_PLUGINS, officialCatalogue } from "./officialPin";
 
-export type OfficialPluginState = "available" | "installed" | "comingSoon" | "unsupported";
+type OfficialPluginState = "available" | "installed" | "comingSoon" | "unsupported";
 export type OfficialPlugin = { name: string; title: string; blurb: string; icon: string; version: string | null; example: string | null; state: OfficialPluginState; update: string | null };
 type ComingSoon = (typeof COMING_SOON)[number];
 type OfficialView = Pick<PluginsStore, "listings" | "records" | "order"> & Partial<Pick<PluginsStore, "pinned" | "candidates">>;
 
 const officialListing = (s: Pick<PluginsStore, "listings">, name: string): PluginListing | undefined => {
-  const listing = Object.hasOwn(s.listings, name) ? s.listings[name] : undefined;
+  const listing = ownValue(s.listings, name);
   return listing?.official && listing.manifest?.official ? listing : undefined;
 };
 
 const pinnedOf = (s: Partial<Pick<PluginsStore, "pinned">>, name: string) => s.pinned?.find((p) => p.name === name);
 
 const candidateOf = (s: Partial<Pick<PluginsStore, "candidates">>, name: string): PluginListing | undefined =>
-  s.candidates && Object.hasOwn(s.candidates, name) ? s.candidates[name] : undefined;
+  ownValue(s.candidates, name);
 
 const installedOf = (s: Pick<PluginsStore, "listings" | "records">, listing: PluginListing): boolean => !!activeManifest(s, listing.name);
 
@@ -85,7 +86,7 @@ export function useOfficialPlugins(): OfficialPlugin[] {
 
 function linkOutcome(name: string): InstallResult | null {
   const s = currentPlugins();
-  const fetch = Object.hasOwn(s.fetches, name) ? s.fetches[name] : undefined;
+  const fetch = ownValue(s.fetches, name);
   if (fetch?.state === "promoting") return null;
   if (fetch?.state === "failed") return { ok: false, reason: `Couldn't switch to the download: ${fetch.reason}` };
   const manifest = activeManifest(s, name);
@@ -147,7 +148,7 @@ function needsFetch(name: string): boolean {
   return officialListing(s, name)?.folderId !== pinned.folderId;
 }
 
-export function fetchOfficialCandidate(name: string, consent: ConsentToken | null, quiet = false): Promise<InstallResult & { code?: string }> {
+function fetchOfficialCandidate(name: string, consent: ConsentToken | null, quiet = false): Promise<InstallResult & { code?: string }> {
   if (!needsFetch(name)) return Promise.resolve({ ok: true });
   const running = inFlight.get(name);
   if (running) return running;
@@ -177,7 +178,7 @@ export function cancelOfficialInstall(name: string) {
   if (inFlight.has(name)) cancelOfficialPluginFetch(name);
 }
 
-export type InstallOptions = { showSheet?: boolean; onConsent?: (id: number) => void; alive?: () => boolean };
+type InstallOptions = { showSheet?: boolean; onConsent?: (id: number) => void; alive?: () => boolean };
 
 export const isOfficialName = (s: Pick<PluginsStore, "listings" | "candidates" | "pinned">, name: string) =>
   !!officialListing(s, name) || !!candidateOf(s, name) || !!pinnedOf(s, name);
@@ -193,7 +194,7 @@ export function installOfficialPlugin(name: string, options: InstallOptions = {}
   releaseOrphanedConsent();
   if (currentPlugins().consent) return Promise.resolve({ ok: false, reason: ALREADY_ASKING });
   const approvedCandidate = candidateOf(currentPlugins(), name);
-  const record = Object.hasOwn(currentPlugins().records, name) ? currentPlugins().records[name] : undefined;
+  const record = ownValue(currentPlugins().records, name);
   if (approvedCandidate?.hash && record?.enabled && approvalMatches(approvedCandidate, record.approved)) {
     if (currentPlugins().fetches[name]?.state === "promoting") return linked(name);
     const consent = consentToken();
@@ -270,8 +271,8 @@ const PROMPT_COUNTS: Record<UpdatePromptReason, PluginCount> = {
 
 export function officialUpdateVerdict(s: Pick<PluginsStore, "listings" | "records" | "pinned">, name: string, candidate: PluginListing): UpdateVerdict {
   const pinned = pinnedOf(s, name);
-  const record = Object.hasOwn(s.records, name) ? s.records[name] : undefined;
-  const listing = Object.hasOwn(s.listings, name) ? s.listings[name] : undefined;
+  const record = ownValue(s.records, name);
+  const listing = ownValue(s.listings, name);
   const baseline = listing?.manifest;
   const next = candidate.manifest;
   if (!pinned || !record?.enabled || !record.approved || !listing?.official || !baseline?.official || !listing.hash) return { ok: false, reason: "baseline" };
@@ -305,17 +306,17 @@ function promoteWithRetry(name: string, candidate: PluginListing, consent: Conse
   });
 }
 
-export function reconcileOfficial(consent: ConsentToken | null, now = Date.now()) {
+function reconcileOfficial(consent: ConsentToken | null, now = Date.now()) {
   if (!PLATFORM_FEATURES.plugins) return;
   const s = currentPlugins();
   for (const pinned of s.pinned ?? []) {
     const name = pinned.name;
-    const record = Object.hasOwn(s.records, name) ? s.records[name] : undefined;
+    const record = ownValue(s.records, name);
     if (!record?.approved || !record.enabled) continue;
-    const listing = Object.hasOwn(s.listings, name) ? s.listings[name] : undefined;
+    const listing = ownValue(s.listings, name);
     if (listing && !listing.official) continue;
     const candidate = candidateOf(s, name);
-    const fetch = Object.hasOwn(s.fetches, name) ? s.fetches[name] : undefined;
+    const fetch = ownValue(s.fetches, name);
     if (fetch?.state === "fetching" || fetch?.state === "promoting") continue;
     if (candidate?.manifest && candidate.hash) {
       if (approvalMatches(candidate, record.approved)) {

@@ -8,7 +8,7 @@ import { useScopedTheme } from "../ui/theme";
 import { noteStopBreathing } from "../../state/telemetry/stopBreathing";
 import { Breathe, Button, curve, drawnSymbol, MouseArea, reduceMotion, reduceMotionKnown, type ButtonHit } from "../ui";
 
-export type NavPlace = { style?: ViewStyle; hit?: ButtonHit };
+type NavPlace = { style?: ViewStyle; hit?: ButtonHit };
 import type { ClickModifiers } from "../../lib/keys";
 import { closeHistoryMenu, goBack, goForward, historyItems, toggleHistoryMenu } from "../../state/tabs/navigation";
 import { openModeFor, openUrl } from "../../state/bookmarks/actions";

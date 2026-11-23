@@ -28,7 +28,7 @@ export function upgraded(doc: unknown, version: number, migrations: Migrations =
 }
 
 export type SavedProblem = "empty" | "invalid" | "shape" | "newer";
-export type SavedRead = { doc: SavedObject; from: number } | { problem: SavedProblem };
+type SavedRead = { doc: SavedObject; from: number } | { problem: SavedProblem };
 
 export function readSavedValue(value: unknown, version: number, migrations: Migrations = {}, field = "version"): SavedRead {
   const stamped = isFields(value) && owns(value, field) ? value[field] : 0;

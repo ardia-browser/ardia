@@ -3,11 +3,10 @@ import { asSecret, reveal, type Secret, type SecretKind } from "@ardia/core";
 
 export type { KeychainReadResult };
 
-export type KeychainSecretRead<K extends SecretKind> = { status: "ok"; value: Secret<K> } | { status: "missing" } | { status: "error"; reason: string };
+type KeychainSecretRead<K extends SecretKind> = { status: "ok"; value: Secret<K> } | { status: "missing" } | { status: "error"; reason: string };
 
 const Keychain = nativeModule("ArdiaKeychain");
 
-export const keychainGet = (account: string) => Keychain.get(account);
 export const keychainRead = (account: string): Promise<KeychainReadResult> => Keychain.read(account);
 export const keychainSet = (account: string, secret: string) => Keychain.set(account, secret);
 export const keychainDelete = (account: string) => Keychain.delete(account);

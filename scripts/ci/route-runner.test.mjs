@@ -10,7 +10,6 @@ import {
   DEFAULTS,
   FORCE_LABEL,
   GithubReadError,
-  HttpError,
   LIMITS_URL,
   MAIN_REF,
   SETTING_NAMES,

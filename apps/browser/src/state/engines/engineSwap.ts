@@ -11,7 +11,7 @@ import { consentToken, type ConsentToken } from "../telemetry/client";
 import { updateLive } from "../tabs/actions";
 import { setPageProgress } from "../tabs/pageProgress";
 
-export type RetiringPage = { engine: PageEngine };
+type RetiringPage = { engine: PageEngine };
 
 export const useRetiringPages = create<Record<string, RetiringPage>>()(() => ({}));
 

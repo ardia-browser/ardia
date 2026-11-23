@@ -52,6 +52,7 @@ onAndroid("the material start screen is the scheme's surfaces, a top app bar of 
     expect(flat(node(root, `materialStart:${label}`))).toMatchObject({ width: 48, height: 48 });
     expect(pressable(root, `materialStart:${label}`).props.android_ripple).toMatchObject({ borderless: true });
   }
+  expect(node(root, "startLogoButton")).toBeDefined();
   expect(node(root, "materialStartCenter")!.findAll((found) => found.props.testID === "materialStartSearch")).toHaveLength(0);
   expect(flat(node(root, "materialStartBottomBar"))).toMatchObject({
     position: "absolute",

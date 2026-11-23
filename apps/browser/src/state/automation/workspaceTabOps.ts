@@ -25,7 +25,7 @@ export function mute(results: OpResult[], op: Op, muted: boolean): OpResult {
   return { tabs: ids };
 }
 
-export const NATIVE_DEADLINE_MS = 10_000;
+const NATIVE_DEADLINE_MS = 10_000;
 
 const LATE = Symbol("late");
 

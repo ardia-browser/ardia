@@ -7,7 +7,7 @@ import { foreignWriteHooks } from "../browser/foreignWriteHooks";
 import { withTreesFrom } from "./sharedTrees";
 import { SHARED_GROUPS_SIDEBAR_ONLY } from "./workspaceSharedGuard";
 
-export const SHARED_GROUP_CHANGE_REFUSED = `That would change a group synced to a shared folder; ${SHARED_GROUPS_SIDEBAR_ONLY}. The change that reached it was undone.`;
+const SHARED_GROUP_CHANGE_REFUSED = `That would change a group synced to a shared folder; ${SHARED_GROUPS_SIDEBAR_ONLY}. The change that reached it was undone.`;
 
 function syncedProjection(s: BrowserState): Map<string, string> {
   const out = new Map<string, string>();
@@ -81,7 +81,7 @@ export class SocketOrigin {
   }
 }
 
-export const READ_ONLY_ORIGIN: Pick<SocketOrigin, "segment"> = { segment() {} };
+const READ_ONLY_ORIGIN: Pick<SocketOrigin, "segment"> = { segment() {} };
 
 export function guardedBySocketOrigin<B>(mutates: boolean, run: (origin: Pick<SocketOrigin, "segment">) => B | Promise<B>, refused: (message: string) => B): B | Promise<B> {
   if (!mutates) return run(READ_ONLY_ORIGIN);

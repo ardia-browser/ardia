@@ -379,7 +379,7 @@ const cliControl = (on: boolean | null) => testGlobals.acTestCliControl?.(on) ??
 export const cancelledDownloads: string[] = [];
 export const downloadSettingsWrites: { profile: string; folder?: string; askWhereToSave?: boolean }[] = [];
 export const clearedSiteData: { profile: string; origin: string; engine?: string }[] = [];
-export const endedWebKitSessions: string[] = [];
+const endedWebKitSessions: string[] = [];
 export const removedStagings: string[] = [];
 export const stagingRemovals = { ok: true };
 export const deletedProfileData: string[] = [];
@@ -391,7 +391,7 @@ export const discardedOffers: string[] = [];
 export const installedCrx: { path: string; profile: string }[] = [];
 export const chosenExtensionFolder: { next: string | null } = { next: null };
 export const crxInstallFailure: { next: string | null } = { next: null };
-export const linkRoute: { next: LinkRoute } = { next: {} };
+const linkRoute: { next: LinkRoute } = { next: {} };
 export const resolvedPermissions: { id: string; result: string; remember: boolean }[] = [];
 
 export const extensionAnswers = {

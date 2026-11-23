@@ -13,6 +13,7 @@ final class ControlSocket {
   static let maxResolving = 8
   static let resolveDeadline: TimeInterval = 10
   static let doorbellKey = "peer-doorbell-"
+  static let endpointDeadline: TimeInterval = 5
 
   typealias Sink = (_ name: String, _ body: [String: Any]) -> Void
 
@@ -34,6 +35,8 @@ final class ControlSocket {
   private var resolverJobs = 0
   private var expiries: [String: DispatchWorkItem] = [:]
   private var approvedUntil: [Int: Date] = [:]
+  private let cutOffLock = NSLock()
+  private var cutOffFlag = false
   private lazy var doorbell = ControlDoorbell(
     queue: queue,
     capacity: { [weak self] in self.map { Self.maxConnections - $0.connections.count } ?? 0 },
@@ -81,15 +84,81 @@ final class ControlSocket {
     }
   }
 
+  private var isCutOff: Bool {
+    cutOffLock.lock()
+    defer { cutOffLock.unlock() }
+    return cutOffFlag
+  }
+
+  private func setCutOff(_ on: Bool) {
+    cutOffLock.lock()
+    cutOffFlag = on
+    cutOffLock.unlock()
+  }
+
+  func cutOff() -> Bool {
+    setCutOff(true)
+    queue.async { [self] in
+      if isCutOff { for connection in Array(connections.values) { connection.retire() } }
+    }
+    return true
+  }
+
+  private func mayWrite(_ connection: ControlConnection) -> Bool {
+    guard !isCutOff else {
+      connection.retire()
+      return false
+    }
+    return stillApproved(connection)
+  }
+
   func reply(_ connection: Int, _ line: String, ticket: Int) {
     let data = Self.framed(line)
     queue.async { [self] in
-      if let target = connections[connection] {
+      if !isCutOff, let target = connections[connection], stillApproved(target) {
         target.reply(data, ticket: ticket)
       } else if ticket > 0 {
         sink?.send("onWritten", ["tickets": [ticket]])
       }
     }
+  }
+
+  func devtoolsEndpoint(_ connection: Int, _ done: @escaping ([String: Any]) -> Void) {
+    queue.async { [self] in
+      guard admits(connection) else { return done(["problem": "left"]) }
+      DispatchQueue.main.async { [weak self] in
+        ArdiaEngineBridge.callForSecretReply(DevtoolsEndpoint.engineCall, profile: "", timeout: Self.endpointDeadline) { reply in
+          if let reply {
+            self?.answerEndpoint(connection, done) { DevtoolsEndpoint.read(engineReply: reply) }
+            return
+          }
+          DispatchQueue.main.async {
+            ArdiaEngineBridge.call("ac_cli_control", profile: "", args: "{}") { json in
+              self?.answerEndpoint(connection, done) {
+                DevtoolsEndpoint.read(status: (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any] ?? [:])
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  private func answerEndpoint(_ connection: Int, _ done: @escaping ([String: Any]) -> Void, _ read: @escaping () -> Result<DevtoolsEndpoint, DevtoolsEndpoint.Problem>) {
+    queue.async { [self] in
+      guard admits(connection) else { return done(["problem": "left"]) }
+      let result = read()
+      guard admits(connection) else { return done(["problem": "left"]) }
+      switch result {
+      case let .success(endpoint): done(endpoint.reply)
+      case let .failure(problem): done(["problem": problem.rawValue])
+      }
+    }
+  }
+
+  private func admits(_ connection: Int) -> Bool {
+    guard !isCutOff, bound != nil, !peerFinished.contains(connection), let target = connections[connection] else { return false }
+    return stillApproved(target)
   }
 
   func broadcast(_ targets: [Int], _ line: String) {
@@ -187,6 +256,7 @@ final class ControlSocket {
   }
 
   private func startOnQueue() -> [String: Any] {
+    setCutOff(false)
     if let bound { return status("on", path: bound.path) }
     let dir: String
     do {
@@ -348,7 +418,7 @@ final class ControlSocket {
   }
 
   private func open(_ id: Int, fd: Int32, key: String?, until: Date?) -> Bool {
-    guard bound != nil, connections.count < Self.maxConnections else { return false }
+    guard bound != nil, !isCutOff, connections.count < Self.maxConnections else { return false }
     let generation = generation
     let connection = ControlConnection(
       id: id, fd: fd, queue: queue,
@@ -367,7 +437,8 @@ final class ControlSocket {
       onPeerFinished: { [weak self] connection in
         guard let self, self.connections[connection.id] != nil, self.peerFinished.insert(connection.id).inserted else { return }
         self.sink?.send("onClose", ["connection": connection.id])
-      })
+      },
+      mayWrite: { [weak self] connection in self?.mayWrite(connection) ?? false })
     connections[id] = connection
     if let key {
       approvalKeys[id] = key

@@ -4,7 +4,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, r
 import { basename, dirname, join, resolve } from "node:path";
 import { templateProblems, templateSizes } from "./template-state.mjs";
 
-export const TEMPLATE_CACHE_REVISION = 2;
+const TEMPLATE_CACHE_REVISION = 2;
 export const TEMPLATE_MAX_AGE_HOURS = 12;
 const PRUNE_AFTER_HOURS = 2 * TEMPLATE_MAX_AGE_HOURS;
 const STAGING_ABANDONED_HOURS = 2;
@@ -29,7 +29,7 @@ export function uboVersion(app) {
   }
 }
 
-export const appCdhash = (app) => spawnSync("codesign", ["-dvvv", app], { encoding: "utf8" }).stderr?.match(/^CDHash=([0-9a-f]+)$/m)?.[1] ?? null;
+const appCdhash = (app) => spawnSync("codesign", ["-dvvv", app], { encoding: "utf8" }).stderr?.match(/^CDHash=([0-9a-f]+)$/m)?.[1] ?? null;
 
 export function appIdentity(app) {
   return { version: plistValue(app, "CFBundleShortVersionString"), build: plistValue(app, "CFBundleVersion"), cdhash: appCdhash(app), ubo: uboVersion(app) };
@@ -91,7 +91,7 @@ const generations = (keyDir) => {
   }
 };
 
-export function checkTemplate(dir, entry, key, { sizesOf = templateSizes, componentsOf = null, ...opts } = {}) {
+function checkTemplate(dir, entry, key, { sizesOf = templateSizes, componentsOf = null, ...opts } = {}) {
   if (!existsSync(dir)) return ["no cached template"];
   return entryProblems(entry, key, { ...opts, sizes: sizesOf(dir), components: componentsOf?.(dir) ?? null });
 }

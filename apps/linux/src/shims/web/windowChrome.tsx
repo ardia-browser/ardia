@@ -24,7 +24,7 @@ const ART = {
 
 type Light = keyof (typeof ART)["light"];
 
-export type TrafficLightsPlace = { center: readonly [number, number]; trailing: boolean };
+type TrafficLightsPlace = { center: readonly [number, number]; trailing: boolean };
 
 const DEFAULT_PLACE: TrafficLightsPlace = { center: DEFAULT_CENTER, trailing: false };
 const places = new Map<string, TrafficLightsPlace>();

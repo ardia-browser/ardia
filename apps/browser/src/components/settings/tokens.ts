@@ -6,20 +6,18 @@ const dark = {
   sidebarDivider: "rgba(0,0,0,0.6)",
   miniWindow: "#2A2A2C",
   miniBar: "rgba(255,255,255,0.22)",
-  miniField: "rgba(255,255,255,0.14)",
   miniPage: "rgba(255,255,255,0.08)",
   warningFill: "rgba(255,159,10,0.12)",
   dashedBorder: "rgba(255,255,255,0.25)",
 };
 
-export type SettingsColors = typeof dark;
+type SettingsColors = typeof dark;
 
 const light: SettingsColors = {
   windowFill: "#F2F2F2",
   sidebarDivider: "rgba(0,0,0,0.1)",
   miniWindow: "#E9E9EB",
   miniBar: "rgba(0,0,0,0.16)",
-  miniField: "rgba(0,0,0,0.08)",
   miniPage: "#FFFFFF",
   warningFill: "rgba(255,149,0,0.1)",
   dashedBorder: "rgba(0,0,0,0.2)",
@@ -103,6 +101,7 @@ export const settingsLayout = { emptyTop: 40, sidebarWidth: 214, paneMaxWidth: 6
 
 export const choicePreview = {
   tabRows: [1, 0.85, 0.95, 0.7],
+  topTabRows: [1, 1, 1, 1],
   shortTabRows: [1, 0.8, 0.9],
   switcherCards: [false, true, false],
   resultLines: [0.9, 0.6],

@@ -12,10 +12,10 @@ import { openProfileIconPicker } from "./iconPicker";
 import { choosePresetColor } from "./themeActions";
 
 export type ProfileMenuPlace = "sidebar" | "settings";
-export type ProfileColorChoice = { id: ProfileColor; title: string; swatch: string };
+type ProfileColorChoice = { id: ProfileColor; title: string; swatch: string };
 type ProfileMenuItem = ChoiceItem<{ color: ProfileColor }, "rename" | "icon" | "color" | "topApps" | "settings" | "details" | "default" | "delete">;
 
-export type ProfileMenuState = {
+type ProfileMenuState = {
   place: ProfileMenuPlace;
   hasIcon: boolean;
   colors: ProfileColorChoice[];

@@ -3,14 +3,14 @@ import { View } from "react-native";
 import { toAppUrl } from "@ardia/core";
 import type { NavigationState, WebViewHandle, WebViewProps } from "@ardia-real/ardiacore";
 import { ardiaHost, reportHostError } from "../../host";
-import { HostExtensionView, type CornerRadii, type ExtensionViewEvent, type NativeFrame, type PopupPlacement } from "../../hostExtensionView";
+import { HostExtensionView, type ExtensionViewEvent, type NativeFrame, type PopupPlacement } from "../../hostExtensionView";
 import { PopupSizeWaiters, extensionViewEvaluate } from "../../hostExtensionScripts";
 import { refreshTabViewports } from "../../hostViewport";
 import { inputRegions } from "../../shellAbove";
 import { watchPageBelowShell } from "./HostWebView";
 import { clipRadii } from "./clipRadii";
 
-export type HostExtensionWebViewProps = WebViewProps & {
+type HostExtensionWebViewProps = WebViewProps & {
   placement?: Omit<PopupPlacement, "visible" | "decorated" | "decoratedScale">;
   onNativeFrame?: (frame: NativeFrame) => void;
   decorationVisible?: () => boolean;

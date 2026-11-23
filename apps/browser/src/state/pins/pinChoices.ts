@@ -13,7 +13,7 @@ export const nextPinChoice = editStamp;
 export const groupChoiceKey = (key: string) => `group:${key}`;
 export const placeChoiceKey = (key: string) => `place:${key}`;
 export const orderChoiceKey = (key: string) => `order:${key}`;
-export const tabChoiceKey = (key: string) => key;
+const tabChoiceKey = (key: string) => key;
 
 export function markPinned(choices: PinChoices, profileId: string, marks: { groups?: readonly string[]; tabs?: readonly string[]; placed?: readonly string[] }): PinChoices {
   const mine = { ...choices[profileId] };

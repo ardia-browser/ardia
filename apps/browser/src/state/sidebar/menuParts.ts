@@ -9,7 +9,7 @@ import { groupPath } from "../groups/groups";
 
 export { menuSections as sections } from "../app/menuSections";
 
-export type Choice = Extract<MenuItem, { id: string }>;
+type Choice = Extract<MenuItem, { id: string }>;
 
 export type Destination =
   | { kind: "profile"; profileId: string | null }

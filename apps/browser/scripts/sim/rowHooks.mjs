@@ -23,7 +23,7 @@ export const PER_ROW_FILES = [
   "components/media/HoverPlayer.tsx",
 ];
 
-export function perRowHookImports(srcDir) {
+function perRowHookImports(srcDir) {
   const found = new Map();
   for (const file of PER_ROW_FILES) {
     const path = `${srcDir}/${file}`;

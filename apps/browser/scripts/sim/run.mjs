@@ -30,8 +30,8 @@ if (args.includes("--help")) {
   process.exit(0);
 }
 
-export const CI_SEEDS = "1-40";
-export const CI_STEPS = 120;
+const CI_SEEDS = "1-40";
+const CI_STEPS = 120;
 const REACH_FLOOR_SEEDS = 20;
 const MODES = ["correctness", "cost", "leak", "map"];
 

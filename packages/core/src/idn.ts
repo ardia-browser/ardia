@@ -211,7 +211,7 @@ const DANGEROUS = new RegExp(
   "u",
 );
 
-export type SpoofReason =
+type SpoofReason =
   | "invalid"
   | "disallowedCharacter"
   | "invisible"

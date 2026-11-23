@@ -14,6 +14,7 @@ const CANARY = {
   oauthClientSecret: "GOCSPX-CanaryClientSecret42zz",
   pluginSecret: "canary-plugin-secret-55-kv",
   syncPhrase: "canaryword alpha bravo charlie delta echo",
+  devtoolsToken: "CanaryDevtoolsToken_q1w2e3r4t5y6u7i8o9p0",
 };
 
 const keychain = new Map([
@@ -79,6 +80,8 @@ const { secretsMethod } = await import("./state/plugins/channelData.ts");
 const { getSecret, googleTokensOf, bearer, basic } = await import("./state/live/net.ts");
 const { getPassword, savePassword } = await import("./platform/passwords.ts");
 const { recoveryWords } = await import("./state/sync/recoveryKit.ts");
+const { controlDevtoolsEndpoint } = await import("./platform/automation.ts");
+const { devtoolsEndpointLine } = await import("./state/automation/socketDevtools.ts");
 const { Clock } = await import("../../../packages/sync/src/hlc.ts");
 const { syncScope } = await import("../../../packages/sync/src/scope.ts");
 const { emptyScope } = await import("../../../packages/sync/src/scopeState.ts");
@@ -108,6 +111,12 @@ const SOURCES = {
     return read.value;
   },
   syncPhrase: async () => recoveryWords(),
+  devtoolsToken: async () => {
+    stub.controlSocket.devtoolsEndpoint = () => ({ port: 41234, generation: 3, token: CANARY.devtoolsToken });
+    const read = await controlDevtoolsEndpoint(1);
+    assert.ok(!("problem" in read));
+    return read.token;
+  },
 };
 
 const SHAPED = new Set(["oauthToken"]);
@@ -316,6 +325,8 @@ test("the legitimate sinks get the plaintext and nothing else does", async () =>
   const { enterRecoveryPhrase } = await import("./state/sync/engine.ts");
   await enterRecoveryPhrase("/sync", asSecret("syncPhrase", CANARY.syncPhrase)).catch(() => null);
   assert.deepEqual(enteredPhrases, [CANARY.syncPhrase], "the native sync module gets the phrase");
+  const endpoint = await SOURCES.devtoolsToken();
+  assert.deepEqual(JSON.parse(devtoolsEndpointLine(7, { port: 41234, generation: 3, token: endpoint })), { id: 7, result: { port: 41234, token: CANARY.devtoolsToken, generation: 3 } }, "control.devtoolsEndpoint's reply line carries the token to the admitted peer");
 });
 
 test("a malformed answer from a provider fails with Ardia's own words, not the provider's", async () => {
@@ -497,6 +508,7 @@ const WRAP_SITES = {
   "apps/linux/src/syncAuthority.ts": ["*"],
   "apps/browser/src/state/sync/engine.ts": ["syncPhrase"],
   "apps/browser/src/components/dev/devHarness.ts": ["syncPhrase"],
+  "apps/browser/src/platform/automation.ts": ["devtoolsToken"],
 };
 
 const REVEAL_SINKS = {
@@ -509,6 +521,7 @@ const REVEAL_SINKS = {
   "apps/browser/src/components/settings/panes/SyncSheets.tsx": { calls: 1, why: "Show Words displays the recovery phrase to the user" },
   "apps/linux/src/importedPasswordSave.ts": { calls: 1, why: "Linux tells a CSV import handle, which its host resolves, from a typed password" },
   "apps/linux/src/liveSources.ts": { calls: 2, why: "Linux's host exchanges Google's authorization code and PKCE verifier for tokens" },
+  "apps/browser/src/state/automation/socketDevtools.ts": { calls: 1, why: "control.devtoolsEndpoint writes the DevTools token on the reply line to the peer the socket admitted" },
   "apps/linux/src/syncAuthority.ts": { calls: 1, why: "a Linux window hands the recovery phrase to the window that runs sync, over the app's own channel, and it is branded again on arrival" },
 };
 

@@ -1,13 +1,13 @@
 import { isFields } from "../../lib/decode";
 import { hostFetchPlugin, readPluginFile, readPluginStorage, writePluginStorage, type PluginFetchResult, type PluginFetchSpec, type PluginFileReadResult } from "../../platform/plugins";
 
-export type HostFetchSpec = PluginFetchSpec;
-export type HostFetchResult = PluginFetchResult;
-export type HostFileResult = PluginFileReadResult;
+type HostFetchSpec = PluginFetchSpec;
+type HostFetchResult = PluginFetchResult;
+type HostFileResult = PluginFileReadResult;
 
 export const hostFetch = (spec: HostFetchSpec): Promise<HostFetchResult> => hostFetchPlugin(spec).catch((error: unknown) => ({ ok: false as const, reason: String(error) }));
 
-export type StorageRead = { status: "ok"; text: string } | { status: "missing" } | { status: "error"; reason: string };
+type StorageRead = { status: "ok"; text: string } | { status: "missing" } | { status: "error"; reason: string };
 
 export function storageReadOf(raw: unknown): StorageRead {
   if (raw === null || raw === undefined) return { status: "missing" };

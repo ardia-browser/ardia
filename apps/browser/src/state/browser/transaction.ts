@@ -1,6 +1,6 @@
 import type { StateCreator } from "zustand";
 
-export type KeyedListener<T> = (s: T, prev: T) => void;
+type KeyedListener<T> = (s: T, prev: T) => void;
 export type SubscribeTo<T> = (keys: readonly (keyof T)[], listener: KeyedListener<T>) => () => void;
 
 export function transactional<T>(heardAlone?: (s: T, prev: T) => boolean, settle?: (s: T, prev: T) => T) {

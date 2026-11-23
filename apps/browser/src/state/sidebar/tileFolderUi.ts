@@ -3,7 +3,7 @@ import { showMenu, type MenuItem } from "../../platform/menus";
 import { create } from "zustand";
 import { useBrowser } from "../browser/store";
 import { activeTabId, plural } from "../browser/model";
-import { dissolveTileFolder, folderIn, folderLabel, folderMembers, leaveTileFolder, newTileFolder, renameTileFolder } from "../pins/tileFolders";
+import { dissolveTileFolder, folderIn, folderMembers, leaveTileFolder, newTileFolder, renameTileFolder } from "../pins/tileFolders";
 import { dismissHover } from "./hover";
 import { measureRow } from "./sidebarUi";
 
@@ -90,4 +90,3 @@ export async function openTileFolderMenu(windowId: string, folderId: string) {
   if (choice) closeFolderPanel();
 }
 
-export const folderTitle = (windowId: string, folderId: string) => folderLabel(folderIn(store(), windowId, folderId));

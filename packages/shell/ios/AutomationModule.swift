@@ -23,8 +23,16 @@ public class AutomationModule: Module {
       ControlSocket.shared.reply(connection, line, ticket: ticket)
     }
 
+    Function("cutOff") { () -> Bool in
+      ControlSocket.shared.cutOff()
+    }
+
     Function("broadcast") { (connections: [Int], line: String) in
       ControlSocket.shared.broadcast(connections, line)
+    }
+
+    AsyncFunction("devtoolsEndpoint") { (connection: Int, promise: Promise) in
+      ControlSocket.shared.devtoolsEndpoint(connection) { promise.resolve($0) }
     }
 
     AsyncFunction("answerPeer") { (ask: Int, outcome: String, promise: Promise) in

@@ -1,5 +1,5 @@
-export const EXPIRY_MARK = /@([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)\s+until\s+(\d{4}-\d{2}-\d{2})(?=:|\s|$)/;
-export const EXPIRY_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const EXPIRY_MARK = /@([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)\s+until\s+(\d{4}-\d{2}-\d{2})(?=:|\s|$)/;
+const EXPIRY_DATE = /^\d{4}-\d{2}-\d{2}$/;
 export const OWNER = /^@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/;
 
 const DEADLINE =
@@ -40,7 +40,7 @@ function basicRegex(pattern) {
   }
 }
 
-export function shellHelpLines(src, strings, context = src) {
+function shellHelpLines(src, strings, context = src) {
   const singleQuoted = strings.filter((s) => s.kind === "single");
   const lines = src.split("\n");
   const exempt = new Set();

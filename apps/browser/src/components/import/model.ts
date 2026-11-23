@@ -1,15 +1,12 @@
 import type {
   BrowserProfile,
   BrowserSource,
-  DiaTabsResult,
-  ImportedExtension,
   ImportKind,
-  ImportResult,
   SpaceSummary,
 } from "../../state/import/apply";
 import { IMPORT_KINDS } from "../../state/import/flow";
 
-export type { BrowserProfile, BrowserSource, DiaTabsResult, ImportedExtension, ImportKind, ImportResult, SpaceSummary };
+export type { BrowserSource, ImportKind, SpaceSummary };
 
 export const APP = "Ardia";
 

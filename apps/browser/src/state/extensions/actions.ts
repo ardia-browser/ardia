@@ -243,7 +243,7 @@ export async function showExtensionMenu(windowId: string, ext: InstalledExtensio
   }
 }
 
-export type ExtensionListChoice = "add" | "manage";
+type ExtensionListChoice = "add" | "manage";
 
 export const EXTENSION_LIST_ITEMS: ChoiceItem<never, ExtensionListChoice>[] = [
   { id: "manage", title: "Manage Extensions…", symbol: "puzzlepiece.extension" },

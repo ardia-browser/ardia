@@ -19,7 +19,7 @@ import { minimalismIn } from "../windows/layout";
 
 const store = () => useBrowser.getState();
 
-export const BROWSER_LAYOUT_MENU_ID = "browserLayout";
+const BROWSER_LAYOUT_MENU_ID = "browserLayout";
 
 export function browserLayoutItems(s: BrowserState, windowId: string): MenuItem[] {
   const w = s.windows[windowId];
@@ -103,5 +103,5 @@ export async function openSidebarMenu(windowId: string) {
     const id = s.newTab(windowId);
     if (id) newGroupWithSelection(windowId, [id]);
   } else if (choice === "addShared") void addSharedFolder(windowId);
-  else if (choice === "closeAll") closeAllTabs(windowId);
+  else if (choice === "closeAll") closeAllTabs(windowId, { consent });
 }

@@ -1,19 +1,20 @@
 import { materialColorSource } from "../../lib/material/schemePick";
 import { useDynamicScheme } from "../app/dynamicScheme";
 import { useAppearanceDesign } from "../settings/appearance";
-import { AppState } from "react-native";
-import { lookBudget, systemLook } from "../../platform/look";
+import { AppState, Platform } from "react-native";
+import { lookBudget, nativeGlassRender, systemLook, systemLookNow } from "../../platform/look";
 import { create } from "zustand";
 import { createGate, DAILY_KEY, type SharingSource } from "../../lib/telemetryGate";
 import { backdropProps, COUNTED, launchProps, launchTrayProps, legacyImportOutcome, parseDaily, pendingUsage, type Counted } from "../../lib/telemetrySchema";
 import { canPostTelemetry, deviceFacts, JS_STARTED_AT, launchBackdropShownAt, newTelemetryId, postTelemetry, processStartedAt, setUsageConsent, takePendingCounts } from "../../platform/telemetry";
-import { appearanceTelemetry, colorChoiceTelemetry, offeredInterfaceStyle, offeredScheme } from "../../lib/appearance";
+import { appearanceTelemetry, chromeStyle, colorChoiceTelemetry, glassRenderTelemetry, macLookOf, offeredInterfaceStyle, offeredScheme } from "../../lib/appearance";
 import { useBoot } from "../app/bootState";
 import { isDemoSession } from "../app/launchFlags";
 import { currentPreferences } from "../settings/store";
 import { readPreferences, writePreference } from "../store/browserDatabase";
 import { browserDatabase } from "../store/database";
 import { syncOffered } from "../../platform/system";
+import { syncData } from "../sync/store";
 
 const DAILY_CHECK_MS = 60 * 60_000;
 
@@ -78,7 +79,10 @@ export async function reportLaunch(firstScreenAt: number) {
   const { interfaceStyle, schemeChoice, colorChoice, dynamicColors } = currentPreferences();
   const material_colors = materialColorSource(useAppearanceDesign.getState().design === "material", colorChoice, useDynamicScheme.getState().pair, dynamicColors);
   const color_choice = colorChoiceTelemetry(colorChoice);
-  gate.capture("app_launched", { legacy_import: legacyImportOutcome(boot.outcome), legacy_import_failures: boot.failures, look_mode: look, ...appearanceTelemetry(offeredInterfaceStyle(interfaceStyle, syncOffered()), offeredScheme(schemeChoice, syncOffered())), material_colors, color_choice });
+  const design = useAppearanceDesign.getState().design;
+  const { status, view } = syncData();
+  const glass_render = glassRenderTelemetry(Platform.OS, design, chromeStyle(design, interfaceStyle, macLookOf(status.isEnabled, view.look), systemLookNow().reduceTransparency), nativeGlassRender());
+  gate.capture("app_launched", { legacy_import: legacyImportOutcome(boot.outcome), legacy_import_failures: boot.failures, look_mode: look, ...appearanceTelemetry(offeredInterfaceStyle(interfaceStyle, syncOffered()), offeredScheme(schemeChoice, syncOffered())), material_colors, color_choice, glass_render });
   const processStart = await processStartedAt();
   const timings = launchProps(processStart, JS_STARTED_AT, firstScreenAt);
   if (timings) gate.capture("perf_launch", timings);

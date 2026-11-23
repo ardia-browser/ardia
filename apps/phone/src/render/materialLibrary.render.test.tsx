@@ -1,4 +1,5 @@
 import { Platform, StyleSheet, Text } from "react-native";
+import { Pressable } from "react-native-gesture-handler";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { predictiveBack } from "@ardia/phone-native";
 import { Surfaces } from "../App";
@@ -70,7 +71,7 @@ afterEach(() => {
 type Root = ReturnType<typeof renderSurface>;
 const node = (root: Root, id: string) => root.root.findAll((found) => found.props.testID === id && typeof found.type === "string")[0];
 const nodes = (root: Root, id: string) => root.root.findAll((found) => found.props.testID === id && typeof found.type === "string");
-const pressables = (root: Root, id: string) => root.root.findAll((found) => found.props.testID === id && typeof found.props.onPress === "function" && found.props.android_ripple !== undefined);
+const pressables = (root: Root, id: string) => root.root.findAll((found) => found.type === Pressable && found.props.testID === id && typeof found.props.onPress === "function" && found.props.android_ripple !== undefined);
 const pressable = (root: Root, id: string) => pressables(root, id)[0]!;
 const flat = (found: ReactTestInstance | undefined) => StyleSheet.flatten(found?.props.style) ?? {};
 const textNode = (within: ReactTestInstance, text: string) => within.findAll((found) => found.type === Text && found.props.children === text)[0];

@@ -10,7 +10,7 @@ import { groupKeptOpen } from "../groups/closeGuard";
 import { live, setMeetingGroup, updateCalendarSettings, useLive } from "./store";
 import { shownLiveOf } from "../tabs/tabLive";
 
-export const MEETING_FALLBACK_TITLE = "Meeting";
+const MEETING_FALLBACK_TITLE = "Meeting";
 const CLEANUP_IDLE_MS = 30 * 60_000;
 
 const store = () => useBrowser.getState();

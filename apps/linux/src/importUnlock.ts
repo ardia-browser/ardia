@@ -2,8 +2,8 @@ import type { BrowserSource, ImportKind } from "../../../packages/import/src/ind
 
 type LinuxProfile = BrowserSource["profiles"][number] & { needsPrimaryPassword?: boolean; cardsNeedKeyring?: boolean };
 
-export const APP_NAME = "Ardia";
-export const FIREFOX_CARD_KEY = "Firefox Encrypted Storage";
+const APP_NAME = "Ardia";
+const FIREFOX_CARD_KEY = "Firefox Encrypted Storage";
 
 const chosen = (source: BrowserSource, selected: readonly string[]) =>
   (source.profiles as LinuxProfile[]).filter((profile) => selected.length === 0 || selected.includes(profile.id));
@@ -14,7 +14,7 @@ export const asksPrimaryPassword = (source: BrowserSource, selected: readonly st
 const readsCardKey = (source: BrowserSource, selected: readonly string[], kinds: Iterable<ImportKind>) =>
   source.family === "firefox" && [...kinds].includes("autofill") && chosen(source, selected).some((profile) => profile.cardsNeedKeyring === true);
 
-export type UnlockCopy = { title: string; subtitle: string; lead: string; detail: string; field: boolean; waiting: string };
+type UnlockCopy = { title: string; subtitle: string; lead: string; detail: string; field: boolean; waiting: string };
 
 export function unlockCopy(source: BrowserSource, selected: readonly string[], kinds: Iterable<ImportKind>): UnlockCopy {
   const title = "Unlock your data for import";
@@ -116,7 +116,7 @@ export function createSecretSlot() {
   };
 }
 
-export type UnlockApi = {
+type UnlockApi = {
   unlockBrowser(browserId: string, options?: { primaryPassword?: string; profiles?: readonly string[]; kinds?: readonly string[] }): Promise<void>;
 };
 

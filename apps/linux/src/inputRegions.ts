@@ -7,8 +7,8 @@ export type PageArea = { slot: Element; rect: Rect; radii?: CornerRadii; cardRad
 type Page = { visible: boolean; radii?: () => CornerRadii; cardRadii?: () => CornerRadii };
 
 export const REVEAL_DEADLINE_MS = 150;
-export const SETTLE_FRAMES = 12;
-export const REVEAL_SLACK_PX = 24;
+const SETTLE_FRAMES = 12;
+const REVEAL_SLACK_PX = 24;
 
 export type RegionDeps = {
   send: ((regions: HostInputRegions) => Promise<unknown>) | null;
@@ -52,7 +52,7 @@ export function subtract(from: Rect, hole: Rect): Rect[] {
   return pieces.filter(area);
 }
 
-export const within = (inner: Rect, outer: Rect, slack = 0) =>
+const within = (inner: Rect, outer: Rect, slack = 0) =>
   inner.x >= outer.x - slack && inner.y >= outer.y - slack && inner.x + inner.width <= outer.x + outer.width + slack && inner.y + inner.height <= outer.y + outer.height + slack;
 
 const rounded = (rect: Rect): Rect => ({ x: Math.round(rect.x * 100) / 100, y: Math.round(rect.y * 100) / 100, width: Math.round(rect.width * 100) / 100, height: Math.round(rect.height * 100) / 100 });

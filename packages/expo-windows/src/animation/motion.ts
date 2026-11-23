@@ -9,7 +9,7 @@ type Timers = { requestAnimationFrame(frame: Frame): number; cancelAnimationFram
 type BurstListener = (burst: MotionBurst) => void;
 type ConsentEpoch = () => string;
 
-export const FRAME_MS = 1000 / 60;
+const FRAME_MS = 1000 / 60;
 const LONG_FRAME_MS = FRAME_MS * 2.5;
 const REPORT_AFTER_FRAMES = 3;
 

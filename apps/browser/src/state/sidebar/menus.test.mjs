@@ -577,6 +577,23 @@ test("Sleep Tab sleeps a pinned row, a Top App and a regular tab that Chrome kee
   webviews.clear();
 });
 
+test("Sleep Tab puts a page left by a form post, one with an unload prompt or one running a download to sleep when asked, but still keeps typed input", async () => {
+  const { w, ids } = windowWith("posted", "prompt", "downloading", "postedTyped", "front");
+  const [posted, prompt, downloading, postedTyped] = ids;
+  const discarded = [];
+  sleepableViews(ids, [], { [posted]: [100], [prompt]: [101, 7], [downloading]: [102], [postedTyped]: [100, 26] }, discarded);
+  takeTabSleepCounts();
+  for (const id of [posted, prompt, downloading, postedTyped]) {
+    await whileMenuIsUp(() => openTabMenu(w, S().tabs[id]), () => {}, "sleep");
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.deepEqual(discarded.sort(), [posted, prompt, downloading].sort(), "only automatic sleep is held back by these; the user's own Sleep Tab goes ahead");
+  const counts = takeTabSleepCounts();
+  assert.equal(counts.menu_sleeps_past_automatic, 3);
+  assert.equal(counts.menu_sleep_kept_reason, "typedInput", "typed text still keeps a posted page awake");
+  webviews.clear();
+});
+
 test("Sleep Tabs on a group asks Chrome about its hidden loaded tabs, nested groups included, and counts the ones it kept", async () => {
   const { w, ids } = windowWith("a", "b", "c", "d", "e");
   const [a, b, c, d, e] = ids;

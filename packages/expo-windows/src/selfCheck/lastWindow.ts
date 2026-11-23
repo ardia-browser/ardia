@@ -1,7 +1,7 @@
 import type { AppWindowsModule } from "../nativeModuleTypes";
 import { requireNativeModule } from "../modules";
 
-export const LAST_WINDOW_ID = "self-check-last-settings";
+const LAST_WINDOW_ID = "self-check-last-settings";
 const STILL_RUNNING_MS = 8000;
 
 const windows = () => requireNativeModule<Pick<AppWindowsModule, "quit" | "windowIds" | "openWindow" | "closeWindow" | "requestClose">>("ArdiaAppWindows");

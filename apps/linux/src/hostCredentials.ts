@@ -14,7 +14,7 @@ export const CREDENTIAL_CAPABILITIES = [
   "ArdiaAutofill.cardNumber",
 ] as const;
 
-export type CredentialAvailability = { available: boolean; reason?: string; code?: string; message?: string };
+type CredentialAvailability = { available: boolean; reason?: string; code?: string; message?: string };
 type ReauthStatus = {
   reauth: boolean;
   reauthReason?: string;
@@ -24,8 +24,8 @@ type ReauthStatus = {
   protectionFallback?: boolean;
   storage?: string;
 };
-export type PasswordStatus = ReauthStatus & { passwords: CredentialAvailability };
-export type AutofillStatus = ReauthStatus & { addresses: CredentialAvailability; cards: CredentialAvailability };
+type PasswordStatus = ReauthStatus & { passwords: CredentialAvailability };
+type AutofillStatus = ReauthStatus & { addresses: CredentialAvailability; cards: CredentialAvailability };
 
 const SECRET_CALLS = new Set(["passwords.save", "passwords.update", "passwords.add", "autofill.saveCard"]);
 

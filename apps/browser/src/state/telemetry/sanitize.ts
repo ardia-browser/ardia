@@ -108,7 +108,7 @@ export const JS_FATAL_KINDS = [
   "unknown",
 ] as const;
 
-export type JsFatalKind = (typeof JS_FATAL_KINDS)[number];
+type JsFatalKind = (typeof JS_FATAL_KINDS)[number];
 
 const RN_JS_ERRORS: Record<string, JsFatalKind> = {
   TypeError: "rn_js_type_error",
@@ -242,7 +242,7 @@ export function parseStack(stack: unknown, limit = 50, keep: (file: string) => b
   return frames.reverse();
 }
 
-export type NativeFrame = { image: string; symbol?: string; symbolOffset?: number; offset?: number };
+type NativeFrame = { image: string; symbol?: string; symbolOffset?: number; offset?: number };
 export type NativeImage = { name: string; uuid: string };
 
 const OUR_IMAGES = /^(Ardia|ArdiaCore|ArdiaShell|Chromium Framework|Expo|ExpoModulesCore|React|hermes|RCT|Sparkle|chrome$|chrome_crashpad_handler$|lib(?:EGL|GLESv2|vk_swiftshader|vulkan|qt5_shim|qt6_shim)\.so)/;

@@ -1,6 +1,6 @@
 import type { BrowserState } from "../browser/store";
 import { ancestorIds, depthOf, orderSections, placeBlock, syncGroupOrder, withParent } from "../groups/groups";
-import { isIncognitoProfile, isPinnedRow, makeTab, newId, pinKeyOf, snapshotTab, TILE_PIN, without } from "../browser/model";
+import { isIncognitoProfile, isPinnedRow, makeTab, newId, pinHomeOf, pinKeyOf, snapshotTab, TILE_PIN, without } from "../browser/model";
 import { pendingRestore, restoreId } from "../tabs/adoptIds";
 import type { BrowserWindow, HistoryEntry, ParkedPins, Tab, TabGroup } from "../browser/types";
 import { samePage } from "../../lib/url";
@@ -8,7 +8,6 @@ import { historyOf } from "../history/history";
 import { isRegularWindow } from "../windows/small";
 import { ASLEEP, withWake } from "../tabs/pageSession";
 import { mapSlotIds, slotTabIds, splitOf, splitTabIds } from "../splits/splits";
-
 
 type PinSource = Pick<BrowserState, "tabs" | "groups" | "history" | "profiles"> & Partial<Pick<BrowserState, "windows" | "splits">>;
 
@@ -18,8 +17,6 @@ function atPin(t: Tab, history: HistoryEntry[]): Partial<Pick<Tab, "url" | "titl
   const entry = history.find((h) => samePage(h.url, home));
   return { url: home, title: entry?.title ?? t.title, favicon: entry?.favicon ?? t.favicon };
 }
-
-const homeOf = (t: { url: string; pinnedUrl?: string | null }) => t.pinnedUrl || t.url;
 
 export function parkWindowPins(parked: Record<string, ParkedPins>, w: BrowserWindow, s: PinSource): Record<string, ParkedPins> {
   if (w.kind === "private") return parked;
@@ -90,7 +87,7 @@ export function adoptParkedPins(s: BrowserState, windowId: string, profileId: st
   const added: string[] = [];
   const splitPanes = new Set((park.splits ?? []).flatMap((v) => splitTabIds(v)));
   for (const { id, groupId, restoreFrom, ...snap } of park.tabs) {
-    const home = homeOf(snap);
+    const home = pinHomeOf(snap);
     const heldId = groupId ? undefined : held.get(id);
     if (heldId) {
       if (splitPanes.has(id) && !splitOf(s, heldId)) tabOf.set(id, heldId);

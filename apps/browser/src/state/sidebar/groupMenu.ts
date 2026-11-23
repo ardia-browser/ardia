@@ -19,6 +19,8 @@ import { urlParts } from "../../lib/urlParts";
 import { isPluginMenuChoice, pluginMenuItems, runPluginMenuChoice, type PluginMenuContext } from "../plugins/menus";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
+import { userClose } from "../tabs/closeActivation";
+import type { CloseOptions } from "../tabs/tabs";
 
 type GroupChoice = Destination | { kind: "color"; color: GroupColor | null };
 
@@ -107,8 +109,9 @@ export async function openGroupMenu(windowId: string, groupId: string) {
   const choice = await chooseFromMenu(groupMenuItems(store(), windowId, groupId));
   if (!choice) return;
   const removes = typeof choice === "string" ? REMOVES_FOLDER.has(choice) : choice.kind === "profile";
+  const closes = choice === "delete" || choice === "bookmarkBar" ? userClose(store().groups[groupId]?.tabIds ?? [], { consent }) : undefined;
   if (removes && !(await confirmRemovingShared(windowId, groupId))) return;
-  runGroupChoice(windowId, groupId, choice, consent);
+  runGroupChoice(windowId, groupId, choice, consent, closes);
 }
 
 const REMOVES_FOLDER = new Set(["pin", "ungroup", "delete", "bookmarkBar"]);
@@ -119,7 +122,7 @@ function sendGroup(groupId: string, to: GroupChoice) {
   else if (to.kind === "window") moveGroupToWindow(groupId, to.windowId);
 }
 
-function runGroupChoice(windowId: string, groupId: string, choice: string | GroupChoice, consent: ConsentToken | null) {
+function runGroupChoice(windowId: string, groupId: string, choice: string | GroupChoice, consent: ConsentToken | null, closes: CloseOptions | undefined) {
   const s = store();
   const g = s.groups[groupId];
   if (!g || g.windowId !== windowId) return;
@@ -146,8 +149,8 @@ function runGroupChoice(windowId: string, groupId: string, choice: string | Grou
   else if (choice === "copy") copyUrls(g.tabIds, false);
   else if (choice === "copyMd") copyUrls(g.tabIds, true);
   else if (choice === "ungroup") s.ungroup(groupId);
-  else if (choice === "bookmarkBar") s.moveGroupToBookmarksBar(groupId);
+  else if (choice === "bookmarkBar") s.moveGroupToBookmarksBar(groupId, closes);
   else if (choice === "sleep") void sleepTabsFromMenu(groupTabIds(s.groups, groupId).filter((id) => canSleep(s, id)), "group");
-  else if (choice === "close") void closeGroup(groupId);
-  else if (choice === "delete") s.deleteGroup(groupId);
+  else if (choice === "close") void closeGroup(groupId, { user: { consent } });
+  else if (choice === "delete") s.deleteGroup(groupId, closes);
 }

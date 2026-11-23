@@ -6,7 +6,7 @@ import { siteKey } from "../groups/groupNames";
 import { notePanelHint } from "../telemetry/passwordManagerCounts";
 
 export const PANEL_HINTS_DOCUMENT = "password-panel-hints.json";
-export const PANEL_HINT_DISMISSALS = 3;
+const PANEL_HINT_DISMISSALS = 3;
 const LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 
 let dismissals: Record<string, number> | null = null;
@@ -28,7 +28,7 @@ export function panelHintLabel(url: string | undefined): string | null {
   return LABEL.test(label) ? label : null;
 }
 
-export const panelHintQuiet = (profileId: string) => (dismissalsByProfile()[profileId] ?? 0) >= PANEL_HINT_DISMISSALS;
+const panelHintQuiet = (profileId: string) => (dismissalsByProfile()[profileId] ?? 0) >= PANEL_HINT_DISMISSALS;
 
 export async function offerPanelHint(tabId: string, opened: FieldProviderOpened): Promise<boolean> {
   if (!PLATFORM_FEATURES.systemPasswordManagers || opened?.shown !== true || (opened.panel !== "above" && opened.panel !== "below")) return false;

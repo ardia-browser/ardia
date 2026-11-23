@@ -7,7 +7,7 @@ import { offsets, type Height } from "./listOffsets";
 import { seenSliding, type ListViewport } from "./listViewport";
 
 export type Section = { list: string[]; base: number };
-export type GroupPlaces = { sections: Section[]; membersOf: (s: BrowserState, groupId: string) => string[]; membersTop: (members: string[]) => number; height: Height };
+type GroupPlaces = { sections: Section[]; membersOf: (s: BrowserState, groupId: string) => string[]; membersTop: (members: string[]) => number; height: Height };
 
 export function groupMembersTop(s: BrowserState, groupId: string, places: GroupPlaces, depth = 0): number | null {
   const key = entryKey("group", groupId);
@@ -24,7 +24,7 @@ export function groupMembersTop(s: BrowserState, groupId: string, places: GroupP
   return at === undefined ? null : parentTop + at + places.membersTop(places.membersOf(s, groupId));
 }
 
-export type PlaceInputs = { entries: string[]; viewport: ListViewport | null; above: number; pinned: (() => Section | null) | null };
+type PlaceInputs = { entries: string[]; viewport: ListViewport | null; above: number; pinned: (() => Section | null) | null };
 
 export const groupSeen = (read: () => PlaceInputs, height: Height, membersOf: GroupPlaces["membersOf"]) => (groupId: string, y: number, h: number, before: BrowserState) => {
   const { entries, viewport, above, pinned } = read();

@@ -19,7 +19,7 @@ import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
-export const MARKER_VARIABLES = ["ARDIA_DATA_DIR", "HOME"];
+const MARKER_VARIABLES = ["ARDIA_DATA_DIR", "HOME"];
 
 const real = (dir) => {
   try {

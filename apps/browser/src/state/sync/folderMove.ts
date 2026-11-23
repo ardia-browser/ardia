@@ -4,7 +4,7 @@ import { onConsentPeriodChange } from "../telemetry/choice";
 import { APP_SCOPE, type SyncDoc } from "./syncDoc";
 import { PROFILE, profileScope } from "./records";
 
-export const SYNC_FOLDER_NAME = "Ardia Sync";
+const SYNC_FOLDER_NAME = "Ardia Sync";
 const DAMAGED_GIVEN_UP_MS = 86_400_000;
 
 export type FolderMoveResult =
@@ -41,7 +41,7 @@ export function folderScopes(doc: SyncDoc): string[] {
   return [...new Set([APP_SCOPE, ...Object.keys(doc.scopes), ...linked, ...listed])];
 }
 
-export type FolderMoveNative = {
+type FolderMoveNative = {
   folderInfo(path: string | null): Promise<FolderInfo>;
   chainStatus(folder: string): Promise<"ok" | "missing" | "unavailable">;
   createChain(folder: string): Promise<void>;
@@ -52,7 +52,7 @@ export type FolderMoveNative = {
 
 const trimmed = (path: string) => (path.length > 1 ? path.replace(/\/+$/, "") : path);
 
-export const parentFolder = (path: string) => {
+const parentFolder = (path: string) => {
   const clean = trimmed(path);
   const cut = clean.lastIndexOf("/");
   return cut > 0 ? clean.slice(0, cut) : "/";
@@ -60,7 +60,7 @@ export const parentFolder = (path: string) => {
 
 const baseName = (path: string) => trimmed(path).split("/").pop() ?? "";
 const within = (inner: string, outer: string) => trimmed(inner).startsWith(`${trimmed(outer)}/`);
-export const samePath = (a: string, b: string) => trimmed(a) === trimmed(b);
+const samePath = (a: string, b: string) => trimmed(a) === trimmed(b);
 
 export async function syncFolderAt(picked: string, info: (path: string) => Promise<FolderInfo | null>): Promise<string> {
   const folder = trimmed(picked);
@@ -78,7 +78,7 @@ export async function pickSyncFolder(current: string | null): Promise<string | n
   return picked ? syncFolderAt(picked, (path) => native.folderInfo(path).catch(() => null)) : null;
 }
 
-export function listedProfileScopes(appFiles: Listing["files"]): string[] {
+function listedProfileScopes(appFiles: Listing["files"]): string[] {
   const scopes = new Set<string>();
   for (const { payload } of appFiles) {
     const file = parseSyncFile(payload);

@@ -2,13 +2,13 @@ import { isFields } from "../../lib/decode";
 import { readStorageText, writeStorageText } from "./hostIo";
 
 export const MAX_STORAGE_BYTES = 2 * 1024 * 1024;
-export const STORAGE_LIMITS = { key: 128, keys: 1000, valueBytes: 256 * 1024, totalBytes: MAX_STORAGE_BYTES } as const;
+const STORAGE_LIMITS = { key: 128, keys: 1000, valueBytes: 256 * 1024, totalBytes: MAX_STORAGE_BYTES } as const;
 
 const STORAGE_KEY = /^[\x21-\x7e]{1,128}$/;
 
 type Data = Record<string, unknown>;
 export type StorageOutcome<T> = { ok: true; value: T } | { ok: false; code: "bad_request" | "failed"; message: string; closed?: true };
-export type StorageLookup = { found: true; value: unknown } | { found: false };
+type StorageLookup = { found: true; value: unknown } | { found: false };
 type Loaded = { ok: true; data: Data } | { ok: false; message: string };
 
 const loaded = new Map<string, Data>();
@@ -63,7 +63,7 @@ function withData<T>(name: string, use: (data: Data, epoch: number) => StorageOu
   });
 }
 
-export const isStorageKey = (key: unknown): key is string => typeof key === "string" && STORAGE_KEY.test(key);
+const isStorageKey = (key: unknown): key is string => typeof key === "string" && STORAGE_KEY.test(key);
 
 export function storageGet(name: string, key: unknown): Promise<StorageOutcome<StorageLookup>> {
   if (!isStorageKey(key)) return Promise.resolve(fail("bad_request", `key is 1 to ${STORAGE_LIMITS.key} printable ASCII characters.`));
@@ -115,12 +115,6 @@ export function dropPluginStorage(name: string) {
   loaded.delete(name);
   generations.set(name, (generations.get(name) ?? 0) + 1);
 }
-
-export const wipePluginStorage = (name: string): Promise<StorageOutcome<true>> =>
-  queued(name, async (epoch) => {
-    dropPluginStorage(name);
-    return save(name, {}, epoch);
-  });
 
 export async function closePluginStorage(name: string): Promise<void> {
   closed.add(name);

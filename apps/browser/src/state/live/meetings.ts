@@ -2,7 +2,7 @@ import type { CalendarParticipant, SystemCalendarEvent } from "../../platform/ca
 import { UI_LOCALE } from "../../lib/uiLocale";
 
 export type CalendarEvent = SystemCalendarEvent;
-export type MeetingProvider = "meet" | "zoom" | "teams" | "webex" | "other";
+type MeetingProvider = "meet" | "zoom" | "teams" | "webex" | "other";
 
 const host = (url: string) => {
   try {
@@ -50,7 +50,7 @@ export function meetingOf(url: string): { provider: MeetingProvider; key: string
   return null;
 }
 
-export const isMeetingUrl = (url: string) => !!meetingOf(url);
+const isMeetingUrl = (url: string) => !!meetingOf(url);
 
 const URL_RE = /https?:\/\/[^\s<>"'`)\]]+/g;
 const NOISE = [
@@ -98,7 +98,7 @@ const NONE_DISMISSED: DismissedNow = {};
 
 const isDismissed = (e: CalendarEvent, dismissed: DismissedNow) => dismissed[e.occurrence] !== undefined;
 
-export function currentOrNext(events: CalendarEvent[], now: number, dismissed: DismissedNow = NONE_DISMISSED): CalendarEvent | null {
+function currentOrNext(events: CalendarEvent[], now: number, dismissed: DismissedNow = NONE_DISMISSED): CalendarEvent | null {
   const meetings = events.filter(isMeeting).filter((e) => e.end > now && !isDismissed(e, dismissed));
   const current = meetings.filter((e) => e.start <= now).sort((a, b) => b.start - a.start)[0];
   return current ?? meetings.sort((a, b) => a.start - b.start)[0] ?? null;

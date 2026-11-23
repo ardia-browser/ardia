@@ -17,6 +17,7 @@ final class ControlConnection {
   private let onClose: (ControlConnection) -> Void
   private let onWritten: ([Int]) -> Void
   private let onPeerFinished: (ControlConnection) -> Void
+  private let mayWrite: (ControlConnection) -> Bool
   private var readSource: DispatchSourceRead?
   private var writeSource: DispatchSourceWrite?
   private var writeArmed = false
@@ -34,7 +35,8 @@ final class ControlConnection {
   init(
     id: Int, fd: Int32, queue: DispatchQueue, onLine: @escaping (ControlConnection, String) -> Void,
     onClose: @escaping (ControlConnection) -> Void, onWritten: @escaping ([Int]) -> Void,
-    onPeerFinished: @escaping (ControlConnection) -> Void = { _ in }
+    onPeerFinished: @escaping (ControlConnection) -> Void = { _ in },
+    mayWrite: @escaping (ControlConnection) -> Bool = { _ in true }
   ) {
     self.id = id
     self.fd = fd
@@ -43,6 +45,7 @@ final class ControlConnection {
     self.onClose = onClose
     self.onWritten = onWritten
     self.onPeerFinished = onPeerFinished
+    self.mayWrite = mayWrite
   }
 
   func open() {
@@ -144,10 +147,14 @@ final class ControlConnection {
   }
 
   private func flush() {
-    let result = output.write(to: fd)
-    report(output.takeFinishedTickets())
+    var result = ControlOutput.WriteResult.lineDone
+    while result == .lineDone {
+      guard !closed, finishingLine || mayWrite(self) else { return }
+      result = output.write(to: fd, oneLine: true)
+      report(output.takeFinishedTickets())
+    }
     switch result {
-    case .drained:
+    case .drained, .lineDone:
       if finishingLine { return close() }
       disarmWrite()
       closeIfDrained()

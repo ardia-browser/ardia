@@ -97,6 +97,8 @@ source_set("core") {
     "ac_page_channel_held.mm",
     "ac_page_script.cc",
     "ac_page_script.h",
+    "ac_discard_veto.h",
+    "ac_discard_veto.mm",
     "ac_page_view.h",
     "ac_page_view.mm",
     "ac_password_prompt.h",

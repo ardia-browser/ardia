@@ -35,6 +35,9 @@ test("the licences list this phone's own native code: Ardia's Swift packages on 
   } else {
     expect(text).toContain("Android Jetpack");
     expect(text).not.toContain("ArdiaKit");
+    expect(text).toContain("Copyright (c) 2026 Andras Prifer");
+    expect(text).toContain("The above copyright notice and this permission notice shall be included");
   }
+  if (Platform.OS === "ios") expect(text).not.toContain("Andras Prifer");
   unmount(root);
 });

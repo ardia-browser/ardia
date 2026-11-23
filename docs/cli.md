@@ -70,8 +70,15 @@ reaches Ardia two ways (`docs/automation.md`, `docs/control-socket.md`):
   (`Browser.setDownloadBehavior`), emulation on any tab, cookies, storage, request interception, screencasts and the
   debugger all work. Events and replies pass through unchanged.
 
+  The control socket's `control.devtoolsEndpoint` hands out the port and token, only to programs the socket admitted
+  (the doorbell's rule, `docs/control-socket.md` › The DevTools token). The command doesn't use it yet. Next it will,
+  falling back to `ArdiaControl.json` only on an `unknown_method` reply to that request; after that the engine stops
+  writing the token into the file, so the file no longer lets a program skip the doorbell.
+
   What still guards it is what keeps other users and web pages off the connection, not what a process running as
-  you may do: the token (32 random bytes per start, compared in constant time, only in the 0600 `ArdiaControl.json`),
+  you may do: the token (32 random bytes per start, compared in constant time, kept in the 0600 `ArdiaControl.json` and handed by
+  the control socket's `control.devtoolsEndpoint` to programs it admitted, which keep it until the token connection
+  restarts),
   loopback only, and nothing a browser sends: a request with an `Origin`, `Sec-Fetch-Site` or `Sec-Fetch-Dest` header, or
   a `Host` other than `127.0.0.1:<port>` or `localhost:<port>`, is refused before the token is read. So no web page,
   extension page, service worker or DNS-rebound name in a browser that sends Fetch Metadata (Chromium, Firefox 90 and

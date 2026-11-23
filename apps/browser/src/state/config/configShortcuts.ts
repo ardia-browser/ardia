@@ -97,7 +97,7 @@ function perProfileEntry(id: string, profiles: ShortcutProfiles): CommandEntry |
 export const shortcutDescription = (entry: CommandEntry): string =>
   entry.defaults.length ? `${entry.title} (default ${entry.defaults.map(formatShortcut).join(", ")})` : `${entry.title} (no default)`;
 
-export type ShortcutsResult = { overrides: Record<string, string[]>; problems: string[] };
+type ShortcutsResult = { overrides: Record<string, string[]>; problems: string[] };
 
 export function configShortcuts(file: string, given: unknown, current: Readonly<Record<string, string[]>>, profiles: ShortcutProfiles = { order: [], mustExist: false }): ShortcutsResult {
   if (typeof given !== "object" || given === null || Array.isArray(given)) return { overrides: { ...current }, problems: [`${file}: shortcuts must be an object of command id to shortcut`] };

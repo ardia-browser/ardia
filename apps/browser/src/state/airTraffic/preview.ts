@@ -11,7 +11,7 @@ export type LinkPreview =
   | { ok: false }
   | { ok: true; url: string; opening: OpeningTrace; trace: LinkTrace | null; dropped: boolean; profileName: string; groupName: string | null; usedLast: boolean; open: OpenAs };
 
-export function previewUrl(typed: string): string | null {
+function previewUrl(typed: string): string | null {
   const text = typed.trim();
   if (!text) return null;
   const parts = urlParts(/^[a-z][a-z\d+.-]*:\/\//i.test(text) ? text : `https://${text}`);

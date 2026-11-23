@@ -77,9 +77,9 @@ export type NativeFileDropAreaProps = Omit<FileDropAreaProps, "onDropUpdate"> & 
 
 const NativeFileDropArea = requireNativeViewManager<NativeFileDropAreaProps>("ArdiaFileDrop");
 
-export type MagnifyPhase = "began" | "changed" | "ended" | "cancelled";
+type MagnifyPhase = "began" | "changed" | "ended" | "cancelled";
 export type MagnifyUpdate = { phase: MagnifyPhase; magnification: number };
-export type MagnifyAreaProps = ViewProps & {
+type MagnifyAreaProps = ViewProps & {
   enabled?: boolean;
   onMagnify?: (e: MagnifyUpdate) => void;
 };
@@ -115,7 +115,7 @@ export const FileDropArea = forwardRef<View, FileDropAreaProps>(function FileDro
   );
 });
 
-export type DevDragAction = "move" | "drop" | "cancel" | "end";
+type DevDragAction = "move" | "drop" | "cancel" | "end";
 export type DevDragPayload = { files?: string[]; urls?: string[]; publicURLs?: string[]; text?: string; fileDrag?: boolean };
 
 export type FileDropNative = {

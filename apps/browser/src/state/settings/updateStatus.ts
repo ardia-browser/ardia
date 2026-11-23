@@ -9,7 +9,7 @@ export const FOLLOW_FOR_MS = 120_000;
 export const FOLLOW_UPDATE_EVERY_MS = 2_000;
 export const FOLLOW_UPDATE_FOR_MS = 75 * 60 * 1000;
 
-export type SwitchOutcome = "offered" | "upToDate" | "failed";
+type SwitchOutcome = "offered" | "upToDate" | "failed";
 
 export function switchOutcome(check: SwitchCheck | null | undefined): SwitchOutcome | null {
   switch (check?.phase) {
@@ -39,7 +39,7 @@ export function updateUnderWay(state: UpdaterState | undefined): boolean {
   return phase === "downloading" || phase === "installing";
 }
 
-export type CheckNowControl = { title: string; checking: boolean; disabled: boolean; pressable: boolean };
+type CheckNowControl = { title: string; checking: boolean; disabled: boolean; pressable: boolean };
 
 export function checkNowControl(state: UpdaterState | undefined): CheckNowControl {
   const idle = { title: "Check Now", checking: false, disabled: false, pressable: true };

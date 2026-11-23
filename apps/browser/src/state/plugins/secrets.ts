@@ -1,12 +1,12 @@
 import { asSecret, type Secret } from "@ardia/core";
 import { keychainDelete, keychainRead, keychainReadSecret, keychainSet, keychainSetSecret } from "../../platform/keychain";
 
-export const SECRET_LIMITS = { keys: 64, valueBytes: 16 * 1024 } as const;
+const SECRET_LIMITS = { keys: 64, valueBytes: 16 * 1024 } as const;
 const SECRET_KEY = /^[A-Za-z0-9_-]{1,64}$/;
 
 export type SecretOutcome<T> = { ok: true; value: T } | { ok: false; code: "bad_request" | "failed"; message: string };
 
-export const secretAccount = (plugin: string, key: string) => `ardia.plugin.${plugin}.${key}`;
+const secretAccount = (plugin: string, key: string) => `ardia.plugin.${plugin}.${key}`;
 const indexAccount = (plugin: string) => `ardia.plugin-index.${plugin}`;
 
 const queues = new Map<string, Promise<unknown>>();
@@ -18,11 +18,11 @@ function queued<T>(plugin: string, work: () => Promise<T>): Promise<T> {
 }
 
 const fail = <T,>(code: "bad_request" | "failed", message: string): SecretOutcome<T> => ({ ok: false, code, message });
-export const isSecretKey = (key: unknown): key is string => typeof key === "string" && SECRET_KEY.test(key);
+const isSecretKey = (key: unknown): key is string => typeof key === "string" && SECRET_KEY.test(key);
 
 type Index = { ok: true; keys: string[] } | { ok: false; message: string };
 
-export const UNREADABLE_INDEX = "The Keychain's list of this plugin's secrets can't be read, so Ardia leaves it alone.";
+const UNREADABLE_INDEX = "The Keychain's list of this plugin's secrets can't be read, so Ardia leaves it alone.";
 
 type Read = { ok: true; value: string | null } | { ok: false; message: string };
 

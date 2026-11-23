@@ -34,7 +34,7 @@ export function CheckRow({ value, onChange, label }: { value: boolean; onChange:
   );
 }
 
-export const PROMPT_INPUT_DELAY_MS = 500;
+const PROMPT_INPUT_DELAY_MS = 500;
 
 export function usePromptInputGuard(promptKey: string | number | null | undefined) {
   const visibleAt = useRef(Number.POSITIVE_INFINITY);

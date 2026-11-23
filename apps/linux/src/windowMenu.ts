@@ -3,7 +3,7 @@ import type { ArdiaHost } from "./host";
 import { hostSupports, invokeHost } from "./host.ts";
 import { privateWindowEntries } from "./hostPrivateWindows.ts";
 
-export type WindowMenuWindow = { id: string; title: string; current?: boolean };
+type WindowMenuWindow = { id: string; title: string; current?: boolean };
 type WindowMenuState = { windowOrder: readonly string[]; windows: Record<string, { kind?: string } | undefined> };
 
 export function windowMenuWindows<S extends WindowMenuState>(
@@ -49,7 +49,7 @@ export function minimizeAllWindows(windowIds: readonly string[], host?: ArdiaHos
   return Promise.allSettled(windowIds.map((id) => invokeHost("ArdiaShell.minimizeWindow", { args: [id] }, host))).then(() => undefined);
 }
 
-export type WindowMenuDeps<S extends WindowMenuState> = {
+type WindowMenuDeps<S extends WindowMenuState> = {
   state: () => S;
   title: (state: S, id: string) => string;
   utility: (id: string) => boolean;

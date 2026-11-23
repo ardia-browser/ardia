@@ -2,7 +2,7 @@ import { adjustingLightness, parseHex, type Vec4 } from "./colors";
 
 const DEFAULT_TINT: Vec4 = [0.5, 0.5, 0.5, 1];
 
-export const MATERIAL = {
+const MATERIAL = {
   dark: { material: [68.3 / 255, 68.0 / 255, 68.4 / 255], baseTint: { white: 0, alpha: 0.4 }, gradientOpacity: 0.5 },
   light: { material: [211.2 / 255, 206.7 / 255, 206.0 / 255], baseTint: { white: 1, alpha: 0.8 }, gradientOpacity: 0.75 },
 };

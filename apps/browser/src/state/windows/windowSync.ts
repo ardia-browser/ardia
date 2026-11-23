@@ -12,7 +12,7 @@ import type { Frame } from "../browser/types";
 const fitsBelowSaved = (frame: Frame, was: Frame | null | undefined, [width, height]: readonly [number, number]) =>
   (!was || was[2] !== frame[2] || was[3] !== frame[3]) && (Math.round(frame[2]) < width || Math.round(frame[3]) < height);
 
-export type LightsCenter = LightsPlace | null;
+type LightsCenter = LightsPlace | null;
 
 export type WindowPort = {
   open(id: string, options: OpenWindowOptions, lightsCenter: LightsCenter): void;
@@ -24,7 +24,7 @@ export type WindowPort = {
   releaseProfile(profile: string): void;
 };
 
-export type WindowSyncSetup = {
+type WindowSyncSetup = {
   port: WindowPort;
   getState(): BrowserState;
   isQuitting(): boolean;

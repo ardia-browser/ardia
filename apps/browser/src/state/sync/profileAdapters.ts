@@ -15,9 +15,9 @@ const NOTHING_REMOVED: Removed = () => new Set();
 
 export type ProfileRecord = { n: string; c: Profile["color"]; i: string | null; d?: true; o?: true; th?: ProfileTheme | null };
 
-export type ProfileThemeRecord = { t: ProfileTheme } | { preset: true };
+type ProfileThemeRecord = { t: ProfileTheme } | { preset: true };
 
-export type ThemeAngleRecord = { a?: number; d?: number };
+type ThemeAngleRecord = { a?: number; d?: number };
 
 type Stamped = { v: unknown; o?: readonly [string, number] };
 

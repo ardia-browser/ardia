@@ -1,6 +1,6 @@
 import { useBrowser } from "../browser/store";
 
-export const LATE_LIMIT_MS = 60_000;
+const LATE_LIMIT_MS = 60_000;
 
 type Outstanding = { owner: number | null; token: object; timer: ReturnType<typeof setTimeout> };
 

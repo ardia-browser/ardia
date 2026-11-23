@@ -7,7 +7,7 @@ import { boundFolders } from "../sharedFolders/store";
 
 type Trees = { groups: Set<string>; tabs: Set<string> };
 
-export function boundTrees(s: BrowserState): Trees {
+function boundTrees(s: BrowserState): Trees {
   const bound = new Set(boundFolders().map(({ profileId, key }) => `${profileId}\u0001${key}`));
   const groups = new Set<string>();
   const tabs = new Set<string>();

@@ -1,5 +1,6 @@
 import { takeTabLayoutCounts } from "./tabLayoutCounts";
 import { takeTabMotionCounts } from "./tabMotionCounts";
+import { takeCloseActivationCounts } from "./closeActivationCounts";
 import { isSharing, onConsentPeriodChange } from "./choice";
 import { consentedCount, consentedMax } from "./consentedCount";
 import { countFor, type ConsentToken } from "./consentPeriod";
@@ -141,5 +142,6 @@ export function takeTabStripCounts() {
     tab_strip_closes_after_select_ignored: closesAfterSelect.take(),
     ...takeTabLayoutCounts(),
     ...takeTabMotionCounts(),
+    ...takeCloseActivationCounts(),
   };
 }

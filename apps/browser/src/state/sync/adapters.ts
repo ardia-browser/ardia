@@ -6,7 +6,6 @@ import { useBrowser, type BrowserState } from "../browser/store";
 import { engineProfile } from "../browser/model";
 import { profileOpened } from "../profiles/profileLoading";
 import { isPeekTab } from "../peek/peek";
-import { fromSync } from "../pins/pinOrderChoices";
 import { fromLegacy } from "../../lib/legacy";
 import { thisDeviceDetails } from "./deviceDetails";
 import type { BookmarkNode } from "../browser/types";
@@ -203,7 +202,7 @@ export function deviceTabsAdapter(profileId: string, deviceId: string, name: () 
 
 const PASSWORD_READ_INTERVAL = 30_000;
 
-export type SealedPasswords = {
+type SealedPasswords = {
   read: (engineProfile: string) => Promise<SealedLogin[] | null | undefined>;
   save: (engineProfile: string, origin: string, username: string, sealed: string, replacing: boolean) => Promise<boolean>;
 };

@@ -1,6 +1,6 @@
 import { cancelShortcutRecording, recordShortcut, type MenuShortcut, resolvedShortcuts, useCtrlTabChoice, useMenuBarRevision } from "../../../state/commands/commandShortcuts";
 import type { CtrlTabChoice } from "../../../state/commands/ctrlTabKeys";
-import { Box, Button, EmptyState, KeyCap, PopUp, SearchField, space, Symbol, Text, Toggle, useHover, type Option } from "../../ui";
+import { Box, Button, EmptyState, KeyCap, PopUp, SearchField, space, Symbol, Text, useHover, type Option } from "../../ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
 import { useTheme } from "../../ui/theme";

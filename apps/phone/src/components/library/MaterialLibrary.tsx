@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { BackHandler, FlatList, Keyboard, Pressable, SectionList, StyleSheet, Text, TextInput, View, type GestureResponderEvent } from "react-native";
+import { BackHandler, FlatList, Keyboard, SectionList, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, type PressableEvent } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { predictiveBack } from "@ardia/phone-native";
@@ -301,7 +302,7 @@ function LibraryTabs({ section }: { section: LibrarySection }) {
   );
 }
 
-type ListItemProps = { testID?: string; leading: ReactNode; headline: string; supporting?: string | null; trailing?: string | null; label?: string; hint?: string; onPress: () => void; onLongPress?: (event: GestureResponderEvent) => void };
+type ListItemProps = { testID?: string; leading: ReactNode; headline: string; supporting?: string | null; trailing?: string | null; label?: string; hint?: string; onPress: () => void; onLongPress?: (event: PressableEvent) => void };
 
 function ListItem({ testID, leading, headline, supporting, trailing, label, hint, onPress, onLongPress }: ListItemProps) {
   const { scheme } = useMaterialTheme();

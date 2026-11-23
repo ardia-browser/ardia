@@ -46,7 +46,7 @@ type RawCheck =
   | { __typename: "CheckRun"; name: string; status: string; conclusion: string | null; detailsUrl: string | null }
   | { __typename: "StatusContext"; context: string; state: string; targetUrl: string | null };
 
-export type RawPR = {
+type RawPR = {
   id: string;
   state?: "OPEN" | "CLOSED" | "MERGED";
   number: number;
@@ -67,8 +67,6 @@ export type RawPR = {
   reviewThreads?: { nodes: { isResolved: boolean }[] };
   commits: { nodes: { commit: { statusCheckRollup: { state: string; contexts: { nodes: RawCheck[] } } | null } }[] };
 };
-
-type StateCount = { state: string; count: number };
 
 export type ListedPR = {
   id: string;
@@ -123,7 +121,7 @@ const withLink = (text: string, providerMessage: string) => {
   return link ? `${text}: ${link}` : text;
 };
 
-export function checkState(c: RawCheck): CheckState {
+function checkState(c: RawCheck): CheckState {
   if (c.__typename === "StatusContext") {
     if (c.state === "SUCCESS") return "success";
     if (c.state === "FAILURE" || c.state === "ERROR") return "failure";
@@ -190,7 +188,7 @@ export function listingOf(json: GithubResponse): Listing {
   return { authored: idsOf(data?.authored.nodes ?? []), review: idsOf(data?.review.nodes ?? []), direct: new Set(idsOf(data?.direct.nodes ?? [])) };
 }
 
-export type Sectioned = { id: string; section: PullRequestSection };
+type Sectioned = { id: string; section: PullRequestSection };
 
 export function sectioned(listing: Listing, filters: { authored: boolean; reviewRequests: boolean }): Sectioned[] {
   const out: Sectioned[] = [];
@@ -262,7 +260,7 @@ export function withStacks(items: LiveItem[]): LiveItem[] {
   return items.map((it) => (info.has(it.id) && it.pr ? { ...it, pr: { ...it.pr, stack: info.get(it.id) } } : it));
 }
 
-export type CheckSummary = {
+type CheckSummary = {
   text: string;
   tone: "success" | "failure" | "pending" | "neutral";
   counts: { success: number; failure: number; pending: number };

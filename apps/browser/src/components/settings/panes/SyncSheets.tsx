@@ -199,7 +199,7 @@ function sharingDescription(p: Pick<RemoteProfile, "sharesWith" | "waiting">): s
   return added ? `On your other devices. Shares data with ${name}, which is added too.` : `On your other devices. Shares data with ${name}.`;
 }
 
-export function remoteProfileDescription(p: Pick<RemoteProfile, "sharesWith" | "waiting" | "sharedByOthers">): string {
+function remoteProfileDescription(p: Pick<RemoteProfile, "sharesWith" | "waiting" | "sharedByOthers">): string {
   const sharing = sharingDescription(p);
   if (!p.sharedByOthers) return sharing;
   return `${sharing.endsWith(".") ? sharing : `${sharing}.`} To remove it, first remove the profiles that share its data.`;

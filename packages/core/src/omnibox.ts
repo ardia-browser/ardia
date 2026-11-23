@@ -3,7 +3,7 @@ import { cleanUrl } from "./cleanUrl.ts";
 import { displayHost, punycodeEncode } from "./idn.ts";
 import { PSL_TLDS } from "./tlds.ts";
 
-export type ParsedUrl = { scheme: string; host: string; port: string; path: string; query: string; hash: string };
+type ParsedUrl = { scheme: string; host: string; port: string; path: string; query: string; hash: string };
 
 const URL_PARTS = /^([a-z][a-z0-9+.-]*):\/\/(?:[^@/?#]*@)?(\[[^\]]*\]|[^:/?#]*)(?::(\d+))?([^?#]*)(\?[^#]*)?(#.*)?$/i;
 

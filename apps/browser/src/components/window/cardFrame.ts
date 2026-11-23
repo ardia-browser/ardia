@@ -4,7 +4,7 @@ import { perLook } from "../ui/tokens";
 import { sidebarCardGap } from "./dockMotion";
 import { currentInterfaceScale, useCurrentInterfaceScale } from "../../state/settings/interfaceScale";
 
-export type CardFrame = PageFrame & { dockGap: number };
+type CardFrame = PageFrame & { dockGap: number };
 
 const framesOfLook = perLook(() => new Map<string, CardFrame>());
 

@@ -79,7 +79,7 @@ const unavailable = (feature: string) => (..._args: unknown[]): Promise<never> =
 
 export const fetchBangList: (etag: string | null) => Promise<BangListReply> = unavailable("Bang list fetching");
 
-export const LINUX_WINDOW_CORNER_RADIUS = 19;
+const LINUX_WINDOW_CORNER_RADIUS = 19;
 
 const frameCornerRadius = (host?: ArdiaHost) => (id: string): Promise<number> =>
   invokeHost<unknown>("ArdiaShell.windowFrame", { args: [id] }, host).then(

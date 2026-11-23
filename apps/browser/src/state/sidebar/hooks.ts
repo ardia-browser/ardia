@@ -1,8 +1,9 @@
 import { useShallow } from "zustand/react/shallow";
 import { useBrowser } from "../browser/store";
-import { activeTabId, isPinnedRow, tabTitle, viewTabIds } from "../browser/model";
-import { liveTabOpen, liveTabPlace, stackMembers } from "../live/rows";
+import { activeTabId, isPinnedRow, tabTitle } from "../browser/model";
+import { liveTabOpen, stackMembers } from "../live/rows";
 import { useLive } from "../live/store";
+import { liveActiveTab, liveItemTab, liveStrays } from "./liveRows";
 import type { Tab } from "../browser/types";
 import { awayFromPin } from "../pins/organize";
 import { cleanedTabsFor } from "../pins/closedTabs";
@@ -105,21 +106,12 @@ export const useClosedTabs = () => useBrowser((s) => s.closedTabs);
 export const useClosedGroups = () => useBrowser((s) => s.closedGroups);
 
 export const useLiveStrays = (windowId: string, profileId: string, folderId: string, itemIds: Set<string>, hiddenIds: Set<string>) =>
-  useBrowser(
-    useShallow((s) =>
-      viewTabIds(s, windowId, profileId).filter((id) => s.tabs[id]?.liveItem?.folderId === folderId && liveTabPlace(s.tabs[id]!.liveItem!.itemId, itemIds, hiddenIds) === "stray"),
-    ),
-  );
+  useBrowser(useShallow((s) => liveStrays(s, windowId, profileId, folderId, itemIds, hiddenIds)));
 
 export const useLiveActiveTab = (windowId: string, profileId: string, folderId: string, itemIds: Set<string>, hiddenIds: Set<string>) =>
-  useBrowser((s) => {
-    const id = activeTabId(s, windowId, profileId) ?? "";
-    const liveItem = s.tabs[id]?.liveItem;
-    return liveItem?.folderId === folderId && liveTabPlace(liveItem.itemId, itemIds, hiddenIds) !== "hidden" ? id : null;
-  });
+  useBrowser((s) => liveActiveTab(s, windowId, profileId, folderId, itemIds, hiddenIds));
 
-export const useLiveItemTab = (windowId: string, profileId: string, folderId: string, itemId: string) =>
-  useBrowser((s) => (liveTabOpen(s.tabs, folderId, [itemId]) ? (viewTabIds(s, windowId, profileId).find((id) => s.tabs[id]?.liveItem?.itemId === itemId && s.tabs[id]?.liveItem?.folderId === folderId) ?? null) : null));
+export const useLiveItemTab = (windowId: string, profileId: string, folderId: string, itemId: string) => useBrowser((s) => liveItemTab(s, windowId, profileId, folderId, itemId));
 
 export const useLiveTabOpen = (folderId: string, itemIds: string[]) => useBrowser((s) => liveTabOpen(s.tabs, folderId, itemIds));
 

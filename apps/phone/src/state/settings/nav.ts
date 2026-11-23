@@ -22,13 +22,20 @@ export type SettingsRoute =
   | { page: "licenses" }
   | { page: "whatsSent" };
 
-type SettingsNav = { open: boolean; stack: SettingsRoute[]; popping: boolean };
+type SettingsNav = { generation: number; open: boolean; stack: SettingsRoute[]; popping: boolean };
 
-export const useSettingsNav = create<SettingsNav>()(() => ({ open: false, stack: [], popping: false }));
+export const useSettingsNav = create<SettingsNav>()(() => ({ generation: 0, open: false, stack: [], popping: false }));
 
 const scrolls = new Map<string, number>();
 
-export const rememberSettingsScroll = (page: string, y: number) => void scrolls.set(page, y);
+export const isSettingsOpening = (generation: number) => {
+  const state = useSettingsNav.getState();
+  return state.open && state.generation === generation;
+};
+
+export const rememberSettingsScroll = (page: string, y: number, generation: number) => {
+  if (isSettingsOpening(generation)) scrolls.set(page, y);
+};
 
 export const settingsScroll = (page: string) => scrolls.get(page) ?? 0;
 
@@ -59,13 +66,13 @@ export function openSettings(route: SettingsRoute = { page: "root" }, { direct =
   if (!settingsRouteOffered(route)) return;
   scrolls.clear();
   const stack: SettingsRoute[] = direct || route.page === "root" ? [route] : [{ page: "root" }, route];
-  useSettingsNav.setState({ open: true, stack, popping: false });
+  useSettingsNav.setState((state) => ({ generation: state.generation + 1, open: true, stack, popping: false }));
 }
 
 export function openSettingsPage(route: SettingsRoute) {
   if (!settingsRouteOffered(route)) return;
   scrolls.clear();
-  useSettingsNav.setState({ open: true, stack: [route], popping: false });
+  useSettingsNav.setState((state) => ({ generation: state.generation + 1, open: true, stack: [route], popping: false }));
 }
 
 export const pushSettings = (route: SettingsRoute) => {

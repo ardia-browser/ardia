@@ -1,5 +1,5 @@
-import { useEffect, type ReactNode } from "react";
-import { Platform, PlatformColor, Pressable, StyleSheet, Text, View, type ColorValue, type StyleProp, type ViewStyle } from "react-native";
+import { useEffect, type ReactNode, type RefObject } from "react";
+import { Platform, PlatformColor, Pressable, StyleSheet, Text, View, type ColorValue, type StyleProp, type ViewStyle, type ViewInstance } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { useReduceMotion } from "./contrast";
 import { useDesign } from "./design";
@@ -15,11 +15,12 @@ const KNOB_SLOP = space.s;
 
 export type TogglePress = "row" | "knob";
 
-type ToggleProps = { value: boolean; disabled?: boolean; onChange: (value: boolean) => void; label: string; hint?: string; testID?: string };
+type ToggleProps = { value: boolean; disabled?: boolean; onChange: (value: boolean) => void; label: string; hint?: string; testID?: string; buttonRef?: RefObject<ViewInstance | null> };
 
-export function Toggle({ value, disabled, onChange, label, hint, testID }: ToggleProps) {
+export function Toggle({ value, disabled, onChange, label, hint, testID, buttonRef }: ToggleProps) {
   return (
     <Pressable
+      ref={buttonRef}
       testID={testID}
       accessibilityRole="switch"
       accessibilityLabel={label}
@@ -36,7 +37,7 @@ export function Toggle({ value, disabled, onChange, label, hint, testID }: Toggl
 
 type ToggleRowProps = ToggleProps & { press?: TogglePress; detail?: string; detailInset?: number; children?: ReactNode; style?: StyleProp<ViewStyle> };
 
-export function ToggleRow({ value, disabled = false, onChange, label, hint, detail, detailInset = 0, press: pressMode = "row", testID, children, style }: ToggleRowProps) {
+export function ToggleRow({ value, disabled = false, onChange, label, hint, detail, detailInset = 0, press: pressMode = "row", testID, buttonRef, children, style }: ToggleRowProps) {
   const theme = useTheme();
   const rowStyle = usePressStyle("row", { style: [styles.row, style] });
   const words = (
@@ -49,12 +50,13 @@ export function ToggleRow({ value, disabled = false, onChange, label, hint, deta
     return (
       <View style={[styles.row, style]}>
         {words}
-        <Toggle testID={testID} value={value} disabled={disabled} onChange={onChange} label={detail ? `${label}, ${detail}` : label} hint={hint} />
+        <Toggle buttonRef={buttonRef} testID={testID} value={value} disabled={disabled} onChange={onChange} label={detail ? `${label}, ${detail}` : label} hint={hint} />
       </View>
     );
   }
   return (
     <Pressable
+      ref={buttonRef}
       testID={testID}
       accessibilityRole="switch"
       accessibilityLabel={detail ? `${label}, ${detail}` : label}

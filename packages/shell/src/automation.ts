@@ -21,4 +21,10 @@ export type AutomationNative = {
   answerPeer?(ask: number, outcome: ControlPeerAnswer): Promise<boolean>;
   approvals?(): Promise<ControlApprovals>;
   revokeApproval?(key: string): Promise<boolean>;
+  devtoolsEndpoint?(connection: number): Promise<NativeDevtoolsEndpoint>;
+  cutOff?(): boolean;
 };
+
+export const DEVTOOLS_ENDPOINT_PROBLEMS = ["off", "unreadable", "stale", "left"] as const;
+export type DevtoolsEndpointProblem = (typeof DEVTOOLS_ENDPOINT_PROBLEMS)[number];
+export type NativeDevtoolsEndpoint = { port: number; generation: number; token: string } | { problem: DevtoolsEndpointProblem };

@@ -17,7 +17,6 @@ import { startCommandInstall } from "./linuxCommandInstall";
 
 const INDICATOR_HOLD_MS = 3000;
 
-export type { ControlStatus };
 
 export const useControlServer = create<{ server: ControlStatus | null }>()(() => ({ server: null }));
 

@@ -5,7 +5,7 @@ import { liveOf, onLiveChange } from "../tabs/tabLive";
 import { isWebPageUrl } from "../../lib/url";
 import { jsStartedAt } from "../telemetry/jsStart";
 
-export type LaunchRowsRelease = "loaded" | "nopage" | "deadline" | "scroll" | "drag" | "profile" | "reveal" | "late";
+type LaunchRowsRelease = "loaded" | "nopage" | "deadline" | "scroll" | "drag" | "profile" | "reveal" | "late";
 
 export const HOLD_MS = 1000;
 export const HOLD_WITHOUT_PAGE_MS = 250;
@@ -15,7 +15,7 @@ const MAX_REPORTED_MS = 60_000;
 
 type Held = { tab: string | null; profileId: string | undefined; loading: boolean };
 
-export const useLaunchRows = create<{ started: boolean; held: Record<string, true> }>()(() => ({ started: false, held: {} }));
+const useLaunchRows = create<{ started: boolean; held: Record<string, true> }>()(() => ({ started: false, held: {} }));
 
 const holdingIn = (s: { started: boolean; held: Record<string, true> }, windowId: string) => s.started && !!s.held[windowId];
 
@@ -142,8 +142,6 @@ export function launchRowsFields() {
   const { later, ms, release } = launchRowsReport();
   return { sidebar_rows_later: later, sidebar_rows_ms: ms, sidebar_rows_release: release };
 }
-
-export const launchRowsTimeline = () => ({ startedAt, mountedAt, firstRelease, laterRows, growing, cancelled, holding: [...windows.keys()] });
 
 export function resetLaunchRowsForTests(clock?: () => number) {
   stopWatching();

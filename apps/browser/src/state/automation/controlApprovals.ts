@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { controlApprovals, revokeControlApproval, type ControlApproval } from "../../platform/automation";
 import { errorText } from "../../lib/errors";
 
-export type ControlApprovalsState = { approvals: ControlApproval[]; problem: string | null; doorbell: boolean; loaded: boolean };
+type ControlApprovalsState = { approvals: ControlApproval[]; problem: string | null; doorbell: boolean; loaded: boolean };
 
 export const useControlApprovals = create<ControlApprovalsState>()(() => ({ approvals: [], problem: null, doorbell: true, loaded: false }));
 

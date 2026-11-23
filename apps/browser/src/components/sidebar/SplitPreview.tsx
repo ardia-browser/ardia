@@ -12,7 +12,7 @@ import { ROW_GLYPH, SPLIT_PREVIEW } from "./tokens";
 import { profileSurfaces } from "./profileSurfaces";
 
 type PreviewValues = { shown: Animated.Value; hidden: Animated.AnimatedInterpolation<number>; toLeft: Animated.Value };
-export type SplitPreviewMotion = { side: SplitDropSide | null; values: PreviewValues | null; fades: boolean };
+type SplitPreviewMotion = { side: SplitDropSide | null; values: PreviewValues | null; fades: boolean };
 
 export function useSplitPreview(side: SplitDropSide | null, panes: number): SplitPreviewMotion {
   const previews = !!side && panes < SPLIT_MAX_PANES;

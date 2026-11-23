@@ -4,7 +4,7 @@ import { springs } from "../ui/motion";
 const BAND = 36;
 const BAND_SCALE = 90;
 
-export type ResizeBounds = { min: number; max: number };
+type ResizeBounds = { min: number; max: number };
 
 const band = (over: number) => BAND * (1 - Math.exp(-over / BAND_SCALE));
 const unband = (stretch: number) => -BAND_SCALE * Math.log(1 - Math.min(stretch, BAND - 0.01) / BAND);

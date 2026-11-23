@@ -6,7 +6,7 @@ import { Box, Button, Checkbox, Divider, space, Symbol, Text, useHover, useTheme
 
 const shortAddress = (url: string) => url.replace(/^https?:\/\/(www\.)?/i, "").replace(/[?#].*$/, "");
 
-export function useAttachedRows() {
+function useAttachedRows() {
   const { attach, local, pageAddress, systemLine } = useReportShallow((s) => ({ attach: s.draft.attach, local: s.local, pageAddress: s.pageAddress, systemLine: s.systemLine }));
   const files = canAttachFiles();
   const events = files ? (local?.lines ?? 0) : 0;

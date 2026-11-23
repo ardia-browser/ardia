@@ -17,7 +17,7 @@ const PAGE = { width: 612, height: 792, margin: 60 } as const;
 const INK = 0.1;
 const GREY = 0.4;
 
-export const createdDate = (date: Date) => `${MONTHS[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+const createdDate = (date: Date) => `${MONTHS[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
 
 export function kitText(words: readonly string[], created: Date, device: string): string {
   const lines = ["Ardia Recovery Kit", `Created ${createdDate(created)} on ${device}`, "", INTRO, ""];

@@ -1,6 +1,6 @@
 import { setSearchEngineName, setSelectionPopover, type SearchEngineIdentity } from "../../platform/pageOptions";
 import { chooseTextFragment, cleanUrl, cleanUrlReport, searchUrl, withTextFragment, type CleanedUrl, type SelectionContext } from "@ardia/core";
-import { copyAddress, copyLink } from "../../platform/clipboard";
+import { copyAddress } from "../../platform/clipboard";
 import { create } from "zustand";
 import { webviews } from "../../platform/webviews";
 import type { PageSelection } from "../../platform/tabs";

@@ -259,7 +259,7 @@ export async function flush() {
   }
 }
 
-export type { AskPlacement, SharingSource };
+export type { AskPlacement };
 
 export function setSharing(on: boolean, source: SharingSource, placement?: AskPlacement): Promise<boolean> {
   const relay = telemetryRelay();

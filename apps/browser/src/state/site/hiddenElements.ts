@@ -29,7 +29,7 @@ const HIDING_RULE = /^[a-z0-9.-]+##(?![+^\s])(?!.*\/\*)[^\0-\x1f\x7f\x85\u2028\u
 const MAX_FILTER = 1024;
 
 export type HiddenElement = { filter: string; host: string; selector: string; session: boolean };
-export type PickResult = { selector?: string; cancelled?: boolean; refused?: boolean } | null;
+type PickResult = { selector?: string; cancelled?: boolean; refused?: boolean } | null;
 
 export function hidingHost(url: string | null | undefined): string | null {
   if (!url) return null;
@@ -135,8 +135,6 @@ export function acceptedPick(result: PickResult, confirmed: boolean, samePage: b
 }
 
 const picking = new Set<string>();
-
-export const isPickingElement = (tabId: string) => picking.has(tabId);
 
 export async function startHidingElement(tabId: string, point: [number, number] | null = null) {
   const page = pageOf(tabId);

@@ -6,11 +6,11 @@ export const QUIT_COMMAND = "quit";
 export const QUIT_LOCK = "ardia.linux.quit";
 
 export type QuitOutcome = "quitting" | "cancelled" | "busy";
-export type QuitAsk = DialogsNative["confirm"];
-export type QuitLocks = {
+type QuitAsk = DialogsNative["confirm"];
+type QuitLocks = {
   request(name: string, options: { ifAvailable: true }, callback: (lock: unknown) => Promise<QuitOutcome>): Promise<QuitOutcome>;
 };
-export type LinuxQuitHooks = {
+type LinuxQuitHooks = {
   appName: () => string;
   warnBeforeQuitting: () => boolean;
   stopWarning: () => void;

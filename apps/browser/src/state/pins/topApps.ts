@@ -26,7 +26,7 @@ export function topAppsShared(s: Sharing, a: string, b: string): boolean {
 export const sameTopApp = (s: Sharing, a: Pick<Tab, "pin" | "profileId">, b: Pick<Tab, "pin" | "profileId">) =>
   isTopApp(a) && isTopApp(b) && topAppsShared(s, a.profileId, b.profileId);
 
-export function topAppCircles(s: Circles): string[][] {
+function topAppCircles(s: Circles): string[][] {
   return dataGroups(s)
     .map((g) => g.profileIds.filter((id) => s.profiles[id]!.shareTopApps))
     .filter((ids) => ids.length > 1);

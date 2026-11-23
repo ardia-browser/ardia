@@ -1,6 +1,6 @@
 import { showInPlaceOf, type HostTab } from "./hostTab.ts";
 
-export type SwitchView = { tab: () => HostTab | null; slot: Element; regions: { setPage(slot: Element, visible: boolean): void } };
+type SwitchView = { tab: () => HostTab | null; slot: Element; regions: { setPage(slot: Element, visible: boolean): void } };
 type ActiveWindows = { windows: Record<string, { profileId: string; activeTabIds: Record<string, string> } | undefined> };
 type ActiveStore = { subscribe(listener: (state: ActiveWindows, previous: ActiveWindows) => void): () => void };
 

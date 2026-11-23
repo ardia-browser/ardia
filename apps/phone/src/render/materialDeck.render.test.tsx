@@ -19,6 +19,7 @@ import { useArchiveCard } from "../state/browse/archiveCard";
 import * as browse from "../state/browse/store";
 import { currentPreferences, setPreference } from "../state/settings/store";
 import { OFF_STATUS, useSync } from "../state/sync/store";
+import { useSettingsNav } from "../state/settings/nav";
 import * as telemetry from "../state/telemetry/telemetry";
 import { useTabs } from "../state/tabs/store";
 import { renderSurface, someTabs, unmount, withTabs, withMaterialYou } from "../../test/render/harness";
@@ -157,10 +158,11 @@ onAndroid("the deck keeps its card geometry where the Material bars fit, and mov
   expect(short.safeBottom).toBe(48);
 });
 
-onAndroid("the top app bar is Material's: 64 dp under the status bar on surface, the title in titleLarge, and ··· a 48 dp icon button with an unbounded ripple that opens the deck's menu", () => {
+onAndroid("the transparent header keeps the title and the 48 dp More button above the cards", () => {
   const root = deck();
-  expect(flat(host(root, "materialDeckTopBar"))).toMatchObject({ paddingTop: SAFE.top, height: SAFE.top + 64, backgroundColor: LIGHT.surface });
-  expect(flat(host(root, "materialDeckTitle"))).toMatchObject({ fontSize: 22, lineHeight: 28, color: LIGHT.onSurface });
+  expect(flat(host(root, "materialDeckTopBar"))).toMatchObject({ paddingTop: SAFE.top, height: SAFE.top + 64 });
+  expect(flat(host(root, "materialDeckTopBar")).backgroundColor).toBeUndefined();
+  expect(flat(host(root, "materialDeckTitle"))).toMatchObject({ fontSize: 16, lineHeight: 24, color: LIGHT.onSurface });
   const more = pressable(root, "materialDeckMore")!;
   expect(more.props.accessibilityLabel).toBe("More");
   expect(flat(more)).toMatchObject({ width: 48, height: 48 });
@@ -223,7 +225,7 @@ onAndroid("Incognito takes the dark scheme of the same colours: its switch's eye
   expect(pressable(incognito, "materialDeckIncognito")!.props.accessibilityValue).toEqual({ text: "On" });
   expect(pressable(incognito, "materialDeckIncognito")!.findAll((node) => node.type === IncognitoEyes && node.props.incognito === true)).toHaveLength(1);
   expect(flat(host(incognito, "materialDeckBackdrop")).backgroundColor).toBe("#000000");
-  expect(flat(host(incognito, "materialDeckTopBar")).backgroundColor).toBe("#000000");
+  expect(flat(host(incognito, "materialDeckTopBar")).backgroundColor).toBeUndefined();
   expect(flat(host(incognito, "materialDeckBottomRow")).backgroundColor).toBe("#000000");
   expect(flat(host(incognito, "materialDeckSearch")).backgroundColor).toBe("#000000");
   const fab = pressable(incognito, "materialDeckFab")!;
@@ -261,12 +263,12 @@ onAndroid("the bar's Incognito switch: a tap shows only the Incognito tabs, a se
   leave.mockRestore();
 });
 
-onAndroid("a scheme change re-themes the open deck: cards, top app bar, search, FAB and the Incognito switch's eyes", () => {
+onAndroid("a scheme change re-themes the open deck: cards, search, FAB and the Incognito switch's eyes", () => {
   withPrivates(1);
   const root = deck();
   act(() => setDynamicScheme(WALLPAPER));
   expect(flat(cards(root).find((card) => flat(card).backgroundColor !== WALLPAPER.dark.surfaceContainerLow))!.backgroundColor).toBe("#ABCDEF");
-  expect(flat(host(root, "materialDeckTopBar")).backgroundColor).toBe(WALLPAPER.light.surface);
+  expect(flat(host(root, "materialDeckTopBar")).backgroundColor).toBeUndefined();
   expect(flat(host(root, "materialDeckBottomRow")).backgroundColor).toBe(WALLPAPER.light.surfaceContainer);
   expect(flat(host(root, "materialDeckSearch")).backgroundColor).toBe(WALLPAPER.light.surfaceContainerHigh);
   expect(pressable(root, "materialDeckIncognito")!.findAll((node) => node.type === IncognitoEyes)[0]!.props.color).toBe(WALLPAPER.light.onSurfaceVariant);
@@ -326,4 +328,68 @@ onAndroid("the Incognito switch sits on the capsule's left where the redesign ha
 test("the deck's search row rises by the whole keyboard on Android, whose reported height leaves out the navigation bar", () => {
   expect(materialKeyboardLift(300, 48, "android")).toBe(300 + MATERIAL_DECK.keyboardGap - 8);
   expect(materialKeyboardLift(300, 34, "ios")).toBe(300 + MATERIAL_DECK.keyboardGap - 34 - 8);
+});
+
+onAndroid("the Material deck's More dropdown and Space dropdown open as Material 3 Expressive menus: grouped 16 dp containers on surfaceContainer (surfaceContainerHighest in dark), dynamic scheme colours, and a primary checkmark", async () => {
+  const space = (syncId: string, name: string) => ({
+    syncId,
+    name,
+    color: null,
+    icon: null,
+    isDefault: syncId === "work",
+    theme: null,
+    deviceTabs: [],
+    pinned: { tiles: [], sections: [] },
+    bookmarks: [],
+    history: [],
+    sendTargets: null,
+  });
+  useSync.setState((state) => ({
+    ...state,
+    status: { ...OFF_STATUS, isEnabled: true, phase: "updated" },
+    view: {
+      ...state.view,
+      profiles: [space("work", "Work"), space("home", "Home")],
+      selectedProfileId: "work",
+    },
+  }));
+  const overlay = require("../components/ui/Overlay");
+  const frame = jest.spyOn(overlay, "useOverlayFrame").mockReturnValue(() => Promise.resolve({ x: 0, y: 0, width: 393, height: 873 }));
+  const anchor = jest.spyOn(overlay, "measureAnchor").mockResolvedValue({ x: 337, y: 52, width: 44, height: 44 });
+  const root = deck();
+  act(() => pressable(root, "materialDeckMore")!.props.onPress());
+  act(() => jest.advanceTimersByTime(16));
+  expect(host(root, "materialMenu")).toBeDefined();
+  const groups = hosts(root, "materialMenuGroup");
+  expect(groups).toHaveLength(3);
+  for (const group of groups) expect(flat(group)).toMatchObject({ backgroundColor: LIGHT.surfaceContainer, borderRadius: 16, elevation: 3 });
+  act(() => setDynamicScheme(WALLPAPER));
+  expect(flat(hosts(root, "materialMenuGroup")[0])).toMatchObject({ backgroundColor: WALLPAPER.light.surfaceContainer });
+  const measureRows = () => act(() => root.root.findAll((node) => node.props.testID === "drawnMenuRows" && typeof node.props.onContentSizeChange === "function")[0]!.props.onContentSizeChange(200, 240));
+  const menuLayer = () => root.root.findAll((node) => typeof node.type === "string" && node.props.pointerEvents !== undefined && node.findAll((inner) => inner.props.testID === "materialMenu").length > 0).pop()!;
+  expect(menuLayer().props.pointerEvents).toBe("none");
+  for (let step = 0; step < 3; step++) await act(async () => undefined);
+  measureRows();
+  expect(menuLayer().props.pointerEvents).toBe("auto");
+  const settings = root.root.findAll((node) => node.props.accessibilityRole === "menuitem" && node.props.accessibilityLabel === "Settings" && typeof node.props.onPress === "function")[0]!;
+  act(() => settings.props.onPress());
+  expect(useSettingsNav.getState().open).toBe(true);
+  act(() => useSettingsNav.setState({ open: false, stack: [{ page: "root" }], popping: false }));
+  act(() => jest.advanceTimersByTime(500));
+
+  act(() => pressable(root, "materialDeckSpace")!.props.onPress());
+  act(() => jest.advanceTimersByTime(16));
+  expect(host(root, "materialMenu")).toBeDefined();
+  for (let step = 0; step < 3; step++) await act(async () => undefined);
+  measureRows();
+  expect(menuLayer().props.pointerEvents).toBe("auto");
+  const spaceItems = root.root.findAll((node) => node.props.accessibilityRole === "menuitem" && typeof node.type === "string");
+  expect(spaceItems.map((node) => node.props.accessibilityLabel)).toEqual(["Work", "Home"]);
+  expect(spaceItems[0]!.props.accessibilityState).toMatchObject({ checked: true });
+  const checks = spaceItems[0]!.findAll((node) => node.props.name === "checkmark" && typeof node.props.color === "string");
+  expect(checks.length).toBeGreaterThan(0);
+  expect(checks[0]!.props.color).toBe(WALLPAPER.light.primary);
+  unmount(root);
+  frame.mockRestore();
+  anchor.mockRestore();
 });

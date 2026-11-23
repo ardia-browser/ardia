@@ -22,7 +22,25 @@ import {
 import type { Target } from "../../state/sidebar/sidebarUi";
 import { useMedia, usePinnedWithMediaControls } from "../../state/media/media";
 
-export const FoldedAway = createContext(false);
+export type AwaySource = { away: () => boolean; subscribe: (changed: () => void) => () => void };
+
+const NEVER_AWAY: AwaySource = { away: () => false, subscribe: () => () => {} };
+
+export const FoldedAway = createContext<AwaySource>(NEVER_AWAY);
+
+function useAwayChanges(source: AwaySource, changed: (away: boolean) => void) {
+  const latest = useRef(changed);
+  latest.current = changed;
+  useEffect(() => {
+    let was = source.away();
+    return source.subscribe(() => {
+      const now = source.away();
+      if (now === was) return;
+      was = now;
+      latest.current(now);
+    });
+  }, [source]);
+}
 
 export const cardHoverProps = {
   onMouseEnter: cardEntered,
@@ -97,6 +115,7 @@ export function useRowHoverCell(windowId: string, rowTarget: Target | null) {
   const away = useContext(FoldedAway);
   const latest = useRef({ windowId, rowTarget, page, away });
   latest.current = { windowId, rowTarget, page, away };
+  const isAway = () => latest.current.away.away();
   const entered = useRef<Target | null>(null);
   const inside = useRef<HoverPointerEvent | null>(null);
   const [row] = useState(() => ({}));
@@ -105,14 +124,14 @@ export function useRowHoverCell(windowId: string, rowTarget: Target | null) {
     return !page || currentWindow(windowId)?.profileId === page;
   };
   const [enterRow] = useState(() => (event?: HoverPointerEvent) => {
-    if (!onCurrentPage() || latest.current.away) return;
+    if (!onCurrentPage() || isAway()) return;
     const windowId = latest.current.windowId;
     const target = cardTargetNow(latest.current.rowTarget);
     entered.current = target;
     if (holdEnterWhileScrolling(windowId, row, () => inside.current && enterRow(inside.current))) return;
     watchCovered(windowId, refresh, true);
     const enter = () => {
-      if (latest.current.away) return;
+      if (isAway()) return;
       setHovered(true);
       rowShown(windowId, target);
     };
@@ -134,11 +153,8 @@ export function useRowHoverCell(windowId: string, rowTarget: Target | null) {
       },
     }),
   );
-  const shownAway = useRef(away);
-  useEffect(() => {
-    if (shownAway.current === away) return;
-    shownAway.current = away;
-    if (!away) {
+  useAwayChanges(away, (now) => {
+    if (!now) {
       if (inside.current) enterRow(inside.current);
       return;
     }
@@ -146,7 +162,7 @@ export function useRowHoverCell(windowId: string, rowTarget: Target | null) {
     setHovered(false);
     watchCovered(windowId, refresh, false);
     if (rowTarget) releaseAnchor(windowId, rowTarget.id);
-  }, [away]);
+  });
   useEffect(
     () => () => {
       const { windowId, rowTarget } = latest.current;
@@ -163,6 +179,7 @@ export function useGroupHover(windowId: string, groupId: string) {
   const [, refresh] = useReducer((n: number) => n + 1, 0);
   const page = useContext(PageProfileContext);
   const away = useContext(FoldedAway);
+  useAwayChanges(away, refresh);
   const onPage = useWindow(windowId, (w) => !page || w?.profileId === page);
   const windowRef = useRef(windowId);
   windowRef.current = windowId;
@@ -181,7 +198,7 @@ export function useGroupHover(windowId: string, groupId: string) {
     watchCovered(windowId, refresh, true);
     return () => watchCovered(windowId, refresh, false);
   }, [windowId]);
-  const hovered = inside && onPage && !away && !rowsCovered(windowId);
+  const hovered = inside && onPage && !away.away() && !rowsCovered(windowId);
   useEffect(() => {
     if (!hovered) return;
     setGroupPointed(groupId, true);

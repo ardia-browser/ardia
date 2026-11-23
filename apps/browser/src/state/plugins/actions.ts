@@ -9,17 +9,12 @@ export const disablePlugin = (name: string) => turnOffPlugin(name, consentNow())
 export { restartProcess as restartPlugin } from "./process";
 export { removePluginAfterConfirm } from "./removeConfirmed";
 export { openPluginPage, pluginPagePath } from "./pages";
-export { consentLines, fullControlLine, FULL_CONTROL_SUMMARY, type ConsentLine } from "./consent";
+export { consentLines, fullControlLine, FULL_CONTROL_SUMMARY } from "./consent";
 export { canRelink, relinkPrograms } from "./programs";
-export { cancelOfficialInstall, installOfficialPlugin, officialPlugins, COMING_SOON, OFFICIAL_CATALOGUE, type OfficialPlugin, type OfficialPluginState } from "./official";
-export type { InstallResult } from "./installWaiters";
-export { ensurePluginActivated, PluginActivationError } from "./activation";
-export { runPluginCommand, runPluginAction, pluginBarActions } from "./commands";
-export { openPluginPanel, closePluginPanel } from "./panels";
-export { runPluginToolbarItem, pluginToolbarItems, type PluginToolbarEntry } from "./toolbar";
-export { pluginMenuItems, runPluginMenuChoice, isPluginMenuChoice, type PluginMenuContext } from "./menus";
-export { pluginThemes, loadPluginTheme, pluginThemeKey, parsePluginThemeKey, type PluginTheme } from "./themes";
-export { runPluginDecideHook, type PluginVerdict } from "./decideHooks";
+export { installOfficialPlugin, officialPlugins, COMING_SOON, OFFICIAL_CATALOGUE, type OfficialPlugin } from "./official";
+export { ensurePluginActivated } from "./activation";
+export { runPluginAction, pluginBarActions } from "./commands";
+export { runPluginToolbarItem, type PluginToolbarEntry } from "./toolbar";
 export { setPluginSecretRow, pluginSecretRowIsSet } from "./secretRows";
 export {
   mountPluginSurface,
@@ -29,12 +24,9 @@ export {
   closePluginSidePanel,
   openPluginPopover,
   closePluginPopover,
-  openPluginCommandView,
   closePluginCommandView,
   resolveQuickPick,
   resolveInputBox,
-  clearPluginSurfaces,
-  dropWindowPluginSurfaces,
   nextSurfaceInstanceId,
   type Anchor,
 } from "./surfaces";

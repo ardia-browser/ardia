@@ -1,11 +1,6 @@
 import { frameRows } from "./frames-phase.mjs";
+import { median } from "./median.mjs";
 
-export const median = (xs) => {
-  const s = xs.filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
-  if (!s.length) return NaN;
-  const m = s.length >> 1;
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-};
 
 export const LOADING_FIXTURE = "/hang?id=load";
 

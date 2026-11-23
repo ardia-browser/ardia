@@ -12,7 +12,7 @@ const FRAME_SLACK_MS = 50;
 const BAND_MARGIN = 48;
 
 type Run = Animated.CompositeAnimation;
-export type StripSlide = { key: string; value: Animated.Value; opacity: Animated.Value | null; from: number; at: number; until: number; moving: number; fading: boolean; appearAt: number | null; pending: boolean; mounted: boolean; consent: ConsentToken | null };
+type StripSlide = { key: string; value: Animated.Value; opacity: Animated.Value | null; from: number; at: number; until: number; moving: number; fading: boolean; appearAt: number | null; pending: boolean; mounted: boolean; consent: ConsentToken | null };
 type GhostTab = { title: string; url: string; favicon?: string | null; icon?: string | null; profileId: string };
 export type StripGhost = { key: string; x: number; width: number; tab: GhostTab; opacity: Animated.Value; until: number; started: boolean };
 export type Shot = { keys: string[]; x: Map<string, number>; width: Map<string, number>; tabs: Map<string, string[]>; shown: Map<string, string[]>; groups: Set<string>; end: number | null; state: BrowserState };

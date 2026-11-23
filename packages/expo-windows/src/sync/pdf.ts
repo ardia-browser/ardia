@@ -33,7 +33,7 @@ function encode(text: string): number[] {
   return out;
 }
 
-export function textWidth(text: string, font: PdfFont, size: number): number {
+function textWidth(text: string, font: PdfFont, size: number): number {
   let units = 0;
   for (const char of text) {
     const code = char.codePointAt(0)!;

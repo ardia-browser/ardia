@@ -38,9 +38,26 @@ export type NewTabOptions = {
 };
 
 
-export type CloseOptions = { lastClosesWindow?: boolean; keepTopApps?: boolean; unrecorded?: boolean };
-export type CloseKind = "close" | "unload" | "removePin";
-export type CloseIntent = { kind: CloseKind; ids: string[] };
+export type Successor = { id: string | null; above: boolean; shown: boolean };
+export type UserClose = { successors: ReadonlyMap<string, Successor>; noted: (pick: Successor) => void; shows: (s: BrowserState, windowId: string, profileId: string, id: string) => boolean };
+export type CloseOptions = { lastClosesWindow?: boolean; keepTopApps?: boolean; unrecorded?: boolean; userClose?: UserClose };
+
+export const successorKey = (windowId: string, profileId: string) => `${windowId}|${profileId}`;
+
+export function standingSuccessor(s: BrowserState, close: UserClose | undefined, windowId: string, profileId: string, removing: ReadonlySet<string>): string | undefined {
+  const id = close?.successors.get(successorKey(windowId, profileId))?.id;
+  const t = id && !removing.has(id) ? s.tabs[id] : undefined;
+  return t && t.windowId === windowId && t.profileId === profileId && (!inPinnedContainer(s, t.id) || hasPage(t)) && close!.shows(s, windowId, profileId, t.id) ? t.id : undefined;
+}
+
+function chosenSuccessor(s: BrowserState, close: UserClose | undefined, w: BrowserWindow, profileId: string, removing: ReadonlySet<string>): string | undefined {
+  const pick = close?.successors.get(successorKey(w.id, profileId));
+  if (!pick) return undefined;
+  close!.noted(pick);
+  return standingSuccessor(s, close, w.id, profileId, removing);
+}
+type CloseKind = "close" | "unload" | "removePin";
+type CloseIntent = { kind: CloseKind; ids: string[] };
 
 export function closeKind(s: BrowserState, tabId: string): CloseKind {
   if (!inPinnedContainer(s, tabId)) return "close";
@@ -71,14 +88,14 @@ function withoutTopApps(s: BrowserState, ids: string[]): string[] {
   return others.length ? others : ids;
 }
 
-export function closingTabs(s: BrowserState, ids: string[], { lastClosesWindow = false, keepTopApps = s.settings.keepTopAppsRunning, unrecorded = false }: CloseOptions = {}): [BrowserState, string[]] {
+export function closingTabs(s: BrowserState, ids: string[], { lastClosesWindow = false, keepTopApps = s.settings.keepTopAppsRunning, unrecorded = false, userClose }: CloseOptions = {}): [BrowserState, string[]] {
   let next = s;
   for (const id of ids) {
     const source = peekSourceOf(next, id);
     if (source) next = withoutPeek(next, source);
   }
   const asked = ids.filter((id) => next.tabs[id]);
-  next = unloadPinnedTabs(next, asked, keepTopApps);
+  next = unloadPinnedTabs(next, asked, keepTopApps, userClose);
   const gone = asked.filter((id) => !inPinnedContainer(next, id));
   const goneIds = new Set(gone);
   const closedWindows = new Set<string>();
@@ -92,7 +109,7 @@ export function closingTabs(s: BrowserState, ids: string[], { lastClosesWindow =
     else closedWindows.add(w.id);
   }
   const removed = gone.filter((id) => !closedWindows.has(next.tabs[id]!.windowId));
-  return [removeTabs(next, removed, !unrecorded), [...closedWindows]];
+  return [removeTabs(next, removed, !unrecorded, userClose), [...closedWindows]];
 }
 
 function pinnedInsertionIndex(s: BrowserState, w: BrowserWindow): number {
@@ -128,7 +145,7 @@ export function activated(s: BrowserState, id: string, shareLivePins = true): Pa
 
 export const apply = (s: BrowserState, patch: Partial<BrowserState>): BrowserState => ({ ...s, ...patch });
 
-export function removeTabs(s: BrowserState, ids: string[], record: boolean): BrowserState {
+export function removeTabs(s: BrowserState, ids: string[], record: boolean, close?: UserClose): BrowserState {
   const gone = new Set(ids.filter((id) => s.tabs[id]));
   if (gone.size === 0) return s;
   const now = Date.now();
@@ -158,7 +175,7 @@ export function removeTabs(s: BrowserState, ids: string[], record: boolean): Bro
       if (!gone.has(activeId)) continue;
       const before = w.tabIds.filter((id) => s.tabs[id]?.profileId === profileId);
       const left = withoutTopApps(s, before.filter((id) => !gone.has(id)));
-      const next = otherPane(s, activeId, gone) ?? closeSuccessor(s, activeId, before, left);
+      const next = chosenSuccessor(s, close, w, profileId, gone) ?? otherPane(s, activeId, gone) ?? closeSuccessor(s, activeId, before, left);
       if (next) activeTabIds[profileId] = next;
       else delete activeTabIds[profileId];
     }
@@ -205,7 +222,7 @@ function adoptOrphans(tabs: Record<string, Tab>, before: Record<string, Tab>, go
   return linkEdits(next, tabs, adopted);
 }
 
-export function unloadPinnedTabs(s: BrowserState, requested: string[], keepTopApps = false): BrowserState {
+function unloadPinnedTabs(s: BrowserState, requested: string[], keepTopApps = false, close?: UserClose): BrowserState {
   const asked = requested.filter((id) => inPinnedContainer(s, id));
   const withTopApp = (id: string) => withPinnedPanes(s, [id]).some((pane) => isTopApp(s.tabs[pane]));
   const switchedAway = keepTopApps ? withPinnedPanes(s, asked.filter(withTopApp)) : [];
@@ -244,7 +261,8 @@ export function unloadPinnedTabs(s: BrowserState, requested: string[], keepTopAp
       if (!gone.has(activeId)) continue;
       const shown = profileId === w.profileId;
       if (shown && leaving.has(activeId) && runningInFront(activeId)) noteTopAppsKeptRunning(1);
-      const nextRow = withTopApp(activeId) ? undefined : (otherPane(s, activeId, closing) ?? lastLivePinnedTab(s, w, activeId, closing, true));
+      const chosen = chosenSuccessor(s, close, w, profileId, closing);
+      const nextRow = chosen ?? (withTopApp(activeId) ? undefined : (otherPane(s, activeId, closing) ?? lastLivePinnedTab(s, w, activeId, closing, true)));
       let replacement = nextRow ?? lastRegularTab(s, w, activeId, closing) ?? lastLivePinnedTab(s, w, activeId, closing, keepTopApps);
       if (!replacement) [next, replacement] = withNewTab(next, w.id, { profileId, background: !shown });
       if (shown) next = apply(next, activated(next, replacement));

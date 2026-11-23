@@ -26,9 +26,9 @@ function settle(progress: Animated.Value, phase: keyof typeof SELECTED_ROW_PILL_
   return () => run.stop();
 }
 
-export type PillAway = { side: "above" | "below"; tab: PillTab } | null;
+type PillAway = { side: "above" | "below"; tab: PillTab } | null;
 type PillSink = (away: PillAway) => void;
-export type PillTracker = { judge: () => void; relocate: () => void; attach: (sink: PillSink) => () => void };
+type PillTracker = { judge: () => void; relocate: () => void; attach: (sink: PillSink) => () => void };
 
 const samePill = (a: PillAway, b: PillAway) => a === b || (!!a && !!b && a.side === b.side && samePillTab(a.tab, b.tab));
 

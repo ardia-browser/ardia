@@ -5,10 +5,11 @@ import { id, ids, int, obj, PAGE, PROFILE, text } from "./socketSchema";
 import { expect, now, page, profileArg } from "./socketTargets";
 import { openableUrl } from "./workspaceOps";
 import { OpError } from "./workspaceTargets";
+import { ownValue } from "../../lib/decode";
 
 const MAX_DEPTH = 64;
 export const TREE_MAX_ITEMS = 5000;
-export const TREE_MAX_BYTES = 1024 * 1024;
+const TREE_MAX_BYTES = 1024 * 1024;
 
 type TreeBudget = { items: number; bytes: number; truncated: boolean };
 
@@ -49,7 +50,7 @@ function rootsOf(profile: string) {
 
 function nodeOf(value: unknown): BookmarkNode {
   const s = now();
-  const node = typeof value === "string" && Object.hasOwn(s.bookmarks.nodes, value) ? s.bookmarks.nodes[value] : undefined;
+  const node = ownValue(s.bookmarks.nodes, value);
   if (!node || !ownerOfBookmark(s, node.id)) throw new OpError("no_window", `There's no bookmark ${String(value)}.`);
   return node;
 }

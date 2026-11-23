@@ -113,6 +113,8 @@ const MODULE_FALLBACKS: Record<string, Record<string, Fallback>> = {
     answerPeer: answer(false),
     approvals: answer({ approvals: [], doorbell: false }),
     revokeApproval: answer(false),
+    devtoolsEndpoint: answer({ problem: "unreadable" }),
+    cutOff: now(true),
   },
   ArdiaSystemSignals: {
     watchIdle: () => undefined,

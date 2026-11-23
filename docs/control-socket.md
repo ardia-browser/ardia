@@ -13,7 +13,8 @@ before its first line is read until the user allows it in the doorbell; a client
 and revoked, and the test-instance rule are in `docs/automation.md` › Who the program is. Every admitted connection is
 the owner: the methods below don't vary by client. `usage_counts.cli_socket_doorbells_shown` and
 `cli_socket_doorbell_<outcome>` (`once`, `half_hour`, `always`, `deny`, `unshown`, `timeout`, `left`, `stopped`,
-`unsaved`) count the doorbells and how they ended.
+`unsaved`) count the doorbells and how they ended. A program the socket admitted can ask it for the engine's DevTools
+token (`control.devtoolsEndpoint`, › The DevTools token) instead of reading `ArdiaControl.json`.
 
 This page is the map of the whole profile against the socket: every data point Ardia keeps, where it lives, and which
 methods read and change it. The goal is full control: anything a person can see or change in Ardia, the command can
@@ -272,6 +273,7 @@ changes it today, 🔍 read only, 🗺️ designed below, ⛔ deliberately not e
 | `methods` | no | This catalogue |
 | `commands` | no | The command catalogue `run` takes |
 | `windows` | no | Windows and their tabs, with each tab's DevTools target |
+| `control.devtoolsEndpoint` | no | The engine's DevTools token connection: `{port, token, generation}` (see › The DevTools token) |
 | `workspace` | no | The sidebar tree of a window or profile: pinned, groups, tabs, with usage on request |
 | `apply` | yes | A batch of ops on tabs, groups and pins (`docs/automation.md`): `open`, `tab.*`, `group.*` |
 | `run` | yes | Runs a menu command in a window or on a tab |
@@ -557,6 +559,53 @@ as they land, and nothing else: no `apply`, `run`, `subscribe`, `answer`, `plugi
 above. The dispatcher already has its single check point for this: `controlSocket.ts` asks `connectionAccess` for each
 request and `accessProblem` (`socketCatalog.ts`) refuses everything outside `PLUGIN_SESSION_METHODS` for a plugin
 connection, before params are even checked. Until the credential exists every connection is `owner`.
+
+## The DevTools token
+
+`control.devtoolsEndpoint` takes nothing and answers `{port, token, generation}`: the loopback port, the token and the
+generation of the engine's token connection, the one `ardia browse` speaks CDP over (`docs/cli.md`). It's how the
+command gets the token without reading `ArdiaControl.json`, so the token reaches only programs the socket let in: the
+bundled `ardia` and Ardia's other signed code, programs you allowed in the doorbell, and, in test instances, any
+process of the user, as for every method. The engine's server restarting moves `generation`; a client keeps the
+generation it was given and asks again when a connection is refused.
+
+- **Who gets it.** Only a connection the socket admitted. Native checks again on its own queue, before and after it
+  reads the token and once more after reading it, that the connection is still open and its approval still live, and a reply to a connection whose
+  approval ran out meanwhile is dropped (`ControlSocket.admits`, `reply`). A 30-minute approval that runs out, or
+  one removed in Settings, closes the connection, so the client sees the stream end rather than a reply. Before
+  starting each line, native checks the approval, so a line queued behind a slow reader never starts after it ends; a line already being written then is finished, as for every reply, and the token in it was
+  given while the approval held.
+- **A token outlives the approval.** The engine checks only the token, not the doorbell, so a program that got it
+  (even one allowed once) can use it until the token connection restarts: control off and on, or Ardia quitting.
+  Removing a program's approval stops it asking again; it doesn't take back a token it already has.
+- **Control off** answers `failed` "Control is off.", when the request arrives and again when the read comes back.
+  Turning it off first cuts native off, synchronously and before the rest of the stop (`ArdiaAutomation.cutOff`): from
+  then on native writes no line that hasn't started, hands out no token and admits no connection, until the socket
+  starts again.
+  Like every request, this one is abandoned when its peer stops writing (› A request lives only while its connection
+  and consent do): keep the write side open until the reply arrives. It then answers `failed` "The connection closed
+  before the token was ready." if anything is still written.
+- **Where it comes from.** The engine call `ac_cli_devtools_endpoint` when the engine has it (it answers
+  `{port, generation, token}` through `ArdiaEngineBridge.callForSecretReply`, whose bytes are wiped after parsing);
+  the engine's shared status (`ac_cli_control`, which also feeds `cliControl` events and JS state) is never trusted to
+  carry the token. Until the engine has that call, `ArdiaControl.json`, read by the app only if it is a regular file
+  of the user's with no group or other bits and no access list letting anyone else in, not a link, at most 64 KiB, and
+  its `port`, `generation` and `pid` match the running server (`ControlPeerCore/DevtoolsEndpoint.swift`). A server
+  that stops just after the read leaves a token that opens nothing; the next connection fails and the client asks
+  again.
+- **Errors.** `failed` when the token connection isn't running, the token can't be read, or the server restarted
+  while Ardia read it (ask again). Where the socket has no doorbell (Linux and Windows today) the method isn't listed
+  and answers `unknown_method`, as an Ardia older than it does. A command that reads the token from here should fall
+  back to the file only on an `unknown_method` reply carrying its own request's `id`; a `refused` line with `id: null`
+  is the doorbell turning the program away, and the file isn't a way around that.
+- **Containment.** In JS the token is a `Secret` of kind `devtoolsToken` from the moment it crosses from native
+  (`platform/automation.ts`), revealed only on that one reply line (`socketDevtools.ts`); JSON, text, telemetry,
+  logs and every other reply or event drop it (`secretContainment.test.mjs`).
+- **Rollout.** The command doesn't ask for it yet: it reads `ArdiaControl.json`. Next, the command asks here and falls
+  back to the file as above; then the engine stops writing the token into the file.
+- **Telemetry.** `usage_counts.cli_socket_devtools_endpoint_<outcome>`: `given` (read and handed to the socket to
+  write; a peer that leaves or loses its approval at that moment may not receive it), `control_off`, `unsupported`,
+  `server_off`, `unreadable`, `stale`, `left`. Never the token, the port or which program asked.
 
 ## Secrets
 

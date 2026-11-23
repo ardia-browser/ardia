@@ -50,7 +50,7 @@ export async function clearSiteDataAfterConfirm(tab: Pick<Tab, "id" | "windowId"
   return result && typeof result.cookies === "number" ? result.cookies : 0;
 }
 
-export type ReloadMenuState = { blocker: "on" | "off" | "offInSettings" | "unavailable" };
+type ReloadMenuState = { blocker: "on" | "off" | "offInSettings" | "unavailable" };
 
 export function reloadMenuItems({ blocker }: ReloadMenuState): MenuItem[] {
   return menuSections(

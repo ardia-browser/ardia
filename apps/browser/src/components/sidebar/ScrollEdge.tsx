@@ -9,7 +9,7 @@ const FADE = { duration: duration.fast, easing: curve.fade };
 
 const SCROLLED_PAST = 0.5;
 
-export type ScrollSpan = { offset: number; viewport: number; content: number };
+type ScrollSpan = { offset: number; viewport: number; content: number };
 
 export function scrolledPastTop(offset: number): boolean {
   return offset >= SCROLLED_PAST;
@@ -19,7 +19,7 @@ export function hiddenBelow({ offset, viewport, content }: ScrollSpan): boolean 
   return viewport > 0 && offset + viewport < content - 1;
 }
 
-export type EdgeSeen = { seen: () => boolean; onSeen: (listener: () => void) => () => void };
+type EdgeSeen = { seen: () => boolean; onSeen: (listener: () => void) => () => void };
 
 function fadingEdge() {
   const opacity = new Animated.Value(0);

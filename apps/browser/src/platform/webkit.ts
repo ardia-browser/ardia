@@ -7,7 +7,6 @@ import {
   type PageCookie,
   type CookieRemoval,
   type SiteData,
-  type SiteDataWritten,
   type StorageChange,
   type PasskeyAccess,
   type PasskeyAccessStatus,
@@ -15,14 +14,11 @@ import {
 } from "@ardia/ardiacore";
 
 export { NO_PASSKEY_ACCESS };
-export type { ChromiumCookieWrite, ChromiumSiteDataReply, ChromiumSiteDataRequest, SiteStorage, StorageItems } from "@ardia/ardiacore";
-export type { CookieRemoval, SiteData, SiteDataWritten, StorageChange };
-export type { PasskeyAccess, PasskeyAccessStatus, PageCookie, WebKitCount };
+export type { ChromiumCookieWrite, SiteStorage, StorageItems } from "@ardia/ardiacore";
+export type { CookieRemoval, SiteData, StorageChange };
+export type { PasskeyAccess, PasskeyAccessStatus, PageCookie };
 
 export const endWebKitPrivateSession = (session: string) => call("webKit.endPrivateSession", { session });
-export const webKitCookieStoreKey = (profile: string) => call("webKit.cookieStoreKey", { profile });
-export const importWebKitCookies = (profile: string, storeKey: string, cookies: PageCookie[]) =>
-  call("webKit.importCookies", { profile, storeKey, cookies });
 export const exportWebKitCookies = (profile: string, urls: string[], keys?: string[]) => call("webKit.exportCookies", { profile, urls, ...(keys ? { keys } : {}) });
 export const setWebKitFraudWarnings = (enabled: boolean) => call("webKit.setFraudWarnings", { enabled });
 export const watchWebKitSiteData = (enabled: boolean) => call("webKit.watchSiteData", { enabled });

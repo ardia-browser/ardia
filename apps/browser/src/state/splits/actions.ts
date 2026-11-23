@@ -11,6 +11,8 @@ import type { AdoptId } from "../browser/types";
 import { noteSplit } from "../telemetry/usage";
 import { returnFocusToPage } from "../sidebar/actions";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
+import { userClose, type ByUser } from "../tabs/closeActivation";
+import { consentToken } from "../telemetry/client";
 
 const store = () => useBrowser.getState();
 
@@ -67,7 +69,7 @@ export function dropTabIntoSplit(tabId: string, targetTabId: string, side: Split
   return openSplitPane(target.windowId, { tabId, anchorTabId: targetTabId, side });
 }
 
-export type RowSplitDrop = { adopted: SplitLane | null };
+type RowSplitDrop = { adopted: SplitLane | null };
 
 export function dropTabOnRow(tabId: string, rowTabId: string, side: "left" | "right"): RowSplitDrop | null {
   const s = store();
@@ -85,18 +87,20 @@ export function dropTabOnRow(tabId: string, rowTabId: string, side: "left" | "ri
   return { adopted: now && splitLane(now) !== splitLane(tab) ? splitLane(now) : null };
 }
 
-export function closePane(tabId: string) {
-  void closeTab(tabId);
+function closePane(tabId: string, user: ByUser) {
+  void closeTab(tabId, { user });
 }
 
-export function closeSplitView(splitId: string) {
+export const pressClosePane = (tabId: string) => closePane(tabId, { consent: consentToken() });
+
+export function closeSplitView(splitId: string, user: ByUser) {
   const split = store().splits[splitId];
   if (!split) return;
   noteSplit("splitViewCloses");
-  store().closeTabs(splitTabIds(split));
+  store().closeTabs(splitTabIds(split), userClose(splitTabIds(split), user));
 }
 
-export function splitMenuItems(tabId: string): MenuItem[] {
+function splitMenuItems(tabId: string): MenuItem[] {
   const s = store();
   const split = splitOf(s, tabId);
   if (!split || !s.tabs[tabId]) return [];
@@ -132,6 +136,7 @@ export function splitMenuItems(tabId: string): MenuItem[] {
 }
 
 export async function showSplitMenu(tabId: string) {
+  const consent = consentToken();
   const s = store();
   const split = splitOf(s, tabId);
   const tab = s.tabs[tabId];
@@ -157,9 +162,9 @@ export async function showSplitMenu(tabId: string) {
     case "separate":
       return st.separateSplit(split.id);
     case "close":
-      return closePane(tabId);
+      return closePane(tabId, { consent });
     case "closeSplit":
-      return closeSplitView(split.id);
+      return closeSplitView(split.id, { consent });
   }
 }
 

@@ -20,12 +20,12 @@ import { netFetch, readActivePage, secretsMethod, storageMethod } from "./channe
 import { UI_METHODS, uiMethod } from "./channelUi";
 import { programsStatus, relinkOwnPrograms } from "./programs";
 
-export const CHANNEL_PROTOCOL = 2;
-export const LEGACY_CHANNEL_PROTOCOL = 1;
-export const MAX_OPEN_URLS = 10;
-export const TAB_APPLY_OPS = ["open", "tab.close", "tab.activate"] as const;
+const CHANNEL_PROTOCOL = 2;
+const LEGACY_CHANNEL_PROTOCOL = 1;
+const MAX_OPEN_URLS = 10;
+const TAB_APPLY_OPS = ["open", "tab.close", "tab.activate"] as const;
 
-export type ChannelCaller = { name: string; run: number };
+type ChannelCaller = { name: string; run: number };
 
 function minimizedWindows(full: boolean) {
   const windows = automationWindows(useBrowser.getState());

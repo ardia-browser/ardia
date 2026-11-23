@@ -20,7 +20,7 @@ const PANE_ALIASES: Record<string, SettingsPane> = {
   engines: "advanced",
 };
 
-export type AppUrlAction = { kind: "newTab" } | { kind: "settings"; pane: SettingsPane | undefined };
+type AppUrlAction = { kind: "newTab" } | { kind: "settings"; pane: SettingsPane | undefined };
 
 export function appUrlAction(url: string): AppUrlAction | null {
   const route = appUrlRoute(url);

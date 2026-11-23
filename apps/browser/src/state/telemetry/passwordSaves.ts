@@ -1,7 +1,7 @@
 import { orWarn, passwordFailure } from "../../lib/fallback";
 import { capture, consentToken } from "./client";
 
-export type PasswordImportSource = "browser" | "csv";
+type PasswordImportSource = "browser" | "csv";
 
 export function passwordImportTally(source: PasswordImportSource) {
   const counts = { tried: 0, saved: 0, refused: 0, not_landed: 0, other: 0 };

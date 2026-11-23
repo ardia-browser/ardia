@@ -1,9 +1,9 @@
 import pin from "../../../official-plugins.json";
 import type { experimentOn } from "../../platform/killSwitches";
 
-export type OfficialEntry = { name: string; title: string; blurb: string; icon: string };
+type OfficialEntry = { name: string; title: string; blurb: string; icon: string };
 type Experiment = Parameters<typeof experimentOn>[0];
-export type OfficialTelemetry = { title: string; items: string[] };
+type OfficialTelemetry = { title: string; items: string[] };
 type PinEntry = OfficialEntry & { preselected?: boolean; anchorAliases?: readonly string[]; telemetry?: OfficialTelemetry; example?: string; legacyInstall?: { program: string } };
 type Pin = { plugins: readonly PinEntry[]; comingSoon?: readonly (OfficialEntry & { experiment: string })[] };
 

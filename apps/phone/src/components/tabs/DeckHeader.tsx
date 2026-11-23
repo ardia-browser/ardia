@@ -32,12 +32,15 @@ function joinMenuGroups(groups: readonly MenuItem[][], ruled: boolean = menuGrou
   return groups.filter((group) => group.length > 0).flatMap((group, index): MenuItem[] => (index > 0 && ruled ? ["divider", ...group] : group));
 }
 
-export function deckMoreMenuItems({ syncEnabled, canReopen, hasTabs, onCloseAll, archive = true }: { syncEnabled: boolean; canReopen: boolean; hasTabs: boolean; onCloseAll: () => void; archive?: boolean }): MenuItem[] {
-  return joinMenuGroups([
-    [...(archive ? [{ label: destinationWords.archive, icon: "archivebox" as const, onPress: openArchive }] : []), ...(syncEnabled ? [{ label: destinationWords.spaces, icon: "macAndPhone" as const, onPress: openSpaces }] : [])],
-    [{ label: actionWords.newIncognitoTab, icon: "eyes", onPress: newIncognitoTab }, ...(canReopen ? [{ label: "Reopen Closed Tab", icon: "arrowUturnBackward" as const, onPress: reopenLastClosed }] : []), ...(hasTabs ? [{ label: "Close All Tabs", icon: "xmark" as const, destructive: true, onPress: onCloseAll }] : [])],
-    [{ label: destinationWords.settings, icon: "gearshape", onPress: () => openSettings() }],
-  ]);
+export function deckMoreMenuItems({ syncEnabled, canReopen, hasTabs, onCloseAll, archive = true, material = false }: { syncEnabled: boolean; canReopen: boolean; hasTabs: boolean; onCloseAll: () => void; archive?: boolean; material?: boolean }): MenuItem[] {
+  return joinMenuGroups(
+    [
+      [...(archive ? [{ label: destinationWords.archive, icon: "archivebox" as const, onPress: openArchive }] : []), ...(syncEnabled ? [{ label: destinationWords.spaces, icon: "macAndPhone" as const, onPress: openSpaces }] : [])],
+      [{ label: actionWords.newIncognitoTab, icon: "eyes", onPress: newIncognitoTab }, ...(canReopen ? [{ label: "Reopen Closed Tab", icon: "arrowUturnBackward" as const, onPress: reopenLastClosed }] : []), ...(hasTabs ? [{ label: "Close All Tabs", icon: "xmark" as const, destructive: true, onPress: onCloseAll }] : [])],
+      [{ label: destinationWords.settings, icon: "gearshape", onPress: () => openSettings() }],
+    ],
+    material ? true : menuGroupsRuled(),
+  );
 }
 
 export function useDeckSpaces() {

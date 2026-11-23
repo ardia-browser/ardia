@@ -11,7 +11,7 @@ import { LEGACY_SWITCHER_ICONS_KEY } from "../profiles/switcherMark";
 
 export const CONFIG_FILE = "config.json";
 
-export type ConfigRead = { patch: Partial<Settings>; theme: string | null | undefined; problems: string[] };
+type ConfigRead = { patch: Partial<Settings>; theme: string | null | undefined; problems: string[] };
 
 const EXCLUDED: ReadonlySet<string> = new Set(CONFIG_EXCLUDED_KEYS);
 
@@ -28,7 +28,7 @@ const listed = (values: readonly unknown[]) => {
   return words.length > 1 ? `${words.slice(0, -1).join(", ")} or ${words.at(-1)}` : (words[0] ?? "");
 };
 
-export function describeSchema(schema: JsonSchema): string {
+function describeSchema(schema: JsonSchema): string {
   if (schema.enum) return `must be ${listed(schema.enum)}`;
   const types = Array.isArray(schema.type) ? schema.type : schema.type ? [schema.type] : [];
   const parts = types.map((type) => {

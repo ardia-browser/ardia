@@ -175,6 +175,12 @@ export function startDevHarness() {
     get syncSheets(): typeof import("../settings/panes/SyncSheets") {
       return require("../settings/panes/SyncSheets");
     },
+    get vaultStore(): typeof import("../../state/vaults/store") {
+      return require("../../state/vaults/store");
+    },
+    get vaultDropdowns(): typeof import("../../state/vaults/chromeDropdown") & typeof import("../../state/vaults/menuDropdown") & typeof import("../../state/vaults/saveOffer") & typeof import("../../state/telemetry/vaultCounts") {
+      return { ...require("../../state/vaults/chromeDropdown"), ...require("../../state/vaults/menuDropdown"), ...require("../../state/vaults/saveOffer"), ...require("../../state/telemetry/vaultCounts") };
+    },
     get menus(): typeof import("../../state/sidebar/menus") &
       typeof import("../../state/sidebar/liveMenus") &
       typeof import("../../state/site/reloadMenu") &

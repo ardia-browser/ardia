@@ -472,7 +472,7 @@ void StartEarlyWindow() {
       "--disable-stack-profiler",
       "--disable-features=MacAppCodeSignClone,DevToolsAcceptDebuggingConnections,AutofillAiWalletPrivatePasses,SettingsGlowupJourneys,AsyncLiveResize",
       "--enable-features=WebContentsDiscard,BrowserInitiatedAutomaticPictureInPicture,MacOcclusionForceShutoff,ImprovedStartupBestEffortDelay:StartupDelayStopOnLoadingTimedOut/true,"
-      "CPUMeasurementInFreezingPolicy:freezing_visible_protection_time/0s",
+      "CPUMeasurementInFreezingPolicy:freezing_visible_protection_time/0s,fill-on-account-select",
       "--profile-directory=Default",
       "--js-flags=--no-memory-reducer",
   };

@@ -1,3 +1,4 @@
+import { consentToken } from "../telemetry/choice";
 import { tabTitle } from "../browser/model";
 import type { Suggestion } from "@ardia/core";
 import { prompt } from "../../platform/dialogs";
@@ -13,6 +14,7 @@ import { openSplitPane } from "../splits/actions";
 import { openSettings } from "../settings/settingsWindows";
 import { isOrganizeId, shownOrganizeContext, sideBySide, splitCandidates, type OrganizeContext, type OrganizeId } from "./organizeActions";
 import { renameProfile } from "../profiles/profileMenu";
+import { isVaultActionId, runVaultAction } from "../vaults/barActions";
 import { isPluginAction, runPluginAction } from "../plugins/commands";
 
 const store = () => useBrowser.getState();
@@ -62,6 +64,7 @@ const RUN_ORGANIZE: Record<OrganizeId, (c: OrganizeContext) => void | Promise<vo
 };
 
 export function runBarAction(id: string, windowId: string) {
+  if (isVaultActionId(id)) return runVaultAction(id, store(), windowId, consentToken());
   if (isPluginAction(id)) return void runPluginAction(id, windowId);
   if (isOrganizeId(id)) {
     const c = shownOrganizeContext(id, windowId);

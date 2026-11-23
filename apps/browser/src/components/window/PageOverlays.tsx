@@ -26,7 +26,9 @@ import { HISTORY_MENU_WIDTH, HistoryPopover } from "./HistoryPopover";
 import { TabWebView } from "./TabWebView";
 import { fitLeft, pageSurfaceLeft, type PageAnchor, type PageSurface } from "./pageAnchors";
 import { useSidebarSide } from "../../state/browser/hooks";
+import { VaultMenuHost } from "../vaults/VaultMenu";
 import { VaultFieldBadgeHost } from "../vaults/VaultFieldBadge";
+import { VaultSaveOffer } from "../vaults/VaultSaveOffer";
 
 export function PageOverlays({
   tabId,
@@ -70,6 +72,7 @@ export function PageOverlays({
       {cliPill && <ControlPill style={statusStyle} />}
       {!newTabShown && <PermissionPrompt tabId={tabId} {...at("prompt", PERMISSION_PROMPT_WIDTH)} />}
       <PasswordPrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />
+      <VaultSaveOffer tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />
       <AutofillPrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />
       {verificationCodes && <VerificationCodeOffer tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />}
       <NewTabNotice windowId={windowId} tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />
@@ -83,6 +86,7 @@ export function PageOverlays({
       <NavigationOverlays tabId={tabId} windowId={windowId} anchor={anchor} paneWidth={width} historyMenu={popovers} />
       <SelectionPopover tabId={tabId} zoom={zoom} />
       <VaultFieldBadgeHost tabId={tabId} zoom={zoom} />
+      <VaultMenuHost tabId={tabId} zoom={zoom} />
     </>
   );
 }

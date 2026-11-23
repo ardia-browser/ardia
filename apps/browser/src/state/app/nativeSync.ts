@@ -39,6 +39,7 @@ import { answerQuitAfterSaves, isQuitting, setQuitting } from "./quit";
 import { extensionsChangeMenu, liveReachesMenu, menuInputsChanged, menuLiveKey, pagesChangeMenu, readerChangesMenu, trackedMenuState, type MenuReads } from "../commands/menuState";
 import { onLiveChange } from "../tabs/tabLive";
 import { usePages } from "../tabs/pageState";
+import { startVaults } from "../vaults/start";
 import { openFromWindowlessPage } from "../tabs/openFromWindowlessPage";
 import { startCaptionRegionSync } from "../windows/captionRegions";
 
@@ -80,6 +81,7 @@ export function startNativeSync() {
 
   store.getState().setAppDark(Appearance.getColorScheme() === "dark");
   startNativeSettings();
+  startVaults();
   startInterfaceScaleRefresh();
   void isDarkAppearance().then((dark) => store.getState().setAppDark(dark));
 

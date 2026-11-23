@@ -153,7 +153,11 @@ export const COMMANDS = {
   pinExtensions: { title: "Pin Extensions…" },
   autofill: {
     littleArdia: "page",
-    variants: { contact: { title: "Contact…" }, passwords: { title: "Passwords…" }, creditCard: { title: "Credit Card…" } },
+    variants: {
+      contact: { title: "Contact…" },
+      passwords: { title: "Passwords…", keys: ["⌘\\"] },
+      creditCard: { title: "Credit Card…" },
+    },
   },
   openFile: { title: "Open File…", keys: ["⌘O"] },
   savePage: { title: "Save Page As…", ...pageInLittleArdia },

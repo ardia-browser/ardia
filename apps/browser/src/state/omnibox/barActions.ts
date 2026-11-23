@@ -11,6 +11,8 @@ import type { Tab } from "../browser/types";
 import { organizeActions } from "./organizeActions";
 import { muteState, muteTitle, siteMuteTitle } from "../tabs/mute";
 import { isWebPageUrl } from "../../lib/url";
+import { vaultBarActions } from "../vaults/barActions";
+import { vaultRevision } from "../vaults/store";
 import { pluginActionsRevision, pluginBarActions } from "../plugins/commands";
 import { currentPlugins } from "../plugins/store";
 import { eligibleKind } from "../automation/automationWindows";
@@ -155,6 +157,7 @@ export function barActions(s: BrowserState, windowId: string): CommandAction[] {
     });
   }
   out.push(...organizeActions(s, windowId));
+  out.push(...vaultBarActions(s, windowId));
   if (eligibleKind(s, windowId)) out.push(...pluginBarActions(currentPlugins(), windowId));
   return out;
 }
@@ -165,7 +168,7 @@ export function currentBarActions(windowId: string): CommandAction[] {
   const s = useBrowser.getState();
   let byWindow = barActionsOf.get(s);
   if (!byWindow) barActionsOf.set(s, (byWindow = new Map()));
-  const key = `${windowId}|${menuBarRevision()}|${pluginActionsRevision()}`;
+  const key = `${windowId}|${menuBarRevision()}|${pluginActionsRevision()}|${vaultRevision()}`;
   let actions = byWindow.get(key);
   if (!actions) byWindow.set(key, (actions = barActions(s, windowId)));
   return actions;

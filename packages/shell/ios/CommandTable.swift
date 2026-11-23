@@ -307,6 +307,7 @@ enum CommandTable {
     "returnToPinnedUrl": [("\u{D}", [.command])],
     "share": [("s", [.option, .command])],
     "reportProblem": [("i", [.option, .shift, .command])],
+    "autofill:passwords": [("\\", [.command])],
     "openFile": [("o", [.command])],
     "emailPageLocation": [("i", [.shift, .command])],
     "printWithSystemDialog": [("p", [.option, .command])],

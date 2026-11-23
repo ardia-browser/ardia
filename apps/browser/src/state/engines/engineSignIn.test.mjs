@@ -25,7 +25,7 @@ globalThis.acTestNativeModules = {
       if (name === "readSiteData" && webKit.readDelay) await new Promise((resolve) => setTimeout(resolve, webKit.readDelay));
       if (name === "writeSiteData" && webKit.writeHold) {
         webKit.writing = true;
-        await webKit.writeHold;
+        await (typeof webKit.writeHold === "function" ? webKit.writeHold() : webKit.writeHold);
       }
       return JSON.stringify(webKitCalls[name]({ ...JSON.parse(json), profile }) ?? null);
     },
@@ -727,7 +727,7 @@ test("a carry is a main-thread job while it writes, not while it waits for its b
   const { tabId } = setup();
   const spanPage = countingPage({ cookies: [signedInOn("span.test")], storage: {} });
   webviews.set(tabId, spanPage);
-  webKit.writeHold = new Promise((resolve) => setTimeout(resolve, 30));
+  webKit.writeHold = () => new Promise((resolve) => setTimeout(resolve, 30));
   const began = Date.now();
   const carry = carrySite("", "span.test", "webkit", { origin: "https://span.test", consent: null });
   await new Promise((resolve) => setTimeout(resolve, 10));

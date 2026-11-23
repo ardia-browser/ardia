@@ -27,6 +27,7 @@ public class WebViewModule: Module {
       ArdiaWebView.setSelectionPopoverEnabled(enabled)
       WebKitPageGestures.selectionPopover = enabled
     },
+    "setVaultCodeSetup": setting { VaultTotpSetup.enable(try $0.bool("enabled")) },
     "setVaultContextMenu": setting { args in
       ArdiaWebView.setVaultContextMenu(autofill: try args.bool("autofill"), generators: try args.dicts("generate"),
                                        anyField: try args.optionalBool("generateAnyField") ?? false)

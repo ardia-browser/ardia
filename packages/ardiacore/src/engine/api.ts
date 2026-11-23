@@ -185,6 +185,7 @@ export type EngineCalls = BookmarksCalls & FaviconsCalls & HistoryCalls & {
   "webView.setPeekOtherSiteTabs": [{ tabIds: string[] }, null];
   "webView.setSelectionPopover": [{ enabled: boolean }, null];
   "webView.setVaultContextMenu": [{ autofill: boolean; generate: { style: string; title: string }[]; generateAnyField?: boolean }, null];
+  "webView.setVaultCodeSetup": [{ enabled: boolean }, null];
   "webView.setBlockAutoplayEverywhere": [{ enabled: boolean }, null];
   "webView.setCommandScrollZoom": [{ enabled: boolean }, null];
   "webView.setLittleArdiaOpensNewTabLinks": [{ enabled: boolean }, null];

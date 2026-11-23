@@ -713,6 +713,7 @@ const fakeModules = {
     setPeekOtherSiteTabs: () => null,
     setSelectionPopover: () => null,
     setVaultContextMenu: () => null,
+    setVaultCodeSetup: () => null,
     setBlockAutoplayEverywhere: () => null,
     setCommandScrollZoom: () => null,
     setLittleArdiaOpensNewTabLinks: () => null,

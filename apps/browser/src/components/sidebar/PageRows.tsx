@@ -52,7 +52,12 @@ export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, 
   const { list: all } = useCapturedSidebarEntries(windowId, profileId, captured);
   const [mountedRows, setMountedRows] = useState(() => firstPaintEntriesNow(windowId, profileId, all, lazy));
   const [visited, setVisited] = useState(current);
-  if (current && !visited) setVisited(true);
+  const [lastRows, setLastRows] = useState(rows ?? 0);
+  if (rows !== undefined && rows !== lastRows) setLastRows(rows);
+  if (current && !visited) {
+    setVisited(true);
+    if (Math.min(lastRows, all.length) > mountedRows) setMountedRows(Math.min(lastRows, all.length));
+  }
   const cap = offScreen ? 0 : visited ? undefined : rows;
   const growing = cap === undefined && mountedRows < all.length;
   useEffect(() => {

@@ -71,6 +71,7 @@ export const emitEvent = <E extends EventName>(name: E, data: EventData<E>) => {
 };
 
 export const chromeWindowList: ChromeWindowState[] = [];
+export const pagerSnapshots = new Map<string, { sequence: number; selectionSequence: number; position: number; selected: number; phase: string; velocity: number; count: number; profileId?: string | null }>();
 export const engineCalls: { domain: string; verb: string; profile: string }[] = [];
 export const commitReports: boolean[] = [];
 export const commitReportFailures = { next: 0 };
@@ -700,7 +701,7 @@ const fakeModules = {
     switchPager: () => Promise.resolve(false),
     stepPager: () => Promise.resolve(false),
     selectPager: () => Promise.resolve(false),
-    pagerState: () => null,
+    pagerState: (key: string) => pagerSnapshots.get(key) ?? null,
     devPagerState: () => Promise.resolve(null),
     devSimulate: () => unfaked("ArdiaSwipe", "devSimulate"),
   },

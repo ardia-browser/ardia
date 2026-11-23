@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Animated, Pressable, StyleSheet, View, type ScrollView } from "react-native";
-import { revealTab, rowsStamp, sameRows, samePillTab, selectedTabIn, selectedTabSnapshot, selectedPlaceIn, movedInPlace, watchPillTab, watchSelectedPlace, type PillTab, type RowsStamp, type SelectedPlace } from "../../state/sidebar/reveal";
+import { revealTab, rowsStamp, sameRows, samePillTab, selectedTabIn, showsProfile, selectedTabSnapshot, selectedPlaceIn, movedInPlace, watchPillTab, watchSelectedPlace, type PillTab, type RowsStamp, type SelectedPlace } from "../../state/sidebar/reveal";
 import { notePageOverlay } from "../../state/telemetry/usage";
 import { capsule, Panel, radius, reduceMotion, Symbol, Text, tintedImage } from "../ui";
 import { useTheme } from "../ui/theme";
@@ -37,9 +37,10 @@ export function useSelectedRowAway(
   geometry: RefObject<SidebarGeometry> | undefined,
   scroll: RefObject<ScrollView | null>,
   scrollY: () => number,
+  profileId?: string,
 ): PillTracker {
-  const live = useRef({ geometry, scrollY });
-  live.current = { geometry, scrollY };
+  const live = useRef({ geometry, scrollY, profileId });
+  live.current = { geometry, scrollY, profileId };
   const [tracker] = useState(() => {
     let away: PillAway = null;
     let sink: PillSink | null = null;
@@ -88,7 +89,8 @@ export function useSelectedRowAway(
       row = found;
     };
     const place = () => {
-      const page = live.current.geometry?.current;
+      const own = live.current.profileId === undefined || showsProfile(windowId, live.current.profileId);
+      const page = own ? live.current.geometry?.current : undefined;
       const side = page && Date.now() >= quietUntil ? rowAway(row, live.current.scrollY(), page.viewport, page.edgeLift) : null;
       const tab = side ? selectedTabSnapshot(windowId) : null;
       show(side && tab ? { side, tab } : null);

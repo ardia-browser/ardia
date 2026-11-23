@@ -1,3 +1,4 @@
+import type { ScrollView } from "react-native";
 import { layout } from "../ui/theme";
 import type { Section } from "../../state/sidebar/geometry";
 
@@ -8,7 +9,19 @@ export const ROWS_PER_FRAME = 32;
 export const DOCK_SHARE = 0.4;
 export const DOCK_SLACK = 12;
 
-export type SidebarGeometry = { viewport: number; regions: Record<Section, number>; newTabAtTop: boolean; tilesFixed: boolean; edgeLift?: number; laidOut?: () => void };
+export type SidebarGeometry = { viewport: number; regions: Record<Section, number>; newTabAtTop: boolean; tilesFixed: boolean; edgeLift?: number; laidOut?: () => void; ownerShown?: () => boolean };
+
+export type PageSpot = {
+  scrollY: number;
+  viewport: number;
+  regions: Record<Section, number>;
+  tilesFixed: boolean;
+  newTabAtTop: boolean;
+  edgeLift: number;
+  shown: boolean;
+  owns: boolean;
+  scroller: ScrollView | null;
+};
 
 export type PageLayoutInput = {
   tiles: number;

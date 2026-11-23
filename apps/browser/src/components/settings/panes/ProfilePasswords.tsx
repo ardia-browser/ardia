@@ -47,10 +47,9 @@ import { PasskeysSection } from "../../vaults/VaultPasskeys";
 import { VAULT_SETTINGS } from "../../vaults/tokens";
 
 function passwordManagerAppsNote() {
-  const apps = `1Password, Bitwarden, KeePassXC and Proton Pass extensions connect to their ${PLATFORM_TERMS.computer} apps.`;
   return systemInfo().inApplicationsFolder === false
-    ? `${apps} For 1Password, move Ardia to your Applications folder and reopen it (1Password only connects to browsers there), then in the 1Password app open Settings › Browser › Add Browser and choose it.`
-    : `${apps} For 1Password, add Ardia once: in the 1Password app, open Settings › Browser › Add Browser and choose Ardia.`;
+    ? "For 1Password, move Ardia to Applications, then add it in its Settings › Browser."
+    : "Their extensions work here. For 1Password, add Ardia in its Settings › Browser.";
 }
 
 export function PasswordsSection({ profileId }: { profileId: string }) {
@@ -173,7 +172,7 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
       {ardia ? <ForAllProfilesSection /> : null}
       <SectionHeader
         title="Passwords"
-        description={`Saved on this ${PLATFORM_TERMS.computer}, separately for each profile, and encrypted with ${PLATFORM_TERMS.passwordKey}.`}
+        description={`Encrypted on this ${PLATFORM_TERMS.computer}, for this profile only.`}
       />
       <Group>
         <Row title="Import passwords" description={importStatus || "From a CSV exported by Chrome, Safari, Firefox, 1Password, Bitwarden…"}>
@@ -184,11 +183,7 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
             <Button title="Export CSV…" onPress={() => void exportCsv()} />
           </Row>
         ) : null}
-        <Row
-          icon={<Symbol name="questionmark.circle" size={15} color={theme.icon} style={HELP_ICON} />}
-          title="Password manager apps"
-          description={passwordManagerAppsNote()}
-        />
+        <Row title="Password manager apps" description={passwordManagerAppsNote()} />
       </Group>
 
       {!unlocked ? (
@@ -243,6 +238,5 @@ function ArdiaExtras({ query, profile, onNewCode }: { query: string; profile: st
   );
 }
 
-const HELP_ICON = { width: 20, height: 20 } as const;
 const LOCKED = { alignItems: "center", marginTop: settingsLayout.emptyTop } as const;
 const LOCK_ICON = { width: 36, height: 36 } as const;

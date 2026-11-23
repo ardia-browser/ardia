@@ -25,6 +25,8 @@ import { VAULT_SAVE, VAULT_SETTINGS } from "../../vaults/tokens";
 import { VaultUsernameField } from "../../vaults/VaultUsernameField";
 import { Group, Row, SectionHeader } from "../Form";
 
+const DELETE = "delete";
+
 const SAVE_FAILED = "Couldn't save it. Unlock the password manager and try again.";
 
 type SaveProps = { entry: VaultGeneratedPassword; provider: string; profile: string };
@@ -94,9 +96,10 @@ function GeneratedRow({ entry, profile }: { entry: VaultGeneratedPassword; profi
     if (result.error === NEEDS_USERNAME) return showSettingsSheet(<SaveSheet entry={entry} provider={provider} profile={profile} />);
     setProblem(result.saved ? "" : SAVE_FAILED);
   };
-  const chooseTarget = async () => {
-    const choice = await showMenu(generatedSaveMenu(targets, nameOf));
-    if (choice) await saveTo(choice);
+  const more = async () => {
+    const choice = await showMenu([...generatedSaveMenu(targets, nameOf).map((t) => ({ ...t, checked: false })), ...(targets.length ? [{ separator: true as const }] : []), { id: DELETE, title: "Delete…", symbol: "trash" }]);
+    if (choice === DELETE) await remove();
+    else if (choice) await saveTo(choice);
   };
   const remove = async () => {
     const { confirmed } = await confirm({
@@ -108,12 +111,11 @@ function GeneratedRow({ entry, profile }: { entry: VaultGeneratedPassword; profi
     if (confirmed) await deleteGenerated(entry.id);
   };
   return (
-    <Row icon={<Favicon url={entry.origin} />} title={site} description={problem || `${entry.username || "No Username"} · Generated ${ago(entry.createdAt)}`}>
+    <Row icon={<Favicon url={entry.origin} size={VAULT_SETTINGS.siteIcon} />} title={site} description={problem || `${entry.username || "No Username"} · Generated ${ago(entry.createdAt)}`}>
       <Box row gap="xs" center>
         {fillable ? <Button title="Fill" onPress={() => void fill()} /> : null}
         <CopyButton label="Password" onCopy={copy} />
-        {targets.length ? <Button title="Save to…" disabled={busy} onPress={() => void chooseTarget()} /> : null}
-        <Button variant="icon" icon="trash" size="m" tooltip="Delete" onPress={() => void remove()} />
+        <Button variant="icon" icon="ellipsis.circle" size="m" tooltip="More" disabled={busy} onPress={() => void more()} />
       </Box>
     </Row>
   );

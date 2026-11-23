@@ -34,7 +34,7 @@ import { useManagerPlugins, useProfilePasswordManager } from "../../../state/sit
 import { offerToSaveHandedOver, PasswordManagerRow } from "./PasswordManagerRow";
 import { GeneratedPasswordsSection } from "./GeneratedPasswords";
 import { ForAllProfilesSection } from "./PasswordManagers";
-import { useVaultLogins } from "../../../state/vaults/hooks";
+import { useManagerRows, useManagerTotal } from "../../../state/vaults/itemPages";
 import { loadManagerItems } from "../../../state/vaults/store";
 import { vaultsSupported } from "../../../state/vaults/enabled";
 import { refreshArdiaManager } from "../../../state/vaults/ardiaManager";
@@ -109,7 +109,6 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
   const unlocked = usePasswordsUnlocked(profile);
   const choice = useProfilePasswordManager(profileId);
   const ardia = vaultsSupported && choice === "ardia";
-  const logins = useVaultLogins({ enabled: ardia, managersOnly: true });
   const arrived = useRef(0);
 
   const load = useCallback(() => {
@@ -156,11 +155,15 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
   };
 
   const saved = useMemo(() => savedEntries(list ?? []), [list]);
-  const fromManagers = useMemo(() => (ardia ? loginEntries(logins) : []), [ardia, logins]);
-  const entries = useMemo(() => mergeSorted(saved, fromManagers), [saved, fromManagers]);
   const listQuery = useNextFrame(query);
-  const shown = useNarrowedEntries(entries, listQuery);
-  const rows = useGrowingRows(shown.length, `${profile}|${listQuery}`);
+  const savedShown = useNarrowedEntries(saved, listQuery);
+  const rows = useGrowingRows(Number.MAX_SAFE_INTEGER, `${profile}|${listQuery}`);
+  const managers = useManagerRows(ardia && unlocked, listQuery, rows);
+  const managerTotal = useManagerTotal(ardia && unlocked);
+  const fromManagers = useMemo(() => loginEntries(managers.items), [managers.items]);
+  const shown = useMemo(() => mergeSorted(savedShown, fromManagers).slice(0, rows), [savedShown, fromManagers, rows]);
+  const shownTotal = savedShown.length + (ardia ? managers.total : 0);
+  const entryCount = saved.length + (ardia ? managerTotal : 0);
   const context = useMemo<SheetContext>(() => ({ profile, list: list ?? [], ardia, onChanged: load }), [profile, list, ardia, load]);
   const newLogin = (mode: "password" | "code") =>
     showSettingsSheet(
@@ -200,7 +203,7 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
       ) : (
         <>
           <SectionHeader
-            title={list ? plural(entries.length, "Saved Password") : "Saved Passwords"}
+            title={list ? plural(entryCount, "Saved Password") : "Saved Passwords"}
             action={
               <Box row gap="s" center>
                 {ardia ? <Button variant="icon" icon="plus" size="m" tooltip="New Password" onPress={() => newLogin("password")} /> : null}
@@ -208,7 +211,7 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
               </Box>
             }
           />
-          <Group>{list && shown.length === 0 ? <Row title={listQuery ? "No passwords match" : "No saved passwords"} /> : shown.slice(0, rows).map((e) => savedRow(e, context))}</Group>
+          <Group>{list && shownTotal === 0 && (!ardia || managers.ready) ? <Row title={listQuery ? "No passwords match" : "No saved passwords"} /> : shown.map((e) => savedRow(e, context))}</Group>
           {ardia ? <ArdiaExtras query={listQuery} profile={profile} onNewCode={() => newLogin("code")} /> : null}
           {never.length > 0 && (
             <>

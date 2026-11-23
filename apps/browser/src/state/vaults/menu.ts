@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { VaultField, VaultFieldKind, VaultFieldRect } from "../../platform/vaults";
+import type { VaultField, VaultFieldKind } from "../../platform/vaults";
 import { noteMenuShown } from "./menuShown";
 import { webviews } from "../../platform/webviews";
 import { useBrowser } from "../browser/store";
@@ -8,10 +8,12 @@ import { shownTabIds } from "../tabs/shownTabs";
 import { rowsOfMenu, type VaultsNow } from "./menuRowsOf";
 import { prefetchVaultCode } from "./codes";
 import { forgetClosedVaultSaves, forgetVaultPageSaves } from "./saveOffer";
-import { hasMatchRow, restingRow, type MenuMode, type VaultRow } from "./menuModel";
+import { hasMatchRow, restingRow, type VaultRow } from "./menuModel";
+import type { VaultMenu } from "./menuState";
 import { isSecureOrigin } from "./originMatch";
 import { passwordProfileOfTab } from "./ardia";
-import { anyVaultConnectedForTab, loadAllVaultItems, refreshVaultBiometrics, useVaults } from "./store";
+import { anyVaultConnectedForTab, isVaultListed, refreshVaultBiometrics, useVaults } from "./store";
+import { loadMenuItems } from "./menuCaches";
 import { vaultsOnForTab } from "./enabled";
 import { fieldProviderFillOfTab } from "../site/fieldProviderModes";
 import { ardiaFillsInTab } from "./ardiaSources";
@@ -22,35 +24,7 @@ export { AFTER_FILL_QUIET_MS, quietVaultField } from "./menuQuiet";
 
 type FrameId = VaultField["frameId"];
 
-export type VaultTouchPhase = "off" | "ready" | "retry" | "granted" | "unavailable" | "lockout";
-
-export type VaultMenu = {
-  seq: number;
-  tabId: string | null;
-  frameId: FrameId;
-  origin: string;
-  field: VaultFieldKind;
-  rect: VaultFieldRect | null;
-  maxLength: number;
-  mode: MenuMode;
-  query: string;
-  selected: number;
-  selectedKey: string | null;
-  onDemand: boolean;
-  error: string | null;
-  busy: string | null;
-  hovered: boolean;
-  hidden: boolean;
-  noTotp: string[];
-  remembered: string | null;
-  email: boolean;
-  suggestOpen: boolean;
-  touch: VaultTouchPhase;
-  touchRetries: number;
-  touchRearms: number;
-  profile: string | null;
-  webauthn: boolean;
-};
+export type { VaultMenu, VaultTouchPhase } from "./menuState";
 
 type FieldSeen = VaultField & { at: number };
 
@@ -187,6 +161,7 @@ function openMenu(tabId: string, field: FieldSeen, onDemand: boolean) {
   tellPageOfMenu(tabId, opened);
   refreshVaultBiometrics();
   prefetchCodesOf(opened);
+  return opened.seq;
 }
 
 function prefetchCodesOf(menu: VaultMenu) {
@@ -207,9 +182,12 @@ function offerNow(tabId: string, field: FieldSeen): boolean {
   return true;
 }
 
+const loadItemsFor = (tabId: string, field: FieldSeen) =>
+  loadMenuItems(field.origin, field.kind === "username" ? { email: !!field.email, profile: passwordProfileOfTab(tabId) } : null);
+
 async function offerOnFocus(tabId: string, field: FieldSeen) {
   const settled = offerNow(tabId, field);
-  const loading = loadAllVaultItems();
+  const loading = loadItemsFor(tabId, field);
   if (settled) return void loading;
   await loading;
   offerNow(tabId, field);
@@ -223,8 +201,11 @@ function openOnDemand(tabId: string, field: FieldSeen) {
     tellPageOfMenu(tabId, menu);
     return true;
   }
-  openMenu(tabId, field, true);
-  void loadAllVaultItems();
+  const opened = openMenu(tabId, field, true);
+  void loadItemsFor(tabId, field).then(() => {
+    const now = vaultMenuOf(tabId);
+    if (now?.seq === opened) patchVaultMenu(tabId, now.selected < 0 && !now.hovered ? { selected: restingRowOf(now) } : {}, opened);
+  });
   return true;
 }
 
@@ -386,10 +367,10 @@ export function startVaultMenus() {
     const shown = shownTabIds(s);
     for (const [tabId] of open) if (!shown.has(tabId)) closeVaultMenu(tabId);
   });
-  const readyManagers = (s: VaultsNow) => s.providers.filter((p) => p.state === "locked" || (p.state === "unlocked" && p.id in s.items)).length;
+  const readyManagers = (s: VaultsNow) => s.providers.filter((p) => p.state === "locked" || isVaultListed(s, p.id)).length;
   const stopVaults = useVaults.subscribe((s, prev) => {
     if (readyManagers(s) > readyManagers(prev) || unlockedCount(s) > unlockedCount(prev)) offerToFocusedFields();
-    if (s.providers !== prev.providers || s.items !== prev.items || s.pending !== prev.pending) restOpenMenus();
+    if (s.providers !== prev.providers || s.sites !== prev.sites || s.searches !== prev.searches || s.listed !== prev.listed || s.pending !== prev.pending) restOpenMenus();
   });
   const stopPasskeys = usePasskeys.subscribe((s, prev) => s.offers !== prev.offers && restOpenMenus());
   return () => {

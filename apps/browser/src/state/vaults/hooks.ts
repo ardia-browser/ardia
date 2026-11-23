@@ -1,11 +1,10 @@
 import { useVaultCodes } from "./codes";
-import { useEffect, useReducer, useRef } from "react";
-import type { VaultItem } from "../../platform/vaults";
-import { isArdiaProvider } from "./ardia";
+import { useEffect, useReducer } from "react";
 import { restVaultMenu, rowsOfMenu, useVaultMenus, type VaultMenu } from "./menu";
 import { suggestOf } from "./menuModel";
 import { useVaultSaveOffers } from "./saveOffer";
 import { useVaultBiometrics, useVaults } from "./store";
+export { useVaultSiteItems } from "./store";
 import { useBrowser } from "../browser/store";
 import { useGeneratedPasswords } from "./generated";
 import { codePageTab, frontPageTab } from "./ardiaCodes";
@@ -23,21 +22,6 @@ export const useVaultTouchID = () => {
 };
 export const useVaultBiometricsAvailable = () => useVaultBiometrics((s) => s.available);
 export const useVaultMenuGlass = () => useBrowser((s) => s.settings.vaultMenuGlass);
-const NO_ITEMS: Record<string, VaultItem[]> = {};
-
-type LoginsWanted = { enabled?: boolean; managersOnly?: boolean };
-
-export function useVaultLogins({ enabled = true, managersOnly = false }: LoginsWanted = {}): VaultItem[] {
-  const items = useVaults((s) => (enabled ? s.items : NO_ITEMS));
-  const providers = useVaults((s) => s.providers);
-  const lists = Object.entries(items)
-    .filter(([id]) => !(managersOnly && isArdiaProvider(id)) && providers.some((p) => p.id === id && p.state === "unlocked"))
-    .map(([, list]) => list);
-  const last = useRef<{ lists: VaultItem[][]; flat: VaultItem[] }>({ lists: [], flat: [] });
-  const same = lists.length === last.current.lists.length && lists.every((list, i) => list === last.current.lists[i]);
-  if (!same) last.current = { lists, flat: lists.length === 1 ? lists[0]! : lists.flat() };
-  return last.current.flat;
-}
 export const useVaultCode = (key: string) => useVaultCodes((s) => s[key]);
 export const useVaultMenu = (tabId: string) => useVaultMenus((s) => s.menus[tabId] ?? null);
 export const useVaultSaveOffer = (tabId: string) => useVaultSaveOffers((s) => s[tabId] ?? null);

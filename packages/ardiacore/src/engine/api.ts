@@ -261,6 +261,8 @@ export type EngineCalls = BookmarksCalls & FaviconsCalls & HistoryCalls & {
       storeLegacyMigrated?: number;
       storeNewerFormatKept?: number;
       storeCloudNewerFormatKept?: number;
+      catalogBuilds?: number;
+      catalogBuildsSlow?: number;
       storeUnreadableKept?: number;
       storeKeyReadFailed?: number;
       staleWorkDropped?: number;

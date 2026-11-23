@@ -92,6 +92,8 @@ const empty = () => ({
   vault_store_legacy_migrated: 0,
   vault_store_newer_format_kept: 0,
   vault_store_cloud_newer_format_kept: 0,
+  vault_catalog_builds: 0,
+  vault_catalog_builds_slow: 0,
   vault_store_unreadable_kept: 0,
   vault_store_key_read_failed: 0,
   vault_stale_work_dropped: 0,
@@ -232,6 +234,8 @@ const NATIVE_COUNTS = {
   storeResealed: "vault_store_resealed",
   storeSetAside: "vault_store_set_aside",
   storeKeyNotNoted: "vault_store_key_not_noted",
+  catalogBuilds: "vault_catalog_builds",
+  catalogBuildsSlow: "vault_catalog_builds_slow",
 } as const;
 
 const countOf = (n: unknown) => (typeof n === "number" && Number.isFinite(n) && n > 0 ? Math.floor(n) : 0);

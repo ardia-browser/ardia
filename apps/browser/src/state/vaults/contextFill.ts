@@ -14,7 +14,7 @@ import { fillErrorText } from "./fill";
 import { noteVaultField, showAllPasswords, vaultMenuOf } from "./menu";
 import { currentVaultSuggest } from "./menuRowsOf";
 import { onArdiaProfilesChanged, vaultsOnForTab } from "./enabled";
-import { allVaultItems, anyVaultConnectedForTab, currentVaultProviders, loadAllVaultItems, loadVaultItems, useVaults } from "./store";
+import { anyVaultConnectedForTab, currentVaultProviders, loadVaultItems, useVaults, loadSiteItems, siteItemsNow } from "./store";
 
 const contexts = new Map<string, VaultContextField>();
 
@@ -27,7 +27,7 @@ function sendMenu(tabId: string, field: VaultContextField) {
   const menu = contextMenuModel({
     origin: field.origin,
     providers: on ? currentVaultProviders() : [],
-    items: on ? itemsForTab(allVaultItems(), tabId) : [],
+    items: on ? itemsForTab(siteItemsNow(field.origin), tabId) : [],
     remembered: rememberedVaultAccount(field.origin),
     suggest: currentVaultSuggest(),
   });
@@ -38,14 +38,14 @@ export function noteVaultContext(tabId: string, field: VaultContextField) {
   contexts.set(tabId, field);
   sendMenu(tabId, field);
   if (!anyVaultConnectedForTab(tabId)) return;
-  void loadAllVaultItems().then(() => isCurrent(tabId, field) && sendMenu(tabId, field));
+  void loadSiteItems(field.origin).then(() => isCurrent(tabId, field) && sendMenu(tabId, field));
 }
 
-const itemOf = (tabId: string, key: string): VaultItem | undefined => itemsForTab(allVaultItems(), tabId).find((item) => itemKey(item) === key);
+const itemOf = (tabId: string, origin: string, key: string): VaultItem | undefined => itemsForTab(siteItemsNow(origin), tabId).find((item) => itemKey(item) === key);
 
 async function fillChoice(tabId: string, field: VaultContextField, action: Extract<VaultContextAction, { action: "fill" }>) {
   const consent = consentToken();
-  const item = itemOf(tabId, action.login);
+  const item = itemOf(tabId, field.origin, action.login) ?? (await loadSiteItems(field.origin).then(() => itemOf(tabId, field.origin, action.login)));
   const web = webviews.get(tabId);
   if (!item || !web) return toast(tabId, "This login is no longer in your password manager.", true);
   const request = {

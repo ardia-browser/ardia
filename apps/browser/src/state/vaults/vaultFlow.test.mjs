@@ -55,8 +55,14 @@ async function setup(state = "unlocked") {
   store.clearVaultIndex();
   await store.loadVaultProviders();
   await store.loadAllVaultItems(true);
+  await store.loadSiteItems("https://github.com");
   return { w, tabId };
 }
+
+const held = () => {
+  const s = store.useVaults.getState();
+  return [...Object.values(s.sites), ...Object.values(s.searches)].flat();
+};
 
 const second = { provider: "bitwarden", id: "work", title: "GitHub", username: "octo-work", urls: ["https://github.com"], hasTotp: false };
 const openMenuNow = async (tabId, over = {}) => {
@@ -525,7 +531,7 @@ test("a blur closes the menu after a short grace unless the pointer is on it", a
 
 test("a locked manager offers its unlock row and keeps its items out of memory", async () => {
   const { tabId } = await setup("locked");
-  assert.deepEqual(store.allVaultItems(), []);
+  assert.deepEqual(held(), []);
   menu.noteVaultField(tabId, field());
   await settle();
   const rows = menu.rowsOfMenu(menu.vaultMenuOf(tabId));
@@ -535,9 +541,9 @@ test("a locked manager offers its unlock row and keeps its items out of memory",
 
 test("locking drops the index and pending codes", async () => {
   await setup();
-  assert.equal(store.allVaultItems().length, 1);
+  assert.equal(held().length, 1);
   store.applyProviderState(provider("locked"));
-  assert.deepEqual(store.allVaultItems(), []);
+  assert.deepEqual(held(), []);
   assert.deepEqual(store.currentPendingTotp(), []);
 });
 
@@ -552,7 +558,7 @@ test("a provider list that lands after a lock never brings the manager back as u
     await loading;
     await settle();
     assert.equal(store.vaultProviderOf("bitwarden")?.state, "locked");
-    assert.deepEqual(store.allVaultItems(), []);
+    assert.deepEqual(held(), []);
   } finally {
     native.vaultFakes.providersGate = null;
   }
@@ -560,11 +566,11 @@ test("a provider list that lands after a lock never brings the manager back as u
 
 test("a provider list that says a manager is now locked drops its items", async () => {
   await setup();
-  assert.equal(store.allVaultItems().length, 1);
+  assert.equal(held().length, 1);
   native.vaultFakes.providers = [provider("locked")];
   await store.loadVaultProviders();
   assert.equal(store.vaultProviderOf("bitwarden")?.state, "locked");
-  assert.deepEqual(store.allVaultItems(), []);
+  assert.deepEqual(held(), []);
 });
 
 test("a new login gets the save offer and Chrome's prompt for it stays hidden", async () => {
@@ -742,8 +748,8 @@ test("logins that arrive after the field was focused open the menu", async () =>
   const { tabId } = await setup();
   const stop = menu.startVaultMenus();
   try {
-    store.clearVaultIndex();
     native.vaultFakes.items = null;
+    store.clearVaultIndex();
     await openMenuNow(tabId);
     assert.equal(menu.vaultMenuOf(tabId), null, "the list failed to load");
     native.vaultFakes.items = [login];
@@ -1057,6 +1063,7 @@ test("the login just filled in this tab is only a suggestion for a new password"
   native.vaultFakes.items = [{ ...login, urls: ["https://login.example.com"] }];
   await store.loadAllVaultItems(true);
   menu.noteVaultField(tabId, field({ origin: "https://login.example.com", clicked: true }));
+  await settle();
   noteVaultKey(tabId, { frameId: "f1", key: "Enter" });
   await settle();
   native.docs.delete(accounts.VAULT_ACCOUNTS_DOC);

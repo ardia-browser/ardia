@@ -2,7 +2,7 @@ import type { VaultFieldKind, VaultItem, VaultPasswordStyle, VaultProviderState 
 import { fillsWithoutChoice, itemKey, rankItems, searchItems, TIER } from "./originMatch";
 import type { PendingTotp } from "./pendingTotp";
 import type { Settings } from "../settings/settings";
-import { previousUsernames } from "./usernames";
+import { MAX_PREVIOUS_USERNAMES, previousUsernames } from "./usernames";
 
 export type VaultRow =
   | { key: string; kind: "generate"; style: VaultPasswordStyle; spare?: boolean }
@@ -48,6 +48,7 @@ type MenuInput = {
   codes?: readonly VaultItem[];
   suggest?: VaultSuggest;
   passkeys?: readonly VaultItem[];
+  usernames?: readonly VaultItem[];
 };
 
 export const MAX_CODE_ROWS = 4;
@@ -87,9 +88,11 @@ function codeRows(input: MenuInput, ranked: ReturnType<typeof rankItems>): Vault
 
 function usernameRows(input: MenuInput, items: readonly VaultItem[], shown: readonly VaultRow[]): VaultRow[] {
   const taken = new Set(shown.flatMap((r) => (r.kind === "login" ? [r.item.username.trim().toLowerCase()] : [])));
-  return previousUsernames(items.filter((i) => !taken.has(i.username.trim().toLowerCase())), { email: !!input.email }).map(
-    (u): VaultRow => ({ key: `username:${u.username.toLowerCase()}`, kind: "username", username: u.username, item: u.item }),
-  );
+  const free = (username: string) => !!username.trim() && !taken.has(username.trim().toLowerCase());
+  const ranked = input.usernames
+    ? input.usernames.filter((item) => free(item.username)).slice(0, MAX_PREVIOUS_USERNAMES).map((item) => ({ username: item.username.trim(), item }))
+    : previousUsernames(items.filter((i) => free(i.username)), { email: !!input.email });
+  return ranked.map((u): VaultRow => ({ key: `username:${u.username.toLowerCase()}`, kind: "username", username: u.username, item: u.item }));
 }
 
 function unlockRows(input: MenuInput): VaultRow[] {

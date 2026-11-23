@@ -10,7 +10,7 @@ import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/s
 import { hostLabel } from "../../pages/PageLayout";
 import { Favicon } from "../../favicon/Favicon";
 import { Group, Row } from "../Form";
-import { useVaultLogins } from "../../../state/vaults/hooks";
+import { useVaultSiteItems } from "../../../state/vaults/hooks";
 import { ArdiaCodeRow } from "../../vaults/VaultCodeRows";
 import { LoginFormSheet } from "../../vaults/LoginFormSheet";
 import { SavedInRow, WebsiteRow } from "../../vaults/VaultSheetRows";
@@ -30,7 +30,7 @@ function ArdiaPasswordSheet({ profile, saved, list, onChanged, ardia }: { saved:
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const unlocked = usePasswordsUnlocked(profile);
-  const ardiaItem = ardiaLoginOf(useVaultLogins(), profile, saved.origin, saved.username);
+  const ardiaItem = ardiaLoginOf(useVaultSiteItems(saved.origin), profile, saved.origin, saved.username);
   useEffect(() => void revealPassword(profile, saved.origin, saved.username).then(setPassword), []);
   useEffect(() => {
     if (unlocked) return;

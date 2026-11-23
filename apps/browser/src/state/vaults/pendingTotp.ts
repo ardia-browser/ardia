@@ -1,6 +1,6 @@
 export const PENDING_TOTP_MS = 3 * 60_000;
 
-export type PendingTotp = { origin: string; tabId: string; provider: string; id: string; at: number };
+export type PendingTotp = { origin: string; tabId: string; provider: string; id: string; at: number; username?: string };
 
 const livePending = (list: readonly PendingTotp[], now: number) => list.filter((p) => now - p.at < PENDING_TOTP_MS && now >= p.at);
 

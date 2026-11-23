@@ -41,6 +41,7 @@ async function setup(state = "unlocked") {
   store.clearVaultIndex();
   await store.loadVaultProviders();
   await store.loadAllVaultItems(true);
+  await store.loadSiteItems("https://github.com");
   return { tabId };
 }
 
@@ -91,6 +92,7 @@ test("Other Passwords opens the search under the field, and a pick fills only th
   const open = menu.vaultMenuOf(tabId);
   assert.equal(open?.mode, "search");
   assert.equal(open?.frameId, "f1");
+  await settle();
   const row = rowsOfMenu(open).find((r) => r.kind === "login");
   activateVaultRow(tabId, row);
   await settle();
@@ -104,6 +106,7 @@ test("on a classified login field the pick fills the whole login around it", asy
   const { tabId } = await setup();
   context.noteVaultContext(tabId, plain({ frameId: "f3", kind: "password", guess: "password" }));
   context.runVaultContextAction(tabId, { frameId: "f3", origin: "https://github.com", action: "other" });
+  await settle();
   const row = rowsOfMenu(menu.vaultMenuOf(tabId)).find((r) => r.kind === "login");
   activateVaultRow(tabId, row);
   await settle();

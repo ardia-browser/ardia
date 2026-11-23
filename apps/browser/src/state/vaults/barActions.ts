@@ -9,7 +9,7 @@ import { copyFailureMessage, copyFromManager, lockAllProviders } from "./actions
 import { itemsForTab, passwordManagersOnly } from "./ardia";
 import { openVaultMenuOnDemand } from "./menu";
 import { bestItem, isSecureOrigin, rankItems, sameUsername, siteLabel, TIER } from "./originMatch";
-import { allVaultItems, anyVaultConnected, currentVaultProviders } from "./store";
+import { anyVaultConnected, currentVaultProviders, loadSiteItems, siteItemsNow } from "./store";
 import { noteVaultFill } from "../telemetry/vaultCounts";
 
 const ACTIONS = {
@@ -34,7 +34,7 @@ function shownIds(s: BrowserState, windowId: string): VaultActionId[] {
   const ids: VaultActionId[] = [];
   const origin = pageOrigin(activeTab(s, windowId)?.url);
   const tab = activeTab(s, windowId);
-  const best = origin && tab ? bestItem(itemsForTab(allVaultItems(), tab.id), origin) : null;
+  const best = origin && tab ? bestItem(itemsForTab(siteItemsNow(origin), tab.id), origin) : null;
   if (origin) ids.push("vault:fill");
   if (best) ids.push("vault:copyPassword", "vault:copyUsername");
   if (passwordManagersOnly(currentVaultProviders()).some((p) => p.state === "unlocked")) ids.push("vault:lock");
@@ -60,7 +60,9 @@ export function copyChoice(items: readonly VaultItem[], origin: string, filled =
 }
 
 async function copyBest(windowId: string, tabId: string, origin: string, field: VaultCopyField) {
-  const item = copyChoice(itemsForTab(allVaultItems(), tabId), origin, filledUsername(tabId, origin), rememberedVaultAccount(origin));
+  const listed = siteItemsNow(origin);
+  const items = listed.length ? listed : await loadSiteItems(origin);
+  const item = copyChoice(itemsForTab(items, tabId), origin, filledUsername(tabId, origin), rememberedVaultAccount(origin));
   if (!item) return;
   const outcome = await copyFromManager(item.provider, item.id, field);
   if (outcome === "copied") return showToast(windowId, COPIED[field], undefined, { icon: "doc.on.doc", key: "vaultCopy" });

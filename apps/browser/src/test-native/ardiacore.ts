@@ -24,6 +24,7 @@ import type {
 import type { EventSubscription } from "expo-modules-core";
 import { nativeEvents, unfaked } from "./events";
 import { generatedVaultHandlers } from "./vaultGenerated";
+import { fakeListItems, fakeSearchItems, fakeSiteItems, fakeUsernames } from "./vaultQueries";
 import type { AutofillToggle } from "../platform/autofill";
 
 
@@ -433,13 +434,15 @@ function withStrips<Fake extends FakeDomain>(fake: Fake): Fake {
 }
 
 type FakeVaultProvider = CallResult<"vaults.refresh">;
-type FakeVaultItem = CallResult<"vaults.items">[number];
+type FakeVaultItem = CallResult<"vaults.searchItems">[number];
 export const vaultFakes = {
   providers: [] as FakeVaultProvider[],
   dropdownClaims: [] as CallArgs<"vaults.claimChromeDropdowns">[],
   dropdownShowing: [] as CallResult<"vaults.claimChromeDropdowns">["showing"],
   dropdownLogins: [] as string[],
   items: [] as FakeVaultItem[],
+  itemsRevision: 0,
+  searches: [] as string[],
   copied: [] as { provider: string; id: string; field: string }[],
   exports: [] as string[],
   nextExport: { saved: true, count: 0 } as CallResult<"vaults.export">,
@@ -470,6 +473,8 @@ function setVaultState(provider: string, state: FakeVaultProvider["state"]) {
   return vaultState(provider);
 }
 const vaultUnlocked = (provider: string) => vaultFakes.providers.some((p) => p.id === provider && p.state === "unlocked");
+const unlockedVaultItems = () => vaultFakes.items.filter((i) => vaultUnlocked(i.provider));
+const listedVaultIds = () => vaultFakes.providers.filter((p) => p.state === "unlocked").map((p) => p.id);
 const vaultSignInReply = (provider: string) => JSON.stringify({ ok: true, state: setVaultState(provider, "unlocked") });
 
 const loginKey = (args: { origin: string; username: string }) => `${args.origin}\n${args.username}`;
@@ -771,9 +776,23 @@ const fakeModules = {
         if (ardiaProfiles) vaultFakes.ardiaProfiles.push([...ardiaProfiles]);
         return vaultState(provider);
       },
-      items: ({ provider }) => {
-        const listed = () => vaultFakes.items.filter((i) => (!provider || i.provider === provider) && vaultUnlocked(i.provider));
-        return vaultFakes.itemsGate ? vaultFakes.itemsGate.then(listed) : listed();
+      siteItems: ({ origin }) => {
+        const answer = () => ({ items: fakeSiteItems(unlockedVaultItems(), origin), listed: listedVaultIds(), revision: vaultFakes.itemsRevision });
+        return vaultFakes.itemsGate ? vaultFakes.itemsGate.then(answer) : answer();
+      },
+      searchItems: ({ query, limit, ardiaProfile }) => {
+        vaultFakes.searches.push(query);
+        return fakeSearchItems(unlockedVaultItems(), query, limit ?? 100, ardiaProfile);
+      },
+      listItems: ({ ardiaProfile, ...args }) => ({ ...fakeListItems(unlockedVaultItems(), { ...args, profile: ardiaProfile }), revision: vaultFakes.itemsRevision }),
+      usernames: ({ email, limit, ardiaProfile }) => fakeUsernames(unlockedVaultItems(), email, limit ?? 12, ardiaProfile),
+      itemsStatus: () => {
+        const answer = () => {
+          const counts: Record<string, number> = {};
+          for (const item of unlockedVaultItems()) counts[item.provider] = (counts[item.provider] ?? 0) + 1;
+          return { revision: vaultFakes.itemsRevision, listed: listedVaultIds(), counts };
+        };
+        return vaultFakes.itemsGate ? vaultFakes.itemsGate.then(answer) : answer();
       },
       lock: ({ provider }) => setVaultState(provider, "locked"),
       signOut: ({ provider }) => setVaultState(provider, "signedOut"),

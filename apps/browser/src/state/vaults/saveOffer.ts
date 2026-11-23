@@ -7,11 +7,11 @@ import { hideKeyedToast, showToast } from "../app/toasts";
 import { noteVaultLoginFailedAfterNavigation, noteVaultPasswordUpdatedFromOffer } from "../telemetry/vaultCounts";
 import { useBrowser } from "../browser/store";
 import { patchPage, pageOf } from "../tabs/pageState";
-import { filledUsername, forgetFilledUsernamesOutside, rememberedVaultAccount, rememberVaultAccount } from "./accounts";
+import { filledUsername, forgetFilledUsernamesOutside, rememberedVaultAccount, rememberedVaultItem, rememberVaultAccount } from "./accounts";
 import { ARDIA_PROVIDER, isArdiaProvider, itemsForTab } from "./ardia";
 import { isSecureOrigin, itemKey, itemTier, loginSavedIn, sameSite, sameUsername, siteLabel, TIER } from "./originMatch";
 import { PENDING_TOTP_MS } from "./pendingTotp";
-import { allVaultItems, currentVaultProviders, loadAllVaultItems, loadVaultItems, vaultManagerName } from "./store";
+import { currentVaultProviders, loadSiteItems, loadVaultItems, vaultManagerName } from "./store";
 
 export type VaultUpdateTarget = { provider: string; id: string };
 
@@ -101,12 +101,10 @@ function mayAutoSave(event: Pick<VaultSubmission, "username" | "usernameFrom" | 
   return event.generated === true || (event.newPassword === true && event.trusted === true && usernameFromForm(event));
 }
 
-function knownUsername(tabId: string, event: Pick<VaultSubmission, "origin" | "username">, items: readonly VaultItem[]): string {
+async function knownUsername(tabId: string, event: Pick<VaultSubmission, "origin" | "username">, items: readonly VaultItem[]): Promise<string> {
   const typed = event.username.trim();
   if (typed) return typed;
-  const remembered = rememberedVaultAccount(event.origin);
-  const login = remembered ? items.find((i) => itemKey(i) === remembered) : undefined;
-  return login?.username.trim() || filledUsername(tabId, event.origin).trim();
+  return (await rememberedVaultItem(event.origin, items))?.username.trim() || filledUsername(tabId, event.origin).trim();
 }
 
 type Claim = { origin: string; at: number; offered: boolean };
@@ -241,10 +239,10 @@ export async function noteVaultSubmitted(tabId: string, event: VaultSubmission) 
   const load = pageLoadOf(tabId), consent = consentToken();
   if (saving.has(savingKey(event.origin, event.username)) || seenJustNow(tabId, event, Date.now())) return;
   const signedIn = event.reportsOutcome ? waitForLogin(tabId, event.origin, consent) : Promise.resolve(true);
-  await loadAllVaultItems();
+  const listed = await loadSiteItems(event.origin);
   if (!stillWanted(tabId)) return discard(tabId, event.origin);
   const settings = useBrowser.getState().settings;
-  const items = itemsForTab(allVaultItems(), tabId);
+  const items = itemsForTab(listed, tabId);
   const page = event.username.trim();
   const fresh = event.newPassword === true || event.generated === true;
   const base = { enabled: settings.vaultSaveOffer, origin: event.origin, providers: currentVaultProviders(), items, preferred: settings.vaultSaveTarget };
@@ -257,7 +255,7 @@ export async function noteVaultSubmitted(tabId: string, event: VaultSubmission) 
     if (!(await signedIn)) return discard(tabId, event.origin);
     return showOffer(tabId, event.origin, page, page, decision);
   }
-  const guess = knownUsername(tabId, event, items);
+  const guess = await knownUsername(tabId, event, items);
   const account = page || soleSiteUsername(items.filter((i) => base.providers.some((p) => p.id === i.provider && p.state === "unlocked")), event.origin);
   const update = settings.vaultSaveOffer ? decideUpdate({ origin: event.origin, username: account, providers: base.providers, items, remembered: rememberedVaultAccount(event.origin) }) : null;
   if (update) {

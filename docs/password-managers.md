@@ -438,10 +438,15 @@ login on a secure page (search). Rows sort by tier, then the login used last on 
 username on the same host from two managers, or saved once for http and once for https, shows once (logins without
 a username are never folded).
 
-Scale, measured on the 2026-11-13 build with 12,600 logins over 3,000 sites (600 sites with 13 subdomain logins):
-JS `rankItems` takes 1.3 ms of CPU per page (parse and site caches about 7 MB), `menuRows` 2.5 ms, and the native
-broker matches a page in 0.04 ms through `VaultSiteIndex` (logins bucketed by registrable domain, built off the actor
-when the list changes, about 45 ms).
+Scale: JS ranks only the logins `vaults.siteItems` returns for the page's site, so a menu's cost no longer grows with
+the vault. On the 2026-11-23 build with a 25,000 login vault, the old path (every list sent to JS and ranked there)
+spent 870 ms of the JS thread building the first menu's rows and 480 ms on the first search keystroke; now the first
+menu takes 6 ms and a keystroke 4 ms, and each native query 1 to 8 ms. The native broker answers through
+`VaultCatalog` (`VaultBroker+Catalog.swift`): logins bucketed by registrable domain, folded search keys, the Settings
+order and username ranks, built off the actor when a list changes (1.3 s for 50,000 logins optimized). Vault work
+that may never run on the main thread (catalog builds, sealed store reads and writes, CLI output reports) calls
+`VaultOffMain.check()`, which stops a debug build. `usage_counts` carries `vault_catalog_builds` and
+`vault_catalog_builds_slow` (over 250 ms): watch the slow share after a release.
 
 ## The JS surface
 
@@ -451,7 +456,11 @@ Calls (`call("vaults.<name>", args)`, typed in `packages/ardiacore/src/engine/ap
 | --- | --- | --- |
 | `providers` | `{}` | `VaultProviderState[]` |
 | `refresh` | `{provider}` | `VaultProviderState` (drops the item cache, forces a sync on the next list) |
-| `items` | `{provider?}` | `VaultItem[]` (empty for a locked manager) |
+| `siteItems` | `{origin}` | `{items, listed, revision}`: every login (Ardia's own, every profile, and each unlocked manager's) with a URL on the origin's site (same registrable domain, or the same host for an IP or localhost), at most 500; `listed` names the managers whose list is loaded |
+| `searchItems` | `{query, limit?, profile?}` | `VaultItem[]`: the fill menu's search (`originMatch.searchItems` rules and order), at most 200, Ardia's logins only for `profile` |
+| `listItems` | `{query?, offset?, limit, managersOnly?, profile?}` | `{total, items, revision}`: one page (at most 1000) of logins sorted by site, then username, filtered by every query word |
+| `usernames` | `{email, limit?, profile?}` | `VaultItem[]`: one login per username, most used first (emails first when `email`), at most 50 |
+| `itemsStatus` | `{}` | `{revision, listed, counts}` |
 | `lock`, `signOut`, `cancelSignIn` | `{provider}` | `VaultProviderState` |
 | `configure` | `{provider, server?}` | `VaultProviderState` (`message` says why a change was refused) |
 | `copy` | `{provider, id, field: "username" \| "password"}` | `{copied, clearsAfter}` |
@@ -529,7 +538,9 @@ Mac owner check, whichever the provider uses.
 
 A standalone code's id starts with `code.`, so `totp`, `copyCode` and a fill with `provider: "ardia"` take it too.
 
-Events: `vaults.codesChanged` `{}` (the standalone codes changed, here or through iCloud), `vaults.changed` `{provider: VaultProviderState}`, `vaults.itemsChanged` `{provider}` and `vaults.generatedChanged` `{}`.
+Events: `vaults.codesChanged` `{}` (the standalone codes changed, here or through iCloud), `vaults.changed` `{provider: VaultProviderState}`, `vaults.itemsChanged` `{provider, revision}` and `vaults.generatedChanged` `{}`.
+
+JS never holds a whole vault. `state/vaults/store.ts` keeps what it renders: the logins of up to 32 sites (`siteItemsNow`, `loadSiteItems`, `useVaultSiteItems`, filled for the front tab's site as it changes and for each menu, code picker, right-click menu and save offer), the last 8 searches and the ranked usernames (`menuCaches.ts`), and which managers are listed. `vaults.itemsChanged`, a manager unlocking and a sync mark every cache stale and reload the sites used in the last 2 minutes; a manager that locks drops its logins from every cache at once. JS still ranks one site's logins with `rankItems`. A remembered login or a pending code is forgotten only when its site's list comes back without it and a search for its username (kept in memory, never on disk) doesn't find it either.
 
 ## Adding a password manager
 
@@ -1335,9 +1346,10 @@ The sub-page lists Ardia's own saved passwords and the logins of every unlocked 
 site and searched together; a manager's login carries its badge. The list grows as you scroll
 (`state/settings/growingRows.ts`, `useGrowingRows`): 100 rows mount first and each time the scroll nears the end the
 next 100 join, so 10,000 logins mount one page until someone scrolls; passkeys and verification codes past 60 rows
-grow the same way. Ardia's and the managers' halves are built and sorted separately and merged, a
-search that extends the last one filters the last result, and the pane loads only the managers' lists (Ardia's comes
-from Chrome's list). Changes that weaken the fill protections (Ask before filling off, Lock when screen locks or Lock
+grow the same way. Ardia's half comes from Chrome's list and is sorted and searched in JS; the managers' half is
+paged natively (`vaults.listItems` through `state/vaults/itemPages.ts`): JS asks for as many rows as are mounted, in
+pages of at most 1000, keeps the rows it already has as the list grows, and merges the two sorted halves. The
+count in the header adds Chrome's list to the managers' native total. Changes that weaken the fill protections (Ask before filling off, Lock when screen locks or Lock
 When Ardia Quits off, a longer Lock after) ask for the Mac owner first (`state/vaults/settingsGuard.ts`, Chrome's
 re-auth, never the menu's Touch ID grant) and are dropped when declined. Those settings and Sync with iCloud are not
 read from `~/.config/ardia/config.json`. Its sheet copies the username, and copies the

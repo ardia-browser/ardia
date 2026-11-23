@@ -10,7 +10,7 @@ import { itemsForTab } from "./ardia";
 import { forgetVaultCode } from "./codes";
 import { itemKey } from "./originMatch";
 import { noteVaultField, showAllPasswords, vaultMenuOf } from "./menu";
-import { allVaultItems, currentVaultProviders, loadAllVaultItems, loadVaultItems, useVaults, vaultManagerName, vaultProviderOf } from "./store";
+import { currentVaultProviders, loadVaultItems, useVaults, vaultManagerName, vaultProviderOf, loadSiteItems, siteItemsNow } from "./store";
 import { addedLine, addTotpErrorText, canHoldCode, CODE_TEXT, codeMenuModel, replaceQuestion } from "./totpSetupModel";
 import { forgetCodePick, forgetPicksOutside, markCodePick } from "./menuPicks";
 import { noteVaultCodeSetUp } from "../telemetry/vaultCounts";
@@ -24,14 +24,14 @@ const busy = new Set<string>();
 const toast = (tabId: string, title: string, failed = false) => toastInTab(tabId, title, "vaultCode", failed);
 
 const isCurrent = (tabId: string, code: VaultCodeFound) => codes.get(tabId) === code;
-const itemOf = (key: string): VaultItem | undefined => allVaultItems().find((item) => itemKey(item) === key);
+const itemOf = (origin: string, key: string): VaultItem | undefined => siteItemsNow(origin).find((item) => itemKey(item) === key);
 
 function sendMenu(tabId: string, code: VaultCodeFound) {
   const menu = codeMenuModel({
     origin: code.origin,
     account: code.account,
     providers: currentVaultProviders(),
-    items: itemsForTab(allVaultItems(), tabId),
+    items: itemsForTab(siteItemsNow(code.origin), tabId),
     remembered: rememberedVaultAccount(code.origin),
   });
   void webviews.get(tabId)?.setVaultCodeMenu({ token: code.token, menu })?.catch(() => undefined);
@@ -42,7 +42,7 @@ export function noteVaultCode(tabId: string, code: VaultCodeFound) {
   codes.set(tabId, code);
   forgetCodePick(tabId);
   sendMenu(tabId, code);
-  void loadAllVaultItems().then(() => isCurrent(tabId, code) && sendMenu(tabId, code));
+  void loadSiteItems(code.origin).then(() => isCurrent(tabId, code) && sendMenu(tabId, code));
 }
 
 export const saveCodeTo = (tabId: string, code: VaultCodeFound, item: VaultItem, ask: CodeAsk = confirm) => runSaveCodeTo(tabId, code, item, ask, consentToken());
@@ -101,15 +101,18 @@ async function unlockThenPick(tabId: string, code: VaultCodeFound) {
   if ((await unlockForPick(tabId, locked, "vaultCode")) && isCurrent(tabId, code)) openCodePicker(tabId, code);
 }
 
+async function saveListedCode(tabId: string, code: VaultCodeFound, login: string) {
+  const item = itemOf(code.origin, login) ?? (await loadSiteItems(code.origin).then(() => itemOf(code.origin, login)));
+  if (!item) return toast(tabId, CODE_TEXT.gone, true);
+  await saveCodeTo(tabId, code, item);
+}
+
 export function runVaultCodeAction(tabId: string, action: VaultCodeAction) {
   const code = codes.get(tabId);
   if (!code || !vaultsOnForTab(tabId) || code.token !== action.token || code.frameId !== action.frameId || code.origin !== action.origin) return;
   switch (action.action) {
-    case "save": {
-      const item = itemOf(action.login);
-      if (!item) return toast(tabId, CODE_TEXT.gone, true);
-      return void saveCodeTo(tabId, code, item);
-    }
+    case "save":
+      return void saveListedCode(tabId, code, action.login);
     case "other":
       return openCodePicker(tabId, code);
     case "unlock":

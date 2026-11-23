@@ -35,6 +35,7 @@ async function setup({ state = "unlocked", items, page = "https://github.com" })
   store.clearVaultIndex();
   await store.loadVaultProviders();
   await store.loadAllVaultItems(true);
+  await store.loadSiteItems(page);
   return { tabId, fills };
 }
 
@@ -183,6 +184,7 @@ test("a login picked by hand on a look-alike site never arms an automatic code f
   store.setPendingTotp([]);
   const opened = await openMenu(tabId, "https://githuh.com", { kind: "password" });
   menu.showAllPasswords(tabId);
+  await settle();
   const row = menu.rowsOfMenu(menu.vaultMenuOf(tabId)).find((r) => r.kind === "login");
   fill.activateVaultRow(tabId, row);
   for (let i = 0; i < 3; i++) await settle();

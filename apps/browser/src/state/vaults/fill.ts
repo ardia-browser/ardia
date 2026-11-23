@@ -66,7 +66,7 @@ export const needsExplicitPick = (row: VaultRow) => row.kind === "username" || (
 
 function rememberCode(tabId: string, origin: string, item: VaultItem) {
   if (item.hasTotp === false || !fillsWithoutChoice(item, origin)) return;
-  setPendingTotp(rememberPending(currentPendingTotp(), { origin, tabId, provider: item.provider, id: item.id, at: Date.now() }));
+  setPendingTotp(rememberPending(currentPendingTotp(), { origin, tabId, provider: item.provider, id: item.id, at: Date.now(), username: item.username }));
   if (item.hasTotp === true) prefetchVaultCode(item);
 }
 

@@ -35,7 +35,12 @@ export const claimChromeDropdownKinds = (tabId: string, kinds: ChromeDropdownSho
   call("vaults.claimChromeDropdowns", { tabId, kinds, usernames: usernames ?? [], anyLogin: usernames === null });
 export const refreshVault = (provider: string) => call("vaults.refresh", { provider });
 export const setArdiaProfiles = (ardiaProfiles: string[]) => call("vaults.refresh", { provider: "ardia", ardiaProfiles });
-export const vaultItems = (provider?: string) => call("vaults.items", provider ? { provider } : {});
+export const vaultSiteItems = (origin: string) => call("vaults.siteItems", { origin });
+export const searchVaultItems = (query: string, limit: number, profile: string | null) => call("vaults.searchItems", { query, limit, ardiaProfile: profile });
+export const vaultItemPage = ({ profile, ...args }: { query: string; offset: number; limit: number; managersOnly: boolean; profile: string | null }) =>
+  call("vaults.listItems", { ...args, ardiaProfile: profile });
+export const vaultUsernames = (email: boolean, limit: number, profile: string | null) => call("vaults.usernames", { email, limit, ardiaProfile: profile });
+export const vaultItemsStatus = () => call("vaults.itemsStatus", {});
 export const lockVault = (provider: string) => call("vaults.lock", { provider });
 export const signOutVault = (provider: string) => call("vaults.signOut", { provider });
 export const configureVault = (provider: string, server: string | null) => call("vaults.configure", { provider, server });
@@ -110,7 +115,8 @@ export const unlockVault = (provider: string, passwordEntry: string | null, hand
 
 export const onVaultChanged = (listener: (state: VaultProviderState, removed: boolean) => void) => on("vaults.changed", ({ provider, removed }) => listener(provider, removed === true));
 export const onVaultApproval = (listener: (provider: string, url: string) => void) => on("vaults.openApproval", ({ provider, url }) => listener(provider, url));
-export const onVaultItemsChanged = (listener: (provider: string) => void) => on("vaults.itemsChanged", ({ provider }) => listener(provider));
+export const onVaultItemsChanged = (listener: (provider: string, revision: number) => void) =>
+  on("vaults.itemsChanged", ({ provider, revision }) => listener(provider, typeof revision === "number" ? revision : 0));
 
 export type { VaultField, VaultFieldInset, VaultFieldKind, VaultFieldRect, VaultFillError, VaultFillField, VaultKeyPress, VaultPasswordDraft, VaultPasswordStyle, VaultSubmission, VaultTouchIDStatus } from "@ardia/ardiacore";
 export type { VaultCodeRead, VaultCodeReadError, VaultCodeSource, VaultRemoveTotpResult } from "@ardia/ardiacore";

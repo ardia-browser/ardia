@@ -1,11 +1,9 @@
-import { useMemo } from "react";
-import type { VaultItem } from "../../platform/vaults";
-import { previousUsernames } from "./usernames";
+import { useEffect, useState } from "react";
+import { useVaults } from "./store";
+import { rankedVaultUsernames } from "./menuCaches";
 
 export const MAX_USERNAME_SUGGESTIONS = 4;
 const RANKED_USERNAMES = 12;
-
-export const rankedUsernames = (items: readonly VaultItem[], email: boolean) => previousUsernames(items, { email, limit: RANKED_USERNAMES }).map((u) => u.username);
 
 export function usernameCompletions(ranked: readonly string[], typed: string, limit = MAX_USERNAME_SUGGESTIONS): string[] {
   const text = typed.trim().toLowerCase();
@@ -26,6 +24,18 @@ export function stepCompletion(selected: number, count: number, direction: "up" 
 
 export const prefilledUsername = (current: string, ranked: readonly string[]) => (current.trim() ? current : (ranked[0] ?? current));
 
-export function useRankedUsernames(items: readonly VaultItem[], email: boolean): string[] {
-  return useMemo(() => rankedUsernames(items, email), [items, email]);
+const NONE: string[] = [];
+
+export function useRankedUsernames(enabled: boolean, email: boolean, profile: string | null = null): string[] {
+  const [ranked, setRanked] = useState<string[]>(NONE);
+  const stamp = useVaults((s) => s.itemsStamp);
+  useEffect(() => {
+    if (!enabled) return setRanked(NONE);
+    let live = true;
+    void rankedVaultUsernames(email, RANKED_USERNAMES, profile).then((items) => live && setRanked(items.map((item) => item.username.trim())));
+    return () => {
+      live = false;
+    };
+  }, [enabled, email, profile, stamp]);
+  return ranked;
 }

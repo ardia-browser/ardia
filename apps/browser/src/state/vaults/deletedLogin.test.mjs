@@ -39,6 +39,7 @@ async function setup(fillReply) {
   store.clearVaultIndex();
   await store.loadVaultProviders();
   await store.loadAllVaultItems(true);
+  await store.loadSiteItems("https://github.com");
   return { tabId, calls };
 }
 
@@ -48,7 +49,7 @@ test("a login deleted in its manager drops its remembered key and pending code o
   store.setPendingTotp([{ origin: "https://github.com", tabId, provider: "bitwarden", id: "gone", at: Date.now() }]);
   native.vaultFakes.items = [kept];
   await store.loadAllVaultItems(true);
-  assert.equal(accounts.rememberedVaultAccount("https://github.com"), null);
+  assert.equal(accounts.rememberedVaultAccount("https://github.com"), null, "its site's list came back without it");
   accounts.reloadVaultAccounts();
   assert.equal(accounts.rememberedVaultAccount("https://github.com"), null, "gone from disk too");
   assert.equal(pendingFor(store.currentPendingTotp(), "https://github.com", tabId, Date.now()), null);
@@ -83,7 +84,7 @@ test("filling a login the manager no longer has says so, and leaving and loading
   await settle();
   assert.match(menu.vaultMenuOf(tabId).error, /no longer in Bitwarden/);
   assert.equal(menu.vaultMenuOf(tabId).busy, null);
-  assert.deepEqual(store.allVaultItems().map((i) => i.id), ["kept"], "the index refreshed");
+  assert.deepEqual(store.siteItemsNow("https://github.com").map((i) => i.id), ["kept"], "the index refreshed");
   assert.equal(accounts.rememberedVaultAccount("https://github.com"), null);
   assert.doesNotThrow(() => leftPage(tabId, "https://github.com/session", "https://github.com/login", "chromium", false));
   assert.equal(menu.vaultMenuOf(tabId), null);

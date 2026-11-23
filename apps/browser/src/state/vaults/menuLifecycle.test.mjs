@@ -27,6 +27,7 @@ async function setup() {
   store.clearVaultIndex();
   await store.loadVaultProviders();
   await store.loadAllVaultItems(true);
+  await store.loadSiteItems("https://github.com");
   return { w, tabId };
 }
 
@@ -47,7 +48,7 @@ test("a refresh asked for while the list is loading loads again once it lands", 
   } finally {
     Object.defineProperty(native.vaultFakes, "items", plain);
   }
-  assert.equal(store.allVaultItems()[0]?.title, "GitHub Work");
+  assert.equal(store.siteItemsNow("https://github.com")[0]?.title, "GitHub Work");
 });
 
 test("a list that lands after its manager locked and unlocked again is dropped", async () => {
@@ -66,7 +67,7 @@ test("a list that lands after its manager locked and unlocked again is dropped",
   } finally {
     Object.defineProperty(native.vaultFakes, "items", plain);
   }
-  assert.deepEqual(store.allVaultItems().map((i) => i.title), ["GitHub"]);
+  assert.deepEqual(store.siteItemsNow("https://github.com").map((i) => i.title), ["GitHub"]);
 });
 
 test("closing a tab forgets its login field and its menu", async () => {

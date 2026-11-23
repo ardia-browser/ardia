@@ -187,7 +187,6 @@
     "apps/browser/src/state/telemetry/watch.ts": 1,
     "apps/browser/src/state/telemetry/webkitMediaFaults.ts": 1,
     "apps/browser/src/state/telemetry/workCounts.ts": 1,
-    "apps/browser/src/state/vaults/menu.ts": 1,
     "apps/browser/src/state/vaults/standaloneCodes.ts": 1,
     "apps/browser/src/state/vaults/store.ts": 1,
     "apps/browser/src/state/vaults/touchID.ts": 1,

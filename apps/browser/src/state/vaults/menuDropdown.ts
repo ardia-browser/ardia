@@ -72,7 +72,7 @@ export function startVaultMenuDropdowns() {
     if (s.menus !== prev.menus) claimOpenMenus(new Set([...Object.keys(s.menus), ...Object.keys(prev.menus)]), consentToken());
   });
   const stopItems = useVaults.subscribe((s, prev) => {
-    if (s.items !== prev.items || s.providers !== prev.providers) claimOpenMenus(Object.keys(useVaultMenus.getState().menus), consentToken());
+    if (s.sites !== prev.sites || s.searches !== prev.searches || s.providers !== prev.providers) claimOpenMenus(Object.keys(useVaultMenus.getState().menus), consentToken());
   });
   return () => {
     stopMenus();

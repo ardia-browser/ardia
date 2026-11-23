@@ -23,9 +23,9 @@ const knownLoginSites = () => [...new Set(loginSites.values())];
 
 export function startVaultWarming() {
   const stopVaults = useVaults.subscribe((s, prev) => {
-    if (s.providers === prev.providers && s.items === prev.items) return;
+    if (s.providers === prev.providers && s.listed === prev.listed && s.itemsStamp === prev.itemsStamp) return;
     const before = unlockedIds(prev.providers);
-    const listedNow = Object.keys(s.items).some((id) => s.items[id] !== prev.items[id]);
+    const listedNow = s.listed.some((id) => !prev.listed.includes(id)) || (s.itemsStamp !== prev.itemsStamp && s.listed.length > 0);
     const opened = [...unlockedIds(s.providers)].some((id) => !before.has(id));
     if (opened || listedNow) for (const origin of knownLoginSites()) warmVaultSite(origin);
   });

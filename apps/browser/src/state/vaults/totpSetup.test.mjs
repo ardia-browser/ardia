@@ -136,6 +136,7 @@ test("Other Logins opens the search under the image, and a pick there stores the
   const open = menu.vaultMenuOf(tabId);
   assert.equal(open.mode, "search");
   assert.deepEqual(open.rect, { x: 400, y: 300, width: 180, height: 180 });
+  await settle();
   const row = menu.rowsOfMenu(open).find((r) => r.kind === "login" && r.item.id === "gl");
   activateVaultRow(tabId, row);
   await settle();

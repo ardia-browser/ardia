@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { View } from "react-native";
 import { ago } from "../../../lib/time";
 import { confirm, showMenu } from "../../../state/app/system";
@@ -14,7 +14,7 @@ import {
   type VaultGeneratedPassword,
 } from "../../../state/vaults/generated";
 import { fillGeneratedNow } from "../../../state/vaults/generatedFill";
-import { useGeneratedFillable, useKeptGeneratedPasswords, useVaultLogins, useVaultProviders } from "../../../state/vaults/hooks";
+import { useGeneratedFillable, useKeptGeneratedPasswords, useVaultProviders } from "../../../state/vaults/hooks";
 import { siteLabel } from "../../../state/vaults/originMatch";
 import { useRankedUsernames } from "../../../state/vaults/usernameSuggestions";
 import { Favicon } from "../../favicon/Favicon";
@@ -33,8 +33,12 @@ type SaveProps = { entry: VaultGeneratedPassword; provider: string; profile: str
 
 function SaveSheet({ entry, provider, profile }: SaveProps) {
   const nameOf = useManagerName();
-  const ranked = useRankedUsernames(useVaultLogins(), true);
-  const [username, setUsername] = useState(ranked[0] ?? "");
+  const ranked = useRankedUsernames(true, true, profile);
+  const [username, setUsername] = useState("");
+  const typed = useRef(false);
+  useEffect(() => {
+    if (!typed.current && ranked[0]) setUsername(ranked[0]);
+  }, [ranked]);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState("");
   const saving = useRef(false);
@@ -52,7 +56,7 @@ function SaveSheet({ entry, provider, profile }: SaveProps) {
     <Sheet onClose={closeSettingsSheet}>
       <DialogTitle icon={<Favicon url={entry.origin} size={VAULT_SETTINGS.siteIcon} />}>{`Save Password for ${site}?`}</DialogTitle>
       <View style={SHEET_BODY}>
-        <VaultUsernameField value={username} ranked={ranked} onChange={setUsername} autoFocus onSubmit={() => void save()} onEscape={closeSettingsSheet} width={VAULT_SAVE.usernameWidth} />
+        <VaultUsernameField value={username} ranked={ranked} onChange={(text) => ((typed.current = true), setUsername(text))} autoFocus onSubmit={() => void save()} onEscape={closeSettingsSheet} width={VAULT_SAVE.usernameWidth} />
         <Expand open={!!problem} gap={space.ml}>
           <Text size="caption" tone="destructive">
             {problem}

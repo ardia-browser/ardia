@@ -52,6 +52,7 @@ async function setup() {
   store.clearVaultIndex();
   await store.loadVaultProviders();
   await store.loadAllVaultItems(true);
+  await store.loadSiteItems("https://github.com");
   takeVaultCounts();
   return { w, tabId };
 }
@@ -110,14 +111,14 @@ test("a code read from the page is stored on that login and counted by method", 
   assert.deepEqual(outcome, { ok: true });
   assert.deepEqual(native.vaultFakes.codeReads.map(({ source, origin, tabId }) => ({ source, origin, tabId })), [{ source: "page", origin: "https://github.com", tabId }]);
   assert.deepEqual(native.vaultFakes.addedTotps.map(({ provider, id, token }) => ({ provider, id, token })), [{ provider: "ardia", id: octo.id, token: "t1" }]);
-  assert.equal(store.allVaultItems().find((i) => i.id === octo.id)?.hasTotp, true, "the list is reloaded");
+  assert.equal(store.siteItemsNow("https://github.com").find((i) => i.id === octo.id)?.hasTotp, true, "the list is reloaded");
   assert.equal(takeVaultCounts().vault_codes_set_up_page, 1);
 });
 
 test("removing a code reloads the login without one, a refusal says so", async () => {
   await setup();
   assert.deepEqual(await codes.removeArdiaCode(coded), { ok: true });
-  assert.equal(store.allVaultItems().find((i) => i.id === coded.id)?.hasTotp, false);
+  assert.equal(store.siteItemsNow("https://github.com").find((i) => i.id === coded.id)?.hasTotp, false);
   assert.equal(takeVaultCounts().vault_codes_removed, 1);
   native.vaultFakes.nextRemoveTotp = { removed: false, error: "declined" };
   assert.deepEqual(await codes.removeArdiaCode(coded), { ok: false, error: null });

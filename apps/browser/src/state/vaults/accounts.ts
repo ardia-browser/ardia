@@ -1,6 +1,7 @@
 import type { ConsentToken } from "../telemetry/choice";
 import { warnFor } from "../telemetry/consoleConsent";
 import { readDocument, writeDocument } from "../../platform/documents";
+import { searchVaultItems, type VaultItem } from "../../platform/vaults";
 import { isFields } from "../../lib/decode";
 import { parseSaved, versionedJson } from "../../lib/savedDocument";
 import { itemKey, siteKey } from "./originMatch";
@@ -8,10 +9,12 @@ import { itemKey, siteKey } from "./originMatch";
 export const VAULT_ACCOUNTS_DOC = "vault-accounts.json";
 export const MAX_REMEMBERED_ACCOUNTS = 500;
 const VERSION = 1;
+const SEARCH_MOST = 200;
 
 type Remembered = { key: string; at: number };
 
 let accounts: Map<string, Remembered> | null = null;
+const usernamesThisSession = new Map<string, string>();
 
 const isRemembered = (v: unknown): v is Remembered => isFields(v) && typeof v.key === "string" && typeof v.at === "number";
 
@@ -37,12 +40,15 @@ function save(map: Map<string, Remembered>, consent: ConsentToken | null) {
   }
 }
 
-export function rememberVaultAccount(origin: string, item: { provider: string; id: string }, consent: ConsentToken | null, now = Date.now()) {
+export function rememberVaultAccount(origin: string, item: { provider: string; id: string; username?: string }, consent: ConsentToken | null, now = Date.now()) {
   const site = siteKey(origin);
   if (!site) return;
   const map = loaded();
   map.delete(site);
   map.set(site, { key: itemKey(item), at: now });
+  const username = item.username?.trim();
+  if (username) usernamesThisSession.set(itemKey(item), username);
+  else usernamesThisSession.delete(itemKey(item));
   while (map.size > MAX_REMEMBERED_ACCOUNTS) map.delete(map.keys().next().value!);
   save(map, consent);
 }
@@ -54,16 +60,30 @@ export function rememberedVaultAccount(origin: string): string | null {
 
 export const JUST_REMEMBERED_MS = 60_000;
 
-export function forgetMissingVaultAccounts(provider: string, listed: ReadonlySet<string>, consent: ConsentToken | null, now = Date.now()) {
+export function rememberedVaultLogin(origin: string): (Remembered & { username?: string }) | null {
+  const site = siteKey(origin);
+  const entry = site ? loaded().get(site) : undefined;
+  if (!entry) return null;
+  const username = usernamesThisSession.get(entry.key);
+  return username ? { ...entry, username } : entry;
+}
+
+export async function rememberedVaultItem(origin: string, listed: readonly VaultItem[]): Promise<VaultItem | undefined> {
+  const remembered = rememberedVaultLogin(origin);
+  if (!remembered) return undefined;
+  const here = listed.find((item) => itemKey(item) === remembered.key);
+  if (here || !remembered.username) return here;
+  const found = await searchVaultItems(remembered.username, SEARCH_MOST, null).catch((): VaultItem[] => []);
+  return found.find((item) => itemKey(item) === remembered.key);
+}
+
+export function forgetRememberedVaultAccount(origin: string, key: string, consent: ConsentToken | null, now = Date.now()) {
+  const site = siteKey(origin);
   const map = loaded();
-  const prefix = `${provider}/`;
-  let changed = false;
-  for (const [site, entry] of map) {
-    if (!entry.key.startsWith(prefix) || listed.has(entry.key.slice(prefix.length)) || now - entry.at < JUST_REMEMBERED_MS) continue;
-    map.delete(site);
-    changed = true;
-  }
-  if (changed) save(map, consent);
+  const entry = site ? map.get(site) : undefined;
+  if (!entry || entry.key !== key || now - entry.at < JUST_REMEMBERED_MS) return;
+  map.delete(site);
+  save(map, consent);
 }
 
 export function reloadVaultAccounts() {

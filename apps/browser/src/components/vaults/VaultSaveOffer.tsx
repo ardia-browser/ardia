@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { showMenu } from "../../state/app/system";
-import { useVaultLogins, useVaultSaveOffer } from "../../state/vaults/hooks";
+import { useVaultSaveOffer } from "../../state/vaults/hooks";
+import { passwordProfileOfTab } from "../../state/vaults/ardia";
 import { siteLabel } from "../../state/vaults/originMatch";
 import { passwordLetsSave, stageOfferPassword, type VaultPasswordDraft } from "../../state/vaults/savePassword";
 import { prefilledUsername, useRankedUsernames } from "../../state/vaults/usernameSuggestions";
@@ -52,7 +53,7 @@ export function VaultSaveOffer({ tabId, right, top }: { tabId: string; right: nu
   const offer = live ?? (presence.shown ? last.current : null);
   const nameOf = useManagerName();
   const guard = usePromptInputGuard(offer?.seq);
-  const ranked = useRankedUsernames(useVaultLogins({ enabled: !!offer }), true);
+  const ranked = useRankedUsernames(!!offer, true, offer ? passwordProfileOfTab(tabId) : null);
   const [password, setPassword] = useState<{ seq: number; length: number } | null>(null);
   const editing = !!offer?.editing;
   const focusedInside = useRef(false);

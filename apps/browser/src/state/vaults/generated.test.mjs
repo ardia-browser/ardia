@@ -7,6 +7,7 @@ const { useBrowser } = await import("../browser/store.ts");
 const { webviews } = await import("../../platform/webviews.ts");
 const { SETTING_SPECS, parseSettings } = await import("../settings/settings.ts");
 const store = await import("./store.ts");
+const caches = await import("./menuCaches.ts");
 const generated = await import("./generated.ts");
 const { menuRows } = await import("./menuModel.ts");
 const { generatedFillTarget, fillGeneratedNow } = await import("./generatedFill.ts");
@@ -96,7 +97,7 @@ test("Other Passwords… lists generated passwords first, searchable by site and
   await setup({ entries: [entry("g1", "https://signup.example.com", Date.now() - 1000, "me@example.com"), entry("g2", "https://other.test", Date.now())] });
   native.vaultFakes.items = [{ provider: "bitwarden", id: "b1", title: "Example", username: "saved", urls: ["https://example.com"], hasTotp: false }];
   await store.loadAllVaultItems(true);
-  const base = { field: "password", mode: "search", origin: "https://signup.example.com", providers: store.currentVaultProviders(), items: store.allVaultItems(), pending: null, noTotp: new Set() };
+  const base = { field: "password", mode: "search", origin: "https://signup.example.com", providers: store.currentVaultProviders(), items: await caches.loadSearch("", null), pending: null, noTotp: new Set() };
   const all = menuRows({ ...base, query: "", generated: generated.searchGenerated(generated.currentGeneratedPasswords(), "", 100) });
   assert.deepEqual(all.map((r) => r.item?.id), ["g2", "g1", "b1"]);
   assert.ok(all.slice(0, 2).every((r) => r.kind === "login" && r.item.provider === generated.GENERATED_PROVIDER && r.userChose));
@@ -220,14 +221,16 @@ test("with no manager able to save, there's no popover; the generated password s
   webviews.delete(tabId);
 });
 
-test("username suggestions complete what's typed, best first, and the best one fills an empty field", () => {
+test("username suggestions complete what's typed, best first, and the best one fills an empty field", async () => {
   const items = [
     { provider: "bitwarden", id: "1", title: "", username: "handle", urls: [], updatedAt: 3 },
     { provider: "bitwarden", id: "2", title: "", username: "me@example.com", urls: [], updatedAt: 2 },
     { provider: "bitwarden", id: "3", title: "", username: "me@example.com", urls: [], updatedAt: 1 },
     { provider: "bitwarden", id: "4", title: "", username: "work@corp.test", urls: [], updatedAt: 4 },
   ];
-  const ranked = suggestions.rankedUsernames(items, true);
+  native.vaultFakes.providers = [manager("bitwarden", "unlocked")];
+  native.vaultFakes.items = items;
+  const ranked = (await caches.rankedVaultUsernames(true, 12, null)).map((item) => item.username);
   assert.equal(ranked[0], "me@example.com", "used most, and an email");
   assert.equal(suggestions.prefilledUsername("", ranked), "me@example.com");
   assert.equal(suggestions.prefilledUsername("typed", ranked), "typed");

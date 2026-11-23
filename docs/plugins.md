@@ -228,7 +228,7 @@ builds on; `programs.test.mjs` and `adoption.test.mjs` pin it.
 - `PluginConsentSheet({ name, hash, onClosed })` (`components/plugins/PluginConsentSheet.tsx`) is the sheet itself, and
   `usePluginConsent()` says which plugin's sheet is open. It shows the plugin's icon (a password manager's own badge),
   its name, an Official or plugins-folder line with the version, and its description, then every consent line grouped
-  under What It Can Reach, Safeguards and What It Does: a short title, an optional line under it, and chips for
+  under "What it can reach", "Safeguards" and "What it does": a short title, an optional line under it, and chips for
   commands, hosts, events and setting keys (`state/plugins/consentLine.ts`, `components/plugins/consent/`). Return
   installs and Escape cancels. Settings › Plugins lists the same rows under the same groups on the plugin's page.
 - **Install progress stays in the sheet.** After Install (Update, Turn On) the footer follows the real install
@@ -657,7 +657,7 @@ Ardia never runs a plugin's program itself, with one exception for official plug
   and wrote `.zprofile` (`.bash_profile` for bash), so an adopted install already has its line where zsh and bash
   read it.
 - **Not sandboxed.** A program isn't a helper: you, or a program you use, run it from a shell, as you, so neither the
-  sandbox nor the plugin's other permissions apply to it, and the consent sheet says so under What It Can Reach ("Adds ardia to your PATH", with "It runs as you,
+  sandbox nor the plugin's other permissions apply to it, and the consent sheet says so under "What it can reach" ("Adds ardia to your PATH", with "It runs as you,
   outside Ardia's sandbox" under it, and "Adds ~/.local/bin to your PATH", with "In your shell's login file"). It reaches Ardia the way any program does, while "Let the ardia command control Ardia" is on: the
   control socket, which checks only that its peer runs as the same user, and the engine's token connection, whose token
   sits in `ArdiaControl.json` for the user's processes to read (`docs/cli.md`, `docs/control-socket.md`).

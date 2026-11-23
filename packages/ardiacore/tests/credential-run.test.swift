@@ -788,3 +788,37 @@ struct PluginProviderEndToEndTests {
     #expect(result.state.needs?.field == "masterPassword")
   }
 }
+
+@Suite("Secrets a plugin gets for an edit")
+struct PluginEditSecretTests {
+  static let password = "new-password-Q7!x"
+  static let uri = "otpauth://totp/Site:me?secret=JBSWY3DPEHPK3PXP"
+
+  static func sealed(_ value: String) -> Any? { [CredentialVerbLaunch.handleKey: "h\(value.count)"] }
+
+  static func json(_ input: [String: Any]?) throws -> String {
+    String(decoding: try JSONSerialization.data(withJSONObject: try #require(input), options: [.sortedKeys]), as: UTF8.self)
+  }
+
+  @Test func `a provider that opts in to argv secrets gets handles, never the new password or code`() throws {
+    let change = VaultLoginChange(username: "me", password: Self.password, totp: .set(Self.uri))
+    let edit = try Self.json(PluginVaultProvider.editInput(id: "item1", change: change, secret: Self.sealed))
+    let added = try Self.json(PluginVaultProvider.addTotpInput(id: "item1", uri: Self.uri, viaEdit: false, secret: Self.sealed))
+    let viaEdit = try Self.json(PluginVaultProvider.addTotpInput(id: "item1", uri: Self.uri, viaEdit: true, secret: Self.sealed))
+    for text in [edit, added, viaEdit] {
+      #expect(!text.contains(Self.password))
+      #expect(!text.contains("JBSWY3DPEHPK3PXP"))
+      #expect(text.contains("\"$secret\""))
+    }
+    #expect(edit.contains("\"username\":\"me\""))
+  }
+
+  @Test func `a provider without argv secrets keeps getting plain values for its stdin JSON`() throws {
+    let edit = try Self.json(PluginVaultProvider.editInput(id: "item1", change: VaultLoginChange(password: Self.password), secret: { $0 }))
+    #expect(edit.contains(Self.password))
+  }
+
+  @Test func `a secret that can't be sealed sends nothing`() {
+    #expect(PluginVaultProvider.editInput(id: "item1", change: VaultLoginChange(password: Self.password), secret: { _ in nil }) == nil)
+  }
+}

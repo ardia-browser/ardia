@@ -76,13 +76,17 @@ export type NewLogin = { title: string; username: string; password: string; url:
 
 export type SaveRequest = { login: NewLogin };
 
-export type TotpChange = { set: string } | "remove";
+export type TotpChange<Secret = string> = { set: Secret } | "remove";
 
-export type LoginChange = { username?: string; password?: string; url?: string; totp?: TotpChange };
+export type LoginChange<Secret = string> = { username?: string; password?: Secret; url?: string; totp?: TotpChange<Secret> };
 
-export type EditRequest = { id: string; change: LoginChange };
+export type EditRequest<Secret = string> = { id: string; change: LoginChange<Secret> };
 
-export type AddTotpRequest = { id: string; uri: string };
+export type AddTotpRequest<Secret = string> = { id: string; uri: Secret };
+
+export type SealedEditRequest = EditRequest<SecretHandle>;
+
+export type SealedAddTotpRequest = AddTotpRequest<SecretHandle>;
 
 export type StateRequest = { explicit: boolean };
 
@@ -281,8 +285,8 @@ export type CredentialProvider = {
   list: CredentialHandler<ListRequest, ItemPage | readonly ListedItem[]>;
   reveal: CredentialHandler<RevealRequest, Revealed>;
   save?: CredentialHandler<SaveRequest, Item>;
-  edit?: CredentialHandler<EditRequest, Item>;
-  addTotp?: CredentialHandler<AddTotpRequest, Item>;
+  edit?: CredentialHandler<EditRequest, Item> | CredentialHandler<SealedEditRequest, Item>;
+  addTotp?: CredentialHandler<AddTotpRequest, Item> | CredentialHandler<SealedAddTotpRequest, Item>;
   passkeys?: PasskeyHandlers;
   link?: CredentialHandler<LinkRequest, ItemLink>;
 };
@@ -332,8 +336,8 @@ export type HarnessInputs = {
   list: ListRequest;
   reveal: RevealRequest;
   save: SaveRequest;
-  edit: EditRequest;
-  addTotp: AddTotpRequest;
+  edit: EditRequest | SealedEditRequest;
+  addTotp: AddTotpRequest | SealedAddTotpRequest;
   "passkeys.list": PasskeyListRequest;
   "passkeys.get": PasskeyGetRequest;
   "passkeys.save": PasskeySaveRequest;

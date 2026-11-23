@@ -396,36 +396,56 @@ final class PluginVaultProvider: VaultPasskeyHolder, @unchecked Sendable {
     return VaultRevealed(password: revealed.password, totp: revealed.totpURI ?? revealed.totpCode)
   }
 
-  private func itemCall(_ handler: String, _ cli: VaultCLI, _ input: [String: Any]) async throws -> VaultItem {
-    let answer = await call(handler, cli, input)
+  var sendsSecretHandles: Bool { contribution.cli.verbs.values.contains(where: \.argvSecrets) }
+
+  private func itemCall(_ handler: String, _ cli: VaultCLI, _ input: @escaping @Sendable ((String) -> Any?) -> [String: Any]?) async throws -> VaultItem {
+    let handled = sendsSecretHandles
+    let answer = await call(handler, cli) { builder in
+      input { value -> Any? in handled ? builder.handle(value) : value } ?? [:]
+    }
     if case .result(let raw, _) = answer, raw is NSNull { throw VaultError.failed(wording.sentence("savedNotReturned", handler: handler)) }
     return try value(answer, handler: handler) { try CredentialResults.item($0, provider: id) }
   }
 
+  static func addTotpInput(id item: String, uri: String, viaEdit: Bool, secret: (String) -> Any?) -> [String: Any]? {
+    guard let sealed = secret(uri) else { return nil }
+    return viaEdit ? ["id": item, "change": ["totp": ["set": sealed]]] : ["id": item, "uri": sealed]
+  }
+
+  static func editInput(id item: String, change: VaultLoginChange, secret: (String) -> Any?) -> [String: Any]? {
+    var wire: [String: Any] = [:]
+    if let username = change.username { wire["username"] = username }
+    if let password = change.password {
+      guard let sealed = secret(password) else { return nil }
+      wire["password"] = sealed
+    }
+    if let url = change.url { wire["url"] = url }
+    switch change.totp {
+    case .unchanged: break
+    case .set(let uri):
+      guard let sealed = secret(uri) else { return nil }
+      wire["totp"] = ["set": sealed]
+    case .remove: wire["totp"] = "remove"
+    }
+    return ["id": item, "change": wire]
+  }
+
   func save(_ cli: VaultCLI, login: VaultNewLogin) async throws -> VaultItem {
     guard contribution.offers("save"), await handles("save") else { throw VaultError.unsupported }
-    return try await itemCall("save", cli, ["login": ["title": login.title, "username": login.username, "password": login.password, "url": login.url]])
+    let input = CredentialRequestId(json: ["login": ["title": login.title, "username": login.username, "password": login.password, "url": login.url]])
+    return try await itemCall("save", cli) { _ in input.json as? [String: Any] }
   }
 
   func addTotp(_ cli: VaultCLI, id item: String, uri: String) async throws -> VaultItem {
     guard contribution.offers("addTotp") else { throw VaultError.unsupported }
-    if await handles("addTotp") { return try await itemCall("addTotp", cli, ["id": item, "uri": uri]) }
+    if await handles("addTotp") { return try await itemCall("addTotp", cli) { Self.addTotpInput(id: item, uri: uri, viaEdit: false, secret: $0) } }
     guard await handles("edit") else { throw VaultError.unsupported }
-    return try await itemCall("edit", cli, ["id": item, "change": ["totp": ["set": uri]]])
+    return try await itemCall("edit", cli) { Self.addTotpInput(id: item, uri: uri, viaEdit: true, secret: $0) }
   }
 
   func edit(_ cli: VaultCLI, id item: String, change: VaultLoginChange) async throws -> VaultItem {
     guard contribution.offers("edit"), await handles("edit") else { throw VaultError.unsupported }
-    var wire: [String: Any] = [:]
-    if let username = change.username { wire["username"] = username }
-    if let password = change.password { wire["password"] = password }
-    if let url = change.url { wire["url"] = url }
-    switch change.totp {
-    case .unchanged: break
-    case .set(let uri): wire["totp"] = ["set": uri]
-    case .remove: wire["totp"] = "remove"
-    }
-    return try await itemCall("edit", cli, ["id": item, "change": wire])
+    return try await itemCall("edit", cli) { Self.editInput(id: item, change: change, secret: $0) }
   }
 
   func passkeySigner(_ cli: VaultCLI, item: String, credential: Data, rpId: String) async throws -> VaultPasskeySigner? {

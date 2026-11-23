@@ -11,6 +11,8 @@ export const RECIPES = {
   tag: { orient: true },
   key: { orient: true },
   "key.fill": { orient: true },
+  "key.horizontal.fill": { orient: true },
+  touchid: { exclusive: true, ...one(O("touchid", { init: { sw: 0.053 } })) },
   leaf: { orient: true },
   "leaf.fill": { orient: true },
   paintbrush: { orient: true },

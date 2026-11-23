@@ -239,8 +239,22 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - if: steps.built.outputs.cache-hit != 'true'
-        run: pnpm install --frozen-lockfile
+      - name: Install the packages, again after a failure that may be the network or a locked file
+        if: steps.built.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $attempts = 3
+          foreach ($attempt in 1..$attempts) {
+            pnpm install --frozen-lockfile
+            if ($LASTEXITCODE -eq 0) { exit 0 }
+            if ($attempt -lt $attempts) {
+              $wait = 15 * $attempt
+              Write-Host "::warning::pnpm install failed with exit code $LASTEXITCODE on attempt $attempt of $attempts; trying again in $wait s"
+              Start-Sleep -Seconds $wait
+            }
+          }
+          Write-Host "::error::pnpm install failed $attempts times"
+          exit 1
       - name: Toolchain
         if: steps.built.outputs.cache-hit != 'true'
         shell: pwsh
@@ -434,7 +448,7 @@ jobs:
         shell: pwsh
         run: scripts/windows/dependency-check.ps1 -App "${{ runner.temp }}/Ardia"
       - name: Launch it
-        if: ${{ !cancelled() && !startsWith(env.PART, 'tour') && (env.FULL == 'true' || steps.engine.outcome != 'success' || env.COMPILED == 'true') }}
+        if: ${{ !cancelled() && !startsWith(env.PART, 'tour') && env.PART != 'input' && (env.FULL == 'true' || steps.engine.outcome != 'success' || env.COMPILED == 'true') }}
         timeout-minutes: 12
         shell: pwsh
         run: scripts/windows/launch-smoke.ps1 -App "$env:APP/Ardia.exe" -Out "${{ runner.temp }}/launch" -Part $env:PART -NoInput:($env:NO_INPUT -eq 'true')
@@ -565,6 +579,27 @@ jobs:
           path: ${{ runner.temp }}/launch
           if-no-files-found: ignore
           retention-days: 14
+
+  x64-input:
+    needs: [gate, identity, javascript, app]
+    if: ${{ !cancelled() && needs.identity.result == 'success' && needs.javascript.result == 'success' && needs.app.result == 'success' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    env:
+      SLUG: x64
+      PART: input
+      SUFFIX: -input
+      NO_INPUT: "false"
+      APP: apps/browser/windows/x64/Release
+      HERMES: .ci/windows-hermes/hermes.exe
+      FULL: ${{ needs.identity.outputs.full }}
+      COMPILED: ${{ needs.app.outputs.compiled }}
+      KEY: ${{ needs.app.outputs.key }}
+      VERSION: ${{ needs.identity.outputs.version }}
+      BUILD: ${{ needs.identity.outputs.build }}
+    steps: *launch_steps
 
   x64-tour:
     needs: [gate, identity, javascript, app]

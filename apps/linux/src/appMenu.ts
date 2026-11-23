@@ -150,8 +150,13 @@ export function appMenuItems(state: MenuState, shortcuts: AppMenuShortcuts = new
       cmd("toggleSidebarSide"),
       separator,
       cmd("openSplitPane"),
+      cmd("openHorizontalSplitPane"),
       cmd("focusNextPane"),
       cmd("focusPreviousPane"),
+      cmd("movePaneLeft"),
+      cmd("movePaneRight"),
+      cmd("movePaneUp"),
+      cmd("movePaneDown"),
       separator,
       sub("Show Bookmarks Bar", [
         cmd("setBookmarksBar", "always"),

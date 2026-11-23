@@ -21,6 +21,7 @@ const replacements = new Map([
   [here("../browser/src/components/sidebar/HoverCard.tsx"), here("./src/SidebarHoverCard.tsx")],
   [here("../browser/src/components/site/SelectionPopover.tsx"), here("./src/SelectionPopover.tsx")],
   [here("../browser/src/components/window/PageOverlays.tsx"), here("./src/PageOverlays.tsx")],
+  [here("../browser/src/components/split/SplitMoveHandles.tsx"), here("./src/SplitMoveHandles.tsx")],
   [here("../browser/src/components/window/WindowOverlays.tsx"), here("./src/WindowOverlays.tsx")],
   [here("../browser/src/components/downloads/Downloads.tsx"), here("./src/DownloadsPopover.tsx")],
   [here("../browser/src/state/settings/settingsWindows.ts"), here("./src/settingsWindows.ts")],

@@ -73,7 +73,7 @@ const DEFS = organizeDefs([
   },
   {
     id: "split:convert",
-    title: ({ split }) => (sideBySide(split) ? "Convert to Vertical Split View" : "Convert to Horizontal Split View"),
+    title: ({ split }) => (sideBySide(split) ? "Convert to Horizontal Split View" : "Convert to Vertical Split View"),
     icon: "rectangle.split.1x2",
     keywords: ["split view", "rotate split", "stacked", "side by side"],
     shows: (c) => !!c.split,

@@ -41,7 +41,7 @@ import { tabEngine } from "../engines/engines";
 import { runReaderCommand } from "../reader/reader";
 import { goBack, goForward } from "../tabs/navigation";
 import { awaitsFirstPage } from "../tabs/pendingAddress";
-import { focusSplitPane, openSplitPane } from "../splits/actions";
+import { focusSplitPane, moveSplitPane, openHorizontalSplitPane, openSplitPane } from "../splits/actions";
 import { switchTabLayout } from "../settings/actions";
 import { isAppCommand, settingChange, variantArg } from "./commandCatalog";
 import { APP_COMMAND_HANDLERS } from "./appCommands";
@@ -238,9 +238,19 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
       return switchTabLayout(windowId);
     case "openSplitPane":
       return void openSplitPane(windowId);
+    case "openHorizontalSplitPane":
+      return void openHorizontalSplitPane(windowId);
     case "focusNextPane":
     case "focusPreviousPane":
       return focusSplitPane(windowId, command === "focusNextPane" ? 1 : -1);
+    case "movePaneLeft":
+      return void moveSplitPane(windowId, "left");
+    case "movePaneRight":
+      return void moveSplitPane(windowId, "right");
+    case "movePaneUp":
+      return void moveSplitPane(windowId, "up");
+    case "movePaneDown":
+      return void moveSplitPane(windowId, "down");
     case "toggleSidebar":
       return s.toggleSidebar(windowId);
     case "zoomIn":

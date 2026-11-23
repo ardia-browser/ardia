@@ -9,7 +9,7 @@ import { useBrowser } from "../browser/store";
 import { splitOf, type SplitSide } from "../splits/splits";
 import { openExtensionFromMenu } from "../extensions/bridge";
 import { openOptions, shownIn } from "../extensions/actions";
-import { openSplitPane } from "../splits/actions";
+import { openHorizontalSplitPane, openSplitPane } from "../splits/actions";
 import { openSettings } from "../settings/settingsWindows";
 import { isOrganizeId, shownOrganizeContext, sideBySide, splitCandidates, type OrganizeContext, type OrganizeId } from "./organizeActions";
 import { renameProfile } from "../profiles/profileMenu";
@@ -17,7 +17,8 @@ import { isPluginAction, runPluginAction } from "../plugins/commands";
 
 const store = () => useBrowser.getState();
 
-const newPane = ({ windowId, tab }: OrganizeContext, side: SplitSide) => void openSplitPane(windowId, { anchorTabId: tab.id, side });
+const newPane = ({ windowId, tab }: OrganizeContext, side: SplitSide) =>
+  void (side === "bottom" || side === "top" ? openHorizontalSplitPane(windowId, { anchorTabId: tab.id }) : openSplitPane(windowId, { anchorTabId: tab.id, side }));
 
 async function pickTabForSplit(c: OrganizeContext) {
   const tabs = splitCandidates(c);

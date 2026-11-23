@@ -100,7 +100,6 @@ export function MenuSurface({ glass, children }: { glass: boolean; children: Rea
   return (
     <Panel fill={ink.clear} radius={PANEL.radius} border={theme.popoverBorder} shadow={shadow.popover} material={VAULT_MENU.glassMaterial}>
       <GlassFill panelFill={theme.popoverFill} tint={withAlpha(veil, VAULT_MENU.glassTint)} radius={PANEL.radius} />
-      <View pointerEvents="none" style={{ ...StyleSheet.absoluteFillObject, borderRadius: PANEL.radius, backgroundColor: withAlpha(veil, VAULT_MENU.glassVeil) }} />
       {children}
     </Panel>
   );

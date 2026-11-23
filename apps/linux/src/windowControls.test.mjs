@@ -750,3 +750,21 @@ test("the drawn header toggle and Linux's header threshold both read the one tog
     assert.doesNotMatch(source, /headerToggleXFor|HEADER_TOOLS\.toggleX/, `${name} doesn't bypass useHeaderToggleX`);
   }
 });
+
+test("on Linux a band-hosted top strip does not reserve a permanent top inset above the card, so the page fills up to the frame until hovered", async () => {
+  const { linuxCardTopInset, cardTopInset } = await import("./linuxBandLayout.ts");
+  for (const settings of [
+    { addressBar: "sidebar", autoHideTabs: true },
+    { addressBar: "sidebar", sidebarSide: "right", autoHideTabs: true },
+    { minimalismMode: true },
+    { minimalismMode: true, autoHideTabs: true },
+    { minimalismMode: true, tabLayout: "top", autoHideTabs: true },
+  ]) {
+    const s = state(settings);
+    assert.equal(cardTopInset(s, "w", 9, windowsChrome), 32, JSON.stringify(settings));
+    assert.equal(linuxCardTopInset(s, "w", 9, windowsChrome), 9, JSON.stringify(settings));
+    assert.equal(linuxCardTopInset(s, "w", 0, windowsChrome), 0, JSON.stringify(settings));
+  }
+  assert.equal(linuxCardTopInset(state(), "w", 9, windowsChrome), 9);
+  assert.equal(linuxCardTopInset(state({ tabLayout: "top" }), "w", 9, windowsChrome), 9);
+});

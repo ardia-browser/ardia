@@ -116,12 +116,14 @@ test("production graph uses current Linux adapters and one canonical shared stat
   assert.deepEqual(sharedControls.importers, [`${linux}WindowControls.tsx`], "the shared window buttons are reached only through the Linux wrapper");
   assert.ok(sharedControls.importedIds.includes(`${linux}captionControls.ts`) && !sharedControls.importedIds.includes(`${browser}state/windows/controls.ts`), "Close goes to the Linux close coordinator once");
   assert.ok(!graph.has(`${browser}components/window/LeadingWindowControls.tsx`), "the left group is Linux's own, drawn where the traffic lights would be");
-  for (const host of ["components/window/BrowserWindowControls.tsx", "components/settings/SettingsWindow.tsx", "components/import/ImportWindow.tsx"]) {
-    assert.ok(graph.get(`${browser}${host}`).importedIds.includes(`${linux}LeadingWindowControls.tsx`), `${host} draws the desktop's left buttons`);
+  assert.ok(graph.get(`${browser}App.tsx`).importedIds.includes(`${linux}BrowserWindowControls.tsx`), "App.tsx uses the Linux browser window controls");
+  assert.ok(!graph.has(`${browser}components/window/BrowserWindowControls.tsx`), "the shared browser window controls are replaced by the Linux adapter");
+  for (const host of [`${linux}BrowserWindowControls.tsx`, `${browser}components/settings/SettingsWindow.tsx`, `${browser}components/import/ImportWindow.tsx`]) {
+    assert.ok(graph.get(host).importedIds.includes(`${linux}LeadingWindowControls.tsx`), `${host} draws the desktop's left buttons`);
   }
   assert.ok(graph.get(`${linux}LeadingWindowControls.tsx`).importedIds.includes(`${linux}WindowControls.tsx`), "the left group goes through the same Linux wrapper as the right one");
   assert.ok(graph.get(`${linux}main.tsx`).importedIds.includes(`${linux}desktopButtonLayout.ts`), "every window follows the desktop's button layout");
-  const controls = graph.get(`${browser}components/window/BrowserWindowControls.tsx`).importedIds;
+  const controls = graph.get(`${linux}BrowserWindowControls.tsx`).importedIds;
   assert.ok(controls.includes(`${linux}clusterAppMenu.ts`) && !controls.includes(`${browser}state/app/appMenu.ts`), "the … beside the window buttons opens Linux's full app menu");
   for (const importer of ["components/sidebar/Sidebar.tsx", "components/downloads/Downloads.tsx", "components/sidebar/AddressBar.tsx"]) {
     const imported = graph.get(`${browser}${importer}`).importedIds;

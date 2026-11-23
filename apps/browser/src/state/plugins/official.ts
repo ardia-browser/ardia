@@ -40,7 +40,10 @@ export function officialPlugins(
   supported: boolean = PLATFORM_FEATURES.plugins,
   showComingSoon: (experiment: ComingSoon["experiment"]) => boolean = experimentOn,
 ): OfficialPlugin[] {
-  const listed = [...s.order.filter((name) => officialListing(s, name)), ...(s.pinned ?? []).map((p) => p.name)].map((name) => ({ name, title: "", blurb: "", icon: "" }));
+  const listed = [...s.order.filter((name) => officialListing(s, name)), ...(s.pinned ?? []).map((p) => p.name)].map((name) => {
+    const pinned = pinnedOf(s, name);
+    return { name, title: pinned?.title ?? "", blurb: pinned?.blurb ?? "", icon: pinned?.icon ?? "" };
+  });
   const entries = [...OFFICIAL_CATALOGUE];
   for (const extra of listed) if (!entries.some((e) => e.name === extra.name)) entries.push(extra);
   const out: OfficialPlugin[] = entries.map((entry) => {

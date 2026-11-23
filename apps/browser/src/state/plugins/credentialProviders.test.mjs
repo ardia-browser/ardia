@@ -91,3 +91,13 @@ test("a run native asks for while the locked run is still winding down starts on
   assert.ok(markPluginReady("bitwarden", next.run));
   stopProcess("bitwarden", null, 0);
 });
+
+test("an official plugin that isn't installed yet takes its title, blurb and badge from the pin, never its raw name", async () => {
+  const { officialPlugins } = await import("./official.ts");
+  const pin = JSON.parse(readFileSync(new URL("../../../../../tests/fixtures/plugins/official-pin-credentials.json", import.meta.url), "utf8"));
+  const pinned = pin.plugins.map((p) => ({ name: p.name, version: p.version, folderId: `official-${p.name}`, credentialPrograms: p.credentialPrograms, title: p.title, blurb: p.blurb, icon: p.icon, symbol: p.symbol, accent: p.accent }));
+  const state = { listings: {}, records: {}, order: [], pinned, candidates: {} };
+  const rows = officialPlugins(state, true, () => false).filter((p) => pin.plugins.some((q) => q.name === p.name));
+  assert.deepEqual(rows.map((p) => [p.name, p.title, p.blurb, p.icon, p.state]), pin.plugins.map((p) => [p.name, p.title, p.blurb, p.icon, "available"]));
+  assert.deepEqual(officialCredentialProviders(state, true).map((p) => [p.name, p.symbol, p.accent]), pin.plugins.map((p) => [p.name, p.symbol, p.accent]), "the badge's symbol and accent too");
+});

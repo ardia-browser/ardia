@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { View } from "react-native";
 import { copyText } from "../../../state/app/system";
 import { installOfficialPlugin, UNSAVED, type OfficialPlugin } from "../../../state/plugins/actions";
+import { useOfficialCredentialProviders } from "../../../state/plugins/officialCredentials";
 import { useOfficialFetch, useOfficialPlugins, usePluginConsent, usePluginOrder, usePluginPrograms, usePluginUnsaved } from "../../../state/plugins/hooks";
 import { installedLabel, isOffered, officialInSettings, officialTitle, officialView, wasCancelled, type OfficialAttempt } from "../../../state/plugins/officialView";
 import { OFFICIAL_LEGACY_PROGRAMS } from "../../../state/plugins/officialPin";
@@ -12,6 +13,7 @@ import { Group, Row, SectionHeader } from "../Form";
 import { findSetting, type SettingId } from "../settingsIndex";
 import { officialPluginAnchor } from "../rows/pluginRows";
 import { ActivitySpinner, Button, IconTile, Text } from "../../ui";
+import { BrandBadge } from "../../vaults/VaultParts";
 import { lineHeight, monoFace, space } from "../../ui/tokens";
 
 const COPIED_FOR_MS = 2000;
@@ -66,6 +68,12 @@ function useInstall(plugin: OfficialPlugin) {
   return { attempt, install };
 }
 
+function OfficialIcon({ plugin }: { plugin: OfficialPlugin }) {
+  const brand = useOfficialCredentialProviders().find((p) => p.name === plugin.name);
+  if (brand) return <BrandBadge provider={plugin.name} size="l" symbol={brand.symbol} accent={brand.accent ?? undefined} />;
+  return <IconTile symbol={plugin.icon} size="l" />;
+}
+
 function OfficialPluginRow({ plugin }: { plugin: OfficialPlugin }) {
   const programs = usePluginPrograms(plugin.name);
   const { attempt, install } = useInstall(plugin);
@@ -91,7 +99,7 @@ function OfficialPluginRow({ plugin }: { plugin: OfficialPlugin }) {
           ) : null}
         </View>
       }
-      icon={<IconTile symbol={plugin.icon} size="l" />}
+      icon={<OfficialIcon plugin={plugin} />}
       onPress={view.opens ? () => goToSettingsPane("plugins", null, plugin.name) : undefined}
       description={
         view.note === "comingSoon" ? undefined : (

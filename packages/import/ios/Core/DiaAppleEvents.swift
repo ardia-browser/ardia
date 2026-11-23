@@ -206,11 +206,11 @@ public enum DiaTabsFetch {
     while true {
       do {
         let result = try readRunning(app: app, source: source)
-        if result.windowCount > 0 || Date() >= deadline { return result }
+        if result.windowCount > 0 || deadline.timeIntervalSinceNow <= 0 { return result }
       } catch let error as ImportError {
         if case .locked = error { throw error }
         lastError = error
-        if Date() >= deadline { throw lastError }
+        if deadline.timeIntervalSinceNow <= 0 { throw lastError }
       }
       Thread.sleep(forTimeInterval: poll)
     }
@@ -275,7 +275,7 @@ public final class WorkspaceDiaApp: DiaApp, @unchecked Sendable {
 
   static func startedBy(_ requested: Date, _ app: NSRunningApplication) -> Bool {
     guard let launchDate = app.launchDate else { return false }
-    return launchDate >= requested.addingTimeInterval(-1)
+    return launchDate.timeIntervalSince(requested) >= -1
   }
 
   public func quitIfInBackground() {

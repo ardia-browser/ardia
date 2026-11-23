@@ -441,7 +441,7 @@ final class WebKitLogins: NSObject {
       landings.removeValue(forKey: key)
       return
     }
-    let lastLook = Date() >= deadline
+    let lastLook = deadline.timeIntervalSinceNow <= 0
     let lookAgain = { [weak self, weak tab] in
       DispatchQueue.main.asyncAfter(deadline: .now() + Self.landingCheckInterval) {
         self?.land(key, turn: turn, prompt: prompt, deadline: deadline, in: tab)

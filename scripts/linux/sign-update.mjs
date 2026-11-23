@@ -16,12 +16,12 @@ Ardia-<V>-linux-update.txt.sig. --key is a PKCS#8 PEM (openssl genpkey
 with). --unsigned writes only the manifest, for a build without the key.`;
 
 export const VERSION_PATTERN = /^[0-9]+\.[0-9]+\.[0-9]+(-nightly\.[0-9]+)?$/;
-export const FORMATS = [
+const FORMATS = [
   ["deb", "deb"],
   ["tarball", "tar.xz"],
   ["appimage", "AppImage"],
 ];
-export const MAX_PACKAGE_BYTES = 512 * 1024 * 1024;
+const MAX_PACKAGE_BYTES = 512 * 1024 * 1024;
 export const MAX_MANIFEST_BYTES = 4096;
 export const DEFAULT_PUBLIC_KEY = fileURLToPath(new URL("./linux-update.pem", import.meta.url));
 
@@ -79,7 +79,7 @@ export function rawPublicKey(key) {
   return der.subarray(12);
 }
 
-export function signManifest(manifest, privatePem, publicPem) {
+function signManifest(manifest, privatePem, publicPem) {
   const privateKey = createPrivateKey(privatePem);
   if (privateKey.asymmetricKeyType !== "ed25519") throw new Error(`the signing key is ${privateKey.asymmetricKeyType}, not ed25519`);
   if (!rawPublicKey(privateKey).equals(rawPublicKey(publicPem))) throw new Error("the signing key doesn't match the public key installs verify with");

@@ -2,9 +2,9 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import { homedir } from "node:os";
-import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 
-export const STAMP_VERSION = 6;
+const STAMP_VERSION = 6;
 
 const NATIVE = [
   /^apps\/browser\/macos\//,
@@ -31,8 +31,8 @@ const PODS = [
 const POD_SOURCES = /^packages\/[^/]+\/ios\//;
 
 export const isNative = (rel) => NATIVE.some((r) => r.test(rel));
-export const isDeps = (rel) => DEPS.some((r) => r.test(rel));
-export const isPodsInput = (rel) => PODS.some((r) => r.test(rel));
+const isDeps = (rel) => DEPS.some((r) => r.test(rel));
+const isPodsInput = (rel) => PODS.some((r) => r.test(rel));
 
 const BUILD_ENV = new RegExp(
   "^(RCT_|EXPO_|USE_|HERMES_|COCOAPODS_|SWIFT_|CLANG_|GCC_|OTHER_|BUNDLE_|ARDIACORE_(STAGE|PREBUILT|ENGINE_MATCH)|HSTS_|UBO_|UBOL_|RUST|CARGO_)|" +
@@ -40,7 +40,7 @@ const BUILD_ENV = new RegExp(
     "ARDIA_PRUNE|CHROMIUM_TAG|TOOLCHAINS|DEVELOPER_DIR|SDKROOT|MACOSX_DEPLOYMENT_TARGET|CC|CXX|LD|CPP|CFLAGS|CXXFLAGS|" +
     "OBJCFLAGS|LDFLAGS|CPATH|C_INCLUDE_PATH|CPLUS_INCLUDE_PATH|OBJC_INCLUDE_PATH|LIBRARY_PATH|CP_HOME_DIR|LANG|LC_ALL)$",
 );
-export const UNFINGERPRINTABLE_ENV = ["XCODE_XCCONFIG_FILE", "ARDIA_CORE_RS_XCFRAMEWORK", "CARGO_TARGET_DIR"];
+const UNFINGERPRINTABLE_ENV = ["XCODE_XCCONFIG_FILE", "ARDIA_CORE_RS_XCFRAMEWORK", "CARGO_TARGET_DIR"];
 export const BUNDLING_ENV = /^(SKIP_BUNDLING|FORCE_BUNDLING|BUNDLE_[A-Z_]+|EXTRA_PACKAGER_ARGS|EXTRA_COMPILER_ARGS|ENTRY_FILE|CONFIG_JSON|USE_HERMES|HERMES_CLI_PATH|SOURCEMAP_FILE|NODE_ARGS|CLI_PATH)$/;
 export const UNFINGERPRINTABLE_FILES = ["apps/browser/macos/.xcode.env.local", "apps/browser/macos/.xcode.env.updates"];
 
@@ -65,7 +65,7 @@ export const defaults = (env = process.env) => ({
 
 const sha256 = (data) => createHash("sha256").update(data).digest("hex");
 
-export function contentId(path) {
+function contentId(path) {
   const st = fs.lstatSync(path);
   if (st.isSymbolicLink()) return `l:${sha256(fs.readlinkSync(path))}`;
   return `${st.mode & 0o111 ? "x" : "f"}:${sha256(fs.readFileSync(path))}`;
@@ -97,7 +97,7 @@ export function manifestOf(repo, files) {
 
 export const pick = (manifest, keep) => Object.fromEntries(Object.entries(manifest).filter(([rel]) => keep(rel)));
 
-export function hashManifest(manifest, extra = []) {
+function hashManifest(manifest, extra = []) {
   const h = createHash("sha256");
   for (const rel of Object.keys(manifest).sort()) h.update(`${rel}\0${manifest[rel]}\n`);
   for (const line of extra) h.update(`${line}\n`);
@@ -144,7 +144,7 @@ export class HashCache {
   }
 }
 
-export function treeDigest(root, cache = new HashCache(null), { skipTop = [] } = {}) {
+function treeDigest(root, cache = new HashCache(null), { skipTop = [] } = {}) {
   const lines = [];
   const walk = (rel) => {
     const path = rel ? join(root, rel) : root;
@@ -167,7 +167,7 @@ export function frameworkIdentity(framework, cache) {
   return `framework ${treeDigest(framework, cache)}`;
 }
 
-export function toolchainIdentity() {
+function toolchainIdentity() {
   const run = (cmd, args) => {
     const r = spawnSync(cmd, args, { encoding: "utf8" });
     return r.status === 0 ? r.stdout.trim() : null;
@@ -183,7 +183,7 @@ export function toolchainIdentity() {
   return `toolchain ${parts.join(" | ").replace(/\s+/g, " ")}`;
 }
 
-export function cargoConfigLines(env = process.env) {
+function cargoConfigLines(env = process.env) {
   const home = env.CARGO_HOME || join(homedir(), ".cargo");
   const lines = [];
   for (const name of ["config.toml", "config"]) {
@@ -214,7 +214,7 @@ export function rustIdentity(repo, env = process.env, { run = null, toolchain = 
   return ["rust", rustc, cargo, ...cargoConfigLines(env), ...rustEnv, xcode].join(" | ");
 }
 
-export const xcframeworkReceipt = (tree) => join(tree, "packages/sync/ios/Frameworks/ArdiaCoreRS.xcframework.ac-identity");
+const xcframeworkReceipt = (tree) => join(tree, "packages/sync/ios/Frameworks/ArdiaCoreRS.xcframework.ac-identity");
 
 export function receiptMatches(tree, identity) {
   if (!fs.existsSync(join(tree, "packages/core-rs/rust-toolchain.toml"))) return true;
@@ -253,7 +253,7 @@ export function stampOf({ manifest, config, signing = "default", framework, tool
 
 const GENERATED_ENV_FILE = /^export NODE_BINARY=\/[A-Za-z0-9_./@+-]+\n$/;
 
-export function localEnvLines(repo, files = UNFINGERPRINTABLE_FILES) {
+function localEnvLines(repo, files = UNFINGERPRINTABLE_FILES) {
   const lines = [];
   for (const rel of files) {
     let bytes;
@@ -281,7 +281,7 @@ export function stampInputs({ framework, env = process.env, hashCache, toolchain
   return { framework: identity, toolchain, rust, env: fingerprint };
 }
 
-export const engineRecordField = (line, name) =>
+const engineRecordField = (line, name) =>
   line
     .trim()
     .split(" ")
@@ -357,19 +357,7 @@ const writeJsonAtomic = (path, value) => {
   fs.renameSync(tmp, path);
 };
 
-export function countEntries(root) {
-  let n = 0;
-  const walk = (path) => {
-    for (const entry of fs.readdirSync(path, { withFileTypes: true })) {
-      n++;
-      if (entry.isDirectory()) walk(join(path, entry.name));
-    }
-  };
-  walk(root);
-  return n;
-}
-
-export const cacheEntryDir = (cacheRoot, stamp) => join(cacheRoot, stamp);
+const cacheEntryDir = (cacheRoot, stamp) => join(cacheRoot, stamp);
 
 const ENTRY_META = ["meta.json", ".used"];
 
@@ -391,12 +379,12 @@ export function touch(dir, now = new Date()) {
   }
 }
 
-export function duBytes(path) {
+function duBytes(path) {
   const r = spawnSync("du", ["-sk", path], { encoding: "utf8" });
   return r.status === 0 ? Number(r.stdout.split(/\s/)[0]) * 1024 : 0;
 }
 
-export const entryIntact = (entry) => {
+const entryIntact = (entry) => {
   try {
     return treeDigest(entry.dir, undefined, { skipTop: ENTRY_META }) === entry.meta.digest;
   } catch {
@@ -607,7 +595,7 @@ export function evict(cacheRoot, opts) {
   return { ...plan, engines: evictedEngines };
 }
 
-export function manifestDiff(from, to) {
+function manifestDiff(from, to) {
   const changed = [];
   const removed = [];
   for (const [rel, id] of Object.entries(to)) if (from[rel] !== id) changed.push(rel);
@@ -617,7 +605,7 @@ export function manifestDiff(from, to) {
 
 export const slotTree = (slot) => join(slot, "ardia");
 export const slotDerivedData = (slot) => join(slotTree(slot), "apps/browser/build-slot");
-export const slotStatePath = (slot) => join(slot, "slot.json");
+const slotStatePath = (slot) => join(slot, "slot.json");
 export const readSlotState = (slot) => readJson(slotStatePath(slot), { manifest: {}, pending: [], syncedAt: 0 });
 export const writeSlotState = (slot, state) => {
   fs.mkdirSync(slot, { recursive: true });
@@ -630,7 +618,7 @@ export function lockHolderPath(derivedData, root = process.env.AC_LOCK_ROOT || "
   return join(root, `ac-xcodebuild-${base.replace(/[^A-Za-z0-9_.-]/g, "_").slice(0, 40)}-${digest}.holder`);
 }
 
-export const pidAlive = (pid) => {
+const pidAlive = (pid) => {
   if (!Number.isInteger(pid) || pid <= 0) return false;
   try {
     process.kill(pid, 0);
@@ -666,7 +654,7 @@ export function groupAlive(pgid) {
 
 export const slotGroup = (slot) => Number(readJson(slotGroupFile(slot), {}).pgid);
 
-export const GROUP_WRAPPER = 'setpgrp(0, 0); my $f = shift; open(my $h, ">", $f) or die "$f: $!"; print $h "{\\"pgid\\":$$}"; close $h; exec { $ARGV[0] } @ARGV or die "exec $ARGV[0]: $!";';
+const GROUP_WRAPPER = 'setpgrp(0, 0); my $f = shift; open(my $h, ">", $f) or die "$f: $!"; print $h "{\\"pgid\\":$$}"; close $h; exec { $ARGV[0] } @ARGV or die "exec $ARGV[0]: $!";';
 
 export function groupCommand(slot, cmd, args) {
   if (settleGroup(slot)) return null;
@@ -697,7 +685,7 @@ export function slotBusy(slot, { root } = {}) {
 
 export const listSlots = (slotRoot) => listDirs(slotRoot, (n) => /^\d+$/.test(n)).sort((a, b) => Number(a.split("/").pop()) - Number(b.split("/").pop()));
 
-export function rankSlots(slots, manifest, { busy = slotBusy, readState = readSlotState } = {}) {
+function rankSlots(slots, manifest, { busy = slotBusy, readState = readSlotState } = {}) {
   return slots
     .map((slot) => {
       const state = readState(slot);
@@ -792,7 +780,7 @@ function pruneEmptyDirs(root, rel) {
   }
 }
 
-export function linkedAncestor(tree, rel) {
+function linkedAncestor(tree, rel) {
   const parts = rel.split("/").slice(0, -1);
   let path = tree;
   for (const part of parts) {

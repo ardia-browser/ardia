@@ -34,14 +34,16 @@
 // act (ARDIA_INSTANCE allowOcclusion; no switch) and minimize the window through CDP. All get --mute-audio.
 // Metrics per process, summed per kind: CPU time, idle + interrupt wakeups, ri_energy_nj (macOS's per-process energy
 // estimate), ri_billed_energy, and GPU time from the AGX user clients the process created.
-import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { loadavg } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { appEnv, launchVariables, mergeLaunchEnv } from "../../../../scripts/lib/instance.mjs";
+import { appEnv, launchVariables, mergeLaunchEnv, sleep } from "../../../../scripts/lib/instance.mjs";
+import { median } from "./median.mjs";
+import { kindOf, processRows } from "./processes.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "../../../..");
@@ -80,14 +82,7 @@ if (opt.help || !positionals[0]) {
   process.exit(opt.help ? 0 : 64);
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (...a) => console.error(`[energy ${new Date().toISOString().slice(11, 19)}]`, ...a);
-const median = (xs) => {
-  const s = xs.filter(Number.isFinite).sort((a, b) => a - b);
-  if (!s.length) return NaN;
-  const m = s.length >> 1;
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-};
 const out = resolve(opt.out);
 const port = +opt.port;
 const WIN = { x: 40, y: 80, w: 1280, h: 800 };
@@ -352,18 +347,6 @@ class Cdp {
   }
 }
 
-function processRows() {
-  return execFileSync("ps", ["-axww", "-o", "pid=,ppid=,command="], { encoding: "utf8", maxBuffer: 64 << 20 })
-    .split("\n").map((l) => l.trim().match(/^(\d+)\s+(\d+)\s+(.*)$/)).filter(Boolean)
-    .map(([, pid, ppid, command]) => ({ pid: +pid, ppid: +ppid, command }));
-}
-function kindOf(command) {
-  const type = command.match(/--type=(\S+)/)?.[1];
-  if (!type) return /crashpad_handler/.test(command) ? "crashpad" : "browser";
-  if (type === "utility") return `utility:${command.match(/--utility-sub-type=([\w.]+)/)?.[1]?.split(".")[0] ?? "?"}`;
-  if (type === "renderer" && command.includes("--extension-process")) return "extension";
-  return type;
-}
 function bundleInfo(app) {
   const plist = join(app, "Contents/Info.plist");
   const read = (key) => spawnSync("plutil", ["-extract", key, "raw", plist], { encoding: "utf8" }).stdout.trim();

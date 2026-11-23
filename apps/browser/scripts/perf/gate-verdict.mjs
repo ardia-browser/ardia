@@ -19,7 +19,8 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { median, summary } from "./native-summary.mjs";
+import { median } from "./median.mjs";
+import { summary } from "./native-summary.mjs";
 
 export const GATE_ROWS = [
   ["launch → window shown", "launch → window shown"],
@@ -41,12 +42,12 @@ export const GATE_ROWS = [
   ]),
 ];
 
-export const REPORTED_ROWS = [
+const REPORTED_ROWS = [
   "memory (phys_footprint), 1 tab(s)", "memory (phys_footprint), 10 tab(s)", "memory (phys_footprint), 20 tab(s)",
   "memory (phys_footprint), after closing back to 1 tab", "memory, browser process, 20 tabs", "memory, browser process, after closing",
 ];
 
-export function reportedRows(rounds) {
+function reportedRows(rounds) {
   const pooled = (side, name) => rounds.flatMap((r) => byName(r[side]).get(name)?.values ?? []);
   return REPORTED_ROWS.map((name) => ({ name, control: median(pooled("control", name)), candidate: median(pooled("candidate", name)) }));
 }
@@ -165,7 +166,7 @@ export function gateVerdict(rounds) {
 const fmt = (x) => (Math.abs(x) >= 10 ? x.toFixed(0) : x.toFixed(2));
 const signed = (x) => `${x > 0 ? "+" : x < 0 ? "−" : ""}${fmt(Math.abs(x))}`;
 
-export function verdictTable(v, names) {
+function verdictTable(v, names) {
   const lines = [`| row | ${names[0]} pooled min / med / max (n) | ${names[1]} pooled min / med / max (n) | Δ med | per-round Δ med | ${names[0]} round spread | verdict |`, "|---|---|---|---|---|---|---|"];
   for (const r of v.rows) {
     if (r.missing) {

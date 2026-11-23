@@ -175,7 +175,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { INJECTION_ENTITLEMENTS, prepareApp } from "../../../../scripts/lib/app-copy.mjs";
-import { appEnv, launchVariables, mergeLaunchEnv } from "../../../../scripts/lib/instance.mjs";
+import { appEnv, launchVariables, mergeLaunchEnv, sleep } from "../../../../scripts/lib/instance.mjs";
 import { buildSeed } from "./seed.mjs";
 import { waitForUboEngine } from "./ubo-cache.mjs";
 import { launchedTree, listenerPid, quitTargets, signalIfSame, stopTree, survivors } from "./processes.mjs";
@@ -236,7 +236,6 @@ if (opt.help) {
   process.exit(0);
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (...a) => console.error(`[bench ${new Date().toISOString().slice(11, 19)}]`, ...a);
 
 const toolDir = join(opt.out, ".tools");

@@ -555,7 +555,7 @@ function parseMicro(text) {
   return JSON.parse(line.slice("COUNTS ".length));
 }
 
-export const microCountsAsync = () => spawnAsync(process.execPath, MICRO_ARGS, { cwd: appDir, capture: true }).then(parseMicro);
+const microCountsAsync = () => spawnAsync(process.execPath, MICRO_ARGS, { cwd: appDir, capture: true }).then(parseMicro);
 
 const INSTR_ARGS = ["-l", process.execPath, "--no-warnings", "--predictable", "--import", "./src/test-loader.mjs", "scripts/perf/micro-bench.mjs", "instr"];
 

@@ -96,7 +96,7 @@ export async function pdfRep({ inst, pageUrl, r, postscroll }) {
   }
 }
 
-export function scrollTailEnd(events, pids, endTs) {
+function scrollTailEnd(events, pids, endTs) {
   const draws = pids.flatMap((pid) => eventTimes(events, pid, DRAW, endTs, endTs + TAIL_MAX_MS * 1000)).sort((a, b) => a - b);
   let last = endTs / 1000;
   for (const at of draws) {

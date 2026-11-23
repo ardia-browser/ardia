@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { seededRandom } from "./rng.mjs";
 import { generateSteps, turn } from "./world.mjs";
 import { instrumentStore, startServices } from "./probe.mjs";
@@ -7,7 +6,7 @@ import { loadRowHooks, mountRows, rowsOf } from "./rowHooks.mjs";
 import { leakCheck } from "./leak.mjs";
 
 const BASELINE = new URL("./baseline.json", import.meta.url);
-export const COST_SEEDS = 10;
+const COST_SEEDS = 10;
 
 const label = (hook) => `${hook.module}#${hook.name}`;
 const HOT_TITLE = "one tab's title changes";
@@ -15,7 +14,7 @@ const HOT_PAGE = "one tab's page state changes";
 const RARE_SHARE = "one tab starts a screen share";
 const HOT = new Set([HOT_TITLE, HOT_PAGE]);
 
-export async function buildScene(world) {
+async function buildScene(world) {
   await world.reset();
   const S = world.S;
   const [w] = S().windowOrder;
@@ -88,7 +87,7 @@ export async function rowProbe(world, probe, { extraHooks = [] } = {}) {
   };
 }
 
-export async function actionCosts(world, probe, { seeds, steps }) {
+async function actionCosts(world, probe, { seeds, steps }) {
   const loaded = await loadRowHooks(world);
   const { changedIds } = await world.modules.at("state/browser/changes.ts");
   const perKind = {};
@@ -184,7 +183,7 @@ function costSummary(result, baseline) {
   return { text: lines.join("\n"), ok };
 }
 
-export function dependencyMap(probe, rows) {
+function dependencyMap(probe, rows) {
   const byKey = new Map();
   const add = (key, entry) => {
     if (!byKey.has(key)) byKey.set(key, []);
@@ -253,5 +252,3 @@ export async function runMode(world, mode, { seeds, steps, out, asJson, mapFile,
   else out(summary.text);
   return summary.ok;
 }
-
-export const srcOf = (world) => fileURLToPath(world.modules.root);

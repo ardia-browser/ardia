@@ -21,7 +21,7 @@ The check itself runs as apps/browser/src/consentReach.test.mjs.`;
 
 export const BASELINE_PATH = join(ROOT, "apps/browser/src/consent-reach-baseline.json");
 const CONSENT_BASELINE = join(ROOT, "apps/browser/src/consent-baseline.json");
-export const REACH_SECTIONS = ["noter", "consentToken", "consentNow", "console"];
+const REACH_SECTIONS = ["noter", "consentToken", "consentNow", "console"];
 export const SECTIONS = [...REACH_SECTIONS, "queues", "unstampedEvents", "arrivalStamps", "unclearedCounters"];
 const SCOPE = /^apps\/(?:browser|linux)\/src\//;
 const LATER = new Set(["setTimeout", "setInterval", "requestAnimationFrame", "queueMicrotask", "setImmediate"]);
@@ -32,14 +32,14 @@ const NOTER = /^(?:note|count|track)[A-Z]/;
 const SINK_NAME = /^(?:capture|queueLog|warnFor|errorFor|counted|stillValid|(?:note|count|track)[A-Z]\w*)$/;
 const CONSENT_TYPE = /\bConsentToken\b/;
 
-export function buildProgram() {
+function buildProgram() {
   const dir = join(ROOT, "apps/browser");
   const config = ts.parseJsonConfigFileContent(ts.readConfigFile(join(dir, "tsconfig.json"), ts.sys.readFile).config, ts.sys, dir);
   const linux = walk("apps/linux/src", /\.tsx?$/).filter((rel) => !TEST_FILE.test(rel)).map((rel) => join(ROOT, rel));
   return ts.createProgram([...config.fileNames, ...linux], { ...config.options, noEmit: true });
 }
 
-export function activityListeners() {
+function activityListeners() {
   const keys = Object.keys(JSON.parse(readFileSync(CONSENT_BASELINE, "utf8")));
   return new Set(keys.map((key) => / after (\w+) \| /.exec(key)?.[1]).filter((name) => name && LISTENER.test(name)));
 }

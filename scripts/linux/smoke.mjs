@@ -67,17 +67,17 @@ the commit's own.
 
 export const privateFolder = (path) => mkdir(path, { recursive: true, mode: 0o700 });
 export const ASSERTIONS = ["ldd", "shell-ui", "bootstrap", "native-tab", "sandbox", "content-blocker", "restart-restore", "staged-install", "app-version", "cli-install", "cli-control", "cli-scripts", "window-state"];
-export const FORBIDDEN_SWITCHES = ["--no-sandbox", "--disable-seccomp-filter-sandbox", "--disable-namespace-sandbox", "--disable-setuid-sandbox", "--disable-gpu-sandbox", "--no-zygote-sandbox", "--single-process", "--in-process-gpu"];
-export const TREE_FORBIDDEN_SWITCHES = ["--no-sandbox", "--disable-seccomp-filter-sandbox", "--disable-namespace-sandbox", "--disable-setuid-sandbox"];
-export const STAGED_FILES = [
+const FORBIDDEN_SWITCHES = ["--no-sandbox", "--disable-seccomp-filter-sandbox", "--disable-namespace-sandbox", "--disable-setuid-sandbox", "--disable-gpu-sandbox", "--no-zygote-sandbox", "--single-process", "--in-process-gpu"];
+const TREE_FORBIDDEN_SWITCHES = ["--no-sandbox", "--disable-seccomp-filter-sandbox", "--disable-namespace-sandbox", "--disable-setuid-sandbox"];
+const STAGED_FILES = [
   { path: "usr/bin/ardia", mode: 0o755 },
   { path: "usr/share/applications/ardia.desktop", mode: 0o644 },
   { path: "usr/lib/ardia/chrome", mode: 0o755 },
   { path: "usr/lib/ardia/ardia-ui/index.html", mode: 0o644 },
   { path: "usr/share/polkit-1/actions/dev.ardia.linux.policy", mode: 0o644 },
 ];
-export const BLOCKER_FILES = ["manifest.json", "js/vapi.js", "js/vapi-common.js", "js/vapi-client.js"];
-export const UBO_TUNING = { selfieDelayInSeconds: 3, autoUpdateDelayAfterLaunch: 600 };
+const BLOCKER_FILES = ["manifest.json", "js/vapi.js", "js/vapi-common.js", "js/vapi-client.js"];
+const UBO_TUNING = { selfieDelayInSeconds: 3, autoUpdateDelayAfterLaunch: 600 };
 export const UBO_SEED = "ardia-seed/storage.json";
 
 export function uboSeedProblems(seedText, start, storageSource) {
@@ -106,7 +106,7 @@ export function uboTuningProblems(background, tuning = UBO_TUNING) {
   });
 }
 export const VERSION_PATTERN = /^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$/;
-export const CLI_CONTROL_CAPABILITIES = ["engine.setCliControl", "ArdiaCli.install", "ArdiaAutomation.start"];
+const CLI_CONTROL_CAPABILITIES = ["engine.setCliControl", "ArdiaCli.install", "ArdiaAutomation.start"];
 export const USER_SCRIPTS_CAPABILITIES = ["ArdiaUserScripts.watch", "ArdiaUserScripts.read", "ArdiaUserScripts.readStatus", "ArdiaUserScripts.writeStatus"];
 export const WINDOW_STATE_CAPABILITIES = ["ArdiaShell.windowButtonLayout", "ArdiaShell.windowState"];
 export const UNKNOWN_WINDOW_ERROR = "No such native window";
@@ -117,9 +117,9 @@ export function userScriptSource() {
   return ["// ==UserScript==", `// @name        ${SCRIPT_NAME}`, "// @version     1.0.0", "// @match       http://127.0.0.1/smoke/*", "// @run-at      document-end", "// @grant       none", "// ==/UserScript==", "", `document.title = ${JSON.stringify(SCRIPT_TITLE_PREFIX)} + document.title;`, ""].join("\n");
 }
 export const CLI_INSTALLER = "ardia-cli-install.sh";
-export const CLI_DIGEST = "ardia-cli.sha256";
+const CLI_DIGEST = "ardia-cli.sha256";
 export const cliTarball = (version) => `ardia-cli-${version}-linux-x64.tar.gz`;
-export const CLI_VERSION_LINE = /^ardia [0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$/;
+const CLI_VERSION_LINE = /^ardia [0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$/;
 const BRIDGE_DIR = new URL("../../engine/ardiacore-linux/content-blocker/", import.meta.url);
 const DEFAULT_TIMEOUT_MS = 300000;
 

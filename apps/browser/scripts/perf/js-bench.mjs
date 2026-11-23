@@ -58,8 +58,9 @@ import { createServer } from "node:http";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { prepareApp } from "../../../../scripts/lib/app-copy.mjs";
-import { appEnv, binaryOf } from "../../../../scripts/lib/instance.mjs";
+import { appEnv, binaryOf, sleep } from "../../../../scripts/lib/instance.mjs";
 import { writeSeed } from "./seed.mjs";
+import { medianOrNull as median } from "./median.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appDir = resolve(here, "../..");
@@ -76,18 +77,11 @@ for (let i = 0; i < rest.length; i++) {
   else positional.push(rest[i]);
 }
 
-const median = (xs) => {
-  const s = xs.filter((x) => typeof x === "number" && Number.isFinite(x)).sort((a, b) => a - b);
-  if (!s.length) return null;
-  const m = s.length >> 1;
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-};
 const pct = (xs, p) => {
   const s = xs.filter(Number.isFinite).sort((a, b) => a - b);
   return s.length ? s[Math.min(s.length - 1, Math.floor(p * s.length))] : null;
 };
 const sum = (o) => Object.values(o ?? {}).reduce((a, b) => a + b, 0);
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export function bundle(outDir, { profiling = false } = {}) {
   mkdirSync(outDir, { recursive: true });
@@ -279,7 +273,7 @@ export async function launch(app, dataDir, port, extraEnv = {}) {
 
 const launched = new Set();
 
-export function quitOnSignals(...closers) {
+function quitOnSignals(...closers) {
   for (const [sig, code] of [["SIGINT", 130], ["SIGTERM", 143]])
     process.once(sig, async () => {
       process.stderr.write(`js-bench: ${sig}: quitting ${launched.size} instance(s)\n`);

@@ -64,7 +64,7 @@ export function pbxSettings(text, name) {
   return { count: values.length, distinct: [...new Set(values)] };
 }
 
-export function plistString(text, key) {
+function plistString(text, key) {
   const match = new RegExp(`<key>${key}</key>\\s*<string>([^<]*)</string>`).exec(text);
   return match ? match[1] : null;
 }

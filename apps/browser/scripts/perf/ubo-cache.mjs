@@ -7,7 +7,7 @@ export const UBO_ENGINE_KEYS = UBO_ENGINE_KEY_SETS[0];
 
 const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
 
-export const UBO_LOG_FLUSHED_BYTES = 1048576;
+const UBO_LOG_FLUSHED_BYTES = 1048576;
 
 export const uboStoreDir = (dataDir) => join(dataDir, "Chromium", "Default", "Local Extension Settings", UBO_ID);
 const uboIndexedDb = (dataDir, kind) => join(dataDir, "Chromium", "Default", "IndexedDB", `chrome-extension_${UBO_ID}_0.indexeddb.${kind}`);
@@ -36,7 +36,7 @@ export function uboSignature(dataDir) {
 
 export const uboSettled = (dataDir) => uboLogBytes(dataDir) < UBO_LOG_FLUSHED_BYTES;
 
-export const UBO_IDB_NAME = "uBlock0CacheStorage";
+const UBO_IDB_NAME = "uBlock0CacheStorage";
 
 export const engineSaved = ({ local = [], indexedDB = [] } = {}) =>
   UBO_ENGINE_KEY_SETS.some((keys) => keys.every((key) => local.includes(key) && indexedDB.includes(key)));

@@ -25,7 +25,7 @@ function regexAllowed(previous, beforePrevious) {
   return false;
 }
 
-export function tokenizeJs(source, { jsx = false } = {}) {
+function tokenizeJs(source, { jsx = false } = {}) {
   return lexJs(source, 0, false, jsx).tokens;
 }
 
@@ -230,7 +230,7 @@ function lexJs(source, from, untilBrace, jsx) {
   return { tokens, end: at };
 }
 
-export function tokenizeSwift(source) {
+function tokenizeSwift(source) {
   const tokens = [];
   let at = 0;
   let newline = false;

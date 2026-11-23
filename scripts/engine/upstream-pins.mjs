@@ -24,13 +24,13 @@ limit stops it cleanly. The tracking issue and its comments count only when gith
 writes only from the workflow (GITHUB_ACTIONS=true); elsewhere it needs --dry-run.`;
 
 export const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
-export const PIN_FILES = {
+const PIN_FILES = {
   env: "engine/patches/build/env.sh",
   macLinuxIni: "engine/patches/build/helium-pins.ini",
   windowsIni: "scripts/windows/engine/helium-pins.ini",
   windowsPrebuilt: "scripts/windows/engine/prebuilt.json",
 };
-export const UPSTREAM_REPOS = {
+const UPSTREAM_REPOS = {
   "helium-chromium": "imputnet/helium-chromium",
   "helium-macos": "imputnet/helium-macos",
   "helium-linux": "imputnet/helium-linux",
@@ -45,7 +45,7 @@ export const ISSUE_TITLE = "Engine: Chromium or Helium upstream is ahead of our 
 export const ISSUE_MARKER = "<!-- ardia-upstream-pins -->";
 export const WORKFLOW_BOT = "github-actions[bot]";
 export const ISSUE_LABEL = "todo";
-export const MAX_ISSUE_PAGES = 200;
+const MAX_ISSUE_PAGES = 200;
 const DEFAULT_REPOSITORY = "ardia-browser/ardia";
 const CHROMIUM_STABLE_URL = "https://chromiumdash.appspot.com/fetch_releases?channel=Stable&platform=Mac&num=1";
 const API = "https://api.github.com";
@@ -82,7 +82,7 @@ export function parseEnvExports(text) {
   return values;
 }
 
-export function windowsIniPins(text) {
+function windowsIniPins(text) {
   const windows = parseIni(text);
   return {
     chromium: windows.chromium?.version,
@@ -338,7 +338,7 @@ export function renderIssueBody(report) {
   ].join("\n");
 }
 
-export function renderCloseComment(report) {
+function renderCloseComment(report) {
   const ahead = partsIn(report, "ahead");
   const lead = ahead.length
     ? ["No engine pin is behind upstream any more, so this is done. These are ahead of upstream's latest release:", ...ahead]
@@ -346,7 +346,7 @@ export function renderCloseComment(report) {
   return [closeMarker(stateToken(report)), ...lead, "", renderReport(report)].join("\n");
 }
 
-export function renderReopenComment(report) {
+function renderReopenComment(report) {
   return [reopenMarker(stateToken(report)), "Upstream has moved past the engine's pins again; the description lists what is behind."].join("\n");
 }
 
@@ -433,12 +433,12 @@ async function latestRelease(client, repo) {
   return release.tag_name;
 }
 
-export function gitShowReader(root = REPO_ROOT) {
+function gitShowReader(root = REPO_ROOT) {
   return (commit, path) =>
     execFileSync("git", ["-C", root, "show", `${commit}:${path}`], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
 }
 
-export async function fetchPrebuiltPins({ source, client, repo, readAtCommit }) {
+async function fetchPrebuiltPins({ source, client, repo, readAtCommit }) {
   let text = null;
   if (readAtCommit) {
     try {
@@ -525,7 +525,7 @@ async function listAll(client, path, what, maxPages) {
   }
 }
 
-export const listAllIssues = (client, repo, maxPages = MAX_ISSUE_PAGES) =>
+const listAllIssues = (client, repo, maxPages = MAX_ISSUE_PAGES) =>
   listAll(client, `/repos/${repo}/issues?state=all`, `issues in ${repo}`, maxPages);
 
 export async function syncIssue({ client, repo, report, dryRun, log = console.log, maxPages = MAX_ISSUE_PAGES }) {

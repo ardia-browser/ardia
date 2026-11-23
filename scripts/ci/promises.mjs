@@ -93,7 +93,7 @@ export function update(root, promises, issue) {
   });
 }
 
-export const LOCKABLE = /(?:^|\/)(?:[^/]+\.test\.[^/]+|[^/]+-test\.mjs|[^/]+Tests\.swift)$/;
+const LOCKABLE = /(?:^|\/)(?:[^/]+\.test\.[^/]+|[^/]+-test\.mjs|[^/]+Tests\.swift)$/;
 
 export function add(root, promises, issue, file, test) {
   if (!LOCKABLE.test(file)) throw new Error(`${file}: only test files (*.test.*, *-test.mjs, *Tests.swift) can be locked, so Checks' repository job runs when they change`);

@@ -8,7 +8,7 @@ export const STARTUP_COMPONENTS = {
   giekcmmlnklenlaomppkphknjmnnpneh: "SSLErrorAssistant",
 };
 
-export const TEMPLATE_LIMITS = {
+const TEMPLATE_LIMITS = {
   uboStoreMB: [25, 50],
   uboBlobsMB: [15, 40],
   uboLogMB: 1,
@@ -27,7 +27,7 @@ export function installedVersion(dataDir, folder) {
   }
 }
 
-export function updaterChecked(dataDir) {
+function updaterChecked(dataDir) {
   try {
     const apps = JSON.parse(readFileSync(join(dataDir, "Chromium", "Local State"), "utf8")).updateclientdata?.apps ?? {};
     return Object.keys(apps).filter((id) => apps[id]?.dlrc != null);

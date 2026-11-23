@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { functionSymbols, imageFor } from "./macho.mjs";
 
-export const MAP_HEADER = "# ardia-symbol-map 1";
+const MAP_HEADER = "# ardia-symbol-map 1";
 const MAP_SOURCES = new Set(["dsym", "match"]);
 
 const SWIFT = /^(\$[sSe]|_T0)/;
@@ -23,7 +23,7 @@ function runDemangler(candidates, names) {
   return null;
 }
 
-export const DEMANGLERS = {
+const DEMANGLERS = {
   swift: [["swift-demangle", ["--simplified"]], ["xcrun", ["swift-demangle", "--simplified"]]],
   cxx: [["c++filt", []], ["llvm-cxxfilt", []], ["xcrun", ["c++filt"]]],
 };

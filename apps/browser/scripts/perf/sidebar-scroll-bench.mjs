@@ -8,6 +8,7 @@ import { INJECTION_ENTITLEMENTS, prepareApp } from "../../../../scripts/lib/app-
 import { attach, launch, session, sleep } from "../../../../scripts/lib/instance.mjs";
 import { framesLibrary } from "./frames-phase.mjs";
 import { windowGaps } from "./windowGaps.mjs";
+import { medianOrNull as median } from "./median.mjs";
 
 const HELP = `Sidebar scroll cost with real gestures: what one trackpad flick or wheel spin over the sidebar's tab list costs the
 app, at several tab counts, read while the screen may be locked.
@@ -78,12 +79,6 @@ const flag = (name, fallback) => {
 };
 const has = (name) => argv.includes(`--${name}`);
 
-const median = (xs) => {
-  const s = xs.filter((x) => typeof x === "number" && Number.isFinite(x)).sort((a, b) => a - b);
-  if (!s.length) return null;
-  const m = s.length >> 1;
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-};
 const round = (x, d = 1) => (x === null || x === undefined ? null : Math.round(x * 10 ** d) / 10 ** d);
 
 if (argv[0] === "compare") {

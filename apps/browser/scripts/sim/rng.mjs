@@ -11,17 +11,6 @@ export function seededRandom(seed) {
 
 export const randomInt = (random, below) => Math.floor(random() * below);
 
-export function weightedPick(random, weights) {
-  const entries = Object.entries(weights);
-  const total = entries.reduce((sum, [, w]) => sum + w, 0);
-  let at = random() * total;
-  for (const [key, w] of entries) {
-    at -= w;
-    if (at < 0) return key;
-  }
-  return entries.at(-1)[0];
-}
-
 export async function shrinkSequence(steps, stillFails, { budget = 600 } = {}) {
   let tries = 0;
   const attempt = async (candidate) => {

@@ -8,7 +8,7 @@ import { crossesLane } from "./lanes";
 import { choose } from "../settings/settings";
 import { activated, apply, removeTabs, withNewTab } from "../tabs/tabs";
 import type { AdoptId, BrowserWindow, SplitSlot, SplitView, Tab } from "../browser/types";
-import { paneNeighbor, reorderedSplit, swappedSplit, type SplitDirection } from "./reorder";
+import { paneNeighbor, reshapeTwoPane, swappedSplit, type SplitDirection } from "./reorder";
 
 export type SplitsSlice = {
   splits: Record<string, SplitView>;
@@ -24,7 +24,6 @@ export type SplitsSlice = {
   movePane(tabId: string, delta: 1 | -1): void;
   movePaneDirection(tabId: string, direction: SplitDirection): boolean;
   swapPanes(a: string, b: string): boolean;
-  setSplitPaneOrder(splitId: string, tabIds: string[]): void;
   focusPane(windowId: string, delta: 1 | -1): void;
   toggleTabLayout(windowId: string): void;
 };
@@ -71,12 +70,7 @@ export const mapSlotIds = (slots: SplitSlot[], f: (id: string) => string): Split
   slots.map((slot) => ("stack" in slot ? { ...slot, stack: [f(slot.stack[0]), f(slot.stack[1])] } : { ...slot, tabId: f(slot.tabId) }));
 
 export function stackAt(split: Pick<SplitView, "slots">): number {
-  let at = 0;
-  for (const slot of split.slots) {
-    if ("stack" in slot) return at;
-    at += 1;
-  }
-  return -1;
+  return split.slots.findIndex((slot) => "stack" in slot);
 }
 
 export function withPaneIds(split: SplitView, ids: string[]): SplitView {
@@ -264,6 +258,14 @@ export const createSplitsSlice: StateCreator<BrowserState, [], [], SplitsSlice> 
     if (existing && splitTabIds(existing).length >= MAX_SPLIT_PANES && !replaced && !sameSplit) return { ok: false, reason: "max" };
 
     let tabId = o.tabId;
+    const side = o.side ?? "right";
+    if (sameSplit && existing && tabId && splitTabIds(existing).length === 2) {
+      const { split, changed } = reshapeTwoPane(existing, anchor.id, tabId, side);
+      if (changed) s = gather({ ...s, splits: { ...s.splits, [split.id]: split } }, anchor.id, splitTabIds(split), []);
+      if (!o.background) s = apply(s, activated(s, tabId));
+      set(s);
+      return { ok: true, tabId, splitId: split.id };
+    }
     if (tabId) {
       const t = s.tabs[tabId];
       if (!t || tabId === anchor.id || t.windowId !== windowId || t.profileId !== anchor.profileId) return { ok: false, reason: "invalid" };
@@ -281,7 +283,7 @@ export const createSplitsSlice: StateCreator<BrowserState, [], [], SplitsSlice> 
       set(s);
       return { ok: true, tabId, splitId: split.id };
     }
-    const split = withPane(current, anchor.id, tabId, o.side ?? "right", windowId);
+    const split = withPane(current, anchor.id, tabId, side, windowId);
     if (!split) return { ok: false, reason: "max" };
     s = gather({ ...s, splits: { ...s.splits, [split.id]: split } }, anchor.id, splitTabIds(split), joining);
     if (!o.background) s = apply(s, activated(s, tabId));
@@ -379,12 +381,6 @@ export const createSplitsSlice: StateCreator<BrowserState, [], [], SplitsSlice> 
     const split = splitOf(get(), tabId);
     const target = split && paneNeighbor(split, tabId, direction);
     return target ? get().swapPanes(tabId, target) : false;
-  },
-  setSplitPaneOrder(splitId, tabIds) {
-    set((s) => {
-      const next = s.splits[splitId] && reorderedSplit(s.splits[splitId]!, tabIds);
-      return next ? { splits: { ...s.splits, [splitId]: next } } : {};
-    });
   },
   focusPane(windowId, delta) {
     const s = get(), w = s.windows[windowId], active = w?.activeTabIds[w.profileId], split = splitOf(s, active);

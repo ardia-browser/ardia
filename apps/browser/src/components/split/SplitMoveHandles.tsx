@@ -1,5 +1,6 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import { Animated, PanResponder, StyleSheet, View } from "react-native";
+import type { ToolbarRow } from "../../lib/toolbarRow";
 import type { SplitView } from "../../state/browser/types";
 import type { PageBarMatch } from "../../state/plugins/pageBar";
 import { useTab } from "../../state/browser/hooks";
@@ -9,23 +10,28 @@ import { reorderTick } from "../../state/drag/reorderTick";
 import { useShareFor } from "../../state/media/screenShare";
 import { useDeveloperMode } from "../../state/site/developerMode";
 import { swapSplitPanes } from "../../state/splits/actions";
-import { usePaneToolbarCollapsed, usePaneTopLeftObscured } from "../../state/splits/hooks";
+import { usePaneTopLeftObscured } from "../../state/splits/hooks";
+import {
+  beginSplitMoveDrag,
+  cancelSplitMoveDrag,
+  finishSplitMoveDrag,
+  registerSplitMoveCommit,
+  updateSplitMoveDrag,
+  useSplitMoveDrag,
+} from "../../state/splits/moveDrag";
 import { activate } from "../../state/tabs/actions";
-import { consentToken, type ConsentToken } from "../../state/telemetry/client";
 import { SHARE_BAR_HEIGHT } from "../media/ShareBar";
 import { PAGE_BAR_HEIGHT } from "../plugins/PluginPageBar";
 import { DEVELOPER_BAR } from "../toolbar/tokens";
-import { PageCoverGate, Panel, useHover, usePresence, useTheme, useTooltip, withAlpha } from "../ui";
+import { capsule, PageCoverGate, Panel, useHover, usePresence, useTheme, useTooltip, withAlpha } from "../ui";
 import type { Rect } from "../window/geometry";
 import { developerBarShown, type CardChrome } from "../window/paneChrome";
 import { SHADOWS } from "../window/tokens";
 import { SplitMoveIcon } from "./SplitMoveIcon";
-import { handleOrigin, moveHandleTooltip, paneTopChrome, resolveMoveTarget, type Point } from "./splitMove";
+import { edgeHandleCenter, edgeHandleOrigin, moveHandleTooltip, paneTopChrome, resolveMoveTarget, toolbarHandleCenter } from "./splitMove";
 import { MOVE_HANDLE, MOVE_TARGET_ALPHA, moveHandleRadius, moveTargetDashRadius, moveTargetRadius, SPLIT_MOTION, splitColors } from "./tokens";
 
-type DragState = { tabId: string; x: number; y: number; targetId: string | null; moved: boolean };
-
-const MOVE_HINTS = ["movePaneLeft", "movePaneRight"] as const;
+const MOVE_HINTS = ["movePaneLeft", "movePaneRight", "movePaneUp", "movePaneDown"] as const;
 
 export const SplitMoveHandles = memo(function SplitMoveHandles({
   windowId,
@@ -34,7 +40,9 @@ export const SplitMoveHandles = memo(function SplitMoveHandles({
   activeId,
   chrome,
   small,
-  toolbarHeight,
+  toolbarRow,
+  cardWidth,
+  captionRoom,
   pageBars,
   cardRadius,
 }: {
@@ -44,54 +52,89 @@ export const SplitMoveHandles = memo(function SplitMoveHandles({
   activeId: string | undefined;
   chrome: CardChrome;
   small: boolean;
-  toolbarHeight: number;
+  toolbarRow: ToolbarRow;
+  cardWidth: number;
+  captionRoom: number;
   pageBars: Readonly<Record<string, PageBarMatch | null | undefined>>;
   cardRadius: number;
 }) {
   const theme = useTheme();
   const hints = useShortcutHints(MOVE_HINTS);
-  const tooltip = useTooltip(moveHandleTooltip(hints.movePaneLeft, hints.movePaneRight));
-  const [drag, setDrag] = useState<DragState | null>(null);
-  const cancelled = useRef(false);
+  const tooltip = useTooltip(moveHandleTooltip(split, hints));
+  const drag = useSplitMoveDrag(windowId);
   const lastTarget = useRef<string | null>(null);
   const dragging = !!drag?.moved;
   const dragTabId = drag?.tabId ?? null;
+
+  const sourceRect = drag ? panes[drag.tabId] : undefined;
+  const start = useMemo(() => {
+    if (!drag || !sourceRect) return null;
+    if (drag.source === "edge" && drag.edgeStart) return drag.edgeStart;
+    const trailing = sourceRect.y === 0 && sourceRect.x + sourceRect.width === cardWidth ? captionRoom : 0;
+    return toolbarHandleCenter(sourceRect, toolbarRow, trailing);
+  }, [drag?.tabId, drag?.source, drag?.edgeStart?.x, drag?.edgeStart?.y, sourceRect, toolbarRow, cardWidth, captionRoom]);
+
+  const targetId = drag?.moved && start ? resolveMoveTarget(split, panes, drag.tabId, start, drag.dx, drag.dy) : null;
+
+  useEffect(() => {
+    if (targetId && targetId !== lastTarget.current) reorderTick();
+    lastTarget.current = targetId;
+  }, [targetId]);
+
+  const latest = useRef({ split, panes, activeId, toolbarRow, cardWidth, captionRoom });
+  latest.current = { split, panes, activeId, toolbarRow, cardWidth, captionRoom };
+
+  useEffect(() => {
+    registerSplitMoveCommit(windowId, (ended, dx, dy) => {
+      const cur = latest.current;
+      const rect = cur.panes[ended.tabId];
+      if (ended.moved && rect) {
+        const trailing = rect.y === 0 && rect.x + rect.width === cur.cardWidth ? cur.captionRoom : 0;
+        const origin =
+          ended.source === "edge" && ended.edgeStart
+            ? ended.edgeStart
+            : toolbarHandleCenter(rect, cur.toolbarRow, trailing);
+        const target = resolveMoveTarget(cur.split, cur.panes, ended.tabId, origin, dx, dy);
+        if (target) swapSplitPanes(ended.tabId, target, ended.consent);
+      }
+      if (ended.tabId !== cur.activeId) activate(ended.tabId);
+    });
+    return () => registerSplitMoveCommit(windowId, null);
+  }, [windowId]);
 
   useEffect(() => {
     if (!dragging) return;
     captureEscape("splitMove", true);
     const subscription = onAppEvent((event) => {
       if (event.type !== "dragEscape") return;
-      cancelled.current = true;
       lastTarget.current = null;
-      setDrag(null);
+      cancelSplitMoveDrag(true, windowId);
     });
     return () => {
       captureEscape("splitMove", false);
       subscription.remove();
     };
-  }, [dragging]);
+  }, [dragging, windowId]);
 
   useEffect(() => {
     if (dragTabId && !panes[dragTabId]) {
-      cancelled.current = true;
       lastTarget.current = null;
-      setDrag(null);
+      cancelSplitMoveDrag(false, windowId, dragTabId);
     }
-  }, [dragTabId, panes]);
+  }, [dragTabId, panes, windowId]);
 
   const colors = splitColors(theme.dark);
-  const sourceRect = drag?.moved ? panes[drag.tabId] : undefined;
-  const targetRect = drag?.moved && drag.targetId ? panes[drag.targetId] : undefined;
+  const targetRect = drag?.moved && targetId ? panes[targetId] : undefined;
   const targetCorner = moveTargetRadius(cardRadius);
   const dashCorner = moveTargetDashRadius(cardRadius);
   const handleCorner = moveHandleRadius();
-  const entries = Object.entries(panes);
+  const showEdgeHandles = chrome.kind === "none";
+  const entries = showEdgeHandles ? Object.entries(panes) : [];
 
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
       {dragging && <View pointerEvents="auto" style={[StyleSheet.absoluteFill, GRABBING]} />}
-      {sourceRect && (
+      {drag?.moved && sourceRect && (
         <View
           pointerEvents="none"
           style={{
@@ -135,56 +178,47 @@ export const SplitMoveHandles = memo(function SplitMoveHandles({
         </View>
       )}
       {entries.map(([tabId, rect]) => (
-        <PaneMoveHandle
+        <PaneEdgeMoveHandle
           key={tabId}
           windowId={windowId}
           tabId={tabId}
           rect={rect}
-          focused={tabId === activeId}
-          split={split}
-          panes={panes}
           chrome={chrome}
           small={small}
-          toolbarHeight={toolbarHeight}
-          hasPageBar={chrome.kind === "none" && !!pageBars[tabId]}
+          toolbarHeight={toolbarRow.height}
+          hasPageBar={!!pageBars[tabId]}
           tooltip={tooltip}
           draggingAny={dragging}
           draggingThis={dragTabId === tabId}
-          cancelled={cancelled}
-          lastTarget={lastTarget}
-          onDrag={setDrag}
         />
       ))}
-      {drag?.moved && (
+      {drag?.moved && start && (
         <Panel
           pointerEvents="none"
           fill={colors.moveHandleHoverFill}
-          border={drag.targetId ? theme.accent : colors.moveHandleHoverBorder}
+          border={targetId ? theme.accent : colors.moveHandleHoverBorder}
           radius={handleCorner}
           shadow={SHADOWS.status}
           style={[
             HANDLE_FACE,
             {
               position: "absolute",
-              left: drag.x - MOVE_HANDLE.box / 2,
-              top: drag.y - MOVE_HANDLE.box / 2,
+              left: start.x + drag.dx - MOVE_HANDLE.box / 2,
+              top: start.y + drag.dy - MOVE_HANDLE.box / 2,
             },
           ]}
         >
-          <SplitMoveIcon size={MOVE_HANDLE.glyph} color={drag.targetId ? theme.accent : colors.moveHandleHoverIcon} />
+          <SplitMoveIcon size={MOVE_HANDLE.glyph} color={targetId ? theme.accent : colors.moveHandleHoverIcon} />
         </Panel>
       )}
     </View>
   );
 });
 
-const PaneMoveHandle = memo(function PaneMoveHandle({
+const PaneEdgeMoveHandle = memo(function PaneEdgeMoveHandle({
   windowId,
   tabId,
   rect,
-  focused,
-  split,
-  panes,
   chrome,
   small,
   toolbarHeight,
@@ -192,16 +226,10 @@ const PaneMoveHandle = memo(function PaneMoveHandle({
   tooltip,
   draggingAny,
   draggingThis,
-  cancelled,
-  lastTarget,
-  onDrag,
 }: {
   windowId: string;
   tabId: string;
   rect: Rect;
-  focused: boolean;
-  split: SplitView;
-  panes: Readonly<Record<string, Rect>>;
   chrome: CardChrome;
   small: boolean;
   toolbarHeight: number;
@@ -209,30 +237,24 @@ const PaneMoveHandle = memo(function PaneMoveHandle({
   tooltip: string | undefined;
   draggingAny: boolean;
   draggingThis: boolean;
-  cancelled: { current: boolean };
-  lastTarget: { current: string | null };
-  onDrag: (next: DragState | null) => void;
 }) {
   const theme = useTheme();
   const { hovered, hoverProps, clearHover } = useHover();
   const url = useTab(tabId, (t) => t?.url ?? "");
-  const collapsed = usePaneToolbarCollapsed(windowId, tabId, chrome.kind === "pane" && chrome.autoHide && !!url);
   const sharing = !!useShareFor(tabId);
   const developerBar = developerBarShown(chrome, { developerMode: useDeveloperMode(url), small, fullscreen: false });
   const obscured = usePaneTopLeftObscured(tabId);
   const topChrome = paneTopChrome({
     chrome,
     toolbarHeight,
-    collapsed,
+    collapsed: false,
     topBarHeight: developerBar ? DEVELOPER_BAR.height : hasPageBar ? PAGE_BAR_HEIGHT : 0,
     shareBarHeight: sharing ? SHARE_BAR_HEIGHT : 0,
   });
-  const origin = handleOrigin(rect, topChrome);
-  const start = useRef<Point>({ x: 0, y: 0 });
-  const moved = useRef(false);
-  const dragConsent = useRef<ConsentToken | null>(null);
-  const latest = useRef({ tabId, focused, split, panes, origin, onDrag, clearHover });
-  latest.current = { tabId, focused, split, panes, origin, onDrag, clearHover };
+  const origin = edgeHandleOrigin(rect, topChrome);
+  const center = edgeHandleCenter(rect, topChrome);
+  const latest = useRef({ windowId, tabId, center, clearHover });
+  latest.current = { windowId, tabId, center, clearHover };
 
   useEffect(() => {
     clearHover();
@@ -251,56 +273,30 @@ const PaneMoveHandle = memo(function PaneMoveHandle({
         onPanResponderTerminationRequest: () => false,
         onPanResponderGrant: () => {
           const cur = latest.current;
-          cancelled.current = false;
-          moved.current = false;
-          lastTarget.current = null;
-          dragConsent.current = consentToken();
-          start.current = { x: cur.origin.x + MOVE_HANDLE.box / 2, y: cur.origin.y + MOVE_HANDLE.box / 2 };
-          cur.onDrag({ tabId: cur.tabId, x: start.current.x, y: start.current.y, targetId: null, moved: false });
+          beginSplitMoveDrag(cur.windowId, cur.tabId, "edge", cur.center);
         },
-        onPanResponderMove: (_, g) => {
-          if (cancelled.current) return;
-          const cur = latest.current;
-          if (!moved.current && Math.hypot(g.dx, g.dy) >= MOVE_HANDLE.dragSlop) moved.current = true;
-          const targetId = moved.current ? resolveMoveTarget(cur.split, cur.panes, cur.tabId, start.current, g.dx, g.dy) : null;
-          if (targetId && targetId !== lastTarget.current) reorderTick();
-          lastTarget.current = targetId;
-          cur.onDrag({ tabId: cur.tabId, x: start.current.x + g.dx, y: start.current.y + g.dy, targetId, moved: moved.current });
-        },
+        onPanResponderMove: (_, g) => updateSplitMoveDrag(latest.current.windowId, latest.current.tabId, g.dx, g.dy, MOVE_HANDLE.dragSlop),
         onPanResponderRelease: (_, g) => {
           const cur = latest.current;
-          if (!cancelled.current) {
-            if (moved.current) {
-              const targetId = resolveMoveTarget(cur.split, cur.panes, cur.tabId, start.current, g.dx, g.dy);
-              if (targetId) {
-                cur.clearHover();
-                swapSplitPanes(cur.tabId, targetId, dragConsent.current);
-              }
-            }
-            if (!cur.focused) activate(cur.tabId);
-          }
-          moved.current = false;
-          lastTarget.current = null;
-          dragConsent.current = null;
-          cur.onDrag(null);
+          cur.clearHover();
+          finishSplitMoveDrag(cur.windowId, cur.tabId, g.dx, g.dy);
         },
         onPanResponderTerminate: () => {
-          moved.current = false;
-          lastTarget.current = null;
-          dragConsent.current = null;
-          latest.current.clearHover();
-          latest.current.onDrag(null);
+          const cur = latest.current;
+          cur.clearHover();
+          cancelSplitMoveDrag(false, cur.windowId, cur.tabId);
         },
       }),
     [],
   );
 
-  const visible = (hovered || draggingThis) && !obscured && !draggingAny;
-  const { shown, appear } = usePresence(visible ? true : null, SPLIT_MOTION.handlePresence, true);
-
+  const expanded = (hovered || draggingThis) && !obscured && !draggingAny;
+  const { shown, appear } = usePresence(expanded ? true : null, SPLIT_MOTION.handlePresence, true);
   const colors = splitColors(theme.dark);
   const corner = moveHandleRadius();
   const coverKey = `${Math.round(origin.x)}:${Math.round(origin.y)}`;
+  const hitHeight = expanded ? MOVE_HANDLE.edgeNotchTop + MOVE_HANDLE.box : MOVE_HANDLE.edgeHitHeight;
+
   return (
     <View
       testID={`ardia.splitMoveHandle.${tabId}`}
@@ -315,14 +311,27 @@ const PaneMoveHandle = memo(function PaneMoveHandle({
         position: "absolute",
         left: origin.x,
         top: origin.y,
-        width: MOVE_HANDLE.box,
-        height: MOVE_HANDLE.box,
+        width: MOVE_HANDLE.edgeHitWidth,
+        height: hitHeight,
+        alignItems: "center",
         cursor: draggingThis ? "grabbing" : "grab",
       }}
     >
+      {!obscured && !draggingAny && !shown && (
+        <View
+          pointerEvents="none"
+          style={{
+            marginTop: MOVE_HANDLE.edgeNotchTop,
+            width: MOVE_HANDLE.edgeNotchWidth,
+            height: MOVE_HANDLE.edgeNotchHeight,
+            borderRadius: capsule(MOVE_HANDLE.edgeNotchHeight),
+            backgroundColor: colors.moveNotch,
+          }}
+        />
+      )}
       {shown ? (
-        <PageCoverGate covering={visible}>
-          <Animated.View pointerEvents="none" style={{ opacity: appear }}>
+        <PageCoverGate covering={expanded}>
+          <Animated.View pointerEvents="none" style={{ marginTop: MOVE_HANDLE.edgeNotchTop, opacity: appear }}>
             <Panel
               key={coverKey}
               glass

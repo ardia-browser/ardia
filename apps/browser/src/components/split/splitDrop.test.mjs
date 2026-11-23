@@ -3,7 +3,6 @@ import { test } from "node:test";
 
 globalThis.__DEV__ = false;
 const { DROP_SIDES, PREVIEW, zoneHit, zoneRect } = await import("./splitDrop.ts");
-const { clampHandleOffset, handlePosition, paneAtPoint } = await import("./paneDrag.ts");
 const { splitGeometry } = await import("../window/geometry.ts");
 const { useBrowser } = await import("../../state/browser/store.ts");
 
@@ -17,6 +16,7 @@ test("all four split drop zones stay inside the pane and never overlap at rest, 
     { x: 0, y: 0, width: 600, height: 800 },
     { x: 0, y: 400, width: 1200, height: 390 },
     { x: 100, y: 50, width: 480, height: 360 },
+    { x: 0, y: 0, width: 220, height: 300 },
   ]) {
     for (const stage of ["rest", "grown"]) {
       const rects = DROP_SIDES.map((side) => [side, zoneRect(pane, side, stage)]);
@@ -53,7 +53,7 @@ test("top and bottom active zones lean vertically toward the pointer while stayi
   assert.ok(bottomLow.y + bottomLow.height <= pane.y + pane.height);
 });
 
-test("zoneHit detects left, right, top and bottom edges and switches immediately when the pointer enters another zone", () => {
+test("zoneHit detects all four edges, switches immediately on entry, and prefers the pane containing the pointer", () => {
   const pane = { x: 0, y: 0, width: 1000, height: 800 };
   const panes = [["t1", pane]];
   assert.deepEqual(zoneHit(panes, 120, 400, null), { tabId: "t1", side: "left" });
@@ -64,20 +64,13 @@ test("zoneHit detects left, right, top and bottom edges and switches immediately
   assert.deepEqual(zoneHit(panes, 500, 80, { tabId: "t1", side: "left" }), { tabId: "t1", side: "top" });
   const grownTop = zoneRect(pane, "top", "grown");
   assert.deepEqual(zoneHit(panes, 500, grownTop.y + grownTop.height + PREVIEW.height / 2 - 5, { tabId: "t1", side: "top" }), { tabId: "t1", side: "top" });
-});
 
-test("pane drag helpers place the move handle at the pane top-left, find target panes in 2D and clamp to card bounds", () => {
-  const panes = {
-    a: { x: 0, y: 0, width: 500, height: 395 },
-    b: { x: 0, y: 404, width: 500, height: 396 },
-    c: { x: 509, y: 0, width: 491, height: 800 },
-  };
-  assert.deepEqual(handlePosition(panes.b, 38, 8), { left: 8, top: 450 });
-  assert.equal(paneAtPoint(panes, 100, 100, "a"), null);
-  assert.equal(paneAtPoint(panes, 100, 500, "a"), "b");
-  assert.equal(paneAtPoint(panes, 700, 200, "a"), "c");
-  assert.equal(paneAtPoint(panes, 504, 200, "a"), null);
-  assert.deepEqual(clampHandleOffset(-20, 900, { width: 1000, height: 800 }, 22), { left: 0, top: 778 });
+  const twoPanes = [
+    ["left", { x: 0, y: 0, width: 500, height: 800 }],
+    ["right", { x: 509, y: 0, width: 500, height: 800 }],
+  ];
+  assert.deepEqual(zoneHit(twoPanes, 495, 400, null), { tabId: "left", side: "right" });
+  assert.deepEqual(zoneHit(twoPanes, 520, 400, null), { tabId: "right", side: "left" });
 });
 
 function freshWindow() {
@@ -157,12 +150,26 @@ test("all 8 two- and three-pane split combinations are reachable from drop sides
   }
 });
 
-test("rearranging a tab already inside a 3-pane split reshapes the layout instead of hitting max", () => {
+test("rearranging a tab already inside a 2-pane or 3-pane split preserves split identity and custom sizes on no-op", () => {
   const { S, w, a, b, c } = freshWindow();
-  S().openSplitPane(w, { anchorTabId: a, tabId: b, side: "right" });
-  S().openSplitPane(w, { anchorTabId: b, tabId: c, side: "right" });
-  const reshaped = S().openSplitPane(w, { anchorTabId: b, tabId: c, side: "bottom" });
+  const initial = S().openSplitPane(w, { anchorTabId: a, tabId: b, side: "right" });
+  assert.equal(initial.ok, true);
+  S().updateSplit(initial.splitId, { sizes: [0.35, 0.65] });
+
+  const noop = S().openSplitPane(w, { anchorTabId: b, tabId: a, side: "left" });
+  assert.equal(noop.ok, true);
+  assert.equal(noop.splitId, initial.splitId);
+  assert.deepEqual(S().splits[initial.splitId].slots.map((slot) => slot.size), [0.35, 0.65]);
+
+  const rotated = S().openSplitPane(w, { anchorTabId: a, tabId: b, side: "bottom" });
+  assert.equal(rotated.ok, true);
+  assert.equal(rotated.splitId, initial.splitId);
+  assert.equal(S().splits[initial.splitId].orientation, "vertical");
+
+  S().openSplitPane(w, { anchorTabId: b, tabId: c, side: "bottom" });
+  const reshaped = S().openSplitPane(w, { anchorTabId: b, tabId: c, side: "right" });
   assert.equal(reshaped.ok, true);
+  assert.equal(reshaped.splitId, initial.splitId);
   const { panes } = splitGeometry(S().splits[reshaped.splitId], 1200, 800, 9);
-  assert.ok(panes[a].height === 800 && panes[b].x === panes[c].x && panes[b].y < panes[c].y);
+  assert.ok(panes[a].width === 1200 && panes[b].y === panes[c].y && panes[b].x < panes[c].x);
 });

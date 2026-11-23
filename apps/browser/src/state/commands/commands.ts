@@ -7,19 +7,7 @@ import { cleanLinkTitle, cleanUrl, cleanUrlReport, markdownLink, type CleanedTit
 import { useBrowser } from "../browser/store";
 import { requestCreateProfile } from "../profiles/createProfileRequest";
 import { activeTabId, bookmarkProfileId, isPinnedRow, resolveWindowId, tabLayoutOf } from "../browser/model";
-import {
-  closeGroup,
-  closeTab,
-  cycleProfile,
-  focus,
-  moveTabToProfile,
-  moveTabToWindow,
-  openProfileMenu,
-  openWindow,
-  switchProfile,
-  toggleMute,
-  toggleSiteMute,
-} from "../browser/actions";
+import { closeGroup, closeTab, cycleProfile, focus, moveTabToProfile, moveTabToWindow, openProfileMenu, openWindow, switchProfile, toggleMute, toggleSiteMute } from "../browser/actions";
 import { bookmarkAllTabs, bookmarkTab } from "../bookmarks/actions";
 import { isBookmarklet, runBookmarklet } from "../bookmarks/bookmarklets";
 import { exportBookmarksFromWindow, toggleDownloadsPanel } from "./platformCommands";
@@ -71,6 +59,7 @@ import { noteSelectionClosedByKey } from "../telemetry/usage";
 import type { ByUser } from "../tabs/closeActivation";
 
 const newOrId = (arg: string) => (arg === "new" ? null : arg);
+const MOVE_PANE_DIRECTION = { movePaneLeft: "left", movePaneRight: "right", movePaneUp: "up", movePaneDown: "down" } as const;
 
 const LITTLE_ARDIA_BLOCKED_LAYOUT: ReadonlySet<string> = new Set([
   "setTabLayout",
@@ -264,13 +253,10 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
     case "focusPreviousPane":
       return focusSplitPane(windowId, command === "focusNextPane" ? 1 : -1);
     case "movePaneLeft":
-      return void moveSplitPane(windowId, "left", consentToken());
     case "movePaneRight":
-      return void moveSplitPane(windowId, "right", consentToken());
     case "movePaneUp":
-      return void moveSplitPane(windowId, "up", consentToken());
     case "movePaneDown":
-      return void moveSplitPane(windowId, "down", consentToken());
+      return void moveSplitPane(windowId, MOVE_PANE_DIRECTION[command], consentToken());
     case "toggleSidebar":
       return s.toggleSidebar(windowId);
     case "zoomIn":

@@ -4,7 +4,8 @@ const { useBrowser } = await import("../browser/store.ts");
 const { activeTabId } = await import("../browser/model.ts");
 const { splitOf, splitTabIds } = await import("./splits.ts");
 const { paneNeighbor } = await import("./reorder.ts");
-const { dropTabIntoSplit, openHorizontalSplitPane, swapSplitPanes, cancelSplitPaneDrag } = await import("./actions.ts");
+const { dropTabIntoSplit, openHorizontalSplitPane, swapSplitPanes } = await import("./actions.ts");
+const { beginSplitMoveDrag, cancelSplitMoveDrag, updateSplitMoveDrag } = await import("./moveDrag.ts");
 const { runCommand } = await import("../commands/commands.ts");
 const { menuState } = await import("../commands/menuState.ts");
 const { webviews } = await import("../../platform/webviews.ts");
@@ -79,11 +80,18 @@ test("horizontal split creation via drag drop and command creates top/bottom spl
     assert.equal(counts.split_vertical_drops, 0);
 
     const second = windowWith("x");
-    runCommand({ command: "openHorizontalSplitPane", arg: null, windowId: second.w });
-    const created = splitOf(S(), activeTabId(S(), second.w));
+    const topId = openHorizontalSplitPane(second.w, { side: "top", url: "https://top.example/" });
+    assert.ok(topId);
+    const topSplit = splitOf(S(), topId);
+    assert.equal(topSplit.orientation, "vertical");
+    assert.equal(splitTabIds(topSplit)[0], topId);
+
+    const third = windowWith("y");
+    runCommand({ command: "openHorizontalSplitPane", arg: null, windowId: third.w });
+    const created = splitOf(S(), activeTabId(S(), third.w));
     assert.equal(created.orientation, "vertical");
     assert.equal(splitTabIds(created).length, 2);
-    assert.equal(takeSplitReorderCounts().split_horizontal_opens, 1);
+    assert.equal(takeSplitReorderCounts().split_horizontal_opens, 2);
   });
 });
 
@@ -136,8 +144,10 @@ test("swapping and cancelling split pane drags preserve slot sizes and record te
     assert.deepEqual(splitTabIds(S().splits[splitId]), [b, a]);
     assert.deepEqual(S().splits[splitId].slots.map((slot) => slot.size), [0.3, 0.7]);
 
-    cancelSplitPaneDrag(splitId, [a, b]);
-    assert.deepEqual(splitTabIds(S().splits[splitId]), [a, b]);
+    beginSplitMoveDrag(w, a, "toolbar");
+    updateSplitMoveDrag(w, a, 20, 0, 4);
+    cancelSplitMoveDrag(true, w);
+    assert.deepEqual(splitTabIds(S().splits[splitId]), [b, a]);
 
     const counts = takeSplitReorderCounts();
     assert.equal(counts.split_pane_drag_swaps, 1);

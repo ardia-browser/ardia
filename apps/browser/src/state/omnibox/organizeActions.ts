@@ -52,9 +52,9 @@ const DEFS = organizeDefs([
   },
   {
     id: "split:add",
-    title: ({ split }) => (sideBySide(split) ? "Add Vertical Split View" : "Add Horizontal Split View"),
+    title: ({ split }) => (sideBySide(split) ? "Add Right Split" : "Add Bottom Split"),
     icon: "rectangle.split.3x1",
-    keywords: ["split view", "add pane", "new pane"],
+    keywords: ["split view", "add pane", "new pane", "right split", "bottom split", "vertical split", "horizontal split"],
     shows: (c) => !!c.split && hasRoom(c.split),
   },
   {
@@ -73,9 +73,9 @@ const DEFS = organizeDefs([
   },
   {
     id: "split:convert",
-    title: ({ split }) => (sideBySide(split) ? "Convert to Horizontal Split View" : "Convert to Vertical Split View"),
+    title: ({ split }) => (sideBySide(split) ? "Switch to Stacked Split" : "Switch to Side-by-Side Split"),
     icon: "rectangle.split.1x2",
-    keywords: ["split view", "rotate split", "stacked", "side by side"],
+    keywords: ["split view", "rotate split", "stacked", "side by side", "horizontal split", "vertical split"],
     shows: (c) => !!c.split,
   },
   {

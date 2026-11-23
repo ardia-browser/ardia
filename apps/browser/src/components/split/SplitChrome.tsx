@@ -295,7 +295,8 @@ function DropZone({ pane, side, shown, stage, pointerX, pointerY, onHidden }: { 
   const colors = splitColors(dark);
   const rest = colors.zoneRest;
   const copy = ZONE_COPY[side];
-  const text = rect.width < 130 ? copy.shortLabel : copy.label;
+  const showLabel = vertical ? rect.width >= 116 && rect.height >= 40 : rect.width >= 84 && rect.height >= 72;
+  const text = rect.width < 148 ? copy.shortLabel : copy.label;
   return (
     <Animated.View
       style={{
@@ -330,7 +331,9 @@ function DropZone({ pane, side, shown, stage, pointerX, pointerY, onHidden }: { 
         }}
       />
       <Symbol name={copy.symbol} size={18} color={active ? theme.accent : rest} style={{ width: 24, height: 20 }} />
-      <Text weight="semibold" numberOfLines={1} color={active ? theme.accent : rest} style={vertical ? { marginLeft: space.m, flexShrink: 1 } : { marginTop: space.l }}>{text}</Text>
+      {showLabel ? (
+        <Text weight="semibold" numberOfLines={1} color={active ? theme.accent : rest} style={vertical ? { marginLeft: space.m, flexShrink: 1 } : { marginTop: space.l }}>{text}</Text>
+      ) : null}
     </Animated.View>
   );
 }

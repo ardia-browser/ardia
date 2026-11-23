@@ -17,6 +17,9 @@ const watchSplits = keyedWatch<BrowserState>(() => useBrowser, (s, prev) => (s.s
 export const useSplitOrientation = (tabId: string | undefined) =>
   useKeyed(watchSplits, tabId, () => splitOf(useBrowser.getState(), tabId)?.orientation ?? null);
 
+export const useSplitForTab = (tabId: string | undefined) =>
+  useKeyed(watchSplits, tabId, () => splitOf(useBrowser.getState(), tabId) ?? null);
+
 export const usePaneToolbarCollapsed = (windowId: string, tabId: string, autoHide: boolean) => {
   const down = useToolbarAutoHide((s) => autoHide && !!s.scrolledDown[tabId] && !s.peek[tabId]);
   const held = useToolbarHeld(windowId, tabId, down);

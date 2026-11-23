@@ -72,7 +72,7 @@ export const COMMANDS = {
   toggleCompactToolbar: { title: "Compact Toolbar", symbol: "rectangle.compress.vertical", toggles: "compactToolbar", ...offInLittleArdia },
   togglePinnedFold: { title: "Collapse Pinned Tabs", symbol: "rectangle.compress.vertical", ...windowOffInLittleArdia },
   openSplitPane: { title: "Open Split Pane", keys: ["⌃⇧=", "⌃+"], ...windowOffInLittleArdia },
-  openHorizontalSplitPane: { title: "Open Horizontal Split Pane", keys: ["⌃⇧-", "⌃_"], ...windowOffInLittleArdia },
+  openHorizontalSplitPane: { title: "Open Split Pane Below", keys: ["⌃⇧-", "⌃_"], ...windowOffInLittleArdia },
   useSelectionForFind: { title: "Use Selection for Find", keys: ["⌘E"], ...pageInLittleArdia },
   findAndReplace: { title: "Find and Replace…", keys: ["⌥⌘F"], ...pageInLittleArdia },
   jumpToSelection: { title: "Jump to Selection", keys: ["⌘J"], ...pageInLittleArdia },

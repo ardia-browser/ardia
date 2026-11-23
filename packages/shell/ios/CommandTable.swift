@@ -159,7 +159,7 @@ enum CommandTable {
     "toggleCompactToolbar": "Compact Toolbar",
     "togglePinnedFold": "Collapse Pinned Tabs",
     "openSplitPane": "Open Split Pane",
-    "openHorizontalSplitPane": "Open Horizontal Split Pane",
+    "openHorizontalSplitPane": "Open Split Pane Below",
     "useSelectionForFind": "Use Selection for Find",
     "findAndReplace": "Find and Replace…",
     "jumpToSelection": "Jump to Selection",

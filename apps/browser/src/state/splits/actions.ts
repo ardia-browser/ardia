@@ -11,7 +11,7 @@ import { splitLane, type SplitLane, splitsOnRow } from "./lanes";
 import type { AdoptId } from "../browser/types";
 import { noteSplit } from "../telemetry/usage";
 import { consentToken, type ConsentToken } from "../telemetry/client";
-import { noteHorizontalSplitOpen, noteSplitDrop, noteSplitPaneDragCancel, noteSplitPaneMove } from "../telemetry/splitReorderCounts";
+import { noteHorizontalSplitOpen, noteSplitDrop, noteSplitPaneMove } from "../telemetry/splitReorderCounts";
 import { reorderTick } from "../drag/reorderTick";
 import { returnFocusToPage } from "../sidebar/actions";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
@@ -38,8 +38,8 @@ export function focusSplitPane(windowId: string, delta: 1 | -1) {
   if (activeTabId(store(), windowId) !== before) returnFocusToPage(windowId);
 }
 
-export function openHorizontalSplitPane(windowId: string, options: Omit<OpenPaneOptions, "side"> = {}, consent?: ConsentToken | null): string | null {
-  const opened = openSplitPane(windowId, { ...options, side: "bottom" });
+export function openHorizontalSplitPane(windowId: string, options: Omit<OpenPaneOptions, "side"> & { side?: "top" | "bottom" } = {}, consent?: ConsentToken | null): string | null {
+  const opened = openSplitPane(windowId, { ...options, side: options.side ?? "bottom" });
   if (opened) noteHorizontalSplitOpen(consent);
   return opened;
 }
@@ -48,31 +48,18 @@ export function moveSplitPane(windowId: string, direction: SplitDirection, conse
   const active = activeTabId(store(), windowId);
   if (!active || !store().movePaneDirection(active, direction)) return false;
   reorderTick();
-  noteSplit("splitPaneKeyMoves", consent);
   noteSplitPaneMove("keyboard", consent);
   returnFocusToPage(windowId);
   return true;
-}
-
-export function moveActiveSplitPane(windowId: string, delta: 1 | -1, consent?: ConsentToken | null): boolean {
-  return moveSplitPane(windowId, delta < 0 ? "left" : "right", consent);
 }
 
 export function swapSplitPanes(a: string, b: string, viaOrConsent?: "drag" | "menu" | ConsentToken | null): boolean {
   if (!store().swapPanes(a, b)) return false;
   const via: "drag" | "menu" = viaOrConsent === "menu" ? "menu" : "drag";
   const consent: ConsentToken | null | undefined = viaOrConsent === "drag" || viaOrConsent === "menu" ? undefined : viaOrConsent;
-  if (via === "drag") {
-    reorderTick();
-    noteSplit("splitPaneDragMoves", consent);
-  }
+  if (via === "drag") reorderTick();
   noteSplitPaneMove(via, consent);
   return true;
-}
-
-export function cancelSplitPaneDrag(splitId: string, tabIds: string[]) {
-  store().setSplitPaneOrder(splitId, tabIds);
-  noteSplitPaneDragCancel();
 }
 
 function openAsTab(windowId: string, { url, adoptId, anchorTabId, background }: OpenPaneOptions): string | null {
@@ -166,7 +153,7 @@ function splitMenuItems(tabId: string): MenuItem[] {
   ];
   const moveItems = hasStack ? [...moveHorizontal, ...moveVertical] : horizontal ? moveHorizontal : moveVertical;
   return [
-    { id: "add", title: horizontal ? "Add Vertical Split View" : "Add Horizontal Split View", symbol: horizontal ? "rectangle.split.2x1" : "rectangle.split.1x2", enabled: !full, ...menuShortcut(horizontal ? "openSplitPane" : "openHorizontalSplitPane") },
+    { id: "add", title: horizontal ? "Add Right Split" : "Add Bottom Split", symbol: horizontal ? "rectangle.split.2x1" : "rectangle.split.1x2", enabled: !full, ...menuShortcut(horizontal ? "openSplitPane" : "openHorizontalSplitPane") },
     { id: "bottom", title: horizontal ? "Add Bottom Split" : "Add Right Split", symbol: horizontal ? "rectangle.bottomhalf.inset.filled" : "rectangle.righthalf.inset.filled", enabled: !full && !stacked, ...menuShortcut(horizontal ? "openHorizontalSplitPane" : "openSplitPane") },
     { separator: true },
     {
@@ -176,7 +163,7 @@ function splitMenuItems(tabId: string): MenuItem[] {
       children: [
         ...moveItems,
         { id: "flip", title: "Flip Split View", symbol: horizontal ? "arrow.left.arrow.right" : "arrow.up.arrow.down" },
-        { id: "convert", title: horizontal ? "Convert to Horizontal Split View" : "Convert to Vertical Split View", symbol: horizontal ? "rectangle.split.1x2" : "rectangle.split.2x1" },
+        { id: "convert", title: horizontal ? "Switch to Stacked Split" : "Switch to Side-by-Side Split", symbol: horizontal ? "rectangle.split.1x2" : "rectangle.split.2x1" },
       ],
     },
     ...(PLATFORM_FEATURES.menuAlternates

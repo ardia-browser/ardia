@@ -18,7 +18,7 @@ import { consentToken } from "../telemetry/client";
 const store = () => useBrowser.getState();
 
 const newPane = ({ windowId, tab }: OrganizeContext, side: SplitSide) =>
-  void (side === "bottom" || side === "top" ? openHorizontalSplitPane(windowId, { anchorTabId: tab.id }) : openSplitPane(windowId, { anchorTabId: tab.id, side }));
+  void (side === "bottom" || side === "top" ? openHorizontalSplitPane(windowId, { anchorTabId: tab.id, side }) : openSplitPane(windowId, { anchorTabId: tab.id, side }));
 
 async function pickTabForSplit(c: OrganizeContext) {
   const tabs = splitCandidates(c);

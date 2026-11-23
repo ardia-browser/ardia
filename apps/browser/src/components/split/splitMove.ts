@@ -1,4 +1,5 @@
 import type { SplitView } from "../../state/browser/types";
+import { toolbarTrailing, type ToolbarRow } from "../../lib/toolbarRow";
 import { horizontalNeighbor, verticalNeighbor } from "../../state/splits/reorder";
 import { STRIP_HEIGHT } from "../../state/windows/toolbarAutoHide";
 import type { Rect } from "../window/geometry";
@@ -6,6 +7,7 @@ import type { CardChrome } from "../window/paneChrome";
 import { MOVE_HANDLE } from "./tokens";
 
 export type Point = { x: number; y: number };
+export type MoveHints = Partial<Record<"movePaneLeft" | "movePaneRight" | "movePaneUp" | "movePaneDown", string>>;
 
 export function paneTopChrome(o: { chrome: CardChrome; toolbarHeight: number; collapsed: boolean; topBarHeight: number; shareBarHeight?: number }): number {
   const share = o.shareBarHeight ?? 0;
@@ -14,8 +16,26 @@ export function paneTopChrome(o: { chrome: CardChrome; toolbarHeight: number; co
   return share;
 }
 
-export function handleOrigin(rect: Rect, topChrome: number, inset = MOVE_HANDLE.inset): Point {
-  return { x: rect.x + inset, y: rect.y + topChrome + inset };
+export function toolbarHandleCenter(rect: Rect, row: ToolbarRow, trailingRight = 0): Point {
+  const { splitRight } = toolbarTrailing(row, { pinnedWidth: 0, split: true });
+  return {
+    x: rect.x + rect.width - (splitRight + trailingRight + 2.5 * row.button),
+    y: rect.y + row.center,
+  };
+}
+
+export function edgeHandleOrigin(rect: Rect, topChrome: number): Point {
+  return {
+    x: rect.x + (rect.width - MOVE_HANDLE.edgeHitWidth) / 2,
+    y: rect.y + topChrome,
+  };
+}
+
+export function edgeHandleCenter(rect: Rect, topChrome: number): Point {
+  return {
+    x: rect.x + rect.width / 2,
+    y: rect.y + topChrome + MOVE_HANDLE.edgeNotchTop + MOVE_HANDLE.box / 2,
+  };
 }
 
 const contains = (rect: Rect, x: number, y: number) => x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height;
@@ -75,8 +95,13 @@ export function resolveMoveTarget(
   return bestId;
 }
 
-export function moveHandleTooltip(leftHint: string | undefined, rightHint: string | undefined): string {
-  if (leftHint && rightHint) return `Drag to move split pane (${leftHint} / ${rightHint})`;
-  const one = leftHint ?? rightHint;
-  return one ? `Drag to move split pane (${one})` : "Drag to move split pane";
+export function moveHandleTooltip(split: Pick<SplitView, "orientation" | "slots"> | null | undefined, hints: MoveHints): string {
+  const hasStack = !!split?.slots.some((slot) => "stack" in slot);
+  const keys = hasStack
+    ? [hints.movePaneLeft, hints.movePaneRight, hints.movePaneUp, hints.movePaneDown]
+    : split?.orientation === "vertical"
+      ? [hints.movePaneUp, hints.movePaneDown]
+      : [hints.movePaneLeft, hints.movePaneRight];
+  const present = keys.filter((k): k is string => !!k);
+  return present.length ? `Drag to move split pane (${present.join(" / ")})` : "Drag to move split pane";
 }

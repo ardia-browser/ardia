@@ -54,15 +54,19 @@ const pointToRect = (x: number, y: number, r: Rect) => Math.hypot(Math.max(r.x -
 
 export function zoneHit(panes: [string, Rect][], px: number, py: number, current: { tabId: string; side: SplitSide } | null) {
   const card = { x: px - PREVIEW.width / 2, y: py - PREVIEW.height / 2, width: PREVIEW.width, height: PREVIEW.height };
-  let best: { tabId: string; side: SplitSide; score: number } | null = null;
+  let best: { tabId: string; side: SplitSide; rank: number; edge: number; centre: number } | null = null;
   for (const [tabId, pane] of panes) {
+    const inPane = contains(pane, px, py);
     for (const side of DROP_SIDES) {
       const keep = current?.tabId === tabId && current.side === side;
       const r = zoneRect(pane, side, keep ? "active" : "grown", px, py);
       if (!overlaps(card, r)) continue;
-      const inside = contains(r, px, py);
-      const score = inside ? (keep ? -2 : -1.5) : keep ? -1 : pointToRect(px, py, r);
-      if (!best || score < best.score) best = { tabId, side, score };
+      const edge = pointToRect(px, py, r);
+      const rank = edge === 0 ? (keep ? 0 : 1) : keep ? 2 : inPane ? 3 : 4;
+      const centre = isVerticalSplitSide(side) ? Math.abs(r.y + r.height / 2 - py) : Math.abs(r.x + r.width / 2 - px);
+      if (!best || rank < best.rank || (rank === best.rank && (edge < best.edge || (edge === best.edge && centre < best.centre)))) {
+        best = { tabId, side, rank, edge, centre };
+      }
     }
   }
   return best && { tabId: best.tabId, side: best.side };

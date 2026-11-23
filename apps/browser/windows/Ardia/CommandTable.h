@@ -115,7 +115,7 @@ inline constexpr CommandRow kCommandRows[] = {
     {"toggleCompactToolbar", "Compact Toolbar", "View > Browser Layout", "", ""},
     {"togglePinnedFold", "Collapse Pinned Tabs", "View > Browser Layout", "", "", RowHiddenWhenDisabled},
     {"openSplitPane", "Open Split Pane", "View > Split View", "ctrl+shift+=|ctrl+plus", "ctrl+\\|none"},
-    {"openHorizontalSplitPane", "Open Horizontal Split Pane", "View > Split View", "ctrl+shift+-|ctrl+_", "ctrl+shift+\\|none"},
+    {"openHorizontalSplitPane", "Open Split Pane Below", "View > Split View", "ctrl+shift+-|ctrl+_", "ctrl+shift+\\|none"},
     {"focusNextPane", "Focus Next Split Pane", "View > Split View", "ctrl+shift+]|ctrl+}", "alt+shift+]|none"},
     {"focusPreviousPane", "Focus Previous Split Pane", "View > Split View", "ctrl+shift+[|ctrl+{", "alt+shift+[|none"},
     {"movePaneLeft", "Move Split Pane Left", "View > Split View", "ctrl+option+left", "ctrl+alt+left"},

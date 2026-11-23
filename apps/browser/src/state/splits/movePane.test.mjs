@@ -5,7 +5,7 @@ const { runCommand } = await import("../commands/commands.ts");
 const { menuState } = await import("../commands/menuState.ts");
 const { activeTabId } = await import("../browser/model.ts");
 const { openSplitPane, swapSplitPanes } = await import("./actions.ts");
-const { horizontalNeighbor, swappedPaneIds, verticalNeighbor } = await import("./reorder.ts");
+const { horizontalNeighbor, verticalNeighbor } = await import("./reorder.ts");
 const { splitOf, splitTabIds } = await import("./splits.ts");
 
 const S = () => useBrowser.getState();
@@ -37,10 +37,6 @@ test("horizontalNeighbor and verticalNeighbor follow split orientation and stack
   assert.equal(horizontalNeighbor(verticalWithRow, "left", 1), "right");
   assert.equal(horizontalNeighbor(verticalWithRow, "right", -1), "left");
   assert.equal(horizontalNeighbor(verticalWithRow, "top", 1), null);
-
-  assert.deepEqual(swappedPaneIds(["a", "b", "c"], "a", "c"), ["c", "b", "a"]);
-  assert.equal(swappedPaneIds(["a", "b"], "a", "a"), null);
-  assert.equal(swappedPaneIds(["a", "b"], "a", "z"), null);
 });
 
 test("movePaneLeft and movePaneRight walk the active pane across a 3-pane split and keep it active", () => {

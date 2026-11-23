@@ -11,10 +11,10 @@ function inkGaps(row, count, split = false) {
   const splitInset = (row.button - TOOLBAR_TRAILING.splitGlyph) / 2;
   const inks = [];
   if (split) {
-    const right = t.splitRight + splitInset;
-    inks.push([right, right + TOOLBAR_TRAILING.splitGlyph]);
-    const second = t.splitRight + row.button + splitInset;
-    inks.push([second, second + TOOLBAR_TRAILING.splitGlyph]);
+    for (let i = 0; i < 3; i++) {
+      const start = t.splitRight + i * row.button + splitInset;
+      inks.push([start, start + TOOLBAR_TRAILING.splitGlyph]);
+    }
   }
   for (let i = count - 1; i >= 0; i--) {
     const right = t.extensionsRight + (count - 1 - i) * (row.extensionButton + TOOLBAR_TRAILING.itemGap) + iconInset;
@@ -49,7 +49,7 @@ for (const scale of [1, 1.25]) {
     test(`at ${scale * 100}% on the ${name} row in a split pane, the field, extensions and Split buttons keep the same rhythm`, () => {
       for (const count of [0, 1, 2]) {
         const { gaps, t } = inkGaps(row, count, true);
-        for (const gap of gaps.filter((_, i) => i !== 1)) near(gap, t.inkGap);
+        for (const gap of gaps.filter((_, i) => i !== 1 && i !== 2)) near(gap, t.inkGap);
       }
     });
   }

@@ -11,6 +11,7 @@ import { PageCoverGate } from "./PageCoverGate";
 import { PeekStage } from "./PeekStage";
 import type { ViewByName } from "./shared";
 import { Surface } from "./Surface";
+import { SvgIcon } from "./SvgIcon";
 import { SwipeArea } from "../pager/SwipeArea";
 import { MeadowPage } from "../meadow/MeadowPage";
 
@@ -37,6 +38,7 @@ export const viewsDrawnInJs = new Map<string, ViewByName>([
   ["ArdiaThemeSwatch", ThemeSwatch],
   ["ArdiaDockSelection", DockSelection],
   ["ArdiaFolderIcon", FolderIcon],
+  ["ArdiaSvgIcon", SvgIcon],
   ["ArdiaWindowProfile", WindowProfile],
   ["ArdiaSwipe", SwipeArea],
   ["ArdiaMeadowPage", MeadowPage],

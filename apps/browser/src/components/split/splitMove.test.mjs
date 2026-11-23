@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 const { handleOrigin, moveHandleTooltip, paneTopChrome, resolveMoveTarget } = await import("./splitMove.ts");
 
@@ -66,4 +67,22 @@ test("moveHandleTooltip formats shortcut hints cleanly", () => {
   assert.equal(moveHandleTooltip("⌃⌥←", "⌃⌥→"), "Drag to move split pane (⌃⌥← / ⌃⌥→)");
   assert.equal(moveHandleTooltip("⌃⌥←", undefined), "Drag to move split pane (⌃⌥←)");
   assert.equal(moveHandleTooltip(undefined, undefined), "Drag to move split pane");
+});
+
+test("split move icon loads the SVG directly with no PNG fallbacks", () => {
+  const svgUrl = new URL("../../../assets/split-move.svg", import.meta.url);
+  assert.ok(existsSync(svgUrl));
+  for (const png of ["split-move.png", "split-move@2x.png", "split-move@3x.png"]) {
+    assert.equal(existsSync(new URL(`../../../assets/${png}`, import.meta.url)), false, `${png} should not exist`);
+  }
+  const iconSource = readFileSync(new URL("./SplitMoveIcon.tsx", import.meta.url), "utf8");
+  assert.match(iconSource, /split-move\.svg/);
+  assert.doesNotMatch(iconSource, /\.png/);
+});
+
+test("split move handle stays hidden until hovered", () => {
+  const handlesSource = readFileSync(new URL("./SplitMoveHandles.tsx", import.meta.url), "utf8");
+  assert.match(handlesSource, /const visible = \(hovered \|\| draggingThis\) && !obscured && !draggingAny;/);
+  assert.match(handlesSource, /usePresence\(visible \? true : null/);
+  assert.doesNotMatch(handlesSource, /restOpacity|activeOpacity/);
 });

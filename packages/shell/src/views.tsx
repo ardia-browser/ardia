@@ -37,6 +37,13 @@ export type SymbolProps = ViewProps & {
 
 export const Symbol = requireNativeViewManager<SymbolProps>("ArdiaSymbol");
 
+export type SvgIconProps = ViewProps & {
+  svg: string;
+  color?: string;
+};
+
+export const SvgIcon = requireNativeViewManager<SvgIconProps>("ArdiaSvgIcon");
+
 export type FadeLabelProps = ViewProps & {
   text: string;
   fontSize?: number;

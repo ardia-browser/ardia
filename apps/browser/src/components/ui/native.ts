@@ -29,6 +29,7 @@ export {
 } from "@ardia/shell";
 
 export { drawnFadeLabel, FadeLabel } from "./FadeLabel";
+export { SvgIcon, type SvgIconProps } from "./SvgIcon";
 export { drawnSymbol, Symbol, type SymbolProps } from "./Symbol";
 
 export { SwipeArea, WebView, type SwipeAreaHandle, type SwipeEvent, type WebViewHandle } from "@ardia/ardiacore";

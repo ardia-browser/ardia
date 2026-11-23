@@ -15,7 +15,7 @@ import { consentToken, type ConsentToken } from "../../state/telemetry/client";
 import { SHARE_BAR_HEIGHT } from "../media/ShareBar";
 import { PAGE_BAR_HEIGHT } from "../plugins/PluginPageBar";
 import { DEVELOPER_BAR } from "../toolbar/tokens";
-import { PageCoverGate, Panel, useHover, useTheme, useTooltip, withAlpha } from "../ui";
+import { PageCoverGate, Panel, useHover, usePresence, useTheme, useTooltip, withAlpha } from "../ui";
 import type { Rect } from "../window/geometry";
 import { developerBarShown, type CardChrome } from "../window/paneChrome";
 import { SHADOWS } from "../window/tokens";
@@ -238,6 +238,10 @@ const PaneMoveHandle = memo(function PaneMoveHandle({
     clearHover();
   }, [origin.x, origin.y, clearHover]);
 
+  useEffect(() => {
+    if (obscured) clearHover();
+  }, [obscured, clearHover]);
+
   const responder = useMemo(
     () =>
       PanResponder.create({
@@ -291,13 +295,8 @@ const PaneMoveHandle = memo(function PaneMoveHandle({
     [],
   );
 
-  const lit = hovered || draggingThis;
-  const hidden = (obscured && !draggingThis) || draggingAny;
-  const targetOpacity = hidden ? 0 : lit ? 1 : focused ? MOVE_HANDLE.activeOpacity : MOVE_HANDLE.restOpacity;
-  const opacity = useRef(new Animated.Value(targetOpacity)).current;
-  useEffect(() => {
-    Animated.timing(opacity, { toValue: targetOpacity, ...SPLIT_MOTION.handleFade, useNativeDriver: true }).start();
-  }, [targetOpacity]);
+  const visible = (hovered || draggingThis) && !obscured && !draggingAny;
+  const { shown, appear } = usePresence(visible ? true : null, SPLIT_MOTION.handlePresence, true);
 
   const colors = splitColors(theme.dark);
   const corner = moveHandleRadius();
@@ -321,21 +320,23 @@ const PaneMoveHandle = memo(function PaneMoveHandle({
         cursor: draggingThis ? "grabbing" : "grab",
       }}
     >
-      <PageCoverGate covering={!hidden}>
-        <Animated.View pointerEvents="none" style={{ opacity }}>
-          <Panel
-            key={coverKey}
-            glass
-            fill={lit ? colors.moveHandleHoverFill : colors.moveHandleFill}
-            border={lit ? colors.moveHandleHoverBorder : colors.moveHandleBorder}
-            radius={corner}
-            shadow={SHADOWS.status}
-            style={HANDLE_FACE}
-          >
-            <SplitMoveIcon size={MOVE_HANDLE.glyph} color={lit ? colors.moveHandleHoverIcon : colors.moveHandleIcon} />
-          </Panel>
-        </Animated.View>
-      </PageCoverGate>
+      {shown ? (
+        <PageCoverGate covering={visible}>
+          <Animated.View pointerEvents="none" style={{ opacity: appear }}>
+            <Panel
+              key={coverKey}
+              glass
+              fill={colors.moveHandleHoverFill}
+              border={colors.moveHandleHoverBorder}
+              radius={corner}
+              shadow={SHADOWS.status}
+              style={HANDLE_FACE}
+            >
+              <SplitMoveIcon size={MOVE_HANDLE.glyph} color={colors.moveHandleHoverIcon} />
+            </Panel>
+          </Animated.View>
+        </PageCoverGate>
+      ) : null}
     </View>
   );
 });

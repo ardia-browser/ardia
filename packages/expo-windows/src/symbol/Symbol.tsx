@@ -1,21 +1,10 @@
 import { createElement, forwardRef, useEffect, type ComponentType } from "react";
 import type { SymbolProps } from "@ardia/shell";
-import { processColor, View, type ViewProps } from "react-native";
+import { View, type ViewProps } from "react-native";
 import { useAppDark } from "../views/appearance";
-import * as NativeComponentRegistry from "react-native/Libraries/NativeComponent/NativeComponentRegistry";
 import { noteMissing } from "../missing";
-import { NATIVE_DEFAULT_POINT_SIZE, vectorIcon, type VectorLayer } from "./layers";
-
-type NativeVectorIconProps = ViewProps & { symbolKey: string; layers: VectorLayer[]; color?: string };
-
-const NativeVectorIcon = NativeComponentRegistry.get<NativeVectorIconProps>("ArdiaVectorIcon", () => ({
-  uiViewClassName: "ArdiaVectorIcon",
-  validAttributes: {
-    symbolKey: true,
-    layers: true,
-    color: { process: processColor as (value: never) => unknown },
-  },
-}));
+import { NATIVE_DEFAULT_POINT_SIZE, vectorIcon } from "./layers";
+import { NativeVectorIcon, type NativeVectorIconProps } from "./nativeVectorIcon";
 
 const LABEL_COLOR = { light: "rgba(0, 0, 0, 0.85)", dark: "rgba(255, 255, 255, 0.85)" };
 

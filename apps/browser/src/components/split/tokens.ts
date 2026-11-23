@@ -7,11 +7,8 @@ const DARK = {
   zoneBorder: "rgba(255,255,255,0.08)",
   zoneFill: "rgba(255,236,214,0.04)",
   zoneDash: "rgba(255,255,255,0.1)",
-  moveHandleFill: "rgba(34,32,33,0.74)",
   moveHandleHoverFill: "rgba(44,42,43,0.94)",
-  moveHandleBorder: "rgba(255,255,255,0.14)",
   moveHandleHoverBorder: "rgba(255,255,255,0.22)",
-  moveHandleIcon: "#FFFFFFC2",
   moveHandleHoverIcon: "#FFFFFFF2",
   moveSourceScrim: "rgba(0,0,0,0.14)",
 };
@@ -22,11 +19,8 @@ const LIGHT: typeof DARK = {
   zoneBorder: "rgba(0,0,0,0.08)",
   zoneFill: "rgba(255,255,255,0.45)",
   zoneDash: "rgba(0,0,0,0.1)",
-  moveHandleFill: "rgba(250,249,250,0.82)",
   moveHandleHoverFill: "rgba(255,255,255,0.96)",
-  moveHandleBorder: "rgba(0,0,0,0.12)",
   moveHandleHoverBorder: "rgba(0,0,0,0.18)",
-  moveHandleIcon: "#000000A6",
   moveHandleHoverIcon: "#000000E6",
   moveSourceScrim: "rgba(0,0,0,0.06)",
 };
@@ -42,8 +36,6 @@ export const MOVE_HANDLE = {
   box: 22,
   glyph: 12,
   inset: space.m,
-  restOpacity: 0.44,
-  activeOpacity: 0.58,
   dragSlop: 4,
   intentFraction: 0.28,
   intentCap: 96,
@@ -72,7 +64,10 @@ export const SPLIT_MOTION = {
   zoneIn: { duration: ZONE_SLIDE_MS, easing: curve.enter },
   zoneOut: { duration: ZONE_SLIDE_MS, easing: curve.exit },
   zoneSpring: springs.snappy,
-  handleFade: { duration: duration.fast, easing: curve.enter },
+  handlePresence: {
+    show: { duration: duration.fast, easing: curve.enter },
+    hide: { duration: duration.fast, easing: curve.exit },
+  },
 } as const;
 
 export const TOAST_MS = 2600;

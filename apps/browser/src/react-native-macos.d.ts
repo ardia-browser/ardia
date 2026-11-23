@@ -12,3 +12,8 @@ declare module "react-native" {
     ardiaCentersCapitals?: boolean;
   }
 }
+
+declare module "*.svg" {
+  const src: string;
+  export default src;
+}

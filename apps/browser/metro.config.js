@@ -18,9 +18,17 @@ function readLinkedDependencies(marker) {
   }
 }
 
-const config = mergeConfig(getDefaultConfig(projectRoot), {
+const defaultConfig = getDefaultConfig(projectRoot);
+const { assetExts, sourceExts } = defaultConfig.resolver;
+
+const config = mergeConfig(defaultConfig, {
   watchFolders: [workspaceRoot, ...linkedDependencies],
+  transformer: {
+    babelTransformerPath: require.resolve("./svg-transformer.js"),
+  },
   resolver: {
+    assetExts: assetExts.filter((ext) => ext !== "svg"),
+    sourceExts: [...sourceExts, "svg"],
     blockList: [windowsBuildOutput, /.*\.ProjectImports\.zip/],
     nodeModulesPaths: [path.resolve(workspaceRoot, "node_modules"), ...linkedDependencies.slice(0, 1)],
     resolveRequest(context, moduleName, platform) {

@@ -1,7 +1,7 @@
-import { tintedImage } from "../ui";
+import { SvgIcon } from "../ui";
 
-const SPLIT_MOVE_ICON = require("../../../assets/split-move.png");
+const SPLIT_MOVE_SVG: string = require("../../../assets/split-move.svg");
 
 export function SplitMoveIcon({ size, color }: { size: number; color: string }) {
-  return tintedImage({ source: SPLIT_MOVE_ICON, tint: color, identity: "split-move", style: { width: size, height: size } });
+  return <SvgIcon svg={SPLIT_MOVE_SVG} color={color} style={{ width: size, height: size }} />;
 }

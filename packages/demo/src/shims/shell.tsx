@@ -6,6 +6,7 @@ import { NATIVE_CHANGE } from "./react-native";
 import { setTrafficLightsCenter } from "./web/windowChrome";
 
 export { Symbol } from "./web/Symbol";
+export { SvgIcon } from "./web/SvgIcon";
 export { ActivitySpinner } from "./web/motion/ActivitySpinner";
 export {
   ContextMenuArea,

@@ -27,7 +27,7 @@ final class PluginProcess: PluginRun {
   var credential: CredentialRunEndpoint?
   private(set) var sink: PluginRedactingSink?
   private(set) var refusedCredentialLines = 0
-  private var stopRequested = false
+  private(set) var stopRequested = false
   private var family: PluginFamily?
   private var log: Int32
 
@@ -325,7 +325,7 @@ final class PluginProcess: PluginRun {
     connection?.close()
     connection = nil
     sink?.close()
-    credential?.ended(crashed: !stopRequested || overMemory)
+    credential?.ended(crashed: PluginExitReport.crashed(stopRequested: stopRequested, overMemory: overMemory))
     if log >= 0 {
       Darwin.close(log)
       log = -1

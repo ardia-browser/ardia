@@ -45,3 +45,16 @@ final class PluginRuns<Run: PluginRun> {
     }
   }
 }
+
+enum PluginExitReport {
+  static func crashed(stopRequested: Bool, overMemory: Bool) -> Bool { !stopRequested || overMemory }
+
+  static func intended(stopRequested: Bool, overMemory: Bool) -> Bool { !crashed(stopRequested: stopRequested, overMemory: overMemory) }
+
+  static func payload(name: String, run: Int, status: Int32?, signal: Int32?, overMemory: Bool, stopRequested: Bool) -> [String: Any] {
+    [
+      "name": name, "run": run, "status": status.map { Int($0) } ?? NSNull(), "signal": signal.map { Int($0) } ?? NSNull(), "overMemory": overMemory,
+      "intended": intended(stopRequested: stopRequested, overMemory: overMemory),
+    ]
+  }
+}

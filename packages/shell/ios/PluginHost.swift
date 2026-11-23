@@ -94,7 +94,7 @@ final class PluginHost {
         self.runs.exited(process)
         self.sink?.send(
           "onExit",
-          ["name": process.name, "run": process.run, "status": status.map { Int($0) } ?? NSNull(), "signal": signal.map { Int($0) } ?? NSNull(), "overMemory": overMemory])
+          PluginExitReport.payload(name: process.name, run: process.run, status: status, signal: signal, overMemory: overMemory, stopRequested: process.stopRequested))
       })
     switch result {
     case .success(let process):

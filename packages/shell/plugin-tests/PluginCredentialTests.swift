@@ -152,3 +152,19 @@ struct PluginRedactingSinkTests {
     #expect(queue.sync { sink.recent } == ["FROM THE PLUGIN"])
   }
 }
+
+@Suite("How a plugin's exit is reported")
+struct PluginExitReportTests {
+  @Test func `a run the host ended, as a lock ends a password manager's run, is an intended exit and no crash`() {
+    let killed = PluginExitReport.payload(name: "bitwarden", run: 3, status: nil, signal: SIGKILL, overMemory: false, stopRequested: true)
+    #expect(killed["intended"] as? Bool == true)
+    #expect(killed["signal"] as? Int == Int(SIGKILL))
+    #expect(!PluginExitReport.crashed(stopRequested: true, overMemory: false))
+  }
+
+  @Test func `a run that died on its own or went over its memory is a crash`() {
+    #expect(PluginExitReport.payload(name: "bitwarden", run: 3, status: 1, signal: nil, overMemory: false, stopRequested: false)["intended"] as? Bool == false)
+    #expect(PluginExitReport.payload(name: "bitwarden", run: 3, status: nil, signal: SIGKILL, overMemory: true, stopRequested: true)["intended"] as? Bool == false)
+    #expect(PluginExitReport.crashed(stopRequested: false, overMemory: false))
+  }
+}

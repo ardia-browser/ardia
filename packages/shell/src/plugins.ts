@@ -59,7 +59,7 @@ export type PluginStartSpec = {
   entry?: string;
 };
 export type PluginStartResult = { ok: true; run: number; pid: number } | { ok: false; reason: string };
-export type PluginExit = { name: string; run: number; status: number | null; signal: number | null; overMemory: boolean };
+export type PluginExit = { name: string; run: number; status: number | null; signal: number | null; overMemory: boolean; intended?: boolean };
 export type PluginLine = { name: string; run: number; launch: number; line: string };
 export type PluginRemoveResult = { ok: true } | { ok: false; reason: string };
 export type PluginFetchSpec = { url: string; method: string; headers: Record<string, string>; body?: string; timeoutMs: number; allowedHosts: string[] };

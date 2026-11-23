@@ -23,6 +23,9 @@ import { useSitePalette } from "./useSitePalette";
 import { setToolbarExtensionsWidth } from "../../state/windows/layout";
 import { SIDEBAR_FIELD } from "../sidebar/geometry";
 import { FieldSiteButton, SidebarFieldFill } from "../sidebar/SidebarField";
+import { openSettings } from "../../state/settings/settingsWindows";
+import { revealSetting } from "../../state/settings/searchState";
+import { addressBarButtons } from "../../state/settings/toolbarActions";
 import { showUrlBarMenu } from "../../state/omnibox/paste";
 import { ToolbarExtensions, useToolbarExtensionsWidth } from "../extensions/ToolbarExtensions";
 import { GlassFill, useGlass } from "../ui/Glass";
@@ -170,6 +173,11 @@ function useUrlField(tab: ToolbarTab, windowId: string, onFocus: () => void) {
   return { insecure, popover, hovered, hoverProps, openPanel, toggleSiteControls, host: pageHostLabel(tab.url), trail: urlTrail(tab.url, tab.title, { hovered, showFullUrl }) };
 }
 
+function customizeToolbar() {
+  openSettings("appearance");
+  revealSetting({ id: "appearance.toolbarActions", pane: "appearance", section: "Address Bar" });
+}
+
 type UrlFieldProps = { tab: ToolbarTab; palette: ToolbarPalette; windowId: string; onFocus: () => void };
 
 export const ToolbarUrlField = memo(function ToolbarUrlField({ tab, palette, windowId, inSplit, onFocus, style }: UrlFieldProps & { inSplit: boolean; style: ViewStyle }) {
@@ -195,7 +203,7 @@ export const ToolbarUrlField = memo(function ToolbarUrlField({ tab, palette, win
           />
         </Pressable>
       )}
-      <ContextMenuArea style={{ flex: 1 }} onContextMenu={() => void showUrlBarMenu(tab)}>
+      <ContextMenuArea style={{ flex: 1 }} onContextMenu={() => void showUrlBarMenu(tab, customizeToolbar)}>
         <Pressable onPress={field.openPanel} style={{ flex: 1, height: row.field, justifyContent: "center", paddingLeft: insecure ? LOCK.gap : urlTextLeft(false) }}>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <Text numberOfLines={1} ellipsizeMode="head" weight="medium" color={palette.text} style={HOST_FULL}>
@@ -210,21 +218,22 @@ export const ToolbarUrlField = memo(function ToolbarUrlField({ tab, palette, win
         </Pressable>
       </ContextMenuArea>
       <FieldButtons tab={tab} palette={palette} onFocus={onFocus} popover={popover} toggleSiteControls={toggleSiteControls}>
-        {hovered && (
-          <>
-            <PageButton tab={tab} palette={palette} windowId={windowId} />
-            {!inSplit && (
-              <Button variant="icon" toolbar
-                palette={palette}
-                icon="rectangle.split.2x1"
-                look="field"
-                onPress={() => openSplitPane(windowId, { anchorTabId: tab.id })}
-                tooltip={withShortcut("Open Split View", splitHint)}
-              />
-            )}
-            <Button variant="icon" toolbar palette={palette} icon="slider.horizontal.3" look="field" onPress={toggleSiteControls} active={popover === "siteControls"} tooltip="Site Controls" />
-          </>
-        )}
+        <PageButtons tab={tab} palette={palette} windowId={windowId} hovered={hovered}>
+          {hovered && (
+            <>
+              {!inSplit && (
+                <Button variant="icon" toolbar
+                  palette={palette}
+                  icon="rectangle.split.2x1"
+                  look="field"
+                  onPress={() => openSplitPane(windowId, { anchorTabId: tab.id })}
+                  tooltip={withShortcut("Open Split View", splitHint)}
+                />
+              )}
+              <Button variant="icon" toolbar palette={palette} icon="slider.horizontal.3" look="field" onPress={toggleSiteControls} active={popover === "siteControls"} tooltip="Site Controls" />
+            </>
+          )}
+        </PageButtons>
       </FieldButtons>
     </View>
   );
@@ -246,7 +255,7 @@ export const SidebarUrlField = memo(function SidebarUrlField({ tab, palette, win
         palette={palette}
         onPress={toggleSiteControls}
       />
-      <ContextMenuArea style={{ flex: 1 }} onContextMenu={() => void showUrlBarMenu(tab)}>
+      <ContextMenuArea style={{ flex: 1 }} onContextMenu={() => void showUrlBarMenu(tab, customizeToolbar)}>
         <Pressable onPress={field.openPanel} style={{ flex: 1, height, justifyContent: "center", paddingLeft: SIDEBAR_TEXT_GAP }}>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <Text numberOfLines={1} ellipsizeMode="head" weight="medium" color={palette.text} style={SHRINK}>
@@ -258,7 +267,7 @@ export const SidebarUrlField = memo(function SidebarUrlField({ tab, palette, win
       </ContextMenuArea>
       <ToolbarRowContext.Provider value={TOOLBAR_ROWS.regular}>
         <FieldButtons tab={tab} palette={palette} onFocus={onFocus} popover={popover} toggleSiteControls={toggleSiteControls} accessory={accessory}>
-          {hovered && <PageButton tab={tab} palette={palette} windowId={windowId} />}
+          <PageButtons tab={tab} palette={palette} windowId={windowId} hovered={hovered} />
         </FieldButtons>
       </ToolbarRowContext.Provider>
       {progress !== null ? (
@@ -275,8 +284,13 @@ const SHRINK = { flexShrink: 1 } as const;
 
 type PageButtonProps = { tab: ToolbarTab; palette: ToolbarPalette; windowId: string };
 
-function PageButton(props: PageButtonProps) {
-  return useBookmarksShown() ? <BookmarkButton {...props} /> : <CopyUrlButton {...props} />;
+function PageButtons({ hovered, children, ...props }: PageButtonProps & { hovered: boolean; children?: ReactNode }) {
+  const pinned = useSettings((s) => s.toolbarActions);
+  const bookmarks = useBookmarksShown();
+  const buttons = addressBarButtons(pinned, bookmarks, hovered).map((action) =>
+    action === "bookmark" ? <BookmarkButton key={action} {...props} /> : <CopyUrlButton key={action} {...props} />,
+  );
+  return pinned === null ? <>{buttons}{children}</> : <>{children}{buttons}</>;
 }
 
 function CopyUrlButton({ tab, palette }: PageButtonProps) {

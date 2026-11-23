@@ -10,6 +10,7 @@ import { MiniWindow } from "../MiniWindow";
 import { PictureChoice } from "../PictureChoice";
 import { AmountSlider } from "../ThemeControls";
 import { PAGE_FRAME } from "../../../lib/windowLayout";
+import { ToolbarActionEditor } from "./ToolbarActionEditor";
 import { BookmarksBarSection } from "./BookmarksBarSection";
 import { modePreview, stylePreview } from "../tokens";
 import { useSettingsColors } from "../useSettingsColors";
@@ -153,6 +154,7 @@ function AddressBarPicker() {
           <Toggle value={compactToolbar} onChange={(v) => updateSettings({ compactToolbar: v })} />
         </Row>
         </Group>
+        <ToolbarActionEditor />
       </Box>
     </>
   );

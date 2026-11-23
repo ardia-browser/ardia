@@ -58,6 +58,30 @@ test("a synced value this version can't show is left out", () => {
   assert.ok(SYNCED_SETTINGS.includes("compactToolbar"));
 });
 
+test("address bar buttons follow the pin order without hover and respect bookmark visibility", async () => {
+  const { addressBarButtons } = await import("./toolbarActions.ts");
+  assert.deepEqual(addressBarButtons(null, true, false), []);
+  assert.deepEqual(addressBarButtons(null, true, true), ["bookmark"]);
+  assert.deepEqual(addressBarButtons(null, false, true), ["copyUrl"]);
+  for (const hovered of [false, true]) {
+    assert.deepEqual(addressBarButtons(["copyUrl", "bookmark"], true, hovered), ["copyUrl", "bookmark"]);
+    assert.deepEqual(addressBarButtons(["bookmark", "copyUrl"], false, hovered), ["copyUrl"]);
+    assert.deepEqual(addressBarButtons([], true, hovered), []);
+  }
+});
+
+test("toolbar actions keep their order across reload and sync, including an intentionally empty toolbar", () => {
+  assert.equal(parseSettings({}).toolbarActions, null);
+  for (const invalid of [["bookmark", "bookmark"], ["extension"], "copyUrl"]) {
+    assert.equal(parseSettings({ toolbarActions: invalid }).toolbarActions, null);
+  }
+  for (const value of [["copyUrl", "bookmark"], ["bookmark", "copyUrl"], ["copyUrl"], [], null]) {
+    assert.deepEqual(parseSettings({ toolbarActions: value }).toolbarActions, value);
+    settingsAdapter.apply(new Map([["set:toolbarActions", { v: value }]]), ["set:toolbarActions"]);
+    assert.deepEqual(S().settings.toolbarActions, value);
+  }
+});
+
 test("a setup code can carry every value its settings can take", () => {
   for (const key of SETUP_SETTING_KEYS) {
     const values = SETTING_SPECS[key].values;

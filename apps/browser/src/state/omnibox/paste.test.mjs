@@ -20,6 +20,7 @@ test("the address field menu: Copy Link with its real shortcut and Markdown alte
     "Copy Link as Markdown ⌥⇧⌘C [link] (alt)",
     "Paste and Search [magnifyingglass]",
   ]);
+  assert.equal(urlBarMenuItems({ paste: null, shareable: true, customizable: true }).at(-1).id, "customizeToolbar");
   assert.deepEqual(render(urlBarMenuItems({ paste: null, shareable: false, keys: () => ({}) })), ["Copy Link [link]", "Copy Link as Markdown [link] (alt)"]);
 });
 

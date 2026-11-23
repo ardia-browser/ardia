@@ -13,6 +13,7 @@ import { toolbarPalette, type ToolbarPalette } from "../ui/toolbarColors";
 import { Button, type ButtonHit, FadeLabel, font, radius, space, ToolbarRowContext, useHover } from "../ui";
 import { TOOLBAR_ROWS } from "../../lib/toolbarRow";
 import { setUrlAnchor } from "../../state/windows/layout";
+import { addressBarButtons } from "../../state/settings/toolbarActions";
 import { SIDEBAR_FIELD } from "./geometry";
 import { SidebarFieldFill } from "./SidebarField";
 import { SidebarUrlField, useToolbarTab } from "../toolbar/Toolbar";
@@ -128,7 +129,8 @@ function PageField({ tab, windowId, width }: { tab: NonNullable<ReturnType<typeo
   const loading = useTabLive(tab.id, (l) => l.isLoading);
   const loaded = usePageProgress(tab.id);
   const progress = loading ? loaded : null;
-  const limit = extensionsFitting(width - 10 - 3 - HOST_ROOM);
+  const pinnedCount = useSettings((s) => addressBarButtons(s.toolbarActions, s.showBookmarks, false).length);
+  const limit = extensionsFitting(width - 10 - 3 - HOST_ROOM - pinnedCount * TOOLBAR_ROWS.regular.fieldButton);
   const extensionsWidth = useToolbarExtensionsWidth(windowId, limit);
   return (
     <SidebarUrlField

@@ -235,6 +235,14 @@ test("on/off, pick-one and number settings are measured with their defaults; tex
   assert.ok(!Object.values(snap).some((v) => v.includes("secret")));
 });
 
+test("the toolbar snapshot reports only whether the button layout is customized", () => {
+  for (const [toolbarActions, expected] of [[null, "default"], [[], "custom"], [["copyUrl"], "custom"], [["secret"], "default"]]) {
+    const snapshot = settingsSnapshot({ ...DEFAULT_SETTINGS, toolbarActions });
+    assert.equal(snapshot.setting_toolbarActions, expected);
+    assert.equal(snapshot.default_toolbarActions, "default");
+  }
+});
+
 test("every measured key survives the telemetry property cleaner unchanged", () => {
   const snap = settingsSnapshot(DEFAULT_SETTINGS);
   assert.deepEqual(cleanProperties(snap), snap);

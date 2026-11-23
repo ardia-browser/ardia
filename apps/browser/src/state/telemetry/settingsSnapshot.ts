@@ -1,3 +1,4 @@
+import { normalizeToolbarActions } from "../settings/toolbarActions";
 import { SETTING_SPECS, type Settings, type SettingSpec } from "../settings/settings";
 
 export const SETTINGS_SNAPSHOT_EVENT = "settings_snapshot";
@@ -27,6 +28,8 @@ export function settingsSnapshot(settings: Settings): Record<string, string> {
     out[`setting_${key}`] = value;
     out[`default_${key}`] = fallback;
   }
+  out.setting_toolbarActions = normalizeToolbarActions(settings.toolbarActions) === null ? "default" : "custom";
+  out.default_toolbarActions = "default";
   return out;
 }
 

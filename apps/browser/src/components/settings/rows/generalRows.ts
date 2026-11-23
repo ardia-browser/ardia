@@ -317,6 +317,11 @@ export const generalRows = {
       section: "Address Bar",
       rows: {
         addressBar: { title: "Address Bar", description: "In the toolbar or in the sidebar.", keywords: ["url bar", "location bar", "toolbar"] },
+        toolbarActions: {
+          title: "Pinned address bar buttons",
+          description: "Keep buttons visible in the sidebar and top toolbar. Drag to reorder. The first pinned button appears farthest left.",
+          keywords: ["pin", "unpin", "toolbar", "copy url", "copy link", "bookmark", "reorder", "customize toolbar"],
+        },
         commandBarPlacement: {
           title: "⌘L opens the command bar",
           description: "In the centre, ⌘L and a click on the address show it over the middle of the page, as in Arc.",
@@ -334,7 +339,7 @@ export const generalRows = {
       rows: {
         showBookmarks: {
           title: "Show bookmarks",
-          description: "Off hides the bookmark button, the bookmarks bar, the Bookmarks menu and every Bookmark command, and the address bar shows Copy URL instead. Your bookmarks stay, and importing still brings them in.",
+          description: "Off hides the bookmark button, the bookmarks bar, the Bookmarks menu and every Bookmark command, and the default address bar shows Copy URL instead. Your bookmarks stay, and importing still brings them in.",
           keywords: ["hide bookmarks", "show bookmarks", "bookmark button", "star", "bookmarks menu", "copy url", "arc", "no bookmarks"],
         },
         bookmarksBar: {

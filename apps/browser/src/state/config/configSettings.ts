@@ -22,7 +22,7 @@ export function sameValue(a: unknown, b: unknown): boolean {
 }
 
 const listed = (values: readonly unknown[]) => {
-  const words = values.map(String);
+  const words = values.map((value) => Array.isArray(value) ? JSON.stringify(value) : String(value));
   return words.length > 1 ? `${words.slice(0, -1).join(", ")} or ${words.at(-1)}` : (words[0] ?? "");
 };
 

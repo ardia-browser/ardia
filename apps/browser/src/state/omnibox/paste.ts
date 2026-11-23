@@ -25,7 +25,7 @@ export function pasteTarget(action: PasteAction): string {
 
 type Keys = (command: string) => MenuKey;
 
-export function urlBarMenuItems({ paste, shareable, keys = menuShortcut }: { paste: PasteAction | null; shareable: boolean; keys?: Keys }): MenuItem[] {
+export function urlBarMenuItems({ paste, shareable, customizable = false, keys = menuShortcut }: { paste: PasteAction | null; shareable: boolean; customizable?: boolean; keys?: Keys }): MenuItem[] {
   return menuSections(
     [
       ...withOptionAlternate(
@@ -36,12 +36,14 @@ export function urlBarMenuItems({ paste, shareable, keys = menuShortcut }: { pas
       ...pasteMenuItem(paste),
     ],
     [shareable && { id: "share", title: "Share", symbol: "square.and.arrow.up", share: true }],
+    [customizable && { id: "customizeToolbar", title: "Customize Toolbar…", symbol: "slider.horizontal.3" }],
   );
 }
 
-export async function showUrlBarMenu(tab: Pick<Tab, "id" | "url" | "title" | "windowId"> & Partial<Pick<Tab, "customTitle">>) {
+export async function showUrlBarMenu(tab: Pick<Tab, "id" | "url" | "title" | "windowId"> & Partial<Pick<Tab, "customTitle">>, customizeToolbar?: () => void) {
   const action = await clipboardPasteAction();
-  const choice = await showMenu(urlBarMenuItems({ paste: action, shareable: canShare(tab) }));
+  const choice = await showMenu(urlBarMenuItems({ paste: action, shareable: canShare(tab), customizable: !!customizeToolbar }));
+  if (choice === "customizeToolbar") customizeToolbar?.();
   if (choice === "pasteAndGo" && action) navigate(tab.id, pasteTarget(action));
   if (choice === "copy") void copyPageUrl(tab.id);
   if (choice === "copyMarkdown") copyText(markdownLink(tab.customTitle || tab.title, tab.url));

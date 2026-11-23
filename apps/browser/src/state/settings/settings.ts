@@ -21,6 +21,7 @@ import { isFields, isString, isStringList } from "../../lib/decode";
 import type { SavedObject } from "../../lib/savedDocument";
 import type { JsonSchema } from "../../lib/jsonSchema";
 import { PROVIDERS_SCHEMA } from "../omnibox/providerSchema";
+import { normalizeToolbarActions, TOOLBAR_LAYOUTS, type ToolbarAction } from "./toolbarActions";
 
 export const DEFAULT_PROFILE_ID = "default";
 
@@ -128,6 +129,7 @@ export const SETTING_SPECS = {
   hideBookmarksBarImport: flag(false),
   appearance: oneOf(["auto", "light", "dark"], "auto", SYNCED),
   addressBar: oneOf(["toolbar", "sidebar"], "toolbar", SYNCED),
+  toolbarActions: shaped<ToolbarAction[] | null>(null, (v) => v === null || normalizeToolbarActions(v) !== null, { enum: [null, ...TOOLBAR_LAYOUTS] }, SYNCED),
   compactToolbar: flag(false, SYNCED),
   pageFrame: shaped<number>(PAGE_FRAME.default, validPageFrame, { type: "integer", minimum: PAGE_FRAME.min, maximum: PAGE_FRAME.max }, SYNCED),
   commandBarPlacement: oneOf(["field", "centred"], "field", SYNCED),

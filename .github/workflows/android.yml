@@ -96,7 +96,7 @@ jobs:
           BOAT_OVERFLOW_SANDBOXES: ${{ vars.BOAT_OVERFLOW_SANDBOXES }}
         run: node .route/scripts/ci/route-runner.mjs --fallback ubuntu-latest --jobs 1
       - id: target
-        name: The runner the long jobs use
+        name: The runner the long jobs use (canary)
         if: always()
         env:
           OUTCOME: ${{ steps.route.outcome }}

@@ -25,7 +25,7 @@ import { over } from "../../lib/color";
 import { anchoredClose, anchoredOpen, Divider, Expand, ink, liquidGlass, reduceMotion, Text, useTheme, VaultTouchID } from "../ui";
 import { NetworkBadge } from "../site/Autofill";
 import { MenuSurface, placement, SelectionPlate, useLeavingMenu, useWholeList } from "../vaults/VaultMenu";
-import { Lines, RowShell, Trailing, type Ink, type VaultTouchState } from "../vaults/VaultRows";
+import { Lines, RowShell, Trailing, type Ink, type RowLayer, type VaultTouchState } from "../vaults/VaultRows";
 import { VAULT_MENU } from "../vaults/tokens";
 import { addressSymbol } from "./AutofillParts";
 import { VaultAppIcon } from "../vaults/VaultParts";
@@ -76,6 +76,7 @@ const EntryRow = memo(function EntryRow({
   row,
   selected,
   plated,
+  layer,
   highlight,
   touch,
   busy,
@@ -86,6 +87,7 @@ const EntryRow = memo(function EntryRow({
   row: AutofillRow;
   selected: boolean;
   plated: boolean;
+  layer?: RowLayer;
   highlight: VaultHighlight;
   touch: VaultTouchState | null;
   busy: boolean;
@@ -100,6 +102,7 @@ const EntryRow = memo(function EntryRow({
       compact={row.kind === "manage"}
       selected={selected}
       plated={plated}
+      layer={layer}
       highlight={highlight}
       onHover={onHover}
       onPress={() => void activateAutofillRow(tabId, row)}
@@ -199,15 +202,16 @@ function MenuPanel({ tabId, menu, area, onGone }: { tabId: string; menu: Autofil
     if (!leaving && inFront && now && !now.hovered && now.seq === menu.seq) selectAutofillRow(tabId, autofillRestingRow(rows));
   }, [inFront]);
   const touch = { phase: menu.touch, retries: menu.touchRetries };
-  const view = (row: AutofillRow, index: number) => (
+  const view = (row: AutofillRow, index: number, layer?: RowLayer) => (
     <EntryRow
       key={row.key}
       tabId={tabId}
       row={row}
       selected={shownSelected === index}
       plated={index < list.length}
+      layer={layer}
       highlight={highlight}
-      touch={index === touchTarget ? touch : null}
+      touch={index === touchTarget && (layer === "lit" || index >= list.length) ? touch : null}
       busy={menu.busy === row.key}
       reserve={touchIDReady}
       onHover={() => menu.selected !== index && selectAutofillRow(tabId, index)}
@@ -244,25 +248,25 @@ function MenuPanel({ tabId, menu, area, onGone }: { tabId: string; menu: Autofil
           scrollEventThrottle={16}
           onScroll={(e) => (scrollTop.current = e.nativeEvent.contentOffset.y)}
         >
-          <SelectionPlate index={shownSelected} offsets={offsets} fill={highlight.fill} />
-          {shown.map(view)}
-          {touchTarget >= 0 ? (
-            <View
-              pointerEvents="none"
-              style={{
-                ...TOUCH_ID_SLOT,
-                top: VAULT_MENU.listPad + offsets[touchTarget]! + (VAULT_MENU.row - VAULT_MENU.touchID) / 2,
-              }}
-            >
-              <VaultTouchID
-                key={menu.touchRearms}
-                armed={touchArmed}
-                grantScope={touchScopeOfAutofill(tabId, selectedRow)}
-                onStatus={(status) => noteAutofillTouchStatus(tabId, menu.seq, status)}
-                style={TOUCH_ID_SIZE}
-              />
-            </View>
-          ) : null}
+          {shown.map((row, i) => view(row, i))}
+          <SelectionPlate
+            index={shownSelected}
+            offsets={offsets}
+            fill={highlight.fill}
+            accessory={
+              touchTarget >= 0 ? (
+                <VaultTouchID
+                  key={menu.touchRearms}
+                  armed={touchArmed}
+                  grantScope={touchScopeOfAutofill(tabId, selectedRow)}
+                  onStatus={(status) => noteAutofillTouchStatus(tabId, menu.seq, status)}
+                  style={TOUCH_ID_SIZE}
+                />
+              ) : null
+            }
+          >
+            {list.map((row, i) => view(row, i, "lit"))}
+          </SelectionPlate>
         </ScrollView>
         <Expand open={!!menu.error}>
           <Text size="caption" tone="destructive" lines={2} style={ERROR}>
@@ -287,11 +291,6 @@ const LIST = {
 const TOUCH_ID_SIZE = {
   width: VAULT_MENU.touchID,
   height: VAULT_MENU.touchID,
-} as const;
-const TOUCH_ID_SLOT = {
-  position: "absolute",
-  right: VAULT_MENU.rowInset + VAULT_MENU.rowPadding,
-  ...TOUCH_ID_SIZE,
 } as const;
 const SEPARATOR = { marginHorizontal: VAULT_MENU.separatorInset } as const;
 const ERROR = {

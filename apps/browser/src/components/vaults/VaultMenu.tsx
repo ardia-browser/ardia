@@ -14,7 +14,7 @@ import { over } from "../../lib/color";
 import { useSettings, useTab, useTabLive } from "../../state/browser/hooks";
 import { anchoredClose, anchoredOpen, Button, Divider, Expand, GlassFill, ink, liquidGlass, PANEL, Panel, POPOVER_MARGIN, PopoverSurface, reduceMotion, SearchField, selectionSlide, shadow, space, Text, useTheme, VaultTouchID, withAlpha } from "../ui";
 import { twinLogins } from "./rowText";
-import { CodesTicking, rowHeight, VaultRowView } from "./VaultRows";
+import { CodesTicking, rowHeight, VaultRowView, type RowLayer } from "./VaultRows";
 import { VAULT_MENU } from "./tokens";
 
 type Area = { width: number; height: number };
@@ -76,7 +76,7 @@ export function useWholeList() {
 
 const isSpare = (row: VaultRow) => row.kind === "generate" && !!row.spare;
 
-export function SelectionPlate({ index, offsets, fill }: { index: number; offsets: readonly number[]; fill: string }) {
+export function SelectionPlate({ index, offsets, fill, accessory, children }: { index: number; offsets: readonly number[]; fill: string; accessory?: ReactNode; children?: ReactNode }) {
   const y = useRef(new Animated.Value(offsets[index] ?? 0)).current;
   const shownAt = useRef(-1);
   const at = offsets[index];
@@ -89,8 +89,14 @@ export function SelectionPlate({ index, offsets, fill }: { index: number; offset
     run.start();
     return () => run.stop();
   }, [index, at]);
+  const back = useMemo(() => Animated.multiply(y, -1), [y]);
   if (at === undefined) return null;
-  return <Animated.View pointerEvents="none" style={{ ...PLATE, borderRadius: VAULT_MENU.rowRadius, backgroundColor: fill, transform: [{ translateY: y }] }} />;
+  return (
+    <Animated.View pointerEvents="none" style={{ ...PLATE, borderRadius: VAULT_MENU.rowRadius, backgroundColor: fill, transform: [{ translateY: y }] }}>
+      {children ? <Animated.View style={{ ...PLATE_CONTENT, transform: [{ translateY: back }] }}>{children}</Animated.View> : null}
+      {accessory ? <View style={PLATE_ACCESSORY}>{accessory}</View> : null}
+    </Animated.View>
+  );
 }
 
 export function MenuSurface({ glass, children }: { glass: boolean; children: ReactNode }) {
@@ -177,7 +183,7 @@ function MenuPanel({ tabId, menu, zoom, area, onGone }: { tabId: string; menu: M
   const site = siteLabel(menu.origin);
   const twins = useMemo(() => twinLogins(list, site), [rows, site]);
   const unfolds = allSettled.reduce((sum, r) => sum + rowHeight(r), 0) + GENERATOR_STYLES.length * VAULT_MENU.row <= listRoom;
-  const view = (row: VaultRow, index: number) => (
+  const view = (row: VaultRow, index: number, layer?: RowLayer) => (
     <VaultRowView
       key={row.key}
       tabId={tabId}
@@ -187,9 +193,10 @@ function MenuPanel({ tabId, menu, zoom, area, onGone }: { tabId: string; menu: M
       twin={twins.has(row.key)}
       selected={shownSelected === index}
       plated={index < list.length}
+      layer={layer}
       reserveTrailing={touchIDReady}
       highlight={highlight}
-      touch={index === touchTarget ? touch : null}
+      touch={index === touchTarget && (layer === "lit" || index >= list.length) ? touch : null}
       busy={menu.busy === row.key}
       onHover={() => menu.selected !== index && selectVaultRow(tabId, index)}
       onPress={() => clickVaultRow(tabId, row)}
@@ -236,16 +243,18 @@ function MenuPanel({ tabId, menu, zoom, area, onGone }: { tabId: string; menu: M
               onScroll={(e) => (scrollTop.current = e.nativeEvent.contentOffset.y)}
               onContentSizeChange={(_, h) => (contentHeight.current = h)}
             >
-              <SelectionPlate index={shownSelected} offsets={offsets} fill={highlight.fill} />
-              {settled.map(view)}
+              {settled.map((row, i) => view(row, i))}
               <Expand open={firstSpare >= 0} animate={unfolds}>
                 {firstSpare >= 0 ? list.slice(firstSpare).map((row, i) => view(row, firstSpare + i)) : null}
               </Expand>
-              {touchTarget >= 0 ? (
-                <View pointerEvents="none" style={{ ...TOUCH_ID_SLOT, top: VAULT_MENU.listPad + offsets[touchTarget]! + (rowHeight(list[touchTarget]!) - VAULT_MENU.touchID) / 2 }}>
-                  <VaultTouchID key={menu.touchRearms} armed={touchArmed} grantScope={touchScopeOf(tabId, menu)} onStatus={(status) => noteVaultTouchStatus(tabId, menu.seq, status)} style={TOUCH_ID_SIZE} />
-                </View>
-              ) : null}
+              <SelectionPlate
+                index={shownSelected}
+                offsets={offsets}
+                fill={highlight.fill}
+                accessory={touchTarget >= 0 ? <VaultTouchID key={menu.touchRearms} armed={touchArmed} grantScope={touchScopeOf(tabId, menu)} onStatus={(status) => noteVaultTouchStatus(tabId, menu.seq, status)} style={TOUCH_ID_SIZE} /> : null}
+              >
+                {list.map((row, i) => view(row, i, "lit"))}
+              </SelectionPlate>
             </ScrollView>
           ) : (
             <View style={EMPTY}>
@@ -276,12 +285,13 @@ function MenuPanel({ tabId, menu, zoom, area, onGone }: { tabId: string; menu: M
   );
 }
 
-const PLATE = { position: "absolute", top: VAULT_MENU.listPad, left: VAULT_MENU.rowInset, right: VAULT_MENU.rowInset, height: VAULT_MENU.row } as const;
+const PLATE = { position: "absolute", top: VAULT_MENU.listPad, left: VAULT_MENU.rowInset, right: VAULT_MENU.rowInset, height: VAULT_MENU.row, overflow: "hidden" } as const;
+const PLATE_ACCESSORY = { position: "absolute", right: VAULT_MENU.rowPadding, top: (VAULT_MENU.row - VAULT_MENU.touchID) / 2, width: VAULT_MENU.touchID, height: VAULT_MENU.touchID } as const;
+const PLATE_CONTENT = { position: "absolute", top: 0, left: -VAULT_MENU.rowInset, right: -VAULT_MENU.rowInset } as const;
 const FILL = { flex: 1 } as const;
 const SEARCH_ROW = { flexDirection: "row", alignItems: "center", gap: space.xs, height: VAULT_MENU.searchHeight, paddingHorizontal: VAULT_MENU.rowInset } as const;
 const LIST = { paddingTop: VAULT_MENU.listPad, paddingBottom: VAULT_MENU.separatorGap } as const;
 const TOUCH_ID_SIZE = { width: VAULT_MENU.touchID, height: VAULT_MENU.touchID } as const;
-const TOUCH_ID_SLOT = { position: "absolute", right: VAULT_MENU.rowInset + VAULT_MENU.rowPadding, ...TOUCH_ID_SIZE } as const;
 const LIST_ALONE = { paddingVertical: VAULT_MENU.listPad } as const;
 const SEPARATOR = { marginHorizontal: VAULT_MENU.separatorInset } as const;
 const EMPTY = { height: VAULT_MENU.compactRow, justifyContent: "center", paddingHorizontal: VAULT_MENU.separatorInset, marginTop: VAULT_MENU.listPad, marginBottom: VAULT_MENU.separatorGap } as const;

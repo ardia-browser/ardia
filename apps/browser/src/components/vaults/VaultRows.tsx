@@ -8,7 +8,7 @@ import { noteVaultMenuPress, type VaultTouchPhase } from "../../state/vaults/men
 import { useVaultCode } from "../../state/vaults/hooks";
 import { ActivitySpinner, capsule, curve, ink, reduceMotion, springs, Symbol, tabularNums, Text, useTheme, withAlpha } from "../ui";
 import { CodeDigits } from "./CodeDigits";
-import { useCrossfade, useGlow } from "./rowMotion";
+import { useCrossfade } from "./rowMotion";
 import { CountdownRing, VaultAppIcon, type RingInk } from "./VaultParts";
 import { VAULT_CODE, VAULT_MENU, VAULT_TOUCH } from "./tokens";
 import { GENERATOR_COPY, itemSite, loginLines, rowLabel } from "./rowText";
@@ -18,8 +18,6 @@ export const CodesTicking = createContext(true);
 export const rowHeight = (row: VaultRow) => (FOOTER_KINDS.has(row.kind) ? VAULT_MENU.compactRow : VAULT_MENU.row);
 
 const TEXT = { flex: 1, minWidth: 0, gap: VAULT_MENU.textGap } as const;
-const TEXT_SLOT = { flex: 1, minWidth: 0 } as const;
-const TEXT_LAYER = { gap: VAULT_MENU.textGap, justifyContent: "center" } as const;
 const SPINNER = { width: VAULT_MENU.spinner, height: VAULT_MENU.spinner } as const;
 const TOUCH_ID = { width: VAULT_MENU.touchID, height: VAULT_MENU.touchID } as const;
 const LAYER = { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" } as const;
@@ -37,12 +35,11 @@ type RowProps = Parameters<typeof VaultRowViewOf>[0];
 const sameTouch = (a: VaultTouchState | null, b: VaultTouchState | null) => a === b || (!!a && !!b && a.phase === b.phase && a.retries === b.retries);
 
 const sameRowProps = (a: RowProps, b: RowProps) =>
-  a.tabId === b.tabId && a.seq === b.seq && a.row === b.row && a.selected === b.selected && a.plated === b.plated && a.reserveTrailing === b.reserveTrailing && a.highlight === b.highlight && a.busy === b.busy && a.site === b.site && a.twin === b.twin && sameTouch(a.touch, b.touch);
+  a.tabId === b.tabId && a.seq === b.seq && a.row === b.row && a.selected === b.selected && a.plated === b.plated && a.reserveTrailing === b.reserveTrailing && a.highlight === b.highlight && a.busy === b.busy && a.site === b.site && a.twin === b.twin && a.layer === b.layer && sameTouch(a.touch, b.touch);
 
 export const VaultRowView = memo(VaultRowViewOf, sameRowProps);
 
-type InkFade = { plain: Ink; lit: Ink; glow: Animated.Value; shown: boolean };
-export type Ink = { title: string; detail: string; icon: string; ground: string; ring?: RingInk; fade?: InkFade };
+export type Ink = { title: string; detail: string; icon: string; ground: string; ring?: RingInk };
 
 export type VaultTouchState = { phase: VaultTouchPhase; retries: number };
 
@@ -54,29 +51,34 @@ function useInk(highlight: VaultHighlight | null, surface: string): Ink {
   return { title: on, detail: on, icon: on, ground: highlight.fill, ring: { arc: on, warning, track: withAlpha(on, theme.dark ? VAULT_CODE.restTrack.dark : VAULT_CODE.restTrack.light) } };
 }
 
-export function RowShell({ label, height, compact, selected, plated, highlight, onHover, onPress, children }: { label: string; height: number; compact: boolean; selected: boolean; plated: boolean; highlight: VaultHighlight; onHover: () => void; onPress: () => void; children: (ink: Ink, lit: boolean) => ReactNode }) {
+export type RowLayer = "plain" | "lit";
+
+export function RowShell({ label, height, compact, selected, plated, layer = "plain", highlight, onHover, onPress, children }: { label: string; height: number; compact: boolean; selected: boolean; plated: boolean; layer?: RowLayer; highlight: VaultHighlight; onHover: () => void; onPress: () => void; children: (ink: Ink, lit: boolean) => ReactNode }) {
   const lit = useInk(highlight, highlight.surface);
   const plain = useInk(null, highlight.surface);
-  const { glow, shown } = useGlow(selected, plated);
-  const fade = plated ? { plain, lit, glow, shown } : undefined;
-  const inkOf = (pressed: boolean): Ink => (pressed && !selected ? lit : { ...(selected ? lit : plain), fade });
+  const style = {
+    height,
+    marginHorizontal: VAULT_MENU.rowInset,
+    paddingHorizontal: compact ? VAULT_MENU.footerPadding : VAULT_MENU.rowPadding,
+    borderRadius: VAULT_MENU.rowRadius,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: VAULT_MENU.iconGap,
+  } as const;
+  if (layer === "lit") {
+    return (
+      <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={style}>
+        {children(lit, true)}
+      </View>
+    );
+  }
+  const inkOf = (pressed: boolean): Ink => (pressed && !selected ? lit : plated ? plain : selected ? lit : plain);
   return (
     <View onMouseEnter={onHover}>
       <Pressable onPressIn={noteVaultMenuPress} onPress={onPress} accessibilityRole="menuitem" accessibilityLabel={label} accessibilityState={{ selected }}>
         {({ pressed }) => (
-          <View
-            style={{
-              height,
-              marginHorizontal: VAULT_MENU.rowInset,
-              paddingHorizontal: compact ? VAULT_MENU.footerPadding : VAULT_MENU.rowPadding,
-              borderRadius: VAULT_MENU.rowRadius,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: VAULT_MENU.iconGap,
-              backgroundColor: (selected && !plated) || (pressed && !selected) ? highlight.fill : undefined,
-            }}
-          >
-            {children(inkOf(pressed), selected || pressed)}
+          <View style={[style, { backgroundColor: (selected && !plated) || (pressed && !selected) ? highlight.fill : undefined }]}>
+            {children(inkOf(pressed), (selected && !plated) || pressed)}
           </View>
         )}
       </Pressable>
@@ -129,18 +131,9 @@ function LinesIn({ title, detail, ink, mono, strong, tryAgain, renderTitle }: Li
 }
 
 export function Lines(props: LinesProps) {
-  const fade = props.ink.fade;
-  if (!fade) return <View style={TEXT}><LinesIn {...props} /></View>;
   return (
-    <View style={TEXT_SLOT}>
-      <View style={TEXT_LAYER}>
-        <LinesIn {...props} ink={fade.plain} />
-      </View>
-      {fade.shown ? (
-        <Animated.View pointerEvents="none" style={{ ...StyleSheet.absoluteFillObject, ...TEXT_LAYER, opacity: fade.glow }}>
-          <LinesIn {...props} ink={fade.lit} />
-        </Animated.View>
-      ) : null}
+    <View style={TEXT}>
+      <LinesIn {...props} />
     </View>
   );
 }
@@ -219,32 +212,11 @@ export function Trailing({ busy, touch, ink, fill, reserve }: { busy: boolean; t
 }
 
 function ItemTile({ provider, ink, symbol = "key.fill" }: { provider: string; ink: Ink; symbol?: string }) {
-  const fade = ink.fade;
-  const tile = (layer: Ink) => <VaultAppIcon provider="" symbol={symbol} neutral badge={{ provider, ground: layer.ground }} />;
-  if (!fade?.shown) return tile(fade ? fade.plain : ink);
-  return (
-    <View>
-      {tile(fade.plain)}
-      <Animated.View pointerEvents="none" style={{ ...StyleSheet.absoluteFillObject, opacity: fade.glow }}>
-        {tile(fade.lit)}
-      </Animated.View>
-    </View>
-  );
+  return <VaultAppIcon provider="" symbol={symbol} neutral badge={{ provider, ground: ink.ground }} />;
 }
 
 function RingSlot({ live, ink, paused }: { live: { expiresAt: number; period: number } | null; ink: Ink; paused: boolean }) {
-  const fade = ink.fade;
-  const ring = (layer: Ink) => (live ? <CountdownRing key={live.expiresAt} expiresAt={live.expiresAt} period={live.period} paused={paused} colors={layer.ring} /> : null);
-  return (
-    <View style={RING_SLOT}>
-      {fade?.shown ? <Animated.View style={{ ...StyleSheet.absoluteFillObject, opacity: fade.glow.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }}>{ring(fade.plain)}</Animated.View> : ring(fade ? fade.plain : ink)}
-      {fade?.shown ? (
-        <Animated.View pointerEvents="none" style={{ ...StyleSheet.absoluteFillObject, opacity: fade.glow }}>
-          {ring(fade.lit)}
-        </Animated.View>
-      ) : null}
-    </View>
-  );
+  return <View style={RING_SLOT}>{live ? <CountdownRing key={live.expiresAt} expiresAt={live.expiresAt} period={live.period} paused={paused} colors={ink.ring} /> : null}</View>;
 }
 
 function CodeLine({ tabId, seq, row, ink, trailing }: { tabId: string; seq: number; row: Extract<VaultRow, { kind: "otp" }>; ink: Ink; trailing: ReactNode }) {
@@ -282,6 +254,7 @@ function VaultRowViewOf({
   busy,
   site,
   twin,
+  layer,
   onHover,
   onPress,
 }: {
@@ -296,13 +269,14 @@ function VaultRowViewOf({
   busy: boolean;
   site: string;
   twin?: boolean;
+  layer?: RowLayer;
   onHover: () => void;
   onPress: () => void;
 }) {
   const tryAgain = useTryAgain(touch?.retries ?? 0) && !!touch && !busy;
   const label = rowLabel(row, site, twin);
   const shell = (children: (ink: Ink, lit: boolean) => ReactNode) => (
-    <RowShell label={label} height={rowHeight(row)} compact={FOOTER_KINDS.has(row.kind)} selected={selected} plated={plated} highlight={highlight} onHover={onHover} onPress={onPress}>
+    <RowShell label={label} height={rowHeight(row)} compact={FOOTER_KINDS.has(row.kind)} selected={selected} plated={plated} layer={layer} highlight={highlight} onHover={onHover} onPress={onPress}>
       {children}
     </RowShell>
   );

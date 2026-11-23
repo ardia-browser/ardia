@@ -837,3 +837,22 @@ test("only a trusted click on the hint's close button dismisses it, and the dism
   assert.equal(page.hintShown(), false);
   assert.deepEqual(page.sent.filter((m) => m.kind === "fieldProviderHint").map((m) => m.data.state), ["shown", "dismissed"]);
 });
+
+test("in menu mode the kit shows no key and reports no focus, and tells the vault code when the mode turns on and off", () => {
+  const page = frame();
+  const modes = [];
+  page.onMenuMode((on) => modes.push([on, page.menuMode()]));
+  page.configure({ ...LOGIN, fill: "menu" });
+  page.focus(input({ type: "password" }));
+  assert.equal(page.keyShown(), false);
+  assert.deepEqual(page.focusReports(), []);
+  page.focusQuery("q");
+  assert.deepEqual(page.focusReports(), []);
+  page.configure({ ...LOGIN, fill: "menu", generation: 2 });
+  page.configure(LOGIN);
+  assert.equal(page.keyShown(), true, "the in-page key takes over for a system provider");
+  page.configure({ ...LOGIN, fill: "menu" });
+  assert.equal(page.keyShown(), false);
+  page.configure(false);
+  assert.deepEqual(modes, [[true, true], [false, true], [true, true], [false, true]], "turning off is told while menu mode still holds");
+});

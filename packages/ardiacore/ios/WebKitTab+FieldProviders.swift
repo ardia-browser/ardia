@@ -59,8 +59,14 @@ extension WebKitTab {
     return originScheme == scheme && origin.host.lowercased() == host && originPort == (top.port ?? defaultPort(scheme))
   }
 
+  private var fillsWithSystemPanel: Bool {
+    guard let provider = ArdiaWebView.fieldProvider(profile: profile) else { return false }
+    return provider["fill"] as? String != "menu"
+  }
+
   private var fieldProviderJSON: String {
-    guard let provider = ArdiaWebView.fieldProvider(profile: profile), let data = try? JSONSerialization.data(withJSONObject: provider),
+    guard fillsWithSystemPanel, let provider = ArdiaWebView.fieldProvider(profile: profile),
+      let data = try? JSONSerialization.data(withJSONObject: provider),
       let text = String(data: data, encoding: .utf8)
     else { return "false" }
     return text

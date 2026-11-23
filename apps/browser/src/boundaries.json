@@ -251,7 +251,7 @@
    "id": "page-script-message-count:page_script.js",
    "source": "page",
    "guard": "Every send or post call in the page script, including those with a kind computed at run time; each literal kind has its own row and native receiver. The count changes when a send is added, so a new one gets reviewed",
-   "count": 34,
+   "count": 48,
    "checks": [
     "packages/ardiacore/ios/page_script.js"
    ]
@@ -395,7 +395,7 @@
    "id": "page-script-listener-count:page_script.js",
    "source": "page",
    "guard": "Every listener in the page script; each event type has its own row. The count changes when a listener is added, so a new one gets reviewed",
-   "count": 66,
+   "count": 85,
    "checks": [
     "packages/ardiacore/ios/page_script.js"
    ]
@@ -1641,6 +1641,78 @@
     "D9"
    ],
    "detected": false
+  },
+  {
+   "id": "chromium-page-message:vaultField",
+   "source": "frame",
+   "guard": "Needs a field provider for the profile, a web origin and a known field kind; insets are clamped, and the geometry only places Ardia's native badge and fill menu",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+VaultPageMessages.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:vaultKey",
+   "source": "frame",
+   "guard": "Menu mode and a web origin only, and the key must be one of the menu keys; it only moves the selection in Ardia's fill menu",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+VaultPageMessages.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:vaultContext",
+   "source": "frame",
+   "guard": "Menu mode and a web origin; it only records which field the right-click menu acts on, filled later through native checks",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+VaultPageMessages.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:vaultCodeTarget",
+   "source": "frame",
+   "guard": "Dropped outside menu mode; a target only names the code field a native fill may write to, after the code's own site match",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+VaultPageMessages.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:vaultSubmit",
+   "source": "frame",
+   "guard": "Menu mode only; the capture is checked against the frame's verified origin and only offers to save, never saves on its own",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+VaultPageMessages.mm",
+    "packages/ardiacore/ios/ArdiaVaultCapture.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:vaultLoginPage",
+   "source": "frame",
+   "guard": "Menu mode and a web origin only; it only marks the page as a login page for the save offer",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+VaultPageMessages.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:vaultLoginOutcome",
+   "source": "frame",
+   "guard": "Menu mode only; a pending capture's outcome is matched to its frame and verified origin before the save offer reacts",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+VaultPageMessages.mm",
+    "packages/ardiacore/ios/ArdiaVaultCapture.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:vaultFilled",
+   "source": "frame",
+   "guard": "Only known field kinds, and only finishes a fill native started for that frame",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+VaultPageMessages.mm",
+    "packages/ardiacore/ios/ArdiaVaultCapture.mm"
+   ]
+  },
+  {
+   "id": "page-script-listener:contextmenu",
+   "source": "page",
+   "guard": "notes which field a right-click landed on for Ardia's menu; fills still go through native checks"
   }
  ]
 }

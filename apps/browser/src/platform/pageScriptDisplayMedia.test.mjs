@@ -9,7 +9,7 @@ const slice = (from, to) => {
   assert.ok(start > 0 && end > start, `page_script.js has ${from.trim()}`);
   return script.slice(start, end);
 };
-const helper = slice("  const asNative = ", "  const { keys, setPrototypeOf } = Object;\n");
+const helper = slice("  const asNative = ", "  const serialize = ");
 const source = slice("  const displayRequests = new Map();\n", "  const receive = (kind, json) => {\n");
 const gate = slice("  const web = ", "  const isTop = ");
 

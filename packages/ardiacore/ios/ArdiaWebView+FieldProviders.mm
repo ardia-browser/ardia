@@ -56,6 +56,8 @@ NSString *FieldProviderJSON(NSString *profile) {
   return provider ? JSONText(provider) : @"false";
 }
 
+BOOL FieldProviderFillsFromMenu(NSString *profile) { return [FieldProviderFor(profile)[@"fill"] isEqual:kFillMenu]; }
+
 }
 
 namespace {

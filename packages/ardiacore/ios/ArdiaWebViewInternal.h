@@ -332,6 +332,17 @@ typedef NS_ENUM(NSInteger, ArdiaTransfer) {
 - (void)resetPageMedia;
 @end
 
+@interface ArdiaWebView (VaultPageMessagesInternal)
+- (void)receiveVaultMessage:(NSString *)kind
+                       json:(NSString *)json
+                       dict:(nullable NSDictionary *)dict
+                      frame:(NSString *)frameId
+                       main:(BOOL)main
+                     origin:(nullable NSString *)verifiedOrigin
+                        tab:(ArdiaCoreTab *)tab;
+- (void)noteVaultDocumentInFrame:(NSString *)frameId tab:(ArdiaCoreTab *)tab main:(BOOL)main origin:(nullable NSString *)verifiedOrigin;
+@end
+
 @interface ArdiaWebView (PeekInternal)
 - (void)pushPeekModifier;
 - (BOOL)peeksLinksToOtherSites;
@@ -388,6 +399,7 @@ NSString *OriginOf(NSString *url);
 NSString *VerifiedOrigin(NSString *origin);
 NSDictionary *_Nullable FieldProviderFor(NSString *_Nullable profile);
 NSString *FieldProviderJSON(NSString *_Nullable profile);
+BOOL FieldProviderFillsFromMenu(NSString *_Nullable profile);
 void NoteEvent(int browserId, NSString *name, NSDictionary *payload);
 void AcceptDrops(NSView *root, BOOL accept);
 NSView *PaneUnder(NSView *view, NSView *ancestor);

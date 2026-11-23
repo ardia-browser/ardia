@@ -36,7 +36,6 @@ static BOOL gSelectionPopover = YES;
 static BOOL gBlockAutoplayEverywhere = NO;
 static char kScriptFramesKey;
 static char kSameSiteFramesKey;
-
 static NSDictionary *DisplayMediaAudioOffer(NSDictionary *message) {
   if (!Flag(message, @"audio")) return nil;
   NSDictionary *support = ArdiaCoreEngine.desktopCaptureAudio;
@@ -133,6 +132,7 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
     if (main) [ArdiaWebView resetFieldProviderPage:tab];
     if (main && ![(Text(dict, @"url", 8192) ?: @"about:") hasPrefix:@"about:"]) _requests.requestedURL = nil;
     [self noteScriptFrame:frameId main:main sameSite:[self sameSiteFrame:main origin:sender]];
+    [self noteVaultDocumentInFrame:frameId tab:tab main:main origin:verifiedOrigin];
     [self callFrame:frameId kind:@"peekConfig" json:PeekConfigJSON(self)];
     AnswerHello(tab, _profile, frameId, main, verifiedOrigin);
     if (main) _firstPaint.scripted = YES;
@@ -309,6 +309,8 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
           @"sources" : ArdiaHost.displayMediaSources,
           @"controller" : @([dict[@"controller"] isEqual:@YES])
         }];
+  } else {
+    [self receiveVaultMessage:kind json:json dict:dict frame:frameId main:main origin:verifiedOrigin tab:tab];
   }
 }
 

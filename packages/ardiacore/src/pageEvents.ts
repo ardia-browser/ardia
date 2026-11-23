@@ -42,6 +42,11 @@ import type {
   VaultCodeFound,
   VaultContextAction,
   VaultContextField,
+  VaultField,
+  VaultKeyPress,
+  VaultLoginOutcome,
+  VaultLoginPage,
+  VaultSubmission,
   VerificationCodeFound,
   WebNotification,
   WebViewProps,
@@ -97,6 +102,11 @@ type NativeEvents = {
   onAutofillPrompt: AutofillPrompt | { id: number; closed: true };
   onExternalApp: ExternalAppRequest;
   onPreferredSize: { width: number; height: number };
+  onVaultField: VaultField;
+  onVaultKey: VaultKeyPress;
+  onVaultSubmitted: VaultSubmission;
+  onVaultLoginOutcome: VaultLoginOutcome;
+  onVaultLoginPage: VaultLoginPage;
   onVaultContext: VaultContextField;
   onVaultContextAction: VaultContextAction;
   onVaultCode: VaultCodeFound;
@@ -164,6 +174,11 @@ const PAGE_EVENTS = {
   onAutofillPrompt: "autofillPrompt",
   onExternalApp: "externalApp",
   onPreferredSize: "preferredSize",
+  onVaultField: "vaultField",
+  onVaultKey: "vaultKey",
+  onVaultSubmitted: "vaultSubmitted",
+  onVaultLoginOutcome: "vaultLoginOutcome",
+  onVaultLoginPage: "vaultLoginPage",
   onVaultContext: "vaultContext",
   onVaultContextAction: "vaultContextAction",
   onVaultCode: "vaultCode",
@@ -228,6 +243,11 @@ const unwrap: { [K in Handlers]: (e: NativeEvents[K]) => Parameters<NonNullable<
   onAutofillPrompt: (e) => ("closed" in e ? [null, e.id] : [e, e.id]),
   onExternalApp: (e) => [e],
   onPreferredSize: (e) => [e],
+  onVaultField: (e) => [e],
+  onVaultKey: (e) => [e],
+  onVaultSubmitted: (e) => [e],
+  onVaultLoginOutcome: (e) => [e],
+  onVaultLoginPage: (e) => [e],
   onVaultContext: (e) => [e],
   onVaultContextAction: (e) => [e],
   onVaultCode: (e) => [e],

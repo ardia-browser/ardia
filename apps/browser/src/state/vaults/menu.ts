@@ -13,7 +13,7 @@ import { isSecureOrigin } from "./originMatch";
 import { passwordProfileOfTab } from "./ardia";
 import { anyVaultConnectedForTab, loadAllVaultItems, refreshVaultBiometrics, useVaults } from "./store";
 import { vaultsOnForTab } from "./enabled";
-import { fieldProviderFillOfTab } from "../site/passwordManager";
+import { fieldProviderFillOfTab } from "../site/fieldProviderModes";
 import { ardiaFillsInTab } from "./ardiaSources";
 import { usePasskeys } from "./passkeyStore";
 import { declinedAt, declineField, hearFieldAgain, isQuiet, quietTabIds } from "./menuQuiet";

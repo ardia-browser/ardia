@@ -1,4 +1,4 @@
-import type { VaultItem } from "./vaults";
+import type { VaultEditResult, VaultItem } from "./vaults";
 
 export type VaultFieldKind = "username" | "password" | "newPassword" | "otp";
 export type VaultFieldRect = { x: number; y: number; width: number; height: number };
@@ -78,3 +78,48 @@ export type VaultSaveRequest = { provider: string; origin: string; title?: strin
 export type VaultPasswordDraft = { token: string; length: number };
 export type VaultSaveResult = { saved: boolean; item?: VaultItem; error?: string };
 export type VaultUpdateRequest = { provider: string; id: string; origin: string };
+
+export type VaultPageCalls = {
+  fillFromVault(request: VaultFillRequest): Promise<VaultFillResult>;
+  fillGeneratedPassword(request: {
+    frameId: string;
+    origin: string;
+    style?: VaultPasswordStyle;
+    maxLength?: number;
+    target?: VaultFillTarget;
+  }): Promise<Pick<VaultFillResult, "filled">>;
+  setVaultContextMenu(request: { frameId: string; origin: string; menu: VaultContextMenu }): Promise<void>;
+  setVaultCodeMenu(request: { token: string; menu: VaultCodeMenu }): Promise<void>;
+  setVaultMenu(request: { frameId: string; open: boolean; highlighted: boolean }): Promise<void>;
+  saveToVault(request: VaultSaveRequest): Promise<VaultSaveResult>;
+  updateVaultPassword(request: VaultUpdateRequest): Promise<VaultEditResult>;
+  discardVaultCapture(request: { origin: string }): Promise<void>;
+  stageVaultPassword(request: { origin: string }): Promise<VaultPasswordDraft>;
+};
+
+export type VaultNativePageCalls = {
+  fillFromVault(
+    frameId: string,
+    origin: string,
+    provider: string,
+    id: string,
+    fields: string[],
+    userChose: boolean,
+    submit: boolean,
+    target: VaultFillTarget | null,
+  ): Promise<VaultFillResult>;
+  fillGeneratedPassword(
+    frameId: string,
+    origin: string,
+    style: VaultPasswordStyle,
+    maxLength: number | null,
+    target: VaultFillTarget | null,
+  ): Promise<Pick<VaultFillResult, "filled">>;
+  setVaultContextMenu(frameId: string, origin: string, menu: VaultContextMenu): Promise<void>;
+  setVaultCodeMenu(token: string, menu: VaultCodeMenu): Promise<void>;
+  setVaultMenu(frameId: string, open: boolean, highlighted: boolean): Promise<void>;
+  saveToVault(provider: string, origin: string, title: string | null, username: string | null): Promise<VaultSaveResult>;
+  updateVaultPassword(provider: string, id: string, origin: string): Promise<VaultEditResult>;
+  discardVaultCapture(origin: string): Promise<void>;
+  stageVaultPassword(origin: string): Promise<VaultPasswordDraft>;
+};

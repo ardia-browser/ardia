@@ -49,6 +49,7 @@ import { escapePressed } from "../../state/windows/unclaimedEscape";
 import { withoutFragment } from "../../lib/url";
 import { adoptOf, loadedPage, navigationOf } from "../../state/tabs/pageSession";
 import { noteCommit } from "../../state/automation/automationEvents";
+import { noteAutofillSuggestions, noteVaultContext, noteVaultField, noteVaultKey, noteVaultLoginOutcome, noteVaultLoginPage, noteVaultSubmitted, runVaultContextAction } from "../../state/vaults/pageEvents";
 import { forgetUnreadIfGone, noteAppBadge, noteUnreadFavicon, noteUnreadLoading, noteUnreadPageEnded } from "../../state/tabs/unread";
 import { trackPageProcessGone } from "../../state/telemetry/diagnostics";
 import { releaseTranslation, translateCrashContext } from "../../state/site/translate";
@@ -348,6 +349,14 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
         else if (command === "hideElement" && point) void startHidingElement(tabId, point);
       }}
       onSelection={(selection) => setPageSelection(tabId, selection)}
+      onVaultField={(field) => noteVaultField(tabId, field)}
+      onVaultKey={(key) => noteVaultKey(tabId, key)}
+      onVaultSubmitted={(submitted) => void noteVaultSubmitted(tabId, submitted)}
+      onVaultLoginOutcome={(outcome) => noteVaultLoginOutcome(tabId, outcome)}
+      onVaultLoginPage={(page) => noteVaultLoginPage(tabId, page)}
+      onVaultContext={(field) => noteVaultContext(tabId, field)}
+      onVaultContextAction={(action) => runVaultContextAction(tabId, action)}
+      onAutofillSuggestions={(count, kinds, hidden, logins) => noteAutofillSuggestions(tabId, count, kinds, hidden, logins)}
       onScroll={(state) => noteScroll(tabId, state)}
       onProtectedMedia={(request) => {
         if (engine === "chromium") noteProtectedVideoRefusal(request, consentToken());

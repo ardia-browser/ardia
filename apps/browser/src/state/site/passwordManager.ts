@@ -10,6 +10,7 @@ import { useShallow } from "zustand/react/shallow";
 import { beforePluginsCommit, beforePluginsWithdraw, onPluginWithdrawAbandoned, usePlugins, recordOf, activeManifest, type PluginsCommit } from "../plugins/store";
 import { notePasswordManagerChosen, notePasswordPanel, noteProfilesMovedBack } from "../telemetry/passwordManagerCounts";
 import { isBundledRetiredRecord, RETIRED_OFFICIAL_PLUGINS, retiredRecordOf } from "../plugins/retiredOfficial";
+import { toggleVaultMenuFromBadge } from "../vaults/menu";
 import {
   choiceKind,
   fieldProviderSet,
@@ -28,7 +29,7 @@ import {
   type PasswordManagerChoice,
 } from "./passwordManagerChoice";
 import { closeVerificationCodePrompts, offerVerificationCode } from "./verificationCodes";
-import { modesOf, useFieldProviderModes } from "./fieldProviderModes";
+import { fieldProviderFillOfTab, modesOf, useFieldProviderModes } from "./fieldProviderModes";
 import { followMode, forgetHeldOffOutside, forgetPendingOfferToSave, offerToSaveHeldOffSomewhere, passwordAutofill, pendingOfferToSave, startOfferToSave, watchPendingOfferToSave, writeOfferToSave } from "./offerToSave";
 
 export { forgetPendingOfferToSave, passwordAutofill };
@@ -386,6 +387,9 @@ export async function openSystemPanel(tabId: string): Promise<boolean> {
   const result = await showSystemPanel(tabId, generation).catch(() => null);
   return !!result && (result.shown || PANEL_MAY_BE_UP.has(result.reason ?? ""));
 }
+
+export const pressFieldProviderKey = (tabId: string): "opened" | "closed" | null =>
+  fieldProviderFillOfTab(tabId) === "menu" ? toggleVaultMenuFromBadge(tabId) : null;
 
 export function passwordManagerSnapshot(): Record<string, string> | null {
   if (!PLATFORM_FEATURES.systemPasswordManagers || !PLATFORM_FEATURES.plugins) return {};

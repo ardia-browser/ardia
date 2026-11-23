@@ -7,6 +7,7 @@ import { id, ids, obj, oneOf, TAB, text, WINDOW } from "./socketSchema";
 import { expect, now, tabOf, windowOf } from "./socketTargets";
 import { openableUrl } from "./workspaceOps";
 import { OpError } from "./workspaceTargets";
+import { ownValue } from "../../lib/decode";
 
 const ORIENTATIONS = ["horizontal", "vertical"] as const;
 
@@ -22,7 +23,7 @@ export function splitRow(s: BrowserState, v: SplitView) {
 
 function splitArg(value: unknown): SplitView {
   const s = now();
-  const v = typeof value === "string" && Object.hasOwn(s.splits, value) ? s.splits[value] : undefined;
+  const v = ownValue(s.splits, value);
   if (!v || !eligibleKind(s, v.windowId)) throw new OpError("no_window", `There's no split ${String(value)}.`);
   return v;
 }

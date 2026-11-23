@@ -1,4 +1,5 @@
 import { consentListing, type PluginRecord, type PluginsStore } from "./store";
+import { ownValue } from "../../lib/decode";
 
 export type ConsentVerb = "install" | "update" | "turnOn";
 
@@ -14,4 +15,4 @@ export function consentVerb(official: boolean, record: Pick<PluginRecord, "appro
 }
 
 export const consentVerbOf = (s: Pick<PluginsStore, "listings" | "candidates" | "records">, name: string, hash: string): ConsentVerb =>
-  consentVerb(!!consentListing(s, name, hash)?.manifest?.official, Object.hasOwn(s.records, name) ? s.records[name] : undefined, hash);
+  consentVerb(!!consentListing(s, name, hash)?.manifest?.official, ownValue(s.records, name), hash);

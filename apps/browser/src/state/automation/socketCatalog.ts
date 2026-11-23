@@ -1,8 +1,9 @@
 import type { JsonSchema } from "../../lib/jsonSchema";
 import { errorText } from "../../lib/errors";
 import { failure, type MethodError } from "./automationMethods";
-import { obj, ownField, schemaProblem } from "./socketSchema";
+import { obj, schemaProblem } from "./socketSchema";
 import { OpError } from "./workspaceTargets";
+import { isFields, ownValue } from "../../lib/decode";
 
 export const STOPPED = "Control was turned off before Ardia made the change, so nothing changed.";
 
@@ -64,7 +65,7 @@ const FAMILY_OF_AREA: Record<string, SocketFamily> = {
 };
 
 export const areaOf = (name: string) => name.split(".")[0]!;
-export const familyOf = (name: string): SocketFamily => ownField(FAMILY_OF_AREA, areaOf(name)) ?? "core";
+export const familyOf = (name: string): SocketFamily => ownValue(FAMILY_OF_AREA, areaOf(name)) ?? "core";
 
 const core = (name: string, mutates: boolean, description: string, result: string, params: JsonSchema = obj({})): MethodSpec => ({ name, mutates, description, params, result });
 
@@ -142,8 +143,8 @@ function guarded(method: string, schema: JsonSchema, value: Record<string, unkno
     if (typeof key === "string" && !Object.hasOwn(listed, key) && !PROTOTYPE_KEYS.has(key)) throw new UnlistedParamError(`${method} read ${path}${String(key)}, which its params schema doesn't list.`);
   };
   const wrapped = (key: string | symbol, found: unknown) => {
-    const nested = typeof key === "string" ? ownField(listed, key) : undefined;
-    if (isClosedObject(nested) && typeof found === "object" && found !== null && !Array.isArray(found)) return guarded(method, nested, found as Record<string, unknown>, `${path}${String(key)}.`);
+    const nested = typeof key === "string" ? ownValue(listed, key) : undefined;
+    if (isClosedObject(nested) && isFields(found)) return guarded(method, nested, found, `${path}${String(key)}.`);
     return found;
   };
   return new Proxy(value, {

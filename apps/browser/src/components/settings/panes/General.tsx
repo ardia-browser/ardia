@@ -27,6 +27,7 @@ import { FilterListsPage } from "./FilterListsPage";
 import { PaneSubPage } from "./PaneSubPage";
 import { SyncSection } from "./SyncSection";
 import { UpdatesSection } from "./UpdatesSection";
+import { homeRelative } from "../../../lib/homePath";
 
 const APP = "Ardia";
 
@@ -140,8 +141,6 @@ function EngineSection() {
     </>
   );
 }
-
-const homeRelative = (path: string) => path.replace(/^\/Users\/[^/]+(?=\/|$)/, "~");
 
 function DownloadsSection() {
   const separate = useSettings((s) => s.separateDownloadFolders);

@@ -10,7 +10,8 @@ import { splitOf } from "../splits/splits";
 import { isAsleep, isLazy } from "../tabs/pageSession";
 import { isSleeping } from "../tabs/sleepingTabs";
 import { focusedWindowOf } from "../windows/ui";
-import { eligibleKind, isEligibleTab, ownEntry, shownPage, type AutomationWindowKind } from "./automationWindows";
+import { eligibleKind, isEligibleTab, shownPage, type AutomationWindowKind } from "./automationWindows";
+import { ownValue } from "../../lib/decode";
 
 export type TabNode = {
   type: "tab";
@@ -102,7 +103,7 @@ export function groupFields(s: Snapshot, g: TabGroup): Omit<GroupNode, "items"> 
 }
 
 export const isEligibleGroup = (s: Pick<BrowserState, "windows" | "groups">, id: string): boolean => {
-  const g = ownEntry(s.groups, id);
+  const g = ownValue(s.groups, id);
   return !!g && eligibleKind(s, g.windowId) === "normal" && !isIncognitoProfile(g.profileId);
 };
 

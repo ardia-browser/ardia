@@ -3,6 +3,7 @@ import { ardiaHost, callHost, type ArdiaHost } from "./host.ts";
 import { unavailableError } from "./hostCapabilities.ts";
 import { hostReportExport } from "./hostReport.ts";
 import { COUNT_EVENTS } from "../../browser/src/state/telemetry/countEvents";
+import { utcDay } from "../../browser/src/lib/time";
 
 const DAY_MS = 86_400_000;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -26,7 +27,6 @@ export type ChunkStore = {
 
 const encoder = new TextEncoder();
 export const utf8Bytes = (text: string) => encoder.encode(text).length;
-export const utcDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 const lineAt = (line: string) => {
   const match = /^\{"at":(\d+)/.exec(line);
   return match ? Number(match[1]) : null;
@@ -113,7 +113,6 @@ export function planPrune(chunks: Chunk[], now: number, keepMs: number, maxBytes
   }
   return { put, remove, dropped, bytes: total, lines: days.reduce((sum, entry) => sum + entry.lines.length, 0), files: days.length };
 }
-
 
 function isUnsentCount(line: string): boolean {
   try {

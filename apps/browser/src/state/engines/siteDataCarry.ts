@@ -3,7 +3,7 @@ import type { PageEngine } from "../../platform/tabs";
 import { getSiteSettings, onSiteSettingChange } from "../../platform/siteSettings";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { engineProfile, isIncognitoProfile } from "../browser/model";
-import { tabEngine } from "./engines";
+import { otherEngine, tabEngine } from "./engines";
 import {
   cookieFingerprint,
   cookieMap,
@@ -33,7 +33,6 @@ const ALLOW_CACHE_MS = 5_000;
 const BLOCK_CACHE_SIZE = 200;
 const NOTHING: SiteDataCarry = { cookies: 0, removed: 0, storage: 0, conflicts: 0 };
 
-const other = (engine: PageEngine): PageEngine => (engine === "webkit" ? "chromium" : "webkit");
 const store = () => useBrowser.getState();
 
 export const carriesSiteData = (s: Pick<BrowserState, "settings"> = store()) => s.settings.engineSwitchCarriesSiteData !== false;
@@ -193,7 +192,7 @@ type Commit = {
 };
 
 async function commitCarry(profile: string, site: string, to: PageEngine, { entry, origins, domains, read, cleared, stillCurrent, consent }: Commit): Promise<SiteDataCarry> {
-  const from = other(to);
+  const from = otherEngine(to);
   const { chromium, webkit } = read;
   if (!webkit || !stillCurrent()) return NOTHING;
   const p = profileOf(book(), profile);
@@ -336,7 +335,7 @@ export async function carryForTab(tabId: string, url: string, to: PageEngine, st
 }
 
 export async function carryRecentSites(to: PageEngine, consent: ConsentToken | null, stillWanted: () => boolean = () => true, limit = 30): Promise<void> {
-  const from = other(to);
+  const from = otherEngine(to);
   const jobs: { profile: string; site: string; at: number }[] = [];
   for (const [profile, p] of Object.entries(book()))
     for (const [site, entry] of Object.entries(p.sites)) if (needsCarry(entry, to, false) && (entry.at[from] ?? 0) > 0) jobs.push({ profile, site, at: entry.at[from] ?? 0 });

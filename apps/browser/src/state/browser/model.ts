@@ -11,6 +11,8 @@ let counter = 0;
 export const newId = (prefix: string) => `${prefix}-${launch}-${(++counter).toString(36)}`;
 
 export const pinKeyOf = (x: { id: string; pinKey?: string }) => x.pinKey ?? x.id;
+
+export const pinHomeOf = (t: { url: string; pinnedUrl?: string | null }) => t.pinnedUrl || t.url;
 export const familyKeyOf = (t: Pick<Tab, "profileId" | "id" | "pinKey">) => `${t.profileId}\u0001${pinKeyOf(t)}`;
 
 let navSeq = 0;

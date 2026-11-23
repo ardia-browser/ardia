@@ -3,25 +3,13 @@ import type { Settings } from "../settings/settings";
 import type { Tab } from "../browser/types";
 import { useBrowser } from "../browser/store";
 import { isIncognitoProfile } from "../browser/model";
+import { cachedHostOf } from "../../lib/url";
 
 export type UnreadSiteSettings = Pick<Settings, "showUnreadCounts" | "unreadHiddenSites">;
 
-const HOST_CACHE_LIMIT = 512;
-const hosts = new Map<string, string>();
-
-function cachedHost(url: string): string {
-  let host = hosts.get(url);
-  if (host === undefined) {
-    if (hosts.size >= HOST_CACHE_LIMIT) hosts.clear();
-    host = hostOf(url);
-    hosts.set(url, host);
-  }
-  return host;
-}
-
 export function isUnreadSiteHidden(settings: UnreadSiteSettings, url: string): boolean {
   if (!url || !settings.unreadHiddenSites?.length) return false;
-  const host = cachedHost(url);
+  const host = cachedHostOf(url);
   return !!host && settings.unreadHiddenSites.includes(host);
 }
 

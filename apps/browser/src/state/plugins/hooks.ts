@@ -11,18 +11,19 @@ import { eligibleKind } from "../automation/automationWindows";
 import { valuesOf } from "./values";
 import { consentVerbOf } from "./consentWords";
 import { fullControlLine } from "./consent";
+import { ownValue } from "../../lib/decode";
 
 export const usePluginOrder = () => usePlugins((s) => s.order);
 export { useOfficialPlugins } from "./official";
 export const usePluginListing = (name: string) => usePlugins((s) => s.listings[name]);
 export const usePluginFullControl = (name: string) =>
   usePlugins((s) => {
-    const listing = Object.hasOwn(s.listings, name) ? s.listings[name] : Object.hasOwn(s.candidates, name) ? s.candidates[name] : undefined;
+    const listing = Object.hasOwn(s.listings, name) ? s.listings[name] : ownValue(s.candidates, name);
     return !!listing?.manifest && fullControlLine(listing.manifest) !== null;
   });
 export const useConsentListing = (name: string, hash: string) => usePlugins((s) => consentListing(s, name, hash));
 export const useConsentVerb = (name: string, hash: string) => usePlugins((s) => consentVerbOf(s, name, hash));
-export const useOfficialFetch = (name: string) => usePlugins((s) => (Object.hasOwn(s.fetches, name) ? s.fetches[name] : undefined));
+export const useOfficialFetch = (name: string) => usePlugins((s) => ownValue(s.fetches, name));
 export const usePluginTitle = (name: string | null | undefined) => usePlugins((s) => (name && Object.hasOwn(s.listings, name) ? (s.listings[name]!.manifest?.title ?? name) : null));
 export const usePluginRecord = (name: string) => usePlugins((s) => recordOf(s, name));
 export const usePluginActive = (name: string) => usePlugins((s) => !!activeManifest(s, name));
@@ -48,7 +49,7 @@ export const usePluginPageUrl = (name: string, path: string) => usePlugins((s) =
 export const usePluginFolderId = (name: string) => usePlugins((s) => s.listings[name]?.folderId ?? "");
 export const usePluginPageRun = (name: string) =>
   usePlugins((s) => {
-    const state = Object.hasOwn(s.processes, name) ? s.processes[name] : undefined;
+    const state = ownValue(s.processes, name);
     return state?.state === "running" ? state.run : 0;
   });
 export const usePluginApproval = (name: string) => usePlugins((s) => recordOf(s, name).approved ?? "");

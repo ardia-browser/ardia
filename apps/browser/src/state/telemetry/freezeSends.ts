@@ -1,6 +1,6 @@
 import { parseSaved, versionedJson } from "../../lib/savedDocument";
 import { readDocument, writeDocument } from "../../platform/documents";
-import { utcDay } from "./daily";
+import { utcDay } from "../../lib/time";
 
 export const FREEZE_SENDS_DOC = "freeze-sends.json";
 export const FREEZE_SENDS_VERSION = 1;

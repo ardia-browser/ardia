@@ -1,5 +1,5 @@
 import { compareVersions, readManifest, type PluginManifest } from "../../lib/pluginManifest";
-import { sha256 } from "../../lib/sha256";
+import { hexOf, sha256 } from "../../lib/sha256";
 import { DECIDE_EVENTS, PLUGIN_EVENTS } from "../automation/eventNames";
 import { checkedSettings } from "../config/configSettings";
 import type { Settings } from "../settings/settings";
@@ -24,9 +24,7 @@ export const NO_CLAIMS: ProgramClaims = { claims: {}, failClosed: false };
 
 export const PLUGIN_RULES = { untabbedEvents: [...UNTABBED_EVENTS], approvedSettings: APPROVED_SETTINGS, decideEvents: [...DECIDE_EVENTS] };
 
-const hex = (bytes: Uint8Array) => Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-
-export const manifestHash = (text: string, folderId = "") => hex(sha256(`${text}\u0000${folderId}`));
+export const manifestHash = (text: string, folderId = "") => hexOf(sha256(`${text}\u0000${folderId}`));
 
 export const LEGACY_OFFICIAL = "bundled";
 const OFFICIAL_FOLDER = /^official-[0-9a-f]{64}$/;

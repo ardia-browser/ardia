@@ -1,6 +1,5 @@
 import type { JsonSchema, JsonType } from "../../lib/jsonSchema";
-
-const isFields = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
+import { isFields, ownValue } from "../../lib/decode";
 
 function typeOf(value: unknown): JsonType | null {
   if (value === null) return "null";
@@ -8,8 +7,6 @@ function typeOf(value: unknown): JsonType | null {
   if (typeof value === "number") return Number.isFinite(value) ? (Number.isInteger(value) ? "integer" : "number") : null;
   return typeof value as JsonType;
 }
-
-export const ownField = <T>(fields: Readonly<Record<string, T>> | undefined, key: string): T | undefined => (fields && Object.hasOwn(fields, key) ? fields[key] : undefined);
 
 const fits = (value: unknown, type: JsonType) => {
   const actual = typeOf(value);
@@ -51,9 +48,9 @@ export function schemaProblem(schema: JsonSchema, value: unknown, path: string):
   }
   if (isFields(value)) {
     const properties = schema.properties ?? {};
-    for (const key of schema.required ?? []) if (ownField(value, key) === undefined) return `${path === "params" ? "" : `${path}: `}${key} is required.`.replace(/^./, (c) => c.toUpperCase());
+    for (const key of schema.required ?? []) if (ownValue(value, key) === undefined) return `${path === "params" ? "" : `${path}: `}${key} is required.`.replace(/^./, (c) => c.toUpperCase());
     for (const [key, item] of Object.entries(value)) {
-      const known = ownField(properties, key);
+      const known = ownValue(properties, key);
       const where = path === "params" ? key : `${path}.${key}`;
       if (known) {
         const problem = schemaProblem(known, item, where);

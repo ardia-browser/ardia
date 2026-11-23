@@ -13,6 +13,7 @@ import { noteBookmarkSyncDiff } from "../telemetry/bookmarkMoves";
 import { consentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
 import { withDeadline } from "../../lib/deadline";
+import { isFields } from "../../lib/decode";
 
 const LEGACY_FILE = "bookmarks.json";
 type LegacyFile = { bookmarks?: { nodes: Bookmarks["nodes"]; roots: Record<string, { bar: string; other: string }> } };
@@ -165,8 +166,6 @@ const CACHE_VERSION = 1;
 const CACHE_MIGRATIONS: Migrations = {};
 
 type CacheDoc = { trees: Record<string, BookmarkNode[]> };
-
-const isFields = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
 const isCachedNode = (n: unknown): n is BookmarkNode =>
   isFields(n) &&

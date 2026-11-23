@@ -34,7 +34,6 @@ const replacements = new Map([
   [here("../browser/src/state/import/apply.ts"), here("./src/importApply.ts")],
   [here("../browser/src/components/import/steps/UnlockStep.tsx"), here("./src/LinuxUnlockStep.tsx")],
   [here("../browser/src/state/sync/engine.ts"), here("./src/syncEngine.ts")],
-  [here("../browser/src/state/extensions/store.ts"), here("./src/extensionsStore.ts")],
   [here("../browser/src/state/live/sources.ts"), here("./src/liveSources.ts")],
   [here("../browser/src/state/live/net.ts"), here("./src/liveNet.ts")],
   [here("../browser/src/components/extensions/ActionPopup.tsx"), here("./src/ExtensionActionPopup.tsx")],

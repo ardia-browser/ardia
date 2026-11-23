@@ -11,7 +11,7 @@ import { watchExtensionInstalls } from "./extensionInstalls";
 import { nativeConsent } from "./nativeConsent";
 import { startWatchChecks } from "./watch";
 import { appIconSetting, currentThemeFileSnapshot, customColorProfiles, narrowWindows, openTabSyncProfiles, SETTINGS_SNAPSHOT_EVENT, settingsSnapshot, widevineSetting, windowButtonLayoutSnapshot } from "./settingsSnapshot";
-import { utcDay } from "./daily";
+import { utcDay } from "../../lib/time";
 import { percentile } from "./transport";
 import { reportNativeCrashes } from "./errors";
 import { emitJourneys, journeysEnding, startJourneys } from "./journeys";

@@ -1,9 +1,10 @@
 import { useBrowser, type BrowserState } from "../browser/store";
-import { isIncognitoProfile } from "../browser/model";
+import { engineProfile, isIncognitoProfile } from "../browser/model";
 import type { BrowserWindow, Tab } from "../browser/types";
-import { eligibleKind, isEligibleTab, lastFocusedEligibleWindow, ownEntry, type AutomationWindowKind } from "./automationWindows";
+import { eligibleKind, isEligibleTab, lastFocusedEligibleWindow, type AutomationWindowKind } from "./automationWindows";
 import { OpError } from "./workspaceTargets";
 import { withinBudget } from "./socketWire";
+import { ownValue } from "../../lib/decode";
 
 export const now = (): BrowserState => useBrowser.getState();
 
@@ -35,9 +36,11 @@ export function windowOrFocused(id: unknown, kinds: readonly AutomationWindowKin
 export function profileArg(id: unknown): string {
   const s = now();
   if (id === undefined || id === null) return s.settings.defaultProfileId;
-  if (!ownEntry(s.profiles, id) || isIncognitoProfile(id as string)) throw new OpError("no_window", `There's no profile ${String(id)}.`);
+  if (!ownValue(s.profiles, id) || isIncognitoProfile(id as string)) throw new OpError("no_window", `There's no profile ${String(id)}.`);
   return id as string;
 }
+
+export const engineArg = (params: Record<string, unknown>) => engineProfile(now(), profileArg(params.profile));
 
 export function page<T, R = T>(items: readonly T[], params: Record<string, unknown>, row: (item: T) => R = (item) => item as unknown as R) {
   const offset = (params.offset as number | undefined) ?? 0;

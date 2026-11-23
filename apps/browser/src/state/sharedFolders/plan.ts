@@ -2,6 +2,7 @@ import type { SharedFolderOp } from "../../platform/sharedFolders";
 import { newLinkId, weblocText } from "../../lib/webloc";
 import { MANIFEST, manifestText, nameOfFile, uniqueFileName, type BaseEntry, type Dropped, type TargetEntry, type TargetLevel } from "./tree";
 import { weave } from "./merge";
+import { sameList } from "../../lib/lists";
 
 export type Planned = { ops: SharedFolderOp[]; base: BaseEntry[] };
 
@@ -42,8 +43,6 @@ function moveOps(prefix: string, moves: Move[], reserved: Set<string>, ops: Shar
   for (const m of parked) ops.push({ op: "move", path: `${prefix}${m.from}`, to: `${prefix}${m.via}` });
   for (const m of parked) ops.push({ op: "move", path: `${prefix}${m.via}`, to: `${prefix}${m.to}` });
 }
-
-const sameList = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
 
 function planLevel(prefix: string, level: TargetLevel, ops: SharedFolderOp[], pass: Pass): BaseEntry[] {
   const entries = level.entries.filter((e) => e.key !== null);

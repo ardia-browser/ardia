@@ -1,4 +1,5 @@
 import { secureRandomBytes } from "../../platform/secureRandom";
+import { hexOf } from "../../lib/sha256";
 
 export type HistoryPage = { url: string; profileId: string; engine: string };
 
@@ -9,7 +10,7 @@ const pageKey = (page: HistoryPage) => `${page.profileId}\n${page.engine}\n${pag
 
 function randomHandle(taken: Map<string, HistoryPage>): string {
   for (;;) {
-    const id = `h${Array.from(secureRandomBytes(20), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+    const id = `h${hexOf(secureRandomBytes(20))}`;
     if (!taken.has(id)) return id;
   }
 }

@@ -5,6 +5,7 @@ import { uuidv4 } from "./ids";
 import { appInfo, mayPost, post, telemetryHost } from "./transport";
 import { EVENTS_SCOPE, eventRecord, logsRequest, outcome } from "./otlp";
 import { parseSaved, versionedJson, unchanged, type Migrations } from "../../lib/savedDocument";
+import { utcDay } from "../../lib/time";
 
 export const DAILY_DOC = "telemetry-daily.json";
 const DAILY_VERSION = 1;
@@ -20,8 +21,6 @@ const MAX_RETRY_MS = 60 * 60_000;
 export const MAX_PENDING = 35;
 
 export type DailyFlags = { first: boolean; daily: true; weekly: boolean; monthly: boolean };
-
-export const utcDay = (at: number) => new Date(at).toISOString().slice(0, 10);
 
 export function isoWeekMonday(day: string) {
   const date = new Date(`${day}T00:00:00Z`);

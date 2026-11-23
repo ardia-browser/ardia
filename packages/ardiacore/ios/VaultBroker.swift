@@ -41,6 +41,8 @@ actor VaultBroker {
   var reconnecting: Task<Void, Never>?
   var reconnectGeneration = 0
   var authorizedAt: [String: Date] = [:]
+  var resumedAtQuit: Set<String> = []
+  var resumedStore = false
   let epochs = VaultLockEpochs.shared
 
   func providerStates() -> [VaultProviderState] {

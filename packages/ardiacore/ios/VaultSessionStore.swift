@@ -11,6 +11,7 @@ final class VaultSessionStore: @unchecked Sendable {
   private var scratch: [String: [String: String]] = [:]
   private var preferences: [String: [String: String]] = [:]
   private var running: [String: VaultCommand] = [:]
+  private var signInRuns: [String: CredentialSignInRun] = [:]
   private var idleMinutes = 30
   private var touchIDAllowed = true
 
@@ -73,6 +74,7 @@ final class VaultSessionStore: @unchecked Sendable {
     forget(provider, keepStored: false)
     lock.lock()
     preferences[provider] = nil
+    signInRuns[provider] = nil
     lock.unlock()
   }
 
@@ -116,6 +118,30 @@ final class VaultSessionStore: @unchecked Sendable {
   func setValue(_ provider: String, _ key: String, _ value: String?) {
     lock.lock()
     scratch[provider, default: [:]][key] = value
+    lock.unlock()
+  }
+
+  func values(_ provider: String) -> [String: String] {
+    lock.lock()
+    defer { lock.unlock() }
+    return scratch[provider] ?? [:]
+  }
+
+  func preferences(_ provider: String) -> [String: String] {
+    lock.lock()
+    defer { lock.unlock() }
+    return preferences[provider] ?? [:]
+  }
+
+  func signInRun(_ provider: String) -> CredentialSignInRun {
+    lock.lock()
+    defer { lock.unlock() }
+    return signInRuns[provider] ?? CredentialSignInRun()
+  }
+
+  func setSignInRun(_ provider: String, _ run: CredentialSignInRun) {
+    lock.lock()
+    signInRuns[provider] = run
     lock.unlock()
   }
 

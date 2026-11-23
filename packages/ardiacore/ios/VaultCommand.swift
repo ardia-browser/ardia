@@ -14,6 +14,8 @@ final class VaultCommand: @unchecked Sendable {
   private let input: Data?
   private let timeout: TimeInterval
   private let onOutput: (@Sendable (String) -> Void)?
+  private let onLine: (@Sendable (_ fromErrors: Bool, _ line: String) -> Void)?
+  private let lineLimit: Int
   private let outputLimit: Int
   private let queue = DispatchQueue(label: "dev.ardia.vaults.command")
   private static let feeding = DispatchQueue(label: "dev.ardia.vaults.command.input", attributes: .concurrent)
@@ -39,9 +41,12 @@ final class VaultCommand: @unchecked Sendable {
   private var incomplete = false
   private var leadsGroup = false
   private var pendingKills = 0
+  private var partialOutputLine = Data()
+  private var partialErrorLine = Data()
 
   init(executable: String, arguments: [String], environment: [String: String], input: Data?, timeout: TimeInterval,
-       outputLimit: Int = VaultCommand.outputLimit, onOutput: (@Sendable (String) -> Void)? = nil) {
+       outputLimit: Int = VaultCommand.outputLimit, onOutput: (@Sendable (String) -> Void)? = nil,
+       lineLimit: Int = 16 * 1024, onLine: (@Sendable (_ fromErrors: Bool, _ line: String) -> Void)? = nil) {
     self.executable = executable
     self.arguments = arguments
     self.environment = environment
@@ -49,6 +54,8 @@ final class VaultCommand: @unchecked Sendable {
     self.timeout = timeout
     self.onOutput = onOutput
     self.outputLimit = outputLimit
+    self.onLine = onLine
+    self.lineLimit = lineLimit
   }
 
   static var running: Int { live.withLock { $0.count } }
@@ -216,7 +223,9 @@ final class VaultCommand: @unchecked Sendable {
   private func received(_ data: Data, errors isErrors: Bool) {
     var snapshot: String?
     var runaway: Process?
+    var lines: [String] = []
     lock.lock()
+    if onLine != nil { lines = splitLines(data, errors: isErrors, flush: false) }
     if isErrors {
       let room = Self.errorLimit - errors.count
       if room > 0 { errors.append(data.prefix(room)) }
@@ -231,6 +240,24 @@ final class VaultCommand: @unchecked Sendable {
     lock.unlock()
     if let runaway { halt(runaway) }
     if let snapshot { onOutput?(snapshot) }
+    for line in lines { onLine?(isErrors, line) }
+  }
+
+  private func splitLines(_ data: Data, errors isErrors: Bool, flush: Bool) -> [String] {
+    var partial = isErrors ? partialErrorLine : partialOutputLine
+    partial.append(data)
+    var lines: [String] = []
+    while let newline = partial.firstIndex(of: 10) {
+      lines.append(String(decoding: partial[partial.startIndex..<newline].prefix(lineLimit), as: UTF8.self))
+      partial = Data(partial[partial.index(after: newline)...])
+    }
+    if flush, !partial.isEmpty {
+      lines.append(String(decoding: partial.prefix(lineLimit), as: UTF8.self))
+      partial = Data()
+    }
+    if partial.count > lineLimit * 4 { partial = Data(partial.prefix(lineLimit)) }
+    if isErrors { partialErrorLine = partial } else { partialOutputLine = partial }
+    return lines
   }
 
   private func shownOutput() -> String {
@@ -241,7 +268,9 @@ final class VaultCommand: @unchecked Sendable {
     lock.lock()
     if isErrors { errorsClosed = true } else { outputClosed = true }
     let ready = exitStatus != nil && outputClosed && errorsClosed
+    let rest = onLine == nil ? [] : splitLines(Data(), errors: isErrors, flush: true)
     lock.unlock()
+    for line in rest { onLine?(isErrors, line) }
     if ready { finish(launched: true) }
   }
 

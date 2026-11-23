@@ -18,9 +18,44 @@ export type VaultProviderState = {
   cliVersion?: string;
   message?: string;
   capabilities: VaultCapabilities;
-  install: { command: string; url: string };
+  install: { command: string; url: string; update?: string };
   setup?: { kind: VaultSetupKind; appURL?: string };
   touchUnlock?: boolean;
+  plugin?: string;
+  title?: string;
+  symbol?: string;
+  accent?: string;
+  signIn?: VaultSignInDescriptor;
+  needs?: VaultProviderNeeds;
+  problem?: { code: string; message: string };
+  unavailable?: { reason: "crashed" | "updating" | "damaged" | "off"; canRestart: boolean };
+};
+
+export type VaultSignInFieldKind = "text" | "email" | "secret" | "url" | "code";
+
+export type VaultSignInDescriptor = {
+  methods: Array<{
+    id: string;
+    title: string;
+    kind: "credentials" | "desktopApproval" | "browserApproval";
+    fields: Array<{ id: string; title: string; kind: VaultSignInFieldKind; optional?: boolean; placeholder?: string; hint?: string; masked?: boolean; prefill?: "account" }>;
+    appURL?: string;
+    appTitle?: string;
+    twoStep?: boolean;
+  }>;
+  servers?: Array<{ id: string; title: string; url?: string; custom?: boolean; placeholder?: string; fieldTitle?: string }>;
+  unlockField?: string;
+};
+
+export type VaultChoice = { id: string; title: string; sendsCode?: boolean };
+
+export type VaultProviderNeeds = {
+  kind: "code" | "password" | "email" | "approval" | "account" | "field";
+  field?: string;
+  methods?: VaultChoice[];
+  accounts?: VaultChoice[];
+  approvalOpened?: boolean;
+  message?: string;
 };
 
 export type VaultUrlMatch = "" | "host" | "exact";
@@ -40,23 +75,29 @@ export type VaultItem = {
   passkey?: { requestId: string; credentialId: string };
 };
 
-export type VaultSignInMethod = { id: string; name: string };
+export type VaultSignInMethod = { id: string; name: string; sendsCode?: boolean };
 
 export type VaultSignInResult = {
   ok: boolean;
   state: VaultProviderState;
-  needs?: "code" | "password" | "email" | "approval";
+  needs?: "code" | "password" | "email" | "approval" | "account" | "field";
+  field?: string;
   methods?: VaultSignInMethod[];
+  accounts?: VaultChoice[];
   error?: string;
   approvalURL?: string;
   entryExpired?: boolean;
 };
 
+export type VaultSignInAnswer = { need: string; value?: string; entryToken?: string; methodId?: string; accountId?: string };
+
 export type VaultSignInFields = {
+  method?: string;
+  values?: Record<string, string>;
+  secrets?: Record<string, string>;
   email?: string;
   password?: string;
   code?: string;
-  method?: string;
   server?: string;
   clientId?: string;
   clientSecret?: string;

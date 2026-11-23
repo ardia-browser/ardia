@@ -24,13 +24,17 @@ final class PluginProcess: PluginRun {
   let hasPage: Bool
   let launch: Int
   var onPagePost: ((PluginProcess, PagePost) -> String?)?
+  var credential: CredentialRunEndpoint?
+  private(set) var sink: PluginRedactingSink?
+  private(set) var refusedCredentialLines = 0
+  private var stopRequested = false
   private var family: PluginFamily?
   private var log: Int32
 
   struct Spec {
     let name: String
     let run: [String]
-    let memoryMB: Int
+    var memoryMB: Int
     let network: Bool
     let folderId: String
     let approved: String
@@ -38,6 +42,7 @@ final class PluginProcess: PluginRun {
     let launch: Int
     var runtime = "process"
     var entry: String?
+    var closedOutput = false
 
     var isScript: Bool { runtime == "js" }
     var sandboxNetwork: Bool { isScript ? false : network }
@@ -144,8 +149,20 @@ final class PluginProcess: PluginRun {
     var noSigPipe: Int32 = 1
     setsockopt(pair[0], SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, socklen_t(MemoryLayout<Int32>.size))
     _ = fcntl(pair[0], F_SETFL, fcntl(pair[0], F_GETFL) | O_NONBLOCK)
-    let log = PluginFiles.openLog(in: dataFolder)
-    defer { Darwin.close(pair[1]) }
+    var sinkPipe: [Int32] = [-1, -1]
+    if spec.closedOutput {
+      guard pipe(&sinkPipe) == 0 else {
+        Darwin.close(pair[0])
+        Darwin.close(pair[1])
+        return .failure(.refused("its output couldn't be set up (\(errnoText()))"))
+      }
+      for fd in sinkPipe { _ = fcntl(fd, F_SETFD, FD_CLOEXEC) }
+    }
+    let log = spec.closedOutput ? sinkPipe[1] : PluginFiles.openLog(in: dataFolder)
+    defer {
+      Darwin.close(pair[1])
+      if spec.closedOutput { Darwin.close(sinkPipe[1]) }
+    }
     guard log >= 0 else {
       Darwin.close(pair[0])
       return .failure(.refused("its log couldn't be opened (\(errnoText()))"))
@@ -192,11 +209,18 @@ final class PluginProcess: PluginRun {
     let result = withCStrings(argv) { cArgv in withCStrings(env) { cEnv in posix_spawn(&pid, "/usr/bin/sandbox-exec", &actions, &attributes, cArgv, cEnv) } }
     guard result == 0 else {
       Darwin.close(pair[0])
-      Darwin.close(log)
+      if spec.closedOutput { Darwin.close(sinkPipe[0]) } else { Darwin.close(log) }
       return .failure(.refused("it couldn't start (\(errnoText(result)))"))
     }
     let limit = UInt64(max(64, spec.memoryMB)) << 20
-    let process = PluginProcess(name: spec.name, run: run, pid: pid, queue: queue, memoryLimit: limit, log: log, approved: spec.approved, hasPage: spec.hasPage, launch: spec.launch)
+    let process = PluginProcess(
+      name: spec.name, run: run, pid: pid, queue: queue, memoryLimit: limit, log: spec.closedOutput ? -1 : log, approved: spec.approved, hasPage: spec.hasPage,
+      launch: spec.launch)
+    if spec.closedOutput {
+      let sink = PluginRedactingSink(fd: sinkPipe[0], queue: queue) { [weak process] text in process?.credential?.redact(text) ?? "[hidden]" }
+      process.sink = sink
+      sink.open()
+    }
     process.watch(channel: pair[0], onLine: onLine, onExit: onExit)
     return .success(process)
   }
@@ -210,8 +234,13 @@ final class PluginProcess: PluginRun {
   private func watch(channel: Int32, onLine: @escaping (PluginProcess, String) -> Void, onExit: @escaping (PluginProcess, Int32?, Int32?, Bool) -> Void) {
     let connection = ControlConnection(
       id: run, fd: channel, queue: queue,
-      onLine: { [weak self] _, line in
-        guard let self, !self.answeredPageLine(line) else { return }
+      onLine: { [weak self] connection, line in
+        guard let self else { return }
+        if let credential = self.credential {
+          connection.release()
+          return credential.receive(line)
+        }
+        guard !self.answeredPageLine(line), !self.answeredCredentialLine(line) else { return }
         onLine(self, line)
       },
       onClose: { _ in }, onWritten: { _ in })
@@ -230,6 +259,20 @@ final class PluginProcess: PluginRun {
     family.start()
     self.family = family
     queue.async { [weak self] in self?.reapIfGone(onExit) }
+  }
+
+  private func answeredCredentialLine(_ line: String) -> Bool {
+    switch PluginCredentialGate.screen(line) {
+    case .forward: return false
+    case .drop:
+      refusedCredentialLines += 1
+      connection?.release()
+      return true
+    case .reply(let reply):
+      refusedCredentialLines += 1
+      connection?.reply(Data((reply + "\n").utf8), ticket: 0)
+      return true
+    }
   }
 
   private func answeredPageLine(_ line: String) -> Bool {
@@ -281,6 +324,8 @@ final class PluginProcess: PluginRun {
     killTimer = nil
     connection?.close()
     connection = nil
+    sink?.close()
+    credential?.ended(crashed: !stopRequested || overMemory)
     if log >= 0 {
       Darwin.close(log)
       log = -1
@@ -308,6 +353,7 @@ final class PluginProcess: PluginRun {
   }
 
   func stop(graceMs: Int, done: @escaping () -> Void) {
+    stopRequested = true
     guard !exited else { return done() }
     stopWaiters.append(done)
     family?.sample()
@@ -323,11 +369,14 @@ final class PluginProcess: PluginRun {
   }
 
   func killNow() {
+    stopRequested = true
     guard !exited else { return }
     signalFamily(SIGKILL)
   }
 
   func terminateForQuit(within seconds: TimeInterval) {
+    stopRequested = true
+    credential?.ended(crashed: false)
     guard !exited else { return }
     family?.sample()
     connection?.close()

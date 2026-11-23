@@ -13,6 +13,20 @@ const suites = [
   ["vault-touch-scopes", [], ["VaultTouchGrants"]],
   ["vault-store", [], ["VaultSealed", "VaultSealedFolder", "VaultStoreKeyPlan", "VaultKeyRing", "VaultSecretShelf", "VaultTouchGrants", "VaultOwnerPrompt", "VaultGeneratedStore", "VaultExportFile"]],
   ["autofill-card", [], ["AutofillCardNumber"]],
+  ["credential-verbs", [], ["CredentialLimits", "CredentialCatalog", "CredentialCatalogParser", "CredentialCatalogParser+Cli", "CredentialVerbLaunch"]],
+  ["credential-output", [], [
+    "CredentialLimits", "CredentialCatalog", "CredentialCatalogParser", "CredentialCatalogParser+Cli", "CredentialVerbLaunch", "CredentialVerbOutput", "CredentialWording", "CredentialResults",
+    "VaultCommandResult", "VaultJSON", "VaultError", "VaultItem", "VaultItemList", "VaultState", "VaultWebAuthn", "VaultOriginMatch", "VaultPublicSuffixRules",
+  ]],
+  ["credential-locator", [], ["VaultBinaryLocator", "CredentialHost", "VaultCommand", "VaultCommandResult", "VaultLockEpoch"]],
+  ["credential-run", [], [
+    "CredentialLimits", "CredentialCatalog", "CredentialCatalogParser", "CredentialCatalogParser+Cli", "CredentialVerbLaunch", "CredentialVerbOutput", "CredentialWording",
+    "CredentialResults", "CredentialHandles", "CredentialHost", "CredentialRunEndpoint", "PluginVaultProvider", "PluginVaultProvider+SignIn", "VaultPasskeyHolder", "VaultPasskey",
+    "VaultProvider", "VaultCLI", "VaultCommand", "VaultCommandResult", "VaultLockEpoch", "VaultJSON", "VaultError", "VaultItem", "VaultItemList",
+    "VaultState", "VaultWebAuthn", "VaultOriginMatch", "VaultPublicSuffixRules", "VaultCapabilities", "VaultInstall", "VaultSetup", "VaultSetupKind",
+    "VaultProviderState", "VaultSignInFields", "VaultSignInFields+JSON", "VaultSignInResult", "VaultSignInNeed", "VaultMethod", "VaultField",
+    "VaultNewLogin", "VaultLoginEdit", "VaultTotp", "VaultTotpSecret", "VaultTotpURI", "VaultMessages", "VaultNetwork", "VaultSecretEntries",
+  ]],
 ];
 
 for (const [name, flags, sources] of suites) {

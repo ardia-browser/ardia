@@ -1,4 +1,5 @@
 import AppKit
+import ArdiaCore
 import Foundation
 
 final class PluginHost {
@@ -15,10 +16,13 @@ final class PluginHost {
   private let outbox = PluginPageOutbox()
   private var nextRun = 0
   private var quitObserver: NSObjectProtocol?
+  private var restoredProviders = false
+  static let credentialProvidersFile = "credential-providers.json"
 
   func attach(_ owner: AnyObject, send: @escaping Sink) {
     let id = ObjectIdentifier(owner)
     queue.sync { sink = (id, send) }
+    prepareCredentialProviders()
     if quitObserver == nil {
       quitObserver = NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: nil) { [weak self] _ in
         self?.queue.sync { self?.terminateAll() }
@@ -64,8 +68,21 @@ final class PluginHost {
     }
   }
 
-  private func spawn(_ spec: PluginProcess.Spec, certificates: PluginSandbox.PreparedCertificates, done: @escaping ([String: Any]) -> Void) {
+  private func spawn(_ given: PluginProcess.Spec, certificates: PluginSandbox.PreparedCertificates, done: @escaping ([String: Any]) -> Void) {
     guard let folders = PluginFolders.current() else { return done(["ok": false, "reason": "Ardia has no data folder"]) }
+    var spec = given
+    let plan: PluginCredentialPlan?
+    switch PluginCredentialPlan.make(for: spec, folders: folders) {
+    case .failure(let refusal):
+      NSLog("[plugins] %@ didn't start: %@", spec.name, refusal.reason)
+      if PluginCredentialProviders.saved()[spec.name] != nil { CredentialPluginHost.shared.markDamaged(spec.name) }
+      return done(["ok": false, "reason": refusal.reason])
+    case .success(let made): plan = made
+    }
+    if let plan {
+      spec.memoryMB = max(spec.memoryMB, plan.memoryMB)
+      spec.closedOutput = true
+    }
     nextRun += 1
     let result = PluginProcess.spawn(
       spec, run: nextRun, folders: folders, queue: queue, certificates: certificates,
@@ -83,6 +100,7 @@ final class PluginHost {
     case .success(let process):
       runs.installed(process)
       process.onPagePost = { [weak self] process, post in self?.post(post, from: process) }
+      if let plan { pinCredentialProvider(process, plan) }
       done(["ok": true, "run": process.run, "pid": Int(process.pid)])
     case .failure(let failure):
       NSLog("[plugins] %@ didn't start: %@", spec.name, failure.reason)
@@ -157,7 +175,7 @@ final class PluginHost {
   func call(_ name: String, run: Int, _ line: String) {
     let data = Self.framed(line)
     queue.async { [self] in
-      guard let process = runs.current[name], process.run == run else { return }
+      guard let process = runs.current[name], process.run == run, process.credential == nil else { return }
       process.connection?.send(data)
     }
   }
@@ -171,6 +189,9 @@ final class PluginHost {
   }
 
   func remove(_ name: String, official: Bool, folderId: String?, done: @escaping (String?) -> Void) {
+    if CredentialPluginHost.shared.enabledPlugins[name] != nil || PluginCredentialProviders.saved()[name] != nil {
+      forgetCredentialProvider(name) { _ in }
+    }
     queue.async { [self] in
       lifecycle.enqueue(name, .remove) { [self] complete in
         runs.stopAll(name, graceMs: 1000) {
@@ -179,6 +200,70 @@ final class PluginHost {
           complete()
         }
       }
+    }
+  }
+
+  private func pinCredentialProvider(_ process: PluginProcess, _ plan: PluginCredentialPlan) {
+    let link = PluginCredentialLink(
+      queue: queue, process: process,
+      forward: { [weak self] process, line in
+        self?.sink?.send("onLine", ["name": process.name, "run": process.run, "launch": process.launch, "line": line])
+      },
+      stop: { [weak self] process in self?.stop(process.name, run: process.run, graceMs: 0) {} })
+    guard let endpoint = CredentialPluginHost.shared.pin(
+      plugin: process.name, run: process.run, approved: process.approved, attachment: attachment, manifest: plan.manifest, link: link)
+    else {
+      NSLog("[plugins] %@ declares a password manager Ardia can't read, so it runs closed with no credential access", process.name)
+      return
+    }
+    process.credential = endpoint
+  }
+
+  private func prepareCredentialProviders() {
+    let wanted: @Sendable (String) -> Void = { name in
+      PluginHost.shared.emit("onCredentialRunWanted", ["name": name])
+    }
+    CredentialPluginHost.shared.onRunWanted(wanted)
+    queue.async { [self] in
+      guard !restoredProviders, let folders = PluginFolders.current() else { return }
+      restoredProviders = true
+      CredentialPluginHost.refuseProgramRoots(PluginCredentialPlan.refusedProgramRoots(folders))
+      for (name, approved) in PluginCredentialProviders.saved().sorted(by: { $0.key < $1.key }) {
+        guard let manifest = PluginCredentialPlan.officialManifest(name, approved: approved, folders: folders) else {
+          NSLog("[plugins] %@'s official copy changed or is missing, so its password manager stays off until it starts again", name)
+          continue
+        }
+        if let problem = CredentialPluginHost.shared.restore(plugin: name, approved: approved, manifest: manifest) {
+          NSLog("[plugins] %@ wasn't restored: %@", name, problem)
+        }
+      }
+    }
+  }
+
+  func setCredentialProvider(_ name: String, enabled: Bool, done: @escaping ([String: Any]) -> Void) {
+    guard enabled else {
+      Task {
+        await CredentialPluginHost.shared.disable(name, forget: false)
+        PluginCredentialProviders.save(name, approved: nil)
+        done(["ok": true])
+      }
+      return
+    }
+    queue.async { [self] in
+      guard let process = runs.current[name], !process.exited, process.credential != nil else {
+        return done(["ok": false, "reason": "Ardia runs password managers only from its official plugins, and \(name) isn't running as one."])
+      }
+      if let problem = CredentialPluginHost.shared.enable(name) { return done(["ok": false, "reason": problem]) }
+      PluginCredentialProviders.save(name, approved: process.approved)
+      done(["ok": true])
+    }
+  }
+
+  func forgetCredentialProvider(_ name: String, done: @escaping ([String: Any]) -> Void) {
+    Task {
+      await CredentialPluginHost.shared.disable(name, forget: true)
+      PluginCredentialProviders.save(name, approved: nil)
+      done(["ok": true])
     }
   }
 }

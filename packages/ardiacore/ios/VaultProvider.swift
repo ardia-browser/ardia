@@ -7,11 +7,11 @@ protocol VaultProvider: Sendable {
   var capabilities: VaultCapabilities { get }
   var install: VaultInstall { get }
   var setup: VaultSetup? { get }
-  var environment: [String: String] { get }
   var readsOffline: Bool { get }
   var staysAuthorizedAfterUse: TimeInterval? { get }
 
-  func isolatedEnvironment(_ directory: String) -> [String: String]
+  func locked()
+  func described(_ state: VaultProviderState) -> VaultProviderState
   func state(_ cli: VaultCLI) async -> VaultProviderState
   func signIn(_ cli: VaultCLI, fields: VaultSignInFields) async -> VaultSignInResult
   func unlock(_ cli: VaultCLI, password: String?) async -> VaultSignInResult
@@ -26,17 +26,6 @@ protocol VaultProvider: Sendable {
   func edit(_ cli: VaultCLI, id: String, change: VaultLoginChange) async throws -> VaultItem
 }
 
-struct VaultRevealed: Sendable {
-  var password: String?
-  var totp: String?
-}
-
-struct VaultItemList: Sendable {
-  var items: [VaultItem]
-  var passwords: [String: String] = [:]
-  var totps: [String: String] = [:]
-}
-
 extension VaultProvider {
   func revealed(_ cli: VaultCLI, id: String) async throws -> VaultRevealed {
     do {
@@ -46,11 +35,11 @@ extension VaultProvider {
     }
   }
   var setup: VaultSetup? { nil }
-  var environment: [String: String] { [:] }
   var readsOffline: Bool { true }
   var staysAuthorizedAfterUse: TimeInterval? { nil }
 
-  func isolatedEnvironment(_ directory: String) -> [String: String] { [:] }
+  func locked() {}
+  func described(_ state: VaultProviderState) -> VaultProviderState { state }
   func lock(_ cli: VaultCLI, session: String) async {}
   func configure(_ cli: VaultCLI, server: String?) async -> String? { "\(name) has no server setting." }
   func save(_ cli: VaultCLI, login: VaultNewLogin) async throws -> VaultItem { throw VaultError.unsupported }
@@ -58,8 +47,8 @@ extension VaultProvider {
   func edit(_ cli: VaultCLI, id: String, change: VaultLoginChange) async throws -> VaultItem { throw VaultError.unsupported }
 
   func makeState(_ state: VaultState, account: String? = nil, server: String? = nil, message: String? = nil) -> VaultProviderState {
-    VaultProviderState(id: id, name: name, state: state, account: account, server: server, message: message, capabilities: capabilities,
-                       install: install, setup: setup)
+    described(VaultProviderState(id: id, name: name, state: state, account: account, server: server, message: message, capabilities: capabilities,
+                                 install: install, setup: setup))
   }
 
   func signedIn() -> VaultSignInResult { VaultSignInResult(ok: true, state: makeState(.unlocked)) }

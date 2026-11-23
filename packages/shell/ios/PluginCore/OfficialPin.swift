@@ -15,6 +15,7 @@ struct OfficialPinEntry: Equatable {
   let legacyInstall: OfficialLegacyInstall?
   var trustedArtifacts: Set<String> = []
   var bundledDigests: Set<String> = []
+  var credentialPrograms: [String] = []
 
   var folderId: String { OfficialPin.folderId(sha256) }
 
@@ -36,6 +37,17 @@ struct OfficialPin: Equatable {
   private static let shaPattern = try! NSRegularExpression(pattern: "^[0-9a-f]{64}$")
 
   let entries: [OfficialPinEntry]
+  var reservedProviders: [String: String] = [:]
+
+  func credentialRefusal(name: String, official: Bool, program: String?) -> String? {
+    if !official {
+      if let owner = reservedProviders[name] { return "\(name) is kept for Ardia's official \(owner) plugin." }
+      return program == nil ? nil : "Ardia runs password managers only from its official plugins."
+    }
+    guard let program else { return nil }
+    guard reservedProviders[name] == name, let entry = entry(name) else { return "Ardia runs password managers only from its official plugins." }
+    return entry.credentialPrograms.contains(program) ? nil : "\(program) isn't a program this plugin may run."
+  }
 
   static func folderId(_ sha256: String) -> String { folderPrefix + sha256 }
 
@@ -61,12 +73,26 @@ struct OfficialPin: Equatable {
     else { return nil }
     var entries: [OfficialPinEntry] = []
     var reserved: Set<String> = []
+    var providers: [String: String] = [:]
+    for plugin in plugins {
+      guard let owner = plugin["name"] as? String else { return nil }
+      let names = plugin["reservedProviders"] as? [String] ?? []
+      guard plugin["reservedProviders"] == nil || plugin["reservedProviders"] is [String], names.allSatisfy(PluginPrograms.isName) else { return nil }
+      for name in names {
+        guard providers[name] == nil || providers[name] == owner else { return nil }
+        providers[name] = owner
+      }
+    }
     for plugin in plugins {
       guard let name = plugin["name"] as? String, PluginPrograms.isName(name), !entries.contains(where: { $0.name == name }),
         let version = plugin["version"] as? String, isVersion(version), let release = plugin["release"] as? String
       else { return nil }
       let programs = plugin["reservedPrograms"] as? [String] ?? []
       guard plugin["reservedPrograms"] == nil || plugin["reservedPrograms"] is [String], programs.allSatisfy(PluginPrograms.isName), Set(programs).count == programs.count
+      else { return nil }
+      let credentialPrograms = plugin["credentialPrograms"] as? [String] ?? []
+      guard plugin["credentialPrograms"] == nil || plugin["credentialPrograms"] is [String], credentialPrograms.allSatisfy(PluginPrograms.isName),
+        credentialPrograms.count <= 4
       else { return nil }
       guard let artifact = (plugin["artifacts"] as? [String: Any])?[platform] as? [String: Any], let file = artifact["file"] as? String, let sha = artifact["sha256"] as? String else { continue }
       guard isSha(sha), ProgramRegistry.isComponent(file), let url = URL(string: release + "/" + file), url.scheme == "https", url.host?.isEmpty == false,
@@ -92,9 +118,10 @@ struct OfficialPin: Equatable {
       }
       entries.append(
         OfficialPinEntry(
-          name: name, version: version, url: url, sha256: sha, reservedPrograms: programs, legacyInstall: legacy, trustedArtifacts: trustedArtifacts, bundledDigests: bundledDigests))
+          name: name, version: version, url: url, sha256: sha, reservedPrograms: programs, legacyInstall: legacy, trustedArtifacts: trustedArtifacts, bundledDigests: bundledDigests,
+          credentialPrograms: credentialPrograms))
     }
-    return OfficialPin(entries: entries)
+    return OfficialPin(entries: entries, reservedProviders: providers)
   }
 
   static func manifestName(_ text: String) -> String? {

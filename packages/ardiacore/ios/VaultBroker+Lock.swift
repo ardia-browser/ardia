@@ -23,6 +23,7 @@ extension VaultBroker {
     let cli = session == nil ? nil : VaultCLI.make(for: provider, sessions: sessions)
     let keepStored = sessions.touchID
     epochs.advance(id) { sessions.forget(id, keepStored: keepStored) }
+    provider.locked()
     authorizedAt[id] = nil
     dropItems(id, announce: true)
     stopWork(id)
@@ -57,7 +58,10 @@ extension VaultBroker {
       }
     }
     epochs.advanceAll { for id in ids { sessions.forget(id, keepStored: keepStored) } }
+    for provider in VaultRegistry.providers { provider.locked() }
     gate.lockAll()
+    resumedStore = false
+    resumedAtQuit = []
     reconnectGeneration += 1
     reconnecting?.cancel()
     reconnecting = nil

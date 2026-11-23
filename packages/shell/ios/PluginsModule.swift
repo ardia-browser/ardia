@@ -1,4 +1,5 @@
 import AppKit
+import ArdiaCore
 import ExpoModulesCore
 import Foundation
 
@@ -8,7 +9,7 @@ public class PluginsModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ArdiaPlugins")
 
-    Events("onLine", "onExit", OfficialPluginFetch.progressEvent)
+    Events("onLine", "onExit", "onCredentialRunWanted", OfficialPluginFetch.progressEvent)
 
     OnCreate {
       PluginHost.shared.attach(self) { [weak self] name, body in self?.sendEvent(name, body) }
@@ -30,6 +31,14 @@ public class PluginsModule: Module {
     Function("event") { (name: String, run: Int, line: String) in PluginHost.shared.event(name, run: run, line) }
 
     Function("call") { (name: String, run: Int, line: String) in PluginHost.shared.call(name, run: run, line) }
+
+    AsyncFunction("setCredentialProvider") { (name: String, enabled: Bool, promise: Promise) in
+      PluginHost.shared.setCredentialProvider(name, enabled: enabled) { promise.resolve($0) }
+    }
+
+    AsyncFunction("forgetCredentialProvider") { (name: String, promise: Promise) in
+      PluginHost.shared.forgetCredentialProvider(name) { promise.resolve($0) }
+    }
 
     AsyncFunction("linkPrograms") { (spec: [String: Any], promise: Promise) in PluginProgramLinks.link(spec) { promise.resolve($0) } }
 
@@ -166,6 +175,7 @@ public class PluginsModule: Module {
   }
 
   private static func revealLog(_ name: String) {
+    guard CredentialPluginHost.shared.enabledPlugins[name] == nil, CredentialPluginHost.shared.endpoint(name) == nil else { return }
     guard let data = PluginFolders.current()?.dataFolder(name) else { return }
     defer { data.close() }
     let log = URL(fileURLWithPath: (data.path as NSString).appendingPathComponent("plugin.log"))

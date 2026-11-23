@@ -17,6 +17,7 @@ struct ProgramRegistry: Equatable {
   static let version = 1
   static let knownLegacyRoots: Set<String> = ["Library/Application Support/Ardia/CLI"]
   static let empty = ProgramRegistry(claims: [:], legacy: [], failClosed: false)
+  static let passwordManagerPrograms: Set<String> = ["op", "bw", "pass-cli", "node"]
 
   let claims: [String: String]
   let legacy: [LegacyInstall]
@@ -88,6 +89,7 @@ struct ProgramRegistry: Equatable {
   }
 
   func refusal(program: String, plugin: String, builtIn: Bool) -> String? {
+    if Self.passwordManagerPrograms.contains(program) { return "\(program) belongs to Ardia's password managers, so no plugin puts it on PATH" }
     if failClosed { return "Ardia's list of program names kept for its official plugins is missing or damaged, so no program goes on PATH" }
     guard let owner = claims[program] else { return nil }
     return builtIn && owner == plugin ? nil : "\(program) belongs to Ardia's official \(owner) plugin"

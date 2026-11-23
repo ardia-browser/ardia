@@ -30,6 +30,28 @@ final class ControlConnection {
   private var draining = false
   private var readSuspended = false
   private var announced = false
+  private var roomWaiters: [(limit: Int, work: () -> Void)] = []
+
+  var bufferedBytes: Int { output.bytes }
+
+  func whenRoom(below limit: Int, _ work: @escaping () -> Void) {
+    guard !closed, !finishingLine else { return }
+    if output.bytes < limit { return work() }
+    roomWaiters.append((limit, work))
+  }
+
+  func release() {
+    pendingRequests = max(0, pendingRequests - 1)
+    closeIfDrained()
+  }
+
+  private func wakeRoomWaiters() {
+    guard !roomWaiters.isEmpty else { return }
+    let bytes = output.bytes
+    let ready = roomWaiters.filter { bytes < $0.limit }
+    roomWaiters.removeAll { bytes < $0.limit }
+    ready.forEach { $0.work() }
+  }
 
   init(
     id: Int, fd: Int32, queue: DispatchQueue, onLine: @escaping (ControlConnection, String) -> Void,
@@ -111,6 +133,7 @@ final class ControlConnection {
     let unwritten = output.takeFinishedTickets() + output.waitingTickets
     output = ControlOutput()
     input = []
+    roomWaiters = []
     announce()
     report(unwritten)
     Self.retiring.removeAll { $0 === self }
@@ -146,6 +169,7 @@ final class ControlConnection {
   private func flush() {
     let result = output.write(to: fd)
     report(output.takeFinishedTickets())
+    defer { wakeRoomWaiters() }
     switch result {
     case .drained:
       if finishingLine { return close() }

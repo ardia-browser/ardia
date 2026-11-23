@@ -82,6 +82,8 @@ extension VaultBroker {
   func resumeAfterQuit() {
     let open = Set(VaultLockPolicy.takeUnlockedAtQuit())
     guard !open.isEmpty, sessions.touchID, !gate.open else { return }
+    resumedAtQuit = open
+    resumedStore = true
     gate.resume(keeping: open, of: VaultRegistry.providers.map(\.id))
     storeOpened()
     for provider in VaultRegistry.providers where open.contains(provider.id) && isReady(provider.id) {

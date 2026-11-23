@@ -185,6 +185,13 @@ public class VaultsModule: Module {
       let server = try args.optionalText("server")
       VaultsModule.answer(reply) { await VaultBroker.shared.configure(id, server: server)?.jsonObject() }
     },
+    "answer": { args, reply in
+      let id = try VaultsModule.provider(args)
+      var answer: [String: Any] = ["need": try args.text("need")]
+      for key in ["value", "entryToken", "methodId", "accountId"] { if let given = try args.optionalText(key) { answer[key] = given } }
+      let fields = VaultSignInFields(answer: VaultJSON.text(answer))
+      VaultsModule.answer(reply) { await VaultBroker.shared.signIn(id, fields: fields)?.jsonObject() }
+    },
     "cancelSignIn": { args, reply in
       let id = try VaultsModule.provider(args)
       VaultsModule.answer(reply) { await VaultBroker.shared.cancelSignIn(id)?.jsonObject() }

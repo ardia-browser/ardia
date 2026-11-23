@@ -62,7 +62,7 @@ enum VaultLockPolicy {
     guard storedStaysOpen, let key = markerKey(creating: false), let marker = VaultQuitMarker.verified(text, key: key),
       let boot = marker["boot"] as? String, boot == bootSession, let providers = marker["providers"] as? [String]
     else { return [] }
-    return providers.filter { VaultRegistry.provider($0) != nil }
+    return providers.filter { $0.range(of: #"^[a-z0-9][a-z0-9-]{0,39}$"#, options: .regularExpression) != nil }
   }
 
   static func forgetUnlockedAtQuit() {

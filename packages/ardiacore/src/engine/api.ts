@@ -19,7 +19,7 @@ import type {
   CookieRemoval, PageCookie, PageEngine, PasskeyAccess, SiteData, SiteDataWritten, StorageChange, StorageItems, WebKitCount,
 } from "../webkit";
 import type { ChromeDropdownShown, DisplayMediaSource, OpenWindowRequest, VaultPasswordStyle, WebNotification } from "../pageTypes";
-import type { VaultPasskey, VaultPasskeyAnswer, VaultPasskeyDone, VaultPasskeyRequest, VaultAddTotpResult, VaultCreateLoginResult, VaultEditResult, VaultStandaloneCode, VaultStandaloneCodeAdded, VaultStandaloneCodeEdited, VaultCodeRead, VaultCodeSource, VaultCopyResult, VaultRemoveTotpResult, VaultGeneratedPassword, VaultGeneratedSaveResult, VaultItem, VaultProviderId, VaultProviderState, VaultSecretField, VaultSyncResult, VaultTotp, VaultBackupStatus, VaultBackupChange, VaultBackupDeleteResult, VaultRestoreResult } from "../vaults";
+import type { VaultPasskey, VaultPasskeyAnswer, VaultPasskeyDone, VaultPasskeyRequest, VaultAddTotpResult, VaultCreateLoginResult, VaultEditResult, VaultStandaloneCode, VaultStandaloneCodeAdded, VaultStandaloneCodeEdited, VaultCodeRead, VaultCodeSource, VaultCopyResult, VaultRemoveTotpResult, VaultGeneratedPassword, VaultGeneratedSaveResult, VaultItem, VaultProviderId, VaultProviderState, VaultSecretField, VaultSyncResult, VaultTotp, VaultBackupStatus, VaultBackupChange, VaultBackupDeleteResult, VaultRestoreResult, VaultSignInAnswer, VaultSignInResult } from "../vaults";
 import type { BookmarksCalls, BookmarksEvents } from "./generated/bookmarks";
 import type { FaviconsCalls, FaviconsEvents } from "./generated/favicons";
 import type { HistoryCalls, HistoryEvents } from "./generated/history";
@@ -229,6 +229,7 @@ export type EngineCalls = BookmarksCalls & FaviconsCalls & HistoryCalls & {
   "vaults.signOut": [{ provider: VaultProviderId }, VaultProviderState];
   "vaults.configure": [{ provider: VaultProviderId; server?: string | null }, VaultProviderState];
   "vaults.cancelSignIn": [{ provider: VaultProviderId }, VaultProviderState];
+  "vaults.answer": [{ provider: VaultProviderId } & VaultSignInAnswer, VaultSignInResult];
   "vaults.copy": [{ provider: VaultProviderId; id: string; field: VaultSecretField }, VaultCopyResult];
   "vaults.totp": [{ provider: VaultProviderId; id: string }, VaultTotp | null];
   "vaults.generate": [{ style?: VaultPasswordStyle; maxLength?: number }, { length: number }];
@@ -325,7 +326,8 @@ export type EngineEvents = BookmarksEvents & FaviconsEvents & HistoryEvents & {
   "media.deviceChooser": DeviceChooser;
   "media.castDialog": CastDialog;
   "media.castRoutes": { profile: string; routes: CastRoute[] };
-  "vaults.changed": { provider: VaultProviderState };
+  "vaults.changed": { provider: VaultProviderState; removed?: boolean };
+  "vaults.openApproval": { provider: VaultProviderId; url: string };
   "vaults.itemsChanged": { provider: VaultProviderId };
   "vaults.generatedChanged": Record<string, never>;
   "vaults.backupChanged": VaultBackupChange;

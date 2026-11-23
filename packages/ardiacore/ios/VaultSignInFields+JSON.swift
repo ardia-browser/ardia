@@ -1,26 +1,36 @@
 import Foundation
 
 extension VaultSignInFields {
+  static let longestValue = 4096
+  static let mostFields = 16
+
   init(json: String) {
     self.init()
     guard let object = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any] else { return }
-    email = Self.trimmed(object["email"])
-    password = VaultJSON.string(object["password"]) ?? Self.entry(object["passwordEntry"])
-    code = Self.trimmed(object["code"])?.replacingOccurrences(of: " ", with: "")
     method = Self.trimmed(object["method"])
     server = Self.trimmed(object["server"])
-    clientId = Self.trimmed(object["clientId"])
-    clientSecret = Self.trimmed(object["clientSecret"]) ?? Self.entry(object["clientSecretEntry"]).flatMap { Self.trimmed($0) }
-    account = Self.trimmed(object["account"])
+    values = Self.table(object["values"]).compactMapValues { Self.trimmed($0) }
+    secrets = Self.table(object["secrets"]).compactMapValues { value in
+      guard let token = value as? String, VaultSecretEntries.isToken(token) else { return nil }
+      return token
+    }
   }
 
-  private static func entry(_ value: Any?) -> String? {
-    guard let token = VaultJSON.string(value) else { return nil }
-    return VaultSecretEntries.value(token)
+  init(answer json: String) {
+    self.init()
+    guard let object = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any], let need = Self.trimmed(object["need"]) else { return }
+    let token = (object["entryToken"] as? String).flatMap { VaultSecretEntries.isToken($0) ? $0 : nil }
+    answer = VaultSignInAnswer(
+      need: need, value: Self.trimmed(object["value"]), entryToken: token, methodId: Self.trimmed(object["methodId"]), accountId: Self.trimmed(object["accountId"]))
+  }
+
+  private static func table(_ value: Any?) -> [String: Any] {
+    guard let table = value as? [String: Any], table.count <= mostFields else { return [:] }
+    return table.filter { $0.key.range(of: #"^[A-Za-z0-9_-]{1,40}$"#, options: .regularExpression) != nil }
   }
 
   private static func trimmed(_ value: Any?) -> String? {
-    guard let text = VaultJSON.string(value)?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return nil }
+    guard let text = (value as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty, text.utf8.count <= longestValue else { return nil }
     return text
   }
 }

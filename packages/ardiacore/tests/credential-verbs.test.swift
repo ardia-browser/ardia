@@ -127,7 +127,29 @@ struct CredentialCatalogTests {
 
   @Test func `a write-to-file flag is denied for op read at parse time`() {
     let verbs: [String: Any] = ["read": ["argv": ["read", ["slot": "ref"], ["flag": "--out-file", "slot": "path"]], "slots": ["ref": ["type": "id", "pattern": "word"], "path": ["type": "id", "pattern": "word"]]]]
-    #expect(Self.problems(Self.manifest(verbs: verbs, program: "op")) == ["\(Self.P).cli.verbs.read: op read is never allowed, since it writes files"])
+    #expect(Self.problems(Self.manifest(verbs: verbs, program: "op")) == ["\(Self.P).cli.verbs.read: op read with --out-file is never allowed, since it writes files"])
+  }
+
+  @Test("A catalog can't spell a denied command with a short flag, a later subcommand or an option Ardia doesn't know", arguments: [
+    ("op", ["read", "op://vault/item/field", "-o", "out.txt"], "op read with -o is never allowed, since it writes files"),
+    ("op", ["document", "get", "doc", "-oout.txt"], "op document get with -o is never allowed, since it writes files"),
+    ("op", ["connect", "token", "create"], "op connect is never allowed, since it mints credentials"),
+    ("op", ["events-api", "create"], "op events-api is never allowed, since it mints credentials"),
+    ("op", ["item", "share", "abc"], "op item share is never allowed, since it shares data"),
+    ("op", ["update", "--directory", "here"], "op update with --directory is never allowed, since it writes files"),
+    ("bw", ["import", "bitwardenjson", "file.json"], "bw import is never allowed, since it reads files"),
+    ("bw", ["create", "attachment", "--file", "a.txt"], "bw create attachment with --file is never allowed, since it reads files"),
+    ("bw", ["receive", "--output", "a.txt"], "bw receive with --output is never allowed, since it writes files"),
+    ("bw", ["get", "--raw", "attachment", "x"], "bw get attachment is never allowed, since it writes files"),
+    ("bw", ["--weird", "serve"], "bw --weird is never allowed, since an option Ardia doesn't know comes before the command"),
+  ])
+  func deniedSpellings(_ program: String, _ argv: [String], _ message: String) {
+    #expect(Self.problems(Self.manifest(verbs: ["v": ["argv": argv]], program: program)) == ["\(Self.P).cli.verbs.v: \(message)"])
+  }
+
+  @Test func `a flag that only looks like a denied one stays allowed`() {
+    #expect(Self.problems(Self.manifest(verbs: ["v": ["argv": ["read", "op://vault/item/field", "--no-newline"]]], program: "op")).isEmpty)
+    #expect(Self.problems(Self.manifest(verbs: ["v": ["argv": ["update"]]], program: "op")).isEmpty)
   }
 
   @Test("An environment entry Ardia never passes is refused", arguments: [

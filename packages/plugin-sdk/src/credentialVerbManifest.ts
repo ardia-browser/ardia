@@ -2,7 +2,7 @@ import { CREDENTIAL_LIMITS, VERB_TIMEOUTS_MS } from "./credentialConstants";
 import { envOf } from "./credentialEnvManifest";
 import { Checks, isFields, KEY, KEY_RULE, P, type Fields } from "./credentialManifestChecks";
 import type { ArgvToken, CredentialVerb, OutputMode, SlotType, VerbOutput, VerbSlot, VerbUnlocks } from "./credentialManifestTypes";
-import { deniedMatch, deniedName, deniedReason } from "./deniedCommands";
+import { deniedMatch, deniedName } from "./deniedCommands";
 
 const VERB_KEYS = ["argv", "slots", "env", "stdin", "timeoutMs", "outputLimitBytes", "output", "signIn", "unlocks", "outlivesCall", "hints"];
 const SLOT_TYPES: readonly SlotType[] = ["id", "enum", "flag", "url", "email", "code", "secret", "json"];
@@ -133,7 +133,7 @@ function stdinOf(c: Checks, path: string, value: unknown, slots: Readonly<Record
 function literalProblem(program: string, argv: readonly ArgvToken[]): string | null {
   const tokens = argv.map((t) => (typeof t === "string" ? t : "flag" in t ? `${t.flag}=` : "\u0000slot"));
   const denied = deniedMatch(program, tokens);
-  return denied ? `${deniedName(program, denied)} is never allowed, since it ${deniedReason(program, denied)}` : null;
+  return denied ? `${deniedName(program, denied)} is never allowed, since ${denied.why}` : null;
 }
 
 const named = (value: unknown, key: string): string[] => (isFields(value) && typeof value[key] === "string" ? [value[key] as string] : []);

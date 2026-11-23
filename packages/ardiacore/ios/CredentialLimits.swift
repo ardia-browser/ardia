@@ -47,6 +47,7 @@ enum CredentialLimits {
   static let valueKeys = 16
   static let valueBytes = 1024
   static let ownerReasonLength = 60
+  static let ownerReasonBytes = 180
   static let snapshotLength = 64
   static let lastLineSecretShortest = 16
   static let redactedShortest = 3
@@ -84,30 +85,48 @@ enum CredentialLimits {
 
   struct DeniedCommand: Sendable {
     let argv: [String]
-    let withFlag: String?
+    var withFlags: [String] = []
     let why: String
   }
 
+  struct DeniedMatch: Sendable {
+    let argv: [String]
+    let flag: String?
+    let why: String
+
+    var runName: String { (argv + (flag.map { [$0] } ?? [])).joined(separator: " ") }
+    var parseName: String { argv.joined(separator: " ") + (flag.map { " with \($0)" } ?? "") }
+  }
+
+  static let unknownLeadingOption = "an option Ardia doesn't know comes before the command"
+
   static let deniedCommands: [String: [DeniedCommand]] = [
     "op": [
-      DeniedCommand(argv: ["run"], withFlag: nil, why: "it runs other programs"),
-      DeniedCommand(argv: ["inject"], withFlag: nil, why: "it runs other programs"),
-      DeniedCommand(argv: ["plugin"], withFlag: nil, why: "it runs other programs"),
-      DeniedCommand(argv: ["read"], withFlag: "--out-file", why: "it writes files"),
-      DeniedCommand(argv: ["document", "get"], withFlag: "--out-file", why: "it writes files"),
-      DeniedCommand(argv: ["service-account"], withFlag: nil, why: "it mints credentials"),
+      DeniedCommand(argv: ["run"], why: "it runs other programs"),
+      DeniedCommand(argv: ["inject"], why: "it runs other programs"),
+      DeniedCommand(argv: ["plugin"], why: "it runs other programs"),
+      DeniedCommand(argv: ["read"], withFlags: ["--out-file", "-o"], why: "it writes files"),
+      DeniedCommand(argv: ["document", "get"], withFlags: ["--out-file", "-o"], why: "it writes files"),
+      DeniedCommand(argv: ["service-account"], why: "it mints credentials"),
+      DeniedCommand(argv: ["connect"], why: "it mints credentials"),
+      DeniedCommand(argv: ["events-api"], why: "it mints credentials"),
+      DeniedCommand(argv: ["item", "share"], why: "it shares data"),
+      DeniedCommand(argv: ["update"], withFlags: ["--directory"], why: "it writes files"),
     ],
     "bw": [
-      DeniedCommand(argv: ["serve"], withFlag: nil, why: "it opens a server"),
-      DeniedCommand(argv: ["send"], withFlag: nil, why: "it shares data"),
-      DeniedCommand(argv: ["export"], withFlag: nil, why: "it writes files"),
-      DeniedCommand(argv: ["encode"], withFlag: nil, why: "it writes files"),
-      DeniedCommand(argv: ["get", "attachment"], withFlag: nil, why: "it writes files"),
+      DeniedCommand(argv: ["serve"], why: "it opens a server"),
+      DeniedCommand(argv: ["send"], why: "it shares data"),
+      DeniedCommand(argv: ["export"], why: "it writes files"),
+      DeniedCommand(argv: ["encode"], why: "it writes files"),
+      DeniedCommand(argv: ["get", "attachment"], why: "it writes files"),
+      DeniedCommand(argv: ["import"], why: "it reads files"),
+      DeniedCommand(argv: ["create", "attachment"], withFlags: ["--file"], why: "it reads files"),
+      DeniedCommand(argv: ["receive"], withFlags: ["--output"], why: "it writes files"),
     ],
     "pass-cli": [
-      DeniedCommand(argv: ["run"], withFlag: nil, why: "it runs other programs"),
-      DeniedCommand(argv: ["inject"], withFlag: nil, why: "it runs other programs"),
-      DeniedCommand(argv: ["ssh-agent"], withFlag: nil, why: "it opens an agent"),
+      DeniedCommand(argv: ["run"], why: "it runs other programs"),
+      DeniedCommand(argv: ["inject"], why: "it runs other programs"),
+      DeniedCommand(argv: ["ssh-agent"], why: "it opens an agent"),
     ],
   ]
 

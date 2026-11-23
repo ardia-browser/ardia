@@ -133,7 +133,7 @@ struct CredentialVerbLaunch: Sendable, Equatable {
       return .failure(CredentialRefusal(.denied, unsafe == "--" ? "a lone -- is never allowed, since it passes arguments through." : "an argument with NUL or a newline is never allowed."))
     }
     if let denied = deniedCommand(program: cli.name, argv: argv) {
-      return .failure(CredentialRefusal(.denied, "\(cli.name) \(denied.argv.joined(separator: " ")) is never allowed."))
+      return .failure(CredentialRefusal(.denied, "\(cli.name) \(denied.runName) is never allowed."))
     }
     var env: [(String, String)] = []
     var folders: [String] = []
@@ -251,7 +251,7 @@ struct CredentialVerbLaunch: Sendable, Equatable {
     return []
   }
 
-  static func deniedCommand(program: String, argv: [String]) -> CredentialLimits.DeniedCommand? {
+  static func deniedCommand(program: String, argv: [String]) -> CredentialLimits.DeniedMatch? {
     guard let denied = CredentialLimits.deniedCommands[program] else { return nil }
     let global = CredentialLimits.globalFlags[program] ?? []
     let valued = CredentialLimits.globalFlagsTakingValues[program] ?? []
@@ -263,10 +263,21 @@ struct CredentialVerbLaunch: Sendable, Equatable {
       index += !token.contains("=") && valued.contains(flag) ? 2 : 1
     }
     let rest = Array(argv[min(index, argv.count)...])
-    for command in denied where rest.starts(with: command.argv) {
-      guard let needed = command.withFlag else { return command }
-      if rest.contains(where: { $0 == needed || $0.hasPrefix(needed + "=") }) { return command }
+    if let first = rest.first, first.hasPrefix("-") {
+      return CredentialLimits.DeniedMatch(argv: [first.split(separator: "=", maxSplits: 1).first.map(String.init) ?? first], flag: nil, why: CredentialLimits.unknownLeadingOption)
+    }
+    let words = rest.filter { !$0.hasPrefix("-") }
+    for command in denied where rest.starts(with: command.argv) || words.starts(with: command.argv) {
+      if command.withFlags.isEmpty { return CredentialLimits.DeniedMatch(argv: command.argv, flag: nil, why: command.why) }
+      if let flag = command.withFlags.first(where: { flag in rest.contains { Self.spells($0, flag) } }) {
+        return CredentialLimits.DeniedMatch(argv: command.argv, flag: flag, why: command.why)
+      }
     }
     return nil
+  }
+
+  static func spells(_ token: String, _ flag: String) -> Bool {
+    if token == flag || token.hasPrefix(flag + "=") { return true }
+    return !flag.hasPrefix("--") && flag.count == 2 && token.hasPrefix(flag)
   }
 }

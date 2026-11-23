@@ -1,5 +1,5 @@
 import { CREDENTIAL_LIMITS, VERB_TIMEOUTS_MS } from "./credentialConstants";
-import { deniedMatch } from "./deniedCommands";
+import { deniedMatch, deniedRunName } from "./deniedCommands";
 import { base64, isLoopbackHost, isRecord, sortedJson, stringsIn, urlParts, utf8Bytes, utf8Length } from "./credentialData";
 import { isSecretHandle } from "./credentialErrors";
 import { readCredentialContribution } from "./credentialManifest";
@@ -39,7 +39,7 @@ export const effectiveTimeout = (asked: unknown, verbTimeoutMs: number) =>
 
 export function deniedCommand(program: string, argv: readonly string[]): string | null {
   const denied = deniedMatch(program, argv);
-  return denied ? `${program} ${denied.argv.join(" ")}${denied.withFlag ? ` ${denied.withFlag}` : ""} is never allowed.` : null;
+  return denied ? `${deniedRunName(program, denied)} is never allowed.` : null;
 }
 
 const TEXT_RULES: Record<VerbSlot["type"], (slot: VerbSlot) => string> = {

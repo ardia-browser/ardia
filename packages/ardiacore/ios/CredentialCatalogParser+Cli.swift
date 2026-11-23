@@ -315,14 +315,14 @@ extension CredentialCatalogParser {
       }
     }
     if let denied = Self.literalDenial(program: program, argv: argv, slots: slots) {
-      problem("\(path): \(program) \(denied.argv.joined(separator: " ")) is never allowed, since \(denied.why)")
+      problem("\(path): \(program) \(denied.parseName) is never allowed, since \(denied.why)")
     }
     return CredentialVerb(
       id: id, argv: argv, slots: slots, env: env, stdin: stdin, timeoutMs: timeoutMs, outputLimitBytes: outputLimit, output: output, signIn: signIn,
       unlocks: unlocks, outlivesCall: outlives, hints: hints, hintOrder: hintOrder)
   }
 
-  static func literalDenial(program: String, argv: [CredentialVerb.Element], slots: [String: CredentialVerb.Slot]) -> CredentialLimits.DeniedCommand? {
+  static func literalDenial(program: String, argv: [CredentialVerb.Element], slots: [String: CredentialVerb.Slot]) -> CredentialLimits.DeniedMatch? {
     let placeholder = "\u{0}"
     func rendered(choosing chosen: (slot: String, value: String)?) -> [String] {
       argv.map { element in

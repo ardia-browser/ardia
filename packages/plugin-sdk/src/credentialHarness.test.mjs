@@ -128,6 +128,15 @@ test("buildVerb refuses what native refuses, with its request code and message",
 test("denied commands are refused after the CLI's global flags, whatever the catalog says", () => {
   const c = { ...parsedCli(), name: "op", verbs: { read: { argv: ["--account", "work", "read", "--out-file", "x"], slots: {}, env: [], stdin: null, timeoutMs: 30000, outputLimitBytes: 1024, output: { mode: "lines" }, signIn: false, unlocks: false, outlivesCall: false, hints: {} } } };
   assert.deepEqual(buildVerb(c, "read", {}, () => null, null), { code: "denied", message: "op read --out-file is never allowed." });
+  const run = (name, argv) => buildVerb({ ...c, name, verbs: { v: { ...c.verbs.read, argv } } }, "v", {}, () => null, null);
+  assert.deepEqual(run("op", ["read", "op://v/i/f", "-o", "x"]), { code: "denied", message: "op read -o is never allowed." });
+  assert.deepEqual(run("op", ["document", "get", "d", "-ox"]), { code: "denied", message: "op document get -o is never allowed." });
+  assert.deepEqual(run("op", ["connect", "token"]), { code: "denied", message: "op connect is never allowed." });
+  assert.deepEqual(run("op", ["item", "share", "i"]), { code: "denied", message: "op item share is never allowed." });
+  assert.deepEqual(run("bw", ["create", "attachment", "--file=a"]), { code: "denied", message: "bw create attachment --file is never allowed." });
+  assert.deepEqual(run("bw", ["get", "--raw", "attachment", "x"]), { code: "denied", message: "bw get attachment is never allowed." });
+  assert.deepEqual(run("bw", ["--weird", "status"]), { code: "denied", message: "bw --weird is never allowed." });
+  assert.equal(run("op", ["read", "op://v/i/f", "--no-newline"]).code, undefined);
 });
 
 test("a typed secret is single use once a verb that consumed it exits 0, and lasts three launches otherwise", async () => {

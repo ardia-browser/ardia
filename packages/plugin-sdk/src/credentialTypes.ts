@@ -1,7 +1,8 @@
 import type { Awaitable, CallContext } from "./types";
 import type { CREDENTIALS_PROTOCOL } from "./credentialConstants";
 
-export type DeniedCommand = { argv: readonly string[]; withFlag?: string };
+export type DeniedCommand = { argv: readonly string[]; withFlags?: readonly string[] };
+export type DeniedMatch = { argv: readonly string[]; flag?: string; why: string };
 
 export type CredentialHandlerName =
   | "state"

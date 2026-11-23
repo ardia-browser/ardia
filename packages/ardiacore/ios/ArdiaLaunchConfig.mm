@@ -245,10 +245,6 @@ BOOL SignedForDistribution() {
   return Truthy([self instance:key]);
 }
 
-- (NSNumber *)switchOverride:(NSString *)name {
-  return _switches[name];
-}
-
 - (NSDictionary<NSString *, NSNumber *> *)cachedSwitches {
   @synchronized(self) {
     if (!_cachedSwitches) _cachedSwitches = [self readCachedSwitches];

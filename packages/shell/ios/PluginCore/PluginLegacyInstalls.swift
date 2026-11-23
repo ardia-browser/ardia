@@ -186,10 +186,4 @@ extension PluginPrograms {
     }
     return outcome
   }
-
-  static func adoptLegacy(plugin: String, places: ProgramPlaces, entry: LegacyInstall) -> LegacyAdoption {
-    let held = lockLegacy(entry, plugin: plugin, places: places)
-    defer { held.release() }
-    return held.held ? adoptLegacyLocked(held, plugin: plugin, places: places, entry: entry) : held.outcome
-  }
 }

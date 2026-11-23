@@ -54,6 +54,7 @@ Ardia never creates the folder. `ardia config init` does, or the user does.
   `websiteEngines`, `protectedVideoInWebKit`, `offerWebKitForProtectedVideo`, `engineSwitchKeepsPage`,
   `engineSwitchAsksAboutUnsavedWork`, `engineSwitchCarriesSiteData`, `webKitFraudWarnings`. `searchEngine` must name an engine that already exists (built in, or
   one the user added in Settings).
+- `shrinkHorizontalTabs` lets inactive tabs across the top shrink to icon buttons before the row scrolls. It defaults to `false` and syncs. In a window with horizontal tabs, find it in Settings › Tabs › Layout › Fit more tabs in the row.
 - `interfaceScale` (0.8 to 1.5 in steps of 0.05, default 1; this Mac only, not synced) is Settings › Appearance ›
   Interface size: it scales the whole app's UI, not web pages, and applies live.
 - `sidebarTextSize` (`default`, `large`, `larger`; this Mac only, not synced) and `sidebarTextContrast` (`auto`

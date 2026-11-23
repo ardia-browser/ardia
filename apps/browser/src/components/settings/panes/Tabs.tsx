@@ -108,6 +108,7 @@ function LayoutSection() {
             anchor="tabs.autoHideTabs"
             description={`Tabs slide away until you point at the ${top ? "top edge" : "edge"}. ${keyText("⌘S")} toggles.`}
           />
+          <SettingToggle anchor="tabs.shrinkHorizontalTabs" />
           <Row anchor="tabs.sidebarSide">
             <Segmented options={SIDEBAR_SIDES} value={sidebarSide} onChange={chooseSidebarSide} />
           </Row>

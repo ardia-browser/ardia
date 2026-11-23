@@ -1,6 +1,6 @@
 import { memo, useContext, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { Animated, type NativeScrollEvent, type NativeSyntheticEvent, type ScrollView, StyleSheet, View } from "react-native";
-import { PageProfileContext, useWindowId } from "../../state/browser/hooks";
+import { PageProfileContext, useSettings, useWindowId } from "../../state/browser/hooks";
 import { tabDragging, useTabDrag } from "../../state/drag/tabDrag";
 import { useShownTabIdFor, useStripEntries, useStripTitleNeeds } from "../../state/tabs/topStrip";
 import { setMeasuredWidth, useMeasuredWidths } from "../../state/windows/measuredWidths";
@@ -40,6 +40,7 @@ const stripEnd = ({ slots, lefts }: DragGeometry) => (slots.length ? lefts.at(-1
 
 export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, current, resting }: { profileId: string; slot: number; pageWidth: number; current: boolean; resting: boolean }) {
   const windowId = useWindowId();
+  const shrinkTabs = useSettings((s) => s.shrinkHorizontalTabs);
   const flare = useContext(FloatingStrip) ? 0 : FLARE;
   const pageStyle = usePageStyle(windowId, slot, pageWidth + flare * 2);
   const entries = useStripEntries(windowId, profileId);
@@ -80,7 +81,7 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
   const holding = held.current ? heldWideTab(entries, held.current.wide) : null;
   const wideId = holding?.tabId ?? activeId;
   const tightNames = useRef(false);
-  const measuresAt = (tight: boolean) => ({ groupChip: chipsAt(tight), folderChip, needsTitle });
+  const measuresAt = (tight: boolean) => ({ groupChip: chipsAt(tight), folderChip, needsTitle, shrinkTabs });
   let measures = measuresAt(tightNames.current);
   let fit = held.current?.fit ?? stripFit(entries, activeId, pageWidth, measures, dock, wideId);
   if (!held.current) {
@@ -91,7 +92,6 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
       fit = stripFit(entries, activeId, pageWidth, measures, dock, wideId);
     }
   }
-  const chipOf = measures.groupChip;
   const layoutWith = (stretch: Stretch | null) => layoutStrip(entries, activeId, pageWidth, measures, dock, held.current?.widths, wideId, fit.selectedMin, fit.titledMin, fit.compactMin, stretch);
   const unstretched = layoutWith(null);
   const toTail = held.current?.tailEdge === undefined ? 0 : Math.max(0, held.current.tailEdge - stripEnd(unstretched.top));
@@ -368,7 +368,7 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
                               chip={selected}
                               tabWidth={tabWidth}
                               activeId={activeId}
-                              chipWidth={chipOf(e.id)}
+                              chipWidth={measures.groupChip(e.id)}
                               onChipFrame={(width) => setMeasuredWidth(chipKey(e.id), width)}
                               memberWidth={memberWidth}
                               folderMeasured={(groupId) => folderChip(groupId) !== undefined}

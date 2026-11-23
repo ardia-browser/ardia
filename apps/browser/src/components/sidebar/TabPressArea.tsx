@@ -20,6 +20,7 @@ type TabPressProps = {
   tab: Tab;
   style?: StyleProp<ViewStyle>;
   pressStyle?: StyleProp<ViewStyle>;
+  accessibilityLabel?: string;
   tooltip?: string;
   hitSlop?: Insets;
   selected?: boolean;
@@ -39,6 +40,7 @@ export function tabPressView({
   tab,
   style,
   pressStyle,
+  accessibilityLabel,
   tooltip,
   hitSlop,
   selected = false,
@@ -76,6 +78,7 @@ export function tabPressView({
         onTouchEnd={() => endPressGesture(press.current)}
         onTouchCancel={() => endPressGesture(press.current)}
         style={pressStyle}
+        accessibilityLabel={accessibilityLabel}
         nativeID={tabPressTag(tab.id, selected, inSplit)}
         collapsable={false}
         hitSlop={hitSlop}

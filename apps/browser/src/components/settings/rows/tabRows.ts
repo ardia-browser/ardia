@@ -5,6 +5,7 @@ import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { newTabOpensOf } from "../../../state/settings/settings";
 
 const inSidebar = (_: unknown, env: SettingsEnv) => !env.top;
+const inTop = (_: unknown, env: SettingsEnv) => env.top;
 
 export const tabRows = {
   tabs: [
@@ -32,6 +33,12 @@ export const tabRows = {
           title: "Hide toolbar while scrolling",
           description: "Scrolling down shrinks the toolbar to a thin strip.",
           keywords: ["hide toolbar", "auto hide toolbar", "toolbar hides", "address bar hides", "collapse", "compact", "scroll", "shrink", "shrinking", "address bar shrinks", "toolbar shrinks", "page shifts", "page jumps"],
+        },
+        shrinkHorizontalTabs: {
+          title: "Fit more tabs in the row",
+          description: "When the row fills up, inactive tabs can shrink to icon buttons before you need to scroll.",
+          keywords: ["tab width", "fixed width", "shrink tabs", "compact tabs", "horizontal tabs", "more tabs", "small buttons"],
+          shown: inTop,
         },
         buttons: {
           title: "Buttons",

@@ -44,6 +44,8 @@ test("config.schema.json lists the allowlist with defaults, shortcuts by command
   for (const key of CONFIG_SETTING_KEYS) assert.ok(accepts(settings.properties[key], settings.properties[key].default), key);
   assert.deepEqual(settings.properties.selectedTabGlow.enum, ["full", "soft", "off"]);
   assert.equal(settings.properties.selectedTabGlow.default, "full");
+  assert.equal(settings.properties.shrinkHorizontalTabs.default, false);
+  assert.equal(accepts(schema, { settings: { tabLayout: "top", shrinkHorizontalTabs: true } }), true);
   const shortcuts = settings.properties.shortcuts;
   assert.deepEqual(Object.keys(shortcuts.properties), [...shortcutCatalog().keys()]);
   assert.match(shortcuts.properties.newTab.description, /New Tab \(default ⌘T\)/);

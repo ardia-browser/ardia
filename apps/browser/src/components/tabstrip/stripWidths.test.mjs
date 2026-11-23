@@ -1,12 +1,49 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-const { heldWideTab, keyedWidths, layoutStrip, nameGrowth, namesStayTight, withRoomyNames, stripFit, stripTabWidths, underPressure } = await import("./stripGroups.ts");
+const { heldWideTab, keyedWidths, layoutDock, layoutStrip, nameGrowth, namesStayTight, withRoomyNames, stripFit, stripTabWidths, underPressure } = await import("./stripGroups.ts");
 const { COMPACT_CHIP, GAP, GROUP_TITLE_MAX, GROUP_TITLE_TIGHT, MAX_CHIP, NEW_TAB_ROOM, SELECTED_MIN_CHIP, SELECTED_STEPS, SELECTED_TIGHT_CHIP, TITLE_MIN_CHIP, TITLED_CHIP } = await import("./tokens.ts");
 const { needingTitles } = await import("../../state/tabs/topStrip.ts");
 
 const tab = (id) => ({ kind: "tab", id, group: null });
 const measured = (needs = []) => ({ groupChip: () => undefined, folderChip: () => undefined, needsTitle: (id) => needs.includes(id) });
 const widths = (o) => stripTabWidths({ pageWidth: 1000, dockWidth: 0, groups: [], compactUnits: 0, titledUnits: 0, selectedShown: false, fixed: 0, gap: GAP, plus: NEW_TAB_ROOM, min: COMPACT_CHIP, titledMin: TITLED_CHIP, selectedMin: SELECTED_MIN_CHIP, max: MAX_CHIP, ...o });
+
+test("twenty tabs with the same favicon fit as small buttons when shrinking is enabled", () => {
+  const tabs = Array.from({ length: 20 }, (_, i) => tab(`t${i}`));
+  const measures = measured(tabs.map((entry) => entry.id));
+  const compact = { ...measures, shrinkTabs: true };
+  assert.ok(!fitsPage(laidOut(tabs, "t0", 1000, measures).strip, 1000));
+  for (const active of ["t0", "t19"]) {
+    for (const page of [880, 997, 1000, 1023, 1200]) {
+      const { strip } = laidOut(tabs, active, page, compact);
+      assert.ok(fitsPage(strip, page), `${page} pt, ${active} active`);
+      assert.equal(strip.top.slots.length, 20);
+      assert.ok(strip.tabWidth(active) >= TITLE_MIN_CHIP);
+      for (const { id } of tabs.filter((entry) => entry.id !== active)) {
+        assert.ok(strip.tabWidth(id) >= COMPACT_CHIP && strip.tabWidth(id) < TITLE_MIN_CHIP);
+      }
+    }
+  }
+  assert.deepEqual(laidOut(tabs.slice(0, 3), "t0", 1000, compact).strip.widths, laidOut(tabs.slice(0, 3), "t0", 1000, measures).strip.widths);
+});
+
+test("compact tabs keep their minimum hit area and scroll when the pinned dock and tabs cannot all fit", () => {
+  const tabs = Array.from({ length: 20 }, (_, i) => tab(`t${i}`));
+  const dock = { kind: "dock", ids: ["p"], members: new Map() };
+  const entries = [dock, ...tabs];
+  const measures = { ...measured(tabs.map((entry) => entry.id)), shrinkTabs: true };
+  const pinned = layoutDock(dock);
+  const draw = (page) => {
+    const fit = stripFit(entries, "t0", page, measures, pinned);
+    return layoutStrip(entries, "t0", page, measures, pinned, undefined, "t0", fit.selectedMin, fit.titledMin, fit.compactMin);
+  };
+  const tiny = draw(500);
+  assert.equal(tiny.tabWidth("t19"), COMPACT_CHIP);
+  assert.ok(!fitsPage(tiny, 500));
+  const wide = draw(1000);
+  assert.deepEqual(tiny.spanOf("p"), wide.spanOf("p"));
+  assert.ok(fitsPage(wide, 1000));
+});
 
 test("a tab whose favicon is shared or missing needs its title; a tab with its own favicon doesn't", () => {
   assert.deepEqual(needingTitles([["a", "gh"], ["b", "gh"], ["c", "docs"], ["d", ""], ["e", "mail"]]), ["a", "b", "d"]);

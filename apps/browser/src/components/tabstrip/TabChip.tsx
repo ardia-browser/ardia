@@ -198,7 +198,7 @@ export const TabChip = memo(function TabChip({ tabId, width, drawn, tuck, dragge
         {dragged && !active && (
           <View pointerEvents="none" style={{ position: "absolute", left: 0, width, top: ITEM_TOP, height: ITEM_HEIGHT, borderRadius: tabRadius(), backgroundColor: theme.windowTint[0] }} />
         )}
-        <TabPressArea windowId={windowId} tab={tab} onSwitch={pick} style={StyleSheet.absoluteFill} pressStyle={{ flex: 1 }}>
+        <TabPressArea windowId={windowId} tab={tab} onSwitch={pick} accessibilityLabel={title} style={StyleSheet.absoluteFill} pressStyle={{ flex: 1 }}>
           {({ pressed }) => (
             <ChipRow
               hover={chipHover}

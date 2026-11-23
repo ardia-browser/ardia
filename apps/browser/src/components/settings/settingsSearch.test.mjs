@@ -36,6 +36,8 @@ const TOP = [
   ["sidebar", ["tabs.sidebarSide"]],
   ["right sidebar", ["tabs.sidebarSide"]],
   ["vertical tabs", ["tabs.layout"]],
+  ["fixed width", ["tabs.shrinkHorizontalTabs"]],
+  ["shrink tabs", ["tabs.shrinkHorizontalTabs"]],
   ["pinned", ["profiles.shareTopApps", "tabs.balancedTopApps", "tabs.sleepingTabs"]],
   ["strikethrough", ["tabs.sleepingTabs"]],
   ["sleeping tabs", ["tabs.sleepingTabs"]],
@@ -318,9 +320,11 @@ test("a row its pane doesn't draw is left out of search, by the same rule the pa
   const { DEFAULT_SETTINGS } = await import("../../state/settings/settings.ts");
   const unshown = (settings, env) => new Set(unshownSettings({ ...DEFAULT_SETTINGS, ...settings }, env).split("\n").filter(Boolean));
   const across = unshown({}, { top: true });
+  assert.ok(!across.has("tabs.shrinkHorizontalTabs"));
   assert.ok(!across.has("tabs.buttons"), "the Hide Tabs button shows in both layouts");
   for (const id of ["tabs.sidebarSide", "appearance.sidebarTextSize", "appearance.addressBar"]) assert.ok(across.has(id), id);
   const sidebar = unshown({}, { top: false, glass: true, syncOn: true, calendarAccess: true });
+  assert.ok(sidebar.has("tabs.shrinkHorizontalTabs"));
   for (const id of ["tabs.sidebarSide", "appearance.sidebarTextSize", "general.syncFolder", "automations.meetingAlert"]) assert.ok(!sidebar.has(id), id);
   for (const id of ["appearance.interfaceStyle", "appearance.glassTint"]) assert.ok(unshown({}, { top: false }).has(id), id);
   assert.ok(unshown({ interfaceStyle: "classic" }, { top: false, glass: true }).has("appearance.glassTint"));

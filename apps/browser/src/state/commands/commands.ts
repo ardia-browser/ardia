@@ -41,7 +41,7 @@ import { tabEngine } from "../engines/engines";
 import { runReaderCommand } from "../reader/reader";
 import { goBack, goForward } from "../tabs/navigation";
 import { awaitsFirstPage } from "../tabs/pendingAddress";
-import { focusSplitPane, openSplitPane } from "../splits/actions";
+import { focusSplitPane, moveSplitPane, openHorizontalSplitPane, openSplitPane } from "../splits/actions";
 import { chooseSidebarSide, switchTabLayout } from "../settings/actions";
 import { isAppCommand, settingChange, variantArg } from "./commandCatalog";
 import { APP_COMMAND_HANDLERS } from "./appCommands";
@@ -54,6 +54,7 @@ import { requestAutofill } from "../site/autofill";
 import { copyPageUrl, copySelectedTabUrls, jumpToSelection } from "../site/selection";
 import { shareTab } from "../site/share";
 import { groupOf } from "../pins/tabGrouping";
+import { consentToken } from "../telemetry/client";
 import { noteUrlCopied } from "../telemetry/urlCopies";
 import { newWindowProfile, originalProfile } from "../windows/small";
 import { openLittleArdia } from "../littleArdia/actions";
@@ -257,9 +258,19 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
     }
     case "openSplitPane":
       return void openSplitPane(windowId);
+    case "openHorizontalSplitPane":
+      return void openHorizontalSplitPane(windowId);
     case "focusNextPane":
     case "focusPreviousPane":
       return focusSplitPane(windowId, command === "focusNextPane" ? 1 : -1);
+    case "movePaneLeft":
+      return void moveSplitPane(windowId, "left", consentToken());
+    case "movePaneRight":
+      return void moveSplitPane(windowId, "right", consentToken());
+    case "movePaneUp":
+      return void moveSplitPane(windowId, "up", consentToken());
+    case "movePaneDown":
+      return void moveSplitPane(windowId, "down", consentToken());
     case "toggleSidebar":
       return s.toggleSidebar(windowId);
     case "zoomIn":

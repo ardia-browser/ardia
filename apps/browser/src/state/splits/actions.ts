@@ -6,13 +6,16 @@ import { withOptionAlternate } from "../app/menuSections";
 import { storeAction, useBrowser } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import { isStacked, MAX_SPLIT_PANES, type OpenPaneOptions, splitOf, type SplitSide, splitTabIds, splitTabIdsOf } from "./splits";
+import { paneNeighbor, type SplitDirection } from "./reorder";
 import { splitLane, type SplitLane, splitsOnRow } from "./lanes";
 import type { AdoptId } from "../browser/types";
 import { noteSplit } from "../telemetry/usage";
+import { consentToken, type ConsentToken } from "../telemetry/client";
+import { noteHorizontalSplitOpen, noteSplitDrop, noteSplitPaneDragCancel, noteSplitPaneMove } from "../telemetry/splitReorderCounts";
+import { reorderTick } from "../drag/reorderTick";
 import { returnFocusToPage } from "../sidebar/actions";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { userClose, type ByUser } from "../tabs/closeActivation";
-import { consentToken } from "../telemetry/client";
 
 const store = () => useBrowser.getState();
 
@@ -33,6 +36,43 @@ export function focusSplitPane(windowId: string, delta: 1 | -1) {
   const before = activeTabId(store(), windowId);
   store().focusPane(windowId, delta);
   if (activeTabId(store(), windowId) !== before) returnFocusToPage(windowId);
+}
+
+export function openHorizontalSplitPane(windowId: string, options: Omit<OpenPaneOptions, "side"> = {}, consent?: ConsentToken | null): string | null {
+  const opened = openSplitPane(windowId, { ...options, side: "bottom" });
+  if (opened) noteHorizontalSplitOpen(consent);
+  return opened;
+}
+
+export function moveSplitPane(windowId: string, direction: SplitDirection, consent?: ConsentToken | null): boolean {
+  const active = activeTabId(store(), windowId);
+  if (!active || !store().movePaneDirection(active, direction)) return false;
+  reorderTick();
+  noteSplit("splitPaneKeyMoves", consent);
+  noteSplitPaneMove("keyboard", consent);
+  returnFocusToPage(windowId);
+  return true;
+}
+
+export function moveActiveSplitPane(windowId: string, delta: 1 | -1, consent?: ConsentToken | null): boolean {
+  return moveSplitPane(windowId, delta < 0 ? "left" : "right", consent);
+}
+
+export function swapSplitPanes(a: string, b: string, viaOrConsent?: "drag" | "menu" | ConsentToken | null): boolean {
+  if (!store().swapPanes(a, b)) return false;
+  const via: "drag" | "menu" = viaOrConsent === "menu" ? "menu" : "drag";
+  const consent: ConsentToken | null | undefined = viaOrConsent === "drag" || viaOrConsent === "menu" ? undefined : viaOrConsent;
+  if (via === "drag") {
+    reorderTick();
+    noteSplit("splitPaneDragMoves", consent);
+  }
+  noteSplitPaneMove(via, consent);
+  return true;
+}
+
+export function cancelSplitPaneDrag(splitId: string, tabIds: string[]) {
+  store().setSplitPaneOrder(splitId, tabIds);
+  noteSplitPaneDragCancel();
 }
 
 function openAsTab(windowId: string, { url, adoptId, anchorTabId, background }: OpenPaneOptions): string | null {
@@ -66,7 +106,9 @@ export function openLinkInSplit(sourceTabId: string, url: string, adoptId?: Adop
 export function dropTabIntoSplit(tabId: string, targetTabId: string, side: SplitSide): string | null {
   const target = store().tabs[targetTabId];
   if (!target || tabId === targetTabId) return null;
-  return openSplitPane(target.windowId, { tabId, anchorTabId: targetTabId, side });
+  const opened = openSplitPane(target.windowId, { tabId, anchorTabId: targetTabId, side });
+  if (opened) noteSplitDrop(side);
+  return opened;
 }
 
 type RowSplitDrop = { adopted: SplitLane | null };
@@ -105,22 +147,36 @@ function splitMenuItems(tabId: string): MenuItem[] {
   const split = splitOf(s, tabId);
   if (!split || !s.tabs[tabId]) return [];
   const horizontal = split.orientation === "horizontal";
-  const index = splitTabIds(split).indexOf(tabId);
   const full = splitTabIds(split).length >= MAX_SPLIT_PANES;
   const stacked = isStacked(split, tabId);
+  const hasStack = split.slots.some((slot) => "stack" in slot);
+  const canMove = {
+    left: !!paneNeighbor(split, tabId, "left"),
+    right: !!paneNeighbor(split, tabId, "right"),
+    up: !!paneNeighbor(split, tabId, "up"),
+    down: !!paneNeighbor(split, tabId, "down"),
+  };
+  const moveHorizontal: MenuItem[] = [
+    { id: "moveLeft", title: "Move Pane Left", symbol: "rectangle.lefthalf.inset.filled.arrow.left", enabled: canMove.left, ...menuShortcut("movePaneLeft") },
+    { id: "moveRight", title: "Move Pane Right", symbol: "rectangle.righthalf.inset.filled.arrow.right", enabled: canMove.right, ...menuShortcut("movePaneRight") },
+  ];
+  const moveVertical: MenuItem[] = [
+    { id: "moveUp", title: "Move Pane Up", symbol: "arrow.up", enabled: canMove.up, ...menuShortcut("movePaneUp") },
+    { id: "moveDown", title: "Move Pane Down", symbol: "arrow.down", enabled: canMove.down, ...menuShortcut("movePaneDown") },
+  ];
+  const moveItems = hasStack ? [...moveHorizontal, ...moveVertical] : horizontal ? moveHorizontal : moveVertical;
   return [
-    { id: "add", title: "Add Split Pane", symbol: horizontal ? "rectangle.split.2x1" : "rectangle.split.1x2", enabled: !full, ...menuShortcut("openSplitPane") },
-    { id: "bottom", title: horizontal ? "Add Bottom Split" : "Add Right Split", symbol: horizontal ? "rectangle.bottomhalf.inset.filled" : "rectangle.righthalf.inset.filled", enabled: !full && !stacked },
+    { id: "add", title: horizontal ? "Add Vertical Split View" : "Add Horizontal Split View", symbol: horizontal ? "rectangle.split.2x1" : "rectangle.split.1x2", enabled: !full, ...menuShortcut(horizontal ? "openSplitPane" : "openHorizontalSplitPane") },
+    { id: "bottom", title: horizontal ? "Add Bottom Split" : "Add Right Split", symbol: horizontal ? "rectangle.bottomhalf.inset.filled" : "rectangle.righthalf.inset.filled", enabled: !full && !stacked, ...menuShortcut(horizontal ? "openHorizontalSplitPane" : "openSplitPane") },
     { separator: true },
     {
       id: "arrange",
       title: "Arrange",
       symbol: "arrow.left.arrow.right",
       children: [
-        { id: "left", title: horizontal ? "Move Pane Left" : "Move Pane Up", symbol: "rectangle.lefthalf.inset.filled.arrow.left", enabled: index > 0 },
-        { id: "right", title: horizontal ? "Move Pane Right" : "Move Pane Down", symbol: "rectangle.righthalf.inset.filled.arrow.right", enabled: index < splitTabIds(split).length - 1 },
+        ...moveItems,
         { id: "flip", title: "Flip Split View", symbol: horizontal ? "arrow.left.arrow.right" : "arrow.up.arrow.down" },
-        { id: "convert", title: horizontal ? "Convert to Vertical Split View" : "Convert to Horizontal Split View", symbol: horizontal ? "rectangle.split.1x2" : "rectangle.split.2x1" },
+        { id: "convert", title: horizontal ? "Convert to Horizontal Split View" : "Convert to Vertical Split View", symbol: horizontal ? "rectangle.split.1x2" : "rectangle.split.2x1" },
       ],
     },
     ...(PLATFORM_FEATURES.menuAlternates
@@ -146,13 +202,17 @@ export async function showSplitMenu(tabId: string) {
   const st = store();
   switch (choice) {
     case "add":
-      return void openSplitPane(tab.windowId, { anchorTabId: tabId, side: horizontal ? "right" : "bottom" });
+      return void (horizontal ? openSplitPane(tab.windowId, { anchorTabId: tabId, side: "right" }) : openHorizontalSplitPane(tab.windowId, { anchorTabId: tabId }, consent));
     case "bottom":
-      return void openSplitPane(tab.windowId, { anchorTabId: tabId, side: horizontal ? "bottom" : "right" });
-    case "left":
-      return st.movePane(tabId, -1);
-    case "right":
-      return st.movePane(tabId, 1);
+      return void (horizontal ? openHorizontalSplitPane(tab.windowId, { anchorTabId: tabId }, consent) : openSplitPane(tab.windowId, { anchorTabId: tabId, side: "right" }));
+    case "moveLeft":
+      return void (st.movePaneDirection(tabId, "left") && noteSplitPaneMove("menu", consent));
+    case "moveRight":
+      return void (st.movePaneDirection(tabId, "right") && noteSplitPaneMove("menu", consent));
+    case "moveUp":
+      return void (st.movePaneDirection(tabId, "up") && noteSplitPaneMove("menu", consent));
+    case "moveDown":
+      return void (st.movePaneDirection(tabId, "down") && noteSplitPaneMove("menu", consent));
     case "flip":
       return st.flipSplit(split.id);
     case "convert":

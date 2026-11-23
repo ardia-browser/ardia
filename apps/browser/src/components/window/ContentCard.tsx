@@ -16,6 +16,7 @@ import { NO_TOOLBAR, toolbarGeometry, type Rect, type ToolbarGeometry } from "./
 import { startPermissionPrompts } from "../../state/site/permissions";
 import { useFullscreenTab } from "../../state/tabs/pageState";
 import { DropTargets, SplitDividers, SplitFocusRing, SplitToast, type WindowShape } from "../split/SplitChrome";
+import { SplitMoveHandles } from "../split/SplitMoveHandles";
 import { dockMoving, usePeekSpan, whenDockStill } from "../../state/windows/dockMotion";
 import { FrozenPage } from "./FrozenPage";
 import { setCardAnchor, setUrlAnchor, useAddressBarInSidebar, useCardCaptionRoom, useMinimalism, usePageFrameInset, useTabLayout, watchToolbarExtensionsWidth, onFullScreenLeft, onInterfaceScaleChange, windowRootShape } from "../../state/windows/layout";
@@ -212,6 +213,9 @@ export function ContentCard() {
       )}
       {split && !fullscreenTab && <SplitDividers split={split} dividers={dividers} width={size.width} height={size.height} />}
       {split && !fullscreenTab && activeRect && <SplitFocusRing rect={activeRect} origin={origin} windowShape={windowFullScreen ? null : windowShape} />}
+      {size.width > 0 && split && !fullscreenTab && (
+        <SplitMoveHandles windowId={windowId} split={split} panes={panes} activeId={activeId} chrome={chrome} small={small} toolbarHeight={toolbarRow.height} pageBars={pageBars} cardRadius={frame.radius} />
+      )}
       {size.width > 0 && popoversOverCard && origin && activeRect && peek !== undefined && (
         <BesidePeekPopovers
           tabId={popoversOverCard}

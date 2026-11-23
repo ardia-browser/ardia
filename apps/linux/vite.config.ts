@@ -21,6 +21,7 @@ const replacements = new Map([
   [here("../browser/src/components/sidebar/HoverCard.tsx"), here("./src/SidebarHoverCard.tsx")],
   [here("../browser/src/components/site/SelectionPopover.tsx"), here("./src/SelectionPopover.tsx")],
   [here("../browser/src/components/window/PageOverlays.tsx"), here("./src/PageOverlays.tsx")],
+  [here("../browser/src/components/split/SplitMoveHandles.tsx"), here("./src/SplitMoveHandles.tsx")],
   [here("../browser/src/components/window/WindowOverlays.tsx"), here("./src/WindowOverlays.tsx")],
   [here("../browser/src/components/downloads/Downloads.tsx"), here("./src/DownloadsPopover.tsx")],
   [here("../browser/src/state/settings/settingsWindows.ts"), here("./src/settingsWindows.ts")],
@@ -40,6 +41,8 @@ const replacements = new Map([
   [here("../browser/src/platform/windowControls.ts"), here("./src/hostWindowControls.ts")],
   [here("../browser/src/components/window/WindowControls.tsx"), here("./src/WindowControls.tsx")],
   [here("../browser/src/components/window/LeadingWindowControls.tsx"), here("./src/LeadingWindowControls.tsx")],
+  [here("../browser/src/components/split/SplitMoveHandles.tsx"), here("./src/SplitMoveHandles.tsx")],
+  [here("../browser/src/components/split/SplitMoveIcon.tsx"), here("./src/SplitMoveIcon.tsx")],
 ]);
 const importedPasswordSave = {
   source: here("../browser/src/state/site/passwords.ts"),

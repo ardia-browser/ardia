@@ -11,7 +11,7 @@ export function migrateProfileShortcuts(overrides: ShortcutOverrides, profiles: 
   return migrated;
 }
 
-export const SHIFTED_KEYS: Readonly<Record<string, string>> = { "+": "=", "{": "[", "}": "]" };
+export const SHIFTED_KEYS: Readonly<Record<string, string>> = { "+": "=", "_": "-", "{": "[", "}": "]" };
 
 export function unshiftedShortcutOverrides(overrides: ShortcutOverrides): ShortcutOverrides {
   let canonical: ShortcutOverrides | undefined;

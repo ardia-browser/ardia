@@ -5,7 +5,7 @@ const { useBrowser } = await import("../browser/store.ts");
 const { tabMenuItems } = await import("./tabMenu.ts");
 const { multiTabMenuItems } = await import("./multiTabMenu.ts");
 const { groupMenuItems } = await import("./groupMenu.ts");
-const { sidebarMenuItems, runBrowserLayoutChoice } = await import("./sidebarMenu.ts");
+const { sidebarMenuItems, openSidebarMenu, runBrowserLayoutChoice } = await import("./sidebarMenu.ts");
 const { appMenuItems } = await import("../app/appMenu.ts");
 const { tabLayoutOf } = await import("../browser/model.ts");
 const { tileFolderContextItems } = await import("./tileFolderUi.ts");
@@ -305,6 +305,7 @@ test("the sidebar background menu: new things, Browser Layout, Close All Tabs la
   const { w, ids } = windowWith("a", "b");
   assert.deepEqual(deep(sidebarMenuItems(S(), w)), [
     "New Tab [plus.app] ⌘T",
+    "New Tab in Split View [rectangle.split.2x1] ⌃⇧=",
     "Reopen Closed Tab [clock.arrow.circlepath] ⇧⌘T (off)",
     "---",
     "New Group [folder.badge.plus]",
@@ -396,6 +397,19 @@ test("multi-select Move to › Top Apps converts pinned rows into Top Apps tiles
   }
   assert.equal(S().tabs[ids[0]].pin?.as, "tile");
   assert.equal(S().tabs[ids[1]].pin?.as, "tile");
+});
+
+test("New Tab in Split View from the sidebar menu opens a new tab beside the active tab", async () => {
+  const { w, ids } = windowWith("a", "b");
+  S().activate(ids[0]);
+  await whileMenuIsUp(() => openSidebarMenu(w), () => {}, "newTabInSplit");
+  const split = Object.values(S().splits)[0];
+  assert.ok(split);
+  const panes = splitTabIdsOf(split);
+  assert.equal(panes.length, 2);
+  assert.equal(panes[0], ids[0]);
+  assert.notEqual(panes[1], ids[0]);
+  assert.notEqual(panes[1], ids[1]);
 });
 
 test("a Top Apps folder: rename, then unpin its tabs or remove the folder", () => {

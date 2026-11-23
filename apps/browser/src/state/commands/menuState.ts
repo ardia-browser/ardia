@@ -8,6 +8,7 @@ import { readerState as readerFor, type ReaderState } from "../reader/reader";
 import { peekTabId } from "../peek/peek";
 import { canHideElements } from "../site/hiddenElements";
 import { splitOf } from "../splits/splits";
+import { paneNeighbor } from "../splits/reorder";
 import { canGoBack, canGoForward } from "../tabs/navigation";
 import { liveReachOf, shownLiveOf } from "../tabs/tabLive";
 import type { Bookmarks, BookmarkNode, Tab } from "../browser/types";
@@ -92,7 +93,14 @@ export function menuState(s: BrowserState, liveOfTab = (id: string) => shownLive
   const regularWindows = s.windowOrder.filter((id) => s.windows[id]!.kind !== "private" && s.windows[id]!.kind !== "small");
 
   const disabled: string[] = [];
-  if (!tab || !splitOf(s, tab.id)) disabled.push("focusNextPane", "focusPreviousPane");
+  const activeSplit = tab ? splitOf(s, tab.id) : undefined;
+  if (!tab || !activeSplit) disabled.push("focusNextPane", "focusPreviousPane", "movePaneLeft", "movePaneRight", "movePaneUp", "movePaneDown");
+  else {
+    if (!paneNeighbor(activeSplit, tab.id, "left")) disabled.push("movePaneLeft");
+    if (!paneNeighbor(activeSplit, tab.id, "right")) disabled.push("movePaneRight");
+    if (!paneNeighbor(activeSplit, tab.id, "up")) disabled.push("movePaneUp");
+    if (!paneNeighbor(activeSplit, tab.id, "down")) disabled.push("movePaneDown");
+  }
   const inSidebar = !w || tabLayoutOf(s, w.id) === "sidebar";
   if (!inSidebar) disabled.push("toggleAddressBar", "toggleSidebarSide");
   if (s.settings.minimalismMode) disabled.push("toggleAddressBar");

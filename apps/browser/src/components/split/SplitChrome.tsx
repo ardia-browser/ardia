@@ -13,7 +13,7 @@ import { useTab, useWindowId, useWindowProfileId } from "../../state/browser/hoo
 import { useCardFrame } from "../window/cardFrame";
 import type { Size } from "../ui/useSettled";
 import { overPeek } from "../../state/windows/dockMotion";
-import { DROP_SIDES, isHorizontalSide, zoneHit, zoneRect, type ZoneStage } from "./splitDrop";
+import { DROP_SIDES, isVerticalSplitSide, zoneHit, zoneRect, type ZoneStage } from "./splitDrop";
 import { setDropTarget, setOnPage, setTargetResolver, useTabDrag } from "../../state/drag/tabDrag";
 import { splitViewAvailable, type SplitSide } from "../../state/splits/splits";
 import { FOCUS_RING, SPLIT_MOTION, splitColors, TOAST_ACTION_MS, TOAST_MS, ZONE_ACCENT_ALPHA, ZONE_DASH_INSET, ZONE_SLIDE_MS, zoneDashRadius, zoneRadius } from "./tokens";
@@ -231,7 +231,7 @@ export function DropTargets({ panes, origin }: { panes: Record<string, Rect>; or
 
   if (!mounted.length) return null;
   return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { overflow: "hidden" }]}>
       {mounted.flatMap(([tabId, rect]) =>
         DROP_SIDES.map((side) => (
           <DropZone
@@ -251,12 +251,11 @@ export function DropTargets({ panes, origin }: { panes: Record<string, Rect>; or
 }
 
 const ZONE_SPRING = { ...SPLIT_MOTION.zoneSpring, useNativeDriver: false } as const;
-
-const ZONE_META: Record<SplitSide, { icon: string; label: string; shortLabel: string }> = {
-  left: { icon: "rectangle.lefthalf.filled", label: "Add left split", shortLabel: "Left split" },
-  right: { icon: "rectangle.righthalf.filled", label: "Add right split", shortLabel: "Right split" },
-  top: { icon: "rectangle.tophalf.filled", label: "Add top split", shortLabel: "Top split" },
-  bottom: { icon: "rectangle.bottomhalf.filled", label: "Add bottom split", shortLabel: "Bottom split" },
+const ZONE_COPY: Record<SplitSide, { symbol: string; label: string; shortLabel: string }> = {
+  left: { symbol: "rectangle.lefthalf.filled", label: "Add left split", shortLabel: "Left split" },
+  right: { symbol: "rectangle.righthalf.filled", label: "Add right split", shortLabel: "Right split" },
+  top: { symbol: "rectangle.tophalf.filled", label: "Add top split", shortLabel: "Top split" },
+  bottom: { symbol: "rectangle.bottomhalf.filled", label: "Add bottom split", shortLabel: "Bottom split" },
 };
 
 function DropZone({ pane, side, shown, stage, pointerX, pointerY, onHidden }: { pane: Rect; side: SplitSide; shown: boolean; stage: ZoneStage; pointerX: number; pointerY: number; onHidden(): void }) {
@@ -282,7 +281,7 @@ function DropZone({ pane, side, shown, stage, pointerX, pointerY, onHidden }: { 
       ({ finished }) => finished && !shown && onHidden(),
     );
   }, [shown]);
-  const horizontal = isHorizontalSide(side);
+  const vertical = isVerticalSplitSide(side);
   const away =
     side === "left"
       ? -(rect.x - pane.x + rect.width)
@@ -291,13 +290,12 @@ function DropZone({ pane, side, shown, stage, pointerX, pointerY, onHidden }: { 
         : side === "top"
           ? -(rect.y - pane.y + rect.height)
           : pane.y + pane.height - rect.y;
-  const offset = slide.interpolate({ inputRange: [0, 1], outputRange: [away, 0] });
+  const shift = slide.interpolate({ inputRange: [0, 1], outputRange: [away, 0] });
   const dark = theme.dark;
   const colors = splitColors(dark);
   const rest = colors.zoneRest;
-  const { icon, label, shortLabel } = ZONE_META[side];
-  const inline = !horizontal && rect.height < 100;
-  const text = rect.width < 130 ? shortLabel : label;
+  const copy = ZONE_COPY[side];
+  const text = rect.width < 130 ? copy.shortLabel : copy.label;
   return (
     <Animated.View
       style={{
@@ -310,11 +308,11 @@ function DropZone({ pane, side, shown, stage, pointerX, pointerY, onHidden }: { 
         borderWidth: 0.5,
         borderColor: colors.zoneBorder,
         backgroundColor: glow.interpolate({ inputRange: [0, 1], outputRange: [colors.zoneFill, withAlpha(theme.accent, dark ? ZONE_ACCENT_ALPHA.dark : ZONE_ACCENT_ALPHA.light)] }),
-        flexDirection: inline ? "row" : "column",
+        flexDirection: vertical ? "row" : "column",
         alignItems: "center",
         justifyContent: "center",
         paddingHorizontal: ZONE_DASH_INSET + space.xs,
-        transform: [horizontal ? { translateX: offset } : { translateY: offset }],
+        transform: [vertical ? { translateY: shift } : { translateX: shift }],
       }}
     >
       <OverPage radius={zoneRadius()} />
@@ -331,10 +329,8 @@ function DropZone({ pane, side, shown, stage, pointerX, pointerY, onHidden }: { 
           borderColor: active ? theme.accent : colors.zoneDash,
         }}
       />
-      <Symbol name={icon} size={18} color={active ? theme.accent : rest} style={{ width: 24, height: 20 }} />
-      <Text numberOfLines={1} weight="semibold" color={active ? theme.accent : rest} style={inline ? { marginLeft: space.m } : { marginTop: space.l }}>
-        {text}
-      </Text>
+      <Symbol name={copy.symbol} size={18} color={active ? theme.accent : rest} style={{ width: 24, height: 20 }} />
+      <Text weight="semibold" numberOfLines={1} color={active ? theme.accent : rest} style={vertical ? { marginLeft: space.m, flexShrink: 1 } : { marginTop: space.l }}>{text}</Text>
     </Animated.View>
   );
 }

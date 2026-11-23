@@ -1,6 +1,41 @@
 import { useShallow } from "zustand/react/shallow";
-import { useBrowser } from "../browser/store";
-import { splitTabIds, splitTabIdsOf } from "./splits";
+import { useToolbarHeld } from "../app/transientUi";
+import { useFindOpen } from "../browser/hooks";
+import { keyedWatch, useKeyed } from "../browser/keyedWatch";
+import { useBrowser, type BrowserState } from "../browser/store";
+import { useEngineOffers } from "../engines/actions";
+import { useCast } from "../media/cast";
+import { useMedia } from "../media/media";
+import { useDeviceChooserOpen } from "../site/deviceChoosers";
+import { usePages } from "../tabs/pageState";
+import { useHistoryMenu } from "../tabs/navigation";
+import { useToolbarAutoHide } from "../windows/toolbarAutoHide";
+import { splitOf, splitTabIds, splitTabIdsOf } from "./splits";
+
+const watchSplits = keyedWatch<BrowserState>(() => useBrowser, (s, prev) => (s.splits !== prev.splits ? true : undefined));
+
+export const useSplitOrientation = (tabId: string | undefined) =>
+  useKeyed(watchSplits, tabId, () => splitOf(useBrowser.getState(), tabId)?.orientation ?? null);
+
+export const usePaneToolbarCollapsed = (windowId: string, tabId: string, autoHide: boolean) => {
+  const down = useToolbarAutoHide((s) => autoHide && !!s.scrolledDown[tabId] && !s.peek[tabId]);
+  const held = useToolbarHeld(windowId, tabId, down);
+  return down && !held;
+};
+
+export const usePaneTopLeftObscured = (tabId: string) => {
+  const page = usePages((s) => {
+    const p = s.pages[tabId];
+    return !!s.popover[tabId] || !!p?.permission || !!p?.externalApp || !!p?.crashed || !!p?.unresponsive || !!(p?.status && p.statusAtTop);
+  });
+  const history = useHistoryMenu((s) => s.menu?.tabId === tabId);
+  const find = useFindOpen(tabId);
+  const engineOffer = useEngineOffers((offers) => !!offers[tabId]);
+  const deviceChooser = useDeviceChooserOpen(tabId);
+  const sharePicker = useMedia((m) => !!m.displayRequests[tabId]);
+  const castPicker = useCast((c) => !!c.dialogs[tabId]);
+  return page || history || find || engineOffer || deviceChooser || sharePicker || castPicker;
+};
 
 export const useDragFallbackPane = (dragging: string | null | undefined, panes: Record<string, unknown>, windowId: string) =>
   useBrowser((s) => {

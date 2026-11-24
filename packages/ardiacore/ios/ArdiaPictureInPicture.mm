@@ -188,7 +188,7 @@ bool Attach(ArdiaWebView *view, NSString *host, ArdiaConsentStamp *stamp) {
     JoinFullScreenSpaces(window);
     PreventActivation(window);
     if (fresh) NoteGesture(@"video window=%ld size=%.0fx%.0f", (long)window.windowNumber, NSWidth(window.frame), NSHeight(window.frame));
-    if (fresh) [view emit:@"pictureInPicture" payload:[stamp onto:@{@"kind" : @"video", @"active" : @YES, @"fullScreenSpaces" : @(JoinsFullScreenSpaces(window)), @"leftApp" : @(view.leftAppInPictureInPicture), @"leftTab" : @(!view.seenByUser)}]];
+    if (fresh) [view emit:@"pictureInPicture" payload:[stamp onto:@{@"kind" : @"video", @"active" : @YES, @"fullScreenSpaces" : @(JoinsFullScreenSpaces(window)), @"leftApp" : @(view.leftAppInPictureInPicture), @"leftSpace" : @([ArdiaWindowController leftActiveSpace:view.window]), @"leftTab" : @(!view.seenByUser)}]];
     if (ardia_host::Background()) {
       window.alphaValue = 0;
       window.ignoresMouseEvents = YES;
@@ -453,7 +453,7 @@ void DocumentEntered(ArdiaWebView *view, ArdiaConsentStamp *stamp) {
       NoteGesture(@"document window=%ld size=%.0fx%.0f", (long)found.windowNumber, NSWidth(found.frame), NSHeight(found.frame));
       JoinFullScreenSpaces(found);
       InstallZoomMonitor();
-      [strongView emit:@"pictureInPicture" payload:[stamp onto:@{@"kind" : @"document", @"active" : @YES, @"fullScreenSpaces" : @(JoinsFullScreenSpaces(found)), @"leftApp" : @(strongView.leftAppInPictureInPicture), @"leftTab" : @(!strongView.seenByUser)}]];
+      [strongView emit:@"pictureInPicture" payload:[stamp onto:@{@"kind" : @"document", @"active" : @YES, @"fullScreenSpaces" : @(JoinsFullScreenSpaces(found)), @"leftApp" : @(strongView.leftAppInPictureInPicture), @"leftSpace" : @([ArdiaWindowController leftActiveSpace:strongView.window]), @"leftTab" : @(!strongView.seenByUser)}]];
     }
     if (!strongView || found || ++tries >= 20) {
       look = nil;

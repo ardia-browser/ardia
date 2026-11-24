@@ -52,4 +52,22 @@ inline bool PartlyVisible(const Rect &window, const std::vector<Rect> &covers, c
   return VisibleArea(window, covers, displays) >= kMinimumVisibleArea;
 }
 
+inline bool WindowShown(bool appActive, bool appKitShows, bool windowServerShows, bool onActiveSpace) {
+  if (!onActiveSpace) return false;
+  return appActive ? appKitShows || windowServerShows : windowServerShows;
+}
+
+inline double OffActiveSpaceSince(double since, bool transitioning, bool offActiveSpace, double now) {
+  if (transitioning || !offActiveSpace) return 0;
+  return since > 0 ? since : now;
+}
+
+inline bool SettlingEnds(bool transitioning, bool shown, double offActiveSpaceSince, double now, double spaceSettle) {
+  return !transitioning && (shown || (offActiveSpaceSince > 0 && now - offActiveSpaceSince >= spaceSettle));
+}
+
+inline bool SeenByUser(bool settling, bool shown, bool appActive, bool fullScreen, bool onActiveSpace) {
+  return settling || (onActiveSpace && (shown || (appActive && fullScreen)));
+}
+
 }

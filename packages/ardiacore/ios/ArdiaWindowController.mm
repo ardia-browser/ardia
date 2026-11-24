@@ -77,6 +77,10 @@ void HandOffTab(ArdiaCoreTab *tab) {
   return [[ArdiaWindowFullScreen ofWindow:controller.coreWindow create:YES] seenOnlyByWindowServer];
 }
 
++ (BOOL)leftActiveSpace:(NSWindow *)window {
+  return window && ardia_window::OffActiveSpace(window);
+}
+
 + (instancetype)strayWindowForProfile:(ArdiaCoreProfile *)profile {
   ArdiaCoreWindow *coreWindow = [[ArdiaCoreWindow alloc] initWithContentRect:NSMakeRect(0, 0, 800, 600)];
   if (!coreWindow.window) return nil;

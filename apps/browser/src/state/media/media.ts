@@ -46,7 +46,7 @@ export const useMedia = create<Store>()(noMedia);
 export function setPictureInPictureState(tabId: string, state: PictureInPictureState) {
   const { kind, active } = state;
   if (!active && "closedBy" in state && state.closedBy) notePictureInPictureClosed(state.closedBy, !!state.auto);
-  if ("fullScreenSpaces" in state && state.active) capture("pip_shown", { kind, full_screen_spaces: state.fullScreenSpaces, left_app: !!state.leftApp, left_tab: !!state.leftTab }, nativeConsent(state));
+  if ("fullScreenSpaces" in state && state.active) capture("pip_shown", { kind, full_screen_spaces: state.fullScreenSpaces, left_app: !!state.leftApp, left_space: !!state.leftSpace, left_tab: !!state.leftTab }, nativeConsent(state));
   useMedia.setState((s) => {
     if (active ? s.pipOpen[tabId] === kind : !s.pipOpen[tabId]) return s;
     const pipOpen = { ...s.pipOpen };

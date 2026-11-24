@@ -456,6 +456,10 @@ NSDictionary<NSString *, DevHandler> *DevHandlers() {
       ActWindowServer(w, [to isEqualToString:@"shows"]);
       return @"ok";
     },
+    @"fakeActiveSpace" : ^NSString *(NSWindow *w, NSString *to) {
+      ActActiveSpace(w, [to isEqualToString:@"off"] ? nil : @([to isEqualToString:@"1"]));
+      return JSONText(@{@"offActiveSpace" : @(OffActiveSpace(w)), @"seen" : @([ArdiaWindowController userSees:w])}, @"{}");
+    },
     @"fullScreen" : ^NSString *(NSWindow *w, NSString *) { return FullScreen(w, nil); },
     @"fakeFullScreen" : ^NSString *(NSWindow *w, NSString *a) { return FullScreen(w, a); },
     @"fakeFullScreenSilentExit" : ^NSString *(NSWindow *w, NSString *) {

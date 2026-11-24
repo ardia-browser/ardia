@@ -119,7 +119,7 @@ export type WebNotification = {
   isMainFrame: boolean;
 };
 
-type PictureInPictureShown = { kind: "video" | "document"; active: true; fullScreenSpaces: boolean; leftApp?: boolean; leftTab: boolean; epoch: string; closedBy?: "app" | "chrome"; auto?: boolean };
+type PictureInPictureShown = { kind: "video" | "document"; active: true; fullScreenSpaces: boolean; leftApp?: boolean; leftSpace?: boolean; leftTab: boolean; epoch: string; closedBy?: "app" | "chrome"; auto?: boolean };
 export type PictureInPictureState = { kind: "video" | "document"; active: boolean; closedBy?: "app" | "chrome"; auto?: boolean } | PictureInPictureShown;
 export type PictureInPictureDrag = { offCursor: boolean; slowMove: boolean; epoch: string };
 export type PictureInPictureSkip = { seconds: number; epoch: string };

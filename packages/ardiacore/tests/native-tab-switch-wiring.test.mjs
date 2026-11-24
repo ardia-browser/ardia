@@ -363,3 +363,57 @@ test("menus, Services, the Touch Bar, drops and accessibility are closed to both
   assert.match(body(menuTarget, "private func forwardEdit(_ action: Selector, from sender: Any?)"), /if Self\.pageIsCovered \{ return \}/);
   assert.match(body(menuTarget, "func validateMenuItem(_ menuItem: NSMenuItem) -> Bool"), /FocusHandoff\.editActions\.contains\(action\), Self\.pageIsCovered \{ return false \}/);
 });
+
+const windowSight = read("../ios/ArdiaWindowFullScreen.mm");
+const windowServerSight = read("../ios/ArdiaWindowServerSight.mm");
+const windowInternal = read("../ios/ArdiaChromeWindowInternal.h");
+const windowDev = read("../ios/ArdiaChromeWindowHost+Dev.mm");
+const windowSightMath = read("../ios/ArdiaWindowSightMath.h");
+const activationAcceptance = read("../scripts/activation-acceptance.mjs");
+
+test("a macOS Space swipe that leaves Ardia the active app takes the window out of sight (#1092)", () => {
+  const init = body(windowSight, "- (instancetype)initWithCoreWindow:(ArdiaCoreWindow *)coreWindow");
+  assert.match(init, /NSWorkspace\.sharedWorkspace\.notificationCenter addObserverForName:NSWorkspaceActiveSpaceDidChangeNotification/);
+  assert.match(init, /\[weakSelf spaceChanged\]/);
+  assert.match(body(windowSight, "- (void)dealloc"), /\[NSWorkspace\.sharedWorkspace\.notificationCenter removeObserver:_spaceObserver\]/);
+  const changed = body(windowSight, "- (void)spaceChanged");
+  assert.match(changed, /NoteFocusChange\(@"space change", window\)/);
+  assert.match(changed, /\[self updateSeen\];/);
+  assert.match(changed, /dispatch_after\(.*kSpaceSettle.*\[weakSelf reconsiderSight\];/s, "the Space animation can still report the window on screen at the first look");
+  assert.match(body(windowSight, "- (BOOL)windowVisible"), /ardia_window_sight::WindowShown\(!inactive, appKitShows, windowServerShows, !OffActiveSpace\(window\)\)/);
+  assert.match(body(windowSight, "- (BOOL)windowVisible"), /const BOOL inactive = UserInAnotherApp\(\);/, "active only for its Picture in Picture window, the window server still decides (#4117)");
+  const update = body(windowSight, "- (void)updateSeen");
+  assert.match(update, /const BOOL shown = !_settling && \[self windowVisible\];/, "mid-transition the window server is still not asked");
+  assert.match(update, /ardia_window_sight::SeenByUser\(_settling, shown, !UserInAnotherApp\(\), IsWindowFullScreen\(window\), !OffActiveSpace\(window\)\)/);
+  assert.match(windowSight, /BOOL UserInAnotherApp\(\) \{ return !NSApp\.isActive \|\| ArdiaChromeWindowHost\.activeOnlyForPictureInPicture; \}/, "active only for its Picture in Picture window counts as the user being in another app (#4117)");
+  assert.match(update, /_offActiveSpaceSince = ardia_window_sight::OffActiveSpaceSince\(_offActiveSpaceSince, _transitioning, OffActiveSpace\(window\), now\);\n  if \(_settling && ardia_window_sight::SettlingEnds\(_transitioning, !_transitioning && \[self windowVisible\], _offActiveSpaceSince, now, kSpaceSettle\)\) _settling = NO;/, "a transition that ends with the window on another Space stops counting as seen once it has stayed off the active Space for kSpaceSettle");
+  const did = body(windowSight, "- (void)windowDid:(NSNotificationName)name");
+  assert.match(did, /dispatch_after\(.*kSpaceSettle.*\[weakSelf reconsiderSight\];/s, "sight is read again once the Space settles after a transition");
+  assert.match(body(windowSight, "- (BOOL)seenOnlyByWindowServer"), /return _seen && _overruled && !_settling && !OffActiveSpace\(_coreWindow\.window\);/, "the window server takes credit only for a window on the active Space");
+  assert.match(body(windowSight, "- (BOOL)wantsWindowServer"), /if \(!UserInAnotherApp\(\) && !OffActiveSpace\(window\) && \(window\.occlusionState & NSWindowOcclusionStateVisible\) != 0\) return NO;/);
+});
+
+test("the Space rule is a pure function the C++ test pins, and settling still wins", () => {
+  const shown = body(windowSightMath, "inline bool WindowShown(");
+  assert.match(shown, /if \(!onActiveSpace\) return false;/);
+  assert.match(shown, /return appActive \? appKitShows \|\| windowServerShows : windowServerShows;/);
+  assert.match(body(windowSightMath, "inline bool SeenByUser("), /return settling \|\| \(onActiveSpace && \(shown \|\| \(appActive && fullScreen\)\)\);/);
+  assert.match(body(windowSightMath, "inline bool SettlingEnds("), /return !transitioning && \(shown \|\| \(offActiveSpaceSince > 0 && now - offActiveSpaceSince >= spaceSettle\)\);/);
+  assert.match(body(windowSightMath, "inline double OffActiveSpaceSince("), /if \(transitioning \|\| !offActiveSpace\) return 0;\n  return since > 0 \? since : now;/, "the clock starts at the first off-Space reading after the transition and resets on any on-Space reading");
+});
+
+test("test instances read only an acted Space, and a check swipes away with Ardia still active", () => {
+  assert.match(windowInternal, /void ActActiveSpace\(NSWindow \*window, NSNumber \*onSpace\);/);
+  assert.match(windowInternal, /BOOL OffActiveSpace\(NSWindow \*window\);/);
+  assert.match(body(windowServerSight, "void ActActiveSpace(NSWindow *window, NSNumber *onSpace)"), /postNotificationName:NSWorkspaceActiveSpaceDidChangeNotification/);
+  const off = body(windowServerSight, "BOOL OffActiveSpace(NSWindow *window)");
+  assert.match(off, /if \(!window\.visible\) return NO;/);
+  assert.match(off, /kActedActiveSpaceKey\)\) return !acted\.boolValue;/);
+  assert.match(off, /if \(ardia_host::Background\(\)\) return NO;/, "a hidden instance never follows the real Space the owner is on");
+  assert.match(off, /return !window\.isOnActiveSpace;/);
+  assert.match(windowDev, /@"fakeActiveSpace" : \^NSString \*\(NSWindow \*w, NSString \*to\) \{\n      ActActiveSpace\(w, \[to isEqualToString:@"off"\] \? nil : @\(\[to isEqualToString:@"1"\]\)\);/);
+  const swipe = body(activationAcceptance, 'await check("call-space-swipe-app-stays-active"');
+  assert.match(swipe, /fakeActiveSpace/);
+  assert.match(swipe, /fakeFullScreen/);
+  assert.doesNotMatch(swipe, /fakeAppActive:0/, "the app stays the active app throughout");
+});

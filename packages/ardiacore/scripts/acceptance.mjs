@@ -62,10 +62,10 @@ const usesPageA = [
   "extension-prompts", "traffic-lights-after-profile-switch", "extension-configure",
   "private-windows-create", "extension-private-window", "extension-installed-bubble", "popup-window", "popup-window-full-screen", "autofill-save-prompts",
   "settings-services", "download-navigation", "page-events", "page-background", "external-app-answer",
-  "external-app-from-extension",
+  "external-app-from-extension", "fullscreen-transition-other-space",
   "notifications", "now-playing", "media-state", "auto-picture-in-picture", "auto-picture-in-picture-app-switch", "auto-picture-in-picture-other-window", "auto-picture-in-picture-paused", "media-plays-on-move", "picture-in-picture-opt-out", "pip-window", "pip-framing", "report-recording-pip", "report-recording-guard", "report-recording-webkit-media", "page-focus",
   "fullscreen-tab-switch", "fullscreen-native", "fullscreen-system-title-bar", "fullscreen-transition-picture", "fullscreen-hidden-page", "fullscreen-split-sibling",
-  "fullscreen-pip", "autofill-suggestions", "images", "extension-surfaces", "frozen", "discard",
+  "fullscreen-pip", "fullscreen-window-other-space", "autofill-suggestions", "images", "extension-surfaces", "frozen", "discard",
   "permission-prompt", "popup-blocked", "move-tab-slow-mount", "move-last-tab-slow-mount",
   "move-tab-closed-while-parked", "move-tab-to-window", "title-bar-close", "last-used-profile",
   "webkit-tab", "webkit-hidden-tab-uncovers", "webkit-move-tab", "webkit-zoom", "webkit-now-playing", "webkit-scroll", "webkit-js-reload",
@@ -5122,6 +5122,112 @@ try {
       return out;
     } finally {
       for (const action of ["fakeFullScreenOcclusionMs:-1", "fakeFullScreenMs:0", "fakeOcclusion:off"]) await win(action).catch(() => null);
+      await evalApp(`ac.actions.switchToTab("${first.id}"); return true`);
+    }
+  });
+
+  const settledAwayAfterTransition = async (probe, tabId, what) => {
+    const started = Date.now();
+    let inTransition = false, endedAt = null, eventsAtEnd = null, last = null;
+    while (Date.now() - started < 8000) {
+      last = await probe();
+      if (last.transitioning) inTransition = true;
+      else if (inTransition && endedAt == null) {
+        endedAt = Date.now();
+        eventsAtEnd = (await eventsOf(tabId)).length;
+      }
+      if (endedAt != null && last.seen === false && !last.settling) return { unseenMs: Date.now() - endedAt, eventsAtEnd };
+    }
+    throw new Error(`${what}: the window never read unseen after its transition: ${JSON.stringify(last)}`);
+  };
+  const SPACE_SETTLE_RECHECK_MS = 800;
+
+  await check("fullscreen-transition-other-space", async () => {
+    const n = await engine("tabs.devWindowNumber", { tabId: first.id });
+    const win = (action) => engine("windows.dev", { window: n, action });
+    const sight = async () => JSON.parse(await win("fullScreen")).pageFullScreen ?? {};
+    const tab = await openTab(`${secureBase}/video?auto&file`, "Video");
+    const pipFlips = async (from, to) => (await eventsOf(tab.id)).slice(from, to).filter((x) => x.name === "pictureInPicture" && x.payload?.kind === "video").map((x) => x.payload.active).filter((active, i, all) => i === 0 || active !== all[i - 1]);
+    const out = {};
+    try {
+      await win("fakeOcclusion:visible");
+      await win("fakeWindowServer:shows");
+      await startVideo(tab.id, true);
+      await until("live.playingAudio", async () => (await live(tab.id))?.playingAudio === true, 8000);
+      await until("onNowPlaying playing", async () => lastEvent(tab.id, "nowPlaying", (p) => p.state?.hasVideo && p.state?.playbackState === "playing"), 5000);
+      const from = (await eventsOf(tab.id)).length;
+      await win("fakeFullScreen:1:700");
+      await sleep(150);
+      out.during = JSON.parse(await win("fakeActiveSpace:0"));
+      if (out.during.seen !== true) throw new Error(`the window's own full-screen transition counted as leaving it: ${JSON.stringify(out.during)}`);
+      const settled = await settledAwayAfterTransition(sight, tab.id, "a transition that ended on another Space");
+      out.unseenMs = settled.unseenMs;
+      out.untilEnd = await pipFlips(from, settled.eventsAtEnd);
+      if (out.untilEnd.length) throw new Error(`Picture in Picture changed before the window's transition had ended: ${JSON.stringify(out.untilEnd)}`);
+      if (settled.unseenMs > SPACE_SETTLE_RECHECK_MS) throw new Error(`the window read unseen ${settled.unseenMs} ms after its transition ended; the 0.5 s recheck after a transition should do it, not the 1 s window-server watcher`);
+      await until("auto PiP once the transition ended with the window on another Space", async () => (await pipFlips(settled.eventsAtEnd)).length || null, 4000)
+        .catch(async (e) => { throw new Error(`${e.message}; window ${JSON.stringify(await sight())}`); });
+      await sleep(1000);
+      out.away = await pipFlips(settled.eventsAtEnd);
+      if (out.away.length !== 1 || out.away[0] !== true) throw new Error(`away from the window's Space it should pop out exactly once: ${JSON.stringify(out.away)}`);
+      const back = (await eventsOf(tab.id)).length;
+      await win("fakeActiveSpace:1");
+      out.back = await until("auto PiP ended on coming back to the window's Space", async () => {
+        const flips = await pipFlips(back);
+        return flips.includes(false) ? flips : null;
+      }, 8000);
+      return out;
+    } finally {
+      await win("fakeActiveSpace:off").catch(() => null);
+      await win("fakeFullScreen:0").catch(() => null);
+      await until("out of full screen", async () => JSON.parse(await win("fullScreen")).fullScreen === false || null, 6000).catch(() => null);
+      for (const action of ["fakeWindowServer:hides", "fakeOcclusion:off"]) await win(action).catch(() => null);
+      await closeTab(tab.id);
+      await evalApp(`ac.actions.switchToTab("${first.id}"); return true`);
+    }
+  });
+
+  await check("fullscreen-window-other-space", async () => {
+    const n = await engine("tabs.devWindowNumber", { tabId: first.id });
+    const win = (action) => engine("windows.dev", { window: n, action });
+    const tab = await openTab(`${secureBase}/video?auto&file`, "Video");
+    const mark = async () => (await eventsOf(tab.id)).at(-1)?.t ?? 0;
+    const out = {};
+    try {
+      await win("fakeOcclusion:visible");
+      await win("fakeWindowServer:shows");
+      await startVideo(tab.id, true);
+      await until("live.playingAudio", async () => (await live(tab.id))?.playingAudio === true, 8000);
+      await until("onNowPlaying playing", async () => lastEvent(tab.id, "nowPlaying", (p) => p.state?.hasVideo && p.state?.playbackState === "playing"), 5000);
+      await win("fakeFullScreen:1");
+      await until("the window in full screen", async () => JSON.parse(await win("fullScreen")).fullScreen === true || null, 6000);
+      await sleep(800);
+      const from = await mark();
+      await win("fakeOcclusion:occluded");
+      await win("fakeWindowServer:hides");
+      out.onItsSpace = JSON.parse(await win("fakeActiveSpace:1"));
+      await sleep(1500);
+      if (out.onItsSpace.offActiveSpace || out.onItsSpace.seen !== true) throw new Error(`the full-screen window on its own Space with Ardia active wasn't seen: ${JSON.stringify(out.onItsSpace)}`);
+      if ((await eventsOf(tab.id)).some((x) => x.name === "pictureInPicture" && x.t > from && x.payload.active)) throw new Error("popped out while the full-screen window was still on the active Space");
+      out.otherSpace = JSON.parse(await win("fakeActiveSpace:0"));
+      if (!out.otherSpace.offActiveSpace || out.otherSpace.seen !== false) throw new Error(`the Space change alone didn't take the window out of sight at once: ${JSON.stringify(out.otherSpace)}`);
+      const popped = await until("auto PiP once the full-screen window was left for another Space with Ardia still active", async () =>
+        (await eventsOf(tab.id)).find((x) => x.name === "pictureInPicture" && x.t > from && x.payload.kind === "video" && x.payload.active && x.payload.fullScreenSpaces !== undefined) ?? null, 8000);
+      out.popped = popped.payload;
+      if (popped.payload.leftApp !== false || popped.payload.leftSpace !== true) throw new Error(`pip_shown left_app/left_space: ${JSON.stringify(popped.payload)}`);
+      out.backOnItsSpace = JSON.parse(await win("fakeActiveSpace:1"));
+      if (out.backOnItsSpace.offActiveSpace || out.backOnItsSpace.seen !== true) throw new Error(`the Space change back alone didn't bring the window back in sight: ${JSON.stringify(out.backOnItsSpace)}`);
+      out.back = (await until("auto PiP ended on coming back to the window's Space", async () => {
+        const e = await lastEvent(tab.id, "pictureInPicture");
+        return e && e.t > popped.t && !e.payload.active ? e : null;
+      }, 8000)).payload;
+      return out;
+    } finally {
+      await win("fakeActiveSpace:off").catch(() => null);
+      await win("fakeFullScreen:0").catch(() => null);
+      await until("out of full screen", async () => JSON.parse(await win("fullScreen")).fullScreen === false || null, 6000).catch(() => null);
+      for (const action of ["fakeWindowServer:hides", "fakeOcclusion:off"]) await win(action).catch(() => null);
+      await closeTab(tab.id);
       await evalApp(`ac.actions.switchToTab("${first.id}"); return true`);
     }
   });

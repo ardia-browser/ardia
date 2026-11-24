@@ -121,7 +121,8 @@ The Linux desktop target is `apps/linux`, for x86-64 Linux on Wayland or X11. Re
 `ardia-bin` on the AUR: [docs/linux-port.md › Installing on Linux](docs/linux-port.md#installing-on-linux). The same
 file has the source-build and packaging instructions. It builds against the dedicated Linux Chromium host.
 
-The macOS app requires Xcode 26+, CocoaPods, Node 24 (pinned in `.nvmrc`), pnpm 11.
+The macOS app requires Xcode 26+, CocoaPods, Node 24 (pinned in `.nvmrc`), pnpm 11. With Nix, `nix develop` (or
+direnv's `.envrc`) provides everything but Xcode.
 
 ```bash
 pnpm install

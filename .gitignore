@@ -55,3 +55,4 @@ scripts/.notary.env
 packages/phone/ios/ArdiaKit/.build/
 packages/phone/ios/ArdiaKit/.swiftpm/
 __pycache__/
+.direnv/

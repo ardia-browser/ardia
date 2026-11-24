@@ -58,6 +58,7 @@ export type ProfileLookFields = { color: ProfileColor; theme?: ProfileTheme | nu
 export type PresetLookFields = ProfileLookFields & { presetThemes?: PresetThemes };
 
 export const PRESET_BACKDROP: ThemeBackdropProps = {
+  backgroundBlurEnabled: true,
   themeColors: [],
   themeOpacity: 1,
   themeBaseAlpha: 0,
@@ -78,6 +79,7 @@ export function spaceLookSource(settings: { spacesFollowAppearance: boolean }): 
 
 export function themeBackdrop(theme: ProfileTheme, dark: boolean): ThemeBackdropProps {
   return {
+    backgroundBlurEnabled: theme.translucency > 0,
     themeColors: flatColors(theme),
     themeOpacity: themeLayerAlpha(theme),
     themeBaseAlpha: themeUnderlayAlpha(theme, dark),

@@ -1,3 +1,5 @@
+import { isWebDemo } from "../../state/onboarding/demoSteps";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { holdThemedWindowsKeyLook, choosePresetColor, onPresetSelection, resetPresetTheme, setProfileTheme, showingPreset, showingTheme } from "../../state/profiles/themeActions";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Animated, Pressable, View } from "react-native";
@@ -261,7 +263,10 @@ export function ThemeEditor({
       <Box gap={full ? "l" : "xl"} style={FILL}>
         {full ? <Preview shown={full.shown} /> : null}
         <Slider stacked={stacked} label="Intensity" value={theme.intensity} snapTo={start?.intensity} onChange={(v, settle) => onChange({ ...theme, intensity: v }, settle)} />
-        <Slider stacked={stacked} label="Pass-through blur" value={theme.translucency} snapTo={start?.translucency} onChange={(v, settle) => onChange({ ...theme, translucency: v }, settle)} />
+        <Box gap="xs">
+          <Slider stacked={stacked} label="Pass-through blur" value={theme.translucency} snapTo={start?.translucency} onChange={(v, settle) => onChange({ ...theme, translucency: v }, settle)} />
+          {PLATFORM_FEATURES.windowTranslucency && !isWebDemo ? <Text size="caption" tone="textSecondary" style={full ? { marginLeft: LABEL + space.ml } : undefined}>Set to zero for an opaque background without blur.</Text> : null}
+        </Box>
         <Slider stacked={stacked} label="Noise" value={theme.grain} snapTo={start?.grain} onChange={(v, settle) => onChange({ ...theme, grain: v }, settle)}>
           <PopUp
             value={theme.texture}

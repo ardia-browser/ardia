@@ -137,6 +137,7 @@ function PerformanceSection() {
           />
         </Row>
         <SettingToggle anchor="advanced.busyTabWarnings" />
+        <SettingToggle anchor="advanced.windowTranslucency" />
       </Group>
     </>
   );

@@ -10,7 +10,7 @@ export const CONFIG_SETTING_KEYS: readonly SettingKey[] = [
   "showClearButton", "tidyTabs", "balancedTopApps", "selectedTabGlow", "interfaceScale", "sidebarTextSize", "sidebarTextContrast", "selectedTopApp", "elementOutlines", "interfaceStyle", "windowButtons", "glassTintWithTheme",
   "glassTintAmount", "fadeUnloadedTabs", "strikeSleepingTabs", "warnBeforeClosingTabGroup", "batterySaverWhen", "memorySaver",
   "memorySaverMode", "busyTabWarnings", "loadProfilesWhenOpened", "unloadProfilesAfter", "keepActiveSites", "extensionSidePanelWidth", "showFullUrl", "showBookmarks", "bookmarksBar",
-  "bookmarksImportDismissed", "appearance", "addressBar", "compactToolbar", "addressBarButtons", "borderlessMode", "tabCornerRadius", "minimalismMode", "pageFrame", "pageFrameZeroInFullScreen", "pageFrameZeroWhenTabsHidden", "commandBarPlacement", "spacesFollowAppearance", "adaptTextToColor",
+  "bookmarksImportDismissed", "appearance", "addressBar", "compactToolbar", "addressBarButtons", "borderlessMode", "tabCornerRadius", "minimalismMode", "pageFrame", "pageFrameZeroInFullScreen", "pageFrameZeroWhenTabsHidden", "commandBarPlacement", "spacesFollowAppearance", "adaptTextToColor", "windowTranslucency",
   "showProfileDots", "compactCliPill", "shortcuts", "mouseShortcuts", "openLinksInLittleArdia", "littleArdiaOpensNewTabLinks", "littleArdiaShortcutFromAnyApp", "littleArdiaSize",
   "omniboxProviders", "launchActions", "commandBarStart", "pressMotion", "folderStyle", "liveFolderIcon", "readerTextSize", "readerFont",
 ];

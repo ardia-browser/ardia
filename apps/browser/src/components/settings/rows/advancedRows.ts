@@ -1,3 +1,4 @@
+import { isWebDemo } from "../../../state/onboarding/demoSteps";
 import { WEBKIT_LIMITS_KEYWORDS, type SettingSection } from "./types";
 import type { SettingsPane } from "../../../state/settings/settingsWindows";
 import type { Settings } from "../../../state/settings/settings";
@@ -31,6 +32,13 @@ export const advancedRows = {
     {
       section: "Performance",
       rows: {
+        windowTranslucency: {
+          title: "Window translucency",
+          explained: true,
+          description: "Turn off to use a solid background and reduce rendering work.",
+          keywords: ["opaque", "transparency", "blur", "performance", "scroll", "background"],
+          shown: () => PLATFORM_FEATURES.windowTranslucency && !isWebDemo,
+        },
         memorySaver: {
           title: "Memory Saver",
           explained: true,

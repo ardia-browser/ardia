@@ -48,8 +48,26 @@ constexpr int kNormalWindowLayer = 0;
 
 inline bool CountsAsCover(int layer, double alpha) { return layer == kNormalWindowLayer && alpha >= 1; }
 
+inline bool CoversWholeDisplay(const Rect &bounds, const std::vector<Rect> &displays) {
+  return std::any_of(displays.begin(), displays.end(), [&](const Rect &d) {
+    return d.width > 0 && d.height > 0 && bounds.x <= d.x && bounds.y <= d.y && bounds.right() >= d.right() && bounds.bottom() >= d.bottom();
+  });
+}
+
+template <typename OwnerIsRegularApp>
+bool IsBackgroundOverlay(OwnerIsRegularApp &&ownerIsRegularApp, const Rect &bounds, const std::vector<Rect> &displays) {
+  return CoversWholeDisplay(bounds, displays) && !ownerIsRegularApp();
+}
+
 inline bool PartlyVisible(const Rect &window, const std::vector<Rect> &covers, const std::vector<Rect> &displays) {
   return VisibleArea(window, covers, displays) >= kMinimumVisibleArea;
+}
+
+inline bool VisibleOnlyPastOverlays(const Rect &window, const std::vector<Rect> &covers, const std::vector<Rect> &overlays, const std::vector<Rect> &displays) {
+  if (overlays.empty() || !PartlyVisible(window, covers, displays)) return false;
+  std::vector<Rect> all = covers;
+  all.insert(all.end(), overlays.begin(), overlays.end());
+  return !PartlyVisible(window, all, displays);
 }
 
 inline bool WindowShown(bool appActive, bool appKitShows, bool windowServerShows, bool onActiveSpace) {

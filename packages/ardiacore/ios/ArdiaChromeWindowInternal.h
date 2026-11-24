@@ -22,6 +22,7 @@
 - (BOOL)seen;
 - (BOOL)seenOnlyByWindowServer;
 - (BOOL)seenOnlyForPageFullScreen;
+- (BOOL)seenOnlyPastOverlays;
 - (void)reconsiderSight;
 - (NSDictionary *)state;
 - (ArdiaCoreTab *)probedTab;
@@ -65,7 +66,11 @@ void ActOcclusion(NSWindow *window, NSNumber *visible);
 void ActWindowServer(NSWindow *window, BOOL shows);
 void ActActiveSpace(NSWindow *window, NSNumber *onSpace);
 BOOL OffActiveSpace(NSWindow *window);
-BOOL ReadWindowServerSight(NSWindow *window);
+struct WindowServerSight {
+  BOOL shows;
+  BOOL onlyPastOverlays;
+};
+WindowServerSight ReadWindowServerSight(NSWindow *window, BOOL skipBackgroundOverlays);
 extern NSTimeInterval gActedOcclusionGap;
 void ActWindowFullScreen(ArdiaCoreWindow *coreWindow, BOOL enter, NSTimeInterval seconds);
 extern NSTimeInterval gActedTransition;

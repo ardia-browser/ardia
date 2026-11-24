@@ -431,3 +431,13 @@ test("a page in its own full screen stays full screen when its window leaves sig
   assert.match(body(windowSight, "void ToggleWindowFullScreen(ArdiaCoreWindow *coreWindow, BOOL (^stillWanted)(void))"), /if \(stillWanted\(\)\) ActWindowFullScreen\(coreWindow, enter, gActedTransition\);/);
   assert.match(body(read("../ios/ArdiaWebView+PictureInPicture.mm"), "- (void)noteStayedOnAppSwitch"), /if \(\[ArdiaWindowController userSeesOnlyForPageFullScreen:self\.window\]\) return;/, "a page full screen hold is not also an app-switch hold");
 });
+
+test("a background app's whole-display overlay is looked past only while AppKit also calls the window visible, and counted (#2785)", () => {
+  const visible = body(windowSight, "- (BOOL)windowVisible");
+  assert.match(visible, /WindowServerShows\(window, appKitShows && !NSApp\.isActive\)/, "an opaque full-display window makes AppKit report the window covered, and then it still counts; active only for its Picture in Picture window, AppKit can call a covered window visible (#4117), so no overlay is looked past then");
+  assert.match(visible, /if \(sight\.onlyPastOverlays != _pastOverlays\) \{[\s\S]*_sightSourceChanged = YES;/);
+  const read = body(windowServerSight, "WindowServerSight ReadWindowServerSight(NSWindow *window, BOOL skipBackgroundOverlays)");
+  assert.match(read, /skipBackgroundOverlays && pid != ownPid && ardia_window_sight::IsBackgroundOverlay\(\[&\] \{ return OwnerIsRegularApp\(pid, regularOwners\); \}, cover, displays\)/, "the owner is asked only for a window that covers a whole display, and never for Ardia's own");
+  assert.match(body(painting, "- (void)userSightChanged"), /userSeesOnlyPastOverlays:self\.window\][\s\S]*@"reason" : @"overlay"/);
+  assert.match(body(windowSight, "- (BOOL)seenOnlyPastOverlays"), /return _seen && _pastOverlays && !_settling && !OffActiveSpace\(_coreWindow\.window\);/, "an overlay takes credit only for a window on the active Space, so a page held in full screen off the Space is counted once, as that");
+});

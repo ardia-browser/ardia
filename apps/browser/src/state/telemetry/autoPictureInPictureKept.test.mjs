@@ -14,7 +14,7 @@ async function sentUsageCounts() {
   const saved = JSON.parse(stub.docs.get("telemetry-queue.json") ?? '{"events":[]}');
   return saved.events
     .filter((e) => e.event === "usage_counts")
-    .map((e) => ({ kept: e.properties.auto_pip_kept_visible, appSwitch: e.properties.auto_pip_stayed_on_app_switch, pageFullScreen: e.properties.auto_pip_kept_page_full_screen, nothingPlaying: e.properties.auto_pip_nothing_playing }));
+    .map((e) => ({ kept: e.properties.auto_pip_kept_visible, appSwitch: e.properties.auto_pip_stayed_on_app_switch, pageFullScreen: e.properties.auto_pip_kept_page_full_screen, nothingPlaying: e.properties.auto_pip_nothing_playing, overlay: e.properties.auto_pip_overlay_skips }));
 }
 
 test("an automatic Picture in Picture held back because nothing played is sent once with the session's counts, then starts again from zero", async () => {
@@ -25,19 +25,20 @@ test("an automatic Picture in Picture held back because nothing played is sent o
   usage.noteAutoPictureInPictureKept("nothingPlaying", client.consentEpoch());
   usage.noteAutoPictureInPictureKept("nothingPlaying", client.consentEpoch());
   usage.sessionEnding();
-  assert.deepEqual(await sentUsageCounts(), [{ kept: 0, appSwitch: 0, pageFullScreen: 0, nothingPlaying: 3 }]);
+  assert.deepEqual(await sentUsageCounts(), [{ kept: 0, appSwitch: 0, pageFullScreen: 0, nothingPlaying: 3, overlay: 0 }]);
 
   usage.sessionEnding();
-  assert.deepEqual(await sentUsageCounts(), [{ kept: 0, appSwitch: 0, pageFullScreen: 0, nothingPlaying: 3 }]);
+  assert.deepEqual(await sentUsageCounts(), [{ kept: 0, appSwitch: 0, pageFullScreen: 0, nothingPlaying: 3, overlay: 0 }]);
 
   usage.noteAutoPictureInPictureKept("onScreen", client.consentEpoch());
   usage.noteAutoPictureInPictureKept("appSwitch", client.consentEpoch());
   usage.noteAutoPictureInPictureKept("appSwitch", client.consentEpoch());
   usage.noteAutoPictureInPictureKept("pageFullScreen", client.consentEpoch());
+  usage.noteAutoPictureInPictureKept("overlay", client.consentEpoch());
   usage.sessionEnding();
   assert.deepEqual(await sentUsageCounts(), [
-    { kept: 0, appSwitch: 0, pageFullScreen: 0, nothingPlaying: 3 },
-    { kept: 1, appSwitch: 2, pageFullScreen: 1, nothingPlaying: 0 },
+    { kept: 0, appSwitch: 0, pageFullScreen: 0, nothingPlaying: 3, overlay: 0 },
+    { kept: 1, appSwitch: 2, pageFullScreen: 1, nothingPlaying: 0, overlay: 1 },
   ]);
 });
 
@@ -50,10 +51,11 @@ test("an automatic Picture in Picture hold that began in an earlier consent peri
   const before = (await sentUsageCounts()).length;
   usage.noteAutoPictureInPictureKept("onScreen", earlier);
   usage.noteAutoPictureInPictureKept("pageFullScreen", earlier);
+  usage.noteAutoPictureInPictureKept("overlay", earlier);
   usage.noteAutoPictureInPictureKept("appSwitch", "");
   usage.noteAutoPictureInPictureKept("appSwitch", client.consentEpoch());
   usage.sessionEnding();
-  assert.deepEqual((await sentUsageCounts()).slice(before), [{ kept: 0, appSwitch: 1, pageFullScreen: 0, nothingPlaying: 0 }]);
+  assert.deepEqual((await sentUsageCounts()).slice(before), [{ kept: 0, appSwitch: 1, pageFullScreen: 0, nothingPlaying: 0, overlay: 0 }]);
   const { flushLocal } = await import("./localStore.ts");
   await flushLocal();
   const unsent = stub.telemetryLocal.records().filter((r) => r.event === "usage_counts" && r.sent === false);

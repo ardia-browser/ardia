@@ -51,6 +51,8 @@ test("no Mac name, Mac-only phrase or key glyph is left in Windows's copy except
   const windows = live.map(windowsWords);
   for (const text of windows) {
     assert.doesNotMatch(text, /\b(?:this|the) Mac\b|\bmacOS version\b|\bfrom the Dock\b|\bin Finder\b|[⌃⌥⇧⌘]/u, text);
+    assert.doesNotMatch(text, /\bSpaces?\b/u, text);
+    assert.doesNotMatch(text.replaceAll("Dock icon clicks", ""), /\bDock\b/u, text);
     for (const phrase of Object.values(PHRASES_ONLY_WITH).flat()) assert.ok(!text.includes(phrase));
   }
   assert.ok(windows.some((text) => text.includes("whether macOS and Ardia agree")));

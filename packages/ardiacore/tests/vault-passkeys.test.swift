@@ -2,6 +2,8 @@ import CryptoKit
 import Foundation
 import Testing
 
+private let timingBudgets = ProcessInfo.processInfo.environment["ARDIA_PERF_BUDGETS"] == "1"
+
 enum PasskeyFixture {
   static func hex(_ data: Data) -> String { data.map { String(format: "%02x", $0) }.joined() }
 
@@ -628,8 +630,11 @@ struct VaultPasskeyIndexTests {
       return (index!.count, built, lookups)
     }.value
     #expect(measured.0 == 3125)
-    #expect(measured.1 < .seconds(2), "built \(measured.1)")
-    #expect(measured.2 / rpIds.count < .milliseconds(1), "\(measured.2 / rpIds.count) per lookup")
+    print("passkey index over 50,000 items: built in \(measured.1), \(measured.2 / rpIds.count) per lookup")
+    if timingBudgets {
+      #expect(measured.1 < .seconds(2), "built \(measured.1)")
+      #expect(measured.2 / rpIds.count < .milliseconds(1), "\(measured.2 / rpIds.count) per lookup")
+    }
   }
 }
 

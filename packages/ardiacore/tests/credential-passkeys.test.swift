@@ -1,6 +1,7 @@
 import CryptoKit
 import Foundation
 import Testing
+import os
 
 enum PluginPasskeyFixture {
   static let rpId = "github.com"
@@ -25,6 +26,13 @@ enum PluginPasskeyFixture {
     contribution.capabilities += extra
     contribution.passkeyRoutes = routes
     return PluginVaultProvider(contribution: contribution, host: try FakeCredentialHost(), wantRun: { _ in }, openApproval: { _, _ in })
+  }
+
+  static func call(_ run: CredentialRun, named handler: String, before ended: OSAllocatedUnfairLock<Bool>) async throws -> [String: Any]? {
+    try await CredentialRunFixture.eventually(CredentialRunFixture.patience) { () -> [String: Any]?? in
+      if let call = run.link.messages().first(where: { $0["name"] as? String == handler }) { return .some(call) }
+      return ended.withLock { $0 } ? .some(nil) : nil
+    }
   }
 
   static func cli(_ run: CredentialRun) -> VaultCLI {
@@ -240,12 +248,12 @@ struct PluginDelegatedPasskeyTests {
     provider.attach(run.endpoint)
     #expect(!provider.capabilities.passkeys)
     let cli = PluginPasskeyFixture.cli(run)
-    let asking = Task { try await provider.passkeySigner(cli, item: "item-9", credential: Data(repeating: 0xA7, count: 16), rpId: PluginPasskeyFixture.rpId) }
-    var asked: [String: Any]?
-    for _ in 0..<50 where asked == nil {
-      asked = run.link.messages().first { $0["name"] as? String == "passkeys.get" }
-      try await Task.sleep(for: .milliseconds(20))
+    let ended = OSAllocatedUnfairLock(initialState: false)
+    let asking = Task {
+      defer { ended.withLock { $0 = true } }
+      return try await provider.passkeySigner(cli, item: "item-9", credential: Data(repeating: 0xA7, count: 16), rpId: PluginPasskeyFixture.rpId)
     }
+    let asked = try await PluginPasskeyFixture.call(run, named: "passkeys.get", before: ended)
     if let call = asked?["call"] as? String {
       Issue.record("asked the plugin for a passkey key")
       try await run.finish(call, result: PluginPasskeyFixture.keyTable(P256.Signing.PrivateKey()))
@@ -305,17 +313,15 @@ struct PluginSealedEditTests {
   static func outcome(_ run: CredentialRun, handler: String, _ operation: @escaping @Sendable () async throws -> VaultItem) async throws
     -> (error: VaultError?, input: [String: Any]?)
   {
+    let ended = OSAllocatedUnfairLock(initialState: false)
     let working = Task { () -> VaultError? in
+      defer { ended.withLock { $0 = true } }
       do {
         _ = try await operation()
         return nil
       } catch let error as VaultError { return error } catch { return .failed("\(error)") }
     }
-    var call: [String: Any]?
-    for _ in 0..<50 where call == nil {
-      call = run.link.messages().first { $0["name"] as? String == handler }
-      try await Task.sleep(for: .milliseconds(20))
-    }
+    let call = try await PluginPasskeyFixture.call(run, named: handler, before: ended)
     if let id = call?["call"] as? String {
       _ = try await run.request("result", ["call": id, "error": ["code": "notFound"]])
     }

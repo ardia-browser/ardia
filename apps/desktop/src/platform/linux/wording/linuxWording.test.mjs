@@ -59,6 +59,7 @@ const EXPECTED = [
   ["components/onboarding/LayoutSteps.tsx", ["title: `Shift-click`"], []],
   ["components/settings/rows/appearanceRows.ts", ["Below the toolbar. Ctrl+Shift+B toggles it.", "no toolbar. Ctrl+Super+M toggles it."], ["⇧⌘B", "⌃⌘M"]],
   ["components/settings/panes/Advanced.tsx", ["or in power saver mode"], ["${PLATFORM_TERMS.lowPowerMode}"]],
+  ["components/settings/rows/advancedRows.ts", ["title: `Zoom pages with Ctrl-scroll`", "description: `Sites that use Ctrl-scroll themselves, like maps, still get it.`"], ["${keyText(\"⌘\")}-scroll"]],
   ["components/downloads/Downloads.tsx", ["tooltip=\"Show in Folder\""], ["Show in ${PLATFORM_TERMS.fileManager}"]],
   ["components/pages/DownloadsPage.tsx", ["title=\"Show in Folder\""], ["Show in ${PLATFORM_TERMS.fileManager}"]],
   ["state/downloads/downloadMenu.ts", ["title: \"Show in Folder\""], ["Show in ${PLATFORM_TERMS.fileManager}"]],

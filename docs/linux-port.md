@@ -1186,7 +1186,7 @@ caller: sync keys, sealing and opening files and passwords, and the recovery phr
 - **Ctrl-scroll zoom.** Chromium zooms a tab when a page leaves a Ctrl-wheel event unhandled
   (`BrowserWebContentsDelegate::ContentsZoomChange`). `chromium-linux-wheel-zoom.patch` puts one gate there,
   `g_ardia_linux_wheel_zoom_off`, and `webView.setCommandScrollZoom {enabled}` sets it for every window and profile
-  (`SetLinuxPageOption`), so Settings › Privacy › Zoom works. The host advertises the call.
+  (`SetLinuxPageOption`), so Settings › Advanced › Browsing › Zoom pages with Ctrl-scroll works. The host advertises the call.
 - **Typeahead.** Keys typed before a new window's UI is ready are held and replayed into the focused text field. The
   hold takes at most 512 events and lasts at most 10 s.
 - **Wayland placement.** Wayland gives clients no global window position. `windowFrame` returns null there, only
@@ -2336,7 +2336,7 @@ These were open at the time of the PR.
   `apps/desktop/src/fieldTiming.ts`, which reports no timing data (`lastInput` is `[0, 0]`, `drain` is empty), so the
   field journeys send no samples from Linux. UI only; the engine key is unchanged.
 - **Settings rows without a backend are hidden**, each until the host advertises its capability
-  (`unavailableSettingIds` in `hostCapabilities.ts`): Zoom with Ctrl and the mouse wheel
+  (`unavailableSettingIds` in `hostCapabilities.ts`): Zoom pages with Ctrl-scroll
   (`webView.setCommandScrollZoom`), Keep new-tab links inside a Little Ardia window
   (`webView.setLittleArdiaOpensNewTabLinks`), Open a Peek window when clicking on links to other sites
   (`webView.setPeekOtherSiteTabs`), Scroll bars (`ArdiaSystem.setThinScrollBars`), all four advertised by the

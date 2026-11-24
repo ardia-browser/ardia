@@ -6,7 +6,7 @@ test("Windows hides the settings whose only effect is an engine call it doesn't 
   const windowsFeatures = source("../../lib/platformFeatures.windows.ts");
   const macFeatures = source("../../lib/platformFeatures.ts");
   const missing = JSON.parse(source("../../../../../packages/expo-windows/src/engine/domains/forwarded.json")).missing;
-  const flags = { keepsNewTabLinksInLittleArdia: [false, true], passwordAutofillSwitch: [false, true], answersPermissionRequests: [false, true], ardiaCommand: [false, true], preloadPages: [false, true] };
+  const flags = { keepsNewTabLinksInLittleArdia: [false, true], commandScrollZoom: [false, true], passwordAutofillSwitch: [false, true], answersPermissionRequests: [false, true], ardiaCommand: [false, true], preloadPages: [false, true] };
   for (const [flag, [onWindows, onMac]] of Object.entries(flags)) {
     assert.match(windowsFeatures, new RegExp(`${flag}: ${onWindows}\\b`), `Windows ${flag}`);
     assert.match(macFeatures, new RegExp(`${flag}: ${onMac}\\b`), `Mac ${flag}`);
@@ -17,6 +17,8 @@ test("Windows hides the settings whose only effect is an engine call it doesn't 
   const rowShownBy = (file, row, flag) => assert.match(source(file), new RegExp(`\\n        ${row}: \\{\\n(?:\\s+(?:title|explained|description|keywords):.*\\n)*\\s+shown: \\(\\) => PLATFORM_FEATURES\\.${flag},`), row);
   rowShownBy("./rows/tabRows.ts", "littleArdiaOpensNewTabLinks", "keepsNewTabLinksInLittleArdia");
   assert.ok(missing.webView.includes("setLittleArdiaOpensNewTabLinks"), "Windows has no Little Ardia new-tab links call yet");
+  rowShownBy("./rows/advancedRows.ts", "commandScrollZoom", "commandScrollZoom");
+  assert.ok(missing.webView.includes("setCommandScrollZoom"), "Windows has no ⌘-scroll zoom call yet");
   rowShownBy("./rows/profileRows.ts", "offerToSavePasswords", "passwordAutofillSwitch");
   assert.match(source("./rows/advancedRows.ts"), /\n        ardiaCommand: \{\n(?:\s+(?:title|explained|description|keywords):.*\n)*\s+shown: \(\) => PLATFORM_FEATURES\.ardiaCommand && !PLATFORM_FEATURES\.plugins,/, "the installer row is for a build that installs the command itself");
   rowShownBy("./rows/advancedRows.ts", "compactCliPill", "ardiaCommand");

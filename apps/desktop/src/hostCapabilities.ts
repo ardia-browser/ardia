@@ -103,6 +103,7 @@ export function unavailableSettingIds(capabilities: LinuxCapabilities, settingId
   if (!capabilities.launchAtLogin) ids.add("general.openAtLogin");
   if (!capabilities.videoUpscaling) ids.add("tabs.videoUpscaling");
   if (!capabilities.cliControl) for (const id of ["advanced.ardiaCommand", "advanced.compactCliPill"]) ids.add(id);
+  if (!capabilities.commandScrollZoom) ids.add("advanced.commandScrollZoom");
   if (!capabilities.peekOtherSites) ids.add("tabs.peekLinksToOtherSites");
   if (!capabilities.popupsOpenAsTabs) ids.add("tabs.popupsOpenAsTabs");
   if (!capabilities.littleArdiaNewTabLinks) ids.add("tabs.littleArdiaOpensNewTabLinks");

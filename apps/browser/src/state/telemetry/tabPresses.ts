@@ -56,6 +56,7 @@ const empty = () => ({
   tile_double_reloads: 0,
   tile_double_fresh: 0,
   tile_double_missed: 0,
+  tile_folder_middle_closes: 0,
 });
 let tally = empty();
 let pending = false;
@@ -191,6 +192,8 @@ export type TileDoubleClick = "return" | "reload" | "fresh" | "missed";
 const TILE_DOUBLE_FIELD = { return: "tile_double_returns", reload: "tile_double_reloads", fresh: "tile_double_fresh", missed: "tile_double_missed" } as const;
 
 export const noteTileDoubleClick = (what: TileDoubleClick, consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void tally[TILE_DOUBLE_FIELD[what]]++);
+
+export const noteTileFolderMiddleClose = (consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void tally.tile_folder_middle_closes++);
 
 export const notePagePressRefused = () => void tally.page_refused++;
 

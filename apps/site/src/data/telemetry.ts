@@ -18,6 +18,7 @@ export const SITE_EVENTS = [
   "download_clicked",
   "github_clicked",
   "discord_clicked",
+  "donate_clicked",
   "notify_clicked",
   "screenshot_opened",
   "section_viewed",

@@ -8,6 +8,7 @@ import DownloadButton from "./DownloadButton.astro";
 import MacOnlyNote from "./MacOnlyNote.astro";
 import PcNote from "./PcNote.astro";
 import SendToMac from "./SendToMac.astro";
+import Donate from "./Donate.astro";
 import { DISCORD, MIN_MACOS, VERSION } from "../data/release";
 const hillsMask = await getImage({ src: hills, width: 320, format: "webp" });
 const whatsNew = (await getEntry("releaseNotes", VERSION)) ? `${base}/release-notes/${VERSION}/` : `${base}/release-notes/`;
@@ -41,6 +42,7 @@ const formats = import.meta.env.DEV ? [] : ["avif"];
         Nightly ships daily fixes. Switch back to stable any time in Settings › General.
       </p>
       <p class="brew not-phone not-pc">Homebrew: <code>brew install ardia-browser/tap/ardia</code></p>
+      <Donate location="closing" />
     </div>
     <div class="closing-stage" data-tilt data-sunset aria-hidden="true">
       <div class="sunset" data-depth="14,10">

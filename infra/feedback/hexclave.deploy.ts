@@ -14,6 +14,7 @@ export const deploy = ({ secret, service }: any) => ({
         OBJECTS_HOST: service(SERVICES.feedbackObjects).hostname(),
         COLLECTOR_HOST: service(SERVICES.collector).hostname(),
         FEEDBACK_UPLOAD_SECRET: secret(SECRETS.feedbackUploadSecret),
+        DONATE_STRIPE_KEY: secret(SECRETS.donateStripeKey),
         GITHUB_REPO: "ardia-browser/ardia",
         DASHBOARD_URL: "https://dash.ardia.dev",
         PUBLIC_URL: "https://ardia.dev",

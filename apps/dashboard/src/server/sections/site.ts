@@ -31,6 +31,7 @@ const CLICK_EVENTS = [
   ["release_notes_viewed", "Release notes"],
   ["notify_clicked", "Notify me"],
   ["discord_clicked", "Discord"],
+  ["donate_clicked", "Donate"],
   ["send_to_mac_clicked", "Send to my Mac"],
   ["testflight_clicked", "iPhone TestFlight"],
   ["android_apk_clicked", "Android APK"],

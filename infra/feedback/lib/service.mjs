@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { UploadSizeError } from "./backends.mjs";
 import { APP_INGEST_KEY, CLI_INGEST_KEY, anonymousIdentity } from "./core.mjs";
+import { parseMonthlyDollars } from "./donate.mjs";
 import { HttpError, rateLimiter, readBody, readJson, sendJson } from "./http.mjs";
 import { newId, normalizeId } from "./ids.mjs";
 import { scrubForIssue } from "./scrub.mjs";
@@ -20,6 +21,7 @@ export const UPSTREAM_MESSAGES = {
   storage: "report storage is unavailable; try again in a minute",
   collector: "the event collector is unavailable; try again in a minute",
   issues: "GitHub is unavailable; try again in a minute",
+  donations: "Stripe is unavailable; try again in a minute",
 };
 
 export class BackendError extends Error {
@@ -126,10 +128,11 @@ export function feedbackEvent(report, { attachments, issue, completedAtMs }) {
 
 const laterTimer = (fn, ms) => setTimeout(fn, ms).unref();
 
-export function createService({ store: rawStore, events: rawEvents, issues: rawIssues, secret, publicUrl, dashboardUrl, rateLimits = true, now = Date.now, log = console.log, later = laterTimer }) {
+export function createService({ store: rawStore, events: rawEvents, issues: rawIssues, donations: rawDonations = null, donateReturnUrl = "https://ardia.dev", secret, publicUrl, dashboardUrl, rateLimits = true, now = Date.now, log = console.log, later = laterTimer }) {
   const store = blame("storage", rawStore);
   const events = blame("collector", rawEvents);
   const issues = blame("issues", rawIssues);
+  const donations = blame("donations", rawDonations);
   const opened = new Map();
   const queuedEvents = new Set();
   const limits = {
@@ -137,6 +140,8 @@ export function createService({ store: rawStore, events: rawEvents, issues: rawI
     createGlobal: rateLimiter({ limit: 300, windowMs: 60 * 60 * 1000, now }),
     upload: rateLimiter({ limit: 120, windowMs: 10 * 60 * 1000, now }),
     complete: rateLimiter({ limit: 30, windowMs: 10 * 60 * 1000, now }),
+    donate: rateLimiter({ limit: 20, windowMs: 10 * 60 * 1000, now }),
+    donateGlobal: rateLimiter({ limit: 200, windowMs: 10 * 60 * 1000, now }),
   };
   const reserved = new Set();
   const completing = new Map();
@@ -316,6 +321,24 @@ export function createService({ store: rawStore, events: rawEvents, issues: rawI
     sendJson(res, 200, await pending);
   }
 
+  async function donateMonthly(req, res, ip) {
+    if (!donations) throw new HttpError(503, "donations_off", "monthly donations are not set up here");
+    if (req.headers.origin !== new URL(donateReturnUrl).origin) throw new HttpError(403, "cross_site", "donations start on the site");
+    const type = String(req.headers["content-type"] ?? "");
+    if (!/^application\/x-www-form-urlencoded\b/i.test(type)) throw new HttpError(415, "form_only", "send the donation form");
+    const dollars = parseMonthlyDollars(new URLSearchParams((await readBody(req, 1024)).toString("utf8")).get("amount"));
+    if (dollars === null) {
+      res.writeHead(303, { Location: `${donateReturnUrl}/#donate`, "Cache-Control": "no-store" });
+      return res.end();
+    }
+    limit("donate", ip);
+    limit("donateGlobal", "all");
+    const url = await donations.monthlyCheckoutUrl(dollars);
+    log(`[feedback] monthly donation checkout opened`);
+    res.writeHead(303, { Location: url, "Cache-Control": "no-store" });
+    res.end();
+  }
+
   return async function handle(req, res) {
     const ip = String(req.headers["x-real-ip"] || req.socket.remoteAddress || "unknown");
     const path = new URL(req.url, "http://feedback").pathname;
@@ -325,6 +348,10 @@ export function createService({ store: rawStore, events: rawEvents, issues: rawI
       if (path === "/api/feedback") {
         if (req.method !== "POST") throw new HttpError(405, "method", "POST only");
         return await create(req, res, ip);
+      }
+      if (path === "/api/donate/monthly") {
+        if (req.method !== "POST") throw new HttpError(405, "method", "POST only");
+        return await donateMonthly(req, res, ip);
       }
       if ((match = FILE_ROUTE.exec(path))) {
         if (req.method !== "PUT") throw new HttpError(405, "method", "PUT only");

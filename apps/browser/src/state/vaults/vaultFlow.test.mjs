@@ -107,17 +107,87 @@ test("nothing opens on an insecure page or with suggestions turned off", async (
   S().updateSettings({ vaultSuggestOnFocus: true });
 });
 
-test("a field the page focuses by script opens nothing until the person clicks it", async () => {
+test("a field the page focuses by itself opens the menu as a focus by the person does, and counts it", async () => {
   const { tabId } = await setup();
+  takeVaultCounts();
   menu.noteVaultField(tabId, field({ auto: true }));
   await settle();
-  assert.equal(menu.vaultMenuOf(tabId), null);
-  menu.offerToFocusedField(tabId);
-  await settle();
-  assert.equal(menu.vaultMenuOf(tabId), null, "nor once a manager unlocks");
-  menu.noteVaultField(tabId, field({ clicked: true }));
-  await settle();
   assert.equal(menu.vaultMenuOf(tabId)?.field, "password");
+  assert.equal(menu.vaultMenuOf(tabId)?.onDemand, false);
+  assert.deepEqual(calls.at(-1), ["menu", true, true]);
+  const counted = takeVaultCounts();
+  assert.equal(counted.vault_menu_opens_on_autofocus, 1);
+  assert.equal(counted.vault_menu_opens_from_icon, 0);
+  menu.closeVaultMenu(tabId);
+  menu.noteVaultField(tabId, field({ focused: false, rect: null }));
+  menu.noteVaultField(tabId, field());
+  await settle();
+  assert.ok(menu.vaultMenuOf(tabId));
+  assert.equal(takeVaultCounts().vault_menu_opens_on_autofocus, 0, "a focus the person made isn't counted");
+  menu.closeVaultMenu(tabId);
+});
+
+test("a page that keeps refocusing its field neither flickers the menu nor brings it back after Escape", async () => {
+  const { tabId } = await setup();
+  const stop = menu.startVaultMenus();
+  try {
+    menu.noteVaultField(tabId, field({ auto: true }));
+    await settle();
+    const opened = menu.vaultMenuOf(tabId);
+    assert.ok(opened);
+    menu.noteVaultField(tabId, field({ focused: false, rect: null }));
+    menu.noteVaultField(tabId, field({ auto: true }));
+    await new Promise((r) => setTimeout(r, 250));
+    assert.equal(menu.vaultMenuOf(tabId)?.seq, opened.seq, "a quick blur and refocus keeps the same menu open");
+    menu.noteVaultField(tabId, field({ focused: false, rect: null }));
+    await new Promise((r) => setTimeout(r, 250));
+    assert.equal(menu.vaultMenuOf(tabId), null, "a blur that lasts closes it");
+    menu.noteVaultField(tabId, field({ auto: true }));
+    await settle();
+    assert.equal(menu.vaultMenuOf(tabId), null, "and the page focusing the same field again doesn't reopen it");
+    menu.noteVaultField(tabId, field({ clicked: true }));
+    await settle();
+    assert.ok(menu.vaultMenuOf(tabId), "a click does");
+    noteVaultKey(tabId, { frameId: "f1", key: "Escape" });
+    for (let i = 0; i < 3; i++) {
+      menu.noteVaultField(tabId, field({ focused: false, rect: null }));
+      menu.noteVaultField(tabId, field({ auto: true }));
+      await settle();
+      menu.offerToFocusedField(tabId);
+      await settle();
+      assert.equal(menu.vaultMenuOf(tabId), null, `refocus ${i + 1} after Escape stays closed`);
+    }
+    menu.noteVaultField(tabId, field({ kind: "username", auto: true }));
+    await settle();
+    assert.equal(menu.vaultMenuOf(tabId)?.field, "username", "the page moving focus to another field offers there");
+  } finally {
+    stop();
+    menu.closeVaultMenu(tabId);
+  }
+});
+
+test("a field focused in a background tab waits until that tab is shown", async () => {
+  const { w, tabId } = await setup();
+  const stop = menu.startVaultMenus();
+  try {
+    const back = S().newTab(w, { url: "https://github.com/login", background: true });
+    webviews.set(back, handle);
+    menu.noteVaultField(back, field({ auto: true }));
+    await settle();
+    assert.equal(menu.vaultMenuOf(back), null);
+    menu.offerToFocusedField(back);
+    await settle();
+    assert.equal(menu.vaultMenuOf(back), null, "nor when a manager unlocks while it's hidden");
+    S().activate(back);
+    menu.offerToFocusedField(back);
+    await settle();
+    assert.equal(menu.vaultMenuOf(back)?.field, "password", "shown, it offers the field that's still focused");
+    S().activate(tabId);
+    await settle();
+    assert.equal(menu.vaultMenuOf(back), null);
+  } finally {
+    stop();
+  }
 });
 
 test("focusing a login field with a match opens the menu on its first login and tells the page", async () => {

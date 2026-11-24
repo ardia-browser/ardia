@@ -776,11 +776,19 @@ when the CLI reports locked or signed out.
   (something else is hit-tested at the tile's spot, such as the page's own icon or Ardia's reveal eye, or the field
   draws a background image in a wide trailing padding); a taken edge hides the tile. It re-reports on scroll and
   resize (one per frame) and when a password field's typed state flips, which is when the reveal eye comes and goes.
-  A click toggles the menu for that field (`toggleVaultMenuFromBadge`, counted as `vault_menu_opens_from_icon`) like a click in the field, so it opens on
-  autofocused fields too, and closing that way counts as declining. A second click within 300 ms is ignored, so a
+  A click toggles the menu for that field (`toggleVaultMenuFromBadge`, counted as `vault_menu_opens_from_icon`) like a click in the field, and closing that way counts as declining. A second click within 300 ms is ignored, so a
   double click settles open. It fades in over 120 ms and scales down slightly when pressed; Reduce Motion drops the
   press scale. Subframe fields never get it (their rect isn't
   reported, and the menu needs it).
+- **Fields the page focuses by itself.** A field focused by `autofocus` or a script's `focus()` (no click or Tab in
+  the last moment; the page script reports it with `auto`) opens the menu exactly as a focus by the person does, in the
+  shown tab only: a background tab offers it when it is shown, if the field is still focused. A field already focused
+  when the page script installs or when the document is ready is reported then, while the page has focus; without
+  focus, Chrome's own focus event on the field follows when the page gets it. The page focusing the same field again
+  after a blur counts as the same focus: a quick refocus keeps the open menu, a later one doesn't reopen it, and after
+  Escape or a dismissal it stays closed until a click. Opening on such a field is counted as
+  `vault_menu_opens_on_autofocus`. Ardia's address and card menu opens on a click for every field, as Chrome's does,
+  so it treats both focuses alike.
 - **Auto-submit only after Touch ID.** Native honours `submit` only when that fill used a fresh Touch ID grant.
 - **Suggest.** The For All Profiles block's Suggest is one row of checkboxes for what the fill menu and
   the right-click menu offer, all on by default: Saved Logins (`vaultSuggestLogins`: the site's logins, and their

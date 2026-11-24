@@ -84,6 +84,8 @@ function wholeScript(context, win, location, clock, sent) {
 
 function makePage({ origin = "https://example.com", path = "/login", top = true, scheme = "normal", media = {}, requestSubmit = true, pinch = null, whole = false } = {}) {
   const sent = [];
+  const readyFns = [];
+  const pageFocus = { on: true };
   const frames = [];
   const focused = [];
   const clock = { now: 1_000_000, timers: [], seq: 0 };
@@ -349,6 +351,12 @@ function makePage({ origin = "https://example.com", path = "/login", top = true,
     elementFromPoint(x, y) {
       return hits.at ? hits.at(x, y) : null;
     }
+    get activeElement() {
+      return focusState.el || body;
+    }
+    hasFocus() {
+      return pageFocus.on;
+    }
     execCommand(command, _ui, value) {
       const target = focused.at(-1);
       if (command !== "insertText" || !target) return false;
@@ -442,6 +450,7 @@ function makePage({ origin = "https://example.com", path = "/login", top = true,
     Node: FakeNode,
     apply: Reflect.apply,
     guard: (fn) => fn,
+    onReady: (fn) => readyFns.push(fn),
     handlers,
     isTop: top,
     revealedField: null,
@@ -473,7 +482,9 @@ function makePage({ origin = "https://example.com", path = "/login", top = true,
     fire(field, "input", extra);
   };
   const of = (kind) => sent.filter((m) => m.kind === kind).map((m) => m.data);
-  return { context, styleReads, ...exports, KeyboardEvent: FakeKeyboardEvent, hits, FakeInput, sent, of, frames, runFrames, advance, clock, location, focused, document, html, body, input, textarea, el, fire, type, handlers, FakeButton, FakeEvent, win, selection };
+  const ready = () => readyFns.splice(0).forEach((fn) => fn());
+  const focusWithoutEvent = (target) => void (focusState.el = target);
+  return { ready, pageFocus, focusWithoutEvent, context, styleReads, ...exports, KeyboardEvent: FakeKeyboardEvent, hits, FakeInput, sent, of, frames, runFrames, advance, clock, location, focused, document, html, body, input, textarea, el, fire, type, handlers, FakeButton, FakeEvent, win, selection };
 }
 
 const ORIGIN = "https://example.com";
@@ -1117,6 +1128,32 @@ test("a focus the page makes with focus() is reported as automatic, a click or T
   assert.equal(page.of("vaultField").at(-1).auto, false, "Tab into a field is the person's");
   page.fire(user, "focusout");
   assert.equal(page.of("vaultField").at(-1).auto, false, "a blur is never automatic");
+});
+
+test("a field already focused when the document is ready is reported as the page's own focus, only while the page has focus", () => {
+  const page = makePage();
+  const { user } = loginForm(page);
+  page.focusWithoutEvent(user);
+  page.pageFocus.on = false;
+  page.ready();
+  assert.deepEqual(page.of("vaultField"), [], "a page without focus waits for the focus event it gets with focus");
+  const later = makePage();
+  const form = loginForm(later);
+  later.focusWithoutEvent(form.user);
+  later.ready();
+  assert.equal(later.of("vaultField").length, 1);
+  assert.equal(later.of("vaultField")[0].focused, true);
+  assert.equal(later.of("vaultField")[0].auto, true);
+  assert.equal(later.of("vaultField")[0].kind, "username");
+  later.fire(form.user, "focusin");
+  later.ready();
+  assert.equal(later.of("vaultField").length, 2, "the focus event after it reports the same field again, once");
+  assert.equal(later.of("vaultField")[1].auto, true);
+  const plain = makePage();
+  plain.body.append(plain.el("div", {}, plain.input({ type: "search", name: "q" })));
+  plain.focusWithoutEvent(plain.body.children[0].children[0]);
+  plain.ready();
+  assert.deepEqual(plain.of("vaultField"), [], "a field that isn't a login field reports nothing");
 });
 
 test("a focus event the page dispatches itself opens nothing", () => {

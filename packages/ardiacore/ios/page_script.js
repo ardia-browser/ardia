@@ -1409,6 +1409,8 @@
     const vaultQuery = Element.prototype.querySelectorAll;
     const vaultFragmentQuery = DocumentFragment.prototype.querySelectorAll;
     const vaultFocusOn = HTMLElement.prototype.focus;
+    const vaultActiveOf = vaultGetterOf(Document.prototype, "activeElement");
+    const vaultPageHasFocus = Document.prototype.hasFocus;
     const vaultStyleOf = window.getComputedStyle;
     const vaultNextFrame = window.requestAnimationFrame;
     const vaultNow = Date.now;
@@ -2313,6 +2315,13 @@
       }),
       vaultOptions,
     ]);
+    const vaultFocusAlready = vaultGuard(() => {
+      if (vaultFocused || typeof vaultPageHasFocus !== "function" || !apply(vaultPageHasFocus, document, [])) return;
+      const el = vaultActiveOf(document);
+      if (vaultIsInput(el) && vaultStillFocused(el)) vaultFocus(el);
+    });
+    vaultFocusAlready();
+    onReady(vaultFocusAlready);
     apply(vaultListen, document, [
       "input",
       vaultGuard((e) => {

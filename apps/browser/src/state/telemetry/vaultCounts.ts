@@ -25,6 +25,7 @@ const empty = () => ({
   vault_menu_rows_built: 0,
   vault_menu_rows_slow: 0,
   vault_menu_opens_from_icon: 0,
+  vault_menu_opens_on_autofocus: 0,
   vault_pick_rank_1: 0,
   vault_pick_rank_2: 0,
   vault_pick_rank_3_to_5: 0,
@@ -128,6 +129,7 @@ export function noteVaultMenuRowsBuilt(ms: number, consent?: ConsentToken | null
 }
 
 export const noteVaultMenuOpenFromIcon = () => bump("vault_menu_opens_from_icon");
+export const noteVaultMenuOpenOnAutofocus = (consent?: ConsentToken | null) => bump("vault_menu_opens_on_autofocus", consent);
 
 export function noteVaultLoginPicked(index: number, typed: boolean, consent?: ConsentToken | null) {
   if (index < 0) return;

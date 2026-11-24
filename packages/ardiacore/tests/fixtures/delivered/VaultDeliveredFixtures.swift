@@ -93,6 +93,42 @@ enum VaultDeliveredFixtures {
     }
   }
 
+  static func writeOldHistory(messages path: String, count: Int, now: Date = Date()) throws {
+    try withDatabase(path) { db in
+      try run(db, messagesSchema)
+      let date = Int64(((now.timeIntervalSince1970 - 86_400 - appleEpoch) * 1_000_000_000).rounded())
+      try run(db, """
+        WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < \(count))
+        INSERT INTO message (guid, text, handle_id, service, date, is_from_me, item_type)
+        SELECT '\(UUID().uuidString)-' || i, 'Your code is 100000', 0, 'SMS', \(date), 0, 0 FROM n
+        """)
+    }
+  }
+
+  static func writeOldHistory(mail path: String, count: Int, now: Date = Date()) throws {
+    try FileManager.default.createDirectory(atPath: (path as NSString).deletingLastPathComponent, withIntermediateDirectories: true)
+    try withDatabase(path) { db in
+      try run(db, mailSchema)
+      let received = Int64(now.timeIntervalSince1970 - 86_400)
+      try run(db, """
+        INSERT OR IGNORE INTO mailboxes (ROWID, url) VALUES (1, 'imap://fixture%40example.com@imap.example.com/INBOX');
+        INSERT OR IGNORE INTO subjects (ROWID, subject) VALUES (1, 'Your code is 100000');
+        WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < \(count))
+        INSERT INTO messages (sender, subject, date_sent, date_received, mailbox) SELECT 0, 1, \(received), \(received), 1 FROM n
+        """)
+    }
+  }
+
+  static func queryPlan(_ path: String, _ sql: String) throws -> String {
+    var plan: [String] = []
+    try withDatabase(path) { db in
+      try step(db, "EXPLAIN QUERY PLAN " + sql, []) { row in
+        if let detail = sqlite3_column_text(row, 3) { plan.append(String(cString: detail)) }
+      }
+    }
+    return plan.joined(separator: "\n")
+  }
+
   enum Value {
     case text(String)
     case int(Int64)

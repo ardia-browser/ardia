@@ -49,6 +49,7 @@ struct VaultDeliveredPaths: Sendable {
 enum VaultDeliveredSQLite {
   static let busyMilliseconds: Int32 = 150
   static let rowLimit: Int32 = 60
+  static let newestRows: Int64 = 400
   static let longestBody = 64 * 1024
 
   static func reach(file path: String) -> VaultDeliveredReach {
@@ -103,6 +104,12 @@ enum VaultDeliveredSQLite {
     }
   }
 
+  static func bindRecent(_ statement: OpaquePointer, cutoff: Int64) {
+    sqlite3_bind_int64(statement, 1, cutoff)
+    sqlite3_bind_int(statement, 2, rowLimit)
+    sqlite3_bind_int64(statement, 3, newestRows)
+  }
+
   static func text(_ statement: OpaquePointer, _ column: Int32) -> String? {
     guard sqlite3_column_type(statement, column) != SQLITE_NULL, let bytes = sqlite3_column_text(statement, column) else { return nil }
     let count = Int(sqlite3_column_bytes(statement, column))
@@ -130,16 +137,9 @@ enum VaultMessagesReader {
     let messages = VaultDeliveredSQLite.withReadOnly(path) { db -> [VaultDeliveredMessage]? in
       let have = VaultDeliveredSQLite.columns(db, table: "message")
       guard have.isSuperset(of: ["ROWID", "text", "date", "is_from_me", "handle_id"]) else { return nil }
-      let body = have.contains("attributedBody") ? "m.attributedBody" : "NULL"
-      let kind = have.contains("item_type") ? " AND m.item_type = 0" : ""
-      let sql = """
-        SELECT m.ROWID, m.text, \(body), m.date, h.id FROM message m LEFT JOIN handle h ON h.ROWID = m.handle_id \
-        WHERE m.is_from_me = 0 AND m.date >= ?1\(kind) ORDER BY m.date DESC LIMIT ?2
-        """
       var found: [VaultDeliveredMessage] = []
-      let done = VaultDeliveredSQLite.each(db, sql, bind: { statement in
-        sqlite3_bind_int64(statement, 1, cutoff)
-        sqlite3_bind_int(statement, 2, VaultDeliveredSQLite.rowLimit)
+      let done = VaultDeliveredSQLite.each(db, sql(have), bind: { statement in
+        VaultDeliveredSQLite.bindRecent(statement, cutoff: cutoff)
       }) { row in
         let text = VaultDeliveredSQLite.text(row, 1).flatMap { $0.isEmpty ? nil : $0 }
           ?? VaultDeliveredSQLite.blob(row, 2).flatMap(VaultTypedStreamText.text)
@@ -153,6 +153,16 @@ enum VaultMessagesReader {
       return done ? found : nil
     }
     return VaultDeliveredRead(reach: .readable, messages: messages ?? [], watched: watched)
+  }
+
+  static func sql(_ have: Set<String>) -> String {
+    let body = have.contains("attributedBody") ? "m.attributedBody" : "NULL"
+    let kind = have.contains("item_type") ? " AND m.item_type = 0" : ""
+    return """
+      SELECT m.ROWID, m.text, \(body), m.date, h.id FROM message m LEFT JOIN handle h ON h.ROWID = m.handle_id \
+      WHERE m.ROWID > IFNULL((SELECT MAX(ROWID) FROM message), 0) - ?3 AND m.is_from_me = 0 AND +m.date >= ?1\(kind) \
+      ORDER BY +m.date DESC LIMIT ?2
+      """
   }
 }
 
@@ -184,19 +194,9 @@ enum VaultMailReader {
         VaultDeliveredSQLite.columns(db, table: "mailboxes").isSuperset(of: ["ROWID", "url"])
       else { return nil }
       let summaries = have.contains("summary") && !VaultDeliveredSQLite.columns(db, table: "summaries").isEmpty
-      let summaryColumn = summaries ? "su.summary" : "NULL"
-      let summaryJoin = summaries ? " LEFT JOIN summaries su ON su.ROWID = m.summary" : ""
-      let deleted = have.contains("deleted") ? " AND m.deleted = 0" : ""
-      let sql = """
-        SELECT m.ROWID, s.subject, \(summaryColumn), m.date_received, a.address, mb.url FROM messages m \
-        LEFT JOIN subjects s ON s.ROWID = m.subject LEFT JOIN addresses a ON a.ROWID = m.sender \
-        LEFT JOIN mailboxes mb ON mb.ROWID = m.mailbox\(summaryJoin) \
-        WHERE m.date_received >= ?1\(deleted) ORDER BY m.date_received DESC LIMIT ?2
-        """
       var found: [VaultDeliveredMessage] = []
-      let done = VaultDeliveredSQLite.each(db, sql, bind: { statement in
-        sqlite3_bind_int64(statement, 1, cutoff)
-        sqlite3_bind_int(statement, 2, VaultDeliveredSQLite.rowLimit)
+      let done = VaultDeliveredSQLite.each(db, sql(have, summaries: summaries), bind: { statement in
+        VaultDeliveredSQLite.bindRecent(statement, cutoff: cutoff)
       }) { row in
         guard isInbox(VaultDeliveredSQLite.text(row, 5)) else { return }
         let subject = VaultDeliveredSQLite.text(row, 1) ?? ""
@@ -214,6 +214,19 @@ enum VaultMailReader {
 }
 
 extension VaultMailReader {
+  static func sql(_ have: Set<String>, summaries: Bool) -> String {
+    let summaryColumn = summaries ? "su.summary" : "NULL"
+    let summaryJoin = summaries ? " LEFT JOIN summaries su ON su.ROWID = m.summary" : ""
+    let deleted = have.contains("deleted") ? " AND m.deleted = 0" : ""
+    return """
+      SELECT m.ROWID, s.subject, \(summaryColumn), m.date_received, a.address, mb.url FROM messages m \
+      LEFT JOIN subjects s ON s.ROWID = m.subject LEFT JOIN addresses a ON a.ROWID = m.sender \
+      LEFT JOIN mailboxes mb ON mb.ROWID = m.mailbox\(summaryJoin) \
+      WHERE m.ROWID > IFNULL((SELECT MAX(ROWID) FROM messages), 0) - ?3 AND +m.date_received >= ?1\(deleted) \
+      ORDER BY +m.date_received DESC LIMIT ?2
+      """
+  }
+
   static let skippedMailboxes: Set<String> = [
     "junk", "junk e-mail", "junk email", "spam", "bulk mail", "trash", "deleted messages", "deleted items", "bin", "deleted",
   ]

@@ -506,6 +506,30 @@ struct VaultDeliveredReaderTests {
     #expect(VaultMailReader.isInbox(url) == kept)
   }
 
+  @Test func `a long message history is read only from its newest rows`() throws {
+    let path = folder + "/chat.db"
+    try VaultDeliveredFixtures.writeOldHistory(messages: path, count: 50_000)
+    try VaultDeliveredFixtures.writeMessages(path, [VaultDeliveredFixtureText(sender: "+15550100", secondsAgo: 5, text: "Your code is 482913")])
+    try VaultDeliveredFixtures.writeOldHistory(messages: path, count: Int(VaultDeliveredSQLite.newestRows))
+    #expect(VaultMessagesReader.read(path, since: Date().addingTimeInterval(-600)).messages.isEmpty)
+    let fresh = folder + "/fresh.db"
+    try VaultDeliveredFixtures.writeOldHistory(messages: fresh, count: 50_000)
+    try VaultDeliveredFixtures.writeMessages(fresh, [VaultDeliveredFixtureText(sender: "+15550100", secondsAgo: 5, text: "Your code is 482913")])
+    #expect(VaultMessagesReader.read(fresh, since: Date().addingTimeInterval(-600)).messages.map(\.text) == ["Your code is 482913"])
+    let plan = try VaultDeliveredFixtures.queryPlan(fresh, VaultMessagesReader.sql(["attributedBody", "item_type"]))
+    #expect(plan.contains("SEARCH m USING INTEGER PRIMARY KEY (rowid>?)"))
+  }
+
+  @Test func `a long mail history is read only from its newest rows`() throws {
+    let path = folder + "/Mail/V10/MailData/Envelope Index"
+    try VaultDeliveredFixtures.writeOldHistory(mail: path, count: 50_000)
+    try VaultDeliveredFixtures.writeMail(path, [VaultDeliveredFixtureMail(sender: "noreply@example.com", secondsAgo: 10, subject: "Your sign-in code", summary: "Use 615273")])
+    #expect(VaultMailReader.read(path, since: Date().addingTimeInterval(-600)).messages.map(\.text) == ["Your sign-in code\nUse 615273"])
+    let plan = try VaultDeliveredFixtures.queryPlan(path, VaultMailReader.sql(["deleted"], summaries: true))
+    #expect(plan.contains("SEARCH m USING INTEGER PRIMARY KEY (rowid>?)"))
+    #expect(!plan.contains("SCAN m"))
+  }
+
   @Test func `the readers never write to the databases`() throws {
     let path = folder + "/chat.db"
     try VaultDeliveredFixtures.writeMessages(path, [VaultDeliveredFixtureText(sender: "+1", secondsAgo: 1, text: "Your code is 482913")])

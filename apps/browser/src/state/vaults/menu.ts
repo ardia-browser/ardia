@@ -314,7 +314,7 @@ export const selectVaultRow = (tabId: string, selected: number) => void (vaultMe
 export function hoverVaultMenu(tabId: string, hovered: boolean) {
   const menu = vaultMenuOf(tabId);
   if (!hovered && menu && menu.mode !== "search" && !menu.busy && lastVaultField(tabId)?.focused === false) return closeVaultMenu(tabId);
-  if (!hovered && menu && menu.mode === "matches" && !menu.busy) return patchVaultMenu(tabId, { hovered, selected: restingRowOf(menu) });
+  if (!hovered && menu && menu.mode === "matches" && !menu.busy && useBrowser.getState().settings.vaultMenuSelectionReturns) return patchVaultMenu(tabId, { hovered, selected: restingRowOf(menu) });
   patchVaultMenu(tabId, { hovered });
 }
 export const searchVaultMenu = (tabId: string, query: string) => patchVaultMenu(tabId, { query, selected: query ? 0 : -1 });

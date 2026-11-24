@@ -205,7 +205,7 @@ export function hoverAutofillMenu(tabId: string, hovered: boolean) {
   const menu = autofillMenuOf(tabId);
   if (!menu) return;
   if (!hovered && !menu.busy && !autofillFieldOf(tabId)) return closeAutofillMenu(tabId);
-  patchAutofillMenu(tabId, hovered ? { hovered } : { hovered, selected: autofillRestingRow(autofillRowsOf(menu)) });
+  patchAutofillMenu(tabId, hovered || !useBrowser.getState().settings.vaultMenuSelectionReturns ? { hovered } : { hovered, selected: autofillRestingRow(autofillRowsOf(menu)) });
 }
 
 export function setAutofillMenuOffscreen(tabId: string, menuSeq: number, offscreen: boolean) {

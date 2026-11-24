@@ -22,6 +22,7 @@ export const useVaultTouchID = () => {
 };
 export const useVaultBiometricsAvailable = () => useVaultBiometrics((s) => s.available);
 export const useVaultMenuGlass = () => useBrowser((s) => s.settings.vaultMenuGlass);
+export const menuSelectionReturns = () => useBrowser.getState().settings.vaultMenuSelectionReturns;
 export const useVaultCode = (key: string) => useVaultCodes((s) => s[key]);
 export const useVaultMenu = (tabId: string) => useVaultMenus((s) => s.menus[tabId] ?? null);
 export const useVaultSaveOffer = (tabId: string) => useVaultSaveOffers((s) => s[tabId] ?? null);

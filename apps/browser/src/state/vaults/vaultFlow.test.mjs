@@ -356,7 +356,7 @@ test("a field already focused gets the menu once its manager unlocks", async () 
   }
 });
 
-test("leaving the menu puts the highlight back on the first login", async () => {
+test("leaving the menu keeps the highlight where the pointer left it, and keys move on from there", async () => {
   const { tabId } = await setup();
   menu.noteVaultField(tabId, field());
   await settle();
@@ -364,8 +364,28 @@ test("leaving the menu puts the highlight back on the first login", async () => 
   menu.selectVaultRow(tabId, 1);
   assert.equal(menu.vaultMenuOf(tabId)?.selected, 1, "hovering Other Passwords highlights it");
   menu.hoverVaultMenu(tabId, false);
-  assert.equal(menu.vaultMenuOf(tabId)?.selected, 0);
-  assert.deepEqual(calls.at(-1), ["menu", true, true]);
+  assert.equal(menu.vaultMenuOf(tabId)?.selected, 1);
+  assert.equal(menu.vaultMenuOf(tabId)?.hovered, false);
+  noteVaultKey(tabId, { frameId: "f1", key: "ArrowUp" });
+  assert.equal(menu.vaultMenuOf(tabId)?.selected, 0, "ArrowUp moves from the kept row");
+  menu.closeVaultMenu(tabId);
+});
+
+test("with Selection Returns to the Top on, leaving the menu puts the highlight back on the first login", async () => {
+  const { tabId } = await setup();
+  S().updateSettings({ vaultMenuSelectionReturns: true });
+  try {
+    menu.noteVaultField(tabId, field());
+    await settle();
+    menu.hoverVaultMenu(tabId, true);
+    menu.selectVaultRow(tabId, 1);
+    menu.hoverVaultMenu(tabId, false);
+    assert.equal(menu.vaultMenuOf(tabId)?.selected, 0);
+    assert.deepEqual(calls.at(-1), ["menu", true, true]);
+  } finally {
+    S().updateSettings({ vaultMenuSelectionReturns: false });
+    menu.closeVaultMenu(tabId);
+  }
 });
 
 test("a touch fills the selected login, and nothing once it's disarmed", async () => {

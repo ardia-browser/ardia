@@ -58,7 +58,7 @@ function GuardedToggle({ title, setting }: { title: string; setting: GuardedSwit
   );
 }
 
-type PlainSwitch = keyof Pick<Settings, "vaultMenuGlass" | "vaultSaveOffer" | "vaultAutoSave">;
+type PlainSwitch = keyof Pick<Settings, "vaultMenuGlass" | "vaultMenuSelectionReturns" | "vaultSaveOffer" | "vaultAutoSave">;
 
 function SettingSwitch({ title, setting }: { title: string; setting: PlainSwitch }) {
   const value = useSettings((s) => s[setting]);
@@ -160,6 +160,7 @@ export function ForAllProfilesSection() {
           {fills ? <VaultSuggestRow /> : null}
           {fills ? <GuardedToggle title="Ask before filling" setting="vaultAskBeforeFilling" /> : null}
           {fills ? <SettingSwitch title="Translucent password menu" setting="vaultMenuGlass" /> : null}
+          {fills ? <SettingSwitch title="Selection returns to the top when the pointer leaves" setting="vaultMenuSelectionReturns" /> : null}
           {savers.length ? <SettingSwitch title="Offer to save new logins" setting="vaultSaveOffer" /> : null}
           {savers.length && saveOffer ? <SettingSwitch title="Save new passwords automatically" setting="vaultAutoSave" /> : null}
           {savers.length ? (

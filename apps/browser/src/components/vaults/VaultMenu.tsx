@@ -5,7 +5,7 @@ import { closeVaultMenu, hoverVaultMenu, noteVaultSearchFocus, useVaultMenus, of
 import { FOOTER_KINDS, GENERATOR_STYLES, type VaultRow } from "../../state/vaults/menuModel";
 import { scrollToKeep } from "../../state/vaults/menuScroll";
 import { siteLabel } from "../../state/vaults/originMatch";
-import { useVaultMenu, useVaultMenuGlass, useVaultMenuRows, useVaultTouchID } from "../../state/vaults/hooks";
+import { menuSelectionReturns, useVaultMenu, useVaultMenuGlass, useVaultMenuRows, useVaultTouchID } from "../../state/vaults/hooks";
 import { armVaultTouchID, isTouchRow, noteVaultTouchStatus, touchIDGlyphShown, touchScopeOf } from "../../state/vaults/touchID";
 import { useWindowInFront } from "../../state/windows/inFront";
 import { useAppActive } from "../../state/app/appActive";
@@ -181,7 +181,7 @@ function MenuPanel({ tabId, menu, zoom, area, onGone }: { tabId: string; menu: M
   const touchShown = useKeptWhile(!touchIDReady || concealed || !touchIDGlyphShown(menu.touch) || !isTouchRow(selectedRow) ? -1 : shownSelected, !leaving);
   const touchTarget = leaving ? -1 : touchShown;
   useEffect(() => {
-    if (!leaving && inFront && !menu.hovered && menu.mode === "matches") selectVaultRow(tabId, restingRowOf(menu));
+    if (!leaving && inFront && !menu.hovered && menu.mode === "matches" && menuSelectionReturns()) selectVaultRow(tabId, restingRowOf(menu));
   }, [inFront]);
   const touchArmed = touchTarget >= 0 && !menu.busy;
   useEffect(() => {

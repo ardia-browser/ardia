@@ -89,6 +89,31 @@ test("Enter fills the highlighted address through the engine and closes", async 
   assert.equal(menu.autofillMenuOf(tabId), null, "the same field stays quiet right after a fill");
 });
 
+test("leaving the menu keeps the highlighted row unless Selection Returns to the Top is on", async () => {
+  const second = { ...jordan, id: "a2", name: "Sam Lee" };
+  const tabId = await setup({ addresses: [jordan, second] });
+  focus(tabId);
+  ask(tabId);
+  await settle();
+  menu.hoverAutofillMenu(tabId, true);
+  menu.selectAutofillRow(tabId, 1);
+  menu.hoverAutofillMenu(tabId, false);
+  assert.equal(menu.autofillMenuOf(tabId)?.selected, 1);
+  native.emitEvent("autofill.menuKey", { tabId, key: "ArrowUp", epoch: "fieldMenu-test" });
+  await settle();
+  assert.equal(menu.autofillMenuOf(tabId)?.selected, 0, "keys move on from the kept row");
+  S().updateSettings({ vaultMenuSelectionReturns: true });
+  try {
+    menu.hoverAutofillMenu(tabId, true);
+    menu.selectAutofillRow(tabId, 1);
+    menu.hoverAutofillMenu(tabId, false);
+    assert.equal(menu.autofillMenuOf(tabId)?.selected, 0);
+  } finally {
+    S().updateSettings({ vaultMenuSelectionReturns: false });
+    menu.closeAutofillMenu(tabId);
+  }
+});
+
 test("a declined card check keeps the menu open with a short reason", async () => {
   const tabId = await setup();
   native.autofillFakes.nextFill = { filled: false, declined: true };

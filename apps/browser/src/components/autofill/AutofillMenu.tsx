@@ -18,7 +18,7 @@ import { addresses, autofillEnabled, cards } from "../../state/settings/paneData
 import { useResource } from "../../state/settings/resources";
 import { useSettings, useTab, useTabLive } from "../../state/browser/hooks";
 import { vaultHighlight, type VaultHighlight } from "../../state/vaults/highlight";
-import { useVaultMenuGlass, useVaultTouchID } from "../../state/vaults/hooks";
+import { menuSelectionReturns, useVaultMenuGlass, useVaultTouchID } from "../../state/vaults/hooks";
 import { touchIDGlyphShown } from "../../state/vaults/touchID";
 import { useWindowInFront } from "../../state/windows/inFront";
 import { over } from "../../lib/color";
@@ -200,7 +200,7 @@ function MenuPanel({ tabId, menu, area, onGone }: { tabId: string; menu: Autofil
   }, [tabId, touchArmed, menu.seq]);
   useEffect(() => {
     const now = autofillMenuOf(tabId);
-    if (!leaving && inFront && now && !now.hovered && now.seq === menu.seq) selectAutofillRow(tabId, autofillRestingRow(rows));
+    if (!leaving && inFront && now && !now.hovered && now.seq === menu.seq && menuSelectionReturns()) selectAutofillRow(tabId, autofillRestingRow(rows));
   }, [inFront]);
   const touch = { phase: menu.touch, retries: menu.touchRetries };
   const view = (row: AutofillRow, index: number, layer?: RowLayer) => (

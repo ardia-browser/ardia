@@ -12,6 +12,7 @@ export const VAULT_SETTING_SPECS = {
   vaultSuggestNewPasswords: flag(true, SYNCED),
   vaultSuggestGenerated: flag(true, SYNCED),
   vaultMenuGlass: flag(true, SYNCED),
+  vaultMenuSelectionReturns: flag(false, SYNCED),
   vaultAskBeforeFilling: flag(true),
   vaultSaveOffer: flag(true, SYNCED),
   vaultAutoSave: flag(true, SYNCED),

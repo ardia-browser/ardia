@@ -13,7 +13,7 @@ export const CONFIG_SETTING_KEYS: readonly SettingKey[] = [
   "bookmarksImportDismissed", "appearance", "addressBar", "compactToolbar", "addressBarButtons", "borderlessMode", "tabCornerRadius", "minimalismMode", "pageFrame", "pageFrameZeroInFullScreen", "pageFrameZeroWhenTabsHidden", "commandBarPlacement", "spacesFollowAppearance", "adaptTextToColor",
   "showProfileDots", "compactCliPill", "shortcuts", "mouseShortcuts", "openLinksInLittleArdia", "littleArdiaOpensNewTabLinks", "littleArdiaShortcutFromAnyApp", "littleArdiaSize",
   "omniboxProviders", "launchActions", "commandBarStart", "pressMotion", "folderStyle", "liveFolderIcon", "readerTextSize", "readerFont",
-  "vaultSuggestOnFocus", "vaultSuggestLogins", "vaultSuggestCodes", "vaultSuggestUsernames", "vaultSuggestNewPasswords", "vaultSuggestGenerated", "vaultMenuGlass", "vaultSaveOffer", "vaultAutoSave", "vaultContextGenerate", "vaultSaveTarget", "vaultPasskeySource",
+  "vaultSuggestOnFocus", "vaultSuggestLogins", "vaultSuggestCodes", "vaultSuggestUsernames", "vaultSuggestNewPasswords", "vaultSuggestGenerated", "vaultMenuGlass", "vaultMenuSelectionReturns", "vaultSaveOffer", "vaultAutoSave", "vaultContextGenerate", "vaultSaveTarget", "vaultPasskeySource",
 ];
 
 export const CONFIG_EXCLUDED_KEYS: readonly SettingKey[] = [

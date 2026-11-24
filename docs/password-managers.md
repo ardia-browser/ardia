@@ -895,6 +895,11 @@ when the CLI reports locked or signed out.
 - **The search menu.** Other Passwords… turns the menu into a search with its own field. It closes like the matches
   menu once neither the page field nor its search field has focus (after the same 100 ms grace, and not while the
   pointer is over it), and Escape from the page closes it; Escape in its search field goes back to the matches.
+- **Where the highlight rests.** The pointer moves the highlight; when it leaves the menu (or the window comes back to
+  the front) the highlight stays on the row it last highlighted, with its plate, white text and Touch ID glyph, and the
+  arrow keys move on from there. "Selection returns to the top when the pointer leaves" (`vaultMenuSelectionReturns`,
+  For All Profiles, off by default) puts it back on the resting row instead, as before. Ardia's address and card menu
+  follows the same setting. It is in the daily settings snapshot as `setting_vaultMenuSelectionReturns`.
 - **The menu over time.** Its rows are recomputed only when what they depend on changes (the field, mode, query,
   the managers and their lists, the Suggest settings), not on each hover or arrow key. The highlight follows the row, not
   its index: the menu keeps the highlighted row's key (`selectedKey`), and whenever its rows change under it (a manager
@@ -1379,7 +1384,8 @@ Settings › Profiles › <profile> › Passwords. On a Mac profile on Ardia it 
    failed install leaves the row with the reason in red, Try Again and Dismiss; a cancelled consent removes it
    quietly. Once the provider registers, its sign-in sheet opens (not when it is already connected). Rows fold in and
    out (`Expand`).
-2. **For All Profiles**: Suggest, Ask before filling, Translucent password menu, Offer to save new logins, Save new
+2. **For All Profiles**: Suggest, Ask before filling, Translucent password menu, Selection returns to the top when the
+   pointer leaves, Offer to save new logins, Save new
    passwords automatically, Save new logins to, Use passkeys from, Lock after, Lock when screen locks, Lock when Ardia
    quits, Unlock with Touch ID (while a connected manager can use it and the Mac has Touch ID), Keep generated
    passwords and the iCloud rows. These are app-wide settings, shown on every Ardia profile's page.

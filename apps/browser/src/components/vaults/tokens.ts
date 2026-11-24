@@ -38,7 +38,6 @@ export const VAULT_MENU = {
   spinner: 12,
   textGap: 1,
   badgeAlpha: 0.16,
-  glassMaterial: "menu",
   glassTint: 0.35,
   detailAlpha: 0.72,
   glassSurface: { dark: "#3F3F3F", light: "#DBDBDB" },

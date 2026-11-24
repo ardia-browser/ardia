@@ -110,7 +110,7 @@ export function MenuSurface({ glass, children }: { glass: boolean; children: Rea
   if (!glass) return <PopoverSurface>{children}</PopoverSurface>;
   const veil = over(theme.popoverFill, theme.dark ? ink.black : ink.white);
   return (
-    <Panel fill={ink.clear} radius={PANEL.radius} border={theme.popoverBorder} shadow={shadow.popover} material={VAULT_MENU.glassMaterial}>
+    <Panel fill={ink.clear} radius={PANEL.radius} border={theme.popoverBorder} shadow={shadow.popover}>
       <GlassFill panelFill={theme.popoverFill} tint={withAlpha(veil, VAULT_MENU.glassTint)} radius={PANEL.radius} />
       {children}
     </Panel>

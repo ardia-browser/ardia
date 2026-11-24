@@ -96,6 +96,7 @@ struct ArdiaPageReports {
   BOOL inPictureInPicture{};
   BOOL autoPictureInPictureActive{};
   BOOL keptByWindowServer{};
+  BOOL keptByPageFullScreen{};
   BOOL playedForAutoPictureInPicture{};
 };
 

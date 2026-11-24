@@ -77,6 +77,12 @@ void HandOffTab(ArdiaCoreTab *tab) {
   return [[ArdiaWindowFullScreen ofWindow:controller.coreWindow create:YES] seenOnlyByWindowServer];
 }
 
++ (BOOL)userSeesOnlyForPageFullScreen:(NSWindow *)window {
+  ArdiaWindowController *controller = [self forNSWindow:window];
+  if (!controller || controller.stray || controller.standalone) return NO;
+  return [[ArdiaWindowFullScreen ofWindow:controller.coreWindow create:NO] seenOnlyForPageFullScreen];
+}
+
 + (BOOL)leftActiveSpace:(NSWindow *)window {
   return window && ardia_window::OffActiveSpace(window);
 }

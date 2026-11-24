@@ -21,6 +21,7 @@
 - (void)tab:(ArdiaCoreTab *)tab fullScreen:(BOOL)fullScreen tell:(void (^)(void))tell;
 - (BOOL)seen;
 - (BOOL)seenOnlyByWindowServer;
+- (BOOL)seenOnlyForPageFullScreen;
 - (void)reconsiderSight;
 - (NSDictionary *)state;
 - (ArdiaCoreTab *)probedTab;
@@ -68,6 +69,7 @@ BOOL ReadWindowServerSight(NSWindow *window);
 extern NSTimeInterval gActedOcclusionGap;
 void ActWindowFullScreen(ArdiaCoreWindow *coreWindow, BOOL enter, NSTimeInterval seconds);
 extern NSTimeInterval gActedTransition;
+extern NSTimeInterval gActedToggleWait;
 NSMapTable<ArdiaCoreTab *, NSNumber *> *FullScreenChanges();
 
 extern BOOL gPageCoverOff;

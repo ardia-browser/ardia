@@ -321,6 +321,14 @@ NSView *LingeringPaneOver(NSView *view) {
     [self traceAutoPictureInPicture:@"app: the window server still shows the tab, AppKit's occlusion overruled"];
     [self emit:@"autoPictureInPictureKept" payload:[ArdiaConsentStamp.begin onto:@{@"appSwitch" : @NO}]];
   }
+  const BOOL keptForPage = seen && _visible && [ArdiaWindowController userSeesOnlyForPageFullScreen:self.window];
+  if (!keptForPage) {
+    _reports.keptByPageFullScreen = NO;
+  } else if (!_reports.keptByPageFullScreen && self.playsForAutoPictureInPicture) {
+    _reports.keptByPageFullScreen = YES;
+    [self traceAutoPictureInPicture:@"app: the window left sight, the page stays in its own full screen"];
+    [self emit:@"autoPictureInPictureKept" payload:[ArdiaConsentStamp.begin onto:@{@"reason" : @"pageFullScreen"}]];
+  }
   if (seen == _reports.seenByUser) return;
   _reports.seenByUser = seen;
   if (_reports.autoPictureInPictureActive || _reports.inPictureInPicture || self.playsForAutoPictureInPicture) {

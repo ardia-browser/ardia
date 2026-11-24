@@ -219,6 +219,7 @@ BOOL TracingPictureInPicture() {
 
 - (void)noteStayedOnAppSwitch {
   if (!_tab || !_visible || _reports.inPictureInPicture || !self.seenByUser || !self.playsForAutoPictureInPicture) return;
+  if ([ArdiaWindowController userSeesOnlyForPageFullScreen:self.window]) return;
   [self traceAutoPictureInPicture:@"app: the user left Ardia, the window server still shows the tab"];
   [self emit:@"autoPictureInPictureKept" payload:[ArdiaConsentStamp.begin onto:@{@"appSwitch" : @YES}]];
 }

@@ -417,3 +417,17 @@ test("test instances read only an acted Space, and a check swipes away with Ardi
   assert.match(swipe, /fakeFullScreen/);
   assert.doesNotMatch(swipe, /fakeAppActive:0/, "the app stays the active app throughout");
 });
+
+test("a page in its own full screen stays full screen when its window leaves sight, and only that is counted (#1938)", () => {
+  assert.match(body(windowSightMath, "inline bool KeptByPageFullScreen("), /return !seenOtherwise && fullScreen && pageHoldsFullScreen;/);
+  const update = body(windowSight, "- (void)updateSeen");
+  assert.match(update, /ardia_window_sight::KeptByPageFullScreen\(seenOtherwise, IsWindowFullScreen\(window\) \|\| _tab != nil, _tab != nil \|\| _entered\)/, "the hold starts with the page's full screen, before the window follows it, and lasts until the window has followed the page out");
+  assert.match(update, /const BOOL seen = seenOtherwise \|\| keptForPage;/);
+  assert.match(update, /if \(keptForPage != _keptForPage\) _sightSourceChanged = YES;/);
+  assert.match(body(windowSight, "- (void)tab:(ArdiaCoreTab *)tab fullScreen:(BOOL)fullScreen tell:(void (^)(void))tell"), /_tab = nil;\n  \}\n  \[self updateSeen\];/, "leaving the page's full screen while away is read at once");
+  assert.match(body(painting, "- (void)userSightChanged"), /userSeesOnlyForPageFullScreen:self\.window\][\s\S]*@"reason" : @"pageFullScreen"/);
+  assert.match(body(windowSight, "- (void)toggle:(BOOL)entering"), /ToggleWindowFullScreen\(coreWindow, \^BOOL \{ return \[weakSelf stillWantsToggle:entering turn:turn\]; \}\);/);
+  assert.match(body(windowSight, "- (BOOL)stillWantsToggle:(BOOL)entering turn:(NSUInteger)turn"), /if \(_coverTurn == turn && \(_tab != nil\) == entering\) return YES;/, "a held acted toggle acts only for the same request, with the page still where it asked to go");
+  assert.match(body(windowSight, "void ToggleWindowFullScreen(ArdiaCoreWindow *coreWindow, BOOL (^stillWanted)(void))"), /if \(stillWanted\(\)\) ActWindowFullScreen\(coreWindow, enter, gActedTransition\);/);
+  assert.match(body(read("../ios/ArdiaWebView+PictureInPicture.mm"), "- (void)noteStayedOnAppSwitch"), /if \(\[ArdiaWindowController userSeesOnlyForPageFullScreen:self\.window\]\) return;/, "a page full screen hold is not also an app-switch hold");
+});

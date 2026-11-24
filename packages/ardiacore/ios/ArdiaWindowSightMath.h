@@ -70,4 +70,6 @@ inline bool SeenByUser(bool settling, bool shown, bool appActive, bool fullScree
   return settling || (onActiveSpace && (shown || (appActive && fullScreen)));
 }
 
+inline bool KeptByPageFullScreen(bool seenOtherwise, bool fullScreen, bool pageHoldsFullScreen) { return !seenOtherwise && fullScreen && pageHoldsFullScreen; }
+
 }

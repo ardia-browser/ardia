@@ -112,6 +112,19 @@ int main() {
     CHECK(SeenByUser(settling, shown, appActive, fullScreen, false) == settling);
   }
 
+  for (int bits = 0; bits < 8; bits++) {
+    const bool pageFullScreen = bits & 1, entered = bits & 2, windowFullScreen = bits & 4;
+    CHECK(KeptByPageFullScreen(false, windowFullScreen || pageFullScreen, pageFullScreen || entered) == (pageFullScreen || (entered && windowFullScreen)));
+    CHECK(!KeptByPageFullScreen(true, windowFullScreen || pageFullScreen, pageFullScreen || entered));
+  }
+  CHECK(KeptByPageFullScreen(false, true, true));
+  CHECK(!KeptByPageFullScreen(true, true, true));
+  CHECK(!KeptByPageFullScreen(false, false, true));
+  CHECK(!KeptByPageFullScreen(false, true, false));
+  CHECK(!KeptByPageFullScreen(SeenByUser(false, false, true, true, false), true, false));
+  CHECK(KeptByPageFullScreen(SeenByUser(false, false, true, true, false), true, true));
+  CHECK(KeptByPageFullScreen(SeenByUser(false, false, false, true, true), true, true));
+
   Random random{0x1236};
   for (int round = 0; round < 3000; round++) {
     const Rect w{random.uniform(-200, 3000), random.uniform(-300, 900), random.uniform(50, 1500), random.uniform(50, 1000)};

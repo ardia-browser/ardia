@@ -1947,6 +1947,20 @@
    "detected": false
   },
   {
+   "id": "linux-host-telemetry:cancelPost",
+   "source": "frame",
+   "guard": "Linux shell host: ArdiaTelemetry.post takes two strings passing ardia::desktop_telemetry_policy::PostAcceptable and, optionally, a third that is the post's request id; ArdiaTelemetry.cancelPost takes exactly one request id. Both refuse an id that isn't 1 to 64 characters of A-Z a-z 0-9 _ - (RequestIdAcceptable, the host's ValidRequestId) with ERR_TELEMETRY_REFUSED before the client is called, and the client checks it again. An id only ever names a post of this window's own TelemetryClient: a second post under an id still in flight answers 0 without starting, and a cancel for an id nobody holds does nothing. A cancel destroys that one post's SimpleURLLoader and answers its post 0 once; it never reaches another window's uploads, another post's body or the network; test_telemetry_policy.py runs the shared hostile list through the compiled id rule and hostTelemetrySend.test.mjs checks the ids the shell makes against it",
+   "checks": [
+    "engine/ardiacore-linux/src/ardia/linux/ac_linux_telemetry.cc#bool RequestIdAcceptable(",
+    "engine/ardiacore-linux/src/ardia/linux/ac_linux_telemetry.cc#void TelemetryClient::Cancel(",
+    "engine/ardiacore-linux/src/ardia/linux/ac_linux_host.cc#if (method == \"ArdiaTelemetry.cancelPost\") {",
+    "engine/ardiacore-desktop/src/ardia/desktop/ac_desktop_suggest_policy.h#inline bool ValidRequestId(",
+    "engine/ardiacore-linux/tests/test_telemetry_policy.py#test_no_hostile_string_is_a_request_id_outside_the_plain_alphabet",
+    "apps/desktop/src/hostTelemetrySend.test.mjs#a request id fits the rule the native client checks"
+   ],
+   "detected": false
+  },
+  {
    "id": "windows-webui-telemetry:post",
    "source": "frame",
    "guard": "Windows WebUI host (--ardia-shell=webui): ArdiaTelemetry.post runs only for the live trusted chrome://ardia/ shell document, requires exactly two string arguments passing TelemetryPostAllowed (ardia::desktop_telemetry_policy::PostAcceptable: a non-empty body <= 512 KiB starting with { and an ak_<kind>_<24 hex> ingest key with no header-injection bytes; then base::JSONReader in RFC mode must parse the body as a JSON object), caps concurrent in-flight requests at kMaxInFlight, posts only to the hardcoded kEndpoint (in a test instance only, ARDIA_TEST_TELEMETRY_ENDPOINT may name an http localhost URL instead) through Chromium's system URLLoaderFactory with CredentialsMode::kOmit, RedirectMode::kError and LOAD_DISABLE_CACHE, cancels in-flight posts on TearDown, and replies only with the filtered HTTP status code; scripts/windows/webui-pilot/bridge.ps1 runs the shared hostile corpus in both argument positions plus malformed, non-object and oversized bodies and bad keys, requires the native ERR_TELEMETRY_REFUSED code for each (a synchronous throw, transport error or timeout fails), checks at the sink that ArdiaShell.testTelemetrySink's requestsStarted (counted where the request is handed to the network) stays 0, and sends a valid control that must reach a loopback listener with the same body and key; scripts/windows/engine/tests/webui_policy_test.cc unit-tests the shared telemetry policy",

@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/functional/callback.h"
@@ -10,6 +11,8 @@
 namespace ardia::linux_telemetry {
 
 using PostReply = base::OnceCallback<void(int status)>;
+
+bool RequestIdAcceptable(std::string_view request_id);
 
 class TelemetryPost;
 
@@ -20,13 +23,18 @@ class TelemetryClient {
   TelemetryClient& operator=(const TelemetryClient&) = delete;
   ~TelemetryClient();
 
-  void Post(std::string body, const std::string& ingest_key, PostReply reply);
+  void Post(std::string body, const std::string& ingest_key,
+            std::string request_id, PostReply reply);
+  void Cancel(const std::string& request_id);
 
  private:
   friend class TelemetryPost;
-  void Finish(TelemetryPost* post, int status);
+  using Posts = std::vector<std::unique_ptr<TelemetryPost>>;
 
-  std::vector<std::unique_ptr<TelemetryPost>> posts_;
+  void Finish(TelemetryPost* post, int status);
+  Posts::iterator Held(const std::string& request_id);
+
+  Posts posts_;
 };
 
 }

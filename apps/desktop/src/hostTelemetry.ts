@@ -1,4 +1,3 @@
-import { APP_INGEST_KEY } from "@ardia/core";
 import { installErrorReporting, resetAnonymousId, startTelemetry } from "../../browser/src/state/telemetry/index.ts";
 import { captureException } from "../../browser/src/state/telemetry/errors";
 import { capture, consentNow, devState, endSession, flush, loadChoice, queueLog, saveQueueNow } from "../../browser/src/state/telemetry/client";
@@ -18,27 +17,19 @@ import { withDeadline } from "../../browser/src/lib/deadline";
 import { PLATFORM_IDS, PLATFORM_TERMS } from "../../browser/src/lib/platformTerms";
 import { refreshDocument } from "./shims/shellBase";
 import { hostSupports, invokeHost, type ArdiaHost } from "./host.ts";
+import { hostTelemetrySend, TELEMETRY_POST } from "./hostTelemetrySend.ts";
 import { startTelemetryLeadership, TELEMETRY_CHANNEL, type LeaderChannel, type LeaderLocks, type TelemetryLeadership, type TelemetryOp } from "./telemetryLeader.ts";
 import { TELEMETRY_DOCUMENTS, TELEMETRY_STATE_DOC as STATE_DOC } from "./telemetryDocuments.ts";
 import { createEndLedger, setTelemetrySettle } from "./telemetrySettle.ts";
 import { parseChoiceChange, shownAfter } from "./telemetryChoice.ts";
 import { applyChoiceDurably, followerChoiceSaved } from "./telemetryChoiceApply.ts";
 
-const TELEMETRY_POST = "ArdiaTelemetry.post";
 const TELEMETRY_STEP = "telemetry";
 const END_TIMEOUT_MS = 2_000;
 const RESET_TIMEOUT_MS = 10_000;
 const WINDOW_USAGE_MS = 60 * 60 * 1000;
 
 const report = (error: unknown) => console.warn("[ardia linux] telemetry", error);
-
-function hostTelemetrySend(host: ArdiaHost) {
-  return async (body: string) => {
-    const reply = await invokeHost<{ status?: unknown } | null>(TELEMETRY_POST, { args: [body, APP_INGEST_KEY] }, host);
-    const status = reply?.status;
-    return typeof status === "number" && Number.isSafeInteger(status) ? status : 0;
-  };
-}
 
 async function continuesSession(host: ArdiaHost): Promise<boolean> {
   if (!hostSupports("ArdiaShell.launchSteps", host) || !hostSupports("ArdiaShell.completeLaunchStep", host)) return false;
@@ -128,7 +119,7 @@ const relayedConsent = (consent: unknown) => (typeof consent === "string" && con
 export function startHostTelemetry(options: { host: ArdiaHost; candidate: boolean; locks?: LeaderLocks; channel?: LeaderChannel | null }) {
   const { host, candidate } = options;
   setTelemetrySettle({ settle: settleHostTelemetry, reopen: reopenHostTelemetry });
-  setTelemetryHost({ os: PLATFORM_TERMS.os, osType: PLATFORM_IDS.otel, send: hostSupports(TELEMETRY_POST, host) ? hostTelemetrySend(host) : null });
+  setTelemetryHost({ os: PLATFORM_TERMS.os, osType: PLATFORM_IDS.otel, send: hostSupports(TELEMETRY_POST, host) ? hostTelemetrySend(host, report) : null });
   loadChoice();
   installErrorReporting();
   watchUncaughtErrors(globalThis);

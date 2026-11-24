@@ -3459,7 +3459,7 @@ base::DictValue ShellHostView::Bootstrap() const {
       .Append("ArdiaShell.windowIdentity").Append("ArdiaShell.beginDialog")
       .Append("ArdiaShell.cancelDialog").Append("ArdiaShell.beginWindowCloseDrain")
       .Append("ArdiaSearch.suggest").Append("ArdiaSearch.cancelSuggest")
-      .Append("ArdiaTelemetry.post")
+      .Append("ArdiaTelemetry.post").Append("ArdiaTelemetry.cancelPost")
       .Append("ArdiaShell.fetchKillSwitches")
       .Append("ArdiaLocation.locationPermission")
       .Append("ArdiaLocation.requestLocationPermission")
@@ -7285,15 +7285,27 @@ void ShellHostView::Invoke(
     return std::move(done).Run(true, base::Value(ardia::LinuxSystemSignals::Get().Post(values[0].GetString())));
   }
   if (method == "ArdiaTelemetry.post") {
-    if (values.size() != 2 || !values[0].is_string() || !values[1].is_string() ||
+    const bool identified = values.size() == 3;
+    if ((values.size() != 2 && !identified) || !values[0].is_string() || !values[1].is_string() ||
+        (identified && (!values[2].is_string() ||
+                        !ardia::linux_telemetry::RequestIdAcceptable(values[2].GetString()))) ||
         !ardia::desktop_telemetry_policy::PostAcceptable(values[0].GetString(), values[1].GetString()))
       return std::move(done).Run(false, base::Value(base::DictValue()
           .Set("code", "ERR_TELEMETRY_REFUSED").Set("message", "Telemetry request refused")));
-    return telemetry_->Post(values[0].GetString(), values[1].GetString(), base::BindOnce(
+    return telemetry_->Post(values[0].GetString(), values[1].GetString(),
+        identified ? values[2].GetString() : std::string(), base::BindOnce(
         [](base::OnceCallback<void(bool, base::Value)> done, int status) {
           std::move(done).Run(true, base::Value(base::DictValue().Set("status", status)));
         },
         std::move(done)));
+  }
+  if (method == "ArdiaTelemetry.cancelPost") {
+    if (values.size() != 1 || !values[0].is_string() ||
+        !ardia::linux_telemetry::RequestIdAcceptable(values[0].GetString()))
+      return std::move(done).Run(false, base::Value(base::DictValue()
+          .Set("code", "ERR_TELEMETRY_REFUSED").Set("message", "Telemetry request refused")));
+    telemetry_->Cancel(values[0].GetString());
+    return std::move(done).Run(true, base::Value());
   }
   if (method == "ArdiaSearch.cancelSuggest") {
     if (values.size() != 1 || !values[0].is_string())

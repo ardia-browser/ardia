@@ -51,6 +51,7 @@ on:
       - "scripts/linux/**"
       - "scripts/lib/**"
       - "scripts/agent/locked"
+      - "scripts/security/hostile-inputs.mjs"
       - "scripts/release/official-plugins.py"
       - ".claude/skills/release/scripts/publish.sh"
       - "docs/linux-port.md"

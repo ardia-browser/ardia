@@ -24,7 +24,7 @@ import { useWindowInFront } from "../../state/windows/inFront";
 import { over } from "../../lib/color";
 import { anchoredClose, anchoredOpen, Divider, Expand, ink, liquidGlass, reduceMotion, Text, useTheme, VaultTouchID } from "../ui";
 import { NetworkBadge } from "../site/Autofill";
-import { MenuSurface, placement, SelectionPlate, useLeavingMenu, useWholeList } from "../vaults/VaultMenu";
+import { MenuSurface, placement, SelectionPlate, useKeptWhile, useLeavingMenu, useWholeList } from "../vaults/VaultMenu";
 import { Lines, PlateTouch, RowShell, Trailing, type Ink, type RowLayer, type VaultTouchState } from "../vaults/VaultRows";
 import { VAULT_MENU } from "../vaults/tokens";
 import { addressSymbol } from "./AutofillParts";
@@ -132,7 +132,7 @@ function MenuPanel({ tabId, menu, area, onGone }: { tabId: string; menu: Autofil
   const leaving = !!onGone;
   const rows = useRows(menu);
   const theme = useTheme();
-  const websiteColor = useTabLive(tabId, (l) => l.themeColor);
+  const websiteColor = useKeptWhile(useTabLive(tabId, (l) => l.themeColor), !leaving);
   const extendWebsiteColor = useSettings((s) => s.extendWebsiteColor);
   const glass = useVaultMenuGlass() && liquidGlass;
   const surface = glass ? (theme.dark ? VAULT_MENU.glassSurface.dark : VAULT_MENU.glassSurface.light) : over(theme.popoverFill, theme.dark ? ink.black : ink.white);
@@ -189,9 +189,10 @@ function MenuPanel({ tabId, menu, area, onGone }: { tabId: string; menu: Autofil
   const touchIDReady = useVaultTouchID();
   const windowId = useTab(tabId, (t) => t?.windowId);
   const inFront = useWindowInFront(windowId);
-  const shownSelected = inFront ? menu.selected : -1;
+  const shownSelected = useKeptWhile(inFront ? menu.selected : -1, !leaving);
   const selectedRow = rows[shownSelected];
-  const touchTarget = leaving || !touchIDReady || menu.hidden || !touchIDGlyphShown(menu.touch) || !isTouchCardRow(selectedRow) ? -1 : shownSelected;
+  const touchShown = useKeptWhile(!touchIDReady || menu.hidden || !touchIDGlyphShown(menu.touch) || !isTouchCardRow(selectedRow) ? -1 : shownSelected, !leaving);
+  const touchTarget = leaving ? -1 : touchShown;
   const touchArmed = touchTarget >= 0 && !menu.busy;
   useEffect(() => {
     armAutofillTouchID(tabId, touchArmed ? menu.seq : null);
@@ -254,16 +255,18 @@ function MenuPanel({ tabId, menu, area, onGone }: { tabId: string; menu: Autofil
             offsets={offsets}
             fill={highlight.fill}
             accessory={
-              touchTarget >= 0 && touchTarget < list.length ? (
+              touchShown >= 0 && touchShown < list.length ? (
                 <>
                   <PlateTouch touch={touch} highlight={highlight} />
-                  <VaultTouchID
-                    key={menu.touchRearms}
-                    armed={touchArmed}
-                    grantScope={touchScopeOfAutofill(tabId, selectedRow)}
-                    onStatus={(status) => noteAutofillTouchStatus(tabId, menu.seq, status)}
-                    style={TOUCH_ID_OVER}
-                  />
+                  {touchTarget >= 0 ? (
+                    <VaultTouchID
+                      key={menu.touchRearms}
+                      armed={touchArmed}
+                      grantScope={touchScopeOfAutofill(tabId, selectedRow)}
+                      onStatus={(status) => noteAutofillTouchStatus(tabId, menu.seq, status)}
+                      style={TOUCH_ID_OVER}
+                    />
+                  ) : null}
                 </>
               ) : null
             }

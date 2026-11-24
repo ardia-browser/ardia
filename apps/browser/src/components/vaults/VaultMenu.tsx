@@ -65,6 +65,12 @@ export function placement(menu: Pick<MenuState, "rect">, zoom: number, area: Are
   return { offscreen, width, left, upward, room, anchor };
 }
 
+export function useKeptWhile<T>(value: T, live: boolean): T {
+  const kept = useRef(value);
+  if (live) kept.current = value;
+  return kept.current;
+}
+
 export function useWholeList() {
   const [whole, setWhole] = useState(false);
   useEffect(() => {
@@ -117,8 +123,9 @@ function MenuPanel({ tabId, menu, zoom, area, onGone }: { tabId: string; menu: M
   const concealed = menu.hidden || (!!menu.typed && menu.mode === "matches" && rows.length === 0);
   const theme = useTheme();
   const fieldColor = useVaultMenus((s) => s.fields[tabId]?.brandColor ?? null);
+  const fieldFocused = useVaultMenus((s) => !!s.fields[tabId]?.focused);
   const pageColor = useTabLive(tabId, (l) => l.themeColor);
-  const websiteColor = fieldColor ?? pageColor;
+  const websiteColor = useKeptWhile(fieldColor ?? pageColor, !leaving && fieldFocused);
   const extendWebsiteColor = useSettings((s) => s.extendWebsiteColor);
   const glass = useVaultMenuGlass() && liquidGlass;
   const surface = glass ? (theme.dark ? VAULT_MENU.glassSurface.dark : VAULT_MENU.glassSurface.light) : over(theme.popoverFill, theme.dark ? ink.black : ink.white);
@@ -169,9 +176,10 @@ function MenuPanel({ tabId, menu, zoom, area, onGone }: { tabId: string; menu: M
   const touchIDReady = useVaultTouchID();
   const windowId = useTab(tabId, (t) => t?.windowId);
   const inFront = useWindowInFront(windowId);
-  const shownSelected = inFront ? menu.selected : -1;
+  const shownSelected = useKeptWhile(inFront ? menu.selected : -1, !leaving);
   const selectedRow = list[shownSelected];
-  const touchTarget = leaving || !touchIDReady || concealed || !touchIDGlyphShown(menu.touch) || !isTouchRow(selectedRow) ? -1 : shownSelected;
+  const touchShown = useKeptWhile(!touchIDReady || concealed || !touchIDGlyphShown(menu.touch) || !isTouchRow(selectedRow) ? -1 : shownSelected, !leaving);
+  const touchTarget = leaving ? -1 : touchShown;
   useEffect(() => {
     if (!leaving && inFront && !menu.hovered && menu.mode === "matches") selectVaultRow(tabId, restingRowOf(menu));
   }, [inFront]);
@@ -253,10 +261,10 @@ function MenuPanel({ tabId, menu, zoom, area, onGone }: { tabId: string; menu: M
                 offsets={offsets}
                 fill={highlight.fill}
                 accessory={
-                  touchTarget >= 0 && touchTarget < list.length ? (
+                  touchShown >= 0 && touchShown < list.length ? (
                     <>
                       <PlateTouch touch={touch} highlight={highlight} />
-                      <VaultTouchID key={menu.touchRearms} armed={touchArmed} grantScope={touchScopeOf(tabId, menu)} onStatus={(status) => noteVaultTouchStatus(tabId, menu.seq, status)} style={TOUCH_ID_OVER} />
+                      {touchTarget >= 0 ? <VaultTouchID key={menu.touchRearms} armed={touchArmed} grantScope={touchScopeOf(tabId, menu)} onStatus={(status) => noteVaultTouchStatus(tabId, menu.seq, status)} style={TOUCH_ID_OVER} /> : null}
                     </>
                   ) : null
                 }

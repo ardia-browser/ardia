@@ -1958,13 +1958,24 @@
       if (el && info) vaultReport(el, info, false);
     };
     const vaultStillFocused = (el) => !!el && vaultIsConnected(el) && !!apply(vaultClosest, el, [":focus"]);
-    const vaultFocus = (el, retried) => {
+    const VAULT_SETTLE_WAITS = [0, 100, 200, 300, 500, 800, 1100];
+    let vaultSettling = null;
+    const vaultSettleLater = (el, attempt) => {
+      if (attempt >= VAULT_SETTLE_WAITS.length) return;
+      vaultSettling = el;
+      const retry = () => vaultSettling === el && vaultStillFocused(el) && !vaultFocused && vaultFocus(el, attempt + 1);
+      const wait = VAULT_SETTLE_WAITS[attempt];
+      if (wait) vaultLater(retry, wait);
+      else apply(vaultNextFrame, window, [vaultGuard(retry)]);
+    };
+    const vaultFocus = (el, attempt = 0) => {
+      if (!attempt) vaultSettling = null;
       const info = vaultIsInput(el) ? vaultKindOf(el) : null;
       if (!info) {
-        if (!retried && vaultIsInput(el) && vaultInputReadOnly(el))
-          apply(vaultNextFrame, window, [vaultGuard(() => vaultStillFocused(el) && !vaultFocused && vaultFocus(el, true))]);
+        if (vaultIsInput(el) && !vaultUsable(el)) vaultSettleLater(el, attempt);
         return;
       }
+      vaultSettling = null;
       if (!vaultLoginPageSent) vaultLookForLogin();
       vaultLastField = el;
       vaultLastInfo = info;

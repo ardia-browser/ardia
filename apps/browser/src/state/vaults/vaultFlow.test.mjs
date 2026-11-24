@@ -166,6 +166,65 @@ test("a page that keeps refocusing its field neither flickers the menu nor bring
   }
 });
 
+test("a focus that couldn't be offered yet is offered when its next report can be, even a refocus by the page", async () => {
+  const { tabId } = await setup();
+  const stop = menu.startVaultMenus();
+  try {
+    menu.noteVaultField(tabId, field({ auto: true, rect: null }));
+    await settle();
+    assert.equal(menu.vaultMenuOf(tabId), null, "no rect while the page animates in");
+    menu.noteVaultField(tabId, field({ auto: true }));
+    await settle();
+    assert.equal(menu.vaultMenuOf(tabId)?.field, "password", "the same focus with a rect opens it");
+    menu.closeVaultMenu(tabId);
+    menu.noteVaultField(tabId, field({ auto: true }));
+    await settle();
+    assert.equal(menu.vaultMenuOf(tabId), null, "once shown for this focus, its reports don't reopen it");
+
+    menu.noteVaultField(tabId, field({ kind: "username", auto: true, rect: null }));
+    menu.noteVaultField(tabId, field({ kind: "username", focused: false, rect: null }));
+    menu.noteVaultField(tabId, field({ kind: "username", auto: true }));
+    await settle();
+    assert.equal(menu.vaultMenuOf(tabId)?.field, "username", "a script refocus of a focus that was never offered offers it");
+  } finally {
+    stop();
+    menu.closeVaultMenu(tabId);
+  }
+});
+
+test("a focused field whose logins arrive late opens the menu when they land, without a new focus", async () => {
+  const { tabId } = await setup();
+  const stop = menu.startVaultMenus();
+  try {
+    native.vaultFakes.items = [];
+    store.clearVaultIndex();
+    await store.loadAllVaultItems(true);
+    await store.loadSiteItems("https://github.com");
+    menu.noteVaultField(tabId, field({ auto: true }));
+    await settle();
+    await settle();
+    assert.equal(menu.vaultMenuOf(tabId), null, "nothing to offer yet");
+    menu.noteVaultField(tabId, field({ auto: true, rect: { x: 10, y: 101, width: 240, height: 28 } }));
+    await settle();
+    assert.equal(menu.vaultMenuOf(tabId), null, "a rect update for the same focus doesn't ask again");
+    native.vaultFakes.items = [login];
+    await store.loadAllVaultItems(true);
+    await store.loadSiteItems("https://github.com");
+    await settle();
+    assert.equal(menu.vaultMenuOf(tabId)?.field, "password");
+    menu.closeVaultMenu(tabId);
+    await store.loadSiteItems("https://github.com");
+    native.vaultFakes.items = [login, second];
+    await store.loadAllVaultItems(true);
+    await store.loadSiteItems("https://github.com");
+    await settle();
+    assert.equal(menu.vaultMenuOf(tabId), null, "a menu already shown for this focus isn't brought back by new logins");
+  } finally {
+    stop();
+    menu.closeVaultMenu(tabId);
+  }
+});
+
 test("a field focused in a background tab waits until that tab is shown", async () => {
   const { w, tabId } = await setup();
   const stop = menu.startVaultMenus();

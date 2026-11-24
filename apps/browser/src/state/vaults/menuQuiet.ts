@@ -1,3 +1,4 @@
+import type { ConsentToken } from "../telemetry/choice";
 import type { VaultField, VaultFieldKind } from "../../platform/vaults";
 
 type FrameId = VaultField["frameId"];
@@ -5,6 +6,8 @@ type Quiet = { frameId: FrameId; kind: VaultFieldKind; until: number | null };
 
 const quiet = new Map<string, Quiet>();
 const declined = new Map<string, number>();
+const offered = new Map<string, { at: number; consent: ConsentToken | null }>();
+const shown = new Map<string, number>();
 
 export const AFTER_FILL_QUIET_MS = 1500;
 
@@ -29,6 +32,14 @@ export const declinedAt = (tabId: string, at: number) => declined.get(tabId) ===
 export function hearFieldAgain(tabId: string) {
   quiet.delete(tabId);
   declined.delete(tabId);
+  offered.delete(tabId);
+  shown.delete(tabId);
 }
 
-export const quietTabIds = () => [...quiet.keys(), ...declined.keys()];
+export const noteFieldOffered = (tabId: string, at: number, consent: ConsentToken | null) => void offered.set(tabId, { at, consent });
+export const noteFieldShown = (tabId: string, at: number) => void shown.set(tabId, at);
+export const offeredField = (tabId: string, at: number) => offered.get(tabId)?.at === at || shown.get(tabId) === at;
+export const unansweredField = (tabId: string, at: number) => offered.get(tabId)?.at === at && shown.get(tabId) !== at;
+export const offerConsentOf = (tabId: string) => offered.get(tabId)?.consent ?? null;
+
+export const quietTabIds = () => [...quiet.keys(), ...declined.keys(), ...offered.keys(), ...shown.keys()];

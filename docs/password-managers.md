@@ -785,8 +785,13 @@ when the CLI reports locked or signed out.
   shown tab only: a background tab offers it when it is shown, if the field is still focused. A field already focused
   when the page script installs or when the document is ready is reported then, while the page has focus; without
   focus, Chrome's own focus event on the field follows when the page gets it. The page focusing the same field again
-  after a blur counts as the same focus: a quick refocus keeps the open menu, a later one doesn't reopen it, and after
-  Escape or a dismissal it stays closed until a click. Opening on such a field is counted as
+  after a blur counts as the same focus: once the menu was shown or asked for on that focus, a quick refocus keeps the
+  open menu, a later one doesn't reopen it, and after Escape or a dismissal it stays closed until a click. A focus that
+  couldn't be offered yet (no rect, no manager ready) is offered on its next report, and a focus offered with nothing
+  to show opens the menu when the site's logins land (`offerToUnansweredFields`), never after it was shown. A field
+  focused while the page hides it (fading or sliding in, under a loading cover, readonly until focus) is checked again
+  on the next frame and then for about three seconds (`VAULT_SETTLE_WAITS`) while it keeps the focus, and reported
+  once it shows: login.microsoftonline.com focuses its email field mid-animation. Opening on such a field is counted as
   `vault_menu_opens_on_autofocus`. Ardia's address and card menu opens on a click for every field, as Chrome's does,
   so it treats both focuses alike.
 - **Auto-submit only after Touch ID.** Native honours `submit` only when that fill used a fresh Touch ID grant.

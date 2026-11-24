@@ -701,6 +701,67 @@ test("a readonly field that the page unlocks on focus is picked up a frame later
   assert.equal(page.of("vaultField").at(-1)?.kind, "username");
 });
 
+test("a field focused while its page is still fading in is reported once it shows, with no second focus event", () => {
+  const page = makePage();
+  const { user, form } = loginForm(page);
+  form.style.opacity = "0";
+  page.fire(user, "focusin");
+  assert.deepEqual(page.of("vaultField"), []);
+  page.runFrames();
+  page.advance(100);
+  assert.deepEqual(page.of("vaultField"), [], "still invisible");
+  form.style.opacity = "1";
+  page.advance(200);
+  const reports = page.of("vaultField");
+  assert.equal(reports.length, 1);
+  assert.equal(reports[0].kind, "username");
+  assert.equal(reports[0].focused, true);
+  assert.equal(reports[0].auto, true);
+  page.advance(5000);
+  page.runFrames();
+  assert.equal(page.of("vaultField").length, 1, "and once only");
+});
+
+test("a field focused under a loading cover is reported when the cover goes, but not after it lost focus or the wait ran out", () => {
+  const page = makePage();
+  const { user } = loginForm(page);
+  const cover = page.el("div", {});
+  page.body.append(cover);
+  page.hits.at = () => cover;
+  page.fire(user, "focusin");
+  page.runFrames();
+  page.advance(250);
+  assert.deepEqual(page.of("vaultField"), []);
+  page.hits.at = null;
+  page.advance(300);
+  assert.equal(page.of("vaultField").at(-1)?.focused, true);
+
+  const left = makePage();
+  const gone = loginForm(left);
+  const leftCover = left.el("div", {});
+  left.body.append(leftCover);
+  left.hits.at = () => leftCover;
+  left.fire(gone.user, "focusin");
+  left.runFrames();
+  left.fire(gone.user, "focusout");
+  left.hits.at = null;
+  left.advance(4000);
+  assert.deepEqual(left.of("vaultField"), [], "a field the focus left is never reported");
+
+  const late = makePage();
+  const slow = loginForm(late);
+  const lateCover = late.el("div", {});
+  late.body.append(lateCover);
+  late.hits.at = () => lateCover;
+  late.fire(slow.user, "focusin");
+  late.runFrames();
+  late.advance(4000);
+  late.hits.at = null;
+  late.advance(4000);
+  late.runFrames();
+  assert.deepEqual(late.of("vaultField"), [], "the page has about three seconds to show the field");
+});
+
 test("while the menu is open the field's rect follows the page, and a removed field reports a blur", () => {
   const page = makePage();
   const { user } = loginForm(page);

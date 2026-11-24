@@ -20,7 +20,7 @@ import { ardiaFillsInTab } from "./ardiaSources";
 import { usePasskeys } from "./passkeyStore";
 import { noteVaultMenuOpenOnAutofocus } from "../telemetry/vaultCounts";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
-import { declinedAt, declineField, hearFieldAgain, isQuiet, quietTabIds } from "./menuQuiet";
+import { declinedAt, declineField, hearFieldAgain, isQuiet, noteFieldOffered, noteFieldShown, offerConsentOf, offeredField, quietTabIds, unansweredField } from "./menuQuiet";
 
 export { AFTER_FILL_QUIET_MS, quietVaultField } from "./menuQuiet";
 
@@ -171,6 +171,7 @@ function openMenu(tabId: string, field: FieldSeen, onDemand: boolean) {
   if (old && old.frameId !== field.frameId) tellPage(tabId, old.frameId, false);
   const menu: VaultMenu = { ...blankMenu(field, onDemand, passwordProfileOfTab(tabId), tabId), seq: ++seq };
   const opened = withSelection({ ...menu, selected: restingRowOf(menu) }, true);
+  noteFieldShown(tabId, field.at);
   setMenu(tabId, opened);
   tellPageOfMenu(tabId, opened);
   refreshVaultBiometrics();
@@ -201,6 +202,7 @@ const loadItemsFor = (tabId: string, field: FieldSeen) =>
   loadMenuItems(field.origin, field.kind === "username" ? { email: !!field.email, profile: passwordProfileOfTab(tabId) } : null);
 
 async function offerOnFocus(tabId: string, field: FieldSeen, consent: ConsentToken | null) {
+  noteFieldOffered(tabId, field.at, consent);
   const settled = offerNow(tabId, field, consent);
   const loading = loadItemsFor(tabId, field);
   if (settled) return void loading;
@@ -230,7 +232,7 @@ export function noteVaultField(tabId: string, event: VaultField) {
   const previous = lastVaultField(tabId);
   const sameKind = !!previous && previous.frameId === event.frameId && previous.kind === event.kind;
   const sameField = sameKind && previous.focused, refocused = sameKind && !previous.focused && event.focused && !event.clicked && !!event.auto;
-  const seen: FieldSeen = { ...event, at: (sameField || refocused) && event.focused ? previous.at : ++focusSeq };
+  const seen: FieldSeen = { ...event, at: sameField || refocused ? previous.at : ++focusSeq };
   useVaultMenus.setState((s) => ({ fields: { ...s.fields, [tabId]: seen } }));
   if (!menuOn) return;
   const menu = vaultMenuOf(tabId);
@@ -245,7 +247,7 @@ export function noteVaultField(tabId: string, event: VaultField) {
   }
   if (menu) closeVaultMenu(tabId);
   if (event.clicked) return void openOnDemand(tabId, seen);
-  if (sameField || refocused || isQuiet(tabId, event)) return;
+  if (((sameField || refocused) && offeredField(tabId, seen.at)) || isQuiet(tabId, event)) return;
   if (!event.main || !canOffer(tabId, seen) || !suggestOnFocus()) return;
   void offerOnFocus(tabId, seen, consentToken());
 }
@@ -363,12 +365,11 @@ export function offerToFocusedField(tabId: string) {
 
 const unlockedCount = (s: VaultsNow) => s.providers.filter((p) => p.state === "unlocked").length;
 
-function offerToFocusedFields() {
-  for (const tabId of Object.keys(useVaultMenus.getState().fields)) offerToFocusedField(tabId);
-}
+const offerToUnansweredFields = () => Object.entries(useVaultMenus.getState().fields).forEach(([tabId, f]) => f && unansweredField(tabId, f.at) && offerNow(tabId, f, offerConsentOf(tabId)));
 
 const restOpenMenus = () => {
   for (const tabId of Object.keys(menus())) restVaultMenu(tabId);
+  offerToUnansweredFields();
 };
 
 export function startVaultMenus() {
@@ -385,7 +386,7 @@ export function startVaultMenus() {
   });
   const readyManagers = (s: VaultsNow) => s.providers.filter((p) => p.state === "locked" || isVaultListed(s, p.id)).length;
   const stopVaults = useVaults.subscribe((s, prev) => {
-    if (readyManagers(s) > readyManagers(prev) || unlockedCount(s) > unlockedCount(prev)) offerToFocusedFields();
+    if (readyManagers(s) > readyManagers(prev) || unlockedCount(s) > unlockedCount(prev)) Object.keys(useVaultMenus.getState().fields).forEach(offerToFocusedField);
     if (s.providers !== prev.providers || s.sites !== prev.sites || s.searches !== prev.searches || s.listed !== prev.listed || s.pending !== prev.pending || s.revision !== prev.revision) restOpenMenus();
   });
   const stopPasskeys = usePasskeys.subscribe((s, prev) => s.offers !== prev.offers && restOpenMenus());

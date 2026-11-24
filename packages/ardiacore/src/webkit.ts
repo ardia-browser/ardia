@@ -108,6 +108,7 @@ export type WebKitCount =
   | "fullscreenKeptShown"
   | "fullscreenMovedWithTab"
   | "fullscreenPageReclaimed"
+  | "autoPictureInPictureFullscreenHold"
   | "historyRestored"
   | "linkDrop"
   | "nativeFind"

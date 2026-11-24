@@ -50,6 +50,7 @@ export type WebKitCount =
   | "pageMuteFallback"
   | "fullscreen"
   | "fullscreenFrameKept"
+  | "autoPictureInPictureFullscreenHold"
   | "discard"
   | "discardWake"
   | "backdropHidden"
@@ -113,6 +114,7 @@ export const WEBKIT_COUNTS = {
   pageMuteFallback: "webKitPageMuteFallbacks",
   fullscreen: "webKitFullscreens",
   fullscreenFrameKept: "webKitFullscreenFramesKept",
+  autoPictureInPictureFullscreenHold: "webKitAutoPictureInPictureFullscreenHolds",
   discard: "webKitDiscards",
   discardWake: "webKitDiscardWakes",
   backdropHidden: "webKitBackdropsHidden",

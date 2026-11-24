@@ -43,3 +43,15 @@ test("a WebKit page kept shown, carried along or put back around full screen is 
   assert.equal(counts.webkit_fullscreen_pages_reclaimed, 1);
   assert.equal(takeEngineSwitchCounts().webkit_fullscreen_pages_moved_with_tab, 0);
 });
+
+test("each automatic Picture in Picture a WebKit page in full screen held back is counted in the hourly engine counts", () => {
+  startWebKitCounts();
+  takeEngineSwitchCounts();
+  counted("autoPictureInPictureFullscreenHold");
+  counted("autoPictureInPictureFullscreenHold");
+  counted("fullscreen");
+  const counts = takeEngineSwitchCounts();
+  assert.equal(counts.webkit_auto_pip_fullscreen_holds, 2);
+  assert.equal(counts.webkit_fullscreens, 1);
+  assert.equal(takeEngineSwitchCounts().webkit_auto_pip_fullscreen_holds, 0);
+});

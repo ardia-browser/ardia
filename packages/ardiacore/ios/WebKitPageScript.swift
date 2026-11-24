@@ -378,6 +378,18 @@ enum WebKitPageScript {
       return !!m || pageActions.length > 0;
     },
     pictureInPicture(on, automatic) {
+      const shownFullScreen = () => {
+        for (let w = window; ; w = w.parent) {
+          let d;
+          try {
+            d = w.document;
+          } catch (e) {
+            return false;
+          }
+          if (d.fullscreenElement || d.webkitFullscreenElement) return true;
+          if (w === w.parent || w === w.top) return false;
+        }
+      };
       if (!on) {
         if (document.pictureInPictureElement) document.exitPictureInPicture();
         for (const v of document.querySelectorAll("video")) if (v.webkitPresentationMode === "picture-in-picture") v.webkitSetPresentationMode("inline");
@@ -387,6 +399,7 @@ enum WebKitPageScript {
       const largest = () => videos.sort((a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight)[0];
       const v = videos.find(playing) || (automatic ? null : largest());
       if (!v) return automatic ? "nothingPlaying" : false;
+      if (automatic && shownFullScreen()) return false;
       if (v.webkitSupportsPresentationMode && v.webkitSupportsPresentationMode("picture-in-picture")) v.webkitSetPresentationMode("picture-in-picture");
       else if (v.requestPictureInPicture) v.requestPictureInPicture();
       else return false;

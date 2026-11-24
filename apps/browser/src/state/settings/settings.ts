@@ -48,7 +48,6 @@ const oneOf = <const V extends readonly string[]>(values: V, d: V[number], synce
   default: d, values, valid: (v) => values.includes(v as string), synced, schema: { type: "string", enum: values },
 });
 const shaped = <T,>(d: T, valid: (v: unknown) => boolean, schema: JsonSchema, synced = false): SettingSpec<T> => ({ default: d, valid, synced, schema });
-
 export const SETTING_SPECS = {
   warnBeforeQuitting: flag(false, SYNCED),
   warnBeforeClosingWindow: flag(true, SYNCED),

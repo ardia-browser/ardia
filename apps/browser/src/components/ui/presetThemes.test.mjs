@@ -14,7 +14,11 @@ const look = (r, intensity = 0.5) => ({ stops: [{ x: 0.2, y: 0.7, color: { r, g:
 const EDIT_A = look(0.1);
 const EDIT_B = look(0.9, 0.8);
 
-const digest = (theme) => createHash("sha256").update(JSON.stringify(theme)).digest("hex");
+const digest = (theme) => {
+  const { backgroundBlurEnabled, ...backdrop } = theme.backdrop;
+  assert.equal(backgroundBlurEnabled, true);
+  return createHash("sha256").update(JSON.stringify({ ...theme, backdrop })).digest("hex");
+};
 const SAVED_CUSTOM = { stops: [{ x: 0.2, y: 0.7, color: { r: 0.9, g: 0.4, b: 0.8, a: 1 } }, { x: 0.8, y: 0.3, color: { r: 0.2, g: 0.7, b: 0.5, a: 1 } }], intensity: 0.8, mode: "auto", grain: 0.3, texture: "sand", translucency: 0.5, angle: 200 };
 const digests = () =>
   Object.fromEntries(

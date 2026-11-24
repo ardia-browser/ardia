@@ -143,6 +143,19 @@ test("the header's empty room beside the hamburger drags the window: the profile
   assert.match(rule(".ardia-profile-controls > .ardia-header-button"), /pointer-events: auto;/);
 });
 
+test("only Settings keeps its 700 px minimum: the Import window, opened at a fixed 640 px, fits its content and its window buttons", async () => {
+  const { readFileSync } = await import("node:fs");
+  const css = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+  const rules = [...css.matchAll(/(?:^|\n)([^{}\n@][^{}]*)\{([^}]*)\}/g)].map((match) => ({ selector: match[1].trim(), body: match[2] }));
+  const settingsOnly = (declaration) => {
+    const matching = rules.filter((rule) => rule.selector.includes(".utility") && rule.body.includes(declaration));
+    assert.ok(matching.length > 0, `a utility window rule sets ${declaration}`);
+    for (const { selector } of matching) assert.match(selector, /\[data-ardia-linux-window="settings"\]/, `${selector} also reaches the Import window`);
+  };
+  settingsOnly("min-width: 700px;");
+  settingsOnly("overflow-x: auto;");
+});
+
 test("minimize and maximize reach the Linux host's window calls; caption regions are the shell's own drag regions", async () => {
   const calls = [];
   globalThis.window = { __ardiaHost: { bootstrap: { windowId: "main", profileId: "default" }, invoke: async (method, args) => void calls.push([method, args.args]), onEvent: () => () => {} } };

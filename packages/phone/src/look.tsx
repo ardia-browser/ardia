@@ -72,6 +72,9 @@ export type LookCounts = {
   backdropFrames?: number;
   sourceRecordings?: number;
   blurLayerRenders?: number;
+  stripRecords?: number;
+  stripRefreshes?: number;
+  strips?: number;
   retints?: number;
   restingLayerHolds?: number;
   restingLayered?: number;
@@ -132,6 +135,8 @@ export const ProfileBackdrop = look<ProfileBackdropProps>("ProfileBackdrop");
 export const FilmGrain = look<FilmGrainProps>("FilmGrain");
 
 export const FrostSource = look<FrostSourceProps>("FrostSource");
+
+export const GlassBackdrop = look<ViewProps>("GlassBackdrop");
 
 export const Frost = look<FrostProps>("Frost");
 

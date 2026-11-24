@@ -486,7 +486,10 @@ off in the lab`.
       median.
     - From sync14 the deck bar's frosts, which sit over nothing but the backdrop, are fills tinted from the
       backdrop's colours under them, with no blur layer: the bar's colour follows the blobs, but the blobs are
-      not seen through it. Logcat has, at each deck build and for each frost, `PAGELAB look frost … path=… (why);
+      not seen through it. Since #3949 that holds for frost variants and Android 12 only: a Glass on Android 13+
+      blurs and refracts the backdrop and reads `path=live`, with the DECK source recording, so on Android 13+ the deck's
+      chrome glass reads `path=live` where the steps below expect `path=tinted`, and the Memory line counts it as a
+      layer over a shared blur strip, not as tinted. Logcat has, at each deck build and for each frost, `PAGELAB look frost … path=… (why);
       source deck: …`, which says what the frost found in its source. For the bar it should read `path=tinted
       … source deck: only the deck backdrop shows: N view(s) under it hidden by it, M over it that draw
       nothing`. When it reads anything else, report the line: it names the view that kept the blur (sync14's
@@ -1325,7 +1328,9 @@ JavaScript re-renders can put a prop back, so apply a part on the settled deck a
 Android's glass is the native `Glass` (`GlassView.kt`), the default since 2026-11-23; the drawn `Frost` fallback in
 `look.tsx` stays only for a build without the native look module. Every glass surface goes through `ChromeSurface` or
 `LookGlass`: the page bar's circles and address capsule, the host pill, the deck's `···`, switcher and bottom bar, the
-start page's buttons, Reader's buttons, toasts and the Duo toolbar. Menus and confirmations stay Android's solid
+start page's buttons, Reader's buttons, toasts and the Duo toolbar; voice search's Done, Search and Browse for Me and
+its Cancel, which iPhone draws as the frost variant `glass` (SwiftUI's `glassEffect`), draw the native Glass too
+(`LookFrost` turns `variant="glass"` into `Glass`). Menus and confirmations stay Android's solid
 Material ("Decided by the owner (2026-11-19)"). The Compose `GlassCircleButton` (Settings pieces) keeps its solid
 look surface: it has no frost source to refract.
 
@@ -1333,21 +1338,70 @@ look surface: it has no frost source to refract.
   `surfaces` source that wraps the whole app, so until this change the native Glass logged
   `path=fallback (inside its own source)` and never blurred. `GlassSource` (`LookViews.tsx`) now names a source that
   holds what is under the glass and not the glass itself: the page bar and host pill sample `page` (the page stack),
-  the deck's chrome `deck` (its backdrop), the start page's buttons `start` (its spaces and mark). Anything else keeps
-  `surfaces`. A frost over a page in the solid page mode never asks its source to record, so the page under the bar
-  is never recorded without `ArdiaGlassOverPage` (it used to be asked once while the source had not drawn yet).
+  the deck's chrome `deck` (its backdrop), the start page's buttons `start` (its spaces and mark), Reader's buttons
+  `reader` (a source holding only Reader's background, beside its chrome: until #3949 they sat inside `surfaces` and
+  drew the fallback fill), voice search's buttons `voice`. Anything else keeps `surfaces`. A frost over a page in the
+  solid page mode never asks its source to record (it used to be asked once while the source had not drawn yet).
+  A native Glass left with no source, or inside the one it names, for a second is counted once in `glass_unsourced`.
   Known gap: the Duo layouts' toolbar and sidebar glass sit inside `surfaces` and so draw the solid fill and rim, never
   the lens.
+- **Over the deck's backdrop.** A Glass over the backdrop alone blurs and refracts it on Android 13+, as iPhone's glass
+  does, and the backdrop's scene frames redraw the live glasses over it. The tinted fill (a colour sampled from the
+  backdrop, no blur layer) stays for the frost variants, Android 12's glass, which has no lens to add, and a lens
+  the GPU refused (`LiquidGlassRules.samplesBackdrop`).
 - **The lens.** A port of liquid-dom's glass shader (MIT, Andras Prifer, https://github.com/AndrewPrifer/liquid-dom;
   `LiquidGlass.kt`, credited in NOTICE and the Licences page). Across a bezel (14 dp, at most 30 % of the shorter
   side) the surface rises on liquid-dom's convex squircle profile; its normal comes from the shape's distance field
   and that profile's slope (capped at 5.67, about 80°), and `refract()` bends a straight-down ray through it per
   colour channel (IOR 1.5, ± 0.04 dispersion for the colour fringe). The backdrop moves by the refracted ray's xy/z
   times the surface height (9 dp of glass plus the bezel's height), capped at the largest shift `maxShiftDp` finds,
-  about 8 dp. It is an AGSL `RuntimeShader` chained as a `RenderEffect` after the frost's blur and saturation on the
-  frost's downscaled layer, so it samples the blurred backdrop as liquid-dom does, and the layer's margin is at least
-  that shift. The effect is rebuilt only when the shape, size or margin changes. It runs wherever the glass is on the
-  frost's Live path: the start page's buttons and any glass over a live source.
+  about 8 dp. It is an AGSL `RuntimeShader` chained after the blur and saturation of the source's shared strip
+  (below), so it samples the blurred backdrop as liquid-dom does, and one pass refracts every glass of the strip: the
+  shader takes up to 12 shapes (box, corner radius, bezel and shift cap, in the strip's own downscaled pixels), finds
+  the one each pixel is in and bends the backdrop through that one. The slots go to the strip's glasses oldest first,
+  so the same twelve keep them however the frame's draws are ordered; a thirteenth draws a second, plain blur of the
+  strip (made only while one is waiting), never a neighbour's refraction, and takes the first slot that frees. The
+  shader is built once per strip; a new effect is made only when a glass moves, resizes or comes and goes.
+  It runs wherever the glass is on the frost's Live path: the page bar and host pill, the deck's chrome, the start
+  page's buttons, Reader's buttons, voice search's buttons and toasts.
+- **One blur and one lens per source** (`FrostStrip`). Each live frost used to blur and refract its own copy of the
+  source: atrace on the F4 counted 33 GPU render passes a frame on the page with the bar's four glasses (`OpsTask`
+  25,303 in 748 frames) against 2 with the solid bar, and 31 a frame on the idle deck with its five, where every blob
+  frame then took 25 ms (p50) instead of 13. Each glass's lens cost 4 passes, and the glass's 12 dp blur, 5.5 px at a
+  fifth of the size, was just over the sigma of 4 past which Skia's GPU blur downsamples first. Now the frosts of one
+  source with the same blur, saturation and scale share one strip: the union of their bounds plus each one's margin,
+  clamped to the source, drawn at the blur's scale with lens(blur) as its `RenderEffect` (the lens applies the
+  frost's saturation to what it returns; without a lens it is blur and a colour filter), recorded once a
+  frame by the first of them to draw. `FrostScale` picks the smallest scale that keeps the blur at 6 px or less in
+  the small layer (a sigma under 4) until it reaches an eighth, so the glass blurs at a sixth. The strip sits at its
+  own place in the source's scaled coordinates (its left and top on whole layer pixels), so a glass draws the strip
+  node translated to the source, with no layer or effect of its own, and no glass's backdrop moves when the strip
+  grows or shrinks. HWUI applies a layer's `RenderEffect` where the layer is drawn and reuses it only for the same
+  clip, so the strip is two nodes: one holds the source with the effect, and the compositing layer every glass draws
+  holds that one, filtered once a frame. The source never asks a live glass to draw: a glass's layer draws the strip
+  node and the strip draws the source's node, both by reference, so the source's own recording reaches them. Until
+  #3949's fourth round the source invalidated every glass from inside its draw, and `ViewRootImpl` schedules a new
+  traversal for an invalidation made while it draws, so each page frame was followed by a glass-only frame that
+  re-rendered the page's layer: 431 traversals in 5 s on an idle GIF page against 220 with the solid bar. Now only
+  its first recording, a size or page change, and glasses still waiting on it (not live, wanting it) wake glasses.
+  HWUI damages a node drawn by two parents fully on its second visit only when it was damaged that frame
+  (`mDamageGenerationId`), and `DamageAccumulator` never grows damage for an image filter, so a change inside a
+  small clipping parent under the glass would repaint only that rectangle of the blurred strip and leave the old
+  halo around it. Any invalidation under the source marks its strips instead, and the source's next pre-draw
+  re-records each strip's filtered node, which damages the whole strip once before the frame syncs
+  (`lookCounts().stripRefreshes`); a frame with no change under the source re-renders nothing. A strip is a few
+  scaled rows, so redrawing it whole for a change outside it costs less than tracking where blur and lens reach.
+  The page itself stays one functor target: a frozen copy of the page would need the WebView's
+  draw functor run a second time, which turned the page white in #3759. A glass redraws only when it moves
+  or changes, and its draw records the strip only when the strip's extent, lenses or slots change, comparing
+  extents clamped to the source, so a glass near the edge doesn't re-record it on every draw. Each strip knows the
+  glasses that draw it: one that leaves (detached, hidden, trimmed, or moved to another strip after a density change)
+  takes its lens with it at once (a glass still showing on that strip draws again to lay it out without it), and the last
+  one out drops the strip. A plain overflow layer is freed after the frame that retired it, whether or not a glass draws again. The memory line counts strips
+  from a snapshot the UI thread publishes (`lookCounts().strips`, `stripRecords`), and a source that stops recording
+  drops them. A source that goes away, or a new one under the same name, makes the glasses naming it draw again, and
+  a glass with no source still asks for one, so a replacement records on its first draw; registering a name also
+  asks the source itself to draw, so one named after its first draw records.
 - **The rim.** liquid-dom's white specular: two lights, from the top left and the opposite side, a 1.25 dp band fading
   inward, power 2, added at 50 % (35 % in dark). It is drawn at full resolution over the glass's clip, after the tint,
   as a second `RuntimeShader`, so it stays sharp, and it draws on every glass from Android 13, lens or not, except
@@ -1357,14 +1411,67 @@ look surface: it has no frost source to refract.
   can't be built the glass keeps the plain blur, if the rim can't it is skipped, and either is tried once per launch
   and logged once (`PAGELAB look glass … shader failed`). The rounded frost or fill always draws; LookView's square
   draw-safety fallback is no longer what a shader failure looks like.
-- **Over a page.** The page bar's glass keeps the solid page mode: it fills with the app's chrome fill (#FFFFFF, or
-  #1E1B1D in dark), tinted and rimmed, with nothing recorded. Recording the page live under the bar cost the F4 three
-  times the janky frames, and it was the recording, not the lens: ten swipes on a Wikipedia page, `dumpsys gfxinfo`,
-  before this change 3.05 and 3.16 % janky (p50 10 ms, p90 13 to 14, p99 25 to 26); the page recorded live with the
-  lens 9.0 and 10.2 % (p50 13 to 14, p90 24 to 25, p99 38 to 40); the same without the lens (`ArdiaFlatGlass`) 11.1 %;
-  the default now 2.96 % (10 / 14 / 27) on a warm run. The lab flag `ArdiaGlassOverPage` records the page live and
-  refracts it, for comparison. When it does, the page source draws through a compositing layer: without one the
-  bar's four glass layers each ran the WebView's draw again and the page went white.
+- **Over a page.** Since #3949 a Glass over a page records the page live on Android 13 and later and refracts it, with
+  no lab flag (`ArdiaGlassOverPage` is gone); a frost variant there (the search tray's thin frost) keeps the solid
+  page mode, Android 12's glass keeps it too, and a phone over the look budget draws the flat fill under every glass.
+  The page source draws through a compositing layer, which any glass over a WebView needs: without one each glass
+  ran the WebView's draw again and the page went white. What it costs on the F4 (Android 14, 120 Hz), ten swipes on
+  Wikipedia's Glass article with `dumpsys gfxinfo` after each fresh demo launch: the solid bar measured 4.0, 6.5,
+  8.9, 5.7 and 6.8 % janky (p50 9 to 10 ms, p90 14 to 20, p99 27 to 44); each glass with its own blur and lens (the
+  old lab flag) 7.2 and 6.8 % (p50 12 to 14, p90 21, p99 36 to 38) with 32 GPU passes a frame; the shipped strip
+  8.6 % (p50 14, p90 23, p99 48) with 10. Frame by frame the RenderThread issues 3.5 ms at the median against 2.8
+  with the solid bar (6.2 before the strip refreshed at 60 Hz) and the GPU takes 3.5 ms against 1.7: the page's
+  layer seemed to be what remained, but that was wrong: see "Where scrolling under the glass went". An idle page
+  with a GIF draws 220 frames in 5 s with the bar out, as the solid bar does (433 before the source stopped waking
+  live glasses from inside its draw). Wikipedia's Newton's cradle page is a poor idle test once scrolled: its pulsing
+  Save hint runs a CSS animation every frame, so main itself draws about 510 frames there with the bar folded. On a
+  page served for the test (one 50 fps GIF and text, `adb reverse` to a local server) main draws 250 frames in 5 s
+  with the bar out and 257 folded, and the glass 250 and 251: no doubling.
+- **Where scrolling under the glass went.** One lab build with launch switches for each part, 3 interleaved scroll
+  runs each on the F4 against main 14db917fd (3.0 % janky, p50 10 ms): the glass as it was, 6.8 % (p50 14, p90 21);
+  the page drawn into its full-screen layer with solid glass and no strip, 3.1 %, though its GPU took 2.2 ms a frame
+  against main's 0.5, so the page layer and the GPU weren't the cost; the live glass with the fold views' layers
+  dropped, 5.0 %; solid glass with them dropped, 4.5 %. The fold views (`floatingBarFold`, `hostPillFold`) hold
+  hardware layers (`renderToHardwareTextureAndroid`) so the fold scales a cached texture; with live glass inside them
+  both layers re-rendered all their contents every frame (about 18 rect fills, 16 texture draws, 18 circles and
+  rounded rects, text and paths a frame where main composites two textures), and without the layers the bar redraws
+  straight into every frame. The lens and rim cost nothing measurable (`ArdiaFlatGlass` drew the same), and the
+  strip's own layers are tiny (180 by 43). The F4 has no `gpu.renderstages` producer and its Adreno tracepoints
+  aren't readable on a user build, so the split comes from these ablations, HWUI's GPU-completion slices and
+  simpleperf (lab builds are profileable: `simpleperf record --app`).
+- **The bar's glass behind its fold layers.** Each fold (`floatingBarFold`, `hostPillFold`) holds its own
+  `GlassBackdropView` (`GlassBehind` in `LookViews.tsx`) as its first child, then a `FoldLayer` around its glyphs that
+  carries the hardware layer (`renderToHardwareTextureAndroid`) the fold view used to hold. The fold view keeps its
+  transform and alpha with `needsOffscreenAlphaCompositing`, so a fading fold composites its glass and glyphs as one
+  group, as its layer did; the backdrop clips to the fold's bounds, as the layer did; and the bar's fold still draws
+  under the pill's. A glass with a backdrop before its branch records nothing in its own view; the backdrop draws it,
+  in tree order, with its transform, size and ancestors' alpha up to the fold, and a glass's redraw or size change
+  invalidates the backdrop instead of the glass, so the glyph layers stay cached while the page scrolls. The backdrop
+  is a `ReactPointerEventsView` with pointer events NONE, so touches beside the folded pill reach the page, and
+  removing one hands its glasses back to drawing themselves. A hidden glass (shown false) used to see a new offset on
+  every pre-draw, since it returns before FrostView's draw and its fold sits scaled, and invalidated itself every
+  frame (3.6 % of the UI thread); a glass that isn't sampling now skips that check and never waits on its source.
+  Mid-fold frames on a blank page match round 5's in the live and Classic looks.
+- **Scrolling with the glass, measured (round 6).** Ten swipes on Wikipedia's Glass article, interleaved, each run
+  started with the F4's CPU cooling devices at level 3 or less (thermal status 0 alone let the big cores throttle
+  mid-series): main 2.68 % janky over 11 runs (p50 9 to 10 ms, p90 13 to 14), the glass 3.90 % over 6 (p50 12, p90
+  16 to 18), against 6.8 % before this round. Render passes while scrolling: 6.3 a frame against main's 2.1 (9.7
+  before). The idle GIF test page: 250 frames in 5 s with the bar out and 252 folded (main 250 and 257). What is
+  left is the page's full-screen layer, which the WebView needs to draw once a frame: in the same lab build, the
+  page layer with solid glass measured the same as the live glass, and taking out the blur, the live strip draws or
+  the lens moved nothing. Caching the bar's tints and rims in layers of their own was tried and dropped: 3.96 %
+  over 8 runs against 3.90 without. The deck's own pre-draw check (`DeckBackdropView.judgeTraversal`, walking the
+  view tree to keep its backdrop still while something else moves) runs on every frame while browsing, about 4 % of
+  the UI thread in main and the glass alike.
+- **The folded bar's glass.** Android folds the bar into the host pill by crossfading the two by opacity, so both
+  glasses show while the fold moves. Once the fold settles, the side it left hides its glass (`shown` false,
+  `foldGlassShown` in `useBarFold`), so it leaves the strip and draws nothing; it used to stay a live consumer at
+  opacity 0, with all four page glasses holding layers while folded. On the test page: one glass holds a layer
+  folded (four before), 7.7 GPU render passes a frame folded against 10.0, and 9.0 with the bar out.
+- **Over the deck, measured.** The idle deck on the F4 with its five glasses live: the look budget's own sample reads
+  20 % busy, median 11.6 ms of work a blob frame, against 24 % and 14.4 ms with the old tinted fill (limit 33 %).
+  The first strip build (each glass with its own lens, every glass redrawn on each blob frame) read 34 % and
+  would have turned the F4's look down.
 - **Left out of the port.** The smooth union between neighbouring shapes (each `Glass` is one shape), the refraction of
   content inside the glass, the reflection sample along the rim and liquid-dom's blurred displacement field. Corners
   stay circular, as the view's clip and outline are.
@@ -1372,8 +1479,11 @@ look surface: it has no frost source to refract.
   Reduce Transparency draw the solid Classic surface in the app's chrome fill; a phone over the look budget or with
   the look off draws the flat fill. `ArdiaFlatGlass` keeps the frost and drops the lens and rim.
   `app_launched.glass_render` reports the best of these the phone can draw at launch, not what each surface drew.
-- **Not seen yet.** The M3 (offline during this pass), Android 12 and 13 phones, TalkBack over the new sources, and
-  the Duo layouts.
+- **Not seen yet.** The M3 (offline during this pass), Android 12 and 13 phones, TalkBack over the new sources, the
+  Duo layouts, the lens during the bar's 0.26 s fold (the fold scales the bar while the strip's lens shapes stay at
+  the glasses' unscaled boxes), a deck grid with more than 12 glasses on one strip (the 13th draws the plain blur), a
+  toast over a page (it records the whole `surfaces` source while it shows), and the strip's pixels after a change
+  in a small clipping parent (proved by the recording, not by a capture).
 
 ## Liquid Glass on iPhone
 
@@ -1898,7 +2008,7 @@ Events (service `ardia-phone`, `$lib` `ardia-phone-telemetry`, tags `app: phone`
 | Event | Fields | When |
 | --- | --- | --- |
 | `sharing_turned_on` | `source` (settings, onboarding) | turning sharing on |
-| `app_launched` | `legacy_import` (imported, started_fresh, none), `legacy_import_failures` (failed tries before the app opened), `look_mode` (full, no_blur, no_motion, neither: the look this launch shows, after the look's budget and the system's Reduce Motion and Reduce Transparency), `interface_style` (match_mac, glass, classic) and `color_scheme` (match_mac, system, light, dark): the redesign's Appearance choices, and `material_colors` (wallpaper, profile, fallback, not_material): where Android's Material design took its colours, from the wallpaper, from a picked profile colour, or from Ardia's own palette on phones that give none; not_material on iPhone and in the original design, and `color_choice` (match_mac, preset, custom): the colour row's choice, and `glass_render` (lens, frost, solid, classic, native, none): the best glass this phone can draw this launch, not what each surface drew (an Android page bar stays solid even on a `lens` phone): the Liquid Glass lens and rim (Android 13+, any iPhone with Metal), plain frost (Android 12 or `ArdiaFlatGlass`) or without blur (below Android 12, over the look budget or with the look off), and otherwise Classic (Classic or Reduce Transparency), Apple's own glass (`native`, iPhone builds before #3950), or none in Material You | each launch with sharing on |
+| `app_launched` | `legacy_import` (imported, started_fresh, none), `legacy_import_failures` (failed tries before the app opened), `look_mode` (full, no_blur, no_motion, neither: the look this launch shows, after the look's budget and the system's Reduce Motion and Reduce Transparency), `interface_style` (match_mac, glass, classic) and `color_scheme` (match_mac, system, light, dark): the redesign's Appearance choices, and `material_colors` (wallpaper, profile, fallback, not_material): where Android's Material design took its colours, from the wallpaper, from a picked profile colour, or from Ardia's own palette on phones that give none; not_material on iPhone and in the original design, and `color_choice` (match_mac, preset, custom): the colour row's choice, and `glass_render` (lens, frost, solid, classic, native, none): the best glass this phone can draw this launch, not what each surface drew (a surface can still draw less: on Android 12, which reports `frost`, the page bar keeps the solid page mode, and `glass_unsourced` counts glass left with nothing to blur): the Liquid Glass lens and rim (Android 13+, any iPhone with Metal), plain frost (Android 12 or `ArdiaFlatGlass`) or without blur (below Android 12, over the look budget or with the look off), and otherwise Classic (Classic or Reduce Transparency), Apple's own glass (`native`, iPhone builds before #3950), or none in Material You | each launch with sharing on |
 | `perf_launch` | `launch_ms`, `js_ms` | each launch, once the module gives the process start (`ArdiaPhoneSystem.processStartedAt()`, epoch ms) |
 | `perf_backdrop` | `backdrop_ms` | each launch on iPhone, once the native launch backdrop has shown (`system.launchBackdropShownAt()`, epoch ms on the process start's clock) |
 | `perf_launch_tray` | `tray_ms` | each launch with Auto-Open Keyboard on, once the launch tray is up (process start on `ArdiaPhoneSystem.processStartedAt()`'s clock) |
@@ -1981,6 +2091,7 @@ Every count and timing the phone can send, for the owner to read as one set and 
 | `glass_captures_over_budget` | Liquid Glass on iPhone, every glass refracting (#3950) | Counted natively and drained with the pending counts: each time an iPhone glass's capture of what lies under it went over budget (its main-thread work, from the walk to the capture, took longer than one frame once, or more than 12 % of the main thread over two seconds), so that glass showed clear glass for 3 s, doubling up to 30 s while it kept tripping within a minute. A rising count means capturing is too slow on those phones; compare it with the iPhone `lens` launches |
 | `drawn_menu_actions_chosen` | Android menu tap fix (#3463) | Watch Android selections against `drawn_menus_opened`. Steady opens and fewer selections can flag lost taps. Opens also include confirmations, so this is a trend, not a tap success rate |
 | `web_videos_floated`, `web_videos_kept_playing` | iPhone Picture in Picture fix (the app's `audio` background mode; a customer's PiP showed Ardia's squashed UI instead of the video) | Read `kept_playing` against `floated` on iPhone. `kept_playing` needs a live page to report playing media (`requestMediaPlaybackState`) 5 s after Ardia left, so a return within 5 s or a pause from the PiP window counts in `floated` only, and the two never match exactly. Without the `audio` mode the simulator showed the video paused at the home screen; with it the ratio should rise clearly. A ratio that falls back toward zero means web video stops in the background again: check `UIBackgroundModes` and WebKit's presentation window |
+| `glass_unsourced` | Glass everywhere on Android (#3949: Reader's buttons sat inside their own source and drew the flat fill, unseen) | Counted natively and drained with the pending counts: a native Glass that, for a second after it settled, had no frost source or sat inside the one it names, so it drew the flat fill instead of glass. Counted once per glass. It should stay near zero; a rise after a release means a screen's glass lost its backdrop: look for `path=fallback (no source)` or `(inside its own source)` in the lab's `PAGELAB look frost` lines |
 | `night_shade_verdicts_reused`, `night_shade_verdicts_learned`, `night_shade_verdicts_corrected` | Night Shade's cached verdicts on Android (a tester's report: yahoo.com loaded white until half way) | Counted natively and drained with the pending counts, never for private tabs. `reused` is a page load, with Night Shade not off, whose site's verdict was already known, so the shade was decided before the first paint; `learned` is a site measured for the first time, whose first load can still shade late; `corrected` is a site whose verdict changed, so that load showed the old one until `DOMContentLoaded`. Read `reused` against `learned` for the hit rate, which should climb as testers revisit sites; a `corrected` share that grows means the measurement disagrees with itself between loads |
 
 ## What is left before the Expo app replaces both native apps
@@ -2135,7 +2246,7 @@ and drawn-menu usage counts; no new telemetry fields are sent.
 - One design on both phones: Android takes main's iPhone redesign too ("the same look on Android and iPhone … keep one design, not two"). Plan: flip Android to the redesign, run both suites and an Android phone pass, then delete the classic design and its tests in one commit, so there is never a third state. Where a platform has a native element it uses its own: on iPhone the system context menus with lift and blur and the action sheets, behind one JavaScript component. Android draws its menus instead ("Decided by the owner (2026-11-19)"). Android's native needs for the redesign are with the Android agent:
   - Done: Print (7b4330166), the sync-cycle flag (c095acaec), and the site permissions kept, listed and revoked (91d934628).
   - Done: the Downloads list, with preview, share and delete, refusing anything outside the app's own files in Download/ (76285c87c).
-  - Done: `Glass` with Classic, its shapes, tint and `shown` fade, and the Mac's synced look (045dea52d). Since 2026-11-23 it is Android's default glass, with a Liquid Glass lens and rim light on Android 13 and later (the owner: "port liquid-dom and add liquid glass for Android as well; switch the native liquid glass placeholder"); see "Liquid Glass on Android". The lab flag `ArdiaNativeGlass` is gone; `ArdiaFlatGlass` turns the lens and rim off and `ArdiaGlassOverPage` refracts the page under the bar, for comparison.
+  - Done: `Glass` with Classic, its shapes, tint and `shown` fade, and the Mac's synced look (045dea52d). Since 2026-11-23 it is Android's default glass, with a Liquid Glass lens and rim light on Android 13 and later (the owner: "port liquid-dom and add liquid glass for Android as well; switch the native liquid glass placeholder"); see "Liquid Glass on Android". The lab flag `ArdiaNativeGlass` is gone; `ArdiaFlatGlass` turns the lens and rim off, for comparison. Since #3949 every surface iPhone draws as glass refracts on Android 13+, the page bar over the live page included; `ArdiaGlassOverPage` is gone.
   - Done: the page under the bar, Android's way: the page stops at the bars and the page view paints the bands they cover in the bars' own colours, from iPhone's `obscuredInsets` and a new `obscuredColors` (177dfa936; "Deliberately different").
   - Done: every toolkit piece iPhone's Expo UI screens name, in Compose (ddec03ae1): `SettingsShortcuts`, `SpaceTitle`, `SpacePageDots`, `GlassCircleButton`, `PinnedTiles`, `FullScreenCover` and `FilterTextEditor`, the `spaceBackdrop`, `minListRowHeight` and `navigationBarBackButtonHidden` modifiers, and `spaceMenuSymbol`, `spaceSymbol` and `spaceColor`.
   - Undone: Android's own menus and confirmations behind `MenuTrigger` and `confirmInSheet`, a PopupMenu and an AlertDialog (e42837edd), were removed with the owner's decision of 2026-11-19; Android draws its menus and action sheets.
@@ -3243,7 +3354,7 @@ touch:
 - `ArdiaWithoutPrivatePages` (Android only) makes the page engine act as on a WebView without multi-profile support,
   so Incognito is refused with its "Update Android System WebView for Incognito" toast;
 - motion captures, demo only: `BrowsePagerFreeze <fraction>`, `BrowsePagerScript`, `BrowseLoadFreeze <progress>`;
-- the lab's own flags, such as `ArdiaOneContainerScroll`, `ArdiaOpeningCard`, `ArdiaFlatGlass` (Android's glass as plain frost, without the Liquid Glass lens and rim, for comparing the two), `ArdiaGlassOverPage` (the page bar's glass records and refracts the page, which costs the F4 about three times the janky frames) and `ArdiaRedesign` (Android draws the redesigned design, for checking the page under the bar before it becomes Android's default).
+- the lab's own flags, such as `ArdiaOneContainerScroll`, `ArdiaOpeningCard`, `ArdiaFlatGlass` (Android's glass as plain frost, without the Liquid Glass lens and rim, for comparing the two) and `ArdiaRedesign` (Android draws the redesigned design, for checking the page under the bar before it becomes Android's default).
 
 Flags take `--ez` (or any string but false, no and 0); everything else can be `--es`. The list is `LaunchArguments.kt`
 (`packages/phone/android/src/main/java/com/ardia/appmodel`).

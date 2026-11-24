@@ -44,7 +44,7 @@
   "missing": {
     "autofill": ["settings", "setSettings", "showSuggestions"],
     "contentBlocker": ["state", "setEnabled", "setListEnabled", "isAllowed", "setAllowed", "removeAllowed", "hiddenElements", "hideElements", "restoreElements", "addList", "removeList", "devFailNextMessage", "devDelayNextLoad"],
-    "engine": ["beginTracing", "endTracing", "isTracing", "cliTabTargets", "cliOwnsTab", "cliConsoleDelta", "cliMoveOffscreen", "cliCloseOffscreenTabs", "setCliHeldTabs", "childProcessCpu"],
+    "engine": ["beginTracing", "endTracing", "isTracing", "cliTabTargets", "cliOwnsTab", "cliConsoleDelta", "cliDevToolsOpen", "cliDevToolsSend", "cliDevToolsClose", "cliCancel", "cliSnapshot", "cliWaitSettled", "cliHitTest", "cliClick", "cliScreenshot", "cliMoveOffscreen", "cliCloseOffscreenTabs", "setCliHeldTabs", "childProcessCpu"],
     "extensions": ["resolveInstallPrompt", "actionStates", "sidePanelUrl"],
     "media": [
       "displayMediaSources",
@@ -106,6 +106,6 @@
     "bookmarks.changed": "bookmarks.changed",
     "extensions.action": "extensions.action",
     "extensions.sync": "extensions.sync",
-    "cliControl": "engine.cliControl"
+    "cliControl": "engine.cliControl", "cliDevTools": "engine.cliDevTools"
   }
 }

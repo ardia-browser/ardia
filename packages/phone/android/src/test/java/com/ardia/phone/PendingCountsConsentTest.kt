@@ -51,6 +51,19 @@ class PendingCountsConsentTest {
     }
 
     @Test
+    fun aGlassLeftWithNothingToSampleCountsOnlyWhileSharing() {
+        val waiting = mutableListOf<() -> Unit>()
+        val unsourced = PendingCounts.glassUnsourced(app) { waiting += it }
+        unsourced()
+        assertEquals("nothing is written while sharing is off", 0, waiting.size)
+        UsageConsent.set(app, true)
+        unsourced()
+        unsourced()
+        waiting.forEach { it() }
+        assertEquals(mapOf("glass_unsourced" to 2), PendingCounts.take(app))
+    }
+
+    @Test
     fun aGlassShaderFailureCountsOnlyInTheConsentingGenerationItHappenedIn() {
         val waiting = mutableListOf<() -> Unit>()
         val failed = PendingCounts.glassShaderFailures(app) { waiting += it }

@@ -74,6 +74,11 @@ App& TheApp() {
   return app;
 }
 
+int& RequestedExitCode() {
+  static int exit_code = 0;
+  return exit_code;
+}
+
 struct Gate {
   std::string refusal = "no scratch ARDIA_DATA_DIR";
   bool asked = false;
@@ -799,7 +804,8 @@ void AfterChromeMain(int exit_code) {
   if (!g_ardia_win_add_main_parts) {
     return;
   }
-  base::Process::TerminateCurrentProcessImmediately(exit_code);
+  base::Process::TerminateCurrentProcessImmediately(
+      exit_code != 0 ? exit_code : RequestedExitCode());
 }
 
 const char* TestGateDecision() {
@@ -812,6 +818,11 @@ void QuitApp() {
   KeepAlive().reset();
   ChromeDevToolsManagerDelegate::AllowBrowserToClose();
   chrome::CloseAllBrowsersAndQuit();
+}
+
+void QuitAppWithExitCode(int exit_code) {
+  RequestedExitCode() = exit_code;
+  QuitApp();
 }
 
 }

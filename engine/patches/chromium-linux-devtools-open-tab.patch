@@ -4,7 +4,7 @@
  using content::GlobalRenderFrameHostId;
  using content::WebContents;
  
-+#if BUILDFLAG(IS_LINUX)
++#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
 +void (*g_ardia_linux_devtools_opened_tab)(WebContents* inspected,
 +                                          WebContents* opened,
 +                                          const GURL& url) = nullptr;
@@ -18,7 +18,7 @@
      // destination, so the navigation is treated as cross-site.
      params.initiator_origin = url::Origin();
    }
-+#if BUILDFLAG(IS_LINUX)
++#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
 +  WebContents* const linux_opened =
 +      inspected_web_contents ? inspected_web_contents->OpenURL(params, {})
 +                             : nullptr;

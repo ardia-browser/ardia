@@ -50,6 +50,10 @@ class GlassShaderFailureTest {
     @After
     fun restoreShaders() = GlassShaders.reset()
 
+    private val field = LiquidGlassRules.lensField(listOf(LiquidGlassRules.stripLens(13, 13, 132, 132, 5f, 66f, 2.75f, 14f, 8f)), 2.75f, 5f)!!
+
+    private fun lens() = GlassShaders.lensFor(field) { throw IllegalStateException("the hook builds it") }
+
     private fun glass() = GlassView(activity, appContext).apply {
         shape = "circle"
         layout(0, 0, 100, 100)
@@ -86,13 +90,13 @@ class GlassShaderFailureTest {
     fun aFailedShaderIsTriedAgainWhenTheAppComesBackToTheForeground() {
         val view = glass()
         recorded(view)
-        assertNull(view.lensEffect(66f, 5f))
+        assertNull(lens())
         assertEquals(1, rimTries)
         assertEquals(1, lensTries)
         assertEquals("each failed shader is counted once, not on every draw", 2, reported)
         assertTrue("a retry after a failure asks the glass to redraw", GlassShaders.retryFailed())
         recorded(view)
-        assertNull(view.lensEffect(66f, 5f))
+        assertNull(lens())
         assertEquals("the rim is built again after a return to the foreground", 2, rimTries)
         assertEquals("the lens is built again after a return to the foreground", 2, lensTries)
         assertEquals(4, reported)
@@ -119,8 +123,8 @@ class GlassShaderFailureTest {
     fun aLensThatCannotBuildLeavesThePlainBlurAndIsTriedOnce() {
         val view = glass()
         drawn(view)
-        assertNull(view.lensEffect(66f, 5f))
-        assertNull(view.lensEffect(66f, 5f))
+        assertNull(lens())
+        assertNull(lens())
         assertEquals(1, lensTries)
         assertEquals(1, GlassShaders.lens.failures)
         recorded(view)

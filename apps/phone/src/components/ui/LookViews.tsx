@@ -2,6 +2,7 @@ import {
   DeckBackdrop,
   Frost,
   Glass,
+  GlassBackdrop,
   glassIsNative,
   INCOGNITO_LOOK,
   lookIsNative,
@@ -10,7 +11,7 @@ import {
   type GlassShape,
 } from "@ardia/phone-native";
 import { createContext, useContext, type ReactNode, type RefObject } from "react";
-import { Pressable, StyleSheet, View, type StyleProp, type ViewInstance, type ViewStyle } from "react-native";
+import { Platform, Pressable, StyleSheet, View, type StyleProp, type ViewInstance, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   backdropStops,
@@ -41,6 +42,13 @@ const GlassSourceContext = createContext<string>(SURFACES_FROST);
 
 export function GlassSource({ name, children }: { name: string; children: ReactNode }) {
   return <GlassSourceContext.Provider value={name}>{children}</GlassSourceContext.Provider>;
+}
+
+export const drawsGlassBehindItsLayers = (os: string, nativeGlass: boolean) => os === "android" && nativeGlass;
+
+export function GlassBehind() {
+  if (!drawsGlassBehindItsLayers(Platform.OS, glassIsNative())) return null;
+  return <GlassBackdrop testID="glassBehind" pointerEvents="none" style={StyleSheet.absoluteFill} />;
 }
 
 function BackdropBase({ color }: { color: string | undefined }) {
@@ -184,6 +192,8 @@ type FrostProps = {
   children?: ReactNode;
 };
 
+export const frostGlassIsNative = (os: string, nativeGlass: boolean) => os === "android" && nativeGlass;
+
 export const chromeIsSolid = (style: ChromeStyle, reduceTransparency: boolean, frostIsNative: boolean) => style === "classic" || reduceTransparency || !frostIsNative;
 
 export function useSolidChrome() {
@@ -224,6 +234,21 @@ export function LookFrost({
       </View>
     );
   const shade = incognito || (dark ?? theme.dark);
+  if (variant === "glass" && frostGlassIsNative(Platform.OS, glassIsNative()))
+    return (
+      <Glass
+        source={source}
+        shape="rounded"
+        cornerRadius={cornerRadius}
+        interactive={false}
+        {...lookColors(look, incognito, shade)}
+        dark={shade}
+        reduceTransparency={reduceTransparency}
+        style={[style, { borderRadius: cornerRadius, backgroundColor: fill }]}
+      >
+        {children}
+      </Glass>
+    );
   return (
     <Frost
       source={source}

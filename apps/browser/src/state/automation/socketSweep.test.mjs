@@ -201,6 +201,9 @@ const PARAMS = (f) => ({
   "files.armUpload": { tab: f.one, paths: ["/tmp/ardia-sweep-upload.txt"] },
   "files.armDownload": { tab: f.one, path: "/tmp/ardia-sweep-download.bin" },
   "files.disarm": {},
+  "devtools.send": { session: 1, method: "Runtime.evaluate" },
+  "devtools.batch": { session: 1, commands: [{ method: "Runtime.evaluate" }] },
+  "tabs.click": { tab: f.one, x: 1, y: 1 },
 });
 
 const stores = () => [S(), useLive.getState(), useAirTraffic.getState()];

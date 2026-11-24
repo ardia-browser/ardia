@@ -144,6 +144,12 @@ reaches Ardia two ways (`docs/automation.md`, `docs/control-socket.md`):
   connection, so another connection using the same session name can't replace or release it
   (`docs/control-socket.md`).
 
+- **The control socket drives tabs too** (macOS and Linux, #4055). `devtools.attach`, `send`, `batch` and `detach`
+  give a control connection a full DevTools session on a tab with its events pushed back, and `tabs.snapshot`,
+  `tabs.waitSettled`, `tabs.hitTest`, `tabs.click` and `tabs.screenshot` are answered by the engine in the browser
+  process (`docs/control-socket.md` › Driving a tab from the engine), so `ardia browse` can work against a normal running
+  Ardia without the token connection or `--remote-debugging-port`, and with no approval prompt per tab.
+
 ## The contract
 
 - **Control protocol.** `hello` carries a protocol number both ways. Ardia answers with `protocol` (today 4) and

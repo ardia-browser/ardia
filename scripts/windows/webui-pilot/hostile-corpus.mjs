@@ -48,9 +48,40 @@ const literal = (value) => {
   return JSON.stringify(value);
 };
 
+const WINDOWS_DOCUMENT_NAME_LIMIT = 200;
+const RESERVED_WINDOWS_DOCUMENTS = [
+  "session.json",
+  "live.json",
+  "live.canonical.json",
+  "rnw-migration.json",
+  "rnw-migration.lock",
+  "launch-starts.txt",
+  "launch-starts.txt.tmp",
+];
+const windowsDeviceName = (name) => {
+  const stem = name.split(".")[0].replace(/ +$/, "").toLowerCase();
+  return ["con", "prn", "aux", "nul", "conin$", "conout$"].includes(stem) || /^(com|lpt)[0-9]$/.test(stem);
+};
+const windowsDocumentOutcome = (value) => {
+  if (typeof value !== "string") return "request";
+  const valid =
+    value.length > 0 &&
+    value.length <= WINDOWS_DOCUMENT_NAME_LIMIT &&
+    /^[A-Za-z0-9._-]+$/.test(value) &&
+    !value.startsWith(".") &&
+    !value.endsWith(".") &&
+    !value.includes("..") &&
+    !windowsDeviceName(value);
+  return valid && !RESERVED_WINDOWS_DOCUMENTS.includes(value.toLowerCase()) ? "accepted" : "name";
+};
+const corpusCase = (id, value) => {
+  const document = windowsDocumentOutcome(value);
+  return { id, expression: literal(value), document, ...(document === "accepted" ? { name: value } : {}) };
+};
+
 const cases = [
-  ...HOSTILE_VALUES.map(({ id, value }) => ({ id, expression: literal(value) })),
-  ...UNLISTED_SCHEMES.map((value, index) => ({ id: `windows.unlisted${index}`, expression: literal(value) })),
+  ...HOSTILE_VALUES.map(({ id, value }) => corpusCase(id, value)),
+  ...UNLISTED_SCHEMES.map((value, index) => corpusCase(`windows.unlisted${index}`, value)),
 ];
 const shapes = [
   { id: "shape.noArgs", expression: "[]" },

@@ -36,6 +36,7 @@ const series = `# fixture series
 chromium chromium-shared.patch
 chromium chromium-mac-only.patch mac
 chromium chromium-linux-only.patch linux
+chromium chromium-linux-taken.patch linux
 chromium chromium-skipped-on-win.patch mac
 
 layer engine/chromium
@@ -103,6 +104,7 @@ const files = {
   'engine/patches/chromium-shared.patch': 'shared\n',
   'engine/patches/chromium-mac-only.patch': 'mac\n',
   'engine/patches/chromium-linux-only.patch': 'linux\n',
+  'engine/patches/chromium-linux-taken.patch': 'linux, taken on windows\n',
   'engine/patches/chromium-skipped-on-win.patch': 'skipped on windows\n',
   'engine/patches/build/ardia_resources.txt': 'engine/patches/build/ardia-icons/app.png chrome/app/app.png\n',
   'engine/patches/build/ardia-icons/app.png': 'icon\n',
@@ -143,11 +145,14 @@ const files = {
   'engine/ardiacore-desktop/src/ardia/desktop/ac_desktop_window_state.h': 'desktop ac_desktop_window_state.h\n',
   'engine/ardiacore-linux/src/ardia/linux/bootstrap.js': 'linux bootstrap.js\n',
   'engine/ardiacore-linux/src/ardia/linux/generate_bootstrap.py': 'linux generate_bootstrap.py\n',
+  'engine/ardiacore-linux/src/ardia/linux/ac_linux_close_hooks.cc': 'linux ac_linux_close_hooks.cc\n',
+  'engine/ardiacore-linux/src/ardia/linux/ac_linux_close_hooks.h': 'linux ac_linux_close_hooks.h\n',
+  'engine/ardiacore-linux/src/ardia/linux/ac_linux_content_hooks.h': 'linux ac_linux_content_hooks.h\n',
   'engine/ardiacore-linux/src/ardia/core/ac_linux_core.cc': 'linux core\n',
   'apps/browser/assets/offline-game/game.js': 'game\n',
   'apps/browser/assets/offline-game-pipeline/inline.py': 'inline\n',
   'packages/ardiacore/ios/page_script.js': 'page\n',
-  [`${win}/series-win`]: 'skip chromium-skipped-on-win.patch\nchromium chromium-win-own.patch\n',
+  [`${win}/series-win`]: 'skip chromium-skipped-on-win.patch\ntake chromium-linux-taken.patch\nchromium chromium-win-own.patch\n',
   [`${win}/patches/chromium-win-own.patch`]: 'windows\n',
   [`${win}/patches/chromium-win-unlisted.patch`]: 'not in series-win\n',
   [`${win}/ardia-layer-win.patch`]: 'layer fixes\n',
@@ -259,6 +264,7 @@ const cases = [
   ['engine-key.test.mjs', 'engine/engine-key.test.mjs', { macos: false, linux: false, win: false }],
   ['a file outside the engine', 'README.md', { macos: false, linux: false, win: false }],
   ['a patch only Windows skips', 'engine/patches/chromium-skipped-on-win.patch', { macos: true, linux: false, win: false }],
+  ['a linux patch series-win takes', 'engine/patches/chromium-linux-taken.patch', { macos: false, linux: true, win: true }],
   ['a patch of series-win', `${win}/patches/chromium-win-own.patch`, { macos: false, linux: false, win: true }],
   ['a Windows patch series-win does not name', `${win}/patches/chromium-win-unlisted.patch`, { macos: false, linux: false, win: false }],
   ['the Windows layer fixes', `${win}/ardia-layer-win.patch`, { macos: false, linux: false, win: true }],
@@ -297,6 +303,7 @@ const dirtyCases = [
   ['an uncommitted edit to ac_external_apps_linux.cc', (fx) => appendFileSync(join(fx.root, ardia, 'ac_external_apps_linux.cc'), 'more\n'), { macos: false, linux: true, win: true }],
   ['an uncommitted edit to ac_external_apps.mm', (fx) => appendFileSync(join(fx.root, ardia, 'ac_external_apps.mm'), 'more\n'), { macos: true, linux: false, win: true }],
   ['an uncommitted edit to a Linux-only patch', (fx) => appendFileSync(join(fx.root, 'engine/patches/chromium-linux-only.patch'), 'more\n'), { macos: false, linux: true, win: false }],
+  ['an uncommitted edit to a linux patch series-win takes', (fx) => appendFileSync(join(fx.root, 'engine/patches/chromium-linux-taken.patch'), 'more\n'), { macos: false, linux: true, win: true }],
   ['an uncommitted edit to a macOS-only patch', (fx) => appendFileSync(join(fx.root, 'engine/patches/chromium-mac-only.patch'), 'more\n'), { macos: true, linux: false, win: true }],
   ['a new untracked file in the Linux layer', (fx) => fx.write('engine/ardiacore-linux/src/ardia/linux/new.cc', 'new\n'), { macos: false, linux: true, win: false }],
   ['a new untracked file in the macOS layer', (fx) => fx.write('engine/ardiacore/src/ardia/core/new.mm', 'new\n'), { macos: true, linux: false, win: false }],
@@ -754,6 +761,8 @@ test('the real checkout has a Windows key and --paths scoped to the Windows buil
   for (const line of readFileSync(join(repo, win, 'series-win'), 'utf8').split('\n')) {
     const skip = line.match(/^skip (\S+)/)
     if (skip) assert.ok(!specs.includes(`engine/patches/${skip[1]}`), `${skip[1]} is skipped on Windows`)
+    const take = line.match(/^take (\S+)/)
+    if (take) assert.ok(specs.includes(`engine/patches/${take[1]}`), `${take[1]} is taken on Windows`)
   }
 })
 

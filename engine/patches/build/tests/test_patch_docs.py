@@ -38,8 +38,8 @@ def series_patches(text):
             if fields and fields[0] == 'chromium']
 
 
-def windows_shared_patches(series_text):
-    return series_win.series_lines(series_text, 'engine/patches/series')
+def windows_shared_patches(series_text, takes=()):
+    return series_win.series_lines(series_text, 'engine/patches/series', takes=takes)
 
 
 def windows_own_patches(series_win_text):
@@ -184,14 +184,19 @@ def windows_problems(series_win_text, series_text, doc_text, win_patch_files, wh
         return problems
     own = set(windows_own_patches(series_win_text))
     skips = series_win.skip_names(series_win_text)
+    takes = series_win.take_names(series_win_text)
     selected = set(windows_shared_patches(series_text))
     every_shared = set(series_patches(series_text))
-    kinds = {**{name: 'skip' for name in skips}, **{name: 'chromium' for name in own}}
+    kinds = {**{name: 'skip' for name in skips}, **{name: 'take' for name in takes}, **{name: 'chromium' for name in own}}
     documented = {name for name, _, _ in rows}
     problems += duplicates(rows, where)
     problems += empty_cells(rows, ('What it does', 'Removable when'), where)
     for name in sorted(skips & own):
         problems.append(f'series-win both skips and applies `{name}`')
+    for name in sorted(takes - every_shared):
+        problems.append(f'series-win takes `{name}`, but it is not in engine/patches/series')
+    for name in sorted(takes & selected):
+        problems.append(f'series-win takes `{name}`, which a Windows tree applies already')
     for name in sorted(skips - selected):
         reason = 'a Windows tree never takes it (a `linux` line)' if name in every_shared \
             else 'it is not in engine/patches/series'
@@ -419,6 +424,22 @@ class WindowsChecker(unittest.TestCase):
     def test_a_patch_both_skipped_and_applied_fails(self):
         self.assertIn('series-win both skips and applies `chromium-win-c.patch`',
                       self.check(series_win=self.series_win + 'skip chromium-win-c.patch\n'))
+
+    def test_a_take_of_a_linux_line_needs_a_take_row(self):
+        series_win = self.series_win + 'take chromium-l.patch\n'
+        self.assertEqual(self.check(series_win=series_win), ['doc: `chromium-l.patch` has no row'])
+        doc = WINDOWS_DOC_SAMPLE + '| `chromium-l.patch` | take | Linux hooks | Series sets |\n'
+        self.assertEqual(self.check(series_win=series_win, doc=doc), [])
+        self.assertEqual(self.check(series_win=series_win, doc=doc.replace('| take |', '| chromium |')),
+                         ['doc:5: `chromium-l.patch` says `chromium` where series-win has `take`'])
+
+    def test_a_take_of_a_line_windows_applies_or_of_nothing_fails(self):
+        doc = WINDOWS_DOC_SAMPLE + '| `chromium-a.patch` | take | Shared | Never |\n'
+        self.assertEqual(self.check(series_win=self.series_win + 'take chromium-a.patch\n', doc=doc),
+                         ['series-win takes `chromium-a.patch`, which a Windows tree applies already'])
+        doc = WINDOWS_DOC_SAMPLE + '| `chromium-z.patch` | take | Gone | Never |\n'
+        self.assertEqual(self.check(series_win=self.series_win + 'take chromium-z.patch\n', doc=doc),
+                         ['series-win takes `chromium-z.patch`, but it is not in engine/patches/series'])
 
     def test_an_empty_removable_when_fails(self):
         self.assertEqual(self.check(doc=WINDOWS_DOC_SAMPLE.replace('With the Mac patch', '')),

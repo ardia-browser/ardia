@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <utility>
 
+#include "ardia/desktop/ac_desktop_paths.h"
 #include "base/functional/bind.h"
 #include "base/location.h"
 
@@ -33,7 +34,7 @@ std::vector<std::string> DownloadTargets(content::DownloadManager* manager, List
   ForEachListed(manager, listed, [&](download::DownloadItem* item) {
     if (item->IsDangerous() || item->IsInsecure()) return;
     if (complete_only && item->GetState() != download::DownloadItem::COMPLETE) return;
-    targets.push_back(item->GetTargetFilePath().value());
+    targets.push_back(ardia::desktop_paths::Text(item->GetTargetFilePath()));
   });
   return targets;
 }

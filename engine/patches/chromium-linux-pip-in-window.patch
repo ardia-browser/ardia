@@ -50,8 +50,8 @@
  
 --- a/chrome/browser/ui/navigator/browser_navigator.cc
 +++ b/chrome/browser/ui/navigator/browser_navigator.cc
-@@ -115,6 +115,9 @@
- #if BUILDFLAG(IS_LINUX)
+@@ -121,6 +121,9 @@
+ #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
  bool (*g_ardia_linux_off_the_record_navigation)(WebContents* source,
                                                   const GURL& url) = nullptr;
 +bool (*g_ardia_linux_refuses_document_picture_in_picture)(
@@ -60,11 +60,11 @@
  #endif
  
  namespace {
-@@ -794,6 +797,13 @@
+@@ -870,6 +873,13 @@
              url)) {
        return nullptr;
      }
-+#if BUILDFLAG(IS_LINUX)
++#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
 +    if (g_ardia_linux_refuses_document_picture_in_picture &&
 +        g_ardia_linux_refuses_document_picture_in_picture(
 +            params->source_contents, params->original_user_gesture)) {

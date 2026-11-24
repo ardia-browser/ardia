@@ -14,6 +14,38 @@ export type DoorbellOutcome = (typeof DOORBELL_OUTCOMES)[number];
 const DEVTOOLS_ENDPOINT_OUTCOMES = ["given", "control_off", "unsupported", "server_off", "unreadable", "stale", "left"] as const;
 export type DevtoolsEndpointOutcome = (typeof DEVTOOLS_ENDPOINT_OUTCOMES)[number];
 
+const ENGINE_CLI_TOTALS = {
+  sessionsOpened: "sessions_opened",
+  sessionsRefused: "sessions_refused",
+  sessionCommands: "session_commands",
+  sessionEvents: "session_events",
+  sessionEventsCut: "session_events_cut",
+  snapshots: "snapshots",
+  snapshotsFailed: "snapshots_failed",
+  snapshotRefs: "snapshot_refs",
+  snapshotsModal: "snapshots_modal",
+  occludedRefs: "occluded_refs",
+  settles: "settles",
+  settlesTimedOut: "settles_timed_out",
+  settleMs: "settle_ms",
+  hitTests: "hit_tests",
+  clicks: "clicks",
+  clicksBlocked: "clicks_blocked",
+  dismissFound: "dismiss_found",
+  refsRebound: "refs_rebound",
+  refsStale: "refs_stale",
+  screenshots: "screenshots",
+  screenshotsHidden: "screenshots_hidden",
+  screenshotsFailed: "screenshots_failed",
+  cancelled: "cancelled",
+  clicksUnverified: "clicks_unverified",
+  refused: "refused",
+} as const;
+type EngineCliTotalKey = keyof typeof ENGINE_CLI_TOTALS;
+type EngineCliField = (typeof ENGINE_CLI_TOTALS)[EngineCliTotalKey];
+const ENGINE_CLI_FIELDS = Object.values(ENGINE_CLI_TOTALS);
+type EngineCliTotals = Partial<Record<EngineCliTotalKey, number>>;
+
 const NONE = {
   cli_pill_shows: 0,
   cli_pill_compact_shows: 0,
@@ -38,6 +70,7 @@ const NONE = {
   cli_page_signal_hit_tests_cancelled: 0,
   cli_page_signal_remote_frames: 0,
   cli_page_signal_occluded: 0,
+  ...(Object.fromEntries(ENGINE_CLI_FIELDS.map((field) => [`cli_engine_${field}`, 0])) as Record<`cli_engine_${EngineCliField}`, number>),
   ...(Object.fromEntries(DOORBELL_OUTCOMES.map((outcome) => [`cli_socket_doorbell_${outcome}`, 0])) as Record<`cli_socket_doorbell_${DoorbellOutcome}`, number>),
   ...(Object.fromEntries(DEVTOOLS_ENDPOINT_OUTCOMES.map((outcome) => [`cli_socket_devtools_endpoint_${outcome}`, 0])) as Record<`cli_socket_devtools_endpoint_${DevtoolsEndpointOutcome}`, number>),
   cli_devtools_traces: 0,
@@ -167,10 +200,33 @@ export function notePageSignals(totals: PageSignalTotals | undefined, consent?: 
   if (sent.some(([, delta]) => delta)) countFor(token, () => sent.forEach(([key, delta]) => (counts[PAGE_SIGNAL_FIELDS[key]] += delta)));
 }
 
-export function noteEngineCliTotals(status: { windowlessPages?: { given: number; missed: number }; tokenCommands?: TokenCommandTotals; pageSignals?: PageSignalTotals }, consent: ConsentToken) {
+let engineCliSeen: Record<EngineCliTotalKey, number> = Object.fromEntries(Object.keys(ENGINE_CLI_TOTALS).map((key) => [key, 0])) as Record<EngineCliTotalKey, number>;
+let engineCliBaselineStale = false;
+onConsentPeriodChange(() => void (engineCliBaselineStale = true));
+
+export function noteEngineCli(totals: EngineCliTotals | undefined, consent?: ConsentToken | null) {
+  if (!totals) return;
+  const token = consentOrNow(consent);
+  const fresh = stillValid(token) && !engineCliBaselineStale;
+  if (stillValid(token)) engineCliBaselineStale = false;
+  const keys = Object.keys(ENGINE_CLI_TOTALS) as EngineCliTotalKey[];
+  const sent = keys.map((key) => {
+    const total = Number(totals[key]) || 0;
+    const delta = fresh ? Math.max(0, total - engineCliSeen[key]) : 0;
+    engineCliSeen[key] = Math.max(total, engineCliSeen[key]);
+    return [key, delta] as const;
+  });
+  if (sent.some(([, delta]) => delta)) countFor(token, () => sent.forEach(([key, delta]) => (counts[`cli_engine_${ENGINE_CLI_TOTALS[key]}`] += delta)));
+}
+
+export function noteEngineCliTotals(
+  status: { windowlessPages?: { given: number; missed: number }; tokenCommands?: TokenCommandTotals; pageSignals?: PageSignalTotals; engineCli?: EngineCliTotals },
+  consent: ConsentToken,
+) {
   noteWindowlessPages(status.windowlessPages, consent);
   noteTokenCommands(status.tokenCommands, consent);
   notePageSignals(status.pageSignals, consent);
+  noteEngineCli(status.engineCli, consent);
 }
 
 export function takeCliCounts() {

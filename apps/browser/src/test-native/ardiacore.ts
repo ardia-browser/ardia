@@ -49,6 +49,7 @@ const testGlobals = globalThis as {
   acTestCliMoveOffscreen?: (tabId: string) => { ok: boolean; reason?: string };
   acTestCliCloseOffscreen?: () => void;
   acTestCliConsole?: (args: { tabId: string; after?: number; generation?: number; limit?: number }) => CliConsoleDelta;
+  acTestCliEngine?: (call: string, args: any) => any;
   acTestTasks?: () => EngineTask[];
   acTestComponents?: () => EngineComponent[];
   acTestEngineInfo?: () => CallResult<"engine.info">;
@@ -467,6 +468,27 @@ const fakeModules = {
         const answer = (await testGlobals.acTestCliHeld?.(tabs)) ?? { kept: 0 };
         return { kept: answer.kept, marked: answer.marked ?? tabs.filter((t) => t.until > Date.now()).map((t) => t.tabId) };
       },
+      cliDevToolsOpen: (args) => testGlobals.acTestCliEngine?.("cliDevToolsOpen", args) ?? { session: 1, targetId: "T", scope: args.scope },
+      cliDevToolsSend: (args) => testGlobals.acTestCliEngine?.("cliDevToolsSend", args) ?? { result: {} },
+      cliDevToolsClose: (args) => testGlobals.acTestCliEngine?.("cliDevToolsClose", args) ?? { closed: true },
+      cliCancel: (args) => testGlobals.acTestCliEngine?.("cliCancel", args) ?? { cancelled: 0 },
+      cliSnapshot: (args) =>
+        testGlobals.acTestCliEngine?.("cliSnapshot", args) ?? { generation: 1, viewport: [800, 600], scope: "page", refs: [], truncated: false, counts: { nodes: 1, frames: 1, interactive: 0, occluded: 0, framesTruncated: false } },
+      cliWaitSettled: (args) =>
+        testGlobals.acTestCliEngine?.("cliWaitSettled", args) ?? {
+          settled: true,
+          waitedMs: 0,
+          navigations: { pending: 0, seen: 0 },
+          network: { inflight: 0, longLived: 0, seen: 0, tracked: true },
+          idle: "idle",
+          frame: "committed",
+          loops: 0,
+          idleMs: 0,
+          frameMs: 0,
+        },
+      cliHitTest: (args) => testGlobals.acTestCliEngine?.("cliHitTest", args) ?? { point: [0, 0], verified: false, blocked: false },
+      cliClick: (args) => testGlobals.acTestCliEngine?.("cliClick", args) ?? { point: [0, 0], verified: false, blocked: false, clicked: true },
+      cliScreenshot: (args) => testGlobals.acTestCliEngine?.("cliScreenshot", args) ?? { data: "", format: "jpeg", width: 1, height: 1, hidden: true, freshFrame: true },
       cliTabTargets: ({ tabIds }) => Object.fromEntries(tabIds.map((id) => [id, testGlobals.acTestCliTargets?.(id) ?? { targetId: null, pageGeneration: 0 }])),
     },
     { inputIdleSeconds: () => 3600 },

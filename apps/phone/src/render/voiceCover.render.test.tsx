@@ -112,6 +112,28 @@ test("the voice actions and Cancel keep the frost tint in Glass and take the sol
   act(() => setAppearanceDesign("original"));
 });
 
+test("where the native glass exists the voice actions and Cancel draw it on Android only; iPhone keeps its SwiftUI frost glass, and Cancel keeps its label and action", () => {
+  jest.spyOn(lookModule, "lookIsNative").mockImplementation(() => true);
+  jest.spyOn(lookModule, "glassIsNative").mockImplementation(() => true);
+  act(() => setAppearanceDesign("redesigned"));
+  const root = show({ phase: "finished", transcript: "otters" });
+  const glass = root.root.findAll((node) => node.type === lookModule.Glass);
+  const frost = root.root.findAll((node) => node.type === lookModule.Frost);
+  if (Platform.OS === "android") {
+    expect(glass).toHaveLength(2);
+    expect(frost.every((node) => glass.some((plate) => plate.findAll((inner) => inner === node).length > 0))).toBe(true);
+  } else {
+    expect(glass).toHaveLength(0);
+    expect(frost).toHaveLength(2);
+  }
+  const cancel = root.root.findAll((node) => node.props.testID === "voiceCancel" && node.props.accessibilityRole === "button")[0]!;
+  expect(cancel.props.accessibilityLabel).toBe("Cancel");
+  act(() => cancel.props.onPress());
+  expect(useVoice.getState().presented).toBe(false);
+  unmount(root);
+  act(() => setAppearanceDesign("original"));
+});
+
 test("the waveform follows the level, and holds still at its resting height under Reduce Motion", () => {
   const levels = [0, 0.5, 1];
   const moving = show({ phase: "listening" }, levels);

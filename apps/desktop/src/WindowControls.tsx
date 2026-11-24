@@ -5,12 +5,14 @@ import { reportHostError } from "./host";
 import { inputRegions } from "./shellAbove";
 import { isLinuxUtility } from "./session";
 import { linuxWindowMenu } from "./linuxWindowMenu";
+import { useMaximizeButtonState } from "./maximizeButtonState";
 import { linuxControlsBehaviour, pressKeepsFocusWhereItWas } from "./windowControlsRules";
 
 export { controlsShown, useControlsShown, type WindowControlsProps };
 
 export const WindowControls = memo(function WindowControls(props: WindowControlsProps) {
   const behaviour = linuxControlsBehaviour({ pageFullScreen: !!useFullscreenTab(props.windowId), hidden: !!props.hidden, utility: isLinuxUtility(props.windowId), windowMenu: !!linuxWindowMenu, shown: useControlsShown() });
+  const maximizeState = useMaximizeButtonState(props.windowId);
   const wrapper = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const controls = wrapper.current?.firstElementChild;
@@ -32,7 +34,7 @@ export const WindowControls = memo(function WindowControls(props: WindowControls
         void linuxWindowMenu.open(props.windowId).catch(reportHostError);
       }}
     >
-      <SharedWindowControls {...props} />
+      <SharedWindowControls {...props} maximizeState={maximizeState} />
     </div>
   );
 });

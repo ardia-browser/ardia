@@ -1,8 +1,8 @@
 --- a/chrome/browser/ui/navigator/browser_navigator.cc
 +++ b/chrome/browser/ui/navigator/browser_navigator.cc
-@@ -112,6 +112,17 @@
- using content::WebContents;
- using WebExposedIsolationLevel = content::WebExposedIsolationLevel;
+@@ -126,6 +126,17 @@
+     bool user_gesture) = nullptr;
+ #endif
  
 +#if BUILDFLAG(IS_WIN)
 +// Ardia: the Windows engine host (ardia/win) keeps a tab or pop-up a page opens
@@ -18,7 +18,7 @@
  namespace {
  
  struct AdditionalParams {
-@@ -1212,6 +1223,25 @@
+@@ -1333,6 +1344,25 @@
  
  base::WeakPtr<content::NavigationHandle> Navigate(NavigateParams* params) {
    AdditionalParams additional_params;

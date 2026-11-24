@@ -15,7 +15,9 @@ export function socketClient(connection) {
     const line = raw ?? JSON.stringify({ id, method, ...(params ? { params } : {}) });
     stub.emitControlRequest({ connection, generation: stub.controlSocket.generation, line });
     return (async () => {
-      for (let i = 0; i < 200 && !stub.controlSocket.replies.slice(before).some((r) => r.connection === connection); i++) await tick();
+      const answered = () => stub.controlSocket.replies.slice(before).some((r) => r.connection === connection);
+      const deadline = Date.now() + 2000;
+      for (let i = 0; !answered() && (i < 200 || Date.now() < deadline); i++) await (i < 200 ? tick() : new Promise((resolve) => setTimeout(resolve, 1)));
       const replies = stub.controlSocket.replies.slice(before).filter((r) => r.connection === connection);
       assert.equal(replies.length, 1, `one reply to ${method}`);
       return JSON.parse(replies[0].line);

@@ -3,6 +3,8 @@
 
 #include <string>
 
+#include "ardia/win/webui/webui_policy.h"
+
 namespace base {
 class CommandLine;
 }
@@ -20,6 +22,12 @@ std::wstring WebUIAppDataDirectory(const std::wstring& ardia_data_dir,
                                    const std::wstring& local_app_data);
 
 std::wstring WebUIUserDataDirectory(const std::wstring& app_data_dir);
+
+bool ShouldRunWebUIStartupMigration(const base::CommandLine& command_line,
+                                    const std::wstring& ardia_data_dir_env);
+
+StartupMigrationResult RunWebUIStartupMigration(
+    const base::CommandLine& command_line);
 
 }
 

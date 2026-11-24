@@ -58,6 +58,9 @@ async function openHeld(connection: number, tabId: string): Promise<Held> {
   });
   const entry: Held = { session, book, logpoints: new Map(), pending: 0, stop };
   own.set(tabId, entry);
+  void session.ended.then(() => {
+    if (held.get(connection)?.get(tabId) === entry) void release(connection, tabId, entry);
+  });
   try {
     await session.send("Debugger.enable", { maxScriptsCacheSize: 0 });
     await session.pause(SCRIPTS_SETTLE_MS);

@@ -144,6 +144,12 @@ void TypedMethods() {
   ExpectInvalid(PlanExport("relative.csv"), "ERR_EXPORT_PATH");
   ExpectInvalid(PlanExport(""), "ERR_EXPORT_PATH");
   ExpectInvalid(PlanExport(std::string("/tmp/a\0b", 8)), "ERR_EXPORT_PATH");
+  ExpectEngine(PlanExport("C:\\Users\\u\\Ardia Passwords.csv", '\\'), "ac_passwords_export",
+               R"({"path":"C:\\Users\\u\\Ardia Passwords.csv"})", Reply::kExport, {Store::kPasswords});
+  ExpectInvalid(PlanExport("C:\\Users\\u\\Ardia Passwords.csv"), "ERR_EXPORT_PATH");
+  ExpectInvalid(PlanExport("/tmp/scratch/a.csv", '\\'), "ERR_EXPORT_PATH");
+  ExpectInvalid(PlanExport("C:relative.csv", '\\'), "ERR_EXPORT_PATH");
+  ExpectInvalid(PlanExport("\\\\server\\share\\a.csv", '\\'), "ERR_EXPORT_PATH");
 
   Plan card = PlanInvoke("ArdiaAutofill.saveCard",
                          Values({Arg::String(""),

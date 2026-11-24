@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ComponentProps } from "react";
-import { StyleSheet, View, type ViewInstance } from "react-native";
+import { Platform, StyleSheet, View, type ViewInstance } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, type SharedValue } from "react-native-reanimated";
 import { useBarReturn } from "./barReturn";
 import { AddressFace } from "./AddressFace";
@@ -185,7 +185,7 @@ function useFoldedGlass<Back extends { centreGlass: { shown: boolean; shownMs: n
     was.current = unfolded;
   }, [unfolded]);
   if (unfolded && !flips) return back;
-  const fade = (glass: { shown: boolean; shownMs: number }) => ({ shown: glass.shown && unfolded, shownMs: flips ? glassFadeMs : glass.shownMs });
+  const fade = (glass: { shown: boolean; shownMs: number }) => ({ shown: glass.shown && unfolded, shownMs: flips && Platform.OS !== "android" ? glassFadeMs : glass.shownMs });
   return { ...back, centreGlass: fade(back.centreGlass), sidesGlass: fade(back.sidesGlass) };
 }
 

@@ -24,7 +24,6 @@ action("webui_bootstrap") {
 
 source_set("win") {
   sources = [
-    "//ardia/linux/ac_linux_contract.h",
     "//ardia/linux/ac_linux_session.cc",
     "//ardia/linux/ac_linux_session.h",
     "ac_calls.cc",
@@ -75,6 +74,7 @@ source_set("win") {
     "webui/webui_caption_script.h",
     "webui/webui_mode.cc",
     "webui/webui_mode.h",
+    "webui/webui_policy.h",
     "webui/webui_shell.cc",
     "webui/webui_shell.h",
   ]
@@ -88,6 +88,7 @@ source_set("win") {
     "//ardia/desktop",
     "//third_party/icu",
     "//components/input",
+    "//services/network/public/cpp",
     "//services/network/public/mojom",
     "//ui/display",
     "//ui/views/controls/webview",

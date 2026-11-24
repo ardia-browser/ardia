@@ -93,12 +93,18 @@ test("on iPhone's design, scrolling down with Collapse Bottom Bar on shrinks the
   const bar = moved(host(root, "floatingBarFold")!);
   expect(bar.opacity).toBe(android ? 0 : 1);
   expect(moved(host(root, "floatingBarFoldGlyphs")!).opacity).toBe(android ? 1 : 0);
-  for (const id of ["floatingBarAddress", "floatingBarTabs", "floatingBarPlus"]) expect(barGlass(root, id)).toBe(android);
+  for (const id of ["floatingBarAddress", "floatingBarTabs", "floatingBarPlus"]) expect(barGlass(root, id)).toBe(false);
   expect(bar.scale).toBeCloseTo(0.62, 3);
   expect(bar.translateY).toBeCloseTo(24 * 0.38, 3);
   expect(host(root, "floatingBarFold")!.props.pointerEvents).toBe("none");
   expect(host(root, "floatingBarFold")!.props.accessibilityElementsHidden).toBe(true);
   expect(moved(host(root, "pageBar")!)).toEqual({ opacity: 1, translateY: 0, scale: 1 });
+  for (const [fold, layer] of [["floatingBarFold", "floatingBarFoldLayer"], ["hostPillFold", "hostPillFoldLayer"]] as const) {
+    expect(host(root, fold)!.props.needsOffscreenAlphaCompositing).toBe(android);
+    expect(host(root, fold)!.props.renderToHardwareTextureAndroid).toBeFalsy();
+    expect(host(root, layer)!.props.renderToHardwareTextureAndroid).toBe(android);
+    expect(host(root, layer)!.props.pointerEvents).toBe("box-none");
+  }
   unmount(root);
 });
 
@@ -265,6 +271,69 @@ test("the 30 point pill reaches the 44 point touch target without growing: a tap
   settle();
   expect(host(root, "floatingBarFold")!.props.pointerEvents).toBe("box-none");
   unmount(root);
+});
+
+test("on Android a fold's glass stays through the crossfade and leaves once the fold settles, so the hidden bar or pill samples nothing", () => {
+  if (!android) return;
+  const root = page("redesigned");
+  const pillShown = () => root.root.findAll((node) => node.props.testID === "hostPill" && node.props.shown !== undefined && typeof node.type !== "string")[0]!.props.shown;
+  const bars = () => ["floatingBarAddress", "floatingBarTabs", "floatingBarPlus"].map((id) => barGlass(root, id));
+  expect(pillShown()).toBe(false);
+  expect(bars()).toEqual([true, true, true]);
+  scrolled("down");
+  act(() => jest.advanceTimersByTime(16));
+  expect(pillShown()).toBe(true);
+  expect(bars()).toEqual([true, true, true]);
+  settle();
+  expect(pillShown()).toBe(true);
+  expect(bars()).toEqual([false, false, false]);
+  scrolled("up");
+  act(() => jest.advanceTimersByTime(16));
+  expect(pillShown()).toBe(true);
+  expect(bars()).toEqual([true, true, true]);
+  settle();
+  expect(pillShown()).toBe(false);
+  expect(bars()).toEqual([true, true, true]);
+  unmount(root);
+});
+
+test("on Android a fold reversed partway keeps both glasses until it settles on an end, whichever way it was going", () => {
+  if (!android) return;
+  for (const at of [0.25, 0.5, 0.75]) {
+    for (const folding of [true, false]) {
+      const root = page("redesigned");
+      if (!folding) {
+        scrolled("down");
+        settle();
+      }
+      const progress = () => moved(host(root, "hostPillFold")!).opacity;
+      const pillShown = () => root.root.findAll((node) => node.props.testID === "hostPill" && node.props.shown !== undefined && typeof node.type !== "string")[0]!.props.shown;
+      const bars = () => ["floatingBarAddress", "floatingBarTabs", "floatingBarPlus"].map((id) => barGlass(root, id));
+      const bothShown = (label: string) => {
+        expect([label, pillShown(), ...bars()]).toEqual([label, true, true, true, true]);
+      };
+      scrolled(folding ? "down" : "up");
+      for (let frame = 0; frame < 120; frame++) {
+        if (folding ? progress() >= at : progress() <= 1 - at) break;
+        act(() => jest.advanceTimersByTime(16));
+      }
+      const turned = progress();
+      expect(turned).toBeGreaterThan(0);
+      expect(turned).toBeLessThan(1);
+      bothShown(`${folding ? "folding" : "unfolding"} at ${at}`);
+      scrolled(folding ? "up" : "down");
+      bothShown(`reversed at ${at}`);
+      for (let frame = 0; frame < 120; frame++) {
+        act(() => jest.advanceTimersByTime(16));
+        const now = progress();
+        if (now > 0 && now < 1) bothShown(`after reversing at ${at}, progress ${now.toFixed(2)}`);
+      }
+      settle();
+      expect(pillShown()).toBe(!folding);
+      expect(bars()).toEqual(folding ? [true, true, true] : [false, false, false]);
+      unmount(root);
+    }
+  }
 });
 
 test("on iPhone the bar's glass and the pill's glass cross over the moment the bar turns, however fast scrolls reverse, with no callback from an earlier fold left to flip them later", () => {

@@ -337,6 +337,54 @@
           "desktop": "absent",
           "windows": "absent"
         },
+        "cliDevToolsOpen": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "cliDevToolsSend": {
+          "service": "ac_cli_devtools_send",
+          "mac": "service",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "cliDevToolsClose": {
+          "service": "ac_cli_devtools_close",
+          "mac": "service",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "cliCancel": {
+          "service": "ac_cli_cancel",
+          "mac": "service",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "cliSnapshot": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "cliWaitSettled": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "cliHitTest": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "cliClick": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "cliScreenshot": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
         "cliMoveOffscreen": {
           "mac": "custom",
           "desktop": "custom",
@@ -357,6 +405,12 @@
         },
         "cliControl": {
           "topic": "cliControl",
+          "mac": "forward",
+          "desktop": "custom",
+          "windows": "forward"
+        },
+        "cliDevTools": {
+          "topic": "cliDevTools",
           "mac": "forward",
           "desktop": "custom",
           "windows": "forward"

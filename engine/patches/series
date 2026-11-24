@@ -116,6 +116,7 @@ chromium chromium-enterprise-context-info.patch
 chromium chromium-ardia-layer.patch mac
 chromium chromium-ardia-linux-layer.patch linux
 chromium chromium-linux-background-windows.patch linux
+chromium chromium-linux-launch-config.patch linux
 chromium chromium-linux-companion-browsers.patch linux
 chromium chromium-linux-page-agent.patch linux
 chromium chromium-linux-page-prompts.patch linux

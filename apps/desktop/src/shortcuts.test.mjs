@@ -132,21 +132,25 @@ test("Ctrl+Shift+Q quits Ardia and Settings lists it as a remappable Ardia short
   assert.equal(linuxMenuShortcuts().filter((entry) => entry.id.startsWith("std:")).length, 1);
 });
 
-test("Ctrl+Shift+C, Chrome's Inspect Element key, opens Inspect Elements next to Ctrl+Alt+C", () => {
+test("Ctrl+Shift+C copies the page's URL, as ⇧⌘C does on the Mac, and Ctrl+Alt+C inspects elements", () => {
   const bindings = linuxBindings();
-  for (const modifiers of [{ ctrlKey: true, shiftKey: true }, { ctrlKey: true, altKey: true }]) {
-    const combo = keyboardCombo(event("KeyC", modifiers));
-    assert.equal(commandAt(bindings, combo.keyCode, combo.flags)?.command, "inspectElements");
-  }
-  const item = linuxMenuShortcuts().find((entry) => entry.id === "inspectElements");
-  assert.equal(item.defaultKey, "c");
-  assert.deepEqual([...item.defaultModifiers].sort(), ["command", "shift"]);
-  assert.deepEqual(item.aliases, [["c", "option", "command"]]);
+  const copyKeys = keyboardCombo(event("KeyC", { ctrlKey: true, shiftKey: true }));
+  assert.equal(commandAt(bindings, copyKeys.keyCode, copyKeys.flags)?.command, "copyUrl");
+  const markdownKeys = keyboardCombo(event("KeyC", { ctrlKey: true, altKey: true, shiftKey: true }));
+  assert.equal(commandAt(bindings, markdownKeys.keyCode, markdownKeys.flags)?.command, "copyUrlAsMarkdown");
+  const inspectKeys = keyboardCombo(event("KeyC", { ctrlKey: true, altKey: true }));
+  assert.equal(commandAt(bindings, inspectKeys.keyCode, inspectKeys.flags)?.command, "inspectElements");
   const copy = linuxMenuShortcuts().find((entry) => entry.id === "copyUrl");
-  assert.equal(copy.key, "");
+  assert.equal(copy.defaultKey, "c");
+  assert.deepEqual([...copy.defaultModifiers].sort(), ["command", "shift"]);
   assert.equal(copy.remappable, true);
+  const inspect = linuxMenuShortcuts().find((entry) => entry.id === "inspectElements");
+  assert.equal(inspect.defaultKey, "c");
+  assert.deepEqual([...inspect.defaultModifiers].sort(), ["command", "option"]);
+  assert.deepEqual(inspect.aliases, []);
   const remapped = keyboardCombo(event("KeyU", { ctrlKey: true, shiftKey: true }));
   assert.equal(commandAt(linuxBindings({ copyUrl: ["u", "command", "shift"] }), remapped.keyCode, remapped.flags)?.command, "copyUrl");
+  assert.equal(commandAt(linuxBindings({ copyUrl: ["u", "command", "shift"] }), copyKeys.keyCode, copyKeys.flags), undefined);
 });
 
 test("a saved shortcut spelled with +, { or } binds as Linux's shifted =, [ or ], as the defaults do", () => {

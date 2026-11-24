@@ -145,7 +145,7 @@ test("on the closed Duo with Collapse Bottom Bar on, scrolling down folds the ba
   const android = Platform.OS === "android";
   expect(shown(fold).opacity ?? 1).toBeCloseTo(android ? 0 : 1, 3);
   expect(shown(host(root, "floatingBarFoldGlyphs")!).opacity ?? 1).toBeCloseTo(android ? 1 : 0, 3);
-  for (const id of ["floatingBarAddress", "floatingBarTabs", "floatingBarPlus"]) expect(root.root.findAll((node) => node.props.testID === id && node.props.shown !== undefined && typeof node.type !== "string")[0]!.props.shown !== false).toBe(android);
+  for (const id of ["floatingBarAddress", "floatingBarTabs", "floatingBarPlus"]) expect(root.root.findAll((node) => node.props.testID === id && node.props.shown !== undefined && typeof node.type !== "string")[0]!.props.shown !== false).toBe(false);
   expect(fold.findAll((node) => node.props.testID === "floatingBarStrip").length).toBeGreaterThan(0);
   expect(Math.abs(shown(host(root, "floatingBarCentre")!).marginLeft ?? 0)).toBe(0);
   expect(lifted(host(root, "floatingBarStrip")!)).toBeCloseTo(0, 3);

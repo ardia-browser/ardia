@@ -44,6 +44,7 @@ export {
   Frost,
   FrostSource,
   Glass,
+  GlassBackdrop,
   glassIsNative,
   INCOGNITO_LOOK,
   nativeGlassRender,

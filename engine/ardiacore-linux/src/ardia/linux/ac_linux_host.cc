@@ -635,6 +635,16 @@ int& CliActiveOwner() {
   return owner;
 }
 
+std::map<int, int>& CliDevToolsSessionHosts() {
+  static base::NoDestructor<std::map<int, int>> hosts;
+  return *hosts;
+}
+
+std::map<std::string, base::WeakPtr<content::WebContents>>& OffscreenTabsByKey() {
+  static base::NoDestructor<std::map<std::string, base::WeakPtr<content::WebContents>>> tabs;
+  return *tabs;
+}
+
 int& Revision() {
   static int rev = 0;
   return rev;
@@ -2084,6 +2094,11 @@ class HostMessageHandler : public content::WebUIMessageHandler,
         if (host != reply->handler->host_.get()) host->EngineEvent(change, changed);
       }
     }
+    if (reply->name == "engine.cliDevToolsOpen" && value->is_dict() && reply->handler->host_) {
+      if (const std::optional<int> session = value->GetDict().FindInt("session")) {
+        CliDevToolsSessionHosts()[*session] = reply->handler->host_->id();
+      }
+    }
     reply->handler->Resolve(reply->id, std::move(*value));
   }
   void Resolve(const std::string& id, base::Value value) {
@@ -2127,6 +2142,46 @@ class HostMessageHandler : public content::WebUIMessageHandler,
     if (!json) return Fail(id, "ERR_BAD_REPLY", "CLI control arguments are not JSON");
     ac_engine_call("ac_cli_control", "", json->c_str(), Replied, new EngineReply{name, weak_factory_.GetWeakPtr(), id});
   }
+  void EngineCliCall(const std::string& id, const ardiacore::linux_automation_window::EngineCliRoute& route,
+                     const base::Value* value) {
+    std::optional<base::Value> parsed;
+    if (value && value->is_string()) {
+      parsed = base::JSONReader::Read(value->GetString(), base::JSON_PARSE_RFC);
+    } else if (!value || value->is_none()) {
+      parsed = base::Value(base::DictValue());
+    }
+    if (!parsed || !parsed->is_dict()) return Fail(id, "ERR_ENGINE", "Engine arguments require a JSON object");
+    base::DictValue request = std::move(parsed->GetDict());
+    if (route.tab) {
+      const std::string* key = request.FindString("tabId");
+      if (!key) return Fail(id, "ERR_ENGINE", std::string(route.name) + " requires {tabId}");
+      content::WebContents* contents = nullptr;
+      for (const auto& [window, other] : Hosts()) {
+        TabBinding* binding = other->BindingForKey(*key);
+        if (binding && binding->contents()) {
+          contents = binding->contents();
+          break;
+        }
+      }
+      if (!contents) {
+        auto offscreen = OffscreenTabsByKey().find(*key);
+        if (offscreen != OffscreenTabsByKey().end()) {
+          contents = offscreen->second.get();
+          if (!contents) OffscreenTabsByKey().erase(offscreen);
+        }
+      }
+      if (!contents) return Fail(id, "ERR_ENGINE", "no such tab");
+      if (contents->GetBrowserContext()->IsOffTheRecord()) {
+        return ProfileFail(id, ardiacore::linux_profiles::ProfileError::kPrivateService);
+      }
+      request.Remove("tabId");
+      request.Set("tab", TabId(contents));
+    }
+    const auto json = base::WriteJson(request);
+    if (!json) return Fail(id, "ERR_BAD_REPLY", "CLI arguments are not JSON");
+    ac_engine_call(route.service, "", json->c_str(), Replied,
+                   new EngineReply{route.name, weak_factory_.GetWeakPtr(), id});
+  }
   void ProfileFail(const std::string& id, ardiacore::linux_profiles::ProfileError error) {
     Fail(id, ardiacore::linux_profiles::ProfileErrorCode(error), ardiacore::linux_profiles::ProfileErrorMessage(error));
   }
@@ -2159,6 +2214,10 @@ class HostMessageHandler : public content::WebUIMessageHandler,
           if (refused != ardiacore::linux_profiles::ProfileError::kNone) return ProfileFail(id, refused);
         }
         return CliControlCall(id, name, args.Find("args"));
+      }
+      if (const auto* route = ardiacore::linux_automation_window::EngineCliRouteFor(name)) {
+        if (private_page) return ProfileFail(id, ardiacore::linux_profiles::ProfileError::kPrivateService);
+        return EngineCliCall(id, *route, args.Find("args"));
       }
       if (name == "profiles.release") {
         bool live_elsewhere = false;
@@ -3426,6 +3485,7 @@ base::DictValue ShellHostView::Bootstrap() const {
   for (const char* capability : ardiacore::linux_capture::kCaptureCapabilities) capabilities.Append(capability);
   for (const char* capability : ardiacore::linux_cast::kCastCapabilities) capabilities.Append(capability);
   for (const char* capability : ardiacore::linux_automation_window::kCapabilities) capabilities.Append(capability);
+  for (const auto& route : ardiacore::linux_automation_window::kEngineCliRoutes) capabilities.Append(route.name);
   if (!is_utility()) {
     for (const char* capability : ardia::desktop_keys::kPageKeyCapabilities) capabilities.Append(capability);
   }
@@ -3677,6 +3737,7 @@ std::optional<std::string> ShellHostView::MoveTabOffscreen(TabBinding* binding) 
   if (!window) return std::string("Ardia couldn't take that tab off-screen.");
   const int id = TabId(contents);
   auto weak = GetWeakPtr();
+  if (binding && !binding->key().empty()) OffscreenTabsByKey()[binding->key()] = contents->GetWeakPtr();
   app_operation_ = true;
   auto owned = std::move(bindings_[id]);
   bindings_.erase(id);
@@ -8577,6 +8638,17 @@ void EngineEvent(void*, const char* topic, const char* json) {
   if (!topic || !json) return;
   const auto payload = base::JSONReader::Read(json, base::JSON_PARSE_RFC);
   if (!payload || !payload->is_dict()) return;
+  if (std::string_view(topic) == "cliDevTools") {
+    const std::optional<int> session = payload->GetDict().FindInt("session");
+    auto owner = session ? CliDevToolsSessionHosts().find(*session) : CliDevToolsSessionHosts().end();
+    if (owner == CliDevToolsSessionHosts().end()) return;
+    auto host = Hosts().find(owner->second);
+    if (payload->GetDict().Find("closed")) CliDevToolsSessionHosts().erase(owner);
+    if (host == Hosts().end()) return;
+    host->second->Event("ArdiaEngine", "engine", base::Value(base::DictValue()
+        .Set("name", "engine.cliDevTools").Set("data", payload->GetDict().Clone())));
+    return;
+  }
   if (std::string_view(topic) == "cliControl") {
     for (const auto& [id, host] : Hosts()) {
       host->Event("ArdiaEngine", "engine", base::Value(base::DictValue()

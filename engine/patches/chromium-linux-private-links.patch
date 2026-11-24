@@ -1,10 +1,10 @@
 --- a/chrome/browser/ui/navigator/browser_navigator.cc
 +++ b/chrome/browser/ui/navigator/browser_navigator.cc
-@@ -112,6 +112,11 @@
+@@ -118,6 +118,11 @@
  using content::WebContents;
  using WebExposedIsolationLevel = content::WebExposedIsolationLevel;
  
-+#if BUILDFLAG(IS_LINUX)
++#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
 +bool (*g_ardia_linux_off_the_record_navigation)(WebContents* source,
 +                                                 const GURL& url) = nullptr;
 +#endif
@@ -12,11 +12,11 @@
  namespace {
  
  struct AdditionalParams {
-@@ -781,6 +786,17 @@
+@@ -876,6 +881,17 @@
          params->browser->GetTabStripModel()->GetActiveWebContents();
    }
  
-+#if BUILDFLAG(IS_LINUX)
++#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
 +  if (params->disposition == WindowOpenDisposition::kOffTheRecord &&
 +      !params->contents_to_insert && params->source_contents &&
 +      !params->is_renderer_initiated && params->user_gesture &&

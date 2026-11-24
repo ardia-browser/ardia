@@ -103,5 +103,67 @@ class StandaloneHeaderTests(unittest.TestCase):
                     self.assertEqual(result.returncode, 0, result.stderr)
 
 
+PATHS_PROGRAM = r"""
+#include <cassert>
+#include <string>
+#include <string_view>
+
+#include "ardia/desktop/ac_desktop_paths.h"
+
+namespace paths = ardia::desktop_paths;
+
+struct NarrowPath {
+  using StringType = std::string;
+  explicit NarrowPath(std::string_view text) : text(text) {}
+  const std::string& value() const { return text; }
+  std::string AsUTF8Unsafe() const { return "converted"; }
+  static NarrowPath FromUTF8Unsafe(std::string_view) { return NarrowPath("converted"); }
+  std::string text;
+};
+
+struct WidePath {
+  using StringType = std::wstring;
+  const std::wstring& value() const { return text; }
+  std::string AsUTF8Unsafe() const {
+    std::string out;
+    for (wchar_t c : text) out.push_back(c < 0x80 ? static_cast<char>(c) : '?');
+    return out;
+  }
+  static WidePath FromUTF8Unsafe(std::string_view text) {
+    WidePath path;
+    for (char c : text) path.text.push_back(static_cast<wchar_t>(static_cast<unsigned char>(c)));
+    return path;
+  }
+  std::wstring text;
+};
+
+int main() {
+  const std::string raw("/home/u/\xff\xfe not utf-8");
+  assert(paths::Text(NarrowPath(raw)) == raw);
+  assert(paths::FromText<NarrowPath>(raw).value() == raw);
+  assert(paths::FromText<NarrowPath>("").value().empty());
+  const WidePath wide = paths::FromText<WidePath>("C:\\Users\\u\\Report Drafts");
+  assert(wide.value() == L"C:\\Users\\u\\Report Drafts");
+  assert(paths::Text(wide) == "C:\\Users\\u\\Report Drafts");
+  return 0;
+}
+"""
+
+
+@unittest.skipUnless(shutil.which(os.environ.get('CXX', 'c++')), 'no C++ compiler')
+class PathTextTests(unittest.TestCase):
+    def test_narrow_paths_keep_their_bytes_and_wide_paths_convert_through_utf8(self):
+        compiler = os.environ.get('CXX', 'c++')
+        with tempfile.TemporaryDirectory(prefix='ardia-desktop-paths-') as scratch:
+            unit = pathlib.Path(scratch, 'paths_test.cc')
+            unit.write_text(PATHS_PROGRAM)
+            binary = pathlib.Path(scratch, 'paths_test')
+            built = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-I', str(SOURCE), str(unit),
+                                    '-o', str(binary)], capture_output=True, text=True, timeout=120)
+            self.assertEqual(built.returncode, 0, built.stderr)
+            ran = subprocess.run([str(binary)], capture_output=True, text=True, timeout=60)
+            self.assertEqual(ran.returncode, 0, ran.stderr)
+
+
 if __name__ == '__main__':
     unittest.main()

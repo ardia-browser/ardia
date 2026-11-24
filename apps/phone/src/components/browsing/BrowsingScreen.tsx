@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { countRender } from "../../state/app/interactionPerf";
-import { Platform, StyleSheet, useWindowDimensions, View } from "react-native";
+import { Platform, StyleSheet, useWindowDimensions, View, type StyleProp, type ViewStyle } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -38,6 +38,7 @@ import {
   tabsMotion,
   floatingBarLayout,
   FrostSource,
+  GlassBehind,
   GlassSource,
   PAGE_FROST,
   pageReportsDrawn,
@@ -250,12 +251,14 @@ const BrowsingPage = memo(function BrowsingPage({ tab }: { tab: BrowserTab }) {
                 <Animated.View
                   testID="floatingBarFold"
                   collapsable={false}
-                  renderToHardwareTextureAndroid={Platform.OS === "android"}
+                  needsOffscreenAlphaCompositing={Platform.OS === "android"}
                   style={folds ? collapse.fold.bar : null}
                   pointerEvents={folds && collapse.collapsed ? "none" : "box-none"}
                   importantForAccessibility={folds && collapse.collapsed ? "no-hide-descendants" : "auto"}
                   accessibilityElementsHidden={folds && collapse.collapsed}
                 >
+                  <GlassBehind />
+                  <FoldLayer testID="floatingBarFoldLayer">
                   <FloatingBar
                     tab={tab}
                     order={barOrder}
@@ -272,18 +275,22 @@ const BrowsingPage = memo(function BrowsingPage({ tab }: { tab: BrowserTab }) {
                     onPlus={newTab}
                     onMore={openPageMenu}
                   />
+                  </FoldLayer>
                 </Animated.View>
                 {folds ? (
                   <Animated.View
                     testID="hostPillFold"
                     collapsable={false}
-                    renderToHardwareTextureAndroid={Platform.OS === "android"}
+                    needsOffscreenAlphaCompositing={Platform.OS === "android"}
                     style={[styles.pillPlace, collapse.fold.pill]}
                     pointerEvents={collapse.collapsed ? "box-none" : "none"}
                     importantForAccessibility={collapse.collapsed ? "auto" : "no-hide-descendants"}
                     accessibilityElementsHidden={!collapse.collapsed}
                   >
-                    <HostPill tab={tab} dark={barDark} shown={collapse.fold.pillGlass} anchors={collapse.collapsed} contentStyle={collapse.fold.pillContent} onExpand={collapse.expand} />
+                    <GlassBehind />
+                    <FoldLayer testID="hostPillFoldLayer" style={styles.pillLayer}>
+                      <HostPill tab={tab} dark={barDark} shown={collapse.fold.pillGlass} anchors={collapse.collapsed} contentStyle={collapse.fold.pillContent} onExpand={collapse.expand} />
+                    </FoldLayer>
                   </Animated.View>
                 ) : null}
               </Animated.View>
@@ -451,4 +458,13 @@ const styles = StyleSheet.create({
   controls: { position: "absolute", left: 0, right: 0 },
   materialPillPlace: { position: "absolute", height: materialBarPill.height + materialBarPill.shadowRoom * 2, paddingVertical: materialBarPill.shadowRoom, alignItems: "center", justifyContent: "flex-end" },
   pillPlace: { position: "absolute", left: 0, right: 0, bottom: 0, height: hostPillLayout.height, alignItems: "center", justifyContent: "flex-end" },
+  pillLayer: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, alignItems: "center", justifyContent: "flex-end" },
 });
+
+function FoldLayer({ testID, style, children }: { testID: string; style?: StyleProp<ViewStyle>; children: ReactNode }) {
+  return (
+    <View testID={testID} collapsable={false} renderToHardwareTextureAndroid={Platform.OS === "android"} pointerEvents="box-none" style={style}>
+      {children}
+    </View>
+  );
+}

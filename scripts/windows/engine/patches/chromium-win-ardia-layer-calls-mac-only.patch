@@ -40,9 +40,9 @@ build_config in pip: True
      content::VideoPictureInPictureWindowController* controller);
 +#endif
  
- // static
- std::unique_ptr<VideoOverlayWindowViews> VideoOverlayWindowViews::Create(
-@@ -330,8 +332,13 @@
+ #if BUILDFLAG(IS_LINUX)
+ void PrepareArdiaPictureInPicture(views::Widget* widget,
+@@ -335,8 +337,13 @@
    // Can't use make_unique(), which doesn't have access to the private
    // constructor. It's important that the constructor be private, because it
    // doesn't initialize the object fully.

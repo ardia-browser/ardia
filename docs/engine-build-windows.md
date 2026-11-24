@@ -232,10 +232,19 @@ On the Windows tree (2026-11-10): `pins` and `guard` pass, 356 patches applied w
 
 ## Our series on Windows
 
-`04-series.sh` applies every `chromium` line of `engine/patches/series`, minus the `skip` lines of
-`scripts/windows/engine/series-win`, then that file's own `chromium` lines (patches in `scripts/windows/engine/patches/`),
-strictly with `git apply` and else with `patch`'s fuzz. It records a failure and goes on, and writes
-`~/chromium-build-win/logs/series-win.tsv`. `series-win` today: three skips and 22 Windows-only patches ([Windows-only patches](#windows-only-patches)).
+`04-series.sh` applies every `chromium` line of `engine/patches/series` Windows takes, minus the `skip` lines of
+`scripts/windows/engine/series-win` and plus the `linux` lines its `take` lines name (each at its own place in the
+series), then that file's own `chromium` lines (patches in `scripts/windows/engine/patches/`),
+strictly with `git apply` and else with `patch`'s fuzz. It stops at the first patch that fails (the rest show as not
+reached), so a tree always carries the plan's first patches and a retry resumes in order, and writes
+`~/chromium-build-win/logs/series-win.tsv`. Each patch that goes in is recorded in `.series-win-applied` beside `src`
+with its place in the plan and its sha256, and a copy goes to `.series-win-applied.d`. Before patching, every
+recorded patch must still sit at the same place in the plan with the same content; a tree an earlier plan patched (a
+remade Windows patch, a `take` that moves the ones after it) is refused with the first entry that parts.
+`series_win.py rewind` reverses the recorded copies back to that entry, and apply goes on from there. A ledger from
+before the copies (names only) is kept when it is a prefix of the plan the tree still carries, and otherwise needs
+the files the series touches restored from a fresh `03-helium.py` run. `03-helium.py` doesn't touch the ledger, so
+remove `.series-win-applied` and `.series-win-applied.d` beside `src` too before applying again. `series_win_test.py` covers it. `series-win` today: four skips, 24 takes and 23 Windows-only patches ([Windows-only patches](#windows-only-patches)).
 A shared `chromium` line may end in a platform tag since the Linux port: untagged lines are for every platform, and
 Windows takes those and the `mac` ones (the set it started from), never `linux`. A tag can name several platforms
 joined by commas (`linux,win`); Windows takes a line whose platforms include `mac` or `win`. A `layer` line Windows would
@@ -263,14 +272,21 @@ The layers:
   that isn't there. The patches Windows applies and the layer sources it compiles are recorded in
   `accepted-patches.txt` and `accepted-layer-sources.txt`; a change to either is taken on purpose with
   `check_inputs.py --accept`. `chrome.dll` depends on it; `//ardia/win:probe` builds `ArdiaProbe.dll`, a stand-in for the app.
-- `series_win.py layer` copies to `//ardia/linux` the `engine/ardiacore-linux` files `//ardia/win/BUILD.gn` names:
-  the WebUI shell (`--ardia-shell=webui`, `docs/windows.md`, WebUI pilot) compiles them as they are. `check_inputs.py`
+- `series_win.py layer` copies to `//ardia/linux` the `engine/ardiacore-linux` files `//ardia/win/BUILD.gn` and
+  `linux-hooks.gn` name: the WebUI shell (`--ardia-shell=webui`, `docs/windows.md`, WebUI pilot) compiles the first as
+  they are, and `linux-hooks.gn` becomes `//ardia/linux/BUILD.gn` with the hook targets the taken patches depend on
+  (`close_hooks` for `chromium-linux-document-close.patch`, the `content_hooks` header for
+  `chromium-linux-media-player-pip.patch`). `check_inputs.py`
   keeps that list in `accepted-linux-sources.txt`, and `key-inputs.json` lists them, so a change to one of them moves
   the Windows key as well as the Linux one; the rest of the Linux layer doesn't. For the compile probe, run
   `04-series.sh` with `ARDIA_LINUX_COMPILE_PROBE=1`: the whole Linux layer is copied, with a `BUILD.gn` made from
-  `linux-probe.gn`, loaded only with the GN arg `ardia_linux_compile_probe = true`. Append that arg to `args.gn`,
+  `linux-hooks.gn` followed by `linux-probe.gn`, loaded only with the GN arg `ardia_linux_compile_probe = true`. Append that arg to `args.gn`,
   `gn gen`, build `ardia/win:linux_compile_probe` with `-k 0`, then restore `args.gn`, `gn gen` again (no rebuild
-  follows: no compile line changes) and run `04-series.sh` without the variable.
+  follows: no compile line changes) and run `04-series.sh` without the variable. On a tree whose siso state doesn't match its files
+  (a tree copied in with `tar`, as on the MSI's WSL), that target schedules its whole closure (101,938 steps there on
+  2026-11-24): stop it with SIGINT and check syntax instead, running each unit's `clang-cl` line from its target's
+  `.ninja` file (`$:` unescaped, `/Fo` and the module flags dropped) with `-fsyntax-only`, which writes nothing under
+  `out/`.
 - `engine/ardiacore/apply.sh` doesn't run: it is Mac code. Only `ardia/core/ac_hooks.h` and `ac_content_hooks.h` are
   copied, because the hook patches include them (`// nogncheck`) and they are OS-neutral. With nothing setting the
   hooks, Chrome behaves as stock.
@@ -356,14 +372,18 @@ a Windows build needs.
 | `chromium-enterprise-context-info.patch` | applies | OS-neutral | Shared; `getContextInfo` answers with the device's context in a build without cloud content analysis, which Windows is too (`enterprise_cloud_content_analysis` defaults to false in its tree), so Endpoint Verification gets an answer there as well. Applies strictly to the Windows tree's copy of the file (checked 2026-11-16) |
 | `chromium-ardia-layer.patch` | applies | OS-neutral | It links `chrome/browser/ardia` into the Mac framework only; Windows needs the same link once the `ac_*` layer builds there |
 
-Every patch that applies does so strictly (`git apply`, no fuzz). The current plan (`series_win.py`) selects the 89
-shared lines a Windows tree takes (untagged and `mac`), skips 3 of them and adds 22 Windows patches: 108 in all. The Windows-only patches follow them (`series-win`, [below](#windows-only-patches)). The file classes above come from paths, so a
+The current plan (`series_win.py`) selects the 90 shared lines a Windows tree takes (untagged and `mac`), skips 4 of
+them, takes 24 `linux` lines and adds 23 Windows patches: 133 in all. On the Windows tree (2026-11-24) 132 apply
+strictly; `chromium-safe-storage-one-key-for-every-data-dir.patch`, a `mac` line, needs fuzz 1 for helium-windows'
+context and can't change without moving the Mac key. The Windows-only patches follow them (`series-win`, [below](#windows-only-patches)). The file classes above come from paths, so a
 shared file can still call into Mac-only code: two did (`chrome.dll` failed to link without the guard patch).
 
 ### Windows-only patches
 
-Each line of `series-win`: a `skip` keeps a patch of `engine/patches/series` off the Windows tree, a `chromium` line
-applies one of `scripts/windows/engine/patches/` after the shared series. `engine/patches/build/tests/test_patch_docs.py`
+Each line of `series-win`: a `skip` keeps a patch of `engine/patches/series` off the Windows tree, a `take` applies one
+of its `linux` lines at that line's own place in the shared series (what a `linux,win` line will do once `series.py`
+reads platform sets; until then a set line would move the macOS key, since every key hashes `series.py`), a `chromium`
+line applies one of `scripts/windows/engine/patches/` after the shared series. `engine/patches/build/tests/test_patch_docs.py`
 fails when a line has no row here, a row's Line doesn't match it, a Removable when is empty, or a row names a line
 `series-win` no longer has.
 
@@ -373,6 +393,30 @@ fails when a line has no row here, a row's Line doesn't match it, a Removable wh
 | `chromium-safe-storage-no-silent-reset.patch` | skip | Its context is helium-macos' `prevent-reset-on-keychain-unavailability`, which a Windows tree doesn't have. Windows still needs a counterpart: a DPAPI decrypt failure must not silently replace the key (`dpapi_key_provider.cc`, `os_crypt_win.cc`) | With the Mac patch; a Windows counterpart would be its own `series-win` line |
 | `chromium-extension-state-mirror-hooks.patch` | skip | Its hooks feed the WebKit replica of each extension, which is Mac only; BUILD.gn's `if (!is_win)` list keeps the replica's engine calls out of the Windows engine | With the Mac patch |
 | `chromium-embedder-discard-veto.patch` | skip | Its callback seam in `DiscardEligibilityPolicy` is registered only by the Mac layer (`ac_discard_veto.mm`), so on Windows it would do nothing but move the engine key; Windows keeps pages through `chromium-win-discard-asks-the-host.patch` (`g_ardia_keeps_page`) | When Windows takes the Mac's discard veto in place of its own hook (#3860) |
+| `chromium-linux-action-popup-hook.patch` | take | `g_ardia_open_action_popup`, a null hook in `extension_action_api.cc` the desktop host sets to open an extension popup in its shell; inert until then | When `series.py` reads platform sets and its line in `engine/patches/series` becomes `linux,win` |
+| `chromium-linux-settings-overrides.patch` | take | The manifest feature list gains `linux`; its `!IS_LINUX` blocks keep Windows exactly as stock | When `series.py` reads platform sets and its line in `engine/patches/series` becomes `linux,win` |
+| `chromium-linux-extension-keybindings.patch` | take | Its keybinding changes sit behind `IS_LINUX`, so Windows compiles stock behavior; the WebUI host widens them when it owns extension shortcuts | When `series.py` reads platform sets and its line in `engine/patches/series` becomes `linux,win` |
+| `chromium-linux-document-close.patch` | take | The close gate (`GateLinuxClose`, cancellation tokens) in `BrowserCloseManager`, `UnloadController` and `RenderFrameHostImpl`; its GN deps are `is_linux \|\| is_win`, and `linux-hooks.gn` gives Windows `//ardia/linux:close_hooks`. With no `g_ardia_linux_close_hooks.defer` registered, every gate answers no and closing runs as stock | When `series.py` reads platform sets and its line in `engine/patches/series` becomes `linux,win` |
+| `chromium-linux-devtools-authority.patch` | take | Its DevTools lease code is all behind `IS_LINUX` and its GN dep is `is_linux`, so Windows compiles stock DevTools; it rides along so `-devtools-open-tab` and `chromium-win-devtools-other-clients.patch` (content, no shared file) apply on the same tree | When `series.py` reads platform sets and its line in `engine/patches/series` becomes `linux,win` |
+| `chromium-linux-auto-pip.patch` | take | `g_ardia_linux_tab_shown`, `-auto_pip_requested`: null hooks in the auto picture-in-picture helpers; the feature switches it adds in `BasicStartupComplete` stay `IS_LINUX`, so RNW keeps its own | When `series.py` reads platform sets and its line in `engine/patches/series` becomes `linux,win` |
+| `chromium-linux-pip-placement.patch` | take | `PrepareArdiaPictureInPicture` stays `IS_LINUX` (the Linux layer defines it), so Windows compiles stock; `chromium-win-ardia-layer-calls-mac-only.patch` is made against it | When `series.py` reads platform sets and its line in `engine/patches/series` becomes `linux,win` |
+| `chromium-linux-page-status.patch` | take | Null hooks for the status URL, hang dialogs and drag end in `BrowserWebContentsDelegate`; inert until the desktop host sets them | When `series.py` reads platform sets and its line in `engine/patches/series` becomes `linux,win` |
+| `chromium-linux-wheel-zoom.patch` | take | `g_ardia_linux_wheel_zoom_off`, false unless the host sets it | When `series.py` reads platform sets and its line in `engine/patches/series` becomes `linux,win` |
+| `chromium-linux-private-links.patch` | take | `g_ardia_linux_off_the_record_navigation`, widened to `IS_LINUX \|\| IS_WIN`; null until the host sets it | When `series.py` reads platform sets and its line in `engine/patches/series` becomes `linux,win` |
+| `chromium-linux-devtools-open-tab.patch` | take | `g_ardia_linux_devtools_opened_tab`/`-open_url`, widened; with both null the open-in-tab path is stock | When `series.py` reads platform sets and its line in `engine/patches/series` becomes `linux,win` |
+| `chromium-linux-background-windows.patch` | take | Its `--ardia-background` check stays `IS_LINUX`, so it is inert on Windows; its launch-config half is `chromium-linux-launch-config.patch`, a `linux` line Windows doesn't take | When `series.py` reads platform sets and its line in `engine/patches/series` becomes `linux,win` |
+| `chromium-linux-companion-browsers.patch` | take | Null hooks (`g_ardia_linux_companion_owner`, `-present_companion`, `-is_companion`, `-window_tab_count`) in `BrowserView`, the unload controller and permission prompts | When `series.py` reads platform sets and its line in `engine/patches/series` becomes `linux,win` |
+| `chromium-linux-page-agent.patch` | take | The browser-side binder (`g_ardia_linux_page_host_binder`) and `ISOLATED_WORLD_ID_ARDIA_PAGE` are widened; the renderer agent (`//ardia/linux:page_agent`) stays `IS_LINUX` until Windows builds it | When `series.py` reads platform sets and its line in `engine/patches/series` becomes `linux,win` |
+| `chromium-linux-page-prompts.patch` | take | Null hooks for permission, file-system, external-protocol, autofill and password prompts drawn by the shell; `chromium-win-external-protocol-dialog.patch` is made against its hook | When `series.py` reads platform sets and its line in `engine/patches/series` becomes `linux,win` |
+| `chromium-linux-navigation-hold-hook.patch` | take | `g_ardia_linux_navigation_throttles`, widened; null until the host sets it | When `series.py` reads platform sets and its line in `engine/patches/series` becomes `linux,win` |
+| `chromium-linux-web-store-uninstall.patch` | take | `g_ardia_linux_store_uninstall`, widened; null until the host sets it | When `series.py` reads platform sets and its line in `engine/patches/series` becomes `linux,win` |
+| `chromium-linux-media-player-pip.patch` | take | The content-side candidates and request calls (`ArdiaLinuxPictureInPictureCandidates`), widened; called only by the host. `linux-hooks.gn` copies `ac_linux_content_hooks.h` | When `series.py` reads platform sets and its line in `engine/patches/series` becomes `linux,win` |
+| `chromium-linux-shell-above-input.patch` | take | `g_ardia_linux_shell_passes_point` in `BrowserView::ShouldDescendIntoChildForEventHandling`; null until a BrowserView-hosted shell sets it | When `series.py` reads platform sets and its line in `engine/patches/series` becomes `linux,win` |
+| `chromium-linux-pip-in-window.patch` | take | `g_ardia_linux_video_overlay`, `-auto_pip_allowed`, `-keeps_picture_in_picture`, `-refuses_document_picture_in_picture`, widened; all null until the host sets them | When `series.py` reads platform sets and its line in `engine/patches/series` becomes `linux,win` |
+| `chromium-linux-thin-scroll-bars.patch` | take | `NativeTheme::SetArdiaLinuxThinScrollBars`, off unless the host calls it | When `series.py` reads platform sets and its line in `engine/patches/series` becomes `linux,win` |
+| `chromium-linux-unhandled-key.patch` | take | `g_ardia_linux_unhandled_key`, null until the host sets it | When `series.py` reads platform sets and its line in `engine/patches/series` becomes `linux,win` |
+| `chromium-linux-window-minimum-size.patch` | take | `g_ardia_linux_minimum_size`, null until the host sets it | When `series.py` reads platform sets and its line in `engine/patches/series` becomes `linux,win` |
+| `chromium-linux-geolocation.patch` | take | `OverrideSystemLocationProvider` → `g_ardia_linux_location_provider`, widened; with the hook null it returns `nullptr`, Chromium's own Windows provider. Its declaration no longer sits inside `-autoplay-policy`'s block, which Windows replaces with `chromium-win-autoplay-policy.patch` | When `series.py` reads platform sets and its line in `engine/patches/series` becomes `linux,win` |
 | `chromium-win-rtl-unittest-domsub.patch` | chromium | Puts back the `base_unittests` literals Helium's domain substitution breaks | Helium's domain substitution leaves those literals alone |
 | `chromium-win-load-local-state-delegate.patch` | chromium | `chrome_main_delegate.cc` calls `LoadLocalState` with no delegate, as stock Chrome does; the parameter comes from `chromium-cef-carryover-mac.patch`, whose caller (H5) is Mac only | The carryover's `LoadLocalState` delegate goes, or a Windows caller passes one |
 | `chromium-win-ardia-layer-calls-mac-only.patch` | chromium | The two calls into `chrome/browser/ardia` that Windows doesn't build (`RegisterManagementPolicyProviders`, `NewArdiaVideoOverlayWindow`) become Mac only; Windows makes Chrome's own Picture in Picture window | Windows builds both: the layer's Mac block and `pip/` |

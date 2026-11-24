@@ -31,26 +31,30 @@ function Glyph({ kind, color, box }: { kind: Kind; color: string; box: number })
   return <Symbol name="xmark" size={box} weight="regular" color={color} style={{ width: box + 4, height: box + 4 }} />;
 }
 
-function ControlButton({ kind, width, height, radius, ink, onPress }: { kind: Kind; width: number; height: number; radius: number; ink: Ink; onPress: () => void }) {
+function ControlButton({ kind, width, height, radius, ink, onPress, forced }: { kind: Kind; width: number; height: number; radius: number; ink: Ink; onPress: () => void; forced?: { readonly hovered: boolean; readonly pressed: boolean } }) {
   const { hovered, hoverProps } = useHover();
   const close = kind === "close";
   return (
     <View {...hoverProps}>
       <Pressable focusable onPress={onPress} accessibilityRole="button" accessibilityLabel={LABEL[kind]}>
-        {({ pressed }) => (
-          <View
-            style={{
-              width,
-              height,
-              borderRadius: radius,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: pressed ? (close ? B.closePressed : ink.pressed) : hovered ? (close ? B.closeHover : ink.hover) : undefined,
-            }}
-          >
-            <Glyph kind={kind} color={close && (hovered || pressed) ? B.closeInk : ink.icon} box={height < B.smallBelow ? B.smallGlyph : B.glyph} />
-          </View>
-        )}
+        {({ pressed }) => {
+          const isHovered = hovered || !!forced?.hovered;
+          const isPressed = pressed || !!forced?.pressed;
+          return (
+            <View
+              style={{
+                width,
+                height,
+                borderRadius: radius,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: isPressed ? (close ? B.closePressed : ink.pressed) : isHovered ? (close ? B.closeHover : ink.hover) : undefined,
+              }}
+            >
+              <Glyph kind={kind} color={close && (isHovered || isPressed) ? B.closeInk : ink.icon} box={height < B.smallBelow ? B.smallGlyph : B.glyph} />
+            </View>
+          );
+        }}
       </Pressable>
     </View>
   );
@@ -69,6 +73,7 @@ export type WindowControlsProps = {
   leading?: boolean;
   inset?: number;
   buttons?: readonly WindowButton[];
+  maximizeState?: { readonly hovered: boolean; readonly pressed: boolean };
 };
 
 export const controlsShown = windowControlsDrawn() || windowButtonsChoosable;
@@ -81,7 +86,7 @@ export const useControlsShown = (): boolean => {
   return windowControlsDrawn();
 };
 
-export const WindowControls = memo(function WindowControls({ windowId, centerY, size, maximizable = true, minimizable = true, onMenu, ink, opacity = 1, hidden = false, leading = false, inset = WINDOW_CONTROLS.edge, buttons }: WindowControlsProps) {
+export const WindowControls = memo(function WindowControls({ windowId, centerY, size, maximizable = true, minimizable = true, onMenu, ink, opacity = 1, hidden = false, leading = false, inset = WINDOW_CONTROLS.edge, buttons, maximizeState }: WindowControlsProps) {
   const theme = useTheme();
   const maximized = useWindowMaximized(windowId);
   const shown = useControlsShown();
@@ -105,7 +110,7 @@ export const WindowControls = memo(function WindowControls({ windowId, centerY, 
       }}
     >
       {drawn.map((button) => (
-        <ControlButton key={button} kind={button === "maximize" && maximized ? "restore" : button} width={width} height={size} radius={plateRadius} ink={colors} onPress={pressOf(button, windowId, onMenu)} />
+        <ControlButton key={button} kind={button === "maximize" && maximized ? "restore" : button} width={width} height={size} radius={plateRadius} ink={colors} onPress={pressOf(button, windowId, onMenu)} forced={button === "maximize" ? maximizeState : undefined} />
       ))}
     </Animated.View>
   );

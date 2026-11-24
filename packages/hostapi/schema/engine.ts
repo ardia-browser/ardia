@@ -4,7 +4,7 @@ export const engine = defineDomain({
   kind: "engine",
   imports: {
     "../wire": ["Done"],
-    "../../engineDomain": ["BatterySaverMode", "BatterySaverState", "ChildProcessCpu", "CliConsoleDelta", "CliControlStatus", "CliTabTarget", "CursorRestore", "EngineComponent", "EngineInfo", "EngineTask", "HoverLostEpisode", "MemorySaverRequest", "MemorySaverState", "PopupProtectedMedia", "PressLoopLongReport", "SystemState", "WindowUnpaintedRecord"],
+    "../../engineDomain": ["BatterySaverMode", "BatterySaverState", "ChildProcessCpu", "CliClick", "CliConsoleDelta", "CliControlStatus", "CliDevToolsEvent", "CliDevToolsOpened", "CliDevToolsReply", "CliHitTest", "CliScreenshot", "CliSettle", "CliSnapshot", "CliTabTarget", "CursorRestore", "EngineComponent", "EngineInfo", "EngineTask", "HoverLostEpisode", "MemorySaverRequest", "MemorySaverState", "PopupProtectedMedia", "PressLoopLongReport", "SystemState", "WindowUnpaintedRecord"],
   },
   calls: {
     info: {
@@ -146,6 +146,69 @@ export const engine = defineDomain({
       mac: "custom",
       windows: "absent",
     },
+    cliDevToolsOpen: {
+      args: '{ tabId: string; owner: string; scope: "full" | "inspect" }',
+      result: "CliDevToolsOpened",
+      desktop: "custom",
+      mac: "custom",
+      windows: "absent",
+    },
+    cliDevToolsSend: {
+      args: "{ session: number; owner: string; method: string; params?: Record<string, unknown>; sessionId?: string; timeoutMs?: number }",
+      result: "CliDevToolsReply",
+      service: "ac_cli_devtools_send",
+      desktop: "custom",
+      windows: "absent",
+    },
+    cliDevToolsClose: {
+      args: "{ session: number; owner: string }",
+      result: "{ closed: boolean }",
+      service: "ac_cli_devtools_close",
+      desktop: "custom",
+      windows: "absent",
+    },
+    cliCancel: {
+      args: "{ owner?: string; all?: boolean }",
+      result: "{ cancelled: number }",
+      service: "ac_cli_cancel",
+      desktop: "custom",
+      windows: "absent",
+    },
+    cliSnapshot: {
+      args: "{ tabId: string; owner?: string; maxRefs?: number; maxTextBytes?: number; interactiveOnly?: boolean; wholePage?: boolean; occlusion?: boolean }",
+      result: "CliSnapshot",
+      desktop: "custom",
+      mac: "custom",
+      windows: "absent",
+    },
+    cliWaitSettled: {
+      args: "{ tabId: string; owner?: string; timeoutMs?: number; quietMs?: number; longRequestMs?: number; maxInflight?: number; idle?: boolean; frame?: boolean }",
+      result: "CliSettle",
+      desktop: "custom",
+      mac: "custom",
+      windows: "absent",
+    },
+    cliHitTest: {
+      args: "{ tabId: string; owner?: string; ref?: string; x?: number; y?: number }",
+      result: "CliHitTest",
+      desktop: "custom",
+      mac: "custom",
+      windows: "absent",
+    },
+    cliClick: {
+      args: '{ tabId: string; owner?: string; ref?: string; x?: number; y?: number; force?: boolean; button?: "left" | "right" | "middle"; clickCount?: number; modifiers?: number }',
+      result: "CliClick",
+      desktop: "custom",
+      mac: "custom",
+      windows: "absent",
+    },
+    cliScreenshot: {
+      args: '{ tabId: string; owner?: string; format?: "png" | "jpeg"; quality?: number; clip?: { x: number; y: number; width: number; height: number }; scale?: number }',
+      result: "CliScreenshot",
+      desktop: "custom",
+      mac: "custom",
+      windows: "absent",
+    },
     cliMoveOffscreen: {
       args: "{ tabId: string }",
       result: "{ ok: boolean; reason?: string }",
@@ -171,6 +234,11 @@ export const engine = defineDomain({
     cliControl: {
       payload: "CliControlStatus",
       topic: "cliControl",
+      desktop: "custom",
+    },
+    cliDevTools: {
+      payload: "CliDevToolsEvent",
+      topic: "cliDevTools",
       desktop: "custom",
     },
     hoverLost: {

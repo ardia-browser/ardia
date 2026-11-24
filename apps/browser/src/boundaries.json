@@ -1855,6 +1855,44 @@
    "detected": false
   },
   {
+   "id": "windows-webui-documents:documentStore",
+   "source": "frame",
+   "guard": "Windows WebUI host (--ardia-shell=webui): ArdiaShell.readDocument, writeDocument, saveDocument and removeDocument run only for the live trusted chrome://ardia/ shell document; document names must pass ValidWindowsDocumentName (1-200 [A-Za-z0-9._-], matching ardia-shell-migration's DOCUMENT_NAME_LIMIT, no path separators, colons/ADS, control chars, .., leading/trailing dots or spaces, or Windows reserved device names CON/PRN/AUX/NUL/COM0-9/LPT0-9) and must not be reserved (session.json, live.json, live.canonical.json, rnw-migration.json, rnw-migration.lock, launch-starts.txt, launch-starts.txt.tmp, case-insensitive), and writes and removes also refuse the engine-owned launch-guard.json in any case (WritableWindowsDocumentName) while reads and bootstrap.documents keep it for launch telemetry; writes are capped at WindowsDocumentLimit (8 MiB, 48 MiB for sync-state.nns in any letter case) and reads at kWindowsDocumentReadLimit (64 MiB, the migrator's DOCUMENT_LIMIT); reads, writes and deletes open the destination directory and target handles with FILE_FLAG_OPEN_REPARSE_POINT, refuse directories/devices/reparse points and multiply-linked files (nNumberOfLinks != 1), verify final-path direct-child containment inside the app-data directory's canonical final path (the root is opened following reparse points, so the root itself may be a junction; every document file is opened with FILE_FLAG_OPEN_REPARSE_POINT) via GetFinalPathNameByHandleW and IsDirectChildOfWinDirectory, validate UTF-8 on reads (base::IsStringUTF8), stage writes through a CREATE_NEW handle committed handle-relatively via NtSetInformationFile (FileRenameInformationEx fallback FileRenameInformation with held RootDirectory handle and leaf name only) and delete via FileDispositionInformationEx/FileDispositionInfo on the open handle; bootstrap.documents enumerates only eligible non-reparse single-link valid-UTF-8 regular files bounded by count and total bytes (BootstrapDocumentFits, checked against the listed size before a file is opened and again after the read) and reaches the page through JSON.parse (BootstrapAssignmentScript), so a document named __proto__ stays an own property; ReadAsset verifies regular single-link non-reparse disk files and strict final-path containment inside AssetDirectory() via IsStrictlyWithinWinDirectory; scripts/windows/webui-pilot/bridge.ps1 runs the shared hostile corpus against the document sinks, requiring the exact native ERR_DOCUMENT_REQUEST/ERR_DOCUMENT_NAME code for refused values (a synchronous throw, transport error or timeout fails) and a confined write/read/remove round trip for names the policy accepts (prototype keys, \"1\", \"true\") with Object.prototype unchanged, plus reparse-point escape checks (ERR_DOCUMENT_READ/WRITE/REMOVE) and a reload proving a __proto__ document survives in bootstrap.documents, scripts/windows/webui-pilot/junction.ps1 proves junction escapes out of ardia-ui are refused with a CSP-allowed image control and sends the shared hostile corpus raw and URL-encoded through chrome://ardia/ checking each request against ArdiaShell.testAssetSink (counted only in a test instance): a same-origin request moves exactly one of served/refused/outsideRoot/unreadable and never served or outsideRoot, a cross-origin one moves none, and values the URL parser resolves to the shell page are counted and not sent, final paths are compared case-sensitively after the drive letter or UNC share (WinFinalPathStartsWith), and scripts/windows/engine/tests/webui_policy_test.cc unit-tests the pure validators",
+   "checks": [
+    "scripts/windows/engine/src/ardia/win/webui/webui_policy.h#ValidWindowsDocumentName",
+    "scripts/windows/engine/src/ardia/win/webui/webui_policy.h#ReservedWindowsDocumentName",
+    "scripts/windows/engine/src/ardia/win/webui/webui_policy.h#IsStrictlyWithinWinDirectory",
+    "scripts/windows/engine/src/ardia/win/webui/webui_policy.h#IsDirectChildOfWinDirectory",
+    "scripts/windows/engine/src/ardia/win/webui/webui_policy.h#ValidWinRenameLeafName",
+    "scripts/windows/engine/src/ardia/win/webui/webui_policy.h#WinFileRenameInfoBufferBytes",
+    "scripts/windows/engine/src/ardia/win/webui/webui_shell.cc#ReadStoredDocument",
+    "scripts/windows/engine/src/ardia/win/webui/webui_shell.cc#WriteStoredDocument",
+    "scripts/windows/engine/src/ardia/win/webui/webui_shell.cc#RemoveStoredDocument",
+    "scripts/windows/engine/src/ardia/win/webui/webui_shell.cc#ReadBootstrapDocuments",
+    "scripts/windows/engine/src/ardia/win/webui/webui_shell.cc#ReadAsset",
+    "scripts/windows/webui-pilot/bridge.ps1#documents-refuse-hostile-corpus",
+    "scripts/windows/webui-pilot/bridge.ps1#documents-refuse-reparse-point",
+    "scripts/windows/webui-pilot/bridge.ps1#documents-launch-guard-read-only",
+    "scripts/windows/webui-pilot/junction.ps1#asset-junction-escape-refused",
+    "scripts/windows/webui-pilot/junction.ps1#asset-sink-refuses-hostile-corpus",
+    "scripts/windows/webui-pilot/junction.ps1#documents-read-under-junction-app-data-root",
+    "scripts/windows/engine/tests/webui_policy_test.cc#TestDocumentNames"
+   ],
+   "detected": false
+  },
+  {
+   "id": "windows-webui-telemetry:post",
+   "source": "frame",
+   "guard": "Windows WebUI host (--ardia-shell=webui): ArdiaTelemetry.post runs only for the live trusted chrome://ardia/ shell document, requires exactly two string arguments passing TelemetryPostAllowed (ardia::desktop_telemetry_policy::PostAcceptable: a non-empty body <= 512 KiB starting with { and an ak_<kind>_<24 hex> ingest key with no header-injection bytes; then base::JSONReader in RFC mode must parse the body as a JSON object), caps concurrent in-flight requests at kMaxInFlight, posts only to the hardcoded kEndpoint (in a test instance only, ARDIA_TEST_TELEMETRY_ENDPOINT may name an http localhost URL instead) through Chromium's system URLLoaderFactory with CredentialsMode::kOmit, RedirectMode::kError and LOAD_DISABLE_CACHE, cancels in-flight posts on TearDown, and replies only with the filtered HTTP status code; scripts/windows/webui-pilot/bridge.ps1 runs the shared hostile corpus in both argument positions plus malformed, non-object and oversized bodies and bad keys, requires the native ERR_TELEMETRY_REFUSED code for each (a synchronous throw, transport error or timeout fails), checks at the sink that ArdiaShell.testTelemetrySink's requestsStarted (counted where the request is handed to the network) stays 0, and sends a valid control that must reach a loopback listener with the same body and key; scripts/windows/engine/tests/webui_policy_test.cc unit-tests the shared telemetry policy",
+   "checks": [
+    "engine/ardiacore-desktop/src/ardia/desktop/ac_desktop_telemetry_policy.h#PostAcceptable",
+    "scripts/windows/engine/src/ardia/win/webui/webui_shell.cc#WinTelemetryClient",
+    "scripts/windows/webui-pilot/bridge.ps1#telemetry-refuses-invalid-requests",
+    "scripts/windows/engine/tests/webui_policy_test.cc#TestDesktopTelemetryPolicy"
+   ],
+   "detected": false
+  },
+  {
    "id": "windows-webui-platform:desktopPlatform",
    "source": "frame",
    "guard": "Windows WebUI host (--ardia-shell=webui): only the trusted shell document's ardiaRequest reaches ardia::desktop::Platform(); ArdiaApp.openExternalURL takes exactly one string and allows only http, https and mailto: the raw text may not hold whitespace, control characters, quotes or backslashes or exceed 32 KB, http(s) must be written scheme://host with no credentials, and only then does ShellExecuteExW see the canonical spec; a background instance opens nothing; setLaunchAtLogin takes one boolean and writes only HKCU Run 'Ardia WebUI' as the quoted executable path (refusing a path with quotes or control characters) plus --ardia-shell=webui, never RNW's 'Ardia' value; the default browser calls take no arguments and only open ms-settings:defaultapps, and platform.ps1 sends the shared corpus as one-item lists to setAsDefaultBrowser and checks the default apps launch count never moves until an empty-list control moves it by one; DPAPI secrets accept account names of 1-64 [A-Za-z0-9_-] only, are stored as sync-key-x<hex of the exact account bytes>.dpapi so accounts differing only by case never share a file on NTFS, live under the WebUI data folder's Sync, are bound to the ardia-sync-key/v1 purpose and instance, and are zeroed after use; scripts/windows/webui-pilot/platform.ps1 sends the shared hostile corpus (scripts/security/hostile-inputs.mjs via hostile-corpus.mjs) plus unlisted schemes and bad shapes to openExternalURL in a Windows guest and checks at the sink that the ShellExecuteExW count never moves, then that one https control moves it by one",
@@ -1952,6 +1990,71 @@
     "packages/core-rs/crates/ardia-shell-migration/tests/hostile.rs",
     "apps/browser/src/state/telemetry/shellMigration.ts",
     "apps/browser/src/state/telemetry/shellMigration.test.mjs"
+   ],
+   "detected": false
+  },
+  {
+   "id": "socket-family:devtools-sessions",
+   "source": "socket",
+   "guard": "devtools.attach, send, batch and detach open a full DevTools client of one tab over the control socket for the owner's connection only (plugin sessions are refused by accessProblem; D3: any same-user process the socket let in is the owner, the same trust as control.devtoolsEndpoint's token). Params are checked against the method's schema, the tab through tabOf (private tabs never), the method name against METHOD_NAME, a child sessionId against CHILD_SESSION, params must be an object and a batch holds at most MAX_BATCH commands with only method, params and sessionId. Every engine session is an untrusted DevTools client (IsTrusted false, so Chromium gives it auto-attach only: no Target.getTargets, attachToTarget or createTarget), never attaches to a WebUI or chrome:// page (MayAttachToURL) or to any frame of an off-the-record profile (MayAttachToRenderFrameHost), so it can only reach its own tab and that tab's iframes and workers; at most 4000 events wait in the engine (the rest counted as dropped) and an event over the cap is cut from its prefix before it is parsed. A session belongs to its connection (ownedSession) and the engine checks the owner again (SessionFor); the engine refuses private tabs (CliTabRefusal), needs the RemoteDebuggingAllowed policy at open and at every command (revoking it ends every session at once) and IsInspectionAllowed for the tab, caps sessions (kMaxSessions, kMaxSessionsPerOwner), takes only ValidMethodName names, an inspect session only kInspectionMethods, and passes an event over 900 KiB as cut. Sessions end when their tab closes, the connection closes (closeEngineCliFor, CancelCliOps) or control goes off (CloseAllCliDevToolsSessions)",
+   "checks": [
+    "apps/browser/src/state/automation/socketEngineCli.ts#checkedMethod",
+    "apps/browser/src/state/automation/socketEngineCli.ts#checkedChild",
+    "apps/browser/src/state/automation/socketEngineCli.ts#MAX_BATCH",
+    "apps/browser/src/state/automation/engineCli.ts#ownedSession",
+    "apps/browser/src/state/automation/engineCli.ts#closeEngineCliFor",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_devtools_sessions.cc#SessionFor",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_devtools_sessions.cc#ValidMethodName",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_devtools_sessions.cc#kInspectionMethods",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_ops.cc#CliRemoteDebuggingAllowed",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_ops.cc#ValidCliOwner",
+    "apps/browser/src/state/automation/socketEngineCli.test.mjs#HOSTILE_VALUES",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_cdp.cc#MayAttachToRenderFrameHost",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_cdp.cc#kMaxQueuedEvents",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_ops.cc#CliTabRefusal"
+   ],
+   "detected": false
+  },
+  {
+   "id": "socket-family:engine-tab-ops",
+   "source": "socket",
+   "guard": "tabs.snapshot, waitSettled, hitTest, click and screenshot take the tab through tabOf, a ref only as e<digits>, a point only as finite numbers within 100000 CSS pixels (never with a ref), and limits within the schema's ranges; the engine reads them again (ReadTarget, ReadOwner, ScreenshotOptionsFromArgs), refuses private tabs and tabs DevTools policy keeps from inspection, caps each operation at 15 s (settle at the caller's timeout, at most 60 s), and calls it off when its connection closes (RegisterCliOp, CancelCliOps). A click goes through the same hit test and is held back while something covers the target unless force. Every entry point, screenshot included, refuses private tabs and needs the RemoteDebuggingAllowed policy and IsInspectionAllowed (CliTabRefusal); turning control off or revoking the policy cancels every running operation (CancelAllCliOps). A click is refused unless the hit test reached the target or something inside it, and is checked again after the pointer moves, so a layer that appears meanwhile stops it",
+   "checks": [
+    "apps/browser/src/state/automation/socketEngineCli.ts#target",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_tab_ops_calls.cc#ReadTarget",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_tab_ops.cc#kOpDeadline",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_settle.cc#read_ms",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_screenshot.cc#ScreenshotOptionsFromArgs",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_ops.cc#CancelCliOps",
+    "apps/browser/src/state/automation/socketEngineCli.test.mjs#HOSTILE_VALUES",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_ops.cc#CliTabRefusal",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_ops.cc#CancelAllCliOps"
+   ],
+   "detected": false
+  },
+  {
+   "id": "engine-cli-page-data:snapshot",
+   "source": "page",
+   "guard": "The snapshot reads each frame's accessibility tree and layout from Chromium through the tab's own untrusted DevTools session (Accessibility.getFullAXTree, DOMSnapshot.captureSnapshot), never page script, frame by frame in frame-tree order, at most 24 frames, each refused frame (DevTools policy, private profile, WebUI: CliFrameRefused) left out with everything under it, at most kMaxItems nodes: names and values are cut to 200 bytes at a UTF-8 boundary (ClippedUtf8), at most maxRefs rows and maxTextBytes of text, at most 24 frames; the DevTools answers it uses for hit tests (DOM.getNodeForLocation, DOM.describeNode, Page.getLayoutMetrics) are read field by field with types checked and only map to nodes already in the tree (PageModel::Find), coordinates past a million pixels are dropped; dismiss buttons are chosen by fixed word lists (DismissChoices), nothing the page says is run or stored beyond the tab's ref table (RefStore, at most 4000 refs, cleared of node ids on navigation). A password field and an input whose autocomplete names a card, a one-time code or a password (split on every HTML whitespace) never has its value or the text under it listed (SensitiveAutocomplete; redacted: true). A ref rebinds only inside its own frame and only to the one element there with its role and name; a main-frame navigation forgets every ref",
+   "checks": [
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_page_model.cc#ClippedUtf8",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_ref_store.cc#kMaxRefEntries",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_page_model.cc#DismissChoices",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_page_model.cc#kMaxItems",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_hit_tester.cc#Located",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_page_model.cc#SensitiveAutocomplete",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_page_reader.cc#CliFrameRefused"
+   ],
+   "detected": false
+  },
+  {
+   "id": "engine-cli-page-data:screenshot",
+   "source": "page",
+   "guard": "A screenshot is pixels copied from the tab's compositor surface (RenderWidgetHostView::CopyFromSurface) and encoded in the browser process on a worker thread; its size is capped at kMaxSide per side and kMaxPixels in all, the clip must be finite and within the page, and Page.captureScreenshot sent on a session is answered this way only for its own tab when it isn't on screen",
+   "checks": [
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_screenshot.cc#kMaxPixels",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_screenshot.cc#ClipFrom",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_screenshot.cc#ScreenshotOptionsFromCdp"
    ],
    "detected": false
   }

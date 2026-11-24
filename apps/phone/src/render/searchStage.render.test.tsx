@@ -496,7 +496,7 @@ onIPhone("with no hinge the search panel sits the floating panel's 8 points in f
 
 const anchorSpan = (root: Root, width: number) => {
   let controls: ReactTestInstance | null = root.root.findAll((node) => node.type === FloatingBar)[0]!.parent;
-  while (controls && (typeof controls.type !== "string" || StyleSheet.flatten(controls.props.style).bottom === undefined)) controls = controls.parent;
+  while (controls && (typeof controls.type !== "string" || StyleSheet.flatten(controls.props.style)?.bottom === undefined)) controls = controls.parent;
   const { left, right } = StyleSheet.flatten(controls!.props.style) as { left: number; right: number };
   const centre = { ...StyleSheet.flatten(host(root, "floatingBarCentre")!.props.style), ...getAnimatedStyle(host(root, "floatingBarCentre")!) } as { marginLeft?: number; marginRight?: number };
   return { left: left + 24 + (centre.marginLeft ?? 0), right: width - right - 24 - (centre.marginRight ?? 0) };

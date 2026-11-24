@@ -1,4 +1,5 @@
 import type { CrashProcess, CrashReport } from "../../../packages/shell/src/app";
+import { CRASH_DUMP_PLATFORM_ID } from "@platform/crashPlatform";
 import { hostSupports, invokeHost, type ArdiaHost } from "./host.ts";
 import { parseMinidump, type Minidump, type MinidumpModule } from "./minidump.ts";
 
@@ -27,9 +28,56 @@ const SIGNAL_CODES: Record<string, Record<number, string>> = {
 
 const PROCESS_KINDS: Record<string, CrashProcess> = { browser: "browser", renderer: "renderer", extension: "renderer", "gpu-process": "gpu", ppapi: "plugin" };
 
+const WINDOWS_PLATFORM = 2;
+const WINDOWS_SIMULATED = 0x517a7ed;
+const WINDOWS_ACCESS_CODES = new Set([0xc0000005, 0xc0000006]);
+const WINDOWS_ACCESS: Record<string, string> = { "0": "ACCESS_READ", "1": "ACCESS_WRITE", "8": "ACCESS_EXECUTE" };
+const WINDOWS_IMAGE = /^[0-9A-Za-z._+-]{5,80}$/;
+const WINDOWS_IMAGE_KINDS = /\.(dll|exe|sys|drv|ocx|cpl)$/i;
+const ENGINE_VERSION = /^\d+(\.\d+){1,3}$/;
+
+const WINDOWS_EXCEPTIONS: Record<number, string> = {
+  0x80000001: "EXCEPTION_GUARD_PAGE",
+  0x80000002: "EXCEPTION_DATATYPE_MISALIGNMENT",
+  0x80000003: "EXCEPTION_BREAKPOINT",
+  0x80000004: "EXCEPTION_SINGLE_STEP",
+  0x40000015: "STATUS_FATAL_APP_EXIT",
+  0xc0000005: "EXCEPTION_ACCESS_VIOLATION",
+  0xc0000006: "EXCEPTION_IN_PAGE_ERROR",
+  0xc000001d: "EXCEPTION_ILLEGAL_INSTRUCTION",
+  0xc0000017: "STATUS_NO_MEMORY",
+  0xc0000025: "EXCEPTION_NONCONTINUABLE_EXCEPTION",
+  0xc0000026: "EXCEPTION_INVALID_DISPOSITION",
+  0xc000007b: "STATUS_INVALID_IMAGE_FORMAT",
+  0xc000008c: "EXCEPTION_ARRAY_BOUNDS_EXCEEDED",
+  0xc000008d: "EXCEPTION_FLT_DENORMAL_OPERAND",
+  0xc000008e: "EXCEPTION_FLT_DIVIDE_BY_ZERO",
+  0xc000008f: "EXCEPTION_FLT_INEXACT_RESULT",
+  0xc0000090: "EXCEPTION_FLT_INVALID_OPERATION",
+  0xc0000091: "EXCEPTION_FLT_OVERFLOW",
+  0xc0000092: "EXCEPTION_FLT_STACK_CHECK",
+  0xc0000093: "EXCEPTION_FLT_UNDERFLOW",
+  0xc0000094: "EXCEPTION_INT_DIVIDE_BY_ZERO",
+  0xc0000095: "EXCEPTION_INT_OVERFLOW",
+  0xc0000096: "EXCEPTION_PRIV_INSTRUCTION",
+  0xc00000fd: "EXCEPTION_STACK_OVERFLOW",
+  0xc000012d: "STATUS_COMMITMENT_LIMIT",
+  0xc0000135: "STATUS_DLL_NOT_FOUND",
+  0xc0000139: "STATUS_ENTRYPOINT_NOT_FOUND",
+  0xc0000142: "STATUS_DLL_INIT_FAILED",
+  0xc0000194: "EXCEPTION_POSSIBLE_DEADLOCK",
+  0xc0000374: "STATUS_HEAP_CORRUPTION",
+  0xc0000409: "STATUS_STACK_BUFFER_OVERRUN",
+  0xc000041d: "STATUS_FATAL_USER_CALLBACK_EXCEPTION",
+  0xc0000417: "STATUS_INVALID_CRUNTIME_PARAMETER",
+  0xc0000420: "STATUS_ASSERTION_FAILURE",
+  0xc0000602: "STATUS_FAIL_FAST_EXCEPTION",
+  0xe06d7363: "MSVC_CPP_EXCEPTION",
+};
+
 export const servesCrashDumps = (host: ArdiaHost | undefined) => !!host && hostSupports(CRASH_DUMPS, host);
 
-const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1) || "???";
+const baseName = (path: string) => path.slice(Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\")) + 1) || "???";
 const folder = (path: string) => path.slice(0, path.lastIndexOf("/") + 1);
 
 function bundledImages(dump: Minidump): { name: string; uuid: string }[] {
@@ -68,6 +116,38 @@ export function linuxCrashReport(dump: Minidump, entry: CrashDumpEntry): CrashRe
   return report;
 }
 
+export const isWindowsDump = (dump: Minidump) => dump.platform === WINDOWS_PLATFORM;
+
+const windowsStatus = (code: number) => WINDOWS_EXCEPTIONS[code] ?? `STATUS_${code.toString(16).toUpperCase().padStart(8, "0")}`;
+
+function windowsImage(path: string): string {
+  if (/^[A-Za-z][A-Za-z0-9+.-]*:(?!\\)/.test(path) || path.includes("://")) return "???";
+  const name = path.slice(Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\")) + 1);
+  return WINDOWS_IMAGE.test(name) && WINDOWS_IMAGE_KINDS.test(name) ? name : "???";
+}
+
+export function windowsCrashReport(dump: Minidump, entry: CrashDumpEntry): CrashReport | null {
+  const thrown = dump.exception;
+  if (!thrown || thrown.address === null || thrown.signal === WINDOWS_SIMULATED) return null;
+  const process = PROCESS_KINDS[dump.annotations.ptype ?? "browser"] ?? "utility";
+  const address = thrown.address;
+  const module = dump.modules.find((candidate) => address >= candidate.base && address - candidate.base < BigInt(candidate.size));
+  const frame = module ? { image: windowsImage(module.path), offset: Number(address - module.base) } : { image: "???" };
+  const report: CrashReport = { incidentId: entry.id, time: dump.time, fileTime: entry.time, process, frames: [frame], terminationNamespace: "WIN32_EXCEPTION", signal: windowsStatus(thrown.signal) };
+  const access = WINDOWS_ACCESS_CODES.has(thrown.signal) && thrown.parameter !== null ? WINDOWS_ACCESS[thrown.parameter.toString()] : undefined;
+  if (access) report.exceptionSubtype = access;
+  if (process !== "browser" && dump.annotations.ver && ENGINE_VERSION.test(dump.annotations.ver)) report.engineVersion = dump.annotations.ver;
+  const version = dump.annotations[VERSION_KEY];
+  if (process === "browser" && version && APP_VERSION.test(version)) report.appVersion = version;
+  if (dump.processStart !== null && dump.time >= dump.processStart) report.uptimeSeconds = Math.round((dump.time - dump.processStart) / 1000);
+  return report;
+}
+
+export function hostCrashReport(dump: Minidump, entry: CrashDumpEntry, platform: number = CRASH_DUMP_PLATFORM_ID): CrashReport | null {
+  if (dump.platform !== platform) return null;
+  return platform === WINDOWS_PLATFORM ? windowsCrashReport(dump, entry) : linuxCrashReport(dump, entry);
+}
+
 function decodeBase64(text: string): Uint8Array {
   const binary = atob(text);
   const bytes = new Uint8Array(binary.length);
@@ -94,7 +174,7 @@ export async function linuxCrashReports(host: ArdiaHost, since: number): Promise
     if (typeof text !== "string" || !text) continue;
     let dump: Minidump | null = null;
     try { dump = parseMinidump(decodeBase64(text)); } catch { dump = null; }
-    const report = dump && linuxCrashReport(dump, entry);
+    const report = dump && hostCrashReport(dump, entry);
     if (report) reports.push(report);
   }
   return newestPerKind(reports);

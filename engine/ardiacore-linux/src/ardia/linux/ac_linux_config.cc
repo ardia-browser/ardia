@@ -6,6 +6,7 @@
 #include <utility>
 #include <vector>
 
+#include "ardia/desktop/ac_desktop_paths.h"
 #include "ardia/linux/ac_linux_config_core.h"
 #include "ardia/linux/ac_linux_launch_config.h"
 #include "base/files/file_descriptor_watcher_posix.h"
@@ -94,7 +95,7 @@ class ConfigService {
       io_ = base::SequenceBound<ConfigWatchIo>(
           base::ThreadPool::CreateSequencedTaskRunner(
               {base::MayBlock(), base::TaskPriority::USER_VISIBLE, base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN}),
-          folder.value(), base::SequencedTaskRunner::GetCurrentDefault(),
+          ardia::desktop_paths::Text(folder), base::SequencedTaskRunner::GetCurrentDefault(),
           base::BindRepeating(&ConfigService::Changed, base::Unretained(this)));
     }
     subscribers_[caller] = std::move(names);
@@ -141,7 +142,7 @@ void ReadFile(const base::FilePath& folder, const base::ListValue& args, Done do
             base::ScopedBlockingCall blocking(FROM_HERE, base::BlockingType::MAY_BLOCK);
             return core::Read(folder, name);
           },
-          folder.value(), args[0].GetString()),
+          ardia::desktop_paths::Text(folder), args[0].GetString()),
       base::BindOnce([](Done done, core::FileRead read) { std::move(done).Run(true, ReadValue(std::move(read))); },
                      std::move(done)));
 }
@@ -176,7 +177,7 @@ void WriteSchemas(const base::FilePath& user_data_directory, const base::FilePat
             base::ScopedBlockingCall blocking(FROM_HERE, base::BlockingType::MAY_BLOCK);
             return core::WriteSchemas(schemas, folder, files);
           },
-          user_data_directory.Append(core::kSchemaFolder).value(), folder.value(), std::move(files)),
+          ardia::desktop_paths::Text(user_data_directory.AppendASCII(core::kSchemaFolder)), ardia::desktop_paths::Text(folder), std::move(files)),
       base::BindOnce(
           [](Done done, core::SchemaWrite write) {
             if (!write.error.empty()) return std::move(done).Run(false, base::Value(std::move(write.error)));

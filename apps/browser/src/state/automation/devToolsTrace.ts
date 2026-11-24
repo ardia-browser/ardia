@@ -1,5 +1,5 @@
 import { MAX_TRACE_EVENTS } from "./devToolsInsights";
-import type { InspectionSession } from "./devToolsSession";
+import { TRANSPORT_LOSS, type InspectionSession } from "./devToolsSession";
 import { OpError } from "./workspaceTargets";
 
 export const TRACE_CATEGORIES = [
@@ -25,6 +25,10 @@ export async function recordTrace(session: InspectionSession, options: { duratio
   let events: unknown[] = [];
   let truncated = false;
   const stop = session.on((method, params) => {
+    if (method === TRANSPORT_LOSS) {
+      truncated = true;
+      return;
+    }
     if (method !== "Tracing.dataCollected" || !Array.isArray(params.value)) return;
     const room = MAX_TRACE_EVENTS - events.length;
     if (room <= 0) {

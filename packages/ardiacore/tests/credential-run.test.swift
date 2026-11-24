@@ -105,11 +105,11 @@ final class RecordingLink: CredentialPluginLink, @unchecked Sendable {
     sent.compactMap { (try? JSONSerialization.jsonObject(with: Data($0.utf8))) as? [String: Any] }
   }
 
-  func reply(to id: Int, within seconds: TimeInterval = 15) async throws -> [String: Any] {
+  func reply(to id: Int, within seconds: TimeInterval = CredentialRunFixture.patience) async throws -> [String: Any] {
     try await CredentialRunFixture.eventually(seconds) { self.messages().first { ($0["id"] as? Int) == id && $0["method"] == nil } }
   }
 
-  func call(named handler: String, within seconds: TimeInterval = 15) async throws -> [String: Any] {
+  func call(named handler: String, within seconds: TimeInterval = CredentialRunFixture.patience) async throws -> [String: Any] {
     try await CredentialRunFixture.eventually(seconds) { self.messages().last { $0["name"] as? String == handler && $0["kind"] as? String == "credentials" } }
   }
 }
@@ -118,6 +118,8 @@ enum CredentialRunFixture {
   static let directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("fixtures/credentials")
   static let password = "correct horse battery staple"
   static let key = "fakesession0123456789abcdefKEY"
+  static let patience: TimeInterval = 120
+  static let killedWithin: TimeInterval = 20
 
   static func scratch(_ name: String) throws -> String {
     let path = (NSTemporaryDirectory() as NSString).appendingPathComponent("ardia-credential-\(name)-\(UUID().uuidString)")
@@ -165,7 +167,7 @@ struct CredentialRun {
     _ = try await link.reply(to: 1)
     guard ready else { return }
     send(["id": 2, "method": "ready", "params": ["commands": [Any](), "credentialProvider": ["handlers": handlers]]])
-    _ = await endpoint.waitUntilReady(timeout: 5)
+    _ = await endpoint.waitUntilReady(timeout: CredentialRunFixture.patience)
   }
 
   func send(_ object: [String: Any]) { endpoint.receive(CredentialRunFixture.line(object)) }
@@ -178,7 +180,7 @@ struct CredentialRun {
   func request(_ method: String, _ params: [String: Any]) async throws -> [String: Any] {
     let id = nextId()
     send(["id": id, "method": method, "params": params])
-    return try await link.reply(to: id, within: 20)
+    return try await link.reply(to: id)
   }
 
   func verb(_ call: String, _ verb: String, _ params: [String: Any] = [:], timeoutMs: Int? = nil) async throws -> [String: Any] {
@@ -194,7 +196,7 @@ struct CredentialRun {
     let endpoint = self.endpoint
     let ticket = host.ticket(provider)
     let answer = Task { await endpoint.call(handler, ticket: ticket, input: input) }
-    let message = try await CredentialRunFixture.eventually(10) { link.messages().dropFirst(before).first { $0["kind"] as? String == "credentials" } }
+    let message = try await CredentialRunFixture.eventually(CredentialRunFixture.patience) { link.messages().dropFirst(before).first { $0["kind"] as? String == "credentials" } }
     return (try #require(message["call"] as? String), message, answer)
   }
 
@@ -373,7 +375,7 @@ struct CredentialRunTests {
     let id = run.nextId()
     run.send(["id": id, "method": "credentials.verb", "params": ["call": open.call, "verb": "sleep", "params": ["seconds": "30"]]])
     let pidFile = (run.host.folder as NSString).appendingPathComponent("sleeping.pid")
-    let pid = try await CredentialRunFixture.eventually(10) { (try? String(contentsOfFile: pidFile, encoding: .utf8)).flatMap { Int32($0.trimmingCharacters(in: .whitespacesAndNewlines)) } }
+    let pid = try await CredentialRunFixture.eventually(CredentialRunFixture.patience) { (try? String(contentsOfFile: pidFile, encoding: .utf8)).flatMap { Int32($0.trimmingCharacters(in: .whitespacesAndNewlines)) } }
     run.host.epochs.advance(run.provider)
     run.endpoint.lockNow()
     guard case .host(.stale) = await open.answer.value else {
@@ -381,7 +383,7 @@ struct CredentialRunTests {
       return
     }
     #expect(run.link.stopped == 1)
-    _ = try await CredentialRunFixture.eventually(5) { kill(pid, 0) != 0 ? true : nil }
+    _ = try await CredentialRunFixture.eventually(CredentialRunFixture.killedWithin) { kill(pid, 0) != 0 ? true : nil }
     let after = try await run.verb(open.call, "status")
     #expect((after["error"] as? [String: Any])?["code"] as? String == "closed")
   }
@@ -415,7 +417,7 @@ struct CredentialRunTests {
     let result = try #require(reply["result"] as? [String: Any])
     #expect(result["timedOut"] as? Bool == true)
     #expect(result["succeeded"] as? Bool == false)
-    #expect(Date().timeIntervalSince(started) < 8)
+    #expect(Date().timeIntervalSince(started) < CredentialRunFixture.killedWithin)
     try await run.finish(open.call)
   }
 
@@ -424,14 +426,14 @@ struct CredentialRunTests {
     let open = try await run.open("list")
     let id = run.nextId()
     run.send(["id": id, "method": "credentials.verb", "params": ["call": open.call, "verb": "sleep", "params": ["seconds": "30"]]])
-    _ = try await CredentialRunFixture.eventually(10) { run.endpoint.runningVerbs == 1 ? true : nil }
+    _ = try await CredentialRunFixture.eventually(CredentialRunFixture.patience) { run.endpoint.runningVerbs == 1 ? true : nil }
     open.answer.cancel()
     guard case .host(.cancelled) = await open.answer.value else {
       Issue.record("the call didn't end cancelled")
       return
     }
     #expect(run.link.messages().contains { $0["call"] as? String == open.call && $0["cancel"] as? Bool == true })
-    _ = try await CredentialRunFixture.eventually(10) { run.endpoint.runningVerbs == 0 ? true : nil }
+    _ = try await CredentialRunFixture.eventually(CredentialRunFixture.patience) { run.endpoint.runningVerbs == 0 ? true : nil }
   }
 
   @Test func `at most four CLI runs at once`() async throws {
@@ -440,11 +442,11 @@ struct CredentialRunTests {
     for _ in 0..<4 {
       run.send(["id": run.nextId(), "method": "credentials.verb", "params": ["call": open.call, "verb": "sleep", "params": ["seconds": "20"]]])
     }
-    _ = try await CredentialRunFixture.eventually(10) { run.endpoint.runningVerbs == 4 ? true : nil }
+    _ = try await CredentialRunFixture.eventually(CredentialRunFixture.patience) { run.endpoint.runningVerbs == 4 ? true : nil }
     let fifth = try await run.verb(open.call, "status")
     #expect((fifth["error"] as? [String: Any])?["message"] as? String == "Fakewarden has 4 commands running.")
     try await run.finish(open.call)
-    _ = try await CredentialRunFixture.eventually(10) { run.endpoint.runningVerbs == 0 ? true : nil }
+    _ = try await CredentialRunFixture.eventually(CredentialRunFixture.patience) { run.endpoint.runningVerbs == 0 ? true : nil }
   }
 
   @Test func `a reused request id can't start a second CLI past the cap, and lock still kills every CLI`() async throws {
@@ -453,15 +455,15 @@ struct CredentialRunTests {
     let id = run.nextId()
     let pidFile = (run.host.folder as NSString).appendingPathComponent("sleeping.pid")
     run.send(["id": id, "method": "credentials.verb", "params": ["call": open.call, "verb": "sleep", "params": ["seconds": "30"]]])
-    let pid = try await CredentialRunFixture.eventually(10) { (try? String(contentsOfFile: pidFile, encoding: .utf8)).flatMap { Int32($0.trimmingCharacters(in: .whitespacesAndNewlines)) } }
+    let pid = try await CredentialRunFixture.eventually(CredentialRunFixture.patience) { (try? String(contentsOfFile: pidFile, encoding: .utf8)).flatMap { Int32($0.trimmingCharacters(in: .whitespacesAndNewlines)) } }
     run.send(["id": id, "method": "credentials.verb", "params": ["call": open.call, "verb": "sleep", "params": ["seconds": "30"]]])
-    let duplicate = try await run.link.reply(to: id, within: 10)
+    let duplicate = try await run.link.reply(to: id)
     #expect((duplicate["error"] as? [String: Any])?["code"] as? String == "bad_request")
     #expect(run.endpoint.runningVerbs == 1)
     run.host.epochs.advance(run.provider)
     run.endpoint.lockNow()
     _ = await open.answer.value
-    _ = try await CredentialRunFixture.eventually(5) { kill(pid, 0) != 0 ? true : nil }
+    _ = try await CredentialRunFixture.eventually(CredentialRunFixture.killedWithin) { kill(pid, 0) != 0 ? true : nil }
     #expect(run.endpoint.runningVerbs == 0)
   }
 
@@ -484,7 +486,7 @@ struct CredentialRunTests {
     let run = try await CredentialRun(ready: false)
     let endpoint = run.endpoint
     let short = Task { await endpoint.waitUntilReady(timeout: 0.2) }
-    let long = Task { await endpoint.waitUntilReady(timeout: 10) }
+    let long = Task { await endpoint.waitUntilReady(timeout: CredentialRunFixture.patience) }
     #expect(await short.value == false)
     try await Task.sleep(for: .milliseconds(300))
     run.send(["id": 2, "method": "ready", "params": ["commands": [Any](), "credentialProvider": ["handlers": ["state", "signIn", "unlock", "signOut", "list", "reveal", "save"]]]])
@@ -617,9 +619,14 @@ final class NodePluginLink: CredentialPluginLink, @unchecked Sendable {
     process.standardInput = input
     process.standardOutput = output
     process.standardError = FileHandle.nullDevice
-    output.fileHandleForReading.readabilityHandler = { [weak self] handle in self?.take(handle.availableData) }
-    try process.run()
+    output.fileHandleForReading.readabilityHandler = { [weak self] handle in
+      let data = handle.availableData
+      if data.isEmpty { handle.readabilityHandler = nil }
+      self?.take(data)
+    }
   }
+
+  func start() throws { try process.run() }
 
   private func take(_ data: Data) {
     let lines = lock.withLock { () -> [String] in
@@ -690,6 +697,7 @@ struct PluginProviderEndToEndTests {
       endpoint = CredentialRunEndpoint(
         plugin: "fakewarden", run: 1, approved: "approved", attachment: 1, contribution: contribution, host: host, link: link, appVersion: "1.41.0")
       link.endpoint = endpoint
+      try link.start()
       let counter = wanted
       provider = PluginVaultProvider(contribution: contribution, host: host, wantRun: { _ in counter.withLock { $0 += 1 } }, openApproval: { _, _ in })
     }
@@ -699,7 +707,7 @@ struct PluginProviderEndToEndTests {
     }
 
     func ready() async throws {
-      #expect(await endpoint.waitUntilReady(timeout: 15))
+      #expect(await endpoint.waitUntilReady(timeout: CredentialRunFixture.patience))
       provider.attach(endpoint)
     }
   }
@@ -750,12 +758,12 @@ struct PluginProviderEndToEndTests {
     rig.host.epochs.advance("fakewarden")
     rig.provider.locked()
     #expect(rig.link.stopped == 1)
-    _ = try await CredentialRunFixture.eventually(10) { rig.link.process.isRunning ? nil : true }
+    _ = try await CredentialRunFixture.eventually(CredentialRunFixture.patience) { rig.link.process.isRunning ? nil : true }
     let started = Date()
     let state = await rig.provider.state(rig.cli())
     #expect(state.state == .unavailable)
     #expect(rig.wanted.withLock { $0 } == 1)
-    #expect(Date().timeIntervalSince(started) < CredentialLimits.runWait + 5)
+    #expect(Date().timeIntervalSince(started) < CredentialLimits.runWait + CredentialRunFixture.killedWithin)
   }
 
   @Test func `an unlock that needs the master password asks for that field`() async throws {

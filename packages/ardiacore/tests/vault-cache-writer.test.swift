@@ -5,6 +5,7 @@ import os
 private final class Written: Sendable {
   let log = OSAllocatedUnfairLock(initialState: [(String, Double, Bool)]())
   let gate = DispatchSemaphore(value: 0)
+  let started = DispatchSemaphore(value: 0)
   let held = OSAllocatedUnfairLock(initialState: false)
 
   var entries: [(String, Double, Bool)] { log.withLock { $0 } }
@@ -19,12 +20,15 @@ struct VaultCacheWriterTests {
   @Test func `saves made while a write is running collapse into one write of the newest snapshot`() {
     let written = Written()
     let writer = VaultCacheWriter { id, snapshot, toCloud in
-      if written.held.withLock({ $0 }) { written.gate.wait() }
+      if written.held.withLock({ $0 }) {
+        written.started.signal()
+        written.gate.wait()
+      }
       written.log.withLock { $0.append((id, snapshot.savedAt, toCloud)) }
     }
     written.held.withLock { $0 = true }
     writer.save("1password", snapshot(1), toCloud: false)
-    Thread.sleep(forTimeInterval: 0.05)
+    written.started.wait()
     writer.save("1password", snapshot(2), toCloud: true)
     writer.save("1password", snapshot(3), toCloud: false)
     written.held.withLock { $0 = false }
@@ -37,14 +41,17 @@ struct VaultCacheWriterTests {
   @Test func `forgetting a store drops its pending write and waits for the running one, so a delete after it wins`() {
     let written = Written()
     let writer = VaultCacheWriter { id, snapshot, _ in
-      if written.held.withLock({ $0 }) { written.gate.wait() }
+      if written.held.withLock({ $0 }) {
+        written.started.signal()
+        written.gate.wait()
+      }
       written.log.withLock { $0.append((id, snapshot.savedAt, false)) }
     }
     written.held.withLock { $0 = true }
     writer.save("bitwarden", snapshot(1), toCloud: false)
-    Thread.sleep(forTimeInterval: 0.05)
+    written.started.wait()
     writer.save("bitwarden", snapshot(2), toCloud: false)
-    DispatchQueue.global().asyncAfter(deadline: .now() + 0.1) {
+    DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) {
       written.held.withLock { $0 = false }
       written.gate.signal()
     }

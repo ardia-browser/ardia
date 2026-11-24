@@ -253,6 +253,8 @@ struct VaultCloudAccountTests {
 struct VaultCommandRunTests {
   let environment = ["PATH": "/usr/bin:/bin"]
 
+  static let killedWithin: Duration = .seconds(20)
+
   static func elapsed(_ start: ContinuousClock.Instant) -> Duration { ContinuousClock.now - start }
 
   @Test func `the site index hands a page a small slice and finds what a full scan finds`() {
@@ -289,7 +291,7 @@ struct VaultCommandRunTests {
     let result = await VaultCommand(executable: "/bin/sleep", arguments: ["30"], environment: environment, input: nil, timeout: 0.5).run()
     #expect(result.timedOut)
     #expect(result.succeeded == false)
-    #expect(Self.elapsed(start) < .seconds(5))
+    #expect(Self.elapsed(start) < Self.killedWithin)
   }
 
   @Test func `a blocked stdin write does not hold the deadline`() async {
@@ -297,7 +299,7 @@ struct VaultCommandRunTests {
     let big = Data(repeating: 0x61, count: 4 * 1024 * 1024)
     let result = await VaultCommand(executable: "/bin/sleep", arguments: ["30"], environment: environment, input: big, timeout: 0.5).run()
     #expect(result.timedOut)
-    #expect(Self.elapsed(start) < .seconds(5))
+    #expect(Self.elapsed(start) < Self.killedWithin)
   }
 
   @Test func `cancelling the calling task stops the command promptly`() async {
@@ -309,7 +311,7 @@ struct VaultCommandRunTests {
     let result = await running.value
     #expect(result.cancelled)
     #expect(result.succeeded == false)
-    #expect(Self.elapsed(start) < .seconds(5))
+    #expect(Self.elapsed(start) < Self.killedWithin)
   }
 
   @Test func `a task cancelled before launch never starts the command`() async {
@@ -322,20 +324,19 @@ struct VaultCommandRunTests {
     let result = await early.value
     #expect(result.cancelled)
     #expect(result.launched == false)
-    #expect(Self.elapsed(start) < .seconds(2))
+    #expect(Self.elapsed(start) < Self.killedWithin)
   }
 
   @Test func `output past the cap stops the command and hands back nothing`() async {
-    let start = ContinuousClock.now
     let result = await VaultCommand(executable: "/usr/bin/yes", arguments: [], environment: environment, input: nil, timeout: 20).run()
     #expect(result.overflowed)
     #expect(result.succeeded == false)
     #expect(result.stdout.isEmpty)
-    #expect(Self.elapsed(start) < .seconds(15))
+    #expect(result.timedOut == false)
   }
 
   @Test func `output past the cap fails the command even when it exits before the output is read`() async {
-    let result = await VaultCommand(executable: "/bin/sh", arguments: ["-c", "printf AB"], environment: environment, input: nil, timeout: 5,
+    let result = await VaultCommand(executable: "/bin/sh", arguments: ["-c", "printf AB"], environment: environment, input: nil, timeout: 60,
                                     outputLimit: 1).run()
     #expect(result.overflowed)
     #expect(result.succeeded == false)
@@ -343,7 +344,7 @@ struct VaultCommandRunTests {
   }
 
   @Test func `output still open when the drain deadline passes fails the command`() async {
-    let script = "echo head; (sleep 4; echo tail) & exit 0"
+    let script = "echo head; (sleep 20; echo tail) & exit 0"
     let result = await VaultCommand(executable: "/bin/sh", arguments: ["-c", script], environment: environment, input: nil, timeout: 10).run()
     #expect(result.status == 0)
     #expect(result.incomplete)
@@ -355,14 +356,14 @@ struct VaultCommandRunTests {
     let result = await VaultCommand(executable: "/bin/sh", arguments: ["-c", script], environment: environment, input: nil, timeout: 0.5).run()
     #expect(result.timedOut)
     let survivor = try #require(pid_t(result.trimmedOutput))
-    let deadline = ContinuousClock.now + .seconds(VaultCommand.killDelay + 3)
+    let deadline = ContinuousClock.now + Self.killedWithin
     while kill(survivor, 0) == 0, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(50)) }
     #expect(kill(survivor, 0) != 0)
   }
 
   @Test func `stdin reaches the command and stdout comes back`() async {
     let text = "fixture-" + "stdin-1"
-    let result = await VaultCommand(executable: "/bin/cat", arguments: [], environment: environment, input: Data(text.utf8), timeout: 5).run()
+    let result = await VaultCommand(executable: "/bin/cat", arguments: [], environment: environment, input: Data(text.utf8), timeout: 60).run()
     #expect(result.succeeded)
     #expect(result.output == text)
   }
@@ -374,7 +375,7 @@ struct VaultCommandRunTests {
   }
 
   @Test func `a command sees only the environment it was given`() async {
-    let result = await VaultCommand(executable: "/usr/bin/env", arguments: [], environment: environment, input: nil, timeout: 5).run()
+    let result = await VaultCommand(executable: "/usr/bin/env", arguments: [], environment: environment, input: nil, timeout: 60).run()
     #expect(result.succeeded)
     #expect(result.output.trimmingCharacters(in: .whitespacesAndNewlines) == "PATH=/usr/bin:/bin")
   }

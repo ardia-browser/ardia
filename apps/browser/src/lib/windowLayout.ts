@@ -13,6 +13,11 @@ export const sidebarWidthLimit = (windowWidth: number | null | undefined): numbe
 export const shownSidebarWidth = (saved: number, windowWidth: number | null | undefined): number => Math.min(saved, sidebarWidthLimit(windowWidth));
 
 export const CARD_INSET = 9;
+export const SQUARE_TILE_COLUMNS = 4;
+export const TOP_APP_TILE_GAP = 6;
+
+export const compactTopAppsWidth = (savedWidth: number, tileHeight: number) =>
+  Math.max(SIDEBAR_MIN_WIDTH, Math.min(savedWidth, 2 * CARD_INSET + SQUARE_TILE_COLUMNS * tileHeight + (SQUARE_TILE_COLUMNS - 1) * TOP_APP_TILE_GAP));
 
 export const PAGE_FRAME = { min: 0, max: 12, default: CARD_INSET } as const;
 

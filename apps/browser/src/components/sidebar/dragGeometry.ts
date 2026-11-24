@@ -2,9 +2,9 @@ import type { ScrollView, View } from "react-native";
 import { layout } from "../ui/theme";
 import { currentSettings } from "../../state/browser/current";
 import { createDragMarks, dragMarksOf, markDrag, type SplitHalfMark } from "../../state/sidebar/dragMarks";
-import { overPins, pinGrid, pinSlot, TILE_GAP } from "./pinZone";
+import { overPins, pinLayout, pinSlot, TILE_GAP } from "./pinZone";
 import { SCROLL_EDGE } from "./ScrollEdge";
-import { apart, SPLIT_HOLD_MS, pinSlotPitch, type Drop, type Frame, type Ghost, type Item, type Pointed, tailKey } from "./dragModel";
+import { apart, SPLIT_HOLD_MS, type Drop, type Frame, type Ghost, type Item, type Pointed, tailKey } from "./dragModel";
 import { NO_DROP } from "../../state/drag/drops";
 import { splitViewAvailable } from "../../state/splits/splits";
 import type { DragHome } from "../../state/sidebar/current";
@@ -180,18 +180,19 @@ export class DragGeometry {
     if (!marks.pins && home === null) count = 0;
     const total = cells.length + count;
     if (!total) return null;
-    const balanced = currentSettings().balancedTopApps;
-    const slot = pinSlot(tiles, total, layout.pinnedHeight, x, y, balanced);
+    const { balancedTopApps, squareTopApps } = currentSettings();
+    const grid = pinLayout(total, tiles.w, layout.pinnedHeight, balancedTopApps, squareTopApps);
+    const slot = pinSlot(tiles, total, grid, x, y);
     const found = !marks.pins ? (home ?? cells.length) : marks.pinBefore === tailKey("tiles") ? cells.length : cells.findIndex((c) => c.key === marks.pinBefore);
     const gap = found < 0 ? cells.length : found;
     const index = slot < gap ? slot : slot >= gap + count ? slot - count : -1;
     const cell = index >= 0 ? cells[index] : undefined;
     if (!cell) return { cell: null, index: gap, gap, part: "gap" };
-    const { columns, width } = pinGrid(total, tiles.w, balanced);
+    const { columns, width, height, pitch } = grid;
     const mid = tiles.x + (slot % columns) * (width + TILE_GAP) + width / 2;
-    const top = tiles.y + Math.floor(slot / columns) * pinSlotPitch();
+    const top = tiles.y + Math.floor(slot / columns) * pitch;
     const reach = this.drag.hold.ready === cell.key ? 0.45 : 0.3;
-    const centre = folders && Math.abs(x - mid) < width * reach && Math.abs(y - (top + layout.pinnedHeight / 2)) <= (layout.pinnedHeight + TILE_GAP) / 2;
+    const centre = folders && Math.abs(x - mid) < width * reach && Math.abs(y - (top + height / 2)) <= pitch / 2;
     return { cell, index, gap, part: centre ? "centre" : x < mid ? "before" : "after" };
   }
 }

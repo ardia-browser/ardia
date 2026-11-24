@@ -1,7 +1,7 @@
 import { memo, useRef } from "react";
 import { Animated, Pressable, View } from "react-native";
 import { ContextMenuArea, space, Symbol } from "../ui";
-import { layout, useTheme } from "../ui/theme";
+import { useTheme } from "../ui/theme";
 import { Squish, useSquish } from "../ui/Squish";
 import { usePageProfileId, useTab, useWindowId, useWindowProfileId } from "../../state/browser/hooks";
 import { useShownFolderTab, useTileFolderMembers } from "../../state/pins/hooks";
@@ -22,7 +22,7 @@ const MOSAICS = {
 const ROW_CELL = 14;
 const ROW_MAX = 4;
 
-export const FolderTile = memo(function FolderTile({ folderId, width, sliding, x, y }: { folderId: string; width: number; sliding: boolean; x: number; y: number }) {
+export const FolderTile = memo(function FolderTile({ folderId, width, height, sliding, x, y }: { folderId: string; width: number; height: number; sliding: boolean; x: number; y: number }) {
   const theme = useTheme();
   const windowId = useWindowId();
   const members = useTileFolderMembers(windowId, folderId);
@@ -61,10 +61,10 @@ export const FolderTile = memo(function FolderTile({ folderId, width, sliding, x
             {({ pressed }) => (
               <Squish scale={squish.scale}>
                 {shown ? (
-                  <TileFace tabId={shown} width={width} active selected={false} hovered={hovered} pressed={pressed} badge={glyph} />
+                  <TileFace tabId={shown} width={width} height={height} active selected={false} hovered={hovered} pressed={pressed} badge={glyph} />
                 ) : (
-                  <RestingTile width={width} selected={open} hovered={hovered} pressed={pressed}>
-                    <FolderMosaic tabIds={members} width={width} />
+                  <RestingTile width={width} height={height} selected={open} hovered={hovered} pressed={pressed}>
+                    <FolderMosaic tabIds={members} width={width} height={height} />
                   </RestingTile>
                 )}
               </Squish>
@@ -76,12 +76,12 @@ export const FolderTile = memo(function FolderTile({ folderId, width, sliding, x
   );
 });
 
-export function FolderMosaic({ tabIds, scale = "tile", width }: { tabIds: string[]; scale?: keyof typeof MOSAICS; width?: number }) {
+export function FolderMosaic({ tabIds, scale = "tile", width, height }: { tabIds: string[]; scale?: keyof typeof MOSAICS; width?: number; height?: number }) {
   if (width) {
     const shown = tabIds.slice(0, ROW_MAX);
     const rows = shown.length > 2 ? [shown.slice(0, 2), shown.slice(2)] : [shown];
     return (
-      <View style={{ width, height: layout.pinnedHeight, justifyContent: "space-evenly" }}>
+      <View style={{ width, height, justifyContent: "space-evenly" }}>
         {rows.map((row) => (
           <View key={row[0]} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-evenly" }}>
             {row.map((id) => (

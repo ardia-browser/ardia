@@ -1,8 +1,7 @@
-import { layout } from "../ui/theme";
 import type { DropSpot } from "../../state/drag/drops";
 import type { SplitHalfMark } from "../../state/sidebar/dragMarks";
-import { pinSlot } from "./pinZone";
-import { pinSlotPitch, type Frame, inside, isGroupItem, type Item, type Pointed, tailKey } from "./dragModel";
+import { type pinLayout, pinSlot } from "./pinZone";
+import { type Frame, inside, isGroupItem, type Item, type Pointed, tailKey } from "./dragModel";
 
 type Aim = {
   spot: DropSpot | null;
@@ -34,7 +33,7 @@ export type Pointing = {
   spot: Pointed | null;
   cells: Item[];
   count: number;
-  balanced: boolean;
+  dropGrid: ReturnType<typeof pinLayout> | null;
   grid: boolean;
   inPinned: boolean;
   kept: { gapKey: string | null; pitch: number };
@@ -67,11 +66,11 @@ const heldFolder: Zone = (p) =>
   p.held ? { spot: { zone: "folder", ontoId: p.firstTab(p.held)! }, gapKey: p.kept.gapKey, pitch: p.kept.pitch, folderTarget: p.held.key } : null;
 
 const tiles: Zone = (p) => {
-  if (!p.overTiles || !p.tiles) return null;
+  if (!p.overTiles || !p.tiles || !p.dropGrid) return null;
   const { spot, cells } = p;
-  const index = !spot ? Math.min(cells.length, pinSlot(p.tiles, cells.length + p.count, layout.pinnedHeight, p.x, p.y, p.balanced)) : spot.part === "after" ? spot.index + 1 : spot.part === "before" ? spot.index : spot.gap;
+  const index = !spot ? Math.min(cells.length, pinSlot(p.tiles, cells.length + p.count, p.dropGrid, p.x, p.y)) : spot.part === "after" ? spot.index + 1 : spot.part === "before" ? spot.index : spot.gap;
   const before = p.grid ? cells[index] : undefined;
-  return { spot: { zone: "tiles", beforeId: p.firstTab(before) }, sequence: rest(p), gapKey: before?.key ?? tailKey("tiles"), pitch: pinSlotPitch() };
+  return { spot: { zone: "tiles", beforeId: p.firstTab(before) }, sequence: rest(p), gapKey: before?.key ?? tailKey("tiles"), pitch: p.dropGrid.pitch };
 };
 
 function groupHit(p: Pointing): { g: Extract<Item, { kind: "group" }>; into: boolean } | undefined {

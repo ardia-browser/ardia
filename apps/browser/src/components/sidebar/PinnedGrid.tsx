@@ -11,11 +11,11 @@ import { useIsSelected } from "../../state/pins/hooks";
 import { NextMeetingBadge } from "../live/NextMeetingBadge";
 import { TileStatus } from "./TileStatus";
 import { refreshShownTile } from "../../state/sidebar/actions";
-import { pinSlotPitch, cellKey, tailKey } from "./dragModel";
+import { cellKey, tailKey } from "./dragModel";
 import { useDragController, useDragging, useDragItem, useDropPins, useFolderTarget, usePinnedCount, usePinSlots } from "./DragProvider";
 import { FolderTile } from "./FolderTile";
 import { useRowHover } from "./hoverController";
-import { pinGrid, pinGridHeight, TILE_GAP } from "./pinZone";
+import { pinLayout, TILE_GAP } from "./pinZone";
 import { registerRow } from "../../state/sidebar/sidebarUi";
 import { FolderDropRing, TileFace, useSlotPosition } from "./TileFace";
 import { folderIdOfCell } from "../../state/pins/tileFolders";
@@ -27,7 +27,8 @@ export const PinnedGrid = memo(function PinnedGrid({ tabs, innerWidth, flush = f
   const controller = useDragController();
   const count = usePinnedCount(tabs);
   const balanced = useSettings((st) => st.balancedTopApps);
-  const { columns, width } = pinGrid(count, innerWidth, balanced);
+  const square = useSettings((st) => st.squareTopApps);
+  const { columns, width, height, gridHeight, pitch } = pinLayout(count, innerWidth, layout.pinnedHeight, balanced, square);
   const slots = usePinSlots(tabs);
   const tail = useDragItem(tailKey("tiles"), { kind: "tail", tabIds: [], section: "tiles" });
   const dragging = useDragging();
@@ -41,15 +42,15 @@ export const PinnedGrid = memo(function PinnedGrid({ tabs, innerWidth, flush = f
       }}
       style={{ marginTop: flush ? 0 : topGap }}
     >
-      <GlassGroup style={{ height: pinGridHeight(count, innerWidth, layout.pinnedHeight, balanced) }}>
+      <GlassGroup style={{ height: gridHeight }}>
         {tabs.map((cell, i) => {
           const x = (slots[i]! % columns) * (width + TILE_GAP);
-          const y = Math.floor(slots[i]! / columns) * pinSlotPitch();
+          const y = Math.floor(slots[i]! / columns) * pitch;
           const folderId = folderIdOfCell(cell);
           return folderId ? (
-            <FolderTile key={cellKey(cell)} folderId={folderId} width={width} sliding={dragging} x={x} y={y} />
+            <FolderTile key={cellKey(cell)} folderId={folderId} width={width} height={height} sliding={dragging} x={x} y={y} />
           ) : (
-            <PinnedTile key={cellKey(cell)} tabId={cell} width={width} sliding={dragging} x={x} y={y} />
+            <PinnedTile key={cellKey(cell)} tabId={cell} width={width} height={height} sliding={dragging} x={x} y={y} />
           );
         })}
       </GlassGroup>
@@ -90,13 +91,19 @@ export function PinFieldZone({ top, height }: { top: number; height: number }) {
   );
 }
 
-export function PinSlotZone({ top = 0 }: { top?: number }) {
+const EMPTY_CELLS: string[] = [];
+
+export function PinSlotZone({ top = 0, innerWidth }: { top?: number; innerWidth: number }) {
   const theme = useTheme();
   const tokens = useSidebarTokens();
   const controller = useDragController();
   const active = useDropPins();
   const gap = controller?.items.get(tailKey("tiles"))?.gap;
-  const opacity = gap ? gap.interpolate({ inputRange: [0, pinSlotPitch()], outputRange: [0, 1], extrapolate: "clamp" }) : active ? 1 : 0;
+  const balanced = useSettings((st) => st.balancedTopApps);
+  const square = useSettings((st) => st.squareTopApps);
+  const count = usePinnedCount(EMPTY_CELLS);
+  const { width, height, pitch } = pinLayout(count, innerWidth, layout.pinnedHeight, balanced, square);
+  const opacity = gap ? gap.interpolate({ inputRange: [0, pitch], outputRange: [0, 1], extrapolate: "clamp" }) : active ? 1 : 0;
   const firstRowTop = firstRowTopOf(useAddressBarInSidebar(), useToolbarLightsCenter()[1], false);
   return (
     <>
@@ -111,7 +118,7 @@ export function PinSlotZone({ top = 0 }: { top?: number }) {
           left: layout.sidebarInset,
           right: layout.sidebarInset,
           top: 0,
-          height: top + (active ? firstRowTop + layout.pinnedHeight : firstRowTop - layout.rowGap),
+          height: top + (active ? firstRowTop + height : firstRowTop - layout.rowGap),
         }}
       />
       <Animated.View
@@ -119,9 +126,9 @@ export function PinSlotZone({ top = 0 }: { top?: number }) {
         style={{
           position: "absolute",
           left: layout.sidebarInset,
-          right: layout.sidebarInset,
+          width: square ? width : innerWidth,
           top: top + firstRowTop,
-          height: layout.pinnedHeight,
+          height,
           opacity,
           borderRadius: radius.pinned,
           borderWidth: 1.5,
@@ -142,7 +149,7 @@ function PinGlyph({ color }: { color: string }) {
   return <Symbol name="pin" size={13} color={color} style={{ width: 16, height: 16 }} />;
 }
 
-const PinnedTile = memo(function PinnedTile({ tabId, width, sliding, x, y }: { tabId: string; width: number; sliding: boolean; x: number; y: number }) {
+const PinnedTile = memo(function PinnedTile({ tabId, width, height, sliding, x, y }: { tabId: string; width: number; height: number; sliding: boolean; x: number; y: number }) {
   const windowId = useWindowId();
   const tab = useTab(tabId);
   const active = useIsActiveTab(tabId);
@@ -171,7 +178,7 @@ const PinnedTile = memo(function PinnedTile({ tabId, width, sliding, x, y }: { t
       >
         <TabPressArea windowId={windowId} tab={tab} selected={selected} onDoubleClick={(wasShown) => refreshShownTile(windowId, tabId, wasShown)}>
           {({ pressed }) => (
-            <TileFace tabId={tabId} width={width} active={active} selected={selected} hovered={hovered} pressed={pressed} />
+            <TileFace tabId={tabId} width={width} height={height} active={active} selected={selected} hovered={hovered} pressed={pressed} />
           )}
         </TabPressArea>
         {overlays}

@@ -72,6 +72,13 @@ export const tabRows = {
           explained: true,
           description: "Up to four per row, sized to the sidebar, like Arc.",
           keywords: ["pinned tiles", "favorites", "grid", "columns", "rows", "arc"],
+          shown: (settings, env) => inSidebar(settings, env) && !settings.squareTopApps,
+        },
+        squareTopApps: {
+          title: "Compact square Top Apps",
+          explained: true,
+          description: "Narrow the sidebar to fit four square tiles per row. Drag its edge to resize them.",
+          keywords: ["shape", "aspect ratio", "size", "pinned tabs", "favorites", "arc", "dia", "rectangle"],
           shown: inSidebar,
         },
         topAppFolders: {

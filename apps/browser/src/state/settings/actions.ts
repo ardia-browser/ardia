@@ -1,6 +1,8 @@
 import type { Shortcut } from "../commands/shortcuts";
 import { storeAction, useBrowser } from "../browser/store";
 import { tabLayoutOf } from "../browser/model";
+import { compactTopAppsWidth } from "../../lib/windowLayout";
+import { SIDEBAR_ROW } from "../../lib/sidebarMetrics";
 import { steppedInterfaceScale } from "../../lib/interfaceScale";
 import { noteTabLayoutSwitch } from "../telemetry/tabLayoutCounts";
 import type { ConsentToken } from "../telemetry/choice";
@@ -60,6 +62,13 @@ export function switchTabLayout(windowId: string, consent?: ConsentToken | null)
   if (!s.windows[windowId]) return;
   noteTabLayoutSwitch(tabLayoutOf(s, windowId) === "sidebar" ? "top" : "sidebar", consent);
   s.toggleTabLayout(windowId);
+}
+
+export function chooseSquareTopApps(squareTopApps: boolean) {
+  const s = useBrowser.getState();
+  s.updateSettings(squareTopApps
+    ? { squareTopApps, sidebarWidth: compactTopAppsWidth(s.settings.sidebarWidth, SIDEBAR_ROW.pinnedHeight) }
+    : { squareTopApps });
 }
 
 export function chooseSidebarSide(side: "left" | "right") {

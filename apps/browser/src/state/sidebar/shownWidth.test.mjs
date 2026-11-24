@@ -54,3 +54,17 @@ test("a drag that ends at the window's limit keeps the wider saved width, and a 
   assert.equal(keptSidebarWidth(250, 290, 190), 250);
   assert.equal(keptSidebarWidth(290, 290, 190), 290);
 });
+
+test("compacting Top Apps fits four squares and keeps a narrower or manually resized sidebar", async () => {
+  const { chooseSquareTopApps } = await import("../settings/actions.ts");
+  S().updateSettings({ squareTopApps: false, sidebarWidth: 236 });
+  chooseSquareTopApps(true);
+  assert.equal(S().settings.squareTopApps, true);
+  assert.equal(S().settings.sidebarWidth, 200);
+  S().updateSettings({ sidebarWidth: 180 });
+  chooseSquareTopApps(false);
+  assert.equal(S().settings.squareTopApps, false);
+  assert.equal(S().settings.sidebarWidth, 180);
+  chooseSquareTopApps(true);
+  assert.equal(S().settings.sidebarWidth, 180);
+});

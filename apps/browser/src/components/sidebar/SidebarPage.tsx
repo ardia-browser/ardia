@@ -16,7 +16,7 @@ import { DragScope, useDragPage, useDragController, useDragging, usePinnedCount 
 import { openSidebarMenu } from "../../state/sidebar/menus";
 import { forgetRowsScrolled, noteRowsScrolled } from "../../state/sidebar/hover";
 import { PinnedGrid } from "./PinnedGrid";
-import { pinGridHeight } from "./pinZone";
+import { pinLayout } from "./pinZone";
 import { SCROLL_EDGE, ScrollEdgeLine, useScrollEdge, useScrollEdgeBelow } from "./ScrollEdge";
 import { listTopGap, sidebarHeaderOf, toolbarEdgeLift } from "./geometry";
 import { useAddressBarInSidebar, usePageFrameInset, useToolbarLightsCenter } from "../../state/windows/layout";
@@ -76,7 +76,8 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
   const previewed = usePinnedCount(tiles);
   const dockRoom = height ? (height - playerHeight) * DOCK_SHARE - topGap - SCROLL_EDGE.gap - SCROLL_EDGE.line : Infinity;
   const balanced = useSettings((st) => st.balancedTopApps);
-  const gridHeight = (count: number) => pinGridHeight(count, innerWidth, layout.pinnedHeight, balanced);
+  const square = useSettings((st) => st.squareTopApps);
+  const gridHeight = (count: number) => pinLayout(count, innerWidth, layout.pinnedHeight, balanced, square).gridHeight;
   const fits = tilesFitDock({ tiles: tiles.length, gridHeight, dockRoom });
   const fixedBeforeDrag = useRef(true);
   useLayoutEffect(() => {

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { View } from "react-native";
 import { useTheme } from "../../ui/theme";
 import { useSettings, useTabLayout } from "../../../state/browser/hooks";
-import { chooseScrollToolbar, chooseSidebarSide, chooseTabLayout, updateSettings } from "../../../state/settings/actions";
+import { chooseScrollToolbar, chooseSquareTopApps, chooseSidebarSide, chooseTabLayout, updateSettings } from "../../../state/settings/actions";
 import { customNewTabUrl, type Settings } from "../../../state/settings/settings";
 import { Box, Button, Checkbox, DialogActions, DialogTitle, PopUp, Segmented, Sheet, space, Text, TextField, Toggle, type Option, type SegmentOption } from "../../ui";
 import { durationMinutes, durationParts, type DurationUnit } from "../../../lib/time";
@@ -157,6 +157,7 @@ function ButtonsRow({ top }: { top: boolean }) {
 const sleepingLookOf = (fade: boolean, strike: boolean): SleepingLook => (fade && strike ? "both" : fade ? "fade" : strike ? "strike" : "normal");
 
 function TabsAndTopAppsSection() {
+  const square = useSettings((s) => s.squareTopApps);
   const unread = useSettings((s) => s.showUnreadCounts);
   const topAppBadges = useSettings((s) => s.showTopAppBadges);
   const fade = useSettings((s) => s.fadeUnloadedTabs);
@@ -178,7 +179,10 @@ function TabsAndTopAppsSection() {
         </Row>
         <SettingToggle anchor="tabs.keepTopAppsRunning" />
         <SettingToggle anchor="tabs.closedTopAppTiles" />
-        <SettingToggle anchor="tabs.balancedTopApps" />
+        <Row anchor="tabs.squareTopApps">
+          <Toggle value={square} accessibilityLabel={setting("tabs.squareTopApps").title} onChange={chooseSquareTopApps} />
+        </Row>
+        {!square && <SettingToggle anchor="tabs.balancedTopApps" />}
         <SettingToggle anchor="tabs.topAppFolders" />
         <SettingToggle anchor="tabs.tabReorderHaptics" />
         <SettingToggle anchor="tabs.swipeBetweenTabs" />

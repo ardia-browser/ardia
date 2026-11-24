@@ -3,7 +3,6 @@ import { layout } from "../ui/theme";
 import { perLook } from "../ui/tokens";
 import type { Drop as StoreDrop } from "../../state/drag/drops";
 import { SLIDE } from "../tabstrip/tokens";
-import { TILE_GAP } from "./pinZone";
 import { folderIdOfCell } from "../../state/pins/tileFolders";
 import { entryKey } from "../../state/sidebar/entryKey";
 
@@ -67,7 +66,6 @@ export function dragItemStyle(item: Item, { source, landing, clipped, inFold, ro
     ...(clipped && !source && !landing ? { marginTop: horizontal ? -rowGap : tailOffset, paddingTop: rowGap, overflow: "hidden" as const } : null),
   };
 }
-export const pinSlotPitch = () => layout.pinnedHeight + TILE_GAP;
 export const EDGE = 28;
 export const FOLDER_HOLD_MS = 400;
 export const SPLIT_HOLD_MS = 250;

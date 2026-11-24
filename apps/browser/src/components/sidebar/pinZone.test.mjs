@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-const { overPins, pinGrid, pinGridHeight, pinSlot, PIN_ZONE_HYSTERESIS } = await import("./pinZone.ts");
+const { overPins, pinGrid, pinLayout, pinSlot, PIN_ZONE_HYSTERESIS } = await import("./pinZone.ts");
 
 const TILE = 41;
 const grid = { x: 6, y: 54, w: 178 };
+const slotAt = (count, x, y, balanced = false) => pinSlot(grid, count, pinLayout(count, grid.w, TILE, balanced), x, y);
 
 test("the grid lays out the count it will have after the drop", () => {
   assert.deepEqual(pinGrid(3, 178), { columns: 3, width: 55 });
@@ -40,13 +41,13 @@ test("balanced rows grow the tiles, not the columns, as the sidebar widens", () 
 });
 
 test("balanced slots and height follow the balanced grid", () => {
-  assert.equal(pinSlot(grid, 4, TILE, 155, 74, true), 1);
-  assert.equal(pinSlot(grid, 4, TILE, 30, 120, true), 2);
-  assert.equal(pinSlot(grid, 4, TILE, 155, 120, true), 3);
-  assert.equal(pinSlot(grid, 5, TILE, 155, 74, true), 2);
-  assert.equal(pinSlot(grid, 5, TILE, 155, 160, true), 4);
-  assert.equal(pinGridHeight(4, 178, TILE, true), 88);
-  assert.equal(pinGridHeight(9, 400, TILE, true), 135);
+  assert.equal(slotAt(4, 155, 74, true), 1);
+  assert.equal(slotAt(4, 30, 120, true), 2);
+  assert.equal(slotAt(4, 155, 120, true), 3);
+  assert.equal(slotAt(5, 155, 74, true), 2);
+  assert.equal(slotAt(5, 155, 160, true), 4);
+  assert.equal(pinLayout(4, 178, TILE, true).gridHeight, 88);
+  assert.equal(pinLayout(9, 400, TILE, true).gridHeight, 135);
 });
 
 test("a full row never overflows the grid", () => {
@@ -60,18 +61,18 @@ test("a full row never overflows the grid", () => {
 });
 
 test("the slot under the pointer is the tile's index after the drop", () => {
-  assert.equal(pinSlot(grid, 3, TILE, 30, 74), 0);
-  assert.equal(pinSlot(grid, 3, TILE, 95, 74), 1);
-  assert.equal(pinSlot(grid, 3, TILE, 155, 74), 2);
-  assert.equal(pinSlot(grid, 3, TILE, 155, 105), 2);
-  assert.equal(pinSlot(grid, 4, TILE, 155, 74), 2);
-  assert.equal(pinSlot(grid, 4, TILE, 30, 120), 3);
-  assert.equal(pinSlot(grid, 4, TILE, 155, 120), 3);
-  assert.equal(pinSlot(grid, 4, TILE, -40, 10), 0);
+  assert.equal(slotAt(3, 30, 74), 0);
+  assert.equal(slotAt(3, 95, 74), 1);
+  assert.equal(slotAt(3, 155, 74), 2);
+  assert.equal(slotAt(3, 155, 105), 2);
+  assert.equal(slotAt(4, 155, 74), 2);
+  assert.equal(slotAt(4, 30, 120), 3);
+  assert.equal(slotAt(4, 155, 120), 3);
+  assert.equal(slotAt(4, -40, 10), 0);
 });
 
 test("a sideways drag below the tiles stays on the same row's slots", () => {
-  const slots = [30, 60, 95, 120, 155].map((x) => pinSlot(grid, 3, TILE, x, 54 + TILE + 10));
+  const slots = [30, 60, 95, 120, 155].map((x) => slotAt(3, x, 54 + TILE + 10));
   assert.deepEqual(slots, [0, 0, 1, 1, 2]);
 });
 
@@ -93,9 +94,29 @@ test("the pin zone reaches the list, and the boundary doesn't flip-flop", () => 
 });
 
 test("the grid's height is its row count after the drop", () => {
-  assert.equal(pinGridHeight(3, 178, TILE), 41);
-  assert.equal(pinGridHeight(4, 178, TILE), 88);
-  assert.equal(pinGridHeight(2, 178, TILE), 41);
-  assert.equal(pinGridHeight(0, 178, TILE), 41);
-  assert.equal(pinGridHeight(7, 178, TILE), 135);
+  assert.equal(pinLayout(3, 178, TILE).gridHeight, 41);
+  assert.equal(pinLayout(4, 178, TILE).gridHeight, 88);
+  assert.equal(pinLayout(2, 178, TILE).gridHeight, 41);
+  assert.equal(pinLayout(0, 178, TILE).gridHeight, 41);
+  assert.equal(pinLayout(7, 178, TILE).gridHeight, 135);
+});
+
+test("square tiles keep the same dimensions for painting, row spacing and drop targets", () => {
+  for (const balanced of [false, true]) {
+    for (const w of [132, 178, 240, 400]) {
+      for (const count of [1, 3, 7, 12]) {
+        const area = { x: 6, y: 54, w };
+        const tiles = pinLayout(count, w, TILE, balanced, true);
+        assert.equal(tiles.columns, 4);
+        assert.equal(tiles.height, tiles.width);
+        assert.ok(tiles.width < w);
+        assert.equal(tiles.gridHeight, Math.ceil(count / tiles.columns) * tiles.pitch - 6);
+        for (let i = 0; i < count; i++) {
+          const x = area.x + (i % tiles.columns) * (tiles.width + 6) + tiles.width / 2;
+          const y = area.y + Math.floor(i / tiles.columns) * tiles.pitch + tiles.height / 2;
+          assert.equal(pinSlot(area, count, tiles, x, y), i);
+        }
+      }
+    }
+  }
 });

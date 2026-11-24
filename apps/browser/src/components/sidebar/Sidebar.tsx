@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { ClipView, ContextMenuArea, space, WindowDragRegion } from "../ui";
-import { useTheme } from "../ui/theme";
+import { layout, useTheme } from "../ui/theme";
 import { useSidebarHighContrast } from "../../state/sidebar/textLook";
 import { TintInk } from "../ui/TintInk";
 import { useWindowId, useWindowProfileId } from "../../state/browser/hooks";
@@ -163,7 +163,7 @@ export function Sidebar({ width }: { width: number }) {
               field === "top" ? (
                 <PinFieldZone top={SIDEBAR_FIELD.top} height={SIDEBAR_FIELD.height} />
               ) : (
-                <PinSlotZone top={header - sidebarHeaderOf(addressBar, lightsY, false)} />
+                <PinSlotZone innerWidth={width - layout.sidebarInset * 2} top={header - sidebarHeaderOf(addressBar, lightsY, false)} />
               )
             ) : null}
             {ghost ? <EdgeGlow /> : null}

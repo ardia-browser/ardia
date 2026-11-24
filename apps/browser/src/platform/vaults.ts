@@ -104,6 +104,7 @@ export const onStandaloneCodesChanged = (listener: () => void) => on("vaults.cod
 export type { DeliveredCode, DeliveredCodeAccess, DeliveredCodes, DeliveredCodeSource } from "@ardia/ardiacore";
 export const deliveredCodes = () => call("vaults.deliveredCodes", {});
 export const setDeliveredCodes = (enabled: boolean) => call("vaults.setDeliveredCodes", { enabled });
+export const setDeliveredCodesWatching = (watching: boolean) => call("vaults.watchDeliveredCodes", { watching });
 export const openFullDiskAccess = () => call("vaults.openFullDiskAccess", {});
 export const onDeliveredCodesChanged = (listener: (state: DeliveredCodes) => void) => on("vaults.deliveredCodesChanged", listener);
 export const vaultPasskeys = () => call("vaults.passkeys", {});

@@ -89,3 +89,33 @@ test("the engine's event reaches the store, and a new code's digits are there on
   assert.deepEqual(ids(), ["delivered.fresh"]);
   assert.equal(seen[0], "482913", "the row never shows a spinner for a code native already has");
 });
+
+test("native watches Messages and Mail only while a code field is focused or a code menu is open, with the setting on", async () => {
+  const { codeFieldOpen } = await import("./menuCodes.ts");
+  const { startVaultMenus, useVaultMenus } = await import("./menu.ts");
+  const stopMenus = startVaultMenus();
+  const watching = native.vaultFakes.deliveredWatching;
+  const field = (kind, focused) => ({ t: { kind, focused, frameId: "main", origin: "https://bank.com", main: true, rect: null, formHasPassword: false, at: 1 } });
+  const show = (fields, menus = {}) => useVaultMenus.setState({ fields, menus });
+  assert.deepEqual(
+    [[{}, {}], [field("password", true), {}], [field("otp", true), {}], [field("otp", false), {}], [field("otp", false), { t: { field: "otp" } }]].map(([fields, menus]) => codeFieldOpen({ fields, menus })),
+    [false, false, true, false, true],
+  );
+  show(field("otp", true));
+  await settle();
+  assert.deepEqual(watching, [], "with the setting off native is never asked, so it never watches");
+  setSettings({ vaultSuggestDeliveredCodes: true });
+  await settle();
+  assert.deepEqual(watching, [true], "turning the setting on while a code field is focused starts watching");
+  show(field("otp", true), { t: { field: "otp" } });
+  show(field("password", true));
+  show(field("password", false));
+  show(field("otp", true));
+  await settle();
+  assert.deepEqual(watching, [true, false, true], "leaving the code field stops watching, focusing one again resumes it");
+  setSettings({ vaultSuggestDeliveredCodes: false });
+  show({});
+  await settle();
+  assert.deepEqual(watching, [true, false, true, false]);
+  stopMenus();
+});

@@ -241,6 +241,7 @@ export type EngineCalls = BookmarksCalls & FaviconsCalls & HistoryCalls & {
   "vaults.totp": [{ provider: VaultProviderId; id: string }, VaultTotp | null];
   "vaults.deliveredCodes": [{}, DeliveredCodes];
   "vaults.setDeliveredCodes": [{ enabled: boolean }, DeliveredCodes];
+  "vaults.watchDeliveredCodes": [{ watching: boolean }, DeliveredCodes];
   "vaults.openFullDiskAccess": [{}, { opened: boolean }];
   "vaults.generate": [{ style?: VaultPasswordStyle; maxLength?: number }, { length: number }];
   "vaults.setOptions": [

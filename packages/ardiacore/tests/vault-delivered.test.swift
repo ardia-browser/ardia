@@ -235,6 +235,7 @@ final class DeliveredClock: @unchecked Sendable {
   private var value: Date
   private var pending: [VaultDeliveredRead]
   private var states: [VaultDeliveredState] = []
+  private var readCount = 0
 
   init(_ start: Date, reads: [VaultDeliveredRead] = []) {
     value = start
@@ -245,16 +246,44 @@ final class DeliveredClock: @unchecked Sendable {
   var announced: [VaultDeliveredState] { lock.withLock { states } }
   func advance(_ seconds: TimeInterval) { lock.withLock { value = value.addingTimeInterval(seconds) } }
   func serve(_ reads: [VaultDeliveredRead]) { lock.withLock { pending = reads } }
-  func reads() -> [VaultDeliveredRead] { lock.withLock { pending } }
+  func reads() -> [VaultDeliveredRead] {
+    lock.withLock {
+      readCount += 1
+      return pending
+    }
+  }
+  var scans: Int { lock.withLock { readCount } }
   func record(_ state: VaultDeliveredState) { lock.withLock { states.append(state) } }
-  func store(enabled: Bool = true) async -> VaultDeliveredCodes {
+  func store(enabled: Bool = true, watches: Bool = false) async -> VaultDeliveredCodes {
     let store = VaultDeliveredCodes(
       paths: VaultDeliveredPaths(messages: nil, mailEnvelope: nil, mailRoot: nil),
-      hooks: VaultDeliveredHooks(now: { self.now }, announce: { self.record($0) }, read: { _, _ in self.reads() }, watches: false))
+      hooks: VaultDeliveredHooks(now: { self.now }, announce: { self.record($0) }, read: { _, _ in self.reads() }, watches: watches))
     if enabled { _ = await store.setEnabled(true) }
     return store
   }
 }
+
+private func scratchFile() throws -> String {
+  let folder = NSTemporaryDirectory() + "ardia-delivered-watch-" + UUID().uuidString
+  try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
+  let path = folder + "/chat.db-wal"
+  #expect(FileManager.default.createFile(atPath: path, contents: Data()))
+  return path
+}
+
+private func append(_ path: String) throws {
+  let handle = try #require(FileHandle(forWritingAtPath: path))
+  try handle.seekToEnd()
+  try handle.write(contentsOf: Data("message".utf8))
+  try handle.close()
+}
+
+private func scansSettle(_ clock: DeliveredClock, at least: Int) async throws {
+  let deadline = Date().addingTimeInterval(10)
+  while clock.scans < least, Date() < deadline { try await Task.sleep(for: .milliseconds(20)) }
+}
+
+private func quietPeriod() async throws { try await Task.sleep(for: .milliseconds(700)) }
 
 private func text(_ key: Int, _ body: String, at date: Date, sender: String = "+15550100") -> VaultDeliveredMessage {
   VaultDeliveredMessage(source: .messages, key: "messages/\(key)", sender: sender, text: body, receivedAt: date)
@@ -348,6 +377,77 @@ struct VaultDeliveredStoreTests {
     #expect(await store.state(rescan: true).codes.isEmpty)
     clock.advance(1.5)
     #expect(await store.state(rescan: true).codes.count == 1)
+  }
+
+  @Test func `messages arriving while no code field is focused are not watched or read`() async throws {
+    let wal = try scratchFile()
+    let clock = DeliveredClock(start, reads: [VaultDeliveredRead(reach: .readable, messages: [], watched: [wal])])
+    let store = await clock.store(watches: true)
+    #expect(clock.scans == 1)
+    #expect(await !store.watchesFiles)
+    for _ in 0..<5 { try append(wal) }
+    try await quietPeriod()
+    #expect(clock.scans == 1)
+  }
+
+  @Test func `focusing a code field rescans and watches, and a code arriving then is read once the writes settle`() async throws {
+    let wal = try scratchFile()
+    let clock = DeliveredClock(start, reads: [VaultDeliveredRead(reach: .readable, messages: [], watched: [wal])])
+    let store = await clock.store(watches: true)
+    clock.advance(3)
+    clock.serve([VaultDeliveredRead(reach: .readable, messages: [text(1, "Your code is 482913", at: start)], watched: [wal])])
+    let focused = await store.setWatching(true)
+    #expect(clock.scans == 2)
+    #expect(focused.codes.count == 1)
+    #expect(await store.watchesFiles)
+    clock.serve([VaultDeliveredRead(reach: .readable, messages: [text(1, "Your code is 482913", at: start), text(2, "Your code is 777123", at: start)], watched: [wal])])
+    for _ in 0..<5 { try append(wal) }
+    try await scansSettle(clock, at: 3)
+    #expect(clock.scans == 3)
+    #expect(clock.announced.last?.codes.count == 2)
+    try await quietPeriod()
+    #expect(clock.scans == 3)
+  }
+
+  @Test func `leaving the code field stops watching, and focusing again within two seconds watches without a rescan`() async throws {
+    let wal = try scratchFile()
+    let clock = DeliveredClock(start, reads: [VaultDeliveredRead(reach: .readable, messages: [], watched: [wal])])
+    let store = await clock.store(watches: true)
+    _ = await store.setWatching(true)
+    #expect(clock.scans == 1)
+    #expect(await store.watchesFiles)
+    _ = await store.setWatching(false)
+    #expect(await !store.watchesFiles)
+    try append(wal)
+    try await quietPeriod()
+    #expect(clock.scans == 1)
+    _ = await store.setWatching(true)
+    #expect(clock.scans == 1)
+    #expect(await store.watchesFiles)
+  }
+
+  @Test func `watching waits for the setting, and turning it off stops the watch`() async throws {
+    let wal = try scratchFile()
+    let clock = DeliveredClock(start, reads: [VaultDeliveredRead(reach: .readable, messages: [], watched: [wal])])
+    let store = await clock.store(enabled: false, watches: true)
+    #expect(await store.setWatching(true) == VaultDeliveredState(access: .off, codes: []))
+    #expect(clock.scans == 0)
+    #expect(await !store.watchesFiles)
+    _ = await store.setEnabled(true)
+    #expect(await store.watchesFiles)
+    _ = await store.setEnabled(false)
+    #expect(await !store.watchesFiles)
+    try append(wal)
+    try await quietPeriod()
+    #expect(clock.scans == 1)
+  }
+
+  @Test func `turning on without Full Disk Access reads once and does not poll`() async throws {
+    let clock = DeliveredClock(start, reads: [.denied])
+    let store = await clock.store()
+    #expect(await store.state(rescan: false).access == .needsAccess)
+    try await Task.sleep(for: .milliseconds(2600))
+    #expect(clock.scans == 1)
   }
 }
 

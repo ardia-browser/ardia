@@ -6,7 +6,7 @@ import { useBrowser } from "../browser/store";
 import { rememberedVaultAccount } from "./accounts";
 import { shownTabIds } from "../tabs/shownTabs";
 import { rowsOfMenu, type VaultsNow } from "./menuRowsOf";
-import { codesAloneOffer, loadingFor, noteOfferedCodes, prefetchCodesOf, watchDeliveredCodes } from "./menuCodes";
+import { codesAloneOffer, followCodeFields, loadingFor, noteOfferedCodes, prefetchCodesOf, watchDeliveredCodes } from "./menuCodes";
 import { forgetClosedVaultSaves, forgetVaultPageSaves } from "./saveOffer";
 import { hasMatchRow, restingRow, type VaultRow } from "./menuModel";
 import type { VaultMenu } from "./menuState";
@@ -388,11 +388,13 @@ export function startVaultMenus() {
   const stopPasskeys = usePasskeys.subscribe((s, prev) => s.offers !== prev.offers && restOpenMenus());
   const stopDelivered = watchDeliveredCodes(restOpenMenus, () => useVaultMenus.getState().fields, offerToFocusedField);
   const stopOffered = useVaultMenus.subscribe((s, prev) => s.menus !== prev.menus && noteOfferedCodes(s.menus, prev.menus, consentToken()));
+  const stopCodeFields = useVaultMenus.subscribe(followCodeFields);
   return () => {
     stopTabs();
     stopVaults();
     stopPasskeys();
     stopDelivered();
     stopOffered();
+    stopCodeFields();
   };
 }

@@ -282,6 +282,10 @@ public class VaultsModule: Module {
       let enabled = try args.bool("enabled")
       VaultsModule.answer(reply) { await VaultDeliveredCodes.shared.setEnabled(enabled).jsonObject() }
     },
+    "watchDeliveredCodes": { args, reply in
+      let watching = try args.bool("watching")
+      VaultsModule.answer(reply) { await VaultDeliveredCodes.shared.setWatching(watching).jsonObject() }
+    },
     "openFullDiskAccess": { _, reply in VaultsModule.answer(reply) { await VaultDeliveredCodes.openFullDiskAccess() } },
     "biometrics": { _, reply in reply.ok(["available": VaultOwnerCheck.biometricsAvailable]) },
     "keychainCounts": { _, reply in

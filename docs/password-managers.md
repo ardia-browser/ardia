@@ -949,6 +949,19 @@ while access is missing. The contract and the native side are the `vaults.delive
   leaves the list forgets its fetched digits. Toggling the setting calls `vaults.setDeliveredCodes`; an otp menu opening
   (or about to open on focus) calls `vaults.deliveredCodes`, which rescans; a code arriving while a code field is focused
   offers the menu there.
+- **When native reads** (`VaultDeliveredCodes`): never on a timer. Turning the setting on reads once (for the access
+  state). After that it reads only when JS asks: `vaults.deliveredCodes` (an otp menu opening, a fill, the settings row
+  on app activation) and `vaults.watchDeliveredCodes {watching}`, which JS sends from the menus store whenever "a code
+  field is focused (auto-focused included) or an otp menu is open" changes (`codeFieldOpen` in `menuCodes.ts`). Watching
+  on rescans unless the last read is under 2 s old, then watches `chat.db`, `Envelope Index` and their `-wal` files with
+  vnode dispatch sources; a write rescans once the writes have been quiet for 250 ms, so a code arriving then still
+  offers the menu. Watching off drops the sources, so the person's own Messages and Mail traffic (every message, read
+  receipt and mail sync writes those files) costs nothing while no code field is focused. The only polling is the 2 s
+  access check for at most 3 minutes after Open Privacy & Security…, and only while access is still missing. Each code
+  has one expiry task native and one timer in JS, only while codes exist. Measured on a hidden Debug instance with
+  fake stores (2026-11-23): idle is the same off, on and focused (about 1.8% CPU, 21 wakeups/s, no reads); 50 unrelated
+  messages at one a second read about 400 KB in 50 scans while a code field is focused, and nothing with none focused
+  (before the gate they cost the same with no code field anywhere).
 - **Rows** (`menuModel.ts` `deliveredRows`): on otp fields in the matches list only, before the saved code rows: codes
   whose site is the page's registrable site first, then newest, at most 3. A code bound to another site never shows,
   since it can never fill there. Only a bound code on the page's site has `userChose: false`; unbound codes need a click (never the resting fill, never Return or Touch ID unasked).
@@ -1438,11 +1451,13 @@ other way in, since Messages and Mail have no API for it.
   and when the setting turns off. A message that gave a code once is never read again. Native starts off on every launch and
   stores nothing; JS sends `vaults.setDeliveredCodes` at startup and on every settings change. Access is `off`, `needsAccess`
   (an `open` or `opendir` fails with EPERM or EACCES) or `on`; a missing database is `on`. While access is missing,
-  turning it on or opening System Settings polls every 2 s for 3 minutes.
-- **Watching.** A `DispatchSource` vnode watch on each database and its `-wal`; a change rescans after 250 ms, and
-  `vaults.deliveredCodes` rescans when the last scan is over 2 s old. A deleted or renamed file is watched again on
-  the next scan.
-- **Calls.** `vaults.deliveredCodes {}` and `vaults.setDeliveredCodes {enabled}` answer `DeliveredCodes`
+  Open Privacy & Security… polls every 2 s for 3 minutes; turning the setting on reads once and never polls.
+- **Watching.** Only between `vaults.watchDeliveredCodes {watching: true}` and `{watching: false}` (JS sends them as a
+  code field gains or loses focus or an otp menu opens or closes) and only with the setting on: a `DispatchSource`
+  vnode watch on each database and its `-wal`; a change rescans after 250 ms of quiet. Watching on rescans when the
+  last scan is over 2 s old, as `vaults.deliveredCodes` does. A deleted or renamed file is watched again on the next
+  scan.
+- **Calls.** `vaults.deliveredCodes {}`, `vaults.setDeliveredCodes {enabled}` and `vaults.watchDeliveredCodes {watching}` answer `DeliveredCodes`
   (`{access, codes}`, newest first), the event `vaults.deliveredCodesChanged` carries the same on every change, and
   `vaults.openFullDiskAccess {}` opens Privacy & Security > Full Disk Access. `DeliveredCode` (`@ardia/ardiacore`) has
   `id` (`delivered.<random>`), `source`, `sender`, `site`, `bound`, `receivedAt` and `expiresAt`, never the code or

@@ -81,6 +81,8 @@ actor VaultDeliveredCodes {
   private let paths: VaultDeliveredPaths
   private let hooks: VaultDeliveredHooks
   private var enabled: Bool
+  private var watching = false
+  private var watchedFiles: [String] = []
   private var access: VaultDeliveredAccess
   private var entries: [VaultDeliveredCode] = []
   private var seen: [String: Date] = [:]
@@ -110,17 +112,30 @@ actor VaultDeliveredCodes {
     enabled = on
     if on {
       scan()
-      watchForAccess()
     } else {
       stopAll()
       entries = []
       seen = [:]
+      watchedFiles = []
       lastScan = nil
       access = .off
       publish()
     }
     return current()
   }
+
+  func setWatching(_ on: Bool) -> VaultDeliveredState {
+    watching = on
+    guard enabled, on else {
+      stopWatch()
+      return current()
+    }
+    let now = state(rescan: true)
+    rewatch(watchedFiles)
+    return now
+  }
+
+  var watchesFiles: Bool { watcher != nil }
 
   func watchForAccess() {
     guard enabled, access == .needsAccess else { return }
@@ -166,7 +181,8 @@ actor VaultDeliveredCodes {
       seen[message.key] = message.receivedAt
       take(message, now: now)
     }
-    if hooks.watches { rewatch(reads.flatMap(\.watched)) }
+    watchedFiles = reads.flatMap(\.watched)
+    if watching { rewatch(watchedFiles) }
     prune()
     publish()
   }
@@ -231,11 +247,15 @@ actor VaultDeliveredCodes {
     hooks.announce(state)
   }
 
-  private func stopAll() {
+  private func stopWatch() {
     watcher?.stop()
     watcher = nil
     pendingScan?.cancel()
     pendingScan = nil
+  }
+
+  private func stopAll() {
+    stopWatch()
     expiry?.cancel()
     expiry = nil
     accessPoll?.cancel()
@@ -245,13 +265,15 @@ actor VaultDeliveredCodes {
   private func rewatch(_ files: [String]) {
     if let watcher, watcher.files == files, watcher.alive { return }
     watcher?.stop()
+    watcher = nil
+    guard hooks.watches, !files.isEmpty else { return }
     watcher = VaultDeliveredWatch(files: files) { [weak self] in
       Task { await self?.changed() }
     }
   }
 
   private func changed() {
-    guard enabled else { return }
+    guard enabled, watching else { return }
     pendingScan?.cancel()
     pendingScan = Task { [weak self] in
       try? await Task.sleep(for: Self.settle)

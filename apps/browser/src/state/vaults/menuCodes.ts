@@ -3,7 +3,7 @@ import type { ConsentToken } from "../telemetry/choice";
 import { noteDeliveredCodeOffered } from "../telemetry/vaultCounts";
 import { prefetchVaultCodes } from "./codes";
 import { anyFillsOnSite, fillsOnSite, isDeliveredItem } from "./deliveredCodesModel";
-import { currentDeliveredItems, refreshDeliveredCodes, useDeliveredCodes } from "./deliveredCodes";
+import { currentDeliveredItems, noteCodeFieldOpen, refreshDeliveredCodes, useDeliveredCodes } from "./deliveredCodes";
 import { vaultsOnForTab } from "./enabled";
 import { rowsOfMenu } from "./menuRowsOf";
 
@@ -27,6 +27,13 @@ export const loadingFor = (kind: VaultFieldKind, loadItems: () => Promise<unknow
 
 export const codesAloneOffer = (tabId: string, field: { kind: VaultFieldKind; origin: string }, asked = false) =>
   field.kind === "otp" && vaultsOnForTab(tabId) && (asked ? currentDeliveredItems().length > 0 : anyFillsOnSite(currentDeliveredItems(), field.origin));
+
+type CodeFields = { menus: Record<string, { field: VaultFieldKind } | null>; fields: Record<string, { kind: VaultFieldKind; focused: boolean } | null> };
+
+export const codeFieldOpen = ({ menus, fields }: CodeFields) =>
+  Object.values(menus).some((menu) => menu?.field === "otp") || Object.values(fields).some((field) => !!field?.focused && field.kind === "otp");
+
+export const followCodeFields = (s: CodeFields, prev: CodeFields) => (s.menus !== prev.menus || s.fields !== prev.fields) && noteCodeFieldOpen(codeFieldOpen(s));
 
 export function watchDeliveredCodes(restOpenMenus: () => void, fields: () => Record<string, { kind: VaultFieldKind; origin: string } | null | undefined>, offerAt: (tabId: string) => void) {
   return useDeliveredCodes.subscribe((s, prev) => {

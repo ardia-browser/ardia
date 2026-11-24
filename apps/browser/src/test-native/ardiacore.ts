@@ -457,6 +457,7 @@ export const vaultFakes = {
   nextRemoveTotp: null as CallResult<"vaults.removeTotp"> | null,
   codeReads: [] as CallArgs<"vaults.readCode">[],
   deliveredTurns: [] as boolean[],
+  deliveredWatching: [] as boolean[],
   delivered: { access: "off", codes: [] } as CallResult<"vaults.deliveredCodes">,
   nextCodeRead: { error: "none" } as CallResult<"vaults.readCode">,
   forgottenCodes: [] as string[],
@@ -881,6 +882,7 @@ const fakeModules = {
         vaultFakes.delivered = enabled ? { ...vaultFakes.delivered, access: "on" } : { access: "off", codes: [] };
         return vaultFakes.delivered;
       },
+      watchDeliveredCodes: ({ watching }) => (vaultFakes.deliveredWatching.push(watching), vaultFakes.delivered),
       readCode: (args) => (vaultFakes.codeReads.push({ ...args }), vaultFakes.nextCodeRead),
       forgetCode: ({ token }) => (vaultFakes.forgottenCodes.push(token), {}),
       copyCode: () => ({ copied: true, clearsAfter: 90 }),

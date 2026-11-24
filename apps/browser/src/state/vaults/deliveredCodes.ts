@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { deliveredCodes, onDeliveredCodesChanged, openFullDiskAccess, setDeliveredCodes, type DeliveredCodeAccess, type DeliveredCodes } from "../../platform/vaults";
+import { deliveredCodes, onDeliveredCodesChanged, openFullDiskAccess, setDeliveredCodes, setDeliveredCodesWatching, type DeliveredCodeAccess, type DeliveredCodes } from "../../platform/vaults";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { useBrowser } from "../browser/store";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
@@ -79,6 +79,20 @@ async function turnDelivered(enabled: boolean, toggled: { consent: ConsentToken 
 }
 
 let started = false;
+let codeFieldOpen = false;
+let watchingTold = false;
+
+function tellWatching() {
+  const watching = codeFieldOpen && wanted();
+  if (watching === watchingTold) return;
+  watchingTold = watching;
+  void setDeliveredCodesWatching(watching).then(adoptDelivered, () => undefined);
+}
+
+export function noteCodeFieldOpen(open: boolean) {
+  codeFieldOpen = open;
+  if (started) tellWatching();
+}
 
 export function startDeliveredCodes() {
   if (started || !PLATFORM_FEATURES.deliveredCodes) return;
@@ -86,7 +100,9 @@ export function startDeliveredCodes() {
   onDeliveredCodesChanged((state) => void adoptDelivered(state));
   useBrowser.subscribeTo(["settings"], (s, prev) => {
     const now = wantedBy(s.settings);
-    if (now !== wantedBy(prev.settings)) void turnDelivered(now, { consent: consentToken() });
+    if (now === wantedBy(prev.settings)) return;
+    void turnDelivered(now, { consent: consentToken() });
+    tellWatching();
   });
   void turnDelivered(wanted(), null);
 }

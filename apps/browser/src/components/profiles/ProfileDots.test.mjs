@@ -65,44 +65,47 @@ test("production row uses its window selection and available room beside Downloa
   assert.ok(marks().every((p) => p.icon === null));
 });
 
-test("holding over a compact profile keeps it under the same pointer when it becomes active", (t) => {
-  const s = () => useBrowser.getState();
-  const ids = emojis.map((_, i) => `drag-profile-${i}`);
-  const target = 4;
-  const width = 220;
-  s().hydrate({ profiles: Object.fromEntries(ids.map((id, i) => [id, { id, name: id, icon: i === target ? null : emojis[i], color: "plum", createdAt: i }])), profileOrder: ids });
-  const windowId = s().createWindow({ profileId: ids[0] });
-  const row = mount(() => ProfileDots({ windowId, width, besideDownloads: true }));
-  t.after(() => {
-    row.unmount();
-    markDrag(noDragMarks, { sources: new Set() });
-  });
-
-  const marks = () => row.value.props.children.props.children.map((child) => child.props);
-  const cells = () => marks().map((p) => p.cell);
-  const frames = () => {
-    const sizes = cells();
-    let left = (width + row.value.props.style.paddingLeft - sizes.reduce((sum, size) => sum + size, 0)) / 2;
-    return sizes.map((size) => {
-      const frame = [left, left + size];
-      left += size;
-      return frame;
+for (const [width, startBesideDownloads, endBesideDownloads] of [[220, true, true], [219, false, true], [190, true, false]]) {
+  test(`hover-switch keeps compact targets fixed (Downloads: ${startBesideDownloads} → ${endBesideDownloads})`, (t) => {
+    const s = () => useBrowser.getState();
+    const ids = emojis.map((_, i) => `drag-profile-${i}`);
+    const target = 4;
+    s().hydrate({ profiles: Object.fromEntries(ids.map((id, i) => [id, { id, name: id, icon: i === target && startBesideDownloads === endBesideDownloads ? null : emojis[i], color: "plum", createdAt: i }])), profileOrder: ids });
+    const windowId = s().createWindow({ profileId: ids[0] });
+    const row = mount((besideDownloads) => ProfileDots({ windowId, width, besideDownloads }), { props: startBesideDownloads });
+    t.after(() => {
+      row.unmount();
+      markDrag(noDragMarks, { sources: new Set() });
     });
-  };
-  const before = frames();
-  const pointer = (before[target][0] + before[target][1]) / 2;
-  const pointedProfile = () => frames().findIndex(([left, right]) => pointer >= left && pointer < right);
-  assert.equal(pointedProfile(), target);
-  markDrag(noDragMarks, { sources: new Set(["tab"]) });
-  assert.deepEqual(frames(), before);
-  s().switchProfile(windowId, ids[target]);
-  assert.ok(marks().every((p) => p.icon === null));
-  assert.equal(pointedProfile(), target);
-  assert.deepEqual(frames(), before);
-  s().switchProfile(windowId, ids[7]);
-  assert.equal(marks()[7].icon, emojis[7]);
-  assert.deepEqual(frames(), before);
-  markDrag(noDragMarks, { sources: new Set() });
-  assert.equal(cells()[0], 12);
-  assert.equal(cells()[7], 26);
-});
+
+    const marks = () => row.value.props.children.props.children.map((child) => child.props);
+    const cells = () => marks().map((p) => p.cell);
+    const frames = () => {
+      const sizes = cells();
+      let left = (width + row.value.props.style.paddingLeft - sizes.reduce((sum, size) => sum + size, 0)) / 2;
+      return sizes.map((size) => {
+        const frame = [left, left + size];
+        left += size;
+        return frame;
+      });
+    };
+    const before = frames();
+    const pointer = (before[target][0] + before[target][1]) / 2;
+    const pointedProfile = () => frames().findIndex(([left, right]) => pointer >= left && pointer < right);
+    assert.equal(pointedProfile(), target);
+    markDrag(noDragMarks, { sources: new Set(["tab"]) });
+    assert.deepEqual(frames(), before);
+    s().switchProfile(windowId, ids[target]);
+    row.rerender(endBesideDownloads);
+    assert.equal(marks()[target].icon, endBesideDownloads ? null : emojis[target]);
+    assert.equal(pointedProfile(), target);
+    assert.deepEqual(frames(), before);
+    s().switchProfile(windowId, ids[7]);
+    const finalIcon = endBesideDownloads && width === 219 ? null : emojis[7];
+    assert.equal(marks()[7].icon, finalIcon);
+    assert.deepEqual(frames(), before);
+    markDrag(noDragMarks, { sources: new Set() });
+    assert.equal(cells()[0], 12);
+    assert.equal(cells()[7], switcherCellWidth(finalIcon));
+  });
+}

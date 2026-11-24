@@ -38,21 +38,21 @@ export function ProfileDots({ windowId, width, besideDownloads }: { windowId: st
   const saved = useProfileRecords(useShallow((profiles) => ids.map((id) => switcherIconOf(profiles[id]))));
   const active = useWindow(windowId, (w) => w?.profileId);
   const dragging = useDragging();
-  const layoutProfile = useRef(active);
-  useLayoutEffect(() => {
-    if (!dragging) layoutProfile.current = active;
-  }, [dragging, active]);
   const room = width - 2 * (besideDownloads ? SIDE_ROOM_BESIDE_DOWNLOADS : SIDE_ROOM);
   const icons = switcherIcons(saved, room, ids.indexOf(active ?? ""));
+  const liveCells = icons.map(switcherCellWidth);
+  const rowWidth = liveCells.reduce((sum, cell) => sum + cell, 0);
+  const paddingLeft = besideDownloads ? dotsRowLeftInset(width, rowWidth, SIDE_ROOM_BESIDE_DOWNLOADS) : 0;
+  const liveLayout = { ids, width, cells: liveCells, paddingLeft };
+  const restLayout = useRef(liveLayout);
+  useLayoutEffect(() => {
+    if (!dragging) restLayout.current = liveLayout;
+  });
+  const row = dragging && restLayout.current.ids === ids ? restLayout.current : liveLayout;
   const { pages, pager } = usePagerPages(windowId);
-  const layoutIcons = dragging && layoutProfile.current !== active
-    ? switcherIcons(saved, room, ids.indexOf(layoutProfile.current ?? ""))
-    : icons;
-  const cells = layoutIcons.map(switcherCellWidth);
-  const reorder = useDotReorder(ids, cells);
-  const rowWidth = cells.reduce((sum, cell) => sum + cell, 0);
+  const reorder = useDotReorder(ids, row.cells);
   return (
-    <View style={{ height: PROFILE_DOTS_HEIGHT, alignItems: "center", paddingLeft: besideDownloads ? dotsRowLeftInset(width, rowWidth, SIDE_ROOM_BESIDE_DOWNLOADS) : 0 }}>
+    <View style={{ height: PROFILE_DOTS_HEIGHT, width: dragging ? row.width : undefined, alignItems: "center", paddingLeft: row.paddingLeft }}>
       <View style={{ marginTop: (PROFILE_DOTS_HEIGHT - 3 - BAND) / 2, height: BAND, flexDirection: "row" }}>
         {ids.map((id, i) => (
           <Dot
@@ -60,7 +60,7 @@ export function ProfileDots({ windowId, width, besideDownloads }: { windowId: st
             id={id}
             windowId={windowId}
             icon={icons[i] ?? null}
-            cell={cells[i]!}
+            cell={row.cells[i]!}
             page={pages.find((p) => p.id === id)}
             pos={pager.pos}
             offset={reorder.offsetOf(id)}

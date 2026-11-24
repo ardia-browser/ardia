@@ -203,13 +203,8 @@ export function LoginFormSheet({ target, initialMode = "password" }: { target: L
       else setProblem(outcome.error ?? "");
       return outcome.ok;
     }
-    if (lookup && siteOrigin) {
-      const found = existingLogin(await savedAt(siteOrigin), siteOrigin, username, self);
-      if (found) {
-        showDuplicate(found);
-        return false;
-      }
-    }
+    const found = lookup && siteOrigin ? existingLogin(await savedAt(siteOrigin), siteOrigin, username, self) : null;
+    if (found) return (showDuplicate(found), false);
     if (target.kind === "new") {
       const profile = currentEngineProfile(profileId);
       const result = await saveNewArdiaLogin({ website: siteOrigin!, username: username.trim(), passwordDraft: draft!.token, profile, ...(code ? { codeToken: code.token } : {}) });

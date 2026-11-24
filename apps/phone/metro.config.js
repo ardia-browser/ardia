@@ -8,6 +8,7 @@ const config = getDefaultConfig(projectRoot);
 config.watchFolders = [path.resolve(repoRoot, "packages/phone"), path.resolve(repoRoot, "packages/core")];
 config.resolver.nodeModulesPaths = [path.resolve(projectRoot, "node_modules")];
 config.resolver.disableHierarchicalLookup = true;
+config.transformer.getTransformOptions = async () => ({ transform: { experimentalImportSupport: true, inlineRequires: true } });
 config.cacheVersion = [config.cacheVersion, process.env.EXPO_PUBLIC_ARDIA_LAB === "true" ? "lab" : "store"].join(":");
 
 const steppedWindow = path.resolve(projectRoot, "src/lib/steppedWindow.ts");

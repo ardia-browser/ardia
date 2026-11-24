@@ -12,7 +12,7 @@ is already laid out at the size it will have as a tab.
   back once per generation (`onPeekDone`). Nothing in React animates the card. Commands and gestures reset the motion's
   clock to the event, so nothing jumps after the card has rested.
 - **Windows and Linux.** They have no native stage, so each registers a JS `ArdiaPeekStage`
-  (`packages/expo-windows/src/views/PeekStage.tsx`, `apps/linux/src/shims/web/PeekStage.tsx`) with the same contract
+  (`packages/expo-windows/src/views/PeekStage.tsx`, `apps/desktop/src/shims/web/PeekStage.tsx`) with the same contract
   (`begin`, `close`, `promote`, the same state and done events) that replays the zoom they had before: the card grows
   out of the link on the snappy spring (0.2 s, damping 0.9), shrinks back into it in 150 ms (ease-in), and Open as Tab
   expands it to the tab's frame in 150 ms (ease-out) before the tab takes over; Reduce Motion fades, and a Peek that

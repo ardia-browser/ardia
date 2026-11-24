@@ -2,11 +2,11 @@ import { useEffect } from "react";
 import { Image, StyleSheet, type ImageSourcePropType } from "react-native";
 import { DockSelection, radius, useGlass, useTheme } from "../ui";
 import { bundledSiteIcon } from "../favicon/siteIcons";
-import { useFavicon } from "../../state/favicons/favicons";
+import { useFavicon } from "../../state/favicons/faviconHooks";
 import { useIconRing, warmIconRing } from "../../state/favicons/iconRing";
 import type { TileTheme } from "../../state/favicons/tileTheme";
 
-export const RING_WIDTH = 2;
+const RING_WIDTH = 2;
 const RING_WARM_DELAY_MS = 500;
 
 export function IconRing({ ring }: { ring: TileTheme }) {

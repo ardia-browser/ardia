@@ -1,7 +1,7 @@
 import { View } from "react-native";
 import { Button, Checkbox, space, Text } from "../../ui";
 import { SectionHeader } from "../../settings/Form";
-import { APP, diaTabsNote, KINDS, type ImportKind } from "../model";
+import { diaTabsNote, KINDS, type ImportKind } from "../model";
 import { ErrorText, Note, Spacer, TargetPicker, Title } from "../Parts";
 import { BrowserRow } from "../Rows";
 import { importType } from "../tokens";

@@ -1,8 +1,12 @@
+import type { Design } from "./design.ts";
+
 export type ScrollDirection = "up" | "down";
 
 export type BarCollapse = { tabId: string | null; page: string | null; direction: ScrollDirection; hidden: boolean };
 
 export const BAR_SHOWN: BarCollapse = { tabId: null, page: null, direction: "up", hidden: false };
+
+export const bottomBarCollapses = (design: Design, preference: boolean | null): boolean => preference ?? design === "material";
 
 export function followScroll(state: BarCollapse, tabId: string | null, page: string | null, direction: ScrollDirection, collapses: boolean): BarCollapse {
   if (!collapses || tabId !== state.tabId || page !== state.page) {
@@ -21,6 +25,6 @@ export function pageInsets(collapses: boolean, barHeight: number, overlap: numbe
   return collapses ? { pageBottom: 0, toneBottom: barHeight } : { pageBottom: barHeight - overlap, toneBottom: overlap };
 }
 
-export type BarCover = { follows: boolean; bar: number; pill: number; collapsed: boolean; cleared: boolean };
+export type BarCover = { insetsScroll: boolean; bar: number; collapses: boolean; cleared: boolean };
 
-export const obscuredBottom = ({ follows, bar, pill, collapsed, cleared }: BarCover) => (!follows ? bar : cleared ? 0 : collapsed ? pill : bar);
+export const obscuredBottom = ({ insetsScroll, bar, collapses, cleared }: BarCover) => (insetsScroll ? bar : collapses || cleared ? 0 : bar);

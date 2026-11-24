@@ -1,5 +1,5 @@
 import type { SqlDatabase } from "../../lib/sqlDatabase";
-import { openMemoryDatabase, openSqlDatabase } from "../../platform/database";
+import { openMemoryDatabase, openSqlDatabase, WAL_SAFE_COMMITS } from "../../platform/database";
 import { newUuid } from "../../lib/ids";
 import { demoSeed } from "../app/demoSeed";
 import { isDemoSession, launchArguments } from "../app/launchFlags";
@@ -43,6 +43,10 @@ export function browserDatabase(): SqlDatabase {
     durable = true;
   }
   return opened;
+}
+
+export function relaxBrowserDatabase() {
+  if (opened && durable) opened.exec(WAL_SAFE_COMMITS);
 }
 
 export const tabDatabase = (): SqlDatabase => (tabs ??= isDemoSession() ? demoDatabase() : browserDatabase());

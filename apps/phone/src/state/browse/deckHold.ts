@@ -1,13 +1,13 @@
 import { useCallback, useMemo, useRef, useSyncExternalStore } from "react";
 import type { StoreApi } from "zustand";
-import { useRootSize, type RootSize } from "../app/rootSize";
+import { setRootSize, useRootSize, type RootSize } from "../app/rootSize";
 import { shownPageTone, usePages, type PageTone } from "../pages/store";
 import { useSearch } from "../search/store";
 import { tabsInSpace } from "../tabs/spaces";
 import { useTabs } from "../tabs/store";
 import { recencyOrder, type BrowserTab } from "../tabs/tabModels";
 import { refreshHiddenDeck, useDeckStandby } from "./deckStandby";
-import { useBrowse } from "./store";
+import { deckPullInFlight, useBrowse } from "./store";
 
 export { refreshHiddenDeck };
 
@@ -50,3 +50,7 @@ export const useHeldPageTone = (id: string): PageTone | null => useHeldWhileDeck
 export const useHeldSearchOpen = () => useHeldWhileDeckHidden(useSearch, (s) => s.open);
 
 export const useHeldRootSize = (): RootSize => useHeldWhileDeckHidden(useRootSize, (s) => s);
+
+export function resizeRoot(width: number, height: number) {
+  if (setRootSize(width, height) && !deckIsShown() && !deckPullInFlight()) refreshHiddenDeck();
+}

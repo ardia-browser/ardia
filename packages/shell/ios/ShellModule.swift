@@ -2,7 +2,7 @@ import AppKit
 import ArdiaCore
 import ExpoModulesCore
 
-public class ShellModule: Module {
+public class ShellModule: Module, ShellNative {
   private static var quitCancelledOwner: ObjectIdentifier?
 
   private let lifetime = ModuleLifetime()
@@ -10,20 +10,57 @@ public class ShellModule: Module {
   private var sidebarObservers: [(NotificationCenter, NSObjectProtocol)] = []
   private var flagsMonitor: Any?
 
+  static func setAppearance(_ mode: String) { NSApp.appearance = mode == "light" ? NSAppearance(named: .aqua) : mode == "dark" ? NSAppearance(named: .darkAqua) : nil }
+
+  static func isDarkAppearance() -> Bool { ShellModule.isDark }
+
+  static func startDictation() { DispatchQueue.main.async { NSApp.sendAction(Selector(("startDictation:")), to: nil, from: nil) } }
+
+  static func fetchBangList(_ etag: String?, _ promise: Promise) {
+    BangListFetch.start(etag: etag) { result in
+      switch result {
+      case .success(let reply): promise.resolve(reply)
+      case .failure(let error): promise.reject("ERR_BANG_LIST", error.localizedDescription)
+      }
+    }
+  }
+
+  static func copyText(_ text: String) {
+    DispatchQueue.main.async {
+      NSPasteboard.general.clearContents()
+      NSPasteboard.general.setString(text, forType: .string)
+    }
+  }
+
+  static func copyURL(_ address: String) {
+    DispatchQueue.main.async {
+      let board = NSPasteboard.general
+      board.clearContents()
+      if let url = URL(string: address), url.scheme != nil { board.writeObjects([url as NSURL]) }
+      board.setString(address, forType: .string)
+    }
+  }
+
+  static func readText() -> String { NSPasteboard.general.string(forType: .string) ?? "" }
+
   public func definition() -> ModuleDefinition {
-    Name("ArdiaShell")
-    Events(ShellEvents.Channel.openURLs.rawValue, ShellEvents.Channel.app.rawValue)
+    Name(Self.moduleName)
+    Self.eventsDefinition
 
     OnCreate {
       _ = installTextFieldSelectAll
       _ = installViewSelectAll
       _ = installSubmenuAction
+      _ = installHoverAfterWindowMoves
       _ = installInputSourceKeys
       _ = installScrollViewInsetFix
       _ = installStripWheel
       _ = installOutsidePressMonitor
       _ = installWindowMoveFallback
       _ = installCenteredResize
+      FullScreenLifecycle.shared.stateOf = { ArdiaChromeWindowHost.windowIsFullScreen($0) }
+      FullScreenLifecycle.shared.settledByCheck = { WindowManager.shared.recordFullScreen($0, on: $1) }
+      FullScreenLifecycle.shared.start()
       self.lifetime.begin(self) {
         self.appearanceObservation?.invalidate()
         self.appearanceObservation = nil
@@ -59,28 +96,13 @@ public class ShellModule: Module {
 
     OnStartObserving(ShellEvents.Channel.openURLs.rawValue) { ShellEvents.attach(.openURLs, to: self, while: self.lifetime) }
 
-    AsyncFunction("setAppearance") { (mode: String) in
-      NSApp.appearance = mode == "light" ? NSAppearance(named: .aqua) : mode == "dark" ? NSAppearance(named: .darkAqua) : nil
-    }.runOnQueue(.main)
-    AsyncFunction("isDarkAppearance") { () -> Bool in ShellModule.isDark }.runOnQueue(.main)
-    Function("startDictation") {
-      DispatchQueue.main.async { NSApp.sendAction(Selector(("startDictation:")), to: nil, from: nil) }
-    }
-    AsyncFunction("fetchBangList") { (etag: String?, promise: Promise) in
-      BangListFetch.start(etag: etag) { result in
-        switch result {
-        case .success(let reply): promise.resolve(reply)
-        case .failure(let error): promise.reject("ERR_BANG_LIST", error.localizedDescription)
-        }
-      }
-    }
-    Function("copyText") { (text: String) in
-      DispatchQueue.main.async {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
-      }
-    }
-    AsyncFunction("readText") { () -> String in NSPasteboard.general.string(forType: .string) ?? "" }.runOnQueue(.main)
+    Self.setAppearanceFunction
+    Self.isDarkAppearanceFunction
+    Self.startDictationFunction
+    Self.fetchBangListFunction
+    Self.copyTextFunction
+    Self.copyURLFunction
+    Self.readTextFunction
   }
 
   private func observeForSidebar() {

@@ -1,8 +1,8 @@
 # Agent brief (read first)
 
-You are one of several engineers working **in parallel in the same working tree** on
-Ardia, a macOS browser that must reach **full feature and visual parity with Dia**
-(The Browser Company). The feature checklist is `docs/dia-feature-parity.md`; the
+You are one of several engineers working **in parallel on the same repository**, some in the shared root
+checkout and some in their own worktrees or clones, on Ardia, a macOS browser that must reach **full feature
+and visual parity with Dia** (The Browser Company). The feature checklist is `docs/dia-feature-parity.md`; the
 visual spec (colors, sizes, animations recovered from Dia's binary) is `docs/dia-spec.md`.
 The user is demanding: no sloppy work, every hover state/animation/detail matters.
 How the code is laid out and named (folders, import direction, tokens, state, the translation layer, environment
@@ -14,7 +14,7 @@ variables) is in `docs/conventions.md`, enforced by `apps/browser/src/convention
   inline styles.
 - Native code lives in Expo modules under `packages/*/ios` (Swift / Objective-C++):
   - `packages/ardiacore`: the web engine, **ArdiaCore**: Chrome's own framework (`Chromium Framework.framework`,
-    Chromium 158.0.8127.36 + Helium 0.22.1 + our patch series, `docs/engine-build.md`) with our layer linked
+    Chromium 158.0.8127.36 + Helium 0.22.2 + our patch series, `docs/engine-build.md`) with our layer linked
     in, and the Expo modules and JS API the app uses (`docs/ardiacore-spike.md`, `docs/ardiacore-parity.md`).
     - **Chromium runs the process.** `main.swift` calls `ArdiaHost.run`: `ChromeMain` starts with our
       `ACMainDelegate`, `NSApp` is Chrome's `BrowserCrApplication`, and the React Native host (`AppDelegate`) starts
@@ -44,14 +44,14 @@ variables) is in `docs/conventions.md`, enforced by `apps/browser/src/convention
 - react-native-macos quirks: RN shadow props crash → use `Surface` for shadows; RCTView resets
   layer props → draw in sublayers; native views must size subviews in `setFrameSize`.
 - **Patched dependencies** live in `patches/` and are listed under `patchedDependencies` in
-  `pnpm-workspace.yaml` (pnpm 11 reads them there); every `pnpm install` applies them, and the Podfile
+  `pnpm-workspace.yaml` (pnpm reads them there); every `pnpm install` applies them, and the Podfile
   (`macos`) compiles React from `node_modules`, so a rebuild picks a change up (`pod install`
   only if a patch adds or removes files). To change one: `pnpm patch <pkg>@<version> --edit-dir <scratch dir>`,
   edit there, then `scripts/agent/locked pod -- pnpm patch-commit <scratch dir>`, and read the new `.patch`:
   pnpm can add bogus `deleted file` entries (drop them and run `pnpm install` again under the same lock).
   Mark edits `[Ardia: … Ardia]`. Current patches: `react-native-macos` (a view's `transform` survives
   AppKit layout and applies from its centre; RCTTiming's display link, c7ebd600; a view in a scroll view observes its bounds once, not once per re-add; focus() on a text field being edited keeps its edit, caret and selection; a placeholder change on an empty field being edited isn't a blur; a placeholder colour change on a field being edited reaches its field editor, so it shows once the field is emptied, and its text keeps the field's own colour; a single-line field with pastedTypes pastes only those as plain text, line breaks folded as in Chrome's omnibox, a088913e; a container whose children change leaves the ones already in place alone instead of re-adding every one, 6d7277fd; a mouse touch matches its own down on the same button and is never recorded twice, so JS never gets a null touch, 8bd086c8; mounts go through one queue in layout order, and a live-resize layout, which React Native mounts on the main thread at once, first mounts every older one still queued, so a zoomed window never keeps an older layout and its views track the window during the animation, 2f4aa603; a network task's callback blocks are atomic and only one of
-  cancel, error and completion finishes it, so a cancel racing a completion never frees the block being called, #955; a React view whose parent and children are all React views leaves Auto Layout, which every macOS 26+ window engages and whose memory exploded with thousands of sidebar rows, #952; a view whose `overflow` changes redisplays its layer, so one that stops clipping at the same size stops masking its children; `measureInWindow` answers in the owning React root's points from its top left, and border images and decoded images use the view's own backing density, interface size included, and redraw when it changes; on a fractional pixel grid Yoga gives a node thinner than 3 device pixels one whole-pixel size wherever it sits, at least 1, so hairlines and 1 point rules neither vanish nor vary; a scroll tells hover once, from its RCTScrollView, not through an observer on every view in it; its first step is checked as any layout change is, so a lone wheel notch moves the highlight at once and leaves it alone on the same row, and while the scroll goes on a view in it is left on the step that takes it out from under the pointer and none is entered until it pauses, neither by the layout check nor by the enters AppKit sends for each view that scrolls under a real pointer; `removeClippedSubviews` hides the children further than 300 pt outside the scroll view's visible part instead of removing them, so AppKit skips them on each scroll step and measuring them still works, hides nothing while VoiceOver or Switch Control is on, never the child that holds the keyboard focus, and a hidden child that moves to another parent is shown there; a Pressable with no `onHoverIn` or `onHoverOut` asks for no mouse enter and leave, so its view gets no tracking area) and `expo-modules-core` (the JS
+  cancel, error and completion finishes it, so a cancel racing a completion never frees the block being called, #955; a React view whose parent and children are all React views leaves Auto Layout, which every macOS 26+ window engages and whose memory exploded with thousands of sidebar rows, #952; a view whose `overflow` changes redisplays its layer, so one that stops clipping at the same size stops masking its children; `measureInWindow` answers in the owning React root's points from its top left, and border images and decoded images use the view's own backing density, interface size included, and redraw when it changes; on a fractional pixel grid Yoga gives a node thinner than 3 device pixels one whole-pixel size wherever it sits, at least 1, so hairlines and 1 point rules neither vanish nor vary; a scroll tells hover once, from its RCTScrollView, not through an observer on every view in it; under a still pointer a view in it waits from the first step: it is left on the step that takes it out from under the pointer and none is entered until that list has been quiet for 60 ms (measured from its last real move), neither by the layout check nor by the enters AppKit sends for each view that scrolls under a real pointer, unless the pointer moved a point since hover last saw it before the scroll began, or since the last full hover check (then hover follows it at once), and a step that leaves the list where it was holds nothing; only views inside a list that just moved wait, each list on its own clock, so hover anywhere else is checked at once, and a row entered while the list coasts is left as soon as it scrolls away; an enter AppKit sends over the part of a view its scroll view clips, or one a scroll held, waits for the pointer to reach the shown part (one app-wide watch on mouse moves, kept only while something waits, tries it again), a leave goes only to a view that was entered, and a view that loses its hover handlers or leaves the window ends its hover state, with the leave it is owed; `removeClippedSubviews` hides the children further than 300 pt outside the scroll view's visible part instead of removing them, so AppKit skips them on each scroll step and measuring them still works, hides nothing while VoiceOver or Switch Control is on, never the child that holds the keyboard focus, and a hidden child that moves to another parent is shown there; a Pressable with no `onHoverIn` or `onHoverOut` asks for no mouse enter and leave, so its view gets no tracking area; a LayoutAnimation frame update sets the final frame at once and glides its layer there with additive Core Animation animations instead of AppKit's per-frame NSAnimationContext, and takes `controlPoints` for its curve, and a view still gliding (moving, or a clipping view's part not yet uncovered) takes no hits until it lands, #3660) and `expo-modules-core` (the JS
   runtime is prepared on the JS thread only, 364f5f7e).
 
 ## The engine
@@ -71,6 +71,11 @@ variables) is in `docs/conventions.md`, enforced by `apps/browser/src/convention
   `apply.sh` copies the whole working tree, so other agents' uncommitted engine files get compiled too.
   A new framework changes every agent's next build, so say so in your report. To try one privately, build the app with
   `ARDIACORE_FRAMEWORK=<framework> scripts/agent/build-app --as <you>` (it stages into your own derived data).
+- Every Mac build records its engine in the app's Info.plist (`ArdiaEngineMatch` exact, nearest or local, plus
+  `ArdiaEngineKey`, `ArdiaEngineVersion`, `ArdiaEngineSource`), from the `engine-match` line `fetch-engine.sh` writes
+  beside a published engine (`packages/ardiacore/scripts/engine-match.sh`). A nearest engine whose
+  `engine/ardiacore/src/ardia/core/public` differs from the checkout's stops the build before it compiles;
+  `ARDIACORE_ALLOW_PUBLIC_MISMATCH=1` builds anyway.
 - New engine code goes in `//chrome/browser/ardia` (`engine/chromium/src`) or `//ardia/core`
   (`engine/ardiacore/src`), never straight into the tree (`docs/engine-build.md` › "Our own code in the tree").
   `engine/patches/series` is the apply order of our patches to Chromium; `engine/patches/series.py check` proves the
@@ -131,8 +136,43 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
   in `public/ac_engine.h` and `ac_engine.h`; a new file goes in that `BUILD.gn`; `ac_engine.exports` exports every
   `ac_*`). A private window's calls arrive with `offTheRecord: true` and are refused unless the call says
   `ardia::OffTheRecord::kAllow`: the engine alone decides which calls serve a private session; (2) `scripts/agent/engine-build`; (3) call it with
-  `ArdiaEngineBridge call:` (`callWithSecret:` for secrets); for JS, add `"verb": EngineCall.passing("ac_<domain>_<verb>")`
-  to the domain module's call table and its `"domain.verb": [args, result]` row to `packages/ardiacore/src/engine/api.ts`.
+  `ArdiaEngineBridge call:` (`callWithSecret:` for secrets); for JS, add the call to its domain's host API schema
+  (below), which generates the Mac call table's `EngineCall.passing("ac_<domain>_<verb>")` row and the TS types.
+  **Host API schema:** every engine domain lives in `packages/hostapi/schema`, and `api.ts` merges only the generated
+  domains; add a new call to its domain's schema file with its `service`, its
+  explicit `desktop` binding (`route`, `custom` or `absent`) and any `mac`/`windows` override (`custom` when that host
+  serves it with its own code; a call no host passes straight through may leave out `service`). A desktop route that
+  answers with one field of the engine's reply, or with null, says so in `routeField` (`kRoutes`' third column), and a
+  non-default bootstrap timeout says so in `deadline`. Each
+  event names its `payload` and its explicit `desktop` binding (`forward`, `custom` or `absent`), with `mac`/`windows`
+  overrides (default `forward`) and a `topic` when the engine topic isn't the event's own name (`engine.cliControl`
+  comes from `cliControl`). Payload types come from paths relative to the generated folder or from a package
+  `packages/ardiacore` depends on (`@ardia/core`). Then run `node packages/hostapi/generate.mjs --write`. It writes the domain's TS types and
+  manifest in `packages/ardiacore/src/engine/generated/`, its whole Swift module when every call is `passing` (or
+  `<Domain>Calls.swift`, a `<domain>CallTable(...)` function taking one handler per Mac `custom`
+  call, which the hand-written `<Domain>Module.swift` calls for its `calls`; `.dropping(...)` removes calls a launch
+  mode doesn't serve, as Tabs and WebKit do for test-instance calls), the shared desktop route table in
+  `engine/ardiacore-desktop/src/ardia/desktop/generated/ac_desktop_routes.h`, and the bootstrap deadline map. Never edit generated files by hand. `pnpm -C packages/hostapi test`
+  checks they're current and that Linux's `EventName`, the Mac's `ForwardedTopics` and Windows'
+  `forwarded.json` agree with the schema.
+  A domain Windows has no module for (`webKit`) is absent there call by call and never named in `forwarded.json`.
+  **Module domains** (positional Expo functions: `shaders`, `shell`, `sync`, `import`) are listed in the schema's `moduleDomains`
+  through `defineModuleDomain`: the package, then per Expo module (`ArdiaWindowBackdrop`) its functions, each with
+  positional `args` (`[name, type]`, plus a Swift type when the TS one isn't a primitive), `result`, `async`, optional
+  `promise`/`queue`, `optional`, `swiftAsync`/`throws`, `instance` (`strong`, or `weak` with a `fallback`) and `debug`, and
+  explicit `mac` (`custom`/`absent`), `desktop` (`custom`, `adapted` when the UI answers in front of the host's own
+  dispatch, `host` or `absent`) and `windows` (`custom`/`absent`) bindings, plus its `constants` and module events. The generator writes `<package>/src/generated/native.ts`
+  (`<Name>Native` per module, `<Domain>Modules` for all of them; the package calls `requireNativeModule` through
+  them), `<package>/ios/<Domain>Native.swift` (a protocol of the Mac module's static functions, plus
+  `moduleName`, `<fn>Function` and `eventsDefinition` definitions), and the domain's entry under the manifest's
+  `modules`. The hand-written module conforms (`class WindowBackdropModule: Module, WindowBackdropNative`), writes
+  `Name(Self.moduleName)` and `Self.holdKeyLookFunction` in its `definition()` and implements the static bodies, so a
+  schema change that the body doesn't follow fails to compile (Swift keyword names are backticked). The manifest keeps
+  each written file's SHA-256, and `--write` never overwrites or deletes one that no longer matches it. The tests check
+  that conformance and that no function, event or name is registered by hand, that the package never types a module
+  past the generated map (both TypeScript scans use the compiler's syntax tree), that the desktop UI answers exactly the `custom` functions (a Promise when `async`), and
+  that the Linux host (`if (method == …)` dispatch outside `bool` helpers, `SendEvent`) and Windows (`REACT_METHOD`, the `writtenInJs` object's
+  members, `moduleDefaults` keys, `EmitEvent`/`emitNativeEvent`) serve exactly the functions and events bound to them.
 - **The page script** is `packages/ardiacore/ios/page_script.js`, a pod resource: `ArdiaHostEngineDelegate.mm` hands it to the
   engine at launch and the renderer runs it in every http(s) and file frame. Changing it needs an app rebuild, not an
   engine one. Its `post(kind, json)` crosses the page channel to `-[ArdiaWebView tab:didReceivePageMessage:…]` (`ArdiaWebView+PageMessages.mm`),
@@ -148,12 +188,38 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
 ## Rules
 - **Stay inside the files you own** (listed in your task). If you need a change elsewhere,
   make the smallest possible change, or describe it in your report instead. Other agents
-  are editing other files right now; never revert or reformat code you don't own. Never run
-  `git checkout -- <file>`, `git restore`, `git stash` or `git reset --hard` in this checkout: they wipe other
-  agents' uncommitted work in the same file. Undo your own hunks by editing.
-- **Commit your own work to `main`** (`git add -p` or explicit paths, only your hunks). Never commit another
-  agent's work in progress. The index and the working tree are shared, and `git commit -- <paths>` (`--only`) takes
-  the whole working-tree file, other agents' hunks included: check `git diff --cached --stat` lists only your
+  are editing other files right now; never revert or reformat code you don't own. In the shared root checkout,
+  never run `git checkout -- <file>`, `git restore`, `git stash`, `git reset --hard` or `git clean`: they wipe other
+  agents' uncommitted work in the same file. Undo your own hunks by editing. A git worktree or a scratch clone is
+  yours alone, so all of those are fine there (`scripts/agent/guard-git` lets them through); `~/chromium-build` is
+  still shared, under `scripts/agent/locked chromium`.
+- **Set up a worktree's dependencies with `scripts/agent/worktree-setup <worktree>`** (`--help`), never by
+  copying or APFS-cloning `node_modules` or `Pods`: a `cp -Rc` of the JS dependencies writes about 93k inodes and
+  keeps fseventsd above 100% CPU for its length, and its deletion costs the same again. The script links each
+  `node_modules` folder entry by entry, in about 0.1 s, into one read-only pnpm install per set of install inputs
+  (lockfile, `.npmrc`, workspace manifests, patches, platform and Node major) under `~/ardia-scratch/deps.noindex/<key>`.
+  The first worktree on new inputs builds that install under `locked pod`: about 6 s, plus any wait for running app
+  builds. `@ardia/*` links point at the worktree's own packages.
+  - In a linked worktree, never `pnpm install`: its `.pnpmfile.cjs` refuses, and the read-only tree stops a bypass.
+    `pnpm run` and `pnpm exec` print the refusal and still run, but calling tools directly is quieter:
+    `node_modules/.bin/tsrs -p .`, `node --import ./src/test-loader.mjs --test …` in `apps/browser`, or
+    `node node_modules/react-native/cli.js start --port <n>` there for Metro. `metro.config.js` reads the link
+    marker, so Metro, `js-bench.mjs bundle` and the Xcode bundle phase resolve through the links with no wrapper.
+  - Changing dependencies (a lockfile, a patch, `pnpm patch`) needs a real install: `--undo` first, then
+    `pnpm install` under `scripts/agent/locked pod`; to link again afterwards, run the setup with `--replace`, which
+    swaps that real install for links. After pulling a new lockfile, run the setup again;
+    `--status` says when a worktree no longer matches. `--prune` deletes cached installs no worktree uses. A git
+    worktree's cache stays claimed while git still has the worktree (`git worktree move` included); `git worktree
+    remove` clears that, while a worktree deleted by hand keeps its cache until `git worktree prune` runs. A scratch
+    export that moves must run the setup again.
+  - A native build needs the worktree's own `Pods`: `pod install` under `locked pod` works against the linked,
+    read-only `node_modules`. If a later build step must write into `node_modules`, it fails loudly on the
+    read-only tree rather than changing it: use a real install (`--undo`) for that worktree.
+  - The script drops `.metadata_never_index` into the worktree, the cache, `~/ardia-scratch` and `~/ardia-wt`. On
+    the Mac mini, run it there the same way, or `touch ~/ardia-scratch/.metadata_never_index` once.
+- **Commit your own work to `main`** from the shared checkout, or push a branch from your worktree (`git add -p`
+  or explicit paths, only your hunks). Never commit another agent's work in progress. The index and the working
+  tree are shared, and `git commit -- <paths>` (`--only`) takes the whole working-tree file, other agents' hunks included: check `git diff --cached --stat` lists only your
   files, then commit the index with a bare `git commit -m …`. For a file that also holds someone else's uncommitted
   hunks, stage a blob (HEAD's copy plus your edits, `git hash-object -w`, `git update-index --cacheinfo
   100644,<blob>,<path>`) and check `git diff --cached`.
@@ -177,15 +243,19 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
     use fixtures you create. Dia's app bundle (binary, assets) may be read.
 - **Isolated builds/instances** (several agents build and run at once). Use your agent name `<you>`:
   - Build (with `run_in_background`): `scripts/agent/build-app --as <you>` (`--config Release`, `--force`; `--help`).
-    It builds into `apps/browser/build-<you>`, in parallel with other agents' builds, and prints only the errors,
-    the warnings count, the result and the .app path (full log in `build-<you>/build-app.log`). Keep your name: a
-    new derived data compiles everything (a few minutes), and a copy of someone else's does too (its paths differ).
-    A JS-only change needs no build: it says so and stops (`--force` builds). A new engine framework is staged
+    It prints only the errors, the warnings count, the result and the .app path (`app: …`; full log in
+    `build-<you>/build-app.log`). A JS-only change needs no build: it says so and stops (`--force` builds). Native
+    stamps already built on this Mac, in any worktree, come from the app cache as an APFS clone in seconds
+    (`scripts/agent/build-cache`; Release gets your JS bundled in). Otherwise a worktree with no build of its own
+    builds in a shared build slot (`~/ardia-scratch/build-slots/<n>`, synced file by file, so a tree near the slot's
+    last build compiles only what changed), and one that already has `build-<you>` keeps building there; `--plain`
+    forces that, `--slot` the slot. On a Mac outside the team's provisioning profile add `--adhoc`, and
+    `--prebuilt-engine` to use the published engine instead of a stale `~/chromium-build`. A new engine framework is staged
     under the chromium lock: `--release` your chromium take first, or it uses your take (`--as`).
     `/tmp/ac-<name>.holder` says who holds a lock. Every `scripts/agent` script takes `--help`.
     When the main session runs the build train (`scripts/agent/train serve`: one shared build of the tree), don't
     build yourself: `train request --as <you>`, then `train wait --as <you>` prints the app to run.
-  - Run: `scripts/agent/ac launch apps/browser/build-<you>/Build/Products/Debug/Ardia.app --data <scratch>/data`
+  - Run: `scripts/agent/ac launch <the app build-app printed> --data <scratch>/data`
     (hidden: `open -g -n`, `ARDIA_BACKGROUND=1`, its own data dir and DevTools port; prints the pid and port).
     `ac eval|page|quit|status` take that data dir (`--help`); scripts use `scripts/lib/instance.mjs` (`launch`,
     `attach`, `session`, `reporter`), whose pid is the DevTools port's listener, never a process-list diff
@@ -225,7 +295,7 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
 - Tests, test-instance variables and what background mode changes: `docs/testing.md`. Benchmarks and the perf gate:
   `docs/perf/README.md`.
 - The Bash tool runs zsh: quote globs (`--include='*.mm'`, `'/tmp/ac-*.holder'`) or use `git grep -n PAT -- '*.mm'`.
-- **Verify before reporting done.** At minimum: `pnpm -w typecheck` (or `npx tsc -p <pkg>`)
+- **Verify before reporting done.** At minimum: `pnpm -w typecheck` (or `pnpm exec tsrs -p <pkg>`)
   passes for what you touched, the app builds, and you exercised the feature in a running
   instance.
   - Drive the app through the dev harness: `scripts/agent/ac eval <data dir> '<body>'` (a function body that
@@ -292,7 +362,7 @@ The only variables the app and engine read, through `ArdiaLaunchConfig` (`packag
 | --- | --- | --- |
 | `ARDIA_DATA_DIR` | path | Scratch data dir: Chrome's data in `<dir>/Chromium`, the app's documents, defaults, keychain items and Sparkle state (`packages/shell/ios/ArdiaIsolation.m`); Chrome gets `--use-mock-keychain`. A Debug build refuses to start without one |
 | `ARDIA_BACKGROUND` | `1` (anything but empty or `0`) | Hidden test instance (Rules › never steal focus; `docs/testing.md`) |
-| `ARDIA_REMOTE_DEBUGGING_PORT` | port | CDP on that port, only on the mock keychain |
+| `ARDIA_REMOTE_DEBUGGING_PORT` | port | CDP on that port, only on the mock keychain. CDP doesn't go through Settings › Advanced › Let programs control Ardia, so that switch can't be judged on an instance with a port: test it on one launched without |
 | `ARDIA_INSTANCE` | `jsLocation=host:port` | This launch's Metro (Debug builds) |
 | | `chromiumSwitches=--a --b=x,y` | Extra Chrome switches, space-separated, only on the mock keychain; background mode drops the auto-accept capture ones, and `--ardia-*` never passes |
 | | `downloadsDir=<dir>` | Chrome's default download folder for this launch, never written to the profile |
@@ -303,7 +373,7 @@ The only variables the app and engine read, through `ArdiaLaunchConfig` (`packag
 | | `syncFolder=<dir>` | The sync folder (`packages/sync/scripts/e2e.mjs`) |
 | | `sharedFolders=<dir>` | Where Share Folder… creates shared folders and where Add Shared Folder… starts (`iCloud Drive › Ardia Shared` otherwise; a scratch data dir uses `<data dir>/Ardia Shared`), `docs/shared-folders.md` |
 | | `importSourceDir=<dir>` · `importSafariHome=<dir>` | Where import looks for other browsers and Safari's home, so a scratch instance never sees the owner's profiles |
-| `ARDIA_SWITCHES` | `name=on\|off,…` | Kill switches (`platform/killSwitches.ts` `SWITCHES`, at most 8, on by default) and experiments (`EXPERIMENTS`: `serverWindowDragAllOpen`, `dragRegionEveryMount`, `webkitSignIn`, off by default). Honoured in every build (`docs/kill-switches.md`) |
+| `ARDIA_SWITCHES` | `name=on\|off,…` | Kill switches (`platform/killSwitches.ts` `SWITCHES`, at most 8, on by default) and experiments (`EXPERIMENTS`: `serverWindowDragAllOpen`, `dragRegionEveryMount`, off by default). Honoured in every build (`docs/kill-switches.md`) |
 | `ARDIA_TRACE` | `visibility` | Occlusion and each WebView attach/detach, `[ardiacore-vis]` in the system log |
 | | `pip` · `pipZoom` | PiP windows to `/tmp/ac-pip-trace.log` · PiP zoom gestures, `[pip-zoom]` |
 | | `trafficLights` | Every traffic-light change to `<data dir>/traffic-lights.log` |
@@ -324,7 +394,10 @@ The only variables the app and engine read, through `ArdiaLaunchConfig` (`packag
 | | `peekStrict` | Peek's test hooks stop relaxing its click checks |
 | | `peekMesh=unavailable\|throws` · `peekReady=never` · `peekReduceMotion` · `peekSlow=<n>` | Peek's motion (`docs/peek-motion.md`): the Genie mesh reported missing or throwing on build, a page that never reports a drawn frame (the 150 ms timeout), Reduce Motion, and the Genie <n> times slower for captures |
 | | `importSecret=<s>` · `importDiaBundleId=<id>` · `importDiaWindows=<json>` | Import's Safe Storage secret · the app Dia's tabs come from (opened hidden and quit by the import) · fixture windows answering for it, with no Automation prompt |
+| | `controlDoorbell` | The control socket asks before admitting a program not signed with Ardia's Team ID, as a release does (test instances otherwise admit every process of the user; `docs/automation.md`). With `appDialog` the doorbell goes to `dialog.json` |
 | | `cliInstallScript=<path>` | Another `ardia` installer script (the Linux and Windows hosts' installer; macOS no longer runs one) |
+| | `applePasswordsPanel` | Background mode really opens macOS's Passwords panel for the key and Edit › AutoFill › Passwords… instead of logging it (`docs/testing.md`); the panel is another process's window and can show on screen |
+| | `systemPanelRace` | Runs AppKit's delayed autofill show-or-hide pass right after the Passwords command, to check the panel survives it (`docs/testing.md`) |
 | | `bundledPlugins=<dir>` | Built-in plugins come from this folder instead of `Ardia.app/Contents/Resources/Plugins` (`docs/plugins.md` › Built-in plugins) |
 | | `legacySource=<home>` · `legacyCrashAfter=<step>` | The Netnyahoo → Ardia migration from a scratch home |
 | | `bangsUrl` · `onboarding` · `whatsNew` · `telemetry` · `liveMock=<url>` · `calendarFixture` | Debug builds only: bang list, run onboarding, show What's New, send telemetry, live folders from a mock, the calendar fixture |

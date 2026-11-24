@@ -1,5 +1,5 @@
 import { engineAvailable, hostCall } from "../engine/host";
-import { expectEqual, expectTrue, type Check } from "./check";
+import { expectEqual, type Check } from "./check";
 import { hide, keptBy, LEFT, listed, loaded, show, until, withPages } from "./engineSleep";
 
 const PUT_BACK_MS = 3000;

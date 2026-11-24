@@ -5,7 +5,7 @@ import { consentToken } from "../telemetry/client";
 
 const ARCHIVE = /\.(?:zip|tar|tgz|tbz|tbz2|txz|cpio|tar\.gz|tar\.bz2|tar\.xz|gz|bz2|xz)$/i;
 
-export type OpenDownloadDeps = {
+type OpenDownloadDeps = {
   open: (path: string) => Promise<boolean>;
   reveal: (path: string) => Promise<boolean>;
 };
@@ -14,11 +14,11 @@ const SYSTEM: OpenDownloadDeps = { open: openFile, reveal: revealFile };
 
 export const isArchive = (path: string) => ARCHIVE.test(path);
 
-export async function openDownload(path: string, deps: OpenDownloadDeps = SYSTEM): Promise<boolean> {
+export async function openDownload(path: string, deps: OpenDownloadDeps = SYSTEM, mayGoOn: () => boolean = () => true): Promise<boolean> {
   if (!PLATFORM_FEATURES.unpacksArchivesSilently || !isArchive(path)) return deps.open(path);
   const consent = consentToken();
   if (!(await deps.open(path))) return false;
   noteDownloadsPanel("archiveOpen", consent);
-  await deps.reveal(path);
+  if (mayGoOn()) await deps.reveal(path);
   return true;
 }

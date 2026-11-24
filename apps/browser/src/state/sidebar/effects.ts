@@ -10,6 +10,7 @@ import { dismissHover } from "./hover";
 import { sidebarUi } from "./sidebarUi";
 import { cancelSwitcher, closeSwitcherRow, commitSwitcher, moveSwitcher } from "./switcher";
 import { noteTabSwitcherReleasedInMenu } from "../telemetry/tabSwitcherOpens";
+import { chromeCtrlTabStoreChanged, followChromeCtrlTab } from "../commands/chromeCtrlTab";
 
 let started = false;
 
@@ -19,6 +20,7 @@ export function startSidebarEffects() {
   startLive();
 
   useBrowser.subscribe((s, prev) => {
+    chromeCtrlTabStoreChanged(s, prev);
     const switcher = sidebarUi().switcher;
     if (switcher && s.windows !== prev.windows && !s.windows[switcher.windowId]) cancelSwitcher();
     const sitesChanged = s.settings.mutedSites !== prev.settings.mutedSites || s.privateSiteMutes !== prev.privateSiteMutes;
@@ -49,4 +51,5 @@ export function startSidebarEffects() {
   });
 
   startAutoCleanUp();
+  followChromeCtrlTab();
 }

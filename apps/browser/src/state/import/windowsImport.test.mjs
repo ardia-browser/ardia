@@ -21,7 +21,7 @@ test("Windows discovery finds each fixture browser under its Windows data folder
   assert.deepEqual(chromeDefault.available, ["bookmarks", "history", "tabs", "passwords", "cookies", "autofill"]);
   assert.equal(chromeDefault.path, `${LOCAL}\\Google\\Chrome\\User Data\\Default`);
   assert.ok(byId.opera.profiles.some((p) => p.id === "."));
-  assert.deepEqual(byId.arc.profiles.find((p) => p.id === "Default").available, ["history", "passwords", "linkRules", "archive", "spaces", "pinnedTabs", "tabs", "favorites"]);
+  assert.deepEqual(byId.arc.profiles.find((p) => p.id === "Default").available, ["history", "passwords", "autofill", "linkRules", "archive", "spaces", "pinnedTabs", "tabs", "favorites"]);
   for (const s of sources) assert.equal(s.needsKeychain, false);
   assert.ok(byId.firefox.profiles.some((p) => p.id === "Profiles/abcd1234.default-release" && p.available.includes("tabs")));
 });

@@ -158,6 +158,10 @@ public final class SystemModule: Module {
       LaunchBackdrop.shownAtEpochMilliseconds()
     }
 
+    Function("launchInterfaceDrawn") { () in
+      DispatchQueue.main.async { MainActor.assumeIsolated { LaunchBackdrop.interfaceDrawn() } }
+    }
+
     AsyncFunction("initialLink") { () -> [String: Any]? in
       MainActor.assumeIsolated { PhoneSystemLinks.shared.takeInitial() }
     }.runOnQueue(.main)

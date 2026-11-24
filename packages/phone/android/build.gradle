@@ -182,7 +182,7 @@ dependencies {
   implementation "androidx.work:work-runtime-ktx:2.10.5"
   implementation "com.squareup.okhttp3:okhttp:4.12.0"
   implementation "androidx.browser:browser:1.10.0"
-  implementation "com.google.mlkit:genai-prompt:1.0.0-beta2"
+  implementation "com.google.mlkit:genai-prompt:1.0.0-beta4"
   implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2"
   implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0"
   implementation "com.google.re2j:re2j:1.8"
@@ -193,6 +193,7 @@ dependencies {
   implementation "com.google.zxing:core:3.5.4"
   implementation project(":ardia-design")
   implementation(findProject(":expo-ui") ?: "expo.modules.ui:expo.modules.ui:+")
+  implementation(findProject(":expo-sqlite") ?: "host.exp.exponent:expo.modules.sqlite:+")
   implementation "androidx.compose.foundation:foundation-android:1.12.1"
   implementation "androidx.compose.ui:ui-android:1.12.1"
   implementation "androidx.compose.material3:material3:1.5.0-beta01"

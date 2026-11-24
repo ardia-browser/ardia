@@ -1,17 +1,18 @@
-import { Platform } from "react-native";
+import { Platform, StyleSheet } from "react-native";
 import { getByGestureTestId } from "react-native-gesture-handler/jest-utils";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { renderSurface, someTabs, unmount } from "../../test/render/harness";
+import type { Design } from "../lib/design";
 import { idOf, itemOf, mockNative, resetNativeMenus, titles, type NativeItem } from "./nativeMenusMock";
 
 jest.mock("@ardia/phone-native", () => require("./nativeMenusMock").nativeMenusModule(jest.requireActual("@ardia/phone-native")));
 
 const { TabDeck } = require("../components/tabs/TabDeck") as typeof import("../components/tabs/TabDeck");
-const { DesignProvider } = require("../components/ui") as typeof import("../components/ui");
+const { DesignProvider, menuLook, onDrawnMenuActionChosen } = require("../components/ui") as typeof import("../components/ui");
 const { haptics } = require("../state/app/haptics") as typeof import("../state/app/haptics");
 const { useArchiveCard } = require("../state/browse/archiveCard") as typeof import("../state/browse/archiveCard");
+const { countDrawnMenuAction } = require("../state/browse/menuCounts") as typeof import("../state/browse/menuCounts");
 const browse = require("../state/browse/store") as typeof import("../state/browse/store");
-const settingsActions = require("../state/settings/actions") as typeof import("../state/settings/actions");
 const settingsNav = require("../state/settings/nav") as typeof import("../state/settings/nav");
 const syncActions = require("../state/sync/actions") as typeof import("../state/sync/actions");
 const syncHooks = require("../state/sync/hooks") as typeof import("../state/sync/hooks");
@@ -75,9 +76,9 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-const deck = () =>
+const deck = (design: Design = "redesigned") =>
   renderSurface(
-    <DesignProvider design="redesigned">
+    <DesignProvider design={design}>
       <TabDeck />
     </DesignProvider>,
   );
@@ -157,11 +158,8 @@ nativeTest("the ··· menu is main's DeckMoreMenu on a tap, in fixed order, and
   const more = menuAround(root, "More");
   expect(more.props.trigger).toBe("tap");
   expect(more.props.fixedOrder).toBe(true);
-  expect(titles(items(more))).toEqual(["Archive", "Spaces From Your Mac", { "": ["New Incognito Tab", "Reopen Closed Tab", "Close All Tabs"] }, { "": ["Settings"] }]);
+  expect(titles(items(more))).toEqual(["Spaces", { "": ["New Incognito Tab", "Reopen Closed Tab", "Close All Tabs"] }, { "": ["Settings"] }]);
   expect(itemOf(items(more), "Close All Tabs")!.destructive).toBe(true);
-  choose(more, "Archive");
-  expect(browse.useBrowse.getState().sheet).toBe("archive");
-  act(() => browse.useBrowse.setState({ sheet: null }));
   choose(more, "Settings");
   expect(settings).toHaveBeenCalledTimes(1);
   mockNative.answer = "confirm";
@@ -201,12 +199,12 @@ nativeTest("the deck header shows a space's name alone when it has no icon of it
   unmount(marked);
 });
 
-nativeTest("the Incognito pill's menu is Close Incognito Tabs, which asks with an action sheet first", async () => {
+nativeTest("holding the Incognito switch offers Close Incognito Tabs, which asks with an action sheet first", async () => {
   act(() => tabStore.useTabs.setState((state) => ({ ...state, privates: someTabs(2, true) })));
   const leave = jest.spyOn(browse, "leaveIncognito").mockImplementation(() => undefined);
   const root = deck();
-  const pill = menuAround(root, "Incognito, 2 tabs");
-  expect(pill.props.trigger).toBe("tap");
+  const pill = menuAround(root, "Incognito");
+  expect(pill.props.trigger).toBe("longPress");
   expect(items(pill)).toEqual([{ id: "0", title: "Close Incognito Tabs", destructive: true }]);
   choose(pill, "Close Incognito Tabs");
   await act(async () => undefined);
@@ -237,24 +235,29 @@ nativeTest("the plus keeps its tap and its long press is main's PlusButton menu"
   unmount(root);
 });
 
-nativeTest("the Archive capsule's interval is a tap menu of main's intervals with the current one checked", () => {
-  const set = jest.spyOn(settingsActions, "setArchiveInterval").mockImplementation(() => undefined);
-  act(() => useArchiveCard.setState({ showing: true }));
-  const root = deck();
-  const picker = contextMenus(root).find((menu) => menu.findAll((node) => typeof node.props.accessibilityLabel === "string" && node.props.accessibilityLabel.startsWith("Archive inactive tabs,")).length > 0)!;
-  expect(picker.props.trigger).toBe("tap");
-  const checked = items(picker).filter((item) => item.checked);
-  expect(checked).toHaveLength(1);
-  const other = items(picker).find((item) => !item.checked)!;
-  act(() => picker.props.onSelect(other.id));
-  expect(set).toHaveBeenCalledTimes(1);
-  unmount(root);
-});
-
 const drawnTest = Platform.OS === "android" ? test : test.skip;
 const menuitems = (root: Root) => root.root.findAll((node) => node.props.accessibilityRole === "menuitem" && typeof node.type === "string").map((node) => node.props.accessibilityLabel);
 const pick = (root: Root, label: string) => act(() => root.root.findAll((node) => node.props.accessibilityRole === "menuitem" && node.props.accessibilityLabel === label && typeof node.props.onPress === "function")[0]!.props.onPress());
 const press = (root: Root, label: string) => act(() => root.root.findAll((node) => node.props.accessibilityLabel === label && typeof node.props.onPress === "function")[0]!.props.onPress());
+const menuRowHeight = (row: ReactTestInstance) => {
+  const style = typeof row.props.style === "function" ? row.props.style({ pressed: false }) : row.props.style;
+  return StyleSheet.flatten(style).minHeight;
+};
+function expectEvenRows(root: Root) {
+  const rows = root.root.findAll((node) => node.props.testID === "drawnMenuRows" && typeof node.type !== "string")[0]!;
+  expect(rows.findAll((node) => node.props.testID === "drawnMenuGap" && typeof node.type === "string")).toHaveLength(0);
+  const heights = rows.findAll((node) => node.props.accessibilityRole === "menuitem" && typeof node.props.onPress === "function" && typeof node.type !== "string").map(menuRowHeight);
+  expect(new Set(heights)).toEqual(new Set([menuLook.row]));
+}
+
+drawnTest("on Android the ··· menu's rows sit one after another at one row height, with no blank band between its groups, whichever optional rows it holds", () => {
+  jest.spyOn(tabHooks, "useCanReopen").mockReturnValue(false);
+  const root = deck();
+  press(root, "More");
+  expect(menuitems(root)).toEqual(["New Incognito Tab", "Close All Tabs", "Settings"]);
+  expectEvenRows(root);
+  unmount(root);
+});
 
 drawnTest("on Android a deck card's long press opens main's CardMenu drawn at the finger, dimmed, where the system's menu would have been", () => {
   withSpaces([WORK]);
@@ -264,7 +267,7 @@ drawnTest("on Android a deck card's long press opens main's CardMenu drawn at th
   const { fireGestureHandler } = require("react-native-gesture-handler/jest-utils") as typeof import("react-native-gesture-handler/jest-utils");
   const { deckCardAt, deckGeometry, initialDeckScroll } = require("../lib/deckGeometry") as typeof import("../lib/deckGeometry");
   const { deckHeaderBottom } = require("../components/tabs/DeckHeader") as typeof import("../components/tabs/DeckHeader");
-  const g = deckGeometry(393, 873, 40, 24, 0, Platform.OS, "redesigned", deckHeaderBottom());
+  const g = deckGeometry(393, 873, 40, 24, 0, Platform.OS, "redesigned", deckHeaderBottom(), 55, "arc");
   const y = g.cardCenterY;
   let x = 0;
   while (x < 393 && deckCardAt(g, 3, initialDeckScroll(3), x, y) < 0) x += 2;
@@ -289,7 +292,8 @@ drawnTest("on Android the ··· menu is drawn with main's items, and Close All 
   const closeAll = jest.spyOn(browse, "closeAllFromDeck").mockImplementation(() => undefined);
   const root = deck();
   press(root, "More");
-  expect(menuitems(root)).toEqual(["Archive", "Spaces From Your Mac", "New Incognito Tab", "Reopen Closed Tab", "Close All Tabs", "Settings"]);
+  expect(menuitems(root)).toEqual(["Spaces", "New Incognito Tab", "Reopen Closed Tab", "Close All Tabs", "Settings"]);
+  expectEvenRows(root);
   pick(root, "Close All Tabs");
   expect(mockNative.sheets).toHaveLength(0);
   expect(closeAll).not.toHaveBeenCalled();
@@ -321,7 +325,7 @@ drawnTest("on Android Settings chosen from the drawn ··· menu opens Settings,
   unmount(root);
 });
 
-drawnTest("on Android the space switcher and the Incognito pill are drawn menus, and leaving Incognito asks in the drawn action sheet", () => {
+drawnTest("on Android the space switcher and holding the Incognito switch are drawn menus, and leaving Incognito asks in the drawn action sheet", () => {
   withSpaces([WORK, HOME]);
   act(() => tabStore.useTabs.setState((state) => ({ ...state, privates: someTabs(2, true) })));
   const select = jest.spyOn(syncActions, "selectProfile").mockImplementation(() => undefined);
@@ -331,12 +335,35 @@ drawnTest("on Android the space switcher and the Incognito pill are drawn menus,
   expect(menuitems(root)).toEqual(["Work", "Home"]);
   pick(root, "Home");
   expect(select).toHaveBeenCalledWith("home");
-  press(root, "Incognito, 2 tabs");
+  act(() => root.root.findAll((node) => node.props.accessibilityLabel === "Incognito" && node.props.accessibilityRole === "switch" && typeof node.props.onLongPress === "function")[0]!.props.onLongPress());
   pick(root, "Close Incognito Tabs");
   expect(leave).not.toHaveBeenCalled();
   act(() => root.root.findAll((node) => node.props.testID === "drawnConfirmationOutside" && typeof node.props.onPress === "function")[0]!.props.onPress());
   expect(leave).not.toHaveBeenCalled();
   unmount(root);
+});
+
+drawnTest.each(["original", "redesigned", "material"] as const)("the %s deck's Close Incognito Tabs menu keeps the regular overview's look and counts the choice once, as its opens are counted", (design) => {
+  act(() => tabStore.useTabs.setState({ privates: someTabs(2, true) }));
+  const root = deck(design);
+  onDrawnMenuActionChosen(countDrawnMenuAction);
+  try {
+    if (design === "original") press(root, "Incognito, 2 tabs");
+    else act(() => root.root.findAll((node) => node.props.accessibilityLabel === "Incognito" && typeof node.props.onLongPress === "function")[0]!.props.onLongPress());
+    if (design === "material") {
+      const { materialMenuFill } = require("../components/ui/MaterialSurfaces") as typeof import("../components/ui/MaterialSurfaces");
+      const { SEEDED_SCHEMES } = require("../lib/material/schemes") as typeof import("../lib/material/schemes");
+      const group = root.root.findAll((node) => node.props.testID === "materialMenuGroup" && typeof node.type === "string")[0]!;
+      const { StyleSheet } = require("react-native") as typeof import("react-native");
+      expect(StyleSheet.flatten(group.props.style).backgroundColor).toBe(materialMenuFill(SEEDED_SCHEMES.ardia.light, false));
+    }
+    pick(root, "Close Incognito Tabs");
+    expect(root.root.findAll((node) => node.props.testID === "drawnConfirmationOutside" && typeof node.props.onPress === "function")).not.toHaveLength(0);
+    expect((telemetry.countUsage as jest.Mock).mock.calls.filter((call) => call[0] === "drawn_menu_actions_chosen")).toHaveLength(1);
+  } finally {
+    onDrawnMenuActionChosen(() => undefined);
+    unmount(root);
+  }
 });
 
 drawnTest("on Android holding the plus opens main's PlusButton menu at the finger", () => {
@@ -361,7 +388,7 @@ drawnTest("on Android a deck card's long-press menu hides the deck from TalkBack
   const { fireGestureHandler } = require("react-native-gesture-handler/jest-utils") as typeof import("react-native-gesture-handler/jest-utils");
   const { deckCardAt, deckGeometry, initialDeckScroll } = require("../lib/deckGeometry") as typeof import("../lib/deckGeometry");
   const { deckHeaderBottom } = require("../components/tabs/DeckHeader") as typeof import("../components/tabs/DeckHeader");
-  const g = deckGeometry(393, 873, 40, 24, 0, Platform.OS, "redesigned", deckHeaderBottom());
+  const g = deckGeometry(393, 873, 40, 24, 0, Platform.OS, "redesigned", deckHeaderBottom(), 55, "arc");
   const y = g.cardCenterY;
   let x = 0;
   while (x < 393 && deckCardAt(g, 3, initialDeckScroll(3), x, y) < 0) x += 2;

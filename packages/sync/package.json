@@ -7,9 +7,9 @@
   "types": "src/index.ts",
   "type": "module",
   "scripts": {
-    "typecheck": "tsc -p .",
+    "typecheck": "tsrs -p .",
     "test:portable": "node --test \"src/**/*.test.ts\" && node ../../apps/phone/scripts/bundle-shared.mjs --check",
-    "test": "swift test --scratch-path \"${TMPDIR:-/tmp}/ardia-sync-swiftpm\" && pnpm run test:portable && node scripts/legacy-migration-e2e.mjs"
+    "test": "../core-rs/scripts/build-xcframework.sh && swift test --scratch-path \"${TMPDIR:-/tmp}/ardia-sync-swiftpm\" && pnpm run test:portable && node scripts/legacy-migration-e2e.mjs"
   },
   "peerDependencies": {
     "expo": "*",

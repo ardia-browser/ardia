@@ -5,7 +5,7 @@ import { mkdtempSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { plan, pullNumberOf, sweep } from "./prune-caches.mjs";
+import { parse, plan, pullNumberOf, sweep } from "./prune-caches.mjs";
 
 const cache = (id, key, ref, createdAt) => ({ id, key, ref, size: 100, createdAt });
 const MAIN = "refs/heads/main";
@@ -66,6 +66,52 @@ test("each branch keeps its own newest cache, since main cannot restore a branch
   ];
   const doomed = plan({ caches, openPulls: [], newestOnly: ["xcode-cas-release-"] });
   assert.deepEqual(doomed.map((item) => item.id), [1]);
+});
+
+test("a main-only prefix deletes its caches outside main, open pull requests included, and leaves main's to newest-only", () => {
+  const caches = [
+    cache(1, "gradle-phone-aaa", "refs/pull/12/merge", "2026-11-01T00:00:00Z"),
+    cache(2, "gradle-phone-bbb", "refs/heads/feature", "2026-11-02T00:00:00Z"),
+    cache(3, "gradle-phone-ccc", MAIN, "2026-11-03T00:00:00Z"),
+    cache(4, "gradle-phone-ddd", MAIN, "2026-11-04T00:00:00Z"),
+    cache(5, "turbo-aaa", "refs/pull/12/merge", "2026-11-05T00:00:00Z"),
+  ];
+  const doomed = plan({ caches, openPulls: [12], newestOnly: ["gradle-phone-"], mainOnly: ["gradle-phone-"] });
+  assert.deepEqual(doomed.map((item) => item.id).sort(), [1, 2, 3]);
+  assert.match(doomed.find((item) => item.id === 1).why, /only refs\/heads\/main keeps gradle-phone- caches/);
+});
+
+test("--main-only needs a key prefix", () => {
+  const script = fileURLToPath(new URL("./prune-caches.mjs", import.meta.url));
+  assert.throws(() => execFileSync(process.execPath, [script, "--main-only"], { stdio: "pipe" }), /--main-only takes a key prefix/);
+});
+
+test("an option that takes a value refuses a missing one or the next flag", () => {
+  for (const flag of ["--repo", "--newest-only", "--main-only", "--drop-prefix"]) {
+    assert.throws(() => parse([flag], {}), new RegExp(`${flag} takes`), `${flag} at the end`);
+    assert.throws(() => parse([flag, "--dry-run"], {}), new RegExp(`${flag} takes`), `${flag} before --dry-run`);
+    assert.throws(() => parse([flag, "-h"], {}), new RegExp(`${flag} takes`), `${flag} before -h`);
+  }
+  const options = parse(["--main-only", "gradle-phone-", "--dry-run", "--drop-prefix", "ardia-test-tsx-1-of-8-", "--repo", "o/r"], {});
+  assert.deepEqual(
+    { mainOnly: options.mainOnly, dropPrefixes: options.dropPrefixes, dryRun: options.dryRun, repo: options.repo },
+    { mainOnly: ["gradle-phone-"], dropPrefixes: ["ardia-test-tsx-1-of-8-"], dryRun: true, repo: "o/r" },
+  );
+});
+
+test("a drop prefix deletes its caches on every branch and leaves keys that only share a stem", () => {
+  const caches = [
+    cache(1, "ardia-test-tsx-1-of-8-aaa-1", MAIN, "2026-11-01T00:00:00Z"),
+    cache(2, "ardia-test-tsx-8-of-8-aaa-2", "refs/pull/12/merge", "2026-11-02T00:00:00Z"),
+    cache(3, "ardia-test-tsx-1-of-3-aaa-sha", MAIN, "2026-11-03T00:00:00Z"),
+    cache(4, "ardia-test-tsx-3-of-3-aaa-sha", "refs/heads/feature", "2026-11-04T00:00:00Z"),
+    cache(5, "ardia-test-tsx-1-of-6-aaa-sha", MAIN, "2026-11-05T00:00:00Z"),
+    cache(6, "ardia-test-tsx-6-of-6-aaa-sha", "refs/heads/feature", "2026-11-06T00:00:00Z"),
+  ];
+  const dropPrefixes = [8, 3].flatMap((total) => Array.from({ length: total }, (_, index) => `ardia-test-tsx-${index + 1}-of-${total}-`));
+  const doomed = plan({ caches, openPulls: [12], newestOnly: [], dropPrefixes });
+  assert.deepEqual(doomed.map((item) => item.id).sort(), [1, 2, 3, 4]);
+  for (const item of doomed) assert.match(item.why, /no workflow makes ardia-test-tsx-\d-of-[38]- caches any more/);
 });
 
 test("a cache that is already gone counts as freed, and one failed delete does not stop the rest", () => {

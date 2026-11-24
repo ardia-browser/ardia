@@ -6,10 +6,10 @@ import { useTheme } from "../ui/theme";
 import { Hud } from "./Hud";
 import { NEW_TAB_NOTICE, windowColors } from "./tokens";
 
-export function NewTabNotice({ windowId, tabId, right, top }: { windowId: string; tabId: string; right: number; top: number }) {
+export function NewTabNotice({ windowId, tabId, right, top, enter = false }: { windowId: string; tabId: string; right: number; top: number; enter?: boolean }) {
   const theme = useTheme();
   const live = usePaneNewTabNotice(windowId, tabId);
-  const { shown, appear } = usePresence(live, NEW_TAB_NOTICE.motion);
+  const { shown, appear } = usePresence(live, NEW_TAB_NOTICE.motion, enter);
   const { hovered, hoverProps } = useHover();
   const hover = !!live && hovered;
   useEffect(() => {
@@ -34,7 +34,7 @@ export function NewTabNotice({ windowId, tabId, right, top }: { windowId: string
                 <Hud shape="capsule" height={NEW_TAB_NOTICE.height}>
                   <View style={[ROW, { backgroundColor: hover ? windowColors(theme.dark).noticeHover : undefined }]}>
                     <Symbol name="plus.square.on.square" size={12} weight="semibold" color={theme.icon} style={ICON} />
-                    <Text size="small" weight="semibold" numberOfLines={1}>
+                    <Text size="small" weight="semibold" numberOfLines={1} ardiaCentersCapitals>
                       New tab opened
                     </Text>
                     <Symbol name="arrow.right" size={10} weight="semibold" color={hover ? theme.textPrimary : theme.textSecondary} style={ICON} />

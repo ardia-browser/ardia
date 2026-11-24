@@ -17,7 +17,7 @@ async function popupWindowsGone(before: readonly string[], withinMs: number) {
   return false;
 }
 
-export const pagePopupCheck = (pageKey: string, firstWindow: () => Promise<string>): Check => ({
+const pagePopupCheck = (pageKey: string, firstWindow: () => Promise<string>): Check => ({
   name: "engine: a pop-up a page opens with a click waits in the background of its window, sent to the app as a pop-up with the size it asked for and its opener, the opener stays the shown tab, and no Chromium pop-up window opens",
   async run() {
     const windowId = await firstWindow();
@@ -101,7 +101,7 @@ async function newPopupTab(seen: Set<string>, by: number) {
   }
 }
 
-export const pagePopupShowLoop = (pageKey: string): Check => ({
+const pagePopupShowLoop = (pageKey: string): Check => ({
   name: `engine: a page's pop-up shows its page in the app's pop-up window, ${LOOP_ROUNDS} times in a row`,
   async run() {
     const seen = new Set((await popupTabs()).map((tab) => tab.key));
@@ -128,7 +128,7 @@ export const pagePopupShowLoop = (pageKey: string): Check => ({
 
 const UNHEARD_OFFER_WAIT_MS = 9000;
 
-export const unheardOfferCheck = (pageKey: string): Check => ({
+const unheardOfferCheck = (pageKey: string): Check => ({
   name: "engine: a tab a page opens that the app never hears of is closed after the deadline, while its opener's window stays",
   async run() {
     const name = "ardia-self-check-unheard";

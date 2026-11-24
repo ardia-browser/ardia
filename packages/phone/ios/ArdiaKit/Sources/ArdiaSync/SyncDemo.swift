@@ -84,7 +84,25 @@ extension SyncSnapshot {
       color: "green",
       icon: "briefcase",
       isDefault: false,
-      theme: SyncedTheme(colors: ["#4F7CFF", "#9B6BFF"], darkColors: ["#1E2A5A", "#3A2466"]),
+      theme: SyncedTheme(
+        colors: ["#4F7CFF", "#9B6BFF"],
+        darkColors: ["#1E2A5A", "#3A2466"],
+        mode: "auto",
+        look: SyncedThemeLook(
+          stops: [
+            SyncedThemeStop(color: SyncedThemeColor(r: 0.3098, g: 0.4863, b: 1, a: 1), x: 0.144, y: 0.149),
+            SyncedThemeStop(color: SyncedThemeColor(r: 0.6078, g: 0.4196, b: 1, a: 1), x: 0.409, y: 0.008),
+          ],
+          intensity: 0.75, grain: 0.7, texture: "tweed", translucency: 0.6, angle: 160
+        ),
+        dark: SyncedThemeLook(
+          stops: [
+            SyncedThemeStop(color: SyncedThemeColor(r: 0.1176, g: 0.1647, b: 0.3529, a: 1), x: 0.333, y: 0.314),
+            SyncedThemeStop(color: SyncedThemeColor(r: 0.2275, g: 0.1412, b: 0.4, a: 1), x: 0.458, y: 0.265),
+          ],
+          intensity: 0.75, grain: 0.7, texture: "tweed", translucency: 0.6, angle: 160
+        )
+      ),
       deviceTabs: [DeviceTabs(deviceId: mac.id, deviceName: mac.name, kind: .mac, tabs: [
         .init(url: "https://linear.app/", title: "Linear"),
         .init(url: "https://www.notion.so/", title: "Notion"),

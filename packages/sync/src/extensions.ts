@@ -13,9 +13,9 @@ export type LocalExtension = {
 
 export type LocalExtensions = { ready: boolean; extensions: LocalExtension[]; pending: string[]; settling?: string[]; queued?: string[] };
 
-export type ExtensionState = { on: boolean; inc: boolean; pin: boolean };
-export type ExtensionRemoval = { removed: true };
-export type ExtensionApproval = { v: string; fps: string[] };
+type ExtensionState = { on: boolean; inc: boolean; pin: boolean };
+type ExtensionRemoval = { removed: true };
+type ExtensionApproval = { v: string; fps: string[] };
 
 export type ExtensionIntent = { kind: "installed" | "uninstalled"; g: number };
 
@@ -24,7 +24,7 @@ export type ExtensionChange =
   | { kind: "reconcile"; id: string; record: ExtensionState; approval: ExtensionApproval | null }
   | { kind: "cancel"; id: string };
 
-export interface ExtensionsHost {
+interface ExtensionsHost {
   read(): Promise<LocalExtensions | null>;
   change(change: ExtensionChange): Promise<boolean>;
   intents(): Record<string, ExtensionIntent>;
@@ -37,16 +37,16 @@ export type ExtensionsAdapter = Adapter & {
 };
 
 export const EXTENSION_PREFIX = "ext:";
-export const EXTENSION_APPROVAL_PREFIX = "ext:v:";
-export const EXTENSION_RETRY_MS = 3_600_000;
+const EXTENSION_APPROVAL_PREFIX = "ext:v:";
+const EXTENSION_RETRY_MS = 3_600_000;
 
 export const extensionKey = (id: string) => `${EXTENSION_PREFIX}${id}`;
 export const extensionApprovalKey = (id: string) => `${EXTENSION_APPROVAL_PREFIX}${id}`;
-export const extensionIdOf = (key: string) =>
+const extensionIdOf = (key: string) =>
   key.startsWith(EXTENSION_APPROVAL_PREFIX) ? key.slice(EXTENSION_APPROVAL_PREFIX.length) : key.slice(EXTENSION_PREFIX.length);
 const isStateKey = (key: string) => key.startsWith(EXTENSION_PREFIX) && !key.startsWith(EXTENSION_APPROVAL_PREFIX);
 
-export function compareVersions(a: string, b: string): number {
+function compareVersions(a: string, b: string): number {
   const pa = a.split(".").map((n) => Number.parseInt(n, 10) || 0);
   const pb = b.split(".").map((n) => Number.parseInt(n, 10) || 0);
   for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
@@ -56,9 +56,9 @@ export function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-export const isRemoval = (v: unknown): v is ExtensionRemoval => !!v && typeof v === "object" && (v as ExtensionRemoval).removed === true;
+const isRemoval = (v: unknown): v is ExtensionRemoval => !!v && typeof v === "object" && (v as ExtensionRemoval).removed === true;
 
-export const isExtensionState = (v: unknown): v is ExtensionState =>
+const isExtensionState = (v: unknown): v is ExtensionState =>
   !!v &&
   typeof v === "object" &&
   !isRemoval(v) &&

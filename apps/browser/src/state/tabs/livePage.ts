@@ -13,17 +13,18 @@ const store = () => useBrowser.getState();
 
 export const livePageId = (tabId: string) => holderOfPage(store().tabs[tabId]) ?? tabId;
 
-export async function withLivePage(tabId: string, act: (page: WebViewHandle, pageId: string) => unknown) {
+export async function withLivePage(tabId: string, act: (page: WebViewHandle, pageId: string) => unknown, mayAct: () => boolean = () => true): Promise<boolean> {
   const tab = store().tabs[tabId];
   const holderId = holderOfPage(tab);
   if (!tab || !holderId) {
     const page = webviews.get(tabId);
-    if (page) act(page, tabId);
-    return;
+    if (!page) return false;
+    act(page, tabId);
+    return true;
   }
   const windowId = tab.windowId;
   const before = webviewMount(holderId);
-  if (!(await requestPinHandOff(tabId))) return;
+  if (!(await requestPinHandOff(tabId, mayAct))) return false;
   const shownHere = () => {
     const holder = store().tabs[holderId];
     return holder?.windowId === windowId && !holderOfPage(holder) && activeTabId(store(), windowId) === holderId;
@@ -33,9 +34,11 @@ export async function withLivePage(tabId: string, act: (page: WebViewHandle, pag
     const page = webviews.get(holderId);
     if (page && webviewMount(holderId) !== before) {
       await new Promise((done) => setTimeout(done, SETTLE_MS));
-      if (shownHere() && webviews.get(holderId) === page) act(page, holderId);
-      return;
+      if (!shownHere() || webviews.get(holderId) !== page || !mayAct()) return false;
+      act(page, holderId);
+      return true;
     }
     await new Promise((done) => setTimeout(done, ARRIVAL_POLL_MS));
   }
+  return false;
 }

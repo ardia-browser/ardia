@@ -43,11 +43,12 @@
   },
   "missing": {
     "autofill": ["settings", "setSettings", "showSuggestions"],
-    "contentBlocker": ["state", "setEnabled", "setListEnabled", "isAllowed", "setAllowed", "hiddenElements", "hideElements", "restoreElements", "addList", "removeList", "devFailNextMessage", "devDelayNextLoad"],
-    "engine": ["beginTracing", "endTracing", "isTracing", "cliTabTargets", "cliOwnsTab", "cliMoveOffscreen", "cliCloseOffscreenTabs"],
+    "contentBlocker": ["state", "setEnabled", "setListEnabled", "isAllowed", "setAllowed", "removeAllowed", "hiddenElements", "hideElements", "restoreElements", "addList", "removeList", "devFailNextMessage", "devDelayNextLoad"],
+    "engine": ["beginTracing", "endTracing", "isTracing", "cliTabTargets", "cliOwnsTab", "cliConsoleDelta", "cliMoveOffscreen", "cliCloseOffscreenTabs", "setCliHeldTabs", "childProcessCpu"],
     "extensions": ["resolveInstallPrompt", "actionStates", "sidePanelUrl"],
     "media": [
       "displayMediaSources",
+      "displayMediaThumbnails",
       "screenRecordingAllowed",
       "requestScreenRecording",
       "selectDevice",
@@ -65,11 +66,11 @@
       "changeCaptureSource",
       "stopCapture"
     ],
-    "passwords": ["autofillEnabled", "setAutofillEnabled"],
+    "passwords": ["autofillEnabled", "setAutofillEnabled", "setFieldProviders", "showSystemPanel", "showPanelHint", "systemPanelAvailable", "otpauthHandler", "setUpVerificationCode"],
     "permissions": ["resolve", "devExternalLaunches"],
-    "profiles": ["loaded", "unloadIdle"],
+    "profiles": ["loaded", "unloadIdle", "ctrlTabMru"],
     "search": ["setEngineName"],
-    "sites": ["preloadPages", "setPreloadPages"],
+    "sites": ["preloadPages", "setPreloadPages", "readStorage", "writeStorage", "registrableDomains"],
     "tabs": [
       "routeLinkTabs",
       "stripCommand",

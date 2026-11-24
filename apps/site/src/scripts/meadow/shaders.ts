@@ -45,6 +45,8 @@ uniform float uNight;
 uniform float uTime;
 uniform vec4 uVeil;
 uniform vec2 uVeilFeather;
+uniform vec4 uTitleVeil;
+uniform float uTitleMist;
 uniform vec2 uTargetSize;
 
 const float PI = 3.14159265;
@@ -148,7 +150,9 @@ float valleyMist(vec2 fragCoord) {
   vec2 outside = max(max(uVeil.xy - uv, uv - uVeil.zw), 0.0) / uVeilFeather;
   float drift = fbm(uv * vec2(3.0, 5.0) + 3.1, 3) * 0.9 + fbm(uv * vec2(9.0, 4.0) - 1.7, 2) * 0.35;
   float bank = 1.0 - smoothstep(0.0, 1.0, length(outside) + drift);
-  return bank * (1.0 - smoothstep(0.35, 0.75, uNight));
+  vec2 outsideTitle = max(max(uTitleVeil.xy - uv, uv - uTitleVeil.zw), 0.0) / uVeilFeather;
+  float rising = (1.0 - smoothstep(0.0, 1.0, length(outsideTitle) + drift * 0.5)) * uTitleMist;
+  return max(bank * (1.0 - smoothstep(0.35, 0.75, uNight)), rising);
 }
 
 vec3 mistPaint() {
@@ -909,6 +913,7 @@ uniform vec2 uSunPx;
 uniform vec2 uMoonPx;
 uniform float uSunRadiusPx;
 uniform float uRelief;
+uniform float uReveal;
 in vec2 vUv;
 out vec4 outColor;
 
@@ -930,6 +935,7 @@ void main() {
   vec2 bestCenter = vec2(0.0);
   float bestSeed = 0.0;
   float bestRegion = 0.0;
+  vec2 bestSize = vec2(1.0);
   for (int j = -2; j <= 2; j++) {
     for (int i = -2; i <= 2; i++) {
       vec2 id = cell + vec2(float(i), float(j));
@@ -962,6 +968,7 @@ void main() {
           bestCenter = center;
           bestSeed = hash12(id + 19.19);
           bestRegion = stroke.z;
+          bestSize = stroke.xy;
         }
       }
     }
@@ -973,18 +980,20 @@ void main() {
     float across = abs(bestLocal.y);
     float body = sqrt(max(1.0 - across * across, 0.0)) * (1.0 - smoothstep(0.8, 1.0, abs(bestLocal.x)));
     float groove = 1.0 - abs(valueNoise(vec2(bestLocal.x * 0.8, bestLocal.y * 4.2) + bestSeed * 61.0));
-    float lip = exp(-pow((bestLocal.x - 0.8) / 0.12, 2.0)) * (1.0 - across * 0.7);
-    float banks = smoothstep(0.6, 0.86, across) * (1.0 - smoothstep(0.86, 1.0, across));
+    float bristles = mix(0.45, groove * groove, 1.0 - smoothstep(0.45, 0.9, 4.2 / bestSize.y));
+    float lipWidth = max(0.12, 1.6 / bestSize.x);
+    float lip = exp(-pow((bestLocal.x - 0.8) / lipWidth, 2.0)) * (1.0 - across * 0.7) * 0.12 / lipWidth;
+    float banks = smoothstep(0.6, 0.86, across) * (1.0 - smoothstep(0.86, 1.0, across)) * smoothstep(0.6, 1.4, 0.14 * bestSize.y);
     float gain = bestRegion < 0.25 ? 0.78 : bestRegion < 0.75 ? 1.0 : 0.7;
-    height = (0.4 * body + 0.3 * groove * groove * body + 0.34 * lip + 0.2 * banks + bestOrder * 0.16) * gain;
+    height = (0.4 * body + 0.3 * bristles * body + 0.34 * lip + 0.2 * banks + bestOrder * 0.16) * gain;
     vec3 dab = texture(uPaint, bestCenter / uResolution).rgb * (0.96 + bestSeed * 0.08);
     color = mix(base, dab, 0.55) * (1.0 - 0.05 * bestLocal.x);
   }
   vec2 weave = sin(pixel / uDpr * vec2(1.05, 1.15));
-  float grain = weave.x * weave.y * 0.5 + valueNoise(pixel / uDpr * 0.7) * 0.5;
+  float grain = weave.x * weave.y * 0.5 + valueNoise(pixel / uDpr * 0.7) * 0.5 * (1.0 - smoothstep(0.35, 0.7, 0.7 / uDpr));
   height += grain * 0.012;
 
-  vec3 normal = normalize(vec3(-dFdx(height) * uRelief / uDpr, -dFdy(height) * uRelief / uDpr, 1.0));
+  vec3 normal = normalize(vec3(-dFdx(height) * uRelief * uDpr, -dFdy(height) * uRelief * uDpr, 1.0));
   float diffuse = dot(normal, uLight) - uLight.z;
   vec3 halfway = normalize(uLight + vec3(0.0, 0.0, 1.0));
   float spec = max(pow(max(dot(normal, halfway), 0.0), 18.0) - pow(halfway.z, 18.0), 0.0);
@@ -996,6 +1005,20 @@ void main() {
   color += pow(uGlow * 1.4 + vec3(0.035, 0.018, 0.0), vec3(1.0 / 2.2)) * glow * 0.5 * sunVisible * (1.0 - uNight);
   float moonDistance = length(pixel - uMoonPx);
   color += vec3(0.55, 0.62, 0.8) * exp(-max(moonDistance - uSunRadiusPx * 0.8, 0.0) / (uSunRadiusPx * 1.4)) * 0.3 * uNight;
+
+  if (uReveal < 1.0) {
+    float py = 1.0 - pixel.y / uResolution.y;
+    float px = pixel.x / uResolution.x;
+    float sweep = fbm(vec2(px * 1.8 + 1.1, py * 4.2 + 0.5), 2) * 0.5 + 0.5;
+    float bristle = valueNoise(vec2(px * 3.8 + 0.9, py * 28.0 + 2.1)) * 0.026 + valueNoise(vec2(px * 7.5 + 4.2, py * 64.0 + 1.7)) * 0.012;
+    float front = max(0.065, py * 0.62 + sweep * 0.13 + px * 0.04 + bristle + 0.09);
+    float coverage = smoothstep(front - 0.06, front + 0.08, uReveal);
+    float finish = smoothstep(0.92, 1.0, uReveal);
+    coverage = clamp(max(coverage, finish), 0.0, 1.0);
+    vec3 linen = vec3(0.9451, 0.9255, 0.8863) * (1.0 + grain * 0.026);
+    vec3 paintedLayer = mix(base, color, smoothstep(0.15, 0.85, coverage));
+    color = mix(linen, paintedLayer, coverage);
+  }
 
   color += (hash12(pixel + fract(uTime * 3.7) * 97.0) - 0.5) / 255.0;
   outColor = vec4(color, 1.0);

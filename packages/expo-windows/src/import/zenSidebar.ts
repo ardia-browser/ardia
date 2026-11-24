@@ -20,7 +20,7 @@ export function zenFavicons(sidebar: ZenSidebar, pages: string[]): Favicon[] {
   return sessionIcons(sidebar.favicons, pages);
 }
 
-export function separateEssentials(prefs: string | null): boolean {
+function separateEssentials(prefs: string | null): boolean {
   if (prefs == null) return true;
   const key = '"zen.workspaces.separate-essentials"';
   for (const line of prefs.split(/\r\n|\r|\n/)) {

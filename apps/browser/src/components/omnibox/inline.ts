@@ -60,6 +60,12 @@ export function completionToWrite(typed: string, wanted: string, shown: string, 
   return wanted === showing ? null : { typed, completion: wanted };
 }
 
+export function keptTyping(typed: string, selection: Selection, kept: (start: number, end: number) => Inline | null): Inline | null {
+  if (selection.start <= typed.length || selection.start >= selection.end) return null;
+  const found = kept(selection.start, selection.end);
+  return found && found.completion && found.typed.length + found.completion.length === selection.end ? found : null;
+}
+
 export const settlesInline = (written: boolean, completion: string, caretAllows: boolean) => written && (!completion || caretAllows);
 
 export function withoutFirst(pending: readonly PendingInline[], inline: Inline): PendingInline[] {

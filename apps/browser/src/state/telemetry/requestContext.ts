@@ -1,6 +1,7 @@
 import { EVENTS_SCOPE, eventRecord, LOGS_SCOPE, logsRequest, type OtlpLogRecord, type QueuedEvent } from "./otlp";
 import { appInfo, telemetryHost } from "./transport";
 import { savedChoice as saved, sessionId } from "./choice";
+import { HOST_SHELL } from "./hostShell";
 
 let engineVersion: string | null = null;
 
@@ -21,6 +22,7 @@ export function context(): Record<string, unknown> {
     $os_version: info.osVersion,
     arch: info.arch,
     engine_version: engineVersion,
+    ...(HOST_SHELL && { host_shell: HOST_SHELL }),
     $environment: environment(),
     $process_person_profile: false,
     $geoip_disable: true,

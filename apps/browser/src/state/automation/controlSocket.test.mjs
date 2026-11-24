@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
 const model = await import("../browser/model.ts");
-const { useCli, useCliIndicator } = await import("../app/cliControl.ts");
+const { useControlServer: useCli, useControlIndicator: useCliIndicator } = await import("../app/programControl.ts");
 const { startAutomation } = await import("./controlSocket.ts");
 const { noteCommit } = await import("./automationEvents.ts");
 const { automationWindows } = await import("./automationWindows.ts");
@@ -380,4 +380,16 @@ test("the pill stays up until the run's reply is written", async (t) => {
   t.mock.timers.tick(1);
   assert.equal(useCliIndicator.getState().shown, false);
   S().updateSettings({ cliControl: false });
+});
+
+test("the owner's apply over the socket still opens file and internal addresses", async () => {
+  fresh();
+  await controlOn();
+  const w = S().createWindow({ url: "https://a.example/" });
+  const opened = await callAsync("apply", { ops: [{ op: "open", urls: ["file:///tmp/notes.html", "ardia://history"], window: w }] });
+  assert.equal(opened.result?.ok, true);
+  const urls = opened.result.tabs.map((t) => t.url);
+  assert.ok(urls.includes("file:///tmp/notes.html"), urls.join());
+  const grouped = await callAsync("apply", { ops: [{ op: "group.create", urls: ["file:///tmp/a.html"], window: w, name: "Files" }] });
+  assert.equal(grouped.result?.ok, true);
 });

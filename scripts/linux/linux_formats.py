@@ -58,7 +58,8 @@ SONAME_PACKAGES = {
 }
 DEB_LOADED_AT_RUNTIME = ('libgtk-3-0t64 | libgtk-3-0', 'libsecret-1-0', 'fonts-liberation', 'xdg-utils')
 DEB_CLI_INSTALLER = ('curl',)
-DEB_RECOMMENDS = ('polkitd | policykit-1', 'libvulkan1')
+DEB_UPDATER = ('openssl',)
+DEB_RECOMMENDS = ('polkitd | policykit-1', 'pkexec | policykit-1', 'libvulkan1')
 BROWSER_ALTERNATIVES = ('x-www-browser', 'gnome-www-browser')
 
 
@@ -117,7 +118,7 @@ def deb_depends(runtime):
     if unknown:
         raise ValueError('no Debian package known for ' + ', '.join(unknown) + ': add it to SONAME_PACKAGES in scripts/linux/linux_formats.py')
     packages = [f'libc6 (>= {max(glibc, key=numeric_version)})']
-    for package in [SONAME_PACKAGES[name] for name in system] + list(DEB_LOADED_AT_RUNTIME + DEB_CLI_INSTALLER):
+    for package in [SONAME_PACKAGES[name] for name in system] + list(DEB_LOADED_AT_RUNTIME + DEB_CLI_INSTALLER + DEB_UPDATER):
         if package not in packages:
             packages.append(package)
     return packages

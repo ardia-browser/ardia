@@ -74,11 +74,9 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Websites you visit may ask for your location.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Ardia uses the microphone when you search with your voice, and for websites that ask to use it.</string>
+	<string>Ardia uses the microphone when you search with your voice and for websites that ask to use it. Listening to a Browse for Me answer at your ear uses the earpiece’s call audio, which iOS also asks about; nothing is recorded.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Ardia saves images you choose to your photo library.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Ardia uses your photo library when you choose photos or videos to upload to a website.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Ardia turns what you say into a search when you use Voice Search.</string>
 	<key>NSUserActivityTypes</key>
@@ -96,6 +94,7 @@
 	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
+		<string>audio</string>
 		<string>fetch</string>
 		<string>processing</string>
 	</array>

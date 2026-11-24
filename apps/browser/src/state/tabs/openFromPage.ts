@@ -112,5 +112,5 @@ export function pageProfileId(windowId: string, pageProfile: string): string {
   return s.profileOrder.find((p) => engineProfile(s, p) === pageProfile) ?? w?.profileId ?? s.settings.defaultProfileId;
 }
 
-export const shiftClickPeeks = (request: Pick<OpenWindowRequest, "shiftClick" | "popup">, peekModifier: string, windowKind: string, fromPeek: boolean) =>
+const shiftClickPeeks = (request: Pick<OpenWindowRequest, "shiftClick" | "popup">, peekModifier: string, windowKind: string, fromPeek: boolean) =>
   !!request.shiftClick && !request.popup && peekModifier === "shift" && windowKind === "main" && !fromPeek;

@@ -1,9 +1,13 @@
+import { guardedBySocketOrigin, type SocketOrigin } from "./socketSharedChokePoint";
+import { commandTarget } from "../commands/commandTarget";
+import { refuseSharedRunCommand } from "./workspaceSharedGuard";
 import { create } from "zustand";
 import {
   broadcastOnControlSocket,
   onControlClose,
   onControlRequest,
   onControlWritten,
+  cutOffControlSocket,
   replyOnControlSocket,
   startControlSocket,
   stopControlSocket,
@@ -13,46 +17,65 @@ import {
 import { systemInfo } from "../../platform/app";
 import { useBrowser } from "../browser/store";
 import { NoCommandWindowError, runCommand } from "../commands/commands";
-import { noteCliCaller, noteSocketRun, noteSocketServing } from "../app/cliControl";
-import { parseCliCaller, type CliCaller } from "../app/cliCaller";
+import { noteControlCaller, noteSocketRun, noteSocketServing } from "../app/programControl";
+import { parseControlCaller, type ControlCaller } from "../app/controlCaller";
 import { errorText } from "../../lib/errors";
-import { minimizedUrl } from "../../lib/urlParts";
+import { redactedEventData } from "./eventRedaction";
 import { automationWindows, type AutomationWindow } from "./automationWindows";
 import { consentToken, type ConsentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
-import { cliTabTargets } from "../../platform/cli";
+import { controlTabTargets } from "../../platform/control";
+import { releaseAllCliHolds, releaseCliHoldsOf } from "../tabs/cliHolds";
+import { watchCliHoldsForEngine } from "./cliHoldsEngine";
 import { TAB_IDLE_EVENTS, USER_IDLE_EVENTS, type AutomationEventName } from "./eventNames";
 import { clientProtocolProblem, commands, failure, hello, parseRequest, parseSubscription, planRun, type RequestId, type Subscription } from "./automationMethods";
-import { feedNeeds, stopFeed, updateFeed } from "./automationFeed";
+import { changeSubscription, feedNeeds, stopFeed, updateFeed } from "./automationFeed";
 import { answerDecision, dropResponder, serveHooks, stopResponders } from "./decideSocket";
 import { launchToReplay, recordLaunch, runLaunchActions } from "./lifecycleEvents";
 import { startDecideHooks } from "./decideHooks";
 import { offscreenMethod } from "./offscreen";
 import { applyMethod, workspaceMethod } from "./workspaceMethods";
+import { accessProblem, checkedParams, familyOf, methodSpec, methodsCatalog, runSpec, servingWhile, type ConnectionAccess } from "./socketCatalog";
+import { registerSocketAreas } from "./socketAreas";
+import { noteSocketCall } from "../telemetry/cliCounts";
+import { capturePageMenus } from "../../platform/surfaces";
+import { fittedEvent, fittedReply } from "./socketWire";
+import { dismissSocketAsks } from "./socketAsk";
+import { dropAllHistoryHandles, dropHistoryHandles } from "./historyHandles";
+import { dropLateResults, forgetTabCalls } from "./tabCalls";
+import { dropAllLogpoints, dropLogpoints } from "./devToolsLogpoints";
+import { closeAllInspections, closeInspectionsFor } from "./devToolsSession";
+import { backgroundInstance } from "../app/appSettings";
+import { programControlOn } from "../app/programControlSetting";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
+import { startPeerDoorbell } from "./peerDoorbell";
+import { CONTROL_OFF, DEVTOOLS_ENDPOINT, devtoolsEndpointLine, devtoolsEndpointMethod, isDevtoolsEndpoint, refuseDevtoolsEndpoint } from "./socketDevtools";
 
-export const useControlSocket = create<{ status: ControlSocketStatus | null }>()(() => ({ status: null }));
+const useControlSocket = create<{ status: ControlSocketStatus | null }>()(() => ({ status: null }));
 
 let generation: number | null = null;
 let applied = false;
 let chain: Promise<void> = Promise.resolve();
 let listening = false;
 const subscriptions = new Map<number, Subscription>();
+const openConnections = new Set<number>();
 const launchSent = new Set<number>();
 const unwrittenRuns = new Set<number>();
-const callers = new Map<number, CliCaller>();
+const callers = new Map<number, ControlCaller>();
+const idleReplays = new Map<number, Record<string, unknown>[]>();
 let nextTicket = 0;
 
-const controlOn = () => useBrowser.getState().settings.cliControl;
+const controlOn = () => programControlOn(useBrowser.getState());
 
-function send(connection: number, id: RequestId, body: Body, ticket = 0) {
-  replyOnControlSocket(connection, JSON.stringify({ id, ...body }), ticket);
+export const replyLine = (id: RequestId, body: Body, method?: string, consent: ConsentToken | null = null) => fittedReply(id, body, method ? methodSpec(method) : undefined, consent);
+
+function send(connection: number, id: RequestId, body: Body, ticket = 0, method?: string, consent: ConsentToken | null = null) {
+  replyOnControlSocket(connection, replyLine(id, body, method, consent), ticket);
 }
 
 function runWritten(tickets: readonly number[]) {
   for (const ticket of tickets) if (unwrittenRuns.delete(ticket)) noteSocketRun(-1);
 }
-
-const minimized = (data: Record<string, unknown>) => (typeof data.url === "string" ? { ...data, url: minimizedUrl(data.url) } : data);
 
 export function eventTargets(subs: ReadonlyMap<number, Subscription>, name: AutomationEventName, data: Record<string, unknown>) {
   const full: number[] = [];
@@ -68,11 +91,12 @@ export function eventTargets(subs: ReadonlyMap<number, Subscription>, name: Auto
 
 function deliver(name: AutomationEventName, data: Record<string, unknown>, time = Date.now(), only?: number) {
   const { full, plain } = eventTargets(only === undefined ? subscriptions : new Map([[only, subscriptions.get(only)!]]), name, data);
-  if (full.length) broadcastOnControlSocket(full, JSON.stringify({ event: name, time, data }));
-  if (plain.length) broadcastOnControlSocket(plain, JSON.stringify({ event: name, time, data: minimized(data) }));
+  const consent = consentToken();
+  if (full.length) broadcastOnControlSocket(full, fittedEvent(name, time, data, consent));
+  if (plain.length) broadcastOnControlSocket(plain, fittedEvent(name, time, redactedEventData(data), consent));
 }
 
-export type FeedConsumer = { subscriptions: () => Iterable<Subscription>; deliver: (name: AutomationEventName, data: Record<string, unknown>, time: number) => void };
+type FeedConsumer = { subscriptions: () => Iterable<Subscription>; deliver: (name: AutomationEventName, data: Record<string, unknown>, time: number) => void };
 
 const consumers = new Map<string, FeedConsumer>();
 
@@ -88,7 +112,7 @@ export function refreshFeed() {
   else stopFeed();
 }
 
-type MethodHandler = (method: string, params: Record<string, unknown>) => Body | Promise<Body> | null;
+type MethodHandler = (method: string, params: Record<string, unknown>, serving: () => boolean) => Body | Promise<Body> | null;
 
 let pluginMethods: MethodHandler | null = null;
 
@@ -117,10 +141,11 @@ export function handleControlRequest({ connection, generation: tagged, line }: C
   const request = parseRequest(line);
   if ("error" in request) return send(connection, request.id, { error: request.error });
   const { id, method, params } = request;
-  if (tagged !== generation || !controlOn()) return send(connection, id, failure("failed", "Control is off."));
+  if (tagged !== generation || !controlOn()) return send(connection, id, method === DEVTOOLS_ENDPOINT ? refuseDevtoolsEndpoint("control_off", consentToken()) : failure("failed", CONTROL_OFF));
+  openConnections.add(connection);
   const ticket = method === "run" ? ++nextTicket : 0;
   const caller = callers.get(connection);
-  if (ticket && caller) noteCliCaller(caller);
+  if (ticket && caller) noteControlCaller(caller);
   if (ticket) {
     unwrittenRuns.add(ticket);
     noteSocketRun(1);
@@ -131,21 +156,28 @@ export function handleControlRequest({ connection, generation: tagged, line }: C
   } catch (error) {
     body = failure("failed", errorText(error));
   }
+  const family = familyOf(method);
+  const consent = consentToken();
   const reply = (settled: Body) => {
+    const line = method === DEVTOOLS_ENDPOINT && "result" in settled && isDevtoolsEndpoint(settled.result) ? devtoolsEndpointLine(id, settled.result) : replyLine(id, settled, method, consent);
+    const failedResult = "result" in settled && typeof settled.result === "object" && settled.result !== null && (settled.result as { ok?: unknown }).ok === false;
+    noteSocketCall(family, "error" in settled || failedResult || line.startsWith(`{"id":${JSON.stringify(id)},"error":`), consent);
+    const replay = takeIdleReplay(connection);
     try {
-      send(connection, id, settled, ticket);
+      replyOnControlSocket(connection, line, ticket);
     } catch (error) {
       runWritten([ticket]);
       throw error;
     }
+    for (const data of replay) deliver("tab.idle", data, Date.now(), connection);
   };
   if (body instanceof Promise) void body.then(reply, (error) => reply(failure("failed", errorText(error))));
   else reply(body);
 }
 
-export async function windowsWithTargets(windows: AutomationWindow[]): Promise<AutomationWindow[]> {
+async function windowsWithTargets(windows: AutomationWindow[]): Promise<AutomationWindow[]> {
   const ids = windows.flatMap((w) => w.tabs.map((t) => t.id));
-  const targets = ids.length ? await cliTabTargets(ids).catch(() => null) : {};
+  const targets = ids.length ? await controlTabTargets(ids).catch(() => null) : {};
   if (!targets) return windows;
   return windows.map((w) => ({
     ...w,
@@ -153,11 +185,18 @@ export async function windowsWithTargets(windows: AutomationWindow[]): Promise<A
   }));
 }
 
-export function runMethod(params: Record<string, unknown>): Body {
+export function runMethod(params: Record<string, unknown>, background = backgroundInstance, stillOn: () => boolean = () => true): Body {
+  if (background) return failure("refused", "run isn't available in background instances; use the dedicated methods (apply, tabs.*, windows.*, closed.restore, …).");
   const plan = planRun(useBrowser.getState(), params);
   if ("error" in plan) return plan;
+  const target = commandTarget(useBrowser.getState(), plan.command, plan.windowId, plan.tabId);
   try {
-    runCommand({ command: plan.command, arg: plan.arg, windowId: plan.windowId }, { strictWindow: plan.windowId !== null, tabId: plan.tabId });
+    refuseSharedRunCommand(plan.command, target.kind === "window" ? target.tabId : null, target.kind === "window" && !!target.targeted);
+  } catch (error) {
+    return failure("refused", errorText(error));
+  }
+  try {
+    runCommand({ command: plan.command, arg: plan.arg, windowId: plan.windowId }, { strictWindow: plan.windowId !== null, tabId: plan.tabId, mayWrite: stillOn });
   } catch (error) {
     if (error instanceof NoCommandWindowError) return failure("no_window", error.message);
     throw error;
@@ -170,39 +209,57 @@ function subscribe(connection: number, params: Record<string, unknown>): Body {
   if ("error" in sub) return sub;
   const served = serveHooks(connection, sub.hooks);
   if ("error" in served) return failure("bad_request", served.error);
-  if (sub.events.size) subscriptions.set(connection, sub);
-  else subscriptions.delete(connection);
-  refreshFeed();
+  const replay = changeSubscription(subscriptions.get(connection), sub.events.size ? sub : null, () => {
+    if (sub.events.size) subscriptions.set(connection, sub);
+    else subscriptions.delete(connection);
+    refreshFeed();
+  });
+  if (replay.length) idleReplays.set(connection, replay);
   replayLaunch(connection);
   return { result: { ok: true, served: served.served, ...(sub.hooks === undefined || sub.hooks === null ? {} : { revisions: served.revisions }) } };
 }
 
-function answer(connection: number, method: string, params: Record<string, unknown>): Body | Promise<Body> {
+const connectionAccess = (_connection: number): ConnectionAccess => "owner";
+
+function answer(connection: number, method: string, given: Record<string, unknown>): Body | Promise<Body> {
+  return guardedBySocketOrigin(methodSpec(method)?.mutates ?? true, (origin) => answerAs(origin, connection, method, given), (message) => failure("refused", message));
+}
+
+function answerAs(origin: Pick<SocketOrigin, "segment">, connection: number, method: string, given: Record<string, unknown>): Body | Promise<Body> {
+  const spec = methodSpec(method);
+  if (!spec) return failure("unknown_method", `There's no method ${method}.`);
+  const refused = accessProblem(connectionAccess(connection), spec);
+  if (refused) return { error: refused };
+  const checked = checkedParams(spec, given);
+  if (!("params" in checked)) return checked;
+  const { params } = checked;
+  const serving = generation;
+  const stillOn = () => (origin.segment(), generation === serving && controlOn() && openConnections.has(connection));
   switch (method) {
     case "hello": {
       const tooOld = clientProtocolProblem(params, systemInfo().appVersion);
       if (tooOld) return { error: tooOld };
-      const caller = parseCliCaller(params.caller);
+      const caller = parseControlCaller(params.caller);
       if (caller) callers.set(connection, caller);
       return { result: hello(systemInfo().appVersion) };
     }
     case "caller": {
       const caller = callers.get(connection);
-      if (caller) noteCliCaller(caller);
+      if (caller) noteControlCaller(caller);
       return { result: { ok: !!caller } };
     }
     case "commands":
       return { result: commands() };
+    case "methods":
+      return { result: methodsCatalog() };
     case "windows":
       return windowsWithTargets(automationWindows(useBrowser.getState())).then((result) => ({ result }));
     case "workspace":
       return workspaceMethod(params);
     case "offscreen":
-      return offscreenMethod(params);
-    case "apply": {
-      const serving = generation;
-      return applyMethod(params, () => generation === serving && controlOn());
-    }
+      return offscreenMethod(params, stillOn);
+    case "apply":
+      return applyMethod(params, stillOn, connection);
     case "subscribe":
       return subscribe(connection, params);
     case "answer": {
@@ -210,23 +267,42 @@ function answer(connection: number, method: string, params: Record<string, unkno
       return "error" in answered ? failure("bad_request", answered.error) : { result: answered };
     }
     case "run":
-      return runMethod(params);
+      return runMethod(params, backgroundInstance, stillOn);
+    case DEVTOOLS_ENDPOINT:
+      return devtoolsEndpointMethod(connection, stillOn, () => generation === serving && controlOn(), consentToken());
   }
-  const plugin = pluginMethods?.(method, params);
+  const area = runSpec(spec, params, servingWhile(stillOn, connection));
+  if (area) return area;
+  const plugin = pluginMethods?.(method, params, stillOn);
   if (plugin) return plugin;
   return failure("unknown_method", `There's no method ${method}.`);
 }
 
+function takeIdleReplay(connection: number) {
+  const replay = subscriptions.has(connection) ? (idleReplays.get(connection) ?? []) : [];
+  idleReplays.delete(connection);
+  return replay;
+}
+
 function handleClose({ connection }: { connection: number }) {
+  releaseCliHoldsOf(connection);
+  idleReplays.delete(connection);
+  openConnections.delete(connection);
+  dismissSocketAsks(connection);
   launchSent.delete(connection);
   callers.delete(connection);
   dropResponder(connection);
+  dropHistoryHandles(connection);
+  dropLateResults(connection);
+  void closeInspectionsFor(connection);
+  void dropLogpoints(connection);
   if (subscriptions.delete(connection)) refreshFeed();
 }
 
 function listen() {
   if (listening) return;
   listening = true;
+  watchCliHoldsForEngine();
   onControlRequest((request) => {
     try {
       handleControlRequest(request);
@@ -236,6 +312,7 @@ function listen() {
   });
   onControlClose(handleClose);
   onControlWritten(({ tickets }) => runWritten(tickets));
+  if (PLATFORM_FEATURES.controlDoorbell) startPeerDoorbell();
 }
 
 async function start(consent: ConsentToken | null) {
@@ -244,12 +321,21 @@ async function start(consent: ConsentToken | null) {
   useControlSocket.setState({ status });
   generation = status.state === "on" ? status.generation : null;
   noteSocketServing(generation !== null && controlOn());
+  void capturePageMenus(generation !== null).catch(() => undefined);
   if (status.state !== "on") warnFor(consent, `[automation] the control socket is off: ${status.reason ?? "unknown"}`);
 }
 
 async function stop() {
+  openConnections.clear();
   generation = null;
+  dismissSocketAsks();
+  dropAllHistoryHandles();
+  forgetTabCalls();
+  releaseAllCliHolds();
+  void closeAllInspections();
+  void dropAllLogpoints();
   noteSocketServing(false);
+  void capturePageMenus(false).catch(() => undefined);
   subscriptions.clear();
   launchSent.clear();
   callers.clear();
@@ -265,8 +351,17 @@ function sync() {
   applied = on;
   const consent = consentToken();
   if (!on) {
+    cutOffControlSocket();
+    openConnections.clear();
     generation = null;
+    dismissSocketAsks();
+    dropAllHistoryHandles();
+    forgetTabCalls();
+    releaseAllCliHolds();
+    void closeAllInspections();
+    void dropAllLogpoints();
     noteSocketServing(false);
+    void capturePageMenus(false).catch(() => undefined);
     stopResponders();
     runWritten([...unwrittenRuns]);
   }
@@ -283,11 +378,12 @@ let started = false;
 export function startAutomation() {
   if (started) return;
   started = true;
+  registerSocketAreas();
   startDecideHooks();
   recordLaunch();
   runLaunchActions();
   sync();
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["settings"], (s, prev) => {
     if (s.settings !== prev.settings) sync();
   });
 }

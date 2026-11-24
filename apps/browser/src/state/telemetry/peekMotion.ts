@@ -1,4 +1,4 @@
-export type PeekEntranceKind = "genie" | "affine" | "fade";
+type PeekEntranceKind = "genie" | "affine" | "fade";
 
 const none = () => ({ genie: 0, affine: 0, fade: 0, fallbacks: 0, readyTimeouts: 0, interrupts: 0, promotes: 0, closes: 0 });
 

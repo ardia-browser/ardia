@@ -98,12 +98,13 @@ Measured materials (our own non-activating panels over solid backdrops; sRGB; ac
   (`pageFrameZeroInFullScreen`, `pageFrameZeroWhenTabsHidden`): the first drops the effective inset to 0 in macOS full
   screen; the second only when full screen and Auto-Hide Tabs are both on (`pageFrameInsetOf`); borderless wins over both.
   Otherwise the slider still applies. The inset applies at the window's edges, below the top strip's
-  sides, in Little Ardia below its bar, and to the peek panel's top, bottom and side (its side is `min(5, frame)`);
+  sides, in Little Ardia below its bar, and to the floating sidebar (the peek), which sits `max(1, frame)` from the window's left, top and bottom, so it lines up with the card at every frame and keeps 1 pt off the edges at 0 (#3381);
   split panes and the extension side panel sit `max(frame, 2)` apart, so two panes still read as two edge to edge.
   Docked beside the sidebar the card starts at the sidebar's edge for any frame up to 9 (the sidebar's rows keep their
   9 pt), and `frame - 9` past it above that. The corner radius scales with the frame, `10 × min(1, frame / 9)` rounded
   to half points (0 edge to edge, where the window's own corner rounds the page), and the peek's is
-  `min(12, radius + frame - its side)`, so its corners still cover the card's. The traffic lights stay 21 pt below the
+  `radius + frame - its side`: the card's own radius at every frame from 1 pt, nested in the window's corner (15.3 pt
+  at 1 pt on a 16 pt window, 10 pt at 9, 7 pt at 12), so its corners cover the card's and never poke past the window's. The traffic lights stay 21 pt below the
   card's top (y = frame + 21; the compact toolbar lifts them as before). The sidebar's header and its first row rise by
   the same lift (`sidebarHeaderOf`, `firstRowTopOf` in `components/sidebar/geometry.ts`; issue #1364), so the first tab or
   Top Apps tile stays 24 pt below the lights; with the address bar in the sidebar the lights are fixed and so is the
@@ -304,18 +305,23 @@ screen capture (frames 8–33 ms apart, most 17), so timings are ±1 frame. Edge
   tabs. It slides in from past the window's edge with no fade, on a spring: response 0.18 s, damping 0.8 (three peeks,
   rms 2.2 % of the travel; the best unconstrained fit, 0.185/0.77, overshoots 2.3 % where every trace peaks at 1.5 %):
   93 % in 66 ms, a 1.5 % (3.5 pt) overshoot at ~0.12 s, at rest by ~0.22 s. It leaves the same way, ease-in-out over
-  ~150 ms (two, rms 3.7 %). The whole card overshoots, fill and contents together; inset 5 pt, that never shows a gap at
-  the window's edge (owner's recording 2026-11-08).
+  ~150 ms (two, rms 3.7 %). The whole card overshoots, fill and contents together (owner's recording 2026-11-08).
+- Ours slides in on an ease-out cubic over 150 ms, as the peek does with Dia's layout, and leaves on Arc's ease-in-out
+  over 150 ms. The owner removed Arc's overshoot (#3631, 2026-11-22): in a 120 fps recording the panel's right edge ran
+  10 px (5 pt at 2x) past its final width and pulled back, and the peek is used all day, so the high-frequency motion
+  rule keeps it plain. The ease-out never passes 1 and lands on it at 150 ms with no tail: 0.30 at 17 ms, 0.53 at
+  33 ms, 0.70 at 50 ms, 0.83 at 67 ms, 0.91 at 83 ms, 0.96 at 100 ms, 0.99 at 117 ms, 0.999 at 133 ms, 1 at 150 ms.
+  It keeps Arc's pace up to Arc's overshoot (rms under 4 % against the traces clipped at 1). The traffic lights in the
+  panel ride the same value, so they land with it.
 - Ours with the page frame at 0 (the peek flush with the window's left, top and bottom): the fill runs 16 pt on past the
-  window's edge, clipped by it, so the overshoot shifts the contents 3.5 pt and the panel stays joined to the window's edge
-  (before: the panel moved off the edge by 5 pt, a strip of page between). Fill and contents are one layer, so they
+  window's edge, clipped by it, so the panel stays joined to the window's edge. Fill and contents are one layer, so they
   can't land a frame apart.
 - Docking from the peek (its sidebar button): instant. The panel becomes the docked sidebar and the page is laid out
   narrower in one frame (a 2 pt settle over three frames after).
 - Hiding the docked sidebar (its button): the sidebar and the card's left edge slide out together, the page laid out at
   every step, much quicker than Dia: ease-out cubic, 100 ms (two hides, rms 1.3 %; Dia's spring misses it by 10 %).
 - Showing from hidden without the peek (⌘S) isn't in the recording: ours uses Dia's spring.
-- Ours (`dockMotion.ts`: `ARC_PEEK_SPRING`, `ARC_PEEK_OUT_MS`, `ARC_HIDE_MS`; `dockMotion.test.mjs` holds the traced
+- Ours (`tokens.ts`: `PEEK_IN_MS`, `ARC_PEEK_OUT_MS`, `ARC_HIDE_MS`; `dockMotion.test.mjs` holds the traced
   points), behind `sidebarSlide`.
 
 #### Arc note: Clear above the unpinned tabs (Arc's bundle and a user's screenshot, 2026-10-16)
@@ -345,7 +351,8 @@ recording: of three unpinned tabs, the two unselected close and the selected one
   and only change colour, as in Dia (see "Pressed" above). An icon button's glyph dips to 0.96 and a pill, push or
   text button to 0.985 on `springs.snappy`, with no overshoot. The Arc-style squish (rows to 0.975, tiles to 0.94,
   a bounce back of about 13 %) shipped in 0.2.47-nightly.6 and was removed at the owner's request: with the row
-  scaling about its centre, a folder's icon slid 4 pt sideways and sprang back on every click.
+  scaling about its centre, a folder's icon slid 4 pt sideways and sprang back on every click. It stays reachable,
+  off by default and with no Settings row, as `pressMotion: "bounce"` in `config.json` (`docs/config.md`).
   A New Tab card's lift and a finished live item's check mark settle on `springs.snappy` too. Since 2026-11-19,
   pressing Reload highlights the toolbar plate while the glyph stays the same size. `springs.bouncy` stays for rare, larger moves: an unread or
   live badge appearing, import's check mark, and the sidebar's edge springing back from a resize past its limit.
@@ -434,9 +441,9 @@ recording: of three unpinned tabs, the two unselected close and the selected one
     (13pt: `x.com` is 69px wide in both). The text starts 48pt in from the panel's edge; the search icon is centred
     30pt in.
   - Open: the panel grows out of the field's box. Its left edge per 60fps frame (px at 2x): 676 (the field) → 674, 624,
-    609, 601, 598, 595, 594, i.e. 63%, 82%, 92%, 95%, 99% of the way: an exponential ease-out of about 130ms (ours:
-    `Easing.out(Easing.exp)`, 130ms). Height grows with it. The content doesn't scale or move: the growing shape
-    uncovers it.
+    609, 601, 598, 595, 594, i.e. 63%, 82%, 92%, 95%, 99% of the way: an exponential ease-out of about 130ms (we
+    copied it with `Easing.out(Easing.exp)`, 130ms, until #3283). Height grows with it. The content doesn't scale or move: the growing shape
+    uncovers it. Ardia doesn't copy this: the command bar is used all day, and the owner's motion rule (AGENTS.md, "Motion follows how often a thing is used") beats matching Dia there, so its panel opens at full size on the first frame (issue #3283; the grow came in with 50a7eeb78 on 2026-10-09).
 
 ### Logo (orb), measured from a same-screen capture
 
@@ -1068,12 +1075,24 @@ on its window.
 - **Tilt**: Dia also tilts the window while it's dragged (`dragAngleAnimation`, 0.005 × speed).
 
 **Ardia** (`ArdiaPiPController.mm`, the maths in `ArdiaPiPThrowMath.h`, tested by `pnpm -C packages/ardiacore test`)
-does the same on Chrome's video PiP window, using the same thresholds, corner rule, 10 pt inset and spring. It
+does the same on Chrome's video PiP window, using the same drag threshold, 10 pt inset and spring. It
 differs in a few places:
 - Chrome's window can't tilt.
 - The window is remembered by its frame (Chrome's `ArdiaPictureInPicture.plist`), not by its corner.
 - A drag or swipe past a screen side keeps Ardia's 28 pt peek stash rather than Dia's off-screen one.
 - A swipe whose fingers rested more than 0.1 s before lifting doesn't throw.
+- A swipe is a flick when its last event moved **10 pt** or more (`kSwipeSureFlingDelta`), or when macOS starts
+  momentum for it at over 350 pt/s. Ardia waits **80 ms** for that momentum (`kMomentumWait`) and accepts it up to
+  **0.3 s** late (`kMomentumLate`). Dia's 6 pt last-event rule isn't used, with inertia
+  off either: a scroll event doesn't say which device sent it, so the inertia setting can't be matched to it.
+- A flick goes to the corner closest to its direction, with no ±45° limit, so it always lands somewhere.
+- A flick tucks the window away only when the window already reaches past that side, the flick is at least twice
+  as sideways as vertical (`kSidewaysFlick`), and **0.1 s** of its travel (`kFlickReach`) would carry more than half
+  the window past the edge.
+- A release with no flick that brings the window to within **80 pt** of a corner's resting spot settles into it on
+  the spring (`kCornerPull`); one that starts within that reach stays put.
+- A tucked window pulled out **48 pt** or more comes out on the spring (`kUntuckPull`), at the edge it was tucked on
+  unless its centre passed the middle of that display.
 - Its screen is the one the window overlaps most.
 - While a swipe or drag moves it, the window keeps at least 60 pt × 40 % on a display. It slides along an edge rather than leaving, and stays below the menu bar and above the Dock unless another display lies that way.
 - A window larger than its display stays on that display.

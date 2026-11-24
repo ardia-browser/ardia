@@ -132,6 +132,23 @@ enum SyncPayloads {
     ]
   }
 
+  static func theme(_ theme: SyncedTheme) -> [String: Any?] {
+    ["colors": theme.colors, "darkColors": theme.darkColors, "mode": theme.mode, "look": theme.look.map(themeLook), "dark": theme.dark.map(themeLook)]
+  }
+
+  static func themeLook(_ look: SyncedThemeLook) -> [String: Any?] {
+    [
+      "stops": look.stops.map { stop -> [String: Any] in
+        ["color": ["r": stop.color.r, "g": stop.color.g, "b": stop.color.b, "a": stop.color.a], "x": stop.x, "y": stop.y]
+      },
+      "intensity": look.intensity,
+      "grain": look.grain,
+      "texture": look.texture,
+      "translucency": look.translucency,
+      "angle": look.angle,
+    ]
+  }
+
   static func profile(_ profile: SyncedProfile) -> [String: Any?] {
     [
       "syncId": profile.syncId,
@@ -139,7 +156,7 @@ enum SyncPayloads {
       "color": profile.color,
       "icon": profile.icon,
       "isDefault": profile.isDefault,
-      "theme": profile.theme.map { ["colors": $0.colors, "darkColors": $0.darkColors] as [String: Any?] },
+      "theme": profile.theme.map(theme),
       "deviceTabs": profile.deviceTabs.map { tabs -> [String: Any?] in
         [
           "deviceId": tabs.deviceId,

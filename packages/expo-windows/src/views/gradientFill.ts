@@ -1,15 +1,15 @@
 import type { SurfaceProps } from "@ardia/shell";
 import { mixOklab, parseColor, type Rgba } from "./color";
 
-export type GradientFillSource = Pick<SurfaceProps, "fill" | "fillColors" | "fillStops" | "fade" | "fadeStops">;
+type GradientFillSource = Pick<SurfaceProps, "fill" | "fillColors" | "fillStops" | "fade" | "fadeStops">;
 
 export type GradientFill = { stops: Rgba[]; places?: number[]; fade?: number[]; fadePlaces?: number[] };
 
-export type Strip = { at: number; size: number };
+type Strip = { at: number; size: number };
 
-export type FallbackRow = Strip & { color: Rgba };
+type FallbackRow = Strip & { color: Rgba };
 
-export type FallbackColumn = Strip & { opacity: number };
+type FallbackColumn = Strip & { opacity: number };
 
 const FALLBACK_ROWS = 12;
 const FALLBACK_COLUMNS = 10;
@@ -53,18 +53,18 @@ function spanAt<T>(values: readonly T[], places: readonly number[], t: number): 
   return [values[values.length - 1]!, values[values.length - 1]!, 0];
 }
 
-export function colorAt(gradient: GradientFill, t: number): Rgba {
+function colorAt(gradient: GradientFill, t: number): Rgba {
   const [from, to, k] = spanAt(gradient.stops, placesOf(gradient.stops.length, gradient.places), t);
   return mixOklab(from, to, k);
 }
 
-export function fadeAt(gradient: GradientFill, t: number): number {
+function fadeAt(gradient: GradientFill, t: number): number {
   if (!gradient.fade) return 1;
   const [from, to, k] = spanAt(gradient.fade, placesOf(gradient.fade.length, gradient.fadePlaces), t);
   return clampUnit(from + (to - from) * k);
 }
 
-export function stripsBetween(places: readonly number[], target: number): Strip[] {
+function stripsBetween(places: readonly number[], target: number): Strip[] {
   const edges = [...new Set([0, ...places.map(clampUnit), 1])].sort((a, b) => a - b);
   const strips: Strip[] = [];
   for (let i = 1; i < edges.length; i++) {

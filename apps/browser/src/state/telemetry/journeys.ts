@@ -2,11 +2,13 @@ import { useBrowser, type BrowserState } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import { capture, consentNow, isSharing, onConsentPeriodChange } from "./client";
 import { appInfo, percentile } from "./transport";
-import { jsStartedAt } from "./jsStart";
+import { firstCommitMs, jsStartedAt } from "./jsStart";
+import { launchCohortFields } from "./launchCohort";
 import { fieldTiming } from "../../platform/fieldTiming";
 import { isAsleep } from "../tabs/pageSession";
 import { NATIVE_REVEAL_COUNTS, forgetDroppedPress, nativePressTime, type Mark } from "./nativeRevealMarks";
 import { switchingPress } from "../tabs/tabReveal";
+import { launchRowsFields, launchRowsSettled } from "../sidebar/launchRows";
 
 let on = false;
 
@@ -78,7 +80,7 @@ function mark(key: string, kind: string, from: number, until = Infinity): number
 type NewTab = { journey: "j2"; key: string; t0: number; heard: number; bar?: number; barSettled?: boolean; keyAt?: number; suggested?: number };
 type Switch = { journey: "j3"; key: string; t0: number; heard: number };
 type Navigate = { journey: "j4"; key: string; t0: number; until?: number };
-type Launch = { journey: "j1"; t0: number; firstWindow?: number; commit?: number; usable?: number; keys: string[]; tabs: number; windows: number };
+type Launch = { journey: "j1"; t0: number; firstWindow?: number; render?: number; commit?: number; usable?: number; keys: string[]; tabs: number; windows: number };
 type Pending = NewTab | Switch | Navigate | Launch;
 
 const MAX_PENDING = 50;
@@ -192,12 +194,11 @@ export const ago = (ms: number) =>
 
 let launch: Launch | null = null;
 let launchSent = false;
-type PreviousLaunch = { lastLaunchAt: number | null; lastQuitAt: number | null; firstOfVersion: boolean | null };
+type PreviousLaunch = { lastLaunchAt: number | null; lastQuitAt: number | null; firstOfVersion: boolean | null; coldNth?: number | null; versionSince?: number | null };
 let previousLaunch: PreviousLaunch = { lastLaunchAt: null, lastQuitAt: null, firstOfVersion: null };
-
 let firstRootCommitted = false;
 
-export function launchCommitted() {
+export function launchCommitted(renderedAt?: number) {
   if (firstRootCommitted) return;
   firstRootCommitted = true;
   if (launch || launchSent || !on) return;
@@ -209,7 +210,7 @@ export function launchCommitted() {
     const tab = activeTabId(s, id);
     if (tab && s.tabs[tab]?.url && !isAsleep(s.tabs[tab])) keys.push(tab);
   }
-  launch = { journey: "j1", t0: start, commit: Date.now(), keys, tabs: Object.keys(s.tabs).length, windows: s.windowOrder.length };
+  launch = { journey: "j1", t0: start, render: renderedAt, commit: Date.now(), keys, tabs: Object.keys(s.tabs).length, windows: s.windowOrder.length };
   frame("launch", "content");
   probeUsable(launch);
   begin(launch);
@@ -235,7 +236,7 @@ export function launchFirstWindow(at: number) {
 function settleLaunch(l: Launch, now: number) {
   const content = mark("launch", "content", l.t0);
   const paints = l.keys.map((k) => mark(k, "fcp", l.t0)).filter((at): at is number => at !== null);
-  const done = l.usable !== undefined && l.firstWindow !== undefined && content !== null && (paints.length || !l.keys.length);
+  const done = l.usable !== undefined && l.firstWindow !== undefined && content !== null && (paints.length || !l.keys.length) && launchRowsSettled();
   if (!done && now - (l.commit ?? l.t0) < 30_000) return false;
   sendLaunch(l, content, paints);
   return true;
@@ -268,7 +269,7 @@ function sendLaunch(l: Launch, content: number | null, paints: number[]) {
     early_window_ms: ms(launchMarks?.earlyWindowShown),
     rn_ms: ms(launchMarks?.reactNativeStarted),
     js_ms: ms(jsStartedAt),
-    commit_ms: ms(l.commit),
+    commit_ms: ms(l.commit), first_commit_ms: firstCommitMs(l.render, l.commit),
     content_ms: ms(content),
     usable_ms: ms(l.usable === undefined ? undefined : Math.max(l.usable, content ?? 0)),
     tab_request_ms: ms(tab ? mark(tab, "request", l.t0) : null),
@@ -279,7 +280,7 @@ function sendLaunch(l: Launch, content: number | null, paints: number[]) {
     history: bucket(history, [[0, "0"], [99, "<100"], [999, "<1k"], [4999, "<5k"], [19_999, "<20k"], [99_999, "<100k"]], "100k+"),
     history_oldest: oldestVisit > 0 && oldestVisit <= l.t0 ? bucket(l.t0 - oldestVisit, [[30 * DAY, "<30d"], [91 * DAY, "<91d"], [365 * DAY, "<1y"], [3 * 365 * DAY, "<3y"]], "3y+") : null,
     cold: bootTime && lastLaunchAt ? lastLaunchAt < bootTime : null,
-    first_of_version: firstOfVersion,
+    first_of_version: firstOfVersion, ...launchCohortFields(previousLaunch, l.t0), ...launchRowsFields(),
     update_prewarm: firstOfVersion ? (prewarm ? (prewarm.status === 0 ? "done" : "failed") : "none") : null,
     update_prewarm_ago: prewarm?.at ? ago(l.t0 - prewarm.at) : null,
     since_quit: lastQuitAt && (!lastLaunchAt || lastQuitAt >= lastLaunchAt) ? ago(l.t0 - lastQuitAt) : lastLaunchAt ? "unclean" : "unknown",

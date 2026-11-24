@@ -2,11 +2,16 @@ package com.ardia.phone
 
 import android.content.SharedPreferences
 import com.ardia.browser.BrowserUrl
+import com.ardia.browser.NightShadeVerdict
+import com.ardia.browser.NightShadeVerdictUse
 import com.ardia.browser.NightShadeMode
 import com.ardia.browser.SitePreferences
 import org.json.JSONObject
 
-class PhoneSitePreferences(private val store: SharedPreferences) : SitePreferences {
+class PhoneSitePreferences(
+    private val store: SharedPreferences,
+    private val verdicts: NightShadeVerdicts = NightShadeVerdicts(NightShadeVerdicts.Preferences(store)),
+) : SitePreferences {
     private val lock = Any()
     private val privateNightShade = HashMap<String, NightShadeMode?>()
     private val privateZoom = HashMap<String, Double?>()
@@ -38,6 +43,16 @@ class PhoneSitePreferences(private val store: SharedPreferences) : SitePreferenc
         }
         editSites(KEY_NIGHT_SHADE_SITES) { if (mode == null) it.remove(key) else it.put(key, mode.raw) }
     }
+
+    override fun nightShadeVerdict(host: String?, isPrivate: Boolean): NightShadeVerdict? {
+        val key = host?.let(::siteKey)?.takeIf { it.isNotEmpty() } ?: return null
+        return verdicts.verdict(key, isPrivate)
+    }
+
+    override fun rememberNightShadeVerdict(host: String, isPrivate: Boolean, verdict: NightShadeVerdict): NightShadeVerdictUse? =
+        verdicts.remember(siteKey(host), isPrivate, verdict)
+
+    fun forgetNightShadeVerdicts(since: Long?) = verdicts.forget(since)
 
     override fun pageZoom(host: String?, isPrivate: Boolean): Double? {
         val key = host?.let(::siteKey) ?: return null
@@ -86,9 +101,12 @@ class PhoneSitePreferences(private val store: SharedPreferences) : SitePreferenc
         return if (sites.has(key)) sites.optBoolean(key) else null
     }
 
-    fun endPrivateBrowsing() = synchronized(lock) {
-        privateNightShade.clear()
-        privateZoom.clear()
+    fun endPrivateBrowsing() {
+        synchronized(lock) {
+            privateNightShade.clear()
+            privateZoom.clear()
+        }
+        verdicts.endPrivateBrowsing()
     }
 
     private fun sites(key: String): JSONObject = runCatching { JSONObject(store.getString(key, null) ?: "{}") }.getOrElse { JSONObject() }

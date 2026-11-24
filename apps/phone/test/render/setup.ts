@@ -65,7 +65,7 @@ jest.mock("../../src/platform/appInfo", () => ({ ...jest.requireActual("../../sr
 
 jest.mock("../../src/platform/database", () => {
   const { renderDatabase } = require("./renderDatabase");
-  return { openSqlDatabase: () => renderDatabase(), openMemoryDatabase: () => renderDatabase() };
+  return { openSqlDatabase: () => renderDatabase(), openMemoryDatabase: () => renderDatabase(), SYNCED_COMMITS: "PRAGMA synchronous = FULL", WAL_SAFE_COMMITS: "PRAGMA synchronous = NORMAL" };
 });
 
 const PHONE_WINDOW = { width: 393, height: 873, scale: 3, fontScale: 1 };

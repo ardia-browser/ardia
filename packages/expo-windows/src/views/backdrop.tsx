@@ -32,7 +32,7 @@ function tintOverMaterial(dark: boolean, baseAlpha?: number): Rgba {
   return [white, white, white, baseAlpha ?? look.alpha];
 }
 
-export type WindowBackdropColors = { fallback: Rgba; tint: Rgba; gradientOpacity: number };
+type WindowBackdropColors = { fallback: Rgba; tint: Rgba; gradientOpacity: number };
 
 export function windowBackdropColors(dark: boolean, baseAlpha?: number): WindowBackdropColors {
   return { fallback: underColor(dark, baseAlpha), tint: tintOverMaterial(dark, baseAlpha), gradientOpacity: (dark ? VIBRANCY.dark : VIBRANCY.light).gradientOpacity };

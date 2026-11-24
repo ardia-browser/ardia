@@ -13,7 +13,7 @@ const BLUE = PlatformColor("systemBlue");
 const LINKS = [
   { title: "ardia.dev", url: "https://ardia.dev" },
   { title: "Release Notes", url: "https://ardia.dev/release-notes" },
-  { title: "Source Code", url: "https://github.com/mantrakp04/ardia" },
+  { title: "Source Code", url: "https://github.com/ardia-browser/ardia" },
 ] as const;
 
 const page = (title: string) => modifierList(navigationTitle(title), navigationBarTitleDisplayMode("inline"), tint(BLUE), settingsChrome());

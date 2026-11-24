@@ -5,7 +5,7 @@ export const CAPSULE_SIZE_CONFIRMED = 82;
 export const CAPSULE_INSET = 14;
 const RUBBER_COEFFICIENT = 0.15;
 
-export function rubberBand(value: number, limit: number, dimension: number, c = RUBBER_COEFFICIENT) {
+function rubberBand(value: number, limit: number, dimension: number, c = RUBBER_COEFFICIENT) {
   if (value <= limit) return value;
   return limit + (1 - 1 / (((value - limit) * c) / dimension + 1)) * dimension;
 }

@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { INJECTION_ENTITLEMENTS, prepareApp } from "../../../../scripts/lib/app-copy.mjs";
 import { launch, session, sleep } from "../../../../scripts/lib/instance.mjs";
 import { framesLibrary } from "./frames-phase.mjs";
+import { medianOrNull as median } from "./median.mjs";
 
 const HELP = `Top tab strip scroll cost: what a two-finger horizontal pan (and a wheel) over the top strip costs the main thread,
 the JS thread and the process, with the React work it caused, in hidden instances of one app with one or more JS bundles.
@@ -74,12 +75,6 @@ for (let i = 1; i < argv.length; i++) {
   } else positional.push(a);
 }
 
-const median = (xs) => {
-  const s = xs.filter((x) => typeof x === "number" && Number.isFinite(x)).sort((a, b) => a - b);
-  if (!s.length) return null;
-  const m = s.length >> 1;
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-};
 const round1 = (x) => (x === null || x === undefined ? x : Math.round(x * 10) / 10);
 
 

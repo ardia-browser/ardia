@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { deflateSync, inflateSync } from "node:zlib";
 import { launch, session, sleep } from "../../../scripts/lib/instance.mjs";
+import { encodePng, readPngRgba as readPng } from "../../../scripts/lib/png.mjs";
 
 const HELP = `Top tab strip UX harness: many-tab scenarios in hidden instances, scored from what the strip draws and what a
 press there hits, so a layout change is judged by numbers.
@@ -97,85 +97,10 @@ const siteShared = (n, i) => (n <= 30 ? (i >= 5 && i <= 14) || [18, 21, 24, 27, 
 const siteTitle = (i) => `${SITE_WORDS[i % SITE_WORDS.length]}${i >= SITE_WORDS.length ? ` ${i}` : ""} · project tracker page ${i}`;
 const siteFavicon = (n, i) => (siteShared(n, i) ? SHARED_FAVICON : hasFavicon(i) ? i : null);
 
-const crcTable = Array.from({ length: 256 }, (_, n) => {
-  let c = n;
-  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-  return c >>> 0;
-});
-const crc32 = (buf) => {
-  let c = 0xffffffff;
-  for (const b of buf) c = crcTable[(c ^ b) & 255] ^ (c >>> 8);
-  return (c ^ 0xffffffff) >>> 0;
-};
-function encodePng({ width, height, rgba }) {
-  const chunk = (type, data) => {
-    const head = Buffer.alloc(8);
-    head.writeUInt32BE(data.length);
-    head.write(type, 4, "ascii");
-    const crc = Buffer.alloc(4);
-    crc.writeUInt32BE(crc32(Buffer.concat([head.subarray(4), data])));
-    return Buffer.concat([head, data, crc]);
-  };
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(width);
-  ihdr.writeUInt32BE(height, 4);
-  ihdr[8] = 8;
-  ihdr[9] = 6;
-  const raw = Buffer.alloc((width * 4 + 1) * height);
-  for (let y = 0; y < height; y++) rgba.copy(raw, y * (width * 4 + 1) + 1, y * width * 4, (y + 1) * width * 4);
-  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ihdr), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
-}
 function solidPng([r, g, b]) {
   const rgba = Buffer.alloc(16 * 16 * 4);
   for (let i = 0; i < 256; i++) rgba.set([r, g, b, 255], i * 4);
   return encodePng({ width: 16, height: 16, rgba });
-}
-function readPng(path) {
-  const buf = readFileSync(path);
-  let width = 0, height = 0, channels = 4;
-  const idat = [];
-  for (let at = 8; at < buf.length; ) {
-    const length = buf.readUInt32BE(at), type = buf.toString("ascii", at + 4, at + 8);
-    if (type === "IHDR") {
-      width = buf.readUInt32BE(at + 8);
-      height = buf.readUInt32BE(at + 12);
-      channels = { 0: 1, 2: 3, 4: 2, 6: 4 }[buf[at + 17]];
-    } else if (type === "IDAT") idat.push(buf.subarray(at + 8, at + 8 + length));
-    at += 12 + length;
-  }
-  const raw = inflateSync(Buffer.concat(idat));
-  const stride = width * channels;
-  const out = Buffer.alloc(stride * height);
-  for (let y = 0; y < height; y++) {
-    const filter = raw[y * (stride + 1)];
-    const row = y * stride, src = y * (stride + 1) + 1;
-    for (let x = 0; x < stride; x++) {
-      const v = raw[src + x];
-      const a = x >= channels ? out[row + x - channels] : 0;
-      const b = y ? out[row - stride + x] : 0;
-      const c = y && x >= channels ? out[row - stride + x - channels] : 0;
-      let p;
-      if (filter === 0) p = v;
-      else if (filter === 1) p = v + a;
-      else if (filter === 2) p = v + b;
-      else if (filter === 3) p = v + ((a + b) >> 1);
-      else {
-        const pa = Math.abs(b - c), pb = Math.abs(a - c), pc = Math.abs(a + b - 2 * c);
-        p = v + (pa <= pb && pa <= pc ? a : pb <= pc ? b : c);
-      }
-      out[row + x] = p & 255;
-    }
-  }
-  const rgba = Buffer.alloc(width * height * 4);
-  for (let i = 0; i < width * height; i++) {
-    const s = i * channels;
-    const grey = channels <= 2;
-    rgba[i * 4] = out[s];
-    rgba[i * 4 + 1] = grey ? out[s] : out[s + 1];
-    rgba[i * 4 + 2] = grey ? out[s] : out[s + 2];
-    rgba[i * 4 + 3] = channels === 4 ? out[s + 3] : channels === 2 ? out[s + 1] : 255;
-  }
-  return { width, height, rgba };
 }
 function cropPng(img, height) {
   const h = Math.min(height, img.height);
@@ -312,7 +237,7 @@ const nativeOf = (frame) => ac.engine.call("windows.list").then((ws) => {
   return found ? found.window : null;
 });
 const classify = (h) => /_NSTheme/.test(h) ? "L" : /^ArdiaShell\\.WindowDragRegion/.test(h) ? "D" : /^(RCTScrollContentView|NSClipView)/.test(h) ? "S" : /^NativeWidgetMac/.test(h) ? "E"
-  : /FileDragView/.test(h) ? "T" : /^(RCTView < )+ArdiaShell\\.ContextMenuArea < ArdiaShell\\.FileDropView/.test(h) ? "X" : "I";
+  : /^(RCTView < )+ArdiaShell\\.ContextMenuArea < ArdiaShell\\.FileDropView/.test(h) ? "X" : /FileDragView|^RCTView < RCTView < ArdiaShell\\.ContextMenuArea < /.test(h) ? "T" : "I";
 const hitRow = (n, width, y) => {
   const xs = []; for (let x = 0; x < width; x++) xs.push(x);
   const out = [];
@@ -326,7 +251,6 @@ const setupBody = (sc, png) => `${HELPERS}
 const id = ${JSON.stringify(sc.window)};
 const sc = ${JSON.stringify(sc)};
 const s0 = st();
-const w0 = s0.windows[id];
 const tabIds = stripOrder(id);
 const loose = tabIds.filter((t) => !s0.tabs[t].pin);
 const pins = tabIds.filter((t) => s0.tabs[t].pin);
@@ -396,11 +320,11 @@ function analyse(img, scale, data, width) {
     }
     return out;
   };
-  const tabRuns = runs((c) => c === "T");
+  const hitTabRuns = runs((c) => c === "T");
   const dragRuns = runs((c, x) => (c === "D" || c === "S") && x >= lightsEnd);
   const dragMaxPt = Math.max(0, ...dragRuns.map(([a, b]) => b - a));
   const deadPt = codes.split("").filter((c, x) => c === "X" && x >= lightsEnd).length;
-  const buttonRuns = runs((c) => c === "I").filter(([a, b]) => b - a >= 14 && a > lightsEnd);
+  const hitButtonRuns = runs((c) => c === "I").filter(([a, b]) => b - a >= 14 && a > lightsEnd);
 
   const W = Math.round(width);
   const bgRow = [];
@@ -437,6 +361,11 @@ function analyse(img, scale, data, width) {
     favs.push({ tabId, x: minX, w, h, count, full: w >= 13 && h >= 13 && count >= 150 });
   }
   const favOf = new Map(favs.map((f) => [f.tabId, f]));
+  const lastTabRun = hitTabRuns.reduce((last, [a, b], i) => (favs.some((f) => f.full && f.x + 8 >= a && f.x + 8 < b) ? i : last), -1);
+  const tabRuns = hitTabRuns.filter((_, i) => i <= lastTabRun);
+  const tabButtonRuns = hitTabRuns.slice(lastTabRun + 1).slice(-2);
+  const edgeRuns = hitTabRuns.filter((r) => !tabButtonRuns.includes(r));
+  const buttonRuns = [...hitButtonRuns, ...tabButtonRuns.filter(([a, b]) => b - a >= 14)].sort((p, q) => p[0] - q[0]);
   const loose = data.loose;
   const withFav = loose.filter((t) => data.favicons[t] && !data.discarded.includes(t) && !sharedColour(t));
   const shown = withFav.filter((t) => favOf.get(t)?.full);
@@ -448,7 +377,7 @@ function analyse(img, scale, data, width) {
   const hardClips = favs.filter((f) => !f.full && f.count >= 16).length;
 
   const runOf = (x) => tabRuns.find(([a, b]) => x >= a && x < b);
-  const scrollRuns = runs((c) => c === "T" || c === "S");
+  const scrollRuns = runs((c, x) => (c === "T" || c === "S") && !tabButtonRuns.some(([a, b]) => x >= a && x < b));
   const viewport = scrollRuns.length ? [Math.min(...scrollRuns.map((r) => r[0])), Math.max(...scrollRuns.map((r) => r[1]))] : [0, 0];
   const inkWidth = (a, b, startX) => {
     let first = -1, last = -1, maxInk = 0;
@@ -500,7 +429,7 @@ function analyse(img, scale, data, width) {
     const hidden = side === "L" ? hiddenL : hiddenR;
     if (!hidden) return null;
     const edge = side === "L" ? viewport[0] : viewport[1];
-    const peek = tabRuns.find(([a, b]) => (side === "L" ? a <= edge + 1 : b >= edge - 1));
+    const peek = edgeRuns.find(([a, b]) => (side === "L" ? a <= edge + 1 : b >= edge - 1));
     if (!peek) return 0;
     const a = side === "L" ? edge : edge - 8;
     const shows = inkWidth(peek[0], peek[1], peek[0]).maxInk >= 40 || favs.some((f) => f.count >= 16 && f.x < peek[1] && f.x + f.w > peek[0]);

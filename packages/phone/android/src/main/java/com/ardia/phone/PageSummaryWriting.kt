@@ -28,6 +28,10 @@ internal interface PageSummaryLocal {
 
     suspend fun characterBudget(): Int
 
+    suspend fun prepare() {}
+
+    suspend fun fit(instructions: String, characters: Int, prompt: (Int) -> String): String = prompt(characters)
+
     suspend fun stream(instructions: String, prompt: String, onText: (String) -> Unit)
 }
 
@@ -35,17 +39,26 @@ internal class PageSummaryWriting(private val cloud: PageSummaryCloud, private v
     sealed class Writer(val outcome: String) {
         data class ChatGPT(val model: String) : Writer("chatgpt")
         data object OnDevice : Writer("on_device")
-        data object Excerpts : Writer("excerpts")
     }
 
-    data class Written(val text: String, val writer: Writer, val note: String, val chatGPTFellBack: Boolean)
+    sealed interface Result
 
-    suspend fun write(content: ReadableContent, provider: PageSummaryProvider, onText: (String) -> Unit, reason: String? = null): Written {
-        var fallback = reason
+    data class Written(val text: String, val writer: Writer, val note: String, val chatGPTFellBack: Boolean) : Result
+
+    data class Unwritten(val message: String, val geminiNanoMissing: String? = null) : Result
+
+    suspend fun prepare(provider: PageSummaryProvider) {
+        if (provider == PageSummaryProvider.OnDevice || !cloud.isConnected) local.prepare()
+    }
+
+    suspend fun write(content: ReadableContent, provider: PageSummaryProvider, onText: (String) -> Unit, reason: String? = null): Result {
+        var note = reason
+        var problem = reason
         var fellBack = false
         if (provider == PageSummaryProvider.ChatGPT) {
             if (!cloud.isConnected) {
-                fallback = NOT_CONNECTED
+                note = NOT_CONNECTED
+                problem = NOT_CONNECTED_UNWRITTEN
             } else {
                 try {
                     var shown = ""
@@ -53,49 +66,60 @@ internal class PageSummaryWriting(private val cloud: PageSummaryCloud, private v
                         shown = it
                         onText(it)
                     }
-                    return Written(shown, Writer.ChatGPT(model), "Written by ChatGPT ($model) on your plan from this page’s text. Check the page for anything important.", chatGPTFellBack = false)
+                    if (shown.isNotBlank()) return Written(shown, Writer.ChatGPT(model), "Written by ChatGPT ($model) on your plan from this page’s text. Check the page for anything important.", chatGPTFellBack = false)
+                    note = EMPTY_CHATGPT_ANSWER
+                    problem = EMPTY_CHATGPT_ANSWER
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (error: Exception) {
                     currentCoroutineContext().ensureActive()
-                    onText("")
-                    fellBack = true
-                    fallback = (error as? ChatGPTFailure ?: ChatGPTFailure.Network).message
+                    note = (error as? ChatGPTFailure ?: ChatGPTFailure.Network).message
+                    problem = note
                 }
+                onText("")
+                fellBack = true
             }
         }
-        when (local.availability()) {
+        val availability = local.availability()
+        when (availability) {
             OnDeviceWriter.Availability.Available -> Unit
-            OnDeviceWriter.Availability.Downloading -> return quote(content, joined(fallback, "Gemini Nano is still downloading. Until it’s ready, here are the page’s key lines."), fellBack)
-            OnDeviceWriter.Availability.Unavailable -> return quote(content, joined(fallback, "This phone can’t run Gemini Nano, so here are the page’s key lines."), fellBack)
+            OnDeviceWriter.Availability.Downloading -> return Unwritten(joined(problem, NANO_DOWNLOADING), availability.telemetry)
+            else -> return Unwritten(joined(problem, "${availability.reason}."), availability.telemetry)
         }
         val budget = local.characterBudget()
+        var failure: Exception? = null
         for (share in listOf(budget, budget / 2)) {
             try {
                 var shown = ""
-                local.stream(PageSummaryDigest.INSTRUCTIONS, PageSummaryDigest.prompt(content, share)) {
+                val prompt = local.fit(PageSummaryDigest.INSTRUCTIONS, share) { PageSummaryDigest.prompt(content, it) }
+                local.stream(PageSummaryDigest.INSTRUCTIONS, prompt) {
                     shown = it
                     onText(it)
                 }
-                val note = fallback?.let { "$it Gemini Nano summarized the page on this phone instead." } ?: "Written on this phone by Gemini Nano. The page’s text didn’t leave the phone."
-                return Written(shown, Writer.OnDevice, note, fellBack)
+                if (shown.isBlank()) continue
+                val written = note?.let { "$it Gemini Nano summarized the page on this phone instead." } ?: "Written on this phone by Gemini Nano. The page’s text didn’t leave the phone."
+                return Written(shown, Writer.OnDevice, written, fellBack)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
                 currentCoroutineContext().ensureActive()
                 onText("")
+                failure = error
             }
         }
-        return quote(content, joined(fallback, "Gemini Nano couldn’t summarize this page, so here are its key lines."), fellBack)
+        val missed = OnDeviceWriter.Availability.ofWriting(failure)
+        return Unwritten(joined(problem, if (missed == OnDeviceWriter.Availability.WriteFailed) NANO_FAILED else "${missed.reason}."), missed.telemetry)
     }
-
-    private fun quote(content: ReadableContent, note: String, fellBack: Boolean): Written = Written(PageSummaryDigest.excerpts(content), Writer.Excerpts, note, fellBack)
 
     private fun joined(first: String?, second: String): String = listOfNotNull(first, second).joinToString(" ")
 
     companion object {
         const val CHATGPT_CHARACTER_BUDGET = 24_000
         const val NOT_CONNECTED = "ChatGPT isn’t connected, so this summary stayed on your phone. Reconnect it in Settings › Pinch to Summarize."
+        const val NOT_CONNECTED_UNWRITTEN = "ChatGPT isn’t connected. Reconnect it in Settings › Pinch to Summarize."
+        const val EMPTY_CHATGPT_ANSWER = "ChatGPT didn’t write a summary."
+        const val NANO_DOWNLOADING = "Gemini Nano is still downloading. Try again when it’s ready."
+        const val NANO_FAILED = "Gemini Nano couldn’t summarize this page."
 
         fun live(account: ChatGPTAccount): PageSummaryWriting = PageSummaryWriting(
             object : PageSummaryCloud {
@@ -107,6 +131,10 @@ internal class PageSummaryWriting(private val cloud: PageSummaryCloud, private v
                 override suspend fun availability(): OnDeviceWriter.Availability = OnDeviceWriter.availability()
 
                 override suspend fun characterBudget(): Int = OnDeviceWriter.characterBudget()
+
+                override suspend fun prepare() = OnDeviceWriter.prepare()
+
+                override suspend fun fit(instructions: String, characters: Int, prompt: (Int) -> String): String = OnDeviceWriter.fit(instructions, characters, prompt)
 
                 override suspend fun stream(instructions: String, prompt: String, onText: (String) -> Unit) = OnDeviceWriter.stream(instructions, prompt, onText)
             },

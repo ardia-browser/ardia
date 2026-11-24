@@ -42,7 +42,7 @@ export function onInterfaceScaleSettled(listener: (scale: number) => void): () =
   };
 }
 
-export const devicePixelsPerRootPoint = (scale = currentInterfaceScale()): number => PixelRatio.get() * scale;
+const devicePixelsPerRootPoint = (scale = currentInterfaceScale()): number => PixelRatio.get() * scale;
 
 export const snappedToDevicePixels = (rootPoints: number): number => snappedToGrid(rootPoints, devicePixelsPerRootPoint());
 

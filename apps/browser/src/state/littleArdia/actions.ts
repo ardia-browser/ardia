@@ -1,3 +1,4 @@
+import { foreignWriteHooks } from "../browser/foreignWriteHooks";
 import { type LinkRoute, routeLinkTabs } from "../../platform/tabs";
 import { showMenu } from "../../platform/menus";
 import { focus, openWindow } from "../browser/actions";
@@ -15,10 +16,12 @@ import { asAdoptId } from "../tabs/adoptIds";
 import type { AdoptId } from "../browser/types";
 import { linkGate, type LinkGateResult, type LinkRouteChoice, type LinkSourceInfo } from "./linkGate";
 import { externalLinkOpen, type ExternalLinkOpen } from "./externalLinkOpen";
+import { admitIncomingUrl } from "./incomingUrls";
 import { noteExternalLink } from "../telemetry/usage";
 import { openInRouteGroup } from "../airTraffic/openAt";
 import { noteLittleArdiaAppHandoff, noteLittleArdiaEscapeClose, type EscapePressedIn } from "../telemetry/littleArdiaEscapes";
 import { askBeforeQuitting, quitWarningMayAsk } from "../windows/quitWarning";
+import type { CloseGuard, GuardedClose } from "../windows/windowClose";
 
 const store = () => useBrowser.getState();
 
@@ -29,13 +32,21 @@ export function openLittleArdia(url?: string, profileId?: string, adoptId?: Adop
 }
 
 
-export function openExternalUrls(given: string[], pointer?: [number, number], source?: LinkSourceInfo, returnTo?: string) {
+export function openExternalUrls(given: string[], pointer?: [number, number], source?: LinkSourceInfo, returnTo?: string): number {
   const settings = store().settings;
-  const urls = settings.allowJavaScriptFromAppleEvents ? given : given.filter((url) => !runsJavaScript(url, settings));
-  if (!urls.length) return;
+  const urls = given.flatMap((url) => {
+    if (settings.allowJavaScriptFromAppleEvents && runsJavaScript(url, settings)) return [url];
+    const admitted = admitIncomingUrl(url);
+    return admitted === null ? [] : [admitted];
+  });
+  const refused = given.length - urls.length;
+  if (!urls.length) return refused;
   const gate = linkGate();
   const app = returnTo ?? source?.bundleId ?? undefined;
-  if (!gate) return openUndecided(urls, pointer, false, app);
+  if (!gate) {
+    openUndecided(urls, pointer, false, app);
+    return refused;
+  }
   const verdicts = urls.map((url): LinkGateResult | Promise<LinkGateResult> => {
     try {
       return gate(url, source ?? null);
@@ -47,12 +58,14 @@ export function openExternalUrls(given: string[], pointer?: [number, number], so
     const plain: string[] = [];
     results.forEach((result, i) => {
       if (!result) return;
+      if (result.url !== urls[i] && admitIncomingUrl(result.url) === null) return;
       if (result.route) return openRoutedUrl(result.url, result.route, pointer, app);
       if (result.url !== urls[i]) return openUrlsFromApps([result.url], { profileId: null, adoptIds: [undefined] }, pointer, true, app);
       plain.push(result.url);
     });
     if (plain.length) openUndecided(plain, pointer, results.some((r) => r?.decided), app);
   });
+  return refused;
 }
 
 function openRoutedUrl(url: string, route: LinkRouteChoice, pointer?: [number, number], app?: string) {
@@ -180,21 +193,21 @@ export async function openLittleArdiaProfileMenu(windowId: string) {
       ...menuShortcut(`switchProfile:${id}`, s),
     })),
   );
-  if (choice) moveLittleArdiaToProfile(windowId, choice);
+  if (choice) foreignWriteHooks.around(() => moveLittleArdiaToProfile(windowId, choice));
 }
 
-export function closeLittleArdia(windowId: string) {
-  if (!isSmall(store(), windowId)) return;
-  if (!quitWarningMayAsk()) return closeWindowAnimated(windowId);
-  void askBeforeQuitting(windowId).then((answer) => {
-    if (answer !== "cancelled" && isSmall(store(), windowId) && !isWindowClosing(windowId)) closeWindowAnimated(windowId);
-  });
+export async function closeLittleArdia(windowId: string, { mayClose = () => true, ask }: CloseGuard = {}): Promise<GuardedClose> {
+  if (!isSmall(store(), windowId)) return "cancelled";
+  if (quitWarningMayAsk() && (await askBeforeQuitting(windowId, ask, mayClose)) === "cancelled") return "cancelled";
+  if (!mayClose()) return "stopped";
+  if (!isSmall(store(), windowId) || isWindowClosing(windowId)) return "cancelled";
+  return (await closeWindowAnimated(windowId)) ? "closing" : mayClose() ? "cancelled" : "stopped";
 }
 
 export function closeLittleArdiaForAppLink(windowId: string | null) {
   if (!windowId || !isSmall(store(), windowId) || isWindowClosing(windowId)) return;
   noteLittleArdiaAppHandoff("appLinkClose");
-  closeLittleArdia(windowId);
+  void closeLittleArdia(windowId);
 }
 
 export function closeLittleArdiaOnEscape(tabId: string, pressedIn: EscapePressedIn = "page") {
@@ -202,7 +215,7 @@ export function closeLittleArdiaOnEscape(tabId: string, pressedIn: EscapePressed
   const tab = s.tabs[tabId];
   if (!tab || !isSmall(s, tab.windowId) || isWindowClosing(tab.windowId) || s.find[tabId]?.open || s.windowUi[tab.windowId]?.panel.open) return;
   noteLittleArdiaEscapeClose(pressedIn);
-  closeLittleArdia(tab.windowId);
+  void closeLittleArdia(tab.windowId);
 }
 
 export function closeBlankLittleArdiaOnEscape(windowId: string): boolean {
@@ -212,6 +225,6 @@ export function closeBlankLittleArdiaOnEscape(windowId: string): boolean {
   const tab = tabId ? s.tabs[tabId] : undefined;
   if (tab && (tab.url || navigationOf(tab))) return false;
   noteLittleArdiaEscapeClose("blankBar");
-  closeLittleArdia(windowId);
+  void closeLittleArdia(windowId);
   return true;
 }

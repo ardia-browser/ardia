@@ -22,7 +22,7 @@ afterEach(() => {
 
 test("the tab pager rounds its cards to the display's own corner when the phone reports one, as Compose's rememberDisplayCornerRadius does", () => {
   const tab = currentTabs().open.find((candidate) => candidate.id === currentTabs().selectedId)!;
-  const root = renderSurface(<BrowsingScreen tab={tab} />);
+  const root = renderSurface(<BrowsingScreen tabId={tab.id} />);
   const edges = root.root.findAll((node) => node.props.testID === "pagerEdgeShadow" && typeof node.type === "string");
   expect(edges.length).toBeGreaterThanOrEqual(1);
   for (const edge of edges) expect(StyleSheet.flatten(edge.props.style)).toMatchObject({ top: 18, bottom: 18 });

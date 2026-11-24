@@ -1,3 +1,4 @@
+import { asSecret } from "@ardia/core";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
@@ -29,7 +30,7 @@ const sealedLogins = (read = stub.readLogins) => ({
     const [o, u, password] = JSON.parse(Buffer.from(sealed, "base64").toString());
     if (o !== origin || u !== username) return false;
     if (replacing && !(await passwords.deletePassword(profile, origin, username))) return false;
-    return passwords.savePassword(profile, origin, username, password);
+    return passwords.savePassword(profile, origin, username, asSecret("password", password));
   },
 });
 
@@ -1097,7 +1098,7 @@ test("passwords: saved on one Mac, changed or deleted on another; the newer edit
   const folder = new Folder();
   const a = new Device("devA", folder);
   const b = new Device("devB", folder);
-  const save = (d, origin, user, password) => d.with(() => passwords.savePassword("", origin, user, password));
+  const save = (d, origin, user, password) => d.with(() => passwords.savePassword("", origin, user, asSecret("password", password)));
   const remove = (d, origin, user) => d.with(() => passwords.deletePassword("", origin, user));
   const list = (d) => [...stub.passwordStores.get(d.id).values()].map((l) => `${l.url} ${l.username}=${l.password}`).sort();
   await save(a, "https://bank.example", "alice", "hunter2");
@@ -1106,7 +1107,7 @@ test("passwords: saved on one Mac, changed or deleted on another; the newer edit
   await syncAll([a, b]);
   assert.deepEqual(list(a), list(b));
   assert.deepEqual(list(b), ["https://bank.example alice=hunter2", "https://mail.example alice=m41l", "https://shop.example bob=sh0p"]);
-  await b.with(() => passwords.updatePassword("", "https://bank.example", "alice", { password: "correct horse" }));
+  await b.with(() => passwords.updatePassword("", "https://bank.example", "alice", { password: asSecret("password", "correct horse") }));
   await remove(b, "https://mail.example", "alice");
   await syncAll([b, a]);
   assert.deepEqual(list(a), ["https://bank.example alice=correct horse", "https://shop.example bob=sh0p"]);
@@ -1118,7 +1119,7 @@ test("passwords: a login whose read is still out when quitting begins isn't save
   const folder = new Folder();
   const a = new Device("devA", folder);
   const b = new Device("devB", folder);
-  await a.with(() => passwords.savePassword("", "https://bank.example", "alice", "hunter2"));
+  await a.with(() => passwords.savePassword("", "https://bank.example", "alice", asSecret("password", "hunter2")));
   await a.sync();
   let quitting = false;
   let armed = false;
@@ -1143,8 +1144,8 @@ test("passwords: a remote change saved in Chrome as quitting begins isn't sent b
   const folder = new Folder();
   const a = new Device("devA", folder);
   const b = new Device("devB", folder);
-  const save = (d, password) => d.with(() => passwords.savePassword("", "https://bank.example", "alice", password));
-  const change = (d, password) => d.with(() => passwords.updatePassword("", "https://bank.example", "alice", { password }));
+  const save = (d, password) => d.with(() => passwords.savePassword("", "https://bank.example", "alice", asSecret("password", password)));
+  const change = (d, password) => d.with(() => passwords.updatePassword("", "https://bank.example", "alice", { password: asSecret("password", password) }));
   const list = (d) => [...stub.passwordStores.get(d.id).values()].map((l) => `${l.username}=${l.password}`);
   await save(a, "one");
   await syncAll([a, b]);
@@ -2144,7 +2145,7 @@ test("bookmarks and history: a Mac on v0.2.43-nightly.4 and one on today's build
   today.with(() => useBrowser.setState({ bookmarks: { nodes: {} } }));
   const t = Date.now() - 3_600_000;
   const x = today.with(() => S().addBookmark({ profileId: "default", url: "https://x.example/", title: "X" }));
-  today.with(() => S().importHistory("default", [{ url: "https://h1.example/", title: "H1", visits: 1, lastVisit: t }]));
+  await today.with(() => S().importHistory("default", [{ url: "https://h1.example/", title: "H1", visits: 1, lastVisit: t }]));
   await syncAll([today, old]);
   assert.deepEqual(tree(old), { bar: { "Bookmarks Bar": ["X=https://x.example/"] }, other: { "Other Bookmarks": [] } });
   assert.deepEqual(nightlyFourHistory(old), ["https://h1.example/"]);
@@ -2192,7 +2193,7 @@ test("profiles that share data: records applied through the owner land once in t
   assert.equal(inBar("https://in.example/").length, 1, "one bookmark node");
   assert.equal(inBar("https://in.example/")[0].parentId, bookmarkRoots(S(), b).bar, "under the shared bar");
 
-  S().importHistory(b, [{ url: "https://out.example/", title: "Out", visits: 1, lastVisit: t + 1000 }]);
+  await S().importHistory(b, [{ url: "https://out.example/", title: "Out", visits: 1, lastVisit: t + 1000 }]);
   S().addBookmark({ profileId: b, url: "https://out.example/", title: "Out" });
   const history = adapters.historyAdapter(a).extract(() => undefined, () => false, Date.now(), () => false, () => undefined, () => undefined, () => undefined);
   const bookmarks = adapters.bookmarksAdapter(a).extract(() => undefined, [], Date.now(), () => false);
@@ -2238,4 +2239,135 @@ test("history: an unchanged page's visits are matched in one pass, not each agai
   const { values } = adapters.historyAdapter("default").extract(baseOf, () => false, Date.now(), () => true, () => undefined, () => undefined, (key) => (baseOf(key) ? JSON.stringify(baseOf(key)) : undefined));
   assert.deepEqual(values.get(`h:${url}`), known);
   assert.ok(abs.mock.callCount() <= visitTimes.length, `${abs.mock.callCount()} comparisons`);
+});
+
+const syncedHistory = (url, title, seen) => {
+  S().hydrate({});
+  stub.historyDbs.clear();
+  stub.chromeHistory("").set(url, { title, visits: [seen] });
+  useBrowser.setState({ history: { "": { list: [{ url, title, favicon: null, visits: 1, lastVisit: seen, visitTimes: [seen] }], floor: -Infinity, ready: true } } });
+  return { known: () => true, now: Date.now(), horizon: 0, joined: true };
+};
+
+test("history: a title synced from another Mac doesn't replace the one this Mac's Chrome keeps, so the command bar finds the page without a restart", async () => {
+  const url = "https://notes.example/5f3c9a";
+  const fresh = "https://notes.example/8e21d0";
+  const seen = Date.now() - 3_600_000;
+  const known = syncedHistory(url, "Journal: Tuesday", seen);
+  const telemetry = await import("../telemetry/client.ts");
+  const { takeSyncWorkCounts } = await import("../telemetry/workCounts.ts");
+  telemetry.setSharing(true, "onboarding");
+  takeSyncWorkCounts();
+  const elsewhere = seen + 60_000;
+  const visits = new Map([
+    [`h:${url}`, { t: "Notion", n: 2, vt: [seen, elsewhere] }],
+    [`h:${fresh}`, { t: "Reading list", n: 1, vt: [elsewhere] }],
+  ]);
+  await adapters.historyAdapter("default").apply(visits, new Set(visits.keys()), () => undefined, known);
+  const entry = (u) => historyOf(S(), "default").find((h) => h.url === u);
+  assert.equal(stub.chromeHistory("").get(url).title, "Journal: Tuesday", "Chrome keeps its own title");
+  assert.equal(entry(url).title, "Journal: Tuesday", "and the list shows that title, not the other Mac's");
+  assert.deepEqual(entry(url).visitTimes, [seen, elsewhere], "while the other Mac's visit still lands");
+  assert.equal(entry(fresh).title, "Reading list", "a page this Mac hasn't seen takes the synced title");
+  assert.equal(takeSyncWorkCounts().sync_history_titles_kept, 1, "the kept title is counted, the new page's isn't");
+  telemetry.setSharing(false, "settings");
+});
+
+test("history: a title Chrome reports while synced visits are being written stays in the list", async () => {
+  const url = "https://notes.example/5f3c9a";
+  const seen = Date.now() - 3_600_000;
+  const known = syncedHistory(url, "", seen);
+  const visits = new Map([[`h:${url}`, { t: "", n: 2, vt: [seen, seen + 60_000] }]]);
+  const applying = adapters.historyAdapter("default").apply(visits, new Set(visits.keys()), () => undefined, known);
+  useBrowser.setState((s) => ({ history: { ...s.history, "": { ...s.history[""], list: s.history[""].list.map((h) => (h.url === url ? { ...h, title: "Journal: Tuesday" } : h)) } } }));
+  await applying;
+  assert.equal(historyOf(S(), "default").find((h) => h.url === url).title, "Journal: Tuesday");
+});
+
+test("a 20,000-deep bookmark folder chain is read for sync in the same order as before, and applied and written to Chrome without overflowing", async () => {
+  const { reloadBookmarks, startBookmarks } = await import("../bookmarks/engineSync.ts");
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+  useBrowser.setState({ bookmarks: { nodes: {} } });
+  S().hydrate({});
+  stub.docs.clear();
+  stub.bookmarkDbs.clear();
+  const stop = startBookmarks();
+  await settle();
+  await reloadBookmarks();
+  S().addBookmark({ profileId: "default", url: "https://first.example/", title: "First" });
+  const roots = bookmarkRoots(S(), "default");
+  const nodes = { ...S().bookmarks.nodes };
+  const depth = 20_000;
+  const deepUrl = "00000000-0000-4000-9000-000000000001";
+  let parent = roots.other;
+  for (let i = 0; i < depth; i++) {
+    const id = `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`;
+    nodes[id] = { kind: "folder", id, parentId: parent, title: `D${i}`, children: [], addedAt: 1 };
+    nodes[parent] = { ...nodes[parent], children: [...nodes[parent].children, id] };
+    parent = id;
+  }
+  nodes[parent] = { ...nodes[parent], children: [...nodes[parent].children, deepUrl] };
+  nodes[deepUrl] = { kind: "url", id: deepUrl, parentId: parent, title: "Deep", url: "https://deep.example/", addedAt: 2 };
+  useBrowser.setState({ bookmarks: { ...S().bookmarks, nodes } });
+  const { values } = adapters.bookmarksAdapter("default").extract(() => undefined, [], Date.now(), () => false);
+  const keys = [...values.keys()];
+  assert.equal(keys.length, depth + 2);
+  assert.equal(values.get(keys[0]).t, "First", "the bar is read before Other Bookmarks");
+  assert.deepEqual(keys.slice(1, 4).map((k) => values.get(k).t), ["D0", "D1", "D2"], "each folder is read before the next one below it");
+  assert.equal(values.get(keys.at(-1)).u, "https://deep.example/");
+  const applied = adapters.bookmarksAdapter("default").apply(values, new Set(values.keys()), () => undefined, { known: () => true, now: Date.now(), horizon: 0, joined: true });
+  assert.notEqual(applied, false);
+  assert.equal(Object.values(S().bookmarks.nodes).filter((n) => n.kind === "folder" && n.title.startsWith("D")).length, depth, "the same chain is applied back over itself");
+  for (let i = 0; i < 20 && !stub.chromeBookmarks("").has(deepUrl); i++) await settle();
+  stop();
+  const db = stub.chromeBookmarks("");
+  assert.equal(db.get(deepUrl)?.u, "https://deep.example/", "the deepest bookmark reaches Chrome");
+  assert.equal([...db.values()].filter((n) => n.k === "f" && n.t.startsWith("D")).length, depth, "with every folder above it");
+});
+
+test("a pinned group chain 4,000 deep from a damaged or foreign file is applied without overflowing", () => {
+  S().hydrate({});
+  S().createWindow({ url: "https://home.example/" });
+  const depth = 4_000;
+  const g = (i) => `deep${String(i).padStart(5, "0")}`;
+  const visible = new Map([[`pin:g:${g(0)}`, { n: "G0", i: null, c: "blue", pos: "1" }]]);
+  for (let i = 1; i < depth; i++) visible.set(`pinn:g:${g(i)}`, { n: `G${i}`, i: null, c: "blue", p: g(i - 1) });
+  visible.set("pin:t:leaf", { g: g(depth - 1), u: "https://leaf.example/", t: null, i: null, ti: "Leaf", pos: "1" });
+  const records = { known: () => true, now: Date.now(), horizon: 0, joined: true, held: () => false, landed: () => {} };
+  pinnedArea.pinnedAdapter("default").apply(visible, new Set(visible.keys()), () => undefined, records);
+  const leaf = Object.values(S().tabs).find((t) => t.pinnedUrl === "https://leaf.example/" || t.url === "https://leaf.example/");
+  assert.ok(leaf, "the leaf pin landed");
+  assert.equal(Object.values(S().groups).filter((x) => x.pinned && x.name.startsWith("G")).length, depth);
+});
+
+test("an 8,000-deep pinned group chain is applied with work in line with its depth, not its square", () => {
+  S().hydrate({});
+  S().createWindow({ url: "https://home.example/" });
+  const depth = 8_000;
+  const g = (i) => `deep${String(i).padStart(5, "0")}`;
+  const visible = new Map([[`pin:g:${g(0)}`, { n: "G0", i: null, c: "blue", pos: "1" }]]);
+  for (let i = 1; i < depth; i++) visible.set(`pinn:g:${g(i)}`, { n: `G${i}`, i: null, c: "blue", p: g(i - 1) });
+  visible.set("pin:t:leaf", { g: g(depth - 1), u: "https://leaf.example/", t: null, i: null, ti: "Leaf", pos: "1" });
+  const records = { known: () => true, now: Date.now(), horizon: 0, joined: true, held: () => false, landed: () => {} };
+  const { add } = Set.prototype;
+  const { push } = Array.prototype;
+  let steps = 0;
+  Set.prototype.add = function (value) {
+    steps++;
+    return add.call(this, value);
+  };
+  Array.prototype.push = function (...items) {
+    steps++;
+    return push.apply(this, items);
+  };
+  try {
+    pinnedArea.pinnedAdapter("default").apply(visible, new Set(visible.keys()), () => undefined, records);
+  } finally {
+    Set.prototype.add = add;
+    Array.prototype.push = push;
+  }
+  const chain = Object.values(S().groups).filter((x) => x.pinned && x.name.startsWith("G"));
+  assert.equal(chain.length, depth);
+  assert.ok(chain.every((x) => x.tabIds.length === 1), "every group in the chain holds the leaf");
+  assert.ok(steps < 100 * depth, `${steps} set and list insertions`);
 });

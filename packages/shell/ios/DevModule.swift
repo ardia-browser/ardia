@@ -5,365 +5,427 @@ import ImageIO
 import UniformTypeIdentifiers
 import UserNotifications
 
-public class DevModule: Module {
+public class DevModule: Module, DevNative {
   #if DEBUG
-  public func definition() -> ModuleDefinition {
-    Name("ArdiaDev")
+  static func devCrash(_ kind: String?) { DispatchQueue.main.async { CrashReports.crashForTesting(kind) } }
 
-    AsyncFunction("devCrash") { (kind: String?) in
-      DispatchQueue.main.async { CrashReports.crashForTesting(kind) }
+  static func devBlockMain(_ ms: Double) -> Double { DevFreeze.blockMain(ms: ms) }
+
+  static func devNotificationCenter(_ actAsEngine: Bool, _ promise: Promise) {
+    let center = UNUserNotificationCenter.current()
+    if actAsEngine {
+      let engine = DevEngineNotificationDelegate()
+      DevEngineNotificationDelegate.kept = engine
+      center.delegate = engine
+      center.setNotificationCategories([UNNotificationCategory(identifier: "engine", actions: [], intentIdentifiers: [], options: [])])
     }
-
-    AsyncFunction("devBlockMain") { (ms: Double) -> Double in DevFreeze.blockMain(ms: ms) }
-
-    AsyncFunction("devNotificationCenter") { (actAsEngine: Bool, promise: Promise) in
-      let center = UNUserNotificationCenter.current()
-      if actAsEngine {
-        let engine = DevEngineNotificationDelegate()
-        DevEngineNotificationDelegate.kept = engine
-        center.delegate = engine
-        center.setNotificationCategories([UNNotificationCategory(identifier: "engine", actions: [], intentIdentifiers: [], options: [])])
-      }
-      center.getNotificationCategories { categories in
-        promise.resolve([
-          "delegate": center.delegate.map { String(describing: type(of: $0)) } ?? "",
-          "engineDelegate": NotificationHub.shared.engineDelegate.map { String(describing: type(of: $0)) } ?? "",
-          "categories": categories.map(\.identifier).sorted(),
-        ])
-      }
+    center.getNotificationCategories { categories in
+      promise.resolve([
+        "delegate": center.delegate.map { String(describing: type(of: $0)) } ?? "",
+        "engineDelegate": NotificationHub.shared.engineDelegate.map { String(describing: type(of: $0)) } ?? "",
+        "categories": categories.map(\.identifier).sorted(),
+      ])
     }
+  }
 
-    AsyncFunction("devNotificationCategoryRace") { (promise: Promise) in
-      let center = UNUserNotificationCenter.current()
-      let engineWrite = { center.setNotificationCategories([UNNotificationCategory(identifier: "engine-late", actions: [], intentIdentifiers: [], options: [])]) }
-      let readLater = { (done: @escaping ([String]) -> Void) in
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { center.getNotificationCategories { done($0.map(\.identifier).sorted()) } }
-      }
-      center.setNotificationCategories([])
-      center.getNotificationCategories { snapshot in
-        engineWrite()
-        center.setNotificationCategories(snapshot)
-        readLater { unguarded in
-          center.setNotificationCategories([])
-          NotificationHub.shared.registerOwnCategories(afterRead: engineWrite)
-          readLater { guarded in promise.resolve(["unguarded": unguarded, "guarded": guarded]) }
-        }
+  static func devNotificationCategoryRace(_ promise: Promise) {
+    let center = UNUserNotificationCenter.current()
+    let engineWrite = { center.setNotificationCategories([UNNotificationCategory(identifier: "engine-late", actions: [], intentIdentifiers: [], options: [])]) }
+    let readLater = { (done: @escaping ([String]) -> Void) in
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1) { center.getNotificationCategories { done($0.map(\.identifier).sorted()) } }
+    }
+    center.setNotificationCategories([])
+    center.getNotificationCategories { snapshot in
+      engineWrite()
+      center.setNotificationCategories(snapshot)
+      readLater { unguarded in
+        center.setNotificationCategories([])
+        NotificationHub.shared.registerOwnCategories(afterRead: engineWrite)
+        readLater { guarded in promise.resolve(["unguarded": unguarded, "guarded": guarded]) }
       }
     }
+  }
 
-    AsyncFunction("devRenderIntroMusic") { (cues: [String: Double], path: String) -> Double? in
-      return IntroMusic.render(cues: cues, to: path)
+  static func devRenderIntroMusic(_ cues: [String: Double], _ path: String) -> Double? { return IntroMusic.render(cues: cues, to: path) }
+
+  static func devLittleArdiaHotKey(_ press: Bool) -> [String: Any] {
+    if press { LittleArdiaHotKey.shared.press() }
+    return LittleArdiaHotKey.shared.state()
+  }
+
+  static func devMenuCommand(_ command: String, _ arg: String?) { MenuTarget.shared.dispatch(command, arg, windowId: WindowManager.shared.keyWindowId) }
+
+  static func devPostKey(_ windowId: String, _ key: String, _ keyCode: Int, _ modifiers: [String]) -> Bool {
+    guard let window = WindowManager.shared.window(windowId) else { return false }
+    let mods = ModifierName.flags(named: modifiers)
+    if key.hasPrefix("menu:"),
+      let event = SyntheticInput.key(.keyDown, in: window, characters: String(key.dropFirst(5)), modifiers: mods, keyCode: keyCode) {
+      return NSApp.mainMenu?.performKeyEquivalent(with: event) ?? false
     }
+    for type in [NSEvent.EventType.keyDown, .keyUp] {
+      guard let event = SyntheticInput.key(type, in: window, characters: key, modifiers: mods, keyCode: keyCode) else { return false }
+      NSApp.postEvent(event, atStart: false)
+    }
+    return true
+  }
 
-    AsyncFunction("devLittleArdiaHotKey") { (press: Bool) -> [String: Any] in
-      if press { LittleArdiaHotKey.shared.press() }
-      return LittleArdiaHotKey.shared.state()
-    }.runOnQueue(.main)
-
-    AsyncFunction("devMenuCommand") { (command: String, arg: String?) in
-      MenuTarget.shared.dispatch(command, arg, windowId: WindowManager.shared.keyWindowId)
-    }.runOnQueue(.main)
-
-    AsyncFunction("devPostKey") { (windowId: String, key: String, keyCode: Int, modifiers: [String]) -> Bool in
-      guard let window = WindowManager.shared.window(windowId) else { return false }
-      let mods = ModifierName.flags(named: modifiers)
-      if key.hasPrefix("menu:"),
-        let event = SyntheticInput.key(.keyDown, in: window, characters: String(key.dropFirst(5)), modifiers: mods, keyCode: keyCode) {
-        return NSApp.mainMenu?.performKeyEquivalent(with: event) ?? false
-      }
-      for type in [NSEvent.EventType.keyDown, .keyUp] {
-        guard let event = SyntheticInput.key(type, in: window, characters: key, modifiers: mods, keyCode: keyCode) else { return false }
-        NSApp.postEvent(event, atStart: false)
-      }
-      return true
-    }.runOnQueue(.main)
-
-    AsyncFunction("devPostKeys") { (windowId: String, presses: [[String: Any]], promise: Promise) in
-      guard let window = WindowManager.shared.window(windowId) else { return promise.resolve([]) }
-      var postedAt: [Double] = []
-      func post(_ index: Int) {
-        guard index < presses.count else { return promise.resolve(postedAt) }
-        let press = presses[index]
-        let after = press["after"] as? Int ?? 0
-        let send = {
-          let key = press["key"] as? String ?? ""
-          let mods = ModifierName.flags(named: press["modifiers"] as? [String] ?? [])
-          let phase = press["phase"] as? String
-          let types: [NSEvent.EventType] = phase == "down" ? [.keyDown] : phase == "up" ? [.keyUp] : [.keyDown, .keyUp]
-          for type in types {
-            if let event = SyntheticInput.key(type, in: window, characters: key, modifiers: mods, keyCode: press["keyCode"] as? Int ?? 0) {
-              NSApp.postEvent(event, atStart: false)
-            }
+  static func devPostKeys(_ windowId: String, _ presses: [[String: Any]], _ promise: Promise) {
+    guard let window = WindowManager.shared.window(windowId) else { return promise.resolve([]) }
+    var postedAt: [Double] = []
+    func post(_ index: Int) {
+      guard index < presses.count else { return promise.resolve(postedAt) }
+      let press = presses[index]
+      let after = press["after"] as? Int ?? 0
+      let send = {
+        let key = press["key"] as? String ?? ""
+        let mods = ModifierName.flags(named: press["modifiers"] as? [String] ?? [])
+        let phase = press["phase"] as? String
+        let types: [NSEvent.EventType] = phase == "down" ? [.keyDown] : phase == "up" ? [.keyUp] : [.keyDown, .keyUp]
+        for type in types {
+          if let event = SyntheticInput.key(type, in: window, characters: key, modifiers: mods, keyCode: press["keyCode"] as? Int ?? 0) {
+            NSApp.postEvent(event, atStart: false)
           }
-          postedAt.append(ProcessInfo.processInfo.systemUptime * 1000)
-          post(index + 1)
         }
-        if after > 0 { DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(after), execute: send) } else { send() }
+        postedAt.append(ProcessInfo.processInfo.systemUptime * 1000)
+        post(index + 1)
       }
-      post(0)
-    }.runOnQueue(.main)
-
-    AsyncFunction("devMenuItems") { (title: String, perform: [String]?, asTitleBar: Bool?) -> [[String: Any]] in
-      var tiling: NSMenu?
-      var flags: [String: Any] = [:]
-      if title.hasPrefix("tiling:"), let window = WindowManager.shared.window(String(title.dropFirst(7))) {
-        for name in ["_canEnterTileMode", "_implicitlyDisallowTiling", "_cgsWindowSaysSupportsTiling"] {
-          let sel = NSSelectorFromString(name)
-          guard window.responds(to: sel) else { continue }
-          typealias Get = @convention(c) (AnyObject, Selector) -> Bool
-          flags[name] = unsafeBitCast(window.method(for: sel), to: Get.self)(window, sel)
-        }
-        let sel = NSSelectorFromString("_windowTilingMenu")
-        if window.responds(to: sel) { tiling = window.perform(sel)?.takeUnretainedValue() as? NSMenu }
-      }
-      guard var menu = tiling ?? NSApp.mainMenu?.items.first(where: { $0.title == title })?.submenu else { return flags.isEmpty ? [] : [flags] }
-      func items(_ menu: NSMenu) -> [[String: Any]] {
-        menu.delegate?.menuNeedsUpdate?(menu)
-        let populate = NSSelectorFromString("_populateFromSidebandUpdatersOfSign:")
-        if menu.responds(to: populate) {
-          typealias Populate = @convention(c) (AnyObject, Selector, Int) -> Void
-          for sign in [-1, 1] { unsafeBitCast(menu.method(for: populate), to: Populate.self)(menu, populate, sign) }
-        }
-        menu.update()
-        return menu.items.map { item in
-          var out: [String: Any] = [
-            "title": item.isSeparatorItem ? "-" : item.title, "key": item.keyEquivalent,
-            "modifiers": item.keyEquivalentModifierMask.rawValue, "action": item.action.map(NSStringFromSelector) ?? "",
-            "enabled": item.isEnabled, "hidden": item.isHidden, "alternate": item.isAlternate,
-          ]
-          if let sub = item.submenu { out["items"] = items(sub) }
-          return out
-        }
-      }
-      let listed = items(menu)
-      if let perform, !perform.isEmpty {
-        for (i, step) in perform.enumerated() {
-          guard let index = menu.items.firstIndex(where: { $0.title == step && (i == perform.count - 1 || $0.submenu != nil) }) else { return [["error": "no \(step)"]] }
-          if i < perform.count - 1, let sub = menu.items[index].submenu { menu = sub; continue }
-          let item = menu.items[index]
-          if asTitleBar == true, let action = item.action { NSApp.sendAction(action, to: item.target, from: item) } else { menu.performActionForItem(at: index) }
-        }
-      }
-      return flags.isEmpty ? listed : [flags] + listed
-    }.runOnQueue(.main)
-
-    AsyncFunction("devDragBlockedRects") { (windowId: String) -> [[Double]] in
-      guard let window = WindowManager.shared.window(windowId) else { return [] }
-      return ServerWindowDrag.blockedRects(window)
-    }.runOnQueue(.main)
-
-    AsyncFunction("devDragRegionRects") { (windowId: String) -> [[Double]] in
-      guard let window = WindowManager.shared.window(windowId) else { return [] }
-      return ServerWindowDrag.blockedRects(window, rebuilt: false)
-    }.runOnQueue(.main)
-
-    AsyncFunction("devDragRegionState") { (windowId: String) -> [String: Any] in
-      guard let window = WindowManager.shared.window(windowId) else { return [:] }
-      let counts = ServerWindowDrag.counts
-      return [
-        "stale": ServerWindowDrag.isStale(window), "rebuilds": counts.rebuilds, "deferred": counts.deferred, "stalePresses": counts.stalePresses,
-      ]
-    }.runOnQueue(.main)
-
-    AsyncFunction("devDragRegionPointer") { (windowId: String, x: Double, top: Double, on: Bool) -> Bool in
-      guard on else {
-        ServerWindowDrag.pointerOverride = nil
-        return true
-      }
-      guard let window = WindowManager.shared.window(windowId) else { return false }
-      let inWindow = SyntheticInput.windowPoint(x: x, top: top, in: window)
-      ServerWindowDrag.pointerOverride = window.convertPoint(toScreen: inWindow)
-      ServerWindowDrag.pointerMoved(in: window, at: inWindow)
-      return true
-    }.runOnQueue(.main)
-
-    Function("devReceiveURLsWhenDetached") { (urls: [String], timeoutMs: Double) in
-      DevModule.urlDelivery = ["state": "waiting"]
-      let start = Date()
-      func poll() {
-        let waited = Date().timeIntervalSince(start) * 1000
-        if ShellEvents.isAttached(.openURLs) {
-          guard waited < timeoutMs else { return DevModule.urlDelivery = ["state": "neverDetached", "waitedMs": waited] }
-          return DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(5), execute: poll)
-        }
-        OpenURLInbox.receive(urls.compactMap(URL.init(string:)))
-        DevModule.urlDelivery = ["state": "received", "waitedMs": waited, "attachedAfter": ShellEvents.isAttached(.openURLs)]
-      }
-      DispatchQueue.main.async(execute: poll)
+      if after > 0 { DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(after), execute: send) } else { send() }
     }
+    post(0)
+  }
 
-    AsyncFunction("devURLDelivery") { () -> [String: Any] in DevModule.urlDelivery }.runOnQueue(.main)
-    AsyncFunction("devOpenURLDeliveries") { () -> [[String: Any]] in OpenURLInbox.testDeliveries }.runOnQueue(.main)
-
-    AsyncFunction("devShortcutRecording") { () -> Bool in ShortcutRecorder.shared.isRecording }.runOnQueue(.main)
-
-    AsyncFunction("devDragPreviewState") { () -> [String: Any] in
-      return DragPreview.shared.debugState
-    }.runOnQueue(.main)
-    AsyncFunction("devWindowMoveProbe") { (id: String, probe: [String: Double], promise: Promise) in
-      guard let window = WindowManager.shared.window(id) else { return promise.resolve(["error": "no window \(id)"]) }
-      let count = Int(probe["steps"] ?? 60), dx = CGFloat(probe["dx"] ?? 3), dy = CGFloat(probe["dy"] ?? 0)
-      let interval = (probe["intervalMs"] ?? 8) / 1000
-      if let x = probe["x"], let top = probe["top"] {
-        let settle = (probe["settleMs"] ?? 200) / 1000, keep = (probe["keep"] ?? 0) != 0, replayStale = (probe["replayStale"] ?? 0) != 0
-        WindowMoveProbe.drag(
-          window, x: CGFloat(x), top: CGFloat(top), count: count, dx: dx, dy: dy, interval: interval, settle: settle, keep: keep, replayStale: replayStale
-        ) {
-          promise.resolve($0)
-        }
-      } else {
-        WindowMoveProbe.steps(window, count: count, dx: dx, dy: dy, interval: interval) { promise.resolve($0) }
+  func devMenuItems(_ title: String, _ perform: [String]?, _ asTitleBar: Bool?) -> [[String: Any]] {
+    var tiling: NSMenu?
+    var flags: [String: Any] = [:]
+    if title.hasPrefix("tiling:"), let window = WindowManager.shared.window(String(title.dropFirst(7))) {
+      for name in ["_canEnterTileMode", "_implicitlyDisallowTiling", "_cgsWindowSaysSupportsTiling"] {
+        let sel = NSSelectorFromString(name)
+        guard window.responds(to: sel) else { continue }
+        typealias Get = @convention(c) (AnyObject, Selector) -> Bool
+        flags[name] = unsafeBitCast(window.method(for: sel), to: Get.self)(window, sel)
       }
-    }.runOnQueue(.main)
-
-    AsyncFunction("devWindowResizeProbe") { (id: String, probe: [String: Double], promise: Promise) in
-      guard let window = WindowManager.shared.window(id) else { return promise.resolve(["error": "no window \(id)"]) }
-      var modifiers: NSEvent.ModifierFlags = []
-      if (probe["option"] ?? 0) != 0 { modifiers.insert(.option) }
-      if (probe["shift"] ?? 0) != 0 { modifiers.insert(.shift) }
-      WindowResizeProbe.resize(
-        window, edgeInset: CGFloat(probe["edgeInset"] ?? 1), count: Int(probe["steps"] ?? 40), dx: CGFloat(probe["dx"] ?? 4),
-        interval: (probe["intervalMs"] ?? 16) / 1000, modifiers: modifiers, bypassFix: (probe["bypassFix"] ?? 0) != 0,
-        failEvents: (probe["failEvents"] ?? 0) != 0
-      ) { promise.resolve($0) }
-    }.runOnQueue(.main)
-
-    AsyncFunction("devWindowReplayAfterMove") { (id: String, rect: [Double]) -> [String: Any] in
-      guard let window = WindowManager.shared.window(id), rect.count == 4 else { return ["error": "no window \(id)"] }
-      return WindowMoveProbe.replayAfterMove(window, NSRect(x: rect[0], y: rect[1], width: rect[2], height: rect[3]))
-    }.runOnQueue(.main)
-
-    AsyncFunction("devSetWindowFrame") { (id: String, rect: [Double]) -> [Double] in
-      guard let window = WindowManager.shared.window(id), rect.count == 4 else { return [] }
-      window.setFrame(NSRect(x: rect[0], y: rect[1], width: rect[2], height: rect[3]), display: false)
-      return [window.frame.minX, window.frame.minY, window.frame.width, window.frame.height]
-    }.runOnQueue(.main)
-
-    AsyncFunction("devSnapshotWindow") { (windowId: String, path: String, transparent: Bool?) -> Bool in
-      return Self.snapshot(windowId: windowId, path: path, transparent: transparent ?? false)
-    }.runOnQueue(.main)
-
-    AsyncFunction("devSnapshotBurst") { (windowId: String, dir: String, rect: [Double], durationMs: Double, promise: Promise) in
-      DevSnapshotBurst.start(windowId: windowId, dir: dir, rect: rect, durationMs: durationMs, promise: promise)
-    }.runOnQueue(.main)
-
-    AsyncFunction("devSetPointer") { (windowId: String, x: Double, y: Double, on: Bool) -> Bool in
-      let select = NSSelectorFromString("ardia_setPointerOverride:")
-      guard let view = NSClassFromString("RCTView"), (view as AnyObject).responds(to: select) else { return false }
-      guard on else {
-        _ = (view as AnyObject).perform(select, with: nil)
-        return true
+      let sel = NSSelectorFromString("_windowTilingMenu")
+      if window.responds(to: sel) { tiling = window.perform(sel)?.takeUnretainedValue() as? NSMenu }
+    }
+    guard var menu = tiling ?? NSApp.mainMenu?.items.first(where: { $0.title == title })?.submenu else { return flags.isEmpty ? [] : [flags] }
+    func items(_ menu: NSMenu) -> [[String: Any]] {
+      menu.delegate?.menuNeedsUpdate?(menu)
+      let populate = NSSelectorFromString("_populateFromSidebandUpdatersOfSign:")
+      if menu.responds(to: populate) {
+        typealias Populate = @convention(c) (AnyObject, Selector, Int) -> Void
+        for sign in [-1, 1] { unsafeBitCast(menu.method(for: populate), to: Populate.self)(menu, populate, sign) }
       }
-      guard let window = WindowManager.shared.window(windowId) else { return false }
-      let screen = SyntheticInput.screenPoint(x: x, top: y, in: window)
-      _ = (view as AnyObject).perform(select, with: NSValue(point: screen))
+      menu.update()
+      return menu.items.map { item in
+        var out: [String: Any] = [
+          "title": item.isSeparatorItem ? "-" : item.title, "key": item.keyEquivalent,
+          "modifiers": item.keyEquivalentModifierMask.rawValue, "action": item.action.map(NSStringFromSelector) ?? "",
+          "enabled": item.isEnabled, "hidden": item.isHidden, "alternate": item.isAlternate,
+        ]
+        if let sub = item.submenu { out["items"] = items(sub) }
+        return out
+      }
+    }
+    let listed = items(menu)
+    if let perform, !perform.isEmpty {
+      for (i, step) in perform.enumerated() {
+        guard let index = menu.items.firstIndex(where: { $0.title == step && (i == perform.count - 1 || $0.submenu != nil) }) else { return [["error": "no \(step)"]] }
+        if i < perform.count - 1, let sub = menu.items[index].submenu { menu = sub; continue }
+        let item = menu.items[index]
+        if asTitleBar == true, let action = item.action { NSApp.sendAction(action, to: item.target, from: item) } else { menu.performActionForItem(at: index) }
+      }
+    }
+    return flags.isEmpty ? listed : [flags] + listed
+  }
+
+  static func devDragBlockedRects(_ windowId: String) -> [[Double]] {
+    guard let window = WindowManager.shared.window(windowId) else { return [] }
+    return ServerWindowDrag.blockedRects(window)
+  }
+
+  static func devDragRegionRects(_ windowId: String) -> [[Double]] {
+    guard let window = WindowManager.shared.window(windowId) else { return [] }
+    return ServerWindowDrag.blockedRects(window, rebuilt: false)
+  }
+
+  static func devDragRegionState(_ windowId: String) -> [String: Any] {
+    guard let window = WindowManager.shared.window(windowId) else { return [:] }
+    let counts = ServerWindowDrag.counts
+    return [
+      "stale": ServerWindowDrag.isStale(window), "rebuilds": counts.rebuilds, "deferred": counts.deferred, "stalePresses": counts.stalePresses,
+    ]
+  }
+
+  static func devDragRegionPointer(_ windowId: String, _ x: Double, _ top: Double, _ on: Bool) -> Bool {
+    guard on else {
+      ServerWindowDrag.pointerOverride = nil
       return true
-    }.runOnQueue(.main)
+    }
+    guard let window = WindowManager.shared.window(windowId) else { return false }
+    let inWindow = SyntheticInput.windowPoint(x: x, top: top, in: window)
+    ServerWindowDrag.pointerOverride = window.convertPoint(toScreen: inWindow)
+    ServerWindowDrag.pointerMoved(in: window, at: inWindow)
+    return true
+  }
 
-    AsyncFunction("devSidebarEdgePointer") { (windowId: String, x: Double, y: Double, on: Bool) -> Bool in
-      guard on else {
-        SidebarEdgeWatcher.shared.pointerOverride = nil
-        SidebarEdgeWatcher.shared.checkPointer()
-        return true
+  static func devReceiveURLsWhenDetached(_ urls: [String], _ timeoutMs: Double) {
+    DevModule.urlDelivery = ["state": "waiting"]
+    let start = Date()
+    func poll() {
+      let waited = Date().timeIntervalSince(start) * 1000
+      if ShellEvents.isAttached(.openURLs) {
+        guard waited < timeoutMs else { return DevModule.urlDelivery = ["state": "neverDetached", "waitedMs": waited] }
+        return DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(5), execute: poll)
       }
-      guard let window = WindowManager.shared.window(windowId) else { return false }
-      SidebarEdgeWatcher.shared.pointerOverride = SyntheticInput.screenPoint(x: x, top: y, in: window)
+      OpenURLInbox.receive(urls.compactMap(URL.init(string:)))
+      DevModule.urlDelivery = ["state": "received", "waitedMs": waited, "attachedAfter": ShellEvents.isAttached(.openURLs)]
+    }
+    DispatchQueue.main.async(execute: poll)
+  }
+
+  static func devURLDelivery() -> [String: Any] { DevModule.urlDelivery }
+
+  static func devOpenURLDeliveries() -> [[String: Any]] { OpenURLInbox.testDeliveries }
+
+  static func devShortcutRecording() -> Bool { ShortcutRecorder.shared.isRecording }
+
+  static func devDragPreviewState() -> [String: Any] { return DragPreview.shared.debugState }
+
+  static func devWindowMoveProbe(_ id: String, _ probe: [String: Double], _ promise: Promise) {
+    guard let window = WindowManager.shared.window(id) else { return promise.resolve(["error": "no window \(id)"]) }
+    let count = Int(probe["steps"] ?? 60), dx = CGFloat(probe["dx"] ?? 3), dy = CGFloat(probe["dy"] ?? 0)
+    let interval = (probe["intervalMs"] ?? 8) / 1000
+    if let x = probe["x"], let top = probe["top"] {
+      let settle = (probe["settleMs"] ?? 200) / 1000, keep = (probe["keep"] ?? 0) != 0, replayStale = (probe["replayStale"] ?? 0) != 0
+      WindowMoveProbe.drag(
+        window, x: CGFloat(x), top: CGFloat(top), count: count, dx: dx, dy: dy, interval: interval, settle: settle, keep: keep, replayStale: replayStale
+      ) {
+        promise.resolve($0)
+      }
+    } else {
+      WindowMoveProbe.steps(window, count: count, dx: dx, dy: dy, interval: interval) { promise.resolve($0) }
+    }
+  }
+
+  static func devWindowResizeProbe(_ id: String, _ probe: [String: Double], _ promise: Promise) {
+    guard let window = WindowManager.shared.window(id) else { return promise.resolve(["error": "no window \(id)"]) }
+    var modifiers: NSEvent.ModifierFlags = []
+    if (probe["option"] ?? 0) != 0 { modifiers.insert(.option) }
+    if (probe["shift"] ?? 0) != 0 { modifiers.insert(.shift) }
+    WindowResizeProbe.resize(
+      window, edgeInset: CGFloat(probe["edgeInset"] ?? 1), count: Int(probe["steps"] ?? 40), dx: CGFloat(probe["dx"] ?? 4),
+      interval: (probe["intervalMs"] ?? 16) / 1000, modifiers: modifiers, bypassFix: (probe["bypassFix"] ?? 0) != 0,
+      failEvents: (probe["failEvents"] ?? 0) != 0
+    ) { promise.resolve($0) }
+  }
+
+  static func devWindowReplayAfterMove(_ id: String, _ rect: [Double]) -> [String: Any] {
+    guard let window = WindowManager.shared.window(id), rect.count == 4 else { return ["error": "no window \(id)"] }
+    return WindowMoveProbe.replayAfterMove(window, NSRect(x: rect[0], y: rect[1], width: rect[2], height: rect[3]))
+  }
+
+  static func devSetWindowFrame(_ id: String, _ rect: [Double]) -> [Double] {
+    guard let window = WindowManager.shared.window(id), rect.count == 4 else { return [] }
+    window.setFrame(NSRect(x: rect[0], y: rect[1], width: rect[2], height: rect[3]), display: false)
+    return [window.frame.minX, window.frame.minY, window.frame.width, window.frame.height]
+  }
+
+  static func devSnapshotWindow(_ windowId: String, _ path: String, _ transparent: Bool?) -> Bool { return Self.snapshot(windowId: windowId, path: path, transparent: transparent ?? false) }
+
+  static func devSnapshotBurst(_ windowId: String, _ dir: String, _ rect: [Double], _ durationMs: Double, _ promise: Promise) { DevSnapshotBurst.start(windowId: windowId, dir: dir, rect: rect, durationMs: durationMs, promise: promise) }
+
+  static func devSetPointer(_ windowId: String, _ x: Double, _ y: Double, _ on: Bool) -> Bool {
+    let select = NSSelectorFromString("ardia_setPointerOverride:")
+    guard let view = NSClassFromString("RCTView"), (view as AnyObject).responds(to: select) else { return false }
+    guard on else {
+      SwitcherPointer.devLocation = nil
+      _ = (view as AnyObject).perform(select, with: nil)
+      return true
+    }
+    guard let window = WindowManager.shared.window(windowId) else { return false }
+    let screen = SyntheticInput.screenPoint(x: x, top: y, in: window)
+    SwitcherPointer.devLocation = screen
+    _ = (view as AnyObject).perform(select, with: NSValue(point: screen))
+    return true
+  }
+
+  static func devPointerSweep(_ windowId: String, _ spec: [String: Any], _ promise: Promise) { DevPointerSweep.start(windowId: windowId, spec: spec, promise: promise) }
+
+  static func devSidebarEdgePointer(_ windowId: String, _ x: Double, _ y: Double, _ on: Bool) -> Bool {
+    guard on else {
+      SidebarEdgeWatcher.shared.pointerOverride = nil
       SidebarEdgeWatcher.shared.checkPointer()
       return true
-    }.runOnQueue(.main)
-
-    AsyncFunction("devSidebarEdgeStats") { (reset: Bool) -> [String: Any] in
-      let stats = SidebarEdgeWatcher.shared.stats
-      if reset { SidebarEdgeWatcher.shared.resetStats() }
-      return stats
-    }.runOnQueue(.main)
-
-    AsyncFunction("devHoverStats") { (reset: Bool) -> [String: Any] in
-      let select = NSSelectorFromString("ardia_hoverStats:")
-      guard let view = NSClassFromString("RCTView"), (view as AnyObject).responds(to: select) else { return [:] }
-      return ((view as AnyObject).perform(select, with: NSNumber(value: reset))?.takeUnretainedValue() as? [String: Any]) ?? [:]
-    }.runOnQueue(.main)
-
-    AsyncFunction("devSetMouseButtons") { (pressed: Int) -> Bool in
-      let select = NSSelectorFromString("ardia_setButtonsOverride:")
-      guard let view = NSClassFromString("RCTView"), (view as AnyObject).responds(to: select) else { return false }
-      _ = (view as AnyObject).perform(select, with: pressed < 0 ? nil : NSNumber(value: pressed > 0))
-      return true
-    }.runOnQueue(.main)
-
-    AsyncFunction("devTypeKeys") { (windowId: String, text: String, interval: Double, promise: Promise) in
-      let toKeyWindow = windowId == "key"
-      guard let window = toKeyWindow ? NSApp.keyWindow : WindowManager.shared.window(windowId), !text.isEmpty else { return promise.resolve([]) }
-      let keys = text.map(String.init)
-      let now = { Date().timeIntervalSince1970 * 1000 }
-      let activity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .latencyCritical], reason: "devTypeKeys")
-      let timer = DispatchSource.makeTimerSource(flags: .strict, queue: .main)
-      var times = [[String: Double]](repeating: [:], count: keys.count)
-      var next = 0, drawn = 0
-      var t0 = 0.0
-      let press = { (i: Int) in
-        let handled = now()
-        let target = toKeyWindow ? NSApp.keyWindow ?? window : window
-        for type in [NSEvent.EventType.keyDown, .keyUp] {
-          guard let event = SyntheticInput.key(type, in: target, characters: keys[i]) else { continue }
-          if toKeyWindow { NSApp.sendEvent(event) }
-          else if type == .keyDown { target.firstResponder?.keyDown(with: event) } else { target.firstResponder?.keyUp(with: event) }
-        }
-        let observer = CFRunLoopObserverCreateWithHandler(
-          nil, CFRunLoopActivity.beforeWaiting.rawValue | CFRunLoopActivity.exit.rawValue, false, 2_000_001
-        ) { _, _ in
-          times[i] = ["due": t0 + interval * Double(i), "handled": handled, "drawn": now()]
-          drawn += 1
-          if drawn == keys.count {
-            ProcessInfo.processInfo.endActivity(activity)
-            promise.resolve(times)
-          }
-        }
-        CFRunLoopAddObserver(CFRunLoopGetMain(), observer, .commonModes)
-      }
-      timer.setEventHandler {
-        if next == 0 { t0 = now() }
-        repeat {
-          press(next)
-          next += 1
-        } while next < keys.count && t0 + interval * Double(next) <= now()
-        if next == keys.count { timer.cancel() }
-      }
-      timer.schedule(deadline: .now(), repeating: .microseconds(Int(interval * 1000)), leeway: .nanoseconds(0))
-      timer.resume()
     }
+    guard let window = WindowManager.shared.window(windowId) else { return false }
+    SidebarEdgeWatcher.shared.pointerOverride = SyntheticInput.screenPoint(x: x, top: y, in: window)
+    SidebarEdgeWatcher.shared.checkPointer()
+    return true
+  }
 
-    AsyncFunction("devKeyEquivalent") { (windowId: String, press: [String: Any], promise: Promise) in
-      KeyEquivalents.press(windowId: windowId, press) { promise.resolve($0) }
-    }.runOnQueue(.main)
+  static func devSidebarEdgeStats(_ reset: Bool) -> [String: Any] {
+    let stats = SidebarEdgeWatcher.shared.stats
+    if reset { SidebarEdgeWatcher.shared.resetStats() }
+    return stats
+  }
 
-    AsyncFunction("devMenuBar") { () -> [[String: Any]] in
-      return KeyEquivalents.menuBar()
-    }.runOnQueue(.main)
+  static func devHoverStats(_ reset: Bool) -> [String: Any] {
+    let select = NSSelectorFromString("ardia_hoverStats:")
+    guard let view = NSClassFromString("RCTView"), (view as AnyObject).responds(to: select) else { return [:] }
+    return ((view as AnyObject).perform(select, with: NSNumber(value: reset))?.takeUnretainedValue() as? [String: Any]) ?? [:]
+  }
 
-    AsyncFunction("devKeyEquivalentTrace") { () -> [String] in
-      return KeyEquivalents.trace
-    }.runOnQueue(.main)
+  static func devSetMouseButtons(_ pressed: Int) -> Bool {
+    let select = NSSelectorFromString("ardia_setButtonsOverride:")
+    guard let view = NSClassFromString("RCTView"), (view as AnyObject).responds(to: select) else { return false }
+    _ = (view as AnyObject).perform(select, with: pressed < 0 ? nil : NSNumber(value: pressed > 0))
+    return true
+  }
 
-    AsyncFunction("devFocusHandoffTrace") { () -> [String] in
-      return FocusHandoff.shared.trace
-    }.runOnQueue(.main)
-
-    AsyncFunction("devClick") { (windowId: String, click: [String: Any], promise: Promise) in
-      KeyEquivalents.click(windowId: windowId, click) { promise.resolve($0) }
-    }.runOnQueue(.main)
-
-    AsyncFunction("devRunAppleScript") { (source: String, promise: Promise) in
-      Self.scriptQueue.async {
-        var error: NSDictionary?
-        let result = NSAppleScript(source: source)?.executeAndReturnError(&error)
-        if let error {
-          promise.resolve(["ok": false, "error": error[NSAppleScript.errorMessage] as? String ?? "\(error)", "number": error[NSAppleScript.errorNumber] as Any])
-        } else {
-          promise.resolve(["ok": true, "result": result.map(Self.plain) as Any])
+  static func devTypeKeys(_ windowId: String, _ text: String, _ interval: Double, _ promise: Promise) {
+    let toKeyWindow = windowId == "key"
+    guard let window = toKeyWindow ? NSApp.keyWindow : WindowManager.shared.window(windowId), !text.isEmpty else { return promise.resolve([]) }
+    let keys = text.map(String.init)
+    let now = { Date().timeIntervalSince1970 * 1000 }
+    let activity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .latencyCritical], reason: "devTypeKeys")
+    let timer = DispatchSource.makeTimerSource(flags: .strict, queue: .main)
+    var times = [[String: Double]](repeating: [:], count: keys.count)
+    var next = 0, drawn = 0
+    var t0 = 0.0
+    let press = { (i: Int) in
+      let handled = now()
+      let target = toKeyWindow ? NSApp.keyWindow ?? window : window
+      for type in [NSEvent.EventType.keyDown, .keyUp] {
+        guard let event = SyntheticInput.key(type, in: target, characters: keys[i]) else { continue }
+        if toKeyWindow { NSApp.sendEvent(event) }
+        else if type == .keyDown { target.firstResponder?.keyDown(with: event) } else { target.firstResponder?.keyUp(with: event) }
+      }
+      let observer = CFRunLoopObserverCreateWithHandler(
+        nil, CFRunLoopActivity.beforeWaiting.rawValue | CFRunLoopActivity.exit.rawValue, false, 2_000_001
+      ) { _, _ in
+        times[i] = ["due": t0 + interval * Double(i), "handled": handled, "drawn": now()]
+        drawn += 1
+        if drawn == keys.count {
+          ProcessInfo.processInfo.endActivity(activity)
+          promise.resolve(times)
         }
+      }
+      CFRunLoopAddObserver(CFRunLoopGetMain(), observer, .commonModes)
+    }
+    timer.setEventHandler {
+      if next == 0 { t0 = now() }
+      repeat {
+        press(next)
+        next += 1
+      } while next < keys.count && t0 + interval * Double(next) <= now()
+      if next == keys.count { timer.cancel() }
+    }
+    timer.schedule(deadline: .now(), repeating: .microseconds(Int(interval * 1000)), leeway: .nanoseconds(0))
+    timer.resume()
+  }
+
+  static func devFieldTrace(_ on: Bool) -> [[String: Any]] { DevFieldTrace.toggle(on) }
+
+  static func devKeyEquivalent(_ windowId: String, _ press: [String: Any], _ promise: Promise) { KeyEquivalents.press(windowId: windowId, press) { promise.resolve($0) } }
+
+  static func devMenuBar() -> [[String: Any]] { return KeyEquivalents.menuBar() }
+
+  static func devKeyEquivalentTrace() -> [String] { return KeyEquivalents.trace }
+
+  static func devFocusHandoffTrace() -> [String] { return FocusHandoff.shared.trace }
+
+  static func devClick(_ windowId: String, _ click: [String: Any], _ promise: Promise) { KeyEquivalents.click(windowId: windowId, click) { promise.resolve($0) } }
+
+  static func devRunAppleScript(_ source: String, _ promise: Promise) {
+    Self.scriptQueue.async {
+      var error: NSDictionary?
+      let result = NSAppleScript(source: source)?.executeAndReturnError(&error)
+      if let error {
+        promise.resolve(["ok": false, "error": error[NSAppleScript.errorMessage] as? String ?? "\(error)", "number": error[NSAppleScript.errorNumber] as Any])
+      } else {
+        promise.resolve(["ok": true, "result": result.map(Self.plain) as Any])
       }
     }
+  }
+
+  public func definition() -> ModuleDefinition {
+    Name(Self.moduleName)
+
+    Self.devCrashFunction
+
+    Self.devBlockMainFunction
+
+    Self.devNotificationCenterFunction
+
+    Self.devNotificationCategoryRaceFunction
+
+    Self.devRenderIntroMusicFunction
+
+    Self.devLittleArdiaHotKeyFunction
+
+    Self.devMenuCommandFunction
+
+    Self.devPostKeyFunction
+
+    Self.devPostKeysFunction
+
+    devMenuItemsFunction
+
+    Self.devDragBlockedRectsFunction
+
+    Self.devDragRegionRectsFunction
+
+    Self.devDragRegionStateFunction
+
+    Self.devDragRegionPointerFunction
+
+    Self.devReceiveURLsWhenDetachedFunction
+
+    Self.devURLDeliveryFunction
+    Self.devOpenURLDeliveriesFunction
+
+    Self.devShortcutRecordingFunction
+
+    Self.devDragPreviewStateFunction
+    Self.devWindowMoveProbeFunction
+
+    Self.devWindowResizeProbeFunction
+
+    Self.devWindowReplayAfterMoveFunction
+
+    Self.devSetWindowFrameFunction
+
+    Self.devSnapshotWindowFunction
+
+    Self.devSnapshotBurstFunction
+
+    Self.devSetPointerFunction
+
+    Self.devPointerSweepFunction
+
+    Self.devSidebarEdgePointerFunction
+
+    Self.devSidebarEdgeStatsFunction
+
+    Self.devHoverStatsFunction
+
+    Self.devSetMouseButtonsFunction
+
+    Self.devTypeKeysFunction
+
+    Self.devFieldTraceFunction
+
+    Self.devKeyEquivalentFunction
+
+    Self.devMenuBarFunction
+
+    Self.devKeyEquivalentTraceFunction
+
+    Self.devFocusHandoffTraceFunction
+
+    Self.devClickFunction
+
+    Self.devRunAppleScriptFunction
   }
 
   private static var urlDelivery: [String: Any] = [:]
@@ -412,7 +474,7 @@ public class DevModule: Module {
   }
   #else
   public func definition() -> ModuleDefinition {
-    Name("ArdiaDev")
+    Name(Self.moduleName)
   }
   #endif
 }
@@ -495,3 +557,34 @@ final class DevSnapshotBurst: NSObject {
 }
 #endif
 
+
+#if DEBUG
+enum DevFieldTrace {
+  private static var observer: CFRunLoopObserver?
+  private static var samples: [[String: Any]] = []
+  private static var last = ""
+
+  static func toggle(_ on: Bool) -> [[String: Any]] {
+    if let observer { CFRunLoopRemoveObserver(CFRunLoopGetMain(), observer, .commonModes) }
+    observer = nil
+    let taken = samples
+    samples = []
+    last = ""
+    guard on else { return taken }
+    let added = CFRunLoopObserverCreateWithHandler(nil, CFRunLoopActivity.beforeWaiting.rawValue, true, 2_000_001) { _, _ in sample() }
+    CFRunLoopAddObserver(CFRunLoopGetMain(), added, .commonModes)
+    observer = added
+    return taken
+  }
+
+  private static func sample() {
+    guard let editor = NSApp.keyWindow?.firstResponder as? NSTextView, editor.isFieldEditor else { return }
+    let selection = editor.selectedRange()
+    let text = editor.string
+    let key = "\(text)|\(selection.location)|\(selection.length)"
+    guard key != last else { return }
+    last = key
+    samples.append(["at": Date().timeIntervalSince1970 * 1000, "text": text, "start": selection.location, "end": NSMaxRange(selection)])
+  }
+}
+#endif

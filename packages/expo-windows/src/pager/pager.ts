@@ -2,7 +2,7 @@ import type { NativePagerConfig, PagerSnapshot, PagerStateEvent } from "@ardia/a
 
 export type { PagerSnapshot, PagerStateEvent };
 
-export type PagerPhase = PagerSnapshot["phase"];
+type PagerPhase = PagerSnapshot["phase"];
 
 export type PagerArea = {
   position(position: number): boolean;
@@ -11,7 +11,7 @@ export type PagerArea = {
 
 export type PagerConfig = Omit<NativePagerConfig, "key" | "ack" | "width"> & Required<Pick<NativePagerConfig, "ack" | "width">>;
 
-export type PagerClock = {
+type PagerClock = {
   now(): number;
   requestFrame(frame: () => void): number;
   cancelFrame(id: number): void;
@@ -19,10 +19,10 @@ export type PagerClock = {
   startMotion?(): () => void;
 };
 
-export const OMEGA = (2 * Math.PI) / 0.25;
+const OMEGA = (2 * Math.PI) / 0.25;
 export const REST_DISPLACEMENT = 0.003;
-export const REST_SPEED = 0.1;
-export const LONGEST_STEP_MS = 100;
+const REST_SPEED = 0.1;
+const LONGEST_STEP_MS = 100;
 
 type Spring = { from: number; target: number; velocity: number; elapsed: number; last: number };
 
@@ -31,7 +31,7 @@ const sameOrder = (a: readonly string[] | undefined, b: readonly string[] | unde
 
 const clampIndex = (index: number, count: number) => Math.min(Math.max(index, 0), count - 1);
 
-export function springAt(from: number, target: number, velocity: number, seconds: number) {
+function springAt(from: number, target: number, velocity: number, seconds: number) {
   const x0 = from - target;
   const b = velocity + OMEGA * x0;
   const decay = Math.exp(-OMEGA * seconds);
@@ -79,7 +79,7 @@ export class PagerRegistry {
   }
 }
 
-export class Pager {
+class Pager {
   readonly key: string;
   private registry: PagerRegistry;
   private areas = new Set<PagerArea>();

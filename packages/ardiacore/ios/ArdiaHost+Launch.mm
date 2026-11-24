@@ -128,11 +128,16 @@ static NSString *AppDataDirectory() {
   return [support URLByAppendingPathComponent:NSBundle.mainBundle.bundleIdentifier ?: @"Ardia"].path;
 }
 
+static bool IsWebLink(NSURL *link) {
+  NSString *scheme = link.scheme.lowercaseString;
+  return link.host.length && ([scheme isEqualToString:@"http"] || [scheme isEqualToString:@"https"]);
+}
+
 static void ParkLaunchLinks(NSArray<NSURL *> *links, NSString *linkProfile) {
   if (!links.count || !linkProfile || LaunchTabSwitchedOff() || HoldsIncomingLinks()) return;
   NSMutableArray<NSString *> *urls = [NSMutableArray array];
   for (NSURL *link in links)
-    if (!link.isFileURL && link.absoluteString.length) [urls addObject:link.absoluteString];
+    if (IsWebLink(link)) [urls addObject:link.absoluteString];
   [ArdiaWebView startLinkTabs:urls profile:linkProfile];
 }
 
@@ -243,7 +248,9 @@ static void TryEarlyWindow() {
   NSString *focused = session.focusedWindowId, *key = session.launchTabId, *url = session.launchTabURL, *profile = session.launchTabProfile;
   if (!focused || !key) return;
   NSDictionary *window = [session windowWithId:focused];
-  if (!window || [window[@"incognito"] boolValue] || window[@"kind"] || ![window[@"frame"] isKindOfClass:NSArray.class]) return;
+  if (!window || ![window[@"incognito"] isKindOfClass:NSNumber.class] && window[@"incognito"] || [window[@"incognito"] isEqual:@YES] || window[@"kind"] ||
+      ![window[@"frame"] isKindOfClass:NSArray.class])
+    return;
   if (![window[@"tabIds"] isKindOfClass:NSArray.class] || ![window[@"tabIds"] containsObject:key]) return;
   for (NSDictionary *split in session.splits)
     if ([[session tabIdsOfSplit:split] containsObject:key]) return;

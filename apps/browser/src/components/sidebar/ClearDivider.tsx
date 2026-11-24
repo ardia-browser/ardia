@@ -1,13 +1,14 @@
 import { memo, useState, type ReactNode } from "react";
-import { Animated, Image, Pressable, View } from "react-native";
+import { Animated, Pressable, View } from "react-native";
 import { useTheme } from "../ui/theme";
-import { ContextMenuArea, Divider, sidebarLineHeight, space, Symbol, Text, useHover } from "../ui";
+import { ContextMenuArea, Divider, drawnSymbol, sidebarLineHeight, space, Text, tintedImage, useHover } from "../ui";
 import { TAB_ROW } from "./tokens";
 import { HoverSlot } from "../ui/HoverSlot";
 import { closeAllTabs } from "../../state/sidebar/clearTabs";
 import { tidy as tidyTabs } from "../../state/sidebar/tidyUi";
 import { openSidebarMenu } from "../../state/sidebar/menus";
 import { PINNED_FOLD_TITLES, togglePinnedFold } from "../../state/sidebar/pinnedFold";
+import { consentToken } from "../../state/telemetry/client";
 
 const BROOM = require("../../../assets/tidy-broom.png");
 
@@ -61,7 +62,7 @@ export const ClearDivider = memo(function ClearDivider({ windowId, profileId, li
                     title="Tidy"
                     label="Tidy Tabs"
                     onPress={() => tidyTabs(windowId, "tabs", profileId)}
-                    icon={(color) => <Image source={BROOM} style={{ width: 11, height: 11, marginRight: space.xs, tintColor: color }} />}
+                    icon={(color) => tintedImage({ source: BROOM, tint: color, style: { width: 11, height: 11, marginRight: space.xs } })}
                   />
                 ) : null}
                 {tidy && clear ? <Divider vertical thick length={9} style={ACTIONS_DIVIDER} /> : null}
@@ -69,8 +70,8 @@ export const ClearDivider = memo(function ClearDivider({ windowId, profileId, li
                   <DividerButton
                     title="Clear"
                     label="Clear unpinned tabs"
-                    onPress={() => closeAllTabs(windowId)}
-                    icon={(color) => <Symbol name="arrow.down" size={9} weight="semibold" color={color} style={{ width: 8, height: 11, marginRight: space.xs }} />}
+                    onPress={() => closeAllTabs(windowId, { consent: consentToken() })}
+                    icon={(color) => drawnSymbol({ name: "arrow.down", size: 9, weight: "semibold", color, style: CLEAR_ARROW })}
                   />
                 ) : null}
               </>
@@ -95,7 +96,7 @@ function FoldButton({ pinned, onPress }: { pinned: PinnedFold; onPress: () => vo
           return (
             <View style={{ height: bandHeight(), flexDirection: "row", alignItems: "center", paddingRight: space.m }}>
               <Animated.View style={{ width: 10, height: 10, marginRight: space.xs, alignItems: "center", justifyContent: "center", transform: [{ rotate }] }}>
-                <Symbol name="chevron.down" size={8} weight="semibold" color={color} style={{ width: 10, height: 10 }} />
+                {drawnSymbol({ name: "chevron.down", size: 8, weight: "semibold", color, style: CHEVRON })}
               </Animated.View>
               <Text size="tiny" weight="medium" color={color}>
                 Pinned
@@ -129,3 +130,6 @@ function DividerButton({ title, label, onPress, icon }: { title: string; label: 
     </View>
   );
 }
+
+const CHEVRON = { width: 10, height: 10 } as const;
+const CLEAR_ARROW = { width: 8, height: 11, marginRight: space.xs } as const;

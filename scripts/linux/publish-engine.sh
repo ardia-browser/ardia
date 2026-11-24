@@ -7,7 +7,7 @@ packages/ardiacore/scripts/fetch-engine.sh --arch linux-x86_64:
 ArdiaCore-<key12>-linux-x64.tar.xz and its .sha256, plus the symbols the
 stripping removes, ArdiaCore-<key12>-linux-x64-symbols.tar.xz and its .sha256
 (scripts/linux/symbolize.py reads it), where key is the engine
-key of <source> (engine/engine-key.sh: engine/ and the offline game it packs),
+key of <source> (engine/engine-key.sh --platform linux),
 from a git checkout whose key paths are clean, or computed the same way over a
 plain copy beside a <source>.commit file.
 

@@ -10,7 +10,7 @@ let watching = false;
 
 const loopName = (value: unknown) => (typeof value === "string" && LOOPS.has(value) ? value : "other");
 
-export function pressLoopLongProperties(r: PressLoopLongReport) {
+function pressLoopLongProperties(r: PressLoopLongReport) {
   return { loop: loopName(r.loop), inner: loopName(r.inner), still_open: r.open === true, buttons_held: r.buttonsHeld === true };
 }
 

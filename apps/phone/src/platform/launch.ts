@@ -1,4 +1,4 @@
-import { pages } from "@ardia/phone-native";
+import { pages, system } from "@ardia/phone-native";
 import type { LaunchValue } from "../lib/launchArguments";
 
 export function launchValues(): Record<string, LaunchValue> {
@@ -15,5 +15,13 @@ export function launchedForSyncDemo(): boolean {
     return pages.launchOptions()?.syncDemo === true;
   } catch {
     return false;
+  }
+}
+
+export function markInterfaceDrawn() {
+  try {
+    system.launchInterfaceDrawn();
+  } catch {
+    return;
   }
 }

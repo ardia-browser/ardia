@@ -34,11 +34,68 @@ export const TabIcon = memo(function TabIcon({
   direct?: boolean;
   marks?: number;
 }) {
-  useTheme();
-  const inSidebar = useContext(TextScopeContext) === "sidebar";
-  const size = compact ? (inSidebar ? sidebarIconSize(COMPACT_ICON) : COMPACT_ICON) : (givenSize ?? (inSidebar ? sidebarIconSize(ICON) : ICON));
   const sleeping = useIsSleeping(tabId ?? "");
   const marks = useIconMarks(tabId, givenMarks);
+  return tabIconView({ tabId, url, favicon, icon, size: useIconSize(compact, givenSize), color, profile, direct, marks, sleeping });
+});
+
+export const RowTabIcon = memo(function RowTabIcon({
+  tabId,
+  url,
+  favicon,
+  icon,
+  size: givenSize,
+  compact = false,
+  color,
+  profileId: profile,
+  direct,
+  marks,
+  sleeping,
+}: {
+  tabId?: string;
+  url: string;
+  favicon?: string | null;
+  icon?: string | null;
+  size?: number;
+  compact?: boolean;
+  color?: string;
+  profileId?: string;
+  direct?: boolean;
+  marks: number;
+  sleeping: boolean;
+}) {
+  return tabIconView({ tabId, url, favicon, icon, size: useIconSize(compact, givenSize), color, profile, direct, marks, sleeping });
+});
+
+function useIconSize(compact: boolean, givenSize: number | undefined) {
+  useTheme();
+  const inSidebar = useContext(TextScopeContext) === "sidebar";
+  return compact ? (inSidebar ? sidebarIconSize(COMPACT_ICON) : COMPACT_ICON) : (givenSize ?? (inSidebar ? sidebarIconSize(ICON) : ICON));
+}
+
+function tabIconView({
+  tabId,
+  url,
+  favicon,
+  icon,
+  size,
+  color,
+  profile,
+  direct,
+  marks,
+  sleeping,
+}: {
+  tabId?: string;
+  url: string;
+  favicon?: string | null;
+  icon?: string | null;
+  size: number;
+  color?: string;
+  profile?: string;
+  direct?: boolean;
+  marks: number;
+  sleeping: boolean;
+}) {
   const engine = tabId && size >= 14 ? markedEngine(marks) : null;
   const opacity = sleeping || marks & FADED ? SLEEPING_OPACITY : 1;
   const props = { url, favicon, icon, size, color, direct };
@@ -49,9 +106,9 @@ export const TabIcon = memo(function TabIcon({
       <EngineMark mark={engine} size={size} />
     </View>
   );
-});
+}
 
-function EngineMark({ mark, size }: { mark: PageEngine; size: number }) {
+export function EngineMark({ mark, size }: { mark: PageEngine; size: number }) {
   const theme = useTheme();
   const box = Math.round(size * 0.6);
   return (
@@ -70,7 +127,7 @@ function EngineMark({ mark, size }: { mark: PageEngine; size: number }) {
         backgroundColor: sidebarTokens(theme).engineMarkPlate,
       }}
     >
-      <Symbol name={ENGINE_SYMBOLS[mark]} size={box - 3} weight="semibold" color={theme.icon} style={{ width: box, height: box }} />
+      <Symbol name={ENGINE_SYMBOLS[mark]} size={box - 3} weight="semibold" color={theme.icon} centresInk style={{ width: box, height: box }} />
     </View>
   );
 }
@@ -80,7 +137,7 @@ function TabProfileIcon({ tabId, ...props }: Omit<Parameters<typeof Icon>[0], "p
   return <Icon {...props} profileId={profileId} />;
 }
 
-const SLEEPING_OPACITY = 0.45;
+export const SLEEPING_OPACITY = 0.45;
 const ICON = 16;
 const COMPACT_ICON = 14;
 
@@ -114,5 +171,5 @@ function Icon({
       </View>
     );
   }
-  return <Favicon url={url} favicon={favicon} size={size} profileId={profileId} direct={direct} opacity={opacity} />;
+  return <Favicon url={url} favicon={favicon} size={size} profileId={profileId} direct={direct} opacity={opacity} fallbackColor={color} />;
 }

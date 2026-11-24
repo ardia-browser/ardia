@@ -50,6 +50,8 @@ internal class PageSummarySession(
         private set
     var chatGPTFellBack = false
         private set
+    var geminiNanoMissing: String? = null
+        private set
     var onSettled: ((PageSummarySession) -> Unit)? = null
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -63,6 +65,7 @@ internal class PageSummarySession(
 
     fun start() {
         if (task != null) return
+        scope.launch { writing.prepare(provider) }
         task = scope.launch { run() }
     }
 
@@ -99,13 +102,21 @@ internal class PageSummarySession(
 
     private suspend fun write(extracted: ReadableContent, using: PageSummaryProvider, reason: String?) {
         phase = Phase.Writing
+        geminiNanoMissing = null
         writesWithChatGPT = using == PageSummaryProvider.ChatGPT
-        val written = try {
+        val result = try {
             writing.write(extracted, using, { if (isCurrent()) text = it }, reason)
         } finally {
             writesWithChatGPT = false
         }
         if (!isCurrent()) return
+        val written = when (result) {
+            is PageSummaryWriting.Unwritten -> {
+                geminiNanoMissing = result.geminiNanoMissing
+                return fail(result.message)
+            }
+            is PageSummaryWriting.Written -> result
+        }
         if (written.text.isBlank()) return fail("Couldn’t summarize this page.")
         text = written.text
         writer = written.writer

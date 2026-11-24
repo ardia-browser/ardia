@@ -6,6 +6,7 @@ import { deckPull, PULL_STAGE } from "../state/browse/deckPull";
 import { useBrowse } from "../state/browse/store";
 import * as pages from "../state/pages/store";
 import { currentTabs } from "../state/tabs/store";
+import * as telemetry from "../state/telemetry/telemetry";
 import { framesUntil, landOpeningPage, renderSurface, unmount, withTabs } from "../../test/render/harness";
 
 beforeEach(() => jest.useFakeTimers());
@@ -126,4 +127,24 @@ test("the deck takes taps and a card's page takes over as soon as its spring is 
   expect(useBrowse.getState().surface).toBe("browsing");
   expect(elapsed).toBeLessThan(450);
   unmount(root);
+});
+
+test("card_opens_waited counts only an open whose page didn't lay out within its cap, not every pulled open whose page is made as its card lands", () => {
+  const counted = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
+  for (const laysOut of [true, false]) {
+    withTabs(3);
+    useBrowse.setState({ surface: "deck", sheet: null, deckEntrance: null, frozenOrder: null, opening: null });
+    const root = renderSurface(<Surfaces />);
+    act(() => sendDeckCommand({ kind: "openFocused" }));
+    let landed = false;
+    for (let elapsed = 0; elapsed < 1000 && useBrowse.getState().surface === "deck"; elapsed += 16) {
+      act(() => jest.advanceTimersByTime(16));
+      if (laysOut && !landed && useBrowse.getState().opening !== null) landed = landOpeningPage(root);
+    }
+    expect(useBrowse.getState().surface).toBe("browsing");
+    expect(counted.mock.calls.filter(([name]) => name === "card_opens_waited")).toHaveLength(laysOut ? 0 : 1);
+    counted.mockClear();
+    unmount(root);
+    act(() => jest.runOnlyPendingTimers());
+  }
 });

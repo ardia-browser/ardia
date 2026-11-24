@@ -4,7 +4,7 @@ import { spaceLookSource } from "../../lib/profileLook";
 import { profileColorsOf } from "../profiles/looks";
 import { isRegularWindow } from "./small";
 
-export type LaunchBackdrop = ThemeBackdropProps & {
+type LaunchBackdrop = ThemeBackdropProps & {
   dark: boolean;
   vibrancy: boolean;
   colors: [string, string];

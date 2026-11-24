@@ -5,9 +5,9 @@ import { ink } from "../ui/tokens";
 
 type Lab = [number, number, number];
 
-export type PaneTones = { rest: string; hover: string; pressed: string; selected: string };
+type PaneTones = { rest: string; hover: string; pressed: string; selected: string };
 
-export type ProfileSurfaces = {
+type ProfileSurfaces = {
   sidebar: string;
   selectedRow: string;
   ghost: string;
@@ -17,16 +17,16 @@ export type ProfileSurfaces = {
   emptySlot: string;
 };
 
-export const PANE_STEPS = {
+const PANE_STEPS = {
   dark: { rest: 0.06, hover: 0.09, pressed: 0.12, selected: 0.14 },
   light: { rest: -0.04, hover: -0.06, pressed: -0.08, selected: 0.05 },
 } as const;
 
-export const GHOST_STEP = { deeper: 0.07, lighter: 0.015 } as const;
-export const ACCENT_SHARE = 0.32;
-export const ACCENT_MIN_CHROMA = 0.02;
-export const PANE_CHROMA_MAX = 0.07;
-export const PANE_CHROMA_PER_LIGHTNESS = 0.3;
+const GHOST_STEP = { deeper: 0.07, lighter: 0.015 } as const;
+const ACCENT_SHARE = 0.32;
+const ACCENT_MIN_CHROMA = 0.02;
+const PANE_CHROMA_MAX = 0.07;
+const PANE_CHROMA_PER_LIGHTNESS = 0.3;
 export const MIN_PANE_TEXT_CONTRAST = 4.5;
 
 const labOf = (color: string): Lab => {
@@ -60,7 +60,7 @@ export function toneStep(surface: string, accent: string, lightness: number): st
 
 const lightInk = (text: string) => contrastRatio(text, ink.black) > contrastRatio(text, ink.white);
 
-export const MIN_SHOWN_PANE_DISTANCE = 0.04;
+const MIN_SHOWN_PANE_DISTANCE = 0.04;
 
 function shownPane(surface: string, accent: string, step: number, ink: string, rest: string): string {
   const candidates = [step, -step, -2.2 * step].map((s) => toneStep(surface, accent, s));
@@ -68,7 +68,7 @@ function shownPane(surface: string, accent: string, step: number, ink: string, r
   return candidates.find(fits) ?? candidates.reduce((best, fill) => (contrastRatio(ink, fill) > contrastRatio(ink, best) ? fill : best));
 }
 
-export const PANE_REACH = [1, 1.5, 2, 3, 4] as const;
+const PANE_REACH = [1, 1.5, 2, 3, 4] as const;
 
 function panesOn(surface: string, accent: string, dark: boolean, ink: string, selectedInk: string): PaneTones {
   const steps = dark ? PANE_STEPS.dark : PANE_STEPS.light;

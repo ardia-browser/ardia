@@ -1,7 +1,8 @@
-import { StyleSheet } from "react-native";
+import { AccessibilityInfo, Platform, StyleSheet } from "react-native";
 import { act } from "react-test-renderer";
 import { SyncScan } from "../components/sync/SyncScan";
-import { Portal } from "../components/ui";
+import { ActionButton, overlayInk, Portal, voiceLayout } from "../components/ui";
+import { OverlayCancelButton } from "../components/ui/LookViews";
 import * as scan from "../state/sync/scan";
 import { renderSurface, textOf, unmount, withTabs } from "../../test/render/harness";
 
@@ -16,9 +17,9 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-const open = async (access: "granted" | "unavailable" | "denied") => {
+const open = async (access: "granted" | "unavailable" | "denied", onCancel: () => void = () => undefined) => {
   jest.spyOn(scan, "prepareCamera").mockImplementation(async () => access);
-  const root = renderSurface(<SyncScan onScan={() => undefined} onEnterWords={() => undefined} onCancel={() => undefined} />);
+  const root = renderSurface(<SyncScan onScan={() => undefined} onEnterWords={() => undefined} onCancel={onCancel} />);
   await act(async () => {});
   return root;
 };
@@ -58,5 +59,68 @@ test("Not an Ardia sync code fades in with the native apps' fade instead of popp
   expect(note.props.entering).toBeDefined();
   expect(note.props.exiting).toBeDefined();
   expect(textOf({ root: note } as never)).toBe("Not an Ardia sync code.");
+  unmount(root);
+});
+
+const scanHost = (root: Awaited<ReturnType<typeof open>>, id: string) => root.root.findAll((node) => node.props.testID === id && typeof node.type === "string")[0]!;
+const flat = (node: { props: { style?: unknown } }) => StyleSheet.flatten(node.props.style as never) ?? {};
+
+test("the scanner's Cancel is the voice screen's: the shared top-right overlay button, named Cancel", async () => {
+  const root = await open("granted");
+  expect(root.root.findAll((node) => node.type === OverlayCancelButton)[0]!.props.label).toBe("Cancel");
+  const cancel = scanHost(root, "scanCancel");
+  expect(flat(cancel)).toMatchObject({ width: voiceLayout.cancel, height: voiceLayout.cancel });
+  expect(flat(cancel).right).toBeDefined();
+  expect(flat(cancel).left).toBeUndefined();
+  const enter = root.root.findAll((node) => node.type === ActionButton && node.props.title === "Enter Recovery Phrase");
+  expect(enter).toHaveLength(1);
+  expect(enter[0]!.props).toMatchObject({ variant: "glass", tone: "overlay", stretch: true });
+  expect(flat(scanHost(root, "scanEnterWords")).backgroundColor).toBe(overlayInk.glass);
+  unmount(root);
+});
+
+test("without permission the heading is a header and Open Settings is the overlay recovery action, black on white whatever the app's scheme", async () => {
+  const root = await open("denied");
+  const headers = root.root.findAll((node) => typeof node.type === "string" && node.props.accessibilityRole === "header");
+  expect(headers.map((node) => node.props.children)).toContain("Allow Camera Access");
+  expect(root.root.findAll((node) => node.type === ActionButton && node.props.title === "Open Settings")[0]!.props.tone).toBe("overlay");
+  const settings = scanHost(root, "scanOpenSettings");
+  expect(flat(settings).backgroundColor).toBe(overlayInk.fill);
+  const label = settings.findAll((node) => typeof node.type === "string" && node.props.children === "Open Settings")[0]!;
+  expect(flat(label).color).toBe(overlayInk.onFill);
+  unmount(root);
+});
+
+test("the scanner is a modal overlay that stops taking touches and leaves the screen reader as soon as Cancel is pressed, before the camera stops", async () => {
+  const cancelled = jest.fn();
+  const root = await open("granted", cancelled);
+  const screen = scanHost(root, "syncScanner");
+  expect(screen.props.accessibilityViewIsModal).toBe(true);
+  act(() => screen.props.onAccessibilityEscape());
+  const leaving = scanHost(root, "syncScanner");
+  expect(leaving.props.pointerEvents).toBe("none");
+  expect(leaving.props.accessibilityElementsHidden).toBe(true);
+  expect(cancelled).not.toHaveBeenCalled();
+  act(() => jest.runOnlyPendingTimers());
+  expect(cancelled).toHaveBeenCalledTimes(1);
+  unmount(root);
+});
+
+const onIPhone = Platform.OS === "ios" ? test : test.skip;
+
+onIPhone("Cancel gives screen reader focus back to the action that opened the scanner, after the scanner has gone", async () => {
+  jest.spyOn(AccessibilityInfo, "isScreenReaderEnabled").mockResolvedValue(true);
+  const focused = jest.spyOn(AccessibilityInfo, "setAccessibilityFocus").mockImplementation(() => undefined);
+  jest.spyOn(scan, "prepareCamera").mockImplementation(async () => "granted");
+  const opener = 4242;
+  const root = renderSurface(<SyncScan inline returnFocusTo={() => opener as never} onScan={() => undefined} onEnterWords={() => undefined} onCancel={() => undefined} />);
+  await act(async () => undefined);
+  focused.mockClear();
+  act(() => scanHost(root, "syncScanner").props.onAccessibilityEscape());
+  await act(async () => undefined);
+  act(() => jest.advanceTimersByTime(100));
+  await act(async () => undefined);
+  act(() => jest.advanceTimersByTime(100));
+  expect(focused).toHaveBeenCalledWith(opener);
   unmount(root);
 });

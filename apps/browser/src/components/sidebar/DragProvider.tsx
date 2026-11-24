@@ -6,13 +6,16 @@ import { useStore } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { perLook, radius } from "../ui";
 import { useClipped, type ClipSource } from "./EntryMotion";
-import { noDragMarks } from "../../state/sidebar/dragMarks";
+import { LANDING, markNow, noDragMarks, SOURCE, SPLIT_LEFT, SPLIT_RIGHT, watchMarks, type SplitHalfMark } from "../../state/sidebar/dragMarks";
+import { useKeyed } from "../../state/browser/keyedWatch";
 import { cellKey, dragItemStyle, restingTail, type Ghost, type ItemSpec } from "./dragModel";
 import { DragController } from "./dragController";
 import { DragItems } from "./dragItems";
 import { onAppEvent } from "../../state/drag/dragNative";
 import { WindowDropGlow } from "../tabstrip/WindowDropGlow";
-import { TAB_CLICK_SLOP } from "../../state/sidebar/heldTabPress";
+import { dragGesture } from "./dragGesture";
+import { FoldedAway } from "./hoverController";
+import { useWindowId } from "../../state/browser/hooks";
 
 const dropGlowPlace = perLook(() => ({ left: 5, right: 5, top: 44, bottom: 6, borderRadius: radius.chrome }));
 
@@ -20,8 +23,10 @@ const DragContext = createContext<DragController | null>(null);
 const DragItemsContext = createContext<DragItems | null>(null);
 export const FoldEntryContext = createContext(false);
 
+
 export function DragProvider({ children }: { children: (ghost: Ghost | null, controller: DragController) => ReactNode }) {
   const controller = useMemo(() => new DragController(), []);
+  controller.windowId = useWindowId();
   const items = useMemo(() => new DragItems(controller, true), [controller]);
   const [ghost, setGhost] = useState<Ghost | null>(null);
   controller.setGhost = setGhost;
@@ -41,11 +46,11 @@ export function DragProvider({ children }: { children: (ghost: Ghost | null, con
   );
 }
 
-export function DragPage({ live, children }: { live: boolean; children: ReactNode }) {
+export function useDragPage(live: boolean) {
   const controller = useContext(DragContext);
   const items = useMemo(() => controller && new DragItems(controller, false), [controller]);
   useLayoutEffect(() => items?.setLive(live), [items, live]);
-  return <DragItemsContext.Provider value={items}>{children}</DragItemsContext.Provider>;
+  return (children: ReactNode) => <DragItemsContext.Provider value={items}>{children}</DragItemsContext.Provider>;
 }
 
 export function DragScope({ enabled, children }: { enabled: boolean; children: ReactNode }) {
@@ -55,7 +60,6 @@ export function DragScope({ enabled, children }: { enabled: boolean; children: R
 
 export const useDragController = () => useContext(DragContext) ?? undefined;
 export const useDropInto = (groupId: string) => useStore(useContext(DragContext)?.marks ?? noDragMarks, (m) => m.dropInto === groupId);
-export const useDropSplit = (key: string) => useStore(useContext(DragContext)?.marks ?? noDragMarks, (m) => (m.split?.key === key ? m.split.side : null));
 export const useDropTile = () => useStore(useContext(DragContext)?.marks ?? noDragMarks, (m) => m.tile);
 export const useDropRow = () => useStore(useContext(DragContext)?.marks ?? noDragMarks, (m) => m.row);
 export const useDropPane = () => useStore(useContext(DragContext)?.marks ?? noDragMarks, (m) => m.pane);
@@ -106,34 +110,23 @@ export function useDragItem(key: string, spec: ItemSpec, clip: ClipSource | null
   const marks = controller?.marks ?? noDragMarks;
   const item = useMemo(() => controller?.create(key), [controller, key]);
   if (item) Object.assign(item, spec);
+  const folded = useContext(FoldedAway);
   useEffect(() => {
     if (!items || !item) return;
-    return items.add(key, item);
-  }, [items, item, key]);
+    return items.addWhileShown(key, item, folded);
+  }, [items, item, key, folded]);
 
-  const responder = useMemo(() => {
-    let far = 0;
-    let pressAt = [0, 0];
-    const reach = (x: number, y: number) => (far = Math.max(far, Math.hypot(x - pressAt[0]!, y - pressAt[1]!)));
-    return PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) => {
-        pressAt = [g.moveX - g.dx, g.moveY - g.dy];
-        return spec.kind !== "tail" && Math.hypot(g.dx, g.dy) > 4;
-      },
-      onPanResponderGrant: (_, g) => {
-        far = 0;
-        reach(g.moveX, g.moveY);
-        void controller?.begin(key, g.x0, g.y0);
-      },
-      onPanResponderMove: (_, g) => {
-        reach(g.moveX, g.moveY);
-        controller?.move(g.moveX, g.moveY);
-      },
-      onPanResponderRelease: (e, g) => controller?.end(true, Math.max(reach(g.moveX, g.moveY), reach(e.nativeEvent.pageX, e.nativeEvent.pageY)) <= TAB_CLICK_SLOP ? e : null),
-      onPanResponderTerminate: () => controller?.interrupt(),
-      onPanResponderTerminationRequest: () => false,
-    });
-  }, [controller, key]);
+  const responder = useMemo(
+    () =>
+      PanResponder.create(
+        dragGesture(spec.kind !== "tail", {
+          begin: (x, y) => void controller?.begin(key, x, y),
+          move: (x, y) => controller?.move(x, y),
+          end: (commit) => (commit ? controller?.end(true) : controller?.interrupt()),
+        }),
+      ),
+    [controller, key],
+  );
   const ref = useCallback(
     (view: View | null) => {
       if (item) item.view = view;
@@ -147,8 +140,10 @@ export function useDragItem(key: string, spec: ItemSpec, clip: ClipSource | null
     [item],
   );
 
-  const source = useStore(marks, (m) => m.sources.has(key));
-  const landing = useStore(marks, (m) => m.landing === key);
+  const mark = useKeyed(watchMarks(marks), key, () => markNow(marks, key));
+  const source = !!(mark & SOURCE);
+  const landing = !!(mark & LANDING);
+  const scoped = !!useContext(DragContext);
   const clipped = useClipped(clip);
   useScopedTheme();
   const inFold = useContext(FoldEntryContext);
@@ -159,5 +154,6 @@ export function useDragItem(key: string, spec: ItemSpec, clip: ClipSource | null
     : spec.kind === "tail"
       ? restingTail()
       : {};
-  return { wrapper: { ref, style }, handle: responder.panHandlers, headerRef, dragging: source, gap: item?.gap };
+  const splitSide: SplitHalfMark["side"] | null = !scoped ? null : mark & SPLIT_LEFT ? "left" : mark & SPLIT_RIGHT ? "right" : null;
+  return { wrapper: { ref, style }, handle: responder.panHandlers, headerRef, dragging: source, gap: item?.gap, splitSide };
 }

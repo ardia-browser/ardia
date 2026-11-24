@@ -5,11 +5,11 @@ import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { webviews } from "../../platform/webviews";
 import { useBrowser } from "../browser/store";
+import { ALL, useKeyed, watchSettings, watchTabRecord } from "../browser/keyedWatch";
 import type { BrowserState } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import { peekTabId } from "../peek/peek";
 import { splitOf, splitTabIdsOf } from "../splits/splits";
-import { hostOf } from "@ardia/core";
 import { capture } from "../telemetry/client";
 import { nativeConsent } from "../telemetry/nativeConsent";
 import { noteMediaPositionReport, noteNowPlayingLoopRestart } from "../telemetry/mediaCardCounts";
@@ -29,6 +29,7 @@ type Store = {
   pipOpen: Record<string, PictureInPictureState["kind"]>;
   displayRequests: Record<string, DisplayMediaRequest>;
   tabShares: Record<string, TabShare>;
+  sharedTabs: Record<string, true>;
 };
 
 export type TabShare = {
@@ -37,7 +38,7 @@ export type TabShare = {
   dismissed: Record<string, true>;
 };
 
-const noMedia = (): Store => ({ sessions: {}, dismissed: {}, leftPaused: {}, pip: {}, pipOpen: {}, displayRequests: {}, tabShares: {} });
+const noMedia = (): Store => ({ sessions: {}, dismissed: {}, leftPaused: {}, pip: {}, pipOpen: {}, displayRequests: {}, tabShares: {}, sharedTabs: {} });
 const PER_TAB = Object.keys(noMedia()) as (keyof Store)[];
 
 export const useMedia = create<Store>()(noMedia);
@@ -183,9 +184,9 @@ export function resumeCommands(before: Session | undefined, after: NowPlaying | 
 
 export const hasTrackControls = (session: Session) => session.actions.includes("nexttrack") || session.actions.includes("previoustrack");
 
-export const SKIP_SECONDS = 15;
+const SKIP_SECONDS = 15;
 
-export function skipBy(tabId: string, session: Session, seconds: number) {
+function skipBy(tabId: string, session: Session, seconds: number) {
   const now = Date.now();
   const position = Math.max(0, Math.min(session.duration ?? Infinity, positionOf(session, now) + seconds));
   applyNowPlaying(tabId, { ...session, position, timestamp: now });
@@ -207,7 +208,7 @@ export const transportIcons = (session: Session) =>
     ? { back: "backward.end.fill", ahead: "forward.end.fill", backTip: "Play Previous Track", aheadTip: "Play Next Track" }
     : { back: `gobackward.${SKIP_SECONDS}`, ahead: `goforward.${SKIP_SECONDS}`, backTip: `Skip back ${SKIP_SECONDS} seconds`, aheadTip: `Skip ahead ${SKIP_SECONDS} seconds` };
 
-export function isTabShown(s: BrowserState, tabId: string, profileId?: string): boolean {
+function isTabShown(s: BrowserState, tabId: string, profileId?: string): boolean {
   const windowId = s.tabs[tabId]?.windowId;
   if (!windowId) return false;
   const active = activeTabId(s, windowId, profileId);
@@ -223,7 +224,7 @@ export function hasPlayer(m: Pick<Store, "sessions" | "dismissed">, tabId: strin
 function isHiddenPlayerTab(s: BrowserState, tabId: string): boolean {
   const tab = s.tabs[tabId];
   const w = tab && s.windows[tab.windowId];
-  return !!w && !isTabShown(s, tabId, s.settings.playingNowAcrossProfiles ? w.profileId : tab.profileId);
+  return !!w && s.settings.sidebarMediaControls && !isTabShown(s, tabId, s.settings.playingNowAcrossProfiles ? w.profileId : tab.profileId);
 }
 
 let hiddenBefore = new Set<string>();
@@ -319,7 +320,7 @@ export function usePictureInPicture(tabId: string): [boolean, (press: GestureRes
   return [on, (press) => void togglePictureInPicture(tabId, controlPress(press))];
 }
 
-useBrowser.subscribe((s, prev) => {
+useBrowser.subscribeTo(["tabs"], (s, prev) => {
   if (s.tabs === prev.tabs) return;
   const m = useMedia.getState();
   const gone = [...new Set(PER_TAB.flatMap((k) => Object.keys(m[k])))].filter((id) => !s.tabs[id]);
@@ -350,4 +351,11 @@ export const useHiddenPlayerTabs = (windowId: string, profileId: string, session
 
 export const sidebarPlayerCandidates = (m: Pick<Store, "leftPaused">, hidden: string[]) => hidden.filter((id) => !m.leftPaused[id]);
 
-export const usePinnedWithMediaControls = (tabId: string | undefined) => useBrowser((s) => !!tabId && !!s.tabs[tabId]?.pin);
+export const pinnedWithMediaControls = (s: BrowserState, tabId: string | undefined) => !!tabId && !!s.tabs[tabId]?.pin && s.settings.sidebarMediaControls;
+
+export function usePinnedWithMediaControls(tabId: string | undefined): boolean {
+  const read = () => pinnedWithMediaControls(useBrowser.getState(), tabId);
+  const byTab = useKeyed(watchTabRecord, tabId, read);
+  const bySetting = useKeyed(watchSettings, tabId == null ? null : ALL, read);
+  return byTab && bySetting;
+}

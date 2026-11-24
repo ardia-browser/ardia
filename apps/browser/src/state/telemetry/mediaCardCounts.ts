@@ -1,4 +1,5 @@
 import type { NowPlaying } from "../../platform/media";
+import { takeSharePreviewCounts } from "./sharePreviewCounts";
 
 const REWIND_SECONDS = 1;
 const PAST_END_SECONDS = 2;
@@ -42,7 +43,7 @@ export function noteMediaPositionReport(before: PositionReport | undefined, repo
 }
 
 export function takeMediaCardCounts() {
-  const taken = { sidebar_player_expands: sidebarPlayerExpands, sidebar_player_reopens: sidebarPlayerReopens, sidebar_player_from_other_profile: sidebarPlayerFromOtherProfile, now_playing_loop_restarts: loopRestarts, media_position_rewinds: rewinds, media_reports_past_end: pastEnd };
+  const taken = { sidebar_player_expands: sidebarPlayerExpands, sidebar_player_reopens: sidebarPlayerReopens, sidebar_player_from_other_profile: sidebarPlayerFromOtherProfile, now_playing_loop_restarts: loopRestarts, media_position_rewinds: rewinds, media_reports_past_end: pastEnd, ...takeSharePreviewCounts() };
   sidebarPlayerExpands = 0;
   sidebarPlayerReopens = 0;
   sidebarPlayerFromOtherProfile = 0;

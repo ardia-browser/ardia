@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Animated, Pressable, View } from "react-native";
+import { Animated, Pressable, View, type PanResponderInstance } from "react-native";
 import { useShallow } from "zustand/react/shallow";
 import { switchProfile } from "../../state/browser/actions";
 import { noteSwitcherPress } from "../../state/telemetry/switcherPresses";
@@ -13,10 +13,13 @@ import { SIDEBAR_FOOTER_DOWNLOADS } from "../sidebar/geometry";
 import { switcherCellWidth, switcherIcons, SwitcherMark } from "./ProfileIcons";
 import { openProfileItemMenu } from "./profileMenu";
 import { profileSwitcherShown } from "../../state/profiles/switcherShown";
+import { switcherIconOf } from "../../state/profiles/switcherMark";
 import { profileSwitcher } from "./tokens";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
 import { useProfileHold, useProfileTarget } from "../sidebar/DragProvider";
 import { useSidebarTokens } from "../sidebar/tokens";
+import { useDotReorder } from "./useDotReorder";
+import { dotsRowLeftInset } from "./dotsRow";
 
 export const PROFILE_DOTS_HEIGHT = profileSwitcher.height;
 const { band: BAND, dotTooltipLift, holdPlate } = profileSwitcher;
@@ -32,27 +35,52 @@ export function useProfileDotsShown() {
 
 export function ProfileDots({ windowId, width, besideDownloads }: { windowId: string; width: number; besideDownloads: boolean }) {
   const ids = useProfileOrder(useShallow((o) => o));
-  const saved = useProfileRecords(useShallow((profiles) => ids.map((id) => profiles[id]?.icon ?? null)));
-  const shown = useSettings((s) => s.profileSwitcherIcons);
-  const icons = switcherIcons(saved, shown, width - 2 * (besideDownloads ? SIDE_ROOM_BESIDE_DOWNLOADS : SIDE_ROOM));
+  const saved = useProfileRecords(useShallow((profiles) => ids.map((id) => switcherIconOf(profiles[id]))));
+  const icons = switcherIcons(saved, width - 2 * (besideDownloads ? SIDE_ROOM_BESIDE_DOWNLOADS : SIDE_ROOM));
   const { pages, pager } = usePagerPages(windowId);
+  const cells = ids.map((_, i) => switcherCellWidth(icons[i] ?? null));
+  const reorder = useDotReorder(ids, cells);
+  const rowWidth = cells.reduce((sum, cell) => sum + cell, 0);
   return (
-    <View style={{ height: PROFILE_DOTS_HEIGHT, alignItems: "center" }}>
+    <View style={{ height: PROFILE_DOTS_HEIGHT, alignItems: "center", paddingLeft: besideDownloads ? dotsRowLeftInset(width, rowWidth, SIDE_ROOM_BESIDE_DOWNLOADS) : 0 }}>
       <View style={{ marginTop: (PROFILE_DOTS_HEIGHT - 3 - BAND) / 2, height: BAND, flexDirection: "row" }}>
         {ids.map((id, i) => (
-          <Dot key={id} id={id} windowId={windowId} icon={icons[i] ?? null} page={pages.find((p) => p.id === id)} pos={pager.pos} />
+          <Dot
+            key={id}
+            id={id}
+            windowId={windowId}
+            icon={icons[i] ?? null}
+            page={pages.find((p) => p.id === id)}
+            pos={pager.pos}
+            offset={reorder.offsetOf(id)}
+            pan={reorder.panFor(id)}
+            lifted={reorder.dragging === id}
+            reordering={reorder.dragging !== null}
+          />
         ))}
       </View>
     </View>
   );
 }
 
-function Dot({ id, windowId, icon, page, pos }: { id: string; windowId: string; icon: string | null; page: PagerPage | undefined; pos: Animated.Value }) {
+type DotProps = {
+  id: string;
+  windowId: string;
+  icon: string | null;
+  page: PagerPage | undefined;
+  pos: Animated.Value;
+  offset: Animated.Value;
+  pan: PanResponderInstance;
+  lifted: boolean;
+  reordering: boolean;
+};
+
+function Dot({ id, windowId, icon, page, pos, offset, pan, lifted, reordering }: DotProps) {
   const theme = useTheme();
   useNativePagerPosition(windowId);
   const name = useProfile(id, (p) => p?.name ?? "");
   const { hovered, hoverProps } = useHover();
-  const holding = useProfileHold(id);
+  const holding = useProfileHold(id) || lifted;
   const target = useProfileTarget(id);
   const tokens = useSidebarTokens();
   const pressMotion = usePressScaleMotion(true, buttonMotion.iconPressScale);
@@ -66,8 +94,8 @@ function Dot({ id, windowId, icon, page, pos }: { id: string; windowId: string; 
   const cell = switcherCellWidth(icon);
   const mark = useRef<View>(null);
   return (
-    <View {...hoverProps} ref={mark}>
-      <TooltipAbove text={name} active={hovered && !pressed} centerX={cell / 2} bottom={BAND / 2 + dotTooltipLift} />
+    <Animated.View {...hoverProps} {...pan.panHandlers} ref={mark} style={{ zIndex: lifted ? 1 : 0, transform: [{ translateX: offset }] }}>
+      <TooltipAbove text={name} active={hovered && !pressed && !reordering} centerX={cell / 2} bottom={BAND / 2 + dotTooltipLift} />
       <ContextMenuArea onContextMenu={() => void openProfileItemMenu(id, "sidebar", windowId, mark.current)}>
         <Pressable
           accessibilityRole="button"
@@ -93,6 +121,6 @@ function Dot({ id, windowId, icon, page, pos }: { id: string; windowId: string; 
           </View>
         </Pressable>
       </ContextMenuArea>
-    </View>
+    </Animated.View>
   );
 }

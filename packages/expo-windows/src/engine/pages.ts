@@ -13,10 +13,10 @@ import { isPopupWindowId, onPopupWindowClosed, openPopupWindow, popupOpenerKey, 
 import { dropKeptFollow, keepFollow, spendKeptFollow } from "./keptFollow";
 import { handPopupAsTab } from "./popupsAsTabs";
 
-export type PageListener = (name: string, data: unknown) => void;
+type PageListener = (name: string, data: unknown) => void;
 export type PageRect = Omit<CoverRect, "radius">;
 export type PageShape = PageRect & { radius: number; holes: number[][] };
-export type PageStart = { url?: string; profile?: string; adopt?: string; windowId: string };
+type PageStart = { url?: string; profile?: string; adopt?: string; windowId: string };
 
 type ShowArgs = { key: string; visible: boolean } & Partial<PageShape>;
 
@@ -220,10 +220,12 @@ function sendShow(page: Page): Promise<unknown> | undefined {
   if (!args || args === page.showSent || page.closed) return void noteShowStep(page.key, `sendShow: ${!args ? "nothing" : page.closed ? "closed" : "already sent"}`);
   page.showSent = args;
   noteShowStep(page.key, `sendShow: ${args.visible ? "shown" : "hidden"}`);
-  return hostCall("tab.show", args, page.windowId).catch((error: unknown) => {
-    throw (console.warn(`[ardia windows] the page ${page.key} could not show: ${String((error as Error)?.message ?? error)}`), error);
-  });
+  return hostCall("tab.show", args, page.windowId).catch(warnedThat(page, "could not show"));
 }
+
+const warnedThat = (page: Page, what: string) => (error: unknown) => {
+  throw (console.warn(`[ardia windows] the page ${page.key} ${what}: ${String((error as Error)?.message ?? error)}`), error);
+};
 
 function followNow(page: Page) {
   lastAskedToFocus = page;
@@ -245,7 +247,7 @@ function askShow(page: Page, args: ShowArgs) {
       const focusArgs = page.focusArgs;
       if (fieldFocusedIn(page.windowId, page.key)) return sent;
       return Promise.resolve(sent).then(() =>
-        page.closed || lastAskedToFocus !== page || fieldFocusedIn(page.windowId, page.key) ? undefined : hostCall("tab.call", { ...focusArgs, key: page.key, method: "focus", deferred: true }),
+        page.closed || lastAskedToFocus !== page || fieldFocusedIn(page.windowId, page.key) ? undefined : hostCall("tab.call", { ...focusArgs, key: page.key, method: "focus", deferred: true }).catch(warnedThat(page, "could not take focus")),
       );
     }),
   );

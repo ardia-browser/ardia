@@ -7,6 +7,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 FILES = [SOURCE / 'ardia/linux' / f'ac_linux_{name}.cc' for name in ['page_messages', 'link_gesture', 'link_tabs', 'page_evaluation']]
 FIXTURE = ROOT / 'tests/fixtures/page_state.h'
 
@@ -26,7 +27,7 @@ class PageMessageTests(unittest.TestCase):
         cls.binary = directory / 'page-messages'
         subprocess.run([os.environ.get('CXX', 'c++'), '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g',
                         '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-no-pie', '-I', str(directory),
-                        '-I', str(SOURCE), *map(str, FILES), str(ROOT / 'tests/page_messages_test.cc'), '-o', str(cls.binary)],
+                        '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE), *map(str, FILES), str(ROOT / 'tests/page_messages_test.cc'), '-o', str(cls.binary)],
                        check=True, text=True, timeout=90)
 
     @classmethod

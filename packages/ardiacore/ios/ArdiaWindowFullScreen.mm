@@ -334,7 +334,7 @@ NSMapTable<ArdiaCoreTab *, NSNumber *> *FullScreenChanges() {
 - (void)updateSeen {
   if (![self occlusionActed] && [CFBridgingRelease(CGSessionCopyCurrentDictionary())[@"CGSSessionScreenIsLocked"] boolValue]) return;
   if (_settling && !_transitioning && [self windowVisible]) _settling = NO;
-  const BOOL seen = _settling || [self windowVisible] || (NSApp.isActive && IsWindowFullScreen(_coreWindow.window));
+  const BOOL seen = _settling || [self windowVisible] || (NSApp.isActive && !ArdiaChromeWindowHost.activeOnlyForPictureInPicture && IsWindowFullScreen(_coreWindow.window));
   if ([ArdiaLaunchConfig.shared traced:@"visibility"])
     NSLog(@"[ardiacore-vis] window %ld seen=%d (transitioning=%d settling=%d)", (long)_coreWindow.window.windowNumber, seen, _transitioning, _settling);
   const BOOL overruleChanged = _overruleChanged;

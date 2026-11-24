@@ -162,6 +162,45 @@ test("closing a pinned tab selects the regular tab the window showed last, not t
   assert.ok(S().tabs[q].page.nav, "the other pinned tab keeps its page");
 });
 
+test("closing a pinned row shows the pinned row used before it while its page is loaded, even over a regular tab used since", () => {
+  reset();
+  const [w, a, b, n] = setup("a", "b", "n");
+  S().pinTabs([a, b], true, true);
+  S().activate(b);
+  S().activate(n);
+  S().activate(a);
+  S().closeTab(a);
+  assert.equal(model.activeTabId(S(), w), b);
+  assert.ok(!S().tabs[a].page.nav, "the closed row is unloaded");
+});
+
+test("closing a pinned row with no other loaded row goes to the regular tab", () => {
+  reset();
+  const [w, a, b, n] = setup("a", "b", "n");
+  S().pinTabs([a, b], true, true);
+  S().activate(b);
+  S().activate(n);
+  S().activate(a);
+  S().closeTab(b);
+  assert.ok(!S().tabs[b].page.nav, "the other row is unloaded first");
+  S().closeTab(a);
+  assert.equal(model.activeTabId(S(), w), n);
+  assert.ok(!S().tabs[b].page.nav, "the unloaded row stays unloaded");
+});
+
+test("closing a pane of a pinned split unloads both panes and shows the other loaded row, not a regular tab", () => {
+  reset();
+  const [w, a, b, n, r] = setup("a", "b", "n", "r");
+  S().pinTabs([a, b], true, true);
+  S().createSplit([a, n]);
+  S().activate(b);
+  S().activate(r);
+  S().activate(a);
+  S().closeTab(a);
+  assert.equal(model.activeTabId(S(), w), b);
+  assert.ok(!S().tabs[a].page.nav && !S().tabs[n].page.nav, "both panes are unloaded");
+});
+
 test("groups stay contiguous; splits need two panes", () => {
   reset();
   const w = S().createWindow({ url: "a.com" });
@@ -368,6 +407,46 @@ test("⇧⌘T reopens only what the window's shown profile closed", () => {
   S().switchProfile(w, "default");
   S().reopenClosedTab(w);
   assert.ok(Object.values(S().tabs).some((t) => short(t.url) === "b" && t.profileId === "default"));
+});
+
+test("switching tabs in one profile keeps another profile's opener links in the same window", () => {
+  reset();
+  const [w, a] = setup("a", "b");
+  const c = open(w, "c", a);
+  const p = S().createProfile({ name: "Work" });
+  S().switchProfile(w, p);
+  const w1 = model.activeTabId(S(), w);
+  const w2 = S().newTab(w, { url: "w2.com", background: true });
+  const w3 = open(w, "w3", w1);
+  S().activate(w3);
+  S().activate(w2);
+  assert.equal(S().tabs[w3].openerId, null, "Work's own opener links clear on a switch, as before");
+  assert.equal(S().tabs[c].openerId, a, "a switch in Work keeps the default profile's opener link");
+  open(w, "w4", w2, false);
+  S().navigate(w2, "typed.com");
+  assert.equal(S().tabs[c].openerId, a, "a link opened in front and a typed address in Work keep it too");
+  S().switchProfile(w, "default");
+  open(w, "c2", a);
+  const personal = hosts(w).filter((_, i) => S().tabs[S().windows[w].tabIds[i]].profileId === "default");
+  assert.deepEqual(personal, ["a", "c", "c2", "b"], "the next link from the same tab still lines up after the first");
+});
+
+test("tabs closed together come back to their places, from ⇧⌘T or Recently Closed in any order (#2492)", () => {
+  reset();
+  const [w, , b, c, , e] = setup("a", "b", "c", "d", "e");
+  S().closeTabs([b, c, e]);
+  assert.deepEqual(hosts(w), ["a", "d"]);
+  S().reopenClosed(w);
+  assert.deepEqual(hosts(w), ["a", "d", "e"]);
+  S().reopenClosed(w);
+  S().reopenClosed(w);
+  assert.deepEqual(hosts(w), ["a", "b", "c", "d", "e"]);
+  const [, b2, c2] = S().windows[w].tabIds;
+  S().closeTabs([b2, c2]);
+  const entry = (host) => S().closedTabs.find((x) => short(x.tab.url) === host).id;
+  S().restoreClosed(entry("b"), w);
+  S().restoreClosed(entry("c"), w);
+  assert.deepEqual(hosts(w), ["a", "b", "c", "d", "e"]);
 });
 
 test("abandoned New Tab cleanup never closes a window or the tab it shows", () => {

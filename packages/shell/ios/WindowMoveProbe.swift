@@ -107,6 +107,7 @@ enum WindowMoveProbe {
     WindowMove.moveTimes = []
     WindowMove.frameTimes = []
     WindowMove.traceOverflowed = false
+    WindowMove.nativeDrags = []
     let began = CACurrentMediaTime()
     var releasedAt = 0.0
     var ended = began
@@ -151,7 +152,8 @@ enum WindowMoveProbe {
         let screen = window.screen.map { NSStringFromRect($0.frame) } ?? "nil"
         if !keep { window.setFrameOrigin(origin) }
         done([
-          "hit": hit, "serverOwnsPress": serverOwns, "moved": [end.x - origin.x, end.y - origin.y],
+          "hit": hit, "serverOwnsPress": serverOwns,
+          "nativeDrags": WindowMove.nativeDrags.map { entry in entry.merging(["t": ((entry["t"] as? Double) ?? 0) - began]) { $1 } }, "moved": [end.x - origin.x, end.y - origin.y],
           "pointerTravel": [dx * CGFloat(count), dy * CGFloat(count)], "backSteps": backSteps, "samples": origins.count,
           "start": [origin.x, origin.y], "released": [released.x, released.y], "end": [end.x, end.y], "screen": screen,
           "afterRelease": after, "path": origins, "releasedAt": releasedAt, "pacing": pacing,

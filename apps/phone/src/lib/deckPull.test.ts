@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DECK, deckGeometry, deckLeading } from "./deckGeometry.ts";
-import { DECK_PULL, pullBarGlyphs, pullBarShift, pullClearsBar, pullLands, pullPagePose, pullRise, pullShrink, pullSpeed, pullTarget, pullTuck, stackPullTarget } from "./deckPull.ts";
+import { DECK, deckGeometry, deckLeading, deckPileScale } from "./deckGeometry.ts";
+import { DECK_PULL, deckCardAt, pullBarGlyphs, pullBarShift, pullClearsBar, pullLands, pullPagePose, pullRise, pullShrink, pullSpeed, pullTarget, pullTuck, stackPullTarget } from "./deckPull.ts";
 
 const g = deckGeometry(440, 956, 62, 34, 0, "ios", "redesigned", 48, 55);
 const target = stackPullTarget(g, "t8", 8, 7, 0);
@@ -127,4 +127,23 @@ test("a grid tile high on the screen is a target too, and a tile at the very bot
   near(pose.y, 420);
   const low = pullTarget("t2", 440, 956, { centerX: 114, centerY: 760, width: 197, height: 428 }, 13, 55);
   assert.equal(low.reach, DECK_PULL.minReach);
+});
+
+test("a tap on the deck while it lands finds the card at the tap's place where the cards come to rest, the right-hand card winning where two overlap, and nothing above or below the cards", () => {
+  const ids = Array.from({ length: 10 }, (_, index) => `t${index}`);
+  const hit = { ids, scroll: 7, g };
+  const front = deckLeading(g, 0);
+  assert.equal(deckCardAt(hit, front + g.cardWidth / 2, g.cardCenterY), "t7");
+  assert.equal(deckCardAt(hit, deckLeading(g, -1) + 2, g.cardCenterY), "t6");
+  assert.equal(deckCardAt(hit, deckLeading(g, 1) + 2, g.cardCenterY), "t8");
+  assert.equal(deckCardAt(hit, front + g.cardWidth / 2, g.cardCenterY - g.cardHeight), null);
+  assert.equal(deckCardAt(hit, front + g.cardWidth / 2, g.cardCenterY + g.cardHeight), null);
+  assert.equal(deckCardAt({ ids: [], scroll: 0, g }, front + 10, g.cardCenterY), null);
+  const arc = deckGeometry(440, 956, 62, 34, 0, "ios", "redesigned", 48, 55, "arc");
+  const scale = deckPileScale(arc, -1);
+  assert.ok(scale < 1);
+  const edge = deckLeading(arc, -1) + (arc.cardWidth * (1 - scale)) / 2;
+  const arcHit = { ids, scroll: 7, g: arc };
+  assert.equal(deckCardAt(arcHit, edge + 2, arc.cardCenterY), "t6");
+  assert.notEqual(deckCardAt(arcHit, edge - 2, arc.cardCenterY), "t6");
 });

@@ -11,10 +11,11 @@ const { src, alt, sizes } = Astro.props;
 const full = await getImage({ src, format: "webp", width: Math.min(src.width, 2880) });
 const name = src.src.split("/").pop()?.split(".")[0]?.split("_")[0] ?? "shot";
 const widths = [640, 960, 1280, 1600, 1920, 2200, src.width].filter((w, i, a) => w <= src.width && a.indexOf(w) === i);
+const formats = import.meta.env.DEV ? [] : ["avif"];
 ---
 
 <div class="shot" style={`aspect-ratio: ${src.width} / ${src.height}`}>
-  <Picture src={src} alt={alt} formats={["avif"]} fallbackFormat="webp" widths={widths} sizes={sizes} loading="lazy" decoding="async" />
+  <Picture src={src} alt={alt} formats={formats} fallbackFormat="webp" widths={widths} sizes={sizes} loading="lazy" decoding="async" />
   <button
     class="zoom-hit"
     type="button"

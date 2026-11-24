@@ -11,9 +11,8 @@ const cloneFlat = (f: Flat): Flat => ({ nodes: new Map(f.nodes), children: new M
 export function flatFromStore(b: Bookmarks, engine: string): Flat {
   const roots = rootIdsFor(engine);
   const flat = emptyFlat();
-  const walk = (id: string, parent: string | null) => {
-    const node = b.nodes[id];
-    if (!node || flat.nodes.has(id)) return;
+  const visit = (id: string, parent: string | null) => {
+    const node = b.nodes[id]!;
     flat.nodes.set(id, {
       kind: node.kind,
       parent,
@@ -22,24 +21,38 @@ export function flatFromStore(b: Bookmarks, engine: string): Flat {
       addedAt: node.addedAt,
       ...(node.syncKey ? { key: node.syncKey } : {}),
     });
-    if (node.kind !== "folder") return;
-    const kids: string[] = [];
-    for (const c of node.children) {
-      if (!b.nodes[c] || flat.nodes.has(c)) continue;
-      walk(c, id);
-      kids.push(c);
-    }
-    flat.children.set(id, kids);
+    return node.kind === "folder" ? { id, children: node.children, next: 0, kids: [] as string[] } : null;
   };
-  walk(roots.bar, null);
-  walk(roots.other, null);
+  for (const root of [roots.bar, roots.other]) {
+    if (!b.nodes[root] || flat.nodes.has(root)) continue;
+    const first = visit(root, null);
+    const stack = first ? [first] : [];
+    while (stack.length) {
+      const top = stack.at(-1)!;
+      if (top.next === top.children.length) {
+        flat.children.set(top.id, top.kids);
+        stack.pop();
+        continue;
+      }
+      const c = top.children[top.next++]!;
+      if (!b.nodes[c] || flat.nodes.has(c)) continue;
+      top.kids.push(c);
+      const inner = visit(c, top.id);
+      if (inner) stack.push(inner);
+    }
+  }
   return flat;
 }
 
 export function flatFromEngine(tree: { bar: EngineBookmark; other: EngineBookmark }, engine: string): Flat {
   const roots = rootIdsFor(engine);
   const flat = emptyFlat();
-  const walk = (node: EngineBookmark, id: string, parent: string | null) => {
+  const stack: { node: EngineBookmark; id: string; parent: string | null }[] = [
+    { node: tree.other, id: roots.other, parent: null },
+    { node: tree.bar, id: roots.bar, parent: null },
+  ];
+  while (stack.length) {
+    const { node, id, parent } = stack.pop()!;
     flat.nodes.set(id, {
       kind: node.k === "u" ? "url" : "folder",
       parent,
@@ -49,12 +62,11 @@ export function flatFromEngine(tree: { bar: EngineBookmark; other: EngineBookmar
       ...(node.key ? { key: node.key } : {}),
     });
     if (node.k === "f") {
-      flat.children.set(id, (node.c ?? []).map((c) => c.id));
-      for (const c of node.c ?? []) walk(c, c.id, id);
+      const children = node.c ?? [];
+      flat.children.set(id, children.map((c) => c.id));
+      for (let i = children.length - 1; i >= 0; i--) stack.push({ node: children[i]!, id: children[i]!.id, parent: id });
     }
-  };
-  walk(tree.bar, roots.bar, null);
-  walk(tree.other, roots.other, null);
+  }
   return flat;
 }
 
@@ -218,12 +230,13 @@ export function applyOps(tree: Flat, ops: BookmarkOp[], engine: string): Flat {
     if (op.op === "remove") {
       if (!node || node.parent === null) break;
       detach(op.id);
-      const drop = (id: string) => {
-        for (const c of flat.children.get(id) ?? []) drop(c);
+      const dropping = [op.id];
+      while (dropping.length) {
+        const id = dropping.pop()!;
+        for (const c of flat.children.get(id) ?? []) dropping.push(c);
         flat.nodes.delete(id);
         flat.children.delete(id);
-      };
-      drop(op.id);
+      }
       continue;
     }
     if (op.op === "update") {

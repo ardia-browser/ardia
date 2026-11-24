@@ -4,7 +4,7 @@ import ArdiaDesign
 internal import ArdiaPhoneNative
 import CoreSpotlight
 import Foundation
-import SQLite3
+import PhoneSync
 
 struct SearchWithArdiaIntent: AppIntent {
   static let title: LocalizedStringResource = "Search with Ardia"
@@ -211,31 +211,11 @@ enum TabRecords {
   }
 
   private static func read(_ sql: String, _ values: [String]) -> [StoredTab] {
-    var db: OpaquePointer?
-    guard sqlite3_open_v2(database.path(percentEncoded: false), &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK, let db else {
-      if let db { sqlite3_close_v2(db) }
-      return []
+    let rows = SQLiteEngine.expoSQLite.readRows(at: database.path(percentEncoded: false), sql, values, busyTimeoutMilliseconds: 1_000) ?? []
+    return rows.map { row in
+      func date(_ column: Int) -> Date? { row[column].number.map { Date(timeIntervalSince1970: $0 / 1000) } }
+      return StoredTab(id: row[0].text ?? "", title: row[1].text ?? "", url: row[2].text ?? "", lastActive: date(3) ?? .distantPast, archivedAt: date(4))
     }
-    defer { sqlite3_close_v2(db) }
-    sqlite3_busy_timeout(db, 1_000)
-    var statement: OpaquePointer?
-    guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK, let statement else { return [] }
-    defer { sqlite3_finalize(statement) }
-    let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
-    for (index, value) in values.enumerated() {
-      sqlite3_bind_text(statement, Int32(index + 1), value, -1, transient)
-    }
-    var rows: [StoredTab] = []
-    while sqlite3_step(statement) == SQLITE_ROW {
-      func text(_ column: Int32) -> String {
-        sqlite3_column_text(statement, column).map { String(cString: $0) } ?? ""
-      }
-      func date(_ column: Int32) -> Date? {
-        sqlite3_column_type(statement, column) == SQLITE_NULL ? nil : Date(timeIntervalSince1970: sqlite3_column_double(statement, column) / 1000)
-      }
-      rows.append(StoredTab(id: text(0), title: text(1), url: text(2), lastActive: date(3) ?? .distantPast, archivedAt: date(4)))
-    }
-    return rows
   }
 }
 

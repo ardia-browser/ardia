@@ -1,6 +1,7 @@
 import type { BrowserState } from "../browser/store";
 import type { Frame } from "../browser/types";
 import { isSmallWindow } from "./small";
+import { settingsWith } from "../settings/settings";
 
 const sameFrame = (a: Frame | null | undefined, b: Frame | null | undefined) => a === b || (!!a && !!b && a.every((v, i) => v === b[i]));
 
@@ -13,7 +14,7 @@ export function withWindowFrame(s: BrowserState, id: string, frame: Frame, resto
   if (fitted || !resized || !isSmallWindow(w)) return { windows };
   const size: [number, number] = [Math.round(frame[2]), Math.round(frame[3])];
   const [width, height] = s.settings.littleArdiaSize;
-  return size[0] === width && size[1] === height ? { windows } : { windows, settings: { ...s.settings, littleArdiaSize: size } };
+  return size[0] === width && size[1] === height ? { windows } : { windows, settings: settingsWith(s.settings, { littleArdiaSize: size }) };
 }
 
 export function withWindowMaximized(s: BrowserState, id: string, on: boolean): Partial<BrowserState> {

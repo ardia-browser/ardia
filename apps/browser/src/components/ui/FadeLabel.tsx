@@ -25,9 +25,12 @@ const WEIGHT_NAMES: Partial<Record<NativeWeight, "regular" | "medium" | "semibol
 
 const FADE_WIDTH = 24;
 
-export function FadeLabel({ text, weight, fadeWidth = FADE_WIDTH, ...props }: FadeLabelProps) {
+export function FadeLabel(props: FadeLabelProps) {
   useScopedTheme();
-  const inSidebar = useContext(TextScopeContext) === "sidebar";
+  return drawnFadeLabel(props, useContext(TextScopeContext) === "sidebar");
+}
+
+export function drawnFadeLabel({ text, weight, fadeWidth = FADE_WIDTH, ...props }: FadeLabelProps, inSidebar: boolean) {
   const look = activeLook();
   const name = WEIGHT_NAMES[weight ?? "regular"];
   const drawn = name ? NAMED[look.weights[name]] : weight;

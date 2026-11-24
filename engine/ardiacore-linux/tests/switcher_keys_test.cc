@@ -2,9 +2,9 @@
 #include <cstdlib>
 #include <string_view>
 
-#include "ardia/linux/ac_linux_switcher_keys.h"
+#include "ardia/desktop/ac_desktop_switcher_keys.h"
 
-using ardia::linux_switcher::SwitcherKey;
+using ardia::desktop_switcher::SwitcherKey;
 
 namespace {
 

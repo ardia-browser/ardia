@@ -1,3 +1,4 @@
+import { runOnJS } from "react-native-reanimated";
 import { interactionLine, lookTotalsBetween, summarizeFrames, type LookTotals } from "../../lib/framePerf";
 import { isLabBuild, labLog, lookActivity, lookTotals } from "../../platform/lab";
 
@@ -18,6 +19,17 @@ export function enableInteractionPerf(on: boolean, reporter: (line: string) => v
   enabled = on;
   report = reporter;
   if (!on) finishInteraction();
+}
+
+export function markTiming(label: string, at: number = Date.now()) {
+  if (enabled) report(`PAGELAB time ${label} ${at}`);
+}
+
+export function markNextUiFrame(label: string) {
+  "worklet";
+  requestAnimationFrame(() => {
+    runOnJS(markTiming)(label, Date.now());
+  });
 }
 
 export function setUiFrameRecorder(recorder: UiFrameRecorder | null) {

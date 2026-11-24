@@ -5,8 +5,7 @@ import { systemInfo } from "../../../state/app/system";
 import { openUrls } from "../../../state/browser/actions";
 import { ActivitySpinner, Button, lineHeight, Segmented, space, Text, Toggle } from "../../ui";
 import { perLook } from "../../ui/tokens";
-import { SHARING_COPY } from "../../../state/telemetry/copy";
-import { engineVersion, followUpdater, setUpdaterPrefs, updater, widevine as widevineComponent } from "../../../state/settings/paneData";
+import { engineVersion, followUpdater, setUpdaterPrefs, updater } from "../../../state/settings/paneData";
 import { checkNowControl, switchCheckLine, updaterBusy } from "../../../state/settings/updateStatus";
 import { useResource } from "../../../state/settings/resources";
 import { UI_LOCALE } from "../../../lib/uiLocale";
@@ -14,7 +13,7 @@ import { Group, Row, SectionHeader } from "../Form";
 import { setting } from "../settingsIndex";
 
 const APP = "Ardia";
-const REPOSITORY = "https://github.com/mantrakp04/ardia";
+const REPOSITORY = "https://github.com/ardia-browser/ardia";
 
 export function UpdatesSection() {
   const [state, reload] = useResource(updater);
@@ -45,7 +44,7 @@ export function UpdatesSection() {
       <SectionHeader title="Updates" description={live && !ready ? "Updates aren't set up for this build." : undefined} />
       <Group>
         {live && (
-          <Row anchor="general.autoUpdate" description={`${setting("general.autoUpdate").description} ${SHARING_COPY.updateChecks} ${SHARING_COPY.switchFile}`}>
+          <Row anchor="general.autoUpdate">
             <Toggle value={ready && live.automaticChecks && live.automaticDownloads} disabled={!ready} accessibilityLabel={setting("general.autoUpdate").title} onChange={setAutoInstall} />
           </Row>
         )}
@@ -76,9 +75,7 @@ export function UpdatesSection() {
 
 function VersionDetails({ status }: { status: string | null }) {
   const [info] = useResource(engineVersion);
-  const [widevine] = useResource(widevineComponent);
-  const widevineVersion = widevine && widevine.version !== "0.0.0.0" ? widevine.version : null;
-  const engines = [`Chromium ${info?.chromiumVersion ?? "…"}`, widevine === undefined ? "Widevine checking…" : widevineVersion ? `Widevine ${widevineVersion}` : null].filter(Boolean).join(" · ");
+  const engines = `Chromium ${info?.chromiumVersion ?? "…"}`;
   return (
     <View>
       {status ? (
@@ -89,11 +86,6 @@ function VersionDetails({ status }: { status: string | null }) {
       <Text selectable size="caption" tone="textSecondary" style={DETAIL()}>
         {engines}
       </Text>
-      {widevine !== undefined && !widevineVersion ? (
-        <Text size="caption" tone="textSecondary" style={DETAIL()}>
-          Widevine isn't available in this build: video that needs it, like Netflix or Disney+, won't play.
-        </Text>
-      ) : null}
       <View style={LINKS}>
         <Button variant="text" look="link" pad="none" title="Source code" onPress={() => openUrls([`${REPOSITORY}/tree/v${systemInfo().appVersion}`])} />
         <Button variant="text" look="link" pad="none" title="Licenses" onPress={() => openUrls(["chrome://credits"])} />

@@ -4,7 +4,13 @@ import { View, type ViewProps } from "react-native";
 
 export const INCOGNITO_LOOK = "incognito";
 
-export type LookColors = { color?: string | null; themeColors?: string[]; darkThemeColors?: string[] | null };
+export type ThemeTexture = "grain" | "sand" | "denim" | "tweed";
+
+export type ThemeLookStop = { color: { r: number; g: number; b: number; a: number }; x: number; y: number };
+
+export type ThemeLook = { stops: ThemeLookStop[]; intensity: number; grain: number; texture: ThemeTexture; translucency: number; angle: number };
+
+export type LookColors = { color?: string | null; themeColors?: string[]; darkThemeColors?: string[] | null; themeLook?: ThemeLook | null };
 
 export type DeckBackdropProps = ViewProps & LookColors & { dark?: boolean; reduceMotion?: boolean; reduceTransparency?: boolean };
 
@@ -23,10 +29,17 @@ export type GlassShape = "capsule" | "circle" | "rounded";
 
 export type GlassSurface = "glass" | "classic";
 
-export type GlassProps = FrostProps & { shape?: GlassShape; tint?: string; interactive?: boolean; surface?: GlassSurface; tinted?: boolean; barShadow?: boolean; shown?: boolean; shownMs?: number };
+export type LookDynamicColor = { dynamic: { light: string; dark: string } };
+
+export type ClassicChrome = { fill?: string | LookDynamicColor; edgeWidth?: number; edge?: string | LookDynamicColor; shadowRadius?: number; shadowY?: number; shadow?: string | LookDynamicColor };
+
+export type GlassProps = FrostProps & { shape?: GlassShape; tint?: string; interactive?: boolean; surface?: GlassSurface; tinted?: boolean; barShadow?: boolean; classicChrome?: ClassicChrome; shown?: boolean; shownMs?: number };
+
+export type NativeGlassRender = "lens" | "frost" | "solid";
 
 type LookNative = {
   hasGlass?: () => boolean;
+  glassRender?: () => string;
   setPageFrost?: (mode: "live" | "solid") => string;
   probeFrosts?: () => void;
   setLookOff?: (off: boolean) => boolean;
@@ -106,6 +119,11 @@ export const lookIsNative = () => hasNativeLook;
 const hasNativeGlass = hasNativeLook && lookNative?.hasGlass?.() === true;
 
 export const glassIsNative = () => hasNativeGlass;
+
+export function nativeGlassRender(): NativeGlassRender | null {
+  const drawn = lookNative?.glassRender?.();
+  return drawn === "lens" || drawn === "frost" || drawn === "solid" ? drawn : null;
+}
 
 export const DeckBackdrop = look<DeckBackdropProps>("DeckBackdrop");
 

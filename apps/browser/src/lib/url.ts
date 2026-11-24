@@ -10,6 +10,21 @@ export const isWebPageUrl = (url: string) => /^(https?|file):/i.test(url);
 
 export const displayHostOf = (url: string) => displayHost(hostOf(url));
 
+const HOST_CACHE_LIMIT = 512;
+
+export function cachedHostLookup(): (url: string) => string {
+  const cachedHosts = new Map<string, string>();
+  return (url) => {
+    let host = cachedHosts.get(url);
+    if (host === undefined) {
+      if (cachedHosts.size >= HOST_CACHE_LIMIT) cachedHosts.clear();
+      host = hostOf(url);
+      cachedHosts.set(url, host);
+    }
+    return host;
+  };
+}
+
 export const pageHostLabel = (url: string) => (url.startsWith("file:") ? "File" : breadcrumb(url).host);
 
 export function urlTrail(url: string, title: string, { hovered, showFullUrl }: { hovered: boolean; showFullUrl: boolean }): string {

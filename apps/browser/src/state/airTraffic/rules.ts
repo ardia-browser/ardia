@@ -13,13 +13,13 @@ const MIGRATIONS: Migrations = { 0: unchanged, 1: unchanged };
 export const OPEN_AS = ["tab", "window", "littleArdia"] as const;
 export type OpenAs = (typeof OPEN_AS)[number];
 export type SourceApp = { bundleId: string | null; name: string };
-export type LinkTextKind = "contains" | "equals";
+type LinkTextKind = "contains" | "equals";
 export type LinkCondition = { kind: "any" } | { kind: "site"; host: string } | { kind: "pattern"; pattern: string } | { kind: "contains"; text: string } | { kind: "equals"; text: string };
 export type AirTrafficTarget = { profileId: string | null; open: OpenAs; groupKey?: string };
 export type AirTrafficRule = AirTrafficTarget & { id: string; enabled: boolean; from: SourceApp | null; when: LinkCondition };
 export type AirTrafficConfig = { rules: AirTrafficRule[]; fallback: AirTrafficTarget | null; fallbackChosen?: true };
-export type TargetUsable = (profileId: string, groupKey: string | null) => boolean;
-export type AirTrafficMatch = { by: "rule"; rule: AirTrafficRule; index: number; target: AirTrafficTarget } | { by: "fallback"; target: AirTrafficTarget };
+type TargetUsable = (profileId: string, groupKey: string | null) => boolean;
+type AirTrafficMatch = { by: "rule"; rule: AirTrafficRule; index: number; target: AirTrafficTarget } | { by: "fallback"; target: AirTrafficTarget };
 
 export const NO_AIR_TRAFFIC: AirTrafficConfig = { rules: [], fallback: null };
 
@@ -37,11 +37,11 @@ export function siteHost(input: string): string | null {
   return "error" in spec || !spec.host ? null : spec.host;
 }
 
-export const MAX_LINK_TEXT = 2048;
+const MAX_LINK_TEXT = 2048;
 
 const SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i;
 
-export const linkText = (text: string) => text.trim().toLowerCase().replace(SCHEME, "").replace(/^www\./, "");
+const linkText = (text: string) => text.trim().toLowerCase().replace(SCHEME, "").replace(/^www\./, "");
 
 function webAddress(text: string): URL | null {
   try {
@@ -57,7 +57,7 @@ const pageOf = (url: URL) => {
   return `${url.hostname.replace(/^www\./, "")}${port ? `:${port}` : ""}${url.pathname}`.toLowerCase().replace(/\/+$/, "");
 };
 
-export function exactAddress(text: string): string | null {
+function exactAddress(text: string): string | null {
   const raw = text.trim();
   if (/[?#]/.test(raw)) return null;
   const url = webAddress(SCHEME.test(raw) ? raw : `http://${raw}`);
@@ -117,7 +117,7 @@ export function linkMatches(when: LinkCondition, url: string): boolean {
   return !!spec && matchesUrl(spec, url);
 }
 
-export const appMatches = (from: SourceApp | null, source: LinkSource) => !from || sourceMatches([from.bundleId ?? from.name], source);
+const appMatches = (from: SourceApp | null, source: LinkSource) => !from || sourceMatches([from.bundleId ?? from.name], source);
 
 const targetUsable = (target: AirTrafficTarget, usable: TargetUsable) => target.profileId === null || usable(target.profileId, null);
 

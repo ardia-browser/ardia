@@ -6,12 +6,11 @@ import com.google.zxing.BinaryBitmap
 import com.google.zxing.DecodeHintType
 import com.google.zxing.EncodeHintType
 import com.google.zxing.LuminanceSource
-import com.google.zxing.NotFoundException
 import com.google.zxing.PlanarYUVLuminanceSource
 import com.google.zxing.ReaderException
 import com.google.zxing.common.BitMatrix
 import com.google.zxing.common.HybridBinarizer
-import com.google.zxing.qrcode.QRCodeReader
+import com.google.zxing.multi.qrcode.QRCodeMultiReader
 import com.google.zxing.qrcode.QRCodeWriter
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 
@@ -34,7 +33,7 @@ class SyncCodeJudge(private val isValid: (String) -> Boolean = { SyncJoin.check(
 }
 
 class QrDecoder {
-    private val reader = QRCodeReader()
+    private val reader = QRCodeMultiReader()
     private val hints = mapOf(
         DecodeHintType.POSSIBLE_FORMATS to listOf(BarcodeFormat.QR_CODE),
         DecodeHintType.TRY_HARDER to true,
@@ -46,10 +45,13 @@ class QrDecoder {
         return decode(source) ?: decode(source.invert())
     }
 
-    fun decode(source: LuminanceSource): String? = try {
-        reader.decode(BinaryBitmap(HybridBinarizer(source)), hints).text
-    } catch (missing: NotFoundException) {
-        null
+    fun decode(source: LuminanceSource): String? {
+        val bitmap = BinaryBitmap(HybridBinarizer(source))
+        return read { reader.decode(bitmap, hints).text } ?: read { reader.decodeMultiple(bitmap, hints).firstOrNull()?.text }
+    }
+
+    private inline fun read(attempt: () -> String?): String? = try {
+        attempt()
     } catch (unreadable: ReaderException) {
         null
     } finally {

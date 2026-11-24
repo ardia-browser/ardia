@@ -5,12 +5,14 @@ import { DeviceEventEmitter, turboModules } from "../test-native/reactNative.ts"
 
 const calls = [];
 const opening = new Map();
+const refusesFocus = new Set();
 turboModules.ArdiaEngineHost = {
   available: () => true,
   hostCall: async (verb, argsJson, windowId) => {
     const args = JSON.parse(argsJson);
     calls.push({ verb, args, windowId });
     if (verb === "tab.create" && opening.has(args.key)) await opening.get(args.key).promise;
+    if (verb === "tab.call" && args.method === "focus" && refusesFocus.has(args.key)) return JSON.stringify({ error: "the tab has no page" });
     return JSON.stringify(verb === "tab.create" ? { tab: calls.length } : { ok: true });
   },
   engineCall: async () => "{}",
@@ -355,6 +357,25 @@ test("each kept ask is counted once as kept, then as used or dropped", async () 
   await settle();
   assert.deepEqual(takeKeptFollows(), { kept: 3, used: 1, dropped: 2 });
   assert.deepEqual(takeKeptFollows(), { kept: 0, used: 0, dropped: 0 }, "taking them starts the next hour from zero");
+  await unmountAll();
+});
+
+test("a focus the page takes once it shows, refused by the engine, is logged instead of lost", async () => {
+  refusesFocus.add("kf-refused");
+  const warned = [];
+  const warn = console.warn;
+  console.warn = (...args) => void warned.push(args.join(" "));
+  try {
+    followPage("kf-refused");
+    mount("kf-refused");
+    showPage("kf-refused", true, shape);
+    await settle();
+  } finally {
+    console.warn = warn;
+  }
+  assert.deepEqual(followed("kf-refused"), followedOnce("kf-refused"));
+  assert.ok(warned.some((line) => line.includes("the page kf-refused could not take focus: the tab has no page")), warned.join("\n"));
+  refusesFocus.delete("kf-refused");
   await unmountAll();
 });
 

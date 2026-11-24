@@ -3,7 +3,7 @@ import { test } from "node:test";
 await import("../../test-native/index.ts");
 const { useBrowser } = await import("../browser/store.ts");
 const { useLive } = await import("../live/store.ts");
-const { watchRowsMoved } = await import("./reveal.ts");
+const { rowsStamp, sameRows, selectedTabSnapshot } = await import("./reveal.ts");
 
 const S = () => useBrowser.getState();
 
@@ -15,39 +15,35 @@ function windowWith(...hosts) {
   return { w, ids };
 }
 
-function counting() {
-  let moves = 0;
-  const stop = watchRowsMoved(() => void moves++);
-  return { moves: () => moves, stop };
-}
+test("the rows stamp holds while nothing changes, so the pill's judge re-locates nothing on a plain scroll", () => {
+  windowWith("a", "b");
+  assert.equal(sameRows(rowsStamp(), rowsStamp()), true);
+  assert.equal(sameRows(null, rowsStamp()), false);
+});
 
 test("rows count as moved when a live folder moves, though the browser store didn't change", () => {
-  const watch = counting();
+  windowWith("a");
+  const before = rowsStamp();
   useLive.setState({ folderOrder: ["b", "a"] });
-  assert.equal(watch.moves(), 1);
-  watch.stop();
+  assert.equal(sameRows(before, rowsStamp()), false);
 });
 
-test("rows count as moved when a tab is pinned or unpinned, which changes only the tabs", () => {
-  const { ids } = windowWith("a", "b");
-  const watch = counting();
+test("rows count as moved when a tab is pinned or unpinned, or the selection moves", () => {
+  const { w, ids } = windowWith("a", "b");
+  let before = rowsStamp();
   S().pinTabs([ids[1]], false);
-  assert.ok(watch.moves() >= 1);
-  watch.stop();
+  assert.equal(sameRows(before, rowsStamp()), false);
+  before = rowsStamp();
+  S().activate(ids[0]);
+  assert.equal(sameRows(before, rowsStamp()), false);
 });
 
-test("a title or load change on a tab doesn't count as rows moving", () => {
-  const { ids } = windowWith("a", "b");
-  const id = ids[0];
-  const watch = counting();
-  useBrowser.setState({ tabs: { ...S().tabs, [id]: { ...S().tabs[id], title: "Another title" } } });
-  assert.equal(watch.moves(), 0);
-  watch.stop();
-});
-
-test("stopping the watch unsubscribes from both stores", () => {
-  const watch = counting();
-  watch.stop();
-  useLive.setState({ folderOrder: ["a", "b", "c"] });
-  assert.equal(watch.moves(), 0);
+test("the pill's tab snapshot is the window's selected tab, read once", () => {
+  const { w, ids } = windowWith("a", "b");
+  S().activate(ids[1]);
+  const tab = selectedTabSnapshot(w);
+  assert.equal(tab?.id, ids[1]);
+  assert.equal(tab?.url, "https://b.com/");
+  assert.equal(typeof tab?.marks, "number", "the icon marks ride along, so the pill draws the row's engine badge");
+  assert.equal(selectedTabSnapshot("missing"), null);
 });

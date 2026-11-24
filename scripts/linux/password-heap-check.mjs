@@ -38,7 +38,7 @@ Exit status: 0 when nothing is found after the dialogs close, 1 when a copy
 is found, 2 when the run itself fails or a flow answers wrongly.`;
 
 const here = dirname(fileURLToPath(import.meta.url));
-const lib = join(here, "..", "..", "apps", "linux", "scripts", "acceptance", "lib");
+const lib = join(here, "..", "..", "apps", "desktop", "scripts", "acceptance", "lib");
 const run = promisify(execFile);
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const WINDOW = 10;

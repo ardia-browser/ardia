@@ -6,6 +6,9 @@ const { profileFor } = await import("../browser/model.ts");
 const { startWindowCloseGuard } = await import("./windowClose.ts");
 const { closeTab } = await import("../browser/actions.ts");
 const { shellNativeModules, windows } = await import("../../test-native/shell.ts");
+const { takeWindowPlacementCounts } = await import("../telemetry/windowPlacementCounts.ts");
+const { newTileFolder } = await import("../pins/tileFolders.ts");
+const { ASLEEP, wakeOf, withWake } = await import("../tabs/pageSession.ts");
 
 const S = () => useBrowser.getState();
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -121,6 +124,101 @@ test("with sharing on, a profile no other window shows moves to the open window 
   assert.ok(listed(a, work).includes(S().windows[a].activeTabIds[work]), "A remembers a Work tab to show");
   assert.equal(listed(a).length, 3, "A's own tabs untouched");
   assert.ok(!S().closedWindows.some((c) => c.tabs.some((t) => t.url?.startsWith("https://w"))), "not recorded as closed");
+});
+
+test("with sharing on, a profile handed to the open window keeps its pinned tabs and pinned folders (#2175)", async () => {
+  const { a, b } = twoWindows();
+  const work = S().createProfile({ name: "Work" });
+  const pin = S().newTab(b, { url: "https://pin.com", profileId: work, background: true });
+  const inFolder = S().newTab(b, { url: "https://folder.com", profileId: work, background: true });
+  const loose = S().newTab(b, { url: "https://loose.com", profileId: work, background: true });
+  S().pinTabs([pin], true);
+  const folder = S().groupTabs([inFolder], { pinned: true, name: "Folder" });
+  assert.equal(listed(a, work).length, 0, "only B shows Work");
+  takeWindowPlacementCounts();
+  await closeByUser(b);
+  assert.equal(S().windows[b], undefined, "B closed");
+  assert.ok(listed(a, work).includes(loose), "Work's unpinned tab moved to A");
+  assert.equal(S().parkedPins[work], undefined, "nothing waits in the park: A shows Work and holds its pins");
+  S().switchProfile(a, work);
+  const shown = listed(a, work).map((id) => S().tabs[id]);
+  const pinned = shown.find((t) => t.pin && (t.pinKey ?? t.id) === pin);
+  assert.ok(pinned, "Work's pinned tab is in A");
+  assert.equal(pinned.pinnedUrl ?? pinned.url, "https://pin.com");
+  const folders = Object.values(S().groups).filter((g) => g.pinned && g.windowId === a && g.profileId === work);
+  assert.deepEqual(folders.map((g) => [g.pinKey ?? g.id, g.name]), [[folder, "Folder"]], "and its pinned folder");
+  assert.deepEqual(folders[0].tabIds.map((id) => S().tabs[id].url), ["https://folder.com"]);
+  assert.ok(listed(a, work).includes(loose), "the unpinned tab is still there");
+  assert.equal(listed(a, work).length, 3);
+  assert.equal(takeWindowPlacementCounts().window_close_pins_kept, 2, "counted: the pinned tab and the folder's tab");
+});
+
+test("with sharing on, a profile neither handed over nor shown elsewhere still parks its pins", async () => {
+  const { a, b } = twoWindows();
+  const work = S().createProfile({ name: "Work" });
+  const pin = S().newTab(b, { url: "https://pin.com", profileId: work, background: true });
+  S().pinTabs([pin], true);
+  await closeByUser(b);
+  assert.equal(listed(a, work).length, 0, "A doesn't show Work");
+  assert.deepEqual(S().parkedPins[work]?.tabs.map((t) => t.id), [pin], "Work's pin is parked");
+  S().switchProfile(a, work);
+  assert.ok(listed(a, work).some((id) => (S().tabs[id].pinKey ?? id) === pin && S().tabs[id].pin), "and comes back in A");
+});
+
+test("with sharing on, two profiles handed over at once each keep their own Top Apps folder and tab ids (#3148)", async () => {
+  S().hydrate({});
+  share(true);
+  S().updateProfile("default", { shareTopApps: true });
+  const w = S().createWindow({ url: "https://mail.com" });
+  const [mail] = S().windows[w].tabIds;
+  const docs = S().newTab(w, { url: "https://docs.com" });
+  S().pinTabs([mail, docs], true);
+  const work = S().createProfile({ shareTopApps: true, name: "Work", shareWith: "default" });
+  const { state, folderId } = newTileFolder(S(), [mail, docs], "Apps");
+  useBrowser.setState(state);
+  for (const id of [work, "default"]) S().updateProfile(id, { shareTopApps: undefined });
+  S().newTab(w, { url: "https://work-loose.com", profileId: work, background: true });
+  S().newTab(w, { url: "https://personal-loose.com", profileId: "default", background: true });
+  const other = S().createProfile({ name: "Other" });
+  const b = S().createWindow({ url: "https://other.com", profileId: other });
+  takeWindowPlacementCounts();
+  await closeByUser(w);
+  assert.equal(S().windows[w], undefined, "the window closed");
+  const tiles = (p) => listed(b, p).map((id) => S().tabs[id]).filter((t) => t.pin);
+  for (const [p, name] of [[work, "Work"], ["default", "Personal"]]) {
+    assert.deepEqual(tiles(p).map((t) => t.pinnedUrl).sort(), ["https://docs.com", "https://mail.com"], `${name} has both tiles`);
+    assert.deepEqual(tiles(p).map((t) => t.pin.folder?.name), ["Apps", "Apps"], `${name} keeps its folder`);
+    assert.ok(tiles(p).every((t) => t.pin.folder.id === folderId), `${name}'s folder is the same one`);
+  }
+  assert.deepEqual(tiles("default").map((t) => t.id).sort(), [mail, docs].sort(), "Personal's tiles keep their own ids");
+  assert.ok(tiles(work).every((t) => t.id !== mail && t.id !== docs), "Work never takes an id Personal just freed");
+  const counts = takeWindowPlacementCounts();
+  assert.equal(counts.window_close_pins_kept, 4, "counted: both profiles' two tiles");
+  assert.equal(counts.window_close_pin_ids_renewed, 2, "and Work's two, which took new ids");
+});
+
+test("with sharing on, a handed-over pin whose key another profile's tab holds still restores its page (#3148)", async () => {
+  S().hydrate({});
+  share(true);
+  S().updateProfile("default", { shareTopApps: true });
+  const b = S().createWindow({ url: "https://b.com" });
+  const w = S().createWindow({ url: "https://w.com" });
+  const mail = S().newTab(b, { url: "https://mail.com" });
+  S().pinTabs([mail], true);
+  const work = S().createProfile({ shareTopApps: true, name: "Work", shareWith: "default" });
+  S().switchProfile(w, work);
+  S().newTab(w, { url: "https://work-loose.com", profileId: work, background: true });
+  for (const id of [work, "default"]) S().updateProfile(id, { shareTopApps: undefined });
+  const copy = listed(w, work).map((id) => S().tabs[id]).find((t) => t.pin);
+  assert.equal(copy.pinKey, mail, "Work's tile is a copy of Personal's, which B holds");
+  useBrowser.setState({ tabs: { ...S().tabs, [copy.id]: { ...copy, page: withWake(ASLEEP, `restore:${copy.id}`) } } });
+  takeWindowPlacementCounts();
+  await closeByUser(w);
+  const tile = listed(b, work).map((id) => S().tabs[id]).find((t) => t.pin);
+  assert.equal(tile?.pinnedUrl, "https://mail.com", "Work's tile came over to B");
+  assert.equal(S().tabs[mail].profileId, "default", "Personal's tile keeps its id");
+  assert.equal(wakeOf(tile), `restore:${copy.id}`, "and Work's page is restored from where it was");
+  assert.equal(takeWindowPlacementCounts().window_close_pin_ids_renewed, 0, "B's tab held the key all along, so no id was just freed");
 });
 
 test("with sharing off, a profile only the closing window shows still closes with it", async () => {
@@ -300,7 +398,7 @@ test("Settings and Import close through the same request as browser windows, fro
   const source = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
   assert.match(source("./windowClose.ts"), /if \(!w\) return closeWindowWithoutTabs\(windowId, onceAgreed\);/);
   assert.match(source("./controls.ts"), /export const closeFromWindowControls = \(windowId: string\) => requestWindowClose\(windowId\);/);
-  assert.match(source("../commands/commands.ts"), /if \(command === "closeTab"\) return requestWindowClose\(requested!\);/);
+  assert.match(source("../commands/commands.ts"), /if \(command === "closeTab"\) return requestWindowClose\(target\.windowId\);/);
   assert.match(source("../import/flow.ts"), /export const closeImport = \(\) => requestWindowClose\(IMPORT_WINDOW_ID\);/);
   assert.match(source("../../../windows/Ardia/WindowManager.h"), /if \(!found \|\| !m_context \|\| m_quitting\) return;\n\s+try \{\n\s+args\.Cancel\(true\);/);
   assert.match(source("../../platform/nativeApi.ts"), /windows\.addListener\?\.\("onWindowEvent", \(event\) => \{\n\s+if \(event\.type === "closeRequest"\) void windows\.closeWindow\(event\.id\);/);

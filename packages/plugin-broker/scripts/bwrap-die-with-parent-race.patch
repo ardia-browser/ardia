@@ -1,0 +1,58 @@
+--- a/bubblewrap.c
++++ b/bubblewrap.c
+@@ -33,6 +33,7 @@
+ #include <sys/signalfd.h>
+ #include <sys/capability.h>
+ #include <sys/prctl.h>
++#include <sys/syscall.h>
+ #include <linux/sched.h>
+ #include <linux/seccomp.h>
+ #include <linux/filter.h>
+@@ -2886,6 +2887,8 @@
+   pid_t pid;
+   int event_fd = -1;
+   int child_wait_fd = -1;
++  int parent_pidfd = -1;
++  pid_t monitor_pid = -1;
+   int setup_finished_pipe[] = {-1, -1};
+   const char *new_cwd;
+   uid_t ns_uid;
+@@ -3087,6 +3090,14 @@
+   if (child_wait_fd == -1)
+     die_with_error ("eventfd()");
+ 
++  if (opt_die_with_parent)
++    {
++      monitor_pid = getpid ();
++      parent_pidfd = (int) syscall (__NR_pidfd_open, monitor_pid, 0);
++      if (parent_pidfd == -1)
++        die_with_error ("pidfd_open()");
++    }
++
+   /* Track whether pre-exec setup finished if we're reporting process exit */
+   if (opt_json_status_fd != -1)
+     {
+@@ -3235,6 +3246,22 @@
+     close (opt_json_status_fd);
+ 
+   /* Wait for the parent to init uid/gid maps and drop caps */
++  if (parent_pidfd != -1)
++    {
++      struct pollfd waits[2] = { { child_wait_fd, POLLIN, 0 }, { parent_pidfd, POLLIN, 0 } };
++      pid_t parent;
++
++      handle_die_with_parent ();
++      if (TEMP_FAILURE_RETRY (poll (waits, 2, -1)) < 0)
++        die_with_error ("poll");
++      if (waits[1].revents & (POLLIN | POLLHUP | POLLERR))
++        die ("the bwrap monitor exited before the sandbox was set up");
++      parent = getppid ();
++      if (parent != 0 && parent != monitor_pid)
++        die ("the bwrap monitor is no longer this sandbox's parent");
++      close (parent_pidfd);
++    }
++
+   res = read (child_wait_fd, &val, 8);
+   close (child_wait_fd);
+ 
+

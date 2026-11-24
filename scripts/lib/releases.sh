@@ -1,4 +1,4 @@
-REPO="mantrakp04/ardia"
+REPO="ardia-browser/ardia"
 REPO_URL="https://github.com/$REPO"
 LATEST_DOWNLOAD_URL="$REPO_URL/releases/latest/download"
 NIGHTLY_DMG_URL="$REPO_URL/releases/download/nightly/Ardia-Nightly.dmg"
@@ -31,6 +31,10 @@ appcast() { python3 -I "$APPCAST_PY" "$@"; }
 
 engine_symbols_name() { echo "ArdiaCore-${1#engine-}-symbols.tar.xz"; }
 engine_uuids_name() { echo "ArdiaCore-${1#engine-}-uuids.txt"; }
+app_symbols_name() { echo "Ardia-${1#v}-symbols.tar.xz"; }
+app_uuids_name() { echo "Ardia-${1#v}-uuids.txt"; }
+release_symbols_name() { case "$1" in engine-*) engine_symbols_name "$1" ;; *) app_symbols_name "$1" ;; esac; }
+release_uuids_name() { case "$1" in engine-*) engine_uuids_name "$1" ;; *) app_uuids_name "$1" ;; esac; }
 
 latest_stable_tag() {
   local tag
@@ -48,5 +52,11 @@ download_live_feed() {
     || { echo "error: couldn't list $tag's assets" >&2; exit 1; }
   grep -qx appcast.xml <<<"$names" || return 1
   mkdir -p "$dir"
-  gh release download "$tag" -R "$REPO" -p appcast.xml -D "$dir" --clobber
+  local attempt
+  for attempt in 1 2 3; do
+    gh release download "$tag" -R "$REPO" -p appcast.xml -D "$dir" --clobber && return 0
+    [ "$attempt" = 3 ] || sleep 5
+  done
+  echo "error: $tag lists appcast.xml but it wouldn't download: merging onto an older feed would drop what shipped since" >&2
+  exit 1
 }

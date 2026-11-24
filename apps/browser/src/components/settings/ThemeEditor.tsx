@@ -1,31 +1,19 @@
-import { holdThemedWindowsKeyLook, choosePresetColor, setProfileTheme } from "../../state/profiles/themeActions";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { holdThemedWindowsKeyLook, choosePresetColor, onPresetSelection, resetPresetTheme, setProfileTheme, showingPreset, showingTheme } from "../../state/profiles/themeActions";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Animated, Pressable, View } from "react-native";
-import {
-  DEFAULT_THEME_ANGLE,
-  flatColors,
-  lookAngle,
-  MAX_THEME_STOPS,
-  requestedDarkFor,
-  resolveTheme,
-  shownLook,
-  startingTheme,
-  themeAccent,
-  withAddedStop,
-  withAngle,
-  withoutStop,
-  spaceLookSource,
-  type ShownLook,
-} from "../../lib/profileLook";
+import { flatColors, lookAngle, MAX_THEME_STOPS, requestedDarkFor, resolveTheme, shownLook, themeAccent, withAddedStop, withAngle, withoutStop, spaceLookSource, stopLightness, type PresetLookFields, type ShownLook } from "../../lib/profileLook";
+import { isUntouched, presetStartingTheme, presetThemeOf } from "../../lib/presetLook";
 import { THEME_TEXTURES } from "@ardia/core";
 import { PROFILE_COLORS } from "../ui/theme";
 import { useAppDark, useProfile, useSettings, useWindow } from "../../state/browser/hooks";
 import type { ProfileColor, ProfileTheme, ThemeMode, ThemeTexture } from "../../state/browser/types";
 import { Box, Button, curve, duration, Group, PopUp, Segmented, space, Swatch, swatch, Text, ThemeSwatch } from "../ui";
 import { importArcTheme } from "../../state/profiles/arcThemes";
+import { noteThemePreset } from "../../state/telemetry/themePresetCounts";
+import { themeGesture, type ThemeEdit } from "../../lib/themeGesture";
 import { Row, SectionHeader } from "./Form";
+import type { SettingId } from "./settingsIndex";
 import { ColorPad, DirectionDial, LABEL, Labelled, LightnessBar, Preview, Slider } from "./ThemeControls";
-import { settingsInk } from "./tokens";
 
 export { arcThemeChoices, importArcTheme } from "../../state/profiles/arcThemes";
 
@@ -37,45 +25,51 @@ const MODES: { value: ThemeMode; symbol: string; title: string }[] = [
 
 const TEXTURE_NAMES: Record<ThemeTexture, string> = { grain: "Grain", sand: "Sand", denim: "Denim", tweed: "Tweed" };
 
-function useLiveTheme(theme: ProfileTheme | null | undefined, apply: (theme: ProfileTheme) => void) {
-  const [draft, setDraft] = useState<ProfileTheme | null>(null);
-  const pending = useRef<ProfileTheme | null>(null);
-  const frame = useRef<number | null>(null);
+function useLiveTheme(profileId: string, theme: ProfileTheme | null | undefined, target: string, showing: () => string, apply: (theme: ProfileTheme | null) => void) {
+  const [draft, setDraft] = useState<ThemeEdit | null>(null);
   const applyLatest = useRef(apply);
   applyLatest.current = apply;
-  useEffect(() => () => void (frame.current !== null && cancelAnimationFrame(frame.current)), []);
-  const flush = () => {
-    frame.current = null;
-    if (pending.current) applyLatest.current(pending.current);
-  };
-  const change = (next: ProfileTheme, settle = false) => {
-    pending.current = next;
-    setDraft(settle ? null : next);
-    if (settle) {
-      if (frame.current !== null) cancelAnimationFrame(frame.current);
-      flush();
-    } else if (frame.current === null) frame.current = requestAnimationFrame(flush);
-  };
-  return { theme: draft ?? theme ?? null, change };
+  const showingLatest = useRef(showing);
+  showingLatest.current = showing;
+  const profileLatest = useRef(profileId);
+  profileLatest.current = profileId;
+  const gesture = useRef<ReturnType<typeof themeGesture> | null>(null);
+  gesture.current ??= themeGesture({
+    apply: (next) => applyLatest.current(next),
+    showing: () => showingLatest.current(),
+    current: () => showingTheme(profileLatest.current),
+    draft: setDraft,
+    requestFrame: requestAnimationFrame,
+    cancelFrame: cancelAnimationFrame,
+  });
+  useEffect(() => () => gesture.current?.dispose(), []);
+  useEffect(() => onPresetSelection(profileId, () => gesture.current?.selectionChanged()), [profileId]);
+  const change = (next: ProfileTheme | null, settle = false) => gesture.current!.change(next, target, settle);
+  return { theme: draft && draft.target === target ? draft.theme : (theme ?? null), change, cancel: () => gesture.current!.cancel(), begin: () => gesture.current!.begin(target) };
 }
 
-export function useThemeDraft(profileId: string, apply: (theme: ProfileTheme) => void) {
+export function useThemeDraft(profileId: string, apply: (theme: ProfileTheme | null) => void) {
   const profile = useProfile(profileId, (p) => p);
-  const live = useLiveTheme(profile?.theme, apply);
+  const color = profile?.color ?? "plum";
+  const live = useLiveTheme(profileId, profile?.theme, `${profileId}:${color}`, () => `${profileId}:${showingPreset(profileId)}`, apply);
   const appDark = useAppDark();
   const source = useSettings((s) => spaceLookSource(s));
+  const original = useMemo(() => presetStartingTheme((PROFILE_COLORS[color] ?? PROFILE_COLORS.plum).swatch), [color]);
   const stored = live.theme;
+  const look = stored ?? original;
   const editsDark = !!stored && requestedDarkFor(stored, appDark, source);
-  const custom = stored?.dark ? resolveTheme(stored, editsDark) : stored;
-  const startCustom = () => {
-    if (profile && !custom) live.change(startingTheme(PROFILE_COLORS[profile.color]?.swatch ?? PROFILE_COLORS.plum.swatch), true);
+  const editing = stored?.dark ? resolveTheme(stored, editsDark) : look;
+  const shown = shownLook(look, appDark, source);
+  const change = (next: ProfileTheme | null, settle = false) => {
+    const kept = next && isUntouched(next, original) ? null : next;
+    if (kept && !stored) noteThemePreset("edited");
+    live.change(kept, settle);
   };
-  const shown = stored ? shownLook(stored, appDark, source) : null;
-  return { profile, stored, custom, editsDark, shown, followsApp: source === "app", change: live.change, startCustom };
+  return { profile, stored, editing, editsDark, shown, followsApp: source === "app", change, cancel: live.cancel, begin: live.begin, original };
 }
 
-export function ThemeSection({ profileId }: { profileId: string }) {
-  const { profile, stored, custom, editsDark, shown, followsApp, change, startCustom } = useThemeDraft(profileId, (theme) => setProfileTheme(profileId, theme));
+export function ThemeSection({ profileId, anchor }: { profileId: string; anchor: SettingId }) {
+  const { profile, stored, editing: theme, editsDark, shown, followsApp, change, cancel, begin, original } = useThemeDraft(profileId, (next) => setProfileTheme(profileId, next));
   const editing = !!profile && !!stored;
   useEffect(() => {
     if (!editing) return;
@@ -92,22 +86,18 @@ export function ThemeSection({ profileId }: { profileId: string }) {
       />
       <Group>
         <Row
-          title="Colour"
+          anchor={anchor}
           description={
             stored?.dark
               ? `Separate light and dark looks. Editing keeps the ${editsDark ? "dark" : "light"} one.`
-              : custom
-                ? "Custom gradient"
-                : PROFILE_COLORS[profile.color]?.name
+              : presetLabel(profile.color, !!stored)
           }
         >
-          <ThemeSwatches color={custom ? null : profile.color} onPreset={(c) => choosePresetColor(profileId, c)} custom={custom} onCustom={startCustom} />
+          <ThemeSwatches color={profile.color} edits={profile} onPreset={(c) => choosePresetColor(profileId, c)} />
         </Row>
-        {custom && shown ? (
-          <Box pad="l">
-            <ThemeEditor theme={custom} full={{ shown, followsApp }} onChange={change} />
-          </Box>
-        ) : null}
+        <Box pad="l">
+          <ThemeEditor theme={theme} start={original} full={{ shown, followsApp }} onChange={change} onBegin={begin} onReset={stored ? () => { cancel(); resetPresetTheme(profileId); } : undefined} resetLabel={presetLabel(profile.color, false)} />
+        </Box>
       </Group>
     </>
   );
@@ -124,30 +114,30 @@ export function ThemePicker({
   size?: number;
   gap?: number;
   onPreset?: (color: ProfileColor) => void;
-  onTheme?: (theme: ProfileTheme) => void;
+  onTheme?: (theme: ProfileTheme | null) => void;
 }) {
   const profileId = useWindow(windowId, (w) => w?.profileId) ?? "";
   const incognito = useWindow(windowId, (w) => w?.kind === "private");
   const look = useThemeDraft(profileId, (theme) => (onTheme ? onTheme(theme) : setProfileTheme(profileId, theme)));
   if (!profileId || incognito || !look.profile) return null;
-  const { custom } = look;
+  const reset = () => {
+    look.cancel();
+    if (onTheme) onTheme(null);
+    else resetPresetTheme(profileId);
+  };
   return (
     <View style={{ gap: space.xxxl }}>
-      <ThemeSwatches
-        size={size}
-        gap={gap}
-        color={custom ? null : look.profile.color}
-        onPreset={(c) => (onPreset ? onPreset(c) : choosePresetColor(profileId, c))}
-        custom={custom}
-        onCustom={look.startCustom}
-      />
-      {custom ? (
-        <FadeIn>
-          <ThemeEditor theme={custom} onChange={look.change} />
-        </FadeIn>
-      ) : null}
+      <ThemeSwatches size={size} gap={gap} color={look.profile.color} edits={look.profile} onPreset={(c) => (onPreset ? onPreset(c) : choosePresetColor(profileId, c))} />
+      <FadeIn>
+        <ThemeEditor theme={look.editing} start={look.original} onChange={look.change} onBegin={look.begin} onReset={look.stored ? reset : undefined} resetLabel={presetLabel(look.profile.color, false)} />
+      </FadeIn>
     </View>
   );
+}
+
+function presetLabel(color: ProfileColor, edited: boolean): string {
+  const name = (PROFILE_COLORS[color] ?? PROFILE_COLORS.plum).name;
+  return edited ? `${name}, edited` : name;
 }
 
 const COLORS = Object.keys(PROFILE_COLORS) as ProfileColor[];
@@ -155,28 +145,29 @@ const COLORS = Object.keys(PROFILE_COLORS) as ProfileColor[];
 export function ThemeSwatches({
   color,
   onPreset,
-  custom,
-  onCustom,
+  edits,
   size = swatch.size,
   gap = swatch.gap,
 }: {
   color: ProfileColor | null;
   onPreset: (color: ProfileColor) => void;
-  custom?: ProfileTheme | null;
-  onCustom?: () => void;
+  edits?: PresetLookFields;
   size?: number;
   gap?: number;
 }) {
   return (
     <View style={{ flexDirection: "row", flexWrap: "wrap", gap }} accessibilityRole="radiogroup" accessibilityLabel="Theme color">
-      {COLORS.map((c) => (
-        <ColorButton key={c} name={PROFILE_COLORS[c].name} ring={PROFILE_COLORS[c].swatch} size={size} selected={color === c} onPress={() => onPreset(c)} />
-      ))}
-      {onCustom ? (
-        <ColorButton name="Custom" ring={custom ? themeAccent(custom) : settingsInk.customSwatch} size={size} selected={!!custom} onPress={onCustom}>
-          <CustomSwatch theme={custom ?? null} />
-        </ColorButton>
-      ) : null}
+      {COLORS.map((c) => {
+        const edited = edits ? presetThemeOf(edits, c) : null;
+        const name = presetLabel(c, !!edited);
+        return edited ? (
+          <ColorButton key={c} name={name} ring={themeAccent(edited)} size={size} selected={color === c} onPress={() => onPreset(c)}>
+            <EditedSwatch theme={edited} />
+          </ColorButton>
+        ) : (
+          <ColorButton key={c} name={name} ring={PROFILE_COLORS[c].swatch} size={size} selected={color === c} onPress={() => onPreset(c)} />
+        );
+      })}
     </View>
   );
 }
@@ -205,35 +196,25 @@ function FadeIn({ children }: { children: ReactNode }) {
   return <Animated.View style={{ opacity: t, transform: [{ translateY: t.interpolate({ inputRange: [0, 1], outputRange: [FADE_RISE, 0] }) }] }}>{children}</Animated.View>;
 }
 
-const RAINBOW: ProfileTheme = {
-  stops: [
-    { x: 1, y: 0.5, color: { r: 0.93, g: 0.45, b: 0.62, a: 1 } },
-    { x: 0, y: 0.5, color: { r: 0.42, g: 0.66, b: 0.95, a: 1 } },
-    { x: 0.5, y: 1, color: { r: 0.62, g: 0.9, b: 0.58, a: 1 } },
-  ],
-  intensity: 1,
-  mode: "auto",
-  grain: 0,
-  texture: "grain",
-  translucency: 0,
-};
-
-export function CustomSwatch({ theme }: { theme: ProfileTheme | null }) {
-  return <ThemeSwatch colors={flatColors(theme ?? RAINBOW)} angle={theme ? lookAngle(theme) : DEFAULT_THEME_ANGLE} style={{ flex: 1 }} />;
+function EditedSwatch({ theme }: { theme: ProfileTheme }) {
+  return <ThemeSwatch colors={flatColors(theme)} angle={lookAngle(theme)} style={FILL} />;
 }
 
-function ThemeStops({ theme, onChange }: { theme: ProfileTheme; onChange: (next: ProfileTheme, settle?: boolean) => void }) {
+type Reset = { onReset?: () => void; resetLabel?: string; onBegin?: () => void; start?: ProfileTheme };
+
+function ThemeStops({ theme, onChange, onReset, resetLabel, onBegin, start }: { theme: ProfileTheme; onChange: (next: ProfileTheme, settle?: boolean) => void } & Reset) {
   const [selected, setSelected] = useState(0);
   const index = Math.min(selected, theme.stops.length - 1);
   return (
     <Box gap="m">
-      <ColorPad theme={theme} selected={index} onSelect={setSelected} onChange={onChange} />
-      <LightnessBar theme={theme} index={index} onChange={onChange} />
+      <ColorPad theme={theme} selected={index} onSelect={setSelected} onChange={onChange} onBegin={onBegin} start={start?.stops.length === theme.stops.length ? start.stops : undefined} />
+      <LightnessBar theme={theme} index={index} onChange={onChange} snapTo={start?.stops.length === theme.stops.length && start.stops[index] ? stopLightness(start.stops[index]) : undefined} />
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
         <Text size="caption" tone="textSecondary">
           {theme.stops.length} of {MAX_THEME_STOPS} colours
         </Text>
-        <Box row gap="xs">
+        <Box row gap="xs" style={CENTERED}>
+          {onReset ? <Button variant="text" look="link" size="caption" title="Reset" label={resetLabel ? `Reset to ${resetLabel}` : "Reset"} onPress={onReset} /> : null}
           <Button
             variant="stepper"
             icon="minus"
@@ -264,20 +245,24 @@ export function ThemeEditor({
   theme,
   full,
   onChange,
+  onReset,
+  resetLabel,
+  onBegin,
+  start,
 }: {
   theme: ProfileTheme;
   full?: { shown: ShownLook; followsApp: boolean };
   onChange: (next: ProfileTheme, settle?: boolean) => void;
-}) {
+} & Reset) {
   const stacked = !full;
   return (
     <Box row gap="xl">
-      <ThemeStops theme={theme} onChange={onChange} />
+      <ThemeStops theme={theme} onChange={onChange} onReset={onReset} resetLabel={resetLabel} onBegin={onBegin} start={start} />
       <Box gap={full ? "l" : "xl"} style={FILL}>
         {full ? <Preview shown={full.shown} /> : null}
-        <Slider stacked={stacked} label="Intensity" value={theme.intensity} onChange={(v, settle) => onChange({ ...theme, intensity: v }, settle)} />
-        <Slider stacked={stacked} label="Pass-through blur" value={theme.translucency} onChange={(v, settle) => onChange({ ...theme, translucency: v }, settle)} />
-        <Slider stacked={stacked} label="Noise" value={theme.grain} onChange={(v, settle) => onChange({ ...theme, grain: v }, settle)}>
+        <Slider stacked={stacked} label="Intensity" value={theme.intensity} snapTo={start?.intensity} onChange={(v, settle) => onChange({ ...theme, intensity: v }, settle)} />
+        <Slider stacked={stacked} label="Pass-through blur" value={theme.translucency} snapTo={start?.translucency} onChange={(v, settle) => onChange({ ...theme, translucency: v }, settle)} />
+        <Slider stacked={stacked} label="Noise" value={theme.grain} snapTo={start?.grain} onChange={(v, settle) => onChange({ ...theme, grain: v }, settle)}>
           <PopUp
             value={theme.texture}
             minWidth={78}
@@ -322,6 +307,7 @@ function EditorRow({ label, stacked, children }: { label: string; stacked?: bool
 }
 
 const FILL = { flex: 1 } as const;
+const CENTERED = { alignItems: "center" } as const;
 const LABELLED_ROW = { flexDirection: "row", alignItems: "center" } as const;
 const EDITOR_LABEL = { width: LABEL + space.ml } as const;
 const KEPT_NOTE = { flex: 1, marginLeft: space.m } as const;

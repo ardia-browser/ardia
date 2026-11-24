@@ -48,12 +48,12 @@ function paintedIn(windowId: string): Promise<void> {
   });
 }
 
-async function handOff(copyId: string, commit: () => void): Promise<boolean> {
+async function handOff(copyId: string, commit: () => void, mayCommit: () => boolean = () => true): Promise<boolean> {
   const s = store();
   const copy = s.tabs[copyId];
   const holder = holderOf(s, copyId);
   if (!copy || !holder) {
-    commit();
+    if (mayCommit()) commit();
     return false;
   }
   const key = familyKeyOf(copy);
@@ -94,19 +94,33 @@ async function handOff(copyId: string, commit: () => void): Promise<boolean> {
       painted.delete(source);
     }
   }
-  const still = current();
+  const still = current() && mayCommit();
   settle();
   if (still) commit();
   if (useFrozenPages.getState().bridges[source]?.copyId === copyId) bridge(source, null);
   return still;
 }
 
-export const handOffPinPage = (copyId: string, commit: () => void) => (users > 0 ? void handOff(copyId, commit) : commit());
+const flights = new Map<string, Promise<boolean>>();
 
-export const requestPinHandOff = (copyId: string) => handOff(copyId, () => store().handOffPin(copyId));
+function tracked(copyId: string, run: () => Promise<boolean>) {
+  const copy = store().tabs[copyId];
+  const flight = run();
+  if (!copy) return flight;
+  const key = familyKeyOf(copy);
+  flights.set(key, flight);
+  void flight.then(() => flights.get(key) === flight && flights.delete(key));
+  return flight;
+}
+
+export const pinHandOffOf = (family: string) => flights.get(family);
+
+export const handOffPinPage = (copyId: string, commit: () => void) => (users > 0 ? void tracked(copyId, () => handOff(copyId, commit)) : commit());
+
+export const requestPinHandOff = (copyId: string, mayCommit: () => boolean = () => true) => tracked(copyId, () => handOff(copyId, () => store().handOffPin(copyId), mayCommit));
 
 export function startPinHandoff() {
-  if (users++ === 0) stopWatching = useBrowser.subscribe((s, prev) => {
+  if (users++ === 0) stopWatching = useBrowser.subscribeTo(["windows", "windowUi", "tabs"], (s, prev) => {
     if (s.windows !== prev.windows || s.windowUi !== prev.windowUi) {
       for (const [id, w] of Object.entries(s.windows)) {
         const was = prev.windows[id];

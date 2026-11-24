@@ -1,8 +1,6 @@
 import posters from "../assets/hero/posters.json";
 import { HERO_FRAMES, HERO_STATES } from "./heroFrames.mjs";
 
-type Tone = "light" | "dark";
-
 interface Captured {
   state: string;
   frame: string;
@@ -10,9 +8,6 @@ interface Captured {
   height: number;
   files: { file: string; width: number; height: number }[];
   lqip: string;
-  tones: Record<string, { tone: string; halo: number }>;
-  sky: string;
-  headerHalo: number;
 }
 
 const urls = import.meta.glob<string>("../assets/hero/*.webp", { query: "?url", import: "default", eager: true });
@@ -36,12 +31,7 @@ export interface HeroPoster {
   horizon: string;
   lqip: string;
   fallback: boolean;
-  tones: Record<string, [Tone, string]>;
-  sky: Tone;
-  headerHalo: string;
 }
-
-const halo = (value: number) => (Math.round(value / 0.05) * 0.05).toFixed(2);
 
 export const HERO_POSTERS: HeroPoster[] = (posters as Captured[]).map((poster) => {
   const { frame, state } = frameAndState(poster);
@@ -59,9 +49,6 @@ export const HERO_POSTERS: HeroPoster[] = (posters as Captured[]).map((poster) =
     horizon: frame.horizon,
     lqip: poster.lqip,
     fallback: poster.state === "dawn" && poster.frame === "wide",
-    tones: Object.fromEntries(Object.entries(poster.tones).map(([group, value]) => [group, [value.tone as Tone, halo(value.halo)]])),
-    sky: poster.sky as Tone,
-    headerHalo: halo(poster.headerHalo),
   };
 });
 

@@ -1,0 +1,20 @@
+[package]
+name = "ardia-update-core-boringssl"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+name = "ardia_update_core"
+path = "../../../crates/ardia-update-core/src/lib.rs"
+
+[[test]]
+name = "vectors"
+path = "vectors.rs"
+
+[dependencies]
+ardia-crypto = { package = "ardia-crypto-boringssl", path = "../crypto" }
+
+[dev-dependencies]
+serde_json = "1"

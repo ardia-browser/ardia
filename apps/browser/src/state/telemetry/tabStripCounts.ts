@@ -1,93 +1,147 @@
-let groupToggles = 0;
-let textOnlyRows = 0;
-let compactLayouts = 0;
-let edgeScrollDrags = 0;
-let revealsAfterPress = 0;
-let mostTabs = 0;
-let heldCloses = 0;
-let mostTitledTabs = 0;
-let scrolls = 0;
-let revealsHeldForScroll = 0;
-let scrollStalls = 0;
-let commandsRefused = 0;
-let lastScrollAt = -Infinity;
+import { takeTabLayoutCounts } from "./tabLayoutCounts";
+import { takeTabMotionCounts } from "./tabMotionCounts";
+import { takeCloseActivationCounts } from "./closeActivationCounts";
+import { isSharing, onConsentPeriodChange } from "./choice";
+import { consentedCount, consentedMax } from "./consentedCount";
+import { countFor, type ConsentToken } from "./consentPeriod";
+
+const groupToggles = consentedCount();
+const textOnlyRows = consentedCount();
+const compactLayouts = consentedCount();
+const readableLayouts = consentedCount();
+const edgeScrollDrags = consentedCount();
+const revealsAfterPress = consentedCount();
+const mostTabs = consentedMax();
+const heldCloses = consentedCount();
+const heldCloseStretches = consentedCount();
+const mostTitledTabs = consentedMax();
+const picks = consentedCount();
+const picksAfterScroll = consentedCount();
+let menuPicks = 0;
+const scrolls = consentedCount();
+const revealsHeldForScroll = consentedCount();
+const scrollStalls = consentedCount();
+const commandsRefused = consentedCount();
+const toggleRemeasures = consentedCount();
+const closesAfterSelect = consentedCount();
+const lastScrollAt = new Map<string, number>();
+let lastToggle = { windowId: "", at: -Infinity };
+onConsentPeriodChange(() => {
+  lastScrollAt.clear();
+  menuPicks = 0;
+  lastToggle = { windowId: "", at: -Infinity };
+});
+
+const TOGGLE_WINDOW_MS = 400;
 
 const NEW_SCROLL_GAP_MS = 250;
 const STALL_GAP_MS = 34;
+const PICK_AFTER_SCROLL_MS = 10000;
 
-export function noteTabStripGroupToggle() {
-  groupToggles++;
+export function noteTabStripGroupToggle(windowId: string, at: number) {
+  groupToggles.note();
+  lastToggle = { windowId, at };
+}
+
+export function noteTabStripChipsMeasured(windowId: string, at: number) {
+  if (windowId === lastToggle.windowId && at - lastToggle.at < TOGGLE_WINDOW_MS) toggleRemeasures.note();
 }
 
 export function noteTextOnlyRow() {
-  textOnlyRows++;
+  textOnlyRows.note();
 }
 
 export function noteTabStripCompact() {
-  compactLayouts++;
+  compactLayouts.note();
+}
+
+export function noteTabStripReadable() {
+  readableLayouts.note();
 }
 
 export function noteTabStripEdgeScroll() {
-  edgeScrollDrags++;
+  edgeScrollDrags.note();
 }
 
 export function noteTabStripRevealAfterPress() {
-  revealsAfterPress++;
+  revealsAfterPress.note();
 }
 
 export function noteTabStripOverflow(tabs: number) {
-  mostTabs = Math.max(mostTabs, tabs);
+  mostTabs.note(tabs);
+}
+
+export function noteTabStripPick(strip: string, at: number) {
+  picks.note();
+  if (at - (lastScrollAt.get(strip) ?? -Infinity) < PICK_AFTER_SCROLL_MS) picksAfterScroll.note();
+}
+
+export function noteTabStripMenuPick(consent: ConsentToken | null) {
+  countFor(consent, () => void menuPicks++);
 }
 
 export function noteTabStripHeldClose() {
-  heldCloses++;
+  heldCloses.note();
+}
+
+export function noteTabStripHeldCloseStretch() {
+  heldCloseStretches.note();
 }
 
 export function noteTabStripTitledTabs(tabs: number) {
-  mostTitledTabs = Math.max(mostTitledTabs, tabs);
+  mostTitledTabs.note(tabs);
 }
 
 export function noteTabStripCommandRefused() {
-  commandsRefused++;
+  commandsRefused.note();
 }
 
 export function noteTabStripRevealHeldForScroll() {
-  revealsHeldForScroll++;
+  revealsHeldForScroll.note();
 }
 
-export function noteTabStripScrolled(at: number) {
-  const gap = at - lastScrollAt;
-  lastScrollAt = at;
-  if (gap > NEW_SCROLL_GAP_MS) scrolls++;
-  else if (gap > STALL_GAP_MS) scrollStalls++;
+export function noteTabStripCloseAfterSelect() {
+  closesAfterSelect.note();
+}
+
+export function noteTabStripScrolled(strip: string, at: number) {
+  if (!isSharing()) return;
+  const gap = at - (lastScrollAt.get(strip) ?? -Infinity);
+  if (gap > NEW_SCROLL_GAP_MS) for (const [key, when] of lastScrollAt) if (at - when > PICK_AFTER_SCROLL_MS) lastScrollAt.delete(key);
+  lastScrollAt.set(strip, at);
+  if (gap > NEW_SCROLL_GAP_MS) scrolls.note();
+  else if (gap > STALL_GAP_MS) scrollStalls.note();
+}
+
+function takeMenuPicks() {
+  const taken = menuPicks;
+  menuPicks = 0;
+  return taken;
 }
 
 export function takeTabStripCounts() {
-  const taken = {
-    tab_strip_group_toggles: groupToggles,
-    pinned_rows_made_text_only: textOnlyRows,
-    tab_strip_compact_layouts: compactLayouts,
-    tab_strip_edge_scroll_drags: edgeScrollDrags,
-    tab_strip_reveals_after_press: revealsAfterPress,
-    tab_strip_most_tabs: mostTabs,
-    tab_strip_held_closes: heldCloses,
-    tab_strip_most_titled_tabs: mostTitledTabs,
-    tab_strip_scrolls: scrolls,
-    tab_strip_scroll_stalls: scrollStalls,
-    tab_strip_reveals_held_for_scroll: revealsHeldForScroll,
-    tab_strip_commands_refused: commandsRefused,
+  return {
+    tab_strip_group_toggles: groupToggles.take(),
+    tab_strip_toggle_remeasures: toggleRemeasures.take(),
+    pinned_rows_made_text_only: textOnlyRows.take(),
+    tab_strip_compact_layouts: compactLayouts.take(),
+    tab_strip_readable_layouts: readableLayouts.take(),
+    tab_strip_edge_scroll_drags: edgeScrollDrags.take(),
+    tab_strip_reveals_after_press: revealsAfterPress.take(),
+    tab_strip_most_tabs: mostTabs.take(),
+    tab_strip_held_closes: heldCloses.take(),
+    tab_strip_held_close_stretches: heldCloseStretches.take(),
+    tab_strip_most_titled_tabs: mostTitledTabs.take(),
+    tab_strip_picks: picks.take(),
+    tab_strip_picks_after_scroll: picksAfterScroll.take(),
+    tab_strip_menu_picks: takeMenuPicks(),
+    tab_strip_scrolls: scrolls.take(),
+    tab_strip_scroll_stalls: scrollStalls.take(),
+    tab_strip_reveals_held_for_scroll: revealsHeldForScroll.take(),
+    tab_strip_commands_refused: commandsRefused.take(),
+    tab_strip_closes_after_select_ignored: closesAfterSelect.take(),
+    ...takeTabLayoutCounts(),
+    ...takeTabMotionCounts(),
+    ...takeCloseActivationCounts(),
   };
-  groupToggles = 0;
-  textOnlyRows = 0;
-  compactLayouts = 0;
-  edgeScrollDrags = 0;
-  revealsAfterPress = 0;
-  mostTabs = 0;
-  heldCloses = 0;
-  mostTitledTabs = 0;
-  scrolls = 0;
-  scrollStalls = 0;
-  revealsHeldForScroll = 0;
-  commandsRefused = 0;
-  return taken;
 }

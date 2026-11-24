@@ -64,7 +64,7 @@ final class IdleWatch {
   }
 }
 
-public class SystemSignalsModule: Module {
+public class SystemSignalsModule: Module, SystemSignalsNative {
   private static let event = "onSystemSignal"
 
   private let lifetime = ModuleLifetime()
@@ -74,9 +74,33 @@ public class SystemSignalsModule: Module {
     DispatchQueue.main.async { self?.send(["type": "idle", "threshold": threshold, "idle": idle]) }
   }
 
+  func watchIdle(_ thresholds: [Double]) { self.lifetime.run { self.idle.watch(thresholds) } }
+
+  static func holdsIncomingLinks() -> Bool { ArdiaHost.holdsIncomingLinks }
+
+  static func setHoldIncomingLinks(_ hold: Bool, _ hooksStamp: String?) { ArdiaHost.setHoldIncomingLinks(hold, hooksStamp: hooksStamp) }
+
+  static func setApprovedDownloadFolders(_ folders: [String]) { ArdiaDownloadMover.shared.setApprovedFolders(folders) }
+
+  static func moveCompletedDownload(_ path: String, _ folder: String) -> [String: Any] {
+    var result = ArdiaDownloadMover.shared.moveDownload(at: path, toFolder: folder)
+    if let event = result.removeValue(forKey: "event") as? [String: Any] {
+      DispatchQueue.main.async { ArdiaEvents.emit("downloads.changed", data: event) }
+    }
+    return result
+  }
+
+  static func devPost(_ name: String) -> Bool {
+    guard LaunchConfig.shared.isolated else { return false }
+    let notification: [String: Notification.Name] = ["willSleep": NSWorkspace.willSleepNotification, "didWake": NSWorkspace.didWakeNotification]
+    guard let posted = notification[name] else { return false }
+    NSWorkspace.shared.notificationCenter.post(name: posted, object: NSWorkspace.shared)
+    return true
+  }
+
   public func definition() -> ModuleDefinition {
-    Name("ArdiaSystemSignals")
-    Events(Self.event)
+    Name(Self.moduleName)
+    Self.eventsDefinition
 
     OnCreate {
       self.lifetime.begin(self) {
@@ -89,31 +113,17 @@ public class SystemSignalsModule: Module {
 
     OnDestroy { self.lifetime.end() }
 
-    Function("watchIdle") { (thresholds: [Double]) in
-      self.lifetime.run { self.idle.watch(thresholds) }
-    }
+    watchIdleFunction
 
-    Function("holdsIncomingLinks") { () -> Bool in ArdiaHost.holdsIncomingLinks }
+    Self.holdsIncomingLinksFunction
 
-    Function("setHoldIncomingLinks") { (hold: Bool, hooksStamp: String?) in ArdiaHost.setHoldIncomingLinks(hold, hooksStamp: hooksStamp) }
+    Self.setHoldIncomingLinksFunction
 
-    Function("setApprovedDownloadFolders") { (folders: [String]) in ArdiaDownloadMover.shared.setApprovedFolders(folders) }
+    Self.setApprovedDownloadFoldersFunction
 
-    AsyncFunction("moveCompletedDownload") { (path: String, folder: String) -> [String: Any] in
-      var result = ArdiaDownloadMover.shared.moveDownload(at: path, toFolder: folder)
-      if let event = result.removeValue(forKey: "event") as? [String: Any] {
-        DispatchQueue.main.async { ArdiaEvents.emit("downloads.changed", data: event) }
-      }
-      return result
-    }.runOnQueue(DispatchQueue.global(qos: .userInitiated))
+    Self.moveCompletedDownloadFunction
 
-    AsyncFunction("devPost") { (name: String) -> Bool in
-      guard LaunchConfig.shared.isolated else { return false }
-      let notification: [String: Notification.Name] = ["willSleep": NSWorkspace.willSleepNotification, "didWake": NSWorkspace.didWakeNotification]
-      guard let posted = notification[name] else { return false }
-      NSWorkspace.shared.notificationCenter.post(name: posted, object: NSWorkspace.shared)
-      return true
-    }.runOnQueue(.main)
+    Self.devPostFunction
   }
 
   private func observeSleep() {

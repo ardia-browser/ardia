@@ -1,30 +1,29 @@
-import { Platform, StyleSheet } from "react-native";
+import { FlatList, Platform, StyleSheet } from "react-native";
 import { getAnimatedStyle } from "react-native-reanimated";
 import { act } from "react-test-renderer";
 import { StartScreen } from "../components/search/StartScreen";
 import { DeckBar } from "../components/tabs/DeckBar";
-import { ArdiaLogo, DesignProvider, FloatingMenu } from "../components/ui";
+import { AppIcon, ArdiaLogo, BarPlusGlyph, ChromeSurface, controlSize, DesignProvider, PressInPlace, startLayout } from "../components/ui";
 import { redesignedBarCenterFromBottom } from "../lib/deckGeometry";
 import type { Design } from "../lib/design";
 import { haptics } from "../state/app/haptics";
+import * as browseStore from "../state/browse/store";
 import { useBrowse } from "../state/browse/store";
-import * as settingsNav from "../state/settings/nav";
 import * as syncActions from "../state/sync/actions";
 import { dismissSearch, presentSearch } from "../state/search/store";
 import { OFF_STATUS, useSync, type PinnedTile, type SyncedProfile } from "../state/sync/store";
 import * as telemetry from "../state/telemetry/telemetry";
 import { useTabs } from "../state/tabs/store";
-import { renderSurface, unmount, withTabs } from "../../test/render/harness";
+import { renderSurface, unmount, updateSurface, withTabs } from "../../test/render/harness";
+import { StartSpaces } from "../components/search/StartSpaces";
 
 const mockMotion = { reduced: false };
 jest.mock("../state/app/systemLook", () => ({ ...jest.requireActual("../state/app/systemLook"), useReduceMotion: () => mockMotion.reduced }));
 
 const safeArea = require("react-native-safe-area-context") as { useSafeAreaInsets: () => { top: number; bottom: number; left: number; right: number } };
-const lookModule = require("@ardia/phone-native/src/look") as typeof import("@ardia/phone-native/src/look");
 
 const HEIGHT = 873;
 const WIDTH = 393;
-const SWITCHER_Y = HEIGHT * 0.44;
 const BAR_CENTER_Y = HEIGHT - redesignedBarCenterFromBottom(34, Platform.OS);
 
 const tile = (i: number, folder: PinnedTile["folder"] = null): PinnedTile => ({ key: `k${i}`, title: `Pin ${i}`, url: `https://pin${i}.example/`, icon: null, folder });
@@ -75,6 +74,7 @@ afterEach(() => {
 
 type Root = ReturnType<typeof renderSurface>;
 
+
 const start = (design: Design = "redesigned") =>
   renderSurface(
     <DesignProvider design={design}>
@@ -94,17 +94,39 @@ test("the original start page keeps its logo and its deck bar, and none of the r
   unmount(root);
 });
 
-test("the redesigned start page has no logo and no deck bar; its own bar holds Tabs, a 77 by 48 plus and Settings, centred 11 points above the safe bottom on iPhone and where the browsing bar sits on Android (8 above its 3-button bar), 24 in from the sides", () => {
+test("the redesigned start page has no deck bar and only the Ardia mark in the middle; its own bar holds round Tabs and Settings circles and a 77 by 48 plus pill, centred 11 points above the safe bottom on iPhone and where the browsing bar sits on Android, 24 in from the sides", () => {
   const root = start();
+  expect(root.root.findAll((node) => node.type === AppIcon && node.props.side === 128)).toHaveLength(1);
+  expect(host(root, "appIcon")).toBeDefined();
   expect(root.root.findAll((node) => node.type === ArdiaLogo)).toHaveLength(0);
   expect(root.root.findAll((node) => node.type === DeckBar)).toHaveLength(0);
   const bar = style(root, "startBar");
   expect(bar.top + bar.height / 2).toBe(BAR_CENTER_Y);
-  expect(bar).toMatchObject({ height: 48, paddingHorizontal: 24 });
+  expect(bar).toMatchObject({ height: 48, paddingLeft: 24, paddingRight: 24 });
   expect(style(root, "startBarTabs")).toMatchObject({ width: 48, height: 48, borderRadius: 24 });
   expect(style(root, "startBarSettings")).toMatchObject({ width: 48, height: 48, borderRadius: 24 });
   expect(style(root, "startBarPlus")).toMatchObject({ width: 77, height: 48, borderRadius: 24 });
+  for (const gone of ["startSwitcher", "startTiles", "startPageDots", "startSyncInvitation"]) expect(host(root, gone)).toBeUndefined();
   unmount(root);
+});
+
+test("the Start bar's circles and its wide plus take the bars' shared chrome surface, 48-point control size, plus glyph and press, with the shared names", () => {
+  const root = start();
+  for (const id of ["startBarTabs", "startBarSettings", "startBarPlus"]) {
+    const surface = root.root.findAll((node) => node.type === ChromeSurface && node.props.testID === id)[0]!;
+    expect(surface.props.shape).toBe(id === "startBarPlus" ? "capsule" : "circle");
+    expect(StyleSheet.flatten(surface.props.style)).toMatchObject({ height: controlSize.bar });
+  }
+  const plus = root.root.findAll((node) => node.type === PressInPlace && node.props.label === "New Tab")[0]!;
+  expect(plus.findAll((node) => node.type === BarPlusGlyph)).toHaveLength(1);
+  expect(root.root.findAll((node) => node.type === PressInPlace && node.props.label === "Settings")).toHaveLength(1);
+  unmount(root);
+  act(() => useTabs.setState({ incognito: true }));
+  const privately = start();
+  expect(privately.root.findAll((node) => node.type === PressInPlace && node.props.label === "New Incognito Tab")).toHaveLength(1);
+  expect(privately.root.findAll((node) => node.type === ChromeSurface && node.props.testID === "startBarPlus")[0]!.props.incognito).toBe(true);
+  unmount(privately);
+  act(() => useTabs.setState({ incognito: false }));
 });
 
 test("the plus's menu offers a private tab and reopening, and in a private tab a regular one too", () => {
@@ -122,61 +144,35 @@ test("the plus's menu offers a private tab and reopening, and in a private tab a
   unmount(privately);
 });
 
-test("the space's switcher is centred at 0.44 of the screen's height, a plain header without a chevron when there is one space", () => {
-  withSpaces([profile("work", "Work")]);
-  const root = start();
-  const switcher = style(root, "startSwitcher");
-  expect(switcher.top + switcher.height / 2).toBeCloseTo(SWITCHER_Y, 5);
-  expect(root.root.findAll((node) => node.props.accessibilityRole === "header" && node.props.accessibilityLabel === "Work")).not.toHaveLength(0);
-  expect(root.root.findAll((node) => node.props.accessibilityLabel === "Space, Work")).toHaveLength(0);
-  expect(host(root, "startPageDots")).toBeUndefined();
-  expect(host(root, "startPager")).toBeUndefined();
-  unmount(root);
-});
-
-test("pinned tiles sit 45 points under the switcher, four to a row, 52 tall with 14-point corners, 8 apart and 20 in from the sides, icon only", () => {
+test("with spaces the page shows no name, tiles or dots, only the mark over a gradient of the space's colour", () => {
   withSpaces([profile("work", "Work", Array.from({ length: 6 }, (_, i) => tile(i)))]);
   const root = start();
-  expect(style(root, "startTiles").top).toBeCloseTo(SWITCHER_Y + 45, 5);
-  expect(style(root, "startTiles")).toMatchObject({ paddingHorizontal: 20, gap: 8 });
-  expect(hosts(root, "startTileRow").map((row) => row.findAll((node) => node.props.testID === "startTile" && typeof node.type === "string").length)).toEqual([4, 2]);
-  const width = (WIDTH - 40 - 3 * 8) / 4;
-  for (const face of hosts(root, "startTile")) expect(StyleSheet.flatten(face.props.style)).toMatchObject({ width, height: 52, borderRadius: 14 });
-  expect(hosts(root, "startTiles")[0]!.findAll((node) => node.type === "Text")).toHaveLength(0);
+  for (const gone of ["startSwitcher", "startTiles", "startTile", "startPageDots", "startSyncInvitation"]) expect(host(root, gone)).toBeUndefined();
+  expect(root.root.findAll((node) => node.props.accessibilityRole === "header" && node.props.accessibilityLabel === "Work")).toHaveLength(0);
+  expect(String(style(root, "startGradient").experimental_backgroundImage)).toMatch(/^linear-gradient\(/);
+  expect(root.root.findAll((node) => node.type === AppIcon && node.props.side === 128)).toHaveLength(1);
+  expect(host(root, "appIcon")).toBeDefined();
+  expect(root.root.findAll((node) => node.type === ArdiaLogo)).toHaveLength(0);
   unmount(root);
 });
 
-test("with fewer than four tiles the row splits between them, as SwiftUI's grid does", () => {
-  withSpaces([profile("work", "Work", [tile(0), tile(1)])]);
-  const root = start();
-  for (const face of hosts(root, "startTile")) expect(StyleSheet.flatten(face.props.style).width).toBe((WIDTH - 40 - 8) / 2);
-  unmount(root);
-});
-
-test("a tile opens its page in the space, and a folder tile opens a menu of its tabs", () => {
-  const open = jest.spyOn(syncActions, "openRemote").mockImplementation(() => undefined);
-  withSpaces([profile("work", "Work", [tile(0), tile(1, [{ key: "f0", title: "Inside", url: "https://inside.example/", icon: null }])])]);
-  const root = start();
-  act(() => root.root.findAll((node) => node.props.accessibilityLabel === "Pin 0" && typeof node.props.onPress === "function")[0]!.props.onPress());
-  expect(open).toHaveBeenCalledWith("https://pin0.example/", "Pin 0", "work", "k0");
-  act(() => root.root.findAll((node) => node.props.accessibilityLabel === "Pin 1" && typeof node.props.onPress === "function")[0]!.props.onPress());
-  const menu = root.root.findAll((node) => node.type === FloatingMenu)[0]!;
-  expect(menu.props.items.map((item: { label: string }) => item.label)).toEqual(["Inside"]);
-  act(() => menu.props.items[0].onPress());
-  expect(open).toHaveBeenLastCalledWith("https://inside.example/", "Inside", "work", "f0");
-  unmount(root);
-});
-
-test("with more than one space the pages swipe sideways, and the dots sit 60 points above the bar's centre with the current one lit", () => {
+test("with more than one space the gradients swipe sideways, a page per space, and the pager is an adjustable control named for the space", () => {
   withSpaces([profile("work", "Work"), profile("home", "Home"), profile("play", "Play")], "home");
   const root = start();
   expect(host(root, "startPager")).toBeDefined();
-  const dots = style(root, "startPageDots");
-  expect(dots.top + dots.height / 2).toBe(BAR_CENTER_Y - 60);
-  expect(dots).toMatchObject({ gap: 21 });
-  expect(hosts(root, "startPageDot")).toHaveLength(3);
-  for (const dot of hosts(root, "startPageDot")) expect(StyleSheet.flatten(dot.props.style)).toMatchObject({ width: 7, height: 7 });
-  expect(host(root, "startPageDots")!.props.accessibilityLabel).toBe("Space 2 of 3");
+  expect(hosts(root, "startGradient").length).toBeGreaterThan(1);
+  const spaces = host(root, "startSpaces")!;
+  expect(spaces.props.accessibilityRole).toBe("adjustable");
+  expect(spaces.props.accessibilityLabel).toBe("Space 2 of 3");
+  expect(spaces.props.accessibilityValue).toEqual({ text: "Home" });
+  unmount(root);
+});
+
+test("each space's gradient takes that space's colour", () => {
+  withSpaces([{ ...profile("work", "Work"), color: "blue" }, { ...profile("home", "Home"), color: "orange" }]);
+  const root = start();
+  const [work, home] = hosts(root, "startGradient").map((node) => String(StyleSheet.flatten(node.props.style).experimental_backgroundImage));
+  expect(work).not.toBe(home);
   unmount(root);
 });
 
@@ -203,57 +199,70 @@ test("in a private tab a swipe still switches space but is never counted", () =>
   unmount(root);
 });
 
-test("with more than one space the name is still a plain header with no chevron and no menu, and adjusting the dots switches space, counted as a pick and not a swipe", () => {
+test("adjusting the spaces with a screen reader switches space, counted as a pick and not a swipe, and never while private", () => {
   withSpaces([profile("work", "Work"), profile("home", "Home")]);
   const root = start();
-  expect(root.root.findAll((node) => node.props.accessibilityRole === "header" && node.props.accessibilityLabel === "Work")).not.toHaveLength(0);
-  expect(root.root.findAll((node) => node.props.accessibilityLabel === "Space, Work")).toHaveLength(0);
-  expect(root.root.findAll((node) => node.type === FloatingMenu && node.props.items.some((item: { label: string }) => item.label === "Home"))).toHaveLength(0);
-  const dots = host(root, "startPageDots")!;
-  expect(dots.props.accessibilityRole).toBe("adjustable");
-  expect(dots.props.accessibilityValue).toEqual({ text: "Work" });
-  act(() => dots.props.onAccessibilityAction({ nativeEvent: { actionName: "decrement" } }));
+  const spaces = host(root, "startSpaces")!;
+  act(() => spaces.props.onAccessibilityAction({ nativeEvent: { actionName: "decrement" } }));
   expect(select).not.toHaveBeenCalled();
-  act(() => dots.props.onAccessibilityAction({ nativeEvent: { actionName: "increment" } }));
+  act(() => spaces.props.onAccessibilityAction({ nativeEvent: { actionName: "increment" } }));
   expect(select).toHaveBeenCalledWith("home");
-  expect(tick).toHaveBeenCalledTimes(1);
   expect(counted.mock.calls).toEqual([["spaces_picked"]]);
   unmount(root);
-});
-
-test("in a private tab adjusting the dots still switches space but is never counted", () => {
+  counted.mockClear();
   act(() => useTabs.setState({ incognito: true }));
-  withSpaces([profile("work", "Work"), profile("home", "Home")]);
-  const root = start();
-  act(() => host(root, "startPageDots")!.props.onAccessibilityAction({ nativeEvent: { actionName: "increment" } }));
-  expect(select).toHaveBeenCalledWith("home");
+  const privately = start();
+  act(() => host(privately, "startSpaces")!.props.onAccessibilityAction({ nativeEvent: { actionName: "increment" } }));
   expect(counted).not.toHaveBeenCalled();
+  unmount(privately);
+});
+
+test("tapping the mark opens Search through New Tab with a bar tick on the press; it is announced as New Tab with no hint that repeats it, and counted only on Android, never while private", () => {
+  const opened = jest.spyOn(browseStore, "newTab").mockImplementation(() => undefined);
+  const pressTick = jest.spyOn(haptics, "barPress").mockImplementation(() => undefined);
+  const root = start();
+  const button = host(root, "startLogoButton")!;
+  expect(button.props.accessibilityRole).toBe("button");
+  expect(button.props.accessibilityLabel).toBe("New Tab");
+  expect(button.props.accessibilityHint).toBeUndefined();
+  const logo = root.root.findAll((node) => node.props.testID === "startLogoButton" && typeof node.props.onPress === "function")[0]!;
+  act(() => logo.props.onPressIn());
+  expect(pressTick).toHaveBeenCalledTimes(1);
+  expect(opened).not.toHaveBeenCalled();
+  act(() => logo.props.onPressOut());
+  act(() => logo.props.onPress());
+  expect(opened).toHaveBeenCalledTimes(1);
+  expect(counted.mock.calls.filter((call) => call[0] === "start_logo_taps")).toHaveLength(Platform.OS === "android" ? 1 : 0);
   unmount(root);
 });
 
-test("with no spaces and sync off, a Sync With Your Mac capsule sits where the switcher would, and opens sync setup", () => {
-  const openSettings = jest.spyOn(settingsNav, "openSettings").mockImplementation(() => undefined);
-  const root = start();
-  const invitation = style(root, "startSyncInvitation");
-  expect(invitation.top + invitation.minHeight / 2).toBeCloseTo(SWITCHER_Y, 5);
-  const capsule = root.root.findAll((node) => node.props.accessibilityLabel === "Sync With Your Mac" && typeof node.props.onPress === "function")[0]!;
-  act(() => capsule.props.onPress());
-  expect(openSettings).toHaveBeenCalledWith({ page: "syncConnect" });
-  expect(host(root, "startSwitcher")).toBeUndefined();
-  unmount(root);
-});
-
-test("with sync on but no spaces yet, the page shows neither the switcher nor the invitation", () => {
-  withSpaces([]);
-  const root = start();
-  expect(host(root, "startSyncInvitation")).toBeUndefined();
-  expect(host(root, "startSwitcher")).toBeUndefined();
-  unmount(root);
+test("an ordinary tap on the mark dims it at once and never scales it, with or without Reduce Motion", () => {
+  jest.spyOn(browseStore, "newTab").mockImplementation(() => undefined);
+  jest.spyOn(haptics, "barPress").mockImplementation(() => undefined);
+  for (const reduced of [false, true]) {
+    mockMotion.reduced = reduced;
+    const root = start();
+    const mark = () => getAnimatedStyle(host(root, "startLogo")!) as { opacity: number; transform: Record<string, number | string>[] };
+    const scaleOf = () => (Object.assign({}, ...mark().transform) as { scale: number }).scale;
+    const logo = root.root.findAll((node) => node.props.testID === "startLogoButton" && typeof node.props.onPress === "function")[0]!;
+    expect(mark().opacity).toBe(1);
+    act(() => logo.props.onPressIn());
+    expect(mark().opacity).toBe(startLayout.logoPressOpacity);
+    expect(scaleOf()).toBe(1);
+    for (let frame = 0; frame < 30; frame++) act(() => jest.advanceTimersByTime(16));
+    expect(mark().opacity).toBe(startLayout.logoPressOpacity);
+    expect(scaleOf()).toBe(1);
+    act(() => logo.props.onPressOut());
+    expect(mark().opacity).toBe(1);
+    expect(scaleOf()).toBe(1);
+    unmount(root);
+  }
+  mockMotion.reduced = false;
 });
 
 const content = (root: Root) => getAnimatedStyle(host(root, "startContent")!) as { opacity: number; transform: { scale: number }[] };
 
-test("while the search tray is up the spaces fade out and shrink to 0.96, the bar fades, and neither takes touches", () => {
+test("while the search tray is up the mark fades out and shrinks to 0.96, the bar fades, and neither takes touches", () => {
   withSpaces([profile("work", "Work", [tile(0)])]);
   const root = start();
   expect(content(root).opacity).toBe(1);
@@ -287,7 +296,7 @@ test("on the original start page Android's bar stays in place under the rising t
   unmount(root);
 });
 
-test("with Reduce Motion the spaces only fade behind the tray, without shrinking", () => {
+test("with Reduce Motion the mark only fades behind the tray, without shrinking", () => {
   mockMotion.reduced = true;
   withSpaces([profile("work", "Work")]);
   const root = start();
@@ -298,32 +307,42 @@ test("with Reduce Motion the spaces only fade behind the tray, without shrinking
   unmount(root);
 });
 
-const THEMED = { colors: ["#FF5A5F", "#5856D6"], darkColors: null };
-
-test("over a themed space in light mode the backdrop wears a 34% white veil; in dark mode and in a private tab it doesn't", () => {
-  withSpaces([profile("work", "Work", [], THEMED)]);
-  const light = start();
-  expect(style(light, "themeVeil").backgroundColor).toBe("rgba(255,255,255,0.34)");
-  unmount(light);
-  const scheme = jest.spyOn(require("react-native"), "useColorScheme").mockReturnValue("dark");
-  const dark = start();
-  expect(host(dark, "themeVeil")).toBeUndefined();
-  unmount(dark);
-  scheme.mockRestore();
-  act(() => useTabs.setState({ incognito: true }));
-  const privately = start();
-  expect(host(privately, "themeVeil")).toBeUndefined();
-  unmount(privately);
+test("when the page width changes with the same space selected, the pager moves to that space at the new width", () => {
+  withSpaces([profile("work", "Work"), profile("home", "Home")], "home");
+  const scrolled = jest.spyOn(FlatList.prototype, "scrollToOffset").mockImplementation(() => {});
+  const spaces = (width: number) => <StartSpaces geometry={{ width, height: 678, safeSide: 0, barCenterY: 620 }} dark={false} incognito={false} />;
+  const root = renderSurface(spaces(466));
+  scrolled.mockClear();
+  updateSurface(root, spaces(951));
+  expect(scrolled).toHaveBeenCalledWith({ offset: 951, animated: false });
+  scrolled.mockRestore();
+  unmount(root);
 });
 
-test("the original start page has no veil, and the native backdrop is asked for the themed look, which draws its own veil", () => {
-  withSpaces([profile("work", "Work", [], THEMED)]);
-  const original = start("original");
-  expect(host(original, "themeVeil")).toBeUndefined();
-  unmount(original);
-  jest.spyOn(lookModule, "lookIsNative").mockImplementation(() => true);
-  const native = start();
-  expect(host(native, "themeVeil")).toBeUndefined();
-  expect(native.root.findAll((node) => node.type === lookModule.ProfileBackdrop).map((node) => node.props.themed)).toEqual([true]);
-  unmount(native);
+test("with no tabs open the bar's Tabs button becomes Archive, or Spaces when sync is on, so Start never leads to an empty tab view", () => {
+  withTabs(0);
+  const deck = jest.spyOn(browseStore, "showDeck").mockImplementation(async () => undefined);
+  const archive = jest.spyOn(browseStore, "openArchive").mockImplementation(() => undefined);
+  const spaces = jest.spyOn(browseStore, "openSpaces").mockImplementation(() => undefined);
+  const press = (root: Root, label: string) => act(() => root.root.findAll((node) => node.props.accessibilityLabel === label && typeof node.props.onPress === "function")[0]!.props.onPress());
+  const offline = start();
+  expect(host(offline, "startBarTabs")).toBeUndefined();
+  expect(style(offline, "startBarArchive")).toMatchObject({ width: 48, height: 48, borderRadius: 24 });
+  press(offline, "Archive");
+  expect(archive).toHaveBeenCalledTimes(1);
+  expect(counted).toHaveBeenCalledWith("start_no_tabs_button_taps");
+  unmount(offline);
+  withSpaces([profile("work", "Work")]);
+  const synced = start();
+  expect(host(synced, "startBarArchive")).toBeUndefined();
+  press(synced, "Spaces");
+  expect(spaces).toHaveBeenCalledTimes(1);
+  unmount(synced);
+  act(() => withTabs(1));
+  const browsing = start();
+  expect(host(browsing, "startBarSynced")).toBeUndefined();
+  press(browsing, "Tabs");
+  expect(deck).toHaveBeenCalledTimes(1);
+  expect(archive).toHaveBeenCalledTimes(1);
+  unmount(browsing);
 });

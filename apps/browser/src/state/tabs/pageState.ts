@@ -10,6 +10,8 @@ import type {
 } from "../../platform/tabs";
 import type { ExternalAppRequest } from "../../platform/siteSettings";
 import type { PermissionRequest } from "../../platform/permissions";
+
+type VerificationCodeOffer = { token: string; app: string; host: string; generation: number };
 import { create } from "zustand";
 import { useBrowser } from "../browser/store";
 import { recordWatch, useKeyed } from "../browser/keyedWatch";
@@ -33,6 +35,7 @@ export type PageState = {
   passwordPrompt: PasswordPrompt | null;
   autofillPrompt: AutofillPrompt | null;
   externalApp: ExternalAppRequest | null;
+  verificationCode: VerificationCodeOffer | null;
   mediaAccess: MediaAccess | null;
   wasNewTab: boolean;
   backToNewTab: boolean;
@@ -54,6 +57,7 @@ const IDLE_PAGE: PageState = {
   passwordPrompt: null,
   autofillPrompt: null,
   externalApp: null,
+  verificationCode: null,
   mediaAccess: null,
   wasNewTab: false,
   backToNewTab: false,
@@ -133,7 +137,7 @@ export function useFullscreenTab(windowId: string): string | undefined {
   });
 }
 
-useBrowser.subscribe((s, prev) => {
+useBrowser.subscribeTo(["tabs"], (s, prev) => {
   if (s.tabs === prev.tabs) return;
   for (const id of iconPages.keys()) if (!s.tabs[id]) iconPages.delete(id);
   const { pages, ready, popover } = usePages.getState();

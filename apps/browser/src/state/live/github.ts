@@ -46,7 +46,7 @@ type RawCheck =
   | { __typename: "CheckRun"; name: string; status: string; conclusion: string | null; detailsUrl: string | null }
   | { __typename: "StatusContext"; context: string; state: string; targetUrl: string | null };
 
-export type RawPR = {
+type RawPR = {
   id: string;
   state?: "OPEN" | "CLOSED" | "MERGED";
   number: number;
@@ -67,8 +67,6 @@ export type RawPR = {
   reviewThreads?: { nodes: { isResolved: boolean }[] };
   commits: { nodes: { commit: { statusCheckRollup: { state: string; contexts: { nodes: RawCheck[] } } | null } }[] };
 };
-
-type StateCount = { state: string; count: number };
 
 export type ListedPR = {
   id: string;
@@ -110,14 +108,20 @@ export function blockedNodes(errors: readonly GraphqlError[] | undefined): Graph
 export function blockedError(blocked: readonly GraphqlError[]): LiveError | null {
   if (!blocked.length) return null;
   const sso = blocked.find((e) => ORG_SSO.test(e.message));
-  return sso ? new LiveError("sso", sso.message) : new LiveError("tokenBlocked", blocked[0]!.message);
+  if (sso) return new LiveError("sso", withLink("An organization needs single sign-on for this token", sso.message));
+  return new LiveError("tokenBlocked", withLink("This token can't read some pull requests", blocked[0]!.message));
 }
 
 export function blockedLink(message: string): string | null {
-  return message.match(/https:\/\/github\.com\/(?:settings|orgs)\/[^\s"')]+/)?.[0]?.replace(/[.,]$/, "") ?? null;
+  return message.match(/https:\/\/github\.com\/(?:settings|orgs)\/[\w./-]+/)?.[0]?.replace(/[.,]$/, "") ?? null;
 }
 
-export function checkState(c: RawCheck): CheckState {
+const withLink = (text: string, providerMessage: string) => {
+  const link = blockedLink(providerMessage);
+  return link ? `${text}: ${link}` : text;
+};
+
+function checkState(c: RawCheck): CheckState {
   if (c.__typename === "StatusContext") {
     if (c.state === "SUCCESS") return "success";
     if (c.state === "FAILURE" || c.state === "ERROR") return "failure";
@@ -184,7 +188,7 @@ export function listingOf(json: GithubResponse): Listing {
   return { authored: idsOf(data?.authored.nodes ?? []), review: idsOf(data?.review.nodes ?? []), direct: new Set(idsOf(data?.direct.nodes ?? [])) };
 }
 
-export type Sectioned = { id: string; section: PullRequestSection };
+type Sectioned = { id: string; section: PullRequestSection };
 
 export function sectioned(listing: Listing, filters: { authored: boolean; reviewRequests: boolean }): Sectioned[] {
   const out: Sectioned[] = [];
@@ -200,9 +204,9 @@ export type DetailsResponse = { data?: { rateLimit?: RateLimitInfo | null; nodes
 export function detailNodes(ids: string[], res: DetailsResponse): RawPR[] {
   const errors = res.errors ?? [];
   const limited = errors.find((e) => e.type === "RATE_LIMITED");
-  if (limited) throw new LiveError("rateLimited", limited.message);
+  if (limited) throw new LiveError("rateLimited", "Rate Limit Exceeded");
   const nodes = res.data?.nodes;
-  const fail = (error?: GraphqlError) => new LiveError("other", (error ?? errors[0])?.message ?? "Missing pull request details");
+  const fail = (_error?: GraphqlError) => new LiveError("other", "GitHub couldn't read the pull request details");
   if (!nodes || nodes.length !== ids.length) throw fail();
   return nodes.filter((node, i): node is RawPR => {
     if (node) return true;
@@ -256,7 +260,7 @@ export function withStacks(items: LiveItem[]): LiveItem[] {
   return items.map((it) => (info.has(it.id) && it.pr ? { ...it, pr: { ...it.pr, stack: info.get(it.id) } } : it));
 }
 
-export type CheckSummary = {
+type CheckSummary = {
   text: string;
   tone: "success" | "failure" | "pending" | "neutral";
   counts: { success: number; failure: number; pending: number };

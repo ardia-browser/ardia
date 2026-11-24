@@ -73,6 +73,7 @@ public final class WebTab: DiscardablePage, Identifiable {
   public private(set) var pageZoom = 1.0
   public private(set) var isFindingInPage = false
   public private(set) var navigationGeneration = 0
+  public private(set) var hasCommittedLoad = true
   public var request: PageRequest?
   public let blockedResources = BlockedResourceCounter()
 
@@ -258,10 +259,10 @@ public final class WebTab: DiscardablePage, Identifiable {
     webView.allowsBackForwardNavigationGestures = engine.preferences.swipeNavigation == .screenEdges
     webView.allowsLinkPreview = true
     webView.isFindInteractionEnabled = true
-    webView.scrollView.contentInsetAdjustmentBehavior = .automatic
+    webView.scrollView.contentInsetAdjustmentBehavior = .always
     webView.isInspectable = engine.isInspectable
     engine.blocker.install(on: configuration.userContentController, counter: blockedResources)
-    engine.installPageScripts(on: configuration.userContentController)
+    engine.installPageScripts(on: configuration.userContentController, host: host, isPrivate: isPrivate)
     self.webView = webView
     observe(webView)
     let stored = engine.tabs.tab(id)
@@ -343,7 +344,10 @@ public final class WebTab: DiscardablePage, Identifiable {
       if let value = tab.progressThrottle.offer(view.estimatedProgress, at: .now) { tab.progress = value }
     }
     watch(\.isLoading) { tab, view in
-      if view.isLoading, !tab.isLoading { tab.navigationGeneration += 1 }
+      if view.isLoading, !tab.isLoading {
+        tab.navigationGeneration += 1
+        tab.hasCommittedLoad = false
+      }
       if tab.isLoading != view.isLoading { tab.isLoading = view.isLoading }
       if !view.isLoading {
         tab.progressThrottle.reset()
@@ -421,6 +425,7 @@ public final class WebTab: DiscardablePage, Identifiable {
       let targetHost = BrowserURL.host(of: target.absoluteString)
       if let controller = webView?.configuration.userContentController {
         engine?.blocker.prepareNavigation(of: controller, toHost: targetHost, isPrivate: isPrivate)
+        engine?.prepareNightShade(of: controller, toHost: targetHost, isPrivate: isPrivate)
       }
       let zoom = engine?.preferences.settings(for: targetHost, isPrivate: isPrivate).pageZoom ?? 1
       if zoom != pageZoom {
@@ -457,6 +462,7 @@ public final class WebTab: DiscardablePage, Identifiable {
   }
 
   fileprivate func didCommit() {
+    hasCommittedLoad = true
     capturingOrigins = [:]
     blockedResources.reset()
     scrollTracker.reset()
@@ -777,7 +783,7 @@ final class WebTabCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, UIS
         UIAction(title: String(localized: "Copy Link"), image: UIImage(systemName: "link")) { _ in
           engine?.copyLink(link)
         },
-        UIAction(title: String(localized: "Share…"), image: UIImage(systemName: "square.and.arrow.up")) { _ in
+        UIAction(title: String(localized: "Share"), image: UIImage(systemName: "square.and.arrow.up")) { _ in
           engine?.share(link)
         },
         UIAction(title: String(localized: "Download Linked File"), image: UIImage(systemName: "arrow.down.circle")) { _ in

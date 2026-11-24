@@ -84,3 +84,19 @@ test("every kind native sends into a frame has a page-script handler, and every 
   const handled = collect([pageScript], /\bhandlers\.([A-Za-z]+) =/g);
   assert.deepEqual(sorted(handled), sorted(called));
 });
+
+test("a Picture in Picture pinch reaches its handler with whether the window was unfocused and whether another app was in front", async () => {
+  const { deliverPageEvent } = await import("./pageEvents.ts");
+  const seen = [];
+  const props = { onPictureInPictureStandIn: (standIn) => seen.push(standIn) };
+  deliverPageEvent(props, { name: "pictureInPictureStandIn", data: { pinch: true, timedOut: false, unfocused: true, fromOtherApp: true, epoch: "e1" } });
+  deliverPageEvent(props, { name: "pictureInPictureStandIn", data: { pinch: true, timedOut: true, unfocused: false, fromOtherApp: false, epoch: "e2" } });
+  deliverPageEvent(props, { name: "pictureInPictureStandIn", data: { pinch: false, timedOut: true, epoch: "e3" } });
+  deliverPageEvent(props, { name: "pictureInPictureStandIn", data: { pinch: "yes", timedOut: 0, unfocused: "1", fromOtherApp: null, epoch: "e4", extra: "dropped" } });
+  assert.deepEqual(seen, [
+    { pinch: true, timedOut: false, unfocused: true, fromOtherApp: true, epoch: "e1" },
+    { pinch: true, timedOut: true, unfocused: false, fromOtherApp: false, epoch: "e2" },
+    { pinch: false, timedOut: true, unfocused: false, fromOtherApp: false, epoch: "e3" },
+    { pinch: true, timedOut: false, unfocused: true, fromOtherApp: false, epoch: "e4" },
+  ]);
+});

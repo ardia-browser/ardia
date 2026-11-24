@@ -84,7 +84,7 @@ test("the production engine aggregate waits for both engines and rejects the mod
   const chromium = method(source.slice(source.indexOf("struct ChromiumPageEngine")), "func clearBrowsingData(");
   const webKit = method(source.slice(source.indexOf("struct WebKitPageEngine")), "func clearBrowsingData(");
   const aggregate = method(source, "static func clearBrowsingData(");
-  const handler = method(read("ProfilesModule.swift"), '"clearBrowsingData":').replace(/^"clearBrowsingData": /, "");
+  const handler = method(read("ProfilesModule.swift"), "clearBrowsingData:").replace(/^clearBrowsingData: /, "");
   const service = method(read("EngineCall.swift"), "func service(");
   run(compiler, ["-swift-version", "5"], `
 import Foundation
@@ -109,6 +109,7 @@ class WebKitHub {
 struct ChromiumPageEngine: PageEngine { ${chromium} }
 struct WebKitPageEngine: PageEngine {
   var hub: WebKitHub { WebKitHub.shared }
+  static func hasData(_ profile: String) -> Bool { true }
   ${webKit}
 }
 enum PageEngines {

@@ -31,13 +31,13 @@ const nativeTest = Platform.OS === "ios" ? test : test.skip;
 
 const contextMenus = (root: Root) => root.root.findAll((node) => node.type === ("ContextMenuView" as never));
 const items = (menu: ReactTestInstance): NativeItem[] => menu.props.items;
-const pressOptions = (root: Root) => act(() => root.root.findAll((node) => node.props.accessibilityLabel === "Options" && typeof node.props.onPress === "function")[0]!.props.onPress());
+const pressOptions = (root: Root) => act(() => root.root.findAll((node) => node.props.accessibilityLabel === "More" && typeof node.props.onPress === "function")[0]!.props.onPress());
 const drawnMenu = (root: Root): MenuItem[] => root.root.findAll((node) => node.type === FloatingMenu)[0]!.props.items;
 
-nativeTest("on iPhone the Archive's Options menu is main's: an Archive Inactive Tabs submenu of the intervals, then Delete All…, off while the Archive is empty", () => {
+nativeTest("on iPhone the Archive’s More menu is main's: an Archive Inactive Tabs submenu of the intervals, then Delete All…, off while the Archive is empty", () => {
   resetNativeMenus(true);
   const root = renderSurface(<ArchiveView />);
-  const options = contextMenus(root).find((menu) => menu.findAll((node) => node.props.accessibilityLabel === "Options").length > 0)!;
+  const options = contextMenus(root).find((menu) => menu.findAll((node) => node.props.accessibilityLabel === "More").length > 0)!;
   expect(options.props.trigger).toBe("tap");
   const shown = titles(items(options));
   expect(shown).toHaveLength(2);
@@ -51,7 +51,7 @@ nativeTest("on iPhone the Archive's Options menu is main's: an Archive Inactive 
   unmount(root);
 });
 
-test("without the system's menus, as on Android, the Options menu is the drawn one with the same items, and Delete All… asks in the drawn action sheet", () => {
+test("without the system's menus, as on Android, the More menu is the drawn one with the same items, and Delete All… asks in the drawn action sheet", () => {
   act(() => tabStore.useTabs.setState((state) => ({ ...state, archivedCount: 2 })));
   const root = renderSurface(<ArchiveView />);
   expect(contextMenus(root)).toHaveLength(0);

@@ -7,7 +7,7 @@ export const LEGACY_CLEAN_UP_KEY = "cleanUpInactiveTabsAfterHours";
 
 export const DAILY_CLEAN_UP_MINUTES = 24 * 60;
 
-export const CLEAN_UP_PRESETS: readonly { minutes: number; title: string }[] = [
+const CLEAN_UP_PRESETS: readonly { minutes: number; title: string }[] = [
   { minutes: 12 * 60, title: "12 hours" },
   { minutes: 24 * 60, title: "24 hours" },
   { minutes: 7 * 24 * 60, title: "7 days" },

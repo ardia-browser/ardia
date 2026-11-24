@@ -1,4 +1,4 @@
-export type LaunchArgument = { text: string; file?: string };
+type LaunchArgument = { text: string; file?: string };
 export type LaunchArguments = { arguments: LaunchArgument[]; single?: LaunchArgument };
 
 const SWITCH_PREFIXES = ["--", "-", "/"];

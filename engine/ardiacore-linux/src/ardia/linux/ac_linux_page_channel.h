@@ -8,7 +8,7 @@
 #include "ardia/linux/ac_linux_link_gesture.h"
 #include "ardia/linux/ac_linux_link_tabs.h"
 #include "ardia/linux/ac_linux_page_messages.h"
-#include "ardia/linux/ac_linux_page_swipe.h"
+#include "ardia/desktop/ac_desktop_page_swipe.h"
 #include "ardia/linux/ac_linux_theme.h"
 #include "ardia/linux/mojom/page.mojom.h"
 #include "base/callback_list.h"
@@ -115,7 +115,7 @@ class LinuxPageChannel : public content::WebContentsObserver,
                     input::InputEventSource source) override;
   void OnInputEventAck(const content::RenderWidgetHost& widget, blink::mojom::InputEventResultSource source,
                        blink::mojom::InputEventResultState state, const blink::WebInputEvent& event) override;
-  void ForwardSwipe(const ardia::linux_swipe::Step& step, std::optional<gfx::PointF> page_point);
+  void ForwardSwipe(const ardia::desktop_swipe::Step& step, std::optional<gfx::PointF> page_point);
   void RenderWidgetHostDestroyed(content::RenderWidgetHost* widget) override;
 
   content::RenderFrameHostReceiverSet<ardia::linux_page::mojom::PageHost> receivers_;
@@ -131,7 +131,7 @@ class LinuxPageChannel : public content::WebContentsObserver,
   content::WeakDocumentPtr message_document_;
   base::WeakPtr<LinuxPageDropTrack> drop_track_;
   LinuxNewTabLinks new_tab_links_;
-  ardia::linux_swipe::PageSwipe swipe_;
+  ardia::desktop_swipe::PageSwipe swipe_;
   double activating_input_at_ = -1;
   base::RepeatingClosureList page_video_listeners_;
   base::WeakPtrFactory<LinuxPageChannel> weak_factory_{this};

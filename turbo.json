@@ -36,6 +36,24 @@
         "^build"
       ]
     },
+    "@ardia/hostapi#test": {
+      "dependsOn": [
+        "^build"
+      ],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/ardiacore/ios/*.swift",
+        "$TURBO_ROOT$/packages/ardiacore/ios/*.mm",
+        "$TURBO_ROOT$/packages/*/package.json",
+        "$TURBO_ROOT$/packages/*/src/**",
+        "$TURBO_ROOT$/packages/*/ios/*.swift",
+        "$TURBO_ROOT$/engine/ardiacore-desktop/src/**",
+        "$TURBO_ROOT$/engine/ardiacore-linux/src/**",
+        "$TURBO_ROOT$/scripts/windows/engine/src/**",
+        "$TURBO_ROOT$/apps/browser/windows/**/*.cpp",
+        "$TURBO_ROOT$/apps/browser/windows/**/*.h"
+      ]
+    },
     "test:portable": {
       "dependsOn": [
         "^build"

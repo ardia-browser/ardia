@@ -1,27 +1,35 @@
 #!/usr/bin/env bash
 set -euo pipefail
-usage='usage: scripts/linux/release.sh <version> [--engine exact|nearest|<dir>] [--out <dir>] [--allow-dirty]
+usage='usage: scripts/linux/release.sh <version> [--engine exact|nearest|<dir>] [--out <dir>] [--update-key <pem>] [--allow-dirty]
 
 Builds the Linux x64 release of Ardia <version> (a -nightly.<n> version is a
 nightly), the Linux counterpart of scripts/release.sh: it fetches the engine,
-builds apps/linux/dist and the ardia CLI, prepares uBlock Origin, packages
+builds apps/desktop/dist/linux, the ardia CLI and lib/ardia/ardia-update-verify
+(scripts/linux/update-verify.sh), prepares uBlock Origin, packages
 Ardia-<version>-linux-x64.tar.xz with lib/ardia/VERSION and the CLI, and the
 same build as Ardia-<version>-linux-x64.deb and .AppImage, writes
 ardia-bin-<version>.src.tar.gz (the Arch PKGBUILD and .SRCINFO pinned to that
-tarball), the .sha256 files and provenance.txt, and runs the smoke gate on
-the tarball, the .deb and the AppImage. It never publishes: it prints the
-gh release upload command for the assets.
+tarball), the .sha256 files and provenance.txt, runs the smoke gate on
+the tarball, the .deb and the AppImage, and writes the self-update manifest
+Ardia-<version>-linux-update.txt (scripts/linux/sign-update.mjs). It never
+publishes: it prints the gh release upload command for the assets.
 
   --engine exact     the published engine of this commit'"'"'s engine key (default;
                      a release must match its source)
   --engine nearest   the nearest earlier published engine: a test build
   --engine DIR       an engine dir (chrome and manifest.json) or a Chromium out
-                     dir, read only: a test build unless its manifest names
-                     this commit'"'"'s engine key (engine/engine-key.sh)
+                     dir, read only: a test build unless it is this commit'"'"'s
+                     engine (scripts/linux/runtime_files.py serves: its manifest
+                     names this commit'"'"'s engine key, engine/engine-key.sh
+                     --platform linux, or the key that key'"'"'s table row was
+                     built under)
   --out DIR          where the assets go (default dist/<version>/linux); an
                      existing DIR must be empty or an earlier output of this script
+  --update-key PEM   sign the manifest with this Ed25519 private key (default
+                     $LINUX_UPDATE_KEY_FILE); without one the manifest is left
+                     unsigned, and the Release workflow'"'"'s linux-sign job signs it
   --allow-dirty      build with uncommitted changes under apps/browser,
-                     apps/linux, packages, engine or scripts/linux
+                     apps/desktop, packages, engine or scripts/linux
                      (a test build, never a release)
   -h, --help         show this help
 
@@ -29,7 +37,8 @@ It needs MARKETING_VERSION to be <version> and docs/release-notes/<version>.md,
 as scripts/release.sh does: the Linux assets go on the GitHub release the
 macOS release made. pnpm comes from PATH, else
 ~/ardia-linux-build-156/tools/pnpm/node_modules/.bin. The .deb needs dpkg-deb
-and readelf (apt install dpkg binutils, pacman -S dpkg binutils).'
+and readelf (apt install dpkg binutils, pacman -S dpkg binutils), and the
+update verifier cargo and rustup (https://rustup.rs).'
 
 die() { echo "release.sh: $*" >&2; exit 1; }
 warn() { echo "warning: $*" >&2; }
@@ -38,17 +47,23 @@ version=""
 engine_mode=exact
 out=""
 allow_dirty=0
+update_key=${LINUX_UPDATE_KEY_FILE:-}
 while [ $# -gt 0 ]; do
   case "$1" in
     -h|--help) echo "$usage"; exit 0 ;;
     --engine) [ $# -ge 2 ] || die "--engine needs exact, nearest or a directory"; engine_mode=$2; shift 2 ;;
     --out) [ $# -ge 2 ] || die "--out needs a directory"; out=$2; shift 2 ;;
+    --update-key) [ $# -ge 2 ] || die "--update-key needs a PEM file"; update_key=$2; shift 2 ;;
     --allow-dirty) allow_dirty=1; shift ;;
     -*) echo "$usage" >&2; exit 64 ;;
     *) [ -z "$version" ] || { echo "$usage" >&2; exit 64; }; version=$1; shift ;;
   esac
 done
 [ -n "$version" ] || { echo "$usage" >&2; exit 64; }
+if [ -n "$update_key" ]; then
+  [ -f "$update_key" ] || die "no update signing key at $update_key"
+  update_key=$(cd "$(dirname "$update_key")" && pwd -P)/$(basename "$update_key")
+fi
 
 root=$(cd "$(dirname "$0")/../.." && pwd -P)
 . "$root/scripts/lib/releases.sh"
@@ -61,10 +76,10 @@ project_version=$(sed -n 's/.*MARKETING_VERSION = "\{0,1\}\([^";]*\)"\{0,1\};/\1
   || die "MARKETING_VERSION is '$project_version', not $version: the Linux release follows the macOS release of the same version"
 [ -f "docs/release-notes/$version.md" ] || die "no release notes: write docs/release-notes/$version.md first"
 
-dirty=$(git status --porcelain -- apps/browser apps/linux packages engine scripts/linux | grep -v ' apps/browser/build' || true)
+dirty=$(git status --porcelain -- apps/browser apps/desktop packages engine scripts/linux | grep -v ' apps/browser/build' || true)
 if [ -n "$dirty" ]; then
   echo "$dirty" >&2
-  [ "$allow_dirty" = 1 ] || die "uncommitted changes under apps/browser, apps/linux, packages, engine or scripts/linux (above)"
+  [ "$allow_dirty" = 1 ] || die "uncommitted changes under apps/browser, apps/desktop, packages, engine or scripts/linux (above)"
   warn "building with the uncommitted changes above: a test build, never a release"
 fi
 
@@ -81,11 +96,12 @@ node scripts/lib/release-note.mjs "docs/release-notes/$version.md" headline >/de
 
 release_output_entry() {
   case $1 in
-    provenance.txt|ui-build.log|ubo.log|smoke|smoke-deb|smoke-appimage) return 0 ;;
+    provenance.txt|ui-build.log|update-verify.log|ubo.log|smoke|smoke-deb|smoke-appimage) return 0 ;;
     Ardia-*-linux-x64.tar.xz|Ardia-*-linux-x64.tar.xz.sha256) return 0 ;;
     Ardia-*-linux-x64.deb|Ardia-*-linux-x64.deb.sha256|Ardia-*-linux-x64.AppImage|Ardia-*-linux-x64.AppImage.sha256) return 0 ;;
     ardia-bin-*.src.tar.gz|ardia-bin-*.src.tar.gz.sha256) return 0 ;;
     ardia-cli-*-linux-x64.tar.gz|ardia-cli-*-linux-x64.tar.gz.sha256) return 0 ;;
+    Ardia-*-linux-update.txt|Ardia-*-linux-update.txt.sig) return 0 ;;
   esac
   return 1
 }
@@ -108,6 +124,7 @@ deb_name="Ardia-$version-linux-x64.deb"
 appimage_name="Ardia-$version-linux-x64.AppImage"
 cli_name="ardia-cli-$version-linux-x64.tar.gz"
 srcpkg_name="ardia-bin-$version.src.tar.gz"
+update_name="Ardia-$version-linux-update.txt"
 export SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-$(git log -1 --format=%ct)}
 
 echo "==> Engine ($engine_mode)"
@@ -117,7 +134,7 @@ case "$engine_mode" in
   "") die "--engine needs exact, nearest or a directory" ;;
   *) [ -d "$engine_mode" ] || die "--engine $engine_mode is neither exact, nearest nor a directory"; engine=$(cd "$engine_mode" && pwd -P) ;;
 esac
-head_key=$(engine/engine-key.sh) || die "couldn't compute this commit's engine key (engine/engine-key.sh)"
+head_key=$(engine/engine-key.sh --platform linux) || die "couldn't compute this commit's engine key (engine/engine-key.sh --platform linux)"
 manifest_field() {
   python3 -I -c 'import json, sys; print(json.load(open(sys.argv[1])).get(sys.argv[2]) or "")' "$engine/manifest.json" "$1" 2>/dev/null || true
 }
@@ -132,7 +149,7 @@ elif [ -f "$engine/../../chrome/VERSION" ]; then
   chromium_version=$(awk -F= '{ v[$1] = $2 } END { print v["MAJOR"] "." v["MINOR"] "." v["BUILD"] "." v["PATCH"] }' "$engine/../../chrome/VERSION")
 fi
 exact=0
-[ "$engine_key" = "$head_key" ] && exact=1
+python3 -I scripts/linux/runtime_files.py serves --engine "$engine" --key "$head_key" && exact=1
 engine_label=${engine_key:0:12}
 engine_label=${engine_label:-"without a manifest"}
 if [ "$exact" = 1 ]; then
@@ -142,21 +159,25 @@ else
   warn "the engine ($engine_label, Chromium ${chromium_version:-unknown}) isn't this commit's ${head_key:0:12}: a test build, not a release"
 fi
 
-echo "==> UI (apps/linux/dist)"
-pnpm --filter @ardia/linux build >"$out/ui-build.log" 2>&1 \
-  || { tail -20 "$out/ui-build.log" >&2; die "building apps/linux/dist failed ($out/ui-build.log)"; }
+echo "==> UI (apps/desktop/dist/linux)"
+pnpm --filter @ardia/desktop build >"$out/ui-build.log" 2>&1 \
+  || { tail -20 "$out/ui-build.log" >&2; die "building apps/desktop/dist/linux failed ($out/ui-build.log)"; }
 
 echo "==> ardia command (pinned in apps/browser/official-plugins.json)"
 python3 -I scripts/release/official-plugins.py ${OFFICIAL_PLUGINS_FROM:+--from "$OFFICIAL_PLUGINS_FROM"} linux-cli "$version" "$out/$cli_name" \
   || die "the pinned ardia command couldn't be fetched and verified"
+
+echo "==> ardia-update-verify (packages/core-rs)"
+update_verify=$(scripts/linux/update-verify.sh 2>"$out/update-verify.log") \
+  || { tail -20 "$out/update-verify.log" >&2; die "building ardia-update-verify failed ($out/update-verify.log)"; }
 
 echo "==> uBlock Origin"
 blocker=$(scripts/linux/fetch-ubo.sh 2>"$out/ubo.log") \
   || { tail -20 "$out/ubo.log" >&2; die "preparing uBlock Origin failed ($out/ubo.log)"; }
 
 echo "==> Package"
-python3 scripts/linux/package.py --out "$engine" --ui apps/linux/dist --content-blocker "$blocker" \
-  --version "$version" --cli "$out/$cli_name" --destination "$out/$package_name" \
+python3 scripts/linux/package.py --out "$engine" --ui apps/desktop/dist/linux --content-blocker "$blocker" \
+  --version "$version" --cli "$out/$cli_name" --update-verify "$update_verify" --destination "$out/$package_name" \
   --deb "$out/$deb_name" --appimage "$out/$appimage_name" >/dev/null
 srcpkg=$(mktemp -d)
 scripts/linux/arch/update-pkgbuild.sh "$version" --package "$out/$package_name" --out "$srcpkg/ardia-bin" >/dev/null \
@@ -171,7 +192,7 @@ done
 {
   echo "version $version, $channel, linux-x64"
   echo "commit $(git rev-parse HEAD)${dirty:+ + uncommitted changes}"
-  echo "engine key ${engine_key:-unknown} ($([ "$exact" = 1 ] && echo exact || echo "not this commit's $head_key")), from $engine"
+  echo "engine key ${engine_key:-unknown} ($([ "$exact" = 1 ] && echo "exact, this commit's $head_key" || echo "not this commit's $head_key")), from $engine"
   echo "engine source commit ${engine_commit:-unknown}"
   echo "chromium ${chromium_version:-unknown}"
   echo "package $(cut -d' ' -f1 "$out/$package_name.sha256")  $package_name"
@@ -191,15 +212,34 @@ node scripts/linux/smoke.mjs --package "$out/$deb_name" --results "$out/smoke-de
 node scripts/linux/smoke.mjs --package "$out/$appimage_name" --results "$out/smoke-appimage" --timeout-ms 600000 "${smoke_extra[@]}" \
   || die "the smoke gate failed for the AppImage ($out/smoke-appimage/results.json)"
 
+echo "==> Update manifest"
+if [ -n "$update_key" ]; then
+  node scripts/linux/sign-update.mjs --key "$update_key" --dir "$out" --version "$version" >/dev/null \
+    || die "signing $update_name failed (above)"
+else
+  node scripts/linux/sign-update.mjs --unsigned --dir "$out" --version "$version" >/dev/null \
+    || die "writing $update_name failed (above)"
+fi
+
 echo
 [ "$exact" = 1 ] || echo "NOT a release: built against engine $engine_label, not this commit's ${head_key:0:12}."
 [ -z "$dirty" ] || echo "NOT a release: built with uncommitted changes."
 du -sh "$out/$package_name" "$out/$deb_name" "$out/$appimage_name" "$out/$srcpkg_name" "$out/$cli_name"
+upload=("$out/$package_name" "$out/$package_name.sha256" "$out/$deb_name" "$out/$deb_name.sha256"
+  "$out/$appimage_name" "$out/$appimage_name.sha256" "$out/$srcpkg_name" "$out/$srcpkg_name.sha256" "$out/$cli_name" "$out/$cli_name.sha256")
 echo
+if [ -n "$update_key" ]; then
+  upload+=("$out/$update_name" "$out/$update_name.sig")
+  echo "Self-update manifest: $out/$update_name, signed ($update_name.sig)."
+else
+  echo "Self-update manifest: $out/$update_name, UNSIGNED: installs refuse it until it has its .sig. Sign it with"
+  printf '  node scripts/linux/sign-update.mjs --key <LINUX_UPDATE_ED_PRIVATE_KEY pem> --dir %q --version %s\n' "$out" "$version"
+  printf 'and upload both with\n  gh release upload v%s -R %s %q %q\n' "$version" "$REPO" "$out/$update_name" "$out/$update_name.sig"
+fi
 echo "Publish it on the v$version release (made by the macOS release) with:"
-printf '  gh release upload v%s -R %s %q %q %q %q %q %q %q %q %q %q\n' "$version" "$REPO" \
-  "$out/$package_name" "$out/$package_name.sha256" "$out/$deb_name" "$out/$deb_name.sha256" \
-  "$out/$appimage_name" "$out/$appimage_name.sha256" "$out/$srcpkg_name" "$out/$srcpkg_name.sha256" "$out/$cli_name" "$out/$cli_name.sha256"
+printf '  gh release upload v%s -R %s' "$version" "$REPO"
+printf ' %q' "${upload[@]}"
+printf '\n'
 if [ "$channel" = stable ]; then
   echo "then, unless the Release workflow's aur job did it, move the AUR package to it (docs/linux-ci.md › The AUR):"
   printf '  scripts/linux/arch/publish-aur.sh %s --package %q\n' "$version" "$out/$package_name"

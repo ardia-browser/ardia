@@ -81,14 +81,31 @@ internal object LookPaint {
         }
     }
 
+    private data class ThemeMeshKey(val look: ThemeLook, val dark: Boolean, val width: Int, val height: Int)
+
+    private val themeMeshes = object : LinkedHashMap<ThemeMeshKey, Bitmap>(4, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<ThemeMeshKey, Bitmap>?): Boolean = size > 4
+    }
+
     fun forgetCaches() {
         synchronized(meshes) { meshes.clear() }
+        synchronized(themeMeshes) { themeMeshes.clear() }
         grains.clear()
         grainsOver.clear()
+        ThemeTextures.forgetCaches()
     }
 
     fun mesh(look: ProfileLook, dark: Boolean): Bitmap = synchronized(meshes) {
         meshes.getOrPut(look to dark) { Bitmap.createBitmap(DeckMesh.pixels(look, dark), DeckMesh.WIDTH, DeckMesh.HEIGHT, Bitmap.Config.ARGB_8888) }
+    }
+
+    fun themeMesh(art: ThemeArt, width: Int, height: Int): Bitmap = synchronized(themeMeshes) {
+        themeMeshes.getOrPut(ThemeMeshKey(art.look, art.dark, width, height)) {
+            Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { bitmap ->
+                art.drawLayers(Canvas(bitmap), width.toFloat(), height.toFloat())
+                bitmap.setHasAlpha(false)
+            }
+        }
     }
 }
 
@@ -109,6 +126,26 @@ abstract class LookView(context: Context, appContext: AppContext) : ExpoView(con
             field = value
         }
     var dark: Boolean? = null
+
+    var themeLook: ThemeLook? = null
+        set(value) {
+            if (field == value) return
+            field = value
+            resolved = null
+            lightArt = null
+            darkArt = null
+            themeChanged()
+        }
+
+    private var lightArt: ThemeArt? = null
+    private var darkArt: ThemeArt? = null
+
+    protected fun themeArt(dark: Boolean): ThemeArt? {
+        val theme = themeLook ?: return null
+        return if (dark) darkArt ?: ThemeArt(theme, true).also { darkArt = it } else lightArt ?: ThemeArt(theme, false).also { lightArt = it }
+    }
+
+    protected open fun themeChanged() = Unit
 
     private class Resolved(val look: ProfileLook, val lookOrNull: ProfileLook?)
 
@@ -154,7 +191,8 @@ abstract class LookView(context: Context, appContext: AppContext) : ExpoView(con
 
     open fun update() = invalidate()
 
-    private var reportedFailure = false
+    internal var drawFailures = 0
+        private set
 
     final override fun onDraw(canvas: Canvas) = drawSafely(canvas)
 
@@ -166,8 +204,8 @@ abstract class LookView(context: Context, appContext: AppContext) : ExpoView(con
         } catch (failure: Exception) {
             canvas.restoreToCount(saved)
             fillBounds(canvas, fallbackColor())
-            if (!reportedFailure) {
-                reportedFailure = true
+            drawFailures += 1
+            if (drawFailures == 1) {
                 android.util.Log.w("PAGELAB", "PAGELAB look ${javaClass.simpleName} could not draw at ${width}x$height and fell back to a flat colour: ${failure.javaClass.simpleName}: ${failure.message}")
             }
         }
@@ -514,16 +552,34 @@ class DeckBackdropView(context: Context, appContext: AppContext) : LookView(cont
     private var paintedLook: ProfileLook? = null
     private var paintedDark = false
     private var paintedRadius = -1f
+    private var paintedArt: ThemeArt? = null
+    private var paintedMeshSize = 0L
     private var mesh: Bitmap? = null
     private var blobShaders: Array<Shader> = emptyArray()
 
+    private val themeMeshSize: Long get() = ((width / SCENE_SCALE).coerceAtLeast(1).toLong() shl 32) or (height / SCENE_SCALE).coerceAtLeast(1).toLong()
+
+    private fun baseMesh(look: ProfileLook, dark: Boolean, art: ThemeArt?): Bitmap =
+        if (art == null) LookPaint.mesh(look, dark) else LookPaint.themeMesh(art, (width / SCENE_SCALE).coerceAtLeast(1), (height / SCENE_SCALE).coerceAtLeast(1))
+
+    private fun flatColour(look: ProfileLook, dark: Boolean): Int = themeArt(dark)?.flat ?: LookSwitch.flatDeck(look, dark).toArgb()
+
+    override fun themeChanged() {
+        forgetPaint()
+        post { enclosingSource()?.let(FrostSources::redrawFrostsOf) }
+    }
+
     private fun prepare(look: ProfileLook, dark: Boolean, radius: Float) {
-        if (look === paintedLook && dark == paintedDark && radius == paintedRadius && mesh != null) return
+        val art = themeArt(dark)
+        val meshSize = if (art == null) 0L else themeMeshSize
+        if (look === paintedLook && dark == paintedDark && radius == paintedRadius && art === paintedArt && meshSize == paintedMeshSize && mesh != null) return
         if (paintedLook != null) post { enclosingSource()?.let(FrostSources::redrawFrostsOf) }
         paintedLook = look
         paintedDark = dark
         paintedRadius = radius
-        mesh = LookPaint.mesh(look, dark)
+        paintedArt = art
+        paintedMeshSize = meshSize
+        mesh = baseMesh(look, dark, art)
         blobShaders = look.deckBlobs(dark).map { blob ->
             val argb = blob.toArgb()
             RadialGradient(0f, 0f, radius, intArrayOf(argb, argb and 0x00FFFFFF), null, Shader.TileMode.CLAMP)
@@ -532,9 +588,11 @@ class DeckBackdropView(context: Context, appContext: AppContext) : LookView(cont
 
     private val systemStill: Boolean get() = reduceMotion || SystemMotion.reducedNow
 
-    private val still: Boolean get() = systemStill || budgetDegraded
+    private val themed: Boolean get() = themeLook != null
 
-    private val noBlobs: Boolean get() = reduceTransparency || budgetDegraded
+    private val still: Boolean get() = systemStill || budgetDegraded || themed
+
+    private val noBlobs: Boolean get() = reduceTransparency || budgetDegraded || themed
 
     internal val isAnimating: Boolean get() = isShown && !lookIsOff && !still && !noBlobs
 
@@ -550,6 +608,7 @@ class DeckBackdropView(context: Context, appContext: AppContext) : LookView(cont
         keyBuffers.clear()
         blendBuffers.clear()
         paintedLook = null
+        paintedArt = null
         mesh = null
         blobShaders = emptyArray()
         scene = null
@@ -574,7 +633,8 @@ class DeckBackdropView(context: Context, appContext: AppContext) : LookView(cont
         }
 
     internal fun meshCentre(): Int {
-        val mesh = LookPaint.mesh(look, isDark)
+        val dark = isDark
+        val mesh = baseMesh(look, dark, themeArt(dark))
         return mesh.getPixel(mesh.width / 2, mesh.height / 2)
     }
 
@@ -585,7 +645,7 @@ class DeckBackdropView(context: Context, appContext: AppContext) : LookView(cont
 
     internal fun describe(): String =
         "${width}x$height, ${frames} frames, ${framesPerSecond} fps, ${if (still) "still" else "moving"}, ${if (isDark) "dark" else "light"}, " +
-            "transparency ${if (noBlobs) "reduced" else "on"}${if (budgetDegraded) " (look budget: degraded)" else ""}, mesh centre ${LookProbeText.hex(meshCentre())}"
+            "transparency ${if (noBlobs) "reduced" else "on"}${if (budgetDegraded) " (look budget: degraded)" else ""}, ${themeLook?.let { "theme ${it.stops.size} stop(s) ${it.texture.key}" } ?: "no theme"}, mesh centre ${LookProbeText.hex(meshCentre())}"
 
     private var lastOthersDrew = 0L
     private var ownDrawPending = false
@@ -987,9 +1047,9 @@ class DeckBackdropView(context: Context, appContext: AppContext) : LookView(cont
     override fun drawLook(canvas: Canvas) {
         val dark = isDark
         val look = look
-        val drawn = "${if (dark) "dark" else "light"}, look $look, ${width}x$height, " +
-            "${if (systemStill) "still (reduce motion${if (!reduceMotion) ", read natively" else ""})" else if (budgetDegraded) "still (look budget)" else "moving"}, " +
-            "${if (reduceTransparency) "no blobs (reduce transparency)" else if (budgetDegraded) "no blobs (look budget)" else "blobs"}, " +
+        val drawn = "${if (dark) "dark" else "light"}, look $look${themeLook?.let { ", theme ${it.stops.size} stop(s) ${it.texture.key} at ${it.angle.toInt()}°" } ?: ""}, ${width}x$height, " +
+            "${if (systemStill) "still (reduce motion${if (!reduceMotion) ", read natively" else ""})" else if (budgetDegraded) "still (look budget)" else if (themed) "still (theme)" else "moving"}, " +
+            "${if (reduceTransparency) "no blobs (reduce transparency)" else if (budgetDegraded) "no blobs (look budget)" else if (themed) "no blobs (theme)" else "blobs"}, " +
             (if (lookIsOff) "look switched off in the lab: flat colour" else "look on") +
             ", backdrop drawn as ${LookSwitch.backdropDraw(context).label} (scene ${(width / SCENE_SCALE).coerceAtLeast(1)}x${(height / SCENE_SCALE).coerceAtLeast(1)})"
         if (drawn != drawnMode) {
@@ -1007,7 +1067,7 @@ class DeckBackdropView(context: Context, appContext: AppContext) : LookView(cont
         LookActivity.backdropFrames += 1
         if (lookIsOff) {
             stopMotionAfterDraw()
-            fillBounds(canvas, LookSwitch.flatDeck(look, dark).toArgb())
+            fillBounds(canvas, flatColour(look, dark))
             return
         }
         val w = width.toFloat()
@@ -1035,7 +1095,7 @@ class DeckBackdropView(context: Context, appContext: AppContext) : LookView(cont
         }
     }
 
-    override fun fallbackColor(): Int = runCatching { LookSwitch.flatDeck(look, isDark).toArgb() }.getOrDefault(super.fallbackColor())
+    override fun fallbackColor(): Int = runCatching { flatColour(look, isDark) }.getOrDefault(super.fallbackColor())
 
     internal fun paint(canvas: Canvas, mode: LookSwitch.BackdropDraw, look: ProfileLook = this.look, dark: Boolean = isDark, at: Long = clock(SystemClock.uptimeMillis())): Boolean {
         val w = width.toFloat()
@@ -1045,7 +1105,8 @@ class DeckBackdropView(context: Context, appContext: AppContext) : LookView(cont
         when (mode) {
             LookSwitch.BackdropDraw.Full -> {
                 if (!drawScene(canvas, look, dark, w, h, at)) return false
-                canvas.drawRect(0f, 0f, w, h, LookPaint.grain(density, DeckBackdropStyle.grainOpacity(dark)))
+                val art = themeArt(dark)
+                if (art != null) art.drawTexture(canvas, w, h, density) else canvas.drawRect(0f, 0f, w, h, LookPaint.grain(density, DeckBackdropStyle.grainOpacity(dark)))
                 if (!fresh) renderScene(at)
             }
             LookSwitch.BackdropDraw.Small, LookSwitch.BackdropDraw.SmallNoGrain -> {
@@ -1059,7 +1120,7 @@ class DeckBackdropView(context: Context, appContext: AppContext) : LookView(cont
                 if (mode == LookSwitch.BackdropDraw.Small) drawGrain(canvas, dark)
             }
             LookSwitch.BackdropDraw.Flat -> {
-                fillBounds(canvas, LookSwitch.flatDeck(look, dark).toArgb())
+                fillBounds(canvas, flatColour(look, dark))
                 if (!fresh) renderScene(at)
             }
         }
@@ -1164,13 +1225,23 @@ class DeckBackdropView(context: Context, appContext: AppContext) : LookView(cont
     }
 
     private fun drawGrain(canvas: Canvas, dark: Boolean) {
-        val base = FrostTint.lightness(mesh?.let { it.getPixel(it.width / 2, it.height / 2) } ?: LookSwitch.flatDeck(look, dark).toArgb())
-        val paint = LookPaint.grainOver(density, DeckBackdropStyle.grainOpacity(dark) * if (dark) SMALL_GRAIN_DARK else SMALL_GRAIN_LIGHT, dark, base)
+        val art = themeArt(dark)
+        if (art != null && art.grainAlpha <= 0f) return
+        val paint: Paint
+        val kind: String
+        if (art != null) {
+            paint = ThemeTextures.paint(art.texture, density, art.grainAlpha)
+            kind = "${art.texture.key} ${paint.alpha}"
+        } else {
+            val base = FrostTint.lightness(mesh?.let { it.getPixel(it.width / 2, it.height / 2) } ?: LookSwitch.flatDeck(look, dark).toArgb())
+            paint = LookPaint.grainOver(density, DeckBackdropStyle.grainOpacity(dark) * if (dark) SMALL_GRAIN_DARK else SMALL_GRAIN_LIGHT, dark, base)
+            kind = "$dark $base"
+        }
         if (!canvas.isHardwareAccelerated) {
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
             return
         }
-        val key = "${width}x$height $dark $base"
+        val key = "${width}x$height $kind"
         val node = grainNode ?: RenderNode("ardiaGrain").also { grainNode = it }
         if (key != grainKey) {
             node.setPosition(0, 0, width, height)
@@ -1239,7 +1310,7 @@ class ProfileBackdropView(context: Context, appContext: AppContext) : LookView(c
         val w = width.toFloat()
         val h = height.toFloat()
         if (lookIsOff) {
-            fillBounds(canvas, LookSwitch.flatBackdrop(look, dark, themed).toArgb())
+            fillBounds(canvas, shownArt(dark)?.flat ?: LookSwitch.flatBackdrop(look, dark, themed).toArgb())
             return
         }
         if (!fadesOut) {
@@ -1257,7 +1328,19 @@ class ProfileBackdropView(context: Context, appContext: AppContext) : LookView(c
         canvas.restoreToCount(layer)
     }
 
+    private fun shownArt(dark: Boolean): ThemeArt? = if (themed) themeArt(dark) else null
+
     private fun drawBackdrop(canvas: Canvas, dark: Boolean, w: Float, h: Float) {
+        val art = shownArt(dark)
+        if (art != null) {
+            art.draw(canvas, w, h, density)
+            if (softened || fadesOut) {
+                paint.shader = null
+                paint.color = ProfileBackdropStyle.softening.resolve(dark).toArgb()
+                canvas.drawRect(0f, 0f, w, h, paint)
+            }
+            return
+        }
         val look = look
         val colors = look.backdropColors(dark, themed).map { it.toArgb() }.toIntArray()
         paint.shader = null
@@ -1414,6 +1497,7 @@ class FrostSourceView(context: Context, appContext: AppContext) : ExpoView(conte
         val node = recorder ?: RenderNode("ardiaFrostSource").also { recorder = it }
         LookActivity.sourceRecordings += 1
         node.setPosition(0, 0, width, height)
+        node.setUseCompositingLayer(holdsPage, null)
         val recording = node.beginRecording(width, height)
         try {
             super.dispatchDraw(recording)
@@ -1438,6 +1522,12 @@ internal object FrostPage {
     }
 
     enum class Path { Live, Solid, Fallback, Tinted }
+
+    fun wantsSource(choice: Choice?, onlyBackdropUnder: Boolean, blurOverBackdrop: Boolean, holdsPage: Boolean, pageMode: FrostSources.PageMode): Boolean = when {
+        holdsPage && pageMode == FrostSources.PageMode.Solid -> false
+        choice == null -> !(onlyBackdropUnder && !blurOverBackdrop)
+        else -> choice.path == Path.Live || choice.reason == SOURCE_NOT_DRAWN
+    }
 
     data class Choice(val path: Path, val reason: String)
 
@@ -1465,8 +1555,8 @@ internal object FrostPage {
         !hasSource -> Choice(Path.Fallback, "no source")
         !hardware -> Choice(Path.Fallback, "software canvas")
         insideSource -> Choice(Path.Fallback, "inside its own source")
-        !sourceHasContent -> Choice(Path.Fallback, SOURCE_NOT_DRAWN)
         holdsPage && pageMode == FrostSources.PageMode.Solid -> Choice(Path.Solid, "page under the frost, solid page mode")
+        !sourceHasContent -> Choice(Path.Fallback, SOURCE_NOT_DRAWN)
         holdsPage -> Choice(Path.Live, "page under the frost, redrawn every frame")
         else -> Choice(Path.Live, "no page under the frost")
     }
@@ -1524,6 +1614,7 @@ open class FrostView(context: Context, appContext: AppContext) : LookView(contex
     private var blurNode: RenderNode? = null
     private var effectRadius = -1f
     private var effectSaturation = -1f
+    private var effectLens: RenderEffect? = null
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val bounds = RectF()
     private val clip = Path()
@@ -1584,19 +1675,30 @@ open class FrostView(context: Context, appContext: AppContext) : LookView(contex
     internal var layerHeight = 0
         private set
 
-    internal fun forgetLayer() {
+    internal open fun lensReach(): Float = 0f
+
+    internal open fun pageLive(): Boolean = false
+
+    internal open fun solidFill(dark: Boolean): Int? = null
+
+    internal open fun lensEffect(marginPx: Float, scale: Float): RenderEffect? = null
+
+    internal open fun forgetLayer() {
         blurNode?.discardDisplayList()
         blurNode = null
         effectRadius = -1f
         effectSaturation = -1f
+        effectLens = null
         layerWidth = 0
         layerHeight = 0
     }
 
+    private fun effectivePageMode(): FrostSources.PageMode = if (pageLive()) FrostSources.PageMode.Live else FrostSources.pageMode
+
     internal fun wantsSource(): Boolean {
         if (!canBlur()) return false
-        val choice = lastChoice ?: return !(FrostSources.find(source)?.holdsOnlyBackdrop == true && !LookSwitch.blurOverBackdrop(context))
-        return choice.path == FrostPage.Path.Live || choice.reason == FrostPage.SOURCE_NOT_DRAWN
+        val from = FrostSources.find(source)
+        return FrostPage.wantsSource(lastChoice, onlyBackdropUnder = from?.holdsOnlyBackdrop == true, blurOverBackdrop = LookSwitch.blurOverBackdrop(context), holdsPage = from?.holdsPage == true, pageMode = effectivePageMode())
     }
 
     private var reportedFinding: String? = null
@@ -1632,7 +1734,7 @@ open class FrostView(context: Context, appContext: AppContext) : LookView(contex
             hardware = canvas.isHardwareAccelerated,
             insideSource = from != null && isInside(from),
             holdsPage = blurs && from?.holdsPage == true,
-            pageMode = FrostSources.pageMode,
+            pageMode = effectivePageMode(),
             lookOff = lookIsOff,
             onScreen = onScreen(),
         )
@@ -1642,8 +1744,8 @@ open class FrostView(context: Context, appContext: AppContext) : LookView(contex
             val layerNode = blurNode ?: RenderNode("ardiaFrost").also { blurNode = it }
             val blur = style.blurRadius.value * density
             val scale = FrostScale.of(blur)
-            applyEffect(layerNode, blur / scale, style.saturation)
-            val margin = ceil(blur * 2)
+            val margin = LiquidGlassRules.marginPx(blur, lensReach())
+            applyEffect(layerNode, blur / scale, style.saturation, lensEffect(margin, scale))
             val offset = offsetTo(from)
             lastOffset = offset
             val dx = (offset shr 32).toInt()
@@ -1676,7 +1778,7 @@ open class FrostView(context: Context, appContext: AppContext) : LookView(contex
             if (blurNode != null) forgetLayer()
             removeCallbacks(refresh)
             paint.style = Paint.Style.FILL
-            paint.color = style.fallback.resolve(dark).toArgb()
+            paint.color = solidFill(dark) ?: style.fallback.resolve(dark).toArgb()
             canvas.drawPath(clip, paint)
         }
         style.edge?.let { edge ->
@@ -1743,20 +1845,20 @@ open class FrostView(context: Context, appContext: AppContext) : LookView(contex
         }
     }
 
-    private fun applyEffect(layerNode: RenderNode, radius: Float, saturation: Float) {
+    private fun applyEffect(layerNode: RenderNode, radius: Float, saturation: Float, lens: RenderEffect?) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
-        if (radius == effectRadius && saturation == effectSaturation) return
+        if (radius == effectRadius && saturation == effectSaturation && lens === effectLens) return
         effectRadius = radius
         effectSaturation = saturation
+        effectLens = lens
         val blur = RenderEffect.createBlurEffect(radius, radius, Shader.TileMode.CLAMP)
-        layerNode.setRenderEffect(
-            if (saturation == 1f) {
-                blur
-            } else {
-                val matrix = android.graphics.ColorMatrix().apply { setSaturation(saturation) }
-                RenderEffect.createChainEffect(RenderEffect.createColorFilterEffect(android.graphics.ColorMatrixColorFilter(matrix)), blur)
-            },
-        )
+        val frosted = if (saturation == 1f) {
+            blur
+        } else {
+            val matrix = android.graphics.ColorMatrix().apply { setSaturation(saturation) }
+            RenderEffect.createChainEffect(RenderEffect.createColorFilterEffect(android.graphics.ColorMatrixColorFilter(matrix)), blur)
+        }
+        layerNode.setRenderEffect(if (lens == null) frosted else RenderEffect.createChainEffect(lens, frosted))
     }
 
     private fun offsetTo(from: View): Long {

@@ -1,4 +1,5 @@
 import ArdiaBrowser
+import ArdiaDesign
 import Foundation
 import FoundationModels
 import Observation
@@ -34,6 +35,7 @@ final class PageSummarySession: Identifiable {
   let trigger: Trigger
   let page: UUID
   let navigation: Int
+  let revision: Int
   @ObservationIgnored weak var source: WKWebView?
   private(set) var title: String
   private(set) var phase: Phase = .reading
@@ -47,6 +49,7 @@ final class PageSummarySession: Identifiable {
     self.trigger = trigger
     page = tab.id
     navigation = tab.navigationGeneration
+    revision = PageSummarySwitch.shared.revision
     source = tab.webView
     title = tab.title
   }
@@ -57,7 +60,7 @@ final class PageSummarySession: Identifiable {
   }
 
   func isCurrent(for tab: WebTab?) -> Bool {
-    guard let tab, let source else { return false }
+    guard let tab, let source, PageSummarySwitch.shared.isCurrent(revision) else { return false }
     return tab.id == page && tab.navigationGeneration == navigation && tab.webView === source
   }
 
@@ -146,6 +149,10 @@ final class PageSummarySession: Identifiable {
   }
 }
 
+extension PageSummarySwitch {
+  static let shared = PageSummarySwitch(defaults: .standard)
+}
+
 @MainActor
 @Observable
 final class PageSummaryPresenter {
@@ -205,6 +212,7 @@ struct PageSummaryOverlay: View {
     }
     .coordinateSpace(.named(PageSummaryLayer.coordinateSpace))
     .ignoresSafeArea()
+    .environment(\.usesGlass, NativeChromeLook.shared.usesGlass)
   }
 }
 
@@ -223,7 +231,7 @@ struct PageSummaryCard: View {
     }
     .padding(16)
     .frame(maxWidth: 560, maxHeight: maxHeight, alignment: .topLeading)
-    .glassEffect(.regular, in: .rect(cornerRadius: 24))
+    .chromeSurface(in: .rect(cornerRadius: 24), interactive: false)
     .accessibilityElement(children: .contain)
     .accessibilityLabel(Text("Summary"))
     .accessibilityAction(.escape) { onClose() }

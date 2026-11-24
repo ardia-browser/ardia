@@ -1,4 +1,4 @@
-export type DownloadState = "downloading" | "finished" | "failed" | "cancelled";
+type DownloadState = "downloading" | "finished" | "failed" | "cancelled";
 
 export type Download = {
   id: string;

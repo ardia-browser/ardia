@@ -21,7 +21,6 @@ import { useResource } from "../../../state/settings/resources";
 import { goToSettingsPane, SETTINGS_DETAIL } from "../../../state/settings/settingsWindows";
 import { updateSettings } from "../../../state/settings/actions";
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
-import { setting } from "../settingsIndex";
 import { ProfileSubPage } from "./ProfileSubPage";
 
 const SETTING_LABELS: [SiteSettingType, string][] = [

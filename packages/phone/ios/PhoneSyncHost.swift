@@ -59,7 +59,7 @@ public final class PhoneSyncHost {
     values.isExcludedFromBackup = true
     try? folder.setResourceValues(values)
     inbox = PhoneInbox(file: Self.folder.appending(path: "inbox.json"))
-    source = PhoneBrowsingSource(database: Self.database, inbox: inbox, isReady: { !PhoneSyncHost.legacyGate.holdsSync })
+    source = PhoneBrowsingSource(database: Self.database, inbox: inbox, engine: .expoSQLite, isReady: { !PhoneSyncHost.legacyGate.holdsSync })
     service = SyncService()
     service.source = source
     source.onReceived = { [weak self] tabs in self?.announce(tabs) }

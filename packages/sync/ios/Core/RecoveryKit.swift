@@ -10,7 +10,7 @@ public enum RecoveryKit {
 
   static let intro = "If you don’t have access to the Mac on which you first turned on sync, you can still get your synced data on another Mac:"
   static let steps = [
-    "Open Ardia › Settings › Sync, and choose the same sync folder.",
+    "Open Ardia › Settings › General › Sync, and choose the same sync folder.",
     "Click Enter Recovery Phrase.",
     "Paste the 24 words below.",
   ]

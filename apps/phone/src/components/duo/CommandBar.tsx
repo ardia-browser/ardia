@@ -1,7 +1,7 @@
 import { useWindowDimensions, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useScreenLayout } from "../../state/app/screenLayout";
-import { floatingPanelLayout } from "../ui";
+import { searchPanelRadius } from "../search/searchPanelTokens";
 import { commandBarKeyboardTop, commandBarPlacement, commandBarRise, type CommandBarPlacement } from "./duoLayout";
 
 export { commandBarRise, type CommandBarPlacement };
@@ -16,13 +16,13 @@ export function useCommandBar(lift: number): CommandBarPlacement | null {
   return commandBarPlacement(window.width, insets, commandBarKeyboardTop(window.height, lift));
 }
 
-export const commandPanelPlace = (placement: CommandBarPlacement): ViewStyle => ({
+export const commandPanelPlace = (placement: CommandBarPlacement, fieldHeight: number): ViewStyle => ({
   position: "absolute",
   top: placement.top,
   left: placement.left,
   width: placement.width,
   height: placement.maxHeight,
-  borderRadius: floatingPanelLayout.radius,
+  borderRadius: searchPanelRadius(fieldHeight),
   borderCurve: "continuous",
   transformOrigin: "top",
 });

@@ -52,7 +52,11 @@ NS_ASSUME_NONNULL_BEGIN
 @property(class, nonatomic, copy, nullable) NSString *(^focusHandoffSummaryHandler)(NSWindow *window);
 + (BOOL)windowShouldClose:(NSWindow *)window;
 + (BOOL)windowFullScreenIsForPage:(NSWindow *)window;
++ (BOOL)windowIsFullScreen:(NSWindow *)window NS_SWIFT_NAME(windowIsFullScreen(_:));
 + (BOOL)userSeesWindow:(nullable NSWindow *)window NS_SWIFT_NAME(userSees(_:));
++ (BOOL)userSeesOnlyThroughWindowServer:(nullable NSWindow *)window NS_SWIFT_NAME(userSeesOnlyThroughWindowServer(_:));
++ (void)reconsiderSightOfWindow:(nullable NSWindow *)window NS_SWIFT_NAME(reconsiderSight(of:));
+@property(class, nonatomic, copy, nullable) BOOL (^playsForAutoPictureInPictureHandler)(NSWindow *window);
 
 @end
 
@@ -60,6 +64,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (BOOL)isVideoPictureInPictureWindow:(NSWindow *)window;
 + (BOOL)consumePictureInPictureActivation;
++ (BOOL)activeOnlyForPictureInPicture;
++ (BOOL)activateForPictureInPictureReturn;
 
 @end
 

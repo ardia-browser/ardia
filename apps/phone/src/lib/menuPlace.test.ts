@@ -24,11 +24,23 @@ test("a menu too tall for either way keeps clear of the edges, and the host's or
   assert.equal(menuOnTrigger({ x: 16, y: 300, width: 100, height: 40 }, { ...host, y: 24 }, { ...host, y: 24 }, 250, 200, 8).top, 276);
 });
 
+test("a Material menu that must clear its trigger never covers it: too tall for either side, it takes the roomier side and scrolls there, and keeps its height when it fits", () => {
+  const room = { x: 0, y: 0, width: 392, height: 400 };
+  const trigger = { x: 16, y: 176, width: 100, height: 48 };
+  assert.deepEqual(menuOnTrigger(trigger, room, room, 250, 300, 8, undefined, undefined, true), { left: 16, top: 224, height: 168, origin: "left top" });
+  const high = { ...trigger, y: 100 };
+  assert.deepEqual(menuOnTrigger(high, room, room, 250, 300, 8, undefined, undefined, true), { left: 16, top: 148, height: 244, origin: "left top" });
+  const low = { ...trigger, y: 260 };
+  assert.deepEqual(menuOnTrigger(low, room, room, 250, 300, 8, undefined, undefined, true), { left: 16, top: 8, height: 252, origin: "left bottom" });
+  assert.deepEqual(menuOnTrigger(high, room, room, 250, 200, 8, undefined, undefined, true), { left: 16, top: 148, height: 200, origin: "left top" });
+  assert.deepEqual(menuOnTrigger(trigger, room, room, 250, 300, 8), { left: 16, top: 92, height: 300, origin: "left top" });
+});
+
 test("a menu's height counts its rows, headings and dividers", () => {
   assert.equal(menuHeight([{ heading: "Archive" }, { label: "a" }, { label: "b" }, "divider", { label: "c" }]), MENU_PADDING + MENU_HEADING + MENU_ROW * 3 + MENU_DIVIDER);
 });
 
-test("on Android a group break is an 8 dp gap between 48 dp rows, so the menu's height counts the gap instead of iPhone's 20.67-point divider band", () => {
+test("on Android a group break is an 8 dp gap between 48 dp rows, so the menu's height counts the gap instead of iPhone's 9-point divider band", () => {
   assert.equal(ANDROID_MENU_SIZES.divider, 8);
   const items = [{ heading: "Archive" }, { label: "a" }, "divider", { label: "b" }, { label: "Send", children: [{ label: "1" }, "divider", { label: "2" }] }] as const;
   assert.equal(menuHeight(items, ANDROID_MENU_SIZES), 16 + 36 + 48 * 3 + 8);

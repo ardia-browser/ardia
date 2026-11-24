@@ -7,6 +7,7 @@ import unittest
 from support import VALUES, WRITER, cpp_value
 
 SOURCE = pathlib.Path(__file__).resolve().parents[1] / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 
 
 class DocumentsTests(unittest.TestCase):
@@ -384,7 +385,7 @@ int main() {
             (root / 'main.cc').write_text(main)
             binary = root / 'documents'
             sources = ['ac_linux_documents.cc', 'ac_linux_document_schema.cc', 'ac_linux_document_reducer.cc']
-            result = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-I', str(root), '-I', str(SOURCE), *[str(SOURCE / 'ardia/linux' / source) for source in sources], str(root / 'main.cc'), '-o', str(binary)], capture_output=True, text=True)
+            result = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-I', str(root), '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE), *[str(SOURCE / 'ardia/linux' / source) for source in sources], str(root / 'main.cc'), '-o', str(binary)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             result = subprocess.run([str(binary)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

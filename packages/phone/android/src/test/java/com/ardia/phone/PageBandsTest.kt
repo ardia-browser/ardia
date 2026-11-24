@@ -64,4 +64,30 @@ class PageBandsTest {
         val page = Bitmap.createBitmap(10, 10, Bitmap.Config.ARGB_8888)
         assertSame(page, PageBands.compose(page, 1080, 2400, PageBands.Frame(0, 0), Color.RED, Color.BLUE))
     }
+
+    @Test
+    fun summaryPlacementClearsTheFloatingBarWhenBottomBandIsTransparent() {
+        val transparentBar = PageBands.summaryPlacement(
+            height = 2400,
+            density = 3f,
+            bands = PageBands.Frame(126, 0),
+            toneBottomPx = 0,
+            summaryBottomPx = 225,
+            marginDp = 12f,
+            heightShare = 0.45f,
+            minimumHeightDp = 160f,
+        )
+        val bandedBar = PageBands.summaryPlacement(
+            height = 2400,
+            density = 3f,
+            bands = PageBands.Frame(126, 225),
+            toneBottomPx = 225,
+            summaryBottomPx = 0,
+            marginDp = 12f,
+            heightShare = 0.45f,
+            minimumHeightDp = 160f,
+        )
+        assertEquals(261, transparentBar.bottomPx)
+        assertEquals(bandedBar, transparentBar)
+    }
 }

@@ -6,7 +6,7 @@
     android:contentDescription="@string/widget_search_label">
 
     <ImageView
-        android:layout_width="46dp"
+        android:layout_width="37dp"
         android:layout_height="37dp"
         android:layout_gravity="top|start"
         android:layout_margin="16dp"

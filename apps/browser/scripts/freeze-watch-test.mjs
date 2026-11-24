@@ -1,4 +1,3 @@
-import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";

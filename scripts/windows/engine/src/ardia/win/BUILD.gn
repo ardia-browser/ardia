@@ -1,7 +1,32 @@
 assert(is_win)
 
+declare_args() {
+  ardia_linux_compile_probe = false
+}
+
+if (ardia_linux_compile_probe) {
+  group("linux_compile_probe") {
+    deps = [ "//ardia/linux:compile_probe" ]
+  }
+}
+
+action("webui_bootstrap") {
+  script = "//ardia/linux/generate_bootstrap.py"
+  sources = [ "//ardia/linux/bootstrap.js" ]
+  outputs = [ "$root_gen_dir/ardia/linux/host_bootstrap.h" ]
+  args = [
+    "--input",
+    rebase_path(sources[0], root_build_dir),
+    "--output",
+    rebase_path(outputs[0], root_build_dir),
+  ]
+}
+
 source_set("win") {
   sources = [
+    "//ardia/linux/ac_linux_contract.h",
+    "//ardia/linux/ac_linux_session.cc",
+    "//ardia/linux/ac_linux_session.h",
     "ac_calls.cc",
     "ac_calls.h",
     "api.cc",
@@ -35,6 +60,8 @@ source_set("win") {
     "profiles.cc",
     "profiles.h",
     "public/EngineApi.h",
+    "renderer_efficiency.cc",
+    "renderer_efficiency.h",
     "tab_calls.cc",
     "tab_calls.h",
     "tab_events.cc",
@@ -43,10 +70,27 @@ source_set("win") {
     "tab_state.h",
     "test_gate.cc",
     "test_gate.h",
+    "webui/desktop_platform_win.cc",
+    "webui/desktop_platform_win.h",
+    "webui/webui_caption_script.h",
+    "webui/webui_mode.cc",
+    "webui/webui_mode.h",
+    "webui/webui_shell.cc",
+    "webui/webui_shell.h",
   ]
+  sources += get_target_outputs(":webui_bootstrap")
+
+  libs = [ "dwmapi.lib" ]
 
   deps = [
     ":launch_switches",
+    ":webui_bootstrap",
+    "//ardia/desktop",
+    "//third_party/icu",
+    "//components/input",
+    "//services/network/public/mojom",
+    "//ui/display",
+    "//ui/views/controls/webview",
     "//base",
     "//chrome/app:command_ids",
     "//chrome/browser",
@@ -63,6 +107,7 @@ source_set("win") {
     "//components/favicon/core",
     "//components/find_in_page",
     "//components/keep_alive_registry",
+    "//components/performance_manager",
     "//components/policy/core/common",
     "//components/prefs",
     "//components/sessions",

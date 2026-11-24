@@ -5,7 +5,7 @@ import { perLook } from "../../ui/tokens";
 import { Row } from "../Form";
 import { setting, type SettingId } from "../settingsIndex";
 
-export type ChecklistItem = { key: string; label: string; value: boolean; mixed?: boolean; disabled?: boolean; onChange: (on: boolean) => void };
+type ChecklistItem = { key: string; label: string; value: boolean; mixed?: boolean; disabled?: boolean; onChange: (on: boolean) => void };
 
 export function Checklist({ anchor, description, items }: { anchor: SettingId; description?: ReactNode; items: ChecklistItem[] }) {
   const detail = description === undefined ? setting(anchor).description : description;

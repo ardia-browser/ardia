@@ -1,3 +1,4 @@
+import { asSecret, reveal } from "@ardia/core";
 import { confirm, showMenu } from "../../../state/app/system";
 import { Box, Button, Checkbox, DialogActions, DialogTitle, ink, lineHeight, proseLineHeight, radius, Sheet, space, Symbol, tabularNums, Text, TextField } from "../../ui";
 import {
@@ -141,7 +142,7 @@ function PhraseSheet({ folder, onChooseFolder }: { folder: FolderInfo | null; on
     setBusy(true);
     setError(null);
     const joining = !syncing;
-    const result = await enterRecoveryPhrase(folder.path, text);
+    const result = await enterRecoveryPhrase(folder.path, asSecret("syncPhrase", text));
     setBusy(false);
     const message = phraseError(result);
     if (message) setError(message);
@@ -198,7 +199,7 @@ function sharingDescription(p: Pick<RemoteProfile, "sharesWith" | "waiting">): s
   return added ? `On your other devices. Shares data with ${name}, which is added too.` : `On your other devices. Shares data with ${name}.`;
 }
 
-export function remoteProfileDescription(p: Pick<RemoteProfile, "sharesWith" | "waiting" | "sharedByOthers">): string {
+function remoteProfileDescription(p: Pick<RemoteProfile, "sharesWith" | "waiting" | "sharedByOthers">): string {
   const sharing = sharingDescription(p);
   if (!p.sharedByOthers) return sharing;
   return `${sharing.endsWith(".") ? sharing : `${sharing}.`} To remove it, first remove the profiles that share its data.`;
@@ -292,7 +293,7 @@ function ConnectDeviceSheet() {
   return (
     <Sheet size="l" onClose={closeSettingsSheet}>
       <DialogTitle
-        subtitle={`On your other ${PLATFORM_TERMS.syncedComputer}, open Ardia › Settings › Sync and choose the same sync folder. Then click Enter Recovery Phrase and enter the 24 words of your recovery phrase.`}
+        subtitle={`On your other ${PLATFORM_TERMS.syncedComputer}, open Ardia › Settings › General › Sync and choose the same sync folder. Then click Enter Recovery Phrase and enter the 24 words of your recovery phrase.`}
       >
         Connect Another Device
       </DialogTitle>
@@ -317,7 +318,7 @@ function ConnectDeviceSheet() {
       <DialogActions
         leading={
           <>
-            <Button title={words ? "Hide Words" : "Show Words"} onPress={() => (words ? setWords(null) : void recoveryWords()?.then(setWords))} />
+            <Button title={words ? "Hide Words" : "Show Words"} onPress={() => (words ? setWords(null) : void recoveryWords().then((phrase) => setWords(phrase && reveal(phrase).split(" "))))} />
             <Button title="Copy Words" onPress={() => void copyRecoveryPhrase()} />
           </>
         }

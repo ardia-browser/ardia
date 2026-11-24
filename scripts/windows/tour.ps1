@@ -14,7 +14,8 @@ $tourFile = Join-Path $Out "tour.md"
 $script:Lines = [System.Collections.Generic.List[string]]::new()
 $script:Sessions = [System.Collections.Generic.List[object]]::new()
 $script:StopNumber = 0
-$script:Required = [System.Collections.Generic.List[string]]::new()
+$script:FailedStops = [System.Collections.Generic.List[string]]::new()
+$script:RequiredFailures = [System.Collections.Generic.List[string]]::new()
 $script:PreviousSignature = $null
 $script:UiaReady = $null
 $script:LightBrightness = $null
@@ -560,7 +561,7 @@ function Set-Seen($Stop, [bool]$Seen) {
   if ($Seen) { $Stop.Seen = "yes" } else { $Stop.Seen = "no" }
 }
 
-function Start-Ardia([string]$Name, [switch]$Onboarded, [hashtable]$Settings, [switch]$KeepData) {
+function Start-Ardia([string]$Name, [switch]$Onboarded, [hashtable]$Settings, [switch]$KeepData, [string[]]$Arguments = @()) {
   $data = Join-Path (Join-Path $Out "data") $Name
   if (-not $KeepData) { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $data }
   New-Item -ItemType Directory -Force -Path $data | Out-Null
@@ -577,7 +578,7 @@ function Start-Ardia([string]$Name, [switch]$Onboarded, [hashtable]$Settings, [s
   $env:ARDIA_DATA_DIR = $data
   $env:ARDIA_BACKGROUND = ""
   Write-Host "[tour] launching '$Name' with data in $data"
-  $process = Start-Process -FilePath $App -ArgumentList "--log-file=`"$log`"" -PassThru
+  $process = Start-Process -FilePath $App -ArgumentList (@("--log-file=`"$log`"") + $Arguments) -PassThru
   $null = $process.Handle
   $session = [pscustomobject]@{
     Name = $Name
@@ -1014,7 +1015,7 @@ function Invoke-BarTypingStop($Session, [string]$Slug, [string]$Title, [string]$
     $stop.Facts.Add("lost a letter in $lost of $Tries tries")
     Set-Seen $stop ($lost -eq 0)
   }
-  if ($stop.Seen -ne "yes") { $script:Required.Add("$($stop.Number) $Title") }
+  if ($stop.Seen -ne "yes") { $script:FailedStops.Add("$($stop.Number) $Title") }
 }
 
 function Close-Bar {
@@ -1025,7 +1026,7 @@ function Close-Bar {
 
 function Invoke-TypingTour {
   $session = Start-Ardia "typing-sidebar" -Onboarded
-  if (-not (Test-Usable $session)) { $script:Required.Add("Typing (typing-sidebar): no usable window") }
+  if (-not (Test-Usable $session)) { $script:FailedStops.Add("Typing (typing-sidebar): no usable window") }
   if (Test-Usable $session) {
     $opened = Invoke-Stop $session "typing-page" "Not a first run: open Example Domain to type over" {
       param($stop)
@@ -1033,14 +1034,14 @@ function Invoke-TypingTour {
       $stop.Expected = "the window's title names example.com, the host Ardia shows for the open page."
       Set-Seen $stop (Open-Page $session $stop "example.com" "example\.com")
     }
-    if ($opened.Seen -ne "yes") { $script:Required.Add("$($opened.Number) Not a first run: open Example Domain to type over") }
+    if ($opened.Seen -ne "yes") { $script:FailedStops.Add("$($opened.Number) Not a first run: open Example Domain to type over") }
     Invoke-BarTypingStop $session "typing-ctrl-l" "Not a first run: Ctrl+L on a page, typing at 80 ms a key, ten tries" "On Example Domain, pressed Ctrl+L, typed example.com from 300 ms after it at 80 ms a key, reading the field after every key, then closed the bar with Escape; ten times." { Send-QuickChord @(0x11) 0x4C } { Close-Bar } 300 80 10
     Invoke-BarTypingStop $session "typing-ctrl-t" "Not a first run: Ctrl+T, typing at 80 ms a key from 100 ms after it, ten tries" "Pressed Ctrl+T, typed example.com from 100 ms after it at 80 ms a key, reading the field after every key, then closed the tab with Ctrl+W; ten times." { Send-QuickChord @(0x11) 0x54 } { Send-Chord @(0x11) 0x57 } 100 80 10
   }
   Stop-Ardia $session
 
   $session = Start-Ardia "typing-top" -Onboarded -Settings @{ tabLayout = "top" }
-  if (-not (Test-Usable $session)) { $script:Required.Add("Typing (typing-top): no usable window") }
+  if (-not (Test-Usable $session)) { $script:FailedStops.Add("Typing (typing-top): no usable window") }
   if (Test-Usable $session) {
     $opened = Invoke-Stop $session "typing-top-page" "Not a first run, tabs on top: open Example Domain to type over" {
       param($stop)
@@ -1048,13 +1049,13 @@ function Invoke-TypingTour {
       $stop.Expected = "the window's title names example.com, the host Ardia shows for the open page."
       Set-Seen $stop (Open-Page $session $stop "example.com" "example\.com")
     }
-    if ($opened.Seen -ne "yes") { $script:Required.Add("$($opened.Number) Not a first run, tabs on top: open Example Domain to type over") }
+    if ($opened.Seen -ne "yes") { $script:FailedStops.Add("$($opened.Number) Not a first run, tabs on top: open Example Domain to type over") }
     Invoke-BarTypingStop $session "typing-toolbar" "Not a first run, tabs on top: Ctrl+L into the toolbar's address field, typing at 80 ms a key, ten tries" "With tabs on top, on Example Domain, pressed Ctrl+L, typed example.com from 300 ms after it at 80 ms a key, reading the field after every key, then closed the bar with Escape; ten times." { Send-QuickChord @(0x11) 0x4C } { Close-Bar } 300 80 10
   }
   Stop-Ardia $session
 
   $session = Start-Ardia "typing-floating" -Onboarded -Settings @{ newTabOpens = "commandBar" }
-  if (-not (Test-Usable $session)) { $script:Required.Add("Typing (typing-floating): no usable window") }
+  if (-not (Test-Usable $session)) { $script:FailedStops.Add("Typing (typing-floating): no usable window") }
   if (Test-Usable $session) {
     Invoke-BarTypingStop $session "typing-floating" "Not a first run, new tabs open the command bar: Ctrl+T into the floating bar, typing at 80 ms a key, ten tries" "With newTabOpens = commandBar, pressed Ctrl+T, typed example.com from 100 ms after it at 80 ms a key, reading the field after every key, then closed the floating bar with Escape; ten times." { Send-QuickChord @(0x11) 0x54 } { Close-Bar } 100 80 10
   }
@@ -1134,7 +1135,7 @@ function Invoke-HoldStop($Session, [string]$Slug, [string]$Title, [string]$Did, 
     Send-Chord @(0x11) 0x57
     Start-Sleep -Milliseconds 500
   }
-  if ($stop.Seen -ne "yes") { $script:Required.Add("$($stop.Number) $Title") }
+  if ($stop.Seen -ne "yes") { $script:FailedStops.Add("$($stop.Number) $Title") }
 }
 
 function Invoke-WholeTextTries($Session, [string]$Slug, [string]$Title, [string]$How) {
@@ -1164,21 +1165,21 @@ function Invoke-WholeTextTries($Session, [string]$Slug, [string]$Title, [string]
     $stop.Facts.Add("the bar read 'example.com' in $kept of 10")
     Set-Seen $stop ($kept -eq 10)
   }
-  if ($stop.Seen -ne "yes") { $script:Required.Add("$($stop.Number) $Title") }
+  if ($stop.Seen -ne "yes") { $script:FailedStops.Add("$($stop.Number) $Title") }
 }
 
 function Invoke-HoldTour {
   $env:ARDIA_TEST = "keyHoldReadyMs=$($script:HoldReadyMs)"
   $session = Start-Ardia "hold" -Onboarded
   $env:ARDIA_TEST = ""
-  if (-not (Test-Usable $session)) { $script:Required.Add("Hold (hold): no usable window"); Stop-Ardia $session; return }
+  if (-not (Test-Usable $session)) { $script:FailedStops.Add("Hold (hold): no usable window"); Stop-Ardia $session; return }
   $opened = Invoke-Stop $session "hold-page" "Key hold: open Example Domain in the first tab" {
     param($stop)
     $stop.Did = "Launched onboarded, opened example.com in a tab."
     $stop.Expected = "the window's title names example.com."
     Set-Seen $stop (Open-Page $session $stop "example.com" "example\.com")
   }
-  if ($opened.Seen -ne "yes") { $script:Required.Add("$($opened.Number) Key hold: open Example Domain in the first tab") }
+  if ($opened.Seen -ne "yes") { $script:FailedStops.Add("$($opened.Number) Key hold: open Example Domain in the first tab") }
 
   Invoke-HoldStop $session "hold-capitals" "Key hold: capitals from a held Shift and from Caps Lock, typed 15 ms after Ctrl+T" "Pressed Ctrl+T, and from 15 ms after it typed A with Shift held, then b, then Caps Lock, c, d, Caps Lock, 30 ms a key." "the new tab's bar reads 'AbCD' (#2099)." {
     param($stop)
@@ -1250,7 +1251,7 @@ function Invoke-HoldTour {
     [ArdiaTour]::PostMessageW($second.Handle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
     Start-Sleep -Milliseconds 800
   } else {
-    $script:Required.Add("Key hold: Ctrl+N opened no second window")
+    $script:FailedStops.Add("Key hold: Ctrl+N opened no second window")
   }
 
   $padsBefore = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match "^notepad$" } | ForEach-Object { $_.Id })
@@ -1299,14 +1300,14 @@ function Invoke-HoldTour {
   Stop-Ardia $session
 
   $live = Start-Ardia "hold-live" -Onboarded
-  if (-not (Test-Usable $live)) { $script:Required.Add("Hold (hold-live): no usable window"); Stop-Ardia $live; return }
+  if (-not (Test-Usable $live)) { $script:FailedStops.Add("Hold (hold-live): no usable window"); Stop-Ardia $live; return }
   $page = Invoke-Stop $live "hold-live-page" "Key hold, runner's own timing: open Example Domain in the first tab" {
     param($stop)
     $stop.Did = "Launched onboarded without a readiness floor, opened example.com in a tab."
     $stop.Expected = "the window's title names example.com."
     Set-Seen $stop (Open-Page $live $stop "example.com" "example\.com")
   }
-  if ($page.Seen -ne "yes") { $script:Required.Add("$($page.Number) Key hold, runner's own timing: open Example Domain") }
+  if ($page.Seen -ne "yes") { $script:FailedStops.Add("$($page.Number) Key hold, runner's own timing: open Example Domain") }
   Invoke-WholeTextTries $live "hold-whole-live" "Key hold, runner's own timing: example.com typed from 15 ms after Ctrl+T, ten tries" "at the runner's own timing, so the first letters are held and the rest arrive live"
   Stop-Ardia $live
 }
@@ -1409,11 +1410,13 @@ function Invoke-TypeStop($Session, [string]$Slug, [string]$Title, [string]$Did, 
     $stop.Facts.Add("report only ($Issues): every key landed and $Submit opened Example Domain: $whole")
     $heldUnderPointer = $false
     if ($RequireGoHold) {
-      $heldUnderPointer = [bool]($rested -and $null -ne $holdMark -and @(Get-LinesSince $Session $holdMark "\[ardia windows\] bar rows pointer over, holding").Count -and $goStayed)
-      $stop.Facts.Add("search engine: $($script:SuggestProfile)")
       $served = Join-Path $Out "suggest-server.log"
+      $servedLate = (Test-Path -LiteralPath $served) -and [bool](Select-String -LiteralPath $served -Pattern "for '$([regex]::Escape($script:LateQuery))', answered \d+ ms with $($script:LateRows.Count) rows after the release" -Quiet)
+      $heldUnderPointer = [bool]($rested -and $null -ne $holdMark -and $servedLate -and @(Get-LinesSince $Session $holdMark "\[ardia windows\] bar rows pointer over, holding").Count -and $goStayed)
+      $stop.Facts.Add("search engine: $($script:SuggestProfile)")
       if (Test-Path -LiteralPath $served) { $stop.Facts.Add("the tour's suggest server: $((Get-Content -LiteralPath $served | Select-Object -Last 4) -join ' / ')") }
-      $stop.Facts.Add("required (#2102): the mouse rested on Go, the bar held the late rows under it after Go's position was noted, and Go stayed put: $heldUnderPointer; $Submit opened Example Domain: $([bool]$loaded)")
+      $stop.Facts.Add("the tour's suggest server served the late rows for '$($script:LateQuery)' after the release: $servedLate")
+      $stop.Facts.Add("required (#2102): the mouse rested on Go, the tour's server served the late rows, the bar held them under it after Go's position was noted, and Go stayed put: $heldUnderPointer; $Submit opened Example Domain: $([bool]$loaded)")
     }
     $laterKept = $false
     if ($JudgeLaterLetters) {
@@ -1426,7 +1429,7 @@ function Invoke-TypeStop($Session, [string]$Slug, [string]$Title, [string]$Did, 
     }
     Set-Seen $stop ($(if ($JudgeLaterLetters) { $laterKept } elseif ($JudgeWholeText) { $whole } elseif ($RequireGoHold) { $firstKeyOk -and [bool]$loaded -and $heldUnderPointer } else { $firstKeyOk }))
   }
-  if ($Required -and $stop.Seen -ne "yes") { $script:Required.Add("$($stop.Number) $Title") }
+  if ($Required -and $stop.Seen -ne "yes") { $script:FailedStops.Add("$($stop.Number) $Title") }
   return $stop
 }
 
@@ -1450,6 +1453,8 @@ function Start-Hogs([string]$Folder) {
 }
 
 $script:SuggestPort = 0
+$script:SuggestSpki = ""
+$script:SuggestHost = "duckduckgo.com"
 $script:LateQuery = "example.com"
 $script:LateRows = @("example.com tour one", "example.com tour two", "example.com tour three")
 $script:LateMs = 500
@@ -1461,9 +1466,18 @@ function Start-SuggestServer([string]$Log) {
   $script:SuggestRelease = "$Log.release"
   Remove-Item -Force -ErrorAction SilentlyContinue $script:SuggestRelease
   $portFile = "$Log.port"
-  Remove-Item -Force -ErrorAction SilentlyContinue $portFile
-  $job = Start-Job -ArgumentList $portFile, $script:LateQuery, $script:LateRows, $script:LateMs, $Log, $script:SuggestRelease {
-    param($portFile, $lateQuery, $lateRows, $lateMs, $log, $release)
+  $spkiFile = "$Log.spki"
+  Remove-Item -Force -ErrorAction SilentlyContinue $portFile, $spkiFile
+  $job = Start-Job -ArgumentList $portFile, $spkiFile, $script:SuggestHost, $script:LateQuery, $script:LateRows, $script:LateMs, $Log, $script:SuggestRelease {
+    param($portFile, $spkiFile, $suggestHost, $lateQuery, $lateRows, $lateMs, $log, $release)
+    $key = [System.Security.Cryptography.RSA]::Create(2048)
+    $request = [System.Security.Cryptography.X509Certificates.CertificateRequest]::new("CN=$suggestHost", $key, [System.Security.Cryptography.HashAlgorithmName]::SHA256, [System.Security.Cryptography.RSASignaturePadding]::Pkcs1)
+    $names = [System.Security.Cryptography.X509Certificates.SubjectAlternativeNameBuilder]::new()
+    $names.AddDnsName($suggestHost)
+    $request.CertificateExtensions.Add($names.Build())
+    $made = $request.CreateSelfSigned([DateTimeOffset]::UtcNow.AddDays(-1), [DateTimeOffset]::UtcNow.AddDays(7))
+    $certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($made.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Pfx, "tour"), "tour")
+    Set-Content -LiteralPath $spkiFile -Value ([Convert]::ToBase64String([System.Security.Cryptography.SHA256]::HashData($key.ExportSubjectPublicKeyInfo())))
     $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
     $listener.Start()
     Set-Content -LiteralPath $portFile -Value $listener.LocalEndpoint.Port
@@ -1471,17 +1485,22 @@ function Start-SuggestServer([string]$Log) {
     while ($true) {
       $client = $listener.AcceptTcpClient()
       try {
-        $stream = $client.GetStream()
+        $client.ReceiveTimeout = 1000
+        $client.SendTimeout = 1000
+        $stream = [System.Net.Security.SslStream]::new($client.GetStream(), $false)
+        $stream.AuthenticateAsServer($certificate, $false, [System.Security.Authentication.SslProtocols]::None, $false)
         $reader = [System.IO.StreamReader]::new($stream)
         $line = [string]$reader.ReadLine()
         while ($reader.ReadLine()) { }
         $query = $null
-        if ($line -match "^GET /suggest\?q=([^ ]*) ") { $query = [Uri]::UnescapeDataString($Matches[1].Replace("+", " ")) }
+        if ($line -match "^GET /ac/\?q=([^ &]*)") { $query = [Uri]::UnescapeDataString($Matches[1].Replace("+", " ")) }
         $asked = $clock.ElapsedMilliseconds
         $rows = @()
+        $released = ""
         if ($query -eq $lateQuery) {
           $waited = [System.Diagnostics.Stopwatch]::StartNew()
           while (-not (Test-Path -LiteralPath $release) -and $waited.ElapsedMilliseconds -lt 15000) { Start-Sleep -Milliseconds 50 }
+          if (Test-Path -LiteralPath $release) { $released = " after the release" }
           Start-Sleep -Milliseconds $lateMs
           $rows = $lateRows
         }
@@ -1492,7 +1511,7 @@ function Start-SuggestServer([string]$Log) {
         $stream.Write($head, 0, $head.Length)
         $stream.Write($bytes, 0, $bytes.Length)
         $stream.Flush()
-        Add-Content -LiteralPath $log -Value "asked $asked ms for '$query', answered $($clock.ElapsedMilliseconds) ms with $($rows.Count) rows"
+        Add-Content -LiteralPath $log -Value "asked $asked ms for '$query', answered $($clock.ElapsedMilliseconds) ms with $($rows.Count) rows$released"
       } catch {
       } finally {
         $client.Dispose()
@@ -1502,23 +1521,28 @@ function Start-SuggestServer([string]$Log) {
   $ready = $false
   $deadline = (Get-Date).AddSeconds(15)
   $script:SuggestPort = 0
+  $script:SuggestSpki = ""
   while (-not $script:SuggestPort -and (Get-Date) -lt $deadline) {
     if (Test-Path -LiteralPath $portFile) { $script:SuggestPort = [int](Get-Content -Raw -LiteralPath $portFile) } else { Start-Sleep -Milliseconds 100 }
   }
+  if (Test-Path -LiteralPath $spkiFile) { $script:SuggestSpki = (Get-Content -Raw -LiteralPath $spkiFile).Trim() }
   while ($script:SuggestPort -and -not $ready -and (Get-Date) -lt $deadline) {
     try {
-      $ready = (Invoke-WebRequest -Uri "http://127.0.0.1:$($script:SuggestPort)/suggest?q=ready" -TimeoutSec 2 -UseBasicParsing).Content -eq '["ready",[]]'
+      $ready = (Invoke-WebRequest -Uri "https://127.0.0.1:$($script:SuggestPort)/ac/?q=ready&type=list" -TimeoutSec 2 -UseBasicParsing -SkipCertificateCheck).Content -eq '["ready",[]]'
     } catch {
       Start-Sleep -Milliseconds 200
     }
   }
-  if (-not $ready) { $script:Required.Add("the tour's suggest server never answered on port $($script:SuggestPort)") }
+  if (-not $ready -or -not $script:SuggestSpki) { $script:FailedStops.Add("the tour's suggest server never answered on port $($script:SuggestPort) or never named its key") }
   return $job
 }
 
 function Get-SuggestSettings {
-  $base = "http://127.0.0.1:$($script:SuggestPort)"
-  return @{ customSearchEngines = @(@{ id = "tour"; name = "Tour"; keyword = "tour.test"; url = "$base/search?q=%s"; suggestUrl = "$base/suggest?q=%s" }); searchEngine = "tour" }
+  return @{ searchEngine = "duckduckgo" }
+}
+
+function Get-SuggestArguments {
+  return @("--host-resolver-rules=`"MAP $($script:SuggestHost) 127.0.0.1:$($script:SuggestPort)`"", "--ignore-certificate-errors-spki-list=$($script:SuggestSpki)")
 }
 
 function Initialize-SuggestProfile([string]$Name) {
@@ -1535,9 +1559,9 @@ function Initialize-SuggestProfile([string]$Name) {
   if ($saved["settings"] -isnot [System.Collections.IDictionary]) { $saved["settings"] = @{} }
   foreach ($entry in (Get-SuggestSettings).GetEnumerator()) { $saved["settings"][$entry.Key] = $entry.Value }
   if ($saved["settingsMeta"] -isnot [System.Collections.IDictionary]) { $saved["settingsMeta"] = @{ chosen = @(); inferred = @() } }
-  $saved["settingsMeta"]["chosen"] = @(@($saved["settingsMeta"]["chosen"]) + @("searchEngine", "customSearchEngines") | Where-Object { $_ } | Select-Object -Unique)
+  $saved["settingsMeta"]["chosen"] = @(@($saved["settingsMeta"]["chosen"]) + @("searchEngine") | Where-Object { $_ } | Select-Object -Unique)
   Set-Content -LiteralPath $path -Value ($saved | ConvertTo-Json -Depth 64 -Compress) -Encoding utf8NoBOM
-  return "the tour search engine written into $how"
+  return "DuckDuckGo chosen as the search engine in $how"
 }
 
 function Invoke-FirstRunLaunch([string]$Name, [string]$Exe, [scriptblock]$Body, [switch]$OwnSuggestions) {
@@ -1546,7 +1570,7 @@ function Invoke-FirstRunLaunch([string]$Name, [string]$Exe, [scriptblock]$Body, 
   try {
     $script:SuggestProfile = $null
     if ($OwnSuggestions) { $script:SuggestProfile = Initialize-SuggestProfile $Name }
-    $session = if ($OwnSuggestions) { Start-Ardia $Name -KeepData } else { Start-Ardia $Name }
+    $session = if ($OwnSuggestions) { Start-Ardia $Name -KeepData -Arguments (Get-SuggestArguments) } else { Start-Ardia $Name }
   } finally {
     $script:App = $saved
   }
@@ -1560,7 +1584,7 @@ function Invoke-FirstRunLaunch([string]$Name, [string]$Exe, [scriptblock]$Body, 
       $stop.Expected = "a window within $LaunchSeconds s."
       $stop.Seen = "no"
     } | Out-Null
-    $script:Required.Add("First run ($Name): no usable window")
+    $script:FailedStops.Add("First run ($Name): no usable window")
   }
   Stop-Ardia $session
 }
@@ -1610,7 +1634,7 @@ function Invoke-FirstRunTour {
   Invoke-FirstRunLaunch "human-go" "" {
     param($session)
     $walk = Walk-OnboardingToOutro $session
-    Invoke-TypeStop $session "human-go" "First run: Ctrl+T about 400 ms after Get Started, the first key 100 ms after it, the mouse resting on the bar, then the Go button" "Walked the onboarding with its Continue buttons to the last screen ($($walk.Screens); at the last screen: $($walk.AtOutro)), clicked Get Started, pressed Ctrl+T about 400 ms after the click, typed e 100 ms after it, moved the mouse onto Go (rows then grow above it, so the pointer stays over the bar), typed xample.com 30 ms a key, noted where Go was when the field settled, waited 3 s while the late suggestions came in and clicked there. The profile's default search engine is a custom one whose suggest URL is the tour's own loopback server: it answers every request at once with no rows, except example.com, which it answers with three rows only once the stop has noted Go's position and taken its log mark, then $($script:LateMs) ms later, so the late rows always come after the mouse rests and the measurement starts. Required: the first key lands, the bar held the late rows under the pointer, Go stayed put and Go opened Example Domain (#2102)." { param($stop) $clicked = Click-Named $session "Get Started"; $stop.Facts.Add("Get Started clicked: $clicked"); Start-Sleep -Milliseconds 100 } "ctrl+t" "Go" "the whole text: #2101" -Required -RequireGoHold | Out-Null
+    Invoke-TypeStop $session "human-go" "First run: Ctrl+T about 400 ms after Get Started, the first key 100 ms after it, the mouse resting on the bar, then the Go button" "Walked the onboarding with its Continue buttons to the last screen ($($walk.Screens); at the last screen: $($walk.AtOutro)), clicked Get Started, pressed Ctrl+T about 400 ms after the click, typed e 100 ms after it, moved the mouse onto Go (rows then grow above it, so the pointer stays over the bar), typed xample.com 30 ms a key, noted where Go was when the field settled, waited 3 s while the late suggestions came in and clicked there. The profile's search engine is DuckDuckGo, and the launch maps $($script:SuggestHost) to the tour's own loopback TLS server (--host-resolver-rules, and --ignore-certificate-errors-spki-list naming only that server's key, which the engine keeps only in a test instance), so the built-in suggestion endpoint is what the bar asks: the server answers every request at once with no rows, except example.com, which it answers with three rows only once the stop has noted Go's position and taken its log mark, then $($script:LateMs) ms later, so the late rows always come after the mouse rests and the measurement starts. Required: the first key lands, the bar held the late rows under the pointer, Go stayed put and Go opened Example Domain (#2102)." { param($stop) $clicked = Click-Named $session "Get Started"; $stop.Facts.Add("Get Started clicked: $clicked"); Start-Sleep -Milliseconds 100 } "ctrl+t" "Go" "the whole text: #2101" -Required -RequireGoHold | Out-Null
   } -OwnSuggestions
   } finally {
     $suggestServer | Stop-Job -ErrorAction SilentlyContinue
@@ -1642,7 +1666,7 @@ function Invoke-FirstRunTour {
     $stop.Facts.Add("first letter lost in $($lost.Count) of $($script:FirstLetters.Count); with the bar focused before it: lost in $($lostInTime.Count) of $($inTime.Count)")
     foreach ($try in $lost) { $stop.Facts.Add("stop $($try.Number) $($try.Slug): '$($try.Field)', focus first $($try.FocusFirst), page mounted $($try.Mounts) time(s), first read $($try.FirstRead)") }
     Set-Seen $stop ($lost.Count -eq 0 -and $script:FirstLetters.Count -gt 0)
-  } | ForEach-Object { if ($_.Seen -ne "yes") { $script:Required.Add("$($_.Number) the first letter after Ctrl+T (#2124)") } }
+  } | ForEach-Object { if ($_.Seen -ne "yes") { $script:FailedStops.Add("$($_.Number) the first letter after Ctrl+T (#2124)") } }
 
 }
 
@@ -2497,8 +2521,6 @@ function Note-Required($Stop, [string]$Part) {
   }
 }
 
-$script:RequiredFailures = [System.Collections.Generic.List[string]]::new()
-
 function Invoke-PeekTabsTour {
   if (-not (Start-TourPages)) {
     $script:Lines.Add("- The peek-tabs part found no loopback page server on port $($script:TourPagesPort).")
@@ -2813,7 +2835,7 @@ foreach ($tour in $tours) {
   } catch {
     $script:Lines.Add("- The $($tour.Name) part stopped early: $($_.Exception.Message)")
     Write-Host "[tour] the $($tour.Name) part stopped early: $($_.Exception.Message)"
-    if ($tour.Required) { $script:Required.Add("the $($tour.Name) part stopped early: $($_.Exception.Message)") }
+    if ($tour.Required) { $script:FailedStops.Add("the $($tour.Name) part stopped early: $($_.Exception.Message)") }
   } finally {
     foreach ($session in @($script:Sessions | Where-Object { -not $_.Stopping })) { Stop-Ardia $session }
   }
@@ -2824,18 +2846,17 @@ $env:ARDIA_DATA_DIR = ""
 foreach ($part in $Required) {
   if (-not @($tours | Where-Object { $_.Name -eq $part }).Count) { $script:RequiredFailures.Add("$($part): not run") }
 }
-if ($script:RequiredFailures.Count) {
-  $script:Lines.Add("- Required stops that were not seen: $($script:RequiredFailures -join '; ').")
-  Set-Content -LiteralPath (Join-Path $Out "required-failed.txt") -Value ($script:RequiredFailures -join "`n") -Encoding utf8NoBOM
+$requiredNotSeen = @($script:FailedStops) + @($script:RequiredFailures)
+if ($requiredNotSeen.Count) {
+  $script:Lines.Add("- Required stops that were not seen: $($requiredNotSeen -join '; ').")
+  Set-Content -LiteralPath (Join-Path $Out "required-failed.txt") -Value ($requiredNotSeen -join "`n") -Encoding utf8NoBOM
 }
 Write-Tour
 $elapsed = [Math]::Round(((Get-Date) - $script:Started).TotalSeconds)
 $crashed = @($script:Sessions | Where-Object { $_.Crashed })
 Write-Host "[tour] $($script:StopNumber) stops in $elapsed s; tour.md and the screenshots are in $Out"
-if ($script:Required.Count) {
-  foreach ($failed in $script:Required) { Write-Host "::error::required tour stop failed: $failed" }
-}
-if ($crashed.Count -or $script:Required.Count) {
+foreach ($failed in $requiredNotSeen) { Write-Host "::error::required tour stop failed: $failed" }
+if ($crashed.Count -or $requiredNotSeen.Count) {
   foreach ($session in $crashed) { Write-Host "::error::the app crashed or exited on its own during the '$($session.Name)' launch: $($session.Summary)" }
   exit 1
 }

@@ -1,16 +1,17 @@
-import { memo, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { memo, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Image, Pressable, ScrollView, StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { tabTitle } from "../../state/browser/model";
-import { useTab } from "../../state/browser/hooks";
+import { useTab, useTabLive } from "../../state/browser/hooks";
 import { useSidebarUi } from "../../state/sidebar/sidebarUi";
 import { lastPicture, onPicturesChanged } from "../../state/tabs/tabPictures";
 import { commitSwitcher, hoverSwitcherRow, leaveSwitcherRow, subscribeSwitcherTabChanges } from "../../state/sidebar/switcher";
-import { noteTabSwitcherOverflowClick, noteTabSwitcherOverflowOpened, noteTabSwitcherWheelScrolled } from "../../state/telemetry/tabSwitcherOpens";
+import { noteTabSwitcherOverflowClick, noteTabSwitcherOverflowOpened, noteTabSwitcherPictureLate, noteTabSwitcherWheelScrolled } from "../../state/telemetry/tabSwitcherOpens";
 import { Symbol, Text, Panel } from "../ui";
 import { useTheme } from "../ui/theme";
 import { TabIcon } from "./TabIcon";
+import { previewBackdrop } from "./switcherPreview";
 import { revealedOffset } from "./switcherScroll";
-import { SIDEBAR_SHADOW, TAB_SWITCHER as T, TAB_SWITCHER_SCROLL_ID } from "./tokens";
+import { SIDEBAR_SHADOW, TAB_SWITCHER as T, TAB_SWITCHER_SCROLL_ID, tabSwitcherColors } from "./tokens";
 
 const SHOT = Math.round(T.card / T.shotAspect);
 const SHOT_WIDTH = T.card - 2 * T.cardInset;
@@ -22,7 +23,7 @@ const OWN_ANIMATED_SCROLL_MS = 450;
 export function TabSwitcher({ windowId, windowWidth, windowHeight }: { windowId: string; windowWidth: number; windowHeight: number }) {
   const theme = useTheme();
   const pendingSwitcher = useSidebarUi((u) => (u.switcher?.windowId === windowId ? u.switcher : null));
-  const switcher = pendingSwitcher?.visible ? pendingSwitcher : null;
+  const switcher = pendingSwitcher?.mounted ? pendingSwitcher : null;
 
   useEffect(() => {
     if (!pendingSwitcher) return;
@@ -38,27 +39,29 @@ export function TabSwitcher({ windowId, windowWidth, windowHeight }: { windowId:
 
   return (
     <View
+      pointerEvents={switcher.visible ? "auto" : "none"}
       style={{
         position: "absolute",
         left: (windowWidth - width) / 2,
         top: (windowHeight - height) / 2,
         width,
         height,
+        opacity: switcher.visible ? 1 : 0,
       }}
     >
       <Panel
-        fill={theme.dark ? T.fill.dark : T.fill.light}
+        fill={tabSwitcherColors(theme.dark).fill}
         radius={T.panelRadius}
         border={theme.panelBorder}
         shadow={SIDEBAR_SHADOW.tabSwitcher}
         style={StyleSheet.absoluteFill}
       />
-      <SwitcherRow ids={switcher.ids} index={switcher.index} viewport={viewport} overflows={count < switcher.ids.length} accent={theme.accent} />
+      <SwitcherRow ids={switcher.ids} index={switcher.index} viewport={viewport} overflows={count < switcher.ids.length} accent={theme.accent} visible={switcher.visible} />
     </View>
   );
 }
 
-function SwitcherRow({ ids, index, viewport, overflows, accent }: { ids: string[]; index: number; viewport: number; overflows: boolean; accent: string }) {
+function SwitcherRow({ ids, index, viewport, overflows, accent, visible }: { ids: string[]; index: number; viewport: number; overflows: boolean; accent: string; visible: boolean }) {
   const scroll = useRef<ScrollView>(null);
   const [opening] = useState(() => ({ x: revealedOffset(index, 0, viewport, T.card, STRIDE), y: 0 }));
   const offset = useRef(opening.x);
@@ -73,9 +76,12 @@ function SwitcherRow({ ids, index, viewport, overflows, accent }: { ids: string[
     scroll.current?.scrollTo({ x, animated });
   };
 
+  const overflowNoted = useRef(false);
   useEffect(() => {
-    if (overflows) noteTabSwitcherOverflowOpened();
-  }, []);
+    if (!visible || !overflows || overflowNoted.current) return;
+    overflowNoted.current = true;
+    noteTabSwitcherOverflowOpened();
+  }, [visible, overflows]);
 
   useEffect(() => {
     const moved = shownIndex.current !== index;
@@ -87,7 +93,7 @@ function SwitcherRow({ ids, index, viewport, overflows, accent }: { ids: string[
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     offset.current = e.nativeEvent.contentOffset.x;
-    if (wheeled.current || performance.now() < ownScrollUntil.current) return;
+    if (!visible || wheeled.current || performance.now() < ownScrollUntil.current) return;
     wheeled.current = true;
     noteTabSwitcherWheelScrolled();
   };
@@ -111,18 +117,32 @@ function SwitcherRow({ ids, index, viewport, overflows, accent }: { ids: string[
       contentContainerStyle={{ gap: T.gap }}
     >
       {ids.map((id, i) => (
-        <SwitcherCard key={id} tabId={id} index={i} focused={i === index} accent={accent} overflows={overflows} />
+        <SwitcherCard key={id} tabId={id} index={i} focused={i === index} accent={accent} overflows={overflows} visible={visible} />
       ))}
     </ScrollView>
   );
 }
 
-const SwitcherCard = memo(function SwitcherCard({ tabId, index, focused, accent, overflows }: { tabId: string; index: number; focused: boolean; accent: string; overflows: boolean }) {
+const SwitcherCard = memo(function SwitcherCard({ tabId, index, focused, accent, overflows, visible }: { tabId: string; index: number; focused: boolean; accent: string; overflows: boolean; visible: boolean }) {
   const tab = useTab(tabId);
+  const colors = tabSwitcherColors(useTheme().dark);
+  const themeColor = useTabLive(tabId, (live) => live.themeColor);
   const picture = useSyncExternalStore(onPicturesChanged, () => lastPicture(tabId));
+  const pictureData = picture?.data;
+  const source = useMemo(() => (pictureData ? { uri: `data:image/jpeg;base64,${pictureData}` } : null), [pictureData]);
+  const [decoded, setDecoded] = useState<object | null>(null);
+  const lateNoted = useRef(false);
+  const late = visible && !!source && decoded !== source;
+  useEffect(() => {
+    if (!late || lateNoted.current) return;
+    lateNoted.current = true;
+    noteTabSwitcherPictureLate();
+  }, [late]);
   useEffect(() => () => leaveSwitcherRow(index), [index]);
   if (!tab) return null;
   const url = tab.url || tab.pinnedUrl || "";
+  const backdrop = previewBackdrop(url ? themeColor : null, colors);
+  const shown = !!source && decoded === source;
 
   return (
     <Pressable
@@ -135,26 +155,26 @@ const SwitcherCard = memo(function SwitcherCard({ tabId, index, focused, accent,
         onMouseEnter={() => hoverSwitcherRow(index)}
         onMouseLeave={() => leaveSwitcherRow(index)}
       >
-        <View style={{ width: T.card, padding: T.cardInset, borderRadius: T.cardRadius, backgroundColor: focused ? T.focusFill : undefined }}>
+        <View style={{ width: T.card, padding: T.cardInset, borderRadius: T.cardRadius, backgroundColor: focused ? colors.focusFill : undefined }}>
           <View
             style={{
               width: SHOT_WIDTH,
               height: SHOT,
               borderRadius: T.previewRadius,
               overflow: "hidden",
-              backgroundColor: url ? T.pageFill : T.blankFill,
+              backgroundColor: backdrop.fill,
               alignItems: "center",
               justifyContent: "center",
             }}
           >
-            {picture ? (
+            {!shown && <TabIcon tabId={tab.id} url={url} favicon={tab.favicon} icon={tab.customIcon} profileId={tab.profileId} size={T.icon.preview} color={backdrop.icon} />}
+            {source && (
               <Image
-                source={{ uri: `data:image/jpeg;base64,${picture.data}` }}
+                source={source}
                 resizeMode="cover"
-                style={[StyleSheet.absoluteFill, { borderRadius: T.previewRadius }]}
+                onLoad={() => setDecoded(source)}
+                style={[StyleSheet.absoluteFill, { borderRadius: T.previewRadius, opacity: shown ? 1 : 0 }]}
               />
-            ) : (
-              <TabIcon tabId={tab.id} url={url} favicon={tab.favicon} icon={tab.customIcon} profileId={tab.profileId} size={T.icon.preview} color={url ? T.onPage : T.onPanel} />
             )}
             <View
               pointerEvents="none"
@@ -163,18 +183,18 @@ const SwitcherCard = memo(function SwitcherCard({ tabId, index, focused, accent,
                 {
                   borderRadius: T.previewRadius,
                   borderWidth: focused ? T.ring.focused : T.ring.rest,
-                  borderColor: focused ? accent : T.restRing,
+                  borderColor: focused ? accent : colors.restRing,
                 },
               ]}
             />
           </View>
           <View style={{ height: T.label, flexDirection: "row", alignItems: "center", gap: T.labelGap, paddingHorizontal: T.labelInset }}>
             {url || tab.customIcon ? (
-              <TabIcon tabId={tab.id} url={url} favicon={tab.favicon} icon={tab.customIcon} profileId={tab.profileId} size={T.icon.label} color={T.onPanel} />
+              <TabIcon tabId={tab.id} url={url} favicon={tab.favicon} icon={tab.customIcon} profileId={tab.profileId} size={T.icon.label} color={colors.onPanel} />
             ) : (
-              <Symbol name="globe" size={T.icon.globe} color={T.onPanel} style={{ width: T.icon.label, height: T.icon.label }} />
+              <Symbol name="globe" size={T.icon.globe} color={colors.onPanel} style={{ width: T.icon.label, height: T.icon.label }} />
             )}
-            <Text lines={1} weight="semibold" color={T.title} style={{ flex: 1, fontSize: T.titleSize }}>
+            <Text lines={1} weight="semibold" color={colors.title} style={{ flex: 1, fontSize: T.titleSize }}>
               {tabTitle(tab)}
             </Text>
           </View>

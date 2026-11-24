@@ -1,13 +1,13 @@
 import { processColor, type ViewProps } from "react-native";
 import * as NativeComponentRegistry from "react-native/Libraries/NativeComponent/NativeComponentRegistry";
 
-export { gradientDrawsNow, materialCapabilities, nativeBlur, nativeGradient, nativeWindowMaterial, type MaterialCapabilities, type MaterialPath, type MaterialsNative } from "./materialCapabilities";
+export { gradientDrawsNow, materialCapabilities, nativeBlur, nativeGradient, nativeWindowMaterial, type MaterialsNative } from "./materialCapabilities";
 
-export type WindowMaterialKind = "micaAlt" | "mica" | "acrylic";
+type WindowMaterialKind = "micaAlt" | "mica" | "acrylic";
 
-export type NativeWindowMaterialProps = ViewProps & { material: WindowMaterialKind; dark: boolean; fallbackColor: string; tintColor: string };
+type NativeWindowMaterialProps = ViewProps & { material: WindowMaterialKind; dark: boolean; fallbackColor: string; tintColor: string };
 
-export type NativeMaterialBlurProps = ViewProps & {
+type NativeMaterialBlurProps = ViewProps & {
   fallbackColor: string;
   tintColor: string;
   blurRadius: number;
@@ -18,7 +18,7 @@ export type NativeMaterialBlurProps = ViewProps & {
 
 export type GradientSpan = "unit" | "base" | "corner";
 
-export type NativeMaterialGradientProps = ViewProps & {
+type NativeMaterialGradientProps = ViewProps & {
   colors: number[];
   angle: number;
   span: GradientSpan;

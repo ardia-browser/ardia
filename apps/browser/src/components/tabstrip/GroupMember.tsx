@@ -29,6 +29,7 @@ export function GroupMember({
   start,
   offset,
   clip,
+  revealed,
   open,
   interactive,
   shown,
@@ -47,6 +48,7 @@ export function GroupMember({
   start: number;
   offset: number;
   clip: Animated.AnimatedAddition<number> | null;
+  revealed: boolean;
   open: Animated.Value;
   interactive: boolean;
   shown: boolean;
@@ -71,17 +73,10 @@ export function GroupMember({
   );
   const sliding = useMemo(() => open.interpolate({ inputRange: [0, 1], outputRange: [start, start + offset] }), [open, start, offset]);
   const left = useGated(shown, sliding, start + offset);
-  const opacity = useMemo(
-    () =>
-      Animated.add(shownValue, open.interpolate({ inputRange: [0, 0.5], outputRange: [0, 1], extrapolate: "clamp" })).interpolate({
-        inputRange: [0, 1],
-        outputRange: [0, 1],
-        extrapolate: "clamp",
-      }),
-    [],
-  );
+  const opacity = useGated(!revealed, shownValue, 1);
   return (
     <Animated.View pointerEvents={interactive ? "box-none" : "none"} style={{ position: "absolute", top: 0, left, width: visible, overflow: clip ? "hidden" : "visible", height: TOP_STRIP_HEIGHT, opacity: measured ? opacity : 0, zIndex: shown ? 2 : 1, display: parked ? "none" : "flex" }}>
+      <View pointerEvents="box-none" style={{ width, height: TOP_STRIP_HEIGHT }}>
       <Offstage.Provider value={offstage}>
         {member.kind === "folder" ? (
           <FolderMember groupId={member.id} chip={chip} shownTab={member.tabIds.includes(activeId) ? activeId : null} tuck={tuck} />
@@ -91,6 +86,7 @@ export function GroupMember({
           <DraggableChip tabId={member.id} width={width} geometry={geometry} from={from} group={member.group} tuck={tuck} out={out} />
         )}
       </Offstage.Provider>
+      </View>
     </Animated.View>
   );
 }
@@ -110,6 +106,55 @@ function FolderMember({ groupId, chip, shownTab, tuck }: { groupId: string; chip
   );
 }
 
+const FOLDER_MEASURE = { position: "absolute", left: 0, top: 0, width: 10000, flexDirection: "row", alignItems: "flex-start", opacity: 0 } as const;
+
+export function FolderMeasures({ ids }: { ids: string[] }) {
+  if (!ids.length) return null;
+  return (
+    <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={FOLDER_MEASURE}>
+      {ids.map((id) => (
+        <FolderMeasure key={id} groupId={id} />
+      ))}
+    </View>
+  );
+}
+
+function FolderMeasure({ groupId }: { groupId: string }) {
+  const theme = useTheme();
+  const group = useGroup(groupId, (g) => g);
+  const label = useGroupLabel(groupId);
+  if (!group) return null;
+  return (
+    <View onLayout={(e) => setMeasuredWidth(folderKey(groupId), Math.ceil(e.nativeEvent.layout.width * 2) / 2)}>
+      <FolderFace icon={group.icon} color={group.color} label={label} ink={theme.textTab} border={ink.clear} fill={ink.clear} />
+    </View>
+  );
+}
+
+function FolderFace({ icon, color, label, ink: titleInk, border, fill }: { icon: string | null; color: GroupColor | null | undefined; label: string; ink: string; border: string; fill: string }) {
+  return (
+    <View
+      style={{
+        height: FOLDER_HEIGHT,
+        flexDirection: "row",
+        alignItems: "center",
+        paddingLeft: FOLDER_PAD.left,
+        paddingRight: FOLDER_PAD.right,
+        borderRadius: folderRadius(),
+        borderWidth: CHIP_HAIRLINE,
+        borderColor: border,
+        backgroundColor: fill,
+      }}
+    >
+      <StripGroupIcon icon={icon} color={color} open={false} />
+      <Text numberOfLines={1} style={{ marginLeft: FOLDER_TITLE_GAP, maxWidth: FOLDER_TITLE_MAX, ...font.small, fontWeight: weight.semibold, color: titleInk }}>
+        {label}
+      </Text>
+      <Symbol name="chevron.down" size={8} weight="semibold" color={withAlpha(titleInk, 0.6)} style={{ marginLeft: space.xs, width: 9, height: 9 }} />
+    </View>
+  );
+}
+
 function FolderChip({ groupId, holding }: { groupId: string; holding: boolean }) {
   const theme = useTheme();
   const tokens = useSidebarTokens();
@@ -122,37 +167,20 @@ function FolderChip({ groupId, holding }: { groupId: string; holding: boolean })
   if (!group) return null;
   const tint = groupTint(group.color);
   const bare = group.color === "none";
-  const titleInk = tint ?? (holding ? theme.textPrimary : theme.textTab);
+  const titleInk = holding ? theme.textPrimary : theme.textTab;
   return (
-    <View
-      {...hover.hoverProps}
-      mouseDownCanMoveWindow={false}
-      tooltip={tip}
-      onLayout={(e) => setMeasuredWidth(folderKey(groupId), Math.ceil(e.nativeEvent.layout.width * 2) / 2)}
-      style={{ position: "absolute", left: 0, top: MID - FOLDER_HEIGHT / 2, height: FOLDER_HEIGHT }}
-    >
+    <View {...hover.hoverProps} mouseDownCanMoveWindow={false} tooltip={tip} style={{ position: "absolute", left: 0, top: MID - FOLDER_HEIGHT / 2, height: FOLDER_HEIGHT }}>
       <ContextMenuArea onContextMenu={() => void openGroupMenu(windowId, groupId)}>
         <Pressable onPress={() => void openFolderMenu(windowId, groupId)}>
           {({ pressed }) => (
-            <View
-              style={{
-                height: FOLDER_HEIGHT,
-                flexDirection: "row",
-                alignItems: "center",
-                paddingLeft: FOLDER_PAD.left,
-                paddingRight: FOLDER_PAD.right,
-                borderRadius: folderRadius(),
-                borderWidth: CHIP_HAIRLINE,
-                borderColor: bare ? ink.clear : theme.pinnedRestingStroke,
-                backgroundColor: pressed ? theme.tabPressed : tint ? withAlpha(tint, hovered ? 0.3 : 0.22) : hovered ? tokens.groupHeaderHover : bare ? ink.clear : tokens.groupFill,
-              }}
-            >
-              <StripGroupIcon icon={group.icon} color={group.color} open={false} />
-              <Text numberOfLines={1} style={{ marginLeft: FOLDER_TITLE_GAP, maxWidth: FOLDER_TITLE_MAX, ...font.small, fontWeight: weight.semibold, color: titleInk }}>
-                {label}
-              </Text>
-              <Symbol name="chevron.down" size={8} weight="semibold" color={withAlpha(titleInk, 0.6)} style={{ marginLeft: space.xs, width: 9, height: 9 }} />
-            </View>
+            <FolderFace
+              icon={group.icon}
+              color={group.color}
+              label={label}
+              ink={titleInk}
+              border={bare ? ink.clear : theme.pinnedRestingStroke}
+              fill={pressed ? theme.tabPressed : tint ? withAlpha(tint, hovered ? 0.3 : 0.22) : hovered ? tokens.groupHeaderHover : bare ? ink.clear : tokens.groupFill}
+            />
           )}
         </Pressable>
       </ContextMenuArea>

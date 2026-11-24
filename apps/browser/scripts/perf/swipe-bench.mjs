@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { INJECTION_ENTITLEMENTS, prepareApp } from "../../../../scripts/lib/app-copy.mjs";
 import { launch, session, sleep } from "../../../../scripts/lib/instance.mjs";
 import { framesLibrary } from "./frames-phase.mjs";
+import { median } from "./median.mjs";
 
 const HELP = `Profile swipe cost: two-finger horizontal trackpad gestures (the shape of acperf postscroll trackpad-x: 0.3 s of
 finger events with phases, then ~1.2 s of momentum, at 120 events/s) made in the app's own process by acswipe.dylib
@@ -48,12 +49,6 @@ maxJump (largest change between two samples) and the range, so a run where nothi
 ticks and longestGapMs are acframes.m's display-link ticks in the window (they tick at ~60 Hz even while locked).`;
 
 const ROWS = ["travel", "movingMs", "movingGapMs", "movingMainMs", "movingCommits", "mainMs", "jsMs", "cpuMs", "sendEventMs", "commits", "renders", "hostUpdates", "events", "layoutPasses", "viewUpdates", "ticks", "longestGapMs"];
-const median = (xs) => {
-  const s = xs.filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
-  if (!s.length) return NaN;
-  const m = s.length >> 1;
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-};
 const argv = process.argv.slice(2);
 if (argv.includes("-h") || argv.includes("--help") || argv.length < 2) {
   console.log(HELP);

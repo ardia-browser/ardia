@@ -1,5 +1,5 @@
 import { APP_INGEST_KEY, INGEST_KEY_HEADER } from "@ardia/core";
-import { cancelUploads, fileSize, onReportEvent, postReportJson, removeReportFile, uploadFile } from "../../platform/report";
+import { cancelUploads, fileSize, onReportEvent, postReportJson, removeReportFile, sendsReportFiles, uploadFile } from "../../platform/report";
 import { feedbackURLOverride } from "../../platform/launchConfig";
 import { confirm } from "../../platform/dialogs";
 import { readDocument, removeDocument, writeDocument } from "../../platform/documents";
@@ -28,12 +28,13 @@ import {
 import { discardRecording, discardTrace, lastRecordingStats, startRecording, stopRecording } from "./recording";
 import { SAVED_DRAFT_DOC, restoredDraft, savedDraftJson, savedDraftOf } from "./savedDraft";
 import { currentReport, initialReportState, patchDraft, patchReport, useReportSheet, type ReportSheetState } from "./store";
-import { isBusy, sendReport, type UploadDeps, type UploadState } from "./upload";
+import { isBusy, restartReason, sendReport, type RestartReason, type UploadDeps, type UploadState } from "./upload";
 
 export const FEEDBACK_URL = "https://ardia.dev/api/feedback";
 const POST_TIMEOUT_MS = 30_000;
 
-export const feedbackEndpoint = () => feedbackURLOverride() ?? FEEDBACK_URL;
+const feedbackEndpoint = () => feedbackURLOverride() ?? FEEDBACK_URL;
+export const canAttachFiles = sendsReportFiles;
 
 let identity: ReportIdentity | null = null;
 let cancelled = false;
@@ -82,6 +83,7 @@ export function openReport(windowId: string | null, source: "menu" | "check_in" 
 }
 
 async function refreshLocalEvents() {
+  if (!sendsReportFiles()) return;
   const local = await localEventsSince(Date.now() - LOCAL_EVENTS_DAYS * 86_400_000).catch(() => null);
   if (currentReport().windowId) patchReport({ local: local ? { path: local.path, bytes: local.bytes, lines: local.lines } : null });
 }
@@ -128,11 +130,15 @@ export const setAttachedOpen = (attachedOpen: boolean) => patchReport({ attached
 export const setPreview = (preview: boolean) => patchReport({ preview, attachedOpen: false });
 
 export function reportFiles(s = currentReport()): ReportFile[] {
+  if (!sendsReportFiles()) return [];
   const files: ReportFile[] = [];
   if (s.recording.phase === "ready") files.push({ name: "recording.mp4", path: s.recording.path, bytes: s.recording.bytes, type: "video/mp4" });
   if (s.draft.kind === "slow" && s.trace.phase === "ready") files.push({ name: "trace.json.gz", path: s.trace.path, bytes: s.trace.bytes, type: "application/gzip" });
   if (s.draft.attach.errors && s.local && s.local.lines > 0) files.push({ name: "local-events.jsonl.gz", path: s.local.path, bytes: s.local.bytes, type: "application/gzip" });
-  return files.map((f) => ({ ...f, bytes: Math.max(f.bytes, fileSize(f.path)) }));
+  return files.map((f) => {
+    const measured = fileSize(f.path);
+    return { ...f, bytes: measured > 0 ? measured : f.bytes };
+  });
 }
 
 async function postJson(url: string, body: unknown, headers: Record<string, string>) {
@@ -166,10 +172,10 @@ const deps: UploadDeps = {
 
 export async function previewPayload(): Promise<Record<string, unknown>> {
   const s = currentReport();
-  return buildPayload(s.draft, await payloadContext(s.draft, identity?.id ?? "<anonymous id, made when you send>"));
+  return buildPayload(s.draft, await payloadContext(s.draft, identity?.id ?? "<anonymous id, made when you send>", reportFiles(s)));
 }
 
-async function payloadContext(draft: ReportDraft, installId: string) {
+async function payloadContext(draft: ReportDraft, installId: string, files: ReportFile[]) {
   const s = currentReport();
   const info = appInfo();
   return {
@@ -183,7 +189,7 @@ async function payloadContext(draft: ReportDraft, installId: string) {
     pageAddress: s.pageAddress,
     sharing: isSharing(),
     diagnostics: await reportDiagnostics(draft, s.local?.lines ?? null),
-    files: reportFiles(s),
+    files,
   };
 }
 
@@ -202,24 +208,29 @@ export async function sendCurrentReport() {
   }
   cancelled = false;
   const failed = s.upload.phase === "failed" ? s.upload : null;
-  let resume = failed && failed.errorClass !== "expired" ? failed.created : null;
   const sharing = isSharing();
-  const files = reportFiles(s);
+  let files = reportFiles(s);
+  let restartedFor: RestartReason | null = failed ? restartReason(failed, files) : null;
+  let resume = failed && !restartedFor ? failed.created : null;
   const endpoint = { url: feedbackEndpoint(), key: APP_INGEST_KEY, keyHeader: INGEST_KEY_HEADER };
   const onState = (upload: UploadState) => !cancelled && patchReport({ upload });
   const attempt = async () => {
     const shown = resume && identity ? identity : reportIdentity(s.draft.watch && !sharing);
     identity = shown;
-    const payload = buildPayload(s.draft, await payloadContext(s.draft, shown.id));
+    const payload = buildPayload(s.draft, await payloadContext(s.draft, shown.id, files));
     return { shown, result: await sendReport(deps, endpoint, payload, files, onState, resume, () => cancelled) };
   };
   let { shown, result } = await attempt();
-  let restarted = false;
-  if (result.phase === "failed" && result.errorClass === "expired" && resume && !cancelled) {
-    resume = null;
-    restarted = true;
-    ({ shown, result } = await attempt());
+  if (result.phase === "failed" && resume && !cancelled) {
+    const reason = restartReason(result, files);
+    if (reason) {
+      resume = null;
+      restartedFor = reason;
+      files = reportFiles(currentReport());
+      ({ shown, result } = await attempt());
+    }
   }
+  const restarted = !!restartedFor;
   if (cancelled) return;
   if (result.phase === "failed") {
     capture("report_failed", {
@@ -230,6 +241,9 @@ export async function sendCurrentReport() {
       attempts: result.attempts,
       resumed: !!failed,
       restarted,
+      restart_reason: restartedFor ?? "none",
+      attachments: files.length,
+      sends_files: sendsReportFiles(),
     }, consent);
     return;
   }
@@ -260,6 +274,8 @@ export async function sendCurrentReport() {
     retries: result.sent.retries,
     resumed: !!failed,
     restarted,
+    restart_reason: restartedFor ?? "none",
+    sends_files: sendsReportFiles(),
   }, consent);
 }
 

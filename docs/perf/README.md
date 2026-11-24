@@ -11,26 +11,33 @@ All of them are in `apps/browser/scripts/perf/`.
 | File | Bench | What it is |
 |---|---|---|
 | `native-bench.mjs` | native | Launch, idle CPU and wakeups, memory, tab and window latency, throttling, on a Release app in hidden instances. Its header maps every section and output row to the function that measures it. |
+| `native-summary.mjs`, `gate-verdict.mjs`, `gate.sh` | native | The rows native-bench prints, the release gate's pooled verdict over its rounds, and the script that runs the whole gate under one perflab lock (below). |
+| `bench-sweep.mjs` | native, JS | Stops the app instances a gate's jobs launched with `open` (outside every process group, so no signal to a bench reaches them), found only by `ARDIA_DATA_DIR` or `HOME` in their environment naming a path inside the gate's own folders, never by executable or pid. The owner's Ardia never matches. |
+| `template-cache.mjs`, `template-state.mjs`, `ubo-cache.mjs` | native, cross-browser | The data folder every run copies: what a finished one must hold (uBO's saved engine, the startup components), and the cache that keeps it between rounds and gates, keyed by the app's build and code, uBO's version, the bench bundle and the page port. |
 | `acperf.swift` | native | Process probes (rusage, phys_footprint, window on screen, quit) and `postkeys` (real key events posted to one pid with `CGEventPostToPid`), built on demand with swiftc. |
 | `acmark.m` | native | Injected into the bench's copy of the app: marks when a window's React content commits, and (`AC_BENCH_KEYLOG=1`) every key down the app's event loop sees. |
 | `acframes.m`, `frames-phase.mjs`, `frames-phase.test.mjs` | native | The frame rig (`native-bench.mjs --only frames`, `framecounts`): `acframes.m` is injected like `acmark.m` and records display-link ticks, main- and JS-thread run-loop busy time and layout counters; `frames-phase.mjs` drives the interactions and reads them; the test checks the window arithmetic. Rows: [What the frame rows measure](#what-the-frame-rows-measure). |
 | `scroll-frames.mjs` | native | Scroll smoothness on local pages that follow the scroll in script, rAF, canvas, scroll-driven animations, a smooth-scroll library and an inner scroller: real trackpad (phases and momentum, at 120, 90 or 60 events/s), wheel and key scrolls into a hidden instance (`acperf postscroll`, CDP keys), read from Chrome's trace. Rows: compositor draws, main frames, stale draws (a draw with no new main frame since the one before: script-placed content shows the old scroll position), rAF rate and gaps, per app. Its header has the details. |
 | `strip-scroll.mjs`, `acstrip.m` | native | What a two-finger pan and a wheel over the top tab strip cost (25 or 80 tabs, 1 or 2 profiles, mid-strip, at either end, leaving and reaching its start): main- and JS-thread CPU and busy time, the longest main-thread iteration, the process's CPU, UI-manager layout passes and view updates, React commits and renders, and how far the strip moved, sides interleaved gesture by gesture. `acstrip.m` is injected like `acframes.m`: it finds the strip's scroll view, sets its offset, reads thread CPU, and makes the gestures in-process (precise phaseless deltas; `--driver acperf` posts real phased ones when the screen is unlocked). |
-| `sidebar-scroll-bench.mjs` | native | What a flick and a wheel spin over the sidebar's tab list cost at 50, 150 and 300 tabs (pinned tiles and rows, groups, audible and loading tabs), 1 or 2 profiles, with the hover pointer resting over the list: main- and JS-thread CPU and busy time, frames and the longest gap, the process's CPU, root hit tests, view updates and layout passes, React commits and renders, JS tasks from scroll and hover events, and how far the list moved. Runs a production bundle on a Debug app through a stand-in packager; sides interleave with `--append`. `acframes.m` posts the gestures in-process (`gesture` op: phaseless precise pans and wheel notches, which a locked screen still routes) and reads or sets the scroll offset (`scrollpos`). |
+| `sidebar-scroll-bench.mjs` | native | What a flick and a wheel spin over the sidebar's tab list cost at 50, 150 and 300 tabs (pinned tiles and rows, groups, audible and loading tabs), 1 or 2 profiles, with the hover pointer resting over the list: main- and JS-thread CPU and busy time, frames and the longest gap, the process's CPU, root hit tests, view updates and layout passes, React commits and renders, JS tasks from scroll and hover events, and how far the list moved. Runs a production bundle on a Debug app through a stand-in packager; sides interleave with `--append`. `acframes.m` posts the gestures in-process (`gesture` op: phaseless precise pans and wheel notches, which a locked screen still routes) and reads or sets the scroll offset (`scrollpos`). Each gesture also reports the longest main run-loop iteration, how many ran over 8.3 ms (`mainOver`, with when and how long in `mainLong`), and, from the scroll offset `acframes.m` logs on every display-link tick, how many ticks moved the list and how many of those came over 12 ms late (`lateWhileMoving`: a frame dropped while the list moved, the one you see). Keep the display awake (`caffeinate -d -u`): with it asleep the display link stops and the frame columns read 0. |
 | `tab-actions.mjs`, `actabs.m` | native | Tab actions from the AppKit event to the last paint, on a session that looks like a real one (60 tabs, 2 profiles, pinned tiles and rows, groups, audible and loading tabs, 2 windows): sidebar click, ⌃Tab, ⌘1–9, ⌘T, ⌘-click, ⌘W, the row's ✕, pin and unpin, ⌃⇧PgDn. `--extra-tabs N` adds N plain tabs to it, the many-tab session: J2 (⌘T) and J3 (⌃Tab) must cost the same at 0 and 100 extra (#1330). Sides (a bundle each, `--side-env` for extra environment) alternate launch by launch. Each action is split into event → store, React's commit, layout, the UI blocks on the main thread and AppKit's display + Core Animation commit, plus the shown page's frame, with React renders and commits per action. `actabs.m` is injected like `acmark.m`: it posts the key, mouse and menu events in-process and times every UI-manager flush to its Core Animation commit. Its `front` op logs which page is frontmost at a point of the window, every 2 ms, to `bench-tabs.jsonl`. |
+| `soak.mjs`, `soak-app.js` | native, JS | A long session compressed into minutes (#3163): rounds of navigations (new pages and revisits), tab opens and closes and switches on js-bench's 200-tab seed in a hidden instance, sampled every few rounds for the JS heap after a forced collection, store slice sizes, live store listeners, module-event listeners, intervals and pending timeouts (the probe's `listeners` option counts them), native views, the browser process's memory, GC counts and time, the JS loop's lag, and switch, open and close JS time. `--sync 1` pairs a second instance through a scratch sync folder; `--history N` seeds a large history. `compare` prints the growth per 1000 navigations of two runs. |
+| `sync-cycle-bench.mjs` | Node | One profile's sync cycle on the real history adapter and `syncScope`, two devices on an in-memory folder, at several history sizes: JS-thread CPU per idle cycle, per cycle after a local visit and after a visit on the other device. Run with `node --import ./src/test-loader.mjs scripts/perf/sync-cycle-bench.mjs` from apps/browser. |
 | `launch-trace.mjs` | native | Where the engine's start goes, two sides compared: Chrome's startup traces (`native-bench.mjs --only launch --trace-startup <categories>`), milestones from the process's creation (ChromeMain, BrowserMain, each process's first event) and the browser main thread's slices by name. |
 | `acsample.c`, `launch-samples.mjs` | native | The stretch the trace doesn't cover (ChromeMain → BrowserMain, ~100 ms): `acsample.c`, injected with `--env DYLD_INSERT_LIBRARIES`, samples the main thread every ~1 ms from before `main`; `launch-samples.mjs` symbolizes the samples against the unstripped framework (`dist/<v>/symbols`) and compares the functions in a window of two sides. How to run: its header. It found 0.2.31's +20 ms: the platform policy loader waiting on `/usr/bin/profiles`. |
 | `bench-entry.js`, `bench-channel.js`, `bench-offline.js` | native | The JS entry of the bench bundle: the app's `index.js` plus the command channel (`ac.journeys()` is the field timing's own view). `bench-offline.js` answers every non-local `fetch` itself when the data folder holds a `bench-offline` file, so nothing is uploaded while sharing is on. |
 | `js-bench.mjs` | JS | React commits, renders, store updates and JS tasks per interaction, on a production bundle. |
 | `bench-app.js` | JS, render | The scenarios js-bench and render-bench run inside the app. **Not** part of native-bench. |
-| `seed.mjs` | JS, render | The big profile those runs start from: 200 tabs, 5000 history entries, 1000 bookmarks. |
+| `seed.mjs` | JS, render | The big profile those runs start from: 200 tabs, 5000 history entries, 1000 bookmarks. js-bench loads the two active tabs from `127.0.0.1` and the other tabs from `[::1]` (same port), so the active page's favicon can't reach the other rows through Chromium's same-host fallback partway through launch, and serves the active pages 400 ms late, so the address field's load fill (shown past 150 ms) is counted in every launch rather than in some. |
 | `render-bench.mjs` | render | Wasted renders per interaction, using React's profiling build (`js-bench.mjs bundle <dir> --profiling 1`). |
 | `census.mjs` | render | Per action of each journey (Cmd-T, keystroke, Cmd-L, tab switch, Enter, page load, hover): components rendered, wasted renders, hooks run, store subscriptions notified, selectors evaluated, native view updates, timers scheduled. Its results and fix list: [render-census.md](render-census.md). |
 | `micro-bench.mjs` | Node | Store-side work that grows with a profile (sidebar entries, group names, omnibox) in Node. No app needed. Its `counts` and `instr` cases feed the ratchet. |
 | `suggest-instr.mjs`, `suggest-hermes.mjs`, `bar-actions.json` | Node, Hermes | One command-bar keystroke on the seed profile (typing `github.com/net` and `react native perf`: site check, the bar's 46 actions, suggestions). `micro-bench.mjs suggest-keys` prints ops and time per key (`SUGGEST_BEFORE=1` runs the code as it was before the J2 hill-climb: the frozen spec `packages/core/src/suggest.reference.ts`); `suggest-instr.mjs` the instructions retired per round; `suggest-hermes.mjs` the same keys in the app's Hermes (the app's babel transform, the `hermes` CLI from Pods), per key, run under the perflab lock. `packages/core/src/suggest.property.test.ts` and `fuzzy.property.test.ts` hold the live code to the frozen spec on random profiles and typing sequences. |
+| `session-save-bench.mjs` | Node | One session save on a large session (1500 tabs, pins, folders, closed windows; `--tabs N`, `--runs N`, `--json`): JS time to build `session.json` and hand it to the document store after a title, address or settings change and a dropped pin. Run from `apps/browser` with `node --import ./src/test-loader.mjs scripts/perf/session-save-bench.mjs`. No app needed. |
 | `bookmark-move-bench.mjs` | Node | A Bookmarks page drag of a selection into another folder: CPU time of the store update and of the diff sent to Chrome, and how many ops it sends (`--each` and `--slice`/`--flat` time older code). No app needed. |
 | `ratchet.mjs`, `ratchet.json` | ratchet | Ceilings on counts that can only go down, and the commands that check, lower and rebuild them. |
 | `ratchet-app.js`, `ops.mjs` | ratchet | The `launch` scenario the ratchet adds to js-bench, and the builtin-call counter micro-bench uses. |
+| `median.mjs`, `processes.mjs` | shared | The median the app benches and the gate report (session-save-bench keeps its own upper-middle sample), and the process-table helpers (a launched app's process tree, Chromium process kinds) the benches and the gate share. |
 
 Every bench that runs a copy of the app (js-bench, render-bench, census, native-bench, tab-actions) makes it with
 `prepareApp` in `scripts/lib/app-copy.mjs`: an APFS clone with the bundle swapped in, re-signed with the original's identity
@@ -78,41 +85,103 @@ the control stays `dist/<previous stable>/export/Ardia.app` however many nightli
    by run, putting the control first on even runs, so both see the same machine. Don't run the apps as two
    separate jobs. The 0.2.22 gate ran 0.2.21 and the RC 15 minutes apart and chased a launch "regression" that
    was only drift. For js-bench, alternate `run --runs 1 --append 1` between the two labels, in a fresh `--out`.
-4. **Use a quiet machine.** Before starting, check `ps` for other agents' builds, benches and test instances. When
+4. **Hold one lock for all of it.** `gate.sh` (below) runs the whole gate as one command under `locked perflab`, so
+   no other agent's timing shares the Mac, nothing is left holding the lock after a ^C or a timeout, and it stops at
+   once when the lock is busy past `GATE_LOCK_WAIT` seconds (default 3600). `--only prepare` builds the
+   bench bundle, copies and signs both apps and makes both template data folders. None of that is a timing, so inside
+   the lock it runs beside `smoke.sh` and `ratchet.mjs` (`.claude/skills/release/SKILL.md` › 4). The timed rounds then
+   run the prepared copies with `--prepared`.
+   - Templates are cached in `dist/<v>/bench/templates/` (`<out>/.templates/` for an app outside `dist`), keyed by
+     the app's version, build and code signature hash, its bundled uBO, the bench bundle and the page port
+     (`--page-port`, default 9476; a busy port falls back to any port and caches nothing). Runs with `--env` or
+     `--control-env`, `--seed` or `profiles` never use it. Each store is a new generation that is never changed; a
+     run copies the generation it checked and checks the copy again: the same key, uBO's store and blobs within
+     limits and unchanged since it was stored, the installed startup components the same versions it recorded, and
+     under `--template-max-age` hours old (default 12; 0 turns the cache off). The age limit is there because the
+     CRLSet and uBO's lists move: a template from the last gate, days ago, would download them inside every run's
+     idle window.
+   - The two sides' templates are made together, minutes apart, and used only as that pair, so both start from the
+     same component versions and equally fresh uBO lists. When either side has no valid cached template, or the two
+     weren't made together, both are made again. So in practice the cache saves the templates (60–90 s a side) on
+     the second round and on every rerun of a gate, not across gates.
+5. **Use a quiet machine.** Before starting, check `ps` for other agents' builds, benches and test instances. When
    the timing is what you're measuring, run one bench at a time.
    - Pick your own `--port`.
    - Keep the display awake (`caffeinate -d`).
    - If the screen locks or the display sleeps, macOS stops giving windows display-link frames. Pages then paint
-     about once a second. native-bench leaves those switches and new tabs out and counts them in the "samples
-     left out" row. A nonzero count there means rerun with the screen awake.
+     about once a second. native-bench leaves those switches and new tabs out (the visible page drew fewer than 5
+     rAF frames in the 250 ms before) and counts them in the "samples left out" row. A nonzero count there means
+     rerun with the screen awake; `gate-verdict.mjs` calls such a round invalid.
    - WindowServer captures fail while the screen is locked, but the bench doesn't need any.
    - The instances' windows are on screen, usually in front of everything: when the owner is using the Mac, their
      pointer moving over one wakes that app (hover, cursor updates), whichever version it is. The "idle windows:
      someone used the Mac" rows count the seconds of input during each run's idle windows. Don't call an idle
      regression from runs where they're nonzero. The 0.2.26 gate's idle spikes came in a round the owner was using the
      Mac and didn't come back in 16 more interleaved runs, 8 of them with the owner at work.
-5. **Collect enough runs.** Use at least 6 launches and 2 session runs per app. Each session run takes about 5
-   minutes with `--idle 60`. The table gives the median with min–max and n.
-   - Call a row a regression only when the ranges separate, or when it reproduces in a second interleaved round.
-   - Overlapping ranges are noise.
+6. **Collect two rounds and read them pooled.** A round is one native-bench run with `--only launch,session,windows
+   --launch-runs 6 --runs 2`: 6 launches, 2 session runs and 2 windows runs per app, interleaved. Run two rounds, back
+   to back, each into a new empty folder, and score only when both exited 0. `gate-verdict.mjs` reads them (the rule
+   the 0.2.47 and 0.2.48 gates used). It scores nothing and exits 2 when a round is incomplete: a phase or run
+   missing, any run short of its samples (6 launches, 16 switches, 5 new tabs, 3 + 8 new windows, both idle windows),
+   samples left out, or the rounds measuring different builds (version, build or code signature hash). A session run
+   as its five parts (`--only idle,memory,switch,newtab,newwindow`) counts as the session. A row fails when:
+   - the pooled ranges separate: the candidate's best run is worse than the control's worst, or
+   - the candidate is worse in both rounds and its pooled median is worse by more than the control's own
+     round-to-round spread of medians.
+   Overlapping ranges are noise, and so is a row that's worse in one round only. A single round can only fail on
+   separated ranges, which is why the gate runs two: one round on a busy Mac separates some row by a hair, a
+   different one each time (0.2.47's three rounds did).
    - Compare runs made with the same `--only`: a sub-phase run settles less than a full session.
-6. **Clean up.** Afterwards, run `scripts/agent/unregister-builds` and delete your out dir.
+   - The `windows` phase stays in the gate: it times new windows at one settled tab, which the session's three (at 20
+     tabs) don't cover, and it doubles each new-window row's runs. A regression only in one-tab windows failed all
+     three window rows with it and none without it.
+   - A round takes about 19 minutes, 16 of them the four session runs. Their waits (`--launch-settle 30`, `--idle 60`,
+     `--close-settle 30`) are most of that, and each was checked against shorter ones (#3715: three interleaved
+     rounds of 0.2.47 against 0.2.48, cumulative rusage and footprint read every 5 s in the same runs, so each
+     shorter wait is compared with the full one run by run, 8–12 runs):
+     - launch settle 10, 15, 20 or 25 s: the 1-tab idle window still holds startup work (browser wakeups +0.15 to
+       +0.38/s, higher in 7/8 to 12/12 runs);
+     - a 30 or 45 s idle window: periodic work beyond it goes missing or lands unevenly (20 tabs at 30 s: all-process
+       wakeups −4.3/s and CPU −0.17 %, lower in 12/12; 1 tab at 45 s: wakeups +0.33/s, higher in 8/8);
+     - close settle 10 s: memory reads 4–10 MB high; 20 s: 0–2 MB high in 7/8.
+     So they stay. Don't shorten one without a run-by-run comparison like that.
+7. **Clean up.** Afterwards, run `scripts/agent/unregister-builds` and delete your out dir (keep
+   `dist/<v>/bench/`: the next gate's control bundle and templates).
 
 ```sh
-V=0.2.23 PREV=0.2.22 OUT=<your scratch dir>/gate
-scripts/release.sh $V --rc
-# Native. Omit --control-bundle when both apps share NATIVE_API_VERSION.
-node apps/browser/scripts/perf/native-bench.mjs --out $OUT/nb --port 9478 \
-  --app dist/$V-rc/export/Ardia.app --label rc \
-  --control dist/$PREV/export/Ardia.app --control-label $PREV --control-bundle dist/$PREV/bench/main.jsbundle \
-  --only launch,session,windows --launch-runs 6 --runs 2
-# JS: alternate the apps one run at a time.
+scripts/release.sh 0.2.49 --rc
+apps/browser/scripts/perf/gate.sh 0.2.49 0.2.48 --out <your scratch dir>/gate   # exit: the verdict, or the step that failed
+scripts/agent/unregister-builds
+```
+
+`gate.sh --help` lists what it runs: `smoke.sh`, `ratchet.mjs run --own` and `native-bench --only prepare` side by
+side, then two rounds (`native-bench --prepared --only launch,session,windows --launch-runs 6 --runs 2`, each in a new
+`mktemp -d` folder), then `gate-verdict.mjs` on both. On a pass it keeps the candidate's bench bundle as
+`dist/<v>/bench/main.jsbundle` (step 2: the next gate's `--control-bundle`, its default) before you delete the out dir.
+Its exit status is the verdict's (0 pass, 1 a row fails, 2 invalid), or the step that failed (10 smoke, 11 ratchet,
+12 prepare, 13 and 14 the rounds, 15 the verdict didn't run; 70 when it passed but couldn't keep the bundle; 71 when an
+app instance it launched is still running after cleanup, whatever the verdict). None of
+those is the lock's own 75-77, so a failed step is never retried or reported as a busy lock. INT, TERM or HUP to it or
+its process group stops every job it started (INT, then TERM, then KILL), then stops the app instances its jobs launched, and the lock stays held until all of them have exited. Jobs run with
+`TMPDIR` set to a scratch folder of the run's own (`/tmp/ac-gate.XXXXXX`, which also holds the ratchet's report in
+`ac-ratchet/`), and the benches keep their data in `<out>/prep` and each round's folder, so every instance they launch
+has `ARDIA_DATA_DIR` or `HOME` inside one of those. `bench-sweep.mjs` stops exactly those: it reads each process's
+environment just before each SIGTERM and SIGKILL and never matches on executable or pid. When some still run, the
+gate exits 71, whatever the verdict. Each run's bookkeeping folder, `<out>/.run.XXXXXX` (the worker's pid, each job's
+group marker, the marker folders), is removed at the end unless cleanup failed, and a second gate on the same `--out`
+touches nothing of a running one before it holds the lock. A round also records each side's build identity and the
+hash of the bench bundle inside the app copy it ran, and `gate-verdict.mjs` refuses rounds where either differs.
+
+js-bench is triage, not part of every gate: the ratchet (`ratchet.mjs run --own`) already checks the same commits,
+renders, store updates and timers on the candidate's own bundle, as counts that don't move with load. Run it when the
+ratchet failed or a gate row needs explaining, alternating the apps one run at a time:
+
+```sh
 for i in 1 2 3; do for app in $PREV:dist/$PREV/export/Ardia.app rc:dist/$V-rc/export/Ardia.app; do
   node apps/browser/scripts/perf/js-bench.mjs run --app ${app#*:} --bundle ${app#*:}/Contents/Resources/main.jsbundle \
     --label ${app%%:*} --runs 1 --append 1 --out $OUT/js
 done; done
 node apps/browser/scripts/perf/js-bench.mjs compare $OUT/js/$PREV.json $OUT/js/rc.json
-scripts/agent/unregister-builds
 ```
 
 For a question that the phases don't answer, don't fork native-bench into a probe. Prepare the copies once with
@@ -146,27 +215,71 @@ per interaction mostly come out to the digit in every run, and so do the builtin
 raised only by hand, with the reason in the commit. Nothing runs in CI, so the check is a command:
 
 ```sh
-node apps/browser/scripts/perf/ratchet.mjs run            # 90 s: bundle the tree, run the journeys once, count the Node hot paths, check
+node apps/browser/scripts/perf/ratchet.mjs run            # about 2 minutes: bundle the tree; the journeys, the one-tab launch and the Node counts side by side; check
 node apps/browser/scripts/perf/ratchet.mjs run --instr    # the same, plus the instruction counter
 node apps/browser/scripts/perf/ratchet.mjs run --own --app dist/<v>-rc/export/Ardia.app   # a release candidate's own bundle
 node apps/browser/scripts/perf/ratchet.mjs check <report.json>          # a js-bench report you already have (several runs: the median run)
-node apps/browser/scripts/perf/ratchet.mjs lower <report.json>          # lock in the counts a change cut; prints the diff
-node apps/browser/scripts/perf/ratchet.mjs baseline       # rebuild ratchet.json (8 runs of each session, about 13 minutes, a quiet machine)
-node apps/browser/scripts/perf/ratchet.mjs baseline --measure-only   # the runs only; then `init <the two reports> --adopt` merges them without raising a ceiling
+node apps/browser/scripts/perf/ratchet.mjs check <reports> --retry <retry report>   # a run's verdict again, its retry merged per scenario as run does
+node apps/browser/scripts/perf/ratchet.mjs lower <report.json>          # lock in the counts a change cut; prints the diff (takes --retry too)
+node apps/browser/scripts/perf/ratchet.mjs baseline       # rebuild ratchet.json (8 runs of each session in 4 hidden instances at once, about 5 minutes; --lanes <n>)
+node apps/browser/scripts/perf/ratchet.mjs baseline --measure-only   # the runs only; then `init <the reports it prints> --adopt` merges them without raising a ceiling
 ```
 
-`run` takes about 85 s (6 s of it bundling the tree, 15 s the Node counts, the rest one launch and the nine scenarios of
-one hidden instance), and about 170 s when a count is over and the scenarios run a second time. It exits 1 and prints a
-table of the counts over their ceiling. A count over in the first run gets one more run, and only a count over in both fails: a real regression is in both, a pointer moving over the hidden window or the window
-deactivating mid-scenario is in one. A report of several runs is judged by its median run.
+`run` bundles the tree (about 6 s), then runs three things at once: the ten journeys in one hidden instance, the one-tab
+launch in a second (its own test-server port, remote-debugging port, data folder, app copy and report,
+`<label>-small.json`), and the Node counts. Test-server ports start at `--port` (default 47831) and remote-debugging
+ports at `--cdp-port` (default 9700), one per run each instance actually makes; both are checked before anything
+launches. On ⌃C or a SIGTERM the ratchet passes the signal to each js-bench, which quits the instances it opened as it
+does on its own, waits up to 20 s for them, then SIGKILLs whatever is left of each js-bench's process group and exits
+130 or 143. The bundler and the Node and instruction counters are killed at once.
+The instruction counter (`--instr`) runs after them, alone. It exits 1 and prints a table of the counts over their
+ceiling. A count over in the first run gets one more run, and only a count over in both fails: a real regression is in
+both, a pointer moving over the hidden window or the window deactivating mid-scenario is in one. The second run is the
+journeys in order up to the last one with a count over, not that scenario alone: a scenario's counts depend on the
+ones before it (`openClose` straight after `startup` mounts 6 fewer components on close, `ContextMenuArea` included, than
+after `pageLoad`, and `pageLoad` alone runs about 12% more tasks and timers). The one-tab launch runs again only when one
+of its own counts is over, and `nodeChurn` never does: its worst run decides. `run` saves the Node counts
+(`<label>-micro.json`) and ends by printing the `check` line, quoted for a shell, that gives the same verdict from the
+saved reports: the reports, `--retry` for each retry report, `--micro` and, with `--instr`, the measured count. Passing a
+retry report as a plain report instead would drop the scenarios it didn't rerun. A report of several runs is judged by its median run. Against the old serial flow (median of 3, interleaved, `--bundle` given): a run 143 → 126 s, and one with
+a `pageLoad` count over 281 → 223 s; a count over in `launch` reruns only `startup,launch`.
+
+`baseline` spreads the journeys' 8 launches (`--runs`) over 4 hidden instances (`--lanes`, default 4; both positive whole
+numbers; each lane has its own label,
+ports and data folders) and counts the Node hot paths alongside, then runs the 8 one-tab launches one at a time, alone,
+and the instruction counts after. Journeys side by side don't move each other's counts: over 8 serial and 8
+four-at-once runs (#3737), all 50 exact group totals were the same in every run and every gated count's range
+overlapped. The one-tab launch does move: sampled four at once, `small.launch.storeKeys` came out 43 to 49 against 43 in
+every serial run, so it isn't sampled in parallel.
+
+Before a scenario measures, `settleWindow` (`bench-app.js`) saves the session and waits for it to land
+(`ac.persistence.sessionSaved`: every changed document written, held pins landed; a bundle without it flushes
+synchronously; a save that reports failure or throws fails the run rather than measuring on top of it, and a slow one
+is bounded by the scenario's own deadline), then waits for 3 s with no document write and then for a 1 s window with no new one-shot timer (or the
+same ones as the window before). Those waits, and the short sleeps the scenarios take before them, stay as long as they
+were: shorter ones change what is counted. With 500 ms windows, or one 2 s wait, the reader-mode check
+(`state/reader/reader.ts`: 250 ms after a tab shows, again 1.5 s later) for tabs the warm-up switches left unchecked ran
+inside the measured switches in some runs (`switchTabs.timers.setTimeout:anonymous` 27 to 43, `switchTabs.subNotified`
+4004 to 4046, against 27 and 4004 in every run with the 3 s wait). Tracking the app's pending timers, a 4 or 6 s floor
+of short windows, and waiting for every tab to finish loading didn't stop it, and dropping the sleeps before a settle
+moved `idle.timers` (5 to 6) and `open.timers` (−5%).
 
 ### What is steady
 
 The scenarios run in a fixed order (`ratchet.mjs` header says why): `startup`, `launch` (all the launch's work, read
-once it has stopped), `idle`, `typing`, `switchTabs`, `scroll`, `hover`, `pageLoad`, `openClose`, with
+once it has stopped), `idle`, `typing`, `switchTabs`, `scroll`, `hover`, `pageLoad`, `openClose`, `nodeChurn`, with
 `--options '{"seconds":5}'`, followed by a second launch from a one-tab session (`js-bench.mjs --seed small`, counts
 prefixed `small.`). `launch.firstCommitMounts` (and `small.launch.firstCommitMounts`) is what the launch's first React
-commit mounted (`acPerf.firstCommitMounts`): the first frame waits for all of it. The census behind `ratchet.json` is 8 launches of 0.2.27's Release app with the tree's
+commit mounted (`acPerf.firstCommitMounts`): the first frame waits for all of it. `nodeChurn.nativeNodesLeft` is how many
+of React Native's native animated nodes outlive a churn (20 tabs visited, then 60 tabs opened and closed and 120
+switches): the probe counts `createAnimatedNode` against `dropAnimatedNode` (`acPerf.nativeNodes`), and anything above 0
+is a node left behind for every tab or switch, for the life of the app. A tab stays open 60 ms (its 13 nodes are created
+about 12 ms after the open, 27 ms at worst on a loaded Mac); the gaps after a close and between switches are 10 ms (a
+close's drops land within about 13 ms, and the gap doesn't change what is left at the end). It still waits 1.5 s
+before reading the start count and 2.5 s after the last switch: a shorter wait before sampled the start count before 13
+late nodes of a cold launch arrived, and a shorter one after missed a node a deferred job leaks a second or two later. A
+deliberate leak of one node per opened tab, one per switch, or one 1 s after the last switch comes out the same with
+the old churn and this one. The census behind `ratchet.json` is 8 launches of 0.2.27's Release app with the tree's
 bundle.
 
 Group totals per scenario over the 16 baseline runs (two batches of 8): a bare number repeated in every run is gated
@@ -234,7 +347,7 @@ again shows up here at once: `switchTabs.subNotified` grows by the row count per
   writes. They stay in the js-bench report.
 - A new component, task or timer that has no ceiling shows up in the group total's ceiling, not on its own: `check`
   lists the biggest counts without one.
-- The ceilings are for probe revision 2 and bench revision 3 (`perfProbe.ts` `PERF_PROBE_REVISION`, js-bench
+- The ceilings are for probe revision 2 and bench revision 4 (`perfProbe.ts` `PERF_PROBE_REVISION`, js-bench
   `BENCH_REVISION`). `check` warns when a report has another; rebuild with `baseline` after a change that redefines a
   counter.
 
@@ -339,6 +452,12 @@ legacy files gone, then copied per run), read big-seed launch numbers as "launch
 Launch rows count from just before `open -g -n`. Command rows count from `Date.now()` in the app's JS as the
 command starts.
 
+Every run starts from a copy of one template, made by a seeding launch that also waits until uBlock Origin has saved
+its compiled engine (the three `cache/selfie/static*` keys in its `chrome.storage.local`) and its storage has gone quiet
+(`ubo-cache.mjs`, 90 s deadline). Without that wait every run was uBO's first launch with a stale cache: about 7 s in,
+uBO wrote a 26 MB engine through the browser process, which peaked about 200 MB higher for under a second and, in a
+third to half of runs, kept 60 to 70 MB until quit, so the memory rows swung by that much from run to run.
+
 | Row | Measures |
 |---|---|
 | launch → window shown | The first on-screen window of at least 300×200 with alpha > 0 (CGWindowList) |
@@ -347,7 +466,9 @@ command starts.
 | launch → first page painted | The restored tab's first-contentful-paint |
 | launch → first page's first frame | The restored tab's first `requestAnimationFrame` |
 | idle CPU, idle wakeups/s | rusage over the whole process tree (or one process kind) across `--idle` seconds, with the channel paused, at 1 tab and at 20 tabs |
+| seed tab loaded / active tab loading: wakeups/s, CPU | `--only loading`: the same rusage over `--idle` seconds with the seed tab loaded, then with a new active tab on `/hang` (headers and a first chunk, never the end), so the toolbar's stop button breathes the whole window. "runs where the app saw it loading throughout" checks `tabLive` before and after |
 | memory (phys_footprint) | The tree's footprint at 1, 10 and 20 tabs, and 30 s after closing back to 1. The "browser process" rows count that process alone. |
+| JS heap (Hermes), JS allocated (Hermes) | `HermesInternal.getInstrumentedStats()` right after each memory reading: `js_heapSize` (what the GC holds, which grows and shrinks in 4 MB segments, so a few hundred KB of live objects can move the browser process by 4 MB) and `js_allocatedBytes` (every allocated object, including garbage the GC hasn't collected yet, so it reads above the live set until a collection) (#3344) |
 | idle windows: someone used the Mac (…with the pointer moving over the window) | Seconds of mouse, trackpad or keyboard input during the run's idle windows (HIDIdleTime polled every 250 ms), and of those, with the pointer moving over the instance's window |
 | after an idle minute: command answered | The first command's latency after the 1-tab idle (catches App Nap) |
 | samples left out | Switches and new tabs dropped because the page got fewer than 5 frames in 250 ms |
@@ -555,11 +676,17 @@ only the wakeup counts mean anything.
 | Wakeups/s, all processes, 20 tabs | 15.0 (10.2–65.5) | 14.8 (9.2–19.0) |
 
 The job: our own JS jobs mark what they run (`state/app/jobActivity.ts`: `sync`, `sessionSave`, `memoryTrim` (its forced
-`gc()`), `omniboxSuggest`, `liveFolders`, `historyApply`, `import`), and a freeze is given the one it overlapped most.
+`gc()`), `omniboxSuggest`, `liveFolders`, `historyApply`, `import`, `siteDataCarry`), and a freeze is given the one it overlapped
+most. A JS-thread freeze can be any of them. A main-thread freeze is given only a job that does its work on the main thread
+(`holdsMainThread`: `sync`, `import`, `siteDataCarry`, whose Chromium cookie reads go through DevTools on the browser's UI
+thread); the JS-only job it merely ran beside (a session save, whose disk write is already on a background queue) is
+`js_activity`. Before #3669 every overlap counted, so a main-thread `activity` of `sessionSave` from 0.2.48 or older is
+mostly a coincidence: the 0.2.48 rise came from the sign-in carry's whole-jar `Network.getAllCookies` reads (#2942), which
+run on the main thread right after the same tab changes that schedule a save.
 
 `app_freeze` (sharing on, and only for a freeze whose consent epoch at its start is still current): `freeze_thread`,
 `freeze_duration` (400ms_1s … over_30s), `freeze_ms`, `input_wait_ms`, `gc_ms`, `gc_count`, `heap_mb_floor`,
-`activity`, `tabs_floor`, `windows`, `sync_on`, `layout`, `action_in_flight` (the journeys' pending new tab, switch,
+`activity`, `js_activity` (main-thread freezes: the JS-only job alongside), `tabs_floor`, `windows`, `sync_on`, `layout`, `action_in_flight` (the journeys' pending new tab, switch,
 navigation or launch), `memory_pressure`, `thermal`, `on_battery`, `uptime`, `signature` (`sig_` and the FNV-1a, in hex, of the top three frames
 from our own images), `samples`, and `freeze_frames`/`freeze_images` in the crash reports' shape. At most 5 a session and
 20 a UTC day, one per signature a day, counted in `freeze-sends.json` (the day, its send count and its signatures; apart from the 20-slot local ring, which wraps). The dashboard's Performance › Freezes card

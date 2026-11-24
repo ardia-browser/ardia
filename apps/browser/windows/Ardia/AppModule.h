@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <map>
 #include <optional>
 #include <set>
@@ -21,6 +22,7 @@
 #include "NativeModules.h"
 
 #include "AppImage.h"
+#include "CrashDumps.h"
 #include "LaunchConfig.h"
 #include "LaunchLog.h"
 #include "Paths.h"
@@ -334,6 +336,81 @@ inline winrt::Microsoft::ReactNative::JSValue Sample() noexcept {
 
 }
 
+namespace AppCrashReports {
+
+inline std::vector<std::filesystem::path> Folders() noexcept {
+  std::vector<std::filesystem::path> folders;
+  try {
+    if (Paths::HasCustomDataDirectory()) {
+      folders.push_back(Paths::DataDirectory() / L"Chromium" / L"Crashpad" / L"reports");
+      folders.push_back(Paths::DataDirectory() / L"Crashpad" / L"reports");
+    } else {
+      folders.push_back(Paths::UserFolder(FOLDERID_LocalAppData, L"LOCALAPPDATA") / L"Ardia" / L"User Data" / L"Crashpad" / L"reports");
+    }
+  } catch (...) {
+  }
+  return folders;
+}
+
+inline winrt::Microsoft::ReactNative::JSValue Describe(CrashDumps::Report const &report) {
+  using winrt::Microsoft::ReactNative::JSValue;
+  using winrt::Microsoft::ReactNative::JSValueArray;
+  using winrt::Microsoft::ReactNative::JSValueObject;
+  JSValueObject object;
+  if (!report.incidentId.empty()) object["incidentId"] = JSValue{report.incidentId};
+  object["time"] = JSValue{report.time};
+  object["fileTime"] = JSValue{report.fileTime};
+  object["process"] = JSValue{report.process};
+  object["terminationNamespace"] = JSValue{report.terminationNamespace};
+  object["exceptionType"] = JSValue{report.signal};
+  object["signal"] = JSValue{report.signal};
+  if (!report.exceptionSubtype.empty()) object["exceptionSubtype"] = JSValue{report.exceptionSubtype};
+  if (!report.engineVersion.empty()) object["engineVersion"] = JSValue{report.engineVersion};
+  if (!report.appVersion.empty()) object["appVersion"] = JSValue{report.appVersion};
+  if (report.uptimeSeconds) object["uptimeSeconds"] = JSValue{*report.uptimeSeconds};
+  JSValueArray frames;
+  for (CrashDumps::Frame const &frame : report.frames) {
+    JSValueObject entry;
+    entry["image"] = JSValue{frame.image};
+    if (frame.offset && *frame.offset <= 9007199254740991ull) entry["offset"] = JSValue{static_cast<int64_t>(*frame.offset)};
+    frames.push_back(JSValue{std::move(entry)});
+  }
+  object["frames"] = JSValue{std::move(frames)};
+  return JSValue{std::move(object)};
+}
+
+inline winrt::Microsoft::ReactNative::JSValue Since(double since) noexcept {
+  using winrt::Microsoft::ReactNative::JSValue;
+  using winrt::Microsoft::ReactNative::JSValueArray;
+  JSValueArray reports;
+  try {
+    for (CrashDumps::Report const &report : CrashDumps::Collect(Folders(), since)) reports.push_back(Describe(report));
+  } catch (...) {
+    reports.clear();
+  }
+  return JSValue{std::move(reports)};
+}
+
+inline bool Store(std::string const &name, std::string const &hex) noexcept {
+  try {
+    if (!CrashDumps::IsDumpFileName(name)) return false;
+    auto bytes = CrashDumps::DecodeHex(hex);
+    std::vector<std::filesystem::path> folders = Folders();
+    if (!bytes || bytes->empty() || folders.empty()) return false;
+    std::error_code error;
+    std::filesystem::create_directories(folders.front(), error);
+    if (error) return false;
+    std::ofstream out(folders.front() / Paths::Wide(name), std::ios::binary | std::ios::trunc);
+    out.write(reinterpret_cast<char const *>(bytes->data()), static_cast<std::streamsize>(bytes->size()));
+    out.close();
+    return !out.fail();
+  } catch (...) {
+    return false;
+  }
+}
+
+}
+
 REACT_STRUCT(SystemInfo)
 struct SystemInfo {
   REACT_FIELD(appName)
@@ -373,7 +450,7 @@ struct SystemInfo {
 REACT_MODULE(AppModule, L"ArdiaApp")
 struct AppModule {
   REACT_CONSTANT(windowsApiVersion)
-  const int windowsApiVersion = 24;
+  const int windowsApiVersion = 25;
 
   REACT_SYNC_METHOD(systemInfo)
   SystemInfo systemInfo() noexcept {
@@ -455,8 +532,21 @@ struct AppModule {
   }
 
   REACT_METHOD(crashReports)
-  void crashReports(double, winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue> promise) noexcept {
-    promise.Resolve(winrt::Microsoft::ReactNative::JSValue{winrt::Microsoft::ReactNative::JSValueArray{}});
+  void crashReports(double since, winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue> promise) noexcept {
+    try {
+      std::thread([since, promise]() noexcept { promise.Resolve(AppCrashReports::Since(since)); }).detach();
+    } catch (...) {
+      promise.Resolve(winrt::Microsoft::ReactNative::JSValue{winrt::Microsoft::ReactNative::JSValueArray{}});
+    }
+  }
+
+  REACT_METHOD(devWriteCrashFixture)
+  void devWriteCrashFixture(std::string name, std::string hex, winrt::Microsoft::ReactNative::ReactPromise<bool> promise) noexcept {
+    if (!AppLaunch::Shared().testInstance) {
+      promise.Reject("devWriteCrashFixture is only for test instances");
+      return;
+    }
+    promise.Resolve(AppCrashReports::Store(name, hex));
   }
 
   REACT_METHOD(appIcons)

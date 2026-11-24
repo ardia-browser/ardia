@@ -276,6 +276,19 @@ test("site exceptions cover subdomains and revoking removes every covering direc
   assert.deepEqual(ublock.state.whitelist, ["chrome-extension-scheme", "moz-extension-scheme"]);
 });
 
+test("the exact remove takes out only a listed entry, never a broader one or a default, in one write", async () => {
+  const { call, ublock } = load();
+  await call("setAllowed", { host: "example.com", allowed: true });
+  await call("setAllowed", { host: "shop.example.com", allowed: true });
+  assert.equal((await call("removeAllowed", { host: "shop.example.com" })).value, true);
+  assert.deepEqual(ublock.state.whitelist, ["chrome-extension-scheme", "moz-extension-scheme", "example.com"]);
+  for (const host of ["shop.example.com", "news.example.com", "chrome-extension-scheme", OFF]) {
+    const before = [...ublock.state.whitelist];
+    assert.equal((await call("removeAllowed", { host })).value, false, host);
+    assert.deepEqual(ublock.state.whitelist, before, `nothing written for ${host}`);
+  }
+});
+
 test("turning blocking off adds the off directive and stops list updates; on removes both", async () => {
   const { call, ublock } = load();
   await call("setEnabled", { enabled: false });

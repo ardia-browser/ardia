@@ -89,6 +89,14 @@ extension MainMenu {
     return order.map { ($0, groups[$0]!) }
   }
 
+  static func commandItem(shortcutId id: String) -> CommandItem? {
+    var found: CommandItem?
+    walk(NSApp.mainMenu) { item, _ in
+      if found == nil, let item = MouseShortcuts.bindable(item), item.commandAlternateOf == nil, item.shortcutId == id { found = item }
+    }
+    return found
+  }
+
   static func setShortcut(_ item: NSMenuItem, _ key: String, _ mods: NSEvent.ModifierFlags) {
     let shortcut = keyEquivalent(key, key.isEmpty ? [] : mods)
     if item.keyEquivalent != shortcut.key { item.keyEquivalent = shortcut.key }
@@ -147,7 +155,7 @@ extension MainMenu {
       let item = group.primary
       if let command = item as? CommandItem, dynamicCommands.contains(command.command) { continue }
       guard !item.defaultTitle.isEmpty else { continue }
-      list.append(["id": id, "title": item.defaultTitle, "path": group.path, "remappable": true])
+      list.append(["id": id, "title": item.defaultTitle, "path": group.path, "remappable": true, "mouseBindable": MouseShortcuts.bindable(item) != nil])
     }
     var seen = Set<String>()
     walk(NSApp.mainMenu) { item, path in

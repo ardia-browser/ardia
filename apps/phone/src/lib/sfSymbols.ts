@@ -1,4 +1,4 @@
-const SF_SYMBOLS: Record<string, string> = {
+export const SF_SYMBOL_ALIASES: Readonly<Record<string, string>> = {
   plus: "plus",
   minus: "minus",
   xmark: "xmark",
@@ -11,7 +11,8 @@ const SF_SYMBOLS: Record<string, string> = {
   "arrow.up.forward": "arrowUpForward",
   "arrow.uturn.backward": "arrowUturnBackward",
   "arrow.clockwise": "arrowClockwise",
-  "arrow.down.circle.fill": "arrowDownCircle",
+  "arrow.down.circle": "arrowDownCircle",
+  "arrow.down.circle.fill": "arrowDownCircleFill",
   "square.and.arrow.up": "squareAndArrowUp",
   "square.and.arrow.up.fill": "squareAndArrowUp",
   trash: "trash",
@@ -40,11 +41,13 @@ const SF_SYMBOLS: Record<string, string> = {
   star: "star",
   "star.fill": "starFill",
   "pin.fill": "pinFill",
+  moon: "moon",
   "moon.fill": "moonFill",
   "keyboard.fill": "keyboardFill",
   info: "info",
   "equal.circle.fill": "equalCircleFill",
   "xmark.circle.fill": "xmarkCircleFill",
+  "checkmark.circle": "checkmarkCircle",
   "checkmark.circle.fill": "checkmarkCircle",
   "checkmark.shield": "checkmarkShield",
   "checkmark.shield.fill": "checkmarkShield",
@@ -53,6 +56,7 @@ const SF_SYMBOLS: Record<string, string> = {
   "folder.fill": "folderFill",
   laptopcomputer: "laptop",
   macbook: "laptop",
+  "laptopcomputer.and.iphone": "macAndPhone",
   iphone: "iphone",
   "macbook.and.iphone": "macAndPhone",
   gearshape: "gearshape",
@@ -60,28 +64,25 @@ const SF_SYMBOLS: Record<string, string> = {
   "clock.arrow.circlepath": "clockArrow",
   "character.cursor.ibeam": "textCursor",
   "textformat.size": "textformatSize",
+  "sidebar.left": "sidebarLeft",
   eyes: "eyes",
   eyeglasses: "eyeglasses",
   "eraser.fill": "eraserFill",
-  "exclamationmark.triangle.fill": "exclamationmarkTriangle",
+  "exclamationmark.triangle": "exclamationmarkTriangle",
+  "exclamationmark.triangle.fill": "exclamationmarkTriangleFill",
   "hand.raised.fill": "handRaised",
   "hand.wave.fill": "handWave",
   sparkles: "sparkles",
   link: "link",
   "plus.square.on.square": "plusSquareOnSquare",
-  desktopcomputer: "desktop",
+  display: "desktop",
+  desktopcomputer: "macDesktop",
   camera: "camera",
   video: "video",
 };
 
 export function sfSymbol(name: string | null, known: (symbol: string) => boolean): string | null {
   if (!name) return null;
-  const symbol = SF_SYMBOLS[name];
+  const symbol = SF_SYMBOL_ALIASES[name];
   return symbol && known(symbol) ? symbol : null;
-}
-
-const SF_NAMES: Record<string, string> = Object.entries(SF_SYMBOLS).reduce<Record<string, string>>((names, [sf, symbol]) => (symbol in names ? names : { ...names, [symbol]: sf }), { eyeglassesThin: "eyeglasses" });
-
-export function sfName(symbol: string | null | undefined): string | undefined {
-  return symbol ? SF_NAMES[symbol] : undefined;
 }

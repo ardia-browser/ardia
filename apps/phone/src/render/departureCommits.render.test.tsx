@@ -83,6 +83,7 @@ const commitsDuring = (design: Design, motion: Motion, pageReportsEachFrame: boo
 for (const design of DESIGNS) {
   for (const motion of MOTIONS) {
     test(`in the ${design} design, a page reporting its load progress every frame while ${motion.name} adds no React commit, so nothing holds back the motion on the UI thread`, () => {
+      commitsDuring(design, motion, false);
       const quiet = commitsDuring(design, motion, false);
       const reporting = commitsDuring(design, motion, true);
       expect(reporting).toBe(quiet);

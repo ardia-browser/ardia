@@ -3,17 +3,20 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { clearChatGPTProblem, refreshChatGPTAccount, useChatGPTAccount } from "../../state/browseForMe/store";
 import { choosePageSummaryChatGPT, choosePageSummaryProvider, refreshPageSummaryProvider, usePageSummaryProvider } from "../../state/pageSummary/store";
 import { PAGE_SUMMARY_COPY } from "../../state/pageSummary/copy";
+import { refreshPageSummariesEnabled, setPageSummariesEnabled, usePageSummariesEnabled } from "../../state/pageSummary/enabled";
 import { popSettings } from "../../state/settings/nav";
 import { font, PrimaryButton, settingsLayout, settingsTint, space, Symbol, useTheme } from "../ui";
-import { Divider, Group, IconTile, SettingsPage } from "./SettingsKit";
+import { Divider, Group, IconTile, SettingsPage, ToggleRow } from "./SettingsKit";
 
 export function PageSummaryPage() {
   const theme = useTheme();
   const account = useChatGPTAccount();
   const provider = usePageSummaryProvider();
+  const enabled = usePageSummariesEnabled();
   useEffect(() => {
     void refreshChatGPTAccount();
     void refreshPageSummaryProvider();
+    void refreshPageSummariesEnabled();
     return () => void clearChatGPTProblem();
   }, []);
   const connected = account?.connected ?? false;
@@ -28,18 +31,23 @@ export function PageSummaryPage() {
         </Text>
         <Text style={[font.subheadline, styles.centered, { color: theme.secondaryLabel }]}>{PAGE_SUMMARY_COPY.subtitle}</Text>
       </View>
-      <Group footer={choosesChatGPT ? PAGE_SUMMARY_COPY.chatGPTFooter : `${PAGE_SUMMARY_COPY.onDeviceFooter} ${PAGE_SUMMARY_COPY.chatGPTFooter}`}>
-        <Choice title={PAGE_SUMMARY_COPY.onDevice} detail={PAGE_SUMMARY_COPY.onDeviceDetail} selected={!choosesChatGPT} onPress={() => void choosePageSummaryProvider("on_device")} />
-        <Divider />
-        <Choice
-          title={PAGE_SUMMARY_COPY.chatGPT}
-          detail={signingIn ? "Waiting for ChatGPT…" : connected && account?.label ? account.label : PAGE_SUMMARY_COPY.chatGPTDetail}
-          selected={choosesChatGPT}
-          enabled={!signingIn}
-          onPress={() => void choosePageSummaryChatGPT(connected)}
-        />
+      <Group footer={enabled ? undefined : PAGE_SUMMARY_COPY.offFooter}>
+        <ToggleRow title={PAGE_SUMMARY_COPY.title} value={enabled} onChange={(on) => void setPageSummariesEnabled(on)} />
       </Group>
-      {choosesChatGPT && !connected ? (
+      {enabled ? (
+        <Group footer={choosesChatGPT ? PAGE_SUMMARY_COPY.chatGPTFooter : `${PAGE_SUMMARY_COPY.onDeviceFooter} ${PAGE_SUMMARY_COPY.chatGPTFooter}`}>
+          <Choice title={PAGE_SUMMARY_COPY.onDevice} detail={PAGE_SUMMARY_COPY.onDeviceDetail} selected={!choosesChatGPT} onPress={() => void choosePageSummaryProvider("on_device")} />
+          <Divider />
+          <Choice
+            title={PAGE_SUMMARY_COPY.chatGPT}
+            detail={signingIn ? "Waiting for ChatGPT…" : connected && account?.label ? account.label : PAGE_SUMMARY_COPY.chatGPTDetail}
+            selected={choosesChatGPT}
+            enabled={!signingIn}
+            onPress={() => void choosePageSummaryChatGPT(connected)}
+          />
+        </Group>
+      ) : null}
+      {enabled && choosesChatGPT && !connected ? (
         <View style={styles.connect}>
           <PrimaryButton title={signingIn ? "Waiting for ChatGPT…" : "Continue with ChatGPT"} onPress={() => void choosePageSummaryChatGPT(false)} />
           <Text style={[font.footnote, { color: theme.secondaryLabel }]}>{PAGE_SUMMARY_COPY.reconnect}</Text>

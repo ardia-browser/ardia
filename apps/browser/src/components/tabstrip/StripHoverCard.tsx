@@ -37,7 +37,8 @@ export function StripHoverCard({ windowId, stripBottom, windowWidth }: { windowI
   const hover = useStripHover((s) => (s.hover?.windowId === windowId ? s.hover : null));
   const { drawn, motion } = useHoverCardMotion(`strip:${windowId}`, hover);
   if (!drawn) return null;
-  const left = Math.max(STRIP_CARD_MARGIN, Math.min(drawn.anchor.x, windowWidth - STRIP_CARD_WIDTH - STRIP_CARD_MARGIN));
+  const near = Math.max(drawn.anchor.x, drawn.anchor.x + drawn.anchor.width - STRIP_CARD_WIDTH);
+  const left = Math.max(STRIP_CARD_MARGIN, Math.min(near, windowWidth - STRIP_CARD_WIDTH - STRIP_CARD_MARGIN));
   return (
     <Animated.View
       pointerEvents="none"

@@ -2,7 +2,7 @@ import type { PeekStageGeometry } from "../ui";
 
 export type PeekRect = { x: number; y: number; width: number; height: number };
 
-export type PeekLayoutInput = {
+type PeekLayoutInput = {
   width: number;
   height: number;
   pageTop: number;
@@ -60,5 +60,3 @@ export function peekGeometry(o: PeekLayoutInput): PeekStageGeometry {
     fullscreen: o.fullscreen,
   };
 }
-
-export const peekRestScale = (g: PeekStageGeometry) => g.rest.width / g.page.width;

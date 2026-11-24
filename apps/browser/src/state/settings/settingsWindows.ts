@@ -1,6 +1,7 @@
 import { focusWindow, openWindow } from "../../platform/windows";
 import { create } from "zustand";
 import { useBrowser } from "../browser/store";
+import { consentToken, type ConsentToken } from "../telemetry/choice";
 
 export const SETTINGS_WINDOW_ID = "settings";
 export const IMPORT_WINDOW_ID = "import";
@@ -60,14 +61,34 @@ export const SETTINGS_DETAIL = {
 
 export const detailValue = (detail: string | null, kind: "site" | "extension") => (detail?.startsWith(`${kind}:`) ? detail.slice(kind.length + 1) : null);
 
+const targetedOpenListeners = new Set<(consent: ConsentToken | null) => void>();
+const openListeners = new Set<(pane: SettingsPane, profileId: string | null) => void>();
+let pendingOpenAt: number | null = null;
+const OPEN_CLAIM_MS = 5_000;
+
+export const onTargetedSettingsOpen = (listener: (consent: ConsentToken | null) => void) => void targetedOpenListeners.add(listener);
+export const onSettingsOpen = (listener: (pane: SettingsPane, profileId: string | null) => void) => void openListeners.add(listener);
+export function claimSettingsOpenAt(): number | null {
+  const at = pendingOpenAt;
+  pendingOpenAt = null;
+  return at !== null && Date.now() - at < OPEN_CLAIM_MS ? at : null;
+}
+
 export function openSettings(pane?: SettingsPane, profileId?: string | null, detail?: string | null) {
-  if (pane) goToSettingsPane(pane, profileId ?? null, detail ?? null);
+  if (pane) {
+    const consent = consentToken();
+    targetedOpenListeners.forEach((listener) => listener(consent));
+    goToSettingsPane(pane, profileId ?? null, detail ?? null);
+  }
+  const nav = useSettingsNav.getState();
+  pendingOpenAt = Date.now();
   void openWindow(SETTINGS_WINDOW_ID, { kind: "settings", title: "Settings" });
+  openListeners.forEach((listener) => listener(nav.pane, nav.profileId));
 }
 
 export const openSiteSettings = (origin: string, profileId: string) => openSettings("profiles", profileId, SETTINGS_DETAIL.site(origin));
 
-export const useImportRequest = create<{ source: string | null }>()(() => ({ source: null }));
+const useImportRequest = create<{ source: string | null }>()(() => ({ source: null }));
 
 export function takePreferredImportSource() {
   const { source } = useImportRequest.getState();

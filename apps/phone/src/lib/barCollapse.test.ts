@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { BAR_SHOWN, barShown, followScroll, obscuredBottom, pageInsets } from "./barCollapse.ts";
+import { BAR_SHOWN, barShown, bottomBarCollapses, followScroll, obscuredBottom, pageInsets } from "./barCollapse.ts";
+
+test("bottom bar collapse defaults on for Android's Material design, off elsewhere, and keeps any explicit choice", () => {
+  assert.equal(bottomBarCollapses("material", null), true);
+  assert.equal(bottomBarCollapses("redesigned", null), false);
+  assert.equal(bottomBarCollapses("original", null), false);
+  assert.equal(bottomBarCollapses("material", false), false);
+  assert.equal(bottomBarCollapses("redesigned", true), true);
+  assert.equal(bottomBarCollapses("original", true), true);
+});
 
 test("the bar hides when the page scrolls down and comes back when it scrolls up", () => {
   const opened = followScroll(BAR_SHOWN, "a", "p", "up", true);
@@ -50,15 +59,17 @@ test("a new page in the same tab, Back included, starts with the bar shown", () 
   assert.equal(followScroll(followScroll(back, "a", "https://zero/", "up", true), "a", "https://zero/", "down", true).hidden, true);
 });
 
-test("where the page's bottom follows the bar, it is the bar's height, the pill's when collapsed, and nothing under full-screen video, Find or the search tray", () => {
-  const cover = { follows: true, bar: 75, pill: 51.5, collapsed: false, cleared: false };
-  assert.equal(obscuredBottom(cover), 75);
-  assert.equal(obscuredBottom({ ...cover, collapsed: true }), 51.5);
+test("where the page view can't scroll past the bar, the page runs under a bar that collapses, and under nothing at all for full-screen video, Find or the search tray", () => {
+  const cover = { insetsScroll: false, bar: 75, collapses: true, cleared: false };
+  assert.equal(obscuredBottom(cover), 0);
   assert.equal(obscuredBottom({ ...cover, cleared: true }), 0);
-  assert.equal(obscuredBottom({ ...cover, collapsed: true, cleared: true }), 0);
+  assert.equal(obscuredBottom({ ...cover, collapses: false, cleared: true }), 0);
 });
 
-test("where it doesn't follow, as on iPhone where SwiftUI keeps the bar's height, the bottom stays the bar's height", () => {
-  const cover = { follows: false, bar: 75, pill: 51.5, collapsed: true, cleared: true };
-  assert.equal(obscuredBottom(cover), 75);
+test("a bar that never collapses keeps the page above it, so the last lines and fixed footers stay reachable", () => {
+  assert.equal(obscuredBottom({ insetsScroll: false, bar: 75, collapses: false, cleared: false }), 75);
+});
+
+test("where the page view scrolls past the bar, as on iPhone, the bottom stays the bar's height", () => {
+  assert.equal(obscuredBottom({ insetsScroll: true, bar: 75, collapses: true, cleared: true }), 75);
 });

@@ -30,6 +30,8 @@ export function sidebarLightsCenter(right: boolean, width: number, offset: numbe
 
 const LIGHTS_REACH = 80;
 export const lightsOffWindow = (place: LightsPlace) => (place[2] === "right" ? place[0] <= -LIGHTS_REACH / 4 : place[0] + LIGHTS_REACH <= 0);
+export const lightsPlaceOffWindow = ({ center, trailing }: { center: readonly [number, number]; trailing: boolean }): boolean =>
+  lightsOffWindow(trailing ? [center[0], center[1], "right"] : [center[0], center[1]]);
 export const stillOffWindow = (from: LightsPlace | undefined, to: LightsPlace) =>
   !!from && from[1] === to[1] && from[2] === to[2] && lightsOffWindow(from) && lightsOffWindow(to);
 
@@ -79,4 +81,5 @@ export const sidebarSliding = (windowId: string) => {
   return !!m.moving[windowId] || !!m.leaving[windowId];
 };
 export const usePeekSpan = (windowId: string): PeekSpan | undefined => useDockMotion((m) => m.peeks[windowId]);
+export const usePeekLeaving = (windowId: string): boolean => useDockMotion((m) => !!m.leaving[windowId]);
 export const devPeeks: Record<string, { show(): void; hide(): void }> = {};

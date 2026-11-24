@@ -19,6 +19,7 @@ import type { FilterListCategory } from "../../../state/site/siteSettings";
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 import { SetupCodeRow } from "./SetupCodeRow";
+import { EngineModeRow } from "./EngineModeRow";
 import { CATEGORIES, useContentBlocker, writeBlocker } from "./FilterListsSheet";
 import { CrashReportDetails, ShareDiagnosticsToggle } from "./ShareDiagnostics";
 import { Checklist } from "./Checklist";
@@ -26,6 +27,7 @@ import { FilterListsPage } from "./FilterListsPage";
 import { PaneSubPage } from "./PaneSubPage";
 import { SyncSection } from "./SyncSection";
 import { UpdatesSection } from "./UpdatesSection";
+import { homeRelative } from "../../../lib/homePath";
 
 const APP = "Ardia";
 
@@ -41,6 +43,7 @@ export function GeneralPane({ detail }: SettingsPlace) {
     <View>
       <DefaultBrowserSection />
       <StartupSection />
+      {PLATFORM_FEATURES.webKit && <EngineSection />}
       <DownloadsSection />
       {PLATFORM_FEATURES.contentBlocker && <ContentBlockingSection />}
       {PLATFORM_FEATURES.sync && <SyncSection />}
@@ -128,7 +131,16 @@ function StartupSection() {
   );
 }
 
-const homeRelative = (path: string) => path.replace(/^\/Users\/[^/]+(?=\/|$)/, "~");
+function EngineSection() {
+  return (
+    <>
+      <SectionHeader title="Web engine" />
+      <Group>
+        <EngineModeRow anchor="general.engineMode" />
+      </Group>
+    </>
+  );
+}
 
 function DownloadsSection() {
   const separate = useSettings((s) => s.separateDownloadFolders);

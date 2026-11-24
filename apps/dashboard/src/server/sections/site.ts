@@ -33,6 +33,7 @@ const CLICK_EVENTS = [
   ["discord_clicked", "Discord"],
   ["send_to_mac_clicked", "Send to my Mac"],
   ["testflight_clicked", "iPhone TestFlight"],
+  ["android_apk_clicked", "Android APK"],
   ["demo_customize", "Demo: customize"],
   ["demo_setup_code_copied", "Demo: setup code copied"],
   ["bench_row_switched", "Bench row switched"],

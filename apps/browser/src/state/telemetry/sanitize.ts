@@ -1,6 +1,23 @@
+import { isSecret, noteSecretEscape } from "@ardia/core";
 
 const FILE_EXTENSIONS =
   "json|jsonl|js|mjs|cjs|jsx|ts|tsx|map|bundle|jsbundle|hbc|html?|css|txt|md|rtf|csv|log|ips|plist|xml|ya?ml|pdf|docx?|xlsx?|pptx?|key|pages|numbers|png|jpe?g|gif|webp|heic|svg|ico|icns|mp[34]|m4[av]|mov|avi|mkv|webm|wav|aac|flac|zip|gz|tgz|tar|7z|rar|dmg|pkg|app|crx|xpi|db|sqlite|sqlite3|ldb|sst";
+
+const TOKEN_RULES: [RegExp, string][] = [
+  [/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g, "<token>"],
+  [/\b(?:Bearer|Basic|Token)\s+(?=[\w.~+/=-]*[\d+/=])[\w.~+/=-]{8,}/gi, "<token>"],
+  [/\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_\w{20,}|glpat-[\w-]{20,})/g, "<token>"],
+  [/\bsk-(?:ant-|proj-|svcacct-|admin-)?[\w-]{16,}/g, "<token>"],
+  [/\b(?:[rsp]k_(?:live|test)_[A-Za-z0-9]{16,}|whsec_[A-Za-z0-9]{16,})/g, "<token>"],
+  [/\bxox[abposre]-[A-Za-z0-9-]{10,}|\bxapp-[A-Za-z0-9-]{10,}/g, "<token>"],
+  [/\bAIza[\w-]{30,}|\bya29\.[\w-]{20,}|\b1\/\/0[\w-]{20,}/g, "<token>"],
+  [/\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g, "<token>"],
+  [/\beyJ[\w-]{6,}\.[\w-]{6,}(?:\.[\w-]*)?/g, "<token>"],
+  [/\b((?:pass(?:word|wd|phrase)?|pwd|secret|client[_-]?secret|api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|token)\s*[=:]\s*)(?:(?=[^\s,;&<>]*[\d!#$%*+./=?@^_~-])[^\s,;&<>]{6,}|[^\s,;&<>]{16,})/gi, "$1<secret>"],
+];
+
+const LONG_TOKEN = /[A-Za-z0-9+/_-]{32,}={0,2}/g;
+const looksRandom = (text: string) => /\d/.test(text) && /[A-Z]/.test(text) && /[a-z]/.test(text);
 
 const RULES: [RegExp, string][] = [
   [/\b(?:about|data|blob|javascript|mailto|file|chrome|ardia|chrome-extension|devtools|view-source):\S+/gi, "<url>"],
@@ -37,6 +54,11 @@ function withoutPartialLastWord(text: string): string {
   return "";
 }
 
+export function scrubTokens(text: string): string {
+  for (const [pattern, placeholder] of TOKEN_RULES) text = text.replace(pattern, placeholder);
+  return text;
+}
+
 export function scrubText(input: unknown, max = 200): string {
   if (typeof input !== "string") return "";
   let text = input.split(/\r?\n/, 1)[0] ?? "";
@@ -45,7 +67,9 @@ export function scrubText(input: unknown, max = 200): string {
   const beforeQuote = untilFirstQuote(text);
   const endsAtQuote = beforeQuote !== text;
   text = endsAtQuote ? beforeQuote : capped ? withoutPartialLastWord(text) : text;
+  text = scrubTokens(text);
   for (const [pattern, placeholder] of RULES) text = text.replace(pattern, placeholder);
+  text = text.replace(LONG_TOKEN, (match) => (looksRandom(match) ? "<token>" : match));
   text = text.replace(/\s+/g, " ").trim();
   if (text.length >= max) return `${text.slice(0, max - 1)}…`;
   return capped && !endsAtQuote ? `${text}…` : text;
@@ -84,7 +108,7 @@ export const JS_FATAL_KINDS = [
   "unknown",
 ] as const;
 
-export type JsFatalKind = (typeof JS_FATAL_KINDS)[number];
+type JsFatalKind = (typeof JS_FATAL_KINDS)[number];
 
 const RN_JS_ERRORS: Record<string, JsFatalKind> = {
   TypeError: "rn_js_type_error",
@@ -175,7 +199,7 @@ function stackFrames(error: unknown, keep: (file: string) => boolean): Exception
   return HEADERLESS_FRAME.test(stack.split("\n", 1)[0]!) ? parseStack(stack, 50, keep) : [];
 }
 
-const ARDIA_CODE = /^(?:native|(?:[^\s()?#:]*\/)?(?:InternalBytecode\.js|main\.jsbundle|index\.windows\.bundle|index\.bundle)|http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\/index\.bundle(?:\/\/&|\?)[^\s()\/]*|chrome:\/\/ardia\/[\w./-]+\.js)$/;
+const ARDIA_CODE = /^(?:native|index\.windows|(?:[^\s()?#:]*\/)?(?:InternalBytecode\.js|main\.jsbundle|index\.windows\.bundle|index\.bundle)|http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\/index\.bundle(?:\/\/&|\?)[^\s()\/]*|chrome:\/\/ardia\/[\w./-]+\.js)$/;
 const CODE_FUNCTION = /^(?:async |new )?[\w$.<>#:-]+(?: \[as [\w$]+\])?$/;
 
 export function errorFrames(error: unknown): ExceptionFrame[] {
@@ -218,7 +242,7 @@ export function parseStack(stack: unknown, limit = 50, keep: (file: string) => b
   return frames.reverse();
 }
 
-export type NativeFrame = { image: string; symbol?: string; symbolOffset?: number; offset?: number };
+type NativeFrame = { image: string; symbol?: string; symbolOffset?: number; offset?: number };
 export type NativeImage = { name: string; uuid: string };
 
 const OUR_IMAGES = /^(Ardia|ArdiaCore|ArdiaShell|Chromium Framework|Expo|ExpoModulesCore|React|hermes|RCT|Sparkle|chrome$|chrome_crashpad_handler$|lib(?:EGL|GLESv2|vk_swiftshader|vulkan|qt5_shim|qt6_shim)\.so)/;
@@ -317,6 +341,10 @@ function scrubWebuiPages(value: string): string {
 export function cleanProperties(props: Record<string, unknown>): Record<string, PropertyValue> {
   const out: Record<string, PropertyValue> = {};
   for (const [key, value] of Object.entries(props)) {
+    if (isSecret(value)) {
+      noteSecretEscape("telemetry", value);
+      continue;
+    }
     if (!/^\$?[a-z][a-z0-9_]{0,48}$/i.test(key)) continue;
     if (value === null || typeof value === "boolean") out[key] = value;
     else if (typeof value === "number") {

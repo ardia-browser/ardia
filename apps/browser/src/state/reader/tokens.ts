@@ -81,8 +81,5 @@ export const READER_SHEET = [
   ".bar:hover,.bar:focus-within{opacity:1;}",
   ".bar button{all:unset;box-sizing:border-box;min-width:28px;height:24px;padding:0 7px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;color:var(--aside);cursor:default;}",
   ".bar button:hover{background:var(--wash);color:var(--ink);}",
-  ".bar button:disabled{opacity:.35;background:none;}",
   ".bar button:focus-visible{outline:2px solid var(--quiet);outline-offset:-2px;}",
-  ".bar .small{font-size:11px;}.bar .large{font-size:15px;}",
-  `.bar .serif{font-family:${READER_FONT_STACKS.serif};font-size:14px;}.bar .sans{font-family:${READER_FONT_STACKS.sans};font-size:13px;}`,
 ].join("");

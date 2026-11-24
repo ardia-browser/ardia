@@ -137,12 +137,13 @@ test("quitting clears the session id and writes the local copy synchronously", (
   assert.ok(stub.telemetryLocal.records().some((r) => r.event === "last_event"));
 });
 
-test("the hourly measurement reports size, timings, drops and posts", async () => {
+test("the hourly measurement reports timings, the queue's size and posts, and never the whole local copy's totals or drops", async () => {
   const { reportLocalStore, LOCAL_STORE_EVENT } = await import("./localStoreReport.ts");
   client.setSharing(true, "settings");
   client.capture("one_more", {}, client.consentNow());
   const props = await reportLocalStore(client.consentToken());
-  for (const key of ["bytes", "lines", "files", "write_ms_p95", "prune_ms", "lines_dropped", "queue_bytes", "bytes_posted", "failed_posts"]) assert.ok(key in props, key);
+  for (const key of ["write_ms_p95", "prune_ms", "queue_bytes", "bytes_posted", "failed_posts"]) assert.ok(key in props, key);
+  for (const key of ["bytes", "lines", "files", "lines_dropped"]) assert.ok(!(key in props), key);
   local.flushLocal();
   assert.equal(stub.telemetryLocal.records().at(-1).event, LOCAL_STORE_EVENT);
 });

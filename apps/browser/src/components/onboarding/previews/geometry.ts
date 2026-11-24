@@ -5,7 +5,7 @@ import { space } from "../../ui/tokens";
 export type Geo = { s: number; W: number; H: number };
 export type Rect = { x: number; y: number; w: number; h: number };
 
-export const DESIGN = { width: 860, height: 600 } as const;
+const DESIGN = { width: 860, height: 600 } as const;
 
 export function geo(width: number, height: number): Geo {
   const s = Math.min(width / DESIGN.width, height / DESIGN.height);
@@ -20,7 +20,7 @@ export const CRUMB_X = 153;
 export const STRIP_H = 42;
 export const CHIP = { x: 76, w: 173, gap: space.xs, top: 5, h: 32 } as const;
 export const CARD = CARD_INSET;
-export const SIDE_CARD_X = SIDEBAR_W + CARD_INSET - ROW.x;
+const SIDE_CARD_X = SIDEBAR_W + CARD_INSET - ROW.x;
 export const LIGHTS_Y = { toolbar: CARD_INSET + 21, field: 24, strip: 20.75 } as const;
 export const TOOLBAR_ICONS = [21, 56, 92, 127] as const;
 export const SIDEBAR_ICONS = [98, 133, 168] as const;

@@ -195,7 +195,7 @@ private fun Body(session: PageSummarySession) {
             val note = session.note
             if (note != null && phase is PageSummarySession.Phase.Done) {
                 Row(Modifier.padding(top = Spacing.hairline).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }, horizontalArrangement = Arrangement.spacedBy(Spacing.tight)) {
-                    Icon(if (session.writer is PageSummaryWriting.Writer.Excerpts) ArdiaSymbols.docText else ArdiaSymbols.sparkles, null, Modifier.size(16.dp).padding(top = 1.dp), tint = secondary)
+                    Icon(ArdiaSymbols.sparkles, null, Modifier.size(16.dp).padding(top = 1.dp), tint = secondary)
                     Text(note, style = ArdiaType.footnote, color = secondary)
                 }
             }

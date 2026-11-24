@@ -1,14 +1,19 @@
+import { Platform } from "react-native";
 import { create } from "zustand";
 import { history } from "../history/store";
 import { HISTORY_RETENTION_MS } from "../history/historySummary";
+import { useLibrary } from "../library/store";
 import {
   clearTone,
+  isRefusedSnapshot,
   livePageIds,
   listenToPages,
   pageNavigation,
   settled,
+  snapshotIsCurrent,
   snapshotPage,
   storeNavigation,
+  type SnapshotTiming,
   storeTone,
   type PageEngineEvent,
   type PageState,
@@ -19,10 +24,10 @@ import { showOnboarding, useOnboarding } from "../onboarding/store";
 import { pageUi } from "../page/store";
 import { settingsNav } from "../settings/nav";
 import { refreshDefaultBrowser } from "../settings/defaultBrowser";
-import { forgetPosition, saveTabPosition, watchFrontScroll } from "./positions";
+import { forgetPosition, frontScrollCameToRest, saveTabPosition, watchFrontScroll } from "./positions";
 import { noteLocalChange, showSpace } from "../sync/store";
 import { spaceToShow, tabsInSpace } from "../tabs/spaces";
-import { currentPreferences, loadPreferences } from "../settings/store";
+import { currentPreferences, loadPreferences, setPreference } from "../settings/store";
 import type { VisitTransition, Visit } from "../store/browserDatabase";
 import { enterTarget, rowTarget, resolve, type TrayRow } from "../search/omnibox";
 import { applySearchEngine, dismissSearch, presentSearch, refreshSearchRows, searchState, useSearch, beginPasteRead, endPasteRead } from "../search/store";
@@ -34,7 +39,10 @@ import {
   closePrivateTabs,
   closeTabById,
   currentTabs,
+  flushTabWrites,
   loadTabs,
+  onTabWritesStalled,
+  tabWritesPending,
   openNewTab,
   reopenClosedTab,
   restoreArchivedTab,
@@ -50,14 +58,17 @@ import { deckOrder, findTab, isPrivateOnScreen, isPrivateTab, selectedTab, tabBe
 import { setHidesFromRecents } from "../../platform/links";
 import { copyText, pasteForGo } from "../../platform/system";
 import { pasteTap } from "../search/pasteRow";
-import { noteSnapshotPageTop, noteSnapshotShown, pictureKey, picturePainted, whenPicturePainted } from "../../lib/shownSnapshots";
+import { anyPicturePainted, noteSnapshotPageTop, noteSnapshotShown, pictureKey, picturePainted } from "../../lib/shownSnapshots";
 import { DECK_PULL } from "../../lib/deckPull";
+import { tabWords } from "../../lib/sharedWords";
 import { runOnUI } from "react-native-reanimated";
 import { showToast } from "../toasts/store";
+import { PRIVATE_PAGES_UNAVAILABLE, refuseIncognito } from "../tabs/privatePages";
 import { hideArchiveCard } from "./archiveCard";
-import { cutDeckPullFromRest, deckPull, deckPullArmed, deckPullFades, deckPullGrowing, deckStandbyId, endDeckPull, fadeDeckPullFromRest, handOverDeckPull, landDeckPullFromRest, noteDeckPullEntrance, PULL_STAGE, whenDeckStandby } from "./deckPull";
-import { beginInteraction, cutInteraction, INTERACTION_WINDOW_MS } from "../app/interactionPerf";
+import { cutDeckPullFromRest, deckPull, deckPullArmed, deckPullFades, deckPullGrowing, deckStandbyId, endDeckPull, fadeDeckPullFromRest, landDeckPullFromRest, noteDeckPullEntrance, PULL_STAGE, showPulledPage, whenDeckStandby } from "./deckPull";
+import { beginInteraction, cutInteraction, INTERACTION_WINDOW_MS, markNextUiFrame, markTiming } from "../app/interactionPerf";
 import { refreshHiddenDeck, wantDeckStandby } from "./deckStandby";
+import { sendDeckCommand } from "./deckCommands";
 import { countUsage } from "../telemetry/telemetry";
 import { startBrowseForMe } from "../browseForMe/store";
 import { rememberPageTones, restorePageTones } from "../pages/toneMemory";
@@ -68,9 +79,9 @@ import { syncOffered } from "../../platform/system";
 export type Surface = "start" | "browsing" | "deck";
 export type Sheet = "archive" | "spaces" | null;
 
-type BrowseState = { surface: Surface; sheet: Sheet; deckEntrance: string | null; frozenOrder: string[] | null; opening: string | null; openingCardWidth: number | null; veiled: string | null; covered: string | null; leaving: string | null };
+type BrowseState = { surface: Surface; sheet: Sheet; deckEntrance: string | null; frozenOrder: string[] | null; opening: string | null; openingCardWidth: number | null; veiled: string | null; covered: string | null; arriving: string | null; arrivalCover: string | null; openingCover: string | null; leaving: string | null };
 
-export const useBrowse = create<BrowseState>()(() => ({ surface: "start", sheet: null, deckEntrance: null, frozenOrder: null, opening: null, openingCardWidth: null, veiled: null, covered: null, leaving: null }));
+export const useBrowse = create<BrowseState>()(() => ({ surface: "start", sheet: null, deckEntrance: null, frozenOrder: null, opening: null, openingCardWidth: null, veiled: null, covered: null, arriving: null, arrivalCover: null, openingCover: null, leaving: null }));
 
 const lastVisits = new Map<string, Visit>();
 
@@ -94,12 +105,15 @@ export function startBrowser(beforeOpening: () => void = () => undefined) {
   archiveDueTabs();
   archiveTimer = setInterval(archiveDueTabs, AUTO_ARCHIVE_CHECK_MS);
   listenToPages(pageEvent);
-  watchFrontScroll(frontPageId);
+  onTabWritesStalled(() => showToast(tabWords.notSaved, "warning"));
+  if (!SCROLL_REST_IS_REPORTED) watchFrontScroll(frontPageId, pictureScrolledOrQuietPage);
   if (!currentPreferences().hasFinishedOnboarding) showOnboarding();
   else if (currentPreferences().autoOpensKeyboard) presentSearch("home", "", useTabs.getState().incognito, null, "atRest");
 }
 
 let appActive = true;
+
+const SCROLL_REST_IS_REPORTED = Platform.OS === "ios";
 
 function frontPageId() {
   if (!appActive || useBrowse.getState().surface !== "browsing" || pageCovered()) return null;
@@ -113,6 +127,7 @@ export function pageCovered() {
     ui.menuOpen ||
     ui.readerTabId !== null ||
     ui.press !== null ||
+    useLibrary.getState().open ||
     settingsNav().open ||
     useOnboarding.getState().showing ||
     useBrowse.getState().sheet !== null
@@ -125,6 +140,7 @@ const AUTO_ARCHIVE_CHECK_MS = 15 * 60_000;
 
 export function appBecameActive() {
   appActive = true;
+  if (tabWritesPending()) flushTabWrites();
   if (pruneExpiredArchive() > 0) loadArchive();
   if (archiveTimer) clearInterval(archiveTimer);
   archiveTimer = setInterval(archiveDueTabs, AUTO_ARCHIVE_CHECK_MS);
@@ -140,12 +156,17 @@ export function appWillResignActive() {
   archiveTimer = null;
   const selected = currentTabs().selectedId;
   if (selected) selectTabById(selected);
+  flushTabWrites();
   void savePageStates();
 }
 
-const show = (surface: Surface) => useBrowse.setState({ surface });
+const show = (surface: Surface) => {
+  showPulledPage();
+  useBrowse.setState({ surface });
+};
 
 export function openPage(url: string, origin: TabOrigin) {
+  showPulledPage();
   takeLeavingPicture(null);
   dismissSearch("submitted");
   const tab = openNewTab({ url, origin });
@@ -210,7 +231,10 @@ export function beginOpeningTab(id: string, veiled = false, cardWidth: number | 
   showSpaceOf(id);
   setIncognito(isPrivateTab(currentTabs(), id));
   selectTabById(id);
-  useBrowse.setState({ opening: id, openingCardWidth: cardWidth, veiled: veiled ? id : null, covered: veiled ? id : null });
+  cancelArrivalWait();
+  openingSeq += 1;
+  earlyCoverHides.delete(id);
+  useBrowse.setState({ opening: id, openingCardWidth: cardWidth, veiled: veiled ? id : null, covered: veiled ? id : null, openingCover: veiled ? `${OPENING_COVER_ID}-${openingSeq}` : null, arriving: null, leaving: null });
 }
 
 export function unveilOpeningPage(id: string) {
@@ -219,7 +243,36 @@ export function unveilOpeningPage(id: string) {
 
 const drawnWaiters = new Map<string, () => void>();
 
+const drawnPages = new Map<string, number | null>();
+
+export const notePageHosted = (id: string) => void drawnPages.delete(id);
+
+export const pageWasDrawn = (id: string) => drawnPages.has(id);
+
+export function documentWasDrawn(id: string) {
+  if (!drawnPages.has(id)) return false;
+  const drawn = drawnPages.get(id) ?? null;
+  const shown = pageNavigation(id)?.document;
+  return drawn === null || shown === undefined || drawn === shown;
+}
+
+const drawnListeners = new Map<string, Set<() => void>>();
+
+export function listenForPageDrawn(id: string, listener: () => void): () => void {
+  const listeners = drawnListeners.get(id) ?? new Set<() => void>();
+  listeners.add(listener);
+  drawnListeners.set(id, listeners);
+  return () => {
+    listeners.delete(listener);
+    if (!listeners.size && drawnListeners.get(id) === listeners) drawnListeners.delete(id);
+  };
+}
+
 export function whenPageDrawn(id: string, capMs: number, then: (drawn: boolean) => void): () => void {
+  if (drawnPages.has(id)) {
+    then(true);
+    return () => undefined;
+  }
   let called = false;
   const stop = () => {
     called = true;
@@ -237,63 +290,109 @@ export function whenPageDrawn(id: string, capMs: number, then: (drawn: boolean) 
   return stop;
 }
 
-export const pageDrawn = (id: string) => drawnWaiters.get(id)?.();
+export function pageDrawn(id: string, document?: number) {
+  drawnPages.set(id, document ?? null);
+  drawnWaiters.get(id)?.();
+  for (const listener of [...(drawnListeners.get(id) ?? [])]) listener();
+}
 
 export const OPENING_COVER_ID = "openingCover";
 
+export const ARRIVAL_COVER_ID = "pagerArrivalCover";
+
 export type CoverHidden = "drawn" | "cap" | "lost";
 
-const coverWaiters = new Map<string, (reason: CoverHidden) => void>();
+type CoverWaiter = { cover: string | null; hidden: (reason: CoverHidden) => void };
 
-export function whenPageCoverHidden(id: string, capMs: number, then: (reason: CoverHidden) => void): () => void {
+const coverWaiters = new Map<string, CoverWaiter>();
+
+export function whenPageCoverHidden(id: string, capMs: number, then: (reason: CoverHidden) => void, cover: string | null = null): () => void {
+  const early = earlyCoverHides.get(id);
+  if (early && coverMatches(cover, early.cover, early.found)) {
+    earlyCoverHides.delete(id);
+    then(early.reason);
+    return () => undefined;
+  }
   let called = false;
   const stop = () => {
     called = true;
     clearTimeout(cap);
-    if (coverWaiters.get(id) === hidden) coverWaiters.delete(id);
+    if (coverWaiters.get(id) === waiter) coverWaiters.delete(id);
   };
   const hidden = (reason: CoverHidden) => {
     if (called) return;
     stop();
     then(reason);
   };
+  const waiter: CoverWaiter = { cover, hidden };
   const cap = setTimeout(() => hidden("lost"), capMs);
-  coverWaiters.set(id, hidden);
+  coverWaiters.set(id, waiter);
   return stop;
 }
 
-export const pageCoverHidden = (id: string, reason: "drawn" | "cap") => coverWaiters.get(id)?.(reason);
+const COVER_ACK_NEEDS_ID = Platform.OS === "ios";
 
-const laidOutWaiters = new Map<string, () => void>();
+type EarlyCoverHide = { cover: string | undefined; reason: "drawn" | "cap"; found: boolean };
 
-export function whenPageLaidOut(id: string, capMs: number, then: () => void) {
-  laidOutWaiters.get(id)?.();
+const earlyCoverHides = new Map<string, EarlyCoverHide>();
+
+function coverMatches(expected: string | null, cover: string | undefined, found: boolean) {
+  if (expected === null) return true;
+  if (COVER_ACK_NEEDS_ID) return cover === expected && found;
+  return cover === undefined || cover === expected;
+}
+
+export function pageCoverHidden(id: string, reason: "drawn" | "cap", cover?: string, found = true) {
+  const waiter = coverWaiters.get(id);
+  if (!waiter) {
+    earlyCoverHides.set(id, { cover, reason, found });
+    return;
+  }
+  if (!coverMatches(waiter.cover, cover, found)) return;
+  waiter.hidden(reason);
+}
+
+let openingSeq = 0;
+
+let arrivalSeq = 0;
+
+const laidOutWaiters = new Map<string, (laidOut: boolean) => void>();
+
+export function whenPageLaidOut(id: string, capMs: number, then: (laidOut: boolean) => void) {
+  laidOutWaiters.get(id)?.(false);
   let called = false;
-  const done = () => {
+  const done = (laidOut: boolean) => {
     if (called) return;
     called = true;
     clearTimeout(cap);
     if (laidOutWaiters.get(id) === done) laidOutWaiters.delete(id);
-    then();
+    then(laidOut);
   };
-  const cap = setTimeout(done, capMs);
+  const cap = setTimeout(() => done(false), capMs);
   laidOutWaiters.set(id, done);
 }
 
-export const pageLaidOut = (id: string) => laidOutWaiters.get(id)?.();
+export const pageLaidOut = (id: string) => laidOutWaiters.get(id)?.(true);
 
 export function stopOpeningTab(id: string) {
   if (useBrowse.getState().opening === id) useBrowse.setState({ opening: null, veiled: null, covered: null });
 }
 
 export function openTab(id: string) {
+  const tabs = currentTabs();
+  if (!tabs.open.some((tab) => tab.id === id) && !tabs.privates.some((tab) => tab.id === id)) return;
+  showPulledPage();
   takeLeavingPicture(id);
   hideArchiveCard();
   dismissSearch();
   showSpaceOf(id);
-  setIncognito(isPrivateTab(currentTabs(), id));
+  if (!setIncognito(isPrivateTab(currentTabs(), id))) {
+    closePrivateTabs();
+    useBrowse.setState({ surface: "start", sheet: null, opening: null, veiled: null, covered: null });
+    return;
+  }
   if (currentTabs().selectedId !== id) selectTabById(id);
-  useBrowse.setState({ surface: "browsing", sheet: null, opening: null, veiled: null, covered: null });
+  useBrowse.setState({ surface: "browsing", sheet: null, opening: null, veiled: null, covered: null, leaving: null });
   const tab = findTab(currentTabs(), id);
   if (tab && !tab.snapshotFileName && loading.get(id) === false) scheduleSnapshot(id);
 }
@@ -308,7 +407,7 @@ export function newTab() {
 
 export function newIncognitoTab() {
   const was = useTabs.getState().incognito;
-  setIncognito(true);
+  if (!setIncognito(true)) return;
   presentSearch(trayOrigin(), "", was);
 }
 
@@ -320,14 +419,14 @@ export function newRegularTab() {
 
 export function switchDeckIncognito() {
   const was = useTabs.getState().incognito;
-  if (!was) countUsage("deck_incognito_switches");
-  setIncognito(!was);
+  if (setIncognito(!was) && !was) countUsage("deck_incognito_switches");
 }
 
 export function toggleTrayIncognito() {
   const was = useTabs.getState().incognito;
   if (searchState().incognitoOnCancel === null) useSearch.setState({ incognitoOnCancel: was });
-  setIncognito(!was);
+  if (!setIncognito(!was)) return;
+  if (!was) countUsage("tray_incognito_switches");
   refreshSearchRows();
 }
 
@@ -343,40 +442,59 @@ export function cancelSearch() {
 }
 
 export async function showDeck() {
+  markTiming("deck press");
+  const { surface } = useBrowse.getState();
   const selected = currentTabs().selectedId;
-  if (useBrowse.getState().surface === "browsing" && selected && deckPullArmed() === selected && !pageCovered()) {
+  if (selected && pullBusyWith(selected)) return;
+  if (surface === "deck" && deckPullGrowing() !== null) return;
+  if (surface === "browsing" && deckPullGrowing() !== null) endDeckPull();
+  if (surface === "browsing" && selected && deckPullArmed() === selected && !pageCovered()) {
     landDeckFromRest(selected);
     return;
   }
-  await enterDeck();
+  enterDeck();
 }
 
-async function enterDeck() {
+let entranceSeq = 0;
+
+function enterDeck() {
+  entranceSeq += 1;
   const { surface } = useBrowse.getState();
   const selected = currentTabs().selectedId;
   const covered = pageCovered();
   dismissSearch();
-  entranceCapture = null;
   if (surface === "browsing" && selected) {
     const tab = findTab(currentTabs(), selected);
     if (tab?.snapshotFileName) noteSnapshotShown(tab.snapshotFileName);
-    if (coverIsCapturable(loading.get(selected) === false, covered)) entranceCapture = {
-      id: selected,
-      done: captureSnapshot(selected).then(() => {
-        const fresh = findTab(currentTabs(), selected)?.snapshotFileName;
-        if (fresh) noteSnapshotShown(fresh);
-      }),
-    };
+    latchDeckCapture(selected, covered, null, CAPTURES_AFTER_MOTION && deckPullArmed() !== selected);
   }
   const leaving = surface === "browsing" ? selected : null;
   labTrace(`PAGELAB deck shown with ${currentTabs().open.length} tabs, ${currentTabs().privates.length} private`);
   useBrowse.setState({ surface: "deck", deckEntrance: leaving, frozenOrder: null, opening: null, veiled: null, covered: null, leaving });
 }
 
-let pullCapture: { id: string; done: Promise<void> } | null = null;
+type DeckCapture = { id: string; pageTop: number | null; done: Promise<void> | null };
+
+let deckCapture: DeckCapture | null = null;
 let landingFromRest: string | null = null;
-let handingOver: string | null = null;
 let trackedPull: string | null = null;
+let pullBusySince = 0;
+
+const PULL_STALE_MS = 1500;
+
+function pullBusyWith(id: string) {
+  if (landingFromRest !== id && trackedPull !== id) return false;
+  const stage = deckPull.stage.value;
+  if (stage === PULL_STAGE.tracking || stage === PULL_STAGE.landing || stage === PULL_STAGE.returning || Date.now() - pullBusySince < PULL_STALE_MS) return true;
+  labTrace("PAGELAB deck pull left waiting with nothing in flight, a new request takes over");
+  landingFromRest = null;
+  trackedPull = null;
+  return false;
+}
+
+const CAPTURES_AFTER_MOTION = Platform.OS === "android";
+const PULL_COPIES_PAGE = Platform.OS !== "android";
+const CAPTURE_HOLDS_PAGE_MS = 400;
 
 const pullCounts = (id: string) => !useTabs.getState().incognito && !findTab(currentTabs(), id)?.isPrivate;
 
@@ -384,34 +502,83 @@ const PULL_PERF = "deck pull";
 const PULLED_PAGE_TOP = 0;
 const PULL_LANDING_PERF = "deck pull landing";
 
+const pictureIsCurrent = (id: string) => Boolean(findTab(currentTabs(), id)?.snapshotFileName) && snapshotIsCurrent(id) === true;
+
+export function keepFrontPictureCurrent() {
+  const id = currentTabs().selectedId;
+  if (!id || useBrowse.getState().surface !== "browsing" || deckPullInFlight() || deckPullGrowing() !== null) return;
+  if (!coverIsCapturable(loading.get(id) === false, pageCovered()) || !snapshotAllowed(id) || pictureIsCurrent(id)) return;
+  labTrace(`PAGELAB snapshot ${id} taken while the page is quiet`);
+  void captureSnapshot(id, null, false, "quiet");
+}
+
+function latchDeckCapture(id: string, covered: boolean, pageTop: number | null, afterMotion: boolean) {
+  deckCapture = null;
+  if (!coverIsCapturable(loading.get(id) === false, covered) || !frontPageShown(id) || pictureIsCurrent(id)) return;
+  if (pullCounts(id)) countUsage("deck_pictures_at_press");
+  const latched: DeckCapture = { id, pageTop, done: null };
+  deckCapture = latched;
+  if (!afterMotion) void takeDeckCapture(latched);
+}
+
+function takeDeckCapture(latched: DeckCapture) {
+  if (latched.done) return latched.done;
+  latched.done = captureSnapshot(latched.id, latched.pageTop, true).then(() => {
+    if (deckCapture === latched) deckCapture = null;
+    const fresh = findTab(currentTabs(), latched.id)?.snapshotFileName;
+    if (fresh) noteSnapshotShown(fresh);
+  });
+  return latched.done;
+}
+
+const cardPictureShown = (id: string) => {
+  const picture = findTab(currentTabs(), id)?.snapshotFileName ?? null;
+  return picture === null || picturePainted(pictureKey(`deck:${id}`, picture)) || anyPicturePainted(`deck:${id}`);
+};
+
+export function deckMotionDone(id: string) {
+  if (!cardPictureShown(id) && pullCounts(id)) countUsage("deck_pictures_late");
+  const latched = deckCapture?.id === id ? deckCapture : null;
+  if (!latched || latched.done) {
+    deckEntered(id);
+    return;
+  }
+  const entrance = entranceSeq;
+  let entered = false;
+  const enter = () => {
+    if (entered) return;
+    entered = true;
+    clearTimeout(hold);
+    if (entrance === entranceSeq) deckEntered(id);
+  };
+  const hold = setTimeout(enter, CAPTURE_HOLDS_PAGE_MS);
+  void takeDeckCapture(latched).then(enter);
+}
+
 export function deckPullBegan(id: string, tracked = true) {
   const tab = findTab(currentTabs(), id);
   if (tab?.snapshotFileName) noteSnapshotShown(tab.snapshotFileName);
   if (tracked) {
     trackedPull = id;
+    pullBusySince = Date.now();
     beginInteraction(PULL_PERF, INTERACTION_WINDOW_MS.deckPull);
   }
-  pullCapture = null;
-  if (!coverIsCapturable(loading.get(id) === false, pageCovered())) return;
-  const done = captureSnapshot(id, PULLED_PAGE_TOP).then(() => {
-    const fresh = findTab(currentTabs(), id)?.snapshotFileName;
-    if (fresh) noteSnapshotShown(fresh);
-  });
-  pullCapture = { id, done };
+  if (PULL_COPIES_PAGE) latchDeckCapture(id, pageCovered(), PULLED_PAGE_TOP, false);
+  else deckCapture = null;
 }
 
 export function deckPullReleased(id: string, lands: boolean) {
+  pullBusySince = Date.now();
   cutInteraction(PULL_PERF);
   beginInteraction(lands ? PULL_LANDING_PERF : "deck pull return", INTERACTION_WINDOW_MS.deckPullLanding);
   if (pullCounts(id)) countUsage(lands ? "deck_bar_swipes" : "deck_bar_swipes_returned");
 }
 
 function landDeckFromRest(id: string) {
-  if (landingFromRest === id || handingOver === id) return;
   landingFromRest = id;
-  deckPullBegan(id, false);
+  pullBusySince = Date.now();
   if (deckStandbyId() !== id) {
-    labTrace("PAGELAB deck pull waits for the deck to be ready for this page");
+    labTrace("PAGELAB deck pull asks the hidden deck for this page");
     refreshHiddenDeck();
     wantDeckStandby();
   }
@@ -419,19 +586,20 @@ function landDeckFromRest(id: string) {
     if (landingFromRest !== id) return;
     if (useBrowse.getState().surface !== "browsing" || currentTabs().selectedId !== id) {
       landingFromRest = null;
-      pullCapture = null;
       labTrace("PAGELAB deck pull dropped, its page is no longer in front");
       return;
     }
     if (!ready) {
       landingFromRest = null;
-      pullCapture = null;
-      labTrace("PAGELAB deck pull gave up waiting, the deck opens without it");
-      void enterDeck();
+      labTrace("PAGELAB deck pull found no hidden deck for this page, the deck opens without it");
+      enterDeck();
       return;
     }
+    deckPullBegan(id, false);
     beginInteraction(PULL_LANDING_PERF, INTERACTION_WINDOW_MS.deckPullLanding);
     runOnUI(deckPullFades() ? (cardShowsPicture(id) ? fadeDeckPullFromRest : cutDeckPullFromRest) : landDeckPullFromRest)(id, deckPullSettled, deckPullRefused);
+    runOnUI(markNextUiFrame)("deck motion");
+    runOnUI(markNextUiFrame)("deck takes taps");
   });
 }
 
@@ -440,109 +608,63 @@ function cardShowsPicture(id: string) {
   return picture != null && picturePainted(pictureKey(`deck:${id}`, picture));
 }
 
-function whenPullPicturePainted(id: string, then: () => void) {
-  const capture = pullCapture?.id === id ? pullCapture.done : null;
-  const current = () => findTab(currentTabs(), id)?.snapshotFileName ?? null;
-  const painted = () => {
-    refreshHiddenDeck();
-    const deadline = Date.now() + DECK_PULL.paintDeadlineMs;
-    const paints = (picture: string | null) => {
-      if (!picture) {
-        then();
-        return;
-      }
-      const slice = Math.max(Math.min(DECK_PULL.paintCapMs, deadline - Date.now()), 0);
-      whenPicturePainted(pictureKey(`deck:${id}`, picture), slice, (shown) => {
-        const now = current();
-        const late = Date.now() >= deadline;
-        if (shown && now === picture) then();
-        else if (!late) {
-          if (now !== picture) refreshHiddenDeck();
-          paints(now);
-        } else {
-          if (now === null || !picturePainted(pictureKey(`deck:${id}`, now))) {
-            if (pullCounts(id)) countUsage("deck_pictures_late");
-            labTrace("PAGELAB deck pull handed over before its picture had painted");
-          }
-          then();
-        }
-      });
-    };
-    paints(current());
-  };
-  if (!capture) {
-    painted();
-    return;
-  }
-  let waited = false;
-  const captured = () => {
-    if (waited) return;
-    waited = true;
-    clearTimeout(cap);
-    painted();
-  };
-  const cap = setTimeout(captured, DECK_PULL.captureCapMs);
-  void capture.then(captured);
-}
-
 function deckPullRefused(id: string) {
   if (landingFromRest !== id) return;
   landingFromRest = null;
   if (trackedPull !== null || useBrowse.getState().surface !== "browsing" || currentTabs().selectedId !== id) return;
-  pullCapture = null;
+  deckCapture = null;
   labTrace("PAGELAB deck pull refused on the UI thread, the deck opens without it");
-  void enterDeck();
+  enterDeck();
 }
 
-export function deckPullSettled(id: string, landed: boolean, worstFrameMs = 0) {
+let landingTapAt: number | null = null;
+
+export function noteDeckTapWhileLanding(at: number) {
+  landingTapAt = at;
+}
+
+export function deckPullSettled(id: string, landed: boolean, worstFrameMs = 0, openAfter = "") {
+  const tappedAt = landingTapAt;
+  landingTapAt = null;
   labTrace(`PAGELAB deck pull animation ${landed ? "landed" : "returned"}`);
-  landingFromRest = null;
-  handingOver = null;
-  trackedPull = null;
+  if (landingFromRest === id) landingFromRest = null;
+  if (trackedPull === id) trackedPull = null;
   if (worstFrameMs > DECK_PULL.hitchMs && pullCounts(id)) countUsage("deck_pulls_hitched");
   if (!landed) {
-    pullCapture = null;
+    if (deckCapture?.id === id && !deckCapture.done) deckCapture = null;
     refreshHiddenDeck();
     return;
   }
-  handingOver = id;
-  whenPullPicturePainted(id, () => enterDeckFromPull(id));
-}
-
-function enterDeckFromPull(id: string) {
-  if (pullCapture?.id === id) pullCapture = null;
-  const lost = () => {
-    if (handingOver === id) handingOver = null;
-    if (deckPullGrowing() === null) endDeckPull();
-  };
+  if (deckCapture?.id === id) void takeDeckCapture(deckCapture);
+  if (!cardPictureShown(id)) {
+    if (pullCounts(id)) countUsage("deck_pictures_late");
+    labTrace("PAGELAB deck pull handed over before its card had a picture painted");
+  }
   if (useBrowse.getState().surface !== "browsing" || currentTabs().selectedId !== id) {
-    lost();
+    if (deckPullGrowing() === null) endDeckPull();
     return;
   }
-  runOnUI(handOverDeckPull)();
-  requestAnimationFrame(() => {
-    if (useBrowse.getState().surface !== "browsing" || currentTabs().selectedId !== id) {
-      lost();
-      return;
-    }
-    if (handingOver === id) handingOver = null;
-    dismissSearch();
-    entranceCapture = null;
-    noteDeckPullEntrance(id);
-    labTrace(`PAGELAB deck shown with ${currentTabs().open.length} tabs, ${currentTabs().privates.length} private`);
-    useBrowse.setState({ surface: "deck", deckEntrance: null, frozenOrder: null, opening: null, veiled: null, covered: null, leaving: null });
-  });
+  dismissSearch();
+  noteDeckPullEntrance(id);
+  labTrace(`PAGELAB deck shown with ${currentTabs().open.length} tabs, ${currentTabs().privates.length} private`);
+  markTiming("deck taps");
+  useBrowse.setState({ surface: "deck", deckEntrance: null, frozenOrder: null, opening: null, veiled: null, covered: null, leaving: null });
+  if (!openAfter || !findTab(currentTabs(), openAfter)) return;
+  labTrace("PAGELAB deck card tapped while the deck landed opens as it lands");
+  if (pullCounts(openAfter)) countUsage("deck_opens_while_landing");
+  sendDeckCommand({ kind: "open", tabId: openAfter, tappedAt: tappedAt ?? Date.now() });
 }
 
-export const deckPullCommitted = () => deckPull.stage.value === PULL_STAGE.landing || landingFromRest !== null || handingOver !== null;
+const pullBusy = () => {
+  const id = landingFromRest ?? trackedPull;
+  return id !== null && pullBusyWith(id);
+};
 
-export const deckPullInFlight = () => trackedPull !== null || landingFromRest !== null || handingOver !== null || pullCapture !== null;
+export const deckPullCommitted = () => deckPull.stage.value === PULL_STAGE.landing || (landingFromRest !== null && pullBusy());
+
+export const deckPullInFlight = () => pullBusy();
 
 export const peekDeckEntrance = () => useBrowse.getState().deckEntrance;
-
-let entranceCapture: { id: string; done: Promise<void> } | null = null;
-
-export const deckEntranceCapture = (id: string) => (entranceCapture?.id === id ? entranceCapture.done : null);
 
 export const consumeDeckEntrance = () => {
   const entrance = useBrowse.getState().deckEntrance;
@@ -605,6 +727,15 @@ export function swipedPastHistory(id: string, direction: "back" | "forward") {
   else show("start");
 }
 
+export function pageOpenFailed(id: string, code: string) {
+  if (code !== PRIVATE_PAGES_UNAVAILABLE || !isPrivateTab(currentTabs(), id)) return;
+  const wasShowing = useBrowse.getState().surface === "browsing" && currentTabs().selectedId === id;
+  refuseIncognito();
+  if (searchState().open) dismissSearch();
+  closePrivateTabs();
+  if (wasShowing) show("start");
+}
+
 export const openArchive = () => useBrowse.setState({ sheet: "archive" });
 
 let sheetFromSettings = false;
@@ -629,7 +760,7 @@ export const openSpaces = () => {
 };
 
 export function reopenArchived(tab: BrowserTab) {
-  restoreArchivedTab(tab);
+  if (!restoreArchivedTab(tab)) return;
   openTab(tab.id);
 }
 
@@ -643,10 +774,58 @@ export function swipeOrder(): string[] {
   return [...kept, ...live.filter((id) => !known.has(id))];
 }
 
-export function switchToNeighbour(id: string) {
+export function switchToNeighbour(id: string, swiped = false) {
   const order = swipeOrder();
+  const from = currentTabs().selectedId;
   useBrowse.setState({ frozenOrder: order });
   openTab(id);
+  if (swiped) noteTabSwiped(from, id);
+}
+
+export const swipeToNeighbour = (id: string) => switchToNeighbour(id, true);
+
+const ARRIVAL_COVER_LOST_MS = 400;
+let stopArrivalWait: (() => void) | null = null;
+
+function cancelArrivalWait() {
+  const stop = stopArrivalWait;
+  stopArrivalWait = null;
+  stop?.();
+}
+
+export function arriveAtNeighbour(id: string) {
+  const order = swipeOrder();
+  const from = currentTabs().selectedId;
+  cancelArrivalWait();
+  useBrowse.setState({ frozenOrder: order });
+  openTab(id);
+  arrivalSeq += 1;
+  earlyCoverHides.delete(id);
+  const cover = `${ARRIVAL_COVER_ID}-${arrivalSeq}`;
+  useBrowse.setState({ covered: id, arriving: id, arrivalCover: cover });
+  stopArrivalWait = whenPageCoverHidden(
+    id,
+    ARRIVAL_COVER_LOST_MS,
+    (reason) => {
+      stopArrivalWait = null;
+      if (COVER_ACK_NEEDS_ID && reason !== "drawn" && !isPrivateTab(currentTabs(), id) && !useTabs.getState().incognito) countUsage("page_covers_capped");
+      const now = useBrowse.getState();
+      if (now.arriving === id && now.arrivalCover === cover) useBrowse.setState({ arriving: null, arrivalCover: null, covered: now.covered === id ? null : now.covered });
+    },
+    cover,
+  );
+  noteTabSwiped(from, id);
+}
+
+export const arrivalCovers = (id: string) => {
+  const { arriving, covered } = useBrowse.getState();
+  return arriving === id && covered === id;
+};
+
+function noteTabSwiped(from: string | null, to: string) {
+  if (!currentPreferences().tabSwipeHintShown) setPreference("tabSwipeHintShown", true);
+  const tabs = currentTabs();
+  if ((from === null || !isPrivateTab(tabs, from)) && !isPrivateTab(tabs, to)) countUsage("tabs_bar_swiped");
 }
 
 const transitions: Record<VisitKind, VisitTransition | null> = {
@@ -690,6 +869,7 @@ function pageEvent(event: PageEngineEvent) {
   else if (event.name === "page.state" && currentTabs().selectedId !== event.pageId) backgroundPageState(event.pageId, event.state);
   else if (event.name === "page.closeRequested") closeTabById(event.pageId);
   else if (event.name === "page.snapshotLanded") snapshotLanded(event.pageId, event.uri, event.generation);
+  else if (event.name === "page.scrollSettled") frontScrollCameToRest(event.pageId, event.y, frontPageId(), pictureScrolledOrQuietPage);
 }
 
 const loading = new Map<string, boolean>();
@@ -709,23 +889,76 @@ export function captureCurrentCover() {
   void captureSnapshot(id);
 }
 
-export async function captureSnapshot(id: string, pageTop: number | null = null) {
-  if (!snapshotAllowed(id)) return;
-  const snapshot = await snapshotPage(id);
-  const top = pageTop ?? (pullCapture?.id === id || deckPullGrowing() === id ? PULLED_PAGE_TOP : null);
+const exactCaptureStarted = new Map<string, number>();
+const publishedCaptureStarted = new Map<string, number>();
+let captureClock = 0;
+
+const captureIsStale = (id: string, startedAt: number, timing: SnapshotTiming) =>
+  (publishedCaptureStarted.get(id) ?? 0) > startedAt || (timing === "quiet" && (exactCaptureStarted.get(id) ?? 0) > startedAt);
+
+export async function captureSnapshot(id: string, pageTop: number | null = null, latched = false, timing: SnapshotTiming = "now"): Promise<boolean> {
+  if (!latched && !snapshotAllowed(id)) return false;
+  const countable = pictureCountable(id);
+  const startedAt = ++captureClock;
+  if (timing === "now") exactCaptureStarted.set(id, startedAt);
+  const taken = await snapshotPage(id, !latched, timing);
+  if (captureIsStale(id, startedAt, timing)) {
+    labTrace(`PAGELAB snapshot ${id} dropped, a newer one was taken after it`);
+    return false;
+  }
+  const counts = countable && pictureCountable(id);
+  if (taken && isRefusedSnapshot(taken)) {
+    pictureRefused(id, taken.refused, counts);
+    return false;
+  }
+  const snapshot = taken;
+  if (snapshot) pictureSaved(id, snapshot.route, counts);
+  const pulled = (deckCapture?.id === id && deckCapture.pageTop !== null) || deckPullGrowing() === id;
+  const top = pageTop ?? (pulled ? PULLED_PAGE_TOP : null);
   if (snapshot && top !== null) noteSnapshotPageTop(snapshot.uri, top);
   else if (snapshot?.frame) noteSnapshotPageTop(snapshot.uri, snapshot.frame.y);
   const tab = snapshot ? findTab(currentTabs(), id) : null;
-  if (!snapshot || !tab) return;
+  if (!snapshot || !tab) return false;
   const step = pictureCaptured(tab, snapshot.uri, snapshot.durable !== false, snapshot.generation);
+  if (step) publishedCaptureStarted.set(id, startedAt);
   if (step && tab.snapshotFileName !== step.show) {
     updateTabById(id, { snapshotFileName: step.show });
-    showFadingDeckThePicture(id);
+    showHiddenDeckThePicture(id);
   }
+  return step !== null;
 }
 
-function showFadingDeckThePicture(id: string) {
-  if (deckPullFades() && currentTabs().selectedId === id && useBrowse.getState().surface === "browsing" && !deckPullInFlight()) refreshHiddenDeck();
+function pictureScrolledOrQuietPage(id: string) {
+  pictureScrolledPage(id);
+  keepFrontPictureCurrent();
+}
+
+function pictureScrolledPage(id: string) {
+  if (Platform.OS !== "android" || loading.get(id) !== true || !coverIsCapturable(true, pageCovered())) return;
+  const countable = pictureCountable(id);
+  void captureSnapshot(id).then((published) => {
+    if (published && countable && pictureCountable(id)) countUsage("page_pictures_scrolled");
+  });
+}
+
+function pictureCountable(id: string) {
+  const tab = findTab(currentTabs(), id);
+  return tab !== undefined && !tab.isPrivate && !useTabs.getState().incognito;
+}
+
+function pictureSaved(id: string, route: string | undefined, counts: boolean) {
+  labTrace(`PAGELAB snapshot ${id} saved by ${route ?? "unknown"}`);
+  if (route === "engine" && counts) countUsage("page_pictures_webkit");
+}
+
+function pictureRefused(id: string, reason: "hidden" | "blank", counts: boolean) {
+  labTrace(`PAGELAB snapshot ${id} refused: page ${reason}, the card keeps its last picture`);
+  if (!counts) return;
+  countUsage(reason === "blank" ? "page_pictures_blank" : "page_pictures_hidden");
+}
+
+function showHiddenDeckThePicture(id: string) {
+  if (currentTabs().selectedId === id && useBrowse.getState().surface === "browsing" && !deckPullInFlight()) refreshHiddenDeck();
 }
 
 function snapshotLanded(id: string, uri: string, generation: number) {
@@ -735,13 +968,18 @@ function snapshotLanded(id: string, uri: string, generation: number) {
   if (!landed) return;
   if (landed === "shown" && tab.snapshotFileName !== uri) {
     updateTabById(id, { snapshotFileName: uri });
-    showFadingDeckThePicture(id);
+    showHiddenDeckThePicture(id);
   } else rewriteTab(id);
+}
+
+function frontPageShown(id: string) {
+  if (currentTabs().selectedId !== id) return true;
+  return useBrowse.getState().surface === "browsing" && !pageCovered();
 }
 
 function snapshotAllowed(id: string) {
   if (currentTabs().selectedId !== id) return true;
-  return useBrowse.getState().surface === "browsing" && !pageCovered();
+  return frontPageShown(id) && !deckPullInFlight() && deckPullGrowing() === null;
 }
 
 function scheduleSnapshot(id: string, tries = SNAPSHOT_RETRIES) {
@@ -753,7 +991,7 @@ function scheduleSnapshot(id: string, tries = SNAPSHOT_RETRIES) {
       if (!findTab(currentTabs(), id)) return;
       const selected = currentTabs().selectedId === id;
       if (selected && useBrowse.getState().surface !== "browsing") return;
-      if (snapshotAllowed(id)) void captureSnapshot(id);
+      if (snapshotAllowed(id)) void captureSnapshot(id, null, false, "quiet");
       else if (tries > 0) scheduleSnapshot(id, tries - 1);
     }, SNAPSHOT_SETTLE_MS),
   );
@@ -830,11 +1068,14 @@ useTabs.subscribe((tabs) => {
     hidesFromRecents = hides;
     void settled(() => setHidesFromRecents(hides), false);
   }
+  for (const id of drawnPages.keys()) if (!findTab(tabs, id)) drawnPages.delete(id);
   for (const id of [...lastVisits.keys(), ...loading.keys()]) {
     if (findTab(tabs, id)) continue;
     lastVisits.delete(id);
     loading.delete(id);
     forgetPosition(id);
+    exactCaptureStarted.delete(id);
+    publishedCaptureStarted.delete(id);
     clearTimeout(snapshotTimers.get(id));
     snapshotTimers.delete(id);
   }

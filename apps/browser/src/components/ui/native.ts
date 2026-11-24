@@ -1,8 +1,10 @@
 export {
   ActivitySpinner,
+  Breathe,
   ClipView,
   ContextMenuArea,
   DockSelection,
+  FieldGlowView,
   FileDropArea,
   FolderIcon,
   MagnifyArea,
@@ -19,6 +21,7 @@ export {
   WindowProfile,
   type DroppedItem,
   type DropUpdate,
+  type FieldGlowLook,
   type MagnifyUpdate,
   type PeekStageGeometry,
   type PeekStageHandle,
@@ -26,8 +29,8 @@ export {
   type SurfaceProps,
 } from "@ardia/shell";
 
-export { FadeLabel } from "./FadeLabel";
-export { Symbol, type SymbolProps } from "./Symbol";
+export { drawnFadeLabel, FadeLabel } from "./FadeLabel";
+export { drawnSymbol, Symbol, type SymbolProps } from "./Symbol";
 
 export { SwipeArea, WebView, type SwipeAreaHandle, type SwipeEvent, type WebViewHandle } from "@ardia/ardiacore";
 

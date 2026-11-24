@@ -1,5 +1,6 @@
 import { PINNED_TOAST, receivedToast, sentToast } from "../sync/syncRules.ts";
 import type { ToastIcon } from "../toasts/store.ts";
+import { actionWords } from "../../lib/sharedWords.ts";
 
 export type SampleToast = { message: string; icon: ToastIcon };
 
@@ -8,7 +9,7 @@ const SAMPLE_DEVICE = "MacBook Pro";
 export function sampleToast(name: string): SampleToast | null {
   switch (name) {
     case "copied":
-      return { message: "Copied URL", icon: "link" };
+      return { message: actionWords.copiedLink, icon: "link" };
     case "cleared":
       return { message: "Cleared Browsing Data", icon: "checkmark" };
     case "received":

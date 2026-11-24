@@ -19,6 +19,11 @@ echo "==> Content blocker"
 [ -f "$ardiacore/vendor/ubo/ext/manifest.json" ] || die "uBlock Origin isn't installed ($ardiacore/scripts/ubo.sh)"
 "$ardiacore/scripts/ubol.sh"
 [ -f "$ardiacore/vendor/ubol-webkit/rules/rulesets.json" ] || die "uBlock Origin Lite's WebKit rules aren't built ($ardiacore/scripts/ubol.sh)"
+"$ardiacore/scripts/hsts-preload.sh"
+[ -f "$ardiacore/vendor/hsts-preload/hosts/subdomains.hosts" ] || die "the HSTS preload list isn't built ($ardiacore/scripts/hsts-preload.sh)"
+
+echo "==> Rust core"
+"$root/packages/core-rs/scripts/build-xcframework.sh" >&2 || die "ArdiaCoreRS.xcframework didn't build (packages/core-rs/scripts/build-xcframework.sh)"
 
 echo "==> Archive"
 (cd "$root/apps/browser" && ARDIACORE_FRAMEWORK="$framework" "$root/scripts/agent/locked" pod --wait 1800 -- \

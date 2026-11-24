@@ -19,7 +19,7 @@ export const objects = (value: unknown): Json[] => (Array.isArray(value) ? value
 export const text = (value: unknown) => (typeof value === "string" && value !== "" ? value : undefined);
 const flag = (value: unknown) => value === true || value === "true";
 
-export function container(value: unknown): number | undefined {
+function container(value: unknown): number | undefined {
   const id = typeof value === "number" ? Math.trunc(value) : typeof value === "string" && /^[+-]?\d+$/.test(value) ? Number(value) : undefined;
   return id !== undefined && id > 0 ? id : undefined;
 }
@@ -61,13 +61,13 @@ function clusterCount(s: string): number {
   return count;
 }
 
-export function zenEmoji(value: unknown): string | undefined {
+function zenEmoji(value: unknown): string | undefined {
   const icon = text(value);
   if (!icon || clusterCount(icon) > 4 || icon.includes("/") || icon.includes(":")) return undefined;
   return [...icon].some((ch) => isEmojiScalar(ch.codePointAt(0)!)) ? icon : undefined;
 }
 
-export function zenGradient(theme: unknown): string[] {
+function zenGradient(theme: unknown): string[] {
   const stops = objects(record(theme)?.gradientColors);
   const ordered = [...stops.filter((s) => s.isPrimary === true), ...stops.filter((s) => s.isPrimary !== true)];
   return ordered.flatMap((stop) => {

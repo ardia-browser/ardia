@@ -187,7 +187,7 @@ function ProfilePill({
             style={[PILL, { backgroundColor: fill }]}
           >
             <ProfileBadge profile={profile} size={PILL_BADGE} />
-            <Text tone={selected ? "onAccent" : "textPrimary"} numberOfLines={1} style={PILL_NAME}>
+            <Text tone={selected ? "onAccent" : "textPrimary"} numberOfLines={1} ardiaCentersCapitals style={PILL_NAME}>
               {profile.name}
             </Text>
           </Pressable>

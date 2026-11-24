@@ -34,7 +34,7 @@ afterEach(() => {
 
 type Root = ReturnType<typeof renderSurface>;
 
-const g = deckGeometry(393, 873, 40, 24, 0, Platform.OS, appDesign, deckHeaderBottom());
+const g = deckGeometry(393, 873, 40, 24, 0, Platform.OS, appDesign, deckHeaderBottom(), 55, "arc");
 
 const ownerTab = (card: ReactTestInstance) => {
   let owner: ReactTestInstance | null = card;

@@ -128,16 +128,16 @@ test("Android never opens a system menu or action sheet, even where a native one
   expect(mockNative.sheets).toHaveLength(0);
 });
 
-test("the drawn menu splits its groups by divider: on Android an 8 dp gap with no rule, headings and rows kept in order; on iPhone a 20.67-point band with its 1-point line", () => {
+test("the drawn menu splits its groups by divider: on Android an 8 dp gap with no rule, headings and rows kept in order; on iPhone a 9-point band with a 1-point line across the menu", () => {
   const root = trigger("tap");
   act(() => root.root.findAll((node) => node.props.accessibilityLabel === "Trigger" && typeof node.props.onPress === "function")[0]!.props.onPress());
   const flatten = require("react-native").StyleSheet.flatten;
   const gaps = root.root.findAll((node) => node.props.testID === "drawnMenuGap" && typeof node.type === "string");
   const rules = root.root.findAll((node) => node.props.testID === "drawnMenuRule" && typeof node.type === "string");
   expect(gaps).toHaveLength(2);
-  expect(gaps.map((gap) => flatten(gap.props.style).height)).toEqual(Platform.OS === "android" ? [8, 8] : [20.67, 20.67]);
+  expect(gaps.map((gap) => flatten(gap.props.style).height)).toEqual(Platform.OS === "android" ? [8, 8] : [9, 9]);
   if (Platform.OS === "android") expect(rules).toHaveLength(0);
-  else expect(rules.map((rule) => flatten(rule.props.style))).toEqual([expect.objectContaining({ height: 1, marginHorizontal: 24 }), expect.objectContaining({ height: 1, marginHorizontal: 24 })]);
+  else expect(rules.map((rule) => flatten(rule.props.style))).toEqual([expect.objectContaining({ height: 1, marginHorizontal: 0 }), expect.objectContaining({ height: 1, marginHorizontal: 0 })]);
   const order = root.root.findAll((node) => typeof node.type === "string" && (node.props.testID === "drawnMenuGap" || node.props.accessibilityRole === "header" || node.props.accessibilityRole === "menuitem")).map((node) => (node.props.testID === "drawnMenuGap" ? "gap" : node.props.accessibilityRole === "header" ? node.props.children : node.props.accessibilityLabel));
   expect(order).toEqual(["Copy Link", "Send to Device", "gap", "Theme", "Light", "Dark", "gap", "Close Tab"]);
   unmount(root);
@@ -475,40 +475,53 @@ test("an Incognito card's native menu on iPhone is not counted either", () => {
   onNativeMenuOpened(() => undefined);
 });
 
-test("drawn_menus_opened is never counted while browsing privately: on the deck's Incognito side, on an Incognito page, or for an Incognito card's menu", () => {
+test("drawn menus count public opens and Android selections once, but neither is counted while browsing privately", () => {
   const telemetry = require("../state/telemetry/telemetry") as typeof import("../state/telemetry/telemetry");
   const counted = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
-  const { countDrawnMenu } = require("../state/browse/menuCounts") as typeof import("../state/browse/menuCounts");
+  const { countDrawnMenu, countDrawnMenuAction } = require("../state/browse/menuCounts") as typeof import("../state/browse/menuCounts");
+  const { onDrawnMenuActionChosen, onDrawnMenuOpened } = require("../components/ui/Menu") as typeof import("../components/ui/Menu");
   const { useTabs } = require("../state/tabs/store") as typeof import("../state/tabs/store");
   const { useBrowse } = require("../state/browse/store") as typeof import("../state/browse/store");
   const { launchTabs } = require("../state/tabs/tabsState") as typeof import("../state/tabs/tabsState");
   const { someTabs } = require("../../test/render/harness") as typeof import("../../test/render/harness");
+  const tabs = useTabs.getState();
+  const browse = useBrowse.getState();
   const privateTab = someTabs(1, true)[0]!;
-  act(() => {
-    useTabs.setState({ ...launchTabs(someTabs(2), 0), incognito: false, listing: 0 });
-    useBrowse.setState({ surface: "deck" });
-  });
-  countDrawnMenu(false);
-  expect(counted).toHaveBeenCalledTimes(1);
-  countDrawnMenu(true);
-  expect(counted).toHaveBeenCalledTimes(1);
-  act(() => useTabs.setState({ incognito: true }));
-  countDrawnMenu(false);
-  expect(counted).toHaveBeenCalledTimes(1);
-  act(() => {
-    useTabs.setState((state) => ({ ...state, incognito: false, privates: [privateTab], selectedId: privateTab.id }));
-    useBrowse.setState({ surface: "browsing" });
-  });
-  countDrawnMenu(false);
-  expect(counted).toHaveBeenCalledTimes(1);
-  expect(counted).toHaveBeenCalledWith("drawn_menus_opened");
-  const { onDrawnMenuOpened } = require("../components/ui/Menu") as typeof import("../components/ui/Menu");
-  const opened = jest.fn();
-  onDrawnMenuOpened(opened);
-  const root = renderSurface(<Menu items={ITEMS} place={{ top: 100, left: 20, width: 250 }} privately onDismiss={() => undefined} />);
-  expect(opened).toHaveBeenCalledWith(true);
-  unmount(root);
-  onDrawnMenuOpened(() => undefined);
+  const openAndChoose = (privately = false) => {
+    const root = renderSurface(<Menu items={ITEMS} place={{ top: 100, left: 20, width: 250 }} privately={privately} onDismiss={() => undefined} />);
+    try {
+      pickMenu(root, "Copy Link");
+      pickMenu(root, "Copy Link");
+    } finally {
+      unmount(root);
+    }
+  };
+  onDrawnMenuOpened(countDrawnMenu);
+  if (Platform.OS === "android") onDrawnMenuActionChosen(countDrawnMenuAction);
+  try {
+    act(() => {
+      useTabs.setState({ ...launchTabs(someTabs(2), 0), incognito: false, listing: 0 });
+      useBrowse.setState({ surface: "deck" });
+    });
+    openAndChoose();
+    openAndChoose(true);
+    act(() => useTabs.setState({ incognito: true }));
+    openAndChoose();
+    act(() => {
+      useTabs.setState({ incognito: false, privates: [privateTab], selectedId: privateTab.id });
+      useBrowse.setState({ surface: "browsing" });
+    });
+    openAndChoose();
+    expect(ran).toEqual(["copy", "copy", "copy", "copy"]);
+    expect(counted.mock.calls).toEqual(Platform.OS === "android" ? [["drawn_menus_opened"], ["drawn_menu_actions_chosen"]] : [["drawn_menus_opened"]]);
+  } finally {
+    onDrawnMenuOpened(() => undefined);
+    onDrawnMenuActionChosen(() => undefined);
+    act(() => {
+      useTabs.setState(tabs);
+      useBrowse.setState(browse);
+    });
+  }
 });
 
 test("a confirmation's button labels wrap instead of truncating, and the card grows with the text size up to the screen's width", () => {
@@ -1197,5 +1210,23 @@ test("on Android a cancelled confirmation's restore already handed to the native
   expect(toOpener()).toBe(2);
   act(() => jest.advanceTimersByTime(3000));
   expect(revoked).not.toHaveBeenCalled();
+  unmount(root);
+});
+
+test("an open drawn menu carries a Fabric catch-up while its opening scale plays, so a press after it settles lands on the row Fabric knows about", () => {
+  const root = renderSurface(<Menu items={ITEMS} place={{ top: 100, left: 20, width: 250 }} onDismiss={() => undefined} />);
+  expect(root.root.findAll((node) => node.props.testID === "menuFabricCatchUp" && typeof node.type === "string")).toHaveLength(1);
+  unmount(root);
+});
+
+test("the Material You menu carries the same Fabric catch-up while its opening motion plays", () => {
+  const { DesignProvider } = require("../components/ui/design") as typeof import("../components/ui/design");
+  const root = renderSurface(
+    <DesignProvider design="material">
+      <Menu items={ITEMS} place={{ top: 100, left: 20, width: 250 }} onDismiss={() => undefined} />
+    </DesignProvider>,
+  );
+  expect(root.root.findAll((node) => node.props.testID === "materialMenu" && typeof node.type === "string")).toHaveLength(1);
+  expect(root.root.findAll((node) => node.props.testID === "menuFabricCatchUp" && typeof node.type === "string")).toHaveLength(1);
   unmount(root);
 });

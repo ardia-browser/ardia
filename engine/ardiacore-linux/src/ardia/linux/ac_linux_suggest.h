@@ -6,7 +6,7 @@
 #include <optional>
 #include <string>
 
-#include "ardia/linux/ac_linux_suggest_policy.h"
+#include "ardia/desktop/ac_desktop_suggest_policy.h"
 #include "base/files/file_path.h"
 #include "base/functional/callback.h"
 #include "base/values.h"
@@ -42,7 +42,7 @@ class SuggestionClient {
   friend class SuggestionFetch;
   void Finish(const std::string& id, std::optional<std::string> body);
 
-  ardia::linux_suggest_policy::SuggestionSlots slots_;
+  ardia::desktop_suggest_policy::SuggestionSlots slots_;
   std::map<std::string, std::unique_ptr<SuggestionFetch>> fetches_;
 };
 

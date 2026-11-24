@@ -9,8 +9,8 @@
 #include <utility>
 #include <vector>
 
-#include "ardia/linux/ac_linux_sync_crypto.h"
 #include "ardia/linux/ac_linux_sync_json.h"
+#include "ardia/linux/ac_linux_sync_keys.h"
 #include "ardia/linux/ac_linux_sync_keystore.h"
 
 namespace ardia::linux_sync {
@@ -62,6 +62,7 @@ inline constexpr Method kMethods[] = {
     {"ArdiaSync.savePassword", Route::kPasswords},
     {"ArdiaSync.claimAuthority", Route::kClaim},
     {"ArdiaSync.releaseAuthority", Route::kRelease},
+    {"ArdiaSync.core", Route::kCore},
 };
 
 inline constexpr int64_t kAuthorityLeaseMs = 30000;
@@ -146,6 +147,17 @@ class DisclosureWindow {
 
  private:
   std::optional<int64_t> granted_ms_;
+};
+
+struct OpenFailureCounts {
+  void Note(OpenError error);
+  bool empty() const { return format + authentication + too_large + other == 0; }
+  JsonValue ToJson() const;
+
+  double format = 0;
+  double authentication = 0;
+  double too_large = 0;
+  double other = 0;
 };
 
 struct CoreOptions {

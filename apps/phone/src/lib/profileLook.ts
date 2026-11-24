@@ -1,8 +1,23 @@
-import { hslToRgb, rgbToHsl } from "./color.ts";
+import {
+  lookAngle,
+  opaqueThemeTint,
+  resolveTheme,
+  sanitizeTheme,
+  shownLook,
+  themeAccent,
+  themePalette,
+  type ProfileTheme,
+  type ThemeLook,
+  type ThemeLookSource,
+  type ThemeMode,
+} from "@ardia/core/src/theme.ts";
+import { hslToRgb, rgbToHsl, withAlpha } from "./color.ts";
 
 type Rgb = readonly [number, number, number];
 
 export type PresetSpec = { key: string; swatch: string; tint?: string };
+
+export type CustomLook = { theme: ProfileTheme; source: ThemeLookSource };
 
 export type ProfileLook = {
   preset: string | null;
@@ -11,9 +26,18 @@ export type ProfileLook = {
   isNeutral: boolean;
   theme: readonly string[];
   darkTheme: readonly string[] | null;
+  custom: CustomLook | null;
 };
 
-export type LookSource = { color: string | null; theme: { colors: string[]; darkColors: string[] | null } | null };
+export type SyncedThemeLook = Omit<ThemeLook, "angle"> & { angle: number };
+
+export type SyncedTheme = { colors: string[]; darkColors: string[] | null; mode?: ThemeMode; look?: SyncedThemeLook | null; dark?: SyncedThemeLook | null };
+
+export type LookSource = { color: string | null; theme: SyncedTheme | null };
+
+export type NativeThemeLook = SyncedThemeLook;
+
+export const CUSTOM_CHOICE = "custom";
 
 const WINDOW_ALPHA = 0.36;
 const NEUTRAL_ALPHA = 0.12;
@@ -55,15 +79,32 @@ function lightened(rgb: Rgb, delta: number): Rgb {
   return hslToRgb(h, s, clamp(l + delta));
 }
 
-
-
 const tintForHue = (swatch: Rgb, grey: boolean): Rgb => snapped(hslToRgb(hsl(swatch)[0], grey ? 0 : HUE_SATURATION, HUE_LIGHTNESS));
 
 export function presetLook(preset: PresetSpec): ProfileLook {
   const neutral = isNeutralKey(preset.key);
   const swatch = parsed(preset.swatch);
   const tint = parse(preset.tint) ?? tintForHue(swatch, neutral);
-  return { preset: preset.key, swatch: hex(swatch), tint: hex(tint), isNeutral: neutral, theme: [], darkTheme: null };
+  return { preset: preset.key, swatch: hex(swatch), tint: hex(tint), isNeutral: neutral, theme: [], darkTheme: null, custom: null };
+}
+
+export function customLook(theme: ProfileTheme, source: ThemeLookSource): ProfileLook {
+  const accent = parsed(themeAccent(theme));
+  const isNeutral = hsl(accent)[1] < NEUTRAL_SATURATION;
+  return {
+    preset: null,
+    swatch: hex(accent),
+    tint: hex(tintForHue(accent, isNeutral)),
+    isNeutral,
+    theme: themePalette(theme),
+    darkTheme: theme.dark ? themePalette(theme.dark) : null,
+    custom: { theme, source },
+  };
+}
+
+export function syncedTheme(theme: SyncedTheme | null | undefined): ProfileTheme | null {
+  if (!theme?.look) return null;
+  return sanitizeTheme({ ...theme.look, mode: theme.mode ?? "auto", dark: theme.dark ?? undefined });
 }
 
 function colorsOf(list: readonly string[] | null | undefined): Rgb[] {
@@ -71,6 +112,8 @@ function colorsOf(list: readonly string[] | null | undefined): Rgb[] {
 }
 
 export function lookOf(source: LookSource, presets: readonly PresetSpec[], fallback: string): ProfileLook {
+  const full = syncedTheme(source.theme);
+  if (full) return customLook(full, "app");
   const named = (key: string | null | undefined) => presets.find((preset) => preset.key === key?.trim().toLowerCase());
   const theme = colorsOf(source.theme?.colors);
   const darkTheme = colorsOf(source.theme?.darkColors);
@@ -85,23 +128,71 @@ export function lookOf(source: LookSource, presets: readonly PresetSpec[], fallb
     isNeutral,
     theme: theme.map(hex),
     darkTheme: darkTheme.length ? darkTheme.map(hex) : null,
+    custom: null,
   };
   if (look.theme.length || look.darkTheme) return look;
   const same = presets.map(presetLook).find((preset) => preset.swatch === look.swatch && preset.tint === look.tint && preset.isNeutral === look.isNeutral);
   return same ?? look;
 }
 
-export function lookForApp(choice: string | null, syncEnabled: boolean, profile: LookSource | null, presets: readonly PresetSpec[], fallback: string): ProfileLook {
+export function lookForApp(
+  choice: string | null,
+  syncEnabled: boolean,
+  profile: LookSource | null,
+  presets: readonly PresetSpec[],
+  fallback: string,
+  customTheme: ProfileTheme | null = null,
+): ProfileLook {
+  if (choice === CUSTOM_CHOICE && customTheme) return customLook(customTheme, "own");
   const chosen = presets.find((preset) => preset.key === choice);
   if (chosen) return presetLook(chosen);
-  return lookOf(syncEnabled && profile ? profile : { color: null, theme: null }, presets, fallback);
+  return lookOf(syncEnabled && profile && choice === null ? profile : { color: null, theme: null }, presets, fallback);
 }
 
-export const choiceAfterMatchToggle = (matches: boolean, look: ProfileLook, fallback: string): string | null => (matches ? null : (look.preset ?? fallback));
+export function activeCustomLook(choice: string | null, customTheme: ProfileTheme | null, syncEnabled: boolean, profile: LookSource | null): CustomLook | null {
+  if (choice === CUSTOM_CHOICE) return customTheme ? { theme: customTheme, source: "own" } : null;
+  if (choice !== null || !syncEnabled) return null;
+  const synced = syncedTheme(profile?.theme);
+  return synced ? { theme: synced, source: "app" } : null;
+}
+
+export function themedScheme(custom: CustomLook | null, preferred: "light" | "dark" | null): "light" | "dark" | null {
+  if (!custom) return preferred;
+  const shownDark = (appDark: boolean) => shownLook(custom.theme, appDark, custom.source).dark;
+  if (preferred) return shownDark(preferred === "dark") ? "dark" : "light";
+  const light = shownDark(false);
+  return light === shownDark(true) ? (light ? "dark" : "light") : null;
+}
+
+export function shownTheme(custom: CustomLook, dark: boolean): ProfileTheme {
+  for (const appDark of [dark, !dark]) {
+    const shown = shownLook(custom.theme, appDark, custom.source);
+    if (shown.dark === dark) return shown.look;
+  }
+  return resolveTheme(custom.theme, dark);
+}
+
+const resolvedLooks = new WeakMap<CustomLook, [NativeThemeLook | undefined, NativeThemeLook | undefined]>();
+
+export function themeLookFor(look: ProfileLook, dark: boolean): NativeThemeLook | null {
+  if (!look.custom) return null;
+  const known = resolvedLooks.get(look.custom) ?? [undefined, undefined];
+  const cached = known[dark ? 1 : 0];
+  if (cached) return cached;
+  const theme = shownTheme(look.custom, dark);
+  const { stops, intensity, grain, texture, translucency } = theme;
+  const resolved = { stops: stops.map((stop) => ({ color: { ...stop.color }, x: stop.x, y: stop.y })), intensity, grain, texture, translucency, angle: lookAngle(theme) };
+  known[dark ? 1 : 0] = resolved;
+  resolvedLooks.set(look.custom, known);
+  return resolved;
+}
+
+export const choiceAfterMatchToggle = (matches: boolean, look: ProfileLook, fallback: string): string | null =>
+  matches ? null : look.custom ? CUSTOM_CHOICE : (look.preset ?? fallback);
 
 export const themeStops = (look: ProfileLook, dark: boolean): readonly string[] => (dark ? (look.darkTheme ?? look.theme) : look.theme);
 
-export const showsTheme = (look: ProfileLook, dark: boolean, themed: boolean) => themed && themeStops(look, dark).length >= 2;
+export const showsTheme = (look: ProfileLook, dark: boolean, themed: boolean) => themed && (look.custom !== null || themeStops(look, dark).length >= 2);
 
 export function windowTintStops(look: ProfileLook, dark: boolean): [string, string] {
   const alpha = (look.isNeutral ? NEUTRAL_ALPHA : WINDOW_ALPHA) * (dark ? DARK_SHARE : LIGHT_SHARE);
@@ -111,6 +202,8 @@ export function windowTintStops(look: ProfileLook, dark: boolean): [string, stri
 }
 
 export function backdropStops(look: ProfileLook, dark: boolean, themed: boolean): string[] {
+  const resolved = themed ? themeLookFor(look, dark) : null;
+  if (resolved) return opaqueThemeTint(resolved, dark);
   return showsTheme(look, dark, themed) ? [...themeStops(look, dark)] : windowTintStops(look, dark);
 }
 
@@ -129,8 +222,12 @@ export function spaceTone(source: LookSource | null, dark: boolean, increasedCon
   return [hex(mixed(base, toward, amount)), hex(mixed(base, toward, amount + (dark ? 0.06 : -0.04)))];
 }
 
-export type NativeLookColors = { color: string; themeColors: string[]; darkThemeColors: string[] | null };
+export type NativeLookColors = { color: string; themeColors: string[]; darkThemeColors: string[] | null; themeLook: NativeThemeLook | null };
 
-export function nativeLookColors(look: ProfileLook): NativeLookColors {
-  return { color: look.preset ?? look.swatch, themeColors: [...look.theme], darkThemeColors: look.darkTheme ? [...look.darkTheme] : null };
+const GLASS_TINT_SHARE = 0.15;
+
+export const lookGlassTint = (look: ProfileLook): string | undefined => (look.isNeutral ? undefined : withAlpha(look.tint, GLASS_TINT_SHARE));
+
+export function nativeLookColors(look: ProfileLook, dark: boolean): NativeLookColors {
+  return { color: look.preset ?? look.swatch, themeColors: [...look.theme], darkThemeColors: look.darkTheme ? [...look.darkTheme] : null, themeLook: themeLookFor(look, dark) };
 }

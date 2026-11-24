@@ -6,11 +6,13 @@ import subprocess
 import tempfile
 import unittest
 
+from support import core_rs_flags
+
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 REPO = ROOT.parents[1]
 LINUX = ROOT / 'src/ardia/linux'
-HELPERS = ['ac_linux_live.cc', 'ac_linux_sync_keystore.cc', 'ac_linux_sync_json.cc', 'ac_linux_sync_crypto.cc',
-           'ac_linux_sync.cc', 'ac_linux_sync_vault.cc', 'ac_linux_sync_wordlist.cc']
+HELPERS = ['ac_linux_live.cc', 'ac_linux_sync_keystore.cc', 'ac_linux_sync_json.cc', 'ac_linux_sync_keys.cc',
+           'ac_linux_sync.cc', 'ac_linux_sync_vault.cc']
 LIBSECRET = next((path for path in ['/usr/lib/libsecret-1.so.0', '/usr/lib/x86_64-linux-gnu/libsecret-1.so.0',
                                     '/usr/lib64/libsecret-1.so.0'] if os.path.exists(path)), None)
 SHARED_CONTRACT = """
@@ -39,10 +41,11 @@ class LiveServiceTests(unittest.TestCase):
         cls.scratch = tempfile.TemporaryDirectory(prefix='ardia-live-')
         cls.addClassCleanup(cls.scratch.cleanup)
         cls.tool = pathlib.Path(cls.scratch.name) / 'live_host_tool'
+        includes, core = core_rs_flags(cls(), cls.scratch.name)
         compiled = subprocess.run([
             compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g', '-fsanitize=address,undefined',
-            '-fno-omit-frame-pointer', '-I', str(ROOT / 'src'), *[str(LINUX / source) for source in HELPERS],
-            str(ROOT / 'tests/fixtures/live_host_tool.cc'), '-o', str(cls.tool), '-lcrypto', '-ldl', '-lpthread',
+            '-fno-omit-frame-pointer', '-I', str(ROOT / 'src'), '-I', str(ROOT.parent / 'ardiacore-desktop' / 'src'), *includes, *[str(LINUX / source) for source in HELPERS],
+            str(ROOT / 'tests/fixtures/live_host_tool.cc'), '-o', str(cls.tool), *core, '-ldl', '-lpthread',
         ], capture_output=True, text=True, timeout=300)
         if compiled.returncode:
             raise AssertionError(compiled.stderr)

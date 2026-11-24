@@ -35,7 +35,7 @@ const url = new URL(releasePath(r.version), home).href;
 const name = `Ardia ${r.version}`;
 const headline = r.headline.replace(/\.$/, "");
 const title = `${name} release notes: ${headline}`.length <= 70 ? `${name} release notes: ${headline}` : `${name} release notes`;
-const longDate = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+const longDate = new Intl.DateTimeFormat("en-US", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 const published = isoDate(r.date);
 const isCurrent = r.version === VERSION;
 const organization = { "@type": "Organization", name: "Ardia", url: home, logo: new URL("apple-touch-icon.png", home).href };
@@ -69,7 +69,7 @@ const jsonLd = [
 
 <Base title={title} description={r.description} jsonLd={jsonLd} article={{ published }} noindex={r.nightly}>
   <Header home={`${base}/`} current="notes" />
-  <main class="release">
+  <main id="main" class="release">
     <section class="masthead" aria-labelledby="release-title">
       <div class="wrap mast-grid">
         <nav class="crumbs label" aria-label="Breadcrumb">
@@ -105,7 +105,7 @@ const jsonLd = [
       <span class="grass" aria-hidden="true"></span>
     </section>
 
-    <article class="body paint" aria-labelledby="release-title">
+    <article class="body paint" data-paint="midmorning" aria-labelledby="release-title">
       <div class="wrap">
         {
           r.nightly && (
@@ -156,12 +156,12 @@ const jsonLd = [
       </div>
     </article>
 
-    <section class="end paint edge" aria-labelledby="end-title">
+    <section class="end paint edge" data-paint="sundown" aria-labelledby="end-title">
       <div class="wrap end-inner">
         <p class="label kicker">{isCurrent ? "The latest one" : `Now on ${VERSION}`}</p>
-        <h2 class="poster end-title" id="end-title">{isCurrent ? "Still wet." : "It kept going."}</h2>
+        <h2 class="poster end-title" id="end-title">{isCurrent ? "Latest release." : "It kept going."}</h2>
         <p class="end-line">
-          Ardia is a free Mac browser with Arc’s sidebar and Dia’s polish, on real Chromium.{" "}
+          Ardia is a free Mac browser with Arc’s sidebar and Dia’s look, built on Chromium.{" "}
           <a class="link" href={`${base}/benchmarks/`}>See how fast</a>, or <a class="link" href={`${base}/try/`}>click around the demo</a> first.
         </p>
         <DownloadButton location="release_notes" class="not-phone sun-btn" />
@@ -207,16 +207,8 @@ const jsonLd = [
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 4px 0;
+    gap: 4px 20px;
     color: var(--ink-2);
-  }
-  .meta > * + *::before {
-    content: "·";
-    margin: 0 10px;
-    color: var(--ink-3);
-  }
-  .meta > .nightly-tag + *::before {
-    content: none;
   }
   .nightly-tag {
     display: inline-flex;
@@ -236,19 +228,18 @@ const jsonLd = [
     max-width: 62rem;
     margin-top: 14px;
     font-weight: 560;
-    font-stretch: 106%;
-    letter-spacing: -0.03em;
+    letter-spacing: -0.026em;
   }
   .version {
     position: relative;
     justify-self: start;
     isolation: isolate;
-    font-size: clamp(4.4rem, 2.2rem + 7vw, 9.6rem);
-    line-height: 0.86;
-    letter-spacing: -0.005em;
+    font-size: clamp(3.4rem, 1.8rem + 5vw, 6.8rem);
+    line-height: 0.94;
+    letter-spacing: -0.036em;
   }
   .version.nightly {
-    font-size: clamp(2.8rem, 1.8rem + 3.4vw, 5rem);
+    font-size: clamp(2.2rem, 1.5rem + 2.6vw, 3.8rem);
   }
   .version::before {
     content: "";
@@ -272,7 +263,7 @@ const jsonLd = [
   }
   @media (prefers-reduced-motion: no-preference) {
     .version::before {
-      animation: swipe 800ms var(--ease-out) 200ms both;
+      animation: swipe 420ms var(--ease-out) 80ms both;
     }
   }
   @keyframes swipe {
@@ -291,14 +282,14 @@ const jsonLd = [
     right: calc(var(--gutter) - 2%);
     top: clamp(-24px, -1vw, 0px);
     width: min(300px, 26vw);
-    aspect-ratio: 931 / 702;
+    aspect-ratio: 822 / 821;
     pointer-events: none;
   }
   .mast-art :global(.mast-sun) {
     position: absolute;
-    left: 42.86%;
+    left: 31.87%;
     top: 0;
-    width: 26.85%;
+    width: 36.25%;
     height: auto;
   }
   .mast-art :global(.mast-hills) {
@@ -319,8 +310,6 @@ const jsonLd = [
   }
 
   .body {
-    --bg: var(--noon);
-    --wash: linear-gradient(180deg, #e9ead8 0%, var(--noon) 30%, var(--golden) 100%);
     padding: clamp(40px, 6vw, 88px) 0 clamp(72px, 9vw, 128px);
   }
   .body :global(.notes) {
@@ -376,7 +365,6 @@ const jsonLd = [
   }
   .turn-version {
     font-size: clamp(1.8rem, 1.4rem + 1.2vw, 2.6rem);
-    line-height: 0.9;
   }
   .turn-headline {
     font-size: var(--t-small);
@@ -395,12 +383,6 @@ const jsonLd = [
   }
 
   .end {
-    --bg: var(--dusk);
-    --bg-top: #e3a585;
-    --wash: linear-gradient(180deg, #e3a585 0%, var(--dusk) 50%, var(--dusk-late) 100%);
-    --ink-2: #3f3437;
-    --ink-3: #5a4a4e;
-    --dab: var(--sun);
     padding: clamp(64px, 8vw, 120px) 0 clamp(96px, 10vw, 160px);
   }
   .end-inner {
@@ -426,6 +408,9 @@ const jsonLd = [
     }
   }
   @media (max-width: 640px) {
+    .meta {
+      max-width: 50%;
+    }
     .masthead {
       padding-bottom: 76px;
     }

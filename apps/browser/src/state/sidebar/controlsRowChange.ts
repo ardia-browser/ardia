@@ -6,7 +6,7 @@ import { dismissHoverIn } from "./hover";
 import { setSidebarUi, sidebarUi } from "./sidebarUi";
 import { closeFolderPanelIn } from "./tileFolderUi";
 
-export function closeWhatTheSidebarAnchors(windowId: string) {
+function closeWhatTheSidebarAnchors(windowId: string) {
   dismissHoverIn(windowId);
   closeFolderPanelIn(windowId);
   if (sidebarUi().iconPicker?.windowId === windowId) setSidebarUi({ iconPicker: null });

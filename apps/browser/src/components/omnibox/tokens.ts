@@ -55,6 +55,7 @@ export const GO_BUTTON = {
   padX: space.xl,
   radius: capsule(32),
   hoverOpacity: 0.9,
+  pressedOpacity: 0.78,
   gap: space.s,
   glyph: 11,
   glyphBox: 14,
@@ -88,8 +89,6 @@ export const SUGGESTION = {
 } as const;
 
 export const SELECTED_SUGGESTION_ALPHA = { dark: 0.56, light: 0.3 } as const;
-
-export const GROW = { duration: 130, easing: curve.outExpo } as const;
 
 export const SCOPE_PULSE = {
   fill: { dark: 0.28, light: 0.2 },

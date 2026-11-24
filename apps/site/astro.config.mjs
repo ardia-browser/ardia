@@ -76,7 +76,7 @@ export default defineConfig({
   output: "static",
   trailingSlash: "ignore",
   build: { inlineStylesheets: "always", assets: "_assets" },
-  image: { responsiveStyles: false },
+  image: { responsiveStyles: false, domains: ["avatars.githubusercontent.com"] },
   devToolbar: { enabled: false },
   integrations: [demo(), dist()],
 });

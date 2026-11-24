@@ -10,7 +10,7 @@ import { groupKeptOpen } from "../groups/closeGuard";
 import { live, setMeetingGroup, updateCalendarSettings, useLive } from "./store";
 import { shownLiveOf } from "../tabs/tabLive";
 
-export const MEETING_FALLBACK_TITLE = "Meeting";
+const MEETING_FALLBACK_TITLE = "Meeting";
 const CLEANUP_IDLE_MS = 30 * 60_000;
 
 const store = () => useBrowser.getState();
@@ -59,7 +59,7 @@ export function startMeetingGroups() {
   if (started) return;
   started = true;
 
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["tabs"], (s, prev) => {
     for (const id of changedIds(s.tabs, prev.tabs)) {
       const tab = s.tabs[id];
       if (!tab) continue;

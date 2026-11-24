@@ -13,6 +13,10 @@ final class FolderIconView: ExpoView {
   var wantsOpen = false
   var palette = FolderPalette()
 
+  private static var fullMotions: [String: [CGImage]] = [:]
+  private static var fullMotionOrder: [String] = []
+  private static let fullMotionsKept = 16
+
   private let art = CALayer()
   private var progress: Double = 0
   private var motion: Motion?
@@ -84,25 +88,51 @@ final class FolderIconView: ExpoView {
     let image = { (progress: Double) in
       FolderArt.image(progress, size: frame.size, center: center, side: side, scale: scale, palette: palette)
     }
+    let artKey = "\(frame.size.width)x\(frame.size.height)@\(scale):\(center.x),\(center.y):\(side):\(palette.artKey)"
     art.contentsScale = scale
     art.contents = image(progress)
     art.removeAnimation(forKey: "folder")
     if let motion {
       let elapsed = CACurrentMediaTime() - motion.start
-      if elapsed < motion.duration { play(motion, elapsed: elapsed, image: image) } else { self.motion = nil }
+      if elapsed < motion.duration { play(motion, elapsed: elapsed, artKey: artKey, image: image) } else { self.motion = nil }
     }
     CATransaction.commit()
   }
 
-  private func play(_ motion: Motion, elapsed: CFTimeInterval, image: (Double) -> CGImage?) {
+  private static func fullMotion(_ key: String, count: Int, image: (Double) -> CGImage?) -> [CGImage] {
+    if let frames = fullMotions[key] { return frames }
+    let frames = (0..<count).compactMap { i in image((Double(i) + 0.5) / Double(count)) }
+    guard frames.count == count else { return frames }
+    fullMotions[key] = frames
+    fullMotionOrder.append(key)
+    if fullMotionOrder.count > fullMotionsKept { fullMotions[fullMotionOrder.removeFirst()] = nil }
+    return frames
+  }
+
+  private func play(_ motion: Motion, elapsed: CFTimeInterval, artKey: String, image: (Double) -> CGImage?) {
     let count = max(2, Int((motion.duration * FolderArt.framesPerSecond).rounded(.up)))
-    let frames = (0..<count).compactMap { i in image(motion.from + (motion.to - motion.from) * (Double(i) + 0.5) / Double(count)) }
+    let frames: [CGImage]
+    if abs(motion.to - motion.from) == 1 {
+      let opening = Self.fullMotion("\(artKey):\(count)", count: count, image: image)
+      frames = motion.to > motion.from ? opening : opening.reversed()
+    } else {
+      frames = (0..<count).compactMap { i in image(motion.from + (motion.to - motion.from) * (Double(i) + 0.5) / Double(count)) }
+    }
     let animation = CAKeyframeAnimation(keyPath: "contents")
     animation.values = frames
     animation.calculationMode = .discrete
     animation.duration = motion.duration
     animation.beginTime = art.convertTime(CACurrentMediaTime(), from: nil) - elapsed
     art.add(animation, forKey: "folder")
+  }
+}
+
+private extension FolderPalette {
+  var artKey: String {
+    [stroke, face, insideTop, insideBottom].map { color in
+      let srgb = color.usingColorSpace(.sRGB) ?? color
+      return String(format: "%.4f,%.4f,%.4f,%.4f", srgb.redComponent, srgb.greenComponent, srgb.blueComponent, srgb.alphaComponent)
+    }.joined(separator: ";")
   }
 }
 

@@ -10,7 +10,7 @@ import { useIsActiveTab, useSettings, useTab, useWindowId } from "../../state/br
 import { useIsSelected } from "../../state/pins/hooks";
 import { NextMeetingBadge } from "../live/NextMeetingBadge";
 import { TileStatus } from "./TileStatus";
-import { returnShownTabToPinnedUrl } from "../../state/sidebar/actions";
+import { refreshShownTile } from "../../state/sidebar/actions";
 import { pinSlotPitch, cellKey, tailKey } from "./dragModel";
 import { useDragController, useDragging, useDragItem, useDropPins, useFolderTarget, usePinnedCount, usePinSlots } from "./DragProvider";
 import { FolderTile } from "./FolderTile";
@@ -168,9 +168,8 @@ const PinnedTile = memo(function PinnedTile({ tabId, width, sliding, x, y }: { t
       <View
         ref={(v) => registerRow(windowId, tabId, v)}
         {...hoverProps}
-        onDoubleClick={() => returnShownTabToPinnedUrl(windowId, tabId)}
       >
-        <TabPressArea windowId={windowId} tab={tab} selected={selected}>
+        <TabPressArea windowId={windowId} tab={tab} selected={selected} onDoubleClick={(wasShown) => refreshShownTile(windowId, tabId, wasShown)}>
           {({ pressed }) => (
             <TileFace tabId={tabId} width={width} active={active} selected={selected} hovered={hovered} pressed={pressed} />
           )}

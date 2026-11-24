@@ -1,3 +1,4 @@
+import { actionWords, dismissWords } from "../../lib/sharedWords.ts";
 export type FindResult = { query: string; activeIndex: number; total: number; isDone: boolean };
 
 export type FindCount = { kind: "match"; label: string } | { kind: "none"; label: string } | null;
@@ -69,7 +70,7 @@ function fileChooserPlan(request: Extract<Request, { kind: "fileChooser" }>, bas
 }
 
 export function requestPlan(request: Request): RequestPlan {
-  const base = { title: request.title, message: request.message, defaultText: "", cancel: "Cancel" as string | null, field: "none" as RequestDialog["field"], choices: [] };
+  const base = { title: request.title, message: request.message, defaultText: "", cancel: dismissWords.cancel as string | null, field: "none" as RequestDialog["field"], choices: [] };
   switch (request.kind) {
     case "fileChooser":
       return fileChooserPlan(request, base);
@@ -80,7 +81,7 @@ export function requestPlan(request: Request): RequestPlan {
     case "prompt":
       return { kind: "dialog", dialog: { ...base, field: "text", defaultText: request.defaultText, confirm: "OK" } };
     case "openExternal":
-      return { kind: "dialog", dialog: { ...base, confirm: "Open" } };
+      return { kind: "dialog", dialog: { ...base, confirm: actionWords.open } };
     case "httpAuthentication":
       return { kind: "dialog", dialog: { ...base, field: "credentials", confirm: "Sign In" } };
     case "permission":
@@ -141,8 +142,8 @@ export function pressPlan(
 export const PRESS_TITLES: Record<PressAction, string> = {
   openInNewTab: "Open in New Tab",
   openInBackground: "Open in Background",
-  copyLink: "Copy Link",
-  share: "Share…",
+  copyLink: actionWords.copyLink,
+  share: actionWords.share,
   download: "Download Linked File",
   saveImage: "Save Image",
 };

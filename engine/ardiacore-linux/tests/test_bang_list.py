@@ -6,7 +6,9 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 LINUX = SOURCE / 'ardia/linux'
+DESKTOP = LINUX.parents[3] / 'ardiacore-desktop' / 'src' / 'ardia' / 'desktop'
 REPO = ROOT.parents[1]
 
 
@@ -15,7 +17,7 @@ class BangListTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='ardia-bang-list-') as directory:
             binary = Path(directory) / 'bang-list'
             subprocess.run([os.environ.get('CXX', 'c++'), '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g',
-                            '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-I', str(SOURCE),
+                            '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE),
                             str(ROOT / 'tests/bang_list_policy_test.cc'), '-o', str(binary)],
                            check=True, text=True, timeout=180)
             result = subprocess.run([str(binary)], text=True, timeout=60, capture_output=True,
@@ -25,7 +27,7 @@ class BangListTests(unittest.TestCase):
 
     def test_the_url_limit_and_reply_are_the_macs(self):
         mac = (REPO / 'packages/shell/ios/BangListFetch.swift').read_text()
-        policy = (LINUX / 'ac_linux_bang_list_policy.h').read_text()
+        policy = (DESKTOP / 'ac_desktop_bang_list_policy.h').read_text()
         self.assertIn('URL(string: "https://services.helium.imput.net/bangs.json")!', mac)
         self.assertIn('kListUrl = "https://services.helium.imput.net/bangs.json"', policy)
         self.assertIn('static let maxBytes = 5_000_000', mac)
@@ -65,13 +67,14 @@ class BangListTests(unittest.TestCase):
     def test_the_host_advertises_and_routes_the_call(self):
         host = (LINUX / 'ac_linux_host.cc').read_text()
         self.assertIn('capabilities.Append("ArdiaShell.fetchBangList");', host)
-        self.assertIn('if (method == ardia::linux_bang_list::kCall) return ardiacore::FetchLinuxBangList(values, std::move(done));', host)
-        self.assertIn('kCall[] = "ArdiaShell.fetchBangList"', (LINUX / 'ac_linux_bang_list_policy.h').read_text())
+        self.assertIn('if (method == ardia::desktop_bang_list::kCall) return ardiacore::FetchLinuxBangList(values, std::move(done));', host)
+        self.assertIn('kCall[] = "ArdiaShell.fetchBangList"', (DESKTOP / 'ac_desktop_bang_list_policy.h').read_text())
         build = (LINUX / 'BUILD.gn').read_text()
-        for name in ('ac_linux_bang_list.cc', 'ac_linux_bang_list.h', 'ac_linux_bang_list_policy.h'):
+        for name in ('ac_linux_bang_list.cc', 'ac_linux_bang_list.h', '//ardia/desktop'):
             self.assertIn(f'"{name}"', build)
+        self.assertIn('"ac_desktop_bang_list_policy.h"', (DESKTOP / 'BUILD.gn').read_text())
         self.assertIn('["ArdiaShell.fetchBangList", 75000],', (LINUX / 'bootstrap.js').read_text())
-        self.assertIn('kTimeoutSeconds = 60;', (LINUX / 'ac_linux_bang_list_policy.h').read_text())
+        self.assertIn('kTimeoutSeconds = 60;', (DESKTOP / 'ac_desktop_bang_list_policy.h').read_text())
         modules = (REPO / 'apps/linux/src/hostModules.ts').read_text()
         self.assertIn('if (name === "ArdiaShell" && !hostSupports(`${name}.${method}`, host)) {', modules)
 

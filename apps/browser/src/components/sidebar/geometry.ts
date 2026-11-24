@@ -12,6 +12,8 @@ export const GROUP_BORDER = SIDEBAR_GROUP.border;
 export const GROUP_RADIUS = SIDEBAR_GROUP.radius;
 export const GROUP_INNER_RADIUS = GROUP_RADIUS - GROUP_BORDER;
 export const GROUP_INSET = SIDEBAR_GROUP.inset;
+export const LIVE_FOLDER_BOX_PAD = LIVE_FOLDER_PAD + GROUP_BORDER;
+export const LIVE_FOLDER_HEADER_MARGIN = -LIVE_FOLDER_BOX_PAD;
 export const groupMembersPadBottom = (shown: number) => (shown ? GROUP_MEMBERS_PAD_BOTTOM : 0);
 
 export const SIDEBAR_FIELD = {

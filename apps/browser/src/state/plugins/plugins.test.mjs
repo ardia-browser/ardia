@@ -94,7 +94,7 @@ test("an installed plugin stays off until its consent is accepted, then starts i
 
 test("the consent sheet names every reach the plugin gets", () => {
   const lines = consentLines(P().listings.example.manifest).map((l) => l.text).join("\n");
-  for (const words of ["/usr/bin/python3 helper.py", "can't connect beyond", "title of your tabs", "tab.activated", "Runs Ardia commands", "commandBarStart", "ardia://example", "handed the tab you're on", "Say Hello", "Offers tools"]) assert.ok(lines.includes(words), words);
+  for (const words of ["/usr/bin/python3 helper.py", "can't connect to anything or accept connections", "title of your tabs", "tab.activated", "Runs Ardia commands", "commandBarStart", "ardia://example", "handed the tab you're on", "Say Hello", "Offers tools"]) assert.ok(lines.includes(words), words);
 });
 
 test("settings defaults apply on enable and go back on disable, unless changed since", async () => {
@@ -175,11 +175,11 @@ test("tools: the CLI and other plugins call them; unknown tools and stopped help
   const pending = pluginSocketMethod("plugins.call", { plugin: "example", tool: "seen", input: {} });
   await settle();
   const call = host.events.map((e) => JSON.parse(e.line)).findLast((e) => e.call && e.tool === "seen");
-  assert.deepEqual(call.caller, { kind: "cli" });
+  assert.deepEqual(call.caller, { kind: "cli" }, "a socket caller is still \"cli\" on the wire");
   await ask("result", { call: call.call, result: { events: [] } }, run);
   assert.deepEqual(await pending, { result: { events: [] } });
-  assert.equal((await callTool("example", "missing", {}, { kind: "cli" })).code, "bad_request");
-  assert.equal((await callTool("other", "hello", {}, { kind: "cli" })).code, "refused");
+  assert.equal((await callTool("example", "missing", {}, { kind: "socket" })).code, "bad_request");
+  assert.equal((await callTool("other", "hello", {}, { kind: "socket" })).code, "refused");
   const { id, before } = helper("tools.call", { plugin: "example", tool: "hello" }, run);
   await settle();
   const nested = host.events.map((e) => JSON.parse(e.line)).findLast((e) => e.call && e.tool === "hello");
@@ -379,7 +379,7 @@ test("two plugins setting the same value: turning the first off keeps it while t
 
 test("a stopped helper's requests are ignored and its pending calls fail at once", async () => {
   const run = await enabled();
-  const pending = callTool("example", "seen", {}, { kind: "cli" });
+  const pending = callTool("example", "seen", {}, { kind: "socket" });
   await settle();
   lifecycle.disablePlugin("example");
   const outcome = await pending;
@@ -508,6 +508,11 @@ test("when plugins.json can't be saved, turning a plugin on or off changes no se
   } finally {
     stub.refusedWrites.on = false;
   }
+  assert.equal(P().consent, null, "a failed enable closes its sheet");
+  assert.equal(P().unsaved, "example");
+  assert.equal(lifecycle.enablePlugin("example", hash), false, "a closed sheet can't approve");
+  assert.ok(lifecycle.requestPluginConsent("example"));
+  assert.equal(P().unsaved, null, "asking again clears the reason");
   assert.ok(lifecycle.enablePlugin("example", hash));
   assert.deepEqual(S().settings.commandBarStart, { openTabs: { limit: 5 } });
   stub.refusedWrites.on = true;
@@ -519,6 +524,28 @@ test("when plugins.json can't be saved, turning a plugin on or off changes no se
   }
   assert.ok(lifecycle.disablePlugin("example"));
   assert.deepEqual(S().settings.commandBarStart, original);
+});
+
+test("a plugin turned on after a failed save no longer shows the save failure", async () => {
+  S().hydrate({});
+  startPlugins();
+  for (const name of Object.keys(P().records)) lifecycle.disablePlugin(name);
+  await install();
+  assert.ok(lifecycle.requestPluginConsent("example"));
+  const { hash } = P().consent;
+  assert.ok(lifecycle.enablePlugin("example", hash));
+  assert.ok(lifecycle.disablePlugin("example"));
+  assert.ok(lifecycle.requestPluginConsent("example"));
+  stub.refusedWrites.on = true;
+  try {
+    assert.equal(lifecycle.enablePlugin("example", hash), false);
+  } finally {
+    stub.refusedWrites.on = false;
+  }
+  assert.equal(P().unsaved, "example");
+  assert.ok(lifecycle.turnOnApprovedPlugin("example"));
+  assert.equal(P().unsaved, null, "turning it on without a sheet clears the failure");
+  lifecycle.disablePlugin("example");
 });
 
 test("approving a plugin's changed manifest takes its old default out of the stack", async () => {
@@ -879,14 +906,14 @@ test("when a helper that called another plugin's tools stops, its waiting calls 
   const callee = P().processes.second.run;
   for (let i = 0; i < 16; i++) helper("tools.call", { plugin: "second", tool: "seen", input: {} }, caller);
   await settle();
-  const full = await Promise.race([callTool("second", "seen", {}, { kind: "cli" }), settle().then(() => null)]);
+  const full = await Promise.race([callTool("second", "seen", {}, { kind: "socket" }), settle().then(() => null)]);
   assert.match(full?.message ?? "", /too many calls/, "the caller's 16 calls fill second's slots");
   const sentBefore = host.events.length;
   restartProcess("example");
   await settle();
   const cancels = host.events.slice(sentBefore).filter((e) => e.name === "second" && e.run === callee && JSON.parse(e.line).cancel === true);
   assert.equal(cancels.length, 16, "second is told to stop each call its caller can no longer take");
-  const after = await Promise.race([callTool("second", "seen", {}, { kind: "cli" }), settle().then(() => null)]);
+  const after = await Promise.race([callTool("second", "seen", {}, { kind: "socket" }), settle().then(() => null)]);
   assert.equal(after, null, "a new call is waiting on second, not refused");
   lifecycle.disablePlugin("second");
   lifecycle.disablePlugin("example");
@@ -947,7 +974,7 @@ test("an open queued when its run ends never runs", async () => {
 test("a tool call that fails after sharing changed isn't counted in the new period", async () => {
   const run = await enabled();
   takePluginCounts();
-  const outcome = callTool("example", "seen", {}, { kind: "cli" });
+  const outcome = callTool("example", "seen", {}, { kind: "socket" });
   await settle();
   setConsentPeriod(true, "plugins-test-next");
   try {

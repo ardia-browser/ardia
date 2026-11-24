@@ -23,16 +23,66 @@ class PageScriptsTest {
         assertEquals(iphone, File(assets, "readable-content.js").readText().removeSuffix("\n").split('\n'))
     }
 
+    private fun block(lines: List<String>, first: String, last: String): List<String> {
+        val trimmed = lines.map { it.trim() }
+        val start = trimmed.indexOfFirst { it.startsWith(first) }
+        val end = (start until trimmed.size).first { trimmed[it] == last }
+        return trimmed.subList(start, end + 1)
+    }
+
     @Test
-    fun nightShadeScriptDiffersFromTheIphoneOnlyInItsBridge() {
-        val iphone = swiftScript("NightShade.swift", "static let nightShade = #\"\"\"")
-        val android = File(assets, "night-shade.js").readText().removeSuffix("\n").split('\n')
-        assertEquals(iphone.size, android.size)
-        val different = iphone.indices.filter { iphone[it] != android[it] }
-        assertEquals(1, different.size)
-        assertTrue(iphone[different[0]].contains("window.webkit.messageHandlers.ardiaPage"))
-        assertTrue(android[different[0]].contains("window.${PageScripts.BRIDGE_NAME}"))
-        assertTrue(android[different[0]].contains("\"${PageScripts.NIGHT_SHADE_MESSAGE}\""))
+    fun nightShadeShadesAndMeasuresPagesAsTheIphoneDoes() {
+        val iphone = swiftScript("NightShade.swift", "static let nightShadeSource = #\"\"\"")
+        val android = File(assets, "night-shade.js").readText().split('\n')
+        assertEquals(block(iphone, "const CSS =", "\"picture img{filter:none!important}\";"), block(android, "const CSS =", "\"picture img{filter:none!important}\";"))
+        assertEquals(block(iphone, "const luminance =", "};"), block(android, "const luminance =", "};"))
+        val iphoneMeasure = block(iphone, "const pageIsLight =", "};")
+        assertEquals(iphoneMeasure, block(android, "const pageIsLight =", "};"))
+        assertTrue(iphoneMeasure.size > 5)
+        val pending = { lines: List<String> -> lines.map { it.trim() }.single { it.startsWith("const stylesPending =") } }
+        assertEquals(pending(iphone), pending(android))
+    }
+
+    @Test
+    fun nightShadeStartsWithItsHostsStateBakedIn() {
+        val script = "(baked) => {\n  window.__seen = baked;\n}\n"
+        val start = PageScripts.nightShadeAtStart(script, "yahoo.com", NightShadeMode.Always, NightShadeVerdict.Light)
+        assertTrue(start.startsWith("if (window === window.top) {"))
+        assertTrue(start.contains("((baked) => {\n  window.__seen = baked;\n})({\"host\":\"yahoo.com\",\"mode\":\"always\",\"verdict\":\"light\"});"))
+        val unknown = PageScripts.nightShadeAtStart(script, null, NightShadeMode.Automatic, null)
+        assertTrue(unknown.contains("({\"host\":null,\"mode\":\"automatic\",\"verdict\":\"unknown\"});"))
+        val quoted = PageScripts.nightShadeAtStart(script, "a\"b\\c", NightShadeMode.Disabled, NightShadeVerdict.Dark)
+        assertTrue(quoted.contains("\"host\":\"a\\\"b\\\\c\""))
+    }
+
+    @Test
+    fun theNightShadeAssetIsAFunctionOfItsBakedState() {
+        val asset = File(assets, "night-shade.js").readText().trim()
+        assertTrue(asset.startsWith("(baked) => {"))
+        assertTrue(asset.endsWith("}"))
+        assertTrue(asset.contains("\"${PageScripts.NIGHT_SHADE_MESSAGE}\""))
+        assertTrue(asset.contains("\"${PageScripts.NIGHT_SHADE_VERDICT_MESSAGE}\""))
+        assertTrue(asset.contains("window.${PageScripts.BRIDGE_NAME}"))
+    }
+
+    @Test
+    fun everyScriptThePagesReadIsAnAsset() {
+        val sources = File("src/main/java/com/ardia/browser/PageScripts.kt").readText()
+        val names = Regex("read\\(\"([^\"]+)\"\\)").findAll(sources).map { it.groupValues[1] }.toList()
+        assertEquals(listOf("night-shade.js", "readable-content.js", "page-look.js"), names)
+        for (name in names) assertTrue(name, File(assets, name).isFile)
+    }
+
+    @Test
+    fun nightShadeAnswersAndReportsAreParsedStrictly() {
+        assertEquals("always light", PageScripts.nightShadeState(NightShadeMode.Always, NightShadeVerdict.Light))
+        assertEquals("disabled unknown", PageScripts.nightShadeState(NightShadeMode.Disabled, null))
+        assertEquals(NightShadeVerdict.Dark, PageScripts.nightShadeVerdict("nightShadeVerdict:dark"))
+        assertEquals(NightShadeVerdict.Light, PageScripts.nightShadeVerdict("nightShadeVerdict:light"))
+        assertNull(PageScripts.nightShadeVerdict("nightShadeVerdict:sepia"))
+        assertNull(PageScripts.nightShadeVerdict("nightShade"))
+        assertNull(PageScripts.nightShadeVerdict(null))
+        assertNull(TouchScrollers.parse("nightShadeVerdict:light", 7L))
     }
 
     @Test

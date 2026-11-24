@@ -17,6 +17,8 @@ import { PinnedTabsStep } from "./PinnedTabsStep";
 import { SetupCodeOutro } from "./SetupCodeOutro";
 import { isWebDemo } from "../../state/onboarding/demoSteps";
 import { ToolTour } from "./tour/ToolTour";
+import { useTour } from "../../state/onboarding/tour";
+import { useOpenedOnce } from "../ui/useOpenedOnce";
 import { ONBOARDING_CARD, OnboardingCardContext, useOnboardingColors } from "./Parts";
 import { DevResetOnboarding } from "./DevResetOnboarding";
 
@@ -24,12 +26,12 @@ const FLOATING_MIN_HEIGHT = 620;
 
 export function OnboardingOverlay() {
   const windowId = useWindowId();
-  const active = useOnboarding((s) => s.windowId === windowId);
-  const session = useOnboarding((s) => s.session);
+  const session = useOnboarding((s) => (s.windowId === windowId ? s.session : null));
+  const touring = useOpenedOnce(useTour((s) => s.windowId === windowId && s.stops.length > 0));
   return (
     <>
-      {active ? <Overlay key={session} session={session} /> : null}
-      <ToolTour />
+      {session !== null ? <Overlay key={session} session={session} /> : null}
+      {touring ? <ToolTour /> : null}
       {__DEV__ ? <DevResetOnboarding /> : null}
     </>
   );

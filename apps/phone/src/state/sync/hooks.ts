@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { lookForApp, type PresetSpec, type ProfileLook } from "../../lib/profileLook";
 import { usePreferences } from "../settings/store";
+import { useCustomTheme } from "../settings/themeDraft";
 import { useTab } from "../tabs/hooks";
 import { isSyncableUrl } from "../tabs/tabModels";
 import { isPinnedOnMac, pinsOnTheirWay } from "./spaces";
@@ -23,9 +24,10 @@ export function useSelectedProfile() {
 
 export function useLook(presets: readonly PresetSpec[], fallback: string): ProfileLook {
   const choice = usePreferences((p) => p.colorChoice);
+  const custom = useCustomTheme();
   const enabled = useSyncEnabled();
   const profile = useSelectedProfile();
-  return useMemo(() => lookForApp(choice, enabled, profile, presets, fallback), [choice, enabled, profile, presets, fallback]);
+  return useMemo(() => lookForApp(choice, enabled, profile, presets, fallback, custom), [choice, enabled, profile, presets, fallback, custom]);
 }
 
 export function useSendTargets(tabId: string) {

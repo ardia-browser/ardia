@@ -135,10 +135,33 @@ test("frames from Ardia's own code on each platform are sent, and nothing else",
     "    at PrivateDraft (sensitive-project.bundle:2:4)",
     "    at PrivateDraft (Private Project.js:2:4)",
     "    at PrivateDraft (https://example.com/app.js:2:4)",
+    "    at PrivateDraft (/Users/someone/sensitive-project/index.windows:2:4)",
+    "    at PrivateDraft (https://example.com/index.windows:2:4)",
   ].join("\n");
   captureException(error, "onerror");
   const frames = queued().slice(before)[0].properties.$exception_list[0].stacktrace.frames;
   assert.deepEqual(frames.map((f) => f.function).reverse(), ["choose", "release", "windows", "linux", "bytecode", "apply"]);
+});
+
+test("an unhandled rejection on Windows keeps its bytecode frame, whose source is named index.windows", () => {
+  const before = queued().length;
+  const error = new TypeError("Cannot read property 'ok' of undefined");
+  error.stack = [
+    "TypeError: Cannot read property 'ok' of undefined",
+    "    at anonymous (address at index.windows:1:3049129)",
+    "    at tryCallOne (address at InternalBytecode.js:1:27609)",
+    "    at anonymous (address at InternalBytecode.js:1:36971)",
+  ].join("\n");
+  captureException(error, "onunhandledrejection");
+  const frames = queued().slice(before)[0].properties.$exception_list[0].stacktrace.frames;
+  assert.deepEqual(
+    frames.map((f) => [f.filename, f.colno, f.in_app]),
+    [
+      ["InternalBytecode.js", 36971, false],
+      ["InternalBytecode.js", 27609, false],
+      ["index.windows", 3049129, true],
+    ],
+  );
 });
 
 test("a native crash names its exception and the app's images at the top level, never its reason", async () => {

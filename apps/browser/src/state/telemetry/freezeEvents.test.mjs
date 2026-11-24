@@ -145,6 +145,7 @@ test("a signature whose hash is all digits survives the property scrub, stays di
   const sent = (await sentFreezes()).map((p) => p.signature);
   assert.deepEqual(sent, signatures);
   assert.notEqual(sent[0], sent[1]);
+  stub.docs.delete("freeze-sends.json");
   const day = Date.UTC(2026, 10, 20);
   assert.equal(sends.claimDailySend(signatures[0], day), true);
   assert.equal(sends.claimDailySend(signatures[0], day + 60_000), false, "same signature, same day");
@@ -222,6 +223,23 @@ test("the job a freeze overlapped most is its activity", () => {
   save();
   assert.equal(jobs.activityDuring(now - 60_000, now - 50_000), "none");
   assert.equal(jobs.during("import", () => 41) + 1, 42);
+});
+
+test("a main-thread freeze is charged only to a job that holds the main thread; the JS job it ran beside is js_activity", async () => {
+  client.setSharing(true, "settings");
+  const save = jobs.beginActivity("sessionSave", Date.now() - 2000);
+  await reportFreeze(record({ thread: "main", samples: [{ state: 1, frames: frames(["Ardia", 0x5100], ["system", 0x1]) }] }));
+  const carry = jobs.beginActivity("siteDataCarry", Date.now() - 3200);
+  await reportFreeze(record({ thread: "main", samples: [{ state: 1, frames: frames(["Ardia", 0x5200], ["system", 0x1]) }] }));
+  await reportFreeze(record({ thread: "js", samples: [{ state: 1, frames: frames(["hermes", 0x5300], ["system", 0x1]) }] }));
+  carry();
+  save();
+  const [beside, held, js] = await sentFreezes();
+  assert.deepEqual([beside.freeze_thread, beside.activity, beside.js_activity], ["main", "none", "sessionSave"]);
+  assert.deepEqual([held.freeze_thread, held.activity, held.js_activity], ["main", "siteDataCarry", "sessionSave"]);
+  assert.deepEqual([js.freeze_thread, js.activity, js.js_activity], ["js", "siteDataCarry", null]);
+  assert.equal(jobs.holdsMainThread("sessionSave"), false);
+  assert.equal(jobs.holdsMainThread("siteDataCarry"), true);
 });
 
 test("more than 20 freezes in one day across restarts: 20 sent at most, and a signature sent today isn't sent again after the local ring wraps", async () => {

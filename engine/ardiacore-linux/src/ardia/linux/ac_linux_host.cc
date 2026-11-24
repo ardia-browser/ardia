@@ -17,15 +17,15 @@
 #include <vector>
 
 #include "ardia/linux/ac_linux_app_activation.h"
-#include "ardia/linux/ac_linux_policy.h"
+#include "ardia/desktop/ac_desktop_policy.h"
 #include "ardia/linux/ac_linux_contract.h"
-#include "ardia/linux/ac_linux_page_keys.h"
+#include "ardia/desktop/ac_desktop_page_keys.h"
 #include "ardia/linux/ac_linux_pointer_regions.h"
 #include "ardia/linux/ac_linux_report.h"
-#include "ardia/linux/ac_linux_report_core.h"
+#include "ardia/desktop/ac_desktop_report_core.h"
 #include "ardia/linux/ac_linux_sidebar_edge.h"
-#include "ardia/linux/ac_linux_status_geometry.h"
-#include "ardia/linux/ac_linux_switcher_keys.h"
+#include "ardia/desktop/ac_desktop_status_geometry.h"
+#include "ardia/desktop/ac_desktop_switcher_keys.h"
 #include "ardia/linux/ac_linux_auto_pip_service.h"
 #include "ardia/linux/ac_linux_automation_window.h"
 #include "ardia/linux/ac_linux_capture.h"
@@ -37,7 +37,7 @@
 #include "ardia/linux/ac_linux_web_store.h"
 #include "ardia/linux/ac_linux_background_dialogs.h"
 #include "ardia/linux/ac_linux_bang_list.h"
-#include "ardia/linux/ac_linux_bang_list_policy.h"
+#include "ardia/desktop/ac_desktop_bang_list_policy.h"
 #include "ardia/linux/ac_linux_calendar_service.h"
 #include "ardia/linux/ac_linux_close.h"
 #include "ardia/linux/ac_linux_close_hooks.h"
@@ -47,6 +47,7 @@
 #include "ardia/linux/ac_linux_search_engines.h"
 #include "ardia/linux/ac_linux_sync_service.h"
 #include "ardia/linux/ac_linux_desktop_core.h"
+#include "ardia/desktop/ac_desktop_platform.h"
 #include "ardia/linux/ac_linux_hardware.h"
 #include "ardia/linux/ac_linux_dialog_views.h"
 #include "ardia/linux/ac_linux_document_service.h"
@@ -58,7 +59,7 @@
 #include "ardia/linux/ac_linux_extensions.h"
 #include "ardia/linux/ac_linux_native_messaging.h"
 #include "ardia/linux/ac_linux_notifications.h"
-#include "ardia/linux/ac_linux_notifications_core.h"
+#include "ardia/desktop/ac_desktop_notifications_core.h"
 #include "ardia/linux/ac_linux_files.h"
 #include "ardia/linux/ac_linux_automation.h"
 #include "ardia/linux/ac_linux_cli.h"
@@ -69,13 +70,12 @@
 #include "ardia/linux/ac_linux_import_service.h"
 #include "ardia/linux/ac_linux_launch_config.h"
 #include "ardia/linux/ac_linux_page_channel.h"
-#include "ardia/linux/ac_linux_page_swipe.h"
+#include "ardia/desktop/ac_desktop_page_swipe.h"
 #include "ardia/linux/ac_linux_page_commands.h"
 #include "ardia/linux/ac_linux_memory_saver.h"
 #include "ardia/linux/ac_linux_page_media.h"
 #include "ardia/linux/ac_linux_page_prompts.h"
-#include "ardia/linux/ac_linux_power.h"
-#include "ardia/linux/ac_linux_tab_policy.h"
+#include "ardia/desktop/ac_desktop_tab_policy.h"
 #include "ardia/linux/ac_linux_tab_sleep.h"
 #include "ardia/linux/ac_linux_idle_profile_engine.h"
 #include "ardia/linux/ac_linux_idle_profiles.h"
@@ -97,17 +97,19 @@
 #include "ardia/linux/ac_linux_session.h"
 #include "ardia/linux/ac_linux_startup_tab.h"
 #include "ardia/linux/ac_linux_site_controls_service.h"
-#include "ardia/linux/ac_linux_window_caption.h"
-#include "ardia/linux/ac_linux_window_commands.h"
+#include "ardia/desktop/ac_desktop_window_commands.h"
+#include "ardia/desktop/ac_desktop_window_corners.h"
+#include "ardia/desktop/ac_desktop_window_state.h"
 #include "ardia/linux/ac_linux_window_lifecycle.h"
 #include "ardia/linux/ac_linux_favicons.h"
 #include "ardia/linux/ac_linux_page_status.h"
 #include "ardia/linux/ac_linux_suggest.h"
 #include "ardia/linux/ac_linux_system.h"
+#include "ardia/linux/ac_linux_tab_bindings.h"
 #include "ardia/linux/ac_linux_telemetry.h"
-#include "ardia/linux/ac_linux_telemetry_policy.h"
+#include "ardia/desktop/ac_desktop_telemetry_policy.h"
+#include "ardia/linux/ac_linux_self_update.h"
 #include "ardia/linux/ac_linux_updates.h"
-#include "ardia/linux/ac_linux_password_prompt.h"
 #include "ardia/linux/ac_linux_system_signals.h"
 #include "ardia/linux/ac_linux_geoclue.h"
 #include "ardia/linux/ac_linux_typeahead_input.h"
@@ -150,6 +152,7 @@
 #include "base/uuid.h"
 #include "base/unguessable_token.h"
 #include "base/values.h"
+#include "chrome/browser/ardia/ac_cli_console_ring.h"
 #include "chrome/browser/ardia/ac_cli_owned_tabs.h"
 #include "chrome/browser/ardia/ac_cli_visible_tabs.h"
 #include "chrome/browser/ardia/public/ac_engine.h"
@@ -187,6 +190,7 @@
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/browser_widget.h"
 #include "chrome/browser/ui/views/frame/contents_container_view.h"
+#include "chrome/browser/ui/views/window_sizer_linux.h"
 #include "chrome/browser/ui/views/tab_contents/chrome_web_contents_view_focus_helper.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/chrome_switches.h"
@@ -213,6 +217,7 @@
 #include "content/public/browser/render_widget_host_view.h"
 #include "content/public/browser/url_data_source.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/browser/web_contents_delegate.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/browser/web_ui.h"
 #include "content/public/browser/web_ui_controller.h"
@@ -234,6 +239,7 @@
 #include "ui/aura/client/focus_client.h"
 #include "ui/aura/env.h"
 #include "ui/aura/window_tree_host.h"
+#include "ui/aura/window_tree_host_platform.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_event_dispatcher.h"
 #include "ui/aura/window_targeter.h"
@@ -260,6 +266,8 @@
 #include "ui/gfx/geometry/rounded_corners_f.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/codec/png_codec.h"
+#include "ui/linux/linux_ui.h"
+#include "ui/linux/window_button_order_observer.h"
 #include "ui/events/base_event_utils.h"
 #include "ui/events/event_constants.h"
 #include "ui/events/event.h"
@@ -269,6 +277,8 @@
 #include "ui/events/keycodes/keyboard_code_conversion.h"
 #include "ui/native_theme/native_theme.h"
 #include "ui/ozone/public/ozone_platform.h"
+#include "ui/platform_window/extensions/wayland_extension.h"
+#include "ui/platform_window/platform_window_delegate.h"
 #include "ui/views/background.h"
 #include "ui/views/controls/webview/webview.h"
 #include "ui/views/controls/native/native_view_host.h"
@@ -277,7 +287,9 @@
 #include "ui/views/view_observer.h"
 #include "ui/views/view_targeter.h"
 #include "ui/views/view_targeter_delegate.h"
+#include "ui/views/view_constants_aura.h"
 #include "ui/views/view_tracker.h"
+#include "ui/views/view_utils.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_observer.h"
 #include "ui/wm/core/window_modality_controller.h"
@@ -317,12 +329,15 @@ extern bool (*g_ardia_linux_is_companion)(const BrowserWindowInterface*);
 extern bool (*g_ardia_linux_automation_window)(const BrowserWindowInterface*);
 extern int (*g_ardia_linux_window_tab_count)(const BrowserWindowInterface*);
 extern bool (*g_ardia_linux_frameless_app)(const std::string& app_name);
+extern bool (*g_ardia_linux_borderless_frame)(const BrowserWindowInterface*);
+extern void (*g_ardia_linux_compositor_decoration_changed)(gfx::AcceleratedWidget widget);
 extern bool (*g_ardia_linux_shell_passes_point)(gfx::NativeView child, const gfx::Point& location);
+extern void (*g_ardia_linux_tiled_edges_changed)(views::Widget* widget);
 
 namespace ardia {
 namespace {
 
-constexpr size_t kDocumentLimit = linux_policy::kDocumentLimit;
+constexpr size_t kDocumentLimit = desktop_policy::kDocumentLimit;
 constexpr size_t kAssetLimit = 32 * 1024 * 1024;
 constexpr char kSessionName[] = "linux-session.json";
 constexpr const char* kCliControlCalls[] = {"engine.cliControlStatus", "engine.setCliControl",
@@ -394,12 +409,85 @@ constexpr base::TimeDelta kShellCurtainSettle = base::Milliseconds(100);
 constexpr base::TimeDelta kShellCurtainLimit = base::Seconds(4);
 
 class ViewportView : public views::WebView {
- public:
   METADATA_HEADER(ViewportView, views::WebView)
 
  public:
-  explicit ViewportView(Profile* profile) : views::WebView(profile) {}
+  explicit ViewportView(Profile* profile) : views::WebView(profile) {
+    if (holder()->layer_managed_by_views()) {
+      SetPaintToLayer(ui::LAYER_NOT_DRAWN);
+      layer()->SetFillsBoundsOpaquely(false);
+    }
+  }
   ~ViewportView() override { SetWebContents(nullptr); }
+
+  void SetPaneBounds(const gfx::Rect& pane_bounds, const gfx::Rect& content_bounds) {
+    const gfx::Rect local(content_bounds.x() - pane_bounds.x(), content_bounds.y() - pane_bounds.y(),
+                          content_bounds.width(), content_bounds.height());
+    const bool wants_clip = !pane_bounds.IsEmpty() && local != gfx::Rect(pane_bounds.size());
+    const std::optional<gfx::Rect> next_content = wants_clip ? std::make_optional(local) : std::nullopt;
+    const bool content_changed = content_bounds_ != next_content;
+    const bool bounds_changed = bounds() != pane_bounds;
+    content_bounds_ = next_content;
+    if (bounds_changed) {
+      SetBoundsRect(pane_bounds);
+    } else if (content_changed) {
+      OnBoundsChanged(bounds());
+    }
+    if (content_changed || (wants_clip && bounds_changed)) {
+      holder()->DeprecatedLayoutImmediately();
+    }
+  }
+
+  bool ClipsContent() const { return content_bounds_.has_value(); }
+
+  void SyncClipLayout() { holder()->DeprecatedLayoutImmediately(); }
+
+  void ApplyCornerRadii(const gfx::RoundedCornersF& radii) {
+    if (ClipsContent()) {
+      if (holder()->layer_managed_by_views() && layer()) {
+        layer()->SetMasksToBounds(true);
+        layer()->SetRoundedCornerRadius(radii);
+        layer()->SetIsFastRoundedCorner(true);
+        holder()->SetNativeViewCornerRadii(gfx::RoundedCornersF());
+        return;
+      }
+      if (aura::Window* container = holder()->GetNativeViewContainer();
+          container && container != holder()->native_view() && container->layer()) {
+        container->layer()->SetRoundedCornerRadius(radii);
+        container->layer()->SetIsFastRoundedCorner(true);
+        holder()->SetNativeViewCornerRadii(gfx::RoundedCornersF());
+        return;
+      }
+      holder()->SetNativeViewCornerRadii(radii);
+      return;
+    }
+    if (holder()->layer_managed_by_views() && layer()) {
+      layer()->SetMasksToBounds(false);
+      layer()->SetRoundedCornerRadius(gfx::RoundedCornersF());
+    } else if (aura::Window* container = holder()->GetNativeViewContainer();
+               container && container != holder()->native_view() && container->layer()) {
+      container->layer()->SetRoundedCornerRadius(gfx::RoundedCornersF());
+    }
+    holder()->SetNativeViewCornerRadii(radii);
+  }
+
+ protected:
+  void OnBoundsChanged(const gfx::Rect& previous_bounds) override {
+    if (!content_bounds_ || CapturesFullscreen()) {
+      views::WebView::OnBoundsChanged(previous_bounds);
+      return;
+    }
+    holder()->SetNativeViewSize(gfx::Size());
+    holder()->SetBoundsRect(*content_bounds_);
+  }
+
+ private:
+  bool CapturesFullscreen() const {
+    return web_contents() && web_contents()->IsBeingCaptured() && !web_contents()->GetPreferredSize().IsEmpty() &&
+           web_contents()->GetDelegate() && web_contents()->GetDelegate()->IsFullscreenForTabOrPending(web_contents());
+  }
+
+  std::optional<gfx::Rect> content_bounds_;
 };
 
 BEGIN_METADATA(ViewportView)
@@ -705,7 +793,7 @@ bool PrepareDocuments(const base::FilePath& directory) {
 
 std::optional<std::string> ReadDocument(const base::FilePath& directory,
                                       const std::string& name) {
-  if (!linux_policy::ValidDocumentName(name) ||
+  if (!desktop_policy::ValidDocumentName(name) ||
       !PrepareDocuments(directory)) {
     return std::nullopt;
   }
@@ -714,7 +802,7 @@ std::optional<std::string> ReadDocument(const base::FilePath& directory,
     return std::nullopt;
   }
   std::string contents;
-  return base::ReadFileToStringWithMaxSize(file, &contents, linux_policy::DocumentLimit(name))
+  return base::ReadFileToStringWithMaxSize(file, &contents, desktop_policy::DocumentLimit(name))
              ? std::make_optional(std::move(contents))
              : std::nullopt;
 }
@@ -724,7 +812,7 @@ std::string StorageDigest(std::string_view contents) {
 }
 
 struct StoredDocument {
-  linux_policy::StoredRead outcome = linux_policy::StoredRead::kFailed;
+  desktop_policy::StoredRead outcome = desktop_policy::StoredRead::kFailed;
   std::string contents;
 };
 
@@ -735,15 +823,15 @@ StoredDocument ReadStoredDocument(const base::FilePath& directory,
       lstat(directory.AppendASCII(name).value().c_str(), &info) == 0 ? 0 : errno;
   std::optional<std::string> contents =
       error ? std::nullopt : ReadDocument(directory, name);
-  return {linux_policy::ClassifyStoredRead(error, contents.has_value()),
+  return {desktop_policy::ClassifyStoredRead(error, contents.has_value()),
           contents.value_or(std::string())};
 }
 
 bool WriteDocument(const base::FilePath& directory,
                    const std::string& name,
                    const std::optional<std::string>& contents) {
-  if (!linux_policy::ValidDocumentName(name) ||
-      (contents && contents->size() > linux_policy::DocumentLimit(name)) ||
+  if (!desktop_policy::ValidDocumentName(name) ||
+      (contents && contents->size() > desktop_policy::DocumentLimit(name)) ||
       !PrepareDocuments(directory)) {
     return false;
   }
@@ -798,7 +886,7 @@ base::DictValue ReadDocuments(const base::FilePath& directory) {
   for (auto file = files.Next(); !file.empty(); file = files.Next()) {
     const std::string name = file.BaseName().value();
     if (name == kSessionName || LinuxDocuments::Reserved(name) ||
-        linux_policy::DocumentLimit(name) > kDocumentLimit) continue;
+        desktop_policy::DocumentLimit(name) > kDocumentLimit) continue;
     auto contents = ReadDocument(directory, name);
     if (contents && documents.size() < 128 &&
         bytes + contents->size() <= kDocumentLimit) {
@@ -921,7 +1009,7 @@ std::optional<std::string> ReadAsset(base::FilePath directory,
                                    std::string path,
                                    base::FilePath documents,
                                    base::DictValue bootstrap) {
-  if (!linux_policy::ValidAssetPath(path) || MimeType(path).empty()) {
+  if (!desktop_policy::ValidAssetPath(path) || MimeType(path).empty()) {
     return std::nullopt;
   }
   if (path == "host-bootstrap.js") {
@@ -951,6 +1039,14 @@ std::optional<std::string> ReadAsset(base::FilePath directory,
   return contents;
 }
 
+bool HoldsNativeView(views::WebView* view, content::WebContents* contents) {
+  views::NativeViewHost* holder = view->holder();
+  gfx::NativeView native = contents->GetNativeView();
+  if (!native || holder->native_view() != native) return false;
+  if (holder->layer_managed_by_views()) return holder->layer() && native->layer()->parent() == holder->layer();
+  return native->GetProperty(views::kHostViewKey) == holder;
+}
+
 class DevToolsFrontendWatch : public content::WebContentsObserver {
  public:
   DevToolsFrontendWatch(content::WebContents* frontend, base::OnceClosure destroyed)
@@ -975,7 +1071,7 @@ class TabBinding : public content::WebContentsObserver {
   bool transferable = false;
   bool temporary = false;
   content::WebContents* contents() const { return contents_; }
-  views::WebView* viewport() const { return viewport_; }
+  ViewportView* viewport() const { return viewport_; }
   base::DictValue Navigation() const;
   void ReportNavigation();
   ardiacore::LinuxPageState* page() const { return page_.get(); }
@@ -995,9 +1091,9 @@ class TabBinding : public content::WebContentsObserver {
   base::WeakPtr<TabBinding> GetWeakPtr() { return weak_factory_.GetWeakPtr(); }
   void MoveTo(ShellHostView* owner);
   void Rebind(content::WebContents* contents);
-  void SetViewport(views::WebView* view) { viewport_ = view; }
-  views::WebView* devtools_viewport() const { return devtools_viewport_; }
-  void SetDevToolsViewport(views::WebView* view) { devtools_viewport_ = view; }
+  void SetViewport(ViewportView* view) { viewport_ = view; }
+  ViewportView* devtools_viewport() const { return devtools_viewport_; }
+  void SetDevToolsViewport(ViewportView* view) { devtools_viewport_ = view; }
   void RemoveViewports();
   void ResetPageCommands();
   void StartMedia();
@@ -1014,7 +1110,9 @@ class TabBinding : public content::WebContentsObserver {
   std::unique_ptr<DevToolsFrontendWatch> devtools_watch;
   bool devtools_had_focus = false;
   gfx::Rect pane_bounds;
+  gfx::Rect content_bounds;
   bool pane_visible = false;
+  desktop_window_corners::Corners pane_radii = desktop_window_corners::kPageCardCorners;
   bool presented = false;
   void FocusFromHost();
   bool presentation_applied = false;
@@ -1063,8 +1161,8 @@ class TabBinding : public content::WebContentsObserver {
                        const std::string& link_wait);
   raw_ptr<ShellHostView> owner_;
   raw_ptr<content::WebContents> contents_;
-  raw_ptr<views::WebView> viewport_ = nullptr;
-  raw_ptr<views::WebView> devtools_viewport_ = nullptr;
+  raw_ptr<ViewportView> viewport_ = nullptr;
+  raw_ptr<ViewportView> devtools_viewport_ = nullptr;
   std::string key_;
   bool host_focusing_ = false;
   uint64_t contents_generation_ = 1;
@@ -1357,6 +1455,8 @@ class ShellHostView : public views::View,
   void OnDevToolsDockChanged(content::WebContents* inspected, content::WebContents* devtools);
   void HideDevToolsViewport(TabBinding* binding);
   void LayoutPane(TabBinding* binding);
+  void ForgetClosedTab(TabBinding* binding);
+  void DropClosedTab(base::WeakPtr<TabBinding> binding);
   void KeepPaneFocus(TabBinding* activating);
   void OnDidChangeFocus(views::View* before, views::View* now) override;
   void QueueTransaction(std::optional<int> command);
@@ -1418,6 +1518,19 @@ class ShellHostView : public views::View,
     ardiacore::FetchLinuxFavicon(profile, url, std::move(reply));
   }
   bool WindowFullScreen() const;
+  desktop_window_state::NativeWindow NativeWindowFacts() const;
+  desktop_window_state::WindowState NativeWindowState() const;
+  void ScheduleWindowStateReport();
+  void RefreshEngineFrame();
+  desktop_window_corners::DecorationAnswer DecorationAnswer() const;
+  bool DecoratedByCompositor() const;
+  bool FrameIsBorderless() const;
+  base::DictValue WindowDecorationsValue() const;
+  void FollowDecorations();
+  desktop_window_corners::FrameInsets FramedRestoredInsets();
+  bool HasWaylandToplevel() const;
+  void KeepDefaultVisibleSize();
+  bool HostsAcceleratedWidget(gfx::AcceleratedWidget widget) const;
   PrefService* WindowOutputPrefs() const;
   void RememberWindowOutput();
   void ForgetWindowOutput();
@@ -1675,8 +1788,12 @@ class ShellHostView : public views::View,
                                    const gfx::PresentationFeedback& feedback) override;
   void OnCompositingShuttingDown(ui::Compositor* compositor) override { presentation_observation_.Reset(); }
   void ReportWindowGeometry();
+  void ReportWindowState();
   void LayoutOverlay();
-  void RoundUtilityCorners();
+  void RoundWindowCorners();
+  void ApplyWindowCorners(const desktop_window_corners::Corners& corners);
+  void ClipViewport(views::WebView* view, const desktop_window_corners::Corners& own);
+  void ClipPaneView(TabBinding* binding, views::WebView* view);
   void HideCaptionButtons();
   void ShellPainted();
   void LiftCurtain();
@@ -1707,7 +1824,11 @@ class ShellHostView : public views::View,
   std::vector<gfx::Rect> shell_pass_;
   std::unique_ptr<ShellTransparency> shell_transparency_;
   raw_ptr<views::View> curtain_ = nullptr;
-  gfx::RoundedCornersF utility_corners_;
+  std::optional<desktop_window_corners::Corners> window_corners_;
+  std::optional<std::pair<bool, desktop_window_corners::DecorationAnswer>> followed_decorations_;
+  bool measuring_framed_insets_ = false;
+  bool default_size_followed_ = false;
+  bool sized_by_default_ = false;
   base::OneShotTimer curtain_timer_;
   raw_ptr<HostMessageHandler> handler_ = nullptr;
   uint64_t renderer_generation_ = 0;
@@ -1788,6 +1909,9 @@ class ShellHostView : public views::View,
   bool requested_ = false;
   linux_window::GeometryLedger geometry_{GlobalScreenCoordinates()};
   base::OneShotTimer frame_timer_;
+  std::optional<desktop_window_state::WindowState> reported_window_state_;
+  desktop_window_state::SettledWindowState settled_window_state_;
+  bool window_state_report_pending_ = false;
   std::unique_ptr<linux_window::TypeaheadInput> typeahead_;
   std::optional<std::string> output_target_;
   bool output_forgotten_ = false;
@@ -2385,7 +2509,7 @@ class HostMessageHandler : public content::WebUIMessageHandler,
       if (name == "engine.systemState") {
         host_->WatchSystemState();
         host_->WatchSystemSignals();
-        return ardiacore::LinuxPowerMonitor::Get().Current(base::BindOnce(
+        return ardia::desktop::Platform().CurrentPower(base::BindOnce(
             [](base::WeakPtr<HostMessageHandler> handler, std::string id, base::DictValue state) {
               if (handler) handler->Resolve(id, base::Value(std::move(state)));
             }, weak_factory_.GetWeakPtr(), id));
@@ -2461,6 +2585,19 @@ class HostMessageHandler : public content::WebUIMessageHandler,
       }
       const auto* route = ardiacore::linux_contract::FindRoute(name);
       if (!route) return Fail(id, "ERR_UNKNOWN_CALL", "This call is unavailable on Linux");
+      if (name == ardiacore::linux_private_services::kFaviconPeekCall) {
+        Profile* page = host_->page_profile();
+        Profile* source = ardiacore::LinuxProfile(profile);
+        const bool loaded = source && !source->IsOffTheRecord() && !source->ShutdownStarted();
+        const auto error = ardiacore::linux_private_services::RouteFaviconPeek(
+            page && page->IsOffTheRecord(), page && page->ShutdownStarted(), profile_name->kind, loaded);
+        if (error != ardiacore::linux_profiles::ProfileError::kNone) return ProfileFail(id, error);
+        const std::string path = source->GetPath().value();
+        const std::string service(route->service);
+        ac_engine_call(service.c_str(), path.c_str(), json.c_str(), Replied,
+                       new EngineReply{name, weak_factory_.GetWeakPtr(), id, path});
+        return;
+      }
       if (private_request) {
         return ProfileFail(id, ardiacore::linux_profiles::ProfileError::kPrivateService);
       }
@@ -2646,6 +2783,7 @@ ShellHostView::~ShellHostView() {
 }
 
 void ShellHostView::Initialize() {
+  sized_by_default_ = ArdiaLinuxTakeDefaultSizedBrowser(browser_);
   documents_ = DocumentsFor(profile());
   dialogs_ = std::make_unique<LinuxWindowDialogs>(window_id_, DialogProfile(), GetWidget(),
                                                   ardiacore::BackgroundInstance());
@@ -2684,6 +2822,7 @@ void ShellHostView::Initialize() {
   }
   if (small_ && !is_utility()) GetWidget()->OnSizeConstraintsChanged();
   LayoutOverlay();
+  FollowDecorations();
   StartLinuxContentBlocker(profile(), page_profile());
   if (!title_.empty()) {
     browser_->GetWindow()->GetNativeWindow()->SetTitle(base::UTF8ToUTF16(title_));
@@ -2705,6 +2844,7 @@ void ShellHostView::Initialize() {
                        base::BindOnce(&ShellHostView::LiftCurtain, base::Unretained(this)));
   ApplyShellInput();
   ardiacore::WatchLinuxShellInput(shell());
+  settled_window_state_.Settle(NativeWindowFacts());
 }
 
 void ShellHostView::StartStartupTab() {
@@ -3259,6 +3399,7 @@ base::DictValue ShellHostView::Bootstrap() const {
   capabilities.Append("shell.inputRegions");
   capabilities.Append("pip.attach");
   capabilities.Append("tab.adoptCopies");
+  capabilities.Append("tab.viewportClip");
   capabilities.Append("pip.viewport");
   capabilities.Append("pip.command");
   capabilities.Append("shell.glassRegions");
@@ -3271,6 +3412,7 @@ base::DictValue ShellHostView::Bootstrap() const {
   for (const char* capability : kCliControlCalls) capabilities.Append(capability);
   for (const char* capability : ardiacore::kLinuxAutomationCapabilities) capabilities.Append(capability);
   for (const char* capability : ardiacore::kLinuxCliCapabilities) capabilities.Append(capability);
+  for (const char* capability : ardia::linux_self_update_policy::kSelfUpdateCapabilities) capabilities.Append(capability);
   for (const char* capability : ardiacore::kLinuxConfigCapabilities) capabilities.Append(capability);
   for (const char* capability : ardia::linux_desktop::kSystemCapabilities) capabilities.Append(capability);
   for (const char* capability : ardia::linux_hardware::kHardwareCapabilities) capabilities.Append(capability);
@@ -3278,21 +3420,23 @@ base::DictValue ShellHostView::Bootstrap() const {
   if (TakesOpenUrls()) {
     for (const char* capability : ardia::linux_open_urls::kOpenUrlCapabilities) capabilities.Append(capability);
   }
-  for (const char* capability : ardia::linux_commands::kWindowCommandCapabilities) capabilities.Append(capability);
+  for (const char* capability : ardia::desktop_commands::kWindowCommandCapabilities) capabilities.Append(capability);
+  for (const char* capability : ardia::desktop_window_state::kWindowStateCapabilities) capabilities.Append(capability);
+  for (const char* capability : ardia::desktop_window_corners::kWindowCornersCapabilities) capabilities.Append(capability);
   for (const char* capability : ardiacore::linux_capture::kCaptureCapabilities) capabilities.Append(capability);
   for (const char* capability : ardiacore::linux_cast::kCastCapabilities) capabilities.Append(capability);
   for (const char* capability : ardiacore::linux_automation_window::kCapabilities) capabilities.Append(capability);
   if (!is_utility()) {
-    for (const char* capability : ardia::linux_keys::kPageKeyCapabilities) capabilities.Append(capability);
+    for (const char* capability : ardia::desktop_keys::kPageKeyCapabilities) capabilities.Append(capability);
   }
   for (const char* capability : ardia::linux_window::kAppActivationCapabilities) capabilities.Append(capability);
   if (!is_utility()) {
     for (const char* capability : ardia::linux_window::kSmallWindowCapabilities) capabilities.Append(capability);
   }
-  for (const char* capability : ardia::linux_notifications::kNotificationCapabilities) capabilities.Append(capability);
+  for (const char* capability : ardia::desktop_notifications::kNotificationCapabilities) capabilities.Append(capability);
   capabilities.Append("ArdiaShell.fetchBangList");
   if (!is_utility()) {
-    for (const char* capability : ardia::linux_report::kReportCapabilities) capabilities.Append(capability);
+    for (const char* capability : ardia::desktop_report::kReportCapabilities) capabilities.Append(capability);
   }
   if (!is_utility()) {
     for (const char* capability : ardia::linux_crash::kCrashCapabilities) capabilities.Append(capability);
@@ -3314,6 +3458,7 @@ base::DictValue ShellHostView::Bootstrap() const {
   bootstrap.Set("pageProfile", page_profile_);
   if (!private_window_.empty()) bootstrap.Set("privateWindow", private_window_.Clone());
   bootstrap.Set("windowKind", WindowKind());
+  bootstrap.Set("shellZoom", blink::ZoomLevelToZoomFactor(zoom::ZoomController::GetZoomLevelForWebContents(shell())));
   if (const base::CommandLine* command = base::CommandLine::ForCurrentProcess();
       command->HasSwitch(sandbox::policy::switches::kNoSandbox)) {
     const std::string decision = command->GetSwitchValueASCII("ardia-sandbox-decision");
@@ -3335,22 +3480,82 @@ void ShellHostView::LayoutOverlay() {
   shell_->SetBoundsRect(GetLocalBounds());
   if (glass_) glass_->SetBoundsRect(GetLocalBounds());
   if (curtain_) curtain_->SetBoundsRect(GetLocalBounds());
-  RoundUtilityCorners();
+  RoundWindowCorners();
   browser_view_->GetActiveContentsWebView()->SetVisible(false);
   if (extension_surfaces_) extension_surfaces_->Relayout();
   Restack();
   HideCaptionButtons();
 }
 
-void ShellHostView::RoundUtilityCorners() {
-  if (!is_utility() || !browser_view_->browser_widget()) return;
+gfx::RoundedCornersF RoundedCorners(const desktop_window_corners::Corners& corners) {
+  return gfx::RoundedCornersF(corners.upper_left, corners.upper_right, corners.lower_right, corners.lower_left);
+}
+
+void ShellHostView::RoundWindowCorners() {
+  if (!browser_view_ || !browser_view_->browser_widget()) return;
   BrowserFrameView* frame = browser_view_->browser_widget()->GetFrameView();
-  const gfx::RoundedCornersF corners = frame ? frame->GetWindowRoundedCorners() : gfx::RoundedCornersF();
-  if (corners == utility_corners_) return;
-  utility_corners_ = corners;
-  SetBackground(views::CreateRoundedRectBackground(kColorWebContentsBackground, corners));
-  shell_->holder()->SetNativeViewCornerRadii(corners);
-  if (curtain_) curtain_->layer()->SetRoundedCornerRadius(corners);
+  const gfx::RoundedCornersF frame_corners = frame && views::Widget::IsWindowCompositingSupported()
+                                                  ? frame->GetWindowRoundedCorners()
+                                                  : gfx::RoundedCornersF();
+  const desktop_window_corners::Corners corners{
+      .upper_left = frame_corners.upper_left(),
+      .upper_right = frame_corners.upper_right(),
+      .lower_right = frame_corners.lower_right(),
+      .lower_left = frame_corners.lower_left(),
+  };
+  if (window_corners_ != corners) ApplyWindowCorners(corners);
+  for (const auto& [id, binding] : bindings_) {
+    ClipPaneView(binding.get(), binding->viewport());
+    ClipPaneView(binding.get(), binding->devtools_viewport());
+  }
+}
+
+void ShellHostView::ApplyWindowCorners(const desktop_window_corners::Corners& corners) {
+  window_corners_ = corners;
+  VLOG(1) << "ardia window " << window_id_ << " frame corners " << corners.upper_left << " " << corners.upper_right
+          << " " << corners.lower_right << " " << corners.lower_left;
+  if (!window_id_.empty()) {
+    Event("ArdiaShell", desktop_window_corners::kWindowDecorationsEvent,
+          base::Value(WindowDecorationsValue().Set("windowId", window_id_)));
+  }
+  const gfx::RoundedCornersF rounded = RoundedCorners(corners);
+  if (!browser_view_->layer() && !rounded.IsEmpty()) {
+    browser_view_->SetPaintToLayer();
+    browser_view_->layer()->SetFillsBoundsOpaquely(false);
+  }
+  if (browser_view_->layer()) {
+    browser_view_->layer()->SetRoundedCornerRadius(rounded);
+    browser_view_->layer()->SetIsFastRoundedCorner(true);
+  }
+  if (is_utility()) SetBackground(views::CreateRoundedRectBackground(kColorWebContentsBackground, rounded));
+  shell_->holder()->SetNativeViewCornerRadii(rounded);
+  if (curtain_) {
+    curtain_->layer()->SetRoundedCornerRadius(rounded);
+    curtain_->layer()->SetIsFastRoundedCorner(true);
+  }
+}
+
+void ShellHostView::ClipPaneView(TabBinding* binding, views::WebView* view) {
+  if (!binding || !view) return;
+  const gfx::Rect bounds = view->bounds();
+  const gfx::Rect& pane = binding->pane_bounds;
+  ClipViewport(view, desktop_window_corners::CornersSharedWithPane(
+                         {.x = bounds.x(), .y = bounds.y(), .width = bounds.width(), .height = bounds.height()},
+                         {.x = pane.x(), .y = pane.y(), .width = pane.width(), .height = pane.height()},
+                         binding->pane_radii));
+}
+
+void ShellHostView::ClipViewport(views::WebView* view, const desktop_window_corners::Corners& own) {
+  if (!view || view->parent() != this) return;
+  const gfx::Rect bounds = view->bounds();
+  const gfx::RoundedCornersF radii = RoundedCorners(desktop_window_corners::ClipToWindow(
+      {.x = bounds.x(), .y = bounds.y(), .width = bounds.width(), .height = bounds.height()}, width(), height(),
+      window_corners_.value_or(desktop_window_corners::Corners()), own));
+  if (auto* viewport = views::AsViewClass<ViewportView>(view)) {
+    viewport->ApplyCornerRadii(radii);
+    return;
+  }
+  view->holder()->SetNativeViewCornerRadii(radii);
 }
 
 void ShellHostView::ShellPainted() {
@@ -3377,9 +3582,20 @@ void ShellHostView::HideCaptionButtons() {
   }
 }
 
+void ShellHostView::RefreshEngineFrame() {
+  if (!browser_view_ || !browser_view_->browser_widget()) return;
+  GetWidget()->FrameTypeChanged();
+  BrowserFrameView* frame = browser_view_->browser_widget()->GetFrameView();
+  if (!frame) return;
+  frame->InvalidateLayout();
+  frame->SchedulePaint();
+  HideCaptionButtons();
+  RoundWindowCorners();
+}
+
 void ShellHostView::OnWidgetThemeChanged(views::Widget*) {
   HideCaptionButtons();
-  if (browser_view_) RoundUtilityCorners();
+  if (browser_view_) RoundWindowCorners();
 }
 
 void ShellHostView::OnViewIsDeleting(views::View*) {
@@ -4426,7 +4642,7 @@ void ReportNotificationResponse(int owner, bool clicked, base::Value response) {
   }
   if (!chosen) return;
   if (clicked) chosen->FocusWindow();
-  chosen->Event("ArdiaApp", ardia::linux_notifications::kResponseEvent, std::move(response));
+  chosen->Event("ArdiaApp", ardia::desktop_notifications::kResponseEvent, std::move(response));
 }
 
 void BroadcastProfileLoaded(const std::string& profile) {
@@ -4490,6 +4706,7 @@ void ShellHostView::OnWidgetActivationChanged(views::Widget*, bool active) {
 }
 
 void ShellHostView::OnWidgetBoundsChanged(views::Widget*, const gfx::Rect&) {
+  ScheduleWindowStateReport();
   if (is_utility()) return;
   frame_timer_.Start(FROM_HERE, base::Milliseconds(250),
                      base::BindOnce(&ShellHostView::ReportWindowGeometry, base::Unretained(this)));
@@ -4542,6 +4759,7 @@ void ShellHostView::OnWidgetVisibilityChanged(views::Widget*, bool visible) {
 }
 
 void ShellHostView::OnWidgetShowStateChanged(views::Widget* widget) {
+  ScheduleWindowStateReport();
   ReportWindowGeometry();
   if (widget && WindowFullScreen() && !window_id_.empty()) {
     FullScreenRestorer().Entered(window_id_);
@@ -4558,6 +4776,192 @@ bool ShellHostView::WindowFullScreen() const {
       widget->IsFullscreen(), controller && controller->IsWindowFullscreenForTabOrPending(),
       controller && controller->IsFullscreenCausedByTab());
 }
+
+base::DictValue WindowStateValue(const desktop_window_state::WindowState& state) {
+  return base::DictValue()
+      .Set("maximized", state.maximized)
+      .Set("tiled", state.tiled)
+      .Set("fullScreen", state.full_screen);
+}
+
+desktop_window_state::NativeWindow ShellHostView::NativeWindowFacts() const {
+  const views::Widget* widget = GetWidget();
+  if (!widget) return {};
+  desktop_window_state::NativeWindow native{
+      .maximized = widget->IsMaximized(),
+      .widget_full_screen = widget->IsFullscreen(),
+      .window_full_screen = WindowFullScreen(),
+      .compositor_reports_edges = !GlobalScreenCoordinates(),
+  };
+  if (browser_view_ && browser_view_->browser_widget()) {
+    const ui::WindowTiledEdges& tiled = browser_view_->browser_widget()->tiled_edges();
+    native.edges = {.left = tiled.left, .right = tiled.right, .top = tiled.top, .bottom = tiled.bottom};
+  }
+  return native;
+}
+
+desktop_window_state::WindowState ShellHostView::NativeWindowState() const {
+  return settled_window_state_.Peek(NativeWindowFacts());
+}
+
+void ShellHostView::ScheduleWindowStateReport() {
+  if (std::exchange(window_state_report_pending_, true)) return;
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(&ShellHostView::ReportWindowState, GetWeakPtr()));
+}
+
+void ShellHostView::ReportWindowState() {
+  window_state_report_pending_ = false;
+  if (!GetWidget()) return;
+  RoundWindowCorners();
+  const desktop_window_state::WindowState state = settled_window_state_.Settle(NativeWindowFacts());
+  if (window_id_.empty() || reported_window_state_ == state) return;
+  reported_window_state_ = state;
+  Event("ArdiaShell", desktop_window_state::kWindowStateEvent,
+        base::Value(WindowStateValue(state).Set("windowId", window_id_)));
+}
+
+std::string CurrentDesktop() {
+  const std::optional<std::string> desktop = base::Environment::Create()->GetVar("XDG_CURRENT_DESKTOP");
+  return desktop && desktop_window_state::ReportableToolkitString(*desktop) ? *desktop : std::string();
+}
+
+const std::string& LaunchDesktop() {
+  static const base::NoDestructor<std::string> desktop(CurrentDesktop());
+  return *desktop;
+}
+
+const ui::WaylandToplevelExtension* WaylandToplevelOf(const views::Widget* widget) {
+  aura::Window* window = widget ? widget->GetNativeWindow() : nullptr;
+  auto* tree_host = window ? static_cast<aura::WindowTreeHostPlatform*>(window->GetHost()) : nullptr;
+  const ui::PlatformWindow* platform = tree_host ? tree_host->platform_window() : nullptr;
+  return platform ? ui::GetWaylandToplevelExtension(*platform) : nullptr;
+}
+
+desktop_window_corners::DecorationAnswer ShellHostView::DecorationAnswer() const {
+  const ui::WaylandToplevelExtension* toplevel = WaylandToplevelOf(GetWidget());
+  return desktop_window_corners::DecorationAnswerOf(toplevel ? toplevel->CompositorDecorationMode() : 0);
+}
+
+bool ShellHostView::HasWaylandToplevel() const {
+  return WaylandToplevelOf(GetWidget()) != nullptr;
+}
+
+bool ShellHostView::DecoratedByCompositor() const {
+  return desktop_window_corners::CompositorDecorates(DecorationAnswer(), LaunchDesktop());
+}
+
+bool ShellHostView::FrameIsBorderless() const {
+  if (measuring_framed_insets_) return false;
+  return followed_decorations_ ? followed_decorations_->first : DecoratedByCompositor();
+}
+
+base::DictValue ShellHostView::WindowDecorationsValue() const {
+  const desktop_window_corners::Corners corners = window_corners_.value_or(desktop_window_corners::Corners());
+  return base::DictValue()
+      .Set("decoratedBy", desktop_window_corners::DecoratedByName(FrameIsBorderless()))
+      .Set("answer", desktop_window_corners::AnswerName(followed_decorations_ ? followed_decorations_->second
+                                                                             : DecorationAnswer()))
+      .Set("corners", base::DictValue()
+                          .Set("upperLeft", corners.upper_left)
+                          .Set("upperRight", corners.upper_right)
+                          .Set("lowerRight", corners.lower_right)
+                          .Set("lowerLeft", corners.lower_left));
+}
+
+bool ShellHostView::HostsAcceleratedWidget(gfx::AcceleratedWidget widget) const {
+  const views::Widget* own = GetWidget();
+  aura::Window* window = own ? own->GetNativeWindow() : nullptr;
+  return window && window->GetHost() && window->GetHost()->GetAcceleratedWidget() == widget;
+}
+
+class DefaultWindowSizer : public WindowSizerLinux {
+ public:
+  explicit DefaultWindowSizer(BrowserWindowInterface* browser) : WindowSizerLinux(nullptr, browser) {}
+  gfx::Rect DefaultBounds(const display::Display& display) const {
+    return WindowSizer::GetDefaultWindowBounds(display);
+  }
+};
+
+desktop_window_corners::FrameInsets ShellHostView::FramedRestoredInsets() {
+  const views::Widget* widget = GetWidget();
+  aura::Window* window = widget ? widget->GetNativeWindow() : nullptr;
+  ui::PlatformWindowDelegate* tree_host =
+      window ? static_cast<aura::WindowTreeHostPlatform*>(window->GetHost()) : nullptr;
+  if (!tree_host) return {};
+  base::AutoReset<bool> framed(&measuring_framed_insets_, true);
+  const gfx::Insets insets = tree_host->CalculateInsetsInDIP(ui::PlatformWindowState::kNormal);
+  return {.left = insets.left(), .top = insets.top(), .right = insets.right(), .bottom = insets.bottom()};
+}
+
+void ShellHostView::KeepDefaultVisibleSize() {
+  views::Widget* widget = GetWidget();
+  if (!widget || !browser_) return;
+  const bool restored = !widget->IsMaximized() && !widget->IsFullscreen() && !widget->IsMinimized();
+  const gfx::Rect bounds = widget->GetWindowBoundsInScreen();
+  const gfx::Rect default_bounds = DefaultWindowSizer(browser_).DefaultBounds(
+      display::Screen::Get()->GetDisplayNearestWindow(widget->GetNativeWindow()));
+  const std::optional<desktop_window_corners::Box> kept = desktop_window_corners::DefaultBoundsWithoutFrame(
+      {.x = bounds.x(), .y = bounds.y(), .width = bounds.width(), .height = bounds.height()},
+      default_bounds.width(), default_bounds.height(), FramedRestoredInsets(), restored, sized_by_default_);
+  if (!kept) return;
+  VLOG(1) << "ardia window " << window_id_ << " keeps its default visible size " << kept->width << "x"
+          << kept->height << " without the frame";
+  widget->SetBounds(gfx::Rect(kept->x, kept->y, kept->width, kept->height));
+}
+
+void ShellHostView::FollowDecorations() {
+  const desktop_window_corners::DecorationAnswer answer = DecorationAnswer();
+  const bool decorated = DecoratedByCompositor();
+  VLOG(1) << "ardia window " << window_id_ << " decorated by "
+          << desktop_window_corners::DecoratedByName(decorated) << ", xdg-decoration answer "
+          << desktop_window_corners::AnswerName(answer);
+  const bool attaching = !followed_decorations_;
+  const bool changed = attaching || followed_decorations_->first != decorated;
+  if (followed_decorations_ == std::pair(decorated, answer)) return;
+  followed_decorations_ = std::pair(decorated, answer);
+  if (changed && (decorated || !attaching)) {
+    RefreshEngineFrame();
+  } else if (changed) {
+    RoundWindowCorners();
+  }
+  if (decorated && !default_size_followed_ &&
+      (answer != desktop_window_corners::DecorationAnswer::kNone || !HasWaylandToplevel())) {
+    default_size_followed_ = true;
+    KeepDefaultVisibleSize();
+  }
+  if (!window_id_.empty()) {
+    Event("ArdiaShell", desktop_window_corners::kWindowDecorationsEvent,
+          base::Value(WindowDecorationsValue().Set("windowId", window_id_)));
+  }
+}
+
+base::Value WindowButtonLayoutValue() {
+  const ui::LinuxUi* linux_ui = ui::LinuxUi::instance();
+  const std::optional<std::string> layout = linux_ui ? linux_ui->GetWindowButtonLayout() : std::nullopt;
+  return base::Value(base::DictValue()
+      .Set("layout", layout && desktop_window_state::ReportableToolkitString(*layout) ? base::Value(*layout) : base::Value())
+      .Set("desktop", CurrentDesktop()));
+}
+
+class WindowButtonLayoutWatch : public ui::WindowButtonOrderObserver {
+ public:
+  WindowButtonLayoutWatch() : reported_(WindowButtonLayoutValue()) {
+    if (ui::LinuxUi* linux_ui = ui::LinuxUi::instance()) observation_.Observe(linux_ui);
+  }
+  void OnWindowButtonOrderingChange() override {
+    base::Value layout = WindowButtonLayoutValue();
+    if (layout == reported_) return;
+    reported_ = layout.Clone();
+    for (const auto& [id, host] : Hosts()) {
+      host->Event("ArdiaShell", desktop_window_state::kWindowButtonLayoutEvent, layout.Clone());
+    }
+  }
+
+ private:
+  base::Value reported_;
+  base::ScopedObservation<ui::LinuxUi, ui::WindowButtonOrderObserver> observation_{this};
+};
 
 void ShellHostView::ReportWindowGeometry() {
   views::Widget* widget = GetWidget();
@@ -4678,7 +5082,7 @@ bool ShellHostView::AcceleratorPressed(const ui::Accelerator& accelerator) {
   const base::DictValue& binding = found->second;
   const std::string command = String(binding, "command");
   if (switcher_capture_) {
-    const char* key = ardia::linux_switcher::SwitcherKey({.key_code = accelerator.key_code(),
+    const char* key = ardia::desktop_switcher::SwitcherKey({.key_code = accelerator.key_code(),
                                                           .control = accelerator.IsCtrlDown(),
                                                           .alt = accelerator.IsAltDown(),
                                                           .command = accelerator.IsCmdDown(),
@@ -4805,7 +5209,7 @@ void ShellHostView::WatchSystemSignals() {
 
 void ShellHostView::WatchSystemState() {
   if (system_state_subscription_) return;
-  system_state_subscription_ = ardiacore::LinuxPowerMonitor::Get().Subscribe(base::BindRepeating(
+  system_state_subscription_ = ardia::desktop::Platform().WatchPower(base::BindRepeating(
       [](base::WeakPtr<ShellHostView> host, const base::DictValue& state) {
         if (host) host->Event("ArdiaEngine", "engine", base::Value(base::DictValue()
             .Set("name", "engine.systemState").Set("data", state.Clone())));
@@ -4905,9 +5309,9 @@ bool ShellHostView::PromptPageEvent(content::WebContents* contents, std::string_
 bool ShellHostView::ReportUnhandledEscape(content::WebContents* contents) {
   for (const auto& [id, binding] : bindings_) {
     if (!contents || binding->contents() != contents) continue;
-    if (!ardia::linux_keys::PageTakesEscape(!!binding->page(), binding->presented, binding->pane_visible)) return false;
-    return binding->page()->EmitDocument(ardia::linux_keys::kCommandEvent, base::Value(base::DictValue()
-        .Set("command", ardia::linux_keys::kEscapeCommand).Set("text", "")));
+    if (!ardia::desktop_keys::PageTakesEscape(!!binding->page(), binding->presented, binding->pane_visible)) return false;
+    return binding->page()->EmitDocument(ardia::desktop_keys::kCommandEvent, base::Value(base::DictValue()
+        .Set("command", ardia::desktop_keys::kEscapeCommand).Set("text", "")));
   }
   return false;
 }
@@ -5024,7 +5428,7 @@ void ShellHostView::HideDevToolsViewport(TabBinding* binding) {
 }
 
 void ShellHostView::LayoutPane(TabBinding* binding) {
-  views::WebView* page = binding->viewport();
+  ViewportView* page = binding->viewport();
   if (!browser_view_) return;
   content::WebContents* contents = binding->contents();
   BrowserWindowInterface* owner = OwnerOf(contents);
@@ -5052,14 +5456,19 @@ void ShellHostView::LayoutPane(TabBinding* binding) {
   gfx::Rect page_bounds = pane;
   if (devtools) ApplyDevToolsContentsResizingStrategy(strategy, pane, &tools_bounds, &page_bounds);
   const gfx::Vector2d origin = binding->pane_bounds.OffsetFromOrigin();
-  page->SetBoundsRect(page_bounds + origin);
-  page->SetVisible(visible);
+  const gfx::Rect page_rect = page_bounds + origin;
+  const gfx::Rect content_rect = devtools || binding->content_bounds.IsEmpty() ? page_rect : binding->content_bounds;
   if (visible) {
+    const bool attached = page->web_contents() == contents;
+    page->SetPaneBounds(page_rect, content_rect);
+    page->SetVisible(true);
     owner_view->GetActiveContentsWebView()->SetWebContents(nullptr);
     page->SetWebContents(contents);
-    page->holder()->SetNativeViewCornerRadii(gfx::RoundedCornersF(12.0f));
+    if (!attached) page->SyncClipLayout();
+    ClipPaneView(binding, page);
     ardiacore::NoteTabInShownSlot(contents);
   } else {
+    page->SetVisible(false);
     page->SetWebContents(nullptr);
   }
   views::WebView* tools = binding->devtools_viewport();
@@ -5071,8 +5480,9 @@ void ShellHostView::LayoutPane(TabBinding* binding) {
     }
   }
   if (!tools) {
-    tools = AddChildView(std::make_unique<ViewportView>(ProfileOf(contents->GetBrowserContext())));
-    binding->SetDevToolsViewport(tools);
+    ViewportView* created = AddChildView(std::make_unique<ViewportView>(ProfileOf(contents->GetBrowserContext())));
+    binding->SetDevToolsViewport(created);
+    tools = created;
     Restack();
   }
   const bool fresh = !binding->devtools_watch || binding->devtools_watch->web_contents() != devtools;
@@ -5087,14 +5497,19 @@ void ShellHostView::LayoutPane(TabBinding* binding) {
   }
   tools->SetBoundsRect(tools_bounds + origin);
   tools->SetVisible(true);
+  views::FocusManager* focus = GetFocusManager();
+  const bool reattach = tools->web_contents() == devtools && !HoldsNativeView(tools, devtools);
+  const bool reattach_focused = reattach && focus && tools->Contains(focus->GetFocusedView());
+  if (reattach_focused) focus->ClearFocus();
+  if (reattach) tools->SetWebContents(nullptr);
   tools->SetWebContents(devtools);
   if (auto* native = devtools->GetNativeView(); native && !native->IsVisible()) native->Show();
-  tools->holder()->SetNativeViewCornerRadii(gfx::RoundedCornersF(12.0f));
+  ClipPaneView(binding, tools);
   const size_t page_index = GetIndexOf(page).value();
   const size_t tools_index = GetIndexOf(tools).value();
   if (strategy.hide_inspected_contents() ? tools_index < page_index : tools_index > page_index)
     ReorderChildView(tools, page_index);
-  if ((fresh && DevToolsWindow::AsDevToolsWindow(devtools)) || restore_focus) {
+  if ((fresh && DevToolsWindow::AsDevToolsWindow(devtools)) || restore_focus || reattach_focused) {
     tools->RequestFocus();
     devtools->Focus();
   }
@@ -5283,6 +5698,20 @@ void ShellHostView::ReplaceTabContents(content::WebContents* old_contents,
   previous->EmitRebind(std::move(*created));
   previous->Retire();
   ardiacore::RedeliverLinuxPermissionPrompts(binding->contents());
+}
+
+void ShellHostView::ForgetClosedTab(TabBinding* binding) {
+  if (!binding || !base::SequencedTaskRunner::HasCurrentDefault()) return;
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(&ShellHostView::DropClosedTab, GetWeakPtr(), binding->GetWeakPtr()));
+}
+
+void ShellHostView::DropClosedTab(base::WeakPtr<TabBinding> binding) {
+  if (!binding || binding->contents()) return;
+  auto owned = ardiacore::linux_tab_bindings::TakeBinding(bindings_, binding.get(), devtools_had_focus_);
+  if (!owned) return;
+  owned.reset();
+  CheckPlayerSource();
 }
 
 void ShellHostView::OnTabStripModelChanged(
@@ -5773,10 +6202,10 @@ void ShellHostView::TabCommand(
           }
           std::move(done).Run(true, result && request.Valid() ? base::Value(std::move(*result)) : base::Value());
         }, std::move(*request), std::move(done)));
-  } else if (command == ardia::linux_commands::kEditCommand) {
-    using ardia::linux_commands::EditAction;
+  } else if (command == ardia::desktop_commands::kEditCommand) {
+    using ardia::desktop_commands::EditAction;
     const auto action = values.size() == 1 && values[0].is_string()
-        ? ardia::linux_commands::ParseEditAction(values[0].GetString()) : std::nullopt;
+        ? ardia::desktop_commands::ParseEditAction(values[0].GetString()) : std::nullopt;
     if (!action) return std::move(done).Run(false, base::Value("edit requires one known editing action"));
     switch (*action) {
       case EditAction::kUndo: contents->Undo(); break;
@@ -5917,12 +6346,50 @@ void ShellHostView::SetViewport(
   const double top = std::clamp(y * scale, 0.0, static_cast<double>(this->height()));
   const double right = std::clamp((x + width) * scale, left, static_cast<double>(this->width()));
   const double bottom = std::clamp((y + height) * scale, top, static_cast<double>(this->height()));
-  const gfx::Rect bounds = gfx::ToEnclosingRect(gfx::RectF(left, top, right - left, bottom - top));
+  const desktop_window_corners::Box box = desktop_window_corners::EnclosingBox(left, top, right, bottom);
+  const gfx::Rect bounds(box.x, box.y, box.width, box.height);
+  std::optional<desktop_window_corners::Corners> radii;
+  if (const base::Value* given = args.Find("radii")) {
+    const base::DictValue* corners = given->GetIfDict();
+    if (corners) {
+      radii = desktop_window_corners::PageRadiiInDip(
+          corners->FindDouble("upperLeft").value_or(NAN), corners->FindDouble("upperRight").value_or(NAN),
+          corners->FindDouble("lowerRight").value_or(NAN), corners->FindDouble("lowerLeft").value_or(NAN), scale);
+    }
+    if (!radii) {
+      return std::move(done).Run(false, base::Value("Viewport radii must be four finite, nonnegative corners"));
+    }
+  }
+  std::optional<gfx::Rect> content_bounds;
+  if (const base::Value* given = args.Find("contentRect")) {
+    const base::DictValue* content = given->GetIfDict();
+    const std::optional<desktop_window_corners::Box> prior =
+        binding->content_bounds.IsEmpty()
+            ? std::nullopt
+            : std::make_optional(desktop_window_corners::Box{.x = binding->content_bounds.x(),
+                                                           .y = binding->content_bounds.y(),
+                                                           .width = binding->content_bounds.width(),
+                                                           .height = binding->content_bounds.height()});
+    const std::optional<desktop_window_corners::Box> content_box =
+        content ? desktop_window_corners::ContentBoxInDip(
+                      {.x = content->FindDouble("x").value_or(NAN),
+                       .y = content->FindDouble("y").value_or(NAN),
+                       .width = content->FindDouble("width").value_or(NAN),
+                       .height = content->FindDouble("height").value_or(NAN)},
+                      {.x = x, .y = y, .width = width, .height = height}, scale, box, prior)
+                : std::nullopt;
+    if (!content_box) {
+      return std::move(done).Run(false, base::Value("Viewport contentRect must be a finite, nonnegative rectangle"));
+    }
+    content_bounds = gfx::Rect(content_box->x, content_box->y, content_box->width, content_box->height);
+  }
   if (!binding->viewport()) {
     binding->SetViewport(AddChildView(std::make_unique<ViewportView>(ProfileOf(binding->contents()->GetBrowserContext()))));
   }
   binding->pane_bounds = bounds;
+  binding->content_bounds = content_bounds.value_or(bounds);
   binding->pane_visible = args.FindBool("visible").value_or(false) && !bounds.IsEmpty();
+  if (radii) binding->pane_radii = *radii;
   LayoutPane(binding);
   Restack();
   std::move(done).Run(true, base::Value());
@@ -6568,12 +7035,15 @@ void ShellHostView::Invoke(
   if (LinuxCredentialsInvokes(method)) {
     return LinuxCredentialsInvoke(!page_profile() || page_profile()->IsOffTheRecord(), shell_, method, values, std::move(done));
   }
-  if (LinuxCalendarInvokes(method)) {
-    if (!profile() || profile()->ShutdownStarted()) {
-      return std::move(done).Run(false, ProfileFailure(ardiacore::linux_profiles::ProfileError::kUnavailable));
+  if (const auto capability = ardia::desktop::Platform().CapabilityFor(method)) {
+    if (*capability == ardia::desktop::PlatformCapability::kCalendar) {
+      if (!profile() || profile()->ShutdownStarted()) {
+        return std::move(done).Run(false, ProfileFailure(ardiacore::linux_profiles::ProfileError::kUnavailable));
+      }
+      WatchCalendar();
     }
-    WatchCalendar();
-    return LinuxCalendarInvoke(DocumentDirectory(profile()), method, values, std::move(done));
+    return ardia::desktop::Platform().Invoke(
+        *capability, {method, values, profile() ? DocumentDirectory(profile()) : base::FilePath()}, std::move(done));
   }
   if (LinuxSyncInvokes(method)) {
     return LinuxSyncInvoke({base::NumberToString(id_) + "#" + base::NumberToString(renderer_generation_),
@@ -6601,7 +7071,7 @@ void ShellHostView::Invoke(
   if (ardiacore::LinuxSystemInvokes(method)) {
     return ardiacore::LinuxSystemInvoke(method, values, std::move(done));
   }
-  if (method == ardia::linux_bang_list::kCall) return ardiacore::FetchLinuxBangList(values, std::move(done));
+  if (method == ardia::desktop_bang_list::kCall) return ardiacore::FetchLinuxBangList(values, std::move(done));
   if (ardiacore::LinuxCrashInvokes(method)) {
     if (is_utility() || private_window() || !private_window_.empty()) {
       return std::move(done).Run(false, base::Value(base::DictValue()
@@ -6614,7 +7084,7 @@ void ShellHostView::Invoke(
     return ardiacore::LinuxReportInvoke(
         method, values, profile() ? DocumentDirectory(profile()) : base::FilePath(), id_,
         base::BindRepeating([](base::WeakPtr<ShellHostView> host, base::Value event) {
-          if (host) host->Event("ArdiaReport", ardia::linux_report::kEvent, std::move(event));
+          if (host) host->Event("ArdiaReport", ardia::desktop_report::kEvent, std::move(event));
         }, GetWeakPtr()),
         std::move(done));
   }
@@ -6657,7 +7127,7 @@ void ShellHostView::Invoke(
   }
   if (method == "ArdiaSearch.suggest") {
     if (values.size() != 2 || !values[0].is_string() || !values[1].is_string() ||
-        !ardia::linux_suggest_policy::ValidRequestId(values[1].GetString()) ||
+        !ardia::desktop_suggest_policy::ValidRequestId(values[1].GetString()) ||
         !ardia::linux_suggest::CanFetchSuggestions(profile(), page_profile(), values[0].GetString()))
       return std::move(done).Run(false, base::Value(base::DictValue()
           .Set("code", "ERR_SUGGEST_REFUSED").Set("message", "Search suggestion request refused")));
@@ -6699,7 +7169,7 @@ void ShellHostView::Invoke(
   }
   if (method == "ArdiaTelemetry.post") {
     if (values.size() != 2 || !values[0].is_string() || !values[1].is_string() ||
-        !ardia::linux_telemetry_policy::PostAcceptable(values[0].GetString(), values[1].GetString()))
+        !ardia::desktop_telemetry_policy::PostAcceptable(values[0].GetString(), values[1].GetString()))
       return std::move(done).Run(false, base::Value(base::DictValue()
           .Set("code", "ERR_TELEMETRY_REFUSED").Set("message", "Telemetry request refused")));
     return telemetry_->Post(values[0].GetString(), values[1].GetString(), base::BindOnce(
@@ -7028,7 +7498,7 @@ void ShellHostView::Invoke(
   }
   if (method == "ArdiaShell.readDocument") {
     const std::string name = ArgumentString(values, 0);
-    if (!linux_policy::ValidDocumentName(name) || name == kSessionName ||
+    if (!desktop_policy::ValidDocumentName(name) || name == kSessionName ||
         LinuxDocuments::Reserved(name)) {
       return std::move(done).Run(false, base::Value("Invalid or reserved document name"));
     }
@@ -7037,11 +7507,11 @@ void ShellHostView::Invoke(
         base::BindOnce(
             [](base::OnceCallback<void(bool, base::Value)> done,
                StoredDocument stored) {
-              if (stored.outcome == linux_policy::StoredRead::kFailed) {
+              if (stored.outcome == desktop_policy::StoredRead::kFailed) {
                 return std::move(done).Run(false, base::Value(base::DictValue()
                     .Set("code", "ERR_DOCUMENT_READ").Set("message", "The document could not be read")));
               }
-              std::move(done).Run(true, stored.outcome == linux_policy::StoredRead::kFound
+              std::move(done).Run(true, stored.outcome == desktop_policy::StoredRead::kFound
                                             ? base::Value(std::move(stored.contents))
                                             : base::Value());
             }, std::move(done)));
@@ -7050,7 +7520,7 @@ void ShellHostView::Invoke(
   if (method == "ArdiaShell.writeDocument" || method == "ArdiaShell.saveDocument" ||
       method == "ArdiaShell.removeDocument") {
     const std::string name = ArgumentString(values, 0);
-    if (!linux_policy::ValidDocumentName(name) || name == kSessionName ||
+    if (!desktop_policy::ValidDocumentName(name) || name == kSessionName ||
         LinuxDocuments::Reserved(name)) {
       return std::move(done).Run(false, base::Value("Invalid or reserved document name"));
     }
@@ -7060,7 +7530,7 @@ void ShellHostView::Invoke(
         return std::move(done).Run(false, base::Value("Document text is required"));
       }
       contents = values[1].GetString();
-      if (contents->size() > linux_policy::DocumentLimit(name))
+      if (contents->size() > desktop_policy::DocumentLimit(name))
         return std::move(done).Run(false, base::Value(base::DictValue()
             .Set("code", "ERR_DOCUMENT_LIMIT").Set("message", "Document storage limit exceeded")));
     }
@@ -7223,6 +7693,9 @@ void ShellHostView::Invoke(
     }
     return std::move(done).Run(true, base::Value());
   }
+  if (method == desktop_window_state::kWindowButtonLayoutCall) {
+    return std::move(done).Run(true, WindowButtonLayoutValue());
+  }
   if (method == "ArdiaShell.windowIds") {
     base::ListValue ids;
     for (const auto& [id, host] : Hosts()) {
@@ -7231,14 +7704,15 @@ void ShellHostView::Invoke(
     return std::move(done).Run(true, base::Value(std::move(ids)));
   }
   if (method == "ArdiaShell.startWindowMove" || method == "ArdiaShell.captionDoubleClick") {
-    const bool handled = method == "ArdiaShell.startWindowMove" ? linux_window::StartCaptionMove(GetWidget())
-                                                                : linux_window::CaptionDoubleClick(GetWidget());
+    const bool handled = method == "ArdiaShell.startWindowMove" ? ardia::desktop::Platform().StartWindowMove(GetWidget())
+                                                                : ardia::desktop::Platform().CaptionDoubleClick(GetWidget());
     return std::move(done).Run(true, base::Value(handled));
   }
   if (method == "ArdiaShell.windowFrame" || method == "ArdiaShell.closeWindow" ||
-      method == "ArdiaShell.minimizeWindow" ||
+      method == "ArdiaShell.minimizeWindow" || method == desktop_window_state::kWindowStateCall ||
+      method == desktop_window_corners::kWindowDecorationsCall ||
       method == "ArdiaShell.toggleMaximizeWindow" ||
-      method == ardia::linux_commands::kToggleFullScreenCall ||
+      method == ardia::desktop_commands::kToggleFullScreenCall ||
       method == "ArdiaShell.focusWindow" || method == "ArdiaShell.utilityReady" ||
       method == "ArdiaShell.shellPainted" || method == "ArdiaShell.setWindowTitle") {
     ShellHostView* target = nullptr;
@@ -7267,6 +7741,12 @@ void ShellHostView::Invoke(
     if (method == "ArdiaShell.windowFrame") {
       return std::move(done).Run(true, base::Value(SharedFrameValue(target->browser()->GetWindow()->GetBounds())));
     }
+    if (method == desktop_window_corners::kWindowDecorationsCall) {
+      return std::move(done).Run(true, base::Value(target->WindowDecorationsValue()));
+    }
+    if (method == desktop_window_state::kWindowStateCall) {
+      return std::move(done).Run(true, base::Value(WindowStateValue(target->NativeWindowState())));
+    }
     if (method == "ArdiaShell.setWindowTitle") {
       target->browser()->GetWindow()->GetNativeWindow()->SetTitle(
           base::UTF8ToUTF16(ArgumentString(values, 1)));
@@ -7282,11 +7762,11 @@ void ShellHostView::Invoke(
       } else {
         window->Maximize();
       }
-    } else if (method == ardia::linux_commands::kToggleFullScreenCall) {
+    } else if (method == ardia::desktop_commands::kToggleFullScreenCall) {
       views::Widget* widget = target->GetWidget();
       ExclusiveAccessManager* access = target->is_utility() ? nullptr : ExclusiveAccessManager::From(target->browser());
       if (!widget || !access) return std::move(done).Run(false, base::Value("Only browser windows go full screen"));
-      const bool full_screen = ardia::linux_commands::FullScreenAfterToggle(widget->IsFullscreen());
+      const bool full_screen = ardia::desktop_commands::FullScreenAfterToggle(widget->IsFullscreen());
       access->fullscreen_controller()->ToggleBrowserFullscreenMode(true);
       return std::move(done).Run(true, base::Value(full_screen));
     } else if (method == "ArdiaShell.focusWindow") {
@@ -7415,7 +7895,7 @@ void ShellHostView::Invoke(
         ui::NativeTheme::GetInstanceForNativeUi()->preferred_color_scheme() ==
         ui::NativeTheme::PreferredColorScheme::kDark));
   }
-  if (method == ardia::linux_commands::kReadTextCall) {
+  if (method == ardia::desktop_commands::kReadTextCall) {
     if (values.size() != 0) return std::move(done).Run(false, base::Value(method + " takes no arguments"));
     ui::Clipboard* clipboard = ui::Clipboard::GetForCurrentThread();
     if (!clipboard) return std::move(done).Run(true, base::Value(""));
@@ -7528,7 +8008,7 @@ std::optional<gfx::PointF> TabBinding::ShellPoint(gfx::PointF page_point) const 
 void TabBinding::ReportSwipe(base::DictValue swipe) {
   if (!owner_ || !presented || !pane_visible) return;
   swipe.Set("tabId", key_);
-  owner_->Event("ArdiaShell", ardia::linux_swipe::kPageSwipeEvent, base::Value(std::move(swipe)));
+  owner_->Event("ArdiaShell", ardia::desktop_swipe::kPageSwipeEvent, base::Value(std::move(swipe)));
 }
 
 bool TabBinding::PeeksOtherSites() const {
@@ -7586,9 +8066,12 @@ std::optional<gfx::PointF> ShellHostView::ShellPoint(const TabBinding& binding, 
   const double scale = blink::ZoomLevelToZoomFactor(zoom::ZoomController::GetZoomLevelForWebContents(shell()));
   if (!std::isfinite(scale) || scale <= 0) return std::nullopt;
   const gfx::Rect& pane = binding.pane_bounds;
-  const double x = std::clamp<double>(page_point.x(), 0, pane.width());
-  const double y = std::clamp<double>(page_point.y(), 0, pane.height());
-  return gfx::PointF((pane.x() + x) / scale, (pane.y() + y) / scale);
+  const bool tools_open = binding.devtools_viewport() && binding.devtools_viewport()->GetVisible();
+  const gfx::Point content_origin =
+      tools_open || binding.content_bounds.IsEmpty() ? pane.origin() : binding.content_bounds.origin();
+  const double x = std::clamp<double>(content_origin.x() + page_point.x(), pane.x(), pane.right());
+  const double y = std::clamp<double>(content_origin.y() + page_point.y(), pane.y(), pane.bottom());
+  return gfx::PointF(x / scale, y / scale);
 }
 
 std::optional<double> ShellHostView::PointerFromPageBottom(content::WebContents* contents) {
@@ -7900,6 +8383,7 @@ void TabBinding::WebContentsDestroyed() {
     devtools_viewport_->SetWebContents(nullptr);
   }
   owner_->LayoutPane(this);
+  owner_->ForgetClosedTab(this);
 }
 
 std::map<int, RequestedWindow>& RequestedWindows() {
@@ -8154,8 +8638,9 @@ void StartLinuxHost() {
   ardiacore::InstallLinuxBackgroundFileDialogs();
   g_ardia_auto_picture_in_picture_off = true;
   ardia::InstallCliVisibleTabs();
-  ardia::linux_password::InstallReauthFallback();
-  ardia::InstallLinuxLocationProvider();
+  ardia::InstallCliConsoleRing();
+  ardia::desktop::Platform().InstallReauth();
+  ardia::desktop::Platform().InstallLocationProvider();
   g_ardia_linux_tab_shown = [](content::WebContents* contents) {
     for (const auto& [id, host] : Hosts()) {
       const int shown = host->TabShown(contents);
@@ -8190,6 +8675,12 @@ void StartLinuxHost() {
     }
     return false;
   };
+  static base::NoDestructor<WindowButtonLayoutWatch> window_button_layout_watch;
+  g_ardia_linux_tiled_edges_changed = [](views::Widget* widget) {
+    for (const auto& [id, host] : Hosts()) {
+      if (host->GetWidget() == widget) host->ScheduleWindowStateReport();
+    }
+  };
   g_ardia_linux_minimum_size = [](const BrowserWindowInterface* browser, gfx::Size* minimum) {
     if (!browser || !minimum) return;
     const auto found = Hosts().find(browser->GetSessionID().id());
@@ -8197,7 +8688,7 @@ void StartLinuxHost() {
   };
   g_ardia_linux_unhandled_key = [](content::WebContents* contents, const input::NativeWebKeyboardEvent& event) {
     const int modifiers = event.GetModifiers();
-    if (!ardia::linux_keys::IsUnhandledEscape({
+    if (!ardia::desktop_keys::IsUnhandledEscape({
             .raw_key_down = event.GetType() == blink::WebInputEvent::Type::kRawKeyDown,
             .key_code = event.windows_key_code,
             .control = (modifiers & blink::WebInputEvent::kControlKey) != 0,
@@ -8293,6 +8784,18 @@ void StartLinuxHost() {
   };
   g_ardia_linux_is_companion = [](const BrowserWindowInterface* browser) { return IsCompanion(browser); };
   g_ardia_linux_frameless_app = &IsUtilityAppName;
+  g_ardia_linux_borderless_frame = [](const BrowserWindowInterface* browser) {
+    if (!browser) return false;
+    const auto found = Hosts().find(browser->GetSessionID().id());
+    return found != Hosts().end() && found->second->FrameIsBorderless();
+  };
+  g_ardia_linux_compositor_decoration_changed = [](gfx::AcceleratedWidget widget) {
+    for (const auto& [id, host] : Hosts()) {
+      if (!host->HostsAcceleratedWidget(widget)) continue;
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, base::BindOnce(&ShellHostView::FollowDecorations, host->GetWeakPtr()));
+    }
+  };
   g_ardia_linux_automation_window = &ardiacore::IsLinuxAutomationWindow;
   g_ardia_linux_shell_passes_point = [](gfx::NativeView child, const gfx::Point& location) {
     return std::ranges::any_of(Hosts(), [&](const auto& entry) { return entry.second->PassesShellPoint(child, location); });

@@ -1,0 +1,16 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Pilot form</title>
+<style>body{font:20px system-ui;margin:40px;background:#f6f7fb}input{font:22px system-ui;padding:10px;width:520px}#log{margin-top:16px;color:#345}</style>
+</head><body>
+<h1>WebUI pilot page</h1>
+<p>Typed keys arrive in this page's input:</p>
+<input id="q" placeholder="type here">
+<div id="log"></div>
+<script>
+const q = document.getElementById('q');
+const log = document.getElementById('log');
+q.addEventListener('input', () => { log.textContent = 'value: ' + q.value; });
+addEventListener('focus', () => { document.title = 'Pilot form (focused)'; });
+addEventListener('blur', () => { document.title = 'Pilot form'; });
+</script>
+</body></html>

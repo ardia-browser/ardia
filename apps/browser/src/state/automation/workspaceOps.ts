@@ -6,8 +6,8 @@ import { EMOJI_GROUPS } from "../../lib/emojiData";
 import { urlParts } from "../../lib/urlParts";
 import { internalPageOf } from "../pages/urls";
 
-export const MAX_OPS = 500;
-export const MAX_URLS = 100;
+const MAX_OPS = 500;
+const MAX_URLS = 100;
 const MAX_ID = 128;
 const MAX_TEXT = 200;
 const MAX_URL = 8192;
@@ -40,8 +40,8 @@ const SPECS = {
   "group.delete": { required: ["group"], fields: { group: "group" } },
 } satisfies Record<string, { required: string[]; fields: Record<string, Kind> }>;
 
-export type OpName = keyof typeof SPECS;
-export const OP_NAMES = Object.keys(SPECS) as OpName[];
+type OpName = keyof typeof SPECS;
+const OP_NAMES = Object.keys(SPECS) as OpName[];
 
 export type Op = { op: OpName; [field: string]: unknown };
 
@@ -68,6 +68,8 @@ export function iconValue(value: unknown): IconValue | undefined {
   if (symbol && symbol[1]!.length <= 64) return symbolIcon(symbol[1]!);
   return value.length <= 16 && knownEmoji(value) ? value : undefined;
 }
+
+export type UrlRule = (value: string, op: OpName) => string | { error: string };
 
 export function openableUrl(value: string): string | { error: string } {
   if (!value.trim()) return { error: "An empty URL." };
@@ -97,7 +99,7 @@ function groupField(value: unknown, index: number): string | GroupName | null {
 
 const GROUP_FIELD = "a group id, a group's name, {\"name\": \"…\"}, or $N for an earlier operation's group";
 
-function check(kind: Kind, value: unknown, index: number): unknown | { bad: string } {
+function check(kind: Kind, value: unknown, index: number, op: OpName, urlRule: UrlRule): unknown | { bad: string } {
   switch (kind) {
     case "group":
       return groupField(value, index) ?? { bad: GROUP_FIELD };
@@ -116,7 +118,7 @@ function check(kind: Kind, value: unknown, index: number): unknown | { bad: stri
     case "text":
       return typeof value === "string" && value.length <= MAX_TEXT && !/[\u0000-\u001f\u007f]/.test(value) ? value.trim() : { bad: `text of at most ${MAX_TEXT} characters without control characters` };
     case "textOrNull":
-      return value === null ? null : check("text", value, index);
+      return value === null ? null : check("text", value, index, op, urlRule);
     case "pinAs":
       return value === "tile" || value === "row" ? value : { bad: "\"tile\" or \"row\"" };
     case "color":
@@ -130,7 +132,7 @@ function check(kind: Kind, value: unknown, index: number): unknown | { bad: stri
       if (!Array.isArray(list) || list.length === 0 || list.length > MAX_URLS || !list.every((v) => typeof v === "string")) return { bad: `a URL or a list of 1 to ${MAX_URLS} URLs` };
       const urls: string[] = [];
       for (const raw of list as string[]) {
-        const url = openableUrl(raw);
+        const url = urlRule(raw, op);
         if (typeof url !== "string") return { bad: url.error, refused: true };
         urls.push(url);
       }
@@ -141,7 +143,7 @@ function check(kind: Kind, value: unknown, index: number): unknown | { bad: stri
 
 export type ParseError = { index: number; code: "bad_request" | "refused"; message: string };
 
-export function parseOps(value: unknown): Op[] | ParseError {
+export function parseOps(value: unknown, urlRule: UrlRule = openableUrl): Op[] | ParseError {
   const list = Array.isArray(value) ? value : null;
   if (!list || list.length === 0 || list.length > MAX_OPS) return { index: -1, code: "bad_request", message: `ops is a list of 1 to ${MAX_OPS} operations.` };
   const out: Op[] = [];
@@ -150,14 +152,14 @@ export function parseOps(value: unknown): Op[] | ParseError {
     if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return fail("an operation is a JSON object.");
     const fields = raw as Record<string, unknown>;
     const name = fields.op;
-    if (typeof name !== "string" || !(name in SPECS)) return fail(`op is one of: ${OP_NAMES.join(", ")}.`);
+    if (typeof name !== "string" || !Object.hasOwn(SPECS, name)) return fail(`op is one of: ${OP_NAMES.join(", ")}.`);
     const spec = SPECS[name as OpName] as { required: string[]; fields: Record<string, Kind> };
     const op: Op = { op: name as OpName };
     for (const [key, given] of Object.entries(fields)) {
       if (key === "op") continue;
       const kind = spec.fields[key];
       if (!kind) return fail(`${name} takes no ${key} (it takes ${Object.keys(spec.fields).join(", ")}).`);
-      const checked = check(kind, given, index);
+      const checked = check(kind, given, index, name as OpName, urlRule);
       if (checked && typeof checked === "object" && "bad" in checked) {
         const bad = checked as { bad: string; refused?: boolean };
         return fail(kind === "urls" && bad.refused ? bad.bad : `${key} must be ${bad.bad}.`, bad.refused ? "refused" : "bad_request");

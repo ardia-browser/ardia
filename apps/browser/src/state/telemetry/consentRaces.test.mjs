@@ -103,6 +103,37 @@ test("F3 memory and settings snapshots started before sharing went off and on ag
   assert.equal(posted.some((body) => body.includes("perf_memory") || body.includes("settings_snapshot")), false);
 });
 
+test("a memory sample whose reads span sharing going off and on again leaves the new period's stop-button breathing seconds for the next sample", async () => {
+  const { noteStopBreathing, takeStopBreathing } = await import("./stopBreathing.ts");
+  client.setSharing(true, "onboarding");
+  takeStopBreathing();
+  globalThis.acTestTasks = () => [{ type: "browser", memory: 300 * 1_048_576 }];
+  const app = stub.shellNativeModules.ArdiaApp;
+  const original = app.diagnosticsSample;
+  let flipped = false;
+  const started = Date.now();
+  app.diagnosticsSample = async () => {
+    if (!flipped && Date.now() - started >= 1500) {
+      flipped = true;
+      offAndOn();
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
+    return original();
+  };
+  noteStopBreathing(true);
+  try {
+    await usage.devHourly();
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+  } finally {
+    app.diagnosticsSample = original;
+    globalThis.acTestTasks = undefined;
+    noteStopBreathing(false);
+  }
+  assert.equal(flipped, true);
+  assert.deepEqual(await queued("perf_memory"), []);
+  assert.ok(takeStopBreathing().stop_breathing_s >= 3);
+});
+
 test("F3 a crash read started while sharing was off doesn't send crashes from before sharing was turned on", async () => {
   client.setSharing(false, "settings");
   const app = stub.shellNativeModules.ArdiaApp;
@@ -145,6 +176,28 @@ test("F3 main-process work keeps the newest sample as its baseline when two read
     mock.timers.tick(120_000);
     const third = await answer(diagnostics.takeMainProcessWork(), { cpuMs: 1400, wakeups: 0 });
     assert.equal(third.browser_cpu_pct, 1);
+  } finally {
+    mock.timers.reset();
+    app.diagnosticsSample = original;
+  }
+});
+
+test("F3 a consent period change starts a new main-process baseline, so presses that brought Ardia forward before it aren't counted after it", async () => {
+  client.setSharing(true, "settings");
+  const app = stub.shellNativeModules.ArdiaApp;
+  const original = app.diagnosticsSample;
+  let sample = { cpuMs: 100, wakeups: 0, dragRegionActivatingPresses: 2 };
+  app.diagnosticsSample = async () => ({ ...sample });
+  mock.timers.enable({ apis: ["Date"], now: 5_000_000 });
+  try {
+    await diagnostics.takeMainProcessWork();
+    sample = { cpuMs: 200, wakeups: 0, dragRegionActivatingPresses: 9 };
+    offAndOn();
+    for (let i = 0; i < 20; i++) await turn();
+    mock.timers.tick(120_000);
+    sample = { cpuMs: 1400, wakeups: 0, dragRegionActivatingPresses: 10 };
+    const work = await diagnostics.takeMainProcessWork();
+    assert.equal(work.drag_region_activating_presses, 1);
   } finally {
     mock.timers.reset();
     app.diagnosticsSample = original;

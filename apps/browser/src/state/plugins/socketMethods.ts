@@ -4,15 +4,15 @@ import { failure } from "../automation/automationMethods";
 import type { Body } from "../automation/controlSocket";
 import { openSettings } from "../settings/settingsWindows";
 import { releaseOrphanedConsent } from "./consentSurface";
-import { ALREADY_ASKING, disablePlugin, removePlugin, requestPluginConsent } from "./lifecycle";
-import { activeManifest, currentPlugins, isAlwaysOn, isInstalled, needsReview, recordOf } from "./store";
-import { officialPlugins } from "./official";
+import { ALREADY_ASKING, removePlugin, requestPluginConsent, turnOffPlugin } from "./lifecycle";
+import { activeManifest, currentPlugins, needsReview, recordOf } from "./store";
+import { installOfficialPlugin, isOfficialName, officialPlugins } from "./official";
 import { pluginRecordsSaved } from "./savedState";
 import { callTool } from "./tools";
 
 const nameOf = (params: Record<string, unknown>) => (typeof params.name === "string" ? params.name : null);
 
-export function pluginList() {
+function pluginList() {
   const s = currentPlugins();
   return s.order.map((name) => {
     const listing = s.listings[name]!;
@@ -32,13 +32,21 @@ export function pluginList() {
   });
 }
 
-export function pluginSocketMethod(method: string, params: Record<string, unknown>): Body | Promise<Body> | null {
+function callPluginTool(params: Record<string, unknown>): Body | Promise<Body> {
+  const { plugin, tool, input } = params;
+  if (typeof plugin !== "string" || typeof tool !== "string") return failure("bad_request", "plugins.call needs a plugin and a tool.");
+  return callTool(plugin, tool, input, { kind: "socket" }).then((o) => (o.ok ? { result: o.result } : failure(o.code, o.message)));
+}
+
+export function pluginSocketMethod(method: string, params: Record<string, unknown>, serving: () => boolean = () => true): Body | Promise<Body> | null {
   if (method === "plugins") return { result: pluginList() };
   if (method === "plugins.official") return { result: officialPlugins(currentPlugins()) };
   if (!method.startsWith("plugins.")) return null;
+  if (method === "plugins.call") return callPluginTool(params);
   const name = nameOf(params);
   const plugins = currentPlugins();
-  const known = name !== null && Object.hasOwn(plugins.listings, name);
+  const official = name !== null && isOfficialName(plugins, name);
+  const known = name !== null && (Object.hasOwn(plugins.listings, name) || official);
   const recorded = name !== null && Object.hasOwn(plugins.records, name);
   const leftOn = recorded && plugins.records[name!]!.enabled;
   switch (method) {
@@ -47,24 +55,23 @@ export function pluginSocketMethod(method: string, params: Record<string, unknow
       if (activeManifest(currentPlugins(), name)) return { result: { ok: true } };
       releaseOrphanedConsent();
       if (currentPlugins().consent) return failure("refused", ALREADY_ASKING);
+      if (official) {
+        void installOfficialPlugin(name!);
+        return { result: { waiting: true } };
+      }
       if (!requestPluginConsent(name)) return failure("refused", `${name} has problems, so it can't be turned on.`);
       openSettings("plugins", null, name);
       return { result: { waiting: true } };
     case "plugins.disable": {
       if (!known && !leftOn) return failure("bad_request", `There's no plugin ${String(name)}.`);
-      if (isAlwaysOn(currentPlugins().listings[name])) return isInstalled(currentPlugins(), name!) ? failure("refused", `${name} is built into Ardia: once installed it stays.`) : { result: { ok: true } };
       const consent = consentNow();
-      if (!disablePlugin(name, consent)) return failure("failed", "Couldn't save plugins.json.");
-      return pluginRecordsSaved(consent).then((saved) => (saved ? { result: { ok: true } } : failure("failed", "It's off for now, but plugins.json couldn't be saved, so it may be on again after Ardia restarts.")));
+      return turnOffPlugin(name!, consent).then((off) =>
+        !off ? failure("failed", "Couldn't save plugins.json.") : pluginRecordsSaved(consent).then((saved) => (saved ? { result: { ok: true } } : failure("failed", "It's off for now, but plugins.json couldn't be saved, so it may be on again after Ardia restarts."))),
+      );
     }
     case "plugins.remove":
       if (!known && !recorded) return failure("bad_request", `There's no plugin ${String(name)}.`);
-      return removePlugin(name).then((r) => (r.ok ? { result: { ok: true } } : failure("failed", r.reason ?? "Couldn't remove it.")));
-    case "plugins.call": {
-      const { plugin, tool, input } = params;
-      if (typeof plugin !== "string" || typeof tool !== "string") return failure("bad_request", "plugins.call needs a plugin and a tool.");
-      return callTool(plugin, tool, input, { kind: "cli" }).then((o) => (o.ok ? { result: o.result } : failure(o.code, o.message)));
-    }
+      return removePlugin(name, serving).then((r) => (r.ok ? { result: { ok: true } } : failure("failed", r.reason ?? "Couldn't remove it.")));
   }
   return failure("unknown_method", `There's no method ${method}.`);
 }

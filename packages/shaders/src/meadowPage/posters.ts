@@ -1,4 +1,4 @@
-export type PosterShape = { aspect: number; horizon: number };
+type PosterShape = { aspect: number; horizon: number };
 
 export function nearestPoster<Poster extends PosterShape>(posters: readonly Poster[], aspect: number): Poster | null {
   let best: Poster | null = null;

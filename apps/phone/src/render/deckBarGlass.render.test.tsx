@@ -49,7 +49,7 @@ test("on glass each glyph takes the size that draws it as large as SwiftUI's sym
   const glass = jest.spyOn(lookModule, "glassIsNative").mockImplementation(() => true);
   const root = renderSurface(
     <DeckBar
-      leading={{ icon: "laptop", label: "Synced Tabs", onPress: () => undefined }}
+      leading={{ icon: "laptop", label: "Spaces", onPress: () => undefined }}
       plusLabel="New Tab"
       frost={{ source: "deck", variant: "bar" }}
       onPlus={() => undefined}

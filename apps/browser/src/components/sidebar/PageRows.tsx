@@ -21,9 +21,12 @@ import { INCOGNITO_ICON } from "../ntp/IncognitoHeading";
 import { rowPitch, ROWS_PER_FRAME, type SidebarGeometry } from "./pageLayout";
 import { NewTabRow } from "./NewTabRow";
 import { CleanUpUpsell } from "./CleanUpUpsell";
+import { PluginSidebarViews } from "../plugins/PluginSidebarViews";
+import { PLUGIN_CHROME, usePluginChrome } from "../../state/plugins/chrome";
 import { sidebarTokens, TAB_ROW } from "./tokens";
 import { tailKey } from "./dragModel";
 import type { ListViewport } from "./listViewport";
+import { useLaunchGrowth } from "./useLaunchGrowth";
 
 type PageRowsProps = {
   windowId: string;
@@ -40,24 +43,31 @@ type PageRowsProps = {
   geometry: RefObject<SidebarGeometry> | undefined;
   regions: SidebarGeometry["regions"];
   viewport: ListViewport | null;
-  onListHeight: (height: number) => void;
 };
 
 const DOCKED_TILES_GAP = SCROLL_EDGE.gap + SCROLL_EDGE.line + SCROLL_EDGE.inset;
 
-export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, tiles, underDockedTiles, innerWidth, inlineNewTab, controller, geometry, regions, viewport, onListHeight }: PageRowsProps) {
+export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, tiles, underDockedTiles, innerWidth, inlineNewTab, controller, geometry, regions, viewport }: PageRowsProps) {
   const [captured] = useState(newCapture);
+  const pluginViews = usePluginChrome(PLUGIN_CHROME.sidebar);
   const { list: all } = useCapturedSidebarEntries(windowId, profileId, captured);
   const [mountedRows, setMountedRows] = useState(() => firstPaintEntriesNow(windowId, profileId, all, lazy));
   const [visited, setVisited] = useState(current);
-  if (current && !visited) setVisited(true);
+  const [lastRows, setLastRows] = useState(rows ?? 0);
+  if (rows !== undefined && rows !== lastRows) setLastRows(rows);
+  if (current && !visited) {
+    setVisited(true);
+    if (Math.min(lastRows, all.length) > mountedRows) setMountedRows(Math.min(lastRows, all.length));
+  }
   const cap = offScreen ? 0 : visited ? undefined : rows;
   const growing = cap === undefined && mountedRows < all.length;
+  const launch = useLaunchGrowth(windowId, { lazy, current, total: all.length, shownRows: Math.min(mountedRows, all.length), controller });
+  const growNow = growing && !launch.holding;
   useEffect(() => {
-    if (!growing) return;
+    if (!growNow) return;
     const frame = requestAnimationFrame(() => setMountedRows((n) => (n + ROWS_PER_FRAME >= all.length ? Infinity : n + ROWS_PER_FRAME)));
     return () => cancelAnimationFrame(frame);
-  }, [growing, mountedRows, all.length]);
+  }, [growNow, mountedRows, all.length]);
   const limit = cap ?? (growing ? mountedRows : undefined);
   const list = limit === undefined ? all : all.slice(0, limit);
   const pending = usePendingEntriesHeight(windowId, profileId, all, mountedRows, growing);
@@ -74,14 +84,12 @@ export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, 
   const pinnedGap = collapsed && !kept && !pinnedFold.moving ? 0 : layout.rowGap;
   const newTabButtonAtTop = useNewTabAtTop();
   const animated = current && !offScreen;
-  const motion = useListMotion(windowId, profileId, all, captured, animated, viewport, newTabButtonAtTop && inlineNewTab ? rowPitch() : 0);
-  const scope = useMemo(() => ({ slideBelow: motion.slideBelow }), [motion.slideBelow]);
+  const motion = useListMotion(windowId, profileId, all, captured, animated, viewport, newTabButtonAtTop && inlineNewTab ? rowPitch() : 0, () => ({ list: collapsed ? (kept ? [kept] : []) : pinned, base: regions.pinnedGroups - regions.list }));
+  const scope = useMemo(() => ({ slideBelow: motion.slideBelow, seenIn: motion.seenIn }), [motion.slideBelow, motion.seenIn]);
   if (geometry) geometry.current.newTabAtTop = newTabButtonAtTop && inlineNewTab;
   return (
     <ListMotionContext.Provider value={scope}>
-      <View
-        onLayout={(e) => onListHeight(e.nativeEvent.layout.height + SCROLL_EDGE.inset - (inlineNewTab ? rowPitch() : 0))}
-      >
+      <View>
         {isIncognitoProfile(profileId) ? <IncognitoBadge /> : null}
         {tiles.length ? (
           <DragScope enabled={current}>
@@ -119,6 +127,7 @@ export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, 
         <View
           ref={(v) => {
             controller?.regions.set("list", v);
+            launch.list.current = v;
           }}
           onLayout={(e) => void (regions.list = e.nativeEvent.layout.y)}
           removeClippedSubviews
@@ -138,6 +147,7 @@ export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, 
           <Tail section="list" />
           {!newTabButtonAtTop && inlineNewTab ? <NewTabRow windowId={windowId} shift={motion.tail} clip={motion.tailClip} /> : null}
         </View>
+        {pluginViews && !offScreen && !isIncognitoProfile(profileId) ? <PluginSidebarViews windowId={windowId} /> : null}
         {current ? <CleanUpUpsell windowId={windowId} shift={motion.tail} /> : null}
       </View>
     </ListMotionContext.Provider>

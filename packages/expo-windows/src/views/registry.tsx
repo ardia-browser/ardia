@@ -14,11 +14,6 @@ const withEngine = new Map<string, ViewByName>([["ArdiaWebView", EngineWebView]]
 
 const views = new Map<string, ViewByName>();
 
-export function registerView(name: string, view: ViewByName) {
-  known.set(name, view);
-  views.delete(name);
-}
-
 function placeholderFor(name: string): ViewByName {
   return forwardRef<View, ViewProps>(function Placeholder(props, ref) {
     useEffect(() => {
@@ -29,7 +24,7 @@ function placeholderFor(name: string): ViewByName {
   });
 }
 
-export function viewOnWindows(name: string): ViewByName {
+function viewOnWindows(name: string): ViewByName {
   const cached = views.get(name);
   if (cached) return cached;
   const made = known.get(name) ?? (engineAvailable() ? withEngine.get(name) : undefined) ?? placeholderFor(name);

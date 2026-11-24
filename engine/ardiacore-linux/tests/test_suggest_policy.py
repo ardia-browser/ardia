@@ -6,6 +6,7 @@ import unittest
 
 
 SOURCE = pathlib.Path(__file__).resolve().parents[1] / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 
 
 class SuggestPolicyTests(unittest.TestCase):
@@ -17,9 +18,9 @@ class SuggestPolicyTests(unittest.TestCase):
 #include <optional>
 #include <string>
 #include <vector>
-#include "ardia/linux/ac_linux_suggest_policy.h"
+#include "ardia/desktop/ac_desktop_suggest_policy.h"
 int main() {
-  using namespace ardia::linux_suggest_policy;
+  using namespace ardia::desktop_suggest_policy;
   assert(RequestAllowed("https://www.google.com/complete/search?client=firefox&q=linux%20parity"));
   assert(RequestAllowed("https://duckduckgo.com/ac/?q=a&type=list"));
   assert(RequestAllowed("https://suggest.yandex.com/suggest-ff.cgi?part=%C3%A4"));
@@ -92,9 +93,9 @@ int main() {
 #include <optional>
 #include <string>
 #include <vector>
-#include "ardia/linux/ac_linux_suggest_policy.h"
+#include "ardia/desktop/ac_desktop_suggest_policy.h"
 int main() {
-  using namespace ardia::linux_suggest_policy;
+  using namespace ardia::desktop_suggest_policy;
   assert(SuggestionTemplateCandidate("https://ext.example/suggest?q=%s&client={google:clientName}") == "https://ext.example/suggest?q=q&client=");
   assert(SuggestionTemplateCandidate("https://ext.example/s?q=%s&lang={language}{inputEncoding}") == "https://ext.example/s?q=q&lang=");
   assert(SuggestionTemplateCandidate("https://ext.example/s/{a%b}?q=%s") == "https://ext.example/s/{a%b}?q=q");
@@ -164,7 +165,7 @@ def run_policy_program(compiler, code):
         cpp = scratch / 'suggest.cc'
         cpp.write_text(code, encoding='latin-1')
         binary = scratch / 'suggest'
-        compiled = subprocess.run([compiler, '-std=c++20', '-Wall', '-Werror', '-I', str(SOURCE), str(cpp), '-o', str(binary)], capture_output=True, text=True)
+        compiled = subprocess.run([compiler, '-std=c++20', '-Wall', '-Werror', '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE), str(cpp), '-o', str(binary)], capture_output=True, text=True)
         if compiled.returncode != 0:
             raise AssertionError(compiled.stderr)
         subprocess.run([str(binary)], check=True)

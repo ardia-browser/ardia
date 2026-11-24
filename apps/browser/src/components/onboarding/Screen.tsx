@@ -22,7 +22,7 @@ export function useScreen<K extends keyof Settings>(keys: readonly K[]) {
   return { values, base, mock: { ...base, ...values } as Settings };
 }
 
-export function useAccent() {
+function useAccent() {
   const windowId = useOnboarding((s) => s.windowId);
   return useWindowProfileValue(windowId ?? "", (p) => (p?.theme ? themeAccent(p.theme) : (PROFILE_COLORS[p?.color ?? "plum"] ?? PROFILE_COLORS.plum).swatch));
 }
@@ -31,7 +31,7 @@ const MOCK_SIZE = { width: 420, height: 300 } as const;
 const MOCK_OVERLAY_FADE = { duration: onboardingMotion.mockOverlay, easing: curve.enter };
 const MOCK_OVERLAY_PRESENCE = { show: MOCK_OVERLAY_FADE, hide: MOCK_OVERLAY_FADE };
 
-export function MockPanel({ settings, focus, overlay, switcher }: { settings: Partial<Settings>; focus: PreviewId | null; overlay?: ReactNode; switcher?: boolean }) {
+export function MockPanel({ settings, focus, overlay }: { settings: Partial<Settings>; focus: PreviewId | null; overlay?: ReactNode }) {
   const accent = useAccent();
   const windowId = useOnboarding((s) => s.windowId);
   const custom = useWindowProfileValue(windowId ?? "", (p) => p?.theme ?? null);
@@ -39,7 +39,7 @@ export function MockPanel({ settings, focus, overlay, switcher }: { settings: Pa
   return (
     <View style={{ alignItems: "center", justifyContent: "center" }}>
       <Animated.View style={{ width: MOCK_SIZE.width, height: MOCK_SIZE.height, opacity: t.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }}>
-        <MockWindow settings={settings} accent={accent} theme={custom} focus={focus} switcher={switcher} />
+        <MockWindow settings={settings} accent={accent} theme={custom} focus={focus} />
       </Animated.View>
       {shown ? (
         <Animated.View

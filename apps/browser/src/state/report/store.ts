@@ -12,7 +12,7 @@ export type Recording =
 
 export type Trace = { phase: "none" } | { phase: "tracing" } | { phase: "saving" } | { phase: "ready"; path: string; bytes: number; seconds: number } | { phase: "failed" };
 
-export type LocalEvents = { path: string; bytes: number; lines: number } | null;
+type LocalEvents = { path: string; bytes: number; lines: number } | null;
 
 export type SentReport = { id: string; issueUrl: string | null; issueNumber: number | null; name: string; avatar: { colors: [string, string, string]; angle: number }; watchUntil: number | null; watchTurnsOff: boolean };
 

@@ -9,6 +9,7 @@ final class PluginPageMessageBridge: NSObject, WKScriptMessageHandler {
 
   let binding: PageBinding
   weak var webView: WKWebView?
+  var delivered: ((String) -> Void)?
   private(set) var revoked = false
   private let limit = PluginPageMessages.Limit()
 
@@ -31,6 +32,7 @@ final class PluginPageMessageBridge: NSObject, WKScriptMessageHandler {
       origin.host == binding.plugin, binding.run > 0, limit.allow(now: ProcessInfo.processInfo.systemUptime)
     else { return }
     PluginHost.shared.pageMessage(binding, body: message.body)
+    if let delivered, let text = message.body as? String, PluginPageMessages.fromPage(text, view: binding.view) != nil { delivered(text) }
   }
 
   static func deliver(_ binding: PageBinding, _ json: String, done: @escaping () -> Void) {
@@ -45,6 +47,9 @@ final class PluginPageView: ExpoView, WKNavigationDelegate, WKUIDelegate {
   private var bridge: PluginPageMessageBridge?
 
   let onLoaded = EventDispatcher()
+  let onTitleChange = EventDispatcher()
+  let onNavigationChange = EventDispatcher()
+  let onMessage = EventDispatcher()
 
   var plugin = "" { didSet { if plugin != oldValue { rebuild() } } }
   var url = "" { didSet { if url != oldValue { gate.wantsLoad() } } }
@@ -53,6 +58,12 @@ final class PluginPageView: ExpoView, WKNavigationDelegate, WKUIDelegate {
   var approved = "" { didSet { if approved != oldValue { rebuild() } } }
   var run = 0 { didSet { if run != oldValue { rebuild() } } }
   var context = "" { didSet { if context != oldValue { handOver() } } }
+  var themeCss = "" { didSet { if themeCss != oldValue { applyTheme() } } }
+
+  static let themeWorld = WKContentWorld.world(name: "ardia-theme")
+  private var observations: [NSKeyValueObservation] = []
+  private var sentTitle: String?
+  private var sentNavigation: [String: AnyHashable]?
 
   static let offlinePolicy =
     "default-src 'self' ardia-plugin: data: blob: 'unsafe-inline' 'unsafe-eval'; connect-src 'self' ardia-plugin:; form-action 'self'; worker-src 'none'"
@@ -84,6 +95,7 @@ final class PluginPageView: ExpoView, WKNavigationDelegate, WKUIDelegate {
     controller.removeScriptMessageHandler(forName: "ardia", contentWorld: .page)
     let bridge = PluginPageMessageBridge(PageBinding.fresh(plugin: plugin, approved: approved, run: run))
     bridge.webView = web
+    bridge.delivered = { [weak self] body in self?.onMessage(["body": body]) }
     controller.add(bridge, contentWorld: .page, name: "ardia")
     self.bridge = bridge
   }
@@ -107,6 +119,9 @@ final class PluginPageView: ExpoView, WKNavigationDelegate, WKUIDelegate {
   private func rebuild() {
     gate.pageRemoved()
     bridge = nil
+    observations = []
+    sentTitle = nil
+    sentNavigation = nil
     web?.removeFromSuperview()
     web = nil
     guard PluginFolders.isName(plugin) else { return }
@@ -115,6 +130,7 @@ final class PluginPageView: ExpoView, WKNavigationDelegate, WKUIDelegate {
     configuration.setURLSchemeHandler(
       PluginSchemeHandler(plugin: plugin, folderId: folderId, approved: approved, policy: network ? nil : Self.offlinePolicy), forURLScheme: PluginSchemeHandler.scheme)
     configuration.userContentController.addUserScript(pageScript())
+    configuration.userContentController.addUserScript(themeScript())
     configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
     if !network && !PluginPageOffline.hold(preferences: configuration.preferences, configuration: configuration) {
       NSLog("[plugins] %@'s page isn't shown: this macOS can't hold a page without network offline", plugin)
@@ -132,6 +148,7 @@ final class PluginPageView: ExpoView, WKNavigationDelegate, WKUIDelegate {
     view.setValue(false, forKey: "drawsBackground")
     addSubview(view)
     web = view
+    observe(view)
     Self.live[plugin] = self
     gate.pageCreated(inWindow: window != nil)
     gate.wantsLoad()
@@ -169,10 +186,65 @@ final class PluginPageView: ExpoView, WKNavigationDelegate, WKUIDelegate {
     return WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page)
   }
 
+  private var themeLiteral: String { Self.jsString(themeCss) }
+
+  private func themeScript() -> WKUserScript {
+    let source = """
+      (() => { const apply = (text) => { let style = document.getElementById("ardia-theme"); \
+      if (!style) { style = document.createElement("style"); style.id = "ardia-theme"; } style.textContent = text; \
+      const root = document.head || document.documentElement; if (!root) return false; if (style.parentNode !== root) root.appendChild(style); return true; }; \
+      window.__ardiaThemeCss = \(themeLiteral); window.__ardiaApplyTheme = apply; \
+      if (!apply(window.__ardiaThemeCss)) { const watch = new MutationObserver(() => { if (apply(window.__ardiaThemeCss)) watch.disconnect(); }); \
+      watch.observe(document, { childList: true, subtree: true }); } })();
+      """
+    return WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: Self.themeWorld)
+  }
+
+  private func reinstallScripts(on web: WKWebView) {
+    let controller = web.configuration.userContentController
+    controller.removeAllUserScripts()
+    controller.addUserScript(pageScript())
+    controller.addUserScript(themeScript())
+  }
+
+  private func applyTheme() {
+    guard let web else { return }
+    reinstallScripts(on: web)
+    let update = "window.__ardiaThemeCss = \(themeLiteral); if (window.__ardiaApplyTheme) window.__ardiaApplyTheme(window.__ardiaThemeCss); true;"
+    web.evaluateJavaScript(update, in: nil, in: Self.themeWorld) { _ in }
+  }
+
+  private func observe(_ view: WKWebView) {
+    observations = [
+      view.observe(\.title, options: [.new]) { [weak self] _, _ in DispatchQueue.main.async { self?.reportTitle() } },
+      view.observe(\.url, options: [.new]) { [weak self] _, _ in DispatchQueue.main.async { self?.reportNavigation() } },
+      view.observe(\.canGoBack, options: [.new]) { [weak self] _, _ in DispatchQueue.main.async { self?.reportNavigation() } },
+      view.observe(\.canGoForward, options: [.new]) { [weak self] _, _ in DispatchQueue.main.async { self?.reportNavigation() } },
+    ]
+  }
+
+  private func reportTitle() {
+    guard let web else { return }
+    let title = web.title ?? ""
+    guard title != sentTitle else { return }
+    sentTitle = title
+    onTitleChange(["title": title])
+    reportNavigation()
+  }
+
+  private func reportNavigation() {
+    guard let web, web.url != nil else { return }
+    let state: [String: AnyHashable] = [
+      "url": web.url?.absoluteString ?? "", "title": web.title ?? "", "canGoBack": web.canGoBack, "canGoForward": web.canGoForward,
+    ]
+    guard state != sentNavigation else { return }
+    sentNavigation = state
+    onNavigationChange(state)
+  }
+
   private func handOver() {
     guard let web else { return }
-    web.configuration.userContentController.removeAllUserScripts()
-    web.configuration.userContentController.addUserScript(pageScript())
+    reinstallScripts(on: web)
     let update = "if (window.ardia) { window.ardia.context = \(contextLiteral); window.ardia.dispatchEvent(new Event(\"context\")); }"
     web.evaluateJavaScript(update, completionHandler: nil)
   }
@@ -198,6 +270,8 @@ final class PluginPageView: ExpoView, WKNavigationDelegate, WKUIDelegate {
 
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
     onLoaded(["url": webView.url?.absoluteString ?? "", "title": webView.title ?? ""])
+    reportTitle()
+    reportNavigation()
   }
 
   func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {

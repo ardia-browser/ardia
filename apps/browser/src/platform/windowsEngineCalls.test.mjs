@@ -5,6 +5,7 @@ import { domainCall, domainFunctions, domainsOf, reproduced, topicRouter } from 
 import { watchDownloads } from "../../../../packages/expo-windows/src/engine/domains/downloads.ts";
 import { readArgs } from "../../../../packages/expo-windows/src/engine/domains/calling.ts";
 import { privateWindowShown } from "../../../../packages/expo-windows/src/engine/privateWindows.ts";
+import { typeRows } from "../../../../packages/ardiacore/src/engine/apiRows.mjs";
 
 const repo = new URL("../../../../", import.meta.url);
 const read = (path) => readFileSync(new URL(path, repo), "utf8");
@@ -13,11 +14,18 @@ const windowsDomains = "packages/expo-windows/src/engine/domains/";
 const engineSources = "engine/chromium/src/chrome/browser/ardia/";
 const rows = JSON.parse(read(`${windowsDomains}forwarded.json`));
 const MAC_ONLY = new Set(["swipe", "webKit"]);
+const ENGINE_CALL = /^AC_(?:PROFILE|ARGS)_CALL\(\s*(ac_\w+)/gm;
+const windowsEngineCalls = new Set(
+  read("scripts/windows/engine/accepted-layer-sources.txt")
+    .split("\n")
+    .filter((name) => name.endsWith(".cc"))
+    .flatMap((name) => [...read(engineSources + name).matchAll(ENGINE_CALL)].map((match) => match[1])),
+);
 const sorted = (list) => [...list].sort();
 
 function macTables() {
   const tables = {};
-  for (const file of readdirSync(new URL(ios, repo)).filter((name) => name.endsWith("Module.swift"))) {
+  for (const file of readdirSync(new URL(ios, repo)).filter((name) => /(Module|Calls)\.swift$/.test(name))) {
     const text = read(ios + file);
     const domain = text.match(/CallTable\(domain: "([a-zA-Z]+)"/)?.[1];
     if (!domain || MAC_ONLY.has(domain)) continue;
@@ -66,7 +74,16 @@ test("the scan finds the Mac's call tables", () => {
 });
 
 test("every verb the Mac passes straight to the engine goes to the same engine call on Windows", () => {
-  const passing = Object.fromEntries(Object.entries(mac).filter(([, table]) => Object.keys(table.passing).length).map(([domain, table]) => [domain, table.passing]));
+  const passing = {};
+  for (const [domain, table] of Object.entries(mac)) {
+    for (const [verb, call] of Object.entries(table.passing)) {
+      if (rows.missing[domain]?.includes(verb)) {
+        assert.equal(windowsEngineCalls.has(call), false, `${domain}.${verb} is missing on Windows only while the Windows engine builds no ${call}`);
+        continue;
+      }
+      (passing[domain] ??= {})[verb] = call;
+    }
+  }
   const awaited = rows.awaitingEngine ?? {};
   const onWindows = Object.fromEntries(
     sorted([...new Set([...Object.keys(rows.forwarded), ...Object.keys(awaited)])]).map((domain) => [domain, { ...rows.forwarded[domain], ...awaited[domain] }]),
@@ -88,6 +105,13 @@ test("every verb of the Mac's tables is forwarded, reproduced or listed as missi
     assert.deepEqual(sorted(onWindows), sorted(table.verbs), `${domain} has the Mac's verbs`);
     assert.equal(new Set(onWindows).size, onWindows.length, `${domain} answers each verb one way`);
   }
+});
+
+test("a verb the Mac passes to an engine call Windows doesn't build is missing on Windows", () => {
+  assert.ok(windowsEngineCalls.size > 40, "the scan found the Windows engine's calls");
+  for (const [domain, table] of Object.entries(mac))
+    for (const [verb, call] of Object.entries(table.passing))
+      if (!windowsEngineCalls.has(call)) assert.ok(rows.missing[domain]?.includes(verb), `${domain}.${verb} (${call}) is listed as missing on Windows`);
 });
 
 test("Windows only names engine calls the Windows engine has", () => {
@@ -422,6 +446,19 @@ test("engine.info answers from the engine host in the Mac's shape", async () => 
   assert.deepEqual(engine.hosted, ["host.info"]);
 });
 
+test("favicons.peek reads through ac_favicons_peek, and an engine without it answers with ac_favicons_get as main did", async () => {
+  const args = { pages: ["https://a.example/"], icons: [], size: 32 };
+  const stored = { pages: { "https://a.example/": { png: ONE_PIXEL_PNG, icon: "https://a.example/favicon.ico" } }, icons: {} };
+  const current = fakeEngine((name) => (name === "ac_favicons_peek" ? JSON.stringify(stored) : '{"error":"unexpected"}'));
+  assert.deepEqual(await calling(current, "favicons")("peek", args, "work"), stored);
+  assert.deepEqual(current.calls.map((c) => c.name), ["ac_favicons_peek"]);
+  const older = fakeEngine((name) => (name === "ac_favicons_get" ? JSON.stringify(stored) : '{"error":"unknown call"}'));
+  assert.deepEqual(await calling(older, "favicons")("peek", args, "work"), stored);
+  assert.deepEqual(older.calls.map((c) => c.name), ["ac_favicons_peek", "ac_favicons_get"]);
+  const failing = fakeEngine(() => '{"error":"favicons not loaded"}');
+  await assert.rejects(calling(failing, "favicons")("peek", args, "work"), /favicons not loaded/);
+});
+
 test("favicons.fetch answers the icon Chromium stored for that address, with its size", async () => {
   const url = "https://a.example/favicon.ico";
   const engine = fakeEngine(() => JSON.stringify({ pages: {}, icons: { [url]: { png: ONE_PIXEL_PNG } } }));
@@ -550,11 +587,11 @@ test("the window list answers an empty list where the engine has none, so a call
 
 test("an event only the Windows host sends is declared apart from the Mac's, and Windows does send it", () => {
   const api = read("packages/ardiacore/src/engine/api.ts");
-  const bodyOf = (name) => api.slice(api.indexOf(`export type ${name} = {`), api.indexOf("\n};", api.indexOf(`export type ${name} = {`)));
-  const keysOf = (body) => [...body.matchAll(/^ {2}"([a-zA-Z]+\.[a-zA-Z]+)":/gm)].map((m) => m[1]);
-  const windowsOnly = keysOf(bodyOf("WindowsHostEvents"));
+  const manifest = JSON.parse(read("packages/ardiacore/src/engine/generated/manifest.json"));
+  const windowsOnly = [...typeRows(api, manifest, "WindowsHostEvents").rows];
   assert.ok(windowsOnly.length > 0);
-  const mac = new Set(keysOf(bodyOf("EngineEvents")));
+  const mac = typeRows(api, manifest, "EngineEvents").rows;
+  assert.ok(mac.has("history.changed"));
   const sent = readdirSync(new URL(windowsDomains + "../", repo)).filter((file) => /\.tsx?$/.test(file)).map((file) => read("packages/expo-windows/src/engine/" + file)).join("\n");
   for (const name of windowsOnly) {
     assert.equal(mac.has(name), false, `${name} is also in the Mac's events`);

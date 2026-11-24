@@ -14,16 +14,16 @@ const PAD = 9;
 const HEIGHT = 34;
 const MIN_CUT_NAME = 52;
 const ICON_WIDTH = 32;
-export const PROFILE_INDICATOR_X = Math.max(WINDOW_CHROME.leadingWidth + 6, CARD_INSET);
+export const profileIndicatorX = () => Math.max(WINDOW_CHROME.leadingWidth + 6, CARD_INSET);
 
-function useIndicator(room: number) {
+function useIndicator(room: number, profileShown: boolean) {
   const theme = useTheme();
   const incognito = useIsIncognito();
   const profiles = useProfiles();
   const profile = useWindowProfile();
   const title = incognito ? "Incognito" : profile.name;
   const textWidth = useMeasuredWidth(`profile-name|${title}`);
-  const shown = (incognito || profiles.length >= 2) && room >= ICON_WIDTH;
+  const shown = profileShown && (incognito || profiles.length >= 2) && room >= ICON_WIDTH;
   const nameRoom = room - 2 * PAD;
   const showName = !!textWidth && (textWidth <= nameRoom || nameRoom >= MIN_CUT_NAME);
   const width = !shown ? 0 : showName ? Math.min(room, textWidth + 2 * PAD) : ICON_WIDTH;
@@ -31,13 +31,19 @@ function useIndicator(room: number) {
   return { incognito, title, textWidth, shown, showName, width, color, profileId: profile.id };
 }
 
-export const useProfileIndicatorWidth = (room: number) => useIndicator(room).width;
+export const useProfileIndicatorWidth = (room: number, profileShown = true) => useIndicator(room, profileShown).width;
 
-export function ProfileIndicator({ room }: { room: number }) {
+export const useAppMenuInHeader = (): boolean => false;
+
+export function HeaderAppMenu(_: { size: number }): null {
+  return null;
+}
+
+export function ProfileIndicator({ room, profileShown = true }: { room: number; profileShown?: boolean }) {
   const theme = useTheme();
   const windowId = useWindowId();
   const { hovered, hoverProps } = useHover();
-  const { incognito, title, textWidth, shown, showName, width, color, profileId } = useIndicator(room);
+  const { incognito, title, textWidth, shown, showName, width, color, profileId } = useIndicator(room, profileShown);
   const pressMotion = usePressScaleMotion(!incognito && !showName && !!textWidth, buttonMotion.iconPressScale);
   const indicator = useRef<View>(null);
   if (!shown) return null;

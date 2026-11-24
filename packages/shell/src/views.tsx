@@ -3,6 +3,7 @@ import type { ViewProps } from "react-native";
 import { nativeModule } from "./nativeModules";
 import type { MiddleClickEvent } from "./system";
 import type { PluginPageProps } from "./plugins";
+import type { DockSelectionNative, FieldGlowNative, GlassEffectNative } from "./generated/native";
 
 export type WindowProfileSwapped = { selection?: string; switchId?: number; profileLoaded?: boolean; activeMs?: number; swapMs?: number; heldTimedOut?: boolean };
 export type WindowProfileProps = ViewProps & {
@@ -32,6 +33,7 @@ export type SymbolProps = ViewProps & {
   size?: number;
   weight?: "light" | "regular" | "medium" | "semibold" | "bold";
   color?: string;
+  centresInk?: boolean;
 };
 
 export const Symbol = requireNativeViewManager<SymbolProps>("ArdiaSymbol");
@@ -55,6 +57,10 @@ export const EdgeFadeMask = requireNativeViewManager<EdgeFadeMaskProps>("ArdiaEd
 export type ActivitySpinnerProps = ViewProps;
 
 export const ActivitySpinner = requireNativeViewManager<ActivitySpinnerProps>("ArdiaActivitySpinner");
+
+export type BreatheProps = ViewProps & { running: boolean; cycleMs: number; opacityRange: readonly [number, number]; scaleRange: readonly [number, number] };
+
+export const Breathe = requireNativeViewManager<BreatheProps>("ArdiaBreathe");
 
 export type FolderIconProps = ViewProps & {
   open: boolean;
@@ -136,7 +142,7 @@ export type GlassEffectProps = ViewProps & {
   dark?: boolean;
 };
 
-export type GlassEffectNative = { isLiquidGlass(): boolean };
+export type { GlassEffectNative };
 
 const GlassEffectModule = nativeModule("ArdiaGlassEffect");
 
@@ -179,10 +185,7 @@ export function PopoverBubble({ shadowOpacity, shadowRadius, shadowOffsetY, ...p
 
 export type IconTheme = { kind: "blur" } | { kind: "template"; fill: string; stroke?: string };
 
-export type DockSelectionNative = {
-  iconTheme(uri: string | null, emoji: string | null): Promise<IconTheme | null>;
-  iconAccent(uri: string): Promise<string | null>;
-};
+export type { DockSelectionNative };
 
 const DockSelectionModule = nativeModule("ArdiaDockSelection");
 
@@ -209,3 +212,21 @@ export type DockSelectionProps = ViewProps & {
 export const DockSelection = requireNativeViewManager<DockSelectionProps>("ArdiaDockSelection");
 
 export const PluginPageView = requireNativeViewManager<PluginPageProps>("ArdiaPlugins");
+
+export type FieldGlowLook = {
+  rgba: readonly number[];
+  glow: number[][];
+  tailFade: number[];
+  capFade: number[];
+  tail: number;
+  cap: number;
+  frontShare: number;
+  tailCeiling: number;
+  line: number;
+  floor: number;
+};
+type FieldGlowProps = ViewProps & { glowId: string; radius: number; look: FieldGlowLook };
+export type { FieldGlowNative };
+
+let fieldGlowView: ReturnType<typeof requireNativeViewManager<FieldGlowProps>> | null = null;
+export const FieldGlowView = () => (fieldGlowView ??= requireNativeViewManager<FieldGlowProps>("ArdiaFieldGlow"));

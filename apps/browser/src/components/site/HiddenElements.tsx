@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { displayHost } from "@ardia/core";
-import { Button, MenuRow, MenuSeparator, PANEL, PanelHeader, Popover, POPOVER_WIDTH, usePopoverPresence } from "../ui";
+import { Button, MenuRow, MenuSeparator, PANEL, PanelHeader, Popover, POPOVER_WIDTH } from "../ui";
 import { Favicon } from "../favicon/Favicon";
 import { useTab } from "../../state/browser/hooks";
 import { currentEngineProfile } from "../../state/browser/current";
@@ -13,12 +13,7 @@ import { hiddenElementsOn, hiddenElementTitle, restoreHiddenElements, startHidin
 export const HIDDEN_ELEMENTS_WIDTH = POPOVER_WIDTH.l;
 const LIST_HEIGHT = 300;
 
-export function HiddenElementsPopover({ open, ...place }: SitePanelPlace & { open: boolean }) {
-  const presence = usePopoverPresence(open);
-  return presence.shown ? <HiddenElementsPanel {...place} closing={presence.closing} onClosed={presence.onClosed} /> : null;
-}
-
-function HiddenElementsPanel({ tabId, right, left, top, closing, onClosed }: SitePanelPlace & { closing: boolean; onClosed: () => void }) {
+export function HiddenElementsPanel({ tabId, right, left, top, closing, onClosed }: SitePanelPlace & { closing: boolean; onClosed: () => void }) {
   const tab = useTab(tabId);
   const changes = useHiddenElements((s) => s.changes);
   const [listed, setListed] = useState<{ host: string; elements: HiddenElement[] } | null>(null);

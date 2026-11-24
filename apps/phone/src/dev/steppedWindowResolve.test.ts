@@ -22,3 +22,8 @@ test("Expo UI still has the window module the iPhone build replaces", () => {
   assert.equal(typeof upstream.getWindow, "function");
   assert.equal(typeof upstream.getSlotIndices, "function");
 });
+
+test("phone bundles inline their requires, so a module loads when it is first used rather than at launch", async () => {
+  const options = await config.transformer.getTransformOptions([], { dev: false, hot: false, platform: "ios" }, async () => []);
+  assert.deepEqual(options.transform, { experimentalImportSupport: true, inlineRequires: true });
+});

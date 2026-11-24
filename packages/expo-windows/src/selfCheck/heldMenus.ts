@@ -1,9 +1,9 @@
 import type { WindowsNative } from "@ardia/shell";
-import { engineAvailable, hostCall, onEngineTopic } from "../engine/host";
+import { engineAvailable, hostCall } from "../engine/host";
 import { requireNativeModule } from "../modules";
 import type { DialogsModule, MenusModule } from "../nativeModuleTypes";
 import { expectTrue, type Check } from "./check";
-import type { TabEvent } from "./engineHost";
+import { pageLoads } from "./heldDialogs";
 
 const LOAD_MS = 8000;
 const STALLED_MS = 3000;
@@ -16,21 +16,6 @@ const dialogs = () => requireNativeModule<Pick<DialogsModule, "devReleaseDialogs
 const windows = () => requireNativeModule<Pick<WindowsNative, "windowIds" | "openWindow" | "closeWindow">>("ArdiaAppWindows");
 const MENU_OWNER = "self-check-menu-owner";
 const settled = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-
-const pageLoads = (key: string, title: string, withinMs: number) =>
-  new Promise<boolean>((resolve) => {
-    const watching = onEngineTopic("tab", (event: TabEvent) => {
-      if (event.key !== key || event.name !== "navigation") return;
-      if (event.data?.title !== title || event.data.isLoading !== false) return;
-      clearTimeout(deadline);
-      watching.remove();
-      resolve(true);
-    });
-    const deadline = setTimeout(() => {
-      watching.remove();
-      resolve(false);
-    }, withinMs);
-  });
 
 async function menuCountReaches(count: number, withinMs: number) {
   for (let waited = 0; waited < withinMs; waited += 100) {

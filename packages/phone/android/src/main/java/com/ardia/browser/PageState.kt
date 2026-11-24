@@ -56,6 +56,22 @@ enum class NightShadeMode(val raw: String) {
     Always("always"),
 }
 
+enum class NightShadeVerdict(val raw: String) {
+    Light("light"),
+    Dark("dark"),
+    ;
+
+    companion object {
+        fun of(raw: String?): NightShadeVerdict? = entries.firstOrNull { it.raw == raw }
+    }
+}
+
+enum class NightShadeVerdictUse {
+    Reused,
+    Learned,
+    Corrected,
+}
+
 class PrivatePagesUnavailableException : IllegalStateException("Private pages need separate website data, which this WebView cannot give")
 
 enum class WebsiteDataKind {

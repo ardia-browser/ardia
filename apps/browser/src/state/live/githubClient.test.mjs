@@ -136,7 +136,7 @@ test("pull requests an organization's token policy hides drop out and the folder
   setConsentPeriod(false, null);
   assert.ok(items.length > 0);
   assert.equal(client.warning()?.kind, "tokenBlocked");
-  assert.equal(client.warning()?.message, message);
+  assert.equal(client.warning()?.message, "This token can't read some pull requests: https://github.com/settings/personal-access-tokens/1", "the folder keeps GitHub's settings link, never GitHub's own text");
   assert.equal(takeLiveGithubCounts().live_github_blocked_listings, 1);
 });
 

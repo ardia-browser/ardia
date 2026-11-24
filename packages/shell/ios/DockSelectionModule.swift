@@ -3,21 +3,25 @@ import ArdiaCore
 import CoreImage
 import ExpoModulesCore
 
-public class DockSelectionModule: Module {
+public class DockSelectionModule: Module, DockSelectionNative {
+  static func iconTheme(_ uri: String?, _ emoji: String?) -> [String: Any]? {
+    guard let source = IconSource(uri: uri, emoji: emoji), let image = source.load() else { return nil }
+    let theme = IconTheme.generate(image)
+    if case .blur? = theme, let blurred = BlurredIcon.of(source) { _ = GlassGlow.of(source, blurred: blurred.plain) }
+    return theme?.json
+  }
+
+  static func iconAccent(_ uri: String) -> String? {
+    guard let image = IconSource(uri: uri, emoji: nil)?.load() else { return nil }
+    return IconAccent.dominant(image)
+  }
+
   public func definition() -> ModuleDefinition {
-    Name("ArdiaDockSelection")
+    Name(Self.moduleName)
 
-    AsyncFunction("iconTheme") { (uri: String?, emoji: String?) -> [String: Any]? in
-      guard let source = IconSource(uri: uri, emoji: emoji), let image = source.load() else { return nil }
-      let theme = IconTheme.generate(image)
-      if case .blur? = theme, let blurred = BlurredIcon.of(source) { _ = GlassGlow.of(source, blurred: blurred.plain) }
-      return theme?.json
-    }
+    Self.iconThemeFunction
 
-    AsyncFunction("iconAccent") { (uri: String) -> String? in
-      guard let image = IconSource(uri: uri, emoji: nil)?.load() else { return nil }
-      return IconAccent.dominant(image)
-    }
+    Self.iconAccentFunction
 
     View(DockSelection.self) {
       Prop("image") { (view: DockSelection, v: String?) in view.source = IconSource(uri: v, emoji: view.source?.emoji) }

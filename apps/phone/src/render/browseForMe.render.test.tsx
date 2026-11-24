@@ -100,29 +100,29 @@ test("voice search offers Browse for Me beside Search once words are heard, and 
   unmount(voice);
 });
 
-const rowTitles = (node: ReactTestInstance) => [...new Set(node.findAll((child) => typeof child.type === "string" && typeof child.props.title === "string" && typeof child.props.systemImage === "string").map((child) => child.props.title as string))];
+const textsIn = (node: ReactTestInstance) => node.findAll((child) => typeof child.type === "string" && typeof child.props.text === "string").map((child) => child.props.text as string);
+const paneTitles = (root: ReactTestRenderer) => root.root.findAll((node) => typeof node.type === "string" && typeof node.props.title === "string" && typeof node.props.systemImage === "string").map((node) => node.props.title as string);
 
-const experimental = (root: ReactTestRenderer) => root.root.findAll((node) => typeof node.type === "string" && node.props.title === "Experimental");
-
-onIos("Settings lists Browse for Me alone in an Experimental section, saying On iPhone until ChatGPT is connected, and drops the section without the native page", () => {
+onIos("Settings lists Experimental as a pane holding Browse for Me, saying On iPhone until ChatGPT is connected, and drops the pane without the native page", () => {
   act(() => openSettings());
   const root: ReactTestRenderer = renderSurface(<SettingsView />);
-  const sections = experimental(root);
-  expect(sections.length).toBeGreaterThan(0);
-  expect(rowTitles(sections[0]!)).toEqual(["Browse for Me"]);
-  expect(rowTitles(root.root)).toContain("Search Engine");
-  const links = root.root.findAll((node) => typeof node.type === "string" && typeof node.props.value === "string" && !("path" in node.props)).map((node) => node.props.value);
-  expect(links).toContain("browseForMe");
-  expect(shows(root, "On iPhone")).toBe(true);
-  send({ name: "account", connected: true });
-  expect(shows(root, "ChatGPT")).toBe(true);
-  expect(shows(root, "On iPhone")).toBe(false);
-  send({ name: "account", connected: false });
+  expect(paneTitles(root)).toContain("Experimental");
   unmount(root);
+  act(() => openSettings({ page: "experimental" }));
+  const pane: ReactTestRenderer = renderSurface(<SettingsView />);
+  expect(textsIn(pane.root)).toContain("Browse for Me");
+  const links = pane.root.findAll((node) => typeof node.type === "string" && typeof node.props.value === "string" && !("path" in node.props)).map((node) => node.props.value);
+  expect(links).toContain("browseForMe");
+  expect(shows(pane, "On iPhone")).toBe(true);
+  send({ name: "account", connected: true });
+  expect(shows(pane, "ChatGPT")).toBe(true);
+  expect(shows(pane, "On iPhone")).toBe(false);
+  send({ name: "account", connected: false });
+  unmount(pane);
   available = false;
+  act(() => openSettings());
   const without: ReactTestRenderer = renderSurface(<SettingsView />);
-  expect(experimental(without)).toHaveLength(0);
-  expect(rowTitles(without.root)).not.toContain("Browse for Me");
+  expect(paneTitles(without)).not.toContain("Experimental");
   unmount(without);
 });
 

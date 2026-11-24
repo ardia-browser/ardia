@@ -60,7 +60,29 @@ data class SyncedProfile(
 )
 
 @Serializable
-data class SyncedTheme(val colors: List<String>, val darkColors: List<String>? = null)
+data class SyncedTheme(
+    val colors: List<String>,
+    val darkColors: List<String>? = null,
+    val mode: String? = null,
+    val look: SyncedThemeLook? = null,
+    val dark: SyncedThemeLook? = null,
+)
+
+@Serializable
+data class SyncedThemeLook(
+    val stops: List<SyncedThemeStop>,
+    val intensity: Double = 0.6,
+    val grain: Double = 0.0,
+    val texture: String = "grain",
+    val translucency: Double = 1.0,
+    val angle: Double? = null,
+)
+
+@Serializable
+data class SyncedThemeStop(val color: SyncedThemeColor, val x: Double = 0.5, val y: Double = 0.5)
+
+@Serializable
+data class SyncedThemeColor(val r: Double, val g: Double, val b: Double, val a: Double = 1.0)
 
 @Serializable
 data class DeviceTabs(val deviceId: String, val deviceName: String, val kind: String, val tabs: List<RemoteTab>)

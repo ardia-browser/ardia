@@ -2,7 +2,7 @@ import { onAppEvent, type AppEvent } from "../../platform/app";
 import { capture } from "./client";
 import { nativeConsent } from "./nativeConsent";
 
-export type PasteRefusedEvent = Extract<AppEvent, { type: "pasteRefused" }>;
+type PasteRefusedEvent = Extract<AppEvent, { type: "pasteRefused" }>;
 
 const REASONS = new Set([
   "deadline",

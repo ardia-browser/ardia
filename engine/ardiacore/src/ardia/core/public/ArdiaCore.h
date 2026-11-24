@@ -106,6 +106,13 @@ ARDIACORE_EXPORT
 - (NSString*)unloadIdleProfile:(ArdiaCoreProfile*)profile;
 @end
 
+@interface ArdiaCoreEngine (CliHolds)
++ (NSInteger)holdTabsForCli:(NSArray<ArdiaCoreTab*>*)tabs
+                      until:(NSArray<NSNumber*>*)untilMs
+                       live:(NSArray<NSNumber*>*)live
+                     marked:(NSMutableIndexSet*)marked;
+@end
+
 @interface ArdiaCoreEngine (Tracing)
 + (void)beginTracing:(void (^)(BOOL started))completion;
 + (void)endTracing:(BOOL)keep completion:(void (^)(NSString* _Nullable path))completion;

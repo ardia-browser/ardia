@@ -20,15 +20,15 @@ interface WebpackContext {
   (key: string): unknown;
 }
 
-const VIDEOS = (
-  require as unknown as {
-    context: (
-      directory: string,
-      deep?: boolean,
-      filter?: RegExp
-    ) => WebpackContext;
-  }
-).context(".", true, /^\.\/[^/]+\/index\.tsx$/);
+declare const require: {
+  context: (
+    directory: string,
+    deep?: boolean,
+    filter?: RegExp
+  ) => WebpackContext;
+};
+
+const VIDEOS = require.context(".", true, /^\.\/[^/]+\/index\.tsx$/);
 
 const ID = /^\.\/([^/]+)\/index\.tsx$/;
 

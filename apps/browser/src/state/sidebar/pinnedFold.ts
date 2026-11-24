@@ -43,7 +43,7 @@ const pinnedRowIn = (t: BrowserState["tabs"][string] | undefined, profileId: str
 const inPinnedGroupOf = (s: Pick<BrowserState, "groups">, id: string, profileId: string) =>
   Object.values(s.groups).some((g) => g.pinned && g.profileId === profileId && g.tabIds.includes(id));
 
-export function enteredPinnedSection(s: Pick<BrowserState, "tabs" | "groups">, prev: Pick<BrowserState, "tabs" | "groups">, profileId: string): boolean {
+function enteredPinnedSection(s: Pick<BrowserState, "tabs" | "groups">, prev: Pick<BrowserState, "tabs" | "groups">, profileId: string): boolean {
   if (s.groups === prev.groups)
     return changedIds(s.tabs, prev.tabs).some((id) => !!prev.tabs[id] && pinnedRowIn(s.tabs[id], profileId) && !pinnedRowIn(prev.tabs[id], profileId) && !inPinnedGroupOf(s, id, profileId));
   const before = pinnedSectionTabs(prev, profileId);
@@ -51,7 +51,7 @@ export function enteredPinnedSection(s: Pick<BrowserState, "tabs" | "groups">, p
   return false;
 }
 
-export function expandOnPin(s: BrowserState, prev: BrowserState) {
+function expandOnPin(s: BrowserState, prev: BrowserState) {
   if (s.tabs === prev.tabs && s.groups === prev.groups) return;
   for (const id of s.profileOrder) if (pinnedCollapsed(s, id) && enteredPinnedSection(s, prev, id)) setPinnedCollapsed(id, false);
 }
@@ -62,11 +62,11 @@ export function pinnedFoldMenuItem(s: BrowserState, windowId: string): MenuItem[
   const w = s.windows[windowId];
   if (!w || !s.profiles[w.profileId] || tabLayoutOf(s, w.id) !== "sidebar") return [];
   const collapsed = pinnedCollapsed(s, w.profileId);
-  const hasPinned = pinnedSequence(s, live().folders, live().folderOrder, windowId, w.profileId).length > 0;
+  if (!pinnedSequence(s, live().folders, live().folderOrder, windowId, w.profileId).length) return [];
   return [
     collapsed
-      ? { id: "pinnedFold", title: PINNED_FOLD_TITLES.expand, symbol: "rectangle.expand.vertical", enabled: hasPinned }
-      : { id: "pinnedFold", title: PINNED_FOLD_TITLES.collapse, symbol: "rectangle.compress.vertical", enabled: hasPinned },
+      ? { id: "pinnedFold", title: PINNED_FOLD_TITLES.expand, symbol: "rectangle.expand.vertical" }
+      : { id: "pinnedFold", title: PINNED_FOLD_TITLES.collapse, symbol: "rectangle.compress.vertical" },
   ];
 }
 

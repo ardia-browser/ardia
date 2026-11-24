@@ -64,7 +64,7 @@ bool LinuxSystemSignals::Post(const std::string& name) {
 
 void LinuxSystemSignals::WatchIdle(int watcher, const std::vector<double>& thresholds) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  const std::set<double> kept = linux_idle::CleanThresholds(thresholds);
+  const std::set<double> kept = desktop_idle::CleanThresholds(thresholds);
   if (kept.empty()) {
     wanted_.erase(watcher);
   } else {

@@ -3,11 +3,11 @@ import { parseSaved, unchanged, versionedJson, type Migrations } from "../../lib
 import { sourceAppOf, type SourceApp } from "./rules";
 
 export const LINK_SOURCES_DOC = "link-sources.json";
-export const LINK_SOURCES_VERSION = 1;
+const LINK_SOURCES_VERSION = 1;
 export const MAX_RECENT_APPS = 20;
 const MIGRATIONS: Migrations = { 0: unchanged };
 
-export const COMMON_APPS: readonly SourceApp[] = [
+const COMMON_APPS: readonly SourceApp[] = [
   { bundleId: "com.tinyspeck.slackmacgap", name: "Slack" },
   { bundleId: "com.apple.mail", name: "Mail" },
   { bundleId: "com.apple.MobileSMS", name: "Messages" },
@@ -24,7 +24,7 @@ export const COMMON_APPS: readonly SourceApp[] = [
 
 export const sourceAppKey = (app: SourceApp) => (app.bundleId ?? `name:${app.name}`).toLowerCase();
 
-export function sourceAppFrom(source: LinkSource): SourceApp | null {
+function sourceAppFrom(source: LinkSource): SourceApp | null {
   const bundleId = source?.bundleId?.trim() || null;
   const name = source?.appName?.trim() || bundleId;
   return name ? { bundleId, name } : null;

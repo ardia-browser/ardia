@@ -12,6 +12,33 @@ enum class PageCover { none, reactNative, chromium, other };
 enum class HoverTrigger { move, click, recheck };
 enum class FocusHolder { none, window, otherWindow, page, control };
 
+enum class HealRefusal {
+  none,
+  notVisible,
+  notOnActiveSpace,
+  notInFront,
+  modalWindow,
+  attachedSheet,
+  savePanel,
+  menuActive,
+  menuShown,
+  fullScreenMoving,
+  notClick,
+  keyPopup,
+  notEligible
+};
+
+enum class MenuWindowKind { window, panel, menu, sharing, tooltip, popover, fullScreen, ardia, other };
+enum class MenuWindowLevel { normal, floating, raised, popUp };
+enum class MenuWindowParent { none, browser, other };
+
+struct MenuWindowInfo {
+  bool present = false;
+  MenuWindowKind kind = MenuWindowKind::other;
+  MenuWindowLevel level = MenuWindowLevel::normal;
+  MenuWindowParent parent = MenuWindowParent::none;
+};
+
 struct Activation {
   bool appActive = false;
   bool runningActive = false;
@@ -46,6 +73,10 @@ struct HoverEpisode {
   double startedAt = 0;
   bool healed = false;
   int healWorked = -1;
+  HealRefusal firstRefusal = HealRefusal::none;
+  HealRefusal lastRefusal = HealRefusal::none;
+  MenuWindowInfo refusedWindow;
+  NSUInteger otherWindowClicks = 0;
   ArdiaConsentStamp *stamp = nil;
 };
 
@@ -60,9 +91,11 @@ extern NSMutableArray<NSDictionary *> *gDevHoverEvents;
 
 NSString *ReasonName(HoverReason reason);
 NSString *HolderName(FocusHolder holder);
+NSString *HealRefusalName(HealRefusal refusal);
+NSString *MenuWindowName(const MenuWindowInfo &info);
 bool WindowFlag(NSWindow *window, NSString *name);
 bool MenuActive(NSWindow *window);
-bool MenuShown(NSWindow *browser);
+bool MenuShown(NSWindow *browser, MenuWindowInfo *matched = nullptr);
 NSView *PageAt(NSWindow *window, NSPoint point);
 NSView *EnclosingPage(NSView *view);
 NSView *HitAt(NSWindow *window, NSPoint point);

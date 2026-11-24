@@ -35,9 +35,9 @@ const GLINTS = [
   { x: 300, y: 12, w: 70 },
 ] as const;
 
-export type StyleChoice = { glass: boolean; tint: number };
+type StyleChoice = { glass: boolean; tint: number };
 
-export function styleChoiceOf(settings: Partial<Settings>, hovered: Settings["interfaceStyle"] | null): StyleChoice {
+function styleChoiceOf(settings: Partial<Settings>, hovered: Settings["interfaceStyle"] | null): StyleChoice {
   const style = hovered ?? settings.interfaceStyle ?? DEFAULT_SETTINGS.interfaceStyle;
   const tinted = settings.glassTintWithTheme ?? DEFAULT_SETTINGS.glassTintWithTheme;
   return { glass: style === "glass", tint: tinted ? (settings.glassTintAmount ?? DEFAULT_SETTINGS.glassTintAmount) : 0 };

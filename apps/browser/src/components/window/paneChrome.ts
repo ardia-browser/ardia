@@ -1,6 +1,6 @@
 export type CardChrome = { kind: "none" } | { kind: "pane" | "window"; autoHide: boolean };
 
-export type PaneBar =
+type PaneBar =
   | { kind: "none" }
   | { kind: "toolbar" }
   | { kind: "backdrop" }

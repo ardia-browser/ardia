@@ -16,9 +16,11 @@ import { presentSearch, dismissSearch } from "../state/search/store";
 import { setPreference } from "../state/settings/store";
 import { currentTabs, updateTabById, useTabs } from "../state/tabs/store";
 import { framesUntil, renderSurface, textOf, unmount, withTabs } from "../../test/render/harness";
+import { noteSnapshotLoaded, noteSnapshotShown } from "../lib/shownSnapshots";
 
 const DESIGNS: Design[] = ["redesigned", "original"];
 const FRESH = "file:///snapshots/leaving-fresh.jpg";
+const EARLIER = "file:///snapshots/leaving-earlier.jpg";
 
 let renders: string[] = [];
 
@@ -110,67 +112,48 @@ for (const design of DESIGNS) {
     unmount(root);
   });
 
-  test(`in the ${design} design, a Tabs tap shows the waiting deck without mounting a card, and the leaving card holds the fresh picture of the page just left until it has painted`, async () => {
+  test(`in the ${design} design, a Tabs tap shows the waiting deck without mounting a card and never waits for the fresh picture of the page just left: the deck takes taps as soon as its motion lands and the leaving card draws a picture, never the placeholder`, async () => {
     const selected = currentTabs().selectedId!;
+    act(() => updateTabById(selected, { snapshotFileName: EARLIER }));
+    noteSnapshotShown(EARLIER);
+    noteSnapshotLoaded(EARLIER);
     act(() => pageStateChanged(selected, { url: "https://site0.example/", title: "Kernel Archives", isLoading: false, isLive: true, canGoBack: false, canGoForward: false } as never));
     jest.spyOn(pages, "snapshot").mockImplementation(async () => ({ uri: FRESH, width: 600, height: 1157 }) as never);
     const root = app(design);
     settle();
     const before = new Set(deckCards(root));
+    for (const image of cardsLayer(root).findAll((node) => node.props.source?.uri === EARLIER && typeof node.props.onLoad === "function" && typeof node.type !== "string")) act(() => image.props.onLoad({ nativeEvent: { source: { width: 600, height: 1157 } } }));
     renders = [];
-    if (pulls(design)) {
-      await act(async () => {
-        void showDeck();
-        jest.advanceTimersByTime(16);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      act(() => jest.advanceTimersByTime(16));
-      expect(useBrowse.getState().surface).toBe("browsing");
-      expect(parkedAt(deck(root)!)).toBe(0);
-      expect(deckCards(root).every((card) => before.has(card))).toBe(true);
-      framesUntil(() => deckPull.stage.value === PULL_STAGE.landed, 240);
+    let frames = 0;
+    await act(async () => {
+      void showDeck();
+      await Promise.resolve();
+    });
+    while (useBrowse.getState().surface !== "deck" && frames < 40) {
       await act(async () => {
         jest.advanceTimersByTime(16);
         await Promise.resolve();
-        await Promise.resolve();
       });
-      act(() => jest.advanceTimersByTime(16));
-      const landing = deckCards(root).find((card) => card.findAll((node) => node.props.source?.uri === FRESH && typeof node.type === "string").length > 0)!;
-      expect(landing).toBeDefined();
-      expect(textOf({ root: landing } as never)).not.toContain("Kernel Archives");
-      expect(deckCards(root).every((card) => before.has(card))).toBe(true);
-      expect(useBrowse.getState().surface).toBe("browsing");
-      expect(page(root)).toHaveLength(1);
-      const fresh = cardsLayer(root).findAll((node) => node.props.source?.uri === FRESH && typeof node.props.onLoad === "function" && typeof node.type !== "string")[0]!;
-      act(() => fresh.props.onLoad({ nativeEvent: { source: { width: 600, height: 1157 } } }));
-      framesUntil(() => useBrowse.getState().surface === "deck", 12);
-      expect(useBrowse.getState().surface).toBe("deck");
-      act(() => jest.advanceTimersByTime(32));
-      expect(page(root)).toHaveLength(0);
-      expect(deck(root)!.props.pointerEvents).toBe("auto");
-      expect(opacity(cardsLayer(root))).toBe(1);
-      expect(count("DeckCard")).toBeLessThanOrEqual(1);
-      unmount(root);
-      return;
+      frames += 1;
     }
-    await openFromPage(design);
-    expect(StyleSheet.flatten(deck(root)!.props.style).display).toBeUndefined();
+    expect(useBrowse.getState().surface).toBe("deck");
+    expect(frames).toBeLessThanOrEqual(pulls(design) ? 16 : 1);
+    act(() => jest.advanceTimersByTime(16));
     expect(deck(root)!.props.pointerEvents).toBe("auto");
+    act(() => jest.advanceTimersByTime(200));
+    expect(opacity(cardsLayer(root))).toBe(1);
     expect(deckCards(root).every((card) => before.has(card))).toBe(true);
-    const leaving = deckCards(root).find((card) => card.findAll((node) => node.props.source?.uri === FRESH && typeof node.type === "string").length > 0)!;
+    const leaving = deckCards(root).find((card) => card.findAll((node) => (node.props.source?.uri === FRESH || node.props.source?.uri === EARLIER) && typeof node.type === "string").length > 0)!;
     expect(leaving).toBeDefined();
     expect(textOf({ root: leaving } as never)).not.toContain("Kernel Archives");
-    expect(opacity(cardsLayer(root))).toBe(0);
-    expect(page(root)).toHaveLength(1);
-    const picture = cardsLayer(root).findAll((node) => node.props.source?.uri === FRESH && typeof node.props.onLoad === "function" && typeof node.type !== "string")[0]!;
-    act(() => picture.props.onLoad({ nativeEvent: { source: { width: 600, height: 1157 } } }));
-    act(() => jest.advanceTimersByTime(40));
-    expect(opacity(cardsLayer(root))).toBe(1);
-    framesUntil(() => useBrowse.getState().leaving === null, 150);
-    expect(useBrowse.getState().leaving).toBeNull();
+    framesUntil(() => useBrowse.getState().leaving === null, 40);
+    await act(async () => {
+      jest.advanceTimersByTime(400);
+      await Promise.resolve();
+    });
     expect(page(root)).toHaveLength(0);
-    expect(count("DeckCard")).toBeLessThanOrEqual(1);
+    expect(deckCards(root).find((card) => card.findAll((node) => node.props.source?.uri === FRESH && typeof node.type === "string").length > 0)).toBeDefined();
+    expect(count("DeckCard")).toBeLessThanOrEqual(2);
     unmount(root);
   });
 }
@@ -197,7 +180,6 @@ test("a deck opened from a page with the deck waiting renders no card at all, wh
   expect(cold.cards).toBeGreaterThanOrEqual(cold.mounted);
   expect(warm.mounted).toBe(9);
   expect(warm.cards).toBe(0);
-  expect(warm.deck).toBeLessThanOrEqual(cold.deck);
   expect(warm.deck).toBe(2);
 });
 

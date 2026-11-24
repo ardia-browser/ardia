@@ -6,8 +6,8 @@ type Json = Record<string, unknown>;
 export const ARC_ROUTING_FILE = "StorableLinkRouting.json";
 export const ARC_ARCHIVE_FILE = "StorableArchiveItems.json";
 export const ARC_ICON_CACHE = "SidebarItemsFaviconCache";
-export const MAXIMUM_ARCHIVED = 1_500;
-export const MAXIMUM_RULES = 1_000;
+const MAXIMUM_ARCHIVED = 1_500;
+const MAXIMUM_RULES = 1_000;
 export const ROUTING_BYTES = 4 << 20;
 export const ARCHIVE_BYTES = 64 << 20;
 const MAXIMUM_ARCHIVE_ITEMS = 50_000;
@@ -21,7 +21,7 @@ const MAXIMUM_PNG_BYTES = 16 * 1024;
 const MAXIMUM_TOTAL_BYTES = 6 * 1024 * 1024;
 const PNG_BASE64_PREFIX = "iVBORw0KGgo";
 
-export const THRESHOLD_MINUTES: Readonly<Record<string, number>> = {
+const THRESHOLD_MINUTES: Readonly<Record<string, number>> = {
   twelveHours: 12 * 60,
   twentyFourHours: 24 * 60,
   sevenDays: 7 * 24 * 60,
@@ -53,7 +53,7 @@ function only(value: unknown): [string, unknown] | undefined {
 
 const boundedId = (value: unknown) => (typeof value === "string" && value !== "" && utf8Bytes(value) <= MAXIMUM_ID ? value : undefined);
 
-export function arcDestination(value: unknown, spaces: ReadonlyMap<string, string>): ArcLinkDestination | undefined {
+function arcDestination(value: unknown, spaces: ReadonlyMap<string, string>): ArcLinkDestination | undefined {
   const outer = only(value);
   if (!outer || (outer[0] !== "space" && outer[0] !== "littleArc")) return undefined;
   const target = only(record(outer[1])?._0);

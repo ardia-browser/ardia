@@ -59,7 +59,7 @@ export async function engineCallJson(name: string, profile: string, argsJson: st
   return engine.engineCall(name, profile, argsJson);
 }
 
-export type ProfileFolderRemoval = "removed" | "absent" | "inUse" | "partial" | "refused" | "failed" | "unsupported";
+type ProfileFolderRemoval = "removed" | "absent" | "inUse" | "partial" | "refused" | "failed" | "unsupported";
 
 const REMOVALS: readonly ProfileFolderRemoval[] = ["removed", "absent", "inUse", "partial", "refused", "failed"];
 

@@ -49,6 +49,19 @@ test("every browser walks the full set of steps, and a browser's preset skips on
   settle();
 });
 
+test("onboarding no longer asks about the profile switcher, and the Look step keeps the rest of its questions", () => {
+  const id = S().createWindow();
+  for (const source of ["fresh", "arc", "dia", "chrome", null]) {
+    startOnboarding(id, "source");
+    chooseSource(source);
+    assert.equal(asked().includes("switcher"), false, String(source));
+    assert.equal(activeSteps().includes("look"), true, String(source));
+  }
+  assert.deepEqual(QUESTIONS.look.map((q) => q.id), ["color", "appearance", "style", "frame", "siteColor", "lookMore"]);
+  assert.equal(QUESTIONS.look.some((q) => q.keys.includes("profileSwitcherIcons")), false);
+  settle();
+});
+
 test("Continue goes through the steps in order and Skip moves past the rest of a step", () => {
   const id = S().createWindow();
   startOnboarding(id, "source");

@@ -37,6 +37,20 @@ class GlassRulesTest {
     }
 
     @Test
+    fun classicTakesTheAppsChromeFillSoAndroidsDarkChromeStaysItsNearBlack() {
+        val chrome = GlassRules.chromeFill(mapOf("fill" to mapOf("dynamic" to mapOf("light" to "#FFFFFF", "dark" to "#1E1B1D"))))
+        assertEquals(0xFFFFFFFF.toInt() to 0xFF1E1B1D.toInt(), chrome)
+        assertEquals(0xFF1E1B1D.toInt(), GlassRules.classicFill(tinted = false, dark = true, lookSurface = 0xFF123456.toInt(), chromeFill = chrome))
+        assertEquals(0xFFFFFFFF.toInt(), GlassRules.classicFill(tinted = false, dark = false, lookSurface = 0xFF123456.toInt(), chromeFill = chrome))
+        assertEquals("a tinted surface keeps the space's colour", 0xFF123456.toInt(), GlassRules.classicFill(tinted = true, dark = true, lookSurface = 0xFF123456.toInt(), chromeFill = chrome))
+        assertEquals(0xFF1E1B1D.toInt() to 0xFF1E1B1D.toInt(), GlassRules.chromeFill(mapOf("fill" to "#1E1B1D")))
+        assertEquals("CSS order: alpha last", 0x80102030.toInt(), GlassRules.hex("#10203080"))
+        assertNull(GlassRules.chromeFill(mapOf("fill" to "rgba(0,0,0,0.5)")))
+        assertNull(GlassRules.chromeFill(mapOf("edge" to "#000000")))
+        assertNull(GlassRules.chromeFill(null))
+    }
+
+    @Test
     fun classicsEdgeIsTheLabelAtTwelvePercentAndItsShadowDarkerInDark() {
         assertEquals(0x1F, GlassRules.classicEdge(dark = false) ushr 24)
         assertEquals(0x000000, GlassRules.classicEdge(dark = false) and 0xFFFFFF)
@@ -52,14 +66,6 @@ class GlassRulesTest {
         assertFalse("off screen", GlassRules.fadesIn(wasShown = false, shown = true, attached = false, durationMs = 200f, animatorsOn = true))
         assertFalse("no duration", GlassRules.fadesIn(wasShown = false, shown = true, attached = true, durationMs = 0f, animatorsOn = true))
         assertFalse("animations off in the system", GlassRules.fadesIn(wasShown = false, shown = true, attached = true, durationMs = 200f, animatorsOn = false))
-    }
-
-    @Test
-    fun nativeGlassIsOnlyAskedForByItsLaunchArgument() {
-        assertTrue(GlassRules.nativeGlassAsked(mapOf("ArdiaNativeGlass" to true)))
-        assertFalse(GlassRules.nativeGlassAsked(mapOf("ArdiaNativeGlass" to "true")))
-        assertFalse(GlassRules.nativeGlassAsked(emptyMap()))
-        assertFalse("a store build passes no arguments", GlassRules.nativeGlassAsked(LaunchExtras.arguments(mapOf("ArdiaNativeGlass" to true), allowed = false)))
     }
 
     @Test

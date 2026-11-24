@@ -1,0 +1,28 @@
+[package]
+name = "ardia-plugin-host"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+build = "build.rs"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "ardia-plugin-host"
+path = "src/main.rs"
+
+[[test]]
+name = "confine_order"
+path = "tests/confine_order.rs"
+harness = false
+
+[dependencies]
+rquickjs-sys = { version = "=0.14.0", default-features = false }
+url = "2.5"
+libc = "0.2"
+serde_json = "1"
+
+[dev-dependencies]
+serde_json = "1"

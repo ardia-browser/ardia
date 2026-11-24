@@ -11,11 +11,11 @@ import { isWebPageUrl } from "../../lib/url";
 import { isWithin } from "./bookmarks";
 import { NO_SIDEBAR_EDGE, overSidebar, type SidebarEdge } from "./sidebarEdge";
 
-export type BarDragSource = { kind: "bookmark"; id: string; panel: string | null } | { kind: "tabs"; tabIds: string[] } | { kind: "links" };
+type BarDragSource = { kind: "bookmark"; id: string; panel: string | null } | { kind: "tabs"; tabIds: string[] } | { kind: "links" };
 
-export type ZoneHit = { spot: DropSpot | null; springOpen?: () => void };
+type ZoneHit = { spot: DropSpot | null; springOpen?: () => void };
 
-export type DropZone = {
+type DropZone = {
   windowId: string;
   depth: number;
   resolve(x: number, y: number, draggedId: string | null): ZoneHit | undefined;

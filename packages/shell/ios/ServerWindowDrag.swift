@@ -16,7 +16,10 @@ enum ServerWindowDrag {
   private static var refreshedAt: [ObjectIdentifier: CFTimeInterval] = [:]
   private static let staleAtMost: TimeInterval = 2
   private static var stale: [ObjectIdentifier: DispatchWorkItem] = [:]
-  private(set) static var counts = (rebuilds: 0, deferred: 0, stalePresses: 0)
+  private(set) static var counts = (rebuilds: 0, deferred: 0, stalePresses: 0, scrollWaits: 0)
+  private static let scrollQuiet: CFTimeInterval = 0.25
+  private static var scrolledAt: CFTimeInterval = -.infinity
+  private static var scrollMonitor: Any?
   #if DEBUG
   static var pointerOverride: NSPoint?
   #endif
@@ -64,14 +67,28 @@ enum ServerWindowDrag {
   }
 
   private static func markStale(_ window: NSWindow) {
+    guard stale[ObjectIdentifier(window)] == nil else { return }
+    counts.deferred += 1
+    armStale(window, after: staleAtMost)
+  }
+
+  private static func armStale(_ window: NSWindow, after delay: TimeInterval, waited: Bool = false) {
     let key = ObjectIdentifier(window)
-    guard stale[key] == nil else { return }
     let work = DispatchWorkItem { [weak window] in
-      if let window, stale[key] != nil { refresh(window) }
+      guard let window, stale[key] != nil else { return }
+      let wait = untilScrollQuiet(for: window)
+      guard wait > 0 else { return refresh(window) }
+      if !waited { counts.scrollWaits += 1 }
+      armStale(window, after: wait, waited: true)
     }
     stale[key] = work
-    counts.deferred += 1
-    DispatchQueue.main.asyncAfter(deadline: .now() + staleAtMost, execute: work)
+    DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+  }
+
+  private static func untilScrollQuiet(for window: NSWindow) -> CFTimeInterval {
+    let at = pointer()
+    let under = NSWindow.windowNumber(at: at, belowWindowWithWindowNumber: 0) == window.windowNumber
+    return under && inBand(window, at) ? 0 : scrollQuiet - (CACurrentMediaTime() - scrolledAt)
   }
 
   private static let pointerArrives: [Notification.Name] = [
@@ -137,15 +154,19 @@ enum ServerWindowDrag {
 
   private static var pending: [ObjectIdentifier: DispatchWorkItem] = [:]
 
-  static func scheduleRefresh(_ window: NSWindow) {
+  static func scheduleRefresh(_ window: NSWindow, after delay: CFTimeInterval = refreshEvery, waited: Bool = false) {
     let key = ObjectIdentifier(window)
     pending[key]?.cancel()
     let work = DispatchWorkItem { [weak window] in
       pending[key] = nil
-      if let window { refresh(window) }
+      guard let window else { return }
+      let wait = untilScrollQuiet(for: window)
+      guard wait > 0 else { return refresh(window) }
+      if !waited { counts.scrollWaits += 1 }
+      scheduleRefresh(window, after: wait, waited: true)
     }
     pending[key] = work
-    DispatchQueue.main.asyncAfter(deadline: .now() + refreshEvery, execute: work)
+    DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
   }
 
   static func mounted() {
@@ -172,10 +193,17 @@ enum ServerWindowDrag {
       guard let window = event.window else { return event }
       if event.type != .leftMouseDown {
         scheduleRefresh(window)
-      } else if stale[ObjectIdentifier(window)] != nil, event.locationInWindow.y >= window.frame.height - band(window) {
-        counts.stalePresses += 1
+      } else if event.locationInWindow.y >= window.frame.height - band(window) {
+        let key = ObjectIdentifier(window)
+        let isStale = stale[key] != nil
+        guard isStale || pending[key] != nil else { return event }
+        if isStale { counts.stalePresses += 1 }
         refresh(window)
       }
+      return event
+    }
+    scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
+      if let window = event.window, event.locationInWindow.y < window.frame.height - band(window) { scrolledAt = CACurrentMediaTime() }
       return event
     }
     NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in catchUpAll() }

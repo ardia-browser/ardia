@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test:shims": "node --test scripts/web-shims.test.mjs",
-    "typecheck": "tsc -p . && node scripts/icons/check.mjs",
+    "typecheck": "tsrs -p . && node scripts/icons/check.mjs",
     "icons": "node scripts/icons/regenerate.mjs"
   },
   "dependencies": {
@@ -37,7 +37,7 @@
     "playwright": "1.64.0",
     "pngjs": "7.0.0",
     "rollup-plugin-visualizer": "^6.0.4",
-    "typescript": "~5.9.2",
+    "tsrs": "7.1.0-beta.tsrs4",
     "vite": "^7.1.9"
   }
 }

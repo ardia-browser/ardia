@@ -60,6 +60,9 @@ function environment({ top = true, page = "https://page.example", selection = nu
     }
     click() {
       clicked.push(this);
+      const e = new MouseEvent("click", { trusted: false, path: [this] });
+      for (const fn of this.listeners?.click ?? []) fn(e);
+      this.onclick?.(e);
     }
   }
   class HTMLAnchorElement extends HTMLElement {
@@ -186,9 +189,18 @@ function environment({ top = true, page = "https://page.example", selection = nu
     window,
     document,
     addEventListener: (type, fn) => (listeners[type] ??= []).push(fn),
-    listen: (type, fn, options) => (bubbling[type] ??= []).push({ fn, once: !!options?.once }),
-    unlisten: (type, fn) => (bubbling[type] = (bubbling[type] ?? []).filter((l) => l.fn !== fn)),
-    asNative: (native, call) => (...args) => call(native, window, args),
+    listen: function (type, fn, options) {
+      if (this instanceof Element) return ((this.listeners ??= {})[type] ??= []).push(fn);
+      (bubbling[type] ??= []).push({ fn, once: !!options?.once });
+    },
+    unlisten: function (type, fn) {
+      if (this instanceof Element) return (this.listeners[type] = this.listeners[type].filter((l) => l !== fn));
+      bubbling[type] = (bubbling[type] ?? []).filter((l) => l.fn !== fn);
+    },
+    asNative: (native, call) =>
+      function (...args) {
+        return call(native, this ?? window, args);
+      },
     Navigator,
     UserActivation,
     navigator,
@@ -629,6 +641,62 @@ test("window.open is noted only while the page has a user activation, with the a
   env.window.open();
   assert.deepEqual(newTabLinks(env), ["https://page.example/relative"]);
   assert.equal(env.opened.length, 5, "every call still reaches the browser's own window.open");
+});
+
+test("a page that cancels the click and clicks its own new-tab link instead notes it, as Linear's menus do", () => {
+  const env = environment();
+  const shown = env.link("https://github.com/o/r/pull/1?from=linear", { target: "_blank" });
+  const standIn = env.link("https://github.com/o/r/pull/1?from=linear", { target: "_blank" });
+  env.gesture([shown], {}, {
+    page: (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      env.activation.active = true;
+      standIn.click();
+    },
+  });
+  env.flush();
+  assert.deepEqual(newTabLinks(env), ["https://github.com/o/r/pull/1?from=linear"]);
+  assert.deepEqual(env.clicked, [standIn], "the page's click still reaches the browser");
+  assert.deepEqual(standIn.listeners.click, [], "no listener stays on the link");
+});
+
+test("a scripted click on a link is noted only with a user activation, a new-tab target, an http(s) address and its default left alone", () => {
+  const env = environment();
+  env.link("https://other.example/timer", { target: "_blank" }).click();
+  env.activation.active = true;
+  for (const target of ["_self", "_top"]) env.link(`/${target}`, { target }).click();
+  env.link("/none").click();
+  env.link("/file.zip", { target: "_blank", download: "" }).click();
+  env.link("mailto:a@b.example", { target: "_blank" }).click();
+  env.div().click();
+  const editable = env.link("/edit", { target: "_blank" });
+  editable.editable = true;
+  editable.click();
+  const cancelled = env.link("/cancelled", { target: "_blank" });
+  cancelled.onclick = (e) => e.preventDefault();
+  cancelled.click();
+  const rewritten = env.link("/tracked", { target: "_blank" });
+  rewritten.onclick = () => rewritten.setAttribute("href", "https://other.example/landing");
+  rewritten.click();
+  env.link("/named", { target: "results" }).click();
+  assert.deepEqual(newTabLinks(env), ["https://other.example/landing", "https://page.example/named"]);
+  assert.equal(env.clicked.length, 11, "every call still reaches the browser's own click");
+});
+
+test("a scripted click is judged by the link its handlers leave: a target they add counts, a download they add doesn't", () => {
+  const env = environment();
+  env.activation.active = true;
+  const targeted = env.link("/targeted");
+  targeted.onclick = () => targeted.setAttribute("target", "_blank");
+  targeted.click();
+  const downloaded = env.link("/export.csv", { target: "_blank" });
+  downloaded.onclick = () => downloaded.setAttribute("download", "export.csv");
+  downloaded.click();
+  const kept = env.link("/kept", { target: "_blank" });
+  kept.onclick = () => kept.setAttribute("target", "_self");
+  kept.click();
+  assert.deepEqual(newTabLinks(env), ["https://page.example/targeted"]);
 });
 
 test("a named target or the page's <base target> counts; _self, _top, _parent and no target don't", () => {

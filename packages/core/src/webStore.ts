@@ -1,4 +1,4 @@
-export type ExtensionPermissions = { permissions: string[]; hostPermissions: string[] };
+type ExtensionPermissions = { permissions: string[]; hostPermissions: string[] };
 
 export const isExtensionId = (s: string) => /^[a-p]{32}$/.test(s);
 

@@ -13,7 +13,7 @@ import { CARD_BORDER, ChoiceCard, SELECTED_BORDER } from "./ChoiceCard";
 
 export const useOnboardingColors = () => onboardingColorsOf(useTheme());
 
-export type OnboardingCardSize = { width: number; height: number; inset: number; crowded?: boolean };
+type OnboardingCardSize = { width: number; height: number; inset: number; crowded?: boolean };
 
 export const ONBOARDING_CARD = { width: 880, height: 560, inset: 40, compactBelow: 540, titleBarClearance: 46 } as const;
 
@@ -39,7 +39,7 @@ export function Reveal({ delay = 0, children, style }: { delay?: number; childre
 const STEP_BAR = { width: 22, height: 3 } as const;
 const STEP_DOT = 5;
 
-export function StepDots({ count, index, shape }: { count: number; index: number; shape: "bar" | "dot" }) {
+function StepDots({ count, index, shape }: { count: number; index: number; shape: "bar" | "dot" }) {
   const colors = useOnboardingColors();
   if (shape === "bar")
     return (

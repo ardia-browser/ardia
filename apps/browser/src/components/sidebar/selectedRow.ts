@@ -5,7 +5,7 @@ import { GLOW_ROOM, type SidebarGeometry } from "./pageLayout";
 import { SCROLL_EDGE } from "./ScrollEdge";
 
 export type RowSpot = { y: number; height: number };
-export type RowAway = "above" | "below" | null;
+type RowAway = "above" | "below" | null;
 
 export function visibleSpan(scrollY: number, viewport: number, edgeLift = 0): { top: number; bottom: number } {
   return { top: scrollY + (scrollY > 0 ? GLOW_ROOM - edgeLift : 0), bottom: scrollY + viewport };

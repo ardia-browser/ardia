@@ -69,7 +69,7 @@ function revealFor(s: BrowserState, prev: BrowserState, windowId: string, next: 
   return null;
 }
 
-export function switchedTabs(s: BrowserState, prev: BrowserState): Switch[] {
+function switchedTabs(s: BrowserState, prev: BrowserState): Switch[] {
   if (s.windows === prev.windows) return [];
   const out: Switch[] = [];
   for (const id in s.windows) {

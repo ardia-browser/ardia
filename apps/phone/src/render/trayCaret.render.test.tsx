@@ -30,10 +30,10 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
-test("the completing field's caret is the accent and its selection the accent at 30%, not the system's teal", () => {
+test("the completing field's caret is the space's accent and its selection the accent at 30%, not the system's teal or iOS blue", () => {
   let accent = "";
   function Accent() {
-    accent = useTheme().formAccent;
+    accent = useTheme().spaceAccentInk;
     return null;
   }
   presentSearch("page", "");

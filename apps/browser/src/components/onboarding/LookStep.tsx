@@ -34,10 +34,6 @@ const STYLE_CHOICES: ChoiceOption<Settings["interfaceStyle"]>[] = [
   { value: "glass", preview: "style-glass", title: "Liquid Glass", subtitle: "Buttons and panels catch the light, as in Tahoe" },
   { value: "classic", preview: "style-classic", title: "Classic", subtitle: "Flat and quiet, as in Dia" },
 ];
-const SWITCHER_CHOICES: ChoiceOption<boolean>[] = [
-  { value: false, preview: "switcher-dots", title: "Dots", subtitle: "A quiet row of dots, as in Dia" },
-  { value: true, preview: "switcher-icons", title: "Icons", subtitle: "Each profile's symbol or emoji, as in Arc" },
-];
 const BOOKMARKS_BAR: { value: Settings["bookmarksBar"]; title: string }[] = [
   { value: "always", title: "Always" },
   { value: "newTab", title: "New Tab" },
@@ -137,24 +133,6 @@ export function LookStep() {
       </Page>
     );
   }
-  if (id === "switcher")
-    return (
-      <Page
-        id={id}
-        title="Dots or icons?"
-        subtitle="How the switcher at the bottom of the sidebar shows your profiles."
-        patch={{ profileSwitcherIcons: values.profileSwitcherIcons }}
-        picked={values.profileSwitcherIcons ? ["Profile icons in the sidebar"] : []}
-        preview={<MockPanel settings={mock} focus={focus.focus} switcher />}
-      >
-        <ChoiceList
-          options={SWITCHER_CHOICES}
-          value={values.profileSwitcherIcons}
-          onChange={(profileSwitcherIcons) => change({ profileSwitcherIcons })}
-          mock={focus}
-        />
-      </Page>
-    );
   if (id === "siteColor")
     return (
       <Page
@@ -201,9 +179,9 @@ export function LookStep() {
         </View>
       </Page>
     );
-  const name = customTheme ? "Custom" : color ? PROFILE_COLORS[color]?.name : null;
+  const name = color ? PROFILE_COLORS[color]?.name : null;
   return (
-    <Page id="color" title="Pick a color" subtitle="It tints the sidebar and the window." patch={{}} picked={name ? [`${name} theme`] : []} preview={preview}>
+    <Page id="color" title="Pick a color" subtitle="It tints the sidebar and the window." patch={{}} picked={name ? [customTheme ? `${name} theme, edited` : `${name} theme`] : []} preview={preview}>
       <ThemePicker windowId={windowId} size={32} gap={space.xs} onPreset={previewColor} onTheme={previewTheme} />
     </Page>
   );

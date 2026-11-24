@@ -1,4 +1,4 @@
-import { engineProfile, resolveWindowId } from "./model";
+import { engineProfile } from "./model";
 import { useBrowser } from "./store";
 import { isSilenced, muteState, type MuteState } from "../tabs/mute";
 import { focusedWindowOf } from "../windows/ui";
@@ -16,9 +16,7 @@ export const currentBookmarkRoots = (profileId: string) => bookmarkRoots(useBrow
 export const currentProfiles = () => useBrowser.getState().profiles;
 export const currentProfileOrder = () => useBrowser.getState().profileOrder;
 export const currentEngineProfile = (profileId: string) => engineProfile(useBrowser.getState(), profileId);
-export const resolvedWindowId = (windowId?: string | null) => resolveWindowId(useBrowser.getState(), windowId);
 export const workspaceSnapshot = () => useBrowser.getState();
-export const downloadsOpenIn = (windowId: string) => !!useBrowser.getState().windowUi[windowId]?.downloadsOpen;
 export const currentLive = (tabId: string) => shownLiveOf(useBrowser.getState(), tabId);
 export function currentMuteState(tabId: string): MuteState {
   const s = useBrowser.getState();

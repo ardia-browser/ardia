@@ -2,13 +2,64 @@ import AppKit
 import EventKit
 import ExpoModulesCore
 
-public class CalendarModule: Module {
+public class CalendarModule: Module, CalendarNative {
   private var store = EKEventStore()
   private var observer: NSObjectProtocol?
 
+  static func authorizationStatus() -> String { Self.status() }
+
+  func requestAccess(_ promise: Promise) {
+    let asked = Self.status()
+    let started = Date()
+    self.store.requestFullAccessToEvents { granted, error in
+      DispatchQueue.main.async {
+        if granted { self.store = EKEventStore(); self.observe() }
+        let status = Self.status()
+        let responsible = Self.responsibleForSelf()
+        if !granted {
+          NSLog("[calendar] full access not granted: asked in %@, now %@, responsible %@, error %@", asked, status, responsible, error.map { "\($0)" } ?? "none")
+        }
+        promise.resolve([
+          "granted": granted,
+          "status": status,
+          "error": error?.localizedDescription as Any,
+          "responsible": responsible,
+          "ms": Int(Date().timeIntervalSince(started) * 1000),
+        ])
+      }
+    }
+  }
+
+  func calendars() -> [[String: Any]] {
+    guard Self.status() == "fullAccess" else { return [] }
+    return self.store.calendars(for: .event).map { cal in
+      [
+        "id": cal.calendarIdentifier,
+        "title": cal.title,
+        "color": Self.hex(cal.color),
+        "account": cal.source?.title ?? "",
+        "accountType": Self.sourceType(cal.source?.sourceType),
+        "owned": cal.allowsContentModifications && cal.type != .subscription && cal.type != .birthday,
+      ]
+    }
+  }
+
+  func events(_ start: Double, _ end: Double, _ calendarIds: [String]) -> [[String: Any]] {
+    guard Self.status() == "fullAccess" else { return [] }
+    let all = self.store.calendars(for: .event)
+    let calendars = calendarIds.isEmpty ? all : all.filter { calendarIds.contains($0.calendarIdentifier) }
+    guard !calendars.isEmpty else { return [] }
+    let predicate = self.store.predicateForEvents(
+      withStart: Date(timeIntervalSince1970: start / 1000),
+      end: Date(timeIntervalSince1970: end / 1000),
+      calendars: calendars
+    )
+    return self.store.events(matching: predicate).map(Self.serialize)
+  }
+
   public func definition() -> ModuleDefinition {
-    Name("ArdiaCalendar")
-    Events("onCalendarChanged")
+    Name(Self.moduleName)
+    Self.eventsDefinition
 
     OnStartObserving("onCalendarChanged") {
       self.observe()
@@ -19,58 +70,13 @@ public class CalendarModule: Module {
       self.observer = nil
     }
 
-    Function("authorizationStatus") { () -> String in
-      Self.status()
-    }
+    Self.authorizationStatusFunction
 
-    AsyncFunction("requestAccess") { (promise: Promise) in
-      let asked = Self.status()
-      let started = Date()
-      self.store.requestFullAccessToEvents { granted, error in
-        DispatchQueue.main.async {
-          if granted { self.store = EKEventStore(); self.observe() }
-          let status = Self.status()
-          let responsible = Self.responsibleForSelf()
-          if !granted {
-            NSLog("[calendar] full access not granted: asked in %@, now %@, responsible %@, error %@", asked, status, responsible, error.map { "\($0)" } ?? "none")
-          }
-          promise.resolve([
-            "granted": granted,
-            "status": status,
-            "error": error?.localizedDescription as Any,
-            "responsible": responsible,
-            "ms": Int(Date().timeIntervalSince(started) * 1000),
-          ])
-        }
-      }
-    }.runOnQueue(.main)
+    requestAccessFunction
 
-    AsyncFunction("calendars") { () -> [[String: Any]] in
-      guard Self.status() == "fullAccess" else { return [] }
-      return self.store.calendars(for: .event).map { cal in
-        [
-          "id": cal.calendarIdentifier,
-          "title": cal.title,
-          "color": Self.hex(cal.color),
-          "account": cal.source?.title ?? "",
-          "accountType": Self.sourceType(cal.source?.sourceType),
-          "owned": cal.allowsContentModifications && cal.type != .subscription && cal.type != .birthday,
-        ]
-      }
-    }.runOnQueue(.main)
+    calendarsFunction
 
-    AsyncFunction("events") { (start: Double, end: Double, calendarIds: [String]) -> [[String: Any]] in
-      guard Self.status() == "fullAccess" else { return [] }
-      let all = self.store.calendars(for: .event)
-      let calendars = calendarIds.isEmpty ? all : all.filter { calendarIds.contains($0.calendarIdentifier) }
-      guard !calendars.isEmpty else { return [] }
-      let predicate = self.store.predicateForEvents(
-        withStart: Date(timeIntervalSince1970: start / 1000),
-        end: Date(timeIntervalSince1970: end / 1000),
-        calendars: calendars
-      )
-      return self.store.events(matching: predicate).map(Self.serialize)
-    }.runOnQueue(.main)
+    eventsFunction
   }
 
   private func observe() {

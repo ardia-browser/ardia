@@ -33,7 +33,7 @@ test("source links exclude script URLs and protocol-relative navigation", () => 
   assert.equal(safeSource("javascript:alert(1)"), false);
   assert.equal(safeSource("//evil.test"), false);
   assert.equal(safeSource("/health"), true);
-  assert.equal(safeSource("https://github.com/mantrakp04/ardia/issues/1"), true);
+  assert.equal(safeSource("https://github.com/ardia-browser/ardia/issues/1"), true);
 });
 
 test("the latest snooze restores a pin even before the routine has pulled the earlier pin", () => {

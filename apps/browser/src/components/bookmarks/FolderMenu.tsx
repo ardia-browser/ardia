@@ -23,7 +23,7 @@ import { bookmarksBar, folderMenu, type BarSize } from "./tokens";
 const PAD = PANEL.rowInset;
 const FAVICON_LEFT = PANEL.rowInset + PANEL.rowPadding;
 
-export function placeMenu(panel: FolderMenuPanel, layer: MenuRect, width: number, height: number | null, size: BarSize) {
+function placeMenu(panel: FolderMenuPanel, layer: MenuRect, width: number, height: number | null, size: BarSize) {
   const { anchor, level } = panel;
   const m = folderMenu.margin;
   let left: number;

@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useBrowser, type BrowserState } from "../browser/store";
+import { fieldWatch, useKeyed } from "../browser/keyedWatch";
 import { activeTabId, engineProfile } from "../browser/model";
 import type { AdoptKind, SplitView, Tab } from "../browser/types";
 import { tabEngine, type PageEngine } from "../engines/engines";
@@ -19,8 +20,13 @@ import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { webviews } from "../../platform/webviews";
 import { notePageOverlay } from "../telemetry/usage";
 import { liveOf } from "../tabs/tabLive";
+import { warmOrder } from "../tabs/sleepPolicy";
 
 export const useSplitOf = (tabId: string | undefined) => useBrowser((s) => splitOf(s, tabId));
+
+const watchSplits = fieldWatch(() => useBrowser, (s: BrowserState) => s.splits);
+
+export const useInSplit = (tabId: string) => useKeyed(watchSplits, tabId, () => !!splitOf(useBrowser.getState(), tabId));
 
 export const useIsSmallWindow = (windowId: string) => useBrowser((s) => isSmallWindow(s.windows[windowId]));
 
@@ -77,14 +83,15 @@ export function successorWhenLeaving(leaving: string[], windowId: string): strin
   return next && next !== activeTabId(s, windowId) ? next : undefined;
 }
 
-export const useWarmTabIds = (windowId: string, pagerPages: PagerPage[] | null, successor: string | undefined) =>
-  useBrowser(
+export function useWarmTabIds(windowId: string, pagerPages: PagerPage[] | null, successor: string | undefined) {
+  return useBrowser(
     useShallow((s) => {
       const w = s.windows[windowId];
       const ids = !w || !pagerPages ? [] : pagerPages.map((p) => (p.id === w.profileId ? undefined : w.activeTabIds[p.id])).filter((id): id is string => !!id);
-      return successor && s.tabs[successor]?.windowId === windowId && !ids.includes(successor) ? [...ids, successor] : ids;
+      return warmOrder(ids, successor && s.tabs[successor]?.windowId === windowId ? successor : undefined);
     }),
   );
+}
 
 export const useSplitsOf = (tabIds: string[]) => useBrowser(useShallow((s) => tabIds.map((id) => splitOf(s, id)).filter((v): v is SplitView => !!v)));
 

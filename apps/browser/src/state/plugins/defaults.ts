@@ -6,7 +6,7 @@ import { checkedSettings, CONFIG_FILE, sameValue } from "../config/configSetting
 import type { Settings } from "../settings/settings";
 import type { PluginRecord } from "./store";
 
-export function keysConfigSets(): ReadonlySet<string> {
+function keysConfigSets(): ReadonlySet<string> {
   try {
     const read = readConfigFile(CONFIG_FILE);
     if (read.status !== "ok") return new Set();
@@ -18,9 +18,9 @@ export function keysConfigSets(): ReadonlySet<string> {
 }
 
 type Step = PluginRecord["applied"][string];
-export type Claims = ReadonlyMap<string, Step & { owner: string }>;
+type Claims = ReadonlyMap<string, Step & { owner: string }>;
 
-export function claimsOf(records: Record<string, PluginRecord>, except: string): Claims {
+function claimsOf(records: Record<string, PluginRecord>, except: string): Claims {
   const claims = new Map<string, Step & { owner: string }>();
   for (const [name, record] of Object.entries(records)) {
     if (name === except || !record.enabled) continue;
@@ -29,13 +29,13 @@ export function claimsOf(records: Record<string, PluginRecord>, except: string):
   return claims;
 }
 
-export function nextOrder(records: Record<string, PluginRecord>): number {
+function nextOrder(records: Record<string, PluginRecord>): number {
   let highest = 0;
   for (const record of Object.values(records)) for (const step of Object.values(record.applied)) highest = Math.max(highest, step.order);
   return highest + 1;
 }
 
-export function planDefaults(m: PluginManifest, settings: Settings, fileKeys: ReadonlySet<string>, claims: Claims = new Map(), order = 1): { patch: Partial<Settings>; applied: PluginRecord["applied"] } {
+function planDefaults(m: PluginManifest, settings: Settings, fileKeys: ReadonlySet<string>, claims: Claims = new Map(), order = 1): { patch: Partial<Settings>; applied: PluginRecord["applied"] } {
   const { values } = checkedSettings("plugin.json", m.settings.defaults, settings);
   const patch: Record<string, unknown> = {};
   const applied: PluginRecord["applied"] = {};
@@ -51,7 +51,7 @@ export function planDefaults(m: PluginManifest, settings: Settings, fileKeys: Re
   return { patch: patch as Partial<Settings>, applied };
 }
 
-export function planRestore(applied: PluginRecord["applied"], settings: Settings, claims: Claims = new Map(), fileKeys: ReadonlySet<string> = new Set()): Partial<Settings> {
+function planRestore(applied: PluginRecord["applied"], settings: Settings, claims: Claims = new Map(), fileKeys: ReadonlySet<string> = new Set()): Partial<Settings> {
   const patch: Record<string, unknown> = {};
   for (const [key, { value, previous, order }] of Object.entries(applied)) {
     if (!(key in settings) || fileKeys.has(key)) continue;

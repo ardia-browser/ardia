@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import {
   closePage,
+  isRefusedSnapshot,
   pages,
   type FindResult,
   type PageEngineEvent,
@@ -11,9 +12,11 @@ import {
   type PageState,
   type PageTone,
   type PageViewHandle,
+  type RefusedSnapshot,
 } from "../../platform/pages";
 
-export type { FindResult, PageEngineEvent, PageNavigationState, PageRequest, PageScrollPosition, PageSnapshot, PageState, PageTone, PageViewHandle };
+export type { FindResult, PageEngineEvent, PageNavigationState, PageRequest, PageScrollPosition, PageSnapshot, PageState, PageTone, PageViewHandle, RefusedSnapshot };
+export { isRefusedSnapshot };
 
 type PagesState = {
   navigation: Record<string, PageState>;
@@ -130,13 +133,46 @@ export const settled = <T>(call: () => Promise<T>, fallback: T): Promise<T> =>
     .then(call)
     .catch(() => fallback);
 
+const settledSync = <T>(call: () => T, fallback: T): T => {
+  try {
+    return call();
+  } catch {
+    return fallback;
+  }
+};
+
+export function snapshotsCommitted(entries: Record<string, string>) {
+  if (!Object.keys(entries).length) return;
+  try {
+    pages.snapshotsCommitted(entries);
+  } catch {
+    return;
+  }
+}
+
 export function deletePageSnapshots(ids: readonly string[]) {
+  if (!ids.length) return;
+  if (settledSync(() => pages.deletesSnapshotsTogether(), false)) {
+    void settled(() => pages.deleteSnapshotsFor([...ids]), undefined);
+    return;
+  }
   for (const id of ids) void settled(() => pages.deleteSnapshots(id), undefined);
 }
 
 export const endPrivateSession = () => void settled(() => pages.endPrivateSession(), undefined);
 
-export const snapshotPage = (id: string): Promise<PageSnapshot | null> => settled(() => pages.snapshot(id, { maxWidth: 600, quality: 72 }), null);
+export type SnapshotTiming = "now" | "quiet";
+
+export const snapshotPage = (id: string, windowCopy = true, timing: SnapshotTiming = "now"): Promise<PageSnapshot | RefusedSnapshot | null> =>
+  settled(() => pages.snapshot(id, { maxWidth: 600, quality: 72, ...(windowCopy ? {} : { windowCopy }), ...(timing === "quiet" ? { quiet: true } : {}) }), null);
+
+export function snapshotIsCurrent(id: string): boolean | null {
+  try {
+    return pages.snapshotIsCurrent(id);
+  } catch {
+    return null;
+  }
+}
 
 export const savePageState = (id: string): Promise<string | null> => settled(() => pages.saveState(id), null);
 

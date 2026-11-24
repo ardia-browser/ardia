@@ -4,7 +4,8 @@ const internals = React.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_
 const sameDeps = (a, b) => !!a && !!b && a.length === b.length && a.every((d, i) => Object.is(d, b[i]));
 
 export function mount(render, { props, contexts = [] } = {}) {
-  const slots = [];
+  let slots = [];
+  const refSlots = new WeakSet();
   const provided = new Map(contexts);
   let at = 0;
   let current = props;
@@ -13,6 +14,7 @@ export function mount(render, { props, contexts = [] } = {}) {
   let alive = true;
   let renders = 0;
   let effects = [];
+  let discarding = false;
 
   const schedule = () => {
     if (alive) dirty = true;
@@ -34,7 +36,11 @@ export function mount(render, { props, contexts = [] } = {}) {
     },
     useCallback: (fn, deps) => dispatcher.useMemo(() => fn, deps),
     useRef(initial) {
-      const s = slot(() => ({ current: initial }));
+      const s = slot(() => {
+        const ref = { current: initial };
+        refSlots.add(ref);
+        return ref;
+      });
       at++;
       return s;
     },
@@ -42,6 +48,7 @@ export function mount(render, { props, contexts = [] } = {}) {
       const s = slot(() => {
         const state = { value: typeof initial === "function" ? initial() : initial };
         state.set = (next) => {
+          if (discarding) return;
           const v = typeof next === "function" ? next(state.value) : next;
           if (Object.is(v, state.value)) return;
           state.value = v;
@@ -59,6 +66,7 @@ export function mount(render, { props, contexts = [] } = {}) {
     useSyncExternalStore(subscribe, getSnapshot) {
       const s = slot(() => ({}));
       at++;
+      if (discarding) return getSnapshot();
       s.getSnapshot = getSnapshot;
       s.value = getSnapshot();
       if (s.subscribe !== subscribe) {
@@ -74,8 +82,9 @@ export function mount(render, { props, contexts = [] } = {}) {
       const s = slot(() => ({}));
       at++;
       if (s.ran && deps && sameDeps(s.deps, deps)) return;
-      s.deps = deps;
       effects.push(() => {
+        s.deps = deps;
+        s.effect = effect;
         s.cleanup?.();
         s.ran = true;
         const cleanup = effect();
@@ -138,6 +147,34 @@ export function mount(render, { props, contexts = [] } = {}) {
       renderNow();
       settle();
       return value;
+    },
+    replayEffects() {
+      for (const s of slots) {
+        if (!s?.effect) continue;
+        s.cleanup?.();
+        const cleanup = s.effect();
+        s.cleanup = typeof cleanup === "function" ? cleanup : undefined;
+      }
+      settle();
+      return value;
+    },
+    discard(next = current) {
+      const previous = internals.H;
+      const committed = slots;
+      const wasDirty = dirty;
+      slots = committed.map((s) => (s && !refSlots.has(s) ? { ...s } : s));
+      internals.H = dispatcher;
+      at = 0;
+      discarding = true;
+      try {
+        return render(next);
+      } finally {
+        discarding = false;
+        slots = committed;
+        dirty = wasDirty;
+        internals.H = previous;
+        effects = [];
+      }
     },
     unmount() {
       alive = false;

@@ -3,7 +3,7 @@ import { fitFor, type SymbolLayer, type SymbolWeight } from "../../../demo/src/s
 
 export type { SymbolWeight };
 
-export type VectorElement = {
+type VectorElement = {
   d: string;
   matrix: number[];
   evenOdd: boolean;
@@ -141,7 +141,7 @@ function pathData(tag: string, attributes: Record<string, string>) {
 
 const bodies = new Map<string, BodyElement[]>();
 
-export function bodyElements(body: string): BodyElement[] {
+function bodyElements(body: string): BodyElement[] {
   const cached = bodies.get(body);
   if (cached) return cached;
   const elements: BodyElement[] = [];

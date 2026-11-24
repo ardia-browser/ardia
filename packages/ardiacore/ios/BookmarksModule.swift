@@ -28,10 +28,5 @@ public class BookmarksModule: Module {
     }
   }
 
-  static let calls = CallTable(domain: "bookmarks", handlers: [
-    "tree": EngineCall.passing("ac_bookmarks_tree"),
-    "apply": EngineCall.passing("ac_bookmarks_apply"),
-    "watch": EngineCall.passing("ac_bookmarks_watch"),
-    "exportHtml": exportHtml,
-  ])
+  static let calls = bookmarksCallTable(exportHtml: exportHtml)
 }

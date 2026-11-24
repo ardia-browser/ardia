@@ -9,6 +9,7 @@ import { placing, type TabPlacement } from "./placing";
 import { pinnedGroupMembers } from "../browser/structure";
 import { samePage } from "../../lib/url";
 import { pinHome } from "./pinHomes";
+import { sameList } from "../../lib/lists";
 
 export type OrganizeSlice = {
   selection: Record<string, string[]>;
@@ -99,7 +100,7 @@ export const createOrganizeSlice: StateCreator<BrowserState, [], [], OrganizeSli
       const view = new Set(viewTabIds(s, windowId));
       const next = [...new Set(ids)].filter((id) => view.has(id));
       const prev = s.selection[windowId] ?? [];
-      if (next.length === prev.length && next.every((id, i) => id === prev[i])) return {};
+      if (sameList(next, prev)) return {};
       return { selection: { ...s.selection, [windowId]: next } };
     });
   },

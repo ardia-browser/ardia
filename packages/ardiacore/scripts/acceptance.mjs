@@ -68,7 +68,7 @@ const usesPageA = [
   "fullscreen-pip", "autofill-suggestions", "images", "extension-surfaces", "frozen", "discard",
   "permission-prompt", "popup-blocked", "move-tab-slow-mount", "move-last-tab-slow-mount",
   "move-tab-closed-while-parked", "move-tab-to-window", "title-bar-close", "last-used-profile",
-  "webkit-tab", "webkit-move-tab", "webkit-zoom", "webkit-now-playing", "webkit-scroll", "webkit-js-reload",
+  "webkit-tab", "webkit-hidden-tab-uncovers", "webkit-move-tab", "webkit-zoom", "webkit-now-playing", "webkit-scroll", "webkit-js-reload",
   "window-close-before-reveal", "window-close-during-exit", "window-close-while-full-screen-restore-waits",
   "webkit-clearing-keeps-zoom", "webkit-private-session-ends-mid-transfer", "webkit-now-playing-frames",
   "page-view-calls", "tab-close-then-load", "tab-close-before-create", "tab-load-before-attach", "tab-create-interrupted-by-move", "tab-close-while-lent",
@@ -142,7 +142,7 @@ const attaching = argv[0] === "--attach";
 if (attaching) argv.shift();
 const keep = flag("--keep") || attaching;
 const audioOutputOf = (browserPid) => {
-  const utilities = execFileSync("ps", ["-A", "-ww", "-o", "ppid=,command="], { encoding: "utf8" }).split("\n")
+  const utilities = execFileSync("ps", ["-A", "-ww", "-o", "ppid=,command="], { encoding: "utf8", maxBuffer: 1 << 26 }).split("\n")
     .filter((line) => line.trim().split(/\s+/)[0] === String(browserPid) && line.includes("--type=utility"));
   if (!utilities.length) return null;
   return utilities.some((line) => line.includes(" --disable-audio-output")) ? "fake" : "speakers";
@@ -665,6 +665,36 @@ const openTab = async (url, title, background = false) => {
     await until("A shown", async () => (await state()).active === first.id);
   }
   return tab;
+};
+const captureWindow = (windowNumber, png) =>
+  execFileSync("/usr/bin/python3", ["-I", "-c", [
+    "import ctypes, ctypes.util, sys",
+    "cg = ctypes.cdll.LoadLibrary(ctypes.util.find_library('CoreGraphics'))",
+    "cf = ctypes.cdll.LoadLibrary(ctypes.util.find_library('CoreFoundation'))",
+    "io = ctypes.cdll.LoadLibrary('/System/Library/Frameworks/ImageIO.framework/ImageIO')",
+    "class R(ctypes.Structure): _fields_ = [(n, ctypes.c_double) for n in 'xywh']",
+    "cg.CGWindowListCreateImage.restype = ctypes.c_void_p",
+    "cg.CGWindowListCreateImage.argtypes = [R, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32]",
+    "image = cg.CGWindowListCreateImage(R(float('inf'), float('inf'), 0, 0), 8, int(sys.argv[1]), 1 | 8)",
+    "image or sys.exit('no image')",
+    "path = sys.argv[2].encode()",
+    "cf.CFURLCreateFromFileSystemRepresentation.restype = cf.CFStringCreateWithCString.restype = ctypes.c_void_p",
+    "cf.CFURLCreateFromFileSystemRepresentation.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_long, ctypes.c_bool]",
+    "cf.CFStringCreateWithCString.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_uint32]",
+    "io.CGImageDestinationCreateWithURL.restype = ctypes.c_void_p",
+    "io.CGImageDestinationCreateWithURL.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t, ctypes.c_void_p]",
+    "io.CGImageDestinationAddImage.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]",
+    "io.CGImageDestinationFinalize.argtypes = [ctypes.c_void_p]",
+    "url = cf.CFURLCreateFromFileSystemRepresentation(None, path, len(path), False)",
+    "dest = io.CGImageDestinationCreateWithURL(url, cf.CFStringCreateWithCString(None, b'public.png', 0x08000100), 1, None)",
+    "io.CGImageDestinationAddImage(dest, image, None)",
+    "io.CGImageDestinationFinalize(dest) or sys.exit('not written')",
+  ].join("\n"), String(windowNumber), png], { timeout: 20000 });
+const pngPixel = (png, fx, fy) => {
+  const [w, h] = execFileSync("ffprobe", ["-v", "error", "-show_entries", "stream=width,height", "-of", "csv=p=0", png], { encoding: "utf8" }).trim().split(",").map(Number);
+  const raw = execFileSync("ffmpeg", ["-loglevel", "error", "-i", png, "-f", "rawvideo", "-pix_fmt", "rgba", "-"], { maxBuffer: 1 << 28 });
+  const x = Math.round((w - 1) * fx), y = Math.round((h - 1) * fy);
+  return [...raw.subarray((y * w + x) * 4, (y * w + x) * 4 + 4)];
 };
 const closeTab = (id) => evalApp(`ac.store.getState().closeTab("${id}"); return true`);
 const shownAndMounted = async (id) => {
@@ -2820,6 +2850,41 @@ try {
     }
   });
 
+  await check("content-blocker-unload-cycles", async () => {
+    const pageIdleMs = 36000;
+    const profile = `blocker-unload-cycles-${Date.now() % 1000}`;
+    const unload = async () => {
+      let last = null;
+      try {
+        await until("the profile unloaded", async () => {
+          if (!(await engine("profiles.loaded")).profiles.includes(profile)) return true;
+          if (!last || last.status === "busy") last = await engine("profiles.unloadIdle", { profile });
+          if (last.status === "busy") await sleep(2000);
+          return null;
+        }, 60000);
+      } catch (error) {
+        throw new Error(`${error.message}; last unload: ${JSON.stringify(last)}`);
+      }
+      return last?.status ?? null;
+    };
+    const cycles = [];
+    for (let cycle = 0; cycle < 2; cycle++) {
+      await engine("contentBlocker.hiddenElements", { profile });
+      await sleep(pageIdleMs);
+      cycles.push(await unload());
+      await engine("contentBlocker.setAllowed", { host: "unload-cycles.test", allowed: true });
+      await engine("contentBlocker.setAllowed", { host: "unload-cycles.test", allowed: false });
+    }
+    await engine("contentBlocker.hiddenElements", { profile });
+    await sleep(pageIdleMs);
+    cycles.push(await unload());
+    const afterUnload = await evalApp(`return ac.engine.call("contentBlocker.hiddenElements", ${JSON.stringify({ profile })}).then((r) => ({ ok: r }), (e) => ({ error: e.message }))`);
+    if (afterUnload.error) throw new Error(`the first blocker call after an unload failed: ${afterUnload.error}`);
+    const state = await engine("contentBlocker.state");
+    if (!state?.stats?.ready) throw new Error("the blocker isn't ready after the profile unloaded twice");
+    return { profile, cycles, afterUnload };
+  });
+
   await check("content-blocker-private", async () => {
     const origin = `http://adpage.test:${server.address().port}`;
     const out = [];
@@ -3903,13 +3968,14 @@ try {
         rmSync(button, { force: true });
         await open();
         if ((await appActive(false)) !== "0") throw new Error("no app-active seam");
-        const from = logLines().length;
+        const from = Math.max(0, logLines().length - 1);
         try {
           if ((await engine("tabs.devPictureInPictureAction", { action: name })) !== "started") throw new Error("no button self-test");
           const clicked = await until(`the ${name} click`, async () => (existsSync(button) ? JSON.parse(readFileSync(button, "utf8")) : null), 10000);
           await sleep(300);
           const raised = logLines().slice(from).filter((l) => /^\S+ \S+ \S+ (makeKey|orderFront)/.test(l) && !l.includes("NativeWidgetMacFramelessNSWindow"));
-          return { ...clicked, raised };
+          const forced = logLines().slice(from).filter((l) => l.includes("activateIgnoringOtherApps (skipped in a test instance)")).length;
+          return { ...clicked, raised, forced };
         } finally {
           await appActive(true);
         }
@@ -3925,8 +3991,9 @@ try {
       const requests = (await eventsOf(tab.id)).filter((x) => x.name === "activateRequest").length;
       const back = await clickButton("backToTab");
       const backRequests = (await eventsOf(tab.id)).filter((x) => x.name === "activateRequest").length - requests;
-      if (!back.closed || !back.preventsActivation || back.activations !== 1 || backRequests !== 1)
-        throw new Error(`Chrome's Back to Tab: ${JSON.stringify({ back, backRequests })}`);
+      const backRequest = await lastEvent(tab.id, "activateRequest");
+      if (!back.closed || !back.preventsActivation || back.activations !== 1 || backRequests !== 1 || back.forced !== 1 || backRequest?.payload?.reason !== "pictureInPicture" || backRequest.payload.fromOtherApp !== true)
+        throw new Error(`Chrome's Back to Tab: ${JSON.stringify({ back, backRequests, backRequest })}`);
       await sleep(500);
       const reducesMotion = (() => {
         try {
@@ -3947,12 +4014,14 @@ try {
           const w = await shown();
           const [x, y] = rect(w.frame);
           return Math.abs(x - spot[corner][0]) < 1 && Math.abs(y - spot[corner][1]) < 1 && w.cornerRadius === 9 ? w : null;
-        }, 5000);
+        }, 5000).catch(async (e) => {
+          throw new Error(`${e.message}; it is at ${(await shown())?.frame} after ${JSON.stringify(JSON.parse(await pipAct("throw")).lastSwipe)}`);
+        });
         await pipAct(`frame:{{${Math.round(vx + (vw - pw) / 2)}, ${Math.round(vy + (vh - ph) / 2)}}, {${pw}, ${ph}}}`);
         await sleep(400);
-        await pipAct("swipe:240,-160,8");
+        await pipAct("swipe:240,-160,8,momentum");
         await landed("bottomRight");
-        for (const [kind, gesture] of [["swipe", "swipe:-400,300,8"], ["drag", "drag:-400,300,6,8"]]) {
+        for (const [kind, gesture] of [["swipe", "swipe:-400,300,8,momentum"], ["drag", "drag:-400,300,6,8"]]) {
           await pipAct(gesture);
           await landed("topLeft");
           const info = await pipAct("throw");
@@ -3961,8 +4030,94 @@ try {
           if (flight.corner !== "topLeft" || !radii.length || radii.some((r) => r !== 6))
             throw new Error(`a ${kind} thrown out of a corner isn't 6 pt in flight: ${JSON.stringify({ corner: flight.corner, radii })}`);
           corners[kind] = { frames: radii.length, flightRadius: [Math.min(...radii), Math.max(...radii)] };
-          await pipAct("swipe:400,-300,8");
+          await pipAct("swipe:400,-300,8,momentum");
           await landed("bottomRight");
+        }
+        await pipAct("swipe:-300,200,10,pause");
+        await sleep(900);
+        const carefully = rect((await shown()).frame);
+        if (Math.abs(carefully[0] - (spot.bottomRight[0] - 300)) > 1 || Math.abs(carefully[1] - (spot.bottomRight[1] + 200)) > 1)
+          throw new Error(`a swipe whose fingers stop before they lift should leave the PiP exactly where it was let go, but it is at ${carefully}`);
+        await pipAct("swipe:300,-200,8,momentum");
+        await landed("bottomRight");
+        await pipAct(`frame:{{${vx + vw - Math.round(pw * 0.2)}, ${vy + 10}}, {${pw}, ${ph}}}`);
+        const rightEdgeOpen = await until("the right edge taking a tuck", async () => ((await shown())?.stashed ? true : null), 2500).catch(() => false);
+        if (rightEdgeOpen) await pipAct("unstash");
+        await sleep(900);
+        await pipAct(`frame:{{${spot.bottomRight[0]}, ${spot.bottomRight[1]}}, {${pw}, ${ph}}}`);
+        await sleep(900);
+        corners.rightEdgeOpen = rightEdgeOpen;
+        if (rightEdgeOpen) {
+          await pipAct("swipe:60,0,6,momentum");
+          await landed("bottomRight");
+          corners.gentleFlickAtEdge = JSON.parse(await pipAct("throw")).lastSwipe.how;
+          await pipAct("swipe:150,0,6,momentum");
+          await until("a hard flick at the edge tucking the PiP away", async () => ((await shown())?.stashed ? true : null), 5000);
+          corners.flickedAway = JSON.parse(await pipAct("throw")).lastSwipe.how;
+          if (corners.flickedAway !== "flickedAway") throw new Error(`a hard flick at the edge should tuck it away: ${corners.flickedAway}`);
+          await pipAct("unstash");
+          await sleep(900);
+          await pipAct("swipe:-300,200,10,pause");
+          await sleep(900);
+          await pipAct("swipe:300,-200,8,momentum");
+          await landed("bottomRight");
+          const untucked = async (what, test) => until(what, async () => {
+            const w = await shown();
+            return w && !w.stashed && test(rect(w.frame)[0]) ? rect(w.frame)[0] : null;
+          }, 5000);
+          const tuck = async () => {
+            await pipAct("stash");
+            await until("the PiP tucked at the right edge", async () => ((await shown())?.stashed ? true : null), 5000);
+            await sleep(500);
+          };
+          await tuck();
+          await pipAct("swipe:-20,0,4,pause");
+          await sleep(1200);
+          if (!(await shown())?.stashed) throw new Error("a 20 pt pull on a tucked PiP should leave it tucked");
+          await pipAct("swipe:-60,0,6,pause");
+          corners.shortPull = await untucked("a tucked PiP pulled out 60 pt, most of it still past the edge, back out at that edge", (x) => Math.abs(x - (vx + vw - pw - 16)) < 1);
+          await pipAct(`frame:{{${vx + vw - Math.round(pw * 0.6)}, ${vy + 10}}, {${pw}, ${ph}}}`);
+          await sleep(1200);
+          if ((await shown())?.stashed) throw new Error("a PiP with 40% of it past the edge should stay where it was put: only more than half tucks it away");
+          await pipAct(`frame:{{${vx + vw - Math.round(pw * 0.4)}, ${vy + 10}}, {${pw}, ${ph}}}`);
+          await until("a PiP with 60% of it past the edge tucking away", async () => ((await shown())?.stashed ? true : null), 5000);
+          await sleep(500);
+          await pipAct(`swipe:${-Math.round(pw * 0.7)},0,8`);
+          corners.pulledOut = await untucked("a PiP pulled a little out of the tuck back at the edge it was tucked on", (x) => Math.abs(x - (vx + vw - pw - 16)) < 1);
+          await tuck();
+          await pipAct(`swipe:${-Math.round(vw * 0.7)},0,12`);
+          corners.pulledPastHalf = await untucked("a PiP pulled past the middle of the screen leaving the side it was tucked on", (x) => x + pw / 2 < vx + vw / 2);
+          const edged = `{{${vx + vw - Math.round(pw * 0.7)}, ${vy + 100}}, {${pw}, ${ph}}}`;
+          await until("the PiP resting 30% past the right edge", async () => {
+            if ((await shown())?.frame === edged) return true;
+            await pipAct(`frame:${edged}`);
+            await sleep(600);
+            return null;
+          }, 8000);
+          await sleep(600);
+          await pipAct("drag:40,0,3,8,0");
+          await until("a click-drag flicked at the edge the PiP is already past tucking it away", async () => ((await shown())?.stashed ? true : null), 5000).catch(async (e) => {
+            throw new Error(`${e.message}; it is at ${(await shown())?.frame} after ${JSON.stringify(JSON.parse(await pipAct("throw")).lastRelease)}`);
+          });
+          corners.dragFlickedAway = JSON.parse(await pipAct("throw")).lastRelease.outcome;
+          if (corners.dragFlickedAway !== "flickTuck") throw new Error(`a click-drag flicked at the edge should tuck it away as a flick: ${corners.dragFlickedAway}`);
+          await pipAct("unstash");
+          corners.arrowOut = await untucked("a tucked PiP brought back by its arrow", (x) => Math.abs(x - (vx + vw - pw - 16)) < 1);
+          const flight = JSON.parse(await pipAct("throw")).lastThrow;
+          if (flight.corner !== "none" || flight.frames.length < 10) throw new Error(`a PiP brought back by its arrow should come out on the spring: ${JSON.stringify({ corner: flight.corner, frames: flight.frames.length })}`);
+          await pipAct(`frame:{{${vx - Math.round(pw * 0.8)}, ${vy + 10}}, {${pw}, ${ph}}}`);
+          corners.leftEdgeOpen = await until("the left edge taking a tuck", async () => ((await shown())?.stashed ? true : null), 2500).catch(() => false);
+          if (corners.leftEdgeOpen) {
+            await sleep(500);
+            await pipAct("swipe:60,0,6,pause");
+            const out = await until("a PiP tucked on the left pulled out 60 pt, back out at that edge", async () => {
+              const w = await shown();
+              return w && !w.stashed && Math.abs(rect(w.frame)[0] - (vx + 16)) < 1 ? rect(w.frame)[0] : null;
+            }, 5000);
+            corners.leftPull = out;
+          }
+          await pipAct(`frame:{{${spot.bottomRight[0]}, ${spot.bottomRight[1]}}, {${pw}, ${ph}}}`);
+          await sleep(900);
         }
       }
       return {
@@ -3971,7 +4126,7 @@ try {
         closeButton: closed.point,
         playing: [before.time.toFixed(1), after.time.toFixed(1)],
         close: { activations: closed.activations, raised: closed.raised.length },
-        backToTab: { activations: back.activations, activateRequests: backRequests },
+        backToTab: { activations: back.activations, activateRequests: backRequests, forced: back.forced, fromOtherApp: backRequest.payload.fromOtherApp },
       };
     } finally {
       await closeTab(tab.id);
@@ -3987,30 +4142,6 @@ try {
       await pipByHand(tab.id);
       const shown = await until("the styled PiP window", async () => (await pipWindows())?.find((w) => w.video && w.styled && w.visible) ?? null, 5000);
       const pipAct = (action) => engine("tabs.devPictureInPictureAction", { action });
-      const captureWindow = (windowNumber, png) =>
-        execFileSync("/usr/bin/python3", ["-I", "-c", [
-          "import ctypes, ctypes.util, sys",
-          "cg = ctypes.cdll.LoadLibrary(ctypes.util.find_library('CoreGraphics'))",
-          "cf = ctypes.cdll.LoadLibrary(ctypes.util.find_library('CoreFoundation'))",
-          "io = ctypes.cdll.LoadLibrary('/System/Library/Frameworks/ImageIO.framework/ImageIO')",
-          "class R(ctypes.Structure): _fields_ = [(n, ctypes.c_double) for n in 'xywh']",
-          "cg.CGWindowListCreateImage.restype = ctypes.c_void_p",
-          "cg.CGWindowListCreateImage.argtypes = [R, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32]",
-          "image = cg.CGWindowListCreateImage(R(float('inf'), float('inf'), 0, 0), 8, int(sys.argv[1]), 1 | 8)",
-          "image or sys.exit('no image')",
-          "path = sys.argv[2].encode()",
-          "cf.CFURLCreateFromFileSystemRepresentation.restype = cf.CFStringCreateWithCString.restype = ctypes.c_void_p",
-          "cf.CFURLCreateFromFileSystemRepresentation.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_long, ctypes.c_bool]",
-          "cf.CFStringCreateWithCString.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_uint32]",
-          "io.CGImageDestinationCreateWithURL.restype = ctypes.c_void_p",
-          "io.CGImageDestinationCreateWithURL.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t, ctypes.c_void_p]",
-          "io.CGImageDestinationAddImage.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]",
-          "io.CGImageDestinationFinalize.argtypes = [ctypes.c_void_p]",
-          "url = cf.CFURLCreateFromFileSystemRepresentation(None, path, len(path), False)",
-          "dest = io.CGImageDestinationCreateWithURL(url, cf.CFStringCreateWithCString(None, b'public.png', 0x08000100), 1, None)",
-          "io.CGImageDestinationAddImage(dest, image, None)",
-          "io.CGImageDestinationFinalize(dest) or sys.exit('not written')",
-        ].join("\n"), String(windowNumber), png], { timeout: 20000 });
       const pixels = (png, scale) => {
         const [w, h] = execFileSync("ffprobe", ["-v", "error", "-show_entries", "stream=width,height", "-of", "csv=p=0", png], { encoding: "utf8" }).trim().split(",").map(Number);
         const raw = execFileSync("ffmpeg", ["-loglevel", "error", "-i", png, "-f", "rawvideo", "-pix_fmt", "rgba", "-"], { maxBuffer: 1 << 28 });
@@ -5665,6 +5796,49 @@ try {
       return { favicon: !!before.favicon, zoom, entries: entries?.length };
     } finally {
       await closeTab(id);
+      await evalApp(`ac.actions.switchToTab("${first.id}"); return true`);
+    }
+  });
+
+  await check("webkit-hidden-tab-uncovers", async () => {
+    const green = await openTab(`${base}/solid?c=00ff00&t=Green`, "Green");
+    let blue = null, red = null;
+    try {
+      blue = await webkitTab("/solid?c=0000ff&t=Blue", "Blue");
+      red = await webkitTab("/solid?c=ff0000&t=Red", "Red");
+      const windowNumber = await engine("tabs.devWindowNumber", { tabId: green.id });
+      const lit = (px, channel) => px[channel] >= 180 && px.slice(0, 3).every((v, i) => i === channel || v <= px[channel] * 0.6);
+      const shows = async (id, label, channel, expectedWebKitTabs) => {
+        await evalApp(`ac.actions.switchToTab(${q(id)}); return true`);
+        await until(`${label} shown`, async () => (await state()).active === id);
+        const png = join(scratch, `webkit-hidden-tab-uncovers-${label}.png`);
+        let seen = null;
+        await until(`${label} drawn in a capture`, async () => {
+          captureWindow(windowNumber, png);
+          seen = pngPixel(png, 0.7, 0.6);
+          return lit(seen, channel) || null;
+        }, 8000).catch(() => {
+          throw new Error(`${label} isn't on screen: the window shows ${JSON.stringify(seen)} where its page should be`);
+        });
+        let visibleWebKitTabs = -1;
+        await until(`${label} leaves ${expectedWebKitTabs} unhidden WebKitTab view(s)`, async () => {
+          const views = JSON.parse(await engine("windows.dev", { window: windowNumber, action: "tabviews" }));
+          visibleWebKitTabs = views.filter((v) => v.class.endsWith(".WebKitTab") || v.class === "WebKitTab").length;
+          return visibleWebKitTabs === expectedWebKitTabs;
+        }, 4000).catch(() => {
+          throw new Error(`${label} left ${visibleWebKitTabs} unhidden WebKitTab view(s), expected ${expectedWebKitTabs}`);
+        });
+        return seen;
+      };
+      const earlier = await shows(green.id, "the earlier Chromium tab", 1, 0);
+      const webkit = await shows(blue, "the earlier WebKit tab", 2, 1);
+      const later = await shows(red, "the later WebKit tab", 0, 1);
+      const back = await shows(green.id, "the Chromium tab again", 1, 0);
+      return { earlier, webkit, later, back };
+    } finally {
+      if (red) await closeTab(red);
+      if (blue) await closeTab(blue);
+      await closeTab(green.id);
       await evalApp(`ac.actions.switchToTab("${first.id}"); return true`);
     }
   });

@@ -84,7 +84,7 @@ export function startMemoryTrim() {
     else finish();
   };
 
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["tabs"], (s, prev) => {
     if (s.tabs === prev.tabs) return;
     const count = keysOf(s.tabs).length;
     if (count === tabCount) return;

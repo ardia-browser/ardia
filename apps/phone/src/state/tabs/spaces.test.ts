@@ -37,11 +37,12 @@ test("without sync every tab is in the one space", () => {
   assert.ok(!isSplit(waitingForProfiles));
 });
 
-test("only the redesign with sync on and profiles splits tabs into spaces, defaulting to the marked profile or the first", () => {
+test("the redesign and Material You, with sync on and profiles, split tabs into spaces, defaulting to the marked profile or the first", () => {
   assert.deepEqual(tabSpacesFor("original", true, profiles, "work"), UNSYNCED);
   assert.deepEqual(tabSpacesFor("redesigned", false, profiles, "work"), UNSYNCED);
   assert.deepEqual(tabSpacesFor("redesigned", true, [], null), UNSYNCED);
   assert.deepEqual(tabSpacesFor("redesigned", true, profiles, "work"), { current: "work", defaultId: "personal", known });
+  assert.deepEqual(tabSpacesFor("material", true, profiles, "work"), { current: "work", defaultId: "personal", known });
   const unmarked = profiles.map((p) => ({ ...p, isDefault: false })).reverse();
   assert.equal(tabSpacesFor("redesigned", true, unmarked, "work").defaultId, "work");
   assert.ok(sameSpaces(tabSpacesFor("redesigned", true, profiles, "work"), spaces("work")));

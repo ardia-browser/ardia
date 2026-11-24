@@ -7,6 +7,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 HOST = SOURCE / 'ardia/linux/ac_linux_host.cc'
 FILES = [SOURCE / 'ardia/linux' / f'ac_linux_{name}.cc' for name in ['page_lease', 'security', 'history_zoom', 'theme', 'page_status', 'page_state']]
 FIXTURE = ROOT / 'tests/fixtures/page_state.h'
@@ -27,6 +28,7 @@ PRELUDE = r'''
 #include "fixtures/page_state.h"
 #include "ardia/linux/ac_linux_page_state.h"
 #include "ardia/linux/ac_linux_page_commits.h"
+#include "ardia/linux/ac_linux_tab_bindings.h"
 #include <set>
 #include <functional>
 #include <string_view>
@@ -39,7 +41,8 @@ template<class T> struct raw_ptr {
   T* operator->() const { return pointer; }
   T* get() const { return pointer; }
 };
-namespace views { struct WebView { bool visible = true; content::WebContents* contents = nullptr; bool GetVisible() { return visible; } void SetVisible(bool value) { visible = value; } void SetWebContents(content::WebContents* value) { contents = value; } }; }
+int& DestroyedViews() { static int destroyed = 0; return destroyed; }
+namespace views { struct WebView { bool visible = true; content::WebContents* contents = nullptr; ~WebView() { ++DestroyedViews(); } bool GetVisible() { return visible; } void SetVisible(bool value) { visible = value; } void SetWebContents(content::WebContents* value) { contents = value; } }; }
 namespace base { template<class C, class V> bool Contains(const C& container, const V& value) { return std::find(container.begin(), container.end(), value) != container.end(); } }
 std::map<const content::WebContents*, int>& Ids() { static std::map<const content::WebContents*, int> ids; return ids; }
 int TabId(content::WebContents* contents) { auto found = Ids().find(contents); return found == Ids().end() ? 0 : found->second; }
@@ -51,6 +54,17 @@ struct HostMessageHandler {};
 namespace ardiacore { struct LinuxPageChannel { int detached = 0; static std::map<const content::WebContents*, LinuxPageChannel>& All() { static std::map<const content::WebContents*, LinuxPageChannel> all; return all; } static LinuxPageChannel* FromWebContents(content::WebContents* contents) { return &All()[contents]; } void Detach() { ++detached; } }; inline void TrackLinuxAutofillFocus(content::WebContents*) {} inline void RedeliverLinuxPermissionPrompts(content::WebContents*) {} }
 namespace ardia::linux_pip { inline void ClearIntent(content::WebContents*) {} }
 namespace base { template<class F, class... Args> auto BindOnce(F function, Args... args) { return [=]() { function(args...); }; } }
+namespace base { template<class C, class... P, class... Args> auto BindOnce(void (C::*method)(P...), WeakPtr<C> target, Args... args) { return [=]() { if (C* object = target.get()) (object->*method)(args...); }; } }
+#define FROM_HERE 0
+namespace base {
+std::vector<std::function<void()>>& PostedTasks() { static std::vector<std::function<void()>> tasks; return tasks; }
+struct SequencedTaskRunner {
+  static bool HasCurrentDefault() { return true; }
+  static SequencedTaskRunner* GetCurrentDefault() { static SequencedTaskRunner runner; return &runner; }
+  void PostTask(int, std::function<void()> task) { PostedTasks().push_back(std::move(task)); }
+};
+}
+size_t RunPostedTasks() { auto tasks = std::move(base::PostedTasks()); base::PostedTasks().clear(); for (auto& task : tasks) task(); return tasks.size(); }
 namespace ardiacore { template<class Depart> void DepartWhenLinuxPageHidden(content::WebContents*, Depart depart) { depart(); } inline void ReturnBeforeLinuxPageHidden(content::WebContents*) {} }
 void TellAutoPictureInPictureDeparted(base::WeakPtr<content::WebContents>) {}
 struct AutoPictureInPictureTabHelper {
@@ -61,7 +75,8 @@ class TabBinding : public content::WebContentsObserver {
  public:
   TabBinding(ShellHostView* owner, content::WebContents* contents, std::string key)
       : content::WebContentsObserver(contents), owner_(owner), contents_(contents), key_(std::move(key)) { StartMedia(); }
-  ~TabBinding() override { RetirePage(); }
+  ~TabBinding() override;
+  void RemoveViewports();
   const std::string& key() const { return key_; }
   std::string claim;
   uint64_t renderer_generation = 0;
@@ -146,6 +161,18 @@ class ShellHostView {
   void SetPresentations(const base::DictValue& args, std::function<void(bool, base::Value)> done);
   int layouts = 0;
   void LayoutPane(TabBinding*) { ++layouts; }
+  void ForgetClosedTab(TabBinding* binding);
+  void DropClosedTab(base::WeakPtr<TabBinding> binding);
+  std::vector<std::unique_ptr<views::WebView>> children;
+  views::WebView* AddChildView(std::unique_ptr<views::WebView> view) { children.push_back(std::move(view)); return children.back().get(); }
+  std::unique_ptr<views::WebView> RemoveChildViewT(views::WebView* view) {
+    auto found = std::find_if(children.begin(), children.end(), [view](const auto& child) { return child.get() == view; });
+    assert(found != children.end());
+    auto owned = std::move(*found);
+    children.erase(found);
+    return owned;
+  }
+  ~ShellHostView() { weak_factory_.InvalidateWeakPtrs(); bindings_.clear(); }
   base::WeakPtrFactory<ShellHostView> weak_factory_{this};
 };
 '''
@@ -234,7 +261,7 @@ void Reclaim() {
   assert(!stale->Valid() && !ardiacore::EmitLinuxPageEvent(*stale, "find", base::Value()));
   w.host.sent.clear();
   w.first.reset();
-  assert(w.host.sent.empty());
+  assert(w.host.sent.empty() && base::PostedTasks().empty());
   assert(w.binding->page()->EmitNavigation() && w.host.sent.back().id == "9" && Text(w.host.sent.back().payload, "bindingGeneration") == Text(lease, "bindingGeneration"));
   auto old_command = base::DictValue().Set("id", 7).Set("claim", "claim");
   auto new_command = base::DictValue().Set("id", 9).Set("claim", "claim");
@@ -320,6 +347,140 @@ void DiscardedRebind() {
   assert(!Named(again.FindDict("snapshot")->Find("events")->GetList(), "discarded"));
 }
 
+void ClosedTabLeavesTheWindow() {
+  World w;
+  w.Claim();
+  w.host.devtools_had_focus_[7] = true;
+  w.host.devtools_had_focus_[9] = true;
+  auto weak = w.binding->GetWeakPtr();
+  w.browser.strip.tabs.clear();
+  w.first.reset();
+  assert(base::PostedTasks().size() == 1);
+  assert(w.host.Binding(7) == w.binding && !w.binding->contents());
+  assert(RunPostedTasks() == 1);
+  assert(!weak && w.host.bindings_.empty());
+  assert(!w.host.devtools_had_focus_.contains(7) && w.host.devtools_had_focus_.contains(9));
+  w.host.DropClosedTab(weak);
+  w.host.DropClosedTab(base::WeakPtr<TabBinding>());
+  assert(w.host.bindings_.empty() && base::PostedTasks().empty());
+}
+
+void ClosedTabRemovesBothViewports() {
+  World w;
+  w.Claim();
+  w.host.devtools_had_focus_[7] = true;
+  w.binding->viewport_ = w.host.AddChildView(std::make_unique<views::WebView>());
+  w.binding->devtools_viewport_ = w.host.AddChildView(std::make_unique<views::WebView>());
+  w.binding->viewport_->SetWebContents(w.first.get());
+  auto* other = w.host.AddChildView(std::make_unique<views::WebView>());
+  auto weak = w.binding->GetWeakPtr();
+  const int destroyed = DestroyedViews();
+  w.browser.strip.tabs.clear();
+  w.first.reset();
+  assert(w.host.children.size() == 3 && !w.host.children[0]->contents && !w.host.children[1]->visible);
+  assert(RunPostedTasks() == 1);
+  assert(!weak && w.host.bindings_.empty() && !w.host.devtools_had_focus_.contains(7));
+  assert(DestroyedViews() == destroyed + 2);
+  assert(w.host.children.size() == 1 && w.host.children[0].get() == other);
+}
+
+void QueuedDropAfterHostTeardown() {
+  Profile profile;
+  auto contents = std::make_unique<content::WebContents>(&profile);
+  Ids()[contents.get()] = 21;
+  auto host = std::make_unique<ShellHostView>();
+  host->bindings_[21] = std::make_unique<TabBinding>(host.get(), contents.get(), "gone");
+  host->bindings_[21]->viewport_ = host->AddChildView(std::make_unique<views::WebView>());
+  host->devtools_had_focus_[21] = true;
+  auto weak = host->bindings_[21]->GetWeakPtr();
+  const int destroyed = DestroyedViews();
+  contents.reset();
+  assert(base::PostedTasks().size() == 1);
+  host.reset();
+  assert(!weak && DestroyedViews() == destroyed + 1);
+  assert(RunPostedTasks() == 1);
+}
+
+void QueuedDropAfterSameIdReplacement() {
+  World w;
+  auto weak = w.binding->GetWeakPtr();
+  w.browser.strip.tabs.clear();
+  w.first.reset();
+  assert(base::PostedTasks().size() == 1);
+  auto retired = std::move(w.host.bindings_[7]);
+  w.host.bindings_[7] = std::make_unique<TabBinding>(&w.host, w.second.get(), "replacement");
+  TabBinding* replacement = w.host.bindings_[7].get();
+  w.host.devtools_had_focus_[7] = true;
+  assert(RunPostedTasks() == 1);
+  assert(weak && retired.get() == weak.get());
+  assert(w.host.Binding(7) == replacement && w.host.devtools_had_focus_.at(7));
+  retired.reset();
+  assert(!weak && w.host.Binding(7) == replacement && w.host.devtools_had_focus_.at(7));
+  World destroyed;
+  destroyed.browser.strip.tabs.clear();
+  destroyed.first.reset();
+  destroyed.host.bindings_[7] = std::make_unique<TabBinding>(&destroyed.host, destroyed.second.get(), "replacement");
+  destroyed.host.devtools_had_focus_[7] = true;
+  assert(RunPostedTasks() == 1);
+  assert(destroyed.host.Binding(7) && destroyed.host.Binding(7)->key() == "replacement" && destroyed.host.devtools_had_focus_.at(7));
+  World rebound;
+  auto rebound_weak = rebound.binding->GetWeakPtr();
+  rebound.browser.strip.tabs.clear();
+  rebound.first.reset();
+  rebound.binding->Rebind(rebound.second.get());
+  rebound.host.devtools_had_focus_[7] = true;
+  assert(RunPostedTasks() == 1);
+  assert(rebound_weak && rebound.host.Binding(7) == rebound.binding && rebound.binding->contents() == rebound.second.get());
+  assert(rebound.host.devtools_had_focus_.at(7));
+  World live;
+  live.host.DropClosedTab(live.binding->GetWeakPtr());
+  assert(live.host.Binding(7) == live.binding);
+}
+
+void QueuedDropOnTheSourceAfterTransfer() {
+  World source;
+  World destination;
+  auto weak = source.binding->GetWeakPtr();
+  source.browser.strip.tabs.clear();
+  source.first.reset();
+  assert(base::PostedTasks().size() == 1);
+  auto moved = std::move(source.host.bindings_[7]);
+  source.host.bindings_.erase(7);
+  source.host.devtools_had_focus_.erase(7);
+  destination.host.bindings_.clear();
+  moved->owner_ = &destination.host;
+  destination.host.bindings_[7] = std::move(moved);
+  destination.host.devtools_had_focus_[7] = true;
+  source.host.devtools_had_focus_[7] = true;
+  assert(RunPostedTasks() == 1);
+  assert(weak && destination.host.Binding(7) == weak.get() && destination.host.devtools_had_focus_.at(7));
+  assert(source.host.bindings_.empty() && source.host.devtools_had_focus_.at(7));
+}
+
+void ClosingManyTabsKeepsBindingsBounded() {
+  Profile profile;
+  views::Widget widget;
+  BrowserWindowInterface browser{&profile};
+  content::WebContents shell{&profile};
+  ShellHostView host;
+  host.browser_ = &browser;
+  host.shell_contents = &shell;
+  host.widget = &widget;
+  const int destroyed = DestroyedViews();
+  for (int id = 100; id < 164; ++id) {
+    auto contents = std::make_unique<content::WebContents>(&profile);
+    Ids()[contents.get()] = id;
+    host.bindings_[id] = std::make_unique<TabBinding>(&host, contents.get(), "key" + std::to_string(id));
+    host.bindings_[id]->viewport_ = host.AddChildView(std::make_unique<views::WebView>());
+    host.devtools_had_focus_[id] = id % 2;
+    auto weak = host.bindings_[id]->GetWeakPtr();
+    contents.reset();
+    assert(RunPostedTasks() == 1);
+    assert(host.bindings_.empty() && host.devtools_had_focus_.empty() && host.children.empty() && !weak);
+  }
+  assert(DestroyedViews() == destroyed + 64);
+}
+
 int main(int argc, char** argv) {
   assert(argc == 2);
   std::string mode = argv[1];
@@ -329,6 +490,12 @@ int main(int argc, char** argv) {
   else if (mode == "presentations") Presentations();
   else if (mode == "failed-remount") FailedRemount();
   else if (mode == "discarded-rebind") DiscardedRebind();
+  else if (mode == "closed-tab") ClosedTabLeavesTheWindow();
+  else if (mode == "closed-viewports") ClosedTabRemovesBothViewports();
+  else if (mode == "queued-teardown") QueuedDropAfterHostTeardown();
+  else if (mode == "queued-replacement") QueuedDropAfterSameIdReplacement();
+  else if (mode == "queued-transfer") QueuedDropOnTheSourceAfterTransfer();
+  else if (mode == "many-closed-tabs") ClosingManyTabsKeepsBindingsBounded();
   else return 2;
 }
 '''
@@ -352,12 +519,16 @@ class PageHostJoinTests(unittest.TestCase):
         methods.append(body(host, 'std::unique_ptr<ardiacore::LinuxPageState> ShellHostView::MountPage('))
         methods.append(body(host, 'void ShellHostView::ReplaceTabContents('))
         methods.append(body(host, 'TabBinding* ShellHostView::ClaimedBinding('))
+        methods.append(body(host, 'void ShellHostView::DropClosedTab('))
+        methods.append(body(host, 'void ShellHostView::ForgetClosedTab('))
+        methods.append(body(host, 'TabBinding::~TabBinding('))
+        methods.append(body(host, 'void TabBinding::RemoveViewports('))
         methods.append(body(host, 'void ShellHostView::SetPresentations(').replace(
             'base::OnceCallback<void(bool, base::Value)> done', 'std::function<void(bool, base::Value)> done').replace('std::move(done).Run(', 'done('))
         test = directory / 'join.cc'
         test.write_text(PRELUDE + '\n'.join(methods) + TESTS)
         cls.binary = directory / 'join'
-        subprocess.run([os.environ.get('CXX', 'c++'), '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g', '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-no-pie', '-I', str(directory), '-I', str(SOURCE), '-I', str(ROOT / 'tests'), *map(str, FILES), str(test), '-o', str(cls.binary)], check=True, text=True, timeout=120)
+        subprocess.run([os.environ.get('CXX', 'c++'), '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g', '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-no-pie', '-I', str(directory), '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE), '-I', str(ROOT / 'tests'), *map(str, FILES), str(test), '-o', str(cls.binary)], check=True, text=True, timeout=120)
 
     @classmethod
     def tearDownClass(cls):
@@ -384,6 +555,36 @@ class PageHostJoinTests(unittest.TestCase):
 
     def test_discard_swap_sends_discarded_in_the_rebind_snapshot(self):
         self.run_case('discarded-rebind')
+
+    def test_a_closed_tab_drops_its_binding_and_per_tab_state(self):
+        self.run_case('closed-tab')
+
+    def test_a_closed_tab_removes_and_destroys_both_its_viewports(self):
+        self.run_case('closed-viewports')
+
+    def test_the_queued_drop_is_a_no_op_after_the_window_is_torn_down(self):
+        self.run_case('queued-teardown')
+
+    def test_the_queued_drop_keeps_a_same_id_replacement_or_rebound_binding_and_its_focus(self):
+        self.run_case('queued-replacement')
+
+    def test_the_queued_drop_on_the_source_keeps_a_transferred_binding_and_its_focus(self):
+        self.run_case('queued-transfer')
+
+    def test_closing_many_tabs_keeps_bindings_bounded(self):
+        self.run_case('many-closed-tabs')
+
+    def test_the_closed_tab_drop_is_posted_and_guarded_by_weak_pointers(self):
+        host = HOST.read_text()
+        destroyed = body(host, 'void TabBinding::WebContentsDestroyed(')
+        self.assertTrue(destroyed.rstrip('}').rstrip().endswith('owner_->ForgetClosedTab(this);'))
+        forget = body(host, 'void ShellHostView::ForgetClosedTab(')
+        self.assertIn('base::SequencedTaskRunner::HasCurrentDefault()', forget)
+        self.assertIn('base::BindOnce(&ShellHostView::DropClosedTab, GetWeakPtr(), binding->GetWeakPtr())', forget)
+        drop = body(host, 'void ShellHostView::DropClosedTab(')
+        self.assertLess(drop.index('if (!binding || binding->contents()) return;'), drop.index('TakeBinding('))
+        self.assertLess(drop.index('TakeBinding('), drop.index('owned.reset();'))
+        self.assertIn('"ac_linux_tab_bindings.h"', (SOURCE / 'ardia/linux/BUILD.gn').read_text())
 
 if __name__ == '__main__':
     unittest.main()

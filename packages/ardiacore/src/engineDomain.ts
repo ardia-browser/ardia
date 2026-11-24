@@ -36,6 +36,12 @@ export type EngineTask = {
   pid?: number;
 };
 
+export type ChildProcessCpu = {
+  pid: number;
+  started: number;
+  cpuMs: number;
+};
+
 export type SystemState = {
   onBattery: boolean;
   batteryLevel: number | null;
@@ -84,6 +90,10 @@ export type HoverLostEpisode = {
   coverWindow?: string;
   healed: boolean;
   healWorked: boolean | null;
+  healRefused?: string;
+  healRefusedLast?: string;
+  healRefusedWindow?: string;
+  otherWindowClicks?: number;
   endedBy: "hover" | "heal" | "appInactive" | "windowClosed";
   seconds: number;
   episode: number;
@@ -108,11 +118,21 @@ export type PressLoopLongReport = { loop: string; inner: string; open: boolean; 
 
 export type CliTabTarget = { targetId: string | null; pageGeneration: number };
 
-export type CliDragsEnded = { ownerGone: number; debuggerUnowned: number; nativeRefused: number; sourceGone?: number };
+type CliDragsEnded = { ownerGone: number; debuggerUnowned: number; nativeRefused: number; sourceGone?: number };
 
-export type CliWindowlessPages = { given: number; missed: number };
+type CliWindowlessPages = { given: number; missed: number };
 
-export type CliControlStatus = { dragsEnded?: CliDragsEnded; windowlessPages?: CliWindowlessPages } & (
+type CliTokenCommands = Partial<Record<"accessibility" | "ardia" | "browser" | "dom" | "emulation" | "fetch" | "input" | "network" | "page" | "runtime" | "storage" | "target" | "other", number>>;
+
+type CliPageSignals = { consoleReads: number; focusedOrigins: number; originMismatches: number; hitTests: number; hitTestsFailed: number; hitTestsCancelled: number; remoteFrames: number; occluded: number };
+
+type CliConsoleRing = { captured: number; evicted: number; reads: number; rings: number };
+
+export type CliConsoleEntry = { seq: number; level: "warning" | "error"; exception: boolean; mainFrame: boolean; text: string; source: string; line: number; time: number };
+
+export type CliConsoleDelta = { entries: CliConsoleEntry[]; generation: number; reset: boolean; next: number; last: number; dropped: number; withheld: number; errors: number; more: boolean };
+
+export type CliControlStatus = { dragsEnded?: CliDragsEnded; windowlessPages?: CliWindowlessPages; tokenCommands?: CliTokenCommands; pageSignals?: CliPageSignals; consoleRing?: CliConsoleRing } & (
   | { state: "external" }
   | ({ state: "off" | "starting" } & CliServer)
   | ({ state: "on"; port: number } & CliServer)

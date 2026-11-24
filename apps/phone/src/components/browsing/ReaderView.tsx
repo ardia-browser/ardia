@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, Text, View } from "react-native";
-import Animated, { SlideInDown, SlideOutDown, useAnimatedStyle, useSharedValue, withSpring, type SharedValue } from "react-native-reanimated";
+import { useEffect, useRef, useState } from "react";
+import { FlatList, Image, Pressable, StyleSheet, Text, View, type ViewInstance } from "react-native";
+import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSystemBars } from "../../state/app/systemBars";
 import { closeReader, readableContent, setReaderSerif, setReaderStep, setReaderTheme, type ReadableContent } from "../../state/page/actions";
@@ -17,17 +17,36 @@ import {
   type ReaderTheme,
 } from "../../state/page/pagePrompts";
 import { copy } from "../../lib/platformCopy";
-import { ChromeSurface, font, readerInk, readerLayout, space, Symbol, tabsMotion, type MenuItem } from "../ui";
+import { dismissWords, ELLIPSIS } from "../../lib/sharedWords";
+import { ChromeSurface, EmptyState, font, LoadingState, motionAliases, readerInk, readerLayout, smoothCorners, space, tabsMotion, TextSizeGlyph, useDesign, useModalOverlay, usePressStyle, useReduceMotion, type MenuItem } from "../ui";
+import { MaterialIconAction, MaterialTopBar } from "../ui/MaterialTopBar";
 import { MenuTrigger } from "../ui/MenuTrigger";
-
+import { pageMenuOpener } from "./pageMenuOpener";
+import { readerGlyphs } from "./readerTokens";
 
 const rise = SlideInDown.springify().stiffness(tabsMotion.sheetIn.stiffness).damping(tabsMotion.sheetIn.damping);
 const fall = SlideOutDown.springify().stiffness(tabsMotion.sheetOut.stiffness).damping(tabsMotion.sheetOut.damping);
+const riseReduced = FadeIn.duration(tabsMotion.sheetReduced);
+const fallReduced = FadeOut.duration(tabsMotion.sheetReduced);
+
+export function useLeavingReader(tabId: string | null): { shown: string | null; closing: boolean } {
+  const [shown, setShown] = useState(tabId);
+  useEffect(() => {
+    if (tabId !== shown) setShown(tabId);
+  }, [tabId, shown]);
+  return { shown: tabId ?? shown, closing: tabId === null && shown !== null };
+}
 
 type Load = { kind: "loading" } | { kind: "failed" } | { kind: "loaded"; content: ReadableContent };
 
-export function ReaderView({ tabId }: { tabId: string }) {
+export function ReaderView({ tabId, closing = false }: { tabId: string; closing?: boolean }) {
   const insets = useSafeAreaInsets();
+  const material = useDesign() === "material";
+  const reduceMotion = useReduceMotion();
+  const done = useRef<ViewInstance>(null);
+  const { ref: overlayRef, ...overlay } = useModalOverlay({ open: true, closing, onDismiss: closeReader, focus: material ? undefined : done, returnFocusTo: pageMenuOpener });
+  const donePress = usePressStyle("text");
+  const appearancePress = usePressStyle("icon");
   const dark = useDarkScheme();
   const settings = useReaderSettings();
   const shown = readerTheme(settings.theme, dark);
@@ -46,8 +65,9 @@ export function ReaderView({ tabId }: { tabId: string }) {
   const size = readerBodySize(settings.step);
   const shownSize = useSharedValue(size);
   useEffect(() => {
-    shownSize.value = withSpring(size, SIZE_SPRING);
-  }, [size]);
+    shownSize.value = reduceMotion ? size : withSpring(size, motionAliases.readerTextSize);
+  }, [size, reduceMotion]);
+  const textScale = useAnimatedStyle(() => ({ transform: [{ scale: shownSize.value / size }] }), [size]);
   const family = settings.serif ? copy().readerSerif.family : copy().readerSans.family;
   const items: MenuItem[] = [
     { label: "Smaller Text", systemImage: "textformat.size.smaller", disabled: settings.step <= 0, onPress: () => setReaderStep(clampReaderStep(settings.step - 1)) },
@@ -63,47 +83,63 @@ export function ReaderView({ tabId }: { tabId: string }) {
     })),
   ];
   return (
-    <Animated.View entering={rise} exiting={fall} style={[StyleSheet.absoluteFill, { backgroundColor: ink.background, paddingTop: insets.top }]}>
+    <Animated.View testID="readerView" entering={reduceMotion ? riseReduced : rise} exiting={reduceMotion ? fallReduced : fall} style={[StyleSheet.absoluteFill, { backgroundColor: ink.background }]}>
+      <View testID="readerOverlay" ref={overlayRef} collapsable={false} style={[styles.fill, { paddingTop: insets.top }]} {...overlay}>
+      {material ? (
+        <MaterialTopBar
+          nav="close"
+          onNav={closeReader}
+          ink={ink.ink}
+          actions={
+            load.kind === "loaded" ? (
+              <MenuTrigger items={items} trigger="tap" fixedOrder frost={null} dark={shown === "dark"} place={{ top: insets.top + readerLayout.chromeBand, right: readerLayout.chromeSide }}>
+                {({ onPress }) => <MaterialIconAction icon="textformatSize" label="Text Appearance" ink={ink.ink} onPress={onPress ?? (() => undefined)} />}
+              </MenuTrigger>
+            ) : null
+          }
+        />
+      ) : (
       <View style={styles.top}>
         {load.kind === "loaded" ? (
           <MenuTrigger items={items} trigger="tap" fixedOrder frost={null} dark={shown === "dark"} place={{ top: insets.top + readerLayout.chromeBand, left: readerLayout.chromeSide }}>
             {({ onPress }) => (
-              <Pressable accessibilityRole="button" accessibilityLabel="Text Appearance" onPress={onPress}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Text Appearance" onPress={onPress} style={appearancePress}>
                 <ChromeSurface shape="circle" cornerRadius={readerLayout.chromeButton / 2} dark={shown === "dark"} style={styles.circle}>
-                  <View style={styles.mirrored}>
-                    <Symbol name="textformatSize" size={30} color={ink.ink} />
-                  </View>
+                  <TextSizeGlyph size={readerGlyphs.textSize} color={ink.ink} />
                 </ChromeSurface>
               </Pressable>
             )}
           </MenuTrigger>
         ) : null}
         <View style={styles.fill} />
-        <Pressable accessibilityRole="button" onPress={closeReader}>
+        <Pressable ref={done} testID="readerDone" accessibilityRole="button" accessibilityLabel={dismissWords.done} onPress={closeReader} style={donePress}>
           <ChromeSurface shape="capsule" cornerRadius={readerLayout.chromeButton / 2} dark={shown === "dark"} style={styles.capsule}>
-            <Text style={[font.body, styles.bold, { color: ink.ink }]}>Done</Text>
+            <Text style={[font.body, styles.bold, { color: ink.ink }]}>{dismissWords.done}</Text>
           </ChromeSurface>
         </Pressable>
       </View>
+      )}
       {load.kind === "loading" ? (
         <View style={styles.center}>
-          <ActivityIndicator accessibilityLabel="Loading article" color={ink.secondary} />
+          <LoadingState testID="readerLoading" label={LOADING_ARTICLE} ink={{ label: ink.ink, secondary: ink.secondary }} />
         </View>
       ) : load.kind === "failed" ? (
-        <View style={[styles.center, styles.gap]}>
-          <Symbol name="docPlaintext" size={44} color={ink.secondary} />
-          <Text style={[font.title3, styles.bold, { color: ink.ink }]}>No Article Found</Text>
+        <View style={styles.center}>
+          <EmptyState testID="readerNoArticle" title={NO_ARTICLE} glyph="docPlaintext" ink={{ label: ink.ink, secondary: ink.secondary }} />
         </View>
       ) : (
-        <FlatList
+        <AnimatedFlatList
+          testID="readerText"
+          style={[styles.text, textScale]}
           data={load.content.paragraphs}
           keyExtractor={(_, index) => String(index)}
           contentContainerStyle={{ paddingBottom: insets.bottom + space.huge }}
           ListHeaderComponent={<Header content={load.content} family={family} size={size} ink={ink} />}
-          renderItem={({ item }) => <Paragraph text={item} family={family} size={shownSize} color={ink.ink} />}
+          renderItem={({ item }) => <Paragraph text={item} family={family} size={size} color={ink.ink} />}
         />
       )}
       <View style={[styles.navigationBand, { height: insets.bottom, backgroundColor: ink.background }]} pointerEvents="none" />
+      </View>
     </Animated.View>
   );
 }
@@ -129,18 +165,20 @@ function Header({ content, family, size, ink }: { content: ReadableContent; fami
   );
 }
 
-function Paragraph({ text, family, size, color }: { text: string; family: string; size: SharedValue<number>; color: string }) {
-  const sized = useAnimatedStyle(() => ({ fontSize: size.value, lineHeight: size.value * readerLayout.lineHeight, marginBottom: size.value * readerLayout.paragraphGap }));
+function Paragraph({ text, family, size, color }: { text: string; family: string; size: number; color: string }) {
   return (
-    <Animated.Text selectable style={[styles.paragraph, { fontFamily: family, color }, sized]}>
+    <Text selectable style={[styles.paragraph, { fontFamily: family, color, fontSize: size, lineHeight: size * readerLayout.lineHeight, marginBottom: size * readerLayout.paragraphGap }]}>
       {text}
-    </Animated.Text>
+    </Text>
   );
 }
 
+const AnimatedFlatList = Animated.createAnimatedComponent(FlatList<string>);
+
 const WEB_IMAGE = /^https?:\/\//i;
-const SIZE_STIFFNESS = 1500;
-const SIZE_SPRING = { stiffness: SIZE_STIFFNESS, damping: 2 * Math.sqrt(SIZE_STIFFNESS), mass: 1 };
+const NO_ARTICLE = "No Article Found";
+
+const LOADING_ARTICLE = `Loading Article${ELLIPSIS}`;
 
 function LeadImage({ uri }: { uri: string }) {
   const [aspect, setAspect] = useState<number | null>(null);
@@ -160,16 +198,15 @@ function LeadImage({ uri }: { uri: string }) {
 
 const styles = StyleSheet.create({
   top: { flexDirection: "row", alignItems: "center", minHeight: readerLayout.chromeBand, paddingHorizontal: readerLayout.chromeSide },
-  mirrored: { transform: [{ scaleX: -1 }] },
   circle: { width: readerLayout.chromeButton, height: readerLayout.chromeButton, alignItems: "center", justifyContent: "center" },
   capsule: { height: readerLayout.chromeButton, paddingHorizontal: readerLayout.chromeCapsulePadding, alignItems: "center", justifyContent: "center" },
   fill: { flex: 1 },
+  text: { flex: 1, transformOrigin: "top" },
   bold: { fontWeight: "600" },
   medium: { fontWeight: "500" },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  gap: { gap: space.m },
   header: { gap: space.s, paddingHorizontal: space.xl, paddingTop: space.s, maxWidth: readerLayout.maxWidth, alignSelf: "center", width: "100%" },
   paragraph: { paddingHorizontal: space.xl, maxWidth: readerLayout.maxWidth, alignSelf: "center", width: "100%" },
-  lead: { width: "100%", marginTop: space.s, borderRadius: readerLayout.leadRadius },
+  lead: { width: "100%", marginTop: space.s, borderRadius: readerLayout.leadRadius, ...smoothCorners },
   navigationBand: { position: "absolute", left: 0, right: 0, bottom: 0 },
 });

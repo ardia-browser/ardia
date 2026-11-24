@@ -45,7 +45,7 @@ test("a warning from work that began while sharing was off stays on this Mac onc
   assert.deepEqual(localLogs("[extensions] load health failed").map((r) => r.sent), [false]);
 });
 
-test("an extension action-state request that began while sharing was off isn't counted in the next period", async () => {
+test("an extension action-state request that began while sharing was off isn't counted in the next period and isn't kept in the local copy", async () => {
   const S = () => useBrowser.getState();
   S().hydrate({});
   const windowId = S().createWindow({ url: "a.com" });
@@ -63,5 +63,5 @@ test("an extension action-state request that began while sharing was off isn't c
   await refreshed;
   assert.equal(takeLiveWorkCounts().extension_action_state_failures, 0);
   local.flushLocal();
-  assert.ok(stub.telemetryLocal.records().some((r) => r.event === "usage_counts" && r.sent === false && r.properties?.extension_action_state_failures === 1));
+  assert.deepEqual(stub.telemetryLocal.records().filter((r) => r.event === "usage_counts" && r.properties?.extension_action_state_failures), []);
 });

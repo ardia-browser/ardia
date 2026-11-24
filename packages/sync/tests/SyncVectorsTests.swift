@@ -29,7 +29,6 @@ final class SyncVectorsTests: XCTestCase {
     var entropy: String
     var fileId: String
     var payload: String
-    var nonce: String
   }
 
   struct VaultFile: Codable {
@@ -37,7 +36,6 @@ final class SyncVectorsTests: XCTestCase {
     var scope: String
     var payload: String
     var id: String
-    var nonce: String
   }
 
   struct DamagedFile: Codable {
@@ -45,8 +43,6 @@ final class SyncVectorsTests: XCTestCase {
     var scope: String
     var payload: String
     var id: String
-    var nonce: String
-    var flipByte: Int
   }
 
   struct PendingFile: Codable {
@@ -141,19 +137,20 @@ final class SyncVectorsTests: XCTestCase {
   static func wordlistDigest() -> String { hexString(Data(SHA256.hash(data: Data(Wordlist.english.joined(separator: "\n").utf8)))) }
 
   static func vaultPath(_ keys: SyncKeys, scope: String, name: String) -> String {
-    "vault/\(keys.chainTag)/\(keys.scopeTag(scope))/\(name)"
+    "vault/\(keys.chainTag)/\(try! keys.scopeTag(scope))/\(name)"
   }
 
-  static func build(_ inputs: Inputs, into root: URL) throws -> Expected {
-    let vaultFolder = root.appendingPathComponent("vault", isDirectory: true)
-    var chains: [String: Chain] = [:]
-    for (name, entropy) in inputs.entropies {
+  static func chains(_ inputs: Inputs) -> [String: Chain] {
+    Dictionary(uniqueKeysWithValues: inputs.entropies.map { name, entropy in
       let keys = SyncKeys(entropy: hex(entropy))
-      chains[name] = Chain(
+      return (name, Chain(
         phrase: RecoveryPhrase.words(for: hex(entropy)).joined(separator: " "),
         chainTag: keys.chainTag,
-        scopeTags: Dictionary(uniqueKeysWithValues: inputs.scopes.map { ($0, keys.scopeTag($0)) }))
-    }
+        scopeTags: Dictionary(uniqueKeysWithValues: inputs.scopes.map { ($0, try! keys.scopeTag($0)) })))
+    })
+  }
+
+  static func sealedPasswords(_ inputs: Inputs) throws -> [SealedLogin] {
     var passwords: [SealedLogin] = []
     for name in inputs.entropies.keys.sorted() {
       for login in inputs.passwords {
@@ -161,32 +158,7 @@ final class SyncVectorsTests: XCTestCase {
         passwords.append(SealedLogin(entropy: name, origin: login.origin, username: login.username, password: login.password, sealed: sealed))
       }
     }
-    let localStates = try inputs.localStates.map { state in
-      let sealed = try keys(inputs, state.entropy).seal(payload(inputs, state.payload), scopeTag: "local", fileId: state.fileId, nonce: AES.GCM.Nonce(data: hex(state.nonce)))
-      return SealedLocalState(entropy: state.entropy, fileId: state.fileId, payload: state.payload, sealed: sealed.base64EncodedString())
-    }
-    var inventory = Inventory(files: [], damaged: [], pending: [])
-    for file in inputs.vaultFiles {
-      let keys = keys(inputs, file.entropy)
-      let vault = SyncVault(folder: vaultFolder, keys: keys)
-      try vault.createChain()
-      try vault.write(scope: file.scope, payload: payload(inputs, file.payload), fileId: file.id, nonce: AES.GCM.Nonce(data: hex(file.nonce)))
-      inventory.files.append(Entry(entropy: file.entropy, scope: file.scope, payload: file.payload, id: file.id, path: vaultPath(keys, scope: file.scope, name: "\(file.id).nns")))
-    }
-    for file in inputs.damaged {
-      let keys = keys(inputs, file.entropy)
-      var sealed = try keys.seal(payload(inputs, file.payload), scopeTag: keys.scopeTag(file.scope), fileId: file.id, nonce: AES.GCM.Nonce(data: hex(file.nonce)))
-      sealed[file.flipByte] ^= 1
-      let path = vaultPath(keys, scope: file.scope, name: "\(file.id).nns")
-      try write(sealed, to: root.appendingPathComponent(path))
-      inventory.damaged.append(Entry(entropy: file.entropy, scope: file.scope, payload: file.payload, id: file.id, path: path))
-    }
-    for file in inputs.pending {
-      let path = vaultPath(keys(inputs, file.entropy), scope: file.scope, name: ".\(file.id).nns.icloud")
-      try write(Data(), to: root.appendingPathComponent(path))
-      inventory.pending.append(Entry(entropy: file.entropy, scope: file.scope, payload: nil, id: file.id, path: path))
-    }
-    return Expected(wordlistSha256: wordlistDigest(), chains: chains, passwords: passwords, localStates: localStates, vault: inventory)
+    return passwords
   }
 
   static func write(_ data: Data, to url: URL) throws {
@@ -231,7 +203,7 @@ final class SyncVectorsTests: XCTestCase {
       entropy: hexString(entropy),
       phrase: RecoveryPhrase.words(for: entropy).joined(separator: " "),
       chainTag: keys.chainTag,
-      scopeTags: Dictionary(uniqueKeysWithValues: inputs.scopes.map { ($0, keys.scopeTag($0)) }),
+      scopeTags: Dictionary(uniqueKeysWithValues: try inputs.scopes.map { ($0, try keys.scopeTag($0)) }),
       files: files,
       password: login,
       sealedPassword: try keys.sealPassword(login.password, origin: login.origin, username: login.username),
@@ -241,31 +213,27 @@ final class SyncVectorsTests: XCTestCase {
 
   func testWriteVectors() throws {
     guard let target = ProcessInfo.processInfo.environment["ARDIA_SYNC_VECTORS_WRITE"], !target.isEmpty else {
-      throw XCTSkip("set ARDIA_SYNC_VECTORS_WRITE to the sync-vectors folder to rewrite expected.json, vault/ and swift/")
+      throw XCTSkip("set ARDIA_SYNC_VECTORS_WRITE to the sync-vectors folder to rewrite swift/; cargo test -p ardia-sync-vectors reproduces expected.json and vault/")
     }
     let root = URL(fileURLWithPath: target, isDirectory: true)
     let inputs = try JSONDecoder().decode(Inputs.self, from: Data(contentsOf: root.appendingPathComponent("inputs.json")))
-    try? FileManager.default.removeItem(at: root.appendingPathComponent("vault", isDirectory: true))
-    try Self.encode(try Self.build(inputs, into: root), to: root.appendingPathComponent("expected.json"))
     try Self.writeRandomSet(inputs, writer: "swift", to: root.appendingPathComponent("swift", isDirectory: true))
   }
 
-  func testFixedNoncesReproduceTheCommittedBytes() throws {
-    let scratch = FileManager.default.temporaryDirectory.appendingPathComponent("sync-vectors-\(UUID().uuidString)", isDirectory: true)
-    defer { try? FileManager.default.removeItem(at: scratch) }
-    let built = try Self.build(try Self.inputs(), into: scratch)
+  func testDeterministicOutputsMatchTheCommittedVectors() throws {
+    let inputs = try Self.inputs()
     let committed = try Self.expected()
-    XCTAssertEqual(built.wordlistSha256, committed.wordlistSha256)
-    XCTAssertEqual(built.chains, committed.chains)
-    XCTAssertEqual(built.passwords, committed.passwords)
-    XCTAssertEqual(built.localStates, committed.localStates)
-    XCTAssertEqual(built.vault, committed.vault)
-    let builtTree = try Self.tree(scratch.appendingPathComponent("vault"))
+    XCTAssertEqual(Self.wordlistDigest(), committed.wordlistSha256)
+    XCTAssertEqual(Self.chains(inputs), committed.chains)
+    XCTAssertEqual(try Self.sealedPasswords(inputs), committed.passwords)
     let committedTree = try Self.tree(Self.root.appendingPathComponent("vault"))
-    XCTAssertEqual(builtTree.keys.sorted(), committedTree.keys.sorted())
-    for (path, bytes) in committedTree { XCTAssertEqual(builtTree[path], bytes, path) }
     let listed = (committed.vault.files + committed.vault.damaged + committed.vault.pending).map { String($0.path.dropFirst("vault/".count)) }
     XCTAssertEqual(listed.sorted(), committedTree.keys.sorted())
+    for entry in committed.vault.files + committed.vault.damaged + committed.vault.pending {
+      let keys = Self.keys(inputs, entry.entropy)
+      let name = entry.payload == nil ? ".\(entry.id).nns.icloud" : "\(entry.id).nns"
+      XCTAssertEqual(entry.path, Self.vaultPath(keys, scope: entry.scope, name: name))
+    }
   }
 
   func testRandomNoncesKeepTheFormatAndOpen() throws {
@@ -299,7 +267,7 @@ final class SyncVectorsTests: XCTestCase {
       let keys = SyncKeys(entropy: entropy)
       XCTAssertEqual(keys.chainTag, chain.chainTag)
       XCTAssertEqual(Set(chain.scopeTags.keys), Set(inputs.scopes))
-      for (scope, tag) in chain.scopeTags { XCTAssertEqual(keys.scopeTag(scope), tag) }
+      for (scope, tag) in chain.scopeTags { XCTAssertEqual(try keys.scopeTag(scope), tag) }
     }
   }
 
@@ -406,7 +374,7 @@ final class SyncVectorsTests: XCTestCase {
     let keys = SyncKeys(entropy: entropy)
     XCTAssertEqual(keys.chainTag, set.chainTag)
     XCTAssertEqual(Set(set.scopeTags.keys), Set(inputs.scopes))
-    for (scope, tag) in set.scopeTags { XCTAssertEqual(keys.scopeTag(scope), tag) }
+    for (scope, tag) in set.scopeTags { XCTAssertEqual(try keys.scopeTag(scope), tag) }
     let vault = SyncVault(folder: folder.appendingPathComponent("vault", isDirectory: true), keys: keys)
     for scope in inputs.scopes {
       let mine = set.files.filter { $0.scope == scope }

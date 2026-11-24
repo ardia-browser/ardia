@@ -2,6 +2,7 @@ import { memo, useRef } from "react";
 import { Animated, Pressable, View } from "react-native";
 import { ContextMenuArea, space, Symbol } from "../ui";
 import { layout, useTheme } from "../ui/theme";
+import { Squish, useSquish } from "../ui/Squish";
 import { usePageProfileId, useTab, useWindowId, useWindowProfileId } from "../../state/browser/hooks";
 import { useShownFolderTab, useTileFolderMembers } from "../../state/pins/hooks";
 import { useDragItem, useFolderTarget } from "./DragProvider";
@@ -33,6 +34,7 @@ export const FolderTile = memo(function FolderTile({ folderId, width, sliding, x
   const target = useFolderTarget(entryKey("tileFolder", folderId));
   const position = useSlotPosition(x, y, width, sliding, dragging);
   const pressedAt = useRef<number | undefined>(undefined);
+  const squish = useSquish("tile");
   if (!members.length) return null;
   const glyph = (
     <View pointerEvents="none" style={{ position: "absolute", bottom: TILE_STATUS.inset.y, right: TILE_STATUS.inset.x }}>
@@ -46,21 +48,27 @@ export const FolderTile = memo(function FolderTile({ folderId, width, sliding, x
       <View ref={onScreen ? (v) => registerRow(windowId, folderId, v) : undefined} {...hoverProps}>
         <ContextMenuArea onContextMenu={() => void openTileFolderMenu(windowId, folderId)}>
           <Pressable
-            onPressIn={(e) => void (pressedAt.current = e.nativeEvent.timestamp)}
+            onPressIn={(e) => {
+              squish.onPressIn?.();
+              pressedAt.current = e.nativeEvent.timestamp;
+            }}
+            onPressOut={squish.onPressOut}
             onPress={() => {
               dismissHover();
               if (!closedByPress(folderId, pressedAt.current)) void toggleFolderPanel(windowId, folderId);
             }}
           >
-            {({ pressed }) =>
-              shown ? (
-                <TileFace tabId={shown} width={width} active selected={false} hovered={hovered} pressed={pressed} badge={glyph} />
-              ) : (
-                <RestingTile width={width} selected={open} hovered={hovered} pressed={pressed}>
-                  <FolderMosaic tabIds={members} width={width} />
-                </RestingTile>
-              )
-            }
+            {({ pressed }) => (
+              <Squish scale={squish.scale}>
+                {shown ? (
+                  <TileFace tabId={shown} width={width} active selected={false} hovered={hovered} pressed={pressed} badge={glyph} />
+                ) : (
+                  <RestingTile width={width} selected={open} hovered={hovered} pressed={pressed}>
+                    <FolderMosaic tabIds={members} width={width} />
+                  </RestingTile>
+                )}
+              </Squish>
+            )}
           </Pressable>
         </ContextMenuArea>
       </View>

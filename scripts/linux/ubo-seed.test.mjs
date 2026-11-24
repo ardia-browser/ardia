@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { defaultLists, patchStart, SEED_PATH, seedProblems, seedStorage, SELFIE_KEYS } from "./ubo-seed.mjs";
+import { defaultLists, patchStart, SEED_PATH, seedProblems, seedStorage, selfieKeys } from "./ubo-seed.mjs";
 
 const START = "const x = 1;\n\nµb.isReadyPromise = (async function start() {\n    try {\n        await µb.restoreAdminSettings();\n    } catch (ex) {}\n})();\n";
 const ASSETS = {
@@ -11,6 +11,8 @@ const ASSETS = {
   "public_suffix_list.dat": { content: "internal" },
 };
 const VERSION = "1.76.0b25";
+const SELFIE_KEYS = ["Main", "NetFilteringEngine", "ExtFilteringEngine"].map((component) => `cache/selfie/staticArdia2${component}`);
+const STORAGE_SOURCE = SELFIE_KEYS.map((key) => `io.toCache('${key.slice("cache/".length)}', {});`).join("\n");
 
 function storage(overrides = {}) {
   const base = { version: VERSION, selectedFilterLists: ["user-filters", "ublock-filters", "easylist"], "cache/easylist": "raw", "cache/compiled/easylist": "compiled", "cache/assets.json": "{}", assetCacheRegistry: "registry", ardiaReloadPending: true };
@@ -50,7 +52,7 @@ test("an empty profile in an English locale takes the seed", async () => {
   const { writes } = await runLoader();
   assert.equal(writes.length, 1);
   assert.equal(writes[0].version, VERSION);
-  assert.equal(writes[0]["cache/selfie/staticMain"], "selfie cache/selfie/staticMain");
+  assert.equal(writes[0][SELFIE_KEYS[0]], `selfie ${SELFIE_KEYS[0]}`);
 });
 
 test("a profile uBlock Origin already started in keeps its own storage", async () => {
@@ -76,12 +78,20 @@ test("the default selection is user filters and every list not off by default", 
   assert.deepEqual(defaultLists(ASSETS), ["user-filters", "ublock-filters", "easylist"]);
 });
 
+test("the seed discovers the bundled snapshot keys and requires one key per component", () => {
+  assert.deepEqual(selfieKeys(STORAGE_SOURCE), SELFIE_KEYS);
+  assert.deepEqual(selfieKeys(STORAGE_SOURCE.replaceAll("Ardia2", "")), SELFIE_KEYS.map((key) => key.replace("Ardia2", "")));
+  assert.throws(() => selfieKeys(STORAGE_SOURCE.replace("ExtFilteringEngine", "Other")), /exactly one selfie key for ExtFilteringEngine/);
+  assert.throws(() => selfieKeys(STORAGE_SOURCE.repeat(2)), /exactly one selfie key for Main/);
+});
+
 test("a seed must hold a saved engine and exactly the default lists", () => {
-  assert.deepEqual(seedProblems(storage(), ASSETS), []);
-  assert.deepEqual(seedProblems(storage({ "cache/selfie/staticNetFilteringEngine": "" }), ASSETS), ["no cache/selfie/staticNetFilteringEngine"]);
-  assert.deepEqual(seedProblems(storage({ selectedFilterLists: ["user-filters", "ublock-filters", "easylist", "DEU-0"] }), ASSETS), ["selects lists beyond the defaults: DEU-0"]);
-  assert.deepEqual(seedProblems(storage({ selectedFilterLists: ["user-filters", "easylist"] }), ASSETS), ["misses default lists: ublock-filters"]);
-  assert.deepEqual(seedProblems({}, ASSETS), ["no version", ...SELFIE_KEYS.map((key) => `no ${key}`), "no selectedFilterLists"]);
+  const validate = (input) => seedProblems(input, ASSETS, SELFIE_KEYS);
+  assert.deepEqual(validate(storage()), []);
+  assert.deepEqual(validate(storage({ [SELFIE_KEYS[1]]: "" })), [`no ${SELFIE_KEYS[1]}`]);
+  assert.deepEqual(validate(storage({ selectedFilterLists: ["user-filters", "ublock-filters", "easylist", "DEU-0"] })), ["selects lists beyond the defaults: DEU-0"]);
+  assert.deepEqual(validate(storage({ selectedFilterLists: ["user-filters", "easylist"] })), ["misses default lists: ublock-filters"]);
+  assert.deepEqual(validate({}), ["no version", ...SELFIE_KEYS.map((key) => `no ${key}`), "no selectedFilterLists"]);
 });
 
 test("the seed keeps the saved engine and drops list copies uBlock Origin can rebuild and the bridge's own keys", () => {

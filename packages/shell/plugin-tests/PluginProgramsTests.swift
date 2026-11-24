@@ -11,7 +11,7 @@ final class PluginProgramsTests: XCTestCase {
     let made = FileManager.default.temporaryDirectory.appendingPathComponent("plugin-programs-\(UUID().uuidString)", isDirectory: true)
     try FileManager.default.createDirectory(at: made, withIntermediateDirectories: true)
     root = PluginSandbox.resolved(made.path)!
-    places = ProgramPlaces(store: "\(root)/Programs", binDir: "\(root)/bin", legacy: "\(root)/OldCLI")
+    places = ProgramPlaces(store: "\(root)/Programs", binDir: "\(root)/bin")
   }
 
   override func tearDownWithError() throws {
@@ -27,12 +27,14 @@ final class PluginProgramsTests: XCTestCase {
     return folder
   }
 
+  var oldHome: LegacyInstall { LegacyInstall(owner: "greeter", program: "hello-tool", base: root, relative: "OldCLI", current: "current") }
+
   func install(_ folder: String, plugin: String = "greeter", version: String, adopt: Bool = false) throws -> ProgramsLinked {
     let opened = try XCTUnwrap(PluginFiles.openFolder(folder))
     defer { opened.close() }
     guard case .text(let text) = PluginFiles.readManifest(in: opened) else { throw XCTSkip("no manifest") }
     let approved = PluginFiles.approvalHash(text: text, folderId: opened.id)
-    return try PluginPrograms.install(plugin: plugin, from: opened, approved: approved, version: version, programs: [tool], places: places, adopt: adopt).get()
+    return try PluginPrograms.install(plugin: plugin, from: opened, approved: approved, version: version, programs: [tool], places: places, adoption: adopt ? oldHome : nil).get()
   }
 
   func run(_ path: String) -> String {
@@ -73,7 +75,7 @@ final class PluginProgramsTests: XCTestCase {
     guard case .text(let text) = PluginFiles.readManifest(in: opened) else { return XCTFail("no manifest") }
     let approved = PluginFiles.approvalHash(text: text, folderId: opened.id)
     for store in ["a", "b"] {
-      let elsewhere = ProgramPlaces(store: "\(root)/\(store)", binDir: "\(root)/bin-\(store)", legacy: nil)
+      let elsewhere = ProgramPlaces(store: "\(root)/\(store)", binDir: "\(root)/bin-\(store)")
       XCTAssertEqual(try PluginPrograms.install(plugin: "greeter", from: opened, approved: approved, version: "1.0.0", programs: [tool], places: elsewhere).get().linked, ["hello-tool"], store)
     }
   }
@@ -148,9 +150,17 @@ final class PluginProgramsTests: XCTestCase {
     XCTAssertEqual(try install(folder, version: "1.0.0").linked, [])
     unlink(binPath)
     XCTAssertEqual(symlink("\(root)/OldCLI/current/bin/hello-tool", binPath), 0)
+    XCTAssertEqual(try install(folder, version: "1.0.0", adopt: true).linked, [], "a link into an old home that isn't there is someone else's")
+    try FileManager.default.createDirectory(atPath: "\(root)/OldCLI/0.2.41/bin", withIntermediateDirectories: true)
+    try "#!/bin/sh\n".write(toFile: "\(root)/OldCLI/0.2.41/bin/hello-tool", atomically: true, encoding: .utf8)
+    XCTAssertEqual(symlink("0.2.41", "\(root)/OldCLI/current"), 0)
     XCTAssertEqual(try install(folder, version: "1.0.0").linked, [], "only the plugin that adopts the old home may take its link")
     XCTAssertEqual(try install(folder, version: "1.0.0", adopt: true).linked, ["hello-tool"])
     XCTAssertEqual(PluginPrograms.linkTarget(binPath), "\(pluginStore)/current/bin/hello")
+    unlink(binPath)
+    try FileManager.default.createDirectory(atPath: "\(root)/OldCLI/0.2.41/bin", withIntermediateDirectories: true)
+    XCTAssertEqual(symlink("\(root)/OldCLI/0.2.41/bin/hello-tool", binPath), 0)
+    XCTAssertEqual(try install(folder, version: "1.0.0", adopt: true).linked, [], "only the exact old launcher is taken over, not any path under the old home")
   }
 
   func testAnotherPluginsProgramIsNamedNotTaken() throws {
@@ -197,12 +207,13 @@ final class PluginProgramsTests: XCTestCase {
     XCTAssertEqual(run(binPath), "one", "a folder put at the old path after approval is never read")
     var info = stat()
     XCTAssertEqual(stat("\(pluginStore)/current/bin/hello", &info), 0)
-    XCTAssertEqual(info.st_mode & 0o7777, 0o755)
+    XCTAssertEqual(info.st_mode & 0o7777, 0o555, "trimmed, then sealed read-only once it verified")
   }
 
   func testAdoptingTheOldHomeRepointsItsCurrentAndClearsItsUnusedVersions() throws {
     let legacy = "\(root)/OldCLI"
     for version in ["0.2.40", "0.2.41"] { try FileManager.default.createDirectory(atPath: "\(legacy)/\(version)/bin", withIntermediateDirectories: true) }
+    try "#!/bin/sh\n".write(toFile: "\(legacy)/0.2.41/bin/hello-tool", atomically: true, encoding: .utf8)
     try FileManager.default.createDirectory(atPath: "\(legacy)/0.2.40/.leases", withIntermediateDirectories: true)
     XCTAssertTrue(FileManager.default.createFile(atPath: "\(legacy)/0.2.40/.leases/\(getpid())", contents: nil))
     try FileManager.default.createDirectory(atPath: "\(legacy)/cua-driver", withIntermediateDirectories: true)
@@ -218,7 +229,9 @@ final class PluginProgramsTests: XCTestCase {
     XCTAssertEqual(run("\(legacy)/current/bin/hello"), "one", "paths saved through the old home keep working")
     let left = try FileManager.default.contentsOfDirectory(atPath: legacy).sorted()
     XCTAssertEqual(left, [".lock", "0.2.40", "cua-driver", "current", "usage.json"], "a running old version and the home's own state stay")
-    XCTAssertFalse(try install(folder, version: "1.0.0", adopt: true).adopted, "adopting twice changes nothing")
+    let again = try install(folder, version: "1.0.0", adopt: true)
+    XCTAssertFalse(again.adopted, "adopting twice changes nothing")
+    XCTAssertEqual(again.adoption, .already, "and says it was already Ardia's")
   }
 
   func testAfterUpdateIsMarkedPerVersion() throws {
@@ -311,7 +324,7 @@ final class PluginProgramsTests: XCTestCase {
     let approved = PluginFiles.approvalHash(text: text, folderId: opened.id)
     let result = PluginPrograms.install(plugin: "greeter", from: opened, approved: approved, version: "1.0.0", programs: [tool], places: places, expectedDigest: signed)
     guard case .failure(let refusal) = result else { return XCTFail("a changed payload installed") }
-    XCTAssertEqual(refusal.reason, "its files don't match the ones this Ardia was signed with")
+    XCTAssertEqual(refusal.reason, "its files don't match the ones Ardia downloaded and checked")
     XCTAssertEqual(versions(), [])
     XCTAssertNil(PluginPrograms.linkTarget(binPath))
     XCTAssertEqual(chmod("\(folder)/bin/hello", 0o755), 0)
@@ -342,6 +355,7 @@ final class PluginProgramsTests: XCTestCase {
     try "planted".write(toFile: "\(folder)/lib/__pycache__/x.pyc", atomically: true, encoding: .utf8)
     let linked = try install(folder, version: "1.0.0")
     XCTAssertFalse(FileManager.default.fileExists(atPath: "\(pluginStore)/\(linked.version)/lib/__pycache__"), "a cache in the source is never copied")
+    XCTAssertEqual(chmod("\(pluginStore)/\(linked.version)/lib", 0o755), 0)
     try FileManager.default.createDirectory(atPath: "\(pluginStore)/\(linked.version)/lib/__pycache__", withIntermediateDirectories: true)
     try "written by python".write(toFile: "\(pluginStore)/\(linked.version)/lib/__pycache__/y.pyc", atomically: true, encoding: .utf8)
     let again = try install(folder, version: "1.0.0")
@@ -400,15 +414,24 @@ final class PluginProgramsTests: XCTestCase {
   func testAdoptionWaitsForTheOldInstaller() throws {
     let legacy = "\(root)/OldCLI"
     try FileManager.default.createDirectory(atPath: "\(legacy)/0.2.41/bin", withIntermediateDirectories: true)
+    try "#!/bin/sh\n".write(toFile: "\(legacy)/0.2.41/bin/hello-tool", atomically: true, encoding: .utf8)
     XCTAssertEqual(symlink("0.2.41", "\(legacy)/current"), 0)
+    try FileManager.default.createDirectory(atPath: places.binDir, withIntermediateDirectories: true)
+    XCTAssertEqual(symlink("\(legacy)/current/bin/hello-tool", binPath), 0)
     let held = open("\(legacy)/.lock", O_RDWR | O_CREAT, 0o644)
     XCTAssertEqual(flock(held, LOCK_EX), 0)
     let folder = try makePlugin("greeter", version: "1.0.0", say: "one")
-    XCTAssertFalse(try install(folder, version: "1.0.0", adopt: true).adopted)
+    let busy = try install(folder, version: "1.0.0", adopt: true)
+    XCTAssertFalse(busy.adopted)
+    XCTAssertTrue(busy.adoptBusy, "a held lock is reported, so Ardia tries again")
+    XCTAssertEqual(PluginPrograms.linkTarget(binPath), "\(legacy)/current/bin/hello-tool", "the PATH link isn't taken while the old installer holds its lock")
+    XCTAssertEqual(busy.linked, [])
+    XCTAssertNil(busy.refused["hello-tool"], "a busy old install isn't reported as someone else's link")
     XCTAssertEqual(PluginPrograms.linkTarget("\(legacy)/current"), "0.2.41", "an install in progress is left alone")
     XCTAssertTrue(FileManager.default.fileExists(atPath: "\(legacy)/0.2.41"))
     close(held)
     XCTAssertTrue(try install(folder, version: "1.0.0", adopt: true).adopted)
+    XCTAssertEqual(PluginPrograms.linkTarget(binPath), "\(pluginStore)/current/bin/hello", "the PATH link and current change together, under the lock")
   }
 
   func testAfterUpdateIsClaimedByOneProcessAtATime() throws {
@@ -434,5 +457,56 @@ final class PluginProgramsTests: XCTestCase {
     XCTAssertEqual(PluginPrograms.versionFolderName(version: "1.2.3-nightly.4", approved: String(repeating: "ab", count: 32)), "1.2.3-nightly.4-abababababab")
     XCTAssertEqual(PluginPrograms.versionFolderName(version: "../../x", approved: "0123456789abcdef"), "x-0123456789ab")
     XCTAssertEqual(PluginPrograms.versionFolderName(version: nil, approved: "0123456789abcdef"), "0.0.0-0123456789ab")
+  }
+}
+
+extension PluginProgramsTests {
+  func testAdoptionNeverFollowsALinkedFolderAndPrunesOnlyInsideTheOldHome() throws {
+    let elsewhere = "\(root)/elsewhere"
+    try FileManager.default.createDirectory(atPath: "\(elsewhere)/0.2.41/bin", withIntermediateDirectories: true)
+    try "#!/bin/sh\n".write(toFile: "\(elsewhere)/0.2.41/bin/hello-tool", atomically: true, encoding: .utf8)
+    XCTAssertEqual(symlink("0.2.41", "\(elsewhere)/current"), 0)
+    XCTAssertEqual(symlink(elsewhere, "\(root)/OldCLI"), 0)
+    XCTAssertFalse(PluginPrograms.legacyInstalled(oldHome), "a linked old home isn't one")
+    let folder = try makePlugin("greeter", version: "1.0.0", say: "one")
+    XCTAssertEqual(try install(folder, version: "1.0.0", adopt: true).adoption, .none)
+    XCTAssertEqual(PluginPrograms.linkTarget("\(elsewhere)/current"), "0.2.41", "nothing through the link changes")
+    XCTAssertTrue(FileManager.default.fileExists(atPath: "\(elsewhere)/0.2.41"))
+  }
+
+  func testAnOldHomeWhoseCurrentPointsOutsideItIsntTakenOver() throws {
+    try FileManager.default.createDirectory(atPath: "\(root)/OldCLI", withIntermediateDirectories: true)
+    XCTAssertEqual(symlink("/usr/bin", "\(root)/OldCLI/current"), 0)
+    let folder = try makePlugin("greeter", version: "1.0.0", say: "one")
+    XCTAssertEqual(try install(folder, version: "1.0.0", adopt: true).adoption, .none)
+    XCTAssertEqual(PluginPrograms.linkTarget("\(root)/OldCLI/current"), "/usr/bin")
+  }
+}
+
+extension PluginProgramsTests {
+  func testAnUpdateWhileTheOldInstallerHoldsItsLockChangesNoLinkAndRunsNoAfterUpdate() throws {
+    let legacy = "\(root)/OldCLI"
+    try FileManager.default.createDirectory(atPath: "\(legacy)/0.2.41/bin", withIntermediateDirectories: true)
+    try "#!/bin/sh\n".write(toFile: "\(legacy)/0.2.41/bin/hello-tool", atomically: true, encoding: .utf8)
+    XCTAssertEqual(symlink("0.2.41", "\(legacy)/current"), 0)
+    let first = try makePlugin("greeter", version: "1.0.0", say: "one")
+    XCTAssertEqual(try install(first, version: "1.0.0", adopt: true).adoption, .adopted)
+    let adoptedCurrent = PluginPrograms.linkTarget("\(pluginStore)/current")
+    XCTAssertEqual(run(binPath), "one")
+    try FileManager.default.removeItem(atPath: first)
+    let second = try makePlugin("greeter", version: "2.0.0", say: "two")
+    let held = open("\(legacy)/.lock", O_RDWR | O_CREAT, 0o644)
+    XCTAssertEqual(flock(held, LOCK_EX), 0)
+    let busy = try install(second, version: "2.0.0", adopt: true)
+    XCTAssertTrue(busy.adoptBusy)
+    XCTAssertEqual(PluginPrograms.linkTarget("\(pluginStore)/current"), adoptedCurrent, "Ardia's own current isn't switched while the old installer holds its lock")
+    XCTAssertEqual(PluginPrograms.linkTarget("\(legacy)/current"), "\(pluginStore)/current")
+    XCTAssertEqual(run(binPath), "one", "what PATH runs is unchanged")
+    XCTAssertFalse(PluginPrograms.shouldRunAfterUpdate(busy, plugin: "greeter", places: places), "no afterUpdate starts on a busy result")
+    close(held)
+    let done = try install(second, version: "2.0.0", adopt: true)
+    XCTAssertEqual(done.adoption, .already)
+    XCTAssertEqual(run(binPath), "two")
+    XCTAssertTrue(PluginPrograms.shouldRunAfterUpdate(done, plugin: "greeter", places: places))
   }
 }

@@ -1,6 +1,7 @@
 packages:
   - apps/*
   - packages/*
+  - "!apps/linux"
   - "!apps/site"
   - "!apps/dashboard"
   - "!apps/videos"

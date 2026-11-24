@@ -1,4 +1,4 @@
-import { legacyImport as native } from "@ardia/phone-native";
+import { legacyImport as native, legacySettled } from "@ardia/phone-native";
 import { requireOptionalNativeModule } from "expo-modules-core";
 import type { LegacyApi } from "../state/legacy/importer";
 
@@ -14,3 +14,13 @@ export const legacyImport: LegacyApi = {
 };
 
 export const canStartWithoutImport = () => opensWithoutImport;
+
+export type NativeImportState = "none" | "imported" | "startedFresh" | "pending" | "unknown";
+
+export function nativeImportState(): NativeImportState {
+  try {
+    return legacySettled?.() ?? "unknown";
+  } catch {
+    return "pending";
+  }
+}

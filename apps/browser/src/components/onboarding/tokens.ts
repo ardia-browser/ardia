@@ -36,7 +36,6 @@ export type OnboardingColors = typeof dark & {
   separator: string;
   checkbox: string;
   checkboxBorder: string;
-  checkboxOn: string;
   checkmark: string;
 };
 
@@ -79,7 +78,6 @@ export function onboardingColorsOf(theme: Theme): OnboardingColors {
       separator: theme.divider,
       checkbox: theme.ringRadioFill,
       checkboxBorder: theme.ringRadioBorder,
-      checkboxOn: theme.ringRadioOn,
       checkmark: theme.onPrimary,
     };
     byTheme.set(theme, (colors = { ...(theme.dark ? dark : light), ...roles }));
@@ -101,7 +99,6 @@ export const onboardingMotion = {
   overlayIn: duration.slow,
   overlayOut: duration.long,
   reveal: duration.long,
-  checkMark: duration.base,
   mockOverlay: duration.slow,
   introSkip: duration.slow,
   tourIn: duration.slow,

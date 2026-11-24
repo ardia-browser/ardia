@@ -6,6 +6,7 @@ import type { StripScroll } from "./stripScroll";
 
 export const chipKey = (groupId: string) => `strip-group-chip|${groupId}`;
 export const folderKey = (groupId: string) => `strip-folder-chip|${groupId}`;
+export const nameKey = (groupId: string) => `strip-group-name|${groupId}`;
 
 export type StripDrag = {
   tabId: string | null;
@@ -43,7 +44,7 @@ export type GroupOut = { top: DragGeometry; slot: number; chip: number; expanded
 
 export type Release = { kind: "handedOff" } | { kind: "across"; landing: Landing } | { kind: "dropped" } | { kind: "settle" };
 
-export type ReleaseSteps = {
+type ReleaseSteps = {
   local: boolean;
   lifted: boolean;
   from: number;

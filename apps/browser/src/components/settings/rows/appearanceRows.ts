@@ -2,7 +2,9 @@ import { type SettingsEnv, type SettingSection } from "./types";
 import type { SettingsPane } from "../../../state/settings/settingsWindows";
 import { keyText } from "../../../state/commands/keyText";
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
+import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 import { interfaceScaleAdjustable } from "../../../state/settings/interfaceScale";
+import { windowButtonsChoosable } from "../../../lib/windowChrome";
 
 const inSidebar = (_: unknown, env: SettingsEnv) => !env.top;
 
@@ -59,6 +61,17 @@ export const appearanceRows = {
       },
     },
     {
+      section: "Window buttons",
+      rows: {
+        windowButtons: {
+          title: "Window buttons",
+          description: "Native, traffic lights, or none.",
+          keywords: ["window controls", "title bar", "titlebar", "close button", "minimize", "maximize", "traffic lights", "gnome", "kde", "native", "decorations", "linux", "hidden", "none", "tiling", "i3", "sway", "hyprland", "button layout", "desktop", "top left", "mac", "full screen", "menu button", "header"],
+          shown: () => windowButtonsChoosable,
+        },
+      },
+    },
+    {
       section: "Size and text",
       rows: {
         interfaceScale: {
@@ -85,12 +98,27 @@ export const appearanceRows = {
       },
     },
     {
+      section: "Switching tabs",
+      rows: {
+        ctrlTab: {
+          title: `What ${PLATFORM_TERMS.switchTabsKey} does`,
+          description: "Step through your tabs in order, or open the recent tabs switcher.",
+          keywords: ["ctrl tab", "control tab", "alt tab", "tab switcher", "switch tabs", "switching tabs", "recent tabs", "recently used", "last tab", "previous tab", "next tab", "cycle tabs", "mru", "tabbing", "arc", "dia", "chrome"],
+        },
+        afterClosingTab: {
+          title: "After closing a tab",
+          description: "Go back to the previously active tab, or to the tab above or below (to the left or right across the top).",
+          keywords: ["close tab", "closing", "closing tab", "closing a tab", "tab closing", "tab close", "after closing", "after close", "close behavior", "close behaviour", "cmd w", "next tab", "previous tab", "tab above", "tab to the left", "tab below", "tab to the right", "neighbour", "neighbor", "adjacent", "adjacent tab", "last used", "previously active", "focus", "select", "activate", "mru", "arc", "chrome", "firefox"],
+        },
+      },
+    },
+    {
       section: "Toolbar",
       rows: {
         addressBar: {
-          title: "Address bar position",
+          title: "Address bar",
           description: "In the toolbar or in the sidebar.",
-          keywords: ["url bar", "location bar", "toolbar", "address bar"],
+          keywords: ["url bar", "location bar", "toolbar", "address bar", "address field", "omnibox", "url field", "address bar in sidebar", "arc", "dia"],
           shown: inSidebar,
           needs: "Use vertical tabs to change this",
         },
@@ -106,7 +134,13 @@ export const appearanceRows = {
           title: `${keyText("⌘L")} opens the command bar`,
           explained: true,
           description: "Shows the address over the middle of the page, like Arc.",
-          keywords: ["cmd l", "command bar", "centred", "centered", "arc", "url bar", "location bar", "click", "click address", "click url"],
+          keywords: ["cmd l", "command l", "ctrl l", "command bar", "command palette", "centred", "centered", "middle", "floating", "arc", "url bar", "location bar", "click", "click address", "click url"],
+        },
+        commandBarOnClick: {
+          title: "Clicking the address opens it in the center too",
+          keywords: ["click address", "click url", "centred on click", "command bar on click"],
+          shown: (s) => s.commandBarPlacement !== "field",
+          needs: `Choose In the center for ${keyText("⌘L")} to use this`,
         },
         addressBarButtons: {
           title: "Address bar buttons",

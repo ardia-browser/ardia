@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
-import { Animated } from "react-native";
+import { Animated, View } from "react-native";
 import type { ClickModifiers } from "../../lib/keys";
 import { toggleNewTabBar } from "../../state/omnibox/newTabBar";
 import { openOverflowMenu, openSidebarMenu } from "../../state/sidebar/menus";
@@ -7,12 +7,17 @@ import { openNewTabInSplit } from "../../state/splits/actions";
 import { splitViewAvailable } from "../../state/splits/splits";
 import { newTab } from "../../state/tabs/actions";
 import { noteTabStripMenu } from "../../state/telemetry/usage";
+import { noteTabStripMenuPick } from "../../state/telemetry/tabStripCounts";
+import { consentToken } from "../../state/telemetry/client";
 import { useShortcutHint, withShortcut } from "../../state/commands/commandShortcuts";
 import { Button, useHover, type IconPalette } from "../ui";
 import { useTheme } from "../ui/theme";
 import { perLook, radius } from "../ui/tokens";
 import type { DragGeometry } from "./stripGroups";
 import { registerSlot } from "./stripReorder";
+import { NEW_TAB_SLOT, useStripSlide } from "./stripMotion";
+import { pressStripOpen } from "../../state/tabs/stripPress";
+import { workspaceSnapshot } from "../../state/browser/current";
 import { GAP, ITEM_HEIGHT, ITEM_TOP, NEW_TAB_ICON, OVERFLOW_BUTTON, tabRadius } from "./tokens";
 import { keyText } from "../../state/commands/keyText";
 
@@ -34,6 +39,7 @@ export function NewTabButton({ windowId, geometry, pinned }: { windowId: string;
     [theme.textSecondary, theme.iconDisabled, theme.tabHover, theme.tabPressed],
   );
   const shift = useRef(new Animated.Value(0)).current;
+  const [slid, slidRef] = useStripSlide(pinned ? null : NEW_TAB_SLOT);
   const latest = useRef(geometry);
   latest.current = geometry;
   const latestPinned = useRef(pinned);
@@ -41,16 +47,21 @@ export function NewTabButton({ windowId, geometry, pinned }: { windowId: string;
   useEffect(() => registerSlot(() => latest.current, () => (latestPinned.current ? -1 : latest.current.slots.length), shift), []);
   const open = (modifiers: ClickModifiers) => {
     if (modifiers.altKey && splitViewAvailable) openNewTabInSplit(windowId);
-    else toggleNewTabBar(windowId) || newTab(windowId, { newTabCommand: true });
+    else if (!toggleNewTabBar(windowId)) pressStripOpen(windowId, () => newTab(windowId, { newTabCommand: true }), (tabId) => !!workspaceSnapshot().tabs[tabId]);
   };
   const openOverflow = () => {
     noteTabStripMenu("overflow");
-    void openOverflowMenu(windowId);
+    const consent = consentToken();
+    void openOverflowMenu(windowId, () => noteTabStripMenuPick(consent));
   };
   return (
     <Animated.View {...hoverProps} pointerEvents="box-none" style={{ marginTop: ITEM_TOP, flexDirection: "row", transform: [{ translateX: shift }] }}>
-      <Button variant="icon" toolbar icon="plus" glyph={NEW_TAB_ICON} hit={NEW_TAB_HIT()} palette={palette} tooltip={splitViewAvailable ? `${withShortcut("New Tab", newTabHint)} — ${keyText("⌥")}-click to open in Split View` : withShortcut("New Tab", newTabHint)} onPress={open} onContextMenu={() => openTabStripMenu(windowId)} />
-      <Button variant="icon" toolbar icon="chevron.down" glyph={OVERFLOW_BUTTON.glyph} weight="semibold" hit={OVERFLOW_HIT()} palette={palette} color={hovered ? theme.textSecondary : theme.textTertiary} style={OVERFLOW_STYLE} tooltip="Open and recently closed tabs" onPress={openOverflow} onContextMenu={() => openTabStripMenu(windowId)} />
+      <View {...slid} ref={slidRef} pointerEvents="box-none" style={[NEW_TAB_ROW, slid.style as object]}>
+        <Button variant="icon" toolbar icon="plus" glyph={NEW_TAB_ICON} hit={NEW_TAB_HIT()} palette={palette} tooltip={splitViewAvailable ? `${withShortcut("New Tab", newTabHint)} — ${keyText("⌥")}-click to open in Split View` : withShortcut("New Tab", newTabHint)} onPress={open} onContextMenu={() => openTabStripMenu(windowId)} />
+        <Button variant="icon" toolbar icon="chevron.down" glyph={OVERFLOW_BUTTON.glyph} weight="semibold" hit={OVERFLOW_HIT()} palette={palette} color={hovered ? theme.textSecondary : theme.textTertiary} style={OVERFLOW_STYLE} tooltip="Open and recently closed tabs" onPress={openOverflow} onContextMenu={() => openTabStripMenu(windowId)} />
+      </View>
     </Animated.View>
   );
 }
+
+const NEW_TAB_ROW = { flexDirection: "row" } as const;

@@ -1,19 +1,20 @@
-import { faviconsFor, fetchFavicon, iconTheme, storeFavicon, type IconTheme } from "../../platform/favicons";
+import { faviconsFor, fetchFavicon, iconTheme, peekFavicons, storeFavicon, type IconTheme } from "../../platform/favicons";
 import { withoutFragment } from "../../lib/url";
 import { onHistoryChanged } from "../../platform/history";
-import { readDocument, removeDocument } from "../../platform/documents";
-import { useEffect } from "react";
 import { create } from "zustand";
-import { batchStoreUpdates, useBrowser, type BrowserState } from "../browser/store";
+import { batchStoreUpdates, useBrowser } from "../browser/store";
 import { ALL, useKeyed, watchAppDark } from "../browser/keyedWatch";
-import { engineProfile, isIncognitoProfile } from "../browser/model";
-import { DEFAULT_PROFILE_ID } from "../settings/settings";
+import { isIncognitoProfile } from "../browser/model";
+import { anyBorrowed, askable, askKey, borrowersOf, borrowFor, cacheKey, closeViewers, isBorrowed, keysFor, lookupOrder, settlePeek, sourceEngineOf, viewerOf } from "./faviconKeys";
 import { webviews } from "../../platform/webviews";
 import { changedPages, pagesWrittenSince, withPages, type PagesPair } from "./pagesWritten";
 import { onProfilesOpened, profileOpened } from "../profiles/profileLoading";
+import { removeLegacyFiles } from "./legacyFavicons";
 import { consentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
+import { notePageFavicon, notePageFaviconFailed, notePrivateFaviconPeek } from "../telemetry/pageFaviconCounts";
 import { fetchFailedBefore, forgetAsked, markAsked, noteFetchFailed, unmarkAsked } from "./askedFavicons";
+import { incognitoClosed, takeRequest, unheldBy, unheldIn } from "./privateLookups";
 
 type Icons = {
   pages: Record<string, string | null>;
@@ -37,7 +38,7 @@ export const useFavicons = create<Favicons>()(() => ({ profiles: {}, themes: {} 
 
 export const knownFaviconTheme = (uri: string) => useFavicons.getState().themes[uri];
 
-export const cacheKey = (profileId: string) => (isIncognitoProfile(profileId) ? profileId : engineProfile(useBrowser.getState(), profileId));
+export { cacheKey, lookupOrder, privateViewer } from "./faviconKeys";
 const siteOf = (url: string) => /^[a-z][\w+.-]*:\/\/[^/?#]*/i.exec(url)?.[0].toLowerCase() ?? "";
 export const faviconOutlived = (iconPage: string | null, url: string) => !!iconPage && !!url && siteOf(iconPage) !== siteOf(url);
 
@@ -82,7 +83,8 @@ const wrote = (key: string, page: string) => {
 let lookupTimer: ReturnType<typeof setTimeout> | undefined;
 
 function ask(key: string, page: string) {
-  if (isIncognitoProfile(key) || !markAsked(key, page)) return;
+  if (isBorrowed(key) ? !borrowFor(key) : isIncognitoProfile(key)) return;
+  if (!markAsked(key, page)) return;
   if (!queued.has(key)) queued.set(key, new Set());
   queued.get(key)!.add(page);
   lookupTimer ??= setTimeout(lookUp, LOOKUP_DELAY_MS);
@@ -107,8 +109,9 @@ function lookUpPages(key: string, list: string[]) {
     inFlight.set(id, entry);
     return { id, entry, started: entry.wrote };
   });
-  void faviconsFor(key, list)
-    .then((found) =>
+  void (isBorrowed(key) ? peekFavicons(sourceEngineOf(key), list) : faviconsFor(key, list))
+    .then((found) => {
+      if (!settlePeek(key, list, false, () => notePrivateFaviconPeek(false, consent), retryPeek(key))) return;
       update(key, (icons) => {
         const writes: [string, string | null][] = [];
         for (const [i, page] of list.entries()) {
@@ -117,16 +120,19 @@ function lookUpPages(key: string, list: string[]) {
           if (icons.pages[page] !== uri) writes.push([page, uri]);
         }
         return writes.length ? { ...icons, pages: withPages(icons.pages, writes) } : icons;
-      }, true),
-    )
+      }, true);
+    })
     .catch((error) => {
       for (const page of list) unmarkAsked(key, page);
+      settlePeek(key, list, true, () => notePrivateFaviconPeek(true, consent), retryPeek(key));
       warnFor(consent, "[favicons] lookup failed", error);
     })
     .finally(() => {
       for (const { id, entry } of pending) if (--entry.lookups === 0) inFlight.delete(id);
     });
 }
+
+const retryPeek = (key: string) => (page: string) => void ([...(watchers.get(page) ?? [])].some((w) => w.profileId === viewerOf(key)) && ask(key, page));
 
 const inflight = new Map<string, Promise<string | null>>();
 
@@ -142,10 +148,8 @@ export function noteFavicon(tabId: string, src: string) {
   const id = `${key}|${src}`;
   let pending = inflight.get(id);
   if (!pending) {
-    pending = handle
-      .downloadFavicon(src)
-      .then((image) => image?.uri ?? null)
-      .catch(() => null);
+    const consent = consentToken();
+    pending = handle.downloadFavicon(src).then((image) => notePageFavicon(image?.uri ?? null, consent), (error) => notePageFaviconFailed(error, consent));
     inflight.set(id, pending);
     void pending.finally(() => inflight.delete(id));
   }
@@ -159,6 +163,7 @@ function remember(key: string, page: string, src: string, uri: string) {
   const swapped = Date.now() - appearanceChangedAt < APPEARANCE_SWAP_MS;
   wrote(key, page);
   update(key, (icons) => {
+    if (incognitoClosed(key)) return icons;
     const previous = icons.pages[page];
     if (previous === uri && icons.srcs[src] === uri) return icons;
     let appearances = icons.appearances;
@@ -170,7 +175,7 @@ function remember(key: string, page: string, src: string, uri: string) {
   });
 }
 
-export type KnownFavicon = { page: string; icon: string; png: string };
+type KnownFavicon = { page: string; icon: string; png: string };
 
 const PNG_DATA_URI = "data:image/png;base64,";
 
@@ -234,41 +239,37 @@ function lookupIn(key: string, url: string, src: string | null | undefined): str
   return (src ? icons.srcs[src] : undefined) ?? icons.pages[page] ?? undefined;
 }
 
-function lookupOrder(profileId?: string): string[] {
-  if (profileId && !isIncognitoProfile(profileId)) return [profileId];
-  return [...new Set([...(profileId ? [profileId] : []), DEFAULT_PROFILE_ID, ...useBrowser.getState().profileOrder])];
-}
-
-export function resolveFavicon(url: string, src?: string | null, profileId?: string): ResolvedFavicon | null {
+export function resolveFavicon(url: string, src?: string | null, profileId?: string, source?: string): ResolvedFavicon | null {
   if (!url) return null;
-  for (const id of lookupOrder(profileId)) {
-    const uri = lookupIn(cacheKey(id), url, src);
-    if (uri) return { uri, profileId: id };
-  }
+  for (const id of lookupOrder(profileId, source))
+    for (const key of keysFor(profileId, id)) {
+      const uri = lookupIn(key, url, src);
+      if (uri) return { uri, profileId: isBorrowed(key) ? key : id };
+    }
   return null;
 }
 
 export const useAppearanceDark = () => useKeyed(watchAppDark, ALL, () => useBrowser.getState().ui.appDark);
 
-function answered(url: string, profileId?: string): boolean {
+function answered(url: string, profileId?: string, source?: string): boolean {
   const { profiles } = useFavicons.getState();
   const page = withoutFragment(url);
-  return lookupOrder(profileId).every((id) => !askable(id) || profiles[cacheKey(id)]?.pages[page] !== undefined);
+  return lookupOrder(profileId, source).every((id) => !askable(id) || keysFor(profileId, id).some((key) => profiles[key]?.pages[page] !== undefined));
 }
 
-const askable = (id: string) => !isIncognitoProfile(id) && profileOpened(cacheKey(id));
 
-type Watcher = { url: string; src?: string | null; profileId?: string; known?: boolean };
+type Watcher = { url: string; src?: string | null; profileId?: string; source?: string; known?: boolean };
 const watchers = new Map<string, Set<Watcher>>();
 
 function check(w: Watcher) {
-  const known = answered(w.url, w.profileId);
+  const known = answered(w.url, w.profileId, w.source);
   if (known === w.known) return;
   w.known = known;
   if (!known) {
-    for (const id of lookupOrder(w.profileId)) if (askable(id)) ask(cacheKey(id), withoutFragment(w.url));
+    for (const id of lookupOrder(w.profileId, w.source)) if (askable(id)) ask(askKey(w.profileId, id), withoutFragment(w.url));
   } else if (w.src && w.profileId && !resolveFavicon(w.url, w.src, w.profileId)) fetchMissing(w.profileId, w.url, w.src);
 }
+
 
 function onFavicons(f: Favicons, prev: Favicons) {
   if (f.profiles === prev.profiles || !watchers.size) return;
@@ -296,7 +297,7 @@ function onFavicons(f: Favicons, prev: Favicons) {
   for (const set of due) for (const w of [...set]) check(w);
 }
 
-function watch(w: Watcher) {
+export function watchMissingFavicon(w: Watcher) {
   if (!watching) {
     watching = true;
     useFavicons.subscribe(onFavicons);
@@ -312,33 +313,26 @@ function watch(w: Watcher) {
   };
 }
 
-export function useFavicon(url: string, src?: string | null, profileId?: string): ResolvedFavicon | null {
-  const key = useFavicons(() => {
-    const found = resolveFavicon(url, src, profileId);
-    return found ? `${found.profileId} ${found.uri}` : null;
-  });
-  const missing = !!url && !key;
-  const order = missing ? lookupOrder(profileId).join(" ") : "";
-  useEffect(() => (missing ? watch({ url, src, profileId }) : undefined), [missing, order, profileId, url, src]);
-  const split = key?.indexOf(" ") ?? -1;
-  return key ? { profileId: key.slice(0, split), uri: key.slice(split + 1) } : null;
+const theming = new Map<string, symbol>();
+const privateIconListeners = new Set<(unheld: (uri: string) => boolean) => void>();
+
+export const faviconHeld = (uri: string) => !unheldIn(useFavicons.getState().profiles)(uri);
+
+export function onPrivateIconsDropped(listener: (unheld: (uri: string) => boolean) => void) {
+  privateIconListeners.add(listener);
+  return () => void privateIconListeners.delete(listener);
 }
 
-const theming = new Set<string>();
-
-export function useFaviconTheme(url: string, src?: string | null, profileId?: string): IconTheme | null | undefined {
-  const uri = useFavicons(() => resolveFavicon(url, src, profileId)?.uri ?? null);
-  const theme = useFavicons((f) => (uri ? f.themes[uri] : undefined));
-  const pending = !!uri && theme === undefined;
-  useEffect(() => {
-    if (!pending || !uri || theming.has(uri)) return;
-    theming.add(uri);
-    void iconTheme({ uri })
-      .catch(() => null)
-      .then((found) => queue((f) => (f.themes[uri] === (found ?? null) ? f : { ...f, themes: capped(f.themes, uri, found ?? null) })))
-      .finally(() => theming.delete(uri));
-  }, [pending, uri]);
-  return theme;
+export function askFaviconTheme(uri: string) {
+  if (theming.has(uri) || !faviconHeld(uri)) return;
+  const request = Symbol(uri);
+  theming.set(uri, request);
+  void iconTheme({ uri })
+    .catch(() => null)
+    .then((found) => {
+      if (!takeRequest(theming, uri, request) || !faviconHeld(uri)) return;
+      queue((f) => (f.themes[uri] === (found ?? null) ? f : { ...f, themes: capped(f.themes, uri, found ?? null) }));
+    });
 }
 
 function forget(key: string) {
@@ -347,32 +341,28 @@ function forget(key: string) {
   update(key, () => EMPTY_ICONS, true);
 }
 
-export const pruneEngineFavicons = (engine: string) => forget(engine);
-
-function removeLegacyFiles(s: Pick<BrowserState, "profiles">) {
-  for (const id of Object.keys(s.profiles)) {
-    const doc = `favicons-${id}.json`;
-    try {
-      if (readDocument(doc) === null) continue;
-      removeDocument(doc);
-    } catch (error) {
-      console.warn(`[favicons] couldn't remove ${doc}`, error);
-    }
-  }
+export function pruneEngineFavicons(engine: string) {
+  forget(engine);
+  for (const key of borrowersOf(engine)) forget(key);
 }
 
 export function startFavicons() {
-  removeLegacyFiles(useBrowser.getState());
+  removeLegacyFiles(useBrowser.getState(), consentToken());
   const history = onHistoryChanged((change) => {
     if (change.kind !== "deleted") return;
-    if (change.all) return forget(change.profile);
+    if (change.all) return pruneEngineFavicons(change.profile);
     const gone = new Set(change.urls.map(withoutFragment));
-    const key = change.profile;
-    for (const page of gone) unmarkAsked(key, page);
-    update(key, (icons) => {
-      if (!Object.keys(icons.pages).some((page) => gone.has(page))) return icons;
-      return { ...icons, pages: Object.fromEntries(Object.entries(icons.pages).filter(([page]) => !gone.has(page))) };
-    });
+    for (const key of [change.profile, ...borrowersOf(change.profile)]) {
+      for (const page of gone) {
+        unmarkAsked(key, page);
+        wrote(key, page);
+      }
+      update(key, (icons) => {
+        if (!Object.keys(icons.pages).some((page) => gone.has(page))) return icons;
+        return { ...icons, pages: Object.fromEntries(Object.entries(icons.pages).filter(([page]) => !gone.has(page))) };
+      });
+    }
+    for (const page of gone) for (const w of [...(watchers.get(page) ?? [])]) ((w.known = undefined), check(w));
   });
   const opened = onProfilesOpened(() => {
     for (const set of [...watchers.values()])
@@ -381,14 +371,24 @@ export function startFavicons() {
         check(w);
       }
   });
-  const stop = useBrowser.subscribe((s, prev) => {
+  const stop = useBrowser.subscribeTo(["ui", "windows"], (s, prev) => {
     if (s.ui.appDark !== prev.ui.appDark) appearanceChangedAt = Date.now();
-    if (s.windows !== prev.windows && (changes.length || Object.keys(useFavicons.getState().profiles).some(isIncognitoProfile))) {
+    const before = s.windows === prev.windows ? null : Object.values(prev.windows).map((w) => w.profileId);
+    if (before && (changes.length || anyBorrowed() || before.some(isIncognitoProfile) || Object.keys(useFavicons.getState().profiles).some(isIncognitoProfile))) {
       const open = new Set(Object.values(s.windows).map((w) => w.profileId));
       for (const t of Object.values(s.tabs)) open.add(t.profileId);
+      for (const key of closeViewers(open)) {
+        forgetAsked(key);
+        queued.delete(key);
+      }
       queue((f) => {
-        const gone = Object.keys(f.profiles).filter((id) => isIncognitoProfile(id) && !open.has(id));
-        return gone.length ? { ...f, profiles: Object.fromEntries(Object.entries(f.profiles).filter(([id]) => !gone.includes(id))) } : f;
+        const gone = Object.keys(f.profiles).filter((id) => isIncognitoProfile(id) && !open.has(viewerOf(id)));
+        if (!gone.length) return f;
+        const profiles = Object.fromEntries(Object.entries(f.profiles).filter(([id]) => !gone.includes(id)));
+        const unheld = unheldBy(Object.values(profiles));
+        for (const uri of [...theming.keys()].filter(unheld)) theming.delete(uri);
+        for (const listener of privateIconListeners) listener(unheld);
+        return { ...f, profiles, themes: Object.fromEntries(Object.entries(f.themes).filter(([uri]) => !unheld(uri))) };
       }, true);
     }
   });

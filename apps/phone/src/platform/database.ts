@@ -1,6 +1,10 @@
 import { openDatabaseSync, type SQLiteDatabase } from "expo-sqlite";
 import type { SqlDatabase, SqlValue } from "../lib/sqlDatabase";
 
+export const SYNCED_COMMITS = "PRAGMA synchronous = FULL";
+
+export const WAL_SAFE_COMMITS = "PRAGMA synchronous = NORMAL";
+
 function bind(native: SQLiteDatabase): SqlDatabase {
   const params = (values: readonly SqlValue[] | undefined) => (values ? [...values] : []);
   return {
@@ -16,6 +20,7 @@ function bind(native: SQLiteDatabase): SqlDatabase {
 export function openSqlDatabase(name: string): SqlDatabase {
   const native = openDatabaseSync(name);
   native.execSync("PRAGMA journal_mode = WAL");
+  native.execSync(SYNCED_COMMITS);
   return bind(native);
 }
 

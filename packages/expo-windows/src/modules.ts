@@ -8,10 +8,12 @@ import { engineModules } from "./engine/modules";
 import { listenedOnWindows } from "./engine/popupCommands";
 import { windowsImport } from "./import";
 import { windowsInlineCompletion } from "./inlineCompletion";
+import { windowsShellClipboard } from "./shellClipboard";
 import type { DialogsModule, MenusModule, WindowsHostModule } from "./nativeModuleTypes";
 import { windowsIntroMusic } from "./introMusic";
 import { watchDialogsWith, windowsDialogPages } from "./engine/dialogPages";
 import { windowsExternalAppCounts } from "./engine/domains/externalApps";
+import { windowsRendererEfficiency } from "./engine/rendererEfficiency";
 import { windowsLaunchLinks } from "./launchLinks";
 import { noteMissing } from "./missing";
 import { windowsSelfChecks } from "./selfCheck/registered";
@@ -51,7 +53,7 @@ const syncOnWindows = windowsSync();
 
 watchDialogsWith(() => (TurboModuleRegistry.get<TurboModule & Pick<DialogsModule, "openCount">>("ArdiaDialogs")?.openCount() ?? 0) + (TurboModuleRegistry.get<TurboModule & Pick<MenusModule, "openCount">>("ArdiaMenus")?.openCount() ?? 0) > 0);
 
-const writtenInJs: Record<string, Record<string, unknown>> = { ...(syncOnWindows ? { ArdiaSync: syncOnWindows } : {}), ArdiaUpdater: windowsUpdater, ArdiaSwipe: windowsSwipe, ArdiaMotion: windowsMotion, ArdiaLaunchLinks: windowsLaunchLinks, ArdiaExternalAppCounts: windowsExternalAppCounts, ArdiaDialogPages: windowsDialogPages, ArdiaImport: windowsImport(), ArdiaInlineCompletion: windowsInlineCompletion(() => TurboModuleRegistry.get<TurboModule & WindowsHostModule>("ArdiaWindowsHost")), ArdiaApp: windowsIntroMusic, ArdiaSelfCheck: windowsSelfChecks };
+const writtenInJs: Record<string, Record<string, unknown>> = { ...(syncOnWindows ? { ArdiaSync: syncOnWindows } : {}), ArdiaUpdater: windowsUpdater, ArdiaSwipe: windowsSwipe, ArdiaMotion: windowsMotion, ArdiaLaunchLinks: windowsLaunchLinks, ArdiaExternalAppCounts: windowsExternalAppCounts, ArdiaRendererEfficiency: windowsRendererEfficiency, ArdiaDialogPages: windowsDialogPages, ArdiaImport: windowsImport(), ArdiaInlineCompletion: windowsInlineCompletion(() => TurboModuleRegistry.get<TurboModule & WindowsHostModule>("ArdiaWindowsHost")), ArdiaApp: windowsIntroMusic, ArdiaSelfCheck: windowsSelfChecks, ArdiaShell: windowsShellClipboard(() => TurboModuleRegistry.get<TurboModule & { copyText?(text: string): void }>("ArdiaShell")) };
 
 const inert = (module: string, key: string) => () => {
   noteMissing(`${module}.${key}`);

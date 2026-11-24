@@ -84,14 +84,14 @@ test("a history of years, past 5,000 pages, is read whole, with its oldest page 
   stop();
 });
 
-test("deleting half of a long history reads the selection a few times over, not once per URL kept", () => {
+test("deleting half of a long history reads the selection a few times over, not once per URL kept", async () => {
   S().hydrate({});
   stub.docs.clear();
   stub.historyDbs.clear();
   const total = 2_000;
   const now = Date.now();
   const rows = Array.from({ length: total }, (_, i) => ({ url: `https://site${i}.example/path/${i}/page`, title: `Page ${i}`, visits: 1, lastVisit: now - i * 1000 }));
-  S().importHistory("default", rows);
+  await S().importHistory("default", rows);
   assert.equal(historyOf(S(), "default").length, total);
   const doomed = rows.filter((_, i) => i % 2 === 0).map((r) => r.url);
   let reads = 0;
@@ -182,7 +182,7 @@ test("profiles that share data read one history and one tree in every state a li
     if (JSON.stringify(bookmarkRoots(s, a)) !== JSON.stringify(bookmarkRoots(s, b))) disagreements.push(`roots at ${heard}`);
     if (isBookmarked(s, a, "https://mark.example/") !== isBookmarked(s, b, "https://mark.example/")) disagreements.push(`bookmark at ${heard}`);
   });
-  S().importHistory(b, [
+  await S().importHistory(b, [
     { url: "https://one.example/", title: "One", visits: 1, lastVisit: t },
     { url: "https://two.example/", title: "Two", visits: 1, lastVisit: t + 1000 },
   ]);

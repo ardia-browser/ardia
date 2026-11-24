@@ -1,3 +1,4 @@
+import ArdiaCore
 import Darwin
 import Foundation
 
@@ -35,6 +36,35 @@ final class PluginProcess: PluginRun {
     let approved: String
     let hasPage: Bool
     let launch: Int
+    var runtime = "process"
+    var entry: String?
+
+    var isScript: Bool { runtime == "js" }
+    var sandboxNetwork: Bool { isScript ? false : network }
+  }
+
+  static func hostBinary() -> String? {
+    let candidate = LaunchConfig.shared.testValue("pluginHost") ?? Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/ArdiaPluginHost").path
+    guard let real = PluginSandbox.resolved(candidate) else { return nil }
+    var info = stat()
+    guard stat(real, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG, access(real, X_OK) == 0 else { return nil }
+    return real
+  }
+
+  static func launchPlan(_ spec: Spec, in folder: OpenedFolder) -> Result<(launched: String, program: String, arguments: [String]), Failure> {
+    if spec.isScript {
+      guard let given = spec.entry, let entry = PluginFiles.scriptEntry(given, in: folder) else {
+        return .failure(.refused("its entry \(spec.entry ?? "(none)") wasn't found, or isn't a script file inside the plugin's folder"))
+      }
+      guard let host = hostBinary() else { return .failure(.refused("Ardia's plugin host is missing from the app")) }
+      return .success((host, host, ["--entry", entry]))
+    }
+    guard let first = spec.run.first else { return .failure(.refused("it names no program")) }
+    let isLocal = !first.hasPrefix("/") && first.contains("/")
+    let launched = isLocal ? PluginFiles.localProgram(first, in: folder) : PluginSandbox.program(first, pluginFolder: folder.path)
+    guard let launched else { return .failure(.refused("\(first) wasn't found, or isn't a program file inside the plugin's folder")) }
+    let program = isLocal ? (folder.path as NSString).appendingPathComponent(first) : launched
+    return .success((launched, program, Array(spec.run.dropFirst())))
   }
 
   enum Failure: Error {
@@ -60,20 +90,24 @@ final class PluginProcess: PluginRun {
 
   static func errnoText(_ code: Int32 = errno) -> String { String(cString: strerror(code)) }
 
-  static func environment(name: String, data: String) -> [String] {
-    [
-      "PATH=" + PluginSandbox.searchPath.joined(separator: ":"),
-      "HOME=" + (data as NSString).appendingPathComponent("home"),
-      "TMPDIR=" + (data as NSString).appendingPathComponent("tmp") + "/",
-      "LANG=en_US.UTF-8",
-      "ARDIA_PLUGIN_NAME=" + name,
-      "ARDIA_PLUGIN_FD=\(channelFd)",
-      "ARDIA_PLUGIN_PROTOCOL=1",
-    ]
+  static let certificateCache = PluginCertificateCache()
+
+  static func prepareCertificates(for spec: Spec, deliverOn queue: DispatchQueue, then: @escaping (PluginSandbox.PreparedCertificates) -> Void) {
+    guard spec.sandboxNetwork else { return then(.offline) }
+    certificateCache.prepare(for: LaunchConfig.shared.environmentForChildProcesses, deliverOn: queue, then: then)
+  }
+
+  static func environment(name: String, data: OpenedFolder, network: Bool, certificates: PluginSandbox.PreparedCertificates) -> [String] {
+    let built = PluginSandbox.helperEnvironment(
+      name: name, data: data, channelFd: channelFd, network: network, given: LaunchConfig.shared.environmentForChildProcesses, certificates: certificates)
+    if !built.droppedProxies.isEmpty {
+      NSLog("[plugins] %@: %@ carries a user name or password, so its helper doesn't get it", name, built.droppedProxies.joined(separator: ", "))
+    }
+    return built.variables
   }
 
   static func spawn(
-    _ spec: Spec, run: Int, folders: PluginFolders, queue: DispatchQueue,
+    _ spec: Spec, run: Int, folders: PluginFolders, queue: DispatchQueue, certificates: PluginSandbox.PreparedCertificates,
     onLine: @escaping (PluginProcess, String) -> Void, onExit: @escaping (PluginProcess, Int32?, Int32?, Bool) -> Void
   ) -> Result<PluginProcess, Failure> {
     let folder: OpenedFolder
@@ -86,14 +120,17 @@ final class PluginProcess: PluginRun {
     guard let dataFolder = folders.dataFolder(spec.name) else { return .failure(.refused("its data folder couldn't be made")) }
     defer { dataFolder.close() }
     let data = dataFolder.path
-    guard let first = spec.run.first else { return .failure(.refused("it names no program")) }
-    let isLocal = !first.hasPrefix("/") && first.contains("/")
-    let launched = isLocal ? PluginFiles.localProgram(first, in: folder) : PluginSandbox.program(first, pluginFolder: pluginFolder)
-    guard let launched else { return .failure(.refused("\(first) wasn't found, or isn't a program file inside the plugin's folder")) }
-    let program = isLocal ? (pluginFolder as NSString).appendingPathComponent(first) : launched
+    let launched: String
+    let program: String
+    let arguments: [String]
+    switch launchPlan(spec, in: folder) {
+    case .success(let plan): (launched, program, arguments) = plan
+    case .failure(let failure): return .failure(failure)
+    }
     let sandbox = PluginSandbox(
       home: PluginSandbox.resolved(NSHomeDirectory()) ?? NSHomeDirectory(), appData: folders.appData, configFolder: folders.config,
-      pluginFolder: pluginFolder, pluginData: data, program: program, network: spec.network)
+      pluginFolder: pluginFolder, pluginData: data, program: program, network: spec.sandboxNetwork, kind: spec.isScript ? .script : .program,
+      officialCopy: folders.officialCopy(spec.name, folderId: spec.folderId).flatMap { PluginSandbox.resolved($0.path) })
     let sandboxArguments: [String]
     do {
       sandboxArguments = try sandbox.arguments()
@@ -150,8 +187,8 @@ final class PluginProcess: PluginRun {
     if !PluginProcessTree.disclaim(&attributes) {
       NSLog("[plugins] %@: macOS's responsibility calls aren't available, so its processes are tracked by group and descendants only", spec.name)
     }
-    let argv = ["/usr/bin/sandbox-exec"] + sandboxArguments + [launched] + spec.run.dropFirst()
-    let env = environment(name: spec.name, data: data)
+    let argv = ["/usr/bin/sandbox-exec"] + sandboxArguments + [launched] + arguments
+    let env = environment(name: spec.name, data: dataFolder, network: spec.sandboxNetwork, certificates: certificates)
     var pid: pid_t = 0
     let result = withCStrings(argv) { cArgv in withCStrings(env) { cEnv in posix_spawn(&pid, "/usr/bin/sandbox-exec", &actions, &attributes, cArgv, cEnv) } }
     guard result == 0 else {
@@ -284,11 +321,6 @@ final class PluginProcess: PluginRun {
     }
     killTimer = item
     queue.asyncAfter(deadline: .now() + .milliseconds(max(0, graceMs)), execute: item)
-  }
-
-  func killNow() {
-    guard !exited else { return }
-    signalFamily(SIGKILL)
   }
 
   func terminateForQuit(within seconds: TimeInterval) {

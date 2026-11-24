@@ -19,4 +19,20 @@ export function useIncreasedContrast(): boolean {
   return on;
 }
 
+export function useScreenReader(): boolean {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void AccessibilityInfo.isScreenReaderEnabled()
+      .then((value) => live && setOn(value))
+      .catch(() => undefined);
+    const subscription = AccessibilityInfo.addEventListener("screenReaderChanged", (value: boolean) => setOn(value));
+    return () => {
+      live = false;
+      subscription.remove();
+    };
+  }, []);
+  return on;
+}
+
 export { useReduceMotion, useReduceTransparency } from "../../state/app/systemLook";

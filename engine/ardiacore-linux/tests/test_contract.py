@@ -9,7 +9,11 @@ import unittest
 class ContractTests(unittest.TestCase):
     def test_allowlist_only_targets_existing_nonsecret_services(self):
         root = Path(__file__).resolve().parents[3]
-        source = (root / 'engine/ardiacore-linux/src/ardia/linux/ac_linux_contract.h').read_text()
+        source = (root / 'engine/ardiacore-desktop/src/ardia/desktop/generated/ac_desktop_routes.h').read_text()
+        contract = (root / 'engine/ardiacore-linux/src/ardia/linux/ac_linux_contract.h').read_text()
+        self.assertIn('#include "ardia/desktop/generated/ac_desktop_routes.h"', contract)
+        self.assertIn('using ardia::desktop_routes::kRoutes;', contract)
+        self.assertNotIn('kRoutes[]', contract)
         services = set(re.findall(r'^AC_(?:ENGINE|PROFILE|ARGS)_CALL\((ac_\w+)\b',  '\n'.join(path.read_text() for path in (root / 'engine/chromium/src/chrome/browser/ardia').glob('*.cc')), re.MULTILINE))
         routes = re.findall(r'\{"([\w.]+)", "(ac_\w+)", "(\w*)"\}', source)
         self.assertGreater(len(routes), 30)
@@ -126,7 +130,7 @@ int main() {
             cpp = Path(scratch) / 'contract.cc'
             binary = Path(scratch) / 'contract'
             cpp.write_text(code.replace("ARDIA_NATIVE_GUARD", guard))
-            result = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-I', str(root), str(cpp), '-o', str(binary)], capture_output=True, text=True)
+            result = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-I', str(root), '-I', str(root.parents[1] / 'ardiacore-desktop' / 'src'), str(cpp), '-o', str(binary)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             subprocess.run([str(binary)], check=True)
 

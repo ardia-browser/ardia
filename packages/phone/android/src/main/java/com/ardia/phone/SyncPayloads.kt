@@ -13,6 +13,8 @@ import com.ardia.sync.SyncStatusText
 import com.ardia.sync.SyncStatusWords
 import com.ardia.sync.SyncedDevice
 import com.ardia.sync.SyncedProfile
+import com.ardia.sync.SyncedTheme
+import com.ardia.sync.SyncedThemeLook
 
 object SyncPayloads {
     fun phase(phase: SyncPhase): String = when (phase) {
@@ -106,13 +108,32 @@ object SyncPayloads {
         "pendingPins" to pendingPins.sortedWith(compareBy({ it.first }, { it.second })).map { (profile, url) -> mapOf("profileSyncId" to profile, "url" to url) },
     )
 
+    private fun theme(theme: SyncedTheme): Map<String, Any?> = mapOf(
+        "colors" to theme.colors,
+        "darkColors" to theme.darkColors,
+        "mode" to theme.mode,
+        "look" to theme.look?.let(::themeLook),
+        "dark" to theme.dark?.let(::themeLook),
+    )
+
+    private fun themeLook(look: SyncedThemeLook): Map<String, Any?> = mapOf(
+        "stops" to look.stops.map { stop ->
+            mapOf("color" to mapOf("r" to stop.color.r, "g" to stop.color.g, "b" to stop.color.b, "a" to stop.color.a), "x" to stop.x, "y" to stop.y)
+        },
+        "intensity" to look.intensity,
+        "grain" to look.grain,
+        "texture" to look.texture,
+        "translucency" to look.translucency,
+        "angle" to look.angle,
+    )
+
     private fun profile(profile: SyncedProfile): Map<String, Any?> = mapOf(
         "syncId" to profile.syncId,
         "name" to profile.name,
         "color" to profile.color,
         "icon" to profile.icon,
         "isDefault" to profile.isDefault,
-        "theme" to profile.theme?.let { mapOf("colors" to it.colors, "darkColors" to it.darkColors) },
+        "theme" to profile.theme?.let(::theme),
         "deviceTabs" to profile.deviceTabs.map { tabs ->
             mapOf(
                 "deviceId" to tabs.deviceId,

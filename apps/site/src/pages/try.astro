@@ -11,17 +11,17 @@ const home = homeUrl(Astro.site);
 const url = new URL("try/", home).href;
 const title = "Try Ardia live · an Arc and Dia alternative you can click";
 const description =
-  "Click around the real Ardia sidebar right here: tabs, split view, the command bar, profiles. Free for Mac once you’re done kicking the tyres.";
+  "Click around the real Ardia sidebar right here: tabs, split view, the command bar and profiles. Free for Mac once you’re done kicking the tires.";
 const jsonLd = [aboutArdiaPage({ home, url, title, description }), breadcrumbs(home, ["Demo", url])];
 ---
 
 <Base title={title} description={description} jsonLd={jsonLd}>
   <Header home={`${base}/`} current="try" />
-  <main>
+  <main id="main">
     <section class="intro" aria-labelledby="try-title">
       <div class="wrap">
         <p class="label kicker">Live demo</p>
-        <h1 class="poster" id="try-title"><span class="visually-hidden">Try Ardia in your browser: </span>Kick the tyres.</h1>
+        <h1 class="poster" id="try-title"><span class="visually-hidden">Try Ardia in your browser: </span>Kick the tires.</h1>
         <p class="lede">
           The real sidebar, running in this page. Click a tab, split two side by side, put the tabs on top, open the command bar.
           Nothing to install until you want the real thing.
@@ -31,29 +31,28 @@ const jsonLd = [aboutArdiaPage({ home, url, title, description }), breadcrumbs(h
 
     <Showcase />
 
-    <section class="what paint edge" aria-labelledby="what-title">
+    <section class="what paint edge" data-paint="midmorning" aria-labelledby="what-title">
       <div class="wrap">
         <p class="label kicker">What you just clicked</p>
-        <h2 class="poster" id="what-title">Arc’s sidebar. Dia’s polish.</h2>
+        <h2 class="poster" id="what-title">Arc’s sidebar. Dia’s look.</h2>
         <div class="cols">
           <div class="col">
-            <h3>Coming from Arc?</h3>
+            <h3>Import from Arc</h3>
             <p>
-              Same sidebar, same muscle memory. The importer brings your spaces, pinned tabs and their names along. It ships most weeks,
-              and the <a class="link" href={`${base}/release-notes/`}>release notes</a> say what changed.
+              Bring over your spaces, pinned tabs, folders, splits, themes and Air Traffic Control rules in one step. Updates ship most weeks; see the{" "}
+              <a class="link" href={`${base}/release-notes/`}>release notes</a>.
             </p>
           </div>
           <div class="col">
-            <h3>Miss Dia’s looks?</h3>
+            <h3>Chromium underneath</h3>
             <p>
-              It dresses like Dia, or like Arc if you ask. Underneath it’s real Chromium, so sites and Chrome extensions just work. No AI
-              tucked in anywhere.
+              Looks like Dia by default, or Arc in Settings. Sites and Chrome extensions run as expected, with no built-in AI.
             </p>
           </div>
           <div class="col">
-            <h3>Is it quick?</h3>
+            <h3>Measured speed</h3>
             <p>
-              Measured against Dia and Helium on one Mac, with the rows it loses left in. <a class="link" href={`${base}/benchmarks/`}
+              Benchmarked against Dia and Helium on launch, memory, CPU and power. <a class="link" href={`${base}/benchmarks/`}
                 >See the benchmarks</a
               >.
             </p>
@@ -73,7 +72,6 @@ const jsonLd = [aboutArdiaPage({ home, url, title, description }), breadcrumbs(h
   }
   .intro h1 {
     font-size: var(--t-mega);
-    line-height: 0.82;
     margin-left: -0.04em;
   }
   .lede {
@@ -83,8 +81,6 @@ const jsonLd = [aboutArdiaPage({ home, url, title, description }), breadcrumbs(h
     color: var(--ink-2);
   }
   .what {
-    --bg: var(--noon);
-    --wash: linear-gradient(180deg, #e9ead8 0%, var(--noon) 40%, var(--golden) 100%);
     padding: clamp(64px, 8vw, 120px) 0 var(--section);
   }
   .what h2 {
@@ -100,11 +96,10 @@ const jsonLd = [aboutArdiaPage({ home, url, title, description }), breadcrumbs(h
     padding-top: 24px;
   }
   .col h3 {
-    font-weight: 620;
-    font-stretch: 104%;
+    font-weight: 640;
     font-size: 1.25rem;
     line-height: 1.25;
-    letter-spacing: -0.018em;
+    letter-spacing: -0.022em;
   }
   .col p {
     margin-top: 10px;

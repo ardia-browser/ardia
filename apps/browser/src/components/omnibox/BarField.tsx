@@ -76,6 +76,7 @@ export function BarField({
       pastedTypes={PASTED_TYPES}
       selectionColor={theme.selection}
       enableFocusRing={false}
+      ardiaCentersCapitals
       style={{
         flex: 1,
         ...type,

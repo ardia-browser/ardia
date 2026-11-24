@@ -20,8 +20,8 @@ import { settleMovedPins } from "../pins/pinMirror";
 import { holderOf, returnSharedPages, swapPinPage } from "../pins/pinShare";
 import { isTopApp, topAppsShared } from "../pins/topApps";
 import { joinedWithCurrent, newTabPlacement } from "../tabs/openers";
-import { handOverTabs, tabsClosedWithWindow } from "../tabs/sharedWindowClose";
-import { isLastRegularWindow, isOpenRegularWindow, isRegularWindow, isSmall, isSmallWindow, lastActiveProfile, linkProfileOf, mainWindowFor } from "./small";
+import { handOverPins, handOverTabs, tabsClosedWithWindow } from "../tabs/sharedWindowClose";
+import { isOnlyRegularWindow, isOpenRegularWindow, isRegularWindow, isSmall, isSmallWindow, lastActiveProfile, linkProfileOf, mainWindowFor } from "./small";
 import { activated, apply, removeTabs, withNewTab } from "../tabs/tabs";
 import type { AdoptId, BrowserWindow, ClosedWindow, Frame, ParkedPins, Tab, WindowKind } from "../browser/types";
 import { emptyWindow, smallWindow, withWindow } from "./newWindow";
@@ -39,7 +39,7 @@ import { closedWindowOf, withoutLastWindowMarks } from "./closedWindow";
 import type { Drop } from "../drag/drops";
 import { droppedInProfile, intoProfile } from "./profileMoves";
 
-export type CreateWindowOptions = {
+type CreateWindowOptions = {
   profileId?: string;
   kind?: WindowKind;
   url?: string;
@@ -54,7 +54,7 @@ export type CreateWindowOptions = {
 
 export type CloseWindowOptions = { keepsLastWindow?: boolean };
 
-export type MoveOptions = { background?: boolean };
+type MoveOptions = { background?: boolean };
 
 export type WindowsSlice = {
   windows: Record<string, BrowserWindow>;
@@ -64,6 +64,7 @@ export type WindowsSlice = {
 
   createWindow(options?: CreateWindowOptions): string;
   closeWindow(id: string, options?: CloseWindowOptions): void;
+  dropStaleLastWindowMark(): void;
   setWindowFrame(id: string, frame: Frame, restored?: Frame, fitted?: boolean): void;
   setWindowMaximized(id: string, on: boolean): void;
   setWindowFullScreen(id: string, on: boolean, display?: string): void;
@@ -90,7 +91,7 @@ function lastProfileAfterClosing(s: BrowserState, id: string): string | null {
   return linkProfileOf(s, next ? s.windows[next] : undefined) ?? s.ui.lastProfileId;
 }
 
-export function moveTabsInto(s: BrowserState, ids: string[], targetId: string): BrowserState {
+function moveTabsInto(s: BrowserState, ids: string[], targetId: string): BrowserState {
   const target = s.windows[targetId];
   if (!target || isSmallWindow(target)) return s;
   const moving = ids
@@ -189,31 +190,38 @@ export const createWindowsSlice: StateCreator<BrowserState, [], [], WindowsSlice
   },
 
   closeWindow(id, { keepsLastWindow = false } = {}) {
-    const s = handOverTabs(returnSharedPages(get(), id), id, isOpenRegularWindow);
+    const before = returnSharedPages(get(), id);
+    const s = handOverTabs(before, id, isOpenRegularWindow);
     const w = s.windows[id];
     if (!w) return;
     const tabs = tabsClosedWithWindow(s, id);
     const small = isSmallWindow(w);
-    const last = isLastRegularWindow(s, id);
+    const last = isOnlyRegularWindow(s, id);
     const keeps = last && keepsLastWindow && w.tabIds.some((t) => s.tabs[t]?.url);
     const entry = w.kind !== "private" && !small && (keeps || tabs.some((t) => t.url)) ? closedWindowOf(s, w, tabs, keeps) : null;
     const kept = last ? withoutLastWindowMarks(s.closedWindows) : s.closedWindows;
     const closedWindows = entry ? [...kept, entry].slice(-MAX_CLOSED_WINDOWS) : kept;
     const next = removeTabs(s, w.tabIds, small);
-    set({
+    set(handOverPins({
       ...next,
       windows: without(next.windows, [id]),
       windowOrder: next.windowOrder.filter((w) => w !== id),
       windowUi: without(next.windowUi, [id]),
       closedWindows,
-      parkedPins: small ? s.parkedPins : parkWindowPins(s.parkedPins, w, s),
+      parkedPins: small ? s.parkedPins : parkWindowPins(s.parkedPins, before.windows[id]!, before),
       closedTabs: w.kind === "private" ? next.closedTabs.filter((c) => c.windowId !== id) : next.closedTabs,
       ui: {
         ...next.ui,
         focusOrder: next.ui.focusOrder.filter((f) => f !== id),
         lastProfileId: lastProfileAfterClosing(s, id),
       },
-    });
+    }, before, id, isOpenRegularWindow));
+  },
+
+  dropStaleLastWindowMark() {
+    const s = get();
+    if (!s.closedWindows.some((c) => c.lastWindow) || !Object.values(s.windows).some(isRegularWindow)) return;
+    set({ closedWindows: withoutLastWindowMarks(s.closedWindows) });
   },
 
   setWindowFrame(id, frame, restored, fitted) {

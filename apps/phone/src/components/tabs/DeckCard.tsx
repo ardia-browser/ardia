@@ -1,20 +1,23 @@
-import { memo, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { memo, useEffect, useRef, useState, type ComponentProps, type ReactNode, type RefObject } from "react";
 import { countRender } from "../../state/app/interactionPerf";
 import { PixelRatio, Platform, StyleSheet, Text, View, type StyleProp, type ViewInstance, type ViewStyle } from "react-native";
 import Animated, { useAnimatedStyle, useDerivedValue, useSharedValue, type SharedValue } from "react-native-reanimated";
 import { isUnseenReceived } from "../../lib/tabFace";
-import { DECK, DECK_HEADER, deckBarBand, deckFlyLift, deckHeaderIconReveal, deckLeaveFade, deckStatusStrip, deckHeaderLeading, deckHeaderPlacement, deckLeading, deckSlot, deckVisibleWidth, lerp, titleReveal, type DeckGeometry, type DeckLeaving, type DeckSlots } from "../../lib/deckGeometry";
+import { DECK, DECK_HEADER, deckArcHeaderPlacement, deckArcTitleReveal, deckBarBand, deckPileScale, deckFlyLift, deckHeaderIconReveal, deckHeaderReveal, deckLeaveFade, deckStatusStrip, deckHeaderLeading, deckHeaderPlacement, deckLeading, deckSlot, deckVisibleWidth, lerp, titleReveal, type DeckGeometry, type DeckLeaving, type DeckSlots } from "../../lib/deckGeometry";
 import { pullTuck } from "../../lib/deckPull";
+import { CARD_MOVE_RESPONSE } from "../../lib/sharedMotion";
 import { useHeldPageTone } from "../../state/browse/deckHold";
 import { display } from "../../state/search/omnibox";
 import type { BrowserTab } from "../../state/tabs/tabModels";
 import { shownTone } from "../../lib/pageTone";
 import { snapshotPageTop } from "../../lib/shownSnapshots";
-import { barHeight, FadeView, Favicon, font, iPhoneOr, motionReportsNearEnd, MotionView, screenReaderActions, space, Symbol, IncognitoSpecs, TabFace, tabsInk, tabsLayout, tabsMotion, useDesign, usePageUnderBars, useTheme, isDarkColor, type MenuItem, type MotionCurve } from "../ui";
+import { accentGlowCss, barHeight, elevation, FadeView, Favicon, font, iPhoneOr, iconRoles, motionReportsNearEnd, MotionView, shadowCss, smoothCorners, space, Symbol, IncognitoSpecs, TabFace, tabsInk, tabsLayout, useDesign, usePageUnderBars, useTheme, isDarkColor, type MenuItem, type MotionCurve, type SymbolName } from "../ui";
 import { MenuTrigger, nativeMenus, spaceSystemImage, type MenuHandlers } from "../ui/MenuTrigger";
 import { hideArchiveCard } from "../../state/browse/archiveCard";
-import { OPENING_COVER_ID } from "../../state/browse/store";
+import { OPENING_COVER_ID, useBrowse } from "../../state/browse/store";
 import { canShareTab, copyTabLink, shareTab } from "../../state/browse/tabMenus";
+import { actionWords } from "../../lib/sharedWords";
+import { CARD_MENU_ACTION, CLOSE_TAB, tabCardAccess, tabCardTitle, tabCardTitleText, useIsActiveTab } from "./tabCard";
 import { openSettings } from "../../state/settings/nav";
 import { useIsPinned, useSendTargets, useSyncEnabled, useSyncView } from "../../state/sync/hooks";
 import { pinToMac, sendTab, type sendTargetsFor } from "../../state/sync/actions";
@@ -168,19 +171,19 @@ export function cardPose(g: DeckGeometry, role: DeckRole, relative: number, sp: 
   const cy = g.cardCenterY;
   let x = cx;
   let y = cy;
-  let scale = 1;
-  let corner: number = DECK.cardRadius;
+  let scale = role === "expanded" || role === "launcher" ? 1 : deckPileScale(g, relative);
+  let corner: number = g.cardCorner * scale;
   let opacity = 1;
   if (role === "expanded") {
     scale = lerp(g.width / Math.max(g.cardWidth, 1), 1, sp);
     x = lerp(g.width / 2, cx, pp);
     y = lerp(g.height / 2, cy, rise);
-    corner = lerp(g.screenCorner, DECK.cardRadius, sp);
+    corner = lerp(g.screenCorner, g.cardCorner, sp);
   } else if (role === "launcher") {
     scale = lerp(DECK.launcherStartWidth / Math.max(g.cardWidth, 1), 1, sp);
     x = lerp(g.tabButtonX, cx, pp);
     y = lerp(g.barCenterY, cy, pp);
-    corner = lerp(DECK.launcherStartRadius, DECK.cardRadius, sp);
+    corner = lerp(DECK.launcherStartRadius, g.cardCorner, sp);
     opacity = Math.min(1, sp * 2.5);
   } else if (role === "slideLeft") {
     x -= (1 - pp) * g.width * 0.7;
@@ -195,6 +198,57 @@ export function cardPose(g: DeckGeometry, role: DeckRole, relative: number, sp: 
   return { x, y, scale, corner, opacity, header: Math.min(1, settle) * Math.min(1, liftFade) * shown, visible: deckVisibleWidth(g, relative, isLast), lift, fade: 1 - shown };
 }
 
+function reachPose(g: DeckGeometry, p: { x: number; y: number; scale: number; visible: number }) {
+  "worklet";
+  return {
+    transform: [
+      { translateX: p.x - (g.cardWidth * p.scale) / 2 },
+      { translateY: p.y - (g.cardHeight * p.scale) / 2 },
+      { scaleX: Math.max(1, p.visible * p.scale) / g.cardWidth },
+      { scaleY: p.scale },
+    ],
+  };
+}
+
+export function useCardPlacement(id: string, g: DeckGeometry, motion: DeckMotion, restCorner: number = g.cardCorner) {
+  const { orderIds, covering } = motion;
+  const at = useDerivedValue(() => orderIds.value.indexOf(id), [id]);
+
+  const placed = useDerivedValue(() => {
+    const now = deckNow(motion);
+    const m = deckCardMotion(now, at.value, id);
+    const p = cardPose(g, m.role, m.relative, now.scaleProgress, now.positionProgress, m.lift, m.fade, m.isLast, now.riseProgress);
+    const top = p.y - (g.cardHeight * p.scale) / 2 - tabsLayout.headerGap - tabsLayout.headerHeight;
+    const growing = m.role === "expanded" || m.role === "launcher";
+    return {
+      pose: p,
+      top,
+      place: deckHeaderPlacement(p.x - (g.cardWidth * p.scale) / 2, p.visible),
+      z: m.z,
+      expanded: m.role === "expanded",
+      launcher: m.role === "launcher",
+      growing,
+      restLeft: deckLeading(g, m.relative),
+      rest: growing ? now.scaleProgress : 1,
+    };
+  }, [g, id]);
+  const cardLayer = useAnimatedStyle(() => ({ zIndex: placed.value.z }));
+  const overCardLayer = useAnimatedStyle(() => ({ zIndex: placed.value.z + 1 }));
+  const cardMotion = useAnimatedStyle(() => {
+    const p = placed.value.pose;
+    const corner = p.corner + (restCorner - g.cardCorner) * placed.value.rest;
+    return {
+      opacity: covering.value === id ? 0 : p.opacity,
+      borderRadius: placed.value.launcher ? restCorner : corner / Math.max(p.scale, 0.01),
+      transform: [{ translateX: p.x - g.cardWidth / 2 }, { translateY: p.y - g.cardHeight / 2 }, { scale: p.scale }],
+    };
+  }, [g, restCorner]);
+  const reachMotion = useAnimatedStyle(() => reachPose(g, placed.value.pose), [g]);
+  return { placed, cardStyle: [cardLayer, cardMotion], reachStyle: [overCardLayer, reachMotion] };
+}
+
+export type DeckCardProps = Props;
+
 export const DeckCard = memo(function DeckCard({ tab, index, geometry: g, motion, onOpen, onClose, onCloseNow, onMenu }: Props) {
   const reach = useRef<ViewInstance>(null);
   countRender("DeckCard");
@@ -203,6 +257,7 @@ export const DeckCard = memo(function DeckCard({ tab, index, geometry: g, motion
   const tone = shownTone(useHeldPageTone(tab.id), tab.themeColorHex);
   const { orderIds, scaleProgress, covering } = motion;
   const id = tab.id;
+  const arcHeader = g.stack === "arc";
 
   const at = useDerivedValue(() => orderIds.value.indexOf(id), [id]);
 
@@ -215,43 +270,34 @@ export const DeckCard = memo(function DeckCard({ tab, index, geometry: g, motion
     const tucks = pulled && m.role !== "expanded" && now.expanded >= 0;
     const p = tucks ? { ...slot, ...pullTuck(cardPose(g, "expanded", now.expanded - now.scroll, now.scaleProgress, now.positionProgress, 0, 0, false, now.riseProgress), slot, revealed) } : slot;
     const top = p.y - (g.cardHeight * p.scale) / 2 - tabsLayout.headerGap - tabsLayout.headerHeight;
-    return { pose: p, top, place: deckHeaderPlacement(p.x - (g.cardWidth * p.scale) / 2, p.visible), z: m.z, expanded: m.role === "expanded", shown: 1, headed: revealed };
-  }, [g, id]);
+    const cardLeft = p.x - (g.cardWidth * p.scale) / 2;
+    return { pose: p, top, place: arcHeader ? deckArcHeaderPlacement(cardLeft, p.visible) : deckHeaderPlacement(cardLeft, p.visible), z: m.z, expanded: m.role === "expanded", shown: 1, headed: revealed };
+  }, [g, id, arcHeader]);
+  const cardLayer = useAnimatedStyle(() => ({ zIndex: placed.value.z }));
+  const overCardLayer = useAnimatedStyle(() => ({ zIndex: placed.value.z + 1 }));
   const cardStyle = useAnimatedStyle(() => {
     const p = placed.value.pose;
     return {
-      zIndex: placed.value.z,
       opacity: covering.value === id ? 0 : p.opacity * placed.value.shown,
       borderRadius: p.corner / Math.max(p.scale, 0.01),
       transform: [{ translateX: p.x - g.cardWidth / 2 }, { translateY: p.y - g.cardHeight / 2 }, { scale: p.scale }],
     };
   }, [g]);
   const titleWidth = useSharedValue(0);
+  const wholeHeader = design === "redesigned" && !arcHeader;
   const headerStyle = useAnimatedStyle(() => {
     const { pose: p, top, place } = placed.value;
     return {
-      zIndex: placed.value.z + 1,
-      opacity: p.header * placed.value.headed * deckHeaderIconReveal(place.available, tabsLayout.faviconSize),
+      opacity: p.header * placed.value.headed * (wholeHeader ? deckHeaderReveal(place.available) : deckHeaderIconReveal(place.available, tabsLayout.faviconSize)),
       transform: [{ translateX: place.left + place.available - g.cardWidth }, { translateY: top }],
     };
-  });
-  const reachStyle = useAnimatedStyle(() => {
-    const p = placed.value.pose;
-    return {
-      zIndex: placed.value.z + 1,
-      transform: [
-        { translateX: p.x - (g.cardWidth * p.scale) / 2 },
-        { translateY: p.y - (g.cardHeight * p.scale) / 2 },
-        { scaleX: Math.max(1, p.visible * p.scale) / g.cardWidth },
-        { scaleY: p.scale },
-      ],
-    };
-  }, [g]);
+  }, [wholeHeader]);
+  const reachStyle = useAnimatedStyle(() => reachPose(g, placed.value.pose), [g]);
   const rowStyle = useAnimatedStyle(() => {
     const available = placed.value.place.available;
-    return { transform: [{ translateX: g.cardWidth - available + deckHeaderLeading(available, tabsLayout.faviconSize, tabsLayout.headerSpacing, titleWidth.value, titleReveal(available)) }] };
-  });
-  const titleStyle = useAnimatedStyle(() => ({ opacity: titleReveal(placed.value.place.available) }));
+    return { transform: [{ translateX: g.cardWidth - available + (wholeHeader || arcHeader ? 0 : deckHeaderLeading(available, tabsLayout.faviconSize, tabsLayout.headerSpacing, titleWidth.value, titleReveal(available))) }] };
+  }, [wholeHeader, arcHeader]);
+  const titleStyle = useAnimatedStyle(() => ({ opacity: wholeHeader ? 1 : arcHeader ? deckArcTitleReveal(placed.value.place.available, tabsLayout.faviconSize, tabsLayout.headerSpacing) : titleReveal(placed.value.place.available) }), [wholeHeader, arcHeader]);
   const underBars = usePageUnderBars();
   const pageTop = (tab.snapshotFileName ? snapshotPageTop(tab.snapshotFileName) : null) ?? (underBars ? 0 : g.safeTop);
   const faceStyle = useAnimatedStyle(() => ({ transform: [{ translateY: placed.value.expanded ? deckStatusStrip(g, scaleProgress.value, pageTop) : 0 }] }), [g, pageTop]);
@@ -259,15 +305,16 @@ export const DeckCard = memo(function DeckCard({ tab, index, geometry: g, motion
   const bandStyle = useAnimatedStyle(() => ({ transform: [{ scaleY: placed.value.expanded && !underBars ? deckBarBand(g, 0, scaleProgress.value).grown : 0 }] }), [g, underBars]);
 
   const host = display(tab.url).host;
-  const title = tab.title || host || "New Tab";
+  const title = tabCardTitle(tab, host);
   const cardContents = (
     <>
       <Animated.View testID="deckCardFace" style={[StyleSheet.absoluteFill, faceStyle]}>
         <TabFace tab={tab} title={title} host={host} tone={tone.top} roles={theme} paintedAs={`deck:${tab.id}`} />
       </Animated.View>
-      <Animated.View testID="deckCardBarBand" pointerEvents="none" style={[styles.band, { height: bar.height, backgroundColor: tone.bottom ?? theme.surface }, bandStyle]}>
-        {design === "original" ? <View testID="deckCardBarShade" style={[StyleSheet.absoluteFill, { backgroundColor: isDarkColor(tone.bottom ?? theme.surface) ? tabsInk.barShadeOnDark : tabsInk.barShadeOnLight }]} /> : null}
+      <Animated.View testID="deckCardBarBand" pointerEvents="none" style={[styles.band, { height: bar.height, backgroundColor: tone.bottom ?? theme.canvas }, bandStyle]}>
+        {design === "original" ? <View testID="deckCardBarShade" style={[StyleSheet.absoluteFill, { backgroundColor: isDarkColor(tone.bottom ?? theme.canvas) ? tabsInk.barShadeOnDark : tabsInk.barShadeOnLight }]} /> : null}
       </Animated.View>
+      {underBars && tab.snapshotFileName ? <View testID="deckCardStatusBand" pointerEvents="none" style={[styles.statusBand, { height: (g.safeTop * g.cardWidth) / g.width, backgroundColor: tone.top ?? theme.pageSurface }]} /> : null}
       {isUnseenReceived(tab) ? <ReceivedBadge /> : null}
     </>
   );
@@ -280,45 +327,40 @@ export const DeckCard = memo(function DeckCard({ tab, index, geometry: g, motion
         importantForAccessibility="no-hide-descendants"
         style={[
           styles.card,
-          { width: g.cardWidth, height: g.cardHeight, borderColor: theme.cardEdge, backgroundColor: tone.top ?? theme.surface },
+          { width: g.cardWidth, height: g.cardHeight, borderColor: theme.cardEdge, backgroundColor: tone.top ?? theme.canvas },
+          cardLayer,
           cardStyle,
         ]}
       >
         {nativeMenus() ? (
-          <DeckCardMenu tab={tab} index={index} onClose={onClose} fill={tone.top ?? theme.surface}>
+          <DeckCardMenu tab={tab} index={index} onClose={onClose} fill={tone.top ?? theme.canvas} corner={g.cardCorner}>
             {cardContents}
           </DeckCardMenu>
         ) : (
           cardContents
         )}
       </Animated.View>
-      <Animated.View
-        ref={reach}
-        accessible
-        accessibilityRole="button"
-        accessibilityLabel={title}
-        accessibilityValue={{ text: tab.isPrivate ? `Incognito, ${host}` : host }}
-        accessibilityHint="Opens the tab."
-        {...screenReaderActions([
-          { name: "activate", run: () => onOpen(index) },
-          { name: "close", label: "Close Tab", run: () => onCloseNow(index) },
-          ...(onMenu ? [{ name: "menu", label: CARD_MENU_ACTION, run: () => onMenu(index, reach) }] : []),
-        ])}
-        pointerEvents="none"
-        style={[styles.reach, { width: g.cardWidth, height: g.cardHeight }, reachStyle]}
+      <TabCardReach
+        reachRef={reach}
+        tab={tab}
+        title={title}
+        host={host}
+        open={() => onOpen(index)}
+        close={() => onCloseNow(index)}
+        menu={onMenu ? () => onMenu(index, reach) : undefined}
+        style={[styles.reach, { width: g.cardWidth, height: g.cardHeight }, overCardLayer, reachStyle]}
       />
-      <Animated.View style={[styles.header, { width: g.cardWidth }, headerStyle]} pointerEvents="none">
+      <Animated.View style={[styles.header, { width: g.cardWidth }, overCardLayer, headerStyle]} pointerEvents="none">
         <FadeView testID="deckHeaderFade" trailing={{ length: DECK_HEADER.trailingFade }} style={StyleSheet.absoluteFill}>
           <Animated.View style={[styles.headerRow, rowStyle]}>
             <CardIcon tab={tab} />
             <Animated.Text
               testID="deckHeaderTitle"
-              maxFontSizeMultiplier={DECK_HEADER.maxFontScale}
+              {...tabCardTitleText}
               onLayout={(event) => {
                 titleWidth.value = event.nativeEvent.layout.width;
               }}
               style={[HEADER_TITLE_FONT, styles.title, { color: theme.headerText }, titleStyle]}
-              numberOfLines={1}
             >
               {deckHeaderTitle(tab, title)}
             </Animated.Text>
@@ -331,12 +373,28 @@ export const DeckCard = memo(function DeckCard({ tab, index, geometry: g, motion
 
 type SendTarget = ReturnType<typeof sendTargetsFor>[number];
 
-type CardMenuContext = { devices: SendTarget[]; pinned: boolean; syncEnabled: boolean; spaces: SyncedProfile[] };
+type CardMenuContext = { devices: SendTarget[]; pinned: boolean; syncEnabled: boolean; spaces: SyncedProfile[]; icons?: boolean };
 
 const deviceSystemImage = (device: Pick<SendTarget, "name" | "kind">) => (device.kind === "phone" ? "iphone" : /book/i.test(device.name) ? "laptopcomputer" : "desktopcomputer");
 
-export function cardMenuItems(tab: BrowserTab, { devices, pinned, syncEnabled, spaces }: CardMenuContext, close: () => void): MenuItem[] {
-  const closing: MenuItem = { label: "Close Tab", destructive: true, onPress: close };
+const CARD_MENU_ICONS: Record<string, { icon: SymbolName; systemImage: string }> = {
+  [actionWords.copyLink]: { icon: iconRoles.copyLink, systemImage: "link" },
+  [actionWords.share]: { icon: iconRoles.share, systemImage: "square.and.arrow.up" },
+  "Pin to Mac": { icon: "star", systemImage: "star" },
+  "Pinned to Mac": { icon: "starFill", systemImage: "star.fill" },
+  "Move to Space": { icon: "squareStack", systemImage: "square.stack" },
+  [CLOSE_TAB]: { icon: "xmark", systemImage: "xmark" },
+};
+
+const withMenuIcon = (item: MenuItem): MenuItem => (item === "divider" || "heading" in item || !CARD_MENU_ICONS[item.label] ? item : { ...item, ...CARD_MENU_ICONS[item.label] });
+
+export function cardMenuItems(tab: BrowserTab, context: CardMenuContext, close: () => void): MenuItem[] {
+  const items = plainCardMenuItems(tab, context, close);
+  return context.icons ? items.map(withMenuIcon) : items;
+}
+
+function plainCardMenuItems(tab: BrowserTab, { devices, pinned, syncEnabled, spaces }: CardMenuContext, close: () => void): MenuItem[] {
+  const closing: MenuItem = { label: CLOSE_TAB, destructive: true, onPress: close };
   if (!canShareTab(tab)) return [closing];
   const send = (device: SendTarget) => () => void sendTab(tab, device);
   const sends: MenuItem[] =
@@ -348,7 +406,7 @@ export function cardMenuItems(tab: BrowserTab, { devices, pinned, syncEnabled, s
   const pin: MenuItem[] = tab.isPrivate || !syncEnabled ? [] : pinned ? [{ label: "Pinned to Mac", disabled: true, onPress: () => undefined }] : [{ label: "Pin to Mac", onPress: () => void pinToMac(tab, () => openSettings({ page: "sync" })) }];
   const others = tab.isPrivate ? [] : spaces;
   const move: MenuItem[] = others.length ? [{ label: "Move to Space", children: others.map((space): MenuItem => ({ label: space.name, systemImage: spaceSystemImage(space.name, space.icon), onPress: () => moveTabToSpace(tab.id, space.syncId) })) }] : [];
-  return [{ label: "Copy Link", onPress: () => copyTabLink(tab) }, { label: "Share", onPress: () => shareTab(tab) }, ...sends, ...pin, ...move, "divider", closing];
+  return [{ label: actionWords.copyLink, onPress: () => copyTabLink(tab) }, { label: actionWords.share, onPress: () => shareTab(tab) }, ...sends, ...pin, ...move, "divider", closing];
 }
 
 type CardMenuProps = { tab: BrowserTab; close: () => void; testID: string; haptic?: () => void; style?: StyleProp<ViewStyle>; children: (handlers: MenuHandlers) => ReactNode };
@@ -361,17 +419,24 @@ export function CardMenu({ tab, close, testID, haptic, style, children }: CardMe
   const profiles = useSyncView().profiles;
   const spaces = moveTargets(tabSpaces, profiles, tab);
   return (
-    <MenuTrigger testID={testID} items={cardMenuItems(tab, { devices, pinned, syncEnabled, spaces }, close)} trigger="longPress" haptic={haptic} privately={tab.isPrivate} onOpen={hideArchiveCard} style={style}>
+    <MenuTrigger testID={testID} items={cardMenuItems(tab, { devices, pinned, syncEnabled, spaces, icons: true }, close)} trigger="longPress" haptic={haptic} privately={tab.isPrivate} onOpen={hideArchiveCard} style={style}>
       {children}
     </MenuTrigger>
   );
 }
 
-export const CARD_MENU_ACTION = "Tab Options";
+export { CARD_MENU_ACTION };
 
-export function DeckCardMenu({ tab, index, onClose, fill, children }: { tab: BrowserTab; index: number; onClose: (index: number) => void; fill: string; children: ReactNode }) {
+type TabCardReachProps = { tab: BrowserTab; title: string; host: string; open: () => void; close: () => void; menu?: () => void; reachRef?: RefObject<ViewInstance | null>; testID?: string; style: ComponentProps<typeof Animated.View>["style"] };
+
+export function TabCardReach({ tab, title, host, open, close, menu, reachRef, testID, style }: TabCardReachProps) {
+  const selected = useIsActiveTab(tab.id);
+  return <Animated.View ref={reachRef} testID={testID} {...tabCardAccess({ tab, title, host, selected, open, close, menu })} pointerEvents="none" style={style} />;
+}
+
+export function DeckCardMenu({ tab, index, onClose, fill, corner = DECK.cardRadius, children }: { tab: BrowserTab; index: number; onClose: (index: number) => void; fill: string; corner?: number; children: ReactNode }) {
   return (
-    <CardMenu testID="deckCardMenu" tab={tab} close={() => onClose(index)} style={[styles.cardMenu, { backgroundColor: fill }]}>
+    <CardMenu testID="deckCardMenu" tab={tab} close={() => onClose(index)} style={[styles.cardMenu, { backgroundColor: fill, borderRadius: corner }]}>
       {() => children}
     </CardMenu>
   );
@@ -395,7 +460,7 @@ const androidCardOpen = (): CardOpen => (isLabBuild && launchArguments().opening
 
 export const cardOpen: () => CardOpen = iPhoneOr(() => "openingCard", androidCardOpen);
 
-export const OPENING_CARD_RESPONSE = iPhoneOr(0.18, 0.3);
+export const OPENING_CARD_RESPONSE = CARD_MOVE_RESPONSE;
 export const OPENING_CARD_MOTION: MotionCurve = { type: "spring", response: OPENING_CARD_RESPONSE, dampingFraction: 1 };
 
 type OpeningCardProps = { tab: BrowserTab; geometry: DeckGeometry; centerX: number; centerY: number; growsAtMount?: boolean; endsSquare?: boolean; onGrowing: () => void; onLanded?: () => void };
@@ -422,6 +487,7 @@ const deckCardFrame = (g: DeckGeometry): CoverFrame => ({ left: (g.width - g.car
 
 export function OpeningCard({ tab, geometry: g, centerX, centerY, growsAtMount = false, endsSquare = false, onGrowing, onLanded }: OpeningCardProps) {
   const [frame] = useState(() => (endsSquare ? coverFrame(g) : deckCardFrame(g)));
+  const openingCover = useBrowse((s) => s.openingCover);
   const inner = { ...g, cardWidth: frame.width, cardHeight: frame.height };
   const theme = useTheme();
   const design = useDesign();
@@ -441,8 +507,8 @@ export function OpeningCard({ tab, geometry: g, centerX, centerY, growsAtMount =
   const full = frame.scale;
   const bar = deckBarBand(inner, barHeight(g.safeBottom), 1);
   const host = display(tab.url).host;
-  const title = tab.title || host || "New Tab";
-  const start = { translateX: centerX - g.width / 2, translateY: centerY - g.height / 2, scale: frame.startScale, cornerRadius: DECK.cardRadius / frame.startScale };
+  const title = tabCardTitle(tab, host);
+  const start = { translateX: centerX - g.width / 2, translateY: centerY - g.height / 2, scale: frame.startScale, cornerRadius: g.cardCorner / frame.startScale };
   const to = grown ? { translateX: 0, translateY: 0, scale: full, cornerRadius: endsSquare ? 0 : DECK.displayCornerRadius / full } : start;
   return (
     <MotionView
@@ -454,16 +520,17 @@ export function OpeningCard({ tab, geometry: g, centerX, centerY, growsAtMount =
       to={to}
       motion={OPENING_CARD_MOTION}
       onMotionEnd={onLanded ? (finished) => finished && onLanded() : undefined}
-      {...(endsSquare && onLanded && motionReportsNearEnd() ? { nativeID: OPENING_COVER_ID, nearEndPx: COVER_NEAR_END_PX, onMotionNearEnd: () => onLanded() } : endsSquare ? { nativeID: OPENING_COVER_ID } : {})}
-      style={[styles.opening, endsSquare ? null : styles.openingEdge, { left: frame.left, top: frame.top, width: frame.width, height: frame.height, borderColor: theme.cardEdge, backgroundColor: tone.top ?? theme.surface }]}
+      {...(endsSquare && onLanded && motionReportsNearEnd() ? { nativeID: openingCover ?? OPENING_COVER_ID, nearEndPx: COVER_NEAR_END_PX, onMotionNearEnd: () => onLanded() } : endsSquare ? { nativeID: openingCover ?? OPENING_COVER_ID } : {})}
+      style={[styles.opening, endsSquare ? null : styles.openingEdge, { left: frame.left, top: frame.top, width: frame.width, height: frame.height, borderColor: theme.cardEdge, backgroundColor: tone.top ?? theme.canvas }]}
     >
       <MotionView testID="openingCardFace" style={StyleSheet.absoluteFill} from={growsAtMount ? { translateY: 0 } : undefined} to={{ translateY: grown ? deckStatusStrip(inner, 0, pageTop) : 0 }} motion={OPENING_CARD_MOTION}>
         <TabFace tab={tab} title={title} host={host} tone={tone.top} roles={theme} paintedAs={`deck:${tab.id}`} />
       </MotionView>
+      {underBars && tab.snapshotFileName ? <View testID="openingCardStatusBand" pointerEvents="none" style={[styles.statusBand, { height: (g.safeTop * frame.width) / g.width, backgroundColor: tone.top ?? theme.pageSurface }]} /> : null}
       {underBars ? null : (
         <MotionView testID="openingCardBand" pointerEvents="none" style={StyleSheet.absoluteFill} from={growsAtMount ? { translateY: bar.height } : undefined} to={{ translateY: grown ? 0 : bar.height }} motion={OPENING_CARD_MOTION}>
-          <View testID="openingCardBandFill" style={[styles.openingBand, { top: frame.height - bar.height, width: frame.width, height: bar.height, backgroundColor: tone.bottom ?? theme.surface }]}>
-            {design === "original" ? <View style={[StyleSheet.absoluteFill, { backgroundColor: isDarkColor(tone.bottom ?? theme.surface) ? tabsInk.barShadeOnDark : tabsInk.barShadeOnLight }]} /> : null}
+          <View testID="openingCardBandFill" style={[styles.openingBand, { top: frame.height - bar.height, width: frame.width, height: bar.height, backgroundColor: tone.bottom ?? theme.canvas }]}>
+            {design === "original" ? <View style={[StyleSheet.absoluteFill, { backgroundColor: isDarkColor(tone.bottom ?? theme.canvas) ? tabsInk.barShadeOnDark : tabsInk.barShadeOnLight }]} /> : null}
           </View>
         </MotionView>
       )}
@@ -474,19 +541,16 @@ export function OpeningCard({ tab, geometry: g, centerX, centerY, growsAtMount =
   );
 }
 
-const CARD_ELEVATION = 14;
 const COVER_NEAR_END_PX = 2;
 const HEADER_ROW_ROOM = 2000;
 const HEADER_TITLE_FONT = iPhoneOr<{ fontSize: number; lineHeight: number }>(font.footnote, font.caption);
-const CARD_SHADOW_BLUR = 36;
-const RECEIVED_INSET = 10;
 
 export function ReceivedBadge() {
   const theme = useTheme();
   return (
-    <View style={[styles.badge, { backgroundColor: theme.formAccent, boxShadow: `0px 2px 12px ${theme.formAccent}59` }]}>
-      <Symbol name="laptop" size={12} color={tabsInk.onDark} />
-      <Text style={[styles.badgeText, { color: tabsInk.onDark }]}>From Your Mac</Text>
+    <View style={[styles.badge, { backgroundColor: theme.spaceAccent, boxShadow: accentGlowCss(theme.spaceAccent) }]}>
+      <Symbol name="laptop" size={tabsLayout.receivedBadgeGlyph} color={theme.onSpaceAccent} />
+      <Text style={[styles.badgeText, { color: theme.onSpaceAccent }]}>From Your Mac</Text>
     </View>
   );
 }
@@ -497,27 +561,30 @@ const styles = StyleSheet.create({
     left: 0,
     top: 0,
     overflow: "hidden",
+    ...smoothCorners,
     borderWidth: StyleSheet.hairlineWidth,
-    ...Platform.select({ android: { elevation: CARD_ELEVATION, shadowColor: tabsInk.cardShadow }, default: { boxShadow: `-2px 4px ${CARD_SHADOW_BLUR}px ${tabsInk.cardShadow}` } }),
+    ...Platform.select({ android: { elevation: elevation.stack.android, shadowColor: elevation.stack.light }, default: { boxShadow: shadowCss("stack", false) } }),
   },
+  statusBand: { position: "absolute", left: 0, right: 0, top: 0 },
   band: { position: "absolute", left: 0, right: 0, bottom: 0, transformOrigin: "bottom" },
-  cardMenu: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, borderRadius: DECK.cardRadius },
-  opening: { position: "absolute", overflow: "hidden" },
+  cardMenu: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, ...smoothCorners },
+  opening: { position: "absolute", overflow: "hidden", ...smoothCorners },
   openingEdge: { borderWidth: StyleSheet.hairlineWidth },
   openingEdgeOverlay: { ...StyleSheet.absoluteFill, borderWidth: StyleSheet.hairlineWidth },
   openingBand: { position: "absolute", left: 0 },
   badge: {
     position: "absolute",
-    top: RECEIVED_INSET,
-    left: RECEIVED_INSET,
+    top: tabsLayout.receivedBadgeInset,
+    left: tabsLayout.receivedBadgeInset,
     flexDirection: "row",
     alignItems: "center",
     gap: space.xs,
     paddingHorizontal: space.s,
     paddingVertical: space.xs,
-    borderRadius: 999,
+    borderRadius: tabsLayout.receivedBadgeRadius,
+    ...smoothCorners,
   },
-  badgeText: { fontSize: 11, lineHeight: 13, fontWeight: "600" },
+  badgeText: { ...font.caption2, fontWeight: "600" },
   reach: { position: "absolute", left: 0, top: 0, transformOrigin: "left top" },
   header: { position: "absolute", left: 0, top: 0, height: tabsLayout.headerHeight, overflow: "hidden" },
   headerRow: { position: "absolute", left: 0, top: 0, width: HEADER_ROW_ROOM, flexDirection: "row", alignItems: "center", gap: tabsLayout.headerSpacing, height: tabsLayout.headerHeight },

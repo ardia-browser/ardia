@@ -34,8 +34,7 @@ id GuardedCall(SEL selector, IMP original, NSMethodSignature *signature) {
   return nil;
 }
 
-NSUInteger GuardAccessibilityOf(Class cls) {
-  NSUInteger guarded = 0;
+void GuardAccessibilityOf(Class cls) {
   unsigned int count = 0;
   Method *methods = cls ? class_copyMethodList(cls, &count) : nullptr;
   for (unsigned int i = 0; i < count; i++) {
@@ -45,10 +44,8 @@ NSUInteger GuardAccessibilityOf(Class cls) {
     id guard = GuardedCall(selector, method_getImplementation(methods[i]), [NSMethodSignature signatureWithObjCTypes:types]);
     if (!guard) continue;
     method_setImplementation(methods[i], imp_implementationWithBlock(guard));
-    guarded++;
   }
   free(methods);
-  return guarded;
 }
 
 NSArray<NSAccessibilityCustomAction *> *GuardedCustomActions(id element, NSArray<NSAccessibilityCustomAction *> *actions) {
@@ -64,15 +61,9 @@ NSArray<NSAccessibilityCustomAction *> *GuardedCustomActions(id element, NSArray
   return actions;
 }
 
-NSUInteger gGuardedAccessibility = 0;
-
 }
 
 @implementation ArdiaWebView (RevealGuards)
-
-+ (NSUInteger)guardedAccessibilityCalls {
-  return gGuardedAccessibility;
-}
 
 + (void)installRevealGuards {
   static dispatch_once_t once;
@@ -138,7 +129,7 @@ NSUInteger gGuardedAccessibility = 0;
         return !Refused(page) && ((BOOL (*)(id, SEL, id))original)(page, drop, info);
       };
     });
-    for (NSString *name in @[ @"BrowserAccessibilityCocoa", @"AXPlatformNodeCocoa" ]) gGuardedAccessibility += GuardAccessibilityOf(NSClassFromString(name));
+    for (NSString *name in @[ @"BrowserAccessibilityCocoa", @"AXPlatformNodeCocoa" ]) GuardAccessibilityOf(NSClassFromString(name));
     const SEL customActions = @selector(accessibilityCustomActions);
     for (NSString *name in @[ @"BrowserAccessibilityCocoa", @"AXPlatformNodeCocoa" ]) {
       Class cls = NSClassFromString(name);
@@ -150,7 +141,6 @@ NSUInteger gGuardedAccessibility = 0;
         method_setImplementation(methods[i], imp_implementationWithBlock(^NSArray *(id element) {
           return GuardedCustomActions(element, ((NSArray * (*)(id, SEL))original)(element, customActions));
         }));
-        gGuardedAccessibility++;
       }
       free(methods);
     }

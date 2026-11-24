@@ -5,7 +5,7 @@ import { isRegularWindow, mainWindowFor } from "../windows/small";
 import { showToast } from "../app/toasts";
 import { bookmarkRoots, type BookmarkOwners } from "./bookmarks";
 
-export const ARC_HOLDER = " (Arc)";
+const ARC_HOLDER = " (Arc)";
 
 function sidebarWindow(s: BrowserState, profileId: string, near?: string | null): string | undefined {
   const w = near ? s.windows[near] : undefined;
@@ -52,7 +52,7 @@ export function restorableArcHolder(s: BookmarkOwners, folderId: string): boolea
 
 export const allArcHolders = (s: BookmarkOwners) => [...new Set(s.profileOrder.flatMap((p) => arcHolders(s, p)))];
 
-export function arcHolders(s: BookmarkOwners, profileId: string): string[] {
+function arcHolders(s: BookmarkOwners, profileId: string): string[] {
   const bar = bookmarkRoots(s, profileId)?.bar;
   const root = bar ? s.bookmarks.nodes[bar] : undefined;
   return root?.kind === "folder" ? root.children.filter((id) => restorableArcHolder(s, id)) : [];

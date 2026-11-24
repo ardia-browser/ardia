@@ -1,11 +1,16 @@
-import { deleteProfileData } from "../../platform/profiles";
+import { clearBrowsingData as clearEngineBrowsingData, deleteProfileData, type BrowsingDataType } from "../../platform/profiles";
 import { useBrowser } from "../browser/store";
 import { engineProfile } from "../browser/model";
 import { noteProfileDataDeleted } from "../telemetry/profileDataCounts";
+import { forgetSiteDataProfile, whileClearingSiteData } from "../engines/siteData";
 import { consentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
 
-export { clearBrowsingData, type BrowsingDataType } from "../../platform/profiles";
+export type { BrowsingDataType };
+
+export function clearBrowsingData(profile: string, types: BrowsingDataType[], since?: number) {
+  return whileClearingSiteData(profile, types, () => clearEngineBrowsingData(profile, types, since));
+}
 
 const CLOSE_DELAY_MS = 1500;
 
@@ -30,6 +35,7 @@ async function drain() {
         useBrowser.getState().profileDataDeleted(engine);
         continue;
       }
+      forgetSiteDataProfile(engine);
       const remaining = await deleteProfileData(engine).catch((error: unknown) => [String(error)]);
       noteProfileDataDeleted(!remaining.length, consent);
       if (remaining.length) {
@@ -47,7 +53,7 @@ async function drain() {
 export function startProfileDataCleanup() {
   failed.clear();
   void drain();
-  return useBrowser.subscribe((s, prev) => {
+  return useBrowser.subscribeTo(["orphanedProfileData"], (s, prev) => {
     if (s.orphanedProfileData !== prev.orphanedProfileData) void drain();
   });
 }

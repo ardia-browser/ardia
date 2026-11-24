@@ -96,7 +96,7 @@ onAndroid("the original Settings keeps Compose's colour row and has no Appearanc
   const root = settings("original");
   expect(pressable(root, "Appearance")).toBeUndefined();
   expect(textOf(root)).toContain("Color");
-  expect(root.root.findAll((node) => node.props.testID === "swatchRing" && typeof node.type === "string").length).toBe(9);
+  expect(root.root.findAll((node) => node.props.testID === "swatchRing" && typeof node.type === "string").length).toBe(10);
   unmount(root);
 });
 
@@ -123,10 +123,10 @@ onAndroid("on the hand-built Appearance Android keeps, the page has main's choic
   expect(text).toContain("Match My Mac follows your Mac.");
   expect(text).not.toContain("Reduce Transparency");
   expect(text).toContain("Match My Mac follows your Mac. System follows this device.");
-  const choices = root.root.findAll((node) => node.props.accessibilityRole === "button" && node.props.accessibilityState && typeof node.props.onPress === "function").map((node) => node.props.accessibilityLabel);
+  const choices = root.root.findAll((node) => node.props.accessibilityRole === "button" && node.props.accessibilityState?.selected !== undefined && typeof node.props.onPress === "function").map((node) => node.props.accessibilityLabel);
   expect(choices).toEqual(["Match My Mac", "Glass", "Classic", "Match My Mac", "System", "Light", "Dark", "Stack", "Grid"]);
   expect(text).toContain("How your open tabs are laid out.");
-  expect(root.root.findAll((node) => node.props.testID === "swatchRing" && typeof node.type === "string").length).toBe(9);
+  expect(root.root.findAll((node) => node.props.testID === "swatchRing" && typeof node.type === "string").length).toBe(10);
   expect(root.root.findAll((node) => node.props.accessibilityRole === "switch" && node.props.accessibilityLabel === "Match My Mac").length).toBe(0);
   unmount(root);
   withSync(null);
@@ -138,7 +138,7 @@ onAndroid("on the hand-built Appearance Android keeps, the page has main's choic
 onAndroid("on the hand-built Appearance Android keeps, choosing on the page checks the row and keeps the choice in the settings store", () => {
   openSettings({ page: "appearance" });
   const root = settings("redesigned");
-  const styleRows = () => root.root.findAll((node) => node.props.accessibilityRole === "button" && node.props.accessibilityState && typeof node.props.onPress === "function").slice(0, 3);
+  const styleRows = () => root.root.findAll((node) => node.props.accessibilityRole === "button" && node.props.accessibilityState?.selected !== undefined && typeof node.props.onPress === "function").slice(0, 3);
   expect(styleRows().map((node) => node.props.accessibilityState.selected)).toEqual([true, false, false]);
   press(root, "Classic");
   expect(usePreferences.getState().interfaceStyle).toBe("classic");

@@ -1,5 +1,5 @@
+export { clearSiteDataEverywhere as clearSiteData } from "../engines/siteData";
 export {
-  clearSiteData,
   getSiteSettings,
   removeExternalAppAllowance,
   resetSiteSettings,

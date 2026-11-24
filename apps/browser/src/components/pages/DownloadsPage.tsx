@@ -107,7 +107,7 @@ function DownloadCard({ d: listed, windowId }: { d: Download; windowId: string }
           ) : done ? (
             <Button title={`Show in ${PLATFORM_TERMS.fileManager}`} onPress={() => void revealFile(d.path)} />
           ) : null}
-          <Button variant="icon" icon="ellipsis" size="l" onPress={() => void downloadMenu(d, windowId)} tooltip="More actions" />
+          <Button variant="icon" icon="ellipsis" size="l" onPress={() => void downloadMenu(d)} tooltip="More actions" />
           {d.state !== "downloading" && (
             <Button variant="icon" icon="xmark" size="l" onPress={() => removeDownload(d.id)} tooltip="Remove from List" />
           )}

@@ -1,4 +1,4 @@
-import { cleanUrl } from "@ardia/core";
+import { cleanLinkTitle, cleanUrl } from "@ardia/core";
 import { sharePage, sharePageVia, shareText, type PageShare, type ShareAnchor } from "../../platform/share";
 import type { Tab } from "../browser/types";
 
@@ -7,7 +7,7 @@ export const canShare = (tab: Pick<Tab, "url"> | undefined) => /^https?:/i.test(
 export async function shareTab(tab: Pick<Tab, "url" | "title" | "customTitle"> | undefined, windowId: string, via?: string | null, anchor?: ShareAnchor) {
   if (!tab || !canShare(tab)) return;
   const url = cleanUrl(tab.url);
-  const title = tab.customTitle || tab.title || null;
+  const title = cleanLinkTitle(tab.customTitle || tab.title, tab.url) || null;
   return via ? sharePageVia(via, url, title, windowId) : sharePage(url, title, windowId, anchor);
 }
 
@@ -19,5 +19,5 @@ export function shareFromPage(tab: Pick<Tab, "url" | "title" | "customTitle" | "
   if (share.kind === "text") return share.text ? shareText(share.text, tab.windowId, anchor) : undefined;
   const url = (share.kind === "image" && share.fileUrl) || webUrl(share.url);
   if (!url) return;
-  return sharePage(url === share.fileUrl ? url : cleanUrl(url), share.title || null, tab.windowId, anchor);
+  return sharePage(cleanUrl(url), cleanLinkTitle(share.title, url) || null, tab.windowId, anchor);
 }

@@ -1,0 +1,40 @@
+{
+  "id": "fixes-0247n8",
+  "segments": [
+    {
+      "scene": "s8topapps",
+      "title": "⌘W on the New Tab closes the window",
+      "body": "Keep Top Apps running is on and a Top App is playing. ⌘W on the window's only New Tab: nightly.7 opened another New Tab every time, so the window never closed. Now it closes on the first press.",
+      "cam": [0, 0, 1100, 720],
+      "lead": 0.8,
+      "tail": 4.8
+    },
+    {
+      "scene": "s8keys",
+      "title": "Settings search finds a shortcut by its keys",
+      "body": "\"cmd opt n\" typed into Settings' search. nightly.7 found nothing. Now it lists the command that holds ⌥⌘N and opens Shortcuts filtered to it.",
+      "cam": [140, 45, 820, 640],
+      "lead": 0.8,
+      "tail": 6.2,
+      "ripple": true
+    },
+    {
+      "scene": "s8strip",
+      "title": "Tabs across the top stay readable in a narrow window",
+      "body": "The window narrowed from 1180 to 760 points. nightly.7 squeezed every title to a few letters. Now tabs that won't fit move into the open tabs menu, and the group shows how many went there.",
+      "cam": [0, 0, 760, 500],
+      "lead": 0.6,
+      "tail": 6.4,
+      "cursor": false
+    },
+    {
+      "scene": "s8plugins",
+      "title": "Apple Passwords is an official plugin",
+      "body": "Settings › Plugins. nightly.7 listed only Command Line. Now Apple Passwords sits under Official, off until you turn it on.",
+      "cam": [140, 45, 820, 640],
+      "lead": 0.3,
+      "tail": 4.2,
+      "cursor": false
+    }
+  ]
+}

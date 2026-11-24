@@ -1,7 +1,7 @@
 import { BANG_LIST, BANG_LIST_UNICODE } from "./bangList.ts";
 import { bangDocument, bangTable, findBang, joinBangTables, readBangDocument, slimBangs, type BangTable } from "./bangs.ts";
 import { cleanUrl } from "./cleanUrl.ts";
-import { allEngines, engineById, parseSuggestions, suggestRequestUrl, type CustomSearchEngine, type SearchEngine } from "./engines.ts";
+import { allEngines, engineById, parseSuggestions, suggestRequestUrl, validSearchTemplate, type CustomSearchEngine, type SearchEngine } from "./engines.ts";
 import { breadcrumb, fixupUrl, searchUrlFor, urlForDisplay } from "./omnibox.ts";
 import { findScope, type SearchScope } from "./siteSearch.ts";
 import { buildSuggestions, prepareSuggestions, type SuggestionResult, type SuggestionSource } from "./suggest.ts";
@@ -35,7 +35,7 @@ type MobileSuggestOptions = {
   scope?: SearchScope | null;
   now?: number;
 };
-export type MobileResolution = { kind: "url" | "search" | "bang"; url: string; query: string; engine: string };
+type MobileResolution = { kind: "url" | "search" | "bang"; url: string; query: string; engine: string };
 
 let source: SuggestionSource = { tabs: [], history: [], bookmarks: [] };
 let engines: SearchEngine[] = allEngines();
@@ -65,7 +65,7 @@ export function mobileSetSources(next: SuggestionSource): boolean {
 
 export function mobileSetSearch(search: MobileSearch): { id: string; name: string; url: string; suggests: boolean } {
   const list = allEngines(search.customEngines ?? []);
-  if (search.customUrl?.includes("%s")) list.push({ id: "custom", name: "Custom", keyword: "custom", url: search.customUrl, custom: true });
+  if (validSearchTemplate(search.customUrl)) list.push({ id: "custom", name: "Custom", keyword: "custom", url: search.customUrl, custom: true });
   engines = list;
   engine = engineById(engines, search.engineId ?? undefined);
   return { id: engine.id, name: engine.name, url: engine.url, suggests: Boolean(engine.suggestUrl) };

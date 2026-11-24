@@ -117,6 +117,7 @@ public final class BrowsingPreferences {
   }
 
   public let sitePermissions: SitePermissions
+  public let nightShadeVerdicts: NightShadeVerdicts
   public private(set) var sites: [String: SiteSettings]
   private var privateSites: [String: SiteSettings] = [:]
 
@@ -130,6 +131,7 @@ public final class BrowsingPreferences {
     translateLanguage = defaults.string(forKey: Self.keys.translateLanguage).flatMap { PageTranslation.isLanguageCode($0) ? $0 : nil }
     translateConfirmed = defaults.bool(forKey: Self.keys.translateConfirmed)
     self.sitePermissions = sitePermissions ?? SitePermissions(defaults: defaults)
+    nightShadeVerdicts = NightShadeVerdicts(defaults: defaults)
     sites = (defaults.data(forKey: Self.keys.sites)).flatMap { try? JSONDecoder().decode([String: SiteSettings].self, from: $0) } ?? [:]
   }
 
@@ -150,6 +152,7 @@ public final class BrowsingPreferences {
   public func endPrivateBrowsing() {
     let hadNightShade = privateSites.values.contains { $0.nightShade != nil }
     privateSites.removeAll()
+    nightShadeVerdicts.endPrivateBrowsing()
     if hadNightShade { onNightShadeChange?() }
   }
 
@@ -194,12 +197,13 @@ public enum BrowsingDataKind: String, CaseIterable, Sendable, Identifiable {
 
 public enum BrowsingDataCleaner {
   @MainActor
-  public static func clear(_ kinds: Set<BrowsingDataKind>, since date: Date? = nil, tabs: TabStore, store: WKWebsiteDataStore = .default()) async {
+  public static func clear(_ kinds: Set<BrowsingDataKind>, since date: Date? = nil, tabs: TabStore, nightShadeVerdicts: NightShadeVerdicts, store: WKWebsiteDataStore = .default()) async {
     let cacheTypes: Set<String> = [WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache, WKWebsiteDataTypeFetchCache, WKWebsiteDataTypeOfflineWebApplicationCache]
     var types: Set<String> = []
     if kinds.contains(.cache) { types.formUnion(cacheTypes) }
     if kinds.contains(.cookiesAndSiteData) { types.formUnion(WKWebsiteDataStore.allWebsiteDataTypes().subtracting(cacheTypes)) }
     if kinds.contains(.history) { tabs.clearHistory(since: date) }
+    if !kinds.isDisjoint(with: [.history, .cookiesAndSiteData]) { nightShadeVerdicts.clear(since: date) }
     if kinds.contains(.cache) { URLCache.shared.removeAllCachedResponses() }
     guard !types.isEmpty else { return }
     await store.removeData(ofTypes: types, modifiedSince: date ?? .distantPast)

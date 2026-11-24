@@ -5,7 +5,7 @@ import type { Tab, TabLive } from "../browser/types";
 import { frozenCopiesOf } from "../pins/pinShare";
 import { hasPage, holderOfPage, isAsleep, navigationOf } from "./pageSession";
 
-export type LiveListener = (tabId: string, live: TabLive, prev: TabLive) => void;
+type LiveListener = (tabId: string, live: TabLive, prev: TabLive) => void;
 type Browser = { getState(): BrowserState; subscribe(listener: (s: BrowserState, prev: BrowserState) => void): () => void };
 
 const values = new Map<string, TabLive>();
@@ -94,7 +94,7 @@ export function setLive(tabId: string, patch: Partial<TabLive>) {
   drainLive();
 }
 
-export function forgetLive(ids: Iterable<string>) {
+function forgetLive(ids: Iterable<string>) {
   for (const id of ids) stageReplace(id, IDLE_LIVE);
   drainLive();
 }

@@ -18,7 +18,7 @@ test("each ⇧⌘C a focused Developer Tools keeps is counted for the hour, then
   assert.deepEqual(takeDevToolsKeyCounts(), { devtools_keys_kept: 0 });
 });
 
-test("a kept ⇧⌘C from while sharing was off, from an earlier consent period or with no epoch isn't counted, and stays in the local copy", async () => {
+test("a kept ⇧⌘C from while sharing was off, from an earlier consent period or with no epoch isn't counted and isn't kept in the local copy", async () => {
   client.setSharing(true, "onboarding");
   const earlier = client.consentEpoch();
   client.setSharing(false, "settings");
@@ -30,5 +30,5 @@ test("a kept ⇧⌘C from while sharing was off, from an earlier consent period 
   assert.deepEqual(takeDevToolsKeyCounts(), { devtools_keys_kept: 0 });
   const { flushLocal } = await import("./localStore.ts");
   await flushLocal();
-  assert.equal(stub.telemetryLocal.records().filter((r) => r.event === "usage_counts" && r.sent === false && r.properties.devtools_keys_kept === 1).length, 3);
+  assert.deepEqual(stub.telemetryLocal.records().filter((r) => r.event === "usage_counts" && r.properties.devtools_keys_kept), []);
 });

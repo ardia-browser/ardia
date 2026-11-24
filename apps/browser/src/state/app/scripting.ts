@@ -73,16 +73,17 @@ export function startScripting() {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let dueAt = Infinity;
   let scriptedAt = -Infinity;
+  const pushScriptState = () => {
+    timer = undefined;
+    dueAt = Infinity;
+    void push();
+  };
   const pushWithin = (ms: number) => {
     const at = Date.now() + ms;
     if (at >= dueAt) return;
     clearTimeout(timer);
     dueAt = at;
-    timer = setTimeout(() => {
-      timer = undefined;
-      dueAt = Infinity;
-      void push();
-    }, ms);
+    timer = setTimeout(pushScriptState, ms);
   };
   useBrowser.subscribe((s, prev) => {
     const change = scriptChange(s, prev);

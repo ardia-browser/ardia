@@ -10,8 +10,7 @@ export const TRAY_DRAG = {
 
 export const TRAY_LIFT = {
   keyboardThreshold: 120,
-  landingDelayMs: 450,
-  iPhoneLandingDelayMs: 220,
+  landingDelayMs: 220,
   settleHoldMs: 650,
   closePollMs: 50,
   closePolls: 20,
@@ -58,6 +57,13 @@ export function trayDragDismisses(translation: number, velocity: number, trayHei
   if (velocity <= TRAY_DRAG.returnVelocity) return false;
   if (velocity >= TRAY_DRAG.flickVelocity) return true;
   return translation + Math.max(velocity, 0) * TRAY_DRAG.momentum >= trayDismissDistance(trayHeight);
+}
+
+export function trayExpansionTarget(progress: number, translationY: number, velocityY: number): number {
+  "worklet";
+  if (velocityY < -600 || translationY < -64) return 1;
+  if (velocityY > 600 || translationY > 64) return 0;
+  return progress > 0.5 ? 1 : 0;
 }
 
 export function trayDragReleasesKeyboard(translation: number): boolean {

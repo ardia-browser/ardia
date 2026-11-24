@@ -2,11 +2,13 @@ export { blocking } from "./blocking";
 export { browseForMe, BrowseForMeSettings, type BrowseForMeEvent, type BrowseForMeOutcome, type ChatGPTAccountState, type ChatGPTModelChoice } from "./browseForMe";
 export { defaultBrowser, type DefaultBrowserStatus } from "./defaultBrowser";
 export { downloads } from "./downloads";
+export { isRefusedSnapshot } from "./pageTypes";
 export type { DownloadedFile, DownloadedFileKind } from "./downloads";
 export {
   legacy,
   legacyImport,
   legacyLab,
+  legacySettled,
   type LegacyCounts,
   type LegacyData,
   type LegacyRead,
@@ -24,15 +26,16 @@ export { CompletingField, completingFieldIsNative, type CompletingFieldHandle, t
 export { announceNatively, focusViewNatively, screenReaderFocusIsNative, ScrollActions, type ScrollActionDirection, type ScrollActionsProps } from "./accessibility";
 export { FadeView, fadeIsNative, type FadeEdge, type FadeViewProps } from "./fade";
 export { PasteButton, pasteButtonIsNative, type PasteButtonProps } from "./pasteButton";
+export { NativeSymbol, nativeSymbolExists, nativeSymbolsAvailable, type NativeSymbolProps, type NativeSymbolWeight } from "./symbol";
 export { actionSheet, ContextMenuView, nativeMenusAvailable, type ActionSheetAction, type ActionSheetOptions, type ContextMenuHandle, type ContextMenuProps, type MenuAppearance, type MenuItem } from "./menus";
-export { SearchStage, SearchStagePanel, searchStageIsNative, type SearchStageExit, type SearchStageHandle, type SearchStageLift, type SearchStageMorphLook, type SearchStageProps } from "./searchStage";
+export { SearchStage, SearchStagePanel, searchStageIsNative, type SearchStageExit, type SearchStageHandle, type SearchStageCorners, type SearchStageLift, type SearchStageMorphLook, type SearchStageProps } from "./searchStage";
 export { MotionView, motionReportsNearEnd, motionRunsInRenderServer, type MotionCurve, type MotionTarget, type MotionViewProps } from "./motion";
-export { forcedDuoCanvas, ScreenLayoutProbe, screenLayoutIsNative, type DuoCanvasMode, type ScreenLayoutEdge, type ScreenLayoutName, type ScreenLayoutReport, type ScreenSpaceReport } from "./screenLayout";
+export { forcedDuoCanvas, ScreenLayoutProbe, screenLayoutIsNative, type DuoCanvasMode, type ScreenLayoutName, type ScreenLayoutReport, type ScreenSpaceReport } from "./screenLayout";
 export * as settingsUI from "./settingsUI";
 export { sync } from "./sync";
 export { syncLab, type SyncRuntimeCheck } from "./syncLab";
 export { labLog, restorableState, system, systemLab, type SystemLink, type SystemLinkSource } from "./system";
-export { TRAY_BACK_TRAVEL, trayBack, type TrayBackHandlers } from "./back";
+export { predictiveBack, TRAY_BACK_TRAVEL, trayBack, type PredictiveBackHandlers, type TrayBackHandlers } from "./back";
 export { scanLab, scanner, ScanView, type ScanError, type ScanPermission, type ScanViewProps } from "./scan";
 export { clipboard, type ClipboardOffer } from "./clipboard";
 export {
@@ -43,6 +46,8 @@ export {
   Glass,
   glassIsNative,
   INCOGNITO_LOOK,
+  nativeGlassRender,
+  type NativeGlassRender,
   lookIsNative,
   lookLab,
   type LookCounts,
@@ -52,11 +57,16 @@ export {
   type FrostProps,
   type FrostSourceProps,
   type FrostVariant,
+  type ClassicChrome,
   type GlassProps,
   type GlassShape,
   type GlassSurface,
   type LookColors,
+  type LookDynamicColor,
   type ProfileBackdropProps,
+  type ThemeLook,
+  type ThemeLookStop,
+  type ThemeTexture,
 } from "./look";
 export { lookBudget, useLookBudgetProbe } from "./lookBudget";
 export { systemLookNow, useSystemLook, useSystemReduceMotion, useSystemReduceTransparency } from "./systemLook";
@@ -117,6 +127,7 @@ export type {
   PageSecurity,
   PageSetup,
   PageSnapshot,
+  RefusedSnapshot,
   PageState,
   PageSummaryProvider,
   PageTone,
@@ -134,3 +145,5 @@ export type {
   VisitKind,
   WebsiteDataKind,
 } from "./pageTypes";
+export { MATERIAL_ROLES, materialColors, type MaterialRole, type MaterialSchemeChange, type NativeMaterialScheme, type NativeMaterialSchemes } from "./material";
+export { MaterialSearchBar, materialSearchBarIsNative, type MaterialSearchAppearance, type MaterialSearchBarHandle, type MaterialSearchBarProps } from "./materialSearchBar";

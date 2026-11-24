@@ -186,6 +186,13 @@ final class LegacySnapshot: @unchecked Sendable {
 }
 
 enum LegacyReader {
+  static func settledState() -> String {
+    let gate = LegacyPaths.gate
+    if let outcome = gate.outcome { return outcome.rawValue }
+    if PhoneTestBuild.isOn, FileManager.default.fileExists(atPath: LegacyPaths.labUnusableFlag.path(percentEncoded: false)) { return "pending" }
+    return gate.hasLegacyData ? "pending" : "none"
+  }
+
   static func source() -> [String: Any] {
     let gate = LegacyPaths.gate
     switch gate.outcome {
@@ -362,6 +369,10 @@ public final class LegacyModule: Module {
 
     AsyncFunction("source") { () -> [String: Any] in
       LegacyReader.source()
+    }
+
+    Function("settledState") { () -> String in
+      LegacyReader.settledState()
     }
 
     AsyncFunction("readLegacy") { () throws -> [String: Any] in

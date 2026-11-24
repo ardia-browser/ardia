@@ -83,7 +83,7 @@ inline std::u16string_view TrimWhitespace(std::u16string_view value, TrimPositio
             compiled = subprocess.run([
                 compiler, '-std=c++20', '-g', '-fsanitize=address,undefined',
                 '-fno-omit-frame-pointer', '-I', str(root),
-                '-I', str(ROOT / 'tests/fixtures'), '-I', str(ROOT / 'src'),
+                '-I', str(ROOT / 'tests/fixtures'), '-I', str(ROOT / 'src'), '-I', str(ROOT.parent / 'ardiacore-desktop' / 'src'),
                 *sources,
                 '-o', str(executable),
             ], capture_output=True, text=True, timeout=60)

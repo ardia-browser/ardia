@@ -58,7 +58,7 @@ final class WindowsInteropTests: XCTestCase {
       entropy: Self.entropy.map { String(format: "%02x", $0) }.joined(),
       words: RecoveryPhrase.words(for: Self.entropy),
       chainTag: keys.chainTag,
-      scopeTags: Dictionary(uniqueKeysWithValues: Self.documents.map { ($0.scope, keys.scopeTag($0.scope)) }),
+      scopeTags: Dictionary(uniqueKeysWithValues: try Self.documents.map { ($0.scope, try keys.scopeTag($0.scope)) }),
       files: files,
       local: Sealed(plain: Self.local, sealed: try keys.seal(Data(Self.local.utf8), scopeTag: "local", fileId: "state").base64EncodedString()),
       password: PasswordEntry(
@@ -103,7 +103,7 @@ final class WindowsInteropTests: XCTestCase {
     XCTAssertEqual(keys.chainTag, manifest.chainTag)
     let vault = SyncVault(folder: Self.fixtures.appendingPathComponent(name, isDirectory: true), keys: keys)
     XCTAssertTrue(vault.chainExists())
-    for (scope, tag) in manifest.scopeTags { XCTAssertEqual(keys.scopeTag(scope), tag) }
+    for (scope, tag) in manifest.scopeTags { XCTAssertEqual(try keys.scopeTag(scope), tag) }
     for file in manifest.files {
       let listing = try vault.read(scope: file.scope, skipping: [])
       XCTAssertEqual(listing.damaged.count, 0)

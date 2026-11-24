@@ -1,5 +1,5 @@
 import { takeFocusHandoffCounts as takeNativeCounts } from "../../platform/focus";
-import { capture, stillValid, type ConsentToken } from "./client";
+import { stillValid, type ConsentToken } from "./client";
 
 const FIELDS = {
   delivered: "focus_handoffs_delivered",
@@ -27,7 +27,6 @@ export function takeFocusHandoffCounts(): Record<Field, number> {
   for (const [epoch, raw] of Object.entries(takeNativeCounts())) {
     const counts = fields(raw ?? {});
     if (stillValid(epoch as ConsentToken)) for (const field of Object.keys(counts) as Field[]) sent[field] += counts[field];
-    else if (Object.values(counts).some(Boolean)) capture("usage_counts", counts, null);
   }
   return sent;
 }

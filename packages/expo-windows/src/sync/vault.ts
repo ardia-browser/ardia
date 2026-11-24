@@ -1,11 +1,11 @@
 import type { Listing, SyncNative } from "@ardia/sync";
 import { isTag } from "./base32";
 
-export const FILE_EXTENSION = ".nns";
+const FILE_EXTENSION = ".nns";
 
-export type VaultEntry = { name: string; dir: boolean; modified: number; placeholder: boolean };
+type VaultEntry = { name: string; dir: boolean; modified: number; placeholder: boolean };
 
-export type Opened = { state: "data"; payload: string } | { state: "busy" | "placeholder" | "missing" | "damaged" | "unreadable" };
+type Opened = { state: "data"; payload: string } | { state: "busy" | "placeholder" | "missing" | "damaged" | "unreadable" };
 
 export type SyncContract = NonNullable<typeof SyncNative>;
 
@@ -18,7 +18,7 @@ export type VaultNative = Pick<SyncContract, "chainStatus" | "write"> & {
   hydrate(folder: string, scope: string, id: string): void;
 };
 
-export type SyncFileCounts = ReturnType<NonNullable<SyncContract["takeFileCounts"]>>;
+type SyncFileCounts = ReturnType<NonNullable<SyncContract["takeFileCounts"]>>;
 
 export type FileCounts = Omit<SyncFileCounts, "hydrated">;
 
@@ -26,11 +26,11 @@ export const FOLDER_UNREADABLE = "ERR_SYNC_FOLDER_UNREADABLE";
 
 const reason = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-export function folderUnreadable(error: unknown): Error & { code: string } {
+function folderUnreadable(error: unknown): Error & { code: string } {
   return Object.assign(new Error(`The sync folder couldn't be read: ${reason(error)}`), { code: FOLDER_UNREADABLE });
 }
 
-export class RemoveFailed extends Error {
+class RemoveFailed extends Error {
   readonly ids: string[];
 
   constructor(ids: string[]) {

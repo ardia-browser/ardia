@@ -1,6 +1,6 @@
 import { errorText } from "./errors";
 
-export type PasswordAction = "browser import" | "csv import" | "settings edit" | "settings delete" | "sync delete";
+type PasswordAction = "browser import" | "csv import" | "settings edit" | "settings delete" | "sync delete";
 
 export const orWarn =
   <T,>(fallback: T, action?: PasswordAction) =>
@@ -9,7 +9,7 @@ export const orWarn =
     return fallback;
   };
 
-export type PasswordFailure = "refused-or-already-saved" | "not-landed-in-time" | "other";
+type PasswordFailure = "refused-or-already-saved" | "not-landed-in-time" | "other";
 
 export function passwordFailure(error: unknown): PasswordFailure {
   const text = errorText(error);

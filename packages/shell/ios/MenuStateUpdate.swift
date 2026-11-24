@@ -12,8 +12,10 @@ struct MenuStateUpdate: Record {
   @Field var warnBeforeClosingWindow: Bool = false
   @Field var undoReopensClosedTab: Bool = false
   @Field var linksOpenInLittleArdia: Bool = false
+  @Field var littleArdiaShortcutFromAnyApp: Bool = false
   @Field var bookmarksShown: Bool = true
   @Field var downloadsInProgress: Int = 0
   @Field var extensions: [MenuExtension] = []
   @Field var shortcuts: [String: [[String]]] = [:]
+  @Field var mouseShortcuts: [String: [String]] = [:]
 }

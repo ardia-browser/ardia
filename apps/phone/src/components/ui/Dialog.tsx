@@ -4,13 +4,21 @@ import Animated, { FadeIn } from "react-native-reanimated";
 import { tabsMotion } from "./motion";
 import { Portal } from "./Overlay";
 import { useTheme } from "./theme";
-import { dialogLayout, font, space } from "./tokens";
+import { useDesign } from "./design";
+import { MaterialDialog } from "./MaterialSurfaces";
+import { controlSize, dialogLayout, font, smoothCorners, space } from "./tokens";
+import { dismissWords } from "../../lib/sharedWords";
+import { Tappable } from "./pressFeedback";
 
 export type DialogButton = { title: string; onPress: () => void; destructive?: boolean };
 
 type Props = { title: string; message?: string | null; buttons: DialogButton[]; onDismiss: () => void; children?: ReactNode };
 
-export function Dialog({ title, message, buttons, onDismiss, children }: Props) {
+export function Dialog(props: Props) {
+  return useDesign() === "material" ? <MaterialDialog {...props} /> : <ClassicDialog {...props} />;
+}
+
+function ClassicDialog({ title, message, buttons, onDismiss, children }: Props) {
   const theme = useTheme();
   useEffect(() => {
     const back = BackHandler.addEventListener("hardwareBackPress", () => {
@@ -32,9 +40,9 @@ export function Dialog({ title, message, buttons, onDismiss, children }: Props) 
             {children}
             <View style={styles.buttons}>
               {buttons.map((button) => (
-                <Pressable key={button.title} accessibilityRole="button" onPress={button.onPress} style={styles.button}>
-                  <Text style={[font.body, styles.buttonText, { color: button.destructive ? theme.destructive : theme.formAccent }]}>{button.title}</Text>
-                </Pressable>
+                <Tappable key={button.title} kind="text" label={button.title} onPress={button.onPress} style={styles.button}>
+                  <Text style={[font.body, styles.buttonText, { color: button.destructive ? theme.destructive : theme.spaceAccentInk }]}>{button.title}</Text>
+                </Tappable>
               ))}
             </View>
           </View>
@@ -46,10 +54,10 @@ export function Dialog({ title, message, buttons, onDismiss, children }: Props) 
 
 const styles = StyleSheet.create({
   center: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center" },
-  panel: { width: dialogLayout.width, borderRadius: dialogLayout.radius, padding: space.xxl, gap: space.l, elevation: 24 },
+  panel: { width: dialogLayout.width, borderRadius: dialogLayout.radius, ...smoothCorners, padding: space.xxl, gap: space.l, elevation: 24 },
   title: { fontWeight: "600" },
   buttons: { flexDirection: "row", justifyContent: "flex-end", gap: space.s },
-  button: { minHeight: 44, justifyContent: "center", paddingHorizontal: space.m },
+  button: { minHeight: controlSize.hitTarget, justifyContent: "center", paddingHorizontal: space.m },
   buttonText: { fontWeight: "600" },
 });
 
@@ -62,7 +70,7 @@ export function ConfirmDialog({ confirmation, onClose }: { confirmation: Confirm
       message={confirmation.message}
       onDismiss={onClose}
       buttons={[
-        { title: "Cancel", onPress: onClose },
+        { title: dismissWords.cancel, onPress: onClose },
         {
           title: confirmation.action,
           destructive: confirmation.destructive ?? true,
@@ -81,7 +89,7 @@ export function showActionSheet(confirmation: Confirmation) {
     {
       title: confirmation.title,
       message: confirmation.message,
-      options: [confirmation.action, "Cancel"],
+      options: [confirmation.action, dismissWords.cancel],
       destructiveButtonIndex: confirmation.destructive === false ? undefined : 0,
       cancelButtonIndex: 1,
     },

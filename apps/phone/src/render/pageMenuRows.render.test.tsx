@@ -3,6 +3,8 @@ import { Dimensions, Platform, StyleSheet } from "react-native";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import "../platform/copy";
 import { PageMenu } from "../components/browsing/PageMenu";
+import { blocking } from "../platform/blocking";
+import { pages } from "../platform/pages";
 import * as pageActions from "../state/page/actions";
 import { usePages } from "../state/pages/store";
 import { useSettingsNav } from "../state/settings/nav";
@@ -25,6 +27,8 @@ beforeEach(() => {
   useBrowse.setState({ surface: "browsing", sheet: null });
   useSettingsNav.setState({ open: false, stack: [{ page: "root" }], popping: false });
   useDefaultBrowser.setState({ status: { isDefault: false, canAsk: true } });
+  jest.spyOn(pages, "nightShade").mockResolvedValue({ mode: "disabled" } as never);
+  jest.spyOn(blocking, "isEnabledForSite").mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -48,31 +52,48 @@ const hiddenFromReaders = (node: ReactTestInstance) => {
 };
 const textSize = (scale: number) => Dimensions.set({ window: { ...realWindow, fontScale: scale }, screen: { ...realWindow, fontScale: scale } });
 
-test("each toggle row is one switch for screen readers, named and with its state, and its own switch is hidden from them", async () => {
+test("each toggle row is one switch for screen readers, named and with its state, and its words are hidden so they aren't read twice", async () => {
   const root = await openMenu();
   const row = host(root, "menuToggle:Night Shade");
   expect(row.props.accessibilityRole).toBe("switch");
   expect(row.props.accessibilityLabel).toBe("Night Shade");
   expect(row.props.accessibilityState).toMatchObject({ checked: false, disabled: false });
-  const inner = row.findAll((node) => typeof node.props.onChange === "function" && node.props.label === "Night Shade")[0]!;
-  expect(hiddenFromReaders(inner)).toBe(true);
+  expect(root.root.findAll((node) => typeof node.type === "string" && node.props.accessibilityRole === "switch" && node.props.accessibilityLabel === "Night Shade")).toHaveLength(1);
+  const words = root.root.findAll((node) => typeof node.type === "string" && node.props.children === "Night Shade")[0]!;
+  expect(hiddenFromReaders(words)).toBe(true);
+  unmount(root);
+});
+
+test("the switches that close the menu and reload the page say so in their hint; Night Shade changes in place and keeps its row", async () => {
+  const flip = jest.spyOn(pageActions, "setNightShadeOn").mockImplementation(() => undefined as never);
+  const root = await openMenu();
+  expect(host(root, "menuToggle:Block Ads and Trackers").props.accessibilityHint).toBe("Closes the menu and reloads the page.");
+  expect(host(root, "menuToggle:Desktop Site").props.accessibilityHint).toBe("Closes the menu and reloads the page.");
+  const nightShade = host(root, "menuToggle:Night Shade");
+  expect(nightShade.props.accessibilityHint).toBeUndefined();
+  act(() => root.root.findAll((node) => node.props.testID === "menuToggle:Night Shade" && typeof node.props.onPress === "function")[0]!.props.onPress());
+  expect(flip).toHaveBeenCalledWith(true);
+  expect(host(root, "menuToggle:Night Shade")).toBe(nightShade);
   unmount(root);
 });
 
 onAndroid("on Android a tap anywhere on a toggle row flips it, as Compose's toggleable row", async () => {
   const flip = jest.spyOn(pageActions, "setNightShadeOn").mockImplementation(() => undefined as never);
   const root = await openMenu();
-  act(() => root.root.findAll((node) => node.props.testID === "menuToggle:Night Shade" && typeof node.props.onPress === "function")[0]!.props.onPress());
+  const row = root.root.findAll((node) => node.props.testID === "menuToggle:Night Shade" && typeof node.props.onPress === "function")[0]!;
+  expect(textOf({ root: row } as never)).toContain("Night Shade");
+  act(() => row.props.onPress());
   expect(flip).toHaveBeenCalledWith(true);
   unmount(root);
 });
 
-onIos("on iPhone the row itself takes no tap, as SwiftUI's Toggle, but VoiceOver's double tap flips it", async () => {
+onIos("on iPhone only the switch itself takes a tap, as SwiftUI's Toggle, and it is the one VoiceOver activates", async () => {
   const flip = jest.spyOn(pageActions, "setNightShadeOn").mockImplementation(() => undefined as never);
   const root = await openMenu();
-  const row = host(root, "menuToggle:Night Shade");
-  expect(row.props.onPress).toBeUndefined();
-  act(() => row.props.onAccessibilityTap());
+  const knob = root.root.findAll((node) => node.props.testID === "menuToggle:Night Shade" && typeof node.props.onPress === "function")[0]!;
+  expect(textOf({ root: knob } as never)).not.toContain("Night Shade");
+  expect(root.root.findAll((node) => typeof node.props.onPress === "function" && textOf({ root: node } as never).includes("Night Shade"))).toHaveLength(0);
+  act(() => knob.props.onPress());
   expect(flip).toHaveBeenCalledWith(true);
   unmount(root);
 });

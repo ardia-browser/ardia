@@ -7,6 +7,7 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 LINUX = SOURCE / 'ardia' / 'linux'
 
 
@@ -48,14 +49,14 @@ int main() {
             cpp = scratch / 'updates.cc'
             cpp.write_text(code, encoding='utf-8')
             binary = scratch / 'updates'
-            compiled = subprocess.run([compiler, '-std=c++20', '-Wall', '-Werror', '-fsanitize=address,undefined', '-I', str(SOURCE), str(cpp), '-o', str(binary)], capture_output=True, text=True)
+            compiled = subprocess.run([compiler, '-std=c++20', '-Wall', '-Werror', '-fsanitize=address,undefined', '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE), str(cpp), '-o', str(binary)], capture_output=True, text=True)
             if compiled.returncode != 0:
                 raise AssertionError(compiled.stderr)
             subprocess.run([str(binary)], check=True)
 
     def test_the_fetch_is_a_cookieless_get_with_no_redirects_on_the_system_network_context(self):
         fetcher = (LINUX / 'ac_linux_updates.cc').read_text()
-        for needle in ['GURL(policy::UrlFor(source_))', 'request->method = "GET"', 'CredentialsMode::kOmit', 'RedirectMode::kError',
+        for needle in ['GURL(policy::UrlFor(source))', 'request->url = RequestUrl(source_)', 'request->method = "GET"', 'CredentialsMode::kOmit', 'RedirectMode::kError',
                        'system_network_context_manager()', 'GetSharedURLLoaderFactory()', 'DownloadToString(', 'policy::MaxBytesFor(source_)',
                        'base::Seconds(policy::kTimeoutSeconds)', 'policy::AdmitFetch(', 'cookies_allowed: NO', 'DCHECK_CURRENTLY_ON(content::BrowserThread::UI)']:
             self.assertIn(needle, fetcher)

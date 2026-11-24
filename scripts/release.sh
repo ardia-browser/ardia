@@ -44,6 +44,21 @@ if [ "$phase" = check ]; then
   exit 0
 fi
 
+work="$(mktemp -d "${TMPDIR:-/tmp}/ac-release-work.XXXXXX")"
+trap 'rm -rf "$work"' EXIT
+base_feed="$work/appcast.xml"
+preflight_mode=release
+[ "$rc" = 1 ] && preflight_mode="${RELEASE_PREFLIGHT_MODE:-candidate}"
+preflight_args=(--mode "$preflight_mode" --feed "${APPCAST_BASE:-$LATEST_DOWNLOAD_URL/appcast.xml}" --feed-out "$base_feed" --values-out "$work/values")
+[ "${RELEASE_FEED_MAY_BE_MISSING:-0}" = 1 ] && preflight_args+=(--allow-no-feed)
+node "$stages/preflight.mjs" "$version" "${preflight_args[@]}" || die "preflight stopped the release (above)"
+checked() { sed -n "s/^$1=//p" "$work/values"; }
+project_version="$(checked project_version)"
+release_build="$(checked release_build)"
+min_macos="$(checked min_macos)"
+version_settings=()
+[ "$project_version" = "$version" ] || version_settings=(MARKETING_VERSION="$version" CURRENT_PROJECT_VERSION="$release_build")
+
 sparkle="${SPARKLE_BIN:-$macos/Pods/Sparkle/bin}"
 sparkle_key_file="${SPARKLE_KEY_FILE:-}"
 if [ "$phase" = build ]; then
@@ -71,21 +86,6 @@ framework_engine="${ARDIACORE_FRAMEWORK_ENGINE:-}"
 provisioning_profile="${RELEASE_PROVISIONING_PROFILE:-}"
 read -r -a extra_build_settings <<<"${RELEASE_BUILD_SETTINGS:-}"
 
-pbx="$macos/Ardia.xcodeproj/project.pbxproj"
-project_version="$(sed -n 's/.*MARKETING_VERSION = "\{0,1\}\([^";]*\)"\{0,1\};/\1/p' "$pbx" | sort -u)"
-min_macos="$(sed -n 's/.*MACOSX_DEPLOYMENT_TARGET = \([0-9]*\)\.0;/\1/p' "$pbx" | sort -u)"
-[[ "$min_macos" =~ ^[0-9]+$ ]] || die "the project's MACOSX_DEPLOYMENT_TARGET isn't one whole macOS version: '$min_macos'"
-project_build="$(sed -n 's/.*CURRENT_PROJECT_VERSION = \(.*\);/\1/p' "$pbx" | sort -u)"
-version_settings=()
-release_build="$project_build"
-if [ "$rc" = 1 ]; then
-  [ "$project_version" = "$version" ] || { release_build="$((project_build + 1))"; version_settings=(MARKETING_VERSION="$version" CURRENT_PROJECT_VERSION="$release_build"); }
-elif [ "$project_version" != "$version" ]; then
-  die "MARKETING_VERSION is '$project_version'. Set it to $version (and bump CURRENT_PROJECT_VERSION) first."
-fi
-
-work="$(mktemp -d "${TMPDIR:-/tmp}/ac-release-work.XXXXXX")"
-trap 'rm -rf "$work"' EXIT
 notes_body="$work/notes-body.md"
 notes="$root/docs/release-notes/$version.md"
 notes_video=""
@@ -114,9 +114,10 @@ fi
 if [ "$phase" = sign ]; then
   [ -n "$provisioning_profile" ] || die "--phase sign exports the ad hoc archive --phase build made: set RELEASE_PROVISIONING_PROFILE"
 elif [ -n "$framework_engine" ]; then
-  [ -n "${ARDIACORE_FRAMEWORK:-}" ] || die "ARDIACORE_FRAMEWORK_ENGINE names the engine key (engine/engine-key.sh) a prebuilt ARDIACORE_FRAMEWORK was built from; set both or neither"
-  [ "$framework_engine" = "$("$root/engine/engine-key.sh")" ] \
-    || die "ARDIACORE_FRAMEWORK_ENGINE is $framework_engine but HEAD's engine key is $("$root/engine/engine-key.sh"): that framework wasn't built from this commit's engine"
+  [ -n "${ARDIACORE_FRAMEWORK:-}" ] || die "ARDIACORE_FRAMEWORK_ENGINE names the engine key (engine/engine-key.sh --platform macos) a prebuilt ARDIACORE_FRAMEWORK was built from; set both or neither"
+  head_engine="$("$root/engine/engine-key.sh" --platform macos)"
+  [ "$framework_engine" = "$head_engine" ] \
+    || die "ARDIACORE_FRAMEWORK_ENGINE is $framework_engine but HEAD's macOS engine key is $head_engine: that framework wasn't built from this commit's engine"
 fi
 if [ "$phase" = all ] && [ -z "${ARDIACORE_FRAMEWORK:-}" ]; then
   "$root/scripts/lib/engine-fresh.sh" "$framework_src" "$chromium_src" || exit 1
@@ -124,13 +125,13 @@ fi
 
 engine_source=""
 if [ "$phase" != build ]; then
-  engine_tree="$("$root/engine/engine-key.sh")"
-  engine_release="$(awk -v t="$engine_tree" '$1 == t { print $2; exit }' "$ardiacore/prebuilt-engines.tsv")"
+  engine_tree="$("$root/engine/engine-key.sh" --platform macos)"
+  read -r engine_release engine_built <<<"$(awk -v t="$engine_tree" '$1 == t { print $2, ($4 == "" ? $1 : $4); exit }' "$ardiacore/prebuilt-engines.tsv")"
   [ "$rc" = 1 ] || [ -n "$engine_release" ] \
     || die "packages/ardiacore/prebuilt-engines.tsv lists no published engine for this engine key (${engine_tree:0:12}): publish it with scripts/publish-engine.sh, commit the table line, then release"
   case "$engine_release" in engine-*) engine_tag="$engine_release" ;; *) engine_tag="v$engine_release" ;; esac
   [ -n "$engine_release" ] \
-    && engine_source="$REPO_URL/releases/download/$engine_tag/ArdiaCore-${engine_tree:0:12}-source.tar.xz"
+    && engine_source="$REPO_URL/releases/download/$engine_tag/ArdiaCore-${engine_built:0:12}-source.tar.xz"
 
   identity_name="Developer ID Application"
   identity="$(security find-identity -v -p codesigning | awk -v n="$identity_name" 'index($0, n) { print $2; exit }')"
@@ -148,21 +149,6 @@ if [ "$phase" != build ]; then
   fi
 fi
 
-feed_base="${APPCAST_BASE:-$LATEST_DOWNLOAD_URL/appcast.xml}"
-base_feed="$work/appcast.xml"
-case "$feed_base" in
-  none) : > "$base_feed" ;;
-  http://* | https://*) curl -fsL "$feed_base" -o "$base_feed" || : > "$base_feed" ;;
-  *) cp "$feed_base" "$base_feed" ;;
-esac
-if [ ! -s "$base_feed" ] && [ "$rc" = 0 ] && [ "$feed_base" != none ]; then
-  die "couldn't read the published appcast ($feed_base): every release builds on it, or earlier versions and the other channel drop out of the feed"
-fi
-newest_listed=""
-[ -s "$base_feed" ] && newest_listed="$(appcast newest-build "$base_feed")"
-[ -z "$newest_listed" ] || [ "$release_build" -gt "$newest_listed" ] \
-  || die "the build number ($release_build) must be above every build in the feed, nightly or stable (newest: $newest_listed): bump CURRENT_PROJECT_VERSION"
-
 if [ "$phase" != sign ]; then
   rm -rf "$dist"
   mkdir -p "$dist"
@@ -177,13 +163,10 @@ if [ "$phase" != sign ]; then
   "$stages/archive.sh" "$dist" "$framework_src" "${RELEASE_BUILD_DIR:-$root/apps/browser/build-release}" "$archive_signing" \
     ${version_settings[@]+"${version_settings[@]}"} AC_UPDATE_CHANNEL="$channel" \
     ${extra_build_settings[@]+"${extra_build_settings[@]}"}
-  echo "==> Official plugins (pinned in apps/browser/official-plugins.json)"
-  python3 -I "$stages/official-plugins.py" ${OFFICIAL_PLUGINS_FROM:+--from "$OFFICIAL_PLUGINS_FROM"} bundle "$dist/plugins" \
-    || die "the pinned official plugins couldn't be fetched and verified"
 fi
 if [ "$phase" = build ]; then
   echo
-  echo "Built $archive (signed ad hoc) with the pinned official plugins; sign it with --phase sign."
+  echo "Built $archive (signed ad hoc); sign it with --phase sign. Official plugins aren't bundled: Install fetches the pinned ones."
   exit 0
 fi
 if [ "$phase" = sign ] && [ -n "$build_input" ]; then
@@ -191,13 +174,12 @@ if [ "$phase" = sign ] && [ -n "$build_input" ]; then
   mkdir -p "$dist"
   [ -f "$build_input/provenance.txt" ] && [ ! -L "$build_input/provenance.txt" ] || die "no provenance.txt in $build_input"
   cp "$build_input/provenance.txt" "$dist/provenance.txt"
-  [ -d "$build_input/plugins" ] || die "no plugins in $build_input"
-  ditto "$build_input/plugins" "$dist/plugins"
 fi
-[ -f "$dist/plugins/cli/plugin.json" ] || die "no official plugins in $dist/plugins from --phase build"
 
 "$stages/export-sign.sh" "$dist" "$archive" "$identity" ${provisioning_profile:+"$provisioning_profile"}
 "$stages/verify.sh" "$app" "$archive" "$version" "$release_build"
+echo "==> Pack app symbols"
+"$root/scripts/lib/pack-symbols.sh" --app "$app" "$archive/dSYMs" "$dist/$(app_symbols_name "$version")" "$dist/$(app_uuids_name "$version")"
 [ "$phase" = sign ] || "$stages/launch-check.sh" "$app"
 if [ "$notarize" = 1 ]; then
   echo "==> Notarize app"

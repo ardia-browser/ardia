@@ -4,7 +4,7 @@ import { setCover, type Box } from "./covers";
 
 export type Measurable = Pick<NativeMethods, "measureInWindow">;
 
-export type CoverClip = { node: () => Measurable | null; watch(listener: () => void): () => void };
+type CoverClip = { node: () => Measurable | null; watch(listener: () => void): () => void };
 
 export const CoverClips = createContext<readonly CoverClip[]>([]);
 
@@ -34,7 +34,7 @@ export function watchClips(clips: readonly CoverClip[], listener: () => void): (
   return () => unwatch.forEach((stop) => stop());
 }
 
-export function clipBox(box: Box, clips: readonly Box[]): Box | null {
+function clipBox(box: Box, clips: readonly Box[]): Box | null {
   let left = box.x;
   let top = box.y;
   let right = box.x + box.width;

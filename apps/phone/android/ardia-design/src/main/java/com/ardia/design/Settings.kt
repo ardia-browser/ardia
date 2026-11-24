@@ -10,7 +10,6 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -266,8 +265,7 @@ fun AppIconPreview(painter: Painter, modifier: Modifier = Modifier, side: Dp = S
         null,
         modifier
             .size(scaledSide)
-            .clip(shape)
-            .border(0.5.dp, SystemPalette.label.current.copy(alpha = 0.08f), shape),
+            .clip(shape),
     )
 }
 

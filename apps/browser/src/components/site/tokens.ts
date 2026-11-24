@@ -11,7 +11,7 @@ const DARK = {
   certificateWell: "rgba(255,255,255,0.05)",
 };
 
-export type SiteTokens = typeof DARK;
+type SiteTokens = typeof DARK;
 
 const LIGHT: SiteTokens = {
   tile: "rgba(0,0,0,0.0525)",

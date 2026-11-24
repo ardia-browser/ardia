@@ -6,30 +6,22 @@ import { zip } from "./zip";
 const repoRoot = `${process.cwd()}/../..`;
 const siteRoot = process.cwd();
 
-const glyphSubpaths = (() => {
-  const source = readFileSync(`${repoRoot}/engine/patches/build/ardia-icons/chrome/app/vector_icons/browser_logo.icon`, "utf8");
-  const letters: Record<string, string> = { MOVE_TO: "M", LINE_TO: "L", CUBIC_TO: "C", CLOSE: "Z" };
-  const paths: string[] = [];
-  for (const line of (source as string).split("\n")) {
-    const [command, ...numbers] = line.split(",").map((s) => s.trim()).filter(Boolean);
-    const letter = command && letters[command];
-    if (!letter) continue;
-    if (letter === "M") paths.push("");
-    paths[paths.length - 1] += letter + numbers.join(" ");
-  }
-  return paths;
-})();
+const markSource = readFileSync(`${siteRoot}/src/assets/ardia-mark.svg`, "utf8");
+const markBox = markSource.match(/viewBox="([^"]+)"/)![1]!;
+const markPath = (id: string) => markSource.match(new RegExp(`<path id="${id}" d="([^"]+)"`))![1]!;
 
-const GLYPH_BOX = "0.9 2.9 14.2 10.2";
-const markSvg = (fills: string[]) =>
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${GLYPH_BOX}" width="1420" height="1020">${glyphSubpaths
-    .map((d, i) => `<path fill="${fills[i] ?? fills[0]}" d="${d}"/>`)
-    .join("")}</svg>\n`;
+const oneColourMark = (fill: string) => {
+  const [x, y, width, height] = markBox.split(" ");
+  const seam = `<mask id="seam" maskUnits="userSpaceOnUse" x="${x}" y="${y}" width="${width}" height="${height}"><rect x="${x}" y="${y}" width="${width}" height="${height}" fill="#fff"/><path d="${markPath("front")}" fill="#000" stroke="#000" stroke-width="44" stroke-linejoin="round"/></mask>`;
+  return markSource
+    .replace(/<path id="back" d="([^"]+)" fill="[^"]+"\/>/, `<defs>${seam}</defs><path id="back" d="$1" fill="${fill}" mask="url(#seam)"/>`)
+    .replace(/fill="#[0-9A-Fa-f]{6}"/g, `fill="${fill}"`);
+};
 
 export const MARK_SVGS: Record<string, string> = {
-  "mark-colour": markSvg([colour("Forest"), colour("Sage"), colour("Sun")]),
-  "mark-black": markSvg([colour("Ink")]),
-  "mark-white": markSvg(["#FFFFFF"]),
+  "mark-colour": markSource,
+  "mark-black": oneColourMark(colour("Ink")),
+  "mark-white": oneColourMark("#FFFFFF"),
 };
 
 const svgToPng = (svg: string) => sharp(Buffer.from(svg), { density: 144 }).resize({ width: 2048 }).png({ compressionLevel: 9 }).toBuffer();
@@ -38,7 +30,7 @@ const builders: Record<string, () => Promise<Buffer> | Buffer> = {
   "ardia-app-icon.png": () =>
     readFileSync(`${repoRoot}/apps/browser/macos/Ardia-macOS/Assets.xcassets/AppIcon.appiconset/icon_512x512_2x.png`),
   "ardia-mark-painted.png": () =>
-    sharp(`${repoRoot}/docs/brand/ardia/source/mark.png`).trim({ threshold: 16 }).png({ compressionLevel: 9 }).toBuffer(),
+    sharp(`${siteRoot}/src/assets/ardia-mark.png`).trim({ threshold: 16 }).png({ compressionLevel: 9 }).toBuffer(),
   ...Object.fromEntries(
     Object.entries(MARK_SVGS).flatMap(([id, svg]) => [
       [`ardia-${id}.svg`, () => Buffer.from(svg)],
@@ -71,10 +63,10 @@ const readme = () =>
     "",
     ...FACTS.map((f) => `${f.term}: ${f.href ?? f.value}`),
     "",
-    "Colours",
+    "Colors",
     ...COLOURS.map((c) => `${c.name} ${c.hex}: ${c.use}`),
     "",
-    "Use the logos as they are: no redrawing, recolouring, stretching or effects.",
+    "Use the logos as they are: no redrawing, recoloring, stretching or effects.",
     "Ardia isn’t affiliated with Google or The Browser Company. Arc, Dia and Chrome are their trademarks.",
     `More at https://${SITE}/press`,
     "",

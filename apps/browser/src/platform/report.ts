@@ -1,12 +1,13 @@
 import { nativeModule, type RecordingResult, type ReportEvent, type UploadReply } from "@ardia/shell";
+import { REPORT_SUPPORT } from "./reportSupport";
 
 export type { RecordingResult, ReportEvent, UploadReply };
 
 let bound: ReturnType<typeof nativeModule<"ArdiaReport">> | null = null;
 const Report = () => (bound ??= nativeModule("ArdiaReport"));
 
-export type ReportPost = (url: string, body: string, headers: Record<string, string>, timeoutMs: number) => Promise<{ status: number; text: string }>;
-export type ReportPlatform = { recording: boolean; post: ReportPost };
+type ReportPost = (url: string, body: string, headers: Record<string, string>, timeoutMs: number) => Promise<{ status: number; text: string }>;
+type ReportPlatform = { recording: boolean; files: boolean; post: ReportPost };
 
 const postWithFetch: ReportPost = async (url, body, headers, timeoutMs) => {
   const abort = new AbortController();
@@ -19,10 +20,11 @@ const postWithFetch: ReportPost = async (url, body, headers, timeoutMs) => {
   }
 };
 
-let reportPlatform: ReportPlatform = { recording: true, post: postWithFetch };
+let reportPlatform: ReportPlatform = { ...REPORT_SUPPORT, post: postWithFetch };
 
 export const setReportPlatform = (platform: Partial<ReportPlatform>) => void (reportPlatform = { ...reportPlatform, ...platform });
 export const recordsReports = () => reportPlatform.recording;
+export const sendsReportFiles = () => reportPlatform.files;
 export const postReportJson: ReportPost = (url, body, headers, timeoutMs) => reportPlatform.post(url, body, headers, timeoutMs);
 
 const isPending = (answer: unknown): answer is Promise<unknown> => typeof (answer as { then?: unknown } | null | undefined)?.then === "function";
@@ -45,7 +47,10 @@ export const cancelWindowRecording = () => Report().cancelRecording();
 export const recordingThumbnail = (path: string, out: string) => Report().recordingThumbnail(path, out);
 export const gzipFile = (source: string, destination: string, removeSource: boolean) => Report().gzipFile(source, destination, removeSource);
 export const gzipText = (text: string, destination: string) => Report().gzipText(text, destination);
-export const uploadFile = (id: string, url: string, method: string, headers: Record<string, string>, path: string) =>
-  Report().upload(id, url, method, headers, path);
+export async function uploadFile(id: string, url: string, method: string, headers: Record<string, string>, path: string): Promise<UploadReply> {
+  const reply: unknown = await Report().upload(id, url, method, headers, path);
+  const answer = reply && typeof reply === "object" ? (reply as Partial<UploadReply>) : {};
+  return { status: typeof answer.status === "number" ? answer.status : 0, body: typeof answer.body === "string" ? answer.body : "", error: answer.error ?? (reply ? null : "no uploader") };
+}
 export const cancelUploads = () => ignoreFailure(Report().cancelUploads());
 export const onReportEvent = (listener: (event: ReportEvent) => void) => Report().addListener("onReport", listener);

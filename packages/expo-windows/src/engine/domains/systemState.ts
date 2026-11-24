@@ -2,7 +2,7 @@ import type { SystemState } from "@ardia/ardiacore";
 import { ok, type Desktop, type Engine, type Handler, type PowerReading } from "./calling";
 import { desktopOf } from "./exports";
 
-export const POWER_POLL_MS = 20_000;
+const POWER_POLL_MS = 20_000;
 const MEMORY_WARNING_LOAD = 85;
 const MEMORY_CRITICAL_LOAD = 95;
 

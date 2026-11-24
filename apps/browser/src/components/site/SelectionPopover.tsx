@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Animated, StyleSheet, View } from "react-native";
 import { useSettings } from "../../state/browser/hooks";
+import { useTabValue } from "../../state/tabs/tabWatch";
+import { consentToken, type ConsentToken } from "../../state/telemetry/client";
+import { notePageOverlay } from "../../state/telemetry/usage";
 import { defaultSearchEngine } from "../../state/settings/settings";
 import { POPOVER_MOTION, PopoverSurface, space } from "../ui";
 import { searchSelection, setPageSelection, usePageSelection, type ClickModifiers, type PageSelection } from "../../state/site/selection";
@@ -10,27 +13,45 @@ import { ChipButton, SITE_PANEL } from "./SiteControlsParts";
 const HEIGHT = SITE_PANEL.footerControl + 2 * space.xs;
 const GAP = 6;
 
-export function SelectionPopover({ tabId, zoom }: { tabId: string; zoom: number }) {
+export function SelectionPopover({ tabId }: { tabId: string }) {
+  const zoom = useTabValue(tabId, (t) => t?.zoom ?? 1);
   const enabled = useSettings((st) => st.showSelectionSearch);
   const selection = usePageSelection((s) => (enabled ? (s[tabId] ?? null) : null));
-  const [shown, setShown] = useState<PageSelection | null>(null);
+  const [shown, setShown] = useState<{ selection: PageSelection; consent: ConsentToken | null } | null>(null);
   const [area, setArea] = useState({ width: 0, height: 0 });
   useEffect(() => {
     if (!selection) return setShown(null);
-    const timer = setTimeout(() => setShown(selection), selectionBar.showDelay);
+    const consent = consentToken();
+    const timer = setTimeout(() => setShown({ selection, consent }), selectionBar.showDelay);
     return () => clearTimeout(timer);
   }, [selection]);
   useEffect(() => () => setPageSelection(tabId, null), [tabId]);
+  const counted = useRef(false);
+  const returned = useRef(false);
+  useEffect(() => {
+    if (shown) return;
+    counted.current = false;
+    returned.current = false;
+  }, [shown]);
+  const noteShown = () => {
+    if (counted.current || !shown) return;
+    counted.current = true;
+    notePageOverlay("paneOverlayOpened", returned.current ? consentToken() : shown.consent);
+  };
+  const noteHidden = () => {
+    if (counted.current) returned.current = true;
+    counted.current = false;
+  };
   if (!selection && !shown) return null;
 
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill} onLayout={(e) => setArea(e.nativeEvent.layout)}>
-      {shown && area.width > 0 && <Bar key={`${shown.rect.x},${shown.rect.y}`} tabId={tabId} selection={shown} zoom={zoom} area={area} />}
+      {shown && area.width > 0 && <SelectionBar key={`${shown.selection.rect.x},${shown.selection.rect.y}`} tabId={tabId} selection={shown.selection} zoom={zoom} area={area} onShown={noteShown} onHidden={noteHidden} />}
     </View>
   );
 }
 
-function Bar({ tabId, selection, zoom, area }: { tabId: string; selection: PageSelection; zoom: number; area: { width: number; height: number } }) {
+function SelectionBar({ tabId, selection, zoom, area, onShown, onHidden }: { tabId: string; selection: PageSelection; zoom: number; area: { width: number; height: number }; onShown: () => void; onHidden: () => void }) {
   const [width, setWidth] = useState(0);
   const appear = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -39,7 +60,13 @@ function Bar({ tabId, selection, zoom, area }: { tabId: string; selection: PageS
   const r = selection.rect;
   const top = r.y * zoom;
   const bottom = (r.y + r.height) * zoom;
-  if (bottom < 0 || top > area.height) return null;
+  const inPane = bottom >= 0 && top <= area.height;
+  const visible = inPane && width > 0;
+  useEffect(() => {
+    if (visible) onShown();
+    else if (!inPane) onHidden();
+  }, [visible, inPane]);
+  if (!inPane) return null;
   const above = top - GAP - HEIGHT >= 4;
   const y = above ? top - GAP - HEIGHT : Math.min(bottom + GAP, area.height - HEIGHT - 4);
   const center = (r.x + r.width / 2) * zoom;

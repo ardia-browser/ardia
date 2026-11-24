@@ -1,14 +1,14 @@
 import { PlatformColor } from "react-native";
-import { Button, Form, HStack, Image, LabeledContent, Section, Spacer, Text } from "@expo/ui/swift-ui";
-import { accessibilityAddTraits, accessibilityHidden, font, foregroundStyle, navigationBarTitleDisplayMode, navigationTitle, tint } from "@expo/ui/swift-ui/modifiers";
+import { Form, LabeledContent, Section, Text } from "@expo/ui/swift-ui";
+import { navigationBarTitleDisplayMode, navigationTitle, tint } from "@expo/ui/swift-ui/modifiers";
 import { setSearchEngine, useEngines } from "../../state/settings/actions";
 import { usePreferences } from "../../state/settings/hooks";
 import { useSyncEnabled, useSyncView } from "../../state/sync/hooks";
 import { syncedEngineName } from "../../state/sync/syncRules";
-import { modifierList, settingsChrome, useTheme } from "../ui";
+import { modifierList, settingsChrome } from "../ui";
+import { ExpoChoiceRow } from "./ExpoSettingsParts";
 
 export function ExpoSearchEnginePage() {
-  const theme = useTheme();
   const engines = useEngines((s) => s.engines);
   const selected = usePreferences((p) => p.searchEngineId);
   const syncEnabled = useSyncEnabled();
@@ -24,13 +24,7 @@ export function ExpoSearchEnginePage() {
       ) : (
         <Section>
           {engines.map((engine) => (
-            <Button key={engine.id} onPress={() => setSearchEngine(engine.id)} modifiers={[tint("primary"), accessibilityAddTraits(engine.id === selected ? ["isButton", "isSelected"] : ["isButton"])]}>
-              <HStack>
-                <Text>{engine.name}</Text>
-                <Spacer />
-                {engine.id === selected ? <Image systemName="checkmark" modifiers={[font({ textStyle: "body", weight: "semibold" }), foregroundStyle(theme.formAccent), accessibilityHidden(true)]} /> : null}
-              </HStack>
-            </Button>
+            <ExpoChoiceRow key={engine.id} title={engine.name} checked={engine.id === selected} onPress={() => setSearchEngine(engine.id)} />
           ))}
         </Section>
       )}

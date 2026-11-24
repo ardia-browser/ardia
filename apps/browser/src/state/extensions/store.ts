@@ -3,7 +3,7 @@ import type { SettingsPane, SettingsPlace } from "../settings/settingsWindows";
 import { useMemo } from "react";
 import { create } from "zustand";
 import { useBrowser, type BrowserState } from "../browser/store";
-import { activeTabId, engineProfile, incognitoOriginal, isIncognitoProfile, privateSession } from "../browser/model";
+import { engineProfile, incognitoOriginal, isIncognitoProfile, privateSession } from "../browser/model";
 import { shownPageId } from "../peek/peek";
 import { isTabReady } from "../tabs/pageState";
 import type { ToolbarDrag } from "./toolbarOrder";
@@ -14,7 +14,10 @@ export type Anchor = { x: number; y: number; width: number; height: number };
 
 export const extensionPageUrl = (extensionId: string, path: string) => `chrome-extension://${extensionId}/${path.replace(/^\//, "")}`;
 
-export type InstallRequest = { windowId: string; profile: string; source: "webStore" | "unpacked" } & (
+let installKeys = 0;
+export const nextInstallKey = () => ++installKeys;
+
+export type InstallRequest = { key: number; windowId: string; profile: string; source: "webStore" | "unpacked" } & (
   | { status: "error"; error: string }
   | { status: "ready" | "installing"; pkg: ExtensionPackage }
   | { status: "prompt"; prompt: ExtensionInstallPrompt }
@@ -53,7 +56,7 @@ export function extensionProfile(s: BrowserState, windowId: string | null | unde
   return !w ? "" : (privateSession(s, w.profileId) ?? engineProfile(s, w.profileId));
 }
 
-export function settingsProfileOf(s: BrowserState, windowId: string | null | undefined): string | null {
+function settingsProfileOf(s: BrowserState, windowId: string | null | undefined): string | null {
   const own = windowId ? s.windows[windowId]?.profileId : undefined;
   if (!own) return null;
   const profileId = isIncognitoProfile(own) ? incognitoOriginal(own) : own;

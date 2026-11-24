@@ -14,7 +14,7 @@ import { siteCalls } from "./sites";
 import { externalAppCalls } from "./externalApps";
 import { webViewCalls } from "./webView";
 
-export type Rows = {
+type Rows = {
   forwarded: Record<string, Record<string, string>>;
   awaitingEngine?: Record<string, Record<string, string>>;
   missing: Record<string, string[]>;

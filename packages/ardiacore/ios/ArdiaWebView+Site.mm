@@ -62,6 +62,12 @@ constexpr NSSize kExtensionPopupMaximum = {800, 600};
   [_tab resolveAutofillPrompt:promptId action:action];
 }
 
+- (BOOL)answerAutofillPrompt:(NSInteger)promptId action:(NSString *)action {
+  if (![_tab.autofillPrompt[@"id"] isEqual:@(promptId)]) return NO;
+  [_tab resolveAutofillPrompt:promptId action:action];
+  return ![_tab.autofillPrompt[@"id"] isEqual:@(promptId)];
+}
+
 - (NSString *)executeExtensionAction:(NSString *)extensionId {
   return [_tab executeExtensionAction:extensionId];
 }

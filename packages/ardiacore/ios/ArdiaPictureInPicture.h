@@ -8,6 +8,7 @@
 namespace ardia_pip {
 
 void WatchZoom();
+void RefreshPinchesFromOtherApps();
 
 NSWindow *GrabbedWindow();
 
@@ -15,6 +16,6 @@ void VideoEntered(ArdiaWebView *view, NSString *host, ArdiaConsentStamp *stamp);
 
 void DocumentEntered(ArdiaWebView *view, ArdiaConsentStamp *stamp);
 
-void TabRequestedActivation(ArdiaWebView *view);
+BOOL TabRequestedActivation(ArdiaWebView *view, BOOL *fromOtherApp);
 
 }

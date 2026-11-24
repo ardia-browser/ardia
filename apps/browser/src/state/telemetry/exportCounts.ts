@@ -1,5 +1,5 @@
 import type { ConsentToken } from "./choice";
-import { countFor } from "./countFor";
+import { consentOrNow, countFor } from "./countFor";
 
 let bookmarkExports = 0;
 let passwordExports = 0;
@@ -13,11 +13,11 @@ let passwordListSlowShows = 0;
 const LARGE_PASSWORD_LIST = 1000;
 const SLOW_PASSWORD_LIST_MS = 1000;
 
-export const noteBookmarkExport = (consent?: ConsentToken | null) => countFor(consent, () => void (bookmarkExports += 1), { bookmark_html_exports: 1 });
-export const notePasswordExport = (consent?: ConsentToken | null) => countFor(consent, () => void (passwordExports += 1), { password_exports: 1 });
-export const noteUnpackedInstall = (consent?: ConsentToken | null) => countFor(consent, () => void (unpackedInstalls += 1), { unpacked_extension_installs: 1 });
-export const noteBookmarkExportFailure = (consent?: ConsentToken | null) => countFor(consent, () => void (bookmarkExportFailures += 1), { bookmark_html_export_failures: 1 });
-export const notePasswordExportFailure = (consent?: ConsentToken | null) => countFor(consent, () => void (passwordExportFailures += 1), { password_export_failures: 1 });
+export const noteBookmarkExport = (consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void (bookmarkExports += 1));
+export const notePasswordExport = (consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void (passwordExports += 1));
+export const noteUnpackedInstall = (consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void (unpackedInstalls += 1));
+export const noteBookmarkExportFailure = (consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void (bookmarkExportFailures += 1));
+export const notePasswordExportFailure = (consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void (passwordExportFailures += 1));
 
 export function notePasswordListShown(logins: number, ms: number) {
   passwordListShows += 1;

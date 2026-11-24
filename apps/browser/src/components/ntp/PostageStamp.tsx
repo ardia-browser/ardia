@@ -6,7 +6,7 @@ import { postageStamp } from "./tokens";
 
 const ICON = require("../../../assets/app-icon.png");
 
-export type StampInk = { frame: string; ring: string; label: string; paper?: string };
+type StampInk = { frame: string; ring: string; label: string; paper?: string };
 
 export function PostageStamp({
   icon,

@@ -1,0 +1,20 @@
+{
+  "manifest": 2,
+  "name": "sdk-bench",
+  "title": "SDK Bench",
+  "description": "A cap-sized tree, a 1,000-row list, two commands and a deactivate hook, for the plugin host tests and measurements.",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "activationEvents": ["onStartupFinished"],
+  "permissions": { "storage": true },
+  "contributes": {
+    "commands": [
+      { "name": "ping", "title": "Bench: Ping" },
+      { "name": "spin", "title": "Bench: Spin" }
+    ],
+    "sidebarViews": [
+      { "id": "cap", "title": "Cap" },
+      { "id": "rows", "title": "Rows" }
+    ]
+  }
+}

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { appearanceSummary, appearanceTelemetry, appliedDark, chromeStyle, macLookOf, preferredScheme, resolvedInterfaceStyle, type MacLook } from "./appearance.ts";
+import { appearanceSummary, appearanceTelemetry, appliedDark, chromeStyle, glassRenderTelemetry, macLookOf, preferredScheme, resolvedInterfaceStyle, type MacLook } from "./appearance.ts";
 
 const classicDarkMac: MacLook = { interfaceStyle: "classic", appearance: "dark" };
 const glassLightMac: MacLook = { interfaceStyle: "glass", appearance: "light" };
@@ -62,4 +62,15 @@ test("telemetry carries the two choices as fixed words", () => {
   assert.deepEqual(appearanceTelemetry("matchMac", "matchMac"), { interface_style: "match_mac", color_scheme: "match_mac" });
   assert.deepEqual(appearanceTelemetry("classic", "system"), { interface_style: "classic", color_scheme: "system" });
   assert.deepEqual(appearanceTelemetry("glass", "dark"), { interface_style: "glass", color_scheme: "dark" });
+});
+
+test("each launch says how the glass is drawn: Android's lens, frost or solid, Classic, iPhone's own, or no glass in Material You", () => {
+  assert.equal(glassRenderTelemetry("android", "redesigned", "glass", "lens"), "lens");
+  assert.equal(glassRenderTelemetry("android", "redesigned", "glass", "frost"), "frost");
+  assert.equal(glassRenderTelemetry("android", "redesigned", "glass", "solid"), "solid");
+  assert.equal(glassRenderTelemetry("android", "redesigned", "glass", null), "solid", "no native look module draws the flat fallback");
+  assert.equal(glassRenderTelemetry("android", "redesigned", "classic", "lens"), "classic");
+  assert.equal(glassRenderTelemetry("ios", "redesigned", "glass", null), "native");
+  assert.equal(glassRenderTelemetry("ios", "redesigned", "classic", null), "classic");
+  assert.equal(glassRenderTelemetry("android", "material", "glass", "lens"), "none");
 });

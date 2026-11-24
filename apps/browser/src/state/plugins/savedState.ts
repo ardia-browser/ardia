@@ -1,20 +1,21 @@
 import { documentSaved, readDocument, writeDocument } from "../../platform/documents";
 import { isFields, type Fields } from "../../lib/decode";
 import { parseSaved, versionedJson } from "../../lib/savedDocument";
-import { NAME_PATTERN } from "../../lib/pluginManifest";
-import type { PluginRecord } from "./store";
+import { KEY_PATTERN, NAME_PATTERN, VERSION_PATTERN } from "../../lib/pluginManifest";
+import type { OfficialAutoUpdate, PluginRecord, SiteSwitchValues } from "./store";
+import { switchOrigin } from "../../lib/pluginPageBar";
 import { warnFor } from "../telemetry/consoleConsent";
 import type { ConsentToken } from "../telemetry/choice";
 
-export const PLUGINS_DOC = "plugins.json";
+const PLUGINS_DOC = "plugins.json";
 const VERSION = 1;
 const NAME = new RegExp(NAME_PATTERN);
 
 const HASH = /^[0-9a-f]{64}$/;
 
-function valuesOf(raw: unknown): Record<string, string | boolean> {
+function valuesOf(raw: unknown): Record<string, string | boolean | number> {
   if (!isFields(raw)) return {};
-  return Object.fromEntries(Object.entries(raw).filter((e): e is [string, string | boolean] => typeof e[1] === "string" || typeof e[1] === "boolean"));
+  return Object.fromEntries(Object.entries(raw).filter((e): e is [string, string | boolean | number] => typeof e[1] === "string" || typeof e[1] === "boolean" || (typeof e[1] === "number" && Number.isFinite(e[1]))));
 }
 
 function appliedOf(raw: unknown): PluginRecord["applied"] {
@@ -24,6 +25,30 @@ function appliedOf(raw: unknown): PluginRecord["applied"] {
   return out;
 }
 
+const KEY = new RegExp(KEY_PATTERN);
+
+function sitesOf(raw: unknown): SiteSwitchValues | null {
+  if (!isFields(raw)) return null;
+  const entries = Object.entries(raw).flatMap(([key, origins]): [string, Record<string, boolean>][] => {
+    if (!KEY.test(key) || !isFields(origins)) return [];
+    const kept = Object.entries(origins).filter((e): e is [string, boolean] => typeof e[1] === "boolean" && switchOrigin(e[0]) === e[0]);
+    return kept.length ? [[key, Object.fromEntries(kept)]] : [];
+  });
+  return entries.length ? Object.fromEntries(entries) : null;
+}
+
+export const MAX_UPDATE_LINES = 24;
+const MAX_UPDATE_LINE = 600;
+const VERSION_TEXT = new RegExp(VERSION_PATTERN);
+
+const versionOf = (raw: unknown): string | null => (typeof raw === "string" && VERSION_TEXT.test(raw) ? raw : null);
+
+function updatedOf(raw: unknown): OfficialAutoUpdate | null {
+  if (!isFields(raw) || !Array.isArray(raw.added)) return null;
+  const added = raw.added.filter((line): line is string => typeof line === "string" && line.length > 0 && line.length <= MAX_UPDATE_LINE).slice(0, MAX_UPDATE_LINES);
+  return { from: versionOf(raw.from), to: versionOf(raw.to), added, ...(raw.runtime === true ? { runtime: true as const } : {}) };
+}
+
 export function parsePluginRecords(json: string | null): Record<string, PluginRecord> {
   const doc = parseSaved(json, VERSION);
   if (!doc || !isFields(doc.plugins)) return {};
@@ -31,7 +56,11 @@ export function parsePluginRecords(json: string | null): Record<string, PluginRe
   for (const [name, raw] of Object.entries(doc.plugins as Fields)) {
     if (!NAME.test(name) || !isFields(raw)) continue;
     const approved = typeof raw.approved === "string" && HASH.test(raw.approved) ? raw.approved : null;
-    out[name] = { enabled: raw.enabled === true && approved !== null, approved, values: valuesOf(raw.values), applied: appliedOf(raw.applied), ...(raw.controlGranted === true ? { controlGranted: true } : {}), ...(raw.installed === true ? { installed: true } : {}) };
+    out[name] = { enabled: raw.enabled === true && approved !== null, approved, values: valuesOf(raw.values), applied: appliedOf(raw.applied), ...(raw.controlGranted === true ? { controlGranted: true } : {}), ...(raw.installed === true ? { installed: true } : {}), ...(typeof raw.previous === "string" && HASH.test(raw.previous) ? { previous: raw.previous } : {}) };
+    const sites = sitesOf(raw.sites);
+    if (sites) out[name]!.sites = sites;
+    const updated = updatedOf(raw.updated);
+    if (updated) out[name]!.updated = updated;
   }
   return out;
 }

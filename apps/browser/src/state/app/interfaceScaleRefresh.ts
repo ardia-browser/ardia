@@ -7,7 +7,7 @@ import { dismissHover } from "../sidebar/hover";
 import { dismissStripHover } from "../tabs/stripHover";
 import { closeProfileIconPicker } from "../profiles/iconPicker";
 
-export function closeAnchoredUi() {
+function closeAnchoredUi() {
   closeEveryPopover();
   closeExtensionPopup();
   closeFolderMenus();

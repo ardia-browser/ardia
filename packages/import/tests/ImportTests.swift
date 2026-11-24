@@ -5,6 +5,31 @@ import XCTest
 final class ImportTests: XCTestCase {
   let chrome = Fixtures.support("Google/Chrome/Default")
 
+  func testBookmarksHtmlMarksUnnamedListsAndKeepsEmptyNamedFolders() {
+    let html = """
+    <DL><p>
+        <DT><H3 ADD_DATE="1700000000"></H3>
+        <DL><p>
+        </DL><p>
+        <DT><H3 ADD_DATE="0"></H3>
+        <DL><p>
+            <DT><A HREF="https://kept.example/">Kept</A>
+        </DL><p>
+        <DT><H3></H3>
+        <DL><p>
+        </DL><p>
+        <DL><p>
+            <DT><A HREF="https://loose.example/">Loose</A>
+        </DL><p>
+    </DL><p>
+    """
+    let children = NetscapeBookmarks.parse(html).children ?? []
+    XCTAssertEqual(children.map(\.title), ["", "", "", ""])
+    XCTAssertEqual(children.map(\.role), [nil, nil, nil, "list"])
+    XCTAssertEqual(children.map { $0.children?.count }, [0, 1, 0, 1])
+    XCTAssertEqual(children[0].dateAdded, 1_700_000_000_000)
+  }
+
   func testHistoryLeavesSourceUntouched() throws {
     let file = chrome.appendingPathComponent("History")
     let before = try Data(contentsOf: file)

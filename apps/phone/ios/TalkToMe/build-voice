@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+# Build Talk to Me's voice download: Phonon 31M (English) as compiled Core ML models and six voices.
+#
+#   apps/phone/ios/TalkToMe/build-voice [--out DIR] [--models-only]
+#   apps/phone/ios/TalkToMe/build-voice -h | --help
+#
+# Downloads phonon-31m-en-coreml.zip from the pinned xn-ptts release, checks its SHA-256, checks every kept file
+# against the bundle.json inside it and each voice against voices.tsv, compiles the three .mlpackage models to
+# .mlmodelc with coremlcompiler (so the phone never compiles or writes beside them), keeps the voices in voices.tsv,
+# and packs DIR/stage/TalkToMe into DIR/phonon-31m-en.aar, an LZFSE Apple Archive, then prints its size and SHA-256.
+# --models-only stops after DIR/stage/TalkToMe, the folder the test build's -ArdiaTalkToMeModels takes.
+# DIR defaults to /private/tmp/ardia-talk-to-me-pack. To ship a new voice, upload the .aar to a new release in
+# ardia-browser/ardia-voices and update url, bytes and sha256 in VoiceDownload (packages/phone/ios/TalkToMe.swift).
+set -euo pipefail
+
+release=v0.7.1
+url="https://github.com/gradium-ai/xn-ptts/releases/download/$release/phonon-31m-en-coreml.zip"
+zipSha=058cde756a5e67bcdb986e7c45fe431d41a1a9073e68aabae314c80631a34b76
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+out=/private/tmp/ardia-talk-to-me-pack
+modelsOnly=no
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --out) out="$2"; shift ;;
+    --models-only) modelsOnly=yes ;;
+    -h|--help) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "unknown option $1" >&2; exit 64 ;;
+  esac
+  shift
+done
+
+die() { echo "error: $*" >&2; exit 1; }
+sha() { shasum -a 256 "$1" | cut -d' ' -f1; }
+
+mkdir -p "$out"
+out="$(cd "$out" && pwd -P)"
+download="$out/download"
+mkdir -p "$download"
+zip="$download/phonon-31m-en-coreml-$release.zip"
+if [ ! -f "$zip" ] || [ "$(sha "$zip")" != "$zipSha" ]; then
+  curl -fL --retry 3 -o "$zip.partial" "$url"
+  mv "$zip.partial" "$zip"
+fi
+[ "$(sha "$zip")" = "$zipSha" ] || die "$zip is not the pinned release ($release)"
+
+unpacked="$download/unpacked"
+rm -rf "$unpacked"
+mkdir -p "$unpacked"
+ditto -x -k "$zip" "$unpacked"
+source="$unpacked/phonon-31m-en"
+[ -f "$source/bundle.json" ] || die "the release zip has no phonon-31m-en/bundle.json"
+
+expected() { /usr/bin/python3 -I -c 'import json,sys; files={f["path"]: f["sha256"] for f in json.load(open(sys.argv[1]))["files"]}; print(files.get(sys.argv[2], ""))' "$source/bundle.json" "$1"; }
+check() {
+  local want
+  want="$(expected "$1")"
+  [ -n "$want" ] || die "$1 is not listed in bundle.json"
+  [ "$(sha "$source/$1")" = "$want" ] || die "$1 does not match bundle.json"
+}
+
+stage="$out/stage"
+models="$stage/TalkToMe"
+rm -rf "$stage"
+mkdir -p "$models/voices"
+for file in tokenizer.json host.safetensors; do
+  check "$file"
+  cp "$source/$file" "$models/$file"
+done
+while IFS=$'\t' read -r name voiceSha; do
+  [ -n "$name" ] || continue
+  check "voices/$name.safetensors"
+  [ "$(sha "$source/voices/$name.safetensors")" = "$voiceSha" ] || die "voice $name does not match voices.tsv"
+  cp "$source/voices/$name.safetensors" "$models/voices/"
+done < "$here/voices.tsv"
+for package in "$source"/*.mlpackage; do
+  while IFS= read -r file; do check "$(basename "$package")/$file"; done < <(cd "$package" && find . -type f | sed 's|^\./||')
+  xcrun coremlcompiler compile "$package" "$models" --platform iOS --deployment-target 27.0 > "$out/coremlcompiler.log" 2>&1 || { cat "$out/coremlcompiler.log" >&2; die "coremlcompiler failed on $(basename "$package")"; }
+  [ -d "$models/$(basename "$package" .mlpackage).mlmodelc" ] || die "no compiled model for $(basename "$package")"
+done
+/usr/bin/python3 -I - "$source/bundle.json" "$models" <<'PY'
+import hashlib, json, os, sys
+source, models = sys.argv[1], sys.argv[2]
+meta = json.load(open(source))
+kept = []
+for root, _, names in os.walk(models):
+    for name in sorted(names):
+        path = os.path.join(root, name)
+        rel = os.path.relpath(path, models)
+        if rel == "bundle.json":
+            continue
+        digest = hashlib.sha256(open(path, "rb").read()).hexdigest()
+        kept.append({"path": rel, "size": os.path.getsize(path), "sha256": digest})
+meta["files"] = sorted(kept, key=lambda f: f["path"])
+meta["voices"] = sorted(os.path.splitext(n)[0] for n in os.listdir(os.path.join(models, "voices")))
+json.dump(meta, open(os.path.join(models, "bundle.json"), "w"), indent=1, sort_keys=True)
+PY
+echo "models: $models ($(du -sh "$models" | cut -f1))"
+[ "$modelsOnly" = no ] || exit 0
+
+archive="$out/phonon-31m-en.aar"
+rm -f "$archive"
+aa archive -d "$stage" -subdir TalkToMe -o "$archive" -a lzfse
+[ -f "$archive" ] || die "aa wrote no archive"
+echo "voice: $archive"
+echo "  bytes  $(stat -f %z "$archive")"
+echo "  sha256 $(sha "$archive")"

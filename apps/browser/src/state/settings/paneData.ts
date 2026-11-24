@@ -1,8 +1,6 @@
 import { useBrowser } from "../browser/store";
 import {
   engineInfo,
-  listComponents,
-  WIDEVINE_COMPONENT_ID,
   appIcons,
   currentAppIcon,
   isDefaultBrowser,
@@ -30,13 +28,16 @@ import { engineProfile } from "../browser/model";
 import { currentSyncFolder, folderInfo } from "../sync/engine";
 import { extensionsProfileId, refreshExtensions } from "../extensions/actions";
 import { cached, load, loadAll, need, resource, store, useAllLoaded, type Needed } from "./resources";
-import type { SettingsPane } from "./settingsWindows";
-import { FOLLOW_EVERY_MS, FOLLOW_FOR_MS, switchOutcome, updaterBusy } from "./updateStatus";
+import { onSettingsOpen, type SettingsPane } from "./settingsWindows";
+import { FOLLOW_EVERY_MS, FOLLOW_FOR_MS, FOLLOW_UPDATE_EVERY_MS, FOLLOW_UPDATE_FOR_MS, switchOutcome, updateUnderWay, updaterBusy } from "./updateStatus";
 import { noteUpdateChannelSwitch } from "../telemetry/usage";
 import { consentToken } from "../telemetry/client";
+import { forgetPendingOfferToSave, passwordAutofill } from "../site/passwordManager";
 import { notePreloadPagesTurned } from "../telemetry/preloadPagesCounts";
 import { trackAutofillToggleKept } from "../telemetry/track";
 import { askedValue, rememberAsked } from "./autofillAsked";
+
+export { passwordAutofill };
 
 export const APP_ICON_SIZE = 56;
 
@@ -52,7 +53,6 @@ export const siteOrigins = resource("siteOrigins", (profile: string) => getSiteS
 export const appLinks = resource("appLinks", (profile: string) => getExternalAppAllowances(profile).catch(() => []));
 export const zoomLevels = resource("zoomLevels", (profile: string) => getZoomLevels(profile).catch((): Record<string, number> => ({})));
 export const preloadPages = resource("preloadPages", (profile: string) => getPreloadPages(profile).catch(() => false));
-export const passwordAutofill = resource("passwordAutofill", (profile: string) => getPasswordAutofill(profile).catch(() => true));
 export const addresses = resource("addresses", (profile: string) => listAddresses(profile).catch(orWarn<SavedAddress[]>([])));
 export const cards = resource("cards", (profile: string) => listCards(profile).catch(orWarn<SavedCard[]>([])));
 export const autofillEnabled = resource("autofillEnabled", (profile: string) =>
@@ -60,7 +60,7 @@ export const autofillEnabled = resource("autofillEnabled", (profile: string) =>
 );
 export const autofillToggleAsked = resource("autofillToggleAsked", (profile: string, toggle: AutofillToggle) => Promise.resolve(askedValue(profile, toggle)));
 export const downloadSettings = resource("downloadSettings", (profile: string) => getDownloadSettings(profile).catch(() => null));
-export const extensionList = resource("extensions", (profile: string) => refreshExtensions(profile));
+export const extensionList = resource("extensions", (profile: string) => refreshExtensions(profile, consentToken()));
 export const shortcutItems = resource("menuShortcuts", () =>
   menuShortcuts().then(
     (items) => (setMenuBarShortcuts(items), items.filter((item) => !UNAVAILABLE_COMMANDS.has(item.id))),
@@ -68,20 +68,13 @@ export const shortcutItems = resource("menuShortcuts", () =>
   ),
 );
 export const engineVersion = resource("engineInfo", () => engineInfo().catch(() => null));
-export const widevine = resource("widevine", () =>
-  listComponents().then(
-    (list) => list.find((c) => c.id === WIDEVINE_COMPONENT_ID) ?? null,
-    () => null,
-  ),
-);
-
 const defaultProfile = () => engineProfile(useBrowser.getState(), currentSettings().defaultProfileId);
 
 export function paneNeeds(pane: SettingsPane, profileId: string | null): Needed[] {
   const profile = profileId ? engineProfile(useBrowser.getState(), profileId) : defaultProfile();
   switch (pane) {
     case "general":
-      return [need(loginItem), need(defaultBrowser), need(updater), need(downloadSettings, profile), need(contentBlocker), need(syncFolder, currentSyncFolder() ?? null), need(engineVersion), need(widevine)];
+      return [need(loginItem), need(defaultBrowser), need(updater), need(downloadSettings, profile), need(contentBlocker), need(syncFolder, currentSyncFolder() ?? null), need(engineVersion)];
     case "profiles":
       return [
         need(downloadSettings, profile),
@@ -110,6 +103,8 @@ export const usePaneLoaded = (pane: SettingsPane, profileId: string | null) => u
 
 export const preparePane = (pane: SettingsPane, profileId: string | null) => loadAll(paneNeeds(pane, profileId));
 
+onSettingsOpen((pane, profileId) => void preparePane(pane, profileId));
+
 function noteAsked(profile: string, toggle: AutofillToggle, asked: boolean, now: boolean) {
   rememberAsked(profile, toggle, asked, now);
   store(autofillToggleAsked, [profile, toggle], asked);
@@ -126,6 +121,7 @@ export async function setPreloadPagesFor(profile: string, on: boolean) {
 }
 
 export async function setPasswordAutofillFor(profile: string, on: boolean) {
+  if (!(await forgetPendingOfferToSave(profile, consentToken())) && !on) return;
   if (!(await written(setPasswordAutofill(on, profile)))) return;
   const now = await getPasswordAutofill(profile).catch(() => on);
   store(passwordAutofill, [profile], now);
@@ -163,11 +159,12 @@ export function followUpdater(settled?: (state: UpdaterState) => void) {
   if (followingNow && !settled) return;
   const run = ++following;
   followingNow = true;
-  const until = Date.now() + FOLLOW_FOR_MS;
+  const started = Date.now();
   const tick = (): Promise<void> =>
     load(updater, [], { fresh: true }).then((state) => {
       if (run !== following) return;
-      if (updaterBusy(state) && Date.now() < until) return new Promise<void>((done) => setTimeout(done, FOLLOW_EVERY_MS)).then(tick);
+      const updating = updateUnderWay(state);
+      if (updaterBusy(state) && Date.now() < started + (updating ? FOLLOW_UPDATE_FOR_MS : FOLLOW_FOR_MS)) return new Promise<void>((done) => setTimeout(done, updating ? FOLLOW_UPDATE_EVERY_MS : FOLLOW_EVERY_MS)).then(tick);
       followingNow = false;
       settled?.(state);
     });

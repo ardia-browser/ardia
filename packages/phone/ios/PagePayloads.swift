@@ -27,6 +27,7 @@ enum PagePayloads {
       "blockedRequests": page.blockedResources.count,
       "isLive": page.isLive,
       "isPrivate": page.isPrivate,
+      "document": page.navigationGeneration,
     ]
     if let url = page.url?.absoluteString, url != "about:blank" { state["url"] = url }
     if let faviconURL { state["faviconUrl"] = faviconURL }

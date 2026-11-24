@@ -80,6 +80,42 @@ class PageLookTest {
     }
 
     @Test
+    fun aBandTooMixedForOneColourStillTellsItsCommonestShade() {
+        val dark = PageColors.opaque(16, 18, 20)
+        val link = PageColors.opaque(100, 150, 250)
+        val footer = IntArray(64) { if (it % 5 == 0) dark else PageColors.opaque(60 + it * 3, 120, 200) }
+        assertNull(ToneSampler.dominant(footer))
+        assertEquals(dark, ToneSampler.shade(footer))
+        assertEquals(link, ToneSampler.shade(IntArray(8) { link }))
+        assertNull(ToneSampler.shade(IntArray(0)))
+    }
+
+    @Test
+    fun aPageDrawnDarkNeverGetsALightThemeColourOrBackground() {
+        val dark = PageColors.opaque(16, 18, 20)
+        val darker = PageColors.opaque(32, 33, 34)
+        val light = PageColors.opaque(234, 236, 240)
+        val drawnDark = PageTone(topShade = dark, bottomShade = dark)
+        assertEquals(PageTone(dark, dark), PageTone.resolve(light, light, drawnDark, light))
+        assertEquals(PageTone(darker, darker), PageTone.resolve(light, darker, drawnDark, null))
+        assertEquals(PageTone(darker, darker), PageTone.resolve(darker, light, drawnDark, null))
+        assertEquals(PageTone(light, light), PageTone.resolve(light, null, PageTone(topShade = light, bottomShade = light), null))
+        assertEquals(PageTone(dark, dark), PageTone.resolve(light, null, PageTone(light, light, dark, dark), null))
+    }
+
+    @Test
+    fun aSampleThatCantTellAnEdgesColourKeepsTheOneSampledBefore() {
+        val dark = 0xFF101418.toInt()
+        val light = 0xFFFFFFFF.toInt()
+        assertEquals(PageTone(dark, dark), PageTone(dark, null).over(PageTone(light, dark)))
+        assertEquals(PageTone(dark, dark, dark, light), PageTone(dark, dark, dark, light).over(PageTone(light, light, light, dark)))
+        assertEquals(PageTone(null, dark, light, dark), PageTone(bottom = dark, topShade = light, bottomShade = dark).over(null))
+        assertEquals(PageTone(light, dark), PageTone(null, dark).over(PageTone(light, light)))
+        assertEquals(PageTone(dark, null), PageTone(dark, null).over(null))
+        assertEquals(PageTone(dark, light), PageTone(dark, light).over(PageTone(light, dark)))
+    }
+
+    @Test
     fun networkErrorsBecomeTheIphoneFailures() {
         assertEquals(NetworkFailure.HostNotFound, NetworkFailure.fromWebViewError(WebViewClient.ERROR_HOST_LOOKUP, isOnline = true))
         assertEquals(NetworkFailure.Offline, NetworkFailure.fromWebViewError(WebViewClient.ERROR_HOST_LOOKUP, isOnline = false))

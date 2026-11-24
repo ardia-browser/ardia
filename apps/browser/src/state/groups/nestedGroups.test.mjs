@@ -73,6 +73,51 @@ test("Remove from Group takes a tab up one level; ungrouping a nested group hand
   assert.equal(S().groups[outer].tabIds.includes(c), true);
 });
 
+test("Remove from Group keeps the selected tabs in their sidebar order, after the tabs that stay", () => {
+  for (const pick of [(a, b) => [a, b], (a, b) => [b, a]]) {
+    reset();
+    const { w, ids: [a, b, c] } = windowWith("a", "b", "c");
+    const reading = S().groupTabs([a, b, c], { pinned: false, name: "Reading" });
+    S().removeTabsFromGroup(pick(a, b));
+    assert.deepEqual(rows(reading), ["c"]);
+    assert.deepEqual(order(w), ["c", "a", "b"]);
+    assert.deepEqual(sidebarEntries(S(), w).list, [`g:${reading}`, `t:${a}`, `t:${b}`]);
+  }
+});
+
+test("Remove from Group on every tab of a group leaves them where they were", () => {
+  reset();
+  const { w, ids: [a, b, c, d] } = windowWith("a", "b", "c", "d");
+  const reading = S().groupTabs([a, b, c], { pinned: false, name: "Reading" });
+  S().removeTabsFromGroup([c, a, b]);
+  assert.equal(S().groups[reading], undefined);
+  assert.deepEqual(order(w), ["a", "b", "c", "d"]);
+});
+
+test("Remove from Group across nested groups takes each tab up one level, in order", () => {
+  reset();
+  const { w, outer, inner, a, b, c } = nested();
+  S().removeTabsFromGroup([c, b, a]);
+  assert.equal(S().groups[inner], undefined);
+  assert.deepEqual(rows(outer), ["b", "c", "d"]);
+  assert.deepEqual(order(w), ["b", "c", "d", "a", "e"]);
+  reset();
+  const again = nested();
+  S().removeTabsFromGroup([again.b, again.a]);
+  assert.deepEqual(rows(again.outer), ["[Inner]", "b", "d"]);
+  assert.deepEqual(order(again.w), ["c", "b", "d", "a", "e"]);
+});
+
+test("Remove from Group takes a split row out whole, in order with the other selected tab", () => {
+  reset();
+  const { w, ids: [a, b, c, d] } = windowWith("a", "b", "c", "d");
+  S().createSplit([b, c]);
+  const g = S().groupTabs([a, b, c, d], { pinned: false, name: "Reading" });
+  S().removeTabsFromGroup([c, a]);
+  assert.deepEqual(S().groups[g].tabIds, [d]);
+  assert.deepEqual(order(w), ["d", "a", "b", "c"]);
+});
+
 test("ungrouping a root makes its nested groups roots", () => {
   reset();
   const { w, outer, inner } = nested();

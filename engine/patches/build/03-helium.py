@@ -62,6 +62,15 @@ SKIP = {
     'helium/core/rbe-nativelink-config.patch': 'Helium\'s remote build setup',
     'helium/macos/rbe-linux-clang-wrapper.patch': 'Helium\'s remote build setup',
     'helium/macos/chromium-signing.patch': 'Helium\'s signing flow; scripts/release.sh signs Ardia',
+    'helium/core/pins/pin-state.patch': 'Helium\'s shared pinned tabs; Ardia keeps its own pins in the sidebar',
+    'helium/core/pins/pin-sync.patch': 'Helium\'s shared pinned tabs: pins mirrored into every window',
+    'helium/core/pins/sync-splits.patch': 'Helium\'s shared pinned tabs: pinned splits mirrored into every window',
+    'helium/core/pins/sync-drags.patch': 'Helium\'s shared pinned tabs: pin changes applied when a tab drag ends',
+    'helium/core/pins/hibernate-on-close.patch': 'Helium\'s shared pinned tabs: closing a pin hibernates it',
+    'helium/core/pins/pinned-url.patch': 'Helium\'s shared pinned tabs: a pin returns to the URL it was pinned at',
+    'helium/core/pins/open-links-outside.patch': 'Helium\'s shared pinned tabs: other sites open from a pin in new tabs',
+    'helium/core/pins/migrate-legacy-pins.patch': 'Helium\'s shared pinned tabs: per-window pins merged into one set',
+    'helium/ui/pins-ui.patch': 'Helium\'s tab strip UI for its shared pins; Ardia draws its own sidebar',
 }
 
 LINUX_SKIP = {

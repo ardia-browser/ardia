@@ -37,8 +37,6 @@ export function profileBeside(profileId: string, step: -1 | 1): string | null {
 
 export const splitIdOfNow = (tabId: string) => splitOf(store(), tabId)?.id ?? null;
 
-export const shownProfileOf = (windowId: string) => store().windows[windowId]?.profileId ?? null;
-
 export const splitsOnRowNow = (tabId: string, rowTabId: string) => splitsOnRow(store(), tabId, rowTabId);
 
 export const cleanUpCandidateCount = (windowId: string) => cleanUpCandidates(store(), windowId).length;

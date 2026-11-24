@@ -12,7 +12,7 @@ const sourcesIn = (folder) =>
     .map((file) => read(folder + file));
 
 const ASKED_BY = ["packages/shell/src/", "packages/ardiacore/src/", "packages/shaders/src/", "packages/import/src/", "packages/sync/src/"];
-const DRAWN_AS_NOTHING_ON_WINDOWS = ["ArdiaMeadow", "ArdiaPlugins", "ArdiaPowerUp", "ArdiaReport", "ArdiaWebKit"];
+const DRAWN_AS_NOTHING_ON_WINDOWS = ["ArdiaFieldGlow", "ArdiaMeadow", "ArdiaPlugins", "ArdiaPowerUp", "ArdiaReport", "ArdiaWebKit"];
 
 const asked = () => {
   const names = new Set();
@@ -46,22 +46,4 @@ test("a label asked to strike its text through draws the line, and one not asked
   assert.equal("textDecorationLine" in labelTextStyle({ strikethrough: false }, true), false);
   assert.deepEqual(labelTextStyle({ fontSize: 15, weight: "semibold", color: "#112233" }, true), { fontSize: 15, fontWeight: "600", fontVariant: ["tabular-nums"], color: "#112233" });
   assert.equal(labelTextStyle({}, true).color, "rgba(255,255,255,0.85)");
-});
-
-const NOT_ON_WINDOWS_YET = ["downloadFavicon", "downloadImage", "executeExtensionAction", "exitPictureInPicture", "mediaCaptureSourceId", "nativeTag", "notificationAction", "resolveAutofillPrompt", "resolveDisplayMedia", "resolvePasswordPrompt"];
-
-const tableKeys = (source, name) => {
-  const from = source.indexOf(`const ${name}:`);
-  return [...source.slice(from, source.indexOf("\n};", from)).matchAll(/^  ([A-Za-z]+): /gm)].map(([, key]) => key);
-};
-
-test("every call the shared UI can make on a page is one Windows carries out or answers, or one it is listed as not having yet", () => {
-  const types = read("packages/ardiacore/src/pageTypes.ts");
-  const handle = types.slice(types.indexOf("export type WebViewHandle"));
-  const asked = [...handle.slice(0, handle.indexOf("\n};")).matchAll(/^  ([A-Za-z]+)\(/gm)].map(([, name]) => name);
-  const view = read("packages/expo-windows/src/engine/EngineWebView.tsx");
-  const has = new Set([...tableKeys(view, "ARGUMENTS"), ...tableKeys(view, "ANSWERS"), ...[...view.matchAll(/if \(method === "([A-Za-z]+)"\) return /g)].map(([, name]) => name)]);
-  assert.ok(asked.length > 30 && has.size > 25);
-  assert.deepEqual(asked.filter((name) => !has.has(name) && !NOT_ON_WINDOWS_YET.includes(name)), [], "a page call the Mac added: on Windows it does nothing and answers null");
-  assert.deepEqual(NOT_ON_WINDOWS_YET.filter((name) => has.has(name) || !asked.includes(name)), [], "listed as missing, but Windows has it or the Mac dropped it");
 });

@@ -85,6 +85,14 @@ test("file shortcuts become stored overrides: \"\" unbinds, the default clears t
   assert.deepEqual(read({ shortcuts: { newTab: "cmd+y" } }).patch, { shortcuts: { newTab: ["y", "command"] } });
 });
 
+test("per-profile shortcuts read from the file for any profile id, and the profile's own default clears the override", () => {
+  const order = ["default", "p-work"];
+  const { overrides, problems } = configShortcuts("config.json", { "switchProfile:p-work": "alt+2", "switchProfile:default": "ctrl+1", "newLittleArdia:p-later": "cmd+alt+l", "switchProfile:bad id": "alt+3" }, { "switchProfile:default": ["9", "option"] }, { order, mustExist: false });
+  assert.deepEqual(overrides, { "switchProfile:p-work": ["2", "option"], "newLittleArdia:p-later": ["l", "option", "command"] });
+  assert.deepEqual(problems, ["config.json: shortcuts.switchProfile:bad id isn't a command"]);
+  assert.deepEqual(configShortcuts("settings.set", { "switchProfile:p-gone": "alt+2" }, {}, { order, mustExist: true }).problems, ["settings.set: shortcuts.switchProfile:p-gone names a profile that doesn't exist"]);
+});
+
 test("both link modifiers on alt settle on one fixed pair instead of flipping on every reconcile, and the conflict is reported", async () => {
   const { useBrowser } = await import("../browser/store.ts");
   const S = () => useBrowser.getState();
@@ -111,4 +119,13 @@ test("a shortcut equal to any of the command's defaults is no override, so the o
 test("a settings key that is present but not an object is an error and applies nothing", () => {
   assert.deepEqual(read(null), { patch: {}, theme: null, problems: ["config.json: settings must be an object"] });
   assert.deepEqual(readConfig(JSON.stringify({ theme: "nord" }), DEFAULT_SETTINGS), { patch: {}, theme: "nord", problems: [] });
+});
+
+test("theme takes a plugin's theme key, and a malformed one is a problem", () => {
+  assert.equal(read({}, { theme: "plugin:reader/dusk" }).theme, "plugin:reader/dusk");
+  for (const theme of ["plugin:Reader/dusk", "plugin:reader/", "plugin:reader/a/b"]) {
+    const { theme: got, problems } = read({}, { theme });
+    assert.equal(got, undefined, theme);
+    assert.equal(problems.length, 1, theme);
+  }
 });

@@ -4,7 +4,7 @@ import type { SplitHalfMark } from "../../state/sidebar/dragMarks";
 import { pinSlot } from "./pinZone";
 import { pinSlotPitch, type Frame, inside, isGroupItem, type Item, type Pointed, tailKey } from "./dragModel";
 
-export type Aim = {
+type Aim = {
   spot: DropSpot | null;
   gapKey: string | null;
   sequence?: string[];

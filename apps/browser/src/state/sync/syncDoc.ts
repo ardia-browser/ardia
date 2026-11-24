@@ -110,3 +110,18 @@ export type SyncUi = {
   remoteTabs: Record<string, RemoteTabs[]>;
   remoteProfiles: RemoteProfile[];
 };
+
+export const emptyUi = (status: SyncStatus): SyncUi => ({
+  status,
+  enabled: false,
+  joining: false,
+  folder: null,
+  types: defaultTypes(),
+  profiles: {},
+  lastSyncedAt: null,
+  error: null,
+  pending: 0,
+  devices: [],
+  remoteTabs: {},
+  remoteProfiles: [],
+});

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DragItems } from "./dragItems.ts";
 
-const controller = (active = false) => ({ items: new Map(), marks: null, active });
+const controller = (active = false) => ({ items: new Map(), marks: null, active, measureLate() {} });
 const item = (name) => {
   let gap = 12;
   return { name, gap: { stopAnimation() {}, setValue: (v) => (gap = v), value: () => gap } };

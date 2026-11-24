@@ -9,6 +9,7 @@ final class PluginHost {
 
   private let queue = DispatchQueue(label: "ardia.plugins", qos: .userInitiated)
   private var sink: (owner: ObjectIdentifier, send: Sink)?
+  private var attachment = 0
   private let runs = PluginRuns<PluginProcess>()
   private let lifecycle = PluginLifecycle()
   private let outbox = PluginPageOutbox()
@@ -25,6 +26,10 @@ final class PluginHost {
     }
   }
 
+  func emit(_ name: String, _ body: [String: Any]) {
+    queue.async { [self] in sink?.send(name, body) }
+  }
+
   func detach(_ owner: AnyObject) {
     let id = ObjectIdentifier(owner)
     queue.async { [self] in
@@ -35,6 +40,7 @@ final class PluginHost {
   }
 
   private func terminateAll() {
+    attachment += 1
     let all = runs.all
     runs.removeAll()
     for process in all { process.terminateForQuit(within: Self.quitGrace / Double(max(1, all.count))) }
@@ -44,18 +50,25 @@ final class PluginHost {
     queue.async { [self] in
       lifecycle.enqueue(spec.name, .start, cancelled: { done(["ok": false, "reason": "a later stop or removal replaced this start"]) }) { [self] complete in
         runs.stopAll(spec.name, graceMs: 0) { [self] in
-          spawn(spec, done: done)
-          complete()
+          let attached = attachment
+          PluginProcess.prepareCertificates(for: spec, deliverOn: queue) { [self] certificates in
+            if attachment == attached {
+              spawn(spec, certificates: certificates, done: done)
+            } else {
+              done(["ok": false, "reason": "Ardia closed its plugins while this one was starting"])
+            }
+            complete()
+          }
         }
       }
     }
   }
 
-  private func spawn(_ spec: PluginProcess.Spec, done: @escaping ([String: Any]) -> Void) {
+  private func spawn(_ spec: PluginProcess.Spec, certificates: PluginSandbox.PreparedCertificates, done: @escaping ([String: Any]) -> Void) {
     guard let folders = PluginFolders.current() else { return done(["ok": false, "reason": "Ardia has no data folder"]) }
     nextRun += 1
     let result = PluginProcess.spawn(
-      spec, run: nextRun, folders: folders, queue: queue,
+      spec, run: nextRun, folders: folders, queue: queue, certificates: certificates,
       onLine: { [weak self] process, line in
         self?.sink?.send("onLine", ["name": process.name, "run": process.run, "launch": process.launch, "line": line])
       },
@@ -157,11 +170,11 @@ final class PluginHost {
     }
   }
 
-  func remove(_ name: String, done: @escaping (String?) -> Void) {
+  func remove(_ name: String, official: Bool, folderId: String?, done: @escaping (String?) -> Void) {
     queue.async { [self] in
       lifecycle.enqueue(name, .remove) { [self] complete in
         runs.stopAll(name, graceMs: 1000) {
-          let problem = PluginFolders.current().map { $0.remove(name) } ?? "Ardia has no data folder."
+          let problem = PluginFolders.current().map { $0.remove(name, official: official, folderId: folderId) } ?? "Ardia has no data folder."
           DispatchQueue.main.async { done(problem) }
           complete()
         }

@@ -30,7 +30,7 @@ __define("packages/core/src/mobile.ts", function (exports, __require) {
 const { BANG_LIST, BANG_LIST_UNICODE } = __require("packages/core/src/bangList.ts");
 const { bangDocument, bangTable, findBang, joinBangTables, readBangDocument, slimBangs } = __require("packages/core/src/bangs.ts");
 const { cleanUrl } = __require("packages/core/src/cleanUrl.ts");
-const { allEngines, engineById, parseSuggestions, suggestRequestUrl } = __require("packages/core/src/engines.ts");
+const { allEngines, engineById, parseSuggestions, suggestRequestUrl, validSearchTemplate } = __require("packages/core/src/engines.ts");
 const { breadcrumb, fixupUrl, searchUrlFor, urlForDisplay } = __require("packages/core/src/omnibox.ts");
 const { findScope } = __require("packages/core/src/siteSearch.ts");
 const { buildSuggestions, prepareSuggestions } = __require("packages/core/src/suggest.ts");
@@ -64,7 +64,7 @@ if (typeof scope.URL === "undefined") scope.URL = HostURL;
                              
                
   
-                                                                                                               
+                                                                                                        
 
 let source                   = { tabs: [], history: [], bookmarks: [] };
 let engines                 = allEngines();
@@ -94,7 +94,7 @@ function mobileSetSources(next                  )          {
 
 function mobileSetSearch(search              )                                                               {
   const list = allEngines(search.customEngines ?? []);
-  if (search.customUrl?.includes("%s")) list.push({ id: "custom", name: "Custom", keyword: "custom", url: search.customUrl, custom: true });
+  if (validSearchTemplate(search.customUrl)) list.push({ id: "custom", name: "Custom", keyword: "custom", url: search.customUrl, custom: true });
   engines = list;
   engine = engineById(engines, search.engineId ?? undefined);
   return { id: engine.id, name: engine.name, url: engine.url, suggests: Boolean(engine.suggestUrl) };
@@ -187,6 +187,7 @@ __define("packages/core/src/index.ts", function (exports, __require) {
   __exportAll(exports, __require("packages/core/src/providerNetwork.ts"));
   __exportAll(exports, __require("packages/core/src/providerRows.ts"));
   __exportAll(exports, __require("packages/core/src/quickCreate.ts"));
+  __exportAll(exports, __require("packages/core/src/secret.ts"));
   __exportAll(exports, __require("packages/core/src/siteSearch.ts"));
   __exportAll(exports, __require("packages/core/src/suggest.ts"));
   __exportAll(exports, __require("packages/core/src/suggestFetcher.ts"));
@@ -194,6 +195,7 @@ __define("packages/core/src/index.ts", function (exports, __require) {
   __exportAll(exports, __require("packages/core/src/textFragment.ts"));
   __exportAll(exports, __require("packages/core/src/theme.ts"));
   __exportAll(exports, __require("packages/core/src/webStore.ts"));
+
 
 
 
@@ -372,7 +374,7 @@ function appUrlOrigin(url        )                {
   return parts ? `${APP_SCHEME}://${parts.host}` : null;
 }
 
-                         
+                  
                                        
                                                 
                       
@@ -947,7 +949,7 @@ function convert(input        )                                         {
   return { value: (amount * a.factor) / b.factor, unit: b.label };
 }
 
-                                                                                 
+                                                                          
 
 function calculate(raw        )                     {
   const expression = raw.trim().replace(/^=\s*/, "").replace(/\s*=\s*\??$/, "");
@@ -969,8 +971,11 @@ function calculate(raw        )                     {
 
 });
 __define("packages/core/src/cleanUrl.ts", function (exports, __require) {
+  __export(exports, "cleanUrlReport", () => cleanUrlReport);
   __export(exports, "cleanUrl", () => cleanUrl);
+  __export(exports, "cleanLinkTitle", () => cleanLinkTitle);
   __export(exports, "markdownLink", () => markdownLink);
+  __export(exports, "linkLines", () => linkLines);
 
 const GLOBAL_PARAMS = new Set([
   "gclid", "gclsrc", "dclid", "gbraid", "wbraid", "gad_source", "gad_campaignid", "_ga", "_gl", "srsltid",
@@ -1020,31 +1025,67 @@ function isTrackingParam(name        , hostname = "")          {
   return siteRules(hostname).some((r) => r.params.includes(key) || r.prefixes?.some((p) => key.startsWith(p)));
 }
 
-function cleanUrl(url        )         {
+                                                                               
+                                                                                                 
+                                                                                     
+
+function cleanUrlReport(url        )                 {
+  const unchanged = Object.freeze({ url: url              , removedTracker: false });
   const match = /^([^?#]*)(\?[^#]*)?(#.*)?$/.exec(url);
-  if (!match?.[2]) return url;
+  if (!match?.[2]) return unchanged;
   let hostname = "";
   try {
     const parsed = new URL(url);
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return url;
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return unchanged;
     hostname = parsed.hostname;
   } catch {
-    return url;
+    return unchanged;
   }
   const [, base = "", query = "", hash = ""] = match;
   const pairs = query.slice(1).split("&");
-  const kept = pairs.filter((pair) => pair && !isTrackingParam(decodeName(pair.split("=")[0] ), hostname));
-  if (kept.length === pairs.length) return url;
-  return `${base}${kept.length ? `?${kept.join("&")}` : ""}${hash}`;
+  const tracks = (pair        ) => isTrackingParam(decodeName(pair.split("=")[0] ), hostname);
+  const kept = pairs.filter((pair) => pair && !tracks(pair));
+  if (kept.length === pairs.length) return unchanged;
+  const cleaned = `${base}${kept.length ? `?${kept.join("&")}` : ""}${hash}`              ;
+  return Object.freeze({ url: cleaned, removedTracker: pairs.some((pair) => pair !== "" && tracks(pair)) });
 }
 
-function markdownLink(title        , url        )         {
-  return `[${(title || url).replace(/([[\]])/g, "\\$1")}](${cleanUrl(url)})`;
+function cleanUrl(url        )             {
+  return cleanUrlReport(url).url;
+}
+
+const LINE_BREAK_ESCAPES                         = { "\r": "%0D", "\n": "%0A" };
+
+const markdownLabel = (text        ) => text.replace(/[\\[\]*_\x60<>~]/g, "\\$&").replace(/&(?=#?[A-Za-z0-9]+;)/g, "&amp;");
+
+function markdownDestination(url        )         {
+  const oneLine = url.replace(/[\r\n]/g, (character) => LINE_BREAK_ESCAPES[character] ).replace(/&(?=#?[A-Za-z0-9]+;)/g, "&amp;");
+  return /[\s<>]/.test(oneLine) ? `<${oneLine.replace(/[<>\\]/g, "\\$&")}>` : oneLine.replace(/[()\\]/g, "\\$&");
+}
+
+                                                                                      
+
+function cleanLinkTitle(title                           , url        )               {
+  const oneLine = (title ?? "").replace(/\s*[\r\n\u2028\u2029]+\s*/g, " ").trim();
+  if (!oneLine) return ""                ;
+  return (oneLine === url.trim() ? cleanUrl(url) : cleanUrl(oneLine))                          ;
+}
+
+function markdownLink(title        , url        )           {
+  const clean = cleanUrl(url);
+  return `[${markdownLabel(cleanLinkTitle(title, url) || clean)}](${markdownDestination(clean)})`            ;
+}
+
+function linkLines(lines                     , markdown         )           {
+  return (markdown && lines.length > 1 ? lines.map((line) => `- ${line}`).join("\n") : lines.join("\n"))            ;
 }
 
 });
 __define("packages/core/src/engines.ts", function (exports, __require) {
   __export(exports, "BUILT_IN_ENGINES", () => BUILT_IN_ENGINES);
+  __export(exports, "validSearchTemplate", () => validSearchTemplate);
+  __export(exports, "customEngineFrom", () => customEngineFrom);
+  __export(exports, "customEnginesFrom", () => customEnginesFrom);
   __export(exports, "allEngines", () => allEngines);
   __export(exports, "extensionEngineId", () => extensionEngineId);
   __export(exports, "controllingExtensionEngine", () => controllingExtensionEngine);
@@ -1145,8 +1186,20 @@ const BUILT_IN_ENGINES                          = [
   },
 ];
 
+const validSearchTemplate = (url         )                => typeof url === "string" && /^https?:\/\/[^/?#\s]+/i.test(url) && url.includes("%s");
+
+function customEngineFrom(raw         )                            {
+  if (!raw || typeof raw !== "object") return null;
+  const { id, name, keyword, url } = raw                           ;
+  if (typeof id !== "string" || typeof name !== "string" || typeof keyword !== "string" || !validSearchTemplate(url)) return null;
+  return { id, name, keyword, url };
+}
+
+const customEnginesFrom = (raw         )                       =>
+  Array.isArray(raw) ? raw.flatMap((e) => customEngineFrom(e) ?? []) : [];
+
 function allEngines(custom                                = [], extension                                   = [])                 {
-  const engines                 = [...BUILT_IN_ENGINES, ...custom.map((e) => ({ ...e, custom: true }))];
+  const engines                 = [...BUILT_IN_ENGINES, ...customEnginesFrom(custom).map((e) => ({ ...e, custom: true }))];
   const seen = new Set        ();
   for (const e of extension) {
     if (seen.has(e.extensionId)) continue;
@@ -1176,7 +1229,7 @@ function engineById(engines                         , id                    )   
 const searchUrl = (engine                           , query        ) => searchUrlFor(engine.url, query);
 
 const suggestRequestUrl = (engine              , query        ) =>
-  engine.suggestUrl && query.trim() ? searchUrlFor(engine.suggestUrl, query) : null;
+  engine.suggestUrl && !engine.custom && query.trim() ? searchUrlFor(engine.suggestUrl, query) : null;
 
 const engineHost = (engine                           ) => hostOf(engine.url.replace(/%s/g, "q"));
 
@@ -1232,6 +1285,8 @@ __define("packages/core/src/omnibox.ts", function (exports, __require) {
   __export(exports, "isJavaScriptUrl", () => isJavaScriptUrl);
   __export(exports, "withoutJavaScriptScheme", () => withoutJavaScriptScheme);
   __export(exports, "fixupUrl", () => fixupUrl);
+  __export(exports, "sameAddress", () => sameAddress);
+  __export(exports, "spacedAddressGuess", () => spacedAddressGuess);
   __export(exports, "searchUrlFor", () => searchUrlFor);
   __export(exports, "resolveInput", () => resolveInput);
   __export(exports, "classifyPaste", () => classifyPaste);
@@ -1240,10 +1295,10 @@ __define("packages/core/src/omnibox.ts", function (exports, __require) {
   __export(exports, "urlForDisplay", () => urlForDisplay);
 const { appUrlOrigin, toAppUrl } = __require("packages/core/src/appUrls.ts");
 const { cleanUrl } = __require("packages/core/src/cleanUrl.ts");
-const { displayHost } = __require("packages/core/src/idn.ts");
+const { displayHost, punycodeEncode } = __require("packages/core/src/idn.ts");
 const { PSL_TLDS } = __require("packages/core/src/tlds.ts");
 
-                                                                                                                  
+                                                                                                           
 
 const URL_PARTS = /^([a-z][a-z0-9+.-]*):\/\/(?:[^@/?#]*@)?(\[[^\]]*\]|[^:/?#]*)(?::(\d+))?([^?#]*)(\?[^#]*)?(#.*)?$/i;
 
@@ -1267,12 +1322,14 @@ const LOCAL_TLDS = new Set(["meta", "local", "localhost", "test", "internal", "l
 let registries                         ;
 const knownTld = (tld        ) => LOCAL_TLDS.has(tld) || (registries ??= new Set(PSL_TLDS.split(/\s+/))).has(tld);
 
+const isIPv4 = (host        ) => /^(\d{1,3}\.){3}\d{1,3}$/.test(host) && host.split(".").every((octet) => Number(octet) <= 255);
+
 function isLocalHost(host        )          {
   return (
     host === "localhost" ||
     !host.includes(".") ||
     host.startsWith("[") ||
-    /^(\d{1,3}\.){3}\d{1,3}$/.test(host) ||
+    isIPv4(host) ||
     /\.(local|localhost|test|internal|lan|home\.arpa)$/.test(host)
   );
 }
@@ -1282,7 +1339,7 @@ const isLabel = (part        ) => LABEL_CHARS.test(part) && part[0] !== "-" && !
 const isTld = (part        ) => (isLabel(part) && !/^\d/.test(part)) || /^xn--[a-z0-9-]+$/i.test(part);
 
 function isHostName(name        )          {
-  if (name.toLowerCase() === "localhost" || /^\[[0-9a-f:.]+\]$/i.test(name) || /^(\d{1,3}\.){3}\d{1,3}$/.test(name)) return true;
+  if (name.toLowerCase() === "localhost" || /^\[[0-9a-f:.]+\]$/i.test(name) || isIPv4(name)) return true;
   const labels = name.split(".");
   return labels.length === 1 ? isLabel(name) : labels.slice(0, -1).every(isLabel) && isTld(labels.at(-1) );
 }
@@ -1315,8 +1372,55 @@ function fixupUrl(raw        )                {
   return url && !isJavaScriptUrl(url) ? toAppUrl(url) : null;
 }
 
+                                                           
+
+const WIKI_HOST = /(^|\.)(wikipedia|wiktionary|wikimedia|wikiquote|wikibooks|wikisource|wikinews|wikiversity|wikivoyage|wikidata|mediawiki)\.org$/;
+
+function spacedAddress(input        )                       {
+  if (!input.includes(" ") || /[^\S ]/.test(input)) return null;
+  const end = input.search(/[/?#]/);
+  if (end <= 0 || input.slice(0, end).includes(" ") || input.startsWith("/ ", end)) return null;
+  const host = matchHost(input);
+  if (!host) return null;
+  const name = host.name.toLowerCase();
+  if (KNOWN_SCHEMES.has(name) || name === "javascript") return null;
+  const port = Number(host.port.slice(1));
+  if (host.port && (port < 1 || port > 65535)) return null;
+  const dotted = name.includes(".") && !/^[\d.]+$/.test(name);
+  const ip = name.startsWith("[") || isIPv4(name);
+  const local = name === "localhost" || ip || (!!host.port && !(dotted && !isLocalHost(name) && (port === 80 || port === 443)));
+  if (!dotted && !local) return null;
+  const rest = input.slice(host.authority.length);
+  const wiki = WIKI_HOST.test(name) && /^\/wiki\/[^\s/?#]/.test(rest);
+  const certain = local || wiki || /^[^\s?#]*\?(?:[^\s#]*&)?[^\s#&=]+=/.test(rest);
+  return { escaped: input.replace(/ /g, "%20"), certain };
+}
+
+const asciiLabel = (label        ) =>
+  /^[\x00-\x7f]*$/.test(label) ? label.replace(/[A-Z]+/g, (upper) => upper.toLowerCase()) : `xn--${punycodeEncode(Array.from(label.normalize("NFKC"), (c) => c.toLowerCase()).join(""))}`;
+
+function addressKey(url        )         {
+  const m = /^([a-z][a-z0-9+.-]*):\/\/([^/?#]*)(.*)$/i.exec(url.trim());
+  if (!m) return url.trim();
+  const scheme = m[1] .toLowerCase();
+  const web = scheme === "http" || scheme === "https";
+  const defaultPort = scheme === "https" ? 443 : scheme === "http" ? 80 : -1;
+  const authority = m[2] .replace(/^[^:@[\]]+/, (host) => host.split(".").map(asciiLabel).join(".")).replace(/[A-Z]+/g, (upper) => upper.toLowerCase()).replace(/:(\d+)$/, (port, digits        ) => (!web ? port : Number(digits) === defaultPort ? "" : `:${Number(digits)}`));
+  const rest = web && !m[3] .startsWith("/") ? `/${m[3]}` : m[3] ;
+  return `${scheme}://${authority}${rest}`;
+}
+
+const sameAddress = (a        , b        ) => addressKey(a) === addressKey(b);
+
+function spacedAddressGuess(raw        )                {
+  const spaced = spacedAddress(raw.trim());
+  return spaced && !spaced.certain ? fixupUrl(spaced.escaped) : null;
+}
+
 function fixup(raw        )                {
-  const input = raw.trim();
+  const trimmed = raw.trim();
+  const spaced = spacedAddress(trimmed);
+  const input = spaced?.certain ? spaced.escaped : trimmed;
   if (!input || (/\s/.test(input) && !/^([a-z][a-z0-9+.-]*:\/\/|\/[^\s/])/i.test(input))) return null;
   if (/^(about|data|mailto|tel|sms|facetime|view-source):/i.test(input)) return input;
 
@@ -1347,8 +1451,12 @@ function fixup(raw        )                {
   return host.port || path.endsWith("/") || parts > 1 ? `${proto}://${input}` : null;
 }
 
+const SURROGATE_PAIR_OR_LONE = /[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDFFF]/g;
+
+const wellFormed = (text        ) => text.replace(SURROGATE_PAIR_OR_LONE, (unit) => (unit.length === 2 ? unit : "\uFFFD"));
+
 function searchUrlFor(template        , query        )         {
-  const q = encodeURIComponent(query.trim());
+  const q = encodeURIComponent(wellFormed(query.trim()));
   return template.includes("%s") ? template.replace(/%s/g, q) : template + q;
 }
 
@@ -1364,7 +1472,7 @@ function resolveInput(raw        , search        )         {
 function classifyPaste(text        )                     {
   const trimmed = withoutJavaScriptScheme(text.trim()).trim();
   if (!trimmed) return null;
-  const url = /\s/.test(trimmed) ? null : fixupUrl(trimmed);
+  const url = /\s/.test(trimmed) && !spacedAddress(trimmed)?.certain ? null : fixupUrl(trimmed);
   if (url && !/^(about|data):/i.test(url)) return { kind: "go", url: cleanUrl(url) };
   return { kind: "search", query: trimmed.replace(/\s+/g, " ").slice(0, 2000) };
 }
@@ -1623,7 +1731,7 @@ const DANGEROUS = new RegExp(
   "u",
 );
 
-                         
+                  
              
                          
                
@@ -1871,7 +1979,7 @@ const { matchActions } = __require("packages/core/src/fuzzy.ts");
                    
   
 
-                                                                   
+                                                            
 
 const NONE                = { rows: [], exact: false };
 const MIN_PARTIAL_QUERY = 3;
@@ -2006,7 +2114,7 @@ const SITE_INGEST_KEY = "ak_site_6b26588b3764ae7d0f6d63d7";
 
 const INGEST_KEY_HEADER = "X-Ardia-Key";
 
-                                                  
+                                           
 
 const INGEST_KEYS                                         = {
   app: APP_INGEST_KEY,
@@ -2333,6 +2441,8 @@ function globalProviderRows(sections                            , shown         
 });
 __define("packages/core/src/pageText.ts", function (exports, __require) {
   __export(exports, "displayUrl", () => displayUrl);
+  __export(exports, "documentKey", () => documentKey);
+  __export(exports, "routeOf", () => routeOf);
   __export(exports, "pageKey", () => pageKey);
   __export(exports, "withRootSlash", () => withRootSlash);
   __export(exports, "pageTexts", () => pageTexts);
@@ -2351,13 +2461,24 @@ function displayUrl(url        )         {
   return urlForDisplay(url).replace(/\/$/, "");
 }
 
-const pageKey = (url        ) => url.replace(/#.*$/, "").replace(/\/$/, "");
+const documentKey = (url        ) => {
+  const at = url.indexOf("#");
+  return (at < 0 ? url : url.slice(0, at)).replace(/\/$/, "");
+};
+
+const routeOf = (url        ) => {
+  const at = url.indexOf("#");
+  return at >= 0 && (url.startsWith("#/", at) || url.startsWith("#!/", at)) ? url.slice(at) : "";
+};
+
+const pageKey = (url        ) => documentKey(url) + routeOf(url);
 
 const withRootSlash = (url        ) => url.replace(/^(https?:\/\/[^/?#]*)(?=[?#]|$)/i, "$1/");
 
                         
               
               
+                    
                 
                      
                      
@@ -2385,7 +2506,10 @@ function pageText(row                                )           {
     const shown = displayUrl(row.url);
     const shownLower = shown.toLowerCase();
     const titleLower = row.title.toLowerCase();
-    text = { url: row.url, key: pageKey(row.url), shown, shownLower, titleLower, titleWords: wordsOf(titleLower) };
+    const document = documentKey(row.url);
+    const route = routeOf(row.url);
+    text = { url: row.url, key: document + route, shown, shownLower, titleLower, titleWords: wordsOf(titleLower) };
+    if (route) text.document = document;
     pageTexts.set(row, text);
   }
   return text;
@@ -2520,7 +2644,7 @@ const providerApprovalKey = (definition         ) => `omnibox-provider:${sha256H
 });
 __define("packages/core/src/quickCreate.ts", function (exports, __require) {
   __export(exports, "matchQuickCreate", () => matchQuickCreate);
-                           
+                    
              
                 
               
@@ -2560,6 +2684,171 @@ function matchQuickCreate(query        , limit = 3)                {
     .slice(0, limit)
     .map((x) => x.c);
 }
+
+});
+__define("packages/core/src/secret.ts", function (exports, __require) {
+  __export(exports, "SECRET_KINDS", () => SECRET_KINDS);
+  __export(exports, "REDACTED_SECRET", () => REDACTED_SECRET);
+  __export(exports, "SecretEscapeError", () => SecretEscapeError);
+  __export(exports, "Secret", () => Secret);
+  __export(exports, "asSecret", () => asSecret);
+  __export(exports, "isSecret", () => isSecret);
+  __export(exports, "reveal", () => reveal);
+  __export(exports, "sameSecret", () => sameSecret);
+  __export(exports, "noteSecretEscape", () => noteSecretEscape);
+  __export(exports, "setSecretEscapeMode", () => setSecretEscapeMode);
+  __export(exports, "onSecretEscape", () => onSecretEscape);
+  __export(exports, "secretsDropped", () => secretsDropped);
+  __export(exports, "withoutSecrets", () => withoutSecrets);
+const SECRET_KINDS = ["password", "oauthToken", "oauthClientSecret", "apiToken", "pluginSecret", "syncPhrase", "devtoolsToken"]         ;
+
+                                                       
+
+                                                                              
+
+                                         
+
+const REDACTED_SECRET = "<secret>";
+
+const plaintext = new WeakMap                ();
+const kinds = new WeakMap                    ();
+const listeners = new Set                                                 ();
+let mode                   = "drop";
+let dropped = 0;
+
+class SecretEscapeError extends Error {
+           where              ;
+           kind            ;
+
+  constructor(where              , kind            ) {
+    super(`A ${kind} secret reached a ${where} sink`);
+    this.name = "SecretEscapeError";
+    this.where = where;
+    this.kind = kind;
+  }
+}
+
+class Secret                                    {
+                   secretKind    ;
+
+          constructor() {}
+
+  get kind()    {
+    return kinds.get(this)     ;
+  }
+
+  toJSON()            {
+    noteSecretEscape("json", this);
+    return undefined;
+  }
+
+  toString()         {
+    noteSecretEscape("text", this);
+    return REDACTED_SECRET;
+  }
+
+  valueOf()         {
+    return this.toString();
+  }
+}
+
+Object.defineProperty(Secret.prototype, Symbol.toPrimitive, { value: Secret.prototype.toString });
+Object.defineProperty(Secret.prototype, Symbol.for("nodejs.util.inspect.custom"), { value: () => `Secret(${REDACTED_SECRET})` });
+
+function asSecret                      (kind   , value        )            {
+  if (typeof value !== "string") throw new TypeError("A secret is text");
+  if (!SECRET_KINDS.includes(kind)) throw new TypeError("Unknown secret kind");
+  const box = Object.create(Secret.prototype)             ;
+  plaintext.set(box, value);
+  kinds.set(box, kind);
+  Object.freeze(box);
+  return box;
+}
+
+const isSecret = (value         )                  => typeof value === "object" && value !== null && plaintext.has(value);
+
+function reveal(secret        )         {
+  const value = plaintext.get(secret);
+  if (value === undefined) throw new TypeError("Not a secret");
+  return value;
+}
+
+const sameSecret = (a                           , b                           )          =>
+  !!a && !!b && (a === b || (a.kind === b.kind && reveal(a) === reveal(b)));
+
+function noteSecretEscape(where              , secret        )       {
+  const kind = kinds.get(secret) ?? "password";
+  if (mode === "throw") throw new SecretEscapeError(where, kind);
+  dropped++;
+  for (const listener of listeners) {
+    try {
+      listener(where, kind);
+    } catch {}
+  }
+}
+
+function setSecretEscapeMode(next                  )                   {
+  const previous = mode;
+  mode = next;
+  return previous;
+}
+
+function onSecretEscape(listener                                                 )             {
+  listeners.add(listener);
+  return () => void listeners.delete(listener);
+}
+
+const secretsDropped = () => dropped;
+
+function withoutSecrets   (value   , where              , seen = new WeakSet        ())    {
+  if (isSecret(value)) {
+    noteSecretEscape(where, value);
+    return undefined     ;
+  }
+  if (!value || typeof value !== "object" || seen.has(value)) return value;
+  seen.add(value);
+  if (Array.isArray(value)) {
+    let changed = false;
+    const out = value.map((item) => {
+      const kept = withoutSecrets(item, where, seen);
+      if (kept !== item) changed = true;
+      return kept;
+    });
+    return (changed ? out : value)     ;
+  }
+  if (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null) return value;
+  let out                                 = null;
+  for (const [key, item] of Object.entries(value)) {
+    const kept = withoutSecrets(item, where, seen);
+    if (kept === item) continue;
+    out ??= { ...(value                           ) };
+    if (kept === undefined) delete out[key];
+    else out[key] = kept;
+  }
+  return (out ?? value)     ;
+}
+
+                                               
+                                           
+
+                                                  
+                       
+           
+                             
+             
+                        
+              
+                                                 
+                 
+                                             
+                                                    
+                              
+                                                                                                  
+                      
+                       
+                      
+
+                                                                       
 
 });
 __define("packages/core/src/siteSearch.ts", function (exports, __require) {
@@ -2612,7 +2901,7 @@ const POPULAR_SITE_SEARCHES                        = [
 
                                                                                                           
 
-                            
+                     
                                    
                                 
                             
@@ -2684,14 +2973,14 @@ function offeredSiteSearch(typed        , completion        , sources           
                     
   
 
-                                                                                                                    
+                                                                                                             
 
-                           
+                    
                                                        
                                    
                                      
 
-                                                               
+                                                        
 
 function keywordBySpace(typed        , next        )                        {
   if (!typed.trim() || /\s$/.test(typed) || next !== `${typed} `) return null;
@@ -2719,6 +3008,8 @@ __define("packages/core/src/suggest.ts", function (exports, __require) {
   __export(exports, "buildSuggestions", () => buildSuggestions);
   __export(exports, "displayUrl", () => __require("packages/core/src/pageText.ts")["displayUrl"]);
   __export(exports, "prepareSuggestions", () => __require("packages/core/src/candidatePool.ts")["prepareSuggestions"]);
+  __export(exports, "dedupeSuggestions", () => __require("packages/core/src/suggestionRows.ts")["dedupeSuggestions"]);
+  __export(exports, "listsRoutesApart", () => __require("packages/core/src/suggestionRows.ts")["listsRoutesApart"]);
   __export(exports, "suggestionKey", () => __require("packages/core/src/suggestionRows.ts")["suggestionKey"]);
 const { findBang } = __require("packages/core/src/bangs.ts");
 const { calculate } = __require("packages/core/src/calculator.ts");
@@ -2726,9 +3017,9 @@ const { NO_BOOKMARKS, poolFor, savedBookmark, savedVisit, tabsOver } = __require
 const { extensionSuggestions } = __require("packages/core/src/extensionRows.ts");
 const { BUILT_IN_ENGINES, searchUrl } = __require("packages/core/src/engines.ts");
 const { matchActions } = __require("packages/core/src/fuzzy.ts");
-const { fixupUrl, hostOf, searchUrlFor } = __require("packages/core/src/omnibox.ts");
-const { matchScore, matchScoreWord, narrowing, parseQuery, remember, TopList } = __require("packages/core/src/pageMatch.ts");
-const { hostLowerOfPage, hostOfPage, hostPart, originOfPage, pageKey, withRootSlash } = __require("packages/core/src/pageText.ts");
+const { fixupUrl, hostOf, sameAddress, searchUrlFor, spacedAddressGuess } = __require("packages/core/src/omnibox.ts");
+const { leadingRows, matchScore, matchScoreWord, narrowing, parseQuery, remember, TabList, TopList } = __require("packages/core/src/pageMatch.ts");
+const { documentKey, hostLowerOfPage, hostOfPage, hostPart, originOfPage, pageKey, routeOf, withRootSlash } = __require("packages/core/src/pageText.ts");
 const { globalProviderRows, providerUrl, safeProviderRows } = __require("packages/core/src/providerRows.ts");
 const { matchQuickCreate } = __require("packages/core/src/quickCreate.ts");
 const { scopedSearchUrl } = __require("packages/core/src/siteSearch.ts");
@@ -2741,6 +3032,17 @@ const { actionRow, createRow, dedupeSuggestions, Output, pageSuggestion, suggest
 
 
 const DAY = 86_400_000;
+const lowerOrigin = (url        ) => url.replace(/^[a-z][a-z0-9+.-]*:\/\/[^/?#]*/i, (origin) => origin.toLowerCase());
+const withoutFragment = (url        ) => url.replace(/#.*$/, "");
+function withoutLead(listed                   , lead                   )           {
+  const rest           = [];
+  for (const x of listed) {
+    let inLead = false;
+    for (const y of lead) if (y === x) inLead = true;
+    if (!inLead) rest[rest.length] = x;
+  }
+  return rest;
+}
 
 function buildSuggestions(raw        , source                  , options                 = {})                   {
   const { limit = 8, now = Date.now(), engine = BUILT_IN_ENGINES[0] , preference = "website", remote = [], actions = [], scope, preventInline = false } = options;
@@ -2764,20 +3066,21 @@ function buildSuggestions(raw        , source                  , options        
   }
 
   const pool = poolFor(source.history, source.bookmarks ?? NO_BOOKMARKS);
-  const { tabIds, extra, renamed } = tabsOver(pool, source.tabs, options.currentTabId);
+  const tabsNow = tabsOver(pool, source.tabs, options.currentTabId);
+  const { tabIds, extra, renamed } = tabsNow;
   const currentKey = options.currentUrl ? pageKey(options.currentUrl) : null;
-  const via                                = {};
-  let tagged = false;
+  const via = new Map                           ();
   const tag = (s            , as                                   )             => {
-    if (as) {
-      via[suggestionKey(s)] = as;
-      tagged = true;
-    }
+    if (as) via.set(s, as);
     return s;
   };
   const known = (url        ) => {
     const key = pageKey(url);
-    const c = pool.byKey.get(key) ?? extra.find((x) => x.text.key === key);
+    let c = pool.byKey.get(key) ?? extra.find((x) => x.text.key === key);
+    if (!c && !routeOf(url)) {
+      const document = documentKey(url);
+      c = pool.byDocument.get(document) ?? extra.find((x) => x.text.document === document);
+    }
     if (!c) return undefined;
     const shown = { ...c, title: c.pageTitle ?? c.title };
     const opened = withRootSlash(url);
@@ -2787,6 +3090,22 @@ function buildSuggestions(raw        , source                  , options        
     const lent = visit ?? bookmark ?? shown;
     const row          = { url: visit?.url ?? opened, title: lent.title, favicon: lent.favicon, visits: visit?.visits ?? 0, bookmarked: bookmark !== undefined };
     return tag(pageSuggestion(row, null), "literal");
+  };
+  const openTabAt = (url        )                         => {
+    if (!options.switchToOpenTab) return undefined;
+    const opened = withRootSlash(lowerOrigin(url));
+    if (!tabIds.has(pageKey(opened))) return undefined;
+    const route = routeOf(opened);
+    const tab = source.tabs.find((t) => {
+      if (!t.url || t.id === options.currentTabId) return false;
+      const at = withRootSlash(lowerOrigin(t.url));
+      return withoutFragment(at) === withoutFragment(opened) && routeOf(at) === route;
+    });
+    if (!tab) return undefined;
+    const visit = savedVisit(source.history, opened);
+    const bookmark = savedBookmark(source.bookmarks ?? NO_BOOKMARKS, opened);
+    const title = tab.customTitle || visit?.title || bookmark?.title || tab.title;
+    return tag(pageSuggestion({ url: opened, title, favicon: tab.favicon ?? visit?.favicon ?? bookmark?.favicon ?? null, visits: visit?.visits ?? 0, bookmarked: bookmark !== undefined }, tab.id), "open_tab");
   };
 
   const websiteFirst = preference === "website";
@@ -2801,22 +3120,29 @@ function buildSuggestions(raw        , source                  , options        
   const scores           = again ? from.scores : [];
   let found = 0;
   const top = new TopList(limit + 1);
+  const tabTop = new TabList();
+  const typedUrl = scope ? null : fixupUrl(query);
+  const guessedUrl = scope || typedUrl ? null : spacedAddressGuess(query);
+  const tabUrls = guessedUrl ? new Map(source.tabs.map((t) => [t.id, t.url])) : null;
+  const tabUrl = (tabId                    ) => (tabUrls && tabId ? tabUrls.get(tabId) : undefined);
+  const listedRow = (x        ) => !guessedUrl || !sameAddress(tabUrl(x.tabId) ?? x.c.url, guessedUrl);
   const onSite = scope ? new TopList(4) : null;
   const score = oneWord ? matchScoreWord : matchScore;
   const bound = Boolean(scope);
   let inline                = null;
+  const hiddenByRename = renamed.size > 0 ? renamed : null;
   for (const list of [pages, extra]) {
     const inPages = list === pages;
     for (let at = 0; at < list.length; at++) {
       const c = list[at] ;
-      const m = again && inPages ? scores[at]  : score(c.text, parsed);
+      const m = again && inPages ? scores[at]  : c.named ? Math.max(score(c.text, parsed), score(c.named, parsed)) : score(c.text, parsed);
       if (m <= 0) continue;
       if (inPages && !again) {
         matched[found] = c;
         scores[found++] = m;
       }
       const key = c.text.key;
-      if (inPages && renamed.has(key)) continue;
+      if (inPages && hiddenByRename !== null && hiddenByRename.has(key)) continue;
       const derank = currentKey !== null && key === currentKey ? 80 : 0;
       const lastVisit = c.fresh ? now : c.lastVisit;
       let age = 10;
@@ -2825,18 +3151,22 @@ function buildSuggestions(raw        , source                  , options        
         age = d < 0 ? 0 : d > 30 ? 30 : d;
       }
       const base = c.logVisits - age + (c.bookmarked ? 20 : 0);
-      if (!bound && top.floor >= m + base - derank + 7) {
-        if (!completes) continue;
-        if (inline === null ? false : inline.s >= m + base - derank + 7) continue;
-        if (c.visits <= 0 || !c.text.shownLower.startsWith(q)) continue;
+      const upper = m + base - derank + 7;
+      const belowTop = !bound && top.floor >= upper;
+      let cannotLead                     ;
+      if (belowTop && !tabTop.takes(m, upper)) {
+        cannotLead = !completes || (inline !== null && inline.s >= upper) || c.visits <= 0 || !c.text.shownLower.startsWith(q);
+        if (cannotLead) continue;
       }
-      const tabId = c.tabId ?? tabIds.get(key);
+      const tabId = c.tabId ?? (c.openIn === tabsNow.mark ? c.openTabId : undefined);
+      if (belowTop && !tabId && (cannotLead ?? (!completes || (inline !== null && inline.s >= upper) || c.visits <= 0 || !c.text.shownLower.startsWith(q)))) continue;
       const s = m + (base + (tabId ? 6 : 0)) - derank;
       let r                    ;
       if (top.floor < s || top.items.length < limit + 1) {
         r = { c, tabId, m, s };
         top.offer(r);
       }
+      if (tabId && !bound && (guessedUrl === null || listedRow({ c, tabId, m, s }))) tabTop.offer(r ?? { c, tabId, m, s });
       if (onSite) {
         const host = hostOfPage(c.text);
         if (host === scope .host || host.endsWith(`.${scope .host}`)) onSite.offer(r ?? { c, tabId, m, s });
@@ -2857,12 +3187,11 @@ function buildSuggestions(raw        , source                  , options        
     const scopedUrl = (text        ) => scopedSearchUrl(scope, text, engine);
     out.push({ kind: "search", query, url: scopedUrl(query), engine: scope.name });
     out.push(...remoteRows(scopedUrl, scope.name));
-    out.push(...onSite .items.map((x) => pageSuggestion(x.c, x.tabId)));
+    if (!options.remotePending) out.push(...onSite .items.map((x) => pageSuggestion(x.c, x.tabId)));
     return { items: out.items, completion: "" };
   }
 
   const search             = { kind: "search", query, url: searchUrl(engine, query), engine: engine.name };
-  const typedUrl = fixupUrl(query);
   const calc = calculate(query);
   const creates = matchQuickCreate(raw.trimStart());
   const actionRows = query.length >= 4 ? 4 : 2;
@@ -2876,27 +3205,40 @@ function buildSuggestions(raw        , source                  , options        
   let first            ;
   if (creates.length && /^\S+\s+\S/.test(query)) first = createRow(creates[0] );
   else if (actionMatches[0]?.exact) first = actionRow(actionMatches[0].action);
-  else if (target && completion) first = tag(known(target.url) ?? { kind: "page", url: target.url, title: "", favicon: target.favicon }, !websiteFirst && "search_first_inline");
-  else if (typedUrl) first = known(typedUrl) ?? { kind: "page", url: typedUrl, title: "", favicon: null };
+  else if (target && completion) first = openTabAt(target.url) ?? tag(known(target.url) ?? { kind: "page", url: target.url, title: "", favicon: target.favicon }, !websiteFirst && "search_first_inline");
+  else if (typedUrl) first = openTabAt(typedUrl) ?? known(typedUrl) ?? { kind: "page", url: typedUrl, title: "", favicon: null };
   else if (extensionMatches.exact) first = extensionMatches.rows[0] ;
-  else if (websiteFirst && best && best.m >= 40 && (!noInline || typedIsPage(best.c.text, q))) first = tag(pageSuggestion(best.c, best.tabId), best.c.renamed && "renamed_tab");
+  else if (!guessedUrl && websiteFirst && best && best.m >= 40 && (!noInline || typedIsPage(best.c.text, q))) first = tag(pageSuggestion(best.c, best.tabId), best.c.renamed && "renamed_tab");
   else first = search;
 
+  const savedGuess = guessedUrl ? ranked.find((x) => !x.tabId && sameAddress(x.c.url, guessedUrl)) : undefined;
+  const guessTab = guessedUrl ? source.tabs.find((t) => t.id !== options.currentTabId && sameAddress(t.url, guessedUrl)) : undefined;
+  const guessRow = !guessedUrl ? null : guessTab ? pageSuggestion({ url: guessTab.url, title: guessTab.customTitle || guessTab.title, favicon: guessTab.favicon, visits: 0, bookmarked: false }, guessTab.id) : (known(guessedUrl) ?? (savedGuess ? { ...pageSuggestion(savedGuess.c, null), url: guessedUrl } : { kind: "page", url: guessedUrl, title: "", favicon: null }));
   out.push(first);
   out.push(search);
+  if (guessRow) out.push(guessRow);
   if (calc) out.push({ kind: "calc", expression: calc.expression, value: calc.display, url: searchUrl(engine, calc.expression) });
   out.push(...actionMatches.map((m) => actionRow(m.action)));
   out.push(...extensionMatches.rows);
   out.push(...creates.map(createRow));
-  const pageRows = ranked.map((x) => tag(pageSuggestion(x.c, x.tabId), x.c.renamed && "renamed_tab"));
-  out.push(...pageRows.slice(0, 3));
-  out.push(...(options.remoteSites ?? []).slice(0, 2).map((site)             => known(site.url) ?? tag({ kind: "page", url: site.url, title: site.title, favicon: null }, "engine_site")));
+  const rowOf = (x        , as                                    = x.c.renamed && "renamed_tab")             => {
+    const url = tabUrl(x.tabId);
+    return tag(pageSuggestion(url ? { ...x.c, url } : x.c, x.tabId), as);
+  };
+  const listed = guessedUrl ? ranked.filter(listedRow) : ranked;
+  const lead = leadingRows(listed, tabTop.items);
+  out.push(...lead.map((x, i) => rowOf(x, i < 3 ? undefined : "leading_tab")));
+  const remoteSites = (options.remoteSites ?? []).slice(0, 2).filter((site) => !guessedUrl || !sameAddress(site.url, guessedUrl));
+  out.push(...remoteSites.map((site)             => known(site.url) ?? tag({ kind: "page", url: site.url, title: site.title, favicon: null }, "engine_site")));
   const providerAt = out.items.length;
   out.push(...remoteRows((text) => searchUrl(engine, text), engine.name));
-  out.push(...pageRows.slice(3));
-  const providerRows = options.providers?.length ? globalProviderRows(options.providers, out.items) : [];
+  const trailing = withoutLead(listed, lead);
+  const providerRows = options.providers?.length ? globalProviderRows(options.providers, [...out.items, ...trailing.filter((x) => x.tabId).map((x) => rowOf(x))]) : [];
+  const offered = providerRows.length ? new Set(providerRows.map((row) => pageKey(row.url))) : null;
+  if (!options.remotePending) out.push(...(offered ? trailing.filter((x) => x.tabId || !offered.has(pageKey(x.c.url))) : trailing).map((x) => rowOf(x)));
   const items = providerRows.length ? [...out.items.slice(0, providerAt), ...providerRows, ...out.items.slice(providerAt)] : out.items;
-  const shownVia = tagged ? viaOf(items, via) : undefined;
+  if (guessRow && out.items.includes(guessRow)) tag(guessRow, "spaced_address");
+  const shownVia = via.size ? viaOf(items, via) : undefined;
   return shownVia ? { items, completion, via: shownVia } : { items, completion };
 }
 
@@ -2911,11 +3253,11 @@ function providerScopeSuggestions(query        , scope             , sections   
   return { items, completion: "" };
 }
 
-function viaOf(items                       , via                               )                                            {
+function viaOf(items                       , via                                        )                                            {
   let shown                                           ;
   for (const item of items) {
-    const key = suggestionKey(item);
-    if (via[key]) (shown ??= {})[key] = via[key];
+    const as = via.get(item);
+    if (as) (shown ??= {})[suggestionKey(item)] = as;
   }
   return shown;
 }
@@ -2977,17 +3319,22 @@ const { logVisits, pageText, pageTexts, tabPageText, withRootSlash } = __require
                  
                   
                  
+                   
+                    
+                     
+                        
   
 
                                                                                      
-                                                        
+                                                                                         
 
-                                                                                                                           
+                                                                                                                                            
                 
                      
                                  
                     
                                 
+                                     
                         
                          
                     
@@ -3001,8 +3348,13 @@ const SLICE_CHECK = 64;
 
 function baseFor(bookmarks                        )               {
   let base = bases.get(bookmarks);
-  if (!base) bases.set(bookmarks, (base = { list: [], byKey: new Map(), keys: new Set(), cursor: 0, done: false }));
+  if (!base) bases.set(bookmarks, (base = { list: [], byKey: new Map(), byDocument: new Map(), cursor: 0, done: false }));
   return base;
+}
+
+function addTo(byKey                        , byDocument                        , c           ) {
+  byKey.set(c.text.key, c);
+  if (c.text.document !== undefined && !byDocument.has(c.text.document)) byDocument.set(c.text.document, c);
 }
 
 function advance(b         , bookmarks                        , deadline        )          {
@@ -3013,11 +3365,10 @@ function advance(b         , bookmarks                        , deadline        
   while (!base.done && base.cursor < bookmarks.length) {
     const row = bookmarks[base.cursor++] ;
     const text = pageText(row);
-    base.keys.add(text.key);
     if (!base.byKey.has(text.key)) {
       const c            = { url: row.url, title: row.title, favicon: row.favicon, visits: 0, lastVisit: 0, logVisits: 0, bookmarked: true, text };
       base.list.push(c);
-      base.byKey.set(text.key, c);
+      addTo(base.byKey, base.byDocument, c);
     }
     if (late()) return false;
   }
@@ -3026,14 +3377,15 @@ function advance(b         , bookmarks                        , deadline        
     const h = b.history[b.historyCursor++] ;
     const text = pageText(h);
     if (!b.byKey.has(text.key)) {
-      const bookmarked = base.keys.has(text.key);
+      const mark = base.byKey.get(text.key);
+      const named = mark?.title && mark.text.titleLower !== text.titleLower && withRootSlash(mark.url) === withRootSlash(h.url) ? mark.text : undefined;
       let c = historyCandidates.get(h);
-      if (!c || c.bookmarked !== bookmarked) {
-        c = { url: h.url, title: h.title, favicon: h.favicon, visits: h.visits, lastVisit: h.lastVisit, logVisits: logVisits(h.visits), bookmarked, text };
+      if (!c || c.bookmarked !== !!mark || c.named !== named) {
+        c = { url: h.url, title: named ? mark .title : h.title, pageTitle: named ? h.title : undefined, favicon: h.favicon, visits: h.visits, lastVisit: h.lastVisit, logVisits: logVisits(h.visits), bookmarked: !!mark, text, named };
         historyCandidates.set(h, c);
       }
       b.list.push(c);
-      b.byKey.set(text.key, c);
+      addTo(b.byKey, b.byDocument, c);
     }
     if (late()) return false;
   }
@@ -3043,9 +3395,11 @@ function advance(b         , bookmarks                        , deadline        
     if (late()) return false;
   }
   const history = b.byKey;
+  const historyDocuments = b.byDocument;
   b.pool = {
     list: b.list,
     byKey: { get: (key) => history.get(key) ?? base.byKey.get(key), has: (key) => history.has(key) || base.byKey.has(key) },
+    byDocument: { get: (document) => historyDocuments.get(document) ?? base.byDocument.get(document) },
   };
   return true;
 }
@@ -3054,7 +3408,7 @@ function builderFor(history                       , bookmarks                   
   let byBookmarks = builders.get(history);
   if (!byBookmarks) builders.set(history, (byBookmarks = new WeakMap()));
   let b = byBookmarks.get(bookmarks);
-  if (!b) byBookmarks.set(bookmarks, (b = { base: baseFor(bookmarks), history, list: [], byKey: new Map(), historyCursor: 0, bookmarkCursor: 0, pool: null }));
+  if (!b) byBookmarks.set(bookmarks, (b = { base: baseFor(bookmarks), history, list: [], byKey: new Map(), byDocument: new Map(), historyCursor: 0, bookmarkCursor: 0, pool: null }));
   return b;
 }
 
@@ -3097,42 +3451,74 @@ function exactRows                             (rows                )           
 const savedVisit = (history                       , url        )                         => exactRows(history).get(withRootSlash(url));
 const savedBookmark = (bookmarks                        , url        )                          => exactRows(bookmarks).get(withRootSlash(url));
 
-                                                                                                                                                        
+                                             
+                                                                                                                                                                               
 const tabsOverCache = new WeakMap                             ();
+let lastMarked                  = null;
+
+function marked(result          )           {
+  if (lastMarked === result.mark) return result;
+  for (const [key, tabId] of result.tabIds) {
+    const c = result.pool.byKey.get(key);
+    if (c) {
+      c.openIn = result.mark;
+      c.openTabId = tabId;
+      c.openRenamed = false;
+    }
+  }
+  lastMarked = result.mark;
+  return result;
+}
 
 function tabsOver(pool      , tabs                   , currentTabId         )           {
   const cached = tabsOverCache.get(tabs);
   if (cached && cached.pool === pool && cached.currentTabId === currentTabId && cached.rows.length === tabs.length) {
     let same = true;
     for (let i = 0; same && i < tabs.length; i++) same = cached.rows[i] === tabs[i];
-    if (same) return cached;
-  }
-  const open           = [];
-  const chosen = new Map                ();
-  for (const t of tabs) {
-    if (!t.url || t.id === currentTabId) continue;
-    open.push(t);
-    const key = pageText(t).key;
-    const kept = chosen.get(key);
-    if (!kept || (t.customTitle && !kept.customTitle)) chosen.set(key, t);
+    if (same) return marked(cached);
   }
   const tabIds = new Map                ();
-  for (const [key, t] of chosen) tabIds.set(key, t.id);
-  const extra              = [];
-  const renamed = new Set        ();
-  for (const t of open) {
+  const renamedTabKeys = new Set        ();
+  const firstOfPage            = new Array(tabs.length);
+  for (let i = 0; i < tabs.length; i++) {
+    const t = tabs[i] ;
+    if (!t.url || t.id === currentTabId) continue;
     const key = pageText(t).key;
-    const listed = pool.byKey.get(key);
-    if (!listed) {
-      if (!t.customTitle && chosen.get(key) !== t) continue;
-      extra.push({ url: t.url, title: t.customTitle || t.title, pageTitle: t.title, ...(t.customTitle ? { renamed: true          } : {}), favicon: t.favicon, visits: 0, lastVisit: 0, logVisits: 0, fresh: true, bookmarked: false, tabId: t.id, text: tabPageText(t) });
-    } else if (t.customTitle) {
-      renamed.add(key);
-      extra.push({ url: t.url, title: t.customTitle, renamed: true, favicon: t.favicon ?? listed.favicon, visits: listed.visits, lastVisit: listed.lastVisit, logVisits: listed.logVisits, bookmarked: listed.bookmarked, tabId: t.id, text: tabPageText(t, listed.text) });
+    if (!t.customTitle) {
+      if (!tabIds.has(key)) {
+        tabIds.set(key, t.id);
+        firstOfPage[i] = true;
+      }
+    } else if (!renamedTabKeys.has(key)) {
+      renamedTabKeys.add(key);
+      tabIds.set(key, t.id);
     }
   }
-  const result = { pool, currentTabId, rows: tabs.slice(), tabIds, extra, renamed };
+  const extra              = [];
+  const renamed = new Set        ();
+  const mark           = {};
+  const result           = { pool, currentTabId, rows: tabs.slice(), tabIds, extra, renamed, mark };
+  for (let i = 0; i < tabs.length; i++) {
+    const t = tabs[i] ;
+    if (!t.url || t.id === currentTabId) continue;
+    const key = pageText(t).key;
+    const listed = pool.byKey.get(key);
+    if (listed && (listed.openIn !== mark || (t.customTitle && !listed.openRenamed))) {
+      listed.openIn = mark;
+      listed.openTabId = t.id;
+      listed.openRenamed = !!t.customTitle;
+    }
+    if (!t.customTitle) {
+      if (!listed && firstOfPage[i] && (renamedTabKeys.size === 0 || !renamedTabKeys.has(key))) extra.push({ url: t.url, title: t.title, pageTitle: t.title, favicon: t.favicon, visits: 0, lastVisit: 0, logVisits: 0, fresh: true, bookmarked: false, tabId: t.id, text: tabPageText(t) });
+    } else if (!listed) {
+      extra.push({ url: t.url, title: t.customTitle, pageTitle: t.title, renamed: true, favicon: t.favicon, visits: 0, lastVisit: 0, logVisits: 0, fresh: true, bookmarked: false, tabId: t.id, text: tabPageText(t) });
+    } else {
+      renamed.add(key);
+      extra.push({ url: t.url, title: t.customTitle, renamed: true, favicon: t.favicon ?? listed.favicon, visits: listed.visits, lastVisit: listed.lastVisit, logVisits: listed.logVisits, bookmarked: listed.bookmarked, tabId: t.id, text: tabPageText(t, listed.text), named: listed.named });
+    }
+  }
   tabsOverCache.set(tabs, result);
+  lastMarked = result.mark;
   return result;
 }
 
@@ -3140,12 +3526,13 @@ function tabsOver(pool      , tabs                   , currentTabId         )   
 __define("packages/core/src/suggestionRows.ts", function (exports, __require) {
   __export(exports, "pageSuggestion", () => pageSuggestion);
   __export(exports, "suggestionKey", () => suggestionKey);
+  __export(exports, "listsRoutesApart", () => listsRoutesApart);
   __export(exports, "Output", () => Output);
   __export(exports, "createRow", () => createRow);
   __export(exports, "actionRow", () => actionRow);
   __export(exports, "dedupeSuggestions", () => dedupeSuggestions);
                                                     
-const { pageKey, withRootSlash } = __require("packages/core/src/pageText.ts");
+const { documentKey, pageKey, routeOf, withRootSlash } = __require("packages/core/src/pageText.ts");
                                                                  
 
                                                                                                        
@@ -3177,6 +3564,20 @@ function suggestionKey(s            )         {
     case "provider":
       return `provider:${s.providerId}:${pageKey(s.url)}`;
   }
+}
+
+function listsRoutesApart(items                       )          {
+  const routes = new Map                ();
+  for (const s of items) {
+    if (s.kind !== "page") continue;
+    const route = routeOf(s.url);
+    if (!route) continue;
+    const document = documentKey(s.url);
+    const seen = routes.get(document);
+    if (seen === undefined) routes.set(document, route);
+    else if (seen !== route) return true;
+  }
+  return false;
 }
 
 class Output {
@@ -3224,10 +3625,12 @@ __define("packages/core/src/pageMatch.ts", function (exports, __require) {
   __export(exports, "narrowing", () => narrowing);
   __export(exports, "remember", () => remember);
   __export(exports, "TopList", () => TopList);
+  __export(exports, "TabList", () => TabList);
+  __export(exports, "leadingRows", () => leadingRows);
                                                           
 const { shownWordsOf } = __require("packages/core/src/pageText.ts");
 
-                     
+              
             
                                          
                 
@@ -3336,6 +3739,11 @@ class TopList {
   offer(r        ) {
     const items = this.items;
     if (items.length === this.size && items[items.length - 1] .s >= r.s) return;
+    const same = r.c.renamed ? sameKeyAt(items, r) : -1;
+    if (same >= 0) {
+      if (items[same] .s >= r.s) return;
+      items.splice(same, 1);
+    }
     let i = items.length;
     while (i > 0 && items[i - 1] .s < r.s) i--;
     items.splice(i, 0, r);
@@ -3344,16 +3752,61 @@ class TopList {
   }
 }
 
+const LEADING_PAGE_ROWS = 3;
+const LEADING_ROWS = 5;
+
+const matchesAhead = (a        , b        ) => a.m > b.m || (a.m === b.m && a.s > b.s);
+
+function sameKeyAt(items                   , r        )         {
+  for (let i = 0; i < items.length; i++) if (items[i] .c.text.key === r.c.text.key) return i;
+  return -1;
+}
+
+class TabList {
+           items           = [];
+  takes(m        , s        )          {
+    const last = this.items[LEADING_ROWS - 1];
+    return !last || m > last.m || (m === last.m && s > last.s);
+  }
+  offer(r        ) {
+    const items = this.items;
+    const same = r.c.renamed ? sameKeyAt(items, r) : -1;
+    if (same >= 0) {
+      if (!matchesAhead(r, items[same] )) return;
+      items.splice(same, 1);
+    }
+    if (items.length === LEADING_ROWS && !matchesAhead(r, items[items.length - 1] )) return;
+    let i = items.length;
+    while (i > 0 && matchesAhead(r, items[i - 1] )) i--;
+    items.splice(i, 0, r);
+    if (items.length > LEADING_ROWS) items.pop();
+  }
+}
+
+function leadingRows(ranked                   , tabs                   )           {
+  const lead           = [];
+  for (const x of ranked) {
+    if (lead.length >= LEADING_PAGE_ROWS) break;
+    if (sameKeyAt(lead, x) < 0) lead.push(x);
+  }
+  const bar = lead.length === LEADING_PAGE_ROWS ? lead[LEADING_PAGE_ROWS - 1] .m : 0;
+  for (const t of tabs) {
+    if (lead.length >= LEADING_ROWS) break;
+    if (t.m >= bar && sameKeyAt(lead, t) < 0) lead.push(t);
+  }
+  return lead;
+}
+
 });
 __define("packages/core/src/suggestFetcher.ts", function (exports, __require) {
   __export(exports, "createSuggestFetcher", () => createSuggestFetcher);
 const { parseRemoteSuggestions, suggestReplyJson, suggestRequestUrl } = __require("packages/core/src/engines.ts");
 
                                                               
-                                                                                               
+                                                                                                                      
 
                               
-                                                                                                                     
+                                                                                                                                            
                  
   
 
@@ -3388,7 +3841,7 @@ function createSuggestFetcher({
 
   return {
     cancel,
-    request(engine, query, onResult) {
+    request(engine, query, onResult, onFailed) {
       cancel();
       const url = suggestRequestUrl(engine, query);
       if (!url) return;
@@ -3402,7 +3855,7 @@ function createSuggestFetcher({
         timer = undefined;
         const controller = new AbortController();
         inFlight = controller;
-        fetch(url, { signal: controller.signal })
+        fetch(url, { signal: controller.signal, engine })
           .then(async (res) => {
             if (!res.ok) return none;
             try {
@@ -3420,7 +3873,11 @@ function createSuggestFetcher({
                 onResult(suggestions.queries, suggestions.sites);
               }
             },
-            () => {},
+            () => {
+              if (controller.signal.aborted || current !== generation) return;
+              inFlight = undefined;
+              onFailed?.();
+            },
           );
       }, delay);
     },
@@ -3439,7 +3896,7 @@ __define("packages/core/src/textFragment.ts", function (exports, __require) {
   __export(exports, "chooseTextFragment", () => chooseTextFragment);
   __export(exports, "withTextFragment", () => withTextFragment);
 
-                                                                                             
+                                                                                      
 
                                 
                    
@@ -3527,6 +3984,47 @@ function withTextFragment(url        , fragment              )         {
 });
 __define("packages/core/src/theme.ts", function (exports, __require) {
   __export(exports, "THEME_TEXTURES", () => THEME_TEXTURES);
+  __export(exports, "MAX_THEME_STOPS", () => MAX_THEME_STOPS);
+  __export(exports, "PAD_LIGHTNESS", () => PAD_LIGHTNESS);
+  __export(exports, "DEFAULT_THEME_ANGLE", () => DEFAULT_THEME_ANGLE);
+  __export(exports, "DARKENED_LOOK_KEEP", () => DARKENED_LOOK_KEEP);
+  __export(exports, "STARTING_NOISE", () => STARTING_NOISE);
+  __export(exports, "TEXTURE_STRENGTH", () => TEXTURE_STRENGTH);
+  __export(exports, "padColor", () => padColor);
+  __export(exports, "padPosition", () => padPosition);
+  __export(exports, "oklab", () => oklab);
+  __export(exports, "fromOklab", () => fromOklab);
+  __export(exports, "colorHex", () => colorHex);
+  __export(exports, "hexColor", () => hexColor);
+  __export(exports, "mixOklab", () => mixOklab);
+  __export(exports, "lookAngle", () => lookAngle);
+  __export(exports, "themeArea", () => themeArea);
+  __export(exports, "themeDark", () => themeDark);
+  __export(exports, "resolveTheme", () => resolveTheme);
+  __export(exports, "darkenedLook", () => darkenedLook);
+  __export(exports, "requestedDarkFor", () => requestedDarkFor);
+  __export(exports, "shownLook", () => shownLook);
+  __export(exports, "arcLayerAlpha", () => arcLayerAlpha);
+  __export(exports, "themeLayerAlpha", () => themeLayerAlpha);
+  __export(exports, "themeUnderlayAlpha", () => themeUnderlayAlpha);
+  __export(exports, "themeGrainAlpha", () => themeGrainAlpha);
+  __export(exports, "flatColors", () => flatColors);
+  __export(exports, "themeAccent", () => themeAccent);
+  __export(exports, "themePalette", () => themePalette);
+  __export(exports, "backdropUnderColor", () => backdropUnderColor);
+  __export(exports, "themeUnderColor", () => themeUnderColor);
+  __export(exports, "opaqueThemeTint", () => opaqueThemeTint);
+  __export(exports, "themeLuminance", () => themeLuminance);
+  __export(exports, "readableDark", () => readableDark);
+  __export(exports, "stopLightness", () => stopLightness);
+  __export(exports, "withStopAt", () => withStopAt);
+  __export(exports, "withStopLightness", () => withStopLightness);
+  __export(exports, "withAngle", () => withAngle);
+  __export(exports, "withAddedStop", () => withAddedStop);
+  __export(exports, "withoutStop", () => withoutStop);
+  __export(exports, "withTexture", () => withTexture);
+  __export(exports, "startingTheme", () => startingTheme);
+  __export(exports, "sanitizeTheme", () => sanitizeTheme);
 const THEME_TEXTURES = ["grain", "sand", "denim", "tweed"]         ;
 
                                                            
@@ -3543,12 +4041,350 @@ const THEME_TEXTURES = ["grain", "sand", "denim", "tweed"]         ;
                      
   
 
+                                                                        
+
+                                                                    
+
+                         
+                     
+                    
+                
+                        
+                       
+                 
+  
+
+                                        
+                  
+                   
+  
+
+                                                        
+
+                                                                                      
+
+const MAX_THEME_STOPS = 3;
+const PAD_LIGHTNESS = 0.6;
+const DEFAULT_THEME_ANGLE = 135;
+const DARKENED_LOOK_KEEP = 0.4;
+const STARTING_NOISE = 0.5;
+const TEXTURE_STRENGTH                                         = { grain: 0.8, sand: 0.15, denim: 0.6, tweed: 0.4 };
+
+const BASE_REACH = 0.75;
+const MAX_SANITIZED_STOPS = 16;
+const SAMPLE_POINTS = [0, 0.5, 1];
+const MIN_BLACK_TEXT_CONTRAST = 3;
+const MIN_WHITE_TEXT_CONTRAST = 2;
+
+                                    
+
+const clamp01 = (v        ) => Math.min(1, Math.max(0, v));
+const finite = (v         )              => typeof v === "number" && Number.isFinite(v);
+const numberOr = (v         , fallback        ) => (finite(v) ? v : fallback);
+
+function hslToRgb(h        , s        , l        )                           {
+  if (s === 0) return [l, l, l];
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const channel = (t        ) => {
+    t = t < 0 ? t + 1 : t > 1 ? t - 1 : t;
+    return t < 1 / 6 ? p + (q - p) * 6 * t : t < 1 / 2 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p;
+  };
+  return [channel(h + 1 / 3), channel(h), channel(h - 1 / 3)];
+}
+
+function rgbToHsl(r        , g        , b        )                           {
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min;
+  if (d === 0) return [0, 0, l];
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  const h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h / 6, s, l];
+}
+
+const unitHex = (c                   ) =>
+  `#${c.map((v) => Math.round(Math.min(255, Math.max(0, clamp01(v) * 255))).toString(16).padStart(2, "0")).join("").toUpperCase()}`;
+
+function padColor(x        , y        , lightness = PAD_LIGHTNESS)             {
+  const dx = clamp01(x) - 0.5, dy = clamp01(y) - 0.5;
+  let hue = Math.atan2(dy, dx) / (2 * Math.PI);
+  if (hue < 0) hue += 1;
+  const sat = Math.min(1, Math.hypot(dx, dy) / 0.5);
+  const [r, g, b] = hslToRgb(hue, sat, clamp01(lightness));
+  return { r, g, b, a: 1 };
+}
+
+function padPosition(color            )                           {
+  const [h, s] = rgbToHsl(clamp01(color.r), clamp01(color.g), clamp01(color.b));
+  const angle = h * 2 * Math.PI;
+  return { x: 0.5 + 0.5 * s * Math.cos(angle), y: 0.5 + 0.5 * s * Math.sin(angle) };
+}
+
+const decode = (v        ) => Math.sign(v) * (Math.abs(v) <= 0.04045 ? Math.abs(v) / 12.92 : ((Math.abs(v) + 0.055) / 1.055) ** 2.4);
+const encode = (v        ) => Math.sign(v) * (Math.abs(v) <= 0.0031308 ? Math.abs(v) * 12.92 : 1.055 * Math.abs(v) ** (1 / 2.4) - 0.055);
+
+function oklab(c            )      {
+  const [r, g, b] = [c.r, c.g, c.b].map(decode)       ;
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return [
+    0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+  ];
+}
+
+function fromOklab([L, A, B]     )                           {
+  const l = (L + 0.3963377774 * A + 0.2158037573 * B) ** 3;
+  const m = (L - 0.1055613458 * A - 0.0638541728 * B) ** 3;
+  const s = (L - 0.0894841775 * A - 1.291485548 * B) ** 3;
+  return [
+    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
+  ].map(encode)                            ;
+}
+
+function colorHex(color            )         {
+  return unitHex([color.r, color.g, color.b]);
+}
+
+function hexColor(hex        )             {
+  const short = hex.trim().replace("#", "");
+  const h = short.length === 3 || short.length === 4 ? Array.from(short, (c) => c + c).join("") : short;
+  const ch = (i        ) => parseInt(h.slice(2 * i, 2 * i + 2), 16) / 255;
+  return { r: ch(0), g: ch(1), b: ch(2), a: 1 };
+}
+
+function mixOklab(a            , b            , t        )                           {
+  const [la, lb] = [oklab(a), oklab(b)];
+  return fromOklab(la.map((v, i) => v + (lb[i]  - v) * t)       );
+}
+
+function lookAngle(theme                          )         {
+  return theme.angle ?? DEFAULT_THEME_ANGLE;
+}
+
+const direction = (degrees        ) => {
+  const r = (degrees * Math.PI) / 180;
+  return { dx: Math.sin(r), dy: -Math.cos(r) };
+};
+
+const baseHalf = (width        , height        , dx        , dy        ) =>
+  (Math.hypot(width * dx, height * dy) * Math.hypot(width, height)) / (2 * Math.max(width, height));
+
+const overlayHalf = (width        , height        , dx        , dy        ) => (width * Math.abs(dx) + height * Math.abs(dy)) / 2;
+
+function along(degrees        , x        , y        , width        , height        , half                 )         {
+  const { dx, dy } = direction(degrees);
+  return ((x - width / 2) * dx + (y - height / 2) * dy) / (2 * half(width, height, dx, dy)) + 0.5;
+}
+
+function themeArea(theme           , x        , y        , width        , height        )                           {
+  const [c0, c1 = c0, c2] = theme.stops.map((s) => s.color)                                          ;
+  const angle = lookAngle(theme);
+  const t = clamp01(along(angle, x, y, width, height, baseHalf) / BASE_REACH);
+  const base = mixOklab(c0, c1, t);
+  if (!c2) return base;
+  const a = clamp01(along(angle + 45, x, y, width, height, overlayHalf)) * c2.a;
+  return base.map((v, i) => v + ((i === 0 ? c2.r : i === 1 ? c2.g : c2.b) - v) * a)                            ;
+}
+
+function themeDark(theme              , appDark         )          {
+  return theme.mode === "auto" ? appDark : theme.mode === "dark";
+}
+
+function resolveTheme(theme              , dark         )               {
+  const { dark: darkLook, ...base } = theme;
+  if (!dark || !darkLook) return base;
+  const { angle: _lightAngle, ...light } = base;
+  return { ...light, ...darkLook };
+}
+
+function darkenedLook(theme              , keep = DARKENED_LOOK_KEEP)               {
+  return { ...theme, stops: theme.stops.map((s) => ({ ...s, color: { ...s.color, r: s.color.r * keep, g: s.color.g * keep, b: s.color.b * keep } })) };
+}
+
+function requestedDarkFor(theme              , appDark         , source                 )          {
+  return source === "own" ? themeDark(theme, appDark) : appDark;
+}
+
+function shownLook(theme              , appDark         , source                 )            {
+  const requestedDark = requestedDarkFor(theme, appDark, source);
+  const resolved = resolveTheme(theme, requestedDark);
+  const lightOnly = theme.mode !== "dark" && !theme.dark;
+  const look = source !== "own" && requestedDark && lightOnly && !readableDark(resolved, true) ? darkenedLook(resolved) : resolved;
+  const dark = source === "utility" ? requestedDark : readableDark(look, requestedDark);
+  return { look, requestedDark, dark };
+}
+
+function arcLayerAlpha(intensity        )         {
+  return 0.2 + 0.55 * clamp01(intensity);
+}
+
+function themeLayerAlpha(theme           )         {
+  return 1 - clamp01(theme.translucency) * (1 - arcLayerAlpha(theme.intensity));
+}
+
+function themeUnderlayAlpha(theme           , dark         )         {
+  const arc = Math.min(arcLayerAlpha(theme.intensity), 0.5);
+  return clamp01(theme.translucency) * (dark ? 0.35 * arc : arc);
+}
+
+function themeGrainAlpha(theme           )         {
+  return clamp01(theme.grain) * TEXTURE_STRENGTH[theme.texture];
+}
+
+function flatColors(theme           )           {
+  return theme.stops.slice(0, MAX_THEME_STOPS).flatMap((s) => [s.color.r, s.color.g, s.color.b, s.color.a]);
+}
+
+function themeAccent(theme           )         {
+  return unitHex(themeArea(theme, 0.5, 0.5, 1, 1));
+}
+
+function themePalette(theme           )           {
+  return theme.stops.map((s) => colorHex(s.color));
+}
+
+function backdropUnderGrey(underlayAlpha        , dark         )         {
+  const u = clamp01(underlayAlpha);
+  const blur = dark ? 0.16 : 0.92;
+  return (dark ? 0 : 1) * u + blur * (1 - u);
+}
+
+function underGrey(theme           , dark         )         {
+  return backdropUnderGrey(themeUnderlayAlpha(theme, dark), dark);
+}
+
+function backdropUnderColor(underlayAlpha        , dark         )         {
+  const grey = backdropUnderGrey(underlayAlpha, dark);
+  return unitHex([grey, grey, grey]);
+}
+
+function themeUnderColor(theme           , dark         )         {
+  return backdropUnderColor(themeUnderlayAlpha(theme, dark), dark);
+}
+
+function composite(theme           , dark         , x        , y        )           {
+  const a = themeLayerAlpha(theme);
+  const under = underGrey(theme, dark);
+  return themeArea(theme, x, y, 1, 1).map((v) => a * clamp01(v) + (1 - a) * under);
+}
+
+function opaqueThemeTint(theme           , dark         )                   {
+  return [unitHex(composite(theme, dark, 0, 0)), unitHex(composite(theme, dark, 1, 1))];
+}
+
+const relativeLuminance = (c          ) => {
+  const [r, g, b] = c.map((v) => decode(clamp01(v)))                            ;
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+
+function themeLuminance(theme           , dark         )         {
+  let sum = 0;
+  for (const x of SAMPLE_POINTS) for (const y of SAMPLE_POINTS) sum += relativeLuminance(composite(theme, dark, x, y));
+  return sum / SAMPLE_POINTS.length ** 2;
+}
+
+function readableDark(theme           , dark         )          {
+  const y = themeLuminance(theme, dark);
+  const blackText = (y + 0.05) / 0.05, whiteText = 1.05 / (y + 0.05);
+  if (dark) return !(whiteText < MIN_WHITE_TEXT_CONTRAST && blackText > whiteText);
+  return blackText < MIN_BLACK_TEXT_CONTRAST && whiteText > blackText;
+}
+
+function stopLightness(stop           )         {
+  return rgbToHsl(clamp01(stop.color.r), clamp01(stop.color.g), clamp01(stop.color.b))[2];
+}
+
+function withStopAt                     (theme   , index        , x        , y        )    {
+  const stops = theme.stops.map((s, i) => (i === index ? { x, y, color: { ...padColor(x, y, stopLightness(s)), a: s.color.a } } : s));
+  return { ...theme, stops };
+}
+
+function withStopLightness                     (theme   , index        , lightness        )    {
+  const stops = theme.stops.map((s, i) => (i === index ? { ...s, color: { ...padColor(s.x, s.y, lightness), a: s.color.a } } : s));
+  return { ...theme, stops };
+}
+
+function withAngle                     (theme   , degrees        )    {
+  return { ...theme, angle: ((Math.round(degrees) % 360) + 360) % 360 };
+}
+
+function withAddedStop                     (theme   )    {
+  if (theme.stops.length >= MAX_THEME_STOPS) return theme;
+  const last = theme.stops[theme.stops.length - 1] ?? { x: 0.8, y: 0.5 };
+  const angle = Math.atan2(last.y - 0.5, last.x - 0.5) + (2 * Math.PI) / 5;
+  const radius = Math.max(0.3, Math.hypot(last.x - 0.5, last.y - 0.5));
+  const x = 0.5 + radius * Math.cos(angle), y = 0.5 + radius * Math.sin(angle);
+  return { ...theme, stops: [...theme.stops, { x, y, color: padColor(x, y) }] };
+}
+
+function withoutStop                     (theme   , index        )    {
+  if (theme.stops.length <= 1) return theme;
+  return { ...theme, stops: theme.stops.filter((_, i) => i !== index) };
+}
+
+function withTexture                     (theme   , texture              )    {
+  return { ...theme, texture, grain: theme.grain || STARTING_NOISE };
+}
+
+function startingTheme(swatch        )               {
+  const base = padPosition(hexColor(swatch));
+  const angle = Math.atan2(base.y - 0.5, base.x - 0.5);
+  const radius = Math.max(0.3, Math.hypot(base.x - 0.5, base.y - 0.5));
+  const stop = (offset        )            => {
+    const x = 0.5 + radius * Math.cos(angle + offset), y = 0.5 + radius * Math.sin(angle + offset);
+    return { x, y, color: padColor(x, y) };
+  };
+  return { stops: [stop(-0.45), stop(0.45)], intensity: 0.6, mode: "auto", grain: 0, texture: "grain", translucency: 1 };
+}
+
+function sanitizeColor(v         )                    {
+  if (!v || typeof v !== "object") return null;
+  const c = v                           ;
+  const parts = [c.r, c.g, c.b];
+  if (!parts.every((n) => finite(n) && Math.abs(n) < 4)) return null;
+  return { r: c.r          , g: c.g          , b: c.b          , a: clamp01(numberOr(c.a, 1)) };
+}
+
+function sanitizeLook(v         )                   {
+  if (!v || typeof v !== "object") return null;
+  const t = v                           ;
+  if (!Array.isArray(t.stops)) return null;
+  const stops              = [];
+  for (const raw of t.stops.slice(0, MAX_SANITIZED_STOPS)) {
+    if (stops.length >= MAX_THEME_STOPS) break;
+    const s = raw                                  ;
+    const color = sanitizeColor(s?.color);
+    if (color) stops.push({ color, x: clamp01(numberOr(s .x, 0.5)), y: clamp01(numberOr(s .y, 0.5)) });
+  }
+  if (!stops.length) return null;
+  return {
+    stops,
+    intensity: clamp01(numberOr(t.intensity, 0.6)),
+    grain: clamp01(numberOr(t.grain, 0)),
+    texture: THEME_TEXTURES.includes(t.texture                ) ? (t.texture                ) : "grain",
+    translucency: clamp01(numberOr(t.translucency, 1)),
+    ...(finite(t.angle) ? { angle: ((t.angle % 360) + 360) % 360 } : {}),
+  };
+}
+
+function sanitizeTheme(v         )                      {
+  const look = sanitizeLook(v);
+  if (!look) return null;
+  const t = v                           ;
+  const dark = sanitizeLook(t.dark);
+  return { ...look, mode: t.mode === "light" || t.mode === "dark" ? t.mode : "auto", ...(dark ? { dark } : {}) };
+}
+
 });
 __define("packages/core/src/webStore.ts", function (exports, __require) {
   __export(exports, "isExtensionId", () => isExtensionId);
   __export(exports, "webStoreExtensionId", () => webStoreExtensionId);
   __export(exports, "permissionWarnings", () => permissionWarnings);
-                                                                                        
+                                                                                 
 
 const isExtensionId = (s        ) => /^[a-p]{32}$/.test(s);
 

@@ -7,12 +7,14 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 LINUX = SOURCE / 'ardia' / 'linux'
+DESKTOP = LINUX.parents[3] / 'ardiacore-desktop' / 'src' / 'ardia' / 'desktop'
 
 SCENARIOS = r'''#include <cassert>
 #include <cstdio>
-#include "ardia/linux/ac_linux_idle_policy.h"
-using namespace ardia::linux_idle;
+#include "ardia/desktop/ac_desktop_idle_policy.h"
+using namespace ardia::desktop_idle;
 
 int main() {
   assert((CleanThresholds({60, 0, -5, 1e9, 30, 60, 0.5}) == std::set<double>{30, 60}));
@@ -64,7 +66,7 @@ class SystemSignalsTests(unittest.TestCase):
             scratch = pathlib.Path(scratch)
             (scratch / 'idle.cc').write_text(SCENARIOS)
             binary = scratch / 'idle'
-            compiled = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined', '-I', str(SOURCE),
+            compiled = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined', '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE),
                                        str(scratch / 'idle.cc'), '-o', str(binary)], capture_output=True, text=True, timeout=120)
             self.assertEqual(compiled.returncode, 0, compiled.stderr)
             result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=30)
@@ -95,8 +97,8 @@ class SystemSignalsTests(unittest.TestCase):
         retire = host[host.index('  void RetireRenderer() {'):]
         retire = retire[:retire.index('\n  }\n')]
         self.assertIn('ardia::LinuxSystemSignals::Get().WatchIdle(id_, {});', retire)
-        build = (LINUX / 'BUILD.gn').read_text()
-        for name in ['"ac_linux_system_signals.cc"', '"ac_linux_idle_policy.h"']:
+        build = (LINUX / 'BUILD.gn').read_text() + (DESKTOP / 'BUILD.gn').read_text()
+        for name in ['"ac_linux_system_signals.cc"', '"ac_desktop_idle_policy.h"']:
             self.assertIn(name, build)
 
 

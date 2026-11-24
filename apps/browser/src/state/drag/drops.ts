@@ -43,18 +43,18 @@ export function firstStaying(slots: readonly Slot[], moving: readonly string[]):
   return null;
 }
 
-export function tabAfter(s: Order, id: string | undefined, moving: readonly string[]): string | null {
+function tabAfter(s: Order, id: string | undefined, moving: readonly string[]): string | null {
   const w = id ? s.windows[s.tabs[id]?.windowId ?? ""] : undefined;
   if (!w || !id) return null;
   return w.tabIds.slice(w.tabIds.indexOf(id) + 1).find((t) => !moving.includes(t)) ?? null;
 }
 
-export function slotAnchor(s: Order, slots: readonly Slot[], from: number, to: number, moving: readonly string[]): string | null {
+function slotAnchor(s: Order, slots: readonly Slot[], from: number, to: number, moving: readonly string[]): string | null {
   const others = slots.filter((_, i) => i !== from);
   return firstStaying(others.slice(to), moving) ?? tabAfter(s, others.at(-1)?.tabIds.at(-1), moving);
 }
 
-export function laneSpot({ pinned, groupId }: Lane, beforeId: string | null): DropSpot {
+function laneSpot({ pinned, groupId }: Lane, beforeId: string | null): DropSpot {
   if (groupId) return { zone: "group", groupId, beforeId };
   return { zone: pinned ? "pins" : "list", beforeId };
 }

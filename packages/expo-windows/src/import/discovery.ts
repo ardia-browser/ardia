@@ -37,7 +37,7 @@ async function chromiumKinds(host: ImportHost, folder: string, arc: boolean): Pr
 const text = (value: unknown) => (typeof value === "string" && value ? value : undefined);
 const record = (value: unknown): Info => (typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Info) : {});
 
-export async function chromiumProfiles(host: ImportHost, browser: Browser, only?: string): Promise<Profile[]> {
+async function chromiumProfiles(host: ImportHost, browser: Browser, only?: string): Promise<Profile[]> {
   const root = dataDirectory(host, browser);
   const state = record(record(await readJson(host, join(root, "Local State"))).profile);
   const infoCache = record(state.info_cache);
@@ -101,7 +101,7 @@ async function firefoxSource(host: ImportHost, browser: Browser): Promise<Profil
   return out;
 }
 
-export async function profilesOf(host: ImportHost, browser: Browser): Promise<Profile[]> {
+async function profilesOf(host: ImportHost, browser: Browser): Promise<Profile[]> {
   if (browser.family === "firefox") return firefoxSource(host, browser);
   const profiles = await chromiumProfiles(host, browser);
   return browser.sidebar === "arc" ? attachArcSpaces(host, profiles) : profiles;

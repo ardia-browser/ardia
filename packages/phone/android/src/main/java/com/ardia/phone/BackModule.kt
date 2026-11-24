@@ -2,6 +2,7 @@ package com.ardia.phone
 
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import androidx.activity.BackEventCompat
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
@@ -11,13 +12,31 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
 class TrayBack(private val report: (String, Map<String, Any?>) -> Unit) : OnBackPressedCallback(false) {
-    override fun handleOnBackStarted(backEvent: BackEventCompat) = report(PROGRESS, progress(0f, backEvent))
+    private var progressed = 0
 
-    override fun handleOnBackProgressed(backEvent: BackEventCompat) = report(PROGRESS, progress(backEvent.progress, backEvent))
+    override fun handleOnBackStarted(backEvent: BackEventCompat) {
+        progressed = 0
+        BackLog.say("swipe started at the ${edgeOf(backEvent)} edge")
+        report(PROGRESS, progress(0f, backEvent))
+    }
 
-    override fun handleOnBackCancelled() = report(CANCEL, emptyMap())
+    override fun handleOnBackProgressed(backEvent: BackEventCompat) {
+        progressed += 1
+        report(PROGRESS, progress(backEvent.progress, backEvent))
+    }
 
-    override fun handleOnBackPressed() = report(COMMIT, emptyMap())
+    override fun handleOnBackCancelled() {
+        BackLog.say("swipe cancelled after $progressed progress events")
+        report(CANCEL, emptyMap())
+    }
+
+    override fun handleOnBackPressed() {
+        BackLog.say("back committed after $progressed progress events")
+        progressed = 0
+        report(COMMIT, emptyMap())
+    }
+
+    private fun edgeOf(event: BackEventCompat): String = if (event.swipeEdge == BackEventCompat.EDGE_LEFT) "left" else "right"
 
     private fun progress(value: Float, event: BackEventCompat): Map<String, Any?> =
         mapOf("progress" to value.coerceIn(0f, 1f).toDouble(), "edge" to if (event.swipeEdge == BackEventCompat.EDGE_LEFT) "left" else "right")
@@ -29,6 +48,14 @@ class TrayBack(private val report: (String, Map<String, Any?>) -> Unit) : OnBack
     }
 }
 
+internal object BackLog {
+    const val TAG = "ArdiaBack"
+
+    fun say(line: String) {
+        runCatching { Log.i(TAG, line) }
+    }
+}
+
 class TrayBackBinding(private val report: (String, Map<String, Any?>) -> Unit) {
     private var callback: TrayBack? = null
     private var boundTo: OnBackPressedDispatcher? = null
@@ -36,6 +63,7 @@ class TrayBackBinding(private val report: (String, Map<String, Any?>) -> Unit) {
         private set
 
     fun want(enabled: Boolean, dispatcher: OnBackPressedDispatcher?, owner: LifecycleOwner?) {
+        if (enabled != wanted) BackLog.say(if (enabled) "claimed: the app takes Back" else "released: Back goes to React Native")
         wanted = enabled
         if (enabled && dispatcher != null && owner != null) bind(dispatcher, owner)
         callback?.isEnabled = enabled && boundTo != null
@@ -47,6 +75,7 @@ class TrayBackBinding(private val report: (String, Map<String, Any?>) -> Unit) {
             return
         }
         callback?.remove()
+        BackLog.say("callback bound to the activity's dispatcher")
         val made = TrayBack(report)
         dispatcher.addCallback(owner, made)
         made.isEnabled = wanted

@@ -6,11 +6,13 @@ public struct TabsBackdrop: View {
   @Environment(\.accessibilityReduceTransparency) private var systemReduceTransparency
 
   private let look: ProfileLook
+  private let themeLook: ThemeLook?
   private let reduceMotionOverride: Bool?
   private let reduceTransparencyOverride: Bool?
 
-  public init(look: ProfileLook = .plum, reduceMotion: Bool? = nil, reduceTransparency: Bool? = nil) {
+  public init(look: ProfileLook = .plum, themeLook: ThemeLook? = nil, reduceMotion: Bool? = nil, reduceTransparency: Bool? = nil) {
     self.look = look
+    self.themeLook = themeLook
     reduceMotionOverride = reduceMotion
     reduceTransparencyOverride = reduceTransparency
   }
@@ -20,6 +22,19 @@ public struct TabsBackdrop: View {
   private var reduceTransparency: Bool { reduceTransparencyOverride ?? systemReduceTransparency }
 
   public var body: some View {
+    ZStack {
+      if let themeLook {
+        ThemeBackdrop(look: themeLook, dark: colorScheme == .dark)
+      } else {
+        meshAndBlobs
+      }
+    }
+    .ignoresSafeArea()
+    .accessibilityHidden(true)
+  }
+
+  @ViewBuilder
+  private var meshAndBlobs: some View {
     ZStack {
       MeshGradient(width: 3, height: 2, points: [
         [0, 0], [0.5, 0], [1, 0],
@@ -33,8 +48,6 @@ public struct TabsBackdrop: View {
         FilmGrain(opacity: colorScheme == .dark ? 0.06 : 0.08)
       }
     }
-    .ignoresSafeArea()
-    .accessibilityHidden(true)
   }
 
   private var baseColors: [Color] { look.deckBase(dark: colorScheme == .dark) }

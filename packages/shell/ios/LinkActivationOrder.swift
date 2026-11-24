@@ -17,6 +17,9 @@ final class LinkActivationOrder: NSObject {
     case onOpen = "open"
     case released = "released"
     case stageManager = "stageManager"
+    case windowManager = "windowManager"
+    case keyRestored = "keyRestored"
+    case raiseSkipped = "raiseSkipped"
   }
 
   private static let pairing: TimeInterval = 3
@@ -30,6 +33,8 @@ final class LinkActivationOrder: NSObject {
   private var holdPending = false
   private var holding = false
   private var holdGeneration = 0
+  private var raisedGeneration = 0
+  private var activation = 0
   private var holdMonitor: Any?
   private var hidden: [Hidden] = []
   private weak var opened: NSWindow?
@@ -69,15 +74,19 @@ final class LinkActivationOrder: NSObject {
 
   @objc private func willBecomeActive(_ notification: Notification) {
     release(raising: false)
-    placements = Self.placements()
+    activation += 1
+    let onScreen = Self.onScreenWindows()
+    placements = Self.placements(onScreen)
     activatedAt = nil
     keptEarly = false
-    holdPending = !littleLinkExpected && activationMayCarryLink && !stageManagerOrdersWindows
-    if littleLinkExpected || holdPending { hideBeforeRaise() }
+    holdPending = !littleLinkExpected && activationMayCarryLink && !stageManagerOrdersWindows && !windowManagerActivated(onScreen)
+    ActivationRaise.allow()
+    if littleLinkExpected || holdPending { keepFromRaising() }
   }
 
   @objc private func didBecomeActive(_ notification: Notification) {
     activatedAt = Date()
+    if ActivationRaise.allow() { Self.report(.raiseSkipped) }
     if littleLinkExpected {
       littleLinkAt = nil
       keepEarly(.atActivation)
@@ -91,6 +100,7 @@ final class LinkActivationOrder: NSObject {
   }
 
   @objc private func didResignActive(_ notification: Notification) {
+    ActivationRaise.allow()
     release(raising: false)
   }
 
@@ -117,6 +127,29 @@ final class LinkActivationOrder: NSObject {
     return CFPreferencesGetAppBooleanValue("GloballyEnabled" as CFString, domain, nil)
   }
 
+  private static let windowManagerBundles = ["com.apple.dock", "com.apple.WindowManager"]
+
+  private func windowManagerActivated(_ onScreen: [[String: Any]]) -> Bool {
+    guard Self.leftToWindowManager(onScreen) else { return false }
+    Self.report(.windowManager)
+    return true
+  }
+
+  private static func leftToWindowManager(_ onScreen: [[String: Any]]) -> Bool {
+    let list = onScreen.compactMap { entry -> LinkActivationHold.Listed? in
+      guard let number = (entry[kCGWindowNumber as String] as? NSNumber)?.intValue,
+            let owner = (entry[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value,
+            let layer = (entry[kCGWindowLayer as String] as? NSNumber)?.intValue,
+            let bounds = (entry[kCGWindowBounds as String] as? NSDictionary).flatMap({ CGRect(dictionaryRepresentation: $0) })
+      else { return nil }
+      let windowServer = entry[kCGWindowOwnerName as String] as? String == "Window Server"
+      return LinkActivationHold.Listed(number: number, owner: owner, layer: layer, bounds: bounds, windowServer: windowServer)
+    }
+    let managers = Set(windowManagerBundles.flatMap { NSRunningApplication.runningApplications(withBundleIdentifier: $0) }.map(\.processIdentifier))
+    return LinkActivationHold.leftToWindowManager(
+      pointer: CGEvent(source: nil)?.location, own: ProcessInfo.processInfo.processIdentifier, windowManagers: managers, frontToBack: list)
+  }
+
   private var littleLinkExpected: Bool {
     littleLinkAt.map { Date().timeIntervalSince($0) < Self.arrivalPairing } == true
   }
@@ -129,7 +162,7 @@ final class LinkActivationOrder: NSObject {
     let generation = holdGeneration
     holdMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown, .keyDown]) {
       [weak self] event in
-      self?.release(raising: true)
+      self?.release(raising: true, pickingKey: event.type == .keyDown)
       return event
     }
     DispatchQueue.main.asyncAfter(deadline: .now() + Self.holdLimit) { [weak self] in
@@ -138,13 +171,14 @@ final class LinkActivationOrder: NSObject {
     }
   }
 
-  private func release(raising: Bool) {
+  private func release(raising: Bool, pickingKey: Bool = true) {
     guard holding else { return }
     holding = false
+    if raising { raisedGeneration += 1 }
     if let holdMonitor { NSEvent.removeMonitor(holdMonitor) }
     holdMonitor = nil
     guard raising else { return }
-    Self.raiseFrontWindow()
+    Self.raiseFrontWindow(placements.compactMap(\.window), pickingKey: pickingKey && NSApp.isActive)
     Self.report(.released)
   }
 
@@ -156,10 +190,24 @@ final class LinkActivationOrder: NSObject {
 
   private func pushBack() {
     let placements = placements
+    let generation = raisedGeneration
+    let scheduledIn = activation
     Self.restore(placements, except: nil)
     DispatchQueue.main.async { [weak self] in
-      Self.restore(placements, except: nil)
-      self?.showHidden()
+      guard let self, self.activation == scheduledIn else { return }
+      if self.raisedGeneration == generation, NSApp.isActive { Self.restore(placements, except: nil) }
+      self.showHidden()
+    }
+  }
+
+  private func keepFromRaising() {
+    let windows = placements.compactMap(\.window).filter { $0 !== opened }
+    guard ActivationRaise.block(windows) else { return hideBeforeRaise() }
+    showHidden()
+    let scheduledIn = activation
+    DispatchQueue.main.async { [weak self] in
+      guard self?.activation == scheduledIn else { return }
+      ActivationRaise.allow()
     }
   }
 
@@ -170,7 +218,11 @@ final class LinkActivationOrder: NSObject {
       window.alphaValue = 0
       hidden.append(Hidden(window))
     }
-    DispatchQueue.main.asyncAfter(deadline: .now() + Self.hiddenLimit) { [weak self] in self?.showHidden() }
+    let scheduledIn = activation
+    DispatchQueue.main.asyncAfter(deadline: .now() + Self.hiddenLimit) { [weak self] in
+      guard let self, self.activation == scheduledIn else { return }
+      self.showHidden()
+    }
   }
 
   private func showHidden() {
@@ -185,7 +237,11 @@ final class LinkActivationOrder: NSObject {
     let placements = placements
     if !keptEarly, !placements.isEmpty { Self.report(.onOpen) }
     Self.restore(placements, except: opened)
-    DispatchQueue.main.async { [weak opened] in Self.restore(placements, except: opened) }
+    let scheduledIn = activation
+    DispatchQueue.main.async { [weak self, weak opened] in
+      guard self?.activation == scheduledIn else { return }
+      Self.restore(placements, except: opened)
+    }
   }
 
   private static func opensInLittleArdia(_ urls: [URL]) -> Bool {
@@ -204,15 +260,27 @@ final class LinkActivationOrder: NSObject {
     }
   }
 
-  private static func raiseFrontWindow() {
+  private static func raiseFrontWindow(_ placed: [NSWindow], pickingKey: Bool) {
     for window in [NSApp.mainWindow, NSApp.keyWindow].compactMap({ $0 }) where window.isVisible && !window.isMiniaturized {
       window.orderFront(nil)
     }
+    let candidates = placed + NSApp.orderedWindows.filter { window in !placed.contains { $0 === window } }
+    guard pickingKey else { return }
+    let picked = HoldReleaseKey.pick(hasKey: NSApp.keyWindow != nil, frontToBack: candidates.map {
+      HoldReleaseKey.Candidate(
+        visible: $0.isVisible, miniaturized: $0.isMiniaturized, canBecomeKey: $0.canBecomeKey, normalLevel: $0.level == .normal,
+        browser: WindowManager.shared.isSteadyBrowserWindow($0), onActiveSpace: $0.isOnActiveSpace)
+    })
+    guard let picked else { return }
+    candidates[picked].makeKeyAndOrderFront(nil)
+    report(.keyRestored)
   }
 
-  private static func placements() -> [Placement] {
-    guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]]
-    else { return [] }
+  private static func onScreenWindows() -> [[String: Any]] {
+    CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+  }
+
+  private static func placements(_ list: [[String: Any]]) -> [Placement] {
     let pid = ProcessInfo.processInfo.processIdentifier
     var above: Int?
     var result: [Placement] = []
@@ -225,5 +293,41 @@ final class LinkActivationOrder: NSObject {
       if let above, let window = NSApp.window(withWindowNumber: number) { result.append(Placement(window: window, below: above)) }
     }
     return result
+  }
+}
+
+private enum ActivationRaise {
+  private typealias WindowForOrdering = @convention(c) (NSWindow, Selector) -> Unmanaged<NSWindow>?
+
+  private static let blocked = NSHashTable<NSWindow>.weakObjects()
+  private static var skipped = false
+
+  private static let installed: Bool = {
+    let selector = NSSelectorFromString("_windowForOrdering")
+    guard let method = class_getInstanceMethod(NSWindow.self, selector),
+          let encoding = method_getTypeEncoding(method), String(cString: encoding) == "@16@0:8"
+    else { return false }
+    let original = unsafeBitCast(method_getImplementation(method), to: WindowForOrdering.self)
+    let replacement: @convention(block) (NSWindow) -> Unmanaged<NSWindow>? = { window in
+      guard Thread.isMainThread, blocked.contains(window) else { return original(window, selector) }
+      skipped = true
+      return nil
+    }
+    method_setImplementation(method, imp_implementationWithBlock(replacement))
+    return true
+  }()
+
+  static func block(_ windows: [NSWindow]) -> Bool {
+    guard installed else { return false }
+    skipped = false
+    windows.forEach(blocked.add)
+    return true
+  }
+
+  @discardableResult
+  static func allow() -> Bool {
+    defer { skipped = false }
+    blocked.removeAllObjects()
+    return skipped
   }
 }

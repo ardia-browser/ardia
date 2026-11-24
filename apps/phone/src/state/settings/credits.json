@@ -1,5 +1,5 @@
 {
-  "inputs": "5365fe7145a264544240881bc6353d4c99ffea2612bac2cce698a35921913f6a",
+  "inputs": "9af1dc12277e10f40664f662002ade8f1a4c8502169e9e585acdcb1303fc85a8",
   "packages": [
     {
       "name": "@babel/runtime",
@@ -120,6 +120,12 @@
       "version": "0.0.6",
       "license": "MIT",
       "url": "https://github.com/facebook/flow"
+    },
+    {
+      "name": "Google Material Symbols",
+      "version": "10ecc14790612ca8fd164e3f4ffe9c16fc50d5b7",
+      "license": "Apache-2.0",
+      "url": "https://github.com/google/material-design-icons"
     },
     {
       "name": "invariant",

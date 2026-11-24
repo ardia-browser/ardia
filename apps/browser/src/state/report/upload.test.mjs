@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-const { sendReport, uploadUrlsFrom, issueNumberOf, resolveUrl, uploadFraction, isBusy, failureClass, failureMessage, RETRY_DELAYS_MS } = await import("./upload.ts");
+const { sendReport, uploadUrlsFrom, issueNumberOf, resolveUrl, uploadFraction, isBusy, failureClass, failureMessage, restartReason, RETRY_DELAYS_MS } = await import("./upload.ts");
 
 const endpoint = { url: "http://127.0.0.1:4319/api/feedback", key: "ak_app_x", keyHeader: "X-Ardia-Key" };
 const files = [
@@ -149,6 +149,47 @@ test("a failed upload keeps the report and retry sends only what's missing", asy
   const retry = await run(server, first.result.created);
   assert.equal(retry.result.phase, "sent");
   assert.deepEqual(server.calls.map((c) => c.kind === "put" ? c.file : c.url.split("/").pop()), ["trace.json.gz", "complete"]);
+});
+
+test("a created report remembers the size declared for each file", async () => {
+  const server = fakeServer({ put: () => 503 });
+  const { result } = await run(server);
+  assert.equal(result.stage, "upload");
+  assert.deepEqual(result.created.declared, { "recording.mp4": 1000, "trace.json.gz": 500 });
+  assert.deepEqual(server.calls[0].body, { title: "t" });
+});
+
+test("Try Again resumes only while every file still matches what was declared, sent or not", async () => {
+  const server = fakeServer({ put: (name) => (name === "trace.json.gz" ? 503 : 200) });
+  const { result: failed } = await run(server);
+  assert.equal(failed.errorClass, "server");
+  assert.equal(restartReason(failed, files), null);
+  const regrown = [files[0], { ...files[1], bytes: 640 }];
+  assert.equal(restartReason(failed, regrown), "files_changed");
+  assert.equal(restartReason(failed, [{ ...files[0], bytes: 9 }, files[1]]), "files_changed");
+  assert.equal(restartReason(failed, [...files, { name: "local-events.jsonl.gz", path: "/d/l.gz", bytes: 7, type: "application/gzip" }]), "files_changed");
+  assert.equal(restartReason(failed, [files[1]]), "files_changed");
+  assert.equal(restartReason(failed, [files[0]]), "files_changed");
+  assert.equal(restartReason(failed, []), "files_changed");
+  assert.equal(restartReason({ ...failed, errorClass: "rejected" }, files), "rejected");
+  assert.equal(restartReason({ ...failed, errorClass: "expired" }, files), "expired");
+  const { declared: _, ...older } = failed.created;
+  assert.equal(restartReason({ ...failed, created: older }, files), "files_changed");
+  assert.equal(restartReason({ ...failed, stage: "create", created: null }, files), null);
+});
+
+test("a resumed upload whose file changed size is refused by the server, so it must start over", async () => {
+  const sizes = new Map(files.map((f) => [f.name, f.bytes]));
+  const server = fakeServer({ put: (name) => (name === "trace.json.gz" && sizes.get(name) !== 500 ? 413 : name === "trace.json.gz" ? 503 : 200) });
+  const { result: failed } = await run(server);
+  sizes.set("trace.json.gz", 640);
+  const regrown = [files[0], { ...files[1], bytes: 640 }];
+  const states = [];
+  const resumed = await sendReport(server.deps, endpoint, { title: "t" }, regrown, (st) => states.push(st), failed.created);
+  assert.equal(resumed.phase, "failed");
+  assert.equal(resumed.errorClass, "rejected");
+  assert.equal(restartReason(resumed, regrown), "rejected");
+  assert.equal(restartReason(failed, regrown), "files_changed");
 });
 
 test("a failed complete retries only the complete call", async () => {

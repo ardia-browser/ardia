@@ -2,7 +2,7 @@ import { TurboModuleRegistry } from "react-native";
 import type { WindowsImportModule } from "../nativeModuleTypes";
 import type { ImportHost } from "./host";
 
-export const NATIVE_IMPORT = "ArdiaWindowsImport";
+const NATIVE_IMPORT = "ArdiaWindowsImport";
 
 const parsed = async <Value>(promise: Promise<string>): Promise<Value> => JSON.parse(await promise) as Value;
 

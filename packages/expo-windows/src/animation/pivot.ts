@@ -1,4 +1,4 @@
-export type TransformStep = Record<string, unknown>;
+type TransformStep = Record<string, unknown>;
 
 const RESTING: Record<string, number> = { scale: 1, scaleX: 1, scaleY: 1, rotate: 0, rotateX: 0, rotateY: 0, rotateZ: 0, skewX: 0, skewY: 0 };
 

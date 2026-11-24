@@ -278,10 +278,6 @@ public struct AppIconPreview: View {
       .interpolation(.high)
       .frame(width: scaledSide, height: scaledSide)
       .clipShape(.rect(cornerRadius: scaledSide * 0.225, style: .continuous))
-      .overlay {
-        RoundedRectangle(cornerRadius: scaledSide * 0.225, style: .continuous)
-          .strokeBorder(.primary.opacity(0.08), lineWidth: 0.5)
-      }
       .accessibilityHidden(true)
   }
 }
@@ -347,35 +343,88 @@ public struct ColorSwatch: View {
   public static let ringWidth: CGFloat = 2
   public static let hitHeight: CGFloat = 44
 
-  public var color: Color
+  public var fill: AnyShapeStyle
+  public var ring: Color
   public var isSelected: Bool
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   public init(color: Color, isSelected: Bool) {
-    self.color = color
+    self.init(fill: AnyShapeStyle(color), ring: color, isSelected: isSelected)
+  }
+
+  public init(colors: [Color], ring: Color, isSelected: Bool) {
+    let stops = colors.count > 1 ? colors : Array(repeating: colors.first ?? ring, count: 2)
+    self.init(fill: AnyShapeStyle(LinearGradient(colors: stops, startPoint: .topLeading, endPoint: .bottomTrailing)), ring: ring, isSelected: isSelected)
+  }
+
+  public init(fill: AnyShapeStyle, ring: Color, isSelected: Bool) {
+    self.fill = fill
+    self.ring = ring
     self.isSelected = isSelected
   }
 
   public var body: some View {
     Circle()
-      .fill(color)
+      .fill(fill)
       .frame(width: Self.side, height: Self.side)
       .padding(Self.ringGap + Self.ringWidth)
       .overlay {
         if isSelected {
-          Circle().strokeBorder(color, lineWidth: Self.ringWidth)
+          Circle().strokeBorder(ring, lineWidth: Self.ringWidth)
         }
       }
-      .animation(Motion.snappy, value: isSelected)
+      .frame(minHeight: Self.hitHeight)
+      .contentShape(.rect)
+      .animation(reduceMotion ? nil : Motion.snappy, value: isSelected)
   }
 }
 
 public struct PressableStyle: ButtonStyle {
-  public init() {}
+  public enum Kind: Sendable {
+    case icon
+    case filled
+
+    public var pressedOpacity: Double {
+      switch self {
+      case .icon: 0.35
+      case .filled: 0.8
+      }
+    }
+  }
+
+  public let kind: Kind
+
+  public init(_ kind: Kind = .icon) {
+    self.kind = kind
+  }
 
   public func makeBody(configuration: Configuration) -> some View {
     configuration.label
-      .scaleEffect(configuration.isPressed ? 0.94 : 1)
-      .animation(Motion.press, value: configuration.isPressed)
+      .opacity(configuration.isPressed ? kind.pressedOpacity : 1)
+      .transaction { $0.animation = nil }
+  }
+}
+
+public extension View {
+  @ViewBuilder
+  func chromeButtonStyle(prominent: Bool) -> some View {
+    modifier(ChromeButtonStyle(prominent: prominent))
+  }
+}
+
+private struct ChromeButtonStyle: ViewModifier {
+  let prominent: Bool
+
+  @Environment(\.usesGlass) private var usesGlass
+
+  @ViewBuilder
+  func body(content: Content) -> some View {
+    switch (usesGlass, prominent) {
+    case (true, true): content.buttonStyle(.glassProminent)
+    case (true, false): content.buttonStyle(.glass)
+    case (false, true): content.buttonStyle(.borderedProminent)
+    case (false, false): content.buttonStyle(.bordered)
+    }
   }
 }
 
@@ -390,6 +439,8 @@ public struct SettingsShortcut: Identifiable, Equatable {
 }
 
 public struct SettingsShortcuts: View {
+  private static let corner: CGFloat = 12
+
   public var shortcuts: [SettingsShortcut]
   public var action: (SettingsShortcut) -> Void
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -411,8 +462,8 @@ public struct SettingsShortcuts: View {
           Text(LocalizedStringKey(shortcut.title))
             .font(.body.weight(.medium))
             .frame(maxWidth: .infinity, minHeight: 48)
-            .background(Color(.secondarySystemGroupedBackground), in: .capsule)
-            .contentShape(.capsule)
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: Self.corner, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: Self.corner, style: .continuous))
         }
         .buttonStyle(PressableStyle())
         .foregroundStyle(.primary)

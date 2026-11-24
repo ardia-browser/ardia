@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "ardia/core/ac_launch_switches.h"
-#include "ardia/linux/ac_linux_notifications_core.h"
+#include "ardia/desktop/ac_desktop_notifications_core.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"
@@ -31,7 +31,7 @@ namespace ardiacore {
 
 namespace {
 
-namespace notifications = ardia::linux_notifications;
+namespace notifications = ardia::desktop_notifications;
 
 using Done = base::OnceCallback<void(bool, base::Value)>;
 

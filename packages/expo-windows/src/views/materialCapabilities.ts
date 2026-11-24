@@ -1,6 +1,6 @@
 import { DeviceEventEmitter, TurboModuleRegistry, type EmitterSubscription, type TurboModule } from "react-native";
 
-export type MaterialCapabilities = {
+type MaterialCapabilities = {
   build: number;
   systemBackdrop: boolean;
   systemBackdropSupported: boolean;
@@ -9,7 +9,7 @@ export type MaterialCapabilities = {
   background: boolean;
 };
 
-export type MaterialPath = { path: string; reason: string; step?: string };
+type MaterialPath = { path: string; reason: string; step?: string };
 
 export type MaterialsNative = {
   capabilities(): MaterialCapabilities;
@@ -62,7 +62,7 @@ function gradientFailed() {
   for (const listener of [...failureListeners]) listener();
 }
 
-export function onGradientFailure(listener: () => void): () => void {
+function onGradientFailure(listener: () => void): () => void {
   failureListeners.add(listener);
   failures ??= DeviceEventEmitter.addListener(GRADIENT_FAILED_EVENT, gradientFailed);
   return () => {

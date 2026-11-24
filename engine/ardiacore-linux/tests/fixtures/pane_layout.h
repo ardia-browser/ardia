@@ -12,6 +12,8 @@
 #include <utility>
 #include <vector>
 
+#include "ardia/desktop/ac_desktop_window_corners.h"
+
 namespace base {
 template <typename T> class WeakPtr {
  public:
@@ -58,12 +60,18 @@ template <typename T> class AutoReset {
 };
 }
 
+#define METADATA_HEADER(...)
+
+using Profile = int;
+
 namespace gfx {
 struct Vector2d {
   int x = 0, y = 0;
 };
 struct Size {
   int width = 0, height = 0;
+  bool IsEmpty() const { return width <= 0 || height <= 0; }
+  bool operator==(const Size&) const = default;
 };
 struct Rect {
   int x_ = 0, y_ = 0, w_ = 0, h_ = 0;
@@ -87,7 +95,35 @@ struct Rect {
   bool operator==(const Rect&) const = default;
 };
 inline Rect operator+(Rect rect, Vector2d offset) { rect.Offset(offset.x, offset.y); return rect; }
-struct RoundedCornersF { explicit RoundedCornersF(float) {} };
+struct RoundedCornersF {
+  float upper_left = 0, upper_right = 0, lower_right = 0, lower_left = 0;
+  RoundedCornersF() = default;
+  explicit RoundedCornersF(float r) : upper_left(r), upper_right(r), lower_right(r), lower_left(r) {}
+  RoundedCornersF(float ul, float ur, float lr, float ll)
+      : upper_left(ul), upper_right(ur), lower_right(lr), lower_left(ll) {}
+  bool operator==(const RoundedCornersF&) const = default;
+};
+}
+
+namespace ui {
+enum LayerType { LAYER_NOT_DRAWN };
+struct Layer {
+  Layer* parent() const { return parent_; }
+  void SetFillsBoundsOpaquely(bool value) { opaque = value; }
+  void SetMasksToBounds(bool value) { masks_to_bounds = value; }
+  void SetRoundedCornerRadius(gfx::RoundedCornersF value) { radii = value; }
+  void SetIsFastRoundedCorner(bool value) { fast_rounded = value; }
+  Layer* parent_ = nullptr;
+  bool opaque = true;
+  bool masks_to_bounds = false;
+  bool fast_rounded = false;
+  gfx::RoundedCornersF radii;
+};
+}
+
+namespace views {
+inline const int* const kHostViewKey = nullptr;
+inline bool manages_layers = true;
 }
 
 namespace aura {
@@ -95,9 +131,18 @@ struct Window {
   void Show() { shows++; visible = true; }
   void Hide() { visible = false; }
   bool IsVisible() const { return visible; }
+  ui::Layer* layer() { return &layer_; }
+  const void* GetProperty(const int*) const { return host_view; }
   bool visible = true;
   int shows = 0;
+  bool parented = false;
+  const void* host_view = nullptr;
+  ui::Layer layer_;
 };
+}
+
+namespace gfx {
+using NativeView = aura::Window*;
 }
 
 namespace content {
@@ -130,8 +175,18 @@ class WebContents {
     auto hook = focused;
     if (hook) hook();
   }
+  struct Delegate {
+    bool fullscreen = false;
+    bool IsFullscreenForTabOrPending(const WebContents*) const { return fullscreen; }
+  };
+  bool IsBeingCaptured() const { return captured; }
+  gfx::Size GetPreferredSize() const { return preferred_size; }
+  Delegate* GetDelegate() { return &delegate; }
   std::function<void()> focused;
   aura::Window native;
+  Delegate delegate;
+  bool captured = false;
+  gfx::Size preferred_size;
   int focuses = 0;
   bool destroyed = false;
   std::vector<WebContentsObserver*> observers;
@@ -185,44 +240,116 @@ class View {
   void RequestFocus();
   void SetVisible(bool value) { visible_ = value; }
   bool GetVisible() const { return visible_; }
-  void SetBoundsRect(const gfx::Rect& bounds) { bounds_ = bounds; }
+  void SetBoundsRect(const gfx::Rect& bounds) {
+    const gfx::Rect previous = bounds_;
+    bounds_ = bounds;
+    OnBoundsChanged(previous);
+  }
   const gfx::Rect& bounds() const { return bounds_; }
+  void SetPaintToLayer(ui::LayerType = ui::LAYER_NOT_DRAWN) {
+    if (!layer_) layer_ = std::make_unique<ui::Layer>();
+  }
+  ui::Layer* layer() const { return layer_.get(); }
+ protected:
+  virtual void OnBoundsChanged(const gfx::Rect&) {}
  private:
   bool visible_ = true;
   gfx::Rect bounds_;
+  std::unique_ptr<ui::Layer> layer_;
 };
 class FocusManager {
  public:
   View* GetFocusedView() const { return focused; }
+  void ClearFocus() { focused = nullptr; }
   View* focused = nullptr;
 };
 inline FocusManager focus_manager;
+inline bool detach_advances_focus = false;
+inline int focused_detaches = 0;
 inline void View::RequestFocus() { focus_manager.focused = this; }
-struct NativeViewHolder { void SetNativeViewCornerRadii(gfx::RoundedCornersF) {} };
-class WebView : public View {
+struct NativeViewHolder {
+  explicit NativeViewHolder(const View* owner = nullptr) : owner_(owner) {}
+  void SetNativeViewCornerRadii(gfx::RoundedCornersF radii) {
+    applied_radii = clip_installed ? gfx::RoundedCornersF(radii.upper_left, radii.upper_right, 0, 0) : radii;
+  }
+  void SetNativeViewSize(gfx::Size size) { native_size = size; }
+  void SetBoundsRect(const gfx::Rect& rect) { holder_bounds = rect; }
+  const gfx::Rect& bounds() const { return holder_bounds; }
+  void DeprecatedLayoutImmediately() {
+    immediate_layouts++;
+    if (!owner_ || !native_) return;
+    const gfx::Rect parent_local(owner_->bounds().size());
+    clip_installed = !parent_local.IsEmpty() && !holder_bounds.IsEmpty() && holder_bounds != parent_local;
+    clip_rect = clip_installed ? parent_local : gfx::Rect();
+  }
+  aura::Window* GetNativeViewContainer() { return manages_layers ? nullptr : &container_; }
+  gfx::NativeView native_view() const { return native_; }
+  bool layer_managed_by_views() const { return manages_layers; }
+  ui::Layer* layer() { return native_ ? &layer_ : nullptr; }
+  bool Holds(gfx::NativeView native) {
+    if (native_ != native || !native->parented) return false;
+    return manages_layers ? native->layer()->parent() == &layer_ : native->host_view == this;
+  }
+  void Attach(gfx::NativeView native) {
+    native_ = native;
+    native->parented = true;
+    if (manages_layers) native->layer_.parent_ = &layer_;
+    else native->host_view = this;
+  }
+  void Detach() {
+    gfx::NativeView native = std::exchange(native_, nullptr);
+    native->parented = false;
+    if (native->layer_.parent_ == &layer_) native->layer_.parent_ = nullptr;
+    if (native->host_view == this) native->host_view = nullptr;
+    clip_installed = false;
+    clip_rect = gfx::Rect();
+    native->Hide();
+  }
+  const View* owner_ = nullptr;
+  gfx::NativeView native_ = nullptr;
+  ui::Layer layer_;
+  aura::Window container_;
+  gfx::Rect holder_bounds;
+  gfx::Rect clip_rect;
+  gfx::Size native_size;
+  gfx::RoundedCornersF applied_radii;
+  bool clip_installed = false;
+  int immediate_layouts = 0;
+};
+using NativeViewHost = NativeViewHolder;
+class WebView : public View, private content::WebContentsObserver {
  public:
+  explicit WebView(Profile* = nullptr) : holder_(this) {}
   void SetWebContents(content::WebContents* contents) {
-    if (contents && contents != contents_ && GetVisible()) contents->GetNativeView()->Show();
+    if (contents == contents_) return;
+    if (contents_) holder_.Detach();
     contents_ = contents;
+    Observe(contents);
+    if (!contents && detach_advances_focus && focus_manager.focused == this) {
+      focused_detaches++;
+      focus_manager.focused = nullptr;
+    }
+    if (!contents) return;
+    holder_.Attach(contents->GetNativeView());
+    OnBoundsChanged(bounds());
+    if (GetVisible()) contents->GetNativeView()->Show();
   }
   content::WebContents* web_contents() const { return contents_; }
   NativeViewHolder* holder() { return &holder_; }
+  int base_bounds_changes = 0;
+ protected:
+  void OnBoundsChanged(const gfx::Rect&) override {
+    base_bounds_changes++;
+    holder_.SetBoundsRect(gfx::Rect(bounds().size()));
+  }
  private:
+  void WebContentsDestroyed() override { SetWebContents(nullptr); }
   content::WebContents* contents_ = nullptr;
   NativeViewHolder holder_;
 };
 }
 
-class ViewportView : public views::WebView {
- public:
-  explicit ViewportView(int) {}
-  void SetShape(std::vector<gfx::Rect> paint, std::vector<gfx::Rect> input) {
-    paint_shape = std::move(paint);
-    input_shape = std::move(input);
-  }
-  std::vector<gfx::Rect> paint_shape;
-  std::vector<gfx::Rect> input_shape;
-};
+ARDIA_VIEWPORT_VIEW
 
 struct ContentsContainerView {
   views::WebView* devtools_web_view() { return &devtools; }
@@ -230,7 +357,7 @@ struct ContentsContainerView {
 };
 struct BrowserView;
 struct BrowserWindowInterface { BrowserView* view = nullptr; };
-inline int ProfileOf(int context) { return context; }
+inline Profile* ProfileOf(int) { return nullptr; }
 struct BrowserView {
   static BrowserView* GetBrowserViewForBrowser(BrowserWindowInterface* browser) { return browser ? browser->view : nullptr; }
   views::WebView* GetActiveContentsWebView() { return &contents; }
@@ -258,6 +385,8 @@ inline std::vector<content::WebContents*> forgotten_hangs;
 inline void ForgetDeferredLinuxHangs(content::WebContents* contents) { forgotten_hangs.push_back(contents); }
 }
 
+namespace desktop_window_corners = ardia::desktop_window_corners;
+
 class ShellHostView;
 ARDIA_FRONTEND_WATCH
 
@@ -265,9 +394,9 @@ class TabBinding {
  public:
   TabBinding(ShellHostView* owner, content::WebContents* contents) : owner_(owner), contents_(contents) {}
   content::WebContents* contents() const { return contents_; }
-  views::WebView* viewport() const { return viewport_; }
-  views::WebView* devtools_viewport() const { return devtools_viewport_; }
-  void SetDevToolsViewport(views::WebView* view) { devtools_viewport_ = view; }
+  ViewportView* viewport() const { return viewport_; }
+  ViewportView* devtools_viewport() const { return devtools_viewport_; }
+  void SetDevToolsViewport(ViewportView* view) { devtools_viewport_ = view; }
   void ResetPageCommands() { resets++; }
   std::unique_ptr<int> media = std::make_unique<int>(1);
   struct Page {
@@ -290,16 +419,18 @@ class TabBinding {
   std::unique_ptr<DevToolsFrontendWatch> devtools_watch;
   bool devtools_had_focus = false;
   gfx::Rect pane_bounds;
+  gfx::Rect content_bounds;
   std::vector<gfx::Rect> pane_shape;
   std::vector<gfx::Rect> pane_input_shape;
   bool pane_visible = false;
+  desktop_window_corners::Corners pane_radii = desktop_window_corners::kPageCardCorners;
   std::string claim = "claim";
   uint64_t renderer_generation = 1;
   int resets = 0;
   ShellHostView* owner_;
   content::WebContents* contents_;
-  views::WebView* viewport_ = nullptr;
-  views::WebView* devtools_viewport_ = nullptr;
+  ViewportView* viewport_ = nullptr;
+  ViewportView* devtools_viewport_ = nullptr;
 };
 
 class ShellHostView : public views::View {
@@ -307,9 +438,19 @@ class ShellHostView : public views::View {
   ShellHostView();
   ~ShellHostView();
   void LayoutPane(TabBinding* binding);
+  std::vector<TabBinding*> forgotten;
+  void ForgetClosedTab(TabBinding* binding) { forgotten.push_back(binding); }
   void OnDevToolsDockChanged(content::WebContents* inspected, content::WebContents* devtools);
   void HideDevToolsViewport(TabBinding* binding);
   void Restack() { restacks++; }
+  void ClipPaneView(TabBinding* binding, views::WebView* view);
+  void ClipViewport(views::WebView* view, const desktop_window_corners::Corners& own) {
+    clipped.push_back(view);
+    clipped_radii.push_back(own);
+    if (auto* viewport = dynamic_cast<ViewportView*>(view)) {
+      viewport->ApplyCornerRadii(gfx::RoundedCornersF(own.upper_left, own.upper_right, own.lower_right, own.lower_left));
+    }
+  }
   TabBinding* Binding(int id) {
     for (auto& binding : bindings) {
       if (TabId(binding->contents()) == id) return binding.get();
@@ -344,14 +485,14 @@ class ShellHostView : public views::View {
     children.erase(found);
     children.insert(children.begin() + std::min(index, children.size()), std::move(moved));
   }
-  int profile() const { return 0; }
-  int page_profile() const { return 0; }
+  Profile* profile() const { return nullptr; }
+  Profile* page_profile() const { return nullptr; }
   base::WeakPtr<ShellHostView> GetWeakPtr() { return weak.GetWeakPtr(); }
   TabBinding* Bind(content::WebContents* contents, int id) {
     tab_ids[contents] = id;
     bindings.push_back(std::make_unique<TabBinding>(this, contents));
     auto* binding = bindings.back().get();
-    binding->viewport_ = AddChildView(std::make_unique<ViewportView>(0));
+    binding->viewport_ = AddChildView(std::make_unique<ViewportView>(nullptr));
     binding->renderer_generation = renderer_generation_;
     return binding;
   }
@@ -374,6 +515,8 @@ class ShellHostView : public views::View {
   int* handler_ = &handler_storage;
   uint64_t renderer_generation_ = 1;
   int restacks = 0;
+  std::vector<views::WebView*> clipped;
+  std::vector<desktop_window_corners::Corners> clipped_radii;
   base::WeakPtrFactory<ShellHostView> weak{this};
 };
 

@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { StyleSheet, View, type ViewInstance } from "react-native";
 
+import { DesignProvider, useDesign } from "./design";
+
 export type WindowRect = { x: number; y: number; width: number; height: number };
 
 type Layer = { id: number; node: ReactNode; leaving: boolean };
@@ -127,11 +129,12 @@ export function OverlayHost({ children }: { children: ReactNode }) {
 
 export function Portal({ exitMs = 0, children }: { exitMs?: number; children: ReactNode }) {
   const overlay = useContext(OverlayContext);
+  const [design] = useState(useDesign());
   const [id] = useState(() => ++nextId);
   const leaveAfter = useRef(exitMs);
   leaveAfter.current = exitMs;
   useLayoutEffect(() => {
-    overlay?.show(id, children);
+    overlay?.show(id, <DesignProvider design={design}>{children}</DesignProvider>);
   });
   useLayoutEffect(
     () => () => {

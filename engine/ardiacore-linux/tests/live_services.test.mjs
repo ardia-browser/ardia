@@ -11,6 +11,7 @@ import { hostLiveClient, LIVE_CAPABILITIES } from "../../../apps/linux/src/hostL
 import { linuxLiveSources } from "../../../apps/linux/src/liveSources.ts";
 import { live, setAccount, updateConfig } from "../../../apps/browser/src/state/live/store.ts";
 import { LiveError } from "../../../apps/browser/src/state/live/types.ts";
+import { asSecret } from "../../../packages/core/src/secret.ts";
 
 const TOOL = process.env.LIVE_HOST_TOOL;
 const scratch = mkdtempSync(join(tmpdir(), "ardia-live-services-"));
@@ -114,7 +115,7 @@ test("each advertised provider connects through the native service and keeps its
   await linux.connectBitbucket(f.bitbucket.user, f.bitbucket.token);
   await linux.connectNotion(f.notion.token);
   await linux.connectConfluence("acme.atlassian.net/", f.confluence.email, f.confluence.token);
-  await linux.connectGoogle(f.gdrive.clientId, f.gdrive.clientSecret, f.gdrive.code, "fixture-verifier-0123456789", "http://127.0.0.1:53682/ardia-oauth");
+  await linux.connectGoogle(f.gdrive.clientId, f.gdrive.clientSecret, asSecret("oauthToken", f.gdrive.code), asSecret("oauthToken", "fixture-verifier-0123456789"), "http://127.0.0.1:53682/ardia-oauth");
   const accounts = live().accounts;
   assert.equal(accounts.github.login, f.github.login);
   assert.equal(accounts.bitbucket.login, f.bitbucket.accountId);
@@ -290,7 +291,7 @@ test("a Google renewal that lands after a reconnect cannot overwrite the new tok
   await eventually(() => services.state.googleRenewals > renewals, "the renewal to start");
   await call("Tool.holdWrites", [true]);
   const f = LIVE_FIXTURE.gdrive;
-  const connecting = linux.connectGoogle(f.clientId, f.clientSecret, f.code, "fixture-verifier-0123456789", "http://127.0.0.1:53682/ardia-oauth");
+  const connecting = linux.connectGoogle(f.clientId, f.clientSecret, asSecret("oauthToken", f.code), asSecret("oauthToken", "fixture-verifier-0123456789"), "http://127.0.0.1:53682/ardia-oauth");
   await eventually(async () => (await heldWrites()) >= 1, "the reconnect's save to be posted");
   await new Promise((resolve) => setTimeout(resolve, 1800));
   await call("Tool.holdWrites", [false]);

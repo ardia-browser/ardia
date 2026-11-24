@@ -2,58 +2,38 @@ import XCTest
 @testable import ArdiaUpdaterCore
 
 final class ScreenEdgeCrossingTests: XCTestCase {
-  func sweep(_ xs: [CGFloat], every step: TimeInterval, from start: TimeInterval = 10) -> ScreenEdgeCrossing {
+  func moves(_ path: [(past: CGFloat, at: TimeInterval)]) -> [ScreenEdgeCrossing.Move] {
     var crossing = ScreenEdgeCrossing()
-    for (i, x) in xs.enumerated() { crossing.track(CGPoint(x: x, y: 400), at: start + Double(i) * step) }
-    return crossing
+    return path.compactMap { crossing.track(past: $0.past, at: $0.at) }
   }
 
-  func testASweepToTheNextDisplayIsAFling() {
-    let crossing = sweep([1600, 1580, 1560, 1540, 1520, 1500], every: 0.009)
-    XCTAssertEqual(crossing.speed(right: false), 100 / 0.045, accuracy: 1)
-    XCTAssertTrue(crossing.isFling(right: false))
-    XCTAssertFalse(crossing.isFling(right: true))
+  func testASweepToTheNextDisplayIsOneCrossing() {
+    XCTAssertEqual(moves([(-60, 10), (-20, 10.01), (20, 10.02), (200, 10.03), (600, 10.04)]), [.crossed])
   }
 
-  func testASlowArrivalIsNoFling() {
-    XCTAssertFalse(sweep([1530, 1524, 1518, 1512, 1506], every: 0.009).isFling(right: false))
+  func testAnOvershootThatComesBackReturns() {
+    XCTAssertEqual(moves([(-30, 10), (12, 10.01), (40, 10.05), (-10, 10.4)]), [.crossed, .returned])
   }
 
-  func testAnArrivalAfterAPauseIsNoFling() {
-    var crossing = sweep([1700, 1600], every: 0.008)
-    crossing.track(CGPoint(x: 1500, y: 400), at: 10.2)
-    XCTAssertEqual(crossing.speed(right: false), 0)
-    XCTAssertFalse(crossing.isFling(right: false))
-  }
-
-  func testOnlyTheLastFiftyMillisecondsCount() {
-    var crossing = sweep([3000, 2000, 1000], every: 0.03)
-    XCTAssertEqual(crossing.speed(right: false), 1000 / 0.03, accuracy: 1)
-    crossing.track(CGPoint(x: 1000, y: 400), at: 10.12)
-    XCTAssertEqual(crossing.speed(right: false), 0)
-  }
-
-  func testTheRightEdgeCountsMovesToTheRight() {
-    XCTAssertTrue(sweep([3000, 3020, 3040, 3060], every: 0.008).isFling(right: true))
-  }
-
-  func testPushesAddUpToThePushDistance() {
+  func testComingBackTooLateIsNoReturn() {
+    XCTAssertEqual(moves([(-30, 10), (12, 10.01), (-10, 10.8)]), [.crossed])
     var crossing = ScreenEdgeCrossing()
-    crossing.startPush()
-    XCTAssertFalse(crossing.push(by: 20))
-    XCTAssertFalse(crossing.push(by: -30))
-    XCTAssertFalse(crossing.push(by: 20))
-    XCTAssertFalse(crossing.push(by: 20))
-    XCTAssertTrue(crossing.push(by: 4))
-    crossing.startPush()
-    XCTAssertEqual(crossing.pushed, 0)
+    _ = crossing.track(past: -30, at: 10)
+    _ = crossing.track(past: 12, at: 10.01)
+    XCTAssertTrue(crossing.awaitingReturn(at: 10.5))
+    XCTAssertFalse(crossing.awaitingReturn(at: 10.8))
   }
 
-  func testForgettingDropsSpeedAndPush() {
-    var crossing = sweep([1600, 1560, 1520], every: 0.008)
-    _ = crossing.push(by: 40)
-    crossing.forget()
-    XCTAssertEqual(crossing.speed(right: false), 0)
-    XCTAssertEqual(crossing.pushed, 0)
+  func testGoingPastTheReachIsNoReturn() {
+    XCTAssertEqual(moves([(-30, 10), (12, 10.01), (120, 10.05), (40, 10.1), (-10, 10.2)]), [.crossed])
+    XCTAssertEqual(moves([(-30, 10), (150, 10.01), (-10, 10.1)]), [.crossed])
+  }
+
+  func testLandingDeepInsideIsNoReturn() {
+    XCTAssertEqual(moves([(-30, 10), (12, 10.01), (-200, 10.1)]), [.crossed])
+  }
+
+  func testAPointerThatStartsOutsideNeverCrosses() {
+    XCTAssertEqual(moves([(30, 10), (10, 10.05), (-10, 10.1)]), [])
   }
 }

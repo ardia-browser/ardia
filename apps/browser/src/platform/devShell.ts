@@ -1,7 +1,8 @@
 import * as shellPackage from "@ardia/shell";
 import * as app from "./app";
 import * as calendar from "./calendar";
-import * as cli from "./cli";
+import * as commandInstall from "./commandInstall";
+import * as control from "./control";
 import * as clipboard from "./clipboard";
 import * as commands from "./commands";
 import * as dev from "./dev";
@@ -35,7 +36,8 @@ export const shell = {
   ...scripting,
   ...calendar,
   ...keychain,
-  ...cli,
+  ...control,
+  ...commandInstall,
   ...userScripts,
   ...dev,
 };

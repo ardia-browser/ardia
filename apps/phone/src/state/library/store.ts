@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { downloads } from "../../platform/downloads";
+import { openTab } from "../browse/store";
 import { history } from "../history/store";
 import { settled } from "../pages/store";
 import { dismissSearch } from "../search/store";
@@ -8,9 +9,10 @@ import { readPreferences, writePreference } from "../store/browserDatabase";
 import { browserDatabase } from "../store/database";
 import { selectedProfile, syncData } from "../sync/store";
 import { belongsToSpace } from "../tabs/spaces";
-import { useTabs } from "../tabs/store";
+import { openNewTab, useTabs } from "../tabs/store";
 import { countUsage } from "../telemetry/telemetry";
 import { forgettingHidden, hidingEntry, historyEntries, keepingHidden, type HiddenHistory, type HistoryEntry, type HistoryVisitInput } from "./historyTimeline";
+import { destinationWords } from "../../lib/sharedWords";
 
 export type DownloadedFile = Awaited<ReturnType<typeof downloads.files>>[number];
 
@@ -18,11 +20,12 @@ export type LibrarySection = "history" | "bookmarks" | "downloads";
 
 export const LIBRARY_SECTIONS: readonly LibrarySection[] = ["history", "bookmarks", "downloads"];
 
-export const LIBRARY_NAMES: Record<LibrarySection, string> = { history: "History", bookmarks: "Bookmarks", downloads: "Downloads" };
+export const LIBRARY_NAMES: Record<LibrarySection, string> = { history: destinationWords.history, bookmarks: destinationWords.bookmarks, downloads: destinationWords.downloads };
 
 export const LIBRARY_SYMBOLS: Record<LibrarySection, string> = { history: "clock", bookmarks: "book", downloads: "arrow.down.circle" };
 
 export const LIBRARY_SEARCH_PROMPTS: Record<LibrarySection, string | null> = { history: "Search History", bookmarks: "Search Bookmarks", downloads: null };
+export const LIBRARY_CLEAR_DATA = "clearData";
 
 export const HIDDEN_HISTORY_KEY = "library.hiddenHistory";
 
@@ -44,15 +47,25 @@ export const useLibrary = create<LibraryState>()(() => ({ open: false, section: 
 
 export function openLibrary(section: LibrarySection) {
   useLibrary.setState({ open: true, section, path: [] });
-  countUsage("library_opened");
+  if (!useTabs.getState().incognito) countUsage("library_opened");
 }
 
 export const closeLibrary = () => useLibrary.setState({ open: false });
 
+export function libraryBack(): boolean {
+  const { open, path } = useLibrary.getState();
+  if (!open) return false;
+  if (path.length) popLibraryPage();
+  else closeLibrary();
+  return true;
+}
+
 export function openFromLibrary(url: string, title: string) {
+  const incognito = useTabs.getState().incognito;
   closeLibrary();
   dismissSearch();
-  openRemote(url, title, null);
+  if (!incognito) openRemote(url, title, null);
+  else if (/^https?:\/\//i.test(url)) openTab(openNewTab({ url, title, origin: "link", isPrivate: true }).id);
 }
 
 export function showLibrarySection(section: LibrarySection) {

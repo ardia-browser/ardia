@@ -3,7 +3,7 @@ import Foundation
 
 let args = CommandLine.arguments
 guard args.count >= 3, let pid = pid_t(args[1]) else {
-  FileHandle.standardError.write("usage: ax <pid> windows | press <button title>\n".data(using: .utf8)!)
+  FileHandle.standardError.write("usage: ax <pid> windows | texts | press <button title>\n".data(using: .utf8)!)
   exit(2)
 }
 guard AXIsProcessTrusted() else {
@@ -36,6 +36,26 @@ case "windows":
     let title: String = attribute(window, kAXTitleAttribute) ?? ""
     let titles = buttons(in: window).compactMap { (button: AXUIElement) -> String? in attribute(button, kAXTitleAttribute) }
     return ["title": title, "buttons": titles.filter { !$0.isEmpty }]
+  }
+  let data = try JSONSerialization.data(withJSONObject: listed)
+  print(String(data: data, encoding: .utf8)!)
+case "texts":
+  func texts(in element: AXUIElement, depth: Int = 0) -> [String] {
+    guard depth < 16 else { return [] }
+    let own = [kAXTitleAttribute, kAXValueAttribute, kAXDescriptionAttribute]
+      .compactMap { (name: String) -> String? in attribute(element, name) }
+      .filter { !$0.isEmpty }
+    let children: [AXUIElement] = attribute(element, kAXChildrenAttribute) ?? []
+    return own + children.flatMap { texts(in: $0, depth: depth + 1) }
+  }
+  let listed = windows.map { window -> [String: Any] in
+    var frame = CGRect.zero
+    if let value: AXValue = attribute(window, "AXFrame") { AXValueGetValue(value, .cgRect, &frame) }
+    return [
+      "title": (attribute(window, kAXTitleAttribute) as String?) ?? "",
+      "x": frame.origin.x, "y": frame.origin.y, "w": frame.width, "h": frame.height,
+      "texts": texts(in: window),
+    ]
   }
   let data = try JSONSerialization.data(withJSONObject: listed)
   print(String(data: data, encoding: .utf8)!)

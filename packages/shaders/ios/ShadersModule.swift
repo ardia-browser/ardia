@@ -1,35 +1,39 @@
 import ArdiaCore
 import ExpoModulesCore
 
-public class AreaLightModule: Module {
+public class AreaLightModule: Module, AreaLightNative {
   public func definition() -> ModuleDefinition {
-    Name("ArdiaAreaLight")
+    Name(Self.moduleName)
 
-    AsyncFunction("debugSnapshot") { (dir: String) -> [[String: Any]] in
-      try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-      return MetalSurface.instances.enumerated().compactMap { index, view in
-        guard let window = view.window, let content = window.contentView else { return nil }
-        let name = String(describing: type(of: view))
-        let path = (dir as NSString).appendingPathComponent("\(index)-\(name).png")
-        let r = view.convert(view.bounds, to: nil)
-        let top = content.frame.height - r.maxY
-        let drawable = view.metalView.drawableSize
-        return [
-          "file": path, "class": name, "ok": view.writeSnapshot(to: path), "window": window.windowNumber,
-          "frame": [r.minX, top, r.width, r.height], "key": window.isKeyWindow, "main": window.isMainWindow,
-          "drawable": [drawable.width, drawable.height],
-          "hidden": view.isHiddenOrHasHiddenAncestor, "alpha": view.alphaValue,
-        ]
-      }
-    }.runOnQueue(.main)
+    Self.debugSnapshotFunction
+  }
+
+  static func debugSnapshot(_ dir: String) -> [[String: Any]] {
+    try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+    return MetalSurface.instances.enumerated().compactMap { index, view in
+      guard let window = view.window, let content = window.contentView else { return nil }
+      let name = String(describing: type(of: view))
+      let path = (dir as NSString).appendingPathComponent("\(index)-\(name).png")
+      let r = view.convert(view.bounds, to: nil)
+      let top = content.frame.height - r.maxY
+      let drawable = view.metalView.drawableSize
+      return [
+        "file": path, "class": name, "ok": view.writeSnapshot(to: path), "window": window.windowNumber,
+        "frame": [r.minX, top, r.width, r.height], "key": window.isKeyWindow, "main": window.isMainWindow,
+        "drawable": [drawable.width, drawable.height],
+        "hidden": view.isHiddenOrHasHiddenAncestor, "alpha": view.alphaValue,
+      ]
+    }
   }
 }
 
-public class WindowBackdropModule: Module {
-  public func definition() -> ModuleDefinition {
-    Name("ArdiaWindowBackdrop")
+public class WindowBackdropModule: Module, WindowBackdropNative {
+  static func holdKeyLook(_ on: Bool) { WindowTreatmentView.holdsKeyLook = on }
 
-    AsyncFunction("holdKeyLook") { (on: Bool) in WindowTreatmentView.holdsKeyLook = on }.runOnQueue(.main)
+  public func definition() -> ModuleDefinition {
+    Name(Self.moduleName)
+
+    Self.holdKeyLookFunction
 
     View(WindowBackdropView.self) {
       Prop("colors") { (view: WindowBackdropView, colors: [String]) in view.setColors(colors) }

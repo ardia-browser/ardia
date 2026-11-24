@@ -1,5 +1,5 @@
 import { classifyPaste, markdownLink, sanitizePaste, searchUrl, type PasteAction } from "@ardia/core";
-import { copyText, readText } from "../../platform/clipboard";
+import { copyLink, copyText, copyUncleanedUrl, readText } from "../../platform/clipboard";
 import { showMenu, type MenuItem } from "../../platform/menus";
 import { menuSections, withOptionAlternate, type MenuKey } from "../app/menuSections";
 import { currentSettings } from "../browser/current";
@@ -10,16 +10,16 @@ import { canShare, shareTab } from "../site/share";
 import { copyPageUrl } from "../site/selection";
 import type { Tab } from "../browser/types";
 
-export async function clipboardPasteAction(): Promise<PasteAction | null> {
+async function clipboardPasteAction(): Promise<PasteAction | null> {
   return classifyPaste(await readText());
 }
 
-export function pasteMenuItem(action: PasteAction | null): MenuItem[] {
+function pasteMenuItem(action: PasteAction | null): MenuItem[] {
   if (!action) return [];
   return [{ id: "pasteAndGo", title: action.kind === "go" ? "Paste and Go" : "Paste and Search", symbol: action.kind === "go" ? "arrow.right.circle" : "magnifyingglass" }];
 }
 
-export function pasteTarget(action: PasteAction): string {
+function pasteTarget(action: PasteAction): string {
   return action.kind === "go" ? action.url : searchUrl(defaultSearchEngine(currentSettings()), action.query);
 }
 
@@ -44,7 +44,7 @@ export async function showUrlBarMenu(tab: Pick<Tab, "id" | "url" | "title" | "wi
   const choice = await showMenu(urlBarMenuItems({ paste: action, shareable: canShare(tab) }));
   if (choice === "pasteAndGo" && action) navigate(tab.id, pasteTarget(action));
   if (choice === "copy") void copyPageUrl(tab.id);
-  if (choice === "copyMarkdown") copyText(markdownLink(tab.customTitle || tab.title, tab.url));
+  if (choice === "copyMarkdown") copyLink(markdownLink(tab.customTitle || tab.title, tab.url));
   if (choice?.startsWith("share:via:")) void shareTab({ url: tab.url, title: tab.title, customTitle: tab.customTitle ?? null }, tab.windowId, choice.slice("share:via:".length));
 }
 
@@ -59,14 +59,19 @@ export function fieldMenuItems({ paste, hasSelection, hasText }: { paste: PasteA
   );
 }
 
-export type FieldMenuPick = { kind: "go"; url: string } | { kind: "edit"; text: string; caret: number } | { kind: "selectAll" } | null;
+type FieldMenuPick = { kind: "go"; url: string } | { kind: "edit"; text: string; caret: number } | { kind: "selectAll" } | null;
+
+export function copyFieldSelection(value: string, start: number, end: number, fullUrl: string | null) {
+  if (fullUrl && start === 0 && end === value.length) return copyUncleanedUrl(fullUrl);
+  copyText(value.slice(start, end));
+}
 
 export async function showFieldMenu(value: string, selection: { current: { start: number; end: number } }, fullUrl: string | null = null): Promise<FieldMenuPick> {
   const paste = await clipboardPasteAction();
   const { start, end } = selection.current;
   const choice = await showMenu(fieldMenuItems({ paste, hasSelection: end > start, hasText: !!value }));
   if (choice === "pasteAndGo" && paste) return { kind: "go", url: pasteTarget(paste) };
-  if (choice === "copy" || choice === "cut") copyText(fullUrl && start === 0 && end === value.length ? fullUrl : value.slice(start, end));
+  if (choice === "copy" || choice === "cut") copyFieldSelection(value, start, end, fullUrl);
   if (choice === "cut" || choice === "paste") {
     const insert = choice === "paste" ? sanitizePaste(await readText()) : "";
     return { kind: "edit", text: value.slice(0, start) + insert + value.slice(end), caret: start + insert.length };

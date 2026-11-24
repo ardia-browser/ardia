@@ -17,6 +17,7 @@ public final class PhoneBrowsingSource: LocalBrowsingSource {
 
   public let database: URL
   public let inbox: PhoneInbox
+  private let engine: SQLiteEngine
   private let isReady: () -> Bool
   private let now: () -> Date
   public var onReceived: (([ReceivedTab]) -> Void)?
@@ -24,15 +25,16 @@ public final class PhoneBrowsingSource: LocalBrowsingSource {
   private var reading = false
   private var empty = false
 
-  public init(database: URL, inbox: PhoneInbox, isReady: @escaping () -> Bool = { true }, now: @escaping () -> Date = Date.init) {
+  public init(database: URL, inbox: PhoneInbox, engine: SQLiteEngine, isReady: @escaping () -> Bool = { true }, now: @escaping () -> Date = Date.init) {
     self.database = database
     self.inbox = inbox
+    self.engine = engine
     self.isReady = isReady
     self.now = now
   }
 
   isolated deinit {
-    if let connection { sqlite3_close_v2(connection) }
+    if let connection { engine.close(connection) }
   }
 
   public func beginRead() throws {
@@ -43,10 +45,10 @@ public final class PhoneBrowsingSource: LocalBrowsingSource {
       reading = true
       return
     }
-    let handle = try Self.open(database.path(percentEncoded: false))
+    let handle = try open(database.path(percentEncoded: false))
     connection = handle
     do {
-      sqlite3_busy_timeout(handle, Self.busyTimeoutMilliseconds)
+      engine.busyTimeout(handle, Self.busyTimeoutMilliseconds)
       try execute("PRAGMA query_only = ON")
       try execute("BEGIN")
       reading = true
@@ -61,8 +63,8 @@ public final class PhoneBrowsingSource: LocalBrowsingSource {
 
   public func endRead() {
     if let connection {
-      if reading { sqlite3_exec(connection, "ROLLBACK", nil, nil, nil) }
-      sqlite3_close_v2(connection)
+      if reading { _ = engine.exec(connection, "ROLLBACK") }
+      engine.close(connection)
     }
     connection = nil
     reading = false
@@ -157,54 +159,52 @@ public final class PhoneBrowsingSource: LocalBrowsingSource {
     return order.compactMap { records[$0] }
   }
 
-  private static func open(_ path: String) throws -> OpaquePointer {
+  private func open(_ path: String) throws -> OpaquePointer {
     var failure = SQLITE_CANTOPEN
     for flags in [SQLITE_OPEN_READONLY, SQLITE_OPEN_READWRITE] {
-      var handle: OpaquePointer?
-      let opened = sqlite3_open_v2(path, &handle, flags | SQLITE_OPEN_NOMUTEX, nil)
+      let (opened, handle) = engine.open(path, flags | SQLITE_OPEN_NOMUTEX)
       if opened == SQLITE_OK, let handle {
-        if sqlite3_exec(handle, "SELECT count(*) FROM sqlite_master", nil, nil, nil) == SQLITE_OK { return handle }
-        failure = sqlite3_errcode(handle)
+        if engine.exec(handle, "SELECT count(*) FROM sqlite_master") == SQLITE_OK { return handle }
+        failure = engine.errorCode(handle)
       } else {
         failure = opened
       }
-      if let handle { sqlite3_close_v2(handle) }
+      if let handle { engine.close(handle) }
       guard failure == SQLITE_CANTOPEN else { break }
     }
     throw ReadFailure.unreadable(failure)
   }
 
   private func execute(_ sql: String) throws {
-    let result = sqlite3_exec(connection, sql, nil, nil, nil)
+    guard let connection else { throw ReadFailure.unreadable(SQLITE_MISUSE) }
+    let result = engine.exec(connection, sql)
     guard result == SQLITE_OK else { throw ReadFailure.unreadable(result) }
   }
 
   private func rows(_ sql: String, _ arguments: [Any]) throws -> [[Any?]] {
     guard let connection else { throw ReadFailure.unreadable(SQLITE_MISUSE) }
-    var statement: OpaquePointer?
-    let prepared = sqlite3_prepare_v2(connection, sql, -1, &statement, nil)
+    let (prepared, statement) = engine.prepare(connection, sql)
     guard prepared == SQLITE_OK, let statement else { throw ReadFailure.unreadable(prepared) }
-    defer { sqlite3_finalize(statement) }
-    let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+    defer { engine.finalize(statement) }
     for (index, argument) in arguments.enumerated() {
       let position = Int32(index + 1)
       switch argument {
-      case let text as String: sqlite3_bind_text(statement, position, text, -1, transient)
-      case let number as Int64: sqlite3_bind_int64(statement, position, number)
-      default: sqlite3_bind_null(statement, position)
+      case let text as String: engine.bindText(statement, position, text)
+      case let number as Int64: engine.bindInt64(statement, position, number)
+      default: engine.bindNull(statement, position)
       }
     }
     var found: [[Any?]] = []
     while true {
-      let step = sqlite3_step(statement)
+      let step = engine.step(statement)
       if step == SQLITE_DONE { break }
       guard step == SQLITE_ROW else { throw ReadFailure.unreadable(step) }
-      found.append((0..<sqlite3_column_count(statement)).map { column -> Any? in
-        switch sqlite3_column_type(statement, column) {
+      found.append((0..<engine.columnCount(statement)).map { column -> Any? in
+        switch engine.columnType(statement, column) {
         case SQLITE_NULL: return nil
-        case SQLITE_INTEGER: return sqlite3_column_int64(statement, column)
-        case SQLITE_FLOAT: return sqlite3_column_double(statement, column)
-        default: return sqlite3_column_text(statement, column).map { String(cString: $0) }
+        case SQLITE_INTEGER: return engine.columnInt64(statement, column)
+        case SQLITE_FLOAT: return engine.columnDouble(statement, column)
+        default: return engine.columnText(statement, column)
         }
       })
     }

@@ -15,11 +15,18 @@ const profileSwap = await import("./profileSwap.ts");
 const defaults = await import("./defaultBrowserCounts.ts");
 const passwords = await import("./passwordSaves.ts");
 const track = await import("./track.ts");
+const heard = (msAgo = 0) => {
+  const key = track.newOmniboxKey();
+  track.omniboxKeyHeard(key);
+  key.at -= msAgo;
+  return key;
+};
 const stuck = await import("./stuckDrags.ts");
 const localReport = await import("./localStoreReport.ts");
 const failures = await import("./webNotificationFailures.ts");
 const relay = await import("./relay.ts");
 const { browserSuggestFetch } = await import("../omnibox/suggestTransport.ts");
+const { BUILT_IN_ENGINES } = await import("@ardia/core");
 const { connectCalendar } = await import("../live/calendar.ts");
 const { webviews } = await import("../../platform/webviews.ts");
 after(() => client.setSharing(false, "settings"));
@@ -114,7 +121,7 @@ test("4 a search suggestion request made while sharing was off isn't counted whe
   let reply;
   globalThis.acTestSuggest = () => new Promise((resolve) => (reply = resolve));
   try {
-    const fetched = browserSuggestFetch("")("https://suggest.example/?q=a", { signal: new AbortController().signal });
+    const fetched = browserSuggestFetch("")("https://duckduckgo.com/ac/?q=a&type=list", { signal: new AbortController().signal, engine: BUILT_IN_ENGINES.find((e) => e.id === "duckduckgo") });
     await turn();
     client.setSharing(true, "settings");
     reply({ status: 200, body: "[]" });
@@ -143,7 +150,7 @@ test("4 a calendar connection begun while sharing was off isn't sent once sharin
   assert.deepEqual(await queued("calendar_connect"), []);
 });
 
-test("4 a custom filter list added while sharing was off isn't counted when the download finishes after", async () => {
+test("4 a custom filter list added while sharing was off isn't counted when the download finishes after, and isn't kept in the local copy", async () => {
   client.setSharing(false, "settings");
   const token = client.consentToken();
   client.setSharing(true, "settings");
@@ -152,8 +159,7 @@ test("4 a custom filter list added while sharing was off isn't counted when the 
   usage.sessionEnding();
   assert.ok((await queued("usage_counts")).every((p) => !p.content_blocker_custom_lists_added && !p.content_blocker_custom_list_add_failures));
   const local = await localRecords("usage_counts");
-  assert.equal(local.filter((r) => r.sent === false && r.properties.content_blocker_custom_lists_added === 1).length, 1);
-  assert.equal(local.filter((r) => r.sent === false && r.properties.content_blocker_custom_list_add_failures === 1).length, 1);
+  assert.deepEqual(local.filter((r) => r.properties.content_blocker_custom_lists_added || r.properties.content_blocker_custom_list_add_failures), []);
 });
 
 test("7 a CLI status read started before sharing went off and on again doesn't refill drag and windowless-page counts", async () => {
@@ -241,7 +247,7 @@ test("4 app_launched for a launch while sharing was off isn't sent when sharing 
   assert.deepEqual(await queued("app_launched"), []);
 });
 
-test("D a bar load whose focus check finishes after sharing went off and on again is in the local copy, marked not sent", async () => {
+test("D a bar load whose focus check finishes after sharing went off and on again isn't counted and isn't kept in the local copy", async () => {
   client.setSharing(true, "onboarding");
   webviews.set("local-bar-tab", { evaluate: async () => true });
   mock.timers.enable({ apis: ["setTimeout"] });
@@ -253,13 +259,14 @@ test("D a bar load whose focus check finishes after sharing went off and on agai
   } finally {
     mock.timers.reset();
   }
-  const local = (await localRecords("usage_counts")).filter((r) => r.properties?.bar_loads === 1);
-  assert.equal(local.length, 1);
-  assert.equal(local[0].sent, false);
+  const local = (await localRecords("usage_counts")).filter((r) => r.properties?.bar_loads);
+  assert.deepEqual(local, []);
   assert.equal(bar.takeBarLoadFocusCounts().bar_loads, 0);
 });
 
-test("D a window focused while sharing is off is still checked into the local copy, marked not sent", async () => {
+test("D a window focused while sharing is off isn't counted and isn't kept in the local copy", async () => {
+  const occlusion = await import("./windowOcclusionCounts.ts");
+  occlusion.takeWindowOcclusionCounts();
   client.setSharing(false, "settings");
   stub.chromeWindowList.splice(0, stub.chromeWindowList.length, { id: "w-local", key: true, visible: true, chromeOccluded: true, occlusionVisible: true });
   mock.timers.enable({ apis: ["setTimeout"] });
@@ -271,9 +278,9 @@ test("D a window focused while sharing is off is still checked into the local co
     mock.timers.reset();
     stub.chromeWindowList.splice(0);
   }
-  const local = (await localRecords("usage_counts")).filter((r) => r.properties?.focused_window_checks === 1);
-  assert.equal(local.length, 1);
-  assert.equal(local[0].sent, false);
+  const local = (await localRecords("usage_counts")).filter((r) => r.properties?.focused_window_checks);
+  assert.deepEqual(local, []);
+  assert.deepEqual(occlusion.takeWindowOcclusionCounts(), { focused_window_checks: 0, focused_window_pages_occluded: 0 });
 });
 
 const transport = await import("./transport.ts");
@@ -458,8 +465,8 @@ test("r4607098788 a consent change's own prune finishing late doesn't erase what
   } finally {
     local.prune = prune;
   }
-  const props = await localReport.reportLocalStore(client.consentToken());
-  assert.equal(props?.lines_dropped, 3);
+  const reading = await localStore.pruneLocalStore(Date.now(), true);
+  assert.equal(reading?.droppedLines, 3);
 });
 
 test("PRRT 4607475653 search-suggestion counts from before a consent change are drained at the change even when no latency was sampled, so the next period doesn't send them", async () => {
@@ -469,7 +476,7 @@ test("PRRT 4607475653 search-suggestion counts from before a consent change are 
   track.noteSearchSuggest("ok", client.consentToken());
   track.noteSearchSuggest("failed", client.consentToken());
   client.replaceInstallId();
-  for (let i = 0; i < 5; i++) track.sampleOmniboxLatency(12);
+  for (let i = 0; i < 5; i++) track.sampleOmniboxLatency(heard(12));
   await usage.devHourly();
   const sent = await queued("perf_omnibox");
   assert.ok(sent.length > 0, "the hour sent its omnibox sample");
@@ -494,15 +501,17 @@ test("PRRT 4607859820 pinned rows and splits from an import begun in an earlier 
   assert.ok((await queued("usage_counts")).every((p) => !p.imported_pinned_rows && !p.imported_splits));
 });
 
-test("PRRT 4607859813 a stale extension listing keeps every skip category in its local record", async () => {
+test("PRRT 4607859813 a stale extension listing isn't counted in any skip category and isn't kept in the local copy", async () => {
   const importRuns = await import("./importRuns.ts");
   client.setSharing(true, "onboarding");
   const earlier = client.consentToken();
   offAndOn();
+  importRuns.takeImportRuns();
   importRuns.noteImportExtensionListing(0, { installed: 2, manifestV2: 1, unpacked: 0, policy: 0, external: 0, notWebStore: 1 }, earlier);
-  const local = (await localRecords("usage_counts")).at(-1);
-  assert.equal(local.sent, false);
-  assert.deepEqual([local.properties.import_extensions_skipped_installed, local.properties.import_extensions_skipped_mv2, local.properties.import_extensions_skipped_not_web_store], [2, 1, 1]);
+  const local = (await localRecords("usage_counts")).filter((r) => r.properties.import_extensions_skipped_installed || r.properties.import_extensions_skipped_mv2 || r.properties.import_extensions_skipped_not_web_store);
+  assert.deepEqual(local, []);
+  const taken = importRuns.takeImportRuns();
+  assert.deepEqual([taken.import_extensions_skipped_installed, taken.import_extensions_skipped_mv2, taken.import_extensions_skipped_not_web_store], [0, 0, 0]);
 });
 
 test("PRRT 4608136987 search-suggestion counts from a normal report with no latency sample are kept for the next report in the same period", async () => {
@@ -514,7 +523,7 @@ test("PRRT 4608136987 search-suggestion counts from a normal report with no late
   track.noteSearchSuggest("ok", client.consentToken());
   track.noteSearchSuggest("blocked", client.consentToken());
   usage.emitWindowUsage(client.consentNow());
-  for (let i = 0; i < 5; i++) track.sampleOmniboxLatency(12);
+  for (let i = 0; i < 5; i++) track.sampleOmniboxLatency(heard(12));
   usage.emitWindowUsage(client.consentNow());
   const sent = await queued("perf_omnibox");
   assert.equal(sent.reduce((n, p) => n + (p.search_suggest_ok ?? 0), 0), 1, JSON.stringify(sent));
@@ -536,7 +545,7 @@ test("Codex 6.2 #4 with sharing on throughout, suggestion counts wait for the ne
   track.takeOmniboxLatency();
   track.noteSearchSuggest("ok", client.consentToken());
   usage.sessionEnding();
-  for (let i = 0; i < 5; i++) track.sampleOmniboxLatency(9);
+  for (let i = 0; i < 5; i++) track.sampleOmniboxLatency(heard(9));
   usage.sessionEnding();
   assert.equal((await queued("perf_omnibox")).at(-1)?.search_suggest_ok, 1);
 });

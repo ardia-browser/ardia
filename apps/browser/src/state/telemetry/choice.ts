@@ -8,8 +8,8 @@ import { parseSaved, versionedJson, unchanged, type Migrations, type SavedObject
 import { isFields, isString, numberOr, stringOr } from "../../lib/decode";
 
 const STATE_DOC = "telemetry.json";
-const STATE_VERSION = 1;
-const STATE_MIGRATIONS: Migrations = { 0: unchanged };
+const STATE_VERSION = 2;
+const STATE_MIGRATIONS: Migrations = { 0: unchanged, 1: (doc) => ({ ...doc, versionSince: null, versionColdLaunches: null }) };
 
 export type Watch = {
   watchReport: string | null;
@@ -32,6 +32,8 @@ export type Session = {
   lastLaunchAt: number | null;
   lastQuitAt: number | null;
   lastBuild: string | null;
+  versionSince: number | null;
+  versionColdLaunches: number | null;
   settingsDay: string | null;
   context: SavedContext | null;
   epoch: string | null;
@@ -62,6 +64,8 @@ const DEFAULT: Saved = {
   lastLaunchAt: null,
   lastQuitAt: null,
   lastBuild: null,
+  versionSince: null,
+  versionColdLaunches: null,
   settingsDay: null,
   context: null,
   epoch: null,
@@ -103,6 +107,8 @@ function readSaved(doc: SavedObject | null): Saved {
     lastLaunchAt: numberOr(doc.lastLaunchAt, null),
     lastQuitAt: numberOr(doc.lastQuitAt, null),
     lastBuild: stringOr(doc.lastBuild, null),
+    versionSince: numberOr(doc.versionSince, null),
+    versionColdLaunches: numberOr(doc.versionColdLaunches, null),
     epoch: stringOr(doc.epoch, null) ?? (sharing.sharing ? legacyEpoch(doc) : null),
     settingsDay: stringOr(doc.settingsDay, null),
     context: readContext(doc.context),

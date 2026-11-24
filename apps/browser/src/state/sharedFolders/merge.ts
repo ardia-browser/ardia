@@ -14,9 +14,9 @@ import {
   type TargetEntry,
   type TargetLevel,
 } from "./tree";
-import { identities, preferred, type Identities } from "./identities";
+import { identities, type Identities } from "./identities";
 
-export type Merged = { level: TargetLevel; waiting: number };
+type Merged = { level: TargetLevel; waiting: number };
 
 type Context = Identities & { waiting: number };
 
@@ -130,7 +130,7 @@ function ordered(entries: TargetEntry[], base: BaseEntry[], local: LocalEntry[],
   return weave([...woven, ...remoteSeq.filter((e) => !placed.has(e))], entries);
 }
 
-export function sameRelative<T>(a: T[], b: T[]): boolean {
+function sameRelative<T>(a: T[], b: T[]): boolean {
   const inB = new Set(b);
   const inA = new Set(a);
   const x = a.filter((e) => inB.has(e));

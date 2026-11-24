@@ -113,6 +113,33 @@ test("each batch is sealed into its own numbered part, and the state isn't rewri
   assert.ok(!shell.docs.has("sync-state.nns"));
 });
 
+test("20,000 batches restored from the journal and handed over again are each kept once, without a scan per batch", async () => {
+  const count = 20_000;
+  const all = Array.from({ length: count }, (_, i) => batch(i + 1));
+  const some = Array.prototype.some;
+  let scanned = 0;
+  Array.prototype.some = function (...args) {
+    scanned += this.length;
+    return some.apply(this, args);
+  };
+  let doc;
+  try {
+    let files;
+    ({ doc, files } = await opening({
+      docs: {
+        "sync-journal-1.nns": sealed({ id: 1, journal: { app: all }, version: 1 }),
+        "sync-journal-2.nns": sealed({ id: 2, journal: { app: all.slice(count / 2) }, version: 1 }),
+      },
+    }));
+    await files.persistJournal("app")(all);
+  } finally {
+    Array.prototype.some = some;
+  }
+  assert.equal(doc.scopes.app.journal.length, count);
+  assert.equal(parts().length, 2, "nothing new to write");
+  assert.ok(scanned < 10 * count, `${scanned} list entries scanned`);
+});
+
 test("a batch handed over twice is written once", async () => {
   const { files } = await opening();
   await files.persistJournal("app")([batch(1)]);

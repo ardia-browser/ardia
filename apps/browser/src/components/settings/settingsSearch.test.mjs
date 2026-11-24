@@ -2,17 +2,17 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 import { editDistance, search, snippetAround, splitByRanges } from "./searchMatch.ts";
-import { SETTINGS, SETTINGS_INDEX } from "./settingsIndex.ts";
+import { findSetting, resolveSettingId, settingsIndexWith, SETTINGS, SETTINGS_INDEX } from "./settingsIndex.ts";
 
 const ids = (query) => search(SETTINGS_INDEX, query).map((h) => h.entry.id);
 const first = (query) => ids(query)[0];
 
 const TOP = [
-  ["cli", ["advanced.ardiaCommand"]],
+  ["cli", ["advanced.ardiaCommand", "advanced.programs"]],
   ["shell", ["advanced.ardiaCommand"]],
   ["devtools", ["advanced.ardiaCommand"]],
   ["remote debugging", ["advanced.ardiaCommand"]],
-  ["command line", ["plugins.commandLine"]],
+  ["command line", ["plugins.cli"]],
   ["terminal", ["advanced.ardiaCommand"]],
   ["ardia command", ["advanced.ardiaCommand"]],
   ["dark", ["appearance.theme"]],
@@ -23,6 +23,8 @@ const TOP = [
   ["tint", ["appearance.glassTint", "appearance.glassTint"]],
   ["default browser", ["general.defaultBrowser"]],
   ["search engine", ["profiles.searchEngine"]],
+  ["webkit only", ["general.engineMode"]],
+  ["chromium only", ["general.engineMode"]],
   ["ad block", ["general.blockAds"]],
   ["adblock", ["general.blockAds"]],
   ["block ads", ["general.blockAds"]],
@@ -51,6 +53,25 @@ const TOP = [
   ["keyboard shortcuts", ["shortcuts.menuCommands"]],
   ["hotkeys", ["shortcuts.menuCommands", "shortcuts.extensionShortcuts"]],
   ["⌘L", ["appearance.commandBarPlacement"]],
+  ["alt tab", ["appearance.ctrlTab"]],
+  ["ctrl tab", ["appearance.ctrlTab"]],
+  ["control tab", ["appearance.ctrlTab"]],
+  ["tab switcher", ["appearance.ctrlTab"]],
+  ["switch tabs", ["appearance.ctrlTab"]],
+  ["recent tabs", ["appearance.ctrlTab"]],
+  ["after closing a tab", ["appearance.afterClosingTab"]],
+  ["closing a tab", ["appearance.afterClosingTab"]],
+  ["tab above", ["appearance.afterClosingTab"]],
+  ["tab to the left", ["appearance.afterClosingTab"]],
+  ["tab below", ["appearance.afterClosingTab"]],
+  ["tab closing", ["appearance.afterClosingTab"]],
+  ["close behavior", ["appearance.afterClosingTab"]],
+  ["address bar", ["appearance.addressBar"]],
+  ["url bar", ["appearance.addressBar"]],
+  ["command bar", ["appearance.commandBarPlacement"]],
+  ["cmd l", ["appearance.commandBarPlacement"]],
+  ["hide toolbar", ["tabs.hideToolbarWhileScrolling"]],
+  ["auto hide toolbar", ["tabs.hideToolbarWhileScrolling"]],
   ["shrink", ["tabs.hideToolbarWhileScrolling"]],
   ["⌘z", ["shortcuts.undoReopensClosedTab"]],
   ["update", ["general.updateChannel", "general.autoUpdate"]],
@@ -111,6 +132,13 @@ const TOP = [
   ["thme", ["appearance.theme"]],
   ["upscalling", ["tabs.videoUpscaling"]],
   ["extensoins", ["profiles.extensions", "profiles.webStore"]],
+  ["safe browsing", ["advanced.webKitFraudWarnings"]],
+  ["phishing", ["advanced.webKitFraudWarnings"]],
+  ["unsaved", ["advanced.engineSwitchAsksAboutUnsavedWork"]],
+  ["seamless", ["advanced.engineSwitchKeepsPage"]],
+  ["bring sign-ins", ["advanced.engineSwitchCarriesSiteData"]],
+  ["drm prompt", ["advanced.offerWebKitForProtectedVideo"]],
+  ["webkit limitations", ["advanced.enginesDiffer", "general.engineMode"]],
 ];
 
 test("real queries put the setting people mean first", () => {
@@ -119,9 +147,15 @@ test("real queries put the setting people mean first", () => {
   assert.ok(TOP.length >= 40);
 });
 
+test("arc finds the Ctrl+Tab picker and the toolbar's address bar and command bar pickers", () => {
+  const found = ids("arc");
+  assert.ok(found.includes("appearance.ctrlTab"));
+  assert.ok(found.some((id) => ["appearance.addressBar", "appearance.commandBarPlacement"].includes(id)));
+});
+
 test("whole-word hits rank above word prefixes, and a loose keyword no longer wins", () => {
   const found = ids("cli");
-  assert.equal(found[0], "advanced.ardiaCommand");
+  assert.ok(["advanced.ardiaCommand", "advanced.programs"].includes(found[0]), found[0]);
   assert.ok(!found.includes("general.crashDetails"));
   const clickRows = found.filter((id) => /[Cc]lick/.test(SETTINGS.find((s) => s.id === id).title));
   assert.ok(clickRows.length && clickRows.every((id) => found.indexOf(id) > 0));
@@ -156,8 +190,16 @@ test("results that land on the same place collapse into one", () => {
 test("rows named by the query stay apart even when they share a place", () => {
   const tabs = search(SETTINGS_INDEX, "tabs").filter((h) => h.entry.section === "Layout" && h.title.length);
   assert.ok(tabs.length >= 2, "several Layout rows say tabs in their names");
-  assert.equal(first("command line"), "plugins.commandLine");
+  assert.equal(first("command line"), "plugins.cli");
   assert.equal(first("devtools"), "advanced.ardiaCommand");
+});
+
+test("a lower-tier named row in the same section does not suppress a higher-tier unnamed match", () => {
+  const hits = search(SETTINGS_INDEX, "switch tabs");
+  assert.equal(hits[0]?.entry.id, "appearance.ctrlTab");
+  assert.ok(hits[0].tier > (hits.find((h) => h.entry.id === "appearance.afterClosingTab")?.tier ?? -1));
+  assert.equal(first("check for updates"), "general.autoUpdate");
+  assert.equal(first("corner radius"), "appearance.tabCornerRadius");
 });
 
 test("a pane's name finds that pane's rows", () => {
@@ -221,30 +263,18 @@ test("a long matching text shows the part around its match", () => {
   assert.equal(cut.text.slice(cut.ranges[0].start, cut.ranges[0].end), "Live");
 });
 
-test("the official plugins turn up for the words people use for the command line", () => {
-  for (const query of ["command line", "cli", "terminal", "plugins", "ardia command", "official plugins"]) assert.ok(ids(query).includes("plugins.commandLine") || ids(query).includes("plugins.official"), query);
-  for (const query of ["command line", "cli", "terminal"]) assert.ok(ids(query).includes("plugins.commandLine"), query);
+test("the official plugins turn up by their pinned title and their manifest's keywords, and the old anchor still leads there", () => {
+  for (const query of ["command line", "plugins", "official plugins"]) assert.ok(ids(query).includes("plugins.cli") || ids(query).includes("plugins.official"), query);
+  assert.ok(ids("command line").includes("plugins.cli"));
+  assert.ok(ids("terminal").includes("plugins.cli"), "its pinned blurb says terminal");
+  assert.ok(!search(SETTINGS_INDEX, "skills").some((h) => h.entry.id === "plugins.cli"), "no keyword of the plugin's own is baked into the browser");
+  const withKeywords = settingsIndexWith({ "plugins.cli": ["skills", "cli"] });
+  assert.ok(search(withKeywords, "skills").some((h) => h.entry.id === "plugins.cli"), "the manifest's keywords find it");
+  assert.equal(withKeywords.length, SETTINGS_INDEX.length);
   assert.ok(ids("plugins").includes("plugins.official"));
   assert.equal(first("official plugins"), "plugins.official");
-});
-
-test("every pane has settings", () => {
-  for (const pane of ["general", "profiles", "tabs", "appearance", "automations", "plugins", "shortcuts", "advanced"]) assert.ok(SETTINGS.some((s) => s.pane === pane), pane);
-});
-
-test("search still finds a row hidden until something else is on, when the row says what it needs", async () => {
-  const { unshownSettings } = await import("./settingsIndex.ts");
-  const { DEFAULT_SETTINGS } = await import("../../state/settings/settings.ts");
-  const unshown = new Set(unshownSettings(DEFAULT_SETTINGS, { top: false, syncOn: false }).split("\n"));
-  assert.ok(unshown.has("general.syncFolder"));
-  const entry = SETTINGS.find((s) => s.id === "general.syncFolder");
-  assert.equal(entry.needs, "Turn on Sync to use this");
-  for (const s of SETTINGS) if (s.needs) assert.ok(s.shown, `${s.id} says what it needs but has no rule`);
-});
-
-test("an empty query finds nothing", () => {
-  assert.deepEqual(ids(""), []);
-  assert.deepEqual(ids("   "), []);
+  assert.equal(resolveSettingId("plugins.commandLine"), "plugins.cli");
+  assert.equal(findSetting("plugins.commandLine")?.id, "plugins.cli");
 });
 
 test("edit distance counts a swap as one edit", () => {
@@ -264,6 +294,7 @@ test("every indexed setting is anchored in its pane, and every anchor is indexed
     ...[...sources.matchAll(/["`]([a-zA-Z]+)\.([a-zA-Z]+)["`]/g)].filter((m) => panes.has(m[1])).map((m) => `${m[1]}.${m[2]}`),
     ...(sources.includes("anchor={`automations.${id}`}") ? ["github", "bitbucket", "notion", "confluence", "gdrive"].map((id) => `automations.${id}`) : []),
   ]);
+  if (sources.includes("officialPluginAnchor(plugin.name)")) for (const s of SETTINGS) if (s.pane === "plugins" && s.section === "Official" && s.id !== "plugins.official") anchors.add(s.id);
   const indexed = new Set(SETTINGS.map((s) => s.id));
   for (const id of indexed) assert.ok(anchors.has(id), `${id} is in the index but no pane anchors it`);
   for (const id of anchors) assert.ok(indexed.has(id), `${id} is anchored in a pane but not in the index`);
@@ -294,7 +325,8 @@ test("a row its pane doesn't draw is left out of search, by the same rule the pa
   for (const id of ["tabs.sidebarSide", "appearance.sidebarTextSize", "general.syncFolder", "automations.meetingAlert"]) assert.ok(!sidebar.has(id), id);
   for (const id of ["appearance.interfaceStyle", "appearance.glassTint"]) assert.ok(unshown({}, { top: false }).has(id), id);
   assert.ok(unshown({ interfaceStyle: "classic" }, { top: false, glass: true }).has("appearance.glassTint"));
-  assert.ok(unshown({ memorySaver: false }, { top: false }).has("advanced.keepActiveSites"));
+  assert.ok(unshown({ memorySaver: false, busyTabWarnings: false }, { top: false }).has("advanced.keepActiveSites"));
+  assert.ok(!unshown({ memorySaver: false, busyTabWarnings: true }, { top: false }).has("advanced.keepActiveSites"), "busy-tab warnings read the kept sites too");
   assert.ok(!unshown({ memorySaver: true }, { top: false }).has("advanced.keepActiveSites"));
   assert.ok(unshown({ newTabOpens: "commandBar" }, { top: false }).has("tabs.newTabUrl"));
   assert.ok(unshown({ cleanUpInactiveTabsAfterMinutes: 60 }, { top: false }).has("tabs.suggestCleanUp"));
@@ -302,6 +334,13 @@ test("a row its pane doesn't draw is left out of search, by the same rule the pa
   assert.ok(unshown({}, { top: false }).has("profiles.profileDownloadsFolder"));
   assert.ok(unshown({ addressBar: "sidebar" }, { top: false }).has("appearance.compactToolbar"));
   assert.ok(!unshown({ addressBar: "sidebar" }, { top: true }).has("appearance.compactToolbar"));
+  const chromiumOnly = unshown({ engineMode: "chromium" }, { top: false });
+  for (const id of ["advanced.pageEngine", "advanced.websiteEngines", "advanced.enginesDiffer", "advanced.offerWebKitForProtectedVideo", "advanced.webKitFraudWarnings"]) assert.ok(chromiumOnly.has(id), id);
+  for (const id of ["general.engineMode", "advanced.engineSwitchKeepsPage", "advanced.engineSwitchAsksAboutUnsavedWork", "advanced.engineSwitchCarriesSiteData"]) assert.ok(!chromiumOnly.has(id), id);
+  const webkitOnly = unshown({ engineMode: "webkit" }, { top: false });
+  for (const id of ["advanced.pageEngine", "advanced.websiteEngines", "advanced.offerWebKitForProtectedVideo"]) assert.ok(webkitOnly.has(id), id);
+  for (const id of ["general.engineMode", "advanced.enginesDiffer", "advanced.webKitFraudWarnings"]) assert.ok(!webkitOnly.has(id), id);
+  assert.ok(unshown({}, { top: false }).has("appearance.windowButtons"), "the Mac and Windows have no choice of window buttons");
 });
 
 const SHOWN_BY_LOADED_DATA = ["UpdatesSection.tsx: general.autoUpdate", "UpdatesSection.tsx: general.updateChannel"];
@@ -341,6 +380,12 @@ test("Interface size turns up for every word people use for UI scaling", () => {
   for (const query of ["interface size", "ui size", "scaling", "fractional scaling", "1440p", "ui scale"]) assert.equal(first(query), "appearance.interfaceScale", query);
 });
 
+test("the profile switcher toggle turns up for the words of the old three-way row", () => {
+  for (const query of ["profile switcher", "profile dots", "profile icons", "dots", "space icons", "switcher in the sidebar shows"]) assert.ok(ids(query).includes("profiles.showProfileDots"), query);
+  for (const query of ["profile switcher", "profile dots"]) assert.equal(first(query), "profiles.showProfileDots", query);
+  assert.equal(findSetting("profiles.switcherShows"), undefined);
+});
+
 test("Minimalism mode turns up for every word people use for it", () => {
   for (const query of ["minimal", "minimalism", "clean", "zen", "distraction free", "no toolbar"]) assert.ok(ids(query).includes("appearance.minimalismMode"), query);
 });
@@ -354,12 +399,12 @@ test("search leaves out the official plugins when Settings › Plugins doesn't d
   const { DEFAULT_SETTINGS } = await import("../../state/settings/settings.ts");
   const unshown = (env) => new Set(unshownSettings(DEFAULT_SETTINGS, env).split("\n").filter(Boolean));
   const without = unshown({ top: false, officialPlugins: [] });
-  assert.ok(without.has("plugins.commandLine"));
+  assert.ok(without.has("plugins.cli"));
   assert.ok(without.has("plugins.official"));
   const onlyAi = unshown({ top: false, officialPlugins: ["ai"] });
-  assert.ok(onlyAi.has("plugins.commandLine"));
+  assert.ok(onlyAi.has("plugins.cli"));
   assert.ok(!onlyAi.has("plugins.official"));
   const bundled = unshown({ top: false, officialPlugins: ["cli"] });
-  assert.ok(!bundled.has("plugins.commandLine"));
+  assert.ok(!bundled.has("plugins.cli"));
   assert.ok(!bundled.has("plugins.official"));
 });

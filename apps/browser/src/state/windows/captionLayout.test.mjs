@@ -7,7 +7,8 @@ const windows = (await import("../../lib/platformChrome.windows.ts")).WINDOW_CHR
 const mac = (await import("../../lib/platformChrome.ts")).WINDOW_CHROME;
 const { littleArdiaBarLayout } = await import("../../components/littleArdia/barLayout.ts");
 const { SMALL_FIELD_HEIGHT, SMALL_BAR_BUTTON } = await import("../../components/littleArdia/tokens.ts");
-const { BROWSER_WINDOW_BUTTONS, trailingClearance, WINDOW_CONTROLS, windowControlsWidth } = await import("../../lib/windowChrome.ts");
+const { trailingClearance, WINDOW_CONTROLS, windowControlsWidth } = await import("../../lib/windowChrome.ts");
+const BROWSER_WINDOW_BUTTONS = windows.trailingButtons.length;
 const { syncCaptionRegions } = await import("./captionRegions.ts");
 
 const SETTINGS = { tabLayout: "sidebar", sidebarSide: "left", addressBar: "toolbar", compactToolbar: false, hideToolbarWhileScrolling: false, autoHideTabs: false, sidebarWidth: 190 };
@@ -295,4 +296,83 @@ test("the layouts around #1973 keep their window buttons where they were", () =>
     assert.equal(windowControlsLeading(s, "w", mac), false);
     assert.equal(sidebarControlsRow(s, "w", mac), 0, "the Mac's lights keep their own place");
   }
+});
+
+const linux = await import("../../lib/platformChrome.desktop.ts");
+const { stripCaptionRoom } = await import("../../components/tabstrip/stripGroups.ts");
+
+test("on Linux with the traffic lights no layout keeps room or a place for drawn window buttons, as on the Mac", () => {
+  for (const [settings, window] of LAYOUTS) {
+    const s = state(settings, window);
+    assert.equal(windowControlsPlace(s, "w", 9, linux.TRAFFIC_LIGHTS_CHROME), null);
+    assert.equal(cardCaptionRoom(s, "w", 9, linux.TRAFFIC_LIGHTS_CHROME), 0);
+    assert.equal(cardTopInset(s, "w", 9, linux.TRAFFIC_LIGHTS_CHROME), 9);
+    assert.equal(sidebarCaptionRoom(s, "w", linux.TRAFFIC_LIGHTS_CHROME), 0);
+  }
+  assert.equal(stripCaptionRoom(false, false, linux.TRAFFIC_LIGHTS_CHROME), 0);
+  assert.deepEqual(littleArdiaBarLayout(linux.TRAFFIC_LIGHTS_CHROME), littleArdiaBarLayout(mac));
+});
+
+test("on Linux with the window buttons hidden no layout keeps room or a place for them, nor room for traffic lights", () => {
+  for (const [settings, window] of LAYOUTS) {
+    const s = state(settings, window);
+    assert.equal(windowControlsPlace(s, "w", 9, linux.HIDDEN_BUTTONS_CHROME), null);
+    assert.equal(cardCaptionRoom(s, "w", 9, linux.HIDDEN_BUTTONS_CHROME), 0);
+    assert.equal(cardTopInset(s, "w", 9, linux.HIDDEN_BUTTONS_CHROME), 9);
+    assert.equal(sidebarCaptionRoom(s, "w", linux.HIDDEN_BUTTONS_CHROME), 0);
+    assert.equal(sidebarControlsRow(s, "w", linux.HIDDEN_BUTTONS_CHROME), 0);
+    assert.deepEqual(captionRegions(s, "w", false, linux.HIDDEN_BUTTONS_CHROME), []);
+  }
+  assert.equal(stripCaptionRoom(false, false, linux.HIDDEN_BUTTONS_CHROME), 0);
+  const bar = littleArdiaBarLayout(linux.HIDDEN_BUTTONS_CHROME);
+  assert.equal(bar.height, SMALL_BAR_HEIGHT);
+  assert.equal(bar.trailingRoom, 0);
+  assert.ok(bar.navLeft < littleArdiaBarLayout(linux.TRAFFIC_LIGHTS_CHROME).navLeft, "Little Ardia's back button starts at the edge, not after lights");
+});
+
+test("on Linux with native buttons every layout places them where the Windows build does", () => {
+  for (const [settings, window] of LAYOUTS) {
+    const s = state(settings, window);
+    assert.deepEqual(windowControlsPlace(s, "w", 9, linux.NATIVE_BUTTONS_CHROME), windowControlsPlace(s, "w", 9, windows));
+    assert.equal(sidebarCaptionRoom(s, "w", linux.NATIVE_BUTTONS_CHROME), sidebarCaptionRoom(s, "w", windows));
+  }
+  assert.deepEqual(littleArdiaBarLayout(linux.NATIVE_BUTTONS_CHROME), littleArdiaBarLayout(windows));
+});
+
+test("on Linux with the desktop's buttons at the left the … stays where the Windows build puts its buttons, alone, and the left keeps room for exactly the buttons drawn there", async () => {
+  const { parseButtonLayout } = await import("../../lib/windowButtonLayout.ts");
+  const { windowControlsInset } = await import("./layout.ts");
+  const left = linux.nativeButtonsChrome(parseButtonLayout("close,minimize,maximize:"));
+  for (const [settings, window] of LAYOUTS) {
+    const s = state(settings, window);
+    const label = JSON.stringify([settings, window]);
+    assert.deepEqual(windowControlsPlace(s, "w", 9, left), windowControlsPlace(s, "w", 9, windows), `${label}: the … sits where Windows puts its buttons`);
+    const room = sidebarCaptionRoom(s, "w", windows);
+    assert.equal(sidebarCaptionRoom(s, "w", left), room ? room - windowControlsWidth(BROWSER_WINDOW_BUTTONS) + windowControlsWidth(1) : 0, `${label}: a right sidebar keeps room for the … alone`);
+    assert.equal(sidebarHeaderCollapsed(s, "w", left), false, `${label}: the header holds the buttons, as it holds the Mac's lights`);
+    assert.equal(windowControlsInset(s, "w", left), settings.addressBar === "sidebar" && !window.fullScreen ? 190 - WINDOW_CONTROLS.edge - windowControlsWidth(1) : WINDOW_CONTROLS.edge, label);
+  }
+  const macBar = littleArdiaBarLayout(mac);
+  const leftBar = littleArdiaBarLayout(left);
+  assert.equal(leftBar.navLeft - macBar.navLeft, left.leadingWidth - mac.leadingWidth, "Little Ardia's back button sits as far past the buttons as it sits past the Mac's lights");
+  const closeOnly = littleArdiaBarLayout(linux.nativeButtonsChrome(parseButtonLayout("close:")));
+  assert.ok(closeOnly.navLeft < macBar.navLeft && closeOnly.navLeft > littleArdiaBarLayout(linux.HIDDEN_BUTTONS_CHROME).navLeft, "one button at the left needs less room than three lights, and more than none");
+});
+
+test("on Linux with buttons on both sides the right keeps room for its own buttons only, and atop a left sidebar the right group moves to the sidebar's right end", async () => {
+  const { parseButtonLayout } = await import("../../lib/windowButtonLayout.ts");
+  const { windowControlsInset } = await import("./layout.ts");
+  const both = linux.nativeButtonsChrome(parseButtonLayout("close:maximize"));
+  for (const [settings, window] of LAYOUTS) {
+    const s = state(settings, window);
+    const label = JSON.stringify([settings, window]);
+    assert.deepEqual(windowControlsPlace(s, "w", 9, both), windowControlsPlace(s, "w", 9, windows), `${label}: the right group sits where Windows puts its buttons`);
+    const room = sidebarCaptionRoom(s, "w", windows);
+    assert.equal(sidebarCaptionRoom(s, "w", both), room ? room - windowControlsWidth(BROWSER_WINDOW_BUTTONS) + windowControlsWidth(2) : 0, label);
+  }
+  const leadsSidebar = state({ addressBar: "sidebar" });
+  assert.equal(windowControlsLeading(leadsSidebar, "w", both), true);
+  assert.equal(windowControlsInset(leadsSidebar, "w", both), 190 - WINDOW_CONTROLS.edge - windowControlsWidth(2));
+  assert.equal(windowControlsInset(leadsSidebar, "w", windows), WINDOW_CONTROLS.edge, "with nothing at the left the row starts at the edge, as on Windows");
+  assert.equal(windowControlsInset(state({ addressBar: "sidebar", sidebarWidth: 60 }), "w", both), both.leadingWidth + WINDOW_CONTROLS.gap, "a sidebar too narrow for both groups never puts the right one over the left one");
 });

@@ -187,6 +187,13 @@ export const Animated = {
   multiply: (a: Readable, b: Readable) => combined(() => read(a) * read(b)),
 };
 
+const layoutAnimations: unknown[] = [];
+
+export const LayoutAnimation = {
+  Types: { spring: "spring", linear: "linear", easeInEaseOut: "easeInEaseOut", easeIn: "easeIn", easeOut: "easeOut", keyboard: "keyboard" },
+  configureNext: (config: unknown) => void layoutAnimations.push(config),
+};
+
 export const findNodeHandle = () => null;
 
 export const unstable_batchedUpdates = (update: () => void) => update();

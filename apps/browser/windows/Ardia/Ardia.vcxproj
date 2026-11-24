@@ -109,6 +109,7 @@
     <ClInclude Include="AppIcon.h" />
     <ClInclude Include="AppImage.h" />
     <ClInclude Include="AppModule.h" />
+    <ClInclude Include="CrashDumps.h" />
     <ClInclude Include="LaunchConfig.h" />
     <ClInclude Include="ModalThread.h" />
     <ClInclude Include="NativeDialogs.h" />

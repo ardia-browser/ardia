@@ -53,11 +53,10 @@ test("dropping reorders the toolbar at once and tells Chrome which extension mov
   assert.deepEqual(asked, [["configure", "a"], ["configure", "a"]]);
 });
 
-test("the extensions menu offers Move to Front for pinned extensions that didn't fit, and only when some didn't", () => {
+test("the extensions menu lists every extension, then Manage Extensions… and Add Extension…, with no Move to Front or Pin Extensions…", () => {
   const a = ext("a", 0), b = ext("b", 1), c = ext("c", 2);
-  const menu = extensionOverflowItems([a, b, c], [b, c]);
-  const front = menu.find((x) => x.id === "front");
-  assert.equal(front.title, "Move to Front");
-  assert.deepEqual(front.children.map((x) => [x.title, x.value.front.id]), [["b", "b"], ["c", "c"]]);
-  assert.equal(extensionOverflowItems([a, b, c], []).some((x) => x.id === "front"), false);
+  const menu = extensionOverflowItems([a, b, c]);
+  assert.deepEqual(menu.map((x) => (x.separator ? "---" : x.title)), ["a", "b", "c", "---", "Manage Extensions…", "Add Extension…"]);
+  assert.deepEqual(menu.slice(0, 3).map((x) => x.value.id), ["a", "b", "c"]);
+  assert.deepEqual(extensionOverflowItems([]).map((x) => x.id), ["manage", "add"]);
 });

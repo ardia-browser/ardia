@@ -370,26 +370,23 @@ const render = (items, depth = 0) =>
 
 const ext = { name: "Dark Reader", enabled: true, pinned: false, optionsUrl: "chrome-extension://x/options.html", sidePanel: false, mayModify: true };
 
-test("an extension's menu: its name, Options and Pin, Turn Off and Manage Extension, Remove Extension… last", () => {
+test("an extension's menu: Options and Pin, then Manage Extension, Remove Extension… last; no name header or Turn Off", () => {
   assert.deepEqual(render(extensionMenuItems(ext, false)), [
-    "Dark Reader (off)",
-    "---",
     "Options [gearshape]",
     "Pin to Toolbar [pin]",
     "---",
-    "Turn Off [power]",
     "Manage Extension [puzzlepiece.extension]",
     "---",
     "Remove Extension… [trash]",
   ]);
-  assert.deepEqual(render(extensionMenuItems({ ...ext, pinned: true, sidePanel: true, mayModify: false }, true)).slice(2, 5), [
+  assert.deepEqual(render(extensionMenuItems({ ...ext, pinned: true, sidePanel: true, mayModify: false }, true)).slice(0, 3), [
     "Options [gearshape]",
     "Close Side Panel [sidebar.right]",
     "Unpin from Toolbar [pin.slash]",
   ]);
   const off = render(extensionMenuItems({ ...ext, enabled: false, sidePanel: true }, false));
-  assert.deepEqual(off.slice(2, 4), ["Options [gearshape] (off)", "Pin to Toolbar [pin]"]);
-  assert.equal(off[5], "Turn On [power]");
+  assert.deepEqual(off, ["Pin to Toolbar [pin]", "---", "Manage Extension [puzzlepiece.extension]", "---", "Remove Extension… [trash]"]);
+  assert.ok(!render(extensionMenuItems({ ...ext, optionsUrl: "" }, false)).some((l) => l.startsWith("Options")), "no options page, no Options row");
 });
 
 const { windowExtensions, pageProfile } = await import("./store.ts");
@@ -1101,5 +1098,50 @@ test("the panel's own lookup answering after a newer answer for the same tab use
       assert.deepEqual(x.cards(), ["ext@a", "ext@b"]);
     }
     checkInvariants(x, newerSays);
+  }
+});
+
+test("Manage Extension opens its details after a Settings search", async () => {
+  const { w } = setup();
+  const { showExtensionMenu } = await import("./actions.ts");
+  const { currentSettingsSearch, previewSetting, setSettingsQuery } = await import("../settings/searchState.ts");
+  const { useSettingsNav } = await import("../settings/settingsWindows.ts");
+  const { shellNativeModules } = await import("../../test-native/shell.ts");
+  const menus = shellNativeModules.ArdiaMenus;
+  const showMenu = menus.showMenu;
+  const target = { id: "appearance.theme", pane: "appearance", section: "theme" };
+  menus.showMenu = async () => "manage";
+  try {
+    setSettingsQuery("theme");
+    previewSetting(target);
+    assert.equal(useSettingsNav.getState().pane, "appearance");
+
+    await showExtensionMenu(w, EXT);
+    previewSetting(target);
+
+    assert.equal(currentSettingsSearch().query, "");
+    assert.equal(useSettingsNav.getState().pane, "profiles");
+    assert.equal(useSettingsNav.getState().detail, "extension:ext");
+  } finally {
+    menus.showMenu = showMenu;
+    setSettingsQuery("");
+  }
+});
+
+test("Settings opened at a place from outside drops a search left from before, so its preview can't replace that place", async () => {
+  const { currentSettingsSearch, previewSetting, setSettingsQuery } = await import("../settings/searchState.ts");
+  const { openSiteSettings, useSettingsNav } = await import("../settings/settingsWindows.ts");
+  const target = { id: "appearance.theme", pane: "appearance", section: "theme" };
+  try {
+    setSettingsQuery("theme");
+    previewSetting(target);
+    assert.equal(useSettingsNav.getState().pane, "appearance");
+    openSiteSettings("https://example.com", "default");
+    previewSetting(target);
+    assert.equal(currentSettingsSearch().query, "");
+    assert.equal(useSettingsNav.getState().pane, "profiles");
+    assert.equal(useSettingsNav.getState().detail, "site:https://example.com");
+  } finally {
+    setSettingsQuery("");
   }
 });

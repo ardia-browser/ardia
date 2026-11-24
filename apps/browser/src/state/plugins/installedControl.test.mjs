@@ -13,24 +13,57 @@ const settle = async () => {
   for (let i = 0; i < 8; i++) await tick();
 };
 
-const CLI = JSON.stringify({ manifest: 1, name: "cli", title: "Command Line", version: "0.3.0", alwaysOn: true, official: true, permissions: ["control"], programs: [{ name: "ardia", path: "bin/ardia" }] });
+const AUTO = JSON.stringify({ manifest: 2, name: "auto", title: "Auto", alwaysOn: true, autoInstall: true, official: true, permissions: { control: true }, contributes: { programs: [{ name: "auto-tool", path: "bin/auto" }] } });
 
 setConsentPeriod(true, "test-epoch");
 S().hydrate({});
-S().updateSettings({ cliControl: false });
-stub.shellNativeModules.ArdiaDocuments.writeDocument("plugins.json", JSON.stringify({ plugins: { cli: { enabled: true, approved: "a".repeat(64), values: {}, applied: {}, installed: true } }, version: 1 }));
 host.links.length = 0;
-host.linkResult = { ok: true, linked: ["ardia"], refused: {}, binDir: "/home/.local/bin" };
-host.folders = [{ name: "cli", text: CLI, status: "ok", folderId: "bundled", bundled: true }];
+host.linkResult = { ok: true, linked: ["auto-tool"], refused: {}, binDir: "/home/.local/bin" };
+host.folders = [{ name: "auto", text: AUTO, status: "ok", folderId: `official-${"a".repeat(64)}`, official: true }];
 startPlugins();
 await settle();
 
-test("an installed Command Line means control is on: a launch turns it back on, and Stop holds until the next launch", async () => {
+test("autoInstall installs nothing by itself: activation waits for the user's approval, and Install grants control once", async () => {
+  const { usePlugins, activeManifest } = await import("./store.ts");
+  assert.equal(activeManifest(usePlugins.getState(), "auto"), null);
+  assert.deepEqual(host.links, []);
+  assert.equal(S().settings.cliControl, false);
+  assert.ok(lifecycle.requestPluginConsent("auto"));
+  assert.ok(lifecycle.enablePlugin("auto", usePlugins.getState().consent.hash));
+  await settle();
+  assert.ok(activeManifest(usePlugins.getState(), "auto"));
   assert.equal(S().settings.cliControl, true);
-  const { stopCliControl } = await import("../app/cliControl.ts");
-  stopCliControl();
+});
+
+test("you turn control off, Ardia restarts, and it stays off: no launch turns it back on", async () => {
+  const { stopProgramControl } = await import("../app/programControl.ts");
+  stopProgramControl();
+  assert.equal(S().settings.cliControl, false);
+  const meta = S().settingsMeta;
+  S().hydrate({ settings: { ...S().settings }, settingsMeta: meta });
+  await lifecycle.rescanPlugins();
   lifecycle.reconcilePlugins();
   await settle();
-  assert.equal(S().settings.cliControl, false, "Stop holds for the rest of this launch");
+  assert.equal(S().settings.cliControl, false, "an explicit Off is kept across a restart");
+  const { relinkOwnPrograms } = await import("./programs.ts");
+  relinkOwnPrograms("auto");
+  await settle();
+  assert.equal(S().settings.cliControl, false, "a relink isn't a new grant either");
   host.linkResult = null;
+});
+
+test("after Stop, the Settings switch turns control back on, and a relaunch keeps it on", async () => {
+  const { stopProgramControl } = await import("../app/programControl.ts");
+  const { setControlFromSettings } = await import("../app/programControlSetting.ts");
+  stopProgramControl();
+  assert.equal(S().settings.cliControl, false);
+  setControlFromSettings(true);
+  assert.equal(S().settings.cliControl, true);
+  lifecycle.reconcilePlugins();
+  await settle();
+  assert.equal(S().settings.cliControl, true);
+  const { readFileSync } = await import("node:fs");
+  const pane = readFileSync(new URL("../../components/settings/panes/Advanced.tsx", import.meta.url), "utf8");
+  assert.match(pane, /function ProgramsRows\(\) \{[\s\S]*?<ProgramControlRow \/>/, "the macOS Programs section has the switch, not only the program list");
+  assert.match(pane, /anchor="advanced.programControl"[\s\S]*?onChange=\{setControlFromSettings\}/);
 });

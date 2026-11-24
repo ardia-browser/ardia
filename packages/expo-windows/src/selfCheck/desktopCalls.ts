@@ -1,22 +1,17 @@
 import { TurboModuleRegistry, type TurboModule } from "react-native";
 import type { DomainModule } from "@ardia/ardiacore";
-import type { AppNative, DocumentsNative } from "@ardia/shell";
+import type { DocumentsNative } from "@ardia/shell";
 import type { DialogsModule, SystemSignalsModule } from "../nativeModuleTypes";
 import { engineAvailable } from "../engine/host";
 import { nativeImportHost } from "../import/nativeHost";
 import { requireNativeModule } from "../modules";
 import { expectEqual, expectTrue, type Check } from "./check";
+import { dataFolder } from "./importFiles";
 
 const PICKS = "file-chooser.txt";
 const MANIFEST = "manifest.json";
 
 const documents = () => requireNativeModule<DocumentsNative>("ArdiaDocuments");
-const dataFolder = () => {
-  const folder = requireNativeModule<Pick<AppNative, "launchConfig">>("ArdiaApp").launchConfig().dataDirectory;
-  expectTrue(typeof folder === "string" && folder.length > 0, "the instance has no data folder");
-  return folder;
-};
-
 function native<Module extends TurboModule>(name: string): Module {
   const found = TurboModuleRegistry.get<Module>(name);
   expectTrue(found, `${name} has no Windows module`);

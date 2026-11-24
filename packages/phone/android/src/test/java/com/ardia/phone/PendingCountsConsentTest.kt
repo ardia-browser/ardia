@@ -51,6 +51,26 @@ class PendingCountsConsentTest {
     }
 
     @Test
+    fun aGlassShaderFailureCountsOnlyInTheConsentingGenerationItHappenedIn() {
+        val waiting = mutableListOf<() -> Unit>()
+        val failed = PendingCounts.glassShaderFailures(app) { waiting += it }
+        UsageConsent.set(app, true)
+        failed()
+        waiting.removeAt(0)()
+        assertEquals(mapOf("glass_shaders_failed" to 1), PendingCounts.take(app))
+        failed()
+        UsageConsent.set(app, false)
+        UsageConsent.set(app, true)
+        waiting.removeAt(0)()
+        assertEquals("sharing went off and on again before the count was written", emptyMap<String, Int>(), PendingCounts.take(app))
+        UsageConsent.set(app, false)
+        failed()
+        assertEquals("a failure while sharing is off starts no write", 0, waiting.size)
+        UsageConsent.set(app, true)
+        assertEquals(emptyMap<String, Int>(), PendingCounts.take(app))
+    }
+
+    @Test
     fun turningSharingOffClearsWhatWasPending() {
         UsageConsent.set(app, true)
         PendingCounts.add(app, PendingCounts.TABS_SENT, UsageConsent.window(app))

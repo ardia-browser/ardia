@@ -1,4 +1,4 @@
-import { blocking, downloads, pages, type DownloadEvent, type PageEngineEvent, type PageState } from "@ardia/phone-native";
+import { blocking, downloads, isRefusedSnapshot, pages, type DownloadEvent, type PageEngineEvent, type PageState } from "@ardia/phone-native";
 
 export type TestLine = { step: string; ok: boolean; detail: string };
 
@@ -261,7 +261,7 @@ export async function runSelfTest(
   await step("snapshot", async () => {
     await pause(800);
     const snapshot = await pages.snapshot(pageId);
-    if (!snapshot) throw new Error("no snapshot");
+    if (!snapshot || isRefusedSnapshot(snapshot)) throw new Error(snapshot ? `snapshot refused: ${snapshot.refused}` : "no snapshot");
     return `route=${snapshot.route ?? "?"} ${snapshot.bytes ?? "?"} bytes ${snapshot.width}x${snapshot.height} ${snapshot.path}`;
   });
 

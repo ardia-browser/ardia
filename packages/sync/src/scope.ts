@@ -1,9 +1,10 @@
 import { canonical } from "./canon.ts";
 import { hlcWall, type Clock, type HLC } from "./hlc.ts";
 import { holdsBack, noteFileHealth } from "./fileHealth.ts";
-import { baseKeysWith, dropBase, dropRecord, putBase, putRecord, visible, withBaseIndex } from "./scopeKeys.ts";
+import { baseKeysWith, baseWritesUnder, dropBase, dropRecord, putBase, putRecord, visible } from "./scopeKeys.ts";
 export * from "./scopeKeys.ts";
-import type { Adapter, LogFile, Origin, ScopeOptions, ScopeState, SnapshotFile, SyncFile, SyncRecord, Transport } from "./scopeState.ts";
+import { covered, isApplied, markApplied, raiseApplied } from "./applied.ts";
+import type { Adapter, LogFile, ScopeOptions, ScopeState, SnapshotFile, SyncFile, SyncRecord, Transport } from "./scopeState.ts";
 
 const DEFAULTS: Required<Omit<ScopeOptions, "persist" | "holdApply">> = {
   expired: () => false,
@@ -25,7 +26,7 @@ const isValue = (o: Record<string, unknown>) => Object.prototype.hasOwnProperty.
 const isOp = (v: unknown) => isObject(v) && typeof v.k === "string" && typeof v.h === "string" && isValue(v);
 const isRecord = (v: unknown) => isObject(v) && typeof v.h === "string" && isOrigin(v.o) && isValue(v);
 
-function parseSyncFile(payload: string): SyncFile | null {
+export function parseSyncFile(payload: string): SyncFile | null {
   let file: unknown;
   try {
     file = JSON.parse(payload);
@@ -39,22 +40,6 @@ function parseSyncFile(payload: string): SyncFile | null {
   }
   return null;
 }
-
-export const covered = (vv: Record<string, number>, [device, seq]: Origin) => (vv[device] ?? 0) >= seq;
-
-function markApplied(state: ScopeState, device: string, seq: number) {
-  if (covered(state.vv, [device, seq])) return;
-  const extra = new Set(state.extra[device] ?? []);
-  extra.add(seq);
-  let top = state.vv[device] ?? 0;
-  while (extra.delete(top + 1)) top++;
-  state.vv[device] = top;
-  if (extra.size) state.extra[device] = [...extra].sort((a, b) => a - b);
-  else delete state.extra[device];
-}
-
-const isApplied = (state: ScopeState, [device, seq]: Origin) =>
-  covered(state.vv, [device, seq]) || (state.extra[device]?.includes(seq) ?? false);
 
 function see(state: ScopeState, device: string, at: number) {
   if (!(device in state.seen) || at > state.seen[device]!) state.seen[device] = at;
@@ -90,15 +75,7 @@ export function ingestSnapshot(state: ScopeState, file: SnapshotFile, clock: Clo
       changed.add(key);
     }
   }
-  for (const [device, seq] of Object.entries(file.vv)) {
-    if (seq > (state.vv[device] ?? 0)) {
-      state.vv[device] = seq;
-      const extra = (state.extra[device] ?? []).filter((s) => s > seq);
-      for (let top = seq; extra[0] === top + 1; top++) state.vv[device] = extra.shift()!;
-      if (extra.length) state.extra[device] = extra;
-      else delete state.extra[device];
-    }
-  }
+  for (const [device, seq] of Object.entries(file.vv)) raiseApplied(state, device, seq);
 }
 
 const parseBase = (json: string | undefined) => (json === undefined ? undefined : (JSON.parse(json) as unknown));
@@ -121,8 +98,25 @@ function settleDurable(state: ScopeState) {
 type Change = { key: string; value: unknown; json: string };
 type Stamps = Map<string, { json: string; h: HLC }>;
 
+type Extracted = { source: object; baseWrites: number; joined: boolean };
+const extractedFrom = new WeakMap<ScopeState, Map<string, Extracted>>();
+
+function unchangedSinceExtracted(state: ScopeState, adapter: Adapter, source: object | undefined) {
+  const last = source && extractedFrom.get(state)?.get(adapter.prefix);
+  return !!last && last.source === source && last.joined === state.joined && last.baseWrites === baseWritesUnder(state, adapter.prefix);
+}
+
+function noteExtracted(state: ScopeState, adapter: Adapter, source: object | undefined) {
+  if (!source) return;
+  let byPrefix = extractedFrom.get(state);
+  if (!byPrefix) extractedFrom.set(state, (byPrefix = new Map()));
+  byPrefix.set(adapter.prefix, { source, baseWrites: baseWritesUnder(state, adapter.prefix), joined: state.joined });
+}
+
 async function changesOf(state: ScopeState, adapter: Adapter, now: number) {
   if (adapter.adoptRemoteOnJoin && !state.joined) return null;
+  const source = adapter.extractsOnlyFrom?.();
+  if (unchangedSinceExtracted(state, adapter, source)) return { changes: [], settle: undefined, source: undefined };
   let pending: Set<string> | null = null;
   const queued = (key: string) => (pending ??= new Set([...state.outbox, ...(state.journal ?? []).flatMap((f) => f.ops)].map((op) => op.k))).has(key);
   const extraction = await adapter.extract((key) => parseBase(state.base[key]), queued, now, (key) => key in state.records, (key) => state.records[key]?.v, (key) => state.records[key]?.h, (key) => state.base[key]);
@@ -141,7 +135,7 @@ async function changesOf(state: ScopeState, adapter: Adapter, now: number) {
     if (!(key in state.base) || values.has(key) || ignore?.(key)) continue;
     changes.push({ key, value: null, json: "null" });
   }
-  return { changes, settle: extraction.published };
+  return { changes, settle: extraction.published, source };
 }
 
 function stampOf(state: ScopeState, adapter: Adapter, clock: Clock, { key, value }: Change): HLC {
@@ -170,6 +164,7 @@ async function publishAdapter(state: ScopeState, adapter: Adapter, clock: Clock,
     state.outbox.push({ k: key, h, v: value });
     published.add(key);
   }
+  noteExtracted(state, adapter, found.source);
   const { settle } = found;
   if (settle && published.size) settleWhenDurable(state, () => settle(published));
   return published;
@@ -245,7 +240,7 @@ export async function pull(state: ScopeState, transport: Transport, scope: strin
   return changed;
 }
 
-async function applyAdapter(state: ScopeState, adapter: Adapter, keys: Set<string>, now: number, horizon: number, held: () => boolean): Promise<boolean> {
+async function applyAdapter(state: ScopeState, adapter: Adapter, keys: Set<string>, now: number, horizon: number, held: () => boolean, deferred: Set<string>): Promise<boolean> {
   const mine = new Set([...keys].filter((k) => k.startsWith(adapter.prefix)));
   if (!mine.size) return true;
   const view = visible(state, adapter.prefix);
@@ -258,7 +253,15 @@ async function applyAdapter(state: ScopeState, adapter: Adapter, keys: Set<strin
   const landed = new Set<string>();
   let ok: boolean | void = false;
   try {
-    const records = { known: (key: string) => key in state.records, now, horizon, joined: applyAs[adapter.prefix] === "joined", held, landed: (key: string) => void landed.add(key) };
+    const records = {
+      known: (key: string) => key in state.records,
+      now,
+      horizon,
+      joined: applyAs[adapter.prefix] === "joined",
+      held,
+      landed: (key: string) => void landed.add(key),
+      defer: (key: string) => void (mine.has(key) && deferred.add(key)),
+    };
     ok = await adapter.apply(view, mine, (key) => parseBase(state.base[key]), records);
   } catch (error) {
     console.warn(`[sync] applying ${adapter.prefix} failed`, error);
@@ -272,7 +275,7 @@ async function applyAdapter(state: ScopeState, adapter: Adapter, keys: Set<strin
     return false;
   }
   applyAs[adapter.prefix] = "joined";
-  for (const key of mine) settle(key);
+  for (const key of mine) if (!deferred.has(key)) settle(key);
   return true;
 }
 
@@ -345,7 +348,7 @@ export async function compact(state: ScopeState, transport: Transport, scope: st
   return true;
 }
 
-export type CycleResult = { published: number; changed: number; pending: number; compacted: boolean; snapshotBytes: number };
+type CycleResult = { published: number; changed: number; pending: number; compacted: boolean; snapshotBytes: number };
 
 export async function syncScope(args: {
   scope: string;
@@ -357,10 +360,6 @@ export async function syncScope(args: {
   now?: () => number;
   options?: ScopeOptions;
 }): Promise<CycleResult> {
-  return withBaseIndex(args.state, () => syncScopeIndexed(args));
-}
-
-async function syncScopeIndexed(args: Parameters<typeof syncScope>[0]): Promise<CycleResult> {
   const { scope, state, transport, adapters, clock, device, options } = args;
   const now = args.now ?? Date.now;
   let published = 0;
@@ -381,9 +380,11 @@ async function syncScopeIndexed(args: Parameters<typeof syncScope>[0]): Promise<
     published += late.size;
     for (const key of late) keys.delete(key);
     heldApply ||= applyHeld();
-    const applied = !heldApply && (await applyAdapter(state, adapter, keys, now(), 2 * (options?.tombstoneTTL ?? DEFAULTS.tombstoneTTL), applyHeld));
+    const deferred = new Set<string>();
+    const applied = !heldApply && (await applyAdapter(state, adapter, keys, now(), 2 * (options?.tombstoneTTL ?? DEFAULTS.tombstoneTTL), applyHeld, deferred));
     heldApply ||= applyHeld();
     if (!applied) for (const key of keys) if (key.startsWith(adapter.prefix)) unapplied.push(key);
+    if (applied) for (const key of deferred) unapplied.push(key);
   }
   state.unapplied = [...unapplied, ...[...keys].filter((k) => !adapters.some((a) => k.startsWith(a.prefix)))];
   if (!heldApply && (!state.awaitRemote || Object.keys(state.seen).some((d) => d !== device))) {

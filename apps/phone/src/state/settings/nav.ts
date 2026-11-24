@@ -2,7 +2,12 @@ import { create } from "zustand";
 
 export type SettingsRoute =
   | { page: "root" }
+  | { page: "general" }
+  | { page: "tabs" }
+  | { page: "search" }
+  | { page: "experimental" }
   | { page: "appearance" }
+  | { page: "theme" }
   | { page: "searchEngine" }
   | { page: "browseForMe" }
   | { page: "pageSummary" }
@@ -21,13 +26,20 @@ export type SettingsRoute =
   | { page: "licenses" }
   | { page: "whatsSent" };
 
-type SettingsNav = { open: boolean; stack: SettingsRoute[]; popping: boolean };
+type SettingsNav = { generation: number; open: boolean; stack: SettingsRoute[]; popping: boolean };
 
-export const useSettingsNav = create<SettingsNav>()(() => ({ open: false, stack: [], popping: false }));
+export const useSettingsNav = create<SettingsNav>()(() => ({ generation: 0, open: false, stack: [], popping: false }));
 
 const scrolls = new Map<string, number>();
 
-export const rememberSettingsScroll = (page: string, y: number) => void scrolls.set(page, y);
+export const isSettingsOpening = (generation: number) => {
+  const state = useSettingsNav.getState();
+  return state.open && state.generation === generation;
+};
+
+export const rememberSettingsScroll = (page: string, y: number, generation: number) => {
+  if (isSettingsOpening(generation)) scrolls.set(page, y);
+};
 
 export const settingsScroll = (page: string) => scrolls.get(page) ?? 0;
 
@@ -54,17 +66,17 @@ export const offerPageSummaryPage = (offered: () => boolean) => {
 export const settingsRouteOffered = (route: SettingsRoute) =>
   route.page === "browseForMe" ? browseForMePageOffered() : route.page === "pageSummary" ? pageSummaryPageOffered() : !SYNC_PAGES.has(route.page) || syncPagesOffered();
 
-export function openSettings(route: SettingsRoute = { page: "root" }) {
+export function openSettings(route: SettingsRoute = { page: "root" }, { direct = false } = {}) {
   if (!settingsRouteOffered(route)) return;
   scrolls.clear();
-  const stack: SettingsRoute[] = route.page === "root" ? [route] : [{ page: "root" }, route];
-  useSettingsNav.setState({ open: true, stack, popping: false });
+  const stack: SettingsRoute[] = direct || route.page === "root" ? [route] : [{ page: "root" }, route];
+  useSettingsNav.setState((state) => ({ generation: state.generation + 1, open: true, stack, popping: false }));
 }
 
 export function openSettingsPage(route: SettingsRoute) {
   if (!settingsRouteOffered(route)) return;
   scrolls.clear();
-  useSettingsNav.setState({ open: true, stack: [route], popping: false });
+  useSettingsNav.setState((state) => ({ generation: state.generation + 1, open: true, stack: [route], popping: false }));
 }
 
 export const pushSettings = (route: SettingsRoute) => {
@@ -86,7 +98,7 @@ export function closeSettings() {
 
 export const settingsNav = () => useSettingsNav.getState();
 
-const SIMPLE_PAGES = new Set<SettingsRoute["page"]>(["root", "appearance", "searchEngine", "browseForMe", "pageSummary", "siteSettings", "filterLists", "myFilters", "trustedSites", "clearData", "sync", "defaultBrowser", "syncConnect", "syncWords", "syncScan", "about", "licenses", "whatsSent"]);
+const SIMPLE_PAGES = new Set<SettingsRoute["page"]>(["root", "general", "tabs", "search", "experimental", "appearance", "theme", "searchEngine", "browseForMe", "pageSummary", "siteSettings", "filterLists", "myFilters", "trustedSites", "clearData", "sync", "defaultBrowser", "syncConnect", "syncWords", "syncScan", "about", "licenses", "whatsSent"]);
 
 export const settingsRouteKey = (route: SettingsRoute): string => (route.page === "filterList" ? `filterList:${route.id}` : route.page);
 

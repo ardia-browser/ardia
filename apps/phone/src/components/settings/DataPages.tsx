@@ -4,12 +4,13 @@ import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { appVersion, clearBrowsingData, openFromSettings, websiteDataClearsByTime } from "../../state/settings/actions";
 import { popSettings, pushSettings } from "../../state/settings/nav";
 import { CLEAR_RANGES, clearChoice, clearFooter, clearIsEmpty, clearMessage, clearTitle, type ClearRange } from "../../state/settings/settingsRules";
-import { AppIcon, appIconLayout, ConfirmSheet, font, settingsLayout, space, Symbol, useTheme, type Confirmation, type SymbolName } from "../ui";
+import { AppIcon, appIconLayout, ConfirmSheet, font, settingsLayout, space, Symbol, useTheme, type Confirmation, type SymbolName, Tappable } from "../ui";
 import { copy } from "../../lib/platformCopy";
 import { libraryCredits } from "../../state/settings/libraryCredits";
 import { ButtonRow, Divider, Group, NavRow, PickerRow, SettingsPage, ToggleRow, ValueRow } from "./SettingsKit";
+import { destinationWords } from "../../lib/sharedWords";
 
-export function ClearDataPage() {
+export function ClearDataPage({ onBack = popSettings }: { onBack?: () => void }) {
   const [range, setRange] = useState<ClearRange>("today");
   const [history, setHistory] = useState(true);
   const [cache, setCache] = useState(true);
@@ -24,15 +25,15 @@ export function ClearDataPage() {
     setClearing(true);
     await clearBrowsingData(choice, range);
     setClearing(false);
-    popSettings();
+    onBack();
   };
   return (
-    <SettingsPage title="Clear Browsing Data" onBack={popSettings}>
+    <SettingsPage title="Clear Browsing Data" onBack={onBack}>
       <Group>
         <PickerRow title="Time Range" options={CLEAR_RANGES} selected={range} onSelect={setRange} />
       </Group>
       <Group header="Clear" footer={clearFooter(choice, range, byTime)}>
-        <ToggleRow title="History" value={history} divider onChange={setHistory} />
+        <ToggleRow title={destinationWords.history} value={history} divider onChange={setHistory} />
         <ToggleRow title="Cache" value={cache} divider onChange={setCache} />
         <ToggleRow title="Cookies and Site Data" value={cookies} divider={range === "allTime"} onChange={setCookies} />
         {range === "allTime" ? <ToggleRow title="Archived Tabs" value={archive} onChange={setArchive} /> : null}
@@ -81,7 +82,7 @@ export function AboutPage() {
       <Group footer={copy().privacy}>
         <LinkRow title="ardia.dev" icon="globe" url="https://ardia.dev" divider />
         <LinkRow title="Release Notes" icon="sparkles" url="https://ardia.dev/release-notes" divider />
-        <LinkRow title="Source Code" icon="code" url="https://github.com/mantrakp04/ardia" />
+        <LinkRow title="Source Code" icon="code" url="https://github.com/ardia-browser/ardia" />
       </Group>
       <Group>
         <NavRow title="Open Source Licenses" onPress={() => pushSettings({ page: "licenses" })} />
@@ -91,7 +92,7 @@ export function AboutPage() {
 }
 
 export const dataCredits = () => [
-  { name: "Ardia", use: copy().ardiaCredit, license: "Apache License 2.0", url: "https://github.com/mantrakp04/ardia" },
+  { name: "Ardia", use: copy().ardiaCredit, license: "Apache License 2.0", url: "https://github.com/ardia-browser/ardia" },
   { name: "EasyList", use: "The list behind Block Ads.", license: "CC BY-SA 3.0 or GPLv3", url: "https://easylist.to" },
   { name: "EasyPrivacy", use: "The list behind Block Trackers.", license: "CC BY-SA 3.0 or GPLv3", url: "https://easylist.to" },
   { name: "Fanboy’s Cookie Monster List", use: "The list behind Block Cookie Banners.", license: "CC BY-SA 3.0 or GPLv3", url: "https://secure.fanboy.co.nz" },
@@ -112,11 +113,11 @@ export function LicensesPage() {
           </View>
           <Divider />
           <ValueRow title="License" value={credit.license} divider />
-          <Pressable accessibilityRole="link" onPress={() => openFromSettings(credit.url)} style={styles.row}>
+          <Tappable kind="row" role="link" label={credit.url.replace(/^https:\/\//, "")} onPress={() => openFromSettings(credit.url)} style={styles.row}>
             <Text style={[font.body, { color: theme.formAccent }]} numberOfLines={1}>
               {credit.url.replace(/^https:\/\//, "")}
             </Text>
-          </Pressable>
+          </Tappable>
         </Group>
       ))}
       <Group header="Code in This App">
@@ -138,6 +139,7 @@ export function LicensesPage() {
               </View>
               <Text style={[font.footnote, { color: theme.secondaryLabel }]}>{credit.license}</Text>
             </Pressable>
+            {credit.notice ? <Text style={[font.caption, styles.notice, { color: theme.secondaryLabel }]}>{credit.notice}</Text> : null}
             {index < LIBRARY_CREDITS.length - 1 ? <Divider /> : null}
           </View>
         ))}
@@ -156,4 +158,5 @@ const styles = StyleSheet.create({
   bold: { fontWeight: "600" },
   library: { flexDirection: "row", alignItems: "center", gap: space.m, minHeight: settingsLayout.rowMinHeight, paddingHorizontal: settingsLayout.rowInset, paddingVertical: space.s },
   credit: { paddingHorizontal: settingsLayout.rowInset, paddingVertical: space.m, gap: space.xs },
+  notice: { paddingHorizontal: settingsLayout.rowInset, paddingBottom: space.s },
 });

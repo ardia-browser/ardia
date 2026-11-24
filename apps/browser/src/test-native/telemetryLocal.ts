@@ -1,7 +1,7 @@
 import type { ShellNativeModules, TelemetryLocalExport } from "@ardia/shell";
+import { utcDay } from "../lib/time";
 
 const DAY_MS = 86_400_000;
-const utcDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 const lineAt = (line: string) => Number(/^\{"at":(\d+)/.exec(line)?.[1] ?? NaN);
 
 export const telemetryLocal = {

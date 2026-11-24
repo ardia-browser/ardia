@@ -1,0 +1,166 @@
+---
+import { Image } from "astro:assets";
+import { CONTRIBUTORS, CONTRIBUTOR_AVATAR_PX } from "../data/contributors";
+import { REPO } from "../data/release";
+
+const firstIssues = `${REPO}/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22`;
+const guide = `${REPO}/blob/main/CONTRIBUTING.md`;
+---
+
+{
+  CONTRIBUTORS.length > 0 && (
+    <section class="contributors paint edge edge-b dark" data-paint="latenight" id="contributors" aria-labelledby="contributors-title" data-shot="contributors">
+      <div class="wrap">
+        <header class="contributors-head">
+          <p class="label kicker">Open source</p>
+          <h2 class="poster" id="contributors-title" data-reveal>
+            Painted by <br />many hands.
+          </h2>
+          <p class="lede" data-reveal style="--i: 1">
+            {CONTRIBUTORS.length} people have shipped code to Ardia. Fix one bug and your face goes up here on the next build.
+          </p>
+        </header>
+
+        <ul class="faces" role="list" aria-label="Contributors" data-reveal style="--i: 2">
+          {CONTRIBUTORS.map((person) => (
+            <li>
+              <a
+                class="face"
+                href={person.href}
+                rel="noopener"
+                title={person.login}
+                data-track="github_clicked"
+                data-track-link="contributor"
+                data-track-location="contributors"
+              >
+                <Image
+                  src={person.avatar}
+                  alt={person.login}
+                  width={CONTRIBUTOR_AVATAR_PX}
+                  height={CONTRIBUTOR_AVATAR_PX}
+                  densities={[1, 2]}
+                  format="webp"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </a>
+            </li>
+          ))}
+          <li>
+            <a
+              class="face you"
+              href={firstIssues}
+              rel="noopener"
+              title="You, next"
+              data-track="github_clicked"
+              data-track-link="good_first_issues"
+              data-track-location="contributors"
+            >
+              <span aria-hidden="true">+</span>
+              <span class="visually-hidden">Find a good first issue</span>
+            </a>
+          </li>
+        </ul>
+
+        <div class="cta" data-reveal style="--i: 3">
+          <a class="link" href={firstIssues} rel="noopener" data-track="github_clicked" data-track-link="good_first_issues" data-track-location="contributors"
+            >Pick a good first issue</a
+          >
+          <a class="link" href={guide} rel="noopener" data-track="github_clicked" data-track-link="contributing" data-track-location="contributors"
+            >Read the contributing guide</a
+          >
+        </div>
+      </div>
+    </section>
+  )
+}
+
+<style>
+  .contributors {
+    padding: clamp(72px, 4rem + 5vw, 160px) 0 clamp(88px, 5rem + 5vw, 180px);
+  }
+  .contributors-head {
+    max-width: 40em;
+  }
+  h2 {
+    font-size: var(--t-h2);
+  }
+  .lede {
+    margin-top: 24px;
+    font-size: var(--t-lede);
+    color: var(--ink-2);
+    max-width: 30em;
+  }
+  .faces {
+    --size: 56px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(var(--size), 1fr));
+    gap: 14px;
+    margin: clamp(40px, 4.5vw, 64px) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .faces li {
+    display: flex;
+    justify-content: center;
+  }
+  .face {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: var(--size);
+    height: var(--size);
+    border-radius: 50%;
+    overflow: hidden;
+    background: var(--night-2);
+    box-shadow:
+      0 0 0 2px rgb(239 232 220 / 0.14),
+      0 8px 18px rgb(5 8 18 / 0.35);
+    transition: box-shadow 120ms var(--ease-out);
+  }
+  .face :global(img) {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .face:hover,
+  .face:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px var(--sun),
+      0 8px 18px rgb(5 8 18 / 0.35);
+  }
+  .you {
+    background: transparent;
+    box-shadow: inset 0 0 0 2px rgb(239 232 220 / 0.3);
+    color: var(--ink-2);
+    font-family: var(--poster);
+    font-size: 1.6rem;
+    font-weight: 500;
+    line-height: 1;
+    text-decoration: none;
+  }
+  .you:hover,
+  .you:focus-visible {
+    color: var(--sun);
+    box-shadow: inset 0 0 0 2px var(--sun);
+  }
+  .cta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 28px;
+    margin-top: clamp(32px, 3.5vw, 48px);
+  }
+  .cta .link {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+  @media (max-width: 600px) {
+    .faces {
+      --size: 48px;
+      gap: 12px;
+    }
+  }
+</style>

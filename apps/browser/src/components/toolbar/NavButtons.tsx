@@ -4,31 +4,49 @@ import { webviews } from "../../state/tabs/webviewHandles";
 import { withLivePage } from "../../state/tabs/livePage";
 import { newTab } from "../../state/tabs/actions";
 import type { Tab } from "../../state/browser/types";
-import { Button, curve, MouseArea, nativeLoop, reduceMotion, reduceMotionKnown, springs, Symbol, type ButtonHit } from "../ui";
+import { useScopedTheme } from "../ui/theme";
+import { noteStopBreathing } from "../../state/telemetry/stopBreathing";
+import { Breathe, Button, curve, drawnSymbol, MouseArea, reduceMotion, reduceMotionKnown, type ButtonHit } from "../ui";
 
-export type NavPlace = { style?: ViewStyle; hit?: ButtonHit };
+type NavPlace = { style?: ViewStyle; hit?: ButtonHit };
 import type { ClickModifiers } from "../../lib/keys";
 import { closeHistoryMenu, goBack, goForward, historyItems, toggleHistoryMenu } from "../../state/tabs/navigation";
 import { openModeFor, openUrl } from "../../state/bookmarks/actions";
 import type { ToolbarPalette } from "../ui/toolbarColors";
-import { useShortcutHint, withShortcut } from "../../state/commands/commandShortcuts";
+import { withShortcut } from "../../state/commands/commandShortcuts";
 import { GLYPH, HISTORY_GLYPH, HISTORY_BUTTON_MOTION, RELOAD_BUTTON_MOTION, SYMBOL_BOX } from "./tokens";
 import { showReloadMenu } from "../../state/site/reloadMenu";
+import { useStableHandler } from "./useStableHandler";
 
 const ICON_CENTER = { width: GLYPH, height: GLYPH, alignItems: "center" as const, justifyContent: "center" as const };
 const ICON_LAYER = { ...ICON_CENTER, position: "absolute" as const };
 const SYMBOL_FRAME = { width: SYMBOL_BOX, height: SYMBOL_BOX };
 
 const ReloadGlyphColor = createContext("");
+const ReloadGlyphBreathing = createContext(false);
 
 function ReloadSymbol({ name }: { name: "arrow.clockwise" | "xmark" }) {
-  return <Symbol name={name} size={GLYPH} weight="regular" color={useContext(ReloadGlyphColor)} style={SYMBOL_FRAME} />;
+  useScopedTheme();
+  return drawnSymbol({ name, size: GLYPH, weight: "regular", color: useContext(ReloadGlyphColor), style: SYMBOL_FRAME });
+}
+
+function BreathingStop() {
+  return (
+    <Breathe
+      running={useContext(ReloadGlyphBreathing)}
+      cycleMs={RELOAD_BUTTON_MOTION.breatheCycle}
+      opacityRange={RELOAD_BUTTON_MOTION.breatheOpacity}
+      scaleRange={RELOAD_BUTTON_MOTION.breatheScale}
+      style={ICON_CENTER}
+    >
+      <ReloadSymbol name="xmark" />
+    </Breathe>
+  );
 }
 
 const ReloadGlyph = memo(function ReloadGlyph({ loading, color }: { loading: boolean; color: string }) {
   const stateMotion = useRef(new Animated.Value(loading ? 1 : 0)).current;
   const returnMotion = useRef(new Animated.Value(0)).current;
-  const breatheMotion = useRef(new Animated.Value(0)).current;
   const previousLoading = useRef(loading);
   const [motionReady, setMotionReady] = useState(() => reduceMotion() !== null);
   const [motionReduced, setMotionReduced] = useState(() => reduceMotion() === true);
@@ -74,20 +92,12 @@ const ReloadGlyph = memo(function ReloadGlyph({ loading, color }: { loading: boo
       Animated.timing(returnMotion, { toValue: 0, duration: RELOAD_BUTTON_MOTION.stateOut, easing: curve.enter, useNativeDriver: true }),
     ]).start();
   }, [loading, motionReduced, returnMotion, stateMotion]);
+  const breathing = loading && motionReady && !motionReduced;
   useEffect(() => {
-    if (!loading || !motionReady || motionReduced) return;
-    const halfCycle = RELOAD_BUTTON_MOTION.breatheCycle / 2;
-    const breathe = nativeLoop(breatheMotion, [
-      { to: 1, ms: halfCycle, easing: curve.pulse },
-      { to: 0, ms: halfCycle, easing: curve.pulse },
-    ]);
-    breathe.start();
-    return () => {
-      breathe.stop();
-      breatheMotion.stopAnimation();
-      breatheMotion.setValue(0);
-    };
-  }, [breatheMotion, loading, motionReady, motionReduced]);
+    if (!breathing) return;
+    noteStopBreathing(true);
+    return () => noteStopBreathing(false);
+  }, [breathing]);
   const layers = useMemo(() => {
     const reload = {
       opacity: stateMotion.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
@@ -97,24 +107,22 @@ const ReloadGlyph = memo(function ReloadGlyph({ loading, color }: { loading: boo
       ],
     };
     const stop = { opacity: stateMotion, transform: [{ scale: stateMotion.interpolate({ inputRange: [0, 1], outputRange: [RELOAD_BUTTON_MOTION.hiddenScale, 1] }) }] };
-    const breathe = {
-      opacity: breatheMotion.interpolate({ inputRange: [0, 1], outputRange: [...RELOAD_BUTTON_MOTION.breatheOpacity] }),
-      transform: [{ scale: breatheMotion.interpolate({ inputRange: [0, 1], outputRange: [...RELOAD_BUTTON_MOTION.breatheScale] }) }],
-    };
     return (
       <View style={ICON_CENTER}>
         <Animated.View pointerEvents="none" style={[ICON_LAYER, reload]}>
           <ReloadSymbol name="arrow.clockwise" />
         </Animated.View>
         <Animated.View pointerEvents="none" style={[ICON_LAYER, stop]}>
-          <Animated.View style={[ICON_CENTER, breathe]}>
-            <ReloadSymbol name="xmark" />
-          </Animated.View>
+          <BreathingStop />
         </Animated.View>
       </View>
     );
-  }, [stateMotion, returnMotion, breatheMotion]);
-  return <ReloadGlyphColor.Provider value={color}>{layers}</ReloadGlyphColor.Provider>;
+  }, [stateMotion, returnMotion]);
+  return (
+    <ReloadGlyphColor.Provider value={color}>
+      <ReloadGlyphBreathing.Provider value={breathing}>{layers}</ReloadGlyphBreathing.Provider>
+    </ReloadGlyphColor.Provider>
+  );
 });
 
 export const ReloadButton = memo(function ReloadButton({
@@ -123,15 +131,27 @@ export const ReloadButton = memo(function ReloadButton({
   palette,
   place,
   onFocus,
+  reloadHint,
 }: {
   tab: Pick<Tab, "id" | "url" | "windowId">;
   loading: boolean;
   palette: ToolbarPalette;
   place?: NavPlace;
   onFocus: () => void;
+  reloadHint: string | undefined;
 }) {
-  const web = () => webviews.get(tab.id);
-  const reloadHint = useShortcutHint("reload");
+  const onPress = useStableHandler((m: ClickModifiers) => {
+    onFocus();
+    if (loading) return void webviews.get(tab.id)?.stopLoading();
+    if (m.metaKey) return void newTab(tab.windowId, { url: tab.url, background: true, openerId: tab.id });
+    void withLivePage(tab.id, (page) => (m.shiftKey ? page.forceReload() : page.reload()));
+  });
+  const onContextMenu = useStableHandler(() => {
+    onFocus();
+    void showReloadMenu(tab.id);
+  });
+  const color = tab.url ? palette.icon : palette.iconDisabled;
+  const glyph = useMemo(() => <ReloadGlyph loading={loading} color={color} />, [loading, color]);
   return (
     <Button variant="icon" toolbar
       style={place?.style}
@@ -139,19 +159,11 @@ export const ReloadButton = memo(function ReloadButton({
       glyph={GLYPH}
       hit={place?.hit}
       disabled={!tab.url}
-      onPress={(m) => {
-        onFocus();
-        if (loading) return void web()?.stopLoading();
-        if (m.metaKey) return void newTab(tab.windowId, { url: tab.url, background: true, openerId: tab.id });
-        void withLivePage(tab.id, (page) => (m.shiftKey ? page.forceReload() : page.reload()));
-      }}
-      onContextMenu={() => {
-        onFocus();
-        void showReloadMenu(tab.id);
-      }}
+      onPress={onPress}
+      onContextMenu={onContextMenu}
       tooltip={loading ? "Stop Loading This Page" : withShortcut("Refresh", reloadHint)}
     >
-      <ReloadGlyph loading={loading} color={tab.url ? palette.icon : palette.iconDisabled} />
+      {glyph}
     </Button>
   );
 });
@@ -165,6 +177,7 @@ export const HistoryButton = memo(function HistoryButton({
   place,
   onFocus,
   closesTab = false,
+  historyHint,
 }: {
   tabId: string;
   windowId: string;
@@ -174,56 +187,49 @@ export const HistoryButton = memo(function HistoryButton({
   place?: NavPlace;
   onFocus: () => void;
   closesTab?: boolean;
+  historyHint: string | undefined;
 }) {
   const handoffMotion = useRef(new Animated.Value(0)).current;
-  const pressOffsetMotion = useRef(new Animated.Value(0)).current;
+  const [handingOff, setHandingOff] = useState(false);
   const icon = direction < 0 ? "chevron.left" : "chevron.right";
   const iconColor = disabled ? palette.iconDisabled : palette.icon;
-  const handoffFadeOut = handoffMotion.interpolate({ inputRange: [0, HISTORY_BUTTON_MOTION.duration], outputRange: [1, 0] });
-  const handoffFadeIn = handoffMotion.interpolate({ inputRange: [0, HISTORY_BUTTON_MOTION.incomingDelay, HISTORY_BUTTON_MOTION.duration], outputRange: [0, 0, 1] });
-  const handoffOutX = handoffMotion.interpolate({ inputRange: [0, HISTORY_BUTTON_MOTION.duration], outputRange: [0, direction * HISTORY_BUTTON_MOTION.travel] });
-  const handoffInX = handoffMotion.interpolate({ inputRange: [0, HISTORY_BUTTON_MOTION.duration], outputRange: [-direction * HISTORY_BUTTON_MOTION.travel, 0] });
+  const handoff = useMemo(
+    () => ({
+      fadeOut: handoffMotion.interpolate({ inputRange: [0, HISTORY_BUTTON_MOTION.duration], outputRange: [1, 0] }),
+      fadeIn: handoffMotion.interpolate({ inputRange: [0, HISTORY_BUTTON_MOTION.incomingDelay, HISTORY_BUTTON_MOTION.duration], outputRange: [0, 0, 1] }),
+      outX: handoffMotion.interpolate({ inputRange: [0, HISTORY_BUTTON_MOTION.duration], outputRange: [0, direction * HISTORY_BUTTON_MOTION.travel] }),
+      inX: handoffMotion.interpolate({ inputRange: [0, HISTORY_BUTTON_MOTION.duration], outputRange: [-direction * HISTORY_BUTTON_MOTION.travel, 0] }),
+    }),
+    [handoffMotion, direction],
+  );
   useEffect(() => {
     const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", (reduced) => {
       if (!reduced) return;
       handoffMotion.stopAnimation();
       handoffMotion.setValue(0);
-      pressOffsetMotion.stopAnimation();
-      pressOffsetMotion.setValue(0);
+      setHandingOff(false);
     });
     return () => {
       subscription.remove();
       handoffMotion.stopAnimation();
-      pressOffsetMotion.stopAnimation();
     };
-  }, [handoffMotion, pressOffsetMotion]);
-  const animatePressOffset = (pressed: boolean) => {
-    pressOffsetMotion.stopAnimation();
-    if (reduceMotion() !== false) {
-      pressOffsetMotion.setValue(0);
-      return;
-    }
-    Animated.spring(pressOffsetMotion, {
-      toValue: pressed ? direction * HISTORY_BUTTON_MOTION.pressTravel : 0,
-      ...springs.snappy,
-      useNativeDriver: true,
-    }).start();
-  };
+  }, [handoffMotion]);
   const animateHandoff = () => {
     if (reduceMotion() !== false) return;
     handoffMotion.stopAnimation();
     handoffMotion.setValue(0);
+    setHandingOff(true);
     Animated.timing(handoffMotion, { toValue: HISTORY_BUTTON_MOTION.duration, duration: HISTORY_BUTTON_MOTION.duration, easing: curve.enter, useNativeDriver: true }).start(({ finished }) => {
       if (!finished) return;
       handoffMotion.setValue(0);
+      setHandingOff(false);
     });
   };
-  const historyHint = useShortcutHint(direction < 0 ? "back" : "forward");
-  const openMenu = () => {
+  const openMenu = useStableHandler(() => {
     onFocus();
     toggleHistoryMenu(tabId, direction);
-  };
-  const onPress = async (m: ClickModifiers & { middle?: boolean }) => {
+  });
+  const onPress = useStableHandler(async (m: ClickModifiers & { middle?: boolean }) => {
     onFocus();
     animateHandoff();
     closeHistoryMenu();
@@ -231,29 +237,37 @@ export const HistoryButton = memo(function HistoryButton({
     if (mode === "current" || mode === "split") return direction < 0 ? goBack(tabId) : goForward(tabId);
     const [target] = await historyItems(tabId, direction, 1);
     if (target?.url) openUrl(target.url, windowId, mode);
-  };
+  });
+  const onMiddleClick = useStableHandler((e: ClickModifiers) => !disabled && void onPress({ ...e, middle: true }));
+  const face = useMemo(
+    () =>
+      handingOff ? (
+        <View style={ICON_CENTER}>
+          <Animated.View pointerEvents="none" style={[ICON_LAYER, { opacity: handoff.fadeOut, transform: [{ translateX: handoff.outX }] }]}>
+            {drawnSymbol({ name: icon, size: HISTORY_GLYPH.size, weight: HISTORY_GLYPH.weight, color: iconColor, style: SYMBOL_FRAME })}
+          </Animated.View>
+          <Animated.View pointerEvents="none" style={[ICON_LAYER, { opacity: handoff.fadeIn, transform: [{ translateX: handoff.inX }] }]}>
+            {drawnSymbol({ name: icon, size: HISTORY_GLYPH.size, weight: HISTORY_GLYPH.weight, color: iconColor, style: SYMBOL_FRAME })}
+          </Animated.View>
+        </View>
+      ) : (
+        drawnSymbol({ name: icon, size: HISTORY_GLYPH.size, weight: HISTORY_GLYPH.weight, color: iconColor, style: SYMBOL_FRAME })
+      ),
+    [handingOff, handoff, icon, iconColor],
+  );
   return (
-    <MouseArea style={place?.style} onMiddleClick={(e) => !disabled && void onPress({ ...e, middle: true })}>
+    <MouseArea style={place?.style} onMiddleClick={onMiddleClick}>
       <Button variant="icon" toolbar
         palette={palette}
         glyph={GLYPH}
         hit={place?.hit}
         disabled={disabled}
         onPress={onPress}
-        onPressIn={() => animatePressOffset(true)}
-        onPressOut={() => animatePressOffset(false)}
         onLongPress={openMenu}
         onContextMenu={openMenu}
         tooltip={withShortcut(direction > 0 ? "Go Forward" : closesTab ? "Close Tab and Go Back" : "Go Back", historyHint)}
       >
-        <Animated.View style={[ICON_CENTER, { transform: [{ translateX: pressOffsetMotion }] }]}>
-          <Animated.View pointerEvents="none" style={[ICON_LAYER, { opacity: handoffFadeOut, transform: [{ translateX: handoffOutX }] }]}>
-            <Symbol name={icon} size={HISTORY_GLYPH.size} weight={HISTORY_GLYPH.weight} color={iconColor} style={SYMBOL_FRAME} />
-          </Animated.View>
-          <Animated.View pointerEvents="none" style={[ICON_LAYER, { opacity: handoffFadeIn, transform: [{ translateX: handoffInX }] }]}>
-            <Symbol name={icon} size={HISTORY_GLYPH.size} weight={HISTORY_GLYPH.weight} color={iconColor} style={SYMBOL_FRAME} />
-          </Animated.View>
-        </Animated.View>
+        {face}
       </Button>
     </MouseArea>
   );

@@ -5,24 +5,22 @@ import { INTERNAL_PAGES, internalPageOf } from "../pages/urls";
 import { pluginPageOf } from "../plugins/pageNames";
 import { groupOf } from "../pins/tabGrouping";
 import { focusedWindowOf } from "../windows/ui";
+import { ownValue } from "../../lib/decode";
 
 export type AutomationWindowKind = "normal" | "little";
-export type AutomationTab = { id: string; url: string; title: string; profile: string; active: boolean; pinned: boolean; group: string | null };
+type AutomationTab = { id: string; url: string; title: string; profile: string; active: boolean; pinned: boolean; group: string | null };
 export type AutomationWindow = { id: string; kind: AutomationWindowKind; focused: boolean; profile: string; profileName: string; tabs: AutomationTab[] };
 
 type Snapshot = Pick<BrowserState, "windows" | "windowOrder" | "tabs" | "peeks" | "groups" | "profiles" | "ui">;
 
-export const ownEntry = <T>(record: Readonly<Record<string, T>>, id: unknown): T | undefined =>
-  typeof id === "string" && Object.prototype.hasOwnProperty.call(record, id) ? record[id] : undefined;
-
 export function eligibleKind(s: Pick<BrowserState, "windows">, windowId: string | null | undefined): AutomationWindowKind | null {
-  const w = ownEntry(s.windows, windowId);
+  const w = ownValue(s.windows, windowId);
   if (!w || w.kind === "private" || isIncognitoProfile(w.profileId)) return null;
   return w.kind === "small" ? "little" : "normal";
 }
 
 export function isEligibleTab(s: Pick<BrowserState, "windows" | "tabs" | "peeks">, tabId: string): boolean {
-  const t = ownEntry(s.tabs, tabId);
+  const t = ownValue(s.tabs, tabId);
   return !!t && eligibleKind(s, t.windowId) !== null && !isIncognitoProfile(t.profileId) && !isPeekTab(s, tabId);
 }
 

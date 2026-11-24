@@ -13,7 +13,6 @@ export const sceneMs = {
   appearance: 1200,
   style: 1300,
   siteColor: 1300,
-  switcher: 1300,
   block: 1300,
   links: 1500,
   autoBadge: 900,

@@ -2,16 +2,23 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { BackHandler, findNodeHandle, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, type ViewInstance } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import { withAlpha } from "../../lib/color";
 import { useReduceMotion } from "./contrast";
 import { focusForScreenReader, takeHandedFocus } from "./coverFocus";
+import { useDesign } from "./design";
 import { useFocusReturn } from "./focusReturn";
+import { MATERIAL_STATE } from "./materialRoles";
+import { useMaterialBack } from "./MaterialSurfaces";
+import { useMaterialTheme } from "./materialTheme";
+import { materialDuration, materialMotion, materialMove, materialShape, materialSize, materialType } from "./materialTokens";
 import { screenReaderActions } from "./screenReaderActions";
 import type { Confirmation } from "./Dialog";
 import { countDrawnMenuOpened, MenuMaterial } from "./Menu";
-import { materialEnter, materialExit, materialMenuMotion, menuMotion } from "./motion";
+import { menuMotion, reducedMotionMs } from "./motion";
 import { Portal, usePortalLeaving, usePortalLeft } from "./Overlay";
-import { actionSheetInk, actionSheetLook, ink, materialDialogInk, materialDialogLook } from "./tokens";
+import { actionSheetInk, actionSheetLook, ink, materialDialogInk, materialDialogLook, shape, smoothCorners } from "./tokens";
 import { useTheme } from "./theme";
+import { dismissWords } from "../../lib/sharedWords";
 
 export type SheetAction = { title: string; destructive?: boolean; onPress: () => void };
 
@@ -28,7 +35,7 @@ export function ActionSheet({ onCancel, opener, ...props }: Props) {
     if (returnTo.target) returnFocus(returnTo.target);
   }, [onCancel, returnTo, returnFocus]);
   return (
-    <Portal exitMs={MATERIAL ? materialMenuMotion.dialogOutMs : menuMotion.sheetOut}>
+    <Portal exitMs={menuMotion.sheetOut}>
       {MATERIAL ? <MaterialDialogCard {...props} onCancel={cancelled} /> : <SheetCard {...props} onCancel={cancelled} />}
     </Portal>
   );
@@ -56,11 +63,33 @@ function useSheetBehaviour(onCancel: () => void, opensOn: () => ViewInstance | n
   return leaving;
 }
 
+function useSheetFade(leaving: boolean, reduceMotion: boolean, left: () => void) {
+  const shown = useSharedValue(1);
+  useEffect(() => {
+    if (leaving) shown.value = withTiming(0, { duration: reduceMotion ? menuMotion.contentFade : menuMotion.sheetOut }, (finished) => finished && runOnJS(left)());
+  }, [leaving]);
+  return useAnimatedStyle(() => ({ opacity: shown.value }));
+}
+
 const spokenHeading = (title?: string | null, message?: string | null) => (title && message ? `${title}${/[.?!]$/.test(title) ? "" : "."} ${message}` : title || message || "");
 
-function MaterialDialogCard({ title, message, actions, cancel = "Cancel", onCancel }: Props) {
+function MaterialDialogCard({ title, message, actions, cancel = dismissWords.cancel, onCancel }: Props) {
+  const material = useDesign() === "material";
   const theme = useTheme();
-  const paint = theme.dark ? materialDialogInk.dark : materialDialogInk.light;
+  const { scheme } = useMaterialTheme();
+  const classic = theme.dark ? materialDialogInk.dark : materialDialogInk.light;
+  const paint = material
+    ? {
+        surface: scheme.surfaceContainerHigh,
+        title: scheme.onSurface,
+        message: scheme.onSurfaceVariant,
+        dismiss: scheme.primary,
+        action: scheme.primary,
+        destructive: scheme.error,
+        ripple: withAlpha(scheme.onSurface, MATERIAL_STATE.pressed),
+        scrim: withAlpha(scheme.scrim, MATERIAL_STATE.scrim),
+      }
+    : classic;
   const reduceMotion = useReduceMotion();
   const window = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -69,30 +98,77 @@ function MaterialDialogCard({ title, message, actions, cancel = "Cancel", onCanc
   const spoken = useRef<ViewInstance>(null);
   const firstButton = useRef<ViewInstance>(null);
   const heading = spokenHeading(title, message);
-  const leaving = useSheetBehaviour(onCancel, () => (heading ? spoken : firstButton).current);
-  const left = usePortalLeft();
-  const shown = useSharedValue(reduceMotion ? 1 : 0);
+  const leaving = usePortalLeaving();
   useEffect(() => {
-    if (!reduceMotion) shown.value = withTiming(1, { duration: materialMenuMotion.dialogInMs, easing: materialEnter });
-  }, []);
-  useEffect(() => {
-    if (leaving) shown.value = withTiming(0, { duration: reduceMotion ? menuMotion.contentFade : materialMenuMotion.dialogOutMs, easing: materialExit }, (finished) => finished && runOnJS(left)());
+    if (leaving) return;
+    return focusForScreenReader(() => (heading ? spoken : firstButton).current);
   }, [leaving]);
+  useEffect(() => {
+    countDrawnMenuOpened();
+  }, []);
+  useMaterialBack(material && !leaving, { onCommit: onCancel });
+  useEffect(() => {
+    if (material || leaving) return;
+    const back = BackHandler.addEventListener("hardwareBackPress", () => {
+      onCancel();
+      return true;
+    });
+    return () => back.remove();
+  }, [material, onCancel, leaving]);
+  const left = usePortalLeft();
+  const shown = useSharedValue(material && !reduceMotion ? 0 : 1);
+  useEffect(() => {
+    if (!material || leaving) return;
+    if (reduceMotion) {
+      shown.value = 1;
+      return;
+    }
+    shown.value = materialMove(1, materialMotion.dialogEnter.easing, materialMotion.dialogEnter.durationMs);
+  }, [material, leaving, reduceMotion]);
+  useEffect(() => {
+    if (!leaving) return;
+    if (material) {
+      const exitMs = reduceMotion ? reducedMotionMs(materialDuration.short3) : materialMotion.dialogExit.durationMs;
+      if (exitMs === 0) {
+        shown.value = 0;
+        left();
+        return;
+      }
+      shown.value = materialMove(0, materialMotion.dialogExit.easing, exitMs, (finished) => {
+        "worklet";
+        if (finished) runOnJS(left)();
+      });
+      return;
+    }
+    shown.value = withTiming(0, { duration: reduceMotion ? menuMotion.contentFade : menuMotion.sheetOut }, (finished) => finished && runOnJS(left)());
+  }, [leaving, material, reduceMotion]);
   const fade = useAnimatedStyle(() => ({ opacity: shown.value }));
-  const grow = useAnimatedStyle(() => ({ transform: [{ scale: materialDialogLook.enterScale + (1 - materialDialogLook.enterScale) * shown.value }] }));
+  const panelStyle = useAnimatedStyle(() => (material ? { opacity: shown.value, transform: [{ scale: 0.9 + 0.1 * shown.value }] } : {}));
   const cancelAction = screenReaderActions([{ name: "cancel", label: cancel, run: onCancel }]);
   const buttons = [{ title: cancel, destructive: false, onPress: onCancel, dismisses: true }, ...actions.map((action) => ({ ...action, dismisses: false }))];
+  const titleStyle = material ? materialType.headlineSmall : materialDialogLook.title;
+  const messageStyle = material ? materialType.bodyMedium : materialDialogLook.message;
+  const buttonTextStyle = material ? materialType.labelLarge : materialDialogLook.button;
   return (
     <Animated.View style={[StyleSheet.absoluteFill, fade]} pointerEvents={leaving ? "none" : "auto"} collapsable={false} accessibilityElementsHidden={leaving} importantForAccessibility={leaving ? "no-hide-descendants" : "auto"}>
       <Pressable testID="drawnConfirmationOutside" accessible={false} importantForAccessibility="no" style={[StyleSheet.absoluteFill, { backgroundColor: paint.scrim }]} onPress={onCancel} />
       <View style={styles.centre} pointerEvents="box-none">
-        <Animated.View testID="drawnActionSheet" accessibilityViewIsModal style={[styles.dialog, { width, maxHeight, backgroundColor: paint.surface, boxShadow: materialDialogLook.shadow }, grow]}>
+        <Animated.View
+          testID="drawnActionSheet"
+          accessibilityViewIsModal
+          style={[
+            styles.dialog,
+            { width, maxHeight, backgroundColor: paint.surface },
+            material ? styles.materialDialog : { boxShadow: materialDialogLook.shadow },
+            panelStyle,
+          ]}
+        >
           <ScrollView testID="drawnConfirmationScroll" keyboardShouldPersistTaps="handled" style={styles.scroll} contentContainerStyle={styles.dialogContent} bounces={false} overScrollMode="never">
             {heading ? (
               <View ref={spoken} testID="drawnConfirmationHeading" accessible accessibilityRole="header" accessibilityLabel={heading} {...cancelAction}>
-                {title ? <Text style={[materialDialogLook.title, { color: paint.title }]}>{title}</Text> : null}
+                {title ? <Text style={[titleStyle, { color: paint.title }]}>{title}</Text> : null}
                 {message ? (
-                  <Text style={[materialDialogLook.message, title ? styles.dialogMessage : null, { color: paint.message }]}>
+                  <Text style={[messageStyle, title ? styles.dialogMessage : null, { color: paint.message }]}>
                     {message}
                   </Text>
                 ) : null}
@@ -108,10 +184,10 @@ function MaterialDialogCard({ title, message, actions, cancel = "Cancel", onCanc
                   accessibilityLabel={button.title}
                   {...(button.dismisses ? {} : screenReaderActions([{ name: "activate", run: button.onPress }, { name: "cancel", label: cancel, run: onCancel }]))}
                   onPress={button.onPress}
-                  android_ripple={{ color: paint.ripple }}
-                  style={styles.dialogButton}
+                  android_ripple={{ color: paint.ripple, foreground: material }}
+                  style={material ? styles.materialDialogButton : styles.dialogButton}
                 >
-                  <Text style={[materialDialogLook.button, { color: button.dismisses ? paint.dismiss : button.destructive ? paint.destructive : paint.action }]}>{button.title}</Text>
+                  <Text style={[buttonTextStyle, { color: button.dismisses ? paint.dismiss : button.destructive ? paint.destructive : paint.action }]}>{button.title}</Text>
                 </Pressable>
               ))}
             </View>
@@ -124,7 +200,7 @@ function MaterialDialogCard({ title, message, actions, cancel = "Cancel", onCanc
 
 export const materialDialogWidth = (room: number) => Math.min(materialDialogLook.maxWidth, room - 2 * materialDialogLook.screenMargin);
 
-function SheetCard({ title, message, actions, cancel = "Cancel", onCancel }: Props) {
+function SheetCard({ title, message, actions, cancel = dismissWords.cancel, onCancel }: Props) {
   const theme = useTheme();
   const paint = theme.dark ? actionSheetInk.dark : actionSheetInk.light;
   const reduceMotion = useReduceMotion();
@@ -139,18 +215,14 @@ function SheetCard({ title, message, actions, cancel = "Cancel", onCancel }: Pro
   const heading = spokenHeading(title, message);
   const leaving = useSheetBehaviour(onCancel, () => (heading ? spoken : firstAction).current);
   const left = usePortalLeft();
-  const shown = useSharedValue(1);
-  useEffect(() => {
-    if (leaving) shown.value = withTiming(0, { duration: reduceMotion ? menuMotion.contentFade : menuMotion.sheetOut }, (finished) => finished && runOnJS(left)());
-  }, [leaving]);
-  const fade = useAnimatedStyle(() => ({ opacity: shown.value }));
+  const fade = useSheetFade(leaving, reduceMotion, left);
   const cancelAction = announces ? screenReaderActions([{ name: "cancel", label: cancel, run: onCancel }]) : {};
   return (
     <Animated.View style={[StyleSheet.absoluteFill, fade]} pointerEvents={leaving ? "none" : "auto"} collapsable={false} accessibilityElementsHidden={leaving} importantForAccessibility={leaving ? "no-hide-descendants" : "auto"}>
       <Pressable testID="drawnConfirmationOutside" {...(announces ? { accessible: false, importantForAccessibility: "no" as const } : { accessibilityRole: "button" as const, accessibilityLabel: cancel })} style={[StyleSheet.absoluteFill, { backgroundColor: ink.clear }]} onPress={onCancel} />
       <View style={styles.centre} pointerEvents="box-none">
         <View ref={card} testID="drawnActionSheet" accessibilityViewIsModal style={[styles.card, { width, maxHeight, borderColor: paint.rim, boxShadow: actionSheetLook.shadow }]}>
-          <MenuMaterial source={null} fill={paint.fill} solid={paint.solid} radius={actionSheetLook.radius} style={[styles.material, { maxHeight: maxHeight - 2 * actionSheetLook.rim }]}>
+          <MenuMaterial source={null} fill={paint.fill} solid={paint.solid} radius={shape.panel} style={[styles.material, { maxHeight: maxHeight - 2 * actionSheetLook.rim }]}>
             <ScrollView testID="drawnConfirmationScroll" keyboardShouldPersistTaps="handled" style={styles.scroll} contentContainerStyle={styles.content} bounces={false} overScrollMode="never">
             {heading ? (
               <View ref={spoken} testID="drawnConfirmationHeading" accessible accessibilityRole="header" accessibilityLabel={heading} {...cancelAction}>
@@ -212,20 +284,22 @@ export function ConfirmSheet({ confirmation, onClose }: { confirmation: Confirma
 
 const styles = StyleSheet.create({
   centre: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center" },
-  card: { borderRadius: actionSheetLook.radius, borderWidth: actionSheetLook.rim },
-  material: { overflow: "hidden" },
+  card: { borderRadius: shape.panel, borderWidth: actionSheetLook.rim, ...smoothCorners },
+  material: { overflow: "hidden", ...smoothCorners },
   scroll: { flexGrow: 0 },
   content: { paddingTop: actionSheetLook.top, paddingHorizontal: actionSheetLook.side, paddingBottom: actionSheetLook.buttonBottom },
   message: { marginTop: actionSheetLook.messageGap },
   buttons: { marginHorizontal: actionSheetLook.buttonSide - actionSheetLook.side, gap: actionSheetLook.buttonsBetween },
   afterText: { marginTop: actionSheetLook.buttonGap },
-  button: { minHeight: actionSheetLook.buttonHeight, borderRadius: actionSheetLook.buttonHeight / 2, justifyContent: "center", paddingHorizontal: actionSheetLook.buttonSide, paddingVertical: (actionSheetLook.buttonHeight - actionSheetLook.button.lineHeight) / 2 },
+  button: { minHeight: actionSheetLook.buttonHeight, borderRadius: shape.control, ...smoothCorners, justifyContent: "center", paddingHorizontal: actionSheetLook.buttonSide, paddingVertical: (actionSheetLook.buttonHeight - actionSheetLook.button.lineHeight) / 2 },
   pressed: { opacity: 0.7 },
   centred: { textAlign: "center" },
   dialog: { borderRadius: materialDialogLook.radius, overflow: "hidden" },
+  materialDialog: { borderRadius: materialShape.extraLarge, elevation: 3 },
   dialogContent: { padding: materialDialogLook.padding },
   dialogMessage: { marginTop: materialDialogLook.messageGap },
   dialogButtons: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: materialDialogLook.buttonsBetween, marginRight: -materialDialogLook.buttonSide / 2 },
   dialogButtonsAfterText: { marginTop: materialDialogLook.buttonsGap },
   dialogButton: { minHeight: materialDialogLook.buttonHeight, borderRadius: materialDialogLook.buttonHeight / 2, overflow: "hidden", justifyContent: "center", paddingHorizontal: materialDialogLook.buttonSide },
+  materialDialogButton: { minHeight: materialSize.touchTarget, minWidth: materialSize.touchTarget, borderRadius: materialShape.full, overflow: "hidden", alignItems: "center", justifyContent: "center", paddingHorizontal: materialDialogLook.buttonSide },
 });

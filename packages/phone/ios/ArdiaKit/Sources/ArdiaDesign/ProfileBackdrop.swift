@@ -2,6 +2,7 @@ import SwiftUI
 
 public struct ProfileBackdrop: View {
   private let look: ProfileLook?
+  private let themeLook: ThemeLook?
   private let themed: Bool
   private let softened: Bool
   private let fadesOut: Bool
@@ -11,8 +12,9 @@ public struct ProfileBackdrop: View {
 
   public static let themeVeil = 0.34
 
-  public init(look: ProfileLook? = nil, themed: Bool = false, softened: Bool = false, fadesOut: Bool = false) {
+  public init(look: ProfileLook? = nil, themeLook: ThemeLook? = nil, themed: Bool = false, softened: Bool = false, fadesOut: Bool = false) {
     self.look = look
+    self.themeLook = themeLook
     self.themed = themed
     self.softened = softened
     self.fadesOut = fadesOut
@@ -38,6 +40,20 @@ public struct ProfileBackdrop: View {
 
   @ViewBuilder
   private func backdrop(softened: Bool) -> some View {
+    if themed, let themeLook {
+      ThemeBackdrop(look: themeLook, dark: colorScheme == .dark)
+        .overlay {
+          if softened {
+            Color.adaptive(light: .white.opacity(0.72), dark: .black.opacity(0.55))
+          }
+        }
+    } else {
+      gradientBackdrop(softened: softened)
+    }
+  }
+
+  @ViewBuilder
+  private func gradientBackdrop(softened: Bool) -> some View {
     let look = look ?? ambientLook
     let dark = colorScheme == .dark
     let showsTheme = look.showsTheme(dark: dark, themed: themed)

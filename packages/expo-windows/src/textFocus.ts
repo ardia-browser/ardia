@@ -29,12 +29,12 @@ let reported: boolean | undefined;
 
 const focus = () => requireNativeModule<Pick<FocusOnWindows, "setTextInputFocused" | "takeKeyboardFromPage" | "fieldFocused" | "fieldAsked" | "fieldBlurred">>("ArdiaFocus");
 
-export function textInputHasFocus(state: Pick<TextInputState, "currentlyFocusedInput" | "isTextInput"> = textInputState.default): boolean {
+function textInputHasFocus(state: Pick<TextInputState, "currentlyFocusedInput" | "isTextInput"> = textInputState.default): boolean {
   const field = state.currentlyFocusedInput();
   return field != null && state.isTextInput(field);
 }
 
-export function reportTextInputFocus() {
+function reportTextInputFocus() {
   const focused = textInputHasFocus();
   if (focused === reported) return;
   reported = focused;

@@ -1,4 +1,4 @@
-export type ListBand = { top: number; bottom: number };
+type ListBand = { top: number; bottom: number };
 
 export type ListViewport = { band: () => ListBand | null };
 

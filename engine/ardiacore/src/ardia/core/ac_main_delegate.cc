@@ -25,6 +25,7 @@
 #include "chrome/browser/browser_process_impl.h"
 #include "chrome/browser/chrome_browser_main.h"
 #include "chrome/browser/chrome_browser_main_extra_parts.h"
+#include "chrome/browser/ardia/ac_cli_console_ring.h"
 #include "chrome/browser/ardia/ac_scripts_policy.h"
 #include "chrome/browser/chrome_content_browser_client.h"
 #include "chrome/common/chrome_paths.h"
@@ -161,6 +162,7 @@ class ACBrowserMainExtraParts : public ChromeBrowserMainExtraParts {
     AppKeepAlive() = std::make_unique<ScopedKeepAlive>(
         KeepAliveOrigin::APP_CONTROLLER, KeepAliveRestartOption::DISABLED);
     StartLifetimeObservers();
+    ardia::InstallCliConsoleRing();
   }
   void PostBrowserStart() override {
     g_browser_started = true;

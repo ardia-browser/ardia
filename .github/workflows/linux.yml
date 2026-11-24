@@ -2,15 +2,64 @@ name: Linux
 
 on:
   pull_request:
-    paths:
+    paths: &linux
+      - "apps/desktop/**"
+      - "apps/linux"
       - "apps/linux/**"
-      - "apps/browser/**"
-      - "scripts/release/official-plugins.py"
-      - "packages/**"
-      - "engine/**"
+      - "apps/browser/src/**"
+      - "apps/browser/assets/**"
+      - "apps/browser/package.json"
+      - "apps/browser/tsconfig.json"
+      - "apps/browser/official-plugins.json"
+      - "apps/browser/official-plugins.d.json.ts"
+      - "apps/browser/macos/Ardia.xcodeproj/project.pbxproj"
+      - "apps/browser/windows/Ardia/IntroMusic.wav"
+      - "apps/site/src/scripts/meadow/**"
+      - "apps/cli/install.sh"
+      - "packages/core/src/**"
+      - "packages/ardiacore/src/**"
+      - "packages/import/src/**"
+      - "packages/shaders/src/**"
+      - "packages/shell/src/**"
+      - "packages/sync/src/**"
+      - "packages/*/package.json"
+      - "packages/*/tsconfig.json"
+      - "packages/ardiacore/scripts/**"
+      - "packages/ardiacore/ios/ArdiaLittleFitMath.h"
+      - "packages/ardiacore/ios/ArdiaWindowController.mm"
+      - "packages/ardiacore/ios/page_script.js"
+      - "packages/shell/ios/BangListFetch.swift"
+      - "packages/shell/ios/CrashReports.swift"
+      - "packages/shell/ios/ReportFiles.swift"
+      - "packages/shell/ios/ReportUploader.swift"
+      - "packages/shell/ios/ShellModule.swift"
+      - "packages/shell/ios/ShellNative.swift"
+      - "packages/shell/ios/SystemModule.swift"
+      - "packages/shell/ios/WindowManager.swift"
+      - "packages/sync/ios/Core/Wordlist.swift"
+      - "packages/sync/tests/fixtures/**"
+      - "packages/core-rs/**"
+      - "packages/ardiacore/prebuilt-engines-linux.tsv"
+      - "packages/ardiacore/tests/ubo-scriptlets.test.mjs"
+      - "packages/shaders/ios/Meadow/**"
+      - "packages/shaders/windows/**"
+      - "engine/ardiacore-linux/**"
+      - "engine/ardiacore-desktop/**"
+      - "engine/ardiacore/src/**"
+      - "engine/chromium/**"
+      - "engine/patches/**"
+      - "engine/engine-key.*"
       - "scripts/linux/**"
       - "scripts/lib/**"
       - "scripts/agent/locked"
+      - "scripts/release/official-plugins.py"
+      - ".claude/skills/release/scripts/publish.sh"
+      - "docs/linux-port.md"
+      - "docs/engine-build.md"
+      - "docs/engine-build-windows.md"
+      - "scripts/windows/engine/series-win"
+      - "scripts/windows/engine/series_win.py"
+      - "scripts/windows/engine/patches/**"
       - "infra/feedback/lib/**"
       - "patches/**"
       - "package.json"
@@ -19,29 +68,18 @@ on:
       - "turbo.json"
       - "tsconfig.base.json"
       - ".nvmrc"
+      - "packages/core-rs/Cargo.toml"
+      - "packages/core-rs/Cargo.lock"
+      - "packages/core-rs/rust-toolchain.toml"
+      - "packages/core-rs/crates/ardia-crypto/**"
+      - "packages/core-rs/crates/ardia-update-core/**"
+      - "packages/core-rs/crates/ardia-update-verify/**"
       - ".github/workflows/linux.yml"
       - ".github/actions/linux-setup/**"
+      - ".github/actions/linux-update-verify/**"
   push:
     branches: [main]
-    paths:
-      - "apps/linux/**"
-      - "apps/browser/**"
-      - "scripts/release/official-plugins.py"
-      - "packages/**"
-      - "engine/**"
-      - "scripts/linux/**"
-      - "scripts/lib/**"
-      - "scripts/agent/locked"
-      - "infra/feedback/lib/**"
-      - "patches/**"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "turbo.json"
-      - "tsconfig.base.json"
-      - ".nvmrc"
-      - ".github/workflows/linux.yml"
-      - ".github/actions/linux-setup/**"
+    paths: *linux
   workflow_dispatch:
     inputs:
       engine:
@@ -51,8 +89,8 @@ on:
         default: nearest
 
 concurrency:
-  group: linux-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: linux-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 permissions:
   contents: read
@@ -63,6 +101,7 @@ env:
 
 jobs:
   gate:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -84,31 +123,119 @@ jobs:
             const vouch = require(`${process.env.GITHUB_WORKSPACE}/.github/vouch/vouch.cjs`);
             await vouch.gate({ github, context, core });
 
+  route:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    outputs:
+      target: ${{ steps.target.outputs.target }}
+    steps:
+      - id: router
+        name: The router, from main
+        continue-on-error: true
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: refs/heads/main
+          path: .route
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /scripts/ci/
+            /.github/TEAM.td
+            /.github/vouch/vouch.cjs
+      - id: route
+        name: GitHub or Boat for the long jobs
+        if: steps.router.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BOAT_CI_LIMITS_KEY: ${{ secrets.BOAT_CI_LIMITS_KEY }}
+          BOAT_OVERFLOW: ${{ vars.BOAT_OVERFLOW }}
+          BOAT_OVERFLOW_REPOS: ${{ vars.BOAT_OVERFLOW_REPOS }}
+          BOAT_OVERFLOW_QUEUED: ${{ vars.BOAT_OVERFLOW_QUEUED }}
+          BOAT_OVERFLOW_BUSY: ${{ vars.BOAT_OVERFLOW_BUSY }}
+          BOAT_OVERFLOW_QUEUED_AGE: ${{ vars.BOAT_OVERFLOW_QUEUED_AGE }}
+          BOAT_OVERFLOW_DAY_STARTS: ${{ vars.BOAT_OVERFLOW_DAY_STARTS }}
+          BOAT_OVERFLOW_HOUR_STARTS: ${{ vars.BOAT_OVERFLOW_HOUR_STARTS }}
+          BOAT_OVERFLOW_MINUTE_STARTS: ${{ vars.BOAT_OVERFLOW_MINUTE_STARTS }}
+          BOAT_OVERFLOW_VM_HOURS: ${{ vars.BOAT_OVERFLOW_VM_HOURS }}
+          BOAT_OVERFLOW_SANDBOXES: ${{ vars.BOAT_OVERFLOW_SANDBOXES }}
+        run: node .route/scripts/ci/route-runner.mjs --fallback ubuntu-24.04 --jobs 3
+      - id: target
+        name: The runner the long jobs use
+        if: always()
+        env:
+          OUTCOME: ${{ steps.route.outcome }}
+          PICKED: ${{ steps.route.outputs.target }}
+        run: |
+          if [ "$OUTCOME" = success ] && [ "$PICKED" = boat ]; then
+            echo "target=boat" >> "$GITHUB_OUTPUT"
+          else
+            echo "target=github" >> "$GITHUB_OUTPUT"
+          fi
+
   checks:
-    needs: gate
-    if: needs.gate.outputs.run == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    name: checks (${{ matrix.name }})
+    needs: [gate, route]
+    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
+    runs-on: ${{ github.run_attempt == '1' && needs.route.result == 'success' && needs.route.outputs.target == 'boat' && 'boat-large' || 'ubuntu-24.04' }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: "UI", part: ui, shard: 1/1, slug: ui }
+          - { name: "engine fixtures", part: engine, shard: 1/1, slug: engine }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
       - uses: ./.github/actions/linux-setup
+      - name: The Rust sync core the host tests link
+        if: matrix.part == 'engine'
+        run: |
+          if ! command -v rustup >/dev/null && [ ! -x "$HOME/.cargo/bin/rustup" ]; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none --no-modify-path
+          fi
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          cd packages/core-rs
+          PATH="$HOME/.cargo/bin:$PATH" rustup toolchain install
+          PATH="$HOME/.cargo/bin:$PATH" cargo build --locked -p ardia-ffi
+      - id: chromium
+        name: A stock Chromium, on runners without GitHub's image
+        if: runner.environment != 'github-hosted'
+        uses: browser-actions/setup-chrome@48ad923757ca74d66703209fe939badbdf80f2f4
+        with:
+          chrome-version: stable
+          install-dependencies: true
       - name: Stock Chromium
-        run: echo "$(readlink -f /usr/bin/chromium) $(/usr/bin/chromium --version)"
-      - run: scripts/linux/ci-checks.sh --logs "$RUNNER_TEMP/checks"
+        env:
+          INSTALLED: ${{ steps.chromium.outputs.chrome-path }}
+        run: |
+          chromium=/usr/bin/chromium
+          if [ -n "$INSTALLED" ]; then
+            chromium="$INSTALLED"
+            echo "ARDIA_ACCEPTANCE_CHROMIUM=$chromium" >> "$GITHUB_ENV"
+          fi
+          echo "$(readlink -f "$chromium") $("$chromium" --version)"
+      - run: scripts/linux/ci-checks.sh --part ${{ matrix.part }} --shard ${{ matrix.shard }} --logs "$RUNNER_TEMP/checks"
       - if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: checks-logs
+          name: checks-logs-${{ matrix.slug }}
           path: ${{ runner.temp }}/checks
           if-no-files-found: ignore
           retention-days: 14
 
   package:
-    needs: gate
-    if: needs.gate.outputs.run == 'true'
-    runs-on: ubuntu-24.04
+    needs: [gate, route]
+    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
+    runs-on: ${{ github.run_attempt == '1' && needs.route.result == 'success' && needs.route.outputs.target == 'boat' && 'boat-large' || 'ubuntu-24.04' }}
     timeout-minutes: 45
     env:
       ENGINE_MODE: ${{ inputs.engine || 'nearest' }}
@@ -118,7 +245,24 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
       - id: engine-key
-        run: echo "key=$(engine/engine-key.sh)" >> "$GITHUB_OUTPUT"
+        run: echo "key=$(engine/engine-key.sh --platform linux)" >> "$GITHUB_OUTPUT"
+      - name: Which packages
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          FULL_CI: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
+        run: |
+          set -euo pipefail
+          full=true
+          if [ "$GITHUB_EVENT_NAME" = pull_request ] && [ "$FULL_CI" != true ]; then
+            if git diff --quiet "$BASE" HEAD -- scripts/linux packages/core-rs/crates/ardia-update-core packages/core-rs/crates/ardia-update-verify \
+              .github/workflows/linux.yml .github/actions/linux-setup .github/actions/linux-update-verify; then full=false; fi
+          fi
+          echo "FULL=$full" >> "$GITHUB_ENV"
+          if [ "$full" = true ]; then
+            echo "Full run: the tarball, the .deb and the AppImage, each smoke-tested, and the .deb installed."
+          else
+            echo "::notice::Fast run: the tarball alone, smoke-tested. The .deb and the AppImage are built on main, with the full-ci label, or when the PR changes the Linux packaging."
+          fi
       - name: Version
         run: |
           set -euo pipefail
@@ -135,6 +279,7 @@ jobs:
             libx11-6 libxcb1 libxcomposite1 libxdamage1 libxext6 libxfixes3 libxrandr2 libxkbcommon0
             libgbm1 libdrm2 libexpat1 libcairo2 libpango-1.0-0 libudev1 libasound2t64 libglib2.0-0t64
             libgtk-3-0t64 libsecret-1-0
+      - uses: ./.github/actions/linux-update-verify
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: apps/browser/build-ardiacore/prebuilt-linux-x86_64
@@ -156,7 +301,7 @@ jobs:
             exit 1
           fi
           selected=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["engine_key"])' "$engine/manifest.json")
-          if [ "$selected" = "$ENGINE_KEY" ]; then
+          if python3 -I scripts/linux/runtime_files.py serves --engine "$engine" --key "$ENGINE_KEY"; then
             label="${GITHUB_SHA:0:12}"
             echo "ENGINE_EXACT=1" >> "$GITHUB_ENV"
             echo "### Linux engine ${ENGINE_KEY:0:12} (exact)" >> "$GITHUB_STEP_SUMMARY"
@@ -166,7 +311,7 @@ jobs:
             echo "### Linux engine ${selected:0:12} (older than this commit's ${ENGINE_KEY:0:12})" >> "$GITHUB_STEP_SUMMARY"
           fi
           { echo "ENGINE=$engine"; echo "PACKAGE_NAME=Ardia-linux-x64-$label"; } >> "$GITHUB_ENV"
-      - run: pnpm --filter @ardia/linux build
+      - run: pnpm --filter @ardia/desktop build
       - name: ardia command (pinned)
         run: |
           set -euo pipefail
@@ -182,21 +327,31 @@ jobs:
         run: |
           set -euo pipefail
           blocker=$(scripts/linux/fetch-ubo.sh)
-          python3 scripts/linux/package.py --out "$ENGINE" --ui apps/linux/dist --content-blocker "$blocker" \
-            --version "$VERSION" $CLI_ARGS --destination "$RUNNER_TEMP/dist/$PACKAGE_NAME.tar.xz" \
-            --deb "$RUNNER_TEMP/dist/$PACKAGE_NAME.deb" --appimage "$RUNNER_TEMP/dist/$PACKAGE_NAME.AppImage"
-          for built in tar.xz deb AppImage; do
+          update_verify=$(scripts/linux/update-verify.sh)
+          formats=(tar.xz)
+          extra=()
+          if [ "$FULL" = true ]; then
+            formats+=(deb AppImage)
+            extra+=(--deb "$RUNNER_TEMP/dist/$PACKAGE_NAME.deb" --appimage "$RUNNER_TEMP/dist/$PACKAGE_NAME.AppImage")
+          fi
+          python3 scripts/linux/package.py --out "$ENGINE" --ui apps/desktop/dist/linux --content-blocker "$blocker" \
+            --version "$VERSION" $CLI_ARGS --update-verify "$update_verify" --destination "$RUNNER_TEMP/dist/$PACKAGE_NAME.tar.xz" "${extra[@]}"
+          for built in "${formats[@]}"; do
             (cd "$RUNNER_TEMP/dist" && sha256sum "$PACKAGE_NAME.$built" > "$PACKAGE_NAME.$built.sha256")
           done
+      - name: Content blocker patches
+        run: node --test packages/ardiacore/tests/ubo-scriptlets.test.mjs
       - name: Smoke
         run: |
           set -euo pipefail
           extra=()
           [ "${ENGINE_EXACT:-0}" = 1 ] || extra+=(--allow-old-engine)
           node scripts/linux/smoke.mjs --package "$RUNNER_TEMP/dist/$PACKAGE_NAME.tar.xz" --results "$RUNNER_TEMP/smoke" --timeout-ms 600000 "${extra[@]}"
+          [ "$FULL" = true ] || exit 0
           node scripts/linux/smoke.mjs --package "$RUNNER_TEMP/dist/$PACKAGE_NAME.deb" --results "$RUNNER_TEMP/smoke/deb" --timeout-ms 600000 "${extra[@]}"
           node scripts/linux/smoke.mjs --package "$RUNNER_TEMP/dist/$PACKAGE_NAME.AppImage" --results "$RUNNER_TEMP/smoke/appimage" --timeout-ms 600000 "${extra[@]}"
       - name: Debian package installs
+        if: env.FULL == 'true'
         run: |
           set -euo pipefail
           dpkg-deb --info "$RUNNER_TEMP/dist/$PACKAGE_NAME.deb"

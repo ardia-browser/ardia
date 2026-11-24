@@ -1,7 +1,7 @@
-export type Installer = { url: string; sha256: string; bytes: number };
-export type UpdateManifest = { version: string; build: number; installers: Partial<Record<Cpu, Installer>> };
+type Installer = { url: string; sha256: string; bytes: number };
+type UpdateManifest = { version: string; build: number; installers: Partial<Record<Cpu, Installer>> };
 export type BuildIdentity = { version: string; build: number };
-export type Cpu = "x64" | "arm64";
+type Cpu = "x64" | "arm64";
 
 const CPUS: Cpu[] = ["x64", "arm64"];
 const LARGEST_INSTALLER_BYTES = 2 ** 30;

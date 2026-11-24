@@ -27,9 +27,10 @@ NSMutableOrderedSet<NSString *> *LoadedProfiles();
 NSMutableDictionary<NSString *, ArdiaContentBlockerPage *> *Pages();
 ArdiaContentBlockerPage *HiddenPage(NSString *key, NSString *profile, ArdiaCoreProfile *p, NSString *extensionId, NSString *file);
 bool IsHiddenPageWindow(NSWindow *window);
+void ForgetIfGone(NSString *profile);
 void LoadIntoProfile(NSString *profile, void (^then)(NSString *error));
 extern NSString *const kOffDirective;
-void Call(NSString *profile, NSString *expression, void (^completion)(id value, NSString *error));
+void Call(NSString *profile, NSString *expression, void (^completion)(id value, NSString *error), bool loadsProfile = true);
 bool LiteSettingsPending(ArdiaCoreProfile *p);
 void MoveLiteSettings(NSString *profile, ArdiaCoreProfile *p, void (^done)(void));
 

@@ -3,6 +3,7 @@ PODS:
     - ExpoModulesCore
   - ArdiaImport (0.0.0):
     - ArdiaCore
+    - ArdiaSync
     - ExpoModulesCore
   - ArdiaShaders (0.0.0):
     - ArdiaCore
@@ -2579,11 +2580,11 @@ EXTERNAL SOURCES:
     :path: "../../../node_modules/react-native-macos/ReactCommon/yoga"
 
 SPEC CHECKSUMS:
-  ArdiaCore: fec0ff79e738095bf228d036f0f24a27e7d32091
-  ArdiaImport: d231c083669944e154f0e26ad66aa1ec9fb53452
+  ArdiaCore: 59d7d86c1e33d148778a360ca09e49a6cfe1e9b4
+  ArdiaImport: 5d11bd8e6bbbc8504eabf57bbeb75e2290c39fdb
   ArdiaShaders: 1ad91c6f4412d6ad67580a3b0ee9ffc6d8a6021b
-  ArdiaShell: 43c566e5e8cca5575b53c5d2c3b4739a303df132
-  ArdiaSync: 4b02488e71e3e91c17139415cab5db84601159ef
+  ArdiaShell: abf8a9a3cd115e3577193fdddcdc0a153f5b35e4
+  ArdiaSync: 4f500414c3c10a78fa01b4cda95f6bd9f64c25c6
   boost: cea1d4f90a3a59537f3deb03ff5656489d7133dd
   DoubleConversion: d31b1eb37f6d6f456530c4fd9124b857d6889cab
   EXConstants: 18ac927605517285307ea8f7ffe6fe7ca538eb5d

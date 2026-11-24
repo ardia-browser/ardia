@@ -12,6 +12,8 @@ export const isSmallWindow = (w: BrowserWindow | undefined): boolean => w?.kind 
 
 export const isRegularWindow = (w: BrowserWindow | undefined): w is MainWindow => w?.kind === "main";
 
+export const regularWindows = (s: Pick<BrowserState, "windows" | "windowOrder">) => s.windowOrder.map((id) => s.windows[id]).filter(isRegularWindow);
+
 export const isSmall = (s: Pick<BrowserState, "windows">, windowId?: string | null): boolean =>
   !!windowId && s.windows[windowId]?.kind === "small";
 
@@ -19,6 +21,9 @@ export const isOpenRegularWindow = (w: BrowserWindow | undefined): boolean => is
 
 export const isLastRegularWindow = (s: Pick<BrowserState, "windows">, id: string): boolean =>
   isRegularWindow(s.windows[id]) && !Object.values(s.windows).some((o) => o.id !== id && isOpenRegularWindow(o));
+
+export const isOnlyRegularWindow = (s: Pick<BrowserState, "windows">, id: string): boolean =>
+  isRegularWindow(s.windows[id]) && !Object.values(s.windows).some((o) => o.id !== id && isRegularWindow(o));
 
 export function mainWindowFor(s: BrowserState, profileId?: string): string | undefined {
   const order = [...new Set([...s.ui.focusOrder, ...s.windowOrder])].filter((id) => isOpenRegularWindow(s.windows[id]));

@@ -1,15 +1,19 @@
 import { useState } from "react";
 import { View } from "react-native";
-import { CLI_PLUGIN, describeCliInstall, installCliInBackground, useCli } from "../../../state/app/cliControl";
-import { usePluginActive, usePluginListing, usePluginPrograms } from "../../../state/plugins/hooks";
+import { describeCommandInstall, installCommandInBackground, useCommandInstall } from "../../../state/app/linuxCommandInstall";
+import { useControlServer } from "../../../state/app/programControl";
+import { programControlOn, setControlFromSettings, setProgramControl } from "../../../state/app/programControlSetting";
+import { usePluginsWithPrograms, usePluginPrograms } from "../../../state/plugins/hooks";
+import { useProgramRegistry } from "../../../state/plugins/programRegistry";
 import { canRelink, relinkPrograms } from "../../../state/plugins/actions";
-import type { PluginListing, ProgramsState } from "../../../state/plugins/store";
+import type { ProgramsState } from "../../../state/plugins/store";
 import { goToSettingsPane, type SettingsPlace } from "../../../state/settings/settingsWindows";
 import { useSettings } from "../../../state/browser/hooks";
 import { updateSettings } from "../../../state/settings/actions";
 import { openChromeSettings } from "../../../state/pages/urls";
 import type { BatterySaverWhen, Settings } from "../../../state/settings/settings";
 import { keepSiteActive, stopKeepingSiteActive, type MemorySaverMode } from "../../../state/tabs/memorySaver";
+import { keptSitesListed } from "../../../state/tabs/keptSites";
 import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/sheet";
 import { Button, DialogActions, DialogTitle, lineHeight, PopUp, Sheet, space, Text, TextField, Toggle } from "../../ui";
 import { perLook } from "../../ui/tokens";
@@ -18,18 +22,19 @@ import { FormField, Group, Row, SectionHeader, SettingToggle } from "../Form";
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 import { useAutomationRuleRows } from "./AutomationRules";
+import { AllowedProgramsRows } from "./AllowedPrograms";
 import { WebEngineSection } from "./WebEngineSection";
 
 const BATTERY_SAVER_DESCRIPTIONS: Record<BatterySaverWhen, string> = {
-  lowBattery: `At 20% battery or less, or in ${PLATFORM_TERMS.lowPowerMode}, busy background tabs pause and animations slow down.`,
-  unplugged: `On battery or in ${PLATFORM_TERMS.lowPowerMode}, busy background tabs pause and animations slow down.`,
-  never: "Background tabs and animations run at full speed on battery.",
+  lowBattery: `Pauses busy background tabs at 20% battery or in ${PLATFORM_TERMS.lowPowerMode}.`,
+  unplugged: `Pauses busy background tabs on battery or in ${PLATFORM_TERMS.lowPowerMode}.`,
+  never: "Background tabs and animations always run at full speed.",
 };
 
 type MemorySaverLevel = "off" | MemorySaverMode | "custom";
 type MemorySaverKeys = Pick<Settings, "memorySaver" | "memorySaverMode" | "loadProfilesWhenOpened" | "unloadProfilesAfter">;
 
-const profilesUnload = (after: string) => (PLATFORM_FEATURES.unloadsIdleProfiles ? ` Profiles you aren't using unload after ${after}.` : "");
+const profilesUnload = (after: string) => (PLATFORM_FEATURES.unloadsIdleProfiles ? ` Idle profiles unload after ${after}.` : "");
 
 type MemorySaverPreset = Exclude<MemorySaverLevel, "custom">;
 
@@ -41,20 +46,22 @@ const MEMORY_SAVER_LEVELS: Record<MemorySaverPreset, { title: string; descriptio
   },
   moderate: {
     title: "Moderate",
-    description: () => "Tabs become inactive after a longer period of time. Profiles load when you first open them.",
+    description: () => "Sleeps tabs slowly. Profiles load on open.",
     settings: { memorySaver: true, memorySaverMode: "moderate", loadProfilesWhenOpened: true, unloadProfilesAfter: "never" },
   },
   balanced: {
     title: "Balanced (recommended)",
-    description: () => "Tabs become inactive after an optimal period of time. Profiles load when you first open them.",
+    description: () => "Sleeps idle tabs automatically. Profiles load on open.",
     settings: { memorySaver: true, memorySaverMode: "balanced", loadProfilesWhenOpened: true, unloadProfilesAfter: "never" },
   },
   maximum: {
     title: "Maximum",
-    description: () => `Tabs become inactive after a shorter period of time. Profiles load when you first open them.${profilesUnload("15 minutes")}`,
+    description: () => (PLATFORM_FEATURES.unloadsIdleProfiles ? "Sleeps tabs aggressively and unloads idle profiles after 15m." : "Sleeps tabs aggressively. Profiles load on open."),
     settings: { memorySaver: true, memorySaverMode: "maximum", loadProfilesWhenOpened: true, unloadProfilesAfter: "15m" },
   },
 };
+const TAB_SLEEP: Record<MemorySaverMode, string> = { moderate: "Sleeps tabs slowly", balanced: "Sleeps idle tabs automatically", maximum: "Sleeps tabs aggressively" };
+
 const MEMORY_SAVER_PRESETS = Object.keys(MEMORY_SAVER_LEVELS) as MemorySaverPreset[];
 
 const UNLOAD_AFTER: Record<Settings["unloadProfilesAfter"], string> = { never: "", "5m": "5 minutes", "15m": "15 minutes", "1h": "an hour", "2h": "2 hours" };
@@ -66,9 +73,9 @@ function memorySaverLevel(s: MemorySaverKeys): MemorySaverLevel {
 }
 
 function customDescription(s: MemorySaverKeys) {
-  const tabs = MEMORY_SAVER_LEVELS[s.memorySaverMode].description().split(". ")[0];
-  const load = s.loadProfilesWhenOpened ? " Profiles load when you first open them." : " Every profile loads when Ardia opens.";
-  return `${tabs}.${load}${s.unloadProfilesAfter === "never" ? "" : profilesUnload(UNLOAD_AFTER[s.unloadProfilesAfter])} Pick a level to use its settings instead.`;
+  const tabs = TAB_SLEEP[s.memorySaverMode];
+  const load = s.loadProfilesWhenOpened ? " Profiles load on open." : " Every profile loads at launch.";
+  return `${tabs}.${load}${s.unloadProfilesAfter === "never" ? "" : profilesUnload(UNLOAD_AFTER[s.unloadProfilesAfter])}`;
 }
 
 export function AdvancedPane(_: SettingsPlace) {
@@ -96,6 +103,7 @@ function PerformanceSection() {
   const keys = { memorySaver, memorySaverMode, loadProfilesWhenOpened, unloadProfilesAfter };
   const batterySaverWhen = useSettings((s) => s.batterySaverWhen);
   const keepActiveSites = useSettings((s) => s.keepActiveSites);
+  const sitesListed = useSettings(keptSitesListed);
   const level = memorySaverLevel(keys);
   const options = [...MEMORY_SAVER_PRESETS.map((value) => ({ value: value as MemorySaverLevel, title: MEMORY_SAVER_LEVELS[value].title })), ...(level === "custom" ? [{ value: "custom" as const, title: "Custom" }] : [])];
   return (
@@ -108,7 +116,7 @@ function PerformanceSection() {
         <Row anchor="advanced.keepActiveSites">
           <Button title="Add Site…" icon="plus" onPress={() => showSettingsSheet(<KeepActiveSiteSheet />)} />
         </Row>
-        {memorySaver &&
+        {sitesListed &&
           [...keepActiveSites]
             .sort((a, b) => a.localeCompare(b))
             .map((site) => (
@@ -128,6 +136,7 @@ function PerformanceSection() {
             minWidth={190}
           />
         </Row>
+        <SettingToggle anchor="advanced.busyTabWarnings" />
       </Group>
     </>
   );
@@ -135,69 +144,113 @@ function PerformanceSection() {
 
 const viaPlugin = PLATFORM_FEATURES.plugins;
 
-function pluginCommandLine(plugin: PluginListing | undefined, programs: ProgramsState | undefined, installed: boolean): string {
-  if (!plugin?.manifest) return "Not in this build.";
-  if (!installed) return "Not installed.";
-  if (programs?.state === "linked") return programs.linked.includes("ardia") ? "On your PATH. It can control Ardia." : Object.values(programs.refused).join("; ");
+function programsLine(programs: ProgramsState | undefined): string {
+  if (programs?.state === "linked") {
+    const refused = Object.entries(programs.refused).map(([name, reason]) => `${name}: ${reason}`);
+    if (refused.length) return refused.join("; ");
+    if (programs.adoption === "retrying") return "Waiting for the old install to finish updating…";
+    if (programs.adoption === "busy") return "The old install is busy updating. Try again in a moment.";
+    if (programs.adoption === "failed") return "The old install couldn't be switched over to it.";
+    return programs.linked.length ? `On your PATH: ${programs.linked.join(", ")}` : "Nothing on your PATH.";
+  }
   if (programs?.state === "failed") return `Not on your PATH: ${programs.reason}`;
   return "Putting it on your PATH…";
 }
 
-function PluginCommandRow() {
-  const cli = useCli();
-  const plugin = usePluginListing(CLI_PLUGIN);
-  const programs = usePluginPrograms(CLI_PLUGIN);
-  const installed = usePluginActive(CLI_PLUGIN);
+function PluginProgramsRow({ name, title }: { name: string; title: string }) {
+  const programs = usePluginPrograms(name);
   const failed = canRelink(programs);
   return (
     <Row
-      anchor="advanced.ardiaCommand"
+      title={title}
+      onPress={() => goToSettingsPane("plugins", null, name)}
       description={
-        <View>
-          <Text selectable size="caption" tone={failed ? "destructive" : "textSecondary"} style={NOTE()}>
-            {pluginCommandLine(plugin, programs, installed)}
-          </Text>
-          {cli.server?.state === "external" ? (
-            <Text size="caption" tone="textSecondary" style={NOTE()}>
-              This instance has its own DevTools port.
-            </Text>
-          ) : null}
-          {plugin?.manifest && !installed ? <Button variant="text" look="link" pad="none" title="Open Plugins" onPress={() => goToSettingsPane("plugins")} /> : null}
-        </View>
+        <Text selectable size="caption" tone={failed ? "destructive" : "textSecondary"} style={NOTE()}>
+          {programsLine(programs)}
+        </Text>
       }
     >
-      {failed ? <Button title="Try Again" onPress={() => relinkPrograms(CLI_PLUGIN)} /> : null}
+      {failed ? <Button title="Try Again" onPress={() => relinkPrograms(name)} /> : null}
     </Row>
   );
 }
 
-function CommandLineSection() {
-  const on = useSettings((s) => s.cliControl);
-  const cli = useCli();
-  const ruleRows = useAutomationRuleRows();
-  const server = cli.server;
-  const serverNote =
+function ProgramControlRow() {
+  const on = useSettings((settings) => programControlOn({ settings }));
+  const server = useControlServer((s) => s.server);
+  const note =
     server?.state === "external"
-      ? "This instance already has a DevTools port from the command line, so the setting leaves it alone."
+      ? "Already has a DevTools port from the command line; left as is."
       : server?.reason
         ? server.reason
         : on && server?.state === "on"
           ? server.connections
             ? `Connected now: ${server.connections === 1 ? "1 session" : `${server.connections} sessions`}.`
             : "On. Nothing is connected."
-          : "Installs the ardia command and lets it open, read and act in every page you're signed in to. It stays on after you quit.";
-  const failed = !!cli.error && !cli.installing;
+          : null;
+  return (
+    <Row anchor="advanced.programControl" description={note ?? undefined}>
+      <Toggle value={on} accessibilityLabel="Let programs control Ardia" onChange={setControlFromSettings} />
+    </Row>
+  );
+}
+
+function ProgramsRows() {
+  const plugins = usePluginsWithPrograms();
+  const registryUnreadable = useProgramRegistry((s) => s.failClosed);
+  return (
+    <>
+      <ProgramControlRow />
+      {PLATFORM_FEATURES.controlDoorbell ? <AllowedProgramsRows /> : null}
+      <Row
+        anchor="advanced.programs"
+        description={
+          <View>
+            <Text size="caption" tone="textSecondary" style={NOTE()}>
+              {plugins.length ? "Commands your plugins put in your terminal." : "None of your plugins add commands to your terminal."}
+            </Text>
+            {registryUnreadable ? (
+              <Text selectable size="caption" tone="destructive" style={NOTE()}>
+                Ardia's list of program names kept for its built-in plugins is missing or damaged, so no program goes on PATH. Reinstall Ardia from ardia.dev.
+              </Text>
+            ) : null}
+          </View>
+        }
+      />
+      {plugins.map((p) => (
+        <PluginProgramsRow key={p.name} name={p.name} title={p.title} />
+      ))}
+    </>
+  );
+}
+
+function CommandLineSection() {
+  const on = useSettings((settings) => programControlOn({ settings }));
+  const install = useCommandInstall();
+  const server = useControlServer((s) => s.server);
+  const ruleRows = useAutomationRuleRows();
+  const serverNote =
+    server?.state === "external"
+      ? "Already has a DevTools port from the command line; left as is."
+      : server?.reason
+        ? server.reason
+        : on && server?.state === "on"
+          ? server.connections
+            ? `Connected now: ${server.connections === 1 ? "1 session" : `${server.connections} sessions`}.`
+            : "On. Nothing is connected."
+          : "Installs the ardia command to read and act in your signed-in pages.";
+  const failed = !!install.error && !install.installing;
   const setOn = (next: boolean) => {
-    updateSettings({ cliControl: next });
-    if (next && !cli.installing && (!cli.installedVersion || cli.error)) void installCliInBackground("settings");
+    setProgramControl(next);
+    if (next && !install.installing && (!install.installedVersion || install.error)) void installCommandInBackground("settings");
   };
-  const tryAgain = () => void installCliInBackground("settings");
-  const installLine = on || cli.installedVersion || cli.installing || failed ? describeCliInstall(cli) : null;
+  const tryAgain = () => void installCommandInBackground("settings");
+  const installLine = on || install.installedVersion || install.installing || failed ? describeCommandInstall(install) : null;
   return (
     <>
       <SectionHeader title="Command line and automation" />
       <Group>
-        {viaPlugin ? <PluginCommandRow /> : (
+        {viaPlugin ? <ProgramsRows /> : (
         <Row
           anchor="advanced.ardiaCommand"
           description={
@@ -214,7 +267,7 @@ function CommandLineSection() {
           }
         >
           {failed && on ? <Button title="Try Again" onPress={tryAgain} /> : null}
-          {on && !failed && cli.installedVersion && !cli.installing ? <Button title="Reinstall" onPress={() => void installCliInBackground("settings")} /> : null}
+          {on && !failed && install.installedVersion && !install.installing ? <Button title="Reinstall" onPress={() => void installCommandInBackground("settings")} /> : null}
           <Toggle value={on} accessibilityLabel="ardia command" onChange={setOn} />
         </Row>
         )}

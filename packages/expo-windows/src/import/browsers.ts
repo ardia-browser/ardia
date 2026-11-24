@@ -1,6 +1,6 @@
 import type { Family } from "./model";
 
-export type Root = "local" | "roaming";
+type Root = "local" | "roaming";
 
 export type Browser = {
   id: string;

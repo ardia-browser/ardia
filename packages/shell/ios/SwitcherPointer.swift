@@ -3,6 +3,14 @@ import Carbon.HIToolbox
 import ExpoModulesCore
 
 final class SwitcherPointer {
+  private static let devLock = NSLock()
+  private static var devPoint: NSPoint?
+  static var devLocation: NSPoint? {
+    get { devLock.withLock { devPoint } }
+    set { devLock.withLock { devPoint = newValue } }
+  }
+  static var location: NSPoint { devLocation ?? NSEvent.mouseLocation }
+
   private let lock = NSLock()
   private var origin: NSPoint?
   private var hasMoved = false

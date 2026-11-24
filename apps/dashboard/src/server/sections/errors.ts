@@ -1,6 +1,8 @@
 import { windowFor, type RangeKey } from "../../lib/range";
 import { UTC } from "../../lib/zone";
 import { num, query, str } from "../clickhouse";
+import { frameNames } from "../frame-symbols";
+import { frameLabel, frameName, imageUuids, nativeFrame, type FrameNames, type NativeFrame } from "../../lib/native-frames";
 import { classifyNoise } from "../noise";
 import { APP_SOURCE, SITE, prop, since } from "../sql";
 import { windowInfo } from "../series";
@@ -12,11 +14,13 @@ const TYPE = `if(event = 'cli_command', concat('exit ', properties['exit_code'])
 const MESSAGE = `if(event = 'cli_command', trimRight(concat('ardia ', properties['command'], ' ', properties['subcommand'])), substring(coalesce(nullIf(JSONExtractString(properties['$exception_values'], 1), ''), JSONExtractString(properties['$exception_list'], 1, 'value')), 1, 300))`;
 const FILTER = `((event = '$exception' AND (${SITE} OR ${APP_SOURCE} OR ${CLI})) OR ${CLI_FAILED})`;
 
-type Frame = { function?: string; filename?: string; module?: string; lineno?: number | null; colno?: number | null };
+type Frame = { function?: string; filename?: string; module?: string; lineno?: number | null; colno?: number | null; image_offset?: string };
+type ShownFrame = { fn: string; where: string; native: NativeFrame | null };
 
-function framesOf(list: string): string[] {
+export function framesOf(list: string, imagesJson = ""): ShownFrame[] {
   try {
     const parsed = JSON.parse(list) as { stacktrace?: { frames?: Frame[] } }[];
+    const images = imageUuids(imagesJson);
     return parsed
       .flatMap((entry) => entry.stacktrace?.frames ?? [])
       .reverse()
@@ -25,11 +29,19 @@ function framesOf(list: string): string[] {
         const file = frame.filename || frame.module || "";
         const line = frame.lineno ? `:${frame.lineno}${frame.colno ? `:${frame.colno}` : ""}` : "";
         const fn = frame.function && frame.function !== "?" ? frame.function : "anonymous";
-        return file ? `${fn}  ${file}${line}` : fn;
+        const native = frame.image_offset ? nativeFrame(frame, images) : null;
+        return { fn, where: file ? `${file}${line}` : "", native: native?.uuid ? native : null };
       });
   } catch {
     return [];
   }
+}
+
+export function frameLines(frames: ShownFrame[], names: FrameNames): string[] {
+  return frames.map((f) => {
+    const fn = f.native ? frameLabel(f.native, names) : f.fn;
+    return f.where ? `${fn}  ${f.where}` : fn;
+  });
 }
 
 type Where = "site" | "app" | "cli";
@@ -56,9 +68,9 @@ export async function errorsExceptions(range: RangeKey, signal?: AbortSignal, zo
     query(
       `SELECT uuid, toUnixTimestamp64Milli(timestamp), ${WHERE}, distinct_id, ${TYPE}, ${MESSAGE},
          multiIf(${SITE}, properties['release_version'], ${CLI}, properties['cli_version'], properties['crashed_version'] != '', properties['crashed_version'], ${prop("$app_version")}),
-         substring(properties['$exception_list'], 1, 12000), properties['$raw_user_agent'], properties['$current_url'],
+         if(properties['crash_images'] != '', properties['$exception_list'], substring(properties['$exception_list'], 1, 12000)), properties['$raw_user_agent'], properties['$current_url'],
          if(${SITE}, concat(${prop("$browser")}, ' ', properties['$browser_version'], ' · ', ${prop("$os")}), concat('macOS ', properties['$os_version'], ' · ', properties['arch'])),
-         properties['$exception_level'], properties['crash_signal']
+         properties['$exception_level'], properties['crash_signal'], properties['crash_images']
        FROM telemetry.events
        WHERE ${FILTER} AND ${since(w.start)}
        ORDER BY timestamp DESC
@@ -75,7 +87,7 @@ export async function errorsExceptions(range: RangeKey, signal?: AbortSignal, zo
   ]);
 
   const historyByKey = new Map(history.map((r) => [`${str(r[0])}|${str(r[1])}|${str(r[2])}`, { total: num(r[3]), firstSeen: num(r[4]), lastSeen: num(r[5]) }]));
-  type Row = { id: string; at: number; where: Where; person: string; type: string; message: string; version: string; list: string; ua: string; url: string; platform: string; level: string; crashSignal: string };
+  type Row = { id: string; at: number; where: Where; person: string; type: string; message: string; version: string; list: string; ua: string; url: string; platform: string; level: string; crashSignal: string; images: string };
   const rows: Row[] = recent.map((r) => ({
     id: str(r[0]),
     at: num(r[1]),
@@ -90,6 +102,7 @@ export async function errorsExceptions(range: RangeKey, signal?: AbortSignal, zo
     platform: str(r[10]).trim(),
     level: str(r[11]),
     crashSignal: str(r[12]),
+    images: str(r[13]),
   }));
 
   const groups = new Map<string, Row[]>();
@@ -121,13 +134,18 @@ export async function errorsExceptions(range: RangeKey, signal?: AbortSignal, zo
       firstSeen: past?.firstSeen ?? Math.min(...list.map((r) => r.at)),
       lastSeen: past?.lastSeen ?? head.at,
       versions: [...versions].map(([version, count]) => ({ version, count })).sort((a, b) => b.count - a.count),
-      recent: list.slice(0, 8).map((r) => ({ id: r.id, at: r.at, person: r.person, version: r.version, url: r.url, platform: r.platform, level: r.level, crashSignal: r.crashSignal, frames: framesOf(r.list) })),
+      recent: list.slice(0, 8).map((r) => ({ id: r.id, at: r.at, person: r.person, version: r.version, url: r.url, platform: r.platform, level: r.level, crashSignal: r.crashSignal, stack: framesOf(r.list, r.images) })),
     };
   });
+  const names = await frameNames(out.flatMap((g) => g.recent.flatMap((o) => o.stack.flatMap((f) => (f.native ? [f.native] : [])))), signal);
+  const named = out.map(({ recent, ...group }) => ({
+    ...group,
+    recent: recent.map(({ stack, ...o }) => ({ ...o, frames: frameLines(stack, names), namedFrames: stack.filter((f) => f.native && frameName(f.native, names)).length })),
+  }));
 
   return {
     window: windowInfo(w),
-    groups: out.sort((a, b) => b.count - a.count || b.lastSeen - a.lastSeen),
+    groups: named.sort((a, b) => b.count - a.count || b.lastSeen - a.lastSeen),
     series: [
       { key: "app", label: "App", values: series.app },
       { key: "cli", label: "CLI", values: series.cli },

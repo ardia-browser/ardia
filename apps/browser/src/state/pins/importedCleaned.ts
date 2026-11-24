@@ -8,7 +8,7 @@ export const cleanedKey = (c: ClosedTab) => `${c.tab.profileId}\u0001${c.tab.url
 
 export const keptCleanedKeys = (s: Pick<BrowserState, "cleanedTabs">) => new Set(keptCleanedTabs(s.cleanedTabs).map(cleanedKey));
 
-export type ImportedCleaned = { cleanedTabs: ClosedTab[]; added: number; already: number };
+type ImportedCleaned = { cleanedTabs: ClosedTab[]; added: number; already: number };
 
 export function withImportedCleaned(s: Pick<BrowserState, "cleanedTabs" | "profiles">, entries: ClosedTab[]): ImportedCleaned {
   const kept = keptCleanedTabs(s.cleanedTabs);

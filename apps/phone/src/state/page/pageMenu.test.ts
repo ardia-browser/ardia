@@ -263,3 +263,10 @@ test("Open in Default Browser is offered only when the system lets Ardia ask and
   assert.equal(menuModel(input({ isDefaultBrowser: true, canOfferDefaultBrowser: true })).offersDefaultBrowser, false);
   assert.equal(menuModel(input({ isDefaultBrowser: false, canOfferDefaultBrowser: false })).offersDefaultBrowser, false);
 });
+
+test("the page menu's switches that close the menu and reload the page say so in their hint, and the one that changes in place has none", async () => {
+  const { menuSwitchHint, MENU_SWITCH_RELOAD_HINT } = await import("./pageMenu.ts");
+  assert.equal(menuSwitchHint("blockers"), MENU_SWITCH_RELOAD_HINT);
+  assert.equal(menuSwitchHint("desktopSite"), MENU_SWITCH_RELOAD_HINT);
+  assert.equal(menuSwitchHint("nightShade"), undefined);
+});

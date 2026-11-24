@@ -60,18 +60,18 @@
   "profile swipe (next profile)": {
    "layoutPasses": 41,
    "mountBatches": 17,
-   "uiBlocks": 731,
-   "viewUpdates": 263,
-   "commits": 16,
-   "hostUpdates": 2277
+   "uiBlocks": 106,
+   "viewUpdates": 20,
+   "commits": 4,
+   "hostUpdates": 288
   },
   "profile swipe (previous profile)": {
    "layoutPasses": 24,
    "mountBatches": 4,
-   "uiBlocks": 366,
-   "viewUpdates": 257,
+   "uiBlocks": 109,
+   "viewUpdates": 21,
    "commits": 4,
-   "hostUpdates": 2227
+   "hostUpdates": 288
   },
   "sidebar scroll (200 tabs, flick down and back)": {
    "layoutPasses": 31,

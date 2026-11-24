@@ -34,6 +34,14 @@ extension SearchStageView {
     return StageAnchor(id: id, frame: frame, style: view.traitCollection.userInterfaceStyle)
   }
 
+  var anchorMissReason: String {
+    guard let id = anchorNativeId else { return "noAnchorId" }
+    guard let root = window else { return "noWindow" }
+    guard let view = Self.find(nativeId: id, in: root) else { return "anchorNotFound" }
+    guard view.window != nil else { return "anchorOffWindow" }
+    return "anchorEmpty"
+  }
+
   func renderFace(of anchor: StageAnchor) -> StageFace? {
     guard let root = window, let view = Self.find(nativeId: faceNativeId ?? anchor.id, in: root), view.bounds.width > 0, view.bounds.height > 0 else { return nil }
     let size = anchor.frame.size
@@ -90,14 +98,34 @@ extension SearchStageView {
 
 struct StageMorphLook {
   var usesGlass = true
+  var frosted = false
   var panelTint: UIColor = .clear
   var panelStyle: UIUserInterfaceStyle = .unspecified
   var classicPanel: UIColor = .secondarySystemBackground
+  var classicChrome = ClassicChrome()
+}
+
+struct StageCardPlace {
+  var cardInset: CGFloat = BrowseLayout.panelInset
+  var cardGap: CGFloat = BrowseLayout.panelAboveKeyboard
+  var fieldInset: CGFloat = BrowseLayout.panelFieldInset
+  var fieldTop: CGFloat = BrowseLayout.panelFieldInset
+}
+
+struct StageCorners {
+  var anchor: CGFloat?
+  var panel: CGFloat = BrowseLayout.panelRadius
+  var field: CGFloat?
+
+  func anchor(height: CGFloat) -> CGFloat { min(anchor ?? height / 2, height / 2) }
+  func field(height: CGFloat) -> CGFloat { min(field ?? height / 2, height / 2) }
 }
 
 @MainActor
 final class StageEmergence {
   private let pill: CGRect
+  private let corners: StageCorners
+  private let place: StageCardPlace
   private let fieldCenter: CGFloat
   private let mask = CALayer()
   private let cardLens = CALayer()
@@ -124,8 +152,10 @@ final class StageEmergence {
     return face.layer.opacity == 0 && (face.layer.animationKeys() ?? []).isEmpty
   }
 
-  init(pill: CGRect, fieldCenter: CGFloat, face: UIView?, on tray: UIView) {
+  init(pill: CGRect, fieldCenter: CGFloat, corners: StageCorners, place: StageCardPlace, face: UIView?, on tray: UIView) {
     self.pill = pill
+    self.corners = corners
+    self.place = place
     self.fieldCenter = fieldCenter
     self.face = face
     CATransaction.begin()
@@ -155,11 +185,11 @@ final class StageEmergence {
     CATransaction.setDisableActions(true)
     mask.frame = tray.bounds
     cardLens.frame = cardWindow
-    cardLens.cornerRadius = isOpen ? BrowseLayout.panelRadius : closed.height / 2
+    cardLens.cornerRadius = isOpen ? corners.panel : corners.anchor(height: closed.height)
     fieldLens.frame = field
-    fieldLens.cornerRadius = field.height / 2
+    fieldLens.cornerRadius = isOpen ? corners.field(height: field.height) : corners.anchor(height: field.height)
     shadowLens.frame = card.insetBy(dx: -Self.shadowRoom, dy: -Self.shadowRoom)
-    shadowLens.cornerRadius = BrowseLayout.panelRadius + Self.shadowRoom
+    shadowLens.cornerRadius = corners.panel + Self.shadowRoom
     CATransaction.commit()
     UIView.performWithoutAnimation { face?.center = CGPoint(x: card.midX, y: fieldCenter) }
     guard isOpen, !isOpening else { return }
@@ -186,7 +216,8 @@ final class StageEmergence {
     let shown = tray.layer.presentation() ?? tray.layer
     let window = cardNow.union(fieldNow).intersection(card)
     let frame = shown.convert(window.isNull ? card : window, to: stage.layer.presentation() ?? stage.layer)
-    return StageMorph.Start(frame: frame, radius: min(BrowseLayout.panelRadius, frame.height / 2))
+    let radiusNow = (cardLens.presentation() ?? cardLens).cornerRadius
+    return StageMorph.Start(frame: frame, radius: min(radiusNow, frame.height / 2))
   }
 
   func end(on tray: UIView) {
@@ -202,11 +233,11 @@ final class StageEmergence {
   }
 
   private func fieldFrame(in card: CGRect) -> CGRect {
-    let height = 2 * (fieldCenter - BrowseLayout.panelFieldInset) + 2 * Self.fieldClearance
+    let height = 2 * (fieldCenter - place.fieldTop) + 2 * Self.fieldClearance
     return CGRect(
-      x: card.minX + BrowseLayout.panelFieldInset - Self.fieldClearance,
+      x: card.minX + place.fieldInset - Self.fieldClearance,
       y: fieldCenter - height / 2,
-      width: card.width - 2 * BrowseLayout.panelFieldInset + 2 * Self.fieldClearance,
+      width: card.width - 2 * place.fieldInset + 2 * Self.fieldClearance,
       height: height
     )
   }
@@ -219,14 +250,14 @@ final class StageEmergence {
       Self.spring("position.x", field.from.midX, field.to.midX, on: Motion.stageOpenWiden),
       Self.spring("bounds.size.height", field.from.height, field.to.height, on: Motion.stageOpenWiden),
       Self.spring("position.y", field.from.midY, field.to.midY, on: Motion.stageOpenWiden),
-      Self.spring("cornerRadius", field.from.height / 2, field.to.height / 2, on: Motion.stageOpenWiden),
+      Self.spring("cornerRadius", corners.anchor(height: field.from.height), corners.field(height: field.to.height), on: Motion.stageOpenWiden),
     ])
     Self.group(on: cardLens, [
       Self.spring("bounds.size.width", card.from.width, card.to.width, on: Motion.stageOpenWiden),
       Self.spring("position.x", card.from.midX, card.to.midX, on: Motion.stageOpenWiden),
       Self.spring("bounds.size.height", card.from.height, card.to.height, on: Motion.stageDeepen, after: deepenAt),
       Self.spring("position.y", card.from.midY, card.to.midY, on: Motion.stageDeepen, after: deepenAt),
-      Self.capsuleRadius(heights: Span(from: card.from.height, to: card.to.height), cap: radius.to, on: Motion.stageDeepen, after: deepenAt),
+      Self.deepeningRadius(heights: Span(from: card.from.height, to: card.to.height), radii: radius, on: Motion.stageDeepen, after: deepenAt),
     ])
     let shadowFade = CABasicAnimation(keyPath: "opacity")
     shadowFade.fromValue = 0
@@ -253,7 +284,7 @@ final class StageEmergence {
     return spring
   }
 
-  private static func capsuleRadius(heights: Span<CGFloat>, cap: CGFloat, on timing: Spring, after delay: CFTimeInterval) -> CAAnimation {
+  private static func deepeningRadius(heights: Span<CGFloat>, radii: Span<CGFloat>, on timing: Spring, after delay: CFTimeInterval) -> CAAnimation {
     let steps = max(Int(timing.settlingDuration * 120), 2)
     var values: [CGFloat] = []
     var keyTimes: [NSNumber] = []
@@ -261,7 +292,8 @@ final class StageEmergence {
       let fraction = Double(step) / Double(steps)
       let progress = timing.criticalProgress(at: fraction * timing.settlingDuration)
       let height = heights.from + (heights.to - heights.from) * CGFloat(progress)
-      values.append(min(height / 2, cap))
+      let radius = radii.from + (radii.to - radii.from) * CGFloat(progress)
+      values.append(min(height / 2, radius))
       keyTimes.append(NSNumber(value: fraction))
     }
     let animation = CAKeyframeAnimation(keyPath: "cornerRadius")
@@ -286,12 +318,15 @@ final class StageEmergence {
 final class StageMorph {
   let view: StageMorphView
   private(set) var hasFlown = false
+  private let corners: StageCorners
+  private let startsFromEmergence: Bool
   private var destination: CGRect?
   private var flight: UIViewPropertyAnimator?
   private var folding: [UIViewPropertyAnimator] = []
   private var fades: [UIViewPropertyAnimator] = []
 
   private static let landedTolerance: CGFloat = 0.17
+  private static let visiblyLandedWithin: CGFloat = 8
 
   struct Start {
     var frame: CGRect
@@ -301,23 +336,31 @@ final class StageMorph {
   var hasDestination: Bool { destination != nil }
   var isShown: Bool { !view.isHidden }
 
+  var isVisiblyLanded: Bool {
+    guard let destination, let shown = view.layer.presentation()?.frame else { return false }
+    return Self.gap(between: shown, and: destination) <= Self.visiblyLandedWithin
+  }
+
   var isMoving: Bool {
     guard let flight, flight.isRunning || folding.contains(where: \.isRunning) else { return false }
     guard let destination, let shown = view.layer.presentation()?.frame else { return true }
     return Self.gap(between: shown, and: destination) > Self.landedTolerance
   }
 
-  init(card: CGRect, fieldCenter: CGFloat, of tray: UIView, in stage: UIView, look: StageMorphLook, from start: Start?) {
+  init(card: CGRect, fieldCenter: CGFloat, corners: StageCorners, of tray: UIView, in stage: UIView, look: StageMorphLook, from start: Start?) {
+    self.corners = corners
+    startsFromEmergence = start != nil
     let cardFrame = tray.convert(card, to: stage).offsetBy(dx: 0, dy: Self.unfinishedTravel(of: tray))
     let snapshot = tray.resizableSnapshotView(from: card, afterScreenUpdates: false, withCapInsets: .zero)
     view = StageMorphView(look: look, contents: snapshot, cardSize: card.size, fieldCenter: fieldCenter)
-    view.shape(to: start?.frame ?? cardFrame, radius: start?.radius ?? BrowseLayout.panelRadius)
+    view.shape(to: start?.frame ?? cardFrame, radius: start?.radius ?? corners.panel)
     view.isHidden = true
     stage.addSubview(view)
   }
 
-  func fly(to target: CGRect, style: UIUserInterfaceStyle, carrying face: StageFace?, timing: UITimingCurveProvider, duration: TimeInterval) {
-    guard !hasFlown else { return }
+  @discardableResult
+  func fly(to target: CGRect, style: UIUserInterfaceStyle, carrying face: StageFace?, timing: UITimingCurveProvider, duration: TimeInterval, direct: Bool = false) -> TimeInterval {
+    guard !hasFlown else { return 0 }
     hasFlown = true
     destination = target
     appear()
@@ -325,6 +368,18 @@ final class StageMorph {
     if let face {
       UIView.performWithoutAnimation { view.carry(face.makeView()) }
       fades.append(Self.run(Motion.stageFaceArrival, after: Motion.stageFaceArrivalDelay) { [view] in view.faceSlot.alpha = 1 })
+    }
+    if direct {
+      let travel = UIViewPropertyAnimator(duration: duration, timingParameters: timing)
+      let landed = corners.anchor(height: target.height)
+      travel.addAnimations { [view] in
+        view.shape(to: target, radius: landed)
+        view.settle(style: style)
+      }
+      travel.startAnimation()
+      flight = travel
+      folding = []
+      return duration
     }
     let start = view.frame
     let radius = view.radius
@@ -336,14 +391,17 @@ final class StageMorph {
       view.settle(style: style)
     }
     let fold = UIViewPropertyAnimator(duration: Motion.stageFold.settlingDuration, timingParameters: Motion.stageFold.stageTimingParameters)
-    fold.addAnimations { [view] in view.shape(to: folded, radius: target.height / 2) }
+    let landed = corners.anchor(height: target.height)
+    fold.addAnimations { [view] in view.shape(to: folded, radius: landed) }
     let narrow = UIViewPropertyAnimator(duration: Motion.stageWiden.settlingDuration, timingParameters: Motion.stageWiden.stageTimingParameters)
-    narrow.addAnimations { [view] in view.shape(to: target, radius: target.height / 2) }
+    narrow.addAnimations { [view] in view.shape(to: target, radius: landed) }
     travel.startAnimation()
     fold.startAnimation(afterDelay: Motion.stageFoldLag)
     narrow.startAnimation(afterDelay: Motion.stageFoldLag + Motion.stageFold.time(toReach: Motion.stageFoldBeforeNarrowing))
     flight = travel
     folding = [fold, narrow]
+    let narrowing = Motion.stageFoldLag + Motion.stageFold.time(toReach: Motion.stageFoldBeforeNarrowing)
+    return max(duration, narrowing + Motion.stageWiden.settlingDuration)
   }
 
   func vanish() {
@@ -355,18 +413,8 @@ final class StageMorph {
   }
 
   func handOff() {
-    if let destination {
-      flight?.stopAnimation(true)
-      folding.forEach { $0.stopAnimation(true) }
-      UIView.performWithoutAnimation {
-        view.shape(to: destination, radius: destination.height / 2)
-        view.alpha = 0
-      }
-      DispatchQueue.main.async { self.remove() }
-      return
-    }
     let fade = Self.run(Motion.stageHandOff) { [view] in view.alpha = 0 }
-    fade.addCompletion { _ in self.remove() }
+    fade.addCompletion { [weak self] _ in self?.remove() }
   }
 
   func remove() {
@@ -378,6 +426,19 @@ final class StageMorph {
 
   func appear() {
     UIView.performWithoutAnimation { view.isHidden = false }
+  }
+
+  func restart(fromCard card: CGRect, of tray: UIView, in stage: UIView) {
+    guard !hasFlown, !startsFromEmergence else { return }
+    let frame = Self.shownCard(card, of: tray, in: stage)
+    guard !frame.isEmpty else { return }
+    UIView.performWithoutAnimation { view.shape(to: frame, radius: min(view.radius, frame.height / 2)) }
+  }
+
+  private static func shownCard(_ card: CGRect, of tray: UIView, in stage: UIView) -> CGRect {
+    let shown = (tray.layer.presentation() ?? tray.layer).convert(card, to: stage.layer.presentation() ?? stage.layer)
+    guard shown.maxY > stage.bounds.maxY else { return shown }
+    return CGRect(x: shown.minX, y: shown.minY, width: shown.width, height: max(stage.bounds.maxY - shown.minY, 0))
   }
 
   private func startFades() {
@@ -420,15 +481,24 @@ final class StageMorphView: UIView {
     if look.usesGlass {
       surface = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
       classicFill = nil
+    } else if look.frosted {
+      let frost = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
+      frost.contentView.backgroundColor = look.classicPanel
+      frost.clipsToBounds = true
+      frost.layer.cornerCurve = .continuous
+      surface = frost
+      classicFill = .systemBackground
     } else {
       surface = UIView()
       surface.backgroundColor = look.classicPanel
-      surface.layer.borderWidth = 0.5
-      surface.layer.borderColor = UIColor.label.withAlphaComponent(0.12).cgColor
+      let edgeTraits = look.panelStyle == .unspecified ? UITraitCollection.current : UITraitCollection(userInterfaceStyle: look.panelStyle)
+      surface.layer.borderWidth = CGFloat(look.classicChrome.edgeWidth)
+      surface.layer.borderColor = look.classicChrome.edge?.resolvedColor(with: edgeTraits).cgColor
       surface.layer.cornerCurve = .continuous
       classicFill = .systemBackground
     }
     super.init(frame: .zero)
+    surface.layer.cornerCurve = .continuous
     isUserInteractionEnabled = false
     accessibilityElementsHidden = true
     contents.clipsToBounds = true
@@ -481,6 +551,11 @@ final class StageMorphView: UIView {
 
   func settle(style: UIUserInterfaceStyle) {
     surface.overrideUserInterfaceStyle = style
-    if let classicFill { surface.backgroundColor = classicFill }
+    guard let classicFill else { return }
+    if let frost = surface as? UIVisualEffectView {
+      frost.contentView.backgroundColor = classicFill
+    } else {
+      surface.backgroundColor = classicFill
+    }
   }
 }

@@ -16,9 +16,9 @@ extension PeekStage {
       return shownCard.contains(p) ? self : scrim.hitTest(p)
     }
     if motion.phase == .waiting { return shownCard.contains(p) ? self : scrim.hitTest(p) }
-    if PeekInputRoute.matches(self, windowPoint: convert(p, to: nil)) { return page.hitTest(p) ?? self }
+    if PeekInputRoute.matches(self, windowPoint: convert(p, to: nil)) { return page.hitTest(lastFrame.page.apply(p)) ?? self }
     if !mapsInput { return super.hitTest(point) }
-    if lastFrame.shownPage.contains(p) { return page.hitTest(lastFrame.page.inverse.apply(p)) ?? self }
+    if lastFrame.shownPage.contains(p) { return page.hitTest(p) ?? self }
     if shownCard.contains(p) { return chrome.hitTest(lastFrame.card.inverse.apply(p)) ?? self }
     return scrim.hitTest(p)
   }

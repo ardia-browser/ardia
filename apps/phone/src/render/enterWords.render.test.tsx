@@ -15,7 +15,7 @@ afterEach(() => {
 
 test("Enter Words is pushed over the connect page, which stays beneath and hidden from screen readers, and its counter and footer crossfade", async () => {
   const root = renderSurface(<SyncConnect onClose={() => undefined} onConnected={() => undefined} />);
-  await pressButton(root, "Enter Words");
+  await pressButton(root, "Enter Recovery Phrase");
   act(() => jest.runOnlyPendingTimers());
   expect(root.root.findAll((node) => node.props.testID === "enterWordsPushed" && typeof node.type === "string")).toHaveLength(1);
   expect(textOf(root)).toContain("Connect to Your Mac");
@@ -30,7 +30,7 @@ test("Enter Words is pushed over the connect page, which stays beneath and hidde
 
 test("the phrase field takes each platform's keyboard: ASCII on iPhone, dismissed by a drag, and Android's visible-password keyboard", async () => {
   const root = renderSurface(<SyncConnect onClose={() => undefined} onConnected={() => undefined} />);
-  await pressButton(root, "Enter Words");
+  await pressButton(root, "Enter Recovery Phrase");
   act(() => jest.runOnlyPendingTimers());
   const field = root.root.findAll((node) => node.props.accessibilityLabel === "Recovery Phrase" && typeof node.props.onChangeText === "function")[0]!;
   expect(field.props.keyboardType).toBe(Platform.OS === "ios" ? "ascii-capable" : "visible-password");

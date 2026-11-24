@@ -3,14 +3,14 @@ import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
 const { sidebarEntries } = await import("./entries.ts");
 const { rowSpan } = await import("./geometry.ts");
-const { sidebarMenuItems } = await import("./sidebarMenu.ts");
+const { browserLayoutItems } = await import("./sidebarMenu.ts");
 const fold = await import("./pinnedFold.ts");
 const { flushPersistence, loadSession, startPersistence } = await import("../session/persist.ts");
 const stub = await import("../../test-native/index.ts");
 
 const S = () => useBrowser.getState();
 const collapsed = () => fold.pinnedCollapsed(S(), "default");
-const foldItem = (w) => sidebarMenuItems(S(), w).find((it) => it.id === "pinnedFold");
+const foldItem = (w) => browserLayoutItems(S(), w).find((it) => it.id === "pinnedFold");
 
 function windowWith(...hosts) {
   S().hydrate({});
@@ -33,14 +33,14 @@ test("the toggle collapses and expands one profile's pinned section, and leaves 
   assert.equal(S().profiles["incognito:w@default"], undefined, "a profile that isn't saved has nothing to remember");
 });
 
-test("the sidebar menu says Collapse or Expand Pinned Tabs, is off with nothing pinned, and isn't there with tabs on top", () => {
+test("Browser Layout says Collapse or Expand Pinned Tabs, only once something is pinned, and isn't there with tabs on top", () => {
   const { w, ids } = windowWith("a", "b", "c");
-  assert.deepEqual(foldItem(w), { id: "pinnedFold", title: "Collapse Pinned Tabs", symbol: "rectangle.compress.vertical", enabled: false });
+  assert.equal(foldItem(w), undefined);
   S().pinTabs([ids[1]], true, true);
-  assert.equal(foldItem(w).enabled, true);
+  assert.deepEqual(foldItem(w), { id: "pinnedFold", title: "Collapse Pinned Tabs", symbol: "rectangle.compress.vertical" });
   fold.runPinnedFold(w, "pinnedFold");
   assert.equal(collapsed(), true);
-  assert.deepEqual(foldItem(w), { id: "pinnedFold", title: "Expand Pinned Tabs", symbol: "rectangle.expand.vertical", enabled: true });
+  assert.deepEqual(foldItem(w), { id: "pinnedFold", title: "Expand Pinned Tabs", symbol: "rectangle.expand.vertical" });
   assert.equal(fold.runPinnedFold(w, "newTab"), false);
   fold.runPinnedFold(w, "pinnedFold");
   assert.equal(collapsed(), false);

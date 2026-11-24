@@ -17,7 +17,7 @@ const LIGHT: typeof DARK = {
   zoneDash: "rgba(0,0,0,0.1)",
 };
 
-export type SplitColors = typeof DARK;
+type SplitColors = typeof DARK;
 
 export const splitColors = (dark: boolean): SplitColors => (dark ? DARK : LIGHT);
 

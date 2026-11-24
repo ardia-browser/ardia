@@ -1,2 +1,2 @@
-export { completeInline, copyFieldAs, dictationAvailable, startDictation } from "../../platform/text";
+export { completeInline, copyFieldAs, dictationAvailable, keepInlineWhileTyping, startDictation, takeKeptInline } from "../../platform/text";
 export { caretAllowsInline, selectInlineCompletion } from "../../platform/inlineSelection";

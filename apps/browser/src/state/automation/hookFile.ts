@@ -1,11 +1,11 @@
 import { isFields, type Fields } from "../../lib/decode";
 import { parseMatchPattern, type MatchSpec } from "../../lib/matchPattern";
-import { sha256 } from "../../lib/sha256";
+import { hexOf, sha256 } from "../../lib/sha256";
 import { MIN_IDLE_SECONDS, TAB_IDLE_EVENTS, USER_IDLE_EVENTS, isAutomationEvent, isDecideEvent, type DecideEvent } from "./eventNames";
 
 export const HOOKS_FILE = "hooks.json";
-export const MAX_HOOKS = 200;
-export const MAX_REWRITES = 50;
+const MAX_HOOKS = 200;
+const MAX_REWRITES = 50;
 
 const KEYS = [
   "name", "on", "at", "days", "timezone", "every", "match", "run", "command", "arg", "timeout", "idle", "fullUrls",
@@ -25,7 +25,7 @@ const OPEN_MODES = ["tab", "littleArdia", "window"] as const;
 
 export type Rewrite = { pattern: string; spec: MatchSpec; to: string };
 export type Route = { profile: string | null; open: (typeof OPEN_MODES)[number] | null };
-export type DecideRules = {
+type DecideRules = {
   rewrite?: Rewrite[];
   cancel?: true;
   route?: Route;
@@ -33,7 +33,7 @@ export type DecideRules = {
   folder?: string;
   permission?: "allow" | "deny" | "ask";
 };
-export type OmniboxSpec = { title: string; keyword: string | null; global: boolean };
+type OmniboxSpec = { title: string; keyword: string | null; global: boolean };
 
 export type HookSpec = {
   name: string;
@@ -52,17 +52,15 @@ export type HookSpec = {
   scheduled: boolean;
 };
 
-export type HooksRead = { hooks: HookSpec[]; problems: string[] };
+type HooksRead = { hooks: HookSpec[]; problems: string[] };
 
-export function canonicalJson(value: unknown): string {
+function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   if (isFields(value)) return `{${Object.keys(value).sort().map((k) => `${JSON.stringify(k)}:${canonicalJson(value[k])}`).join(",")}}`;
   return JSON.stringify(value) ?? "null";
 }
 
-const hex = (bytes: Uint8Array) => Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-
-export const hookRevision = (raw: Fields) => hex(sha256(canonicalJson(raw))).slice(0, 32);
+export const hookRevision = (raw: Fields) => hexOf(sha256(canonicalJson(raw))).slice(0, 32);
 
 export function parseDuration(value: unknown): number | null {
   if (typeof value !== "string") return null;

@@ -54,7 +54,7 @@ const EVERY_ENTRY_POINT = {
   bar: true,
   organize: ["bookmark", "folder", "import", "export"],
   unshown: [],
-  cli: true,
+  cli: false,
   menuDisabled: false,
 };
 

@@ -151,7 +151,7 @@ void HandlesAndProfiles() {
   }
   assert(IsContentBlockerCall("contentBlocker.state") && !IsContentBlockerCall("sites.settings"));
   const auto capabilities = Capabilities();
-  assert(capabilities.size() == 17);
+  assert(capabilities.size() == 19);
   for (const auto name : capabilities) assert(Handles(name) && name != "contentBlocker.devDelayNextLoad");
   auto route = [](std::string_view name, std::string_view requested) { return RouteProfile(name, requested, false); };
   auto from_private = [](std::string_view name, std::string_view requested) { return RouteProfile(name, requested, true); };
@@ -439,6 +439,40 @@ void CustomFilterLists() {
   assert(PrivateBlockerRefusal("contentBlocker.removeList", id_args, true)->code == "ERR_PROFILE_PRIVATE");
   assert(!PrivateBlockerRefusal("contentBlocker.addList", url_args, false));
   assert(!PrivateBlockerRefusal("contentBlocker.removeList", id_args, false));
+  const auto removed_allowed = PrepareBlockerCall("contentBlocker.removeAllowed", base::DictValue().Set("host", "Shop.Example.com"));
+  assert(std::get<BlockerRequest>(removed_allowed).op == BlockerOp::kRemoveAllowed);
+  assert(std::get<BlockerRequest>(removed_allowed).host == "shop.example.com");
+  for (const char* host : {"", "*.example.com", "example.com/x", "a b", "example.com\nfoo"}) {
+    assert(AsFailure(PrepareBlockerCall("contentBlocker.removeAllowed", base::DictValue().Set("host", host))));
+  }
+  assert(AsFailure(PrepareBlockerCall("contentBlocker.removeAllowed", base::DictValue().Set("host", "example.com").Set("allowed", base::Value(false)))));
+  assert(Mutates(BlockerOp::kRemoveAllowed));
+  const base::Value removed_yes(true);
+  const base::Value removed_no(false);
+  assert(ChangedBlocker(BlockerOp::kRemoveAllowed, &removed_yes));
+  assert(!ChangedBlocker(BlockerOp::kRemoveAllowed, &removed_no));
+  assert(!ChangedBlocker(BlockerOp::kRemoveAllowed, nullptr));
+  assert(ChangedBlocker(BlockerOp::kSetAllowed, &removed_no));
+  assert(!ChangedBlocker(BlockerOp::kIsAllowed, &removed_yes));
+  assert(WaitsForFollowers(BlockerOp::kRemoveAllowed) && !WaitsForFollowers(BlockerOp::kSetAllowed));
+  {
+    auto all_followed = AfterFollowers(base::Value(base::DictValue().Set("removed", base::Value(true))), 0);
+    assert(std::holds_alternative<base::Value>(all_followed));
+    auto partial = AfterFollowers(base::Value(base::DictValue().Set("removed", base::Value(true))), 1);
+    assert(std::get<Failure>(partial).code == "ERR_PARTIAL");
+    auto earlier_failure = AfterFollowers(Failure{"ERR_X", "x"}, 2);
+    assert(std::get<Failure>(earlier_failure).code == "ERR_X");
+  }
+  assert(BridgeOpName(BlockerOp::kRemoveAllowed) == "removeAllowed");
+  assert(PrivateBlockerRefusal("contentBlocker.removeAllowed", base::DictValue().Set("host", "example.com"), true)->code == "ERR_PROFILE_PRIVATE");
+  auto registrable = PrepareServiceCall("sites.registrableDomains", base::DictValue().Set("hosts", base::Value(base::ListValue().Append(base::Value("a.example.com")).Append(base::Value("ardia-probe.a.example.com")))));
+  assert(std::get<ServiceRequest>(registrable).service == "ac_registrable_domains");
+  assert(AsFailure(PrepareServiceCall("sites.registrableDomains", base::DictValue())));
+  assert(AsFailure(PrepareServiceCall("sites.registrableDomains", base::DictValue().Set("hosts", base::Value(base::ListValue())))));
+  assert(AsFailure(PrepareServiceCall("sites.registrableDomains", base::DictValue().Set("hosts", base::Value(base::ListValue().Append(base::Value(3)))))));
+  auto domains = CompleteServiceCall("sites.registrableDomains", base::Value(base::DictValue().Set("domains", base::Value(base::ListValue().Append(base::Value("example.com")).Append(base::Value("example.com"))))));
+  assert(std::get<base::Value>(domains).GetDict().Find("domains")->GetList().size() == 2);
+  assert(Handles("sites.registrableDomains") && Handles("contentBlocker.removeAllowed"));
   assert(BridgeOpName(BlockerOp::kAddList) == "addList");
   assert(BridgeOpName(BlockerOp::kRemoveList) == "removeList");
 

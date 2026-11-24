@@ -4,7 +4,7 @@ import { createElement, type ComponentType, type ReactNode } from "react";
 import { Platform } from "react-native";
 import type { LookColors } from "./look";
 
-export type ModifierConfig = { $type: string; [key: string]: unknown; eventListener?: (args: unknown) => void };
+type ModifierConfig = { $type: string; [key: string]: unknown; eventListener?: (args: unknown) => void };
 
 type ModifierHelpers = {
   createModifier: (type: string, params?: Record<string, unknown>) => ModifierConfig;
@@ -29,7 +29,7 @@ export const SETTINGS_UI_MODULE = "ArdiaPhoneSettingsUI";
 
 export const settingsUIAvailable = () => requireOptionalNativeModule(SETTINGS_UI_MODULE) !== null;
 
-export type SettingsPieceProps = { testID?: string; modifiers?: ModifierConfig[]; children?: ReactNode };
+type SettingsPieceProps = { testID?: string; modifiers?: ModifierConfig[]; children?: ReactNode };
 
 const views = new Map<string, ComponentType<object>>();
 
@@ -52,7 +52,7 @@ export const SettingsHeroContent = piece<SettingsPieceProps & { title: string; s
 
 export const SetupStepRow = piece<SettingsPieceProps & { number: number; title: string; detail: string; progress: SetupProgress }>("SetupStepRowView");
 
-export const ColorSwatch = piece<SettingsPieceProps & { preset: ProfilePresetName; isSelected: boolean }>("ColorSwatchView");
+export const ColorSwatch = piece<SettingsPieceProps & { preset: ProfilePresetName; isSelected: boolean; colors?: string[]; ring?: string }>("ColorSwatchView");
 
 export const CheckmarkLabel = piece<SettingsPieceProps & { title: string; isChecked: boolean }>("CheckmarkLabelView");
 
@@ -138,4 +138,13 @@ export const minListRowHeight = (height: number) => ardia("minListRowHeight", { 
 
 export const contentMargins = (params: { edges: "top" | "bottom" | "all"; length: number }) => ardia("contentMargins", params);
 
+export const bouncesOnlyWhenScrollable = () => ardia("bouncesOnlyWhenScrollable");
+
 export const modifierList = (...items: (ModifierConfig | null | undefined | false)[]): ModifierConfig[] => items.filter((item): item is ModifierConfig => !!item);
+
+export const accessibilityFocusRequest = (request: number) => ardia("accessibilityFocusRequest", { request });
+
+export const onWidthChange = (handler: (width: number) => void): ModifierConfig | null => {
+  const modifier = ardia("widthChange");
+  return modifier && { ...modifier, eventListener: (args: unknown) => handler((args as { width: number }).width) };
+};

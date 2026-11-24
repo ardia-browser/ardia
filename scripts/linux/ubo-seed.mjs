@@ -3,9 +3,9 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { launchArdia } from "../../apps/linux/scripts/acceptance/lib/ardia.mjs";
-import { connectCdp, evaluate } from "../../apps/linux/scripts/acceptance/lib/cdp.mjs";
-import { until } from "../../apps/linux/scripts/acceptance/lib/util.mjs";
+import { launchArdia } from "../../apps/desktop/scripts/acceptance/lib/ardia.mjs";
+import { connectCdp, evaluate } from "../../apps/desktop/scripts/acceptance/lib/cdp.mjs";
+import { until } from "../../apps/desktop/scripts/acceptance/lib/util.mjs";
 
 const USAGE = `usage: node scripts/linux/ubo-seed.mjs --chrome FILE --ui DIR --blocker DIR [--timeout-ms N]
 
@@ -18,12 +18,20 @@ seed into an empty profile when the profile's languages select no list the seed
 lacks. Run it on the staged copy package.py makes, never on the vendor copy.
 
   --chrome FILE     the engine's chrome executable
-  --ui DIR          the shell UI bundle (apps/linux/dist)
+  --ui DIR          the shell UI bundle (apps/desktop/dist/linux)
   --blocker DIR     the staged uBlock Origin directory to seed
   --timeout-ms N    deadline for uBlock Origin to save its engine (default 240000)`;
 
 export const SEED_PATH = "ardia-seed/storage.json";
-export const SELFIE_KEYS = ["cache/selfie/staticMain", "cache/selfie/staticNetFilteringEngine", "cache/selfie/staticExtFilteringEngine"];
+
+export function selfieKeys(storageSource) {
+  const keys = [...storageSource.matchAll(/\bio\.toCache\('(selfie\/static[\w/-]+)',/g)].map(([, key]) => `cache/${key}`);
+  return ["Main", "NetFilteringEngine", "ExtFilteringEngine"].map((component) => {
+    const matches = keys.filter((key) => key.endsWith(component));
+    if (matches.length !== 1) throw new Error(`js/storage.js must save exactly one selfie key for ${component}`);
+    return matches[0];
+  });
+}
 
 const START_ANCHOR = "µb.isReadyPromise = (async function start() {\n    try {\n";
 const SEED_LOADER = `const ardiaSeedFromPackage = async ( ) => {
@@ -61,10 +69,10 @@ export function defaultLists(assets) {
   return ["user-filters", ...Object.entries(assets).filter(([, list]) => list.content === "filters" && list.off !== true).map(([key]) => key)];
 }
 
-export function seedProblems(storage, assets) {
+export function seedProblems(storage, assets, keys) {
   const problems = [];
   if (typeof storage.version !== "string" || !storage.version) problems.push("no version");
-  for (const key of SELFIE_KEYS) if (typeof storage[key] !== "string" || !storage[key]) problems.push(`no ${key}`);
+  for (const key of keys) if (typeof storage[key] !== "string" || !storage[key]) problems.push(`no ${key}`);
   const selected = storage.selectedFilterLists;
   if (!Array.isArray(selected)) problems.push("no selectedFilterLists");
   else {
@@ -89,7 +97,7 @@ export function seedStorage(storage, assets) {
   return kept;
 }
 
-const SUMMARY = `chrome.storage.local.get(null).then((all) => JSON.stringify({ keys: Object.keys(all).length, version: all.version ?? null, selfie: ${JSON.stringify(SELFIE_KEYS)}.map((key) => typeof all[key] === "string" ? all[key].length : 0) }))`;
+const summaryFor = (keys) => `chrome.storage.local.get(null).then((all) => JSON.stringify({ keys: Object.keys(all).length, version: all.version ?? null, selfie: ${JSON.stringify(keys)}.map((key) => typeof all[key] === "string" ? all[key].length : 0) }))`;
 const EVERYTHING = "chrome.storage.local.get(null).then((all) => JSON.stringify(all))";
 
 async function blockerStorage(app, expression) {
@@ -110,6 +118,8 @@ const sameSummary = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 export async function seed({ chrome, ui, blocker, timeoutMs = 240000, log = console.error }) {
   const startPath = join(blocker, "js/start.js");
   const assets = JSON.parse(await readFile(join(blocker, "assets/assets.json"), "utf8"));
+  const keys = selfieKeys(await readFile(join(blocker, "js/storage.js"), "utf8"));
+  const summary = summaryFor(keys);
   await writeFile(startPath, patchStart(await readFile(startPath, "utf8")));
   await rm(join(blocker, "ardia-seed"), { recursive: true, force: true });
   const scratch = await mkdtemp(join(tmpdir(), "ardia-ubo-seed-"));
@@ -129,14 +139,14 @@ export async function seed({ chrome, ui, blocker, timeoutMs = 240000, log = cons
     let last = null;
     let stable = 0;
     await until(async () => {
-      const now = await blockerStorage(app, SUMMARY);
+      const now = await blockerStorage(app, summary);
       stable = saved(now) && sameSummary(now, last) ? stable + 1 : 0;
       last = now;
       return stable >= 2;
     }, { timeout: timeoutMs, interval: 1000, label: "uBlock Origin to save its engine", abort: () => app.exitReason() });
     const storage = await blockerStorage(app, EVERYTHING);
     if (!storage) throw new Error("could not read uBlock Origin's storage");
-    const problems = seedProblems(storage, assets);
+    const problems = seedProblems(storage, assets, keys);
     if (problems.length) throw new Error(`the seed is not the default list selection: ${problems.join("; ")}`);
     const kept = seedStorage(storage, assets);
     await mkdir(join(blocker, "ardia-seed"), { recursive: true });

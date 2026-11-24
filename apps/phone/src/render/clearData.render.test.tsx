@@ -54,6 +54,22 @@ test("clearing from today passes today's start to the website-data clear, so iPh
   cleared.mockRestore();
 });
 
+test("clearing history forgets Night Shade's remembered verdicts from the same range, since a list of hosts is history", async () => {
+  const forgot = jest.spyOn(pages, "forgetNightShadeVerdicts").mockImplementation(async () => undefined);
+  const now = new Date(2026, 10, 15, 14, 30).getTime();
+  jest.setSystemTime(now);
+  await act(async () => {
+    await clearBrowsingData({ history: true, cache: false, cookies: false, archive: false }, "today");
+  });
+  expect(forgot).toHaveBeenCalledWith(new Date(2026, 10, 15).getTime());
+  forgot.mockClear();
+  await act(async () => {
+    await clearBrowsingData({ history: false, cache: true, cookies: false, archive: false }, "allTime");
+  });
+  expect(forgot).not.toHaveBeenCalled();
+  forgot.mockRestore();
+});
+
 test("Clear Data asks in the drawn confirmation card, as iPhone's SwiftUI confirmation does, not the centred dialog", async () => {
   const { ConfirmDialog, ConfirmSheet } = require("../components/ui") as typeof import("../components/ui");
   const byTime = jest.spyOn(pages, "clearsWebsiteDataSince").mockImplementation(() => true);

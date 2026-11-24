@@ -4,6 +4,7 @@ import { curve } from "../ui/motion";
 import type { Anchor } from "../../state/sidebar/sidebarUi";
 import { hoverCardAt, hoverCardBox, type HoverCardFrame } from "./hoverPlacement";
 import { SIDEBAR_MOTION } from "./tokens";
+import { whenRowsStill } from "../../state/sidebar/hover";
 
 export const HOVER_CARD_FADE_MS = SIDEBAR_MOTION.hoverCardFade;
 
@@ -11,7 +12,7 @@ const fade = curve.fade;
 
 const HoverCardFrameContext = createContext<HoverCardFrame>({ side: "left", windowWidth: 0, sidebarEdge: 0 });
 export const HoverCardFrameProvider = HoverCardFrameContext.Provider;
-export const useHoverCardFrame = () => useContext(HoverCardFrameContext);
+const useHoverCardFrame = () => useContext(HoverCardFrameContext);
 
 export function useHoverCardOrigin(anchor: Anchor) {
   const frame = useHoverCardFrame();
@@ -23,14 +24,14 @@ function createMotion() {
   return { opacity, style: { opacity } };
 }
 
-export const hoverCardMotions = new Map<string, ReturnType<typeof createMotion>>();
+const hoverCardMotions = new Map<string, ReturnType<typeof createMotion>>();
 
 export function useHoverCardMotion<T>(key: string, target: T | null) {
   const [motion] = useState(createMotion);
   const [drawn, setDrawn] = useState<T | null>(null);
   const [leaving, setLeaving] = useState(false);
   const [entering, setEntering] = useState(false);
-  const state = useRef({ drawn: null as T | null, leaving: false, run: 0, fade: 0 });
+  const state = useRef({ drawn: null as T | null, leaving: false, run: 0, fade: 0, teardown: () => {} });
 
   useLayoutEffect(() => {
     if (!__DEV__) return;
@@ -41,6 +42,7 @@ export function useHoverCardMotion<T>(key: string, target: T | null) {
   useLayoutEffect(() => {
     const s = state.current;
     const run = ++s.run;
+    s.teardown();
     if (target) {
       const fresh = !s.drawn;
       const returning = s.leaving;
@@ -65,15 +67,24 @@ export function useHoverCardMotion<T>(key: string, target: T | null) {
     setLeaving(true);
     Animated.timing(motion.opacity, { toValue: 0, duration: HOVER_CARD_FADE_MS, easing: fade, useNativeDriver: true }).start(({ finished }) => {
       if (!finished || state.current.run !== run) return;
-      state.current.drawn = null;
-      state.current.leaving = false;
-      setDrawn(null);
-      setLeaving(false);
-      setEntering(false);
+      state.current.teardown = whenRowsStill(key, () => {
+        if (state.current.run !== run) return;
+        state.current.drawn = null;
+        state.current.leaving = false;
+        setDrawn(null);
+        setLeaving(false);
+        setEntering(false);
+      });
     });
   }, [target]);
 
-  useLayoutEffect(() => () => motion.opacity.stopAnimation(), []);
+  useLayoutEffect(
+    () => () => {
+      motion.opacity.stopAnimation();
+      state.current.teardown();
+    },
+    [],
+  );
 
   return { drawn, leaving, entering, motion };
 }

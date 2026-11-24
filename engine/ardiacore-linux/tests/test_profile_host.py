@@ -91,7 +91,7 @@ int main() {
             cpp = Path(scratch) / 'refuse.cc'
             binary = Path(scratch) / 'refuse'
             cpp.write_text(code.replace('ARDIA_NATIVE', functions))
-            result = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-I', str(ROOT / 'src'),
+            result = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-I', str(ROOT / 'src'), '-I', str(ROOT.parent / 'ardiacore-desktop' / 'src'),
                                      str(ROOT / 'src/ardia/linux/ac_linux_profiles.cc'), str(cpp), '-o', str(binary)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=30)

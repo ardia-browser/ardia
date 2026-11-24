@@ -4,34 +4,24 @@ import type { Tab } from "../browser/types";
 import { isIncognitoProfile, without } from "../browser/model";
 import { hostOf } from "@ardia/core";
 import { isString, listOf } from "../../lib/decode";
+import { cachedHostLookup } from "../../lib/url";
+
+const cachedHostOf = cachedHostLookup();
 
 export type MuteState = "site" | "tab" | null;
 
 type SiteMutes = Pick<BrowserState, "settings" | "privateSiteMutes">;
 type MutedTab = Pick<Tab, "url" | "windowId" | "profileId" | "muted">;
 
-export function isHostMuted(s: SiteMutes, tab: Pick<Tab, "windowId" | "profileId">, host: string): boolean {
+function isHostMuted(s: SiteMutes, tab: Pick<Tab, "windowId" | "profileId">, host: string): boolean {
   const own = isIncognitoProfile(tab.profileId) ? s.privateSiteMutes[tab.windowId]?.[host] : undefined;
   return own ?? s.settings.mutedSites.includes(host);
-}
-
-const HOST_CACHE_LIMIT = 512;
-const hosts = new Map<string, string>();
-
-function cachedHost(url: string): string {
-  let host = hosts.get(url);
-  if (host === undefined) {
-    if (hosts.size >= HOST_CACHE_LIMIT) hosts.clear();
-    host = hostOf(url);
-    hosts.set(url, host);
-  }
-  return host;
 }
 
 export function isSiteMuted(s: SiteMutes, tab: Omit<MutedTab, "muted">): boolean {
   const anyMuted = (s.settings.mutedSites?.length ?? 0) > 0 || (isIncognitoProfile(tab.profileId) && !!s.privateSiteMutes[tab.windowId]);
   if (!anyMuted || !tab.url) return false;
-  const host = cachedHost(tab.url);
+  const host = cachedHostOf(tab.url);
   return !!host && isHostMuted(s, tab, host);
 }
 
@@ -74,7 +64,6 @@ export function sessionWithOwnTabMutes(doc: SavedDoc): SavedDoc {
     parkedPins: parked,
   };
 }
-
 
 export type MuteSlice = {
   privateSiteMutes: Record<string, Record<string, boolean>>;

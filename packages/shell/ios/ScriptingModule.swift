@@ -1,11 +1,15 @@
 import ExpoModulesCore
 
-public class ScriptingModule: Module {
+public class ScriptingModule: Module, ScriptingNative {
   private let lifetime = ModuleLifetime()
 
+  static func setScriptState(_ state: [String: Any]) { ShellScripting.setState(state) }
+
+  static func replyToScript(_ id: String, _ result: [String: Any]?, _ error: String?) { ShellScripting.reply(id, result: result, error: error) }
+
   public func definition() -> ModuleDefinition {
-    Name("ArdiaScripting")
-    Events(ShellEvents.Channel.scriptCommand.rawValue)
+    Name(Self.moduleName)
+    Self.eventsDefinition
 
     OnCreate { self.lifetime.begin(self) { ShellEvents.retire(self) } }
 
@@ -16,9 +20,7 @@ public class ScriptingModule: Module {
       ShellEvents.detach(self)
     }
 
-    AsyncFunction("setScriptState") { (state: [String: Any]) in ShellScripting.setState(state) }
-    AsyncFunction("replyToScript") { (id: String, result: [String: Any]?, error: String?) in
-      ShellScripting.reply(id, result: result, error: error)
-    }.runOnQueue(.main)
+    Self.setScriptStateFunction
+    Self.replyToScriptFunction
   }
 }

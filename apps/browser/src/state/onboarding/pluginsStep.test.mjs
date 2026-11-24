@@ -5,7 +5,7 @@ const { useBrowser } = await import("../browser/store.ts");
 const { startPlugins } = await import("../plugins/start.ts");
 const { usePlugins } = await import("../plugins/store.ts");
 const lifecycle = await import("../plugins/lifecycle.ts");
-const { officialPlugins } = await import("../plugins/official.ts");
+const { officialPlugins, installOfficialPlugin } = await import("../plugins/official.ts");
 const { activeSteps, questionsFor, goToStep, startOnboarding, useOnboarding, QUESTION_ORDER, STEPS } = await import("./onboarding.ts");
 const { offeredInOnboarding, pluginsStepHasSomething } = await import("./pluginsOffer.ts");
 const step = await import("./pluginsStep.ts");
@@ -21,15 +21,23 @@ const settle = async () => {
 };
 const CLI = JSON.stringify({ manifest: 1, name: "cli", title: "Command Line", version: "0.3.0", alwaysOn: true, official: true, icon: "terminal.fill", permissions: ["control"], programs: [{ name: "ardia", path: "bin/ardia" }] });
 const TOOL = JSON.stringify({ manifest: 1, name: "tool", title: "Tool", alwaysOn: true, official: true, programs: [{ name: "tool-x", path: "bin/x" }] });
-const BUILT_IN = { status: "ok", folderId: "bundled", bundled: true };
+const BUILT_IN = { status: "ok", folderId: "bundled", official: true };
 const offered = (soon = false) => offeredInOnboarding(officialPlugins(P(), true, () => soon));
 const plugin = (state, name = "cli") => ({ name, title: name, blurb: "", icon: "terminal.fill", version: null, state });
 
-async function fresh(folders) {
+const pinOf = (entries) => entries.map((e, i) => ({ name: e.name, version: JSON.parse(e.text).version ?? "1.0.0", folderId: `official-${String(i + 1).repeat(64)}` }));
+
+async function fresh(entries) {
   host.linkResult = null;
   host.links.length = 0;
-  usePlugins.setState({ records: {}, programs: {}, consent: null });
-  host.folders = folders;
+  host.promotes.length = 0;
+  host.officialFetchLog.length = 0;
+  host.officialFetchResults = {};
+  host.officialFetchGate = null;
+  host.pinned = pinOf(entries);
+  host.officialArtifacts = Object.fromEntries(entries.map((e) => [e.name, e.text]));
+  host.folders = [];
+  usePlugins.setState({ records: {}, programs: {}, consent: null, pinned: null, candidates: {}, fetches: {} });
   await lifecycle.rescanPlugins(null);
   await settle();
   step.resetPluginsStep();
@@ -174,8 +182,10 @@ test("Skip while the consent is showing closes it and installs nothing; leaving 
 
 test("an install that is already there has nothing to offer: Continue moves on and counts no skip", async () => {
   await fresh([{ name: "cli", text: CLI, ...BUILT_IN }]);
-  lifecycle.requestPluginConsent("cli");
+  const asked = installOfficialPlugin("cli", { showSheet: false });
+  await settle();
   lifecycle.enablePlugin("cli", P().consent.hash);
+  await asked;
   await settle();
   step.resetPluginsStep();
   takeOfficialPluginCounts();
@@ -187,5 +197,63 @@ test("an install that is already there has nothing to offer: Continue moves on a
   assert.equal(O().step, "outro");
   assert.equal(P().consent, null);
   assert.deepEqual(takeOfficialPluginCounts(), {});
+  useOnboarding.setState({ windowId: null });
+});
+
+test("Install downloads first: nothing is asked or installed while it downloads, and the verified download is what the consent shows", async () => {
+  await fresh([{ name: "cli", text: CLI, ...BUILT_IN }]);
+  let release;
+  host.officialFetchGate = new Promise((resolve) => (release = resolve));
+  const done = step.installPickedPlugins(offered());
+  await settle();
+  assert.deepEqual(host.officialFetchLog, ["cli"]);
+  assert.equal(P().consent, null);
+  assert.equal(P().fetches.cli?.state, "fetching");
+  release();
+  await settle();
+  assert.equal(P().consent?.name, "cli");
+  assert.equal(P().consent.hash, P().candidates.cli.hash);
+  assert.equal(P().listings.cli, undefined, "the download stays out of the active scan until confirmed");
+  assert.ok(lifecycle.enablePlugin("cli", P().consent.hash));
+  await done;
+  assert.deepEqual(host.promotes.map((p) => [p.name, p.folderId, p.approved]), [["cli", host.pinned[0].folderId, P().records.cli.approved]]);
+  assert.equal(P().listings.cli.folderId, host.pinned[0].folderId);
+  assert.equal(host.links.length, 1);
+});
+
+test("an offline download leaves nothing installed and offers Try Again, which works once it's back", async () => {
+  await fresh([{ name: "cli", text: CLI, ...BUILT_IN }]);
+  host.officialFetchResults.cli = { ok: false, code: "offline", reason: "The Internet connection appears to be offline." };
+  await step.installPickedPlugins(offered());
+  assert.equal(T().phase, "failed");
+  assert.match(T().failures.cli, /Check your internet connection/);
+  assert.equal(P().consent, null);
+  assert.equal(P().records.cli, undefined);
+  assert.equal(P().listings.cli, undefined);
+  assert.deepEqual(host.links, []);
+  assert.deepEqual(host.promotes, []);
+  delete host.officialFetchResults.cli;
+  const again = step.installPluginAgain("cli");
+  await settle();
+  assert.ok(lifecycle.enablePlugin("cli", P().consent.hash));
+  await again;
+  assert.deepEqual([T().phase, T().installed], ["installed", ["cli"]]);
+});
+
+test("leaving the step while it downloads cancels the download and asks nothing afterwards", async () => {
+  await fresh([{ name: "cli", text: CLI, ...BUILT_IN }]);
+  let release;
+  host.officialFetchGate = new Promise((resolve) => (release = resolve));
+  const done = step.installPickedPlugins(offered());
+  await settle();
+  goToStep("home");
+  step.leavePluginsStep();
+  release();
+  await done;
+  await settle();
+  assert.equal(P().consent, null);
+  assert.equal(P().records.cli, undefined);
+  assert.deepEqual(host.promotes, []);
+  assert.equal(O().step, "home");
   useOnboarding.setState({ windowId: null });
 });

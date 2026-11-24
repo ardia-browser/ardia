@@ -17,9 +17,10 @@ function later(run: () => void, ms: number) {
   }, ms);
 }
 
-export function offerArchiveCard(openTabs: number) {
-  if (!offersArchiveCard(currentPreferences().archiveCardShown, openTabs)) return;
+export function offerArchiveCard(openTabs: number): boolean {
+  if (!offersArchiveCard(currentPreferences().archiveCardShown, openTabs)) return false;
   later(() => useArchiveCard.setState({ showing: true }), ARCHIVE_CARD_DELAY_MS);
+  return true;
 }
 
 export function offerArchiveCardNow(openTabs: number) {

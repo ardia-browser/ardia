@@ -64,7 +64,7 @@ interface Page : AutoCloseable {
 
     suspend fun readableContent(): ReadableContent
 
-    suspend fun snapshot(maxWidth: Int = SNAPSHOT_WIDTH): Bitmap?
+    suspend fun snapshot(maxWidth: Int = SNAPSHOT_WIDTH, windowCopy: Boolean = true): Bitmap?
 
     suspend fun sampleTone(topInset: Int, bottomInset: Int): PageTone?
 

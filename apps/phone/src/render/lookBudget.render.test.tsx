@@ -12,6 +12,7 @@ jest.spyOn(platformTelemetry, "canPostTelemetry").mockImplementation(() => true)
 const look = require("../platform/look") as typeof import("../platform/look");
 const telemetry = require("../state/telemetry/telemetry") as typeof import("../state/telemetry/telemetry");
 const { TabDeck } = require("../components/tabs/TabDeck") as typeof import("../components/tabs/TabDeck");
+const { DesignProvider } = require("../components/ui") as typeof import("../components/ui");
 const { useBrowse } = require("../state/browse/store") as typeof import("../state/browse/store");
 const { renderSurface, unmount, withTabs } = require("../../test/render/harness") as typeof import("../../test/render/harness");
 const { State } = require("react-native-gesture-handler") as typeof import("react-native-gesture-handler");
@@ -54,7 +55,11 @@ test("the deck tells the budget's probe it is idle only while settled and untouc
   withTabs(9);
   setPreference("archiveCardShown", false);
   useBrowse.setState({ surface: "deck", sheet: null, deckEntrance: null, frozenOrder: null, opening: null });
-  const first = renderSurface(<TabDeck />);
+  const first = renderSurface(
+    <DesignProvider design="original">
+      <TabDeck />
+    </DesignProvider>,
+  );
   act(() => jest.advanceTimersByTime(300));
   expect(useArchiveCard.getState().showing).toBe(true);
   expect(calls.at(-1)?.idle).toBe(false);

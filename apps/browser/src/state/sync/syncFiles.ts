@@ -51,10 +51,17 @@ const journalPart = (n: number) => `sync-journal-${n}.nns`;
 
 const openSealed = async (sealed: string | null | undefined) => (sealed ? ((await SyncNative?.openLocal(sealed)) ?? null) : null);
 
-function addBatches(into: Journal, part: Journal | undefined) {
+function addBatches(into: Journal, part: Journal | undefined, added: Map<string, Set<string>>) {
   for (const [scope, files] of Object.entries(part ?? {})) {
     const list = (into[scope] ??= []);
-    for (const file of files) if (!list.some((f) => f.seq === file.seq && f.device === file.device)) list.push(file);
+    let ids = added.get(scope);
+    if (!ids) added.set(scope, (ids = new Set()));
+    for (const file of files) {
+      const id = `${file.device}:${file.seq}`;
+      if (ids.has(id)) continue;
+      ids.add(id);
+      list.push(file);
+    }
   }
 }
 
@@ -144,11 +151,12 @@ export function syncFiles(current: () => SyncDoc) {
       const clock = new Clock(doc.deviceId ?? "", doc.clock);
       if (savedClock) clock.observe(savedClock);
       const batches: Journal = {};
+      const added = new Map<string, Set<string>>();
       journal.lastId = Math.max(covers, 0);
       for (const part of parts) {
         journal.lastId = Math.max(journal.lastId, part.id);
         if (part.id <= covers) continue;
-        addBatches(batches, part.journal);
+        addBatches(batches, part.journal, added);
         if (!part.changes || part.device !== doc.deviceId) continue;
         if (part.clock) clock.observe(part.clock);
         replayChanges(scopes, part.changes, live);
@@ -190,13 +198,15 @@ export function syncFiles(current: () => SyncDoc) {
   const persistJournal = (scope: string) => (batches: LogFile[]) =>
     serial(async () => {
       const list = (journal.batches[scope] ??= []);
-      const fresh = batches.filter((file) => !list.some((f) => f.seq === file.seq));
+      const known = new Set(list.map((f) => f.seq));
+      const fresh = batches.filter((file) => !known.has(file.seq));
       if (!fresh.length) return;
       for (const file of fresh) list.push(file);
       try {
         await writePart({ journal: { [scope]: fresh } });
       } catch (error) {
-        const left = (journal.batches[scope] ?? []).filter((f) => !fresh.includes(f));
+        const failed = new Set(fresh);
+        const left = (journal.batches[scope] ?? []).filter((f) => !failed.has(f));
         if (left.length) journal.batches[scope] = left;
         else delete journal.batches[scope];
         throw error;

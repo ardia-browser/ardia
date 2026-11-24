@@ -1,5 +1,5 @@
 import { dragPreview, windowFrame, type DragPreviewShape } from "../../platform/windows";
-import { hapticTick } from "../../platform/haptics";
+import { reorderTick } from "./reorderTick";
 import { create } from "zustand";
 import { focus } from "../browser/actions";
 import { lastPicture, startTabPictures } from "../tabs/tabPictures";
@@ -12,12 +12,12 @@ import { dropTabIntoSplit } from "../splits/actions";
 import { dropTabsOutside, rootPointIn, screenPoint, windowUnder } from "./windowDrop";
 import { dropTabsOnBar, followTabDragOnBar } from "../bookmarks/barDrag";
 
-export type DropTarget = { tabId: string; side: SplitSide };
+type DropTarget = { tabId: string; side: SplitSide };
 type Insert = { windowId: string; beforeId: string | null };
 type Picture = { chip: () => [number, number, number, number]; grab: [number, number] };
 type TabDragSession = { seq: number; liveFrame: Frame | null; pointer: [number, number]; picture: Picture | null; sentShape: DragPreviewShape };
 
-export type TabDragging = {
+type TabDragging = {
   phase: "tab";
   tabId: string | null;
   tabIds: string[];
@@ -34,7 +34,7 @@ export type TabDragging = {
   session: TabDragSession;
 };
 
-export type ExternalDragging = {
+type ExternalDragging = {
   phase: "external";
   owner: { windowId: string; token: number };
   overWindow: string;
@@ -94,7 +94,7 @@ export function updateTabDrag(x: number, y: number, lifted: boolean | null = nul
   const { session } = drag;
   const s = useBrowser.getState();
   const { outside, overWindow } = windowUnder(s, drag.windowId, x, y, session.liveFrame);
-  if (overWindow && overWindow !== drag.overWindow) hapticTick();
+  if (overWindow && overWindow !== drag.overWindow) reorderTick();
   const screen = overWindow ? screenPoint(s, drag.windowId, x, y, session.liveFrame) : null;
   const over = overWindow ? s.windows[overWindow]?.frame : null;
   const overPoint: [number, number] | null = screen && over ? rootPointIn(over, screen) : null;

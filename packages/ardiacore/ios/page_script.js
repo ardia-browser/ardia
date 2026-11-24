@@ -507,6 +507,530 @@
     reportNowPlaying();
   };
 
+  const fieldProviderKit = (env) => {
+    const { document, send, guard, later, onReady, revealed, addListener, apply, FrameMutationObserver, setTimeout, addEventListener, requestAnimationFrame, isTop } = env;
+    const { charCodeAt, promiseThen, imul, Detector, detect, toRGBA } = env.intrinsics;
+    const USERNAME_TOKEN = /(^|\s)(username|email|webauthn)(\s|$)/i;
+    const ONE_TIME_CODE = /(^|\s)one-time-code(\s|$)/i;
+    const USERNAME_HINT = /user|e-?mail|login|account/i;
+    const OTPAUTH_PREFIXES = ["otpauth://", "otpauth-migration://"];
+    const hasOwnToggle = (el) => {
+      for (let n = el.parentElement, depth = 0; n && depth < 3 && n.querySelectorAll("input").length === 1; n = n.parentElement, depth++)
+        for (const c of n.querySelectorAll('button, [role="button"], [aria-label], [title], [class*="eye" i], [class*="toggle" i]'))
+          if (c !== el && /show|hide|reveal|toggle|visib|eye|peek|afficher|mostrar|anzeigen/i.test((c.getAttribute("aria-label") || "") + " " + (c.getAttribute("title") || "") + " " + (c.getAttribute("class") || "")))
+            return true;
+      return false;
+    };
+    const nearPassword = (el, shown) => {
+      let scope = el.form;
+      for (let n = el.parentElement, depth = 0; !scope && n && depth < 6; n = n.parentElement, depth++)
+        if (n.querySelectorAll("input").length > 1) scope = n;
+      return !!scope && (!!scope.querySelector('input[type="password"]') || (!!shown && scope.contains(shown)));
+    };
+    const loginFieldKind = (el, shown) => {
+      if (!el || el.localName !== "input" || el.disabled || el.readOnly || el.hidden || el.type === "hidden") return null;
+      if (el.getBoundingClientRect().width < 80) return null;
+      const auto = el.getAttribute("autocomplete") || "";
+      if (el.type === "password" || el === shown) return "password";
+      if (ONE_TIME_CODE.test(auto)) return "code";
+      if (el.type === "email" || USERNAME_TOKEN.test(auto)) return "username";
+      if (el.type !== "text" && el.type !== "tel") return null;
+      const hints = [el.name, el.id, auto, el.getAttribute("placeholder") || ""].join(" ");
+      return USERNAME_HINT.test(hints) && nearPassword(el, shown) ? "username" : null;
+    };
+    const startsWithFolded = (text, prefix) => {
+      if (text.length < prefix.length) return false;
+      for (let i = 0; i < prefix.length; i++) {
+        const code = apply(charCodeAt, text, [i]);
+        const folded = code >= 65 && code <= 90 ? code + 32 : code;
+        if (folded !== apply(charCodeAt, prefix, [i])) return false;
+      }
+      return true;
+    };
+    const verificationSetupURL = (raw) =>
+      typeof raw === "string" && raw.length <= 2048 && (startsWithFolded(raw, OTPAUTH_PREFIXES[0]) || startsWithFolded(raw, OTPAUTH_PREFIXES[1])) ? raw : null;
+
+    const SVG_NS = "http://www.w3.org/2000/svg";
+    const KEY = [
+      ["path", { d: "M5 4.4a3.6 3.6 0 1 0 0 7.2a3.6 3.6 0 1 0 0-7.2ZM4.2 6.9a1.1 1.1 0 1 1 0 2.2a1.1 1.1 0 1 1 0-2.2Z", fill: "currentColor", stroke: "none", "fill-rule": "evenodd" }],
+      ["path", { d: "M8 7.1h5.6v1.8H8ZM10.6 8.9h1.5v1.9h-1.5ZM12.4 8.9h1.2v1.4h-1.2Z", fill: "currentColor", stroke: "none" }],
+      ["path", { d: "M16.6 7.1l1.9 1.9 1.9-1.9", "stroke-width": "1.4" }],
+    ];
+    const KEY_BOX = { viewBox: "0 0 22 16", width: "26", height: "19", fill: "none", stroke: "currentColor", "stroke-width": "1.35", "stroke-linecap": "round", "stroke-linejoin": "round" };
+    const KEY_CSS =
+      "button{all:initial;box-sizing:border-box;display:flex;align-items:center;justify-content:center;border-radius:6px;cursor:default;opacity:1;transition:background-color .12s;background:color-mix(in srgb,currentColor 14%,transparent)}" +
+      "button:hover{background:color-mix(in srgb,currentColor 22%,transparent)}button:active{background:color-mix(in srgb,currentColor 30%,transparent)}";
+    const ON_DARK = "#ffffff";
+    const ON_LIGHT = "#1d1d1f";
+    const DARK_LUMINANCE = 0.179;
+    const parseColor = (text) => {
+      const m = typeof text === "string" ? /^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,/]\s*([\d.]+%?))?\s*\)$/.exec(text) : null;
+      if (!m) return null;
+      const alpha = m[4] === undefined ? 1 : m[4].endsWith("%") ? parseFloat(m[4]) / 100 : parseFloat(m[4]);
+      return { r: +m[1], g: +m[2], b: +m[3], a: alpha };
+    };
+    const luminance = ({ r, g, b }) => {
+      const linear = (c) => ((c /= 255) <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+      return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+    };
+    const readColor = (css) => parseColor(css) || (toRGBA ? toRGBA(css) : null);
+    const badgeInk = (backgrounds, text, pageIsDark) => {
+      for (const background of backgrounds) {
+        const c = readColor(background);
+        if (c && c.a >= 0.5) return luminance(c) < DARK_LUMINANCE ? ON_DARK : ON_LIGHT;
+      }
+      const ink = readColor(text);
+      if (ink && ink.a >= 0.5) return luminance(ink) > 0.5 ? ON_DARK : ON_LIGHT;
+      return (typeof pageIsDark === "function" ? pageIsDark() : pageIsDark) ? ON_DARK : ON_LIGHT;
+    };
+    const pageIsDark = () => {
+      try {
+        const scheme = getComputedStyle(document.documentElement).colorScheme || "";
+        const dark = /\bdark\b/.test(scheme), light = /\blight\b/.test(scheme);
+        if (dark !== light) return dark;
+        const body = document.body ? readColor(getComputedStyle(document.body).color) : null;
+        if (body && body.a >= 0.5) return luminance(body) > 0.5;
+        return !!(typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches);
+      } catch {
+        return false;
+      }
+    };
+    const fieldInk = (field, cs) => {
+      const backgrounds = [cs.backgroundColor];
+      for (let n = field.parentElement, depth = 0; n && depth < 12; n = n.parentElement, depth++) backgrounds.push(getComputedStyle(n).backgroundColor);
+      return badgeInk(backgrounds, cs.color, pageIsDark);
+    };
+    const KEY_ASPECT = 1.4;
+    const HINT_GAP = 8;
+    const HINT_HEIGHT = 28;
+    const HINT_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+    const HINT_CSS =
+      ".chip{all:initial;box-sizing:border-box;display:flex;align-items:center;gap:6px;padding:5px 5px 5px 10px;border-radius:8px;background:#1f2328;color:#f0f6fc;border:1px solid rgba(255,255,255,.14);font:500 12.5px/18px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;white-space:nowrap;box-shadow:0 6px 18px rgba(0,0,0,.35);pointer-events:none}" +
+      "b{font-weight:650;background:rgba(255,255,255,.14);padding:0 6px;border-radius:5px}" +
+      "button{all:initial;pointer-events:auto;cursor:default;width:18px;height:18px;border-radius:5px;display:flex;align-items:center;justify-content:center;color:#9198a1;font:15px/1 -apple-system,system-ui,sans-serif}button:hover{background:rgba(255,255,255,.12);color:#f0f6fc}";
+    const KEY_REPEAT_MS = 600;
+    const QR_MIN = 64;
+    const QR_MAX = 640;
+    const QR_DETECTIONS = 12;
+    const QR_CANVAS_SCANS = 3;
+    const QR_CANVAS_RETRY_MS = 1500;
+    const LINKS_PER_SCAN = 8;
+    const FRAME_DEPTH = 4;
+
+    let config = null;
+    let listening = false;
+    let keyField = null;
+    let keyKind = null;
+    let keyHost = null;
+    let hintHost = null;
+    let hintText = null;
+    let hintClose = null;
+    let hintField = null;
+    let hintSide = "below";
+    let hintLabel = "";
+    let keyButton = null;
+    let keyClickedAt = -Infinity;
+    let reportedFocus;
+    let focusSeq = 0;
+    let observer = null;
+    let qrDetector = null;
+    let qrDetections = 0;
+    let qrChecked = new WeakMap();
+    let qrCanvasScans = new WeakMap();
+    let found = new Set();
+    const typed = new WeakSet();
+    const watchedDocuments = new WeakSet();
+
+    const findsCodes = () => !!config && config.codeSetup && isTop;
+    const wants = (kind) => !!config && (kind === "code" ? config.oneTimeCode : kind ? config.login : false);
+    const svgElement = (tag, attributes) => {
+      const el = document.createElementNS(SVG_NS, tag);
+      for (const name of Object.keys(attributes)) el.setAttribute(name, attributes[name]);
+      return el;
+    };
+    const trailingRect = (field) => {
+      const r = field.getBoundingClientRect();
+      const cs = getComputedStyle(field);
+      const size = Math.min(24, Math.max(18, r.height - 8));
+      const width = Math.round(size * KEY_ASPECT);
+      const rtl = cs.direction === "rtl";
+      const inset = Math.max(4, Math.min(10, parseFloat(rtl ? cs.paddingLeft : cs.paddingRight) || 4));
+      const border = parseFloat(rtl ? cs.borderLeftWidth : cs.borderRightWidth) || 0;
+      return { left: rtl ? r.left + border + inset : r.right - border - inset - width, top: r.top + (r.height - size) / 2, size, width, color: fieldInk(field, cs) };
+    };
+    const hideHint = () => {
+      if (hintHost) hintHost.style.display = "none";
+      hintField = null;
+    };
+    const hideKey = () => {
+      if (keyHost) keyHost.style.display = "none";
+      keyField = keyKind = null;
+      hideHint();
+    };
+    const placeHint = () => {
+      if (!hintHost || !hintField || hintField !== keyField) return;
+      const { left, top, size, width } = (env.keyRect || trailingRect)(keyField);
+      const height = (hintHost.getBoundingClientRect && hintHost.getBoundingClientRect().height) || HINT_HEIGHT;
+      const hintWidth = (hintHost.getBoundingClientRect && hintHost.getBoundingClientRect().width) || 0;
+      hintHost.style.left = Math.max(4, left + width - hintWidth) + "px";
+      hintHost.style.top = (hintSide === "above" ? Math.max(4, top - HINT_GAP - height) : top + size + HINT_GAP) + "px";
+    };
+    const makeHint = () => {
+      if (env.makeHint) return env.makeHint();
+      const host = document.createElement("ardia-field-provider-hint");
+      host.style.cssText = "all:initial;position:fixed;z-index:2147483647;display:none;";
+      const root = host.attachShadow({ mode: "closed" });
+      const style = document.createElement("style");
+      style.textContent = HINT_CSS;
+      root.appendChild(style);
+      const chip = document.createElement("div");
+      chip.className = "chip";
+      const text = document.createElement("span");
+      const close = document.createElement("button");
+      close.type = "button";
+      close.tabIndex = -1;
+      close.textContent = "\u00d7";
+      chip.appendChild(text);
+      chip.appendChild(close);
+      root.appendChild(chip);
+      return { host, text, close };
+    };
+    const showHint = (state) => {
+      const label = state && typeof state.label === "string" ? state.label : "";
+      if (!config || !keyField || !keyHost || keyHost.style.display !== "block" || !HINT_LABEL.test(label)) return hideHint();
+      if (!hintHost || !hintHost.isConnected) {
+        ({ host: hintHost, text: hintText, close: hintClose } = makeHint());
+        hintClose.setAttribute("aria-label", "Close");
+        apply(addListener, hintClose, ["mousedown", (e) => e.preventDefault()]);
+        apply(addListener, hintClose, [
+          "click",
+          guard((e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!e.isTrusted || !hintField) return;
+            hideHint();
+            send("fieldProviderHint", { state: "dismissed" });
+          }),
+        ]);
+        document.documentElement.appendChild(hintHost);
+      }
+      const side = state.side === "above" ? "above" : "below";
+      if (hintField === keyField && hintHost.style.display === "block" && hintLabel === label && hintSide === side) return placeHint();
+      hintLabel = label;
+      const bold = document.createElement("b");
+      bold.textContent = label;
+      hintText.replaceChildren("Type ", bold, " in Passwords to find this site");
+      hintSide = side;
+      hintField = keyField;
+      hintHost.style.display = "block";
+      placeHint();
+      send("fieldProviderHint", { state: "shown" });
+    };
+    const placeKey = () => {
+      if (!keyHost || !keyField) return;
+      const { left, top, size, width, color } = (env.keyRect || trailingRect)(keyField);
+      keyHost.style.left = left + "px";
+      keyHost.style.top = top + "px";
+      keyButton.style.width = width + "px";
+      keyButton.style.height = size + "px";
+      keyButton.style.color = color;
+    };
+    const makeKey = () => {
+      if (env.makeKey) return env.makeKey();
+      const host = document.createElement("ardia-field-provider");
+      host.style.cssText = "all:initial;position:fixed;z-index:2147483647;display:none;";
+      const root = host.attachShadow({ mode: "closed" });
+      const style = document.createElement("style");
+      style.textContent = KEY_CSS;
+      root.appendChild(style);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.tabIndex = -1;
+      const svg = svgElement("svg", KEY_BOX);
+      for (const [tag, attributes] of KEY) svg.appendChild(svgElement(tag, attributes));
+      button.appendChild(svg);
+      root.appendChild(button);
+      return { host, button };
+    };
+    const ensureKey = () => {
+      if (keyHost && keyHost.isConnected) return;
+      ({ host: keyHost, button: keyButton } = makeKey());
+      keyButton.title = "Passwords";
+      keyButton.setAttribute("aria-label", "Fill from Passwords");
+      apply(addListener, keyButton, ["mousedown", (e) => e.preventDefault()]);
+      apply(addListener, keyButton, [
+        "click",
+        guard((e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!e.isTrusted || !config || !keyKind || !keyField || !wants(keyKind)) return;
+          const box = (env.keyRect || trailingRect)(keyField);
+          if (!(e.clientX >= box.left - 2 && e.clientX <= box.left + box.width + 2 && e.clientY >= box.top - 2 && e.clientY <= box.top + box.size + 2)) return;
+          if (e.timeStamp - keyClickedAt < KEY_REPEAT_MS) return;
+          keyClickedAt = e.timeStamp;
+          send("fieldProvider", { field: keyKind, generation: config.generation });
+        }),
+      ]);
+      document.documentElement.appendChild(keyHost);
+    };
+    const updateKey = guard(() => {
+      if (!config) return hideKey();
+      const el = document.activeElement;
+      const kind = loginFieldKind(el, revealed());
+      if (!kind || !wants(kind)) return hideKey();
+      if (el.value && typed.has(el)) return hideKey();
+      if (kind === "password" && keyField !== el && hasOwnToggle(el)) return hideKey();
+      ensureKey();
+      keyField = el;
+      keyKind = kind;
+      keyHost.style.display = "block";
+      if (hintField && hintField !== el) hideHint();
+      placeKey();
+      placeHint();
+    });
+
+    const watchDocument = (doc) => {
+      if (watchedDocuments.has(doc)) return;
+      watchedDocuments.add(doc);
+      apply(addListener, doc, ["focusin", focusGained, true]);
+      apply(addListener, doc, ["focusout", focusLost, true]);
+    };
+    const deepActive = (doc, depth) => {
+      const el = doc.activeElement;
+      if (!el || (el.localName !== "iframe" && el.localName !== "frame") || depth >= FRAME_DEPTH) return el;
+      let inner = null;
+      try {
+        inner = el.contentDocument;
+      } catch {}
+      if (!inner) return null;
+      watchDocument(inner);
+      return deepActive(inner, depth + 1);
+    };
+    const sendFocus = (field, query) => {
+      reportedFocus = field;
+      focusSeq++;
+      send("fieldFocus", query ? { field, seq: focusSeq, generation: config.generation, query } : { field, seq: focusSeq, generation: config.generation });
+    };
+    const reportFocus = guard(() => {
+      if (!isTop || !config) return;
+      const kind = loginFieldKind(deepActive(document, 0), revealed());
+      const field = wants(kind) ? kind : null;
+      if (field !== reportedFocus) sendFocus(field);
+    });
+    const reportFocusSoon = () => setTimeout(reportFocus, 0);
+    const focusQuery = guard((query) => {
+      if (!isTop || !config || typeof query !== "string" || !query || query.length > 64) return;
+      const kind = loginFieldKind(deepActive(document, 0), revealed());
+      sendFocus(wants(kind) ? kind : null, query);
+    });
+    const focusGained = () => {
+      reportFocus();
+      reportFocusSoon();
+    };
+    const focusLost = guard(() => {
+      if (isTop && config && reportedFocus !== null) sendFocus(null);
+      reportFocusSoon();
+    });
+    const codeKey = (url) => {
+      let hash = 0x811c9dc5;
+      for (let i = 0; i < url.length; i++) hash = imul(hash ^ apply(charCodeAt, url, [i]), 0x01000193);
+      return (hash >>> 0).toString(16) + ":" + url.length.toString(36);
+    };
+
+    const noteInput = guard((e) => {
+      const el = e.target;
+      if (!el || el.localName !== "input") return;
+      if (!el.value) typed.delete(el);
+      else if (e.isTrusted) typed.add(el);
+      if (config) updateKey();
+    });
+    const qrCandidate = (el) => {
+      if (el.localName === "img" && !el.complete) return "later";
+      if (el.localName === "img" ? el.naturalWidth < QR_MIN : el.localName !== "canvas") return "never";
+      const r = el.getBoundingClientRect();
+      if (r.width < QR_MIN || r.height < QR_MIN || r.width > QR_MAX || r.height > QR_MAX) return "later";
+      const ratio = r.width / r.height;
+      if (ratio < 0.8 || ratio > 1.25) return "later";
+      return !el.checkVisibility || el.checkVisibility({ opacityProperty: true, visibilityProperty: true }) ? "yes" : "later";
+    };
+    const forgetFound = () => {
+      found = new Set();
+      qrChecked = new WeakMap();
+      qrCanvasScans = new WeakMap();
+      qrDetections = 0;
+    };
+    const noteCode = (raw, generation) => {
+      const url = verificationSetupURL(raw);
+      if (!url || !findsCodes() || config.generation !== generation) return false;
+      const key = codeKey(url);
+      if (found.has(key)) return true;
+      found.add(key);
+      send("verificationCode", { url, generation });
+      return true;
+    };
+    const scanLinks = guard(() => {
+      if (!findsCodes()) return;
+      let seen = 0;
+      for (const link of document.querySelectorAll('a[href^="otpauth" i]')) {
+        if (++seen > LINKS_PER_SCAN) return;
+        noteCode(link.getAttribute("href"), config.generation);
+      }
+    });
+    const scanQR = guard(() => {
+      if (!findsCodes() || !Detector || document.visibilityState !== "visible" || !document.querySelector("input")) return;
+      const generation = config.generation;
+      for (const el of document.querySelectorAll("img, canvas")) {
+        if (qrDetections >= QR_DETECTIONS) return;
+        const canvas = el.localName === "canvas";
+        const src = el.currentSrc || el.src || "";
+        if (canvas ? (qrCanvasScans.get(el) ?? 0) >= QR_CANVAS_SCANS : qrChecked.get(el) === src) continue;
+        const candidate = qrCandidate(el);
+        if (!canvas && candidate !== "later") qrChecked.set(el, src);
+        if (candidate !== "yes") continue;
+        qrDetections++;
+        if (canvas) qrCanvasScans.set(el, (qrCanvasScans.get(el) ?? 0) + 1);
+        if (!qrDetector) qrDetector = new Detector({ formats: ["qr_code"] });
+        const scans = qrCanvasScans;
+        apply(promiseThen, apply(detect, qrDetector, [el]), [
+          guard((codes) => {
+            let accepted = false;
+            for (let i = 0; i < codes.length; i++) if (noteCode(codes[i] && codes[i].rawValue, generation)) accepted = true;
+            if (canvas && accepted) scans.set(el, QR_CANVAS_SCANS);
+            else if (canvas && scans.get(el) < QR_CANVAS_SCANS) setTimeout(scanSoon, QR_CANVAS_RETRY_MS);
+          }),
+          () => {},
+        ]);
+      }
+    });
+    const scan = () => {
+      scanLinks();
+      scanQR();
+    };
+    const scanSoon = later(scan, 400);
+    const listen = () => {
+      if (listening) return;
+      listening = true;
+      watchDocument(document);
+      document.addEventListener("focusin", updateKey, true);
+      document.addEventListener("focusin", () => findsCodes() && scanSoon(), true);
+      document.addEventListener(
+        "focusout",
+        guard((e) => {
+          setTimeout(() => document.activeElement !== e.target && updateKey(), 0);
+        }),
+        true,
+      );
+      document.addEventListener("input", noteInput, true);
+      document.addEventListener("load", (e) => findsCodes() && e.target && e.target.localName === "img" && scanSoon(), true);
+      document.addEventListener("visibilitychange", () => findsCodes() && scanSoon());
+      addEventListener("pageshow", (e) => e.isTrusted && e.persisted && forgetFound());
+      addEventListener("focus", focusGained, true);
+      addEventListener("blur", focusLost, true);
+      addEventListener("scroll", () => keyField && requestAnimationFrame(() => (placeKey(), placeHint())), { passive: true, capture: true });
+      addEventListener("resize", () => keyField && requestAnimationFrame(() => (placeKey(), placeHint())));
+      addEventListener("pagehide", hideHint);
+    };
+    const stopScanning = () => {
+      if (observer) observer.disconnect();
+      observer = null;
+    };
+    const configure = (state) => {
+      const next =
+        state && typeof state === "object"
+          ? { login: state.login === true, oneTimeCode: state.oneTimeCode === true, codeSetup: state.codeSetup === true, generation: typeof state.generation === "number" ? state.generation : 0 }
+          : null;
+      const previous = config;
+      config = next && (next.login || next.oneTimeCode || next.codeSetup) ? next : null;
+      if (!config) {
+        hideKey();
+        stopScanning();
+        found = new Set();
+        reportedFocus = undefined;
+        return;
+      }
+      if (!previous || previous.generation !== config.generation) {
+        found = new Set();
+        qrChecked = new WeakMap();
+        qrCanvasScans = new WeakMap();
+        qrDetections = 0;
+        reportedFocus = undefined;
+      }
+      listen();
+      if (!findsCodes()) stopScanning();
+      else {
+        if (!observer && FrameMutationObserver) {
+          observer = new FrameMutationObserver(scanSoon);
+          observer.observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ["src", "href", "class", "style", "hidden"] });
+        }
+        onReady(scan);
+      }
+      updateKey();
+      reportedFocus = undefined;
+      reportFocus();
+    };
+    return { configure, focusQuery, hint: guard((state) => (state ? showHint(state) : hideHint())), badgeInk, hasOwnToggle, loginFieldKind, verificationSetupURL, codeKey, rememberedCodes: () => found.size };
+  };
+  const fieldProviderIntrinsics = (scope) => {
+    const call = Reflect.apply;
+    const describe = Object.getOwnPropertyDescriptor;
+    const accessor = (proto, name, kind) => (proto && describe(proto, name) ? describe(proto, name)[kind] : undefined);
+    const Offscreen = scope.OffscreenCanvas;
+    const pen = scope.OffscreenCanvasRenderingContext2D && scope.OffscreenCanvasRenderingContext2D.prototype;
+    const getContext = Offscreen && Offscreen.prototype.getContext;
+    const setFill = accessor(pen, "fillStyle", "set");
+    const clearRect = pen && pen.clearRect;
+    const fillRect = pen && pen.fillRect;
+    const getImageData = pen && pen.getImageData;
+    const pixelBytes = accessor(scope.ImageData && scope.ImageData.prototype, "data", "get");
+    const painted = !!(Offscreen && getContext && setFill && clearRect && fillRect && getImageData && pixelBytes);
+    let context = null;
+    const toRGBA = (css) => {
+      if (!painted || typeof css !== "string" || !css || css.length > 200) return null;
+      try {
+        if (!context) context = call(getContext, new Offscreen(1, 1), ["2d", { willReadFrequently: true }]);
+        call(clearRect, context, [0, 0, 1, 1]);
+        call(setFill, context, ["rgba(0, 0, 0, 0)"]);
+        call(setFill, context, [css]);
+        call(fillRect, context, [0, 0, 1, 1]);
+        const bytes = call(pixelBytes, call(getImageData, context, [0, 0, 1, 1]), []);
+        return { r: bytes[0], g: bytes[1], b: bytes[2], a: bytes[3] / 255 };
+      } catch {
+        return null;
+      }
+    };
+    const Detector = typeof scope.BarcodeDetector === "function" ? scope.BarcodeDetector : null;
+    const detect = Detector && Detector.prototype ? Detector.prototype.detect : null;
+    return {
+      charCodeAt: String.prototype.charCodeAt,
+      promiseThen: Promise.prototype.then,
+      imul: Math.imul,
+      Detector: typeof detect === "function" ? Detector : null,
+      detect,
+      toRGBA,
+    };
+  };
+  const nativeMutationObserver = window.MutationObserver;
+  const nativeAddListener = EventTarget.prototype.addEventListener;
+  const fieldIntrinsics = fieldProviderIntrinsics(window);
+  const fieldProviders = fieldProviderKit({
+    document,
+    send,
+    guard,
+    later,
+    onReady,
+    revealed: () => revealedField,
+    addListener: nativeAddListener,
+    apply,
+    FrameMutationObserver: nativeMutationObserver,
+    setTimeout,
+    addEventListener,
+    requestAnimationFrame,
+    isTop,
+    intrinsics: fieldIntrinsics,
+  });
+  handlers.fieldProvider = fieldProviders.configure;
+  handlers.fieldFocusQuery = (message) => fieldProviders.focusQuery(message && message.query);
+  handlers.fieldProviderHint = fieldProviders.hint;
   const typedByUser = new WeakSet();
   let revealedField = null;
   let eyeField = null;
@@ -517,13 +1041,7 @@
     '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8Z"/><circle cx="8" cy="8" r="2.1"/></svg>';
   const EYE_SLASH =
     '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><path d="M6.2 3.8A6.6 6.6 0 0 1 8 3.5c4.1 0 6.5 4.5 6.5 4.5a11 11 0 0 1-1.7 2.2M4.3 4.9C2.5 6.1 1.5 8 1.5 8s2.4 4.5 6.5 4.5c1.2 0 2.3-.4 3.2-.9"/><path d="M6.6 6.6a2.1 2.1 0 0 0 2.8 2.8"/><path d="M2 2l12 12"/></svg>';
-  const hasOwnToggle = (el) => {
-    for (let n = el.parentElement, depth = 0; n && depth < 3 && n.querySelectorAll("input").length === 1; n = n.parentElement, depth++)
-      for (const c of n.querySelectorAll('button, [role="button"], [aria-label], [title], [class*="eye" i], [class*="toggle" i]'))
-        if (c !== el && /show|hide|reveal|toggle|visib|eye|peek|afficher|mostrar|anzeigen/i.test((c.getAttribute("aria-label") || "") + " " + (c.getAttribute("title") || "") + " " + (c.getAttribute("class") || "")))
-          return true;
-    return false;
-  };
+  const { hasOwnToggle } = fieldProviders;
   const placeEye = () => {
     if (!eyeHost || !eyeField) return;
     const r = eyeField.getBoundingClientRect();
@@ -1277,12 +1795,39 @@
     );
     const userActivationOf = window.Navigator && Object.getOwnPropertyDescriptor(Navigator.prototype, "userActivation");
     const activeOf = window.UserActivation && Object.getOwnPropertyDescriptor(UserActivation.prototype, "isActive");
+    const activated = () => {
+      const activation = apply(userActivationOf.get, navigator, []);
+      return !!activation && !!apply(activeOf.get, activation, []);
+    };
+    const tracksActivation = !!(userActivationOf && activeOf);
+    const clickDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "click");
+    if (tracksActivation && clickDescriptor && typeof clickDescriptor.value === "function") {
+      const watchScriptedLinkClick = guard((link) => {
+        if (linkUrl(link) === null || !activated()) return null;
+        let dispatched = null;
+        const seen = (e) => {
+          if (!dispatched) dispatched = e;
+        };
+        apply(listen, link, ["click", seen, true]);
+        return guard(() => {
+          apply(unlisten, link, ["click", seen, true]);
+          if (!dispatched || defaultPrevented(dispatched) || replacesPage(link)) return;
+          const url = linkUrl(link);
+          if (peekable({ link, url, path: [link] })) send("newTabLink", { url });
+        });
+      });
+      const click = asNative(clickDescriptor.value, (target, self, args) => {
+        const settle = watchScriptedLinkClick(self);
+        try {
+          return apply(target, self, args);
+        } finally {
+          if (settle) settle();
+        }
+      });
+      Object.defineProperty(HTMLElement.prototype, "click", { ...clickDescriptor, value: click });
+    }
     const openDescriptor = Object.getOwnPropertyDescriptor(window, "open");
-    if (userActivationOf && activeOf && openDescriptor && typeof openDescriptor.value === "function") {
-      const activated = () => {
-        const activation = apply(userActivationOf.get, navigator, []);
-        return !!activation && !!apply(activeOf.get, activation, []);
-      };
+    if (tracksActivation && openDescriptor && typeof openDescriptor.value === "function") {
       const openedByUser = (args) => {
         if (!args.length || args[0] === undefined || args[0] === null || !activated()) return;
         const raw = `${args[0]}`;
@@ -1310,14 +1855,20 @@
       const GRACE_MS = 5000;
       const KEYS_GRACE_MS = 2000;
       const MEDIA_ERR_DECODE = 3;
+      const MEDIA_ERR_ENCRYPTED = 5;
+      const decryptFailure = /decrypt|cdm|licen[cs]e|\bkeys?\b/i;
+      const failedKeyStatus = /^(output-restricted|internal-error)$/;
       let drmSent = false;
       let refused = "";
+      let refusedStage = "";
       const attempted = new Set();
       const grantedOnActivation = new WeakSet();
-      const needsProtectedPlayback = (keySystem) => {
+      const protectedKeys = new WeakMap();
+      const protectedSessions = new WeakMap();
+      const needsProtectedPlayback = (keySystem, stage) => {
         if (drmSent) return;
         drmSent = true;
-        send("drm", { keySystem });
+        send("drm", { keySystem, stage });
       };
       const progressed = (m) => m.readyState >= 2 && m.currentTime > 0;
       const anyProgressed = () => [...attempted, ...document.querySelectorAll("video, audio")].some(progressed);
@@ -1325,7 +1876,7 @@
       const stalled = (m) => !m.paused && !m.ended && !progressed(m);
       const judgeAttempt = (m) =>
         after(GRACE_MS, () => {
-          if (refused && stalled(m)) needsProtectedPlayback(refused);
+          if (refused && stalled(m)) needsProtectedPlayback(refused, refusedStage);
         });
       const onAttempt = (m) => {
         if (attempted.size >= 16) attempted.delete(attempted.values().next().value);
@@ -1334,27 +1885,39 @@
       };
       const onNeedsKey = (m) =>
         after(KEYS_GRACE_MS, () => {
-          if (!m.mediaKeys && !progressed(m)) needsProtectedPlayback(refused);
+          if (!m.mediaKeys && !progressed(m)) needsProtectedPlayback(refused, refusedStage || "access");
         });
+      const keysOf = (m) => (m.mediaKeys ? protectedKeys.get(m.mediaKeys) : undefined);
+      const failedDecrypt = (error) =>
+        error.code === MEDIA_ERR_ENCRYPTED || (error.code === MEDIA_ERR_DECODE && typeof error.message === "string" && apply(test, decryptFailure, [error.message]));
+      const onMediaError = (m) => {
+        if (!m.error) return;
+        if (refused && m.error.code === MEDIA_ERR_DECODE) return needsProtectedPlayback(refused, refusedStage);
+        const keys = keysOf(m);
+        if (keys && failedDecrypt(m.error)) needsProtectedPlayback(keys.keySystem, "licence");
+      };
       const onDrmMediaEvent = (e) => {
         const m = e.target;
         if (drmSent || !(m instanceof HTMLMediaElement)) return;
         if (e.type === "play") onAttempt(m);
         else if (e.type === "encrypted" || e.type === "waitingforkey") onNeedsKey(m);
-        else if (e.type === "error" && refused && m.error && m.error.code === MEDIA_ERR_DECODE) needsProtectedPlayback(refused);
+        else if (e.type === "error") onMediaError(m);
       };
       const drmMediaEvents = ["play", "encrypted", "waitingforkey", "error"];
       for (const type of drmMediaEvents) document.addEventListener(type, guard(onDrmMediaEvent), true);
       detachedMediaWatchers.push((m) => {
         for (const type of drmMediaEvents) m.addEventListener(type, guard(onDrmMediaEvent));
       });
-      const onRefused = (keySystem, activated) => {
+      const onRefused = (keySystem, activated, stage) => {
         if (drmSent) return;
-        if (!refused) refused = keySystem;
+        if (!refused || (refusedStage === "access" && stage !== "access")) {
+          refused = keySystem;
+          refusedStage = stage;
+        }
         for (const m of attempted) if (stalled(m)) judgeAttempt(m);
         if (activated)
           after(GRACE_MS, () => {
-            if (!anyProgressed()) needsProtectedPlayback(keySystem);
+            if (!anyProgressed()) needsProtectedPlayback(refused || keySystem, refusedStage || stage);
           });
       };
       const wrapped = asNative(requestAccess, (target, self, args) => {
@@ -1363,7 +1926,7 @@
         if (!drmSent && typeof keySystem === "string" && apply(test, protectedSystem, [keySystem])) {
           const activated = !!(navigator.userActivation && navigator.userActivation.isActive);
           const remember = guard((access) => activated && access && typeof access === "object" && grantedOnActivation.add(access));
-          apply(then, result, [remember, () => onRefused(keySystem, activated)]);
+          apply(then, result, [remember, () => onRefused(keySystem, activated, "access")]);
         }
         return result;
       });
@@ -1382,7 +1945,8 @@
             const keySystem = keySystemFrom(self);
             if (typeof keySystem === "string" && apply(test, protectedSystem, [keySystem])) {
               const activated = !!(navigator.userActivation && navigator.userActivation.isActive) || grantedOnActivation.has(self);
-              apply(then, result, [null, () => onRefused(keySystem, activated)]);
+              const rememberKeys = guard((keys) => keys && typeof keys === "object" && protectedKeys.set(keys, { keySystem, activated }));
+              apply(then, result, [rememberKeys, () => onRefused(keySystem, activated, "createMediaKeys")]);
             }
           }
           return result;
@@ -1391,6 +1955,51 @@
           ...Object.getOwnPropertyDescriptor(AccessType.prototype, "createMediaKeys"),
           value: wrappedCreate,
         });
+        const KeysType = window.MediaKeys;
+        const SessionType = window.MediaKeySession;
+        const createSession = KeysType && KeysType.prototype.createSession;
+        const updateSession = SessionType && SessionType.prototype.update;
+        const keyStatusesOf = SessionType && Object.getOwnPropertyDescriptor(SessionType.prototype, "keyStatuses");
+        const StatusMap = window.MediaKeyStatusMap;
+        const eachStatus = StatusMap && StatusMap.prototype.forEach;
+        const listenOn = window.EventTarget && window.EventTarget.prototype.addEventListener;
+        if (typeof createSession === "function" && typeof updateSession === "function") {
+          const onSessionFailed = (session, stage) => {
+            const keys = protectedSessions.get(session);
+            if (keys) onRefused(keys.keySystem, keys.activated, stage);
+          };
+          const onKeyStatuses = guard((e) => {
+            const session = e.target;
+            if (drmSent || !protectedSessions.has(session)) return;
+            const statuses = apply(keyStatusesOf.get, session, []);
+            let failed = false;
+            apply(eachStatus, statuses, [(status) => (failed = failed || (typeof status === "string" && apply(test, failedKeyStatus, [status])))]);
+            if (failed) onSessionFailed(session, "keystatus");
+          });
+          const watchesStatuses = keyStatusesOf && typeof keyStatusesOf.get === "function" && typeof eachStatus === "function" && typeof listenOn === "function";
+          const wrappedSession = asNative(createSession, (target, self, args) => {
+            const session = apply(target, self, args);
+            const keys = protectedKeys.get(self);
+            if (keys && session && typeof session === "object") {
+              protectedSessions.set(session, keys);
+              if (watchesStatuses) apply(listenOn, session, ["keystatuseschange", onKeyStatuses]);
+            }
+            return session;
+          });
+          const wrappedUpdate = asNative(updateSession, (target, self, args) => {
+            const result = apply(target, self, args);
+            if (!drmSent && protectedSessions.has(self)) apply(then, result, [null, guard(() => onSessionFailed(self, "licence"))]);
+            return result;
+          });
+          Object.defineProperty(KeysType.prototype, "createSession", {
+            ...Object.getOwnPropertyDescriptor(KeysType.prototype, "createSession"),
+            value: wrappedSession,
+          });
+          Object.defineProperty(SessionType.prototype, "update", {
+            ...Object.getOwnPropertyDescriptor(SessionType.prototype, "update"),
+            value: wrappedUpdate,
+          });
+        }
       }
     }
   } catch (e) {}
@@ -1440,6 +2049,7 @@
     else restoreDisplayMedia();
     if (config.fieldTiming) setFieldTiming(true);
     if (typeof config.selectionPopover === "boolean" && handlers.selectionPopover) handlers.selectionPopover(config.selectionPopover);
+    if (config.fieldProvider !== undefined) handlers.fieldProvider(config.fieldProvider);
     if (config.pipButton) handlers.pipButton(true);
   };
   send("hello", { top: isTop, url: location.href });
@@ -1448,24 +2058,6 @@
   document.addEventListener("fullscreenchange", tellExclusive);
 
   if (!isTop) return receive;
-
-  let contextMenuAt = null;
-  addEventListener(
-    "contextmenu",
-    (e) => {
-      if (e.isTrusted) contextMenuAt = { x: e.clientX, y: e.clientY, at: performance.now() };
-    },
-    { capture: true, passive: true },
-  );
-  document.addEventListener("ardia-hide-element", () => {
-    const asked = contextMenuAt;
-    contextMenuAt = null;
-    if (asked && performance.now() - asked.at < 60000) send("hideElement", { x: asked.x, y: asked.y });
-  });
-  document.addEventListener("ardia-hide-element-in-frame", () => {
-    contextMenuAt = null;
-    send("hideElement", { x: -1, y: -1 });
-  });
 
   const parse = (css) => {
     if (!css) return null;
@@ -1646,18 +2238,20 @@
     send("theme", { color, source });
   });
   let themeQueued = false;
+  let pageThemeQueued = false;
+  const PAGE_THEME_GAP_MS = 100;
   const themeTouched = (records) => {
+    let page = false;
     for (const r of records) {
       if (r.type === "childList") {
-        for (const n of r.addedNodes) if (n.nodeName === "META") return true;
-        for (const n of r.removedNodes) if (n.nodeName === "META") return true;
-      } else if (r.target.nodeName === "META") return true;
-      else if ((r.target === document.documentElement || r.target === document.body) && r.oldValue !== r.target.getAttribute(r.attributeName)) return true;
+        for (const n of r.addedNodes) if (n.nodeName === "META") return "meta";
+        for (const n of r.removedNodes) if (n.nodeName === "META") return "meta";
+      } else if (r.target.nodeName === "META") return "meta";
+      else if ((r.target === document.documentElement || r.target === document.body) && r.oldValue !== r.target.getAttribute(r.attributeName)) page = true;
     }
-    return false;
+    return page ? "page" : null;
   };
-  const scheduleTheme = () => {
-    metaCache = undefined;
+  const queueTheme = () => {
     if (themeQueued) return;
     themeQueued = true;
     nextFrame(() => {
@@ -1665,9 +2259,26 @@
       reportTheme();
     });
   };
+  const scheduleTheme = () => {
+    metaCache = undefined;
+    queueTheme();
+  };
+  const queuePageTheme = () => {
+    if (pageThemeQueued) return;
+    pageThemeQueued = true;
+    after(() => {
+      pageThemeQueued = false;
+      queueTheme();
+    }, PAGE_THEME_GAP_MS);
+  };
+  const themeChanged = (records) => {
+    const touched = themeTouched(records);
+    if (touched === "meta") scheduleTheme();
+    else if (touched === "page") queuePageTheme();
+  };
   const startTheme = () => {
     reportTheme();
-    const observer = new NativeMutationObserver((records) => themeTouched(records) && scheduleTheme());
+    const observer = new NativeMutationObserver(themeChanged);
     observer.observe(document.head || document.documentElement, {
       childList: true,
       subtree: true,

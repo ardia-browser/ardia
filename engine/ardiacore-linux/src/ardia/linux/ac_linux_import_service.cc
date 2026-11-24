@@ -880,7 +880,7 @@ class ImportService {
       if (outcome.withheld) {
         event.Set("type", "failed");
         event.Set("code", "ERR_SECRET_IN_REPLY");
-        event.Set("message", "The import result was withheld because it contained a password");
+        event.Set("message", "The import result was withheld because it contained an imported password, cookie or card number");
       } else {
         base::ListValue failed;
         base::ListValue warnings;

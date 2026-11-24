@@ -1,5 +1,6 @@
 package com.ardia.phone
 
+import com.ardia.design.Frosting
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
@@ -20,15 +21,30 @@ class LookModule : Module() {
 
         Function("systemLook") { systemLook.check() }
 
-        Function("hasGlass") { GlassRules.nativeGlassAsked(LaunchExtras.arguments(LaunchExtras.of(appContext.currentActivity?.intent))) }
+        Function("hasGlass") {
+            readGlassLaunch()
+            true
+        }
+
+        Function("glassRender") {
+            readGlassLaunch()
+            val context = appContext.reactContext
+            val blurs = Frosting.isBlurSupported && context != null && !LookSwitch.isOff(context) && !LookBudget.isDegraded(context)
+            LiquidGlassRules.render(android.os.Build.VERSION.SDK_INT, classic = false, flat = GlassLaunch.flat || GlassShaders.lens.failed, blurs = blurs).raw
+        }
 
         OnCreate {
             val context = appContext.reactContext ?: return@OnCreate
+            readGlassLaunch()
             SystemMotion.note(systemLook.seed())
+            GlassShaders.onFailed = PendingCounts.glassShaderFailures(context.applicationContext)
             systemLookObserver = SystemLookObserver(context.applicationContext) { systemLook.check() }.also { it.start() }
         }
 
-        OnActivityEntersForeground { systemLook.check() }
+        OnActivityEntersForeground {
+            systemLook.check()
+            if (GlassShaders.retryFailed()) AttachedLookViews.all().forEach { it.postInvalidate() }
+        }
 
         OnDestroy { systemLookObserver?.stop() }
 
@@ -36,6 +52,7 @@ class LookModule : Module() {
             check(PhoneLab.isOn) { "the page frost mode is a lab switch" }
             FrostSources.pageMode = FrostSources.PageMode.entries.firstOrNull { it.raw == mode } ?: FrostSources.PageMode.Live
             FrostSources.frosts().forEach { it.invalidate() }
+            FrostSources.allSources().forEach { it.invalidate() }
             FrostSources.pageMode.raw
         }
 
@@ -179,6 +196,7 @@ class LookModule : Module() {
             Prop("color") { view: DeckBackdropView, value: String? -> view.color = value }
             Prop("themeColors") { view: DeckBackdropView, value: List<String>? -> view.themeColors = value }
             Prop("darkThemeColors") { view: DeckBackdropView, value: List<String>? -> view.darkThemeColors = value }
+            Prop("themeLook") { view: DeckBackdropView, value: Map<String, Any?>? -> view.themeLook = ThemeLook.from(value) }
             Prop("dark") { view: DeckBackdropView, value: Boolean? -> view.dark = value }
             Prop("reduceMotion") { view: DeckBackdropView, value: Boolean? -> view.reduceMotion = value == true }
             Prop("reduceTransparency") { view: DeckBackdropView, value: Boolean? -> view.reduceTransparency = value == true }
@@ -190,6 +208,7 @@ class LookModule : Module() {
             Prop("color") { view: ProfileBackdropView, value: String? -> view.color = value }
             Prop("themeColors") { view: ProfileBackdropView, value: List<String>? -> view.themeColors = value }
             Prop("darkThemeColors") { view: ProfileBackdropView, value: List<String>? -> view.darkThemeColors = value }
+            Prop("themeLook") { view: ProfileBackdropView, value: Map<String, Any?>? -> view.themeLook = ThemeLook.from(value) }
             Prop("dark") { view: ProfileBackdropView, value: Boolean? -> view.dark = value }
             Prop("themed") { view: ProfileBackdropView, value: Boolean? -> view.themed = value == true }
             Prop("softened") { view: ProfileBackdropView, value: Boolean? -> view.softened = value == true }
@@ -217,6 +236,7 @@ class LookModule : Module() {
             Prop("color") { view: FrostView, value: String? -> view.color = value }
             Prop("themeColors") { view: FrostView, value: List<String>? -> view.themeColors = value }
             Prop("darkThemeColors") { view: FrostView, value: List<String>? -> view.darkThemeColors = value }
+            Prop("themeLook") { view: FrostView, value: Map<String, Any?>? -> view.themeLook = ThemeLook.from(value) }
             Prop("dark") { view: FrostView, value: Boolean? -> view.dark = value }
             Prop("reduceTransparency") { view: FrostView, value: Boolean? -> view.reduceTransparency = value == true }
             OnViewDidUpdateProps { view -> view.update() }
@@ -230,6 +250,7 @@ class LookModule : Module() {
             Prop("color") { view: GlassView, value: String? -> view.color = value }
             Prop("themeColors") { view: GlassView, value: List<String>? -> view.themeColors = value }
             Prop("darkThemeColors") { view: GlassView, value: List<String>? -> view.darkThemeColors = value }
+            Prop("themeLook") { view: GlassView, value: Map<String, Any?>? -> view.themeLook = ThemeLook.from(value) }
             Prop("dark") { view: GlassView, value: Boolean? -> view.dark = value }
             Prop("reduceTransparency") { view: GlassView, value: Boolean? -> view.reduceTransparency = value == true }
             Prop("shape") { view: GlassView, value: String? -> view.shape = value }
@@ -238,10 +259,18 @@ class LookModule : Module() {
             Prop("surface") { view: GlassView, value: String? -> view.surface = value }
             Prop("tinted") { view: GlassView, value: Boolean? -> view.tinted = value == true }
             Prop("barShadow") { view: GlassView, value: Boolean? -> view.barShadow = value == true }
+            Prop("classicChrome") { view: GlassView, value: Map<String, Any?>? -> view.classicFill = GlassRules.chromeFill(value) }
             Prop("shown") { view: GlassView, value: Boolean? -> view.shown = value ?: true }
             Prop("shownMs") { view: GlassView, value: Float? -> view.shownMs = (value ?: GlassRules.DEFAULT_SHOWN_MS).coerceAtLeast(0f) }
             OnViewDidUpdateProps { view -> view.update() }
         }
+    }
+
+    private fun readGlassLaunch() {
+        val activity = appContext.currentActivity ?: return
+        val arguments = LaunchExtras.arguments(LaunchExtras.of(activity.intent))
+        GlassLaunch.flat = LiquidGlassRules.flatAsked(arguments)
+        GlassLaunch.overPage = LiquidGlassRules.overPageAsked(arguments)
     }
 
     companion object {

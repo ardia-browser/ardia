@@ -24,6 +24,10 @@
 //     --idle <secs>        each idle window (default 60)
 //     --port <n>           the instances' CDP port (default 9461). One instance runs at a time
 //     --page-port <n>      the test pages' server port (default 9462); templates restore pages from it, so keep it fixed
+//     --template-cache <dir>  where finished template profiles are kept between out dirs (default <apps>/.templates),
+//                          keyed by the copy's version, build, code signature hash, bundled uBO and JS bundle, the page
+//                          port, window, screen height, --env and --launch-tab; a browser with --base is never cached
+//     --template-max-age <hours>  a cached template older than this is made again (default 12; 0 never caches)
 //     --deadline <mins>    stop starting items after this long (default 100); run again to resume
 //     --gate away|off      away (default): every item waits until the owner is away (screen locked with no input for
 //                          60 s, or no keyboard, mouse or trackpad input for --away secs) and is thrown away, its browser quit at once, the
@@ -72,8 +76,12 @@ import { cpus, loadavg, totalmem } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { appEnv, launchVariables, mergeLaunchEnv } from "../../../../scripts/lib/instance.mjs";
+import { appEnv, launchVariables, mergeLaunchEnv, sleep } from "../../../../scripts/lib/instance.mjs";
 import { mergeRivals, rivalWarnings, RivalsRefused } from "./xbench-rivals.mjs";
+import { appIdentity, copyCachedTemplate, fileSha256, keyProblems, lookupTemplate, storeTemplate, TEMPLATE_MAX_AGE_HOURS, templateKey } from "./template-cache.mjs";
+import { templateSizes } from "./template-state.mjs";
+import { median } from "./median.mjs";
+import { kindOf, processRows } from "./processes.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "../../../..");
@@ -90,6 +98,8 @@ const { values: opt, positionals } = parseArgs({
     idle: { type: "string", default: "60" },
     port: { type: "string", default: "9461" },
     "page-port": { type: "string", default: "9462" },
+    "template-cache": { type: "string" },
+    "template-max-age": { type: "string", default: String(TEMPLATE_MAX_AGE_HOURS) },
     deadline: { type: "string", default: "100" },
     gate: { type: "string", default: "away" },
     window: { type: "string", default: "40,80" },
@@ -113,14 +123,7 @@ if (opt.help || !positionals[0]) {
   process.exit(opt.help ? 0 : 64);
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (...a) => console.error(`[xbench ${new Date().toISOString().slice(11, 19)}]`, ...a);
-const median = (xs) => {
-  const s = xs.filter(Number.isFinite).sort((a, b) => a - b);
-  if (!s.length) return NaN;
-  const m = s.length >> 1;
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-};
 const out = resolve(opt.out);
 const port = +opt.port;
 const WIN = { x: +opt.window.split(",")[0], y: +opt.window.split(",")[1], w: 1280, h: 800 };
@@ -363,20 +366,6 @@ class Cdp {
     this.root?.close();
     this.root = null;
   }
-}
-
-function processRows() {
-  return execFileSync("ps", ["-axww", "-o", "pid=,ppid=,command="], { encoding: "utf8", maxBuffer: 64 << 20 })
-    .split("\n").map((l) => l.trim().match(/^(\d+)\s+(\d+)\s+(.*)$/)).filter(Boolean)
-    .map(([, pid, ppid, command]) => ({ pid: +pid, ppid: +ppid, command }));
-}
-
-function kindOf(command) {
-  const type = command.match(/--type=(\S+)/)?.[1];
-  if (!type) return /crashpad_handler/.test(command) ? "crashpad" : "browser";
-  if (type === "utility") return `utility:${command.match(/--utility-sub-type=([\w.]+)/)?.[1]?.split(".")[0] ?? "?"}`;
-  if (type === "renderer" && command.includes("--extension-process")) return "extension";
-  return type;
 }
 
 function info(app) {
@@ -625,8 +614,37 @@ class PrefsGuard {
   }
 }
 
+const templateCacheDir = () => resolve(opt["template-cache"] ?? join(opt.apps, ".templates"));
+const cachedTemplateSizes = (name) => (dir) => (isArdia(name) ? templateSizes(join(dir, "home/data")) : null);
+const validTemplate = (record) => (record?.pages?.length ? [] : ["it restores no page"]);
+
+function cachedTemplateKey(name) {
+  if (!(+opt["template-max-age"] > 0) || opt.base.some((b) => b.startsWith(`${name}=`))) return null;
+  const app = bundleOf(name);
+  const identity = appIdentity(app);
+  const key = templateKey({
+    identity: { ...identity, ubo: identity.ubo ?? "none" }, bundleSha: fileSha256(join(app, "Contents/Resources/main.jsbundle")) ?? "none",
+    pagePort: +opt["page-port"], recipe: `xbench-${name}`, harness: HARNESS, launchTab: opt["launch-tab"], window: opt.window,
+    screen: probe("screen").h, env: opt.env.filter((e) => e.startsWith(`${name}=`)).join(" ") || "none",
+  });
+  const problems = keyProblems(key);
+  if (problems.length) log(`${name}: not caching its template (${problems.join("; ")})`);
+  return problems.length ? null : key;
+}
+
 async function makeTemplate(name) {
   const dir = templateDir(name);
+  const key = cachedTemplateKey(name);
+  if (key) {
+    const checks = { validate: validTemplate, sizesOf: cachedTemplateSizes(name) };
+    const found = lookupTemplate(templateCacheDir(), key, { maxAgeHours: +opt["template-max-age"], ...checks });
+    const copied = found.hit ? copyCachedTemplate(found, dir, checks) : null;
+    if (copied?.ok) {
+      log(`${name} template: cached ${found.entry.made} in ${found.dir}`);
+      return;
+    }
+    log(`${name}: making its template (${(copied?.problems ?? found.problems).join("; ")})`);
+  }
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
   const baseHome = opt.base.find((b) => b.startsWith(`${name}=`))?.slice(name.length + 1);
@@ -654,6 +672,10 @@ async function makeTemplate(name) {
   if (isArdia(name)) fixArdiaSession(join(dir, "home/data/session.json"));
   for (const f of ["SingletonLock", "SingletonSocket", "SingletonCookie"]) rmSync(join(dir, "home/udd", f), { force: true });
   log(`${name} template: ${version.Browser}`);
+  if (key) {
+    const record = { ...JSON.parse(readFileSync(join(dir, "template.json"), "utf8")), sizes: cachedTemplateSizes(name)(dir) };
+    log(`${name} template stored in ${storeTemplate(templateCacheDir(), key, dir, record)}`);
+  }
 }
 
 function fixArdiaSession(file) {

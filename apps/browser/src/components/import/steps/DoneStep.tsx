@@ -6,6 +6,7 @@ import { plural } from "../../../state/browser/model";
 import { useProfileOrder, useProfileRecords } from "../../../state/profiles/hooks";
 import type { ImportCounts } from "../../../state/import/apply";
 import { backTo, closeImport, openFoundExtensions, type ImportFlow } from "../../../state/import/flow";
+import { takeOfferedEngine } from "../../../state/import/searchEngine";
 import { useOnboarding } from "../../../state/onboarding/onboarding";
 import { Button, space, Symbol, Text, useTheme } from "../../ui";
 import { APP, kindTitle } from "../model";
@@ -69,6 +70,22 @@ function LeftBehind({ notes, failed }: { notes: string[]; failed: boolean }) {
   );
 }
 
+function SearchEngineLine({ flow, failed }: { flow: ImportFlow; failed: boolean }) {
+  const { source, step } = flow;
+  if (step.name !== "done" || !step.searchEngine) return null;
+  const { name, offered } = step.searchEngine;
+  const from = source?.name ?? "Your other browser";
+  const line = offered ? `${from} searches with ${name}. ${APP} kept the search engine you chose.` : `Search uses ${name} now, as in ${from}. You can change it in Settings › Profiles.`;
+  return (
+    <View style={{ alignItems: failed ? "flex-start" : "center", gap: space.m, marginTop: failed ? space.s : 0 }}>
+      <Text size="small" tone="textSecondary" style={failed ? undefined : { textAlign: "center" }}>
+        {line}
+      </Text>
+      {offered && <Button title={`Use ${name} for Search`} onPress={takeOfferedEngine} />}
+    </View>
+  );
+}
+
 function RestoreArcFolders() {
   const bookmarks = useBookmarks((b) => b);
   const profiles = useProfileRecords();
@@ -103,6 +120,7 @@ export function DoneBody({ flow }: { flow: ImportFlow }) {
           </Text>
         ))}
         {summary.length > 0 && <Text size="small" tone="textSecondary" style={{ marginTop: space.l }}>{`Imported ${summary.join(", ")}.`}</Text>}
+        <SearchEngineLine flow={flow} failed />
         <LeftBehind notes={notes} failed />
         <ExtensionList flow={flow} />
         <Text size="small" tone="textTertiary" style={{ marginTop: space.l }}>
@@ -119,6 +137,7 @@ export function DoneBody({ flow }: { flow: ImportFlow }) {
       <Text tone="textSecondary" style={{ textAlign: "center" }}>
         {summary.length ? `Imported ${summary.join(", ")}.` : "There was nothing new to import."}
       </Text>
+      <SearchEngineLine flow={flow} failed={false} />
       <LeftBehind notes={notes} failed={false} />
       <ExtensionList flow={flow} />
       <RestoreArcFolders />

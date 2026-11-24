@@ -1,0 +1,245 @@
+{
+  "manifest": 2,
+  "name": "v2-showcase",
+  "title": "V2 Showcase",
+  "description": "Every v2 surface in one plugin: commands, prompts, toasts, a sidebar view, a toolbar popover, a sidecar panel, omnibox, a tab menu, a decide hook, a theme, settings and tools.",
+  "version": "2.0.0",
+  "icon": "sparkles",
+  "main": "dist/index.js",
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:pick-tab",
+    "onCommand:close-tabs",
+    "onCommand:set-default-repo",
+    "onCommand:set-token",
+    "onCommand:check-stars",
+    "onCommand:browse-repos",
+    "onCommand:open-sidecar",
+    "onCommand:tab-summary",
+    "onView:sidebar",
+    "onToolbar:showcase",
+    "onOmnibox:gh",
+    "onMenu:tab"
+  ],
+  "permissions": {
+    "tabs": "write",
+    "fullUrls": true,
+    "activePage": true,
+    "workspace": true,
+    "commands": true,
+    "storage": true,
+    "secrets": true,
+    "network": [
+      "api.github.com"
+    ]
+  },
+  "contributes": {
+    "commands": [
+      {
+        "name": "pick-tab",
+        "title": "Showcase: Jump to a Tab",
+        "icon": "rectangle.stack",
+        "keywords": [
+          "switch",
+          "tabs",
+          "quick pick"
+        ]
+      },
+      {
+        "name": "close-tabs",
+        "title": "Showcase: Close Tabs…",
+        "icon": "xmark.square",
+        "keywords": [
+          "close",
+          "clean up"
+        ]
+      },
+      {
+        "name": "set-default-repo",
+        "title": "Showcase: Set Default Repository",
+        "icon": "book.closed",
+        "keywords": [
+          "github"
+        ]
+      },
+      {
+        "name": "set-token",
+        "title": "Showcase: Set GitHub Token",
+        "icon": "key",
+        "keywords": [
+          "github",
+          "secret"
+        ]
+      },
+      {
+        "name": "check-stars",
+        "title": "Showcase: Check Stars",
+        "icon": "star",
+        "keywords": [
+          "github"
+        ]
+      },
+      {
+        "name": "browse-repos",
+        "title": "Showcase: Browse Repositories",
+        "icon": "books.vertical",
+        "view": "repo-browser",
+        "keywords": [
+          "github"
+        ]
+      },
+      {
+        "name": "open-sidecar",
+        "title": "Showcase: Open Sidecar",
+        "icon": "rectangle.righthalf.inset.filled",
+        "keywords": [
+          "split",
+          "panel"
+        ]
+      },
+      {
+        "name": "tab-summary",
+        "title": "Showcase: About This Tab",
+        "icon": "info.circle"
+      }
+    ],
+    "tools": [
+      {
+        "name": "repo-stars",
+        "title": "Repository stats",
+        "description": "Stars, forks and open issues for a GitHub repository.",
+        "timeout": 15
+      },
+      {
+        "name": "active-page",
+        "title": "Active page",
+        "description": "The active tab's address, title and selection.",
+        "timeout": 5
+      }
+    ],
+    "hooks": [
+      "tab.opening",
+      "tab.activated",
+      "tab.opened",
+      "tab.closed"
+    ],
+    "settings": {
+      "rows": [
+        {
+          "key": "focusGuard",
+          "title": "Focus Guard",
+          "description": "Stops navigation to the hosts below.",
+          "type": "toggle",
+          "default": false
+        },
+        {
+          "key": "blockedHosts",
+          "title": "Blocked hosts",
+          "description": "Comma-separated, like news.ycombinator.com, reddit.com.",
+          "type": "text",
+          "default": ""
+        },
+        {
+          "key": "refreshMinutes",
+          "title": "Refresh stars every",
+          "description": "Minutes between toolbar badge refreshes.",
+          "type": "number",
+          "default": 30,
+          "min": 5,
+          "max": 240,
+          "step": 5
+        },
+        {
+          "key": "badgeTone",
+          "title": "Badge colour",
+          "type": "choice",
+          "default": "accent",
+          "choices": [
+            {
+              "value": "accent",
+              "title": "Accent"
+            },
+            {
+              "value": "success",
+              "title": "Green"
+            },
+            {
+              "value": "warning",
+              "title": "Amber"
+            },
+            {
+              "value": "secondary",
+              "title": "Quiet"
+            }
+          ]
+        },
+        {
+          "key": "countVisits",
+          "title": "Count tab switches on the toolbar",
+          "type": "toggle",
+          "default": true
+        },
+        {
+          "key": "defaultRepo",
+          "title": "Default repository",
+          "type": "text",
+          "default": "nodejs/node"
+        },
+        {
+          "key": "githubToken",
+          "title": "GitHub token",
+          "description": "Optional; raises GitHub's rate limit. Kept in the Keychain.",
+          "type": "secret"
+        }
+      ]
+    },
+    "menus": {
+      "tab": [
+        {
+          "command": "tab-summary",
+          "title": "About This Tab",
+          "icon": "info.circle"
+        }
+      ]
+    },
+    "toolbar": [
+      {
+        "id": "showcase",
+        "title": "V2 Showcase",
+        "icon": "sparkles",
+        "view": "toolbar-popover"
+      }
+    ],
+    "sidebarViews": [
+      {
+        "id": "sidebar",
+        "title": "Showcase",
+        "icon": "sparkles"
+      }
+    ],
+    "panels": [
+      {
+        "id": "sidecar",
+        "title": "Showcase Sidecar",
+        "icon": "rectangle.righthalf.inset.filled",
+        "mode": "sidecar",
+        "file": "web/index.html",
+        "retainContext": true
+      }
+    ],
+    "omnibox": [
+      {
+        "id": "gh",
+        "title": "GitHub",
+        "keyword": "gh"
+      }
+    ],
+    "themes": [
+      {
+        "id": "showcase",
+        "title": "Showcase Aurora",
+        "file": "themes/showcase.json"
+      }
+    ]
+  }
+}

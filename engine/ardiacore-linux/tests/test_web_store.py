@@ -14,7 +14,7 @@ class WebStoreQueueTests(unittest.TestCase):
         cls.directory = tempfile.TemporaryDirectory(prefix='ardia-web-store-')
         cls.binary = pathlib.Path(cls.directory.name) / 'web-store'
         subprocess.run([os.environ.get('CXX', 'c++'), '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g',
-                        '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-I', str(ROOT / 'src'),
+                        '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-I', str(ROOT / 'src'), '-I', str(ROOT.parent / 'ardiacore-desktop' / 'src'),
                         str(LINUX / 'ac_linux_web_store_queue.cc'), str(ROOT / 'tests/web_store_test.cc'),
                         '-o', str(cls.binary)], check=True, text=True, timeout=120)
 

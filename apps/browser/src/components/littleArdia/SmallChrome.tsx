@@ -14,7 +14,7 @@ import { insecureLevel } from "../toolbar/Toolbar";
 import { SMALL_BAR_HEIGHT } from "../../state/windows/small";
 
 export const SMALL_INSET = CARD_INSET;
-export { SMALL_BAR_BUTTON, SMALL_BAR_GAP, SMALL_FIELD_GAP, SMALL_WINDOW_FRAME, smallWindowRadius } from "./tokens";
+export { SMALL_BAR_BUTTON, SMALL_WINDOW_FRAME, smallWindowRadius } from "./tokens";
 const HOST = { flexShrink: 0, maxWidth: "60%" } as const;
 const FLEX = { flex: 1 } as const;
 
@@ -34,10 +34,10 @@ export function SmallBar({
   fieldLeft: number;
   field: ReactNode;
   buttons: SmallBarButton[];
-  trailing?: ReactNode;
+  trailing?: ReactNode[];
   children?: ReactNode;
 }) {
-  const count = buttons.length + (trailing ? 1 : 0);
+  const count = buttons.length + (trailing?.length ?? 0);
   const buttonsWidth = count * SMALL_BAR_BUTTON + Math.max(0, count - 1) * SMALL_BAR_GAP;
   const mid = height / 2;
   const right = SMALL_INSET + trailingRoom;
@@ -76,7 +76,7 @@ export function PageLabel({ tab, hovered = false, label }: { tab: Tab; hovered?:
         backgroundColor: hovered ? theme.toolbarHover : undefined,
       }}
     >
-      <FieldLoadFill key={tab.id} tabId={tab.id} color={theme.accent} height={FIELD_HEIGHT} radius={radius.tile} />
+      <FieldLoadFill tabId={tab.id} color={theme.accent} height={FIELD_HEIGHT} radius={radius.tile} />
       {insecure ? (
         <Symbol name="lock.open.trianglebadge.exclamationmark.fill" size={12} color={theme.textSecondary} style={{ width: 16, height: 16 }} />
       ) : tab.url ? (
@@ -86,17 +86,16 @@ export function PageLabel({ tab, hovered = false, label }: { tab: Tab; hovered?:
       )}
       {tab.url ? (
         <View style={{ flex: 1, flexDirection: "row", alignItems: "center" }}>
-          <Text accessible={!!label} accessibilityLabel={label} lines={1} ellipsizeMode="head" weight="medium" style={HOST}>
+          <Text accessible={!!label} accessibilityLabel={label} lines={1} ellipsizeMode="head" weight="medium" ardiaCentersCapitals style={HOST}>
             {host}
           </Text>
           {title && title !== host ? <FadeLabel text={`  ${title}`} fontSize={font.body.fontSize} color={theme.textSecondary} fadeWidth={14} style={{ flex: 1, height: 18 }} /> : null}
         </View>
       ) : (
-        <Text lines={1} tone="placeholder" style={FLEX}>
+        <Text lines={1} tone="placeholder" ardiaCentersCapitals style={FLEX}>
           Search or enter address
         </Text>
       )}
     </View>
   );
 }
-

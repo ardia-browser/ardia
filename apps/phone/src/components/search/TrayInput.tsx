@@ -7,6 +7,7 @@ import { useSearchCompletedFor, useSearchCompletion } from "../../state/search/h
 import { useTabs } from "../../state/tabs/store";
 import { countUsage } from "../../state/telemetry/telemetry";
 import { font } from "../ui";
+import { searchPanel } from "./searchPanelTokens";
 
 export type TrayInputHandle = { focus(): void; blur(): void; clearsInPlace(): boolean };
 
@@ -22,6 +23,7 @@ type Props = {
   onTyped: (text: string) => void;
   onSubmit: (text: string) => void;
   style: StyleProp<TextStyle>;
+  weight?: "regular" | "medium";
 };
 
 const SHARED = {
@@ -37,7 +39,7 @@ export const TrayInput = forwardRef<TrayInputHandle, Props>(function TrayInput(p
   return completingFieldIsNative() ? <CompletingInput {...props} ref={ref} /> : <PlainInput {...props} ref={ref} />;
 });
 
-const CompletingInput = forwardRef<TrayInputHandle, Props>(function CompletingInput({ start, selectsStart, color, placeholderColor, accent, keyboardAppearance, holdsScroll, nativeID, onTyped, onSubmit, style }, ref) {
+const CompletingInput = forwardRef<TrayInputHandle, Props>(function CompletingInput({ start, selectsStart, color, placeholderColor, accent, keyboardAppearance, holdsScroll, nativeID, onTyped, onSubmit, style, weight = "regular" }, ref) {
   const field = useRef<CompletingFieldHandle>(null);
   const [typed, setTyped] = useState(start);
   const completion = useSearchCompletion();
@@ -79,7 +81,7 @@ const CompletingInput = forwardRef<TrayInputHandle, Props>(function CompletingIn
       color={color}
       placeholderTextColor={placeholderColor}
       fontSize={font.title3.fontSize}
-      fontWeight="regular"
+      fontWeight={weight}
       onTypedChange={(next) => {
         setTyped(next);
         onTyped(next);
@@ -94,7 +96,7 @@ const countFieldScroll = () => {
   if (!useTabs.getState().incognito) countUsage("address_field_scrolled");
 };
 
-const PlainInput = forwardRef<TrayInputHandle, Props>(function PlainInput({ start, selectsStart, color, placeholderColor, accent, keyboardAppearance, onTyped, onSubmit, style }, ref) {
+const PlainInput = forwardRef<TrayInputHandle, Props>(function PlainInput({ start, selectsStart, color, placeholderColor, accent, keyboardAppearance, onTyped, onSubmit, style, weight = "regular" }, ref) {
   const input = useRef<TextInputInstance>(null);
   const [selection, setSelection] = useState<{ start: number; end: number } | undefined>(
     selectsStart && start ? { start: 0, end: start.length } : { start: start.length, end: start.length },
@@ -104,7 +106,7 @@ const PlainInput = forwardRef<TrayInputHandle, Props>(function PlainInput({ star
     <TextInput
       ref={input}
       {...SHARED}
-      style={[font.title3, style, { color }]}
+      style={[font.title3, style, { color }, weight === "medium" ? MEDIUM : null]}
       defaultValue={start}
       selection={selection}
       onSelectionChange={() => {
@@ -115,8 +117,11 @@ const PlainInput = forwardRef<TrayInputHandle, Props>(function PlainInput({ star
       placeholderTextColor={placeholderColor}
       selectionColor={accent}
       keyboardAppearance={keyboardAppearance}
+      maxFontSizeMultiplier={searchPanel.maxTextScale}
       submitBehavior="submit"
       disableFullscreenUI
     />
   );
 });
+
+const MEDIUM = { fontWeight: "500" } as const;

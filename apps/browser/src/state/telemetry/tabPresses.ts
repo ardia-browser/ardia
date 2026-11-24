@@ -2,8 +2,9 @@ import { pressesWithoutRelease, pressRepeated } from "../../platform/focus";
 import { capture, consentToken, stillValid, onConsentPeriodChange, type ConsentToken } from "./client";
 import { takeHoverCardCounts } from "./hoverCardCounts";
 import { percentile } from "./transport";
+import { consentOrNow, countFor } from "./countFor";
 
-export type TabPressEnd = "click" | "dragClick" | "drag";
+type TabPressEnd = "click" | "dragClick" | "drag";
 
 export type TabPressDrop = "no_release" | "not_dragged" | "no_start" | "start_mismatch";
 
@@ -51,6 +52,10 @@ const empty = () => ({
   range_selects: 0,
   range_from_shown: 0,
   page_refused: 0,
+  tile_double_returns: 0,
+  tile_double_reloads: 0,
+  tile_double_fresh: 0,
+  tile_double_missed: 0,
 });
 let tally = empty();
 let pending = false;
@@ -73,7 +78,12 @@ function takeLostReleases() {
   return fresh;
 }
 
+let period = {};
+const startedIn = new WeakMap<object, object>();
+const ofThisPeriod = (started?: object) => !started || (startedIn.get(started) ?? period) === period;
+
 function forgetPresses() {
+  period = {};
   tally = empty();
   pending = false;
   unansweredOut = null;
@@ -108,7 +118,8 @@ export function noteRowPress(shownTabEmpty: boolean): Promise<void> {
 
 onConsentPeriodChange(() => (emitTabPresses(null), forgetPresses()));
 
-export function notePressStarted(switchedOnPress = false, windowKey = true) {
+export function notePressStarted(switchedOnPress = false, windowKey = true, press?: PressOut) {
+  if (press) startedIn.set(press, period);
   if (pending) tally.unanswered++;
   pending = true;
   tally.presses++;
@@ -132,7 +143,9 @@ export function notePressEnded(end: TabPressEnd, tabId: string | null = null, dr
   shown = tabId ? { tabId, at: Date.now() } : null;
 }
 
-function countPressOut({ drift, windowKey }: PressOut, withoutPress: boolean) {
+function countPressOut(out: PressOut, withoutPress: boolean) {
+  if (!ofThisPeriod(out)) return;
+  const { drift, windowKey } = out;
   tally[`drift_${drift}` as const]++;
   if (!withoutPress) return;
   tally.press_out_no_press++;
@@ -173,17 +186,26 @@ export function notePagePress(tabId: string) {
   if (ms >= 0 && ms < PAGE_CLICK_WINDOW_MS && toPageClick.length < MAX_SAMPLES) toPageClick.push(ms);
 }
 
+export type TileDoubleClick = "return" | "reload" | "fresh" | "missed";
+
+const TILE_DOUBLE_FIELD = { return: "tile_double_returns", reload: "tile_double_reloads", fresh: "tile_double_fresh", missed: "tile_double_missed" } as const;
+
+export const noteTileDoubleClick = (what: TileDoubleClick, consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void tally[TILE_DOUBLE_FIELD[what]]++);
+
 export const notePagePressRefused = () => void tally.page_refused++;
 
-export const noteDragWithoutDrop = () => void tally.drags_without_drop++;
+export const noteDragBegan = (drag: object) => void startedIn.set(drag, period);
 
-export type SidebarDropKind = "gap" | "split_left" | "split_right" | "split_pinned" | "split_unpinned" | "tile" | "other_profile" | "profile_icon";
+export const noteDragWithoutDrop = (drag?: object) => void (ofThisPeriod(drag) && tally.drags_without_drop++);
 
-export const noteSidebarDrop = (kind: SidebarDropKind) => void tally[`drops_${kind}`]++;
+type SidebarDropKind = "gap" | "split_left" | "split_right" | "split_pinned" | "split_unpinned" | "tile" | "other_profile" | "profile_icon";
+
+export const noteSidebarDrop = (kind: SidebarDropKind, drag?: object) => void (ofThisPeriod(drag) && tally[`drops_${kind}`]++);
 
 export type DragProfileHold = "icon" | "edge";
 
-export function noteDragProfileSwitch(by: DragProfileHold | null) {
+export function noteDragProfileSwitch(by: DragProfileHold | null, drag?: object) {
+  if (!ofThisPeriod(drag)) return;
   tally.drag_profile_switches++;
   if (by === "icon") tally.drag_profile_holds++;
   else if (by === "edge") tally.drag_profile_edge_holds++;

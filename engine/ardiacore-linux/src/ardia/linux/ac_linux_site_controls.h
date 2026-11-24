@@ -57,6 +57,7 @@ enum class BlockerOp {
   kRestoreElements,
   kAddList,
   kRemoveList,
+  kRemoveAllowed,
 };
 
 inline constexpr size_t kMaxFollowedLists = 512;
@@ -98,6 +99,9 @@ std::variant<BlockerRequest, Failure> PrepareBlockerCall(std::string_view name,
                                                          const base::DictValue& args);
 
 bool Mutates(BlockerOp op);
+bool ChangedBlocker(BlockerOp op, const base::Value* value);
+bool WaitsForFollowers(BlockerOp op);
+std::variant<base::Value, Failure> AfterFollowers(std::variant<base::Value, Failure> reply, int failed);
 bool AnswersWithoutBlocker(const BlockerRequest& request);
 std::optional<Failure> PrivateBlockerRefusal(std::string_view name, const base::DictValue& args,
                                              bool private_window);

@@ -35,7 +35,7 @@ function profileTinted(theme: Theme, color: string, tinted: boolean, share = PRO
   return toHex([mix(r, pr), mix(g, pg), mix(b, pb), a * 255]);
 }
 
-export function controlGlassTint(theme: Theme, state: GlassState, tint: number): string {
+function controlGlassTint(theme: Theme, state: GlassState, tint: number): string {
   const [r, g, b, a] = parseColor(theme.pinnedResting);
   const alpha = Math.min(1, a * CONTROL_FILL_SHARE * STATE_GAIN[state] + tint * TINT_LIFT_PER_SHARE);
   return profileTinted(theme, toHex([r, g, b, alpha * 255]), tint > 0, tint, theme.accent);

@@ -221,3 +221,26 @@ test("a title, favicon, zoom, mute or activity change on a holder leaves the cop
     }
   }
 });
+
+test("a tab falling asleep or waking wakes its row, whose flags carry the sleep and the struck title", async () => {
+  const { useLifecycle } = await import("./sleepingTabs.ts");
+  const { SLEEPING, STRUCK } = await import("../sidebar/rowState.ts");
+  const { w, ids } = session(3);
+  const [, b, c] = ids;
+  S().updateSettings({ strikeSleepingTabs: true });
+  let woken = [];
+  const offs = [b, c].map((id) => watchTabState(id, () => woken.push(id)));
+  useLifecycle.setState((l) => ({ discarded: { ...l.discarded, [b]: true } }));
+  assert.deepEqual(woken, [b]);
+  assert.ok(rowFlags(S(), w, b) & SLEEPING);
+  assert.ok(rowFlags(S(), w, b) & STRUCK);
+  assert.equal(rowFlags(S(), w, c) & (SLEEPING | STRUCK), 0);
+  woken = [];
+  useLifecycle.setState((l) => {
+    const { [b]: _, ...rest } = l.discarded;
+    return { discarded: rest };
+  });
+  assert.deepEqual(woken, [b]);
+  assert.equal(rowFlags(S(), w, b) & (SLEEPING | STRUCK), 0);
+  offs.forEach((off) => off());
+});

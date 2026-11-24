@@ -4,7 +4,8 @@ import { appVersion } from "../../platform/appInfo";
 import { haptics } from "../app/haptics";
 import { blocking, type BlockingCategory, type BlockingState } from "../../platform/blocking";
 import { pages } from "../../platform/pages";
-import { openExternal, shareText } from "../../platform/system";
+import { cleanUrl, linkLines } from "@ardia/core/src/cleanUrl.ts";
+import { openExternal, shareLinkList } from "../../platform/system";
 import { openPage } from "../browse/store";
 import { history } from "../history/store";
 import { forgetHiddenHistory } from "../library/store";
@@ -14,6 +15,7 @@ import { applySearchEngine } from "../search/store";
 import { showToast } from "../toasts/store";
 import { clearArchivedTabs, currentTabs, setAutoArchiveInterval } from "../tabs/store";
 import type { AutoArchiveInterval } from "../tabs/tabModels";
+import { countUsage } from "../telemetry/telemetry";
 import { closeSettings } from "./nav";
 import type { ColorChoice, NightShadeMode, Preferences, SwipeNavigationMode } from "./preferences";
 import { clearSince, exportableUrls, FALLBACK_ENGINES, FILTER_LIST_ADDRESS, pickerEngines, listsUpdateFailed, websiteDataKinds, type ClearChoice, type ClearRange } from "./settingsRules";
@@ -73,6 +75,13 @@ export const setAutoOpenKeyboard = (on: boolean) => setPreference("autoOpensKeyb
 export const setSwipeNavigation = (mode: SwipeNavigationMode) => setPreference("swipeNavigation", mode);
 export const setCollapsesBottomBar = (on: boolean) => setPreference("collapsesBottomBar", on);
 export const setColorChoice = (choice: ColorChoice) => setPreference("colorChoice", choice);
+export const setDynamicColors = (on: boolean) => setPreference("dynamicColors", on);
+
+export function setMaterialYou(on: boolean) {
+  if (currentPreferences().materialYou === on) return;
+  setPreference("materialYou", on);
+  countUsage(on ? "material_you_turned_on" : "material_you_turned_off");
+}
 export const setInterfaceStyle = (choice: InterfaceStyleChoice) => setPreference("interfaceStyle", choice);
 export const setSchemeChoice = (choice: SchemeChoice) => setPreference("schemeChoice", choice);
 export const setArchiveInterval = (interval: AutoArchiveInterval) => setAutoArchiveInterval(interval);
@@ -139,6 +148,7 @@ export async function clearBrowsingData(choice: ClearChoice, range: ClearRange) 
     const since = clearSince(range, Date.now());
     history().clear(since);
     forgetHiddenHistory(since);
+    await settled(() => pages.forgetNightShadeVerdicts(since), undefined);
   }
   const kinds = websiteDataKinds(choice);
   if (kinds.length) await settled(() => pages.clearWebsiteData(kinds, clearSince(range, Date.now())), undefined);
@@ -154,7 +164,7 @@ export function exportOpenTabs() {
     showToast("No Open Tabs", "warning");
     return;
   }
-  quietly(() => shareText(urls.join("\n"), "Open Tabs from Ardia"));
+  quietly(() => shareLinkList(linkLines(urls.map(cleanUrl), false), "Open Tabs from Ardia"));
 }
 
 export function openFromSettings(url: string) {

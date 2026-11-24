@@ -1,3 +1,4 @@
+import { useShallow } from "zustand/react/shallow";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, PanResponder, StyleSheet, View } from "react-native";
 import { useTheme } from "../ui/theme";
@@ -166,14 +167,17 @@ function DividerHandle({ split, divider, width, height }: { split: SplitView; di
 const HANDLE_THICKNESS = 4;
 const HANDLE_LENGTH = 36;
 
+const NOT_DRAGGING = { dragging: null, x: -1, y: -1, lifted: null, outside: false, target: null } as const;
+
 export function DropTargets({ panes, origin }: { panes: Record<string, Rect>; origin: { x: number; y: number } | null }) {
   const windowId = useWindowId();
-  const dragging = useTabDrag((s) => (s.phase === "tab" && s.windowId === windowId ? s.tabId : null));
-  const x = useTabDrag((s) => (s.phase === "tab" ? s.x : -1));
-  const y = useTabDrag((s) => (s.phase === "tab" ? s.y : -1));
-  const lifted = useTabDrag((s) => (s.phase === "tab" ? s.lifted : null));
-  const outside = useTabDrag((s) => s.phase === "tab" && s.outside);
-  const target = useTabDrag((s) => (s.phase === "tab" ? s.target : null));
+  const { dragging, x, y, lifted, outside, target } = useTabDrag(
+    useShallow((s) =>
+      s.phase === "tab"
+        ? { dragging: s.windowId === windowId ? s.tabId : null, x: s.x, y: s.y, lifted: s.lifted, outside: s.outside, target: s.target }
+        : NOT_DRAGGING,
+    ),
+  );
   const draggedProfile = useTab(dragging ?? undefined, (t) => t?.profileId);
   const windowProfile = useWindowProfileId();
   const foreign = !!dragging && draggedProfile !== windowProfile;
@@ -315,17 +319,23 @@ export const SplitToast = memo(function SplitToast({ windowId }: { windowId: str
   const toast = useToasts((s) => s.toasts[windowId] ?? null);
   const [shown, setShown] = useState(toast);
   const [closing, setClosing] = useState(false);
+  const [held, setHeld] = useState(false);
   if (toast && toast !== shown) {
     setShown(toast);
     setClosing(false);
   } else if (!toast && shown && !closing) setClosing(true);
   useEffect(() => {
-    if (!toast || toast.sticky) return;
-    const timer = setTimeout(() => setClosing(true), toast.action ? TOAST_ACTION_MS : TOAST_MS);
+    if (!toast || toast.sticky || (held && toast.secondary)) return;
+    const timer = setTimeout(() => setClosing(true), toast.holdMs ?? (toast.action ? TOAST_ACTION_MS : TOAST_MS));
     return () => clearTimeout(timer);
-  }, [toast?.id]);
+  }, [toast?.id, held && !!toast?.secondary]);
   if (!shown) return null;
-  const action = shown.action;
+  const { action, secondary } = shown;
+  const pick = (chosen: typeof action) => () => {
+    chosen?.run();
+    setShown(null);
+    hideToast(windowId, shown.id);
+  };
   return (
     <Toast
       key={shown.id}
@@ -333,11 +343,11 @@ export const SplitToast = memo(function SplitToast({ windowId }: { windowId: str
       message={shown.message ?? undefined}
       icon={shown.icon ?? "rectangle.split.3x1"}
       action={action?.title}
-      onAction={() => {
-        action?.run();
-        setShown(null);
-        hideToast(windowId, shown.id);
-      }}
+      onAction={pick(action)}
+      secondary={secondary?.title}
+      onSecondary={pick(secondary)}
+      onHeld={secondary ? setHeld : undefined}
+      titleLines={shown.titleLines}
       closing={closing}
       onClosed={() => {
         setShown(null);

@@ -7,7 +7,7 @@ import { fixStatus, type FixStatus, type InstallHistory, type Issue } from "./fi
 import { gh, github } from "./github";
 import { APP_SOURCE, prop } from "./sql";
 
-const REPO = "mantrakp04/ardia";
+const REPO = "ardia-browser/ardia";
 const ISSUE_TTL_MS = 10 * 60_000;
 const LIST_LIMIT = 500;
 const REPORT_CACHE = { freshMs: 60_000, keepMs: 10 * 60_000 };

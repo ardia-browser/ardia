@@ -39,7 +39,7 @@ const tally = (html: string) =>
     .filter((s) => s.name !== "Not yet");
 
 const summaryOf = (sections: { name: string; items: number }[]) =>
-  sections.map((s) => (s.name === "Faster" ? "faster" : `${s.items} ${s.name.toLowerCase()}`)).join(" · ");
+  sections.map((s) => (s.name === "Faster" ? "faster" : `${s.items} ${s.name.toLowerCase()}`)).join(", ");
 
 const fit = (text: string, limit = DESCRIPTION_LIMIT) => {
   if (text.length <= limit) return text;

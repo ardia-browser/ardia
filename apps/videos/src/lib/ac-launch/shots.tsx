@@ -506,7 +506,7 @@ function SiteLogo({ width }: { width: number }) {
     <>
       {clear(924, 216, 476, 474)}
       {clear(924, 702, 476, 40)}
-      <Img src={staticFile("brand/mark.png")} style={{ ...at(941, 346, 443, 334), filter: `drop-shadow(0 ${18 * s}px ${22 * s}px rgba(32,63,50,0.16))` }} />
+      <Img src={staticFile("brand/mark.png")} style={{ ...at(995.5, 346, 334, 334), filter: `drop-shadow(0 ${18 * s}px ${22 * s}px rgba(32,63,50,0.16))` }} />
       <div
         style={{
           position: "absolute", right: (1440 - 1393) * s, top: 287 * s, transform: "rotate(-9deg)", transformOrigin: "100% 0",

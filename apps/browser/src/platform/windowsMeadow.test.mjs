@@ -34,7 +34,7 @@ test("the page is the bundled meadow with the app's own intro values in its head
   assert.equal(configIn(html).intro.wordmark, WORDMARK);
   assert.match(configIn(html).muteIcons.playing, /^<svg /);
   assert.match(configIn(html).muteIcons.muted, /^<svg /);
-  const poster = MEADOW_POSTERS.find((p) => p.file === "dawn-laptop-1917.webp");
+  const poster = MEADOW_POSTERS.find((p) => p.file === "dawn-laptop-1920.webp");
   assert.ok(html.includes(`url(${poster.uri}) 50% ${poster.horizon * 100}% / cover no-repeat`), "the dawn poster nearest 16:10 is the first paint");
   assert.ok(html.includes(`html{background:${colors.background}}`), "the page's background is the intro's, never black or white of its own");
 });

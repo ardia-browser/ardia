@@ -29,7 +29,7 @@ test("under BrowseLoadFreeze the page stays behind the tab's loading placeholder
   jest.spyOn(launchFlags, "launchArguments").mockImplementation(() => ({ ...NO_LAUNCH_ARGUMENTS, loadFreeze: 0.4 }));
   const tab = currentTabs().open[0]!;
   act(() => storeNavigation(tab.id, settled));
-  const root = renderSurface(<BrowsingScreen tab={tab} />, { flushTimers: false });
+  const root = renderSurface(<BrowsingScreen tabId={tab.id} />, { flushTimers: false });
   act(() => jest.advanceTimersByTime(5000));
   const shown = cover(root);
   expect(shown).toBeDefined();
@@ -40,7 +40,7 @@ test("under BrowseLoadFreeze the page stays behind the tab's loading placeholder
 test("without it, a settled page with a snapshot needs no cover", () => {
   const tab = currentTabs().open[0]!;
   act(() => storeNavigation(tab.id, settled));
-  const root = renderSurface(<BrowsingScreen tab={tab} />, { flushTimers: false });
+  const root = renderSurface(<BrowsingScreen tabId={tab.id} />, { flushTimers: false });
   act(() => jest.advanceTimersByTime(5000));
   expect(cover(root)).toBeUndefined();
   unmount(root);

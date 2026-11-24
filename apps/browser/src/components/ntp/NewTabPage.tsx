@@ -12,6 +12,7 @@ import { Omnibox } from "../omnibox/Omnibox";
 import { NTP_BAR } from "./tokens";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { markNewTabBar } from "../../state/omnibox/newTabMarks";
+import { useHeroBarFocusWhenShownAgain } from "../../state/tabs/newTabKeep";
 
 const BAR_HEIGHT = 112;
 const MARKS = {
@@ -28,9 +29,9 @@ const MARKS = {
 const MARK_SIZE = 100;
 const SUN_DELAY = 250;
 const MARK_LAYERS = [
-  { name: "sun", hidden: 56, delay: SUN_DELAY, spring: springs.smooth },
-  { name: "back", hidden: 40.5, delay: 170, spring: springs.smooth },
-  { name: "front", hidden: 34, delay: 80, spring: springs.smooth },
+  { name: "sun", hidden: 80, delay: SUN_DELAY, spring: springs.smooth },
+  { name: "back", hidden: 46, delay: 170, spring: springs.smooth },
+  { name: "front", hidden: 48, delay: 80, spring: springs.smooth },
 ] as const;
 const SUN_DRIFT = 6;
 const SUN_DRIFT_SPRING = springs.smooth;
@@ -49,12 +50,13 @@ export function barWidth(viewWidth: number) {
   return Math.min(content, viewWidth - 28);
 }
 
-export function NewTabPage({ tabId, toolbar = true }: { tabId: string; toolbar?: boolean }) {
+export function NewTabPage({ tabId, toolbar = true, kept = false }: { tabId: string; toolbar?: boolean; kept?: boolean }) {
   const theme = useTheme();
   const windowId = useWindowId();
   const incognito = useWindow(windowId, (w) => w?.kind === "private");
   const onboarding = useOnboarding((s) => s.windowId === windowId);
   const card = useCardAnchors((s) => s[windowId]);
+  useHeroBarFocusWhenShownAgain(windowId, tabId, kept);
   const [size, setSizeState] = useState<Size | null>(() => (lastSize && (!card || sameSize(lastSize.card, card)) ? lastSize.size : null));
   const setSize = (next: Size) => setSizeState((prev) => (prev && sameSize(prev, next) ? prev : next));
   useEffect(() => {

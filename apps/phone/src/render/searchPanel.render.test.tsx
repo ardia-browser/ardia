@@ -183,7 +183,7 @@ test("an answer for text the field has since typed past stays on offer, as main'
   unmount(root);
 });
 
-test("a row for an open tab says Switch to Tab under its title, with main's glyph rules on both phones in the redesign: no switch arrow, a 25-point search glyph and the favicon at 82% of its slot", () => {
+test("in the redesign a row is Arc's one line: a 20-point favicon or a 19-point glyph, the title, and Switch to Tab after it for an open tab, with no switch arrow", () => {
   presentSearch("start", "");
   const root = renderSurface(<SearchTray />);
   const field = typingField(root);
@@ -194,8 +194,8 @@ test("a row for an open tab says Switch to Tab under its title, with main's glyp
   expect(textOf(root)).toContain("Switch to Tab");
   const query = symbols.find((node) => node.props.name === "magnifyingglass")!;
   expect(symbols.some((node) => node.props.name === "arrowRightCircle")).toBe(false);
-  expect(query.props.size).toBe(25);
-  expect(favicons[0]!.props.size).toBeCloseTo(18.04, 2);
+  expect(query.props.size).toBe(19);
+  expect(favicons[0]!.props.size).toBe(20);
   unmount(root);
 });
 
@@ -215,7 +215,7 @@ test("the classic design keeps Compose's row: the switch arrow, a 19-point searc
   unmount(root);
 });
 
-test("the empty panel lists recent searches, then the Mac's tabs with the laptop before their host, and no open tabs", () => {
+test("the empty panel lists recent searches, then the Mac's tabs with the laptop after their title, and no open tabs", () => {
   rows = [visited("https://www.google.com/search?q=swift+concurrency", "swift concurrency - Google Search", 1)];
   presentSearch("start", "");
   const root = renderSurface(<SearchTray />);
@@ -255,7 +255,7 @@ test("the empty panel lists recent searches, then the Mac's tabs with the laptop
   const shown = useSearch.getState().rows;
   expect(shown.map((row) => row.title)).toEqual(["swift concurrency", "SwiftUI | Apple Developer Documentation"]);
   expect(shown.some((row) => row.kind === "page" && row.switchesTab)).toBe(false);
-  expect(textOf(root)).toContain("developer.apple.com");
+  expect(textOf(root)).not.toContain("developer.apple.com");
   expect(textOf(root)).not.toContain("Switch to Tab");
   expect(root.root.findAll((node) => (node.type as { name?: string })?.name === "Symbol" && node.props.name === "laptop").length).toBe(1);
   unmount(root);

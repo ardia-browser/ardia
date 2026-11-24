@@ -16,6 +16,7 @@ jobs:
   manage:
     runs-on: ubuntu-latest
     if: >-
+      github.event.comment.user.type != 'Bot' &&
       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
       (startsWith(github.event.comment.body, 'vouch') ||
        startsWith(github.event.comment.body, 'denounce') ||

@@ -1,0 +1,27 @@
+[package]
+name = "ardia-crypto"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+default = ["rustcrypto"]
+rustcrypto = ["dep:aes-gcm", "dep:aes", "dep:hkdf", "dep:hmac", "dep:sha2", "dep:getrandom"]
+ed25519 = ["dep:ed25519-dalek"]
+
+[dependencies]
+aes-gcm = { workspace = true, optional = true }
+aes = { workspace = true, optional = true }
+hkdf = { workspace = true, optional = true }
+hmac = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+getrandom = { workspace = true, optional = true }
+ed25519-dalek = { workspace = true, optional = true }
+zeroize.workspace = true
+
+[dev-dependencies]
+ed25519-dalek = { workspace = true }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("boringssl"))'] }

@@ -6,6 +6,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 LINUX = SOURCE / 'ardia/linux'
 REPO = ROOT.parents[1]
 
@@ -15,7 +16,7 @@ class AppActivationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='ardia-app-activation-') as directory:
             binary = Path(directory) / 'app-activation'
             subprocess.run([os.environ.get('CXX', 'c++'), '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g',
-                            '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-I', str(SOURCE),
+                            '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE),
                             str(ROOT / 'tests/app_activation_test.cc'), str(LINUX / 'ac_linux_window_lifecycle.cc'),
                             '-o', str(binary)], check=True, text=True, timeout=180)
             result = subprocess.run([str(binary)], text=True, timeout=60, capture_output=True,

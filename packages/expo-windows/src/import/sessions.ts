@@ -29,7 +29,7 @@ type Navigation = { index: number; url: string; title: string };
 type Tab = { windowId: number; visualIndex: number; navigations: Navigation[]; current: number; pinned: boolean; group?: string; lastActive?: number };
 type Window = { selectedTab: number; type?: number };
 
-export async function sessionFiles(host: ImportHost, profile: string): Promise<string[]> {
+async function sessionFiles(host: ImportHost, profile: string): Promise<string[]> {
   const folder = join(profile, "Sessions");
   const stamped = (await entries(host, folder))
     .filter((e) => !e.dir && /^Session_\d+$/.test(e.name))
@@ -174,7 +174,7 @@ const withoutContainerPrefix = (url: string) => {
   return colon > 0 && inner.indexOf(":") > 0 ? inner : url;
 };
 
-export function parseSession(bytes: Uint8Array): OpenTabs {
+function parseSession(bytes: Uint8Array): OpenTabs {
   const reader = new ByteReader(bytes);
   if (reader.u32() !== SIGNATURE) throw new ImportFailure("unreadable", "Not a Chromium session file");
   const version = reader.u32();

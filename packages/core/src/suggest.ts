@@ -4,9 +4,9 @@ import { NO_BOOKMARKS, poolFor, savedBookmark, savedVisit, tabsOver, type Candid
 import { extensionSuggestions } from "./extensionRows.ts";
 import { BUILT_IN_ENGINES, searchUrl } from "./engines.ts";
 import { matchActions } from "./fuzzy.ts";
-import { fixupUrl, hostOf, searchUrlFor } from "./omnibox.ts";
-import { matchScore, matchScoreWord, narrowing, parseQuery, remember, TopList, type Ranked } from "./pageMatch.ts";
-import { hostLowerOfPage, hostOfPage, hostPart, originOfPage, pageKey, type PageText, withRootSlash } from "./pageText.ts";
+import { fixupUrl, hostOf, sameAddress, searchUrlFor, spacedAddressGuess } from "./omnibox.ts";
+import { leadingRows, matchScore, matchScoreWord, narrowing, parseQuery, remember, TabList, TopList, type Ranked } from "./pageMatch.ts";
+import { documentKey, hostLowerOfPage, hostOfPage, hostPart, originOfPage, pageKey, type PageText, routeOf, withRootSlash } from "./pageText.ts";
 import { globalProviderRows, providerUrl, safeProviderRows, type ProviderSection, type ProviderSuggestion } from "./providerRows.ts";
 import { matchQuickCreate } from "./quickCreate.ts";
 import { scopedSearchUrl, type SearchScope } from "./siteSearch.ts";
@@ -16,9 +16,20 @@ import { actionRow, createRow, dedupeSuggestions, Output, pageSuggestion, sugges
 export type { CommandAction, Suggestion, SuggestionResult, SuggestionSource, SuggestionVia, SuggestOptions } from "./suggestion.ts";
 export { displayUrl } from "./pageText.ts";
 export { prepareSuggestions } from "./candidatePool.ts";
-export { suggestionKey } from "./suggestionRows.ts";
+export { dedupeSuggestions, listsRoutesApart, suggestionKey } from "./suggestionRows.ts";
 
 const DAY = 86_400_000;
+const lowerOrigin = (url: string) => url.replace(/^[a-z][a-z0-9+.-]*:\/\/[^/?#]*/i, (origin) => origin.toLowerCase());
+const withoutFragment = (url: string) => url.replace(/#.*$/, "");
+function withoutLead(listed: readonly Ranked[], lead: readonly Ranked[]): Ranked[] {
+  const rest: Ranked[] = [];
+  for (const x of listed) {
+    let inLead = false;
+    for (const y of lead) if (y === x) inLead = true;
+    if (!inLead) rest[rest.length] = x;
+  }
+  return rest;
+}
 
 export function buildSuggestions(raw: string, source: SuggestionSource, options: SuggestOptions = {}): SuggestionResult {
   const { limit = 8, now = Date.now(), engine = BUILT_IN_ENGINES[0]!, preference = "website", remote = [], actions = [], scope, preventInline = false } = options;
@@ -42,20 +53,21 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
   }
 
   const pool = poolFor(source.history, source.bookmarks ?? NO_BOOKMARKS);
-  const { tabIds, extra, renamed } = tabsOver(pool, source.tabs, options.currentTabId);
+  const tabsNow = tabsOver(pool, source.tabs, options.currentTabId);
+  const { tabIds, extra, renamed } = tabsNow;
   const currentKey = options.currentUrl ? pageKey(options.currentUrl) : null;
-  const via: Record<string, SuggestionVia> = {};
-  let tagged = false;
+  const via = new Map<Suggestion, SuggestionVia>();
   const tag = (s: Suggestion, as: SuggestionVia | false | undefined): Suggestion => {
-    if (as) {
-      via[suggestionKey(s)] = as;
-      tagged = true;
-    }
+    if (as) via.set(s, as);
     return s;
   };
   const known = (url: string) => {
     const key = pageKey(url);
-    const c = pool.byKey.get(key) ?? extra.find((x) => x.text.key === key);
+    let c = pool.byKey.get(key) ?? extra.find((x) => x.text.key === key);
+    if (!c && !routeOf(url)) {
+      const document = documentKey(url);
+      c = pool.byDocument.get(document) ?? extra.find((x) => x.text.document === document);
+    }
     if (!c) return undefined;
     const shown = { ...c, title: c.pageTitle ?? c.title };
     const opened = withRootSlash(url);
@@ -65,6 +77,22 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
     const lent = visit ?? bookmark ?? shown;
     const row: PageRow = { url: visit?.url ?? opened, title: lent.title, favicon: lent.favicon, visits: visit?.visits ?? 0, bookmarked: bookmark !== undefined };
     return tag(pageSuggestion(row, null), "literal");
+  };
+  const openTabAt = (url: string): Suggestion | undefined => {
+    if (!options.switchToOpenTab) return undefined;
+    const opened = withRootSlash(lowerOrigin(url));
+    if (!tabIds.has(pageKey(opened))) return undefined;
+    const route = routeOf(opened);
+    const tab = source.tabs.find((t) => {
+      if (!t.url || t.id === options.currentTabId) return false;
+      const at = withRootSlash(lowerOrigin(t.url));
+      return withoutFragment(at) === withoutFragment(opened) && routeOf(at) === route;
+    });
+    if (!tab) return undefined;
+    const visit = savedVisit(source.history, opened);
+    const bookmark = savedBookmark(source.bookmarks ?? NO_BOOKMARKS, opened);
+    const title = tab.customTitle || visit?.title || bookmark?.title || tab.title;
+    return tag(pageSuggestion({ url: opened, title, favicon: tab.favicon ?? visit?.favicon ?? bookmark?.favicon ?? null, visits: visit?.visits ?? 0, bookmarked: bookmark !== undefined }, tab.id), "open_tab");
   };
 
   const websiteFirst = preference === "website";
@@ -79,22 +107,29 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
   const scores: number[] = again ? from.scores : [];
   let found = 0;
   const top = new TopList(limit + 1);
+  const tabTop = new TabList();
+  const typedUrl = scope ? null : fixupUrl(query);
+  const guessedUrl = scope || typedUrl ? null : spacedAddressGuess(query);
+  const tabUrls = guessedUrl ? new Map(source.tabs.map((t) => [t.id, t.url])) : null;
+  const tabUrl = (tabId: string | undefined) => (tabUrls && tabId ? tabUrls.get(tabId) : undefined);
+  const listedRow = (x: Ranked) => !guessedUrl || !sameAddress(tabUrl(x.tabId) ?? x.c.url, guessedUrl);
   const onSite = scope ? new TopList(4) : null;
   const score = oneWord ? matchScoreWord : matchScore;
   const bound = Boolean(scope);
   let inline: Ranked | null = null;
+  const hiddenByRename = renamed.size > 0 ? renamed : null;
   for (const list of [pages, extra]) {
     const inPages = list === pages;
     for (let at = 0; at < list.length; at++) {
       const c = list[at]!;
-      const m = again && inPages ? scores[at]! : score(c.text, parsed);
+      const m = again && inPages ? scores[at]! : c.named ? Math.max(score(c.text, parsed), score(c.named, parsed)) : score(c.text, parsed);
       if (m <= 0) continue;
       if (inPages && !again) {
         matched[found] = c;
         scores[found++] = m;
       }
       const key = c.text.key;
-      if (inPages && renamed.has(key)) continue;
+      if (inPages && hiddenByRename !== null && hiddenByRename.has(key)) continue;
       const derank = currentKey !== null && key === currentKey ? 80 : 0;
       const lastVisit = c.fresh ? now : c.lastVisit;
       let age = 10;
@@ -103,18 +138,22 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
         age = d < 0 ? 0 : d > 30 ? 30 : d;
       }
       const base = c.logVisits - age + (c.bookmarked ? 20 : 0);
-      if (!bound && top.floor >= m + base - derank + 7) {
-        if (!completes) continue;
-        if (inline === null ? false : inline.s >= m + base - derank + 7) continue;
-        if (c.visits <= 0 || !c.text.shownLower.startsWith(q)) continue;
+      const upper = m + base - derank + 7;
+      const belowTop = !bound && top.floor >= upper;
+      let cannotLead: boolean | undefined;
+      if (belowTop && !tabTop.takes(m, upper)) {
+        cannotLead = !completes || (inline !== null && inline.s >= upper) || c.visits <= 0 || !c.text.shownLower.startsWith(q);
+        if (cannotLead) continue;
       }
-      const tabId = c.tabId ?? tabIds.get(key);
+      const tabId = c.tabId ?? (c.openIn === tabsNow.mark ? c.openTabId : undefined);
+      if (belowTop && !tabId && (cannotLead ?? (!completes || (inline !== null && inline.s >= upper) || c.visits <= 0 || !c.text.shownLower.startsWith(q)))) continue;
       const s = m + (base + (tabId ? 6 : 0)) - derank;
       let r: Ranked | undefined;
       if (top.floor < s || top.items.length < limit + 1) {
         r = { c, tabId, m, s };
         top.offer(r);
       }
+      if (tabId && !bound && (guessedUrl === null || listedRow({ c, tabId, m, s }))) tabTop.offer(r ?? { c, tabId, m, s });
       if (onSite) {
         const host = hostOfPage(c.text);
         if (host === scope!.host || host.endsWith(`.${scope!.host}`)) onSite.offer(r ?? { c, tabId, m, s });
@@ -135,12 +174,11 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
     const scopedUrl = (text: string) => scopedSearchUrl(scope, text, engine);
     out.push({ kind: "search", query, url: scopedUrl(query), engine: scope.name });
     out.push(...remoteRows(scopedUrl, scope.name));
-    out.push(...onSite!.items.map((x) => pageSuggestion(x.c, x.tabId)));
+    if (!options.remotePending) out.push(...onSite!.items.map((x) => pageSuggestion(x.c, x.tabId)));
     return { items: out.items, completion: "" };
   }
 
   const search: Suggestion = { kind: "search", query, url: searchUrl(engine, query), engine: engine.name };
-  const typedUrl = fixupUrl(query);
   const calc = calculate(query);
   const creates = matchQuickCreate(raw.trimStart());
   const actionRows = query.length >= 4 ? 4 : 2;
@@ -154,27 +192,40 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
   let first: Suggestion;
   if (creates.length && /^\S+\s+\S/.test(query)) first = createRow(creates[0]!);
   else if (actionMatches[0]?.exact) first = actionRow(actionMatches[0].action);
-  else if (target && completion) first = tag(known(target.url) ?? { kind: "page", url: target.url, title: "", favicon: target.favicon }, !websiteFirst && "search_first_inline");
-  else if (typedUrl) first = known(typedUrl) ?? { kind: "page", url: typedUrl, title: "", favicon: null };
+  else if (target && completion) first = openTabAt(target.url) ?? tag(known(target.url) ?? { kind: "page", url: target.url, title: "", favicon: target.favicon }, !websiteFirst && "search_first_inline");
+  else if (typedUrl) first = openTabAt(typedUrl) ?? known(typedUrl) ?? { kind: "page", url: typedUrl, title: "", favicon: null };
   else if (extensionMatches.exact) first = extensionMatches.rows[0]!;
-  else if (websiteFirst && best && best.m >= 40 && (!noInline || typedIsPage(best.c.text, q))) first = tag(pageSuggestion(best.c, best.tabId), best.c.renamed && "renamed_tab");
+  else if (!guessedUrl && websiteFirst && best && best.m >= 40 && (!noInline || typedIsPage(best.c.text, q))) first = tag(pageSuggestion(best.c, best.tabId), best.c.renamed && "renamed_tab");
   else first = search;
 
+  const savedGuess = guessedUrl ? ranked.find((x) => !x.tabId && sameAddress(x.c.url, guessedUrl)) : undefined;
+  const guessTab = guessedUrl ? source.tabs.find((t) => t.id !== options.currentTabId && sameAddress(t.url, guessedUrl)) : undefined;
+  const guessRow = !guessedUrl ? null : guessTab ? pageSuggestion({ url: guessTab.url, title: guessTab.customTitle || guessTab.title, favicon: guessTab.favicon, visits: 0, bookmarked: false }, guessTab.id) : (known(guessedUrl) ?? (savedGuess ? { ...pageSuggestion(savedGuess.c, null), url: guessedUrl } : { kind: "page", url: guessedUrl, title: "", favicon: null }));
   out.push(first);
   out.push(search);
+  if (guessRow) out.push(guessRow);
   if (calc) out.push({ kind: "calc", expression: calc.expression, value: calc.display, url: searchUrl(engine, calc.expression) });
   out.push(...actionMatches.map((m) => actionRow(m.action)));
   out.push(...extensionMatches.rows);
   out.push(...creates.map(createRow));
-  const pageRows = ranked.map((x) => tag(pageSuggestion(x.c, x.tabId), x.c.renamed && "renamed_tab"));
-  out.push(...pageRows.slice(0, 3));
-  out.push(...(options.remoteSites ?? []).slice(0, 2).map((site): Suggestion => known(site.url) ?? tag({ kind: "page", url: site.url, title: site.title, favicon: null }, "engine_site")));
+  const rowOf = (x: Ranked, as: SuggestionVia | false | undefined = x.c.renamed && "renamed_tab"): Suggestion => {
+    const url = tabUrl(x.tabId);
+    return tag(pageSuggestion(url ? { ...x.c, url } : x.c, x.tabId), as);
+  };
+  const listed = guessedUrl ? ranked.filter(listedRow) : ranked;
+  const lead = leadingRows(listed, tabTop.items);
+  out.push(...lead.map((x, i) => rowOf(x, i < 3 ? undefined : "leading_tab")));
+  const remoteSites = (options.remoteSites ?? []).slice(0, 2).filter((site) => !guessedUrl || !sameAddress(site.url, guessedUrl));
+  out.push(...remoteSites.map((site): Suggestion => known(site.url) ?? tag({ kind: "page", url: site.url, title: site.title, favicon: null }, "engine_site")));
   const providerAt = out.items.length;
   out.push(...remoteRows((text) => searchUrl(engine, text), engine.name));
-  out.push(...pageRows.slice(3));
-  const providerRows = options.providers?.length ? globalProviderRows(options.providers, out.items) : [];
+  const trailing = withoutLead(listed, lead);
+  const providerRows = options.providers?.length ? globalProviderRows(options.providers, [...out.items, ...trailing.filter((x) => x.tabId).map((x) => rowOf(x))]) : [];
+  const offered = providerRows.length ? new Set(providerRows.map((row) => pageKey(row.url))) : null;
+  if (!options.remotePending) out.push(...(offered ? trailing.filter((x) => x.tabId || !offered.has(pageKey(x.c.url))) : trailing).map((x) => rowOf(x)));
   const items = providerRows.length ? [...out.items.slice(0, providerAt), ...providerRows, ...out.items.slice(providerAt)] : out.items;
-  const shownVia = tagged ? viaOf(items, via) : undefined;
+  if (guessRow && out.items.includes(guessRow)) tag(guessRow, "spaced_address");
+  const shownVia = via.size ? viaOf(items, via) : undefined;
   return shownVia ? { items, completion, via: shownVia } : { items, completion };
 }
 
@@ -189,11 +240,11 @@ function providerScopeSuggestions(query: string, scope: SearchScope, sections: r
   return { items, completion: "" };
 }
 
-function viaOf(items: readonly Suggestion[], via: Record<string, SuggestionVia>): Record<string, SuggestionVia> | undefined {
+function viaOf(items: readonly Suggestion[], via: ReadonlyMap<Suggestion, SuggestionVia>): Record<string, SuggestionVia> | undefined {
   let shown: Record<string, SuggestionVia> | undefined;
   for (const item of items) {
-    const key = suggestionKey(item);
-    if (via[key]) (shown ??= {})[key] = via[key];
+    const as = via.get(item);
+    if (as) (shown ??= {})[suggestionKey(item)] = as;
   }
   return shown;
 }

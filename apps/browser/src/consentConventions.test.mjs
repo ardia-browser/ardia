@@ -6,14 +6,14 @@ import { test } from "node:test";
 import ts from "typescript";
 
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
-const SCOPES = ["apps/browser/src", "apps/linux/src"];
+const SCOPES = ["apps/browser/src", "apps/desktop/src"];
 const TELEMETRY_DIR = "apps/browser/src/state/telemetry";
 const TELEMETRY = /^apps\/browser\/src\/state\/telemetry\//;
 const BASELINE = JSON.parse(readFileSync(new URL("./consent-baseline.json", import.meta.url), "utf8"));
 const LATER_CALLEES = new Set(["setTimeout", "setInterval", "requestAnimationFrame", "queueMicrotask", "setImmediate"]);
 const PROMISE_CALLBACKS = new Set(["then", "catch", "finally"]);
 const LISTENER = /^(?:on[A-Z]\w*|addListener|addEventListener)$/;
-const TOKEN_TAKERS = new Set(["consentNow", "consentToken"]);
+const TOKEN_TAKERS = new Set(["consentNow", "consentToken", "consentOrNow"]);
 const CONSOLE_LEVELS = new Set(["warn", "error"]);
 const NOTER_NAME = /^(?:note|count|track)(?:[A-Z]\w*)?$/;
 const INCREMENTS = new Set([ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.PlusEqualsToken]);

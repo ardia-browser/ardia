@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { Animated, View } from "react-native";
-import { useLastingLoad } from "../../state/tabs/lastingLoad";
 import { notePageOverlay } from "../../state/telemetry/usage";
 import { consentToken } from "../../state/telemetry/client";
 import { capsule, hairline, reduceMotion, useTheme } from "../ui";
@@ -11,9 +10,8 @@ const { width, height, top, track, motion } = LOADING_PILL;
 const FULL = 1;
 const WIPED = 2;
 
-export function LoadingPill({ tabId }: { tabId: string }) {
+export function LoadingPill({ loading }: { loading: boolean }) {
   const theme = useTheme();
-  const loading = useLastingLoad(tabId);
   const [mounted, setMounted] = useState(loading);
   if (loading && !mounted) setMounted(true);
   const opacity = useRef(new Animated.Value(0)).current;

@@ -50,3 +50,59 @@ test("the text size setting names one size per step the reader offers", () => {
   assert.deepEqual([...SETTING_SPECS.readerTextSize.values], [...READER_SIZE_NAMES]);
   assert.ok(READER_SIZE_NAMES.includes(SETTING_SPECS.readerTextSize.default));
 });
+
+function fakeDocument() {
+  class Node {
+    constructor(tag) {
+      this.tagName = tag.toUpperCase();
+      this.children = [];
+      this.listeners = {};
+      this.attributes = {};
+      this.style = { setProperty() {} };
+      this.textContent = "";
+      this.className = "";
+    }
+    append(...nodes) {
+      this.children.push(...nodes);
+    }
+    setAttribute(name, value) {
+      this.attributes[name] = String(value);
+    }
+    addEventListener(type, run) {
+      (this.listeners[type] ||= []).push(run);
+    }
+    attachShadow() {
+      return (this.shadow = new Node("#shadow"));
+    }
+    querySelectorAll() {
+      return [];
+    }
+    querySelector() {
+      return null;
+    }
+  }
+  const all = (node) => [node, ...node.children.flatMap(all)];
+  const document = { title: "A long read", body: null, createElement: (tag) => new Node(tag), importNode: (node) => node };
+  return { document, all };
+}
+
+test("the reader page draws no text size or font controls, and nothing it draws changes the look", () => {
+  const { document, all } = fakeDocument();
+  const window = {};
+  class CSSStyleSheet {
+    replaceSync(text) {
+      this.text = text;
+    }
+  }
+  const context = vm.createContext({ window, document, CSSStyleSheet, post() {}, location: { href: "https://a.example/long", hostname: "a.example" } });
+  vm.runInContext(`(function(post){${readerCall("state")}})(post)`, context);
+  const reader = window[Symbol.for("ardia.reader")];
+  reader.build({ title: "A long read", textContent: "word ".repeat(2000), content: document.createElement("div") });
+  reader.setLook({ dark: false, size: 2, font: "serif" });
+  const shadow = reader.host.shadow;
+  const buttons = all(shadow).filter((node) => node.tagName === "BUTTON");
+  assert.deepEqual(buttons.map((button) => button.attributes["aria-label"]), ["Close Reader (Esc)"]);
+  for (const node of all(shadow)) for (const run of node.listeners.click || []) run({ target: node, preventDefault() {}, stopPropagation() {} });
+  assert.deepEqual({ ...reader.look }, { dark: false, size: 2, font: "serif" });
+  assert.doesNotMatch(shadow.adoptedStyleSheets[0].text, /\.bar \.(small|large|serif|sans)/);
+});

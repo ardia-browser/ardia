@@ -2,6 +2,14 @@ const shown = new Set<string>();
 
 export const snapshotWasShown = (uri: string) => shown.has(uri);
 
+const loadedOnce = new Set<string>();
+
+export const snapshotLoadedOnce = (uri: string) => loadedOnce.has(uri);
+
+export function noteSnapshotLoaded(uri: string) {
+  loadedOnce.add(uri);
+}
+
 export function noteSnapshotShown(uri: string) {
   shown.add(uri);
 }
@@ -21,6 +29,8 @@ export const pictureKey = (owner: string, uri: string) => `${owner}|${uri}`;
 const painted = new Set<string>();
 
 export const picturePainted = (key: string) => painted.has(key);
+
+export const anyPicturePainted = (owner: string) => [...painted].some((key) => key.startsWith(`${owner}|`));
 
 export function forgetPicturePainted(key: string) {
   painted.delete(key);

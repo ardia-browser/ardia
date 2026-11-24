@@ -14,8 +14,18 @@ the folder takes the servers' place and devices pair by entering the recovery ph
 
 Code:
 - `packages/sync/ios/Core`: plain Swift, also built by `packages/sync/Package.swift`.
-  - `RecoveryPhrase.swift`: the phrase (BIP-39).
-  - `SyncCrypto.swift`: keys, the file format and names.
+  - `RecoveryPhrase.swift`: the phrase (BIP-39). Swift still splits the text into words exactly as it always has
+    (`CharacterSet.lowercaseLetters`), then hands the Rust core only those words, with any that can't be a list word
+    replaced by `x`, so trailing whitespace, letters Unicode tables disagree on and the core's 4 KB phrase cap never
+    change what restores; the unknown word shown is the user's own at the index the core reports.
+  - `SyncCrypto.swift`: `SyncKeys`, a thin wrapper over the Rust core's C ABI (`ArdiaCoreRS`): keys, the file format
+    and names. Passwords decode without dropping a second leading U+FEFF (the core drops the one Foundation did).
+    Every refusal throws, `scopeTag` included. Open failures are counted by code only while sharing is on, under the
+    consent period they happened in (`SyncKeys.consentEpoch`, set by `SyncModule` from `ArdiaEvents.consentEpoch`;
+    nothing sets it on the iPhone, so it never counts there).
+  - `Wordlist.swift`: the English list, kept for `test_sync.py`, `scripts/e2e.mjs` and the wordlist checks.
+  - `SealedLogins.swift`: this Mac's saved logins sealed for sync. A login that won't seal is listed as passwordless,
+    as Windows lists one whose password it can't read, so sync leaves its copy alone instead of reading a deletion.
   - `SyncVault.swift`: the folder, with file coordination and partial files.
   - `SyncKeyStore.swift`: Keychain.
   - `RecoveryKit.swift`: PDF, text sheet and QR code.
@@ -36,7 +46,7 @@ Code:
   - `sentTabsAdapter.ts` and `sentTabs.ts`: `send:` records, and opening the tabs sent to this Mac.
   - `openTabs.ts`, `openTabsApply.ts`, `openTabsLocal.ts`, `openTabCloses.ts` and `openTabRecords.ts`: a profile's
     regular tabs when it syncs all open tabs (`otab:`), and the closes that go out with them.
-- `apps/browser/src/components/settings/panes/Sync.tsx` and `SyncSheets.tsx`: Settings › Sync.
+- `apps/browser/src/components/settings/panes/SyncSection.tsx` and `SyncSheets.tsx`: Settings › General › Sync.
 
 ## Threat model
 
@@ -260,7 +270,7 @@ separated on the next publish.
 
 ## What syncs
 
-Per profile: each synced profile is its own scope, with its own opt-in (Settings › Sync ›
+Per profile: each synced profile is its own scope, with its own opt-in (Settings › General › Sync ›
 Profiles).
 - On joining, Personal pairs with the synced default profile and other profiles pair by name.
   - Pairing waits until the folder shows what to pair with: the synced default profile's record, or other profiles'
@@ -322,7 +332,7 @@ Profiles).
 
 ### All open tabs
 
-A profile can sync every open tab, not just its pinned ones, Arc-style: Settings › Sync › All Open Tabs, one switch per
+A profile can sync every open tab, not just its pinned ones, Arc-style: Settings › General › Sync › All Open Tabs, one switch per
 synced profile, or Settings › Profiles › the profile › Sync All Open Tabs. The switch is `Profile.syncTabs` and syncs as
 `ptab:`. Tab sync runs for a profile when it syncs on this Mac, its switch is on and What Syncs › Open Tabs is on here.
 It covers profiles that share another's data (tabs are each profile's own).
@@ -352,7 +362,18 @@ It covers profiles that share another's data (tabs are each profile's own).
   doubles. The check needs no memory of the window closing, so closing and reopening between two syncs works too. Quitting and relaunching with the
   session restored publishes nothing (tab ids survive a relaunch; tested).
 - **Pins.** A tab pinned on one Mac deletes its `otab:t:` record and goes out as `pin:t:` under the same key; the pin
-  adapter, which runs first, pins the other Mac's regular tab, so it isn't doubled. Unpinning gives it back.
+  adapter, which runs first, pins the other Mac's regular tab, so it isn't doubled. Unpinning gives it back. A pin's
+  page counts as looked at when the pin adapter writes it: `applyPinned` compares the profile's tabs and parked pins
+  before and after it applies, and hands every page it set (a pin another Mac brings back, a sleeping copy a `pin:t:`
+  record moved, and the copies the mirror moves with it) to `openTabsPinPageWrites`, which keeps them in the open-tabs
+  memory of that scope (weakly keyed by the scope, so a deleted scope takes them along). A loaded pin whose page the
+  record left alone gets nothing. Pages are taken only while the profile syncs all open tabs and no newer `otab:on`
+  says it went off, and every hand-over and extraction drops pages for keys no tab or parked pin holds and pages no copy
+  or parked pin still shows. On unpin, a copy whose page is the one looked at, or one the pin adapter set, keeps the
+  other Mac's newer record; any other page is a navigation made here and is sent. A pin this Mac hasn't seen as an open
+  tab or had a page set on by the pin adapter since launch has no page looked at, so it keeps the newer record unless
+  the record is gone. The remembered page of a key goes once no tab or parked pin has it and its record is
+  deleted or compacted away, also while the profile has no window (tested).
 - **Turning it off.** The Mac where the switch went off tombstones every `otab:` record of the profile and writes
   `otab:on` `{ on: false }` in the same batch (and keeps tombstoning stragglers while it stays off, `tabsRetire` on the
   profile's link; it stops as soon as a newer `otab:on` `{ on: true }` shows the switch went back on elsewhere, even
@@ -422,7 +443,7 @@ What Chrome Sync does for extensions, through our folder (`packages/sync/src/ext
   doesn't publish an extension it holds a record for until it has applied that record.
 - **Older Macs** (0.2.38, the 0.2.39 nightlies) keep `ext:` records in their replica and snapshots without
   applying them. A build whose engine lacks `ac_extensions_sync_*` publishes and applies nothing for extensions.
-- Settings › Sync › What Syncs › Extensions turns it off; a profile that shares another's data has its owner's
+- Settings › General › Sync › What Syncs › Extensions turns it off; a profile that shares another's data has its owner's
   extensions.
 
 ### Passwords
@@ -473,7 +494,7 @@ Saved passwords are Chrome's (its password manager).
 
 ## UX (from Dia's binary)
 
-Settings › Sync. Dia puts sync in Account › Sync, with the section icon
+Settings › General › Sync. Dia puts sync in Account › Sync, with the section icon
 `arrow.triangle.2.circlepath`.
 
 - **Off.** The row reads "Sync · Off", with **Turn On Sync** and **Enter Recovery Phrase…**. If
@@ -481,6 +502,10 @@ Settings › Sync. Dia puts sync in Account › Sync, with the section icon
   **Other Options** (Dia's menu: "Set Up Without Another Device", "Enter Recovery Phrase").
   Below is the sync folder, with Choose…. If iCloud Drive is off it says so, links to iCloud
   settings, and offers another folder; test instances never default to iCloud Drive.
+  On Linux there's no cloud drive to default to: until a folder is chosen, the button is **Turn On…**, which asks
+  where the folder goes and makes an `Ardia Sync` folder inside the one picked. Two picks are used as they are: a
+  folder already named `Ardia Sync`, and a folder that already holds sync data, which goes to **Enter Recovery
+  Phrase…** instead of starting a second chain (`docs/linux-port.md` › Sync).
 - **Turn On Sync** makes a phrase and shows **Save Your Recovery Kit**, with Dia's copy:
   - "Your Recovery Kit contains all you need to recover your data should you lose access to
     this device."
@@ -494,7 +519,7 @@ Settings › Sync. Dia puts sync in Account › Sync, with the section icon
     placeholder "Enter your 24-word recovery phrase", the "%d/%d words" counter, "too many
     words", and Connect / "Connecting…" / Cancel.
   - Once connected, the sheet says "This Mac Is Syncing" and lists the synced profiles this Mac lacks, each with Add
-    to This Mac, and Add All (Settings › Sync › Profiles offers the same). Until the profiles have paired it says
+    to This Mac, and Add All (Settings › General › Sync › Profiles offers the same). Until the profiles have paired it says
     "Looking for the profiles on your other devices…", with the files still downloading.
   - It also shows the folder the phrase is checked against, with Change….
 - **On.**
@@ -508,6 +533,9 @@ Settings › Sync. Dia puts sync in Account › Sync, with the section icon
     server.
   - **Advanced…** has Save Recovery Kit…, Copy Recovery Code (Dia's ⌥ item, copied as
     `org.nspasteboard.ConcealedType`), Sync Now, Show Sync Folder in Finder and Stop Syncing….
+  - On Linux the Sync Folder row has **Move…** (and Advanced… has Move Sync Folder…): it copies this phrase's files to
+    the folder picked and syncs through it from then on, or just points at a folder that already holds them, and
+    never touches the old folder (`state/sync/folderMove.ts`, `docs/linux-port.md` › Sync).
   - Then Profiles (toggles, and Add to This Mac), All Open Tabs (a switch per synced profile: "Every open tab syncs, not
     just pinned ones. Closing a tab closes it on your other Macs too."), What Syncs (Bookmarks, History, Open Tabs,
     Pinned Tabs and Groups, Passwords, Extensions, Settings) and Devices (each with "last synced …").
@@ -525,7 +553,7 @@ Settings › Sync. Dia puts sync in Account › Sync, with the section icon
   (`macbook.and.iphone`), a submenu per device (`iphone` for a phone, `laptopcomputer` or `desktopcomputer` for a
   Mac). Each lists "Recent Tabs"; picking one opens it in a new tab. The fallback name is "Unknown Device".
 - **Send to <device>** in a tab's menu sends it (see Sent tabs); with several devices it's **Send to Device**, a
-  submenu. Settings › Sync › Devices shows each device with its symbol.
+  submenu. Settings › General › Sync › Devices shows each device with its symbol.
 
 ## Cycle
 
@@ -576,6 +604,21 @@ bookmark, settings, profile or group edit, and on Sync Now. A cycle:
     - `companion/companion.test.ts`: the iPhone's adapters and cycle.
   - `apps/phone/scripts/bundle-shared.mjs --check`: the iPhone's bundle of this code is up to date.
   - `scripts/legacy-migration-e2e.mjs`: the migration tool run end to end on a scratch install.
+- Rust core (`packages/core-rs`; the Mac app, the iPhone and Linux link it, Windows still has its own C++):
+  `packages/core-rs/scripts/build-xcframework.sh` builds `ArdiaCoreRS.xcframework` (Mac, iPhone, simulator; release,
+  `panic = abort`, RustCrypto) into `packages/sync/ios/Frameworks`, untracked. The `ArdiaSync` podspec runs it at
+  `pod install` and vendors it, `packages/sync/Package.swift` takes it as a `binaryTarget` (so `swift test`, `ArdiaKit`
+  and `PhoneSync` link it), the iPhone's Podfile runs it before Xcode resolves its packages, and `scripts/agent/build-app`,
+  `apps/phone/scripts/build-sim-app` and `release-ios` run it before building. It does nothing while its inputs'
+  hash is unchanged. CI installs the toolchain with `.github/actions/core-rs-xcframework`. `ardia-sync-core` is this format and the recovery
+  phrase once more, matching Swift byte for byte, behind `ardia-crypto` (RustCrypto under cargo, BoringSSL inside
+  Chromium's GN build: [linux-port.md](linux-port.md) › The Rust sync core in the engine build) and a C ABI in `ardia-ffi` (`include/ardia_core.h`; ownership, caps and error rules in
+  `packages/core-rs/ABI.md`). `cargo test` reproduces every byte in `sync-vectors`, opens the Swift and Kotlin
+  random-nonce sets, both `windows-interop` vaults and `sealed-0.2.32.b64`, and checks every platform's wordlist copy.
+  `tests/phrase-cases.json` and `tests/password-read-cases.json` freeze how each platform reads unusual phrases and
+  sealed passwords today (Rust follows Swift, including Foundation's lenient base64 and its dropped leading U+FEFF);
+  `tests/linux-sync/test_linux_sync.py` runs Linux's `ac_linux_sync_keys.cc`, linked to the core, against the same vectors and cases. The Rust workflow (`.github/workflows/rust.yml`) runs all of it on
+  macOS, Linux and Windows.
 - `pnpm --filter @ardia/browser test` runs `src/state/sync/adapters.test.mjs` (4 tests against the real
   store: delete versus add, concurrent moves that would make a cycle, parked pinned tabs, passwords
   both ways), `src/state/sync/send.test.mjs` (sent tabs: one addressed elsewhere is never touched; it opens once and

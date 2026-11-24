@@ -1,10 +1,10 @@
 import type { ConsentToken } from "./choice";
-import { countFor } from "./countFor";
+import { consentOrNow, countFor } from "./countFor";
 
 let removed = 0;
 let left = 0;
 
-export const noteProfileDataDeleted = (folderGone: boolean, consent?: ConsentToken | null) => countFor(consent, () => void (folderGone ? removed++ : left++), { [folderGone ? "profile_data_removed" : "profile_data_left"]: 1 });
+export const noteProfileDataDeleted = (folderGone: boolean, consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void (folderGone ? removed++ : left++));
 
 export function takeProfileDataCounts() {
   const taken = { profile_data_removed: removed, profile_data_left: left };

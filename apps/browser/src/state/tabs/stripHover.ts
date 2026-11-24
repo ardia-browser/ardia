@@ -6,7 +6,7 @@ import { consentToken } from "../telemetry/client";
 import { tabDragging } from "../drag/tabDrag";
 import type { Anchor } from "../sidebar/sidebarUi";
 
-export type StripHover = { windowId: string; tabId: string; anchor: Anchor };
+type StripHover = { windowId: string; tabId: string; anchor: Anchor };
 
 export const STRIP_HOVER_DELAY_MS = { show: 500, leave: 160 };
 
@@ -72,7 +72,7 @@ export function dismissStripHover() {
   hide();
 }
 
-useBrowser.subscribe((s, prev) => {
+useBrowser.subscribeTo(["settings"], (s, prev) => {
   if (!s.settings.showTabHoverMenu && prev.settings.showTabHoverMenu) dismissStripHover();
 });
 

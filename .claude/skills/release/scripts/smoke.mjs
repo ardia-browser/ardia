@@ -155,18 +155,43 @@ await sleep(800);
 check("autofill dropdown accepts a suggestion", (await evaluate(`document.getElementById("c").value`)) === "Springfield");
 
 await go(`${pages}/passkey.html`);
+const passkeys = process.env.SMOKE_PASSKEYS === "1";
+const beforePasskey = new Set(windows().map((w) => w.id));
+const isPasskeyDialog = (w) =>
+  /passkey/i.test(w.title) || (!beforePasskey.has(w.id) && level(w) === 0 && w.w > 200 && w.h > 150 && w.title !== "Untitled");
 await click("#b");
 await sleep(1500);
 let list = windows();
 for (let i = 0, last = ""; i < 12; i++) {
   const now = JSON.stringify(list.map((w) => [w.id, w.x, w.y, w.w, w.h]));
-  if (now === last && list.some((w) => /passkey/i.test(w.title))) break;
+  if (now === last && list.some(isPasskeyDialog)) break;
   last = now;
   await sleep(500);
   list = windows();
 }
-const dialog = list.find((w) => /passkey/i.test(w.title));
-checkTitles("passkey dialog shows", !!dialog, dialog?.title ?? "no passkey window");
+const dialog = list.find(isPasskeyDialog);
+if (passkeys) {
+  const detail = dialog ? `${dialog.w}x${dialog.h} "${dialog.title}"` : "no passkey window";
+  const name = "passkey dialog shows, offering iCloud Keychain (Passwords) next to Ardia's passkeys";
+  checkTitles("passkey dialog shows", !!dialog, detail);
+  if (locked) {
+    checkUnlocked(name, false, `${detail}; Accessibility reads no window contents while the screen is locked, so the choices weren't read`);
+  } else {
+    let texts = null;
+    let unread = "";
+    try {
+      texts = JSON.parse(execFileSync(process.env.SMOKE_AX, [pid, "texts"], { encoding: "utf8", timeout: 20000, stdio: ["ignore", "pipe", "pipe"] })).flatMap((w) => w.texts);
+    } catch (error) {
+      unread = error.status === 3 ? "untrusted" : String(error.stderr || error.message).trim();
+    }
+    const offers = !!texts && ["Save in Passwords", "Save in Ardia Passkeys"].every((choice) => texts.includes(choice));
+    const why = offers ? "both choices offered" : texts ? `choices missing from ${JSON.stringify(texts.filter((t) => /save|passkey/i.test(t)))}` : `its choices couldn't be read: ${unread}`;
+    if (unread === "untrusted") needs(false, "this process isn't trusted for Accessibility: give the terminal Accessibility in System Settings › Privacy & Security")(name, false, `${detail}; choices unread`);
+    else checkTitles(name, !!dialog && offers, `${detail}; ${why}`);
+  }
+} else {
+  checkTitles("passkey dialog shows (no browser passkey entitlement: Chrome's own dialog)", !!dialog && /passkey/i.test(dialog.title), dialog?.title || "no passkey window");
+}
 if (dialog) {
   const owner = list.slice(list.indexOf(dialog) + 1).find((w) => level(w) === 0 && w.w > 400 && w.h > 300);
   const inside = owner && dialog.x >= owner.x && dialog.x + dialog.w <= owner.x + owner.w && dialog.y >= owner.y && dialog.y + dialog.h <= owner.y + owner.h;
@@ -177,7 +202,8 @@ if (dialog) {
 }
 await go(`${pages}/form.html`);
 await sleep(1500);
-(canReadTitles ? checkUnlocked : checkTitles)("…and closes when the page navigates", !windows().some((w) => /passkey/i.test(w.title)));
+(canReadTitles ? checkUnlocked : checkTitles)("…and closes when the page navigates",
+  !windows().some((w) => /passkey/i.test(w.title) || (dialog && w.id === dialog.id)));
 
 const adsOnPage = () => adFate(adScript, () => go(`${pages}/ad.html`));
 const allowAds = (allowed) => instance.eval(`return ac.engine.call("contentBlocker.setAllowed", ${JSON.stringify({ host: "localhost", allowed })})`, { timeout: 30000 });

@@ -99,7 +99,7 @@ test("a page shown ahead of JS is pixels only: keys and clicks at the page are s
   assert.match(input, /kRevealInputMask = kButtonDowns \| kButtonUps \| kButtonDrags \| kKeys \| kPointer;/);
   const swallow = body(input, "+ (BOOL)swallowsAheadOfSwitch:(NSEvent *)event");
   assert.match(swallow, /if \(!gOnScreenAhead && \(!button \|\| gPresses\.Idle\(\)\)\) return NO;/, "no pointer event is looked at while no page is ahead of JS");
-  assert.match(swallow, /const BOOL overCoveredPage = lands && gOnScreenAhead && \[ArdiaWebView revealGapIn:event\.window\] && InTabPage\(HitInWindow\(event\)\);/, "only in the window showing one; clicks, scrolls and hover over a page, the chrome keeps its own");
+  assert.match(swallow, /const BOOL overCoveredPage = lands && !activatesApp && gOnScreenAhead && \[ArdiaWebView revealGapIn:event\.window\] && InTabPage\(HitInWindow\(event\)\);/, "only in the window showing one; clicks, scrolls and hover over a page, the chrome keeps its own, and a press that activates the app reaches AppKit");
   assert.match(body(input, "+ (ArdiaWebView *)onScreenAheadIn:(NSWindow *)window"), /if \(!gOnScreenAhead \|\| !window\) return nil;/, "the focus paths that ask on every paint pay nothing while no page is ahead");
   assert.match(swallow, /if \(type & kKeys\) return \[ArdiaWebView swallowsKeyAheadOfSwitch:event\];/);
   assert.match(body(input, "+ (BOOL)swallowsKeyAheadOfSwitch:(NSEvent *)event"), /const BOOL ahead = gOnScreenAhead && window && \[ArdiaWebView revealGapIn:window\] && InTabPage\(keyboard\);/, "keys aimed at a page; the sidebar and the toolbar keep theirs");
@@ -240,7 +240,9 @@ test("a sleeping, closed, crashed, non-web, split or other profile's page is nev
   assert.match(first, /hasPrefix:@"https:"/);
   assert.match(first, /other->_tab\.profile == _tab\.profile/);
   assert.match(tabReveal, /PLATFORM_FEATURES\.nativeTabSwitch && !inSplit \? `\$\{selected \? "tab-selected" : "tab-switch"\}:\$\{tabId\}` : undefined/);
-  assert.match(pressArea, /const inSplit = !!useSplitOf\(tab\.id\);/);
+  assert.match(pressArea, /const inSplit = useInSplit\(props\.tab\.id\);/);
+  assert.match(read("../../../apps/browser/src/components/sidebar/TabRow.tsx"), /inSplit: !!\(flags & IN_SPLIT\)/);
+  assert.match(read("../../../apps/browser/src/state/sidebar/rowState.ts"), /if \(splitOf\(s, tabId\)\) flags \|= IN_SPLIT;/);
   assert.match(tabReveal, /if \(PLATFORM_FEATURES\.nativeTabSwitch && s\.splits !== prev\.splits\) setTabsInSplits\(tabsInSplits\(s\)\);/);
   assert.match(body(tabFile, "- (void)tab:(ArdiaCoreTab *)tab rendererGone:(NSString *)status code:(int)code"), /\[self dropReveal\];/);
   assert.match(body(tabFile, "- (void)tabDidChangeDiscarded:(ArdiaCoreTab *)tab"), /if \(tab\.discarded\) \[self dropReveal\];/);

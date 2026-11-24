@@ -29,7 +29,7 @@ export const isWebUrl = (url: string) => /^https?:\/\//i.test(url);
 export const historyExpired = (key: string, value: unknown, now: number) =>
   key.startsWith("h:") && lastVisitOf(value as HistoryValue) < now - HISTORY_WINDOW_MS;
 
-export const lastVisitOf = (v: HistoryValue | null | undefined) => (v && Array.isArray(v.vt) ? Math.max(0, ...v.vt) : 0);
+export const lastVisitOf = (v: HistoryValue | null | undefined) => (v && Array.isArray(v.vt) ? v.vt.reduce((m, t) => Math.max(m, t), 0) : 0);
 
 export const dayOf = (at: number) => new Date(at).toISOString().slice(0, 10).replaceAll("-", "");
 
@@ -74,7 +74,9 @@ function unionTimes(a: number[], b: number[]): number[] {
   return out.slice(-MAX_VISIT_TIMES);
 }
 
-export type HistoryContext = {
+const keptTimes = (times: number[]): number[] => (times.length > MAX_VISIT_TIMES ? unionTimes(times.filter((t) => Number.isFinite(t)), []) : times);
+
+type HistoryContext = {
   visits: (LocalVisit & { p: string })[];
   profiles: string[];
   state: ScopeState;
@@ -97,9 +99,9 @@ export function historyAdapter(ctx: HistoryContext): Adapter {
         const entry = byUrl.get(v.u) ?? { title: "", times: [], profiles: new Set(), newest: 0 };
         const times = v.vt.filter((t) => Number.isFinite(t) && t >= since);
         if (!times.length) continue;
-        entry.times.push(...times);
+        for (const t of times) entry.times.push(t);
         entry.profiles.add(v.p);
-        const newest = Math.max(...times);
+        const newest = times.reduce((m, t) => Math.max(m, t), -Infinity);
         if (newest >= entry.newest) {
           entry.newest = newest;
           if (v.t) entry.title = v.t;
@@ -125,8 +127,8 @@ export function historyAdapter(ctx: HistoryContext): Adapter {
           values.set(key, { t: entry.title, n: local.length, vt: local } satisfies HistoryValue);
           continue;
         }
-        const knownTimes = Array.isArray(known.vt) ? known.vt.filter((t) => Number.isFinite(t)) : [];
-        const oldestKept = knownTimes.length >= MAX_VISIT_TIMES ? Math.min(...knownTimes) : -Infinity;
+        const knownTimes = keptTimes(Array.isArray(known.vt) ? known.vt.filter((t) => Number.isFinite(t)) : []);
+        const oldestKept = knownTimes.length >= MAX_VISIT_TIMES ? knownTimes.reduce((m, t) => Math.min(m, t), Infinity) : -Infinity;
         const missing = local.filter((t) => t >= oldestKept && !near(knownTimes, t));
         if (!missing.length) continue;
         const vt = unionTimes(knownTimes, local);
@@ -145,8 +147,8 @@ export function historyAdapter(ctx: HistoryContext): Adapter {
         const value = visible.get(key) as HistoryValue | undefined;
         if (value) {
           const mine = ctx.visited[url];
-          const times = Array.isArray(value.vt) ? value.vt : [];
-          const oldestKept = times.length >= MAX_VISIT_TIMES ? Math.min(...times) : -Infinity;
+          const times = keptTimes(Array.isArray(value.vt) ? value.vt : []);
+          const oldestKept = times.length >= MAX_VISIT_TIMES ? times.reduce((m, t) => Math.min(m, t), Infinity) : -Infinity;
           if (mine !== undefined && mine >= oldestKept && mine > (ctx.floors[url] ?? -Infinity) && !near(times, mine)) ctx.due(url);
           continue;
         }
@@ -162,7 +164,7 @@ export function historyAdapter(ctx: HistoryContext): Adapter {
   };
 }
 
-export type SendContext = {
+type SendContext = {
   scope: string;
   sends: () => PendingSend[];
   acks: () => Ack[];
@@ -202,7 +204,7 @@ export function sendsAdapter(ctx: SendContext): Adapter {
   };
 }
 
-export type BookmarkContext = {
+type BookmarkContext = {
   scope: string;
   state: ScopeState;
   ops: () => BookmarkOp[];
@@ -224,7 +226,10 @@ export function bookmarksAdapter(ctx: BookmarkContext): Adapter {
       const children = new Map<string, string[]>();
       for (const [k, v] of view) {
         const parent = (v as BookmarkValue).p;
-        if (typeof parent === "string") children.set(parent, [...(children.get(parent) ?? []), k.slice(3)]);
+        if (typeof parent !== "string") continue;
+        const list = children.get(parent);
+        if (list) list.push(k.slice(3));
+        else children.set(parent, [k.slice(3)]);
       }
       const otherPositions = [...view]
         .filter(([, v]) => (v as BookmarkValue).p === "other" && typeof (v as BookmarkValue).pos === "string")
@@ -254,7 +259,7 @@ export function bookmarksAdapter(ctx: BookmarkContext): Adapter {
             const at = stack.pop()!;
             if (deletes.has(`bm:${at}`)) continue;
             deletes.add(`bm:${at}`);
-            stack.push(...(children.get(at) ?? []));
+            for (const child of children.get(at) ?? []) stack.push(child);
           }
         }
       }

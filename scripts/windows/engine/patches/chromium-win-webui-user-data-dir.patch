@@ -1,0 +1,548 @@
+--- a/chrome/install_static/user_data_dir.cc
++++ b/chrome/install_static/user_data_dir.cc
+@@ -10,6 +10,8 @@
+ #include <stdlib.h>
+ 
+ #include <optional>
++#include <string>
++#include <vector>
+ 
+ #include "chrome/chrome_elf/nt_registry/nt_registry.h"
+ #include "chrome/install_static/install_details.h"
+@@ -27,6 +29,16 @@ bool g_temp_user_data_dir_created_for_headless = false;
+ // Retrieves a registry policy for the user data directory from the registry, if
+ // one is set. If there's none set in either HKLM or HKCU, |user_data_dir| will
+ // be unmodified.
++bool UserDataDirPolicyPresent(const InstallConstants& mode) {
++  std::wstring policies_path = L"SOFTWARE\\Policies\\";
++  AppendChromeInstallSubDirectory(mode, false, &policies_path);
++  std::wstring value;
++  return nt::QueryRegValueSZ(nt::HKLM, nt::NONE, policies_path.c_str(),
++                             L"UserDataDir", &value) ||
++         nt::QueryRegValueSZ(nt::HKCU, nt::NONE, policies_path.c_str(),
++                             L"UserDataDir", &value);
++}
++
+ void GetUserDataDirFromRegistryPolicyIfSet(const InstallConstants& mode,
+                                            std::wstring* user_data_dir) {
+   assert(user_data_dir);
+@@ -108,8 +120,250 @@ bool IsHeadlessMode(const std::wstring& command_line) {
+   return GetCommandLineSwitch(command_line, L"headless").has_value();
+ }
+ 
++std::wstring FinalPathOfHandle(HANDLE handle, DWORD volume) {
++  const DWORD flags = volume | FILE_NAME_NORMALIZED;
++  std::wstring path;
++  const DWORD size = ::GetFinalPathNameByHandleW(handle, nullptr, 0, flags);
++  if (size == 0)
++    return path;
++  path.resize(size);
++  const DWORD written =
++      ::GetFinalPathNameByHandleW(handle, &path[0], size, flags);
++  path.resize(written > 0 && written < size ? written : 0);
++  while (!path.empty() && path.back() == L'\\')
++    path.pop_back();
++  return path;
++}
++
++std::wstring ResolvedFolder(std::wstring path) {
++  std::wstring rest;
++  while (!path.empty() &&
++         ::GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES) {
++    const size_t slash = path.find_last_of(L'\\');
++    if (slash == std::wstring::npos)
++      return std::wstring();
++    rest = path.substr(slash) + rest;
++    path.resize(slash);
++  }
++  if (path.empty())
++    return std::wstring();
++  HANDLE handle = ::CreateFileW(
++      path.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
++      nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
++  if (handle == INVALID_HANDLE_VALUE)
++    return std::wstring();
++  const std::wstring resolved = FinalPathOfHandle(handle, VOLUME_NAME_GUID);
++  ::CloseHandle(handle);
++  return resolved.empty() ? resolved : resolved + rest;
++}
++
++bool WithinOrSameFolder(const std::wstring& inner, const std::wstring& outer) {
++  if (outer.empty() || inner.size() < outer.size() ||
++      ::CompareStringOrdinal(inner.c_str(), static_cast<int>(outer.size()),
++                             outer.c_str(), static_cast<int>(outer.size()),
++                             TRUE) != CSTR_EQUAL) {
++    return false;
++  }
++  return inner.size() == outer.size() || inner[outer.size()] == L'\\';
++}
++
++std::wstring WithTrailingSlash(std::wstring path) {
++  if (!path.empty() && path.back() != L'\\')
++    path.push_back(L'\\');
++  return path;
++}
++
++std::vector<std::wstring> ReactNativeFolders() {
++  std::vector<std::wstring> folders;
++  for (const wchar_t* variable : {L"LOCALAPPDATA", L"APPDATA"}) {
++    const std::wstring base = GetEnvironmentString(variable);
++    if (base.empty())
++      continue;
++    const std::wstring root = WithTrailingSlash(base) + L"Ardia";
++    folders.push_back(ResolvedFolder(root));
++    folders.push_back(ResolvedFolder(root + L"\\User Data"));
++  }
++  return folders;
++}
++
++bool JoinsReactNativeFolders(const std::wstring& folder) {
++  const std::wstring mine = ResolvedFolder(folder);
++  if (mine.empty())
++    return true;
++  for (const std::wstring& theirs : ReactNativeFolders()) {
++    if (theirs.empty() || WithinOrSameFolder(mine, theirs) ||
++        WithinOrSameFolder(theirs, mine)) {
++      return true;
++    }
++  }
++  return false;
++}
++
++HANDLE g_pinned_webui_folder = INVALID_HANDLE_VALUE;
++
++std::wstring PinWebUIFolder(const std::wstring& folder) {
++  HANDLE handle = ::CreateFileW(
++      folder.c_str(), FILE_LIST_DIRECTORY | SYNCHRONIZE,
++      FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
++      FILE_FLAG_BACKUP_SEMANTICS, nullptr);
++  if (handle == INVALID_HANDLE_VALUE)
++    return std::wstring();
++  std::wstring path = FinalPathOfHandle(handle, VOLUME_NAME_DOS);
++  if (path.compare(0, 8, L"\\\\?\\UNC\\") == 0)
++    path = L"\\\\" + path.substr(8);
++  else if (path.compare(0, 4, L"\\\\?\\") == 0)
++    path = path.substr(4);
++  if (path.empty()) {
++    ::CloseHandle(handle);
++    return path;
++  }
++  if (g_pinned_webui_folder != INVALID_HANDLE_VALUE)
++    ::CloseHandle(g_pinned_webui_folder);
++  g_pinned_webui_folder = handle;
++  return path;
++}
++
++void RefuseWebUIShell() {
++  ::TerminateProcess(::GetCurrentProcess(), 1);
++}
++
++void PauseAfterPinForTestBuild() {
++  wchar_t exe[MAX_PATH];
++  const DWORD length = ::GetModuleFileNameW(nullptr, exe, MAX_PATH);
++  if (length == 0 || length >= MAX_PATH)
++    return;
++  std::wstring marker(exe, length);
++  const size_t slash = marker.find_last_of(L'\\');
++  if (slash == std::wstring::npos)
++    return;
++  marker.resize(slash + 1);
++  marker.append(L"Ardia.test-build");
++  if (::GetFileAttributesW(marker.c_str()) == INVALID_FILE_ATTRIBUTES)
++    return;
++  const std::wstring pause = GetEnvironmentString(L"ARDIA_TEST_PIN_PAUSE_MS");
++  if (pause.empty())
++    return;
++  DWORD milliseconds = 0;
++  for (wchar_t c : pause) {
++    if (c < L'0' || c > L'9')
++      return;
++    milliseconds = milliseconds * 10 + static_cast<DWORD>(c - L'0');
++    if (milliseconds > 30000)
++      milliseconds = 30000;
++  }
++  ::Sleep(milliseconds);
++}
++
++constexpr wchar_t kBaseWhitespace[] = {
++    0x09,   0x0B,   0x0C,   0x20,   0x0A,   0x0D,   0x0085, 0x00A0,
++    0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006,
++    0x2007, 0x2008, 0x2009, 0x200A, 0x2028, 0x2029, 0x202F, 0x205F,
++    0x3000, 0};
++
++std::wstring TrimmedLikeBase(const std::wstring& text) {
++  const size_t first = text.find_first_not_of(kBaseWhitespace);
++  if (first == std::wstring::npos)
++    return std::wstring();
++  const size_t last = text.find_last_not_of(kBaseWhitespace);
++  return text.substr(first, last - first + 1);
++}
++
++size_t SwitchPrefixLength(const std::wstring& text) {
++  for (const wchar_t* prefix : {L"--", L"-", L"/"}) {
++    const size_t length = ::wcslen(prefix);
++    if (text.compare(0, length, prefix) == 0)
++      return length;
++  }
++  return 0;
++}
++
++std::wstring AsciiLower(std::wstring text) {
++  for (wchar_t& c : text) {
++    if (c >= L'A' && c <= L'Z')
++      c = static_cast<wchar_t>(c - L'A' + L'a');
++  }
++  return text;
++}
++
++bool VanishedWhileListing(DWORD error) {
++  return error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND ||
++         error == ERROR_ACCESS_DENIED;
++}
++
+ }  // namespace
+ 
++bool WebUITreeHasLink(const std::wstring& root,
++                      void (*before_listing)(const std::wstring& folder,
++                                             void* context),
++                      void* context) {
++  std::vector<std::wstring> pending{root};
++  while (!pending.empty()) {
++    const std::wstring folder = std::move(pending.back());
++    pending.pop_back();
++    if (before_listing)
++      before_listing(folder, context);
++    WIN32_FIND_DATAW data;
++    HANDLE find = ::FindFirstFileExW((folder + L"\\*").c_str(),
++                                     FindExInfoBasic, &data,
++                                     FindExSearchNameMatch, nullptr,
++                                     FIND_FIRST_EX_LARGE_FETCH);
++    if (find == INVALID_HANDLE_VALUE) {
++      const DWORD error = ::GetLastError();
++      if (folder != root && VanishedWhileListing(error))
++        continue;
++      if (folder == root &&
++          (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND)) {
++        return false;
++      }
++      return true;
++    }
++    bool linked = false;
++    do {
++      const std::wstring name = data.cFileName;
++      if (name == L"." || name == L"..")
++        continue;
++      if (data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) {
++        linked = true;
++        break;
++      }
++      if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
++        pending.push_back(folder + L"\\" + name);
++    } while (::FindNextFileW(find, &data));
++    ::FindClose(find);
++    if (linked)
++      return true;
++  }
++  return false;
++}
++
++bool IsWebUIShellCommandLine(const std::wstring& command_line) {
++  const std::wstring trimmed = TrimmedLikeBase(command_line);
++  if (trimmed.empty())
++    return false;
++  const std::vector<std::wstring> tokens = TokenizeCommandLineToArray(trimmed);
++  bool parse_switches = true;
++  std::optional<std::wstring> value;
++  for (size_t i = 1; i < tokens.size(); ++i) {
++    const std::wstring arg = TrimmedLikeBase(tokens[i]);
++    parse_switches = parse_switches && arg != L"--";
++    if (!parse_switches)
++      continue;
++    const size_t prefix = SwitchPrefixLength(arg);
++    if (prefix == 0 || prefix == arg.size())
++      continue;
++    const size_t equals = arg.find(L'=');
++    const std::wstring switch_string = arg.substr(0, equals);
++    if (switch_string.substr(prefix) == L"single-argument")
++      break;
++    const std::wstring key = AsciiLower(switch_string);
++    if (key.substr(SwitchPrefixLength(key)) != L"ardia-shell")
++      continue;
++    value = equals == std::wstring::npos ? std::wstring()
++                                         : arg.substr(equals + 1);
++  }
++  return value.has_value() && *value == L"webui";
++}
++
+ bool GetUserDataDirectoryImpl(const std::wstring& command_line,
+                               const InstallConstants& mode,
+                               std::wstring* result,
+@@ -135,6 +389,17 @@ bool GetUserDataDirectoryImpl(const std::wstring& command_line,
+     }
+   }
+ 
++  const bool webui = IsWebUIShellCommandLine(command_line);
++  if (webui && UserDataDirPolicyPresent(mode)) {
++    RefuseWebUIShell();
++    return false;
++  }
++  if (webui && user_data_dir.empty()) {
++    const std::wstring local = GetEnvironmentString(L"LOCALAPPDATA");
++    if (!local.empty())
++      user_data_dir = WithTrailingSlash(local) + L"Ardia WebUI\\Chromium";
++  }
++
+   // Headless Chrome instances are expected to run in parallel with the headful
+   // Chrome and other headless Chrome instances. In order to do so, headless
+   // Chrome needs a dedicated user data directory for each headless instance.
+@@ -157,8 +422,18 @@ bool GetUserDataDirectoryImpl(const std::wstring& command_line,
+     user_data_dir.pop_back();
+   }
+ 
++  if (webui &&
++      (user_data_dir.empty() || JoinsReactNativeFolders(user_data_dir))) {
++    RefuseWebUIShell();
++    return false;
++  }
++
+   bool got_valid_directory =
+       !user_data_dir.empty() && RecursiveDirectoryCreate(user_data_dir);
++  if (!got_valid_directory && webui) {
++    RefuseWebUIShell();
++    return false;
++  }
+   if (!got_valid_directory) {
+     *invalid_supplied_directory = user_data_dir;
+     got_valid_directory = GetDefaultUserDataDirectory(mode, &user_data_dir);
+@@ -171,6 +446,17 @@ bool GetUserDataDirectoryImpl(const std::wstring& command_line,
+   if (!got_valid_directory)
+     return false;
+ 
++  if (webui) {
++    const std::wstring pinned = PinWebUIFolder(user_data_dir);
++    if (pinned.empty() || JoinsReactNativeFolders(pinned) ||
++        WebUITreeHasLink(pinned, nullptr, nullptr)) {
++      RefuseWebUIShell();
++      return false;
++    }
++    PauseAfterPinForTestBuild();
++    user_data_dir = pinned;
++  }
++
+   *result = MakeAbsoluteFilePath(user_data_dir);
+   return true;
+ }
+--- a/chrome/install_static/user_data_dir.h
++++ b/chrome/install_static/user_data_dir.h
+@@ -49,6 +49,13 @@ bool GetUserDataDirectory(std::wstring* user_data_directory,
+ // data directory specification.
+ bool IsTemporaryUserDataDirectoryCreatedForHeadless();
+ 
++bool IsWebUIShellCommandLine(const std::wstring& command_line);
++
++bool WebUITreeHasLink(const std::wstring& root,
++                      void (*before_listing)(const std::wstring& folder,
++                                             void* context),
++                      void* context);
++
+ }  // namespace install_static
+ 
+ #endif  // CHROME_INSTALL_STATIC_USER_DATA_DIR_H_
+--- a/chrome/install_static/user_data_dir_win_unittest.cc
++++ b/chrome/install_static/user_data_dir_win_unittest.cc
+@@ -4,12 +4,24 @@
+ 
+ #include "chrome/install_static/user_data_dir.h"
+ 
+-#include <algorithm>
++#include <windows.h>
++
++#include <shellapi.h>
+ 
++#include <algorithm>
++#include <string>
++#include <vector>
++
++#include "base/command_line.h"
++#include "base/compiler_specific.h"
++#include "base/files/scoped_temp_dir.h"
++#include "base/strings/string_util.h"
++#include "base/strings/utf_string_conversions.h"
+ #include "base/test/test_reg_util_win.h"
+ #include "build/branding_buildflags.h"
+ #include "chrome/chrome_elf/nt_registry/nt_registry.h"
+ #include "chrome/install_static/install_details.h"
++#include "chrome/install_static/install_util.h"
+ #include "testing/gmock/include/gmock/gmock.h"
+ #include "testing/gtest/include/gtest/gtest.h"
+ 
+@@ -217,5 +229,169 @@ TEST(UserDataDir, HasNoHeadlessTempUserDataDirIfProvidedByPolicy) {
+   EXPECT_FALSE(IsTemporaryUserDataDirectoryCreatedForHeadless());
+ }
+ 
++
++constexpr int kEither = -1;
++
++struct ShellSwitchCase {
++  const wchar_t* command_line;
++  int webui;
++};
++
++constexpr ShellSwitchCase kShellSwitchCases[] = {
++    {L"chrome.exe --ardia-shell=webui", 1},
++    {L"chrome.exe --ARDIA-SHELL=webui", 1},
++    {L"chrome.exe --Ardia-Shell=webui", 1},
++    {L"chrome.exe -ardia-shell=webui", 1},
++    {L"chrome.exe /ardia-shell=webui", 1},
++    {L"chrome.exe\t--ardia-shell=webui", 1},
++    {L"chrome.exe --ardia-shell=WebUI", 0},
++    {L"chrome.exe --ardia-shell", 0},
++    {L"chrome.exe --ardia-shell=", 0},
++    {L"chrome.exe --ardia-shell=webui --ardia-shell=rnw", 0},
++    {L"chrome.exe --ardia-shell=rnw --ARDIA-SHELL=webui", 1},
++    {L"chrome.exe -- --ardia-shell=webui", 0},
++    {L"chrome.exe --ardia-shell=webui -- --ardia-shell=rnw", 1},
++    {L"chrome.exe \" -- \" --ardia-shell=webui", 0},
++    {L"chrome.exe \"\t--\t\" --ardia-shell=webui", 0},
++    {L"chrome.exe \" --ardia-shell=webui \"", 1},
++    {L"chrome.exe \"--ardia-shell=webui\"", 1},
++    {L"chrome.exe --ardia-shell=\"webui\"", 1},
++    {L"chrome.exe \"--ardia-shell=web ui\"", 0},
++    {L"chrome.exe --ardia-shell=webui\x3000", 1},
++    {L"chrome.exe --ardia-shell=webui\x00A0", 1},
++    {L"chrome.exe \x3000--ardia-shell=webui", 1},
++    {L"chrome.exe ---ardia-shell=webui", 0},
++    {L"chrome.exe --ardia-shell==webui", 0},
++    {L"chrome.exe --ardia\x2011shell=webui", 0},
++    {L"chrome.exe --ardia-shell=w\x00E9" L"bui", 0},
++    {L"chrome.exe --single-argument --ardia-shell=webui", 0},
++    {L"chrome.exe --SINGLE-ARGUMENT --ardia-shell=webui", 1},
++    {L"chrome.exe --Single-Argument --ardia-shell=webui", 1},
++    {L"chrome.exe /single-argument --ardia-shell=webui", 0},
++    {L"chrome.exe -single-argument=x --ardia-shell=webui", 0},
++    {L"chrome.exe \" --single-argument\" --ardia-shell=webui", 0},
++    {L"chrome.exe --ardia-shell=webui --single-argument --ardia-shell=rnw", 1},
++    {L"   chrome.exe --ardia-shell=webui", 1},
++    {L" --ardia-shell=webui", 0},
++    {L"\"--ardia-shell=webui\" --other", 0},
++    {L"\"C:\\Program Files\\Ardia\\chrome.exe\" --ardia-shell=webui", 1},
++    {L"chrome.exe --user-data-dir=\"C:\\a b\" --ardia-shell=webui", 1},
++    {L"chrome.exe --ardia-shell=webui \"\"", 1},
++    {L"chrome.exe \"\"--ardia-shell=webui", kEither},
++    {L"chrome.exe \"a\"\"b\" --ardia-shell=webui", kEither},
++    {L"chrome.exe --ardia-shell=webui\\\" x", kEither},
++    {L"chrome.exe \"--ardia-shell=webui", kEither},
++    {L"chrome.exe -", 0},
++    {L"chrome.exe --", 0},
++    {L"chrome.exe --=webui", 0},
++    {L"", 0},
++    {L"   ", 0},
++};
++
++std::vector<std::wstring> CommandLineToArgvWTokens(
++    const std::wstring& command_line) {
++  std::vector<std::wstring> tokens;
++  HMODULE shell = ::LoadLibraryExW(L"api-ms-win-downlevel-shell32-l1-1-0.dll",
++                                   nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
++  if (!shell)
++    return tokens;
++  auto* split = reinterpret_cast<decltype(::CommandLineToArgvW)*>(
++      ::GetProcAddress(shell, "CommandLineToArgvW"));
++  int count = 0;
++  wchar_t** args = split ? split(command_line.c_str(), &count) : nullptr;
++  if (!args) {
++    ::FreeLibrary(shell);
++    return tokens;
++  }
++  for (int i = 0; i < count; ++i)
++    tokens.emplace_back(UNSAFE_BUFFERS(args[i]));
++  ::LocalFree(args);
++  ::FreeLibrary(shell);
++  return tokens;
++}
++
++TEST(UserDataDir, ArdiaShellSwitchMatchesBaseCommandLine) {
++  for (const ShellSwitchCase& c : kShellSwitchCases) {
++    SCOPED_TRACE(base::WideToUTF8(c.command_line));
++    const bool early = IsWebUIShellCommandLine(c.command_line);
++    const bool late = base::CommandLine::FromString(c.command_line)
++                          .GetSwitchValueASCII("ardia-shell") == "webui";
++    EXPECT_EQ(early, late);
++    if (c.webui != kEither)
++      EXPECT_EQ(late, c.webui == 1);
++  }
++}
++
++TEST(UserDataDir, ArdiaShellTokensMatchCommandLineToArgvW) {
++  for (const ShellSwitchCase& c : kShellSwitchCases) {
++    SCOPED_TRACE(base::WideToUTF8(c.command_line));
++    const std::wstring trimmed(
++        base::TrimWhitespace(std::wstring_view(c.command_line), base::TRIM_ALL));
++    if (trimmed.empty())
++      continue;
++    EXPECT_EQ(TokenizeCommandLineToArray(trimmed),
++              CommandLineToArgvWTokens(trimmed));
++  }
++}
++
++
++struct VanishingFolder {
++  std::wstring folder;
++  bool removed = false;
++};
++
++void RemoveFolderBeforeListing(const std::wstring& folder, void* context) {
++  auto* vanishing = static_cast<VanishingFolder*>(context);
++  if (folder == vanishing->folder)
++    vanishing->removed = ::RemoveDirectoryW(folder.c_str()) != 0;
++}
++
++TEST(UserDataDir, WebUITreeWalkFindsNoLinkInPlainTree) {
++  base::ScopedTempDir temp;
++  ASSERT_TRUE(temp.CreateUniqueTempDir());
++  const std::wstring root = temp.GetPath().value();
++  ASSERT_TRUE(::CreateDirectoryW((root + L"\\Default").c_str(), nullptr));
++  ASSERT_TRUE(::CreateDirectoryW((root + L"\\Default\\Cache").c_str(), nullptr));
++  EXPECT_FALSE(WebUITreeHasLink(root, nullptr, nullptr));
++}
++
++TEST(UserDataDir, WebUITreeWalkSkipsAFolderRemovedBeforeItIsListed) {
++  base::ScopedTempDir temp;
++  ASSERT_TRUE(temp.CreateUniqueTempDir());
++  const std::wstring root = temp.GetPath().value();
++  ASSERT_TRUE(::CreateDirectoryW((root + L"\\Default").c_str(), nullptr));
++  ASSERT_TRUE(::CreateDirectoryW((root + L"\\Default\\Cache").c_str(), nullptr));
++  ASSERT_TRUE(
++      ::CreateDirectoryW((root + L"\\Default\\Cache\\Cache_Data").c_str(), nullptr));
++  VanishingFolder vanishing{root + L"\\Default\\Cache\\Cache_Data"};
++  EXPECT_FALSE(WebUITreeHasLink(root, &RemoveFolderBeforeListing, &vanishing));
++  EXPECT_TRUE(vanishing.removed);
++}
++
++TEST(UserDataDir, WebUITreeWalkAcceptsARootThatIsGone) {
++  base::ScopedTempDir temp;
++  ASSERT_TRUE(temp.CreateUniqueTempDir());
++  const std::wstring root = temp.GetPath().value() + L"\\Chromium";
++  ASSERT_TRUE(::CreateDirectoryW(root.c_str(), nullptr));
++  VanishingFolder vanishing{root};
++  EXPECT_FALSE(WebUITreeHasLink(root, &RemoveFolderBeforeListing, &vanishing));
++  EXPECT_TRUE(vanishing.removed);
++}
++
++TEST(UserDataDir, WebUITreeWalkRefusesADirectoryLink) {
++  base::ScopedTempDir temp;
++  ASSERT_TRUE(temp.CreateUniqueTempDir());
++  const std::wstring root = temp.GetPath().value() + L"\\Chromium";
++  const std::wstring target = temp.GetPath().value() + L"\\Elsewhere";
++  ASSERT_TRUE(::CreateDirectoryW(root.c_str(), nullptr));
++  ASSERT_TRUE(::CreateDirectoryW(target.c_str(), nullptr));
++  ASSERT_TRUE(::CreateDirectoryW((root + L"\\Default").c_str(), nullptr));
++  ASSERT_TRUE(::CreateSymbolicLinkW(
++      (root + L"\\Default\\Network").c_str(), target.c_str(),
++      SYMBOLIC_LINK_FLAG_DIRECTORY |
++          SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE));
++  EXPECT_TRUE(WebUITreeHasLink(root, nullptr, nullptr));
++}
++
+ }  // namespace
+ }  // namespace install_static

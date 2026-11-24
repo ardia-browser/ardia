@@ -16,7 +16,7 @@ export type Engine = {
   externalApps?: ExternalApps;
 };
 
-export type SaveRequest = { name: string; extension: string; kind: string; message: string };
+type SaveRequest = { name: string; extension: string; kind: string; message: string };
 
 export type PowerReading = { onBattery?: unknown; batteryPercent?: unknown; batterySaver?: unknown; memoryLoad?: unknown; physicalMemory?: unknown };
 
@@ -29,7 +29,7 @@ export type Desktop = {
   every(ms: number, run: () => void): void;
 };
 
-export type CallError = Error & { code: string };
+type CallError = Error & { code: string };
 
 export const callError = (code: string, message: string): CallError => Object.assign(new Error(message), { code });
 

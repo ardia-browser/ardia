@@ -195,8 +195,8 @@ test("the loaded tab budget grows with the Mac's memory, and shrinks to the mode
   assert.deepEqual(minutes(loadedTabBudget(on("moderate"), sys(16))), { tabs: 32, minutes: 120 });
   assert.deepEqual(minutes(loadedTabBudget(on("maximum"), sys(16))), { tabs: 8, minutes: 30 });
   assert.deepEqual(minutes(loadedTabBudget(on("maximum"), sys(8))), { tabs: 5, minutes: 30 });
-  assert.deepEqual(minutes(loadedTabBudget(on("balanced"), sys(32, "warning"))), { tabs: 10, minutes: 10 }, "under pressure the floor, and ten minutes hidden");
-  assert.deepEqual(minutes(loadedTabBudget(on("moderate"), sys(32, "critical"))), { tabs: 20, minutes: 10 });
+  assert.deepEqual(minutes(loadedTabBudget(on("balanced"), sys(32, "warning"))), { tabs: 10, minutes: 5 }, "under a memory warning the floor, and five minutes hidden");
+  assert.deepEqual(minutes(loadedTabBudget(on("moderate"), sys(32, "critical"))), { tabs: 20, minutes: 2 }, "under critical pressure two minutes");
   assert.deepEqual(minutes(loadedTabBudget(on("turbo"), sys(8))), { tabs: 10, minutes: 60 }, "an unknown mode is Balanced");
   assert.equal(loadedTabBudget({ memorySaver: false, memorySaverMode: "maximum" }, sys(8)), null, "Memory Saver off keeps every tab loaded");
   assert.equal(loadedTabBudget(on("balanced"), null), null, "nothing sleeps before the Mac's memory is known");
@@ -342,5 +342,248 @@ test("tabs the engine kept give their asks to tabs not kept yet, so a sweep wher
   assert.deepEqual(await sweep(later), [ids[3]], "ten minutes later the kept tabs are due again, and the younger tab now past the wait is asked first and sleeps");
   assert.deepEqual(asked, [ids[3], ids[7], ids[6], ids[5]], "the kept tabs fill the asks that are left");
   assert.equal(takeTabSleepCounts().tabs_over_budget_asks_passed_on, 1, "one ask went from a kept tab to a tab not kept yet");
+  webviews.clear();
+});
+
+test("a tab switched to 15 times stays loaded, and each kind of protection that kept a tab is counted once per tab", async (t) => {
+  const { sleepTabsOverBudget, tabsOverBudget } = await import("./loadedTabBudget.ts");
+  const { switchesOf, clearSwitches } = await import("./tabSwitches.ts");
+  const { webviews } = await import("../../platform/webviews.ts");
+  const { takeTabSleepCounts } = await import("../telemetry/tabSleepCounts.ts");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const now = Date.now() + 480 * 60 * minute;
+  const { ids, active } = windowOfHiddenTabs(4, now);
+  lifecycle.startTabLifecycle();
+  clearSwitches();
+  for (let i = 0; i < 15; i++) {
+    S().activate(ids[3]);
+    S().activate(active);
+  }
+  assert.equal(switchesOf(ids[3]), 15, "each switch to the tab counts once");
+  ids.forEach((id, i) => S().updateTab(id, { lastActiveAt: now - (60 + i * 60) * minute }));
+  const budget = { tabs: 1, hiddenMs: 30 * minute };
+  assert.ok(!tabsOverBudget(S(), [active, ...ids], budget, now).includes(ids[3]), "the oldest tab is kept because it is used all the time");
+  webviews.clear();
+  const answers = { [ids[2]]: [100], [ids[1]]: [101, 26] };
+  for (const id of [active, ...ids]) webviews.set(id, { sleepIfHidden: () => Promise.resolve(answers[id] ?? []) });
+  takeTabSleepCounts();
+  const sweep = async (at) => {
+    const done = sleepTabsOverBudget(budget, at);
+    for (let i = 0; i < 8; i++) {
+      await new Promise((resolve) => setImmediate(resolve));
+      t.mock.timers.tick(1500);
+    }
+    return done;
+  };
+  assert.deepEqual(await sweep(now), [ids[0]], "the page left by a form post and the one with an unload prompt stay; the idle one sleeps");
+  lifecycle.noteDiscarded(ids[0]);
+  await sweep(now + minute);
+  const counts = takeTabSleepCounts();
+  assert.equal(counts.sleep_kept_frequently_used, 1, "counted once, not once per sweep");
+  assert.equal(counts.sleep_kept_posted_document, 1);
+  assert.equal(counts.sleep_kept_before_unload, 1, "an unload prompt outranks typed input");
+  assert.equal(counts.sleep_kept_typed_input, 0);
+  assert.equal(counts.tabs_slept_over_budget, 1);
+  webviews.clear();
+  clearSwitches();
+});
+
+test("a candidate that starts playing sound while an earlier tab's answer is awaited isn't asked, and each tab is counted once per reason", async (t) => {
+  const { sleepTabsOverBudget } = await import("./loadedTabBudget.ts");
+  const { webviews } = await import("../../platform/webviews.ts");
+  const { takeTabSleepCounts } = await import("../telemetry/tabSleepCounts.ts");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const now = Date.now() + 900 * 60 * minute;
+  const { ids, active } = windowOfHiddenTabs(3, now);
+  ids.forEach((id, i) => S().updateTab(id, { lastActiveAt: now - (60 + i * 60) * minute }));
+  const asked = [];
+  let answers = {
+    [ids[2]]: () => {
+      S().updateLive(ids[1], { playingAudio: true });
+      return Promise.resolve([26]);
+    },
+  };
+  webviews.clear();
+  for (const id of [active, ...ids]) webviews.set(id, { sleepIfHidden: () => (asked.push(id), answers[id]?.() ?? Promise.resolve([])) });
+  takeTabSleepCounts();
+  const sweep = async (at) => {
+    const done = sleepTabsOverBudget({ tabs: 1, hiddenMs: 30 * minute }, at);
+    for (let i = 0; i < 8; i++) {
+      await new Promise((resolve) => setImmediate(resolve));
+      t.mock.timers.tick(1500);
+    }
+    return done;
+  };
+  assert.deepEqual(await sweep(now), [ids[0]]);
+  assert.deepEqual(asked, [ids[2], ids[0]], "the tab that began playing mid-sweep is skipped, not sent to Chromium");
+  answers = { [ids[2]]: () => Promise.resolve([26]) };
+  await sweep(now + 11 * minute);
+  const counts = takeTabSleepCounts();
+  assert.equal(counts.sleep_kept_typed_input, 1, "typed input kept the tab twice, counted once");
+  assert.equal(counts.sleep_kept_audible, 1);
+  S().updateLive(ids[1], { playingAudio: false });
+  webviews.clear();
+});
+
+test("a protection seen while sharing is off is still counted the first time it is seen after sharing turns on", async (t) => {
+  const { sleepTabsOverBudget } = await import("./loadedTabBudget.ts");
+  const { takeTabSleepCounts } = await import("../telemetry/tabSleepCounts.ts");
+  const { webviews } = await import("../../platform/webviews.ts");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const now = Date.now() + 1200 * 60 * minute;
+  const { ids, active } = windowOfHiddenTabs(2, now);
+  ids.forEach((id, i) => S().updateTab(id, { lastActiveAt: now - (60 + i * 60) * minute }));
+  S().updateLive(ids[1], { playingAudio: true });
+  webviews.clear();
+  for (const id of [active, ...ids]) webviews.set(id, { sleepIfHidden: () => Promise.resolve([7]) });
+  takeTabSleepCounts();
+  setConsentPeriod(false, null);
+  await sleepTabsOverBudget({ tabs: 1, hiddenMs: 30 * minute }, now);
+  setConsentPeriod(true, "tab-lifecycle-test-2");
+  await sleepTabsOverBudget({ tabs: 1, hiddenMs: 30 * minute }, now + minute);
+  await sleepTabsOverBudget({ tabs: 1, hiddenMs: 30 * minute }, now + 2 * minute);
+  assert.equal(takeTabSleepCounts().sleep_kept_audible, 1, "counted once in the period sharing was on, though first seen before it");
+  setConsentPeriod(true, "tab-lifecycle-test");
+  S().updateLive(ids[1], { playingAudio: false });
+  webviews.clear();
+});
+
+test("memory pressure tightens the sweep at once, a few tabs a tick, counts each level reached", async (t) => {
+  const { sleepTabsOverBudget, loadedTabBudget } = await import("./loadedTabBudget.ts");
+  const { webviews } = await import("../../platform/webviews.ts");
+  const { takeTabSleepCounts, noteMemoryPressure } = await import("../telemetry/tabSleepCounts.ts");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const now = Date.now() + 720 * 60 * minute;
+  const { ids, active } = windowOfHiddenTabs(12, now);
+  ids.forEach((id, i) => S().updateTab(id, { lastActiveAt: now - (6 + i) * minute }));
+  webviews.clear();
+  const asked = [];
+  for (const id of [active, ...ids]) webviews.set(id, { sleepIfHidden: (seconds) => (asked.push([id, seconds]), Promise.resolve([])) });
+  takeTabSleepCounts();
+  const sys = (memoryPressure) => ({ onBattery: false, batteryLevel: null, lowPowerMode: false, memoryPressure, physicalMemory: 8 * 2 ** 30 });
+  const settings = { memorySaver: true, memorySaverMode: "maximum" };
+  const sweep = async (budget, at) => {
+    const done = sleepTabsOverBudget(budget, at);
+    for (let i = 0; i < 8; i++) {
+      await new Promise((resolve) => setImmediate(resolve));
+      t.mock.timers.tick(1500);
+    }
+    return done;
+  };
+  assert.deepEqual(await sweep(loadedTabBudget(settings, sys("normal")), now), [], "at normal pressure nothing hidden under half an hour sleeps");
+  const warning = loadedTabBudget(settings, sys("warning"));
+  assert.equal(warning.everyMs, 15_000);
+  const slept = await sweep(warning, now);
+  assert.equal(slept.length, 4, "a warning sleeps at most four tabs in one tick");
+  assert.deepEqual(asked.map(([, seconds]) => seconds), [300, 300, 300, 300], "each asked with the five minute wait");
+  slept.forEach((id) => lifecycle.noteDiscarded(id));
+  const critical = loadedTabBudget(settings, sys("critical"));
+  assert.equal((await sweep(critical, now + 10_000)).length, 4);
+  noteMemoryPressure("warning");
+  noteMemoryPressure("critical");
+  const counts = takeTabSleepCounts();
+  assert.equal(counts.tabs_slept_under_memory_warning, 4);
+  assert.equal(counts.tabs_slept_under_memory_critical, 4);
+  assert.equal(counts.tabs_slept_over_budget, 8);
+  assert.equal(counts.memory_pressure_warnings, 1);
+  assert.equal(counts.memory_pressure_criticals, 1);
+  webviews.clear();
+});
+
+test("pressure sweeps wait for launch to settle, share one rate limit through a warning, normal, warning flap, and stop when the level changes mid-sweep", async (t) => {
+  const { pressureChanged, armPressureSweeps, sweepIfDue, loadedTabBudget } = await import("./loadedTabBudget.ts");
+  const { webviews } = await import("../../platform/webviews.ts");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const now = Date.now() + 1500 * 60 * minute;
+  const { ids, active } = windowOfHiddenTabs(12, now);
+  ids.forEach((id, i) => S().updateTab(id, { lastActiveAt: now - (60 + i) * minute }));
+  const sys = (memoryPressure) => ({ onBattery: false, batteryLevel: null, lowPowerMode: false, memoryPressure, physicalMemory: 8 * 2 ** 30 });
+  const settings = { memorySaver: true, memorySaverMode: "maximum" };
+  const warning = loadedTabBudget(settings, sys("warning"));
+  const normal = loadedTabBudget(settings, sys("normal"));
+  const asked = [];
+  let hold = null;
+  webviews.clear();
+  for (const id of [active, ...ids]) webviews.set(id, { sleepIfHidden: () => (asked.push(id), hold ? hold : Promise.resolve([7])) });
+  const settle = async () => {
+    for (let i = 0; i < 8; i++) {
+      await new Promise((resolve) => setImmediate(resolve));
+      t.mock.timers.tick(1500);
+    }
+  };
+  pressureChanged(null, warning, now);
+  await settle();
+  assert.deepEqual(asked, [], "a warning read at launch asks nothing until launch has settled");
+  armPressureSweeps();
+  pressureChanged(null, warning, now);
+  await settle();
+  pressureChanged(null, normal, now + 100);
+  pressureChanged(null, warning, now + 200);
+  await settle();
+  assert.equal(asked.length, 4, "the flap's second warning is inside the 15 s limit the first sweep started");
+  assert.deepEqual(await sweepIfDue(normal, null, now + 30_000), [], "the minute job shares the limit too: 30 s after a sweep is too soon for it");
+  asked.length = 0;
+  let release;
+  hold = new Promise((resolve) => (release = resolve));
+  const sweep = sweepIfDue(warning, null, now + 120_000);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(asked.length, 1, "the sweep is waiting on its first ask");
+  pressureChanged(null, normal, now + 120_100);
+  release([7]);
+  hold = null;
+  await settle();
+  await sweep;
+  assert.equal(asked.length, 1, "after the Mac returns to normal the sweep sends no more asks under the warning's rules");
+  webviews.clear();
+});
+
+test("crossing the budget while a warning is already on wakes the sweep jobs, once per crossing", async () => {
+  const { watchOverBudget } = await import("./loadedTabBudget.ts");
+  const { webviews, webviewRef } = await import("../../platform/webviews.ts");
+  const now = Date.now() + 2000 * 60 * minute;
+  const { ids, active } = windowOfHiddenTabs(3, now);
+  webviews.clear();
+  const refs = Object.fromEntries([active, ...ids].map((id) => [id, webviewRef(id)]));
+  refs[active]({ sleepIfHidden: async () => [] });
+  refs[ids[0]]({ sleepIfHidden: async () => [] });
+  let woken = 0;
+  const stop = watchOverBudget(() => ({ tabs: 2, hiddenMs: 5 * minute, pressure: "warning", everyMs: 15_000 }), () => woken++);
+  refs[ids[1]]({ sleepIfHidden: async () => [] });
+  assert.equal(woken, 1, "a third loaded tab puts the window over a budget of two");
+  refs[ids[2]]({ sleepIfHidden: async () => [] });
+  assert.equal(woken, 1, "staying over budget isn't a new crossing");
+  lifecycle.noteDiscarded(ids[1]);
+  lifecycle.noteDiscarded(ids[2]);
+  assert.equal(woken, 2, "falling back under it is");
+  stop();
+  lifecycle.noteReady(ids[1]);
+  lifecycle.noteReady(ids[2]);
+  webviews.clear();
+});
+
+test("under memory pressure a tab an ardia command session holds is never asked, including a hold taken while an earlier ask is awaited", async (t) => {
+  const { sleepTabsOverBudget, loadedTabBudget } = await import("./loadedTabBudget.ts");
+  const { holdForCli, releaseAllCliHolds } = await import("./cliHolds.ts");
+  const { webviews } = await import("../../platform/webviews.ts");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const now = Date.now() + 2400 * 60 * minute;
+  const { ids, active } = windowOfHiddenTabs(4, now);
+  ids.forEach((id, i) => S().updateTab(id, { lastActiveAt: now - (60 + i * 60) * minute }));
+  const sys = { onBattery: false, batteryLevel: null, lowPowerMode: false, memoryPressure: "warning", physicalMemory: 8 * 2 ** 30 };
+  const warning = { ...loadedTabBudget({ memorySaver: true, memorySaverMode: "maximum" }, sys), tabs: 1 };
+  releaseAllCliHolds();
+  holdForCli("s1", [ids[3]]);
+  const asked = [];
+  webviews.clear();
+  const answers = { [ids[2]]: () => (holdForCli("s2", [ids[1]]), Promise.resolve([26])) };
+  for (const id of [active, ...ids]) webviews.set(id, { sleepIfHidden: () => (asked.push(id), answers[id]?.() ?? Promise.resolve([])) });
+  const done = sleepTabsOverBudget(warning, now);
+  for (let i = 0; i < 8; i++) {
+    await new Promise((resolve) => setImmediate(resolve));
+    t.mock.timers.tick(1500);
+  }
+  assert.deepEqual(await done, [ids[0]]);
+  assert.deepEqual(asked, [ids[2], ids[0]], "the held tab is left out of the warning sweep, and a hold taken mid-sweep stops its ask");
+  releaseAllCliHolds();
   webviews.clear();
 });

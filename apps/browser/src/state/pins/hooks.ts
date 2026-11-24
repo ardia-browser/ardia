@@ -1,9 +1,8 @@
 import { useShallow } from "zustand/react/shallow";
 import { useBrowser } from "../browser/store";
 import { useTabState } from "../tabs/tabStateWatch";
-import { activeTabId } from "../browser/model";
 import { usePageProfileId } from "../browser/hooks";
-import { folderIn, folderLabel, folderMembers, tileFolderOf } from "./tileFolders";
+import { folderIn, folderLabel, folderMembers, shownFolderTab } from "./tileFolders";
 
 export function useTileFolderMembers(windowId: string, folderId: string) {
   const profileId = usePageProfileId();
@@ -17,10 +16,7 @@ export function useTileFolderLabel(windowId: string, folderId: string) {
 
 export function useShownFolderTab(windowId: string, folderId: string) {
   const profileId = usePageProfileId();
-  return useBrowser((s) => {
-    const id = activeTabId(s, windowId, profileId);
-    return id && tileFolderOf(s.tabs[id])?.id === folderId ? id : null;
-  });
+  return useBrowser((s) => shownFolderTab(s, windowId, profileId, folderId));
 }
 
 export const useIsSelected = (windowId: string, tabId: string) => useTabState(tabId, (s) => (s.selection[windowId] ?? []).includes(tabId));

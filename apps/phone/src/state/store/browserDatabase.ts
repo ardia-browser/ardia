@@ -71,6 +71,49 @@ export function writeTabs(db: SqlDatabase, put: readonly BrowserTab[], remove: r
   });
 }
 
+const ID_CHUNK = 500;
+
+export function archivedIdsAmong(db: SqlDatabase, ids: readonly string[]): Set<string> {
+  const found = new Set<string>();
+  for (let start = 0; start < ids.length; start += ID_CHUNK) {
+    const chunk = ids.slice(start, start + ID_CHUNK);
+    const marks = chunk.map(() => "?").join(",");
+    for (const row of db.all<{ id: string }>(`SELECT id FROM tabs WHERE archivedAt IS NOT NULL AND id IN (${marks})`, chunk)) found.add(row.id);
+  }
+  return found;
+}
+
+export type TabCommit = { clearArchived: boolean; put: readonly BrowserTab[]; remove: readonly string[]; states?: readonly (readonly [string, string | null])[] };
+
+export function commitTabChanges(db: SqlDatabase, commit: TabCommit): string[] {
+  const stored = commit.put.filter((tab) => !tab.isPrivate);
+  let cleared: string[] = [];
+  const states = commit.states ?? [];
+  if (!commit.clearArchived && !stored.length && !commit.remove.length && !states.length) return cleared;
+  const kept = new Set(stored.map((tab) => tab.id));
+  db.transaction(() => {
+    if (commit.clearArchived) {
+      cleared = db.all<{ id: string }>("SELECT id FROM tabs WHERE archivedAt IS NOT NULL").map((r) => r.id).filter((id) => !kept.has(id));
+      for (let start = 0; start < cleared.length; start += ID_CHUNK) {
+        const chunk = cleared.slice(start, start + ID_CHUNK);
+        const marks = chunk.map(() => "?").join(",");
+        db.run(`DELETE FROM tab_state WHERE id IN (${marks})`, chunk);
+        db.run(`DELETE FROM tabs WHERE id IN (${marks})`, chunk);
+      }
+    }
+    for (const tab of stored) db.run(`INSERT OR REPLACE INTO tabs (${TAB_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, tabValues(tab));
+    for (const id of commit.remove) {
+      db.run("DELETE FROM tabs WHERE id = ?", [id]);
+      db.run("DELETE FROM tab_state WHERE id = ?", [id]);
+    }
+    for (const [id, data] of states) {
+      if (data === null) db.run("DELETE FROM tab_state WHERE id = ?", [id]);
+      else db.run("INSERT OR REPLACE INTO tab_state (id, data) SELECT ?, ? WHERE EXISTS (SELECT 1 FROM tabs WHERE id = ?)", [id, data, id]);
+    }
+  });
+  return cleared;
+}
+
 export function deleteArchivedTabs(db: SqlDatabase): string[] {
   let removed: string[] = [];
   db.transaction(() => {
@@ -80,6 +123,12 @@ export function deleteArchivedTabs(db: SqlDatabase): string[] {
   });
   return removed;
 }
+
+export const archivedBefore = (db: SqlDatabase, cutoff: number): string[] =>
+  db.all<{ id: string }>("SELECT id FROM tabs WHERE archivedAt IS NOT NULL AND archivedAt < ?", [cutoff]).map((r) => r.id);
+
+export const archivedRankedFrom = (db: SqlDatabase, offset: number) =>
+  db.all<TabRow>(`SELECT ${TAB_COLUMNS} FROM tabs WHERE archivedAt IS NOT NULL ORDER BY archivedAt DESC LIMIT -1 OFFSET ?`, [offset]).map(tabOf);
 
 export function expiredArchivedIds(db: SqlDatabase, cutoff: number, keep: number): string[] {
   const old = db.all<{ id: string }>("SELECT id FROM tabs WHERE archivedAt IS NOT NULL AND archivedAt < ?", [cutoff]);

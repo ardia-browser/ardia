@@ -61,14 +61,6 @@ bool MenuActive(NSWindow *window) {
   return gDevMenuActive || WindowFlag(window, @"hasViewsMenuActive");
 }
 
-bool MenuShown(NSWindow *browser) {
-  for (NSWindow *window in NSApp.windows) {
-    if (window == browser || !window.isVisible) continue;
-    if (window.parentWindow == browser || window.level >= NSPopUpMenuWindowLevel || [window.className containsString:@"Menu"]) return true;
-  }
-  return false;
-}
-
 bool IsBrowserWindow(NSWindow *window) {
   if (!window || ardia_content_blocker::IsHiddenPageWindow(window)) return false;
   ArdiaWindowController *controller = [ArdiaWindowController forNSWindow:window];
@@ -221,13 +213,13 @@ bool IsProblem(const HoverCheck &check, HoverTrigger trigger) {
   }
 }
 
-bool PanelOrSheetOpen() {
-  if (NSApp.modalWindow) return true;
+HealRefusal PanelOrSheetRefusal() {
+  if (NSApp.modalWindow) return HealRefusal::modalWindow;
   for (NSWindow *window in NSApp.windows) {
-    if (window.attachedSheet) return true;
-    if (window.isVisible && [window isKindOfClass:NSSavePanel.class]) return true;
+    if (window.attachedSheet) return HealRefusal::attachedSheet;
+    if (window.isVisible && [window isKindOfClass:NSSavePanel.class]) return HealRefusal::savePanel;
   }
-  return false;
+  return HealRefusal::none;
 }
 
 constexpr double kFullScreenMoveLongest = 5;
@@ -252,12 +244,33 @@ bool OtherArdiaWindowActive(NSWindow *window) {
   return false;
 }
 
-bool SafeToHeal(NSWindow *window, const HoverCheck &check, HoverTrigger trigger) {
-  if (!window.isVisible || !window.isOnActiveSpace || !check.activation.inFront() || PanelOrSheetOpen()) return false;
-  if (check.menuActive || MenuShown(window) || FullScreenMoving()) return false;
-  if (check.reason == HoverReason::halfActive) return trigger == HoverTrigger::click && check.key != FocusWindowKind::popup;
-  if (check.reason == HoverReason::responderLost) return trigger == HoverTrigger::click && check.overPage && check.windowKey;
-  return check.reason == HoverReason::notKeyOrMain && check.activation.appActive && Unseen(check.key) && !OtherArdiaWindowActive(window);
+HealRefusal GuardRefusal(NSWindow *window, const HoverCheck &check, MenuWindowInfo *menuWindow) {
+  if (!window.isVisible) return HealRefusal::notVisible;
+  if (!window.isOnActiveSpace) return HealRefusal::notOnActiveSpace;
+  if (!check.activation.inFront()) return HealRefusal::notInFront;
+  const HealRefusal panel = PanelOrSheetRefusal();
+  if (panel != HealRefusal::none) return panel;
+  if (check.menuActive) return HealRefusal::menuActive;
+  if (MenuShown(window, menuWindow)) return HealRefusal::menuShown;
+  if (FullScreenMoving()) return HealRefusal::fullScreenMoving;
+  return HealRefusal::none;
+}
+
+bool SafeToHeal(NSWindow *window, const HoverCheck &check, HoverTrigger trigger, HealRefusal *refusedBy, MenuWindowInfo *menuWindow) {
+  HealRefusal refusal = GuardRefusal(window, check, menuWindow);
+  if (refusal == HealRefusal::none) {
+    if (check.reason == HoverReason::halfActive) {
+      if (trigger != HoverTrigger::click) refusal = HealRefusal::notClick;
+      else if (check.key == FocusWindowKind::popup) refusal = HealRefusal::keyPopup;
+    } else if (check.reason == HoverReason::responderLost) {
+      if (trigger != HoverTrigger::click) refusal = HealRefusal::notClick;
+      else if (!(check.overPage && check.windowKey)) refusal = HealRefusal::notEligible;
+    } else if (!(check.reason == HoverReason::notKeyOrMain && check.activation.appActive && Unseen(check.key) && !OtherArdiaWindowActive(window))) {
+      refusal = HealRefusal::notEligible;
+    }
+  }
+  if (refusedBy) *refusedBy = refusal;
+  return refusal == HealRefusal::none;
 }
 
 HoverEpisode gEpisode;
@@ -325,6 +338,10 @@ void CloseEpisode(NSString *endedBy) {
     @"coverWindow" : KindName(first.coverWindow),
     @"healed" : @(gEpisode.healed),
     @"healWorked" : gEpisode.healWorked < 0 ? NSNull.null : @(gEpisode.healWorked == 1),
+    @"healRefused" : HealRefusalName(gEpisode.firstRefusal),
+    @"healRefusedLast" : HealRefusalName(gEpisode.lastRefusal),
+    @"healRefusedWindow" : MenuWindowName(gEpisode.refusedWindow),
+    @"otherWindowClicks" : @(gEpisode.otherWindowClicks),
     @"endedBy" : endedBy,
     @"seconds" : @(lround(MAX(0, Uptime() - gEpisode.startedAt))),
     @"episode" : @(gEpisodeCount),
@@ -418,9 +435,21 @@ void OpenEpisode(NSWindow *window, const HoverCheck &check, HoverTrigger trigger
   NoteFocusChange([@"hover lost: " stringByAppendingString:ReasonName(check.reason)], window);
 }
 
+void NoteHealRefusal(HealRefusal refusal, const MenuWindowInfo &menuWindow) {
+  if (gEpisode.firstRefusal == HealRefusal::none) gEpisode.firstRefusal = refusal;
+  gEpisode.lastRefusal = refusal;
+  if (refusal == HealRefusal::menuShown && !gEpisode.refusedWindow.present) gEpisode.refusedWindow = menuWindow;
+}
+
 void HandleHoverCheck(NSWindow *window, NSPoint point, HoverTrigger trigger, ArdiaConsentStamp *stamp) {
   if (gEpisode.open && !gEpisode.owner) CloseEpisode(@"windowClosed");
-  if (!window || (gEpisode.open && gEpisode.owner != window)) return;
+  if (!window) return;
+  if (gEpisode.open && gEpisode.owner != window) {
+    if (trigger != HoverTrigger::click) return;
+    gEpisode.otherWindowClicks++;
+    if (gEpisode.first.reason != HoverReason::halfActive || gEpisode.healed) return;
+    gEpisode.owner = window;
+  }
   const HoverCheck check = Probe(window, point, trigger == HoverTrigger::click);
   if (trigger == HoverTrigger::move && !check.overPage) return;
   gLastHoverVerdict = DescribeCheck(check, trigger);
@@ -437,7 +466,11 @@ void HandleHoverCheck(NSWindow *window, NSPoint point, HoverTrigger trigger, Ard
     }
     OpenEpisode(window, check, trigger, stamp);
   }
-  if (!gEpisode.healed && SafeToHeal(window, check, trigger)) Heal(window, point, check.reason);
+  if (gEpisode.healed) return;
+  HealRefusal refusal = HealRefusal::none;
+  MenuWindowInfo menuWindow;
+  if (SafeToHeal(window, check, trigger, &refusal, &menuWindow)) Heal(window, point, check.reason);
+  else NoteHealRefusal(refusal, menuWindow);
 }
 
 void HandleCoveredClick(NSWindow *browser, NSWindow *cover, NSPoint point, ArdiaConsentStamp *stamp) {

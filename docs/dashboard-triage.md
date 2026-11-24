@@ -4,6 +4,8 @@
 
 The dashboard's `/settings` page, which settings opted-in users change, is described in `docs/dashboard-settings.md`.
 
+The `/health` page's Protected video panel (`server/sections/protected-video.ts`, section `health.protectedVideo`) shows protected video in Chromium tabs (Ardia has no Widevine support; protected video plays in WebKit): the share of installs whose latest `settings_snapshot` reports `setting_widevine_installed = "true"`, then `usage_counts`' `drm_refusals` with its stages (`drm_refusals_access`, `drm_refusals_create_keys`, `drm_refusals_licence`, `drm_refusals_keystatus`), summed per app version. Refusals counted with no stage show as No stage. The same `setting_widevine_installed` also lists on `/settings` like any setting, with default `false`.
+
 ## Credentials
 
 The dashboard's `reader` user only sees `telemetry.*`, so triage uses its own connection, configured with env vars that `serverEnv()` reads like the rest:
@@ -124,6 +126,16 @@ The Site page's **Where they clicked Download** panel splits `download_clicked` 
 
 Performance › Freezes reads `app_freeze` over the last 7 days, grouped by `signature`: people (`uniqExact(distinct_id)`),
 freezes (`count()`), time frozen (`sum(freeze_ms)`), the most common thread and job, the latest version, and the top
-three frames from Ardia's own images (hover the place). Offsets symbolicate with the engine's uploaded symbols
-(`scripts/symbolicate-crash.sh`) and Hermes's with the release framework's local symbols.
+three frames from Ardia's own images. Frames read as function names wherever the build's symbols are published; hover
+a place to see each name with its raw offset. The summary line says how many places are named. The names come from
+`sandbox.ardia_frame_symbols`, which the hourly frame-naming job fills (`docs/symbolication.md`). Errors names the native
+frames of the crashes it shows the same way, and each crash row says how many native frames were named. Hermes frames
+stay raw.
 
+Android's Material You switch (Settings › General, off by default) is counted as `usage_counts.material_you_turned_on` and `material_you_turned_off`; `app_launched.material_colors` is `not_material` for launches with it off. The counts below are taken only with it on, except `find_closed_bar`.
+
+Android search reports full-screen sheet expansions as the consent-gated daily `usage_counts.search_sheet_expanded` count on `ardia-phone`. Incognito expansions do not count. Compare it with `searches` to track use of the expanded result list; neither count includes queries or page content.
+
+Compare `usage_counts.site_settings_sheet_expanded` with `site_settings_sheet_opened` to track use of the full-screen Android address bar menu. Both are consent-gated counts that exclude Incognito.
+
+Android Find on Page: compare phone `usage_counts.find_closed_bar` with `find_opened_bar`. The close counter counts each non-private session once, whether it ends through Close or Back. Counts require usage sharing.

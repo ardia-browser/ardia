@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage="usage: token-smoke.sh <Ardia.app> <ardia command> [metro host:port]
-Runs ardia browse read, open and a refused command against a hidden instance of <Ardia.app> over the real token
+Runs ardia browse read, open, set viewport and cookies against a hidden instance of <Ardia.app> over the real token
 connection (no DevTools port), with the given ardia command (the release smoke passes the app's built-in one). A Debug
 build needs its Metro as the third argument."
 case "${1:-}" in -h | --help | "") echo "$usage"; [ -n "${1:-}" ] && exit 0 || exit 64 ;; esac
@@ -11,7 +11,7 @@ cli="${2:?$usage}"
 metro="${3:-}"
 case "$app" in /Applications/*) echo "error: never an installed app" >&2; exit 1 ;; esac
 root="$(cd "$(dirname "$0")/../.." && pwd -P)"
-work="$(cd "$(mktemp -d /tmp/ac-token.XXXXXX)" && pwd -P)"
+work="$(cd "$(mktemp -d "${AC_SCRATCH_TMP:-/tmp}/ac-token.XXXXXX")" && pwd -P)"
 data="$work/d"
 mkdir -p "$data"
 pid=""
@@ -70,7 +70,7 @@ else
   [ "$(field code <<<"$viewport")" = viewport_needs_hidden_tab ] && [ "$(field data.result <<<"$sized")" != 390x844 ] && ok=1 || ok=0
   check "ardia browse set viewport is refused on a tab Ardia has shown" $ok "$(head -c 300 <<<"$viewport")"
 fi
-refused="$(browse cookies --json)"
-[ "$(field code <<<"$refused")" = policy_refused ] && [ "$(field data.method <<<"$refused")" = Network.getCookies ] && ok=1 || ok=0
-check "a method off the policy's list is refused by name" $ok "$(head -c 300 <<<"$refused")"
+cookies="$(browse cookies --json)"
+[ "$(field success <<<"$cookies")" = true ] && ok=1 || ok=0
+check "ardia browse cookies reads cookies over the token connection, a full DevTools client" $ok "$(head -c 300 <<<"$cookies")"
 exit $status

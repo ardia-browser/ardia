@@ -114,6 +114,7 @@ test("app link prompts and answers are counted and reset once taken", () => {
     external_app_launches: 0,
     external_app_launches_refused: 0,
     external_app_launches_automatic: 0,
+    incoming_links_refused: 0,
   });
 });
 

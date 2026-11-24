@@ -21,3 +21,8 @@
 -keepclasseswithmembernames,includedescriptorclasses class * {
     native <methods>;
 }
+-keep class * implements com.google.firebase.components.ComponentRegistrar {
+    public <init>();
+}
+-keep class com.google.mlkit.** { *; }
+-keep class com.google.android.gms.internal.mlkit_** { *; }

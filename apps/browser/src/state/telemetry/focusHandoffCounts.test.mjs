@@ -48,7 +48,7 @@ test("focus handoffs from while sharing was off are never sent, and handoffs aft
   assert.equal((await sentUsageCounts()).at(-1).focus_handoffs_delivered, 1);
 });
 
-test("D hand-offs from while sharing was off or from an earlier consent period stay in the local copy, marked not sent", async () => {
+test("D hand-offs from while sharing was off or from an earlier consent period aren't counted and aren't kept in the local copy", async () => {
   const { flushLocal } = await import("./localStore.ts");
   await flushLocal();
   const already = stub.telemetryLocal.records().length;
@@ -63,7 +63,7 @@ test("D hand-offs from while sharing was off or from an earlier consent period s
   usage.sessionEnding();
   await flushLocal();
   const local = stub.telemetryLocal.records().slice(already).filter((r) => r.event === "usage_counts" && (r.properties.focus_handoffs_delivered || r.properties.focus_handoffs_timed_out));
-  assert.deepEqual(local.map((r) => [r.sent, r.properties.focus_handoffs_delivered ?? 0, r.properties.focus_handoffs_timed_out ?? 0]), [[false, 2, 0], [false, 0, 3], [true, 1, 0]]);
+  assert.deepEqual(local.map((r) => [r.sent, r.properties.focus_handoffs_delivered ?? 0, r.properties.focus_handoffs_timed_out ?? 0]), [[true, 1, 0]]);
   const sent = await sentUsageCounts();
   assert.equal(sent.at(-1).focus_handoffs_delivered, 1);
   assert.ok(sent.every((p) => !p.focus_handoffs_timed_out));

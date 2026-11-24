@@ -51,10 +51,10 @@ onIos("Clear Browsing Data is main's form on Expo UI: Time Range, the Clear swit
   await done(root);
 });
 
-onIos("About Ardia has main's three links with their arrows and Open Source Licenses; Licenses lists each credit with its license and address", async () => {
+onIos("About Ardia has the version, main's three links with their arrows and Open Source Licenses; Licenses lists each credit with its license and address", async () => {
   const openLink = jest.spyOn(settingsActions, "openFromSettings").mockImplementation(() => undefined);
   const about = await open({ page: "about" });
-  expect(texts(about.page)).toEqual(expect.arrayContaining(["Ardia", "ardia.dev", "Release Notes", "Source Code", "Open Source Licenses"]));
+  expect(texts(about.page)).toEqual(expect.arrayContaining(["Ardia", settingsActions.appVersion(), "ardia.dev", "Release Notes", "Source Code", "Open Source Licenses"]));
   expect(within(about.page, (props) => props.systemName === "arrow.up.forward")).toHaveLength(3);
   await press(within(about.page, (props) => typeof props.onButtonPress === "function" || typeof props.onPress === "function").find((node) => texts(node).includes("Release Notes"))!);
   expect(openLink).toHaveBeenCalledWith("https://ardia.dev/release-notes");

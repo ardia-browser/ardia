@@ -11,6 +11,10 @@ interface SitePreferences {
 
     fun desktopSite(host: String?, isPrivate: Boolean): Boolean? = null
 
+    fun nightShadeVerdict(host: String?, isPrivate: Boolean): NightShadeVerdict? = null
+
+    fun rememberNightShadeVerdict(host: String, isPrivate: Boolean, verdict: NightShadeVerdict): NightShadeVerdictUse? = null
+
     object Defaults : SitePreferences {
         override fun nightShade(host: String?, isPrivate: Boolean) = NightShadeMode.Disabled
 

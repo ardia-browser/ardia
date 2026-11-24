@@ -10,13 +10,14 @@ on:
       - "apps/browser/metro.config.js"
       - "apps/browser/src/**"
       - "packages/*/src/**"
+      - "!packages/phone/**"
       - "apps/browser/package.json"
       - "packages/expo-windows/**"
       - "scripts/windows/**"
       - "pnpm-lock.yaml"
       - ".github/workflows/windows.yml"
   push:
-    branches: [main, t3/windows-linux-release-priority]
+    branches: [main]
     paths:
       - "apps/browser/windows/**"
       - "apps/browser/NuGet.config"
@@ -25,6 +26,7 @@ on:
       - "apps/browser/metro.config.js"
       - "apps/browser/src/**"
       - "packages/*/src/**"
+      - "!packages/phone/**"
       - "apps/browser/package.json"
       - "packages/expo-windows/**"
       - "scripts/windows/**"
@@ -54,11 +56,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: windows-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: windows-${{ github.workflow }}-${{ (github.event_name == 'pull_request' || github.event_name == 'push') && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
   gate:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -66,7 +69,6 @@ jobs:
       pull-requests: read
     outputs:
       run: ${{ steps.vouch.outputs.run }}
-      full: ${{ steps.depth.outputs.full }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -80,27 +82,19 @@ jobs:
           script: |
             const vouch = require(`${process.env.GITHUB_WORKSPACE}/.github/vouch/vouch.cjs`);
             await vouch.gate({ github, context, core });
-      - id: depth
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
-        with:
-          retries: 3
-          script: |
-            let full = context.eventName !== "pull_request";
-            if (!full) {
-              const { data: pr } = await github.rest.pulls.get({ ...context.repo, pull_number: context.payload.pull_request.number });
-              full = pr.labels.some((label) => label.name === "full-ci");
-            }
-            core.setOutput("full", full ? "true" : "false");
-            core.info(full ? "Full run: compile, tours and installers." : "Fast run: reuse a built app when the native code is unchanged, then launch it.");
 
   identity:
     needs: gate
-    if: needs.gate.outputs.run == 'true'
+    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       version: ${{ steps.identity.outputs.version }}
       build: ${{ steps.identity.outputs.build }}
+      full: ${{ steps.depth.outputs.full }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -120,10 +114,25 @@ jobs:
           build=$(git rev-list --count HEAD)
           { echo "version=$version"; echo "build=$build"; } >> "$GITHUB_OUTPUT"
           echo "Ardia $version, Windows build $build (the commits in $(git rev-parse --short HEAD)'s history)" >> "$GITHUB_STEP_SUMMARY"
+      - id: depth
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+        with:
+          retries: 3
+          script: |
+            let full = context.eventName !== "pull_request";
+            if (!full) {
+              const firstAttempt = Number(process.env.GITHUB_RUN_ATTEMPT || 1) === 1;
+              const pr = firstAttempt
+                ? context.payload.pull_request
+                : (await github.rest.pulls.get({ ...context.repo, pull_number: context.payload.pull_request.number })).data;
+              full = (pr.labels || []).some((label) => label.name === "full-ci");
+            }
+            core.setOutput("full", full ? "true" : "false");
+            core.info(full ? "Full run: compile, tours and installers." : "Fast run: reuse a built app when the native code is unchanged, then launch it.");
 
   source:
     needs: identity
-    if: inputs.version
+    if: ${{ !cancelled() && needs.identity.result == 'success' && inputs.version }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -152,7 +161,7 @@ jobs:
 
   javascript:
     needs: gate
-    if: needs.gate.outputs.run == 'true'
+    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -161,7 +170,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: 24
@@ -186,8 +195,8 @@ jobs:
           retention-days: 1
 
   app:
-    needs: gate
-    if: needs.gate.outputs.run == 'true'
+    needs: [gate, identity]
+    if: ${{ !cancelled() && needs.identity.result == 'success' && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
     runs-on: windows-latest
     timeout-minutes: 75
     env:
@@ -195,7 +204,7 @@ jobs:
       SLUG: x64
       APP: apps/browser/windows/x64/Release
       HERMES: .ci/windows-hermes/hermes.exe
-      FULL: ${{ needs.gate.outputs.full }}
+      FULL: ${{ needs.identity.outputs.full }}
     outputs:
       compiled: ${{ steps.built.outputs.cache-hit != 'true' }}
       key: ${{ steps.native.outputs.key }}
@@ -227,14 +236,28 @@ jobs:
           key: ${{ steps.native.outputs.key }}
           lookup-only: true
       - if: steps.built.outputs.cache-hit != 'true'
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115
       - if: steps.built.outputs.cache-hit != 'true'
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: 24
           cache: pnpm
-      - if: steps.built.outputs.cache-hit != 'true'
-        run: pnpm install --frozen-lockfile
+      - name: Install the packages, again after a failure that may be the network or a locked file
+        if: steps.built.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $attempts = 3
+          foreach ($attempt in 1..$attempts) {
+            pnpm install --frozen-lockfile
+            if ($LASTEXITCODE -eq 0) { exit 0 }
+            if ($attempt -lt $attempts) {
+              $wait = 15 * $attempt
+              Write-Host "::warning::pnpm install failed with exit code $LASTEXITCODE on attempt $attempt of $attempts; trying again in $wait s"
+              Start-Sleep -Seconds $wait
+            }
+          }
+          Write-Host "::error::pnpm install failed $attempts times"
+          exit 1
       - name: Toolchain
         if: steps.built.outputs.cache-hit != 'true'
         shell: pwsh
@@ -306,8 +329,8 @@ jobs:
           retention-days: 14
 
   arm64-app:
-    needs: gate
-    if: needs.gate.outputs.run == 'true'
+    needs: [gate, identity]
+    if: ${{ !cancelled() && needs.identity.result == 'success' && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
     runs-on: windows-11-arm
     timeout-minutes: 90
     env:
@@ -315,7 +338,7 @@ jobs:
       SLUG: arm64
       APP: apps/browser/windows/ARM64/Release
       HERMES: .ci/windows-hermes/hermes.exe
-      FULL: ${{ needs.gate.outputs.full }}
+      FULL: ${{ needs.identity.outputs.full }}
     outputs:
       compiled: ${{ steps.built.outputs.cache-hit != 'true' }}
       key: ${{ steps.native.outputs.key }}
@@ -323,7 +346,7 @@ jobs:
 
   x64:
     needs: [gate, identity, javascript, app]
-    if: needs.gate.outputs.run == 'true'
+    if: ${{ !cancelled() && needs.identity.result == 'success' && needs.javascript.result == 'success' && needs.app.result == 'success' }}
     runs-on: windows-latest
     timeout-minutes: 60
     permissions:
@@ -335,7 +358,7 @@ jobs:
       NO_INPUT: "false"
       APP: apps/browser/windows/x64/Release
       HERMES: .ci/windows-hermes/hermes.exe
-      FULL: ${{ needs.gate.outputs.full }}
+      FULL: ${{ needs.identity.outputs.full }}
       COMPILED: ${{ needs.app.outputs.compiled }}
       KEY: ${{ needs.app.outputs.key }}
       VERSION: ${{ needs.identity.outputs.version }}
@@ -396,6 +419,14 @@ jobs:
           if-no-files-found: error
           compression-level: 1
           retention-days: 7
+      - name: Keep the source maps of the bytecode this build ships, named by its build number
+        if: env.PART == 'launch' && env.COMPILED == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: windows-sourcemaps-${{ env.SLUG }}-build-${{ env.BUILD }}
+          path: ${{ env.APP }}/sourcemaps/react
+          if-no-files-found: error
+          retention-days: ${{ inputs.version && 90 || 14 }}
       - name: Host manifest
         if: ${{ !cancelled() && env.PART == 'launch' }}
         shell: pwsh
@@ -420,12 +451,12 @@ jobs:
         shell: pwsh
         run: scripts/windows/dependency-check.ps1 -App "${{ runner.temp }}/Ardia"
       - name: Launch it
-        if: ${{ !cancelled() && (env.FULL == 'true' || steps.engine.outcome != 'success' || env.COMPILED == 'true') }}
+        if: ${{ !cancelled() && !startsWith(env.PART, 'tour') && env.PART != 'input' && (env.FULL == 'true' || steps.engine.outcome != 'success' || env.COMPILED == 'true') }}
         timeout-minutes: 12
         shell: pwsh
         run: scripts/windows/launch-smoke.ps1 -App "$env:APP/Ardia.exe" -Out "${{ runner.temp }}/launch" -Part $env:PART -NoInput:($env:NO_INPUT -eq 'true')
       - name: Tour
-        if: ${{ !cancelled() && env.SLUG == 'x64' && env.PART == 'launch' && env.FULL == 'true' }}
+        if: ${{ !cancelled() && env.PART == 'tour' }}
         continue-on-error: true
         timeout-minutes: 12
         shell: pwsh
@@ -478,12 +509,12 @@ jobs:
           compression-level: 0
           retention-days: 14
       - name: Launch it with the engine
-        if: ${{ !cancelled() && steps.engine.outcome == 'success' }}
+        if: ${{ !cancelled() && !startsWith(env.PART, 'tour') && steps.engine.outcome == 'success' }}
         timeout-minutes: 12
         shell: pwsh
         run: scripts/windows/launch-smoke.ps1 -App "${{ runner.temp }}/Ardia/Ardia.exe" -Out "${{ runner.temp }}/launch-engine" -Part $env:PART -NoInput:($env:NO_INPUT -eq 'true')
       - name: Tour the pages
-        if: ${{ !cancelled() && env.SLUG == 'x64' && env.PART == 'launch' && env.FULL == 'true' && steps.engine.outcome == 'success' }}
+        if: ${{ !cancelled() && env.PART == 'tour' && steps.engine.outcome == 'success' }}
         continue-on-error: true
         timeout-minutes: 20
         shell: pwsh
@@ -491,14 +522,14 @@ jobs:
           scripts/windows/tour.ps1 -App "${{ runner.temp }}/Ardia/Ardia.exe" -Out "${{ runner.temp }}/tour-engine" -Only pages,peek,peek-dark,peek-tabs,peek-layouts
           if (Test-Path "${{ runner.temp }}/tour-engine/tour.md") { Get-Content "${{ runner.temp }}/tour-engine/tour.md" >> $env:GITHUB_STEP_SUMMARY }
       - name: Tour the first run
-        if: ${{ !cancelled() && env.SLUG == 'x64' && env.PART == 'launch' && env.FULL == 'true' && steps.engine.outcome == 'success' }}
+        if: ${{ !cancelled() && env.PART == 'tour-first-run' && steps.engine.outcome == 'success' }}
         timeout-minutes: 40
         shell: pwsh
         run: |
           scripts/windows/tour.ps1 -App "${{ runner.temp }}/Ardia/Ardia.exe" -Out "${{ runner.temp }}/tour-first-run" -Only first-run
           if (Test-Path "${{ runner.temp }}/tour-first-run/tour.md") { Get-Content "${{ runner.temp }}/tour-first-run/tour.md" >> $env:GITHUB_STEP_SUMMARY }
       - name: Tour the typing
-        if: ${{ !cancelled() && env.SLUG == 'x64' && env.PART == 'launch' && env.FULL == 'true' && steps.engine.outcome == 'success' }}
+        if: ${{ !cancelled() && env.PART == 'tour' && steps.engine.outcome == 'success' }}
         timeout-minutes: 18
         shell: pwsh
         run: |
@@ -513,10 +544,10 @@ jobs:
             !${{ runner.temp }}/launch-engine/*-data
           if-no-files-found: ignore
           retention-days: 14
-      - if: ${{ !cancelled() && env.SLUG == 'x64' && env.PART == 'launch' }}
+      - if: ${{ !cancelled() && startsWith(env.PART, 'tour') }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: tour-engine
+          name: ${{ env.PART == 'tour' && 'tour-engine' || 'tour-engine-first-run' }}
           path: |
             ${{ runner.temp }}/tour-engine
             !${{ runner.temp }}/tour-engine/data
@@ -537,7 +568,7 @@ jobs:
           path: ${{ runner.temp }}/Ardia
           if-no-files-found: ignore
           retention-days: 14
-      - if: ${{ !cancelled() && env.SLUG == 'x64' && env.PART == 'launch' }}
+      - if: ${{ !cancelled() && env.PART == 'tour' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: tour
@@ -552,9 +583,72 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  x64-input:
+    needs: [gate, identity, javascript, app]
+    if: ${{ !cancelled() && needs.identity.result == 'success' && needs.javascript.result == 'success' && needs.app.result == 'success' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    env:
+      SLUG: x64
+      PART: input
+      SUFFIX: -input
+      NO_INPUT: "false"
+      APP: apps/browser/windows/x64/Release
+      HERMES: .ci/windows-hermes/hermes.exe
+      FULL: ${{ needs.identity.outputs.full }}
+      COMPILED: ${{ needs.app.outputs.compiled }}
+      KEY: ${{ needs.app.outputs.key }}
+      VERSION: ${{ needs.identity.outputs.version }}
+      BUILD: ${{ needs.identity.outputs.build }}
+    steps: *launch_steps
+
+  x64-tour:
+    needs: [gate, identity, javascript, app]
+    if: ${{ !cancelled() && needs.identity.result == 'success' && needs.javascript.result == 'success' && needs.app.result == 'success' && needs.identity.outputs.full == 'true' }}
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      SLUG: x64
+      PART: tour
+      SUFFIX: -tour
+      NO_INPUT: "false"
+      APP: apps/browser/windows/x64/Release
+      HERMES: .ci/windows-hermes/hermes.exe
+      FULL: ${{ needs.identity.outputs.full }}
+      COMPILED: ${{ needs.app.outputs.compiled }}
+      KEY: ${{ needs.app.outputs.key }}
+      VERSION: ${{ needs.identity.outputs.version }}
+      BUILD: ${{ needs.identity.outputs.build }}
+    steps: *launch_steps
+
+  x64-tour-first-run:
+    needs: [gate, identity, javascript, app]
+    if: ${{ !cancelled() && needs.identity.result == 'success' && needs.javascript.result == 'success' && needs.app.result == 'success' && needs.identity.outputs.full == 'true' }}
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      SLUG: x64
+      PART: tour-first-run
+      SUFFIX: -tour-first-run
+      NO_INPUT: "false"
+      APP: apps/browser/windows/x64/Release
+      HERMES: .ci/windows-hermes/hermes.exe
+      FULL: ${{ needs.identity.outputs.full }}
+      COMPILED: ${{ needs.app.outputs.compiled }}
+      KEY: ${{ needs.app.outputs.key }}
+      VERSION: ${{ needs.identity.outputs.version }}
+      BUILD: ${{ needs.identity.outputs.build }}
+    steps: *launch_steps
+
   x64-gate:
     needs: [gate, identity, javascript, app]
-    if: needs.gate.outputs.run == 'true'
+    if: ${{ !cancelled() && needs.identity.result == 'success' && needs.javascript.result == 'success' && needs.app.result == 'success' }}
     runs-on: windows-latest
     timeout-minutes: 45
     permissions:
@@ -566,7 +660,7 @@ jobs:
       NO_INPUT: "false"
       APP: apps/browser/windows/x64/Release
       HERMES: .ci/windows-hermes/hermes.exe
-      FULL: ${{ needs.gate.outputs.full }}
+      FULL: ${{ needs.identity.outputs.full }}
       COMPILED: ${{ needs.app.outputs.compiled }}
       KEY: ${{ needs.app.outputs.key }}
       VERSION: ${{ needs.identity.outputs.version }}
@@ -575,7 +669,7 @@ jobs:
 
   arm64:
     needs: [gate, identity, javascript, arm64-app]
-    if: needs.gate.outputs.run == 'true'
+    if: ${{ !cancelled() && needs.identity.result == 'success' && needs.javascript.result == 'success' && needs.arm64-app.result == 'success' }}
     runs-on: windows-11-arm
     timeout-minutes: 60
     permissions:
@@ -587,7 +681,7 @@ jobs:
       NO_INPUT: "true"
       APP: apps/browser/windows/ARM64/Release
       HERMES: .ci/windows-hermes/hermes.exe
-      FULL: ${{ needs.gate.outputs.full }}
+      FULL: ${{ needs.identity.outputs.full }}
       COMPILED: ${{ needs.arm64-app.outputs.compiled }}
       KEY: ${{ needs.arm64-app.outputs.key }}
       VERSION: ${{ needs.identity.outputs.version }}
@@ -596,7 +690,7 @@ jobs:
 
   arm64-gate:
     needs: [gate, identity, javascript, arm64-app]
-    if: needs.gate.outputs.run == 'true'
+    if: ${{ !cancelled() && needs.identity.result == 'success' && needs.javascript.result == 'success' && needs.arm64-app.result == 'success' }}
     runs-on: windows-11-arm
     timeout-minutes: 45
     permissions:
@@ -608,7 +702,7 @@ jobs:
       NO_INPUT: "true"
       APP: apps/browser/windows/ARM64/Release
       HERMES: .ci/windows-hermes/hermes.exe
-      FULL: ${{ needs.gate.outputs.full }}
+      FULL: ${{ needs.identity.outputs.full }}
       COMPILED: ${{ needs.arm64-app.outputs.compiled }}
       KEY: ${{ needs.arm64-app.outputs.key }}
       VERSION: ${{ needs.identity.outputs.version }}

@@ -1,27 +1,28 @@
-import { Platform } from "react-native";
+import { Platform, StyleSheet } from "react-native";
 import { FLOATING_BAR_PLACE } from "../../lib/deckGeometry";
+import { withAlpha } from "../../lib/color";
 import { ANDROID_MENU_SIZES, IPHONE_MENU_SIZES } from "../../lib/menuPlace";
+import { neutralFills } from "./paletteTokens";
+import { targetMinimum } from "./targetTokens";
 export const ink = { white: "#FFFFFF", black: "#000000", clear: "#00000000", knobShadow: "rgba(0,0,0,0.25)" } as const;
+
+export const shape = { control: 12, field: 12, row: 12, card: 16, panel: 22 } as const;
+
+export const smoothCorners = { borderCurve: "continuous" } as const;
+
+export const controlSize = { bar: FLOATING_BAR_PLACE.control, hitTarget: targetMinimum } as const;
+
+export const stroke = { chrome: 0.5, hairline: StyleSheet.hairlineWidth, field: 1 } as const;
+
+export const press = { textOpacity: 0.35, iconOpacity: 0.35, filledOpacity: 0.8, disabledOpacity: 0.4 } as const;
 
 const ANDROID_DARK_SURFACE = "#1E1B1D";
 
+const rowPress = { light: "rgba(0,0,0,0.06)", dark: "rgba(255,255,255,0.1)" };
+
 export const toggleLayout = { width: 51, height: 31, knob: 27, inset: 2 } as const;
 
-export type ProfileColor = "plum" | "blue" | "purple" | "pink" | "red" | "orange" | "yellow" | "green" | "neutral";
-
-export type ProfileColorSpec = { name: string; swatch: string; tint?: string; action?: string };
-
-export const PROFILE_COLORS: Record<ProfileColor, ProfileColorSpec> = {
-  plum: { name: "Plum", swatch: "#C07A98", tint: "#B25B6B", action: "#DD899B" },
-  blue: { name: "Blue", swatch: "#4691C3" },
-  purple: { name: "Purple", swatch: "#7873AF" },
-  pink: { name: "Pink", swatch: "#D37B8B" },
-  red: { name: "Red", swatch: "#C1575C" },
-  orange: { name: "Orange", swatch: "#D87249" },
-  yellow: { name: "Yellow", swatch: "#E3AC38" },
-  green: { name: "Green", swatch: "#3EB489" },
-  neutral: { name: "Neutral", swatch: "#8E8E93" },
-};
+export { PROFILE_COLORS, type ProfileColor, type ProfileColorSpec } from "./paletteTokens";
 
 const lightRoles = {
   dark: false,
@@ -32,18 +33,16 @@ const lightRoles = {
   fieldFill: "rgba(0,0,0,0.06)",
   fieldStroke: "rgba(0,0,0,0.06)",
   rowIcon: "rgba(0,0,0,0.42)",
-  rowHighlight: "rgba(0,0,0,0.05)",
+  rowHighlight: rowPress.light,
   plusFill: "rgba(118,118,128,0.16)",
   chevronFill: "rgba(118,118,128,0.12)",
   controlEdge: "rgba(0,0,0,0.06)",
   disabled: "rgba(0,0,0,0.2)",
   accent: "#6395FC",
   formAccent: "#007AFF",
-  primaryAction: "#0F182C",
-  onPrimaryAction: "#FFFFFF",
   switchOn: "#34C759",
   trayShadow: "#000000",
-  trayDim: "rgba(0,0,0,0.28)",
+  trayDim: "rgba(0,0,0,0.16)",
   pageSurface: "#FFFFFF",
   tileFill: "rgba(118,118,128,0.2)",
   tileEdge: "rgba(0,0,0,0.14)",
@@ -60,10 +59,17 @@ const lightRoles = {
   separator: "rgba(60,60,67,0.29)",
   tertiaryFill: "rgba(118,118,128,0.12)",
   tertiaryLabel: "rgba(60,60,67,0.3)",
-  toastFill: "rgba(255,255,255,0.92)",
+  toastFill: "rgba(255,255,255,0.97)",
+  toastLabel: "#000000",
   toastShadow: "rgba(0,0,0,0.18)",
   panelBorder: "rgba(0,0,0,0.1)",
   dialogScrim: "rgba(0,0,0,0.32)",
+  appSurface: neutralFills.light.appSurface as string,
+  groupedBackground: neutralFills.light.groupedBackground as string,
+  groupedCell: neutralFills.light.groupedCell as string,
+  rowPressed: rowPress.light,
+  secondaryFill: "rgba(120,120,128,0.16)",
+  switchOff: "rgba(120,120,128,0.16)",
 };
 
 export type ColorRoles = typeof lightRoles;
@@ -77,18 +83,16 @@ const darkRoles: ColorRoles = {
   fieldFill: "rgba(255,255,255,0.12)",
   fieldStroke: "rgba(255,255,255,0.08)",
   rowIcon: "rgba(255,255,255,0.5)",
-  rowHighlight: "rgba(255,255,255,0.08)",
+  rowHighlight: rowPress.dark,
   plusFill: "rgba(255,255,255,0.16)",
   chevronFill: "rgba(255,255,255,0.13)",
   controlEdge: "rgba(255,255,255,0.1)",
   disabled: "rgba(255,255,255,0.25)",
   accent: "#4A77D4",
   formAccent: "#0A84FF",
-  primaryAction: "#DCCBD8",
-  onPrimaryAction: "#000000",
   switchOn: "#30D158",
   trayShadow: "#000000",
-  trayDim: "rgba(0,0,0,0.28)",
+  trayDim: "rgba(0,0,0,0.42)",
   pageSurface: "#000000",
   tileFill: "rgba(255,255,255,0.2)",
   tileEdge: "rgba(255,255,255,0.28)",
@@ -97,7 +101,7 @@ const darkRoles: ColorRoles = {
   secondaryLabel: "rgba(235,235,245,0.6)",
   deckControl: "rgba(255,255,255,0.14)",
   destructive: "#FF453A",
-  panel: "#2A2A2A",
+  panel: "#1C1C1E",
   divider: "rgba(255,255,255,0.09)",
   menuScrim: "rgba(0,0,0,0.3)",
   placeholderTints: ["#262447", "#3F2532", "#1E3046", "#1F3527", "#3D3020", "#30243F"] as readonly string[],
@@ -105,10 +109,17 @@ const darkRoles: ColorRoles = {
   separator: "rgba(84,84,88,0.6)",
   tertiaryFill: "rgba(118,118,128,0.24)",
   tertiaryLabel: "rgba(235,235,245,0.3)",
-  toastFill: "rgba(44,42,43,0.9)",
+  toastFill: "rgba(28,28,30,0.97)",
+  toastLabel: "#FFFFFF",
   toastShadow: "rgba(0,0,0,0.5)",
   panelBorder: "rgba(255,255,255,0.1)",
   dialogScrim: "rgba(0,0,0,0.48)",
+  appSurface: neutralFills.dark.appSurface,
+  groupedBackground: neutralFills.dark.groupedBackground,
+  groupedCell: neutralFills.dark.groupedCell,
+  rowPressed: rowPress.dark,
+  secondaryFill: "rgba(120,120,128,0.32)",
+  switchOff: "rgba(120,120,128,0.32)",
 };
 
 export const colorRoles = { light: lightRoles, dark: darkRoles } as const;
@@ -125,16 +136,17 @@ export const menuLayout = {
   zoomReset: 48,
   sheetTopGap: Platform.OS === "ios" ? 10 : 24,
   sheetGrabber: Platform.OS === "ios" ? { width: 36, height: 5, top: 6 } : null,
+  halfSheetGrabber: { width: 32, height: 4, top: 10 },
 } as const;
 
-export const pageMenuLayout = { actionGlyph: 24, barSpacing: 8, groupSpacing: 16, zoomHeight: 32, zoomButtonWidth: 40, zoomReset: 48, rowInset: 16, accessibilityBottom: 24, pressedScale: 0.94 } as const;
+export const pageMenuLayout = { actionGlyph: 24, barSpacing: 8, groupSpacing: 16, zoomHeight: 32, zoomButtonWidth: 40, zoomReset: 48, rowInset: 16, accessibilityBottom: 24 } as const;
 
 export const pageMenuInk = {
   light: { sheet: "#FFFFFF", group: "#FFFFFF", rowPressed: "rgba(120,120,128,0.2)" },
   dark: { sheet: "#000000", group: "#171717", rowPressed: "rgba(120,120,128,0.36)" },
 } as const;
 
-export const toastLayout = { minHeight: 44, verticalPadding: 11, iconSize: 17, barClearance: 64, sideInset: 32, shadowRadius: 14, shadowY: 6 } as const;
+export const toastLayout = { radius: shape.control, minHeight: 44, verticalPadding: 11, iconSize: 17, barClearance: 64, sideInset: 32, shadowRadius: 14, shadowY: 6 } as const;
 
 export const pageInk = { findError: "#C93333" } as const;
 
@@ -146,11 +158,13 @@ export const readerInk = {
 
 export const readerLayout = { minLeadAspect: 0.75, maxWidth: 680, topBar: 52, chromeBand: 46, chromeSide: 16, chromeButton: 44, chromeCapsulePadding: 16, leadRadius: 12, lineHeight: 1.52, titleScale: 1.55, titleLine: 1.2, paragraphGap: 0.9, headerGap: 1.2 } as const;
 
-export const dialogLayout = { width: 312, radius: 28, fieldHeight: 48 } as const;
+export const dialogLayout = { width: 312, radius: shape.panel, fieldHeight: 48 } as const;
 
 export const settingsLayout = {
+  removeDot: 24,
+  removeGlyph: 14,
   expoListTop: 12,
-  groupRadius: 26,
+  groupRadius: shape.panel,
   rowMinHeight: 52,
   rowInset: 16,
   labelGap: 16,
@@ -164,10 +178,36 @@ export const settingsLayout = {
   swatch: 26,
   swatchRing: 2,
   swatchGap: 3,
-  primaryButton: { radius: 14, height: { ios: 190 / 3, android: 50 } },
+  primaryButton: { radius: shape.card, height: { ios: 190 / 3, android: 50 } },
   stepShift: 60,
   titleWidth: 240,
 } as const;
+
+export const themeEditorLayout = {
+  pad: 232,
+  padWedges: 90,
+  knob: 30,
+  knobHitSlop: 10,
+  knobBorder: 2,
+  knobBorderSelected: 3,
+  knobHalo: 3,
+  lightnessSteps: 24,
+  lightnessHeight: 10,
+  track: 4,
+  thumb: 26,
+  dial: 44,
+  dialSnap: 4,
+  dialNotch: 45,
+  dialHand: 2,
+  dialHub: 6,
+  preview: 150,
+  stepper: 32,
+  accessibilityStep: 0.1,
+  accessibilityTurn: 1 / 24,
+  rainbowStops: 7,
+} as const;
+
+export const themeEditorInk = { knobOutline: "rgba(0,0,0,0.25)" } as const;
 
 export const settingsTint = {
   neutral: "#86888D",
@@ -352,7 +392,6 @@ export const materialDialogLook = {
   title: { fontSize: 24, lineHeight: 32 },
   message: { fontSize: 14, lineHeight: 20, letterSpacing: 0.25 },
   button: { fontSize: 14, lineHeight: 20, fontWeight: "500", letterSpacing: 0.1 },
-  enterScale: 0.92,
   shadow: "0px 4px 8px 3px rgba(0,0,0,0.15), 0px 1px 3px 0px rgba(0,0,0,0.3)",
 } as const;
 
@@ -371,7 +410,7 @@ export const scanInk = {
   soft: "rgba(255,255,255,0.75)",
 } as const;
 
-export const scanLayout = { frame: 250, frameStroke: 3, frameArmShare: 0.18, noteRadius: 12, cancelInset: 8 } as const;
+export const scanLayout = { frame: 250, frameStroke: 3, frameArmShare: 0.18, noteRadius: 12, cancelInset: 8, unavailableIcon: 48 } as const;
 
 export const voiceInk = {
   label: "#FFFFFF",
@@ -380,6 +419,7 @@ export const voiceInk = {
   bar: "rgba(255,255,255,0.85)",
   glass: "rgba(255,255,255,0.18)",
   transcript: "rgba(0,0,0,0.18)",
+  logoShadow: "0px 6px 12px rgba(0, 0, 0, 0.15)",
 } as const;
 
 export const voiceLayout = {
@@ -400,7 +440,7 @@ export const failureLayout = { icon: 36, textWidth: 320, button: 40 } as const;
 
 export const archiveCardLayout = { radius: 16, tile: 28, maxWidth: 520, aboveBarCenter: 28, tint: "#B059EE" } as const;
 
-export const onboardingArt = { appIcon: 60, linkCardWidth: 210, linkCardRadius: 18, stripHeight: 64, arrowLift: 26, shadowRadius: 12, sheetRadius: 38 } as const;
+export const onboardingArt = { appIcon: 60, linkCardWidth: 210, linkCardRadius: shape.card, stripHeight: 64, arrowLift: 26, arrowGlyph: 22, wordsVertical: 10, sheetRadius: 38 } as const;
 
 export const floatingBarLayout = {
   control: FLOATING_BAR_PLACE.control,
@@ -408,7 +448,6 @@ export const floatingBarLayout = {
   bottomGap: FLOATING_BAR_PLACE.bottomGap,
   glyph: 19,
   menuGlyph: 17,
-  plusSymbol: 23.6,
   menuSymbol: 23.3,
   privateSymbol: 28,
   addressLead: 13,
@@ -420,28 +459,17 @@ export const floatingBarLayout = {
 
 export const floatingPanelLayout = {
   inset: 8,
-  radius: 32.75,
   aboveKeyboard: 8,
   departLift: 120,
   departMs: 200,
-  fieldInset: 9,
-  fieldBottom: 1,
-  fieldEdge: 0.5,
-  fieldLight: { fill: "#FFFFFF", edge: "rgba(0,0,0,0.06)" },
-  fieldDark: { fill: "rgba(255,255,255,0.12)", edge: "rgba(255,255,255,0.08)" },
-  tintShare: 0.55,
-  incognitoShare: 0.85,
-  incognitoFill: "#151517",
-  shadow: "0px 4px 36px rgba(0, 0, 0, 0.1)",
-  incognitoShadow: "0px 4px 36px rgba(0, 0, 0, 0.3)",
 } as const;
 
 export const startLayout = {
   switcherRatio: 0.44,
   tilesGap: 45,
   pageDotsAboveBar: 60,
-  barCircle: 48,
-  barPlus: { width: 77, height: 48 },
+  barCircle: controlSize.bar,
+  barPlus: { width: 77, height: controlSize.bar },
   barGap: 8,
   circleGlyph: 19.2,
   plusGlyph: 22.4,
@@ -449,9 +477,8 @@ export const startLayout = {
   tileSide: 20,
   tileGap: 8,
   tileHeight: 52,
-  tileRadius: 14,
+  tileRadius: shape.row,
   tileIcon: 20,
-  tilePressScale: 0.94,
   folderIconShare: 0.95,
   symbolIconShare: 0.9,
   folderInkOpacity: 0.55,
@@ -464,6 +491,7 @@ export const startLayout = {
   pageDot: 7,
   pageDotSpacing: 21,
   invitationPadding: 20,
+  logoPressOpacity: 0.85,
 } as const;
 
 export const deckChromeLayout = {
@@ -476,7 +504,7 @@ export const deckChromeLayout = {
   pillPadding: 14,
   pillSpacing: 8,
   pillSpecs: 20,
-  barCircle: 48,
+  barCircle: controlSize.bar,
   barGap: 8,
   searchLead: 13,
   searchTrail: 16,
@@ -484,7 +512,6 @@ export const deckChromeLayout = {
   searchSpacing: 8,
   searchGlyph: 16.8,
   incognitoEyes: 30,
-  clearGlyph: 22.8,
   clearHit: 32,
   archiveCenter: 78.5,
   archiveHeight: 43,
@@ -509,7 +536,7 @@ export const startInk = {
   dark: { pageDot: "rgba(255,255,255,0.32)", badgeInk: "#FFFFFF" },
 } as const;
 
-export const chromeLayout = { edge: 0.5, shadowRadius: 10, shadowY: 2, barSideInset: 24 } as const;
+export const chromeLayout = { edge: stroke.chrome, shadowRadius: 10, shadowY: 2, barSideInset: 24, barCastsShadow: Platform.OS === "ios" } as const;
 
 export const chromeInk = {
   light: { surface: "#FFFFFF", edge: "rgba(0,0,0,0.12)", shadow: "rgba(0,0,0,0.12)", foreground: "rgba(14,15,16,0.9)", secondary: "rgba(0,0,0,0.5)", notSecure: lightRoles.destructive },
@@ -563,7 +590,7 @@ export const syncSketch = {
   ],
 } as const;
 
-export const sheetInk = { scrim: "rgba(0,0,0,0.25)" } as const;
+export const sheetInk = { scrim: "rgba(0,0,0,0.25)", fill: { light: neutralFills.light.groupedBackground, dark: neutralFills.dark.groupedBackground } } as const;
 
 export const sheetLayout = { topGap: 10, iPhoneTopGap: 0, radius: 32, backgroundRadius: 24 } as const;
 
@@ -580,7 +607,7 @@ export const expoSpacesLayout = {
   section: 32,
   bannerGap: 10,
   bannerPadding: 12,
-  bannerRadius: 14,
+  bannerRadius: shape.row,
   rowInset: 20,
   rowHeight: 48,
   showAllHeight: 44,
@@ -591,10 +618,13 @@ export const expoSpacesLayout = {
 } as const;
 
 export const spacesLayout = {
+  switchWidth: 52,
+  switchHeight: 36,
+  switchUnselectedOpacity: 0.35,
   headerCircle: 32,
   bannerGap: 10,
   bannerPadding: 12,
-  bannerRadius: 14,
+  bannerRadius: shape.row,
   headerGap: 6,
   headerBottom: 4,
   tileGap: 6,
@@ -603,6 +633,7 @@ export const spacesLayout = {
   dot: 9,
   buttonTop: 6,
   stepBadge: 26,
+  stepBadgeEdge: 1.5,
   stepTileRadius: 7,
   stepDividerInset: 56,
 } as const;
@@ -610,6 +641,7 @@ export const spacesLayout = {
 export const tabsInk = {
   incognitoCard: "#1C1D22",
   incognitoCardRaised: "#2A2B31",
+  incognitoOnLight: "rgba(28,29,34,0.6)",
   incognitoBackdrop: ["#1A1A1E", "#0E0E10"] as const,
   incognitoSheet: "#151517",
   cardShadow: "rgba(0,0,0,0.18)",
@@ -649,6 +681,10 @@ export const tabsLayout = {
   emptyWidth: 300,
   archiveTop: 52,
   archiveButton: 44,
+  archiveMoreGlyph: 20,
+  receivedBadgeRadius: 6,
+  receivedBadgeInset: 10,
+  receivedBadgeGlyph: 12,
   archiveField: 40,
   archiveTile: 28,
 } as const;
@@ -657,17 +693,25 @@ export const space = { none: 0, hair: 1, tight: 2, xs: 4, s: 8, m: 12, l: 16, xl
 
 export const shadowRadius = { tile: 1.5, knob: 2, card: 16, lifted: 24 } as const;
 
-export const radius = { row: 14, field: 16, card: 20, sheet: 40 } as const;
+export const radius = { row: shape.row, field: shape.field, card: shape.card, sheet: 40 } as const;
 
 export const capsule = (height: number) => height / 2;
+
+export const controlRadius = (side: number) => Math.min(shape.control, Math.round(side * 0.3));
+
+type ShadowRole = { y: number; blur: number; light: string; dark: string };
+
+function cssShadowOf({ y, blur, light, dark: night }: ShadowRole, dark: boolean) {
+  return `0px ${y}px ${blur}px ${dark ? night : light}`;
+}
+
+const appIconElevation = { y: 4, blur: 20, light: "rgba(0,0,0,0.12)", dark: "rgba(0,0,0,0.12)" } as const;
 
 export const appIconLayout = {
   maxScale: 1.4,
   corner: 0.225,
-  fill: "#FFFFFF",
-  edge: 0.5,
-  edgeAlpha: 0.08,
-  shadow: "0px 4px 20px rgba(0, 0, 0, 0.12)",
+  fill: "#F8F3E1",
+  shadow: cssShadowOf(appIconElevation, false),
   about: 72,
   welcome: 104,
   welcomeFrame: 5,
@@ -685,16 +729,15 @@ export const font = {
   subheadline: { fontSize: 15, lineHeight: 20 },
   footnote: { fontSize: 13, lineHeight: 18 },
   caption: { fontSize: 12, lineHeight: 16 },
+  caption2: { fontSize: 11, lineHeight: 13 },
 } as const;
 
 export const browseLayout = {
   barCollapseTravel: 30,
   barSwipeUp: 22,
   searchFieldHeight: 47.5,
-  searchFieldInset: 15,
   fieldLeading: 18,
   fieldTrailing: 10,
-  trayFieldTop: 15,
   suggestionPitch: 58.5,
   suggestionIconSlot: 22,
   rowLeading: 12,
@@ -704,12 +747,14 @@ export const browseLayout = {
   logoHeight: 108,
   plusCapsule: { width: 78, height: 40 },
   chevronCircle: 35,
+  chevronGlyph: 16,
+  findButton: 40,
+  findGlyph: 18,
   barCenterFromBottom: 44,
   barSideInset: 20,
-  hitTarget: 44,
+  hitTarget: controlSize.hitTarget,
   barHeight: 75,
   pageOverlap: 26,
-  barControlScale: 0.93,
   progressHeight: 2.5,
   hostPillHeight: 40,
   accessory: { width: 32, height: 40 },
@@ -722,3 +767,72 @@ export const logoInk = {
   frontHill: ["#17604B", "#063528"],
   outline: "#FFFFFF",
 } as const;
+
+export const elevation = {
+  control: { y: chromeLayout.shadowY, blur: chromeLayout.shadowRadius * 2, light: chromeInk.light.shadow, dark: chromeInk.dark.shadow },
+  card: { y: 3, blur: 20, light: "rgba(0,0,0,0.11)", dark: "rgba(0,0,0,0.4)" },
+  floating: { y: 4, blur: 36, light: "rgba(0,0,0,0.1)", dark: "rgba(0,0,0,0.3)" },
+  stack: { y: 6, blur: 28, light: tabsInk.cardShadow, dark: tabsInk.cardShadow, android: 14 },
+  appIcon: appIconElevation,
+} as const;
+
+export type ElevationLevel = keyof typeof elevation;
+
+export const shadowCss = (level: ElevationLevel, dark: boolean) => cssShadowOf(elevation[level], dark);
+
+export const nativeShadowRadius = (level: ElevationLevel) => elevation[level].blur / 2;
+
+export const swipeDeleteLayout = { slop: 12, revealWidth: 88, glyph: 20 } as const;
+
+export const accentGlow = { y: 2, blur: 12, alpha: 0.35 } as const;
+
+export const accentGlowCss = (accent: string) => {
+  const glow = withAlpha(accent, accentGlow.alpha);
+  return cssShadowOf({ y: accentGlow.y, blur: accentGlow.blur, light: glow, dark: glow }, false);
+};
+
+const dynamicColor = (light: string, dark: string) => ({ dynamic: { light, dark } });
+
+export const nativeClassicChrome = {
+  fill: dynamicColor(chromeInk.light.surface, chromeInk.dark.surface),
+  edgeWidth: stroke.chrome,
+  edge: dynamicColor(chromeInk.light.edge, chromeInk.dark.edge),
+  shadowRadius: nativeShadowRadius("control"),
+  shadowY: elevation.control.y,
+  shadow: dynamicColor(elevation.control.light, elevation.control.dark),
+} as const;
+
+export const overlayInk = { fill: ink.white, onFill: ink.black, glass: "rgba(255,255,255,0.18)", solidGlass: "#3A3A3C", label: ink.white, edge: "rgba(255,255,255,0.55)" } as const;
+
+export type ActionSize = "hero" | "regular" | "compact";
+
+export const actionLayout = {
+  height: { hero: Platform.OS === "ios" ? settingsLayout.primaryButton.height.ios : settingsLayout.primaryButton.height.android, regular: 50, compact: controlSize.hitTarget },
+  radius: { hero: settingsLayout.primaryButton.radius, regular: shape.control, compact: shape.control },
+  sidePadding: { hero: space.xl, regular: space.xl, compact: space.l },
+  verticalPadding: space.m,
+  label: { hero: font.body, regular: font.body, compact: font.subheadline },
+  labelWeight: "600",
+  nativeLabelWeight: "semibold",
+  icon: { hero: 19, regular: 19, compact: 17 },
+  iconGap: space.s,
+  edge: 1,
+} as const;
+
+export const faviconLayout = { cornerShare: 0.26, plateInset: 0.14, letterShare: 0.56, letterLine: 1.15, globeShare: 0.6 } as const;
+
+export const emptyStateLayout = { glyph: 40, maxWidth: tabsLayout.emptyWidth, gap: space.s, glyphGap: space.m, actionGap: space.l, pad: space.xxl } as const;
+
+export const glyphSlot = { field: 20, icon: 22 } as const;
+
+export const barGlyphLayout = { plus: { pointSize: 18, weight: "medium", side: startLayout.plusGlyph }, circle: { pointSize: 16, weight: "medium", side: startLayout.circleGlyph } } as const;
+
+export const primaryActionRoles = {
+  hero: { height: actionLayout.height.hero, radius: actionLayout.radius.hero, fill: "spaceAccent", ink: "onSpaceAccent", nativeControlSize: "extraLarge", wraps: true },
+  full: { height: actionLayout.height.regular, radius: actionLayout.radius.regular, fill: "spaceAccent", ink: "onSpaceAccent", nativeControlSize: "large", wraps: true },
+  compact: { height: actionLayout.height.compact, radius: actionLayout.radius.compact, fill: "spaceAccent", ink: "onSpaceAccent", nativeControlSize: "regular", wraps: true },
+} as const;
+
+export type PrimaryActionRole = keyof typeof primaryActionRoles;
+
+export const actionRoleOf = { hero: "hero", regular: "full", compact: "compact" } as const satisfies Record<ActionSize, PrimaryActionRole>;

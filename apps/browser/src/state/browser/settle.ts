@@ -14,7 +14,7 @@ import { mirrorTopApps } from "../pins/topApps";
 import { mirrorTabs, pagesIntoSplits, unshareTabs } from "../tabs/tabShare";
 import { splitsWhereUnavailable } from "../splits/splits";
 
-export type SettleStep = (s: BrowserState, prev: BrowserState) => BrowserState | null;
+type SettleStep = (s: BrowserState, prev: BrowserState) => BrowserState | null;
 
 const patched =
   <P extends Partial<BrowserState>>(step: (s: BrowserState, prev: BrowserState) => P | null): SettleStep =>
@@ -43,7 +43,7 @@ export const SETTLE_STEPS: readonly (readonly [string, SettleStep])[] = [
   ["pinnedTabsLeaveLive", patched(pinnedTabsLeaveLive)],
 ];
 
-export const SETTLE_ROUNDS = 8;
+const SETTLE_ROUNDS = 8;
 
 export class SettleDidNotConverge extends Error {
   readonly steps: string[];

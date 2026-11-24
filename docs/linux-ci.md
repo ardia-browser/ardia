@@ -1,18 +1,18 @@
 # Linux CI
 
 Linux CI follows the Mac's prebuilt-engine model. Chromium is compiled only on a Linux builder. GitHub Actions fetches
-a published, checksum-verified engine, builds the current `apps/linux` UI, packages it and smoke-tests the package.
+a published, checksum-verified engine, builds the current `apps/desktop` UI, packages it and smoke-tests the package.
 Hosted CI never runs `gclient sync`, GN or a Chromium build.
 
 ## Pieces
 
 | Piece | What it does |
 | --- | --- |
-| [`.github/workflows/linux.yml`](../.github/workflows/linux.yml) | Runs on pull requests, pushes to `main` and by hand: a vouch `gate` job, then a `checks` job and a `package` job on `ubuntu-24.04` |
+| [`.github/workflows/linux.yml`](../.github/workflows/linux.yml) | Runs on pull requests and pushes to `main` that touch what the Linux build and its fixture suites read (not the Mac, iPhone, Android or Windows native code beyond the few files the parity fixtures compare against, which `scripts/ci/workflow-paths.test.mjs` checks), and by hand: a vouch `gate` job for pull requests from forks, then two `checks` jobs (the UI checks and the engine fixtures) and a `package` job on `ubuntu-24.04`. A pull request packages and smoke-tests the tarball alone unless it changes `scripts/linux`, the workflow or its setup action, or carries the `full-ci` label; pushes and manual runs also build, smoke-test and install the `.deb` and the AppImage |
 | [`.github/actions/linux-setup`](../.github/actions/linux-setup/action.yml) | Ubuntu packages for the fixtures (clang, dbus, NSS tools, gnome-keyring, PyGObject), Node 24, pnpm and `pnpm install --frozen-lockfile` |
-| [`scripts/linux/ci-checks.sh`](../scripts/linux/ci-checks.sh) | The engine-free checks; the `engine/ardiacore-linux/tests` modules run in parallel because the suite takes well over five minutes serially |
+| [`scripts/linux/ci-checks.sh`](../scripts/linux/ci-checks.sh) | The engine-free checks. `--part ui` runs the `apps/desktop` and `scripts/linux` checks side by side; `--part engine --shard I/N` runs every Nth Python suite and `engine/ardiacore-linux/tests` module, those in parallel, because the suite takes well over five minutes serially. With no options it runs everything |
 | [`scripts/linux/publish-engine.sh`](../scripts/linux/publish-engine.sh) | Builder side: stages, strips and archives an engine from a Chromium out dir; `--upload` publishes it and adds its table row |
-| [`packages/ardiacore/prebuilt-engines-linux.tsv`](../packages/ardiacore/prebuilt-engines-linux.tsv) | `key<TAB>tag<TAB>sha256` for each Linux engine published in ardia-browser/ardia |
+| [`packages/ardiacore/prebuilt-engines-linux.tsv`](../packages/ardiacore/prebuilt-engines-linux.tsv) | `key<TAB>tag<TAB>sha256` for each Linux engine published in ardia-browser/ardia, and a fourth field, the key it was published under, when that engine's sources are this key's (rows carried over when the key changed) |
 | `packages/ardiacore/scripts/fetch-engine.sh --arch linux-x86_64` | Dispatches to [`scripts/linux/fetch-engine.sh`](../scripts/linux/fetch-engine.sh); the Mac path is unchanged |
 | [`scripts/linux/runtime_files.py`](../scripts/linux/runtime_files.py) | The one runtime allowlist used by publishing, fetching and packaging, and the safe archive unpacker |
 | [`scripts/linux/smoke.mjs`](../scripts/linux/smoke.mjs) | Strict smoke gate for a packaged tarball |
@@ -23,13 +23,33 @@ Hosted CI never runs `gclient sync`, GN or a Chromium build.
 
 ## Engine archives
 
-- **Key.** The engine is keyed by `engine/engine-key.sh`, as on the Mac: one hash of `engine/`,
-  `apps/browser/assets/offline-game` and `apps/browser/assets/offline-game-pipeline`, because the Linux build packs
-  the offline game too (`game-resource.sh`). Uncommitted changes in any of those paths stop the fetcher and the
-  publisher.
-  The key doesn't cover `packages/ardiacore/ios/page_script.js`, which the Linux layer compiles into the engine
-  (`engine/ardiacore-linux/apply.sh`, `page_script.h`): a commit that changes only that file keeps its key while the
-  published engine still carries the old script. Check it after every upstream sync, and rebuild if it changed.
+- **Key.** The engine is keyed by `engine/engine-key.sh --platform linux` (`engine/engine-key.py`), the Mac by
+  `--platform macos`: one hash of every file the Linux build reads.
+  - `engine/` without the `mac` lines of `engine/patches/series`, their patches and `engine/ardiacore`. The series is
+    read with `engine/patches/series.py`'s own parser and validation, so the key and the build never disagree about a
+    line (CRLF, comments, an unknown platform), and it counts as its lines for Linux: a new `mac` line changes nothing.
+  - Without the translation units a `BUILD.gn` under `engine/` lists only inside `if (is_mac)`, such as
+    `ac_external_apps.mm`. Headers there stay in both keys, since Linux code may include them.
+  - Plus what `engine/ardiacore-linux/copies.tsv` lists (`<source><TAB><target>`, read by `apply.sh` and the key alike):
+    a few `engine/ardiacore` headers, `packages/ardiacore/ios/page_script.js` and the logos.
+  - Plus `apps/browser/assets/offline-game` and its pipeline, because the Linux build packs the offline game too
+    (`game-resource.sh`).
+  `engine/engine-key.sh --platform linux --paths` gives the git pathspecs of those inputs; uncommitted changes there
+  stop the fetcher and the publisher, and a Mac-only edit doesn't.
+- **Carried-over rows.** A row with a fourth field (`key<TAB>tag<TAB>sha256<TAB>built key`) serves an engine published
+  under the built key: the fetcher downloads `ArdiaCore-<built key:12>-linux-x64.tar.xz` and checks its manifest names
+  the built key. They map the engines published before the per-platform keys to the new keys of the commits they were
+  built from, and the key after `copies.tsv` replaced the copies `apply.sh` spelled out to `engine-165962861895`: the
+  old and new `apply.sh` write byte-identical trees.
+- **Exact.** `scripts/linux/runtime_files.py serves --engine <dir> --key <key>` (used by `release.sh` and the `package`
+  job) calls an engine dir this key's exact engine only when its `manifest.json` is format 2 for `linux`/`x64`, every
+  required runtime file is a regular file (`locales` a directory), `chrome` is executable and matches the manifest's
+  `chrome_sha256`, and the manifest names the key, or the key's row names the manifest's key as its built key. The
+  row comes from the table (`--table`, default `ARDIACORE_PREBUILT_LINUX_TABLE`, else the checked-in one), and a row
+  there that names another built key refuses the engine. With no row there, it is the row the fetcher verified: the
+  second line of the cached engine's `.complete`, under the archive SHA-256, and it counts only for the cache folder
+  named after its key and for the tag of its built key. So a row from the published table counts too, and the fetcher
+  finds a cached engine again without its table.
 - **Archive.** `ArdiaCore-<key12>-linux-x64.tar.xz` holds one directory, `ardiacore-linux-x64/`. It contains the
   allowlisted runtime files and a `manifest.json` (format 2): engine key, source commit, Chromium version, `args.gn` hash,
   chrome hash and build ID, and build and packaging times.
@@ -50,7 +70,7 @@ Hosted CI never runs `gclient sync`, GN or a Chromium build.
   `scripts/linux/symbolize.py --symbols ArdiaCore-<key12>-linux-x64-symbols.tar.xz --build-id <id> <offset>...`
   (crashing frame first; the others are return addresses). The fetcher never downloads the symbols.
 - **Source commit.** The publisher doesn't trust `repo.commit` alone. It computes the engine key of the source copy the
-  way `engine/engine-key.sh` does (one tree per key path, then one hash) and records `source_commit` only when that
+  with `engine/engine-key.sh --platform linux` over a scratch tree of it and records `source_commit` only when that
   commit's key matches.
 - **Out dir.** The publisher copies from the out dir while holding the chromium lock and never writes there.
 
@@ -92,7 +112,7 @@ package job red after almost every merge.
 ## Jobs
 
 - **`checks`.** It needs no engine. It runs:
-  - the `apps/linux` typecheck, host, symbol, module-graph and acceptance self-tests;
+  - the `apps/desktop` typecheck, host, symbol, module-graph and acceptance self-tests;
   - the UI build;
   - the Python and Node suites under `engine/patches/build/tests`, `engine/chromium/src/chrome/browser/ardia/tests` and
     `engine/ardiacore-linux/tests`.
@@ -101,7 +121,7 @@ package job red after almost every merge.
 - **`package`.** In order, it:
   1. reads the version from `MARKETING_VERSION` in the Xcode project, as `scripts/release.sh` does;
   2. fetches the engine (cached per engine key and table);
-  3. builds `apps/linux/dist`;
+  3. builds `apps/desktop/dist/linux`;
   4. fetches the `ardia` command pinned in `apps/browser/official-plugins.json` (its linux-x64 tarball, from
      ardia-browser/plugins' release, SHA-256 checked) and names it `ardia-cli-<version>-linux-x64.tar.gz` for the package
      (`scripts/release/official-plugins.py linux-cli`); until the pin is published it packages without the CLI, with a
@@ -161,11 +181,19 @@ It refuses any sandbox-disabling switch. Every check must run and pass:
     of a userscript that prefixes the fixture's title must report the profile `loaded`, `ardia scripts list` must show
     it as reported by Ardia, and the fixture opened with `ardia browse` must read retitled. After
     `ardia scripts uninstall` it must report `removed`, and the fixture must open with its own title.
+13. `window-state`: in the first instance, `ArdiaShell.windowButtonLayout` must answer `{ layout, desktop }` (a string
+    or `null`, and a string), `ArdiaShell.windowState` for the shell's own window three booleans (`maximized`, `tiled`,
+    `fullScreen`), and `windowState` for an unknown window the error `No such native window`.
+14. `sync-core`: in the first instance, `ArdiaSync.core` must answer `rust`, and `ArdiaSync.enterPhrase` must run the
+    Rust core: a valid phrase for a folder that doesn't exist answers `noData`, a broken checksum `checksum`, and a
+    phrase with `zzzz` in it `unknownWord` naming `zzzz`. Nothing is saved: no folder matches, so no key is stored.
 
-Checks 9 to 12 report `skip` and pass for a dev package without `VERSION` or `cli/`. Each can also report `old` when
-the engine's host predates the feature: `appVersion` is Chromium's own version, the bootstrap advertises none of
-`engine.setCliControl`, `ArdiaCli.install` and `ArdiaAutomation.start`, or (for `cli-scripts`) not all four
-`ArdiaUserScripts` methods. `old` fails the gate unless
+Checks 9 to 12 report `skip` and pass for a dev package without `VERSION` or `cli/`. Checks 9 to 14 can also report
+`old` when the engine's host predates the feature: `appVersion` is Chromium's own version, the bootstrap advertises
+none of `engine.setCliControl`, `ArdiaCli.install` and `ArdiaAutomation.start`, (for `cli-scripts`) not all four
+`ArdiaUserScripts` methods, or (for `window-state`) neither `ArdiaShell.windowButtonLayout` nor
+`ArdiaShell.windowState`, or (for `sync-core`) no `ArdiaSync.core`; an engine that advertises only one of the two
+fails `window-state`. `old` fails the gate unless
 `--allow-old-engine` is passed. CI and `release.sh` pass it only for an engine that isn't the commit's own.
 
 It takes about 8 s without the CLI, and writes `results.json`, the launch logs and `cli.log`.
@@ -180,7 +208,7 @@ it:
 
 1. checks the version's channel, `MARKETING_VERSION`, the notes file and a clean tree;
 2. fetches the exact engine (`--engine nearest`, an engine dir or a Chromium out dir make test builds);
-3. builds `apps/linux/dist`, the CLI and uBlock Origin;
+3. builds `apps/desktop/dist/linux`, the CLI and uBlock Origin;
 4. packages `Ardia-<version>-linux-x64.tar.xz` with `--version` and `--cli`, and the same tree as
    `Ardia-<version>-linux-x64.deb` (which needs `dpkg-deb` and `readelf`) and `Ardia-<version>-linux-x64.AppImage`;
 5. writes `ardia-bin-<version>.src.tar.gz`, the PKGBUILD and `.SRCINFO` pinned to that tarball by
@@ -200,6 +228,10 @@ The Release workflow (`release.yml`) runs it in its `linux` job, beside the Mac 
 artifact. When the install test fails (after apt's and the image pulls' retries), the job deletes the `.deb` and its
 `.sha256`, adds a `deb dropped` line to `provenance.txt` and warns, and still succeeds: the tarball, AppImage, Arch
 source package and CLI ship without it. Only a `deb dropped` line lets `publish.sh` go on without the `.deb`.
+The `linux-sign` job, the only one that sees the `LINUX_UPDATE_ED_PRIVATE_KEY` secret, downloads that artifact and
+signs `Ardia-<version>-linux-update.txt` with `scripts/linux/sign-update.mjs`, which refuses a key that doesn't match
+`scripts/linux/linux-update.pem`; it uploads the manifest and its `.sig` as the `linux-update` artifact. When signing
+fails, `publish` warns and the release ships without them, so installed Linux apps fall back to the release page for it.
 `publish` puts that artifact in `dist/<version>/linux/`, and `publish.sh` attaches the assets to the GitHub release it
 creates. It refuses a Linux folder whose provenance names an inexact engine or uncommitted changes. A dry run
 publishes nothing. When the `linux` job fails, usually because the release's engine key has no published Linux
@@ -241,12 +273,18 @@ hand. The one-time setup is in [releasing.md](releasing.md#linux-package).
 
 ## Triggers and gating
 
-- **When it runs.** On pull requests and pushes to `main` that touch what the Linux build reads: `apps/linux`,
+- **When it runs.** On pull requests and pushes to `main` that touch what the Linux build reads: `apps/desktop`,
   `apps/browser`, `plugins`, `packages`, `engine`, `scripts/linux`, `scripts/lib`, `scripts/agent/locked`,
   `infra/feedback/lib`, `patches`, the workspace manifests and lockfile, the Linux setup action and the workflow itself.
   Mac-only changes elsewhere skip it. It can still be started by hand, with `exact` to require this commit's engine.
-- **Gate.** Like `ios.yml` and `android.yml`, a `gate` job runs `vouch.gate` first, and both jobs need it. An unvouched
-  author's pull request waits until a maintainer comments `vouch` or adds `run-ci`; `linux.yml` is in
-  `GATED_WORKFLOWS` (`.github/vouch/vouch.cjs`), so that re-runs its skipped run. Pushes and manual runs always build.
+- **Gate.** Like `ios.yml`, `android.yml`, `windows.yml` and `mac.yml`, a `gate` job runs `vouch.gate` first for a
+  pull request from a fork, and both jobs need it. An unvouched author's pull request waits until a maintainer comments
+  `vouch` or adds `run-ci`; `linux.yml` is in `GATED_WORKFLOWS` (`.github/vouch/vouch.cjs`), so that re-runs its
+  skipped run. Pushes, manual runs and pull requests from a branch of this repository skip the gate and build at once:
+  only people with write access push those branches, and the gate would only spend an `ubuntu-latest` slot to say so.
+  A newer push cancels the run before it, on `main` too; manual runs are never cancelled.
+- **Runner.** A `route` job picks `ubuntu-24.04` or, when GitHub's runners are busy, Boat CI's `boat-large` for
+  `checks` and `package` ([ci-boat-overflow.md](ci-boat-overflow.md)). It is skipped for forks, and a skipped or failed
+  route job keeps both on `ubuntu-24.04`.
 - **No engine.** With no published engine for this commit's key or the 200 engine commits before it, `package` fails
   and says to publish one.

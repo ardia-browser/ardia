@@ -1,0 +1,1923 @@
+{
+ "sources": {
+  "page": "the top frame's page: any site the user visits",
+  "frame": "any frame, including cross-origin and sandboxed iframes",
+  "main-world": "a value returned from script evaluated in the page's main world, which the page can rewrite (Chromium evaluates there; WebKit uses an isolated world)",
+  "sync": "a record from another device that holds the sync key",
+  "other-app": "another app on this Mac, through an opened URL, an Apple Event, a notification, or an input event posted while it is in front",
+  "plugin": "an approved plugin, within its manifest's permissions",
+  "socket": "a same-user process on the control socket while Settings > Advanced > Let programs control Ardia is on",
+  "native": "the browser's own native layer, relaying OS input",
+  "import": "a file or browser profile the user chose to import",
+  "update": "a release manifest, its signature and the package the browser downloaded for the self-updater, trusted only once the release key's signature verifies"
+ },
+ "customEvents": {
+  "ardia:media-element": "Page-world shim names a media element for the isolated world to track; only an HTMLMediaElement is taken, and only its own playback state is read",
+  "ardia:media-fault": "Page-world shim relays a media error on the listed media sites only; a string of at most 64 characters, at most 200 per page, classified natively by WebKitMediaFaults.event",
+  "ardia:media-session": "Page-world shim relays the page's own Media Session: actions filtered to a fixed list, positions must be finite numbers; it describes only the page's own media",
+  "ardia:app-badge": "Page-world shim relays the Badging API from the top frame; native requires the main frame and takes the origin from frameInfo, as for the badge API itself",
+  "ardia:media-action": "Dispatched by the isolated world into the page world to run a media action on the page's own elements. A page that dispatches its own only acts on itself",
+  "ardia:notification-reply": "Sent by the isolated world to WebKit's page-world Notification shim. A page that dispatches its own only misleads its own shim; it carries nothing from other origins",
+  "ardia:notification": "WebKit's page-world Notification shim posts it to the isolated world. Any page script can send the same; native ignores the claimed origin and requires the main frame, frameInfo.securityOrigin equal to the top origin and the site's permission set to allow (WebKitTab+Site.swift)"
+ },
+ "rows": [
+  {
+   "id": "chromium-page-message:appBadge",
+   "source": "frame",
+   "guard": "Main frame only, browser-verified origin; sets the badge for that origin's installed app",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:commandWheel",
+   "source": "frame",
+   "guard": "Spends only native wheel credits the browser recorded; a page can at most stop a zoom",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:displayMedia",
+   "source": "frame",
+   "guard": "The browser re-checks the permissions policy and user activation; the user picks the source; the grant is bound to frame and origin",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:displayMediaHello",
+   "source": "frame",
+   "guard": "Answers configuration to the same frame only",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:drm",
+   "source": "frame",
+   "guard": "Main frame only; offers an engine switch the user must accept",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:exclusive",
+   "source": "frame",
+   "guard": "Enum state for fullscreen and pointer lock UI; no privilege",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:fieldFocus",
+   "source": "page",
+   "guard": "Main frame only; positions the field provider chip, same-site checked against the verified origin",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:fieldProvider",
+   "source": "frame",
+   "guard": "Same-site checked against the browser-verified origin; the system panel is Apple's own and opens only while visible",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:fieldProviderHint",
+   "source": "frame",
+   "guard": "Same-site checked against the browser-verified origin",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:firstPaint",
+   "source": "page",
+   "guard": "Main frame only; ends a paint hold",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:hello",
+   "source": "frame",
+   "guard": "Configuration sent back to the same frame; the field provider only to same-site frames",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:linkDrop",
+   "source": "page",
+   "guard": "Main frame only, http(s) only, needs a real native mouse release over the view within 1 s, rate limited",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:media",
+   "source": "frame",
+   "guard": "Held for a tab not shown yet with a byte cap; frame ids capped; read as media state only",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaLaunchTabHolder.mm#holdPageMessage"
+   ]
+  },
+  {
+   "id": "chromium-page-message:newTabLink",
+   "source": "frame",
+   "guard": "Page script sends it only after a trusted click or user activation, http(s) only; native keeps 8 s of notes. Open: notes from any frame (B2)",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ],
+   "findings": [
+    "B2"
+   ]
+  },
+  {
+   "id": "chromium-page-message:notification",
+   "source": "frame",
+   "guard": "Browser-verified origin; shown only when that origin's permission is allow",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:notificationClose",
+   "source": "frame",
+   "guard": "Closes only notifications the same origin showed",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:nowPlaying",
+   "source": "frame",
+   "guard": "Held with a byte cap; drives the media UI only",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaLaunchTabHolder.mm#holdPageMessage"
+   ]
+  },
+  {
+   "id": "chromium-page-message:peek",
+   "source": "frame",
+   "guard": "Needs a native left mouse-up over this view with matching modifiers, used once; other-site peeks main frame only; http(s) only",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:peekGone",
+   "source": "frame",
+   "guard": "Clears that frame's peek state only",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:peekHello",
+   "source": "frame",
+   "guard": "Answers configuration to the same frame",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:peekTrace",
+   "source": "frame",
+   "guard": "Trace text for test instances only",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:perf",
+   "source": "frame",
+   "guard": "Finite numbers for telemetry timings",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:pinch",
+   "source": "page",
+   "guard": "Finite numbers; drives the pinch UI",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:pipButtonPress",
+   "source": "frame",
+   "guard": "Empty payload; only adds one to a usage count, and native opens nothing for it",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:pipTrace",
+   "source": "frame",
+   "guard": "Trace text for test instances only",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:scroll",
+   "source": "page",
+   "guard": "Main frame only; enum state for toolbar hiding",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:selection",
+   "source": "page",
+   "guard": "Main frame only; text and finite rect for the selection UI",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:theme",
+   "source": "page",
+   "guard": "Main frame only; colour string parsed as a colour for the toolbar tint",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ]
+  },
+  {
+   "id": "chromium-page-message:verificationCode",
+   "source": "page",
+   "guard": "Main frame only; the offer is bound to frame, navigation, profile and generation; filling needs a click on the chip",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ]
+  },
+  {
+   "id": "page-script-message-count:page_script.js",
+   "source": "page",
+   "guard": "Every send or post call in the page script, including those with a kind computed at run time; each literal kind has its own row and native receiver. The count changes when a send is added, so a new one gets reviewed",
+   "count": 35,
+   "checks": [
+    "packages/ardiacore/ios/page_script.js"
+   ]
+  },
+  {
+   "id": "page-script-listener:DOMContentLoaded",
+   "source": "page",
+   "guard": "lifecycle; sends state that native checks"
+  },
+  {
+   "id": "page-script-listener:blur",
+   "source": "page",
+   "guard": "positions UI only; sends nothing privileged"
+  },
+  {
+   "id": "page-script-listener:change",
+   "source": "page",
+   "guard": "isTrusted checked before a field counts as typed by the user"
+  },
+  {
+   "id": "page-script-listener:click",
+   "source": "page",
+   "guard": "isTrusted and primary button checked before anything is sent (link notes, Peek)"
+  },
+  {
+   "id": "page-script-listener:dragend",
+   "source": "page",
+   "guard": "isTrusted checked and in-viewport coordinates required before a link drop is sent; native also needs a real mouse release"
+  },
+  {
+   "id": "page-script-listener:dragstart",
+   "source": "page",
+   "guard": "isTrusted checked; notes an http(s) link being dragged"
+  },
+  {
+   "id": "page-script-listener:focus",
+   "source": "page",
+   "guard": "positions UI only; sends nothing privileged"
+  },
+  {
+   "id": "page-script-listener:focusin",
+   "source": "page",
+   "guard": "isTrusted checked where it marks typed fields; positions UI only"
+  },
+  {
+   "id": "page-script-listener:focusout",
+   "source": "page",
+   "guard": "positions or hides field UI only"
+  },
+  {
+   "id": "page-script-listener:fullscreenchange",
+   "source": "page",
+   "guard": "enum state only"
+  },
+  {
+   "id": "page-script-listener:input",
+   "source": "page",
+   "guard": "isTrusted checked before a field counts as typed by the user"
+  },
+  {
+   "id": "page-script-listener:keydown",
+   "source": "page",
+   "guard": "isTrusted checked before marking the page as used"
+  },
+  {
+   "id": "page-script-listener:keystatuseschange",
+   "source": "page",
+   "guard": "DRM key status; feeds the drm message, which native takes from the main frame only"
+  },
+  {
+   "id": "page-script-listener:load",
+   "source": "page",
+   "guard": "lifecycle; sends state that native checks"
+  },
+  {
+   "id": "page-script-listener:mousedown",
+   "source": "page",
+   "guard": "isTrusted checked; records real presses for Peek and field use"
+  },
+  {
+   "id": "page-script-listener:mousemove",
+   "source": "page",
+   "guard": "isTrusted checked; hover state only"
+  },
+  {
+   "id": "page-script-listener:mouseout",
+   "source": "page",
+   "guard": "Only while the on-video Picture in Picture button is on; hides that button, sends nothing"
+  },
+  {
+   "id": "page-script-listener:mouseup",
+   "source": "page",
+   "guard": "isTrusted and primary button checked before Peek; the selection listener only schedules a selection report"
+  },
+  {
+   "id": "page-script-listener:pagehide",
+   "source": "page",
+   "guard": "isTrusted checked"
+  },
+  {
+   "id": "page-script-listener:pageshow",
+   "source": "page",
+   "guard": "isTrusted and persisted checked"
+  },
+  {
+   "id": "page-script-listener:pause",
+   "source": "page",
+   "guard": "media state only"
+  },
+  {
+   "id": "page-script-listener:pointerlockchange",
+   "source": "page",
+   "guard": "enum state only"
+  },
+  {
+   "id": "page-script-listener:pointermove",
+   "source": "page",
+   "guard": "Only while the on-video Picture in Picture button is on; places that button over the video under the pointer, sends nothing"
+  },
+  {
+   "id": "page-script-listener:prerenderingchange",
+   "source": "page",
+   "guard": "lifecycle only"
+  },
+  {
+   "id": "page-script-listener:resize",
+   "source": "page",
+   "guard": "layout only"
+  },
+  {
+   "id": "page-script-listener:scroll",
+   "source": "page",
+   "guard": "scroll state for toolbar hiding, enum only"
+  },
+  {
+   "id": "page-script-listener:submit",
+   "source": "page",
+   "guard": "reads fields only after a trusted keystroke or press was recorded"
+  },
+  {
+   "id": "page-script-listener:visibilitychange",
+   "source": "page",
+   "guard": "lifecycle only"
+  },
+  {
+   "id": "page-script-listener:wheel",
+   "source": "page",
+   "guard": "Scroll direction from the deltas, and Command-scroll zoom spends native wheel credits"
+  },
+  {
+   "id": "page-script-listener-count:page_script.js",
+   "source": "page",
+   "guard": "Every listener in the page script; each event type has its own row. The count changes when a listener is added, so a new one gets reviewed",
+   "count": 74,
+   "checks": [
+    "packages/ardiacore/ios/page_script.js"
+   ]
+  },
+  {
+   "id": "webkit-page-message:appBadge",
+   "source": "frame",
+   "guard": "Main frame only, frameInfo origin (WebKitTab+Site.swift)"
+  },
+  {
+   "id": "webkit-page-message:field",
+   "source": "frame",
+   "guard": "Autofill script in the isolated world; same-origin frames and document tokens (WebKitAutofill.swift)"
+  },
+  {
+   "id": "webkit-page-message:fieldFocus",
+   "source": "frame",
+   "guard": "Same-site check against frameInfo.securityOrigin (WebKitTab+FieldProviders.swift)"
+  },
+  {
+   "id": "webkit-page-message:fieldProvider",
+   "source": "frame",
+   "guard": "Same-site check against frameInfo.securityOrigin (WebKitTab+FieldProviders.swift)"
+  },
+  {
+   "id": "webkit-page-message:fieldProviderHello",
+   "source": "frame",
+   "guard": "Answers configuration to the same frame (WebKitTab+FieldProviders.swift)"
+  },
+  {
+   "id": "webkit-page-message:fieldProviderHint",
+   "source": "frame",
+   "guard": "Same-site check against frameInfo.securityOrigin (WebKitTab+FieldProviders.swift)"
+  },
+  {
+   "id": "webkit-page-message:icons",
+   "source": "frame",
+   "guard": "Main frame only; icon URLs fetched as data:image or http(s) only"
+  },
+  {
+   "id": "webkit-page-message:linkDrop",
+   "source": "frame",
+   "guard": "Main frame only (WebKitTab+Site.swift)"
+  },
+  {
+   "id": "webkit-page-message:loginField",
+   "source": "frame",
+   "guard": "Main frame only, trusted pointer or key, bound to the page origin; fills only after a native dropdown pick"
+  },
+  {
+   "id": "webkit-page-message:loginSubmit",
+   "source": "frame",
+   "guard": "Main frame only, origin from frameInfo; offers save or update for that origin only. Open: synthetic submit not refused (B4)",
+   "findings": [
+    "B4"
+   ]
+  },
+  {
+   "id": "webkit-page-message:media",
+   "source": "frame",
+   "guard": "Mutes or tracks that frame only"
+  },
+  {
+   "id": "webkit-page-message:mediaFault",
+   "source": "frame",
+   "guard": "Classified by WebKitMediaFaults.event into a fixed shape"
+  },
+  {
+   "id": "webkit-page-message:notification",
+   "source": "frame",
+   "guard": "Main frame, origin equal to the top origin, permission allow (WebKitTab+Site.swift)"
+  },
+  {
+   "id": "webkit-page-message:nowPlaying",
+   "source": "frame",
+   "guard": "Media UI only"
+  },
+  {
+   "id": "webkit-page-message:pip",
+   "source": "frame",
+   "guard": "Boolean only"
+  },
+  {
+   "id": "webkit-page-message:scroll",
+   "source": "frame",
+   "guard": "Main frame only; enum down/up/top"
+  },
+  {
+   "id": "webkit-page-message:selection",
+   "source": "frame",
+   "guard": "Main frame only; selection UI"
+  },
+  {
+   "id": "webkit-page-message:status",
+   "source": "frame",
+   "guard": "Link status text for the status bar"
+  },
+  {
+   "id": "webkit-page-message:submit",
+   "source": "frame",
+   "guard": "Autofill script in the isolated world; same-origin frames and document tokens (WebKitAutofill.swift)"
+  },
+  {
+   "id": "webkit-page-message:theme",
+   "source": "frame",
+   "guard": "Main frame only; colour must match #RRGGBB and the source an enum"
+  },
+  {
+   "id": "webkit-page-message:verificationCode",
+   "source": "frame",
+   "guard": "Main frame only; bound to frame and navigation; filling needs a click"
+  },
+  {
+   "id": "webkit-page-listener-count:WebKitAutofillScript.swift",
+   "source": "page",
+   "guard": "Isolated world; fills only after a native pick; document tokens",
+   "count": 9,
+   "checks": [
+    "packages/ardiacore/ios/WebKitAutofillScript.swift"
+   ]
+  },
+  {
+   "id": "webkit-page-listener-count:WebKitLogins.swift",
+   "source": "page",
+   "guard": "Isolated world; trusted pointer or key before a field counts; submit is open (B4)",
+   "count": 9,
+   "checks": [
+    "packages/ardiacore/ios/WebKitLogins.swift"
+   ],
+   "findings": [
+    "B4"
+   ]
+  },
+  {
+   "id": "webkit-page-listener-count:WebKitMediaFaults.swift",
+   "source": "page",
+   "guard": "Media and key errors classified by WebKitMediaFaults.event into a fixed shape",
+   "count": 2,
+   "checks": [
+    "packages/ardiacore/ios/WebKitMediaFaults.swift"
+   ]
+  },
+  {
+   "id": "webkit-page-listener-count:WebKitNotifications+Scripts.swift",
+   "source": "page",
+   "guard": "ardia:notification bridge from the page-world shim; native ignores the claimed origin and uses frameInfo",
+   "count": 2,
+   "checks": [
+    "packages/ardiacore/ios/WebKitNotifications+Scripts.swift"
+   ]
+  },
+  {
+   "id": "webkit-page-listener-count:WebKitPageScript+Input.swift",
+   "source": "page",
+   "guard": "Isolated world; trusted input checks; main-frame checks native side",
+   "count": 8,
+   "checks": [
+    "packages/ardiacore/ios/WebKitPageScript+Input.swift"
+   ]
+  },
+  {
+   "id": "webkit-page-listener-count:WebKitPageScript+PageWorld.swift",
+   "source": "page",
+   "guard": "Page-world shim for media errors and notifications; what it reports is classified natively (WebKitMediaFaults.event) and notification origins come from frameInfo",
+   "count": 2,
+   "checks": [
+    "packages/ardiacore/ios/WebKitPageScript+PageWorld.swift"
+   ]
+  },
+  {
+   "id": "webkit-page-listener-count:WebKitPageScript+Theme.swift",
+   "source": "page",
+   "guard": "Isolated world; colour validated natively",
+   "count": 8,
+   "checks": [
+    "packages/ardiacore/ios/WebKitPageScript+Theme.swift"
+   ]
+  },
+  {
+   "id": "webkit-page-listener-count:WebKitPageScript.swift",
+   "source": "page",
+   "guard": "Isolated world; media and icon state validated natively",
+   "count": 18,
+   "checks": [
+    "packages/ardiacore/ios/WebKitPageScript.swift"
+   ]
+  },
+  {
+   "id": "webkit-script-handler:ardiacore/ios/WebKitAutofill.swift",
+   "source": "frame",
+   "guard": "Same-origin frames and document tokens before any fill or save offer",
+   "checks": [
+    "packages/ardiacore/ios/WebKitAutofill.swift#userContentController"
+   ]
+  },
+  {
+   "id": "webkit-script-handler:ardiacore/ios/WebKitContentBlockerScripts.swift",
+   "source": "frame",
+   "guard": "Cosmetic replies consumed in a named isolated world as CSS and parsed JSON",
+   "checks": [
+    "packages/ardiacore/ios/WebKitContentBlockerScripts.swift#userContentController"
+   ]
+  },
+  {
+   "id": "webkit-script-handler:ardiacore/ios/WebKitHub.swift",
+   "source": "frame",
+   "guard": "Routes by the WKWebView's owner; WebKitTab.pageMessage checks main frame and frameInfo origin per kind",
+   "checks": [
+    "packages/ardiacore/ios/WebKitHub.swift#userContentController"
+   ]
+  },
+  {
+   "id": "webkit-script-handler:shell/ios/PluginPageView.swift",
+   "source": "plugin",
+   "guard": "Own view, main frame, plugin scheme and host, a live binding and a rate limit",
+   "checks": [
+    "packages/shell/ios/PluginPageView.swift#userContentController"
+   ]
+  },
+  {
+   "id": "evaluate-result:components/extensions/ActionPopup.tsx",
+   "source": "main-world",
+   "guard": "The extension's own popup page; size clamped to MIN/MAX",
+   "count": 1,
+   "checks": [
+    "apps/browser/src/components/extensions/ActionPopup.tsx"
+   ]
+  },
+  {
+   "id": "evaluate-result:state/app/scripting.ts",
+   "source": "main-world",
+   "guard": "AppleScript execute, behind a default-off setting; the result goes back to the script that asked",
+   "count": 1,
+   "checks": [
+    "apps/browser/src/state/app/scripting.ts"
+   ]
+  },
+  {
+   "id": "evaluate-result:state/commands/commands.ts",
+   "source": "main-world",
+   "guard": "Use Selection for Find: only a string, capped at 500 characters (B5)",
+   "count": 1,
+   "checks": [
+    "apps/browser/src/state/commands/commands.ts"
+   ]
+  },
+  {
+   "id": "evaluate-result:state/engines/actions.ts",
+   "source": "main-world",
+   "guard": "Unsaved-work check: a boolean that picks a warning",
+   "count": 1,
+   "checks": [
+    "apps/browser/src/state/engines/actions.ts"
+   ]
+  },
+  {
+   "id": "evaluate-result:state/engines/engineSwap.ts",
+   "source": "main-world",
+   "guard": "Scroll position: finite numbers used to restore scroll",
+   "count": 2,
+   "checks": [
+    "apps/browser/src/state/engines/engineSwap.ts"
+   ]
+  },
+  {
+   "id": "evaluate-result:state/extensions/webStore.ts",
+   "source": "main-world",
+   "guard": "Web Store page only; the id must pass webStoreExtensionId and be installed; removal asks the user (B3)",
+   "count": 1,
+   "checks": [
+    "apps/browser/src/state/extensions/webStore.ts"
+   ]
+  },
+  {
+   "id": "evaluate-result:state/media/media.ts",
+   "source": "main-world",
+   "guard": "Picture in Picture state: a boolean",
+   "count": 1,
+   "checks": [
+    "apps/browser/src/state/media/media.ts"
+   ]
+  },
+  {
+   "id": "evaluate-result:state/plugins/channelData.ts",
+   "source": "main-world",
+   "guard": "readActivePage: plugin gesture and permission, re-checked after the read; fields type-checked",
+   "count": 1,
+   "checks": [
+    "apps/browser/src/state/plugins/channelData.ts"
+   ]
+  },
+  {
+   "id": "evaluate-result:state/reader/reader.ts",
+   "source": "main-world",
+   "guard": "Reader report: observational only; the look is written only from browser controls (B1, R3)",
+   "count": 1,
+   "checks": [
+    "apps/browser/src/state/reader/reader.ts"
+   ]
+  },
+  {
+   "id": "evaluate-result:state/site/hiddenElements.ts",
+   "source": "main-world",
+   "guard": "Picker answer: acceptedPick needs a native confirmation on the same page; savablePickedSelector and hidingFilter keep it to one plain hiding rule (A1, A3, C1)",
+   "count": 8,
+   "checks": [
+    "apps/browser/src/state/site/hiddenElements.ts"
+   ]
+  },
+  {
+   "id": "evaluate-result:state/site/selection.ts",
+   "source": "main-world",
+   "guard": "Quote link and replace-in-field: arguments JSON-encoded, results only update Find UI or toast copy",
+   "count": 4,
+   "checks": [
+    "apps/browser/src/state/site/selection.ts"
+   ]
+  },
+  {
+   "id": "evaluate-result:state/site/translate.ts",
+   "source": "main-world",
+   "guard": "Translation sample: strings type-checked and capped before the on-device model (B5)",
+   "count": 6,
+   "checks": [
+    "apps/browser/src/state/site/translate.ts"
+   ]
+  },
+  {
+   "id": "evaluate-result:state/tabs/profileMoveCheck.ts",
+   "source": "main-world",
+   "guard": "Dev self-check against the local test server only",
+   "count": 1,
+   "checks": [
+    "apps/browser/src/state/tabs/profileMoveCheck.ts"
+   ]
+  },
+  {
+   "id": "evaluate-result:state/telemetry/barLoadFocus.ts",
+   "source": "main-world",
+   "guard": "A boolean for a telemetry timing",
+   "count": 1,
+   "checks": [
+    "apps/browser/src/state/telemetry/barLoadFocus.ts"
+   ]
+  },
+  {
+   "id": "native-channel:command",
+   "source": "native",
+   "guard": "Menu and shortcut commands from the browser's own menus"
+  },
+  {
+   "id": "native-channel:openURLs",
+   "source": "other-app",
+   "guard": "openExternalUrls runs admitIncomingUrl on every URL: web, file, about:blank and listed ardia: routes only (D5)",
+   "checks": [
+    "apps/browser/src/state/littleArdia/incomingUrls.ts#admitIncomingUrl"
+   ],
+   "findings": [
+    "D5"
+   ]
+  },
+  {
+   "id": "native-channel:window",
+   "source": "native",
+   "guard": "Window frame and state events from AppKit"
+  },
+  {
+   "id": "native-channel:app",
+   "source": "native",
+   "guard": "App lifecycle events from AppKit"
+  },
+  {
+   "id": "native-channel:notificationResponse",
+   "source": "other-app",
+   "guard": "A click on a notification the browser showed; routed by the browser's own notification id"
+  },
+  {
+   "id": "native-channel:scriptCommand",
+   "source": "other-app",
+   "guard": "AppleScript; macOS Automation permission; JavaScript only behind allowJavaScriptFromAppleEvents (default off)"
+  },
+  {
+   "id": "sync-adapter:adapters.ts#sharedDataAdapter",
+   "source": "sync",
+   "guard": "shareRecord decoder (records.ts)",
+   "checks": [
+    "apps/browser/src/state/sync/adapters.ts#sharedDataAdapter"
+   ]
+  },
+  {
+   "id": "sync-adapter:adapters.ts#deviceAdapter",
+   "source": "sync",
+   "guard": "deviceRecord decoder; names only",
+   "checks": [
+    "apps/browser/src/state/sync/adapters.ts#deviceAdapter"
+   ]
+  },
+  {
+   "id": "sync-adapter:adapters.ts#bookmarksAdapter",
+   "source": "sync",
+   "guard": "bookmarkValue decoder; URLs stored as bookmarks and opened only on a click (C4: bookmarklets sync as in Chrome)",
+   "checks": [
+    "apps/browser/src/state/sync/adapters.ts#bookmarksAdapter"
+   ]
+  },
+  {
+   "id": "sync-adapter:adapters.ts#deviceTabsAdapter",
+   "source": "sync",
+   "guard": "deviceTabs decoder. Open: recent-device tab URLs take any scheme (C5, #3569)",
+   "checks": [
+    "apps/browser/src/state/sync/adapters.ts#deviceTabsAdapter"
+   ],
+   "findings": [
+    "C5"
+   ]
+  },
+  {
+   "id": "sync-adapter:adapters.ts#passwordsAdapter",
+   "source": "sync",
+   "guard": "Sealed records; passwordValue decoder; native unsealing",
+   "checks": [
+    "apps/browser/src/state/sync/adapters.ts#passwordsAdapter"
+   ]
+  },
+  {
+   "id": "sync-adapter:deviceRemoval.ts#alsoDeleting",
+   "source": "sync",
+   "guard": "Wraps another adapter; deletes only keys that adapter owns",
+   "checks": [
+    "apps/browser/src/state/sync/deviceRemoval.ts#alsoDeleting"
+   ]
+  },
+  {
+   "id": "sync-adapter:extensions.ts#extensionsAdapterFor",
+   "source": "sync",
+   "guard": "Web Store ids, version and permission fingerprint checked natively (C3: privileges follow the record)",
+   "checks": [
+    "apps/browser/src/state/sync/extensions.ts#extensionsAdapterFor"
+   ]
+  },
+  {
+   "id": "sync-adapter:groupLooksAdapter.ts#groupLooksAdapter",
+   "source": "sync",
+   "guard": "Colours and icons validated against fixed sets",
+   "checks": [
+    "apps/browser/src/state/sync/groupLooksAdapter.ts#groupLooksAdapter"
+   ]
+  },
+  {
+   "id": "sync-adapter:historyAdapter.ts#historyAdapter",
+   "source": "sync",
+   "guard": "historyValue decoder; entries recorded, never opened on receipt",
+   "checks": [
+    "apps/browser/src/state/sync/historyAdapter.ts#historyAdapter"
+   ]
+  },
+  {
+   "id": "sync-adapter-set:openTabs.ts#openTabsAdapters",
+   "source": "sync",
+   "guard": "Composes the single adapters listed above; adds no decoding of its own",
+   "checks": [
+    "apps/browser/src/state/sync/openTabs.ts#openTabsAdapters"
+   ]
+  },
+  {
+   "id": "sync-adapter-set:pinned.ts#pinnedAreaAdapters",
+   "source": "sync",
+   "guard": "Composes the single adapters listed above; adds no decoding of its own",
+   "checks": [
+    "apps/browser/src/state/sync/pinned.ts#pinnedAreaAdapters"
+   ]
+  },
+  {
+   "id": "sync-adapter:pinned.ts#pinnedAdapter",
+   "source": "sync",
+   "guard": "Pin records applied to sleeping tabs. Open: no scheme policy on pin URLs (C5, #3569)",
+   "checks": [
+    "apps/browser/src/state/sync/pinned.ts#pinnedAdapter"
+   ],
+   "findings": [
+    "C5"
+   ]
+  },
+  {
+   "id": "sync-adapter:pinnedHomesAdapter.ts#pinnedHomesAdapter",
+   "source": "sync",
+   "guard": "syncedHome takes any non-empty string. Open: group homes need a web-only policy (C5, #3569)",
+   "checks": [
+    "apps/browser/src/state/sync/pinnedHomesAdapter.ts#pinnedHomesAdapter"
+   ],
+   "findings": [
+    "C5"
+   ]
+  },
+  {
+   "id": "sync-adapter:pinnedOrderAdapter.ts#pinnedOrderAdapter",
+   "source": "sync",
+   "guard": "Order keys only",
+   "checks": [
+    "apps/browser/src/state/sync/pinnedOrderAdapter.ts#pinnedOrderAdapter"
+   ]
+  },
+  {
+   "id": "sync-adapter:pinnedRowsAdapter.ts#pinnedRowsAdapter",
+   "source": "sync",
+   "guard": "Row or tile flags only",
+   "checks": [
+    "apps/browser/src/state/sync/pinnedRowsAdapter.ts#pinnedRowsAdapter"
+   ]
+  },
+  {
+   "id": "sync-adapter:profileAdapters.ts#profilesAdapter",
+   "source": "sync",
+   "guard": "profileRecord decoder",
+   "checks": [
+    "apps/browser/src/state/sync/profileAdapters.ts#profilesAdapter"
+   ]
+  },
+  {
+   "id": "sync-adapter:profileAdapters.ts#profileThemesAdapter",
+   "source": "sync",
+   "guard": "Themes sanitized before use",
+   "checks": [
+    "apps/browser/src/state/sync/profileAdapters.ts#profileThemesAdapter"
+   ]
+  },
+  {
+   "id": "sync-adapter:profileAdapters.ts#profileTopAppsAdapter",
+   "source": "sync",
+   "guard": "topAppsRecord decoder; a boolean",
+   "checks": [
+    "apps/browser/src/state/sync/profileAdapters.ts#profileTopAppsAdapter"
+   ]
+  },
+  {
+   "id": "sync-adapter:profileAdapters.ts#profileOpenTabsAdapter",
+   "source": "sync",
+   "guard": "openTabsRecord decoder; a boolean",
+   "checks": [
+    "apps/browser/src/state/sync/profileAdapters.ts#profileOpenTabsAdapter"
+   ]
+  },
+  {
+   "id": "sync-adapter-set:profileAdapters.ts#profileSyncAdapters",
+   "source": "sync",
+   "guard": "Composes the single adapters listed above; adds no decoding of its own",
+   "checks": [
+    "apps/browser/src/state/sync/profileAdapters.ts#profileSyncAdapters"
+   ]
+  },
+  {
+   "id": "sync-adapter:scopeAdapters.ts#extensionsOf",
+   "source": "sync",
+   "guard": "See extensions.ts#extensionsAdapterFor",
+   "checks": [
+    "apps/browser/src/state/sync/scopeAdapters.ts#extensionsOf"
+   ]
+  },
+  {
+   "id": "sync-adapter-set:scopeAdapters.ts#appAdapters",
+   "source": "sync",
+   "guard": "Composes the single adapters listed above; adds no decoding of its own",
+   "checks": [
+    "apps/browser/src/state/sync/scopeAdapters.ts#appAdapters"
+   ]
+  },
+  {
+   "id": "sync-adapter-set:scopeAdapters.ts#profileAdapters",
+   "source": "sync",
+   "guard": "Composes the single adapters listed above; adds no decoding of its own",
+   "checks": [
+    "apps/browser/src/state/sync/scopeAdapters.ts#profileAdapters"
+   ]
+  },
+  {
+   "id": "sync-adapter:sentTabsAdapter.ts#sentTabsAdapter",
+   "source": "sync",
+   "guard": "sendRecord decoder; sendableUrl lets only http(s) open",
+   "checks": [
+    "apps/browser/src/state/sync/sentTabsAdapter.ts#sentTabsAdapter"
+   ]
+  },
+  {
+   "id": "sync-adapter:settingsAdapter.ts#settingsAdapter",
+   "source": "sync",
+   "guard": "Only SYNCED_SETTINGS keys; validSettingValue against SETTING_SPECS before updateSettings, which checks again",
+   "checks": [
+    "apps/browser/src/state/sync/settingsAdapter.ts#settingsAdapter"
+   ]
+  },
+  {
+   "id": "sync-adapter:tileFoldersAdapter.ts#tileFoldersAdapter",
+   "source": "sync",
+   "guard": "Folder ids and names as strings",
+   "checks": [
+    "apps/browser/src/state/sync/tileFoldersAdapter.ts#tileFoldersAdapter"
+   ]
+  },
+  {
+   "id": "plugin-method:apply",
+   "source": "plugin",
+   "guard": "parseOps with pluginUrlRule: http(s) only for open and group.create (D4); permissions re-checked",
+   "checks": [
+    "apps/browser/src/state/plugins/channelApi.ts#case \"apply\""
+   ],
+   "findings": [
+    "D4"
+   ]
+  },
+  {
+   "id": "plugin-method:hello",
+   "source": "plugin",
+   "guard": "Session handshake; protocol version only",
+   "checks": [
+    "apps/browser/src/state/plugins/channelApi.ts#case \"hello\""
+   ]
+  },
+  {
+   "id": "plugin-method:net.fetch",
+   "source": "plugin",
+   "guard": "Needs the network permission and an allowed host list from the manifest",
+   "checks": [
+    "apps/browser/src/state/plugins/channelApi.ts#case \"net.fetch\""
+   ]
+  },
+  {
+   "id": "plugin-method:open",
+   "source": "plugin",
+   "guard": "pluginWebUrl on every URL: http(s) only, no credentials, no control characters (D4)",
+   "checks": [
+    "apps/browser/src/state/plugins/channelApi.ts#case \"open\""
+   ],
+   "findings": [
+    "D4"
+   ]
+  },
+  {
+   "id": "plugin-method:page.open",
+   "source": "plugin",
+   "guard": "isPagePath on the path; side from SPLIT_SIDES; tab context needs the tabs permission",
+   "checks": [
+    "apps/browser/src/state/plugins/channelApi.ts#case \"page.open\""
+   ]
+  },
+  {
+   "id": "plugin-method:programs.relink",
+   "source": "plugin",
+   "guard": "The plugin's own programs only; reserved names need the signed pin",
+   "checks": [
+    "apps/browser/src/state/plugins/channelApi.ts#case \"programs.relink\""
+   ]
+  },
+  {
+   "id": "plugin-method:programs.status",
+   "source": "plugin",
+   "guard": "Read only",
+   "checks": [
+    "apps/browser/src/state/plugins/channelApi.ts#case \"programs.status\""
+   ]
+  },
+  {
+   "id": "plugin-method:ready",
+   "source": "plugin",
+   "guard": "Marks the plugin ready; no input",
+   "checks": [
+    "apps/browser/src/state/plugins/channelApi.ts#case \"ready\""
+   ]
+  },
+  {
+   "id": "plugin-method:result",
+   "source": "plugin",
+   "guard": "Answers a call the browser made, matched by id",
+   "checks": [
+    "apps/browser/src/state/plugins/channelApi.ts#case \"result\""
+   ]
+  },
+  {
+   "id": "plugin-method:run",
+   "source": "plugin",
+   "guard": "planRun refuses non-runnable commands; the plugin command path shares it",
+   "checks": [
+    "apps/browser/src/state/plugins/channelApi.ts#case \"run\""
+   ]
+  },
+  {
+   "id": "plugin-method:tabs.readActivePage",
+   "source": "plugin",
+   "guard": "Plugin gesture and permission, re-checked after the read; page text is data",
+   "checks": [
+    "apps/browser/src/state/plugins/channelApi.ts#case \"tabs.readActivePage\""
+   ]
+  },
+  {
+   "id": "plugin-method:tools.call",
+   "source": "plugin",
+   "guard": "The callee's permissions must be a subset of the caller's",
+   "checks": [
+    "apps/browser/src/state/plugins/channelApi.ts#case \"tools.call\""
+   ]
+  },
+  {
+   "id": "plugin-method:values",
+   "source": "plugin",
+   "guard": "The plugin's own setting values, validated against its manifest",
+   "checks": [
+    "apps/browser/src/state/plugins/channelApi.ts#case \"values\""
+   ]
+  },
+  {
+   "id": "plugin-method:windows",
+   "source": "plugin",
+   "guard": "URLs minimized unless the plugin has full tab access",
+   "checks": [
+    "apps/browser/src/state/plugins/channelApi.ts#case \"windows\""
+   ]
+  },
+  {
+   "id": "plugin-method:workspace",
+   "source": "plugin",
+   "guard": "Same op parser and URL rule as apply",
+   "checks": [
+    "apps/browser/src/state/plugins/channelApi.ts#case \"workspace\""
+   ],
+   "findings": [
+    "D4"
+   ]
+  },
+  {
+   "id": "socket-family:core",
+   "source": "socket",
+   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner)",
+   "checks": [
+    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem"
+   ],
+   "findings": [
+    "D3"
+   ]
+  },
+  {
+   "id": "socket-family:workspace",
+   "source": "socket",
+   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner)",
+   "checks": [
+    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem"
+   ],
+   "findings": [
+    "D3"
+   ]
+  },
+  {
+   "id": "socket-family:tabs",
+   "source": "socket",
+   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner)",
+   "checks": [
+    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem"
+   ],
+   "findings": [
+    "D3"
+   ]
+  },
+  {
+   "id": "socket-family:windows",
+   "source": "socket",
+   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner)",
+   "checks": [
+    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem"
+   ],
+   "findings": [
+    "D3"
+   ]
+  },
+  {
+   "id": "socket-family:profiles",
+   "source": "socket",
+   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner)",
+   "checks": [
+    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem"
+   ],
+   "findings": [
+    "D3"
+   ]
+  },
+  {
+   "id": "socket-family:splits",
+   "source": "socket",
+   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner)",
+   "checks": [
+    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem"
+   ],
+   "findings": [
+    "D3"
+   ]
+  },
+  {
+   "id": "socket-family:peek",
+   "source": "socket",
+   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner)",
+   "checks": [
+    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem"
+   ],
+   "findings": [
+    "D3"
+   ]
+  },
+  {
+   "id": "socket-family:bookmarks",
+   "source": "socket",
+   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner)",
+   "checks": [
+    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem"
+   ],
+   "findings": [
+    "D3"
+   ]
+  },
+  {
+   "id": "socket-family:history",
+   "source": "socket",
+   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner)",
+   "checks": [
+    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem"
+   ],
+   "findings": [
+    "D3"
+   ]
+  },
+  {
+   "id": "socket-family:downloads",
+   "source": "socket",
+   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner)",
+   "checks": [
+    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem"
+   ],
+   "findings": [
+    "D3"
+   ]
+  },
+  {
+   "id": "socket-family:settings",
+   "source": "socket",
+   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner)",
+   "checks": [
+    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem"
+   ],
+   "findings": [
+    "D3"
+   ]
+  },
+  {
+   "id": "socket-family:sites",
+   "source": "socket",
+   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner); ad blocker sites through siteOf (a plain lowercase host: no scheme, port, path, wildcard or line break) and, to be trusted, oneSiteOf (Chromium's registrable domain: no public suffix, private section included, and no IP) before they reach uBlock's trusted list",
+   "checks": [
+    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem",
+    "apps/browser/src/state/automation/socketSites.ts#siteOf",
+    "apps/browser/src/state/automation/socketSites.ts#oneSiteOf"
+   ],
+   "findings": [
+    "D3"
+   ]
+  },
+  {
+   "id": "socket-family:extensions",
+   "source": "socket",
+   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner)",
+   "checks": [
+    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem"
+   ],
+   "findings": [
+    "D3"
+   ]
+  },
+  {
+   "id": "socket-family:plugins",
+   "source": "socket",
+   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner)",
+   "checks": [
+    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem"
+   ],
+   "findings": [
+    "D3"
+   ]
+  },
+  {
+   "id": "socket-family:media",
+   "source": "socket",
+   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner)",
+   "checks": [
+    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem"
+   ],
+   "findings": [
+    "D3"
+   ]
+  },
+  {
+   "id": "socket-family:sync",
+   "source": "socket",
+   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner)",
+   "checks": [
+    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem"
+   ],
+   "findings": [
+    "D3"
+   ]
+  },
+  {
+   "id": "socket-family:secrets",
+   "source": "socket",
+   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner)",
+   "checks": [
+    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem"
+   ],
+   "findings": [
+    "D3"
+   ]
+  },
+  {
+   "id": "socket-family:pins",
+   "source": "socket",
+   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner)",
+   "checks": [
+    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem"
+   ],
+   "findings": [
+    "D3"
+   ]
+  },
+  {
+   "id": "socket-family:favicons",
+   "source": "socket",
+   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner)",
+   "checks": [
+    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem"
+   ],
+   "findings": [
+    "D3"
+   ]
+  },
+  {
+   "id": "socket-family:shared_folders",
+   "source": "socket",
+   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner)",
+   "checks": [
+    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem"
+   ],
+   "findings": [
+    "D3"
+   ]
+  },
+  {
+   "id": "socket-family:live",
+   "source": "socket",
+   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner)",
+   "checks": [
+    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem"
+   ],
+   "findings": [
+    "D3"
+   ]
+  },
+  {
+   "id": "socket-family:presets",
+   "source": "socket",
+   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner)",
+   "checks": [
+    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem"
+   ],
+   "findings": [
+    "D3"
+   ]
+  },
+  {
+   "id": "socket-family:air_traffic",
+   "source": "socket",
+   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner)",
+   "checks": [
+    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem"
+   ],
+   "findings": [
+    "D3"
+   ]
+  },
+  {
+   "id": "socket-family:permissions",
+   "source": "socket",
+   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner)",
+   "checks": [
+    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem"
+   ],
+   "findings": [
+    "D3"
+   ]
+  },
+  {
+   "id": "socket-family:menus",
+   "source": "socket",
+   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner)",
+   "checks": [
+    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem"
+   ],
+   "findings": [
+    "D3"
+   ]
+  },
+  {
+   "id": "socket-family:devtools",
+   "source": "socket",
+   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); tabs through tabOf; reload and logpoints only on tabs the command opened (controlOwnsTab); a session sends only INSPECTION_METHODS, never an emulation or network override, and every session ends when its connection closes or control stops (closeInspectionsFor); logpoint conditions always answer false (D3: any same-user process is the owner)",
+   "checks": [
+    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem",
+    "apps/browser/src/state/automation/devToolsSession.ts#INSPECTION_METHODS",
+    "apps/browser/src/state/automation/devToolsSession.ts#closeInspectionsFor",
+    "apps/browser/src/state/automation/devToolsLogpoints.ts#logpointCondition",
+    "apps/browser/src/state/automation/socketDevToolsLogpoints.ts#controlOwnsTab"
+   ],
+   "findings": [
+    "D3"
+   ]
+  },
+  {
+   "id": "raw-settings-write:state/engines/actions.ts",
+   "source": "native",
+   "guard": "Sets engineMode to one of the engine modes from a user action",
+   "count": 2,
+   "checks": [
+    "apps/browser/src/state/engines/actions.ts"
+   ]
+  },
+  {
+   "id": "raw-settings-write:state/settings/settings.ts",
+   "source": "native",
+   "guard": "updateSettings applies writableSettingsPatch before anything is derived (R5, R7)",
+   "count": 1,
+   "checks": [
+    "apps/browser/src/state/settings/settings.ts"
+   ]
+  },
+  {
+   "id": "external-url:admitIncomingUrl",
+   "source": "other-app",
+   "guard": "Web, file, about:blank and listed ardia: routes only; unsafe characters refused; JavaScript only behind allowJavaScriptFromAppleEvents",
+   "checks": [
+    "apps/browser/src/state/littleArdia/incomingUrls.ts#admitIncomingUrl",
+    "packages/ardiacore/ios/ArdiaHost+Launch.mm#openURLs"
+   ],
+   "findings": [
+    "D5"
+   ],
+   "detected": false
+  },
+  {
+   "id": "deep-link:appUrlRoute",
+   "source": "other-app",
+   "guard": "ardia: URLs map to fixed routes; unknown routes are refused by admitIncomingUrl",
+   "checks": [
+    "packages/core/src/appUrls.ts#appUrlRoute"
+   ],
+   "findings": [
+    "D5"
+   ],
+   "detected": false
+  },
+  {
+   "id": "settings-write:updateSettings",
+   "source": "native",
+   "guard": "writableSettingsPatch validates every key against SETTING_SPECS before anything is derived; unknown and prototype keys dropped",
+   "checks": [
+    "apps/browser/src/state/settings/settings.ts#writableSettingsPatch",
+    "apps/browser/src/state/settings/settingsPatch.ts#checkedSettingsPatch"
+   ],
+   "findings": [
+    "B1",
+    "R5",
+    "R7",
+    "R8"
+   ],
+   "detected": false
+  },
+  {
+   "id": "settings-read:parseSettings",
+   "source": "native",
+   "guard": "Every key read from disk is checked against its spec; invalid values fall back to defaults",
+   "checks": [
+    "apps/browser/src/state/settings/settings.ts#parseSettings"
+   ],
+   "detected": false
+  },
+  {
+   "id": "search-engine:customEngineFrom",
+   "source": "sync",
+   "guard": "Custom engines are rebuilt from their four declared fields; templates must be http(s) with %s; suggestion requests bound to the live extension registry",
+   "checks": [
+    "packages/core/src/engines.ts#customEngineFrom",
+    "apps/browser/src/state/omnibox/suggestTransport.ts"
+   ],
+   "findings": [
+    "C2",
+    "R4"
+   ],
+   "detected": false
+  },
+  {
+   "id": "content-blocker-write:hideElements",
+   "source": "page",
+   "guard": "hidingFilter (one line, picker grammar, 1,024 characters) in the app; savedHidingRule and querySelector in the Mac extension page; HidingRule and querySelector on Linux (the bridge's own pattern is older, #3570)",
+   "checks": [
+    "apps/browser/src/state/site/hiddenElements.ts#hidingFilter",
+    "packages/ardiacore/ios/ArdiaContentBlocker.mm#savedHidingRule",
+    "engine/ardiacore-linux/content-blocker/ardia-linux-bridge.js#hideElements"
+   ],
+   "findings": [
+    "A1",
+    "A3",
+    "C1"
+   ],
+   "detected": false
+  },
+  {
+   "id": "content-blocker-cleanup:ubo.sh",
+   "source": "native",
+   "guard": "Startup cleanup of saved lines the picker couldn't have written, with a deadline",
+   "checks": [
+    "packages/ardiacore/scripts/ubo.sh#ardiaCleanHidingRules"
+   ],
+   "findings": [
+    "A2",
+    "R1",
+    "R2",
+    "R6"
+   ],
+   "detected": false
+  },
+  {
+   "id": "content-blocker-restore:restoreElements",
+   "source": "page",
+   "guard": "Removes exact listed lines only. Open: a hand-written rule of the same shape is offered and removed (A4); a private window's Show edits the regular profile (C10)",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaContentBlocker.mm#kRestore"
+   ],
+   "findings": [
+    "A4",
+    "C10"
+   ],
+   "detected": false
+  },
+  {
+   "id": "content-blocker-lists:filterListAddress",
+   "source": "native",
+   "guard": "One parsed http(s) URL with a dotted host",
+   "checks": [
+    "apps/browser/src/state/site/contentBlocking.ts#filterListAddress"
+   ],
+   "findings": [
+    "C9"
+   ],
+   "detected": false
+  },
+  {
+   "id": "plugin-install:manifest",
+   "source": "plugin",
+   "guard": "Manifest parsed and checked (names, permissions, contributions); consent hash rechecked at the button",
+   "checks": [
+    "apps/browser/src/lib/pluginManifest.ts",
+    "apps/browser/src/state/plugins/lifecycle.ts"
+   ],
+   "detected": false
+  },
+  {
+   "id": "plugin-update:official-auto",
+   "source": "plugin",
+   "guard": "An official update's manifest is approved without a sheet only when the installed copy and the download are the pin's verified copies and every field but cosmetic text is identical to the approved manifest (a first command-bar-only main excepted); anything else, unknown or malformed keeps the prompt",
+   "checks": [
+    "apps/browser/src/state/plugins/officialUpdate.ts#updateWithin",
+    "apps/browser/src/state/plugins/official.ts#officialUpdateVerdict"
+   ],
+   "detected": false
+  },
+  {
+   "id": "plugin-install:official",
+   "source": "native",
+   "guard": "Official copies checked against the signed pin on every lookup; one verified snapshot is unpacked within caps of 512 MB downloaded, 1 GB unpacked, 100 times the download and 200 times an entry's compressed size past 4 MB, 20,000 entries and 32 levels (Swift tests in packages/shell/plugin-tests)",
+   "checks": [
+    "packages/shell/ios/PluginCore/OfficialTrust.swift",
+    "packages/shell/ios/PluginCore/OfficialArchive.swift"
+   ],
+   "findings": [
+    "D1",
+    "D2"
+   ],
+   "detected": false
+  },
+  {
+   "id": "plugin-process:sandbox",
+   "source": "plugin",
+   "guard": "Every helper and the JavaScript host start under a deny-default Seatbelt profile: system libraries, the plugin's own folder and program, its data folder, descriptor 3 and the network only when granted; the JavaScript host can't fork or start programs (Swift tests in packages/shell/plugin-tests)",
+   "checks": [
+    "packages/shell/ios/PluginCore/PluginSandbox.swift#profile",
+    "packages/shell/ios/PluginProcess.swift#spawn"
+   ],
+   "detected": false
+  },
+  {
+   "id": "control-socket:accept",
+   "source": "socket",
+   "guard": "AF_UNIX, mode 0600 in a data folder you own that no one else can write, with no macOS access list letting anyone else in and not on a volume that ignores ownership, with no ancestor someone else could swap, held open by descriptor for the lock, cleanup and a post-bind inode check (PrivateFolder); peer UID equal; then the peer's audit token (LOCAL_PEERTOKEN) is resolved with Security.framework: a hardened program signed with Ardia's own Team ID is the owner, anything else waits on the doorbell (Allow Once, 30 minutes, Always, Don't Allow) or a saved approval keyed by Team ID + identifier or path + cdhash, and is refused on a timeout, when its peer leaves or when nobody can see the question. Test instances keep the same-user rule unless ARDIA_TEST controlDoorbell (D3: a same-user process can still exec the bundled ardia or its runtime, and still reads the token connection's ArdiaControl.json). Swift tests in packages/shell/controlpeer-tests",
+   "checks": [
+    "packages/shell/ios/ControlSocket.swift",
+    "packages/shell/ios/ControlPeerCore/ControlPeer.swift",
+    "packages/shell/ios/ControlPeerCore/ControlPeerPolicy.swift",
+    "packages/shell/ios/ControlPeerCore/ControlDoorbell.swift",
+    "packages/shell/ios/ControlPeerCore/ControlApprovals.swift",
+    "packages/shell/ios/ControlPeerCore/PrivateFolder.swift"
+   ],
+   "findings": [
+    "D3",
+    "D7"
+   ],
+   "detected": false
+  },
+  {
+   "id": "control-socket:devtools-endpoint",
+   "source": "socket",
+   "guard": "control.devtoolsEndpoint hands the engine's DevTools port, token and generation only to a connection the control socket admitted (peer UID, then on macOS the bundled ardia, Team-signed code or a doorbell approval; same-user test instances as for every method). Native checks again on the socket queue, before and after reading, that the connection is still open and its approval live (ControlSocket.admits), drops any reply to a connection whose approval ran out (ControlSocket.reply), and checks the approval again before the writer starts each line (ControlConnection mayWrite), so a line queued behind a slow reader never starts after the approval ends. The token is read from the engine's dedicated ac_cli_devtools_endpoint call when the engine has it (callForSecretReply, bytes wiped), never from the shared ac_cli_control status, else from ArdiaControl.json opened O_NOFOLLOW, required a regular file of the user's with no group or other bits and no access list letting others in (PrivateFolder.privateFile), at most 64 KiB, whose port, generation and pid match the running server (DevtoolsEndpoint.read); it must be 16 to 256 base64url characters. Refused while control is off, at arrival and again after the read; turning control off cuts native off synchronously (ControlSocket.cutOff, one lock shared by the writer, replies, admission and the token read) before the asynchronous stop; where the socket has no doorbell (Linux, Windows) the method is unlisted and answers unknown_method. In JS it is a Secret of kind devtoolsToken from the moment it arrives (platform/automation.ts) and is revealed only on that one reply line (socketDevtools.devtoolsEndpointLine). Swift tests in packages/shell/controlpeer-tests, JS in socketDevtools.test.mjs (the shared hostile-input corpus as params, param names, own prototype keys and request ids, checked at the native read and the reply line) and secretContainment.test.mjs",
+   "checks": [
+    "packages/shell/ios/ControlPeerCore/DevtoolsEndpoint.swift",
+    "packages/shell/ios/ControlSocket.swift",
+    "apps/browser/src/state/automation/socketDevtools.ts#devtoolsEndpointMethod",
+    "apps/browser/src/platform/automation.ts#controlDevtoolsEndpoint"
+   ],
+   "detected": false
+  },
+  {
+   "id": "engine-token-connection:ardia-browse",
+   "source": "socket",
+   "guard": "Engine token server: loopback only; before the token is read, anything a browser sends (Origin, Sec-Fetch-Site, Sec-Fetch-Dest) or a Host other than 127.0.0.1:<port> or localhost:<port> is refused (ArdiaRequestIsFromProgram), so no page, extension, service worker or DNS-rebound name in a browser that sends Fetch Metadata (Chromium, Firefox 90+, Safari 16.4+) reaches it, and an older Safari top-level GET still needs the token and can't read the answer; a 32-byte token compared in constant time (ControlServer::Accepts) from the 0600 ArdiaControl.json, published through one open descriptor of a folder no other user owns or can write, with no macOS access list naming anyone but you and not on a volume that ignores ownership (UnsafeControlFolder), the file stripped of inherited ACLs and checked 0600 (OnlyOwnerCanRead); RemoteDebuggingAllowed policy; then a full DevTools client by the owner's decision (#2807). TokenClient::FilterCommand keeps only framing: a JSON object with an integer id and string method, params an object, a known sessionId, one command per (session, id), 4096 waiting replies at most",
+   "checks": [
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_control.cc#Accepts",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_control_file.cc#UnsafeControlFolder",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_control_file.cc#OnlyOwnerCanRead",
+    "engine/patches/chromium-devtools-control-token.patch#ArdiaRequestIsFromProgram",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_token_policy.cc#FilterCommand"
+   ],
+   "detected": false
+  },
+  {
+   "id": "engine-token-connection:ardia-page-signals",
+   "source": "socket",
+   "guard": "Ardia.consoleDelta, Ardia.focusedFrameOrigin and Ardia.hitTest are answered by the engine, not the page: TokenClient::StartPageSignal takes them only after FilterCommand's framing checks and only on a session this client attached to a page or tab target, so they pass the same inspection gate as that attach (Chrome's DevTools availability policy and the frame checks in ShouldAllowSession); the browser session, an iframe's session and any targetId are refused, and RunPageSignal checks IsInspectionAllowed for the tab again at answer time (ContentsInspectable), the focused frame's own policy before reading its origin, and the ring withholds entries from frames the policy keeps from inspection (FrameInspectable). RunPageSignal refuses any parameter it doesn't know (UnknownParam), takes after, generation and limit only as whole numbers in range (WholeNumber), x and y only as finite numbers within a million CSS pixels (Coordinate), backendNodeId only as a positive integer, and expectedOrigin only as a bare http or https origin that serializes back to itself (the hostile corpus caught chrome:// and chrome-untrusted:// origins getting through before); the focused frame's origin and document id come from the browser's own RenderFrameHost, never from the page; the hit test's DevTools answers are parsed field by field with types checked, its ancestor walk runs in an isolated world the page can't reach, at most 32 ancestors, node names cut to 64 characters, a 3 second deadline, at most 4 probes at once, refused for a frame at the point the policy keeps from inspection (FrameInspectable), re-run when the page scrolled between reading the scroll position and hit-testing, cancelled when the session detaches or the client goes (teardown deferred to a later task) and stopped when the page or the hit frame navigates, and a cross-site iframe is reported as a remote frame rather than a blocker; console text the ring keeps is sliced in UTF-16 before conversion and cut to 2048 bytes and source URLs to 512 at a UTF-8 boundary, at most 200 entries per tab, with a generation so a replaced ring reads as reset. Replies go back only to the asking connection while its session is still attached. Live: packages/ardiacore/scripts/token-signals-check.mjs, which also sends every value of the shared hostile-input corpus as each parameter and as a parameter name and checks each reply is refused unless the value is valid",
+   "checks": [
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_token_policy.cc#StartPageSignal",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_page_signals.cc#UnknownParam",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_page_signals.cc#WholeNumber",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_page_signals.cc#Coordinate",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_page_signals.cc#ReadFocusedFrameOrigin",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_console_ring.cc#ContentsInspectable",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_console_ring.cc#FrameInspectable",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_console_ring.cc#Truncated",
+    "packages/ardiacore/scripts/token-signals-check.mjs#check",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_hit_probe.cc#kMaxProbesInFlight",
+    "engine/chromium/src/chrome/browser/ardia/ac_cli_hit_probe_helpers.cc#FrameInspectable",
+    "packages/ardiacore/scripts/token-signals-check.mjs#HOSTILE_VALUES"
+   ],
+   "detected": false
+  },
+  {
+   "id": "import:bookmarks",
+   "source": "import",
+   "guard": "Imported bookmarks keep their URLs; javascript: entries become bookmarklets as in Chrome (C4)",
+   "checks": [
+    "apps/browser/src/state/import/apply.ts"
+   ],
+   "findings": [
+    "C4"
+   ],
+   "detected": false
+  },
+  {
+   "id": "import:tabs",
+   "source": "import",
+   "guard": "Imported session tabs exclude javascript: and data:",
+   "checks": [
+    "apps/browser/src/state/import/tabImport.ts"
+   ],
+   "detected": false
+  },
+  {
+   "id": "import:files",
+   "source": "import",
+   "guard": "Native readers in packages/import (profile roots, ZIP sizes, extension metadata; C11, C12); a ZIP holds at most 10,000 entries, 1 GB an entry and 4 GB in all, no entry past 200 times its compressed size above 4 MB, members that run past the file or share bytes are refused, every member is inflated exactly and its CRC checked, and its links and traversing names are never read",
+   "checks": [
+    "packages/import/ios/Core/Discovery.swift",
+    "packages/import/ios/Core/ZipArchive.swift"
+   ],
+   "findings": [
+    "C11",
+    "C12"
+   ],
+   "detected": false
+  },
+  {
+   "id": "import:chromium-bookmarks-rust",
+   "source": "import",
+   "guard": "Rust Chromium bookmarks parser behind libardia_import, which the Mac reads every Chrome-family Bookmarks and AccountBookmarks file through (ChromiumBookmarks.swift, linked as libardia_apple in ArdiaCoreRS.xcframework): a Bookmarks file over 64 MiB is refused before it is read, RFC JSON only with at most 200 nested containers, 64 folder levels and 250,000 nodes; titles and URLs reach the tree verbatim and scheme policy stays with import:bookmarks; the shared hostile list runs through the static library and every vector through the Swift caller",
+   "checks": [
+    "packages/core-rs/crates/ardia-import-core/src/chromium_bookmarks.rs",
+    "packages/import/ios/Core/ChromiumBookmarks.swift",
+    "packages/core-rs/tests/import-bookmarks/test_import_bookmarks.py"
+   ],
+   "detected": false
+  },
+  {
+   "id": "update:linux-manifest",
+   "source": "update",
+   "guard": "The Linux self-update helper copies the downloaded manifest (at most 4096 bytes), its signature (at most 64) and the package as the user, then lib/ardia/ardia-update-verify (ardia-update-core) refuses anything the release key didn't sign, any manifest that isn't canonical format 1 for the version its file name gives, any version not newer than lib/ardia/VERSION and any package whose size or SHA-256 differs; it opens nothing through a symbolic link and answers one fixed line, so no manifest byte reaches the shell; the shared hostile list runs through the binary",
+   "checks": [
+    "scripts/linux/ardia-update#verify()",
+    "packages/core-rs/crates/ardia-update-verify/src/main.rs#fn verify(",
+    "packages/core-rs/crates/ardia-update-core/src/manifest.rs#pub fn verify_linux_update",
+    "packages/core-rs/tests/linux-update/test_linux_update.py#test_no_hostile_string_passes_the_verifier"
+   ],
+   "detected": false
+  },
+  {
+   "id": "import:netscape-html-rust",
+   "source": "import",
+   "guard": "Rust Netscape HTML bookmarks parser behind libardia_import, not linked by any host yet: a file over 64 MiB is refused before it is read, 64 folder levels and 250,000 nodes with each folder reserved before its contents, no recursion on the input, and one slot per attribute the parser reads whatever a tag carries; entities decode once and titles and URLs reach the tree verbatim, place: queries are skipped and scheme policy stays with import:bookmarks; the shared hostile list runs through the static library",
+   "checks": [
+    "packages/core-rs/crates/ardia-import-core/src/netscape_bookmarks.rs",
+    "packages/core-rs/tests/import-netscape/test_import_netscape.py"
+   ],
+   "detected": false
+  },
+  {
+   "id": "setup-code:apply",
+   "source": "other-app",
+   "guard": "Fixed schema of settings and catalog pins; values checked by updateSettings (C7: preview after apply)",
+   "checks": [
+    "apps/browser/src/state/presets/setupCode.ts"
+   ],
+   "findings": [
+    "C7"
+   ],
+   "detected": false
+  },
+  {
+   "id": "launch-environment:feedback",
+   "source": "native",
+   "guard": "ARDIA_FEEDBACK_URL and debug-port flags honoured by the launch config (D8, D9)",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaLaunchConfig.mm"
+   ],
+   "findings": [
+    "D8",
+    "D9"
+   ],
+   "detected": false
+  },
+  {
+   "id": "webkit-event:copyAddress",
+   "source": "page",
+   "guard": "WebKit's page menu sends the link, image or media address the page holds as an app-wide event with a native request number; only a non-empty string with an integer request is passed on, after cleanUrlReport strips tracking parameters, and native writes it only for its latest request while the pasteboard is unchanged since that menu action",
+   "checks": [
+    "apps/browser/src/state/site/pageLinkCopy.ts#copyLinkFromPageMenu",
+    "packages/ardiacore/ios/WebKitContextMenu.swift#WebKitCopiedAddresses"
+   ],
+   "detected": false
+  },
+  {
+   "id": "engine-call:childProcessCpu",
+   "source": "native",
+   "guard": "The app's own renderer child processes only (proc_listpids by parent pid, extension renderers left out), read with proc_pid_rusage on a background queue; a pid whose parent or start time changed during the read is dropped. JS takes only rows whose pid, start time and CPU time are finite non-negative numbers (validReadings); readings of a reused pid or more than 25 s apart start over",
+   "checks": [
+    "packages/ardiacore/ios/ChildProcessCpu.swift#sample",
+    "apps/browser/src/state/tabs/busyProcesses.ts#validReadings",
+    "apps/browser/src/state/tabs/busyProcesses.ts#readHeat"
+   ],
+   "detected": false
+  },
+  {
+   "id": "engine-call:tasks:busyTabWatch",
+   "source": "native",
+   "guard": "Chrome's task manager rows: only a numeric pid and string tab ids are read; a tab id must be the store's own key (Object.hasOwn), private tabs are never named, ownership is read again right before a warning and again before Sleep acts, and a page title reaches the toast only through toastName (controls, line breaks and lone surrogates removed, 24 characters)",
+   "checks": [
+    "apps/browser/src/state/tabs/busyTabWatch.ts#freshOwners",
+    "apps/browser/src/state/tabs/busyTabWatch.ts#toastName",
+    "apps/browser/src/state/tabs/busyTabWatch.ts#stillBusyIn"
+   ],
+   "detected": false
+  },
+  {
+   "id": "windows-webui-bridge:ardiaRequest",
+   "source": "frame",
+   "guard": "Windows WebUI pilot (--ardia-shell=webui): ardiaRequest is taken only from the shell WebContents' live primary main frame whose committed origin is chrome://ardia/, by the handler bound to that document's generation; a new document (reload or renderer swap) or a renderer exit retires the generation, dropping its pending replies, events and pages, and a page asked for by a retired document is never created and its profile never loaded; OnJavascriptDisallowed drops that handler's pending replies at once and retires the generation only if the handler no longer owns the live document; requests of the wrong shape are dropped; tab URLs pass AllowedPageUrl before any profile loads and before each navigation, refusing javascript:, chrome://ardia in any spelling or behind view-source:, non-text URLs and anything unparsable; private profiles are refused; scripts/windows/webui-pilot/bridge.ps1 sends the hostile cases at the sinks in a Windows guest",
+   "checks": [
+    "scripts/windows/engine/src/ardia/win/webui/webui_shell.cc#Trusted",
+    "scripts/windows/engine/src/ardia/win/webui/webui_shell.cc#OwnsHandler",
+    "scripts/windows/engine/src/ardia/win/webui/webui_shell.cc#DeliverReply",
+    "scripts/windows/engine/src/ardia/win/webui/webui_shell.cc#CreatePageIn",
+    "scripts/windows/engine/src/ardia/win/webui/webui_shell.cc#StartPage",
+    "scripts/windows/engine/src/ardia/win/webui/webui_shell.cc#AllowedPageUrl"
+   ],
+   "detected": false
+  },
+  {
+   "id": "windows-webui-platform:desktopPlatform",
+   "source": "frame",
+   "guard": "Windows WebUI host (--ardia-shell=webui): only the trusted shell document's ardiaRequest reaches ardia::desktop::Platform(); ArdiaApp.openExternalURL takes exactly one string and allows only http, https and mailto: the raw text may not hold whitespace, control characters, quotes or backslashes or exceed 32 KB, http(s) must be written scheme://host with no credentials, and only then does ShellExecuteExW see the canonical spec; a background instance opens nothing; setLaunchAtLogin takes one boolean and writes only HKCU Run 'Ardia WebUI' as the quoted executable path (refusing a path with quotes or control characters) plus --ardia-shell=webui, never RNW's 'Ardia' value; the default browser calls take no arguments and only open ms-settings:defaultapps, and platform.ps1 sends the shared corpus as one-item lists to setAsDefaultBrowser and checks the default apps launch count never moves until an empty-list control moves it by one; DPAPI secrets accept account names of 1-64 [A-Za-z0-9_-] only, are stored as sync-key-x<hex of the exact account bytes>.dpapi so accounts differing only by case never share a file on NTFS, live under the WebUI data folder's Sync, are bound to the ardia-sync-key/v1 purpose and instance, and are zeroed after use; scripts/windows/webui-pilot/platform.ps1 sends the shared hostile corpus (scripts/security/hostile-inputs.mjs via hostile-corpus.mjs) plus unlisted schemes and bad shapes to openExternalURL in a Windows guest and checks at the sink that the ShellExecuteExW count never moves, then that one https control moves it by one",
+   "checks": [
+    "scripts/windows/engine/src/ardia/win/webui/desktop_platform_win.cc#ExternalUrlAllowed",
+    "scripts/windows/engine/src/ardia/win/webui/desktop_platform_win.cc#InvokeOpenExternal",
+    "scripts/windows/engine/src/ardia/win/webui/desktop_platform_win.cc#g_external_opens",
+    "scripts/windows/engine/src/ardia/win/webui/desktop_platform_win.cc#LoginItemCommand",
+    "scripts/windows/engine/src/ardia/win/webui/desktop_platform_win.cc#SecretAccountAllowed",
+    "scripts/windows/engine/src/ardia/win/webui/desktop_platform_win.cc#SecretFileName",
+    "scripts/windows/engine/src/ardia/win/webui/desktop_platform_win.cc#CapabilityFor",
+    "scripts/windows/engine/src/ardia/win/webui/desktop_platform_win.cc#PlainCodePoints",
+    "scripts/windows/engine/src/ardia/win/webui/desktop_platform_win.cc#RawUserInfo",
+    "scripts/windows/engine/src/ardia/win/webui/webui_shell.cc#CapabilityFor",
+    "scripts/windows/engine/src/ardia/win/webui/webui_shell.cc#Trusted",
+    "scripts/windows/webui-pilot/platform.ps1#set-launch-at-login-refuses-shared-corpus",
+    "scripts/windows/webui-pilot/platform.ps1#set-default-browser-refuses-shared-corpus",
+    "scripts/windows/engine/src/ardia/win/webui/desktop_platform_win.cc#g_default_apps_opens",
+    "scripts/windows/webui-pilot/hostile-corpus.mjs#HOSTILE_VALUES",
+    "scripts/windows/webui-pilot/platform.ps1#open-external-refuses-shared-corpus",
+    "scripts/windows/webui-pilot/platform.ps1#dpapi-case-distinct-accounts"
+   ],
+   "detected": false
+  },
+  {
+   "id": "native-monitor:pinchFromOtherApp",
+   "source": "other-app",
+   "guard": "A magnify event seen while another app is in front only resizes a Picture in Picture window: the monitor exists only while Ardia is inactive with a zoomable window, a missing CGEvent falls back to the mouse location, a non-finite or far-off pointer is refused before hit-testing, the window must be the topmost under the pointer, and a non-finite or huge magnification becomes a factor between 0.05 and 4 before the clamped, finite-checked resize",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaPictureInPicture.mm#PinchFromOtherApp",
+    "packages/ardiacore/ios/ArdiaPiPZoomMath.h#UsablePointer",
+    "packages/ardiacore/ios/ArdiaPiPZoomMath.h#MagnifyFactor",
+    "packages/ardiacore/ios/ArdiaPiPController.mm#if (!backing) return NSEvent.mouseLocation;",
+    "packages/ardiacore/tests/pip-zoom.test.cc#for (double hostile"
+   ],
+   "detected": false
+  },
+  {
+   "id": "windows-engine:renderer-efficiency-counts",
+   "source": "native",
+   "guard": "Background renderer efficiency counts kept by the Windows engine layer itself, asked for and kept per consent epoch; only whole positive numbers under the seven known keys are added, anything else counts as 0",
+   "checks": [
+    "packages/expo-windows/src/engine/rendererEfficiency.ts",
+    "scripts/windows/engine/src/ardia/win/renderer_efficiency.cc"
+   ],
+   "detected": false
+  },
+  {
+   "id": "devtools-page-data:trace",
+   "source": "page",
+   "guard": "Trace events describe what the page did: each field is type-checked and length-capped, event count capped at MAX_TRACE_EVENTS; only the inspected tab's main frame navigation, frames and renderer process count, bounded to the selected navigation; only numbers, enums and capped URLs reach the reply; nothing is stored",
+   "checks": [
+    "apps/browser/src/state/automation/devToolsInsights.ts#analyzeTrace"
+   ],
+   "detected": false
+  },
+  {
+   "id": "devtools-page-data:issues",
+   "source": "page",
+   "guard": "Audits issues are read field by field into a fixed shape; codes must be letters only; cookie names, domains and paths only, never the raw cookie line or value; capped at MAX_ISSUES",
+   "checks": [
+    "apps/browser/src/state/automation/devToolsIssues.ts#describeIssue"
+   ],
+   "detected": false
+  },
+  {
+   "id": "devtools-page-data:styles",
+   "source": "page",
+   "guard": "Matched styles are read into a fixed shape with capped strings, rule and inheritance counts; the selector goes to DOM.querySelector as data and property names must match a CSS identifier pattern",
+   "checks": [
+    "apps/browser/src/state/automation/devToolsCascade.ts#cascadeFor"
+   ],
+   "detected": false
+  },
+  {
+   "id": "devtools-page-data:source-maps",
+   "source": "page",
+   "guard": "Source maps come only from what the caller passes (a map, its JSON, a data: URL, or a script's text whose inline data: map is read) or a script's own inline data: sourceMapURL from Debugger.scriptParsed; Ardia fetches nothing, so a page's sourceURL or sourceMappingURL can't make it reach the network. Size, section, line and segment counts capped; all logpoint sessions together keep at most MAX_HELD_MAP_BYTES of maps, each keeps at most MAX_HELD_FRAMES frames, and a navigated frame's scripts are dropped; mappings with a wrong segment length or a negative position, and negative section offsets, are refused",
+   "checks": [
+    "apps/browser/src/state/automation/devToolsSourceMaps.ts#inlineMapText",
+    "apps/browser/src/state/automation/devToolsSourceMaps.ts#parseSourceMap"
+   ],
+   "detected": false
+  },
+  {
+   "id": "native:rnw-webui-migration",
+   "source": "native",
+   "guard": "ardia-webui-migrate (ardia-shell-migration) reads the React Native Windows shell's data folder, config folder, sealed sync keys and Credential Manager items, which any same-user process could have planted or linked, and copies them once into the WebUI host's folder: names follow the RNW stores' own rules (document names, theme names, sync-key accounts) and accounts become lowercase hex file names; every root is walked from the volume root and every folder opened relative to a held handle without following links (openat, NtCreateFile with RootDirectory and FILE_OPEN_REPARSE_POINT), and writes, renames, deletes and the lock go through those handles, files with more than one link and oversized files are skipped; the shared hostile corpus runs through tests/hostile.rs and is checked at the filesystem sink, folders that overlap are refused, every write is staged and renamed, DPAPI runs with CRYPTPROTECT_UI_FORBIDDEN and plaintext is zeroed; the attempt report holds only enums and counts and the UI sends only known enums and capped counts from it",
+   "checks": [
+    "packages/core-rs/crates/ardia-shell-migration/src/names.rs",
+    "packages/core-rs/crates/ardia-shell-migration/src/fsafe.rs",
+    "packages/core-rs/crates/ardia-shell-migration/src/migrate.rs",
+    "packages/core-rs/crates/ardia-shell-migration/tests/migration.rs",
+    "packages/core-rs/crates/ardia-shell-migration/tests/units.rs",
+    "packages/core-rs/crates/ardia-shell-migration/tests/hostile.rs",
+    "apps/browser/src/state/telemetry/shellMigration.ts",
+    "apps/browser/src/state/telemetry/shellMigration.test.mjs"
+   ],
+   "detected": false
+  }
+ ]
+}

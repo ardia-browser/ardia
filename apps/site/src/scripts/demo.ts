@@ -14,6 +14,9 @@ const PHONE_BOX_WIDTH = 400;
 const DESKTOP_BOX_WIDTH = 860;
 const NUDGE_DELAY_MS = 900;
 const FAR_SCREENS = 1;
+const DEFER_SCROLL_PX = 40;
+const DEFER_PRELOAD_MARGIN = "600px 0px";
+const HERO_WAIT_MS = 1500;
 
 const root = document.querySelector<HTMLElement>("[data-demo]");
 const stage = root?.querySelector<HTMLElement>("[data-demo-stage]");
@@ -129,6 +132,78 @@ function restWhileFar(box: HTMLElement) {
   ).observe(box);
 }
 
+function deferFrame(root: HTMLElement, frame: HTMLIFrameElement, deferredSrc: string, onLoad: () => void) {
+  let started = false;
+  let visibleObserver: IntersectionObserver | null = null;
+  let warmObserver: IntersectionObserver | null = null;
+  let heroObserver: MutationObserver | null = null;
+  let heroTimer = 0;
+
+  const cleanup = () => {
+    visibleObserver?.disconnect();
+    warmObserver?.disconnect();
+    heroObserver?.disconnect();
+    clearTimeout(heroTimer);
+    removeEventListener("scroll", onScroll);
+    document.removeEventListener("click", onNavClick, true);
+    poster?.removeEventListener("pointerdown", loadNow);
+  };
+
+  const loadNow = () => {
+    if (started) return;
+    started = true;
+    cleanup();
+    delete frame.dataset.src;
+    frame.addEventListener("load", onLoad, { once: true });
+    frame.src = deferredSrc;
+  };
+
+  const loadAfterHero = () => {
+    const hero = document.querySelector<HTMLElement>("[data-meadow]");
+    if (!hero || hero.dataset.meadow === "ready" || hero.dataset.meadow === "failed" || window.scrollY >= DEFER_SCROLL_PX) {
+      loadNow();
+      return;
+    }
+    if (heroObserver) return;
+    heroObserver = new MutationObserver(() => {
+      if (hero.dataset.meadow === "ready" || hero.dataset.meadow === "failed") loadNow();
+    });
+    heroObserver.observe(hero, { attributes: true, attributeFilter: ["data-meadow"] });
+    heroTimer = window.setTimeout(loadNow, HERO_WAIT_MS);
+  };
+
+  const onScroll = () => {
+    if (window.scrollY < DEFER_SCROLL_PX) return;
+    removeEventListener("scroll", onScroll);
+    if (started) return;
+    warmObserver = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) loadNow();
+      },
+      { rootMargin: DEFER_PRELOAD_MARGIN },
+    );
+    warmObserver.observe(root);
+  };
+
+  const onNavClick = (event: MouseEvent) => {
+    const link = (event.target as Element | null)?.closest<HTMLAnchorElement>('a[href$="#demo"], a[data-section="demo"]');
+    if (link) loadNow();
+  };
+
+  visibleObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((e) => e.isIntersecting)) loadAfterHero();
+    },
+    { rootMargin: "0px" },
+  );
+  visibleObserver.observe(root);
+
+  addEventListener("scroll", onScroll, { passive: true });
+  document.addEventListener("click", onNavClick, { capture: true, passive: true });
+  poster?.addEventListener("pointerdown", loadNow, { passive: true });
+  if (location.hash === "#demo" || window.scrollY >= DEFER_SCROLL_PX) onScroll();
+}
+
 function start(root: HTMLElement, box: HTMLElement, frame: HTMLIFrameElement) {
   fit(frame, box);
   new ResizeObserver(() => fit(frame, box)).observe(box);
@@ -140,7 +215,6 @@ function start(root: HTMLElement, box: HTMLElement, frame: HTMLIFrameElement) {
     root.dataset.live = "";
     poster?.setAttribute("inert", "");
     if (bar) bar.hidden = false;
-    document.querySelector("[data-band-lead]")?.replaceChildren("That was a demo. ");
     watchForNudge(frame, box);
   };
   addEventListener("message", (event: MessageEvent<Outbound>) => {
@@ -150,7 +224,13 @@ function start(root: HTMLElement, box: HTMLElement, frame: HTMLIFrameElement) {
     if (event.data.type === "ardia-demo:customize-state") customize?.showState(event.data);
     if (event.data.type === "ardia-demo:download") customize?.downloadFromDemo();
   });
-  frame.contentWindow?.postMessage({ type: "ardia-demo:hello" }, location.origin);
+  const sayHello = () => frame.contentWindow?.postMessage({ type: "ardia-demo:hello" }, location.origin);
+  const deferredSrc = frame.dataset.src;
+  if (deferredSrc && !frame.getAttribute("src")) deferFrame(root, frame, deferredSrc, sayHello);
+  else {
+    frame.addEventListener("load", sayHello, { once: true });
+    sayHello();
+  }
 }
 
 if (root && stage && frame) start(root, stage, frame);

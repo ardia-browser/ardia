@@ -17,6 +17,7 @@ import { useEffect, useState } from "react";
 import { create } from "zustand";
 import { devTestValue } from "../../platform/launchConfig";
 import { everySlowly } from "../../platform/slowTimers";
+import { isPerfRun } from "../app/perfRun";
 import type { CalendarEvent } from "./meetings";
 import { live, updateCalendarSettings, useLive } from "./store";
 
@@ -50,7 +51,7 @@ export const openCalendarPrivacy = () => void openExternalURL("x-apple.systempre
 
 export const calendarBlocked = (access: CalendarData["access"]) => access === "denied" || access === "restricted" || access === "writeOnly";
 
-export function calendarRequestFailure(access: CalendarAuthorization, request: Pick<CalendarAccessRequest, "error" | "responsible"> | null): string | null {
+function calendarRequestFailure(access: CalendarAuthorization, request: Pick<CalendarAccessRequest, "error" | "responsible"> | null): string | null {
   if (access === "fullAccess") return null;
   if (access === "restricted") return `Calendar access is restricted on this Mac, by Screen Time or your organization. If you can change it, allow Ardia in ${CALENDARS_PRIVACY}.`;
   if (access === "writeOnly") return `Ardia can only add events to your calendars. Choose Full Access for Ardia in ${CALENDARS_PRIVACY}.`;
@@ -69,6 +70,7 @@ type Fixture = {
 };
 
 const fixtureMode = (() => {
+  if (isPerfRun) return true;
   try {
     return devTestValue("calendarFixture") === "1";
   } catch {
@@ -172,10 +174,12 @@ export function startCalendar() {
   if (started) return;
   started = true;
   void refreshCalendar();
-  onCalendarChanged(() => void refreshCalendar());
-  onWindowEvent((e) => {
-    if (e.type === "focus" && !calendarConnected() && calendarAuthorization() !== useCalendar.getState().access) void refreshCalendar();
-  });
+  if (!fixtureMode) {
+    onCalendarChanged(() => void refreshCalendar());
+    onWindowEvent((e) => {
+      if (e.type === "focus" && !calendarConnected() && calendarAuthorization() !== useCalendar.getState().access) void refreshCalendar();
+    });
+  }
   everySlowly({
     every: 5 * 60_000,
     run: () => void refreshCalendar(),

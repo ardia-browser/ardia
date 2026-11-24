@@ -1,0 +1,178 @@
+[
+ {
+  "issue": {
+   "code": "CookieIssue",
+   "details": {
+    "cookieIssueDetails": {
+     "cookie": {
+      "name": "session",
+      "path": "/",
+      "domain": "api.shop.example"
+     },
+     "rawCookieLine": "session=s3cr3t-value; Path=/",
+     "cookieWarningReasons": [],
+     "cookieExclusionReasons": [
+      "ExcludeSameSiteUnspecifiedTreatedAsLax"
+     ],
+     "operation": "SetCookie",
+     "siteForCookies": "https://shop.example/",
+     "cookieUrl": "https://api.shop.example/cart",
+     "request": {
+      "requestId": "77.12",
+      "url": "https://api.shop.example/cart"
+     }
+    }
+   },
+   "issueId": "i1"
+  }
+ },
+ {
+  "issue": {
+   "code": "CookieIssue",
+   "details": {
+    "cookieIssueDetails": {
+     "cookie": {
+      "name": "session",
+      "path": "/",
+      "domain": "api.shop.example"
+     },
+     "rawCookieLine": "session=s3cr3t-value; Path=/",
+     "cookieWarningReasons": [],
+     "cookieExclusionReasons": [
+      "ExcludeSameSiteUnspecifiedTreatedAsLax"
+     ],
+     "operation": "SetCookie",
+     "request": {
+      "requestId": "77.12",
+      "url": "https://api.shop.example/cart"
+     }
+    }
+   },
+   "issueId": "i1-dup"
+  }
+ },
+ {
+  "issue": {
+   "code": "CookieIssue",
+   "details": {
+    "cookieIssueDetails": {
+     "cookie": {
+      "name": "_ga",
+      "path": "/",
+      "domain": ".tracker.example"
+     },
+     "cookieWarningReasons": [
+      "WarnThirdPartyPhaseout"
+     ],
+     "cookieExclusionReasons": [],
+     "operation": "ReadCookie",
+     "request": {
+      "requestId": "77.30",
+      "url": "https://tracker.example/p.gif"
+     }
+    }
+   }
+  }
+ },
+ {
+  "issue": {
+   "code": "CorsIssue",
+   "details": {
+    "corsIssueDetails": {
+     "corsErrorStatus": {
+      "corsError": "AllowOriginMismatch",
+      "failedParameter": "https://evil.example"
+     },
+     "isWarning": false,
+     "request": {
+      "requestId": "77.40",
+      "url": "https://api.other.example/data"
+     },
+     "location": {
+      "scriptId": "12",
+      "url": "https://shop.example/app.js",
+      "lineNumber": 10,
+      "columnNumber": 2
+     },
+     "initiatorOrigin": "https://shop.example",
+     "resourceIPAddressSpace": "Public",
+     "clientSecurityState": {
+      "initiatorIsSecureContext": true,
+      "initiatorIPAddressSpace": "Public",
+      "privateNetworkRequestPolicy": "BlockFromInsecureToMorePrivate"
+     }
+    }
+   }
+  }
+ },
+ {
+  "issue": {
+   "code": "ContentSecurityPolicyIssue",
+   "details": {
+    "contentSecurityPolicyIssueDetails": {
+     "violatedDirective": "script-src-elem",
+     "isReportOnly": false,
+     "contentSecurityPolicyViolationType": "kInlineViolation",
+     "frameAncestor": null,
+     "sourceCodeLocation": {
+      "url": "https://shop.example/",
+      "lineNumber": 41,
+      "columnNumber": 8
+     },
+     "violatingNodeId": 88
+    }
+   }
+  }
+ },
+ {
+  "issue": {
+   "code": "MixedContentIssue",
+   "details": {
+    "mixedContentIssueDetails": {
+     "resourceType": "Image",
+     "resolutionStatus": "MixedContentBlocked",
+     "insecureURL": "http://img.example/a.png",
+     "mainResourceURL": "https://shop.example/",
+     "request": {
+      "requestId": "77.50",
+      "url": "http://img.example/a.png"
+     },
+     "frame": {
+      "frameId": "F1"
+     }
+    }
+   }
+  }
+ },
+ {
+  "issue": {
+   "code": "DeprecationIssue",
+   "details": {
+    "deprecationIssueDetails": {
+     "sourceCodeLocation": {
+      "url": "https://shop.example/legacy.js",
+      "lineNumber": 3,
+      "columnNumber": 0
+     },
+     "type": "DocumentDomainSettingWithoutOriginAgentClusterHeader"
+    }
+   }
+  }
+ },
+ {
+  "issue": {
+   "code": "SomeFutureIssue",
+   "details": {}
+  }
+ },
+ {
+  "issue": {
+   "code": "__proto__",
+   "details": {}
+  }
+ },
+ {
+  "issue": "nope"
+ },
+ null
+]

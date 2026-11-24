@@ -19,7 +19,7 @@ afterEach(() => {
 
 test("each incoming pager card carries Compose's 36-point edge shadow on the side that meets the page, hidden until a swipe brings it in", () => {
   const tab = currentTabs().open.find((candidate) => candidate.id === currentTabs().selectedId)!;
-  const root = renderSurface(<BrowsingScreen tab={tab} />);
+  const root = renderSurface(<BrowsingScreen tabId={tab.id} />);
   const edges = root.root.findAll((node) => node.props.testID === "pagerEdgeShadow" && typeof node.type === "string");
   expect(edges.length).toBeGreaterThanOrEqual(1);
   for (const edge of edges) {

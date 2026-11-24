@@ -18,9 +18,6 @@ ARCHIVE = "Ardia.xcarchive"
 APP = f"{ARCHIVE}/Products/Applications/Ardia.app"
 TOP_FILES = {"provenance.txt"}
 ARCHIVE_DIRS = {ARCHIVE, f"{ARCHIVE}/Products", f"{ARCHIVE}/Products/Applications", f"{ARCHIVE}/dSYMs"}
-PLUGINS = "plugins"
-BUILT_IN_PLUGIN = re.compile(rf"^{PLUGINS}/[a-z0-9][a-z0-9-]{{0,63}}(/|$)")
-REQUIRED_PLUGINS = (f"{PLUGINS}/cli/plugin.json",)
 
 
 def fail(message):
@@ -52,9 +49,7 @@ def check_name(name):
         fail(f"member {shown(name)} has an empty, . or .. component")
     if name in TOP_FILES or name in ARCHIVE_DIRS or name == f"{ARCHIVE}/Info.plist" or bundle_root(name):
         return
-    if name == PLUGINS or BUILT_IN_PLUGIN.match(name):
-        return
-    fail(f"member {shown(name)} isn't part of a build (the archive, provenance.txt, {PLUGINS}/)")
+    fail(f"member {shown(name)} isn't part of a build (the archive, provenance.txt)")
 
 
 if os.path.lexists(dest):
@@ -70,7 +65,7 @@ with tarfile.open(tar_path, "r:") as tar:
             fail(f"member {shown(name)} appears twice")
         seen.add(name)
         if member.isfile():
-            if name in ARCHIVE_DIRS or name == PLUGINS:
+            if name in ARCHIVE_DIRS:
                 fail(f"{shown(name)} must be a directory")
         elif member.isdir():
             if name in TOP_FILES or name == f"{ARCHIVE}/Info.plist":
@@ -93,7 +88,7 @@ with tarfile.open(tar_path, "r:") as tar:
         for depth in range(1, len(parts)):
             if "/".join(parts[:depth]) in links:
                 fail(f"member {shown(name)} goes through the symlink {shown('/'.join(parts[:depth]))}")
-    for required in (f"{APP}/Contents/Info.plist", *TOP_FILES, *REQUIRED_PLUGINS):
+    for required in (f"{APP}/Contents/Info.plist", *TOP_FILES):
         if required not in seen:
             fail(f"{required} is missing")
 
@@ -146,4 +141,4 @@ expected = {"CFBundleIdentifier": "com.ardia.browser", "CFBundleExecutable": "Ar
 for key, value in expected.items():
     if info.get(key) != value:
         fail(f"the app's {key} isn't {value}")
-print(f"unpacked {len(members)} members into {dest}: Ardia.app {version} (com.ardia.browser) and its official plugins")
+print(f"unpacked {len(members)} members into {dest}: Ardia.app {version} (com.ardia.browser)")

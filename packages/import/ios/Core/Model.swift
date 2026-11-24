@@ -253,6 +253,23 @@ public struct DiaSidebarRead: Codable, Equatable, Sendable {
   public var primarySpaceId: String?
 }
 
+public struct ImportedSearchEngine: Codable, Equatable, Sendable {
+  public var name: String
+  public var keyword: String
+  public var url: String
+  public var prepopulateId: Int?
+}
+
+public struct ImportCoreRead: Codable, Equatable, Sendable {
+  public enum Format: String, Codable, Sendable { case chromiumBookmarks = "chromium_bookmarks" }
+  public enum Backend: String, Codable, Sendable { case rust, native }
+  public enum Outcome: String, Codable, Sendable { case ok, notFound, unreadable, tooLarge, argument }
+
+  public var format: Format
+  public var backend: Backend
+  public var outcome: Outcome
+}
+
 public struct ImportResult: Codable, Equatable, Sendable {
   public var browserId: String
   public var profileId: String
@@ -266,6 +283,7 @@ public struct ImportResult: Codable, Equatable, Sendable {
   public var spaces: [SpaceSuggestion] = []
   public var favorites: [ImportedTab] = []
   public var favicons: [ImportedFavicon] = []
+  public var searchEngine: ImportedSearchEngine?
   public var separateEssentials: Bool?
   public var diaSidebar: DiaSidebarRead?
   public var arcRouting: ArcRouting?
@@ -273,6 +291,7 @@ public struct ImportResult: Codable, Equatable, Sendable {
   public var arcCachedIcons: Int?
   public var failed: [ImportKind] = []
   public var warnings: [ImportWarning] = []
+  public var importCore: [ImportCoreRead] = []
   public var vaultToken: String?
 
   public var cookies: [Cookie] = [] { didSet { cookieCount = cookies.count } }
@@ -284,7 +303,7 @@ public struct ImportResult: Codable, Equatable, Sendable {
 
   enum CodingKeys: String, CodingKey {
     case browserId, profileId, profile, bookmarks, history, historyCount, tabs, tabGroups, credentials, spaces, favorites, favicons,
-         separateEssentials, diaSidebar, arcRouting, arcArchive, arcCachedIcons, failed, warnings, vaultToken, cookieCount, addressCount, cardCount
+         searchEngine, separateEssentials, diaSidebar, arcRouting, arcArchive, arcCachedIcons, failed, warnings, importCore, vaultToken, cookieCount, addressCount, cardCount
   }
 
   public init(browserId: String, profileId: String) {

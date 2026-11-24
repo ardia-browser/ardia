@@ -1,10 +1,13 @@
 import { requireNativeViewManager, requireOptionalNativeModule } from "expo-modules-core";
 import { createElement, forwardRef, useImperativeHandle, useRef, type ComponentType, type ReactNode, type Ref } from "react";
 import { Platform, View, type ColorValue, type NativeSyntheticEvent, type ViewProps } from "react-native";
+import type { ClassicChrome } from "./look";
 
 export type SearchStageExit = "morph" | "depart" | "drop";
 
-export type SearchStageMorphLook = { usesGlass: boolean; panelTint: ColorValue; panelDark: boolean; classicPanel: ColorValue };
+export type SearchStageMorphLook = { usesGlass: boolean; panelTint: ColorValue; panelDark: boolean; classicPanel: ColorValue; frosted?: boolean; classicChrome?: ClassicChrome };
+
+export type SearchStageCorners = { anchor?: number; panel: number; field?: number };
 
 export type SearchStageHandle = {
   present(): Promise<void>;
@@ -14,7 +17,11 @@ export type SearchStageHandle = {
   finish(): void;
 };
 
-export type SearchStageLift = { lift: number; up: boolean };
+export type SearchStageLift = { lift: number; up: boolean; predicted?: boolean };
+
+type SearchStageSettled = { landed: boolean; path?: string };
+
+type SearchStageLanding = { lands: boolean; path: string };
 
 export type SearchStageProps = ViewProps & {
   shown: boolean;
@@ -25,16 +32,23 @@ export type SearchStageProps = ViewProps & {
   rowsRevealNativeId?: string | null;
   fieldCenter?: number;
   commandTop?: number | null;
+  landsDirectly?: boolean;
   morphLook?: SearchStageMorphLook;
+  morphCorners?: SearchStageCorners;
+  cardInset?: number;
+  cardGap?: number;
+  fieldInset?: number;
+  fieldTop?: number;
   onLift?: (lift: SearchStageLift) => void;
   onReveal?: (reveal: { late: boolean }) => void;
-  onSettled?: (settled: { landed: boolean }) => void;
+  onSettled?: (settled: SearchStageSettled) => void;
+  onLanding?: (landing: SearchStageLanding) => void;
   children?: ReactNode;
 };
 
 type NativeHandle = { present(): Promise<void>; holdLift(): Promise<void>; releaseLift(): Promise<void>; close(exit: string, velocity: number): Promise<void>; finish(): Promise<void> };
 
-type NativeProps = Omit<SearchStageProps, "onLift" | "onReveal" | "onSettled" | "morphLook" | "anchorNativeId" | "faceNativeId" | "focusNativeId" | "revealNativeId" | "rowsRevealNativeId" | "commandTop"> & {
+type NativeProps = Omit<SearchStageProps, "onLift" | "onReveal" | "onSettled" | "onLanding" | "morphLook" | "morphCorners" | "anchorNativeId" | "faceNativeId" | "focusNativeId" | "revealNativeId" | "rowsRevealNativeId" | "commandTop"> & {
   ref?: Ref<NativeHandle>;
   anchorNativeId?: string;
   faceNativeId?: string;
@@ -44,11 +58,17 @@ type NativeProps = Omit<SearchStageProps, "onLift" | "onReveal" | "onSettled" | 
   commandTop?: number;
   morphUsesGlass?: boolean;
   morphPanelTint?: ColorValue;
+  morphFrosted?: boolean;
   morphPanelDark?: boolean;
   morphClassicPanel?: ColorValue;
+  morphClassicChrome?: ClassicChrome;
+  anchorRadius?: number;
+  panelRadius?: number;
+  fieldRadius?: number;
   onLift?: (event: NativeSyntheticEvent<SearchStageLift>) => void;
   onReveal?: (event: NativeSyntheticEvent<{ late: boolean }>) => void;
-  onSettled?: (event: NativeSyntheticEvent<{ landed: boolean }>) => void;
+  onSettled?: (event: NativeSyntheticEvent<SearchStageSettled>) => void;
+  onLanding?: (event: NativeSyntheticEvent<SearchStageLanding>) => void;
 };
 
 const hasNative = Platform.OS === "ios" && requireOptionalNativeModule("ArdiaPhoneSearchStage") !== null;
@@ -75,7 +95,7 @@ export const SearchStage = forwardRef<SearchStageHandle, SearchStageProps>(funct
     }),
     [],
   );
-  const { onLift, onReveal, onSettled, morphLook, anchorNativeId, faceNativeId, focusNativeId, revealNativeId, rowsRevealNativeId, commandTop, ...rest } = props;
+  const { onLift, onReveal, onSettled, onLanding, morphLook, morphCorners, anchorNativeId, faceNativeId, focusNativeId, revealNativeId, rowsRevealNativeId, commandTop, ...rest } = props;
   if (!hasNative) return createElement(View, { ...rest, pointerEvents: props.shown ? "box-none" : "none" });
   return createElement(stage(), {
     ...rest,
@@ -88,11 +108,17 @@ export const SearchStage = forwardRef<SearchStageHandle, SearchStageProps>(funct
     commandTop: commandTop ?? undefined,
     morphUsesGlass: morphLook?.usesGlass,
     morphPanelTint: morphLook?.panelTint,
+    morphFrosted: morphLook?.frosted,
     morphPanelDark: morphLook?.panelDark,
     morphClassicPanel: morphLook?.classicPanel,
+    morphClassicChrome: morphLook?.classicChrome,
+    anchorRadius: morphCorners?.anchor,
+    panelRadius: morphCorners?.panel,
+    fieldRadius: morphCorners?.field,
     onLift: onLift ? (event: NativeSyntheticEvent<SearchStageLift>) => onLift(event.nativeEvent) : undefined,
     onReveal: onReveal ? (event: NativeSyntheticEvent<{ late: boolean }>) => onReveal(event.nativeEvent) : undefined,
-    onSettled: onSettled ? (event: NativeSyntheticEvent<{ landed: boolean }>) => onSettled(event.nativeEvent) : undefined,
+    onSettled: onSettled ? (event: NativeSyntheticEvent<SearchStageSettled>) => onSettled(event.nativeEvent) : undefined,
+    onLanding: onLanding ? (event: NativeSyntheticEvent<SearchStageLanding>) => onLanding(event.nativeEvent) : undefined,
   });
 });
 

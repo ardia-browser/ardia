@@ -23,12 +23,8 @@ constexpr CGFloat kRimAlpha = 0.17;
 
 typedef NS_ENUM(NSInteger, ArdiaPiPEdge) { ArdiaPiPEdgeNone = 0, ArdiaPiPEdgeLeft = -1, ArdiaPiPEdgeRight = 1 };
 
-@interface ArdiaPiPControl : NSView
-@property (nonatomic, copy) void (^onClick)(void);
+@interface ArdiaPiPHandle : NSView
 @property (nonatomic) BOOL hovered;
-@end
-
-@interface ArdiaPiPHandle : ArdiaPiPControl
 @property (nonatomic) ArdiaPiPEdge edge;
 @end
 
@@ -74,6 +70,9 @@ typedef NS_ENUM(NSInteger, ArdiaPiPEdge) { ArdiaPiPEdgeNone = 0, ArdiaPiPEdgeLef
   ArdiaPiPOverlay *_overlay;
   ArdiaPiPResizeCursor *_resizeCursor;
   ArdiaPiPEdge _stashedEdge;
+  ArdiaPiPEdge _pulledFrom;
+  __weak NSScreen *_pulledFromScreen;
+  NSRect _pullStart;
   BOOL _keepOnTop;
   NSMutableArray *_observers;
   NSTimer *_slide;
@@ -85,6 +84,8 @@ typedef NS_ENUM(NSInteger, ArdiaPiPEdge) { ArdiaPiPEdgeNone = 0, ArdiaPiPEdgeLef
   NSPoint _swipePointer;
   CFTimeInterval _swipeBeganAt;
   NSTimeInterval _swipeLastAt;
+  BOOL _awaitingMomentum;
+  NSRect _swipePlaced;
   NSRect _swipeStart;
   BOOL _dragging;
   BOOL _dragMoving;
@@ -92,6 +93,8 @@ typedef NS_ENUM(NSInteger, ArdiaPiPEdge) { ArdiaPiPEdgeNone = 0, ArdiaPiPEdgeLef
   NSPoint _dragFrom;
   NSTimeInterval _dragBeganAt;
   ArdiaConsentStamp *_dragStamp;
+  ArdiaConsentStamp *_swipeStamp;
+  ArdiaConsentStamp *_placementStamp;
   NSInteger _dragOffCursor;
   double _dragMaxOff;
   double _dragSlowestMove;
@@ -129,6 +132,15 @@ typedef NS_ENUM(NSInteger, ArdiaPiPEdge) { ArdiaPiPEdgeNone = 0, ArdiaPiPEdgeLef
 - (void)moveBy:(ardia_pip_throw::Point)delta;
 - (void)swipeMoved:(NSEvent *)event;
 - (void)swipeEnded:(NSEvent *)event cancelled:(BOOL)cancelled;
+- (NSRect)leaveTuckIfPulledOut:(NSPoint)velocity;
+- (NSRect)leaveTuckAt:(ArdiaPiPEdge)edge on:(NSRect)visible velocity:(NSPoint)velocity;
+- (BOOL)settleIntoCornerPulledInto:(NSPoint)velocity;
+- (ArdiaPiPEdge)edgeFlickedPast:(NSPoint)velocity;
+- (void)reportRelease:(NSString *)outcome stamp:(ArdiaConsentStamp *)stamp;
+- (void)swipeCoasted:(NSEvent *)event;
+- (void)endMomentumWait;
+- (ArdiaPiPEdge)edgeBeyondFor:(NSRect)frame;
+- (void)setStashedEdge:(ArdiaPiPEdge)edge;
 - (void)dragReleasedAt:(NSPoint)pointer velocity:(NSPoint)velocity;
 @end
 
@@ -149,6 +161,7 @@ typedef NS_ENUM(NSInteger, ArdiaPiPEdge) { ArdiaPiPEdgeNone = 0, ArdiaPiPEdgeLef
 - (void)followPointer:(NSEvent *)event;
 - (void)dragMoved:(NSEvent *)event;
 - (void)dragEnded:(NSEvent *)event;
+- (void)unstashFromHandle;
 - (void)devSwipe:(NSArray<NSString *> *)args;
 - (void)devDrag:(NSArray<NSString *> *)args;
 @end
@@ -166,10 +179,40 @@ typedef NS_ENUM(NSInteger, ArdiaPiPEdge) { ArdiaPiPEdgeNone = 0, ArdiaPiPEdgeLef
 - (void)runButtonSelfTest:(NSString *)button;
 - (void)runHoverSelfTest;
 - (void)devMouse:(NSArray<NSString *> *)args;
+- (NSString *)devMagnify:(NSArray<NSString *> *)args;
 @end
 
 @interface ArdiaPiPZoom : NSObject
++ (BOOL)zooms:(NSWindow *)window;
++ (instancetype)forWindow:(NSWindow *)window;
++ (BOOL)enabled;
++ (BOOL)beginEdgeResize:(NSWindow *)window event:(NSEvent *)event;
++ (BOOL)continueEdgeResize:(NSEvent *)event;
++ (BOOL)edgeResizing;
++ (void)devPinch:(NSWindow *)window args:(NSArray<NSString *> *)args;
++ (NSDictionary *)devPinchStats:(NSWindow *)window;
++ (NSString *)devStandInWindow:(NSWindow *)window;
+- (void)pinchBegan;
+- (void)pinchBy:(double)factor at:(NSPoint)pointer;
+- (void)pinchEnded;
+- (void)cancelStandIn;
+- (void)zoomBy:(double)factor at:(NSPoint)pointer ease:(BOOL)ease;
+- (NSInteger)standInNumber;
+- (NSInteger)pinchSession;
+- (NSRect)shownFrame;
+- (void)notePinchUnfocused:(BOOL)unfocused fromOtherApp:(BOOL)fromOtherApp;
+@end
+
+@interface ArdiaPiPZoom (Routing)
 + (BOOL)handle:(NSEvent *)event;
++ (BOOL)handleFromOtherApp:(NSEvent *)event;
++ (BOOL)anyZoomable;
++ (NSWindow *)windowUnder:(NSPoint)pointer;
++ (NSArray<NSDictionary *> *)devWindowsAt:(NSPoint)pointer;
++ (NSDictionary *)devLastPinch;
++ (void)yieldPinchOn:(NSWindow *)window;
++ (void)finishPendingPinch;
++ (void)dropStandInOn:(NSWindow *)window;
 @end
 
 namespace ardia_pip {
@@ -188,9 +231,13 @@ BOOL PreventsActivation(NSWindow *window);
 extern NSInteger gActivations;
 void MarkBackToTabActivation();
 BOOL ConsumeBackToTabActivation();
-void ActivateApp(NSString *why);
+BOOL ActivateApp(NSString *why);
+void ActivateWithOnlyPictureInPicture(ArdiaPiPController *controller, BOOL move);
+BOOL ActiveOnlyForPictureInPicture();
 BOOL ThrowEnabled();
 NSPoint PointerOf(NSEvent *event);
+void PinchFromOtherApp(NSEvent *event);
+BOOL FollowsPinchesFromOtherApps();
 ardia_pip_throw::Rect ThrowRect(NSRect r);
 int ScreenIndex(NSScreen *screen);
 std::vector<ardia_pip_throw::Screen> ThrowScreens();

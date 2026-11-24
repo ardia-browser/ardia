@@ -12,7 +12,6 @@
 
 #include <objbase.h>
 #include <shlwapi.h>
-#include <urlmon.h>
 #include <wincrypt.h>
 
 #include <winrt/Windows.Foundation.h>
@@ -33,7 +32,6 @@
 #pragma comment(lib, "crypt32.lib")
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "shlwapi.lib")
-#pragma comment(lib, "urlmon.lib")
 
 namespace Ardia::NotificationParts {
 
@@ -172,14 +170,18 @@ inline std::optional<std::wstring> FileUrlOf(std::wstring const &path) noexcept 
   return std::wstring(url);
 }
 
+inline constexpr size_t kMaxIconDataUriBytes = 1049600;
+inline constexpr DWORD kMaxIconBytes = 786432;
+
 inline std::optional<std::wstring> DataUriIcon(std::string const &icon, std::string const &id) noexcept {
+  if (icon.size() > kMaxIconDataUriBytes) return std::nullopt;
   size_t marker = icon.find(";base64,");
   if (marker == std::string::npos) return std::nullopt;
   std::string_view mime = std::string_view{icon}.substr(5, marker - 5);
   const wchar_t *extension = mime == "image/jpeg" ? L"jpg" : mime == "image/gif" ? L"gif" : L"png";
   std::string_view encoded = std::string_view{icon}.substr(marker + 8);
   DWORD size = 0;
-  if (!CryptStringToBinaryA(encoded.data(), static_cast<DWORD>(encoded.size()), CRYPT_STRING_BASE64, nullptr, &size, nullptr, nullptr) || size == 0) return std::nullopt;
+  if (!CryptStringToBinaryA(encoded.data(), static_cast<DWORD>(encoded.size()), CRYPT_STRING_BASE64, nullptr, &size, nullptr, nullptr) || size == 0 || size > kMaxIconBytes) return std::nullopt;
   std::vector<BYTE> bytes(size);
   if (!CryptStringToBinaryA(encoded.data(), static_cast<DWORD>(encoded.size()), CRYPT_STRING_BASE64, bytes.data(), &size, nullptr, nullptr)) return std::nullopt;
   std::wstring path = TempIconPath(id, extension);
@@ -194,15 +196,9 @@ inline std::optional<std::wstring> DataUriIcon(std::string const &icon, std::str
 }
 
 inline std::optional<std::wstring> IconUrl(std::string const &icon, std::string const &id) noexcept {
-  if (icon.starts_with("file:")) return Paths::Wide(icon);
+  if (icon.starts_with("file:///") && !icon.starts_with("file:////")) return Paths::Wide(icon);
   if (icon.starts_with("data:image/")) return DataUriIcon(icon, id);
-  if (icon.starts_with("https://") || icon.starts_with("http://")) {
-    std::wstring path = TempIconPath(id, L"png");
-    if (path.empty()) return std::nullopt;
-    if (FAILED(URLDownloadToFileW(nullptr, Paths::Wide(icon).c_str(), path.c_str(), 0, nullptr))) return std::nullopt;
-    return FileUrlOf(path);
-  }
-  if (icon.size() > 2 && (icon[1] == ':' || icon.starts_with("\\\\"))) return FileUrlOf(Paths::Wide(icon));
+  if (icon.size() > 2 && icon[1] == ':' && (icon[2] == '\\' || icon[2] == '/')) return FileUrlOf(Paths::Wide(icon));
   return std::nullopt;
 }
 

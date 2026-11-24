@@ -17,7 +17,6 @@ export const bookmarksBar = {
   dropLineInset: space.xs,
   dropRing: 1.5,
   dragStart: 4,
-  springOpenMs: 550,
   ghostOpacity: 0.92,
   hoverIn: duration.fast,
   hoverOut: duration.base,

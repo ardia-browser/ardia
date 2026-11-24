@@ -8,6 +8,7 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 LINUX = SOURCE / 'ardia' / 'linux'
 
 SCENARIOS = r'''#include <cassert>
@@ -118,7 +119,7 @@ class PasswordCheckTests(unittest.TestCase):
             sleeper.chmod(0o755)
             binary = scratch / 'scenarios'
             compiled = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g', '-fsanitize=address,undefined',
-                                       '-I', str(SOURCE), str(scratch / 'scenarios.cc'), str(LINUX / 'ac_linux_password_check.cc'),
+                                       '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE), str(scratch / 'scenarios.cc'), str(LINUX / 'ac_linux_password_check.cc'),
                                        str(LINUX / 'ac_linux_secret_text.cc'), '-o', str(binary)], capture_output=True, text=True, timeout=180)
             self.assertEqual(compiled.returncode, 0, compiled.stderr)
             result = subprocess.run([str(binary), str(helper), str(sleeper)], capture_output=True, text=True, timeout=60)
@@ -134,7 +135,9 @@ class PasswordCheckTests(unittest.TestCase):
         for needle in ['LOG(', 'Textfield', 'SetPromptField', 'GetText(', 'UTF16ToUTF8(', 'std::string password']:
             self.assertNotIn(needle, prompt)
         host = (LINUX / 'ac_linux_host.cc').read_text()
-        self.assertIn('ardia::linux_password::InstallReauthFallback();', host)
+        self.assertIn('ardia::desktop::Platform().InstallReauth();', host)
+        self.assertIn('void InstallReauth() override { linux_password::InstallReauthFallback(); }',
+                      (LINUX / 'ac_linux_desktop_platform.cc').read_text())
         build = (LINUX / 'BUILD.gn').read_text()
         for name in ['"ac_linux_password_check.cc"', '"ac_linux_password_field.cc"', '"ac_linux_password_prompt.cc"',
                      '"ac_linux_secret_text.cc"']:

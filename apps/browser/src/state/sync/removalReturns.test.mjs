@@ -1,3 +1,4 @@
+import { asSecret } from "@ardia/core";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -96,7 +97,7 @@ async function join(mac, engine, before = () => {}) {
   await mac.with(async () => {
     before();
     engine.startSync();
-    assert.ok("ok" in (await engine.enterRecoveryPhrase("/sync", "words")));
+    assert.ok("ok" in (await engine.enterRecoveryPhrase("/sync", asSecret("syncPhrase", "words"))));
     await engine.syncNow();
     await engine.syncNow();
   });

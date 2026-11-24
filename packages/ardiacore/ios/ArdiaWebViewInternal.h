@@ -61,6 +61,7 @@ struct ArdiaFirstPaint {
   BOOL coldTab{};
   BOOL scripted{};
   CFTimeInterval heldAt{};
+  NSString *heldEpoch{};
   float opacity{};
   NSUInteger generation{};
 };
@@ -104,6 +105,16 @@ struct ArdiaCommits {
   double at{};
   int httpStatus{};
   int documents{};
+};
+
+struct ArdiaElementPick {
+  __weak ArdiaCoreTab *tab;
+  int documents{};
+  double armed{};
+  BOOL input{};
+  NSPoint menuPoint{};
+  CFTimeInterval menuAt{-1};
+  __weak ArdiaCoreTab *menuTab;
 };
 
 struct ArdiaFocusAsk {
@@ -165,6 +176,7 @@ struct ArdiaPageFocusState {
   BOOL _pinned;
   NSView *_devtoolsView;
   CFTimeInterval _linkDropAt;
+  ArdiaElementPick _elementPick;
   NSMutableArray<NSDictionary<NSString *, id> *> *_newTabLinks;
   id _sightObserver;
   id _interfaceScaleObserver;
@@ -310,9 +322,12 @@ typedef NS_ENUM(NSInteger, ArdiaTransfer) {
 @end
 
 @interface ArdiaWebView (PageMessagesInternal)
-- (void)noteScriptFrame:(NSString *)frameId main:(BOOL)main;
+- (void)noteScriptFrame:(NSString *)frameId main:(BOOL)main sameSite:(BOOL)sameSite;
 - (void)forgetScriptFrame:(NSString *)frameId;
 - (void)pushSelectionPopover;
+- (void)pushFieldProvider;
+- (void)pushFieldProviderHint:(NSString *)json;
+- (BOOL)sameSiteFrame:(BOOL)main origin:(NSString *)origin;
 - (void)callFrame:(NSString *)frameId kind:(NSString *)kind json:(NSString *)json;
 - (void)resetPageMedia;
 @end
@@ -371,6 +386,8 @@ NSHashTable<ArdiaWebView *> *LiveViews();
 bool SamePage(NSString *a, NSString *b);
 NSString *OriginOf(NSString *url);
 NSString *VerifiedOrigin(NSString *origin);
+NSDictionary *_Nullable FieldProviderFor(NSString *_Nullable profile);
+NSString *FieldProviderJSON(NSString *_Nullable profile);
 void NoteEvent(int browserId, NSString *name, NSDictionary *payload);
 void AcceptDrops(NSView *root, BOOL accept);
 NSView *PaneUnder(NSView *view, NSView *ancestor);

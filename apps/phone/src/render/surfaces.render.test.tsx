@@ -31,7 +31,7 @@ test("the tray opens over the start screen and shows its field", () => {
 test("a page shows its bottom bar", () => {
   useBrowse.setState({ surface: "browsing" });
   const tab = currentTabs().open[0]!;
-  const root = renderSurface(<BrowsingScreen tab={tab} />);
+  const root = renderSurface(<BrowsingScreen tabId={tab.id} />);
   expect(root.toJSON()).not.toBeNull();
   unmount(root);
 });

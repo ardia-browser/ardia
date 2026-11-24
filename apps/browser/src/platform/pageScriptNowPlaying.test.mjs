@@ -107,3 +107,182 @@ test("a short clip that is the site's own media stays on its timeline", () => {
   clip.currentTime = 3;
   assert.equal(timelineReport(timeline, clip, 0).position, 3, "a seek in the clip moves the card");
 });
+
+test("page_script.js tracks setMicrophoneActive/setCameraActive with ordering guards and dispatches toggleMicrophone/toggleCamera", async () => {
+  const { runInNewContext } = await import("node:vm");
+  const start = script.indexOf("  const asNative = ");
+  const end = script.indexOf("  const { keys, setPrototypeOf } = Object;\n", start);
+  assert.ok(start > 0 && end > start, "page_script.js defines asNative");
+  const blockStart = script.indexOf("  const session = navigator.mediaSession;");
+  const blockEnd = script.indexOf("  const fieldProviderKit = (env) => {", blockStart);
+  assert.ok(blockStart > 0 && blockEnd > blockStart, "page_script.js defines media session block");
+
+  const reports = [];
+  const timers = [];
+  const docListeners = new Map();
+  const deferred = () => {
+    let resolve, reject;
+    const promise = new Promise((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  };
+  const pendingMic = [];
+  const pendingCam = [];
+  class MediaSessionProto {
+    constructor() {
+      this.metadata = null;
+      this.playbackState = "none";
+    }
+    setActionHandler() {}
+    setPositionState() {}
+    setMicrophoneActive() {
+      const d = deferred();
+      pendingMic.push(d);
+      return d.promise;
+    }
+    setCameraActive() {
+      const d = deferred();
+      pendingCam.push(d);
+      return d.promise;
+    }
+  }
+  const session = new MediaSessionProto();
+  class MediaStream {
+    constructor(audioTracks = []) {
+      this._audio = audioTracks;
+    }
+    getAudioTracks() {
+      return this._audio;
+    }
+  }
+  class HTMLMediaElement {
+    constructor() {
+      this._paused = false;
+      this.ended = false;
+      this.muted = false;
+      this.volume = 1;
+      this.duration = Infinity;
+      this.currentTime = 0;
+      this.playbackRate = 1;
+      this.tagName = "VIDEO";
+      this.videoWidth = 640;
+      this.loop = false;
+      this.isConnected = true;
+      this.srcObject = new MediaStream([{}]);
+    }
+    get paused() {
+      return this._paused;
+    }
+    play() {
+      return Promise.resolve();
+    }
+    pause() {}
+    addEventListener() {}
+  }
+  class Node {
+    get isConnected() {
+      return true;
+    }
+  }
+  const videoEl = new HTMLMediaElement();
+  const ctx = {
+    window: null,
+    document: {
+      title: "Meet - abc-defg-hij",
+      pictureInPictureElement: null,
+      querySelectorAll: (sel) => (sel === "video,audio" ? [videoEl] : []),
+      addEventListener: (type, fn) => {
+        if (!docListeners.has(type)) docListeners.set(type, []);
+        docListeners.get(type).push(fn);
+      },
+    },
+    navigator: { mediaSession: session, userActivation: { isActive: true } },
+    location: { href: "https://meet.google.com/abc-defg-hij" },
+    performance: { now: () => 0 },
+    URL,
+    Promise,
+    WeakSet,
+    WeakMap,
+    Map,
+    Set,
+    Reflect,
+    Proxy,
+    Object,
+    Array,
+    Number,
+    String,
+    Boolean,
+    JSON,
+    Math,
+    Date,
+    TypeError,
+    DOMException,
+    MediaStream,
+    HTMLMediaElement,
+    Node,
+    queueMicrotask,
+    setTimeout: (fn) => {
+      timers.push(fn);
+      return timers.length;
+    },
+    addEventListener() {},
+  };
+  ctx.window = ctx;
+  const harness = `
+    (function () {
+      "use strict";
+      const isTop = true;
+      const frame = "f1";
+      const tracked = new WeakSet();
+      let active = null;
+      let lastHeard = null;
+      const heard = new WeakSet();
+      const handlers = Object.create(null);
+      const apply = Reflect.apply;
+      ${script.slice(start, end)}
+      const serialize = (v) => JSON.stringify(v);
+      const send = (kind, data) => __reports.push({ kind, data });
+      const guard = (fn) => function () { try { return apply(fn, this, arguments); } catch (e) {} };
+      const later = (fn) => () => { setTimeout(() => guard(fn)(), 0); };
+      ${script.slice(blockStart, blockEnd)}
+      return { handlers, flush: () => { while (__timers.length) __timers.shift()(); } };
+    })()
+  `;
+  ctx.__reports = reports;
+  ctx.__timers = timers;
+  const runtime = runInNewContext(harness, ctx);
+  for (const fn of docListeners.get("playing") ?? []) fn({ type: "playing", target: videoEl });
+  runtime.flush();
+
+  const dispatched = [];
+  session.setActionHandler("togglemicrophone", (d) => dispatched.push(d));
+  session.setActionHandler("togglecamera", (d) => dispatched.push(d));
+  session.setMicrophoneActive(false);
+  session.setMicrophoneActive(true);
+  pendingMic[1].resolve();
+  await Promise.resolve();
+  pendingMic[0].resolve();
+  await Promise.resolve();
+  runtime.flush();
+
+  const latestAfterOrder = JSON.parse(JSON.stringify(reports.filter((r) => r.kind === "nowPlaying").at(-1)?.data));
+  assert.deepEqual(latestAfterOrder.actions, ["togglemicrophone", "togglecamera"]);
+  assert.equal(latestAfterOrder.microphoneActive, true, "stale earlier setMicrophoneActive promise must not overwrite newer state");
+  assert.equal(latestAfterOrder.cameraActive, null);
+
+  session.setCameraActive(true);
+  session.setActionHandler("togglecamera", null);
+  pendingCam[0].resolve();
+  await Promise.resolve();
+  runtime.flush();
+  const latestAfterClear = JSON.parse(JSON.stringify(reports.filter((r) => r.kind === "nowPlaying").at(-1)?.data));
+  assert.deepEqual(latestAfterClear.actions, ["togglemicrophone"]);
+  assert.equal(latestAfterClear.cameraActive, null, "clearing togglecamera handler invalidates in-flight setCameraActive promise");
+
+  session.setActionHandler("togglecamera", (d) => dispatched.push(d));
+  runtime.handlers.media({ action: "toggleMicrophone", seconds: 0 });
+  runtime.handlers.media({ action: "toggleCamera", seconds: 0 });
+  assert.deepEqual(JSON.parse(JSON.stringify(dispatched)), [{ action: "togglemicrophone" }, { action: "togglecamera" }]);
+});

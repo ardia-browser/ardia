@@ -390,3 +390,111 @@ test("across profiles, a tab paused before you switch profiles gets no card, and
   media.setNowPlaying(video, report());
   assert.equal(M().leftPaused[music], true, "another profile's play takes over the paused card");
 });
+
+test("a Google Meet call replaces skip and pause controls with microphone and camera toggles", async () => {
+  const controls = await import("./playerControls.ts");
+  const meet = {
+    ...report({
+      title: "Meet - abc-defg-hij",
+      duration: null,
+      hasVideo: true,
+      actions: ["togglemicrophone", "togglecamera", "hangup"],
+      microphoneActive: true,
+      cameraActive: false,
+    }),
+    playedAt: 1,
+  };
+  assert.equal(controls.isLiveSession(meet), true);
+  assert.equal(controls.isCallSession(meet, { camera: false, microphone: true, screen: false }), true);
+  assert.deepEqual(controls.playerControlsFor(meet, { camera: false, microphone: true, screen: false }, true), {
+    kind: "call",
+    controls: [
+      { kind: "mic", active: true, icon: "mic.fill", tooltip: "Mute Microphone", action: "toggleMicrophone" },
+      { kind: "camera", active: false, icon: "video.slash.fill", tooltip: "Turn On Camera", action: "toggleCamera" },
+    ],
+  });
+  assert.deepEqual(
+    controls.playerControlsFor({ ...meet, microphoneActive: false, cameraActive: true }, null, true),
+    {
+      kind: "call",
+      controls: [
+        { kind: "mic", active: false, icon: "mic.slash.fill", tooltip: "Unmute Microphone", action: "toggleMicrophone" },
+        { kind: "camera", active: true, icon: "video.fill", tooltip: "Turn Off Camera", action: "toggleCamera" },
+      ],
+    },
+    "explicit MediaSession state stays authoritative even when mediaAccess is null",
+  );
+  assert.deepEqual(
+    controls.playerControlsFor({ ...meet, microphoneActive: null, cameraActive: null }, { camera: true, microphone: false, screen: false }, true),
+    {
+      kind: "call",
+      controls: [
+        { kind: "mic", active: false, icon: "mic.slash.fill", tooltip: "Unmute Microphone", action: "toggleMicrophone" },
+        { kind: "camera", active: true, icon: "video.fill", tooltip: "Turn Off Camera", action: "toggleCamera" },
+      ],
+    },
+    "when a call page omits setMicrophoneActive/setCameraActive, mediaAccess supplies the state",
+  );
+  assert.deepEqual(
+    controls.playerControlsFor(meet, { camera: false, microphone: true, screen: false }, false),
+    { kind: "call", controls: [] },
+    "platforms without native call toggle support still omit pause and skip buttons",
+  );
+});
+
+test("a live call without MediaSession actions omits pause and skip, while a non-call live stream keeps play/pause without skip", async () => {
+  const controls = await import("./playerControls.ts");
+  const rawCall = { ...report({ duration: null, actions: [] }), playedAt: 1 };
+  assert.deepEqual(controls.playerControlsFor(rawCall, { camera: false, microphone: true, screen: false }, true), {
+    kind: "call",
+    controls: [],
+  });
+
+  const liveStream = { ...report({ duration: null, actions: ["play", "pause"] }), playedAt: 1 };
+  assert.equal(controls.isCallSession(liveStream, null), false);
+  assert.deepEqual(controls.playerControlsFor(liveStream, null, true), {
+    kind: "playback",
+    canSkip: false,
+    tracks: false,
+  });
+
+  const dvrStream = { ...report({ duration: null, actions: ["play", "pause", "seekbackward", "seekforward"] }), playedAt: 1 };
+  assert.deepEqual(controls.playerControlsFor(dvrStream, null, true), {
+    kind: "playback",
+    canSkip: true,
+    tracks: false,
+  });
+
+  const liveRadio = { ...report({ duration: null, actions: ["play", "pause", "nexttrack", "previoustrack"] }), playedAt: 1 };
+  assert.deepEqual(controls.playerControlsFor(liveRadio, null, true), {
+    kind: "playback",
+    canSkip: true,
+    tracks: true,
+  });
+
+  const vod = { ...report({ duration: 300, actions: ["play", "pause"] }), playedAt: 1 };
+  assert.deepEqual(controls.playerControlsFor(vod, { camera: false, microphone: false, screen: true }, true), {
+    kind: "playback",
+    canSkip: true,
+    tracks: false,
+  });
+});
+
+test("toggling mic or camera from the media card dispatches the command and counts telemetry", async () => {
+  const controls = await import("./playerControls.ts");
+  const { takeMediaCardCounts } = await import("../telemetry/mediaCardCounts.ts");
+  S().hydrate({});
+  const w = S().createWindow({ url: "a.com" });
+  const b = S().newTab(w, { url: "meet.google.com/abc", background: true });
+  const sent = [];
+  webviews.set(b, { mediaCommand: async (action) => void sent.push(action) });
+  takeMediaCardCounts();
+  controls.toggleCallControl(b, "mic");
+  controls.toggleCallControl(b, "camera");
+  controls.toggleCallControl(b, "mic");
+  assert.deepEqual(sent, ["toggleMicrophone", "toggleCamera", "toggleMicrophone"]);
+  const counts = takeMediaCardCounts();
+  assert.equal(counts.media_card_mic_toggles, 2);
+  assert.equal(counts.media_card_camera_toggles, 1);
+  webviews.delete(b);
+});

@@ -8,7 +8,8 @@ import { buttonMotion, curve, usePressScaleMotion } from "../ui/motion";
 import { font, radius, space, weight } from "../ui/tokens";
 import { useSettings, useTab } from "../../state/browser/hooks";
 import { useMuteState } from "../../state/tabs/hooks";
-import { muteTitle } from "../../state/tabs/mute";
+import { muteTitle, type MuteState } from "../../state/tabs/mute";
+import { usePage } from "../../state/tabs/pageState";
 import { Favicon } from "../favicon/Favicon";
 import { useSidebarTokens } from "../sidebar/tokens";
 import { GlassFill, useGlass } from "../ui/Glass";
@@ -31,6 +32,7 @@ import {
   useTicker,
   type Session,
 } from "../../state/media/media";
+import { isLiveSession, playerControlsFor, toggleCallControl, type CallControl } from "../../state/media/playerControls";
 import { hostOf } from "@ardia/core";
 import { Marquee, useMarqueeGroup } from "./Marquee";
 import { TimeBar } from "./MiniPlayer";
@@ -94,8 +96,6 @@ export function useSidebarPlayerTab(windowId: string, profileId: string, current
   }, [current, fromOtherProfile, tabId]);
   return tabId;
 }
-
-const isLive = (session: Session) => session.duration === null;
 
 function useExpansion(want: boolean, motion: PlayerMotion) {
   const [expanded, setExpanded] = useState(false);
@@ -173,6 +173,24 @@ function PlayButton({ tabId, playing, size }: { tabId: string; playing: boolean;
   return <Button variant="icon" icon={playing ? "pause.fill" : "play.fill"} size={size} tooltip={playing ? "Pause" : "Play"} onPress={() => mediaCommand(tabId, "toggle")} />;
 }
 
+function MuteButton({ tabId, mute }: { tabId: string; mute: MuteState }) {
+  return <Button variant="icon" icon={mute ? "speaker.slash.fill" : "speaker.wave.2.fill"} size="m" tooltip={muteTitle(mute)} onPress={() => toggleMute(tabId)} />;
+}
+
+function CallControlButton({ tabId, control, size }: { tabId: string; control: CallControl; size: "m" | "l" }) {
+  const theme = useTheme();
+  return (
+    <Button
+      variant="icon"
+      icon={control.icon}
+      size={size}
+      color={control.active ? undefined : theme.destructive}
+      tooltip={control.tooltip}
+      onPress={() => toggleCallControl(tabId, control.kind)}
+    />
+  );
+}
+
 function TimeLeft({ tabId, session }: { tabId: string; session: Session }) {
   const media = useMediaTokens();
   useTicker(true);
@@ -194,12 +212,14 @@ function TimeLeft({ tabId, session }: { tabId: string; session: Session }) {
 const PlayerControls = memo(function PlayerControls({ tabId, live, reveal, pinned, onSeeking }: { tabId: string; live: boolean; reveal: Reveal; pinned: boolean; onSeeking: (seeking: boolean) => void }) {
   const media = useMediaTokens();
   const session = useSession(tabId);
+  const mediaAccess = usePage(tabId, (p) => p.mediaAccess);
   const mute = useMuteState(tabId);
   const playing = isPlaying(session);
   const video = useMedia((m) => !!m.sessions[tabId]?.hasVideo || !!m.pipOpen[tabId]);
   const [pip, togglePip] = usePictureInPicture(tabId);
   useTicker(playing && live);
   if (!session) return null;
+  const controls = playerControlsFor(session, mediaAccess);
   const icons = transportIcons(session);
   return (
     <View style={{ paddingHorizontal: ROW_INSET + 2 }}>
@@ -207,11 +227,17 @@ const PlayerControls = memo(function PlayerControls({ tabId, live, reveal, pinne
         <TimeBar tabId={tabId} session={session} tokens={media} trailing="total" onDragging={onSeeking} />
       </Animated.View>
       <Animated.View style={{ height: CONTROLS_ROW, flexDirection: "row", alignItems: "center", justifyContent: "space-between", opacity: reveal.controls }}>
-        <Button variant="icon" icon={mute ? "speaker.slash.fill" : "speaker.wave.2.fill"} size="m" tooltip={muteTitle(mute)} onPress={() => toggleMute(tabId)} />
+        <MuteButton tabId={tabId} mute={mute} />
         <View style={{ flexDirection: "row", alignItems: "center", gap: CONTROLS_GAP }}>
-          <Button variant="icon" icon={icons.back} size="m" tooltip={icons.backTip} onPress={() => skipOrTrack(tabId, session, "back")} />
-          <PlayButton tabId={tabId} playing={playing} size="l" />
-          <Button variant="icon" icon={icons.ahead} size="m" tooltip={icons.aheadTip} onPress={() => skipOrTrack(tabId, session, "ahead")} />
+          {controls.kind === "call" ? (
+            controls.controls.map((control) => <CallControlButton key={control.kind} tabId={tabId} control={control} size="m" />)
+          ) : (
+            <>
+              {controls.canSkip ? <Button variant="icon" icon={icons.back} size="m" tooltip={icons.backTip} onPress={() => skipOrTrack(tabId, session, "back")} /> : null}
+              <PlayButton tabId={tabId} playing={playing} size="l" />
+              {controls.canSkip ? <Button variant="icon" icon={icons.ahead} size="m" tooltip={icons.aheadTip} onPress={() => skipOrTrack(tabId, session, "ahead")} /> : null}
+            </>
+          )}
         </View>
         <Animated.View pointerEvents={pinned ? "none" : "box-none"} style={{ opacity: reveal.unpinned }}>
           {video ? (
@@ -252,7 +278,7 @@ const PlayerRow = memo(function PlayerRow({ tabId, hovered, reveal }: { tabId: s
           {artwork ? <Image source={{ uri: artwork }} resizeMode="cover" style={{ width: ART, height: ART }} /> : <Favicon url={tab.url} favicon={tab.favicon} size={16} profileId={tab.profileId} />}
         </View>
       </Animated.View>
-      {isLive(session) ? (
+      {isLiveSession(session) ? (
         <View accessibilityLabel="Live" style={{ marginLeft: space.m }}>
           <Dot size={LIVE_DOT} color={theme.destructive} />
         </View>
@@ -291,6 +317,8 @@ function useReveal(progress: Animated.Value) {
 export function SidebarPlayer({ tabId, motion, docked }: { tabId: string; motion: PlayerMotion; docked: boolean }) {
   const tokens = useSidebarTokens();
   const session = useSession(tabId);
+  const mediaAccess = usePage(tabId, (p) => p.mediaAccess);
+  const mute = useMuteState(tabId);
   const shown = useTab(tabId) !== undefined;
   const playing = isPlaying(session);
   const { hovered, hoverProps } = useHover();
@@ -303,6 +331,8 @@ export function SidebarPlayer({ tabId, motion, docked }: { tabId: string; motion
   const glass = useGlass();
   if (!session || !shown) return null;
   const below = docked ? 0 : HOVER_SLOP;
+  const controls = playerControlsFor(session, mediaAccess);
+  const callTrailing = controls.kind === "call" ? controls.controls[0] : undefined;
 
   return (
     <View style={{ height: slot === "expanded" ? EXPANDED_HEIGHT : ROW_HEIGHT }}>
@@ -332,7 +362,7 @@ export function SidebarPlayer({ tabId, motion, docked }: { tabId: string; motion
               <PlayerRow tabId={tabId} hovered={want} reveal={reveal} />
               <View style={{ minWidth: BUTTON, height: BUTTON, alignItems: "flex-end", justifyContent: "center" }}>
                 <View pointerEvents="none" style={{ opacity: 0 }}>
-                  {playing && session.duration ? <TimeLeftRoom duration={session.duration} /> : <View style={{ width: BUTTON }} />}
+                  {controls.kind === "playback" && playing && session.duration ? <TimeLeftRoom duration={session.duration} /> : <View style={{ width: BUTTON }} />}
                 </View>
                 <Animated.View pointerEvents={settled ? "box-none" : "none"} style={{ position: "absolute", top: 0, right: 0, opacity: reveal.closing }}>
                   <Button variant="icon" icon="xmark" size="m" tooltip="Close Player" onPress={() => dismissPlayer(tabId)} />
@@ -346,7 +376,13 @@ export function SidebarPlayer({ tabId, motion, docked }: { tabId: string; motion
             style={{ position: "absolute", right: 0, bottom: 0, height: ROW_HEIGHT, paddingRight: TRAILING_INSET, alignItems: "flex-end", justifyContent: "center" }}
           >
             <Animated.View pointerEvents={pinned || !settled ? "box-none" : "none"} style={{ opacity: reveal.trailing }}>
-              {playing && session.duration ? <TimeLeft tabId={tabId} session={session} /> : <PlayButton tabId={tabId} playing={playing} size="m" />}
+              {controls.kind === "call" ? (
+                callTrailing ? <CallControlButton tabId={tabId} control={callTrailing} size="m" /> : <MuteButton tabId={tabId} mute={mute} />
+              ) : playing && session.duration ? (
+                <TimeLeft tabId={tabId} session={session} />
+              ) : (
+                <PlayButton tabId={tabId} playing={playing} size="m" />
+              )}
             </Animated.View>
           </View>
         </View>

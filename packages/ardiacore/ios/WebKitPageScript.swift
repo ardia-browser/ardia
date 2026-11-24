@@ -39,6 +39,8 @@ enum WebKitPageScript {
   let lastHeard = null;
   let pageActions = [];
   let pagePosition = null;
+  let pageMicActive = null;
+  let pageCameraActive = null;
   const handlers = Object.create(null);
   const allMedia = () => {
     const list = Array.from(document.querySelectorAll("video, audio"));
@@ -106,6 +108,8 @@ enum WebKitPageScript {
       actions: pageActions,
       controllable: fromSession !== "none" || !(m.duration > 0 && m.duration <= 5),
       loop: !pagePosition && m.loop,
+      microphoneActive: pageMicActive,
+      cameraActive: pageCameraActive,
     });
   };
   const schedule = () => {
@@ -166,7 +170,7 @@ enum WebKitPageScript {
       true,
     );
   }
-  const knownActions = ["play", "pause", "stop", "seekbackward", "seekforward", "seekto", "previoustrack", "nexttrack", "skipad", "enterpictureinpicture"];
+  const knownActions = ["play", "pause", "stop", "seekbackward", "seekforward", "seekto", "previoustrack", "nexttrack", "skipad", "enterpictureinpicture", "togglemicrophone", "togglecamera", "hangup"];
   document.addEventListener(
     "ardia:media-session",
     (e) => {
@@ -176,6 +180,8 @@ enum WebKitPageScript {
       } catch (error) {}
       if (!data || typeof data !== "object") return;
       pageActions = Array.isArray(data.actions) ? knownActions.filter((a) => data.actions.includes(a)) : [];
+      pageMicActive = typeof data.microphoneActive === "boolean" ? data.microphoneActive : null;
+      pageCameraActive = typeof data.cameraActive === "boolean" ? data.cameraActive : null;
       const p = data.position;
       const finite = (n) => typeof n === "number" && isFinite(n);
       if (!p || !finite(p.position) || !finite(p.duration)) pagePosition = null;
@@ -362,6 +368,8 @@ enum WebKitPageScript {
       else if (action === "toggle") isPlaying ? call("pause") || (m && m.pause()) : call("play") || (m && m.play());
       else if (action === "next") call("nexttrack");
       else if (action === "previous") call("previoustrack");
+      else if (action === "toggleMicrophone") call("togglemicrophone");
+      else if (action === "toggleCamera") call("togglecamera");
       else if (action === "seekBy") {
         const handled = seconds >= 0 ? call("seekforward", { seekOffset: seconds }) : call("seekbackward", { seekOffset: -seconds });
         if (!handled && m) {

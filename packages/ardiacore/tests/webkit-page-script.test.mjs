@@ -170,3 +170,143 @@ test("a frame that goes away stops counting as playing and drops its now playing
   topPage.fire("window", "pagehide", { persisted: false });
   assert.equal(topPage.posted.slice(before).some(({ kind }) => kind === "media" || kind === "nowPlaying"), false);
 });
+
+test("WebKit's media bridge tracks call actions and active state with ordering guards and dispatches mic/camera toggles", async () => {
+  const events = [];
+  const docListeners = new Map();
+  const deferred = () => {
+    let resolve;
+    const promise = new Promise((res) => (resolve = res));
+    return { promise, resolve };
+  };
+  const pendingMic = [];
+  let rejectNextCam = false;
+  class MediaSessionProto {
+    setActionHandler() {}
+    setPositionState() {}
+    setMicrophoneActive() {
+      const d = deferred();
+      pendingMic.push(d);
+      return d.promise;
+    }
+    setCameraActive() {
+      if (rejectNextCam) {
+        rejectNextCam = false;
+        return Promise.reject(new Error("denied"));
+      }
+      return Promise.resolve();
+    }
+  }
+  const session = new MediaSessionProto();
+  class Event {
+    constructor(type, init = {}) {
+      this.type = type;
+      this.cancelable = !!init.cancelable;
+      this.defaultPrevented = false;
+    }
+    preventDefault() {
+      if (this.cancelable) this.defaultPrevented = true;
+    }
+  }
+  class CustomEvent extends Event {
+    constructor(type, init = {}) {
+      super(type, init);
+      this._detail = init.detail;
+    }
+    get detail() {
+      return this._detail;
+    }
+  }
+  class MouseEvent extends Event {}
+  class HTMLMediaElement {
+    play() {
+      return Promise.resolve();
+    }
+  }
+  class Node {
+    get isConnected() {
+      return true;
+    }
+  }
+  class EventTarget {
+    addEventListener(type, fn) {
+      if (!docListeners.has(type)) docListeners.set(type, []);
+      docListeners.get(type).push(fn);
+    }
+    dispatchEvent(event) {
+      events.push(event);
+      for (const fn of docListeners.get(event.type) ?? []) fn(event);
+      return !event.defaultPrevented;
+    }
+  }
+  const document = new EventTarget();
+  const ctx = {
+    document,
+    location: { protocol: "https:", hostname: "meet.google.com", origin: "https://meet.google.com" },
+    navigator: { mediaSession: session },
+    performance: { now: () => 0 },
+    Event,
+    CustomEvent,
+    MouseEvent,
+    EventTarget,
+    HTMLMediaElement,
+    Node,
+    Promise,
+    Map,
+    Set,
+    WeakSet,
+    Object,
+    Array,
+    Reflect,
+    Proxy,
+    JSON,
+    String,
+    Boolean,
+    Number,
+    Date,
+    TypeError,
+    isFinite,
+    addEventListener() {},
+  };
+  ctx.window = ctx;
+  runInNewContext(webKitMediaBridge.replace("\\#(WebKitMediaFaults.sitesJSON)", "[]").replace("\\#(WebKitMediaFaults.pageScript)", ""), ctx);
+
+  const dispatched = [];
+  session.setActionHandler("togglemicrophone", (d) => dispatched.push(d));
+  session.setActionHandler("togglecamera", (d) => dispatched.push(d));
+  session.setMicrophoneActive(false);
+  session.setMicrophoneActive(true);
+  pendingMic[1].resolve();
+  await Promise.resolve();
+  pendingMic[0].resolve();
+  await Promise.resolve();
+  await session.setCameraActive(false);
+  await Promise.resolve();
+
+  const last = JSON.parse(events.filter((e) => e.type === "ardia:media-session").at(-1).detail);
+  assert.deepEqual(last.actions, ["togglemicrophone", "togglecamera"]);
+  assert.equal(last.microphoneActive, true);
+  assert.equal(last.cameraActive, false);
+
+  let unhandled = false;
+  const onUnhandled = () => {
+    unhandled = true;
+  };
+  process.on("unhandledRejection", onUnhandled);
+  try {
+    rejectNextCam = true;
+    await assert.rejects(session.setCameraActive(true), /denied/);
+    await new Promise((r) => setTimeout(r, 0));
+  } finally {
+    process.off("unhandledRejection", onUnhandled);
+  }
+  assert.equal(unhandled, false, "rejected setCameraActive must not create an unhandled side-branch rejection");
+  const afterReject = JSON.parse(events.filter((e) => e.type === "ardia:media-session").at(-1).detail);
+  assert.equal(afterReject.cameraActive, false, "rejected setCameraActive must not overwrite prior state");
+
+  const preventedMic = !document.dispatchEvent(new CustomEvent("ardia:media-action", { cancelable: true, detail: JSON.stringify({ action: "togglemicrophone" }) }));
+  const preventedCam = !document.dispatchEvent(new CustomEvent("ardia:media-action", { cancelable: true, detail: JSON.stringify({ action: "togglecamera" }) }));
+  assert.equal(preventedMic, true);
+  assert.equal(preventedCam, true);
+  assert.deepEqual(JSON.parse(JSON.stringify(dispatched)), [{ action: "togglemicrophone" }, { action: "togglecamera" }]);
+});

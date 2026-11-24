@@ -93,8 +93,8 @@ export const watchesEdge = (state: DockState, moving: boolean) => (peekOnScreen(
 
 const atRevealEdge = (x: number, right: boolean, windowWidth: number, band: number = PEEK_EDGE_STRIP) => (right ? x >= windowWidth - band : x < band);
 
-export const edgeEventReveals = (state: DockState, x: number, right: boolean, windowWidth: number, band: number = PEEK_EDGE_STRIP) =>
-  state === "peeking" || atRevealEdge(x, right, windowWidth, band);
+export const edgeEventReveals = (state: DockState, x: number, right: boolean, windowWidth: number, band: number = PEEK_EDGE_STRIP, zoomMenuHeld = false) =>
+  state === "peeking" || (zoomMenuHeld && state === "leaving") || atRevealEdge(x, right, windowWidth, band);
 
 type EdgeSource = "strip" | "native";
 type EdgeArm = { armed: boolean; strip: boolean; native: boolean };

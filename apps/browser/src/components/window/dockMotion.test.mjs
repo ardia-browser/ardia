@@ -522,3 +522,11 @@ test("a peek's light moves that stay wholly off the window at one height aren't 
   assert.equal(dm.stillOffWindow([-60, 33, "right"], [-30, 33, "right"]), true);
   assert.equal(dm.stillOffWindow([-30, 33, "right"], [10, 33, "right"]), false);
 });
+
+test("a zoom-menu hold keeps a peeking or just-leaving sidebar out without opening a closed one", () => {
+  assert.equal(dm.edgeEventReveals("peeking", 500, false, 1280, dm.PEEK_EDGE_STRIP, true), true);
+  assert.equal(dm.edgeEventReveals("leaving", 500, false, 1280, dm.PEEK_EDGE_STRIP, true), true);
+  assert.equal(dm.edgeEventReveals("leaving", 500, false, 1280, dm.PEEK_EDGE_STRIP, false), false);
+  assert.equal(dm.edgeEventReveals("away", 500, false, 1280, dm.PEEK_EDGE_STRIP, true), false);
+  assert.equal(dm.edgeEventReveals("fullscreen", 500, false, 1280, dm.PEEK_EDGE_STRIP, true), false);
+});

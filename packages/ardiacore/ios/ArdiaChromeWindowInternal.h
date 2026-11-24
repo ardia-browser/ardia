@@ -44,12 +44,15 @@ extern const void *kLightsCenterKey;
 extern const void *kLightsShownKey;
 extern const void *kLightsMoveKey;
 extern const void *kLightsTrailingKey;
+extern const void *kInsetLightsKey;
 NSArray<NSButton *> *TrafficLightButtons(NSWindow *window);
 NSPoint LightsCenter(NSWindow *window, NSValue *center, NSSize size);
 void TranslateTrafficLights(NSWindow *window, CGFloat dx);
 void RetileTrafficLights(NSWindow *window);
 void TuckTrafficLightsOutsideWindow(NSWindow *window);
 bool MoveTrafficLights(NSWindow *window, NSValue *center);
+void InstallZoomMenuWatch();
+void SetDevZoomMenuOpen(NSWindow *window, BOOL open);
 
 NSMenuItem *ReservedMenuItemForEvent(NSEvent *event);
 bool IsReservedKey(NSEvent *event);

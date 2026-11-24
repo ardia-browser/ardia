@@ -16,14 +16,8 @@ import { sidebarUi, useSidebarUi } from "../../state/sidebar/sidebarUi";
 import { peekHeld, watchHolds } from "../../state/app/transientUi";
 import { noteSidebarPeek } from "../../state/telemetry/usage";
 import {
-  noteFullScreenPeek,
-  noteFullScreenPeekClosed,
-  notePageFullScreenPeek,
-  noteSidebarPeekClosedWhileResizing,
-  noteSidebarPeekFrame,
-  noteSidebarPeekRevealHeldBack,
-  noteSidebarScreenEdge,
-  noteSidebarSlide,
+  noteFullScreenPeek, noteFullScreenPeekClosed, notePageFullScreenPeek, noteSidebarPeekClosedWhileResizing,
+  noteSidebarPeekFrame, noteSidebarPeekRevealHeldBack, noteSidebarPeekZoomMenuHold, noteSidebarScreenEdge, noteSidebarSlide,
 } from "../../state/telemetry/dockCounts";
 import { ProfileSwipe } from "./ProfileSwipe";
 import { ARC_HIDE_MS, DOCK_SLIDE, SHADOWS } from "./tokens";
@@ -268,7 +262,8 @@ function SidebarDock({
       if (e.type !== "sidebarEdge" || e.id !== windowId) return;
       if (e.screenEdge) noteSidebarScreenEdge(e.screenEdge);
       const at = latestReveal.current;
-      if (e.over && e.screenEdge !== "returned" && !edgeEventReveals(at.state, e.point[0], at.right, at.windowWidth, at.band)) return;
+      if (e.over && e.screenEdge !== "returned" && !edgeEventReveals(at.state, e.point[0], at.right, at.windowWidth, at.band, !!e.zoomMenuHeld)) return;
+      if (e.zoomMenuHeld) { noteSidebarPeekZoomMenuHold(); dismissHoverIn(windowId); }
       edgeOver.current = e.over;
       arm.current = edgeSeen(arm.current, "native", e.over);
       if (e.screenEdge === "crossed") dismissHoverIn(windowId);

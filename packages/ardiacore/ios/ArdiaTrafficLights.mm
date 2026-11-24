@@ -24,6 +24,8 @@ const void *kLightsMoveKey = &kLightsMoveKey;
 
 const void *kLightsTrailingKey = &kLightsTrailingKey;
 
+const void *kInsetLightsKey = &kInsetLightsKey;
+
 CGFloat WindowCornerRadius(NSWindow *window) {
   static CGFloat radius = 19;
   static dispatch_once_t onceToken;
@@ -64,8 +66,6 @@ NSColor *WindowColor() {
 constexpr CGFloat kTrafficLightInsetX = 18;
 
 constexpr CGFloat kTrafficLightTop = 20;
-
-const void *kInsetLightsKey = &kInsetLightsKey;
 
 const void *kLoggedKey = &kLoggedKey;
 
@@ -436,6 +436,7 @@ void InsetTrafficLights(NSWindow *window) {
   InstallTuckAfterButtonLayout([window.contentView.superview class]);
   InstallSharingIndicatorBounds([window.contentView.superview class]);
   InstallSharingWindowBounds();
+  InstallZoomMenuWatch();
   RetileTrafficLights(window);
   LogTrafficLightsOf(window);
 }

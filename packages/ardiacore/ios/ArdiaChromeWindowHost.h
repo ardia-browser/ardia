@@ -70,10 +70,12 @@ NS_ASSUME_NONNULL_BEGIN
 @end
 
 extern NSNotificationName const ArdiaWindowSeenDidChange;
+FOUNDATION_EXPORT NSNotificationName const ArdiaZoomMenuDidChange;
 
 NSView *_Nullable ArdiaWindowRootView(NSWindow *_Nullable window);
 NSValue *_Nullable ArdiaTrafficLightsCenter(NSWindow *_Nullable window);
 BOOL ArdiaTrafficLightsTrailing(NSWindow *_Nullable window);
+FOUNDATION_EXPORT BOOL ArdiaZoomMenuOpen(NSWindow *_Nullable window);
 FOUNDATION_EXPORT BOOL ArdiaPerformReservedKey(NSEvent *event);
 
 @interface ArdiaChromeWindowHost (AccessibilityTitle)

@@ -13,6 +13,7 @@ const NONE = {
   sidebar_peeks_past_target: 0,
   sidebar_peek_resizes: 0,
   sidebar_peek_closes_while_resizing: 0,
+  sidebar_peek_zoom_menu_holds: 0,
   sidebar_screen_edge_crossings: 0,
   sidebar_screen_edge_returns: 0,
   sidebar_full_screen_peeks: 0,
@@ -41,6 +42,8 @@ export const notePageFullScreenPeek = () => void counts.sidebar_page_full_screen
 export const noteSidebarPeekResize = () => void counts.sidebar_peek_resizes++;
 
 export const noteSidebarPeekClosedWhileResizing = () => void counts.sidebar_peek_closes_while_resizing++;
+
+export const noteSidebarPeekZoomMenuHold = () => void counts.sidebar_peek_zoom_menu_holds++;
 
 const SCREEN_EDGE_COUNTS = {
   crossed: "sidebar_screen_edge_crossings",

@@ -17,6 +17,7 @@ final class SidebarEdgeWatcher {
   private var watched: [String: Watch] = [:]
   private var over: Set<String> = []
   private var pressedInside: Set<String> = []
+  private var zoomMenuHeld: Set<String> = []
   private var unreported: Set<String> = []
   private var buttonHeld = false
   private var wasPressed = false
@@ -41,7 +42,12 @@ final class SidebarEdgeWatcher {
 
   func watch(id: String, on: Bool, hold: CGFloat, right: Bool, whilePressed: Bool) {
     watched[id] = on ? Watch(rootHold: max(0, hold), right: right, whilePressed: whilePressed) : nil
-    if on { unreported.insert(id) } else { over.remove(id) }
+    if on {
+      unreported.insert(id)
+    } else {
+      over.remove(id)
+      zoomMenuHeld.remove(id)
+    }
     if !on, crossings[id]?.awaitingReturn(at: ProcessInfo.processInfo.systemUptime) != true { crossings[id] = nil }
     if watched.isEmpty { return stop() }
     start()
@@ -65,7 +71,7 @@ final class SidebarEdgeWatcher {
     switch event.type {
     case .leftMouseDown, .rightMouseDown, .otherMouseDown:
       buttonHeld = true
-      pressedInside.formUnion(over.filter { watched[$0]?.whilePressed == true })
+      pressedInside.formUnion(over.filter { watched[$0]?.whilePressed == true && !zoomMenuHeld.contains($0) })
     case .leftMouseDragged, .rightMouseDragged, .otherMouseDragged: buttonHeld = true
     case .leftMouseUp, .rightMouseUp, .otherMouseUp, .mouseMoved:
       buttonHeld = false
@@ -78,29 +84,36 @@ final class SidebarEdgeWatcher {
     let screenEdge = crossScreenEdge(point, live: live)
     lazy var onDock = live && NSApp.isActive && isOnDock(point)
     let pressed = buttonHeld || (live && NSEvent.pressedMouseButtons != 0)
-    if pressed && !wasPressed { pressedInside.formUnion(over.filter { watched[$0]?.whilePressed == true }) }
+    if pressed && !wasPressed { pressedInside.formUnion(over.filter { watched[$0]?.whilePressed == true && !zoomMenuHeld.contains($0) }) }
     wasPressed = pressed
     for (id, watch) in watched {
       guard let window = WindowManager.shared.window(id) else {
         watched[id] = nil
         over.remove(id)
+        zoomMenuHeld.remove(id)
         unreported.remove(id)
         crossings[id] = nil
         continue
       }
       if !pressed { pressedInside.remove(id) }
+      let zoomMenu = ArdiaZoomMenuOpen(window)
+      if !zoomMenu { zoomMenuHeld.remove(id) }
       let inColumn = Self.inColumn(point, window.frame, watch) && window.screen?.frame.contains(point) == true
-      let now = (pressed && pressedInside.contains(id)) || (watch.whilePressed || !pressed) && (isOver(point, of: window, watch, live: live, holding: over.contains(id))
+      let geometric = (pressed && pressedInside.contains(id)) || (watch.whilePressed || !pressed) && (isOver(point, of: window, watch, live: live, holding: over.contains(id))
         || (inColumn && over.contains(id) && onDock)
         || (inColumn && isOver(point, of: window, watch, live: false) && onDock && isTopBeneathDock(point, of: window, right: watch.right))
         || returnedTo == id)
+      let heldByZoomMenu = zoomMenu && (over.contains(id) || watch.whilePressed)
+      let now = geometric || heldByZoomMenu
+      let countedZoomMenuHold = heldByZoomMenu && !geometric && zoomMenuHeld.insert(id).inserted
       let fresh = unreported.remove(id) != nil
       let edgeNote = screenEdge[id]
-      guard fresh || now != over.contains(id) || edgeNote != nil else { continue }
+      guard fresh || now != over.contains(id) || edgeNote != nil || countedZoomMenuHold else { continue }
       if now { over.insert(id) } else { over.remove(id) }
       let inRoot = InterfaceScale.rootPoint(fromScreen: point, in: window)
       var event: [String: Any] = ["type": "sidebarEdge", "id": id, "over": now, "point": [inRoot.x, inRoot.y]]
       if let edgeNote { event["screenEdge"] = edgeNote }
+      if countedZoomMenuHold { event["zoomMenuHeld"] = true }
       ShellEvents.send(.window, event)
     }
     if watched.isEmpty { return stop() }
@@ -117,6 +130,7 @@ final class SidebarEdgeWatcher {
     for (id, watch) in watched {
       guard tracking, let window = WindowManager.shared.window(id), let screen = window.screen,
         window.isVisible, !window.isMiniaturized, !window.styleMask.contains(.fullScreen),
+        !ArdiaZoomMenuOpen(window),
         Self.inRows(point, window.frame), Self.sidebarSideAtScreenEdge(window, screen, right: watch.right)
       else {
         crossings[id] = nil
@@ -320,10 +334,14 @@ final class SidebarEdgeWatcher {
       observers.append(center.addObserver(forName: .ArdiaInterfaceScaleDidChange, object: nil, queue: .main) { [weak self] _ in
         self?.checkPointer()
       })
+      observers.append(center.addObserver(forName: .ArdiaZoomMenuDidChange, object: nil, queue: .main) { [weak self] note in
+        guard let self, let window = note.object as? NSWindow, self.isWatched(window) else { return }
+        self.checkPointer()
+      })
       for name in [NSWindow.didMoveNotification, NSWindow.didResizeNotification, NSWindow.didChangeScreenNotification] {
         observers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
           guard let self, let window = note.object as? NSWindow, self.isWatched(window) else { return }
-          self.updateGlobalMonitor()
+          self.checkPointer()
         })
       }
     }
@@ -334,6 +352,7 @@ final class SidebarEdgeWatcher {
     watched = [:]
     over = []
     pressedInside = []
+    zoomMenuHeld = []
     unreported = []
     crossings = [:]
     returnedTo = nil

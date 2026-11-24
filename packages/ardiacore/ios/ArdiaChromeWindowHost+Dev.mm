@@ -5,6 +5,7 @@
 #import "ArdiaRuntime.h"
 
 #import <QuartzCore/QuartzCore.h>
+#import <objc/message.h>
 #import <objc/runtime.h>
 
 #include <cmath>
@@ -428,6 +429,31 @@ NSString *Cover(NSWindow *window, bool covered) {
   return NSStringFromRect(cover.frame);
 }
 
+NSString *ZoomMenu(NSWindow *window, NSString *arg) {
+  NSButton *zoom = [window standardWindowButton:NSWindowZoomButton];
+  const SEL placeholderSel = NSSelectorFromString(@"_sidecarButtonPlaceholder");
+  NSView *remote = zoom && [zoom respondsToSelector:placeholderSel] ? ((id (*)(id, SEL))objc_msgSend)(zoom, placeholderSel) : nil;
+  if ([arg isEqualToString:@"remoteOpen"]) {
+    const SEL sel = NSSelectorFromString(@"menuWillOpen");
+    if (remote && [remote respondsToSelector:sel]) ((void (*)(id, SEL))objc_msgSend)(remote, sel);
+  } else if ([arg isEqualToString:@"remoteCancel"]) {
+    const SEL sel = NSSelectorFromString(@"menuDidCancel");
+    if (remote && [remote respondsToSelector:sel]) ((void (*)(id, SEL))objc_msgSend)(remote, sel);
+  } else if ([arg isEqualToString:@"remoteClose"]) {
+    const SEL sel = NSSelectorFromString(@"menuDidCloseSelectingAnItem:");
+    if (remote && [remote respondsToSelector:sel]) ((void (*)(id, SEL, BOOL))objc_msgSend)(remote, sel, YES);
+  } else if ([arg isEqualToString:@"localOpen"]) {
+    if (zoom.cell && [zoom.cell respondsToSelector:@selector(menuWillOpen:)])
+      ((void (*)(id, SEL, NSMenu *))objc_msgSend)(zoom.cell, @selector(menuWillOpen:), [[NSMenu alloc] init]);
+  } else if ([arg isEqualToString:@"localClose"]) {
+    if (zoom.cell && [zoom.cell respondsToSelector:@selector(menuDidClose:)])
+      ((void (*)(id, SEL, NSMenu *))objc_msgSend)(zoom.cell, @selector(menuDidClose:), [[NSMenu alloc] init]);
+  } else if ([arg isEqualToString:@"1"] || [arg isEqualToString:@"0"]) {
+    SetDevZoomMenuOpen(window, [arg isEqualToString:@"1"]);
+  }
+  return @(ArdiaZoomMenuOpen(window)).stringValue;
+}
+
 NSDictionary<NSString *, DevHandler> *DevHandlers() {
   static NSDictionary<NSString *, DevHandler> *handlers = @{
     @"fakeFullScreenMs" : ^NSString *(NSWindow *, NSString *ms) {
@@ -541,6 +567,7 @@ NSDictionary<NSString *, DevHandler> *DevHandlers() {
       [[w standardWindowButton:NSWindowCloseButton] performClick:nil];
       return @"clicked";
     },
+    @"zoomMenu" : ^NSString *(NSWindow *w, NSString *a) { return ZoomMenu(w, a); },
   };
   return handlers;
 }

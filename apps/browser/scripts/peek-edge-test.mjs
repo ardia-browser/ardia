@@ -224,6 +224,45 @@ try {
       await run(`st().updateSettings({ sidebarSide: "left" }); return settle(400);`);
     }
   });
+
+  await rep.check("the green window button's tiling menu keeps a peeking sidebar open until it closes (#3974)", async () => {
+    const zoom = (arg) => `ac.engine.call("windows.list", {}).then((l) => ac.engine.call("windows.dev", { window: l.find((w) => w.hasRoot).window, action: "zoomMenu:${arg}" }))`;
+    assert.equal(await run(`return away();`), false);
+    assert.equal(await run(`return ${zoom("remoteOpen")}.then(() => settle(350)).then(() => ({ live: live() })).then((r) => ${zoom("remoteCancel")}.then(() => r.live));`), false, "opening with the sidebar closed never peeks it");
+    assert.equal(await run(`return peek();`), true);
+    const held = await run(`const events = []; const sub = globalThis.expo.modules.ArdiaAppWindows.addListener("onWindowEvent", (e) => e.zoomMenuHeld && events.push(true));
+      return ${zoom("remoteOpen")}.then((open) => at(700, 400).then(() => settle(600)).then(() => { const whileOpen = live();
+        return ${zoom("remoteCancel")}.then((closed) => settle(600).then(() => { sub.remove(); return { open, whileOpen, closed, after: live(), holds: events.length }; })); }));`);
+    assert.equal(held.open, "1", "remote zoom menu opened");
+    assert.equal(held.whileOpen, true, "stays out when pointer moves to the tiling menu over the page");
+    assert.equal(held.closed, "0", "remote zoom menu dismissed");
+    assert.equal(held.after, false, "hides once dismissed with pointer away");
+    assert.equal(held.holds, 1, "counted once for the hold");
+
+    assert.equal(await run(`return peek();`), true);
+    const local = await run(`return ${zoom("localOpen")}.then((open) => at(700, 400).then(() => settle(600)).then(() => { const whileOpen = live();
+      return ${zoom("localClose")}.then((closed) => settle(600).then(() => ({ open, whileOpen, closed, after: live() }))); }));`);
+    assert.equal(local.open, "1", "in-process zoom menu opened");
+    assert.equal(local.whileOpen, true, "stays out while in-process zoom menu is open");
+    assert.equal(local.closed, "0", "in-process zoom menu closed");
+    assert.equal(local.after, false, "hides after in-process zoom menu closes");
+
+    await run(`return globalThis.expo.modules.ArdiaDev.devSetWindowFrame("w1", [0, 100, ${WIDTH}, ${HEIGHT}]).then(() => settle(400));`);
+    assert.equal(await run(`return peek();`), true);
+    const edge = await run(`const notes = []; const sub = globalThis.expo.modules.ArdiaAppWindows.addListener("onWindowEvent", (e) => e.screenEdge && notes.push(e.screenEdge));
+      return ${zoom("remoteOpen")}.then(() => at(-30, 400)).then(() => settle(400)).then(() => { const whileOpen = live();
+        return ${zoom("remoteClose")}.then(() => settle(600)).then(() => { sub.remove(); return { notes, whileOpen, after: live() }; }); });`);
+    assert.deepEqual(edge.notes, [], "no screen-edge crossing while the tiling menu is open");
+    assert.equal(edge.whileOpen, true, "stays out past the shared screen edge while the tiling menu is open");
+    assert.equal(edge.after, false, "hides once the tiling menu closes");
+
+    assert.equal(await run(`return peek();`), true);
+    const moved = await run(`return ${zoom("remoteOpen")}.then(() => at(80, 120)).then(() => settle(200))
+      .then(() => ${zoom("remoteClose")}).then(() => globalThis.expo.modules.ArdiaDev.devSetWindowFrame("w1", [400, 100, ${WIDTH}, ${HEIGHT}]))
+      .then(() => settle(600)).then(live);`);
+    assert.equal(moved, false, "hides when tiling moves the window away from the pointer");
+    await run(`return globalThis.expo.modules.ArdiaDev.devSetWindowFrame("w1", [80, 80, ${WIDTH}, ${HEIGHT}]).then(() => settle(300));`);
+  });
 } finally {
   await run(`return globalThis.expo.modules.ArdiaDev.devSidebarEdgePointer("w1", 0, 0, false).then(() => ac.shell.devSetPointer("w1", null));`).catch(() => {});
   await app?.quit();

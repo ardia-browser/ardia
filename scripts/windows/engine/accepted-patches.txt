@@ -74,6 +74,7 @@ chromium-auto-pip-global-switch.patch
 chromium-media-session-main-frame-handler.patch
 chromium-pip-user-agent-ignores-page-opt-out.patch
 chromium-widevine-without-cdm.patch
+chromium-media-controls-pinch-width.patch
 chromium-angle-metal-shader-cache.patch
 chromium-ungoogled-disable-default-extensions.patch
 chromium-ungoogled-disable-missing-key-warning.patch

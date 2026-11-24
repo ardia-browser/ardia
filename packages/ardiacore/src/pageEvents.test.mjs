@@ -86,6 +86,17 @@ test("every kind native sends into a frame has a page-script handler, and every 
   assert.deepEqual(sorted(handled), sorted(called));
 });
 
+test("an automatic Picture in Picture held back reaches its handler with why, a close while away included", async () => {
+  const { deliverPageEvent } = await import("./pageEvents.ts");
+  const seen = [];
+  const props = { onAutoPictureInPictureKept: (reason, epoch) => seen.push([reason, epoch]) };
+  deliverPageEvent(props, { name: "autoPictureInPictureKept", data: { reason: "closedWhileAway", epoch: "e1" } });
+  deliverPageEvent(props, { name: "autoPictureInPictureKept", data: { reason: "nothingPlaying", epoch: "e2" } });
+  deliverPageEvent(props, { name: "autoPictureInPictureKept", data: { appSwitch: true, epoch: "e3" } });
+  deliverPageEvent(props, { name: "autoPictureInPictureKept", data: { appSwitch: false } });
+  assert.deepEqual(seen, [["closedWhileAway", "e1"], ["nothingPlaying", "e2"], ["appSwitch", "e3"], ["onScreen", ""]]);
+});
+
 test("a Picture in Picture pinch reaches its handler with whether the window was unfocused and whether another app was in front", async () => {
   const { deliverPageEvent } = await import("./pageEvents.ts");
   const seen = [];

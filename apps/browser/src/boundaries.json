@@ -490,7 +490,10 @@
   {
    "id": "webkit-page-message:pip",
    "source": "frame",
-   "guard": "Boolean only"
+   "guard": "Strict booleans only: a payload whose active is missing or not a real boolean, or whose unloaded is present and not one, is dropped whole; keyed to the posting frame's script id: a close counts only from a frame that reported open, once the last such frame leaves; an unload never arms the closed-while-away hold; at most 8 frames are kept and a dead content process clears them (WebKitAutoPictureInPicture.swift)",
+   "checks": [
+    "packages/ardiacore/tests/webkit-auto-pip.test.mjs#shared hostile inputs"
+   ]
   },
   {
    "id": "webkit-page-message:scroll",

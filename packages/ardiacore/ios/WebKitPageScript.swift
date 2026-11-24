@@ -207,15 +207,24 @@ enum WebKitPageScript {
       },
       true,
     );
-  const pip = (on) => post("pip", { active: on });
-  document.addEventListener("enterpictureinpicture", () => pip(true), true);
-  document.addEventListener("leavepictureinpicture", () => pip(false), true);
+  let pipVideo = null;
+  const pip = (video, on) => {
+    if (on ? pipVideo === video : pipVideo !== video) return;
+    pipVideo = on ? video : null;
+    post("pip", { active: on });
+  };
+  document.addEventListener("enterpictureinpicture", (e) => pip(e.target, true), true);
+  document.addEventListener("leavepictureinpicture", (e) => pip(e.target, false), true);
   document.addEventListener(
     "webkitpresentationmodechanged",
-    (e) => e.target instanceof HTMLVideoElement && pip(e.target.webkitPresentationMode === "picture-in-picture"),
+    (e) => e.target instanceof HTMLVideoElement && pip(e.target, e.target.webkitPresentationMode === "picture-in-picture"),
     true,
   );
   addEventListener("pagehide", () => {
+    if (pipVideo) {
+      pipVideo = null;
+      post("pip", { active: false, unloaded: true });
+    }
     if (isTop) return;
     post("media", { playing: false, muted });
     post("nowPlaying", null);

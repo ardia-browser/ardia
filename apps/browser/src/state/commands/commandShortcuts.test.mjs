@@ -93,3 +93,11 @@ test("a remappable item's default comes from the catalog, a fixed one's from the
   assert.deepEqual(resolved.defaultsOf("switchProfile:work"), [{ key: "1", modifiers: ["control"] }]);
   assert.deepEqual(resolved.defaultsOf("system:Edit > Emoji & Symbols"), [{ key: "e", modifiers: ["control", "command"] }]);
 });
+
+test("an unchanged menu bar snapshot does not bump menuBarRevision", () => {
+  const snapshot = [item("newTab", "t", ["command"]), item("system:Edit > Emoji & Symbols", "e", ["control", "command"], false)];
+  setMenuBarShortcuts(snapshot);
+  const revision = menuBarRevision();
+  setMenuBarShortcuts([item("newTab", "t", ["command"]), item("system:Edit > Emoji & Symbols", "e", ["control", "command"], false)]);
+  assert.equal(menuBarRevision(), revision);
+});

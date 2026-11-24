@@ -1,9 +1,13 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 
-export type Resource<A extends unknown[], T> = { name: string; fetch: (...args: A) => Promise<T> };
+export type Resource<A extends unknown[], T> = { name: string; fetch: (...args: A) => Promise<T>; refreshOnMount?: boolean };
 
-export const resource = <A extends unknown[], T>(name: string, fetch: (...args: A) => Promise<T>): Resource<A, T> => ({ name, fetch });
+export const resource = <A extends unknown[], T>(name: string, fetch: (...args: A) => Promise<T>, options?: { refreshOnMount?: boolean }): Resource<A, T> => ({
+  name,
+  fetch,
+  refreshOnMount: options?.refreshOnMount ?? true,
+});
 
 const keyOf = (name: string, args: unknown[]) => JSON.stringify([name, ...args]);
 
@@ -13,6 +17,7 @@ const generations = new Map<string, number>();
 
 export function load<A extends unknown[], T>(r: Resource<A, T>, args: A, { fresh = false } = {}): Promise<T> {
   const key = keyOf(r.name, args);
+  if (!fresh && r.refreshOnMount === false && key in useCache.getState()) return Promise.resolve(useCache.getState()[key] as T);
   const current = running.get(key);
   if (current && !fresh) return current as Promise<T>;
   const generation = (generations.get(key) ?? 0) + 1;

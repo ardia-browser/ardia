@@ -20,7 +20,7 @@ import { getDownloadSettings, setDownloadSettings, type DownloadSettings } from 
 import { getExternalAppAllowances, getPreloadPages, getSiteSettingsOrigins, getZoomLevels, setPreloadPages } from "../../platform/siteSettings";
 import { getPasswordAutofill, setPasswordAutofill } from "../../platform/passwords";
 import { orWarn } from "../../lib/fallback";
-import { menuShortcuts } from "../../platform/commands";
+import { menuShortcuts, type MenuShortcut } from "../../platform/commands";
 import { setMenuBarShortcuts } from "../commands/commandShortcuts";
 import { UNAVAILABLE_COMMANDS } from "../commands/commandCatalog";
 import { currentSettings } from "../browser/current";
@@ -61,11 +61,34 @@ export const autofillEnabled = resource("autofillEnabled", (profile: string) =>
 export const autofillToggleAsked = resource("autofillToggleAsked", (profile: string, toggle: AutofillToggle) => Promise.resolve(askedValue(profile, toggle)));
 export const downloadSettings = resource("downloadSettings", (profile: string) => getDownloadSettings(profile).catch(() => null));
 export const extensionList = resource("extensions", (profile: string) => refreshExtensions(profile, consentToken()));
-export const shortcutItems = resource("menuShortcuts", () =>
-  menuShortcuts().then(
-    (items) => (setMenuBarShortcuts(items), items.filter((item) => !UNAVAILABLE_COMMANDS.has(item.id))),
-    () => [],
-  ),
+function sameMenuShortcuts(prev: readonly MenuShortcut[] | undefined, next: readonly MenuShortcut[]): boolean {
+  if (!prev || prev.length !== next.length) return false;
+  return next.every((item, i) => {
+    const a = prev[i]!;
+    if (a.id !== item.id || a.title !== item.title || a.remappable !== item.remappable || a.path.length !== item.path.length) return false;
+    for (let j = 0; j < item.path.length; j++) if (a.path[j] !== item.path[j]) return false;
+    if (a.remappable && item.remappable) return a.mouseBindable === item.mouseBindable;
+    if (a.remappable || item.remappable) return false;
+    if (a.key !== item.key || a.modifiers.length !== item.modifiers.length) return false;
+    return item.modifiers.every((m, j) => a.modifiers[j] === m);
+  });
+}
+
+function nextShortcutItems(items: MenuShortcut[]): MenuShortcut[] {
+  setMenuBarShortcuts(items);
+  const filtered = items.filter((item) => !UNAVAILABLE_COMMANDS.has(item.id));
+  const prev = cached(shortcutItems, []);
+  return prev && sameMenuShortcuts(prev, filtered) ? prev : filtered;
+}
+
+export function syncShortcutItems(items: MenuShortcut[]) {
+  store(shortcutItems, [], nextShortcutItems(items));
+}
+
+export const shortcutItems = resource(
+  "menuShortcuts",
+  (): Promise<MenuShortcut[]> => menuShortcuts().then(nextShortcutItems, () => []),
+  { refreshOnMount: false },
 );
 export const engineVersion = resource("engineInfo", () => engineInfo().catch(() => null));
 const defaultProfile = () => engineProfile(useBrowser.getState(), currentSettings().defaultProfileId);
@@ -102,6 +125,8 @@ export function paneNeeds(pane: SettingsPane, profileId: string | null): Needed[
 export const usePaneLoaded = (pane: SettingsPane, profileId: string | null) => useAllLoaded(paneNeeds(pane, profileId));
 
 export const preparePane = (pane: SettingsPane, profileId: string | null) => loadAll(paneNeeds(pane, profileId));
+
+export const refreshShortcutsInBackground = () => load(shortcutItems, [], { fresh: true }).catch(() => undefined);
 
 onSettingsOpen((pane, profileId) => void preparePane(pane, profileId));
 

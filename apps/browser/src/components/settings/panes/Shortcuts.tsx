@@ -1,7 +1,7 @@
 import { cancelShortcutRecording, recordShortcut, type MenuShortcut, resolvedShortcuts, useCtrlTabChoice, useMenuBarRevision } from "../../../state/commands/commandShortcuts";
 import type { CtrlTabChoice } from "../../../state/commands/ctrlTabKeys";
 import { Box, Button, EmptyState, KeyCap, PopUp, SearchField, space, Symbol, Text, useHover, type Option } from "../../ui";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
 import { useTheme } from "../../ui/theme";
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
@@ -27,6 +27,32 @@ const NO_SHORTCUT: Shortcut = { key: "", modifiers: [] };
 const EXTENSION_ITEM = "openExtension:";
 const KEY_SEARCH_SETTLE_MS = 1000;
 const KEY_SEARCH_CANCEL_PRESS_MS = 600;
+const INITIAL_SHORTCUT_ROWS = 24;
+const SHORTCUT_ROW_BATCH = 32;
+
+function useProgressiveCount(total: number, initial: number, step: number): number {
+  const [shown, setShown] = useState(() => Math.min(total, initial));
+  useEffect(() => {
+    if (total <= initial) return setShown(total);
+    setShown((current) => Math.min(total, Math.max(current, initial)));
+    let cancelled = false;
+    let frame = 0;
+    const more = () => {
+      if (cancelled) return;
+      setShown((current) => {
+        const next = Math.min(total, current + step);
+        if (next < total) frame = requestAnimationFrame(more);
+        return next;
+      });
+    };
+    frame = requestAnimationFrame(more);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+    };
+  }, [total, initial, step]);
+  return Math.min(total, shown);
+}
 
 const FILTERS: Option<Filter>[] = [
   { value: "all", title: "All Shortcuts" },
@@ -77,19 +103,26 @@ function KeyboardSection() {
   }, []);
 
   const resolved = useMemo(() => resolvedShortcuts({ settings: { shortcuts: overrides, mouseShortcuts: mouseOverrides }, profileOrder }), [items, overrides, mouseOverrides, profileOrder, menuBar]);
+  const resolvedRef = useRef(resolved);
+  resolvedRef.current = resolved;
   const byId = useMemo(() => new Map((items ?? []).map((item) => [item.id, item])), [items]);
-  const effective = (item: MenuShortcut): Shortcut => resolved.bindings.get(item.id)?.[0] ?? NO_SHORTCUT;
-  const conflictsOf = (item: MenuShortcut) => resolved.conflictsOf(item.id).flatMap((id) => byId.get(id) ?? []);
 
-  const record = async (item: MenuShortcut) => {
+  const record = useCallback(async (item: MenuShortcut) => {
     setRecording(item.id);
     const combo = await recordShortcut();
-    setRecording(null);
+    setRecording((current) => (current === item.id ? null : current));
     if (!combo) return;
     if (isMouseShortcut(combo)) return item.remappable && item.mouseBindable ? setMouseShortcut(item.id, combo) : undefined;
-    const isDefault = sameShortcut(combo, resolved.defaultsOf(item.id)[0] ?? NO_SHORTCUT);
+    const isDefault = sameShortcut(combo, resolvedRef.current.defaultsOf(item.id)[0] ?? NO_SHORTCUT);
     setShortcutOverride(item.id, isDefault ? null : combo);
-  };
+  }, []);
+
+  const clear = useCallback((item: MenuShortcut) => {
+    setShortcutOverride(item.id, resolvedRef.current.defaultsOf(item.id).length ? NO_SHORTCUT : null);
+  }, []);
+
+  const reset = useCallback((id: string) => setShortcutOverride(id, null), []);
+  const clearMouse = useCallback((id: string) => setMouseShortcut(id, null), []);
 
   const searchKeys = async () => {
     if (Date.now() - keySearchEndedAt.current < KEY_SEARCH_CANCEL_PRESS_MS) return;
@@ -104,22 +137,40 @@ function KeyboardSection() {
     setShortcutsQuery(keys);
   };
 
-  const matches = (item: MenuShortcut) =>
-    combo
-      ? (resolved.bindings.get(item.id) ?? []).some((binding) => bindsCombo(binding, combo))
-      : matchesQuery(query, item.title, item.path.join(" "), formatShortcut(effective(item)), formatShortcut(resolved.mouse.get(item.id) ?? NO_SHORTCUT));
+  const { menuItems, extensionItems, found } = useMemo(() => {
+    const shown = (items ?? []).filter((item) => {
+      const effective = resolved.bindings.get(item.id)?.[0] ?? NO_SHORTCUT;
+      const matched = combo
+        ? (resolved.bindings.get(item.id) ?? []).some((binding) => bindsCombo(binding, combo))
+        : matchesQuery(query, item.title, item.path.join(" "), formatShortcut(effective), formatShortcut(resolved.mouse.get(item.id) ?? NO_SHORTCUT));
+      if (!matched) return false;
+      if (filter === "customized") return !!overrides[item.id] || resolved.mouse.has(item.id);
+      if (filter === "conflicts") return resolved.conflictsOf(item.id).some((id) => byId.has(id));
+      return true;
+    });
+    const menuList: MenuShortcut[] = [];
+    const extList: MenuShortcut[] = [];
+    for (const item of shown) {
+      if (item.id.startsWith(EXTENSION_ITEM)) extList.push(item);
+      else menuList.push(item);
+    }
+    return { menuItems: menuList, extensionItems: extList, found: shown.length > 0 };
+  }, [items, query, filter, combo, overrides, resolved, byId]);
 
-  const shown = (items ?? []).filter((item) => {
-    if (!matches(item)) return false;
-    if (filter === "customized") return !!overrides[item.id] || resolved.mouse.has(item.id);
-    if (filter === "conflicts") return conflictsOf(item).length > 0;
-    return true;
-  });
-  const menuItems = shown.filter((i) => !i.id.startsWith(EXTENSION_ITEM));
-  const extensionItems = shown.filter((i) => i.id.startsWith(EXTENSION_ITEM));
-  const menus = [...new Set(menuItems.map((i) => i.path[0] ?? ""))];
+  const visibleMenuCount = useProgressiveCount(menuItems.length, INITIAL_SHORTCUT_ROWS, SHORTCUT_ROW_BATCH);
+  const sections = useMemo(() => {
+    const groups = new Map<string, MenuShortcut[]>();
+    const visible = menuItems.slice(0, visibleMenuCount);
+    for (const item of visible) {
+      const menu = item.path[0] ?? "";
+      const list = groups.get(menu);
+      if (list) list.push(item);
+      else groups.set(menu, [item]);
+    }
+    return [...groups.entries()].map(([menu, list]) => ({ menu, items: list }));
+  }, [menuItems, visibleMenuCount]);
+
   const customizedCount = Object.keys(overrides).length + resolved.mouse.size;
-  const found = shown.length > 0;
 
   useEffect(() => {
     if (!combo || items === null) return;
@@ -129,34 +180,25 @@ function KeyboardSection() {
     return () => clearTimeout(timer);
   }, [combo && comboKey(combo), items === null]);
 
-  const itemRow = (item: MenuShortcut) => {
-    const others = conflictsOf(item);
+  const renderRow = (item: MenuShortcut) => {
+    const others = resolved.conflictsOf(item.id).flatMap((id) => byId.get(id) ?? []);
+    const conflictText = others.length
+      ? `${others.length === 1 ? "This shortcut conflicts with another shortcut:" : "This shortcut conflicts with other shortcuts:"} ${others.map((o) => o.title).join(", ")}`
+      : null;
     return (
-      <Row
+      <ShortcutRow
         key={item.id}
-        icon={null}
-        title={item.title}
-        description={
-          others.length ? (
-            <Text size="caption" tone="warning" style={CONFLICT}>
-              {`${others.length === 1 ? "This shortcut conflicts with another shortcut:" : "This shortcut conflicts with other shortcuts:"} ${others.map((o) => o.title).join(", ")}`}
-            </Text>
-          ) : item.path.length > 1 ? (
-            item.path.slice(1).join(" › ")
-          ) : undefined
-        }
-      >
-        {overrides[item.id] && <Button variant="icon" icon="arrow.uturn.backward" size="m" onPress={() => setShortcutOverride(item.id, null)} tooltip="Reset to Default" />}
-        <ShortcutField
-          combo={effective(item)}
-          mouse={resolved.mouse.get(item.id)}
-          onClearMouse={() => setMouseShortcut(item.id, null)}
-          remappable={item.remappable}
-          recording={recording === item.id}
-          onRecord={() => void record(item)}
-          onClear={() => setShortcutOverride(item.id, resolved.defaultsOf(item.id).length ? NO_SHORTCUT : null)}
-        />
-      </Row>
+        item={item}
+        combo={resolved.bindings.get(item.id)?.[0] ?? NO_SHORTCUT}
+        mouse={resolved.mouse.get(item.id)}
+        customized={!!overrides[item.id]}
+        conflictText={conflictText}
+        recording={recording === item.id}
+        onRecord={record}
+        onClear={clear}
+        onReset={reset}
+        onClearMouse={clearMouse}
+      />
     );
   };
 
@@ -185,10 +227,10 @@ function KeyboardSection() {
           <EmptyState symbol={combo ? "keyboard" : "magnifyingglass"} title={combo ? `No command uses ${formatShortcut(combo)}` : "No matching commands"} />
         </View>
       )}
-      {menus.map((menu) => (
+      {sections.map(({ menu, items: sectionItems }) => (
         <View key={menu}>
           <SectionHeader title={menu} />
-          <Group>{menuItems.filter((i) => (i.path[0] ?? "") === menu).map(itemRow)}</Group>
+          <Group>{sectionItems.map(renderRow)}</Group>
         </View>
       ))}
       <View style={EXTENSIONS}>
@@ -196,12 +238,54 @@ function KeyboardSection() {
           <Row anchor="shortcuts.extensionShortcuts">
             <Button title="Edit…" onPress={() => openUrls(["chrome://extensions/shortcuts"])} />
           </Row>
-          {extensionItems.map(itemRow)}
+          {extensionItems.map(renderRow)}
         </Group>
       </View>
     </>
   );
 }
+
+type ShortcutRowProps = {
+  item: MenuShortcut;
+  combo: Shortcut;
+  mouse?: Shortcut;
+  customized: boolean;
+  conflictText: string | null;
+  recording: boolean;
+  onRecord: (item: MenuShortcut) => void;
+  onClear: (item: MenuShortcut) => void;
+  onReset: (id: string) => void;
+  onClearMouse: (id: string) => void;
+};
+
+const ShortcutRow = memo(function ShortcutRow({ item, combo, mouse, customized, conflictText, recording, onRecord, onClear, onReset, onClearMouse }: ShortcutRowProps) {
+  return (
+    <Row
+      icon={null}
+      title={item.title}
+      description={
+        conflictText ? (
+          <Text size="caption" tone="warning" style={CONFLICT}>
+            {conflictText}
+          </Text>
+        ) : item.path.length > 1 ? (
+          item.path.slice(1).join(" › ")
+        ) : undefined
+      }
+    >
+      {customized && <Button variant="icon" icon="arrow.uturn.backward" size="m" onPress={() => onReset(item.id)} tooltip="Reset to Default" />}
+      <ShortcutField
+        combo={combo}
+        mouse={mouse}
+        onClearMouse={() => onClearMouse(item.id)}
+        remappable={item.remappable}
+        recording={recording}
+        onRecord={() => void onRecord(item)}
+        onClear={() => onClear(item)}
+      />
+    </Row>
+  );
+});
 
 const CTRL_TAB_NOW: Record<CtrlTabChoice, string> = {
   step: "Steps through your tabs in order.",

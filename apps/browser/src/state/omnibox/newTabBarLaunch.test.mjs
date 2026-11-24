@@ -9,7 +9,8 @@ const client = await import("../telemetry/client.ts");
 const usage = await import("../telemetry/usage.ts");
 const { useBrowser } = await import("../browser/store.ts");
 const model = await import("../browser/model.ts");
-const { closeNewTabBar, showOnceOverEmptyCard, startNewTabBar } = await import("./newTabBar.ts");
+const { closeNewTabBar, showNewTabBar, showOnceOverEmptyCard, startNewTabBar } = await import("./newTabBar.ts");
+const { isWindowResignedKey } = await import("../app/appActive.ts");
 const { openExternalUrls } = await import("../littleArdia/actions.ts");
 after(() => client.setSharing(false, "settings"));
 
@@ -63,4 +64,29 @@ test("a link from another app over the launch bar fills the empty card instead o
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(S().windows[w].tabIds.map((id) => S().tabs[id].url), ["https://link.com/"]);
   assert.equal(panel(w).open, false);
+});
+
+test("resignActive keeps the New Tab bar open, while screenLocked and focusing another window dismiss it", () => {
+  S().hydrate({ profiles: { default: PERSONAL }, profileOrder: ["default"], windows: {}, tabs: {} });
+  S().updateSettings({ newTabOpens: "commandBar" });
+  const w1 = S().createWindow({ url: "https://a.com/" });
+  const w2 = S().createWindow({ url: "https://b.com/" });
+  showNewTabBar(w1);
+  assert.equal(panel(w1).open, true);
+
+  stub.emitAppEvent({ type: "resignActive" });
+  assert.equal(panel(w1).open, true, "resignActive keeps the bar open");
+
+  stub.emitAppEvent({ type: "windowResignedKey", windowId: w1 });
+  assert.equal(isWindowResignedKey(w1), true, "windowResignedKey marks window inactive for blur");
+  stub.windows.emit({ type: "focus", id: w1 });
+  assert.equal(isWindowResignedKey(w1), false, "focus clears resigned-key state");
+
+  stub.windows.emit({ type: "focus", id: w2 });
+  assert.equal(panel(w1).open, false, "focusing another Ardia window dismisses the bar");
+
+  showNewTabBar(w2);
+  assert.equal(panel(w2).open, true);
+  stub.emitAppEvent({ type: "screenLocked" });
+  assert.equal(panel(w2).open, false, "screenLocked dismisses the bar");
 });

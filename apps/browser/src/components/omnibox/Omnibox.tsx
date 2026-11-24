@@ -1,6 +1,7 @@
 import { displayUrl, asksForBackspace, keywordBySpace, resolveInput, searchUrl, scopedSearchUrl, suggestionKey, type Suggestion } from "@ardia/core";
 import { Symbol, useTheme } from "../ui";
 import { copyText, pickFiles } from "../../state/app/system";
+import { deferBlurCancel } from "../../state/app/appActive";
 import { chooseFromMenu } from "../../state/app/menuChoice";
 import { dictationAvailable, startDictation } from "../../state/omnibox/textInput";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -278,6 +279,8 @@ export function Omnibox({
     );
 
   const focused = useRef(false);
+  const blurCancel = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(blurCancel.current), []);
   const focusOnce = () => {
     if (focused.current) return;
     focused.current = true;
@@ -308,8 +311,8 @@ export function Omnibox({
       }}
       onChangeText={onChangeText}
       onSubmitEditing={() => choose(current, "current", true)}
-      onFocus={() => ((editing.current = true), setListAway(false), hero && markNewTabBar("focused", tabId))}
-      onBlur={() => ((editing.current = false), (focusEcho.current = false), onCancel?.())}
+      onFocus={() => (clearTimeout(blurCancel.current), (editing.current = true), setListAway(false), hero && markNewTabBar("focused", tabId))}
+      onBlur={() => ((editing.current = false), (focusEcho.current = false), clearTimeout(blurCancel.current), onCancel && (blurCancel.current = deferBlurCancel(windowId, () => editing.current, () => latest.current.onCancel?.())))}
       keyDownEvents={barKeyDownEvents(asksForBackspace(scope), isRemovable(current))}
       onKeyDown={onKeyDown}
     />

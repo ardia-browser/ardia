@@ -8,7 +8,7 @@ import { newTabOpensOf } from "../settings/settings";
 
 export const NEW_TAB_BAR_POLICY = {
   closeTabKeyOnlyDismissesBar: true,
-  dismissOnWindowDeactivation: true,
+  dismissOnWindowDeactivation: false,
   showOnceOverNewEmptyWindow: true,
   showOnLaunch: true,
   closingLastTabLeavesEmptyWindow: true,

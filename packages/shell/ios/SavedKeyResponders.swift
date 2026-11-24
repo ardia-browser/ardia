@@ -17,7 +17,70 @@ final class SavedKeyResponders {
   }
 
   private var saved: [Int: Saved] = [:]
+  private var resignTokens: [ObjectIdentifier: Int] = [:]
   private var next = 0
+  private var installed = false
+
+  func install() {
+    guard !installed else { return }
+    installed = true
+    let center = NotificationCenter.default
+    center.addObserver(self, selector: #selector(textDidEndEditing(_:)), name: NSText.didEndEditingNotification, object: nil)
+    center.addObserver(self, selector: #selector(windowDidResignKey(_:)), name: NSWindow.didResignKeyNotification, object: nil)
+    center.addObserver(self, selector: #selector(appWillResignActive(_:)), name: NSApplication.willResignActiveNotification, object: nil)
+  }
+
+  @objc private func appWillResignActive(_ notification: Notification) {
+    guard let window = NSApp.keyWindow, WindowManager.shared.kind(of: window)?.isBrowser == true else { return }
+    saveOnResign(window)
+  }
+
+  @objc private func textDidEndEditing(_ notification: Notification) {
+    guard let editor = notification.object as? NSTextView, editor.isFieldEditor,
+      let window = editor.window, !window.isKeyWindow,
+      let field = editor.delegate as? NSView,
+      let id = WindowManager.shared.id(of: window),
+      WindowManager.shared.kind(of: window)?.isBrowser == true
+    else { return }
+    let key = ObjectIdentifier(window)
+    if let previous = resignTokens.removeValue(forKey: key) { discard(previous) }
+    next += 1
+    saved[next] = Saved(window: window, responder: field, selection: editor.selectedRange())
+    resignTokens[key] = next
+    ShellEvents.send(.app, ["type": "windowResignedKey", "windowId": id])
+  }
+
+  @objc private func windowDidResignKey(_ notification: Notification) {
+    guard let window = notification.object as? NSWindow,
+      let id = WindowManager.shared.id(of: window),
+      WindowManager.shared.kind(of: window)?.isBrowser == true
+    else { return }
+    ShellEvents.send(.app, ["type": "windowResignedKey", "windowId": id])
+  }
+
+  func saveOnResign(_ window: NSWindow?) {
+    guard let window, Self.isTextInput(window.firstResponder) else { return }
+    let key = ObjectIdentifier(window)
+    if let previous = resignTokens.removeValue(forKey: key) { discard(previous) }
+    let token = save(window)
+    if token != 0 { resignTokens[key] = token }
+  }
+
+  func restoreOnBecomeKey(_ window: NSWindow) {
+    let token = resignTokens.removeValue(forKey: ObjectIdentifier(window))
+    for (_, other) in resignTokens { discard(other) }
+    resignTokens.removeAll()
+    if let token { _ = restore(token) }
+  }
+
+  func windowClosed(_ window: NSWindow) {
+    if let token = resignTokens.removeValue(forKey: ObjectIdentifier(window)) { discard(token) }
+  }
+
+  private static func isTextInput(_ responder: NSResponder?) -> Bool {
+    if let text = responder as? NSTextView, text.isFieldEditor { return true }
+    return responder is NSTextField
+  }
 
   func save(_ window: NSWindow?) -> Int {
     saved = saved.filter { $0.value.window != nil && $0.value.responder != nil }

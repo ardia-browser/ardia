@@ -27,6 +27,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
 
   private override init() {
     super.init()
+    SavedKeyResponders.shared.install()
     NotificationCenter.default.addObserver(self, selector: #selector(appDidBecomeActive(_:)), name: NSApplication.didBecomeActiveNotification, object: nil)
   }
   func window(_ id: String) -> NSWindow? { managed[id]?.window }
@@ -414,6 +415,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
       lastPlaced = window
       lastKeyBrowser = window
     }
+    SavedKeyResponders.shared.restoreOnBecomeKey(window)
     ShellEvents.send(.window, ["type": "focus", "id": id])
   }
 
@@ -438,6 +440,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
 
   func windowWillClose(_ notification: Notification) {
     guard let window = notification.object as? NSWindow, let id = id(of: window), let entry = managed[id] else { return }
+    SavedKeyResponders.shared.windowClosed(window)
     let closedByJS = entry.closingFromJS
     flushFrameReport(window)
     managed[id] = nil

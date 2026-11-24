@@ -13,6 +13,7 @@ import { noteCommandBarKeyDismissal } from "../telemetry/inlineCompletionCounts"
 import { noteBarLoad } from "../telemetry/barLoadFocus";
 import { navigateTyped, noteTypedOpen } from "../plugins/typedAddresses";
 import { focusHeroBar } from "./barState";
+import { startAppActive } from "../app/appActive";
 
 export { isEmptyCardTab };
 
@@ -128,11 +129,11 @@ function dismissBars(except?: string) {
 }
 
 export function startNewTabBar() {
+  startAppActive();
   for (const id of Object.keys(store().tabs)) launchTabs.add(id);
   queueMicrotask(noteLaunchCards);
-  if (!NEW_TAB_BAR_POLICY.dismissOnWindowDeactivation) return;
   onAppEvent((e) => {
-    if (e.type === "resignActive" || e.type === "screenLocked") dismissBars();
+    if (e.type === "screenLocked" || (NEW_TAB_BAR_POLICY.dismissOnWindowDeactivation && e.type === "resignActive")) dismissBars();
   });
   onWindowEvent((e) => {
     if (e.type === "focus") dismissBars(e.id);

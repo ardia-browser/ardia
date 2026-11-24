@@ -37,6 +37,29 @@ export function fakeListItems(items: readonly VaultItem[], args: { query?: strin
   return { total: rows.length, items: rows.slice(offset, offset + Math.min(Math.max(args.limit, 0), 1000)).map((row) => row.item) };
 }
 
+type Saved = { origin: string; username: string };
+
+const PANE_PAGE_MOST = 500;
+
+export function fakePaneRows(saved: readonly Saved[], items: readonly VaultItem[], args: { query?: string; offset?: number; limit: number; managers?: boolean }, revision: string) {
+  const words = (args.query ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+  const own = saved
+    .map((login) => ({ login, site: siteLabel(login.origin) || login.origin, hay: `${login.origin} ${login.username}`.toLowerCase() }))
+    .filter((row) => words.every((w) => row.hay.includes(w)))
+    .map((row) => ({ site: row.site, username: row.login.username, row: { saved: { ...row.login, created: 0, modified: 0 } } }));
+  const managers = args.managers
+    ? fakeListItems(items, { query: args.query, offset: 0, limit: 1000, managersOnly: true }).items.map((item) => ({ ...listedRow(item), row: { item } }))
+    : [];
+  const all = [...own, ...managers.map((m) => ({ site: m.site, username: m.item.username, row: m.row }))].sort((a, b) => byText.compare(a.site, b.site) || byText.compare(a.username, b.username));
+  const offset = Math.max(0, args.offset ?? 0);
+  const listed = saved.length + (args.managers ? items.filter((i) => !isArdiaProvider(i.provider)).length : 0);
+  return { total: all.length, listed, offset, rows: all.slice(offset, offset + Math.min(Math.max(args.limit, 0), PANE_PAGE_MOST)).map((r) => r.row), revision };
+}
+
+const realmOf = (origin: string) => origin.replace(/\/+$/, "").toLowerCase();
+
+export const fakeSavedOn = (saved: readonly Saved[], origin: string) => saved.filter((s) => realmOf(s.origin) === realmOf(origin)).map((s) => ({ ...s, created: 0, modified: 0 }));
+
 export const fakeUsernames = (items: readonly VaultItem[], email: boolean, limit: number, profile: string | null | undefined) =>
   previousUsernames(forProfile(items, profile), { email, limit: Math.min(Math.max(limit, 0), 50) }).map((u) => u.item);
 

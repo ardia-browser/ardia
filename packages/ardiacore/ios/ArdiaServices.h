@@ -13,6 +13,7 @@ typedef void (^ArdiaServiceReply)(id _Nullable value, NSString *_Nullable error)
     completion:(ArdiaCoreResult)completion NS_SWIFT_NAME(call(_:profile:args:completion:));
 
 + (void)listPasswords:(NSString *)profile reply:(ArdiaServiceReply)reply NS_SWIFT_NAME(listPasswords(profile:reply:));
++ (void)listPasswordsJSON:(NSString *)profile reply:(void (^)(NSString *_Nullable json))reply NS_SWIFT_NAME(listPasswordsJSON(_:reply:));
 + (void)unlockPasswords:(NSString *)profile reply:(ArdiaServiceReply)reply NS_SWIFT_NAME(unlockPasswords(profile:reply:));
 + (void)password:(NSString *)profile origin:(NSString *)origin username:(NSString *)username reply:(ArdiaServiceReply)reply
     NS_SWIFT_NAME(password(profile:origin:username:reply:));

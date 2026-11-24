@@ -9,9 +9,12 @@ let passwordExportFailures = 0;
 let passwordListShows = 0;
 let passwordListLargeShows = 0;
 let passwordListSlowShows = 0;
+let passwordListSearches = 0;
+let passwordListSlowSearches = 0;
 
 const LARGE_PASSWORD_LIST = 1000;
 const SLOW_PASSWORD_LIST_MS = 1000;
+const SLOW_PASSWORD_SEARCH_MS = 250;
 
 export const noteBookmarkExport = (consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void (bookmarkExports += 1));
 export const notePasswordExport = (consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void (passwordExports += 1));
@@ -25,6 +28,11 @@ export function notePasswordListShown(logins: number, ms: number) {
   if (ms >= SLOW_PASSWORD_LIST_MS) passwordListSlowShows += 1;
 }
 
+export function notePasswordListSearched(ms: number) {
+  passwordListSearches += 1;
+  if (ms >= SLOW_PASSWORD_SEARCH_MS) passwordListSlowSearches += 1;
+}
+
 export function takeExportCounts() {
   const taken = {
     bookmark_html_exports: bookmarkExports,
@@ -35,6 +43,8 @@ export function takeExportCounts() {
     password_list_shows: passwordListShows,
     password_list_large_shows: passwordListLargeShows,
     password_list_slow_shows: passwordListSlowShows,
+    password_list_searches: passwordListSearches,
+    password_list_slow_searches: passwordListSlowSearches,
   };
   bookmarkExports = 0;
   passwordExports = 0;
@@ -44,5 +54,7 @@ export function takeExportCounts() {
   passwordListShows = 0;
   passwordListLargeShows = 0;
   passwordListSlowShows = 0;
+  passwordListSearches = 0;
+  passwordListSlowSearches = 0;
   return taken;
 }

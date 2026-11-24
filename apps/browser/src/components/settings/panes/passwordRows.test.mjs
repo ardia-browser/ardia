@@ -11,21 +11,30 @@ const native = await import("../../../test-native/ardiacore.ts");
 const { useBrowser } = await import("../../../state/browser/store.ts");
 const { usePasswordUnlocks } = await import("../../../state/site/savedPasswords.ts");
 const { noteSettingsScroll, ROW_PAGE, useGrowingRows } = await import("../../../state/settings/growingRows.ts");
-const { Row } = await import("../Form.tsx");
+const { PANE_PAGE } = await import("../../../state/vaults/paneRows.ts");
+const { listWindow, OVERSCAN_ROWS, recycledKeys } = await import("../WindowedRows.tsx");
+const { PasswordList } = await import("./PasswordList.tsx");
 const { takeExportCounts } = await import("../../../state/telemetry/exportCounts.ts");
 const { PasswordsPage } = await import("./ProfilePasswords.tsx");
 
 const S = () => useBrowser.getState();
 const flush = () => new Promise((r) => setImmediate(r));
 
-function rowsIn(node, found = []) {
-  if (Array.isArray(node)) node.forEach((n) => rowsIn(n, found));
-  else if (node && typeof node === "object" && "props" in node) {
-    if (node.type === Row && node.key?.includes("|user")) found.push(node.key);
-    rowsIn(node.props.children, found);
+function find(node, match) {
+  if (Array.isArray(node)) {
+    for (const n of node) {
+      const found = find(n, match);
+      if (found) return found;
+    }
+  } else if (node && typeof node === "object" && "props" in node) {
+    if (match(node)) return node;
+    return find(node.props.children, match) ?? find(node.props.action, match);
   }
-  return found;
+  return null;
 }
+
+const listOf = (page) => find(page.value, (n) => n.type === PasswordList)?.props.rows;
+const searchOf = (page) => find(page.value, (n) => typeof n.props?.onSearch === "function")?.props;
 
 function savedLogins(n) {
   const store = new Map();
@@ -37,32 +46,69 @@ async function openPasswords(n) {
   S().hydrate({});
   S().createWindow({ url: "https://a.com/" });
   savedLogins(n);
+  native.vaultFakes.paneAsks.length = 0;
   usePasswordUnlocks.setState({ unlocked: { "": true } });
   const page = mount(() => PasswordsPage({ profileId: S().settings.defaultProfileId }));
-  await flush();
-  await flush();
+  for (let i = 0; i < 4; i++) await flush();
   return page;
 }
 
-test("unlocking thousands of saved passwords puts one page of rows on screen, and scrolling near the end adds the next page", async () => {
+test("unlocking 50,000 saved passwords asks the native list for one page of rows, never the whole list", async () => {
   takeExportCounts();
-  const page = await openPasswords(5000);
-  assert.equal(rowsIn(page.value).length, ROW_PAGE, "only the first page of rows is built");
+  const page = await openPasswords(50_000);
+  const rows = listOf(page);
+  assert.equal(rows.total, 50_000);
+  assert.equal(rows.listed, 50_000);
+  assert.ok(rows.rowAt(0)?.saved, "the first row arrived");
+  assert.equal(rows.rowAt(PANE_PAGE), undefined, "a row past the first page isn't fetched until it's wanted");
+  assert.deepEqual(native.vaultFakes.paneAsks.map((a) => [a.offset, a.limit, a.reload]), [[0, PANE_PAGE, true]], "one page, and the profile's list is read again");
   const counts = takeExportCounts();
   assert.equal(counts.password_list_shows, 1);
   assert.equal(counts.password_list_large_shows, 1);
-  noteSettingsScroll(0, 800, 10_000);
-  assert.equal(rowsIn(page.value).length, ROW_PAGE, "a scroll far from the end adds nothing");
-  noteSettingsScroll(9_000, 800, 10_000);
-  noteSettingsScroll(9_100, 800, 10_000);
-  assert.equal(rowsIn(page.value).length, 2 * ROW_PAGE, "reaching the end adds one page, once per content height");
-  noteSettingsScroll(19_000, 800, 20_000);
-  assert.equal(rowsIn(page.value).length, 3 * ROW_PAGE);
 });
 
-test("a short list shows every row", async () => {
-  const page = await openPasswords(40);
-  assert.equal(rowsIn(page.value).length, 40);
+test("scrolling asks only for the pages it reaches, each at most one page long", async () => {
+  const page = await openPasswords(50_000);
+  listOf(page).want(30_050, 30_120);
+  for (let i = 0; i < 3; i++) await flush();
+  assert.deepEqual(native.vaultFakes.paneAsks.slice(1).map((a) => [a.offset, a.limit, a.reload]), [[30_000, PANE_PAGE, false], [30_100, PANE_PAGE, false]]);
+  assert.ok(listOf(page).rowAt(30_120)?.saved);
+  assert.ok(native.vaultFakes.paneAsks.every((a) => a.limit <= PANE_PAGE));
+});
+
+test("a search goes to the native list and counts as a search once its rows are shown", async () => {
+  const page = await openPasswords(5000);
+  takeExportCounts();
+  const search = searchOf(page);
+  search.onTyped("site42");
+  search.onSearch("site42");
+  page.rerender();
+  for (let i = 0; i < 4; i++) await flush();
+  const rows = listOf(page);
+  assert.equal(native.vaultFakes.paneAsks.at(-1).query, "site42");
+  assert.equal(rows.total, 111);
+  assert.equal(rows.listed, 5000);
+  assert.equal(takeExportCounts().password_list_searches, 1);
+});
+
+test("the shown window covers the viewport plus a little on each side, wherever the list starts", () => {
+  const pitch = 45;
+  const atTop = listWindow(0, 800, 0, pitch, 50_000);
+  assert.equal(atTop.first, 0);
+  assert.ok(atTop.last >= Math.ceil(800 / pitch) && atTop.last <= Math.ceil(800 / pitch) + OVERSCAN_ROWS + 10);
+  const deep = listWindow(1_000_000, 800, 1000, pitch, 50_000);
+  assert.ok(deep.first * pitch <= 1_000_000 - 1000 && deep.last * pitch >= 1_000_000 - 1000 + 800);
+  assert.ok(deep.last - deep.first < 80, "a window stays small however long the list is");
+  assert.deepEqual(listWindow(0, 800, 5_000, pitch, 50_000), { first: 0, last: 0 }, "a list below the fold renders one row");
+  assert.deepEqual(listWindow(0, 800, 0, pitch, 0), { first: 0, last: -1 });
+});
+
+test("rows that leave the window hand their keys to rows that enter it", () => {
+  const first = recycledKeys({ byIndex: new Map(), next: 0 }, 0, 9);
+  assert.deepEqual([...first.byIndex.values()].sort((a, b) => a - b), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  const moved = recycledKeys(first, 4, 13);
+  assert.equal(moved.next, 10, "no new keys while the window keeps its size");
+  for (let i = 4; i <= 9; i++) assert.equal(moved.byIndex.get(i), first.byIndex.get(i), "rows still shown keep their keys");
 });
 
 test("after a search shrinks the list back to a height it had before, scrolling to its end still adds a page", () => {

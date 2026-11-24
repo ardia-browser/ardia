@@ -1,4 +1,27 @@
 import Foundation
+import os
+
+enum VaultItemsRevision {
+  private static let counter = OSAllocatedUnfairLock(initialState: 0)
+
+  static func next() -> Int { counter.withLock { $0 += 1; return $0 } }
+}
+
+struct VaultHaystack: Sendable {
+  private let bytes: [UInt8]
+
+  init(_ text: String) { bytes = Array(text.utf8) }
+
+  static func needle(_ term: String) -> [UInt8] { Array(term.utf8) }
+
+  func contains(_ needle: [UInt8]) -> Bool {
+    guard !needle.isEmpty else { return true }
+    guard needle.count <= bytes.count else { return false }
+    return bytes.withUnsafeBytes { hay in needle.withUnsafeBytes { memmem(hay.baseAddress, hay.count, $0.baseAddress, $0.count) != nil } }
+  }
+
+  func contains(all needles: [[UInt8]]) -> Bool { needles.allSatisfy(contains) }
+}
 
 struct VaultCatalog: Sendable {
   static let siteItemsLimit = 500
@@ -28,10 +51,10 @@ struct VaultCatalog: Sendable {
     let order: String
   }
 
-  private struct ListKey: Sendable {
+  struct ListKey: Sendable {
     let site: String
     let username: String
-    let haystack: String
+    let haystack: VaultHaystack
   }
 
   let items: [VaultItem]
@@ -39,8 +62,9 @@ struct VaultCatalog: Sendable {
   private let sites: VaultSiteIndex
   private let searchKeys: [SearchKey]
   private let searchOrder: [Int]
-  private let listKeys: [ListKey]
-  private let listOrder: [Int]
+  let listKeys: [ListKey]
+  let listOrder: [Int]
+  let built = VaultItemsRevision.next()
   let rank: VaultRankIndex
 
   init(_ items: [VaultItem], ownProvider: String) {
@@ -120,7 +144,7 @@ struct VaultCatalog: Sendable {
   private static func listKey(_ item: VaultItem) -> ListKey {
     let url = withScheme(item.urls.first ?? "")
     let site = url.isEmpty ? item.title : (VaultOriginMatch.siteLabel(of: url) ?? url)
-    return ListKey(site: site, username: item.username, haystack: [url.isEmpty ? site : url, item.username, item.title].joined(separator: " ").lowercased())
+    return ListKey(site: site, username: item.username, haystack: VaultHaystack([url.isEmpty ? site : url, item.username, item.title].joined(separator: " ").lowercased()))
   }
 
   private static let emailShape = try? NSRegularExpression(pattern: #"^[^\s@]+@[^\s@]+\.[^\s@]+$"#)
@@ -191,7 +215,7 @@ struct VaultCatalog: Sendable {
   }
 
   func page(query: String, offset: Int, limit: Int, filter: ProfileFilter) -> (total: Int, items: [VaultItem]) {
-    let terms = Self.words(query, folded: false)
+    let terms = Self.words(query, folded: false).map(VaultHaystack.needle)
     let start = max(offset, 0)
     let wanted = min(max(limit, 0), Self.pageLimit)
     var total = 0

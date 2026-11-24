@@ -44,6 +44,8 @@ ArdiaWebView+PageTab ── fillValues / save ───────────�
 | `VaultLockPolicy.swift` | The two lock options, the managers open right now, and the unlocked-at-quit marker. |
 | `VaultExport.swift` | Export Passwords: a CSV written natively from the store, after an owner check and the save panel (asked first, so nothing is read before there's somewhere to write). Passwords it has to read from the CLI for the export are used for the file only, never kept in the sealed store or sent to iCloud; a lock during the export stops it. The file is written beside the destination (0600) and renamed into place, so a failure leaves no partial CSV. |
 | `VaultOriginMatch.swift` | Pure origin matching (no state, Foundation only). |
+| `VaultPaneIndex.swift`, `VaultPaneList.swift` | Settings' Saved Passwords: the profile's list indexed off the main thread, merged with the managers' catalog order, and served a window at a time (`vaults.paneRows`, `vaults.savedOn`). |
+| `VaultFakeProvider.swift` | A test instance's fake manager (`ARDIA_TEST=vaultFakeItems=<n>`): `n` generated logins (several sites each, codes, passkeys, vaults, long titles) for measuring big vaults. |
 | `VaultClipboard.swift`, `VaultPasswordGenerator.swift`, `VaultTotp.swift` | Concealed clipboard copy, strong passwords, one-time code timing. |
 | `ArdiaVault.swift`, `ArdiaVaultLogin.swift`, `ArdiaVaultStore.swift`, `ArdiaVaultIndex.swift` | Ardia's own store as a manager: the provider state and item keys, the Chrome store calls (on the main thread), and the actor the broker hands every `ardia` call to. |
 | `VaultGenerated.swift`, `ArdiaWebView+VaultGenerated.swift` | Generated passwords that aren't saved in a manager yet: the sealed `Generated.vault`, the fill from it and the save popover's password drafts (their calls are in `VaultsModule`). |
@@ -438,6 +440,16 @@ login on a secure page (search). Rows sort by tier, then the login used last on 
 username on the same host from two managers, or saved once for http and once for https, shows once (logins without
 a username are never folded).
 
+Settings' Saved Passwords with a 50,000 login fake manager (`vaultFakeItems=50000`, Debug build, median of three
+interleaved runs, `apps/browser/scripts/perf/passwords-pane-bench.mjs`, 2026-11-23): opening the page went from 1.8 s
+to settle, with the JS thread blocked up to 0.85 s and the main thread up to 0.4 s, to 0.47 s, 0.15 s and 0.07 s; the
+longest search keystroke from 122 ms of JS (and 0.5 s main-thread stalls) to 5 ms; scrolling 30,000 points from
+main-thread stalls of up to 1.7 s (1,600 rows mounted) to 17 ms (84 rows); clearing a search after that from 2.4 s to
+0.44 s; opening a login's sheet from a 2.7 s main-thread stall to 7 ms. Indexing
+50,000 saved logins takes about 0.5 s off the main thread, merging 100,000 rows 30 ms and a search 6 ms (optimized,
+`vault-pane.test.swift`). Telemetry: hourly `password_list_searches` and `password_list_slow_searches` (a quarter
+of a second or longer from keystroke to rows) beside `password_list_shows`.
+
 Scale: JS ranks only the logins `vaults.siteItems` returns for the page's site, so a menu's cost no longer grows with
 the vault. On the 2026-11-23 build with a 25,000 login vault, the old path (every list sent to JS and ranked there)
 spent 870 ms of the JS thread building the first menu's rows and 480 ms on the first search keystroke; now the first
@@ -506,6 +518,8 @@ Calls (`call("vaults.<name>", args)`, typed in `packages/ardiacore/src/engine/ap
 | `searchItems` | `{query, limit?, ardiaProfile?, origin?, channel?}` | `{items, revision, cancelled?}`: ranked search (Recommendations and search above), at most 200, Ardia's logins only for `ardiaProfile`; an empty query lists by title; a newer call on the same `channel` cancels this one |
 | `recommend` | `{origin, ardiaProfile?, pageUsername?, remembered?}` | `{items, listed, revision}`: the fill menu's ranked rows for an empty field, each with `match: {tier, reason, site?}` (`origin`, `site`, `shared` or `brand`), at most 200 |
 | `listItems` | `{query?, offset?, limit, managersOnly?, profile?}` | `{total, items, revision}`: one page (at most 1000) of logins sorted by site, then username, filtered by every query word |
+| `paneRows` | `{profile, query?, offset?, limit, managers?, reload?, channel?}` | `{total, listed, offset, rows, revision}` or `{cancelled}`: one window (at most 500) of Settings' Saved Passwords, the profile's own logins (`{saved}`) merged with every manager's (`{item}`, with `managers`) by site, then username; `reload` reads the profile's list from the engine again; a newer call on the same `channel` cancels this one |
+| `savedOn` | `{profile, origin}` | `SavedPassword[]`: the profile's logins saved for exactly that origin (case and a trailing slash ignored) |
 | `usernames` | `{email, limit?, profile?}` | `VaultItem[]`: one login per username, most used first (emails first when `email`), at most 50 |
 | `itemsStatus` | `{}` | `{revision, listed, counts}` |
 | `lock`, `signOut`, `cancelSignIn` | `{provider}` | `VaultProviderState` |
@@ -1409,13 +1423,21 @@ searches land on Passwords.
 ## Saved Passwords
 
 The sub-page lists Ardia's own saved passwords and the logins of every unlocked manager in one list, sorted by
-site and searched together; a manager's login carries its badge. The list grows as you scroll
-(`state/settings/growingRows.ts`, `useGrowingRows`): 100 rows mount first and each time the scroll nears the end the
-next 100 join, so 10,000 logins mount one page until someone scrolls; passkeys and verification codes past 60 rows
-grow the same way. Ardia's half comes from Chrome's list and is sorted and searched in JS; the managers' half is
-paged natively (`vaults.listItems` through `state/vaults/itemPages.ts`): JS asks for as many rows as are mounted, in
-pages of at most 1000, keeps the rows it already has as the list grows, and merges the two sorted halves. The
-count in the header adds Chrome's list to the managers' native total. Changes that weaken the fill protections (Ask before filling off, Lock when screen locks or Lock
+site and searched together; a manager's login carries its badge. Nothing in the list is sorted, searched or merged
+in JS: `VaultPaneList` (`VaultPaneList.swift`, indexes in `VaultPaneIndex.swift`) reads the profile's list from the
+engine as JSON, parses and indexes it off the main thread, merges it with the managers' catalog order and answers
+`vaults.paneRows` with one window of rows (at most 500; JS asks for 100 at a time, `state/vaults/paneRows.ts`, and keeps
+40 pages near the window). The list is windowed (`components/settings/WindowedRows.tsx`): its height covers every row,
+and only the rows in the Settings window's viewport plus 10 on each side are mounted, on recycled keys, so scrolling
+updates rows instead of creating them; data for 100 rows either side is asked for ahead. Rows keep one line each
+(long names truncate) so every row has the measured height. A search sends the query to `vaults.paneRows` on its own
+channel (a newer keystroke supersedes it) and the field is its own component, so typing re-renders the field only.
+Passkeys past 60 rows use the same window. The edit sheets ask `vaults.savedOn` for the profile's logins on the
+website being typed (duplicate check, delete wording) instead of carrying the whole list. Where there's no native
+password manager (Linux, Windows) the list still comes from `passwords.list` and is sorted and searched in JS
+(`useLocalPaneRows`), in the same windowed list. Settings orders Ardia's logins by `VaultOriginMatch.siteLabel`, as it
+does the managers', so both halves follow one comparison. The
+count in the header is `listed`: every login of the profile and every manager, before the search. Changes that weaken the fill protections (Ask before filling off, Lock when screen locks or Lock
 When Ardia Quits off, a longer Lock after) ask for the Mac owner first (`state/vaults/settingsGuard.ts`, Chrome's
 re-auth, never the menu's Touch ID grant) and are dropped when declined. Those settings and Sync with iCloud are not
 read from `~/.config/ardia/config.json`. Its sheet copies the username, and copies the

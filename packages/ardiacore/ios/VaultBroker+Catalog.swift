@@ -1,12 +1,6 @@
 import Foundation
 import os
 
-enum VaultItemsRevision {
-  private static let counter = OSAllocatedUnfairLock(initialState: 0)
-
-  static func next() -> Int { counter.withLock { $0 += 1; return $0 } }
-}
-
 final class VaultSearchLanes: @unchecked Sendable {
   static let shared = VaultSearchLanes()
   private let lock = NSLock()

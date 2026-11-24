@@ -151,6 +151,10 @@ NSString *StoreFolder(NSString *profile, NSString *extensionId, id version) {
   })];
 }
 
++ (void)listPasswordsJSON:(NSString *)profile reply:(void (^)(NSString *_Nullable json))reply {
+  [ArdiaEngineBridge call:@"ac_passwords_list" profile:ardia_host::OriginalProfileName(profile) args:nil completion:^(NSString *json) { reply(json); }];
+}
+
 + (void)unlockPasswords:(NSString *)profile reply:(ArdiaServiceReply)reply {
   [self callBase:@"ac_passwords_unlock" profile:profile args:nil completion:^(NSDictionary *result) { Answer(result, reply); }];
 }

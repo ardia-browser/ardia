@@ -208,6 +208,23 @@ public class VaultsModule: Module {
       let filter = try VaultsModule.profileFilter(args, managersOnly: try args.optionalBool("managersOnly") == true)
       VaultsModule.answer(reply) { await VaultBroker.shared.listItems(query: query, offset: offset, limit: limit, filter: filter) }
     },
+    "paneRows": { args, reply in
+      let profile = args.profile
+      let query = String((try args.optionalText("query") ?? "").prefix(VaultsModule.longestQuery))
+      let offset = VaultsModule.count(try args.optionalDouble("offset"), otherwise: 0)
+      let limit = VaultsModule.count(try args.double("limit"), otherwise: 0)
+      let managers = try args.optionalBool("managers") == true
+      let reload = try args.optionalBool("reload") == true
+      let channel = try args.optionalText("channel")
+      VaultsModule.answer(reply) {
+        await VaultPaneList.shared.rows(profile: profile, query: query, offset: offset, limit: limit, managers: managers, reload: reload, channel: channel)
+      }
+    },
+    "savedOn": { args, reply in
+      let profile = args.profile
+      let origin = try args.text("origin")
+      VaultsModule.answer(reply) { await VaultPaneList.shared.savedOn(profile: profile, origin: origin) }
+    },
     "usernames": { args, reply in
       let email = try args.bool("email")
       let limit = VaultsModule.count(try args.optionalDouble("limit"), otherwise: 12)

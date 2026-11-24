@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View } from "react-native";
 import type { VaultPasskey } from "../../state/vaults/types";
 import { confirm } from "../../state/app/system";
@@ -9,7 +9,7 @@ import { queryWords, searchText } from "../pages/PageLayout";
 import { Button, Dialog, DialogActions, DialogTitle, Divider, Expand, space, Text, useListPresence } from "../ui";
 import { Favicon } from "../favicon/Favicon";
 import { Group, Row, SectionHeader } from "../settings/Form";
-import { useGrowingRows } from "../../state/settings/growingRows";
+import { WindowedRows } from "../settings/WindowedRows";
 import { BrandBadge, useManagerName } from "./VaultParts";
 import { VAULT_SETTINGS } from "./tokens";
 import { SavedInRow, WebsiteRow } from "./VaultSheetRows";
@@ -49,18 +49,11 @@ const PasskeyRow = memo(function PasskeyRow({ passkey }: { passkey: VaultPasskey
   );
 });
 
-function GrowingPasskeyRows({ passkeys, query }: { passkeys: readonly VaultPasskey[]; query: string }) {
-  const rows = useGrowingRows(passkeys.length, `passkeys|${query}`);
-  return (
-    <View>
-      {passkeys.slice(0, rows).map((passkey, i) => (
-        <View key={keyOf(passkey)}>
-          {i > 0 ? <Divider thick inset="l" /> : null}
-          <PasskeyRow passkey={passkey} />
-        </View>
-      ))}
-    </View>
-  );
+const renderPasskey = (passkey: VaultPasskey | undefined) => (passkey ? <PasskeyRow passkey={passkey} /> : null);
+
+function WindowedPasskeyRows({ passkeys }: { passkeys: readonly VaultPasskey[] }) {
+  const itemAt = useCallback((index: number) => passkeys[index], [passkeys]);
+  return <WindowedRows count={passkeys.length} itemAt={itemAt} render={renderPasskey} />;
 }
 
 function AnimatedPasskeyRows({ passkeys }: { passkeys: readonly VaultPasskey[] }) {
@@ -84,7 +77,7 @@ export function PasskeysSection({ query }: { query: string }) {
   return (
     <Expand open={shown.length > 0}>
       <SectionHeader title={`${COUNT.format(shown.length)} Passkey${shown.length === 1 ? "" : "s"}`} />
-      <Group>{shown.length > ANIMATED_ROWS ? <GrowingPasskeyRows passkeys={shown} query={query} /> : <AnimatedPasskeyRows passkeys={shown} />}</Group>
+      <Group>{shown.length > ANIMATED_ROWS ? <WindowedPasskeyRows passkeys={shown} /> : <AnimatedPasskeyRows passkeys={shown} />}</Group>
     </Expand>
   );
 }

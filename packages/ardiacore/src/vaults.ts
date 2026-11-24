@@ -1,3 +1,4 @@
+import type { SavedPassword } from "./passwords";
 import { decodeReply } from "./engine/call";
 import { nativeModule } from "./nativeModules";
 
@@ -81,6 +82,8 @@ export type VaultItemMatch = { tier: number; reason: "origin" | "site" | "shared
 export type VaultSiteItems = { items: VaultItem[]; listed: VaultProviderId[]; revision: number };
 export type VaultItemSearch = { items: VaultItem[]; revision: number; cancelled?: boolean };
 export type VaultItemPage = { total: number; items: VaultItem[]; revision: number };
+export type VaultPaneRow = { saved: SavedPassword; item?: undefined } | { item: VaultItem; saved?: undefined };
+export type VaultPaneRows = { total: number; listed: number; offset: number; rows: VaultPaneRow[]; revision: string; cancelled?: undefined } | { cancelled: true };
 export type VaultItemsStatus = { revision: number; listed: VaultProviderId[]; counts: Record<VaultProviderId, number> };
 
 export type VaultSignInMethod = { id: string; name: string; sendsCode?: boolean };

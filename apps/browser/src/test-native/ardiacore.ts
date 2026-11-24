@@ -24,7 +24,7 @@ import type {
 import type { EventSubscription } from "expo-modules-core";
 import { nativeEvents, unfaked } from "./events";
 import { generatedVaultHandlers } from "./vaultGenerated";
-import { fakeListItems, fakeRecommend, fakeSearchItems, fakeSiteItems, fakeUsernames } from "./vaultQueries";
+import { fakeListItems, fakePaneRows, fakeRecommend, fakeSavedOn, fakeSearchItems, fakeSiteItems, fakeUsernames } from "./vaultQueries";
 import type { AutofillToggle } from "../platform/autofill";
 
 
@@ -442,6 +442,8 @@ export const vaultFakes = {
   dropdownLogins: [] as string[],
   items: [] as FakeVaultItem[],
   itemsRevision: 0,
+  paneRevision: 0,
+  paneAsks: [] as CallArgs<"vaults.paneRows">[],
   searches: [] as string[],
   copied: [] as { provider: string; id: string; field: string }[],
   exports: [] as string[],
@@ -793,6 +795,12 @@ const fakeModules = {
         return vaultFakes.itemsGate ? vaultFakes.itemsGate.then(answer) : answer();
       },
       listItems: ({ ardiaProfile, ...args }) => ({ ...fakeListItems(unlockedVaultItems(), { ...args, profile: ardiaProfile }), revision: vaultFakes.itemsRevision }),
+      paneRows: (args) => {
+        vaultFakes.paneAsks.push(args);
+        const saved = [...(passwordStores.get(current.device)?.values() ?? [])].map((l) => ({ origin: l.url, username: l.username }));
+        return fakePaneRows(saved, unlockedVaultItems(), args, `${vaultFakes.paneRevision}.${vaultFakes.itemsRevision}`);
+      },
+      savedOn: ({ origin }) => fakeSavedOn([...(passwordStores.get(current.device)?.values() ?? [])].map((l) => ({ origin: l.url, username: l.username })), origin),
       usernames: ({ email, limit, ardiaProfile }) => fakeUsernames(unlockedVaultItems(), email, limit ?? 12, ardiaProfile),
       itemsStatus: () => {
         const answer = () => {

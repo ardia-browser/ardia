@@ -36,7 +36,7 @@ import { setTrafficLightsCenter } from "../../state/windows/nativeWindow";
 import { WindowControls } from "../window/WindowControls";
 import { LeadingWindowControls } from "../window/LeadingWindowControls";
 import { useWindowChrome } from "../../state/windows/windowButtons";
-import { noteSettingsScroll } from "../../state/settings/growingRows";
+import { noteSettingsContentSize, noteSettingsScroll, noteSettingsViewport, settingsContent } from "../../state/settings/growingRows";
 
 const SIDEBAR = settingsLayout.sidebarWidth;
 const TOOLBAR = pageToolbar.window.height;
@@ -177,9 +177,20 @@ export function SettingsWindow() {
             scrollTop.current = contentOffset.y;
             noteSettingsScroll(contentOffset.y, layoutMeasurement.height, contentSize.height);
           }}
-          onLayout={(e) => void (viewport.current = e.nativeEvent.layout.height)}
+          onContentSizeChange={(_width, height) => noteSettingsContentSize(height)}
+          onLayout={(e) => {
+            viewport.current = e.nativeEvent.layout.height;
+            noteSettingsViewport(e.nativeEvent.layout.height);
+          }}
           contentContainerStyle={PANE_SCROLL}>
-          <View key={page} ref={content} collapsable={false} style={PANE_COLUMN}>
+          <View
+            key={page}
+            ref={(view) => {
+              content.current = view;
+              settingsContent.current = view;
+            }}
+            collapsable={false}
+            style={PANE_COLUMN}>
             {shown ? (
               <NativeFormContext.Provider value>
                 <SettingsPaneContext.Provider value={shown.pane}>

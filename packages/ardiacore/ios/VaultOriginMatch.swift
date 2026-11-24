@@ -330,6 +330,73 @@ enum VaultPunycode {
     return output
   }
 
+  static func decode(_ input: String) -> String? {
+    let chars = Array(input.lowercased().unicodeScalars)
+    let split = chars.lastIndex(of: "-") ?? -1
+    var output = split > 0 ? chars[..<split].map { Int($0.value) } : []
+    guard output.allSatisfy({ $0 < 0x80 }) else { return nil }
+    var n = initialN
+    var bias = initialBias
+    var i = 0
+    var position = split + 1
+    while position < chars.count {
+      let old = i
+      var w = 1
+      var k = base
+      while true {
+        guard position < chars.count, let value = digitValue(chars[position]) else { return nil }
+        position += 1
+        guard value <= (Int.max - i) / w else { return nil }
+        i += value * w
+        let t = k <= bias ? tMin : (k >= bias + tMax ? tMax : k - bias)
+        if value < t { break }
+        guard w <= Int.max / (base - t) else { return nil }
+        w *= base - t
+        k += base
+      }
+      bias = adapt(i - old, output.count + 1, old == 0)
+      guard i / (output.count + 1) <= Int(UInt32.max) - n else { return nil }
+      n += i / (output.count + 1)
+      i %= output.count + 1
+      guard Unicode.Scalar(UInt32(n)) != nil else { return nil }
+      output.insert(n, at: i)
+      i += 1
+    }
+    var text = String.UnicodeScalarView()
+    for value in output {
+      guard let scalar = Unicode.Scalar(UInt32(value)) else { return nil }
+      text.append(scalar)
+    }
+    return String(text)
+  }
+
+  static func displayed(_ text: String) -> String {
+    var out = ""
+    var label = ""
+    func flush() {
+      if label.lowercased().hasPrefix("xn--"), let decoded = decode(String(label.dropFirst(4))) { out += decoded } else { out += label }
+      label = ""
+    }
+    for character in text {
+      if character.isLetter || character.isNumber || character == "-" {
+        label.append(character)
+      } else {
+        flush()
+        out.append(character)
+      }
+    }
+    flush()
+    return out
+  }
+
+  private static func digitValue(_ scalar: Unicode.Scalar) -> Int? {
+    switch scalar.value {
+    case 0x30...0x39: return Int(scalar.value) - 22
+    case 0x61...0x7A: return Int(scalar.value) - 0x61
+    default: return nil
+    }
+  }
+
   private static func digit(_ value: Int) -> Character {
     Character(Unicode.Scalar(UInt8(value < 26 ? value + 97 : value + 22)))
   }

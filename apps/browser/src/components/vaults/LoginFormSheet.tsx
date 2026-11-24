@@ -5,6 +5,7 @@ import { showMenu } from "../../state/app/system";
 import { currentEngineProfile } from "../../state/browser/current";
 import { closeSettingsSheet } from "../../state/settings/sheet";
 import type { SavedPassword } from "../../state/site/passwords";
+import { useSavedOn, type SavedOn } from "./savedOn";
 import { noteArdiaLoginEdited, noteLoginCreatedInSettings, noteVaultLoginEdited } from "../../state/telemetry/vaultCounts";
 import { codeSetupChoices } from "../../state/vaults/ardiaCodes";
 import { useCodePageTab, useFrontPageTab, useSeveralProfiles, useVaultProvider } from "../../state/vaults/hooks";
@@ -27,9 +28,11 @@ import { VAULT_FORM, VAULT_SIGN_IN } from "./tokens";
 
 type Mode = "password" | "code";
 
+export type { SavedOn };
+
 export type LoginFormTarget =
-  | { kind: "new"; profileId: string; saved: readonly SavedPassword[]; onSaved: () => void; onShowExisting: (saved: SavedPassword) => void }
-  | { kind: "ardia"; profile: string; saved: SavedPassword; list: readonly SavedPassword[]; hasCode: boolean; onSaved: () => void; onShowExisting: (saved: SavedPassword) => void }
+  | { kind: "new"; profileId: string; savedOn: SavedOn; onSaved: () => void; onShowExisting: (saved: SavedPassword) => void }
+  | { kind: "ardia"; profile: string; saved: SavedPassword; savedOn: SavedOn; hasCode: boolean; onSaved: () => void; onShowExisting: (saved: SavedPassword) => void }
   | { kind: "manager"; item: VaultItem };
 
 type PendingCode = { token: string; title: string };
@@ -133,7 +136,8 @@ export function LoginFormSheet({ target, initialMode = "password" }: { target: L
   const manager = useVaultProvider(target.kind === "manager" ? target.item.provider : "");
   const canCode = target.kind !== "manager" || manager?.capabilities.edit === true;
   const passwordLength = draft?.length ?? 0;
-  const saved = target.kind === "new" ? target.saved : target.kind === "ardia" ? target.list : [];
+  const lookup = target.kind === "manager" ? null : target.savedOn;
+  const { shown: saved, loaded: savedAt } = useSavedOn(lookup, mode === "password" ? normalizeWebsite(website) : null);
   const self = target.kind === "ardia" ? target.saved : null;
   const blocker = loginFormProblem(
     mode === "code"
@@ -199,6 +203,13 @@ export function LoginFormSheet({ target, initialMode = "password" }: { target: L
       else setProblem(outcome.error ?? "");
       return outcome.ok;
     }
+    if (lookup && siteOrigin) {
+      const found = existingLogin(await savedAt(siteOrigin), siteOrigin, username, self);
+      if (found) {
+        showDuplicate(found);
+        return false;
+      }
+    }
     if (target.kind === "new") {
       const profile = currentEngineProfile(profileId);
       const result = await saveNewArdiaLogin({ website: siteOrigin!, username: username.trim(), passwordDraft: draft!.token, profile, ...(code ? { codeToken: code.token } : {}) });
@@ -211,7 +222,7 @@ export function LoginFormSheet({ target, initialMode = "password" }: { target: L
       }
       if (result?.error === "declined") return false;
       if (result?.error === "exists") {
-        const found = existingLogin(target.saved, siteOrigin!, username) ?? { origin: siteOrigin!, username: username.trim() };
+        const found = existingLogin(await savedAt(siteOrigin!), siteOrigin!, username) ?? { origin: siteOrigin!, username: username.trim() };
         showDuplicate(found as SavedPassword);
         return false;
       }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { SavedPassword } from "../../../state/site/passwords";
 import { siteLabel } from "../../../state/vaults/originMatch";
 import type { VaultItem } from "../../../state/vaults/types";
+import type { PaneRows, VaultPaneRow } from "../../../state/vaults/paneRows";
 import { hostLabel, queryWords, searchText } from "../../pages/PageLayout";
 import { itemUrl } from "../../vaults/rowText";
 
@@ -11,29 +12,35 @@ const BY_SITE = new Intl.Collator(undefined, { sensitivity: "base", numeric: tru
 
 const bySite = (a: SavedEntry, b: SavedEntry) => BY_SITE.compare(a.site, b.site) || BY_SITE.compare(a.username, b.username);
 
-export const savedEntries = (saved: readonly SavedPassword[]): SavedEntry[] =>
-  saved.map((p) => ({ key: `saved|${p.origin}|${p.username}`, site: hostLabel(p.origin), username: p.username, url: p.origin, hay: searchText(p.origin, p.username), saved: p })).sort(bySite);
+const savedEntry = (p: SavedPassword): SavedEntry => ({ key: `saved|${p.origin}|${p.username}`, site: hostLabel(p.origin), username: p.username, url: p.origin, hay: searchText(p.origin, p.username), saved: p });
 
-export function loginEntries(logins: readonly VaultItem[]): SavedEntry[] {
-  return logins
-    .map((item) => {
-      const url = itemUrl(item);
-      const site = url ? siteLabel(url) : item.title;
-      return { key: `vault|${item.provider}|${item.id}`, site, username: item.username, url, hay: searchText(url || site, item.username, item.title), item };
-    })
-    .sort(bySite);
+function loginEntry(item: VaultItem): SavedEntry {
+  const url = itemUrl(item);
+  const site = url ? siteLabel(url) : item.title;
+  return { key: `vault|${item.provider}|${item.id}`, site, username: item.username, url, hay: searchText(url || site, item.username, item.title), item };
 }
 
-export function mergeSorted(a: readonly SavedEntry[], b: readonly SavedEntry[]): readonly SavedEntry[] {
-  if (!b.length) return a;
-  if (!a.length) return b;
-  const out: SavedEntry[] = [];
-  let i = 0;
-  let j = 0;
-  while (i < a.length && j < b.length) out.push(bySite(a[i]!, b[j]!) <= 0 ? a[i++]! : b[j++]!);
-  while (i < a.length) out.push(a[i++]!);
-  while (j < b.length) out.push(b[j++]!);
-  return out;
+export const savedEntries = (saved: readonly SavedPassword[]): SavedEntry[] => saved.map(savedEntry).sort(bySite);
+
+export const paneEntry = (row: VaultPaneRow): SavedEntry => (row.saved ? savedEntry(row.saved) : loginEntry(row.item!));
+
+export function useLocalPaneRows(list: readonly SavedPassword[] | null, query: string): PaneRows {
+  const saved = useMemo(() => savedEntries(list ?? []), [list]);
+  const shown = useNarrowedEntries(saved, query);
+  return useMemo<PaneRows>(
+    () => ({
+      key: `${query}`,
+      total: shown.length,
+      listed: saved.length,
+      ready: list !== null,
+      rowAt: (index) => {
+        const entry = shown[index];
+        return entry?.saved ? { saved: entry.saved } : undefined;
+      },
+      want: () => undefined,
+    }),
+    [shown, saved, list, query],
+  );
 }
 
 function matching(entries: readonly SavedEntry[], query: string): readonly SavedEntry[] {

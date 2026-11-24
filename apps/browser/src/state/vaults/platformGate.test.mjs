@@ -26,7 +26,7 @@ test("a profile's Passwords page shows the app-wide manager settings only while 
   const page = source("../../components/settings/panes/ProfilePasswords.tsx");
   const flag = /const (\w+) = vaultsSupported && \w+ === "ardia";/.exec(page)?.[1];
   assert.ok(flag, "the page decides from the profile's own choice");
-  assert.match(page, new RegExp(`\\{${flag} \\? <ForAllProfilesSection`));
+  assert.match(page, new RegExp(`[{(]${flag} \\? <ForAllProfilesSection`));
 });
 
 test("password manager plugins never reach native where plugins don't run, and their run events are a no-op there", async () => {

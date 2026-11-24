@@ -16,7 +16,8 @@ import { plural } from "../../../state/browser/model";
 import { importPasswordsCsv, unlockPasswordsFor, usePasswordsUnlocked } from "../../../state/site/savedPasswords";
 import { hostLabel } from "../../pages/PageLayout";
 import { showSaved, type SheetContext } from "./PasswordSheets";
-import { loginEntries, mergeSorted, savedEntries, useNarrowedEntries, useNextFrame, type SavedEntry } from "./savedEntries";
+import { useLocalPaneRows, useNextFrame, type SavedEntry } from "./savedEntries";
+import { PasswordList } from "./PasswordList";
 import { Favicon } from "../../favicon/Favicon";
 import { Group, Row, SectionHeader } from "../Form";
 import { keptByExtensionNote } from "../keptByExtension";
@@ -28,23 +29,19 @@ import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { showSettingsSheet } from "../../../state/settings/sheet";
 import { goToSettingsPane, SETTINGS_DETAIL } from "../../../state/settings/settingsWindows";
 import { ProfileSubPage } from "./ProfileSubPage";
-import { useGrowingRows } from "../../../state/settings/growingRows";
-import { notePasswordListShown } from "../../../state/telemetry/exportCounts";
+import { notePasswordListSearched, notePasswordListShown } from "../../../state/telemetry/exportCounts";
 import { useManagerPlugins, useProfilePasswordManager } from "../../../state/site/passwordManager";
 import { offerToSaveHandedOver, PasswordManagerRow } from "./PasswordManagerRow";
 import { GeneratedPasswordsSection } from "./GeneratedPasswords";
 import { ForAllProfilesSection } from "./PasswordManagers";
-import { useManagerRows, useManagerTotal } from "../../../state/vaults/itemPages";
+import { savedLoginsOn, usePaneRows } from "../../../state/vaults/paneRows";
 import { loadManagerItems } from "../../../state/vaults/store";
 import { vaultsSupported } from "../../../state/vaults/enabled";
 import { refreshArdiaManager } from "../../../state/vaults/ardiaManager";
-import { brandOf } from "../../../state/vaults/brands";
-import { BrandBadge } from "../../vaults/VaultParts";
 import { VaultLoginSheet } from "../../vaults/VaultLoginSheet";
-import { LoginFormSheet } from "../../vaults/LoginFormSheet";
+import { LoginFormSheet, type SavedOn } from "../../vaults/LoginFormSheet";
 import { VerificationCodesSection } from "../../vaults/VerificationCodes";
 import { PasskeysSection } from "../../vaults/VaultPasskeys";
-import { VAULT_SETTINGS } from "../../vaults/tokens";
 
 function passwordManagerAppsNote() {
   return systemInfo().inApplicationsFolder === false
@@ -84,40 +81,29 @@ export function PasswordsSection({ profileId }: { profileId: string }) {
   );
 }
 
-function savedRow(entry: SavedEntry, context: SheetContext) {
-  return (
-    <Row
-      key={entry.key}
-      icon={entry.url ? <Favicon url={entry.url} size={VAULT_SETTINGS.siteIcon} /> : <BrandBadge provider={entry.item?.provider ?? ""} />}
-      title={entry.site}
-      description={entry.username || "No username"}
-      onPress={() => (entry.saved ? showSaved(entry.saved, context) : showSettingsSheet(<VaultLoginSheet item={entry.item!} site={entry.site} />))}
-    >
-      {entry.item ? <BrandBadge provider={entry.item.provider} tooltip={brandOf(entry.item.provider).name} /> : null}
-    </Row>
-  );
-}
+const LOCAL_LIST = !vaultsSupported;
+
+const realmOf = (origin: string) => origin.replace(/\/+$/, "").toLowerCase();
 
 export function PasswordsPage({ profileId }: { profileId: string }) {
   const theme = useTheme();
   const [list, setList] = useState<SavedPassword[] | null>(null);
   const [never, setNever] = useState<string[]>([]);
-  const [query, setQuery] = useState("");
+  const [listQuery, setListQuery] = useState("");
   const [importStatus, setImportStatus] = useState("");
   const [exportStatus, setExportStatus] = useState("");
+  const [reload, setReload] = useState(0);
   const profile = currentEngineProfile(profileId);
   const unlocked = usePasswordsUnlocked(profile);
   const choice = useProfilePasswordManager(profileId);
   const ardia = vaultsSupported && choice === "ardia";
-  const arrived = useRef(0);
+  const shownAsked = useRef(0);
+  const searchAsked = useRef<{ query: string; at: number } | null>(null);
 
   const load = useCallback(() => {
-    void listPasswords(profile)
-      .catch(orWarn<SavedPassword[]>([]))
-      .then((passwords) => {
-        arrived.current = performance.now();
-        setList(passwords);
-      });
+    shownAsked.current = performance.now();
+    if (LOCAL_LIST) void listPasswords(profile).catch(orWarn<SavedPassword[]>([])).then(setList);
+    else setReload((n) => n + 1);
     void getNeverSavePasswordOrigins(profile).catch(orWarn<string[]>([])).then(setNever);
   }, [profile]);
   useEffect(() => {
@@ -126,11 +112,37 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
   useEffect(() => {
     if (unlocked && ardia) void loadManagerItems();
   }, [unlocked, ardia]);
+
+  const local = useLocalPaneRows(LOCAL_LIST ? list : null, listQuery);
+  const native = usePaneRows({ enabled: !LOCAL_LIST && unlocked && reload > 0, profile, query: listQuery, managers: ardia, reload });
+  const rows = LOCAL_LIST ? local : native;
   useEffect(() => {
-    if (!list || !arrived.current) return;
-    notePasswordListShown(list.length, performance.now() - arrived.current);
-    arrived.current = 0;
-  }, [list]);
+    if (!rows.ready) return;
+    if (shownAsked.current) {
+      notePasswordListShown(rows.listed, performance.now() - shownAsked.current);
+      shownAsked.current = 0;
+    }
+    const asked = searchAsked.current;
+    if (asked && asked.query === listQuery) {
+      notePasswordListSearched(performance.now() - asked.at);
+      searchAsked.current = null;
+    }
+  }, [rows.ready, rows.key]);
+  const typed = useCallback((text: string) => {
+    searchAsked.current = text.trim() ? { query: text, at: performance.now() } : null;
+  }, []);
+
+  const savedOn = useCallback<SavedOn>(
+    (origin) => (LOCAL_LIST ? Promise.resolve((list ?? []).filter((p) => realmOf(p.origin) === realmOf(origin))) : savedLoginsOn(profile, origin)),
+    [profile, list],
+  );
+  const context = useMemo<SheetContext>(() => ({ profile, savedOn, ardia, onChanged: load }), [profile, savedOn, ardia, load]);
+  const open = useCallback(
+    (entry: SavedEntry) => (entry.saved ? showSaved(entry.saved, context) : showSettingsSheet(<VaultLoginSheet item={entry.item!} site={entry.site} />)),
+    [context],
+  );
+  const newLogin = (mode: "password" | "code") =>
+    showSettingsSheet(<LoginFormSheet initialMode={mode} target={{ kind: "new", profileId, savedOn, onSaved: load, onShowExisting: (existing) => showSaved(existing, context) }} />);
 
   const importCsv = async () => {
     try {
@@ -154,40 +166,31 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
     else setExportStatus("");
   };
 
-  const saved = useMemo(() => savedEntries(list ?? []), [list]);
-  const listQuery = useNextFrame(query);
-  const savedShown = useNarrowedEntries(saved, listQuery);
-  const rows = useGrowingRows(Number.MAX_SAFE_INTEGER, `${profile}|${listQuery}`);
-  const managers = useManagerRows(ardia && unlocked, listQuery, rows);
-  const managerTotal = useManagerTotal(ardia && unlocked);
-  const fromManagers = useMemo(() => loginEntries(managers.items), [managers.items]);
-  const shown = useMemo(() => mergeSorted(savedShown, fromManagers).slice(0, rows), [savedShown, fromManagers, rows]);
-  const shownTotal = savedShown.length + (ardia ? managers.total : 0);
-  const entryCount = saved.length + (ardia ? managerTotal : 0);
-  const context = useMemo<SheetContext>(() => ({ profile, list: list ?? [], ardia, onChanged: load }), [profile, list, ardia, load]);
-  const newLogin = (mode: "password" | "code") =>
-    showSettingsSheet(
-      <LoginFormSheet initialMode={mode} target={{ kind: "new", profileId, saved: list ?? [], onSaved: load, onShowExisting: (existing) => showSaved(existing, context) }} />,
-    );
+  const managers = useMemo(() => (ardia ? <ForAllProfilesSection /> : null), [ardia]);
+  const transfers = useMemo(
+    () => (
+      <>
+        <SectionHeader title="Passwords" description={`Encrypted on this ${PLATFORM_TERMS.computer}, for this profile only.`} />
+        <Group>
+          <Row title="Import passwords" description={importStatus || "From a CSV exported by Chrome, Safari, Firefox, 1Password, Bitwarden…"}>
+            <Button title="Import CSV…" onPress={() => void importCsv()} />
+          </Row>
+          {PLATFORM_FEATURES.exportsBookmarksAndPasswords ? (
+            <Row title="Export passwords" description={exportStatus || "To a CSV file. Anyone who can open the file can read your passwords."}>
+              <Button title="Export CSV…" onPress={() => void exportCsv()} />
+            </Row>
+          ) : null}
+          <Row title="Password manager apps" description={passwordManagerAppsNote()} />
+        </Group>
+      </>
+    ),
+    [importStatus, exportStatus, profile, ardia, load],
+  );
 
   return (
     <ProfileSubPage>
-      {ardia ? <ForAllProfilesSection /> : null}
-      <SectionHeader
-        title="Passwords"
-        description={`Encrypted on this ${PLATFORM_TERMS.computer}, for this profile only.`}
-      />
-      <Group>
-        <Row title="Import passwords" description={importStatus || "From a CSV exported by Chrome, Safari, Firefox, 1Password, Bitwarden…"}>
-          <Button title="Import CSV…" onPress={() => void importCsv()} />
-        </Row>
-        {PLATFORM_FEATURES.exportsBookmarksAndPasswords ? (
-          <Row title="Export passwords" description={exportStatus || "To a CSV file. Anyone who can open the file can read your passwords."}>
-            <Button title="Export CSV…" onPress={() => void exportCsv()} />
-          </Row>
-        ) : null}
-        <Row title="Password manager apps" description={passwordManagerAppsNote()} />
-      </Group>
+      {managers}
+      {transfers}
 
       {!unlocked ? (
         <Box gap="ml" style={LOCKED}>
@@ -203,15 +206,15 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
       ) : (
         <>
           <SectionHeader
-            title={list ? plural(entryCount, "Saved Password") : "Saved Passwords"}
+            title={rows.ready ? plural(rows.listed, "Saved Password") : "Saved Passwords"}
             action={
               <Box row gap="s" center>
                 {ardia ? <Button variant="icon" icon="plus" size="m" tooltip="New Password" onPress={() => newLogin("password")} /> : null}
-                <SearchField value={query} onChangeText={setQuery} placeholder="Search" width={200} />
+                <PasswordSearch onTyped={typed} onSearch={setListQuery} />
               </Box>
             }
           />
-          <Group>{list && shownTotal === 0 && (!ardia || managers.ready) ? <Row title={listQuery ? "No passwords match" : "No saved passwords"} /> : shown.map((e) => savedRow(e, context))}</Group>
+          <PasswordList rows={rows} onOpen={open} empty={<Row title={listQuery ? "No passwords match" : "No saved passwords"} />} />
           {ardia ? <ArdiaExtras query={listQuery} profile={profile} onNewCode={() => newLogin("code")} /> : null}
           {never.length > 0 && (
             <>
@@ -229,6 +232,13 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
       )}
     </ProfileSubPage>
   );
+}
+
+function PasswordSearch({ onTyped, onSearch }: { onTyped: (text: string) => void; onSearch: (text: string) => void }) {
+  const [text, setText] = useState("");
+  const later = useNextFrame(text);
+  useEffect(() => onSearch(later), [later]);
+  return <SearchField value={text} onChangeText={(t) => (onTyped(t), setText(t))} placeholder="Search" width={200} />;
 }
 
 function ArdiaExtras({ query, profile, onNewCode }: { query: string; profile: string; onNewCode: () => void }): ReactNode {

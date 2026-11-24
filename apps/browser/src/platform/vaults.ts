@@ -29,6 +29,7 @@ export type { VaultCreateLoginResult, VaultStandaloneCode, VaultStandaloneCodeAd
 export type { VaultPasskey, VaultPasskeyAnswer, VaultPasskeyDone, VaultPasskeyOutcome, VaultPasskeyRequest } from "@ardia/ardiacore";
 
 export type VaultCopyField = VaultSecretField;
+export type { VaultPaneRow, VaultPaneRows } from "@ardia/ardiacore";
 
 export const vaultProviders = () => call("vaults.providers");
 export const claimChromeDropdownKinds = (tabId: string, kinds: ChromeDropdownShown[], usernames: string[] | null) =>
@@ -42,8 +43,9 @@ export const searchVaultItemsOn = (query: string, limit: number, profile: string
   call("vaults.searchItems", { query, limit, ardiaProfile: profile, origin, channel });
 export const recommendVaultItems = (origin: string, profile: string | null, pageUsername: string | null, remembered: string | null) =>
   call("vaults.recommend", { origin, ardiaProfile: profile, pageUsername, remembered });
-export const vaultItemPage = ({ profile, ...args }: { query: string; offset: number; limit: number; managersOnly: boolean; profile: string | null }) =>
-  call("vaults.listItems", { ...args, ardiaProfile: profile });
+export const vaultPaneRows = (args: { profile: string; query: string; offset: number; limit: number; managers: boolean; reload: boolean }) =>
+  call("vaults.paneRows", args);
+export const vaultSavedOn = (profile: string, origin: string) => call("vaults.savedOn", { profile, origin });
 export const vaultUsernames = (email: boolean, limit: number, profile: string | null) => call("vaults.usernames", { email, limit, ardiaProfile: profile });
 export const vaultItemsStatus = () => call("vaults.itemsStatus", {});
 export const lockVault = (provider: string) => call("vaults.lock", { provider });

@@ -12,19 +12,19 @@ import { Favicon } from "../../favicon/Favicon";
 import { Group, Row } from "../Form";
 import { useVaultSiteItems } from "../../../state/vaults/hooks";
 import { ArdiaCodeRow } from "../../vaults/VaultCodeRows";
-import { LoginFormSheet } from "../../vaults/LoginFormSheet";
+import { LoginFormSheet, type SavedOn } from "../../vaults/LoginFormSheet";
 import { SavedInRow, WebsiteRow } from "../../vaults/VaultSheetRows";
 import { ARDIA_PROVIDER } from "../../../state/vaults/ardia";
 import { brandOf } from "../../../state/vaults/brands";
 import { deleteLoginMessage } from "../../../state/vaults/deleteLogin";
 import { ardiaLoginDeleted, ardiaLoginOf, copySavedPassword } from "../../../state/vaults/ardiaCodes";
 
-export type SheetContext = { profile: string; list: readonly SavedPassword[]; ardia: boolean; onChanged: () => void };
+export type SheetContext = { profile: string; savedOn: SavedOn; ardia: boolean; onChanged: () => void };
 
 export const showSaved = (saved: SavedPassword, context: SheetContext) =>
   showSettingsSheet(context.ardia ? <ArdiaPasswordSheet saved={saved} {...context} /> : <PasswordSheet profile={context.profile} saved={saved} onChanged={context.onChanged} />);
 
-function ArdiaPasswordSheet({ profile, saved, list, onChanged, ardia }: { saved: SavedPassword } & SheetContext) {
+function ArdiaPasswordSheet({ profile, saved, savedOn, onChanged, ardia }: { saved: SavedPassword } & SheetContext) {
   const [password, setPassword] = useState<string | null>(null);
   const [revealed, setRevealed] = useState(false);
   const [error, setError] = useState("");
@@ -38,16 +38,17 @@ function ArdiaPasswordSheet({ profile, saved, list, onChanged, ardia }: { saved:
     closeSettingsSheet();
   }, [unlocked]);
 
-  const context: SheetContext = { profile, list, ardia, onChanged };
+  const context: SheetContext = { profile, savedOn, ardia, onChanged };
   const edit = () =>
     showSettingsSheet(
-      <LoginFormSheet target={{ kind: "ardia", profile, saved, list, hasCode: ardiaItem?.hasTotp === true, onSaved: onChanged, onShowExisting: (other) => showSaved(other, context) }} />,
+      <LoginFormSheet target={{ kind: "ardia", profile, saved, savedOn, hasCode: ardiaItem?.hasTotp === true, onSaved: onChanged, onShowExisting: (other) => showSaved(other, context) }} />,
     );
   const remove = async () => {
     setBusy(true);
+    const near = await savedOn(saved.origin).catch(() => [saved]);
     const { confirmed } = await confirm({
       title: `Delete Password for ${hostLabel(saved.origin)}?`,
-      message: deleteLoginMessage(saved, list),
+      message: deleteLoginMessage(saved, near),
       confirmTitle: "Delete",
       destructive: true,
     });

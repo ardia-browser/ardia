@@ -5,8 +5,6 @@ const { useBrowser } = await import("../browser/store.ts");
 const { webviews } = await import("../../platform/webviews.ts");
 const store = await import("./store.ts");
 const menu = await import("./menu.ts");
-const { fetchManagerRows, ITEM_PAGE_MOST } = await import("./itemPages.ts");
-const { loginEntries, mergeSorted, savedEntries } = await import("../../components/settings/panes/savedEntries.ts");
 const { usePlugins } = await import("../plugins/store.ts");
 usePlugins.setState({ scanned: true });
 
@@ -75,23 +73,4 @@ test("locking a manager drops its logins from every cache at once", async () => 
   await settle();
   const open = menu.vaultMenuOf(tabId);
   assert.ok(!open || menu.rowsOfMenu(open).every((r) => r.kind !== "login"));
-});
-
-test("Settings pages manager logins natively in site order and merges them with Ardia's own", async () => {
-  native.vaultFakes.providers = [bitwarden];
-  native.vaultFakes.items = Array.from({ length: 2500 }, (_, i) => login(i, `site${String(i).padStart(4, "0")}.example`));
-  native.engineCalls.length = 0;
-  const first = await fetchManagerRows("", { total: 0, items: [] }, 100);
-  assert.equal(first.total, 2500);
-  assert.equal(first.items.length, 100);
-  const more = await fetchManagerRows("", first, 1300);
-  assert.equal(more.items.length, 1300);
-  assert.deepEqual(more.items.slice(0, 100), first.items, "growing keeps the rows already shown");
-  assert.equal(new Set(more.items.map((i) => i.id)).size, 1300);
-  assert.ok(native.engineCalls.filter((c) => c.verb === "listItems").length <= 1 + Math.ceil(1200 / ITEM_PAGE_MOST));
-  const narrowed = await fetchManagerRows("site0042", { total: 0, items: [] }, 100);
-  assert.deepEqual(narrowed.items.map((i) => i.id), ["42"]);
-  const chrome = savedEntries([{ origin: "https://site0001.example", username: "ardia-own" }]);
-  const merged = mergeSorted(chrome, loginEntries(first.items.slice(0, 3)));
-  assert.deepEqual(merged.map((e) => e.username), ["user0", "ardia-own", "user1", "user2"]);
 });

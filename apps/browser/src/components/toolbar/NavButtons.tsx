@@ -14,7 +14,7 @@ import { closeHistoryMenu, goBack, goForward, historyItems, toggleHistoryMenu } 
 import { openModeFor, openUrl } from "../../state/bookmarks/actions";
 import type { ToolbarPalette } from "../ui/toolbarColors";
 import { withShortcut } from "../../state/commands/commandShortcuts";
-import { GLYPH, HISTORY_GLYPH, HISTORY_BUTTON_MOTION, RELOAD_BUTTON_MOTION, SYMBOL_BOX } from "./tokens";
+import { GLYPH, HISTORY_BUTTON_MOTION, NAV_GLYPH, RELOAD_BUTTON_MOTION, SYMBOL_BOX } from "./tokens";
 import { showReloadMenu } from "../../state/site/reloadMenu";
 import { useStableHandler } from "./useStableHandler";
 
@@ -25,9 +25,11 @@ const SYMBOL_FRAME = { width: SYMBOL_BOX, height: SYMBOL_BOX };
 const ReloadGlyphColor = createContext("");
 const ReloadGlyphBreathing = createContext(false);
 
+const navSymbol = (name: string, color: string) => drawnSymbol({ name, size: NAV_GLYPH.size, weight: NAV_GLYPH.weight, color, style: SYMBOL_FRAME });
+
 function ReloadSymbol({ name }: { name: "arrow.clockwise" | "xmark" }) {
   useScopedTheme();
-  return drawnSymbol({ name, size: GLYPH, weight: "regular", color: useContext(ReloadGlyphColor), style: SYMBOL_FRAME });
+  return navSymbol(name, useContext(ReloadGlyphColor));
 }
 
 function BreathingStop() {
@@ -244,14 +246,14 @@ export const HistoryButton = memo(function HistoryButton({
       handingOff ? (
         <View style={ICON_CENTER}>
           <Animated.View pointerEvents="none" style={[ICON_LAYER, { opacity: handoff.fadeOut, transform: [{ translateX: handoff.outX }] }]}>
-            {drawnSymbol({ name: icon, size: HISTORY_GLYPH.size, weight: HISTORY_GLYPH.weight, color: iconColor, style: SYMBOL_FRAME })}
+            {navSymbol(icon, iconColor)}
           </Animated.View>
           <Animated.View pointerEvents="none" style={[ICON_LAYER, { opacity: handoff.fadeIn, transform: [{ translateX: handoff.inX }] }]}>
-            {drawnSymbol({ name: icon, size: HISTORY_GLYPH.size, weight: HISTORY_GLYPH.weight, color: iconColor, style: SYMBOL_FRAME })}
+            {navSymbol(icon, iconColor)}
           </Animated.View>
         </View>
       ) : (
-        drawnSymbol({ name: icon, size: HISTORY_GLYPH.size, weight: HISTORY_GLYPH.weight, color: iconColor, style: SYMBOL_FRAME })
+        navSymbol(icon, iconColor)
       ),
     [handingOff, handoff, icon, iconColor],
   );

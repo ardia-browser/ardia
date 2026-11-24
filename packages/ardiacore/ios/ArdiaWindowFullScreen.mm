@@ -84,10 +84,10 @@ BOOL UserInAnotherApp() { return !NSApp.isActive || ArdiaChromeWindowHost.active
 
 const NSTimeInterval kSpaceSettle = 0.5;
 
-BOOL WindowServerShows(NSWindow *window) {
-  if (!window.visible || window.miniaturized) return NO;
-  if (objc_getAssociatedObject(window, kActedOcclusionKey)) return objc_getAssociatedObject(window, kActedWindowServerKey) != nil;
-  return ReadWindowServerSight(window);
+WindowServerSight WindowServerShows(NSWindow *window, BOOL skipBackgroundOverlays) {
+  if (!window.visible || window.miniaturized) return {};
+  if (objc_getAssociatedObject(window, kActedOcclusionKey)) return {objc_getAssociatedObject(window, kActedWindowServerKey) != nil, NO};
+  return ReadWindowServerSight(window, skipBackgroundOverlays);
 }
 
 }
@@ -125,6 +125,7 @@ NSMapTable<ArdiaCoreTab *, NSNumber *> *FullScreenChanges() {
   BOOL _picturing;
   BOOL _overruled;
   BOOL _keptForPage;
+  BOOL _pastOverlays;
   BOOL _sightSourceChanged;
   BOOL _watchingWindowServer;
   BOOL _leftApp;
@@ -205,13 +206,20 @@ NSMapTable<ArdiaCoreTab *, NSNumber *> *FullScreenChanges() {
   if ([self occlusionActed] && !objc_getAssociatedObject(window, kActedOcclusionKey)) return YES;
   const BOOL appKitShows = (window.occlusionState & NSWindowOcclusionStateVisible) != 0;
   const BOOL inactive = UserInAnotherApp();
-  const BOOL windowServerShows = (inactive || !appKitShows) && WindowServerShows(window);
+  const WindowServerSight sight = (inactive || !appKitShows) ? WindowServerShows(window, appKitShows && !NSApp.isActive) : WindowServerSight{};
+  const BOOL windowServerShows = sight.shows;
   const BOOL overruled = !appKitShows && windowServerShows;
   if (overruled != _overruled) {
     _overruled = overruled;
     _sightSourceChanged = YES;
     if ([ArdiaLaunchConfig.shared traced:@"visibility"])
       NSLog(@"[ardiacore-vis] window %ld AppKit occlusion %@ by the window server", (long)window.windowNumber, overruled ? @"overruled" : @"trusted");
+  }
+  if (sight.onlyPastOverlays != _pastOverlays) {
+    _pastOverlays = sight.onlyPastOverlays;
+    _sightSourceChanged = YES;
+    if ([ArdiaLaunchConfig.shared traced:@"visibility"])
+      NSLog(@"[ardiacore-vis] window %ld %@", (long)window.windowNumber, _pastOverlays ? @"seen only past a background app's whole-display overlay" : @"no longer seen only past an overlay");
   }
   if ([self wantsWindowServer]) [self watchWindowServer];
   return ardia_window_sight::WindowShown(!inactive, appKitShows, windowServerShows, !OffActiveSpace(window));
@@ -245,6 +253,10 @@ NSMapTable<ArdiaCoreTab *, NSNumber *> *FullScreenChanges() {
 
 - (BOOL)seenOnlyByWindowServer {
   return _seen && _overruled && !_settling && !OffActiveSpace(_coreWindow.window);
+}
+
+- (BOOL)seenOnlyPastOverlays {
+  return _seen && _pastOverlays && !_settling && !OffActiveSpace(_coreWindow.window);
 }
 
 - (BOOL)seenOnlyForPageFullScreen {

@@ -329,6 +329,14 @@ NSView *LingeringPaneOver(NSView *view) {
     [self traceAutoPictureInPicture:@"app: the window left sight, the page stays in its own full screen"];
     [self emit:@"autoPictureInPictureKept" payload:[ArdiaConsentStamp.begin onto:@{@"reason" : @"pageFullScreen"}]];
   }
+  const BOOL pastOverlay = seen && _visible && [ArdiaWindowController userSeesOnlyPastOverlays:self.window];
+  if (!pastOverlay) {
+    _reports.keptPastOverlay = NO;
+  } else if (!_reports.keptPastOverlay && self.playsForAutoPictureInPicture) {
+    _reports.keptPastOverlay = YES;
+    [self traceAutoPictureInPicture:@"app: the tab is seen only past a background app's whole-display overlay"];
+    [self emit:@"autoPictureInPictureKept" payload:[ArdiaConsentStamp.begin onto:@{@"reason" : @"overlay"}]];
+  }
   if (seen == _reports.seenByUser) return;
   _reports.seenByUser = seen;
   if (_reports.autoPictureInPictureActive || _reports.inPictureInPicture || self.playsForAutoPictureInPicture) {

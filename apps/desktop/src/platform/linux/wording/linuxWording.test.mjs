@@ -104,6 +104,10 @@ test("the reworded copy says what Linux does and drops what it can't do", () => 
   }
 });
 
+test("What's Sent on Linux names no macOS Space and no Dock", () => {
+  assert.doesNotMatch(linuxCopy("state/telemetry/copy.ts"), /\bSpaces?\b|\bDock\b/);
+});
+
 test("search rows describing reworded panes read as Linux too", () => {
   const general = linuxCopy("components/settings/rows/generalRows.ts");
   const rows = read("components/settings/rows/generalRows.ts");

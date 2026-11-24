@@ -125,6 +125,32 @@ int main() {
   CHECK(KeptByPageFullScreen(SeenByUser(false, false, true, true, false), true, true));
   CHECK(KeptByPageFullScreen(SeenByUser(false, false, false, true, true), true, true));
 
+  const Rect cuaDriverOverlay = laptop;
+  const Rect spanningOverlay{0, -200, 4072, 1440};
+  const Rect hotkeyTerminal{0, 0, 1512, 600};
+  const Rect docklessApp{100, 80, 1200, 800};
+  CHECK(IsBackgroundOverlay([] { return false; }, cuaDriverOverlay, both));
+  CHECK(IsBackgroundOverlay([] { return false; }, spanningOverlay, both));
+  CHECK(IsBackgroundOverlay([] { return false; }, external, both));
+  CHECK(!IsBackgroundOverlay([] { return true; }, cuaDriverOverlay, both));
+  CHECK(!IsBackgroundOverlay([] { return false; }, hotkeyTerminal, both));
+  CHECK(!IsBackgroundOverlay([] { return false; }, docklessApp, both));
+  CHECK(!IsBackgroundOverlay([] { return false; }, {1, 0, 1512, 982}, both));
+  CHECK(!IsBackgroundOverlay([] { return false; }, cuaDriverOverlay, {}));
+  int ownerLookups = 0;
+  const auto countedOwner = [&] { ownerLookups++; return false; };
+  CHECK(!IsBackgroundOverlay(countedOwner, hotkeyTerminal, both));
+  CHECK(!IsBackgroundOverlay(countedOwner, docklessApp, both));
+  CHECK(ownerLookups == 0);
+  CHECK(IsBackgroundOverlay(countedOwner, cuaDriverOverlay, both));
+  CHECK(ownerLookups == 1);
+
+  CHECK(VisibleOnlyPastOverlays(browserOnLaptop, {}, {cuaDriverOverlay}, both));
+  CHECK(!VisibleOnlyPastOverlays(browserOnLaptop, {}, {}, both));
+  CHECK(!VisibleOnlyPastOverlays(browserOnLaptop, {docklessApp}, {cuaDriverOverlay}, both));
+  CHECK(!VisibleOnlyPastOverlays(browserOnLaptop, {}, {external}, both));
+  CHECK(!VisibleOnlyPastOverlays({1400, 100, 300, 300}, {}, {cuaDriverOverlay}, both));
+
   Random random{0x1236};
   for (int round = 0; round < 3000; round++) {
     const Rect w{random.uniform(-200, 3000), random.uniform(-300, 900), random.uniform(50, 1500), random.uniform(50, 1000)};

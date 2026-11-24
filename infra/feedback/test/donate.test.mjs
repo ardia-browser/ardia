@@ -8,10 +8,10 @@ import { createService } from "../lib/service.mjs";
 const servers = [];
 after(() => servers.forEach((s) => s.close()));
 
-async function service(donations) {
+async function service(donations, { rateLimits = false } = {}) {
   const handle = createService({
     store: localStore("/tmp/ardia-donate-test"), events: localEvents("/tmp/ardia-donate-test"), issues: localIssues("/tmp/ardia-donate-test"),
-    secret: "x".repeat(40), publicUrl: () => "https://ardia.example", dashboardUrl: "https://dash.example", rateLimits: false, log: () => {},
+    secret: "x".repeat(40), publicUrl: () => "https://ardia.example", dashboardUrl: "https://dash.example", rateLimits, log: () => {},
     donations, donateReturnUrl: "https://ardia.example",
   });
   const server = createServer(handle);
@@ -45,13 +45,23 @@ test("stripeDonations rejects a session without a Checkout URL", async () => {
   assert.equal(await stripeDonations({ key: "rk_test_x", returnUrl: "https://a", fetchImpl: ok }).monthlyCheckoutUrl(5), "https://checkout.stripe.com/c/pay/cs_1");
 });
 
-const post = (url, body, origin = "https://ardia.example") =>
+const post = (url, body, origin = "https://ardia.example", ip = "203.0.113.1") =>
   fetch(`${url}/api/donate/monthly`, {
     method: "POST",
     redirect: "manual",
-    headers: { "Content-Type": "application/x-www-form-urlencoded", ...(origin ? { Origin: origin } : {}) },
+    headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Real-IP": ip, ...(origin ? { Origin: origin } : {}) },
     body,
   });
+
+test("monthly donations stop at 20 sessions per address and 200 overall in 10 minutes", async () => {
+  let made = 0;
+  const url = await service({ describe: () => "fake", monthlyCheckoutUrl: async () => (made++, "https://checkout.stripe.com/c/pay/cs_4") }, { rateLimits: true });
+  for (let i = 0; i < 20; i++) assert.equal((await post(url, "amount=5")).status, 303);
+  assert.equal((await post(url, "amount=5")).status, 429);
+  for (let i = 1; i <= 180; i++) assert.equal((await post(url, "amount=5", undefined, `198.51.100.${i}`)).status, 303);
+  assert.equal((await post(url, "amount=5", undefined, "192.0.2.1")).status, 429);
+  assert.equal(made, 200);
+});
 
 test("POST /api/donate/monthly redirects to Checkout, or back to the site for a bad amount", async () => {
   const asked = [];

@@ -187,4 +187,56 @@ final class SharedFolderDirectoryTests: XCTestCase {
     XCTAssertNotNil(listing["error"] as? String)
     XCTAssertNil(SharedFolderDirectory(root: scratch.appendingPathComponent("nowhere")).read()["error"])
   }
+
+  func testResolveGivesTheCanonicalPathAndRefusesTheRootAFileAndAMissingFolder() throws {
+    let real = try folder("real")
+    let link = scratch.appendingPathComponent("link")
+    try fm.createSymbolicLink(at: link, withDestinationURL: real)
+    let viaLink = try SharedFolderDirectory.resolve(link.path + "/")
+    let direct = try SharedFolderDirectory.resolve(real.path)
+    XCTAssertEqual(viaLink["path"] as? String, direct["path"] as? String)
+    XCTAssertEqual(viaLink["inode"] as? Int, direct["inode"] as? Int)
+    XCTAssertFalse((direct["path"] as! String).contains("/link"))
+    XCTAssertThrowsError(try SharedFolderDirectory.resolve("/"))
+    XCTAssertThrowsError(try SharedFolderDirectory.resolve(scratch.appendingPathComponent("nowhere").path))
+    try "x".write(to: scratch.appendingPathComponent("plain.txt"), atomically: true, encoding: .utf8)
+    XCTAssertThrowsError(try SharedFolderDirectory.resolve(scratch.appendingPathComponent("plain.txt").path))
+  }
+
+  func testARepointedSymlinkIsNeitherReadNorWritten() throws {
+    let first = try folder("first")
+    let second = try folder("second")
+    try webloc("https://second.example/").write(to: second.appendingPathComponent("Other.webloc"), atomically: true, encoding: .utf8)
+    let link = scratch.appendingPathComponent("bound")
+    try fm.createSymbolicLink(at: link, withDestinationURL: first)
+    let resolved = try SharedFolderDirectory.resolve(link.path)
+    let identity = ["device": resolved["device"] as! Int, "inode": resolved["inode"] as! Int]
+    let canonical = URL(fileURLWithPath: resolved["path"] as! String, isDirectory: true)
+    XCTAssertEqual(SharedFolderDirectory(root: canonical, identity: identity).read()["exists"] as? Bool, true)
+
+    try fm.removeItem(at: first)
+    try fm.createSymbolicLink(at: URL(fileURLWithPath: resolved["path"] as! String), withDestinationURL: second)
+    let moved = SharedFolderDirectory(root: canonical, identity: identity)
+    XCTAssertEqual(moved.read()["exists"] as? Bool, false)
+    XCTAssertNotNil(moved.read()["error"] as? String)
+    XCTAssertThrowsError(try moved.apply(json: try ops([["op": "write", "path": "New.webloc", "text": webloc("https://x.example/"), "create": true, "expect": NSNull()]])))
+    XCTAssertFalse(fm.fileExists(atPath: second.appendingPathComponent("New.webloc").path))
+  }
+
+  func testAFolderPastTheScanCapIsRefusedWithAClearError() throws {
+    let root = try folder("big")
+    for i in 0...SharedFolderDirectory.maxEntries { XCTAssertTrue(fm.createFile(atPath: root.appendingPathComponent("f\(i).txt").path, contents: nil)) }
+    let listing = SharedFolderDirectory(root: root).read()
+    XCTAssertEqual(listing["exists"] as? Bool, false)
+    XCTAssertTrue((listing["error"] as? String)?.contains("more than") == true)
+  }
+
+  func testRemovingAFolderThatCantBeOpenedIsAnErrorNotDone() throws {
+    let root = try folder("root")
+    let locked = try folder("root/Locked")
+    try fm.setAttributes([.posixPermissions: 0o000], ofItemAtPath: locked.path)
+    defer { try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: locked.path) }
+    XCTAssertThrowsError(try SharedFolderDirectory(root: root).apply(json: try ops([["op": "rmdir", "path": "Locked"]])))
+    XCTAssertTrue(fm.fileExists(atPath: locked.path))
+  }
 }

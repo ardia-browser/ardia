@@ -51,11 +51,12 @@ for (const version of [2, 3, 4]) {
   });
 }
 
-test("saving writes the current version with only an idle or asleep page and a regular tab's restore id; it reads back the same", () => {
+test("saving writes the current version with only an idle or asleep page and a regular tab's restore id; it reads back the same", async () => {
   stub.docs.clear();
   stub.docs.set("session.json", JSON.stringify(oldDocument(4)));
   const stop = startPersistence();
   S().updateTab("lazy", { title: "lazy!" });
+  await new Promise((resolve) => setTimeout(resolve, 0));
   flushPersistence();
   stop();
   const saved = JSON.parse(stub.docs.get("session.json"));

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 globalThis.__DEV__ = false;
-const { splitGeometry } = await import("./geometry.ts");
+const { evenPair, splitGeometry } = await import("./geometry.ts");
 const GAP = 9;
 
 const split = (ids, sizes, orientation = "horizontal") => ({ id: "s", orientation, slots: ids.map((tabId, i) => ({ size: sizes[i], tabId })) });
@@ -18,4 +18,10 @@ test("split panes sit the card's 9 pt apart and fill it to the last point, whate
   assert.equal(three.c.x + three.c.width, 1001);
   const tall = splitGeometry(split(["a", "b"], [0.5, 0.5], "vertical"), 900, 701, GAP).panes;
   assert.equal(tall.b.y + tall.b.height, 701);
+});
+
+test("double-clicking a split divider evens the two panes it separates and leaves the others", () => {
+  assert.deepEqual(evenPair([0.7, 0.3], 0), [0.5, 0.5]);
+  assert.deepEqual(evenPair([0.2, 0.5, 0.3], 1), [0.2, 0.4, 0.4]);
+  assert.deepEqual(evenPair([0.6, 0.4], 1), [0.6, 0.4]);
 });

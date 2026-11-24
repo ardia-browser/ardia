@@ -1,0 +1,106 @@
+--- a/components/password_manager/core/browser/password_store/login_database.cc
++++ b/components/password_manager/core/browser/password_store/login_database.cc
+@@ -962,18 +962,6 @@
+   return result;
+ }
+ 
+-// Fills |cred| with necessary data required to be removed from the database
+-// and returns it.
+-StoredCredential GetStoredCredentialForRemoval(sql::Statement& statement) {
+-  StoredCredential cred;
+-  cred.url = GURL(statement.ColumnStringView(COLUMN_ORIGIN_URL));
+-  cred.username_element = statement.ColumnString16(COLUMN_USERNAME_ELEMENT);
+-  cred.username_value = statement.ColumnString16(COLUMN_USERNAME_VALUE);
+-  cred.password_element = statement.ColumnString16(COLUMN_PASSWORD_ELEMENT);
+-  cred.signon_realm = statement.ColumnString(COLUMN_SIGNON_REALM);
+-  return cred;
+-}
+-
+ // Whether we should try to return the decryptable passwords while the
+ // encryption service fails for some passwords.
+ bool ShouldReturnPartialPasswords() {
+@@ -1062,10 +1050,9 @@
+ 
+   // Needed in order to maintain kClearUndecryptablePasswords experiment groups
+   // population.
+-  if (clearing_undecryptable_passwords) {
+-    clearing_undecryptable_passwords.Run(is_account_store);
+-  }
+-  return base::FeatureList::IsEnabled(features::kClearUndecryptablePasswords);
++  // Ardia: never delete a saved password because this PC can't decrypt it,
++  // whatever kClearUndecryptablePasswords says.
++  return false;
+ }
+ 
+ }  // namespace
+@@ -1930,51 +1917,11 @@
+ 
+ DatabaseCleanupResult LoginDatabase::DeleteUndecryptableLogins() {
+   TRACE_EVENT0("passwords", "LoginDatabase::DeleteUndecryptableLogins");
+-  // If the Keychain in MacOS or the real secret key in Linux is unavailable,
+-  // don't delete any logins.
+-  if (!encryptor_ || !encryptor_->IsEncryptionAvailable()) {
+-    metrics_util::LogDeleteUndecryptableLoginsReturnValue(
+-        metrics_util::DeleteCorruptedPasswordsResult::kEncryptionUnavailable);
+-    return DatabaseCleanupResult::kEncryptionUnavailable;
+-  }
+-
+-  DCHECK(db_.is_open());
+-
+-  sql::Statement s(db_.GetUniqueStatement("SELECT * FROM logins"));
+-
+-  std::vector<StoredCredential> credentials_to_be_deleted;
+-
+-  while (s.Step()) {
+-    std::string encrypted_password =
+-        s.ColumnBlobAsString(COLUMN_PASSWORD_VALUE);
+-    PasswordString decrypted_password;
+-    if (DecryptedString(encrypted_password, &decrypted_password) ==
+-        EncryptionResult::kSuccess) {
+-      continue;
+-    }
+-
+-    // If it was not possible to decrypt the password, remove it from the
+-    // database.
+-    credentials_to_be_deleted.push_back(GetStoredCredentialForRemoval(s));
+-  }
+-
+-  for (const auto& cred : credentials_to_be_deleted) {
+-    if (!RemoveLogin(cred, nullptr)) {
+-      metrics_util::LogDeleteUndecryptableLoginsReturnValue(
+-          metrics_util::DeleteCorruptedPasswordsResult::kItemFailure);
+-      return DatabaseCleanupResult::kItemFailure;
+-    }
+-  }
+-
+-  if (credentials_to_be_deleted.empty()) {
+-    metrics_util::LogDeleteUndecryptableLoginsReturnValue(
+-        metrics_util::DeleteCorruptedPasswordsResult::kSuccessNoDeletions);
+-  } else {
+-    metrics_util::LogDeleteUndecryptableLoginsReturnValue(
+-        metrics_util::DeleteCorruptedPasswordsResult::kSuccessPasswordsDeleted);
+-  }
+-
+-  return DatabaseCleanupResult::kSuccess;
++  // Ardia: the one place that deletes logins it can't decrypt deletes none,
++  // for every caller, so no feature or flag can make it.
++  metrics_util::LogDeleteUndecryptableLoginsReturnValue(
++      metrics_util::DeleteCorruptedPasswordsResult::kEncryptionUnavailable);
++  return DatabaseCleanupResult::kEncryptionUnavailable;
+ }
+ 
+ std::unique_ptr<sql::Transaction> LoginDatabase::CreateTransaction() {
+--- a/components/password_manager/core/browser/sync/password_sync_bridge.cc
++++ b/components/password_manager/core/browser/sync/password_sync_bridge.cc
+@@ -183,9 +183,8 @@
+ // the local copy, to be replaced by the remote version coming from Sync during
+ // merge.
+ bool ShouldRecoverPasswordsDuringMerge() {
+-  // Delete the local undecryptable copy. Launched on MacOS, Linux, Win and iOS.
+-  return base::FeatureList::IsEnabled(
+-      features::kClearUndecryptablePasswordsOnSync);
++  // Ardia: never replace a local password this PC can't decrypt.
++  return false;
+ }
+ 
+ bool WereUndecryptablePasswordsDeleted(PasswordStoreSync* password_store_sync) {

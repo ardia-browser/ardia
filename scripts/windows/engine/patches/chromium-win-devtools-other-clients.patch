@@ -1,0 +1,53 @@
+--- a/content/public/browser/devtools_agent_host.h
++++ b/content/public/browser/devtools_agent_host.h
+@@ -263,6 +263,11 @@
+   virtual ~DevToolsAgentHost() {}
+ };
+ 
++// Ardia: whether a client other than the given ones is attached to the host.
++CONTENT_EXPORT bool ArdiaHasOtherDevToolsClient(
++    DevToolsAgentHost* host,
++    const std::vector<const DevToolsAgentHostClient*>& ours);
++
+ }  // namespace content
+ 
+ #endif  // CONTENT_PUBLIC_BROWSER_DEVTOOLS_AGENT_HOST_H_
+--- a/content/browser/devtools/devtools_agent_host_impl.cc
++++ b/content/browser/devtools/devtools_agent_host_impl.cc
+@@ -681,6 +681,22 @@
+ 
+ protocol::TargetAutoAttacher* DevToolsAgentHostImpl::auto_attacher() {
+   return nullptr;
++}
++
++bool ArdiaHasOtherDevToolsClient(
++    DevToolsAgentHost* host,
++    const std::vector<const DevToolsAgentHostClient*>& ours) {
++  for (DevToolsSession* session :
++       static_cast<DevToolsAgentHostImpl*>(host)->sessions()) {
++    bool own = false;
++    for (const DevToolsAgentHostClient* client : ours) {
++      own = own || client == session->GetClient();
++    }
++    if (!own) {
++      return true;
++    }
++  }
++  return false;
+ }
+ 
+ }  // namespace content
+--- a/content/browser/devtools/devtools_agent_host_impl.h
++++ b/content/browser/devtools/devtools_agent_host_impl.h
+@@ -37,6 +37,11 @@
+ // Describes interface for managing devtools agents from the browser process.
+ class CONTENT_EXPORT DevToolsAgentHostImpl : public DevToolsAgentHost {
+  public:
++  // Ardia: reads the sessions to tell the engine's own clients from others.
++  friend bool ArdiaHasOtherDevToolsClient(
++      DevToolsAgentHost* host,
++      const std::vector<const DevToolsAgentHostClient*>& ours);
++
+   // Returns DevToolsAgentHost with a given |id| or nullptr of it doesn't exist.
+   static scoped_refptr<DevToolsAgentHostImpl> GetForId(const std::string& id);
+ 

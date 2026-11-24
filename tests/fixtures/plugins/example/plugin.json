@@ -1,0 +1,151 @@
+{
+  "$schema": "../../plugin.schema.json",
+  "manifest": 1,
+  "name": "example",
+  "title": "Example",
+  "description": "Uses every contribution: settings, commands, a page, a helper, a command-line program, hooks and tools.",
+  "version": "1.0.0",
+  "permissions": [
+    "tabs",
+    "commands"
+  ],
+  "settings": {
+    "defaults": {
+      "commandBarStart": {
+        "openTabs": {
+          "limit": 5
+        }
+      }
+    },
+    "rows": [
+      {
+        "key": "greeting",
+        "title": "Greeting",
+        "description": "What Say Hello answers with.",
+        "type": "text",
+        "default": "Hello"
+      },
+      {
+        "key": "loud",
+        "title": "Shout",
+        "type": "toggle",
+        "default": false
+      },
+      {
+        "key": "mood",
+        "title": "Mood",
+        "type": "choice",
+        "default": "calm",
+        "choices": [
+          {
+            "value": "calm",
+            "title": "Calm"
+          },
+          {
+            "value": "busy",
+            "title": "Busy"
+          }
+        ]
+      },
+      {
+        "key": "side",
+        "title": "Open beside the page on the",
+        "type": "choice",
+        "default": "right",
+        "choices": [
+          {
+            "value": "right",
+            "title": "Right"
+          },
+          {
+            "value": "left",
+            "title": "Left"
+          }
+        ]
+      }
+    ]
+  },
+  "commands": [
+    {
+      "name": "say-hello",
+      "title": "Say Hello",
+      "icon": "hand.wave",
+      "keywords": [
+        "greet"
+      ],
+      "tool": "hello"
+    },
+    {
+      "name": "new-tab",
+      "title": "Open a Tab from the Example",
+      "icon": "plus.square",
+      "tool": "new-tab"
+    },
+    {
+      "name": "beside",
+      "title": "Open Example Beside This Tab",
+      "icon": "rectangle.split.2x1",
+      "keywords": [
+        "split"
+      ],
+      "open": "split",
+      "context": true,
+      "side": "right",
+      "sideSetting": "side"
+    }
+  ],
+  "page": {
+    "title": "Example",
+    "icon": "sparkles",
+    "file": "page/index.html"
+  },
+  "process": {
+    "run": [
+      "/usr/bin/python3",
+      "helper.py"
+    ],
+    "memoryMB": 256
+  },
+  "programs": [
+    {
+      "name": "ardia-example",
+      "path": "bin/ardia-example"
+    }
+  ],
+  "hooks": [
+    "tab.activated",
+    "tab.opened"
+  ],
+  "tools": [
+    {
+      "name": "hello",
+      "title": "Say hello",
+      "description": "Answers with the Greeting row's value.",
+      "timeout": 5
+    },
+    {
+      "name": "new-tab",
+      "title": "Open a tab",
+      "description": "Runs Ardia's newTab command.",
+      "timeout": 5
+    },
+    {
+      "name": "seen",
+      "title": "Events seen",
+      "description": "The hook events the helper received.",
+      "timeout": 5
+    },
+    {
+      "name": "ask",
+      "title": "Ask another plugin",
+      "description": "Calls a tool through tools.call.",
+      "timeout": 10
+    },
+    {
+      "name": "probe",
+      "title": "Probe the sandbox",
+      "description": "Tries to read paths, connect to a Unix socket and reach a host, and says what worked.",
+      "timeout": 10
+    }
+  ]
+}

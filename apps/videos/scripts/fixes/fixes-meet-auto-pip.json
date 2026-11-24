@@ -1,0 +1,15 @@
+{
+  "id": "fixes-meet-auto-pip",
+  "segments": [
+    {
+      "scene": "meetpip",
+      "title": "Google Meet pops out when you leave its tab",
+      "body": "Join the call, then switch to another tab. 0.2.47-nightly.2 asked the call to pop out while its page was still visible, so a page that waits until it's hidden, as Meet does, stayed put and the call ran on out of sight. Now it's asked once hidden: the call pops into Picture in Picture, and coming back closes it.",
+      "note": "a local call page that behaves like Meet",
+      "layout": "side",
+      "cam": [0, 0, 1512, 949],
+      "lead": 4.6,
+      "tail": 8.6
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "id": "fixes-extension-order",
+  "segments": [
+    {
+      "scene": "extorder",
+      "title": "Drag pinned extensions to reorder them",
+      "body": "Press a pinned extension in the toolbar and drag it sideways: the others slide aside, and the order you drop it in sticks, after a relaunch too. Before, nothing moved. A plain click still opens the popup.",
+      "note": "four test extensions",
+      "layout": "side",
+      "cam": [
+        1072,
+        0,
+        440,
+        290
+      ],
+      "lead": 1.8,
+      "tail": 8.4
+    },
+    {
+      "scene": "extsidebar",
+      "title": "The same drag in the sidebar address bar",
+      "body": "With the address bar in the sidebar, pinned extensions sit inside the field, and they drag the same way: the others slide aside and the order sticks. Before, they stayed put there too.",
+      "note": "four test extensions",
+      "layout": "side",
+      "cam": [
+        0,
+        0,
+        440,
+        290
+      ],
+      "lead": 1.8,
+      "tail": 8.4,
+      "calloutPlace": "top"
+    },
+    {
+      "scene": "extfront",
+      "title": "Move a hidden extension to the front",
+      "body": "When the sidebar is too narrow for every pinned extension, the puzzle-piece menu now has Move to Front: pick a hidden one and it takes the first place. 0.2.46's menu had no way to do that.",
+      "note": "four test extensions",
+      "layout": "side",
+      "cam": [
+        0,
+        0,
+        560,
+        368
+      ],
+      "lead": 1.6,
+      "tail": 7.4
+    }
+  ]
+}

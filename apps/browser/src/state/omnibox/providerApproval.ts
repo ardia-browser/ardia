@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type ProviderApprovalSource = {
+type ProviderApprovalSource = {
   isApproved(key: string): boolean;
   approve(key: string): void;
   revoke(key: string): void;

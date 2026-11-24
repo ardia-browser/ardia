@@ -1,17 +1,27 @@
 import ExpoModulesCore
 
-public class UpdaterModule: Module {
+public class UpdaterModule: Module, UpdaterNative {
+  static func updaterState() -> [String: Any] { AppUpdater.shared.state }
+
+  static func checkForUpdates() { AppUpdater.shared.checkForUpdates(nil) }
+
+  static func setAutomaticUpdateChecks(_ on: Bool) { AppUpdater.shared.setAutomaticChecks(on) }
+
+  static func setAutomaticUpdateDownloads(_ on: Bool) { AppUpdater.shared.setAutomaticDownloads(on) }
+
+  static func setUpdateChannel(_ channel: UpdateChannel) { AppUpdater.shared.setChannel(channel) }
+
   public func definition() -> ModuleDefinition {
-    Name("ArdiaUpdater")
+    Name(Self.moduleName)
 
     OnCreate {
       DispatchQueue.main.async { AppUpdater.shared.start() }
     }
 
-    AsyncFunction("updaterState") { () -> [String: Any] in AppUpdater.shared.state }.runOnQueue(.main)
-    AsyncFunction("checkForUpdates") { AppUpdater.shared.checkForUpdates(nil) }.runOnQueue(.main)
-    AsyncFunction("setAutomaticUpdateChecks") { (on: Bool) in AppUpdater.shared.setAutomaticChecks(on) }.runOnQueue(.main)
-    AsyncFunction("setAutomaticUpdateDownloads") { (on: Bool) in AppUpdater.shared.setAutomaticDownloads(on) }.runOnQueue(.main)
-    AsyncFunction("setUpdateChannel") { (channel: UpdateChannel) in AppUpdater.shared.setChannel(channel) }.runOnQueue(.main)
+    Self.updaterStateFunction
+    Self.checkForUpdatesFunction
+    Self.setAutomaticUpdateChecksFunction
+    Self.setAutomaticUpdateDownloadsFunction
+    Self.setUpdateChannelFunction
   }
 }

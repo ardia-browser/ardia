@@ -1,6 +1,6 @@
 import { PowerUp, hex, ink, reduceMotion, springs, Surface, useTheme } from "../ui";
 import { TOOLBAR_ROWS } from "../../lib/toolbarRow";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { Animated, StyleSheet, View } from "react-native";
 import { useWindow, useWindowId } from "../../state/browser/hooks";
 import { useCardAnchors } from "../../state/windows/layout";
@@ -10,6 +10,9 @@ import { DIA_OFFSET, MARK_ABOVE_BAR, newTabBarTop } from "./newTabLayout";
 import { useOnboarding } from "../../state/onboarding/onboarding";
 import { Omnibox } from "../omnibox/Omnibox";
 import { NTP_BAR } from "./tokens";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
+import { markNewTabBar } from "../../state/omnibox/newTabMarks";
+import { useHeroBarFocusWhenShownAgain } from "../../state/tabs/newTabKeep";
 
 const BAR_HEIGHT = 112;
 const MARKS = {
@@ -26,9 +29,9 @@ const MARKS = {
 const MARK_SIZE = 100;
 const SUN_DELAY = 250;
 const MARK_LAYERS = [
-  { name: "sun", hidden: 56, delay: SUN_DELAY, spring: springs.smooth },
-  { name: "back", hidden: 40.5, delay: 170, spring: springs.smooth },
-  { name: "front", hidden: 34, delay: 80, spring: springs.smooth },
+  { name: "sun", hidden: 80, delay: SUN_DELAY, spring: springs.smooth },
+  { name: "back", hidden: 46, delay: 170, spring: springs.smooth },
+  { name: "front", hidden: 48, delay: 80, spring: springs.smooth },
 ] as const;
 const SUN_DRIFT = 6;
 const SUN_DRIFT_SPRING = springs.smooth;
@@ -47,12 +50,13 @@ export function barWidth(viewWidth: number) {
   return Math.min(content, viewWidth - 28);
 }
 
-export function NewTabPage({ tabId, toolbar = true }: { tabId: string; toolbar?: boolean }) {
+export function NewTabPage({ tabId, toolbar = true, kept = false }: { tabId: string; toolbar?: boolean; kept?: boolean }) {
   const theme = useTheme();
   const windowId = useWindowId();
   const incognito = useWindow(windowId, (w) => w?.kind === "private");
   const onboarding = useOnboarding((s) => s.windowId === windowId);
   const card = useCardAnchors((s) => s[windowId]);
+  useHeroBarFocusWhenShownAgain(windowId, tabId, kept);
   const [size, setSizeState] = useState<Size | null>(() => (lastSize && (!card || sameSize(lastSize.card, card)) ? lastSize.size : null));
   const setSize = (next: Size) => setSizeState((prev) => (prev && sameSize(prev, next) ? prev : next));
   useEffect(() => {
@@ -62,6 +66,15 @@ export function NewTabPage({ tabId, toolbar = true }: { tabId: string; toolbar?:
   const [headingHeight, setHeadingHeight] = useState(0);
   const heading = !onboarding && incognito;
   const [playIntro] = useState(() => !introPlayed.has(tabId));
+  const [restShown, setRestShown] = useState(() => !PLATFORM_FEATURES.newTabBarFirst || !playIntro);
+  const showRest = () => void (restShown || requestAnimationFrame(() => setRestShown(true)));
+  useLayoutEffect(() => {
+    markNewTabBar("page", tabId);
+    return () => markNewTabBar("gone", tabId);
+  }, [tabId]);
+  useLayoutEffect(() => {
+    if (restShown && PLATFORM_FEATURES.newTabBarFirst) markNewTabBar("rest", tabId);
+  }, [restShown]);
   const [rise] = useState(() => {
     const intro = playIntro && !reduceMotion();
     const layers = MARK_LAYERS.map((l) => ({ ...l, y: new Animated.Value(intro ? l.hidden : 0) }));
@@ -93,7 +106,7 @@ export function NewTabPage({ tabId, toolbar = true }: { tabId: string; toolbar?:
 
   return (
     <View style={{ flex: 1 }} onLayout={(e) => setSize(e.nativeEvent.layout)}>
-      {playIntro && theme.powerUpPalette && (
+      {restShown && playIntro && theme.powerUpPalette && (
         <PowerUp
           style={StyleSheet.absoluteFill}
           palette={theme.powerUpPalette}
@@ -104,7 +117,7 @@ export function NewTabPage({ tabId, toolbar = true }: { tabId: string; toolbar?:
         />
       )}
       {heading && <IncognitoHeading left={x} barTop={top} width={width} onHeight={setHeadingHeight} />}
-      <View
+      {restShown && <View
         pointerEvents="none"
         style={{
           position: "absolute",
@@ -127,9 +140,9 @@ export function NewTabPage({ tabId, toolbar = true }: { tabId: string; toolbar?:
             }}
           />
         ))}
-      </View>
-      <View onLayout={(e) => setPanelHeight(e.nativeEvent.layout.height)} style={{ position: "absolute", left: x, top, width }}>
-        {NTP_BAR.shadows.map((level, i) => (
+      </View>}
+      <View onLayout={(e) => (setPanelHeight(e.nativeEvent.layout.height), showRest())} style={{ position: "absolute", left: x, top, width }}>
+        {restShown && NTP_BAR.shadows.map((level, i) => (
           <Surface
             key={i}
             style={StyleSheet.absoluteFill}
@@ -146,7 +159,7 @@ export function NewTabPage({ tabId, toolbar = true }: { tabId: string; toolbar?:
           <View pointerEvents="none" style={{ ...StyleSheet.absoluteFillObject, borderRadius: NTP_BAR.radius, borderWidth: NTP_BAR.border, borderColor: theme.ntpBarBorder }} />
         </Surface>
       </View>
-      <NewTabExtras size={size} bar={bar} />
+      {restShown && <NewTabExtras size={size} bar={bar} />}
     </View>
   );
 }

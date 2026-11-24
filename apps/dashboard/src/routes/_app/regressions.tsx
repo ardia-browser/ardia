@@ -38,6 +38,7 @@ function formatValue(unit: Row["unit"], n: number | null) {
   if (unit === "mb") return n >= 1024 ? `${(n / 1024).toFixed(2)} GB` : `${Math.round(n)} MB`;
   if (unit === "bytes") return n >= 1_048_576 ? `${(n / 1_048_576).toFixed(1)} MB` : `${Math.round(n / 1024)} KB`;
   if (unit === "share") return `${(n * 100).toFixed(2)}%`;
+  if (unit === "cpu") return `${n.toFixed(1)}%`;
   return n.toFixed(1);
 }
 

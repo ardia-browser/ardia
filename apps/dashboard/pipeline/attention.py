@@ -118,7 +118,7 @@ def refresh_holds(c):
         last = re.split(r'\||; recheck|recheck 20', note, flags=re.I)[-1]
         held = bool(re.search(r'\b(?:keep hold|kept hold|hold kept|still (?:on )?hold)\b', last, re.I))
         ident = f'hold:reply-{r["id"]}'
-        if not held: continue  # never infer resolved from a missing/historical note
+        if not held: continue
         suffix = f' (#{r["id"]})'
         title = label(('Verify ' + (r['topic'] or 'held reply'))[:50-len(suffix)] + suffix)
         old = c.execute('SELECT label FROM attention WHERE id=?', (ident,)).fetchone()
@@ -132,7 +132,7 @@ def refresh_holds(c):
     return n
 
 def refresh_reviews(c):
-    result = subprocess.run(['gh', 'pr', 'list', '-R', 'mantrakp04/ardia', '--state', 'open', '--limit', '1000',
+    result = subprocess.run(['gh', 'pr', 'list', '-R', 'ardia-browser/ardia', '--state', 'open', '--limit', '1000',
       '--json', 'number,title,url,isDraft,author'], check=True, capture_output=True, text=True)
     rows = [r for r in json.loads(result.stdout) if not r['isDraft'] and r['author'].get('login') != 'mantrakp04']
     n = len(rows)

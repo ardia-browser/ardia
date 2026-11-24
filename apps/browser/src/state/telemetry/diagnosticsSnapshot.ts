@@ -8,7 +8,7 @@ import { appInfo } from "./transport";
 
 const WAIT_MS = 1_500;
 
-export type DiagnosticsSnapshot = {
+type DiagnosticsSnapshot = {
   text: string;
   app_version: string;
   app_build: string;

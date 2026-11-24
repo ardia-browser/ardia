@@ -1,8 +1,12 @@
 import { animateWindowClose, focusWindow } from "../../platform/windows";
+import { managesWindowClose } from "../../platform/windowClose";
 import { useBrowser, type BrowserState } from "../browser/store";
 import type { CloseWindowOptions } from "./windows";
 import { familyKeyOf } from "../browser/model";
 import { isWindowClosing, startClosingWindow, stopClosingWindow } from "./closingWindows";
+import { tabsHandedOver } from "../tabs/sharedWindowClose";
+import { isOpenRegularWindow } from "./small";
+import { noteWindowCloseTabsKept } from "../telemetry/usage";
 
 export { isWindowClosing };
 
@@ -19,24 +23,35 @@ function familyCounts(s: BrowserState, tabIds: readonly string[]) {
 
 type AnimatedCloseOptions = CloseWindowOptions & { replacedBy?: string | null; then?: () => void };
 
-export function closeWindowAnimated(windowId: string, { replacedBy = null, then, ...options }: AnimatedCloseOptions = {}) {
+export function closeWindowAnimated(windowId: string, { replacedBy = null, then, ...options }: AnimatedCloseOptions = {}): Promise<boolean> {
   const s = useBrowser.getState();
   const w = s.windows[windowId];
-  if (isWindowClosing(windowId) || !w) return;
+  if (isWindowClosing(windowId) || !w) return Promise.resolve(false);
+  if (!replacedBy && !then && managesWindowClose(windowId, "window")) return Promise.resolve(true);
   const leaving = familyCounts(s, w.tabIds);
+  let done: (closed: boolean) => void = () => undefined;
+  const settled = new Promise<boolean>((resolve) => (done = resolve));
   const close = () => {
     if (!pending.delete(windowId)) return;
     stopClosingWindow(windowId);
     const after = useBrowser.getState();
     const now = after.windows[windowId];
-    if (!now) return;
-    if ([...familyCounts(after, now.tabIds)].some(([key, n]) => n > (leaving.get(key) ?? 0))) return void focusWindow(windowId);
+    if (!now) return done(false);
+    if ([...familyCounts(after, now.tabIds)].some(([key, n]) => n > (leaving.get(key) ?? 0))) {
+      after.dropStaleLastWindowMark();
+      focusWindow(windowId);
+      return done(false);
+    }
+    const kept = tabsHandedOver(after, windowId, isOpenRegularWindow).length;
+    if (kept) noteWindowCloseTabsKept(kept);
     useBrowser.getState().closeWindow(windowId, options);
     then?.();
+    done(true);
   };
   startClosingWindow(windowId);
   pending.set(windowId, close);
   void animateWindowClose(windowId, replacedBy).then(close, close);
+  return settled;
 }
 
 export function finishAnimatedCloses() {

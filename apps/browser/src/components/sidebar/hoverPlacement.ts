@@ -8,7 +8,7 @@ export const HOVER_CARD_HEADER = 18;
 const WINDOW_MARGIN = 8;
 
 export type HoverCardFrame = { side: SidebarSide; windowWidth: number; sidebarEdge: number };
-export type HoverCardAt = { x: number; top: number };
+type HoverCardAt = { x: number; top: number };
 
 export function sidebarEdgeOf(side: SidebarSide, windowWidth: number, sidebarWidth: number, peek: readonly [number, number] | undefined): number {
   if (peek) return side === "right" ? peek[0] : peek[1];

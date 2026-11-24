@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-const { awayTitle, awayTitleText, pinAwareTooltip } = await import("./organize.ts");
+const { awayTitle, awayTitleText, pinAwareTooltip, rowAwayTitle } = await import("./organize.ts");
 
 const pinned = { url: "https://mail.example/", pinnedUrl: "https://mail.example/", title: "Inbox", customTitle: null };
 
@@ -24,4 +24,13 @@ test("a renamed pinned tab keeps its name before the slash, and the page title r
 
 test("an untitled page falls back to its address", () => {
   assert.deepEqual(awayTitle({ ...pinned, url: "https://www.mail.example/thread/42", title: "" }), { pinned: null, page: "mail.example/thread/42" });
+});
+
+test("a renamed pinned tab's row keeps its name behind the slash, while the tooltip still names the page", () => {
+  const tab = { ...pinned, customTitle: "Mail", url: "https://mail.example/thread/42", title: "Lunch on Friday" };
+  assert.deepEqual(rowAwayTitle(tab), { pinned: null, page: "Mail", renamed: true });
+  assert.equal(awayTitleText(rowAwayTitle(tab)), "/ Mail");
+  assert.equal(pinAwareTooltip(tab), "Mail / Lunch on Friday\nhttps://mail.example/thread/42");
+  assert.equal(rowAwayTitle({ ...tab, url: "https://mail.example/" }), null);
+  assert.deepEqual(rowAwayTitle({ ...tab, customTitle: null }), { pinned: null, page: "Lunch on Friday" });
 });

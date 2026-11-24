@@ -145,6 +145,28 @@ test("store events: pins, moves, media, splits, crashes and page errors once per
   stub.emitControlClose(conn);
 });
 
+test("media events reach every tab that shows a playing page, its frozen copies included", async () => {
+  fresh();
+  await controlOn();
+  const conn = ++nextConnection;
+  call("subscribe", { events: ["media.started", "media.stopped"] }, conn);
+  const a = S().createWindow({ url: "https://a.example/" });
+  const song = S().newTab(a, { url: "https://music.example/" });
+  S().newTab(a, { url: "https://other.example/" });
+  S().updateSettings({ shareTabsAcrossWindows: true });
+  const b = S().createWindow({ url: "https://b.example/" });
+  const copy = Object.values(S().tabs).find((t) => t.windowId === b && t.pinKey === song).id;
+  useBrowser.setState((x) => ({ tabs: { ...x.tabs, [copy]: { ...x.tabs[copy], page: { kind: "frozen", holderId: song } } } }));
+  assert.equal(S().tabs[copy].page.holderId, song, "the copy is frozen on the playing tab");
+  const from = stub.controlSocket.broadcasts.length;
+  S().updateLive(song, { playingAudio: true });
+  S().updateLive(song, { playingAudio: false });
+  await wait(150);
+  const seen = eventsFor(conn, from).map((e) => `${e.event} ${e.data.tabId === copy ? "copy" : e.data.tabId === song ? "holder" : e.data.tabId}`);
+  assert.deepEqual(seen.sort(), ["media.started copy", "media.started holder", "media.stopped copy", "media.stopped holder"]);
+  stub.emitControlClose(conn);
+});
+
 test("declarative tab.opening rules work with control off; cross-origin rewrites wait for approval", async () => {
   const hooks = [
     { name: "strip", on: "tab.opening", match: "https://track.example/*", rewrite: [{ match: "https://track.example/*", to: "{origin}{path}" }] },
@@ -444,7 +466,7 @@ test("an explicit tab target runs before Peek and the command panel, and a missi
   S().openPanel(w, "");
   assert.deepEqual(call("run", { command: "closeTab", tab: background }, conn).result, { ok: true });
   assert.equal(S().tabs[background], undefined);
-  assert.equal(S().peeks[w]?.tabId, peek);
+  assert.equal(S().peeks[shown]?.tabId, peek);
   assert.equal(S().windowUi[w].panel.open, true);
   assert.equal(call("run", { command: "closeTab", tab: background }, conn).error.code, "no_window");
   assert.equal(call("run", { command: "closeTab", tab: peek }, conn).error.code, "no_window");

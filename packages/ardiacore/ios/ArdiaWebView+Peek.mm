@@ -26,8 +26,17 @@ static NSPoint gPeekUpPoint;
 static NSUInteger gPeekUpSeq = 0;
 static NSUInteger gPeekUsedSeq = 0;
 static BOOL gPeekPressedSinceUp = NO;
+static BOOL gPeekOtherPressSinceUp = NO;
 static const CFTimeInterval kPeekGestureLifetime = 10;
 static const CFTimeInterval kPeekFallbackLifetime = 60;
+static const CFTimeInterval kShiftClickLifetime = 3;
+static const CFTimeInterval kUserActivationLifespan = 5;
+static const NSEventMask kActivatingInputMask = NSEventMaskLeftMouseDown | NSEventMaskLeftMouseUp | NSEventMaskRightMouseDown |
+                                                NSEventMaskOtherMouseDown | NSEventMaskOtherMouseUp | NSEventMaskKeyDown;
+static NSMapTable<NSWindow *, NSNumber *> *InputTimesByWindow() {
+  static NSMapTable *times = [NSMapTable weakToStrongObjectsMapTable];
+  return times;
+}
 
 static ArdiaWebView *PageViewUnder(NSEvent *event) {
   NSView *content = event.window.contentView;
@@ -57,8 +66,11 @@ namespace ardia_web_view {
 void InstallPeekMonitor() {
   static id monitor;
   if (monitor) return;
-  monitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown | NSEventMaskLeftMouseUp
+  monitor = [NSEvent addLocalMonitorForEventsMatchingMask:kActivatingInputMask
                                                   handler:^NSEvent *(NSEvent *event) {
+                                                    if (event.window) [InputTimesByWindow() setObject:@(CACurrentMediaTime()) forKey:event.window];
+                                                    if (event.type == NSEventTypeRightMouseDown || event.type == NSEventTypeOtherMouseDown) gPeekOtherPressSinceUp = YES;
+                                                    if (event.type != NSEventTypeLeftMouseDown && event.type != NSEventTypeLeftMouseUp) return event;
                                                     if (event.type == NSEventTypeLeftMouseDown) {
                                                       gPeekPressedSinceUp = YES;
                                                       return event;
@@ -68,6 +80,7 @@ void InstallPeekMonitor() {
                                                     gPeekUpView = PageViewUnder(event);
                                                     gPeekUpPoint = event.locationInWindow;
                                                     gPeekPressedSinceUp = NO;
+                                                    gPeekOtherPressSinceUp = NO;
                                                     gPeekUpSeq++;
                                                     return event;
                                                   }];
@@ -99,7 +112,20 @@ NSString *SplitLinkModifier() {
 NSDictionary *RecentClickPoint(ArdiaWebView *view) {
   NSWindow *window = view.window;
   if (!window || gPeekUpView != view || gPeekUpAt < 0 || CACurrentMediaTime() - gPeekUpAt > kPeekGestureLifetime) return nil;
-  return @{@"x" : @(gPeekUpPoint.x), @"y" : @(window.contentView.frame.size.height - gPeekUpPoint.y)};
+  const NSPoint inRoot = RootPointFromWindow(window, gPeekUpPoint);
+  return @{@"x" : @(inRoot.x), @"y" : @(inRoot.y)};
+}
+
+BOOL TakeShiftClick(ArdiaWebView *view) {
+  const BOOL fresh = gPeekUpAt >= 0 && CACurrentMediaTime() - gPeekUpAt <= kShiftClickLifetime && !gPeekPressedSinceUp && !gPeekOtherPressSinceUp;
+  if (!fresh || gPeekUpView != view || gPeekUpKeys != NSEventModifierFlagShift || gPeekUpSeq == gPeekUsedSeq) return NO;
+  gPeekUsedSeq = gPeekUpSeq;
+  return YES;
+}
+
+BOOL MayHoldUserActivation(NSWindow *window) {
+  NSNumber *at = window ? [InputTimesByWindow() objectForKey:window] : nil;
+  return at && CACurrentMediaTime() - at.doubleValue <= kUserActivationLifespan;
 }
 
 NSString *PeekConfigJSON(ArdiaWebView *view) {
@@ -174,6 +200,18 @@ static NSString *LinkKeyAction(NSString *key) {
   gPeekOtherSiteTabs = next;
   for (ArdiaWebView *view in LiveViews().allObjects)
     if (view->_transferKey.length && [changed containsObject:view->_transferKey]) [view pushPeekModifier];
+}
+
++ (NSString *)peekModifierInUse {
+  return gPeekModifier;
+}
+
++ (NSString *)splitLinkModifierInUse {
+  return SplitLinkModifier();
+}
+
++ (BOOL)peeksLinksToOtherSitesInTab:(NSString *)transferKey {
+  return transferKey.length && [gPeekOtherSiteTabs containsObject:transferKey];
 }
 
 - (BOOL)peeksLinksToOtherSites {
@@ -266,18 +304,33 @@ static NSString *LinkKeyAction(NSString *key) {
   if ([action isEqualToString:@"split"]) return [self emit:@"openWindow" payload:@{@"url" : url, @"disposition" : @"split", @"userGesture" : @YES}];
   double x, y;
   NSPoint point;
+  NSView *page = _tab.view;
+  const NSRect area = page.superview == self ? page.frame : self.bounds;
   if (main && Finite(dict, @"x", &x) && Finite(dict, @"y", &y)) {
     const CGFloat scale = window.backingScaleFactor > 0 ? window.backingScaleFactor : 1;
-    point = NSMakePoint(x / scale, y / scale);
+    point = NSMakePoint(NSMinX(area) + x / scale, NSMinY(area) + y / scale);
   } else {
     point = [self convertPoint:[window convertPointFromScreen:NSEvent.mouseLocation] fromView:nil];
   }
-  point.x = MIN(MAX(point.x, 0), NSWidth(self.bounds));
-  point.y = MIN(MAX(point.y, 0), NSHeight(self.bounds));
-  const NSPoint inWindow = [self convertPoint:point toView:nil];
-  const CGFloat top = window.contentView.frame.size.height - inWindow.y;
+  point.x = MIN(MAX(point.x, NSMinX(area)), NSMaxX(area));
+  point.y = MIN(MAX(point.y, NSMinY(area)), NSMaxY(area));
+  const NSPoint inRoot = RootPointFromWindow(window, [self convertPoint:point toView:nil]);
   [self emit:@"openWindow"
-      payload:@{@"url" : url, @"disposition" : @"peek", @"userGesture" : @YES, @"site" : @(otherSite), @"point" : @{@"x" : @(inWindow.x), @"y" : @(top)}}];
+      payload:@{@"url" : url, @"disposition" : @"peek", @"userGesture" : @YES, @"site" : @(otherSite), @"point" : @{@"x" : @(inRoot.x), @"y" : @(inRoot.y)}}];
+}
+
+@end
+
+@implementation ArdiaWebView (PaintedFrame)
+
+- (BOOL)showsPaintedFrame {
+  NSView *page = _tab.view;
+  if (!page || page.superview != self || page.hidden) return NO;
+  NSView *widget = RenderWidgetIn(page);
+  if (!widget || widget.hidden) return NO;
+  for (CALayer *tree in widget.layer.sublayers)
+    if (tree.sublayers.count) return YES;
+  return NO;
 }
 
 @end

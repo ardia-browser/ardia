@@ -2,7 +2,7 @@ import { useEffect, useRef, type CSSProperties } from "react";
 import { observeOnscreen, observePixelSize, subscribeFrames } from "./clock";
 import { GLSurface, type Uniforms } from "./surface";
 
-export type UniformsAt = (css: [number, number], time: number) => Uniforms;
+type UniformsAt = (css: [number, number], time: number) => Uniforms;
 
 type Props = {
   fragment: string;

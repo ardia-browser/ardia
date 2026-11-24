@@ -1,68 +1,173 @@
-import { Button, ContextMenuArea, useHover, WindowBackdrop, WindowDragRegion } from "../ui";
+import { Button, ContextMenuArea, PinchArea, pinchScale, pinchSettle, reduceMotion, useHover, WindowBackdrop, WindowDragRegion, type PinchMotion, type SwipeEvent } from "../ui";
 import { setTrafficLightsCenter } from "../../state/windows/nativeWindow";
-import { useEffect, useRef, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Animated, StyleSheet, View } from "react-native";
 import { useTheme } from "../ui/theme";
-import { useProfileOrder } from "../../state/profiles/hooks";
 import { openPanel } from "../../state/windows/actions";
-import { useActiveTab, useWindowId, useWindowProfile, useWindowUi } from "../../state/browser/hooks";
+import { useActiveTab, useWindowFullScreen, useWindowId, useWindowProfile, useWindowUi } from "../../state/browser/hooks";
 import type { Tab } from "../../state/browser/types";
 import { CommandPanel } from "../omnibox/CommandPanel";
 import { ContentCard } from "../window/ContentCard";
+import { browserWindowControls } from "../window/BrowserWindowControls";
 import { DownloadsPopover } from "../downloads/Downloads";
 import { ExtensionOverlays } from "../extensions/ExtensionOverlays";
 import { ToolbarPopupAnchor } from "../extensions/ToolbarExtensions";
-import { setUrlAnchor, usePageFrameInset } from "../../state/windows/layout";
+import { setUrlAnchor, usePageFrameInset, windowCornerRadius } from "../../state/windows/layout";
 import { showUrlBarMenu } from "../../state/omnibox/paste";
 import { copyPageUrl } from "../../state/site/selection";
 import { ProfileBadge } from "../profiles/ProfileIcons";
-import { openInMainWindow, openLittleArdiaProfileMenu } from "../../state/littleArdia/actions";
+import { useProfileDotsShown } from "../profiles/ProfileDots";
+import { HeaderAppMenu, useAppMenuInHeader } from "../profiles/ProfileIndicator";
+import { closeLittleArdia, openInMainWindow, openLittleArdiaProfileMenu } from "../../state/littleArdia/actions";
+import { isWindowClosing } from "../../state/windows/closeAnimated";
+import { notePinch, noteSwipeClose } from "../../state/telemetry/usage";
+import { SwipeCloseContext } from "../window/swipeClose";
+import { useCardFrame } from "../window/cardFrame";
 import { startLittleArdiaNewTabLinks } from "../../state/littleArdia/newTabLinks";
-import { PageLabel, SMALL_BAR_BUTTON, SMALL_BAR_GAP, SMALL_FIELD_GAP, SMALL_INSET, SmallBar } from "./SmallChrome";
-import { SMALL_BAR_HEIGHT, SMALL_LIGHTS_CENTER } from "../../state/windows/small";
+import { PageLabel, SMALL_BAR_BUTTON, SmallBar } from "./SmallChrome";
+import { SMALL_LIGHTS_CENTER } from "../../state/windows/small";
+import { littleArdiaBarLayout, type LittleArdiaBarLayout } from "./barLayout";
+import { useWindowChromeVersion } from "../../state/windows/windowButtons";
 import { HistoryButton } from "../toolbar/NavButtons";
+import { NAV_HINTS, useShortcutHints } from "../../state/commands/commandShortcuts";
 import { toolbarPalette } from "../ui/toolbarColors";
 import { useHistoryAvailability } from "../../state/tabs/navigation";
-import { NAV_CENTER_PAST_ZOOM, SMALL_BAR_ROW, TRAFFIC_LIGHT_PITCH } from "./tokens";
+import { LITTLE_ARDIA_PINCH, LITTLE_ARDIA_SWIPE_CLOSE, smallBarRow } from "./tokens";
+import { perLook } from "../ui/tokens";
+import { keyText } from "../../state/commands/keyText";
 
-const NAV_LEFT = SMALL_LIGHTS_CENTER[0] + 2 * TRAFFIC_LIGHT_PITCH + NAV_CENTER_PAST_ZOOM - SMALL_BAR_BUTTON / 2;
-const NAV_PITCH = SMALL_BAR_BUTTON + SMALL_BAR_GAP;
-const FIELD_LEFT = NAV_LEFT + NAV_PITCH + SMALL_BAR_BUTTON + SMALL_FIELD_GAP;
-const FIELD_MAX_WIDTH = 520;
-const NAV_HIT = { width: SMALL_BAR_BUTTON, height: SMALL_BAR_BUTTON, plateX: 0, plateY: 0, box: SMALL_BAR_ROW.button, radius: SMALL_BAR_ROW.buttonRadius };
-const BUTTON_TOP = (SMALL_BAR_HEIGHT - SMALL_BAR_BUTTON) / 2;
-const BACK_AT = { style: { position: "absolute" as const, top: BUTTON_TOP, left: NAV_LEFT }, hit: NAV_HIT };
-const FORWARD_AT = { style: { position: "absolute" as const, top: BUTTON_TOP, left: NAV_LEFT + NAV_PITCH }, hit: NAV_HIT };
+const NAV_HIT = perLook(() => ({ width: SMALL_BAR_BUTTON, height: SMALL_BAR_BUTTON, plateX: 0, plateY: 0, box: smallBarRow().button, radius: smallBarRow().buttonRadius }));
+const navPlace = (bar: LittleArdiaBarLayout, slot: number, hit: ReturnType<typeof NAV_HIT>) => ({ style: { position: "absolute" as const, top: bar.buttonTop, left: bar.navLeft + slot * bar.navPitch }, hit });
+
+function useBarLayout(): LittleArdiaBarLayout {
+  const chrome = useWindowChromeVersion();
+  return useMemo(() => littleArdiaBarLayout(), [chrome]);
+}
 const alreadyFocused = () => {};
+const SPREAD_STARTS = 0.0001;
 
 export function LittleArdiaWindow() {
   const theme = useTheme();
-  const [width, setWidth] = useState(0);
+  const windowId = useWindowId();
+  const fullScreen = useWindowFullScreen(windowId);
+  const [size, setSize] = useState({ width: 0, height: 0 });
   const frame = usePageFrameInset();
+  const cardRadius = useCardFrame().radius;
+  const gestures = !fullScreen;
+  const pinch = useLittleArdiaPinch(windowId);
+  const swipe = useLittleArdiaSwipeClose(windowId);
+  const bar = useBarLayout();
+  const windowRadius = windowCornerRadius();
+  const headroom = Math.min(bar.height, windowRadius);
+  const corner = useMemo(
+    () => zoomedCorner(pinch.scale, { ...size, inset: frame, cardRadius, windowRadius }),
+    [pinch.scale, size.width, size.height, frame, cardRadius, windowRadius],
+  );
   useEffect(startLittleArdiaNewTabLinks, []);
   return (
-    <View style={{ flex: 1 }} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
-      <WindowBackdrop vibrancy {...theme.backdrop} colors={theme.windowTint} grainOpacity={theme.grain} style={StyleSheet.absoluteFill} />
-      <View style={{ flex: 1, flexDirection: "row", paddingTop: SMALL_BAR_HEIGHT, paddingLeft: frame, paddingRight: frame, paddingBottom: frame }}>
-        <ContentCard />
-      </View>
-      <View style={{ position: "absolute", left: 0, right: 0, top: 0 }}>
-        <LittleArdiaBar />
-      </View>
-      <CommandPanel windowWidth={width} />
+    <View
+      style={{ flex: 1 }}
+      onLayout={(e) => {
+        const { width, height } = e.nativeEvent.layout;
+        setSize((prev) => (prev.width === width && prev.height === height ? prev : { width, height }));
+      }}
+    >
+      <Animated.View style={{ ...StyleSheet.absoluteFillObject, opacity: swipe.opacity, transform: [{ translateX: swipe.x }] }}>
+        <WindowBackdrop vibrancy {...theme.backdrop} colors={theme.windowTint} grainOpacity={theme.grain} style={StyleSheet.absoluteFill} />
+        <PinchArea enabled={gestures} motion={pinch.motion} style={StyleSheet.absoluteFill}>
+          <Animated.View style={{ flex: 1, transform: [{ scale: pinch.scale }] }}>
+            <SwipeCloseContext.Provider value={gestures ? swipe.onSwipe : null}>
+              <View style={{ flex: 1, flexDirection: "row", paddingTop: bar.height - headroom, paddingLeft: frame, paddingRight: frame, paddingBottom: frame }}>
+                <Animated.View pointerEvents="box-none" style={{ flex: 1, flexDirection: "row", paddingTop: headroom, ...(corner ? { borderRadius: corner, overflow: "hidden" } : null) }}>
+                  <ContentCard />
+                </Animated.View>
+              </View>
+            </SwipeCloseContext.Provider>
+            <View style={{ position: "absolute", left: 0, right: 0, top: 0 }}>
+              <LittleArdiaBar />
+            </View>
+          </Animated.View>
+        </PinchArea>
+      </Animated.View>
+      <CommandPanel windowWidth={size.width} />
       <DownloadsPopover />
       <ExtensionOverlays />
+      {browserWindowControls()}
     </View>
   );
+}
+
+function zoomedCorner(scale: Animated.Value, { width, height, inset, cardRadius, windowRadius }: { width: number; height: number; inset: number; cardRadius: number; windowRadius: number }) {
+  if (inset <= 0 || width <= 0 || height <= 0) return null;
+  const spreading = 1 + SPREAD_STARTS;
+  const touchesEdge = Math.max(1 + (2 * inset) / Math.max(width, height), spreading + SPREAD_STARTS);
+  return Animated.divide(scale.interpolate({ inputRange: [1, spreading, touchesEdge], outputRange: [0, cardRadius, windowRadius], extrapolate: "clamp" }), scale);
+}
+
+function useLittleArdiaPinch(windowId: string) {
+  const [scale] = useState(() => new Animated.Value(1));
+  const leaving = useRef(false);
+  const settle = () => pinchSettle([{ value: scale, to: 1 }]);
+  const motion: PinchMotion = {
+    get reduce() {
+      return reduceMotion() === true;
+    },
+    idle: () => leaving.current || isWindowClosing(windowId),
+    begin: () => scale.stopAnimation(),
+    follow: (magnification) => scale.setValue(pinchScale(magnification, LITTLE_ARDIA_PINCH.smallest, LITTLE_ARDIA_PINCH.largest)),
+    settle,
+    open: () => {
+      notePinch("littleArdia", "open");
+      openInMainWindow(windowId);
+      settle();
+    },
+    close: () => {
+      notePinch("littleArdia", "close");
+      leaving.current = true;
+      closeLittleArdia(windowId);
+      if (isWindowClosing(windowId)) return;
+      leaving.current = false;
+      settle();
+    },
+  };
+  return { scale, motion };
+}
+
+function useLittleArdiaSwipeClose(windowId: string) {
+  const [x] = useState(() => new Animated.Value(0));
+  const opacity = useMemo(() => x.interpolate({ inputRange: [0, LITTLE_ARDIA_SWIPE_CLOSE.fadeOver], outputRange: [1, 0], extrapolate: "clamp" }), [x]);
+  const settle = () => pinchSettle([{ value: x, to: 0 }]);
+  const close = () => {
+    noteSwipeClose(true);
+    if (reduceMotion() === true) return closeLittleArdia(windowId);
+    Animated.timing(x, { toValue: LITTLE_ARDIA_SWIPE_CLOSE.fadeOver, duration: LITTLE_ARDIA_SWIPE_CLOSE.leaveMs, useNativeDriver: true }).start(() => {
+      closeLittleArdia(windowId);
+      if (!isWindowClosing(windowId)) x.setValue(0);
+    });
+  };
+  const onSwipe = (e: SwipeEvent) => {
+    if (isWindowClosing(windowId)) return;
+    if (e.phase === "swipe") return close();
+    if (e.phase === "began") return x.stopAnimation();
+    if (e.phase === "changed") return x.setValue(Math.max(0, e.distance));
+    if (e.phase === "ended" && (e.distance >= LITTLE_ARDIA_SWIPE_CLOSE.distance || (e.distance > 0 && e.velocity >= LITTLE_ARDIA_SWIPE_CLOSE.velocity))) return close();
+    if (e.phase === "ended" || e.phase === "cancelled") {
+      noteSwipeClose(false);
+      settle();
+    }
+  };
+  return { x, opacity, onSwipe };
 }
 
 function LittleArdiaBar() {
   const windowId = useWindowId();
   const tab = useActiveTab();
   const panelOpen = useWindowUi().panel.open;
-  const severalProfiles = useProfileOrder((order) => order.length > 1);
+  const switcherShown = useProfileDotsShown();
+  const appMenu = useAppMenuInHeader();
   const [copied, setCopied] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const bar = useBarLayout();
   useEffect(() => {
     void setTrafficLightsCenter(windowId, SMALL_LIGHTS_CENTER);
   }, [windowId]);
@@ -78,29 +183,37 @@ function LittleArdiaBar() {
 
   return (
     <SmallBar
-      fieldLeft={FIELD_LEFT}
-      fieldMaxWidth={FIELD_MAX_WIDTH}
+      height={bar.height}
+      trailingRoom={bar.trailingRoom}
+      fieldLeft={bar.fieldLeft}
       field={tab ? <PageField tab={tab} windowId={windowId} hidden={panelOpen} /> : null}
       buttons={[
-        { icon: copied ? "checkmark" : "link", disabled: !tab?.url, tooltip: "Copy Link (⇧⌘C)", onPress: copy },
-        { icon: "arrow.up.left.and.arrow.down.right", tooltip: "Open in Ardia (⌘O)", onPress: () => openInMainWindow(windowId) },
+        { icon: copied ? "checkmark" : "link", disabled: !tab?.url, tooltip: `Copy Link (${keyText("⇧⌘C")})`, onPress: copy },
+        { icon: "arrow.up.left.and.arrow.down.right", tooltip: `Open in Ardia (${keyText("⌘O")})`, onPress: () => openInMainWindow(windowId) },
       ]}
-      trailing={severalProfiles ? <ProfileButton windowId={windowId} /> : undefined}
+      trailing={[
+        ...(switcherShown ? [<ProfileButton key="profile" windowId={windowId} />] : []),
+        ...(appMenu ? [<HeaderAppMenu key="menu" size={SMALL_BAR_BUTTON} />] : []),
+      ]}
     >
       <WindowDragRegion style={StyleSheet.absoluteFill} />
-      {tab ? <HistoryButtons tabId={tab.id} windowId={windowId} /> : null}
-      {tab ? <ToolbarPopupAnchor windowId={windowId} tabId={tab.id} top={BUTTON_TOP} right={SMALL_INSET} /> : null}
+      {tab ? <HistoryButtons tabId={tab.id} windowId={windowId} bar={bar} /> : null}
+      {tab ? <ToolbarPopupAnchor windowId={windowId} tabId={tab.id} top={bar.buttonTop} right={bar.controlsRight} /> : null}
     </SmallBar>
   );
 }
 
-function HistoryButtons({ tabId, windowId }: { tabId: string; windowId: string }) {
+function HistoryButtons({ tabId, windowId, bar }: { tabId: string; windowId: string; bar: LittleArdiaBarLayout }) {
   const palette = toolbarPalette(useTheme(), null);
   const history = useHistoryAvailability(tabId);
+  const hints = useShortcutHints(NAV_HINTS);
+  const hit = NAV_HIT();
+  const back = useMemo(() => navPlace(bar, 0, hit), [bar, hit]);
+  const forward = useMemo(() => navPlace(bar, 1, hit), [bar, hit]);
   return (
     <>
-      <HistoryButton place={BACK_AT} tabId={tabId} windowId={windowId} direction={-1} disabled={!history.back} palette={palette} onFocus={alreadyFocused} />
-      <HistoryButton place={FORWARD_AT} tabId={tabId} windowId={windowId} direction={1} disabled={!history.forward} palette={palette} onFocus={alreadyFocused} />
+      <HistoryButton place={back} tabId={tabId} windowId={windowId} direction={-1} disabled={!history.back} palette={palette} onFocus={alreadyFocused} closesTab={history.backCloses} historyHint={hints.back} />
+      <HistoryButton place={forward} tabId={tabId} windowId={windowId} direction={1} disabled={!history.forward} palette={palette} onFocus={alreadyFocused} historyHint={hints.forward} />
     </>
   );
 }
@@ -109,7 +222,7 @@ function ProfileButton({ windowId }: { windowId: string }) {
   const profile = useWindowProfile();
   return (
     <Button variant="icon" look="row" tooltip={`Profile: ${profile.name}`} onPress={() => void openLittleArdiaProfileMenu(windowId)}>
-      <ProfileBadge profile={profile} size={16} />
+      <ProfileBadge profile={profile.switcherDot ? { ...profile, icon: null } : profile} size={16} />
     </Button>
   );
 }

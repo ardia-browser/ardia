@@ -27,7 +27,7 @@ function GitHubPage() {
         title="GitHub"
         description={
           <>
-            Public data: mantrakp04/ardia from GitHub's public API. Refreshed every 10 minutes{query.data ? `; this copy is from ${formatAgo(query.data.fetchedAt)}` : ""}.
+            Public data: ardia-browser/ardia from GitHub's public API. Refreshed every 10 minutes{query.data ? `; this copy is from ${formatAgo(query.data.fetchedAt)}` : ""}.
             {query.data?.error ? <span className="text-bad"> Last refresh failed: {query.data.error}</span> : null}
           </>
         }

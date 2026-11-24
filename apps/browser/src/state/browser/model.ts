@@ -1,7 +1,8 @@
 import { appUrlOrigin, displayHost } from "@ardia/core";
+import { singleLine } from "../../lib/singleLine";
 import type { BrowserState } from "./store";
 import { DEFAULT_PROFILE_ID } from "../settings/settings";
-import type { BrowserWindow, Navigation, Profile, Tab, TabGroup, TabLive, TabPin, TabSnapshot } from "./types";
+import type { BrowserWindow, Navigation, Profile, Tab, TabLive, TabPin, TabSnapshot } from "./types";
 import { pinnedGroupMembers } from "./structure";
 
 
@@ -10,6 +11,8 @@ let counter = 0;
 export const newId = (prefix: string) => `${prefix}-${launch}-${(++counter).toString(36)}`;
 
 export const pinKeyOf = (x: { id: string; pinKey?: string }) => x.pinKey ?? x.id;
+
+export const pinHomeOf = (t: { url: string; pinnedUrl?: string | null }) => t.pinnedUrl || t.url;
 export const familyKeyOf = (t: Pick<Tab, "profileId" | "id" | "pinKey">) => `${t.profileId}\u0001${pinKeyOf(t)}`;
 
 let navSeq = 0;
@@ -63,9 +66,13 @@ export function makeTab(windowId: string, profileId: string, url = "", snapshot?
     ...snapshot,
     page: url ? { kind: "loaded", nav: navigationTo(url) } : { kind: "idle" },
     createdAt: now,
-    lastActiveAt: now,
+    lastActiveAt: snapshot?.lastActiveAt ?? now,
+    ...(snapshot?.lastActiveAt ? { restoredAt: now } : {}),
   };
 }
+
+export const byRecentUse = (a: Pick<Tab, "unseen" | "lastActiveAt">, b: Pick<Tab, "unseen" | "lastActiveAt">) =>
+  Number(!!a.unseen) - Number(!!b.unseen) || b.lastActiveAt - a.lastActiveAt;
 
 export const snapshotTab = (t: Tab): TabSnapshot => ({
   url: t.url,
@@ -79,6 +86,7 @@ export const snapshotTab = (t: Tab): TabSnapshot => ({
   pinnedUrl: t.pinnedUrl,
   ...(t.engine ? { engine: t.engine } : {}),
   profileId: t.profileId,
+  lastActiveAt: t.lastActiveAt,
 });
 
 export const TILE_PIN: TabPin = { as: "tile" };
@@ -89,7 +97,7 @@ export const samePin = (a: TabPin | null | undefined, b: TabPin | null | undefin
 export const pinnedSectionTitle = (s: BrowserState, tab: Pick<Tab, "profileId"> | undefined) => `Pinned in ${s.profiles[tab?.profileId ?? ""]?.name ?? "Profile"}`;
 export const togglePinTitle = (tab: Pick<Tab, "pin"> | undefined) => (isPinnedRow(tab) ? "Unpin" : tab?.pin ? "Unpin from Top Apps" : "Move to Top Apps");
 
-export type PinSection = "tile" | "row" | "none";
+type PinSection = "tile" | "row" | "none";
 export const pinSection = (t: Pick<Tab, "pin"> | undefined): PinSection => t?.pin?.as ?? "none";
 
 export function inPinnedContainer(s: Pick<BrowserState, "tabs" | "groups">, id: string): boolean {
@@ -117,6 +125,12 @@ export function closesWindow(s: BrowserState, id: string): boolean {
   const w = tab && s.windows[tab.windowId];
   if (!tab || !w || tab.profileId !== w.profileId || inPinnedContainer(s, id)) return false;
   return viewTabIds(s, w.id).every((t) => t === id || s.tabs[t]!.page.kind === "asleep");
+}
+
+export function showsEmptyWindow(s: BrowserState, windowId: string): boolean {
+  const active = activeTabId(s, windowId);
+  if (active && s.tabs[active]!.url) return false;
+  return viewTabIds(s, windowId).every((id) => id === active || !s.tabs[id]!.url || s.tabs[id]!.page.kind === "asleep");
 }
 
 export function activeTabId(s: BrowserState, windowId: string, profileId?: string): string | undefined {
@@ -149,6 +163,14 @@ export function resolveWindowId(s: BrowserState, id?: string | null): string | u
 export function tabLayoutOf(s: BrowserState, windowId?: string | null): "sidebar" | "top" {
   const id = resolveWindowId(s, windowId);
   return (id && s.windows[id]!.tabLayout) || s.settings.tabLayout;
+}
+
+export function autoHidesTabsIn(s: Pick<BrowserState, "windows" | "settings">, windowId?: string | null): boolean {
+  return (windowId ? s.windows[windowId]?.autoHideTabs : undefined) ?? s.settings.autoHideTabs;
+}
+
+export function tabsShownIn(s: Pick<BrowserState, "windows" | "settings">, windowId?: string | null): boolean {
+  return !autoHidesTabsIn(s, windowId) && !(windowId && s.windows[windowId]?.kind === "small");
 }
 
 export type SidebarSide = "left" | "right";
@@ -187,7 +209,8 @@ export function tabLabel(t: Pick<Tab, "url" | "title" | "customTitle">): string 
 }
 
 const urlLabel = (url: string) => url.replace(/^[a-z][\w+.-]*:\/\//i, "").replace(/^www\./, "").replace(/\/$/, "");
-export const tabTitle = (t: Pick<Tab, "customTitle" | "title" | "url">) => t.customTitle || t.title || (t.url && urlLabel(t.url)) || "New Tab";
+export const ownTabTitle = (t: Pick<Tab, "customTitle" | "title">) => singleLine(t.customTitle || t.title || "");
+export const tabTitle = (t: Pick<Tab, "customTitle" | "title" | "url">) => ownTabTitle(t) || (t.url && urlLabel(t.url)) || "New Tab";
 
 export const tabTooltip = (t: Pick<Tab, "customTitle" | "title" | "url">) => (t.url ? `${tabTitle(t)}\n${t.url}` : tabTitle(t));
 

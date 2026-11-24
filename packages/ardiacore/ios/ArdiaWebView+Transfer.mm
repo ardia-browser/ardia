@@ -98,6 +98,12 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
   });
 }
 
+- (BOOL)releasePageForOffscreen {
+  if (!_tab || _visible || _warm || _reveal.active || _leave.active || _frameHold.holding || _standalone) return NO;
+  [self detach];
+  return YES;
+}
+
 + (void)releaseTransfer:(NSString *)transferKey {
   if (!transferKey.length) return;
   NSString *key = [transferKey copy];
@@ -132,7 +138,9 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
 - (BOOL)takeLinkTab:(NSString *)adoptId {
   ArdiaCoreTab *tab = [ArdiaTabParking parkLinkTab:adoptId forKey:_transferKey];
   if (!tab) return NO;
+  [ArdiaTabRegistry expectFirstShowFocus:YES forTab:tab];
   if ([self takeTransferredTab] != ArdiaTransferNone) return YES;
+  [ArdiaTabRegistry expectFirstShowFocus:NO forTab:tab];
   [ArdiaTabParking discardTab:tab forKey:_transferKey];
   return NO;
 }
@@ -169,10 +177,16 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
       offered = nil;
     }
     if (offered && !offered.closed && [self holdTransferOf:offered]) {
-      if (_transferKey.length) [ArdiaTabParking park:offered forKey:_transferKey];
+      if (_transferKey.length) {
+        [ArdiaTabParking park:offered forKey:_transferKey];
+        [ArdiaTabRegistry expectFirstShowFocus:YES forTab:offered];
+      }
       return;
     }
-    if (offered && !offered.closed) return [self attach:offered];
+    if (offered && !offered.closed) {
+      [ArdiaTabRegistry expectFirstShowFocus:YES forTab:offered];
+      return [self attach:offered];
+    }
   }
   NSString *kind = nil, *key = nil;
   NSRange colon = _adoptId ? [_adoptId rangeOfString:@":"] : NSMakeRange(NSNotFound, 0);
@@ -195,6 +209,7 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
     view->_life.pendingURL = nil;
     view->_life.creatingURL = url;
     view->_life.creatingAt = CACurrentMediaTime();
+    view->_firstPaint.created = url.length && ![url hasPrefix:@"about:"];
     if (view->_extensionHost.length && url.length && controller.coreWindow) {
       if (ArdiaCoreTab *tab = [controller.coreWindow openExtensionView:url profile:profile kind:view->_extensionHost])
         return [view attach:tab];
@@ -226,7 +241,10 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
       return;
     }
     const BOOL userInitiated = view->_life.pendingUserInitiated;
-    if (url.length && [view skipsNavigationDownload:url userInitiated:userInitiated]) url = nil;
+    if (url.length && [view skipsNavigationDownload:url userInitiated:userInitiated]) {
+      url = nil;
+      view->_firstPaint.created = NO;
+    }
     if (url.length) ArdiaFieldMarkNow(view->_transferKey, @"request");
     ArdiaCoreTab *tab = !standalone && !userInitiated && !ardia_host::IsPrivateProfile(view->_profile)
                             ? RestoreSavedHistory(controller, profile, view->_transferKey, url)
@@ -289,6 +307,7 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
 }
 
 - (ArdiaTransfer)takeTransferredTab {
+  _firstPaint.created = NO;
   if (!_transferKey.length) return ArdiaTransferNone;
   if ([ArdiaTabParking launchWasClosed:_transferKey]) {
     if (!_life.launchCloseSent) {
@@ -310,7 +329,13 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
       if (other == self || ![other.transferKey isEqualToString:_transferKey] || !other->_tab) continue;
       if (![self canTake:other->_tab]) return ArdiaTransferNone;
       if (!other->_tab.closed && [self holdTransferOf:other->_tab]) return ArdiaTransferHeld;
+      const BOOL sameWindow = other.window && other.window == self.window;
+      if (sameWindow && NSIsEmptyRect(self.bounds)) {
+        _life.waitingForSize = YES;
+        return ArdiaTransferHeld;
+      }
       tab = other->_tab;
+      other->_life.keepsPageOnDetach = sameWindow;
       [other detach];
       break;
     }
@@ -338,6 +363,10 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
             completion:^(NSDictionary *) {}];
 }
 
+- (void)forgetRestoreKey {
+  if (_transferKey.length) [BoundRestoreKeys() removeObject:_transferKey];
+}
+
 - (void)closeBrowser {
   ArdiaCoreTab *tab = _tab;
   if (tab && _life.handingOff && _transferKey.length && !tab.closed) {
@@ -348,6 +377,7 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
   }
   _life.close();
   if (!tab) return;
+  [self tabWillClose:tab];
   if (_transferKey.length && !ardia_host::IsPrivateProfile(_profile) && ArdiaHost.isStarted)
     [ArdiaServices call:@"ac_tab_restore_tag" profile:_profile args:@{@"tab" : @(tab.tabId), @"key" : _transferKey}
               completion:^(NSDictionary *) {}];

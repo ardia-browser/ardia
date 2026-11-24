@@ -1,26 +1,22 @@
 import AppKit
-import CoreImage
 
 enum AppIcons {
   struct Variant {
     let id: String
     let name: String
-    let plate: (top: NSColor, bottom: NSColor)?
-    let mono: Bool
-    var tint: String? = nil
   }
 
   static let defaultsKey = "ACAppIcon"
   static func changedNotification(bundleId: String) -> Notification.Name { .init("\(bundleId).AppIconChanged") }
 
   static let variants: [Variant] = [
-    Variant(id: "default", name: "Default", plate: nil, mono: false),
-    Variant(id: "midnight", name: "Midnight", plate: (NSColor(srgbRed: 0.20, green: 0.19, blue: 0.22, alpha: 1), NSColor(srgbRed: 0.07, green: 0.07, blue: 0.08, alpha: 1)), mono: false, tint: "neutral"),
-    Variant(id: "daylight", name: "Daylight", plate: (NSColor(srgbRed: 1, green: 1, blue: 1, alpha: 1), NSColor(srgbRed: 0.90, green: 0.90, blue: 0.91, alpha: 1)), mono: false, tint: "neutral"),
-    Variant(id: "plum", name: "Plum", plate: (NSColor(srgbRed: 0.83, green: 0.56, blue: 0.68, alpha: 1), NSColor(srgbRed: 0.52, green: 0.28, blue: 0.40, alpha: 1)), mono: false, tint: "plum"),
-    Variant(id: "ocean", name: "Ocean", plate: (NSColor(srgbRed: 0.45, green: 0.70, blue: 0.93, alpha: 1), NSColor(srgbRed: 0.16, green: 0.36, blue: 0.70, alpha: 1)), mono: false, tint: "blue"),
-    Variant(id: "mono", name: "Mono", plate: nil, mono: true),
-    Variant(id: "noir", name: "Noir", plate: (NSColor(srgbRed: 0.16, green: 0.16, blue: 0.16, alpha: 1), NSColor(srgbRed: 0.03, green: 0.03, blue: 0.03, alpha: 1)), mono: true),
+    Variant(id: "default", name: "Default"),
+    Variant(id: "midnight", name: "Midnight"),
+    Variant(id: "daylight", name: "Daylight"),
+    Variant(id: "plum", name: "Plum"),
+    Variant(id: "ocean", name: "Ocean"),
+    Variant(id: "mono", name: "Mono"),
+    Variant(id: "noir", name: "Noir"),
   ]
 
   static var current: String {
@@ -45,77 +41,56 @@ enum AppIcons {
     }
   }
 
-  static var shown: String { IconStyle.shown(saved: current, theme: IconStyle.systemTheme) }
+  static var shown: String { IconStyle.shown(saved: current, theme: IconStyle.systemTheme, bundleIcon: IconStyle.bundleIcon) }
 
   private static func apply() {
+    let bundleImageBeforeAnyOverride = ApplicationIconName.bundleImage
     let id = shown
-    NSApp.applicationIconImage = id == "default" ? nil : image(id, size: 512)
+    let custom = id == "default" ? nil : image(id, size: 512)
+    NSApp.applicationIconImage = custom
+    if !ApplicationIconName.register(custom ?? bundleImageBeforeAnyOverride) {
+      NSLog("Ardia: couldn't name the \(id) app icon \(ApplicationIconName.name); Chromium's Dock tile draws the bundle icon")
+    }
   }
 
   private static var cache: [String: NSImage] = [:]
+  private static var previewCache: [String: String] = [:]
 
   static var base: NSImage = NSImage(named: "AppIcon") ?? NSWorkspace.shared.icon(forFile: Bundle.main.bundlePath) {
-    didSet { cache.removeAll() }
+    didSet {
+      cache.removeAll()
+      previewCache.removeAll()
+    }
   }
 
-  static var markNamed: (String) -> NSImage? = { NSImage(named: $0) } {
-    didSet { cache.removeAll() }
-  }
-
-  private static func mark(_ variant: Variant) -> NSImage {
-    variant.tint.flatMap { markNamed("AppIconMark-\($0)") } ?? markNamed("AppIconMark") ?? base
+  static var imageNamed: (String) -> NSImage? = { NSImage(named: $0) } {
+    didSet {
+      cache.removeAll()
+      previewCache.removeAll()
+    }
   }
 
   static func image(_ id: String, size: CGFloat) -> NSImage? {
     let key = "\(id)@\(size)"
     if let hit = cache[key] { return hit }
-    guard let variant = variants.first(where: { $0.id == id }) else { return nil }
-    let source = variant.plate == nil ? base : mark(variant)
-    let artwork = variant.mono ? monochrome(source) : source
+    guard variants.contains(where: { $0.id == id }) else { return nil }
+    let artwork = id == "default" ? base : imageNamed("AppIcon-\(id)") ?? base
     let image = NSImage(size: NSSize(width: size, height: size), flipped: false) { rect in
-      guard let plate = variant.plate else {
-        artwork.draw(in: rect)
-        return true
-      }
-      let inset = rect.width * 100 / 1024
-      let body = rect.insetBy(dx: inset, dy: inset)
-      let path = NSBezierPath(roundedRect: body, xRadius: body.width * 0.225, yRadius: body.width * 0.225)
-      NSGraphicsContext.saveGraphicsState()
-      let shadow = NSShadow()
-      shadow.shadowColor = NSColor.black.withAlphaComponent(0.3)
-      shadow.shadowBlurRadius = rect.width * 10 / 1024
-      shadow.shadowOffset = NSSize(width: 0, height: -rect.width * 6 / 1024)
-      shadow.set()
-      plate.bottom.setFill()
-      path.fill()
-      NSGraphicsContext.restoreGraphicsState()
-      NSGradient(starting: plate.top, ending: plate.bottom)?.draw(in: path, angle: -90)
-      NSColor.white.withAlphaComponent(0.12).setStroke()
-      path.lineWidth = max(1, rect.width / 512)
-      path.stroke()
-      path.addClip()
-      artwork.draw(in: body.insetBy(dx: body.width * 0.06, dy: body.width * 0.06))
+      artwork.draw(in: rect)
       return true
     }
     cache[key] = image
     return image
   }
 
-  private static func monochrome(_ image: NSImage) -> NSImage {
-    guard let tiff = image.tiffRepresentation, let input = CIImage(data: tiff),
-          let filter = CIFilter(name: "CIPhotoEffectNoir") else { return image }
-    filter.setValue(input, forKey: kCIInputImageKey)
-    guard let output = filter.outputImage else { return image }
-    let rep = NSCIImageRep(ciImage: output)
-    let result = NSImage(size: rep.size)
-    result.addRepresentation(rep)
-    return result
-  }
-
   static func preview(_ id: String, size: CGFloat) -> String? {
+    let key = "\(id)@\(size)"
+    if let hit = previewCache[key] { return hit }
     guard let image = image(id, size: size * 2),
           let tiff = image.tiffRepresentation,
           let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else { return nil }
-    return "data:image/png;base64,\(png.base64EncodedString())"
+    let encoded = "data:image/png;base64,\(png.base64EncodedString())"
+    previewCache[key] = encoded
+    return encoded
   }
 }

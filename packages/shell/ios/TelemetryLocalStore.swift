@@ -225,7 +225,7 @@ enum TelemetryLocalStore {
     }
   }
 
-  private static func collect(since: Double, includeCli: Bool) -> (Data, Int) {
+  private static func collect(since: Double, includeCli: Bool, withoutUnsentCounts: Bool = false) -> (Data, Int) {
     guard let dir = try? directory() else { return (Data(), 0) }
     let fromDay = utcDay(since)
     var out = Data()
@@ -234,6 +234,12 @@ enum TelemetryLocalStore {
       guard let data = try? Data(contentsOf: file.url) else { continue }
       let offset = file.day == fromDay ? offsetOfFirstLine(in: data) { (lineTime($0) ?? since) >= since } : 0
       let kept = data.suffix(from: data.startIndex + offset)
+      if withoutUnsentCounts {
+        let filtered = LocalReportLines.withoutUnsentCounts(Data(kept))
+        out.append(filtered.data)
+        lines += filtered.lines
+        continue
+      }
       out.append(kept)
       if let last = kept.last, last != 0x0A { out.append(0x0A) }
       lines += newlines(Data(kept)) + (kept.last.map { $0 == 0x0A ? 0 : 1 } ?? 0)
@@ -252,7 +258,7 @@ enum TelemetryLocalStore {
 
   static func exportForReport(since: Double, done: @escaping (Exported?) -> Void) {
     queue.async {
-      let (data, lines) = collect(since: since, includeCli: false)
+      let (data, lines) = collect(since: since, includeCli: false, withoutUnsentCounts: true)
       guard let dir = try? directory().deletingLastPathComponent().appendingPathComponent("export", isDirectory: true),
         (try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)) != nil,
         let gz = GzipData.compress(data)

@@ -4,18 +4,17 @@ import { Animated, View } from "react-native";
 import { currentTab } from "../../state/browser/current";
 import { ink, space } from "../ui/tokens";
 import { pageOf } from "../../state/tabs/pageState";
-import { dismissShareBar, shareInstead, stopSharing, useShareFor } from "../../state/media/screenShare";
+import { dismissShareBar, shareInstead, stopSharing, type ShareFound } from "../../state/media/screenShare";
 import { mediaMotion, useMediaTokens } from "./tokens";
 import { hostOrOrigin } from "../../lib/url";
 import { curve } from "../ui/motion";
 
-const SHARE_BAR_HEIGHT = 38;
+export const SHARE_BAR_HEIGHT = 38;
 const FLEX = { flex: 1 } as const;
 
-export function ShareBar({ tabId }: { tabId: string }) {
+export function ShareBar({ tabId, found }: { tabId: string; found: ShareFound | null }) {
   const theme = useTheme();
   const tokens = useMediaTokens();
-  const found = useShareFor(tabId);
   const height = useRef(new Animated.Value(0)).current;
   const visible = !!found;
   useEffect(() => {

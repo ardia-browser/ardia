@@ -1,228 +1,254 @@
-import type { DownloadSettings } from "../../../state/downloads/actions";
-import { checkForUpdates, setLaunchAtLogin } from "../../../state/app/appSettings";
-import { pickFolder } from "../../../state/app/system";
-import { Button, PopUp, space, Symbol, Toggle } from "../../ui";
 import { useEffect } from "react";
 import { AppState, View } from "react-native";
-import { useTheme } from "../../ui/theme";
+import type { DownloadSettings } from "../../../state/downloads/actions";
+import { setLaunchAtLogin } from "../../../state/app/appSettings";
+import { confirm, pickFolder } from "../../../state/app/system";
+import { Button, PopUp, Toggle } from "../../ui";
 import { updateSettings } from "../../../state/settings/actions";
 import { currentEngineProfile } from "../../../state/browser/current";
 import { useProfiles, useSettings } from "../../../state/browser/hooks";
-import { SHARING_COPY } from "../../../state/telemetry/copy";
-import { Anchor, Group, ProfilePicker, Row, SectionHeader, SettingToggle, useSettingsProfile } from "../Form";
-import { defaultBrowser, downloadSettings, loginItem, makeDefaultBrowser, setDownloadsFor, setUpdaterPrefs, updater } from "../../../state/settings/paneData";
+import { Group, Row, SectionHeader } from "../Form";
+import { defaultBrowser, downloadFoldersDiffer, downloadSettings, loginItem, makeDefaultBrowser, setDownloadsFor } from "../../../state/settings/paneData";
 import { useResource } from "../../../state/settings/resources";
-import { openImport } from "../../../state/settings/settingsWindows";
-import { ExportBookmarksRow } from "./ExportBookmarksRow";
+import { goToSettingsPane, openImport, SETTINGS_DETAIL, type SettingsPlace } from "../../../state/settings/settingsWindows";
+import { redoSetupFromSettings } from "../../../state/onboarding/redo";
+import { onWindowEvent } from "../../../state/windows/nativeWindow";
+import { keyText } from "../../../state/commands/keyText";
+import { categoryOn, setBlockingCategory } from "../../../state/site/contentBlocking";
+import type { FilterListCategory } from "../../../state/site/siteSettings";
+import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
+import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 import { SetupCodeRow } from "./SetupCodeRow";
-import { UI_LOCALE } from "../../../lib/uiLocale";
+import { EngineModeRow } from "./EngineModeRow";
+import { CATEGORIES, useContentBlocker, writeBlocker } from "./FilterListsSheet";
+import { CrashReportDetails, ShareDiagnosticsToggle } from "./ShareDiagnostics";
+import { Checklist } from "./Checklist";
+import { FilterListsPage } from "./FilterListsPage";
+import { PaneSubPage } from "./PaneSubPage";
+import { SyncSection } from "./SyncSection";
+import { UpdatesSection } from "./UpdatesSection";
+import { homeRelative } from "../../../lib/homePath";
 
 const APP = "Ardia";
 
-export function GeneralPane() {
-  const openLinksInLittleArdia = useSettings((s) => s.openLinksInLittleArdia);
-  const restoreSession = useSettings((s) => s.restoreSession);
-  const commandBarPreference = useSettings((s) => s.commandBarPreference);
-  const [loginStatus = "notRegistered", refreshLogin] = useResource(loginItem);
-
+export function GeneralPane({ detail }: SettingsPlace) {
+  if (detail === SETTINGS_DETAIL.filterLists) return <FilterListsPage />;
+  if (detail === SETTINGS_DETAIL.crashDetails)
+    return (
+      <PaneSubPage>
+        <CrashReportDetails />
+      </PaneSubPage>
+    );
   return (
     <View>
-      <DefaultBrowserBanner />
+      <DefaultBrowserSection />
+      <StartupSection />
+      {PLATFORM_FEATURES.webKit && <EngineSection />}
+      <DownloadsSection />
+      {PLATFORM_FEATURES.contentBlocker && <ContentBlockingSection />}
+      {PLATFORM_FEATURES.sync && <SyncSection />}
+      <UpdatesSection />
+      <CrashReportsSection />
+      <ImportSection />
+    </View>
+  );
+}
 
-      <SectionHeader title="General" />
+function DefaultBrowserSection() {
+  const [isDefault, reload] = useResource(defaultBrowser);
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", () => void reload());
+    const focus = onWindowEvent((e) => e.type === "focus" && void reload());
+    return () => {
+      sub.remove();
+      focus.remove();
+    };
+  }, []);
+  if (isDefault !== false) return null;
+  return (
+    <>
+      <SectionHeader title="Default browser" />
       <Group>
-        <Row
-          anchor="general.openAtLogin"
-          description={loginStatus === "requiresApproval" ? "Allow it in System Settings › General › Login Items." : undefined}
-        >
+        <Row anchor="general.defaultBrowser">
+          <Button
+            title={PLATFORM_FEATURES.setsDefaultBrowser ? `Set ${APP} as Default` : `Choose in ${PLATFORM_TERMS.os} Settings…`}
+            kind="primary"
+            onPress={() => void makeDefaultBrowser()}
+          />
+        </Row>
+      </Group>
+    </>
+  );
+}
+
+function StartupSection() {
+  const restoreSession = useSettings((s) => s.restoreSession);
+  const warnBeforeQuitting = useSettings((s) => s.warnBeforeQuitting);
+  const warnBeforeClosingWindow = useSettings((s) => s.warnBeforeClosingWindow);
+  const warnBeforeClosingLastTab = useSettings((s) => s.warnBeforeClosingLastTab);
+  const warnBeforeClosingTabGroup = useSettings((s) => s.warnBeforeClosingTabGroup);
+  const warnBeforeMovingTabs = useSettings((s) => s.warnBeforeMovingTabsToProfile);
+  const [loginStatus = "notRegistered", refreshLogin] = useResource(loginItem);
+  return (
+    <>
+      <SectionHeader title="Startup and quitting" />
+      <Group>
+        <Row anchor="general.openAtLogin" description={loginStatus === "requiresApproval" ? `Allow it in ${PLATFORM_TERMS.loginItemsSettings}.` : undefined}>
           <Toggle
+            accessibilityLabel={`Open ${APP} at login`}
             value={loginStatus === "enabled" || loginStatus === "requiresApproval"}
             onChange={(on) => void setLaunchAtLogin(on).catch(() => {}).finally(refreshLogin)}
           />
         </Row>
-        <SettingToggle anchor="general.warnBeforeQuitting" />
-        <SettingToggle anchor="general.warnBeforeClosingWindow" />
-        <Row
-          anchor="general.openLinksFrom"
-          description={
-            openLinksInLittleArdia
-              ? `A link from Discord, Slack or Mail opens in Little Ardia, a small window of its own. ⌘O moves it into ${APP}; closing it throws it away.`
-              : `A link from Discord, Slack or Mail opens as a new tab in the ${APP} window you used last.`
-          }
-        >
-          <PopUp
-            value={openLinksInLittleArdia ? "small" : "tab"}
-            options={[
-              { value: "small", title: "Little Ardia" },
-              { value: "tab", title: "A new tab" },
-            ]}
-            onChange={(v) => updateSettings({ openLinksInLittleArdia: v === "small" })}
-            minWidth={190}
-          />
-        </Row>
-        <SettingToggle anchor="general.littleArdiaOpensNewTabLinks" />
-      </Group>
-
-      <SectionHeader title={`When quitting ${APP}:`} />
-      <Group>
         <Row anchor="general.windowsAndTabs">
           <PopUp
             value={restoreSession ? "keep" : "close"}
             options={[
-              { value: "keep", title: "Preserve tabs and windows" },
+              { value: "keep", title: "Keep windows and tabs" },
               { value: "close", title: "Start fresh" },
             ]}
             onChange={(v) => updateSettings({ restoreSession: v === "keep" })}
             minWidth={190}
           />
         </Row>
+        <Checklist
+          anchor="general.askBefore"
+          items={[
+            {
+              key: "quit",
+              label: PLATFORM_FEATURES.quitsWithLastWindow ? `Quitting when you close the last window` : `Quitting with ${keyText("⌘Q")}`,
+              value: warnBeforeQuitting,
+              onChange: (on) => updateSettings({ warnBeforeQuitting: on }),
+            },
+            { key: "window", label: "Closing a window with several tabs", value: warnBeforeClosingWindow, onChange: (on) => updateSettings({ warnBeforeClosingWindow: on }) },
+            { key: "lastTab", label: "Closing the last tab in a profile", value: warnBeforeClosingLastTab, onChange: (on) => updateSettings({ warnBeforeClosingLastTab: on }) },
+            { key: "group", label: "Closing a tab group", value: warnBeforeClosingTabGroup, onChange: (on) => updateSettings({ warnBeforeClosingTabGroup: on }) },
+            { key: "move", label: "Moving tabs to another profile", value: warnBeforeMovingTabs, onChange: (on) => updateSettings({ warnBeforeMovingTabsToProfile: on }) },
+          ]}
+        />
       </Group>
-
-      <SectionHeader title="Command bar" description="What happens when what you type could be a website or a search." />
-      <Group>
-        <Row anchor="general.commandBarPreference">
-          <PopUp
-            value={commandBarPreference}
-            options={[
-              { value: "website", title: "Use Website First" },
-              { value: "search", title: "Prefer Search Engine" },
-            ]}
-            onChange={(v) => updateSettings({ commandBarPreference: v })}
-            minWidth={190}
-          />
-        </Row>
-      </Group>
-
-      <DownloadsSection />
-
-      <UpdatesSection />
-
-      <SectionHeader title="Import and Export" />
-      <Group>
-        <Row anchor="general.importBrowser">
-          <Button title="Import…" onPress={openImport} />
-        </Row>
-        <ExportBookmarksRow />
-        <SetupCodeRow />
-      </Group>
-    </View>
+    </>
   );
 }
 
-const homeRelative = (path: string) => path.replace(/^\/Users\/[^/]+(?=\/|$)/, "~");
+function EngineSection() {
+  return (
+    <>
+      <SectionHeader title="Web engine" />
+      <Group>
+        <EngineModeRow anchor="general.engineMode" />
+      </Group>
+    </>
+  );
+}
 
 function DownloadsSection() {
+  const separate = useSettings((s) => s.separateDownloadFolders);
+  const defaultProfileId = useSettings((s) => s.defaultProfileId);
   const profiles = useProfiles();
-  const [profileId, setProfileId] = useSettingsProfile();
-  const profile = currentEngineProfile(profileId);
+  const profile = currentEngineProfile(defaultProfileId);
   const [current] = useResource(downloadSettings, profile);
-  const others = [...new Set(profiles.map((p) => currentEngineProfile(p.id)))].filter((p) => p !== profile);
-  const apply = (patch: Partial<Pick<DownloadSettings, "folder" | "askWhereToSave">>, targets = [profile]) => void setDownloadsFor(patch, targets);
+  const everyProfile = [...new Set([profile, ...profiles.map((p) => currentEngineProfile(p.id))])];
+  const locked = !current || current.managed;
+  const profileKey = everyProfile.join("\n");
+  useEffect(() => {
+    if (separate || everyProfile.length < 2) return;
+    let live = true;
+    void downloadFoldersDiffer(everyProfile).then((differ) => live && differ && updateSettings({ separateDownloadFolders: true }));
+    return () => {
+      live = false;
+    };
+  }, [separate, profileKey]);
+  const apply = (patch: Partial<Pick<DownloadSettings, "folder" | "askWhereToSave">>, targets = everyProfile) => void setDownloadsFor(patch, targets);
   const change = async () => {
     if (!current) return;
     const folder = await pickFolder(current.folder, "Use Folder");
     if (folder) apply({ folder });
   };
-
+  const setSeparate = (on: boolean) => {
+    updateSettings({ separateDownloadFolders: on });
+    if (!on && current && !current.managed) apply({ folder: current.folder, askWhereToSave: current.askWhereToSave }, everyProfile.filter((p) => p !== profile));
+  };
   return (
     <>
-      <SectionHeader
-        title="Downloads"
-        description={profiles.length > 1 ? "Each profile saves to its own folder." : undefined}
-        action={<ProfilePicker value={profileId} onChange={setProfileId} />}
-      />
+      <SectionHeader title="Downloads" />
       <Group>
         <Row
           anchor="general.downloadsFolder"
           description={current ? (current.managed ? `${homeRelative(current.folder)}, set by your organization.` : homeRelative(current.folder)) : undefined}
         >
-          <Button title="Change…" disabled={!current || current.managed} onPress={() => void change()} />
+          <Button title="Change…" disabled={locked} onPress={() => void change()} />
+        </Row>
+        <Row anchor="general.separateDownloadFolders">
+          <Toggle value={separate} accessibilityLabel="Separate folder for each profile" onChange={setSeparate} />
         </Row>
         <Row anchor="general.askWhereToSave">
-          <Toggle value={current?.askWhereToSave ?? false} disabled={!current || current.managed} onChange={(v) => apply({ askWhereToSave: v })} />
+          <Toggle value={current?.askWhereToSave ?? false} disabled={locked} onChange={(v) => apply({ askWhereToSave: v })} />
         </Row>
-        {others.length > 0 && (
-          <Row anchor="general.downloadsAllProfiles">
-            <Button
-              title="Use for All Profiles"
-              disabled={!current || current.managed}
-              onPress={() => current && apply({ folder: current.folder, askWhereToSave: current.askWhereToSave }, others)}
-            />
-          </Row>
-        )}
       </Group>
     </>
   );
 }
 
-function UpdatesSection() {
-  const [state, reload] = useResource(updater);
-  const refresh = () => void reload();
-  useEffect(() => {
-    const sub = AppState.addEventListener("change", refresh);
-    return () => sub.remove();
-  }, []);
-  if (!state?.available) return null;
-  const ready = state.configured;
-  const lastCheck = state.lastCheck
-    ? `Last checked ${new Date(state.lastCheck).toLocaleString(UI_LOCALE, { dateStyle: "medium", timeStyle: "short" })}.`
-    : "Not checked yet.";
+function ContentBlockingSection() {
+  const [blocker, refresh, unavailable] = useContentBlocker({ countOutages: true });
+  const toggleCategory = async (c: FilterListCategory, on: boolean) => {
+    if (!blocker) return;
+    if (!on && c === "ads") {
+      const { confirmed } = await confirm({
+        title: "Turn Off Ad Blocker?",
+        message: "Ardia's Ad Blocker hides ads so pages load faster and feel cleaner.",
+        confirmTitle: "Turn Off",
+      });
+      if (!confirmed) return refresh();
+    }
+    await writeBlocker(() => setBlockingCategory(blocker, c, on), refresh);
+  };
   return (
     <>
-      <SectionHeader title="Updates" description={ready ? undefined : "Updates aren't set up for this build."} />
+      <SectionHeader title="Content blocking" />
       <Group>
-        <Row anchor="general.updateChecks" description={`${SHARING_COPY.updateChecks} ${SHARING_COPY.switchFile}`}>
-          <Toggle value={ready && state.automaticChecks} disabled={!ready} onChange={(v) => setUpdaterPrefs({ automaticChecks: v })} />
-        </Row>
-        <Row anchor="general.autoUpdate">
-          <Toggle
-            value={ready && state.automaticChecks && state.automaticDownloads}
-            disabled={!ready || !state.automaticChecks}
-            onChange={(v) => setUpdaterPrefs({ automaticDownloads: v })}
-          />
-        </Row>
-        {state.channel && (
-          <Row anchor="general.updateChannel">
-            <PopUp
-              value={state.channel}
-              options={[
-                { value: "stable", title: "Stable" },
-                { value: "nightly", title: "Nightly" },
-              ]}
-              disabled={!ready}
-              onChange={(channel) => setUpdaterPrefs({ channel })}
-              minWidth={190}
-            />
+        {CATEGORIES.filter((c) => c.anchor).map((c) => (
+          <Row key={c.id} anchor={c.anchor}>
+            <Toggle value={!!blocker && categoryOn(blocker, c.id)} disabled={!blocker} onChange={(v) => void toggleCategory(c.id, v)} />
+          </Row>
+        ))}
+        <Row anchor="general.filterLists" onPress={() => goToSettingsPane("general", null, SETTINGS_DETAIL.filterLists)} />
+        {unavailable && (
+          <Row title="uBlock Origin isn't answering" description="Its settings show here once it responds. Pages keep the blocking they had.">
+            <Button title="Try Again" onPress={refresh} />
           </Row>
         )}
-        <Row anchor="general.checkNow" title={`${APP} ${state.displayVersion ?? state.version}`} description={ready ? lastCheck : undefined}>
-          <Button title="Check Now" disabled={ready && (!state.canCheck || state.sessionInProgress)} onPress={() => void checkForUpdates().finally(refresh)} />
-        </Row>
       </Group>
     </>
   );
 }
 
-function DefaultBrowserBanner() {
-  const theme = useTheme();
-  const [isDefault, reload] = useResource(defaultBrowser);
-  useEffect(() => {
-    const sub = AppState.addEventListener("change", () => void reload());
-    return () => sub.remove();
-  }, []);
+function CrashReportsSection() {
   return (
-    <Anchor id="general.defaultBrowser" shape="card" style={BANNER}>
+    <>
+      <SectionHeader title="Crash reports" />
       <Group>
-        <Row
-          icon={<Symbol name={isDefault ? "checkmark.seal.fill" : "safari"} size={20} color={isDefault ? theme.success : theme.icon} style={BANNER_ICON} />}
-          title={isDefault ? `${APP} is your default browser` : `${APP} works best as your default browser`}
-        >
-          {!isDefault && <Button title={`Set ${APP} as Default`} kind="primary" onPress={() => void makeDefaultBrowser()} />}
-        </Row>
+        <ShareDiagnosticsToggle />
+        <Row anchor="general.crashDetails" onPress={() => goToSettingsPane("general", null, SETTINGS_DETAIL.crashDetails)} />
       </Group>
-    </Anchor>
+    </>
   );
 }
 
-const BANNER = { marginTop: space.xxl } as const;
-const BANNER_ICON = { width: 28, height: 28 } as const;
+function ImportSection() {
+  return (
+    <>
+      <SectionHeader title="Import" />
+      <Group>
+        <Row anchor="general.importBrowser">
+          <Button title="Import…" onPress={() => openImport()} />
+        </Row>
+        <SetupCodeRow />
+        <Row anchor="general.redoSetup">
+          <Button title="Redo Setup…" onPress={redoSetupFromSettings} />
+        </Row>
+      </Group>
+    </>
+  );
+}

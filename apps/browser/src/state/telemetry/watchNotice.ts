@@ -16,7 +16,7 @@ function showWhenWindowOpen() {
   showToast(windowId, WATCH_COPY.endedTitle, WATCH_COPY.endedMessage(report), {
     icon: "checkmark.shield",
     key: "watch-ended",
-    action: { title: WATCH_COPY.endedAction, run: () => openSettings("privacy") },
+    action: { title: WATCH_COPY.endedAction, run: () => openSettings("general") },
   });
   watchNoticeShown();
   return true;

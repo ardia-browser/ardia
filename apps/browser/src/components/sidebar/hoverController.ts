@@ -2,11 +2,14 @@ import { createContext, useContext, useEffect, useReducer, useRef, useState } fr
 import type { LayoutChangeEvent } from "react-native";
 import { markHoverProps } from "../../lib/hoverMarks";
 import { currentWindow } from "../../state/browser/current";
-import { PageProfileContext, useWindow } from "../../state/browser/hooks";
+import { PageProfileContext, useSettings, useWindow } from "../../state/browser/hooks";
+import { cardTargetFor, cardTargetNow } from "../../state/sidebar/cardTarget";
 import {
   cardEntered,
   cardLaidOut,
   cardLeft,
+  dropHeldEnter,
+  holdEnterWhileScrolling,
   releaseAnchor,
   rowEntered,
   rowLeft,
@@ -17,8 +20,27 @@ import {
   type HoverPointerEvent,
 } from "../../state/sidebar/hover";
 import type { Target } from "../../state/sidebar/sidebarUi";
+import { useMedia, usePinnedWithMediaControls } from "../../state/media/media";
 
-export const FoldedAway = createContext(false);
+export type AwaySource = { away: () => boolean; subscribe: (changed: () => void) => () => void };
+
+const NEVER_AWAY: AwaySource = { away: () => false, subscribe: () => () => {} };
+
+export const FoldedAway = createContext<AwaySource>(NEVER_AWAY);
+
+function useAwayChanges(source: AwaySource, changed: (away: boolean) => void) {
+  const latest = useRef(changed);
+  latest.current = changed;
+  useEffect(() => {
+    let was = source.away();
+    return source.subscribe(() => {
+      const now = source.away();
+      if (now === was) return;
+      was = now;
+      latest.current(now);
+    });
+  }, [source]);
+}
 
 export const cardHoverProps = {
   onMouseEnter: cardEntered,
@@ -26,24 +48,90 @@ export const cardHoverProps = {
   onLayout: (e: LayoutChangeEvent) => cardLaidOut(e.nativeEvent.layout),
 };
 
-export function useRowHover(windowId: string, target: Target | null) {
-  const [hovered, setHovered] = useState(false);
+export function useCardTarget<T extends Target>(target: T | null): T | null {
+  const cards = useSettings((s) => s.showTabHoverMenu);
+  const playerTab = !cards && target?.kind === "tab" ? target.id : undefined;
+  const pinned = usePinnedWithMediaControls(playerTab);
+  const playing = useMedia((m) => {
+    const session = playerTab ? m.sessions[playerTab] : undefined;
+    return !!session && session.controllable && session.playbackState !== "none" && !!(session.title || session.artwork);
+  });
+  return cardTargetFor(target, cards, pinned && playing);
+}
+
+
+export type RowHoverCell = {
+  hovered: boolean;
+  plain: boolean;
+  windowId: string;
+  readers: Set<() => void>;
+  set(hovered: boolean): void;
+  refresh(): void;
+};
+
+export function rowHoverCell(windowId: string): RowHoverCell {
+  const cell: RowHoverCell = {
+    hovered: false,
+    plain: true,
+    windowId,
+    readers: new Set(),
+    set(hovered) {
+      if (cell.hovered === hovered) return;
+      cell.hovered = hovered;
+      cell.refresh();
+    },
+    refresh() {
+      for (const reader of cell.readers) reader();
+    },
+  };
+  return cell;
+}
+
+export const cellHovered = (cell: RowHoverCell) => cell.hovered && !rowsCovered(cell.windowId);
+
+export function useCellHovered(cell: RowHoverCell): boolean {
   const [, refresh] = useReducer((n: number) => n + 1, 0);
+  const seen = useRef(cellHovered(cell));
+  seen.current = cellHovered(cell);
+  useEffect(() => {
+    cell.readers.add(refresh);
+    if (seen.current !== cellHovered(cell)) refresh();
+    return () => void cell.readers.delete(refresh);
+  }, [cell]);
+  return seen.current;
+}
+
+export function useRowHover(windowId: string, rowTarget: Target | null) {
+  const { cell, hoverProps } = useRowHoverCell(windowId, rowTarget);
+  return { hovered: useCellHovered(cell), hoverProps };
+}
+
+export function useRowHoverCell(windowId: string, rowTarget: Target | null) {
+  const [cell] = useState(() => rowHoverCell(windowId));
+  cell.windowId = windowId;
+  const setHovered = cell.set;
+  const refresh = cell.refresh;
   const page = useContext(PageProfileContext);
   const away = useContext(FoldedAway);
-  const latest = useRef({ windowId, target, page, away });
-  latest.current = { windowId, target, page, away };
+  const latest = useRef({ windowId, rowTarget, page, away });
+  latest.current = { windowId, rowTarget, page, away };
+  const isAway = () => latest.current.away.away();
+  const entered = useRef<Target | null>(null);
   const inside = useRef<HoverPointerEvent | null>(null);
+  const [row] = useState(() => ({}));
   const onCurrentPage = () => {
     const { windowId, page } = latest.current;
     return !page || currentWindow(windowId)?.profileId === page;
   };
   const [enterRow] = useState(() => (event?: HoverPointerEvent) => {
-    if (!onCurrentPage() || latest.current.away) return;
-    const { windowId, target } = latest.current;
+    if (!onCurrentPage() || isAway()) return;
+    const windowId = latest.current.windowId;
+    const target = cardTargetNow(latest.current.rowTarget);
+    entered.current = target;
+    if (holdEnterWhileScrolling(windowId, row, () => inside.current && enterRow(inside.current))) return;
     watchCovered(windowId, refresh, true);
     const enter = () => {
-      if (latest.current.away) return;
+      if (isAway()) return;
       setHovered(true);
       rowShown(windowId, target);
     };
@@ -57,35 +145,33 @@ export function useRowHover(windowId: string, target: Target | null) {
       },
       onMouseLeave: (event?: HoverPointerEvent) => {
         inside.current = null;
+        const windowId = latest.current.windowId;
+        if (dropHeldEnter(windowId, row)) return;
         setHovered(false);
-        const { windowId, target } = latest.current;
         watchCovered(windowId, refresh, false);
-        rowLeft(windowId, target, event, onCurrentPage());
+        rowLeft(windowId, entered.current, event, onCurrentPage());
       },
     }),
   );
-  const shownAway = useRef(away);
-  useEffect(() => {
-    if (shownAway.current === away) return;
-    shownAway.current = away;
-    if (!away) {
+  useAwayChanges(away, (now) => {
+    if (!now) {
       if (inside.current) enterRow(inside.current);
       return;
     }
-    const { windowId, target } = latest.current;
+    const { windowId, rowTarget } = latest.current;
     setHovered(false);
     watchCovered(windowId, refresh, false);
-    if (target) releaseAnchor(windowId, target.id);
-  }, [away]);
+    if (rowTarget) releaseAnchor(windowId, rowTarget.id);
+  });
   useEffect(
     () => () => {
-      const { windowId, target } = latest.current;
+      const { windowId, rowTarget } = latest.current;
       watchCovered(windowId, refresh, false);
-      if (target) releaseAnchor(windowId, target.id);
+      if (rowTarget) releaseAnchor(windowId, rowTarget.id);
     },
     [],
   );
-  return { hovered: hovered && !rowsCovered(windowId), hoverProps };
+  return { cell, hoverProps };
 }
 
 export function useGroupHover(windowId: string, groupId: string) {
@@ -93,18 +179,26 @@ export function useGroupHover(windowId: string, groupId: string) {
   const [, refresh] = useReducer((n: number) => n + 1, 0);
   const page = useContext(PageProfileContext);
   const away = useContext(FoldedAway);
+  useAwayChanges(away, refresh);
   const onPage = useWindow(windowId, (w) => !page || w?.profileId === page);
-  const [hoverProps] = useState(() =>
-    markHoverProps({
-      onMouseEnter: () => setInside(true),
-      onMouseLeave: () => setInside(false),
-    }),
-  );
+  const windowRef = useRef(windowId);
+  windowRef.current = windowId;
+  const [hoverProps] = useState(() => {
+    const row = {};
+    return markHoverProps({
+      onMouseEnter: () => {
+        if (!holdEnterWhileScrolling(windowRef.current, row, () => setInside(true))) setInside(true);
+      },
+      onMouseLeave: () => {
+        if (!dropHeldEnter(windowRef.current, row)) setInside(false);
+      },
+    });
+  });
   useEffect(() => {
     watchCovered(windowId, refresh, true);
     return () => watchCovered(windowId, refresh, false);
   }, [windowId]);
-  const hovered = inside && onPage && !away && !rowsCovered(windowId);
+  const hovered = inside && onPage && !away.away() && !rowsCovered(windowId);
   useEffect(() => {
     if (!hovered) return;
     setGroupPointed(groupId, true);

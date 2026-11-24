@@ -4,6 +4,7 @@ import { resolveWindowId } from "../browser/model";
 import { DEFAULT_SETTINGS } from "../settings/settings";
 import {
   activeSteps,
+  cancelOnboarding,
   chooseSource,
   confirmAnswer,
   finishOnboarding,
@@ -11,13 +12,16 @@ import {
   goToStep,
   nextStep,
   presetPatch,
+  previewLive,
   PRESETS,
   questionsFor,
+  redoOnboarding,
   resolveDraft,
   startOnboarding,
   useOnboarding,
 } from "./onboarding";
 import { pinSites } from "./sites";
+import * as pluginsStep from "./pluginsStep";
 
 export const onboardingTestRun = () => devTestValue("onboarding") === "1";
 
@@ -41,7 +45,11 @@ if (__DEV__)
     nextStep,
     activeSteps,
     finish: finishOnboarding,
+    redo: redoOnboarding,
+    cancel: cancelOnboarding,
+    previewLive,
     pinSites,
+    pluginsStep,
     resolveDraft,
     questionsFor,
     PRESETS,

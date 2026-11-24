@@ -1,6 +1,8 @@
 import { Children, createContext, isValidElement, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Animated, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
-import { settingsSectionKey, useSettingsSearch } from "../../state/settings/searchState";
+import { useSettingsSearch } from "../../state/settings/searchState";
+import { useSync } from "../../state/sync/engine";
+import { useCalendar } from "../../state/live/calendar";
 import { registerAnchor } from "./anchors";
 import { useProfiles, useSettings, useTabLayout } from "../../state/browser/hooks";
 import { currentSettings } from "../../state/browser/current";
@@ -8,7 +10,7 @@ import type { SettingsPane } from "../../state/settings/settingsWindows";
 import { curve } from "../ui/motion";
 import { Group as PlainGroup, Row as PlainRow } from "../ui/Row";
 import { useTheme } from "../ui/theme";
-import { lineHeight, proseLineHeight, radius as radii, space } from "../ui/tokens";
+import { lineHeight, proseLineHeight, radius as radii, space, perLook } from "../ui/tokens";
 import { findSetting, sectionEntries, setting, unshownSettings, type SettingEntry, type SettingId } from "./settingsIndex";
 import { Toggle } from "../ui/Switch";
 import { liquidGlass } from "../ui/Glass";
@@ -16,22 +18,31 @@ import { PopUp } from "../ui/Field";
 import { Text } from "../ui/Text";
 import { updateSettings } from "../../state/settings/actions";
 import type { Settings } from "../../state/settings/settings";
+import { officialPlugins } from "../../state/plugins/official";
+import { officialNamesInSettings } from "../../state/plugins/officialView";
+import { usePlugins } from "../../state/plugins/store";
 import { settingsMotion } from "./tokens";
 
 export const SettingsPaneContext = createContext<SettingsPane | null>(null);
 
-export function useUnshownSettings(): ReadonlySet<string> {
+const EMPTY_UNSHOWN: ReadonlySet<string> = new Set();
+const UnshownSettingsContext = createContext<ReadonlySet<string>>(EMPTY_UNSHOWN);
+
+export function UnshownSettingsProvider({ children }: { children: ReactNode }) {
   const top = useTabLayout() === "top";
-  const ids = useSettings((s) => unshownSettings(s, { top, glass: liquidGlass }));
-  return useMemo(() => new Set(ids ? ids.split("\n") : []), [ids]);
+  const syncOn = useSync((s) => s.enabled);
+  const calendarAccess = useCalendar((s) => s.access === "fullAccess" || s.access === "fixture");
+  const official = usePlugins((s) => officialNamesInSettings(officialPlugins(s)).join(" "));
+  const ids = useSettings((s) => unshownSettings(s, { top, glass: liquidGlass, syncOn, calendarAccess, officialPlugins: official ? official.split(" ") : [] }));
+  const unshown = useMemo(() => new Set(ids ? ids.split("\n") : []), [ids]);
+  return <UnshownSettingsContext.Provider value={unshown}>{children}</UnshownSettingsContext.Provider>;
 }
 
+export const useUnshownSettings = (): ReadonlySet<string> => useContext(UnshownSettingsContext);
+
 export function useHiddenSetting() {
-  const shown = useSettings((s) => s.showAdvancedSettings);
-  const revealed = useSettingsSearch((s) => s.revealedSections);
   const unshown = useUnshownSettings();
-  return (entry: SettingEntry | undefined) =>
-    !!entry && (unshown.has(entry.id) || (entry.advanced && !shown && !revealed.includes(settingsSectionKey(entry.pane, entry.section))));
+  return (entry: SettingEntry | undefined) => !!entry && unshown.has(entry.id);
 }
 
 function useHiddenSection(pane: SettingsPane | null | undefined, section: string | undefined) {
@@ -51,9 +62,9 @@ export function Group({ children, of }: { children: ReactNode; of?: SettingId })
   return <PlainGroup>{rows}</PlainGroup>;
 }
 
-export type AnchorShape = "row" | "card";
+type AnchorShape = "row" | "card";
 
-const ANCHOR_RADIUS: Record<AnchorShape, number> = { row: radii.control, card: radii.panel };
+const ANCHOR_RADIUS: Record<AnchorShape, number> = { get row() { return radii.control; }, get card() { return radii.panel; } };
 
 export function Anchor({ id, children, shape, style, keep }: { id?: SettingId; children: ReactNode; shape?: AnchorShape; style?: StyleProp<ViewStyle>; keep?: boolean }) {
   const hidden = useHiddenSetting();
@@ -102,7 +113,7 @@ export function SectionHeader({ title, description, action, anchor }: { title?: 
       <View style={{ flex: 1 }}>
         <Text weight="semibold">{text}</Text>
         {detail ? (
-          <Text size="small" tone="textSecondary" style={SECTION_DETAIL}>
+          <Text size="small" tone="textSecondary" style={SECTION_DETAIL()}>
             {detail}
           </Text>
         ) : null}
@@ -129,7 +140,7 @@ export function Row({
 }) {
   const entry = anchor ? setting(anchor) : undefined;
   const row = (
-    <PlainRow title={title ?? entry?.title} description={description === undefined ? entry?.description : description} icon={icon} onPress={onPress}>
+    <PlainRow title={title ?? entry?.title} description={description === undefined ? (entry?.explained ? entry.description : undefined) : description} icon={icon} onPress={onPress}>
       {children}
     </PlainRow>
   );
@@ -156,18 +167,18 @@ export function ProfilePicker({ value, onChange }: { value: string; onChange: (p
   return <PopUp value={value} options={profiles.map((p) => ({ value: p.id, title: p.name }))} onChange={onChange} />;
 }
 
-const SECTION_HEADER = { flexDirection: "row", alignItems: "flex-end", marginTop: space.xxxl, marginBottom: space.m, paddingHorizontal: space.xxs } as const;
-const SECTION_DETAIL = { marginTop: space.xs, lineHeight: lineHeight.body } as const;
+const SECTION_HEADER = { flexDirection: "row", alignItems: "flex-end", marginTop: space.xxl, marginBottom: space.s, paddingHorizontal: space.s } as const;
+const SECTION_DETAIL = perLook(() => ({ marginTop: space.xs, lineHeight: lineHeight.body }) as const);
 
 export function PaneIntro({ children }: { children: ReactNode }) {
   return (
-    <Text size="small" tone="textSecondary" style={PANE_INTRO}>
+    <Text size="small" tone="textSecondary" style={PANE_INTRO()}>
       {children}
     </Text>
   );
 }
 
-const PANE_INTRO = { marginTop: space.xxl, lineHeight: proseLineHeight.small } as const;
+const PANE_INTRO = perLook(() => ({ marginTop: space.xxl, lineHeight: proseLineHeight.small }) as const);
 
 export function FormField({ label, inline, children }: { label: string; inline?: boolean; children: ReactNode }) {
   return (

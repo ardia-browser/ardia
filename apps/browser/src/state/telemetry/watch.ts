@@ -1,7 +1,9 @@
-import { capture, ensureInstallId, setSharing } from "./client";
+import { capture, consentNow, setSharing } from "./client";
+import { ensureInstallId } from "./installId";
 import { NO_WATCH, save, savedChoice } from "./choice";
+import { telemetryRelay } from "./relay";
 
-export const WATCH_DAYS = 14;
+const WATCH_DAYS = 14;
 const DAY_MS = 86_400_000;
 const CHECK_EVERY_MS = 60 * 60_000;
 
@@ -10,7 +12,7 @@ const monotonicNow = () => (typeof performance !== "undefined" && typeof perform
 let lastMonotonic: number | null = null;
 let timer: ReturnType<typeof setTimeout> | undefined;
 
-export type WatchStatus = { report: string; until: number; turnedSharingOn: boolean } | null;
+type WatchStatus = { report: string; until: number; turnedSharingOn: boolean } | null;
 
 export function watchStatus(): WatchStatus {
   const s = savedChoice();
@@ -19,6 +21,8 @@ export function watchStatus(): WatchStatus {
 }
 
 export function startWatch(reportId: string, days = WATCH_DAYS, now = Date.now()) {
+  const relay = telemetryRelay();
+  if (relay) return relay.change({ kind: "watchStarted", reportId, days });
   const span = Math.max(1, Math.min(WATCH_DAYS, days)) * DAY_MS;
   const until = now + span;
   const current = savedChoice();
@@ -37,7 +41,7 @@ export function startWatch(reportId: string, days = WATCH_DAYS, now = Date.now()
     watchEndedNotice: null,
   });
   lastMonotonic = monotonicNow();
-  capture("watch_started", { days: Math.round(span / DAY_MS), turned_sharing_on: !wasSharing });
+  capture("watch_started", { days: Math.round(span / DAY_MS), turned_sharing_on: !wasSharing }, consentNow());
   schedule(now);
 }
 
@@ -45,7 +49,7 @@ function endWatch(reason: "expired" | "clock" | "stopped") {
   const s = savedChoice();
   const report = s.watchReport;
   if (!report) return;
-  capture("watch_ended", { reason, turned_sharing_on: s.sharingUntil !== null });
+  capture("watch_ended", { reason, turned_sharing_on: s.sharingUntil !== null }, consentNow());
   if (s.sharingUntil !== null) {
     setSharing(false, "watch_ended");
     if (reason !== "stopped") save({ watchEndedNotice: report });
@@ -54,7 +58,11 @@ function endWatch(reason: "expired" | "clock" | "stopped") {
   timer = undefined;
 }
 
-export const stopWatch = () => endWatch("stopped");
+export function stopWatch() {
+  const relay = telemetryRelay();
+  if (relay) return relay.change({ kind: "watchStopped" });
+  endWatch("stopped");
+}
 
 export function checkWatch(now = Date.now(), sameSession = lastMonotonic !== null) {
   const s = savedChoice();
@@ -87,4 +95,8 @@ export function startWatchChecks() {
 
 export const pendingWatchNotice = () => savedChoice().watchEndedNotice;
 
-export const watchNoticeShown = () => save({ watchEndedNotice: null });
+export function watchNoticeShown() {
+  const relay = telemetryRelay();
+  if (relay) return relay.change({ kind: "watchNoticeShown" });
+  save({ watchEndedNotice: null });
+}

@@ -15,7 +15,7 @@ export const useMeetingAlert = create<{ event: CalendarEvent | null }>()(() => (
 let appActive = true;
 const notified = new Set<string>();
 
-export function alertEvent(now = Date.now()): CalendarEvent | null {
+function alertEvent(now = Date.now()): CalendarEvent | null {
   const lead = ALERT_LEADS.find((l) => l.value === live().calendar.alertLead)?.minutes;
   if (lead === null || lead === undefined) return null;
   return dueAlerts(useCalendar.getState().events, now, lead, new Set(live().dismissedAlerts))[0] ?? null;

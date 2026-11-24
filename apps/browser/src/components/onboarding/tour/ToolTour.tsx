@@ -7,7 +7,7 @@ import { Button, Panel, Surface, Text, usePresence } from "../../ui";
 import { useOnboardingColors } from "../Parts";
 import { locateAnchor } from "./anchors";
 import { endToolTour, openVideoTour, stepToolTour, useTour, videoTourUrl, type TourStop } from "../../../state/onboarding/tour";
-import { curve, springs } from "../../ui/motion";
+import { currentValue, curve, nativeLoop, springs } from "../../ui/motion";
 import { proseLineHeight, radius, shadow, space } from "../../ui/tokens";
 import { onboardingMotion, onboardingType, tourRing } from "../tokens";
 
@@ -25,7 +25,7 @@ export function ToolTour() {
   const windowId = useWindowId();
   const active = useTour((s) => s.windowId === windowId && s.stops.length > 0);
   const session = useTour((s) => s.session);
-  const { shown, appear: presence } = usePresence(active ? session : null, TOUR_PRESENCE);
+  const { shown, appear: presence } = usePresence(active ? session : null, TOUR_PRESENCE, true);
 
   if (shown === null) return null;
   return (
@@ -123,19 +123,15 @@ function Tour({ windowId }: { windowId: string }) {
   );
 }
 
-const valueOf = (v: Animated.Value) => (v as unknown as { __getValue(): number }).__getValue();
-
 function Ring({ hole }: { hole: { x: Animated.Value; y: Animated.Value; w: Animated.Value; h: Animated.Value; r: Animated.Value } }) {
   const pulse = useRef(new Animated.Value(0)).current;
-  const [r, setR] = useState(() => valueOf(hole.r));
+  const [r, setR] = useState(() => currentValue(hole.r));
   useEffect(() => {
     const id = hole.r.addListener(({ value }) => setR(Math.max(0, value)));
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: onboardingMotion.tourPulse, easing: curve.pulse, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0, duration: onboardingMotion.tourPulse, easing: curve.pulse, useNativeDriver: true }),
-      ]),
-    );
+    const loop = nativeLoop(pulse, [
+      { to: 1, ms: onboardingMotion.tourPulse, easing: curve.pulse },
+      { to: 0, ms: onboardingMotion.tourPulse, easing: curve.pulse },
+    ]);
     loop.start();
     return () => {
       loop.stop();

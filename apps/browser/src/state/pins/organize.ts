@@ -1,7 +1,7 @@
 import type { StateCreator } from "zustand";
 import type { BrowserState } from "../browser/store";
 import { activeTabId, inPinnedContainer, tabTitle, tabTooltip, viewTabIds } from "../browser/model";
-import { clickedSelection, dropping, type ClickMods, type Drop } from "../drag/drops";
+import { clickedSelection, dropping, type ClickMods, type Drop, type SelectionAnchor } from "../drag/drops";
 import type { Tab } from "../browser/types";
 import type { PinChoices, PinSync } from "./pinChoices";
 import { groupOf } from "./tabGrouping";
@@ -9,10 +9,11 @@ import { placing, type TabPlacement } from "./placing";
 import { pinnedGroupMembers } from "../browser/structure";
 import { samePage } from "../../lib/url";
 import { pinHome } from "./pinHomes";
+import { sameList } from "../../lib/lists";
 
 export type OrganizeSlice = {
   selection: Record<string, string[]>;
-  selectionAnchors: Record<string, string>;
+  selectionAnchors: Record<string, SelectionAnchor>;
   pinChoices: PinChoices;
   pinSync: PinSync;
   topAppsMerged: string;
@@ -36,11 +37,16 @@ export function selectedTabIds(s: BrowserState, windowId: string): string[] {
 
 export const awayFromPin = (t: Pick<Tab, "url" | "pinnedUrl">) => !!t.pinnedUrl && !!t.url && !samePage(t.url, t.pinnedUrl);
 
-export type AwayTitle = { pinned: string | null; page: string };
+export type AwayTitle = { pinned: string | null; page: string; renamed?: true };
 
 type TitledTab = Pick<Tab, "url" | "pinnedUrl" | "customTitle" | "title">;
 
 export const awayTitle = (t: TitledTab): AwayTitle | null => (awayFromPin(t) ? { pinned: t.customTitle || null, page: tabTitle({ ...t, customTitle: null }) } : null);
+
+export function rowAwayTitle(t: TitledTab): AwayTitle | null {
+  const away = awayTitle(t);
+  return away?.pinned ? { pinned: null, page: tabTitle(t), renamed: true } : away;
+}
 
 export const awayTitleText = (away: AwayTitle) => (away.pinned ? `${away.pinned} / ${away.page}` : `/ ${away.page}`);
 
@@ -51,6 +57,22 @@ export function pinAwareTooltip(t: TitledTab): string {
 
 export function onUrlChange(s: BrowserState, tab: Tab, url: string): Partial<Tab> {
   return inPinnedContainer(s, tab.id) ? { pinnedUrl: pinHome({ ...tab, url }, true) } : {};
+}
+
+export function forgetMovedAnchors(s: BrowserState, prev: BrowserState): Pick<BrowserState, "selectionAnchors"> | null {
+  if (s.windows === prev.windows) return null;
+  const moved = Object.entries(s.selectionAnchors).filter(([windowId, anchor]) => {
+    const shown = activeTabId(s, windowId);
+    return shown !== activeTabId(prev, windowId) && shown !== anchor.shownTabId;
+  });
+  if (!moved.length) return null;
+  const kept = { ...s.selectionAnchors };
+  for (const [windowId] of moved) {
+    const shown = activeTabId(s, windowId);
+    if (shown) kept[windowId] = { tabId: shown, shownTabId: shown, reset: true };
+    else delete kept[windowId];
+  }
+  return { selectionAnchors: kept };
 }
 
 export function pruneSelection(selection: Record<string, string[]>, gone: Set<string>): Record<string, string[]> {
@@ -78,7 +100,7 @@ export const createOrganizeSlice: StateCreator<BrowserState, [], [], OrganizeSli
       const view = new Set(viewTabIds(s, windowId));
       const next = [...new Set(ids)].filter((id) => view.has(id));
       const prev = s.selection[windowId] ?? [];
-      if (next.length === prev.length && next.every((id, i) => id === prev[i])) return {};
+      if (sameList(next, prev)) return {};
       return { selection: { ...s.selection, [windowId]: next } };
     });
   },
@@ -88,10 +110,11 @@ export const createOrganizeSlice: StateCreator<BrowserState, [], [], OrganizeSli
     const intoGroup = !!mods.altKey && !!mods.shiftKey && !mods.metaKey && s.settings.optShiftClickOpensInGroup;
     const picked = intoGroup ? null : clickedSelection(s, windowId, tabId, mods);
     if (intoGroup) openInActiveGroup(s, windowId, tabId);
-    const anchor = picked ? picked.anchor : tabId;
-    if (anchor && anchor !== get().selectionAnchors[windowId]) set({ selectionAnchors: { ...get().selectionAnchors, [windowId]: anchor } });
     get().setSelection(windowId, picked?.selection ?? []);
     if (!picked) get().activate(tabId);
+    const anchor: SelectionAnchor = { tabId: picked?.anchor ?? tabId, shownTabId: activeTabId(get(), windowId) };
+    const kept = get().selectionAnchors[windowId];
+    if (kept?.tabId !== anchor.tabId || kept.shownTabId !== anchor.shownTabId || kept.reset) set({ selectionAnchors: { ...get().selectionAnchors, [windowId]: anchor } });
   },
 
   placeTabs(ids, placement) {

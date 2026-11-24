@@ -1,4 +1,4 @@
-export type BarFitInput = {
+type BarFitInput = {
   ids: readonly string[];
   widthOf: (id: string) => number | undefined;
   room: number;
@@ -7,7 +7,7 @@ export type BarFitInput = {
   minWidth: number;
 };
 
-export type BarFit = { mounted: number; shown: number; starts: number[] };
+type BarFit = { mounted: number; shown: number; starts: number[] };
 
 export function barFit({ ids, widthOf, room, chevron, gap, minWidth }: BarFitInput): BarFit {
   const starts: number[] = [];

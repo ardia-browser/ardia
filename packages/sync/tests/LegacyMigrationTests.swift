@@ -609,7 +609,7 @@ final class LegacyMigrationTests: XCTestCase {
   func testSyncFormatIsUnchanged() throws {
     let keys = SyncKeys(entropy: Data(repeating: 0, count: 32))
     XCTAssertEqual(keys.chainTag, "gbcx4r55mk3rlaegbggknyx4ta")
-    XCTAssertEqual(keys.scopeTag("app"), "nr4ncp5iyqzqgjn6ol4zksqtne")
+    XCTAssertEqual(try keys.scopeTag("app"), "nr4ncp5iyqzqgjn6ol4zksqtne")
     let sealed = try XCTUnwrap(Data(base64Encoded: try String(contentsOf: URL(fileURLWithPath: #filePath)
       .deletingLastPathComponent().appendingPathComponent("fixtures/sealed-0.2.32.b64"), encoding: .utf8)
       .trimmingCharacters(in: .whitespacesAndNewlines)))

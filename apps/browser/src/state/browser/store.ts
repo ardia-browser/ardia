@@ -1,30 +1,31 @@
-import { create, type StateCreator } from "zustand";
+import { create, type StateCreator, type StoreApi, type UseBoundStore } from "zustand";
+import { withToolbarKeptWhileScrolling } from "../settings/toolbarScrollDefault";
 import { setHeldReportsTransaction } from "../../platform/nativeEvents";
 import { createBookmarksSlice, ensureRoots, type BookmarksSlice } from "../bookmarks/bookmarks";
 import { changedIds } from "./changes";
 import { createGroupsSlice, type GroupsSlice } from "../groups/groups";
 import { createHistorySlice, type HistorySlice } from "../history/history";
-import { engineProfile, IDLE_LIVE, isIncognitoProfile } from "./model";
+import { engineProfile, isIncognitoProfile } from "./model";
 import { createOrganizeSlice, type OrganizeSlice } from "../pins/organize";
 import { createMuteSlice, type MuteSlice } from "../tabs/mute";
 import { createCleanUpSlice, type CleanUpSlice } from "../pins/tabCleanup";
 import { keptCleanedTabs, keptDeletedGroups } from "../pins/closedTabs";
 import { notePinChoices } from "../pins/pinChoices";
 import { createPeekSlice, type PeekSlice } from "../peek/peek";
-import { pinHome } from "../pins/pinHomes";
-import { createProfilesSlice, DEFAULT_PROFILE, type ProfilesSlice } from "../profiles/profiles";
+import { hydratedLayout } from "./hydratedLayout";
+import { createProfilesSlice, type ProfilesSlice } from "../profiles/profiles";
 import { engineProfiles } from "../profiles/engineProfiles";
 import { createSettingsSlice, parseSettings, parseSettingsMeta, type SettingsSlice } from "../settings/settings";
-import { createSplitsSlice, sanitizeSplits, type SplitsSlice } from "../splits/splits";
+import { createSplitsSlice, type SplitsSlice } from "../splits/splits";
 import { activated, apply } from "../tabs/tabs";
 import { createTabsSlice, type TabsSlice } from "../tabs/tabsSlice";
+import { bindLiveToBrowser, forgetAllLive } from "../tabs/tabLive";
 import { settle, SettleDidNotConverge } from "./settle";
-import { transactional } from "./transaction";
-import type { BrowserWindow, Tab } from "./types";
+import { transactional, type SubscribeTo } from "./transaction";
+import { actionsApart } from "./actionsApart";
 import { createUiSlice, type UiSlice } from "../windows/ui";
 import { createDownloadsSlice, type DownloadsSlice } from "../downloads/downloadsSlice";
 import { createWindowsSlice, type WindowsSlice } from "../windows/windows";
-import { orderSections } from "../groups/groups";
 
 export type BrowserState = ProfilesSlice &
   WindowsSlice &
@@ -83,11 +84,8 @@ const batched =
     return creator(batchedSet, get, api);
   };
 
-const pageMoved = (s: BrowserState, prev: BrowserState) => {
-  if (s.tabs !== prev.tabs) for (const id of changedIds(s.tabs, prev.tabs)) if (s.tabs[id]?.url !== prev.tabs[id]?.url) return true;
-  if (s.live !== prev.live) for (const id of changedIds(s.live, prev.live)) if (!!s.live[id]?.isLoading !== !!prev.live[id]?.isLoading) return true;
-  return false;
-};
+const pageMoved = (s: BrowserState, prev: BrowserState) =>
+  s.tabs !== prev.tabs && changedIds(s.tabs, prev.tabs).some((id) => s.tabs[id]?.url !== prev.tabs[id]?.url);
 const reportsUnsettled = !__DEV__ && !(globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.NODE_TEST_CONTEXT;
 const settled = (s: BrowserState, prev: BrowserState) => {
   try {
@@ -100,9 +98,11 @@ const settled = (s: BrowserState, prev: BrowserState) => {
 };
 const transactions = transactional<BrowserState>(pageMoved, settled);
 export const storeTransaction = transactions.transaction;
+export const afterStoreTransactionIdempotent = transactions.afterTransactionIdempotent;
+export const inStoreTransaction = transactions.inTransaction;
 setHeldReportsTransaction(storeTransaction);
 
-export const useBrowser = create<BrowserState>()(transactions.middleware(batched((...a) => ({
+const createdBrowser = create<BrowserState>()(actionsApart(transactions.middleware(batched((...a) => ({
   ...createProfilesSlice(...a),
   ...createWindowsSlice(...a),
   ...createTabsSlice(...a),
@@ -121,41 +121,16 @@ export const useBrowser = create<BrowserState>()(transactions.middleware(batched
   hydrate(data) {
     const [set, get] = a;
     const s = get();
-    const profiles = data.profiles && Object.keys(data.profiles).length ? data.profiles : { [DEFAULT_PROFILE.id]: DEFAULT_PROFILE };
+    const { profiles, windows, windowOrder, tabs, groups, splits } = hydratedLayout(data);
     const profileOrder = [
       ...(data.profileOrder ?? []).filter((id) => profiles[id]),
       ...Object.keys(profiles).filter((id) => !data.profileOrder?.includes(id)),
     ];
-    const settings = parseSettings(data.settings);
+    const kept = withToolbarKeptWhileScrolling(data.settings, parseSettingsMeta(data.settingsMeta));
+    const settings = parseSettings(kept.settings);
     if (!profiles[settings.defaultProfileId]) settings.defaultProfileId = profileOrder[0]!;
 
     notePinChoices(data.pinChoices ?? {});
-    const rawWindows = data.windows ?? {};
-    const profileOk = (p: string) => !!profiles[p] || isIncognitoProfile(p);
-    const tabs: Record<string, Tab> = {};
-    for (const t of Object.values(data.tabs ?? {})) {
-      if (!rawWindows[t.windowId] || !profileOk(t.profileId)) continue;
-      tabs[t.id] = { ...t, pinnedUrl: t.pinnedUrl ?? pinHome(t, !!t.pin) };
-    }
-    const windows: Record<string, BrowserWindow> = {};
-    for (const w of Object.values(rawWindows)) {
-      const tabIds = orderSections(w.tabIds.filter((id) => tabs[id]?.windowId === w.id), tabs, data.groups ?? {});
-      if (!tabIds.length) continue;
-      const activeTabIds = Object.fromEntries(Object.entries(w.activeTabIds).filter(([p, id]) => tabs[id]?.profileId === p));
-      const profileId = tabIds.some((id) => tabs[id]!.profileId === w.profileId) ? w.profileId : tabs[tabIds[0]!]!.profileId;
-      activeTabIds[profileId] ??= tabIds.find((id) => tabs[id]!.profileId === profileId)!;
-      windows[w.id] = { ...w, tabIds, profileId, activeTabIds };
-    }
-    for (const t of Object.values(tabs)) if (!windows[t.windowId]) delete tabs[t.id];
-    const windowOrder = [...(data.windowOrder ?? []).filter((id) => windows[id]), ...Object.keys(windows).filter((id) => !data.windowOrder?.includes(id))];
-    const inWindow = (id: string, windowId: string) => tabs[id]?.windowId === windowId;
-    const groups = Object.fromEntries(
-      Object.values(data.groups ?? {})
-        .map((g) => ({ ...g, tabIds: g.tabIds.filter((id) => inWindow(id, g.windowId)) }))
-        .filter((g) => g.tabIds.length)
-        .map((g) => [g.id, g]),
-    );
-    const splits = sanitizeSplits(data.splits ?? {}, tabs);
     let bookmarks = s.bookmarks;
     for (const engine of engineProfiles({ profiles })) bookmarks = ensureRoots(bookmarks, engine)[0];
     const focused = data.focusedWindowId && windows[data.focusedWindowId] ? data.focusedWindowId : (windowOrder.at(-1) ?? null);
@@ -167,11 +142,10 @@ export const useBrowser = create<BrowserState>()(transactions.middleware(batched
       profileOrder,
       orphanedProfileData: (data.orphanedProfileData ?? []).filter((e) => !engines.has(e)),
       settings,
-      settingsMeta: parseSettingsMeta(data.settingsMeta),
+      settingsMeta: kept.settingsMeta,
       windows,
       windowOrder,
       tabs,
-      live: Object.fromEntries(Object.keys(tabs).map((id) => [id, IDLE_LIVE])),
       groups,
       splits,
       closedTabs: data.closedTabs ?? [],
@@ -201,11 +175,13 @@ export const useBrowser = create<BrowserState>()(transactions.middleware(batched
       },
     };
     for (const id of next.ui.focusOrder) next = apply(next, activated(next, windows[id]!.activeTabIds[windows[id]!.profileId]!));
+    forgetAllLive();
     set(next);
   },
-}))));
+})))));
+export const useBrowser = createdBrowser as UseBoundStore<StoreApi<BrowserState>> & { subscribeTo: SubscribeTo<BrowserState> };
+bindLiveToBrowser(useBrowser, transactions.afterTransactionIdempotent);
 
-export type { CreateWindowOptions } from "../windows/windows";
 
 type StoreActions = { [K in keyof BrowserState as BrowserState[K] extends (...args: never[]) => unknown ? K : never]: BrowserState[K] };
 

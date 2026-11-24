@@ -12,7 +12,7 @@ protocol PageEngine {
   func clearSiteData(profile: String, origin: String, done: @escaping (Any?, String?) -> Void)
   func prepareTransfer(_ key: String)
   func releaseTransfer(_ key: String)
-  func clearBrowsingData(profile: String, types: [String], since: Double, done: @escaping () -> Void)
+  func clearBrowsingData(profile: String, types: [String], since: Double, done: @escaping (String?) -> Void)
   func deleteProfileData(profile: String, done: @escaping ([String]) -> Void)
 }
 
@@ -53,7 +53,7 @@ struct ChromiumPageEngine: PageEngine {
 
   func releaseTransfer(_ key: String) { ArdiaWebView.releaseTransfer(key) }
 
-  func clearBrowsingData(profile: String, types: [String], since: Double, done: @escaping () -> Void) {
+  func clearBrowsingData(profile: String, types: [String], since: Double, done: @escaping (String?) -> Void) {
     ArdiaServices.clearBrowsingData(profile: profile, types: types, since: since, completion: done)
   }
 
@@ -85,7 +85,7 @@ struct WebKitPageEngine: PageEngine {
   }
 
   func siteSettings(profile: String, origin: String, done: @escaping (Any?, String?) -> Void) {
-    done(hub.permissions.siteSettings(profile: profile, origin: origin), nil)
+    hub.permissions.siteSettings(profile: profile, origin: origin) { done($0, nil) }
   }
 
   func setSiteSetting(profile: String, origin: String, type: String, value: String) {
@@ -97,16 +97,26 @@ struct WebKitPageEngine: PageEngine {
     hub.clearSiteData(profile: profile, host: host) { done($0, nil) }
   }
 
-  func prepareTransfer(_ key: String) { hub.transfers.prepare(key) }
+  func prepareTransfer(_ key: String) { if WebKitHub.started { hub.transfers.prepare(key) } }
 
-  func releaseTransfer(_ key: String) { hub.transfers.release(key) }
+  func releaseTransfer(_ key: String) { if WebKitHub.started { hub.transfers.release(key) } }
 
-  func clearBrowsingData(profile: String, types: [String], since: Double, done: @escaping () -> Void) {
-    hub.clearBrowsingData(profile: profile, types: types, since: since, completion: done)
+  func clearBrowsingData(profile: String, types: [String], since: Double, done: @escaping (String?) -> Void) {
+    guard Self.hasData(profile) else { return done(nil) }
+    hub.clearBrowsingData(profile: profile, types: types, since: since) { done(nil) }
   }
 
   func deleteProfileData(profile: String, done: @escaping ([String]) -> Void) {
+    guard Self.hasData(profile) else { return done([]) }
+    hub.notifications.forgetProfile(profile)
     hub.deleteProfileData(profile) { deleted in done(deleted ? [] : ["WebKit data"]) }
+  }
+
+  private static func hasData(_ profile: String) -> Bool {
+    if WebKitHub.started { return true }
+    guard !WebKitStores.isPrivate(profile) else { return false }
+    let identifier = WebKitStores.storeIdentifier(profile)
+    return UserDefaults.standard.bool(forKey: WebKitStores.storeMadeKey(identifier)) || WebKitStores.storeOnDisk(identifier)
   }
 }
 
@@ -131,12 +141,16 @@ enum PageEngines {
     for engine in all { engine.removeExternalAppAllowance(profile: profile, origin: origin, scheme: scheme) }
   }
 
-  static func clearBrowsingData(profile: String, types: [String], since: Double, done: @escaping () -> Void) {
+  static func clearBrowsingData(profile: String, types: [String], since: Double, done: @escaping (String?) -> Void) {
     var left = all.count
+    var failure: String?
     for engine in all {
-      engine.clearBrowsingData(profile: profile, types: types, since: since) {
-        left -= 1
-        if left == 0 { done() }
+      engine.clearBrowsingData(profile: profile, types: types, since: since) { error in
+        DispatchQueue.main.async {
+          if failure == nil { failure = error }
+          left -= 1
+          if left == 0 { done(failure) }
+        }
       }
     }
   }

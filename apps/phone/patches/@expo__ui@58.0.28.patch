@@ -1,0 +1,192 @@
+diff --git a/build/swift-ui/BottomSheet/index.d.ts b/build/swift-ui/BottomSheet/index.d.ts
+index c39af1a4010e20bcf702b52582f6de25c1eb73ba..aa3075e08a18b569522141b02ff2b733bf3f05fa 100644
+--- a/build/swift-ui/BottomSheet/index.d.ts
++++ b/build/swift-ui/BottomSheet/index.d.ts
+@@ -29,6 +29,12 @@ export interface BottomSheetProps extends CommonViewModifierProps {
+      * Callback function that is called after the `BottomSheet` has been fully dismissed.
+      */
+     onDismiss?: () => void;
++    keepsContentMounted?: boolean;
++    presentationToken?: number;
++    onPresentation?: (presentation: {
++        phase: 'appear' | 'disappear' | 'release' | 'dismiss';
++        token: number;
++    }) => void;
+     /**
+      * When `true`, the sheet will automatically size itself to fit its content.
+      * This sets the presentation detent to match the height of the children.
+diff --git a/build/swift-ui/BottomSheet/index.js b/build/swift-ui/BottomSheet/index.js
+index 74ef9a48ef6d8208dadb445b27283e559adca96f..b3ddc3933227005192cf552382cafa60f7fb1302 100644
+--- a/build/swift-ui/BottomSheet/index.js
++++ b/build/swift-ui/BottomSheet/index.js
+@@ -8,7 +8,7 @@ const BottomSheetNativeView = requireNativeView('ExpoUI', 'BottomSheetView');
+ /**
+  * `BottomSheet` presents content from the bottom of the screen.
+  */ function BottomSheet(props) {
+-    const { modifiers, onIsPresentedChange, onDismiss, anchor, presentationBackground, children, ...restProps } = props;
++    const { modifiers, onIsPresentedChange, onDismiss, anchor, presentationBackground, keepsContentMounted, onPresentation, children, ...restProps } = props;
+     const [isMounted, setIsMounted] = useState(props.isPresented);
+     if (props.isPresented && !isMounted) {
+         setIsMounted(true);
+@@ -19,19 +19,23 @@ const BottomSheetNativeView = requireNativeView('ExpoUI', 'BottomSheetView');
+         modifiers: modifiers,
+         ...modifiers ? createViewModifierEventListener(modifiers) : undefined,
+         ...restProps,
+-        onIsPresentedChange: ({ nativeEvent: { isPresented } })=>{
+-            onIsPresentedChange?.(isPresented);
++        onPresentationAppear: ({ nativeEvent })=>onPresentation?.({ phase: 'appear', token: nativeEvent.token ?? 0 }),
++        onPresentationDisappear: ({ nativeEvent })=>onPresentation?.({ phase: 'disappear', token: nativeEvent.token ?? 0 }),
++        onIsPresentedChange: ({ nativeEvent })=>{
++            onIsPresentedChange?.(nativeEvent.isPresented);
++            if (!nativeEvent.isPresented) onPresentation?.({ phase: 'release', token: nativeEvent.token ?? 0 });
+         },
+-        onDismiss: ()=>{
++        onDismiss: ({ nativeEvent })=>{
+             setIsMounted(false);
+             onDismiss?.();
++            onPresentation?.({ phase: 'dismiss', token: nativeEvent?.token ?? 0 });
+         },
+         children: [
+             anchor != null ? /*#__PURE__*/ _jsx(Slot, {
+                 name: "anchor",
+                 children: anchor
+             }) : null,
+-            isMounted ? /*#__PURE__*/ _jsxs(PresentedContent, {
++            isMounted || keepsContentMounted === true ? /*#__PURE__*/ _jsxs(PresentedContent, {
+                 children: [
+                     presentationBackground != null ? /*#__PURE__*/ _jsx(Slot, {
+                         name: "presentationBackground",
+diff --git a/ios/BottomSheetView.swift b/ios/BottomSheetView.swift
+index b331018ac492033c951ab5d51add0a98292e0989..56501bcb58d8869a4adc09e332c06f09756f6b39 100644
+--- a/ios/BottomSheetView.swift
++++ b/ios/BottomSheetView.swift
+@@ -6,6 +6,17 @@ import ExpoModulesCore
+ final class BottomSheetProps: UIBaseViewProps {
+   @Field var isPresented: Bool = false
+   @Field var fitToContents: Bool = false
++  @Field var presentationToken: Double = 0
++  var showing: BottomSheetShowing?
++  var shownTokens: [Double] = []
++  var wantedShowing: BottomSheetShowing? { isPresented ? BottomSheetShowing(id: presentationToken) : nil }
++  func show(_ next: BottomSheetShowing?) {
++    guard showing != next else { return }
++    objectWillChange.send()
++    showing = next
++  }
++  var onPresentationAppear = EventDispatcher()
++  var onPresentationDisappear = EventDispatcher()
+   var onIsPresentedChange = EventDispatcher()
+   var onDismiss = EventDispatcher()
+ }
+@@ -110,27 +121,38 @@ struct BottomSheetView: ExpoSwiftUI.View {
+       Color.clear.frame(width: 0, height: 0)
+     }
+   }
+-
+   var body: some View {
+     anchor
+-      .sheet(isPresented: $isPresented, onDismiss: {
+-        props.onDismiss()
+-      }) {
++      .sheet(item: Binding(get: { props.showing }, set: { next in
++        if next == nil, let gone = props.showing, props.isPresented {
++          props.onIsPresentedChange(["isPresented": false, "token": gone.id])
++        }
++        props.show(next)
++      }), onDismiss: {
++        let token = props.shownTokens.isEmpty ? 0 : props.shownTokens.removeFirst()
++        props.onDismiss(["token": token])
++      }) { showing in
+         presentedContent
++          .onAppear {
++            props.shownTokens.append(showing.id)
++            props.onPresentationAppear(["token": showing.id])
++          }
++          .onDisappear {
++            props.onPresentationDisappear(["token": showing.id])
++          }
+       }
+-      .onChange(of: isPresented, perform: { newIsPresented in
+-        if props.isPresented == newIsPresented {
+-          return
+-        }
+-        props.onIsPresentedChange([
+-          "isPresented": newIsPresented
+-        ])
+-      })
+-      .onChange(of: props.isPresented) { newValue in
+-        isPresented = newValue
++      .onChange(of: props.isPresented) { _ in
++        props.show(props.wantedShowing)
++      }
++      .onChange(of: props.presentationToken) { _ in
++        props.show(props.wantedShowing)
+       }
+       .onAppear {
+-        isPresented = props.isPresented
++        props.show(props.wantedShowing)
+       }
+   }
+ }
++
++struct BottomSheetShowing: Identifiable, Equatable {
++  let id: Double
++}
+diff --git a/src/swift-ui/BottomSheet/index.tsx b/src/swift-ui/BottomSheet/index.tsx
+index 3f111f57a556deae32d7a45ff2901dcf013d1eac..aa9c443bbb820f984b5c4a30973f709537a81da7 100644
+--- a/src/swift-ui/BottomSheet/index.tsx
++++ b/src/swift-ui/BottomSheet/index.tsx
+@@ -36,6 +36,9 @@ export interface BottomSheetProps extends CommonViewModifierProps {
+    * Callback function that is called after the `BottomSheet` has been fully dismissed.
+    */
+   onDismiss?: () => void;
++  keepsContentMounted?: boolean;
++  presentationToken?: number;
++  onPresentation?: (presentation: { phase: 'appear' | 'disappear' | 'release' | 'dismiss'; token: number }) => void;
+   /**
+    * When `true`, the sheet will automatically size itself to fit its content.
+    * This sets the presentation detent to match the height of the children.
+@@ -48,6 +51,8 @@ type NativeBottomSheetProps = Omit<
+   BottomSheetProps,
+   'onIsPresentedChange' | 'onDismiss' | 'anchor' | 'presentationBackground'
+ > & {
++  onPresentationAppear: (event: NativeSyntheticEvent<{ token?: number }>) => void;
++  onPresentationDisappear: (event: NativeSyntheticEvent<{ token?: number }>) => void;
+   onIsPresentedChange: (event: NativeSyntheticEvent<{ isPresented: boolean }>) => void;
+   onDismiss: (event: NativeSyntheticEvent<object>) => void;
+ };
+@@ -67,6 +72,8 @@ function BottomSheet(props: BottomSheetProps) {
+     onDismiss,
+     anchor,
+     presentationBackground,
++    keepsContentMounted,
++    onPresentation,
+     children,
+     ...restProps
+   } = props;
+@@ -83,17 +90,21 @@ function BottomSheet(props: BottomSheetProps) {
+       modifiers={modifiers}
+       {...(modifiers ? createViewModifierEventListener(modifiers) : undefined)}
+       {...restProps}
+-      onIsPresentedChange={({ nativeEvent: { isPresented } }) => {
+-        onIsPresentedChange?.(isPresented);
++      onPresentationAppear={({ nativeEvent }) => onPresentation?.({ phase: 'appear', token: nativeEvent.token ?? 0 })}
++      onPresentationDisappear={({ nativeEvent }) => onPresentation?.({ phase: 'disappear', token: nativeEvent.token ?? 0 })}
++      onIsPresentedChange={({ nativeEvent }) => {
++        onIsPresentedChange?.(nativeEvent.isPresented);
++        if (!nativeEvent.isPresented) onPresentation?.({ phase: 'release', token: (nativeEvent as { token?: number }).token ?? 0 });
+       }}
+-      onDismiss={() => {
++      onDismiss={({ nativeEvent }) => {
+         setIsMounted(false);
+         onDismiss?.();
++        onPresentation?.({ phase: 'dismiss', token: (nativeEvent as { token?: number }).token ?? 0 });
+       }}>
+       {anchor != null ? <Slot name="anchor">{anchor}</Slot> : null}
+       {/* Only the sheet's content is presented in its own view controller. The anchor renders in
+           place, in the React Native surface, so it stays outside `PresentedContent`. */}
+-      {isMounted ? (
++      {isMounted || keepsContentMounted === true ? (
+         <PresentedContent>
+           {presentationBackground != null ? (
+             <Slot name="presentationBackground">{presentationBackground}</Slot>

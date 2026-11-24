@@ -14,7 +14,7 @@ public final class SyncVault {
   }
 
   public var chainURL: URL { folder.appendingPathComponent(keys.chainTag, isDirectory: true) }
-  func scopeURL(_ scope: String) -> URL { chainURL.appendingPathComponent(keys.scopeTag(scope), isDirectory: true) }
+  func scopeURL(_ scope: String) throws -> URL { chainURL.appendingPathComponent(try keys.scopeTag(scope), isDirectory: true) }
 
   public func chainExists() -> Bool {
     var isDirectory: ObjCBool = false
@@ -28,9 +28,13 @@ public final class SyncVault {
   @discardableResult
   public func write(scope: String, payload: Data) throws -> String {
     let id = SyncKeys.newFileId()
-    let scopeTag = keys.scopeTag(scope)
-    let sealed = try keys.seal(payload, scopeTag: scopeTag, fileId: id)
-    let directory = scopeURL(scope)
+    try write(scope: scope, payload: payload, fileId: id)
+    return id
+  }
+
+  func write(scope: String, payload: Data, fileId id: String) throws {
+    let sealed = try keys.seal(payload, scopeTag: try keys.scopeTag(scope), fileId: id)
+    let directory = try scopeURL(scope)
     try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
     let destination = directory.appendingPathComponent("\(id).\(Self.fileExtension)")
     let staging = try fileManager.url(for: .itemReplacementDirectory, in: .userDomainMask, appropriateFor: directory, create: true)
@@ -40,7 +44,6 @@ public final class SyncVault {
     try coordinate(writing: destination, options: .forReplacing) { url in
       try self.fileManager.moveItem(at: temporary, to: url)
     }
-    return id
   }
 
   public struct RemoveFailed: Error {
@@ -49,7 +52,7 @@ public final class SyncVault {
   }
 
   public func remove(scope: String, ids: [String]) throws {
-    let directory = scopeURL(scope)
+    let directory = try scopeURL(scope)
     var failed: [String] = []
     var firstError: Error?
     for id in ids {
@@ -93,7 +96,7 @@ public final class SyncVault {
 
   public func read(scope: String, skipping known: Set<String>) throws -> Listing {
     var listing = Listing()
-    let directory = scopeURL(scope)
+    let directory = try scopeURL(scope)
     let keysToRead: [URLResourceKey] = [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey, .contentModificationDateKey]
     let names: [String]
     do {
@@ -102,7 +105,7 @@ public final class SyncVault {
       return listing
     }
     let suffix = ".\(Self.fileExtension)"
-    let scopeTag = keys.scopeTag(scope)
+    let scopeTag = try keys.scopeTag(scope)
     var present = Set<String>()
     for name in names.sorted() {
       if name.hasPrefix("."), name.hasSuffix("\(suffix).icloud") {
@@ -143,26 +146,11 @@ public final class SyncVault {
   }
 
   private func coordinate(writing url: URL, options: NSFileCoordinator.WritingOptions, _ body: (URL) throws -> Void) throws {
-    var coordinationError: NSError?
-    var bodyError: Error?
-    try SyncCoordination.run(coordination) { coordinator in
-      coordinator.coordinate(writingItemAt: url, options: options, error: &coordinationError) { url in
-        do { try body(url) } catch { bodyError = error }
-      }
-    }
-    if let error = coordinationError ?? bodyError { throw error }
+    try SyncCoordination.write(coordination, url, options: options, body)
   }
 
   private func coordinate<T>(reading url: URL, _ body: (URL) throws -> T) throws -> T {
-    var coordinationError: NSError?
-    var result: Result<T, Error> = .failure(CocoaError(.fileReadUnknown))
-    try SyncCoordination.run(coordination) { coordinator in
-      coordinator.coordinate(readingItemAt: url, options: [.withoutChanges], error: &coordinationError) { url in
-        result = Result { try body(url) }
-      }
-    }
-    if let coordinationError { throw coordinationError }
-    return try result.get()
+    try SyncCoordination.read(coordination, url, options: [.withoutChanges], body)
   }
 }
 
@@ -192,17 +180,16 @@ public final class SyncCoordination: @unchecked Sendable {
     lock.withLock { cancelled = false }
   }
 
-  static func run(_ coordination: SyncCoordination?, _ body: (NSFileCoordinator) -> Void) throws {
-    let coordinator = NSFileCoordinator(filePresenter: nil)
-    guard let coordination else { return body(coordinator) }
-    try coordination.run(coordinator, body)
+  public func read<T>(_ url: URL, options: NSFileCoordinator.ReadingOptions = [], _ body: (URL) throws -> T) throws -> T {
+    try Self.read(self, url, options: options, body)
   }
 
-  public func read<T>(_ url: URL, options: NSFileCoordinator.ReadingOptions = [], _ body: (URL) throws -> T) throws -> T {
+  static func read<T>(_ coordination: SyncCoordination?, _ url: URL, options: NSFileCoordinator.ReadingOptions, _ body: (URL) throws -> T) throws -> T {
     var coordinationError: NSError?
     var result: Result<T, Error> = .failure(CocoaError(.fileReadUnknown))
-    try run(NSFileCoordinator(filePresenter: nil)) { coordinator in
+    try run(coordination) { coordinator, begin in
       coordinator.coordinate(readingItemAt: url, options: options, error: &coordinationError) { url in
+        guard begin() else { return }
         result = Result { try body(url) }
       }
     }
@@ -210,7 +197,42 @@ public final class SyncCoordination: @unchecked Sendable {
     return try result.get()
   }
 
-  private func run(_ coordinator: NSFileCoordinator, _ body: (NSFileCoordinator) -> Void) throws {
+  static func write(_ coordination: SyncCoordination?, _ url: URL, options: NSFileCoordinator.WritingOptions, _ body: (URL) throws -> Void) throws {
+    var coordinationError: NSError?
+    var bodyError: Error?
+    try run(coordination) { coordinator, begin in
+      coordinator.coordinate(writingItemAt: url, options: options, error: &coordinationError) { url in
+        guard begin() else { return }
+        do { try body(url) } catch { bodyError = error }
+      }
+    }
+    if let error = coordinationError ?? bodyError { throw error }
+  }
+
+  static func move(_ coordination: SyncCoordination?, _ from: URL, to: URL, _ body: (URL, URL) throws -> Void) throws {
+    var coordinationError: NSError?
+    var bodyError: Error?
+    try run(coordination) { coordinator, begin in
+      coordinator.coordinate(writingItemAt: from, options: .forMoving, writingItemAt: to, options: .forReplacing, error: &coordinationError) { source, destination in
+        guard begin() else { return }
+        do { try body(source, destination) } catch { bodyError = error }
+      }
+    }
+    if let error = coordinationError ?? bodyError { throw error }
+  }
+
+  static func run(_ coordination: SyncCoordination?, _ body: (NSFileCoordinator, _ begin: @escaping () -> Bool) -> Void) throws {
+    let coordinator = NSFileCoordinator(filePresenter: nil)
+    guard let coordination else { return body(coordinator) { true } }
+    try coordination.run(coordinator, body)
+  }
+
+  private final class Attempt {
+    var started = false
+    var expired = false
+  }
+
+  private func run(_ coordinator: NSFileCoordinator, _ body: (NSFileCoordinator, _ begin: @escaping () -> Bool) -> Void) throws {
     let key = ObjectIdentifier(coordinator)
     let refused = lock.withLock { () -> Bool in
       if cancelled { return true }
@@ -218,17 +240,27 @@ public final class SyncCoordination: @unchecked Sendable {
       return false
     }
     if refused { throw TimedOut() }
-    var expired = false
+    let attempt = Attempt()
     let timer = DispatchWorkItem { [lock] in
-      lock.withLock { expired = true }
-      coordinator.cancel()
+      let expire = lock.withLock { () -> Bool in
+        guard !attempt.started else { return false }
+        attempt.expired = true
+        return true
+      }
+      if expire { coordinator.cancel() }
     }
     DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout, execute: timer)
-    body(coordinator)
+    body(coordinator) { [lock] in
+      lock.withLock { () -> Bool in
+        guard !attempt.expired, !self.cancelled else { return false }
+        attempt.started = true
+        return true
+      }
+    }
     timer.cancel()
     let gaveUp = lock.withLock { () -> Bool in
       active[key] = nil
-      return expired || cancelled
+      return !attempt.started && (attempt.expired || cancelled)
     }
     if gaveUp { throw TimedOut() }
   }

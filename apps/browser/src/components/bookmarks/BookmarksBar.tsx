@@ -9,7 +9,7 @@ import { barFit } from "../../state/bookmarks/barFit";
 import { openFolderMenu, toggleFolderMenu, useFolderMenus, type MenuRect } from "../../state/bookmarks/folderMenus";
 import type { Settings } from "../../state/settings/settings";
 import { ContextMenuArea, FileDropArea, space, Text, useTheme, type DropUpdate } from "../ui";
-import { ThemeContext } from "../ui/theme";
+import { ThemeOverride } from "../ui/ThemeOverride";
 import { siteScopedTheme, useEasedColor } from "../ui/toolbarColors";
 import { useSitePalette } from "../toolbar/useSitePalette";
 import { BarButton, BarItem, ImportButton } from "./BarItem";
@@ -29,12 +29,12 @@ function SiteColoredBar({ windowId, tabId }: { windowId: string; tabId: string }
   const palette = useSitePalette(tabId);
   const band = useEasedColor(palette.background);
   return (
-    <ThemeContext.Provider value={siteScopedTheme(theme, palette)}>
+    <ThemeOverride theme={siteScopedTheme(theme, palette)}>
       <View>
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: band }]} />
         <Bar windowId={windowId} />
       </View>
-    </ThemeContext.Provider>
+    </ThemeOverride>
   );
 }
 
@@ -67,7 +67,7 @@ function Bar({ windowId }: { windowId: string }) {
     const other = otherId ? b.nodes[otherId] : undefined;
     return other?.kind === "folder" && other.children.length > 0;
   });
-  const hideImport = useSettings((s) => s.hideBookmarksBarImport);
+  const importDismissed = useSettings((s) => s.bookmarksImportDismissed);
   const source = useBarDrag((s) => (s.windowId === windowId ? s.source : null));
   const spot = useBarDrag((s) => (s.windowId === windowId ? s.spot : null));
   const otherOpen = useFolderMenus((s) => s.windowId === windowId && !!otherId && s.panels.some((p) => p.level === 0 && !p.retained && p.key === otherId));
@@ -101,7 +101,7 @@ function Bar({ windowId }: { windowId: string }) {
     room,
     chevron: bookmarksBar.overflowWidth,
     gap: size.itemGap,
-    minWidth: Math.min(size.favicon, size.iconBox),
+    minWidth: size.item,
   });
   const mounted = children.slice(0, fit.mounted);
   const visible = mounted.slice(0, fit.shown);
@@ -185,7 +185,7 @@ function Bar({ windowId }: { windowId: string }) {
         style={{ flex: 1, height: size.item, flexDirection: "row", alignItems: "center" }}
       >
         <View style={{ flex: 1, height: size.item, flexDirection: "row", alignItems: "center", overflow: "hidden" }}>
-          {children.length === 0 && !hideImport ? (
+          {children.length === 0 && !importDismissed ? (
             <ImportButton />
           ) : children.length === 0 ? (
             <Text size="small" tone="textTertiary" style={HINT}>

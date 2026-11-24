@@ -1,4 +1,6 @@
+import { asSecret } from "@ardia/core";
 import { useBrowser } from "../browser/store";
+import { consumeCallbackUrls } from "../tabs/callbackUrls";
 import { endpoints, form } from "./net";
 import { connectGoogle } from "./sources";
 import { secureRandomHex } from "../../platform/secureRandom";
@@ -21,14 +23,16 @@ function query(url: string): Map<string, string> {
 
 export function connectGoogleDrive(windowId: string, clientId: string, clientSecret: string): Promise<void> {
   pending?.cancel();
-  const verifier = secureRandomHex(64);
+  const plainVerifier = secureRandomHex(64);
+  const challenge = base64Url(sha256(plainVerifier));
+  const verifier = asSecret("oauthToken", plainVerifier);
   const state = secureRandomHex(32);
   const url = `${endpoints.googleAuth}?${form({
     client_id: clientId.trim(),
     redirect_uri: REDIRECT,
     response_type: "code",
     scope: SCOPE,
-    code_challenge: base64Url(sha256(verifier)),
+    code_challenge: challenge,
     code_challenge_method: "S256",
     state,
     access_type: "offline",
@@ -36,25 +40,43 @@ export function connectGoogleDrive(windowId: string, clientId: string, clientSec
   })}`;
   const tabId = useBrowser.getState().newTab(windowId, { url });
   return new Promise<void>((resolve, reject) => {
-    const stop = useBrowser.subscribe((s, prev) => {
-      if (s.tabs === prev.tabs) return;
-      const tab = s.tabs[tabId];
-      if (!tab) return finish(new Error("Sign-in was cancelled"));
-      if (!tab.url.startsWith(REDIRECT)) return;
-      const params = query(tab.url);
-      if (params.get("state") !== state) return finish(new Error("Sign-in didn't match this request"));
+    let settled = false;
+    const attempt = { cancel: () => finish(new Error("Cancelled")) };
+    const closeTab = () => {
+      if (useBrowser.getState().tabs[tabId]) useBrowser.getState().closeTabs([tabId], { unrecorded: true });
+    };
+    const stopWatching = useBrowser.subscribeTo(["tabs"], (s) => {
+      if (!s.tabs[tabId]) finish(new Error("Sign-in was cancelled"));
+    });
+    const stopGuarding = useBrowser.subscribeTo(["tabs"], (s) => {
+      if (s.tabs[tabId]) return;
+      stopGuarding();
+      stopConsuming();
+    });
+    const stopConsuming = consumeCallbackUrls(tabId, (address) => {
+      if (!address.startsWith(REDIRECT)) return false;
+      if (settled) return true;
+      const params = query(address);
+      stopWatching();
+      closeTab();
+      if (params.get("state") !== state) {
+        finish(new Error("Sign-in didn't match this request"));
+        return true;
+      }
       const code = params.get("code");
-      stop();
-      useBrowser.getState().closeTab(tabId);
-      if (!code) return finish(new Error(params.get("error") ?? "Google didn't grant access"));
-      connectGoogle(clientId.trim(), clientSecret.trim(), code, verifier, REDIRECT).then(() => finish(), finish);
+      if (!code) finish(new Error("Google didn't grant access"));
+      else connectGoogle(clientId.trim(), clientSecret.trim(), asSecret("oauthToken", code), verifier, REDIRECT).then(() => finish(), finish);
+      return true;
     });
     const finish = (error?: unknown) => {
-      stop();
-      pending = null;
+      if (settled) return;
+      settled = true;
+      stopWatching();
+      closeTab();
+      if (pending === attempt) pending = null;
       if (error) reject(error);
       else resolve();
     };
-    pending = { cancel: () => finish(new Error("Cancelled")) };
+    pending = attempt;
   });
 }

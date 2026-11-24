@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+set -u
+here=$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")
+chrome="$here/chrome"
+helper="$here/chrome-sandbox"
+why=""
+allow=""
+if [[ -n "${APPDIR:-}" && "$here" != "$(readlink -f -- "$APPDIR" 2>/dev/null)/lib/ardia" ]]; then
+  unset APPIMAGE APPDIR
+fi
+if [[ -z "${APPDIR:-}" ]]; then
+  unset APPIMAGE
+fi
+
+data_home=${XDG_DATA_HOME:-}
+[[ "$data_home" == /* ]] || data_home="${HOME:-}/.local/share"
+ardia_command="${ARDIA_CLI_HOME:-$data_home/ardia/cli}/current/bin/ardia"
+command_word='^[abcdefghijklmnopqrstuvwxyz][abcdefghijklmnopqrstuvwxyz0123456789-]*$'
+if [[ $# -gt 0 && "$1" =~ $command_word && ! -f "$1" && $EUID -ne 0 && -f "$ardia_command" && -x "$ardia_command" ]]; then
+  exec "$ardia_command" "$@"
+fi
+
+number() {
+  if [[ -r "$1" ]]; then tr -dc '0-9' < "$1"; else printf '%s' "$2"; fi
+}
+
+apparmor_grants_userns() {
+  local binary profile
+  binary=$(readlink -f -- "$chrome")
+  for profile in /etc/apparmor.d/*; do
+    [[ -f "$profile" ]] || continue
+    grep -qF -- "profile ardia $binary " "$profile" 2>/dev/null && grep -qE '^[[:space:]]*userns,' "$profile" 2>/dev/null && return 0
+  done
+  return 1
+}
+
+userns_ready() {
+  if [[ "$(number /proc/sys/user/max_user_namespaces 1)" == 0 ]]; then
+    why="user namespaces are off (user.max_user_namespaces=0)"
+    allow="sudo sysctl -w user.max_user_namespaces=15000"
+    return 1
+  fi
+  if [[ "$(number /proc/sys/kernel/unprivileged_userns_clone 1)" == 0 ]]; then
+    why="unprivileged user namespaces are off (kernel.unprivileged_userns_clone=0)"
+    allow="sudo sysctl -w kernel.unprivileged_userns_clone=1"
+    return 1
+  fi
+  if [[ "$(number /proc/sys/kernel/apparmor_restrict_unprivileged_userns 0)" == 1 ]] && ! apparmor_grants_userns; then
+    why="AppArmor restricts unprivileged user namespaces and no AppArmor profile grants them to $chrome"
+    allow="sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0"
+    return 1
+  fi
+  return 0
+}
+
+setuid_ready() {
+  local mode
+  [[ -f "$helper" && "$(stat -c %u -- "$helper" 2>/dev/null)" == 0 ]] || return 1
+  mode=$(stat -c %a -- "$helper" 2>/dev/null)
+  [[ ${#mode} == 4 && "${mode:0:1}" =~ [4567] ]] || return 1
+  ! findmnt -n -o OPTIONS --target "$helper" 2>/dev/null | tr , '\n' | grep -qx nosuid
+}
+
+if [[ -z "${BREAKPAD_DUMP_LOCATION:-}" ]]; then
+  for argument in "$@"; do
+    if [[ "$argument" == --user-data-dir=?* ]]; then
+      export BREAKPAD_DUMP_LOCATION="${argument#--user-data-dir=}/Crash Reports"
+    fi
+  done
+fi
+
+for argument in "$@"; do
+  if [[ "$argument" == --no-sandbox ]]; then
+    exec "$chrome" "--ardia-sandbox-decision=Ardia was started with --no-sandbox" "$@"
+  fi
+done
+
+if userns_ready || setuid_ready; then
+  exec "$chrome" "$@"
+fi
+
+installer=$(readlink -f -- "$here/../../install.sh" 2>/dev/null || true)
+{
+  printf 'Ardia can'"'"'t start Chromium'"'"'s sandbox here: %s.\n' "$why"
+  if [[ -n "${APPIMAGE:-}" ]]; then
+    printf 'An AppImage can'"'"'t carry Chromium'"'"'s setuid sandbox helper, and Ardia won'"'"'t run without the sandbox.\n'
+    printf 'Install Ardia'"'"'s .deb, which sets up the sandbox helper and its AppArmor profile, or allow user namespaces with %s.\n' "$allow"
+  elif [[ -n "$installer" && -f "$installer" ]]; then
+    printf 'Install it with sudo %s, which sets up the sandbox, or install Ardia'"'"'s .deb.\n' "$installer"
+  else
+    printf 'Reinstall Ardia'"'"'s package as root so its sandbox helper is set up.\n'
+  fi
+} >&2
+exit 1

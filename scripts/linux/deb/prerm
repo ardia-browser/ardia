@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+if [ "$1" = remove ]; then
+  for name in x-www-browser gnome-www-browser; do
+    update-alternatives --remove "$name" /usr/bin/ardia
+  done
+fi
+exit 0

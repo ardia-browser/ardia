@@ -7,7 +7,7 @@ import { webviews } from "../../state/tabs/webviewHandles";
 import { useFind, useTab } from "../../state/browser/hooks";
 import { currentTab } from "../../state/browser/current";
 import { setFind as setTabFind } from "../../state/windows/actions";
-import { closeFind, findStep, takeFindFocusRequest } from "../../state/find/actions";
+import { closeFind, findStep, noteFind, submitRepeatsKey, takeFindFocusRequest } from "../../state/find/actions";
 import type { FindState } from "../../state/browser/types";
 import { Button, Divider, font, Panel, radius, shadow, space, Symbol, Text } from "../ui";
 import { replaceInField } from "../../state/site/selection";
@@ -48,8 +48,10 @@ function FindBarPanel({ tabId, find }: { tabId: string; find: FindState }) {
   }, [find.focusRequest]);
 
   const setFind = (patch: Partial<FindState>) => setTabFind(tabId, patch);
+  const enterAt = useRef(0);
   const run = (backwards: boolean, query = find.query, findNext = true) => {
     if (!query) setFind({ count: null, active: 0 });
+    if (findNext && query) noteFind("stepped");
     void webviews.get(tabId)?.find(query, !backwards, findNext);
   };
   const close = () => closeFind(tabId);
@@ -94,12 +96,17 @@ function FindBarPanel({ tabId, find }: { tabId: string; find: FindState }) {
             placeholderTextColor={theme.placeholder}
             selectionColor={theme.selection}
             enableFocusRing={false}
-            onSubmitEditing={() => run(false)}
+            onSubmitEditing={() => {
+              if (!submitRepeatsKey(enterAt.current, Date.now())) run(false);
+            }}
             keyDownEvents={FIND_KEYS}
             onKeyDown={(e) => {
               const { key, shiftKey, ctrlKey, metaKey } = e.nativeEvent;
               if (key === "Escape") close();
-              else if (key === "Enter" && !ctrlKey && !metaKey) run(!!shiftKey);
+              else if (key === "Enter" && !ctrlKey && !metaKey) {
+                enterAt.current = Date.now();
+                run(!!shiftKey);
+              }
             }}
             style={{ flex: 1, ...font.title, color: theme.textPrimary, paddingVertical: 0 }}
           />

@@ -25,6 +25,7 @@
 #include "chrome/browser/browser_process_impl.h"
 #include "chrome/browser/chrome_browser_main.h"
 #include "chrome/browser/chrome_browser_main_extra_parts.h"
+#include "chrome/browser/ardia/ac_cli_console_ring.h"
 #include "chrome/browser/ardia/ac_scripts_policy.h"
 #include "chrome/browser/chrome_content_browser_client.h"
 #include "chrome/common/chrome_paths.h"
@@ -161,6 +162,7 @@ class ACBrowserMainExtraParts : public ChromeBrowserMainExtraParts {
     AppKeepAlive() = std::make_unique<ScopedKeepAlive>(
         KeepAliveOrigin::APP_CONTROLLER, KeepAliveRestartOption::DISABLED);
     StartLifetimeObservers();
+    ardia::InstallCliConsoleRing();
   }
   void PostBrowserStart() override {
     g_browser_started = true;
@@ -240,12 +242,6 @@ class ACContentBrowserClient : public ChromeContentBrowserClient {
     AddAppSchemeThrottle(registry);
     MaybeAddNavigationHoldThrottle(registry);
     ardia::AddScriptsPagesThrottle(registry);
-  }
-  void AppendExtraCommandLineSwitches(base::CommandLine* command_line,
-                                      int child_process_id) override {
-    ChromeContentBrowserClient::AppendExtraCommandLineSwitches(command_line,
-                                                               child_process_id);
-    PassSwitchesToGpuProcess(command_line);
   }
   std::optional<base::TimeDelta> GetSpareRendererDelayForSiteURL(
       const GURL& site_url) override {
@@ -344,10 +340,9 @@ void QuietIdleTimers(base::CommandLine* command_line) {
 
 std::optional<int> ACMainDelegate::BasicStartupComplete() {
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
-  g_ardia_begin_frame_bridge = ExperimentOn("beginFrameBridge");
   MergeFeatures(command_line, switches::kDisableFeatures,
                 "Glic,GlicActor,GlicActorUi,ApiGlicPrivate,ContextualCueing,"
-                "GlicZeroStateSuggestions");
+                "GlicZeroStateSuggestions,SettingsGlowupJourneys");
   if (!command_line->HasSwitch(switches::kProcessType)) {
     g_ardia_background_instance = BackgroundInstance();
     DecideTestGateAtStartup();
@@ -356,6 +351,7 @@ std::optional<int> ACMainDelegate::BasicStartupComplete() {
     command_line->AppendSwitch(switches::kNoStartupWindow);
     command_line->AppendSwitch(switches::kNoFirstRun);
     command_line->AppendSwitch(switches::kNoDefaultBrowserCheck);
+    command_line->AppendSwitch("keep-old-history");
     command_line->RemoveSwitch(switches::kMakeDefaultBrowser);
     MergeFeatures(command_line, switches::kEnableFeatures, "WebContentsDiscard");
     QuietIdleTimers(command_line);

@@ -9,7 +9,7 @@ work="${DERIVED_FILE_DIR:-$here/build}/docktile"
 identity="${EXPANDED_CODE_SIGN_IDENTITY:--}"
 [ -z "$identity" ] && identity="-"
 min_os="${MACOSX_DEPLOYMENT_TARGET:-14.0}"
-sources=("$here/DockTilePlugIn.swift" "$here/../ios/AppIcons.swift" "$here/../ios/UpdaterCore/IconStyle.swift")
+sources=("$here/DockTilePlugIn.swift" "$here/../ios/AppIcons.swift" "$here/../ios/UpdaterCore/IconStyle.swift" "$here/../ios/UpdaterCore/ApplicationIconName.swift")
 binary="$work/$name"
 mkdir -p "$work" "$plugin/Contents/MacOS"
 

@@ -13,11 +13,12 @@ after(() => traces.write());
 
 const GRID_TOP = 60;
 
-function tilesScene({ tiles = 5, balanced = false, folder = 0, panel = false, emptyPanel = false } = {}) {
+function tilesScene({ tiles = 5, balanced = false, folder = 0, panel = false, emptyPanel = false, folders = true } = {}) {
   const names = Array.from({ length: tiles }, (_, i) => `t${i + 1}`);
   const W = world("a", "b", "c", ...names);
   const { id } = W;
   if (tiles) S().pinTabs(names.map((n) => id[n]), true);
+  S().updateSettings({ topAppFolders: folders });
   if (balanced) S().updateSettings({ balancedTopApps: true });
   let folderId = null;
   const members = names.slice(0, folder).map((n) => id[n]);
@@ -143,6 +144,28 @@ test("held folder: before the hold is ready, a pointer 40 % off the middle is an
     cellCentre(m, 2, -56 * 0.44),
     cellCentre(m, 2, -56 * 0.46),
   ]);
+});
+
+async function dragAndDrop(m, key, path) {
+  const { c } = mount({ entries: m.L.entries, regions: m.regions, viewport: m.viewport });
+  const r = recorder(c, m.w);
+  const f = m.L.entries.find((e) => e.key === key).frame;
+  await r.begin(key, f.x + Math.min(20, f.w / 2), f.y + 10);
+  for (const p of path) {
+    const at = typeof p === "function" ? p() : p;
+    if (at) r.move(at.x, at.y);
+  }
+  await r.end(true);
+}
+
+test("folders off, the default: holding a tile over another makes no folder, and an existing folder still takes a tile", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const plain = tilesScene({ folders: false });
+  await dragAndDrop(plain, entryKey("tab", plain.id.t1), [cellCentre(plain, 2), () => void t.mock.timers.tick(500), cellCentre(plain, 2, 1)]);
+  t.assert.equal(Object.values(S().tabs).filter((tab) => tileFolderOf(tab)).length, 0, "no folder after a hold with the setting off");
+  const held = tilesScene({ tiles: 6, folder: 2, folders: false });
+  await dragAndDrop(held, entryKey("tab", held.id.t4), [cellCentre(held, 0), cellCentre(held, 0, 2)]);
+  t.assert.equal(tileFolderOf(S().tabs[held.id.t4])?.id, held.folderId, "a tile dropped on an existing folder joins it");
 });
 
 test("an existing folder takes a tile or a list row at once; a folder tile never enters another", async (t) => {

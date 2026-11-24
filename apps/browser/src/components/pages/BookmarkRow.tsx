@@ -9,8 +9,9 @@ import { Button, ContextMenuArea, MouseArea, radius, space, Symbol, Text, useHov
 import { openBookmarkRowMenu } from "../../state/bookmarks/bookmarkMenus";
 import { hostLabel } from "./PageLayout";
 import { bookmarkList, pagesColors } from "./tokens";
+import { perLook } from "../ui/tokens";
 
-const ROW_LOOK = { height: bookmarkList.row, borderRadius: radius.tile, flexDirection: "row", alignItems: "center", paddingHorizontal: space.ml, gap: space.ml } as const;
+const ROW_LOOK = perLook(() => ({ height: bookmarkList.row, borderRadius: radius.tile, flexDirection: "row", alignItems: "center", paddingHorizontal: space.ml, gap: space.ml }) as const);
 const FOLDER_ICON = { width: bookmarkList.folderIconBox, height: bookmarkList.folderIconBox } as const;
 const TITLE = { flexShrink: 1 } as const;
 const DETAIL = { flex: 1 } as const;
@@ -40,7 +41,7 @@ export function BookmarkRow({
   selected: boolean;
   highlighted: boolean;
   targetRef: (v: View | null) => void;
-  onSelect: (e: { metaKey?: boolean; shiftKey?: boolean }) => void;
+  onSelect: (e: { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean }) => void;
   onOpenFolder: (folder?: string) => void;
   onDelete: () => void;
   menuSelection: () => string[];
@@ -99,10 +100,10 @@ export function BookmarkRow({
     >
       <ContextMenuArea onContextMenu={() => void menu()}>
         <MouseArea onMiddleClick={() => open("background")}>
-          <Pressable onPress={(e) => onSelect(e.nativeEvent as unknown as { metaKey?: boolean; shiftKey?: boolean })}>
+          <Pressable onPress={(e) => onSelect(e.nativeEvent as unknown as { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean })}>
             <View
               onDoubleClick={() => (node.kind === "folder" ? onOpenFolder() : void open("current"))}
-              style={[ROW_LOOK, { backgroundColor: selected ? colors.rowSelected : highlighted ? colors.dropTarget : hovered ? theme.rowHover : undefined }]}
+              style={[ROW_LOOK(), { backgroundColor: selected ? colors.rowSelected : highlighted ? colors.dropTarget : hovered ? theme.rowHover : undefined }]}
             >
               {node.kind === "url" ? (
                 <Favicon url={node.url} favicon={node.favicon} profileId={profileId} />

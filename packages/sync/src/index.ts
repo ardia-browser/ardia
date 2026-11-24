@@ -1,10 +1,12 @@
 export * from "./canon.ts";
 export * from "./extensions.ts";
 export * from "./fileHealth.ts";
+export * from "./folders.ts";
 export * from "./hlc.ts";
 export * from "./native.ts";
 export * from "./order.ts";
 export * from "./records.ts";
 export * from "./scope.ts";
+export { covered } from "./applied.ts";
 export * from "./scopeState.ts";
 export * from "./sharedFolders.ts";

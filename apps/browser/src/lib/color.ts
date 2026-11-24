@@ -33,6 +33,14 @@ export function over(top: string, under: string): string {
   return toHex([r, g, b].map((v, i) => a * v + (1 - a) * base[i]!));
 }
 
+const FARTHEST_RGB = Math.hypot(255, 255, 255);
+
+export function colorDistance(a: string, b: string): number {
+  const from = parseColor(a);
+  const to = parseColor(b);
+  return Math.hypot(from[0] - to[0], from[1] - to[1], from[2] - to[2]) / FARTHEST_RGB;
+}
+
 export function luminance(color: string): number {
   if (!isHexColor(color)) return 0;
   const [r, g, b] = parseColor(color).map((v) => {
@@ -40,6 +48,11 @@ export function luminance(color: string): number {
     return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
   }) as Rgba;
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+export function contrastRatio(a: string, b: string): number {
+  const [la, lb] = [luminance(a), luminance(b)];
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
 }
 
 export function isLight(color: string): boolean {

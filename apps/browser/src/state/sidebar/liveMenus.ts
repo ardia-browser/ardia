@@ -1,20 +1,22 @@
 import { cleanUrl, markdownLink } from "@ardia/core";
-import { copyText } from "../../platform/clipboard";
+import { copyAddress, copyLink } from "../../platform/clipboard";
 import { prompt } from "../../platform/dialogs";
 import { showMenu, type MenuItem } from "../../platform/menus";
 import { closeTab } from "../browser/actions";
 import { calendarConnected, connectCalendar, setCalendarHidden, useCalendar } from "../live/calendar";
-import { deleteLiveFolder, liveTabAway, manualRefresh, newLiveFolder, openLiveItem, refreshFolder, returnLiveTab, statusText } from "../live/engine";
+import { deleteLiveFolder, liveTabAway, manualRefresh, newLiveFolder, openLiveItem, refreshFolder, returnLiveTab } from "../live/engine";
 import { ALERT_LEADS, nowBadgeEvent } from "../live/meetings";
 import { SOURCES } from "../live/sources";
-import { repoKey } from "../live/rows";
-import { dismissNowBadge, hideItems, live, markRead, markUnread, setRepoHidden, updateCalendarSettings, updateFolder } from "../live/store";
+import { dismissNowBadge, live, markRead, markUnread, setRepoHidden, updateCalendarSettings, updateFolder } from "../live/store";
+import { folderRepos, setShowNewRepos, showAllRepos } from "../live/repoFilter";
+import { noteLiveFolderColorPick, noteLiveRepoMenuPick } from "../telemetry/liveHides";
+import { consentToken } from "../telemetry/client";
 import type { LiveItem, LiveSourceId } from "../live/types";
+import type { GroupColor } from "../browser/types";
+import { groupColorItems } from "./groupMenu";
 import { useBrowser } from "../browser/store";
 import { openSettings } from "../settings/settingsWindows";
-import { openIconPicker } from "../sidebar/actions";
-import { moveLiveFolder, pinnedSequence } from "./pinnedOrder";
-import { entryKey } from "./entryKey";
+import { openIconPicker } from "./actions";
 import { activeTabId } from "../browser/model";
 import { hintWhen, sections, sep, withAlternate } from "./menuParts";
 
@@ -22,6 +24,7 @@ export function newLiveFolderMenuItem(): MenuItem {
   return {
     id: "live",
     title: "New Live Folder",
+    symbol: "bolt",
     children: [
       { id: "live:pullRequests", title: "Pull Requests", symbol: "arrow.triangle.pull" },
       { id: "live:documents", title: "Documents", symbol: "doc.text" },
@@ -43,103 +46,144 @@ const SOURCE_GROUPS: Record<"pullRequests" | "documents", LiveSourceId[]> = {
   documents: ["notion", "confluence", "gdrive"],
 };
 
-function folderPlace(windowId: string, folderId: string) {
-  const s = live();
-  const folder = s.folders[folderId]!;
-  const sequence = pinnedSequence(useBrowser.getState(), s.folders, s.folderOrder, windowId, folder.profileId);
-  const index = sequence.indexOf(entryKey("live", folderId));
-  return { canMoveUp: index > 0, canMoveDown: index >= 0 && index < sequence.length - 1 };
+const COLOR_CHOICE = "color:";
+const NEUTRAL_CHOICE = "neutral";
+
+function folderColorItems(current: GroupColor | null): MenuItem[] {
+  return groupColorItems(current, null, false).flatMap((item): MenuItem[] => {
+    if ("separator" in item) return [item];
+    if (!("value" in item)) return [];
+    const { value, ...look } = item;
+    return [{ ...look, id: `${COLOR_CHOICE}${(value.kind === "color" && value.color) || NEUTRAL_CHOICE}` }];
+  });
 }
 
-export function liveFolderMenuItems(windowId: string, folderId: string): MenuItem[] {
+function chosenColor(choice: string): GroupColor | null {
+  const color = choice.slice(COLOR_CHOICE.length);
+  return color === NEUTRAL_CHOICE ? null : (color as GroupColor);
+}
+
+export function liveFolderMenuItems(folderId: string): MenuItem[] {
   const s = live();
   const folder = s.folders[folderId];
   if (!folder) return [];
-  const { canMoveUp, canMoveDown } = folderPlace(windowId, folderId);
   const pr = folder.kind === "pullRequests";
   const hiddenRepos = new Set(folder.hiddenRepos);
-  const listed = [...(s.items[folderId] ?? []), ...(s.hidden[folderId] ?? []), ...(s.repoHidden[folderId] ?? [])].flatMap((it) => repoKey(it) ?? []);
-  const repos = [...new Set([...listed, ...hiddenRepos])].map((key) => {
+  const repos = folderRepos(folderId).map((key) => {
     const [source, name] = key.split(/:(.*)/) as [LiveSourceId, string];
     return { key, source, name };
   });
   const oneSource = new Set(repos.map((r) => r.source)).size <= 1;
   repos.sort((a, b) => a.name.localeCompare(b.name) || a.source.localeCompare(b.source));
+  const filters: MenuItem[] = pr
+    ? [
+        {
+          id: "filters",
+          title: "Filters",
+          symbol: "line.3.horizontal.decrease.circle",
+          children: sections(
+            [
+              { id: "filter:authored", title: "Created by Me", checked: folder.filters.authored },
+              { id: "filter:reviewRequests", title: "Awaiting My Review", checked: folder.filters.reviewRequests },
+              {
+                id: "repos",
+                title: "Repositories",
+                enabled: repos.length > 0,
+                children: sections(
+                  [
+                    { id: "repos:all", title: "Show All Repositories", enabled: hiddenRepos.size > 0, keepOpen: true },
+                    { id: "repos:none", title: "Hide All Repositories", enabled: repos.some((r) => !hiddenRepos.has(r.key)), keepOpen: true },
+                  ],
+                  repos.map((r) => ({ id: `repo:${r.key}`, title: oneSource ? r.name : `${r.name} (${SOURCES[r.source].name})`, checked: !hiddenRepos.has(r.key), keepOpen: true })),
+                  [{ id: "repos:new", title: "Show New Repositories", checked: folder.showNewRepos, keepOpen: true }],
+                ),
+              },
+            ],
+            [
+              { id: "option:groupStacks", title: "Group Stacked Pull Requests", checked: folder.groupStacks },
+              { id: "option:showCompleted", title: "Show Completed", checked: folder.showCompleted },
+            ],
+          ),
+        },
+      ]
+    : [];
   return sections(
     [
-      { id: "status", title: statusText(folderId), enabled: false },
       { id: "refresh", title: "Refresh", symbol: "arrow.clockwise", enabled: s.status[folderId]?.state !== "updating" },
-      { id: "read", title: "Mark All as Read", enabled: (s.unread[folderId]?.length ?? 0) > 0 },
+      { id: "read", title: "Mark All as Read", symbol: "checkmark", enabled: (s.unread[folderId]?.length ?? 0) > 0 },
     ],
-    pr
-      ? [
-          { id: "filter:authored", title: "Created by Me", checked: folder.filters.authored },
-          { id: "filter:reviewRequests", title: "Awaiting My Review", checked: folder.filters.reviewRequests },
-          {
-            id: "repos",
-            title: "Repositories",
-            enabled: repos.length > 0,
-            children: sections(
-              [{ id: "repos:all", title: "Show All Repositories", enabled: hiddenRepos.size > 0 }],
-              repos.map((r) => ({ id: `repo:${r.key}`, title: oneSource ? r.name : `${r.name} (${SOURCES[r.source].name})`, checked: !hiddenRepos.has(r.key) })),
-            ),
-          },
-        ]
-      : [],
-    pr
-      ? [
-          { id: "option:groupStacks", title: "Group Stacked Pull Requests", checked: folder.groupStacks },
-          { id: "option:showCompleted", title: "Show Completed", checked: folder.showCompleted },
-        ]
-      : [],
     [
+      ...filters,
       {
         id: "sources",
-        title: pr ? "Pull Requests" : "Documents",
+        title: "Sources",
         symbol: pr ? "arrow.triangle.pull" : "doc.text",
-        children: SOURCE_GROUPS[folder.kind].map((id) => ({
-          id: `source:${id}`,
-          title: s.accounts[id] ? SOURCES[id].name : `${SOURCES[id].name} (Not Connected)`,
-          checked: folder.sources.includes(id),
-        })),
+        children: [
+          ...SOURCE_GROUPS[folder.kind].map((id) => ({
+            id: `source:${id}`,
+            title: s.accounts[id] ? SOURCES[id].name : `${SOURCES[id].name} (Not Connected)`,
+            checked: folder.sources.includes(id),
+          })),
+          sep,
+          { id: "settings", title: "Live Folder Settings…", symbol: "gearshape" },
+        ],
       },
-      { id: "settings", title: "Live Folder Settings…", symbol: "gearshape" },
-    ],
-    [
-      { id: "up", title: "Move Up", symbol: "arrow.up", enabled: canMoveUp },
-      { id: "down", title: "Move Down", enabled: canMoveDown },
-    ],
-    [
-      { id: "rename", title: "Rename…", symbol: "pencil" },
-      { id: "icon", title: folder.icon ? "Change Icon…" : "Add Icon…", symbol: "photo" },
+      {
+        id: "customize",
+        title: "Customize",
+        symbol: "slider.horizontal.3",
+        children: [
+          { id: "rename", title: "Rename…", symbol: "pencil" },
+          { id: "icon", title: folder.icon ? "Change Icon…" : "Add Icon…", symbol: "photo" },
+          { id: "color", title: "Color", symbol: "paintpalette", children: folderColorItems(folder.color ?? null) },
+        ],
+      },
     ],
     [{ id: "delete", title: "Delete Live Folder", symbol: "trash" }],
   );
 }
 
+function runRepoChoice(folderId: string, choice: string): boolean {
+  const folder = live().folders[folderId];
+  if (!folder) return false;
+  if (choice === "repos:all") {
+    showAllRepos(folderId);
+    return true;
+  }
+  if (choice === "repos:none") folderRepos(folderId).filter((repo) => !folder.hiddenRepos.includes(repo)).forEach((repo) => setRepoHidden(folderId, repo, true));
+  else if (choice === "repos:new") setShowNewRepos(folderId, !folder.showNewRepos);
+  else if (choice.startsWith("repo:")) {
+    const repo = choice.slice(5);
+    const show = folder.hiddenRepos.includes(repo);
+    setRepoHidden(folderId, repo, !show);
+    return show;
+  }
+  return false;
+}
+
 export async function openLiveFolderMenu(windowId: string, folderId: string) {
   const folder = live().folders[folderId];
   if (!folder) return;
-  const choice = await showMenu(liveFolderMenuItems(windowId, folderId));
+  let showedRepo = false;
+  const consent = consentToken();
+  const choice = await showMenu(liveFolderMenuItems(folderId), (picked) => {
+    showedRepo = runRepoChoice(folderId, picked) || showedRepo;
+    noteLiveRepoMenuPick(picked, !!live().folders[folderId]?.showNewRepos);
+    return liveFolderMenuItems(folderId);
+  });
+  if (choice?.startsWith("repo")) showedRepo = runRepoChoice(folderId, choice) || showedRepo;
+  if (showedRepo) queueMicrotask(() => void refreshFolder(folderId));
   if (!choice) return;
   const option = FOLDER_OPTIONS.find((key) => choice === `option:${key}`);
   if (choice === "refresh") void manualRefresh(folderId);
   else if (option) updateFolder(folderId, { [option]: !folder[option] });
-  else if (choice === "repos:all") {
-    updateFolder(folderId, { hiddenRepos: [] });
-    void refreshFolder(folderId);
-  } else if (choice.startsWith("repo:")) {
-    const repo = choice.slice(5);
-    const show = folder.hiddenRepos.includes(repo);
-    setRepoHidden(folderId, repo, !show);
-    if (show) void refreshFolder(folderId);
-  } else if (choice.startsWith("filter:")) {
+  else if (choice.startsWith("filter:")) {
     const key = choice.slice(7) as "authored" | "reviewRequests";
     updateFolder(folderId, { filters: { ...folder.filters, [key]: !folder.filters[key] } });
     void refreshFolder(folderId);
   } else if (choice.startsWith("source:")) {
     const id = choice.slice(7) as LiveSourceId;
-    if (!live().accounts[id]) return openSettings("liveFolders");
+    if (!live().accounts[id]) return openSettings("automations");
     const sources = folder.sources.includes(id) ? folder.sources.filter((x) => x !== id) : [...folder.sources, id];
     updateFolder(folderId, { sources: sources.length ? sources : folder.sources });
     void refreshFolder(folderId);
@@ -147,14 +191,17 @@ export async function openLiveFolderMenu(windowId: string, folderId: string) {
     const name = await prompt({ title: "Rename Live Folder", value: folder.name, placeholder: "Live folder name", confirmTitle: "Rename", windowId });
     if (name?.trim()) updateFolder(folderId, { name: name.trim() });
   } else if (choice === "icon") void openIconPicker(windowId, { kind: "live", id: `livefolder|${folderId}` });
+  else if (choice.startsWith(COLOR_CHOICE)) {
+    const color = chosenColor(choice);
+    noteLiveFolderColorPick(consent);
+    updateFolder(folderId, { color });
+  }
   else if (choice === "read") markRead(folderId);
-  else if (choice === "up") moveLiveFolder(windowId, folderId, -1);
-  else if (choice === "down") moveLiveFolder(windowId, folderId, 1);
-  else if (choice === "settings") openSettings("liveFolders");
-  else if (choice === "delete") deleteLiveFolder(folderId);
+  else if (choice === "settings") openSettings("automations");
+  else if (choice === "delete") deleteLiveFolder(folderId, { consent });
 }
 
-export function liveItemMenuItems(windowId: string, folderId: string, item: LiveItem, tabId: string | null): MenuItem[] {
+function liveItemMenuItems(windowId: string, folderId: string, item: LiveItem, tabId: string | null): MenuItem[] {
   const unread = !!live().unread[folderId]?.includes(item.id);
   const shown = !!tabId && activeTabId(useBrowser.getState(), windowId) === tabId;
   return sections(
@@ -164,32 +211,24 @@ export function liveItemMenuItems(windowId: string, folderId: string, item: Live
       ...(tabId ? [{ id: "backToPin", title: "Back to Pinned URL", symbol: "arrow.uturn.backward", enabled: liveTabAway(tabId), ...hintWhen(shown, "returnToPinnedUrl") }] : []),
     ],
     withAlternate({ id: "copy", title: "Copy Link", symbol: "link" }, { id: "copyMd", title: "Copy Link as Markdown", symbol: "link" }, null),
-    [
-      { id: "unread", title: unread ? "Mark as Read" : "Mark as Unread", symbol: unread ? "circle" : "circle.fill" },
-      ...(item.pr ? [{ id: "hide", title: "Hide Until Refresh", symbol: "eye.slash" }] : []),
-    ],
+    [{ id: "unread", title: unread ? "Mark as Read" : "Mark as Unread", symbol: unread ? "circle" : "circle.fill" }],
     tabId ? [{ id: "close", title: "Close", symbol: "xmark", ...hintWhen(shown, "closeTab") }] : [],
   );
 }
 
 export async function openLiveItemMenu(windowId: string, folderId: string, item: LiveItem, tabId: string | null) {
+  const consent = consentToken();
   const unread = !!live().unread[folderId]?.includes(item.id);
   const choice = await showMenu(liveItemMenuItems(windowId, folderId, item, tabId));
   if (choice === "open") openLiveItem(windowId, folderId, item);
   else if (choice === "backToPin" && tabId) returnLiveTab(tabId);
   else if (choice === "background") openLiveItem(windowId, folderId, item, { background: true });
-  else if (choice === "copy") copyText(cleanUrl(item.url));
-  else if (choice === "copyMd") copyText(markdownLink(item.title, item.url));
+  else if (choice === "copy") copyAddress(cleanUrl(item.url));
+  else if (choice === "copyMd") copyLink(markdownLink(item.title, item.url));
   else if (choice === "unread") {
     if (unread) markRead(folderId, [item.id]);
     else markUnread(folderId, item.id);
-  } else if (choice === "hide") hideItems(folderId, [item]);
-  else if (choice === "close" && tabId) void closeTab(tabId);
-}
-
-export async function openLiveStackMenu(folderId: string, stackId: string) {
-  const choice = await showMenu([{ id: "hide", title: "Hide Stack Until Refresh", symbol: "eye.slash" }]);
-  if (choice === "hide") hideItems(folderId, (live().items[folderId] ?? []).filter((it) => it.pr?.stack?.id === stackId));
+  } else if (choice === "close" && tabId) void closeTab(tabId, { user: { consent } });
 }
 
 const DISMISS_NOW = "cal:dismissNow:";
@@ -249,6 +288,6 @@ export function runCalendarMenu(choice: string): boolean {
   else if (choice.startsWith("cal:toggle:")) {
     const id = choice.slice(11);
     setCalendarHidden(id, !settings.hiddenCalendarIds.includes(id));
-  } else if (choice === "cal:settings") openSettings("calendar");
+  } else if (choice === "cal:settings") openSettings("automations");
   return true;
 }

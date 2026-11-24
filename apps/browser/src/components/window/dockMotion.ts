@@ -1,18 +1,37 @@
 import { layout } from "../ui/theme";
-import { DOCK_SPRING } from "./tokens";
+import { DOCK_SLIDE, DOCK_SLIDE_CURVE } from "./tokens";
+import type { SpringSpec } from "../ui/motion";
+import { TRAFFIC_LIGHTS_WIDTH, WINDOW_CHROME, type WindowChrome } from "../../lib/windowChrome";
 
 export const easeOutCubic = (u: number) => 1 - (1 - u) ** 3;
 export const easeInOutCubic = (u: number) => (u < 0.5 ? 4 * u ** 3 : 1 - (-2 * u + 2) ** 3 / 2);
 
-export function springAt(
-  t: number,
-  { response, damping }: { response: number; damping: number } = DOCK_SPRING,
-): number {
+export function springAt(t: number, { response, damping }: SpringSpec): number {
   if (t <= 0) return 0;
   const omega = (2 * Math.PI) / response;
   const wd = omega * Math.sqrt(1 - damping * damping);
   return 1 - Math.exp(-damping * omega * t) * (Math.cos(wd * t) + ((damping * omega) / wd) * Math.sin(wd * t));
 }
+
+export function cubicBezier(x1: number, y1: number, x2: number, y2: number): (u: number) => number {
+  const at = (a: number, b: number, s: number) => 3 * a * s * (1 - s) ** 2 + 3 * b * s * s * (1 - s) + s ** 3;
+  return (u) => {
+    if (u <= 0) return 0;
+    if (u >= 1) return 1;
+    let lo = 0;
+    let hi = 1;
+    for (let i = 0; i < 32; i++) {
+      const mid = (lo + hi) / 2;
+      if (at(x1, x2, mid) < u) lo = mid;
+      else hi = mid;
+    }
+    return at(y1, y2, (lo + hi) / 2);
+  };
+}
+
+const slideCurve = cubicBezier(...DOCK_SLIDE_CURVE);
+
+export const slideAt = (seconds: number) => slideCurve((seconds * 1000) / DOCK_SLIDE.duration);
 
 export const sidebarCardGap = (inset: number) => Math.max(0, inset - layout.sidebarInset);
 
@@ -20,13 +39,25 @@ export const dockedCardInset = (sidebarWidth: number, inset: number) => sidebarW
 
 export const cardInsetAt = (dock: number, sidebarWidth: number, inset: number) => inset + (dockedCardInset(sidebarWidth, inset) - inset) * dock;
 
-export const HEADER_TOOLS = { toggleX: 70.75 + 27, fullScreenToggleX: 29, pitch: 35, edge: layout.sidebarInset + 1 } as const;
+const FULL_SCREEN_TOGGLE_X = 29;
+
+export const headerToggleXFor = (chrome: WindowChrome): number => (chrome.leadingWidth ? 70.75 + 27 + chrome.leadingWidth - TRAFFIC_LIGHTS_WIDTH : FULL_SCREEN_TOGGLE_X);
+export const HEADER_TOOLS = {
+  get toggleX() {
+    return headerToggleXFor(WINDOW_CHROME);
+  },
+  fullScreenToggleX: FULL_SCREEN_TOGGLE_X, pitch: 35, plate: 32, edge: layout.sidebarInset + 1 } as const;
+
+type HeaderToggleState = { windowFullScreen: boolean; pageFullScreen: boolean; controlsRow: boolean };
+
+export function headerToggleXIn({ windowFullScreen, pageFullScreen, controlsRow }: HeaderToggleState, chrome: WindowChrome = WINDOW_CHROME): number {
+  if (windowFullScreen || (chrome.leadingButtons.length && (controlsRow || pageFullScreen))) return FULL_SCREEN_TOGGLE_X;
+  return headerToggleXFor(chrome);
+}
+
+export const headerToggleRightEdge = (toggleX: number) => toggleX + HEADER_TOOLS.plate / 2;
 
 export type HeaderButton = "back" | "forward" | "reload";
-
-export function headerToggleX(windowFullScreen: boolean): number {
-  return windowFullScreen ? HEADER_TOOLS.fullScreenToggleX : HEADER_TOOLS.toggleX;
-}
 
 export function navButtonsFitting(width: number, button = 30, toggle = true, toggleX: number = HEADER_TOOLS.toggleX): { buttons: HeaderButton[]; step: number } {
   const { pitch, edge } = HEADER_TOOLS;
@@ -36,44 +67,60 @@ export function navButtonsFitting(width: number, button = 30, toggle = true, tog
   return { buttons, step: count ? Math.min(pitch, span / count) : pitch };
 }
 
-export const PEEK_EDGE_STRIP = 8;
-export const PEEK_HOLD_SLACK = 24;
-export const PEEK_BLEED = 16;
+export const PEEK_EDGE_STRIP = 3;
+export const TAB_DRAG_EDGE_STRIP = 8;
+const PEEK_HOLD_SLACK = 40;
+export const PEEK_CLOSE_DELAY_MS = 200;
+const PEEK_BLEED = 16;
 
 export const peekBleed = (peekLeft: number) => (peekLeft > 0 ? 0 : PEEK_BLEED);
 
-export type DockState = "fullscreen" | "docked" | "peeking" | "hiding" | "away";
-export type DockInput = { open: boolean; fullscreen: boolean; moving: boolean; peekLive: boolean };
+type DockState = "fullscreen" | "docked" | "peeking" | "leaving" | "hiding" | "away";
+type DockInput = { open: boolean; fullscreen: boolean; moving: boolean; peekLive: boolean; peekLeaving?: boolean };
 
-export function dockState({ open, fullscreen, moving, peekLive }: DockInput): DockState {
+export function dockState({ open, fullscreen, moving, peekLive, peekLeaving = false }: DockInput): DockState {
+  if (peekLive && (fullscreen || !open)) return peekLeaving ? "leaving" : "peeking";
   if (fullscreen) return "fullscreen";
   if (open) return "docked";
-  if (peekLive) return "peeking";
   return moving ? "hiding" : "away";
 }
 
-export const shownAs = (state: DockState) => (state === "peeking" ? "peek" : state === "hiding" ? "away" : state);
+export const peekOnScreen = (state: DockState) => state === "peeking" || state === "leaving";
 
-export const watchesEdge = (state: DockState, moving: boolean) => (state === "peeking" || state === "away") && !moving;
+export const shownAs = (state: DockState) => (peekOnScreen(state) ? "peek" : state === "hiding" ? "away" : state);
+
+export const watchesEdge = (state: DockState, moving: boolean) => (peekOnScreen(state) || state === "away" || state === "fullscreen") && !moving;
+
+const atRevealEdge = (x: number, right: boolean, windowWidth: number, band: number = PEEK_EDGE_STRIP) => (right ? x >= windowWidth - band : x < band);
+
+export const edgeEventReveals = (state: DockState, x: number, right: boolean, windowWidth: number, band: number = PEEK_EDGE_STRIP) =>
+  state === "peeking" || atRevealEdge(x, right, windowWidth, band);
+
+type EdgeSource = "strip" | "native";
+type EdgeArm = { armed: boolean; strip: boolean; native: boolean };
+export const EDGE_ARMED: EdgeArm = { armed: true, strip: false, native: false };
+export const EDGE_DISARMED: EdgeArm = { armed: false, strip: false, native: false };
+
+export function edgeSeen(arm: EdgeArm, source: EdgeSource, over: boolean): EdgeArm {
+  const next = { ...arm, [source]: over };
+  return next.strip || next.native ? next : { ...next, armed: true };
+}
+
+export const edgeClosed = (arm: EdgeArm): EdgeArm => ({ ...arm, armed: !arm.strip && !arm.native });
 
 export const peekHoldWidth = (sidebarWidth: number, peekLeft: number) => peekLeft + sidebarWidth + PEEK_HOLD_SLACK;
-
-export const inPeekHold = (x: number, y: number, holdWidth: number, holdHeight: number) => x >= 0 && x < holdWidth && y >= 0 && y < holdHeight;
-
-export const fromSidebarEdgeInStrip = (stripX: number, right: boolean) => (right ? PEEK_EDGE_STRIP - stripX : stripX);
 
 export const peekSpan = (sidebarWidth: number, right: boolean, windowWidth: number, peekLeft: number): readonly [number, number] =>
   right ? [windowWidth - peekLeft - sidebarWidth, Infinity] : [-Infinity, peekLeft + sidebarWidth];
 
-
 export const edgeWatchWidth = (peeking: boolean, draggingTab: boolean, holdWidth: number, inset: number) =>
-  peeking ? holdWidth : draggingTab || edgeStripOverPage(inset) ? PEEK_EDGE_STRIP : 0;
+  peeking ? holdWidth : draggingTab ? TAB_DRAG_EDGE_STRIP : edgeStripOverPage(inset) ? PEEK_EDGE_STRIP : 0;
 
 export const edgeStripOverPage = (inset: number) => inset < PEEK_EDGE_STRIP;
 
-export type DockMove = "jump" | "arcHide" | "spring";
+type DockMove = "jump" | "arcHide" | "slide";
 
 export function dockMove(o: { open: boolean; animated: boolean; arc: boolean; peekOut: boolean }): DockMove {
   if (!o.animated || (o.arc && o.open && o.peekOut)) return "jump";
-  return o.arc && !o.open ? "arcHide" : "spring";
+  return o.arc && !o.open ? "arcHide" : "slide";
 }

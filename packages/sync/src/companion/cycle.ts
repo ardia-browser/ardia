@@ -13,13 +13,15 @@ import {
   SEND_LIFETIME_MS,
   DAY_MS,
   type LocalTab,
+  type BookmarkValue,
   type LocalVisit,
   type SendRecord,
 } from "./adapters.ts";
+import { fromLegacyUrl } from "./legacy.ts";
 import { buildView, dataOwner, defaultProfileId, liveProfiles, type View } from "./view.ts";
 import { host, loaded, save, viewIsNew, type CompanionState } from "./state.ts";
 
-export type ChainStatus = "ok" | "missing" | "unavailable";
+type ChainStatus = "ok" | "missing" | "unavailable";
 
 export type CycleInput = {
   name: string;
@@ -30,10 +32,10 @@ export type CycleInput = {
   fetchedDue?: string[];
 };
 
-export type Received = { profile: string; key: string; u: string; t: string; from: string; fromName: string | null; at: number };
-export type Removal = { profile: string; urls: string[]; unassigned: boolean };
+type Received = { profile: string; key: string; u: string; t: string; from: string; fromName: string | null; at: number };
+type Removal = { profile: string; urls: string[]; unassigned: boolean };
 
-export type CycleOutput = {
+type CycleOutput = {
   status: ChainStatus;
   view?: View;
   received: Received[];
@@ -124,16 +126,22 @@ export async function runCompanionCycle(input: CycleInput): Promise<CycleOutput>
     const tabsOf = new Map<string, LocalTab[]>();
     for (const t of input.tabs ?? []) {
       const p = profileOf(app, ids, fallback, t.p);
-      if (p) tabsOf.set(p, [...(tabsOf.get(p) ?? []), t]);
+      if (!p) continue;
+      const list = tabsOf.get(p);
+      if (list) list.push(t);
+      else tabsOf.set(p, [t]);
     }
     const visitsOf = new Map<string, (LocalVisit & { p: string })[]>();
     const visited = (c.visited ??= {});
+    const removing = new WeakMap<string[], Set<string>>();
     for (const v of input.visits ?? []) {
       const p = profileOf(app, ids, fallback, v.p);
       if (!p || typeof v.u !== "string" || !Array.isArray(v.vt)) continue;
       const o = owner.get(p) ?? p;
-      visitsOf.set(o, [...(visitsOf.get(o) ?? []), { ...v, p }]);
-      const newest = Math.max(...v.vt.filter((t) => Number.isFinite(t)));
+      const list = visitsOf.get(o);
+      if (list) list.push({ ...v, p });
+      else visitsOf.set(o, [{ ...v, p }]);
+      const newest = v.vt.reduce((m, t) => (Number.isFinite(t) ? Math.max(m, t) : m), -Infinity);
       const mine = (visited[profileScope(o)] ??= {});
       if (Number.isFinite(newest) && newest > (mine[v.u] ?? -Infinity)) mine[v.u] = newest;
     }
@@ -170,7 +178,11 @@ export async function runCompanionCycle(input: CycleInput): Promise<CycleOutput>
                 },
                 removed: (p, url) => {
                   const list = (c.removals![p] ??= []);
-                  if (!list.includes(url)) list.push(url);
+                  let listed = removing.get(list);
+                  if (!listed) removing.set(list, (listed = new Set(list)));
+                  if (listed.has(url)) return;
+                  listed.add(url);
+                  list.push(url);
                 },
                 ready: () => !!input.visits && (!!c.pulled[scope] || ++extracts > 1),
               }),
@@ -270,7 +282,8 @@ export function companionSend(input: { profile: string; key: string; u: string; 
 export function companionRemovalsDone(input: { items: { profile: string; urls: string[] }[] }) {
   const c = loaded();
   for (const { profile, urls } of input.items) {
-    const left = (c.removals?.[profile] ?? []).filter((url) => !urls.includes(url));
+    const done = new Set(urls);
+    const left = (c.removals?.[profile] ?? []).filter((url) => !done.has(url));
     if (left.length) c.removals![profile] = left;
     else delete c.removals?.[profile];
   }
@@ -286,14 +299,27 @@ export function companionAcknowledge(input: { items: { profile: string; key: str
   return { saved: save(true) };
 }
 
+function hasBookmarkFor(c: CompanionState, scope: string, url: string) {
+  const removing = new Set(c.bookmarks.filter((o) => o.scope === scope && o.op === "remove").map((o) => `bm:${o.key}`));
+  if (c.bookmarks.some((o) => o.scope === scope && o.op === "add" && o.value.u === url)) return true;
+  const state = c.scopes[scope];
+  if (!state) return false;
+  for (const [key, value] of visible(state, "bm:")) {
+    const bookmark = value as BookmarkValue | null;
+    if (!removing.has(key) && bookmark?.k === "u" && typeof bookmark.u === "string" && fromLegacyUrl(bookmark.u) === url) return true;
+  }
+  return false;
+}
+
 export function companionAddBookmark(input: { profile: string; key: string; u: string; t: string; at: number }) {
   const c = loaded();
   if (!isLive(input.profile)) return refused;
   const scope = scopeFor(input.profile);
+  if (hasBookmarkFor(c, scope, input.u)) return { saved: true, existing: true };
   if (!c.bookmarks.some((o) => o.scope === scope && o.key === input.key)) {
     c.bookmarks.push({ scope, op: "add", key: input.key, value: { k: "u", p: "other", t: input.t, u: input.u, a: input.at } });
   }
-  return { saved: save(true) };
+  return { saved: save(true), existing: false };
 }
 
 export function companionRemoveBookmark(input: { profile: string; key: string }) {

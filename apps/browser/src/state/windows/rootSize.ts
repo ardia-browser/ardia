@@ -1,0 +1,49 @@
+import { create } from "zustand";
+import { useBrowser, type BrowserState } from "../browser/store";
+import { useKeyed, watchWindowRecord } from "../browser/keyedWatch";
+import { currentInterfaceScale, rootSizeOfFrame, useInterfaceScale } from "../settings/interfaceScale";
+
+export type RootSize = { width: number; height: number };
+
+const useRootSizes = create<Record<string, RootSize>>()(() => ({}));
+
+export function setWindowRootSize(windowId: string, width: number, height: number) {
+  const known = useRootSizes.getState()[windowId];
+  if (width > 0 && height > 0 && (known?.width !== width || known.height !== height)) useRootSizes.setState({ [windowId]: { width, height } });
+}
+
+export function forgetWindowRootSize(windowId: string) {
+  if (!(windowId in useRootSizes.getState())) return;
+  useRootSizes.setState(({ [windowId]: _, ...rest }) => rest, true);
+}
+
+export function windowRootSize(s: Pick<BrowserState, "windows">, windowId: string): RootSize | undefined {
+  const measured = useRootSizes.getState()[windowId];
+  if (measured) return measured;
+  const frame = s.windows[windowId]?.frame;
+  return frame ? rootSizeOfFrame(frame, currentInterfaceScale()) : undefined;
+}
+
+export const windowRootHeightNow = (windowId: string): number | undefined => windowRootSize(useBrowser.getState(), windowId)?.height;
+
+export const windowRootWidth = (s: Pick<BrowserState, "windows">, windowId: string): number | undefined => windowRootSize(s, windowId)?.width;
+
+export const onWindowRootSizes = (listener: () => void): (() => void) => useRootSizes.subscribe(listener);
+
+export function onWindowRootSize(windowId: string, listener: (size: RootSize) => void): () => void {
+  let last: RootSize | undefined;
+  const read = () => {
+    const size = useRootSizes.getState()[windowId];
+    if (size && size !== last) listener((last = size));
+  };
+  read();
+  return useRootSizes.subscribe(read);
+}
+
+export const useWindowRootSize = (windowId: string): RootSize | undefined => useRootSizes((sizes) => sizes[windowId]);
+
+export function useWindowRootWidth(windowId: string): number | undefined {
+  const frameWidth = useKeyed(watchWindowRecord, windowId, () => useBrowser.getState().windows[windowId]?.frame?.[2]);
+  const scale = useInterfaceScale((s) => s.scale);
+  return useRootSizes((sizes) => sizes[windowId]?.width ?? (frameWidth === undefined ? undefined : frameWidth / scale));
+}

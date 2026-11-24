@@ -48,7 +48,7 @@ test("an off the user turned off by hand stays off and still syncs", () => {
 
 test("an off only filled in for the user (chosen and inferred) turns on", () => {
   assert.deepEqual(load(doc(9, { ...DEFAULT_SETTINGS, [KEY]: false }, { chosen: [KEY, "tabLayout"], inferred: [KEY, "tabLayout"] })), { on: true, chosen: false, inferred: false });
-  assert.deepEqual(S().settingsMeta, { chosen: ["tabLayout"], inferred: ["tabLayout"] });
+  assert.deepEqual(S().settingsMeta, { chosen: ["tabLayout"], inferred: ["tabLayout", "hideToolbarWhileScrolling:offByDefault"] });
 });
 
 test("a file from before settingsMeta with the old off turns on", () => {
@@ -56,7 +56,7 @@ test("a file from before settingsMeta with the old off turns on", () => {
 });
 
 test("a current file keeps an off as it is: the change runs once", () => {
-  assert.equal(load(doc(10, { ...DEFAULT_SETTINGS, [KEY]: false }, { chosen: [], inferred: [] })).on, false);
+  assert.equal(load(doc(11, { ...DEFAULT_SETTINGS, [KEY]: false }, { chosen: [], inferred: [] })).on, false);
 });
 
 test("an on stays on", () => {

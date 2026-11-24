@@ -18,6 +18,7 @@ class DevToolsAgentHost;
 class DevToolsAgentHostClient;
 class DevToolsSocketFactory;
 class RenderFrameHost;
+class RenderWidgetHost;
 class WebContents;
 
 extern bool g_ardia_opacity_from_default_color;
@@ -27,6 +28,12 @@ bool ArdiaHasAccessedInitialMainDocument(WebContents* contents);
 bool ArdiaMainFrameHandlesEnterPictureInPicture(WebContents* contents);
 
 DevToolsAgentHost* ArdiaDevToolsAgentHostForId(const std::string& id);
+}
+
+namespace gfx {
+class Point;
+class Rect;
+class Size;
 }
 
 namespace crypto::apple {
@@ -47,6 +54,16 @@ struct RequestAction;
 }
 
 extern int g_ardia_disk_space_check_seconds;
+
+enum ArdiaDragEnd {
+  kArdiaDragEndOwnerGone,
+  kArdiaDragEndDebuggerUnowned,
+  kArdiaDragEndNativeRefused,
+  kArdiaDragEndSourceGone,
+  kArdiaDragEndKinds,
+};
+
+extern int g_ardia_drags_ended[kArdiaDragEndKinds];
 
 extern bool g_ardia_auto_picture_in_picture_off;
 
@@ -74,8 +91,6 @@ void ArdiaSetHybridUiShown(const void* model, bool shown);
 extern bool (*g_ardia_restricted_component_extension)(
     const extensions::ExtensionId& extension_id);
 
-extern bool g_ardia_begin_frame_bridge;
-
 extern void (*g_ardia_initial_main_document_accessed)(
     content::WebContents* contents);
 
@@ -83,6 +98,15 @@ extern bool (*g_ardia_live_tab_skips_restore)(sessions::LiveTab* live_tab,
                                               SessionID* source);
 
 extern int (*g_ardia_permission_tab_shown)(content::WebContents*);
+
+extern bool (*g_ardia_windowless_page_screen_rects)(
+    content::RenderWidgetHost* host,
+    const gfx::Size& view_size,
+    gfx::Rect* window_frame_in_screen,
+    gfx::Point* view_origin_in_window);
+
+extern bool (*g_ardia_hidden_widget_takes_screen_rects)(
+    content::RenderWidgetHost* widget);
 
 extern void (*g_ardia_dnr_rule_matched)(
     content::BrowserContext* browser_context,

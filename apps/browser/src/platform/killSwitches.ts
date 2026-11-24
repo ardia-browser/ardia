@@ -14,7 +14,7 @@ type ExperimentDef = {
   removeBy: string;
 };
 
-export const MAX_SWITCHES = 8;
+export const MAX_SWITCHES = 9;
 
 export const SWITCHES = {
   newTabPrewarm: {
@@ -65,23 +65,34 @@ export const SWITCHES = {
     removeBy: "2026-12-15",
     live: false,
   },
+  peekGenie: {
+    about: "A Peek opens and closes with the Genie warp, a private Core Animation mesh; off, it zooms from the link and the mesh runtime is never inspected (packages/shell PeekStage.swift, ArdiaPeekMesh.m).",
+    owner: "peek",
+    removeBy: "2027-02-15",
+    live: true,
+  },
 } as const satisfies Record<string, SwitchDef>;
 
 export const EXPERIMENTS = {
-  beginFrameBridge: {
-    about: "While a shown tab waits for the display link's first callback, the GPU process sends up to 4 warm-up BeginFrames on the display's last vsync grid (engine, chromium-begin-frame-warm-up.patch).",
-    owner: "tab switch",
-    removeBy: "2026-12-15",
+  freezeWatchOff: {
+    about: "Turns off the freeze watch: the run-loop observers on the main and JavaScript threads that count stalls for perf_memory (packages/ardiacore ArdiaFreezeWatch.mm, state/telemetry/freezes.ts).",
+    owner: "perf",
+    removeBy: "2027-02-28",
   },
   serverWindowDragAllOpen: {
     about: "With serverWindowDrag, every view in the titlebar band is also left open to window moves (a probe for the geometry work).",
     owner: "window",
     removeBy: "2026-12-15",
   },
-  webkitSignIn: {
-    about: "Moving a Chromium page to WebKit first copies the cookies that page's own address gets into the profile's WebKit store, at most 1.5 s (state/engines/engineSignIn.ts).",
-    owner: "engines",
-    removeBy: "2026-12-15",
+  dragRegionEveryMount: {
+    about: "With serverWindowDrag, every React Native mount rebuilds each window's title-bar drag region, as it used to, instead of only the window whose title bar the pointer is in (packages/shell ServerWindowDrag.swift).",
+    owner: "window",
+    removeBy: "2026-12-31",
+  },
+  officialPluginsAi: {
+    about: "Lists the AI plugin as coming soon among the official plugins (state/plugins/official.ts), for Settings and onboarding.",
+    owner: "plugins",
+    removeBy: "2027-03-31",
   },
 } as const satisfies Record<string, ExperimentDef>;
 

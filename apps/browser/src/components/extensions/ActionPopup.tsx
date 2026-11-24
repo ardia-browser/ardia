@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { Animated, Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
+import { Animated, Pressable, StyleSheet, View } from "react-native";
 import { closeExtensionPopup } from "../../state/extensions/actions";
 import { MEASURE_POPUP_SCRIPT } from "../../state/extensions/popupSize";
 import { useShownPageId } from "../../state/peek/hooks";
 import { openFromPage, pageProfileId } from "../../state/tabs/openFromPage";
 import { curve, duration, PANEL, Panel, shadow, WebView, type WebViewHandle } from "../ui";
 import { EXTENSION_PAGE_BACKGROUND, useExtensionColors } from "./tokens";
+import { useCurrentInterfaceScale } from "../../state/settings/interfaceScale";
 
 const MIN = { width: 25, height: 25 };
 const MAX = { width: 800, height: 600 };
@@ -13,9 +14,9 @@ const MAX = { width: 800, height: 600 };
 export function ActionPopup({ windowId, pageProfile, url, anchor }: { windowId: string; pageProfile: string; extensionId: string; url: string; anchor: { x: number; y: number; width: number; height: number } }) {
   const colors = useExtensionColors();
   const web = useRef<WebViewHandle>(null);
-  const screen = useWindowDimensions();
+  const scale = useCurrentInterfaceScale();
   const [windowWidth, setWindowWidth] = useState(0);
-  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
+  const [pageSize, setPageSize] = useState<{ width: number; height: number } | null>(null);
   const appear = useRef(new Animated.Value(0)).current;
   const alive = useRef(true);
   const sized = useRef(false);
@@ -33,12 +34,12 @@ export function ActionPopup({ windowId, pageProfile, url, anchor }: { windowId: 
     if (tabId !== openedOn.current) closeExtensionPopup();
   }, [tabId]);
 
-  const resize = (w: number, h: number) => {
+  const resizePage = (w: number, h: number) => {
     const next = {
       width: Math.min(MAX.width, Math.max(MIN.width, Math.ceil(w))),
       height: Math.min(MAX.height, Math.max(MIN.height, Math.ceil(h))),
     };
-    setSize((prev) => {
+    setPageSize((prev) => {
       if (!prev) Animated.timing(appear, { toValue: 1, duration: duration.base, easing: curve.enter, useNativeDriver: true }).start();
       return prev && prev.width === next.width && prev.height === next.height ? prev : next;
     });
@@ -48,21 +49,21 @@ export function ActionPopup({ windowId, pageProfile, url, anchor }: { windowId: 
     if (sized.current) return;
     void web.current?.evaluate<{ w: number; h: number }>(MEASURE_POPUP_SCRIPT).then((m) => {
       if (!alive.current || !m || sized.current) return;
-      resize(m.w, m.h);
+      resizePage(m.w, m.h);
       watchSize();
     });
   };
 
-  const width = (size?.width ?? MIN.width) + 1;
-  const height = (size?.height ?? MIN.height) + 1;
-  const room = windowWidth || screen.width;
-  const left = Math.max(8, Math.min(anchor.x + anchor.width - width, room - width - 8));
+  const width = (pageSize?.width ?? MIN.width) / scale + 1;
+  const height = (pageSize?.height ?? MIN.height) / scale + 1;
+  const left = windowWidth ? Math.max(8, Math.min(anchor.x + anchor.width - width, windowWidth - width - 8)) : Math.max(8, anchor.x + anchor.width - width);
   const top = anchor.y + anchor.height + 6;
 
   return (
     <>
-      <Pressable style={StyleSheet.absoluteFill} onPress={closeExtensionPopup} onLayout={(e) => setWindowWidth(e.nativeEvent.layout.width)} />
+      <Pressable testID="ardia-extension-popup-dismiss" style={StyleSheet.absoluteFill} onPress={closeExtensionPopup} onLayout={(e) => setWindowWidth(e.nativeEvent.layout.width)} />
       <Animated.View
+        testID="ardia-extension-popup"
         style={{
           position: "absolute",
           left,
@@ -83,7 +84,7 @@ export function ActionPopup({ windowId, pageProfile, url, anchor }: { windowId: 
               pageBackgroundColor={EXTENSION_PAGE_BACKGROUND}
               onPreferredSize={({ width, height }) => {
                 sized.current = true;
-                resize(width, height);
+                resizePage(width * scale, height * scale);
               }}
               onNavigationChange={({ isLoading }) => {
                 if (isLoading) return;

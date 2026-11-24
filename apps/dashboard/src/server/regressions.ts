@@ -14,7 +14,7 @@ const MIN_SESSIONS = 30;
 const CRASH_FREE_DROP = 0.005;
 const PEOPLE_SHOWN = 40;
 
-type Unit = "ms" | "mb" | "bytes" | "per1k" | "share";
+type Unit = "ms" | "mb" | "bytes" | "per1k" | "share" | "cpu";
 
 type MetricDef = {
   key: string;
@@ -30,18 +30,24 @@ export const REGRESSION_METRICS: MetricDef[] = [
   { key: "j2", source: "j2", label: "New tab to typeable", group: "Journeys", unit: "ms", stat: "p50", hint: "Median of each report's p95 (perf_journeys j2_typeable_p95)" },
   { key: "j3", source: "j3", label: "Tab switch", group: "Journeys", unit: "ms", stat: "p50", hint: "Median of each report's p95 (j3_total_p95)" },
   { key: "j4", source: "j4", label: "Navigation to first paint", group: "Journeys", unit: "ms", stat: "p50", hint: "Median of each report's p95 (j4_fcp_p95)" },
-  { key: "launch_p50", source: "launch", label: "Launch to usable, p50", group: "Launch", unit: "ms", stat: "p50", hint: "perf_launch usable_ms" },
-  { key: "launch_p95", source: "launch", label: "Launch to usable, p95", group: "Launch", unit: "ms", stat: "p95", hint: "perf_launch usable_ms" },
+  { key: "launch_p50", source: "launch_warm", label: "Warm launch to usable, p50", group: "Launch", unit: "ms", stat: "p50", hint: "perf_launch usable_ms, launches that are neither the first since the computer started nor the first of a version (Linux can't tell cold launches yet, so there it is every launch but a version's first)" },
+  { key: "launch_p95", source: "launch_warm", label: "Warm launch to usable, p95", group: "Launch", unit: "ms", stat: "p95", hint: "perf_launch usable_ms, warm launches as above" },
+  { key: "launch_cold1_p50", source: "launch_cold1", label: "First cold launch of a version, p50", group: "Launch", unit: "ms", stat: "p50", hint: "perf_launch usable_ms where cold_nth = 1 and not first_of_version: each copy's first launch after a restart on this version, the slowest cold one, so a young version compares with an old one (Mac and Windows; Linux sends no cold_nth)" },
   { key: "memory_p50", source: "memory", label: "Memory, p50", group: "Memory", unit: "mb", stat: "p50", hint: "perf_memory total_mb, every Ardia process" },
   { key: "memory_p95", source: "memory", label: "Memory, p95", group: "Memory", unit: "mb", stat: "p95", hint: "perf_memory total_mb, every Ardia process" },
+  { key: "cpu_p50", source: "cpu", label: "Main process CPU, p50", group: "Energy", unit: "cpu", stat: "p50", hint: "perf_memory browser_cpu_pct: the browser process's share of one core over the hour" },
+  { key: "cpu_p95", source: "cpu", label: "Main process CPU, p95", group: "Energy", unit: "cpu", stat: "p95", hint: "perf_memory browser_cpu_pct" },
+  { key: "wakeups_p50", source: "wakeups", label: "Main process wake-ups per second, p50", group: "Energy", unit: "per1k", stat: "p50", hint: "perf_memory browser_wakeups_per_s over the hour" },
   { key: "crash_free", source: "crash", label: "Crash-free sessions", group: "Stability", unit: "share", stat: "crash-free", hint: "1 − app crashes ÷ launches; crashes credited to the version that crashed" },
   { key: "exceptions", source: "exception", label: "JS exceptions per 1k sessions", group: "Stability", unit: "per1k", stat: "rate", hint: "$exception that isn't a crash report, per 1,000 launches" },
   { key: "gone", source: "gone", label: "Page processes gone per 1k sessions", group: "Stability", unit: "per1k", stat: "rate", hint: "page_process_gone per 1,000 launches" },
-  { key: "store_bytes", source: "store_bytes", label: "Local telemetry store size, p95", group: "Telemetry store", unit: "bytes", stat: "p95", hint: "telemetry_local_store bytes" },
+  { key: "store_bytes", source: "store_bytes", label: "Local telemetry written per hour, p95", group: "Telemetry store", unit: "bytes", stat: "p95", hint: "telemetry_local_store bytes_recorded" },
   { key: "store_write", source: "store_write", label: "Local store write p95", group: "Telemetry store", unit: "ms", stat: "p50", hint: "Median of each hourly report's write time p95" },
 ];
 
 const USABLE = "toFloat64OrZero(properties['usable_ms'])";
+const WARM_LAUNCH = "(properties['first_of_version'] = 'false' AND properties['cold'] != 'true')";
+const FIRST_COLD_LAUNCH = "(properties['first_of_version'] = 'false' AND properties['cold_nth'] = '1')";
 const STORE_WRITE = "toFloat64OrZero(if(properties['write_p95_ms'] != '', properties['write_p95_ms'], properties['write_ms_p95']))";
 const VERSION = `if(event = '$exception' AND properties['crashed_version'] != '', properties['crashed_version'], ${prop("$app_version")})`;
 
@@ -51,9 +57,9 @@ const SAMPLES = `
     SELECT ${VERSION} AS v, distinct_id,
       arrayJoin(multiIf(
         event = 'perf_journeys', [('j2', toFloat64OrZero(properties['j2_typeable_p95'])), ('j3', toFloat64OrZero(properties['j3_total_p95'])), ('j4', toFloat64OrZero(properties['j4_fcp_p95']))],
-        event = 'perf_launch', [('launch', if(properties['first_of_version'] IN ('true', 'false') AND ${USABLE} < 600000, ${USABLE}, 0))],
-        event = 'perf_memory', [('memory', toFloat64OrZero(properties['total_mb']))],
-        event = 'telemetry_local_store', [('store_bytes', toFloat64OrZero(properties['bytes'])), ('store_write', ${STORE_WRITE})],
+        event = 'perf_launch', [('launch_warm', if(${WARM_LAUNCH} AND ${USABLE} < 600000, ${USABLE}, 0)), ('launch_cold1', if(${FIRST_COLD_LAUNCH} AND ${USABLE} < 600000, ${USABLE}, 0))],
+        event = 'perf_memory', [('memory', toFloat64OrZero(properties['total_mb'])), ('cpu', toFloat64OrZero(properties['browser_cpu_pct'])), ('wakeups', toFloat64OrZero(properties['browser_wakeups_per_s']))],
+        event = 'telemetry_local_store', [('store_bytes', toFloat64OrZero(properties['bytes_recorded'])), ('store_write', ${STORE_WRITE})],
         event = 'app_launched', [('sessions', 1.)],
         event = '$exception' AND properties['source'] = 'native_crash', [('crash', 1.)],
         event = '$exception' AND properties['source'] NOT IN ('native_crash', 'helper_crash'), [('exception', 1.)],

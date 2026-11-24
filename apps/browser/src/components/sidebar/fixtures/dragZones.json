@@ -21,7 +21,9 @@
    "gridGrowth": 0,
    "hold": null,
    "dropInto": null,
-   "onto": null,
+   "split": null,
+   "tile": null,
+   "row": null,
    "pins": false,
    "pinCount": 0,
    "pinBefore": null,
@@ -39,10 +41,21 @@
   {
    "step": "move 240,330",
    "drop": {
-    "type": "onto",
-    "targetId": "a"
+    "type": "tabs",
+    "placement": {
+     "pinned": false,
+     "beforeId": "g1"
+    },
+    "sequence": [
+     "t:p1",
+     "t:p2",
+     "g:G(PG)"
+    ]
    },
-   "onto": "t:a"
+   "gapKey": "g:G(G)",
+   "gaps": {
+    "g:G(G)": 37
+   }
   },
   {
    "step": "move 240.5,330",
@@ -50,23 +63,26 @@
     "type": "none"
    },
    "gapKey": null,
-   "onto": null,
    "gaps": {}
   },
   {
    "step": "move 60,330",
    "drop": {
-    "type": "onto",
-    "targetId": "a"
+    "type": "split",
+    "targetId": "a",
+    "side": "left"
    },
-   "onto": "t:a"
+   "split": {
+    "key": "t:a",
+    "side": "left"
+   }
   },
   {
    "step": "move 241,220",
    "drop": {
     "type": "none"
    },
-   "onto": null
+   "split": null
   },
   {
    "step": "move 60,220",
@@ -257,7 +273,9 @@
    "gridGrowth": 0,
    "hold": null,
    "dropInto": null,
-   "onto": null,
+   "split": null,
+   "tile": null,
+   "row": null,
    "pins": false,
    "pinCount": 0,
    "pinBefore": null,
@@ -275,10 +293,14 @@
   {
    "step": "move 60,330",
    "drop": {
-    "type": "onto",
-    "targetId": "a"
+    "type": "split",
+    "targetId": "a",
+    "side": "left"
    },
-   "onto": "t:a"
+   "split": {
+    "key": "t:a",
+    "side": "left"
+   }
   },
   {
    "step": "move 10,330"
@@ -289,16 +311,20 @@
     "type": "none"
    },
    "gapKey": null,
-   "onto": null,
+   "split": null,
    "gaps": {}
   },
   {
    "step": "move 60,330",
    "drop": {
-    "type": "onto",
-    "targetId": "a"
+    "type": "split",
+    "targetId": "a",
+    "side": "left"
    },
-   "onto": "t:a"
+   "split": {
+    "key": "t:a",
+    "side": "left"
+   }
   },
   {
    "step": "end true",
@@ -306,7 +332,7 @@
     "type": "none"
    },
    "pitch": 0,
-   "onto": null,
+   "split": null,
    "sources": []
   },
   {
@@ -316,8 +342,8 @@
      "p1",
      "p2",
      "pg1",
-     "a",
      "c",
+     "a",
      "b",
      "g1",
      "h1",
@@ -344,13 +370,13 @@
       "group": null,
       "folder": null
      },
-     "a": {
+     "c": {
       "pinned": false,
       "row": false,
       "group": null,
       "folder": null
      },
-     "c": {
+     "a": {
       "pinned": false,
       "row": false,
       "group": null,
@@ -417,15 +443,6 @@
        "h1"
       ],
       "parent": "G(G)",
-      "pinned": false,
-      "collapsed": false
-     },
-     "G()": {
-      "tabIds": [
-       "a",
-       "c"
-      ],
-      "parent": null,
       "pinned": false,
       "collapsed": false
      }
@@ -473,7 +490,9 @@
    "gridGrowth": 0,
    "hold": null,
    "dropInto": null,
-   "onto": null,
+   "split": null,
+   "tile": null,
+   "row": null,
    "pins": false,
    "pinCount": 0,
    "pinBefore": null,
@@ -491,10 +510,14 @@
   {
    "step": "move 60,330",
    "drop": {
-    "type": "onto",
-    "targetId": "a"
+    "type": "split",
+    "targetId": "a",
+    "side": "left"
    },
-   "onto": "t:a"
+   "split": {
+    "key": "t:a",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,-3000",
@@ -502,16 +525,20 @@
     "type": "none"
    },
    "gapKey": null,
-   "onto": null,
+   "split": null,
    "gaps": {}
   },
   {
    "step": "move 60,330",
    "drop": {
-    "type": "onto",
-    "targetId": "a"
+    "type": "split",
+    "targetId": "a",
+    "side": "left"
    },
-   "onto": "t:a"
+   "split": {
+    "key": "t:a",
+    "side": "left"
+   }
   },
   {
    "step": "end true",
@@ -519,7 +546,7 @@
     "type": "none"
    },
    "pitch": 0,
-   "onto": null,
+   "split": null,
    "sources": []
   },
   {
@@ -529,8 +556,8 @@
      "p1",
      "p2",
      "pg1",
-     "a",
      "c",
+     "a",
      "b",
      "g1",
      "h1",
@@ -557,13 +584,13 @@
       "group": null,
       "folder": null
      },
-     "a": {
+     "c": {
       "pinned": false,
       "row": false,
       "group": null,
       "folder": null
      },
-     "c": {
+     "a": {
       "pinned": false,
       "row": false,
       "group": null,
@@ -632,15 +659,6 @@
       "parent": "G(G)",
       "pinned": false,
       "collapsed": false
-     },
-     "G()": {
-      "tabIds": [
-       "a",
-       "c"
-      ],
-      "parent": null,
-      "pinned": false,
-      "collapsed": false
      }
     },
     "pinnedArea": [
@@ -686,7 +704,9 @@
    "gridGrowth": 0,
    "hold": null,
    "dropInto": null,
-   "onto": null,
+   "split": null,
+   "tile": null,
+   "row": null,
    "pins": false,
    "pinCount": 0,
    "pinBefore": null,
@@ -754,21 +774,13 @@
   {
    "step": "move 60,480",
    "drop": {
-    "type": "tabs",
-    "placement": {
-     "pinned": false,
-     "groupId": "G(G)",
-     "beforeId": null
-    },
-    "sequence": [
-     "t:p1",
-     "t:p2",
-     "g:G(PG)"
-    ]
+    "type": "split",
+    "targetId": "g2",
+    "side": "left"
    },
-   "gapKey": "tail:group:G(G)",
-   "gaps": {
-    "tail:group:G(G)": 37
+   "split": {
+    "key": "t:g2",
+    "side": "left"
    }
   },
   {
@@ -787,6 +799,7 @@
     ]
    },
    "gapKey": "t:g2",
+   "split": null,
    "gaps": {
     "t:g2": 37
    }
@@ -834,7 +847,16 @@
    }
   },
   {
-   "step": "move 60,405"
+   "step": "move 60,405",
+   "drop": {
+    "type": "split",
+    "targetId": "g1",
+    "side": "left"
+   },
+   "split": {
+    "key": "t:g1",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,390",
@@ -852,6 +874,7 @@
     ]
    },
    "gapKey": "t:g1",
+   "split": null,
    "gaps": {
     "t:g1": 37
    }
@@ -884,10 +907,14 @@
   {
    "step": "move 60,330",
    "drop": {
-    "type": "onto",
-    "targetId": "a"
+    "type": "split",
+    "targetId": "a",
+    "side": "left"
    },
-   "onto": "t:a"
+   "split": {
+    "key": "t:a",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,315",
@@ -904,7 +931,7 @@
     ]
    },
    "gapKey": "t:a",
-   "onto": null,
+   "split": null,
    "gaps": {
     "t:a": 37
    }
@@ -934,25 +961,20 @@
   {
    "step": "move 60,285",
    "drop": {
-    "type": "tabs",
-    "placement": {
-     "pinned": false,
-     "groupId": "G(PG)",
-     "beforeId": null
-    },
-    "sequence": [
-     "t:p1",
-     "t:p2",
-     "g:G(PG)"
-    ]
+    "type": "split",
+    "targetId": "pg1",
+    "side": "left"
    },
-   "gapKey": "tail:group:G(PG)",
-   "gaps": {
-    "tail:group:G(PG)": 37
+   "split": {
+    "key": "t:pg1",
+    "side": "left"
    }
   },
   {
-   "step": "move 60,270",
+   "step": "move 60,270"
+  },
+  {
+   "step": "move 60,255",
    "drop": {
     "type": "tabs",
     "placement": {
@@ -967,12 +989,10 @@
     ]
    },
    "gapKey": "t:pg1",
+   "split": null,
    "gaps": {
     "t:pg1": 37
    }
-  },
-  {
-   "step": "move 60,255"
   },
   {
    "step": "move 60,240",
@@ -1001,10 +1021,14 @@
   {
    "step": "move 60,200",
    "drop": {
-    "type": "onto",
-    "targetId": "p2"
+    "type": "split",
+    "targetId": "p2",
+    "side": "left"
    },
-   "onto": "t:p2"
+   "split": {
+    "key": "t:p2",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,185",
@@ -1023,7 +1047,7 @@
     ]
    },
    "gapKey": "t:p2",
-   "onto": null,
+   "split": null,
    "gaps": {
     "t:p2": 37
    }
@@ -1031,10 +1055,14 @@
   {
    "step": "move 60,160",
    "drop": {
-    "type": "onto",
-    "targetId": "p1"
+    "type": "split",
+    "targetId": "p1",
+    "side": "left"
    },
-   "onto": "t:p1"
+   "split": {
+    "key": "t:p1",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,140",
@@ -1053,7 +1081,7 @@
     ]
    },
    "gapKey": "t:p1",
-   "onto": null,
+   "split": null,
    "gaps": {
     "t:p1": 37
    }
@@ -1228,7 +1256,9 @@
    "gridGrowth": 0,
    "hold": null,
    "dropInto": null,
-   "onto": null,
+   "split": null,
+   "tile": null,
+   "row": null,
    "pins": false,
    "pinCount": 0,
    "pinBefore": null,
@@ -1903,7 +1933,9 @@
    "gridGrowth": 0,
    "hold": null,
    "dropInto": null,
-   "onto": null,
+   "split": null,
+   "tile": null,
+   "row": null,
    "pins": false,
    "pinCount": 0,
    "pinBefore": null,
@@ -2201,7 +2233,9 @@
    "gridGrowth": 0,
    "hold": null,
    "dropInto": null,
-   "onto": null,
+   "split": null,
+   "tile": null,
+   "row": null,
    "pins": false,
    "pinCount": 0,
    "pinBefore": null,
@@ -2271,6 +2305,18 @@
   {
    "step": "move 60,360",
    "drop": {
+    "type": "split",
+    "targetId": "y",
+    "side": "left"
+   },
+   "split": {
+    "key": "t:y",
+    "side": "left"
+   }
+  },
+  {
+   "step": "move 60,345",
+   "drop": {
     "type": "tabs",
     "placement": {
      "pinned": false,
@@ -2280,15 +2326,22 @@
     "sequence": []
    },
    "gapKey": "t:y",
+   "split": null,
    "gaps": {
     "t:y": 37
    }
   },
   {
-   "step": "move 60,345"
-  },
-  {
-   "step": "move 60,330"
+   "step": "move 60,330",
+   "drop": {
+    "type": "split",
+    "targetId": "x",
+    "side": "left"
+   },
+   "split": {
+    "key": "t:x",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,315",
@@ -2302,6 +2355,7 @@
     "sequence": []
    },
    "gapKey": "t:x",
+   "split": null,
    "gaps": {
     "t:x": 37
    }
@@ -2349,10 +2403,14 @@
   {
    "step": "move 60,215",
    "drop": {
-    "type": "onto",
-    "targetId": "a"
+    "type": "split",
+    "targetId": "a",
+    "side": "left"
    },
-   "onto": "t:a"
+   "split": {
+    "key": "t:a",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,200",
@@ -2365,7 +2423,7 @@
     "sequence": []
    },
    "gapKey": "t:a",
-   "onto": null,
+   "split": null,
    "gaps": {
     "t:a": 37
    }
@@ -2493,7 +2551,9 @@
    "gridGrowth": 0,
    "hold": null,
    "dropInto": null,
-   "onto": null,
+   "split": null,
+   "tile": null,
+   "row": null,
    "pins": false,
    "pinCount": 0,
    "pinBefore": null,
@@ -2761,7 +2821,9 @@
    "gridGrowth": 0,
    "hold": null,
    "dropInto": null,
-   "onto": null,
+   "split": null,
+   "tile": null,
+   "row": null,
    "pins": false,
    "pinCount": 0,
    "pinBefore": null,
@@ -3507,7 +3569,9 @@
    "gridGrowth": 0,
    "hold": null,
    "dropInto": null,
-   "onto": null,
+   "split": null,
+   "tile": null,
+   "row": null,
    "pins": false,
    "pinCount": 0,
    "pinBefore": null,
@@ -3529,7 +3593,16 @@
    "step": "move 60,620"
   },
   {
-   "step": "move 60,590"
+   "step": "move 60,590",
+   "drop": {
+    "type": "split",
+    "targetId": "s1",
+    "side": "left"
+   },
+   "split": {
+    "key": "s:S(s1+s2)",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,560",
@@ -3546,6 +3619,7 @@
     ]
    },
    "gapKey": "s:S(s1+s2)",
+   "split": null,
    "gaps": {
     "s:S(s1+s2)": 37
    }
@@ -3592,21 +3666,13 @@
   {
    "step": "move 60,480",
    "drop": {
-    "type": "tabs",
-    "placement": {
-     "pinned": false,
-     "groupId": "G(H)",
-     "beforeId": null
-    },
-    "sequence": [
-     "t:p1",
-     "t:p2",
-     "g:G(PG)"
-    ]
+    "type": "split",
+    "targetId": "h1",
+    "side": "left"
    },
-   "gapKey": "tail:group:G(H)",
-   "gaps": {
-    "tail:group:G(H)": 37
+   "split": {
+    "key": "t:h1",
+    "side": "left"
    }
   },
   {
@@ -3625,6 +3691,7 @@
     ]
    },
    "gapKey": "t:h1",
+   "split": null,
    "gaps": {
     "t:h1": 37
    }
@@ -3653,7 +3720,16 @@
    }
   },
   {
-   "step": "move 60,405"
+   "step": "move 60,405",
+   "drop": {
+    "type": "split",
+    "targetId": "g1",
+    "side": "left"
+   },
+   "split": {
+    "key": "t:g1",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,390",
@@ -3671,6 +3747,7 @@
     ]
    },
    "gapKey": "t:g1",
+   "split": null,
    "gaps": {
     "t:g1": 37
    }
@@ -3865,7 +3942,9 @@
    "gridGrowth": 0,
    "hold": null,
    "dropInto": null,
-   "onto": null,
+   "split": null,
+   "tile": null,
+   "row": null,
    "pins": false,
    "pinCount": 0,
    "pinBefore": null,
@@ -3887,7 +3966,16 @@
    "step": "move 60,620"
   },
   {
-   "step": "move 60,590"
+   "step": "move 60,590",
+   "drop": {
+    "type": "split",
+    "targetId": "s1",
+    "side": "left"
+   },
+   "split": {
+    "key": "s:S(s1+s2)",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,560",
@@ -3904,6 +3992,7 @@
     ]
    },
    "gapKey": "s:S(s1+s2)",
+   "split": null,
    "gaps": {
     "s:S(s1+s2)": 37
    }
@@ -3950,21 +4039,13 @@
   {
    "step": "move 60,480",
    "drop": {
-    "type": "tabs",
-    "placement": {
-     "pinned": false,
-     "groupId": "G(H)",
-     "beforeId": null
-    },
-    "sequence": [
-     "t:p1",
-     "t:p2",
-     "g:G(PG)"
-    ]
+    "type": "split",
+    "targetId": "h1",
+    "side": "left"
    },
-   "gapKey": "tail:group:G(H)",
-   "gaps": {
-    "tail:group:G(H)": 37
+   "split": {
+    "key": "t:h1",
+    "side": "left"
    }
   },
   {
@@ -3983,6 +4064,7 @@
     ]
    },
    "gapKey": "t:h1",
+   "split": null,
    "gaps": {
     "t:h1": 37
    }
@@ -4011,7 +4093,16 @@
    }
   },
   {
-   "step": "move 60,405"
+   "step": "move 60,405",
+   "drop": {
+    "type": "split",
+    "targetId": "g1",
+    "side": "left"
+   },
+   "split": {
+    "key": "t:g1",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,390",
@@ -4029,6 +4120,7 @@
     ]
    },
    "gapKey": "t:g1",
+   "split": null,
    "gaps": {
     "t:g1": 37
    }
@@ -4061,10 +4153,14 @@
   {
    "step": "move 60,330",
    "drop": {
-    "type": "onto",
-    "targetId": "a"
+    "type": "split",
+    "targetId": "a",
+    "side": "left"
    },
-   "onto": "t:a"
+   "split": {
+    "key": "t:a",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,315",
@@ -4081,7 +4177,7 @@
     ]
    },
    "gapKey": "t:a",
-   "onto": null,
+   "split": null,
    "gaps": {
     "t:a": 37
    }
@@ -4111,25 +4207,20 @@
   {
    "step": "move 60,285",
    "drop": {
-    "type": "tabs",
-    "placement": {
-     "pinned": false,
-     "groupId": "G(PG)",
-     "beforeId": null
-    },
-    "sequence": [
-     "t:p1",
-     "t:p2",
-     "g:G(PG)"
-    ]
+    "type": "split",
+    "targetId": "pg1",
+    "side": "left"
    },
-   "gapKey": "tail:group:G(PG)",
-   "gaps": {
-    "tail:group:G(PG)": 37
+   "split": {
+    "key": "t:pg1",
+    "side": "left"
    }
   },
   {
-   "step": "move 60,270",
+   "step": "move 60,270"
+  },
+  {
+   "step": "move 60,255",
    "drop": {
     "type": "tabs",
     "placement": {
@@ -4144,12 +4235,10 @@
     ]
    },
    "gapKey": "t:pg1",
+   "split": null,
    "gaps": {
     "t:pg1": 37
    }
-  },
-  {
-   "step": "move 60,255"
   },
   {
    "step": "move 60,240",
@@ -4178,10 +4267,14 @@
   {
    "step": "move 60,200",
    "drop": {
-    "type": "onto",
-    "targetId": "p2"
+    "type": "split",
+    "targetId": "p2",
+    "side": "left"
    },
-   "onto": "t:p2"
+   "split": {
+    "key": "t:p2",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,185",
@@ -4200,7 +4293,7 @@
     ]
    },
    "gapKey": "t:p2",
-   "onto": null,
+   "split": null,
    "gaps": {
     "t:p2": 37
    }
@@ -4208,10 +4301,14 @@
   {
    "step": "move 60,160",
    "drop": {
-    "type": "onto",
-    "targetId": "p1"
+    "type": "split",
+    "targetId": "p1",
+    "side": "left"
    },
-   "onto": "t:p1"
+   "split": {
+    "key": "t:p1",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,140",
@@ -4230,7 +4327,7 @@
     ]
    },
    "gapKey": "t:p1",
-   "onto": null,
+   "split": null,
    "gaps": {
     "t:p1": 37
    }
@@ -4247,10 +4344,14 @@
   {
    "step": "move 60,200",
    "drop": {
-    "type": "onto",
-    "targetId": "p1"
+    "type": "split",
+    "targetId": "p1",
+    "side": "left"
    },
-   "onto": "t:p1"
+   "split": {
+    "key": "t:p1",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,215",
@@ -4269,7 +4370,7 @@
     ]
    },
    "gapKey": "t:p2",
-   "onto": null,
+   "split": null,
    "gaps": {
     "t:p2": 37
    }
@@ -4277,10 +4378,14 @@
   {
    "step": "move 60,240",
    "drop": {
-    "type": "onto",
-    "targetId": "p2"
+    "type": "split",
+    "targetId": "p2",
+    "side": "left"
    },
-   "onto": "t:p2"
+   "split": {
+    "key": "t:p2",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,255",
@@ -4299,7 +4404,7 @@
     ]
    },
    "gapKey": "g:G(PG)",
-   "onto": null,
+   "split": null,
    "gaps": {
     "g:G(PG)": 37
    }
@@ -4333,6 +4438,18 @@
   {
    "step": "move 60,315",
    "drop": {
+    "type": "split",
+    "targetId": "pg1",
+    "side": "left"
+   },
+   "split": {
+    "key": "t:pg1",
+    "side": "left"
+   }
+  },
+  {
+   "step": "move 60,330",
+   "drop": {
     "type": "tabs",
     "placement": {
      "pinned": false,
@@ -4346,27 +4463,9 @@
     ]
    },
    "gapKey": "tail:group:G(PG)",
+   "split": null,
    "gaps": {
     "tail:group:G(PG)": 37
-   }
-  },
-  {
-   "step": "move 60,330",
-   "drop": {
-    "type": "tabs",
-    "placement": {
-     "pinned": false,
-     "beforeId": "a"
-    },
-    "sequence": [
-     "t:p1",
-     "t:p2",
-     "g:G(PG)"
-    ]
-   },
-   "gapKey": "t:a",
-   "gaps": {
-    "t:a": 37
    }
   },
   {
@@ -4466,7 +4565,8 @@
     "groups": {
      "G(PG)": {
       "tabIds": [
-       "pg1"
+       "pg1",
+       "c"
       ],
       "parent": null,
       "pinned": true,
@@ -4503,6 +4603,7 @@
      ]
     ],
     "orderChoices": [
+     "place:c",
      "place:p1",
      "place:p2",
      "p1",
@@ -4531,7 +4632,9 @@
    "gridGrowth": 0,
    "hold": null,
    "dropInto": null,
-   "onto": null,
+   "split": null,
+   "tile": null,
+   "row": null,
    "pins": false,
    "pinCount": 0,
    "pinBefore": null,
@@ -4910,7 +5013,9 @@
    "gridGrowth": 0,
    "hold": null,
    "dropInto": null,
-   "onto": null,
+   "split": null,
+   "tile": null,
+   "row": null,
    "pins": false,
    "pinCount": 0,
    "pinBefore": null,
@@ -4950,10 +5055,14 @@
   {
    "step": "move 60,590",
    "drop": {
-    "type": "onto",
-    "targetId": "c"
+    "type": "split",
+    "targetId": "c",
+    "side": "left"
    },
-   "onto": "t:c"
+   "split": {
+    "key": "t:c",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,560",
@@ -4970,7 +5079,7 @@
     ]
    },
    "gapKey": "t:c",
-   "onto": null,
+   "split": null,
    "gaps": {
     "t:c": 37
    }
@@ -5016,21 +5125,13 @@
   {
    "step": "move 60,480",
    "drop": {
-    "type": "tabs",
-    "placement": {
-     "pinned": false,
-     "groupId": "G(G)",
-     "beforeId": null
-    },
-    "sequence": [
-     "t:p1",
-     "t:p2",
-     "g:G(PG)"
-    ]
+    "type": "split",
+    "targetId": "g2",
+    "side": "left"
    },
-   "gapKey": "tail:group:G(G)",
-   "gaps": {
-    "tail:group:G(G)": 37
+   "split": {
+    "key": "t:g2",
+    "side": "left"
    }
   },
   {
@@ -5049,6 +5150,7 @@
     ]
    },
    "gapKey": "t:g2",
+   "split": null,
    "gaps": {
     "t:g2": 37
    }
@@ -5094,7 +5196,16 @@
    }
   },
   {
-   "step": "move 60,405"
+   "step": "move 60,405",
+   "drop": {
+    "type": "split",
+    "targetId": "g1",
+    "side": "left"
+   },
+   "split": {
+    "key": "t:g1",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,390",
@@ -5112,6 +5223,7 @@
     ]
    },
    "gapKey": "t:g1",
+   "split": null,
    "gaps": {
     "t:g1": 37
    }
@@ -5144,10 +5256,14 @@
   {
    "step": "move 60,330",
    "drop": {
-    "type": "onto",
-    "targetId": "a"
+    "type": "split",
+    "targetId": "a",
+    "side": "left"
    },
-   "onto": "t:a"
+   "split": {
+    "key": "t:a",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,315",
@@ -5164,7 +5280,7 @@
     ]
    },
    "gapKey": "t:a",
-   "onto": null,
+   "split": null,
    "gaps": {
     "t:a": 37
    }
@@ -5194,25 +5310,20 @@
   {
    "step": "move 60,285",
    "drop": {
-    "type": "tabs",
-    "placement": {
-     "pinned": false,
-     "groupId": "G(PG)",
-     "beforeId": null
-    },
-    "sequence": [
-     "t:p1",
-     "t:p2",
-     "g:G(PG)"
-    ]
+    "type": "split",
+    "targetId": "pg1",
+    "side": "left"
    },
-   "gapKey": "tail:group:G(PG)",
-   "gaps": {
-    "tail:group:G(PG)": 37
+   "split": {
+    "key": "t:pg1",
+    "side": "left"
    }
   },
   {
-   "step": "move 60,270",
+   "step": "move 60,270"
+  },
+  {
+   "step": "move 60,255",
    "drop": {
     "type": "tabs",
     "placement": {
@@ -5227,12 +5338,10 @@
     ]
    },
    "gapKey": "t:pg1",
+   "split": null,
    "gaps": {
     "t:pg1": 37
    }
-  },
-  {
-   "step": "move 60,255"
   },
   {
    "step": "move 60,240",
@@ -5261,10 +5370,14 @@
   {
    "step": "move 60,200",
    "drop": {
-    "type": "onto",
-    "targetId": "p2"
+    "type": "split",
+    "targetId": "p2",
+    "side": "left"
    },
-   "onto": "t:p2"
+   "split": {
+    "key": "t:p2",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,185",
@@ -5283,7 +5396,7 @@
     ]
    },
    "gapKey": "t:p2",
-   "onto": null,
+   "split": null,
    "gaps": {
     "t:p2": 37
    }
@@ -5291,10 +5404,14 @@
   {
    "step": "move 60,160",
    "drop": {
-    "type": "onto",
-    "targetId": "p1"
+    "type": "split",
+    "targetId": "p1",
+    "side": "left"
    },
-   "onto": "t:p1"
+   "split": {
+    "key": "t:p1",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,140",
@@ -5313,7 +5430,7 @@
     ]
    },
    "gapKey": "t:p1",
-   "onto": null,
+   "split": null,
    "gaps": {
     "t:p1": 37
    }
@@ -5330,10 +5447,14 @@
   {
    "step": "move 60,200",
    "drop": {
-    "type": "onto",
-    "targetId": "p1"
+    "type": "split",
+    "targetId": "p1",
+    "side": "left"
    },
-   "onto": "t:p1"
+   "split": {
+    "key": "t:p1",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,215",
@@ -5352,7 +5473,7 @@
     ]
    },
    "gapKey": "t:p2",
-   "onto": null,
+   "split": null,
    "gaps": {
     "t:p2": 37
    }
@@ -5360,10 +5481,14 @@
   {
    "step": "move 60,240",
    "drop": {
-    "type": "onto",
-    "targetId": "p2"
+    "type": "split",
+    "targetId": "p2",
+    "side": "left"
    },
-   "onto": "t:p2"
+   "split": {
+    "key": "t:p2",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,255",
@@ -5382,7 +5507,7 @@
     ]
    },
    "gapKey": "g:G(PG)",
-   "onto": null,
+   "split": null,
    "gaps": {
     "g:G(PG)": 37
    }
@@ -5416,6 +5541,18 @@
   {
    "step": "move 60,315",
    "drop": {
+    "type": "split",
+    "targetId": "pg1",
+    "side": "left"
+   },
+   "split": {
+    "key": "t:pg1",
+    "side": "left"
+   }
+  },
+  {
+   "step": "move 60,330",
+   "drop": {
     "type": "tabs",
     "placement": {
      "pinned": false,
@@ -5429,12 +5566,13 @@
     ]
    },
    "gapKey": "tail:group:G(PG)",
+   "split": null,
    "gaps": {
     "tail:group:G(PG)": 37
    }
   },
   {
-   "step": "move 60,330",
+   "step": "move 60,345",
    "drop": {
     "type": "tabs",
     "placement": {
@@ -5453,15 +5591,16 @@
    }
   },
   {
-   "step": "move 60,345"
-  },
-  {
    "step": "move 60,360",
    "drop": {
-    "type": "onto",
-    "targetId": "a"
+    "type": "split",
+    "targetId": "a",
+    "side": "left"
    },
-   "onto": "t:a"
+   "split": {
+    "key": "t:a",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,375",
@@ -5478,7 +5617,7 @@
     ]
    },
    "gapKey": "g:G(G)",
-   "onto": null,
+   "split": null,
    "gaps": {
     "g:G(G)": 37
    }
@@ -5512,6 +5651,18 @@
   {
    "step": "move 60,440",
    "drop": {
+    "type": "split",
+    "targetId": "g1",
+    "side": "left"
+   },
+   "split": {
+    "key": "t:g1",
+    "side": "left"
+   }
+  },
+  {
+   "step": "move 60,460",
+   "drop": {
     "type": "tabs",
     "placement": {
      "pinned": false,
@@ -5525,12 +5676,10 @@
     ]
    },
    "gapKey": "g:G(H)",
+   "split": null,
    "gaps": {
     "g:G(H)": 37
    }
-  },
-  {
-   "step": "move 60,460"
   },
   {
    "step": "move 60,480",
@@ -5578,8 +5727,7 @@
     "type": "tabs",
     "placement": {
      "pinned": false,
-     "groupId": "G(G)",
-     "beforeId": null
+     "beforeId": "b"
     },
     "sequence": [
      "t:p1",
@@ -5587,9 +5735,9 @@
      "g:G(PG)"
     ]
    },
-   "gapKey": "tail:group:G(G)",
+   "gapKey": "t:b",
    "gaps": {
-    "tail:group:G(G)": 37
+    "t:b": 37
    }
   },
   {
@@ -5614,29 +5762,26 @@
   {
    "step": "move 60,590",
    "drop": {
-    "type": "tabs",
-    "placement": {
-     "pinned": false,
-     "beforeId": "c"
-    },
-    "sequence": [
-     "t:p1",
-     "t:p2",
-     "g:G(PG)"
-    ]
+    "type": "split",
+    "targetId": "s1",
+    "side": "left"
    },
-   "gapKey": "t:c",
-   "gaps": {
-    "t:c": 37
+   "split": {
+    "key": "s:S(s1+s2)",
+    "side": "left"
    }
   },
   {
    "step": "move 60,620",
    "drop": {
-    "type": "onto",
-    "targetId": "c"
+    "type": "split",
+    "targetId": "c",
+    "side": "left"
    },
-   "onto": "t:c"
+   "split": {
+    "key": "t:c",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,650",
@@ -5653,7 +5798,7 @@
     ]
    },
    "gapKey": "tail:list",
-   "onto": null,
+   "split": null,
    "gaps": {
     "tail:list": 37
    }
@@ -5816,7 +5961,9 @@
    "gridGrowth": 0,
    "hold": null,
    "dropInto": null,
-   "onto": null,
+   "split": null,
+   "tile": null,
+   "row": null,
    "pins": false,
    "pinCount": 0,
    "pinBefore": null,
@@ -6581,7 +6728,9 @@
    "gridGrowth": 0,
    "hold": null,
    "dropInto": null,
-   "onto": null,
+   "split": null,
+   "tile": null,
+   "row": null,
    "pins": false,
    "pinCount": 0,
    "pinBefore": null,
@@ -6651,6 +6800,18 @@
   {
    "step": "move 60,360",
    "drop": {
+    "type": "split",
+    "targetId": "y",
+    "side": "left"
+   },
+   "split": {
+    "key": "t:y",
+    "side": "left"
+   }
+  },
+  {
+   "step": "move 60,345",
+   "drop": {
     "type": "tabs",
     "placement": {
      "pinned": false,
@@ -6660,15 +6821,22 @@
     "sequence": []
    },
    "gapKey": "t:y",
+   "split": null,
    "gaps": {
     "t:y": 37
    }
   },
   {
-   "step": "move 60,345"
-  },
-  {
-   "step": "move 60,330"
+   "step": "move 60,330",
+   "drop": {
+    "type": "split",
+    "targetId": "x",
+    "side": "left"
+   },
+   "split": {
+    "key": "t:x",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,315",
@@ -6682,6 +6850,7 @@
     "sequence": []
    },
    "gapKey": "t:x",
+   "split": null,
    "gaps": {
     "t:x": 37
    }
@@ -6729,10 +6898,14 @@
   {
    "step": "move 60,215",
    "drop": {
-    "type": "onto",
-    "targetId": "a"
+    "type": "split",
+    "targetId": "a",
+    "side": "left"
    },
-   "onto": "t:a"
+   "split": {
+    "key": "t:a",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,200",
@@ -6745,7 +6918,7 @@
     "sequence": []
    },
    "gapKey": "t:a",
-   "onto": null,
+   "split": null,
    "gaps": {
     "t:a": 37
    }
@@ -6849,363 +7022,6 @@
    }
   }
  ],
- "onto bounds": [
-  {
-   "step": "begin t:c 26,614",
-   "drop": {
-    "type": "tabs",
-    "placement": {
-     "pinned": false,
-     "beforeId": null
-    },
-    "sequence": [
-     "t:p1",
-     "t:p2",
-     "g:G(PG)"
-    ]
-   },
-   "gapKey": "tail:list",
-   "pitch": 37,
-   "into": null,
-   "external": 0,
-   "gridGrowth": 0,
-   "hold": null,
-   "dropInto": null,
-   "onto": null,
-   "pins": false,
-   "pinCount": 0,
-   "pinBefore": null,
-   "folderTarget": null,
-   "folderAway": false,
-   "folded": null,
-   "landing": null,
-   "sources": [
-    "t:c"
-   ],
-   "gaps": {
-    "tail:list": 37
-   }
-  },
-  {
-   "step": "move 60,325",
-   "drop": {
-    "type": "onto",
-    "targetId": "a"
-   },
-   "onto": "t:a"
-  },
-  {
-   "step": "move 5,325"
-  },
-  {
-   "step": "move 239,325"
-  },
-  {
-   "step": "move 60,316.6"
-  },
-  {
-   "step": "move 60,333.4"
-  },
-  {
-   "step": "move 60,333.5",
-   "drop": {
-    "type": "tabs",
-    "placement": {
-     "pinned": false,
-     "beforeId": "g1"
-    },
-    "sequence": [
-     "t:p1",
-     "t:p2",
-     "g:G(PG)"
-    ]
-   },
-   "gapKey": "g:G(G)",
-   "onto": null,
-   "gaps": {
-    "g:G(G)": 37
-   }
-  },
-  {
-   "step": "move 60,325",
-   "drop": {
-    "type": "onto",
-    "targetId": "a"
-   },
-   "onto": "t:a"
-  },
-  {
-   "step": "move 60,316.5",
-   "drop": {
-    "type": "tabs",
-    "placement": {
-     "pinned": false,
-     "beforeId": "a"
-    },
-    "sequence": [
-     "t:p1",
-     "t:p2",
-     "g:G(PG)"
-    ]
-   },
-   "gapKey": "t:a",
-   "onto": null,
-   "gaps": {
-    "t:a": 37
-   }
-  },
-  {
-   "step": "end true",
-   "drop": {
-    "type": "none"
-   },
-   "gapKey": null,
-   "pitch": 0,
-   "sources": [],
-   "gaps": {}
-  },
-  {
-   "step": "committed",
-   "committed": {
-    "tabIds": [
-     "p1",
-     "p2",
-     "pg1",
-     "c",
-     "a",
-     "b",
-     "g1",
-     "h1",
-     "g2",
-     "s1",
-     "s2"
-    ],
-    "tabs": {
-     "p1": {
-      "pinned": true,
-      "row": true,
-      "group": null,
-      "folder": null
-     },
-     "p2": {
-      "pinned": true,
-      "row": true,
-      "group": null,
-      "folder": null
-     },
-     "pg1": {
-      "pinned": false,
-      "row": false,
-      "group": null,
-      "folder": null
-     },
-     "c": {
-      "pinned": false,
-      "row": false,
-      "group": null,
-      "folder": null
-     },
-     "a": {
-      "pinned": false,
-      "row": false,
-      "group": null,
-      "folder": null
-     },
-     "b": {
-      "pinned": false,
-      "row": false,
-      "group": null,
-      "folder": null
-     },
-     "g1": {
-      "pinned": false,
-      "row": false,
-      "group": null,
-      "folder": null
-     },
-     "h1": {
-      "pinned": false,
-      "row": false,
-      "group": null,
-      "folder": null
-     },
-     "g2": {
-      "pinned": false,
-      "row": false,
-      "group": null,
-      "folder": null
-     },
-     "s1": {
-      "pinned": false,
-      "row": false,
-      "group": null,
-      "folder": null
-     },
-     "s2": {
-      "pinned": false,
-      "row": false,
-      "group": null,
-      "folder": null
-     }
-    },
-    "groups": {
-     "G(PG)": {
-      "tabIds": [
-       "pg1"
-      ],
-      "parent": null,
-      "pinned": true,
-      "collapsed": false
-     },
-     "G(G)": {
-      "tabIds": [
-       "g1",
-       "h1",
-       "g2"
-      ],
-      "parent": null,
-      "pinned": false,
-      "collapsed": false
-     },
-     "G(H)": {
-      "tabIds": [
-       "h1"
-      ],
-      "parent": "G(G)",
-      "pinned": false,
-      "collapsed": false
-     }
-    },
-    "pinnedArea": [
-     "t:p1",
-     "t:p2",
-     "g:G(PG)"
-    ],
-    "anchors": [
-     [
-      "G(PG)",
-      "p2"
-     ]
-    ],
-    "orderChoices": [
-     "place:p1",
-     "place:p2",
-     "p1",
-     "p2"
-    ],
-    "liveOrder": []
-   }
-  }
- ],
- "onto overlap": [
-  {
-   "step": "begin t:c 26,284",
-   "drop": {
-    "type": "tabs",
-    "placement": {
-     "pinned": false,
-     "beforeId": null
-    },
-    "sequence": []
-   },
-   "gapKey": "tail:list",
-   "pitch": 37,
-   "into": null,
-   "external": 0,
-   "gridGrowth": 0,
-   "hold": null,
-   "dropInto": null,
-   "onto": null,
-   "pins": false,
-   "pinCount": 0,
-   "pinBefore": null,
-   "folderTarget": null,
-   "folderAway": false,
-   "folded": null,
-   "landing": null,
-   "sources": [
-    "t:c"
-   ],
-   "gaps": {
-    "tail:list": 37
-   }
-  },
-  {
-   "step": "move 60,218",
-   "drop": {
-    "type": "onto",
-    "targetId": "a"
-   },
-   "onto": "t:a"
-  },
-  {
-   "step": "move 60,222"
-  },
-  {
-   "step": "move 60,226",
-   "drop": {
-    "type": "onto",
-    "targetId": "b"
-   },
-   "onto": "t:b"
-  },
-  {
-   "step": "end true",
-   "drop": {
-    "type": "none"
-   },
-   "gapKey": null,
-   "pitch": 0,
-   "onto": null,
-   "sources": [],
-   "gaps": {}
-  },
-  {
-   "step": "committed",
-   "committed": {
-    "tabIds": [
-     "a",
-     "b",
-     "c"
-    ],
-    "tabs": {
-     "a": {
-      "pinned": false,
-      "row": false,
-      "group": null,
-      "folder": null
-     },
-     "b": {
-      "pinned": false,
-      "row": false,
-      "group": null,
-      "folder": null
-     },
-     "c": {
-      "pinned": false,
-      "row": false,
-      "group": null,
-      "folder": null
-     }
-    },
-    "groups": {
-     "G()": {
-      "tabIds": [
-       "b",
-       "c"
-      ],
-      "parent": null,
-      "pinned": false,
-      "collapsed": false
-     }
-    },
-    "pinnedArea": [],
-    "anchors": [],
-    "orderChoices": [],
-    "liveOrder": []
-   }
-  }
- ],
  "pinned row sweep": [
   {
    "step": "begin t:p1 26,160",
@@ -7229,7 +7045,9 @@
    "gridGrowth": 0,
    "hold": null,
    "dropInto": null,
-   "onto": null,
+   "split": null,
+   "tile": null,
+   "row": null,
    "pins": false,
    "pinCount": 0,
    "pinBefore": null,
@@ -7256,10 +7074,14 @@
   {
    "step": "move 60,200",
    "drop": {
-    "type": "onto",
-    "targetId": "p2"
+    "type": "split",
+    "targetId": "p2",
+    "side": "left"
    },
-   "onto": "t:p2"
+   "split": {
+    "key": "t:p2",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,215",
@@ -7277,7 +7099,7 @@
     ]
    },
    "gapKey": "g:G(PG)",
-   "onto": null,
+   "split": null,
    "gaps": {
     "g:G(PG)": 37
    }
@@ -7305,26 +7127,19 @@
    }
   },
   {
-   "step": "move 60,270"
+   "step": "move 60,270",
+   "drop": {
+    "type": "split",
+    "targetId": "pg1",
+    "side": "left"
+   },
+   "split": {
+    "key": "t:pg1",
+    "side": "left"
+   }
   },
   {
-   "step": "move 60,285",
-   "drop": {
-    "type": "tabs",
-    "placement": {
-     "pinned": false,
-     "groupId": "G(PG)",
-     "beforeId": null
-    },
-    "sequence": [
-     "t:p2",
-     "g:G(PG)"
-    ]
-   },
-   "gapKey": "tail:group:G(PG)",
-   "gaps": {
-    "tail:group:G(PG)": 37
-   }
+   "step": "move 60,285"
   },
   {
    "step": "move 60,300",
@@ -7343,6 +7158,7 @@
     ]
    },
    "gapKey": "tail:pinnedGroups",
+   "split": null,
    "gaps": {
     "tail:pinnedGroups": 37
    }
@@ -7368,10 +7184,14 @@
   {
    "step": "move 60,330",
    "drop": {
-    "type": "onto",
-    "targetId": "a"
+    "type": "split",
+    "targetId": "a",
+    "side": "left"
    },
-   "onto": "t:a"
+   "split": {
+    "key": "t:a",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,345",
@@ -7387,7 +7207,7 @@
     ]
    },
    "gapKey": "g:G(G)",
-   "onto": null,
+   "split": null,
    "gaps": {
     "g:G(G)": 37
    }
@@ -7420,6 +7240,18 @@
   {
    "step": "move 60,405",
    "drop": {
+    "type": "split",
+    "targetId": "g1",
+    "side": "left"
+   },
+   "split": {
+    "key": "t:g1",
+    "side": "left"
+   }
+  },
+  {
+   "step": "move 60,420",
+   "drop": {
     "type": "tabs",
     "placement": {
      "pinned": false,
@@ -7432,12 +7264,10 @@
     ]
    },
    "gapKey": "g:G(H)",
+   "split": null,
    "gaps": {
     "g:G(H)": 37
    }
-  },
-  {
-   "step": "move 60,420"
   },
   {
    "step": "move 60,440",
@@ -7464,20 +7294,13 @@
   {
    "step": "move 60,480",
    "drop": {
-    "type": "tabs",
-    "placement": {
-     "pinned": false,
-     "groupId": "G(H)",
-     "beforeId": null
-    },
-    "sequence": [
-     "t:p2",
-     "g:G(PG)"
-    ]
+    "type": "split",
+    "targetId": "h1",
+    "side": "left"
    },
-   "gapKey": "tail:group:G(H)",
-   "gaps": {
-    "tail:group:G(H)": 37
+   "split": {
+    "key": "t:h1",
+    "side": "left"
    }
   },
   {
@@ -7495,6 +7318,7 @@
     ]
    },
    "gapKey": "t:g2",
+   "split": null,
    "gaps": {
     "t:g2": 37
    }
@@ -7538,28 +7362,26 @@
   {
    "step": "move 60,590",
    "drop": {
-    "type": "tabs",
-    "placement": {
-     "pinned": false,
-     "beforeId": "c"
-    },
-    "sequence": [
-     "t:p2",
-     "g:G(PG)"
-    ]
+    "type": "split",
+    "targetId": "s1",
+    "side": "left"
    },
-   "gapKey": "t:c",
-   "gaps": {
-    "t:c": 37
+   "split": {
+    "key": "s:S(s1+s2)",
+    "side": "left"
    }
   },
   {
    "step": "move 60,620",
    "drop": {
-    "type": "onto",
-    "targetId": "c"
+    "type": "split",
+    "targetId": "c",
+    "side": "left"
    },
-   "onto": "t:c"
+   "split": {
+    "key": "t:c",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,650",
@@ -7575,7 +7397,7 @@
     ]
    },
    "gapKey": "tail:list",
-   "onto": null,
+   "split": null,
    "gaps": {
     "tail:list": 37
    }
@@ -7589,10 +7411,14 @@
   {
    "step": "move 60,590",
    "drop": {
-    "type": "onto",
-    "targetId": "c"
+    "type": "split",
+    "targetId": "c",
+    "side": "left"
    },
-   "onto": "t:c"
+   "split": {
+    "key": "t:c",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,560",
@@ -7608,7 +7434,7 @@
     ]
    },
    "gapKey": "t:c",
-   "onto": null,
+   "split": null,
    "gaps": {
     "t:c": 37
    }
@@ -7652,20 +7478,13 @@
   {
    "step": "move 60,480",
    "drop": {
-    "type": "tabs",
-    "placement": {
-     "pinned": false,
-     "groupId": "G(G)",
-     "beforeId": null
-    },
-    "sequence": [
-     "t:p2",
-     "g:G(PG)"
-    ]
+    "type": "split",
+    "targetId": "g2",
+    "side": "left"
    },
-   "gapKey": "tail:group:G(G)",
-   "gaps": {
-    "tail:group:G(G)": 37
+   "split": {
+    "key": "t:g2",
+    "side": "left"
    }
   },
   {
@@ -7683,6 +7502,7 @@
     ]
    },
    "gapKey": "t:g2",
+   "split": null,
    "gaps": {
     "t:g2": 37
    }
@@ -7690,20 +7510,13 @@
   {
    "step": "move 60,440",
    "drop": {
-    "type": "tabs",
-    "placement": {
-     "pinned": false,
-     "groupId": "G(H)",
-     "beforeId": null
-    },
-    "sequence": [
-     "t:p2",
-     "g:G(PG)"
-    ]
+    "type": "split",
+    "targetId": "h1",
+    "side": "left"
    },
-   "gapKey": "tail:group:G(H)",
-   "gaps": {
-    "tail:group:G(H)": 37
+   "split": {
+    "key": "t:h1",
+    "side": "left"
    }
   },
   {
@@ -7721,6 +7534,7 @@
     ]
    },
    "gapKey": "t:h1",
+   "split": null,
    "gaps": {
     "t:h1": 37
    }
@@ -7753,6 +7567,18 @@
   {
    "step": "move 60,360",
    "drop": {
+    "type": "split",
+    "targetId": "g1",
+    "side": "left"
+   },
+   "split": {
+    "key": "t:g1",
+    "side": "left"
+   }
+  },
+  {
+   "step": "move 60,345",
+   "drop": {
     "type": "tabs",
     "placement": {
      "pinned": false,
@@ -7765,12 +7591,10 @@
     ]
    },
    "gapKey": "t:g1",
+   "split": null,
    "gaps": {
     "t:g1": 37
    }
-  },
-  {
-   "step": "move 60,345"
   },
   {
    "step": "move 60,330"
@@ -7842,6 +7666,18 @@
   {
    "step": "move 60,240",
    "drop": {
+    "type": "split",
+    "targetId": "pg1",
+    "side": "left"
+   },
+   "split": {
+    "key": "t:pg1",
+    "side": "left"
+   }
+  },
+  {
+   "step": "move 60,215",
+   "drop": {
     "type": "tabs",
     "placement": {
      "pinned": false,
@@ -7854,12 +7690,10 @@
     ]
    },
    "gapKey": "t:pg1",
+   "split": null,
    "gaps": {
     "t:pg1": 37
    }
-  },
-  {
-   "step": "move 60,215"
   },
   {
    "step": "move 60,200",
@@ -7887,10 +7721,14 @@
   {
    "step": "move 60,160",
    "drop": {
-    "type": "onto",
-    "targetId": "p2"
+    "type": "split",
+    "targetId": "p2",
+    "side": "left"
    },
-   "onto": "t:p2"
+   "split": {
+    "key": "t:p2",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,140",
@@ -7908,7 +7746,7 @@
     ]
    },
    "gapKey": "t:p2",
-   "onto": null,
+   "split": null,
    "gaps": {
     "t:p2": 37
    }
@@ -8078,7 +7916,9 @@
    "gridGrowth": 0,
    "hold": null,
    "dropInto": null,
-   "onto": null,
+   "split": null,
+   "tile": null,
+   "row": null,
    "pins": false,
    "pinCount": 0,
    "pinBefore": null,
@@ -8340,7 +8180,9 @@
    "gridGrowth": 0,
    "hold": null,
    "dropInto": null,
-   "onto": null,
+   "split": null,
+   "tile": null,
+   "row": null,
    "pins": false,
    "pinCount": 0,
    "pinBefore": null,
@@ -8420,10 +8262,14 @@
   {
    "step": "move 60,330",
    "drop": {
-    "type": "onto",
-    "targetId": "b"
+    "type": "split",
+    "targetId": "b",
+    "side": "left"
    },
-   "onto": "t:b"
+   "split": {
+    "key": "t:b",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,315",
@@ -8441,7 +8287,7 @@
     ]
    },
    "gapKey": "t:b",
-   "onto": null,
+   "split": null,
    "gaps": {
     "t:b": 37
    }
@@ -8501,10 +8347,14 @@
   {
    "step": "move 60,240",
    "drop": {
-    "type": "onto",
-    "targetId": "p2"
+    "type": "split",
+    "targetId": "p2",
+    "side": "left"
    },
-   "onto": "t:p2"
+   "split": {
+    "key": "t:p2",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,215",
@@ -8524,7 +8374,7 @@
     ]
    },
    "gapKey": "t:p2",
-   "onto": null,
+   "split": null,
    "gaps": {
     "t:p2": 37
    }
@@ -8557,10 +8407,14 @@
   {
    "step": "move 60,160",
    "drop": {
-    "type": "onto",
-    "targetId": "p1"
+    "type": "split",
+    "targetId": "p1",
+    "side": "left"
    },
-   "onto": "t:p1"
+   "split": {
+    "key": "t:p1",
+    "side": "left"
+   }
   },
   {
    "step": "move 60,140",
@@ -8580,7 +8434,7 @@
     ]
    },
    "gapKey": "t:p1",
-   "onto": null,
+   "split": null,
    "gaps": {
     "t:p1": 37
    }
@@ -8674,13 +8528,15 @@
     ]
    },
    "gapKey": "tail:list",
-   "pitch": 105,
+   "pitch": 111,
    "into": null,
    "external": 0,
    "gridGrowth": 0,
    "hold": null,
    "dropInto": null,
-   "onto": null,
+   "split": null,
+   "tile": null,
+   "row": null,
    "pins": false,
    "pinCount": 0,
    "pinBefore": null,
@@ -8694,7 +8550,7 @@
     "t:c"
    ],
    "gaps": {
-    "tail:list": 105
+    "tail:list": 111
    }
   },
   {
@@ -8728,7 +8584,7 @@
    },
    "gapKey": "s:S(s1+s2)",
    "gaps": {
-    "s:S(s1+s2)": 105
+    "s:S(s1+s2)": 111
    }
   },
   {
@@ -8748,7 +8604,7 @@
    },
    "gapKey": "tail:group:G(G)",
    "gaps": {
-    "tail:group:G(G)": 105
+    "tail:group:G(G)": 111
    }
   },
   {
@@ -8768,7 +8624,7 @@
    },
    "gapKey": "t:g2",
    "gaps": {
-    "t:g2": 105
+    "t:g2": 111
    }
   },
   {
@@ -8788,7 +8644,7 @@
    },
    "gapKey": "tail:group:G(H)",
    "gaps": {
-    "tail:group:G(H)": 105
+    "tail:group:G(H)": 111
    }
   },
   {
@@ -8808,7 +8664,7 @@
    },
    "gapKey": "t:h1",
    "gaps": {
-    "t:h1": 105
+    "t:h1": 111
    }
   },
   {
@@ -8831,7 +8687,7 @@
    },
    "gapKey": "g:G(H)",
    "gaps": {
-    "g:G(H)": 105
+    "g:G(H)": 111
    }
   },
   {
@@ -8854,7 +8710,7 @@
    },
    "gapKey": "t:g1",
    "gaps": {
-    "t:g1": 105
+    "t:g1": 111
    }
   },
   {
@@ -8879,7 +8735,7 @@
    },
    "gapKey": "g:G(G)",
    "gaps": {
-    "g:G(G)": 105
+    "g:G(G)": 111
    }
   },
   {
@@ -8903,7 +8759,7 @@
    },
    "gapKey": "tail:pinnedGroups",
    "gaps": {
-    "tail:pinnedGroups": 105
+    "tail:pinnedGroups": 111
    }
   },
   {
@@ -8923,7 +8779,7 @@
    },
    "gapKey": "tail:group:G(PG)",
    "gaps": {
-    "tail:group:G(PG)": 105
+    "tail:group:G(PG)": 111
    }
   },
   {
@@ -8943,7 +8799,7 @@
    },
    "gapKey": "t:pg1",
    "gaps": {
-    "t:pg1": 105
+    "t:pg1": 111
    }
   },
   {
@@ -8969,7 +8825,7 @@
    },
    "gapKey": "g:G(PG)",
    "gaps": {
-    "g:G(PG)": 105
+    "g:G(PG)": 111
    }
   },
   {
@@ -8977,14 +8833,6 @@
   },
   {
    "step": "move 60,200",
-   "drop": {
-    "type": "onto",
-    "targetId": "p2"
-   },
-   "onto": "t:p2"
-  },
-  {
-   "step": "move 60,185",
    "drop": {
     "type": "tabs",
     "placement": {
@@ -9002,21 +8850,15 @@
     ]
    },
    "gapKey": "t:p2",
-   "onto": null,
    "gaps": {
-    "t:p2": 105
+    "t:p2": 111
    }
   },
   {
-   "step": "move 60,160",
-   "drop": {
-    "type": "onto",
-    "targetId": "p1"
-   },
-   "onto": "t:p1"
+   "step": "move 60,185"
   },
   {
-   "step": "move 60,140",
+   "step": "move 60,160",
    "drop": {
     "type": "tabs",
     "placement": {
@@ -9034,10 +8876,12 @@
     ]
    },
    "gapKey": "t:p1",
-   "onto": null,
    "gaps": {
-    "t:p1": 105
+    "t:p1": 111
    }
+  },
+  {
+   "step": "move 60,140"
   },
   {
    "step": "end true",
@@ -9191,6 +9035,395 @@
    }
   }
  ],
+ "split bounds": [
+  {
+   "step": "begin t:c 26,614",
+   "drop": {
+    "type": "tabs",
+    "placement": {
+     "pinned": false,
+     "beforeId": null
+    },
+    "sequence": [
+     "t:p1",
+     "t:p2",
+     "g:G(PG)"
+    ]
+   },
+   "gapKey": "tail:list",
+   "pitch": 37,
+   "into": null,
+   "external": 0,
+   "gridGrowth": 0,
+   "hold": null,
+   "dropInto": null,
+   "split": null,
+   "tile": null,
+   "row": null,
+   "pins": false,
+   "pinCount": 0,
+   "pinBefore": null,
+   "folderTarget": null,
+   "folderAway": false,
+   "folded": null,
+   "landing": null,
+   "sources": [
+    "t:c"
+   ],
+   "gaps": {
+    "tail:list": 37
+   }
+  },
+  {
+   "step": "move 60,325",
+   "drop": {
+    "type": "split",
+    "targetId": "a",
+    "side": "left"
+   },
+   "split": {
+    "key": "t:a",
+    "side": "left"
+   }
+  },
+  {
+   "step": "move 5,325",
+   "drop": {
+    "type": "tabs",
+    "placement": {
+     "pinned": false,
+     "beforeId": "g1"
+    },
+    "sequence": [
+     "t:p1",
+     "t:p2",
+     "g:G(PG)"
+    ]
+   },
+   "gapKey": "g:G(G)",
+   "split": null,
+   "gaps": {
+    "g:G(G)": 37
+   }
+  },
+  {
+   "step": "move 239,325"
+  },
+  {
+   "step": "move 60,316.6",
+   "drop": {
+    "type": "split",
+    "targetId": "a",
+    "side": "left"
+   },
+   "split": {
+    "key": "t:a",
+    "side": "left"
+   }
+  },
+  {
+   "step": "move 60,333.4"
+  },
+  {
+   "step": "move 60,333.5",
+   "drop": {
+    "type": "tabs",
+    "placement": {
+     "pinned": false,
+     "beforeId": "g1"
+    },
+    "sequence": [
+     "t:p1",
+     "t:p2",
+     "g:G(PG)"
+    ]
+   },
+   "split": null
+  },
+  {
+   "step": "move 60,325",
+   "drop": {
+    "type": "split",
+    "targetId": "a",
+    "side": "left"
+   },
+   "split": {
+    "key": "t:a",
+    "side": "left"
+   }
+  },
+  {
+   "step": "move 60,316.5",
+   "drop": {
+    "type": "tabs",
+    "placement": {
+     "pinned": false,
+     "beforeId": "a"
+    },
+    "sequence": [
+     "t:p1",
+     "t:p2",
+     "g:G(PG)"
+    ]
+   },
+   "gapKey": "t:a",
+   "split": null,
+   "gaps": {
+    "t:a": 37
+   }
+  },
+  {
+   "step": "end true",
+   "drop": {
+    "type": "none"
+   },
+   "gapKey": null,
+   "pitch": 0,
+   "sources": [],
+   "gaps": {}
+  },
+  {
+   "step": "committed",
+   "committed": {
+    "tabIds": [
+     "p1",
+     "p2",
+     "pg1",
+     "c",
+     "a",
+     "b",
+     "g1",
+     "h1",
+     "g2",
+     "s1",
+     "s2"
+    ],
+    "tabs": {
+     "p1": {
+      "pinned": true,
+      "row": true,
+      "group": null,
+      "folder": null
+     },
+     "p2": {
+      "pinned": true,
+      "row": true,
+      "group": null,
+      "folder": null
+     },
+     "pg1": {
+      "pinned": false,
+      "row": false,
+      "group": null,
+      "folder": null
+     },
+     "c": {
+      "pinned": false,
+      "row": false,
+      "group": null,
+      "folder": null
+     },
+     "a": {
+      "pinned": false,
+      "row": false,
+      "group": null,
+      "folder": null
+     },
+     "b": {
+      "pinned": false,
+      "row": false,
+      "group": null,
+      "folder": null
+     },
+     "g1": {
+      "pinned": false,
+      "row": false,
+      "group": null,
+      "folder": null
+     },
+     "h1": {
+      "pinned": false,
+      "row": false,
+      "group": null,
+      "folder": null
+     },
+     "g2": {
+      "pinned": false,
+      "row": false,
+      "group": null,
+      "folder": null
+     },
+     "s1": {
+      "pinned": false,
+      "row": false,
+      "group": null,
+      "folder": null
+     },
+     "s2": {
+      "pinned": false,
+      "row": false,
+      "group": null,
+      "folder": null
+     }
+    },
+    "groups": {
+     "G(PG)": {
+      "tabIds": [
+       "pg1"
+      ],
+      "parent": null,
+      "pinned": true,
+      "collapsed": false
+     },
+     "G(G)": {
+      "tabIds": [
+       "g1",
+       "h1",
+       "g2"
+      ],
+      "parent": null,
+      "pinned": false,
+      "collapsed": false
+     },
+     "G(H)": {
+      "tabIds": [
+       "h1"
+      ],
+      "parent": "G(G)",
+      "pinned": false,
+      "collapsed": false
+     }
+    },
+    "pinnedArea": [
+     "t:p1",
+     "t:p2",
+     "g:G(PG)"
+    ],
+    "anchors": [
+     [
+      "G(PG)",
+      "p2"
+     ]
+    ],
+    "orderChoices": [
+     "place:p1",
+     "place:p2",
+     "p1",
+     "p2"
+    ],
+    "liveOrder": []
+   }
+  }
+ ],
+ "split overlap": [
+  {
+   "step": "begin t:c 26,284",
+   "drop": {
+    "type": "tabs",
+    "placement": {
+     "pinned": false,
+     "beforeId": null
+    },
+    "sequence": []
+   },
+   "gapKey": "tail:list",
+   "pitch": 37,
+   "into": null,
+   "external": 0,
+   "gridGrowth": 0,
+   "hold": null,
+   "dropInto": null,
+   "split": null,
+   "tile": null,
+   "row": null,
+   "pins": false,
+   "pinCount": 0,
+   "pinBefore": null,
+   "folderTarget": null,
+   "folderAway": false,
+   "folded": null,
+   "landing": null,
+   "sources": [
+    "t:c"
+   ],
+   "gaps": {
+    "tail:list": 37
+   }
+  },
+  {
+   "step": "move 60,218",
+   "drop": {
+    "type": "split",
+    "targetId": "a",
+    "side": "left"
+   },
+   "split": {
+    "key": "t:a",
+    "side": "left"
+   }
+  },
+  {
+   "step": "move 60,222"
+  },
+  {
+   "step": "move 60,226",
+   "drop": {
+    "type": "split",
+    "targetId": "b",
+    "side": "left"
+   },
+   "split": {
+    "key": "t:b",
+    "side": "left"
+   }
+  },
+  {
+   "step": "end true",
+   "drop": {
+    "type": "none"
+   },
+   "gapKey": null,
+   "pitch": 0,
+   "split": null,
+   "sources": [],
+   "gaps": {}
+  },
+  {
+   "step": "committed",
+   "committed": {
+    "tabIds": [
+     "a",
+     "c",
+     "b"
+    ],
+    "tabs": {
+     "a": {
+      "pinned": false,
+      "row": false,
+      "group": null,
+      "folder": null
+     },
+     "c": {
+      "pinned": false,
+      "row": false,
+      "group": null,
+      "folder": null
+     },
+     "b": {
+      "pinned": false,
+      "row": false,
+      "group": null,
+      "folder": null
+     }
+    },
+    "groups": {},
+    "pinnedArea": [],
+    "anchors": [],
+    "orderChoices": [],
+    "liveOrder": []
+   }
+  }
+ ],
  "split sweep": [
   {
    "step": "begin s:S(s1+s2) 26,577",
@@ -9213,7 +9446,9 @@
    "gridGrowth": 0,
    "hold": null,
    "dropInto": null,
-   "onto": null,
+   "split": null,
+   "tile": null,
+   "row": null,
    "pins": false,
    "pinCount": 0,
    "pinBefore": null,
@@ -9892,7 +10127,9 @@
    "gridGrowth": 0,
    "hold": null,
    "dropInto": null,
-   "onto": null,
+   "split": null,
+   "tile": null,
+   "row": null,
    "pins": false,
    "pinCount": 0,
    "pinBefore": null,
@@ -9910,10 +10147,14 @@
   {
    "step": "move 60,291",
    "drop": {
-    "type": "onto",
-    "targetId": "c"
+    "type": "split",
+    "targetId": "d",
+    "side": "right"
    },
-   "onto": "t:c"
+   "split": {
+    "key": "t:d",
+    "side": "right"
+   }
   },
   {
    "step": "move 60,291.01"
@@ -9929,7 +10170,7 @@
     "sequence": []
    },
    "gapKey": "tail:list",
-   "onto": null,
+   "split": null,
    "gaps": {
     "tail:list": 37
    }

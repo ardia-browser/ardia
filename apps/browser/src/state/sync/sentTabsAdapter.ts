@@ -4,7 +4,7 @@ import { SEND, sendRecord, type SendRecord } from "./records";
 export type SendLedger = { outgoing: Record<string, SendRecord>; received: Record<string, number> };
 export type ReceivedSend = { key: string; send: SendRecord };
 
-export const SEND_KEPT_MS = 7 * 86_400_000;
+const SEND_KEPT_MS = 7 * 86_400_000;
 const RECEIVED_KEPT_MS = 90 * 86_400_000;
 const MAX_SENT_URL = 8_192;
 

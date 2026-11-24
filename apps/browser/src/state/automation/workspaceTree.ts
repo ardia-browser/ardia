@@ -3,13 +3,15 @@ import type { GroupColor, Tab, TabGroup } from "../browser/types";
 import { activeTabId, inPinnedContainer, isIncognitoProfile, pinSection } from "../browser/model";
 import { groupPath, innermostGroupOf, rootOf } from "../groups/groups";
 import { NO_GROUP_ICON } from "../groups/groupIcons";
+import { NO_ROW_ICON } from "../pins/rowIcons";
 import { groupLabel } from "../pins/tabGrouping";
 import { tileFolderOf } from "../pins/tileFolders";
 import { splitOf } from "../splits/splits";
 import { isAsleep, isLazy } from "../tabs/pageSession";
 import { isSleeping } from "../tabs/sleepingTabs";
 import { focusedWindowOf } from "../windows/ui";
-import { eligibleKind, isEligibleTab, ownEntry, shownPage, type AutomationWindowKind } from "./automationWindows";
+import { eligibleKind, isEligibleTab, shownPage, type AutomationWindowKind } from "./automationWindows";
+import { ownValue } from "../../lib/decode";
 
 export type TabNode = {
   type: "tab";
@@ -54,15 +56,15 @@ export type Space = {
   tabs: (TabNode | GroupNode)[];
 };
 
-export type WorkspaceWindow = { id: string; kind: AutomationWindowKind; focused: boolean; profile: string; profileName: string; activeTab: string | null; spaces: Space[] };
+type WorkspaceWindow = { id: string; kind: AutomationWindowKind; focused: boolean; profile: string; profileName: string; activeTab: string | null; spaces: Space[] };
 
 export type Workspace = { profiles: { id: string; name: string }[]; windows: WorkspaceWindow[] };
 
 type Snapshot = Pick<BrowserState, "windows" | "windowOrder" | "tabs" | "peeks" | "groups" | "profiles" | "profileOrder" | "splits" | "ui">;
 
-export const colorName = (color: GroupColor | null): string => color ?? "neutral";
+const colorName = (color: GroupColor | null): string => color ?? "neutral";
 
-export const iconName = (icon: string | null): string | null => (icon === NO_GROUP_ICON ? "none" : icon);
+export const iconName = (icon: string | null): string | null => (icon === NO_GROUP_ICON || icon === NO_ROW_ICON ? "none" : icon);
 
 export function tabNode(s: Snapshot, id: string, index = -1): TabNode {
   const t = s.tabs[id] as Tab;
@@ -73,7 +75,7 @@ export function tabNode(s: Snapshot, id: string, index = -1): TabNode {
     id,
     ...shownPage(t),
     customTitle: t.customTitle,
-    icon: t.customIcon,
+    icon: iconName(t.customIcon),
     pin: section === "none" ? null : section,
     pinned: inPinnedContainer(s, id),
     folder: folder ? { id: folder.id, name: folder.name } : null,
@@ -101,7 +103,7 @@ export function groupFields(s: Snapshot, g: TabGroup): Omit<GroupNode, "items"> 
 }
 
 export const isEligibleGroup = (s: Pick<BrowserState, "windows" | "groups">, id: string): boolean => {
-  const g = ownEntry(s.groups, id);
+  const g = ownValue(s.groups, id);
   return !!g && eligibleKind(s, g.windowId) === "normal" && !isIncognitoProfile(g.profileId);
 };
 

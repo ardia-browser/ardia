@@ -5,9 +5,10 @@ import { isFields, isNumber, isString, type Fields } from "../../lib/decode";
 export type { BookmarkValue, DeviceTabs, HistoryValue, SendRecord };
 export type ShareRecord = { o: string };
 export type DeviceKind = "mac" | "phone";
-export type DeviceRecord = { n: string; k?: string; f?: string[] };
+export type DeviceRecord = { n: string; k?: string; f?: string[]; o?: string[]; v?: string; os?: string };
 export type PasswordValue = { o: string; u: string; s: string };
 export type TopAppsRecord = { on: boolean };
+export type OpenTabsRecord = { on: boolean };
 
 export const SHARE = "share:";
 export const DEVICE = "dev:";
@@ -15,6 +16,7 @@ export const DEVICE_TABS = "tabs:";
 export const PROFILE = "prof:";
 export const PROFILE_THEME = "pth:";
 export const PROFILE_TOP_APPS = "pta:";
+export const PROFILE_OPEN_TABS = "ptab:";
 export const BOOKMARK = "bm:";
 export const HISTORY = "h:";
 export const SEND = "send:";
@@ -57,3 +59,5 @@ export const profileRecord = decoder<ProfileRecord>(
 );
 
 export const topAppsRecord = decoder<TopAppsRecord>((v) => typeof v.on === "boolean");
+
+export const openTabsRecord = decoder<OpenTabsRecord>((v) => typeof v.on === "boolean");

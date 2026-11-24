@@ -1,5 +1,7 @@
 # ArdiaCore parity: the app's engine API on ArdiaCore
 
+History: the CEF → ArdiaCore cutover ledger (2026-10-01 to 0.2.31); how to run the acceptance checks today is in `docs/testing.md` › "ArdiaCore acceptance".
+
 **The owner chose a full cutover (2026-10-01):** the next release ships ArdiaCore only, and CEF's native side leaves
 the repo. The JS API (once `packages/cef/src`, now `packages/ardiacore/src`, imported as `@ardia/ardiacore`) doesn't
 change: `packages/ardiacore` registers the same Expo modules and view names (`ArdiaCEF`, `ArdiaExtensions`,
@@ -104,37 +106,7 @@ needs.
 
 ## How to build and check it
 
-```bash
-# Engine (once, and after engine/ changes): both apply.sh, then autoninja, under the chromium lock
-#   scripts/agent/engine-build --as <you>   (docs/engine-build.md)
-# App: apps/browser/macos (the only app project; pod install there after adding native files).
-scripts/agent/build-app --as <you>     # into apps/browser/build-<you>; --help
-# Acceptance, hidden (open -g -n, ARDIA_BACKGROUND=1, a scratch data dir); METRO_PORT is a Metro for this checkout.
-METRO_PORT=8081 node packages/ardiacore/scripts/acceptance.mjs apps/browser/build-<you>/Build/Products/Debug/Ardia.app <scratch dir> [check…]
-```
-
-The app (bundle id `com.ardia.browser`, Apple Development signing with the hardened runtime in
-Debug; `scripts/release.sh` signs releases with Developer ID). A Debug build refuses to start without
-`ARDIA_DATA_DIR` (it never falls back to a real profile). A test run hands it its Metro in `ARDIA_INSTANCE` `jsLocation`
-(that launch's argument domain, never written); never `defaults write com.ardia.browser`, the installed app's. Its build stages a copy of the engine framework
-(`packages/ardiacore/scripts/stage-framework.sh`, under the chromium lock, into `ARDIACORE_STAGE_DIR`), links that, and
-`embed.sh` signs the embedded copy with the build's identity.
-
-Test hygiene the run keeps (each was a real failure):
-- Metro is reached through a proxy that refuses its websockets (`/hot`, `/message`), so another session's edits
-  never reload the app mid-run.
-- Every file the app is asked to read lives in the scratch dir: the checkout is under `~/Documents`, and an ad hoc
-  build reading it raises macOS's folder-access prompt and blocks the main thread on it (the extension fixture is
-  copied).
-- Permissions use MIDI and notifications (no macOS prompt behind them), external apps a scheme no app handles;
-  never location or `mailto:`. Camera and microphone only on a copy of the app without the device entitlements
-  (ad hoc, hardened runtime: macOS refuses the devices without asking) and Chrome's fake devices: every hidden
-  instance gets `--use-fake-device-for-media-stream` (ArdiaHost), and with it the engine keeps the microphone on a
-  fake input (`ac_fake_media.mm`), since the fake list's "default" input is the Mac's real one to the audio service and
-  a stream on it raised macOS's microphone dialog on the owner's screen (2026-10-01).
-- A check that needs a page on screen (permission prompts, choosers, context menus) shows it first: Chrome holds
-  those for hidden tabs. Checks that need "no user activation" reload the page first (CDP's `userGesture` leaves
-  one behind).
+Moved to `docs/testing.md` › "ArdiaCore acceptance".
 
 ## Acceptance (hidden instance)
 
@@ -162,6 +134,7 @@ Test hygiene the run keeps (each was a real failure):
 | passwords, passwords-more | Chrome's password store: save, list, reveal, edit, delete, never-save list, unlock (test reauth), export through the save panel, the autofill pref |
 | autofill, autofill-cards | Addresses; cards saved with a published test number, listed, revealed, deleted; the address and card switches |
 | zoom-levels | `setZoom`/`getZoomLevels` on Chrome's host zoom map |
+| preload-pages | `setPreloadPages`/`getPreloadPages` write and read back Chrome's preload pages state |
 | extensions, extension-surfaces | Unpacked inspect, install, list, disable, uninstall, reload; action state and side panel URL for a tab; the extension's declarativeNetRequest blocks counted on the page (`onContentBlocked`) |
 | chrome-windows-create | `chrome.windows.create` from an extension → the tab lands in the app's window as a live tab (`tab:<id>`), also on a fresh instance showing only the New Tab page (through the extensions module's `onTabs` with an `adoptId`) |
 | extension-popup-window | An action's popup (`extensionHost="popup"`) sees the window it was clicked in as its current window and the page under it as its active tab; it's in no strip and makes no window; Esc in it closes it |
@@ -184,6 +157,7 @@ Test hygiene the run keeps (each was a real failure):
 | frozen | `setFrozen(true/false)` on a background page: the page sees freeze and resume |
 | discard | A background tab discarded in place → `onDiscarded` |
 | permission-prompt, popup-blocked | A permission request → the app's prompt → Chrome; a popup without a gesture → `onPopupBlocked` → `openBlockedPopup` |
+| popup-window-full-screen | A sized `window.open` popup and an extension's `chrome.windows.create` popup (a `TYPE_APP_POPUP` Chrome makes its own window for) opened from a full-screen window can join that window's Space (`NSWindowCollectionBehaviorFullScreenAuxiliary`), so macOS doesn't show them on another desktop; from a window that isn't full screen a popup keeps its own full screen |
 | camera-mic-allow | 0.2.21's crash case, on the media copy (above): a camera + microphone getUserMedia is one prompt; Allow starts the stream with both tracks live |
 | permission-answer-once | A double Allow and two more answers straight to the engine decide nothing twice; a late answer to that prompt doesn't answer the tab's next one |
 | permission-element-allow | The `<usermedia>` element (0.2.21's crash path): with macOS "not asked yet" (`--ardia-test-system-media-permission=ask`), one prompt, one Allow, Chrome's "ask macOS" step handled in the engine, no second prompt, the element's stream live |
@@ -265,7 +239,7 @@ and sent only when changed, progress at most 10 times a second, a held report fl
 | `mediaCommand`, `notificationAction` | done | |
 | `print`, `runPageCommand` | partial | Chrome's commands (print preview, save page, system print, caret browsing): dialogs in a hidden run |
 | `requestPictureInPicture`, `exitPictureInPicture` | partial | Through the page script with a user gesture; a PiP window shows on screen |
-| `resolveDisplayMedia`, `mediaCaptureSourceId` | partial | `mediaCaptureSourceId` is Chrome's (engine-proven); an app-picked source needs the engine to grant it to `getUserMedia` (CEF's `site::AllowDesktopCapture`), so pages keep Chrome's own picker for now |
+| `resolveDisplayMedia`, `mediaCaptureSourceId` | ✅ | The app shows its own share picker (`SharePicker.tsx`): a site calling `getDisplayMedia` raises `displayMediaRequest`, the app answers with `resolveDisplayMedia` and the chosen tab, window or screen, and `mediaCaptureSourceId` names a tab for `shareTabInstead` |
 | `resolvePasswordPrompt` | partial | save and dismiss |
 | `executeExtensionAction` | partial | Runs the action on the tab (activeTab granted); the app shows the popup (`extensionHost="popup"`); needs a visible window |
 | `resolveUnresponsive` | partial | See `onUnresponsive` |
@@ -290,16 +264,17 @@ over, `-[ArdiaCoreTab setTemporarySource:]`) is the tab a closed window's entry 
 | `onPermission`, `resolvePermission` | done | One answer per prompt (`ac_permissions.mm`): a page's permission element (Chrome's embedded flow) reaches the app only for its site question; the steps after Allow ("ask macOS", "open System Settings", policy) stay in the engine, as Chrome's own view does, and a later step is never a question even if the site's setting was reset meanwhile. 0.2.21 answered those steps with a second Accept and aborted (`camera-mic-allow`, `permission-answer-once`, `permission-element-allow`) |
 | `getExternalAppAllowances`, `removeExternalAppAllowance` | done | |
 | `clearBrowsingData`, `deleteProfileData` | done | A profile never loaded this session is its folder alone |
-| `getContentBlocker`, `setContentBlockerEnabled`, `setFilterListEnabled`, `isContentBlockerAllowed`, `setContentBlockerAllowed` | done | uBlock Origin Lite as a component extension (`loadComponentExtension:`), driven through its runtime messages |
+| `getContentBlocker`, `setContentBlockerEnabled`, `setFilterListEnabled`, `addFilterList`, `removeFilterList`, `isContentBlockerAllowed`, `setContentBlockerAllowed` | done | uBlock Origin as a component extension (`loadComponentExtension:`), driven through its runtime messages; `addFilterList`/`removeFilterList` import and drop custom lists by URL (`applyFilterListSelection` `toImport`/`toRemove`), and other profiles follow them |
 | `setSiteSetting`, `getSiteSettings`, `getSiteSettingsOrigins`, `resetSiteSettings`, `clearSiteData` | done | Chrome's content settings under CEF's type names; the page script's `blockAutoplay` comes from them as on CEF |
 | `setZoom`, `getZoomLevels` | done | |
+| `setPreloadPages`, `getPreloadPages` | done | Chrome's preload pages state per profile (`prefetch::SetPreloadPagesState`, standard or none); off by default. A prerendered page's posts on the page channel are held until activation (`ac_prerender_posts.h`), so Chrome doesn't cancel the prerender with `kMojoBinderPolicy` |
 | `listPasswords`, `unlockPasswords`, `getPassword`, `savePassword`, `updatePassword`, `deletePassword`, `getNeverSavePasswordOrigins`, `allowSavingPasswords`, `exportPasswords`, `getPasswordAutofill`, `setPasswordAutofill` | done | |
 | `getAutofillSettings`, `setAutofillSettings`, `listAddresses`, `saveAddress`, `listCards`, `saveCard`, `deleteAutofillEntry`, `revealCardNumber` | done | |
 | `resolveExternalApp` | partial | The prompt is proven; opening the app is not (it would launch one) |
 | `releaseProfile` | partial | Destroys a private profile once no window shows it (engine-proven) |
 | `onPermissionDismissed` | partial | Wired; no check dismisses a prompt by navigating yet |
 | `onContentBlocker` | partial | Reported by the blocker's state changes; not asserted on its own |
-| `setDisplayMediaPicker`, `displayMediaSources` | partial | Kept, but pages keep Chrome's picker until the engine grants app-picked desktop sources; `displayMediaSources` lists screens and windows as CEF (no prompt) |
+| `setDisplayMediaPicker`, `displayMediaSources` | ✅ | The app's own picker runs in every page that asks to share (`setDisplayMediaPicker` turns Chrome's picker off); `displayMediaSources` lists screens and windows, `displayMediaThumbnails` returns base64 JPEG previews of them by source id (ScreenCaptureKit; empty in a hidden run). Linux and Windows keep Chrome's picker |
 | `devScrollZoom` | stubbed | CEF's test hook for its own pinch path; ArdiaCore's pinch is Chrome's |
 
 ## `ArdiaExtensions` (`packages/ardiacore/src/extensions.ts`)
@@ -387,9 +362,11 @@ Plain Chromium code over Chrome's services (`engine/chromium/src/chrome/browser/
 
 | Export | JS functions (`packages/ardiacore/src`) |
 |---|---|
-| `ac_engine_abi_version`, `ac_engine_set_event_sink` | `engineCall`, `onEngineEvent` |
+| `ac_engine_set_event_sink` | `onEngineEvent` |
 | `ac_passwords_*` (list, unlock, reveal, add, update, remove, exceptions, allow, export) | the password functions |
 | `ac_passwords_logins` | none: native only. `ArdiaSync.readPasswords` reads every saved login with its password (both stores, profile store first, blocklisted and empty ones left out; ArdiaSync keeps the first of any two with the same realm and username, compared as Swift strings, so canonically equivalent ones count as one) through `ArdiaEngineBridge.callForSecretReply`, which parses the reply from bytes it then wipes and settles once (the reply, or nil at its deadline); the engine builds the JSON in one reserved buffer and cleanses it after the reply. Any store error, Chrome skipping undecryptable passwords (`SkipUndecryptablePasswords`) or the process-bound backing answers an error, so sync never sees part of a list |
+| `ac_passwords_page_logins`, `ac_passwords_page_fill` (both serve private windows: `OffTheRecord::kAllow`, read from the original profile's stores), `ac_passwords_page_submitted`, `ac_passwords_page_update`, `ac_passwords_page_never` | none: native only, for WebKit pages (`WebKitLogins.swift`). Chrome's own matching for a page: `PasswordStoreInterface::GetLogins` with the page's `PasswordFormDigest` on the profile and account stores (exact, affiliated, PSL and grouped matches; blocklisted, federated and empty ones left out of the fill list, exact matches first, then by last use). `_fill` takes a realm and username the list gave, finds it again among that page's matches and answers its password as secret JSON, after Touch ID when Chrome's "biometric authentication before filling" is on (`PasswordFeatureManagerImpl`), as Chrome's own dropdown does. `_submitted` (password as a secret arg) decides save, update or nothing with `password_manager_util::GetMatchForUpdating`, Chrome's own rule, so the saved password is compared in the engine and never reaches JS; a site blocklisted by an exact entry gets no save offer, and when a store fails to answer and nothing matched it answers `password store unavailable` instead of offering a save that could duplicate a login in the store it couldn't read. `_update` writes the new password into the matching non-weak credential of the store that holds it (`UpdateLogin`), no Touch ID, as Chrome's update bubble, then reads that store again and answers ok only when the credential holds the new password (`UpdateLogin` reports no result). `_submitted`, `_update` and `_never` refuse a private window, as Chrome 158 offers no save in one (`ChromePasswordManagerClient::IsSavingAndFillingEnabled` requires `!IsOffTheRecord()`) while it still fills there. On Linux the sign-in prompt reads "Fill your password on <host>", as `IDS_PASSWORD_MANAGER_FILLING_REAUTH` has no Linux string. `_never` adds Chrome's blocklist entry for the page (`FormSaverImpl::Blocklist`), the same one Chromium pages' "Never" adds, listed by `ac_passwords_exceptions` |
+| `ac_cookies_import` | `importBrowserData` (`ImportWriter.swift`: never over a cookie the profile has) and `WebKitHub.exportCookies` (WebKit to Chromium on an engine switch, with `replaceOlder: true`: a cookie with the same name, domain, path and partition key is replaced when the WebKit copy differs in value, expiry, Secure, HttpOnly or SameSite and was created after the Chromium copy's creation and last update; the WebKit creation time comes from the cookie's `Created` property, and a cookie without one is never a replacement. The write is Chrome's `SetCanonicalCookie`, so its rules hold: a non-secure source can't overwrite a Secure cookie, prefixes, sizes. Replies `imported`, `replaced`, `existing`, `rejected`) |
 | `ac_autofill_*` | the address and card functions |
 | `ac_extensions_*`, `ac_search_engines_list` | `ArdiaExtensions` |
 | `ac_zoom_list`, `ac_zoom_set` | `getZoomLevels`, `setZoom` |
@@ -402,6 +379,7 @@ Plain Chromium code over Chrome's services (`engine/chromium/src/chrome/browser/
 | `ac_history_*`, `ac_favicons_*`, `ac_bookmarks_*` | `history.ts`, `favicons.ts`, `bookmarks.ts` (through `engineCall`) |
 | `ac_tab_restore_tag`, `_take`, `_load` | native: the WebView's attach (and close) and `restore:` |
 | `ac_tabs_watch`, `ac_tabs_group` | tab groups in strip transactions |
+| `ac_extension_storage_*`, `ac_extension_alarms_*`, `ac_extension_grants_*`, `ac_extension_dnr_*` (unbuilt, 2026-11-14) | none: native only, for the WebKit copy of an extension (`WebKitExtensionShared.swift`, `WebKitExtensionSharedCalls.swift`, `WebKitExtensionGrants.swift`); `docs/engine-build.md` › Our own code in the tree |
 
 ## Status
 

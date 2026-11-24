@@ -23,7 +23,7 @@ final class ArdiaDockTilePlugIn: NSObject, NSDockTilePlugIn {
     guard dockTile != nil, let app, let bundleId = app.bundleIdentifier else { return }
 
     if let artwork = app.image(forResource: "AppIcon") { AppIcons.base = artwork }
-    AppIcons.markNamed = { [app] in app.image(forResource: $0) }
+    AppIcons.imageNamed = { [app] in app.image(forResource: $0) }
     observer = DistributedNotificationCenter.default().addObserver(
       forName: AppIcons.changedNotification(bundleId: bundleId), object: nil, queue: .main
     ) { [weak self] note in
@@ -40,7 +40,8 @@ final class ArdiaDockTilePlugIn: NSObject, NSDockTilePlugIn {
 
   private func show() {
     guard let dockTile else { return }
-    let id = IconStyle.shown(saved: saved, theme: IconStyle.systemTheme)
+    let bundleIcon = app?.object(forInfoDictionaryKey: "CFBundleIconName") as? String
+    let id = IconStyle.shown(saved: saved, theme: IconStyle.systemTheme, bundleIcon: bundleIcon)
     if id == "default" || !AppIcons.variants.contains(where: { $0.id == id }) {
       dockTile.contentView = nil
     } else if let image = AppIcons.image(id, size: 512) {

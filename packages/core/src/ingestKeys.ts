@@ -4,7 +4,7 @@ export const SITE_INGEST_KEY = "ak_site_6b26588b3764ae7d0f6d63d7";
 
 export const INGEST_KEY_HEADER = "X-Ardia-Key";
 
-export type IngestSource = "app" | "cli" | "site";
+type IngestSource = "app" | "cli" | "site";
 
 export const INGEST_KEYS: Readonly<Record<IngestSource, string>> = {
   app: APP_INGEST_KEY,

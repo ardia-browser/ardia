@@ -1,0 +1,144 @@
+import type { BrowserSource, ImportKind } from "../../../packages/import/src/index.ts";
+import { UNLOCK_WORDS } from "@platform/importWording";
+
+type LinuxProfile = BrowserSource["profiles"][number] & { needsPrimaryPassword?: boolean; cardsNeedKeyring?: boolean };
+
+const APP_NAME = "Ardia";
+const FIREFOX_CARD_KEY = "Firefox Encrypted Storage";
+
+const chosen = (source: BrowserSource, selected: readonly string[]) =>
+  (source.profiles as LinuxProfile[]).filter((profile) => selected.length === 0 || selected.includes(profile.id));
+
+export const asksPrimaryPassword = (source: BrowserSource, selected: readonly string[]) =>
+  source.family === "firefox" && chosen(source, selected).some((profile) => profile.needsPrimaryPassword === true);
+
+const readsCardKey = (source: BrowserSource, selected: readonly string[], kinds: Iterable<ImportKind>) =>
+  source.family === "firefox" && [...kinds].includes("autofill") && chosen(source, selected).some((profile) => profile.cardsNeedKeyring === true);
+
+type UnlockCopy = { title: string; subtitle: string; lead: string; detail: string; field: boolean; waiting: string };
+
+export function unlockCopy(source: BrowserSource, selected: readonly string[], kinds: Iterable<ImportKind>): UnlockCopy {
+  const title = "Unlock your data for import";
+  const subtitle = `${APP_NAME} can securely import logins, cookies and cards from your previous browser, so you stay signed in and don't have to enter your passwords again.`;
+  if (source.family === "firefox") {
+    const field = asksPrimaryPassword(source, selected);
+    const cards = readsCardKey(source, selected, kinds);
+    const cardKey = UNLOCK_WORDS.firefoxCardKey(source.name, FIREFOX_CARD_KEY, APP_NAME);
+    return {
+      title,
+      subtitle,
+      field,
+      lead: field
+        ? `${source.name}'s saved passwords are protected by a primary password. Enter it to bring them securely into ${APP_NAME}.`
+        : UNLOCK_WORDS.firefoxAsks(source.name, APP_NAME),
+      detail: [
+        field ? `${APP_NAME} uses it only for this import, never saves it, and forgets it after 10 minutes.` : "",
+        cards ? cardKey : "",
+        "Your data stays on this computer.",
+      ].filter(Boolean).join(" "),
+      waiting: field ? "Unlocking..." : UNLOCK_WORDS.waiting,
+    };
+  }
+  const item = source.keychainService ?? `${source.name} Safe Storage`;
+  const many = selected.length > 1;
+  return {
+    title,
+    subtitle,
+    field: false,
+    lead: many ? UNLOCK_WORDS.asksOnce : UNLOCK_WORDS.asks(APP_NAME),
+    detail: UNLOCK_WORDS.chromiumDetail(APP_NAME, item, source.name),
+    waiting: UNLOCK_WORDS.waiting,
+  };
+}
+
+export function unlockFailure(source: BrowserSource, code: string | undefined): string {
+  const retry = "Try again, or skip the encrypted data.";
+  const firefox = source.family === "firefox";
+  switch (code) {
+    case "denied":
+      return firefox
+        ? UNLOCK_WORDS.firefoxDenied(source.name, retry)
+        : UNLOCK_WORDS.denied(source.keychainService ?? `${source.name} Safe Storage`, retry);
+    case "locked":
+      return UNLOCK_WORDS.locked;
+    case "notFound":
+      return firefox
+        ? UNLOCK_WORDS.firefoxNotFound(source.name, FIREFOX_CARD_KEY)
+        : UNLOCK_WORDS.notFound(source.keychainService ?? `${source.name} Safe Storage`, source.name);
+    case "unavailable":
+      return UNLOCK_WORDS.unavailable;
+    case "timeout":
+      return UNLOCK_WORDS.timeout(retry);
+    case "cancelled":
+      return `The unlock was cancelled. ${retry}`;
+    default:
+      return `${source.name}'s encrypted data couldn't be unlocked. ${retry}`;
+  }
+}
+
+export function withoutEncrypted(source: BrowserSource, kinds: ReadonlySet<ImportKind>): Set<ImportKind> {
+  const without = new Set(kinds);
+  without.delete("passwords");
+  if (source.family !== "firefox") without.delete("cookies");
+  return without;
+}
+
+type Listener = () => void;
+
+export function createSecretSlot() {
+  let value = "";
+  const listeners = new Set<Listener>();
+  const notify = () => {
+    for (const listener of [...listeners]) listener();
+  };
+  return {
+    get: () => value,
+    set(next: string) {
+      value = next;
+      notify();
+    },
+    take() {
+      const taken = value;
+      value = "";
+      notify();
+      return taken;
+    },
+    clear() {
+      if (!value) return;
+      value = "";
+      notify();
+    },
+    subscribe(listener: Listener) {
+      listeners.add(listener);
+      return () => void listeners.delete(listener);
+    },
+  };
+}
+
+type UnlockApi = {
+  unlockBrowser(browserId: string, options?: { primaryPassword?: string; profiles?: readonly string[]; kinds?: readonly string[] }): Promise<void>;
+};
+
+export async function unlockSource(
+  api: UnlockApi,
+  source: BrowserSource,
+  selected: readonly string[],
+  kinds: Iterable<ImportKind>,
+  slot: ReturnType<typeof createSecretSlot>,
+) {
+  const primaryPassword = asksPrimaryPassword(source, selected) ? slot.take() : "";
+  slot.clear();
+  try {
+    const scope = { profiles: [...selected], kinds: [...kinds] };
+    await api.unlockBrowser(source.id, primaryPassword ? { primaryPassword, ...scope } : scope);
+    return null;
+  } catch (error) {
+    return unlockFailure(source, (error as { code?: string } | null)?.code);
+  }
+}
+
+export async function unlockForStep<T>(flow: () => { step: object }, unlock: () => Promise<T>): Promise<{ result: T } | null> {
+  const attempt = flow().step;
+  const result = await unlock();
+  return flow().step === attempt ? { result } : null;
+}

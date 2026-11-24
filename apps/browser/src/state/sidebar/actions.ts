@@ -1,33 +1,44 @@
-import { cleanUrl, markdownLink } from "@ardia/core";
-import { copyText } from "../../platform/clipboard";
+import { foreignWriteHooks } from "../browser/foreignWriteHooks";
+import { cleanUrlReport, linkLines, markdownLink } from "@ardia/core";
+import { copyLink } from "../../platform/clipboard";
 import { prompt } from "../../platform/dialogs";
 import { updateFolder } from "../live/store";
 import { useBrowser } from "../browser/store";
 import { webviews } from "../../platform/webviews";
 import { focusHeroBar } from "../omnibox/barState";
 import { ancestorIds } from "../groups/groups";
-import { activeTabId, bookmarkProfileId, inPinnedContainer, pinSection, tabLayoutOf, tabTitle, viewTabIds } from "../browser/model";
-import type { ClickMods } from "../drag/drops";
+import { activeTabId, bookmarkProfileId, familyKeyOf, inPinnedContainer, ownTabTitle, pinSection, tabLayoutOf, tabsShownIn, tabTitle } from "../browser/model";
+import { anchorOutdated, type ClickMods } from "../drag/drops";
 import { selectedTabIds } from "../pins/organize";
 import { groupLabel, groupOf } from "../pins/tabGrouping";
 import type { Tab } from "../browser/types";
+import { awaitsFirstPage } from "../tabs/pendingAddress";
+import { noteUrlCopied } from "../telemetry/urlCopies";
+import { noteRangeSelect, noteTileDoubleClick, type TileDoubleClick } from "../telemetry/tabPresses";
+import { samePage } from "../../lib/url";
+import { liveOf, shownLiveOf } from "../tabs/tabLive";
+import { withLivePage } from "../tabs/livePage";
+import { consentToken, type ConsentToken } from "../telemetry/client";
+import { holderOfPage } from "../tabs/pageSession";
+import { holderOf } from "../pins/pinShare";
+import { pinHandOffOf } from "../pins/pinHandoff";
+import { noteTextOnlyRow } from "../telemetry/tabStripCounts";
+import { NO_ROW_ICON } from "../pins/rowIcons";
 import type { BookmarkFolderChoice } from "./menuParts";
 import { DEFAULT_SIDEBAR_WIDTH } from "../../lib/windowLayout";
+import { activeLook } from "../../lib/activeLook";
 import { measureRow, setSidebarUi, sidebarUi, type Target } from "./sidebarUi";
 
 const store = () => useBrowser.getState();
 
 export function clickTab(windowId: string, tabId: string, mods: ClickMods = {}) {
+  const ranging = !!mods.shiftKey && !mods.metaKey;
+  const fromShownTab = ranging && anchorOutdated(store(), windowId);
   store().clickTab(windowId, tabId, mods);
+  if (ranging && store().selection[windowId]?.length) noteRangeSelect(fromShownTab);
 }
 
-export function tabPlace(tabId: string): string {
-  const s = store();
-  const tab = s.tabs[tabId];
-  return JSON.stringify([tab?.windowId, tab && s.windows[tab.windowId]?.tabIds, tab?.pin, groupOf(s, tabId)?.id ?? null]);
-}
-
-export const resetSidebarWidth = () => store().updateSettings({ sidebarWidth: DEFAULT_SIDEBAR_WIDTH });
+export const resetSidebarWidth = () => store().updateSettings({ sidebarWidth: activeLook().sidebarWidth ?? DEFAULT_SIDEBAR_WIDTH });
 
 export function returnFocusToPage(windowId: string) {
   const s = store();
@@ -42,9 +53,61 @@ export function toggleBookmarkInWindow(windowId: string, page: { url: string; ti
   s.toggleBookmark(bookmarkProfileId(s, s.windows[windowId]), page);
 }
 
-export function returnShownTabToPinnedUrl(windowId: string, tabId: string) {
+const PIN_ARRIVAL_DEADLINE_MS = 3000;
+
+export function refreshShownTile(windowId: string, tabId: string, wasShown: boolean) {
   const s = store();
-  if (activeTabId(s, windowId) === tabId) s.returnToPinnedUrl(tabId);
+  const tab = s.tabs[tabId];
+  if (!tab || tab.windowId !== windowId) return;
+  const consent = consentToken();
+  if (holderOf(s, tabId)) return void whenPinLands(windowId, familyKeyOf(tab)).then((landed) => landed && refreshShownPage(windowId, landed, false, consent));
+  if (activeTabId(s, windowId) === tabId) refreshShownPage(windowId, tabId, wasShown, consent);
+}
+
+function whenPinLands(windowId: string, family: string): Promise<string | null> {
+  const flight = pinHandOffOf(family);
+  if (!flight) return Promise.resolve(null);
+  const before = activeTabId(store(), windowId);
+  return new Promise((done) => {
+    let settled = false;
+    let stop = () => {};
+    const finish = (landed: string | null) => {
+      if (settled) return;
+      settled = true;
+      stop();
+      clearTimeout(deadline);
+      done(landed);
+    };
+    const deadline = setTimeout(() => finish(null), PIN_ARRIVAL_DEADLINE_MS);
+    stop = useBrowser.subscribe((now) => {
+      const shown = activeTabId(now, windowId);
+      const tab = shown ? now.tabs[shown] : undefined;
+      if (shown && tab && familyKeyOf(tab) === family && !holderOfPage(tab)) finish(shown);
+      else if (shown !== before) finish(null);
+    });
+    void flight.then((landed) => landed || finish(null));
+  });
+}
+
+function refreshShownPage(windowId: string, tabId: string, wasShown: boolean, consent: ConsentToken | null) {
+  const s = store();
+  const tab = s.tabs[tabId];
+  if (!tab || activeTabId(s, windowId) !== tabId) return;
+  if (tab.pinnedUrl && !samePage(tab.url, tab.pinnedUrl)) {
+    noteTileDoubleClick("return", consent);
+    return s.returnToPinnedUrl(tabId);
+  }
+  if (!wasShown || !tab.url || shownLiveOf(s, tabId).isLoading) return noteTileDoubleClick("fresh", consent);
+  const outcome = (what: TileDoubleClick) => noteTileDoubleClick(what, consent);
+  void withLivePage(tabId, (page, pageId) => {
+    if (liveOf(pageId).isLoading) return outcome("fresh");
+    return Promise.resolve()
+      .then(() => page.reload())
+      .then(
+        () => outcome("reload"),
+        () => outcome("missed"),
+      );
+  }).then((reached) => reached || outcome("missed"));
 }
 
 export async function startRename(windowId: string, target: Target) {
@@ -60,7 +123,7 @@ export async function startRename(windowId: string, target: Target) {
         confirmTitle: "Update",
         windowId,
       });
-      if (name !== null) store().updateTab(tab.id, { customTitle: name });
+      if (name !== null) foreignWriteHooks.around(() => store().updateTab(tab.id, { customTitle: name }));
       return;
     }
     const group = groupOf(s, tab.id);
@@ -72,7 +135,7 @@ export async function startRename(windowId: string, target: Target) {
   setSidebarUi({ renaming: { windowId, ...target } });
 }
 
-const sidebarShows = (windowId: string) => tabLayoutOf(store(), windowId) === "sidebar" && !!store().windows[windowId]?.sidebarOpen;
+const sidebarShows = (windowId: string) => tabLayoutOf(store(), windowId) === "sidebar" && !!store().windows[windowId] && tabsShownIn(store(), windowId);
 
 async function renameGroupInSheet(windowId: string, groupId: string) {
   const g = store().groups[groupId];
@@ -84,7 +147,7 @@ async function renameGroupInSheet(windowId: string, groupId: string) {
     confirmTitle: "Update",
     windowId,
   });
-  if (name !== null && store().groups[groupId]) store().updateGroup(groupId, { name: name.trim() });
+  if (name !== null && store().groups[groupId]) foreignWriteHooks.around(() => store().updateGroup(groupId, { name: name.trim() }));
 }
 
 export function commitRename(target: Target, text: string) {
@@ -107,6 +170,7 @@ export async function openIconPicker(windowId: string, target: Target) {
 }
 
 export function setIcon(target: Target, icon: string | null) {
+  if (target.kind === "tab" && icon === NO_ROW_ICON) noteTextOnlyRow();
   if (target.kind === "tab") store().updateTab(target.id, { customIcon: icon });
   else if (target.kind === "live") updateFolder(target.id.split("|")[1] ?? "", { icon });
   else store().updateGroup(target.id, { icon });
@@ -121,8 +185,10 @@ export function newGroupWithSelection(windowId: string, ids = selectedTabIds(sto
 export function copyUrls(ids: string[], markdown: boolean) {
   const tabs = ids.map((id) => store().tabs[id]).filter((t): t is Tab => !!t?.url);
   if (!tabs.length) return;
-  const lines = tabs.map((t) => (markdown ? markdownLink(tabTitle(t), t.url) : cleanUrl(t.url)));
-  copyText(markdown && lines.length > 1 ? lines.map((l) => `- ${l}`).join("\n") : lines.join("\n"));
+  const reports = tabs.map((t) => cleanUrlReport(t.url));
+  const lines = tabs.map((t, i) => (markdown ? markdownLink(ownTabTitle(t), t.url) : reports[i]!.url));
+  copyLink(linkLines(lines, markdown));
+  tabs.forEach((t, i) => noteUrlCopied(awaitsFirstPage(t.id), reports[i]!.removedTracker));
 }
 
 export async function bookmarkTabs(windowId: string, ids: string[], folder: BookmarkFolderChoice) {
@@ -152,13 +218,3 @@ export async function editPinnedPage(windowId: string, tabId: string) {
   });
   if (url) store().setPinnedUrl(tabId, url.includes("://") ? url : `https://${url}`);
 }
-
-export function muteAll(windowId: string, muted: boolean) {
-  store().setMuted(viewTabIds(store(), windowId), muted);
-}
-
-export const allMuted = (windowId: string) => {
-  const s = store();
-  const view = viewTabIds(s, windowId).filter((id) => s.tabs[id]!.url);
-  return view.length > 0 && view.every((id) => s.tabs[id]!.muted);
-};

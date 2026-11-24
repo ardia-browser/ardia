@@ -4,8 +4,10 @@ const { useBrowser } = await import("../browser/store.ts");
 const { registerRow, setSidebarUi, sidebarUi } = await import("./sidebarUi.ts");
 const hover = await import("./hover.ts");
 const { cardReach } = await import("./hoverAim.ts");
+const { setDockMoving, setPeekLeaving, setPeekShown } = await import("../windows/dockMotion.ts");
 
 const W = "w";
+const REST = 800;
 const HEIGHT = 800;
 const ROWS = { a: 100, b: 140, c: 180, tile: 40 };
 for (const [id, y] of Object.entries(ROWS)) registerRow(W, id, { measureInWindow: (done) => done(10, y, 160, 30) });
@@ -18,6 +20,7 @@ const settle = () => new Promise((resolve) => setImmediate(resolve));
 
 function fresh(t) {
   t.mock.timers.enable({ apis: ["setTimeout"] });
+  t.after(() => hover.dismissHover());
   hover.suppressHover(false);
   hover.dismissHover();
   hover.cardLeft();
@@ -40,15 +43,15 @@ const leave = (id, event = at(200, ROWS[id] + 10)) => hover.rowLeft(W, row(id), 
 
 async function cardFor(t, id) {
   enter(id);
-  t.mock.timers.tick(500);
+  t.mock.timers.tick(REST);
   await settle();
   assert.equal(shown(), id);
 }
 
-test("a row's card shows after 500 ms and hides 160 ms after the pointer leaves", async (t) => {
+test("a row's card shows after the pointer rests on it for 800 ms and hides 160 ms after it leaves toward the card", async (t) => {
   fresh(t);
   enter("a");
-  t.mock.timers.tick(499);
+  t.mock.timers.tick(REST - 1);
   await settle();
   assert.equal(shown(), null);
   t.mock.timers.tick(1);
@@ -61,19 +64,55 @@ test("a row's card shows after 500 ms and hides 160 ms after the pointer leaves"
   assert.equal(shown(), null);
 });
 
-test("with a card up, the next row's card shows at once", async (t) => {
+test("passing through rows raises no card: each row needs its own rest", async (t) => {
+  fresh(t);
+  for (const id of ["a", "b", "c"]) {
+    enter(id);
+    t.mock.timers.tick(REST - 100);
+    await settle();
+    leave(id, at(20, ROWS[id] + 31));
+  }
+  t.mock.timers.tick(1000);
+  await settle();
+  assert.equal(shown(), null);
+});
+
+test("with a card up, moving to the next row hides it at once and that row's card waits for its own rest", async (t) => {
   fresh(t);
   await cardFor(t, "a");
-  leave("a", at(20, ROWS.b + 1));
-  enter("b");
+  hover.cardLaidOut({ x: 178, y: 96, width: 264, height: 120 });
+  leave("a", at(20, ROWS.b - 9));
+  enter("b", at(20, ROWS.b + 1));
+  assert.equal(shown(), null, "gone as the pointer reaches the next row");
+  t.mock.timers.tick(REST - 1);
   await settle();
+  assert.equal(shown(), null);
+  t.mock.timers.tick(1);
+  await settle();
+  assert.equal(shown(), "b");
+});
+
+test("leaving a row away from its card hides it at once: back past its far edge, or up out of it", async (t) => {
+  fresh(t);
+  await cardFor(t, "b");
+  hover.cardLaidOut({ x: 178, y: 136, width: 264, height: 120 });
+  leave("b", at(10, ROWS.b + 15));
+  assert.equal(shown(), null, "out of its far edge");
+  await cardFor(t, "b");
+  leave("b", at(80, ROWS.b));
+  assert.equal(shown(), null, "out of its top");
+  await cardFor(t, "b");
+  leave("b", at(170, ROWS.b + 15));
+  assert.equal(shown(), "b", "toward the card it waits for the pointer to get there");
+  hover.cardEntered();
+  t.mock.timers.tick(1000);
   assert.equal(shown(), "b");
 });
 
 test("a card never shows after a dismissal, even one that lands while the row is being measured", async (t) => {
   fresh(t);
   enter("a");
-  t.mock.timers.tick(500);
+  t.mock.timers.tick(REST);
   hover.dismissHover();
   await settle();
   assert.equal(shown(), null, "dismissed while measuring");
@@ -115,9 +154,11 @@ test("while the card is up a row under it waits, and reaching the card keeps it"
   t.mock.timers.tick(1000);
   assert.equal(shown(), "tile", "on the card it stays");
   hover.cardLeft();
-  assert.equal(under.entered(), true, "leaving the card onto the waiting row moves the card there");
+  assert.equal(under.entered(), true, "leaving the card onto the waiting row hands the hover to it");
+  assert.equal(shown(), null, "and the card leaves at once");
+  t.mock.timers.tick(REST);
   await settle();
-  assert.equal(shown(), "b");
+  assert.equal(shown(), "b", "until the row's own rest");
 });
 
 test("heading for the card from its row keeps it; stopping short for 200 ms hands the hover to the row", async (t) => {
@@ -132,6 +173,8 @@ test("heading for the card from its row keeps it; stopping short for 200 ms hand
   assert.equal(passing.entered(), false);
   t.mock.timers.tick(1);
   assert.equal(passing.entered(), true);
+  assert.equal(shown(), null);
+  t.mock.timers.tick(REST);
   await settle();
   assert.equal(shown(), "b");
 });
@@ -213,18 +256,18 @@ test("no card while a row is renamed or the icon picker is open in its window, o
   fresh(t);
   setSidebarUi({ renaming: { kind: "tab", id: "x", windowId: "other" } });
   enter("a");
-  t.mock.timers.tick(500);
+  t.mock.timers.tick(REST);
   await settle();
   assert.equal(shown(), "a", "a rename in another window doesn't stop it");
   hover.dismissHover();
   setSidebarUi({ renaming: { kind: "tab", id: "x", windowId: W } });
   enter("c");
-  t.mock.timers.tick(500);
+  t.mock.timers.tick(REST);
   await settle();
   assert.equal(shown(), null, "renaming");
   setSidebarUi({ renaming: null, iconPicker: { kind: "tab", id: "x", windowId: W, anchor: null } });
   enter("b");
-  t.mock.timers.tick(500);
+  t.mock.timers.tick(REST);
   await settle();
   assert.equal(shown(), null, "icon picker");
   setSidebarUi({ iconPicker: null });
@@ -233,7 +276,7 @@ test("no card while a row is renamed or the icon picker is open in its window, o
   registerRow(w, "a", { measureInWindow: (done) => done(10, 100, 160, 30) });
   useBrowser.getState().openPanel(w, "");
   hover.rowShown(w, row("a"));
-  t.mock.timers.tick(500);
+  t.mock.timers.tick(REST);
   await settle();
   assert.equal(shown(), null, "command panel");
 });
@@ -249,7 +292,7 @@ test("a drag suppresses the card until it ends", async (t) => {
   assert.equal(shown(), null);
   hover.suppressHover(false);
   enter("c");
-  t.mock.timers.tick(500);
+  t.mock.timers.tick(REST);
   await settle();
   assert.equal(shown(), "c");
 });
@@ -265,4 +308,80 @@ test("the command panel over the rows takes their highlight", () => {
   hover.watchCovered(W, refresh, false);
   hover.setRowsCovered(W, false);
   assert.equal(refreshed, 1, "a row that's no longer pointed isn't told");
+});
+
+const drawn = { open: true, newTab: false, centred: false, hasActiveTab: true, sidebarAnchor: true };
+
+test("an open command panel over the sidebar rows takes their highlight", () => {
+  assert.equal(hover.panelCoversRows(drawn), true);
+});
+
+test("a panel that draws nothing leaves the rows hoverable", () => {
+  assert.equal(hover.panelCoversRows({ ...drawn, hasActiveTab: false }), false, "no active tab in this profile: the panel renders nothing");
+  assert.equal(hover.panelCoversRows({ ...drawn, open: false }), false, "closed");
+  assert.equal(hover.panelCoversRows({ ...drawn, newTab: true }), false, "the new tab bar sits over the page");
+  assert.equal(hover.panelCoversRows({ ...drawn, centred: true }), false, "the centred bar sits over the page");
+  assert.equal(hover.panelCoversRows({ ...drawn, sidebarAnchor: false }), false, "the field isn't in the sidebar");
+  const release = hover.holdRowsCovered(W, hover.panelCoversRows({ ...drawn, hasActiveTab: false }));
+  assert.equal(hover.rowsCovered(W), false, "an open flag alone holds no rows");
+  release();
+});
+
+test("a pointed row is told when the panel that covered it unmounts", () => {
+  let refreshed = 0;
+  const refresh = () => refreshed++;
+  hover.watchCovered(W, refresh, true);
+  const release = hover.holdRowsCovered(W, true);
+  assert.equal(refreshed, 1);
+  release();
+  assert.equal(refreshed, 2, "the row takes its hover back at once");
+  hover.watchCovered(W, refresh, false);
+});
+
+test("the covered flag follows a panel that unmounts or moves to another window", () => {
+  const release = hover.holdRowsCovered(W, true);
+  assert.equal(hover.rowsCovered(W), true);
+  release();
+  assert.equal(hover.rowsCovered(W), false, "unmounting hands the rows back");
+
+  const first = hover.holdRowsCovered("one", true);
+  assert.equal(hover.rowsCovered("one"), true);
+  first();
+  const second = hover.holdRowsCovered("two", true);
+  assert.equal(hover.rowsCovered("one"), false, "the window the panel left is released");
+  assert.equal(hover.rowsCovered("two"), true);
+  second();
+  assert.equal(hover.rowsCovered("two"), false);
+});
+
+test("a peeking sidebar still sliding in raises no card for the rows it brings under the pointer", async (t) => {
+  fresh(t);
+  setPeekShown(W, true, [0, 200]);
+  enter("a");
+  t.mock.timers.tick(REST);
+  await settle();
+  assert.equal(shown(), null);
+  setPeekShown(W, false);
+});
+
+test("a sidebar sliding away or docking raises no card, and a card asked for just before it slides never lands", async (t) => {
+  fresh(t);
+  for (const slide of [(on) => setPeekLeaving(W, on), (on) => setDockMoving(W, on)]) {
+    hover.dismissHover();
+    slide(true);
+    enter("a");
+    t.mock.timers.tick(1000);
+    await settle();
+    assert.equal(shown(), null, "entered while sliding");
+    slide(false);
+    hover.rowLeft(W, row("a"), at(200, ROWS.a + 10), true);
+    t.mock.timers.tick(1000);
+    enter("b");
+    t.mock.timers.tick(499);
+    slide(true);
+    t.mock.timers.tick(1);
+    await settle();
+    assert.equal(shown(), null, "timer ran out while sliding");
+    slide(false);
+  }
 });

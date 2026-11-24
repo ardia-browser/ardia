@@ -9,16 +9,36 @@ enum ServerWindowDrag {
   private static let refreshSelector = NSSelectorFromString("_updateDragRegionForHiddenStateChange")
   private static let enabled = LaunchConfig.shared.switchOn("serverWindowDrag") || allOpen
   private static let allOpen = LaunchConfig.shared.experimentOn("serverWindowDragAllOpen")
+  private static let everyMount = LaunchConfig.shared.experimentOn("dragRegionEveryMount")
 
   private static let refreshEvery: CFTimeInterval = 0.1
   private static var targets: [ObjectIdentifier: (blocking: [ObjectIdentifier: Bool], open: [NSRect])] = [:]
   private static var refreshedAt: [ObjectIdentifier: CFTimeInterval] = [:]
+  private static let staleAtMost: TimeInterval = 2
+  private static var stale: [ObjectIdentifier: DispatchWorkItem] = [:]
+  private(set) static var counts = (rebuilds: 0, deferred: 0, stalePresses: 0, scrollWaits: 0)
+  private static let scrollQuiet: CFTimeInterval = 0.25
+  private static var scrolledAt: CFTimeInterval = -.infinity
+  private static var scrollMonitor: Any?
+  #if DEBUG
+  static var pointerOverride: NSPoint?
+  #endif
   private static let watchers = NSMapTable<NSWindow, PointerWatcher>.weakToStrongObjects()
 
   private static let lastWindow = NSMapTable<NSView, NSWindow>.weakToWeakObjects()
 
+  private static let scaleChanges: NSObjectProtocol = NotificationCenter.default.addObserver(
+    forName: .ArdiaInterfaceScaleDidChange, object: nil, queue: .main
+  ) { _ in
+    for window in trackedWindows() {
+      refresh(window)
+      scheduleRefresh(window)
+    }
+  }
+
   static func track(_ region: NSView, bridge: AnyObject? = nil) {
     guard enabled, capable else { return }
+    _ = scaleChanges
     if let bridge { observeMounting(bridge) }
     if let old = lastWindow.object(forKey: region), old !== region.window { refresh(old) }
     if let window = region.window {
@@ -38,51 +58,121 @@ enum ServerWindowDrag {
 
   static func refresh(_ window: NSWindow) {
     guard enabled, capable, let content = window.contentView else { return }
-    targets[ObjectIdentifier(window)] = nil
-    refreshedAt[ObjectIdentifier(window)] = CACurrentMediaTime()
+    let key = ObjectIdentifier(window)
+    targets[key] = nil
+    stale.removeValue(forKey: key)?.cancel()
+    refreshedAt[key] = CACurrentMediaTime()
+    counts.rebuilds += 1
     content.perform(refreshSelector)
   }
+
+  private static func markStale(_ window: NSWindow) {
+    guard stale[ObjectIdentifier(window)] == nil else { return }
+    counts.deferred += 1
+    armStale(window, after: staleAtMost)
+  }
+
+  private static func armStale(_ window: NSWindow, after delay: TimeInterval, waited: Bool = false) {
+    let key = ObjectIdentifier(window)
+    let work = DispatchWorkItem { [weak window] in
+      guard let window, stale[key] != nil else { return }
+      let wait = untilScrollQuiet(for: window)
+      guard wait > 0 else { return refresh(window) }
+      if !waited { counts.scrollWaits += 1 }
+      armStale(window, after: wait, waited: true)
+    }
+    stale[key] = work
+    DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+  }
+
+  private static func untilScrollQuiet(for window: NSWindow) -> CFTimeInterval {
+    let at = pointer()
+    let under = NSWindow.windowNumber(at: at, belowWindowWithWindowNumber: 0) == window.windowNumber
+    return under && inBand(window, at) ? 0 : scrollQuiet - (CACurrentMediaTime() - scrolledAt)
+  }
+
+  private static let pointerArrives: [Notification.Name] = [
+    NSWindow.didMoveNotification, NSWindow.didResizeNotification, NSWindow.didChangeScreenNotification,
+    NSWindow.didEnterFullScreenNotification, NSWindow.didExitFullScreenNotification, NSWindow.didDeminiaturizeNotification,
+    NSWindow.didBecomeKeyNotification, NSWindow.didBecomeMainNotification, NSWindow.didChangeOcclusionStateNotification,
+  ]
 
   private static func watch(_ window: NSWindow) {
     guard watchers.object(forKey: window) == nil, let frame = window.contentView?.superview else { return }
     watchers.setObject(PointerWatcher(frame), forKey: window)
     let key = ObjectIdentifier(window)
+    let arrivals = pointerArrives.map { name in
+      NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak window] _ in
+        if let window, stale[key] != nil, inBand(window, pointer()) { refresh(window) }
+      }
+    }
     var closing: NSObjectProtocol?
     closing = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { _ in
       targets[key] = nil
       refreshedAt[key] = nil
+      stale.removeValue(forKey: key)?.cancel()
       pending[key]?.cancel()
       pending[key] = nil
+      arrivals.forEach(NotificationCenter.default.removeObserver)
       if let closing { NotificationCenter.default.removeObserver(closing) }
+    }
+  }
+
+  private static func pointer() -> NSPoint {
+    #if DEBUG
+    if let pointerOverride { return pointerOverride }
+    #endif
+    return NSEvent.mouseLocation
+  }
+
+  private static func inBand(_ window: NSWindow, _ screenPoint: NSPoint) -> Bool {
+    let frame = window.frame
+    return screenPoint.x >= frame.minX && screenPoint.x <= frame.maxX && screenPoint.y >= frame.maxY - band(window) && screenPoint.y <= frame.maxY
+  }
+
+  private static func catchUpAll() {
+    guard !stale.isEmpty else { return }
+    let at = pointer()
+    for window in trackedWindows() where stale[ObjectIdentifier(window)] != nil && inBand(window, at) { refresh(window) }
+  }
+
+  private static func trackedWindows() -> [NSWindow] {
+    var seen = Set<ObjectIdentifier>()
+    return regions.allObjects.compactMap { region in
+      guard let window = region.window, seen.insert(ObjectIdentifier(window)).inserted else { return nil }
+      return window
     }
   }
 
   static func pointerMoved(in window: NSWindow, at point: NSPoint) {
     guard point.y >= window.frame.height - band(window) else { return }
     scheduleRefresh(window)
-    let now = CACurrentMediaTime()
-    if let last = refreshedAt[ObjectIdentifier(window)], now - last < refreshEvery { return }
+    let key = ObjectIdentifier(window)
+    if stale[key] == nil, let last = refreshedAt[key], CACurrentMediaTime() - last < refreshEvery { return }
     refresh(window)
   }
 
   private static var pending: [ObjectIdentifier: DispatchWorkItem] = [:]
 
-  static func scheduleRefresh(_ window: NSWindow) {
+  static func scheduleRefresh(_ window: NSWindow, after delay: CFTimeInterval = refreshEvery, waited: Bool = false) {
     let key = ObjectIdentifier(window)
     pending[key]?.cancel()
     let work = DispatchWorkItem { [weak window] in
       pending[key] = nil
-      if let window { refresh(window) }
+      guard let window else { return }
+      let wait = untilScrollQuiet(for: window)
+      guard wait > 0 else { return refresh(window) }
+      if !waited { counts.scrollWaits += 1 }
+      scheduleRefresh(window, after: wait, waited: true)
     }
     pending[key] = work
-    DispatchQueue.main.asyncAfter(deadline: .now() + refreshEvery, execute: work)
+    DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
   }
 
-  static func scheduleRefreshAll() {
-    var seen = Set<ObjectIdentifier>()
-    for region in regions.allObjects {
-      guard let window = region.window, seen.insert(ObjectIdentifier(window)).inserted else { continue }
-      scheduleRefresh(window)
+  static func mounted() {
+    let at = pointer()
+    for window in trackedWindows() {
+      if everyMount || inBand(window, at) { scheduleRefresh(window) } else { markStale(window) }
     }
   }
 
@@ -99,10 +189,24 @@ enum ServerWindowDrag {
     guard coordinator.responds(to: add) else { return }
     _ = coordinator.perform(add, with: watcher)
     mounting = watcher
-    eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseUp, .rightMouseUp, .otherMouseUp, .keyUp, .flagsChanged]) { event in
-      if let window = event.window { scheduleRefresh(window) }
+    eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp, .rightMouseUp, .otherMouseUp, .keyUp, .flagsChanged]) { event in
+      guard let window = event.window else { return event }
+      if event.type != .leftMouseDown {
+        scheduleRefresh(window)
+      } else if event.locationInWindow.y >= window.frame.height - band(window) {
+        let key = ObjectIdentifier(window)
+        let isStale = stale[key] != nil
+        guard isStale || pending[key] != nil else { return event }
+        if isStale { counts.stalePresses += 1 }
+        refresh(window)
+      }
       return event
     }
+    scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
+      if let window = event.window, event.locationInWindow.y < window.frame.height - band(window) { scrolledAt = CACurrentMediaTime() }
+      return event
+    }
+    NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in catchUpAll() }
   }
 
   static func band(_ window: NSWindow) -> CGFloat {
@@ -126,7 +230,15 @@ enum ServerWindowDrag {
 
   private static func transformed(_ view: NSView) -> Bool {
     guard let layer = view.layer else { return false }
-    return !CATransform3DIsIdentity(layer.transform) || !layer.affineTransform().isIdentity
+    let boundsScale = CATransform3DMakeScale(
+      view.bounds.width > 0 ? view.frame.width / view.bounds.width : 1, view.bounds.height > 0 ? view.frame.height / view.bounds.height : 1, 1)
+    return !nearlyEqual(layer.transform, boundsScale)
+  }
+
+  private static func nearlyEqual(_ a: CATransform3D, _ b: CATransform3D) -> Bool {
+    let lhs = [a.m11, a.m12, a.m13, a.m14, a.m21, a.m22, a.m23, a.m24, a.m31, a.m32, a.m33, a.m34, a.m41, a.m42, a.m43, a.m44]
+    let rhs = [b.m11, b.m12, b.m13, b.m14, b.m21, b.m22, b.m23, b.m24, b.m31, b.m32, b.m33, b.m34, b.m41, b.m42, b.m43, b.m44]
+    return zip(lhs, rhs).allSatisfy { abs($0 - $1) < 0.0001 }
   }
 
   private static func zOrdered(_ view: NSView) -> [NSView] {
@@ -266,8 +378,10 @@ enum ServerWindowDrag {
   }
 
   #if DEBUG
-  static func blockedRects(_ window: NSWindow) -> [[Double]] {
-    targets[ObjectIdentifier(window)] = nil
+  static func isStale(_ window: NSWindow) -> Bool { stale[ObjectIdentifier(window)] != nil }
+
+  static func blockedRects(_ window: NSWindow, rebuilt: Bool = true) -> [[Double]] {
+    if rebuilt { targets[ObjectIdentifier(window)] = nil }
     guard let frame = window.contentView?.superview, let rects = blockingRects(window, in: frame.bounds) else { return [] }
     return rects.map { [$0.minX, frame.bounds.height - $0.maxY, $0.width, $0.height] }
   }

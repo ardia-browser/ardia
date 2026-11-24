@@ -2,8 +2,8 @@ import { useBrowser } from "../browser/store";
 import { isEligibleTab } from "./automationWindows";
 import type { EventSend } from "./storeEvents";
 
-export const NOTIFICATION_TITLE_LIMIT = 200;
-export const NOTIFICATION_BODY_LIMIT = 500;
+const NOTIFICATION_TITLE_LIMIT = 200;
+const NOTIFICATION_BODY_LIMIT = 500;
 
 let sink: EventSend | null = null;
 

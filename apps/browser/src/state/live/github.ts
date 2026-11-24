@@ -18,18 +18,19 @@ const PR_FIELDS = `
     }
   }`;
 
-export const GITHUB_QUERY = `query LiveFolder($authored: String!, $review: String!, $direct: String!) {
-  viewer { login name avatarUrl(size: 64) }
-  authored: search(query: $authored, type: ISSUE, first: 50) { nodes { ... on PullRequest { id } } }
-  review: search(query: $review, type: ISSUE, first: 50) { nodes { ... on PullRequest { id } } }
-  direct: search(query: $direct, type: ISSUE, first: 50) { nodes { ... on PullRequest { id } } }
-}`;
+const CHANGE_FIELDS = `id updatedAt headRefOid mergeable commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }`;
 
-export const GITHUB_DETAILS_QUERY = `query LiveFolderDetails($ids: [ID!]!) { nodes(ids: $ids) { ${PR_FIELDS} ... on PullRequest { state } } }`;
+const RATE_LIMIT = "rateLimit { limit remaining resetAt }";
+
+export const GITHUB_SEARCH_QUERY = `query LiveFolderSearch($q: String!) { ${RATE_LIMIT} search(query: $q, type: ISSUE, first: 50) { nodes { ... on PullRequest { ${CHANGE_FIELDS} } } } }`;
+
+export const GITHUB_DIRECT_QUERY = `query LiveFolderDirect($q: String!) { ${RATE_LIMIT} search(query: $q, type: ISSUE, first: 50) { nodes { ... on PullRequest { id } } } }`;
+
+export const GITHUB_DETAILS_QUERY = `query LiveFolderDetails($ids: [ID!]!) { ${RATE_LIMIT} nodes(ids: $ids) { ${PR_FIELDS} ... on PullRequest { state } } }`;
 
 export const DETAILS_PAGE = 10;
 
-export const GITHUB_VARIABLES = {
+export const GITHUB_SEARCHES = {
   authored: "is:pr is:open author:@me archived:false sort:updated-desc",
   review: "is:pr is:open review-requested:@me archived:false sort:updated-desc",
   direct: "is:pr is:open user-review-requested:@me archived:false",
@@ -45,7 +46,7 @@ type RawCheck =
   | { __typename: "CheckRun"; name: string; status: string; conclusion: string | null; detailsUrl: string | null }
   | { __typename: "StatusContext"; context: string; state: string; targetUrl: string | null };
 
-export type RawPR = {
+type RawPR = {
   id: string;
   state?: "OPEN" | "CLOSED" | "MERGED";
   number: number;
@@ -67,17 +68,60 @@ export type RawPR = {
   commits: { nodes: { commit: { statusCheckRollup: { state: string; contexts: { nodes: RawCheck[] } } | null } }[] };
 };
 
-export type GithubResponse = {
-  data?: {
-    viewer: { login: string; name: string | null; avatarUrl: string };
-    authored: { nodes: (RawPR | { id: string } | Record<string, never>)[] };
-    review: { nodes: (RawPR | { id: string } | Record<string, never>)[] };
-    direct: { nodes: ({ id: string } | Record<string, never>)[] };
-  };
-  errors?: { type?: string; message: string }[];
+export type ListedPR = {
+  id: string;
+  updatedAt?: string;
+  headRefOid?: string;
+  mergeable?: string;
+  commits?: { nodes: { commit: { statusCheckRollup: { state: string } | null } }[] };
 };
 
-export function checkState(c: RawCheck): CheckState {
+export function changeKey(listed: ListedPR | undefined): string | null {
+  if (!listed?.updatedAt) return null;
+  return JSON.stringify([listed.updatedAt, listed.headRefOid ?? null, listed.mergeable ?? null, listed.commits?.nodes[0]?.commit.statusCheckRollup?.state ?? null]);
+}
+
+export type RateLimitInfo = { limit: number; remaining: number; resetAt: string };
+
+type GraphqlError = { type?: string; message: string; path?: (string | number)[] };
+
+type SearchNode = ListedPR | RawPR | { id: string } | Record<string, never> | null;
+
+export type GithubResponse = {
+  data?: {
+    rateLimit?: RateLimitInfo | null;
+    authored: { nodes: SearchNode[] };
+    review: { nodes: SearchNode[] };
+    direct: { nodes: SearchNode[] };
+  };
+  errors?: GraphqlError[];
+};
+
+export type SearchResponse = { data?: { rateLimit?: RateLimitInfo | null; search: { nodes: SearchNode[] } } | null; errors?: GraphqlError[] };
+
+const ORG_SSO = /SAML|single sign-on/i;
+
+export function blockedNodes(errors: readonly GraphqlError[] | undefined): GraphqlError[] {
+  return (errors ?? []).filter((e) => e.type === "FORBIDDEN" && e.path?.[1] === "nodes" && e.path.length === 3);
+}
+
+export function blockedError(blocked: readonly GraphqlError[]): LiveError | null {
+  if (!blocked.length) return null;
+  const sso = blocked.find((e) => ORG_SSO.test(e.message));
+  if (sso) return new LiveError("sso", withLink("An organization needs single sign-on for this token", sso.message));
+  return new LiveError("tokenBlocked", withLink("This token can't read some pull requests", blocked[0]!.message));
+}
+
+export function blockedLink(message: string): string | null {
+  return message.match(/https:\/\/github\.com\/(?:settings|orgs)\/[\w./-]+/)?.[0]?.replace(/[.,]$/, "") ?? null;
+}
+
+const withLink = (text: string, providerMessage: string) => {
+  const link = blockedLink(providerMessage);
+  return link ? `${text}: ${link}` : text;
+};
+
+function checkState(c: RawCheck): CheckState {
   if (c.__typename === "StatusContext") {
     if (c.state === "SUCCESS") return "success";
     if (c.state === "FAILURE" || c.state === "ERROR") return "failure";
@@ -96,7 +140,7 @@ export function checkState(c: RawCheck): CheckState {
   }
 }
 
-function mapPR(raw: RawPR, section: PullRequestSection): LiveItem {
+export function prItem(raw: RawPR, section?: PullRequestSection): LiveItem {
   const rollup = raw.commits.nodes[0]?.commit.statusCheckRollup;
   const checks: PullRequestCheck[] = (rollup?.contexts.nodes ?? []).map((c) => ({
     name: c.__typename === "CheckRun" ? c.name : c.context,
@@ -133,24 +177,36 @@ function mapPR(raw: RawPR, section: PullRequestSection): LiveItem {
   };
 }
 
-const isPR = (n: object): n is RawPR => "number" in n;
+const isPR = (n: SearchNode): n is RawPR => !!n && "number" in n;
 
-export function detailIds(json: GithubResponse, filters: { authored: boolean; reviewRequests: boolean }): string[] {
+export type Listing = { authored: string[]; review: string[]; direct: Set<string> };
+
+const idsOf = (nodes: SearchNode[]) => nodes.flatMap((n) => (n && "id" in n && n.id ? [n.id] : []));
+
+export function listingOf(json: GithubResponse): Listing {
   const data = json.data;
-  if (!data) return [];
-  const sections = [filters.authored && data.authored, filters.reviewRequests && data.review].filter((x) => !!x);
-  return [...new Set(sections.flatMap((section) => section.nodes.map((n) => ("id" in n ? n.id : "")).filter(Boolean)))];
+  return { authored: idsOf(data?.authored.nodes ?? []), review: idsOf(data?.review.nodes ?? []), direct: new Set(idsOf(data?.direct.nodes ?? [])) };
 }
 
-type GraphqlError = { type?: string; message: string; path?: (string | number)[] };
-export type DetailsResponse = { data?: { nodes?: (RawPR | null)[] } | null; errors?: GraphqlError[] };
+type Sectioned = { id: string; section: PullRequestSection };
+
+export function sectioned(listing: Listing, filters: { authored: boolean; reviewRequests: boolean }): Sectioned[] {
+  const out: Sectioned[] = [];
+  const seen = new Set<string>();
+  const add = (id: string, section: PullRequestSection) => void (seen.has(id) || (seen.add(id), out.push({ id, section })));
+  if (filters.authored) for (const id of listing.authored) add(id, "authored");
+  if (filters.reviewRequests) for (const id of listing.review) add(id, listing.direct.has(id) ? "review" : "team");
+  return out;
+}
+
+export type DetailsResponse = { data?: { rateLimit?: RateLimitInfo | null; nodes?: (RawPR | null)[] } | null; errors?: GraphqlError[] };
 
 export function detailNodes(ids: string[], res: DetailsResponse): RawPR[] {
   const errors = res.errors ?? [];
   const limited = errors.find((e) => e.type === "RATE_LIMITED");
-  if (limited) throw new LiveError("rateLimited", limited.message);
+  if (limited) throw new LiveError("rateLimited", "Rate Limit Exceeded");
   const nodes = res.data?.nodes;
-  const fail = (error?: GraphqlError) => new LiveError("other", (error ?? errors[0])?.message ?? "Missing pull request details");
+  const fail = (_error?: GraphqlError) => new LiveError("other", "GitHub couldn't read the pull request details");
   if (!nodes || nodes.length !== ids.length) throw fail();
   return nodes.filter((node, i): node is RawPR => {
     if (node) return true;
@@ -160,28 +216,15 @@ export function detailNodes(ids: string[], res: DetailsResponse): RawPR[] {
   });
 }
 
-export function withDetails(json: GithubResponse, details: (RawPR | null)[]): GithubResponse {
-  const data = json.data;
-  if (!data) return json;
-  const byId = new Map(details.filter((d): d is RawPR => !!d && isPR(d) && d.state === "OPEN").map((d) => [d.id, d]));
-  const fill = (nodes: (RawPR | { id: string } | Record<string, never>)[]) =>
-    nodes.flatMap((n) => ("id" in n && byId.has(n.id) ? [byId.get(n.id)!] : []));
-  return { ...json, data: { ...data, authored: { nodes: fill(data.authored.nodes) }, review: { nodes: fill(data.review.nodes) } } };
-}
-
 export function mapGithub(json: GithubResponse, filters: { authored: boolean; reviewRequests: boolean }): LiveItem[] {
   const data = json.data;
   if (!data) return [];
-  const direct = new Set(data.direct.nodes.map((n) => ("id" in n ? n.id : "")));
-  const out: LiveItem[] = [];
-  const seen = new Set<string>();
-  if (filters.authored) {
-    for (const n of data.authored.nodes) if (isPR(n) && !seen.has(n.id)) (seen.add(n.id), out.push(mapPR(n, "authored")));
-  }
-  if (filters.reviewRequests) {
-    for (const n of data.review.nodes) if (isPR(n) && !seen.has(n.id)) (seen.add(n.id), out.push(mapPR(n, direct.has(n.id) ? "review" : "team")));
-  }
-  return withStacks(out);
+  const byId = new Map<string, RawPR>();
+  for (const n of [...data.authored.nodes, ...data.review.nodes]) if (isPR(n) && !byId.has(n.id)) byId.set(n.id, n);
+  return withStacks(sectioned(listingOf(json), filters).flatMap(({ id, section }) => {
+    const raw = byId.get(id);
+    return raw ? [prItem(raw, section)] : [];
+  }));
 }
 
 export function withStacks(items: LiveItem[]): LiveItem[] {
@@ -217,7 +260,7 @@ export function withStacks(items: LiveItem[]): LiveItem[] {
   return items.map((it) => (info.has(it.id) && it.pr ? { ...it, pr: { ...it.pr, stack: info.get(it.id) } } : it));
 }
 
-export type CheckSummary = {
+type CheckSummary = {
   text: string;
   tone: "success" | "failure" | "pending" | "neutral";
   counts: { success: number; failure: number; pending: number };

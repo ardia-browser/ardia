@@ -295,8 +295,16 @@ void TabBridge::OnWebContentsFocused(
   [tab_ notify:@selector(tabDidGainFocus:)];
 }
 
+blocked_content::PopupBlockerTabHelper* TabBridge::LivePopups() {
+  if (popups_ && popups_ != blocked_content::PopupBlockerTabHelper::FromWebContents(
+                                web_contents())) {
+    popups_ = nullptr;
+  }
+  return popups_;
+}
+
 void TabBridge::EnsurePopupsObserved() {
-  if (popups_) {
+  if (LivePopups()) {
     return;
   }
   popups_ = blocked_content::PopupBlockerTabHelper::FromWebContents(web_contents());
@@ -315,8 +323,8 @@ void TabBridge::BlockedUrlAdded(int32_t popup_id, const GURL& url) {
       FROM_HERE, base::BindOnce(
                      [](base::WeakPtr<TabBridge> bridge, int32_t popup_id,
                         NSDictionary* popup) {
-                       if (!bridge || !bridge->popups_ ||
-                           !bridge->popups_->GetBlockedPopupRequests().contains(
+                       if (!bridge || !bridge->LivePopups() ||
+                           !bridge->LivePopups()->GetBlockedPopupRequests().contains(
                                popup_id)) {
                          return;
                        }
@@ -358,10 +366,10 @@ void TabBridge::DidUpdateAudioMutingState(bool muted) {
 
 void TabBridge::WebContentsDestroyed() {
   audible_subscription_ = {};
-  if (popups_) {
+  if (LivePopups()) {
     popups_->manager()->RemoveObserver(this);
-    popups_ = nullptr;
   }
+  popups_ = nullptr;
   if (zoom_) {
     zoom_->RemoveObserver(this);
     zoom_ = nullptr;

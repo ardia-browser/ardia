@@ -10,13 +10,18 @@ store but through `storeAction` wrappers in each domain's `actions.ts` (`newTab`
 
 ## State
 - `profiles` + `profileOrder`; default profile id is `"default"`.
-- `windows`: `{ profileId, incognito, tabIds (sidebar order, pinned first), activeTabIds[profileId], sidebarOpen, frame }` + `windowOrder`.
+- `windows`: `{ profileId, incognito, tabIds (sidebar order, pinned first), activeTabIds[profileId], frame }` + `windowOrder`. Whether a window shows its tabs: `tabsShownIn(s, windowId)` (`state/browser/model.ts`) reads the window's own `autoHideTabs` (set by ⌘S in that window), else `settings.autoHideTabs`. A change to the setting, from any source, removes every window's own value; the saved session writes the result as each window's `sidebarOpen` for the launch window and older builds.
   A private window's `profileId` is `incognito:<window id>@<originalProfileId>` (`incognitoProfileId`, state/browser/model.ts),
   `originalProfileId` the regular profile it was opened from (`createWindow({ incognito: true, profileId })`, default
   `lastActiveProfile`). Its engine profile (`engineProfile`) is that profile's off-the-record one: private windows of one
   profile share a session (`privateSession(profileId)`, the regular engine name), another profile's never. Downloads
   carry `offTheRecord` and their regular profile (`downloadSession`, state/windows/ui.ts); a session's go with its last window.
 - `tabs` (persisted) vs `live` (loading/progress/back-forward/audio/theme colour; never persisted).
+- `downloads`: one record per download. A running download's `received`, `total` and `speed` are zero there: they live in
+  `useDownloadProgress` (state/downloads/progress.ts), so progress wakes only the rows that show it and never rewrites
+  downloads.json. Read a record with its progress through `useDownload(id)` (state/downloads/hooks.ts) in a component,
+  `withLiveProgress(downloads)` elsewhere (`ac.downloads.withLiveProgress` in the dev harness). A download that has
+  ended holds its final bytes in the record.
 - `groups`: `{ windowId, profileId, name, icon, color, collapsed, pinned, tabIds }` (members contiguous). `color` is
   `null` for Neutral, `"none"` for a transparent group, or one of Chrome's nine group colours.
 - `splits` (state/splits/splits.ts): `{ windowId, tabIds (2–3, pane order), orientation, sizes, stack? }` — `stack` = two panes sharing a slot the other way (Add Bottom Split). Members are contiguous in `window.tabIds`; the window's active tab is the focused pane. A split is one sidebar row (`splitRowPanes`): its panes are all unpinned, or all pinned rows; `placing`, `withGroup`, `createGroup`, `addTabsToGroup` and `removeTabsFromGroup` take every pane of a row they're given one of (`withSplitRows`), pinned panes are always rows, and a pinned split is mirrored to the profile's windows (pinMirror) and parked with them (`ParkedPins.splits`). `window.tabLayout` ("sidebar" | "top", unset = Settings).
@@ -26,13 +31,29 @@ store but through `storeAction` wrappers in each domain's `actions.ts` (`newTab`
   regular window closed with the close button is marked `lastWindow`, with `activePin` when a pinned tab was showing, and
   `openLastWindowOrNew` (state/windows/lastWindow.ts) brings it back on a Dock click or at launch);
   `downloads`; `settings` (typed, state/settings/settings.ts).
+- Interface size: `settings.interfaceScale` is the chosen size (this Mac only); `useInterfaceScale`
+  (state/settings/interfaceScale.ts) holds the applied one, which every root-point conversion reads
+  (`currentInterfaceScale`, `onInterfaceScaleChange`). `chooseInterfaceScale` (state/settings/actions.ts) snaps to a 5 %
+  step; `startInterfaceScale` (interfaceScaleSync.ts) pushes it to native. Window frames stay physical: lay out with
+  `windowRootSize` (state/windows/rootSize.ts).
 - `parkedPins[profileId]` (state/pins/parkedPins.ts): pinned tabs belong to the profile's sidebar, as in Dia. Closing a
   window (⌘W on its last tab, the close button, ⇧⌘W, "Start fresh" on launch) parks its pinned tiles (at their pinned
   URL) and pinned groups, with their order and tab/group ids; the next window that shows the profile takes them back,
   unloaded (`createWindow` — ⌘N, the Dock, a link from another app, the first window after a relaunch —,
   `switchProfile`, Reopen Closed Window, ⇧⌘T of a tile's page), and the park empties, so nothing comes back twice.
-  Only the last window of a profile parks: while another window shows the profile, the pins are there.
+  Only the last window of a profile parks: while another window shows the profile, the pins are there. With Share tabs
+  across windows on, a closing window's profiles that no open window holds go to the open window used last, pins
+  included (`handOverTabs`, then `handOverPins` adopts what the close parked; state/tabs/sharedWindowClose.ts).
   Sync publishes parked pins as the profile's pins and applies changes to them in place (state/sync/adapters `pinnedAdapter`).
+  A session save that would drop pinned tabs or pinned folders of a profile that still exists first appends one entry to
+  `pins-backup.json` (newest 20 saves; state/session/pinGuard.ts): `dropped` counts the keys each profile lost and `pins`
+  holds each such profile's previous pins in parked-pins shape, without merging pins of the same page. To restore, merge
+  the entry's tabs, groups and splits whose ids `parkedPins[profileId]` doesn't have yet; never replace newer parked pins.
+  The next window showing the profile adopts them.
+  The whole session also has immutable daily backups (`session-backup-<ms>.json`, the 7 newest kept) and pre-migration
+  snapshots (`session-premigration-<ms>.json`, the 3 newest kept), and a damaged `session.json`
+  is copied aside and the newest backup restored before anything is saved over it (`state/session/sessionSafety.ts`,
+  docs/conventions.md).
 - Pins are per profile in every window (state/pins/pinMirror.ts): each regular window showing a profile holds its own copy
   (a Tab, a TabGroup) of every pinned tile and pinned group, linked by `pinKey` (unset on the first copy, whose id is
   the key; `pinKeyOf`). A store listener (`mirrorPins`) carries a change of one window's pinned section to the others
@@ -207,11 +228,16 @@ ordered transaction that names its cause. There are no echo windows, timers or "
     place, keeping a group both neighbours share). A split is one row: its panes move together and nothing lands
     between them;
   - a new active tab that stayed in the strip is shown (`activate`'s rules, opener bookkeeping included), unless
-    it's Chrome's pick of a successor (`activePickedOnClose`; from engines that don't say, any activation that comes
-    with the old active tab leaving): then the store's own rule (state/tabs/openers.ts) decides. An explicit activation
+    it's Chrome's pick of a successor (`activePickedOnClose`, counted only while the old active tab left the strip in
+    this change, so a flag still held from an earlier close never stops a switch; from engines that don't say, any
+    activation that comes with the old active tab leaving): then the store's own rule (state/tabs/openers.ts)
+    decides. An extension that activates another tab and then discards the shown one (Auto Tab Discard) is a switch
+    too: the old tab stays in the strip, so there is no successor to pick. An explicit activation
     in the same change as the close (an extension's remove then update) is a switch, and wins over the store's
-    successor command still on its way. A split's other pane and a tab of a profile the window isn't showing
-    aren't shown (the focused pane changes on user focus; profiles keep their own tab);
+    successor command still on its way. A tab of another space that shares the window's data is shown too: the
+    window switches to that space (otherwise the app would send Chrome back to the tab being discarded). A split's
+    other pane and a tab of a space with its own data aren't shown (the focused pane changes on user focus;
+    spaces with their own data keep their own tab);
   - a tab Chrome made (`tab:` adoption) takes Chrome's pin, place and activation the first time the app sees it;
     a tab arriving in a strip of another app window (an extension moving it; the window is `appWindow`, else the
     one its other tabs are in) changes window as it is, page and live state included (`intoWindow`; its view takes
@@ -234,7 +260,7 @@ ordered transaction that names its cause. There are no echo windows, timers or "
   strip's window is never inferred from its tabs.
 - Tests: `src/state/tabs/liveTabs.test.mjs` runs the real wiring against a fake engine that keeps this contract.
 
-## Sync (apps/browser/src/sync, packages/sync)
+## Sync (apps/browser/src/state/sync, packages/sync)
 - End-to-end-encrypted sync through a folder the user picks; design in `docs/sync.md`. `state/sync/engine.ts` owns the
   state (`useSync`: status, devices, other devices' tabs), the setup flows and the cycle; `state/sync/adapters.ts` maps the
   store to synced records (bookmarks, history, open tabs, pinned tabs and pinned groups, settings, passwords).

@@ -10,7 +10,9 @@
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+#include "chrome/browser/ui/browser_window/public/desktop_browser_window_capabilities.h"
 #include "components/permissions/chooser_controller.h"
+#include "components/sessions/content/content_live_tab.h"
 #include "components/sessions/core/live_tab.h"
 #include "components/sessions/core/session_id.h"
 #include "components/tabs/public/tab_interface.h"
@@ -23,9 +25,14 @@
 #include "ardia/core/ac_browser_window.h"
 #include "ardia/core/ac_desktop_capture.h"
 #include "ardia/core/ac_device_chooser.h"
+#include "ardia/core/ac_discard_veto.h"
 #include "ardia/core/ac_extension_shortcuts.h"
 #include "ardia/core/ac_extension_view.h"
+#include "ardia/core/ac_host_visibility.h"
 #include "ardia/core/ac_installed_bubble.h"
+#include "ardia/core/ac_launch_switches.h"
+#include "ardia/core/ac_windowless_page.h"
+#include "ui/base/cocoa/drag_permission.h"
 #import "ardia/core/ardiacore_api_internal.h"
 #import "ardia/core/ardiacore_internal.h"
 
@@ -53,6 +60,11 @@ bool HandleExtensionSidePanel(BrowserWindowInterface* browser_window,
 }
 
 bool LiveTabSkipsRestore(sessions::LiveTab* live_tab, SessionID* source) {
+  if (live_tab &&
+      InAutomationWindow(
+          &static_cast<sessions::ContentLiveTab*>(live_tab)->GetWebContents())) {
+    return true;
+  }
   int32_t source_id = 0;
   if (!live_tab || !IsTemporaryTabId(live_tab->GetSessionID().id(), &source_id)) {
     return false;
@@ -97,16 +109,19 @@ std::unique_ptr<BrowserWebContentsDelegate> CreateWebContentsDelegate(
       ours->host_weak());
 }
 
-const char* BrowserTypeName(BrowserWindowInterface::Type type) {
-  switch (type) {
+const char* BrowserTypeName(const BrowserWindowInterface* browser) {
+  if (DesktopBrowserWindowCapabilities::IsDocumentPictureInPicture(browser)) {
+    return "picture_in_picture";
+  }
+  switch (browser->GetType()) {
     case BrowserWindowInterface::TYPE_NORMAL:
       return "normal";
     case BrowserWindowInterface::TYPE_POPUP:
       return "popup";
     case BrowserWindowInterface::TYPE_DEVTOOLS:
       return "devtools";
-    case BrowserWindowInterface::TYPE_PICTURE_IN_PICTURE:
-      return "picture_in_picture";
+    case BrowserWindowInterface::TYPE_FLOATING:
+      return "floating";
     default:
       return "app";
   }
@@ -114,13 +129,13 @@ const char* BrowserTypeName(BrowserWindowInterface::Type type) {
 
 BrowserWindow* WindowForChromeBrowser(Browser* browser) {
   if (ACBrowserWindow::IsOurs(browser) ||
-      browser->GetType() == BrowserWindowInterface::TYPE_PICTURE_IN_PICTURE) {
+      DesktopBrowserWindowCapabilities::IsDocumentPictureInPicture(browser)) {
     return nullptr;
   }
   ArdiaCoreWindow* window = [g_delegate
       engineWindowForNewBrowserOfProfile:[ArdiaCoreProfile
                                              wrapperFor:browser->GetProfile()]
-                                    type:@(BrowserTypeName(browser->GetType()))];
+                                    type:@(BrowserTypeName(browser))];
   WindowHost* host = window.host;
   return host ? host->HostChromeBrowser(browser) : nullptr;
 }
@@ -171,7 +186,12 @@ void InstallChromeHooks() {
   g_ardia_live_tab_skips_restore = &LiveTabSkipsRestore;
   g_ardia_omits_from_session_service = &OmitsFromSessionService;
   g_ardia_viewless_browsers = true;
+  InstallWindowlessPageGeometry();
+  InstallDiscardVeto();
   ardia::InstallCliVisibleTabs();
+  if (TestFlag("nativeDragRefused")) {
+    ui::ArdiaRefuseDragSessionInitiation();
+  }
 }
 
 }

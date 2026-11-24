@@ -10,6 +10,7 @@ protocol PageTab: NSView {
   var temporarySource: String? { get set }
   var extensionHost: String? { get set }
   var visible: Bool { get set }
+  var selected: Bool { get set }
   var warm: Bool { get set }
   var neighbour: Bool { get set }
   var pageBackgroundColor: NSColor? { get set }
@@ -31,6 +32,7 @@ protocol PageTab: NSView {
   func reloadIgnoringCache()
   func stopLoading()
   func focusPage()
+  func focusPageIfUnfocused() -> Bool
   func setMuted(_ muted: Bool)
   func zoomStep(_ direction: Int)
   func find(_ text: String, forward: Bool, findNext: Bool)
@@ -49,17 +51,22 @@ protocol PageTab: NSView {
   func requestPictureInPicture(clickAt: Double, control: Int, _ completion: @escaping (Bool) -> Void)
   func takeControlPress(clickAt: Double, control: Int) -> Bool
   func exitPictureInPicture()
+  func armElementPick() -> Double
+  func takeElementPick(_ armed: Double) -> Bool
 
   func securityInfo(_ completion: @escaping ([String: Any]) -> Void)
   func pageCookies(_ urls: [String], completion: @escaping ([[String: Any]]?) -> Void)
+  func siteData(_ request: [String: Any], completion: @escaping ([String: Any]?) -> Void)
   func openBlockedPopup(_ popupId: String, always: Bool)
   func clearSiteData(_ reply: @escaping (Any?, String?) -> Void)
 
   func resolvePasswordPrompt(_ action: String, username: String?, password: String?)
   func resolveAutofillPrompt(_ promptId: Int, action: String)
+  func answerAutofillPrompt(_ promptId: Int, action: String) -> Bool
   func executeExtensionAction(_ extensionId: String) -> String?
   func resolveDisplayMedia(_ requestId: String, sourceId: String?, audio: Bool)
   func notificationAction(_ notificationId: String, action: String)
   func resolveUnresponsive(terminate: Bool)
   func discard(unload: Bool) -> String
+  func sleepIfHidden(for seconds: Double) -> [NSNumber]
 }

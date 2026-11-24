@@ -18,6 +18,8 @@ export {
   WindowDragRegion,
 } from "./web/chrome";
 export { FadeLabel } from "./web/FadeLabel";
+export { EdgeFadeMask } from "./web/EdgeFadeMask";
+export { FolderIcon } from "./web/FolderIcon";
 export { MouseArea } from "./web/MouseArea";
 export { showMenu } from "./web/menus";
 
@@ -53,6 +55,9 @@ provideNativeModule("ArdiaApp", {
   launchConfig: () => LAUNCH_CONFIG,
   appIcons: async () => [],
   appIcon: async () => null,
+  interfaceScale: () => 1,
+  interfaceScaleRange: () => [1, 1],
+  setInterfaceScale: async () => 1,
 });
 provideNativeModule("ArdiaCalendar", { authorizationStatus: () => "notDetermined" });
 provideNativeModule("ArdiaCli", { installedVersion: () => null });
@@ -64,9 +69,22 @@ let appearance: "auto" | "light" | "dark" = "auto";
 
 provideNativeModule("ArdiaDocuments", {
   readDocument: (name: string) => documents.get(name) ?? null,
+  documentExists: (name: string) => documents.has(name),
   writeDocument: (name: string, contents: string) => void documents.set(name, contents),
   saveDocument: async (name: string, contents: string) => void documents.set(name, contents),
   removeDocument: (name: string) => void documents.delete(name),
+  syncDocument: async (name: string) => {
+    if (!documents.has(name)) throw Object.assign(new Error("gone"), { code: "ERR_DOCUMENT_GONE" });
+  },
+  createDocument: async (name: string, contents: string) => {
+    if (documents.has(name)) throw Object.assign(new Error("exists"), { code: "ERR_DOCUMENT_EXISTS" });
+    documents.set(name, contents);
+  },
+  listDocuments: (prefix: string) => [...documents.keys()].filter((name) => name.startsWith(prefix)),
+  copyDocument: async (name: string, copyName: string) => {
+    const contents = documents.get(name);
+    if (contents !== undefined) documents.set(copyName, contents);
+  },
 });
 provideNativeModule("ArdiaShell", {
   fetchBangList: async (_etag: string | null) => ({ status: 304, etag: null, contentType: null, body: null, bytes: 0 }),
@@ -87,8 +105,11 @@ provideNativeModule("ArdiaDialogs", {
     window.prompt(options.message ? `${options.title}\n\n${options.message}` : options.title, options.value ?? ""),
 });
 provideNativeModule("ArdiaAppWindows", {
+  windowCornerRadius: () => 19,
+  drawnWindowCornerRadius: () => 19,
   windowIds: async () => [] as string[],
   windowFrame: async (_id: string): Promise<[number, number, number, number] | null> => null,
+  frameCornerRadius: async (_id: string): Promise<number> => 0,
   setTrafficLightsCenter: async (windowId: string, next: [number, number] | null, trailing: boolean) => setTrafficLightsCenter(windowId, next, trailing),
 });
 darkQuery?.addEventListener("change", (e) => appearance === "auto" && emitAppEvent({ type: "appearance", dark: e.matches }));

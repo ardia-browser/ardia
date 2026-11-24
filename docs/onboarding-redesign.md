@@ -19,13 +19,14 @@ reflects every choice so far and animates from one state to the next.
 | 3 | Layout | Tabs: Sidebar / Top · Address bar: Toolbar / Sidebar (hidden with top tabs) · ⌘L: Under the address / Centred. A tag shows "Arc-style", "Dia-style" or "Your mix". |
 | 4 | Tabs | ⌘T: New Tab page / Command bar · New tabs: Bottom / Top · Old tabs: Keep / Tidy after 12 h, 1 day, 1 week · On quit: Restore / Start fresh · Windows: Separate / Shared tabs. More options: Top Apps grid, peek modifier, ⌘Z reopens closed tab, ⌘-click tab groups. |
 | 5 | Look | Theme color · Auto / Light / Dark · Page frame: Framed / Thin / Edge to edge and a slider (asked with every preset) · Website color in the tab bar on / off. More options: app icon, hide toolbar while scrolling, bookmarks bar. |
-| 6 | Search & privacy | Search engine tiles · Typing a word: Website first / Search first · Block ads, trackers, cookie banners · Crash reports (today's receipt). |
+| 6 | Search & privacy | Search engine tiles · Block ads, trackers, cookie banners · Crash reports (today's receipt). |
 | 7 | Pin your apps | today's step, preselected from the imported history once the import has finished |
 | 8 | Make it home | Default browser (7-day trial), Dock, open at login, links from other apps in Little Ardia / a tab |
-| 9 | Outro | postcard listing what you picked · Get Started / Take the Tour |
+| 9 | Want the extras? | Official plugins (`docs/plugins.md` › where they're offered): Command Line, ticked. Install shows what it gets and asks before anything is installed. Left out where no official plugin can be offered. |
+| 10 | Outro | postcard listing what you picked · Get Started / Take the Tour |
 
 Every screen has Skip, which keeps the preset, and the progress dots. Going back keeps your choices. The `ardia`
-CLI step leaves onboarding and stays in Settings › Advanced.
+command is offered as an official plugin on screen 9 and in Settings › Plugins.
 
 ## Presets
 
@@ -53,10 +54,9 @@ Settings. "Starting fresh" or skipping the Source screen keeps the full question
 | ⌘-click makes a group (`cmdClickCreatesTabGroup`) | off | on | off | off | off | off | off | off | on |
 | Appearance (`appearance`) | auto | auto | auto | auto | auto | auto | auto | auto | auto |
 | Site color in tab bar (`extendWebsiteColor`) | off | on | off | off | off | on | off | off | on |
-| Hide toolbar while scrolling (`hideToolbarWhileScrolling`) | on | on | off | off | off | off | off | off | on |
+| Hide toolbar while scrolling (`hideToolbarWhileScrolling`) | on | on | off | off | off | off | off | off | off |
 | Bookmarks bar (`bookmarksBar`) | never | never | never | New Tab | New Tab | never | New Tab | New Tab | never |
 | Search engine (`searchEngine`) | Google | Google | Google | Google | Google | Google | Brave Search | Bing | Google |
-| Typing a word (`commandBarPreference`) | website | website | search | search | search | search | search | search | website |
 | Links from other apps (`openLinksInLittleArdia`) | Little Ardia | Little Ardia | tab | tab | tab | tab | tab | tab | Little Ardia |
 
 Deliberate departures from the source browser:

@@ -38,6 +38,7 @@ export const configureExtension = async (
   profile: string,
   options: {
     pinned?: boolean;
+    pinnedIndex?: number;
     incognito?: boolean;
     fileAccess?: boolean;
     userScripts?: boolean;
@@ -46,12 +47,14 @@ export const configureExtension = async (
 ) => {
   await call("extensions.configure", { profile, id, options });
 };
-export const extensionActionStates = async (tabId: string, ids: string[]): Promise<Record<string, ActionState>> =>
-  ids.length ? call("extensions.actionStates", { tabId, ids }) : {};
+export const extensionActionStates = async (tabId: string, ids: string[], profile: string): Promise<Record<string, ActionState>> =>
+  ids.length ? call("extensions.actionStates", { profile, tabId, ids }) : {};
 export const watchExtensionActions = (profile: string) => call("extensions.watchActions", { profile });
-export const resolveExtensionInstallPrompt = (requestId: string, accepted: boolean) => call("extensions.resolveInstallPrompt", { requestId, accepted });
-export const extensionSidePanelUrl = (tabId: string, extensionId: string) => call("extensions.sidePanelUrl", { tabId, extensionId });
+export const resolveExtensionInstallPrompt = ({ requestId, profile }: Pick<ExtensionInstallPrompt, "requestId" | "profile">, accepted: boolean) =>
+  call("extensions.resolveInstallPrompt", { profile, requestId, accepted });
+export const extensionSidePanelUrl = (tabId: string, extensionId: string, profile: string) => call("extensions.sidePanelUrl", { profile, tabId, extensionId });
 export const extensionsSyncState = (profile: string) => call("extensions.syncState", { profile });
+export const extensionsLoadHealth = (profile: string) => call("extensions.loadHealth", { profile });
 export const applyExtensionsSync = (profile: string, apply: ExtensionsSyncApply) => call("extensions.syncApply", { ...apply, profile });
 
 export const onExtensionsChanged = (listener: (e: ExtensionsChange) => void) => on("extensions.changed", listener);

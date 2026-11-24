@@ -3,243 +3,300 @@ import ArdiaCore
 import ExpoModulesCore
 import LocalAuthentication
 
-public class SyncModule: Module {
+public class SyncModule: Module, SyncNative {
   private let state = KeyState()
   private let owner = DeviceOwnerCheck()
   private static let work = DispatchQueue(label: "ardia.sync", qos: .utility)
 
-  public func definition() -> ModuleDefinition {
-    Name("ArdiaSync")
+  static var queue: DispatchQueue { work }
 
-    OnCreate { Self.work.async { Self.removeTemporaryKits() } }
+  static func folderInfo(_ path: String?) -> [String: Any] {
+    let url = path.map { URL(fileURLWithPath: $0, isDirectory: true) } ?? Self.defaultFolder
+    var isDirectory: ObjCBool = false
+    let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) && isDirectory.boolValue
+    return [
+      "path": url.path,
+      "defaultPath": Self.defaultFolder.path,
+      "iCloudAvailable": Self.testFolder != nil || SyncFolder.iCloudDriveAvailable,
+      "inICloud": SyncFolder.isInICloudDrive(url),
+      "exists": exists,
+      "writable": exists && FileManager.default.isWritableFile(atPath: url.path),
+      "hasSyncData": exists && SyncFolder.hasSyncData(url),
+    ]
+  }
 
-    AsyncFunction("folderInfo") { (path: String?) -> [String: Any] in
-      let url = path.map { URL(fileURLWithPath: $0, isDirectory: true) } ?? Self.defaultFolder
-      var isDirectory: ObjCBool = false
-      let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) && isDirectory.boolValue
-      return [
-        "path": url.path,
-        "defaultPath": Self.defaultFolder.path,
-        "iCloudAvailable": Self.testFolder != nil || SyncFolder.iCloudDriveAvailable,
-        "inICloud": SyncFolder.isInICloudDrive(url),
-        "exists": exists,
-        "writable": exists && FileManager.default.isWritableFile(atPath: url.path),
-        "hasSyncData": exists && SyncFolder.hasSyncData(url),
-      ]
-    }.runOnQueue(Self.work)
+  static func chooseFolder(_ current: String?, _ promise: Promise) {
+    let panel = NSOpenPanel()
+    panel.canChooseFiles = false
+    panel.canChooseDirectories = true
+    panel.canCreateDirectories = true
+    panel.allowsMultipleSelection = false
+    panel.prompt = "Use Folder"
+    panel.message = "Choose a folder that syncs between your Macs, like one in iCloud Drive or Dropbox, or on a NAS or USB drive."
+    if let current { panel.directoryURL = URL(fileURLWithPath: current, isDirectory: true) }
+    panel.begin { response in promise.resolve(response == .OK ? panel.url?.path : nil) }
+  }
 
-    AsyncFunction("chooseFolder") { (current: String?, promise: Promise) in
-      let panel = NSOpenPanel()
-      panel.canChooseFiles = false
-      panel.canChooseDirectories = true
-      panel.canCreateDirectories = true
-      panel.allowsMultipleSelection = false
-      panel.prompt = "Use Folder"
-      panel.message = "Choose a folder that syncs between your Macs, like one in iCloud Drive or Dropbox, or on a NAS or USB drive."
-      if let current { panel.directoryURL = URL(fileURLWithPath: current, isDirectory: true) }
-      panel.begin { response in promise.resolve(response == .OK ? panel.url?.path : nil) }
-    }.runOnQueue(.main)
+  static func newDeviceId() -> String { SyncKeys.newFileId() }
 
-    Function("newDeviceId") { SyncKeys.newFileId() }
+  static var core: String { SyncKeys.backend }
 
-    Function("deviceName") { Host.current().localizedName ?? "This Mac" }
+  static func takeOpenFailures() -> [String: Int] { SyncKeys.takeOpenFailures() }
 
-    AsyncFunction("createPhrase") { (account: String) -> Bool in
-      let entropy = RecoveryPhrase.generateEntropy()
-      guard Self.keyStore.save(entropy, account: account) else { return false }
-      self.state.set(entropy)
-      return true
-    }.runOnQueue(Self.work)
+  static func deviceName() -> String { Host.current().localizedName ?? "This Mac" }
 
-    AsyncFunction("enterPhrase") { (account: String, text: String, folder: String) -> [String: Any] in
-      let entropy: Data
-      do {
-        entropy = try RecoveryPhrase.entropy(from: text)
-      } catch let problem as RecoveryPhrase.Problem {
-        switch problem {
-        case .wordCount(let n): return ["error": "wordCount", "count": n]
-        case .unknownWord(let word): return ["error": "unknownWord", "word": word]
-        case .checksum: return ["error": "checksum"]
-        }
-      }
-      let folderURL = URL(fileURLWithPath: folder, isDirectory: true)
-      if !SyncVault(folder: folderURL, keys: SyncKeys(entropy: entropy)).chainExists() {
-        return ["error": SyncFolder.hasSyncData(folderURL) ? "mismatch" : "noData"]
-      }
-      guard Self.keyStore.save(entropy, account: account) else { return ["error": "keychain"] }
-      self.state.set(entropy)
-      return ["ok": true]
-    }.runOnQueue(Self.work)
+  func createPhrase(_ account: String) -> Bool {
+    let entropy = RecoveryPhrase.generateEntropy()
+    guard Self.keyStore.save(entropy, account: account) else { return false }
+    self.state.set(entropy)
+    return true
+  }
 
-    AsyncFunction("unlock") { (account: String) -> Bool in
-      guard let entropy = Self.keyStore.load(account: account), entropy.count == 32 else { return false }
-      self.state.set(entropy)
-      return true
-    }.runOnQueue(Self.work)
-
-    AsyncFunction("forget") { (account: String) in
-      Self.keyStore.delete(account: account)
-      self.state.set(nil)
-      self.owner.revoke()
-    }.runOnQueue(Self.work)
-
-    AsyncFunction("chainStatus") { (folder: String) throws -> String in
-      let vault = try self.vault(folder)
-      var isDirectory: ObjCBool = false
-      guard FileManager.default.fileExists(atPath: folder, isDirectory: &isDirectory), isDirectory.boolValue else { return "unavailable" }
-      return vault.chainExists() ? "ok" : "missing"
-    }.runOnQueue(Self.work)
-
-    AsyncFunction("createChain") { (folder: String) throws in
-      try FileManager.default.createDirectory(at: URL(fileURLWithPath: folder, isDirectory: true), withIntermediateDirectories: true)
-      try self.vault(folder).createChain()
-    }.runOnQueue(Self.work)
-
-    AsyncFunction("write") { (folder: String, scope: String, payload: String) throws -> String in
-      try self.ensureLocalStateReadable()
-      let vault = try self.vault(folder)
-      return try vault.write(scope: scope, payload: LegacyPasswords.restore(Data(payload.utf8), keys: vault.keys))
-    }.runOnQueue(Self.work)
-
-    AsyncFunction("read") { (folder: String, scope: String, known: [String]) throws -> [String: Any] in
-      let vault = try self.vault(folder)
-      let listing: SyncVault.Listing
-      do {
-        listing = try vault.read(scope: scope, skipping: Set(known))
-      } catch {
-        throw Exception(name: "folderUnreadable", description: "The sync folder couldn't be read: \(error.localizedDescription)", code: "ERR_SYNC_FOLDER_UNREADABLE")
-      }
-      var files: [[String: Any]] = []
-      var damaged: [[String: Any]] = listing.damaged.map { ["id": $0.id, "age": $0.age * 1000] }
-      for file in listing.files {
-        if let payload = LegacyPasswords.hide(file.payload, keys: vault.keys) {
-          files.append(["id": file.id, "payload": payload])
-        } else {
-          damaged.append(["id": file.id, "age": 0])
-        }
-      }
-      return ["files": files, "pending": listing.pending, "damaged": damaged, "present": listing.present]
-    }.runOnQueue(Self.work)
-
-    AsyncFunction("remove") { (folder: String, scope: String, ids: [String]) throws in
-      try self.vault(folder).remove(scope: scope, ids: ids)
-    }.runOnQueue(Self.work)
-
-    AsyncFunction("deleteChain") { (folder: String) throws in
-      try self.vault(folder).deleteChain()
-    }.runOnQueue(Self.work)
-
-    AsyncFunction("sealLocal") { (text: String) throws -> String in
-      try self.ensureLocalStateReadable()
-      guard let keys = self.state.keys else { throw Exception(name: "locked", description: "Sync isn't set up on this Mac.") }
-      return try keys.seal(Data(text.utf8), scopeTag: "local", fileId: "state").base64EncodedString()
-    }.runOnQueue(Self.work)
-
-    AsyncFunction("openLocal") { (sealed: String) -> String? in
-      guard let keys = self.state.keys, let data = Data(base64Encoded: sealed),
-            let plain = try? keys.open(data, scopeTag: "local", fileId: "state") else { return nil }
-      guard let json = LegacyPasswords.hide(plain, keys: keys) else {
-        self.state.markLocalUnreadable()
-        return nil
-      }
-      return json
-    }.runOnQueue(Self.work)
-
-    AsyncFunction("recoveryWords") { (promise: Promise) in
-      self.disclose(promise, on: Self.work) { try self.words() }
-    }.runOnQueue(Self.work)
-
-    AsyncFunction("qrCode") { (promise: Promise) in
-      self.disclose(promise, on: Self.work) { () throws -> String? in
-        guard let image = RecoveryKit.qrCode(words: try self.words()), let png = RecoveryKit.png(image) else { return nil }
-        return "data:image/png;base64," + png.base64EncodedString()
-      }
-    }.runOnQueue(Self.work)
-
-    AsyncFunction("recoveryKitPreview") { (width: Double) throws -> String? in
-      _ = try self.words()
-      return Self.preview(width: CGFloat(width))
-    }.runOnQueue(.main)
-
-    AsyncFunction("saveRecoveryKit") { (format: String, promise: Promise) in
-      guard (try? self.words()) != nil else { return promise.reject("locked", "Sync isn't set up on this Mac.") }
-      let panel = NSSavePanel()
-      let text = format == "text"
-      panel.nameFieldStringValue = text ? RecoveryKit.textName : RecoveryKit.pdfName
-      panel.allowedContentTypes = [text ? .plainText : .pdf]
-      panel.canCreateDirectories = true
-      panel.begin { response in
-        guard response == .OK, let url = panel.url else { return promise.resolve(nil) }
-        self.disclose(promise, on: .main) { () throws -> String? in
-          try Self.kit(try self.words(), text: text).write(to: url, options: [.atomic])
-          return url.path
-        }
-      }
-    }.runOnQueue(.main)
-
-    AsyncFunction("copyRecoveryKit") { (promise: Promise) in
-      self.disclose(promise, on: .main) { () throws -> Bool in
-        let url = try self.temporaryKit()
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.writeObjects([url as NSURL])
-        return true
-      }
-    }.runOnQueue(.main)
-
-    AsyncFunction("shareRecoveryKit") { (promise: Promise) in
-      self.disclose(promise, on: .main) { () throws -> Bool in
-        guard let window = NSApp.keyWindow ?? NSApp.windows.first(where: \.isVisible), let view = window.contentView else { return false }
-        let url = try self.temporaryKit()
-        let point = view.convert(window.mouseLocationOutsideOfEventStream, from: nil)
-        NSSharingServicePicker(items: [url]).show(relativeTo: NSRect(origin: point, size: .zero), of: view, preferredEdge: .minY)
-        return true
-      }
-    }.runOnQueue(.main)
-
-    AsyncFunction("copyRecoveryPhrase") { (promise: Promise) in
-      self.disclose(promise, on: .main) { () throws -> Bool in
-        let words = try self.words().joined(separator: " ")
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.declareTypes([.string, NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")], owner: nil)
-        pasteboard.setString(words, forType: .string)
-        pasteboard.setString("", forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
-        return true
-      }
-    }.runOnQueue(.main)
-
-    AsyncFunction("revealFolder") { (path: String) in
-      NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path, isDirectory: true)])
-    }.runOnQueue(.main)
-
-    AsyncFunction("readPasswords") { (engineProfile: String, promise: Promise) in
-      DispatchQueue.main.async {
-        ArdiaEngineBridge.callForSecretReply("ac_passwords_logins", profile: engineProfile, timeout: Self.loginsTimeout) { reply in
-          promise.resolve(self.sealedLogins(reply))
-        }
+  func enterPhrase(_ account: String, _ text: String, _ folder: String) throws -> [String: Any] {
+    let entropy: Data
+    do {
+      entropy = try RecoveryPhrase.entropy(from: text)
+    } catch let problem as RecoveryPhrase.Problem {
+      switch problem {
+      case .wordCount(let n): return ["error": "wordCount", "count": n]
+      case .unknownWord(let word): return ["error": "unknownWord", "word": word]
+      case .checksum: return ["error": "checksum"]
       }
     }
+    let folderURL = URL(fileURLWithPath: folder, isDirectory: true)
+    if !SyncVault(folder: folderURL, keys: SyncKeys(entropy: entropy)).chainExists() {
+      return ["error": SyncFolder.hasSyncData(folderURL) ? "mismatch" : "noData"]
+    }
+    guard Self.keyStore.save(entropy, account: account) else { return ["error": "keychain"] }
+    self.state.set(entropy)
+    return ["ok": true]
+  }
 
-    AsyncFunction("savePassword") { (engineProfile: String, origin: String, username: String, sealed: String, replacing: Bool, promise: Promise) in
-      guard let keys = self.state.keys, let password = try? keys.openPassword(sealed, origin: origin, username: username) else {
-        NSLog("[sync] a synced password didn't open for its login; not saving it")
-        return promise.resolve(false)
+  func unlock(_ account: String) -> Bool {
+    guard let entropy = Self.keyStore.load(account: account), entropy.count == 32 else { return false }
+    self.state.set(entropy)
+    return true
+  }
+
+  func forget(_ account: String) {
+    Self.keyStore.delete(account: account)
+    self.state.set(nil)
+    self.owner.revoke()
+  }
+
+  func chainStatus(_ folder: String) throws -> String {
+    let vault = try self.vault(folder)
+    var isDirectory: ObjCBool = false
+    guard FileManager.default.fileExists(atPath: folder, isDirectory: &isDirectory), isDirectory.boolValue else { return "unavailable" }
+    return vault.chainExists() ? "ok" : "missing"
+  }
+
+  func createChain(_ folder: String) throws {
+    try FileManager.default.createDirectory(at: URL(fileURLWithPath: folder, isDirectory: true), withIntermediateDirectories: true)
+    try self.vault(folder).createChain()
+  }
+
+  func write(_ folder: String, _ scope: String, _ payload: String) throws -> String {
+    try self.ensureLocalStateReadable()
+    let vault = try self.vault(folder)
+    return try vault.write(scope: scope, payload: LegacyPasswords.restore(Data(payload.utf8), keys: vault.keys))
+  }
+
+  func read(_ folder: String, _ scope: String, _ known: [String]) throws -> [String: Any] {
+    let vault = try self.vault(folder)
+    let listing: SyncVault.Listing
+    do {
+      listing = try vault.read(scope: scope, skipping: Set(known))
+    } catch {
+      throw Exception(name: "folderUnreadable", description: "The sync folder couldn't be read: \(error.localizedDescription)", code: "ERR_SYNC_FOLDER_UNREADABLE")
+    }
+    var files: [[String: Any]] = []
+    var damaged: [[String: Any]] = listing.damaged.map { ["id": $0.id, "age": $0.age * 1000] }
+    for file in listing.files {
+      if let payload = LegacyPasswords.hide(file.payload, keys: vault.keys) {
+        files.append(["id": file.id, "payload": payload])
+      } else {
+        damaged.append(["id": file.id, "age": 0])
       }
-      let save = {
-        ArdiaServices.savePassword(profile: engineProfile, origin: origin, username: username, password: password) { _, error in
-          if let error { NSLog("[sync] saving a synced password: \(error)") }
-          promise.resolve(error == nil)
-        }
+    }
+    return ["files": files, "pending": listing.pending, "damaged": damaged, "present": listing.present]
+  }
+
+  func remove(_ folder: String, _ scope: String, _ ids: [String]) throws { try self.vault(folder).remove(scope: scope, ids: ids) }
+
+  func deleteChain(_ folder: String) throws { try self.vault(folder).deleteChain() }
+
+  func sealLocal(_ text: String) throws -> String {
+    try self.ensureLocalStateReadable()
+    guard let keys = self.state.keys else { throw Exception(name: "locked", description: "Sync isn't set up on this Mac.") }
+    return try keys.seal(Data(text.utf8), scopeTag: "local", fileId: "state").base64EncodedString()
+  }
+
+  func openLocal(_ sealed: String) -> String? {
+    guard let keys = self.state.keys, let data = Data(base64Encoded: sealed),
+          let plain = try? keys.open(data, scopeTag: "local", fileId: "state") else { return nil }
+    guard let json = LegacyPasswords.hide(plain, keys: keys) else {
+      self.state.markLocalUnreadable()
+      return nil
+    }
+    return json
+  }
+
+  func recoveryWords(_ promise: Promise) { self.disclose(promise, on: Self.work) { try self.words() } }
+
+  func qrCode(_ promise: Promise) {
+    self.disclose(promise, on: Self.work) { () throws -> String? in
+      guard let image = RecoveryKit.qrCode(words: try self.words()), let png = RecoveryKit.png(image) else { return nil }
+      return "data:image/png;base64," + png.base64EncodedString()
+    }
+  }
+
+  func recoveryKitPreview(_ width: Double) throws -> String? {
+    _ = try self.words()
+    return Self.preview(width: CGFloat(width))
+  }
+
+  func saveRecoveryKit(_ format: String, _ promise: Promise) {
+    guard (try? self.words()) != nil else { return promise.reject("locked", "Sync isn't set up on this Mac.") }
+    let panel = NSSavePanel()
+    let text = format == "text"
+    panel.nameFieldStringValue = text ? RecoveryKit.textName : RecoveryKit.pdfName
+    panel.allowedContentTypes = [text ? .plainText : .pdf]
+    panel.canCreateDirectories = true
+    panel.begin { response in
+      guard response == .OK, let url = panel.url else { return promise.resolve(nil) }
+      self.disclose(promise, on: .main) { () throws -> String? in
+        try Self.kit(try self.words(), text: text).write(to: url, options: [.atomic])
+        return url.path
       }
-      DispatchQueue.main.async {
-        guard replacing else { return save() }
-        ArdiaServices.deletePassword(profile: engineProfile, origin: origin, username: username) { _, error in
-          guard let error else { return save() }
-          NSLog("[sync] replacing a saved password: \(error)")
-          promise.resolve(false)
-        }
+    }
+  }
+
+  func copyRecoveryKit(_ promise: Promise) {
+    self.disclose(promise, on: .main) { () throws -> Bool in
+      let url = try self.temporaryKit()
+      NSPasteboard.general.clearContents()
+      NSPasteboard.general.writeObjects([url as NSURL])
+      return true
+    }
+  }
+
+  func shareRecoveryKit(_ promise: Promise) {
+    self.disclose(promise, on: .main) { () throws -> Bool in
+      guard let window = NSApp.keyWindow ?? NSApp.windows.first(where: \.isVisible), let view = window.contentView else { return false }
+      let url = try self.temporaryKit()
+      let point = view.convert(window.mouseLocationOutsideOfEventStream, from: nil)
+      NSSharingServicePicker(items: [url]).show(relativeTo: NSRect(origin: point, size: .zero), of: view, preferredEdge: .minY)
+      return true
+    }
+  }
+
+  func copyRecoveryPhrase(_ promise: Promise) {
+    self.disclose(promise, on: .main) { () throws -> Bool in
+      let words = try self.words().joined(separator: " ")
+      let pasteboard = NSPasteboard.general
+      pasteboard.clearContents()
+      pasteboard.declareTypes([.string, NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")], owner: nil)
+      pasteboard.setString(words, forType: .string)
+      pasteboard.setString("", forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
+      return true
+    }
+  }
+
+  static func revealFolder(_ path: String) { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path, isDirectory: true)]) }
+
+  func readPasswords(_ engineProfile: String, _ promise: Promise) {
+    DispatchQueue.main.async {
+      ArdiaEngineBridge.callForSecretReply("ac_passwords_logins", profile: engineProfile, timeout: Self.loginsTimeout) { reply in
+        promise.resolve(self.sealedLogins(reply))
       }
-    }.runOnQueue(Self.work)
+    }
+  }
+
+  func savePassword(_ engineProfile: String, _ origin: String, _ username: String, _ sealed: String, _ replacing: Bool, _ promise: Promise) {
+    guard let keys = self.state.keys, let password = try? keys.openPassword(sealed, origin: origin, username: username) else {
+      NSLog("[sync] a synced password didn't open for its login; not saving it")
+      return promise.resolve(false)
+    }
+    let save = {
+      ArdiaServices.savePassword(profile: engineProfile, origin: origin, username: username, password: password) { _, error in
+        if let error { NSLog("[sync] saving a synced password: \(error)") }
+        promise.resolve(error == nil)
+      }
+    }
+    DispatchQueue.main.async {
+      guard replacing else { return save() }
+      ArdiaServices.deletePassword(profile: engineProfile, origin: origin, username: username) { _, error in
+        guard let error else { return save() }
+        NSLog("[sync] replacing a saved password: \(error)")
+        promise.resolve(false)
+      }
+    }
+  }
+
+  public func definition() -> ModuleDefinition {
+    Name(Self.moduleName)
+
+    OnCreate {
+      SyncKeys.consentEpoch = { ArdiaEvents.consentEpoch }
+      Self.work.async { Self.removeTemporaryKits() }
+    }
+
+    Self.folderInfoFunction
+
+    Self.chooseFolderFunction
+
+    Self.newDeviceIdFunction
+
+    Self.coreConstant
+
+    Self.takeOpenFailuresFunction
+
+    Self.deviceNameFunction
+
+    createPhraseFunction
+
+    enterPhraseFunction
+
+    unlockFunction
+
+    forgetFunction
+
+    chainStatusFunction
+
+    createChainFunction
+
+    writeFunction
+
+    readFunction
+
+    removeFunction
+
+    deleteChainFunction
+
+    sealLocalFunction
+
+    openLocalFunction
+
+    recoveryWordsFunction
+
+    qrCodeFunction
+
+    recoveryKitPreviewFunction
+
+    saveRecoveryKitFunction
+
+    copyRecoveryKitFunction
+
+    shareRecoveryKitFunction
+
+    copyRecoveryPhraseFunction
+
+    Self.revealFolderFunction
+
+    readPasswordsFunction
+
+    savePasswordFunction
   }
 
   private func disclose<T>(_ promise: Promise, on queue: DispatchQueue, _ reveal: @escaping () throws -> T?) {
@@ -258,28 +315,7 @@ public class SyncModule: Module {
 
   private func sealedLogins(_ reply: [String: Any]?) -> [[String: Any]]? {
     guard let keys = state.keys else { return nil }
-    guard let logins = reply?["logins"] as? [[String: Any]] else {
-      NSLog("[sync] reading passwords: \(reply?["error"] ?? "no reply")")
-      return nil
-    }
-    var sealed: [[String: Any]] = []
-    var seen = Set<String>()
-    for login in logins {
-      guard let realm = login["realm"] as? String, let username = login["username"] as? String,
-            let password = login["password"] as? String, let created = login["created"] as? Double else {
-        NSLog("[sync] reading passwords: a malformed login; not syncing passwords now")
-        return nil
-      }
-      guard seen.insert("\(realm)\u{0}\(username)").inserted, let origin = Self.loginOrigin(realm) else { continue }
-      guard let seal = try? keys.sealPassword(password, origin: origin, username: username) else { return nil }
-      sealed.append(["origin": origin, "username": username, "sealed": seal, "created": created])
-    }
-    return sealed
-  }
-
-  static func loginOrigin(_ realm: String) -> String? {
-    let origin = realm.hasSuffix("/") ? String(realm.dropLast()) : realm
-    return origin.range(of: #"^https?://[^/\s]+$"#, options: .regularExpression) != nil ? origin : nil
+    return SealedLogins.from(reply, seal: keys.sealPassword)
   }
 
   private func ensureLocalStateReadable() throws {

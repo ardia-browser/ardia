@@ -1,0 +1,21 @@
+#!/bin/sh
+set -e
+helper=/usr/lib/ardia/chrome-sandbox
+if [ -f "$helper" ]; then
+  chown root:root "$helper"
+  chmod 4755 "$helper"
+fi
+if [ -e /etc/apparmor.d/abi/4.0 ] && [ -f /usr/share/ardia/apparmor/ardia ]; then
+  install -m 0644 /usr/share/ardia/apparmor/ardia /etc/apparmor.d/ardia
+  if command -v apparmor_parser >/dev/null 2>&1 && [ "$(cat /sys/module/apparmor/parameters/enabled 2>/dev/null)" = Y ] && ! { [ -x /usr/bin/ischroot ] && /usr/bin/ischroot; }; then
+    apparmor_parser -r /etc/apparmor.d/ardia || true
+  fi
+fi
+if command -v update-desktop-database >/dev/null 2>&1; then update-desktop-database -q /usr/share/applications || true; fi
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true; fi
+if [ "$1" = configure ] || [ "$1" = abort-remove ] || [ "$1" = abort-deconfigure ] || [ "$1" = abort-upgrade ]; then
+  for name in x-www-browser gnome-www-browser; do
+    update-alternatives --install "/usr/bin/$name" "$name" /usr/bin/ardia 100
+  done
+fi
+exit 0

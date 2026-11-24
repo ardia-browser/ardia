@@ -60,7 +60,39 @@
   let displaySeq = 0;
   let displayMediaShim = null;
   let nativeGetDisplayMedia = null;
+  const controllerTracks = new WeakMap();
+  const usedControllers = new WeakSet();
+  let zoomLevelsShim = null;
+  let nativeZoomLevels = null;
+  const controllerProto = () => {
+    const Controller = window.CaptureController;
+    return typeof Controller === "function" ? Controller.prototype : null;
+  };
+  const installZoomLevels = () => {
+    const proto = controllerProto();
+    if (!proto || typeof proto.getSupportedZoomLevels !== "function" || zoomLevelsShim) return;
+    const trackProto = window.MediaStreamTrack && window.MediaStreamTrack.prototype;
+    const readyState = trackProto && Object.getOwnPropertyDescriptor(trackProto, "readyState");
+    const readyStateOf = readyState && readyState.get;
+    const settingsOf = trackProto && trackProto.getSettings;
+    if (!readyStateOf || !settingsOf) return;
+    if (!nativeZoomLevels) nativeZoomLevels = proto.getSupportedZoomLevels;
+    zoomLevelsShim = asNative(nativeZoomLevels, (target, self, args) => {
+      const track = controllerTracks.get(self);
+      if (!track || apply(readyStateOf, track, []) !== "live") return apply(target, self, args);
+      if (apply(settingsOf, track, []).displaySurface !== "browser") throw new DOMException("Not a supported surface type.", "NotSupportedError");
+      return [];
+    });
+    proto.getSupportedZoomLevels = zoomLevelsShim;
+  };
+  const restoreZoomLevels = () => {
+    const proto = controllerProto();
+    if (!proto || !zoomLevelsShim || proto.getSupportedZoomLevels !== zoomLevelsShim) return;
+    proto.getSupportedZoomLevels = nativeZoomLevels;
+    zoomLevelsShim = null;
+  };
   const restoreDisplayMedia = () => {
+    restoreZoomLevels();
     const devices = navigator.mediaDevices;
     const proto = devices && Object.getPrototypeOf(devices);
     if (!proto || !displayMediaShim || proto.getDisplayMedia !== displayMediaShim) return;
@@ -70,15 +102,39 @@
   const installDisplayMedia = () => {
     const devices = navigator.mediaDevices;
     const proto = devices && Object.getPrototypeOf(devices);
-    if (!proto || !proto.getDisplayMedia || displayMediaShim) return;
+    if (!proto || !proto.getDisplayMedia) return;
+    if (displayMediaShim) {
+      installZoomLevels();
+      return;
+    }
     nativeGetDisplayMedia = proto.getDisplayMedia;
     const getUserMedia = proto.getUserMedia;
+    const streamProto = window.MediaStream && window.MediaStream.prototype;
+    const videoTracksOf = streamProto && streamProto.getVideoTracks;
     const activation = navigator.userActivation;
     const activationProto = activation && Object.getPrototypeOf(activation);
     const activationState = activationProto && Object.getOwnPropertyDescriptor(activationProto, "isActive");
     const isActive = activationState && activationState.get;
     const policy = document.featurePolicy;
     const allowsFeature = policy && policy.allowsFeature;
+    installZoomLevels();
+    const isPrototypeOf = Object.prototype.isPrototypeOf;
+    const NativeTypeError = TypeError;
+    const isController = (value) => {
+      if ((typeof value !== "object" && typeof value !== "function") || value === null) return false;
+      if (!nativeZoomLevels) {
+        const controllerPrototype = controllerProto();
+        return !!controllerPrototype && apply(isPrototypeOf, controllerPrototype, [value]);
+      }
+      try {
+        apply(nativeZoomLevels, value, []);
+        return true;
+      } catch (error) {
+        return !(error instanceof NativeTypeError);
+      }
+    };
+    const badController = () =>
+      Promise.reject(new NativeTypeError("Failed to execute 'getDisplayMedia' on 'MediaDevices': Failed to read the 'controller' property from 'DisplayMediaStreamOptions': Failed to convert value to 'CaptureController'."));
     const nativeRejects = (self, options) =>
       self !== devices ||
       (options !== undefined && options !== null && typeof options !== "object" && typeof options !== "function") ||
@@ -86,17 +142,34 @@
     displayMediaShim = asNative(nativeGetDisplayMedia, (target, self, args) => {
       const constraints = args[0];
       if (nativeRejects(self, constraints)) return apply(target, self, args);
+      let controller;
+      try {
+        controller = constraints !== undefined && constraints !== null ? constraints.controller : undefined;
+      } catch (error) {
+        return Promise.reject(error);
+      }
+      if (controller !== undefined) installZoomLevels();
+      if (controller !== undefined && !isController(controller)) return badController();
       if (activation && isActive && !apply(isActive, activation, []))
         return Promise.reject(new DOMException("getDisplayMedia() requires transient activation (user gesture).", "InvalidStateError"));
+      if (controller !== undefined && usedControllers.has(controller))
+        return Promise.reject(new DOMException("A CaptureController object may only be used with a single getDisplayMedia() invocation.", "InvalidStateError"));
+      if (controller !== undefined) usedControllers.add(controller);
       return new Promise((resolve, reject) => {
         const id = ++displaySeq;
         const options = constraints || {};
-        displayRequests.set(id, { self, resolve, reject, constraints: options });
+        displayRequests.set(id, { self, resolve, reject, constraints: options, controller });
         const windowAudio = options.windowAudio === "exclude" || options.windowAudio === "window" ? options.windowAudio : "system";
-        send("displayMedia", { id, audio: !!options.audio, systemAudio: options.systemAudio !== "exclude", windowAudio });
+        send("displayMedia", { id, audio: !!options.audio, systemAudio: options.systemAudio !== "exclude", windowAudio, controller: controller !== undefined });
       });
     });
     proto.getDisplayMedia = displayMediaShim;
+    const bindController = (controller, stream) => {
+      if (controller === undefined || !videoTracksOf) return stream;
+      const track = apply(videoTracksOf, stream, [])[0];
+      if (track) controllerTracks.set(controller, track);
+      return stream;
+    };
     handlers.displayMedia = ({ id, sourceId, audio }) => {
       const request = displayRequests.get(id);
       if (!request) return;
@@ -112,7 +185,7 @@
           audio: audio === true ? { mandatory: { chromeMediaSource: "desktop" } } : false,
           video: { mandatory: { chromeMediaSource: "desktop", chromeMediaSourceId: sourceId, maxWidth: 3840, maxHeight: 2160, maxFrameRate: +frameRate || 30 } },
         },
-      ]).then(request.resolve, request.reject);
+      ]).then((stream) => request.resolve(bindController(request.controller, stream)), request.reject);
     };
   };
   installDisplayMedia();
@@ -131,11 +204,13 @@
   const frame = Math.random().toString(36).slice(2);
   const tracked = new WeakSet();
   let active = null;
+  let lastHeard = null;
   const heard = new WeakSet();
 
   const session = navigator.mediaSession;
   const actions = new Map();
   let positionState = null;
+  let timeline = null;
   const listening = new WeakSet();
   const LISTEN_TRIES = 20;
   const playingUnmuted = (m) => !m.paused && !m.ended && !m.muted && m.volume > 0;
@@ -147,6 +222,7 @@
     if (heard.has(m) || !playingUnmuted(m)) return listening.delete(m);
     if (decodedAudio(m)) {
       heard.add(m);
+      lastHeard = m;
       listening.delete(m);
       return reportNowPlaying();
     }
@@ -161,12 +237,14 @@
   const isPlaying = (m) => !m.paused && !m.ended;
   const pickMedia = () => {
     const all = [...document.querySelectorAll("video,audio")];
-    if (active && !all.includes(active) && tracked.has(active)) all.push(active);
+    for (const m of [active, lastHeard]) if (m && !all.includes(m) && tracked.has(m)) all.push(m);
     const current = all.includes(active) ? active : null;
+    const heardBefore = all.includes(lastHeard) ? lastHeard : null;
     return (
       all.find((m) => heard.has(m) && isPlaying(m)) ||
       (current && heard.has(current) ? current : null) ||
       all.find(isPlaying) ||
+      heardBefore ||
       current
     );
   };
@@ -184,14 +262,19 @@
     const size = (a) => Math.max(0, ...String(a.sizes || "0x0").split(/\s+/).map((s) => parseInt(s, 10) || 0));
     return absolute([...art].sort((a, b) => size(b) - size(a))[0].src);
   };
-  let lastNowPlaying = "";
+  const NOW_PLAYING_DRIFT_S = 1;
+  let lastNowPlaying = null;
+  let reportedMedia = null;
+  const projectedPosition = (last, now) => last.position + (last.playing ? ((now - last.at) / 1000) * last.rate : 0);
   const reportNowPlaying = later(() => {
     const el = pickMedia();
+    reportedMedia = el;
     const md = session && session.metadata;
     let state = null;
     if (el || md) {
       const duration = positionState?.duration ?? el?.duration;
       const sessionState = session ? session.playbackState : "none";
+      const onTimeline = timeline && timelineReport(timeline, el, performance.now());
       state = {
         frame,
         title: md?.title || document.title || "",
@@ -199,21 +282,30 @@
         album: md?.album || "",
         artwork: artworkOf(md),
         playbackState: sessionState !== "none" ? sessionState : el ? (el.paused || el.ended ? "paused" : "playing") : "none",
-        position: positionState?.position ?? el?.currentTime ?? 0,
+        position: onTimeline ? onTimeline.position : (el?.currentTime ?? 0),
         duration: Number.isFinite(duration) ? duration : null,
-        playbackRate: positionState?.playbackRate ?? el?.playbackRate ?? 1,
+        playbackRate: onTimeline ? onTimeline.playbackRate : (el?.playbackRate ?? 1),
         hasVideo: !!el && el.tagName === "VIDEO" && el.videoWidth > 0,
         actions: [...actions.keys()],
         controllable: !!el && heard.has(el) && (sessionState !== "none" || !oneShot(el)),
+        loop: !positionState && !!el && el.loop,
       };
       if (!state.title && !el) state = null;
     }
-    const json = serialize(state && { ...state, position: Math.round(state.position) });
-    if (json === lastNowPlaying) return;
-    lastNowPlaying = json;
-    send("nowPlaying", state && { ...state, timestamp: Date.now() });
+    const now = Date.now();
+    const key = serialize(state && { ...state, position: 0 });
+    const last = lastNowPlaying;
+    if (last && key === last.key && (!state || Math.abs(state.position - projectedPosition(last, now)) < NOW_PLAYING_DRIFT_S)) return;
+    lastNowPlaying = { key, position: state ? state.position : 0, at: now, playing: !!state && state.playbackState === "playing", rate: (state && state.playbackRate) || 1 };
+    send("nowPlaying", state && { ...state, timestamp: now });
   }, 100);
   let blockAutoplay = false;
+  let usedHere = false;
+  const noteUse = (e) => {
+    if (e.isTrusted && !(e.type === "keydown" && (e.key === "Escape" || e.metaKey))) usedHere = true;
+  };
+  for (const type of ["pointerdown", "keydown"]) window.addEventListener(type, noteUse, true);
+  const askedToPlay = () => usedHere || (!isTop && !!(navigator.userActivation && navigator.userActivation.isActive));
   let pipTrace = false;
   let pipHandlerSet = null;
   const playingMedia = new Set();
@@ -222,13 +314,16 @@
     if (!(m instanceof HTMLMediaElement)) return;
     if (e.type === "play" || e.type === "playing") playingMedia.add(m);
     else if (e.type === "pause" || e.type === "ended" || e.type === "emptied") playingMedia.delete(m);
-    if (blockAutoplay && e.type === "play" && !(navigator.userActivation && navigator.userActivation.hasBeenActive)) {
+    if (blockAutoplay && e.type === "play" && !askedToPlay()) {
       m.pause();
       return;
     }
+    if (e.type === "emptied") timeline?.mediaTimes.delete(m);
     if (e.type === "play" || e.type === "playing") {
       active = m;
       watchRemoval(m);
+      const joinedAt = timeline && anchorStartedMedia(timeline, m, reportedMedia, performance.now());
+      if (joinedAt != null) restartTimelineClock(joinedAt);
     }
     noteHeard(m);
     if (e.type !== "volumechange") reportNowPlaying();
@@ -259,24 +354,27 @@
       for (const e of mediaEvents) self.addEventListener(e, onMediaEvent);
       for (const watch of detachedMediaWatchers) guard(watch)(self);
     }
+    if (media && blockAutoplay && !askedToPlay())
+      return Promise.reject(new DOMException("play() failed because the user didn't interact with the document first.", "NotAllowedError"));
     return apply(target, self, args);
   });
 
   const proto = session && Object.getPrototypeOf(session);
   if (proto) {
-    const wrapSetter = (name) => {
+    const wrapSetter = (name, changed) => {
       const d = Object.getOwnPropertyDescriptor(proto, name);
       if (!d || !d.set) return;
       Object.defineProperty(proto, name, {
         ...d,
         set(value) {
           d.set.call(this, value);
+          changed?.();
           reportNowPlaying();
         },
       });
     };
     wrapSetter("metadata");
-    wrapSetter("playbackState");
+    wrapSetter("playbackState", () => timeline && restartTimelineClock(clockPosition(timeline.playbackRate, timeline.clock, performance.now())));
     const setActionHandler = proto.setActionHandler;
     proto.setActionHandler = function (action, handler) {
       if (action === "enterpictureinpicture") {
@@ -291,21 +389,85 @@
     };
     const setPositionState = proto.setPositionState;
     proto.setPositionState = function (state) {
-      positionState = state || null;
+      const result = setPositionState.apply(this, arguments);
+      const media = reachableMedia();
+      timeline = typeof state?.duration === "number" ? { position: state.position ?? 0, duration: state.duration, playbackRate: state.playbackRate ?? 1, mediaTimes: mediaTimesOf(media), started: [...media, ...playingMedia].some(isPlaying) } : null;
+      positionState = timeline ? state : null;
+      if (timeline) {
+        restartTimelineClock(timeline.position);
+        const reported = timeline;
+        queueMicrotask(guard(() => timeline === reported && (reported.mediaTimes = mediaTimesOf(reachableMedia()))));
+      }
       reportNowPlaying();
-      return setPositionState.apply(this, arguments);
+      return result;
     };
   }
   const playableMedia = (all) => all.find((m) => m.currentSrc || m.srcObject || m.src || m.querySelector("source[src]")) || null;
-  handlers.media = ({ action, seconds }) => {
-    const el = pickMedia() || playableMedia([...document.querySelectorAll("video,audio")]);
+  const pictureInPictureMedia = (root) => {
+    let el = root.pictureInPictureElement || null;
+    while (el?.shadowRoot?.pictureInPictureElement) el = el.shadowRoot.pictureInPictureElement;
+    return el;
+  };
+  const mediaCommandTarget = (action, inPictureInPicture, pick) => {
+    if (action !== "seekPictureInPictureBy") return { action, el: pick() };
+    if (!inPictureInPicture) return null;
+    return { action: "seekBy", el: typeof inPictureInPicture.currentTime === "number" ? inPictureInPicture : null };
+  };
+  const reachableMedia = () => [...new Set([...document.querySelectorAll("video,audio"), active, pictureInPictureMedia(document)])].filter((m) => typeof m?.currentTime === "number");
+  const clockPosition = (rate, clock, now) => {
+    return clock.position + (clock.advancing ? ((now - clock.at) / 1000) * rate : 0);
+  };
+  const timelineNow = (reported, mediaAdvance, now) => {
+    const position = mediaAdvance == null ? clockPosition(reported.playbackRate, reported.clock, now) : reported.position + mediaAdvance;
+    return { position: Math.max(0, Math.min(reported.duration, position)), duration: reported.duration };
+  };
+  const mediaTimesOf = (media) => new WeakMap(media.map((m) => [m, m.currentTime]));
+  const incidentalSound = (m, timeline) => oneShot(m) && m.duration * 2 < timeline.duration;
+  const anchorStartedMedia = (timeline, m, followed, now) => {
+    if (incidentalSound(m, timeline)) return null;
+    const started = timeline.started;
+    timeline.started = true;
+    const followedAdvance = followed === m ? null : mediaAdvanceOf(followed, timeline);
+    if (timeline.mediaTimes.has(m) && followedAdvance == null) return null;
+    const position = started ? timelineNow(timeline, followedAdvance, now).position : timeline.position;
+    timeline.mediaTimes.set(m, m.currentTime - (position - timeline.position));
+    return position;
+  };
+  const mediaAdvanceOf = (el, timeline) => (el && !incidentalSound(el, timeline) && timeline.mediaTimes.has(el) ? el.currentTime - timeline.mediaTimes.get(el) : null);
+  const timelineReport = (timeline, el, now) => {
+    const mediaAdvance = mediaAdvanceOf(el, timeline);
+    return { position: timelineNow(timeline, mediaAdvance, now).position, playbackRate: mediaAdvance == null ? timeline.playbackRate : el.playbackRate };
+  };
+  const restartTimelineClock = (position) => {
+    timeline.clock = { position, at: performance.now(), advancing: session.playbackState !== "paused" };
+  };
+  const seekByCall = (seconds, el, registered, timeline) => {
+    if (registered(seconds >= 0 ? "seekforward" : "seekbackward")) return seconds >= 0 ? ["seekforward", { seekOffset: seconds }] : ["seekbackward", { seekOffset: -seconds }];
+    const within = (position, duration) => ({ seekTime: Math.max(0, Math.min(duration || Infinity, position + seconds)) });
+    if (registered("seekto")) {
+      const at = timeline || (el && { position: el.currentTime, duration: el.duration });
+      return at ? ["seekto", within(at.position, at.duration)] : null;
+    }
+    return el ? ["currentTime", within(el.currentTime, el.duration)] : null;
+  };
+  handlers.media = ({ action: asked, seconds }) => {
+    const target = mediaCommandTarget(asked, pictureInPictureMedia(document), () => pickMedia() || playableMedia([...document.querySelectorAll("video,audio")]));
+    if (!target) return;
+    const { action, el } = target;
     const call = (name, details) => {
       const h = actions.get(name);
       if (!h) return false;
       h({ action: name, ...details });
       return true;
     };
+    const askToSeek = (name, details, landsAt) => {
+      const reported = timeline;
+      if (!call(name, details)) return false;
+      if (timeline && timeline === reported) restartTimelineClock(landsAt(timeline));
+      return true;
+    };
     const playing = session?.playbackState === "playing" || (el && !el.paused);
+    if (action === "play" || action === "toggle") usedHere = true;
     switch (action) {
       case "play":
         call("play") || el?.play();
@@ -324,12 +486,15 @@
         call("previoustrack");
         break;
       case "seekBy": {
-        const handled = seconds >= 0 ? call("seekforward", { seekOffset: seconds }) : call("seekbackward", { seekOffset: -seconds });
-        if (!handled && el) el.currentTime = Math.max(0, Math.min(el.duration || Infinity, el.currentTime + seconds));
+        const mediaAdvance = timeline && mediaAdvanceOf(el, timeline);
+        const [how, details] = seekByCall(seconds, el, (name) => actions.has(name), timeline && timelineNow(timeline, mediaAdvance, performance.now())) || [];
+        if (how === "currentTime") el.currentTime = details.seekTime;
+        else if (how === "seekto") askToSeek(how, details, () => details.seekTime);
+        else if (how) askToSeek(how, details, (reported) => clockPosition(reported.playbackRate, reported.clock, performance.now()) + seconds);
         break;
       }
       case "seekTo":
-        if (!call("seekto", { seekTime: seconds }) && el) el.currentTime = seconds;
+        if (!askToSeek("seekto", { seekTime: seconds }, () => seconds) && el) el.currentTime = seconds;
         break;
       case "stop":
         call("stop") || el?.pause();
@@ -338,9 +503,534 @@
         call("enterpictureinpicture");
         break;
     }
+    lastNowPlaying = null;
     reportNowPlaying();
   };
 
+  const fieldProviderKit = (env) => {
+    const { document, send, guard, later, onReady, revealed, addListener, apply, FrameMutationObserver, setTimeout, addEventListener, requestAnimationFrame, isTop } = env;
+    const { charCodeAt, promiseThen, imul, Detector, detect, toRGBA } = env.intrinsics;
+    const USERNAME_TOKEN = /(^|\s)(username|email|webauthn)(\s|$)/i;
+    const ONE_TIME_CODE = /(^|\s)one-time-code(\s|$)/i;
+    const USERNAME_HINT = /user|e-?mail|login|account/i;
+    const OTPAUTH_PREFIXES = ["otpauth://", "otpauth-migration://"];
+    const hasOwnToggle = (el) => {
+      for (let n = el.parentElement, depth = 0; n && depth < 3 && n.querySelectorAll("input").length === 1; n = n.parentElement, depth++)
+        for (const c of n.querySelectorAll('button, [role="button"], [aria-label], [title], [class*="eye" i], [class*="toggle" i]'))
+          if (c !== el && /show|hide|reveal|toggle|visib|eye|peek|afficher|mostrar|anzeigen/i.test((c.getAttribute("aria-label") || "") + " " + (c.getAttribute("title") || "") + " " + (c.getAttribute("class") || "")))
+            return true;
+      return false;
+    };
+    const nearPassword = (el, shown) => {
+      let scope = el.form;
+      for (let n = el.parentElement, depth = 0; !scope && n && depth < 6; n = n.parentElement, depth++)
+        if (n.querySelectorAll("input").length > 1) scope = n;
+      return !!scope && (!!scope.querySelector('input[type="password"]') || (!!shown && scope.contains(shown)));
+    };
+    const loginFieldKind = (el, shown) => {
+      if (!el || el.localName !== "input" || el.disabled || el.readOnly || el.hidden || el.type === "hidden") return null;
+      if (el.getBoundingClientRect().width < 80) return null;
+      const auto = el.getAttribute("autocomplete") || "";
+      if (el.type === "password" || el === shown) return "password";
+      if (ONE_TIME_CODE.test(auto)) return "code";
+      if (el.type === "email" || USERNAME_TOKEN.test(auto)) return "username";
+      if (el.type !== "text" && el.type !== "tel") return null;
+      const hints = [el.name, el.id, auto, el.getAttribute("placeholder") || ""].join(" ");
+      return USERNAME_HINT.test(hints) && nearPassword(el, shown) ? "username" : null;
+    };
+    const startsWithFolded = (text, prefix) => {
+      if (text.length < prefix.length) return false;
+      for (let i = 0; i < prefix.length; i++) {
+        const code = apply(charCodeAt, text, [i]);
+        const folded = code >= 65 && code <= 90 ? code + 32 : code;
+        if (folded !== apply(charCodeAt, prefix, [i])) return false;
+      }
+      return true;
+    };
+    const verificationSetupURL = (raw) =>
+      typeof raw === "string" && raw.length <= 2048 && (startsWithFolded(raw, OTPAUTH_PREFIXES[0]) || startsWithFolded(raw, OTPAUTH_PREFIXES[1])) ? raw : null;
+
+    const SVG_NS = "http://www.w3.org/2000/svg";
+    const KEY = [
+      ["path", { d: "M5 4.4a3.6 3.6 0 1 0 0 7.2a3.6 3.6 0 1 0 0-7.2ZM4.2 6.9a1.1 1.1 0 1 1 0 2.2a1.1 1.1 0 1 1 0-2.2Z", fill: "currentColor", stroke: "none", "fill-rule": "evenodd" }],
+      ["path", { d: "M8 7.1h5.6v1.8H8ZM10.6 8.9h1.5v1.9h-1.5ZM12.4 8.9h1.2v1.4h-1.2Z", fill: "currentColor", stroke: "none" }],
+      ["path", { d: "M16.6 7.1l1.9 1.9 1.9-1.9", "stroke-width": "1.4" }],
+    ];
+    const KEY_BOX = { viewBox: "0 0 22 16", width: "26", height: "19", fill: "none", stroke: "currentColor", "stroke-width": "1.35", "stroke-linecap": "round", "stroke-linejoin": "round" };
+    const KEY_CSS =
+      "button{all:initial;box-sizing:border-box;display:flex;align-items:center;justify-content:center;border-radius:6px;cursor:default;opacity:1;transition:background-color .12s;background:color-mix(in srgb,currentColor 14%,transparent)}" +
+      "button:hover{background:color-mix(in srgb,currentColor 22%,transparent)}button:active{background:color-mix(in srgb,currentColor 30%,transparent)}";
+    const ON_DARK = "#ffffff";
+    const ON_LIGHT = "#1d1d1f";
+    const DARK_LUMINANCE = 0.179;
+    const parseColor = (text) => {
+      const m = typeof text === "string" ? /^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,/]\s*([\d.]+%?))?\s*\)$/.exec(text) : null;
+      if (!m) return null;
+      const alpha = m[4] === undefined ? 1 : m[4].endsWith("%") ? parseFloat(m[4]) / 100 : parseFloat(m[4]);
+      return { r: +m[1], g: +m[2], b: +m[3], a: alpha };
+    };
+    const luminance = ({ r, g, b }) => {
+      const linear = (c) => ((c /= 255) <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+      return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+    };
+    const readColor = (css) => parseColor(css) || (toRGBA ? toRGBA(css) : null);
+    const badgeInk = (backgrounds, text, pageIsDark) => {
+      for (const background of backgrounds) {
+        const c = readColor(background);
+        if (c && c.a >= 0.5) return luminance(c) < DARK_LUMINANCE ? ON_DARK : ON_LIGHT;
+      }
+      const ink = readColor(text);
+      if (ink && ink.a >= 0.5) return luminance(ink) > 0.5 ? ON_DARK : ON_LIGHT;
+      return (typeof pageIsDark === "function" ? pageIsDark() : pageIsDark) ? ON_DARK : ON_LIGHT;
+    };
+    const pageIsDark = () => {
+      try {
+        const scheme = getComputedStyle(document.documentElement).colorScheme || "";
+        const dark = /\bdark\b/.test(scheme), light = /\blight\b/.test(scheme);
+        if (dark !== light) return dark;
+        const body = document.body ? readColor(getComputedStyle(document.body).color) : null;
+        if (body && body.a >= 0.5) return luminance(body) > 0.5;
+        return !!(typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches);
+      } catch {
+        return false;
+      }
+    };
+    const fieldInk = (field, cs) => {
+      const backgrounds = [cs.backgroundColor];
+      for (let n = field.parentElement, depth = 0; n && depth < 12; n = n.parentElement, depth++) backgrounds.push(getComputedStyle(n).backgroundColor);
+      return badgeInk(backgrounds, cs.color, pageIsDark);
+    };
+    const KEY_ASPECT = 1.4;
+    const HINT_GAP = 8;
+    const HINT_HEIGHT = 28;
+    const HINT_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+    const HINT_CSS =
+      ".chip{all:initial;box-sizing:border-box;display:flex;align-items:center;gap:6px;padding:5px 5px 5px 10px;border-radius:8px;background:#1f2328;color:#f0f6fc;border:1px solid rgba(255,255,255,.14);font:500 12.5px/18px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;white-space:nowrap;box-shadow:0 6px 18px rgba(0,0,0,.35);pointer-events:none}" +
+      "b{font-weight:650;background:rgba(255,255,255,.14);padding:0 6px;border-radius:5px}" +
+      "button{all:initial;pointer-events:auto;cursor:default;width:18px;height:18px;border-radius:5px;display:flex;align-items:center;justify-content:center;color:#9198a1;font:15px/1 -apple-system,system-ui,sans-serif}button:hover{background:rgba(255,255,255,.12);color:#f0f6fc}";
+    const KEY_REPEAT_MS = 600;
+    const QR_MIN = 64;
+    const QR_MAX = 640;
+    const QR_DETECTIONS = 12;
+    const QR_CANVAS_SCANS = 3;
+    const QR_CANVAS_RETRY_MS = 1500;
+    const LINKS_PER_SCAN = 8;
+    const FRAME_DEPTH = 4;
+
+    let config = null;
+    let listening = false;
+    let keyField = null;
+    let keyKind = null;
+    let keyHost = null;
+    let hintHost = null;
+    let hintText = null;
+    let hintClose = null;
+    let hintField = null;
+    let hintSide = "below";
+    let hintLabel = "";
+    let keyButton = null;
+    let keyClickedAt = -Infinity;
+    let reportedFocus;
+    let focusSeq = 0;
+    let observer = null;
+    let qrDetector = null;
+    let qrDetections = 0;
+    let qrChecked = new WeakMap();
+    let qrCanvasScans = new WeakMap();
+    let found = new Set();
+    const typed = new WeakSet();
+    const watchedDocuments = new WeakSet();
+
+    const findsCodes = () => !!config && config.codeSetup && isTop;
+    const wants = (kind) => !!config && (kind === "code" ? config.oneTimeCode : kind ? config.login : false);
+    const svgElement = (tag, attributes) => {
+      const el = document.createElementNS(SVG_NS, tag);
+      for (const name of Object.keys(attributes)) el.setAttribute(name, attributes[name]);
+      return el;
+    };
+    const trailingRect = (field) => {
+      const r = field.getBoundingClientRect();
+      const cs = getComputedStyle(field);
+      const size = Math.min(24, Math.max(18, r.height - 8));
+      const width = Math.round(size * KEY_ASPECT);
+      const rtl = cs.direction === "rtl";
+      const inset = Math.max(4, Math.min(10, parseFloat(rtl ? cs.paddingLeft : cs.paddingRight) || 4));
+      const border = parseFloat(rtl ? cs.borderLeftWidth : cs.borderRightWidth) || 0;
+      return { left: rtl ? r.left + border + inset : r.right - border - inset - width, top: r.top + (r.height - size) / 2, size, width, color: fieldInk(field, cs) };
+    };
+    const hideHint = () => {
+      if (hintHost) hintHost.style.display = "none";
+      hintField = null;
+    };
+    const hideKey = () => {
+      if (keyHost) keyHost.style.display = "none";
+      keyField = keyKind = null;
+      hideHint();
+    };
+    const placeHint = () => {
+      if (!hintHost || !hintField || hintField !== keyField) return;
+      const { left, top, size, width } = (env.keyRect || trailingRect)(keyField);
+      const height = (hintHost.getBoundingClientRect && hintHost.getBoundingClientRect().height) || HINT_HEIGHT;
+      const hintWidth = (hintHost.getBoundingClientRect && hintHost.getBoundingClientRect().width) || 0;
+      hintHost.style.left = Math.max(4, left + width - hintWidth) + "px";
+      hintHost.style.top = (hintSide === "above" ? Math.max(4, top - HINT_GAP - height) : top + size + HINT_GAP) + "px";
+    };
+    const makeHint = () => {
+      if (env.makeHint) return env.makeHint();
+      const host = document.createElement("ardia-field-provider-hint");
+      host.style.cssText = "all:initial;position:fixed;z-index:2147483647;display:none;";
+      const root = host.attachShadow({ mode: "closed" });
+      const style = document.createElement("style");
+      style.textContent = HINT_CSS;
+      root.appendChild(style);
+      const chip = document.createElement("div");
+      chip.className = "chip";
+      const text = document.createElement("span");
+      const close = document.createElement("button");
+      close.type = "button";
+      close.tabIndex = -1;
+      close.textContent = "\u00d7";
+      chip.appendChild(text);
+      chip.appendChild(close);
+      root.appendChild(chip);
+      return { host, text, close };
+    };
+    const showHint = (state) => {
+      const label = state && typeof state.label === "string" ? state.label : "";
+      if (!config || !keyField || !keyHost || keyHost.style.display !== "block" || !HINT_LABEL.test(label)) return hideHint();
+      if (!hintHost || !hintHost.isConnected) {
+        ({ host: hintHost, text: hintText, close: hintClose } = makeHint());
+        hintClose.setAttribute("aria-label", "Close");
+        apply(addListener, hintClose, ["mousedown", (e) => e.preventDefault()]);
+        apply(addListener, hintClose, [
+          "click",
+          guard((e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!e.isTrusted || !hintField) return;
+            hideHint();
+            send("fieldProviderHint", { state: "dismissed" });
+          }),
+        ]);
+        document.documentElement.appendChild(hintHost);
+      }
+      const side = state.side === "above" ? "above" : "below";
+      if (hintField === keyField && hintHost.style.display === "block" && hintLabel === label && hintSide === side) return placeHint();
+      hintLabel = label;
+      const bold = document.createElement("b");
+      bold.textContent = label;
+      hintText.replaceChildren("Type ", bold, " in Passwords to find this site");
+      hintSide = side;
+      hintField = keyField;
+      hintHost.style.display = "block";
+      placeHint();
+      send("fieldProviderHint", { state: "shown" });
+    };
+    const placeKey = () => {
+      if (!keyHost || !keyField) return;
+      const { left, top, size, width, color } = (env.keyRect || trailingRect)(keyField);
+      keyHost.style.left = left + "px";
+      keyHost.style.top = top + "px";
+      keyButton.style.width = width + "px";
+      keyButton.style.height = size + "px";
+      keyButton.style.color = color;
+    };
+    const makeKey = () => {
+      if (env.makeKey) return env.makeKey();
+      const host = document.createElement("ardia-field-provider");
+      host.style.cssText = "all:initial;position:fixed;z-index:2147483647;display:none;";
+      const root = host.attachShadow({ mode: "closed" });
+      const style = document.createElement("style");
+      style.textContent = KEY_CSS;
+      root.appendChild(style);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.tabIndex = -1;
+      const svg = svgElement("svg", KEY_BOX);
+      for (const [tag, attributes] of KEY) svg.appendChild(svgElement(tag, attributes));
+      button.appendChild(svg);
+      root.appendChild(button);
+      return { host, button };
+    };
+    const ensureKey = () => {
+      if (keyHost && keyHost.isConnected) return;
+      ({ host: keyHost, button: keyButton } = makeKey());
+      keyButton.title = "Passwords";
+      keyButton.setAttribute("aria-label", "Fill from Passwords");
+      apply(addListener, keyButton, ["mousedown", (e) => e.preventDefault()]);
+      apply(addListener, keyButton, [
+        "click",
+        guard((e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!e.isTrusted || !config || !keyKind || !keyField || !wants(keyKind)) return;
+          const box = (env.keyRect || trailingRect)(keyField);
+          if (!(e.clientX >= box.left - 2 && e.clientX <= box.left + box.width + 2 && e.clientY >= box.top - 2 && e.clientY <= box.top + box.size + 2)) return;
+          if (e.timeStamp - keyClickedAt < KEY_REPEAT_MS) return;
+          keyClickedAt = e.timeStamp;
+          send("fieldProvider", { field: keyKind, generation: config.generation });
+        }),
+      ]);
+      document.documentElement.appendChild(keyHost);
+    };
+    const updateKey = guard(() => {
+      if (!config) return hideKey();
+      const el = document.activeElement;
+      const kind = loginFieldKind(el, revealed());
+      if (!kind || !wants(kind)) return hideKey();
+      if (el.value && typed.has(el)) return hideKey();
+      if (kind === "password" && keyField !== el && hasOwnToggle(el)) return hideKey();
+      ensureKey();
+      keyField = el;
+      keyKind = kind;
+      keyHost.style.display = "block";
+      if (hintField && hintField !== el) hideHint();
+      placeKey();
+      placeHint();
+    });
+
+    const watchDocument = (doc) => {
+      if (watchedDocuments.has(doc)) return;
+      watchedDocuments.add(doc);
+      apply(addListener, doc, ["focusin", focusGained, true]);
+      apply(addListener, doc, ["focusout", focusLost, true]);
+    };
+    const deepActive = (doc, depth) => {
+      const el = doc.activeElement;
+      if (!el || (el.localName !== "iframe" && el.localName !== "frame") || depth >= FRAME_DEPTH) return el;
+      let inner = null;
+      try {
+        inner = el.contentDocument;
+      } catch {}
+      if (!inner) return null;
+      watchDocument(inner);
+      return deepActive(inner, depth + 1);
+    };
+    const sendFocus = (field, query) => {
+      reportedFocus = field;
+      focusSeq++;
+      send("fieldFocus", query ? { field, seq: focusSeq, generation: config.generation, query } : { field, seq: focusSeq, generation: config.generation });
+    };
+    const reportFocus = guard(() => {
+      if (!isTop || !config) return;
+      const kind = loginFieldKind(deepActive(document, 0), revealed());
+      const field = wants(kind) ? kind : null;
+      if (field !== reportedFocus) sendFocus(field);
+    });
+    const reportFocusSoon = () => setTimeout(reportFocus, 0);
+    const focusQuery = guard((query) => {
+      if (!isTop || !config || typeof query !== "string" || !query || query.length > 64) return;
+      const kind = loginFieldKind(deepActive(document, 0), revealed());
+      sendFocus(wants(kind) ? kind : null, query);
+    });
+    const focusGained = () => {
+      reportFocus();
+      reportFocusSoon();
+    };
+    const focusLost = guard(() => {
+      if (isTop && config && reportedFocus !== null) sendFocus(null);
+      reportFocusSoon();
+    });
+    const codeKey = (url) => {
+      let hash = 0x811c9dc5;
+      for (let i = 0; i < url.length; i++) hash = imul(hash ^ apply(charCodeAt, url, [i]), 0x01000193);
+      return (hash >>> 0).toString(16) + ":" + url.length.toString(36);
+    };
+
+    const noteInput = guard((e) => {
+      const el = e.target;
+      if (!el || el.localName !== "input") return;
+      if (!el.value) typed.delete(el);
+      else if (e.isTrusted) typed.add(el);
+      if (config) updateKey();
+    });
+    const qrCandidate = (el) => {
+      if (el.localName === "img" && !el.complete) return "later";
+      if (el.localName === "img" ? el.naturalWidth < QR_MIN : el.localName !== "canvas") return "never";
+      const r = el.getBoundingClientRect();
+      if (r.width < QR_MIN || r.height < QR_MIN || r.width > QR_MAX || r.height > QR_MAX) return "later";
+      const ratio = r.width / r.height;
+      if (ratio < 0.8 || ratio > 1.25) return "later";
+      return !el.checkVisibility || el.checkVisibility({ opacityProperty: true, visibilityProperty: true }) ? "yes" : "later";
+    };
+    const forgetFound = () => {
+      found = new Set();
+      qrChecked = new WeakMap();
+      qrCanvasScans = new WeakMap();
+      qrDetections = 0;
+    };
+    const noteCode = (raw, generation) => {
+      const url = verificationSetupURL(raw);
+      if (!url || !findsCodes() || config.generation !== generation) return false;
+      const key = codeKey(url);
+      if (found.has(key)) return true;
+      found.add(key);
+      send("verificationCode", { url, generation });
+      return true;
+    };
+    const scanLinks = guard(() => {
+      if (!findsCodes()) return;
+      let seen = 0;
+      for (const link of document.querySelectorAll('a[href^="otpauth" i]')) {
+        if (++seen > LINKS_PER_SCAN) return;
+        noteCode(link.getAttribute("href"), config.generation);
+      }
+    });
+    const scanQR = guard(() => {
+      if (!findsCodes() || !Detector || document.visibilityState !== "visible" || !document.querySelector("input")) return;
+      const generation = config.generation;
+      for (const el of document.querySelectorAll("img, canvas")) {
+        if (qrDetections >= QR_DETECTIONS) return;
+        const canvas = el.localName === "canvas";
+        const src = el.currentSrc || el.src || "";
+        if (canvas ? (qrCanvasScans.get(el) ?? 0) >= QR_CANVAS_SCANS : qrChecked.get(el) === src) continue;
+        const candidate = qrCandidate(el);
+        if (!canvas && candidate !== "later") qrChecked.set(el, src);
+        if (candidate !== "yes") continue;
+        qrDetections++;
+        if (canvas) qrCanvasScans.set(el, (qrCanvasScans.get(el) ?? 0) + 1);
+        if (!qrDetector) qrDetector = new Detector({ formats: ["qr_code"] });
+        const scans = qrCanvasScans;
+        apply(promiseThen, apply(detect, qrDetector, [el]), [
+          guard((codes) => {
+            let accepted = false;
+            for (let i = 0; i < codes.length; i++) if (noteCode(codes[i] && codes[i].rawValue, generation)) accepted = true;
+            if (canvas && accepted) scans.set(el, QR_CANVAS_SCANS);
+            else if (canvas && scans.get(el) < QR_CANVAS_SCANS) setTimeout(scanSoon, QR_CANVAS_RETRY_MS);
+          }),
+          () => {},
+        ]);
+      }
+    });
+    const scan = () => {
+      scanLinks();
+      scanQR();
+    };
+    const scanSoon = later(scan, 400);
+    const listen = () => {
+      if (listening) return;
+      listening = true;
+      watchDocument(document);
+      document.addEventListener("focusin", updateKey, true);
+      document.addEventListener("focusin", () => findsCodes() && scanSoon(), true);
+      document.addEventListener(
+        "focusout",
+        guard((e) => {
+          setTimeout(() => document.activeElement !== e.target && updateKey(), 0);
+        }),
+        true,
+      );
+      document.addEventListener("input", noteInput, true);
+      document.addEventListener("load", (e) => findsCodes() && e.target && e.target.localName === "img" && scanSoon(), true);
+      document.addEventListener("visibilitychange", () => findsCodes() && scanSoon());
+      addEventListener("pageshow", (e) => e.isTrusted && e.persisted && forgetFound());
+      addEventListener("focus", focusGained, true);
+      addEventListener("blur", focusLost, true);
+      addEventListener("scroll", () => keyField && requestAnimationFrame(() => (placeKey(), placeHint())), { passive: true, capture: true });
+      addEventListener("resize", () => keyField && requestAnimationFrame(() => (placeKey(), placeHint())));
+      addEventListener("pagehide", hideHint);
+    };
+    const stopScanning = () => {
+      if (observer) observer.disconnect();
+      observer = null;
+    };
+    const configure = (state) => {
+      const next =
+        state && typeof state === "object"
+          ? { login: state.login === true, oneTimeCode: state.oneTimeCode === true, codeSetup: state.codeSetup === true, generation: typeof state.generation === "number" ? state.generation : 0 }
+          : null;
+      const previous = config;
+      config = next && (next.login || next.oneTimeCode || next.codeSetup) ? next : null;
+      if (!config) {
+        hideKey();
+        stopScanning();
+        found = new Set();
+        reportedFocus = undefined;
+        return;
+      }
+      if (!previous || previous.generation !== config.generation) {
+        found = new Set();
+        qrChecked = new WeakMap();
+        qrCanvasScans = new WeakMap();
+        qrDetections = 0;
+        reportedFocus = undefined;
+      }
+      listen();
+      if (!findsCodes()) stopScanning();
+      else {
+        if (!observer && FrameMutationObserver) {
+          observer = new FrameMutationObserver(scanSoon);
+          observer.observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ["src", "href", "class", "style", "hidden"] });
+        }
+        onReady(scan);
+      }
+      updateKey();
+      reportedFocus = undefined;
+      reportFocus();
+    };
+    return { configure, focusQuery, hint: guard((state) => (state ? showHint(state) : hideHint())), badgeInk, hasOwnToggle, loginFieldKind, verificationSetupURL, codeKey, rememberedCodes: () => found.size };
+  };
+  const fieldProviderIntrinsics = (scope) => {
+    const call = Reflect.apply;
+    const describe = Object.getOwnPropertyDescriptor;
+    const accessor = (proto, name, kind) => (proto && describe(proto, name) ? describe(proto, name)[kind] : undefined);
+    const Offscreen = scope.OffscreenCanvas;
+    const pen = scope.OffscreenCanvasRenderingContext2D && scope.OffscreenCanvasRenderingContext2D.prototype;
+    const getContext = Offscreen && Offscreen.prototype.getContext;
+    const setFill = accessor(pen, "fillStyle", "set");
+    const clearRect = pen && pen.clearRect;
+    const fillRect = pen && pen.fillRect;
+    const getImageData = pen && pen.getImageData;
+    const pixelBytes = accessor(scope.ImageData && scope.ImageData.prototype, "data", "get");
+    const painted = !!(Offscreen && getContext && setFill && clearRect && fillRect && getImageData && pixelBytes);
+    let context = null;
+    const toRGBA = (css) => {
+      if (!painted || typeof css !== "string" || !css || css.length > 200) return null;
+      try {
+        if (!context) context = call(getContext, new Offscreen(1, 1), ["2d", { willReadFrequently: true }]);
+        call(clearRect, context, [0, 0, 1, 1]);
+        call(setFill, context, ["rgba(0, 0, 0, 0)"]);
+        call(setFill, context, [css]);
+        call(fillRect, context, [0, 0, 1, 1]);
+        const bytes = call(pixelBytes, call(getImageData, context, [0, 0, 1, 1]), []);
+        return { r: bytes[0], g: bytes[1], b: bytes[2], a: bytes[3] / 255 };
+      } catch {
+        return null;
+      }
+    };
+    const Detector = typeof scope.BarcodeDetector === "function" ? scope.BarcodeDetector : null;
+    const detect = Detector && Detector.prototype ? Detector.prototype.detect : null;
+    return {
+      charCodeAt: String.prototype.charCodeAt,
+      promiseThen: Promise.prototype.then,
+      imul: Math.imul,
+      Detector: typeof detect === "function" ? Detector : null,
+      detect,
+      toRGBA,
+    };
+  };
+  const nativeMutationObserver = window.MutationObserver;
+  const nativeAddListener = EventTarget.prototype.addEventListener;
+  const fieldIntrinsics = fieldProviderIntrinsics(window);
+  const fieldProviders = fieldProviderKit({
+    document,
+    send,
+    guard,
+    later,
+    onReady,
+    revealed: () => revealedField,
+    addListener: nativeAddListener,
+    apply,
+    FrameMutationObserver: nativeMutationObserver,
+    setTimeout,
+    addEventListener,
+    requestAnimationFrame,
+    isTop,
+    intrinsics: fieldIntrinsics,
+  });
+  handlers.fieldProvider = fieldProviders.configure;
+  handlers.fieldFocusQuery = (message) => fieldProviders.focusQuery(message && message.query);
+  handlers.fieldProviderHint = fieldProviders.hint;
   const typedByUser = new WeakSet();
   let revealedField = null;
   let eyeField = null;
@@ -351,20 +1041,16 @@
     '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8Z"/><circle cx="8" cy="8" r="2.1"/></svg>';
   const EYE_SLASH =
     '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><path d="M6.2 3.8A6.6 6.6 0 0 1 8 3.5c4.1 0 6.5 4.5 6.5 4.5a11 11 0 0 1-1.7 2.2M4.3 4.9C2.5 6.1 1.5 8 1.5 8s2.4 4.5 6.5 4.5c1.2 0 2.3-.4 3.2-.9"/><path d="M6.6 6.6a2.1 2.1 0 0 0 2.8 2.8"/><path d="M2 2l12 12"/></svg>';
-  const hasOwnToggle = (el) => {
-    for (let n = el.parentElement, depth = 0; n && depth < 3 && n.querySelectorAll("input").length === 1; n = n.parentElement, depth++)
-      for (const c of n.querySelectorAll('button, [role="button"], [aria-label], [title], [class*="eye" i], [class*="toggle" i]'))
-        if (c !== el && /show|hide|reveal|toggle|visib|eye|peek|afficher|mostrar|anzeigen/i.test((c.getAttribute("aria-label") || "") + " " + (c.getAttribute("title") || "") + " " + (c.getAttribute("class") || "")))
-          return true;
-    return false;
-  };
+  const { hasOwnToggle } = fieldProviders;
   const placeEye = () => {
     if (!eyeHost || !eyeField) return;
     const r = eyeField.getBoundingClientRect();
     const cs = getComputedStyle(eyeField);
     const size = Math.min(24, Math.max(18, r.height - 8));
-    const inset = Math.max(4, Math.min(10, parseFloat(cs.paddingRight) || 4));
-    eyeHost.style.left = r.right - (parseFloat(cs.borderRightWidth) || 0) - inset - size + "px";
+    const rtl = cs.direction === "rtl";
+    const inset = Math.max(4, Math.min(10, parseFloat(rtl ? cs.paddingLeft : cs.paddingRight) || 4));
+    const border = parseFloat(rtl ? cs.borderLeftWidth : cs.borderRightWidth) || 0;
+    eyeHost.style.left = (rtl ? r.left + border + inset : r.right - border - inset - size) + "px";
     eyeHost.style.top = r.top + (r.height - size) / 2 + "px";
     eyeButton.style.width = eyeButton.style.height = size + "px";
     eyeButton.style.color = cs.color;
@@ -677,7 +1363,15 @@
   let firstPaintObserver = null;
   handlers.firstPaint = () => {
     if (!isTop || firstPaintObserver) return;
-    const painted = () => send("firstPaint", { url: location.href });
+    let sent = false;
+    const painted = (loaded) => {
+      if (sent) return;
+      sent = true;
+      send("firstPaint", { url: location.href, loaded: !!loaded });
+    };
+    const afterFrames = () => apply(raf, window, [() => apply(raf, window, [() => painted(true)])]);
+    if (document.readyState === "complete") afterFrames();
+    else apply(listen, window, ["load", afterFrames, { once: true }]);
     try {
       firstPaintObserver = new PO((list) => {
         for (const e of list.getEntries())
@@ -689,7 +1383,7 @@
       firstPaintObserver.observe({ type: "paint", buffered: true });
     } catch (e) {
       firstPaintObserver = true;
-      onReady(() => apply(raf, window, [painted]));
+      onReady(() => apply(raf, window, [() => painted(true)]));
     }
   };
   handlers.wakeFrames = () => apply(raf, window, [() => {}]);
@@ -946,12 +1640,39 @@
     );
     const userActivationOf = window.Navigator && Object.getOwnPropertyDescriptor(Navigator.prototype, "userActivation");
     const activeOf = window.UserActivation && Object.getOwnPropertyDescriptor(UserActivation.prototype, "isActive");
+    const activated = () => {
+      const activation = apply(userActivationOf.get, navigator, []);
+      return !!activation && !!apply(activeOf.get, activation, []);
+    };
+    const tracksActivation = !!(userActivationOf && activeOf);
+    const clickDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "click");
+    if (tracksActivation && clickDescriptor && typeof clickDescriptor.value === "function") {
+      const watchScriptedLinkClick = guard((link) => {
+        if (linkUrl(link) === null || !activated()) return null;
+        let dispatched = null;
+        const seen = (e) => {
+          if (!dispatched) dispatched = e;
+        };
+        apply(listen, link, ["click", seen, true]);
+        return guard(() => {
+          apply(unlisten, link, ["click", seen, true]);
+          if (!dispatched || defaultPrevented(dispatched) || replacesPage(link)) return;
+          const url = linkUrl(link);
+          if (peekable({ link, url, path: [link] })) send("newTabLink", { url });
+        });
+      });
+      const click = asNative(clickDescriptor.value, (target, self, args) => {
+        const settle = watchScriptedLinkClick(self);
+        try {
+          return apply(target, self, args);
+        } finally {
+          if (settle) settle();
+        }
+      });
+      Object.defineProperty(HTMLElement.prototype, "click", { ...clickDescriptor, value: click });
+    }
     const openDescriptor = Object.getOwnPropertyDescriptor(window, "open");
-    if (userActivationOf && activeOf && openDescriptor && typeof openDescriptor.value === "function") {
-      const activated = () => {
-        const activation = apply(userActivationOf.get, navigator, []);
-        return !!activation && !!apply(activeOf.get, activation, []);
-      };
+    if (tracksActivation && openDescriptor && typeof openDescriptor.value === "function") {
       const openedByUser = (args) => {
         if (!args.length || args[0] === undefined || args[0] === null || !activated()) return;
         const raw = `${args[0]}`;
@@ -979,14 +1700,20 @@
       const GRACE_MS = 5000;
       const KEYS_GRACE_MS = 2000;
       const MEDIA_ERR_DECODE = 3;
+      const MEDIA_ERR_ENCRYPTED = 5;
+      const decryptFailure = /decrypt|cdm|licen[cs]e|\bkeys?\b/i;
+      const failedKeyStatus = /^(output-restricted|internal-error)$/;
       let drmSent = false;
       let refused = "";
+      let refusedStage = "";
       const attempted = new Set();
       const grantedOnActivation = new WeakSet();
-      const needsProtectedPlayback = (keySystem) => {
+      const protectedKeys = new WeakMap();
+      const protectedSessions = new WeakMap();
+      const needsProtectedPlayback = (keySystem, stage) => {
         if (drmSent) return;
         drmSent = true;
-        send("drm", { keySystem });
+        send("drm", { keySystem, stage });
       };
       const progressed = (m) => m.readyState >= 2 && m.currentTime > 0;
       const anyProgressed = () => [...attempted, ...document.querySelectorAll("video, audio")].some(progressed);
@@ -994,7 +1721,7 @@
       const stalled = (m) => !m.paused && !m.ended && !progressed(m);
       const judgeAttempt = (m) =>
         after(GRACE_MS, () => {
-          if (refused && stalled(m)) needsProtectedPlayback(refused);
+          if (refused && stalled(m)) needsProtectedPlayback(refused, refusedStage);
         });
       const onAttempt = (m) => {
         if (attempted.size >= 16) attempted.delete(attempted.values().next().value);
@@ -1003,27 +1730,39 @@
       };
       const onNeedsKey = (m) =>
         after(KEYS_GRACE_MS, () => {
-          if (!m.mediaKeys && !progressed(m)) needsProtectedPlayback(refused);
+          if (!m.mediaKeys && !progressed(m)) needsProtectedPlayback(refused, refusedStage || "access");
         });
+      const keysOf = (m) => (m.mediaKeys ? protectedKeys.get(m.mediaKeys) : undefined);
+      const failedDecrypt = (error) =>
+        error.code === MEDIA_ERR_ENCRYPTED || (error.code === MEDIA_ERR_DECODE && typeof error.message === "string" && apply(test, decryptFailure, [error.message]));
+      const onMediaError = (m) => {
+        if (!m.error) return;
+        if (refused && m.error.code === MEDIA_ERR_DECODE) return needsProtectedPlayback(refused, refusedStage);
+        const keys = keysOf(m);
+        if (keys && failedDecrypt(m.error)) needsProtectedPlayback(keys.keySystem, "licence");
+      };
       const onDrmMediaEvent = (e) => {
         const m = e.target;
         if (drmSent || !(m instanceof HTMLMediaElement)) return;
         if (e.type === "play") onAttempt(m);
         else if (e.type === "encrypted" || e.type === "waitingforkey") onNeedsKey(m);
-        else if (e.type === "error" && refused && m.error && m.error.code === MEDIA_ERR_DECODE) needsProtectedPlayback(refused);
+        else if (e.type === "error") onMediaError(m);
       };
       const drmMediaEvents = ["play", "encrypted", "waitingforkey", "error"];
       for (const type of drmMediaEvents) document.addEventListener(type, guard(onDrmMediaEvent), true);
       detachedMediaWatchers.push((m) => {
         for (const type of drmMediaEvents) m.addEventListener(type, guard(onDrmMediaEvent));
       });
-      const onRefused = (keySystem, activated) => {
+      const onRefused = (keySystem, activated, stage) => {
         if (drmSent) return;
-        if (!refused) refused = keySystem;
+        if (!refused || (refusedStage === "access" && stage !== "access")) {
+          refused = keySystem;
+          refusedStage = stage;
+        }
         for (const m of attempted) if (stalled(m)) judgeAttempt(m);
         if (activated)
           after(GRACE_MS, () => {
-            if (!anyProgressed()) needsProtectedPlayback(keySystem);
+            if (!anyProgressed()) needsProtectedPlayback(refused || keySystem, refusedStage || stage);
           });
       };
       const wrapped = asNative(requestAccess, (target, self, args) => {
@@ -1032,7 +1771,7 @@
         if (!drmSent && typeof keySystem === "string" && apply(test, protectedSystem, [keySystem])) {
           const activated = !!(navigator.userActivation && navigator.userActivation.isActive);
           const remember = guard((access) => activated && access && typeof access === "object" && grantedOnActivation.add(access));
-          apply(then, result, [remember, () => onRefused(keySystem, activated)]);
+          apply(then, result, [remember, () => onRefused(keySystem, activated, "access")]);
         }
         return result;
       });
@@ -1051,7 +1790,8 @@
             const keySystem = keySystemFrom(self);
             if (typeof keySystem === "string" && apply(test, protectedSystem, [keySystem])) {
               const activated = !!(navigator.userActivation && navigator.userActivation.isActive) || grantedOnActivation.has(self);
-              apply(then, result, [null, () => onRefused(keySystem, activated)]);
+              const rememberKeys = guard((keys) => keys && typeof keys === "object" && protectedKeys.set(keys, { keySystem, activated }));
+              apply(then, result, [rememberKeys, () => onRefused(keySystem, activated, "createMediaKeys")]);
             }
           }
           return result;
@@ -1060,6 +1800,51 @@
           ...Object.getOwnPropertyDescriptor(AccessType.prototype, "createMediaKeys"),
           value: wrappedCreate,
         });
+        const KeysType = window.MediaKeys;
+        const SessionType = window.MediaKeySession;
+        const createSession = KeysType && KeysType.prototype.createSession;
+        const updateSession = SessionType && SessionType.prototype.update;
+        const keyStatusesOf = SessionType && Object.getOwnPropertyDescriptor(SessionType.prototype, "keyStatuses");
+        const StatusMap = window.MediaKeyStatusMap;
+        const eachStatus = StatusMap && StatusMap.prototype.forEach;
+        const listenOn = window.EventTarget && window.EventTarget.prototype.addEventListener;
+        if (typeof createSession === "function" && typeof updateSession === "function") {
+          const onSessionFailed = (session, stage) => {
+            const keys = protectedSessions.get(session);
+            if (keys) onRefused(keys.keySystem, keys.activated, stage);
+          };
+          const onKeyStatuses = guard((e) => {
+            const session = e.target;
+            if (drmSent || !protectedSessions.has(session)) return;
+            const statuses = apply(keyStatusesOf.get, session, []);
+            let failed = false;
+            apply(eachStatus, statuses, [(status) => (failed = failed || (typeof status === "string" && apply(test, failedKeyStatus, [status])))]);
+            if (failed) onSessionFailed(session, "keystatus");
+          });
+          const watchesStatuses = keyStatusesOf && typeof keyStatusesOf.get === "function" && typeof eachStatus === "function" && typeof listenOn === "function";
+          const wrappedSession = asNative(createSession, (target, self, args) => {
+            const session = apply(target, self, args);
+            const keys = protectedKeys.get(self);
+            if (keys && session && typeof session === "object") {
+              protectedSessions.set(session, keys);
+              if (watchesStatuses) apply(listenOn, session, ["keystatuseschange", onKeyStatuses]);
+            }
+            return session;
+          });
+          const wrappedUpdate = asNative(updateSession, (target, self, args) => {
+            const result = apply(target, self, args);
+            if (!drmSent && protectedSessions.has(self)) apply(then, result, [null, guard(() => onSessionFailed(self, "licence"))]);
+            return result;
+          });
+          Object.defineProperty(KeysType.prototype, "createSession", {
+            ...Object.getOwnPropertyDescriptor(KeysType.prototype, "createSession"),
+            value: wrappedSession,
+          });
+          Object.defineProperty(SessionType.prototype, "update", {
+            ...Object.getOwnPropertyDescriptor(SessionType.prototype, "update"),
+            value: wrappedUpdate,
+          });
+        }
       }
     }
   } catch (e) {}
@@ -1104,13 +1889,17 @@
     if (pipTrace && pipHandlerSet !== null)
       send("pipTrace", { event: "setActionHandler", action: "enterpictureinpicture", set: pipHandlerSet });
     if (blockAutoplay)
-      pauseUnasked([...playingMedia, ...document.querySelectorAll("video, audio")], !!(navigator.userActivation && navigator.userActivation.hasBeenActive));
+      pauseUnasked([...playingMedia, ...document.querySelectorAll("video, audio")], askedToPlay());
     if (config.displayMediaPicker) installDisplayMedia();
     else restoreDisplayMedia();
     if (config.fieldTiming) setFieldTiming(true);
     if (typeof config.selectionPopover === "boolean" && handlers.selectionPopover) handlers.selectionPopover(config.selectionPopover);
+    if (config.fieldProvider !== undefined) handlers.fieldProvider(config.fieldProvider);
   };
   send("hello", { top: isTop, url: location.href });
+  const tellExclusive = guard(() => send("exclusive", { held: !!(document.pointerLockElement || document.fullscreenElement) }));
+  document.addEventListener("pointerlockchange", tellExclusive);
+  document.addEventListener("fullscreenchange", tellExclusive);
 
   if (!isTop) return receive;
 
@@ -1293,18 +2082,20 @@
     send("theme", { color, source });
   });
   let themeQueued = false;
+  let pageThemeQueued = false;
+  const PAGE_THEME_GAP_MS = 100;
   const themeTouched = (records) => {
+    let page = false;
     for (const r of records) {
       if (r.type === "childList") {
-        for (const n of r.addedNodes) if (n.nodeName === "META") return true;
-        for (const n of r.removedNodes) if (n.nodeName === "META") return true;
-      } else if (r.target.nodeName === "META") return true;
-      else if ((r.target === document.documentElement || r.target === document.body) && r.oldValue !== r.target.getAttribute(r.attributeName)) return true;
+        for (const n of r.addedNodes) if (n.nodeName === "META") return "meta";
+        for (const n of r.removedNodes) if (n.nodeName === "META") return "meta";
+      } else if (r.target.nodeName === "META") return "meta";
+      else if ((r.target === document.documentElement || r.target === document.body) && r.oldValue !== r.target.getAttribute(r.attributeName)) page = true;
     }
-    return false;
+    return page ? "page" : null;
   };
-  const scheduleTheme = () => {
-    metaCache = undefined;
+  const queueTheme = () => {
     if (themeQueued) return;
     themeQueued = true;
     nextFrame(() => {
@@ -1312,9 +2103,26 @@
       reportTheme();
     });
   };
+  const scheduleTheme = () => {
+    metaCache = undefined;
+    queueTheme();
+  };
+  const queuePageTheme = () => {
+    if (pageThemeQueued) return;
+    pageThemeQueued = true;
+    after(() => {
+      pageThemeQueued = false;
+      queueTheme();
+    }, PAGE_THEME_GAP_MS);
+  };
+  const themeChanged = (records) => {
+    const touched = themeTouched(records);
+    if (touched === "meta") scheduleTheme();
+    else if (touched === "page") queuePageTheme();
+  };
   const startTheme = () => {
     reportTheme();
-    const observer = new NativeMutationObserver((records) => themeTouched(records) && scheduleTheme());
+    const observer = new NativeMutationObserver(themeChanged);
     observer.observe(document.head || document.documentElement, {
       childList: true,
       subtree: true,
@@ -1495,7 +2303,11 @@
 
   const scrollDirection = () => {
     const DOWN = 24, UP = 12, MIN_RANGE = 120, SETTLE = 300, GESTURE = 300;
-    let anchor = 0, last = 0, lastAt = -1e9, settleUntil = -1e9, budget = 0, height = 0, sent = null, gestureSent = false;
+    const paged = (snap, vertical) => {
+      const [axis, strictness] = snap.split(" ");
+      return strictness === "mandatory" && (axis === "y" || axis === "both" || axis === (vertical ? "inline" : "block"));
+    };
+    let anchor = 0, last = 0, lastAt = -1e9, settleUntil = -1e9, budget = 0, height = 0, sent = null, gestureSent = false, heading = 0;
     const resized = (viewport, now) => {
       if (now >= settleUntil) budget = 0;
       if (height && viewport !== height) {
@@ -1509,7 +2321,17 @@
       rebase(y) {
         anchor = last = y;
       },
-      scrolled(y, range, viewport, now, user) {
+      wheeled(deltaX, deltaY, pinch) {
+        if (pinch || !deltaY) {
+          if (pinch || deltaX) heading = 0;
+          return;
+        }
+        heading = deltaY > 0 ? 1 : -1;
+      },
+      undirected() {
+        heading = 0;
+      },
+      scrolled(y, range, viewport, now, user, snap = "", vertical = false) {
         resized(viewport, now);
         if (now - lastAt > GESTURE) {
           gestureSent = false;
@@ -1525,9 +2347,9 @@
         }
         let state = null;
         if (y <= 2) state = "top";
-        else if (!user) anchor = y;
+        else if (!user || moved * heading < 0) anchor = y;
         else if (y - anchor >= DOWN) {
-          if (range >= MIN_RANGE) state = "down";
+          if (range >= MIN_RANGE && !paged(snap, vertical)) state = "down";
           else anchor = y;
         } else if (anchor - y >= UP) state = "up";
         else if (sent === "down" ? gestureSent && y > anchor : y < anchor) anchor = y;
@@ -1547,8 +2369,20 @@
     inputAt = performance.now();
     if (!scroller && document.scrollingElement) direction.rebase((scroller = document.scrollingElement).scrollTop);
   };
-  for (const type of ["wheel", "keydown", "mousedown", "touchstart"]) addEventListener(type, noteInput, { passive: true, capture: true });
-  addEventListener("mousemove", (e) => e.buttons && noteInput(), { passive: true, capture: true });
+  const noteUndirectedInput = () => {
+    direction.undirected();
+    noteInput();
+  };
+  addEventListener(
+    "wheel",
+    (e) => {
+      direction.wheeled(e.deltaX, e.deltaY, e.ctrlKey);
+      noteInput();
+    },
+    { passive: true, capture: true },
+  );
+  for (const type of ["keydown", "mousedown", "touchstart"]) addEventListener(type, noteUndirectedInput, { passive: true, capture: true });
+  addEventListener("mousemove", (e) => e.buttons && noteUndirectedInput(), { passive: true, capture: true });
   const measureScroll = guard(() => {
     const target = scrollTarget;
     scrollTarget = null;
@@ -1557,7 +2391,8 @@
     if (!el || !doc || (el !== doc && (el.clientHeight < innerHeight * 0.5 || el.clientWidth < innerWidth * 0.5))) return;
     if (el !== scroller) direction.rebase((scroller = el).scrollTop);
     const now = performance.now();
-    const state = direction.scrolled(el.scrollTop, el.scrollHeight - el.clientHeight, innerHeight, now, now - inputAt < 1000);
+    const style = getComputedStyle(el === doc ? document.documentElement : el);
+    const state = direction.scrolled(el.scrollTop, el.scrollHeight - el.clientHeight, innerHeight, now, now - inputAt < 1000, style.scrollSnapType, /^(vertical|sideways)/.test(style.writingMode));
     if (state) send("scroll", { state });
   });
   addEventListener(

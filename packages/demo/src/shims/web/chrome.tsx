@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { StyleSheet, View, type ViewProps, type ViewStyle } from "react-native";
 import { useBrowser } from "../../../../../apps/browser/src/state/browser/store";
+import type { MiddleClickEvent } from "./MouseArea";
 import { edgeGain, fallbackRadius, highlightMask, maskStyle, peakGain, SHADE_OUTSET, shadeMask, shapeMask, type RimCurve, type RimProfile, type ShadeProfile } from "./glassRim";
 
 type Style = ViewStyle & Record<string, unknown>;
@@ -27,6 +28,10 @@ function withOpacity(color: string, opacity: number) {
 
 export type SurfaceProps = ViewProps & {
   fill?: string;
+  fillColors?: string[];
+  fillStops?: number[];
+  fade?: number[];
+  fadeStops?: number[];
   cornerRadius?: number;
   borderColor?: string;
   borderWidth?: number;
@@ -37,15 +42,25 @@ export type SurfaceProps = ViewProps & {
   shadowOffset?: [number, number];
 };
 
-export const CA_SHADOW_BLUR = 2;
+const CA_SHADOW_BLUR = 2;
 
-export function Surface({ fill, cornerRadius = 0, borderColor, borderWidth = 0, borderColors, shadowColor: color, shadowOpacity = 0, shadowRadius = 0, shadowOffset, style, children, ...props }: SurfaceProps) {
+export function Surface({ fill, fillColors, fillStops, fade, fadeStops, cornerRadius = 0, borderColor, borderWidth = 0, borderColors, shadowColor: color, shadowOpacity = 0, shadowRadius = 0, shadowOffset, style, children, ...props }: SurfaceProps) {
   const gradientBorder = !!borderColors && borderColors.length >= 2 && borderWidth > 0;
   const surface: Style = {
     backgroundColor: fill,
     borderRadius: cornerRadius,
     ...(borderColor && borderWidth > 0 && !gradientBorder ? { borderColor, borderWidth, borderStyle: "solid" } : {}),
   };
+  if (fillColors && fillColors.length >= 2) {
+    const placed = fillStops?.length === fillColors.length;
+    surface.backgroundImage = `linear-gradient(to bottom, ${fillColors.map((c, i) => (placed ? `${c} ${fillStops![i]! * 100}%` : c)).join(", ")})`;
+  }
+  if (fade && fade.length >= 2) {
+    const at = fadeStops?.length === fade.length ? fadeStops : null;
+    const mask = `linear-gradient(to right, ${fade.map((a, i) => `rgba(0,0,0,${a})${at ? ` ${at[i]! * 100}%` : ""}`).join(", ")})`;
+    surface.maskImage = mask;
+    surface.WebkitMaskImage = mask;
+  }
   if (color && shadowOpacity > 0) {
     const [x, y] = shadowOffset ?? [0, 0];
     surface.boxShadow = `${x}px ${y}px ${shadowRadius * CA_SHADOW_BLUR}px ${withOpacity(color, shadowOpacity)}`;
@@ -102,7 +117,7 @@ const RIM_ANGLES = [0, 1, 8.5, 25, 45, 65, 81.5, 89, 90];
 const RIM_DEPTHS = [0, 0.25, 0.75, 1.25, 1.75];
 const GLOW_BY_ANGLE: RimCurve = [[0, 1], [5, 0.9], [10, 0.8], [20, 0.7], [35, 0.6], [90, 0.6]];
 
-export const GLASS: { light: GlassLook; dark: GlassLook } = {
+const GLASS: { light: GlassLook; dark: GlassLook } = {
   light: {
     saturate: 1.8705,
     slope: 0.6098,
@@ -217,13 +232,24 @@ export function GlassGroup({ strength: _strength, ...props }: ViewProps & { stre
   return <View {...props} />;
 }
 
-export type ContextMenuAreaProps = ViewProps & { onContextMenu?: () => void; captureDescendants?: boolean };
+export type ContextMenuAreaProps = ViewProps & { onContextMenu?: () => void; onMiddleClick?: (e: MiddleClickEvent) => void; captureDescendants?: boolean };
 
-export function ContextMenuArea({ onContextMenu, captureDescendants: _capture, ...props }: ContextMenuAreaProps) {
-  const WebView = View as unknown as React.ComponentType<ViewProps & { onContextMenu?: (e: MouseEvent) => void }>;
+type WebMenuProps = ViewProps & { onContextMenu?: (e: MouseEvent) => void; onAuxClick?: (e: MouseEvent) => void; onMouseDown?: (e: MouseEvent) => void };
+
+export function ContextMenuArea({ onContextMenu, onMiddleClick, captureDescendants: _capture, ...props }: ContextMenuAreaProps) {
+  const WebView = View as unknown as React.ComponentType<WebMenuProps>;
   return (
     <WebView
       {...props}
+      onMouseDown={(e) => {
+        if (e.button === 1 && onMiddleClick) e.preventDefault();
+      }}
+      onAuxClick={(e) => {
+        if (e.button !== 1 || !onMiddleClick) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onMiddleClick({ shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey });
+      }}
       onContextMenu={(e) => {
         if (!onContextMenu) return;
         e.preventDefault();
@@ -259,8 +285,8 @@ export function WindowDragRegion({
   return <Region {...props} onClick={onRegionClick} onDoubleClick={onRegionDoubleClick} />;
 }
 
-export type DockSelectionProps = ViewProps & { fill?: string; stroke?: string; cornerRadius?: number; strokeWidth?: number; dark: boolean };
+export type DockSelectionProps = ViewProps & { fill?: string; stroke?: string; cornerRadius?: number; strokeWidth?: number; dark: boolean; outline?: boolean };
 
-export function DockSelection({ fill, stroke, cornerRadius, strokeWidth, dark: _dark, style, ...props }: DockSelectionProps & Record<string, unknown>) {
-  return <View {...props} style={[{ backgroundColor: fill, borderColor: stroke, borderWidth: stroke ? (strokeWidth ?? 1) : 0, borderRadius: cornerRadius }, style]} />;
+export function DockSelection({ fill, stroke, cornerRadius, strokeWidth, dark: _dark, outline, style, ...props }: DockSelectionProps & Record<string, unknown>) {
+  return <View {...props} style={[{ backgroundColor: outline ? undefined : fill, borderColor: stroke, borderWidth: stroke ? (strokeWidth ?? 1) : 0, borderRadius: cornerRadius }, style]} />;
 }

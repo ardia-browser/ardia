@@ -1,0 +1,18 @@
+[package]
+name = "ardia-apple-ffi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "ardia_apple"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[features]
+default = ["rustcrypto"]
+rustcrypto = ["ardia-ffi/rustcrypto"]
+
+[dependencies]
+ardia-ffi = { path = "../ardia-ffi", default-features = false }
+ardia-import-ffi = { path = "../ardia-import-ffi" }

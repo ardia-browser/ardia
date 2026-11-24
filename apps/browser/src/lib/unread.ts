@@ -46,6 +46,17 @@ export function unreadCount(n: number, more = false): Unread | null {
   return { kind: "count", label: whole > 99 ? "99+" : more ? `${whole}+` : String(whole) };
 }
 
+const LEADING_MARK = new RegExp(String.raw`^\s*(?:[(\[]${COUNT}[)\]]\s*|•\s+)(?=\S)`, "u");
+
+export function titleWithoutUnread(title: string, unread: Unread | null): string {
+  if (!unread) return title;
+  const mark = LEADING_MARK.exec(title);
+  if (!mark) return title;
+  const said = mark[1] === undefined ? UNREAD_DOT : countOf(mark[1], mark[2]!);
+  const same = !!said && said.kind === unread.kind && (said.kind === "dot" || said.label === (unread as typeof said).label);
+  return same ? title.slice(mark[0].length) : title;
+}
+
 export function hostOfOrigin(origin: string): string {
   return origin.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "").replace(/:\d+$/, "").toLowerCase();
 }
@@ -89,7 +100,7 @@ const fileNameOf = (url: string) => {
   return path.slice(path.lastIndexOf("/") + 1);
 };
 
-export const faviconIsBadgeNamed = (url: string) => !url.startsWith("data:") && BADGE_TOKEN.test(fileNameOf(url));
+const faviconIsBadgeNamed = (url: string) => !url.startsWith("data:") && BADGE_TOKEN.test(fileNameOf(url));
 
 export const faviconIsOrdinary = (url: string) => !!url && !url.startsWith("data:") && !faviconIsBadgeNamed(url);
 

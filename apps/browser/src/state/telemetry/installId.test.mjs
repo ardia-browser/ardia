@@ -14,7 +14,7 @@ const savedId = () => JSON.parse(stub.docs.get("telemetry.json")).installId;
 test("a state file written by a newer version keeps its install id and sharing choice instead of resetting", () => {
   client.loadChoice();
   assert.equal(client.isSharing(), true);
-  client.capture("probe");
+  client.capture("probe", {}, client.consentNow());
   assert.equal(savedId(), "kept-install");
 });
 

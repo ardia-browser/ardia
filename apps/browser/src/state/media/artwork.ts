@@ -40,7 +40,7 @@ export function useArtwork(tabId: string, url: string | null | undefined): strin
   return uri;
 }
 
-useBrowser.subscribe((s, prev) => {
+useBrowser.subscribeTo(["tabs"], (s, prev) => {
   if (s.tabs === prev.tabs) return;
   const entries = useArtworks.getState().entries;
   const gone = Object.keys(entries).filter((key) => !s.tabs[key.slice(0, key.indexOf(" "))]);

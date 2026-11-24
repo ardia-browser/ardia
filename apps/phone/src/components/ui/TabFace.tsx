@@ -1,0 +1,149 @@
+import { useEffect, useState, type ReactNode } from "react";
+import { StyleSheet, Text, View } from "react-native";
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import { placeholderIndex } from "../../lib/tabFace";
+import { forgetPicturePainted, notePicturePainted, noteSnapshotAspect, noteSnapshotLoaded, noteSnapshotShown, pictureKey, snapshotAspect, snapshotLoadedOnce, snapshotWasShown } from "../../lib/shownSnapshots";
+import { tabsMotion } from "./motion";
+import { isDarkColor } from "../../lib/color";
+import { Favicon } from "./Favicon";
+import { IncognitoSpecs } from "./IncognitoSpecs";
+import { font, space, tabsInk, tabsLayout, type ColorRoles } from "./tokens";
+
+export type TabFaceTab = { url: string; title: string; isPrivate: boolean; snapshotFileName: string | null; themeColorHex: string | null; faviconUrl: string | null };
+
+export function placeholderTint(url: string, roles: ColorRoles): string {
+  return roles.placeholderTints[placeholderIndex(url, roles.placeholderTints.length)]!;
+}
+
+export function tabFill(tab: TabFaceTab, tone: string | null, roles: ColorRoles): string {
+  if (tab.isPrivate) return tabsInk.incognitoCard;
+  return tab.themeColorHex ?? tone ?? placeholderTint(tab.url, roles);
+}
+
+type Props = { tab: TabFaceTab; title: string; host: string; tone: string | null; roles: ColorRoles; compact?: boolean; paintedAs?: string };
+
+type Pictures = { shown: string | null; under: string | null; loaded: string | null };
+
+export function TabFace({ tab, title, host, tone, roles, compact, paintedAs }: Props) {
+  const fill = tabFill(tab, tone, roles);
+  const face = <PlainFace tab={tab} title={title} host={host} fill={fill} roles={roles} compact={compact} />;
+  const picture = tab.snapshotFileName;
+  const [pictures, setPictures] = useState<Pictures>({ shown: picture, under: null, loaded: null });
+  if (pictures.shown !== picture) {
+    const lastLoaded = pictures.loaded === pictures.shown ? pictures.shown : pictures.under;
+    setPictures({ shown: picture, under: picture && lastLoaded !== picture ? lastLoaded : null, loaded: pictures.loaded });
+  }
+  if (!picture) return face;
+  const under = pictures.shown === picture ? pictures.under : null;
+  const loaded = (uri: string) => setPictures((now) => (now.loaded === uri ? now : { ...now, loaded: uri }));
+  const replaced = () => setPictures((now) => (now.shown === picture && now.under !== null ? { ...now, under: null } : now));
+  return (
+    <>
+      {under ? <Snapshot key={under} uri={under} fill={fill} under={face} paintedAs={paintedAs} onLoaded={loaded} /> : null}
+      <Snapshot key={picture} uri={picture} fill={fill} under={face} paintedAs={paintedAs} over={under !== null} onLoaded={loaded} onPainted={under ? replaced : undefined} />
+    </>
+  );
+}
+
+function PlainFace({ tab, title, host, fill, roles, compact }: { tab: TabFaceTab; title: string; host: string; fill: string; roles: ColorRoles; compact?: boolean }) {
+  if (tab.isPrivate) {
+    return (
+      <View style={[StyleSheet.absoluteFill, styles.private, { backgroundColor: fill }]}>
+        <IncognitoSpecs size={compact ? tabsLayout.specsCompact : tabsLayout.specsFace} color={tabsInk.onDark} />
+        {compact ? null : (
+          <>
+            <Text style={[font.footnote, styles.privateTitle]}>Incognito Tab</Text>
+            <Text style={[font.caption, styles.privateCaption]} numberOfLines={2}>
+              {title}
+            </Text>
+          </>
+        )}
+      </View>
+    );
+  }
+  const dark = isDarkColor(fill);
+  const ink = dark ? tabsInk.onDark : roles.label;
+  const soft = dark ? tabsInk.onDarkSoft : roles.foregroundSecondary;
+  return (
+    <View style={[StyleSheet.absoluteFill, compact ? styles.compact : styles.page, { backgroundColor: fill }]}>
+      <Favicon iconUrl={tab.faviconUrl} pageUrl={tab.url} size={compact ? 12 : 32} />
+      {compact ? null : (
+        <>
+          <Text style={[font.body, styles.title, { color: ink }]} numberOfLines={4}>
+            {title}
+          </Text>
+          <Text style={[font.subheadline, { color: soft }]} numberOfLines={1}>
+            {host}
+          </Text>
+        </>
+      )}
+    </View>
+  );
+}
+
+function Snapshot({ uri, fill, under, paintedAs, over = false, onLoaded, onPainted }: { uri: string; fill: string; under: ReactNode; paintedAs?: string; over?: boolean; onLoaded?: (uri: string) => void; onPainted?: () => void }) {
+  const [aspect, setAspect] = useState<number | null>(() => snapshotAspect(uri));
+  const [loaded, setLoaded] = useState(false);
+  const [wasShown] = useState(() => snapshotWasShown(uri));
+  const [covered, setCovered] = useState(() => !wasShown || !snapshotLoadedOnce(uri));
+  const [failed, setFailed] = useState(false);
+  const appear = useSharedValue(wasShown ? 1 : 0);
+  const appearing = useAnimatedStyle(() => ({ opacity: appear.value }));
+  useEffect(() => {
+    if (!loaded && !failed) return;
+    const key = paintedAs ? pictureKey(paintedAs, uri) : uri;
+    const frame = requestAnimationFrame(() => notePicturePainted(key));
+    return () => {
+      cancelAnimationFrame(frame);
+      forgetPicturePainted(key);
+    };
+  }, [loaded, failed, aspect, uri, paintedAs]);
+  const replacesPrevious = loaded && !covered && onPainted !== undefined;
+  useEffect(() => {
+    if (!replacesPrevious) return;
+    const frame = requestAnimationFrame(() => onPainted?.());
+    return () => cancelAnimationFrame(frame);
+  }, [replacesPrevious]);
+  return (
+    <View style={[StyleSheet.absoluteFill, over && (covered || !loaded) ? null : { backgroundColor: fill }]}>
+      {(covered || failed) && !over ? under : null}
+      {failed ? null : <Animated.Image
+        source={{ uri }}
+        resizeMethod="scale"
+        onLoad={(event) => {
+          const { width, height } = event.nativeEvent.source;
+          if (width > 0 && height > 0) {
+            noteSnapshotAspect(uri, width / height);
+            setAspect(width / height);
+          }
+          setLoaded(true);
+          noteSnapshotLoaded(uri);
+          onLoaded?.(uri);
+          if (snapshotWasShown(uri)) {
+            appear.value = 1;
+            setCovered(false);
+            return;
+          }
+          noteSnapshotShown(uri);
+          appear.value = withTiming(1, { duration: tabsMotion.fade }, (finished) => {
+            if (finished) runOnJS(setCovered)(false);
+          });
+        }}
+        style={[aspect ? [styles.snapshot, { aspectRatio: aspect }] : StyleSheet.absoluteFill, appearing]}
+        onError={() => setFailed(true)}
+        resizeMode="cover"
+        fadeDuration={0}
+      />}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  snapshot: { width: "100%" },
+  page: { padding: space.l, paddingTop: space.huge + space.l, gap: space.m },
+  compact: { alignItems: "center", justifyContent: "center" },
+  title: { fontWeight: "600" },
+  private: { alignItems: "center", justifyContent: "center", gap: space.m, paddingHorizontal: space.m },
+  privateTitle: { color: tabsInk.onDark, fontWeight: "600" },
+  privateCaption: { color: tabsInk.onDarkSoft, textAlign: "center" },
+});

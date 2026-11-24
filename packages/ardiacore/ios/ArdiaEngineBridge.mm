@@ -130,16 +130,27 @@ void InstallSink() {
 
 @implementation ArdiaEngineBridge
 
++ (nullable NSString *)privateArgs:(nullable NSString *)args {
+  NSData *bytes = [(args.length ? args : @"{}") dataUsingEncoding:NSUTF8StringEncoding];
+  NSMutableDictionary *parsed = [[NSJSONSerialization JSONObjectWithData:bytes options:0 error:nil] mutableCopy];
+  if (![parsed isKindOfClass:NSMutableDictionary.class]) return nil;
+  parsed[@"offTheRecord"] = @YES;
+  return JSONText(parsed);
+}
+
++ (void)callLoaded:(NSString *)name profile:(NSString *)profile args:(NSString *)args completion:(void (^)(NSString *))completion {
+  auto call = (ac_engine_call_t)Symbol(name.UTF8String);
+  if (!call) return completion(JSONText(@{@"error" : [NSString stringWithFormat:@"the engine has no %@", name]}));
+  if (ardia_host::IsPrivateProfile(profile) && !(args = [self privateArgs:args])) return completion(JSONText(@{@"error" : @"bad arguments"}));
+  ArdiaCoreProfile *p = ardia_host::LoadedProfile(ardia_host::OriginalProfileName(profile));
+  if (!p || p.offTheRecord || !ArdiaHost.isStarted) return completion(JSONText(@{@"error" : @"profile not loaded"}));
+  call(p.path.UTF8String, args.UTF8String, Replied, (__bridge_retained void *)[completion copy]);
+}
+
 + (void)call:(NSString *)name profile:(NSString *)profile args:(NSString *)args completion:(void (^)(NSString *))completion {
   auto call = (ac_engine_call_t)Symbol(name.UTF8String);
   if (!call) return completion(JSONText(@{@"error" : [NSString stringWithFormat:@"the engine has no %@", name]}));
-  if (ardia_host::IsPrivateProfile(profile)) {
-    NSData *bytes = [(args.length ? args : @"{}") dataUsingEncoding:NSUTF8StringEncoding];
-    NSMutableDictionary *parsed = [[NSJSONSerialization JSONObjectWithData:bytes options:0 error:nil] mutableCopy];
-    if (![parsed isKindOfClass:NSMutableDictionary.class]) return completion(JSONText(@{@"error" : @"bad arguments"}));
-    parsed[@"offTheRecord"] = @YES;
-    args = JSONText(parsed);
-  }
+  if (ardia_host::IsPrivateProfile(profile) && !(args = [self privateArgs:args])) return completion(JSONText(@{@"error" : @"bad arguments"}));
   NSString *data = ardia_host::OriginalProfileName(profile);
   void (^done)(NSString *) = [completion copy];
   NSString *argsCopy = [args copy];

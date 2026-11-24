@@ -10,17 +10,21 @@ final class ManagedWindow {
   let kind: WindowKind
   var window: NSWindow
   var isFullScreen = false
+  var display: String?
   var reveal = Reveal.shown
   var exit: [() -> Void]?
   var contentShown = false
   var closingFromJS = false
+  var summoned = false
+  let incognito: Bool
   private var contentObserver: NSObjectProtocol?
   private var contentSizer: NSObjectProtocol?
 
-  init(id: String, kind: WindowKind, window: NSWindow) {
+  init(id: String, kind: WindowKind, window: NSWindow, incognito: Bool = false) {
     self.id = id
     self.kind = kind
     self.window = window
+    self.incognito = incognito
   }
 
   deinit {
@@ -36,6 +40,14 @@ final class ManagedWindow {
     guard case .waiting(var waiting, let entrance) = reveal else { return then() }
     waiting.append(then)
     reveal = .waiting(then: waiting, entrance: entrance)
+  }
+
+  func waitToReveal(entrance: Bool?, timeout: TimeInterval, onTimeout: @escaping (ManagedWindow) -> Void) {
+    window.alphaValue = 0
+    reveal = .waiting(then: [], entrance: entrance)
+    DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
+      if let self { onTimeout(self) }
+    }
   }
 
   func takeReveal() -> (then: [() -> Void], entrance: Bool?)? {

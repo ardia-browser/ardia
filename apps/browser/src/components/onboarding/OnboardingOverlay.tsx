@@ -11,24 +11,27 @@ import { LookStep } from "./LookStep";
 import { SearchPrivacyStep } from "./PrivacyStep";
 import { SourceStep } from "./SourceStep";
 import { HomeStep } from "./HomeStep";
+import { OnboardingConsentSheet, PluginsStep } from "./PluginsStep";
 import { OutroStep } from "./OutroStep";
 import { PinnedTabsStep } from "./PinnedTabsStep";
 import { SetupCodeOutro } from "./SetupCodeOutro";
 import { isWebDemo } from "../../state/onboarding/demoSteps";
 import { ToolTour } from "./tour/ToolTour";
-import { useOnboardingColors } from "./Parts";
+import { useTour } from "../../state/onboarding/tour";
+import { useOpenedOnce } from "../ui/useOpenedOnce";
+import { ONBOARDING_CARD, OnboardingCardContext, useOnboardingColors } from "./Parts";
 import { DevResetOnboarding } from "./DevResetOnboarding";
 
-const CARD = { width: 880, height: 560, inset: 40 };
+const FLOATING_MIN_HEIGHT = 620;
 
 export function OnboardingOverlay() {
   const windowId = useWindowId();
-  const active = useOnboarding((s) => s.windowId === windowId);
-  const session = useOnboarding((s) => s.session);
+  const session = useOnboarding((s) => (s.windowId === windowId ? s.session : null));
+  const touring = useOpenedOnce(useTour((s) => s.windowId === windowId && s.stops.length > 0));
   return (
     <>
-      {active ? <Overlay key={session} session={session} /> : null}
-      <ToolTour />
+      {session !== null ? <Overlay key={session} session={session} /> : null}
+      {touring ? <ToolTour /> : null}
       {__DEV__ ? <DevResetOnboarding /> : null}
     </>
   );
@@ -59,8 +62,11 @@ function Overlay({ session }: { session: number }) {
     ]).start(({ finished }) => finished && dismissOnboarding(session));
   }, [leaving]);
 
-  const width = Math.min(CARD.width, Math.max(0, size.width - CARD.inset * 2));
-  const height = Math.min(CARD.height, Math.max(0, size.height - CARD.inset * 2));
+  const floating = size.width >= ONBOARDING_CARD.width + ONBOARDING_CARD.inset * 2 && size.height >= FLOATING_MIN_HEIGHT;
+  const inset = floating ? ONBOARDING_CARD.inset : 0;
+  const width = Math.min(ONBOARDING_CARD.width, Math.max(0, size.width - inset * 2));
+  const height = Math.min(ONBOARDING_CARD.height, Math.max(0, size.height - inset * 2));
+  const dragStrip = ONBOARDING_CARD.titleBarClearance - inset;
 
   return (
     <Animated.View
@@ -84,22 +90,27 @@ function Overlay({ session }: { session: number }) {
               ],
             }}
           >
-            <Panel fill={colors.card} radius={onboardingCard.radius} border={colors.cardBorder} shadow={onboardingCard.shadow} style={{ flex: 1, overflow: "hidden" }}>
-              <View key={step} style={{ flex: 1 }}>
-                {step === "source" && <SourceStep />}
-                {step === "layout" && <LayoutStep />}
-                {step === "tabs" && <TabsStep />}
-                {step === "look" && <LookStep />}
-                {step === "searchPrivacy" && <SearchPrivacyStep />}
-                {step === "pins" && <PinnedTabsStep />}
-                {step === "home" && <HomeStep />}
-                {step === "outro" && (isWebDemo ? <SetupCodeOutro /> : <OutroStep />)}
-              </View>
+            <Panel fill={colors.card} radius={onboardingCard.radius} border={floating ? colors.cardBorder : null} shadow={floating ? onboardingCard.shadow : undefined} style={{ flex: 1, overflow: "hidden" }}>
+              <OnboardingCardContext.Provider value={{ width, height, inset }}>
+                <View key={step} style={{ flex: 1 }}>
+                  {step === "source" && <SourceStep />}
+                  {step === "layout" && <LayoutStep />}
+                  {step === "tabs" && <TabsStep />}
+                  {step === "look" && <LookStep />}
+                  {step === "searchPrivacy" && <SearchPrivacyStep />}
+                  {step === "pins" && <PinnedTabsStep />}
+                  {step === "home" && <HomeStep />}
+                  {step === "plugins" && <PluginsStep />}
+                  {step === "outro" && (isWebDemo ? <SetupCodeOutro /> : <OutroStep />)}
+                </View>
+              </OnboardingCardContext.Provider>
             </Panel>
+            {dragStrip > 0 ? <WindowDragRegion style={{ position: "absolute", top: 0, left: 0, right: 0, height: dragStrip }} /> : null}
           </Animated.View>
         </View>
       )}
       {step === "intro" && <Intro onDone={() => goToStep("source")} />}
+      <OnboardingConsentSheet />
     </Animated.View>
   );
 }

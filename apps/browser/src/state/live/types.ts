@@ -1,3 +1,5 @@
+import type { GroupColor } from "../browser/types";
+
 export type LiveSourceId = "github" | "bitbucket" | "notion" | "confluence" | "gdrive";
 export type LiveFolderKind = "pullRequests" | "documents";
 
@@ -13,8 +15,11 @@ export type LiveFolder = {
   groupStacks: boolean;
   showCompleted: boolean;
   hiddenRepos: string[];
+  showNewRepos: boolean;
+  shownRepos: string[];
   createdAt: number;
   after?: string | null;
+  color?: GroupColor | null;
 };
 
 export type PullRequestSection = "authored" | "review" | "team";
@@ -42,7 +47,7 @@ export type PullRequestInfo = {
   stack?: { id: string; position: number; size: number };
 };
 
-export type DocumentInfo = {
+type DocumentInfo = {
   kind: string;
   editedBy: string | null;
   place: string | null;
@@ -65,7 +70,7 @@ export type CompletedItem = { item: LiveItem; state: CompletionState; at: number
 
 export type CompletionState = "merged" | "closed" | "reviewed";
 
-export type LiveErrorKind = "signedOut" | "sso" | "rateLimited" | "network" | "notConfigured" | "other";
+export type LiveErrorKind = "signedOut" | "sso" | "tokenBlocked" | "rateLimited" | "network" | "notConfigured" | "other";
 
 export type FolderStatus = {
   state: "initializing" | "idle" | "updating" | "error";

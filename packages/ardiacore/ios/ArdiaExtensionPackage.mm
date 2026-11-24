@@ -175,6 +175,7 @@ NSDictionary *ReadManifest(NSString *folder) {
   NSString *panel = [m[@"side_panel"] isKindOfClass:NSDictionary.class] ? m[@"side_panel"][@"default_path"] : nil;
   out[@"sidePanel"] = [panel isKindOfClass:NSString.class] ? panel : nil;
   out[@"incognitoSplit"] = @([m[@"incognito"] isEqual:@"split"]);
+  out[@"incognitoAllowed"] = @(![m[@"incognito"] isEqual:@"not_allowed"]);
   out[@"homepageUrl"] = [m[@"homepage_url"] isKindOfClass:NSString.class] ? m[@"homepage_url"] : nil;
   out[@"id"] = [m[@"key"] isKindOfClass:NSString.class] ? IdForKey(m[@"key"]) : nil;
   return out;

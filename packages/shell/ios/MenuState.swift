@@ -17,9 +17,12 @@ struct MenuState {
   var warnBeforeQuitting = false
   var warnBeforeClosingWindow = false
   var undoReopensClosedTab = false
+  var linksOpenInLittleArdia = false
+  var littleArdiaShortcutFromAnyApp = false
   var bookmarksShown = true
   var downloadsInProgress = 0
   var shortcuts: [String: [[String]]] = [:]
+  var mouseShortcuts: [String: [String]] = [:]
   var extensions: [MenuExtension] = []
   var fromApp = false
 
@@ -37,9 +40,12 @@ struct MenuState {
     warnBeforeQuitting = update.warnBeforeQuitting
     warnBeforeClosingWindow = update.warnBeforeClosingWindow
     undoReopensClosedTab = update.undoReopensClosedTab
+    linksOpenInLittleArdia = update.linksOpenInLittleArdia
+    littleArdiaShortcutFromAnyApp = update.littleArdiaShortcutFromAnyApp
     bookmarksShown = update.bookmarksShown
     downloadsInProgress = update.downloadsInProgress
     shortcuts = update.shortcuts
+    mouseShortcuts = update.mouseShortcuts
     extensions = update.extensions
     fromApp = true
   }

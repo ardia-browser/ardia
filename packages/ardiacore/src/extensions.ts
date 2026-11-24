@@ -1,7 +1,7 @@
 import type { ExtensionSearchEngine } from "@ardia/core";
 import { call } from "./engine/call";
 
-export type SiteAccess = "ON_ALL_SITES" | "ON_SPECIFIC_SITES" | "ON_CLICK";
+type SiteAccess = "ON_ALL_SITES" | "ON_SPECIFIC_SITES" | "ON_CLICK";
 
 export type InstalledExtension = {
   id: string;
@@ -16,8 +16,10 @@ export type InstalledExtension = {
   sites: string[];
   optionsUrl: string | null;
   pinned: boolean;
+  pinnedIndex?: number;
   incognito: boolean;
   incognitoSplit?: boolean;
+  incognitoAllowed?: boolean | null;
   fileAccess: boolean;
   userScriptsAvailable?: boolean;
   userScripts?: boolean;
@@ -124,7 +126,7 @@ export type ExtensionActionChange = { profile: string; id: string; kind: "action
 
 export type ExtensionSyncIntent = { id: string; kind: "installed" | "uninstalled" };
 
-export type SyncedExtension =
+type SyncedExtension =
   | { id: string; syncable: false }
   | {
       id: string;
@@ -152,6 +154,10 @@ export type ExtensionsSyncApply = {
   record: { on: boolean; inc: boolean; pin: boolean } | { removed: true };
   approval?: { v: string; fps: string[] };
 };
+
+type ExtensionDisableReason = "user" | "permissions" | "corrupted" | "developer" | "unsupported" | "policy" | "external" | "reload" | "other";
+
+export type ExtensionsLoadHealth = { dropped: number; enabled: number; disabled: Partial<Record<ExtensionDisableReason, number>> };
 
 export type ExtensionsSyncApplied = {
   state: "invalid" | "kept" | "absent" | "cancelled" | "blocked" | "pending" | "refused" | "updating" | "installed";

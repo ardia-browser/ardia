@@ -35,10 +35,47 @@ export function addHistoryVisits(profile: string, pages: { url: string; title: s
   return run;
 }
 
-export const importHistoryRows = (profile: string, rows: { url: string; title: string; visits: number; lastVisit: number }[]) =>
-  rows.length
-    ? call("history.import", { profile, rows: rows.map((r) => ({ u: r.url, t: r.title, n: r.visits, l: r.lastVisit })) })
-    : Promise.resolve();
+type HistoryImportRow = { url: string; title: string; visits: number; lastVisit: number };
+
+type HistoryImportResult<R extends HistoryImportRow> = { written: R[]; batches: number; failures: unknown[] };
+
+const HISTORY_IMPORT_BATCH_CHARS = 2 * 1024 * 1024;
+
+const historyImportWire = (r: HistoryImportRow) => ({ u: r.url, t: r.title, n: r.visits, l: r.lastVisit });
+
+export function historyImportBatches<R extends HistoryImportRow>(rows: R[], maxChars = HISTORY_IMPORT_BATCH_CHARS): R[][] {
+  const batches: R[][] = [];
+  let batch: R[] = [];
+  let chars = 0;
+  for (const row of rows) {
+    const size = JSON.stringify(historyImportWire(row)).length + 1;
+    if (batch.length && chars + size > maxChars) {
+      batches.push(batch);
+      batch = [];
+      chars = 0;
+    }
+    batch.push(row);
+    chars += size;
+  }
+  if (batch.length) batches.push(batch);
+  return batches;
+}
+
+export async function importHistoryRows<R extends HistoryImportRow>(profile: string, rows: R[], stillWanted: (row: R) => boolean = () => true): Promise<HistoryImportResult<R>> {
+  const result: HistoryImportResult<R> = { written: [], batches: 0, failures: [] };
+  for (const batch of historyImportBatches(rows)) {
+    const sending = batch.filter(stillWanted);
+    if (!sending.length) continue;
+    result.batches++;
+    try {
+      await call("history.import", { profile, rows: sending.map(historyImportWire) });
+      for (const row of sending) result.written.push(row);
+    } catch (error) {
+      result.failures.push(error);
+    }
+  }
+  return result;
+}
 
 export const deleteHistoryUrls = (profile: string, urls: string[]) =>
   urls.length ? call("history.deleteUrls", { profile, urls }) : Promise.resolve();

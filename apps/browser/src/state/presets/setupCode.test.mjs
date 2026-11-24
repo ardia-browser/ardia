@@ -42,7 +42,7 @@ test("a full set of choices survives a round trip in a short code", () => {
 
 test("every onboarding layout, look and tab key is in the code, and nothing private is", () => {
   assert.deepEqual([...SETUP_SETTING_KEYS].sort(), Object.keys(ARC.settings).sort());
-  for (const key of ["searchEngine", "commandBarPreference", "customSearchUrl", "openLinksInLittleArdia", "shortcuts", "mutedSites"]) {
+  for (const key of ["searchEngine", "customSearchUrl", "openLinksInLittleArdia", "shortcuts", "mutedSites"]) {
     assert.ok(!SETUP_SETTING_KEYS.includes(key), `${key} stays out of setup codes`);
   }
 });
@@ -131,4 +131,10 @@ test("the sidebar side rides in the code, and codes from before it still decode"
   assert.deepEqual(describeSetupChoices(right), ["Tabs in the sidebar", "Sidebar on the right"]);
   assert.deepEqual(describeSetupChoices({ settings: { tabLayout: "top", sidebarSide: "right" } }), ["Tabs along the top"]);
   assert.deepEqual(describeSetupChoices({ settings: { tabLayout: "sidebar", sidebarSide: "left" } }), ["Tabs in the sidebar"]);
+});
+
+test("a Helium preset round-trips and the presets before it keep their codes", () => {
+  const helium = { preset: "helium", settings: {} };
+  assert.deepEqual(decodeSetupCode(encodeSetupCode(helium)), { ok: true, choices: helium });
+  for (const [preset, index] of [["edge", 7], ["fresh", 8], ["helium", 9]]) assert.match(encodeSetupCode({ preset, settings: {} }), new RegExp(`^${SETUP_CODE_PREFIX}p${index}[^0-9]`));
 });

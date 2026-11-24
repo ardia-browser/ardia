@@ -1,23 +1,39 @@
 ---
-import { DMG, NIGHTLY, VERSION } from "../data/release";
+import { DMG, LINUX_NIGHTLY, LINUX_TARBALL, LINUX_VERSION, NIGHTLY, VERSION, WINDOWS_SETUP } from "../data/release";
 
+type Platform = "mac" | "windows-x64" | "windows-arm64" | "linux";
 interface Props {
   label?: string;
   meta?: string;
   class?: string;
   location: "hero" | "closing" | "release_notes" | "menu" | "office-band" | "arc" | "demo-code";
   nightly?: boolean;
+  platform?: Platform;
 }
-const { label = "Download for Mac", meta = "Apple Silicon", class: className, location, nightly = false } = Astro.props;
+const { label, meta, class: className, location, nightly = false, platform = "mac" } = Astro.props;
+
+const pc = {
+  "windows-x64": { href: WINDOWS_SETUP.x64, label: "Download for Windows", meta: "Nightly", only: "windows-only x64-only", arch: "x64" },
+  "windows-arm64": { href: WINDOWS_SETUP.arm64, label: "Download for Windows", meta: "Nightly, Arm", only: "windows-only arm-only", arch: "arm64" },
+  linux: { href: LINUX_TARBALL, label: "Download for Linux", meta: LINUX_NIGHTLY ? "Nightly, x86-64" : "x86-64", only: "linux-only", arch: "x64" },
+}[platform as Exclude<Platform, "mac">];
+const mac = !pc;
+const href = pc ? pc.href : nightly ? NIGHTLY : DMG;
+const shownLabel = label ?? pc?.label ?? "Download for Mac";
+const shownMeta = meta ?? pc?.meta ?? "Apple Silicon";
+const channel = pc ? (platform === "linux" && !LINUX_NIGHTLY ? undefined : "nightly") : nightly ? "nightly" : undefined;
+const version = platform === "linux" ? LINUX_VERSION : pc || nightly ? "nightly" : VERSION;
 ---
 
 <a
-  class:list={["btn", nightly && "nightly-btn", className]}
-  href={nightly ? NIGHTLY : DMG}
-  data-download={nightly ? undefined : ""}
+  class:list={["btn", nightly && "nightly-btn", pc?.only, className]}
+  href={href}
+  data-download={mac && !nightly ? "" : undefined}
   data-track="download_clicked"
-  data-track-version={nightly ? "nightly" : VERSION}
-  data-track-channel={nightly ? "nightly" : undefined}
+  data-track-version={version}
+  data-track-channel={channel}
+  data-track-platform={pc ? platform.split("-")[0] : undefined}
+  data-track-arch={pc?.arch}
   data-track-location={location}
 >
   <svg class="not-phone" width="16" height="18" viewBox="0 0 16 18" fill="none" aria-hidden="true">
@@ -26,7 +42,7 @@ const { label = "Download for Mac", meta = "Apple Silicon", class: className, lo
   <svg class="phone-only" width="16" height="18" viewBox="0 0 16 18" fill="none" aria-hidden="true">
     <path d="M8 11.5V2M3.5 6 8 1.5 12.5 6M5 8.5H1.5V17h13V8.5H11" stroke="currentColor" stroke-width="2" stroke-linecap="square"></path>
   </svg>
-  <span class="not-phone" data-download-label>{label}</span>
-  {!nightly && <span class="phone-only" data-send-label aria-live="polite">Send to my Mac</span>}
-  {meta && <span class="btn-meta not-phone">{meta}</span>}
+  <span class="not-phone" data-download-label>{shownLabel}</span>
+  {mac && !nightly && <span class="phone-only" data-send-label aria-live="polite">Send to my Mac</span>}
+  {shownMeta && <span class="btn-meta not-phone">{shownMeta}</span>}
 </a>

@@ -2,14 +2,15 @@ import { readDocument, saveDocument } from "../../platform/documents";
 import { updaterState } from "../../platform/app";
 import { environment } from "./client";
 import { uuidv4 } from "./ids";
-import { appInfo, mayPost, post } from "./transport";
+import { appInfo, mayPost, post, telemetryHost } from "./transport";
 import { EVENTS_SCOPE, eventRecord, logsRequest, outcome } from "./otlp";
 import { parseSaved, versionedJson, unchanged, type Migrations } from "../../lib/savedDocument";
+import { utcDay } from "../../lib/time";
 
 export const DAILY_DOC = "telemetry-daily.json";
 const DAILY_VERSION = 1;
 const DAILY_MIGRATIONS: Migrations = { 0: unchanged };
-export const DAILY_EVENT = "daily_active";
+const DAILY_EVENT = "daily_active";
 export const DAILY_LIB = "ardia-daily";
 
 const FIRST_PING_DELAY_MS = 30_000;
@@ -19,9 +20,7 @@ const FIRST_RETRY_MS = 60_000;
 const MAX_RETRY_MS = 60 * 60_000;
 export const MAX_PENDING = 35;
 
-export type DailyFlags = { first: boolean; daily: true; weekly: boolean; monthly: boolean };
-
-export const utcDay = (at: number) => new Date(at).toISOString().slice(0, 10);
+type DailyFlags = { first: boolean; daily: true; weekly: boolean; monthly: boolean };
 
 export function isoWeekMonday(day: string) {
   const date = new Date(`${day}T00:00:00Z`);
@@ -49,7 +48,7 @@ export function nextCheckDelay(now: number, jitter = Math.random()) {
   return Math.min(RECHECK_MS, midnight - now + Math.floor(jitter * MIDNIGHT_JITTER_MS));
 }
 
-export type PendingPing = { day: string; id: string; timestamp: string; properties: Record<string, unknown> };
+type PendingPing = { day: string; id: string; timestamp: string; properties: Record<string, unknown> };
 type DailyState = { lastDay: string | null; pending: PendingPing[] };
 
 const validPending = (p: unknown): p is PendingPing => {
@@ -93,14 +92,14 @@ async function updateChannel(): Promise<string | null> {
   }
 }
 
-export function dailyProperties(flags: DailyFlags, channel: string | null): Record<string, unknown> {
+function dailyProperties(flags: DailyFlags, channel: string | null): Record<string, unknown> {
   const info = appInfo();
   return {
     $lib: DAILY_LIB,
     $lib_version: "1",
     $app_name: "Ardia",
     $app_version: info.appVersion,
-    $os: "macOS",
+    $os: telemetryHost().os,
     os_major: (info.osVersion ?? "").split(".")[0] || null,
     arch: info.arch,
     channel,

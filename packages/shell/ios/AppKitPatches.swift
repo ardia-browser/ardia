@@ -1,4 +1,5 @@
 import AppKit
+import ArdiaCore
 import Carbon.HIToolbox
 import ExpoModulesCore
 
@@ -31,6 +32,20 @@ let installViewSelectAll: Void = {
   class_addMethod(viewClass, selectAll, imp_implementationWithBlock(block), "v@:@")
 }()
 
+let installHoverAfterWindowMoves: Void = {
+  let markHoverDirty = NSSelectorFromString("ardia_markHoverDirty")
+  guard let viewClass = NSClassFromString("RCTView"), (viewClass as AnyObject).responds(to: markHoverDirty) else { return }
+  let names = [
+    NSWindow.didMoveNotification, NSWindow.didChangeScreenNotification, NSWindow.didChangeBackingPropertiesNotification,
+    NSApplication.didChangeScreenParametersNotification,
+  ]
+  for name in names {
+    NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { _ in
+      _ = (viewClass as AnyObject).perform(markHoverDirty)
+    }
+  }
+}()
+
 let installSubmenuAction: Void = {
   let submenuAction = NSSelectorFromString("submenuAction:")
   guard !NSMenu.instancesRespond(to: submenuAction) else { return }
@@ -39,20 +54,13 @@ let installSubmenuAction: Void = {
 }()
 
 let installInputSourceKeys: Void = {
-  let processKeyBindings = NSSelectorFromString("processInputKeyBindings:")
   let keyDown = #selector(NSResponder.keyDown(with:))
-  guard NSTextInputContext.responds(to: processKeyBindings), let method = class_getInstanceMethod(NSTextView.self, keyDown) else { return }
+  guard let method = class_getInstanceMethod(NSTextView.self, keyDown) else { return }
   typealias KeyDown = @convention(c) (NSTextView, Selector, NSEvent) -> Void
-  typealias ProcessKeyBindings = @convention(c) (AnyClass, Selector, NSEvent) -> ObjCBool
   let original = unsafeBitCast(method_getImplementation(method), to: KeyDown.self)
-  let process = unsafeBitCast(NSTextInputContext.method(for: processKeyBindings), to: ProcessKeyBindings.self)
-  let inputSourceKeys: Set<UInt16> = [UInt16(kVK_JIS_Eisu), UInt16(kVK_JIS_Kana)]
   let block: @convention(block) (NSTextView, NSEvent) -> Void = { view, event in
-    if inputSourceKeys.contains(event.keyCode) {
-      _ = process(NSTextInputContext.self, processKeyBindings, event)
-    } else {
-      original(view, keyDown, event)
-    }
+    if InputSourceKeys.consume(event) { return }
+    original(view, keyDown, event)
   }
   let imp = imp_implementationWithBlock(block)
   if !class_addMethod(NSTextView.self, keyDown, imp, method_getTypeEncoding(method)) { method_setImplementation(method, imp) }
@@ -70,6 +78,44 @@ let installScrollViewInsetFix: Void = {
   }
   let imp = imp_implementationWithBlock(block)
   if !class_addMethod(cls, #selector(NSView.init(frame:)), imp, method_getTypeEncoding(method)) {
+    method_setImplementation(method, imp)
+  }
+}()
+
+enum StripWheel {
+  static let identifiers: Set<String> = ["ardia-top-strip", "ardia-tab-switcher"]
+  static let pointsPerLine: CGFloat = 40
+
+  static func tagged(_ scroll: NSScrollView) -> Bool {
+    identifiers.contains(scroll.accessibilityIdentifier()) || identifiers.contains(scroll.superview?.accessibilityIdentifier() ?? "")
+  }
+
+  static func redirect(_ event: NSEvent, in scroll: NSScrollView) -> Bool {
+    guard event.phase.isEmpty, event.momentumPhase.isEmpty, !event.hasPreciseScrollingDeltas,
+          !event.modifierFlags.contains(.shift), abs(event.scrollingDeltaY) > abs(event.scrollingDeltaX),
+          tagged(scroll), let document = scroll.documentView else { return false }
+    let clip = scroll.contentView
+    let end = max(0, document.frame.width - clip.bounds.width)
+    let x = min(end, max(0, clip.bounds.origin.x - event.scrollingDeltaY * pointsPerLine))
+    if abs(x - clip.bounds.origin.x) >= 0.5 {
+      clip.scroll(to: NSPoint(x: x, y: clip.bounds.origin.y))
+      scroll.reflectScrolledClipView(clip)
+    }
+    return true
+  }
+}
+
+let installStripWheel: Void = {
+  guard let cls = NSClassFromString("RCTCustomScrollView"),
+        let method = class_getInstanceMethod(cls, #selector(NSResponder.scrollWheel(with:))) else { return }
+  typealias Wheel = @convention(c) (AnyObject, Selector, NSEvent) -> Void
+  let original = unsafeBitCast(method_getImplementation(method), to: Wheel.self)
+  let block: @convention(block) (AnyObject, NSEvent) -> Void = { receiver, event in
+    if let scroll = receiver as? NSScrollView, StripWheel.redirect(event, in: scroll) { return }
+    original(receiver, #selector(NSResponder.scrollWheel(with:)), event)
+  }
+  let imp = imp_implementationWithBlock(block)
+  if !class_addMethod(cls, #selector(NSResponder.scrollWheel(with:)), imp, method_getTypeEncoding(method)) {
     method_setImplementation(method, imp)
   }
 }()

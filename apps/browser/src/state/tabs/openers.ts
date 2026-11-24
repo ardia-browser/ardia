@@ -1,12 +1,16 @@
+import { linkEdits } from "../browser/changes";
 import type { BrowserState } from "../browser/store";
-import { ancestorIds } from "../groups/groups";
+import { withShownTab } from "../groups/shownTabs";
 import { inPinnedContainer } from "../browser/model";
 import { groupOf, pinnedChildGroup } from "../pins/tabGrouping";
 import { splitOf, splitTabIds, splitTabIdsOf } from "../splits/splits";
 import type { BrowserWindow, Tab } from "../browser/types";
-import { isAsleep } from "./pageSession";
+import { holderOfPage, isAsleep } from "./pageSession";
+import { isSleeping } from "./sleepingTabs";
 
 const regular = (s: BrowserState, id: string) => !inPinnedContainer(s, id);
+
+export const sleepsNow = (s: BrowserState, id: string) => isAsleep(s.tabs[id]) || isSleeping(holderOfPage(s.tabs[id]) ?? id);
 
 export function insertionIndex(s: BrowserState, w: BrowserWindow, tab: Tab, background: boolean): number {
   const opener = tab.openerId ? s.tabs[tab.openerId] : undefined;
@@ -27,7 +31,7 @@ export function insertionIndex(s: BrowserState, w: BrowserWindow, tab: Tab, back
   return outsideSplit(s, w, index);
 }
 
-function firstRegular(s: BrowserState, w: BrowserWindow, profileId: string): number {
+export function firstRegular(s: BrowserState, w: BrowserWindow, profileId: string): number {
   const first = w.tabIds.findIndex((id) => s.tabs[id]?.profileId === profileId && regular(s, id));
   return first >= 0 ? first : w.tabIds.length;
 }
@@ -53,7 +57,8 @@ export function joinedWithCurrent(s: BrowserState, ids: string[], openerId: stri
   if (!group || !joining.length) return s;
   const members = new Set([...group.tabIds, ...joining]);
   const tabIds = s.windows[group.windowId]!.tabIds.filter((id) => members.has(id));
-  return { ...s, groups: { ...s.groups, [group.id]: { ...group, tabIds } } };
+  const groups = joining.reduce(withShownTab, { ...s.groups, [group.id]: { ...group, tabIds } });
+  return { ...s, groups };
 }
 
 const listStart = (s: BrowserState, w: BrowserWindow, profileId: string) =>
@@ -80,13 +85,12 @@ function outsideSplit(s: BrowserState, w: BrowserWindow, index: number): number 
   return Math.max(...splitTabIds(split).map((id) => w.tabIds.indexOf(id))) + 1;
 }
 
-export function forgetOpeners(s: BrowserState, windowId: string, keep?: string): BrowserState {
-  const w = s.windows[windowId];
-  const ids = w?.tabIds.filter((id) => id !== keep && s.tabs[id]?.openerId);
+export function forgetOpeners(s: BrowserState, windowId: string, profileId: string): BrowserState {
+  const ids = s.windows[windowId]?.tabIds.filter((id) => s.tabs[id]?.openerId && s.tabs[id]!.profileId === profileId);
   if (!ids?.length) return s;
   const tabs = { ...s.tabs };
   for (const id of ids) tabs[id] = { ...tabs[id]!, openerId: null };
-  return { ...s, tabs };
+  return { ...s, tabs: linkEdits(tabs, s.tabs, ids) };
 }
 
 export function switchKeepsOpeners(s: BrowserState, from: string, to: string): boolean {
@@ -94,19 +98,13 @@ export function switchKeepsOpeners(s: BrowserState, from: string, to: string): b
   return a === b || b === from || a === to;
 }
 
-const hiddenInGroup = (s: BrowserState, id: string) => {
-  const g = groupOf(s, id);
-  return !!g && (g.collapsed || ancestorIds(s.groups, g.id).some((x) => s.groups[x]!.collapsed));
-};
-
-export function openerSuccessor(s: BrowserState, closed: string, order: string[], left: string[]): string | undefined {
+export function closeSuccessor(s: BrowserState, closed: string, order: string[], left: string[]): string | undefined {
   const at = order.indexOf(closed);
-  const candidates = [...left.filter((id) => order.indexOf(id) > at), ...left.filter((id) => order.indexOf(id) < at).reverse()].filter(
-    (id) => !isAsleep(s.tabs[id]) && !hiddenInGroup(s, id),
-  );
-  const opener = s.tabs[closed]?.openerId;
-  return (
-    candidates.find((id) => s.tabs[id]!.openerId === closed) ??
-    (opener ? (candidates.find((id) => s.tabs[id]!.openerId === opener) ?? (candidates.includes(opener) ? opener : undefined)) : undefined)
-  );
+  const nearest = [...left.filter((id) => order.indexOf(id) > at), ...left.filter((id) => order.indexOf(id) < at).reverse()];
+  const awake = nearest.filter((id) => !sleepsNow(s, id));
+  const open = nearest.filter((id) => !isAsleep(s.tabs[id]));
+  const pool = awake.length ? awake : open.length ? open : nearest;
+  const seen = pool.filter((id) => !s.tabs[id]!.unseen);
+  if (!seen.length) return pool[0];
+  return seen.reduce((best, id) => (s.tabs[id]!.lastActiveAt > s.tabs[best]!.lastActiveAt ? id : best));
 }

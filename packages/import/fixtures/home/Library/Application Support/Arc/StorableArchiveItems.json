@@ -1,0 +1,145 @@
+{
+  "items": [
+    "A-1",
+    {
+      "archivedAt": 809906400,
+      "reason": "auto",
+      "source": {
+        "space": {
+          "_0": "S-PERSONAL"
+        }
+      },
+      "sidebarItem": {
+        "id": "A-1",
+        "parentID": null,
+        "childrenIds": [],
+        "title": null,
+        "isUnread": false,
+        "createdAt": 809905800,
+        "data": {
+          "tab": {
+            "savedURL": "https://old-news.example/",
+            "savedTitle": "Old news",
+            "timeLastActiveAt": 809906400
+          }
+        }
+      }
+    },
+    "A-2",
+    {
+      "archivedAt": 809910000,
+      "reason": "manual",
+      "source": {
+        "space": {
+          "_0": "S-WORK"
+        }
+      },
+      "sidebarItem": {
+        "id": "A-2",
+        "parentID": null,
+        "childrenIds": [],
+        "title": "Report",
+        "isUnread": false,
+        "createdAt": 809909400,
+        "data": {
+          "tab": {
+            "savedURL": "https://report.example/q3",
+            "savedTitle": "Q3 report",
+            "timeLastActiveAt": 809910000
+          }
+        }
+      }
+    },
+    "A-3",
+    {
+      "archivedAt": 809911800,
+      "reason": "manual",
+      "source": {
+        "littleArc": {}
+      },
+      "sidebarItem": {
+        "id": "A-3",
+        "parentID": null,
+        "childrenIds": [],
+        "title": null,
+        "isUnread": false,
+        "createdAt": 809911200,
+        "data": {
+          "tab": {
+            "savedURL": "https://little.example/",
+            "savedTitle": "From Little Arc",
+            "timeLastActiveAt": 809911800
+          }
+        }
+      }
+    },
+    "A-4",
+    {
+      "archivedAt": 809912700,
+      "reason": "manual",
+      "source": {
+        "space": {
+          "_0": "S-DELETED"
+        }
+      },
+      "sidebarItem": {
+        "id": "A-4",
+        "parentID": null,
+        "childrenIds": [],
+        "title": null,
+        "isUnread": false,
+        "createdAt": 809912100,
+        "data": {
+          "tab": {
+            "savedURL": "https://ghost.example/",
+            "savedTitle": "Deleted space",
+            "timeLastActiveAt": 809912700
+          }
+        }
+      }
+    },
+    "A-5",
+    {
+      "archivedAt": 809913000,
+      "reason": "manual",
+      "source": {
+        "space": {
+          "_0": "S-PERSONAL"
+        }
+      },
+      "sidebarItem": {
+        "id": "A-5",
+        "title": "A folder",
+        "data": {
+          "list": {}
+        }
+      }
+    },
+    "A-6",
+    {
+      "archivedAt": 809913300,
+      "reason": "manual",
+      "source": {
+        "space": {
+          "_0": "S-PERSONAL"
+        }
+      },
+      "sidebarItem": {
+        "id": "A-6",
+        "parentID": null,
+        "childrenIds": [],
+        "title": null,
+        "isUnread": false,
+        "createdAt": 809912700,
+        "data": {
+          "tab": {
+            "savedURL": "file:///Users/someone/notes.txt",
+            "savedTitle": "Local file",
+            "timeLastActiveAt": 809913300
+          }
+        }
+      }
+    }
+  ],
+  "version": 1
+}

@@ -4,7 +4,6 @@ import ArdiaCore
 enum MainMenu {
   private static var moveToProfile = NSMenu(title: "Move to Profile")
   private static var moveToWindow = NSMenu(title: "Move to Window")
-  private static var bookmarkToFolder = NSMenu(title: "Add Bookmark to Folder")
   static var profiles = NSMenu(title: "Profiles")
   private static var profilesItem = NSMenuItem(title: "Profiles", action: nil, keyEquivalent: "")
   private static var profilesSeparator = NSMenuItem.separator()
@@ -16,14 +15,29 @@ enum MainMenu {
   private static var history = NSMenu(title: "History")
   private static var extensions = NSMenu(title: "Extensions")
   private static var extensionIcons: [String: NSImage] = [:]
-  private static var undo: StandardItem?
+
+  static func performAppWideKey(_ event: NSEvent) -> Bool {
+    guard let item = appWideItem(for: event, in: NSApp.mainMenu), MenuTarget.shared.validateMenuItem(item) else { return false }
+    if item.action == #selector(MenuTarget.quit(_:)) { MenuTarget.shared.quit(item) } else { MenuTarget.shared.performCommand(item) }
+    return true
+  }
+
+  private static func appWideItem(for event: NSEvent, in menu: NSMenu?) -> NSMenuItem? {
+    for item in menu?.items ?? [] {
+      if let found = appWideItem(for: event, in: item.submenu) { return found }
+      let appWide = item.action == #selector(MenuTarget.quit(_:)) || (item as? CommandItem)?.command == CommandTable.Command.openSettings.rawValue
+      guard appWide, KeyEquivalentMatch.matches(item, event) else { continue }
+      return item
+    }
+    return nil
+  }
 
   static func build() -> NSMenu {
+    ArdiaWebView.setAppWideKeys { MainMenu.performAppWideKey($0) }
     let appName = ProcessInfo.processInfo.processName
     let main = NSMenu()
     moveToProfile = NSMenu(title: "Move to Profile")
     moveToWindow = NSMenu(title: "Move to Window")
-    bookmarkToFolder = NSMenu(title: "Add Bookmark to Folder")
     profiles = NSMenu(title: "Profiles")
     profilesSeparator = NSMenuItem.separator()
     littleArdiaInProfile = NSMenu(title: "New Little Ardia Window in Profile")
@@ -86,7 +100,7 @@ enum MainMenu {
       cmd(.newIncognitoWindow),
       cmd(.newLittleArdia),
       littleArdiaInProfileItem,
-      cmd(.toggleOpenLinksInLittleArdia),
+      hidden(.toggleOpenLinksInLittleArdia),
       cmd(.reopenClosedTab),
       cmd(.reopenClosedWindow),
       cmd(.openFile),
@@ -100,7 +114,7 @@ enum MainMenu {
       .separator(),
       cmd(.savePage),
       sub("Share", [cmd(.share), .separator()], menu: shareMenu),
-      cmd(.emailPageLocation),
+      hidden(.emailPageLocation),
       cmd(.print),
       cmd(.printWithSystemDialog),
     ])
@@ -113,10 +127,12 @@ enum MainMenu {
     ]
     edits.forEach { $0.target = MenuTarget.shared }
     let undo = std("Undo", MenuTarget.undoAction)
-    Self.undo = undo
+    undo.target = MenuTarget.shared
+    let redo = std("Redo", MenuTarget.redoAction)
+    redo.target = MenuTarget.shared
     _ = top("Edit", [
       undo,
-      std("Redo", Selector(("redo:"))),
+      redo,
       .separator(),
       edits[0],
       edits[1],
@@ -179,30 +195,45 @@ enum MainMenu {
       cmd(.reload),
       cmd(.forceReload).alternate(),
       .separator(),
-      cmd(.toggleTabLayout),
-      cmd(.toggleSidebar),
-      cmd(.toggleSidebarSide),
-      .separator(),
-      cmd(.openSplitPane),
-      cmd(.focusNextPane),
-      cmd(.focusPreviousPane),
-      bookmarkItem(NSMenuItem.separator()),
-      bookmarkItem(sub("Show Bookmarks Bar", [
-        cmd(.setBookmarksBar, arg: "always"),
-        cmd(.setBookmarksBar, arg: "newTab"),
-        cmd(.setBookmarksBar, arg: "never"),
+      sub("Browser Layout", [
+        cmd(.setTabLayout, arg: "sidebarLeft"),
+        cmd(.setTabLayout, arg: "sidebarRight"),
+        cmd(.setTabLayout, arg: "top"),
+        hidden(.toggleTabLayout),
         .separator(),
-        cmd(.toggleBookmarksBar),
-      ])),
+        cmd(.toggleAddressBar),
+        cmd(.toggleCompactToolbar),
+        cmd(.toggleFullUrl),
+        .separator(),
+        cmd(.toggleSidebar),
+        cmd(.toggleMinimalism),
+        bookmarkItem(sub("Show Bookmarks Bar", [
+          cmd(.setBookmarksBar, arg: "always"),
+          cmd(.setBookmarksBar, arg: "newTab"),
+          cmd(.setBookmarksBar, arg: "never"),
+          .separator(),
+          cmd(.toggleBookmarksBar),
+        ])),
+        cmd(.togglePinnedFold).hiddenWhenDisabled(),
+      ]),
+      sub("Split View", [
+        cmd(.openSplitPane),
+        cmd(.focusNextPane),
+        cmd(.focusPreviousPane),
+      ]),
       .separator(),
-      cmd(.toggleFullUrl),
-      cmd(.toggleAddressBar),
       cmd(.cast),
       cmd(.togglePageEngine),
+      cmd(.toggleReader),
       .separator(),
       cmd(.zoomReset),
       cmd(.zoomIn),
       cmd(.zoomOut),
+      .separator(),
+      sub("Hide Elements", [
+        cmd(.hideElement),
+        cmd(.showHiddenElements),
+      ]),
       .separator(),
       std("Enter Full Screen", #selector(NSWindow.toggleFullScreen(_:))),
       .separator(),
@@ -243,7 +274,6 @@ enum MainMenu {
       sub("Move to Window", [], menu: moveToWindow),
       bookmarkItem(NSMenuItem.separator()),
       bookmarkItem(cmd(.bookmarkPage)),
-      bookmarkItem(sub("Add Bookmark to Folder", [], menu: bookmarkToFolder)),
       .separator(),
       cmd(.renameTab),
       cmd(.changeTabIcon),
@@ -282,9 +312,12 @@ enum MainMenu {
       profilesItem,
       hidden(.openProfileMenu),
     ])
+    let helpMenu = top("Help", helpItems())
+    MenuCatalog.capture(
+      main, dynamic: [services, shareMenu, moveToProfile, moveToWindow, profiles, littleArdiaInProfile, history, extensions],
+      growing: [bookmarks, windowMenu])
     NSApp.windowsMenu = windowMenu
-
-    NSApp.helpMenu = top("Help", helpItems())
+    NSApp.helpMenu = helpMenu
 
     built = nil
     refresh()
@@ -341,6 +374,7 @@ enum MainMenu {
       releaseNotesItem(),
       .separator(),
       CommandItem(.copyDiagnostics),
+      CommandItem(.copyLastFreeze),
     ]
     #if DEBUG
     items += [.separator(), CommandItem(.showOnboarding)]
@@ -371,10 +405,6 @@ enum MainMenu {
     if state.bookmarksRevision == nil || last?.bookmarks != state.bookmarksRevision { buildBookmarkMenus(state) }
     if last?.extensions != extensionKeys { buildExtensions(state) }
     if last?.history != history { buildHistory(state) }
-    if let undo, (undo.target != nil) != state.undoReopensClosedTab {
-      undo.target = state.undoReopensClosedTab ? MenuTarget.shared : nil
-      undo.title = undo.defaultTitle
-    }
     for item in bookmarkItems where item.isHidden == state.bookmarksShown { item.isHidden = !state.bookmarksShown }
     applyShortcuts(state.shortcuts)
   }
@@ -423,7 +453,7 @@ enum MainMenu {
   static func dockMenu() -> NSMenu {
     let menu = NSMenu()
     let state = MenuState.current
-    if state.profiles.count > 1 {
+    if state.profiles.count == 2 {
       for p in state.profiles {
         let item = CommandItem("New \(p.title) Window", "newWindow", arg: p.id)
         item.windowless = true
@@ -433,6 +463,17 @@ enum MainMenu {
       let item = CommandItem("New Window", "newWindow")
       item.windowless = true
       menu.addItem(item)
+    }
+    if state.profiles.count > 2 {
+      let inProfile = NSMenu(title: "New Window in Profile")
+      for p in state.profiles {
+        let item = CommandItem(p.title, "newWindow", arg: p.id)
+        item.windowless = true
+        inProfile.addItem(item)
+      }
+      let root = NSMenuItem(title: inProfile.title, action: nil, keyEquivalent: "")
+      root.submenu = inProfile
+      menu.addItem(root)
     }
     let incognito = CommandItem("New Incognito Window", "newIncognitoWindow")
     incognito.windowless = true
@@ -462,8 +503,6 @@ enum MainMenu {
       item.state = p.current ? .on : .off
       moveToProfile.addItem(item)
     }
-    moveToProfile.addItem(.separator())
-    moveToProfile.addItem(CommandItem("New Profile…", "moveTabToProfile", arg: "new"))
 
     profiles.removeAllItems()
     profilesItem.isHidden = state.profiles.count < 2
@@ -496,11 +535,6 @@ enum MainMenu {
   }
 
   private static func buildBookmarkMenus(_ state: MenuState) {
-    bookmarkToFolder.removeAllItems()
-    for f in state.bookmarks.bookmarkFolders { bookmarkToFolder.addItem(CommandItem(f.title, "addBookmarkToFolder", arg: f.id)) }
-    bookmarkToFolder.addItem(.separator())
-    bookmarkToFolder.addItem(CommandItem("New Folder…", "addBookmarkToFolder", arg: "new"))
-
     while bookmarks.items.count > bookmarksFixedCount { bookmarks.removeItem(at: bookmarksFixedCount) }
     bookmarks.addItem(.separator())
     if !state.bookmarks.recentBookmarks.isEmpty {
@@ -522,9 +556,9 @@ enum MainMenu {
       extensions.addItem(item)
     }
     if !state.extensions.isEmpty { extensions.addItem(.separator()) }
-    extensions.addItem(CommandItem(.addExtension))
     extensions.addItem(CommandItem(.manageExtensions))
-    extensions.addItem(CommandItem(.pinExtensions))
+    extensions.addItem(CommandItem(.addExtension))
+    extensions.addItem(CommandItem(.pinExtensions).hiddenShortcut())
   }
 
   private static func buildHistory(_ state: MenuState) {
@@ -544,5 +578,7 @@ enum MainMenu {
       history.addItem(groupsHeader)
       for entry in state.recentlyClosedGroups { history.addItem(CommandItem(entry.title, "restoreClosed", arg: entry.id)) }
     }
+    history.addItem(.separator())
+    history.addItem(CommandItem(.clearRecentlyClosed))
   }
 }

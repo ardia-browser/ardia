@@ -1,21 +1,38 @@
 import { create } from "zustand";
 import { goBackAcrossEngines } from "../engines/actions";
+import { confirm } from "../../platform/dialogs";
 import { livePageId, withLivePage } from "./livePage";
 import { webviews } from "../../platform/webviews";
-import { useBrowser } from "../browser/store";
+import { useBrowser, type BrowserState } from "../browser/store";
 import { changedIds } from "../browser/changes";
-import { useTabLive } from "../browser/hooks";
+import { activeTabId, inPinnedContainer } from "../browser/model";
+import { noteBackCloseToOpener } from "../telemetry/usage";
+import { useTab, useTabLive } from "../browser/hooks";
+import { useBrowserWhile } from "./tabWatch";
 import type { TabLive } from "../browser/types";
-import { internalPageOf, tabDestination } from "../pages/urls";
+import { isAppPage, tabDestination } from "../pages/urls";
 import { pageOf, patchPage, usePage } from "./pageState";
 import { historyOf } from "../history/history";
 import { adoptedPage, IDLE } from "./pageSession";
+import { isPeekTab } from "../peek/peek";
+import { dismissPeek } from "../peek/actions";
+import { liveOf } from "./tabLive";
 
 const store = () => useBrowser.getState();
 
-export function canGoBack(tabId: string, live: Pick<TabLive, "canGoBack">): boolean {
+function backClosesTab(s: BrowserState, tabId: string): boolean {
+  const tab = s.tabs[tabId];
+  if (!tab?.openerId) return false;
+  if (!isPeekTab(s, tabId) && tab.linkOpenerId !== tab.openerId) return false;
+  const opener = s.tabs[tab.openerId];
+  if (!opener || opener.windowId !== tab.windowId || opener.profileId !== tab.profileId) return false;
+  if (inPinnedContainer(s, tabId)) return false;
+  return true;
+}
+
+export function canGoBack(tabId: string, live: Pick<TabLive, "canGoBack">, s: BrowserState = store()): boolean {
   const page = pageOf(tabId);
-  return !page.newTabShown && (live.canGoBack || page.backToNewTab || !!page.engineBack);
+  return !page.newTabShown && (live.canGoBack || page.backToNewTab || !!page.engineBack || backClosesTab(s, tabId));
 }
 
 export function canGoForward(tabId: string, live: Pick<TabLive, "canGoForward">): boolean {
@@ -23,33 +40,75 @@ export function canGoForward(tabId: string, live: Pick<TabLive, "canGoForward">)
 }
 
 export function useHistoryAvailability(tabId: string) {
-  const back = useTabLive(tabId, (l) => l.canGoBack);
-  const forward = useTabLive(tabId, (l) => l.canGoForward);
+  const moves = useTabLive(tabId, (l) => (l.canGoBack ? 1 : 0) | (l.canGoForward ? 2 : 0));
+  const back = !!(moves & 1);
+  const forward = !!(moves & 2);
   const shown = usePage(tabId, (p) => !!p.newTabShown);
   const backToNewTab = usePage(tabId, (p) => p.backToNewTab || !!p.engineBack);
-  return { back: !shown && (back || backToNewTab), forward: shown || forward };
+  const opened = useTab(tabId, (t) => !!t?.openerId);
+  const closes = useBrowserWhile(opened, (s) => opened && backClosesTab(s, tabId));
+  return { back: !shown && (back || backToNewTab || closes), forward: shown || forward, backCloses: !shown && !back && !backToNewTab && closes };
 }
 
-export function goBack(tabId: string): void {
-  if (livePageId(tabId) !== tabId) return void withLivePage(tabId, (_, id) => goBack(id));
-  const live = store().live[tabId];
-  if (pageOf(tabId).newTabShown) return;
-  if (live?.canGoBack) return void webviews.get(tabId)?.goBack();
-  if (pageOf(tabId).engineBack) return void goBackAcrossEngines(tabId);
-  if (pageOf(tabId).backToNewTab) showNewTab(tabId);
+export function goBack(tabId: string, mayAct: () => boolean = () => true): void {
+  void goBackAsking(tabId, mayAct);
 }
 
-export function goForward(tabId: string): void {
-  if (livePageId(tabId) !== tabId) return void withLivePage(tabId, (_, id) => goForward(id));
-  if (pageOf(tabId).newTabShown) return hideNewTab(tabId);
-  void webviews.get(tabId)?.goForward();
+export async function goBackAsking(tabId: string, mayAct: () => boolean = () => true, ask: typeof confirm = confirm): Promise<boolean> {
+  if (livePageId(tabId) !== tabId) {
+    let went: Promise<boolean> = Promise.resolve(false);
+    const acted = await withLivePage(tabId, (_, id) => (went = goBackAsking(id, mayAct, ask)), mayAct);
+    return acted ? went : false;
+  }
+  if (pageOf(tabId).newTabShown) return true;
+  if (pageOf(tabId).engineBack && !liveOf(tabId).canGoBack) return goBackAcrossEngines(tabId, mayAct, ask);
+  goBackHere(tabId);
+  return true;
+}
+
+function goBackHere(tabId: string) {
+  if (liveOf(tabId).canGoBack) return void webviews.get(tabId)?.goBack();
+  if (pageOf(tabId).backToNewTab) return showNewTab(tabId);
+  if (backClosesTab(store(), tabId)) {
+    noteBackCloseToOpener();
+    if (isPeekTab(store(), tabId)) dismissPeek(store().tabs[tabId]!.windowId);
+    else {
+      const tab = store().tabs[tabId]!;
+      const openerId = tab.openerId!;
+      const wasShown = activeTabId(store(), tab.windowId) === tabId;
+      store().closeTab(tabId);
+      if (wasShown && store().tabs[openerId]) store().activate(openerId);
+    }
+  }
+}
+
+export function goForward(tabId: string, mayAct: () => boolean = () => true): void {
+  void goForwardAsking(tabId, mayAct);
+}
+
+export async function goForwardAsking(tabId: string, mayAct: () => boolean = () => true): Promise<boolean> {
+  if (livePageId(tabId) === tabId) return goForwardHere(tabId);
+  let went = false;
+  const acted = await withLivePage(tabId, (_, id) => (went = goForwardHere(id)), mayAct);
+  return acted && went;
+}
+
+function goForwardHere(tabId: string): boolean {
+  if (pageOf(tabId).newTabShown) {
+    hideNewTab(tabId);
+    return true;
+  }
+  const page = webviews.get(tabId);
+  if (!page) return false;
+  void page.goForward();
+  return true;
 }
 
 function showNewTab(tabId: string, keep?: { url: string; title: string }) {
   const tab = store().tabs[tabId];
   if (!tab?.url) return;
   patchPage(tabId, { newTabShown: { url: keep?.url ?? tab.url, title: keep?.title ?? tab.title, favicon: tab.favicon }, status: "" });
-  const internal = internalPageOf(tabDestination(tab)) !== null;
+  const internal = isAppPage(tabDestination(tab));
   const page = internal && tab.page.kind === "loaded" ? IDLE : internal && tab.page.kind === "adopted" ? adoptedPage(tab.page.adopt) : tab.page;
   store().updateTab(tabId, { url: "", title: "", favicon: null, page });
 }
@@ -67,12 +126,12 @@ function hideNewTab(tabId: string) {
   store().updateTab(tabId, { url: kept.url, title: kept.title, favicon: kept.favicon });
 }
 
-useBrowser.subscribe((s, prev) => {
+useBrowser.subscribeTo(["tabs"], (s, prev) => {
   for (const id of changedIds(s.tabs, prev.tabs)) {
     const tab = s.tabs[id];
     const before = prev.tabs[id];
     if (!tab || !before) continue;
-    if (!tabDestination(before) && internalPageOf(tabDestination(tab)) && !pageOf(id).backToNewTab) patchPage(id, { backToNewTab: true });
+    if (!tabDestination(before) && isAppPage(tabDestination(tab)) && !pageOf(id).backToNewTab) patchPage(id, { backToNewTab: true });
   }
 });
 
@@ -110,7 +169,7 @@ export async function historyItems(asked: string, direction: -1 | 1, max = 15): 
 }
 
 export async function goToHistoryItem(tabId: string, item: HistoryItem): Promise<void> {
-  if (livePageId(tabId) !== tabId) return withLivePage(tabId, (_, id) => void goToHistoryItem(id, item));
+  if (livePageId(tabId) !== tabId) return void (await withLivePage(tabId, (_, id) => void goToHistoryItem(id, item)));
   const page = pageOf(tabId);
   if (item.offset === "newTab") {
     const list = (await webviews.get(tabId)?.navigationEntries()) ?? [];

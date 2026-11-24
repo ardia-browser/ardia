@@ -91,8 +91,8 @@
   const bool ahead = !url.length;
   NavigateParams params(browser, GURL(ahead ? "about:blank" : base::SysNSStringToUTF8(url)),
                         ui::PAGE_TRANSITION_TYPED);
-  params.disposition = foreground ? WindowOpenDisposition::NEW_FOREGROUND_TAB
-                                  : WindowOpenDisposition::NEW_BACKGROUND_TAB;
+  params.disposition = foreground ? WindowOpenDisposition::kNewForegroundTab
+                                  : WindowOpenDisposition::kNewBackgroundTab;
   params.window_action = NavigateParams::WindowAction::kNoAction;
   auto pending = _host->ScopedPendingOpen({params.disposition, nullptr});
   Navigate(&params);
@@ -186,6 +186,14 @@
   _host->set_internal(internal);
 }
 
+- (BOOL)automation {
+  return _host->automation();
+}
+
+- (void)setAutomation:(BOOL)automation {
+  _host->set_automation(automation);
+}
+
 - (void)showInactive {
   _host->ShowInactive();
 }
@@ -211,6 +219,10 @@
   Profile* profile = Profile::FromBrowserContext(contents->GetBrowserContext());
   if (_host->ExistingBrowserFor(profile) == from) {
     return ArdiaCoreAdoptionAdopted;
+  }
+  ardiacore::WindowHost* holder = ardiacore::WindowHost::ForBrowser(from);
+  if (holder && holder->automation()) {
+    return ArdiaCoreAdoptionRefused;
   }
   if (!_host->AdmitsTabsFor(profile) ||
       !ardiacore::WindowHost::LetsTabsGo(from, contents)) {
@@ -314,8 +326,8 @@
   }
   selected = std::clamp(selected, 0, count - 1);
   auto pending = _host->ScopedPendingOpen(
-      {foreground ? WindowOpenDisposition::NEW_FOREGROUND_TAB
-                  : WindowOpenDisposition::NEW_BACKGROUND_TAB,
+      {foreground ? WindowOpenDisposition::kNewForegroundTab
+                  : WindowOpenDisposition::kNewBackgroundTab,
        nullptr});
   content::WebContents* contents = chrome::AddRestoredTab(
       browser, navigations, browser->GetTabStripModel()->count(), selected,
@@ -346,8 +358,8 @@
   std::unique_ptr<content::WebContents> copy = contents->Clone();
   content::WebContents* raw = copy.get();
   auto pending = _host->ScopedPendingOpen(
-      {foreground ? WindowOpenDisposition::NEW_FOREGROUND_TAB
-                  : WindowOpenDisposition::NEW_BACKGROUND_TAB,
+      {foreground ? WindowOpenDisposition::kNewForegroundTab
+                  : WindowOpenDisposition::kNewBackgroundTab,
        contents->GetWeakPtr()});
   TabStripModel* model = browser->GetTabStripModel();
   model->InsertWebContentsAt(model->count(), std::move(copy),

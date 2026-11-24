@@ -7,19 +7,19 @@ export type LocalDir = { kind: "dir"; key: string; name: string; children: Local
 export type LocalEntry = LocalLink | LocalDir;
 
 export type RemoteLink = { kind: "link"; file: string; url: string; id: string | null };
-export type RemoteHeld = { kind: "held"; file: string; waiting: boolean };
-export type RemoteDir = { kind: "dir"; file: string; level: RemoteLevel };
+type RemoteHeld = { kind: "held"; file: string; waiting: boolean };
+type RemoteDir = { kind: "dir"; file: string; level: RemoteLevel };
 export type RemoteEntry = RemoteLink | RemoteHeld | RemoteDir;
 export type RemoteLevel = { entries: RemoteEntry[]; manifest: string[] | null; manifestPending: boolean };
 
 export type Dropped = { kind: "link"; file: string; url: string } | { kind: "dir"; file: string; known: BaseEntry[] };
 
-export type TargetLink = { kind: "link"; key: string | null; file: string | null; name: string; url: string; renamed: boolean; write: boolean; expect: string | null; id: string | null; fileId: string | null; heldName: string | null };
-export type TargetDir = { kind: "dir"; key: string | null; file: string | null; name: string; renamed: boolean; level: TargetLevel };
+type TargetLink = { kind: "link"; key: string | null; file: string | null; name: string; url: string; renamed: boolean; write: boolean; expect: string | null; id: string | null; fileId: string | null; heldName: string | null };
+type TargetDir = { kind: "dir"; key: string | null; file: string | null; name: string; renamed: boolean; level: TargetLevel };
 export type TargetEntry = TargetLink | TargetDir;
 export type TargetLevel = { entries: TargetEntry[]; dropped: Dropped[]; remote: RemoteLevel | null };
 
-export const LINK_EXTENSION = ".webloc";
+const LINK_EXTENSION = ".webloc";
 export const MANIFEST = ".ardia-folder.json";
 const MANIFEST_VERSION = 1;
 const MAX_NAME_BYTES = 200;
@@ -42,7 +42,7 @@ function capBytes(text: string, limit: number): string {
 
 export const EMPTY_REMOTE: RemoteLevel = { entries: [], manifest: null, manifestPending: false };
 
-export const isLinkFile = (file: string) => file.toLowerCase().endsWith(LINK_EXTENSION);
+const isLinkFile = (file: string) => file.toLowerCase().endsWith(LINK_EXTENSION);
 
 export const nameOfFile = (file: string, kind: "link" | "dir") => (kind === "link" && isLinkFile(file) ? file.slice(0, -LINK_EXTENSION.length) : file);
 

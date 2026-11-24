@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
 const { emptyScope } = await import("@ardia/sync");
-const adapters = await import("./adapters.ts");
+const adapters = { ...(await import("./adapters.ts")), ...(await import("./historyAdapter.ts")) };
 const { summarize } = await import("./syncSummary.ts");
 const { emptyDoc } = await import("./syncDoc.ts");
 const records = await import("./records.ts");

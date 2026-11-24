@@ -1,4 +1,5 @@
 #import "ArdiaWebViewInternal.h"
+#import "ArdiaInterfaceScale.h"
 #import "ArdiaRuntime.h"
 #import "ArdiaLaunchConfig.h"
 #import "ArdiaEarlyWindow.h"
@@ -65,6 +66,34 @@ NSString *OriginOf(NSString *url) {
   return origin.length ? origin : nil;
 }
 
+NSView *ScaledRootOf(NSWindow *window) {
+  return window ? [ArdiaInterfaceScale rootOfWindow:window] ?: [ArdiaWindowController forNSWindow:window].root : nil;
+}
+
+NSPoint RootPointFromWindow(NSWindow *window, NSPoint inWindow) {
+  NSView *root = ScaledRootOf(window);
+  if (!root) return NSMakePoint(inWindow.x, NSHeight(window.contentView.frame) - inWindow.y);
+  const NSPoint local = [root convertPoint:inWindow fromView:nil];
+  const NSRect bounds = root.bounds;
+  return NSMakePoint(local.x - NSMinX(bounds), root.isFlipped ? local.y - NSMinY(bounds) : NSMaxY(bounds) - local.y);
+}
+
+NSRect RootRectFromWindow(NSWindow *window, NSRect inWindow) {
+  NSView *root = ScaledRootOf(window);
+  if (!root) return NSMakeRect(NSMinX(inWindow), NSHeight(window.contentView.frame) - NSMaxY(inWindow), NSWidth(inWindow), NSHeight(inWindow));
+  const NSRect local = [root convertRect:inWindow fromView:nil];
+  const NSRect bounds = root.bounds;
+  return NSMakeRect(NSMinX(local) - NSMinX(bounds), root.isFlipped ? NSMinY(local) - NSMinY(bounds) : NSMaxY(bounds) - NSMaxY(local),
+                    NSWidth(local), NSHeight(local));
+}
+
+CGFloat RootPointsPerLocalPoint(NSView *view) {
+  NSView *root = ScaledRootOf(view.window);
+  if (!root) return 1;
+  const NSSize unit = [root convertSize:NSMakeSize(100, 100) fromView:view];
+  return unit.width > 0 ? fabs(unit.width) / 100 : 1;
+}
+
 NSString *VerifiedOrigin(NSString *origin) { return origin.length && ![origin isEqualToString:@"null"] ? origin : nil; }
 
 void NoteEvent(int browserId, NSString *name, NSDictionary *payload) {
@@ -74,6 +103,8 @@ void NoteEvent(int browserId, NSString *name, NSDictionary *payload) {
   NSMutableDictionary *brief = [NSMutableDictionary dictionary];
   for (NSString *key in payload) {
     id value = payload[key];
+    if ([value isKindOfClass:NSString.class] && [value rangeOfString:@"^otpauth(-migration)?:" options:NSRegularExpressionSearch | NSCaseInsensitiveSearch].location == 0)
+      value = [value substringToIndex:[value rangeOfString:@":"].location + 1];
     brief[key] = [value isKindOfClass:NSString.class] && [value length] > 200 ? [value substringToIndex:200] : value;
   }
   [list addObject:@{@"name" : name, @"payload" : brief, @"t" : @(round(CACurrentMediaTime() * 1000))}];
@@ -127,14 +158,22 @@ void AcceptDrops(NSView *root, BOOL accept) {
   if ((self = [super initWithFrame:frameRect])) {
     _profile = @"";
     _visible = YES;
+    _selected = YES;
     _tabIndex = -1;
     self.wantsLayer = YES;
+    __weak ArdiaWebView *weakSelf = self;
+    _interfaceScaleObserver = [NSNotificationCenter.defaultCenter addObserverForName:ArdiaInterfaceScaleDidChange object:nil queue:nil
+                                                                          usingBlock:^(NSNotification *) {
+                                                                            [weakSelf interfaceScaleChanged];
+                                                                          }];
   }
   return self;
 }
 
 - (void)dealloc {
+  if (_interfaceScaleObserver) [NSNotificationCenter.defaultCenter removeObserver:_interfaceScaleObserver];
   if (_sightObserver) [NSNotificationCenter.defaultCenter removeObserver:_sightObserver];
+  [self leaveScreenAhead];
   [self closeBrowser];
 }
 
@@ -152,6 +191,8 @@ void AcceptDrops(NSView *root, BOOL accept) {
 
 - (void)viewWillMoveToWindow:(NSWindow *)newWindow {
   if (!newWindow) [self lendPageToSuccessor];
+  if (self.window && newWindow != self.window && (_visible || _reveal.active)) [ArdiaWebView dropNativeRevealsInWindow:self.window];
+  if (newWindow != self.window) [self leaveScreenAhead];
   [super viewWillMoveToWindow:newWindow];
 }
 
@@ -164,11 +205,19 @@ void AcceptDrops(NSView *root, BOOL accept) {
   if (_visible) [ArdiaEarlyWindow noteLayoutChangeIn:self.window];
   __weak ArdiaWebView *weakSelf = self;
   _sightObserver = [NSNotificationCenter.defaultCenter addObserverForName:ArdiaWindowSeenDidChange object:self.window queue:nil
-                                                               usingBlock:^(NSNotification *) { [weakSelf userSightChanged]; }];
+                                                               usingBlock:^(NSNotification *note) {
+                                                                 [weakSelf userSightChanged];
+                                                                 if ([note.userInfo[ArdiaWindowSeenLeftAppKey] boolValue]) [weakSelf noteStayedOnAppSwitch];
+                                                               }];
   [self userSightChanged];
   if (_tab) [self reclaimLentPage];
   if (_tab) [self adoptMovedPage];
   else [self ensureTab];
+}
+
+- (void)viewDidUnhide {
+  [super viewDidUnhide];
+  [self settleFirstShowFocus];
 }
 
 - (void)setExtensionHost:(NSString *)extensionHost {
@@ -181,10 +230,21 @@ void AcceptDrops(NSView *root, BOOL accept) {
   if (self.window) [self ensureTab];
 }
 
+- (void)setSelected:(BOOL)selected {
+  if (_selected == selected) return;
+  _selected = selected;
+  if (selected && _visible && !_standalone) [self requestFocusRestore];
+}
+
 - (void)setNeighbour:(BOOL)neighbour {
   if (_neighbour == neighbour) return;
   _neighbour = neighbour;
   [self schedulePainting];
+}
+
+- (void)setAutoPictureInPicture:(BOOL)autoPictureInPicture {
+  _autoPictureInPicture = autoPictureInPicture;
+  [self autoPictureInPictureInputsChanged];
 }
 
 - (void)setWarm:(BOOL)warm {
@@ -207,8 +267,11 @@ void AcceptDrops(NSView *root, BOOL accept) {
   if (_visible == visible) return;
   if (!visible) [self storePageFocus];
   _visible = visible;
+  if (visible) [self exposePage];
+  if (visible) [self holdCreatedPageShown];
   if (visible) [self stopHolding];
   if (visible) [self settleRevealsInWindow];
+  if (visible) [self settleFirstShowFocus];
   if (!visible) [_tab exitExclusiveAccess];
   if (visible && !_frameHold.awaiting && self.alphaValue < 1 && _tab.view.superview == self && !_tab.view.hidden) {
     [CATransaction begin];
@@ -270,6 +333,10 @@ void ArdiaWebViewsSetFieldTiming(BOOL on) {
   return RecentEvents()[@(browserId)] ?: @[];
 }
 
++ (void)devNoteEvent:(NSString *)name payload:(NSDictionary *)payload browser:(int)browserId {
+  NoteEvent(browserId, name, payload);
+}
+
 static BOOL gReportsCommits = NO;
 
 + (BOOL)reportsCommits {
@@ -277,7 +344,14 @@ static BOOL gReportsCommits = NO;
 }
 
 + (void)setReportsCommits:(BOOL)reportsCommits {
+  const BOOL turnedOn = reportsCommits && !gReportsCommits;
   gReportsCommits = reportsCommits;
+  if (!turnedOn) return;
+  for (ArdiaWebView *view in LiveViews().allObjects) {
+    if (!view->_tab) continue;
+    view->_sent.navigation = nil;
+    [view emitNavigation];
+  }
 }
 
 + (int)browserIdOfTab:(NSString *)tabId {

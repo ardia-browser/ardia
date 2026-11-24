@@ -3,6 +3,7 @@ import { LEGACY_BOOKMARK_SEED } from "../../lib/legacy";
 import type { BrowserState } from "../browser/store";
 import { engineProfile, without } from "../browser/model";
 import type { BookmarkFolder, BookmarkNode, Bookmarks } from "../browser/types";
+import { noteBookmarksMoved } from "../telemetry/bookmarkMoves";
 
 export type BookmarksSlice = {
   bookmarks: Bookmarks;
@@ -12,6 +13,7 @@ export type BookmarksSlice = {
   addBookmarkFolder(options: { profileId: string; title: string; parentId?: string; index?: number }): string;
   updateBookmark(id: string, patch: { title?: string; url?: string; favicon?: string | null }): void;
   moveBookmark(id: string, parentId: string, index?: number): void;
+  moveBookmarks(ids: readonly string[], parentId: string, index?: number): void;
   removeBookmark(id: string): void;
   toggleBookmark(profileId: string, page: { url: string; title: string; favicon: string | null }): boolean;
   addBookmarkTree(profileId: string, drafts: BookmarkDraft[], parentId?: string, index?: number): string[];
@@ -205,15 +207,39 @@ export const createBookmarksSlice: StateCreator<BrowserState, [], [], BookmarksS
   },
 
   moveBookmark(id, parentId, index) {
+    get().moveBookmarks([id], parentId, index);
+  },
+
+  moveBookmarks(ids, parentId, index) {
     set((s) => {
-      const node = s.bookmarks.nodes[id];
-      if (!node || node.parentId === null || subtree(s.bookmarks, [id]).includes(parentId)) return {};
-      const oldParent = s.bookmarks.nodes[node.parentId];
-      let b = s.bookmarks;
-      if (oldParent?.kind === "folder") {
-        b = { ...b, nodes: { ...b.nodes, [oldParent.id]: { ...oldParent, children: oldParent.children.filter((c) => c !== id) } } };
+      const b = s.bookmarks;
+      if (b.nodes[parentId]?.kind !== "folder") return {};
+      const aboveTarget = new Set<string>();
+      for (let at: string | null | undefined = parentId; at && !aboveTarget.has(at); at = b.nodes[at]?.parentId) aboveTarget.add(at);
+      const picked = new Set(ids.filter((id) => b.nodes[id]?.parentId && !aboveTarget.has(id)));
+      const underPicked = (id: string) => {
+        const seen = new Set<string>();
+        for (let at = b.nodes[id]?.parentId; at && !seen.has(at); at = b.nodes[at]?.parentId) {
+          if (picked.has(at)) return true;
+          seen.add(at);
+        }
+        return false;
+      };
+      const moving = [...picked].filter((id) => !underPicked(id));
+      if (!moving.length) return {};
+      noteBookmarksMoved(moving.length);
+      const leaving = new Set(moving);
+      const nodes = { ...b.nodes };
+      for (const oldParentId of new Set(moving.map((id) => b.nodes[id]!.parentId!))) {
+        const oldParent = nodes[oldParentId];
+        if (oldParent?.kind === "folder") nodes[oldParentId] = { ...oldParent, children: oldParent.children.filter((c) => !leaving.has(c)) };
       }
-      return { bookmarks: insertChild(b, node, parentId, index) };
+      const target = nodes[parentId] as BookmarkFolder;
+      const staying = target.children.filter((c) => !leaving.has(c));
+      const at = Math.max(0, Math.min(index ?? staying.length, staying.length));
+      nodes[parentId] = { ...target, children: [...staying.slice(0, at), ...moving, ...staying.slice(at)] };
+      for (const id of moving) nodes[id] = { ...nodes[id]!, parentId } as BookmarkNode;
+      return { bookmarks: { ...b, nodes } };
     });
   },
 

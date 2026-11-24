@@ -2,31 +2,18 @@ import { requireNativeViewManager } from "expo-modules-core";
 import { forwardRef, type Ref } from "react";
 import type { View, ViewProps } from "react-native";
 import { nativeModule } from "./nativeModules";
+import type { FileDropNative, MagnifyAreaNative, SystemNative } from "./generated/native";
 
 export type MenuShortcut = { id: string; title: string; path: string[] } & (
-  | { remappable: true }
+  | { remappable: true; mouseBindable?: boolean }
   | { remappable: false; key: string; modifiers: ShortcutModifier[] }
 );
 
 export type ShortcutModifier = "control" | "option" | "shift" | "command" | "function";
 
-type LaunchAtLoginStatus = "enabled" | "requiresApproval" | "notRegistered" | "notFound";
+export type LaunchAtLoginStatus = "enabled" | "requiresApproval" | "notRegistered" | "notFound";
 
-export type SystemNative = {
-  backgroundInstance?: boolean;
-  isDefaultBrowser(): Promise<boolean>;
-  setAsDefaultBrowser(): Promise<boolean>;
-  launchAtLoginStatus(): Promise<LaunchAtLoginStatus>;
-  setLaunchAtLogin(enabled: boolean): Promise<void>;
-  fileExists(path: string): boolean;
-  openFile(path: string): Promise<boolean>;
-  revealFile(path: string): Promise<boolean>;
-  moveToTrash(path: string): Promise<boolean>;
-  fileIcon(path: string, size: number): Promise<string | null>;
-  runningAppIcon(pid: number, size: number): Promise<string | null>;
-  hapticTick(): void;
-  setThinScrollBars(thin: boolean): Promise<void>;
-};
+export type { SystemNative };
 
 const System = nativeModule("ArdiaSystem");
 
@@ -52,7 +39,7 @@ export type MouseAreaProps = ViewProps & {
   onMiddleClick?: (e: MiddleClickEvent) => void;
 };
 
-type NativeMouseAreaProps = Omit<MouseAreaProps, "onMiddleClick"> & { onMiddleClick?: (e: { nativeEvent: MiddleClickEvent }) => void };
+export type NativeMouseAreaProps = Omit<MouseAreaProps, "onMiddleClick"> & { onMiddleClick?: (e: { nativeEvent: MiddleClickEvent }) => void };
 
 const NativeMouseArea = requireNativeViewManager<NativeMouseAreaProps>("ArdiaFileDrag");
 
@@ -68,28 +55,26 @@ export type FileDropAreaProps = ViewProps & {
   onDropUpdate?: (e: DropUpdate) => void;
 };
 
-type NativeFileDropAreaProps = ViewProps & {
-  accepts?: "links" | "linksAndText" | "extensionPackages";
-  enabled?: boolean;
-  ref?: (instance: { nativeRef?: { current: View | null } } | null) => void;
+export type FileDropHandle = { nativeRef?: { current: View | null } };
+
+export type NativeFileDropAreaProps = Omit<FileDropAreaProps, "onDropUpdate"> & {
+  ref?: (instance: FileDropHandle | null) => void;
   onDropUpdate?: (e: { nativeEvent: DropUpdate }) => void;
 };
 
 const NativeFileDropArea = requireNativeViewManager<NativeFileDropAreaProps>("ArdiaFileDrop");
 
-export type MagnifyPhase = "began" | "changed" | "ended" | "cancelled";
+type MagnifyPhase = "began" | "changed" | "ended" | "cancelled";
 export type MagnifyUpdate = { phase: MagnifyPhase; magnification: number };
-export type MagnifyAreaProps = ViewProps & {
+type MagnifyAreaProps = ViewProps & {
   enabled?: boolean;
   onMagnify?: (e: MagnifyUpdate) => void;
 };
 
-type NativeMagnifyAreaProps = ViewProps & { enabled?: boolean; onMagnify?: (e: { nativeEvent: MagnifyUpdate }) => void };
+export type NativeMagnifyAreaProps = Omit<MagnifyAreaProps, "onMagnify"> & { onMagnify?: (e: { nativeEvent: MagnifyUpdate }) => void };
 
 const NativeMagnifyArea = requireNativeViewManager<NativeMagnifyAreaProps>("ArdiaMagnifyArea");
-export type MagnifyAreaNative = {
-  devMagnify(windowId: string, x: number, y: number, steps: MagnifyUpdate[]): Promise<{ claimed?: boolean[]; hit?: string; error?: string }>;
-};
+export type { MagnifyAreaNative };
 
 const MagnifyModule = nativeModule("ArdiaMagnifyArea");
 
@@ -118,10 +103,7 @@ export const FileDropArea = forwardRef<View, FileDropAreaProps>(function FileDro
 export type DevDragAction = "move" | "drop" | "cancel" | "end";
 export type DevDragPayload = { files?: string[]; urls?: string[]; publicURLs?: string[]; text?: string; fileDrag?: boolean };
 
-export type FileDropNative = {
-  devDrag(windowId: string, action: DevDragAction, x: number, y: number, payload: DevDragPayload | null): Promise<string>;
-  devLastFileDrag(): Promise<string[]>;
-};
+export type { FileDropNative };
 
 const FileDrop = nativeModule("ArdiaFileDrop");
 

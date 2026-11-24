@@ -3,7 +3,7 @@ const CORNER_FIT: { radius: number; scale: number; k: number; round: number }[] 
   { radius: 10, scale: 1.2233, k: 1.3213, round: 1.035 },
 ];
 
-export function cornerFit(radius: number, superellipse = sliceMasks) {
+function cornerFit(radius: number, superellipse = sliceMasks) {
   const [a, b] = CORNER_FIT as [(typeof CORNER_FIT)[0], (typeof CORNER_FIT)[0]];
   const f = Math.max(0, Math.min(1, (radius - a.radius) / (b.radius - a.radius)));
   const mix = (x: number, y: number) => x + (y - x) * f;
@@ -30,7 +30,7 @@ const MASK_SCALE = 4;
 const STRAIGHT_RAMP = 2.5;
 const MIDDLE = 1;
 
-export const sliceMasks = typeof CSS !== "undefined" && !!CSS.supports?.("-webkit-mask-box-image", "none");
+const sliceMasks = typeof CSS !== "undefined" && !!CSS.supports?.("-webkit-mask-box-image", "none");
 
 export function fallbackRadius(radius: number) {
   return radius * cornerFit(radius, false).scale;
@@ -91,7 +91,7 @@ function insideQuadrant(x: number, y: number, { R, exponent }: Corner) {
   return ((R - x) / R) ** exponent + ((R - y) / R) ** exponent <= 1;
 }
 
-export type SliceMask = { image: string; slice: number; width: number };
+type SliceMask = { image: string; slice: number; width: number };
 
 const masks = new Map<string, SliceMask | null>();
 

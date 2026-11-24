@@ -1,0 +1,22 @@
+[package]
+name = "ardia-plugin-jail"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+name = "jail"
+path = "src/lib.rs"
+
+[[bin]]
+name = "jail-harness"
+path = "src/bin/jail-harness/main.rs"
+test = false
+
+[[test]]
+name = "escape"
+path = "tests/escape.rs"
+
+[dependencies]
+libc = "0.2"

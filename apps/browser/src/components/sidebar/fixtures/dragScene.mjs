@@ -128,7 +128,7 @@ export function sceneLayout({ top = 200, x = LEFT, width = WIDTH } = {}) {
   return api;
 }
 
-export function mount({ entries, regions = {}, root = frameAt(0, 0, 200, 900), viewport = frameAt(0, 100, 200, 700), scrollY = 0, tilesFixed = true, tilesRoom = Infinity }) {
+export function mount({ entries, regions = {}, root = frameAt(0, 0, 200, 900), viewport = frameAt(0, 100, 200, 700), scrollY = 0, tilesFixed = true, tilesRoom = Infinity, splitHoldMs = 0 }) {
   const c = new DragController();
   const ghosts = [];
   c.setGhost = (g) => ghosts.push(g);
@@ -137,6 +137,7 @@ export function mount({ entries, regions = {}, root = frameAt(0, 0, 200, 900), v
   c.scrollY = scrollY;
   c.tilesFixed = tilesFixed;
   c.tilesRoom = tilesRoom;
+  c.splitHoldMs = splitHoldMs;
   for (const [name, frame] of Object.entries(regions)) c.regions.set(name, fakeView(frame));
   for (const e of entries) {
     const item = c.create(e.key);
@@ -163,7 +164,9 @@ export function readDrag(c) {
     hold: d?.hold.key ? { key: d.hold.key, ready: d.hold.ready } : null,
     marks: {
       dropInto: marks.dropInto,
-      onto: marks.onto,
+      split: marks.split,
+      tile: marks.tile,
+      row: marks.row,
       pins: marks.pins,
       pinCount: marks.pinCount,
       pinBefore: marks.pinBefore,

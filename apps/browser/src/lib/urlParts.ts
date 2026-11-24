@@ -1,6 +1,6 @@
 import { hostSpoofReason, punycodeEncode } from "@ardia/core";
 
-export type UrlParts = {
+type UrlParts = {
   scheme: string;
   host: string;
   port: string;
@@ -46,7 +46,7 @@ export function canonicalIpv6(text: string): string | null {
 const DEVIATIONS = /[\u00df\u03c2\u200c\u200d\u3002\uff0e\uff61]/;
 const UNICODE_LABEL = /^[\p{L}\p{M}\p{N}-]{1,63}$/u;
 
-export function asciiHost(host: string): string | null {
+function asciiHost(host: string): string | null {
   if (/^[\x00-\x7f]*$/.test(host)) return host;
   const lower = host.normalize("NFC").toLowerCase();
   if (DEVIATIONS.test(lower) || lower.normalize("NFKC") !== lower) return null;

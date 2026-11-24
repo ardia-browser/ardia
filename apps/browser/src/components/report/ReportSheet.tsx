@@ -3,6 +3,7 @@ import { useWindowId } from "../../state/browser/hooks";
 import { closeReport, mayStartSending, sendCurrentReport, setContact, setDescription, setKind, setTitle, setWatch } from "../../state/report/actions";
 import { draftProblems, fieldProblem, formatDay, REPORT_KINDS, titleCounter, watchEndDate, type DraftField } from "../../state/report/form";
 import { useReport, useReportOpenIn, useReportShallow } from "../../state/report/hooks";
+import { canRecord } from "../../state/report/recording";
 import { isBusy, uploadFraction } from "../../state/report/upload";
 import { useTelemetry } from "../../state/telemetry/choice";
 import { Box, Button, Checkbox, Dialog, ProgressTrack, Segmented, space, Text, TextField } from "../ui";
@@ -35,9 +36,11 @@ function ReportForm() {
         <View>
           <Header />
           <Fields />
-          <View style={{ marginTop: space.l }}>
-            <RecordSection />
-          </View>
+          {canRecord() ? (
+            <View style={{ marginTop: space.l }}>
+              <RecordSection />
+            </View>
+          ) : null}
           <View style={{ marginTop: space.l }}>
             <AttachedRow />
           </View>
@@ -149,7 +152,7 @@ function Footer({ ready }: { ready: boolean }) {
             <ProgressTrack value={upload.phase === "creating" ? 0.02 : uploadFraction(upload)} tone="formAccent" />
           </View>
         ) : failed ? (
-          <Text size="small" tone="destructive">{`Couldn't send. ${failed.message} Your draft is kept.`}</Text>
+          <Text size="small" tone="destructive">{failed.message}</Text>
         ) : (
           <Text size="caption" tone="textSecondary">
             {FOOTER_NOTE}

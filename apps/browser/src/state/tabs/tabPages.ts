@@ -18,8 +18,6 @@ const handedOff = new Map<string, string>();
 type Handoff = { seq: number | undefined; engine: PageEngine };
 const handoffs = new Map<string, Handoff>();
 
-export const isHandedOff = (tabId: string) => handedOff.has(tabId);
-
 export function takeHandOff(tabId: string, engine: PageEngine): Handoff | null {
   const handoff = handoffs.get(tabId);
   if (!handoff || !handedOff.has(tabId)) return null;
@@ -38,7 +36,7 @@ export function handOff(tabId: string, profile: string, engine: PageEngine) {
 
 export function startTabPages() {
   claimLaunch();
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["tabs"], (s, prev) => {
     if (s.tabs === prev.tabs) return;
     for (const id of changedIds(s.tabs, prev.tabs)) {
       const tab = s.tabs[id];

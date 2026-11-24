@@ -3,90 +3,136 @@ import ArdiaCore
 import MachO
 import ExpoModulesCore
 
-public class AppModule: Module {
+public class AppModule: Module, AppNative {
+  static var apiVersion: Int { 97 }
+
+  static func interfaceScale() -> Double { Double(InterfaceScale.scale) }
+
+  static func interfaceScaleRange() -> [Double] { [Double(InterfaceScale.minimum), Double(InterfaceScale.maximum)] }
+
+  static func setInterfaceScale(_ scale: Double) -> Double {
+    InterfaceScale.scale = CGFloat(scale)
+    return Double(InterfaceScale.scale)
+  }
+
+  static func setWindowActivity(_ windowId: String, _ url: String?, _ title: String?) { Handoff.setActivity(windowId: windowId, url: url, title: title) }
+
+  static func share(_ url: String, _ title: String?, _ windowId: String?, _ anchor: [Double]?, _ promise: Promise) { SharePicker.show(url: url, title: title, windowId: windowId, anchor: anchor) { promise.resolve(nil) } }
+
+  static func shareText(_ text: String, _ windowId: String?, _ anchor: [Double]?, _ promise: Promise) { SharePicker.show(text: text, windowId: windowId, anchor: anchor) { promise.resolve(nil) } }
+
+  static func shareVia(_ service: String, _ url: String, _ title: String?, _ windowId: String?) { SharePicker.perform(service: service, url: url, title: title, windowId: windowId) }
+
+  static func isInDock() -> Bool { DockTile.isInDock }
+
+  static func addToDock() -> Bool { DockTile.add() }
+
+  static func appIcons(_ size: Double) -> [[String: Any]] { AppIcons.variants.map { ["id": $0.id, "name": $0.name, "preview": AppIcons.preview($0.id, size: size) as Any] } }
+
+  static func appIcon() -> String { AppIcons.current }
+
+  static func setAppIcon(_ id: String) { AppIcons.set(id, announce: !LaunchConfig.shared.isolated) }
+
+  static func systemInfo() -> [String: Any] {
+    let info = Bundle.main.infoDictionary ?? [:]
+    let config = LaunchConfig.shared
+    let os = ProcessInfo.processInfo.operatingSystemVersion
+    var model = [CChar](repeating: 0, count: 256)
+    var size = model.count
+    sysctlbyname("hw.model", &model, &size, nil, 0)
+    #if DEBUG
+    let configuration = "Debug"
+    #else
+    let configuration = "Release"
+    #endif
+    return [
+      "appName": info["CFBundleName"] as? String ?? "Ardia",
+      "appVersion": info["CFBundleShortVersionString"] as? String ?? "",
+      "appBuild": info["CFBundleVersion"] as? String ?? "",
+      "bundleId": Bundle.main.bundleIdentifier ?? "",
+      "configuration": configuration,
+      "osVersion": "\(os.majorVersion).\(os.minorVersion).\(os.patchVersion)",
+      "osBuild": Self.osBuild,
+      "arch": Self.arch,
+      "model": String(cString: model),
+      "memoryGB": Double(ProcessInfo.processInfo.physicalMemory) / 1_073_741_824,
+      "locale": Locale.current.identifier,
+      "feedbackURL": Self.infoString("ACFeedbackURL") as Any,
+      "feedbackEmail": Self.infoString("ACFeedbackEmail") as Any,
+      "videoTourURL": Self.infoString("ACVideoTourURL") as Any,
+      "releaseNotesURL": Self.infoString("ACReleaseNotesURL") as Any,
+      "engineMatch": Self.infoString("ArdiaEngineMatch") as Any,
+      "isolatedInstance": config.isolated,
+      "forceReleaseNotes": config.instanceFlag("releaseNotes"),
+      "processStart": Self.processStart as Any,
+      "bootTime": Self.bootTime as Any,
+      "launchMarks": ArdiaHost.launchMarks,
+      "launchedHidden": ArdiaHost.launchedHidden as Any,
+      "launchSource": ArdiaHost.launchSource as Any,
+      "loadAverage1m": Self.loadAverage1m as Any,
+      "inApplicationsFolder": Self.inApplicationsFolder,
+      "updatePrewarm": UserDefaults.standard.dictionary(forKey: UpdatePrewarm.lastRunKey) as Any,
+    ]
+  }
+
+  static func crashReports(_ since: Double) -> [[String: Any]] { CrashReports.since(since) }
+
+  static func hardwareInfo() -> [String: Any] { DiagnosticsInfo.hardware() }
+
+  static func diagnosticsSample() -> [String: Any] { DiagnosticsInfo.sample() }
+
+  static func openExternalURL(_ url: String) -> Bool {
+    guard let target = URL(string: url), target.scheme != nil else { return false }
+    return NSWorkspace.shared.open(target)
+  }
+
+  static func playIntroMusic(_ cues: [String: Double], _ muted: Bool) { IntroMusic.shared.play(cues: cues, muted: muted) }
+
+  static func setIntroMusicMuted(_ muted: Bool) { IntroMusic.shared.setMuted(muted) }
+
+  static func stopIntroMusic(_ fade: Double) { IntroMusic.shared.stop(fade: fade) }
+
+  static func launchConfig() -> [String: Any] { LaunchConfig.shared.snapshot }
+
   public func definition() -> ModuleDefinition {
-    Name("ArdiaApp")
-    Constant("apiVersion") { () -> Int in 55 }
+    Name(Self.moduleName)
+    Self.apiVersionConstant
 
     OnCreate {
       DispatchQueue.main.async { AppIcons.restore() }
     }
 
-    AsyncFunction("setWindowActivity") { (windowId: String, url: String?, title: String?) in
-      Handoff.setActivity(windowId: windowId, url: url, title: title)
-    }.runOnQueue(.main)
+    Self.interfaceScaleFunction
+    Self.interfaceScaleRangeFunction
+    Self.setInterfaceScaleFunction
 
-    AsyncFunction("share") { (url: String, title: String?, windowId: String?, anchor: [Double]?, promise: Promise) in
-      SharePicker.show(url: url, title: title, windowId: windowId, anchor: anchor) { promise.resolve(nil) }
-    }.runOnQueue(.main)
+    Self.setWindowActivityFunction
 
-    AsyncFunction("shareText") { (text: String, windowId: String?, anchor: [Double]?, promise: Promise) in
-      SharePicker.show(text: text, windowId: windowId, anchor: anchor) { promise.resolve(nil) }
-    }.runOnQueue(.main)
+    Self.shareFunction
 
-    AsyncFunction("shareVia") { (service: String, url: String, title: String?, windowId: String?) in
-      SharePicker.perform(service: service, url: url, title: title, windowId: windowId)
-    }.runOnQueue(.main)
+    Self.shareTextFunction
 
-    AsyncFunction("isInDock") { () -> Bool in DockTile.isInDock }.runOnQueue(.main)
-    AsyncFunction("addToDock") { () -> Bool in DockTile.add() }.runOnQueue(.main)
+    Self.shareViaFunction
 
-    AsyncFunction("appIcons") { (size: Double) -> [[String: Any]] in
-      AppIcons.variants.map { ["id": $0.id, "name": $0.name, "preview": AppIcons.preview($0.id, size: size) as Any] }
-    }.runOnQueue(.main)
-    AsyncFunction("appIcon") { () -> String in AppIcons.current }.runOnQueue(.main)
-    AsyncFunction("setAppIcon") { (id: String) in AppIcons.set(id, announce: !LaunchConfig.shared.isolated) }.runOnQueue(.main)
+    Self.isInDockFunction
+    Self.addToDockFunction
 
-    Function("systemInfo") { () -> [String: Any] in
-      let info = Bundle.main.infoDictionary ?? [:]
-      let config = LaunchConfig.shared
-      let os = ProcessInfo.processInfo.operatingSystemVersion
-      var model = [CChar](repeating: 0, count: 256)
-      var size = model.count
-      sysctlbyname("hw.model", &model, &size, nil, 0)
-      #if DEBUG
-      let configuration = "Debug"
-      #else
-      let configuration = "Release"
-      #endif
-      return [
-        "appName": info["CFBundleName"] as? String ?? "Ardia",
-        "appVersion": info["CFBundleShortVersionString"] as? String ?? "",
-        "appBuild": info["CFBundleVersion"] as? String ?? "",
-        "bundleId": Bundle.main.bundleIdentifier ?? "",
-        "configuration": configuration,
-        "osVersion": "\(os.majorVersion).\(os.minorVersion).\(os.patchVersion)",
-        "osBuild": Self.osBuild,
-        "arch": Self.arch,
-        "model": String(cString: model),
-        "memoryGB": Double(ProcessInfo.processInfo.physicalMemory) / 1_073_741_824,
-        "locale": Locale.current.identifier,
-        "feedbackURL": Self.infoString("ACFeedbackURL") as Any,
-        "feedbackEmail": Self.infoString("ACFeedbackEmail") as Any,
-        "videoTourURL": Self.infoString("ACVideoTourURL") as Any,
-        "releaseNotesURL": Self.infoString("ACReleaseNotesURL") as Any,
-        "isolatedInstance": config.isolated,
-        "forceReleaseNotes": config.instanceFlag("releaseNotes"),
-        "processStart": Self.processStart as Any,
-        "bootTime": Self.bootTime as Any,
-        "inApplicationsFolder": Self.inApplicationsFolder,
-        "updatePrewarm": UserDefaults.standard.dictionary(forKey: UpdatePrewarm.lastRunKey) as Any,
-      ]
-    }
+    Self.appIconsFunction
+    Self.appIconFunction
+    Self.setAppIconFunction
 
-    AsyncFunction("crashReports") { (since: Double) -> [[String: Any]] in CrashReports.since(since) }
-    AsyncFunction("hardwareInfo") { () -> [String: Any] in DiagnosticsInfo.hardware() }
-    AsyncFunction("diagnosticsSample") { () -> [String: Any] in DiagnosticsInfo.sample() }
+    Self.systemInfoFunction
 
-    AsyncFunction("openExternalURL") { (url: String) -> Bool in
-      guard let target = URL(string: url), target.scheme != nil else { return false }
-      return NSWorkspace.shared.open(target)
-    }.runOnQueue(.main)
+    Self.crashReportsFunction
+    Self.hardwareInfoFunction
+    Self.diagnosticsSampleFunction
 
-    AsyncFunction("playIntroMusic") { (cues: [String: Double], muted: Bool) in IntroMusic.shared.play(cues: cues, muted: muted) }.runOnQueue(.main)
-    AsyncFunction("setIntroMusicMuted") { (muted: Bool) in IntroMusic.shared.setMuted(muted) }.runOnQueue(.main)
-    AsyncFunction("stopIntroMusic") { (fade: Double) in IntroMusic.shared.stop(fade: fade) }.runOnQueue(.main)
-    Function("launchConfig") { () -> [String: Any] in LaunchConfig.shared.snapshot }
+    Self.openExternalURLFunction
+
+    Self.playIntroMusicFunction
+    Self.setIntroMusicMutedFunction
+    Self.stopIntroMusicFunction
+    Self.launchConfigFunction
   }
 
   private static func infoString(_ key: String) -> String? {
@@ -125,6 +171,11 @@ extension AppModule {
     guard sysctl(&mib, 2, &boot, &size, nil, 0) == 0 else { return nil }
     return Double(boot.tv_sec) * 1000 + Double(boot.tv_usec) / 1000
   }()
+
+  fileprivate static var loadAverage1m: Double? {
+    var loads = [Double](repeating: 0, count: 1)
+    return getloadavg(&loads, 1) == 1 ? loads[0] : nil
+  }
 
   fileprivate static let processStart: Double? = {
     var info = kinfo_proc()

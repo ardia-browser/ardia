@@ -24,7 +24,7 @@ const base = {
   sharesTopApps: null,
 };
 
-test("a profile's menu in the sidebar: Rename…, the icon picker and its colour, Profile Settings…, and Delete Profile… last", () => {
+test("a profile's menu in the sidebar: Rename…, the icon picker and its colour, then Profile Settings…; deleting and sharing live in Profile Settings", () => {
   assert.deepEqual(render(profileMenuItems(base)), [
     "Rename… [pencil]",
     "Add Icon… [photo]",
@@ -33,27 +33,27 @@ test("a profile's menu in the sidebar: Rename…, the icon picker and its colour
     "  ✓ Blue (swatch)",
     "---",
     "Profile Settings… [gearshape]",
-    "---",
-    "Delete Profile… [trash]",
   ]);
-  const custom = render(profileMenuItems({ ...base, hasIcon: true, color: null, only: true }));
+  const custom = render(profileMenuItems({ ...base, hasIcon: true, color: null, only: true, sharesTopApps: true }));
   assert.equal(custom[1], "Change Icon… [photo]");
   assert.ok(!custom.some((l) => l.startsWith("  ✓") && l.includes("swatch")));
-  assert.equal(custom.at(-1), "Delete Profile… [trash] (off)");
+  assert.ok(!custom.some((l) => l.includes("Delete Profile") || l.includes("Share Top Apps")));
 });
 
-test("in Settings the same verbs, with the details and default choices in place of Profile Settings…", () => {
+test("in Settings the same verbs, with the details and default choices, and Delete Profile… last", () => {
   const items = render(profileMenuItems({ ...base, place: "settings" }));
   assert.deepEqual(items.slice(5), ["---", "Show Profile Details [info.circle]", "Make Default Profile [star] (off)", "---", "Delete Profile… [trash]"]);
+  assert.equal(render(profileMenuItems({ ...base, place: "settings", only: true })).at(-1), "Delete Profile… [trash] (off)");
 });
 
-test("a profile that shares data has a Share Top Apps check in its menu; one with its own data doesn't", () => {
-  const on = render(profileMenuItems({ ...base, sharesTopApps: true }));
+test("in Settings a profile that shares data has a Share Top Apps check in its menu; one with its own data doesn't", () => {
+  const settings = { ...base, place: "settings" };
+  const on = render(profileMenuItems({ ...settings, sharesTopApps: true }));
   assert.deepEqual(on.slice(5, 8), ["---", "✓ Share Top Apps [square.grid.2x2]", "---"]);
-  const off = render(profileMenuItems({ ...base, sharesTopApps: false }));
+  const off = render(profileMenuItems({ ...settings, sharesTopApps: false }));
   assert.ok(off.includes("Share Top Apps [square.grid.2x2]"));
   assert.ok(!off.some((l) => l.startsWith("✓ Share Top Apps")), "unchecked when off");
-  assert.ok(!render(profileMenuItems(base)).some((l) => l.includes("Share Top Apps")));
+  assert.ok(!render(profileMenuItems(settings)).some((l) => l.includes("Share Top Apps")));
 });
 
 const pickerFor = (profileId) => ({ profileId, windowId: "w", place: "settings", anchor: null });

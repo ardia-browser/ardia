@@ -1,3 +1,4 @@
+import { consentToken } from "../telemetry/client";
 import { isFields } from "../../lib/decode";
 import { formatUrl, webUrl } from "../../lib/urlParts";
 import { registerOmniboxProvider, type ProviderRow } from "../omnibox/providers";
@@ -6,7 +7,7 @@ import type { HookSpec } from "./hookFile";
 import { activeHook, onHooksChanged, useHookRules } from "./hookRules";
 import { onServedHooksChanged, requestDecision, servedHooks } from "./decideSocket";
 
-export const MAX_PROVIDER_ROWS = 8;
+const MAX_PROVIDER_ROWS = 8;
 const TEXT_LIMIT = 2048;
 
 const registered = new Map<string, () => void>();
@@ -36,7 +37,7 @@ function providerFor(hook: HookSpec) {
     title: omnibox.title,
     ...(omnibox.keyword ? { keyword: omnibox.keyword } : {}),
     query: async (text: string, signal: AbortSignal) => {
-      const answer = await requestDecision(hook, "omnibox.query", { text: text.slice(0, TEXT_LIMIT), keyword: omnibox.keyword }, DECIDE_DEADLINE_MS["omnibox.query"], signal);
+      const answer = await requestDecision(hook, "omnibox.query", { text: text.slice(0, TEXT_LIMIT), keyword: omnibox.keyword }, DECIDE_DEADLINE_MS["omnibox.query"], signal, consentToken());
       return signal.aborted ? [] : providerRows(answer);
     },
   };

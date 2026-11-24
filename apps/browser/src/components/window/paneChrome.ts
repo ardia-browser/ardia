@@ -1,14 +1,14 @@
 export type CardChrome = { kind: "none" } | { kind: "pane" | "window"; autoHide: boolean };
 
-export type PaneBar =
+type PaneBar =
   | { kind: "none" }
   | { kind: "toolbar" }
   | { kind: "backdrop" }
   | { kind: "spacer" }
   | { kind: "autoHide"; bar: "pane" | "window" | "backdrop" | null };
 
-export function cardChrome(o: { addressInSidebar: boolean; small: boolean; split: boolean; fullscreen: boolean; hideWhileScrolling: boolean }): CardChrome {
-  if (o.addressInSidebar || o.small) return { kind: "none" };
+export function cardChrome(o: { addressInSidebar: boolean; small: boolean; minimal: boolean; split: boolean; fullscreen: boolean; hideWhileScrolling: boolean }): CardChrome {
+  if (o.addressInSidebar || o.small || o.minimal) return { kind: "none" };
   return { kind: o.split || o.fullscreen ? "pane" : "window", autoHide: o.hideWhileScrolling };
 }
 
@@ -22,3 +22,6 @@ export function paneBar(chrome: CardChrome, pane: { visible: boolean; fullscreen
   if (!pane.visible) return { kind: "spacer" };
   return { kind: chrome.kind === "pane" ? "toolbar" : "backdrop" };
 }
+
+export const developerBarShown = (chrome: CardChrome, pane: { developerMode: boolean; small: boolean; fullscreen: boolean }): boolean =>
+  pane.developerMode && chrome.kind === "none" && !pane.small && !pane.fullscreen;

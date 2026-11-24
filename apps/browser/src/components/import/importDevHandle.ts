@@ -1,8 +1,10 @@
 import { useEffect } from "react";
 import { emptyCounts, type ImportKind } from "../../state/import/apply";
 import { importSafariDirect, importSafariExport } from "../../state/import/fileImports";
-import { backTo, chooseSource, closeImport, NO_EXTENSIONS, setImportKinds, type ImportFlow } from "../../state/import/flow";
+import { backTo, chooseSource, closeImport, NO_EXTENSIONS, patchImport, setImportKinds, type ImportFlow } from "../../state/import/flow";
 import { continueImport, skipEncryptedData, unlockAndImport } from "../../state/import/runImport";
+import { openListedExtensionsInStore } from "../../state/import/listedExtensions";
+import { takeOfferedEngine } from "../../state/import/searchEngine";
 import { devRegister } from "../dev/devRegister";
 
 export function useImportDevHandle(flow: ImportFlow) {
@@ -22,12 +24,18 @@ export function useImportDevHandle(flow: ImportFlow) {
       importSafariDirect,
       importSafari: importSafariExport,
       close: closeImport,
+      openListedExtensions: openListedExtensionsInStore,
       kinds: [...flow.kinds],
       setKinds: (list: ImportKind[]) => setImportKinds(list),
+      setSpaces: (spaces: string[]) => patchImport({ spaces }),
+      setSourceProfiles: (sourceProfiles: string[]) => patchImport({ sourceProfiles }),
+      browsers: flow.source ? flow.source.profiles.map((p) => ({ id: p.id, name: p.name, spaces: p.spaces ?? [] })) : [],
       counts: done?.counts ?? emptyCounts(),
       failures: done?.failures ?? [],
       extensions: done?.extensions ?? NO_EXTENSIONS,
       notes: done?.notes ?? [],
+      searchEngine: done?.searchEngine ? { name: done.searchEngine.name, offered: done.searchEngine.offered } : null,
+      takeOfferedEngine,
       step: step.name,
       error: "error" in step ? step.error : null,
       status: step.name === "progress" ? step.status : {},

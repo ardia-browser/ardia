@@ -9,6 +9,7 @@ export type EngineInfo = {
   popupWindows: number;
   chromeWindows: number;
   focus?: string;
+  pictureInPictureCloses?: string;
 };
 
 export type EngineComponent = {
@@ -32,6 +33,13 @@ export type EngineTask = {
   memory: number;
   gpuMemory: number;
   tabIds: (string | null)[];
+  pid?: number;
+};
+
+export type ChildProcessCpu = {
+  pid: number;
+  started: number;
+  cpuMs: number;
 };
 
 export type SystemState = {
@@ -58,9 +66,74 @@ export const inputIdleSeconds = () => nativeModule("ArdiaEngine").inputIdleSecon
 
 type CliServer = { connections: number; generation: number; file: string; reason?: string };
 
+export type PopupProtectedMedia = { family: "widevine" | "playready" | "fairplay" | "other" | "none"; listed: boolean; epoch: string };
+
+export type CursorRestore = { hidden: boolean; epoch: string };
+
+export type HoverLostEpisode = {
+  reason: "halfActive" | "staleMenu" | "notKeyOrMain" | "coveredByView" | "responderLost" | "coveredByWindow";
+  trigger: "move" | "click";
+  keyWindow: string;
+  mainWindow: string;
+  preventKey: boolean;
+  canKey: boolean;
+  windowMain: boolean;
+  halfActive: boolean;
+  appActive: boolean;
+  runningActive: boolean;
+  frontmost: boolean;
+  menuActive: boolean;
+  overPage: boolean;
+  cover: "none" | "reactNative" | "chromium" | "other";
+  coverClear: boolean;
+  responder?: "none" | "window" | "otherWindow" | "page" | "control";
+  coverWindow?: string;
+  healed: boolean;
+  healWorked: boolean | null;
+  healRefused?: string;
+  healRefusedLast?: string;
+  healRefusedWindow?: string;
+  otherWindowClicks?: number;
+  endedBy: "hover" | "heal" | "appInactive" | "windowClosed";
+  seconds: number;
+  episode: number;
+  epoch: string;
+};
+
+export type WindowUnpaintedRecord = {
+  window: "regular" | "private";
+  trigger: "seen" | "key";
+  seen: boolean;
+  occlusion: "visible" | "occluded";
+  overruled: boolean;
+  appActive: boolean;
+  windows: number;
+  views: number;
+  unpainted: number;
+  reasons: number;
+  epoch: string;
+};
+
+export type PressLoopLongReport = { loop: string; inner: string; open: boolean; buttonsHeld: boolean; epoch: string };
+
 export type CliTabTarget = { targetId: string | null; pageGeneration: number };
 
-export type CliControlStatus =
+type CliDragsEnded = { ownerGone: number; debuggerUnowned: number; nativeRefused: number; sourceGone?: number };
+
+type CliWindowlessPages = { given: number; missed: number };
+
+type CliTokenCommands = Partial<Record<"accessibility" | "ardia" | "browser" | "dom" | "emulation" | "fetch" | "input" | "network" | "page" | "runtime" | "storage" | "target" | "other", number>>;
+
+type CliPageSignals = { consoleReads: number; focusedOrigins: number; originMismatches: number; hitTests: number; hitTestsFailed: number; hitTestsCancelled: number; remoteFrames: number; occluded: number };
+
+type CliConsoleRing = { captured: number; evicted: number; reads: number; rings: number };
+
+export type CliConsoleEntry = { seq: number; level: "warning" | "error"; exception: boolean; mainFrame: boolean; text: string; source: string; line: number; time: number };
+
+export type CliConsoleDelta = { entries: CliConsoleEntry[]; generation: number; reset: boolean; next: number; last: number; dropped: number; withheld: number; errors: number; more: boolean };
+
+export type CliControlStatus = { dragsEnded?: CliDragsEnded; windowlessPages?: CliWindowlessPages; tokenCommands?: CliTokenCommands; pageSignals?: CliPageSignals; consoleRing?: CliConsoleRing } & (
   | { state: "external" }
   | ({ state: "off" | "starting" } & CliServer)
-  | ({ state: "on"; port: number } & CliServer);
+  | ({ state: "on"; port: number } & CliServer)
+);

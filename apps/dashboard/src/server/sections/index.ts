@@ -5,7 +5,9 @@ import { errorsExceptions, errorsLogs } from "./errors";
 import { funnelsInstalls, funnelsRetention, funnelsSite } from "./funnels";
 import { healthVersions } from "./health";
 import { healthCli } from "./health-cli";
+import { healthProtectedVideo } from "./protected-video";
 import { performanceAll } from "./performance";
+import { freezesBySignature } from "./freezes";
 import { settingsOverview, settingsTint } from "./settings";
 import { siteBreakdowns, siteClicks, siteExperiment, siteFriction, siteTraffic, siteVitals } from "./site";
 import { usersActive, usersOptedIn, usersUsage, usersVersions } from "./users";
@@ -21,7 +23,9 @@ export const sections = {
   "funnels.retention": funnelsRetention,
   health: healthVersions,
   "health.cli": healthCli,
+  "health.protectedVideo": healthProtectedVideo,
   performance: performanceAll,
+  "performance.freezes": (_range: RangeKey, signal?: AbortSignal) => freezesBySignature(signal),
   settings: settingsOverview,
   "settings.tint": settingsTint,
   "site.traffic": siteTraffic,

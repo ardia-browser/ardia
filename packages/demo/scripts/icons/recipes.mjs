@@ -4,6 +4,8 @@ const at = (s, dx, dy, x) => ({ init: { s, dx, dy, ...(x ? { x } : {}) } });
 const BADGE = 0.07;
 const badge = (src, s, dx, dy, extra = {}) => L(src, { knockout: BADGE, ...at(s, dx, dy), ...extra });
 const one = (...layers) => ({ recipes: [layers] });
+const PHOSPHOR_SCALE = 1.35;
+const phosphorFill = (id) => ({ exclusive: true, native: true, ...one(L(`phosphor-fill:${id}-fill`, { init: { s: PHOSPHOR_SCALE }, lock: ["s", "a", "dx", "dy", "sw"] })) });
 
 export const RECIPES = {
   tag: { orient: true },
@@ -19,6 +21,7 @@ export const RECIPES = {
 
   app: one(O("square")),
   "xmark.square": one(O("square-x")),
+  "minus.square": one(O("square-minus")),
   "app.badge": one(O("square", at(1.333, -0.03, 0.03)), badge("orig:dot", 1.333, 0.4, -0.4)),
   "questionmark.app.dashed": { recipes: [[O("square-dashed"), L("tabler:question-mark", at(0.6, 0, 0))], [O("square-dashed"), L("phosphor:question", at(0.6, 0, 0))]] },
   macwindow: one(O("macwindow")),
@@ -31,6 +34,7 @@ export const RECIPES = {
   "rectangle.righthalf.filled": one(O("rectangle.half.filled", { flip: -1 })),
   "rectangle.righthalf.inset.filled": one(O("rectangle.righthalf.inset.filled")),
   "rectangle.bottomhalf.inset.filled": one(O("rectangle.bottomhalf.inset.filled")),
+  "rectangle.topthird.inset.filled": one(O("rectangle.topthird.inset.filled")),
   "rectangle.lefthalf.inset.filled.arrow.left": one(O("rectangle.inset.arrow", { flip: -1 })),
   "rectangle.righthalf.inset.filled.arrow.right": one(O("rectangle.inset.arrow")),
   "rectangle.split.2x1": one(O("split.2x1")),
@@ -42,6 +46,14 @@ export const RECIPES = {
   "macwindow.on.rectangle": one(O("frame", at(1.2, -0.12, -0.12)), O("macwindow", { knockout: 0.07, ...at(1.2, 0.12, 0.12) })),
   "plus.rectangle.on.rectangle": one(O("frame", at(1.2, -0.12, -0.12)), O("frame", { knockout: 0.07, ...at(1.2, 0.12, 0.12) }), L("lucide:plus", at(0.55, 0.12, 0.12))),
   "square.on.square": one(O("square", at(1.1, -0.13, -0.13)), O("square", { knockout: 0.07, ...at(1.1, 0.13, 0.13) })),
+  "gearshape.fill": phosphorFill("gear"),
+  "person.2.fill": phosphorFill("users"),
+  "square.on.square.fill": phosphorFill("copy"),
+  "circle.lefthalf.filled": phosphorFill("circle-half"),
+  "wand.and.rays": phosphorFill("magic-wand"),
+  "keyboard.fill": phosphorFill("keyboard"),
+  "puzzlepiece.fill": phosphorFill("puzzle-piece"),
+  "slider.horizontal.2.square": phosphorFill("sliders-horizontal"),
   "plus.square.on.square": one(O("square", at(1.1, -0.13, -0.13)), O("square", { knockout: 0.07, ...at(1.1, 0.13, 0.13) }), L("lucide:plus", at(0.5, 0.13, 0.13))),
   "star.square.on.square": one(O("square", at(1.1, -0.13, -0.13)), O("square", { knockout: 0.07, ...at(1.1, 0.13, 0.13) }), L("phosphor-fill:star-fill", at(0.48, 0.13, 0.13))),
   "rectangle.stack": one(O("frame", at(1.2, 0, 0.12)), O("stack.lines", at(1.2, 0, -0.3))),
@@ -74,6 +86,7 @@ export const RECIPES = {
   "battery.100.bolt": one(O("battery.solid"), L("phosphor-fill:lightning-fill", { knockout: 0.05, ...at(0.55, -0.05, 0) })),
   "chart.bar": one(O("chart.bar")),
   "line.3.horizontal": one(O("line.3.horizontal")),
+  "line.3.horizontal.decrease.circle": one(O("line.3.decrease.circle")),
   "list.bullet": one(O("list.bullet")),
   "text.alignleft": one(O("text.alignleft")),
   doc: one(O("doc")),

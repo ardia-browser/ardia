@@ -20,6 +20,7 @@
 #include "third_party/blink/public/common/loader/resource_type_util.h"
 #include "third_party/blink/public/mojom/loader/resource_load_info.mojom.h"
 #include "ardia/core/ac_browser_internal.h"
+#include "ardia/core/ac_discard_veto.h"
 #include "ardia/core/ac_hooks.h"
 #import "ardia/core/ardiacore_internal.h"
 
@@ -158,6 +159,7 @@ void TabBridge::DidFinishNavigation(content::NavigationHandle* handle) {
   EnsureFaviconObserved();
   EnsureZoomObserved();
   EnsureAudibleObserved();
+  NotePostedDocument(handle);
   if (made_ahead_ && handle->IsInPrimaryMainFrame() && handle->HasCommitted() &&
       !handle->GetURL().IsAboutBlank()) {
     made_ahead_ = false;

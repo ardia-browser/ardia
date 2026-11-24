@@ -20,9 +20,9 @@ const runsText = (passes: number, runs: number) => (passes === runs ? `all ${run
     <header class="cu-head">
       <div class="cu-title">
         <p class="label kicker">Bring your own agent</p>
-        <h2 class="poster cu-heading" id="cu-title" data-reveal>CLI.</h2>
+        <h2 class="poster cu-heading" id="cu-title">CLI.</h2>
         <p class="lede">
-          Your own Claude Code or Codex drives your Ardia with <code>ardia browse</code>, logins and all, and your Mac’s other apps
+          Turn on the Command Line plugin and your own Claude Code or Codex drives your Ardia with <code>ardia browse</code>, logins and all, and your Mac’s other apps
           with <code>ardia computer</code>. Tokens spent on eight browser tasks, against Aside and OpenCode Browse.
         </p>
         {!cu.complete && <p class="label status">Bench in progress · {cu.runs} of {cu.planned} runs so far</p>}
@@ -42,7 +42,7 @@ const runsText = (passes: number, runs: number) => (passes === runs ? `all ${run
     <ul class="charts" role="list">
       {
         cu.charts.map((c) => (
-          <li class="card chart" data-reveal>
+          <li class="card chart">
             <h3 class="card-title">
               {c.title} <span class="agent">· {c.agent}</span>
             </h3>
@@ -87,30 +87,32 @@ const runsText = (passes: number, runs: number) => (passes === runs ? `all ${run
                 ))}
               </div>
             </div>
-            <table class="visually-hidden">
-              <caption>
-                {c.title}, {c.agent}: median per task, lower is better
-              </caption>
-              <thead>
-                <tr>
-                  <th scope="col">Task</th>
-                  {c.series.map((s) => (
-                    <th scope="col">{s.name}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {cu.tasks.map((task, ti) => (
+            <div class="visually-hidden">
+              <table>
+                <caption>
+                  {c.title}, {c.agent}: median per task, lower is better
+                </caption>
+                <thead>
                   <tr>
-                    <th scope="row">{task}</th>
-                    {c.series.map((s) => {
-                      const b = s.bars[ti];
-                      return <td>{b ? `${b.text}, ${runsText(b.passes, b.runs)}` : "not run"}</td>;
-                    })}
+                    <th scope="col">Task</th>
+                    {c.series.map((s) => (
+                      <th scope="col">{s.name}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {cu.tasks.map((task, ti) => (
+                    <tr>
+                      <th scope="row">{task}</th>
+                      {c.series.map((s) => {
+                        const b = s.bars[ti];
+                        return <td>{b ? `${b.text}, ${runsText(b.passes, b.runs)}` : "not run"}</td>;
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </li>
         ))
       }

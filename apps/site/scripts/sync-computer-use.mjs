@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const usage = `Usage: node apps/site/scripts/sync-computer-use.mjs [RESULTS_DIR ...] [--aside-version V] [--opencode-version V]
 
-Copies the browser-agent bench summaries (apps/cli/bench) into apps/site/src/data/computerUse.json,
+Copies the browser-agent bench summaries (plugins/cli/bench in ardia-browser/plugins) into apps/site/src/data/computerUse.json,
 keeping only what the Computer use section needs. Rerun it whenever the bench writes a new summary.
 
 RESULTS_DIR         one or more plans' results folders with summary.json and runs/. A contender comes from the

@@ -5,6 +5,7 @@ const model = await import("../browser/model.ts");
 const { wokenPage } = await import("../tabs/pageSession.ts");
 const { startPinHandoff } = await import("./pinHandoff.ts");
 const { isPageUnloaded } = await import("./pinShare.ts");
+const { shownLiveOf } = await import("../tabs/tabLive.ts");
 const { flushPersistence, loadSession, startPersistence } = await import("../session/persist.ts");
 const stub = await import("../../test-native/index.ts");
 
@@ -40,7 +41,7 @@ test("selecting a pin in B while A holds its page moves the page; A keeps the ta
   assert.equal(S().tabs[copy].page.holderId, mail, "frozen: its page is in B");
   assert.equal(loaded(copy), false, "no second page");
   assert.equal(pages("https://mail.com").length, 1, "one live page for the pin");
-  assert.equal(S().live[copy].playingAudio, true, "A's tile shows the same audio state");
+  assert.equal(shownLiveOf(S(), copy).playingAudio, true, "A's tile shows the same audio state");
 });
 
 test("clicking the frozen copy in A pulls the page back; B keeps it frozen", () => {
@@ -101,7 +102,7 @@ test("the frozen copy follows the page's title, URL, favicon and audio", () => {
   const frozen = S().tabs[shown(a)];
   assert.equal(frozen.title, "Inbox (42)");
   assert.equal(frozen.url, "https://mail.com/inbox/42");
-  assert.equal(S().live[frozen.id].playingAudio, true);
+  assert.equal(shownLiveOf(S(), frozen.id).playingAudio, true);
 });
 
 test("navigating from a frozen copy (address bar, Back to Pinned URL) pulls the page back first", () => {

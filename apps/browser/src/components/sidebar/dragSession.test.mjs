@@ -96,7 +96,6 @@ test("a cancelled row slides home under a fresh token; a new drag before it land
   c.end(true);
   await D.settle();
   r.snap("committed, landing");
-  animations.step(c.items.get(entryKey("tab", m.id.a)).gap, 10);
   animations.held = false;
   animations.finish();
   await D.settle();
@@ -110,7 +109,7 @@ test("landing: which drops slide the ghost to its spot and which drop it at once
   const out = [];
   const cases = [
     ["row to the list", (m) => entryKey("tab", m.id.a), (m) => ({ x: 60, y: frameOf(m, entryKey("tab", m.id.c)).y + 30 })],
-    ["row onto a row", (m) => entryKey("tab", m.id.a), (m) => D.centre(frameOf(m, entryKey("tab", m.id.c)))],
+    ["row on a row's right half", (m) => entryKey("tab", m.id.a), (m) => D.centre(frameOf(m, entryKey("tab", m.id.c)))],
     ["row into the pinned rows", (m) => entryKey("tab", m.id.c), (m) => ({ x: 60, y: frameOf(m, entryKey("tab", m.id.p1)).y + 3 })],
     ["row into the tiles", (m) => entryKey("tab", m.id.c), (m) => D.centre(frameOf(m, entryKey("tab", m.id.t2)), 0)],
     ["tile along the grid", (m) => entryKey("tab", m.id.t1), (m) => ({ x: frameOf(m, entryKey("tab", m.id.t2)).x + 70, y: 80 })],
@@ -189,7 +188,7 @@ test("a drag turns hover cards and Escape capture off and gives both back, howev
   registerRow(m.w, "row", { measureInWindow: (done) => done(10, 10, 100, 30) });
   const cardShows = async () => {
     hover.rowShown(m.w, { kind: "tab", id: "row" });
-    t.mock.timers.tick(500);
+    t.mock.timers.tick(800);
     await D.settle();
     const shown = sidebarUi().hover?.id === "row";
     hover.dismissHover();
@@ -266,4 +265,188 @@ test("a drag begun over one that never ended stops the old one's autoscroll and 
   t.mock.timers.tick(1000);
   c.end(false);
   assert.equal(D.readDrag(c).gapKey, null);
+});
+
+test("a drag let go with no place to drop is counted; a dropped, cancelled or returned drag is not", async () => {
+  const { devTabPresses } = await import("../../state/telemetry/tabPresses.ts");
+  const counted = () => devTabPresses().drags_without_drop;
+  const offScreen = { x: -190, y: 100, w: 200, h: 700 };
+  const run = async ({ viewport, to, commit = true }) => {
+    const m = listScene();
+    const { c } = mount({ entries: m.L.entries, regions: m.regions, ...(viewport ? { viewport } : {}) });
+    const b = frameOf(m, entryKey("tab", m.id.b));
+    const before = counted();
+    await c.begin(entryKey("tab", m.id.b), b.x + 20, b.y + 10);
+    const p = to(m, b);
+    c.move(p.x, p.y);
+    const drop = D.readDrag(c).drop.type;
+    c.end(commit);
+    await D.settle();
+    return { drop, counted: counted() - before };
+  };
+  const belowD = (m) => ({ x: 60, y: frameOf(m, entryKey("tab", m.id.d)).y + 30 });
+  assert.deepEqual(await run({ viewport: offScreen, to: belowD }), { drop: "none", counted: 1 }, "another space's off-screen scroll view");
+  assert.deepEqual(await run({ to: belowD }), { drop: "tabs", counted: 0 });
+  assert.deepEqual(await run({ viewport: offScreen, to: belowD, commit: false }), { drop: "none", counted: 0 });
+  assert.deepEqual((await run({ to: (m, b) => ({ x: b.x + 20, y: b.y + 12 }) })).counted, 0, "let go where it started");
+});
+
+test("a drag that starts while a fold is still filling in mounts the rest first and measures it with the other rows", async () => {
+  const { fillingFold } = await import("./foldFlush.ts");
+  const ran = [];
+  globalThis.requestAnimationFrame = (run) => setTimeout(() => run(Date.now()), 0);
+  const m = listScene();
+  const { c } = mount({ entries: m.L.entries, regions: m.regions });
+  const late = c.create(entryKey("tab", m.id.d) + ":filled");
+  Object.assign(late, { kind: "row", tabIds: [m.id.d], section: "list" });
+  late.view = D.fakeView({ x: 6, y: 600, w: 180, h: 30 });
+  c.windowId = "w-drag";
+  const stop = fillingFold("w-drag", () => {
+    ran.push("flush");
+    c.items.set(late.key, late);
+    stop();
+  });
+  const b = frameOf(m, entryKey("tab", m.id.b));
+  await c.begin(entryKey("tab", m.id.b), b.x + 20, b.y + 10);
+  stop();
+  assert.deepEqual(ran, ["flush"]);
+  assert.deepEqual(late.frame, { x: 6, y: 600, w: 180, h: 30 }, "the drag's own pass measured the row the flush mounted");
+  c.end(false);
+  await D.settle();
+});
+
+test("a drag's measure keeps no frame for a row its fold hid while the measure was out", async () => {
+  const { DragItems } = await import("./dragItems.ts");
+  const m = listScene();
+  const { c } = mount({ entries: m.L.entries, regions: m.regions });
+  const items = new DragItems(c, true);
+  const listeners = new Set();
+  let away = false;
+  const folded = { away: () => away, subscribe: (f) => (listeners.add(f), () => listeners.delete(f)) };
+  const row = c.create(entryKey("tab", m.id.d) + ":folded");
+  Object.assign(row, { kind: "row", tabIds: [m.id.d], section: "list" });
+  row.view = D.fakeView({ x: 6, y: 600, w: 180, h: 30 });
+  items.addWhileShown(row.key, row, folded);
+  row.view.held = true;
+  const b = frameOf(m, entryKey("tab", m.id.b));
+  const begun = c.begin(entryKey("tab", m.id.b), b.x + 20, b.y + 10);
+  await D.settle();
+  away = true;
+  for (const f of [...listeners]) f();
+  away = false;
+  for (const f of [...listeners]) f();
+  row.view.release();
+  await begun;
+  assert.equal(row.frame, null, "the answer for the registration the fold took away is dropped");
+  c.end(false);
+  await D.settle();
+});
+
+test("a row its fold hides while the room springs open gives its gap back for good", async () => {
+  const { DragItems } = await import("./dragItems.ts");
+  const m = listScene();
+  const { c } = mount({ entries: m.L.entries, regions: m.regions });
+  const items = new DragItems(c, true);
+  const listeners = new Set();
+  let away = false;
+  const folded = { away: () => away, subscribe: (f) => (listeners.add(f), () => listeners.delete(f)) };
+  const dKey = entryKey("tab", m.id.d);
+  const d = c.items.get(dKey);
+  c.items.delete(dKey);
+  items.addWhileShown(dKey, d, folded);
+  const b = frameOf(m, entryKey("tab", m.id.b));
+  await c.begin(entryKey("tab", m.id.b), b.x + 20, b.y + 10);
+  animations.held = true;
+  c.move(60, frameOf(m, dKey).y + 2);
+  assert.ok(c.room, "a room spring is running");
+  away = true;
+  for (const f of [...listeners]) f();
+  animations.held = false;
+  animations.finish();
+  await D.settle();
+  assert.equal(d.gap.__getValue(), 0);
+  c.end(false);
+  await D.settle();
+});
+
+test("a drag cancelled while it waits for a fold to finish doesn't go on to measure", async () => {
+  const { fillingFold } = await import("./foldFlush.ts");
+  const m = listScene();
+  const { c } = mount({ entries: m.L.entries, regions: m.regions });
+  c.windowId = "w-cancel";
+  const stop = fillingFold("w-cancel", () => stop());
+  let measured = 0;
+  const measure = c.root.measureInWindow;
+  c.root.measureInWindow = (done) => (measured++, measure(done));
+  const b = frameOf(m, entryKey("tab", m.id.b));
+  const begun = c.begin(entryKey("tab", m.id.b), b.x + 20, b.y + 10);
+  c.end(false);
+  await begun;
+  assert.equal(measured, 0);
+  await D.settle();
+});
+
+test("R5-S1: a selected tab that a flush mounts joins the drag it starts", async () => {
+  const { fillingFold } = await import("./foldFlush.ts");
+  globalThis.requestAnimationFrame = (run) => setTimeout(() => run(Date.now()), 0);
+  const m = listScene();
+  const { c } = mount({ entries: m.L.entries, regions: m.regions });
+  c.windowId = "w-select";
+  const dKey = entryKey("tab", m.id.d);
+  const d = c.items.get(dKey);
+  c.items.delete(dKey);
+  const stop = fillingFold("w-select", () => {
+    c.items.set(dKey, d);
+    stop();
+  });
+  S().setSelection(m.w, [m.id.b, m.id.d]);
+  const b = frameOf(m, entryKey("tab", m.id.b));
+  await c.begin(entryKey("tab", m.id.b), b.x + 20, b.y + 10);
+  assert.deepEqual(c.session.sources.map((s) => s.key).sort(), [entryKey("tab", m.id.b), dKey].sort());
+  assert.equal(c.session.ghost.count, 2);
+  c.end(false);
+  S().setSelection(m.w, []);
+  await D.settle();
+});
+
+test("R5-S4: an older measuring pass that lands after a newer one keeps none of its frames", async () => {
+  const m = listScene();
+  const { c } = mount({ entries: m.L.entries, regions: m.regions });
+  const dKey = entryKey("tab", m.id.d);
+  const d = c.items.get(dKey);
+  const calls = [];
+  let next = 600;
+  d.view = { measureInWindow: (done) => calls.push({ done, y: next }) };
+  const b = frameOf(m, entryKey("tab", m.id.b));
+  const begun = c.begin(entryKey("tab", m.id.b), b.x + 20, b.y + 10);
+  await D.settle();
+  next = 900;
+  const again = c.remeasure(c.session);
+  await D.settle();
+  calls[1].done(6, calls[1].y, 180, 30);
+  await again;
+  calls[0].done(6, calls[0].y, 180, 30);
+  await begun;
+  assert.equal(d.frame.y, 900);
+  c.end(false);
+  await D.settle();
+});
+
+test("R5-S5: a landing measured for a row its fold withdrew meanwhile is dropped", async () => {
+  const m = listScene();
+  const { c } = mount({ entries: m.L.entries, regions: m.regions });
+  const b = frameOf(m, entryKey("tab", m.id.b));
+  await c.begin(entryKey("tab", m.id.b), b.x + 20, b.y + 10);
+  c.move(60, frameOf(m, entryKey("tab", m.id.d)).y + 2);
+  const ref = c.items.get(c.session.gapKey);
+  assert.ok(ref, "the drag opened a gap at a row");
+  ref.view.held = true;
+  const spot = c.landingSpot(c.session.drop);
+  c.items.delete(ref.key);
+  ref.held = (ref.held ?? 0) + 1;
+  ref.view.release();
+  assert.equal(await spot, null);
+  c.items.set(ref.key, ref);
+  c.end(false);
+  await D.settle();
 });

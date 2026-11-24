@@ -2,11 +2,16 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
 const { configFolder, emitConfigChange } = await import("../../test-native/shell.ts");
-const { startConfigFiles, reconcileConfig, resetConfigFilesForTests } = await import("./configFiles.ts");
+const { startConfigFiles, reconcileConfig, resetConfigFilesForTests, problemsToast } = await import("./configFiles.ts");
 const { useBasePalette } = await import("./basePalette.ts");
-const { useToasts } = await import("../app/toasts.ts");
+const { useToasts, showToast, hideKeyedToast } = await import("../app/toasts.ts");
 const { firstWindowCommitted } = await import("../../lib/afterFirstWindow.ts");
-const { colorRoles } = await import("../../components/ui/tokens.ts");
+const { colorRoles, font, radius, weight, lineHeight } = await import("../../components/ui/tokens.ts");
+const { layout } = await import("../../components/ui/theme.ts");
+const { activeLook, iconName } = await import("../../lib/activeLook.ts");
+const { DEFAULT_LOOK } = await import("../../lib/themeLook.ts");
+const { resetSidebarWidth } = await import("../sidebar/actions.ts");
+const { takeConfigProblemToastCounts } = await import("../telemetry/configProblemToasts.ts");
 
 const S = () => useBrowser.getState();
 const files = configFolder.files;
@@ -60,6 +65,24 @@ test("a change made in the app stands until the file changes; every change event
   assert.ok(configFolder.schemaWrites.length >= 1);
 });
 
+test("a window that isn't the launch takes the theme but leaves settings and known problems alone until the file changes", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  fresh({ tabLayout: "sidebar" });
+  const window = S().createWindow({ url: "https://a.com/" });
+  files.set("themes/nord.json", JSON.stringify({ dark: { accent: "#88C0D0" } }));
+  writeConfig({ theme: "nord", settings: { tabLayout: "top", selectedTabGlow: "bright" } });
+  startConfigFiles(colorRoles, false);
+  firstWindowCommitted();
+  await elapse(t, 0);
+  assert.equal(S().settings.tabLayout, "sidebar");
+  assert.equal(useBasePalette.getState().theme, "nord");
+  assert.equal(useToasts.getState().toasts[window], undefined);
+  emitConfigChange();
+  await elapse(t, 100);
+  assert.equal(S().settings.tabLayout, "top");
+  assert.equal(useToasts.getState().toasts[window], undefined, "a problem the launch window showed isn't shown again");
+});
+
 test("taking a key out of the file, or deleting the file, keeps the current value", () => {
   fresh();
   writeConfig({ settings: { tabLayout: "top" } });
@@ -79,15 +102,98 @@ test("a broken file changes nothing, applies what's valid in a fixable one, and 
   startConfigFiles(colorRoles);
   await wait(10);
   assert.equal(S().settings.tabLayout, "sidebar");
-  assert.match(useToasts.getState().toasts[window].title, /^config\.json: isn't valid JSON/);
+  assert.equal(useToasts.getState().toasts[window].title, "config.json has a problem");
+  assert.match(useToasts.getState().toasts[window].message, /^isn't valid JSON/);
   writeConfig({ settings: { tabLayout: "top", selectedTabGlow: "bright" } });
   reconcileConfig();
   assert.equal(S().settings.tabLayout, "top");
-  assert.equal(useToasts.getState().toasts[window].title, "config.json: selectedTabGlow must be full, soft or off");
+  assert.equal(useToasts.getState().toasts[window].message, "selectedTabGlow must be full, soft or off");
   const shown = useToasts.getState().toasts[window].id;
   reconcileConfig();
   assert.equal(useToasts.getState().toasts[window].id, shown, "the same problem isn't toasted again");
   assert.equal(warnings.filter((w) => w.includes("selectedTabGlow")).length, 1);
+});
+
+test("the problem toast stays up while the file is wrong, stays dismissed for the same problems, and goes once they're fixed", async () => {
+  fresh();
+  const window = S().createWindow({ url: "https://a.com/" });
+  writeConfig({ settings: { selectedTabGlow: "bright" } });
+  takeConfigProblemToastCounts();
+  startConfigFiles(colorRoles);
+  await wait(10);
+  const toast = () => useToasts.getState().toasts[window];
+  assert.equal(toast().sticky, true);
+  assert.equal(toast().action.title, "Dismiss");
+  toast().action.run();
+  useToasts.setState({ toasts: { [window]: null } });
+  assert.deepEqual(takeConfigProblemToastCounts(), { config_problem_toasts: 1, config_problem_toast_dismissals: 1 });
+  reconcileConfig();
+  assert.equal(toast(), null, "dismissed, and nothing new is wrong");
+  writeConfig({ settings: { selectedTabGlow: "bright", tabLayout: "middle" } });
+  reconcileConfig();
+  assert.equal(toast().title, "config.json has 2 problems", "a new problem shows every problem again");
+  writeConfig({ settings: { tabLayout: "middle" } });
+  reconcileConfig();
+  assert.equal(toast().title, "config.json has a problem", "a fixed problem leaves the toast in place with what's left");
+  writeConfig({ settings: {} });
+  reconcileConfig();
+  assert.equal(toast(), null, "fixing the file takes the toast down");
+  assert.deepEqual(takeConfigProblemToastCounts(), { config_problem_toasts: 1, config_problem_toast_dismissals: 0 }, "updating it in place isn't another showing");
+});
+
+test("the problem toast waits for another toast to go instead of taking its slot, and comes back after one replaces it", async () => {
+  fresh();
+  const window = S().createWindow({ url: "https://a.com/" });
+  startConfigFiles(colorRoles);
+  await wait(10);
+  showToast(window, "Closed 3 tabs", undefined, { action: { title: "Undo", run() {} } });
+  writeConfig({ settings: { selectedTabGlow: "bright" } });
+  reconcileConfig();
+  assert.equal(useToasts.getState().toasts[window].title, "Closed 3 tabs", "the Undo toast keeps its slot");
+  useToasts.setState({ toasts: { [window]: null } });
+  assert.equal(useToasts.getState().toasts[window].title, "config.json has a problem", "shown once the slot is free");
+  showToast(window, "Translating", undefined, { key: "translate-progress", sticky: true });
+  hideKeyedToast(window, "translate-progress");
+  assert.equal(useToasts.getState().toasts[window].title, "config.json has a problem", "back after the toast that replaced it goes");
+});
+
+test("dismissing holds while the same problems stand, however they're reordered or trimmed", async () => {
+  fresh();
+  const window = S().createWindow({ url: "https://a.com/" });
+  writeConfig({ theme: "demo" });
+  files.set("themes/demo.json", JSON.stringify({ colours: {}, fonts: {} }));
+  startConfigFiles(colorRoles);
+  await wait(10);
+  assert.equal(useToasts.getState().toasts[window].message, "colours and fonts aren't theme keys (dark, light, type, metrics, layout, icons)");
+  useToasts.setState({ toasts: { [window]: null } });
+  files.set("themes/demo.json", JSON.stringify({ fonts: {}, colours: {} }));
+  reconcileConfig();
+  assert.equal(useToasts.getState().toasts[window], null, "reordered");
+  files.set("themes/demo.json", JSON.stringify({ fonts: {} }));
+  reconcileConfig();
+  assert.equal(useToasts.getState().toasts[window], null, "one of them fixed");
+});
+
+test("problems found before any window opens show in the first window that does", async () => {
+  fresh();
+  assert.equal(S().windowOrder.length, 0);
+  writeConfig({ settings: { selectedTabGlow: "bright" } });
+  startConfigFiles(colorRoles);
+  await wait(10);
+  const window = S().createWindow({ url: "https://a.com/" });
+  assert.equal(useToasts.getState().toasts[window]?.title, "config.json has a problem");
+});
+
+test("the problem toast names the file once and sums up the rest", () => {
+  assert.deepEqual(problemsToast(["themes/demo.json: type.family must be a font name", "themes/demo.json: metrics.rowHeight must be a number from 24 to 56", "themes/demo.json: icons.plus has \"Plus\", which isn't an SF Symbol name"]), {
+    title: "themes/demo.json has 3 problems",
+    message: "type.family must be a font name; metrics.rowHeight must be a number from 24 to 56; and 1 more (ardia config check lists them all)",
+  });
+  assert.deepEqual(problemsToast(["themes/demo.json: type.famly isn't a type key (family, mono, scale, sizes, weights)", "themes/demo.json: type.font isn't a type key (family, mono, scale, sizes, weights)", "themes/demo.json: icons isn't a theme key (dark, light)"]).message, "type.famly and type.font aren't type keys (family, mono, scale, sizes, weights); icons isn't a theme key (dark, light)");
+  assert.deepEqual(problemsToast(["config.json: tabLayout must be sidebar or top", "themes/demo.json: dark.accent isn't a colour"]), {
+    title: "Your config files have 2 problems",
+    message: "config.json: tabLayout must be sidebar or top; themes/demo.json: dark.accent isn't a colour",
+  });
 });
 
 test("the theme's roles become the base palette with a new revision, and an unparseable edit keeps the last good version", () => {
@@ -152,4 +258,97 @@ test("restoreSession from the file decides the launch restore, both ways", async
   assert.equal(configRestoreSession(), undefined, "an invalid value leaves the saved setting in charge");
   files.delete("config.json");
   assert.equal(configRestoreSession(), undefined);
+});
+
+test("a theme's look applies live through the tokens, keeps the last good version, and going back gives Ardia's own look", () => {
+  fresh();
+  writeConfig({ theme: "roomy" });
+  files.set("themes/roomy.json", JSON.stringify({ type: { family: "Avenir Next", sizes: { body: 15 }, weights: { medium: "600" } }, metrics: { rowHeight: 40, radius: { row: 14 } }, icons: { plus: "plus.circle" } }));
+  const defaults = { font: font.body, radius: radius.chrome, row: layout.rowHeight, line: lineHeight.body, weight: weight.medium };
+  assert.deepEqual(defaults, { font: { fontSize: 13 }, radius: 10, row: 34, line: 16, weight: "500" });
+  startConfigFiles(colorRoles);
+  const first = useBasePalette.getState();
+  assert.notEqual(first.palette, null, "a look-only theme still gives a new palette, so every themed view re-renders");
+  assert.deepEqual(font.body, { fontSize: 15, fontFamily: "Avenir Next" });
+  assert.equal(font.body, font.body, "the same object per look, so memos hold");
+  assert.equal(lineHeight.body, 18);
+  assert.equal(weight.medium, "600");
+  assert.equal(radius.chrome, 14);
+  assert.equal(layout.rowHeight, 40);
+  assert.equal(iconName("plus"), "plus.circle");
+  assert.equal(iconName("minus"), "minus");
+  files.set("themes/roomy.json", '{ "metrics": ');
+  reconcileConfig();
+  assert.equal(useBasePalette.getState().palette, first.palette, "an unparseable edit keeps the last good look");
+  assert.equal(layout.rowHeight, 40);
+  files.set("themes/roomy.json", JSON.stringify({ metrics: { rowHeight: 80, rowGap: 5 } }));
+  reconcileConfig();
+  assert.equal(layout.rowHeight, 34, "an out-of-range value is reported and Ardia's applies");
+  assert.equal(layout.rowGap, 5);
+  assert.ok(warnings.some((w) => w.includes("themes/roomy.json: metrics.rowHeight must be a number from 24 to 56")));
+  writeConfig({ theme: null });
+  reconcileConfig();
+  assert.equal(activeLook(), DEFAULT_LOOK);
+  assert.equal(useBasePalette.getState().palette, null);
+  assert.deepEqual({ font: font.body, radius: radius.chrome, row: layout.rowHeight, line: lineHeight.body, weight: weight.medium }, defaults);
+});
+
+test("a theme's sidebarWidth resizes the sidebar when it changes after launch, never at launch, and Reset returns to it", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  fresh({ sidebarWidth: 230 });
+  writeConfig({ theme: "wide" });
+  files.set("themes/wide.json", JSON.stringify({ metrics: { sidebarWidth: 300 } }));
+  startConfigFiles(colorRoles);
+  assert.equal(S().settings.sidebarWidth, 230, "launch keeps the width you left");
+  await elapse(t, 6000);
+  files.set("themes/wide.json", JSON.stringify({ metrics: { sidebarWidth: 280 } }));
+  reconcileConfig();
+  assert.equal(S().settings.sidebarWidth, 280);
+  S().updateSettings({ sidebarWidth: 250 });
+  reconcileConfig();
+  assert.equal(S().settings.sidebarWidth, 250, "an unchanged value leaves a width you dragged alone");
+  resetSidebarWidth();
+  assert.equal(S().settings.sidebarWidth, 280);
+  writeConfig({ theme: null });
+  reconcileConfig();
+  resetSidebarWidth();
+  assert.equal(S().settings.sidebarWidth, 190);
+});
+
+test("turning outlines off clears the outline role in both appearances, over a theme's own, and on again restores it", () => {
+  fresh();
+  startConfigFiles(colorRoles);
+  assert.equal(useBasePalette.getState().palette, null);
+  S().updateSettings({ elementOutlines: false });
+  const off = useBasePalette.getState().palette;
+  assert.equal(off.dark.pinnedRestingStroke, "#00000000");
+  assert.equal(off.light.pinnedRestingStroke, "#00000000");
+  assert.equal(off.dark.accent, colorRoles.dark.accent);
+  writeConfig({ theme: "edged" });
+  files.set("themes/edged.json", JSON.stringify({ dark: { pinnedRestingStroke: "#FF0000", accent: "#88C0D0" } }));
+  reconcileConfig();
+  assert.equal(useBasePalette.getState().palette.dark.pinnedRestingStroke, "#00000000");
+  assert.equal(useBasePalette.getState().palette.dark.accent, "#88C0D0");
+  S().updateSettings({ elementOutlines: true });
+  assert.equal(useBasePalette.getState().palette.dark.pinnedRestingStroke, "#FF0000");
+  writeConfig({ theme: null });
+  reconcileConfig();
+  assert.equal(useBasePalette.getState().palette, null);
+});
+
+test("Tab corners rounds the rows over a theme's radius, follows the theme while unset, and changes live", () => {
+  fresh();
+  writeConfig({ theme: "round" });
+  files.set("themes/round.json", JSON.stringify({ metrics: { radius: { row: 14 } } }));
+  startConfigFiles(colorRoles);
+  assert.equal(radius.chrome, 14, "unset, the theme's radius applies");
+  S().updateSettings({ tabCornerRadius: 3 });
+  assert.equal(radius.chrome, 3);
+  assert.equal(useBasePalette.getState().look.radii.chrome, 3, "Settings reads the radius in force from the look");
+  writeConfig({ theme: null });
+  reconcileConfig();
+  assert.equal(radius.chrome, 3, "the setting holds without a theme");
+  S().updateSettings({ tabCornerRadius: null });
+  assert.equal(radius.chrome, 10);
+  assert.equal(activeLook(), DEFAULT_LOOK);
 });

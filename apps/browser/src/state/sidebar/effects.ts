@@ -6,9 +6,11 @@ import { startAutoCleanUp } from "../pins/autoCleanUp";
 import { useBrowser } from "../browser/store";
 import { changedIds } from "../browser/changes";
 import { isSilenced } from "../tabs/mute";
-import { dismissHover } from "../sidebar/hover";
-import { sidebarUi } from "../sidebar/sidebarUi";
-import { cancelSwitcher, commitSwitcher, moveSwitcher } from "../sidebar/switcher";
+import { dismissHover } from "./hover";
+import { sidebarUi } from "./sidebarUi";
+import { cancelSwitcher, closeSwitcherRow, commitSwitcher, moveSwitcher } from "./switcher";
+import { noteTabSwitcherReleasedInMenu } from "../telemetry/tabSwitcherOpens";
+import { chromeCtrlTabStoreChanged, followChromeCtrlTab } from "../commands/chromeCtrlTab";
 
 let started = false;
 
@@ -18,6 +20,7 @@ export function startSidebarEffects() {
   startLive();
 
   useBrowser.subscribe((s, prev) => {
+    chromeCtrlTabStoreChanged(s, prev);
     const switcher = sidebarUi().switcher;
     if (switcher && s.windows !== prev.windows && !s.windows[switcher.windowId]) cancelSwitcher();
     const sitesChanged = s.settings.mutedSites !== prev.settings.mutedSites || s.privateSiteMutes !== prev.privateSiteMutes;
@@ -35,9 +38,11 @@ export function startSidebarEffects() {
       dismissHover();
       useBrowser.getState().closeAbandonedNewTabs();
     }
+    if (e.type === "switcherReleased" && e.afterMenu && sidebarUi().switcher) noteTabSwitcherReleasedInMenu();
     if (e.type === "switcherReleased" || e.type === "resignActive") commitSwitcher();
     if (e.type === "switcherMouseUp" || (e.type === "switcherKey" && e.key === "escape")) cancelSwitcher();
-    if (e.type === "switcherKey" && e.key !== "escape") moveSwitcher(e.key === "next" ? 1 : -1);
+    if (e.type === "switcherKey" && e.key === "close") void closeSwitcherRow();
+    if (e.type === "switcherKey" && (e.key === "next" || e.key === "previous")) moveSwitcher(e.key === "next" ? 1 : -1);
   });
 
   onWindowEvent((e) => {
@@ -46,4 +51,5 @@ export function startSidebarEffects() {
   });
 
   startAutoCleanUp();
+  followChromeCtrlTab();
 }

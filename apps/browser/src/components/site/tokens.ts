@@ -11,7 +11,7 @@ const DARK = {
   certificateWell: "rgba(255,255,255,0.05)",
 };
 
-export type SiteTokens = typeof DARK;
+type SiteTokens = typeof DARK;
 
 const LIGHT: SiteTokens = {
   tile: "rgba(0,0,0,0.0525)",
@@ -42,11 +42,11 @@ export const CARD_BADGES = {
 
 export const MASTERCARD_RINGS = { left: "#EB001B", right: "#F79E1B" } as const;
 
-export const cardBadgeType = { long: font.badge, short: font.badge, weight: "800", letterSpacing: tracking.caps } as const;
+export const cardBadgeType = { get long() { return font.badge; }, get short() { return font.badge; }, weight: "800", letterSpacing: tracking.caps } as const;
 
-export const noticeType = font.small;
+export const noticeType = () => font.small;
 
-export const siteLine = { checkLabel: lineHeight.body } as const;
+export const siteLine = { get checkLabel() { return lineHeight.body; } } as const;
 
 export const selectionBar = { showDelay: 150 } as const;
 

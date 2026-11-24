@@ -7,6 +7,7 @@ import { useScopedLook } from "../app/theme.ts";
 import { scopedTheme, profileTheme } from "../../components/ui/theme.ts";
 import { DEFAULT_SETTINGS, parseSettings, SETTING_SPECS } from "../settings/settings.ts";
 import { SYNCED_SETTINGS } from "../sync/settingsAdapter.ts";
+import { settingsSnapshot } from "../telemetry/settingsSnapshot.ts";
 import { isConfigSettingKey } from "../settings/configAllowlist.ts";
 import { provideProfileLooks } from "../profiles/looks.ts";
 import { launchBackdrop } from "./launchBackdrop.ts";
@@ -32,8 +33,16 @@ test("window translucency defaults on, persists false, and stays device-local", 
   assert.equal(SETTING_SPECS.windowTranslucency.synced, false);
   assert.ok(!SYNCED_SETTINGS.includes("windowTranslucency"));
   assert.ok(isConfigSettingKey("windowTranslucency"));
-  assert.equal(search(SETTINGS_INDEX, "opaque")[0].entry.id, "appearance.windowTranslucency");
-  assert.equal(setting("appearance.windowTranslucency").advanced, true);
+  assert.equal(search(SETTINGS_INDEX, "opaque")[0].entry.id, "advanced.windowTranslucency");
+  assert.equal(setting("advanced.windowTranslucency").pane, "advanced");
+});
+
+test("the existing settings snapshot measures translucency choices and their default", () => {
+  for (const enabled of [false, true]) {
+    const snapshot = settingsSnapshot({ ...DEFAULT_SETTINGS, windowTranslucency: enabled });
+    assert.equal(snapshot.setting_windowTranslucency, String(enabled));
+    assert.equal(snapshot.default_windowTranslucency, "true");
+  }
 });
 
 test("disabling window translucency preserves cached preset and custom colours and blur amounts", () => {
@@ -81,6 +90,25 @@ test("open regular, private and little windows react to the global setting witho
     views.forEach((view, index) => assert.equal(view.value, before[index]));
   } finally {
     views.forEach((view) => view.unmount());
+  }
+});
+
+test("window translucency preserves the saved text adaptation choice in the window scope", () => {
+  S().hydrate({ settings: {} });
+  const window = S().createWindow({});
+  S().setProfileLook(S().windows[window].profileId, { color: custom.color, theme: custom.theme });
+  const view = mount(() => useScopedLook(scopedTheme), { contexts: [[WindowContext, window]] });
+  try {
+    for (const adaptTextToColor of [false, true]) {
+      S().updateSettings({ adaptTextToColor, windowTranslucency: true });
+      const normal = view.value;
+      assert.equal(normal.adaptiveInk, adaptTextToColor);
+      S().updateSettings({ windowTranslucency: false });
+      assert.equal(view.value.adaptiveInk, adaptTextToColor);
+      assert.deepEqual(view.value, { ...normal, backdrop: { ...normal.backdrop, backgroundBlurEnabled: false } });
+    }
+  } finally {
+    view.unmount();
   }
 });
 

@@ -2,17 +2,18 @@ import { memo, useEffect, useState } from "react";
 import { Pressable, View } from "react-native";
 import { webviews } from "../../state/tabs/webviewHandles";
 import { useTab } from "../../state/browser/hooks";
-import { Box, Button, PANEL, Popover, space, Text, usePopoverPresence } from "../ui";
+import { Box, Button, PANEL, Popover, space, Text } from "../ui";
 import { usePages } from "../../state/tabs/pageState";
 import { hoverZoomPopover, toggleZoomPopover, useIsZoomBubble } from "../../state/site/zoomBubble";
 import { closedByThisPress, dismissPopoverByPress } from "../../state/tabs/popoverDismiss";
 import { markHoverProps } from "../../lib/hoverMarks";
 import { type ToolbarPalette } from "../ui/toolbarColors";
+import { useShortcutHint, withShortcut } from "../../state/commands/commandShortcuts";
 
-export const ZoomIndicator = memo(function ZoomIndicator({ tabId, zoom, palette, onFocus }: { tabId: string; zoom: number; palette: ToolbarPalette; onFocus: () => void }) {
+export const ZoomIndicator = memo(function ZoomIndicator({ tabId, zoom, palette, onFocus, quiet = false }: { tabId: string; zoom: number; palette: ToolbarPalette; onFocus: () => void; quiet?: boolean }) {
   const open = usePages((p) => p.popover[tabId] === "zoom");
   const actualSize = Math.abs(zoom - 1) < 0.001;
-  if (actualSize && !open) return null;
+  if ((actualSize || quiet) && !open) return null;
   return (
     <Button variant="icon" toolbar
       look="field"
@@ -30,14 +31,9 @@ export const ZoomIndicator = memo(function ZoomIndicator({ tabId, zoom, palette,
 
 export const ZOOM_POPOVER_WIDTH = 236;
 
-type ZoomPopoverPlace = { tabId: string; right?: number; left?: number; top: number };
+export type SitePanelPlace = { tabId: string; right?: number; left?: number; top: number };
 
-export function ZoomPopover({ open, ...place }: ZoomPopoverPlace & { open: boolean }) {
-  const presence = usePopoverPresence(open);
-  return presence.shown ? <ZoomPanel {...place} closing={presence.closing} onClosed={presence.onClosed} /> : null;
-}
-
-function ZoomPanel({ tabId, right, left, top, closing, onClosed }: ZoomPopoverPlace & { closing: boolean; onClosed: () => void }) {
+export function ZoomPanel({ tabId, right, left, top, closing, onClosed }: SitePanelPlace & { closing: boolean; onClosed: () => void }) {
   const zoom = useTab(tabId)?.zoom ?? 1;
   const bubble = useIsZoomBubble(tabId);
   const [hoverProps] = useState(() => markHoverProps({ onMouseEnter: () => hoverZoomPopover(tabId, true), onMouseLeave: () => hoverZoomPopover(tabId, false) }));
@@ -57,9 +53,11 @@ const ZOOM_BAR = 48;
 const TABULAR_FILL = { flex: 1, fontVariant: ["tabular-nums" as const] };
 
 export function ZoomStepper({ tabId, zoom, percent = true }: { tabId: string; zoom: number; percent?: boolean }) {
+  const zoomOutHint = useShortcutHint("zoomOut");
+  const zoomInHint = useShortcutHint("zoomIn");
   return (
     <Box row gap={percent ? "xxs" : "xs"} style={CENTER_ROW}>
-      <Button variant="stepper" icon="minus" tooltip="Zoom Out (⌘-)" onPress={() => void webviews.get(tabId)?.zoomStep(-1)} />
+      <Button variant="stepper" icon="minus" tooltip={withShortcut("Zoom Out", zoomOutHint)} onPress={() => void webviews.get(tabId)?.zoomStep(-1)} />
       {percent ? (
         <Pressable onPress={() => void webviews.get(tabId)?.zoomStep(0)} tooltip="Reset to 100%">
           <Text size="small" tone={zoom === 1 ? "textSecondary" : "textPrimary"} style={{ width: 44, textAlign: "center", fontVariant: ["tabular-nums"] }}>
@@ -67,7 +65,7 @@ export function ZoomStepper({ tabId, zoom, percent = true }: { tabId: string; zo
           </Text>
         </Pressable>
       ) : null}
-      <Button variant="stepper" icon="plus" tooltip="Zoom In (⌘+)" onPress={() => void webviews.get(tabId)?.zoomStep(1)} />
+      <Button variant="stepper" icon="plus" tooltip={withShortcut("Zoom In", zoomInHint)} onPress={() => void webviews.get(tabId)?.zoomStep(1)} />
     </Box>
   );
 }

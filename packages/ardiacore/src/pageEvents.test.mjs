@@ -18,14 +18,19 @@ const webKitTab = files(/^WebKitTab.*\.swift$/).map(native);
 const pageScript = native("page_script.js");
 const messageReceivers = ["ArdiaWebView+PageMessages.mm", "ArdiaWebView+Peek.mm"].map(native);
 
-test("the Chromium view emits every page event in PAGE_EVENTS, and nothing else", () => {
-  assert.deepEqual(sorted(collect(chromiumEmitters, /\bemit:@"([A-Za-z]+)"\s+payload:/g)), sorted(PAGE_EVENTS));
+const WEBKIT_ONLY_EVENTS = new Set(["mediaFault", "focusRestore"]);
+const WINDOWS_ENGINE_ONLY_EVENTS = new Set(["autoplayBlocked"]);
+
+test("the Chromium view emits every page event in PAGE_EVENTS except the WebKit-only and Windows-engine-only ones, and nothing else", () => {
+  const expected = [...PAGE_EVENTS].filter((name) => !WEBKIT_ONLY_EVENTS.has(name) && !WINDOWS_ENGINE_ONLY_EVENTS.has(name));
+  assert.deepEqual(sorted(collect(chromiumEmitters, /\bemit:@"([A-Za-z]+)"\s+payload:/g)), sorted(expected));
 });
 
-test("the WebKit tab emits only page events in PAGE_EVENTS", () => {
+test("the WebKit tab emits only page events in PAGE_EVENTS, and every WebKit-only event", () => {
   const emitted = collect(webKitTab, /(?<![.\w])emit\("([A-Za-z]+)"/g);
   assert.ok(emitted.size > 0);
   assert.deepEqual(sorted([...emitted].filter((name) => !PAGE_EVENTS.has(name))), []);
+  assert.deepEqual(sorted([...WEBKIT_ONLY_EVENTS].filter((name) => !emitted.has(name) || !PAGE_EVENTS.has(name))), []);
 });
 
 test("every kind the page script sends has a native receiver, and every receiver has a sender", () => {
@@ -34,8 +39,64 @@ test("every kind the page script sends has a native receiver, and every receiver
   assert.deepEqual(sorted(received), sorted(sent));
 });
 
+const popupWindow = native("ArdiaPopupWindow.mm");
+const popupReceiver = popupWindow.slice(popupWindow.indexOf("- (void)tab:(ArdiaCoreTab *)tab\n    didReceivePageMessage:"));
+const popupReceiverBody = popupReceiver.slice(0, popupReceiver.indexOf("\n}\n"));
+
+test("a popup window receives page messages and records only a protected-media refusal, by key-system family", () => {
+  assert.match(popupWindow, /- \(void\)tab:\(ArdiaCoreTab \*\)tab\s+didReceivePageMessage:\(NSString \*\)kind\s+json:\(NSString \*\)json\s+frame:\(NSString \*\)frameId\s+main:\(BOOL\)main\s+origin:\(NSString \*\)verifiedOrigin \{/);
+  assert.match(popupReceiverBody, /if \(!\[kind isEqualToString:@"drm"\]\) return;/);
+  assert.deepEqual(sorted(collect([popupReceiverBody], /kind isEqualToString:@"([A-Za-z]+)"/g)), ["drm"]);
+  assert.match(popupReceiverBody, /\[ArdiaEvents emit:@"engine\.popupProtectedMedia" data:\[ArdiaConsentStamp\.begin onto:@\{@"family" : family, @"listed" : @\(OnProtectedVideoSite\(tab\.url\)\)\}\]\]/);
+});
+
+test("the popup's log line names the key-system family and nothing else, and nothing is forwarded", () => {
+  const logs = [...popupReceiverBody.matchAll(/NSLog\(([^;]*)\);/g)].map((m) => m[1]);
+  assert.deepEqual(logs, ['@"[ardiacore] popup protected media %@: %@", [family isEqualToString:@"none"] ? @"stalled" : @"refused", family']);
+  assert.deepEqual(popupReceiverBody.match(/tab\.url/g), ["tab.url"]);
+  assert.doesNotMatch(popupReceiverBody, /title|HostOf|promptHost|_opener|@selector/);
+  assert.doesNotMatch(popupReceiverBody, /(?<!\(NSString \*\))\b(verifiedOrigin|frameId)\b/);
+  assert.doesNotMatch(popupReceiverBody, /@catch|@try/);
+});
+
+test("the popup's key-system families are the ones the page script sends `drm` for", () => {
+  const scripted = pageScript.match(/const protectedSystem = \/\^com\\\.\(([^)]*)\)\//)?.[1].split("|");
+  assert.deepEqual(scripted, ["widevine\\.alpha", "microsoft\\.playready", "apple\\.fps"]);
+  const families = Object.fromEntries([...popupWindow.matchAll(/hasPrefix:@"([^"]+)"\]\) return @"([a-z]+)";/g)].map((m) => [m[1], m[2]]));
+  assert.deepEqual(families, { "com.widevine.alpha": "widevine", "com.microsoft.playready": "playready", "com.apple.fps": "fairplay" });
+  assert.match(popupWindow, /return @"other";/);
+  assert.match(popupWindow, /if \(!keySystem\.length\) return @"none";/);
+});
+
+test("the popup's streaming-site list is PROTECTED_VIDEO_SITES, https only, subdomains included", () => {
+  const engines = readFileSync(new URL("../../../apps/browser/src/state/engines/engines.ts", import.meta.url), "utf8");
+  const sites = engines.slice(engines.indexOf("export const PROTECTED_VIDEO_SITES"), engines.indexOf("];", engines.indexOf("export const PROTECTED_VIDEO_SITES")));
+  const listed = [...sites.matchAll(/^ {2}"([a-z0-9.]+)",$/gm)].map((m) => m[1]);
+  assert.ok(listed.length > 0);
+  const nativeList = popupWindow.slice(popupWindow.indexOf("BOOL OnProtectedVideoSite"), popupWindow.indexOf("return NO;\n}", popupWindow.indexOf("BOOL OnProtectedVideoSite")));
+  assert.deepEqual(sorted(collect([nativeList.slice(nativeList.indexOf("@["), nativeList.indexOf("];"))], /@"([a-z0-9.]+)"/g)), sorted(listed));
+  assert.match(nativeList, /scheme\.lowercaseString isEqualToString:@"https"/);
+  assert.match(nativeList, /\[host isEqualToString:domain\] \|\| \[host hasSuffix:\[@"\." stringByAppendingString:domain\]\]/);
+});
+
 test("every kind native sends into a frame has a page-script handler, and every handler has a sender", () => {
   const called = collect(chromiumView, /kind:@"([A-Za-z]+)"/g);
   const handled = collect([pageScript], /\bhandlers\.([A-Za-z]+) =/g);
   assert.deepEqual(sorted(handled), sorted(called));
+});
+
+test("a Picture in Picture pinch reaches its handler with whether the window was unfocused and whether another app was in front", async () => {
+  const { deliverPageEvent } = await import("./pageEvents.ts");
+  const seen = [];
+  const props = { onPictureInPictureStandIn: (standIn) => seen.push(standIn) };
+  deliverPageEvent(props, { name: "pictureInPictureStandIn", data: { pinch: true, timedOut: false, unfocused: true, fromOtherApp: true, epoch: "e1" } });
+  deliverPageEvent(props, { name: "pictureInPictureStandIn", data: { pinch: true, timedOut: true, unfocused: false, fromOtherApp: false, epoch: "e2" } });
+  deliverPageEvent(props, { name: "pictureInPictureStandIn", data: { pinch: false, timedOut: true, epoch: "e3" } });
+  deliverPageEvent(props, { name: "pictureInPictureStandIn", data: { pinch: "yes", timedOut: 0, unfocused: "1", fromOtherApp: null, epoch: "e4", extra: "dropped" } });
+  assert.deepEqual(seen, [
+    { pinch: true, timedOut: false, unfocused: true, fromOtherApp: true, epoch: "e1" },
+    { pinch: true, timedOut: true, unfocused: false, fromOtherApp: false, epoch: "e2" },
+    { pinch: false, timedOut: true, unfocused: false, fromOtherApp: false, epoch: "e3" },
+    { pinch: true, timedOut: false, unfocused: true, fromOtherApp: false, epoch: "e4" },
+  ]);
 });

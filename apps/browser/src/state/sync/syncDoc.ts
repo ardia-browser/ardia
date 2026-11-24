@@ -1,17 +1,19 @@
-import type { ScopeState } from "../../platform/sync";
+import type { HLC, ScopeState } from "../../platform/sync";
 import type { Profile } from "../browser/types";
 import { unchanged, type Migrations } from "../../lib/savedDocument";
 import type { DeviceKind, SendRecord } from "./records";
 import type { SendLedger } from "./sentTabsAdapter";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
+import { PLATFORM_TERMS } from "../../lib/platformTerms";
 
 type SyncTypeSpec = { title: string; description: string; profileData?: true };
 
 const SYNC_TYPES = {
   bookmarks: { title: "Bookmarks", description: "Each synced profile’s bookmarks bar and other bookmarks.", profileData: true },
   history: { title: "History", description: "The last 90 days.", profileData: true },
-  tabs: { title: "Open Tabs", description: "Your other devices’ tabs show in the tab overflow menu." },
+  tabs: { title: "Open Tabs", description: "Your other devices’ tabs in the tab overflow menu. All Open Tabs needs it on." },
   pinned: { title: "Pinned Tabs and Groups", description: "Pinned tabs and pinned tab groups." },
-  passwords: { title: "Passwords", description: "Saved passwords. Turning sync off never removes them from this Mac.", profileData: true },
+  passwords: { title: "Passwords", description: `Saved passwords. Turning sync off never removes them from this ${PLATFORM_TERMS.computer}.`, profileData: true },
   extensions: {
     title: "Extensions",
     description: "Extensions from the Chrome Web Store, whether they’re on, and whether they’re pinned.",
@@ -25,16 +27,21 @@ export type DataType = keyof typeof SYNC_TYPES;
 const SPECS: Readonly<Record<DataType, SyncTypeSpec>> = SYNC_TYPES;
 const TYPE_IDS = Object.keys(SYNC_TYPES) as DataType[];
 
-export const DATA_TYPES = TYPE_IDS.map((id) => ({ id, title: SPECS[id].title, description: SPECS[id].description }));
+const offered = (id: DataType) => id !== "passwords" || PLATFORM_FEATURES.syncsPasswords;
+
+export const SYNCED_KINDS = `bookmarks, history, open tabs, pinned tabs, groups, ${PLATFORM_FEATURES.syncsPasswords ? "passwords, " : ""}extensions and settings`;
+
+export const DATA_TYPES = TYPE_IDS.filter(offered).map((id) => ({ id, title: SPECS[id].title, description: SPECS[id].description }));
 
 export const typeSyncedFor = (types: Record<DataType, boolean>, type: DataType, ownsData: boolean) =>
-  types[type] && (ownsData || !SPECS[type].profileData);
+  offered(type) && types[type] && (ownsData || !SPECS[type].profileData);
 
 export type ProfileLink = {
   syncId: string;
   enabled: boolean;
   retire?: boolean;
   themeAdopting?: true;
+  tabsRetire?: true;
 };
 
 export type SyncDoc = {
@@ -51,7 +58,12 @@ export type SyncDoc = {
   joining: boolean;
   seqs?: Record<string, number>;
   sends?: Record<string, SendLedger>;
+  tabCloses?: Record<string, string[]>;
+  removing?: string[] | Record<string, ProfileRemoval>;
+  removingDevices?: string[] | Record<string, HLC>;
 };
+
+export type ProfileRemoval = { keys: Record<string, HLC>; returned?: boolean };
 
 export const DOC = "sync.json";
 export const DOC_VERSION = 1;
@@ -78,11 +90,11 @@ export const emptyDoc = (): SyncDoc => ({
 
 export type SyncStatus = "off" | "starting" | "updating" | "updated" | "stalled" | "offline" | "locked" | "reset" | "unavailable";
 
-export type SyncedDevice = { id: string; name: string; kind: DeviceKind; receivesTabs: boolean; lastSeen: number | null; current: boolean };
+export type SyncedDevice = { id: string; name: string; kind: DeviceKind; receivesTabs: boolean; lastSeen: number | null; current: boolean; version?: string; os?: string };
 export type RemoteTabs = { deviceId: string; name: string; kind: DeviceKind; tabs: { url: string; title: string }[] };
 export type SendTarget = { id: string; name: string; kind: DeviceKind };
 export type ReceivedTab = { windowId: string; tabId: string; send: SendRecord; from: { name: string; kind: DeviceKind } };
-export type RemoteProfile = { syncId: string; name: string; color: Profile["color"]; icon: string | null; sharesWith?: { name: string; added: boolean }; waiting?: true };
+export type RemoteProfile = { syncId: string; name: string; color: Profile["color"]; icon: string | null; sharesWith?: { name: string; added: boolean }; waiting?: true; sharedByOthers?: true };
 
 export type SyncUi = {
   status: SyncStatus;
@@ -98,3 +110,18 @@ export type SyncUi = {
   remoteTabs: Record<string, RemoteTabs[]>;
   remoteProfiles: RemoteProfile[];
 };
+
+export const emptyUi = (status: SyncStatus): SyncUi => ({
+  status,
+  enabled: false,
+  joining: false,
+  folder: null,
+  types: defaultTypes(),
+  profiles: {},
+  lastSyncedAt: null,
+  error: null,
+  pending: 0,
+  devices: [],
+  remoteTabs: {},
+  remoteProfiles: [],
+});

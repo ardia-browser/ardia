@@ -63,6 +63,44 @@ class FormatTests(ImportFixture):
         self.assertEqual(other['role'], 'other')
         self.assertEqual(other['children'], [{'type': 'url', 'title': 'https://four.example/', 'url': 'https://four.example/'}])
 
+    def test_headingless_nested_bookmark_html_list_has_list_role(self):
+        html = self.root / 'bookmarks.html'
+        html.write_text('''<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<DL><p>
+    <DT><DL><p>
+        <DT><A HREF="https://example.org/one">Headingless link</A>
+    </DL><p>
+    <DT><H3>Named folder</H3>
+    <DL><p>
+        <DT><A HREF="https://example.org/two">Named link</A>
+    </DL><p>
+    <DT><H3></H3>
+    <DL><p>
+        <DT><A HREF="https://example.org/three">Blank heading link</A>
+    </DL><p>
+</DL><p>
+''')
+        parsed = self.json('html', html)
+        self.assertEqual(parsed['error'], '')
+        self.assertEqual(parsed['links'], 3)
+        self.assertEqual(parsed['counted'], 3)
+        root = parsed['root']
+        self.assertEqual(root['title'], 'Bookmarks')
+        self.assertNotIn('role', root)
+        headingless, named, blank_heading = root['children']
+        self.assertEqual(named, {
+            'type': 'folder', 'title': 'Named folder',
+            'children': [{'type': 'url', 'title': 'Named link', 'url': 'https://example.org/two'}],
+        })
+        self.assertEqual(blank_heading, {
+            'type': 'folder', 'title': '',
+            'children': [{'type': 'url', 'title': 'Blank heading link', 'url': 'https://example.org/three'}],
+        })
+        self.assertEqual(headingless, {
+            'type': 'folder', 'title': '', 'role': 'list',
+            'children': [{'type': 'url', 'title': 'Headingless link', 'url': 'https://example.org/one'}],
+        })
+
     def test_password_csv_variants_counts_and_deduplication(self):
         chrome = self.root / 'chrome.csv'
         chrome.write_bytes('﻿name,url,username,password,note\r\n'

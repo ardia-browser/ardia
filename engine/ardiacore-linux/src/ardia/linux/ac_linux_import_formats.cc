@@ -465,7 +465,9 @@ BookmarksParse ParseNetscapeBookmarks(std::string_view bytes) {
       } else if (!saw_root_list) {
         saw_root_list = true;
       } else {
-        open_folder(Node());
+        Node list;
+        list.role = "list";
+        open_folder(std::move(list));
       }
     } else if (tag->closing && tag->name == "dl") {
       if (pending) {

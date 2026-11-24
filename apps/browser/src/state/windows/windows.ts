@@ -29,6 +29,7 @@ import { withWindowFrame, withWindowMaximized } from "./windowPlacement";
 import { withFullScreen } from "./fullScreenDisplay";
 import { newTabHome } from "../tabs/newTabHome";
 import { noteAutoHideTabsChosen, noteTornOffWindowKeptAutoHide } from "../telemetry/autoHideTabsChoices";
+import { noteRememberedTabGone } from "../telemetry/windowPlacementCounts";
 import { lastClosedEntry, lastClosedTab, restoreTab, restoreWindow, withoutRecentlyClosed } from "./reopenClosed";
 import { noteRecentlyClosedCleared } from "../telemetry/recentlyClosedCounts";
 import { groupTree, regrouped, splitsWithin, withSplitsBack } from "./groupMoves";
@@ -257,6 +258,7 @@ export const createWindowsSlice: StateCreator<BrowserState, [], [], WindowsSlice
     if (!w || w.kind === "private" || isSmallWindow(w) || !s.profiles[profileId] || w.profileId === profileId) return;
     s = adoptParkedPins(s, windowId, profileId);
     const remembered = w.activeTabIds[profileId];
+    if (remembered && !s.tabs[remembered]) noteRememberedTabGone();
     let target = remembered && s.tabs[remembered]?.windowId === windowId ? remembered : undefined;
     target ??= s.windows[windowId]!.tabIds.find((id) => s.tabs[id]?.profileId === profileId && !isAsleep(s.tabs[id]));
     if (!target) [s, target] = withNewTab(s, windowId, { profileId, background: true });

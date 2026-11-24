@@ -11,6 +11,7 @@ let closePinIdsRenewed = 0;
 let dragLoops = 0;
 let nativeDrags = 0;
 let dragTakeovers = 0;
+let rememberedTabsGone = 0;
 const NO_LINUX_COUNTS = {
   linux_windows_app_decorated: 0,
   linux_windows_compositor_decorated: 0,
@@ -42,6 +43,7 @@ onAppEvent((e) => {
 });
 
 export const noteWindowReopenedMaximized = () => void (isSharing() && reopenedMaximized++);
+export const noteRememberedTabGone = () => void (isSharing() && rememberedTabsGone++);
 export function noteWindowClosePinsKept(n: number, renewed: number) {
   closePinsKept += n;
   closePinIdsRenewed += renewed;
@@ -56,7 +58,7 @@ export function noteLinuxWindowDecorations(decoratedBy: unknown, answer: unknown
 export const noteLinuxPageViewportRejected = (consent: ConsentToken | null) => counted(consent, () => void linuxCounts.linux_page_viewports_rejected++);
 
 export function takeWindowPlacementCounts() {
-  const taken = { window_centered_resizes: centeredResizes, windows_reopened_maximized: reopenedMaximized, window_titles_read: titlesRead, window_drag_loops: dragLoops, window_drags_native: nativeDrags, window_drag_takeovers: dragTakeovers, window_close_pins_kept: closePinsKept, window_close_pin_ids_renewed: closePinIdsRenewed, ...linuxCounts };
+  const taken = { window_centered_resizes: centeredResizes, windows_reopened_maximized: reopenedMaximized, window_titles_read: titlesRead, window_drag_loops: dragLoops, window_drags_native: nativeDrags, window_drag_takeovers: dragTakeovers, window_close_pins_kept: closePinsKept, window_close_pin_ids_renewed: closePinIdsRenewed, window_remembered_tabs_gone: rememberedTabsGone, ...linuxCounts };
   linuxCounts = { ...NO_LINUX_COUNTS };
   centeredResizes = 0;
   reopenedMaximized = 0;
@@ -66,5 +68,6 @@ export function takeWindowPlacementCounts() {
   dragTakeovers = 0;
   closePinsKept = 0;
   closePinIdsRenewed = 0;
+  rememberedTabsGone = 0;
   return taken;
 }

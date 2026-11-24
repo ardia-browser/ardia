@@ -302,7 +302,10 @@ export function conform(s: BrowserState, windowId: string, profileId: string, sp
       ids = placeBlock(ids, ids.filter((id) => splitTabIds(x).includes(id)));
     }
   }
-  const window = { ...w, tabIds: orderSections(ids, tabs, groups) };
+  const remembered = Object.entries(w.activeTabIds);
+  const left = remembered.filter(([, id]) => !gone.includes(id));
+  const activeTabIds = left.length === remembered.length ? w.activeTabIds : Object.fromEntries(left);
+  const window = { ...w, tabIds: orderSections(ids, tabs, groups), activeTabIds };
   groups = syncGroupOrder(groups, window);
   const next: BrowserState = { ...s, tabs, groups, splits, windows: { ...s.windows, [windowId]: window } };
   return gone.length ? removeTabs(next, gone, false) : next;

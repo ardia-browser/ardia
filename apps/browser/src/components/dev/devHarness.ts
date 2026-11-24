@@ -184,6 +184,9 @@ export function startDevHarness() {
     get vaultFixtures(): typeof import("./vaultFixtures") {
       return require("./vaultFixtures");
     },
+    get vaultPerf(): typeof import("./vaultPerf") {
+      return require("./vaultPerf");
+    },
     get vaultStore(): typeof import("../../state/vaults/store") {
       return require("../../state/vaults/store");
     },

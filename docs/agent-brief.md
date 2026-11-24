@@ -333,6 +333,7 @@ The only variables the app and engine read, through `ArdiaLaunchConfig` (`packag
 | | `reauth=granted` | Grants macOS re-auth requests in background mode (otherwise refused) |
 | | `touchID=granted` | The fill menu's fingerprint acts as if touched a moment after it arms (background mode only) |
 | | `vaultCloudDirectory=<dir>` · `vaultSyncedKey=<file>` | Ardia's iCloud backup goes to this folder instead of iCloud Drive · the backup's synced key is read from and written to this file instead of iCloud Keychain (`docs/password-managers.md`) |
+| | `vaultFakeItems=<n>` | A fake password manager, Big Vault (`VaultFakeProvider.swift`), with `n` generated logins; put any executable named `bigvault` in `<data dir>/Password Managers/bin`, then `ArdiaVaults.signIn("bigvault", "{}")`. For measuring Settings and the fill menu with a huge vault (`ac.vaultPerf` in the dev harness) |
 | | `bluetoothChooser` · `mediaRouteProvider` · `externalProtocolNoLaunch` · `systemMediaPermission=denied\|ask\|ask-slow` | Engine fakes: Bluetooth chooser events, a test Cast sink, external protocols recorded instead of opened, camera and microphone permission |
 | | `externalProtocolApp=<app path>` | With `externalProtocolNoLaunch`, the app that answers for a link no installed app opens (an `obsidian://` link without Obsidian), so its prompt and recorded launch can be tested |
 | | `applyProfileGate` | Applies the real-profile switch gate on the mock keychain too |

@@ -13,6 +13,7 @@ public class VaultsModule: Module {
       self.quitObserver = NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: nil) { _ in
         VaultCommand.haltAll()
       }
+      VaultFakeProvider.installIfAsked()
       VaultAutoLock.shared.start()
       DispatchQueue.main.async { MainActor.assumeIsolated { VaultClipboard.clearLeftover() } }
       Task { await VaultBroker.shared.resumeAfterQuit() }

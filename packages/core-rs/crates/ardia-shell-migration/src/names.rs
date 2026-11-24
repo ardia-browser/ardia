@@ -14,12 +14,14 @@ const DOCUMENT_NAME_LIMIT: usize = 200;
 const ACCOUNT_LIMIT: usize = 64;
 const SECRET_ACCOUNT_LIMIT: usize = 120;
 
-const RNW_SCRATCH_FILES: [&str; 5] = [
+const RNW_SCRATCH_FILES: [&str; 7] = [
     "dialog.json",
     "menu.json",
     "activation.log",
     "file-chooser.txt",
     "Ardia.png",
+    "launch-guard.json",
+    "launch-starts.txt",
 ];
 
 const RNW_FOLDERS: [&str; 11] = [

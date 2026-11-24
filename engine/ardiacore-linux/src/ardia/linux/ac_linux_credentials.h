@@ -151,7 +151,7 @@ inline constexpr size_t kMaxProfileBytes = 256;
 Plan PlanCall(std::string_view name, const Arg& input);
 Plan PlanInvoke(std::string_view method, const std::vector<Arg>& values);
 Plan PlanWindowInvoke(bool private_window, std::string_view method, const std::vector<Arg>& values);
-Plan PlanExport(std::string_view path);
+Plan PlanExport(std::string_view path, char separator = '/');
 
 Plan PlanSyncedLogin(std::string_view profile, std::string_view origin, std::string_view username,
                      std::string_view password, bool replacing);

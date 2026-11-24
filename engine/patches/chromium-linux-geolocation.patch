@@ -1,10 +1,10 @@
 --- a/chrome/browser/chrome_content_browser_client.h
 +++ b/chrome/browser/chrome_content_browser_client.h
-@@ -460,6 +460,11 @@
+@@ -464,6 +464,11 @@
    GetGeolocationSystemPermissionManager() override;
  #endif
  
-+#if BUILDFLAG(IS_LINUX)
++#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
 +  std::unique_ptr<device::LocationProvider> OverrideSystemLocationProvider()
 +      override;
 +#endif
@@ -14,7 +14,7 @@
  #endif
 --- a/chrome/browser/chrome_content_browser_client.cc
 +++ b/chrome/browser/chrome_content_browser_client.cc
-@@ -426,6 +426,7 @@
+@@ -430,6 +430,7 @@
  #include "sandbox/policy/features.h"
  #include "sandbox/policy/mojom/sandbox.mojom.h"
  #include "sandbox/policy/switches.h"
@@ -22,27 +22,30 @@
  #include "services/metrics/public/cpp/ukm_source_id.h"
  #include "services/network/public/cpp/features.h"
  #include "services/network/public/cpp/is_potentially_trustworthy.h"
-@@ -864,6 +865,8 @@
+@@ -855,6 +856,11 @@
+ using plugins::ChromeContentBrowserClientPluginsPart;
  #endif
  
- #if BUILDFLAG(IS_LINUX)
++#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
 +extern std::unique_ptr<device::LocationProvider> (*g_ardia_linux_location_provider)();
 +std::unique_ptr<device::LocationProvider> (*g_ardia_linux_location_provider)() = nullptr;
- extern bool (*g_ardia_linux_autoplay_blocked)(content::WebContents* contents);
- bool (*g_ardia_linux_autoplay_blocked)(content::WebContents* contents) = nullptr;
++#endif
++
+ #if !BUILDFLAG(IS_ANDROID)
+ using web_app::ChromeContentBrowserClientIsolatedWebAppsPart;
  #endif
-@@ -3911,6 +3914,14 @@
- }
- #endif
- 
-+#if BUILDFLAG(IS_LINUX)
+@@ -3931,6 +3937,14 @@
+ device::GeolocationSystemPermissionManager*
+ ChromeContentBrowserClient::GetGeolocationSystemPermissionManager() {
+   return device::GeolocationSystemPermissionManager::GetInstance();
++}
++#endif
++
++#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
 +std::unique_ptr<device::LocationProvider>
 +ChromeContentBrowserClient::OverrideSystemLocationProvider() {
 +  return g_ardia_linux_location_provider ? g_ardia_linux_location_provider()
 +                                         : nullptr;
-+}
-+#endif
-+
- #if BUILDFLAG(IS_ANDROID)
- bool ChromeContentBrowserClient::ShouldUseGmsCoreGeolocationProvider() {
-   // Indicate that Chrome uses the GMS core location provider.
+ }
+ #endif
+ 

@@ -1,0 +1,14 @@
+assert(is_win)
+
+source_set("close_hooks") {
+  sources = [
+    "ac_linux_close_hooks.cc",
+    "ac_linux_close_hooks.h",
+  ]
+  deps = [ "//base" ]
+}
+
+source_set("content_hooks") {
+  sources = [ "ac_linux_content_hooks.h" ]
+  deps = [ "//content/public/browser" ]
+}

@@ -25,7 +25,7 @@ const DURATION_CAP_MS = 3_600_000;
 const RUN = /^[0-9a-f]{32}$/;
 
 type CountName = (typeof COUNTS)[number];
-export type ShellMigrationProperties = { outcome: string; failed_stage?: string; attempt: number; duration_ms: number } & { [K in CountName]: number };
+export type ShellMigrationProperties = { outcome: string; failed_stage?: string; prior_failed_stage?: string; attempt: number; duration_ms: number } & { [K in CountName]: number };
 export type ShellMigrationReport = { run: string; properties: ShellMigrationProperties };
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -44,12 +44,13 @@ function parsed(text: string | null): unknown {
 export function shellMigrationReport(text: string | null): ShellMigrationReport | null {
   const report = parsed(text);
   if (!isObject(report) || report.version !== 1) return null;
-  const { run, outcome, failed_stage: stage } = report;
+  const { run, outcome, failed_stage: stage, prior_failed_stage: priorStage } = report;
   if (typeof run !== "string" || !RUN.test(run) || typeof outcome !== "string" || !OUTCOMES.has(outcome)) return null;
   const counts = isObject(report.counts) ? report.counts : {};
   const properties = {
     outcome,
     ...(typeof stage === "string" && STAGES.has(stage) && { failed_stage: stage }),
+    ...(typeof priorStage === "string" && STAGES.has(priorStage) && { prior_failed_stage: priorStage }),
     attempt: Math.max(1, count(report.attempt, COUNT_CAP)),
     duration_ms: count(report.duration_ms, DURATION_CAP_MS),
     ...Object.fromEntries(COUNTS.map((name) => [name, count(counts[name], COUNT_CAP)])),

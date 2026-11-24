@@ -8,6 +8,7 @@ source_set("policies") {
     "ac_desktop_idle_policy.h",
     "ac_desktop_page_keys.h",
     "ac_desktop_page_swipe.h",
+    "ac_desktop_paths.h",
     "ac_desktop_policy.h",
     "ac_desktop_search_engine_policy.h",
     "ac_desktop_status_geometry.h",

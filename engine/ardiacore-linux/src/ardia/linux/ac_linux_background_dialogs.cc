@@ -3,6 +3,7 @@
 #include <memory>
 #include <utility>
 
+#include "ardia/desktop/ac_desktop_paths.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/functional/bind.h"
@@ -71,7 +72,7 @@ class BackgroundFileDialog : public ui::SelectFileDialog {
     base::FilePath directory;
     base::PathService::Get(chrome::DIR_USER_DATA, &directory);
     LOG(WARNING) << "[ardiacore] " << DialogKind(type) << " file dialog (background run, not shown): \""
-                 << base::UTF16ToUTF8(title) << "\" at " << default_path.value();
+                 << base::UTF16ToUTF8(title) << "\" at " << ardia::desktop_paths::Text(default_path);
     base::ThreadPool::PostTaskAndReplyWithResult(
         FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_BLOCKING},
         base::BindOnce(&TakeFileChooserPicks, directory),
@@ -86,10 +87,10 @@ class BackgroundFileDialog : public ui::SelectFileDialog {
     if (picks.empty()) return listener_->FileSelectionCanceled();
     if (type == SELECT_OPEN_MULTI_FILE) {
       std::vector<ui::SelectedFileInfo> files;
-      for (const std::string& pick : picks) files.emplace_back(base::FilePath(pick));
+      for (const std::string& pick : picks) files.emplace_back(ardia::desktop_paths::FromText<base::FilePath>(pick));
       return listener_->MultiFilesSelected(files);
     }
-    listener_->FileSelected(ui::SelectedFileInfo(base::FilePath(picks.front())), 0);
+    listener_->FileSelected(ui::SelectedFileInfo(ardia::desktop_paths::FromText<base::FilePath>(picks.front())), 0);
   }
 
   bool HasMultipleFileTypeChoicesImpl() override { return false; }

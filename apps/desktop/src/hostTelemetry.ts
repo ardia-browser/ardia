@@ -13,6 +13,7 @@ import { setTelemetryHost } from "../../browser/src/state/telemetry/transport";
 import { emitWindowUsage, sessionEnding } from "../../browser/src/state/telemetry/usage";
 import { documentSaved } from "../../browser/src/platform/documents";
 import { withDeadline } from "../../browser/src/lib/deadline";
+import { PLATFORM_IDS, PLATFORM_TERMS } from "../../browser/src/lib/platformTerms";
 import { refreshDocument } from "./shims/shellBase";
 import { hostSupports, invokeHost, type ArdiaHost } from "./host.ts";
 import { startTelemetryLeadership, TELEMETRY_CHANNEL, type LeaderChannel, type LeaderLocks, type TelemetryLeadership, type TelemetryOp } from "./telemetryLeader.ts";
@@ -118,7 +119,7 @@ const relayedConsent = (consent: unknown) => (typeof consent === "string" && con
 export function startHostTelemetry(options: { host: ArdiaHost; candidate: boolean; locks?: LeaderLocks; channel?: LeaderChannel | null }) {
   const { host, candidate } = options;
   setTelemetrySettle({ settle: settleHostTelemetry, reopen: reopenHostTelemetry });
-  setTelemetryHost({ os: "Linux", osType: "linux", send: hostSupports(TELEMETRY_POST, host) ? hostTelemetrySend(host) : null });
+  setTelemetryHost({ os: PLATFORM_TERMS.os, osType: PLATFORM_IDS.otel, send: hostSupports(TELEMETRY_POST, host) ? hostTelemetrySend(host) : null });
   loadChoice();
   installErrorReporting();
   watchUncaughtErrors(globalThis);

@@ -76,6 +76,7 @@ import { linuxWindowMenu } from "./linuxWindowMenu";
 import { TrafficLights } from "./TrafficLights";
 import { startWindowButtonStyle } from "../../browser/src/state/windows/windowButtons";
 import { followButtonLayout } from "@platform/buttonLayout";
+import { followMaximizeButtonState } from "./maximizeButtonState";
 import { followWindowMaximized } from "./windowMaximized";
 import { createUtilitySessionSnapshot, initialLinuxLaunch, isLinuxUtility, setSessionDeparture, setSessionFlush } from "./session";
 import { noteRestoredWindows } from "../../browser/src/state/sidebar/launchRows";
@@ -126,6 +127,7 @@ async function start() {
   followButtonLayout(ardiaHost);
   startWindowButtonStyle();
   followWindowMaximized(ardiaHost, windowId);
+  followMaximizeButtonState(ardiaHost, windowId);
   startConfigFiles(colorRoles, launch);
   startHostTelemetry({ host: ardiaHost, candidate: !utility, locks: navigator.locks as unknown as LeaderLocks });
   countLoginPasswordChecks(linuxTelemetryHooks.leading);

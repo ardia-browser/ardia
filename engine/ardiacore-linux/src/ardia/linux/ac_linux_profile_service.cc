@@ -5,6 +5,7 @@
 #include <memory>
 #include <utility>
 
+#include "ardia/desktop/ac_desktop_paths.h"
 #include "base/check.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
@@ -237,7 +238,7 @@ std::optional<std::string> LinuxProfileName(const Profile* profile) {
 std::optional<std::string> LinuxProfileNameForPath(std::string_view path) {
   ProfileManager* manager = g_browser_process ? g_browser_process->profile_manager() : nullptr;
   if (!manager || path.empty()) return std::nullopt;
-  Profile* profile = manager->GetProfileByPath(base::FilePath(path));
+  Profile* profile = manager->GetProfileByPath(ardia::desktop_paths::FromText<base::FilePath>(path));
   if (!profile || profile->IsOffTheRecord()) return std::nullopt;
   return LinuxProfileName(profile);
 }

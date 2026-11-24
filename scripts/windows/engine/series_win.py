@@ -4,24 +4,33 @@ platforms include `mac` or `win` (Windows started from the Mac's set; `linux` li
 lines are; a `layer` line it would select, untagged or naming win, is refused unless it is a layer this script runs
 itself: engine/chromium and engine/ardiacore-desktop), then those of
 scripts/windows/engine/series-win (when it exists; its patches in scripts/windows/engine/patches,
-and its `skip <patch>` lines leave a patch of engine/patches/series out), each applied strictly (git apply), else with patch's fuzz.
-A patch that fails is recorded and the rest still run. Each patch that goes in is written to .series-win-applied beside
-the tree and never applied again: a later patch on the same lines would hide it from a reverse check. Of the layers, engine/chromium runs as is (its
+its `skip <patch>` lines leave a patch of engine/patches/series out, and its `take <patch>` lines apply a `linux` line
+of engine/patches/series at its own place in that series, as a `linux,win` line would once series.py reads platform
+sets), each applied strictly (git apply), else with patch's fuzz.
+Apply stops at the first patch that fails (the rest are reported as not reached), so the patches in a tree are always the
+plan's first ones and a retry resumes in order. Each patch that goes in is written to .series-win-applied beside
+the tree (its place in the plan, name and sha256, with a copy in .series-win-applied.d) and never applied again: a later
+patch on the same lines would hide it from a reverse check. Before patching, apply checks every recorded patch against
+the plan at the same place and with the same content, and refuses a tree an earlier plan patched (rewind reverses the
+recorded copies back to where the plans part). Of the layers, engine/chromium runs as is (its
 chrome/browser/ardia gets a Windows BUILD.gn made from the shared one (its shared sources less .mm and pip/, plus the
 portable files of its Mac block named in WINDOWS_FROM_MAC_BLOCK), the fixes in
 ardia-layer-win.patch that make its sources build on Windows, and the files under src/chrome/browser/ardia in place of
 the ones that are POSIX only), engine/ardiacore
 gives the hook headers the patches include and ac_launch_switches (its Mac signature check answers no),
 engine/ardiacore-desktop/src/ardia/desktop, the host layer Linux and Windows share, is copied to //ardia/desktop as is,
-the files //ardia/win's BUILD.gn names from engine/ardiacore-linux are copied to //ardia/linux (the WebUI shell of
---ardia-shell=webui compiles them as they are; with ARDIA_LINUX_COMPILE_PROBE=1 the whole Linux layer is copied with a
-BUILD.gn made from linux-probe.gn for a compile probe, loaded only with the GN arg ardia_linux_compile_probe=true), and
+the files //ardia/win's BUILD.gn and linux-hooks.gn name from engine/ardiacore-linux are copied to //ardia/linux (the
+WebUI shell of --ardia-shell=webui compiles the first as they are; linux-hooks.gn becomes //ardia/linux's BUILD.gn,
+the hook targets the taken patches depend on; with ARDIA_LINUX_COMPILE_PROBE=1 the whole Linux layer is copied and
+linux-probe.gn's targets follow the hook targets for a compile probe, loaded only with the GN arg
+ardia_linux_compile_probe=true), and
 scripts/windows/engine/src/ardia/win (the app in the browser process, with the app's EngineApi.h and a generated table
 of the engine's ac_* calls in the sources Windows compiles) is copied to //ardia/win, only the files that changed. Writes a table: patch, result, which files it touches (Mac only, Mac and shared, OS-neutral).
 
-Usage: series_win.py apply --report TSV | layer | classify (CHROMIUM_SRC is the tree)
+Usage: series_win.py apply --report TSV | rewind | layer | classify (CHROMIUM_SRC is the tree)
 """
 import argparse
+import hashlib
 import io
 import os
 import re
@@ -42,6 +51,8 @@ LAYER_OVERLAY = os.path.join(HERE, 'src', 'chrome', 'browser', 'ardia')
 LINUX_LAYER = os.path.join(REPO, 'engine', 'ardiacore-linux', 'src', 'ardia', 'linux')
 DESKTOP_LAYER = os.path.join(REPO, 'engine', 'ardiacore-desktop', 'src', 'ardia', 'desktop')
 LINUX_PROBE_BUILD = os.path.join(HERE, 'linux-probe.gn')
+LINUX_HOOKS_BUILD = os.path.join(HERE, 'linux-hooks.gn')
+GN_SOURCE = re.compile(r'"([A-Za-z0-9_][A-Za-z0-9_./]*\.(?:cc|h))"')
 LINUX_PROBE_SKIPPED = ('BUILD.gn', 'ac_linux_desktop_platform.cc')
 LINUX_PROBE_SWITCH = 'ARDIA_LINUX_COMPILE_PROBE'
 LINUX_PROBE_OUTSIDE = ('renderer/', 'mojom/')
@@ -108,7 +119,7 @@ def selector_tags(selector):
     return tuple(names) if len(set(names)) == len(names) and all(name in ENGINES for name in names) else None
 
 
-def series_lines(text, path, tags=WINDOWS_TAGS):
+def series_lines(text, path, tags=WINDOWS_TAGS, takes=()):
     if text is None:
         return []
     out = []
@@ -129,8 +140,19 @@ def series_lines(text, path, tags=WINDOWS_TAGS):
                                  f'yet but {", ".join(WINDOWS_OWN_LAYERS)}: teach it to apply the layer, or select '
                                  'platforms without win')
             continue
-        if any(tag in tags for tag in line_tags):
+        if any(tag in tags for tag in line_tags) or fields[1] in takes:
             out.append(fields[1])
+    return out
+
+
+def shared_lines(text, path):
+    if text is None:
+        return {}
+    out = {}
+    for raw in io.StringIO(text):
+        fields = raw.split('#', 1)[0].split()
+        if len(fields) in (2, 3) and fields[0] == 'chromium':
+            out[fields[1]] = selector_tags(fields[2] if len(fields) == 3 else 'all') or ()
     return out
 
 
@@ -205,7 +227,12 @@ def desktop_layer(tree):
 
 def linux_reused():
     text = read_file(WIN_BUILD, encoding='utf-8')
-    return sorted(set(re.findall(r'"//ardia/linux/([^"]+)"', text)))
+    compiled = sorted(set(re.findall(r'"//ardia/linux/([^"]+)"', text)))
+    return compiled + [rel for rel in linux_hook_sources() if rel not in compiled]
+
+
+def linux_hook_sources():
+    return sorted(set(GN_SOURCE.findall(read_file(LINUX_HOOKS_BUILD, encoding='utf-8'))))
 
 
 def linux_probe_sources(files):
@@ -213,12 +240,17 @@ def linux_probe_sources(files):
                   if rel.endswith(('.cc', '.h')) and not rel.replace(os.sep, '/').startswith(LINUX_PROBE_OUTSIDE))
 
 
+def linux_hooks_build():
+    return read_file(LINUX_HOOKS_BUILD, encoding='utf-8')
+
+
 def linux_probe_build(files):
     template = read_file(LINUX_PROBE_BUILD, encoding='utf-8')
     if template.count('LINUX_PROBE_SOURCES') != 1:
         raise InputError(f'{os.path.relpath(LINUX_PROBE_BUILD, REPO)}: expected one LINUX_PROBE_SOURCES')
-    listed = '[\n' + ''.join(f'    "{rel}",\n' for rel in linux_probe_sources(files)) + '  ]'
-    return template.replace('LINUX_PROBE_SOURCES', listed)
+    hooks = set(linux_hook_sources())
+    listed = '[\n' + ''.join(f'    "{rel}",\n' for rel in linux_probe_sources(files) if rel not in hooks) + '  ]'
+    return linux_hooks_build() + '\n' + template.replace('LINUX_PROBE_SOURCES', listed)
 
 
 def linux_layer(tree):
@@ -236,10 +268,10 @@ def linux_layer(tree):
     changed = 0
     for rel, path in wanted.items():
         changed += copy_if_changed(path, os.path.join(target, rel))
-    if probe:
-        changed += write_if_changed(os.path.join(target, 'BUILD.gn'), linux_probe_build(wanted))
+    build = linux_probe_build(wanted) if probe else linux_hooks_build()
+    changed += write_if_changed(os.path.join(target, 'BUILD.gn'), build)
     for rel, path in files_under(target).items():
-        if rel not in wanted and not (probe and rel == 'BUILD.gn'):
+        if rel not in wanted and rel != 'BUILD.gn':
             os.remove(path)
             changed += 1
     print(f'ardia/linux: {len(wanted)} files of the Linux layer{" for the compile probe" if probe else ""}, '
@@ -685,20 +717,47 @@ def win_layer(tree):
     print(f'ardia/win: {len(wanted) + len(generated)} files, {len(names)} engine calls, {copied} changed')
 
 
-def skip_names(text):
+def directive_names(text, directive):
     if text is None:
         return set()
     return {l.split(None, 1)[1].strip() for l in (r.split('#', 1)[0].strip() for r in io.StringIO(text))
-            if l.startswith('skip ')}
+            if l.startswith(directive + ' ')}
+
+
+def skip_names(text):
+    return directive_names(text, 'skip')
+
+
+def take_names(text):
+    return directive_names(text, 'take')
 
 
 def skipped():
     return skip_names(checkout_text(SERIES_WIN_REL))
 
 
+def taken():
+    return take_names(checkout_text(SERIES_WIN_REL))
+
+
+def check_takes(series_text, series_win_text):
+    lines = shared_lines(series_text, checkout_path(SERIES_REL))
+    takes, skips = take_names(series_win_text), skip_names(series_win_text)
+    for name in sorted(takes):
+        tags = lines.get(name)
+        if tags is None:
+            raise InputError(f'{SERIES_WIN_REL}: `take {name}` names no `chromium` line of {SERIES_REL}')
+        if name in skips:
+            raise InputError(f'{SERIES_WIN_REL}: `{name}` is both taken and skipped')
+        if any(tag in WINDOWS_TAGS for tag in tags):
+            raise InputError(f'{SERIES_WIN_REL}: `take {name}` names a line Windows applies already')
+    return takes
+
+
 def plan_patches(read):
     skips = skip_names(read(SERIES_WIN_REL))
-    shared = [n for n in series_lines(read(SERIES_REL), checkout_path(SERIES_REL)) if n not in skips]
+    takes = check_takes(read(SERIES_REL), read(SERIES_WIN_REL))
+    shared = [n for n in series_lines(read(SERIES_REL), checkout_path(SERIES_REL), takes=takes) if n not in skips]
     own = series_lines(read(SERIES_WIN_REL), checkout_path(SERIES_WIN_REL))
     return [(n, f'engine/patches/{n}') for n in shared] + [(n, f'{WIN_PATCHES_REL}/{n}') for n in own]
 
@@ -711,42 +770,187 @@ def state_path(tree):
     return os.path.join(os.path.dirname(os.path.abspath(tree)), '.series-win-applied')
 
 
-def read_state(tree):
+def copies_path(tree):
+    return state_path(tree) + '.d'
+
+
+def patch_digest(path):
+    return hashlib.sha256(read_file(path, 'rb')).hexdigest()
+
+
+def read_ledger(tree):
     path = state_path(tree)
-    return set(read_file(path).split()) if os.path.isfile(path) else set()
+    if not os.path.isfile(path):
+        return []
+    entries = []
+    for line in read_file(path).splitlines():
+        fields = line.split('\t')
+        if len(fields) == 3 and fields[0].isdigit():
+            entries.append((int(fields[0]), fields[1], fields[2]))
+        elif len(fields) == 1 and fields[0]:
+            entries.append((None, fields[0], None))
+        elif line:
+            raise InputError(f'{path}: unreadable line {line!r}')
+    return entries
 
 
-def record(tree, name):
+def copy_of(tree, index, name):
+    return os.path.join(copies_path(tree), f'{index:04d}-{name}')
+
+
+def write_ledger(tree, entries):
+    with open(state_path(tree), 'w') as f:
+        f.write(''.join(f'{index}\t{name}\t{digest}\n' for index, name, digest in entries))
+
+
+def record(tree, index, name, path):
+    os.makedirs(copies_path(tree), exist_ok=True)
+    shutil.copyfile(path, copy_of(tree, index, name))
     with open(state_path(tree), 'a') as f:
-        f.write(name + '\n')
+        f.write(f'{index}\t{name}\t{patch_digest(path)}\n')
+
+
+def divergence(tree, plan):
+    entries = read_ledger(tree)
+    legacy = [entry for entry in entries if entry[0] is None]
+    if legacy and len(legacy) != len(entries):
+        return 0, 'mixes entries with and without their place in the plan'
+    if legacy:
+        for position, (_, name, _) in enumerate(entries):
+            if position >= len(plan) or plan[position][0] != name:
+                planned = plan[position][0] if position < len(plan) else 'nothing'
+                return position, f'records {name} at place {position}, where the plan applies {planned}'
+            if not applied(plan[position][1], tree):
+                return position, f'records {name} without its content, and the tree does not carry the current {name}'
+        return None
+    for position, (index, name, digest) in enumerate(entries):
+        if index != position:
+            return position, f'records {name} at place {index} after {position} recorded patches, out of order'
+        if index >= len(plan) or plan[index][0] != name:
+            planned = plan[index][0] if index < len(plan) else 'nothing'
+            return position, f'records {name} at place {index}, where the plan applies {planned}'
+        if patch_digest(plan[index][1]) != digest:
+            return position, f'records {name} with other content than the current patch'
+    return None
+
+
+def upgrade_legacy(tree, plan):
+    entries = read_ledger(tree)
+    if not entries or entries[0][0] is not None:
+        return
+    upgraded = []
+    for position, (_, name, _) in enumerate(entries):
+        os.makedirs(copies_path(tree), exist_ok=True)
+        shutil.copyfile(plan[position][1], copy_of(tree, position, name))
+        upgraded.append((position, name, patch_digest(plan[position][1])))
+    write_ledger(tree, upgraded)
+
+
+def refusal(tree, position, reason):
+    return (f'{state_path(tree)}: an earlier plan patched this tree; entry {position + 1} {reason}. Patching on top would '
+            'misapply. Run `series_win.py rewind` to reverse the recorded patches back to that point (it needs their '
+            f'copies in {copies_path(tree)}), or restore the files the series touches from a fresh 03-helium.py run and '
+            f'remove {state_path(tree)} and {copies_path(tree)}, then apply again.')
+
+
+def apply_plan(tree, plan):
+    parted = divergence(tree, plan)
+    if parted is not None:
+        raise InputError(refusal(tree, *parted))
+    upgrade_legacy(tree, plan)
+    done = len(read_ledger(tree))
+    rows, failed = [], 0
+    for index, (name, path) in enumerate(plan):
+        if index < done:
+            result, detail = 'already applied', 'recorded'
+        elif failed:
+            result, detail = 'not reached', 'a patch before it failed; apply stops there so a retry resumes in order'
+        else:
+            result, detail = apply_one(path, tree)
+            if result == 'FAILED':
+                failed = 1
+            else:
+                record(tree, index, name, path)
+        rows.append((name, result, classify(patch_files(path)), detail))
+        print(f'{result:16} {name}', flush=True)
+    return rows, failed
+
+
+def unapply(path, tree):
+    if run(['git', 'apply', '-R', '--whitespace=nowarn', path], tree).returncode == 0:
+        return True
+    return run(['patch', '-p1', '-R', '--no-backup-if-mismatch', '-s', '-f', '-i', path], tree).returncode == 0
+
+
+def rewind(tree, plan):
+    entries = read_ledger(tree)
+    parted = divergence(tree, plan)
+    keep = len(entries) if parted is None else parted[0]
+    if entries and entries[0][0] is None:
+        if keep < len(entries):
+            raise InputError(f'{state_path(tree)}: no copy of {entries[keep][1]} as it was applied (a ledger from before '
+                             'copies were kept); restore the files the series touches from a fresh 03-helium.py run and remove '
+                             f'{state_path(tree)} and {copies_path(tree)}')
+        upgrade_legacy(tree, plan)
+        return len(entries)
+    for index, name, _digest in reversed(entries[keep:]):
+        copy = copy_of(tree, index, name) if index is not None else None
+        if copy is None or not os.path.isfile(copy):
+            raise InputError(f'{state_path(tree)}: no copy of {name} as it was applied; restore the files the series '
+                             f'touches from a fresh 03-helium.py run and remove {state_path(tree)} and '
+                             f'{copies_path(tree)} instead')
+        if not unapply(copy, tree):
+            raise InputError(f'{copy} no longer reverses on {tree}; restore the files the series touches from a fresh '
+                             f'03-helium.py run and remove {state_path(tree)} and {copies_path(tree)} instead')
+        os.remove(copy)
+        entries = entries[:-1]
+        write_ledger(tree, entries)
+        print(f'{"reversed":16} {name}', flush=True)
+    return len(entries)
+
+
+def apply_summary(rows):
+    skips = sum(1 for row in rows if row[1].startswith('skipped'))
+    failed = sum(1 for row in rows if row[1] == 'FAILED')
+    unreached = sum(1 for row in rows if row[1] == 'not reached')
+    planned = len(rows) - skips
+    summary = f'{planned - failed - unreached} of {planned} patches in, {skips} skipped'
+    if failed or unreached:
+        summary += f', {failed} failed, {unreached} not reached'
+    return summary
 
 
 def cmd_apply(args):
     tree = os.environ['CHROMIUM_SRC']
-    done = read_state(tree)
-    rows, failed = [], 0
+    rows = []
     for name in sorted(skipped()):
         rows.append((name, 'skipped (series-win)', classify(patch_files(os.path.join(PATCHES, name))), ''))
         print(f'{"skipped":16} {name}', flush=True)
-    for name, path in names():
-        if name in done:
-            result, detail = 'already applied', 'recorded'
-        else:
-            result, detail = apply_one(path, tree)
-            if result != 'FAILED':
-                record(tree, name)
-        failed += result == 'FAILED'
-        rows.append((name, result, classify(patch_files(path)), detail))
-        print(f'{result:16} {name}', flush=True)
+    try:
+        applied_rows, failed = apply_plan(tree, names())
+    except InputError as error:
+        print(error, file=sys.stderr)
+        return 2
+    rows += applied_rows
     layers(tree)
     os.makedirs(os.path.dirname(args.report), exist_ok=True)
     with open(args.report, 'w') as f:
         f.write('patch\tresult\tfiles\tdetail\n')
         for row in rows:
             f.write('\t'.join(row) + '\n')
-    skips = sum(1 for r in rows if r[1].startswith('skipped'))
-    print(f'{len(rows) - failed - skips} of {len(rows) - skips} patches in, {skips} skipped; report: {args.report}')
+    print(f'{apply_summary(rows)}; report: {args.report}')
     return 1 if failed else 0
+
+
+def cmd_rewind(args):
+    tree = os.environ['CHROMIUM_SRC']
+    try:
+        kept = rewind(tree, names())
+    except InputError as error:
+        print(error, file=sys.stderr)
+        return 2
+    print(f'{kept} recorded patches match the plan and stay; apply goes on from there')
+    return 0
 
 
 def cmd_layer(args):
@@ -767,8 +971,9 @@ def main():
     apply.add_argument('--report', required=True)
     sub.add_parser('classify')
     sub.add_parser('layer')
+    sub.add_parser('rewind')
     args = parser.parse_args()
-    return {'apply': cmd_apply, 'classify': cmd_classify, 'layer': cmd_layer}[args.command](args)
+    return {'apply': cmd_apply, 'classify': cmd_classify, 'layer': cmd_layer, 'rewind': cmd_rewind}[args.command](args)
 
 
 if __name__ == '__main__':

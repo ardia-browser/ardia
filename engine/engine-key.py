@@ -464,7 +464,7 @@ def normalized_declarations(raw, origin):
     return data
 
 
-def chromium_names(text, origin, tags):
+def chromium_names(text, origin, tags, takes=()):
     names = []
     for number, raw in enumerate((text or '').split('\n'), 1):
         fields = raw.split('#', 1)[0].split()
@@ -486,14 +486,22 @@ def chromium_names(text, origin, tags):
             continue
         if not safe_relative(fields[1]) or '/' in fields[1]:
             raise Problem(f'{origin}:{number}: `{fields[1]}` is not a patch file name')
-        if (tag == 'all' and 'all' in tags) or (tag != 'all' and any(engine in tags for engine in engines)):
+        if (tag == 'all' and 'all' in tags) or (tag != 'all' and any(engine in tags for engine in engines)) or fields[1] in takes:
             names.append(fields[1])
     return names
 
 
-def skip_names(text):
+def directive_names(text, directive):
     return {line.split(None, 1)[1].strip() for line in (raw.split('#', 1)[0].strip() for raw in (text or '').split('\n'))
-            if line.startswith('skip ')}
+            if line.startswith(directive + ' ')}
+
+
+def skip_names(text):
+    return directive_names(text, 'skip')
+
+
+def take_names(text):
+    return directive_names(text, 'take')
 
 
 def resource_sources(text, origin):
@@ -537,7 +545,8 @@ class WinPlan:
             raise Problem(f'{origin}: excluded must name paths inside a declared tree, not {", ".join(stray)}')
         series_win = text_of(tree, data['series_win'])
         skips = skip_names(series_win)
-        shared = [name for name in chromium_names(text_of(tree, data['series']), f'{rev}:{data["series"]}', data['series_tags'])
+        takes = take_names(series_win)
+        shared = [name for name in chromium_names(text_of(tree, data['series']), f'{rev}:{data["series"]}', data['series_tags'], takes)
                   if name not in skips]
         own = chromium_names(series_win, f'{rev}:{data["series_win"]}', data['series_tags'])
         self.patches = [f'{posixpath.dirname(data["series"])}/{name}' for name in shared] + [f'{data["win_patches"]}/{name}' for name in own]

@@ -1855,6 +1855,44 @@
    "detected": false
   },
   {
+   "id": "windows-webui-documents:documentStore",
+   "source": "frame",
+   "guard": "Windows WebUI host (--ardia-shell=webui): ArdiaShell.readDocument, writeDocument, saveDocument and removeDocument run only for the live trusted chrome://ardia/ shell document; document names must pass ValidWindowsDocumentName (1-200 [A-Za-z0-9._-], matching ardia-shell-migration's DOCUMENT_NAME_LIMIT, no path separators, colons/ADS, control chars, .., leading/trailing dots or spaces, or Windows reserved device names CON/PRN/AUX/NUL/COM0-9/LPT0-9) and must not be reserved (session.json, live.json, live.canonical.json, rnw-migration.json, rnw-migration.lock, launch-starts.txt, launch-starts.txt.tmp, case-insensitive), and writes and removes also refuse the engine-owned launch-guard.json in any case (WritableWindowsDocumentName) while reads and bootstrap.documents keep it for launch telemetry; writes are capped at WindowsDocumentLimit (8 MiB, 48 MiB for sync-state.nns in any letter case) and reads at kWindowsDocumentReadLimit (64 MiB, the migrator's DOCUMENT_LIMIT); reads, writes and deletes open the destination directory and target handles with FILE_FLAG_OPEN_REPARSE_POINT, refuse directories/devices/reparse points and multiply-linked files (nNumberOfLinks != 1), verify final-path direct-child containment inside the app-data directory's canonical final path (the root is opened following reparse points, so the root itself may be a junction; every document file is opened with FILE_FLAG_OPEN_REPARSE_POINT) via GetFinalPathNameByHandleW and IsDirectChildOfWinDirectory, validate UTF-8 on reads (base::IsStringUTF8), stage writes through a CREATE_NEW handle committed handle-relatively via NtSetInformationFile (FileRenameInformationEx fallback FileRenameInformation with held RootDirectory handle and leaf name only) and delete via FileDispositionInformationEx/FileDispositionInfo on the open handle; bootstrap.documents enumerates only eligible non-reparse single-link valid-UTF-8 regular files bounded by count and total bytes (BootstrapDocumentFits, checked against the listed size before a file is opened and again after the read) and reaches the page through JSON.parse (BootstrapAssignmentScript), so a document named __proto__ stays an own property; ReadAsset verifies regular single-link non-reparse disk files and strict final-path containment inside AssetDirectory() via IsStrictlyWithinWinDirectory; scripts/windows/webui-pilot/bridge.ps1 runs the shared hostile corpus against the document sinks, requiring the exact native ERR_DOCUMENT_REQUEST/ERR_DOCUMENT_NAME code for refused values (a synchronous throw, transport error or timeout fails) and a confined write/read/remove round trip for names the policy accepts (prototype keys, \"1\", \"true\") with Object.prototype unchanged, plus reparse-point escape checks (ERR_DOCUMENT_READ/WRITE/REMOVE) and a reload proving a __proto__ document survives in bootstrap.documents, scripts/windows/webui-pilot/junction.ps1 proves junction escapes out of ardia-ui are refused with a CSP-allowed image control and sends the shared hostile corpus raw and URL-encoded through chrome://ardia/ checking each request against ArdiaShell.testAssetSink (counted only in a test instance): a same-origin request moves exactly one of served/refused/outsideRoot/unreadable and never served or outsideRoot, a cross-origin one moves none, and values the URL parser resolves to the shell page are counted and not sent, final paths are compared case-sensitively after the drive letter or UNC share (WinFinalPathStartsWith), and scripts/windows/engine/tests/webui_policy_test.cc unit-tests the pure validators",
+   "checks": [
+    "scripts/windows/engine/src/ardia/win/webui/webui_policy.h#ValidWindowsDocumentName",
+    "scripts/windows/engine/src/ardia/win/webui/webui_policy.h#ReservedWindowsDocumentName",
+    "scripts/windows/engine/src/ardia/win/webui/webui_policy.h#IsStrictlyWithinWinDirectory",
+    "scripts/windows/engine/src/ardia/win/webui/webui_policy.h#IsDirectChildOfWinDirectory",
+    "scripts/windows/engine/src/ardia/win/webui/webui_policy.h#ValidWinRenameLeafName",
+    "scripts/windows/engine/src/ardia/win/webui/webui_policy.h#WinFileRenameInfoBufferBytes",
+    "scripts/windows/engine/src/ardia/win/webui/webui_shell.cc#ReadStoredDocument",
+    "scripts/windows/engine/src/ardia/win/webui/webui_shell.cc#WriteStoredDocument",
+    "scripts/windows/engine/src/ardia/win/webui/webui_shell.cc#RemoveStoredDocument",
+    "scripts/windows/engine/src/ardia/win/webui/webui_shell.cc#ReadBootstrapDocuments",
+    "scripts/windows/engine/src/ardia/win/webui/webui_shell.cc#ReadAsset",
+    "scripts/windows/webui-pilot/bridge.ps1#documents-refuse-hostile-corpus",
+    "scripts/windows/webui-pilot/bridge.ps1#documents-refuse-reparse-point",
+    "scripts/windows/webui-pilot/bridge.ps1#documents-launch-guard-read-only",
+    "scripts/windows/webui-pilot/junction.ps1#asset-junction-escape-refused",
+    "scripts/windows/webui-pilot/junction.ps1#asset-sink-refuses-hostile-corpus",
+    "scripts/windows/webui-pilot/junction.ps1#documents-read-under-junction-app-data-root",
+    "scripts/windows/engine/tests/webui_policy_test.cc#TestDocumentNames"
+   ],
+   "detected": false
+  },
+  {
+   "id": "windows-webui-telemetry:post",
+   "source": "frame",
+   "guard": "Windows WebUI host (--ardia-shell=webui): ArdiaTelemetry.post runs only for the live trusted chrome://ardia/ shell document, requires exactly two string arguments passing TelemetryPostAllowed (ardia::desktop_telemetry_policy::PostAcceptable: a non-empty body <= 512 KiB starting with { and an ak_<kind>_<24 hex> ingest key with no header-injection bytes; then base::JSONReader in RFC mode must parse the body as a JSON object), caps concurrent in-flight requests at kMaxInFlight, posts only to the hardcoded kEndpoint (in a test instance only, ARDIA_TEST_TELEMETRY_ENDPOINT may name an http localhost URL instead) through Chromium's system URLLoaderFactory with CredentialsMode::kOmit, RedirectMode::kError and LOAD_DISABLE_CACHE, cancels in-flight posts on TearDown, and replies only with the filtered HTTP status code; scripts/windows/webui-pilot/bridge.ps1 runs the shared hostile corpus in both argument positions plus malformed, non-object and oversized bodies and bad keys, requires the native ERR_TELEMETRY_REFUSED code for each (a synchronous throw, transport error or timeout fails), checks at the sink that ArdiaShell.testTelemetrySink's requestsStarted (counted where the request is handed to the network) stays 0, and sends a valid control that must reach a loopback listener with the same body and key; scripts/windows/engine/tests/webui_policy_test.cc unit-tests the shared telemetry policy",
+   "checks": [
+    "engine/ardiacore-desktop/src/ardia/desktop/ac_desktop_telemetry_policy.h#PostAcceptable",
+    "scripts/windows/engine/src/ardia/win/webui/webui_shell.cc#WinTelemetryClient",
+    "scripts/windows/webui-pilot/bridge.ps1#telemetry-refuses-invalid-requests",
+    "scripts/windows/engine/tests/webui_policy_test.cc#TestDesktopTelemetryPolicy"
+   ],
+   "detected": false
+  },
+  {
    "id": "windows-webui-platform:desktopPlatform",
    "source": "frame",
    "guard": "Windows WebUI host (--ardia-shell=webui): only the trusted shell document's ardiaRequest reaches ardia::desktop::Platform(); ArdiaApp.openExternalURL takes exactly one string and allows only http, https and mailto: the raw text may not hold whitespace, control characters, quotes or backslashes or exceed 32 KB, http(s) must be written scheme://host with no credentials, and only then does ShellExecuteExW see the canonical spec; a background instance opens nothing; setLaunchAtLogin takes one boolean and writes only HKCU Run 'Ardia WebUI' as the quoted executable path (refusing a path with quotes or control characters) plus --ardia-shell=webui, never RNW's 'Ardia' value; the default browser calls take no arguments and only open ms-settings:defaultapps, and platform.ps1 sends the shared corpus as one-item lists to setAsDefaultBrowser and checks the default apps launch count never moves until an empty-list control moves it by one; DPAPI secrets accept account names of 1-64 [A-Za-z0-9_-] only, are stored as sync-key-x<hex of the exact account bytes>.dpapi so accounts differing only by case never share a file on NTFS, live under the WebUI data folder's Sync, are bound to the ardia-sync-key/v1 purpose and instance, and are zeroed after use; scripts/windows/webui-pilot/platform.ps1 sends the shared hostile corpus (scripts/security/hostile-inputs.mjs via hostile-corpus.mjs) plus unlisted schemes and bad shapes to openExternalURL in a Windows guest and checks at the sink that the ShellExecuteExW count never moves, then that one https control moves it by one",

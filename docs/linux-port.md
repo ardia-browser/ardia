@@ -1182,6 +1182,10 @@ caller: sync keys, sealing and opening files and passwords, and the recovery phr
     alternate (Copy Links → Copy Links as Markdown in the tab and multi-tab menus), Ctrl for a ⌘ one (a profile's
     New Window entry).
   - Quit is Ctrl+Shift+Q. Ctrl+Tab commits on release of the physical Control key.
+  - Copy URL is Ctrl+Shift+C (and Copy URL as Markdown Ctrl+Alt+Shift+C), as ⇧⌘C is on the Mac and Ctrl+Shift+C in the
+    Windows app. Inspect Elements is Ctrl+Alt+C, the Mac's ⌥⌘C, not Chrome's Ctrl+Shift+C (#4095). Ardia's bindings
+    run before docked DevTools sees the key, so with DevTools focused Ctrl+Shift+C still copies the URL instead of
+    toggling Select an Element (#4096, an engine change). Watch `usage_counts.url_copies` on Linux.
   - `--ardia-keyboard-diagnostics` with `--enable-logging=stderr` logs each key, its binding and the focused view.
 - **Ctrl-scroll zoom.** Chromium zooms a tab when a page leaves a Ctrl-wheel event unhandled
   (`BrowserWebContentsDelegate::ContentsZoomChange`). `chromium-linux-wheel-zoom.patch` puts one gate there,

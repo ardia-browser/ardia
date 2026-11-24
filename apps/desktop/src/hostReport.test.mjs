@@ -8,7 +8,7 @@ import { canRecord, ensureDraftDir, startRecording } from "../../browser/src/sta
 import { FEEDBACK_URL, reportFiles, resetReport, sendCurrentReport, setDescription, setTitle } from "../../browser/src/state/report/actions.ts";
 import { initialHostSession } from "./hostSession.ts";
 import { resolveHostModule } from "./hostModules.ts";
-import { LOCAL_EVENTS_FILE, REPORT_EXPORT_FOLDER_KEY, hostReportExport, hostReportPost, servesReportSheet } from "./hostReport.ts";
+import { LOCAL_EVENTS_FILE, REPORT_EXPORT_FOLDER_KEY, draftFilePath, hostReportExport, hostReportPost, servesReportSheet } from "./hostReport.ts";
 import { createTelemetryLocal } from "./hostTelemetryLocal.ts";
 import { adoptHostReports, openReport, sendsFromSheet } from "./reportProblem.ts";
 
@@ -128,6 +128,22 @@ test("the local events export is gzipped into one remembered draft folder, and a
   assert.equal(storage.items.get(REPORT_EXPORT_FOLDER_KEY), "/p/Report Drafts/u2");
   const refusing = hostReportExport(fakeHost(BOTH, { "ArdiaReport.draftDirectory": () => { throw new Error("no folder"); } }), memory());
   await assert.rejects(refusing("a"));
+});
+
+test("a Windows draft folder gets its file with a backslash, so the native draft guard takes it", async () => {
+  const folder = "C:\\Users\\u\\AppData\\Local\\Ardia WebUI\\Default\\Ardia\\Report Drafts\\0f8fad5b-d9cb-469f-a165-70867728950e";
+  const written = [];
+  const host = fakeHost(BOTH, {
+    "ArdiaReport.draftDirectory": () => folder,
+    "ArdiaReport.gzipText": (text, path) => (written.push(path), text.length),
+  });
+  const expected = `${folder}\\${LOCAL_EVENTS_FILE}`;
+  assert.deepEqual(await hostReportExport(host, memory())("abc"), { path: expected, bytes: 3 });
+  assert.deepEqual(written, [expected]);
+  assert.ok(!expected.includes("/"));
+  assert.equal(draftFilePath("d:\\Drafts\\u1", "a.gz"), "d:\\Drafts\\u1\\a.gz");
+  assert.equal(draftFilePath("/p/Report Drafts/u1", "a.gz"), "/p/Report Drafts/u1/a.gz");
+  assert.equal(draftFilePath("\\\\server\\share\\u1", "a.gz"), "\\\\server\\share\\u1/a.gz");
 });
 
 test("ArdiaTelemetryLocal.exportForReport answers the Mac's path, bytes and lines from the local copy", async () => {

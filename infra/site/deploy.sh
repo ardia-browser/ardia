@@ -13,6 +13,9 @@ case "$step" in
 esac
 
 if [ "$step" != deploy ]; then
+  if [ -z "${GITHUB_TOKEN:-}${GH_TOKEN:-}" ] && command -v gh >/dev/null && gh_token=$(gh auth token 2>/dev/null); then
+    export GITHUB_TOKEN="$gh_token"
+  fi
   SITE_URL=https://ardia.dev pnpm -C "$site" exec astro build
   rsync -a --delete --exclude 'release-videos/*.mp4' "$site/dist/" "$here/dist/"
   package_mb=$(( $(du -sk "$here/dist" | cut -f1) / 1024 ))

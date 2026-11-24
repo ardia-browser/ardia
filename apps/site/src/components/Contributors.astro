@@ -16,12 +16,9 @@ const guide = `${REPO}/blob/main/CONTRIBUTING.md`;
           <h2 class="poster" id="contributors-title" data-reveal>
             Painted by <br />many hands.
           </h2>
-          <p class="lede" data-reveal style="--i: 1">
-            {CONTRIBUTORS.length} people have shipped code to Ardia. Fix one bug and your face goes up here on the next build.
-          </p>
         </header>
 
-        <ul class="faces" role="list" aria-label="Contributors" data-reveal style="--i: 2">
+        <ul class="faces" role="list" aria-label="Contributors" data-reveal style="--i: 1">
           {CONTRIBUTORS.map((person) => (
             <li>
               <a
@@ -62,7 +59,7 @@ const guide = `${REPO}/blob/main/CONTRIBUTING.md`;
           </li>
         </ul>
 
-        <div class="cta" data-reveal style="--i: 3">
+        <div class="cta" data-reveal style="--i: 2">
           <a class="link" href={firstIssues} rel="noopener" data-track="github_clicked" data-track-link="good_first_issues" data-track-location="contributors"
             >Pick a good first issue</a
           >
@@ -84,12 +81,6 @@ const guide = `${REPO}/blob/main/CONTRIBUTING.md`;
   }
   h2 {
     font-size: var(--t-h2);
-  }
-  .lede {
-    margin-top: 24px;
-    font-size: var(--t-lede);
-    color: var(--ink-2);
-    max-width: 30em;
   }
   .faces {
     --size: 56px;

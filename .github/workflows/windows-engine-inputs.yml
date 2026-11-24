@@ -42,6 +42,8 @@ jobs:
         run: python3 scripts/windows/engine/check_inputs.py
       - name: The check refuses to accept what it could not read
         run: python3 scripts/windows/engine/check_inputs_test.py
+      - name: A Windows tree an earlier plan patched is refused, and rewind takes it back
+        run: python3 scripts/windows/engine/series_win_test.py
       - name: prebuilt.json pins the Windows engine key of its source commit
         run: python3 scripts/windows/engine/prebuilt_test.py
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1

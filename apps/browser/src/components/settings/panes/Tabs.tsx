@@ -112,6 +112,7 @@ function LayoutSection() {
             <Segmented options={SIDEBAR_SIDES} value={sidebarSide} onChange={chooseSidebarSide} />
           </Row>
           <ButtonsRow top={top} />
+          <SettingToggle anchor="tabs.showPinnedDivider" />
         </Group>
         <ScrollToolbarChoices />
       </Box>

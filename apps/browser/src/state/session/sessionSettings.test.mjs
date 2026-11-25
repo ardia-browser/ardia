@@ -19,7 +19,7 @@ const CASES = {
   linkKeys: { peekModifier: "alt", splitLinkModifier: "alt", chosen: ["peekModifier", "splitLinkModifier"], inferred: [] },
   empty: {},
 };
-const BEFORE = {"legacyTrue":{"chosen":["newTabPosition","newTabButtonPosition"],"inferred":["newTabPosition","newTabButtonPosition"],"batterySaverWhen":"lowBattery","newTabButtonPosition":"top","newTabPosition":"top","tabLayout":"sidebar","peekModifier":"shift","splitLinkModifier":"altShift","keys":131},"legacyFalse":{"chosen":["newTabPosition","batterySaverWhen","newTabButtonPosition"],"inferred":["newTabPosition","batterySaverWhen","newTabButtonPosition"],"batterySaverWhen":"never","newTabButtonPosition":"top","newTabPosition":"top","tabLayout":"sidebar","peekModifier":"shift","splitLinkModifier":"altShift","keys":131},"legacyTrueChosen":{"chosen":["tabLayout","batterySaverWhen"],"inferred":[],"batterySaverWhen":"unplugged","newTabButtonPosition":"bottom","newTabPosition":"bottom","tabLayout":"top","peekModifier":"shift","splitLinkModifier":"altShift","keys":131},"legacyTrueInferred":{"chosen":[],"inferred":[],"batterySaverWhen":"lowBattery","newTabButtonPosition":"bottom","newTabPosition":"bottom","tabLayout":"sidebar","peekModifier":"shift","splitLinkModifier":"altShift","keys":131},"missingMeta":{"chosen":["tabLayout","sidebarWidth"],"inferred":["tabLayout","sidebarWidth"],"batterySaverWhen":"lowBattery","newTabButtonPosition":"bottom","newTabPosition":"bottom","tabLayout":"top","peekModifier":"shift","splitLinkModifier":"altShift","keys":131},"chosen":{"chosen":["tabLayout"],"inferred":["appearance"],"batterySaverWhen":"lowBattery","newTabButtonPosition":"bottom","newTabPosition":"bottom","tabLayout":"top","peekModifier":"shift","splitLinkModifier":"altShift","keys":131},"migrated":{"chosen":["tabLayout","newTabPosition","newTabButtonPosition"],"inferred":[],"batterySaverWhen":"lowBattery","newTabButtonPosition":"bottom","newTabPosition":"top","tabLayout":"top","peekModifier":"shift","splitLinkModifier":"altShift","keys":131},"linkKeys":{"chosen":["peekModifier","splitLinkModifier"],"inferred":[],"batterySaverWhen":"lowBattery","newTabButtonPosition":"bottom","newTabPosition":"bottom","tabLayout":"sidebar","peekModifier":"alt","splitLinkModifier":"altShift","keys":131},"empty":{"chosen":[],"inferred":[],"batterySaverWhen":"lowBattery","newTabButtonPosition":"bottom","newTabPosition":"bottom","tabLayout":"sidebar","peekModifier":"shift","splitLinkModifier":"altShift","keys":131}};
+const BEFORE = {"legacyTrue":{"chosen":["newTabPosition","newTabButtonPosition"],"inferred":["newTabPosition","newTabButtonPosition"],"batterySaverWhen":"lowBattery","newTabButtonPosition":"top","newTabPosition":"top","tabLayout":"sidebar","peekModifier":"shift","splitLinkModifier":"altShift","keys":132},"legacyFalse":{"chosen":["newTabPosition","batterySaverWhen","newTabButtonPosition"],"inferred":["newTabPosition","batterySaverWhen","newTabButtonPosition"],"batterySaverWhen":"never","newTabButtonPosition":"top","newTabPosition":"top","tabLayout":"sidebar","peekModifier":"shift","splitLinkModifier":"altShift","keys":132},"legacyTrueChosen":{"chosen":["tabLayout","batterySaverWhen"],"inferred":[],"batterySaverWhen":"unplugged","newTabButtonPosition":"bottom","newTabPosition":"bottom","tabLayout":"top","peekModifier":"shift","splitLinkModifier":"altShift","keys":132},"legacyTrueInferred":{"chosen":[],"inferred":[],"batterySaverWhen":"lowBattery","newTabButtonPosition":"bottom","newTabPosition":"bottom","tabLayout":"sidebar","peekModifier":"shift","splitLinkModifier":"altShift","keys":132},"missingMeta":{"chosen":["tabLayout","sidebarWidth"],"inferred":["tabLayout","sidebarWidth"],"batterySaverWhen":"lowBattery","newTabButtonPosition":"bottom","newTabPosition":"bottom","tabLayout":"top","peekModifier":"shift","splitLinkModifier":"altShift","keys":132},"chosen":{"chosen":["tabLayout"],"inferred":["appearance"],"batterySaverWhen":"lowBattery","newTabButtonPosition":"bottom","newTabPosition":"bottom","tabLayout":"top","peekModifier":"shift","splitLinkModifier":"altShift","keys":132},"migrated":{"chosen":["tabLayout","newTabPosition","newTabButtonPosition"],"inferred":[],"batterySaverWhen":"lowBattery","newTabButtonPosition":"bottom","newTabPosition":"top","tabLayout":"top","peekModifier":"shift","splitLinkModifier":"altShift","keys":132},"linkKeys":{"chosen":["peekModifier","splitLinkModifier"],"inferred":[],"batterySaverWhen":"lowBattery","newTabButtonPosition":"bottom","newTabPosition":"bottom","tabLayout":"sidebar","peekModifier":"alt","splitLinkModifier":"altShift","keys":132},"empty":{"chosen":[],"inferred":[],"batterySaverWhen":"lowBattery","newTabButtonPosition":"bottom","newTabPosition":"bottom","tabLayout":"sidebar","peekModifier":"shift","splitLinkModifier":"altShift","keys":132}};
 
 const doc = (version, settings) => ({ version, profiles: { default: PROFILE }, profileOrder: ["default"], settings, windows: [], windowOrder: [], tabs: [], groups: [], splits: [], closedTabs: [], closedWindows: [] });
 const loaded = () => {
@@ -34,6 +34,7 @@ for (const version of [3, 4, 7]) {
       stub.docs.set("session.json", JSON.stringify(doc(version, structuredClone(settings))));
       S().hydrate(loadSession());
       assert.deepEqual(loaded(), BEFORE[name]);
+      assert.equal(S().settings.showPinnedDivider, true);
       assert.equal("chosen" in S().settings || "inferred" in S().settings, false);
     });
   }
@@ -51,15 +52,16 @@ test("settings and their bookkeeping save apart, read back the same, and a chang
   stub.docs.clear();
   stub.docs.set("session.json", JSON.stringify(doc(7, structuredClone(CASES.chosen))));
   const stop = startPersistence();
-  S().updateSettings({ appearance: "light" });
+  S().updateSettings({ appearance: "light", showPinnedDivider: false });
   await new Promise((resolve) => setTimeout(resolve, 0));
   flushPersistence();
   stop();
   const saved = JSON.parse(stub.docs.get("session.json"));
   assert.ok(saved.version >= 8);
   assert.equal("chosen" in saved.settings || "inferred" in saved.settings, false);
-  assert.deepEqual(saved.settingsMeta, { chosen: ["tabLayout", "appearance"], inferred: MARKERS });
+  assert.deepEqual(saved.settingsMeta, { chosen: ["tabLayout", "appearance", "showPinnedDivider"], inferred: MARKERS });
   S().hydrate(loadSession());
-  assert.deepEqual(S().settingsMeta, { chosen: ["tabLayout", "appearance"], inferred: MARKERS });
+  assert.deepEqual(S().settingsMeta, { chosen: ["tabLayout", "appearance", "showPinnedDivider"], inferred: MARKERS });
   assert.equal(S().settings.appearance, "light");
+  assert.equal(S().settings.showPinnedDivider, false);
 });

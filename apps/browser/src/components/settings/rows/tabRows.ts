@@ -39,6 +39,13 @@ export const tabRows = {
           description: "Hide Tabs and Clear in the sidebar.",
           keywords: ["toggle sidebar", "sidebar button", "hide tabs button", "show the hide tabs button", "clear unpinned tabs", "close all tabs", "clear today", "divider", "arc", "show clear button", "clear button"],
         },
+        showPinnedDivider: {
+          title: "Show the dashed divider",
+          description: "The line between the pinned area and the tab list.",
+          explained: true,
+          keywords: ["dashed line", "dotted line", "pinned divider", "separator", "divider below pinned links"],
+          shown: inSidebar,
+        },
       },
     },
     {

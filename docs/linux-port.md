@@ -362,6 +362,9 @@ The acceptance suite is in [linux-acceptance.md](linux-acceptance.md) and CI in 
   timeout) before the companion goes away. A companion raises no download or multi-tab warning of its own; it is not
   closed with `force_skip_warning_user_on_close`, which would also skip the unload handlers. On quit Chromium's `BrowserCloseManager` drains every Browser,
   companions included. Companions are looked up by id at every use, so a closed one leaves no pointer behind.
+  - A `--headless` run (`--screenshot`, `--dump-dom`) has no shell page to approve a close, so the host installs no
+    close hooks, no quit-about-downloads gate and no window-close handshake, and its host window doesn't keep the
+    browser alive: Chromium closes the windows and quits as upstream does, and the process exits.
   - Chromium's last-window count skips companions, and its `--close-confirmation` multi-tab warning counts the tabs of
     every member, so closing the only visible window asks once, in that window, for the whole family.
   - A companion never reaches `TabRestoreService`: neither its window nor the tabs it closes while closing, on a

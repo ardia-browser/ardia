@@ -187,13 +187,16 @@ It refuses any sandbox-disabling switch. Every check must run and pass:
 14. `sync-core`: in the first instance, `ArdiaSync.core` must answer `rust`, and `ArdiaSync.enterPhrase` must run the
     Rust core: a valid phrase for a folder that doesn't exist answers `noData`, a broken checksum `checksum`, and a
     phrase with `zzzz` in it `unknownWord` naming `zzzz`. Nothing is saved: no folder matches, so no key is stored.
+15. `headless-exit`: a separate run of the launcher with `--headless --screenshot=<file> --window-size=400,300` on a
+    `data:` page, without the DevTools port. It must write a PNG and exit 0 within 15 s. A run that wrote the PNG but
+    had to be killed reports `old`: the engine predates the headless close fix. Any other outcome fails.
 
-Checks 9 to 12 report `skip` and pass for a dev package without `VERSION` or `cli/`. Checks 9 to 14 can also report
+Checks 9 to 12 report `skip` and pass for a dev package without `VERSION` or `cli/`. Checks 9 to 15 can also report
 `old` when the engine's host predates the feature: `appVersion` is Chromium's own version, the bootstrap advertises
 none of `engine.setCliControl`, `ArdiaCli.install` and `ArdiaAutomation.start`, (for `cli-scripts`) not all four
 `ArdiaUserScripts` methods, or (for `window-state`) neither `ArdiaShell.windowButtonLayout` nor
-`ArdiaShell.windowState`, or (for `sync-core`) no `ArdiaSync.core`; an engine that advertises only one of the two
-fails `window-state`. `old` fails the gate unless
+`ArdiaShell.windowState`, (for `sync-core`) no `ArdiaSync.core`, or (for `headless-exit`) a headless screenshot that
+never exits; an engine that advertises only one of the two fails `window-state`. `old` fails the gate unless
 `--allow-old-engine` is passed. CI and `release.sh` pass it only for an engine that isn't the commit's own.
 
 It takes about 8 s without the CLI, and writes `results.json`, the launch logs and `cli.log`.

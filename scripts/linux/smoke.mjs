@@ -5,7 +5,7 @@ import { closeSync, openSync } from "node:fs";
 import { createServer } from "node:http";
 import { copyFile, mkdir, mkdtemp, open, readdir, readFile, readlink, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { inflateSync } from "node:zlib";
+import { crc32 as zlibCrc32, inflateSync } from "node:zlib";
 import { basename, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { SHELL_PREFIX, closeAllApps, killAllAppsNow, launchArdia, launchArguments, launchEnvironment } from "../../apps/desktop/scripts/acceptance/lib/ardia.mjs";
@@ -51,13 +51,15 @@ ARDIA_BACKGROUND=1, a throwaway profile and HOME, the sandbox on) without
                     phrase for a folder that doesn't exist answers noData, a broken checksum answers
                     checksum, and an unknown word answers unknownWord naming the word typed; nothing is
                     saved (old: ArdiaSync.core not advertised)
+  headless-exit     ardia --headless --screenshot=FILE <url> writes a PNG and exits 0 within 15 s, without being killed
+                    (old: it wrote the PNG but kept running)
 
 It writes <results>/results.json ({ok, package, started, assertions[]}) and the
 launch logs to <results>, prints a table, and exits 0 only when every check ran
 and passed or was skipped. A check whose feature the engine's host predates
 (appVersion is Chromium's version; no engine.setCliControl, ArdiaCli.install or
 ArdiaAutomation.start capability; neither ArdiaShell.windowButtonLayout nor
-ArdiaShell.windowState; no ArdiaSync.core) reports "old": a failure, unless
+ArdiaShell.windowState; no ArdiaSync.core; a headless screenshot that never exits) reports "old": a failure, unless
 --allow-old-engine accepts it, as CI and release.sh do for an engine that isn't
 the commit's own.
 
@@ -70,7 +72,10 @@ the commit's own.
 `;
 
 export const privateFolder = (path) => mkdir(path, { recursive: true, mode: 0o700 });
-export const ASSERTIONS = ["ldd", "shell-ui", "bootstrap", "native-tab", "sandbox", "content-blocker", "restart-restore", "staged-install", "app-version", "cli-install", "cli-control", "cli-scripts", "window-state", "sync-core"];
+export const ASSERTIONS = ["ldd", "shell-ui", "bootstrap", "native-tab", "sandbox", "content-blocker", "restart-restore", "staged-install", "app-version", "cli-install", "cli-control", "cli-scripts", "window-state", "sync-core", "headless-exit"];
+export const HEADLESS_EXIT_LIMIT_MS = 15000;
+export const HEADLESS_PAGE = "data:text/html,<h1>ardia headless</h1>";
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const FORBIDDEN_SWITCHES = ["--no-sandbox", "--disable-seccomp-filter-sandbox", "--disable-namespace-sandbox", "--disable-setuid-sandbox", "--disable-gpu-sandbox", "--no-zygote-sandbox", "--single-process", "--in-process-gpu"];
 const TREE_FORBIDDEN_SWITCHES = ["--no-sandbox", "--disable-seccomp-filter-sandbox", "--disable-namespace-sandbox", "--disable-setuid-sandbox"];
 const STAGED_FILES = [
@@ -355,6 +360,69 @@ export function windowStateVerdict(capabilities) {
   const missing = WINDOW_STATE_CAPABILITIES.filter((name) => !advertised.includes(name));
   if (missing.length) return { status: "fail", message: `the host advertises ${advertised.join(", ")} without ${missing.join(", ")}: the engine ships the two together` };
   return { status: "pass", message: `the host advertises ${advertised.join(" and ")}` };
+}
+
+export function headlessExitArguments({ scratch, output }) {
+  return launchArguments({ scratch, extraArgs: ["--headless", `--screenshot=${output}`, "--window-size=400,300", HEADLESS_PAGE] }).filter((arg) => !arg.startsWith("--remote-debugging-"));
+}
+
+const PNG_CHANNELS = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 };
+const PNG_DEPTHS = { 0: [1, 2, 4, 8, 16], 2: [8, 16], 3: [1, 2, 4, 8], 4: [8, 16], 6: [8, 16] };
+const ADAM7 = [[0, 0, 8, 8], [4, 0, 8, 8], [0, 4, 4, 8], [2, 0, 4, 4], [0, 2, 2, 4], [1, 0, 2, 2], [0, 1, 1, 2]];
+
+function pngRawLength({ width, height, bitsPerPixel, interlace }) {
+  const rowBytes = (pixels) => Math.ceil((pixels * bitsPerPixel) / 8) + 1;
+  if (!interlace) return rowBytes(width) * height;
+  let total = 0;
+  for (const [x, y, dx, dy] of ADAM7) {
+    const across = Math.ceil((width - x) / dx);
+    const down = Math.ceil((height - y) / dy);
+    if (across > 0 && down > 0) total += rowBytes(across) * down;
+  }
+  return total;
+}
+
+export function pngSize(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < PNG_SIGNATURE.length + 12 || !buffer.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) return null;
+  let header = null;
+  const data = [];
+  let closed = false;
+  for (let at = PNG_SIGNATURE.length; at < buffer.length; ) {
+    if (closed || at + 12 > buffer.length) return null;
+    const length = buffer.readUInt32BE(at);
+    const end = at + 12 + length;
+    if (end > buffer.length || zlibCrc32(buffer.subarray(at + 4, at + 8 + length)) !== buffer.readUInt32BE(end - 4)) return null;
+    const type = buffer.toString("latin1", at + 4, at + 8);
+    const body = buffer.subarray(at + 8, at + 8 + length);
+    if (!header) {
+      if (type !== "IHDR" || length !== 13) return null;
+      header = { width: body.readUInt32BE(0), height: body.readUInt32BE(4), depth: body[8], color: body[9], compression: body[10], filter: body[11], interlace: body[12] };
+    } else if (type === "IDAT") data.push(body);
+    else if (type === "IEND") closed = length === 0;
+    else if (type === "IHDR") return null;
+    at = end;
+  }
+  if (!header || !closed || !data.length) return null;
+  const { width, height, depth, color, compression, filter, interlace } = header;
+  if (!width || !height || width > 0x7fffffff || height > 0x7fffffff || compression !== 0 || filter !== 0 || interlace > 1 || !PNG_DEPTHS[color]?.includes(depth)) return null;
+  const expected = pngRawLength({ width, height, bitsPerPixel: depth * PNG_CHANNELS[color], interlace });
+  try {
+    if (inflateSync(Buffer.concat(data), { maxOutputLength: expected }).length !== expected) return null;
+  } catch {
+    return null;
+  }
+  return { width, height };
+}
+
+export function headlessExitVerdict({ code = null, signal = null, timedOut = false, ms = 0, shot = null } = {}) {
+  const size = pngSize(shot);
+  if (timedOut) {
+    if (size) return { status: "old", message: `--headless --screenshot wrote its PNG but was still running after ${HEADLESS_EXIT_LIMIT_MS} ms and had to be killed: the engine predates the headless close fix` };
+    return { status: "fail", message: `--headless --screenshot wrote no valid PNG and was still running after ${HEADLESS_EXIT_LIMIT_MS} ms` };
+  }
+  if (code !== 0) return { status: "fail", message: `--headless --screenshot exited ${code ?? signal} after ${ms} ms${size ? "" : " and wrote no valid PNG"}` };
+  if (!size) return { status: "fail", message: `--headless --screenshot exited 0 after ${ms} ms but wrote no valid PNG` };
+  return { status: "pass", message: `--headless --screenshot wrote a ${size.width}x${size.height} PNG and exited 0 after ${ms} ms` };
 }
 
 export function cliControlSupport(capabilities) {
@@ -914,6 +982,38 @@ class Smoke {
     throw outcome(verdict.status === "old" ? "old" : "fail", verdict.message, { version: this.version, appVersion });
   }
 
+  async headlessExit() {
+    const scratch = join(this.work, "headless-profile");
+    await privateFolder(scratch);
+    await mkdir(join(scratch, "home"));
+    const output = join(scratch, "headless.png");
+    const args = headlessExitArguments({ scratch, output });
+    const env = launchEnvironment({ scratch });
+    const refused = launchRefusal(args, env);
+    if (refused) throw new Error(refused);
+    const logPath = join(scratch, "headless-exit.log");
+    await writeFile(join(scratch, "headless-exit-command.json"), JSON.stringify({ executable: this.launcher, args }, null, 2));
+    const log = openSync(logPath, "w");
+    const started = Date.now();
+    const child = spawn(this.launcher, args, { stdio: ["ignore", log, log], env, detached: true });
+    closeSync(log);
+    pipeChildren.add(child);
+    const exit = await new Promise((done) => {
+      const timer = setTimeout(() => done({ timedOut: true }), HEADLESS_EXIT_LIMIT_MS);
+      child.once("exit", (code, signal) => { clearTimeout(timer); done({ code, signal }); });
+      child.once("error", (error) => { clearTimeout(timer); done({ code: `spawn error ${error.message}` }); });
+    });
+    const ms = Date.now() - started;
+    try { process.kill(-child.pid, "SIGKILL"); } catch {}
+    pipeChildren.delete(child);
+    await copyFile(logPath, join(this.results, "headless-exit.log")).catch(() => {});
+    const shot = await readFile(output).catch(() => null);
+    const verdict = headlessExitVerdict({ ...exit, ms, shot });
+    const detail = { ms, bytes: shot?.length ?? null, log: "headless-exit.log" };
+    if (verdict.status === "pass") return detail;
+    throw outcome(verdict.status, verdict.message, detail);
+  }
+
   cliEnvironment() {
     const home = join(this.work, "cli-home");
     const data = join(home, ".local", "share");
@@ -1171,6 +1271,7 @@ class Smoke {
     else await this.record("cli-control", () => this.cliControl(), { timeout: 240000 });
     if (!first && this.hasCli) this.skip("cli-scripts", `Ardia did not start: ${launched.detail.error}`);
     else await this.record("cli-scripts", () => this.cliScripts(), { timeout: 300000 });
+    await this.record("headless-exit", () => this.headlessExit(), { timeout: HEADLESS_EXIT_LIMIT_MS + 30000 });
   }
 
   async finish() {

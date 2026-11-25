@@ -518,9 +518,13 @@ bool IsolatedInstance() {
   return !base::Environment::Create()->GetVar("ARDIA_DATA_DIR").value_or("").empty();
 }
 
+bool HeadlessRun() {
+  return base::CommandLine::ForCurrentProcess()->HasSwitch("headless");
+}
+
 bool MayActivateNativeWindows() {
   const auto* command = base::CommandLine::ForCurrentProcess();
-  return !ardiacore::BackgroundInstance() && !command->HasSwitch("headless") &&
+  return !ardiacore::BackgroundInstance() && !HeadlessRun() &&
          command->GetSwitchValueASCII("ozone-platform") != "headless";
 }
 
@@ -4177,7 +4181,7 @@ void ShellHostView::CloseNativeWindow(LinuxClose::Identity identity) {
 }
 
 void ShellHostView::ArmWindowClose() {
-  if (!browser_ || !browser_view_ || !GetWidget() || GetWidget()->IsClosed()) return;
+  if (HeadlessRun() || !browser_ || !browser_view_ || !GetWidget() || GetWidget()->IsClosed()) return;
   GetWidget()->MakeCloseSynchronous(base::BindOnce(
       [](base::WeakPtr<ShellHostView> host, base::WeakPtr<views::Widget> widget,
          views::Widget::ClosedReason reason) {
@@ -8659,6 +8663,32 @@ void EngineEvent(void*, const char* topic, const char* json) {
   for (const auto& [id, host] : Hosts()) host->EngineEvent(topic, payload->GetDict());
 }
 
+bool KeepsWindowWithoutTabs(const BrowserWindowInterface* browser) {
+  if (!browser || HeadlessRun()) return false;
+  if (Hosts().contains(browser->GetSessionID().id())) return true;
+  ShellHostView* host = IsCompanion(browser) ? MemberHost(browser) : nullptr;
+  return host && !host->closing() && !browser_shutdown::IsTryingToQuit();
+}
+
+void InstallCloseHooks() {
+  if (HeadlessRun()) return;
+  g_ardia_linux_close_hooks = {
+      [](BrowserWindowInterface* browser, const base::UnguessableToken& token,
+         LinuxCloseStage stage, base::OnceCallback<void(bool)> continuation) {
+        if (!browser) return false;
+        const auto found = Hosts().find(browser->GetSessionID().id());
+        if (found == Hosts().end() || found->second->browser() != browser) return false;
+        return found->second->DeferChromeClose(token, stage, std::move(continuation));
+      },
+      [](BrowserWindowInterface* browser, const base::UnguessableToken& token) {
+        if (!browser) return;
+        const auto found = Hosts().find(browser->GetSessionID().id());
+        if (found != Hosts().end() && found->second->browser() == browser)
+          found->second->ChromeCloseCancelled(token);
+      }};
+  SetLinuxQuitAsksAboutDownloads(true);
+}
+
 }
 
 namespace linux_pip {
@@ -8844,12 +8874,7 @@ void StartLinuxHost() {
   };
   DevToolsWindow::RegisterLinuxDevToolsLifecycle();
   content::WebUIConfigMap::GetInstance().AddWebUIConfig(std::make_unique<ShellConfig>());
-  g_ardia_keeps_window_without_tabs = [](const BrowserWindowInterface* browser) {
-    if (!browser) return false;
-    if (Hosts().contains(browser->GetSessionID().id())) return true;
-    ShellHostView* host = IsCompanion(browser) ? MemberHost(browser) : nullptr;
-    return host && !host->closing() && !browser_shutdown::IsTryingToQuit();
-  };
+  g_ardia_keeps_window_without_tabs = &KeepsWindowWithoutTabs;
   g_ardia_linux_companion_owner = [](const BrowserWindowInterface* browser) -> BrowserWindowInterface* {
     ShellHostView* host = IsCompanion(browser) ? MemberHost(browser) : nullptr;
     return host ? host->browser() : nullptr;
@@ -8885,21 +8910,7 @@ void StartLinuxHost() {
     if (host && activate) host->FocusWindow();
     return true;
   };
-  g_ardia_linux_close_hooks = {
-      [](BrowserWindowInterface* browser, const base::UnguessableToken& token,
-         LinuxCloseStage stage, base::OnceCallback<void(bool)> continuation) {
-        if (!browser) return false;
-        const auto found = Hosts().find(browser->GetSessionID().id());
-        if (found == Hosts().end() || found->second->browser() != browser) return false;
-        return found->second->DeferChromeClose(token, stage, std::move(continuation));
-      },
-      [](BrowserWindowInterface* browser, const base::UnguessableToken& token) {
-        if (!browser) return;
-        const auto found = Hosts().find(browser->GetSessionID().id());
-        if (found != Hosts().end() && found->second->browser() == browser)
-          found->second->ChromeCloseCancelled(token);
-      }};
-  SetLinuxQuitAsksAboutDownloads(true);
+  InstallCloseHooks();
   LinuxExtensionsDelegate extensions;
   extensions.deliver = base::BindRepeating([](int window, std::string_view name, base::DictValue data) {
     const auto found = Hosts().find(window);

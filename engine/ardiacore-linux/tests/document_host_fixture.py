@@ -153,6 +153,7 @@ namespace browser_shutdown {
 inline bool trying_to_quit = false;
 inline bool IsTryingToQuit() { return trying_to_quit; }
 }
+bool HeadlessRun() { return false; }
 base::SingleThreadTaskRunner files;
 void Drain() {
   auto* ui = base::SingleThreadTaskRunner::GetCurrentDefault();

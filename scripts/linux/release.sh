@@ -1,21 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
-usage='usage: scripts/linux/release.sh <version> [--engine exact|nearest|<dir>] [--out <dir>] [--update-key <pem>] [--allow-dirty]
+usage='usage: scripts/linux/release.sh <version> [--cpu x64|arm64] [--engine exact|nearest|<dir>] [--out <dir>] [--update-key <pem>] [--allow-dirty]
 
-Builds the Linux x64 release of Ardia <version> (a -nightly.<n> version is a
-nightly), the Linux counterpart of scripts/release.sh: it fetches the engine,
-builds apps/desktop/dist/linux, the ardia CLI and lib/ardia/ardia-update-verify
+Builds the Linux release of Ardia <version> for x64 (default) or arm64 (a
+-nightly.<n> version is a nightly), the Linux counterpart of scripts/release.sh:
+it fetches the engine, builds apps/desktop/dist/linux, the ardia CLI (when
+published for the target CPU) and lib/ardia/ardia-update-verify
 (scripts/linux/update-verify.sh), prepares uBlock Origin, packages
-Ardia-<version>-linux-x64.tar.xz with lib/ardia/VERSION and the CLI, and the
-same build as Ardia-<version>-linux-x64.deb and .AppImage and, from the
-tarball, Ardia-<version>-linux-x64.rpm and the Flatpak bundle
-Ardia-<version>-linux-x64.flatpak (dev.ardia.Ardia), writes
+Ardia-<version>-linux-<cpu>.tar.xz with lib/ardia/VERSION and the CLI, and the
+same build as Ardia-<version>-linux-<cpu>.deb and .AppImage and, from the
+tarball, Ardia-<version>-linux-<cpu>.rpm and the Flatpak bundle
+Ardia-<version>-linux-<cpu>.flatpak (dev.ardia.Ardia), writes
 ardia-bin-<version>.src.tar.gz (the Arch PKGBUILD and .SRCINFO pinned to that
-tarball), the .sha256 files and provenance.txt, runs the smoke gate on the
-tarball, the .deb, the .rpm and the AppImage, and writes the self-update manifest
-Ardia-<version>-linux-update.txt (scripts/linux/sign-update.mjs). It never
-publishes: it prints the gh release upload command for the assets.
+tarball on x64), the .sha256 files and provenance.txt, runs the smoke gate on the
+tarball, the .deb, the .rpm and the AppImage, and on x64 writes the self-update
+manifest Ardia-<version>-linux-update.txt (scripts/linux/sign-update.mjs). It
+never publishes: it prints the gh release upload command for the assets.
 
+  --cpu CPU          target CPU: x64 (default) or arm64
   --engine exact     the published engine of this commit'"'"'s engine key (default;
                      a release must match its source)
   --engine nearest   the nearest earlier published engine: a test build
@@ -52,6 +54,7 @@ die() { echo "release.sh: $*" >&2; exit 1; }
 warn() { echo "warning: $*" >&2; }
 
 version=""
+cpu=x64
 engine_mode=exact
 out=""
 allow_dirty=0
@@ -59,6 +62,7 @@ update_key=${LINUX_UPDATE_KEY_FILE:-}
 while [ $# -gt 0 ]; do
   case "$1" in
     -h|--help) echo "$usage"; exit 0 ;;
+    --cpu) [ $# -ge 2 ] || die "--cpu needs x64 or arm64"; cpu=$2; shift 2 ;;
     --engine) [ $# -ge 2 ] || die "--engine needs exact, nearest or a directory"; engine_mode=$2; shift 2 ;;
     --out) [ $# -ge 2 ] || die "--out needs a directory"; out=$2; shift 2 ;;
     --update-key) [ $# -ge 2 ] || die "--update-key needs a PEM file"; update_key=$2; shift 2 ;;
@@ -68,6 +72,11 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -n "$version" ] || { echo "$usage" >&2; exit 64; }
+case "$cpu" in
+  x64) fetch_arch=linux-x86_64 ;;
+  arm64) fetch_arch=linux-arm64 ;;
+  *) die "--cpu must be x64 or arm64, not '$cpu'" ;;
+esac
 if [ -n "$update_key" ]; then
   [ -f "$update_key" ] || die "no update signing key at $update_key"
   update_key=$(cd "$(dirname "$update_key")" && pwd -P)/$(basename "$update_key")
@@ -105,17 +114,21 @@ node scripts/lib/release-note.mjs "docs/release-notes/$version.md" headline >/de
 release_output_entry() {
   case $1 in
     provenance.txt|ui-build.log|update-verify.log|ubo.log|rpm-build.log|flatpak-build.log|smoke|smoke-deb|smoke-rpm|smoke-appimage) return 0 ;;
-    Ardia-*-linux-x64.tar.xz|Ardia-*-linux-x64.tar.xz.sha256) return 0 ;;
+    Ardia-*-linux-x64.tar.xz|Ardia-*-linux-x64.tar.xz.sha256|Ardia-*-linux-arm64.tar.xz|Ardia-*-linux-arm64.tar.xz.sha256) return 0 ;;
     Ardia-*-linux-x64.deb|Ardia-*-linux-x64.deb.sha256|Ardia-*-linux-x64.AppImage|Ardia-*-linux-x64.AppImage.sha256) return 0 ;;
+    Ardia-*-linux-arm64.deb|Ardia-*-linux-arm64.deb.sha256|Ardia-*-linux-arm64.AppImage|Ardia-*-linux-arm64.AppImage.sha256) return 0 ;;
     Ardia-*-linux-x64.rpm|Ardia-*-linux-x64.rpm.sha256|Ardia-*-linux-x64.flatpak|Ardia-*-linux-x64.flatpak.sha256) return 0 ;;
+    Ardia-*-linux-arm64.rpm|Ardia-*-linux-arm64.rpm.sha256|Ardia-*-linux-arm64.flatpak|Ardia-*-linux-arm64.flatpak.sha256) return 0 ;;
     ardia-bin-*.src.tar.gz|ardia-bin-*.src.tar.gz.sha256) return 0 ;;
-    ardia-cli-*-linux-x64.tar.gz|ardia-cli-*-linux-x64.tar.gz.sha256) return 0 ;;
+    ardia-cli-*-linux-x64.tar.gz|ardia-cli-*-linux-x64.tar.gz.sha256|ardia-cli-*-linux-arm64.tar.gz|ardia-cli-*-linux-arm64.tar.gz.sha256) return 0 ;;
     Ardia-*-linux-update.txt|Ardia-*-linux-update.txt.sig) return 0 ;;
   esac
   return 1
 }
 
-out=${out:-$root/dist/$version/linux}
+default_out=$root/dist/$version/linux
+[ "$cpu" = x64 ] || default_out=$root/dist/$version/linux-$cpu
+out=${out:-$default_out}
 if [ -e "$out" ]; then
   [ -d "$out" ] || die "$out is not a directory"
   if [ -n "$(ls -A "$out")" ]; then
@@ -128,20 +141,20 @@ if [ -e "$out" ]; then
 fi
 mkdir -p "$out"
 out=$(cd "$out" && pwd -P)
-package_name="Ardia-$version-linux-x64.tar.xz"
-deb_name="Ardia-$version-linux-x64.deb"
-rpm_name="Ardia-$version-linux-x64.rpm"
-flatpak_name="Ardia-$version-linux-x64.flatpak"
-appimage_name="Ardia-$version-linux-x64.AppImage"
-cli_name="ardia-cli-$version-linux-x64.tar.gz"
+package_name="Ardia-$version-linux-$cpu.tar.xz"
+deb_name="Ardia-$version-linux-$cpu.deb"
+rpm_name="Ardia-$version-linux-$cpu.rpm"
+flatpak_name="Ardia-$version-linux-$cpu.flatpak"
+appimage_name="Ardia-$version-linux-$cpu.AppImage"
+cli_name="ardia-cli-$version-linux-$cpu.tar.gz"
 srcpkg_name="ardia-bin-$version.src.tar.gz"
 update_name="Ardia-$version-linux-update.txt"
 export SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-$(git log -1 --format=%ct)}
 
-echo "==> Engine ($engine_mode)"
+echo "==> Engine ($engine_mode, linux-$cpu)"
 case "$engine_mode" in
-  exact) engine=$(packages/ardiacore/scripts/fetch-engine.sh --arch linux-x86_64) || die "no published Linux engine for this commit's engine key: publish it with scripts/linux/publish-engine.sh --upload (docs/linux-ci.md)" ;;
-  nearest) engine=$(packages/ardiacore/scripts/fetch-engine.sh --arch linux-x86_64 --nearest) || die "no published Linux engine near this commit's engine key" ;;
+  exact) engine=$(packages/ardiacore/scripts/fetch-engine.sh --arch "$fetch_arch") || die "no published Linux $cpu engine for this commit's engine key: publish it with scripts/linux/publish-engine.sh --cpu $cpu --upload (docs/linux-ci.md)" ;;
+  nearest) engine=$(packages/ardiacore/scripts/fetch-engine.sh --arch "$fetch_arch" --nearest) || die "no published Linux $cpu engine near this commit's engine key" ;;
   "") die "--engine needs exact, nearest or a directory" ;;
   *) [ -d "$engine_mode" ] || die "--engine $engine_mode is neither exact, nearest nor a directory"; engine=$(cd "$engine_mode" && pwd -P) ;;
 esac
@@ -160,7 +173,7 @@ elif [ -f "$engine/../../chrome/VERSION" ]; then
   chromium_version=$(awk -F= '{ v[$1] = $2 } END { print v["MAJOR"] "." v["MINOR"] "." v["BUILD"] "." v["PATCH"] }' "$engine/../../chrome/VERSION")
 fi
 exact=0
-python3 -I scripts/linux/runtime_files.py serves --engine "$engine" --key "$head_key" && exact=1
+python3 -I scripts/linux/runtime_files.py serves --engine "$engine" --key "$head_key" --cpu "$cpu" && exact=1
 engine_label=${engine_key:0:12}
 engine_label=${engine_label:-"without a manifest"}
 if [ "$exact" = 1 ]; then
@@ -174,12 +187,18 @@ echo "==> UI (apps/desktop/dist/linux)"
 pnpm --filter @ardia/desktop build >"$out/ui-build.log" 2>&1 \
   || { tail -20 "$out/ui-build.log" >&2; die "building apps/desktop/dist/linux failed ($out/ui-build.log)"; }
 
-echo "==> ardia command (pinned in apps/browser/official-plugins.json)"
-python3 -I scripts/release/official-plugins.py ${OFFICIAL_PLUGINS_FROM:+--from "$OFFICIAL_PLUGINS_FROM"} linux-cli "$version" "$out/$cli_name" \
-  || die "the pinned ardia command couldn't be fetched and verified"
+has_cli=0
+if [ "$cpu" = x64 ]; then
+  echo "==> ardia command (pinned in apps/browser/official-plugins.json)"
+  python3 -I scripts/release/official-plugins.py ${OFFICIAL_PLUGINS_FROM:+--from "$OFFICIAL_PLUGINS_FROM"} linux-cli "$version" "$out/$cli_name" \
+    || die "the pinned ardia command couldn't be fetched and verified"
+  has_cli=1
+else
+  warn "no pinned linux-$cpu ardia command yet; packaging without bundled CLI"
+fi
 
 echo "==> ardia-update-verify (packages/core-rs)"
-update_verify=$(scripts/linux/update-verify.sh 2>"$out/update-verify.log") \
+update_verify=$(scripts/linux/update-verify.sh --cpu "$cpu" 2>"$out/update-verify.log") \
   || { tail -20 "$out/update-verify.log" >&2; die "building ardia-update-verify failed ($out/update-verify.log)"; }
 
 echo "==> uBlock Origin"
@@ -187,8 +206,10 @@ blocker=$(scripts/linux/fetch-ubo.sh 2>"$out/ubo.log") \
   || { tail -20 "$out/ubo.log" >&2; die "preparing uBlock Origin failed ($out/ubo.log)"; }
 
 echo "==> Package"
-python3 scripts/linux/package.py --out "$engine" --ui apps/desktop/dist/linux --content-blocker "$blocker" \
-  --version "$version" --cli "$out/$cli_name" --update-verify "$update_verify" --destination "$out/$package_name" \
+package_extra=()
+[ "$has_cli" = 0 ] || package_extra+=(--cli "$out/$cli_name")
+python3 scripts/linux/package.py --cpu "$cpu" --out "$engine" --ui apps/desktop/dist/linux --content-blocker "$blocker" \
+  --version "$version" "${package_extra[@]}" --update-verify "$update_verify" --destination "$out/$package_name" \
   --deb "$out/$deb_name" --appimage "$out/$appimage_name" >/dev/null
 rpm_dropped=""
 drop_rpm() {
@@ -203,19 +224,22 @@ done
 if [ -n "$missing_rpm_tools" ]; then
   drop_rpm "building it needs${missing_rpm_tools}"
 else
-  timeout -k 1m 10m python3 scripts/linux/linux_formats.py from-tarball --tarball "$out/$package_name" --version "$version" --rpm "$out/$rpm_name" >"$out/rpm-build.log" 2>&1 \
+  timeout -k 1m 10m python3 scripts/linux/linux_formats.py from-tarball --cpu "$cpu" --tarball "$out/$package_name" --version "$version" --rpm "$out/$rpm_name" >"$out/rpm-build.log" 2>&1 \
     || { status=$?; tail -20 "$out/rpm-build.log" >&2; if [ "$status" = 124 ] || [ "$status" = 137 ]; then drop_rpm "building it took over 10 minutes or was killed (rpm-build.log)"; else drop_rpm "building it failed (rpm-build.log)"; fi; }
 fi
 flatpak_built=1
-timeout -k 1m 20m python3 scripts/linux/linux_formats.py from-tarball --tarball "$out/$package_name" --version "$version" --flatpak "$out/$flatpak_name" >"$out/flatpak-build.log" 2>&1 \
+timeout -k 1m 20m python3 scripts/linux/linux_formats.py from-tarball --cpu "$cpu" --tarball "$out/$package_name" --version "$version" --flatpak "$out/$flatpak_name" >"$out/flatpak-build.log" 2>&1 \
   || { status=$?; { [ "$status" = 124 ] || [ "$status" = 137 ]; } && echo "release.sh: stopped after 20 minutes or killed" >>"$out/flatpak-build.log"; flatpak_built=0; rm -f "$out/$flatpak_name"; tail -20 "$out/flatpak-build.log" >&2; warn "building the Flatpak failed ($out/flatpak-build.log): the release goes without it"; }
-srcpkg=$(mktemp -d)
-scripts/linux/arch/update-pkgbuild.sh "$version" --package "$out/$package_name" --out "$srcpkg/ardia-bin" >/dev/null \
-  || { rm -rf "$srcpkg"; die "writing the Arch PKGBUILD for $package_name failed (above)"; }
-tar --sort=name --owner=0 --group=0 --numeric-owner --mtime="@$SOURCE_DATE_EPOCH" -C "$srcpkg" -cf - ardia-bin \
-  | gzip -n -9 > "$out/$srcpkg_name"
-rm -rf "$srcpkg"
-built_names=("$package_name" "$deb_name" "$appimage_name" "$srcpkg_name")
+built_names=("$package_name" "$deb_name" "$appimage_name")
+if [ "$cpu" = x64 ]; then
+  srcpkg=$(mktemp -d)
+  scripts/linux/arch/update-pkgbuild.sh "$version" --package "$out/$package_name" --out "$srcpkg/ardia-bin" >/dev/null \
+    || { rm -rf "$srcpkg"; die "writing the Arch PKGBUILD for $package_name failed (above)"; }
+  tar --sort=name --owner=0 --group=0 --numeric-owner --mtime="@$SOURCE_DATE_EPOCH" -C "$srcpkg" -cf - ardia-bin \
+    | gzip -n -9 > "$out/$srcpkg_name"
+  rm -rf "$srcpkg"
+  built_names+=("$srcpkg_name")
+fi
 [ -n "$rpm_dropped" ] || built_names+=("$rpm_name")
 [ "$flatpak_built" = 0 ] || built_names+=("$flatpak_name")
 for built in "${built_names[@]}"; do
@@ -224,7 +248,7 @@ done
 
 write_provenance() {
   {
-    echo "version $version, $channel, linux-x64"
+    echo "version $version, $channel, linux-$cpu"
     echo "commit $(git rev-parse HEAD)${dirty:+ + uncommitted changes}"
     echo "engine key ${engine_key:-unknown} ($([ "$exact" = 1 ] && echo "exact, this commit's $head_key" || echo "not this commit's $head_key")), from $engine"
     echo "engine source commit ${engine_commit:-unknown}"
@@ -242,14 +266,18 @@ write_provenance() {
     else
       echo "flatpak dropped: building it failed (flatpak-build.log)"
     fi
-    echo "arch $(cut -d' ' -f1 "$out/$srcpkg_name.sha256")  $srcpkg_name"
-    echo "cli $(cut -d' ' -f1 "$out/$cli_name.sha256")  $cli_name, from $(python3 -I scripts/release/official-plugins.py describe | grep '^plugin cli ')"
+    if [ "$cpu" = x64 ]; then
+      echo "arch $(cut -d' ' -f1 "$out/$srcpkg_name.sha256")  $srcpkg_name"
+    fi
+    if [ "$has_cli" = 1 ]; then
+      echo "cli $(cut -d' ' -f1 "$out/$cli_name.sha256")  $cli_name, from $(python3 -I scripts/release/official-plugins.py describe | grep '^plugin cli ')"
+    fi
   } > "$out/provenance.txt"
 }
 write_provenance
 
 echo "==> Smoke"
-smoke_extra=()
+smoke_extra=(--cpu "$cpu")
 [ "$exact" = 1 ] || smoke_extra+=(--allow-old-engine)
 node scripts/linux/smoke.mjs --package "$out/$package_name" --results "$out/smoke" --timeout-ms 600000 "${smoke_extra[@]}" \
   || die "the smoke gate failed ($out/smoke/results.json)"
@@ -267,29 +295,36 @@ fi
 node scripts/linux/smoke.mjs --package "$out/$appimage_name" --results "$out/smoke-appimage" --timeout-ms 600000 "${smoke_extra[@]}" \
   || die "the smoke gate failed for the AppImage ($out/smoke-appimage/results.json)"
 
-echo "==> Update manifest"
-if [ -n "$update_key" ]; then
-  node scripts/linux/sign-update.mjs --key "$update_key" --dir "$out" --version "$version" >/dev/null \
-    || die "signing $update_name failed (above)"
-else
-  node scripts/linux/sign-update.mjs --unsigned --dir "$out" --version "$version" >/dev/null \
-    || die "writing $update_name failed (above)"
+if [ "$cpu" = x64 ]; then
+  echo "==> Update manifest"
+  if [ -n "$update_key" ]; then
+    node scripts/linux/sign-update.mjs --key "$update_key" --dir "$out" --version "$version" >/dev/null \
+      || die "signing $update_name failed (above)"
+  else
+    node scripts/linux/sign-update.mjs --unsigned --dir "$out" --version "$version" >/dev/null \
+      || die "writing $update_name failed (above)"
+  fi
 fi
 
 echo
 [ "$exact" = 1 ] || echo "NOT a release: built against engine $engine_label, not this commit's ${head_key:0:12}."
 [ -z "$dirty" ] || echo "NOT a release: built with uncommitted changes."
-du -sh "${built_names[@]/#/$out/}" "$out/$cli_name"
+du_targets=("${built_names[@]/#/$out/}")
+[ "$has_cli" = 0 ] || du_targets+=("$out/$cli_name")
+du -sh "${du_targets[@]}"
 upload=()
-for built in "${built_names[@]}" "$cli_name"; do upload+=("$out/$built" "$out/$built.sha256"); done
+for built in "${built_names[@]}"; do upload+=("$out/$built" "$out/$built.sha256"); done
+[ "$has_cli" = 0 ] || upload+=("$out/$cli_name" "$out/$cli_name.sha256")
 echo
-if [ -n "$update_key" ]; then
-  upload+=("$out/$update_name" "$out/$update_name.sig")
-  echo "Self-update manifest: $out/$update_name, signed ($update_name.sig)."
-else
-  echo "Self-update manifest: $out/$update_name, UNSIGNED: installs refuse it until it has its .sig. Sign it with"
-  printf '  node scripts/linux/sign-update.mjs --key <LINUX_UPDATE_ED_PRIVATE_KEY pem> --dir %q --version %s\n' "$out" "$version"
-  printf 'and upload both with\n  gh release upload v%s -R %s %q %q\n' "$version" "$REPO" "$out/$update_name" "$out/$update_name.sig"
+if [ "$cpu" = x64 ]; then
+  if [ -n "$update_key" ]; then
+    upload+=("$out/$update_name" "$out/$update_name.sig")
+    echo "Self-update manifest: $out/$update_name, signed ($update_name.sig)."
+  else
+    echo "Self-update manifest: $out/$update_name, UNSIGNED: installs refuse it until it has its .sig. Sign it with"
+    printf '  node scripts/linux/sign-update.mjs --key <LINUX_UPDATE_ED_PRIVATE_KEY pem> --dir %q --version %s\n' "$out" "$version"
+    printf 'and upload both with\n  gh release upload v%s -R %s %q %q\n' "$version" "$REPO" "$out/$update_name" "$out/$update_name.sig"
+  fi
 fi
 [ -z "$rpm_dropped" ] || echo "Left out: the .rpm ($rpm_dropped)."
 [ "$flatpak_built" = 1 ] || echo "Left out: the Flatpak (building it failed, flatpak-build.log)."

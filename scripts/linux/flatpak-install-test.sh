@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-usage='usage: scripts/linux/flatpak-install-test.sh <Ardia-<version>-linux-x64.flatpak> [<image>...]
+usage='usage: scripts/linux/flatpak-install-test.sh <Ardia-<version>-linux-<cpu>.flatpak> [<image>...]
 
 Installs the single-file Flatpak bundle with flatpak install --user --bundle in
 fresh privileged containers (docker or podman; bubblewrap needs them), as an
@@ -22,6 +22,10 @@ esac
 bundle=$(realpath "$1")
 shift
 [ -f "$bundle" ] || { echo "flatpak-install-test.sh: no file at $bundle" >&2; exit 1; }
+flatpak_arch=x86_64
+case "${bundle##*/}" in
+  *-linux-arm64.flatpak) flatpak_arch=aarch64 ;;
+esac
 images=("$@")
 [ ${#images[@]} -gt 0 ] || images=(ubuntu:24.04 fedora:43)
 engine=$(command -v docker || command -v podman || true)
@@ -57,9 +61,9 @@ for try in 1 2 3; do
   sleep 10
 done
 info=$(flatpak info --user "$app")
-grep -q "Ref: app/$app/x86_64/stable" <<<"$info" || fail "the bundle is not app/$app/x86_64/stable: $info"
-grep -q "Runtime: org.freedesktop.Platform/x86_64/" <<<"$info" || fail "no freedesktop runtime: $info"
-flatpak list --user --runtime --columns=ref,origin | grep -q "^org.freedesktop.Platform/x86_64/.*flathub" || fail "the runtime did not come from Flathub"
+grep -q "Ref: app/$app/$FLATPAK_ARCH/stable" <<<"$info" || fail "the bundle is not app/$app/$FLATPAK_ARCH/stable: $info"
+grep -q "Runtime: org.freedesktop.Platform/$FLATPAK_ARCH/" <<<"$info" || fail "no freedesktop runtime: $info"
+flatpak list --user --runtime --columns=ref,origin | grep -q "^org.freedesktop.Platform/$FLATPAK_ARCH/.*flathub" || fail "the runtime did not come from Flathub"
 echo "ok   $(grep -m1 "Version:" <<<"$info" | xargs), runtime from Flathub, branch stable"
 version=$(flatpak run "$app" --version 2>/tmp/version.log) || { status=$?; tail -20 /tmp/version.log; fail "ardia --version exited $status"; }
 echo "ok   $version"
@@ -158,7 +162,7 @@ for image in "${images[@]}"; do
     status=1
     continue
   fi
-  if ! "$engine" run --rm --privileged -e CHECK="$check" -v "$bundle:/pkg/ardia.flatpak:ro" "$image" bash -c "$setup"; then
+  if ! "$engine" run --rm --privileged -e FLATPAK_ARCH="$flatpak_arch" -e CHECK="$check" -v "$bundle:/pkg/ardia.flatpak:ro" "$image" bash -c "$setup"; then
     echo "FAIL $image"
     status=1
   fi

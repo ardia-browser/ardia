@@ -17,8 +17,9 @@ LINUX = REPO / 'scripts/linux'
 MAC_FETCH = 'packages/ardiacore/scripts/fetch-engine.sh'
 DISPATCH = '''if [ "${1:-}" = --arch ]; then
   case "${2:-}" in
-    linux-x86_64) shift 2; exec "$root/scripts/linux/fetch-engine.sh" "$@" ;;
-    *) die "usage: fetch-engine.sh [--nearest] | fetch-engine.sh --arch linux-x86_64 [--nearest]" ;;
+    linux-x86_64) shift 2; exec "$root/scripts/linux/fetch-engine.sh" --cpu x64 "$@" ;;
+    linux-arm64|linux-aarch64) shift 2; exec "$root/scripts/linux/fetch-engine.sh" --cpu arm64 "$@" ;;
+    *) die "usage: fetch-engine.sh [--nearest] | fetch-engine.sh --arch linux-x86_64|linux-arm64 [--nearest]" ;;
   esac
 fi
 
@@ -145,18 +146,18 @@ class ArchiveMaker:
         manifest.update(overrides)
         return json.dumps(manifest).encode()
 
-    def publish(self, key, members=None, manifest=None, sha=None, skip=(), row_key=None):
+    def publish(self, key, members=None, manifest=None, sha=None, skip=(), row_key=None, cpu='x64'):
         tag = runtime.release_tag(key)
         folder = self.assets / tag
         folder.mkdir(parents=True, exist_ok=True)
-        archive = folder / runtime.archive_name(key)
+        archive = folder / runtime.archive_name(key, cpu=cpu)
         with tarfile.open(archive, 'w:xz') as packed:
             def add(name, data=b'', kind=tarfile.REGTYPE, mode=0o644, link=''):
                 info = tarfile.TarInfo(name)
                 info.type, info.mode, info.linkname = kind, mode, link
                 info.size = len(data) if kind == tarfile.REGTYPE else 0
                 packed.addfile(info, io.BytesIO(data) if kind == tarfile.REGTYPE else None)
-            root = runtime.ARCHIVE_ROOT
+            root = runtime.archive_root(cpu)
             add(root, kind=tarfile.DIRTYPE, mode=0o755)
             for name in runtime.REQUIRED:
                 if name in skip:
@@ -166,7 +167,7 @@ class ArchiveMaker:
                     add(f'{root}/locales/en-US.pak', b'locale')
                 else:
                     add(f'{root}/{name}', b'runtime', mode=0o755 if name == 'chrome' else 0o644)
-            add(f'{root}/manifest.json', manifest if manifest is not None else self.manifest(key))
+            add(f'{root}/manifest.json', manifest if manifest is not None else self.manifest(key, target_cpu=cpu))
             for member in members or ():
                 add(**member)
         digest = sha or hashlib.sha256(archive.read_bytes()).hexdigest()
@@ -683,6 +684,19 @@ class FetcherTests(unittest.TestCase):
         self.assertEqual(self.fetch('--help').returncode, 0)
         self.assertNotEqual(self.fetch('--bogus').returncode, 0)
         self.assertNotEqual(self.fetch('--nearest', 'extra').returncode, 0)
+        self.assertNotEqual(self.fetch('--cpu', 'riscv64').returncode, 0)
+
+    def test_arm64_engine_can_be_fetched_verified_and_checked_with_serves(self):
+        key = self.fixture.key()
+        self.assets.publish(key, cpu='arm64')
+        result = self.fetch('--arch', 'linux-arm64', script=MAC_FETCH)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        engine = pathlib.Path(result.stdout.strip())
+        self.assertEqual(engine, self.fixture.repo / 'apps/browser/build-ardiacore/prebuilt-linux-arm64' / key[:12])
+        manifest = json.loads((engine / 'manifest.json').read_text())
+        self.assertEqual((manifest['engine_key'], manifest['target_cpu']), (key, 'arm64'))
+        self.assertTrue(runtime.serves(engine, key, self.assets.table, cpu='arm64'))
+        self.assertFalse(runtime.serves(engine, key, self.assets.table, cpu='x64'))
 
 
 class MacDispatchTests(unittest.TestCase):

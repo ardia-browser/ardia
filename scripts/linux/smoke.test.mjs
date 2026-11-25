@@ -4,7 +4,7 @@ import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { launchArguments, launchEnvironment } from "../../apps/desktop/scripts/acceptance/lib/ardia.mjs";
-import { ASSERTIONS, SYNC_CORE_PHRASES, syncCoreProblems, syncCoreVerdict, SCRIPT_NAME, SCRIPT_TITLE_PREFIX, UNKNOWN_WINDOW_ERROR, USAGE, USER_SCRIPTS_CAPABILITIES, VERSION_PATTERN, WINDOW_STATE_CAPABILITIES, windowStateProblems, windowStateSupport, windowStateVerdict, appVersionVerdict, cliControlSupport, cliTarball, debLayoutProblems, rpmLayoutProblems, privateFolder, packageFormat, formatTable, installerRanAgain, launchRefusal, packageStagedFiles, parseArgs, pipeLaunchArguments, splitPipeMessages, summarize, uboSeedProblems, uboTuningProblems, userScriptSource } from "./smoke.mjs";
+import { ASSERTIONS, SYNC_CORE_PHRASES, syncCoreProblems, syncCoreVerdict, SCRIPT_NAME, SCRIPT_TITLE_PREFIX, UNKNOWN_WINDOW_ERROR, USAGE, USER_SCRIPTS_CAPABILITIES, VERSION_PATTERN, WINDOW_STATE_CAPABILITIES, windowStateProblems, windowStateSupport, windowStateVerdict, appVersionVerdict, cliControlSupport, cliTarball, debLayoutProblems, rpmLayoutProblems, privateFolder, packageCpu, packageFormat, formatTable, installerRanAgain, launchRefusal, packageStagedFiles, parseArgs, pipeLaunchArguments, splitPipeMessages, summarize, uboSeedProblems, uboTuningProblems, userScriptSource } from "./smoke.mjs";
 
 test("the package checks are named in the usage and keep the original eight first", () => {
   assert.deepEqual(ASSERTIONS.slice(0, 8), ["ldd", "shell-ui", "bootstrap", "native-tab", "sandbox", "content-blocker", "restart-restore", "staged-install"]);
@@ -119,6 +119,11 @@ test("the gate takes a tarball, a .deb, an .rpm or an AppImage and refuses anyth
   assert.equal(packageFormat("/x/Ardia.zip"), null);
   assert.equal(parseArgs(["--package", "a", "--results", "b"]).format, undefined);
   assert.equal(parseArgs(["--package", "a.deb", "--results", "b"]).format, "deb");
+  assert.equal(packageCpu("/x/Ardia-0.2.47-linux-x64.tar.xz"), "x64");
+  assert.equal(packageCpu("/x/Ardia-0.2.47-linux-arm64.deb"), "arm64");
+  assert.equal(cliTarball("0.2.47", "arm64"), "ardia-cli-0.2.47-linux-arm64.tar.gz");
+  assert.equal(parseArgs(["--package", "a.deb", "--results", "b", "--cpu", "arm64"]).cpu, "arm64");
+  assert.throws(() => parseArgs(["--package", "a.deb", "--results", "b", "--cpu", "riscv64"]), /--cpu/);
 });
 
 test("a .deb is root-owned with a setuid root helper, the launcher link, the policy and the AppArmor profile", () => {
@@ -138,6 +143,7 @@ test("a .deb is root-owned with a setuid root helper, the launcher link, the pol
   ];
   const fields = { Package: "ardia", Architecture: "amd64" };
   assert.deepEqual(debLayoutProblems(good.join("\n"), fields), []);
+  assert.deepEqual(debLayoutProblems(good.join("\n"), { ...fields, Architecture: "arm64" }, "arm64"), []);
   const broken = good.map((entry) => entry.replace("-rwsr-xr-x root/root", "-rwxr-xr-x root/root").replace("./usr/share/ardia/apparmor/ardia", "./usr/share/ardia/other"));
   const problems = debLayoutProblems(`${broken.join("\n")}\n${line("-rw-r--r--", "./usr/x").replace("root/root", "user/user")}`, { ...fields, Architecture: "arm64" });
   assert.equal(problems.length, 4, problems.join("\n"));
@@ -164,6 +170,7 @@ test("an .rpm is root-owned with a setuid root helper, the launcher link, the po
   ];
   const fields = { name: "ardia", arch: "x86_64", scripts: "postinstall scriptlet (using /bin/sh):\n  install -m 0644 /usr/share/ardia/apparmor/ardia /etc/apparmor.d/ardia\n" };
   assert.deepEqual(rpmLayoutProblems(good.join("\n"), fields), []);
+  assert.deepEqual(rpmLayoutProblems(good.join("\n"), { ...fields, arch: "aarch64" }, "arm64"), []);
   const broken = good.filter((entry) => !entry.endsWith("/copyright") && !entry.endsWith("/ardia-little.desktop")).map((entry) => entry.replace("-rwsr-xr-x", "-rwxr-xr-x"));
   const problems = rpmLayoutProblems(`${broken.join("\n")}\n${line("-rw-r--r--", "/usr/x", "", "user     user")}`, { name: "ardia", arch: "aarch64", scripts: "" });
   assert.equal(problems.length, 6, problems.join("\n"));

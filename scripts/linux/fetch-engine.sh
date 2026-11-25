@@ -1,20 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
-usage='usage: scripts/linux/fetch-engine.sh [--nearest]
-       packages/ardiacore/scripts/fetch-engine.sh --arch linux-x86_64 [--nearest]
+usage='usage: scripts/linux/fetch-engine.sh [--cpu x64|arm64] [--nearest]
+       packages/ardiacore/scripts/fetch-engine.sh --arch linux-x86_64|linux-arm64 [--nearest]
 
-Downloads, verifies and caches the prebuilt Linux x64 ArdiaCore engine whose
+Downloads, verifies and caches the prebuilt Linux ArdiaCore engine whose
 engine key (engine/engine-key.sh --platform linux: engine/ but for the mac
 lines of the series, and the offline game it packs) matches this checkout
 (scripts/linux/publish-engine.sh makes them), and prints
 the engine directory (the one holding chrome and manifest.json) for
 scripts/linux/package.py --out.
 
+  --cpu CPU   target CPU: x64 (default) or arm64
   --nearest   when this engine key has no published engine, use the one of
               the nearest earlier commit that changed a path the key covers,
               with a warning
 
-Rows come from packages/ardiacore/prebuilt-engines-linux.tsv
+Rows come from packages/ardiacore/prebuilt-engines-linux.tsv (or
+prebuilt-engines-linux-arm64.tsv for arm64)
 (key<TAB>tag<TAB>sha256[<TAB>built key]), then from the published table. A
 row with a built key serves an engine published under that other key (one the
 engine key changed from) built from the sources of this key. The .complete of
@@ -23,30 +25,49 @@ fetched and verified for, so scripts/linux/runtime_files.py serves can tell it
 is the exact engine of this key whichever table the row came from, and a cached
 engine is found again with no table at hand.
 Environment:
-  ARDIACORE_PREBUILT_REPO          GitHub repo (default ardia-browser/ardia)
-  ARDIACORE_PREBUILT_ASSETS        asset base URL (default
-                                   https://github.com/$repo/releases/download)
-  ARDIACORE_PREBUILT_TABLE_URL     published table URL, or none (default the
-                                   copy on the main branch of $repo)
-  ARDIACORE_PREBUILT_LINUX_TABLE   local table path (default the checked-in one)
-Engines are cached in apps/browser/build-ardiacore/prebuilt-linux-x86_64.'
+  ARDIACORE_PREBUILT_REPO                GitHub repo (default ardia-browser/ardia)
+  ARDIACORE_PREBUILT_ASSETS              asset base URL (default
+                                         https://github.com/$repo/releases/download)
+  ARDIACORE_PREBUILT_TABLE_URL           published table URL, or none (default the
+                                         copy on the main branch of $repo)
+  ARDIACORE_PREBUILT_LINUX_TABLE         local table path (default the checked-in one)
+  ARDIACORE_PREBUILT_LINUX_ARM64_TABLE   local arm64 table path override
+Engines are cached in apps/browser/build-ardiacore/prebuilt-linux-x86_64 (or
+prebuilt-linux-arm64 for arm64).'
 nearest=0
-case "${1:-}" in
-  -h|--help) echo "$usage"; exit 0 ;;
-  "") ;;
-  --nearest) nearest=1 ;;
+cpu=x64
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h|--help) echo "$usage"; exit 0 ;;
+    --nearest) nearest=1; shift ;;
+    --cpu)
+      [ $# -ge 2 ] || { echo "$usage" >&2; exit 64; }
+      cpu=$2
+      shift 2
+      ;;
+    *) echo "$usage" >&2; exit 64 ;;
+  esac
+done
+case "$cpu" in
+  x64|arm64) ;;
   *) echo "$usage" >&2; exit 64 ;;
 esac
-[ $# -le 1 ] || { echo "$usage" >&2; exit 64; }
 
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../.." && pwd)
 repo=${ARDIACORE_PREBUILT_REPO:-ardia-browser/ardia}
 assets=${ARDIACORE_PREBUILT_ASSETS:-https://github.com/$repo/releases/download}
-table=${ARDIACORE_PREBUILT_LINUX_TABLE:-$root/packages/ardiacore/prebuilt-engines-linux.tsv}
-table_url=${ARDIACORE_PREBUILT_TABLE_URL:-https://raw.githubusercontent.com/$repo/main/packages/ardiacore/prebuilt-engines-linux.tsv}
-store=$root/apps/browser/build-ardiacore/prebuilt-linux-x86_64
-archive_root=ardiacore-linux-x64
+if [ "$cpu" = arm64 ]; then
+  table_name=prebuilt-engines-linux-arm64.tsv
+  table=${ARDIACORE_PREBUILT_LINUX_ARM64_TABLE:-${ARDIACORE_PREBUILT_LINUX_TABLE:-$root/packages/ardiacore/$table_name}}
+  store=$root/apps/browser/build-ardiacore/prebuilt-linux-arm64
+else
+  table_name=prebuilt-engines-linux.tsv
+  table=${ARDIACORE_PREBUILT_LINUX_TABLE:-$root/packages/ardiacore/$table_name}
+  store=$root/apps/browser/build-ardiacore/prebuilt-linux-x86_64
+fi
+table_url=${ARDIACORE_PREBUILT_TABLE_URL:-https://raw.githubusercontent.com/$repo/main/packages/ardiacore/$table_name}
+archive_root=ardiacore-linux-$cpu
 die() { echo "fetch-engine.sh: $*" >&2; exit 1; }
 
 for tool in git curl sha256sum python3; do
@@ -79,7 +100,7 @@ cached_key() {
 }
 cached_alias() {
   [ -f "$store/${1:0:12}/.complete" ] || return 1
-  python3 -I "$here/runtime_files.py" serves --engine "$store/${1:0:12}" --key "$1" --table "$table"
+  python3 -I "$here/runtime_files.py" serves --engine "$store/${1:0:12}" --key "$1" --cpu "$cpu" --table "$table"
 }
 row=""
 resolve() {
@@ -143,13 +164,13 @@ for stale in "$store"/.tmp-*; do
 done
 tmp=$(mktemp -d "$store/.tmp-XXXXXX")
 trap 'rm -rf "$tmp"' EXIT
-file="ArdiaCore-${built:0:12}-linux-x64.tar.xz"
+file="ArdiaCore-${built:0:12}-linux-$cpu.tar.xz"
 url="$assets/$tag/$file"
 echo "downloading the Linux engine $short ($url)" >&2
 curl -fsSL --retry 3 -o "$tmp/$file" "$url" || die "couldn't download $url"
 actual=$(sha256sum "$tmp/$file" | awk '{ print $1 }')
 [ "$actual" = "$sha" ] || die "$file has SHA-256 $actual, not $sha from the engine table"
-python3 -I "$here/runtime_files.py" unpack --archive "$tmp/$file" --into "$tmp/unpacked" --key "$built" >/dev/null \
+python3 -I "$here/runtime_files.py" unpack --archive "$tmp/$file" --into "$tmp/unpacked" --key "$built" --cpu "$cpu" >/dev/null \
   || die "$file isn't a valid Linux engine for $short"
 rm -f "$tmp/$file"
 rm -rf "$dest"

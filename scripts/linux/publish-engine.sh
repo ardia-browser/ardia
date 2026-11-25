@@ -1,26 +1,29 @@
 #!/usr/bin/env bash
 set -euo pipefail
-usage='usage: scripts/linux/publish-engine.sh --out <chromium out dir> --source <ardia checkout> [--dest DIR] [--repo OWNER/NAME] [--upload]
+usage='usage: scripts/linux/publish-engine.sh --out <chromium out dir> --source <ardia checkout> [--cpu x64|arm64] [--dest DIR] [--repo OWNER/NAME] [--upload]
 
 Packs a Linux Chromium build into the prebuilt engine archive CI fetches with
-packages/ardiacore/scripts/fetch-engine.sh --arch linux-x86_64:
-ArdiaCore-<key12>-linux-x64.tar.xz and its .sha256, plus the symbols the
-stripping removes, ArdiaCore-<key12>-linux-x64-symbols.tar.xz and its .sha256
+packages/ardiacore/scripts/fetch-engine.sh --arch linux-x86_64|linux-arm64:
+ArdiaCore-<key12>-linux-<cpu>.tar.xz and its .sha256, plus the symbols the
+stripping removes, ArdiaCore-<key12>-linux-<cpu>-symbols.tar.xz and its .sha256
 (scripts/linux/symbolize.py reads it), where key is the engine
 key of <source> (engine/engine-key.sh --platform linux),
 from a git checkout whose key paths are clean, or computed the same way over a
 plain copy beside a <source>.commit file.
 
-  --out DIR        the Chromium out dir, e.g. out/Release_GN_linux_x64; copied
-                   under the chromium lock and never modified
+  --out DIR        the Chromium out dir, e.g. out/Release_GN_linux_x64 or
+                   out/Release_GN_linux_arm64; copied under the chromium lock
+                   and never modified
   --source DIR     the Ardia source tree the engine was built from
+  --cpu CPU        target CPU: x64 (default) or arm64
   --dest DIR       where the archive goes (default: a new temporary dir);
                    existing archives are never overwritten
   --repo SLUG      the GitHub repo for --upload (default: $ARDIACORE_PREBUILT_REPO
                    or ardia-browser/ardia)
   --upload         create the engine-<key12> prerelease if needed, upload both
                    archives and their .sha256 files, and add the row to
-                   packages/ardiacore/prebuilt-engines-linux.tsv (not committed)
+                   packages/ardiacore/prebuilt-engines-linux[-arm64].tsv
+                   (not committed)
 
 Prints the archive path, then the table row.'
 for arg in "$@"; do

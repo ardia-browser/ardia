@@ -21,16 +21,35 @@ SYMBOLS_ROOT = 'ardiacore-linux-x64-symbols'
 MANIFEST_FORMAT = 2
 TARGET_OS = 'linux'
 TARGET_CPU = 'x64'
+VALID_CPUS = ('x64', 'arm64')
 HEX40 = re.compile(r'^[0-9a-f]{40}$')
 HEX64 = re.compile(r'^[0-9a-f]{64}$')
 
 
-def archive_name(key):
-    return f'ArdiaCore-{key[:12]}-linux-{TARGET_CPU}.tar.xz'
+def check_cpu(cpu):
+    if cpu not in VALID_CPUS:
+        raise ValueError(f'unsupported Linux CPU {cpu!r}: expected one of {", ".join(VALID_CPUS)}')
+    return cpu
 
 
-def symbols_name(key):
-    return f'ArdiaCore-{key[:12]}-linux-{TARGET_CPU}-symbols.tar.xz'
+def archive_root(cpu=TARGET_CPU):
+    return f'ardiacore-linux-{check_cpu(cpu)}'
+
+
+def symbols_root(cpu=TARGET_CPU):
+    return f'ardiacore-linux-{check_cpu(cpu)}-symbols'
+
+
+def archive_name(key, cpu=TARGET_CPU):
+    return f'ArdiaCore-{key[:12]}-linux-{check_cpu(cpu)}.tar.xz'
+
+
+def symbols_name(key, cpu=TARGET_CPU):
+    return f'ArdiaCore-{key[:12]}-linux-{check_cpu(cpu)}-symbols.tar.xz'
+
+
+def table_filename(cpu=TARGET_CPU):
+    return 'prebuilt-engines-linux.tsv' if check_cpu(cpu) == 'x64' else f'prebuilt-engines-linux-{cpu}.tsv'
 
 
 def release_tag(key):
@@ -78,7 +97,8 @@ def sha256_of(path):
     return digest.hexdigest()
 
 
-def serves(directory, key, table):
+def serves(directory, key, table, cpu=TARGET_CPU):
+    cpu = check_cpu(cpu)
     path = directory / 'manifest.json'
     if not HEX40.match(key) or not path.is_file():
         return False
@@ -88,7 +108,7 @@ def serves(directory, key, table):
         return False
     if not isinstance(manifest, dict):
         return False
-    expected = {'format': MANIFEST_FORMAT, 'target_os': TARGET_OS, 'target_cpu': TARGET_CPU}
+    expected = {'format': MANIFEST_FORMAT, 'target_os': TARGET_OS, 'target_cpu': cpu}
     if any(manifest.get(name) != value for name, value in expected.items()):
         return False
     engine_key, chrome_sha256 = manifest.get('engine_key'), manifest.get('chrome_sha256')
@@ -153,13 +173,14 @@ def strippable(directory):
     return [directory / name for name in REQUIRED + OPTIONAL if name not in NEVER_STRIPPED and is_elf(directory / name)]
 
 
-def check_manifest(directory, key):
+def check_manifest(directory, key, cpu=TARGET_CPU):
+    cpu = check_cpu(cpu)
     path = directory / 'manifest.json'
     if not path.is_file():
         raise ValueError('the engine archive holds no manifest.json')
     manifest = json.loads(path.read_text())
-    expected = {'format': MANIFEST_FORMAT, 'engine_key': key, 'target_os': TARGET_OS, 'target_cpu': TARGET_CPU}
-    wrong = [f'{key} is {manifest.get(key)!r}, not {value!r}' for key, value in expected.items() if manifest.get(key) != value]
+    expected = {'format': MANIFEST_FORMAT, 'engine_key': key, 'target_os': TARGET_OS, 'target_cpu': cpu}
+    wrong = [f'{field} is {manifest.get(field)!r}, not {value!r}' for field, value in expected.items() if manifest.get(field) != value]
     if wrong:
         raise ValueError('the engine manifest does not match: ' + '; '.join(wrong))
     return manifest
@@ -184,23 +205,32 @@ def check_member(member, root):
     raise ValueError(f'archive entry {name!r} is not a file, directory or link')
 
 
-def unpack(archive, into, key):
+def unpack(archive, into, key, cpu=TARGET_CPU):
+    root = archive_root(cpu)
     into.mkdir(parents=True, exist_ok=False)
     extract_filter = getattr(tarfile, 'data_filter', None)
     with tarfile.open(archive, 'r|xz') as packed:
         for member in packed:
-            check_member(member, ARCHIVE_ROOT)
+            check_member(member, root)
             if extract_filter is not None:
                 packed.extract(member, into, filter='data')
             else:
                 member.mode &= ~(stat.S_ISUID | stat.S_ISGID)
                 packed.extract(member, into)
-    engine = into / ARCHIVE_ROOT
+    engine = into / root
     if not engine.is_dir():
-        raise ValueError(f'the engine archive holds no {ARCHIVE_ROOT}/ directory')
-    check_manifest(engine, key)
+        raise ValueError(f'the engine archive holds no {root}/ directory')
+    check_manifest(engine, key, cpu=cpu)
     select(engine)
     return engine
+
+
+def default_table(cpu=TARGET_CPU):
+    if cpu == 'arm64' and os.environ.get('ARDIACORE_PREBUILT_LINUX_ARM64_TABLE'):
+        return pathlib.Path(os.environ['ARDIACORE_PREBUILT_LINUX_ARM64_TABLE'])
+    if os.environ.get('ARDIACORE_PREBUILT_LINUX_TABLE'):
+        return pathlib.Path(os.environ['ARDIACORE_PREBUILT_LINUX_TABLE'])
+    return pathlib.Path(__file__).resolve().parents[2] / 'packages/ardiacore' / table_filename(cpu)
 
 
 def main():
@@ -215,10 +245,12 @@ def main():
     unpacking.add_argument('--archive', type=pathlib.Path, required=True)
     unpacking.add_argument('--into', type=pathlib.Path, required=True)
     unpacking.add_argument('--key', required=True)
+    unpacking.add_argument('--cpu', choices=VALID_CPUS, default=TARGET_CPU)
     serving = commands.add_parser('serves', help='exit 0 when an engine dir is the published engine of an engine key: its manifest names the key, or the key\'s table row names the manifest\'s key as the one it was built under')
     serving.add_argument('--engine', type=pathlib.Path, required=True)
     serving.add_argument('--key', required=True)
-    serving.add_argument('--table', type=pathlib.Path, default=pathlib.Path(os.environ.get('ARDIACORE_PREBUILT_LINUX_TABLE') or pathlib.Path(__file__).resolve().parents[2] / 'packages/ardiacore/prebuilt-engines-linux.tsv'))
+    serving.add_argument('--cpu', choices=VALID_CPUS, default=TARGET_CPU)
+    serving.add_argument('--table', type=pathlib.Path)
     args = parser.parse_args()
     try:
         if args.command == 'list':
@@ -226,9 +258,10 @@ def main():
         elif args.command == 'copy':
             copy(args.source, args.destination)
         elif args.command == 'serves':
-            sys.exit(0 if serves(args.engine, args.key, args.table) else 1)
+            table = args.table if args.table is not None else default_table(args.cpu)
+            sys.exit(0 if serves(args.engine, args.key, table, cpu=args.cpu) else 1)
         else:
-            print(unpack(args.archive, args.into, args.key))
+            print(unpack(args.archive, args.into, args.key, cpu=args.cpu))
     except (ValueError, OSError, tarfile.TarError, lzma.LZMAError, EOFError, json.JSONDecodeError) as error:
         print(f'runtime_files.py: {error}', file=sys.stderr)
         sys.exit(1)

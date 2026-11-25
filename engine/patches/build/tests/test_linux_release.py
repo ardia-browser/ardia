@@ -157,6 +157,38 @@ class PackageVersionAndCliTests(unittest.TestCase):
             self.assertTrue((installed / 'cli/ardia-cli.sha256').is_file())
 
 
+    def test_arm64_package_accepts_arm64_cli_and_checks_aarch64_elf(self):
+        def fake_static_elf(machine):
+            header = bytearray(64)
+            header[0:7] = b'\x7fELF\x02\x01\x01'
+            header[16:18] = (2).to_bytes(2, 'little')
+            header[18:20] = machine.to_bytes(2, 'little')
+            header[20:24] = (1).to_bytes(4, 'little')
+            header[24:32] = (0x400000).to_bytes(8, 'little')
+            header[32:40] = (64).to_bytes(8, 'little')
+            header[52:54] = (64).to_bytes(2, 'little')
+            header[54:56] = (56).to_bytes(2, 'little')
+            header[56:58] = (1).to_bytes(2, 'little')
+            phdr = bytearray(56)
+            phdr[0:4] = (1).to_bytes(4, 'little')
+            phdr[8:16] = (0).to_bytes(8, 'little')
+            phdr[32:40] = (64).to_bytes(8, 'little')
+            return bytes(header + phdr)
+
+        self.assertIsNone(packaging.static_executable_problem(fake_static_elf(packaging.ELF_AARCH64), cpu='arm64'))
+        self.assertIn('aarch64', packaging.static_executable_problem(fake_static_elf(packaging.ELF_X86_64), cpu='arm64'))
+        self.assertIn('x86-64', packaging.static_executable_problem(fake_static_elf(packaging.ELF_AARCH64), cpu='x64'))
+        with tempfile.TemporaryDirectory() as scratch:
+            root = pathlib.Path(scratch)
+            output, ui = fake_engine(root)
+            tarball = fake_cli(root / 'cli', platform='linux-arm64')
+            archive = packaging.package(output, ui, root / 'ardia-arm64.tar.xz', version=VERSION, cli=tarball, cpu='arm64')
+            with tarfile.open(archive) as packed:
+                self.assertIn(f'ardia/lib/ardia/cli/{tarball.name}', packed.getnames())
+            with self.assertRaisesRegex(ValueError, 'linux-arm64'):
+                packaging.package(output, ui, root / 'wrong.tar.xz', version=VERSION, cli=fake_cli(root / 'x64', platform='linux-x64'), cpu='arm64')
+
+
 class ArchPackageTests(unittest.TestCase):
     def source(self, pkgver):
         result = subprocess.run(['bash', '-c', 'source "$1" && pkgver=$2 && source <(grep "^source=" "$1") && printf "%s" "${source[0]}"',
@@ -383,13 +415,14 @@ class ReleaseOptionalRpmTests(unittest.TestCase):
             (bin_dir / tool).chmod(0o755)
         return bin_dir
 
-    def release(self, rpm_tools=True, **fails):
+    def release(self, rpm_tools=True, cpu='x64', **fails):
         root = pathlib.Path(tempfile.mkdtemp(prefix='ardia-release-rpm-'))
         self.addCleanup(shutil.rmtree, root, True)
         repo, engine = self.fake_repo(root)
         out = root / 'out'
         env = {'PATH': str(self.tools(root, rpm_tools)), 'HOME': str(root), **{key: value for key, value in fails.items()}}
-        result = subprocess.run(['bash', str(repo / 'scripts/linux/release.sh'), self.VERSION, '--engine', str(engine), '--out', str(out)],
+        extra = ['--cpu', cpu] if cpu != 'x64' else []
+        result = subprocess.run(['bash', str(repo / 'scripts/linux/release.sh'), self.VERSION, *extra, '--engine', str(engine), '--out', str(out)],
                                 capture_output=True, text=True, timeout=120, cwd=repo, env=env)
         provenance = (out / 'provenance.txt').read_text() if (out / 'provenance.txt').exists() else ''
         return result, out, provenance
@@ -435,6 +468,16 @@ class ReleaseOptionalRpmTests(unittest.TestCase):
         result, out, _ = self.release(FAKE_SMOKE_FAILS='.deb')
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('the smoke gate failed for the .deb', result.stderr)
+        self.assertFalse((out / f'Ardia-{self.VERSION}-linux-update.txt').exists())
+
+    def test_arm64_release_writes_arm64_artifacts_and_provenance(self):
+        result, out, provenance = self.release(cpu='arm64')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for suffix in ('tar.xz', 'deb', 'rpm', 'AppImage', 'flatpak'):
+            name = f'Ardia-{self.VERSION}-linux-arm64.{suffix}'
+            self.assertTrue((out / name).is_file(), name)
+            self.assertTrue((out / f'{name}.sha256').is_file(), name)
+        self.assertIn(f'version {self.VERSION}, nightly, linux-arm64', provenance)
         self.assertFalse((out / f'Ardia-{self.VERSION}-linux-update.txt').exists())
 
 

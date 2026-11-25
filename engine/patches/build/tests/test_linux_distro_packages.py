@@ -81,6 +81,13 @@ class DebDependsTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'libnew.so.1'):
                 formats.deb_depends(runtime)
 
+    def test_aarch64_glibc_loader_is_recognised(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            runtime = self.runtime(scratch, {'chrome': ['libc.so.6', 'ld-linux-aarch64.so.1', 'libnss3.so']})
+            packages = formats.deb_depends(runtime)
+        self.assertIn('libnss3', packages)
+        self.assertRegex(packages[0], r'^libc6 \(>= 2\.[0-9]+\)$')
+
 
 class PkgbuildTests(unittest.TestCase):
     def test_committed_srcinfo_matches_the_pkgbuild(self):
@@ -134,6 +141,24 @@ class PkgbuildTests(unittest.TestCase):
         self.assertEqual(run(ARCH / 'update-pkgbuild.sh', '0.2', '--sha256', DIGEST).returncode, 1)
         self.assertEqual(run(ARCH / 'update-pkgbuild.sh', '0.2.48', '--sha256', 'SKIP').returncode, 1)
         self.assertEqual(run(ARCH / 'update-pkgbuild.sh', '0.2.48').returncode, 1)
+        self.assertEqual(run(ARCH / 'update-pkgbuild.sh', '0.2.48', '--sha256', DIGEST, '--arm64-sha256', 'SKIP').returncode, 1)
+
+    def test_multiarch_pkgbuild_pins_x86_64_and_aarch64(self):
+        arm64_digest = 'cd' * 32
+        with tempfile.TemporaryDirectory() as scratch:
+            result = run(ARCH / 'update-pkgbuild.sh', '0.2.48', '--sha256', DIGEST, '--arm64-sha256', arm64_digest, '--out', scratch)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            pkgbuild = (pathlib.Path(scratch) / 'PKGBUILD').read_text()
+            srcinfo = (pathlib.Path(scratch) / '.SRCINFO').read_text()
+            self.assertIn("arch=('x86_64' 'aarch64')\n", pkgbuild)
+            self.assertIn(f"sha256sums_x86_64=('{DIGEST}')\n", pkgbuild)
+            self.assertIn(f"sha256sums_aarch64=('{arm64_digest}')\n", pkgbuild)
+            self.assertIn('\tarch = x86_64\n\tarch = aarch64\n', srcinfo)
+            self.assertIn('Ardia-0.2.48-linux-arm64.tar.xz\n', srcinfo)
+            self.assertIn(f'\tsha256sums_aarch64 = {arm64_digest}\n', srcinfo)
+            if shutil.which('makepkg'):
+                printed = subprocess.run(['makepkg', '--printsrcinfo'], cwd=scratch, capture_output=True, text=True)
+                self.assertEqual(printed.stdout, srcinfo)
 
 
 class RpmTests(unittest.TestCase):
@@ -182,6 +207,10 @@ class RpmTests(unittest.TestCase):
         self.assertIn('if [ "$1" = 0 ]; then', postun)
         self.assertLess(postun.index('if [ "$1" = 0 ]; then'), postun.index('rm -f /etc/apparmor.d/ardia'))
         self.assertNotIn('#!', spec)
+
+    def test_arm64_rpm_spec_uses_aarch64(self):
+        spec = formats.rpm_spec('0.2.48', [], pathlib.Path('/tmp/tree'), self.DATE, cpu='arm64')
+        self.assertIn('BuildArch: aarch64\n', spec)
 
     def test_the_policy_leaves_updates_to_rpm(self):
         policy = (LINUX / 'dev.ardia.linux.policy').read_text()
@@ -302,6 +331,12 @@ class FlatpakTests(unittest.TestCase):
         self.assertEqual(manifest['modules'][1]['sources'][0], {
             'type': 'archive', 'sha256': DIGEST,
             'url': 'https://github.com/ardia-browser/ardia/releases/download/v0.2.48-nightly.1/Ardia-0.2.48-nightly.1-linux-x64.tar.xz'})
+        with tempfile.TemporaryDirectory() as scratch:
+            arm64 = run(sys.executable, LINUX / 'linux_formats.py', 'flathub', '--version', '0.2.48', '--sha256', DIGEST, '--cpu', 'arm64', '--out', scratch)
+            self.assertEqual(arm64.returncode, 0, arm64.stderr)
+            arm64_manifest = json.loads((pathlib.Path(scratch) / 'dev.ardia.Ardia.json').read_text())
+        self.assertEqual(arm64_manifest['modules'][1]['sources'][0]['url'],
+                         'https://github.com/ardia-browser/ardia/releases/download/v0.2.48/Ardia-0.2.48-linux-arm64.tar.xz')
         self.assertNotEqual(run(sys.executable, LINUX / 'linux_formats.py', 'flathub', '--version', '0.2', '--sha256', DIGEST, '--out', '/tmp/x').returncode, 0)
 
 

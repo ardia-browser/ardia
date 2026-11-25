@@ -135,8 +135,8 @@ def chromium_version(out, source):
     return match.group(1)
 
 
-def stage_from_out(out, source, stage):
-    engine = stage / runtime_files.ARCHIVE_ROOT
+def stage_from_out(out, source, stage, cpu=runtime_files.TARGET_CPU):
+    engine = stage / runtime_files.archive_root(cpu)
     runtime_files.copy(out, engine)
     (engine / 'manifest.json').unlink(missing_ok=True)
     args_gn = out / 'args.gn'
@@ -150,11 +150,11 @@ def stage_from_out(out, source, stage):
     (stage / 'facts.json').write_text(json.dumps(facts))
 
 
-def stage_locked(out, source, stage):
+def stage_locked(out, source, stage, cpu=runtime_files.TARGET_CPU):
     locked = CHECKOUT / 'scripts/agent/locked'
     env = dict(os.environ, AC_LOCK_ROOT=os.environ.get('AC_LOCK_ROOT', '/tmp'))
     command = [str(locked), 'chromium', '--wait', LOCK_WAIT, '--', sys.executable, str(pathlib.Path(__file__).resolve()),
-               '--stage-into', str(stage), '--out', str(out), '--source', str(source)]
+               '--stage-into', str(stage), '--out', str(out), '--source', str(source), '--cpu', cpu]
     result = subprocess.run(command, env=env)
     if result.returncode == 75:
         raise LockBusy('the chromium lock is held (a build is running): publish once it finishes')
@@ -234,11 +234,16 @@ def pending_assets(repo, tag, assets, archive, checksum):
     return [str(archive), str(checksum)]
 
 
-def upload(repo, key, source_commit, pairs, row):
+def table_for(cpu):
+    return CHECKOUT / 'packages/ardiacore' / runtime_files.table_filename(cpu)
+
+
+def upload(repo, key, source_commit, pairs, row, cpu=runtime_files.TARGET_CPU):
     tag = runtime_files.release_tag(key)
+    table = table_for(cpu)
     view = gh('release', 'view', tag, '-R', repo, '--json', 'assets', check=False)
     if view.returncode != 0:
-        notes = f'Prebuilt Linux x64 ArdiaCore engine for engine key {key} (engine/engine-key.sh --platform linux), built from {source_commit or "an unrecorded commit"}.'
+        notes = f'Prebuilt Linux {cpu} ArdiaCore engine for engine key {key} (engine/engine-key.sh --platform linux), built from {source_commit or "an unrecorded commit"}.'
         say(f'creating the prerelease {tag} in {repo}')
         gh('release', 'create', tag, '-R', repo, '--prerelease', '--latest=false', '--title', f'Engine {key[:12]}', '--notes', notes)
         assets = set()
@@ -248,18 +253,21 @@ def upload(repo, key, source_commit, pairs, row):
     if pending:
         say(f'uploading {", ".join(pathlib.Path(path).name for path in pending)} to {repo} {tag}')
         gh('release', 'upload', tag, '-R', repo, *pending)
-    lines = TABLE.read_text().splitlines() if TABLE.is_file() else []
+    lines = table.read_text().splitlines() if table.is_file() else []
     rows = [line.split('\t') for line in lines if line.strip()]
     existing = [fields for fields in rows if fields[0] == key]
     if existing and existing[0] != row.split('\t'):
-        raise PublishError(f'{TABLE.name} already lists {key[:12]} differently: {chr(9).join(existing[0])}')
+        raise PublishError(f'{table.name} already lists {key[:12]} differently: {chr(9).join(existing[0])}')
     if not existing:
-        with TABLE.open('a') as handle:
+        with table.open('a') as handle:
             handle.write(row + '\n')
-        say(f'added {key[:12]} to {TABLE.relative_to(CHECKOUT)}: commit it')
+        say(f'added {key[:12]} to {table.relative_to(CHECKOUT)}: commit it')
 
 
-def publish(out, source, dest, repo, do_upload):
+def publish(out, source, dest, repo, do_upload, cpu=runtime_files.TARGET_CPU):
+    cpu = runtime_files.check_cpu(cpu)
+    root_name = runtime_files.archive_root(cpu)
+    symbols_dir = runtime_files.symbols_root(cpu)
     runtime_files.select(out)
     key, source_commit = engine_identity(source)
     if not HEX40.match(key):
@@ -267,22 +275,22 @@ def publish(out, source, dest, repo, do_upload):
     if dest is None:
         dest = pathlib.Path(tempfile.mkdtemp(prefix='ardia-linux-engine-'))
     dest.mkdir(parents=True, exist_ok=True)
-    archive = dest / runtime_files.archive_name(key)
+    archive = dest / runtime_files.archive_name(key, cpu=cpu)
     checksum = dest / (archive.name + '.sha256')
-    symbols = dest / runtime_files.symbols_name(key)
+    symbols = dest / runtime_files.symbols_name(key, cpu=cpu)
     symbols_checksum = dest / (symbols.name + '.sha256')
     for path in (archive, checksum, symbols, symbols_checksum):
         if path.exists():
             raise PublishError(f'refusing to overwrite {path}')
-    say(f'engine key {key} from {source_commit or "an unrecorded commit"}')
+    say(f'engine key {key} ({cpu}) from {source_commit or "an unrecorded commit"}')
     with tempfile.TemporaryDirectory(prefix='ardia-engine-stage-') as scratch, tempfile.TemporaryDirectory(prefix='ardia-engine-symbols-') as symbols_scratch:
         stage = pathlib.Path(scratch)
-        facts = stage_locked(out, source, stage)
-        engine = stage / runtime_files.ARCHIVE_ROOT
+        facts = stage_locked(out, source, stage, cpu=cpu)
+        engine = stage / root_name
         unstripped = (engine / 'chrome').stat().st_size
         symbols_stage = pathlib.Path(symbols_scratch)
-        keep_symbols(engine, symbols_stage / runtime_files.SYMBOLS_ROOT)
-        write_archive(symbols_stage, symbols, runtime_files.SYMBOLS_ROOT)
+        keep_symbols(engine, symbols_stage / symbols_dir)
+        write_archive(symbols_stage, symbols, symbols_dir)
         strip(engine)
         chrome = engine / 'chrome'
         manifest = {
@@ -290,7 +298,7 @@ def publish(out, source, dest, repo, do_upload):
             'engine_key': key,
             'source_commit': source_commit,
             'target_os': runtime_files.TARGET_OS,
-            'target_cpu': runtime_files.TARGET_CPU,
+            'target_cpu': cpu,
             'chromium_version': facts['chromium_version'],
             'args_gn_sha256': facts['args_gn_sha256'],
             'chrome_sha256': sha256(chrome),
@@ -300,14 +308,14 @@ def publish(out, source, dest, repo, do_upload):
         }
         (engine / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
         say(f'chrome {unstripped} bytes, {chrome.stat().st_size} stripped')
-        write_archive(stage, archive)
+        write_archive(stage, archive, root_name)
     digest = sha256(archive)
     checksum.write_text(f'{digest}  {archive.name}\n')
     symbols_checksum.write_text(f'{sha256(symbols)}  {symbols.name}\n')
     row = f'{key}\t{runtime_files.release_tag(key)}\t{digest}'
     say(f'{archive.name}: {archive.stat().st_size} bytes; {symbols.name}: {symbols.stat().st_size} bytes')
     if do_upload:
-        upload(repo, key, source_commit, [(archive, checksum), (symbols, symbols_checksum)], row)
+        upload(repo, key, source_commit, [(archive, checksum), (symbols, symbols_checksum)], row, cpu=cpu)
     print(archive)
     print(row)
 
@@ -317,6 +325,7 @@ def main():
     parser.add_argument('--out', type=pathlib.Path, required=True)
     parser.add_argument('--source', type=pathlib.Path, required=True)
     parser.add_argument('--dest', type=pathlib.Path)
+    parser.add_argument('--cpu', choices=runtime_files.VALID_CPUS, default=runtime_files.TARGET_CPU)
     parser.add_argument('--repo', default=os.environ.get('ARDIACORE_PREBUILT_REPO') or DEFAULT_REPO)
     parser.add_argument('--upload', action='store_true')
     parser.add_argument('--stage-into', type=pathlib.Path, help=argparse.SUPPRESS)
@@ -324,9 +333,9 @@ def main():
     out, source = args.out.resolve(), args.source.resolve()
     try:
         if args.stage_into is not None:
-            stage_from_out(out, source, args.stage_into)
+            stage_from_out(out, source, args.stage_into, cpu=args.cpu)
             return
-        publish(out, source, args.dest.resolve() if args.dest else None, args.repo, args.upload)
+        publish(out, source, args.dest.resolve() if args.dest else None, args.repo, args.upload, cpu=args.cpu)
     except (PublishError, ValueError, OSError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
         print(f'publish-engine.sh: {error}', file=sys.stderr)
         sys.exit(75 if isinstance(error, LockBusy) else 1)

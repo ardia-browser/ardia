@@ -1,6 +1,6 @@
 import type { ProviderEntry } from "@ardia/core";
 import { useMemo } from "react";
-import { isIncognitoProfile } from "../browser/model";
+import { isIncognitoSpace } from "../browser/model";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { configProviders, keywordProviders, pendingConfigProviders, type ActiveProvider } from "./configProviders";
 import { useProviderApprovalRevision } from "./providerApproval";
@@ -12,8 +12,8 @@ type Context = { entries: readonly ProviderEntry[]; profileId: string; privateCo
 
 function contextOf(s: BrowserState, windowId: string): Context {
   const w = s.windows[windowId];
-  const profileId = w?.profileId ?? "";
-  return { entries: s.settings.omniboxProviders ?? NO_ENTRIES, profileId, privateContext: w?.kind === "private" || isIncognitoProfile(profileId) };
+  const profileId = w?.spaceId ?? "";
+  return { entries: s.settings.omniboxProviders ?? NO_ENTRIES, profileId, privateContext: w?.kind === "private" || isIncognitoSpace(profileId) };
 }
 
 function merged({ entries, profileId, privateContext }: Context, registered: readonly OmniboxProvider[]): ActiveProvider[] {
@@ -34,12 +34,12 @@ export const pendingOmniboxProviders = () => pendingConfigProviders(useBrowser.g
 
 export function useActiveProviders(windowId: string): ActiveProvider[] {
   const entries = useBrowser((s) => s.settings.omniboxProviders ?? NO_ENTRIES);
-  const profileId = useBrowser((s) => s.windows[windowId]?.profileId ?? "");
+  const profileId = useBrowser((s) => s.windows[windowId]?.spaceId ?? "");
   const privateWindow = useBrowser((s) => s.windows[windowId]?.kind === "private");
   const registered = useRegisteredProviders((s) => s.list);
   const revision = useProviderApprovalRevision((s) => s.revision);
   return useMemo(
-    () => merged({ entries, profileId, privateContext: privateWindow || isIncognitoProfile(profileId) }, registered),
+    () => merged({ entries, profileId, privateContext: privateWindow || isIncognitoSpace(profileId) }, registered),
     [entries, profileId, privateWindow, registered, revision],
   );
 }

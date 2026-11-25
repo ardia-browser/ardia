@@ -2,7 +2,7 @@ import { formatUrl, urlParts } from "../../lib/urlParts";
 import type { LinkSource } from "../../lib/linkSource";
 import { useBrowser } from "../browser/store";
 import { externalLinkOpen } from "../littleArdia/externalLinkOpen";
-import { lastActiveProfile } from "../windows/small";
+import { lastActiveSpace } from "../windows/small";
 import { traceLink, traceOpening, type LinkTrace, type OpeningTrace } from "../automation/decisions";
 import type { OpenAs } from "./rules";
 import { routeGroupName } from "./groups";
@@ -29,8 +29,8 @@ export function previewLink(typed: string, source: LinkSource): LinkPreview {
   const settled = trace.by === "program" ? trace.otherwise : trace;
   const decided = settled.by === "usual" ? null : settled.verdict;
   if (decided && "drop" in decided) return { ok: true, url, opening, trace, dropped: true, profileName: "", groupName: null, usedLast: false, open: "tab" };
-  const profileId = decided?.profileId ?? lastActiveProfile(s);
+  const profileId = decided?.profileId ?? lastActiveSpace(s);
   const open = externalLinkOpen(s.settings.openLinksInLittleArdia, [url], decided?.open ?? null);
   const groupName = decided?.groupKey ? routeGroupName(s, profileId, decided.groupKey) : null;
-  return { ok: true, url, opening, trace, dropped: false, profileName: s.profiles[profileId]?.name ?? "", groupName, usedLast: !decided?.profileId, open };
+  return { ok: true, url, opening, trace, dropped: false, profileName: s.spaces[profileId]?.name ?? "", groupName, usedLast: !decided?.profileId, open };
 }

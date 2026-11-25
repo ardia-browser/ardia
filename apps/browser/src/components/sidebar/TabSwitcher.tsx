@@ -167,7 +167,7 @@ const SwitcherCard = memo(function SwitcherCard({ tabId, index, focused, accent,
               justifyContent: "center",
             }}
           >
-            {!shown && <TabIcon tabId={tab.id} url={url} favicon={tab.favicon} icon={tab.customIcon} profileId={tab.profileId} size={T.icon.preview} color={backdrop.icon} />}
+            {!shown && <TabIcon tabId={tab.id} url={url} favicon={tab.favicon} icon={tab.customIcon} spaceId={tab.spaceId} size={T.icon.preview} color={backdrop.icon} />}
             {source && (
               <Image
                 source={source}
@@ -190,7 +190,7 @@ const SwitcherCard = memo(function SwitcherCard({ tabId, index, focused, accent,
           </View>
           <View style={{ height: T.label, flexDirection: "row", alignItems: "center", gap: T.labelGap, paddingHorizontal: T.labelInset }}>
             {url || tab.customIcon ? (
-              <TabIcon tabId={tab.id} url={url} favicon={tab.favicon} icon={tab.customIcon} profileId={tab.profileId} size={T.icon.label} color={colors.onPanel} />
+              <TabIcon tabId={tab.id} url={url} favicon={tab.favicon} icon={tab.customIcon} spaceId={tab.spaceId} size={T.icon.label} color={colors.onPanel} />
             ) : (
               <Symbol name="globe" size={T.icon.globe} color={colors.onPanel} style={{ width: T.icon.label, height: T.icon.label }} />
             )}

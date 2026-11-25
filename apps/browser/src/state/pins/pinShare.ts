@@ -1,6 +1,6 @@
 import type { BrowserState } from "../browser/store";
 import { changedIds } from "../browser/changes";
-import { inPinnedContainer, isIncognitoProfile, pinKeyOf } from "../browser/model";
+import { inPinnedContainer, isIncognitoSpace, pinKeyOf } from "../browser/model";
 import { asleepFrom, frozenOn, hasPage, holderOfPage, needsPage, withNavigationAt, wokenPage } from "../tabs/pageSession";
 import { splitOf, splitTabIds } from "../splits/splits";
 import { sharedListTab } from "../tabs/tabShare";
@@ -10,11 +10,11 @@ import { isTopApp, sameTopApp, sharingChanged } from "./topApps";
 
 
 export function shares(s: BrowserState, t: Tab | undefined): t is Tab {
-  return !!t && !isIncognitoProfile(t.profileId) && isRegularWindow(s.windows[t.windowId]) && (inPinnedContainer(s, t.id) || sharedListTab(s, t)) && !splitOf(s, t.id);
+  return !!t && !isIncognitoSpace(t.spaceId) && isRegularWindow(s.windows[t.windowId]) && (inPinnedContainer(s, t.id) || sharedListTab(s, t)) && !splitOf(s, t.id);
 }
 
 const familyOf = (s: BrowserState, holder: Tab, copy: Tab) =>
-  holder.profileId === copy.profileId ? holder.windowId !== copy.windowId : sameTopApp(s, holder, copy);
+  holder.spaceId === copy.spaceId ? holder.windowId !== copy.windowId : sameTopApp(s, holder, copy);
 
 function holds(s: BrowserState, holder: Tab | undefined, copy: Tab): holder is Tab {
   return (
@@ -87,13 +87,13 @@ export function swapPinPage(s: BrowserState, id: string): { state: BrowserState;
   const a = holder.id;
   const b = copy.id;
   const oneWindow = from === to;
-  const holderSide = (x: { windowId: string; profileId: string }) => x.windowId === from && (!oneWindow || x.profileId === holder.profileId);
-  const copySide = (x: { windowId: string; profileId: string }) => x.windowId === to && (!oneWindow || x.profileId === copy.profileId);
+  const holderSide = (x: { windowId: string; spaceId: string }) => x.windowId === from && (!oneWindow || x.spaceId === holder.spaceId);
+  const copySide = (x: { windowId: string; spaceId: string }) => x.windowId === to && (!oneWindow || x.spaceId === copy.spaceId);
   const windows = { ...s.windows, [from]: swapWindow(s.windows[from]!, a, b) };
   if (!oneWindow) windows[to] = swapWindow(s.windows[to]!, a, b);
   const tabs = { ...s.tabs };
-  tabs[a] = { ...holder, windowId: to, profileId: copy.profileId, page: withNavigationAt(holder) };
-  tabs[b] = { ...copy, ...shownFields(holder), windowId: from, profileId: holder.profileId, page: frozenOn(copy, a) };
+  tabs[a] = { ...holder, windowId: to, spaceId: copy.spaceId, page: withNavigationAt(holder) };
+  tabs[b] = { ...copy, ...shownFields(holder), windowId: from, spaceId: holder.spaceId, page: frozenOn(copy, a) };
   for (const t of Object.values(s.tabs)) {
     if (t.id === a || t.id === b || !t.openerId) continue;
     if (holderSide(t) && t.openerId === a) tabs[t.id] = { ...t, openerId: b };
@@ -161,7 +161,7 @@ export function withSharedFamily(s: BrowserState, ids: string[]): string[] {
   return [...out];
 }
 
-const shownIn = (s: BrowserState, t: Tab) => s.windows[t.windowId]?.profileId === t.profileId && s.windows[t.windowId]?.activeTabIds[t.profileId] === t.id;
+const shownIn = (s: BrowserState, t: Tab) => s.windows[t.windowId]?.spaceId === t.spaceId && s.windows[t.windowId]?.activeTabIds[t.spaceId] === t.id;
 
 function splitLeavers(s: BrowserState, prev: BrowserState): string[] {
   if (s.splits === prev.splits) return [];
@@ -223,7 +223,7 @@ export function settleSharedPins(next: BrowserState, prev: BrowserState): Browse
   for (const id of frozen) {
     const t = s.tabs[id]!;
     const holder = s.tabs[holderOfPage(t)!];
-    if (holder && shares(s, holder) && holder.windowId === t.windowId && holder.profileId === t.profileId && pinKeyOf(holder) === pinKeyOf(t) && hasPage(holder)) {
+    if (holder && shares(s, holder) && holder.windowId === t.windowId && holder.spaceId === t.spaceId && pinKeyOf(holder) === pinKeyOf(t) && hasPage(holder)) {
       const w = windows[t.windowId]!;
       const active = Object.entries(w.activeTabIds);
       if (active.some(([, x]) => x === t.id)) {
@@ -248,9 +248,9 @@ export function settleSharedPins(next: BrowserState, prev: BrowserState): Browse
 export function handPagesOutOfProfile(s: BrowserState, profileId: string): BrowserState {
   let next = s;
   for (const t of Object.values(s.tabs)) {
-    if (t.profileId !== profileId || !hasPage(t) || !isTopApp(t)) continue;
+    if (t.spaceId !== profileId || !hasPage(t) || !isTopApp(t)) continue;
     const key = pinKeyOf(t);
-    const heir = (c: Tab) => c.profileId !== profileId && holderOf(next, c.id)?.id === t.id;
+    const heir = (c: Tab) => c.spaceId !== profileId && holderOf(next, c.id)?.id === t.id;
     const copy = frozenCopiesOf(next, t.id).find(heir) ?? Object.values(next.tabs).find((c) => pinKeyOf(c) === key && heir(c));
     const swapped = copy ? swapPinPage(next, copy.id) : null;
     if (swapped) next = swapped.state;

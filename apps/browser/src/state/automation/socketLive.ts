@@ -1,7 +1,7 @@
 import { TAB_GROUP_COLORS } from "@ardia/core";
-import { isIncognitoProfile } from "../browser/model";
+import { isIncognitoSpace } from "../browser/model";
 import type { GroupColor } from "../browser/types";
-import { connectedSourcesOf, deleteLiveFolder, manualRefresh, newProfileLiveFolder, openLiveItem, refreshFolderWhile } from "../live/engine";
+import { connectedSourcesOf, deleteLiveFolder, manualRefresh, newSpaceLiveFolder, openLiveItem, refreshFolderWhile } from "../live/engine";
 import { hideItems, live, markRead, setRepoHidden, unhide, updateFolder } from "../live/store";
 import type { CompletedItem, LiveFolder, LiveFolderKind, LiveItem, LiveSourceId } from "../live/types";
 import type { MethodSpec, SocketCall } from "./socketCatalog";
@@ -20,7 +20,7 @@ const MAX_NAME = 200;
 
 function folderOf(folderId: unknown): LiveFolder {
   const folder = ownValue(live().folders, folderId);
-  if (!folder || isIncognitoProfile(folder.profileId)) throw new OpError("no_window", `There's no live folder ${String(folderId)}.`);
+  if (!folder || isIncognitoSpace(folder.spaceId)) throw new OpError("no_window", `There's no live folder ${String(folderId)}.`);
   return folder;
 }
 
@@ -28,7 +28,7 @@ function folderRow(folder: LiveFolder) {
   const l = live();
   return {
     id: folder.id,
-    profile: folder.profileId,
+    profile: folder.spaceId,
     kind: folder.kind,
     name: folder.name,
     icon: folder.icon,
@@ -53,7 +53,7 @@ function list(params: Record<string, unknown>) {
   const l = live();
   const folders = l.folderOrder.flatMap((f) => {
     const folder = l.folders[f];
-    return folder && !isIncognitoProfile(folder.profileId) && (!profile || folder.profileId === profile) ? [folderRow(folder)] : [];
+    return folder && !isIncognitoSpace(folder.spaceId) && (!profile || folder.spaceId === profile) ? [folderRow(folder)] : [];
   });
   const accounts = Object.fromEntries(Object.entries(l.accounts).flatMap(([source, a]) => (a ? [[source, { login: a.login, name: a.name, connectedAt: a.connectedAt }]] : [])));
   return { folders, accounts };
@@ -106,7 +106,7 @@ function create(params: Record<string, unknown>) {
   const kind = params.kind as LiveFolderKind;
   const name = params.name !== undefined ? nameOf(params.name) : undefined;
   const sources = sourcesFor(kind, params.sources);
-  const folderId = newProfileLiveFolder(profile, kind, sources, { name, allowed: controlStillOn });
+  const folderId = newSpaceLiveFolder(profile, kind, sources, { name, allowed: controlStillOn });
   expect(!!live().folders[folderId], "the live folder wasn't made.");
   return folderRow(live().folders[folderId]!);
 }
@@ -167,7 +167,7 @@ function open(params: Record<string, unknown>) {
   const item = [...(l.items[folder.id] ?? []), ...(l.hidden[folder.id] ?? []), ...(l.completed[folder.id] ?? []).map((c) => c.item)].find((it) => it.id === params.item);
   if (!item) throw new OpError("no_window", `There's no item ${String(params.item)} in that folder.`);
   const w = windowOrFocused(params.window);
-  if (w.profileId !== folder.profileId) throw new OpError("bad_request", "That window shows another profile than the folder's.");
+  if (w.spaceId !== folder.spaceId) throw new OpError("bad_request", "That window shows another profile than the folder's.");
   const tab = openLiveItem(w.id, folder.id, item, { background: params.background === true });
   expect(!!now().tabs[tab], "the tab didn't open.");
   return { tab, window: w.id };

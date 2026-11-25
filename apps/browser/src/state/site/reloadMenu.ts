@@ -33,7 +33,7 @@ export async function setSiteBlocking(tab: Pick<Tab, "id" | "windowId">, host: s
   return allowed;
 }
 
-export async function clearSiteDataAfterConfirm(tab: Pick<Tab, "id" | "windowId" | "profileId">, origin: string): Promise<number | null> {
+export async function clearSiteDataAfterConfirm(tab: Pick<Tab, "id" | "windowId" | "spaceId">, origin: string): Promise<number | null> {
   const host = new URL(origin).hostname;
   const { confirmed } = await confirm({
     title: `Clear cookies and site data for ${host}?`,
@@ -43,10 +43,10 @@ export async function clearSiteDataAfterConfirm(tab: Pick<Tab, "id" | "windowId"
     windowId: tab.windowId,
   });
   if (!confirmed) return null;
-  const profile = engineProfile(useBrowser.getState(), tab.profileId);
+  const profile = engineProfile(useBrowser.getState(), tab.spaceId);
   const result = await clearSiteDataEverywhere(profile, origin).catch(() => null);
   const now = currentTab(tab.id);
-  if (now && now.profileId === tab.profileId && siteOrigin(now.url) === origin) void webviews.get(tab.id)?.reload();
+  if (now && now.spaceId === tab.spaceId && siteOrigin(now.url) === origin) void webviews.get(tab.id)?.reload();
   return result && typeof result.cookies === "number" ? result.cookies : 0;
 }
 

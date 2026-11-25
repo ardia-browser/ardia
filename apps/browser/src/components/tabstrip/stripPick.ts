@@ -1,7 +1,7 @@
-import { usePageProfileId, useWindowId } from "../../state/browser/hooks";
+import { usePageSpaceId, useWindowId } from "../../state/browser/hooks";
 import { noteTabStripPick } from "../../state/telemetry/tabStripCounts";
 
 export function useStripPick() {
-  const strip = `${useWindowId()}|${usePageProfileId()}`;
+  const strip = `${useWindowId()}|${usePageSpaceId()}`;
   return () => noteTabStripPick(strip, performance.now());
 }

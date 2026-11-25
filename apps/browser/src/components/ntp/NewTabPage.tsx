@@ -131,7 +131,7 @@ export function NewTabPage({ tabId, toolbar = true, kept = false }: { tabId: str
         {rise.layers.map((l) => (
           <Animated.Image
             key={l.name}
-            source={(MARKS[theme.profileColor === "incognito" ? "neutral" : theme.profileColor] ?? MARKS.green)[l.name]}
+            source={(MARKS[theme.spaceColor === "incognito" ? "neutral" : theme.spaceColor] ?? MARKS.green)[l.name]}
             style={{
               position: "absolute",
               width: MARK_SIZE,

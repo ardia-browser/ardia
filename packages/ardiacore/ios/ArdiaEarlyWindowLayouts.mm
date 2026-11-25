@@ -39,7 +39,7 @@ NSString *StateOf(ArdiaSavedSession *session, NSString *windowId) {
   if ([settings[@"borderlessMode"] isEqual:@YES]) state[@"s.borderlessMode"] = @YES;
   if ([settings[@"minimalismMode"] isEqual:@YES]) state[@"s.minimalismMode"] = @YES;
   if ([settings[@"pageFrame"] isKindOfClass:NSNumber.class] && ![settings[@"pageFrame"] isEqual:@9]) state[@"s.pageFrame"] = settings[@"pageFrame"];
-  for (NSString *key in @[ @"tabLayout", @"profileId", @"incognito" ])
+  for (NSString *key in @[ @"tabLayout", @"profileId", @"spaceId", @"incognito" ])
     if (window[key]) state[[@"w." stringByAppendingString:key]] = window[key];
   NSNumber *autoHideTabs = [window[@"autoHideTabs"] isKindOfClass:NSNumber.class] ? window[@"autoHideTabs"]
                          : [settings[@"autoHideTabs"] isKindOfClass:NSNumber.class] ? settings[@"autoHideTabs"] : nil;
@@ -198,7 +198,7 @@ void Write(NSData *data) {
 NSString *ActiveTabOf(ArdiaSavedSession *session, NSString *windowId) {
   NSDictionary *w = [session windowWithId:windowId];
   NSDictionary *active = [w[@"activeTabIds"] isKindOfClass:NSDictionary.class] ? w[@"activeTabIds"] : nil;
-  id tab = [w[@"profileId"] isKindOfClass:NSString.class] ? active[w[@"profileId"]] : nil;
+  id tab = [(w[@"spaceId"] ?: w[@"profileId"]) isKindOfClass:NSString.class] ? active[w[@"spaceId"] ?: w[@"profileId"]] : nil;
   return [tab isKindOfClass:NSString.class] ? tab : nil;
 }
 

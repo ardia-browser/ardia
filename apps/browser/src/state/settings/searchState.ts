@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { goToSettingsPane, newSettingsVisit, onTargetedSettingsOpen, shownSettingsProfile, type SettingsPane, type SettingsPlace, useSettingsNav } from "./settingsWindows";
-import { settingsProfileFor } from "../extensions/store";
+import { settingsSpaceFor } from "../extensions/store";
 import { noteSettingsRevealMiss, noteSettingsSearch, noteSettingsSearchReveal } from "../telemetry/usage";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
 
@@ -25,11 +25,11 @@ export const REVEAL_MEASURE_MS = 1000;
 
 let revealTokens = 0;
 
-const samePlace = (a: SettingsPlace, b: SettingsPlace) => a.pane === b.pane && a.profileId === b.profileId && a.detail === b.detail;
+const samePlace = (a: SettingsPlace, b: SettingsPlace) => a.pane === b.pane && a.spaceId === b.spaceId && a.detail === b.detail;
 
 function requestReveal(id: string, consent: ConsentToken | null): { reveal: RevealRequest } {
-  const { pane, profileId, detail } = useSettingsNav.getState();
-  return { reveal: { id, at: Date.now(), token: ++revealTokens, target: { pane, profileId, detail }, consent } };
+  const { pane, spaceId, detail } = useSettingsNav.getState();
+  return { reveal: { id, at: Date.now(), token: ++revealTokens, target: { pane, spaceId, detail }, consent } };
 }
 
 const MENU_COMMANDS: Target = { id: "shortcuts.menuCommands", pane: "shortcuts", section: "Keyboard" };
@@ -200,8 +200,8 @@ export function jumpToSetting({ id, pane, section }: Target) {
   const consent = consentToken();
   const key = settingsSectionKey(pane, section);
   useSettingsSearch.setState((s) => (s.revealedSections.includes(key) ? {} : { revealedSections: [...s.revealedSections, key] }));
-  if (!useSettingsSearch.getState().previewing) goToSettingsPane(pane, settingsProfileFor(pane, useSettingsNav.getState()));
-  else showWithoutHistory(pane);
+  if (!useSettingsSearch.getState().previewing) goToSettingsPane(pane, searchDestination(pane, id));
+  else showWithoutHistory(pane, id);
   useSettingsSearch.setState({ ...requestReveal(id, consent), previewing: false });
 }
 
@@ -210,15 +210,18 @@ export function previewSetting({ id, pane, section }: Target) {
   const { query, previewing, reveal } = useSettingsSearch.getState();
   if (!query.trim()) return;
   if (reveal?.id === id && previewing && useSettingsNav.getState().pane === pane) return;
-  if (!previewing) goToSettingsPane(pane, settingsProfileFor(pane, useSettingsNav.getState()));
-  else showWithoutHistory(pane);
+  if (!previewing) goToSettingsPane(pane, searchDestination(pane, id));
+  else showWithoutHistory(pane, id);
   useSettingsSearch.setState({ previewSection: settingsSectionKey(pane, section), previewing: true, ...requestReveal(id, consent) });
 }
 
-function showWithoutHistory(pane: SettingsPane) {
+const searchDestination = (pane: SettingsPane, id: string) =>
+  id === "profiles.list" ? null : settingsSpaceFor(pane, useSettingsNav.getState());
+
+function showWithoutHistory(pane: SettingsPane, id: string) {
   const nav = useSettingsNav.getState();
-  const profileId = settingsProfileFor(pane, nav);
-  if (nav.pane !== pane || nav.profileId !== profileId || nav.detail) useSettingsNav.setState({ pane, profileId, detail: null, scroll: 0, visit: newSettingsVisit(), shownProfile: shownSettingsProfile({ pane, profileId, detail: null }), forward: [] });
+  const spaceId = searchDestination(pane, id);
+  if (nav.pane !== pane || nav.spaceId !== spaceId || nav.detail) useSettingsNav.setState({ pane, spaceId, detail: null, scroll: 0, visit: newSettingsVisit(), shownProfile: shownSettingsProfile({ pane, spaceId, detail: null }), forward: [] });
 }
 
 export const setShortcutsQuery = (shortcutsQuery: string) => useSettingsSearch.setState({ shortcutsQuery });

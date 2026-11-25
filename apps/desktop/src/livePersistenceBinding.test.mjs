@@ -54,6 +54,8 @@ test("Linux binding uses the canonical shared store, suppresses write echoes and
     assert.equal(new Set(ids).size, ids.length);
     assert.ok(ids.every((id) => /^lf-[a-f0-9-]{36}$/.test(id)));
     await flushLinuxDocuments();
+    assert.ok(ids.every((id) => payload.folders[id].profileId === "logical"));
+    assert.ok(ids.every((id) => live().folders[id].spaceId === "logical"));
   } finally { Date.now = oldNow; }
 });
 

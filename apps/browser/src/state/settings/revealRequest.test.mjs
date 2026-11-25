@@ -10,7 +10,7 @@ globalThis.fetch = async () => ({ status: 200 });
 
 const nav = () => useSettingsNav.getState();
 const request = () => useSettingsSearch.getState().reveal;
-const at = (pane, profileId = null, detail = null) => useSettingsNav.setState({ pane, profileId, detail, back: [], forward: [] });
+const at = (pane, spaceId = null, detail = null) => useSettingsNav.setState({ pane, spaceId, detail, back: [], forward: [] });
 
 let missesSeen = 0;
 async function revealMisses() {
@@ -33,13 +33,13 @@ test("S1: Manage Extensions commits the destination before it asks for the row, 
   at("general");
   let seen = null;
   const unsubscribe = useSettingsSearch.subscribe((s) => {
-    if (s.reveal && !seen) seen = { pane: nav().pane, profileId: nav().profileId };
+    if (s.reveal && !seen) seen = { pane: nav().pane, spaceId: nav().spaceId };
   });
   setSettingsQuery("cookies");
   openSettings("profiles", "work", null, "profiles.extensions");
   unsubscribe();
-  assert.deepEqual(seen, { pane: "profiles", profileId: "work" }, "navigation was already at the destination when the reveal was published");
-  assert.deepEqual(request().target, { pane: "profiles", profileId: "work", detail: null });
+  assert.deepEqual(seen, { pane: "profiles", spaceId: "work" }, "navigation was already at the destination when the reveal was published");
+  assert.deepEqual(request().target, { pane: "profiles", spaceId: "work", detail: null });
   assert.equal(revealWanted(request(), nav()), true);
   assert.equal(useSettingsSearch.getState().query, "");
 });
@@ -48,12 +48,12 @@ test("S2: a request for profile B is dropped when the user moves on to C before 
   at("profiles", "a");
   openSettings("profiles", "b", null, "profiles.extensions");
   const forB = request();
-  assert.equal(revealTargetShown({ pane: "profiles", profileId: "a", detail: null }, forB), false, "A is still shown while B loads");
+  assert.equal(revealTargetShown({ pane: "profiles", spaceId: "a", detail: null }, forB), false, "A is still shown while B loads");
   replaceSettingsPlace("c");
   assert.equal(revealWanted(forB, nav()), false, "C supersedes B's request");
-  assert.equal(revealTargetShown({ pane: "profiles", profileId: "c", detail: null }, forB), false);
-  assert.equal(revealTargetShown({ pane: "profiles", profileId: "b", detail: "extension:x" }, forB), false, "B's extension page is not B's overview");
-  assert.equal(revealTargetShown({ pane: "profiles", profileId: "b", detail: null }, forB), true);
+  assert.equal(revealTargetShown({ pane: "profiles", spaceId: "c", detail: null }, forB), false);
+  assert.equal(revealTargetShown({ pane: "profiles", spaceId: "b", detail: "extension:x" }, forB), false, "B's extension page is not B's overview");
+  assert.equal(revealTargetShown({ pane: "profiles", spaceId: "b", detail: null }, forB), true);
 });
 
 test("S2 (round 2): navigating A, then B, then back to A drops A's request on the way out, so it never fires again", () => {

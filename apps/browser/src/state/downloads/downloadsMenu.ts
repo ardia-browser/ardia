@@ -27,13 +27,13 @@ export function runDownloadsMenuChoice(windowId: string, choice: string | null, 
   }
 }
 
-const shownProfileOf = (windowId: string) => useBrowser.getState().windows[windowId]?.profileId;
+const shownProfileOf = (windowId: string) => useBrowser.getState().windows[windowId]?.spaceId;
 
 export async function openDownloadsMenu(windowId: string) {
   const consent = consentToken();
-  const profileId = shownProfileOf(windowId);
-  if (!profileId) return;
+  const spaceId = shownProfileOf(windowId);
+  if (!spaceId) return;
   const choice = await showMenu(downloadsMenuItems(useBrowser.getState(), windowId));
-  if (shownProfileOf(windowId) !== profileId) return;
+  if (shownProfileOf(windowId) !== spaceId) return;
   runDownloadsMenuChoice(windowId, choice, consent);
 }

@@ -10,7 +10,7 @@ export function ThemeGradient() {
   const live = useLiveTheme();
   const appDark = useAppDark();
   const source = useSettings(spaceLookSource);
-  const theme = live ? profileTheme({ color: scoped.profileColor === "incognito" ? "plum" : scoped.profileColor, theme: live.theme }, appDark, source) : scoped;
+  const theme = live ? profileTheme({ color: scoped.spaceColor === "incognito" ? "plum" : scoped.spaceColor, theme: live.theme }, appDark, source) : scoped;
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       <WindowBackdrop vibrancy {...theme.backdrop} colors={theme.windowTint} grainOpacity={theme.grain} style={StyleSheet.absoluteFill} />

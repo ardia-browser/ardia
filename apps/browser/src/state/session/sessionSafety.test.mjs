@@ -640,7 +640,7 @@ test("a write gate runs one copy at a time and takes its success whenever it com
 
 test("a pin that hydrating drops (its profile is gone) makes the launch keep the original aside before the first save", async () => {
   const good = JSON.parse(realSession(["https://loose.example/"], { pin: "https://pin.example/" }));
-  const orphaned = JSON.stringify({ ...good, tabs: good.tabs.map((t) => (t.pin ? { ...t, profileId: "gone-profile" } : t)) });
+  const orphaned = JSON.stringify({ ...good, tabs: good.tabs.map((t) => (t.pin ? { ...t, spaceId: "gone-profile" } : t)) });
   stub.docs.set("session.json", orphaned);
   const stop = startPersistence();
   S().updateSettings({ appearance: "light" });
@@ -909,7 +909,7 @@ test("only the last three migration snapshots are kept", async () => {
 test("restoring yesterday's intact backup leaves today's partial one on disk", async () => {
   const yesterday = realSession(["https://yesterday.example/"]);
   const today = JSON.parse(realSession(["https://today.example/"], { pin: "https://only-here.example/" }));
-  const partial = backupJson(Date.now() - 60_000, JSON.stringify({ ...today, tabs: today.tabs.map((t) => (t.pin ? { ...t, profileId: "gone-profile" } : t)) }));
+  const partial = backupJson(Date.now() - 60_000, JSON.stringify({ ...today, tabs: today.tabs.map((t) => (t.pin ? { ...t, spaceId: "gone-profile" } : t)) }));
   stub.docs.set(`${DAILY_BACKUP}${Date.now() - BACKUP_EVERY_MS - 60_000}.json`, backupJson(Date.now() - BACKUP_EVERY_MS - 60_000, yesterday));
   stub.docs.set(`${DAILY_BACKUP}${Date.now() - 60_000}.json`, partial);
   for (let i = 2; i < 9; i++) stub.docs.set(`${DAILY_BACKUP}${Date.now() - i * BACKUP_EVERY_MS}.json`, backupJson(Date.now() - i * BACKUP_EVERY_MS, yesterday));

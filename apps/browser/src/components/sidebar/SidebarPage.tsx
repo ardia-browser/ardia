@@ -5,12 +5,12 @@ import { ContextMenuArea, space, WindowDragRegion } from "../ui";
 import { layout } from "../ui/theme";
 import { SidebarInk } from "./SidebarTextScope";
 import { ThemeScope } from "../window/ThemeScope";
-import { PageProfileContext, useSettings, useWindowId } from "../../state/browser/hooks";
+import { PageSpaceContext, useSettings, useWindowId } from "../../state/browser/hooks";
 import { newTab } from "../../state/tabs/actions";
 import { sidebarListLengthNow, useSidebarCells } from "../../state/sidebar/hooks";
 import { useNewTabAtTop, useSidebarField, useSidebarPart } from "../../state/sidebar/chrome";
 import { SIDEBAR_PLAYER_GROWTH, SIDEBAR_PLAYER_HEIGHT, SidebarPlayer, usePlayerMotion, useSidebarPlayerTab } from "../media/SidebarPlayer";
-import { usePageStyle } from "../../state/windows/profilePager";
+import { usePageStyle } from "../../state/windows/spacePager";
 import { useSharedTilesStyle } from "../../state/sidebar/sharedTiles";
 import { DragScope, useDragPage, useDragController, useDragging, usePinnedCount } from "./DragProvider";
 import { openSidebarMenu } from "../../state/sidebar/menus";
@@ -34,7 +34,7 @@ const NONE: string[] = [];
 const LIST_PAD = GLOW_ROOM + SCROLL_EDGE.inset;
 
 type PageProps = {
-  profileId: string;
+  spaceId: string;
   slot: number;
   paging: boolean;
   width: number;
@@ -50,7 +50,7 @@ type PageProps = {
   onScrollY: (y: number) => void;
 };
 
-export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, width, current, resting, canDock, height, rows, geometry, sharedGeometry, spots, onScrollView, onScrollY }: PageProps) {
+export const SidebarPage = memo(function SidebarPage({ spaceId, slot, paging, width, current, resting, canDock, height, rows, geometry, sharedGeometry, spots, onScrollView, onScrollY }: PageProps) {
   const windowId = useWindowId();
   const dragPage = useDragPage(current);
   const topGap = listTopGap(useSidebarField() === "top");
@@ -66,10 +66,10 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
     return () => cancelAnimationFrame(frame);
   }, [beside]);
   const offScreen = beside && !current;
-  const playerTab = useSidebarPlayerTab(windowId, profileId, current);
+  const playerTab = useSidebarPlayerTab(windowId, spaceId, current);
   const playerHeight = playerTab ? SIDEBAR_PLAYER_HEIGHT : 0;
   const playerMotion = usePlayerMotion();
-  const cells = useSidebarCells(windowId, profileId, offScreen);
+  const cells = useSidebarCells(windowId, spaceId, offScreen);
   const tiles = pinnedShown ? cells : NONE;
   const innerWidth = width - layout.sidebarInset * 2;
   const dragging = useDragging() && current;
@@ -86,7 +86,7 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
   const [dockGuessed, setDockGuessed] = useState(false);
   if (!dockGuessed && canDock && height > 0) {
     setDockGuessed(true);
-    if (clearlyOverflows(sidebarListLengthNow(windowId, profileId), height)) setDockedNow(true);
+    if (clearlyOverflows(sidebarListLengthNow(windowId, spaceId), height)) setDockedNow(true);
   }
   const docked = canDock && dockedNow;
   const { dockFixed, capped } = pageLayout({
@@ -118,17 +118,17 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
   const scrollView = useRef<ScrollView | null>(null);
   useLayoutEffect(() => {
     page.scroller = scrollView.current;
-    spots.set(profileId, page);
+    spots.set(spaceId, page);
     return () => {
-      if (spots.get(profileId) === page) spots.delete(profileId);
+      if (spots.get(spaceId) === page) spots.delete(spaceId);
       if (page.owns) onScrollView(null);
       page.owns = false;
     };
-  }, [spots, profileId, page, onScrollView]);
+  }, [spots, spaceId, page, onScrollView]);
   const [listViewport] = useState<ListViewport>(() => ({
     band: () => (page.viewport ? withOverscan(page.scrollY - LIST_PAD - page.regions.list, page.viewport) : null),
   }));
-  const selectedRow = useSelectedRowAway(windowId, geometry, scrollView, () => page.scrollY, profileId);
+  const selectedRow = useSelectedRowAway(windowId, geometry, scrollView, () => page.scrollY, spaceId);
   const [onScroll] = useState(() =>
     Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
       useNativeDriver: true,
@@ -179,7 +179,7 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
       pointerEvents={current ? "auto" : "none"}
       style={{ position: "absolute", top: 0, bottom: 0, left: 0, width, display: resting ? "none" : "flex", ...pageStyle }}
     >
-      <PageProfileContext.Provider value={profileId}>
+      <PageSpaceContext.Provider value={spaceId}>
         <ThemeScope page>
           <SidebarInk>
             {dragPage(
@@ -219,7 +219,7 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
                         >
                           <PageRows
                             windowId={windowId}
-                            profileId={profileId}
+                            spaceId={spaceId}
                             current={current}
                             rows={rows}
                             lazy={lazy}
@@ -257,7 +257,7 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
             )}
           </SidebarInk>
         </ThemeScope>
-      </PageProfileContext.Provider>
+      </PageSpaceContext.Provider>
     </Animated.View>
   );
 });

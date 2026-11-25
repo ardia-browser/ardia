@@ -84,7 +84,7 @@ export function openFromNewTabBar(windowId: string, target: NewTabTarget, url: s
     return noteBarLoad(into.id);
   }
   const group = target.kind === "group" ? s.groups[target.groupId] : undefined;
-  if (group && group.windowId === windowId && group.profileId === s.windows[windowId]!.profileId) {
+  if (group && group.windowId === windowId && group.spaceId === s.windows[windowId]!.spaceId) {
     const id = store().newTabInGroup(group.id);
     if (!id) return;
     navigateTyped(id, url, () => store().navigate(id, url));

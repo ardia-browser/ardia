@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { Animated, Pressable, TextInput, View, type GestureResponderEvent, type Insets, type TextStyle } from "react-native";
 import { toggleMute } from "../../state/browser/actions";
 import { hex, layout, useTheme } from "../ui/theme";
-import { useIsActiveTab, usePageProfileId, useTab, useWindow, useWindowId } from "../../state/browser/hooks";
+import { useIsActiveTab, usePageSpaceId, useTab, useWindow, useWindowId } from "../../state/browser/hooks";
 import { returnToPinnedUrl } from "../../state/pins/actions";
 import { useSplitRowPanes } from "../../state/sidebar/hooks";
 import { useTabHasBadges } from "../../state/media/tabBadges";
@@ -132,7 +132,7 @@ export const TabRow = memo(function TabRow({
                       </View>
                     ) : (
                       <View>
-                        <RowTabIcon tabId={shown.id} url={shown.url} favicon={shown.favicon} icon={shown.customIcon} profileId={shown.profileId} marks={iconMarks & ICON_MARKS} sleeping={!!(iconMarks & SLEEPING)} compact={quiet} />
+                        <RowTabIcon tabId={shown.id} url={shown.url} favicon={shown.favicon} icon={shown.customIcon} spaceId={shown.spaceId} marks={iconMarks & ICON_MARKS} sleeping={!!(iconMarks & SLEEPING)} compact={quiet} />
                         {badged ? <TabBadges tabId={shown.id} /> : null}
                       </View>
                     )}
@@ -140,7 +140,7 @@ export const TabRow = memo(function TabRow({
                 </Pressable>
               ) : (
                 <>
-                  <RowTabIcon tabId={shown.id} url={shown.url} favicon={shown.favicon} icon={shown.customIcon} profileId={shown.profileId} marks={iconMarks & ICON_MARKS} sleeping={!!(iconMarks & SLEEPING)} compact={quiet} />
+                  <RowTabIcon tabId={shown.id} url={shown.url} favicon={shown.favicon} icon={shown.customIcon} spaceId={shown.spaceId} marks={iconMarks & ICON_MARKS} sleeping={!!(iconMarks & SLEEPING)} compact={quiet} />
                   {badged ? <TabBadges tabId={shown.id} /> : null}
                 </>
               )}
@@ -293,8 +293,8 @@ export const SplitRowItem = memo(function SplitRowItem({
   const preview = useSplitPreview(splitSide, tabIds.length);
   const theme = useTheme();
   const tokens = useSidebarTokens();
-  const profileId = usePageProfileId();
-  const active = useWindow(windowId, (w) => tabIds.includes(w?.activeTabIds[profileId] ?? ""));
+  const spaceId = usePageSpaceId();
+  const active = useWindow(windowId, (w) => tabIds.includes(w?.activeTabIds[spaceId] ?? ""));
   const { hovered, hoverProps } = useRowHover(windowId, null);
   const [moved, movedRef] = useShift(motion?.shift ?? null, useCallback((v: View | null) => registerRow(windowId, entryKey("split", splitId), v), [windowId, splitId]));
   if (tabIds.length < 2) return null;

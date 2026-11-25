@@ -5,25 +5,25 @@ import { pickFiles, prompt } from "../../platform/dialogs";
 import type { CommandEvent } from "../../platform/commands";
 import { cleanLinkTitle, cleanUrl, cleanUrlReport, markdownLink, type CleanedTitle, type CleanedUrl } from "@ardia/core";
 import { useBrowser } from "../browser/store";
-import { requestCreateProfile } from "../profiles/createProfileRequest";
-import { activeTabId, bookmarkProfileId, isPinnedRow, resolveWindowId, tabLayoutOf } from "../browser/model";
+import { requestCreateSpace } from "../spaces/createSpaceRequest";
+import { activeTabId, bookmarkSpaceId, isPinnedRow, resolveWindowId, tabLayoutOf } from "../browser/model";
 import {
   closeGroup,
   closeTab,
-  cycleProfile,
+  cycleSpace,
   focus,
-  moveTabToProfile,
+  moveTabToSpace,
   moveTabToWindow,
-  openProfileMenu,
+  openSpaceMenu,
   openWindow,
-  switchProfile,
+  switchSpace,
   toggleMute,
   toggleSiteMute,
 } from "../browser/actions";
 import { bookmarkAllTabs, bookmarkTab } from "../bookmarks/actions";
 import { isBookmarklet, runBookmarklet } from "../bookmarks/bookmarklets";
 import { exportBookmarksFromWindow, toggleDownloadsPanel } from "./platformCommands";
-import { requestClearData } from "../profiles/clearDataRequest";
+import { requestClearData } from "../spaces/clearDataRequest";
 import { showHistory } from "../history/showHistory";
 import { openInternalPage } from "../pages/urls";
 import { openImport, openSettings } from "../settings/settingsWindows";
@@ -55,8 +55,15 @@ import { copyPageUrl, copySelectedTabUrls, jumpToSelection } from "../site/selec
 import { shareTab } from "../site/share";
 import { groupOf } from "../pins/tabGrouping";
 import { noteUrlCopied } from "../telemetry/urlCopies";
-import { newWindowProfile, originalProfile } from "../windows/small";
-import { openLittleArdia } from "../littleArdia/actions";
+import { isSmall, mainWindowFor, newWindowSpace, originalSpace } from "../windows/small";
+import {
+  closeLittleArdia,
+  cycleLittleArdiaSpace,
+  moveLittleArdiaToSpace,
+  openInMainWindow,
+  openLittleArdia,
+  openLittleArdiaSpaceMenu,
+} from "../littleArdia/actions";
 import { runPeekCommand } from "../peek/actions";
 import { expectFocus, findFocus } from "../focus/focusClaims";
 import { isWebPageUrl } from "../../lib/url";
@@ -115,9 +122,9 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
 
   switch (command) {
     case "newWindow":
-      return void openWindow({ profileId: arg ?? newWindowProfile(s, requested) });
+      return void openWindow({ spaceId: arg ?? undefined });
     case "newIncognitoWindow":
-      return void openWindow({ kind: "private", profileId: originalProfile(s, s.windows[requested ?? ""]) });
+      return void openWindow({ kind: "private", spaceId: originalSpace(s, s.windows[requested ?? ""]) });
     case "newLittleArdia":
       return void openLittleArdia(undefined, arg ?? undefined);
     case "toggleOpenLinksInLittleArdia":
@@ -280,7 +287,7 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
     case "viewSource":
       if (!page || !web || !isWebPageUrl(page.url)) return;
       if (tabEngine(s, page.id) === "webkit") return void web.runPageCommand("viewSource");
-      return void s.newTab(windowId, { url: `view-source:${page.url}`, openerId: page.id, profileId: page.profileId });
+      return void s.newTab(windowId, { url: `view-source:${page.url}`, openerId: page.id, spaceId: page.spaceId });
     case "back":
       return tabId ? goBack(tabId) : undefined;
     case "forward":
@@ -309,12 +316,12 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
       const group = groupOf(s, tabId);
       return group ? void closeGroup(group.id, { mayWrite, user }) : undefined;
     }
-    case "openProfileMenu":
-      return s.windows[windowId]?.kind === "private" ? undefined : void openProfileMenu(windowId);
+    case "openSpaceMenu":
+      return s.windows[windowId]?.kind === "private" ? undefined : void openSpaceMenu(windowId);
     case "duplicateTab":
       return tab ? void s.duplicateTab(tab.id) : undefined;
-    case "moveTabToProfile":
-      return tab && arg ? void moveTabToProfile(tab.id, newOrId(arg), mayWrite) : undefined;
+    case "moveTabToSpace":
+      return tab && arg ? void moveTabToSpace(tab.id, newOrId(arg), mayWrite) : undefined;
     case "moveTabToWindow":
       return tab && arg ? moveTabToWindow(tab.id, newOrId(arg)) : undefined;
     case "bookmarkPage":
@@ -347,12 +354,12 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
       return bookmarkAllTabs(windowId);
     case "mergeAllWindows":
       return s.mergeAllWindows(windowId);
-    case "switchProfile":
-      return arg ? switchProfile(windowId, arg, true, mayWrite) : undefined;
-    case "nextProfile":
-      return cycleProfile(windowId, 1, mayWrite);
-    case "previousProfile":
-      return cycleProfile(windowId, -1, mayWrite);
+    case "switchSpace":
+      return arg ? switchSpace(windowId, arg, true, mayWrite) : undefined;
+    case "nextSpace":
+      return cycleSpace(windowId, 1, mayWrite);
+    case "previousSpace":
+      return cycleSpace(windowId, -1, mayWrite);
     case "openExtension":
       return arg ? openExtensionFromMenu(windowId, arg, tabId) : undefined;
     case "addExtension":
@@ -361,8 +368,8 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
       return openPinDialog(windowId);
     case "autofill":
       return void requestAutofill(windowId, arg, tabId);
-    case "newProfile":
-      return void requestCreateProfile(windowId).then((id) => id && foreignWriteHooks.around(() => switchProfile(windowId, id)));
+    case "newSpace":
+      return void requestCreateSpace(windowId).then((id) => id && foreignWriteHooks.around(() => switchSpace(windowId, id)));
   }
 }
 
@@ -370,14 +377,14 @@ async function addBookmarkToFolder(windowId: string, tabId: string, folder: stri
   const s = useBrowser.getState();
   const tab = s.tabs[tabId];
   if (!tab?.url) return;
-  const profileId = bookmarkProfileId(s, s.windows[windowId]);
+  const spaceId = bookmarkSpaceId(s, s.windows[windowId]);
   let parentId = folder;
   if (folder === "new") {
     const title = await prompt({ title: "New Folder", placeholder: "Folder name", confirmTitle: "Create", windowId });
     if (!title) return;
-    foreignWriteHooks.around(() => void (parentId = useBrowser.getState().addBookmarkFolder({ profileId, title })));
+    foreignWriteHooks.around(() => void (parentId = useBrowser.getState().addBookmarkFolder({ spaceId, title })));
   }
-  foreignWriteHooks.around(() => useBrowser.getState().addBookmark({ profileId, url: tab.url, title: tab.title, favicon: tab.favicon, parentId }));
+  foreignWriteHooks.around(() => useBrowser.getState().addBookmark({ spaceId, url: tab.url, title: tab.title, favicon: tab.favicon, parentId }));
 }
 
 async function openFiles(windowId: string | null) {

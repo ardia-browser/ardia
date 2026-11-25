@@ -6,7 +6,7 @@ import { flushLinuxSession } from "./session";
 
 export * from "../../browser/src/state/settings/settingsWindows";
 
-type UtilitySettingsPlace = SettingsPlace & { reveal?: string; revealId?: string; revealConsent?: ConsentToken | null };
+type UtilitySettingsPlace = Omit<SettingsPlace, "spaceId"> & { profileId: string | null; reveal?: string; revealId?: string; revealConsent?: ConsentToken | null };
 
 export function openSettings(pane?: SettingsPane, profileId?: string | null, detail?: string | null, reveal?: string | null) {
   let settings: UtilitySettingsPlace | undefined;

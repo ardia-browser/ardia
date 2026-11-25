@@ -1,4 +1,4 @@
-import { sendTab, sendTargets, setOpenTabsSynced, setProfileSynced, setTypeSynced, syncNow, syncWritesOpen, useSync } from "../sync/engine";
+import { sendTab, sendTargets, setOpenTabsSynced, setSpaceSynced, setTypeSynced, syncNow, syncWritesOpen, useSync } from "../sync/engine";
 import { DATA_TYPES, type DataType } from "../sync/syncDoc";
 import type { MethodSpec, SocketCall } from "./socketCatalog";
 import { bool, id, obj, oneOf, PROFILE, TAB } from "./socketSchema";
@@ -40,7 +40,7 @@ function writable(what: string) {
 
 const summary = () => {
   const s = useSync.getState();
-  return { status: s.status, lastSyncedAt: s.lastSyncedAt, pending: s.pending, error: s.error, types: s.types, profiles: s.profiles };
+  return { status: s.status, lastSyncedAt: s.lastSyncedAt, pending: s.pending, error: s.error, types: s.types, profiles: s.spaces };
 };
 
 async function runNow(_params: Record<string, unknown>, call: SocketCall) {
@@ -58,7 +58,7 @@ async function setType(params: Record<string, unknown>) {
 }
 
 function linkOf(profileId: string) {
-  const link = writable("choosing which profiles sync").profiles[profileId];
+  const link = writable("choosing which profiles sync").spaces[profileId];
   if (!link) throw new OpError("refused", `Profile ${profileId} isn't linked to sync yet; it links on the next sync after it opens.`);
   return link;
 }
@@ -66,8 +66,8 @@ function linkOf(profileId: string) {
 async function setProfile(params: Record<string, unknown>) {
   const profileId = profileArg(params.profile);
   linkOf(profileId);
-  setProfileSynced(profileId, params.on as boolean);
-  expect(await settles(() => !!useSync.getState().profiles[profileId]?.enabled === params.on), `profile ${profileId} didn't turn ${params.on ? "on" : "off"}.`);
+  setSpaceSynced(profileId, params.on as boolean);
+  expect(await settles(() => !!useSync.getState().spaces[profileId]?.enabled === params.on), `profile ${profileId} didn't turn ${params.on ? "on" : "off"}.`);
   return summary();
 }
 
@@ -76,7 +76,7 @@ async function setOpenTabs(params: Record<string, unknown>) {
   if (!linkOf(profileId).enabled) throw new OpError("refused", `Profile ${profileId} doesn't sync; turn it on with sync.setProfile first.`);
   if (!useSync.getState().types.tabs) throw new OpError("refused", "Open Tabs don't sync; turn them on with sync.setType first.");
   setOpenTabsSynced(profileId, params.on as boolean);
-  expect(await settles(() => !!now().profiles[profileId]?.syncTabs === params.on), `profile ${profileId}'s open tabs didn't turn ${params.on ? "on" : "off"}.`);
+  expect(await settles(() => !!now().spaces[profileId]?.syncTabs === params.on), `profile ${profileId}'s open tabs didn't turn ${params.on ? "on" : "off"}.`);
   return summary();
 }
 
@@ -89,7 +89,7 @@ function send(params: Record<string, unknown>) {
   writable("sending a tab");
   const tab = tabOf(params.tab);
   if (!/^https?:/i.test(tab.url)) throw new OpError("refused", "Only http and https pages can be sent to another device.");
-  const device = sendTargets(tab.profileId).find((d) => d.id === params.device);
+  const device = sendTargets(tab.spaceId).find((d) => d.id === params.device);
   if (!device) throw new OpError("no_window", `There's no device ${String(params.device)} that takes tabs from this profile (sync.devices lists them).`);
   expect(sendTab(tab.id, device.id), "the tab wasn't queued for the device.");
   return { ok: true, device };

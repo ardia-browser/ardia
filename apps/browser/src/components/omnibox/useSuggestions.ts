@@ -63,7 +63,7 @@ export function useSuggestions({
   text,
   active,
   windowId,
-  profileId,
+  spaceId,
   currentTabId,
   currentUrl,
   scope,
@@ -73,7 +73,7 @@ export function useSuggestions({
   text: string;
   active: boolean;
   windowId: string;
-  profileId: string;
+  spaceId: string;
   currentTabId?: string;
   currentUrl?: string;
   scope: SearchScope | null;
@@ -82,7 +82,7 @@ export function useSuggestions({
 }): SuggestionResult {
   const allTabs = useTabs((tabs) => tabs);
   const historyOn = useSettings((st) => st.commandBarHistory);
-  const history = useSuggestionHistory(historyOn ? profileId : null);
+  const history = useSuggestionHistory(historyOn ? spaceId : null);
   const bookmarks = useBookmarks((b) => b);
   const bookmarkEngine = useBookmarkEngine(windowId);
   const engines = useSettings((st) => searchEngines(st));
@@ -92,7 +92,7 @@ export function useSuggestions({
   const shortcuts = useSettings((st) => st.shortcuts);
   const menuBar = useMenuBarRevision();
 
-  const tabs = useMemo(() => Object.values(allTabs).filter((t) => t.profileId === profileId), [allTabs, profileId]);
+  const tabs = useMemo(() => Object.values(allTabs).filter((t) => t.spaceId === spaceId), [allTabs, spaceId]);
   const showBookmarks = useBookmarksShown();
   const bookmarkRows = useMemo(() => (showBookmarks ? engineBookmarks(bookmarks, bookmarkEngine) : NO_BOOKMARKS), [showBookmarks, bookmarks, bookmarkEngine]);
   const source = useMemo(() => ({ tabs, history, bookmarks: bookmarkRows }), [tabs, history, bookmarkRows]);
@@ -111,8 +111,8 @@ export function useSuggestions({
   const drawnRemote = useRef(remote);
   const attempts = useRef({ asking: "", count: 0 });
   drawnRemote.current = remote;
-  const suggestProfile = suggestProfileKey(profileId);
-  const remoteAllowed = remoteSuggestionsAllowed(profileId);
+  const suggestProfile = suggestProfileKey(spaceId);
+  const remoteAllowed = remoteSuggestionsAllowed(spaceId);
   const fetcher = useMemo(() => createSuggestFetcher({ fetch: browserSuggestFetch(suggestProfile) }), [suggestProfile]);
   useEffect(() => {
     setRemote({ text: "", engine: "", list: [], sites: NO_SITES });

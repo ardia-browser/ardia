@@ -134,7 +134,7 @@ test("data cleared in Chromium is cleared in WebKit too, and never comes back fr
   assert.deepEqual(webKit.storage[ORIGIN], []);
 });
 
-test("private windows, a tab that changed profile mid-read, and the carry setting turned off move nothing", async () => {
+test("private windows, a tab that changed space mid-read, and the carry setting turned off move nothing", async () => {
   {
     const { tabId } = setup({ kind: "private" });
     webviews.set(tabId, chromiumPage({ cookies: [signedIn], storage: {} }));
@@ -147,7 +147,7 @@ test("private windows, a tab that changed profile mid-read, and the carry settin
     webviews.set(tabId, page);
     const carried = carrySignIn(tabId, `${ORIGIN}/home`, "webkit", null);
     await new Promise((resolve) => setTimeout(resolve, 0));
-    S().updateTab(tabId, { profileId: "work" });
+    S().updateTab(tabId, { spaceId: "work" });
     release();
     assert.equal(await carried, 0);
   }
@@ -295,7 +295,7 @@ test("a fresh WebKit load holds until the Chromium sign-in has landed, then lets
   const { tabId } = setup();
   webviews.set(tabId, chromiumPage({ cookies: [signedIn], storage: {} }));
   webKit.released.length = 0;
-  for (const listener of webKit.listeners) listener({ name: "webKit.siteDataWanted", data: { id: "g1", profile: "", origin: ORIGIN } });
+  for (const listener of webKit.listeners) listener({ name: "webKit.siteDataWanted", data: { id: "g1", space: "", origin: ORIGIN } });
   for (let i = 0; i < 50 && !webKit.released.length; i++) await new Promise((resolve) => setTimeout(resolve, 5));
   assert.deepEqual(webKit.released, ["g1"]);
   assert.deepEqual(webKit.cookies.map((c) => c.value), ["chromium"]);

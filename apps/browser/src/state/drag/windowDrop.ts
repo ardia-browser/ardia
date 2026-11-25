@@ -58,15 +58,15 @@ export function dropTabsOutside(
   const scale = currentInterfaceScale();
   const frame: Frame = [Math.round(point[0] - NEW_WINDOW_GRAB.x * scale), Math.round(point[1] - height + NEW_WINDOW_GRAB.y * scale), width, height];
   onNewWindow?.(frame);
-  return s.createWindow({ profileId: s.tabs[tabIds[0]!]?.profileId, tabIds, frame });
+  return s.createWindow({ spaceId: s.tabs[tabIds[0]!]?.spaceId, tabIds, frame });
 }
 
-export function openDroppedUrls(windowId: string, profileId: string, placement: TabPlacement | null, urls: string[]): string[] {
+export function openDroppedUrls(windowId: string, spaceId: string, placement: TabPlacement | null, urls: string[]): string[] {
   const s = useBrowser.getState();
   const w = s.windows[windowId];
-  if (!urls.length || !w || !(s.profiles[profileId] || w.profileId === profileId)) return [];
-  const paged = w.profileId !== profileId;
-  const ids = urls.map((url, i) => s.newTab(windowId, { url, background: paged || i > 0, profileId })).filter(Boolean);
+  if (!urls.length || !w || !(s.spaces[spaceId] || w.spaceId === spaceId)) return [];
+  const paged = w.spaceId !== spaceId;
+  const ids = urls.map((url, i) => s.newTab(windowId, { url, background: paged || i > 0, spaceId })).filter(Boolean);
   if (ids.length && placement && !paged) useBrowser.getState().placeTabs(ids, placement);
   return ids;
 }
@@ -99,7 +99,7 @@ export function openDroppedInTab(tabId: string, items: DroppedEntry[]): void {
   for (const input of rest) {
     const now = useBrowser.getState();
     const at = previous ? (now.windows[tab.windowId]?.tabIds.indexOf(previous) ?? -1) + 1 : 0;
-    const id = now.newTab(tab.windowId, { url: input, background: true, profileId: tab.profileId, ...(at > 0 ? { index: at } : {}) });
+    const id = now.newTab(tab.windowId, { url: input, background: true, spaceId: tab.spaceId, ...(at > 0 ? { index: at } : {}) });
     if (id) previous = id;
   }
 }

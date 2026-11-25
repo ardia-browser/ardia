@@ -1,5 +1,5 @@
 import type { JsonSchema } from "../../lib/jsonSchema";
-import { isIncognitoProfile } from "../browser/model";
+import { isIncognitoSpace } from "../browser/model";
 import { routeGroups } from "../airTraffic/groups";
 import { SHARED_GROUPS_SIDEBAR_ONLY, sharedRoot } from "./workspaceSharedGuard";
 import { pinKeyOf } from "../browser/model";
@@ -45,25 +45,25 @@ function conditionOf(value: Record<string, unknown>): LinkCondition {
 function profileOf(value: unknown): string | null {
   if (value === null) return null;
   const s = now();
-  if (typeof value !== "string" || !Object.hasOwn(s.profiles, value) || isIncognitoProfile(value)) throw new OpError("no_window", `There's no profile ${String(value)}.`);
+  if (typeof value !== "string" || !Object.hasOwn(s.spaces, value) || isIncognitoSpace(value)) throw new OpError("no_window", `There's no profile ${String(value)}.`);
   return value;
 }
 
-function groupKeyInSharedFolder(profileId: string, groupKey: string): boolean {
+function groupKeyInSharedFolder(spaceId: string, groupKey: string): boolean {
   const s = now();
-  return Object.values(s.groups).some((g) => g.profileId === profileId && pinKeyOf(g) === groupKey && !!sharedRoot(s, g.id));
+  return Object.values(s.groups).some((g) => g.spaceId === spaceId && pinKeyOf(g) === groupKey && !!sharedRoot(s, g.id));
 }
 
 function targetOf(params: Record<string, unknown>, base: AirTrafficTarget): AirTrafficTarget {
-  const profileId = params.profile !== undefined ? profileOf(params.profile) : base.profileId;
+  const spaceId = params.profile !== undefined ? profileOf(params.profile) : base.profileId;
   const open = (params.open as OpenAs | undefined) ?? base.open;
   const kept = params.profile !== undefined || open !== "tab" ? undefined : base.groupKey;
   const groupKey = params.group !== undefined ? (params.group as string | null) : kept;
   if (groupKey) {
     if (open !== "tab") throw new OpError("bad_request", "Only links opened as a tab go into a group.");
-    if (params.group !== undefined && (profileId === null || !targetUsableNow(profileId, groupKey))) throw new OpError("no_window", `There's no group ${groupKey} in that profile; airTraffic.rules lists them.`);
+    if (params.group !== undefined && (spaceId === null || !targetUsableNow(spaceId, groupKey))) throw new OpError("no_window", `There's no group ${groupKey} in that profile; airTraffic.rules lists them.`);
   }
-  return { profileId, open, groupKey: groupKey ?? undefined };
+  return { profileId: spaceId, open, groupKey: groupKey ?? undefined };
 }
 
 function draftOf(params: Record<string, unknown>, base: RuleDraft): RuleDraft {
@@ -87,7 +87,7 @@ function ruleOf(ruleId: unknown): AirTrafficRule {
 function overview() {
   const s = now();
   const config = currentAirTraffic();
-  const profiles = s.profileOrder.filter((p) => s.profiles[p] && !isIncognitoProfile(p)).map((p) => ({ id: p, name: s.profiles[p]!.name, groups: routeGroups(s, p) }));
+  const profiles = s.spaceOrder.filter((p) => s.spaces[p] && !isIncognitoSpace(p)).map((p) => ({ id: p, name: s.spaces[p]!.name, groups: routeGroups(s, p) }));
   return { rules: config.rules, fallback: config.fallback, fallbackChosen: !!config.fallbackChosen, profiles };
 }
 

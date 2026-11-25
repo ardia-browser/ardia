@@ -37,10 +37,10 @@ function panesOf(s: BrowserState, ids: string[]): string[] | GuardProblem {
 
 const refused = (message: string): GuardProblem => ({ code: "refused", message });
 
-function staysPut(s: BrowserState, ids: string[], profileId: string, zone: Zone | "kept", windowId?: string): GuardProblem | null {
+function staysPut(s: BrowserState, ids: string[], spaceId: string, zone: Zone | "kept", windowId?: string): GuardProblem | null {
   for (const id of ids) {
     const t = s.tabs[id]!;
-    if (t.profileId !== profileId) return refused(`Tab ${id} is in another profile than where it would go; a plugin can't move tabs between profiles.`);
+    if (t.spaceId !== spaceId) return refused(`Tab ${id} is in another profile than where it would go; a plugin can't move tabs between profiles.`);
     const own = zoneOfTab(s, id);
     if (zone === "kept" && own !== "unpinned") return refused(`Tab ${id} is ${ZONE_WORDS[own]}; a plugin moves only unpinned tabs to another window.`);
     if (own !== "unpinned" && windowId !== undefined && t.windowId !== windowId) return refused(`Tab ${id} is ${ZONE_WORDS[own]}; a plugin moves pinned tabs only within their own window.`);
@@ -63,9 +63,9 @@ function moveProblem(s: BrowserState, op: Op): GuardProblem | null {
   }
   if (dest) return staysPut(s, ids, dest.profileId, zoneOfPlacement(s, dest.placement), dest.windowId);
   const windowId = op.window as string | undefined;
-  if (windowId) return staysPut(s, ids, s.windows[windowId]!.profileId, "kept");
+  if (windowId) return staysPut(s, ids, s.windows[windowId]!.spaceId, "kept");
   const first = s.tabs[ids[0]!]!;
-  return staysPut(s, ids, first.profileId, "unpinned");
+  return staysPut(s, ids, first.spaceId, "unpinned");
 }
 
 function groupProblem(s: BrowserState, op: Op): GuardProblem | null {
@@ -74,7 +74,7 @@ function groupProblem(s: BrowserState, op: Op): GuardProblem | null {
   const first = s.tabs[ids[0]!]!;
   for (const id of ids) {
     const t = s.tabs[id]!;
-    if (t.windowId !== first.windowId || t.profileId !== first.profileId) return refused(`Tab ${id} is in another window or profile than tab ${first.id}; a plugin groups tabs only where they already are.`);
+    if (t.windowId !== first.windowId || t.spaceId !== first.spaceId) return refused(`Tab ${id} is in another window or profile than tab ${first.id}; a plugin groups tabs only where they already are.`);
     if (zoneOfTab(s, id) !== "unpinned") return refused(`Tab ${id} is ${ZONE_WORDS[zoneOfTab(s, id)]}; a plugin groups only unpinned tabs.`);
   }
   return null;

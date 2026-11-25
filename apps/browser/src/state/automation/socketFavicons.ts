@@ -28,7 +28,7 @@ async function favicon(params: Record<string, unknown>) {
   const url = pageOf(params.url);
   const profile = profileArg(params.profile);
   const cached = resolveFavicon(url, null, profile);
-  const known = cached?.profileId === profile ? iconOf(cached.uri) : null;
+  const known = cached?.spaceId === profile ? iconOf(cached.uri) : null;
   if (known) return { url, profile, found: true, ...known };
   const looked = await faviconsFor(cacheKey(profile), [url]);
   const stored = iconOf(looked.pages.get(url)?.uri ?? null);

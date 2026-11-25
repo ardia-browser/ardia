@@ -2,7 +2,7 @@ import { useBrowser } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import { dismissBarByCommandKey } from "../omnibox/barState";
 import type { ByUser } from "../tabs/closeActivation";
-import { closeLittleArdia, cycleLittleArdiaProfile, moveLittleArdiaToProfile, openInMainWindow, openLittleArdiaProfileMenu } from "../littleArdia/actions";
+import { closeLittleArdia, cycleLittleArdiaSpace, moveLittleArdiaToSpace, openInMainWindow, openLittleArdiaSpaceMenu } from "../littleArdia/actions";
 
 export function runLittleArdiaCommand(command: string, arg: string | null | undefined, windowId: string, user?: ByUser): boolean {
   const s = useBrowser.getState();
@@ -20,17 +20,17 @@ export function runLittleArdiaCommand(command: string, arg: string | null | unde
     case "openFile":
       openInMainWindow(windowId);
       return true;
-    case "switchProfile":
-      if (arg) moveLittleArdiaToProfile(windowId, arg);
+    case "switchSpace":
+      if (arg) moveLittleArdiaToSpace(windowId, arg);
       return true;
-    case "nextProfile":
-      cycleLittleArdiaProfile(windowId, 1);
+    case "nextSpace":
+      cycleLittleArdiaSpace(windowId, 1);
       return true;
-    case "previousProfile":
-      cycleLittleArdiaProfile(windowId, -1);
+    case "previousSpace":
+      cycleLittleArdiaSpace(windowId, -1);
       return true;
-    case "openProfileMenu":
-      void openLittleArdiaProfileMenu(windowId);
+    case "openSpaceMenu":
+      void openLittleArdiaSpaceMenu(windowId);
       return true;
   }
   return false;

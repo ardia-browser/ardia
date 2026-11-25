@@ -2,7 +2,7 @@ import { useLayoutEffect, useMemo } from "react";
 import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { useBrowser } from "../browser/store";
-import { isIncognitoProfile } from "../browser/model";
+import { isIncognitoSpace } from "../browser/model";
 import { isPeekTab } from "../peek/peek";
 import { notePageBarShown, notePageBarSuperseded } from "../telemetry/pageBarCounts";
 import { pageBarFor, sameMatch, type PageBarMatch, type PageBarPane } from "./pageBar";
@@ -61,11 +61,11 @@ export function watchPublishedPageBars(windowId: string, onBars: (bars: PageBars
 export const publishedPageBar = (windowId: string, tabId: string): PageBarMatch | null => usePageBarPanes.getState()[windowId]?.[tabId] ?? null;
 
 const tabFacts = (windowId: string, ids: string[]) => (s: ReturnType<typeof useBrowser.getState>) => {
-  const profile = s.windows[windowId]?.profileId ?? "";
+  const profile = s.windows[windowId]?.spaceId ?? "";
   return ids.flatMap((id) => {
     const t = s.tabs[id];
     if (!t) return [false, false, false, false, false];
-    return [t.page.kind === "loaded" || t.page.kind === "adopted", t.page.kind === "frozen", isPeekTab(s, id), t.profileId !== profile, isIncognitoProfile(t.profileId)];
+    return [t.page.kind === "loaded" || t.page.kind === "adopted", t.page.kind === "frozen", isPeekTab(s, id), t.spaceId !== profile, isIncognitoSpace(t.spaceId)];
   });
 };
 

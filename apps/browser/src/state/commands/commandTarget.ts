@@ -6,7 +6,7 @@ import { isUtilityWindowId, SETTINGS_WINDOW_ID } from "../settings/settingsWindo
 import { isSmall, mainWindowFor } from "../windows/small";
 import { isAppCommand, LITTLE_ARDIA_PAGE_COMMANDS } from "./commandCatalog";
 
-const LITTLE_ARDIA_COMMANDS: ReadonlySet<string> = new Set(["closeTab", "focusCommandBar", "openFile", "switchProfile", "nextProfile", "previousProfile", "openProfileMenu"]);
+const LITTLE_ARDIA_COMMANDS: ReadonlySet<string> = new Set(["closeTab", "focusCommandBar", "openFile", "switchSpace", "nextProfile", "previousProfile", "openProfileMenu"]);
 
 const peekHandles = (s: BrowserState, command: string, windowId: string) =>
   !!shownPeek(s, windowId) && (command === "openFile" || (command === "closeTab" && !s.windowUi[windowId]?.panel.open));
@@ -32,7 +32,7 @@ export function commandTarget(s: BrowserState, command: BrowserCommand, given: s
   const shownIn = resolveWindowId(s, requested) ?? "";
   if (!targeted && peekHandles(s, command, shownIn)) return { kind: "peek", windowId: shownIn, tabId: shownPeek(s, shownIn)?.tabId ?? null };
   const redirected = !targeted && isSmall(s, requested) && !LITTLE_ARDIA_PAGE_COMMANDS.has(command);
-  const after = redirected ? (mainWindowFor(s, s.windows[requested!]!.profileId) ?? null) : requested;
+  const after = redirected ? (mainWindowFor(s, s.windows[requested!]!.spaceId) ?? null) : requested;
   const windowId = resolveWindowId(s, after) ?? null;
   const tabId = windowId ? (targeted ?? ((LITTLE_ARDIA_PAGE_COMMANDS.has(command) && peekTabId(s, windowId)) || activeTabId(s, windowId)) ?? null) : null;
   return { kind: "window", invokedFrom: requested, requested: after, redirected, windowId, tabId, targeted };

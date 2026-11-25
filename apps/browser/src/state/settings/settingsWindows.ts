@@ -1,3 +1,4 @@
+import { profileIdForSpace } from "../profiles/current";
 import { focusWindow, openWindow } from "../../platform/windows";
 import { create } from "zustand";
 import { useBrowser } from "../browser/store";
@@ -9,27 +10,28 @@ export const IMPORT_WINDOW_ID = "import";
 export const isUtilityWindowId = (id: string | null | undefined) =>
   id === SETTINGS_WINDOW_ID || id === IMPORT_WINDOW_ID;
 
-export const SETTINGS_PANES = ["general", "profiles", "tabs", "appearance", "automations", "plugins", "shortcuts", "advanced"] as const;
+export const SETTINGS_PANES = ["general", "profiles", "spaces", "sync", "tabs", "appearance", "automations", "plugins", "shortcuts", "advanced"] as const;
 
 export type SettingsPane = (typeof SETTINGS_PANES)[number];
 
-export type SettingsPlace = { pane: SettingsPane; profileId: string | null; detail: string | null };
+
+export type SettingsPlace = { pane: SettingsPane; spaceId: string | null; detail: string | null };
 
 type SettingsStop = SettingsPlace & { scroll: number; visit: number; shownProfile: string | null };
 
 type Nav = SettingsStop & { back: SettingsStop[]; forward: SettingsStop[] };
 
-export const settingsPlaceKey = (s: SettingsPlace) => `${s.pane}:${s.profileId ?? ""}:${s.detail ?? ""}`;
+export const settingsPlaceKey = (s: SettingsPlace) => `${s.pane}:${s.spaceId ?? ""}:${s.detail ?? ""}`;
 
 export const settingsPageKey = (s: SettingsPlace) => (s.pane === "profiles" && !s.detail ? "profiles::" : settingsPlaceKey(s));
 
 export function shownSettingsProfile(s: SettingsPlace): string | null {
-  if (s.pane !== "profiles") return s.profileId;
-  const { profiles, settings } = useBrowser.getState();
-  return s.profileId && profiles[s.profileId] ? s.profileId : settings.defaultProfileId;
+  if (s.pane !== "profiles") return s.spaceId;
+  const { profiles, spaces, settings } = useBrowser.getState();
+  return s.spaceId && profiles[s.spaceId] ? s.spaceId : spaces[settings.defaultSpaceId]?.profileId ?? null;
 }
 
-const shownPlaceKey = (s: SettingsPlace) => settingsPlaceKey({ ...s, profileId: shownSettingsProfile(s) });
+const shownPlaceKey = (s: SettingsPlace) => settingsPlaceKey({ ...s, spaceId: shownSettingsProfile(s) });
 
 let lastVisit = 0;
 export const newSettingsVisit = () => ++lastVisit;
@@ -43,37 +45,37 @@ export function rememberSettingsScrollOffset(visit: number, y: number) {
 
 const stopOf = (s: SettingsStop): SettingsStop =>
   shownOffset.visit === s.visit
-    ? { pane: s.pane, profileId: s.profileId, detail: s.detail, visit: s.visit, shownProfile: shownOffset.shownProfile, scroll: shownOffset.y }
-    : { pane: s.pane, profileId: s.profileId, detail: s.detail, visit: s.visit, shownProfile: s.shownProfile, scroll: s.scroll };
+    ? { pane: s.pane, spaceId: s.spaceId, detail: s.detail, visit: s.visit, shownProfile: shownOffset.shownProfile, scroll: shownOffset.y }
+    : { pane: s.pane, spaceId: s.spaceId, detail: s.detail, visit: s.visit, shownProfile: s.shownProfile, scroll: s.scroll };
 
-export const useSettingsNav = create<Nav>()(() => ({ pane: "general", profileId: null, detail: null, scroll: 0, visit: newSettingsVisit(), shownProfile: null, back: [], forward: [] }));
+export const useSettingsNav = create<Nav>()(() => ({ pane: "general", spaceId: null, detail: null, scroll: 0, visit: newSettingsVisit(), shownProfile: null, back: [], forward: [] }));
 
-export function goToSettingsPane(pane: SettingsPane, profileId: string | null = null, detail: string | null = null) {
+export function goToSettingsPane(pane: SettingsPane, spaceId: string | null = null, detail: string | null = null) {
   const current = useSettingsNav.getState();
-  if (current.pane === pane && current.profileId === profileId && current.detail === detail) return;
-  useSettingsNav.setState({ pane, profileId, detail, scroll: 0, visit: newSettingsVisit(), shownProfile: shownSettingsProfile({ pane, profileId, detail }), back: [...current.back, stopOf(current)].slice(-30), forward: [] });
+  if (current.pane === pane && current.spaceId === spaceId && current.detail === detail) return;
+  useSettingsNav.setState({ pane, spaceId, detail, scroll: 0, visit: newSettingsVisit(), shownProfile: shownSettingsProfile({ pane, spaceId, detail }), back: [...current.back, stopOf(current)].slice(-30), forward: [] });
 }
 
 const replacedOffsets = new Map<string, number>();
 
 function leftPlaceKey(stop: SettingsStop): string | null {
   if (stop.pane !== "profiles") return settingsPlaceKey(stop);
-  return stop.shownProfile && useBrowser.getState().profiles[stop.shownProfile] ? settingsPlaceKey({ ...stop, profileId: stop.shownProfile }) : null;
+  return stop.shownProfile && useBrowser.getState().profiles[stop.shownProfile] ? settingsPlaceKey({ ...stop, spaceId: stop.shownProfile }) : null;
 }
 
-export function replaceSettingsPlace(profileId: string | null, detail: string | null = null) {
+export function replaceSettingsPlace(spaceId: string | null, detail: string | null = null) {
   const current = useSettingsNav.getState();
   const { pane, back } = current;
   const left = stopOf(current);
   const leaving = leftPlaceKey(left);
   if (leaving) replacedOffsets.set(leaving, left.scroll);
   const prev = back.at(-1);
-  const same = prev?.pane === pane && prev.profileId === profileId && prev.detail === detail;
-  const place = { pane, profileId, detail };
+  const same = prev?.pane === pane && prev.spaceId === spaceId && prev.detail === detail;
+  const place = { pane, spaceId, detail };
   const stop = same
     ? { scroll: prev.scroll, visit: prev.visit, shownProfile: prev.shownProfile }
     : { scroll: replacedOffsets.get(shownPlaceKey(place)) ?? 0, visit: newSettingsVisit(), shownProfile: shownSettingsProfile(place) };
-  useSettingsNav.setState({ profileId, detail, ...stop, back: same ? back.slice(0, -1) : back, forward: [] });
+  useSettingsNav.setState({ spaceId, detail, ...stop, back: same ? back.slice(0, -1) : back, forward: [] });
 }
 
 export function settingsBack() {
@@ -138,10 +140,15 @@ export function openSettings(pane?: SettingsPane, profileId?: string | null, det
   const nav = useSettingsNav.getState();
   pendingOpenAt = Date.now();
   void openWindow(SETTINGS_WINDOW_ID, { kind: "settings", title: "Settings" });
-  openListeners.forEach((listener) => listener(nav.pane, nav.profileId));
+  openListeners.forEach((listener) => listener(nav.pane, nav.spaceId));
 }
 
-export const openSiteSettings = (origin: string, profileId: string) => openSettings("profiles", profileId, SETTINGS_DETAIL.site(origin));
+export const openProfileSettings = (pane: "profiles" | "passwords" | "autofill" | "extensions", profileId: string) => {
+  goToSettingsPane("profiles", profileId, pane === "profiles" ? null : pane);
+  void openWindow(SETTINGS_WINDOW_ID, { kind: "settings", title: "Settings" });
+};
+
+export const openSiteSettings = (origin: string, spaceId: string) => openSettings("profiles", profileIdForSpace(spaceId), SETTINGS_DETAIL.site(origin));
 
 const useImportRequest = create<{ source: string | null }>()(() => ({ source: null }));
 

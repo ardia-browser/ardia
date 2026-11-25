@@ -6,8 +6,8 @@ import { knownHosts } from "./knownHosts";
 
 function scopeSources(windowId: string) {
   const s = useBrowser.getState();
-  const profileId = s.windows[windowId]?.profileId ?? "";
-  return { engines: searchEngines(s.settings), hosts: knownHosts(s, profileId), providers: providerKeywords(windowId) };
+  const spaceId = s.windows[windowId]?.spaceId ?? "";
+  return { engines: searchEngines(s.settings), hosts: knownHosts(s, spaceId), providers: providerKeywords(windowId) };
 }
 
 export function scopeFor(text: string, windowId: string): SearchScope | null {

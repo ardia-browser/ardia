@@ -1,3 +1,6 @@
+import { workspaceUpgradeError } from "./platform/documents";
+import { openWindow } from "./platform/windows";
+import { Box, Text } from "./components/ui";
 import "./platform/nativeEvents";
 import "./state/tabs/profileMoveCheck";
 import { useEffect, useLayoutEffect, useState } from "react";
@@ -25,7 +28,7 @@ import { colorRoles } from "./components/ui/tokens";
 import { startFavicons } from "./state/favicons/favicons";
 import { startHistory } from "./state/history/engineSync";
 import { startBookmarks } from "./state/bookmarks/engineSync";
-import { startProfileDataCleanup } from "./state/profiles/profileData";
+import { startProfileDataCleanup } from "./state/spaces/spaceData";
 import { startProfileLoading } from "./state/profiles/profileLoading";
 import { startProfileUnloading } from "./state/profiles/profileUnloading";
 import { startPrivateSessions } from "./state/windows/privateSessions";
@@ -46,8 +49,11 @@ import { markFirstWindow } from "./state/telemetry/track";
 import { noteWindowRoot } from "./state/telemetry/windowRootCounts";
 
 probeStore("browser", useBrowser);
-installErrorReporting();
 setStoreBatching(unstable_batchedUpdates);
+const upgradeError = workspaceUpgradeError();
+let launchConsent: ReturnType<typeof consentToken> = null;
+if (!upgradeError) {
+installErrorReporting();
 startPersistence({ restoreSession: configRestoreSession(), retiredDefaultsWaitForSync: settingsSyncWaitsAtLaunch() });
 noteRestoredWindowsNow();
 startConfigFiles(colorRoles);
@@ -70,7 +76,7 @@ startReader();
 startHiddenElements();
 startSync();
 startTelemetry();
-const launchConsent = consentToken();
+launchConsent = consentToken();
 startKillSwitches();
 startProgramControl();
 startOpenWhenDone();
@@ -80,7 +86,10 @@ afterFirstWindow(startPlugins);
 afterFirstWindow(startSharedFolders);
 afterFirstWindow(startBusyTabWatch);
 startMemoryTrim();
-if (__DEV__ || perfProbeEnabled) require("./components/dev/devHarness").startDevHarness();
+} else {
+  void openWindow("workspace-recovery", { kind: "settings", title: "Workspace needs attention" });
+}
+if (!upgradeError && (__DEV__ || perfProbeEnabled)) require("./components/dev/devHarness").startDevHarness();
 
 const devMountDelay = () => (__DEV__ ? ((globalThis as { acDevMountDelayMs?: number }).acDevMountDelayMs ?? 0) : 0);
 
@@ -100,6 +109,7 @@ function Root({ windowId }: { windowId: string }) {
     markFirstWindow();
     firstWindowCommitted();
   }, []);
+  if (upgradeError) return <Box pad="xxl" gap="l"><Text size="title">Your saved workspace was kept</Text><Text>{upgradeError}</Text><Text>Quit this build and restore the matching app-data backup before trying an older build.</Text></Box>;
   if (held) return null;
   return __DEV__ ? (
     <DevErrorBoundary>

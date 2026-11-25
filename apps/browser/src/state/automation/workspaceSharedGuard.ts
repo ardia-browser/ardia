@@ -34,15 +34,15 @@ function groupField(s: BrowserState, results: OpResult[], ref: unknown, scope?: 
 }
 
 function nameScope(s: BrowserState, results: OpResult[], op: Op): Scope {
-  const profileId = op.profile as string | undefined;
+  const spaceId = op.profile as string | undefined;
   const firstTab = () => tabsField(results, op.tabs)[0];
   switch (op.op) {
     case "open":
-      return () => ({ windowId: space(op).windowId, profileId });
+      return () => ({ windowId: space(op).windowId, spaceId });
     case "tab.move":
-      return () => ({ windowId: op.window !== undefined ? normalWindow(String(op.window)) : s.tabs[firstTab()!]!.windowId, profileId });
+      return () => ({ windowId: op.window !== undefined ? normalWindow(String(op.window)) : s.tabs[firstTab()!]!.windowId, spaceId });
     case "group.create":
-      return () => ({ windowId: op.window !== undefined || !firstTab() ? space(op).windowId : s.tabs[firstTab()!]!.windowId, profileId });
+      return () => ({ windowId: op.window !== undefined || !firstTab() ? space(op).windowId : s.tabs[firstTab()!]!.windowId, spaceId });
     default:
       return undefined;
   }
@@ -51,7 +51,7 @@ function nameScope(s: BrowserState, results: OpResult[], op: Op): Scope {
 function parentOfMovedGroup(s: BrowserState, results: OpResult[], op: Op): string | null {
   const asked = resolvedOrNull(() => groupRef(results, op.group));
   if (!asked) return null;
-  return groupField(s, results, op.parent, () => ({ windowId: op.window !== undefined ? normalWindow(String(op.window)) : asked.windowId, profileId: (op.profile as string | undefined) ?? asked.profileId }));
+  return groupField(s, results, op.parent, () => ({ windowId: op.window !== undefined ? normalWindow(String(op.window)) : asked.windowId, spaceId: (op.profile as string | undefined) ?? asked.spaceId }));
 }
 
 function insideAnchor(s: BrowserState, results: OpResult[], ref: unknown): string | null {

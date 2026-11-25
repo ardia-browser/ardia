@@ -3,7 +3,7 @@ import { noteScreenRecordingAsked, noteSharePicked } from "../telemetry/usage";
 import { consentToken, type ConsentToken } from "../telemetry/client";
 import { webviews } from "../../platform/webviews";
 import { useBrowser } from "../browser/store";
-import { engineProfile } from "../browser/model";
+import { engineProfile, engineProfileForSpace } from "../browser/model";
 import { usePages } from "../tabs/pageState";
 import { tabEngine } from "../engines/engines";
 import { useMedia, type TabShare } from "./media";
@@ -22,17 +22,17 @@ const sharesOf = (m: { tabShares: Record<string, TabShare> }) => m.tabShares;
 export function useShareFor(tabId: string, live = true): ShareFound | null {
   const shares = useStoreWhile(useMedia, live, sharesOf);
   const sharing = live && Object.keys(shares).length > 0;
-  const profile = useBrowserWhile(sharing, (s) => {
+  const space = useBrowserWhile(sharing, (s) => {
     const tab = s.tabs[tabId];
-    return tab && /^https?:|^file:/.test(tab.url) ? engineProfile(s, tab.profileId) : null;
+    return tab && /^https?:|^file:/.test(tab.url) ? engineProfile(s, tab.spaceId) : null;
   });
   const capturing = useStoreWhile(usePages, sharing, (p) => Object.keys(shares).filter((id) => p.pages[id]?.mediaAccess?.screen).join(","));
-  if (!live || profile === null) return null;
+  if (!live || space === null) return null;
   for (const capturer of capturing ? capturing.split(",") : []) {
     const share = shares[capturer];
     if (!share || share.dismissed[tabId]) continue;
     const owner = useBrowser.getState().tabs[capturer];
-    if (owner && engineProfile(useBrowser.getState(), owner.profileId) === profile) return [capturer, share];
+    if (owner && engineProfile(useBrowser.getState(), owner.spaceId) === space) return [capturer, share];
   }
   return null;
 }
@@ -106,10 +106,10 @@ export function shareableTabs(tabId: string) {
   const s = useBrowser.getState();
   const tab = s.tabs[tabId];
   if (!tab || tabEngine(s, tabId) === "webkit") return [];
-  const profile = engineProfile(s, tab.profileId);
+  const space = engineProfile(s, tab.spaceId);
   const live = usePages.getState().ready;
   return Object.values(s.tabs)
-    .filter((t) => !!live[t.id] && engineProfile(s, t.profileId) === profile && /^https?:|^file:/.test(t.url))
+    .filter((t) => !!live[t.id] && engineProfile(s, t.spaceId) === space && /^https?:|^file:/.test(t.url))
     .sort((a, b) => (a.id === tabId ? 1 : b.id === tabId ? -1 : b.lastActiveAt - a.lastActiveAt));
 }
 

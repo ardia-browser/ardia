@@ -1,7 +1,7 @@
 import { useContext, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Animated, Pressable, Text, View } from "react-native";
 import { currentGroup } from "../../state/browser/current";
-import { useGroup, usePageProfileId, useWindowId } from "../../state/browser/hooks";
+import { useGroup, usePageSpaceId, useWindowId } from "../../state/browser/hooks";
 import { updateGroup } from "../../state/groups/actions";
 import { pressGroupClose, useGroupCloseControl } from "../../state/sidebar/closeControl";
 import { openGroupMenu } from "../../state/sidebar/menus";
@@ -53,7 +53,7 @@ export function StripGroup({
   const theme = useTheme();
   const scroll = useContext(StripScrollContext);
   const windowId = useWindowId();
-  const profileId = usePageProfileId();
+  const spaceId = usePageSpaceId();
   const group = useGroup(entry.id, (g) => g);
   const groupClose = useGroupCloseControl(entry.id);
   const hover = useChipHover();
@@ -65,7 +65,7 @@ export function StripGroup({
   const { offsets, width } = groupLayout(chipSize, widths, GAP, expanded, shown);
   const members = useMemo(() => dragGeometry(entry.members.map((m, i) => ({ tabIds: tabsOf(m), width: widths[i]! })), GAP), [entry.members, widths.join()]);
   const folderIds = useMemo(() => entry.members.flatMap((m) => (m.kind === "folder" ? [m.id] : [])), [entry.members]);
-  const tuckable = useHasTuckTarget(!expanded && shown >= 0, windowId, profileId, entry.id);
+  const tuckable = useHasTuckTarget(!expanded && shown >= 0, windowId, spaceId, entry.id);
   const open = useRef(new Animated.Value(expanded ? 1 : 0)).current;
   const size = useRef(new Animated.Value(width)).current;
   const state = `${expanded}:${shown >= 0 ? entry.members[shown]!.id : ""}`;
@@ -134,7 +134,7 @@ export function StripGroup({
   const bare = group.color === "none";
   const divider = STRIP_COLORS[theme.dark ? "dark" : "light"].groupDivider;
   const membersShown = hasVisibleMembers(entry);
-  const tuck = () => tuckGroup(windowId, profileId, entry.id);
+  const tuck = () => tuckGroup(windowId, spaceId, entry.id);
   return (
     <Animated.View
       ref={drag.ref}

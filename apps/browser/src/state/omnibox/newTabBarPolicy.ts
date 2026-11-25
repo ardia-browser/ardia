@@ -25,7 +25,7 @@ export const hiddenEmptyCard = (s: BrowserState, tab: Tab) => !tab.pin && newTab
 export function closesBesideKeptTopApps(s: BrowserState, id: string): boolean {
   const tab = s.tabs[id];
   const w = tab && s.windows[tab.windowId];
-  if (!s.settings.keepTopAppsRunning || !w || tab.profileId !== w.profileId || !isEmptyCardTab(s, tab)) return false;
+  if (!s.settings.keepTopAppsRunning || !w || tab.spaceId !== w.spaceId || !isEmptyCardTab(s, tab)) return false;
   return viewTabIds(s, w.id).every((t) => t === id || isAsleep(s.tabs[t]!) || keptWithTopApp(s, t));
 }
 

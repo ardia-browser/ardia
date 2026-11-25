@@ -1,9 +1,10 @@
 import { createDocument, documentSaved, writeDocument } from "../../platform/documents";
+import { removeDownloadStaging, type Download } from "../../platform/downloads";
 import { SESSION_DOCUMENT } from "./sessionDocument";
 import { cosmeticChange, doc, field, listed, type Doc } from "./documentJson";
 import { useBrowser, type BrowserState } from "../browser/store";
-import { isIncognitoProfile, tabsShownIn } from "../browser/model";
-import { earlyLaunchTabOn, launchTab, linkProfile } from "../tabs/launchTab";
+import { isIncognitoSpace, tabsShownIn } from "../browser/model";
+import { earlyLaunchTabOn, launchTab, linkSpace } from "../tabs/launchTab";
 import { launchBackdrop } from "../windows/launchBackdrop";
 import { restoreLaunchLook, saveLaunchLook } from "../windows/launchLook";
 import { isPeekTab } from "../peek/peek";
@@ -29,8 +30,8 @@ export { loadSession } from "./launchSession";
 
 const SAVE_DELAY_MS = 800;
 const COSMETIC_SAVE_DELAY_MS = 10_000;
-const publicTab = (t: { profileId: string }) => !isIncognitoProfile(t.profileId);
-const publicProfiles = <T,>(byProfile: Record<string, T>) => Object.fromEntries(Object.entries(byProfile).filter(([profileId]) => publicTab({ profileId })));
+const publicTab = (t: { spaceId: string }) => !isIncognitoSpace(t.spaceId);
+const publicSpaces = <T,>(byProfile: Record<string, T>) => Object.fromEntries(Object.entries(byProfile).filter(([spaceId]) => publicTab({ spaceId })));
 
 const persistedTab = (t: Tab) => ({ ...t, page: savedPage(t) });
 const savedWindows = (s: Pick<BrowserState, "windows">) =>
@@ -44,7 +45,10 @@ const savedFocus = (s: Pick<BrowserState, "windows" | "ui">) => {
 
 const SESSION_FIELDS = {
   profiles: field(["profiles"], (s) => s.profiles),
-  profileOrder: field(["profileOrder"], (s) => s.profileOrder),
+  topApps: field(["topApps"], (s) => s.topApps),
+  parkedTopApps: field(["parkedTopApps"], (s) => Object.fromEntries(Object.entries(s.parkedTopApps).map(([id, tabs]) => [id, tabs.map((tab) => ({ ...persistedTab(tab), page: { kind: "asleep", wake: savedPage(tab).wake ?? `restore:${tab.id}` } }))]))),
+  spaces: field(["spaces"], (s) => s.spaces),
+  spaceOrder: field(["spaceOrder"], (s) => s.spaceOrder),
   orphanedProfileData: field(["orphanedProfileData"], (s) => s.orphanedProfileData),
   settings: field(["settings"], (s) => s.settings),
   settingsMeta: field(["settingsMeta"], (s) => s.settingsMeta),
@@ -54,10 +58,10 @@ const SESSION_FIELDS = {
     return s.windowOrder.filter((id) => kept.has(id));
   }),
   focusedWindowId: field(["windows", "ui"], savedFocus),
-  lastProfileId: field(["ui"], (s) => s.ui.lastProfileId),
-  launchTab: field(["windows", "tabs", "settings", "profiles", "ui"], (s) => (earlyLaunchTabOn() ? launchTab(s, savedFocus(s)) : null)),
-  launchBackdrop: field(["windows", "profiles", "ui", "settings"], (s) => (earlyLaunchTabOn() ? launchBackdrop(s, savedFocus(s)) : null)),
-  linkProfile: field(["windows", "profiles", "ui", "windowOrder", "settings"], (s) => (earlyLaunchTabOn() ? linkProfile(s) : null)),
+  lastSpaceId: field(["ui"], (s) => s.ui.lastSpaceId),
+  launchTab: field(["windows", "tabs", "settings", "spaces", "profiles", "ui"], (s) => (earlyLaunchTabOn() ? launchTab(s, savedFocus(s)) : null)),
+  launchBackdrop: field(["windows", "spaces", "ui", "settings"], (s) => (earlyLaunchTabOn() ? launchBackdrop(s, savedFocus(s)) : null)),
+  linkProfile: field(["windows", "spaces", "profiles", "ui", "windowOrder", "settings"], (s) => (earlyLaunchTabOn() ? linkSpace(s) : null)),
   tabs: field(["windows", "tabs", "peeks"], (s) => {
     const kept = savedWindowIds(s);
     return listed(Object.values(s.tabs).filter((t) => kept.has(t.windowId) && !isPeekTab(s, t.id)), persistedTab);
@@ -74,9 +78,9 @@ const SESSION_FIELDS = {
   closedWindows: field(["closedWindows", "settings"], (s) =>
     s.closedWindows.filter((c) => c.tabs.every(publicTab)).map((c) => ({ ...c, window: { ...c.window, sidebarOpen: !(c.window.autoHideTabs ?? s.settings.autoHideTabs) } })),
   ),
-  parkedPins: field(["parkedPins"], (s) => publicProfiles(s.parkedPins)),
-  pinChoices: field(["pinChoices"], (s) => publicProfiles(s.pinChoices)),
-  pinSync: field(["pinSync"], (s) => publicProfiles(s.pinSync)),
+  parkedPins: field(["parkedPins"], (s) => publicSpaces(s.parkedPins)),
+  pinChoices: field(["pinChoices"], (s) => publicSpaces(s.pinChoices)),
+  pinSync: field(["pinSync"], (s) => publicSpaces(s.pinSync)),
   topAppsMerged: field(["topAppsMerged"], (s) => s.topAppsMerged),
   closedGroups: field(["closedGroups"], (s) => s.closedGroups.filter((c) => c.tabs.every(publicTab))),
   deletedGroups: field(["deletedGroups"], (s) => s.deletedGroups.filter((c) => c.tabs.every(publicTab))),
@@ -84,7 +88,7 @@ const SESSION_FIELDS = {
 };
 
 const DOWNLOADS_FIELDS = {
-  downloads: field(["downloads", "profiles"], (s) =>
+  downloads: field(["downloads", "profiles", "spaces"], (s) =>
     withLiveProgress(s.downloads.filter((d) => downloadSession(s, d) === null)).map((d) => (d.state === "downloading" ? { ...d, state: "failed" } : d)),
   ),
 };

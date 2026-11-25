@@ -256,7 +256,7 @@ export const siteToolbarRoles: { onLight: SiteToolbarRoles; onDark: SiteToolbarR
   },
 };
 
-export type ProfileColorSpec = {
+export type SpaceColorSpec = {
   name: string;
   swatch: string;
   palette: AreaLightPalette | null;
@@ -265,7 +265,7 @@ export type ProfileColorSpec = {
   action?: string;
 };
 
-export const PROFILE_COLORS: Record<ProfileColor, ProfileColorSpec> = {
+export const PROFILE_COLORS: Record<ProfileColor, SpaceColorSpec> = {
   plum: {
     name: "Plum",
     swatch: "#C07A98",

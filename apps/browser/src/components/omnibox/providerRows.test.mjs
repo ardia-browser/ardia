@@ -26,7 +26,7 @@ function setup(entries) {
   return w;
 }
 
-const bar = (w, text, scope = null) => mount((p) => useSuggestions({ text: p.text, active: true, windowId: w, profileId: "default", scope: p.scope }), { props: { text, scope } });
+const bar = (w, text, scope = null) => mount((p) => useSuggestions({ text: p.text, active: true, windowId: w, spaceId: "default", scope: p.scope }), { props: { text, scope } });
 const shown = (items) => items.map((s) => (s.kind === "provider" ? `provider:${s.title}` : s.kind === "page" ? `page:${s.url}` : s.kind));
 
 test("a global static provider streams in after the built-in rows, once approved", async () => {

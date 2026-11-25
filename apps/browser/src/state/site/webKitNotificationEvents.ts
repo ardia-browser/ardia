@@ -17,18 +17,18 @@ function tabFor(profile: string, origin: string): string | undefined {
   const s = useBrowser.getState();
   const matching = Object.values(s.tabs).filter((tab) => {
     const window = s.windows[tab.windowId];
-    return !!window && window.kind !== "private" && engineProfile(s, tab.profileId) === profile && originOf(tab.url) === origin;
+    return !!window && window.kind !== "private" && engineProfile(s, tab.spaceId) === profile && originOf(tab.url) === origin;
   });
-  const active = matching.find((tab) => s.windows[tab.windowId]?.activeTabIds[tab.profileId] === tab.id);
+  const active = matching.find((tab) => s.windows[tab.windowId]?.activeTabIds[tab.spaceId] === tab.id);
   return (active ?? matching[0])?.id;
 }
 
-function windowFor(profile: string): { windowId: string; profileId: string } | undefined {
+function windowFor(profile: string): { windowId: string; spaceId: string } | undefined {
   const s = useBrowser.getState();
   const ids = [...s.windowOrder, ...Object.keys(s.windows).filter((id) => !s.windowOrder.includes(id))];
   for (const id of ids) {
     const window = s.windows[id];
-    if (window?.kind === "main" && engineProfile(s, window.profileId) === profile) return { windowId: id, profileId: window.profileId };
+    if (window?.kind === "main" && engineProfile(s, window.spaceId) === profile) return { windowId: id, spaceId: window.spaceId };
   }
   return undefined;
 }

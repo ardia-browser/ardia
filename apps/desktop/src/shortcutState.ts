@@ -12,7 +12,7 @@ let listed = false;
 
 const migrate = () => {
   const state = useBrowser.getState();
-  const shortcuts = migrateProfileShortcuts(state.settings.shortcuts, state.profileOrder);
+  const shortcuts = migrateProfileShortcuts(state.settings.shortcuts, state.spaceOrder);
   if (shortcuts === state.settings.shortcuts) return false;
   state.updateSettings({ shortcuts });
   return true;
@@ -20,7 +20,7 @@ const migrate = () => {
 
 const refresh = () => {
   const state = useBrowser.getState();
-  const items = linuxMenuShortcuts(state.settings.shortcuts, state.profileOrder, state.profiles);
+  const items = linuxMenuShortcuts(state.settings.shortcuts, state.spaceOrder, state.profiles);
   batchStoreUpdates(() => {
     setSharedMenuBarShortcuts(items);
     store(shortcutItems, [], items);
@@ -33,6 +33,6 @@ export function setMenuBarShortcuts(_items: readonly MenuShortcut[]) {
 }
 
 useBrowser.subscribe((state, previous) => {
-  if (state.profileOrder === previous.profileOrder && state.profiles === previous.profiles && state.settings.shortcuts === previous.settings.shortcuts) return;
+  if (state.spaceOrder === previous.spaceOrder && state.profiles === previous.profiles && state.settings.shortcuts === previous.settings.shortcuts) return;
   if (!migrate() && listed) refresh();
 });

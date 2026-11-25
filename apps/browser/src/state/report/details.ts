@@ -25,7 +25,7 @@ export async function systemDetails(): Promise<SystemDetails> {
     windows: regular.length,
     private_windows: s.windowOrder.length - regular.length,
     tabs: Object.keys(s.tabs).length,
-    profiles: s.profileOrder.length,
+    profiles: s.spaceOrder.length,
     ...flat(snapshot?.fields ?? {}),
   };
 }

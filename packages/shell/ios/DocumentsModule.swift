@@ -7,6 +7,8 @@ public class DocumentsModule: Module, DocumentsNative {
 
   static func writeDocument(_ name: String, _ contents: String) throws { try DocumentStore.write(name, contents) }
 
+  static func writeDocumentImmediately(_ name: String, _ contents: String) throws { try DocumentStore.writeImmediately(name, contents) }
+
   static func documentSaved(_ name: String, _ promise: Promise) throws {
     try DocumentStore.whenSaved(name) { error in
       if let error { promise.reject("ERR_SAVE_DOCUMENT", error.localizedDescription) } else { promise.resolve(nil) }
@@ -51,6 +53,7 @@ public class DocumentsModule: Module, DocumentsNative {
     Self.readDocumentFunction
     Self.documentExistsFunction
     Self.writeDocumentFunction
+    Self.writeDocumentImmediatelyFunction
     Self.documentSavedFunction
     Self.createDocumentFunction
     Self.listDocumentsFunction

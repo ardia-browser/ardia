@@ -29,7 +29,7 @@ export const emitCommand = (event: CommandEvent) => emitWebCommand(ardiaHost
 
 export const menuShortcuts = async () => {
   const state = useBrowser.getState();
-  return linuxMenuShortcuts(state.settings.shortcuts, state.profileOrder, state.profiles);
+  return linuxMenuShortcuts(state.settings.shortcuts, state.spaceOrder, state.profiles);
 };
 
 const closeToken = (request: WindowCloseRequest) => JSON.stringify(request);

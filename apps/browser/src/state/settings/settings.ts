@@ -11,7 +11,6 @@ import { SIDEBAR_TEXT_SIZES } from "../../lib/themeLook";
 import { TAB_CORNERS, validTabCorners } from "../../lib/tabCorners";
 import { INTERFACE_SCALE, INTERFACE_SCALE_STEPS, validInterfaceScale } from "../../lib/interfaceScale";
 import { isFields, isString, isStringList } from "../../lib/decode";
-import type { SavedObject } from "../../lib/savedDocument";
 import type { JsonSchema } from "../../lib/jsonSchema";
 import { PROVIDERS_SCHEMA } from "../omnibox/providerSchema";
 import { COMMAND_BAR_START_SCHEMA, isCommandBarStart, type CommandBarStart } from "../omnibox/commandBarStart";
@@ -21,7 +20,7 @@ import { READER_FONTS, READER_SIZE_NAMES } from "../reader/tokens";
 import { noteMinimalismToggled } from "../telemetry/minimalismCounts";
 import { checkedSettingsPatch, keptSettingsPatch } from "./settingsPatch";
 
-export const DEFAULT_PROFILE_ID = "default";
+export const DEFAULT_SPACE_ID = "default";
 
 export type SettingSpec<T> = { default: T; valid: (value: unknown) => boolean; synced: boolean; schema: JsonSchema; values?: readonly T[] };
 
@@ -80,7 +79,7 @@ export const SETTING_SPECS = {
   tabReorderHaptics: flag(true, SYNCED),
   swipeBetweenTabs: flag(true, SYNCED),
   undoReopensClosedTab: flag(false, SYNCED),
-  warnBeforeMovingTabsToProfile: flag(true, SYNCED),
+  warnBeforeMovingTabsToSpace: flag(true, SYNCED),
   shareTabsAcrossWindows: flag(false),
   extendWebsiteColor: flag(true, SYNCED),
   cmdClickCreatesTabGroup: flag(false, SYNCED),
@@ -160,7 +159,8 @@ export const SETTING_SPECS = {
   liveFolderIcon: oneOf(["folder", "service"], "folder"),
   spacesFollowAppearance: flag(true),
   adaptTextToColor: flag(true, SYNCED),
-  defaultProfileId: text(DEFAULT_PROFILE_ID),
+  defaultSpaceId: text(DEFAULT_SPACE_ID),
+  spaceSwitcherIcons: flag(false, SYNCED),
   showProfileDots: flag(true, SYNCED),
   shortcuts: shaped<Record<string, string[]>>({}, (v) => isRecordOf(v, isStringList), recordOf(STRING_LIST), SYNCED),
   mouseShortcuts: shaped<Record<string, string[]>>({}, (v) => isRecordOf(v, isStringList), recordOf(STRING_LIST), SYNCED),
@@ -293,50 +293,7 @@ export function choose(s: Pick<BrowserState, "settings" | "settingsMeta">, patch
   return { settings: next, settingsMeta };
 }
 
-export function sessionWithSettingsMeta(doc: SavedObject): SavedObject {
-  if (!isFields(doc.settings) || (isFields(doc.settingsMeta) && !("chosen" in doc.settings) && !("inferred" in doc.settings))) return doc;
-  const raw = withNewTabButtonPosition(withoutBatterySaver(doc.settings as Partial<Settings & SettingsMeta> & { batterySaver?: unknown }))!;
-  const legacy = !raw.chosen ? Object.keys(raw) : null;
-  const { chosen, inferred, ...settings } = raw;
-  return { ...doc, settings, settingsMeta: { chosen: legacy ?? (isStringList(chosen) ? chosen : []), inferred: legacy ?? (isStringList(inferred) ? inferred : []) } };
-}
-
-function withNewTabButtonPosition(saved: Partial<Settings & SettingsMeta> | undefined): Partial<Settings & SettingsMeta> | undefined {
-  if (!saved || saved.newTabButtonPosition !== undefined || saved.newTabPosition !== "top") return saved;
-  const alongside = (keys: string[]) => (keys.includes("newTabPosition") ? [...new Set([...keys, "newTabButtonPosition"])] : keys);
-  return {
-    ...saved,
-    newTabButtonPosition: "top",
-    ...(saved.chosen ? { chosen: alongside(saved.chosen) } : {}),
-    ...(saved.inferred ? { inferred: alongside(saved.inferred) } : {}),
-  };
-}
-
-function withoutBatterySaver(saved: (Partial<Settings & SettingsMeta> & { batterySaver?: unknown }) | undefined): Partial<Settings & SettingsMeta> | undefined {
-  if (!saved || !("batterySaver" in saved)) return saved;
-  const { batterySaver, ...rest } = saved;
-  const explicit = batterySaver === false || (batterySaver === true && !!rest.chosen?.includes("batterySaver") && !rest.inferred?.includes("batterySaver"));
-  const without = (keys: string[]) => keys.filter((k) => k !== "batterySaver");
-  return {
-    ...rest,
-    ...(rest.chosen ? { chosen: explicit ? [...new Set([...without(rest.chosen), "batterySaverWhen"])] : without(rest.chosen) } : {}),
-    ...(rest.inferred ? { inferred: without(rest.inferred) } : {}),
-    ...(explicit && rest.batterySaverWhen === undefined ? { batterySaverWhen: batterySaver ? "unplugged" : "never" } : {}),
-  };
-}
-
-function withoutUntouchedSetting(doc: SavedObject, key: string, oldDefault: unknown): SavedObject {
-  if (!isFields(doc.settings) || doc.settings[key] !== oldDefault) return doc;
-  const { chosen, inferred } = parseSettingsMeta(doc.settingsMeta);
-  if (chosen.includes(key) && !inferred.includes(key)) return doc;
-  const { [key]: _untouched, ...settings } = doc.settings;
-  const without = (keys: string[]) => keys.filter((k) => k !== key);
-  return { ...doc, settings, settingsMeta: { chosen: without(chosen), inferred: without(inferred) } };
-}
-
-export const sessionWithNewTabLinksInLittleArdia = (doc: SavedObject) => withoutUntouchedSetting(doc, "littleArdiaOpensNewTabLinks", false);
-
-export const sessionWithUnreadCountsOffByDefault = (doc: SavedObject) => withoutUntouchedSetting(doc, "showUnreadCounts", true);
+export { sessionWithNewTabLinksInLittleArdia, sessionWithSettingsMeta, sessionWithUnreadCountsOffByDefault } from "../../lib/sessionSettingsUpgrade";
 
 function windowsFollowingAutoHideTabs(s: Pick<BrowserState, "settings" | "windows">, patch: Partial<Settings>): Pick<BrowserState, "windows"> | {} {
   if (patch.autoHideTabs === undefined || patch.autoHideTabs === s.settings.autoHideTabs) return {};

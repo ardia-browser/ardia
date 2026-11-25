@@ -255,7 +255,8 @@ async function applyAdapter(state: ScopeState, adapter: Adapter, keys: Set<strin
   try {
     const records = {
       known: (key: string) => key in state.records,
-      now,
+      stamp: (key: string) => state.records[key]?.h,
+    now,
       horizon,
       joined: applyAs[adapter.prefix] === "joined",
       held,

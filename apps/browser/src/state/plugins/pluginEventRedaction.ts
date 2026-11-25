@@ -70,7 +70,7 @@ export type GroupState = { id: string; windowId: string; name: string; color: st
 
 export type DownloadState = { id: string; state: Download["state"]; paused: boolean; dangerous: boolean; received: number; total: number; mimeType: string; filename: string; url: string | null };
 
-type Snapshot = Pick<BrowserState, "windows" | "windowOrder" | "tabs" | "peeks" | "groups" | "ui" | "profiles" | "downloads">;
+type Snapshot = Pick<BrowserState, "windows" | "windowOrder" | "tabs" | "peeks" | "groups" | "ui" | "profiles" | "spaces" | "downloads">;
 
 const eligibleTabIds = (s: Snapshot, windowId: string) => (s.windows[windowId]?.tabIds ?? []).filter((id) => s.tabs[id]?.windowId === windowId && isEligibleTab(s, id));
 

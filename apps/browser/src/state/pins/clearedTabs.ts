@@ -15,7 +15,7 @@ export type ClearedTabs = {
   tabIndexes: number[];
   groups: TabGroup[];
   fingerprint: string;
-  profileId: string;
+  spaceId: string;
   remoteDeletions: number;
   selectedTabId?: string;
   blankTabIds?: string[];
@@ -26,8 +26,8 @@ export type ClearedTabs = {
 
 const remotePinDeletions = new Map<string, number>();
 
-export function noteRemotePinDeletion(profileId: string) {
-  remotePinDeletions.set(profileId, (remotePinDeletions.get(profileId) ?? 0) + 1);
+export function noteRemotePinDeletion(spaceId: string) {
+  remotePinDeletions.set(spaceId, (remotePinDeletions.get(spaceId) ?? 0) + 1);
 }
 
 export const unpinnedTabIds = (s: BrowserState, windowId: string): string[] => viewTabIds(s, windowId).filter((id) => !inPinnedContainer(s, id));
@@ -65,16 +65,16 @@ export function blankSplitPanes(s: BrowserState, ids: string[]): ClosedTab[] {
     .map((t) => closedTabEntry(s, t, { windowId: t.windowId, index: s.windows[t.windowId]?.tabIds.indexOf(t.id) ?? 0 }, now));
 }
 
-function windowFingerprint(s: BrowserState, windowId: string, profileId: string): string {
+function windowFingerprint(s: BrowserState, windowId: string, spaceId: string): string {
   const w = s.windows[windowId];
   if (!w) return "";
-  const inWindow = (id: string) => s.tabs[id]?.windowId === windowId && s.tabs[id]?.profileId === profileId;
-  const tabs = w.tabIds.filter((id) => !s.tabs[id] || s.tabs[id]!.profileId === profileId).map((id) => {
+  const inWindow = (id: string) => s.tabs[id]?.windowId === windowId && s.tabs[id]?.spaceId === spaceId;
+  const tabs = w.tabIds.filter((id) => !s.tabs[id] || s.tabs[id]!.spaceId === spaceId).map((id) => {
     const t = s.tabs[id];
     return t ? [id, pinSection(t), tileFolderOf(t)?.id ?? ""].join(" ") : id;
   });
   const groups = Object.values(s.groups)
-    .filter((g) => g.windowId === windowId && g.profileId === profileId)
+    .filter((g) => g.windowId === windowId && g.spaceId === spaceId)
     .map((g) => [g.id, g.parentId ?? "", g.pinned, g.tabIds.join(",")].join(" "))
     .sort();
   const splits = Object.values(s.splits)
@@ -84,11 +84,11 @@ function windowFingerprint(s: BrowserState, windowId: string, profileId: string)
   return [...tabs, "", ...groups, "", ...splits].join("\n");
 }
 
-export function undoable(before: BrowserState, after: BrowserState, windowId: string, profileId: string, entries: ClosedTab[], blankPanes: ClosedTab[] = []): ClearedTabs {
+export function undoable(before: BrowserState, after: BrowserState, windowId: string, spaceId: string, entries: ClosedTab[], blankPanes: ClosedTab[] = []): ClearedTabs {
   const tabIds: string[] = [];
   const tabIndexes: number[] = [];
   before.windows[windowId]!.tabIds.forEach((id, index) => {
-    if (before.tabs[id]?.profileId === profileId) {
+    if (before.tabs[id]?.spaceId === spaceId) {
       tabIds.push(id);
       tabIndexes.push(index);
     }
@@ -101,10 +101,10 @@ export function undoable(before: BrowserState, after: BrowserState, windowId: st
     closedEntryIds: newClosedEntryIds(before, after),
     tabIds,
     tabIndexes,
-    groups: Object.values(before.groups).filter((g) => g.windowId === windowId && g.profileId === profileId),
-    fingerprint: windowFingerprint(after, windowId, profileId),
-    profileId,
-    remoteDeletions: remotePinDeletions.get(profileId) ?? 0,
+    groups: Object.values(before.groups).filter((g) => g.windowId === windowId && g.spaceId === spaceId),
+    fingerprint: windowFingerprint(after, windowId, spaceId),
+    spaceId,
+    remoteDeletions: remotePinDeletions.get(spaceId) ?? 0,
     selectedTabId: selectedAmong(before, windowId, allEntries),
     blankTabIds: (after.windows[windowId]?.tabIds ?? []).filter((id) => !before.tabs[id]),
     splits: clearedSplits(before, allEntries),
@@ -148,9 +148,9 @@ function selectedAmong(s: BrowserState, windowId: string, entries: ClosedTab[]):
 export function canUndoClear(s: BrowserState, cleared: ClearedTabs): boolean {
   const closed = new Set(s.closedTabs.map((c) => c.id));
   return (
-    (remotePinDeletions.get(cleared.profileId) ?? 0) === cleared.remoteDeletions &&
+    (remotePinDeletions.get(cleared.spaceId) ?? 0) === cleared.remoteDeletions &&
     cleared.closedEntryIds.every((id) => closed.has(id)) &&
-    windowFingerprint(s, cleared.windowId, cleared.profileId) === cleared.fingerprint
+    windowFingerprint(s, cleared.windowId, cleared.spaceId) === cleared.fingerprint
   );
 }
 

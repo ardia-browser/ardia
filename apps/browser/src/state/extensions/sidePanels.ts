@@ -2,7 +2,7 @@ import { extensionSidePanelUrl } from "../../platform/extensions";
 import { useBrowser } from "../browser/store";
 import { shownPageId } from "../peek/peek";
 import { noteSidePanelKept } from "../telemetry/usage";
-import { shownReadyTab, extensionPageUrl, extensionProfile, isPrivate, pageProfile, shownIn, tabProfile, useExtensions, type SidePanel, type SidePanelCard } from "./store";
+import { shownReadyTab, extensionPageUrl, extensionSpace, isPrivate, pageSpace, shownIn, tabProfile, useExtensions, type SidePanel, type SidePanelCard } from "./store";
 
 const wanted = new Map<string, string>();
 const fetches = new Map<string, number>();
@@ -48,7 +48,7 @@ export const panelClosedOnTab = (windowId: string, tabId?: string) => !!tabId &&
 
 export const panelDroppedOnTab = (windowId: string, tabId?: string) => panelClosedOnTab(windowId, tabId) || (!!tabId && !!removedTabs.get(windowId)?.has(tabId));
 
-const sameCard = (a: SidePanel, b: SidePanel) => a.extensionId === b.extensionId && a.pageProfile === b.pageProfile && a.url === b.url && a.opened === b.opened;
+const sameCard = (a: SidePanel, b: SidePanel) => a.extensionId === b.extensionId && a.pageSpace === b.pageSpace && a.url === b.url && a.opened === b.opened;
 
 export function takeSidePanelFocus(windowId: string, panel: SidePanel): boolean {
   const owed = focusOwed.get(windowId);
@@ -188,7 +188,7 @@ function placePanel(windowId: string, extensionId: string, readyTab: string | un
   if (!url && readyTab && shownTabs.get(windowId)?.delete(readyTab)) tabsOf(removedTabs, windowId).add(readyTab);
   if (!url) return readyTab ? hideSidePanel(windowId) : closeSidePanel(windowId);
   const s = useBrowser.getState();
-  const panel = { extensionId, profile: extensionProfile(s, windowId), pageProfile: pageProfile(s, windowId), url, opened: openings.get(windowId) ?? 0, tabId: readyTab };
+  const panel = { extensionId, profile: extensionSpace(s, windowId), pageSpace: pageSpace(s, windowId), url, opened: openings.get(windowId) ?? 0, tabId: readyTab };
   if (readyTab) {
     const pageKept = sidePanelCards(windowId).some((card) => panelKey(card) === panelKey(panel) && card.owners.includes(readyTab));
     if (pageKept && useExtensions.getState().sidePanels[windowId]?.tabId !== readyTab) noteSidePanelKept();
@@ -196,12 +196,12 @@ function placePanel(windowId: string, extensionId: string, readyTab: string | un
     removedTabs.get(windowId)?.delete(readyTab);
   }
   const now = useExtensions.getState().sidePanels[windowId];
-  if (now && now.extensionId === panel.extensionId && now.url === url && now.profile === panel.profile && now.pageProfile === panel.pageProfile && now.opened === panel.opened && now.tabId === panel.tabId && !now.hidden) return;
+  if (now && now.extensionId === panel.extensionId && now.url === url && now.profile === panel.profile && now.pageSpace === panel.pageSpace && now.opened === panel.opened && now.tabId === panel.tabId && !now.hidden) return;
   useExtensions.setState((e) => ({ sidePanels: { ...e.sidePanels, [windowId]: panel } }));
   refreshSidePanelCards(windowId);
 }
 
-export const panelKey = (p: SidePanel) => `${p.extensionId}|${p.pageProfile}|${p.url}`;
+export const panelKey = (p: SidePanel) => `${p.extensionId}|${p.pageSpace}|${p.url}`;
 
 const NO_CARDS: SidePanelCard[] = [];
 

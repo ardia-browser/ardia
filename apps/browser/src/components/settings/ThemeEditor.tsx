@@ -1,21 +1,21 @@
-import { holdThemedWindowsKeyLook, choosePresetColor, onPresetSelection, resetPresetTheme, setProfileTheme, showingPreset, showingTheme } from "../../state/profiles/themeActions";
+import { holdThemedWindowsKeyLook, choosePresetColor, onPresetSelection, resetPresetTheme, setProfileTheme, showingPreset, showingTheme } from "../../state/spaces/themeActions";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Animated, Pressable, View } from "react-native";
 import { flatColors, lookAngle, MAX_THEME_STOPS, requestedDarkFor, resolveTheme, shownLook, themeAccent, withAddedStop, withAngle, withoutStop, spaceLookSource, stopLightness, type PresetLookFields, type ShownLook } from "../../lib/profileLook";
 import { isUntouched, presetStartingTheme, presetThemeOf } from "../../lib/presetLook";
 import { THEME_TEXTURES } from "@ardia/core";
 import { PROFILE_COLORS } from "../ui/theme";
-import { useAppDark, useProfile, useSettings, useWindow } from "../../state/browser/hooks";
+import { useAppDark, useSpace, useSettings, useWindow } from "../../state/browser/hooks";
 import type { ProfileColor, ProfileTheme, ThemeMode, ThemeTexture } from "../../state/browser/types";
 import { Box, Button, curve, duration, Group, PopUp, Segmented, space, Swatch, swatch, Text, ThemeSwatch } from "../ui";
-import { importArcTheme } from "../../state/profiles/arcThemes";
+import { importArcTheme } from "../../state/spaces/arcThemes";
 import { noteThemePreset } from "../../state/telemetry/themePresetCounts";
 import { themeGesture, type ThemeEdit } from "../../lib/themeGesture";
 import { Row, SectionHeader } from "./Form";
 import type { SettingId } from "./settingsIndex";
 import { ColorPad, DirectionDial, LABEL, Labelled, LightnessBar, Preview, Slider } from "./ThemeControls";
 
-export { arcThemeChoices, importArcTheme } from "../../state/profiles/arcThemes";
+export { arcThemeChoices, importArcTheme } from "../../state/spaces/arcThemes";
 
 const MODES: { value: ThemeMode; symbol: string; title: string }[] = [
   { value: "light", symbol: "sun.max", title: "Light" },
@@ -25,14 +25,14 @@ const MODES: { value: ThemeMode; symbol: string; title: string }[] = [
 
 const TEXTURE_NAMES: Record<ThemeTexture, string> = { grain: "Grain", sand: "Sand", denim: "Denim", tweed: "Tweed" };
 
-function useLiveTheme(profileId: string, theme: ProfileTheme | null | undefined, target: string, showing: () => string, apply: (theme: ProfileTheme | null, final: boolean) => void) {
+function useLiveTheme(spaceId: string, theme: ProfileTheme | null | undefined, target: string, showing: () => string, apply: (theme: ProfileTheme | null, final: boolean) => void) {
   const [draft, setDraft] = useState<ThemeEdit | null>(null);
   const applyLatest = useRef(apply);
   applyLatest.current = apply;
   const showingLatest = useRef(showing);
   showingLatest.current = showing;
-  const profileLatest = useRef(profileId);
-  profileLatest.current = profileId;
+  const profileLatest = useRef(spaceId);
+  profileLatest.current = spaceId;
   const gesture = useRef<ReturnType<typeof themeGesture> | null>(null);
   gesture.current ??= themeGesture({
     apply: (next, final) => applyLatest.current(next, final),
@@ -43,16 +43,16 @@ function useLiveTheme(profileId: string, theme: ProfileTheme | null | undefined,
     cancelFrame: cancelAnimationFrame,
   });
   useEffect(() => () => gesture.current?.dispose(), []);
-  useEffect(() => onPresetSelection(profileId, () => gesture.current?.selectionChanged()), [profileId]);
+  useEffect(() => onPresetSelection(spaceId, () => gesture.current?.selectionChanged()), [spaceId]);
   const change = (next: ProfileTheme | null, settle = false) => gesture.current!.change(next, target, settle);
   const dragging = !!draft && draft.target === target;
   return { theme: dragging ? draft.theme : (theme ?? null), dragging, change, cancel: () => gesture.current!.cancel(), begin: () => gesture.current!.begin(target) };
 }
 
-export function useThemeDraft(profileId: string, apply: (theme: ProfileTheme | null, final: boolean) => void) {
-  const profile = useProfile(profileId, (p) => p);
-  const color = profile?.color ?? "plum";
-  const live = useLiveTheme(profileId, profile?.theme, `${profileId}:${color}`, () => `${profileId}:${showingPreset(profileId)}`, apply);
+export function useThemeDraft(spaceId: string, apply: (theme: ProfileTheme | null, final: boolean) => void) {
+  const space = useSpace(spaceId, (p) => p);
+  const color = space?.color ?? "plum";
+  const live = useLiveTheme(spaceId, space?.theme, `${spaceId}:${color}`, () => `${spaceId}:${showingPreset(spaceId)}`, apply);
   const appDark = useAppDark();
   const source = useSettings((s) => spaceLookSource(s));
   const original = useMemo(() => presetStartingTheme((PROFILE_COLORS[color] ?? PROFILE_COLORS.plum).swatch), [color]);
@@ -66,24 +66,24 @@ export function useThemeDraft(profileId: string, apply: (theme: ProfileTheme | n
     if (kept && !stored) noteThemePreset("edited");
     live.change(kept, settle);
   };
-  return { profile, stored, editing, editsDark, shown, followsApp: source === "app", change, cancel: live.cancel, begin: live.begin, original, dragging: live.dragging };
+  return { space, stored, editing, editsDark, shown, followsApp: source === "app", change, cancel: live.cancel, begin: live.begin, original, dragging: live.dragging };
 }
 
-export function ThemeSection({ profileId, anchor }: { profileId: string; anchor: SettingId }) {
-  const { profile, stored, editing: theme, editsDark, shown, followsApp, change, cancel, begin, original } = useThemeDraft(profileId, (next) => setProfileTheme(profileId, next));
-  const editing = !!profile && !!stored;
+export function ThemeSection({ spaceId, anchor }: { spaceId: string; anchor: SettingId }) {
+  const { space, stored, editing: theme, editsDark, shown, followsApp, change, cancel, begin, original } = useThemeDraft(spaceId, (next) => setProfileTheme(spaceId, next));
+  const editing = !!space && !!stored;
   useEffect(() => {
     if (!editing) return;
     holdThemedWindowsKeyLook(true);
     return () => holdThemedWindowsKeyLook(false);
   }, [editing]);
-  if (!profile) return null;
+  if (!space) return null;
   return (
     <>
       <SectionHeader
         title="Theme"
-        description="Tints this profile's windows, New Tab page and highlights."
-        action={<Button title="Import from Arc…" onPress={() => void importArcTheme(profileId)} />}
+        description="Tints this space's windows, New Tab page and highlights."
+        action={<Button title="Import from Arc…" onPress={() => void importArcTheme(spaceId)} />}
       />
       <Group>
         <Row
@@ -91,13 +91,13 @@ export function ThemeSection({ profileId, anchor }: { profileId: string; anchor:
           description={
             stored?.dark
               ? `Separate light and dark looks. Editing keeps the ${editsDark ? "dark" : "light"} one.`
-              : presetLabel(profile.color, !!stored)
+              : presetLabel(space.color, !!stored)
           }
         >
-          <ThemeSwatches color={profile.color} edits={profile} onPreset={(c) => choosePresetColor(profileId, c)} />
+          <ThemeSwatches color={space.color} edits={space} onPreset={(c) => choosePresetColor(spaceId, c)} />
         </Row>
         <Box pad="l">
-          <ThemeEditor theme={theme} start={original} full={{ shown, followsApp }} onChange={change} onBegin={begin} onReset={stored ? () => { cancel(); resetPresetTheme(profileId); } : undefined} resetLabel={presetLabel(profile.color, false)} />
+          <ThemeEditor theme={theme} start={original} full={{ shown, followsApp }} onChange={change} onBegin={begin} onReset={stored ? () => { cancel(); resetPresetTheme(spaceId); } : undefined} resetLabel={presetLabel(space.color, false)} />
         </Box>
       </Group>
     </>
@@ -121,26 +121,26 @@ export function ThemePicker({
   onLiveTheme?: (theme: ProfileTheme | null | undefined) => void;
   frame?: (editor: ReactNode) => ReactNode;
 }) {
-  const profileId = useWindow(windowId, (w) => w?.profileId) ?? "";
+  const spaceId = useWindow(windowId, (w) => w?.spaceId) ?? "";
   const incognito = useWindow(windowId, (w) => w?.kind === "private");
-  const look = useThemeDraft(profileId, (theme, final) => (onLiveTheme && !final ? onLiveTheme(theme) : onTheme ? onTheme(theme) : setProfileTheme(profileId, theme)));
+  const look = useThemeDraft(spaceId, (theme, final) => (onLiveTheme && !final ? onLiveTheme(theme) : onTheme ? onTheme(theme) : setProfileTheme(spaceId, theme)));
   useEffect(() => {
     if (!look.dragging) onLiveTheme?.(undefined);
   }, [look.dragging]);
   const liveTheme = useRef(onLiveTheme);
   liveTheme.current = onLiveTheme;
   useEffect(() => () => liveTheme.current?.(undefined), []);
-  if (!profileId || incognito || !look.profile) return null;
+  if (!spaceId || incognito || !look.space) return null;
   const reset = () => {
     look.cancel();
     if (onTheme) onTheme(null);
-    else resetPresetTheme(profileId);
+    else resetPresetTheme(spaceId);
   };
   return (
     <View style={{ gap: space.xxxl }}>
-      <ThemeSwatches size={size} gap={gap} color={look.profile.color} edits={look.profile} onPreset={(c) => (onPreset ? onPreset(c) : choosePresetColor(profileId, c))} />
+      <ThemeSwatches size={size} gap={gap} color={look.space.color} edits={look.space} onPreset={(c) => (onPreset ? onPreset(c) : choosePresetColor(spaceId, c))} />
       <FadeIn>
-        {frame(<ThemeEditor theme={look.editing} start={look.original} onChange={look.change} onBegin={look.begin} onReset={look.stored ? reset : undefined} resetLabel={presetLabel(look.profile.color, false)} />)}
+        {frame(<ThemeEditor theme={look.editing} start={look.original} onChange={look.change} onBegin={look.begin} onReset={look.stored ? reset : undefined} resetLabel={presetLabel(look.space.color, false)} />)}
       </FadeIn>
     </View>
   );

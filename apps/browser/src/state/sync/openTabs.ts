@@ -49,7 +49,7 @@ function forgetClosedPages(state: ScopeState, baseTab: (key: string) => OpenTabV
   }
 }
 
-function forgetPinPagesNoCopyShows(s: BrowserState, profileId: string, fromSync: Map<string, Set<string>>) {
+function forgetPinPagesNoCopyShows(s: BrowserState, spaceId: string, fromSync: Map<string, Set<string>>) {
   if (!fromSync.size) return;
   const shown = new Map<string, Set<string>>();
   const show = (key: string, url: string) => {
@@ -58,8 +58,8 @@ function forgetPinPagesNoCopyShows(s: BrowserState, profileId: string, fromSync:
     if (urls) urls.add(url);
     else shown.set(key, new Set([url]));
   };
-  for (const t of Object.values(s.tabs)) if (t.profileId === profileId) show(pinKeyOf(t), t.url);
-  for (const p of s.parkedPins[profileId]?.tabs ?? []) show(p.id, p.url);
+  for (const t of Object.values(s.tabs)) if (t.spaceId === spaceId) show(pinKeyOf(t), t.url);
+  for (const p of s.parkedPins[spaceId]?.tabs ?? []) show(p.id, p.url);
   for (const [key, pages] of fromSync) {
     const urls = shown.get(key);
     for (const url of pages) if (!urls?.has(url)) pages.delete(url);
@@ -72,9 +72,9 @@ const baseIn = (state: ScopeState) => (key: string) => {
   return json === undefined ? null : openTabValue(JSON.parse(json));
 };
 
-function extractOpenTabs(profileId: string, state: ScopeState, closes: OpenTabCloses, base: (key: string) => unknown, remote: (key: string) => unknown): Extraction {
+function extractOpenTabs(spaceId: string, state: ScopeState, closes: OpenTabCloses, base: (key: string) => unknown, remote: (key: string) => unknown): Extraction {
   const s = store();
-  const { synced, pinned } = localOpenTabs(s, profileId);
+  const { synced, pinned } = localOpenTabs(s, spaceId);
   const closed = new Set(closes.keys());
   const seen = pagesSeenIn(state);
   const baseTabs = new Map<string, OpenTabValue | null>();
@@ -85,7 +85,7 @@ function extractOpenTabs(profileId: string, state: ScopeState, closes: OpenTabCl
   };
   forgetClosedPages(state, baseTab);
   const fromSync = pinPagesFromSyncIn(seen);
-  forgetPinPagesNoCopyShows(s, profileId, fromSync);
+  forgetPinPagesNoCopyShows(s, spaceId, fromSync);
   const positions = new Map<string, string>();
   for (const w of new Set(synced.map(({ tab }) => tab.windowId))) {
     const here = synced.filter(({ tab }) => tab.windowId === w);
@@ -142,9 +142,9 @@ function extractOpenTabs(profileId: string, state: ScopeState, closes: OpenTabCl
   };
 }
 
-function closesOnly(profileId: string, state: ScopeState, closes: OpenTabCloses, base: (key: string) => unknown): Extraction | null {
+function closesOnly(spaceId: string, state: ScopeState, closes: OpenTabCloses, base: (key: string) => unknown): Extraction | null {
   forgetClosedPages(state, (key) => openTabValue(base(`${OPEN_TAB}${key}`)));
-  forgetPinPagesNoCopyShows(store(), profileId, pinPagesFromSyncIn(pagesSeenIn(state)));
+  forgetPinPagesNoCopyShows(store(), spaceId, pinPagesFromSyncIn(pagesSeenIn(state)));
   const closed = new Set(closes.keys());
   if (!closed.size) return null;
   const isClosed = (k: string) => k.startsWith(OPEN_TAB) && closed.has(k.slice(OPEN_TAB.length));
@@ -157,8 +157,8 @@ function forget(state: ScopeState) {
   if (state.unapplied.some((k) => k.startsWith(OPEN_TABS))) state.unapplied = state.unapplied.filter((k) => !k.startsWith(OPEN_TABS));
 }
 
-function orphans(profileId: string, state: ScopeState, closed: Set<string>): { key: string; value: OpenTabValue }[] {
-  const { held } = localOpenTabs(store(), profileId);
+function orphans(spaceId: string, state: ScopeState, closed: Set<string>): { key: string; value: OpenTabValue }[] {
+  const { held } = localOpenTabs(store(), spaceId);
   return recordsWith(state, OPEN_TAB).flatMap(([k, record]) => {
     const key = k.slice(OPEN_TAB.length);
     const value = openTabValue(record.v);
@@ -166,9 +166,9 @@ function orphans(profileId: string, state: ScopeState, closed: Set<string>): { k
   });
 }
 
-function adoptMatchingTabs(profileId: string, state: ScopeState, missing: { key: string; value: OpenTabValue }[]) {
+function adoptMatchingTabs(spaceId: string, state: ScopeState, missing: { key: string; value: OpenTabValue }[]) {
   const s = store();
-  const { synced } = localOpenTabs(s, profileId);
+  const { synced } = localOpenTabs(s, spaceId);
   const waiting = new Map<string, string[]>();
   for (const { key, value } of missing) {
     const same = waiting.get(value.u);
@@ -184,7 +184,7 @@ function adoptMatchingTabs(profileId: string, state: ScopeState, missing: { key:
   if (!renamed.size) return;
   const tabs = { ...s.tabs };
   for (const t of Object.values(s.tabs)) {
-    const to = t.profileId === profileId ? renamed.get(pinKeyOf(t)) : undefined;
+    const to = t.spaceId === spaceId ? renamed.get(pinKeyOf(t)) : undefined;
     if (!to) continue;
     const { pinKey: _, ...rest } = t;
     tabs[t.id] = to === t.id ? rest : { ...rest, pinKey: to };
@@ -192,11 +192,11 @@ function adoptMatchingTabs(profileId: string, state: ScopeState, missing: { key:
   fromSync(() => useBrowser.setState({ tabs }));
 }
 
-function bringBackMissing(profileId: string, state: ScopeState, closed: Set<string>) {
-  const missing = orphans(profileId, state, closed);
+function bringBackMissing(spaceId: string, state: ScopeState, closed: Set<string>) {
+  const missing = orphans(spaceId, state, closed);
   if (!missing.length) return;
-  adoptMatchingTabs(profileId, state, missing);
-  const keys = orphans(profileId, state, closed).map(({ key }) => `${OPEN_TAB}${key}`);
+  adoptMatchingTabs(spaceId, state, missing);
+  const keys = orphans(spaceId, state, closed).map(({ key }) => `${OPEN_TAB}${key}`);
   if (keys.length) state.unapplied = [...new Set([...state.unapplied, ...keys])];
   noteOpenTabsWoke();
 }
@@ -206,8 +206,8 @@ const switchedLater = (state: ScopeState, on: boolean, flag: HLC | undefined) =>
   return !!marker && openTabsOn(marker.v) === on && (flag === undefined || marker.h > flag);
 };
 
-function settleCloses(profileId: string, state: ScopeState, closes: OpenTabCloses) {
-  const { held } = localOpenTabs(store(), profileId);
+function settleCloses(spaceId: string, state: ScopeState, closes: OpenTabCloses) {
+  const { held } = localOpenTabs(store(), spaceId);
   const done: string[] = [];
   for (const key of closes.keys()) {
     const k = `${OPEN_TAB}${key}`;
@@ -227,7 +227,7 @@ function retire(state: ScopeState): Adapter {
 
 const waiting: Adapter = { prefix: OPEN_TABS, extract: () => null, apply: () => false };
 
-export function openTabsAdapters(profileId: string, state: ScopeState, mode: OpenTabsMode, closes: OpenTabCloses, flag: () => HLC | undefined): Adapter[] {
+export function openTabsAdapters(spaceId: string, state: ScopeState, mode: OpenTabsMode, closes: OpenTabCloses, flag: () => HLC | undefined): Adapter[] {
   if (mode !== "on" && closes.keys().length) closes.settle([...closes.keys()]);
   if (mode === "off") {
     forget(state);
@@ -235,20 +235,20 @@ export function openTabsAdapters(profileId: string, state: ScopeState, mode: Ope
   }
   if (mode === "retire") return [switchedLater(state, true, flag()) ? waiting : retire(state)];
   if (switchedLater(state, false, flag())) return [waiting];
-  settleCloses(profileId, state, closes);
+  settleCloses(spaceId, state, closes);
   const off = () => switchedLater(state, false, flag());
-  if (!holdsOpenTabs(store(), profileId)) return [{ prefix: OPEN_TABS, extract: (base) => (off() ? null : closesOnly(profileId, state, closes, base)), apply: () => false }];
-  bringBackMissing(profileId, state, new Set(closes.keys()));
+  if (!holdsOpenTabs(store(), spaceId)) return [{ prefix: OPEN_TABS, extract: (base) => (off() ? null : closesOnly(spaceId, state, closes, base)), apply: () => false }];
+  bringBackMissing(spaceId, state, new Set(closes.keys()));
   return [
     {
       prefix: OPEN_TABS,
-      extract: (base, _queued, _now, _known, remote) => (off() ? null : extractOpenTabs(profileId, state, closes, base, remote)),
-      apply: (visible, changed) => !off() && applyOpenTabs(profileId, visible, changed, new Set(closes.keys()), pagesSeenIn(state)),
+      extract: (base, _queued, _now, _known, remote) => (off() ? null : extractOpenTabs(spaceId, state, closes, base, remote)),
+      apply: (visible, changed) => !off() && applyOpenTabs(spaceId, visible, changed, new Set(closes.keys()), pagesSeenIn(state)),
     },
   ];
 }
 
-export function openTabsPinPageWrites(profileId: string, state: ScopeState, mode: OpenTabsMode, flag: () => HLC | undefined): PinPageWrites | undefined {
+export function openTabsPinPageWrites(spaceId: string, state: ScopeState, mode: OpenTabsMode, flag: () => HLC | undefined): PinPageWrites | undefined {
   if (mode !== "on") return undefined;
   return (written) => {
     const seen = pagesSeenIn(state);
@@ -267,6 +267,6 @@ export function openTabsPinPageWrites(profileId: string, state: ScopeState, mode
       }
     }
     forgetClosedPages(state, baseIn(state));
-    forgetPinPagesNoCopyShows(store(), profileId, fromSync);
+    forgetPinPagesNoCopyShows(store(), spaceId, fromSync);
   };
 }

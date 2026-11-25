@@ -1,5 +1,5 @@
 import type { BrowserState } from "../browser/store";
-import { activeTabId, isIncognitoProfile } from "../browser/model";
+import { activeTabId, isIncognitoSpace } from "../browser/model";
 import type { TabGroup } from "../browser/types";
 import { eligibleKind, isEligibleTab, lastFocusedEligibleWindow, shownPage } from "./automationWindows";
 import type { MethodSpec } from "./socketCatalog";
@@ -17,27 +17,27 @@ function clippedTab(id: string, url: string, title: string, active: boolean) {
   return { id, url: url.slice(0, MAX_TAB_URL), title: title.slice(0, MAX_TAB_TITLE), active, ...(clipped.length ? { clipped } : {}) };
 }
 
-const SPACE = id("A space id from spaces.list (a profile id); every space when left out");
+const SPACE = id("A space id from spaces.list; every space when left out");
 
-const spaceIds = (s: BrowserState) => s.profileOrder.filter((p) => s.profiles[p] && !isIncognitoProfile(p));
+const spaceIds = (s: BrowserState) => s.spaceOrder.filter((p) => s.spaces[p] && !isIncognitoSpace(p));
 
 const shownWindows = (s: BrowserState) => s.windowOrder.filter((w) => eligibleKind(s, w) !== null);
 
-const groupWindowOk = (s: BrowserState, g: TabGroup) => eligibleKind(s, g.windowId) !== null && !isIncognitoProfile(g.profileId);
+const groupWindowOk = (s: BrowserState, g: TabGroup) => eligibleKind(s, g.windowId) !== null && !isIncognitoSpace(g.spaceId);
 
-function spaceRow(s: BrowserState, profileId: string, focusedProfile: string | null) {
-  const profile = s.profiles[profileId]!;
-  const tabs = Object.values(s.tabs).filter((t) => t.profileId === profileId && isEligibleTab(s, t.id));
-  const groups = Object.values(s.groups).filter((g) => g.profileId === profileId && groupWindowOk(s, g));
+function spaceRow(s: BrowserState, spaceId: string, focusedProfile: string | null) {
+  const profile = s.spaces[spaceId]!;
+  const tabs = Object.values(s.tabs).filter((t) => t.spaceId === spaceId && isEligibleTab(s, t.id));
+  const groups = Object.values(s.groups).filter((g) => g.spaceId === spaceId && groupWindowOk(s, g));
   return {
-    id: profileId,
+    id: spaceId,
     name: profile.name,
-    profileId,
+    profileId: profile.profileId,
     color: profile.color,
     icon: profile.icon,
-    active: focusedProfile === profileId,
-    default: s.settings.defaultProfileId === profileId,
-    windowIds: shownWindows(s).filter((w) => s.windows[w]!.profileId === profileId),
+    active: focusedProfile === spaceId,
+    default: s.settings.defaultSpaceId === spaceId,
+    windowIds: shownWindows(s).filter((w) => s.windows[w]!.spaceId === spaceId),
     tabCount: tabs.length,
     pinnedCount: tabs.filter((t) => t.pin !== null).length,
     groupCount: groups.length,
@@ -47,13 +47,13 @@ function spaceRow(s: BrowserState, profileId: string, focusedProfile: string | n
 function listSpaces(params: Record<string, unknown>) {
   const s = now();
   const focused = lastFocusedEligibleWindow(s);
-  const focusedProfile = focused ? s.windows[focused]!.profileId : null;
+  const focusedProfile = focused ? s.windows[focused]!.spaceId : null;
   return page(spaceIds(s), params, (p) => spaceRow(s, p, focusedProfile));
 }
 
 function groupRow(s: BrowserState, g: TabGroup) {
   const members = g.tabIds.filter((t) => s.tabs[t]?.windowId === g.windowId && isEligibleTab(s, t));
-  const active = activeTabId(s, g.windowId, g.profileId);
+  const active = activeTabId(s, g.windowId, g.spaceId);
   const tabs: ReturnType<typeof clippedTab>[] = [];
   let bytes = 0;
   for (const t of members.slice(0, MAX_GROUP_TABS)) {
@@ -70,7 +70,7 @@ function groupRow(s: BrowserState, g: TabGroup) {
     title: g.name.slice(0, MAX_TAB_TITLE),
     color: g.color,
     icon: g.icon,
-    spaceId: g.profileId,
+    spaceId: g.spaceId,
     windowId: g.windowId,
     collapsed: g.collapsed,
     pinned: g.pinned,
@@ -86,7 +86,7 @@ function listGroups(params: Record<string, unknown>) {
   const space = params.space !== undefined ? profileArg(params.space) : null;
   const windowRank = new Map(s.windowOrder.map((w, i) => [w, i]));
   const groups = Object.values(s.groups)
-    .filter((g) => groupWindowOk(s, g) && (space === null || g.profileId === space))
+    .filter((g) => groupWindowOk(s, g) && (space === null || g.spaceId === space))
     .sort((a, b) => (windowRank.get(a.windowId) ?? 0) - (windowRank.get(b.windowId) ?? 0) || a.createdAt - b.createdAt);
   return page(groups, params, (g) => groupRow(s, g));
 }
@@ -97,7 +97,7 @@ export const SPACE_METHODS: MethodSpec[] = [
     mutates: false,
     description: "Spaces: each profile's tabs, with how many tabs, pinned tabs and groups it holds and whether the last focused window shows it",
     params: obj({ limit: int("At most this many spaces (default 100)", 1, 1000), offset: int("Skip this many spaces first (default 0)", 0) }),
-    result: "{items: [{id, name, profileId, color, icon, active, default, windowIds, tabCount, pinnedCount, groupCount}], total, nextOffset}",
+    result: "{items: [{id, name, spaceId, color, icon, active, default, windowIds, tabCount, pinnedCount, groupCount}], total, nextOffset}",
     run: listSpaces,
   },
   {

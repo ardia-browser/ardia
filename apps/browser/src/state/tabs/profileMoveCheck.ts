@@ -80,14 +80,15 @@ async function checkMovedTabProfile() {
   const port = httpPagesPort();
   if (!port) throw new Error("no loopback page server: the launch has no httpPages port");
   const url = `http://127.0.0.1:${port}/a`;
-  const first = S().profileOrder[0];
+  const first = S().spaceOrder[0];
   if (!first) throw new Error("no profile");
-  const second = S().createProfile({ name: "Self-check moved tab" });
+  const profileId = S().createProfile({ name: "Self-check moved tab" });
+  const second = S().createSpace({ name: "Self-check moved tab", profileId });
   const made: string[] = [];
   try {
-    const firstWindow = S().createWindow({ url, profileId: first });
+    const firstWindow = S().createWindow({ url, spaceId: first });
     made.push(firstWindow);
-    const secondWindow = S().createWindow({ url, profileId: second });
+    const secondWindow = S().createWindow({ url, spaceId: second });
     made.push(secondWindow);
     const movedTab = S().windows[firstWindow]!.tabIds[0]!;
     const secondTab = S().windows[secondWindow]!.tabIds[0]!;
@@ -99,8 +100,8 @@ async function checkMovedTabProfile() {
     const again = await run(before, movedTab, "reading the first profile before the move", readCode);
     if (again.storage !== "first" || again.cookie !== "first") throw new Error(`the two profiles share storage before the move: ${JSON.stringify(again)}`);
 
-    S().moveTabToProfile(movedTab, second);
-    if (S().tabs[movedTab]?.profileId !== second) throw new Error("the store did not move the tab");
+    S().moveTabToSpace(movedTab, second);
+    if (S().tabs[movedTab]?.spaceId !== second) throw new Error("the store did not move the tab");
     const after = await loadedPage(movedTab, url, "loading again after the move", before);
     const seen = await run(after, movedTab, "reading after the move", readCode);
     if (seen.storage !== "second" || seen.cookie !== "second") throw new Error(`after the move the page reads ${JSON.stringify({ storage: seen.storage, cookie: seen.cookie })}, not the second profile's values: it still runs in the first profile`);

@@ -1,6 +1,6 @@
 import { useBrowser, type BrowserState } from "../browser/store";
 import type { TabGroup } from "../browser/types";
-import { isIncognitoProfile, isPinnedRow } from "../browser/model";
+import { isIncognitoSpace, isPinnedRow } from "../browser/model";
 import { ancestorIds, innermostGroupOf, rootOf } from "../groups/groups";
 import type { TabPlacement } from "../pins/placing";
 import { groupLabel } from "../pins/tabGrouping";
@@ -59,13 +59,13 @@ const folded = (text: string) => text.trim().toLocaleLowerCase();
 function groupNamed(name: string, scope: NameScope): TabGroup {
   const s = store();
   const want = folded(name);
-  const pool = Object.values(s.groups).filter((g) => isEligibleGroup(s, g.id) && g.windowId === scope.windowId && (!scope.profileId || g.profileId === scope.profileId));
+  const pool = Object.values(s.groups).filter((g) => isEligibleGroup(s, g.id) && g.windowId === scope.windowId && (!scope.profileId || g.spaceId === scope.profileId));
   let found = pool.filter((g) => folded(g.name) === want);
   if (!found.length) found = pool.filter((g) => !g.name.trim() && folded(groupLabel(s, g)) === want);
   const where = `window ${scope.windowId}${scope.profileId ? `, profile ${scope.profileId}` : ""}`;
   if (!found.length) throw new OpError("no_window", `There's no group named ${JSON.stringify(name)} in ${where} (ardia groups lists them; --window picks another window).`);
   if (found.length > 1) {
-    const list = found.map((g) => `${g.id} (${JSON.stringify(groupLabel(s, g))}${g.parentId ? `, inside ${g.parentId}` : ""}, profile ${g.profileId})`).join(", ");
+    const list = found.map((g) => `${g.id} (${JSON.stringify(groupLabel(s, g))}${g.parentId ? `, inside ${g.parentId}` : ""}, profile ${g.spaceId})`).join(", ");
     throw new OpError("bad_request", `${JSON.stringify(name)} names ${found.length} groups in ${where}: ${list}. Give one id.`);
   }
   return found[0]!;
@@ -100,11 +100,11 @@ export function anchorRef(results: OpResult[], ref: string): Anchor {
   const group = at === null ? (ownValue(s.groups, ref) ? ref : null) : (results[at]?.group ?? null);
   if (group) {
     const g = groupRef(results, group);
-    return { kind: "group", id: g.id, windowId: g.windowId, profileId: g.profileId };
+    return { kind: "group", id: g.id, windowId: g.windowId, profileId: g.spaceId };
   }
   const id = tabRef(results, ref);
   const t = ownValue(s.tabs, id)!;
-  return { kind: "tab", id, windowId: t.windowId, profileId: t.profileId };
+  return { kind: "tab", id, windowId: t.windowId, profileId: t.spaceId };
 }
 
 export function normalWindow(id: string): string {
@@ -113,7 +113,7 @@ export function normalWindow(id: string): string {
 }
 
 export function profileOf(id: string): string {
-  if (!ownValue(store().profiles, id) || isIncognitoProfile(id)) throw new OpError("no_window", `There's no profile ${id}.`);
+  if (!ownValue(store().profiles, id) || isIncognitoSpace(id)) throw new OpError("no_window", `There's no profile ${id}.`);
   return id;
 }
 
@@ -122,7 +122,7 @@ const isNormal = (s: BrowserState, id: string) => eligibleKind(s, id) === "norma
 export function defaultWindow(profileId?: string): string {
   const s = store();
   const order = [...s.ui.focusOrder, ...s.windowOrder.filter((id) => !s.ui.focusOrder.includes(id))].filter((id) => isNormal(s, id));
-  const showing = profileId ? order.find((id) => s.windows[id]!.profileId === profileId) : undefined;
+  const showing = profileId ? order.find((id) => s.windows[id]!.spaceId === profileId) : undefined;
   const last = lastFocusedEligibleWindow(s);
   const found = showing ?? (last && isNormal(s, last) ? last : order[0]);
   if (!found) throw new OpError("no_window", "No browser window the ardia command can use is open.");
@@ -135,11 +135,11 @@ export function space(op: Op, fallback?: Space): Space {
   const profileId = op.profile !== undefined ? profileOf(op.profile as string) : undefined;
   if (op.window !== undefined) {
     const windowId = normalWindow(op.window as string);
-    return { windowId, profileId: profileId ?? store().windows[windowId]!.profileId };
+    return { windowId, profileId: profileId ?? store().windows[windowId]!.spaceId };
   }
   if (fallback && (!profileId || profileId === fallback.profileId)) return fallback;
   const windowId = defaultWindow(profileId);
-  return { windowId, profileId: profileId ?? store().windows[windowId]!.profileId };
+  return { windowId, profileId: profileId ?? store().windows[windowId]!.spaceId };
 }
 
 export function nextOutside(s: BrowserState, windowId: string, profileId: string, from: number, skip: ReadonlySet<string>): string | null {
@@ -147,7 +147,7 @@ export function nextOutside(s: BrowserState, windowId: string, profileId: string
   if (!w) return null;
   for (let i = from; i < w.tabIds.length; i++) {
     const id = w.tabIds[i]!;
-    if (!skip.has(id) && s.tabs[id]?.profileId === profileId) return id;
+    if (!skip.has(id) && s.tabs[id]?.spaceId === profileId) return id;
   }
   return null;
 }
@@ -203,13 +203,13 @@ export function destination(results: OpResult[], op: Op, moving: ReadonlySet<str
   const ref = (op.before ?? op.after) as string | undefined;
   if (ref) {
     const anchor = anchorRef(results, ref);
-    if (group && (anchor.windowId !== group.windowId || anchor.profileId !== group.profileId)) {
+    if (group && (anchor.windowId !== group.windowId || anchor.profileId !== group.spaceId)) {
       throw new OpError("bad_request", `${ref} is in another window or profile than group ${group.id}.`);
     }
     if (group && !insideGroup(store(), anchor, group)) throw new OpError("bad_request", `${ref} isn't inside group ${group.id}.`);
     return besideAnchor(anchor, op.after !== undefined, moving, group);
   }
-  if (group) return { placement: { pinned: false, groupId: group.id, beforeId: null }, windowId: group.windowId, profileId: group.profileId };
+  if (group) return { placement: { pinned: false, groupId: group.id, beforeId: null }, windowId: group.windowId, profileId: group.spaceId };
   return null;
 }
 

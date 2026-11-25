@@ -84,12 +84,12 @@ export function organizable(s: BrowserState, ids: string[]) {
 }
 
 export function profileMovable(s: BrowserState, ids: string[], profileId: string) {
-  const tile = ids.find((id) => s.tabs[id]!.profileId !== profileId && pinSection(s.tabs[id]) === "tile");
+  const tile = ids.find((id) => s.tabs[id]!.spaceId !== profileId && pinSection(s.tabs[id]) === "tile");
   if (tile) throw new OpError("bad_request", `Tab ${tile} is a Top Apps tile, which stays with its profile.`);
 }
 
 export function leavingTabs(s: BrowserState, ids: string[], where: Space, placed: boolean): Set<string> {
-  return new Set(ids.filter((id) => placed || s.tabs[id]!.windowId !== where.windowId || s.tabs[id]!.profileId !== where.profileId));
+  return new Set(ids.filter((id) => placed || s.tabs[id]!.windowId !== where.windowId || s.tabs[id]!.spaceId !== where.profileId));
 }
 
 const fail = (message: string): never => {
@@ -103,7 +103,7 @@ export function expectTabs(ids: string[], where: Space, placement?: TabPlacement
   for (const id of ids) {
     const t = ownValue(s.tabs, id);
     if (!t) fail(`tab ${id} is gone.`);
-    if (t!.windowId !== where.windowId || t!.profileId !== where.profileId) fail(`tab ${id} isn't in window ${where.windowId}, profile ${where.profileId}.`);
+    if (t!.windowId !== where.windowId || t!.spaceId !== where.profileId) fail(`tab ${id} isn't in window ${where.windowId}, profile ${where.profileId}.`);
     if (!placement) continue;
     if (placement.pinned) {
       if (!t!.pin || (placement.row !== undefined && isPinnedRow(t) !== placement.row)) fail(`tab ${id} isn't pinned as asked.`);
@@ -115,7 +115,7 @@ export function expectTabs(ids: string[], where: Space, placement?: TabPlacement
   }
 }
 
-export function expectGroup(id: string, fields: Partial<Pick<TabGroup, "windowId" | "profileId" | "pinned" | "name" | "icon" | "color" | "collapsed">> & { parentId?: string | null; tabs?: string[] }) {
+export function expectGroup(id: string, fields: Partial<Pick<TabGroup, "windowId" | "spaceId" | "pinned" | "name" | "icon" | "color" | "collapsed">> & { parentId?: string | null; tabs?: string[] }) {
   const g = ownValue(store().groups, id);
   if (!g) return fail(`group ${id} is gone.`);
   const { parentId, tabs, ...rest } = fields;

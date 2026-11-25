@@ -16,7 +16,7 @@ import { ITEM_HEIGHT, PINNED_CELL, PINNED_FACE_INSET, pinnedFaceRadius, PINNED_R
 export function PinnedFace({ tabId, active, hovered, pressed, frame = "cell" }: { tabId: string; active: boolean; hovered: boolean; pressed: boolean; frame?: "cell" | "face" }) {
   const theme = useTheme();
   const tab = useTab(tabId);
-  const tileTheme = useTileTheme(tab?.url ?? "", tab?.favicon, tab?.customIcon, tab?.profileId ?? "");
+  const tileTheme = useTileTheme(tab?.url ?? "", tab?.favicon, tab?.customIcon, tab?.spaceId ?? "");
   const glass = useGlass();
   const badges = useSettings((st) => st.showTopAppBadges);
   const topApp = useSelectedTopApp();

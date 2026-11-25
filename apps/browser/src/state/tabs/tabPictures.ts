@@ -1,5 +1,5 @@
 import { useBrowser } from "../browser/store";
-import { isIncognitoProfile } from "../browser/model";
+import { isIncognitoSpace } from "../browser/model";
 import { webviews } from "../../platform/webviews";
 
 type Picture = { data: string; frame: [number, number, number, number] };
@@ -31,7 +31,7 @@ export function rememberPicture(tabId: string): Promise<void> {
 function remember(tabId: string): Promise<void> {
   const state = useBrowser.getState();
   const tab = state.tabs[tabId];
-  if (!tab || state.windows[tab.windowId]?.kind === "private" || isIncognitoProfile(tab.profileId)) return Promise.resolve();
+  if (!tab || state.windows[tab.windowId]?.kind === "private" || isIncognitoSpace(tab.spaceId)) return Promise.resolve();
   const view = webviews.get(tabId);
   if (!view) return Promise.resolve();
   return view
@@ -60,18 +60,18 @@ export function startTabPictures() {
         timers.delete(windowId);
       }
     for (const w of Object.values(s.windows)) {
-      const id = w.activeTabIds[w.profileId];
+      const id = w.activeTabIds[w.spaceId];
       if (!id || w.kind === "private") continue;
       const was = prev.windows[w.id];
-      if (id === was?.activeTabIds[was.profileId] && s.tabs[id]?.url === prev.tabs[id]?.url) continue;
-      if (isIncognitoProfile(s.tabs[id]?.profileId ?? "")) continue;
+      if (id === was?.activeTabIds[was.spaceId] && s.tabs[id]?.url === prev.tabs[id]?.url) continue;
+      if (isIncognitoSpace(s.tabs[id]?.spaceId ?? "")) continue;
       clearTimeout(timers.get(w.id));
       timers.set(
         w.id,
         setTimeout(() => {
           timers.delete(w.id);
           const now = useBrowser.getState().windows[w.id];
-          if (now?.activeTabIds[now.profileId] === id) remember(id);
+          if (now?.activeTabIds[now.spaceId] === id) remember(id);
         }, SETTLE_MS),
       );
     }

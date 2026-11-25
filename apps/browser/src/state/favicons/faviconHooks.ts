@@ -10,7 +10,7 @@ import { askFaviconTheme, EMPTY_ICONS, lookupOrder, resolveFavicon, useFavicons,
 
 type Listener = () => void;
 type Icons = { pages: Record<string, string | null>; srcs: Record<string, string>; appearances: Record<string, [string, string]> };
-type Favicons = { profiles: Record<string, Icons>; themes: Record<string, unknown> };
+type Favicons = { spaces: Record<string, Icons>; themes: Record<string, unknown> };
 
 const KEY_SEPARATOR = "\n";
 
@@ -34,10 +34,10 @@ function faviconKeyWatches(empty: Icons) {
   const pages = keyedWatch<Favicons>(
     () => useFavicons,
     (f, prev, wake) => {
-      if (f.profiles === prev.profiles || !byPage.size) return;
-      for (const id of changedIds(f.profiles, prev.profiles)) {
-        const now = f.profiles[id] ?? empty;
-        const before = prev.profiles[id] ?? empty;
+      if (f.spaces === prev.spaces || !byPage.size) return;
+      for (const id of changedIds(f.spaces, prev.spaces)) {
+        const now = f.spaces[id] ?? empty;
+        const before = prev.spaces[id] ?? empty;
         for (const page of changedIds(now.pages, before.pages)) wakeAll(byPage, page, wake);
         for (const page of changedIds(now.appearances, before.appearances)) wakeAll(byPage, page, wake);
         for (const src of changedIds(now.srcs, before.srcs)) wakeAll(bySrc, src, wake);
@@ -77,43 +77,43 @@ export function watchFaviconOf(url: string, src: string | null, listener: Listen
 
 export const watchFaviconTheme = (uri: string, listener: Listener): (() => void) => watchFaviconUri(uri, listener);
 
-export const useResolvedFaviconUri = (url: string, src?: string | null, profileId?: string, source?: string): string | null =>
-  useKeyed(watchFaviconPage, pageKey(url, src), () => resolveFavicon(url, src, profileId, source)?.uri ?? null);
+export const useResolvedFaviconUri = (url: string, src?: string | null, spaceId?: string, source?: string): string | null =>
+  useKeyed(watchFaviconPage, pageKey(url, src), () => resolveFavicon(url, src, spaceId, source)?.uri ?? null);
 
 function sourceUnanswered(url: string, viewer: string | undefined, source: string | undefined): boolean {
   if (!url || !source || !privateViewer(viewer) || source === viewer) return false;
-  const { profiles } = useFavicons.getState();
-  return !keysFor(viewer, source).some((key) => profiles[key]?.pages[withoutFragment(url)] !== undefined);
+  const { spaces } = useFavicons.getState();
+  return !keysFor(viewer, source).some((key) => spaces[key]?.pages[withoutFragment(url)] !== undefined);
 }
 
-export function useFavicon(url: string, src?: string | null, profileId?: string, source?: string): ResolvedFavicon | null {
+export function useFavicon(url: string, src?: string | null, spaceId?: string, source?: string): ResolvedFavicon | null {
   const key = useKeyed(watchFaviconPage, pageKey(url, src), () => {
-    const found = resolveFavicon(url, src, profileId, source);
-    return found ? `${found.profileId} ${found.uri}` : null;
+    const found = resolveFavicon(url, src, spaceId, source);
+    return found ? `${found.spaceId} ${found.uri}` : null;
   });
-  const waiting = useKeyed(watchFaviconPage, pageKey(url, src), () => sourceUnanswered(url, profileId, source));
+  const waiting = useKeyed(watchFaviconPage, pageKey(url, src), () => sourceUnanswered(url, spaceId, source));
   const missing = !!url && (!key || waiting);
-  const order = missing ? lookupOrder(profileId, source).join(" ") : "";
-  useEffect(() => (missing ? watchMissingFavicon({ url, src, profileId, source }) : undefined), [missing, order, profileId, source, url, src]);
+  const order = missing ? lookupOrder(spaceId, source).join(" ") : "";
+  useEffect(() => (missing ? watchMissingFavicon({ url, src, spaceId, source }) : undefined), [missing, order, spaceId, source, url, src]);
   const split = key?.indexOf(" ") ?? -1;
-  return key ? { profileId: key.slice(0, split), uri: key.slice(split + 1) } : null;
+  return key ? { spaceId: key.slice(0, split), uri: key.slice(split + 1) } : null;
 }
 
 const watchWindowProfile = keyedWatch<BrowserState>(
   () => useBrowser,
   (s, prev, wake) => {
     if (s.windows === prev.windows) return;
-    for (const id of changedIds(s.windows, prev.windows)) if (s.windows[id]?.profileId !== prev.windows[id]?.profileId) wake(id);
+    for (const id of changedIds(s.windows, prev.windows)) if (s.windows[id]?.spaceId !== prev.windows[id]?.spaceId) wake(id);
   },
 );
 
 export function usePrivateViewer(): string | undefined {
   const windowId = useContext(WindowContext) ?? "";
-  return useKeyed(watchWindowProfile, windowId, () => privateViewer(useBrowser.getState().windows[windowId]?.profileId));
+  return useKeyed(watchWindowProfile, windowId, () => privateViewer(useBrowser.getState().windows[windowId]?.spaceId));
 }
 
-export function useFaviconTheme(url: string, src?: string | null, profileId?: string, source?: string): IconTheme | null | undefined {
-  const uri = useResolvedFaviconUri(url, src, profileId, source);
+export function useFaviconTheme(url: string, src?: string | null, spaceId?: string, source?: string): IconTheme | null | undefined {
+  const uri = useResolvedFaviconUri(url, src, spaceId, source);
   const theme = useKeyed(watchFaviconUri, uri, () => (uri ? useFavicons.getState().themes[uri] : undefined));
   const pending = !!uri && theme === undefined;
   useEffect(() => {

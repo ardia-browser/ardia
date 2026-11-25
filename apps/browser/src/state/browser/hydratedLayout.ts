@@ -1,12 +1,12 @@
-import type { BrowserWindow, Profile, SplitView, Tab, TabGroup } from "./types";
-import { isIncognitoProfile } from "./model";
+import type { BrowserWindow, Space, SplitView, Tab, TabGroup } from "./types";
+import { isIncognitoSpace } from "./model";
 import { pinHome } from "../pins/pinHomes";
-import { DEFAULT_PROFILE } from "../profiles/profiles";
+import { DEFAULT_SPACE } from "../spaces/spaces";
 import { sanitizeSplits, splitTabIds } from "../splits/splits";
 import { orderSections } from "../groups/groups";
 
 type LayoutInput = {
-  profiles?: Record<string, Profile>;
+  spaces?: Record<string, Space>;
   windows?: Record<string, BrowserWindow>;
   windowOrder?: string[];
   tabs?: Record<string, Tab>;
@@ -15,12 +15,12 @@ type LayoutInput = {
 };
 
 export function hydratedLayout(data: LayoutInput) {
-  const profiles = data.profiles && Object.keys(data.profiles).length ? data.profiles : { [DEFAULT_PROFILE.id]: DEFAULT_PROFILE };
+  const spaces = data.spaces && Object.keys(data.spaces).length ? data.spaces : { [DEFAULT_SPACE.id]: DEFAULT_SPACE };
   const rawWindows = data.windows ?? {};
-  const profileOk = (p: string) => !!profiles[p] || isIncognitoProfile(p);
+  const spaceOk = (p: string) => !!spaces[p] || isIncognitoSpace(p);
   const tabs: Record<string, Tab> = {};
   for (const t of Object.values(data.tabs ?? {})) {
-    if (!rawWindows[t.windowId] || !profileOk(t.profileId)) continue;
+    if (!rawWindows[t.windowId] || !spaceOk(t.spaceId)) continue;
     tabs[t.id] = { ...t, pinnedUrl: t.pinnedUrl ?? pinHome(t, !!t.pin) };
   }
   let discarded = Object.keys(data.tabs ?? {}).length - Object.keys(tabs).length;
@@ -30,10 +30,10 @@ export function hydratedLayout(data: LayoutInput) {
     discarded += w.tabIds.length - members.length;
     const tabIds = orderSections(members, tabs, data.groups ?? {});
     if (!tabIds.length) continue;
-    const activeTabIds = Object.fromEntries(Object.entries(w.activeTabIds).filter(([p, id]) => tabs[id]?.profileId === p));
-    const profileId = tabIds.some((id) => tabs[id]!.profileId === w.profileId) ? w.profileId : tabs[tabIds[0]!]!.profileId;
-    activeTabIds[profileId] ??= tabIds.find((id) => tabs[id]!.profileId === profileId)!;
-    windows[w.id] = { ...w, tabIds, profileId, activeTabIds };
+    const activeTabIds = Object.fromEntries(Object.entries(w.activeTabIds).filter(([p, id]) => tabs[id]?.spaceId === p));
+    const spaceId = tabIds.some((id) => tabs[id]!.spaceId === w.spaceId) ? w.spaceId : tabs[tabIds[0]!]!.spaceId;
+    activeTabIds[spaceId] ??= tabIds.find((id) => tabs[id]!.spaceId === spaceId)!;
+    windows[w.id] = { ...w, tabIds, spaceId, activeTabIds };
   }
   discarded += Object.keys(rawWindows).length - Object.keys(windows).length;
   for (const t of Object.values(tabs)) {
@@ -49,7 +49,7 @@ export function hydratedLayout(data: LayoutInput) {
   const splits = sanitizeSplits(data.splits ?? {}, tabs);
   const panes = (all: Record<string, SplitView>) => Object.values(all).reduce((sum, v) => sum + splitTabIds(v).length + 1, 0);
   discarded += panes(data.splits ?? {}) - panes(splits);
-  return { profiles, windows, windowOrder, tabs, groups, splits, discarded };
+  return { spaces, windows, windowOrder, tabs, groups, splits, discarded };
 }
 
 export const layoutDrops = (data: LayoutInput): boolean => hydratedLayout(data).discarded > 0;

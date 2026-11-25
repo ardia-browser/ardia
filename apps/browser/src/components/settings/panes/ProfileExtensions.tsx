@@ -1,3 +1,4 @@
+import { currentProfileId, profileEngine as currentEngineProfile } from "../../../state/profiles/current";
 import {
   addFromWebStore,
   configure,
@@ -13,7 +14,6 @@ import {
 import { useExtensionList, type InstalledExtension } from "../../../state/extensions/store";
 import { useEffect } from "react";
 import { Image, View } from "react-native";
-import { currentEngineProfile } from "../../../state/browser/current";
 import { InstallDialogHost } from "../../extensions/ExtensionOverlays";
 import { Box, Button, PopUp, proseLineHeight, space, Text, Toggle } from "../../ui";
 import { Group, Row, SectionHeader } from "../Form";

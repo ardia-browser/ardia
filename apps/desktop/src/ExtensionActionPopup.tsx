@@ -3,7 +3,7 @@ import { Animated, Pressable, StyleSheet, View, useWindowDimensions } from "reac
 import type { WebViewHandle } from "@ardia-real/ardiacore";
 import { closeExtensionPopup } from "../../browser/src/state/extensions/actions";
 import { useShownPageId } from "../../browser/src/state/peek/hooks";
-import { openFromPage, pageProfileId } from "../../browser/src/state/tabs/openFromPage";
+import { openFromPage, pageSpaceId } from "../../browser/src/state/tabs/openFromPage";
 import { curve, duration, PANEL, Panel, shadow } from "../../browser/src/components/ui";
 import { EXTENSION_PAGE_BACKGROUND, useExtensionColors } from "../../browser/src/components/extensions/tokens";
 import type { NativeFrame } from "./hostExtensionView";
@@ -95,7 +95,7 @@ export function ActionPopup({ windowId, pageProfile, url, anchor }: { windowId: 
                 }}
                 onWindowClose={closeExtensionPopup}
                 onOpenWindow={(request) => {
-                  openFromPage(request, { windowId, profileId: pageProfileId(windowId, pageProfile) });
+                  openFromPage(request, { windowId, spaceId: pageSpaceId(windowId, pageProfile) });
                   if (request.disposition !== "background") closeExtensionPopup();
                 }}
               />

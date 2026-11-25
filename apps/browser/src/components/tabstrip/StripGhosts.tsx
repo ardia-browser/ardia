@@ -30,7 +30,7 @@ const GhostChip = memo(function GhostChip({ ghost, motion }: { ghost: StripGhost
   const { tab } = ghost;
   return (
     <View {...faded} ref={ref} style={[{ position: "absolute", left: ghost.x, top: ITEM_TOP, width: ghost.width, height: ITEM_HEIGHT, flexDirection: "row", alignItems: "center", paddingLeft: CHIP_PAD.left, paddingRight: CHIP_PAD.right }, faded.style as object]}>
-      <TabIcon url={tab.url} favicon={tab.favicon} icon={tab.icon} profileId={tab.profileId} />
+      <TabIcon url={tab.url} favicon={tab.favicon} icon={tab.icon} spaceId={tab.spaceId} />
       <FadeLabel text={tab.title} fontSize={font.small.fontSize} color={theme.textTab} style={{ flex: 1, height: 16, marginLeft: CHIP_LABEL_GAP }} />
     </View>
   );

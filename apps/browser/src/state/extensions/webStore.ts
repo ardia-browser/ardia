@@ -4,7 +4,7 @@ import { webStoreExtensionId } from "@ardia/core";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { changedIds } from "../browser/changes";
 import { liveOf, onLiveChange } from "../tabs/tabLive";
-import { extensionProfile, findExtension, removeExtension, showInstallPrompt } from "./actions";
+import { extensionSpace, findExtension, removeExtension, showInstallPrompt } from "./actions";
 import { focusedWindowOf } from "../windows/ui";
 import { noteExtensionInstallPrompt } from "../telemetry/usage";
 
@@ -61,7 +61,7 @@ export function startWebStoreIntegration() {
       const s = useBrowser.getState();
       const tab = s.tabs[tabId];
       if (!tab || listening.get(tabId) !== url) return;
-      const profile = extensionProfile(s, tab.windowId);
+      const profile = extensionSpace(s, tab.windowId);
       const ext = id && webStoreExtensionId(id) ? findExtension(profile, id) : undefined;
       if (ext) void removeExtension(profile, ext, tab.windowId);
       if (tab.url === url) listen(tabId, url);

@@ -23,7 +23,7 @@ import {
   type EngineMode,
   type WebKitPage,
 } from "./engines";
-import { engineProfile, isIncognitoProfile, navigationTo } from "../browser/model";
+import { engineProfile, engineProfileForSpace, isIncognitoSpace, navigationTo } from "../browser/model";
 import type { Tab } from "../browser/types";
 import { carrySignIn } from "./engineSignIn";
 import { carriesSiteData, carryRecentSites, noteWebKitPageSettled } from "./siteData";
@@ -180,7 +180,7 @@ async function movePage(tabId: string, engine: PageEngine, options: MoveOptions)
   const forced = modeEngineFor(store(), t, url);
   if (forced && forced !== engine) return false;
   if (options.routedHere && !options.routedHere(url)) return false;
-  const saveRule = () => options.rule !== undefined && !isIncognitoProfile(t.profileId) && setWebsiteEngine(url, options.rule);
+  const saveRule = () => options.rule !== undefined && !isIncognitoSpace(t.spaceId) && setWebsiteEngine(url, options.rule);
   clearEngineOffer(tabId);
   if (tabEngine(store(), tabId) === engine) {
     saveRule();
@@ -236,7 +236,7 @@ export function showEngineOffer(tabId: string, site: string, keySystem: string) 
   const t = s.tabs[tabId];
   if (!t || !s.settings.offerWebKitForProtectedVideo) return;
   if (useEngineOffers.getState()[tabId]?.site === site) return;
-  useEngineOffers.setState({ [tabId]: { site, host: hostLabel(site), keySystem, canRemember: !isIncognitoProfile(t.profileId) } });
+  useEngineOffers.setState({ [tabId]: { site, host: hostLabel(site), keySystem, canRemember: !isIncognitoSpace(t.spaceId) } });
 }
 
 export function tellChromiumModeBlocks(t: Tab, site: string) {
@@ -285,7 +285,7 @@ async function carryEachSite(moves: { tab: Tab; to: PageEngine; url: string }[],
   const carried = new Set<string>();
   await Promise.all(
     moves.map(({ tab, to, url }) => {
-      const key = `${tab.profileId}|${siteOf(url)}|${to}`;
+      const key = `${tab.spaceId}|${siteOf(url)}|${to}`;
       if (carried.has(key)) return;
       carried.add(key);
       return carrySignIn(tab.id, url, to, consent);
@@ -341,7 +341,7 @@ export async function setEngineMode(mode: EngineMode, options: { windowId?: stri
 }
 
 const visits = visitRecorder(
-  (profile, visit) => void addHistoryVisits(profile, [{ url: visit.url, title: visit.title, visitTimes: [visit.at] }]).catch(() => {}),
+  (space, visit) => void addHistoryVisits(space, [{ url: visit.url, title: visit.title, visitTimes: [visit.at] }]).catch(() => {}),
   { set: (run, ms) => setTimeout(run, ms), clear: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>) },
   Date.now,
 );
@@ -367,7 +367,7 @@ export function noteWebKitPage(tabId: string, page: WebKitPage) {
   if (!t) return;
   watchClosedTabs();
   visitedTabs.add(tabId);
-  const profile = isIncognitoProfile(t.profileId) ? null : engineProfile(useBrowser.getState(), t.profileId);
+  const profile = isIncognitoSpace(t.spaceId) ? null : engineProfile(useBrowser.getState(), t.spaceId);
   visits.note(tabId, profile, page);
   noteWebKitSite(tabId, page.url);
   if (profile !== null && page.url === page.committedUrl) noteWebKitPageSettled(tabId, page.url, page.isLoading);

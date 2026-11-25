@@ -40,7 +40,7 @@ function forgetStaging(id: string) {
   s.upsertDownload(kept);
 }
 
-function savedDownloads(saved: Pick<BrowserState, "profiles">, found: FoundDocument): SavedDownloads {
+function savedDownloads(saved: Pick<BrowserState, "profiles" | "spaces">, found: FoundDocument): SavedDownloads {
   const raw = found.state === "usable" ? found.doc : null;
   const downloads = rows<Download>(raw?.downloads, (d) => isString(d.id) && isString(d.state) && (d.profile === undefined || d.profile === null || isString(d.profile)));
   const staged: SavedDownloads["staged"] = [];
@@ -65,7 +65,7 @@ function cleanStaging(downloads: SavedDownloads) {
 
 function closedForLaunch(session: SavedSession): HydrateData {
   const now = Date.now();
-  const pinSource = { tabs: session.tabs, groups: session.groups ?? {}, splits: session.splits ?? {}, history: {}, profiles: session.profiles ?? {} };
+  const pinSource = { tabs: session.tabs, groups: session.groups ?? {}, splits: session.splits ?? {}, history: {}, profiles: session.profiles ?? {}, spaces: session.spaces ?? {} };
   let parkedPins = session.parkedPins ?? {};
   for (const w of Object.values(session.windows)) parkedPins = parkWindowPins(parkedPins, w, pinSource);
   const closedWindows = [
@@ -139,7 +139,7 @@ export function loadSession(overrides: LaunchOverrides = {}): LoadedSession | nu
   for (const candidate of candidates(primary, findOlderBuildSession(primary))) {
     try {
       const { session } = candidate.prepare();
-      const list = savedDownloads({ profiles: session.profiles ?? {} }, downloads);
+      const list = savedDownloads({ profiles: session.profiles ?? {}, spaces: session.spaces ?? {} }, downloads);
       const data = launchData(session, list.list, overrides);
       cleanStaging(list);
       return data;
@@ -160,7 +160,7 @@ export function hydrateAtLaunch(overrides: LaunchOverrides): Launch {
   const olderBuildAtLaunch = findOlderBuildSession(primary);
   let olderBuild = olderBuildAtLaunch;
   let downloads = findDownloads();
-  const downloadsFor = (saved: Pick<BrowserState, "profiles">) => {
+  const downloadsFor = (saved: Pick<BrowserState, "profiles" | "spaces">) => {
     try {
       return savedDownloads(saved, downloads);
     } catch {
@@ -171,7 +171,7 @@ export function hydrateAtLaunch(overrides: LaunchOverrides): Launch {
   const attempt = (candidate: Candidate) => {
     try {
       const { session: value, partial } = candidate.prepare();
-      const list = downloadsFor({ profiles: value.profiles ?? {} });
+      const list = downloadsFor({ profiles: value.profiles ?? {}, spaces: value.spaces ?? {} });
       const data = launchData(value, list.list, overrides);
       noteSavedTopAppsMerged(data.topAppsMerged ?? "");
       useBrowser.getState().hydrate(data);
@@ -202,7 +202,7 @@ export function hydrateAtLaunch(overrides: LaunchOverrides): Launch {
     break;
   }
   if (!won) {
-    const list = downloadsFor({ profiles: {} });
+    const list = downloadsFor({ profiles: {}, spaces: {} });
     noteSavedTopAppsMerged("");
     try {
       useBrowser.getState().hydrate({ downloads: list.list });

@@ -407,6 +407,7 @@ protocol DocumentsNative {
   static func readDocument(_ name: String) -> String?
   static func documentExists(_ name: String) -> Bool
   static func writeDocument(_ name: String, _ contents: String) throws
+  static func writeDocumentImmediately(_ name: String, _ contents: String) throws
   static func documentSaved(_ name: String, _ promise: Promise) throws
   static func createDocument(_ name: String, _ contents: String, _ promise: Promise) throws
   static func listDocuments(_ prefix: String) -> [String]
@@ -429,6 +430,10 @@ extension DocumentsNative {
 
   static var writeDocumentFunction: AnyDefinition {
     Function("writeDocument") { (name: String, contents: String) throws in try Self.writeDocument(name, contents) }
+  }
+
+  static var writeDocumentImmediatelyFunction: AnyDefinition {
+    Function("writeDocumentImmediately") { (name: String, contents: String) throws in try Self.writeDocumentImmediately(name, contents) }
   }
 
   static var documentSavedFunction: AnyDefinition {

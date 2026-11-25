@@ -65,7 +65,7 @@ test("every shared migration after the saved version runs, in order, on the shap
     const stampedOneBehind = linuxSessionShape({ ...olderSession({ littleArdiaOpensNewTabLinks: false }), version: added - 1 });
     assert.deepEqual(seen, [added - 1]);
     assert.equal(stampedOneBehind.settings.littleArdiaOpensNewTabLinks, false);
-    assert.equal("showUnreadCounts" in stampedOneBehind.settings, false);
+    assert.equal(stampedOneBehind.settings.showUnreadCounts, true);
 
     seen.length = 0;
     let received;

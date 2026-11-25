@@ -4,7 +4,7 @@ import { everySlowly } from "../../platform/slowTimers";
 import { onWebviewsChanged, webviews } from "../../platform/webviews";
 import { isQuitting, onQuittingChanged } from "../app/quit";
 import { hideKeyedToast, showToast, useToasts } from "../app/toasts";
-import { isIncognitoProfile } from "../browser/model";
+import { isIncognitoSpace } from "../browser/model";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { noteBusyTab } from "../telemetry/busyTabCounts";
 import { consentToken, type ConsentToken } from "../telemetry/client";
@@ -45,7 +45,7 @@ const hasTab = (s: BrowserState, id: unknown): id is string => typeof id === "st
 
 const isPrivate = (s: BrowserState, id: string) => {
   const tab = s.tabs[id]!;
-  return isIncognitoProfile(tab.profileId) || s.windows[tab.windowId]?.kind === "private";
+  return isIncognitoSpace(tab.spaceId) || s.windows[tab.windowId]?.kind === "private";
 };
 
 const watchOn = (s: BrowserState) => s.settings.busyTabWarnings !== false;

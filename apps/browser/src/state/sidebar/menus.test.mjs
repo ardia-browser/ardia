@@ -104,12 +104,12 @@ test("a tab that isn't shown gets no hints, since the keys act on the shown tab,
   assert.ok(lines.includes("  Close Tabs Above (off)"));
 });
 
-test("destinations sit under Move to: profiles checked with no New Profile…, other windows, and no bookmark folder list", () => {
+test("destinations sit under Move to: spaces checked with no New Profile…, other windows, and no bookmark folder list", () => {
   const { w, ids } = windowWith("a", "b");
-  S().createProfile({ name: "Work" });
+  S().createSpace({ name: "Work" });
   const other = S().createWindow({ url: "https://x.com/" });
   const items = tabMenuItems(S(), w, S().tabs[ids[1]]);
-  assert.deepEqual(sub(items, "moveTo", "moveToProfile"), ["Personal ✓ (off)", "Work"]);
+  assert.deepEqual(sub(items, "moveTo", "moveToSpace"), ["Personal ✓ (off)", "Work"]);
   assert.equal(sub(items, "moveTo", "moveToWindow").at(-1), "New Window");
   assert.equal(sub(items, "moveTo", "moveToWindow").length, 3, `one other window: ${other}`);
   assert.ok(!deep(items).some((l) => l.includes("Add Bookmark to Folder")));
@@ -462,10 +462,10 @@ test("a group menu whose group moved to another window meanwhile does nothing", 
   assert.deepEqual(trip.tabIds, [ids[1], ids[2]]);
 });
 
-test("the sidebar menu's Reopen Closed Tab is on only when there is something of the shown profile to reopen", () => {
+test("the sidebar menu's Reopen Closed Tab is on only when there is something of the shown space to reopen", () => {
   const { w, ids } = windowWith("a", "b");
-  const work = S().createProfile({ name: "Work" });
-  const other = S().createWindow({ url: "https://w1.com/", profileId: work });
+  const work = S().createSpace({ name: "Work" });
+  const other = S().createWindow({ url: "https://w1.com/", spaceId: work });
   S().newTab(other, { url: "https://w2.com/" });
   S().closeTabs([S().windows[other].tabIds[1]]);
   const reopen = () => top(sidebarMenuItems(S(), w)).find((l) => l.startsWith("Reopen Closed Tab"));

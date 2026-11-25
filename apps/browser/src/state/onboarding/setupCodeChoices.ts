@@ -14,7 +14,7 @@ export function adoptSetupChoices(choices: SetupChoices, lines: string[]) {
     }
     if (choices.color) {
       delete baseline.color;
-      const showing = o.windowId ? useBrowser.getState().windows[o.windowId]?.profileId : undefined;
+      const showing = o.windowId ? useBrowser.getState().windows[o.windowId]?.spaceId : undefined;
       if (showing && baseline.looks?.[showing]) {
         const { [showing]: _taken, ...others } = baseline.looks;
         baseline.looks = others;

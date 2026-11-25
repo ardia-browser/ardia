@@ -34,25 +34,25 @@ const watchStoreTargets = (windowId: string, found: (targets: RevealTargets, via
 
 export const selectedTabIn = (windowId: string) => activeTabId(useBrowser.getState(), windowId);
 
-export const windowProfileIn = (windowId: string) => useBrowser.getState().windows[windowId]?.profileId;
+export const windowProfileIn = (windowId: string) => useBrowser.getState().windows[windowId]?.spaceId;
 
 export const inShownProfile = (windowId: string, tabId: string) => {
   const s = useBrowser.getState();
-  return !!s.tabs[tabId] && s.tabs[tabId]!.profileId === s.windows[windowId]?.profileId;
+  return !!s.tabs[tabId] && s.tabs[tabId]!.spaceId === s.windows[windowId]?.spaceId;
 };
 
-export const showsProfile = (windowId: string, profileId: string) => useBrowser.getState().windows[windowId]?.profileId === profileId;
+export const showsProfile = (windowId: string, spaceId: string) => useBrowser.getState().windows[windowId]?.spaceId === spaceId;
 
-export type PillTab = { id: string; url: string; favicon: string | null; icon: string | null; profileId: string; faviconUri: string | null; template: boolean; marks: number };
+export type PillTab = { id: string; url: string; favicon: string | null; icon: string | null; spaceId: string; faviconUri: string | null; template: boolean; marks: number };
 
 export function selectedTabSnapshot(windowId: string): PillTab | null {
   const s = useBrowser.getState();
   const id = activeTabId(s, windowId);
   const tab = id ? s.tabs[id] : undefined;
   if (!id || !tab) return null;
-  const faviconUri = resolveFavicon(tab.url, tab.favicon, tab.profileId)?.uri ?? null;
+  const faviconUri = resolveFavicon(tab.url, tab.favicon, tab.spaceId)?.uri ?? null;
   const theme = faviconUri ? knownFaviconTheme(faviconUri) : null;
-  return { id, url: tab.url, favicon: tab.favicon ?? null, icon: tab.customIcon ?? null, profileId: tab.profileId, faviconUri, template: theme?.kind === "template" && !!theme.stroke, marks: iconMarks(s, id) };
+  return { id, url: tab.url, favicon: tab.favicon ?? null, icon: tab.customIcon ?? null, spaceId: tab.spaceId, faviconUri, template: theme?.kind === "template" && !!theme.stroke, marks: iconMarks(s, id) };
 }
 
 export const samePillTab = (a: PillTab, b: PillTab) =>
@@ -60,7 +60,7 @@ export const samePillTab = (a: PillTab, b: PillTab) =>
   a.url === b.url &&
   a.favicon === b.favicon &&
   a.icon === b.icon &&
-  a.profileId === b.profileId &&
+  a.spaceId === b.spaceId &&
   a.faviconUri === b.faviconUri &&
   a.template === b.template &&
   a.marks === b.marks;

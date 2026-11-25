@@ -1,38 +1,19 @@
-import { type SettingsEnv, type SettingSection } from "./types";
+import { type SettingSection } from "./types";
 import type { SettingsPane } from "../../../state/settings/settingsWindows";
-import { keyText } from "../../../state/commands/keyText";
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
-
-const syncOn = (_: unknown, env: SettingsEnv) => !!env.syncOn;
 
 export const profileRows = {
   profiles: [
     {
       section: "Profiles",
       rows: {
-        profiles: {
-          title: "Profiles",
-          explained: true,
-          description: `Pick one to edit it; drag to reorder. ${keyText("⌃1")}–${keyText("⌃9")} switch.`,
-          keywords: ["create profile", "new profile", "delete profile", "reorder", "work", "personal", "drag", "switch profiles", "profile settings"],
-        },
+        list: { title: "Profiles", description: "Browsing identities and their assigned spaces", keywords: ["profile", "create profile", "new profile", "delete profile", "work", "personal"] },
       },
     },
     {
       section: "This profile",
       rows: {
-        themeColor: {
-          title: "Colour",
-          description: "Pick a theme colour and edit it: colours, intensity, blur, noise and direction.",
-          keywords: ["theme", "theme colour", "theme color", "color", "gradient", "custom theme", "custom colour", "edit theme", "reset theme", "intensity", "pass-through blur", "noise", "grain", "direction", "tint"],
-        },
-        syncThisProfile: {
-          title: "Sync this profile",
-          keywords: ["sync profile", "sync"],
-          shown: syncOn,
-          needs: "Turn on Sync to use this",
-        },
         profileDownloadsFolder: {
           title: "Downloads folder",
           keywords: ["download location", "save to", "folder"],

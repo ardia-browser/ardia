@@ -1,7 +1,7 @@
 import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Animated, Pressable, View } from "react-native";
 import { useTheme } from "../ui/theme";
-import { useGroup, usePageProfileId, useWindowId, useWindowProfileId } from "../../state/browser/hooks";
+import { useGroup, usePageSpaceId, useWindowId, useWindowSpaceId } from "../../state/browser/hooks";
 import { updateGroup } from "../../state/groups/actions";
 import { noteGroupHeaderHide } from "../../state/telemetry/usage";
 import { useGroupLabel } from "../../state/groups/hooks";
@@ -100,17 +100,17 @@ export const GroupBlock = memo(function GroupBlock({
   const [captured] = useState(newCapture);
   const entries = useCapturedGroupEntries(groupId, captured);
   const selectedInside = useSelectionInGroup(windowId, groupId);
-  const profileId = usePageProfileId();
-  const keptEntries = useKeptEntries(windowId, profileId, groupId);
-  const foldedHeight = () => foldedGroupHeight(windowId, profileId, groupId);
+  const spaceId = usePageSpaceId();
+  const keptEntries = useKeptEntries(windowId, spaceId, groupId);
+  const foldedHeight = () => foldedGroupHeight(windowId, spaceId, groupId);
   const { wrapper, handle, headerRef } = useDragItem(entryKey("group", groupId), { kind: "group", tabIds, section, groupId, collapsed: stored, foldedHeight, parentGroup }, own?.clip);
   const tail = useDragItem(tailKey({ group: groupId }), { kind: "tail", tabIds: [], section, parentGroup: groupId });
 
   const fold = useFold(collapsed);
   const nodes = useEntryNodes(entries);
   const scope = useContext(ListMotionContext);
-  const onShownPage = useWindowProfileId() === profileId;
-  const motion = useGroupMotion(windowId, profileId, groupId, entries, captured, section === "list" && !parentGroup ? scope : NO_SLIDE_BELOW, onShownPage && !collapsed);
+  const onShownPage = useWindowSpaceId() === spaceId;
+  const motion = useGroupMotion(windowId, spaceId, groupId, entries, captured, section === "list" && !parentGroup ? scope : NO_SLIDE_BELOW, onShownPage && !collapsed);
   const [moved, movedRef] = useShift(own?.shift ?? null);
   const box = useGroupHover(windowId, groupId);
   const dropInto = useDropInto(groupId);
@@ -139,7 +139,7 @@ export const GroupBlock = memo(function GroupBlock({
                 : { key: slot.entry, node: nodes(slot.entry, section, motion.motion(slot.entry), (m) => <SidebarEntry entry={slot.entry} section={section} parentGroup={groupId} motion={m} />) },
             )}
             keep={keptEntries}
-            rowHeight={(key) => entryHeightNow(windowId, profileId, key)}
+            rowHeight={(key) => entryHeightNow(windowId, spaceId, key)}
             padTop={headGap(collapsed && keptEntries.length ? keptEntries[0] : entries[0])}
             padBottom={groupMembersPadBottom(collapsed ? keptEntries.length : entries.length)}
             indent={GROUP_INDENT}
@@ -187,7 +187,7 @@ const GroupHeader = memo(function GroupHeader({ groupId, windowId, collapsed, op
   const { hovered, hoverProps } = useRowHover(windowId, collapsed && !renaming ? { kind: "group", id: groupId } : null);
   const countdown = useMeetingCountdown(groupId);
   const closeControl = useGroupCloseControlWhile(groupId, hovered && !renaming);
-  const profileId = usePageProfileId();
+  const profileId = usePageSpaceId();
   const showsExtra = useShowsExtraTabs(windowId, profileId, groupId);
   const squish = useSquish(renaming ? null : "row");
   const chevronTurn = useMemo(() => ({ ...CHEVRON_BOX, transform: [{ rotate: open.interpolate({ inputRange: [0, 1], outputRange: ["-90deg", "0deg"] }) }] }), [open]);

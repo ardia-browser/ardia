@@ -26,8 +26,9 @@ async function usageCounts() {
 
 function workWindowBehindDefaultWindow() {
   S().hydrate({});
-  const work = S().createProfile({ name: "Work", shareWith: "default" });
-  const workWindow = S().createWindow({ profileId: work });
+  const work = S().createProfile({ name: "Work" });
+  const spaceId = S().createSpace({ name: "Work", profileId: work });
+  const workWindow = S().createWindow({ spaceId });
   const defaultWindow = S().createWindow();
   assert.equal(S().ui.focusOrder[0], defaultWindow);
   return { work, workWindow, tabId: S().windows[workWindow].tabIds[0] };
@@ -50,7 +51,7 @@ test("the Extensions header has a visible Manage button that closes the panel, t
   const { work, workWindow, tabId } = workWindowBehindDefaultWindow();
   client.setSharing(true, "onboarding");
   windows.open.delete(SETTINGS_WINDOW_ID);
-  useSettingsNav.setState({ pane: "general", profileId: null, detail: null, scroll: 0, visit: 0, back: [], forward: [] });
+  useSettingsNav.setState({ pane: "general", spaceId: null, detail: null, scroll: 0, visit: 0, back: [], forward: [] });
   const events = [];
   const pressable = renderPanel(workWindow, tabId, () => events.push(windows.open.has(SETTINGS_WINDOW_ID) ? "close after open" : "close"));
   const manage = pressable("Manage Extensions");
@@ -60,7 +61,7 @@ test("the Extensions header has a visible Manage button that closes the panel, t
   assert.ok(windows.open.has(SETTINGS_WINDOW_ID));
   const nav = useSettingsNav.getState();
   assert.equal(nav.pane, "profiles");
-  assert.equal(nav.profileId, work);
+  assert.equal(nav.spaceId, work);
   assert.equal(nav.detail, null);
   assert.equal(useSettingsSearch.getState().reveal?.id, "profiles.extensions");
   usage.sessionEnding();
@@ -83,8 +84,8 @@ test("the + tile still closes the panel and opens the Chrome Web Store in the pa
 test("Manage Extensions from an extension's page goes back to the profile overview, scrolled to Extensions, even with a search open", async () => {
   const { openManageExtensions } = await import("../../state/extensions/actions.ts");
   const { setSettingsQuery } = await import("../../state/settings/searchState.ts");
-  const { workWindow } = workWindowBehindDefaultWindow();
-  useSettingsNav.setState({ pane: "profiles", profileId: S().windows[workWindow].profileId, detail: "extension:abc", back: [], forward: [] });
+  const { work, workWindow } = workWindowBehindDefaultWindow();
+  useSettingsNav.setState({ pane: "profiles", spaceId: work, detail: "extension:abc", back: [], forward: [] });
   setSettingsQuery("cookies");
   openManageExtensions(workWindow);
   const nav = useSettingsNav.getState();

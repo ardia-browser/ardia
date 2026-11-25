@@ -14,7 +14,7 @@ type Expect = { y: number; until: number; owed: boolean };
 
 type Visit = { visit: number; saved: number; layout: string; generation: number; consent: ConsentToken | null; settled: boolean; expect: Expect | null };
 
-export const settingsLayoutKey = (s: SettingsPlace) => `${settingsPageKey(s)}\u0000${s.profileId ?? ""}`;
+export const settingsLayoutKey = (s: SettingsPlace) => `${settingsPageKey(s)}\u0000${s.spaceId ?? ""}`;
 
 export function revealScrollTarget(y: number, height: number, top: number, viewport: number): number | null {
   if (y >= top + REVEAL_MARGIN && y + height <= top + viewport - REVEAL_MARGIN) return null;

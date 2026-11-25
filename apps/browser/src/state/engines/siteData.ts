@@ -1,7 +1,7 @@
 import { onWebKitSiteCookiesChanged, onWebKitSiteDataWanted, releaseWebKitSiteDataGate, watchWebKitSiteData, type PageCookie } from "../../platform/webkit";
 import { withDeadline } from "../../lib/deadline";
 import { useBrowser } from "../browser/store";
-import { engineProfile, isIncognitoProfile } from "../browser/model";
+import { engineProfile, isIncognitoSpace } from "../browser/model";
 import { forgetRegistrableDomains, siteOfOrigin, webOrigin } from "./siteDataMerge";
 import { learnRegistrableDomains, resetRegistrableLookupsForTest } from "./siteDataDomains";
 import { addHop, touch } from "./siteDataLedger";
@@ -26,8 +26,8 @@ export function noteWebKitPageSettled(tabId: string, url: string, loading: boole
   const s = store();
   const t = s.tabs[tabId];
   const origin = webOrigin(url);
-  if (loading || !t || !origin || isIncognitoProfile(t.profileId) || !carriesSiteData()) return;
-  const profile = engineProfile(s, t.profileId);
+  if (loading || !t || !origin || isIncognitoSpace(t.spaceId) || !carriesSiteData()) return;
+  const profile = engineProfile(s, t.spaceId);
   const consent = consentToken();
   void learnRegistrableDomains([hostOf(origin)]).then(() => {
     const site = siteOfOrigin(origin);
@@ -46,7 +46,7 @@ async function scan() {
   const before = store();
   const hosts: string[] = [];
   for (const t of Object.values(before.tabs)) {
-    const origin = t.url && !isIncognitoProfile(t.profileId) ? webOrigin(t.url) : null;
+    const origin = t.url && !isIncognitoSpace(t.spaceId) ? webOrigin(t.url) : null;
     if (origin) hosts.push(hostOf(origin));
   }
   await learnRegistrableDomains(hosts);

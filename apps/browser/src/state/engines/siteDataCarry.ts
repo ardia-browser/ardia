@@ -2,7 +2,7 @@ import { exportWebKitCookies, readWebKitSiteData, type PageCookie, type SiteStor
 import type { PageEngine } from "../../platform/tabs";
 import { getSiteSettings, onSiteSettingChange } from "../../platform/siteSettings";
 import { useBrowser, type BrowserState } from "../browser/store";
-import { engineProfile, isIncognitoProfile } from "../browser/model";
+import { engineProfile, isIncognitoSpace } from "../browser/model";
 import { otherEngine, tabEngine } from "./engines";
 import {
   cookieFingerprint,
@@ -42,10 +42,10 @@ type Live = { profile: string; site: string; engine: PageEngine; tabId: string }
 export function liveTabs(s = store()): Live[] {
   const out: Live[] = [];
   for (const t of Object.values(s.tabs)) {
-    if (isIncognitoProfile(t.profileId)) continue;
+    if (isIncognitoSpace(t.spaceId)) continue;
     const origin = t.url ? webOrigin(t.url) : null;
     const site = origin ? siteOfOrigin(origin) : null;
-    if (site) out.push({ profile: engineProfile(s, t.profileId), site, engine: tabEngine(s, t.id), tabId: t.id });
+    if (site) out.push({ profile: engineProfile(s, t.spaceId), site, engine: tabEngine(s, t.id), tabId: t.id });
   }
   return out;
 }
@@ -320,15 +320,15 @@ export async function carryForTab(tabId: string, url: string, to: PageEngine, st
   const s = store();
   const t = s.tabs[tabId];
   const origin = webOrigin(url);
-  if (!t || !origin || isIncognitoProfile(t.profileId)) return 0;
-  const profile = engineProfile(s, t.profileId);
+  if (!t || !origin || isIncognitoSpace(t.spaceId)) return 0;
+  const profile = engineProfile(s, t.spaceId);
   await learnRegistrableDomains([hostOf(origin)]);
   const site = siteOfOrigin(origin);
   if (!site) return 0;
   const wanted = () => {
     const now = store();
     const tab = now.tabs[tabId];
-    return stillWanted() && !!tab && !isIncognitoProfile(tab.profileId) && engineProfile(now, tab.profileId) === profile;
+    return stillWanted() && !!tab && !isIncognitoSpace(tab.spaceId) && engineProfile(now, tab.spaceId) === profile;
   };
   const carried = await carrySite(profile, site, to, { origin, stillWanted: wanted, urgent: true, consent });
   return carried.cookies;

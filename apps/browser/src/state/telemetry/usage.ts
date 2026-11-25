@@ -260,7 +260,7 @@ function watchStore() {
         const w = s.windows[id]!;
         const before = prev.windows[id];
         if (before && !before.fullScreen && w.fullScreen) counts.fullScreens++;
-        if (before && before.profileId !== w.profileId && w.kind !== "private") profileSwitched(id, before.profileId, w.profileId, size(s.profiles), switcherSwitchProperties(id, w.profileId));
+        if (before && before.spaceId !== w.spaceId && w.kind !== "private") profileSwitched(id, before.spaceId, w.spaceId, size(s.spaces), switcherSwitchProperties(id, w.spaceId));
       }
     }
     if (s.groups !== prev.groups) counts.groupTabsKept += keptTabsAdded(s.groups, prev.groups);
@@ -338,7 +338,7 @@ function snapshotSettings(consent: ConsentToken | null) {
   const today = utcDay(Date.now()), passwordManagers = passwordManagerSnapshot();
   if (settingsSnapshotDay() === today || !passwordManagers) return;
   const state = useBrowser.getState();
-  const settings = { ...settingsSnapshot(state.settings), ...customColorProfiles(state.profiles, state.settings.defaultProfileId), ...openTabSyncProfiles(state.profiles), ...narrowWindows(state.windows, state.settings.sidebarWidth), ...airTrafficSnapshot(), ...currentThemeFileSnapshot(), ...pluginsSnapshot(), ...windowButtonLayoutSnapshot(), ...passwordManagers, ctrl_tab_mode: ctrlTabChoice(state) };
+  const settings = { ...settingsSnapshot(state.settings), ...customColorProfiles(state.spaces, state.settings.defaultSpaceId), ...openTabSyncProfiles(state.spaces), ...narrowWindows(state.windows, state.settings.sidebarWidth), ...airTrafficSnapshot(), ...currentThemeFileSnapshot(), ...pluginsSnapshot(), ...windowButtonLayoutSnapshot(), ...passwordManagers, ctrl_tab_mode: ctrlTabChoice(state) };
   void Promise.all([currentAppIcon().catch(() => null), listComponents().catch(() => null)]).then(([icon, components]) => (capture(SETTINGS_SNAPSHOT_EVENT, { ...settings, ...appIconSetting(icon), ...widevineSetting(components) }, consent), stillValid(consent) && markSettingsSnapshot(today)));
 }
 

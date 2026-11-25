@@ -12,7 +12,7 @@ const HEADER = historyRow.header;
 export function HistoryList({
   layout,
   cursor,
-  profileId,
+  spaceId,
   windowId,
   selected,
   onToggle,
@@ -22,7 +22,7 @@ export function HistoryList({
 }: {
   layout: Layout;
   cursor: string | null;
-  profileId: string;
+  spaceId: string;
   windowId: string;
   selected: ReadonlySet<string>;
   onToggle: (url: string, shift: boolean) => void;
@@ -79,7 +79,7 @@ export function HistoryList({
       <View key={`r${slot}`} style={{ position: "absolute", top: row.offset, left: 0, right: 0, height: ROW }}>
         <HistoryRow
           entry={row.entry}
-          profileId={profileId}
+          spaceId={spaceId}
           first={row.first}
           last={row.last}
           selected={selected.has(row.entry.url)}

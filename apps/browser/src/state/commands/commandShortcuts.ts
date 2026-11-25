@@ -16,11 +16,11 @@ export { cancelShortcutRecording, recordShortcut, type MenuShortcut } from "../.
 
 type MenuModifier = NonNullable<Extract<MenuItem, { id: string }>["modifiers"]>[number];
 type MenuKey = { key?: string; modifiers?: MenuModifier[] };
-type ShortcutState = { settings: { shortcuts: ShortcutOverrides; mouseShortcuts?: ShortcutOverrides }; profileOrder: readonly string[] };
+type ShortcutState = { settings: { shortcuts: ShortcutOverrides; mouseShortcuts?: ShortcutOverrides }; spaceOrder: readonly string[] };
 type MenuBar = { listed: ReadonlySet<string>; fixed: readonly ShortcutSource[] };
 
 const useMenuBar = create<{ bar: MenuBar | undefined; revision: number }>()(() => ({ bar: undefined, revision: 0 }));
-let resolvedFor: { overrides: ShortcutOverrides; mouse: ShortcutOverrides | undefined; profiles: readonly string[]; menuBar: MenuBar | undefined; resolved: ResolvedShortcuts } | undefined;
+let resolvedFor: { overrides: ShortcutOverrides; mouse: ShortcutOverrides | undefined; spaces: readonly string[]; menuBar: MenuBar | undefined; resolved: ResolvedShortcuts } | undefined;
 
 export function setMenuBarShortcuts(offered: readonly MenuShortcut[]) {
   const items = offered.filter((item) => !UNAVAILABLE_COMMANDS.has(item.id));
@@ -34,14 +34,14 @@ export function setMenuBarShortcuts(offered: readonly MenuShortcut[]) {
 export const menuBarRevision = () => useMenuBar.getState().revision;
 export const useMenuBarRevision = () => useMenuBar((m) => m.revision);
 
-export function resolvedShortcuts({ settings, profileOrder }: ShortcutState): ResolvedShortcuts {
+export function resolvedShortcuts({ settings, spaceOrder }: ShortcutState): ResolvedShortcuts {
   const overrides = settings.shortcuts;
   const mouse = PLATFORM_FEATURES.mouseShortcuts ? settings.mouseShortcuts : undefined;
   const bar = useMenuBar.getState().bar;
-  if (resolvedFor?.overrides !== overrides || resolvedFor.mouse !== mouse || resolvedFor.profiles !== profileOrder || resolvedFor.menuBar !== bar) {
-    const catalog = shortcutSources(profileOrder, [...Object.keys(overrides), ...Object.keys(mouse ?? {})]);
+  if (resolvedFor?.overrides !== overrides || resolvedFor.mouse !== mouse || resolvedFor.spaces !== spaceOrder || resolvedFor.menuBar !== bar) {
+    const catalog = shortcutSources(spaceOrder, [...Object.keys(overrides), ...Object.keys(mouse ?? {})]);
     const sources = bar ? [...catalog.filter((source) => bar.listed.has(source.id)), ...bar.fixed] : catalog;
-    resolvedFor = { overrides, mouse, profiles: profileOrder, menuBar: bar, resolved: resolveShortcuts(sources, overrides, undefined, mouse) };
+    resolvedFor = { overrides, mouse, spaces: spaceOrder, menuBar: bar, resolved: resolveShortcuts(sources, overrides, undefined, mouse) };
   }
   return resolvedFor.resolved;
 }
@@ -87,8 +87,8 @@ export function menuBarBindings(s: ShortcutState): Record<string, string[][]> {
   const fixed = new Set(useMenuBar.getState().bar?.fixed.map((source) => source.id));
   const bindings: Record<string, string[][]> = {};
   for (const [id, keys] of resolved.bindings) if (!fixed.has(id)) bindings[id] = keys.map(stored);
-  for (const id of s.profileOrder) {
-    const alternate = commandAlternateOf(`switchProfile:${id}`, s);
+  for (const id of s.spaceOrder) {
+    const alternate = commandAlternateOf(`switchSpace:${id}`, s);
     bindings[`newWindow:${id}`] = alternate ? [stored(alternate)] : [];
   }
   menuBarBindingsOf.set(resolved, bindings);
@@ -122,8 +122,8 @@ let hearingShortcuts = false;
 function watchShortcuts(_key: string, listener: () => void): () => void {
   if (!hearingShortcuts) {
     hearingShortcuts = true;
-    useBrowser.subscribeTo(["settings", "profileOrder"], (s, prev) => {
-      if (s.settings.shortcuts === prev.settings.shortcuts && s.profileOrder === prev.profileOrder) return;
+    useBrowser.subscribeTo(["settings", "spaceOrder"], (s, prev) => {
+      if (s.settings.shortcuts === prev.settings.shortcuts && s.spaceOrder === prev.spaceOrder) return;
       for (const heard of [...shortcutListeners]) heard();
     });
   }
@@ -166,7 +166,7 @@ export function useCtrlTabChoice(): CtrlTabChoice {
 export function useShortcutAssignments(): readonly unknown[] {
   const bar = useMenuBarRevision();
   const shortcuts = useKeyed(watchShortcuts, ALL, () => useBrowser.getState().settings.shortcuts);
-  const profiles = useKeyed(watchShortcuts, ALL, () => useBrowser.getState().profileOrder);
+  const profiles = useKeyed(watchShortcuts, ALL, () => useBrowser.getState().spaceOrder);
   return useMemo(() => [bar, shortcuts, profiles], [bar, shortcuts, profiles]);
 }
 

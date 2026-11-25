@@ -84,7 +84,7 @@ export function sidebarMenuItems(s: BrowserState, windowId: string): MenuItem[] 
     [
       { id: "newGroup", title: "New Group", symbol: "folder.badge.plus" },
       newLiveFolderMenuItem(),
-      ...(canAddSharedFolder(w?.profileId) ? [{ id: "addShared", title: "Add Shared Folder…", symbol: "person.2" }] : []),
+      ...(canAddSharedFolder(w?.spaceId) ? [{ id: "addShared", title: "Add Shared Folder…", symbol: "person.2" }] : []),
     ],
     [browserLayoutMenuItem(s, windowId)],
     [{ id: "closeAll", title: "Close All Tabs", symbol: "xmark", ...menuShortcut("closeAllTabs", s) }],

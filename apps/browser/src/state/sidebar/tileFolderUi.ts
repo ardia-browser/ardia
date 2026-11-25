@@ -23,7 +23,7 @@ export const closeFolderPanelWhenWindowMoves = (windowId: string) =>
   useBrowser.subscribe((s, prev) => {
     if (s.windows === prev.windows) return;
     const w = s.windows[windowId];
-    if (!w || w.profileId !== prev.windows[windowId]?.profileId || activeTabId(s, windowId) !== activeTabId(prev, windowId)) closeFolderPanel();
+    if (!w || w.spaceId !== prev.windows[windowId]?.spaceId || activeTabId(s, windowId) !== activeTabId(prev, windowId)) closeFolderPanel();
   });
 
 export function closeFolderPanelIn(windowId: string | undefined): boolean {
@@ -45,9 +45,9 @@ export async function toggleFolderPanel(windowId: string, folderId: string) {
   const open = folderPanel();
   if (open?.windowId === windowId && open.folderId === folderId) return closeFolderPanel();
   dismissHover();
-  const profileId = store().windows[windowId]?.profileId;
+  const profileId = store().windows[windowId]?.spaceId;
   const anchor = await measureRow(windowId, folderId);
-  if (anchor && store().windows[windowId]?.profileId === profileId) useFolderPanel.setState({ open: { windowId, folderId, anchor } });
+  if (anchor && store().windows[windowId]?.spaceId === profileId) useFolderPanel.setState({ open: { windowId, folderId, anchor } });
 }
 
 const store = () => useBrowser.getState();

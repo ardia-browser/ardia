@@ -1,5 +1,5 @@
 import { useBrowser, type BrowserState } from "../browser/store";
-import { engineProfile, isIncognitoProfile } from "../browser/model";
+import { engineProfile, isIncognitoSpace } from "../browser/model";
 import type { BrowserWindow, Tab } from "../browser/types";
 import { eligibleKind, isEligibleTab, lastFocusedEligibleWindow, type AutomationWindowKind } from "./automationWindows";
 import { OpError } from "./workspaceTargets";
@@ -33,8 +33,8 @@ export function windowOrFocused(id: unknown, kinds: readonly AutomationWindowKin
 
 export function profileArg(id: unknown): string {
   const s = now();
-  if (id === undefined || id === null) return s.settings.defaultProfileId;
-  if (!ownValue(s.profiles, id) || isIncognitoProfile(id as string)) throw new OpError("no_window", `There's no profile ${String(id)}.`);
+  if (id === undefined || id === null) return s.settings.defaultSpaceId;
+  if (!ownValue(s.spaces, id) || isIncognitoSpace(id as string)) throw new OpError("no_window", `There's no profile ${String(id)}.`);
   return id as string;
 }
 

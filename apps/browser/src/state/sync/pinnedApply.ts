@@ -1,7 +1,7 @@
 import type { ApplyRecords } from "../../platform/sync";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { depthsIn, leaveGroups, orderSections, syncGroupOrder, withParent } from "../groups/groups";
-import { makeTab, newId, pinKeyOf, ROW_PIN } from "../browser/model";
+import { IDLE_LIVE, makeTab, newId, pinKeyOf, ROW_PIN } from "../browser/model";
 import { noteRemotePinDeletion } from "../pins/clearedTabs";
 import { type PinSyncEntry } from "../pins/pinChoices";
 import { adoptParkedPins, parkWindowPins } from "../pins/parkedPins";
@@ -31,53 +31,54 @@ import { ASLEEP, hasPage, isAsleep } from "../tabs/pageSession";
 
 export type PinPageWrites = (written: Map<string, Set<string>>) => void;
 
-function pagesWritten(profileId: string, prev: BrowserState, next: BrowserState): Map<string, Set<string>> {
+function pagesWritten(spaceId: string, prev: BrowserState, next: BrowserState): Map<string, Set<string>> {
   const written = new Map<string, Set<string>>();
   const add = (key: string, url: string) => {
     const urls = written.get(key);
     if (urls) urls.add(url);
     else written.set(key, new Set([url]));
   };
-  for (const t of Object.values(next.tabs)) if (t.profileId === profileId && prev.tabs[t.id]?.url !== t.url) add(pinKeyOf(t), t.url);
-  const parkedBefore = new Map((prev.parkedPins[profileId]?.tabs ?? []).map((p) => [p.id, p.url]));
-  for (const p of next.parkedPins[profileId]?.tabs ?? []) if (parkedBefore.get(p.id) !== p.url) add(p.id, p.url);
+  for (const t of Object.values(next.tabs)) if (t.spaceId === spaceId && prev.tabs[t.id]?.url !== t.url) add(pinKeyOf(t), t.url);
+  const parkedBefore = new Map((prev.parkedPins[spaceId]?.tabs ?? []).map((p) => [p.id, p.url]));
+  for (const p of next.parkedPins[spaceId]?.tabs ?? []) if (parkedBefore.get(p.id) !== p.url) add(p.id, p.url);
   return written;
 }
 
 export function applyPinned(
-  profileId: string,
+  spaceId: string,
   visible: Map<string, unknown>,
   changed: Set<string>,
   base: (key: string) => unknown,
   records: ApplyRecords,
   pageWrites?: PinPageWrites,
+  workspaceOnly = false,
 ): boolean | void {
   if ([...changed].every((k) => k.startsWith(PIN_ROW))) return true;
   const pinItem = (k: string) => k.startsWith(PIN_TAB) || k.startsWith(PIN_GROUP) || k.startsWith(`${PIN_NEST}g:`);
-  if ([...changed].some((k) => pinItem(k) && !visible.has(k))) noteRemotePinDeletion(profileId);
-  const sync = store().pinSync[profileId] ?? {};
+  if ([...changed].some((k) => pinItem(k) && !visible.has(k))) noteRemotePinDeletion(spaceId);
+  const sync = store().pinSync[spaceId] ?? {};
   let s = store();
-  const home = homeWindow(s, profileId);
+  const home = homeWindow(s, spaceId);
   if (!home) return false;
-  const marked = (key: string) => (base(`${PIN_ROW}${key}`) === ROW ? (true as const) : undefined);
-  const PARK = `park:${profileId}`;
-  const shown = home.tabIds.some((id) => s.tabs[id]?.profileId === profileId);
-  if (s.parkedPins[profileId] || !shown) {
-    const stand: Window = { id: PARK, profileId, kind: "main", tabIds: [], activeTabIds: {}, frame: null, createdAt: 0 };
+  const marked = (key: string) => (workspaceOnly || base(`${PIN_ROW}${key}`) === ROW ? (true as const) : undefined);
+  const PARK = `park:${spaceId}`;
+  const shown = home.tabIds.some((id) => s.tabs[id]?.spaceId === spaceId);
+  if (s.parkedPins[spaceId] || !shown) {
+    const stand: Window = { id: PARK, spaceId, kind: "main", tabIds: [], activeTabIds: {}, frame: null, createdAt: 0 };
     s = { ...s, windows: { ...s.windows, [PARK]: stand } };
-    if (s.parkedPins[profileId]) s = adoptParkedPins(s, PARK, profileId);
+    if (s.parkedPins[spaceId]) s = adoptParkedPins(s, PARK, spaceId);
   }
   const newPinWindow = shown ? home.id : PARK;
   const scope = new Set([home.id, PARK]);
   const tabOfKey = new Map<string, string>();
   const groupOfKey = new Map<string, string>();
-  const pinnedMember = new Set(Object.values(s.groups).filter((g) => g.pinned && g.profileId === profileId).flatMap((g) => g.tabIds));
+  const pinnedMember = new Set(Object.values(s.groups).filter((g) => g.pinned && g.spaceId === spaceId).flatMap((g) => g.tabIds));
   const searchOrder = [...scope, ...Object.keys(s.windows).filter((w) => !scope.has(w))];
   const kept = new Map<string, Tab>();
   for (const wid of searchOrder) {
     for (const id of s.windows[wid]?.tabIds ?? []) {
       const t = s.tabs[id];
-      if (t?.profileId !== profileId) continue;
+      if (t?.spaceId !== spaceId || workspaceOnly && t.pin?.as === "tile") continue;
       if (t.pin || pinnedMember.has(id)) {
         if (!tabOfKey.has(pinKeyOf(t))) tabOfKey.set(pinKeyOf(t), id);
       } else if (t.pinKey) {
@@ -87,7 +88,7 @@ export function applyPinned(
     }
   }
   for (const [key, t] of kept) if (!tabOfKey.has(key)) tabOfKey.set(key, t.id);
-  for (const g of Object.values(s.groups)) if (g.pinned && g.profileId === profileId && scope.has(g.windowId) && !groupOfKey.has(pinKeyOf(g))) groupOfKey.set(pinKeyOf(g), g.id);
+  for (const g of Object.values(s.groups)) if (g.pinned && g.spaceId === spaceId && scope.has(g.windowId) && !groupOfKey.has(pinKeyOf(g))) groupOfKey.set(pinKeyOf(g), g.id);
   const keyOfLocal = new Map<string, string>();
   const local = (ofKey: Map<string, string>, taken: (id: string) => boolean, key: string) => {
     const known = ofKey.get(key);
@@ -97,20 +98,20 @@ export function applyPinned(
     if (id !== key) keyOfLocal.set(id, key);
     return id;
   };
-  const tid = (key: string) => local(tabOfKey, (id) => !!s.tabs[id] && s.tabs[id]!.profileId !== profileId, key);
-  const gid = (key: string) => local(groupOfKey, (id) => !!s.groups[id] && (s.groups[id]!.profileId !== profileId || !s.groups[id]!.pinned), key);
+  const tid = (key: string) => local(tabOfKey, (id) => !!s.tabs[id] && (s.tabs[id]!.spaceId !== spaceId || workspaceOnly && s.tabs[id]!.pin?.as === "tile"), key);
+  const gid = (key: string) => local(groupOfKey, (id) => !!s.groups[id] && (s.groups[id]!.spaceId !== spaceId || !s.groups[id]!.pinned), key);
   const pinKeyField = (id: string) => (keyOfLocal.has(id) ? { pinKey: keyOfLocal.get(id)! } : {});
   const pins = new Map<string, PinValue>();
   const groupValues = new Map<string, PinGroupValue>();
   const nestValues = new Map<string, NestGroupValue>();
   const awaiting = new Map<string, string>();
-  const hadGroup = new Set([...Object.values(s.groups).filter((g) => g.profileId === profileId).map(pinKeyOf), ...(s.parkedPins[profileId]?.groups ?? []).map((g) => g.id)]);
+  const hadGroup = new Set([...Object.values(s.groups).filter((g) => g.spaceId === spaceId).map(pinKeyOf), ...(s.parkedPins[spaceId]?.groups ?? []).map((g) => g.id)]);
   const expired = (k: string, g: string) => sync[k.slice(PIN_TAB.length)]?.g === g && (sync[k.slice(PIN_TAB.length)]!.w ?? 0) <= records.now;
   const listed = (g: string) => visible.has(`${PIN_GROUP}${g}`) || visible.has(`${PIN_NEST}g:${g}`);
   const unresolved = (k: string, g: string) => !listed(g) && !hadGroup.has(g) && !records.known(`${PIN_GROUP}${g}`) && !expired(k, g);
-  const contained = (id: string) => !!s.tabs[id] && (s.tabs[id]!.pin || pinnedMember.has(id));
+  const contained = (id: string) => !!s.tabs[id] && !(workspaceOnly && s.tabs[id]!.pin?.as === "tile") && (s.tabs[id]!.pin || pinnedMember.has(id));
   const retainedIn = (id: string, g: string) =>
-    !contained(id) && Object.values(s.groups).some((x) => !x.pinned && x.profileId === profileId && pinKeyOf(x) === g && x.tabIds.includes(id));
+    !contained(id) && Object.values(s.groups).some((x) => !x.pinned && x.spaceId === spaceId && pinKeyOf(x) === g && x.tabIds.includes(id));
   for (const [k, v] of visible) {
     if (k.startsWith(PIN_TAB)) {
       const g = (v as PinValue).g;
@@ -237,7 +238,7 @@ export function applyPinned(
     const color = lookedColor(v.c, base(`${GROUP_LOOK}${old ? pinKeyOf(old) : keyOf(id)}`));
     const made: TabGroup = old
       ? { ...old, name: v.n, icon: v.i, color, pinned: true }
-      : { id, ...pinKeyField(id), windowId: newPinWindow, profileId, name: v.n, icon: v.i, color, collapsed: false, pinned: true, tabIds: [], createdAt: Date.now() };
+      : { id, ...pinKeyField(id), windowId: newPinWindow, spaceId, name: v.n, icon: v.i, color, collapsed: false, pinned: true, tabIds: [], createdAt: Date.now() };
     groups[id] = withParent(made, parentGroup.get(id) ?? undefined);
   }
   const noted = new Map<string, PinSyncEntry>();
@@ -266,7 +267,7 @@ export function applyPinned(
     const w = windows[windowId];
     if (!w) continue;
     const tab: Tab = {
-      ...makeTab(windowId, profileId, v.u, { title: v.ti, pin: group ? null : marked(keyOfLocal.get(id) ?? id) ? ROW_PIN : markedTile(base, keyOfLocal.get(id) ?? id), customTitle: v.t, customIcon: v.i }),
+      ...makeTab(windowId, spaceId, v.u, { title: v.ti, pin: group ? null : marked(keyOfLocal.get(id) ?? id) ? ROW_PIN : markedTile(base, keyOfLocal.get(id) ?? id), customTitle: v.t, customIcon: v.i }),
       id,
       ...pinKeyField(id),
       pinnedUrl: (group && syncedHomeIn(base, keyOfLocal.get(id) ?? id)) || v.u || null,
@@ -283,13 +284,13 @@ export function applyPinned(
   };
   const inGroup = new Set([...memberOrder.values()].flat().filter((id) => tabs[id]));
   for (const g of Object.values(groups)) {
-    if (g.profileId !== profileId) continue;
+    if (g.spaceId !== spaceId) continue;
     const wanted = g.pinned && memberOrder.has(g.id) ? memberOrder.get(g.id)!.filter((id) => tabs[id]) : g.tabIds.filter((id) => !inGroup.has(id));
     groups[g.id] = { ...g, tabIds: wanted };
   }
-  for (const g of Object.values(groups)) if (g.profileId === profileId && !g.tabIds.length) delete groups[g.id];
+  for (const g of Object.values(groups)) if (g.spaceId === spaceId && !g.tabIds.length) delete groups[g.id];
   const copied = new Map<string, string>();
-  const pinnedHere = Object.values(groups).filter((g) => g.profileId === profileId && g.pinned);
+  const pinnedHere = Object.values(groups).filter((g) => g.spaceId === spaceId && g.pinned);
   const depth = depthsIn(groups);
   for (const { id: groupId } of pinnedHere.map((g) => [g, depth(g.id)] as const).sort((a, z) => a[1] - z[1]).map(([g]) => g)) {
     const g = groups[groupId]!;
@@ -308,7 +309,7 @@ export function applyPinned(
         tabIds.push(id);
       } else if (windows[windowId]) {
         const copy: Tab = {
-          ...makeTab(windowId, profileId, t.url, { title: t.title, favicon: t.favicon, customTitle: t.customTitle, customIcon: t.customIcon }),
+          ...makeTab(windowId, spaceId, t.url, { title: t.title, favicon: t.favicon, customTitle: t.customTitle, customIcon: t.customIcon }),
           pinKey: pinKeyOf(t),
           pinnedUrl: t.pinnedUrl,
           page: ASLEEP,
@@ -332,21 +333,21 @@ export function applyPinned(
     const sorted = slots.map((i) => ids[i]!).sort((a, z) => rank.get(a)! - rank.get(z)!);
     slots.forEach((slot, i) => (ids[slot] = sorted[i]!));
     const sectioned = { ...w, tabIds: orderSections(ids, tabs, groups) };
-    const window = { ...sectioned, tabIds: arrangePinnedArea({ tabs, groups }, sectioned, profileId, (group) => anchorIn(base(`${PIN_ORDER}${group}`))) };
+    const window = { ...sectioned, tabIds: arrangePinnedArea({ tabs, groups }, sectioned, spaceId, (group) => anchorIn(base(`${PIN_ORDER}${group}`))) };
     windows[w.id] = window;
     groups = syncGroupOrder(groups, window);
   }
   let { parkedPins } = s;
   const parkWindow = windows[PARK];
   if (parkWindow) {
-    parkedPins = parkWindowPins(parkedPins, parkWindow, { tabs, groups, history: s.history, profiles: s.profiles });
+    parkedPins = parkWindowPins(parkedPins, parkWindow, { tabs, groups, history: s.history, spaces: s.spaces, profiles: s.profiles });
     for (const id of parkWindow.tabIds) delete tabs[id];
     groups = Object.fromEntries(Object.entries(groups).filter(([, g]) => g.windowId !== PARK));
     delete windows[PARK];
   }
   const { find, splits, selection, windowOrder, windowUi } = s;
-  const pinSync = noted.size ? { ...s.pinSync, [profileId]: { ...s.pinSync[profileId], ...Object.fromEntries(noted) } } : s.pinSync;
+  const pinSync = noted.size ? { ...s.pinSync, [spaceId]: { ...s.pinSync[spaceId], ...Object.fromEntries(noted) } } : s.pinSync;
   const prev = useBrowser.getState();
   fromSync(() => useBrowser.setState({ tabs, windows, groups, find, splits, selection, windowOrder, windowUi, parkedPins, pinSync }));
-  pageWrites?.(pagesWritten(profileId, prev, useBrowser.getState()));
+  pageWrites?.(pagesWritten(spaceId, prev, useBrowser.getState()));
 }

@@ -39,11 +39,12 @@ function consumeReveal(revealId: string): boolean {
 
 export function navigateUtility(value: unknown) {
   if (!value || typeof value !== "object") return;
-  const place = value as SettingsPlace;
+  const place = value as SettingsPlace & { profileId?: unknown };
+  const destination = place.spaceId ?? place.profileId;
   const importSource = (value as { importSource?: unknown }).importSource;
   if (typeof importSource === "string") setPreferredImportSource(importSource);
   if (!PANES.some((pane) => pane.id === place.pane)) return;
-  goToSettingsPane(place.pane, typeof place.profileId === "string" ? place.profileId : null, typeof place.detail === "string" ? place.detail : null);
+  goToSettingsPane(place.pane, typeof destination === "string" ? destination : null, typeof place.detail === "string" ? place.detail : null);
   const { reveal, revealId, revealConsent } = value as { reveal?: unknown; revealId?: unknown; revealConsent?: unknown };
   if (typeof reveal !== "string" || findSetting(reveal)?.pane !== place.pane) return;
   if (typeof revealId !== "string" || revealId.length > 64 || !consumeReveal(revealId)) return;

@@ -22,29 +22,29 @@ type Side = Successor["side"];
 
 const sideOf = (s: Pick<BrowserState, "settings">): Side | null => ({ tabAbove: "above", tabBelow: "below", previouslyActive: null } as const)[s.settings.afterClosingTab];
 
-function entryRows(s: BrowserState, windowId: string, profileId: string, entry: string): string[][] {
+function entryRows(s: BrowserState, windowId: string, spaceId: string, entry: string): string[][] {
   const { kind, id } = parseEntry(entry);
   if (kind === "tab") return s.tabs[id] ? [[id]] : [];
-  if (kind === "live") return liveFolderTabRows(s, live(), windowId, profileId, id);
+  if (kind === "live") return liveFolderTabRows(s, live(), windowId, spaceId, id);
   if (kind === "split") {
     const panes = splitRowPanes(s, s.splits[id]);
     return [panes.length ? panes : (splitTabIdsOf(s.splits[id]) ?? [])];
   }
   if (kind !== "group" || !s.groups[id]) return [];
-  const shown = s.groups[id]!.collapsed ? keptEntries(s, windowId, profileId, id) : groupEntries(s, id);
-  return shown.flatMap((e) => entryRows(s, windowId, profileId, e));
+  const shown = s.groups[id]!.collapsed ? keptEntries(s, windowId, spaceId, id) : groupEntries(s, id);
+  return shown.flatMap((e) => entryRows(s, windowId, spaceId, e));
 }
 
-function sidebarRows(s: BrowserState, windowId: string, profileId: string): VisibleRow[] {
-  const { cells, list } = sidebarEntries(s, windowId, profileId);
+function sidebarRows(s: BrowserState, windowId: string, spaceId: string): VisibleRow[] {
+  const { cells, list } = sidebarEntries(s, windowId, spaceId);
   const tile = (cell: string): string[] => {
     const folderId = folderIdOfCell(cell);
     if (!folderId) return s.tabs[cell] ? [cell] : [];
-    return [shownFolderTab(s, windowId, profileId, folderId) ?? []].flat();
+    return [shownFolderTab(s, windowId, spaceId, folderId) ?? []].flat();
   };
-  const sequence = pinnedSequence(s, live().folders, live().folderOrder, windowId, profileId);
-  const shownPinned = pinnedCollapsed(s, profileId) ? [pinnedKept(s, windowId, profileId, sequence) ?? []].flat() : sequence;
-  const rows = (entries: string[], section: VisibleSection) => entries.flatMap((e) => entryRows(s, windowId, profileId, e)).map((ids) => ({ ids, section }));
+  const sequence = pinnedSequence(s, live().folders, live().folderOrder, windowId, spaceId);
+  const shownPinned = pinnedCollapsed(s, spaceId) ? [pinnedKept(s, windowId, spaceId, sequence) ?? []].flat() : sequence;
+  const rows = (entries: string[], section: VisibleSection) => entries.flatMap((e) => entryRows(s, windowId, spaceId, e)).map((ids) => ({ ids, section }));
   return [...cells.map(tile).filter((ids) => ids.length).map((ids) => ({ ids, section: "topApps" as const })), ...rows(shownPinned, "pinned"), ...rows(list, "regular")];
 }
 
@@ -56,10 +56,10 @@ function memberRows(m: StripMember, activeId: string): string[][] {
   return m.tabIds.includes(activeId) ? [[activeId]] : [];
 }
 
-function stripRows(s: BrowserState, windowId: string, profileId: string): VisibleRow[] {
-  const activeId = activeTabId(s, windowId, profileId) ?? "";
+function stripRows(s: BrowserState, windowId: string, spaceId: string): VisibleRow[] {
+  const activeId = activeTabId(s, windowId, spaceId) ?? "";
   const rows: VisibleRow[] = [];
-  for (const e of stripEntries(s, windowId, profileId)) {
+  for (const e of stripEntries(s, windowId, spaceId)) {
     if (e.kind === "dock") {
       for (const id of e.ids) if (s.tabs[id]) rows.push({ ids: [id], section: isPinnedRow(s.tabs[id]) ? "pinned" : "topApps" });
       continue;
@@ -71,8 +71,8 @@ function stripRows(s: BrowserState, windowId: string, profileId: string): Visibl
   return rows;
 }
 
-export function visibleRows(s: BrowserState, windowId: string, profileId: string): VisibleRow[] {
-  return tabLayoutOf(s, windowId) === "top" ? stripRows(s, windowId, profileId) : sidebarRows(s, windowId, profileId);
+export function visibleRows(s: BrowserState, windowId: string, spaceId: string): VisibleRow[] {
+  return tabLayoutOf(s, windowId) === "top" ? stripRows(s, windowId, spaceId) : sidebarRows(s, windowId, spaceId);
 }
 
 const latest = (s: BrowserState, ids: string[]) => ids.reduce<string | undefined>((best, id) => (!best || s.tabs[id]!.lastActiveAt > s.tabs[best]!.lastActiveAt ? id : best), undefined);
@@ -95,16 +95,16 @@ export function tabBeside(s: BrowserState, rows: VisibleRow[], closedId: string,
   return undefined;
 }
 
-function successorFor(s: BrowserState, windowId: string, profileId: string, activeId: string, closing: ReadonlySet<string>, requested: string[], keepTopApps: boolean, side: Side): Omit<Successor, "shown"> | null {
+function successorFor(s: BrowserState, windowId: string, spaceId: string, activeId: string, closing: ReadonlySet<string>, requested: string[], keepTopApps: boolean, side: Side): Omit<Successor, "shown"> | null {
   const panes = splitTabIdsOf(splitOf(s, activeId)) ?? [];
   const insideSplit = requested.every((id) => panes.includes(id)) && panes.some((id) => !closing.has(id) && s.tabs[id]);
   const topApp = inPinnedContainer(s, activeId) && withPinnedPanes(s, [activeId]).some((id) => s.tabs[id]?.pin?.as === "tile");
   if (insideSplit || (topApp && keepTopApps)) return null;
   const candidate = (id: string) => {
     const t = s.tabs[id];
-    return !!t && !closing.has(id) && t.windowId === windowId && t.profileId === profileId && (!inPinnedContainer(s, id) || hasPage(t)) && !(keepTopApps && keptWithTopApp(s, id));
+    return !!t && !closing.has(id) && t.windowId === windowId && t.spaceId === spaceId && (!inPinnedContainer(s, id) || hasPage(t)) && !(keepTopApps && keptWithTopApp(s, id));
   };
-  const rows = visibleRows(s, windowId, profileId);
+  const rows = visibleRows(s, windowId, spaceId);
   const beside = tabBeside(s, rows, activeId, closing, candidate, side);
   if (beside) return { id: beside, side, beside: true };
   const fallback = topApp ? (id: string) => candidate(id) && !inPinnedContainer(s, id) : candidate;
@@ -120,10 +120,10 @@ function pickSuccessors(s: BrowserState, ids: string[], keepTopApps = s.settings
   const leaving = keepTopApps ? withPinnedPanes(s, pinned.filter((id) => withPinnedPanes(s, [id]).some((pane) => s.tabs[pane]?.pin?.as === "tile"))) : [];
   const closing = new Set([...requested, ...leaving, ...withSharedFamily(s, withPinnedPanes(s, pinned.filter((id) => !leaving.includes(id))))]);
   for (const w of Object.values(s.windows)) {
-    for (const [profileId, activeId] of Object.entries(w.activeTabIds)) {
+    for (const [spaceId, activeId] of Object.entries(w.activeTabIds)) {
       if (!closing.has(activeId)) continue;
-      const pick = successorFor(s, w.id, profileId, activeId, closing, requested, keepTopApps, side);
-      if (pick) out.set(successorKey(w.id, profileId), { ...pick, shown: profileId === w.profileId });
+      const pick = successorFor(s, w.id, spaceId, activeId, closing, requested, keepTopApps, side);
+      if (pick) out.set(successorKey(w.id, spaceId), { ...pick, shown: spaceId === w.spaceId });
     }
   }
   return out;
@@ -134,8 +134,8 @@ export type ByUser = { consent: ConsentToken | null };
 export function userClose(ids: string[], { consent }: ByUser, options: CloseOptions = {}): CloseOptions {
   const successors = pickSuccessors(useBrowser.getState(), ids, options.keepTopApps);
   const noted = (pick: Successor) => void (pick.shown && noteCloseActivation(consent, pick.side, pick.beside));
-  const shows = (s: BrowserState, windowId: string, profileId: string, id: string) => visibleRows(s, windowId, profileId).some((row) => row.ids.includes(id));
-  const fallback = (s: BrowserState, windowId: string, profileId: string, activeId: string, removing: ReadonlySet<string>, side: Side) =>
-    successorFor(s, windowId, profileId, activeId, removing, [...removing], options.keepTopApps ?? s.settings.keepTopAppsRunning, side)?.id ?? undefined;
+  const shows = (s: BrowserState, windowId: string, spaceId: string, id: string) => visibleRows(s, windowId, spaceId).some((row) => row.ids.includes(id));
+  const fallback = (s: BrowserState, windowId: string, spaceId: string, activeId: string, removing: ReadonlySet<string>, side: Side) =>
+    successorFor(s, windowId, spaceId, activeId, removing, [...removing], options.keepTopApps ?? s.settings.keepTopAppsRunning, side)?.id ?? undefined;
   return { ...options, userClose: { successors, noted, shows, fallback } };
 }

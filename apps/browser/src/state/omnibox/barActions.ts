@@ -3,7 +3,7 @@ import type { BrowserCommand } from "../../platform/commands";
 import { isBookmarked } from "../bookmarks/bookmarks";
 import { hidesBookmarkCommand } from "../bookmarks/visibility";
 import { useBrowser, type BrowserState } from "../browser/store";
-import { activeTab, bookmarkProfileId, isPinnedRow, pinnedSectionTitle, tabLayoutOf } from "../browser/model";
+import { activeTab, bookmarkSpaceId, isPinnedRow, pinnedSectionTitle, tabLayoutOf } from "../browser/model";
 import { canTidy } from "../pins/tidy";
 import { commandBarTitle, commandSymbol, LITTLE_ARDIA_DISABLED_COMMANDS, UNAVAILABLE_COMMANDS } from "../commands/commandCatalog";
 import { menuBarRevision, shortcutHint } from "../commands/commandShortcuts";
@@ -24,7 +24,7 @@ type ActionDef = {
   title?: (c: Context) => string;
   icon?: string | ((c: Context) => string);
   keywords?: string[];
-  needs?: "page" | "webPage" | "tab" | "profiles" | "pins";
+  needs?: "page" | "webPage" | "tab" | "spaces" | "pins";
 };
 
 const page = "page" as const;
@@ -75,7 +75,7 @@ const DEFS: ActionDef[] = [
   {
     command: "bookmarkPage",
     title: ({ s, windowId, tab }) =>
-      tab?.url && isBookmarked(s, bookmarkProfileId(s, s.windows[windowId]), tab.url) ? "Remove Bookmark" : "Bookmark This Page",
+      tab?.url && isBookmarked(s, bookmarkSpaceId(s, s.windows[windowId]), tab.url) ? "Remove Bookmark" : "Bookmark This Page",
     keywords: ["add bookmark", "bookmark"],
     needs: page,
   },
@@ -111,8 +111,8 @@ const DEFS: ActionDef[] = [
   { command: "importBrowserData", keywords: ["import bookmarks", "import passwords"] },
   { command: "exportBookmarks", keywords: ["export bookmarks", "backup bookmarks", "bookmarks html"] },
   { command: "keyboardShortcuts", keywords: ["shortcuts", "hotkeys"] },
-  { command: "mergeAllWindows", needs: "profiles" },
-  { command: "newProfile", keywords: ["create profile"], needs: "profiles" },
+  { command: "mergeAllWindows", needs: "spaces" },
+  { command: "newSpace", keywords: ["create space"], needs: "spaces" },
   { command: "setAppearance", arg: "dark", keywords: ["dark mode"] },
   { command: "setAppearance", arg: "light", keywords: ["light mode"] },
   { command: "setAppearance", arg: "auto", keywords: ["auto appearance", "system appearance"] },
@@ -132,7 +132,7 @@ export function barActions(s: BrowserState, windowId: string): CommandAction[] {
     if (d.needs === "page" && !tab?.url) continue;
     if (d.needs === "webPage" && !isWebPageUrl(tab?.url ?? "")) continue;
     if (d.needs === "tab" && !tab) continue;
-    if (d.needs === "profiles" && w?.kind === "private") continue;
+    if (d.needs === "spaces" && w?.kind === "private") continue;
     if (d.needs === "pins" && !canTidy(s, windowId)) continue;
     if (hidesBookmarkCommand(s.settings, d.command) || UNAVAILABLE_COMMANDS.has(d.command)) continue;
     if (small && LITTLE_ARDIA_HIDDEN.has(d.command)) continue;
@@ -147,10 +147,10 @@ export function barActions(s: BrowserState, windowId: string): CommandAction[] {
     });
   }
   if (w && w.kind !== "private") {
-    s.profileOrder.forEach((id) => {
-      if (id === w.profileId) return;
-      const name = s.profiles[id]?.name ?? "";
-      const action = `switchProfile:${id}`;
+    s.spaceOrder.forEach((id) => {
+      if (id === w.spaceId) return;
+      const name = s.spaces[id]?.name ?? "";
+      const action = `switchSpace:${id}`;
       out.push({ id: action, title: `Switch to ${name}`, icon: "person.crop.circle", hint: shortcutHint(action, s), keywords: [name, "profile", "space"] });
     });
   }

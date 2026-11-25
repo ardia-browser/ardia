@@ -1,22 +1,23 @@
+import { useContext } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useBrowser } from "../browser/store";
 import { useTabState } from "../tabs/tabStateWatch";
-import { usePageProfileId } from "../browser/hooks";
+import { usePageSpaceId } from "../browser/hooks";
 import { folderIn, folderLabel, folderMembers, shownFolderTab } from "./tileFolders";
 
 export function useTileFolderMembers(windowId: string, folderId: string) {
-  const profileId = usePageProfileId();
-  return useBrowser(useShallow((s) => folderMembers(s, windowId, folderId, profileId)));
+  const spaceId = usePageSpaceId();
+  return useBrowser(useShallow((s) => folderMembers(s, windowId, folderId, spaceId)));
 }
 
 export function useTileFolderLabel(windowId: string, folderId: string) {
-  const profileId = usePageProfileId();
-  return useBrowser((s) => folderLabel(folderIn(s, windowId, folderId, profileId)));
+  const spaceId = usePageSpaceId();
+  return useBrowser((s) => folderLabel(folderIn(s, windowId, folderId, spaceId)));
 }
 
 export function useShownFolderTab(windowId: string, folderId: string) {
-  const profileId = usePageProfileId();
-  return useBrowser((s) => shownFolderTab(s, windowId, profileId, folderId));
+  const spaceId = usePageSpaceId();
+  return useBrowser((s) => shownFolderTab(s, windowId, spaceId, folderId));
 }
 
 export const useIsSelected = (windowId: string, tabId: string) => useTabState(tabId, (s) => (s.selection[windowId] ?? []).includes(tabId));

@@ -3,7 +3,7 @@ import type { WebViewHandle } from "../../platform/tabs";
 import { readChromiumStorage, writeChromiumStorage } from "../../platform/siteSettings";
 import { webviews } from "../../platform/webviews";
 import { useBrowser } from "../browser/store";
-import { engineProfile, isIncognitoProfile } from "../browser/model";
+import { engineProfile, isIncognitoSpace } from "../browser/model";
 import { tabEngine } from "./engines";
 import { chromiumCookie, webOrigin } from "./siteDataMerge";
 import type { ConsentToken } from "../telemetry/client";
@@ -16,7 +16,7 @@ function chromiumPages(profile: string): ChromiumPage[] {
   const s = useBrowser.getState();
   const pages: ChromiumPage[] = [];
   for (const t of Object.values(s.tabs)) {
-    if (isIncognitoProfile(t.profileId) || engineProfile(s, t.profileId) !== profile || tabEngine(s, t.id) !== "chromium") continue;
+    if (isIncognitoSpace(t.spaceId) || engineProfile(s, t.spaceId) !== profile || tabEngine(s, t.id) !== "chromium") continue;
     const page = webviews.get(t.id);
     if (page) pages.push({ page, origin: t.url ? webOrigin(t.url) : null });
   }

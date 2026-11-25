@@ -248,6 +248,7 @@ const dialogs: Modules["ArdiaDialogs"] = {
 };
 
 const documents: Modules["ArdiaDocuments"] = {
+  writeDocumentImmediately: (name, contents) => { stagedDocs.delete(name); docs.set(name, contents); },
   readDocument: (name) => (unreadableDocs.has(name) ? null : stagedDocs.get(name) ?? docs.get(name) ?? null),
   documentExists: (name) => {
     const exists = stagedDocs.has(name) || docs.has(name) || unreadableDocs.has(name);

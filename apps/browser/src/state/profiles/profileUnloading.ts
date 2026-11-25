@@ -1,7 +1,7 @@
 import { loadedProfiles, onProfileLoaded, unloadIdleProfile } from "../../platform/profiles";
 import { everySlowly } from "../../platform/slowTimers";
 import { useBrowser, type BrowserState } from "../browser/store";
-import { engineProfile, isIncognitoProfile } from "../browser/model";
+import { engineProfile, isIncognitoSpace } from "../browser/model";
 import { hasPage, IDLE, needsPage, wakeOf, withWake, wokenPage } from "../tabs/pageSession";
 import { noteProfileKeptForCli, noteProfileUnloaded, noteUnloadedProfileReloaded, noteUnloadedProfileReopened } from "../telemetry/tabSleepCounts";
 import { engineProfiles } from "./engineProfiles";
@@ -30,7 +30,7 @@ export const profileUnloadingForTests = (now: () => number) => void (clock = now
 
 function wakeShown(ids: string[]) {
   const s = store();
-  const active = new Set(Object.values(s.windows).map((w) => w.activeTabIds[w.profileId]));
+  const active = new Set(Object.values(s.windows).map((w) => w.activeTabIds[w.spaceId]));
   for (const id of ids) {
     const tab = s.tabs[id];
     if (tab && active.has(id) && needsPage(tab)) s.updateTab(id, { page: wokenPage(tab) });
@@ -42,13 +42,13 @@ export function closedByUnload(tabId: string): boolean {
   const tab = s.tabs[tabId];
   if (!tab) return false;
   if (hasPage(tab)) sleptByUnload.delete(tabId);
-  return unloadingNow.has(engineProfile(s, tab.profileId)) || sleptByUnload.has(tabId);
+  return unloadingNow.has(engineProfile(s, tab.spaceId)) || sleptByUnload.has(tabId);
 }
 
-const unloadable = (profile: string) => profile !== PERSONAL && !isIncognitoProfile(profile);
+const unloadable = (profile: string) => profile !== PERSONAL && !isIncognitoSpace(profile);
 
 function cliHeldEngineProfiles(s: BrowserState): string[] {
-  return [...new Set(tabsHeldByCli().flatMap((id) => (s.tabs[id] ? [engineProfile(s, s.tabs[id]!.profileId)] : [])))];
+  return [...new Set(tabsHeldByCli().flatMap((id) => (s.tabs[id] ? [engineProfile(s, s.tabs[id]!.spaceId)] : [])))];
 }
 
 const profilesInUse = (s: BrowserState) => new Set([...shownEngineProfiles(s), ...cliHeldEngineProfiles(s)]);

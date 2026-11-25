@@ -4,6 +4,7 @@ import type { MenuItem } from "../../platform/menus";
 import { withOptionAlternate, type MenuEntry } from "../app/menuSections";
 import { openLinks, openUrl, type OpenAllMode } from "./actions";
 import { splitViewAvailable } from "../splits/splits";
+import { t } from "../../lib/i18n";
 
 export type Link = { url: string; title?: string | null };
 
@@ -11,38 +12,42 @@ const OPEN_SYMBOLS = { tab: "plus.app", window: "macwindow.badge.plus", incognit
 
 export function openLinkItems({ split = true }: { split?: boolean } = {}): MenuItem[] {
   return [
-    { id: "tab", title: "Open in New Tab", symbol: OPEN_SYMBOLS.tab },
-    ...(split && splitViewAvailable ? [{ id: "split", title: "Open in Split View", symbol: OPEN_SYMBOLS.split }] : []),
+    { id: "tab", title: t("Open in New Tab"), symbol: OPEN_SYMBOLS.tab },
+    ...(split && splitViewAvailable ? [{ id: "split", title: t("Open in Split View"), symbol: OPEN_SYMBOLS.split }] : []),
     {
       id: "openIn",
-      title: "Open in",
+      title: t("Open in"),
       symbol: "macwindow",
       children: [
-        { id: "window", title: "New Window", symbol: OPEN_SYMBOLS.window },
-        { id: "incognito", title: "Incognito Window", symbol: OPEN_SYMBOLS.incognito },
+        { id: "window", title: t("New Window"), symbol: OPEN_SYMBOLS.window },
+        { id: "incognito", title: t("Incognito Window"), symbol: OPEN_SYMBOLS.incognito },
       ],
     },
   ];
 }
 
 export function openAllItems(links: number, label: "All" | number = "All", { elsewhere = true }: { elsewhere?: boolean } = {}): MenuItem[] {
-  const what = label === "All" ? "All" : String(label);
+  const all = label === "All";
   return [
-    { id: "openAll", title: `Open ${what} in New ${label === 1 ? "Tab" : "Tabs"}`, symbol: OPEN_SYMBOLS.tab, enabled: links > 0 },
+    {
+      id: "openAll",
+      title: all ? t("Open All in New Tabs") : label === 1 ? t("Open {count} in New Tab", { count: label }) : t("Open {count} in New Tabs", { count: label }),
+      symbol: OPEN_SYMBOLS.tab,
+      enabled: links > 0,
+    },
     ...(elsewhere
       ? [
-          { id: "openAllWindow", title: `Open ${what} in New Window`, symbol: OPEN_SYMBOLS.window, enabled: links > 0 },
-          { id: "openAllIncognito", title: `Open ${what} in Incognito Window`, symbol: OPEN_SYMBOLS.incognito, enabled: links > 0 },
+          { id: "openAllWindow", title: all ? t("Open All in New Window") : t("Open {count} in New Window", { count: label }), symbol: OPEN_SYMBOLS.window, enabled: links > 0 },
+          { id: "openAllIncognito", title: all ? t("Open All in Incognito Window") : t("Open {count} in Incognito Window", { count: label }), symbol: OPEN_SYMBOLS.incognito, enabled: links > 0 },
         ]
       : []),
   ];
 }
 
 export function copyLinkItems(count = 1): MenuEntry[] {
-  const n = count === 1 ? "Link" : `${count} Links`;
   return withOptionAlternate(
-    { id: "copy", title: `Copy ${n}`, symbol: "link", enabled: count > 0 },
-    { id: "copyMarkdown", title: `Copy ${n} as Markdown`, symbol: "link", enabled: count > 0 },
+    { id: "copy", title: count === 1 ? t("Copy Link") : t("Copy {count} Links", { count }), symbol: "link", enabled: count > 0 },
+    { id: "copyMarkdown", title: count === 1 ? t("Copy Link as Markdown") : t("Copy {count} Links as Markdown", { count }), symbol: "link", enabled: count > 0 },
   );
 }
 

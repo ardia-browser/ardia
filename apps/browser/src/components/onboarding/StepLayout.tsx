@@ -1,3 +1,4 @@
+import { t } from "../../lib/i18n";
 import { useLayoutEffect, useState, type ReactNode } from "react";
 import { View } from "react-native";
 import { activeSteps, previousStep, useOnboarding } from "../../state/onboarding/onboarding";
@@ -86,7 +87,7 @@ export function StepActions({
     <>
       {first ? null : <BackButton onPress={previousStep} />}
       <PrimaryButton title={continueTitle} icon={icon} onPress={onContinue} disabled={disabled} />
-      {onSkip ? <SecondaryButton title="Skip" onPress={onSkip} /> : null}
+      {onSkip ? <SecondaryButton title={t("Skip")} onPress={onSkip} /> : null}
     </>
   );
 }

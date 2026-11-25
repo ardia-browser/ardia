@@ -1,3 +1,4 @@
+import { t } from "../../lib/i18n";
 import { Children, createContext, isValidElement, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Animated, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import { useSettingsSearch } from "../../state/settings/searchState";
@@ -111,7 +112,7 @@ export function SectionHeader({ title, description, action, anchor }: { title?: 
   return (
     <Anchor id={anchor} keep shape="row" style={SECTION_HEADER}>
       <View style={{ flex: 1 }}>
-        <Text weight="semibold">{text}</Text>
+        <Text weight="semibold">{t(text)}</Text>
         {detail ? (
           <Text size="small" tone="textSecondary" style={SECTION_DETAIL()}>
             {detail}

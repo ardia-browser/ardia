@@ -40,6 +40,7 @@ import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { DEVELOPER_BAR_IN_CORE, canChooseDeveloperMode, setDeveloperMode, useDeveloperMode } from "../../state/site/developerMode";
 import { SiteSwitchRows } from "../plugins/SiteSwitchRows";
 import { ALL_UNREAD_TITLE, canChooseSiteUnread, isUnreadSiteHidden, setSiteUnreadShown, showUnreadCounts } from "../../state/tabs/unreadSites";
+import { t, tp } from "../../lib/i18n";
 
 type Expanded = "connection" | "more" | null;
 
@@ -85,7 +86,9 @@ export function SiteControlsPanel({
   const recommendedEngine = useRecommendedEngine(url);
   const streamingSite = useStreamingSite(url);
   const switchable = useCanSwitchEngine(url);
-  const recommendedTitle = streamingSite ? `Recommended (${ENGINE_NAMES[recommendedEngine]})` : `Default (${ENGINE_NAMES[recommendedEngine]})`;
+  const recommendedTitle = streamingSite
+    ? t("Recommended ({engine})", { engine: ENGINE_NAMES[recommendedEngine] })
+    : t("Default ({engine})", { engine: ENGINE_NAMES[recommendedEngine] });
 
   useEffect(() => {
     if (!origin) return;
@@ -125,7 +128,7 @@ export function SiteControlsPanel({
     if (!origin) return;
     const n = await clearSiteDataAfterConfirm(tab, origin);
     if (n === null) return;
-    setCleared(n ? `Cleared ${n} cookie${n === 1 ? "" : "s"} and site data` : "Cleared site data");
+    setCleared(n ? tp("Cleared {count} cookie and site data", "Cleared {count} cookies and site data", n) : t("Cleared site data"));
   };
   const share = () =>
     shareTile.current?.measureInWindow((x, y, width, height) => {
@@ -159,11 +162,11 @@ export function SiteControlsPanel({
   const engineChoice = offersEngineChoice();
   const castTile = !video && !!origin;
   const tiles = [
-    canShare(tab) ? <ActionTile key="share" ref={shareTile} icon="square.and.arrow.up" label="Share…" onPress={share} /> : null,
+    canShare(tab) ? <ActionTile key="share" ref={shareTile} icon="square.and.arrow.up" label={t("Share…")} onPress={share} /> : null,
     <ActionTile
       key="copy"
       icon="link"
-      label="Copy Clean Link"
+      label={t("Copy Clean Link")}
       onPress={() => {
         close();
         void copyPageUrl(tabId);
@@ -173,7 +176,7 @@ export function SiteControlsPanel({
       <ActionTile
         key="find"
         icon="text.magnifyingglass"
-        label="Find on Page"
+        label={t("Find on Page")}
         onPress={() => {
           close();
           openFind(tabId, { replace: false });
@@ -184,7 +187,7 @@ export function SiteControlsPanel({
       <ActionTile
         key="pip"
         icon={pip ? "pip.exit" : "pip.enter"}
-        label={pip ? "Exit Picture in Picture" : "Picture in Picture"}
+        label={pip ? t("Exit Picture in Picture") : t("Picture in Picture")}
         active={pip}
         onPress={(press) => {
           togglePip(press);
@@ -192,14 +195,14 @@ export function SiteControlsPanel({
         }}
       />
     ) : castTile ? (
-      <ActionTile key="cast" icon="tv.and.mediabox" label="Cast…" onPress={cast} />
+      <ActionTile key="cast" icon="tv.and.mediabox" label={t("Cast…")} onPress={cast} />
     ) : null,
   ].filter(Boolean);
 
-  const blockerValue = blockerLabel(blocker, blocked);
+  const blockerValue = t(blockerLabel(blocker, blocked));
   const shownPermissions = featured ? permissionList.filter((p) => featured.has(p.type)) : [];
   const otherPermissions = permissionList.filter((p) => !featured?.has(p.type));
-  const value = (p: SitePermission) => (settings ? choiceTitle(p.type, permissionValue(p.type, settings, sound) ?? "ask") : "…");
+  const value = (p: SitePermission) => (settings ? t(choiceTitle(p.type, permissionValue(p.type, settings, sound) ?? "ask")) : "…");
 
   return (
     <Popover width={SITE_PANEL.width} top={top} right={right} left={left} onDismiss={() => dismissPopoverByPress(tabId)} fitHeight glass closing={closing} onClosed={onClosed}>
@@ -210,11 +213,11 @@ export function SiteControlsPanel({
 
         {origin ? (
           <>
-            <SectionLabel title="Settings" inset={PANEL.inset} top={SITE_PANEL.sectionTop} bottom={SITE_PANEL.sectionGap - (SITE_PANEL.settingHeight - SITE_PANEL.settingBadge) / 2} />
+            <SectionLabel title={t("Settings")} inset={PANEL.inset} top={SITE_PANEL.sectionTop} bottom={SITE_PANEL.sectionGap - (SITE_PANEL.settingHeight - SITE_PANEL.settingBadge) / 2} />
             {PLATFORM_FEATURES.contentBlocker && (
               <SettingRow
                 icon="shield.lefthalf.filled"
-                title="Block Ads & Trackers"
+                title={t("Block Ads & Trackers")}
                 value={blockerValue}
                 on={!!blocker?.enabled && !blocker.allowed}
                 onPress={
@@ -230,15 +233,15 @@ export function SiteControlsPanel({
               />
             )}
             {DEVELOPER_BAR_IN_CORE && canChooseDeveloperMode(url) && !privatePage ? (
-              <SettingRow icon="hammer" title="Developer Mode" value={developerMode ? "On" : "Off"} on={developerMode} onPress={() => setDeveloperMode(url, !developerMode)} />
+              <SettingRow icon="hammer" title={t("Developer Mode")} value={developerMode ? t("On") : t("Off")} on={developerMode} onPress={() => setDeveloperMode(url, !developerMode)} />
             ) : null}
             <SiteSwitchRows tabId={tabId} url={url} />
-            {engineChoice && switchable ? <SettingRow icon={ENGINE_SYMBOLS[pageEngine]} title="Opens in" value={opensIn} on={!!engineRule} onPress={() => void pickEngine()} /> : null}
+            {engineChoice && switchable ? <SettingRow icon={ENGINE_SYMBOLS[pageEngine]} title={t("Opens in")} value={opensIn} on={!!engineRule} onPress={() => void pickEngine()} /> : null}
             {shownPermissions.map((p) => (
               <SettingRow
                 key={p.type}
                 icon={p.badge}
-                title={p.title}
+                title={t(p.title)}
                 value={value(p)}
                 on={permissionValue(p.type, settings, sound) === "allow"}
                 onPress={() => void pickPermission(p.type, p.choices)}
@@ -263,12 +266,12 @@ export function SiteControlsPanel({
         {expanded === "more" ? (
           <>
             <MenuSeparator />
-            <MenuRow icon="plus.magnifyingglass" title="Zoom" accessory={<ZoomStepper tabId={tabId} zoom={tab.zoom} />} />
-            {origin && !castTile ? <MenuRow icon="tv.and.mediabox" title="Cast…" onPress={cast} /> : null}
+            <MenuRow icon="plus.magnifyingglass" title={t("Zoom")} accessory={<ZoomStepper tabId={tabId} zoom={tab.zoom} />} />
+            {origin && !castTile ? <MenuRow icon="tv.and.mediabox" title={t("Cast…")} onPress={cast} /> : null}
             {engineChoice && origin && switchable ? (
               <MenuRow
                 icon={ENGINE_SYMBOLS[otherEngine(pageEngine)]}
-                title={`Open Page in ${ENGINE_NAMES[otherEngine(pageEngine)]}`}
+                title={t("Open Page in {engine}", { engine: ENGINE_NAMES[otherEngine(pageEngine)] })}
                 onPress={() => {
                   close();
                   void togglePageEngine(tabId);
@@ -285,24 +288,24 @@ export function SiteControlsPanel({
                   <MenuRow
                     key={p.type}
                     icon={p.icon}
-                    title={p.title}
+                    title={t(p.title)}
                     accessory={<PopoverValue title={value(p)} onPress={() => void pickPermission(p.type, p.choices)} />}
                   />
                 ))}
-                {pageEngine === "chromium" ? <MenuRow icon="slider.horizontal.3" title="Site Settings…" onPress={showSiteSettings} /> : null}
+                {pageEngine === "chromium" ? <MenuRow icon="slider.horizontal.3" title={t("Site Settings…")} onPress={showSiteSettings} /> : null}
                 <MenuSeparator />
-                <MenuRow icon="trash" title="Clear Cookies and Site Data…" detail={cleared ?? undefined} onPress={() => void clearData()} />
+                <MenuRow icon="trash" title={t("Clear Cookies and Site Data…")} detail={cleared ?? undefined} onPress={() => void clearData()} />
               </>
             ) : null}
             {origin && canChooseSiteUnread(tab) ? (
               unreadCounts ? (
                 <MenuRow
                   icon="app.badge"
-                  title="Show Unread Count"
+                  title={t("Show Unread Count")}
                   accessory={<Toggle look="panel" value={!unreadHidden} onChange={(v) => setSiteUnreadShown(url, v)} />}
                 />
               ) : (
-                <MenuRow icon="app.badge" title={ALL_UNREAD_TITLE} detail="All sites" accessory={<Toggle look="panel" value={false} onChange={showUnreadCounts} />} />
+                <MenuRow icon="app.badge" title={t(ALL_UNREAD_TITLE)} detail={t("All sites")} accessory={<Toggle look="panel" value={false} onChange={showUnreadCounts} />} />
               )
             ) : null}
           </>

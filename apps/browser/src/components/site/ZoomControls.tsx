@@ -9,6 +9,7 @@ import { closedByThisPress, dismissPopoverByPress } from "../../state/tabs/popov
 import { markHoverProps } from "../../lib/hoverMarks";
 import { type ToolbarPalette } from "../ui/toolbarColors";
 import { useShortcutHint, withShortcut } from "../../state/commands/commandShortcuts";
+import { t } from "../../lib/i18n";
 
 export const ZoomIndicator = memo(function ZoomIndicator({ tabId, zoom, palette, onFocus, quiet = false }: { tabId: string; zoom: number; palette: ToolbarPalette; onFocus: () => void; quiet?: boolean }) {
   const open = usePages((p) => p.popover[tabId] === "zoom");
@@ -24,7 +25,7 @@ export const ZoomIndicator = memo(function ZoomIndicator({ tabId, zoom, palette,
         if (!closedByThisPress(tabId, "zoom")) toggleZoomPopover(tabId);
       }}
       active={open}
-      tooltip={`Zoom: ${Math.round(zoom * 100)}%`}
+      tooltip={t("Zoom: {percent}%", { percent: Math.round(zoom * 100) })}
     />
   );
 });
@@ -41,9 +42,9 @@ export function ZoomPanel({ tabId, right, left, top, closing, onClosed }: SitePa
   return (
     <Popover width={ZOOM_POPOVER_WIDTH} top={top} right={right} left={left} modal={!bubble} onDismiss={() => dismissPopoverByPress(tabId)} closing={closing} onClosed={onClosed}>
       <View {...hoverProps} style={{ flexDirection: "row", alignItems: "center", height: ZOOM_BAR, paddingLeft: PANEL.inset, paddingRight: (ZOOM_BAR - 28) / 2, gap: space.m }}>
-        <Text style={TABULAR_FILL}>{`Zoom: ${Math.round(zoom * 100)}%`}</Text>
+        <Text style={TABULAR_FILL}>{t("Zoom: {percent}%", { percent: Math.round(zoom * 100) })}</Text>
         <ZoomStepper tabId={tabId} zoom={zoom} percent={false} />
-        <Button variant="pill" title="Reset" onPress={() => void webviews.get(tabId)?.zoomStep(0)} />
+        <Button variant="pill" title={t("Reset")} onPress={() => void webviews.get(tabId)?.zoomStep(0)} />
       </View>
     </Popover>
   );
@@ -57,15 +58,15 @@ export function ZoomStepper({ tabId, zoom, percent = true }: { tabId: string; zo
   const zoomInHint = useShortcutHint("zoomIn");
   return (
     <Box row gap={percent ? "xxs" : "xs"} style={CENTER_ROW}>
-      <Button variant="stepper" icon="minus" tooltip={withShortcut("Zoom Out", zoomOutHint)} onPress={() => void webviews.get(tabId)?.zoomStep(-1)} />
+      <Button variant="stepper" icon="minus" tooltip={withShortcut(t("Zoom Out"), zoomOutHint)} onPress={() => void webviews.get(tabId)?.zoomStep(-1)} />
       {percent ? (
-        <Pressable onPress={() => void webviews.get(tabId)?.zoomStep(0)} tooltip="Reset to 100%">
+        <Pressable onPress={() => void webviews.get(tabId)?.zoomStep(0)} tooltip={t("Reset to 100%")}>
           <Text size="small" tone={zoom === 1 ? "textSecondary" : "textPrimary"} style={{ width: 44, textAlign: "center", fontVariant: ["tabular-nums"] }}>
             {Math.round(zoom * 100)}%
           </Text>
         </Pressable>
       ) : null}
-      <Button variant="stepper" icon="plus" tooltip={withShortcut("Zoom In", zoomInHint)} onPress={() => void webviews.get(tabId)?.zoomStep(1)} />
+      <Button variant="stepper" icon="plus" tooltip={withShortcut(t("Zoom In"), zoomInHint)} onPress={() => void webviews.get(tabId)?.zoomStep(1)} />
     </Box>
   );
 }

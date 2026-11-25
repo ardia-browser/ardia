@@ -1,3 +1,4 @@
+import { t } from "../../lib/i18n";
 import type { ReactNode } from "react";
 import { Image, Pressable, View } from "react-native";
 import { useTheme } from "../ui/theme";
@@ -16,7 +17,7 @@ export function RedoCancel() {
   if (!redo) return null;
   return (
     <View mouseDownCanMoveWindow={false}>
-      <Button variant="text" look="link" tone="textSecondary" title="Cancel" label="Cancel setup and keep your settings" centersCapitals onPress={cancelOnboarding} />
+      <Button variant="text" look="link" tone="textSecondary" title={t("Cancel")} label={t("Cancel setup and keep your settings")} centersCapitals onPress={cancelOnboarding} />
     </View>
   );
 }

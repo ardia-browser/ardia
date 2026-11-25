@@ -9,6 +9,7 @@ import { tidy as tidyTabs } from "../../state/sidebar/tidyUi";
 import { openSidebarMenu } from "../../state/sidebar/menus";
 import { PINNED_FOLD_TITLES, togglePinnedFold } from "../../state/sidebar/pinnedFold";
 import { consentToken } from "../../state/telemetry/client";
+import { t } from "../../lib/i18n";
 
 const BROOM = require("../../../assets/tidy-broom.png");
 
@@ -59,8 +60,8 @@ export const ClearDivider = memo(function ClearDivider({ windowId, profileId, li
               <>
                 {tidy ? (
                   <DividerButton
-                    title="Tidy"
-                    label="Tidy Tabs"
+                    title={t("Tidy")}
+                    label={t("Tidy Tabs")}
                     onPress={() => tidyTabs(windowId, "tabs", profileId)}
                     icon={(color) => tintedImage({ source: BROOM, tint: color, style: { width: 11, height: 11, marginRight: space.xs } })}
                   />
@@ -68,8 +69,8 @@ export const ClearDivider = memo(function ClearDivider({ windowId, profileId, li
                 {tidy && clear ? <Divider vertical thick length={9} style={ACTIONS_DIVIDER} /> : null}
                 {clear ? (
                   <DividerButton
-                    title="Clear"
-                    label="Clear unpinned tabs"
+                    title={t("Clear")}
+                    label={t("Clear unpinned tabs")}
                     onPress={() => closeAllTabs(windowId, { consent: consentToken() })}
                     icon={(color) => drawnSymbol({ name: "arrow.down", size: 9, weight: "semibold", color, style: CLEAR_ARROW })}
                   />
@@ -86,7 +87,7 @@ export const ClearDivider = memo(function ClearDivider({ windowId, profileId, li
 function FoldButton({ pinned, onPress }: { pinned: PinnedFold; onPress: () => void }) {
   const theme = useTheme();
   const { hovered, hoverProps } = useHover();
-  const label = pinned.collapsed ? PINNED_FOLD_TITLES.expand : PINNED_FOLD_TITLES.collapse;
+  const label = t(pinned.collapsed ? PINNED_FOLD_TITLES.expand : PINNED_FOLD_TITLES.collapse);
   const rotate = pinned.open.interpolate({ inputRange: [0, 1], outputRange: ["-90deg", "0deg"] });
   return (
     <View {...hoverProps}>
@@ -99,7 +100,7 @@ function FoldButton({ pinned, onPress }: { pinned: PinnedFold; onPress: () => vo
                 {drawnSymbol({ name: "chevron.down", size: 8, weight: "semibold", color, style: CHEVRON })}
               </Animated.View>
               <Text size="tiny" weight="medium" color={color}>
-                Pinned
+                {t("Pinned")}
               </Text>
             </View>
           );

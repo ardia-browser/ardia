@@ -1,3 +1,4 @@
+import { t } from "../../lib/i18n";
 import { fileExists, fileIcon } from "../../state/app/system";
 import { useEffect, useState } from "react";
 import { Image, View, type ImageSourcePropType } from "react-native";
@@ -84,8 +85,8 @@ export function SourceStep() {
 
   return (
     <StepLayout
-      title="Where are you coming from?"
-      subtitle="Ardia sets itself up the way you're used to."
+      title={t("Where are you coming from?")}
+      subtitle={t("Ardia sets itself up the way you're used to.")}
       actions={
         <>
           <StepActions disabled={!source} onContinue={done} onSkip={skip} />
@@ -96,12 +97,12 @@ export function SourceStep() {
     >
       {found.length ? (
         <View style={{ gap: space.m }}>
-          <SectionLabel title={`Found on this ${PLATFORM_TERMS.computer}`} />
+          <SectionLabel title={t("Found on this {computer}", { computer: PLATFORM_TERMS.computer })} />
           <TileGrid tiles={found} selected={source} onPress={choose} />
         </View>
       ) : null}
       <View style={{ gap: space.m }}>
-        <SectionLabel title={found.length ? "Others" : "Browsers"} />
+        <SectionLabel title={found.length ? t("Others") : t("Browsers")} />
         <TileGrid tiles={others} selected={source} onPress={choose} fresh />
       </View>
       {!previewShown && canImport && chosen ? <CompactImport name={chosen.name} running={importing === chosen.id} onImport={startImport} /> : null}
@@ -121,7 +122,7 @@ function CompactImport({ name, running, onImport }: { name: string; running: boo
           {succeeded ? `Imported from ${from ?? name}` : `Importing from ${name}… It runs in its own window.`}
         </Text>
       ) : (
-        <SecondaryButton title={`Import from ${name}`} filled onPress={onImport} />
+        <SecondaryButton title={t("Import from {name}", { name })} filled onPress={onImport} />
       )}
     </View>
   );
@@ -133,7 +134,7 @@ function TileGrid({ tiles, selected, onPress, fresh }: { tiles: Tile[]; selected
       {tiles.map((t) => (
         <SourceTile key={t.id} title={t.name} icon={browserIcon(t.id, t.icon)} symbol="globe" selected={selected === t.id} onPress={() => onPress(t.id)} />
       ))}
-      {fresh ? <SourceTile title="Starting fresh" icon={null} symbol="sparkles" selected={selected === "fresh"} onPress={() => onPress("fresh")} /> : null}
+      {fresh ? <SourceTile title={t("Starting fresh")} icon={null} symbol="sparkles" selected={selected === "fresh"} onPress={() => onPress("fresh")} /> : null}
     </View>
   );
 }

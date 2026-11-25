@@ -18,6 +18,7 @@ import { addSharedFolder } from "../sharedFolders/actions";
 import { canAddSharedFolder } from "../sharedFolders/removal";
 import { chooseSidebarSide, switchTabLayout } from "../settings/actions";
 import { minimalismIn } from "../windows/layout";
+import { t } from "../../lib/i18n";
 
 const store = () => useBrowser.getState();
 
@@ -31,26 +32,26 @@ export function browserLayoutItems(s: BrowserState, windowId: string): MenuItem[
   const addressInToolbar = !minimal && (!inSidebar || s.settings.addressBar === "toolbar");
   return sections(
     [
-      { id: "layout:sidebarLeft", title: "Sidebar on Left", symbol: "sidebar.left", checked: inSidebar && !right, ...(!inSidebar && !right ? menuShortcut("toggleTabLayout", s) : {}) },
-      { id: "layout:sidebarRight", title: "Sidebar on Right", symbol: "sidebar.right", checked: inSidebar && right, ...(!inSidebar && right ? menuShortcut("toggleTabLayout", s) : {}) },
-      { id: "layout:top", title: "Top Tab Bar", symbol: "menubar.rectangle", checked: !inSidebar, ...(inSidebar ? menuShortcut("toggleTabLayout", s) : {}) },
+      { id: "layout:sidebarLeft", title: t("Sidebar on Left"), symbol: "sidebar.left", checked: inSidebar && !right, ...(!inSidebar && !right ? menuShortcut("toggleTabLayout", s) : {}) },
+      { id: "layout:sidebarRight", title: t("Sidebar on Right"), symbol: "sidebar.right", checked: inSidebar && right, ...(!inSidebar && right ? menuShortcut("toggleTabLayout", s) : {}) },
+      { id: "layout:top", title: t("Top Tab Bar"), symbol: "menubar.rectangle", checked: !inSidebar, ...(inSidebar ? menuShortcut("toggleTabLayout", s) : {}) },
     ],
     [
-      inSidebar && !minimal && { id: "layout:addressToolbar", title: "Address Bar in Toolbar", symbol: "menubar.rectangle", checked: s.settings.addressBar === "toolbar" },
-      inSidebar && !minimal && { id: "layout:addressSidebar", title: "Address Bar in Sidebar", symbol: "sidebar.left", checked: s.settings.addressBar === "sidebar" },
-      addressInToolbar && { id: "layout:compactToolbar", title: "Compact Toolbar", symbol: "rectangle.compress.vertical", checked: s.settings.compactToolbar },
+      inSidebar && !minimal && { id: "layout:addressToolbar", title: t("Address Bar in Toolbar"), symbol: "menubar.rectangle", checked: s.settings.addressBar === "toolbar" },
+      inSidebar && !minimal && { id: "layout:addressSidebar", title: t("Address Bar in Sidebar"), symbol: "sidebar.left", checked: s.settings.addressBar === "sidebar" },
+      addressInToolbar && { id: "layout:compactToolbar", title: t("Compact Toolbar"), symbol: "rectangle.compress.vertical", checked: s.settings.compactToolbar },
     ],
     [
-      { id: "layout:autoHide", title: "Auto-Hide Tabs", symbol: "eye.slash", checked: !!w && !tabsShownIn(s, windowId), ...menuShortcut("toggleSidebar", s) },
-      { id: "layout:minimalism", title: "Minimalism Mode", symbol: "rectangle.leftthird.inset.filled", checked: s.settings.minimalismMode, ...menuShortcut("toggleMinimalism", s) },
-      bookmarksShown(s.settings) && w?.kind !== "private" && { id: "layout:bookmarksBar", title: "Bookmarks Bar", symbol: "bookmark", checked: bookmarksBarShownIn(s, windowId), ...menuShortcut("toggleBookmarksBar", s) },
+      { id: "layout:autoHide", title: t("Auto-Hide Tabs"), symbol: "eye.slash", checked: !!w && !tabsShownIn(s, windowId), ...menuShortcut("toggleSidebar", s) },
+      { id: "layout:minimalism", title: t("Minimalism Mode"), symbol: "rectangle.leftthird.inset.filled", checked: s.settings.minimalismMode, ...menuShortcut("toggleMinimalism", s) },
+      bookmarksShown(s.settings) && w?.kind !== "private" && { id: "layout:bookmarksBar", title: t("Bookmarks Bar"), symbol: "bookmark", checked: bookmarksBarShownIn(s, windowId), ...menuShortcut("toggleBookmarksBar", s) },
       ...pinnedFoldMenuItem(s, windowId),
     ],
   );
 }
 
 export function browserLayoutMenuItem(s: BrowserState, windowId: string): MenuItem {
-  return { id: BROWSER_LAYOUT_MENU_ID, title: "Browser Layout", symbol: "sidebar.left", children: browserLayoutItems(s, windowId) };
+  return { id: BROWSER_LAYOUT_MENU_ID, title: t("Browser Layout"), symbol: "sidebar.left", children: browserLayoutItems(s, windowId) };
 }
 
 function placeTabs(windowId: string, layout: "sidebar" | "top", side: "left" | "right" | null, consent: ConsentToken | null) {
@@ -80,19 +81,19 @@ export function sidebarMenuItems(s: BrowserState, windowId: string): MenuItem[] 
   const w = s.windows[windowId];
   return sections(
     [
-      { id: "newTab", title: "New Tab", symbol: "plus.app", ...menuShortcut("newTab", s) },
+      { id: "newTab", title: t("New Tab"), symbol: "plus.app", ...menuShortcut("newTab", s) },
       ...(splitViewAvailable
-        ? [{ id: "newTabInSplit", title: "New Tab in Split View", symbol: "rectangle.split.2x1", enabled: !!activeTabId(s, windowId), ...menuShortcut("openSplitPane", s) }]
+        ? [{ id: "newTabInSplit", title: t("New Tab in Split View"), symbol: "rectangle.split.2x1", enabled: !!activeTabId(s, windowId), ...menuShortcut("openSplitPane", s) }]
         : []),
-      { id: "reopen", title: "Reopen Closed Tab", symbol: "clock.arrow.circlepath", enabled: !!lastClosedEntry(s, windowId), ...menuShortcut("reopenClosedTab", s) },
+      { id: "reopen", title: t("Reopen Closed Tab"), symbol: "clock.arrow.circlepath", enabled: !!lastClosedEntry(s, windowId), ...menuShortcut("reopenClosedTab", s) },
     ],
     [
-      { id: "newGroup", title: "New Group", symbol: "folder.badge.plus" },
+      { id: "newGroup", title: t("New Group"), symbol: "folder.badge.plus" },
       newLiveFolderMenuItem(),
-      ...(canAddSharedFolder(w?.profileId) ? [{ id: "addShared", title: "Add Shared Folder…", symbol: "person.2" }] : []),
+      ...(canAddSharedFolder(w?.profileId) ? [{ id: "addShared", title: t("Add Shared Folder…"), symbol: "person.2" }] : []),
     ],
     [browserLayoutMenuItem(s, windowId)],
-    [{ id: "closeAll", title: "Close All Tabs", symbol: "xmark", ...menuShortcut("closeAllTabs", s) }],
+    [{ id: "closeAll", title: t("Close All Tabs"), symbol: "xmark", ...menuShortcut("closeAllTabs", s) }],
   );
 }
 

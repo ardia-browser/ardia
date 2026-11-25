@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { engineHost, type SearchEngine } from "@ardia/core";
 import { Box, Button, Checkbox, DialogActions, DialogTitle, PopUp, Sheet, space, Symbol, Text, TextField } from "../../ui";
 import { useState } from "react";
@@ -36,10 +37,10 @@ export function SearchSection({ profileId }: { profileId: string }) {
           <Row
             icon={<Symbol name="puzzlepiece.extension" size={13} color={theme.formAccent} style={EXTENSION_ICON} />}
             title={`${controlling.extensionName || "An extension"} is controlling this setting`}
-            description="To change your default search engine, disable the extension or manage its settings."
+            description={t("To change your default search engine, disable the extension or manage its settings.")}
           >
-            <Button title="Manage" onPress={() => manageExtensionsOf(controlling.profile, controlling.extensionId)} />
-            <Button title="Disable" onPress={() => void setEnabled(controlling.profile, controlling.extensionId, false)} />
+            <Button title={t("Manage")} onPress={() => manageExtensionsOf(controlling.profile, controlling.extensionId)} />
+            <Button title={t("Disable")} onPress={() => void setEnabled(controlling.profile, controlling.extensionId, false)} />
           </Row>
         ) : null}
         <Row anchor="profiles.searchEngine">
@@ -55,8 +56,8 @@ export function SearchSection({ profileId }: { profileId: string }) {
         <Row anchor="profiles.otherEngines" onPress={() => goToSettingsPane("profiles", profileId, SETTINGS_DETAIL.otherEngines)} />
         <Row anchor="profiles.suggestWhileTyping">
           <Box gap="s">
-            <Checkbox label="Searches" value={suggestions} onChange={(v) => updateSettings({ searchSuggestions: v })} />
-            <Checkbox label="Pages from history" value={history} onChange={(v) => updateSettings({ commandBarHistory: v })} />
+            <Checkbox label={t("Searches")} value={suggestions} onChange={(v) => updateSettings({ searchSuggestions: v })} />
+            <Checkbox label={t("Pages from history")} value={history} onChange={(v) => updateSettings({ commandBarHistory: v })} />
           </Box>
         </Row>
         <SettingToggle anchor="profiles.showSelectionSearch" />
@@ -77,11 +78,11 @@ export function OtherEnginesPage({ profileId }: { profileId: string }) {
       <SectionHeader
         title={setting("profiles.otherEngines").title}
         description={setting("profiles.otherEngines").description}
-        action={<Button title="Add…" icon="plus" onPress={() => showSettingsSheet(<EngineSheet />)} />}
+        action={<Button title={t("Add…")} icon="plus" onPress={() => showSettingsSheet(<EngineSheet />)} />}
       />
       <Group>
         {custom.length === 0 ? (
-          <Row title="No custom search engines" description="Add one with a URL where %s stands for the search terms." />
+          <Row title={t("No custom search engines")} description={t("Add one with a URL where %s stands for the search terms.")} />
         ) : (
           custom.map((e) => <EngineRow key={e.id} engine={e} selected={selectedId === e.id} locked={locked} editable={e.id !== "custom"} />)
         )}
@@ -89,7 +90,7 @@ export function OtherEnginesPage({ profileId }: { profileId: string }) {
 
       {fromExtensions.length > 0 && (
         <>
-          <SectionHeader title="From extensions" description="Some extensions can add search engines to Ardia." />
+          <SectionHeader title="From extensions" description={t("Some extensions can add search engines to Ardia.")} />
           <Group>
             {fromExtensions.map((e) => (
               <EngineRow key={e.id} engine={e} selected={selectedId === e.id} locked={locked} />
@@ -110,17 +111,17 @@ function EngineRow({ engine, selected, locked, editable }: { engine: SearchEngin
       : engine.keyword;
   return (
     <Row icon={<SiteFavicon host={engineHost(engine)} profileId={DEFAULT_PROFILE_ID} />} title={engine.name} description={description}>
-      {editable && <Button variant="icon" icon="pencil" size="m" onPress={() => showSettingsSheet(<EngineSheet engine={engine} />)} tooltip="Edit" />}
+      {editable && <Button variant="icon" icon="pencil" size="m" onPress={() => showSettingsSheet(<EngineSheet engine={engine} />)} tooltip={t("Edit")} />}
       {selected ? (
         <Box row gap="xs" style={DEFAULT_MARK}>
           <Symbol name="checkmark" size={11} weight="semibold" color={theme.formAccent} style={CHECK} />
           <Text size="small" tone="textSecondary">
-            Default
+            {t("Default")}
           </Text>
         </Box>
       ) : (
         <View style={DEFAULT_WIDTH}>
-          <Button title="Make Default" disabled={locked} onPress={() => setSearchEngine(engine.id)} />
+          <Button title={t("Make Default")} disabled={locked} onPress={() => setSearchEngine(engine.id)} />
         </View>
       )}
     </Row>
@@ -163,7 +164,7 @@ function EngineSheet({ engine }: { engine?: SearchEngine }) {
         leading={
           engine ? (
             <Button
-              title="Delete"
+              title={t("Delete")}
               kind="destructive"
               onPress={() => {
                 removeCustomEngine(engine.id);
@@ -173,8 +174,8 @@ function EngineSheet({ engine }: { engine?: SearchEngine }) {
           ) : null
         }
       >
-        <Button title="Cancel" onPress={closeSettingsSheet} />
-        <Button title={engine ? "Save" : "Add"} kind="primary" onPress={save} />
+        <Button title={t("Cancel")} onPress={closeSettingsSheet} />
+        <Button title={engine ? t("Save") : t("Add")} kind="primary" onPress={save} />
       </DialogActions>
     </Sheet>
   );

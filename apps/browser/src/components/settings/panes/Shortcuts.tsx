@@ -1,3 +1,4 @@
+import { t, tp } from "../../../lib/i18n";
 import { cancelShortcutRecording, recordShortcut, type MenuShortcut, resolvedShortcuts, useCtrlTabChoice, useMenuBarRevision } from "../../../state/commands/commandShortcuts";
 import type { CtrlTabChoice } from "../../../state/commands/ctrlTabKeys";
 import { Box, Button, EmptyState, KeyCap, PopUp, SearchField, space, Symbol, Text, useHover, type Option } from "../../ui";
@@ -29,15 +30,15 @@ const KEY_SEARCH_SETTLE_MS = 1000;
 const KEY_SEARCH_CANCEL_PRESS_MS = 600;
 
 const FILTERS: Option<Filter>[] = [
-  { value: "all", title: "All Shortcuts" },
-  { value: "customized", title: "Customized Shortcuts" },
-  { value: "conflicts", title: "Conflicting Shortcuts" },
+  { value: "all", title: t("All Shortcuts") },
+  { value: "customized", title: t("Customized Shortcuts") },
+  { value: "conflicts", title: t("Conflicting Shortcuts") },
 ];
 
 const PEEK_WITH: Option<PeekModifier>[] = [
   { value: "shift", title: `${keyText("⇧")}-click` },
   { value: "alt", title: `${keyText("⌥")}-click` },
-  { value: "off", title: "Off" },
+  { value: "off", title: t("Off") },
 ];
 
 const SPLIT_WITH: Option<SplitLinkModifier>[] = [
@@ -139,14 +140,14 @@ function KeyboardSection() {
         description={
           others.length ? (
             <Text size="caption" tone="warning" style={CONFLICT}>
-              {`${others.length === 1 ? "This shortcut conflicts with another shortcut:" : "This shortcut conflicts with other shortcuts:"} ${others.map((o) => o.title).join(", ")}`}
+              {tp("This shortcut conflicts with another shortcut: {others}", "This shortcut conflicts with other shortcuts: {others}", others.length, { others: others.map((o) => o.title).join(t(", ")) })}
             </Text>
           ) : item.path.length > 1 ? (
             item.path.slice(1).join(" › ")
           ) : undefined
         }
       >
-        {overrides[item.id] && <Button variant="icon" icon="arrow.uturn.backward" size="m" onPress={() => setShortcutOverride(item.id, null)} tooltip="Reset to Default" />}
+        {overrides[item.id] && <Button variant="icon" icon="arrow.uturn.backward" size="m" onPress={() => setShortcutOverride(item.id, null)} tooltip={t("Reset to Default")} />}
         <ShortcutField
           combo={effective(item)}
           mouse={resolved.mouse.get(item.id)}
@@ -172,9 +173,9 @@ function KeyboardSection() {
           <View style={FILL}>
             <SearchField value={keySearching ? "" : query} onChangeText={setShortcutsQuery} placeholder={keySearching ? "Type Shortcut" : "Search menu commands"} />
           </View>
-          <Button variant="icon" icon="keyboard" size="m" active={keySearching} tooltip="Search by Keys" onPress={() => (keySearching ? void cancelShortcutRecording() : void searchKeys())} />
+          <Button variant="icon" icon="keyboard" size="m" active={keySearching} tooltip={t("Search by Keys")} onPress={() => (keySearching ? void cancelShortcutRecording() : void searchKeys())} />
           <PopUp value={filter} options={FILTERS} onChange={setFilter} minWidth={170} />
-          <Button title="Reset All Shortcuts" disabled={!customizedCount} onPress={() => updateSettings(PLATFORM_FEATURES.mouseShortcuts ? { shortcuts: {}, mouseShortcuts: {} } : { shortcuts: {} })} />
+          <Button title={t("Reset All Shortcuts")} disabled={!customizedCount} onPress={() => updateSettings(PLATFORM_FEATURES.mouseShortcuts ? { shortcuts: {}, mouseShortcuts: {} } : { shortcuts: {} })} />
         </Anchor>
         <Text size="caption" tone="textTertiary">
           {PLATFORM_FEATURES.mouseShortcuts ? "To use a mouse button, click a shortcut, then press the middle button or a side button." : "Mouse buttons as shortcuts work on Mac only for now."}
@@ -182,7 +183,7 @@ function KeyboardSection() {
       </Box>
       {items !== null && (combo ? !found : menuItems.length === 0) && (
         <View style={NO_MATCH}>
-          <EmptyState symbol={combo ? "keyboard" : "magnifyingglass"} title={combo ? `No command uses ${formatShortcut(combo)}` : "No matching commands"} />
+          <EmptyState symbol={combo ? "keyboard" : "magnifyingglass"} title={combo ? t("No command uses {keys}", { keys: formatShortcut(combo) }) : "No matching commands"} />
         </View>
       )}
       {menus.map((menu) => (
@@ -194,7 +195,7 @@ function KeyboardSection() {
       <View style={EXTENSIONS}>
         <Group>
           <Row anchor="shortcuts.extensionShortcuts">
-            <Button title="Edit…" onPress={() => openUrls(["chrome://extensions/shortcuts"])} />
+            <Button title={t("Edit…")} onPress={() => openUrls(["chrome://extensions/shortcuts"])} />
           </Row>
           {extensionItems.map(itemRow)}
         </Group>
@@ -213,7 +214,7 @@ function CtrlTabRow() {
   const choice = useCtrlTabChoice();
   return (
     <Row title={setting("appearance.ctrlTab").title} description={CTRL_TAB_NOW[choice]}>
-      <Button title="Choose…" onPress={() => jumpToSetting(setting("appearance.ctrlTab"))} />
+      <Button title={t("Choose…")} onPress={() => jumpToSetting(setting("appearance.ctrlTab"))} />
     </Row>
   );
 }
@@ -265,7 +266,7 @@ function MouseField({ button, onClear }: { button: Shortcut; onClear: () => void
     <View {...hoverProps} style={KEY_FIELD}>
       <KeyCap keys={[formatShortcut(button)]} hovered={hovered} />
       {hovered ? (
-        <Pressable onPress={onClear} tooltip="Remove Mouse Shortcut" style={CLEAR}>
+        <Pressable onPress={onClear} tooltip={t("Remove Mouse Shortcut")} style={CLEAR}>
           <Symbol name="xmark.circle.fill" size={11} color={theme.textTertiary} style={{ width: 14, height: 14 }} />
         </Pressable>
       ) : null}
@@ -279,7 +280,7 @@ function KeyField({ combo, remappable, recording, onRecord, onClear }: Omit<Shor
   const text = recording ? "Type Shortcut" : formatShortcut(combo);
   if (!remappable) {
     return (
-      <View style={FIXED_KEYS} tooltip="(not remappable)">
+      <View style={FIXED_KEYS} tooltip={t("(not remappable)")}>
         <Text tone="textTertiary">{text || "—"}</Text>
       </View>
     );
@@ -290,7 +291,7 @@ function KeyField({ combo, remappable, recording, onRecord, onClear }: Omit<Shor
         <KeyCap keys={[text || "None"]} editing={recording} empty={!text} hovered={hovered} />
       </Pressable>
       {hovered && !recording && combo.key ? (
-        <Pressable onPress={onClear} tooltip="Remove Shortcut" style={CLEAR}>
+        <Pressable onPress={onClear} tooltip={t("Remove Shortcut")} style={CLEAR}>
           <Symbol name="xmark.circle.fill" size={11} color={theme.textTertiary} style={{ width: 14, height: 14 }} />
         </Pressable>
       ) : null}

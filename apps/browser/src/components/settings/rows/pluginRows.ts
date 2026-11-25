@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import type { SettingRow, SettingSection } from "./types";
 import type { SettingsPane } from "../../../state/settings/settingsWindows";
 import { OFFICIAL_ANCHOR_ALIASES, OFFICIAL_CATALOGUE, COMING_SOON } from "../../../state/plugins/officialPin";
@@ -26,7 +27,7 @@ export const pluginRows = {
       section: "Official",
       rows: {
         official: {
-          title: "Official plugins",
+          title: t("Official plugins"),
           keywords: ["official", "plugins", "built in", "first party", "ardia plugins", "install"],
           shown: (_, env) => !!env.officialPlugins?.length,
         },
@@ -37,8 +38,8 @@ export const pluginRows = {
       section: "Plugins",
       rows: {
         plugins: {
-          title: "Plugins",
-          description: "Yours stay off until you turn them on.",
+          title: t("Plugins"),
+          description: t("Yours stay off until you turn them on."),
           keywords: ["plugin", "add-on", "addon", "install plugin", "ardia plugins"],
         },
       },

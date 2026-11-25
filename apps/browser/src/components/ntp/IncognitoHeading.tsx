@@ -3,6 +3,7 @@ import { Box, proseLineHeight, Symbol, Text, useTheme } from "../ui";
 import { headingTop } from "./newTabLayout";
 import { ntpType } from "./tokens";
 import { perLook } from "../ui/tokens";
+import { t } from "../../lib/i18n";
 
 export const INCOGNITO_ICON = "eyeglasses";
 
@@ -25,11 +26,11 @@ export function IncognitoHeading({ left, barTop, width, onHeight }: { left: numb
       <Box row gap="ml" style={CENTER_ROW}>
         <Symbol name={INCOGNITO_ICON} size={24} weight="medium" color={theme.textPrimary} style={ICON} />
         <Text accessibilityRole="header" lines={1} style={ntpType.incognitoTitle}>
-          Incognito
+          {t("Incognito")}
         </Text>
       </Box>
       <Text size="body" tone="textSecondary" style={BLURB()}>
-        Pages you visit here aren't saved to your history. Cookies and site data are deleted when you close all Incognito windows.
+        {t("Pages you visit here aren't saved to your history. Cookies and site data are deleted when you close all Incognito windows.")}
       </Text>
     </Box>
   );

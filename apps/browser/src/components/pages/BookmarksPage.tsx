@@ -16,6 +16,7 @@ import { DropTargets } from "./dropTargets";
 import { PageHeader } from "./PageLayout";
 import { bookmarkList, pagesColors, undoToast } from "./tokens";
 import { COMMAND_KEY, commandHeld } from "../../state/commands/keyNotation";
+import { t } from "../../lib/i18n";
 
 
 type Target = { kind: "folder"; id: string } | { kind: "row"; id: string; index: number; folder: boolean };
@@ -108,18 +109,18 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
   const actions =
     selected.length > 0 ? (
       <>
-        <Text size="small" tone="textSecondary">{`${selected.length} selected`}</Text>
-        <Button title="Delete" kind="primary" onPress={() => remove(selected)} />
+        <Text size="small" tone="textSecondary">{t("{count} selected", { count: selected.length })}</Text>
+        <Button title={t("Delete")} kind="primary" onPress={() => remove(selected)} />
       </>
     ) : (
-      <Button variant="icon" icon="ellipsis.circle" onPress={() => void openOrganizeMenu(windowId, profileId, folderId)} tooltip="Organize" />
+      <Button variant="icon" icon="ellipsis.circle" onPress={() => void openOrganizeMenu(windowId, profileId, folderId)} tooltip={t("Organize")} />
     );
 
   const indicator = drop && "index" in drop ? drop.index : null;
 
   return (
     <View style={{ flex: 1 }}>
-      <PageHeader title="Bookmarks" query={query} onQuery={setQuery} actions={actions} />
+      <PageHeader title={t("Bookmarks")} query={query} onQuery={setQuery} actions={actions} />
       <View style={BODY}>
         <ScrollView style={TREE} contentContainerStyle={TREE_CONTENT}>
           <FolderTree
@@ -143,17 +144,17 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
         <Box radius="panel" fill="groupFill" border="groupBorder" style={LIST_CARD}>
           <Box row padX="xl" gap="m" style={LIST_HEADER}>
             <Text lines={1} weight="semibold" style={LIST_TITLE}>
-              {searching ? `Results for “${query.trim()}”` : folderTitle}
+              {searching ? t("Results for “{query}”", { query: query.trim() }) : folderTitle}
             </Text>
             {!searching && folderId && (
-              <Button title="Open All" onPress={() => void openFolder(folderId, windowId)} disabled={!ids.length} />
+              <Button title={t("Open All")} onPress={() => void openFolder(folderId, windowId)} disabled={!ids.length} />
             )}
           </Box>
           <Divider thick />
           {ids.length === 0 ? (
             <EmptyState
               symbol={searching ? "magnifyingglass" : "bookmark"}
-              title={searching ? "No search results found" : "This folder is empty"}
+              title={searching ? t("No search results found") : t("This folder is empty")}
             />
           ) : (
             <View

@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { useState } from "react";
 import { applySetupCode, type SetupCodeApplied } from "../../../state/presets/actions";
 import { SETUP_CODE_PREFIX } from "../../../state/presets/setupCode";
@@ -17,7 +18,7 @@ export function SetupCodeRow() {
   };
   const description = result ? (result.ok ? `Applied: ${result.lines.join(", ")}.` : result.error) : SETUP_CODE_HINT;
   return (
-    <Row title="Apply a setup code" description={description}>
+    <Row title={t("Apply a setup code")} description={description}>
       <TextField
         value={code}
         onChangeText={(text) => {
@@ -28,7 +29,7 @@ export function SetupCodeRow() {
         onSubmit={apply}
         width={170}
       />
-      <Button title="Apply" disabled={!code.trim()} onPress={apply} />
+      <Button title={t("Apply")} disabled={!code.trim()} onPress={apply} />
     </Row>
   );
 }

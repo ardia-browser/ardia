@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import {
   addFromWebStore,
   configure,
@@ -27,9 +28,9 @@ import { ProfileSubPage } from "./ProfileSubPage";
 
 type SiteAccess = "allSites" | "specificSites" | "onClick";
 const SITE_ACCESS: { value: SiteAccess; title: string }[] = [
-  { value: "allSites", title: "On all sites" },
-  { value: "specificSites", title: "On specific sites" },
-  { value: "onClick", title: "On click" },
+  { value: "allSites", title: t("On all sites") },
+  { value: "specificSites", title: t("On specific sites") },
+  { value: "onClick", title: t("On click") },
 ];
 const siteAccessOf = (ext: InstalledExtension): SiteAccess =>
   ext.siteAccess === "ON_CLICK" ? "onClick" : ext.siteAccess === "ON_SPECIFIC_SITES" ? "specificSites" : "allSites";
@@ -65,8 +66,8 @@ export function ExtensionsSection({ profileId }: { profileId: string }) {
   return (
     <>
       <SectionHeader
-        title="Extensions"
-        action={<Button variant="icon" icon="ellipsis" size="m" tooltip="More" onPress={() => void openMoreMenu(profile)} />}
+        title={t("Extensions")}
+        action={<Button variant="icon" icon="ellipsis" size="m" tooltip={t("More")} onPress={() => void openMoreMenu(profile)} />}
       />
       <Group>
         <Row anchor="profiles.extensions" description={list.length ? undefined : "Extensions you add appear here and in the Extensions menu. Each profile has its own."} />
@@ -87,7 +88,7 @@ export function ExtensionsSection({ profileId }: { profileId: string }) {
           </Row>
         ))}
         <Row anchor="profiles.webStore">
-          <Button title="Open Web Store" onPress={() => openWebStoreFor(profile, profileId)} />
+          <Button title={t("Open Web Store")} onPress={() => openWebStoreFor(profile, profileId)} />
         </Row>
       </Group>
     </>
@@ -141,10 +142,10 @@ function ExtensionDetails({ ext, profile }: { ext: InstalledExtension; profile: 
         {ext.permissions.length ? (
           ext.permissions.map((p) => <Row key={p} title={p} />)
         ) : (
-          <Row title="This extension requires no special permissions." />
+          <Row title={t("This extension requires no special permissions.")} />
         )}
         {ext.siteAccess ? (
-          <Row title="Site access" description="Which sites the extension can read and change.">
+          <Row title={t("Site access")} description={t("Which sites the extension can read and change.")}>
             <PopUp value={siteAccessOf(ext)} options={SITE_ACCESS} onChange={(siteAccess) => void configure(profile, ext.id, { siteAccess })} />
           </Row>
         ) : null}
@@ -152,42 +153,42 @@ function ExtensionDetails({ ext, profile }: { ext: InstalledExtension; profile: 
 
       <SectionHeader title="Settings" />
       <Group>
-        <Row title="Pin to toolbar" description="Show its button next to the address.">
+        <Row title={t("Pin to toolbar")} description={t("Show its button next to the address.")}>
           <Toggle value={ext.pinned} onChange={(pinned) => void setPinned(profile, ext.id, pinned)} />
         </Row>
-        <Row title="Allow in Incognito" description="Incognito can't stop extensions from recording your browsing.">
+        <Row title={t("Allow in Incognito")} description={t("Incognito can't stop extensions from recording your browsing.")}>
           <Toggle value={ext.incognito} onChange={(incognito) => void configure(profile, ext.id, { incognito })} />
         </Row>
         {ext.userScriptsAvailable ? (
           <Row
-            title="Allow User Scripts"
-            description="Lets it run unreviewed code, like userscripts. Only for code you trust."
+            title={t("Allow User Scripts")}
+            description={t("Lets it run unreviewed code, like userscripts. Only for code you trust.")}
           >
             <Toggle value={!!ext.userScripts} onChange={(userScripts) => void configure(profile, ext.id, { userScripts })} />
           </Row>
         ) : null}
         {ext.optionsUrl ? (
-          <Row title="Extension options">
-            <Button title="Open" onPress={() => openTab(ext.optionsUrl!)} />
+          <Row title={t("Extension options")}>
+            <Button title={t("Open")} onPress={() => openTab(ext.optionsUrl!)} />
           </Row>
         ) : null}
         {ext.webStoreUrl ? (
-          <Row title="View in Chrome Web Store">
-            <Button title="Open" onPress={() => openTab(ext.webStoreUrl!)} />
+          <Row title={t("View in Chrome Web Store")}>
+            <Button title={t("Open")} onPress={() => openTab(ext.webStoreUrl!)} />
           </Row>
         ) : null}
         {!ext.fromWebStore ? (
-          <Row title="Reload" description={ext.path ?? undefined}>
-            <Button title="Reload" onPress={() => void reload(profile, ext.id)} />
+          <Row title={t("Reload")} description={ext.path ?? undefined}>
+            <Button title={t("Reload")} onPress={() => void reload(profile, ext.id)} />
           </Row>
         ) : null}
-        {ext.errors.length ? <Row title="Errors" description={ext.errors.slice(0, 5).join("\n")} /> : null}
+        {ext.errors.length ? <Row title={t("Errors")} description={ext.errors.slice(0, 5).join("\n")} /> : null}
         <Row title={<Text tone="textTertiary">{`ID ${ext.id}`}</Text>} />
       </Group>
 
       <View style={REMOVE}>
         <Button
-          title="Remove Extension…"
+          title={t("Remove Extension…")}
           kind="destructive"
           disabled={!ext.mayModify}
           onPress={() => void removeExtension(profile, ext, SETTINGS_WINDOW_ID)}

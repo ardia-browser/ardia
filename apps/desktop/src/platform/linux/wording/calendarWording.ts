@@ -16,12 +16,12 @@ export const CALENDAR_WORDING: readonly Wording[] = [
       ],
       [
         `{blocked ? (
-            <Button title="Open System Settings" onPress={openCalendarPrivacy} />`,
+            <Button title={t("Open System Settings")} onPress={openCalendarPrivacy} />`,
         `{blocked ? (
-            <Button title="Try Again" onPress={() => void connectCalendar()} />`,
+            <Button title={t("Try Again")} onPress={() => void connectCalendar()} />`,
       ],
-      [`{requestError ? <Button title="Open System Settings" onPress={openCalendarPrivacy} /> : null}`, ""],
-      [`subtitle="Add accounts in the Calendar app."`, `subtitle="Add an account in GNOME Online Accounts, or a calendar in GNOME Calendar or Evolution."`],
+      [`{requestError ? <Button title={t("Open System Settings")} onPress={openCalendarPrivacy} /> : null}`, ""],
+      [`subtitle={t("Add accounts in the Calendar app.")}`, `subtitle={t("Add an account in GNOME Online Accounts, or a calendar in GNOME Calendar or Evolution.")}`],
     ],
   },
   {

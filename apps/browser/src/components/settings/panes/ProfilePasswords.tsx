@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { asSecret, reveal } from "@ardia/core";
 import {
   deletePassword,
@@ -131,21 +132,21 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
   return (
     <ProfileSubPage>
       <SectionHeader
-        title="Passwords"
+        title={t("Passwords")}
         description={`Saved on this ${PLATFORM_TERMS.computer}, separately for each profile, and encrypted with ${PLATFORM_TERMS.passwordKey}.`}
       />
       <Group>
-        <Row title="Import passwords" description={importStatus || "From a CSV exported by Chrome, Safari, Firefox, 1Password, Bitwarden…"}>
-          <Button title="Import CSV…" onPress={() => void importCsv()} />
+        <Row title={t("Import passwords")} description={importStatus || "From a CSV exported by Chrome, Safari, Firefox, 1Password, Bitwarden…"}>
+          <Button title={t("Import CSV…")} onPress={() => void importCsv()} />
         </Row>
         {PLATFORM_FEATURES.exportsBookmarksAndPasswords ? (
-          <Row title="Export passwords" description={exportStatus || "To a CSV file. Anyone who can open the file can read your passwords."}>
-            <Button title="Export CSV…" onPress={() => void exportCsv()} />
+          <Row title={t("Export passwords")} description={exportStatus || "To a CSV file. Anyone who can open the file can read your passwords."}>
+            <Button title={t("Export CSV…")} onPress={() => void exportCsv()} />
           </Row>
         ) : null}
         <Row
           icon={<Symbol name="questionmark.circle" size={15} color={theme.icon} style={HELP_ICON} />}
-          title="Password manager apps"
+          title={t("Password manager apps")}
           description={passwordManagerAppsNote()}
         />
       </Group>
@@ -159,13 +160,13 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
           <Text size="small" tone="textSecondary">
             {`Unlock with ${PLATFORM_TERMS.deviceUnlock} to see them.`}
           </Text>
-          <Button title="Unlock" kind="primary" onPress={() => void unlockPasswordsFor(profile)} />
+          <Button title={t("Unlock")} kind="primary" onPress={() => void unlockPasswordsFor(profile)} />
         </Box>
       ) : (
         <>
           <SectionHeader
             title={list ? plural(list.length, "Saved Password") : "Saved Passwords"}
-            action={<SearchField value={query} onChangeText={setQuery} placeholder="Search" width={200} />}
+            action={<SearchField value={query} onChangeText={setQuery} placeholder={t("Search")} width={200} />}
           />
           <Group>
             {list && shown.length === 0 ? (
@@ -184,11 +185,11 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
           </Group>
           {never.length > 0 && (
             <>
-              <SectionHeader title="Never saved" description="Sites where you chose “Never on This Site”." />
+              <SectionHeader title="Never saved" description={t("Sites where you chose “Never on This Site”.")} />
               <Group>
                 {never.map((origin) => (
                   <Row key={origin} icon={<Favicon url={origin} />} title={hostLabel(origin)}>
-                    <Button title="Remove" onPress={() => void setNeverSavePasswords(profile, origin, false).catch(orWarn(undefined)).then(load)} />
+                    <Button title={t("Remove")} onPress={() => void setNeverSavePasswords(profile, origin, false).catch(orWarn(undefined)).then(load)} />
                   </Row>
                 ))}
               </Group>
@@ -254,18 +255,18 @@ function PasswordSheet({ profile, saved, onChanged }: { profile: string; saved: 
       <DialogTitle icon={<Favicon url={saved.origin} size={20} />}>{hostLabel(saved.origin)}</DialogTitle>
       <View style={SHEET_BODY}>
         <Group>
-          <Row title="Website" description={saved.origin} />
-          <Row title="Username">
+          <Row title={t("Website")} description={saved.origin} />
+          <Row title={t("Username")}>
             {editing ? (
               <TextField value={username} onChangeText={setUsername} width={220} />
             ) : (
               <Box row gap="xs" style={CENTER}>
                 <Text selectable>{saved.username}</Text>
-                <Button variant="icon" icon="doc.on.doc" size="m" onPress={() => copyText(saved.username)} tooltip="Copy Username" />
+                <Button variant="icon" icon="doc.on.doc" size="m" onPress={() => copyText(saved.username)} tooltip={t("Copy Username")} />
               </Box>
             )}
           </Row>
-          <Row title="Password">
+          <Row title={t("Password")}>
             {editing ? (
               <TextField value={password ?? ""} onChangeText={setPassword} secure={!revealed} width={220} />
             ) : (
@@ -273,8 +274,8 @@ function PasswordSheet({ profile, saved, onChanged }: { profile: string; saved: 
                 <Text selectable style={revealed ? monoFace() : undefined}>
                   {password === null ? "…" : revealed ? password : "•".repeat(Math.min(password.length, 12))}
                 </Text>
-                <Button variant="icon" icon={revealed ? "eye.slash" : "eye"} size="m" onPress={() => setRevealed(!revealed)} tooltip={revealed ? "Hide" : "Show"} />
-                <Button variant="icon" icon="doc.on.doc" size="m" onPress={() => password && copyText(password)} tooltip="Copy Password" />
+                <Button variant="icon" icon={revealed ? "eye.slash" : "eye"} size="m" onPress={() => setRevealed(!revealed)} tooltip={revealed ? t("Hide") : t("Show")} />
+                <Button variant="icon" icon="doc.on.doc" size="m" onPress={() => password && copyText(password)} tooltip={t("Copy Password")} />
               </Box>
             )}
           </Row>
@@ -285,23 +286,23 @@ function PasswordSheet({ profile, saved, onChanged }: { profile: string; saved: 
           </Text>
         ) : null}
       </View>
-      <DialogActions leading={<Button title="Delete" kind="destructive" disabled={busy} onPress={() => void remove()} />}>
+      <DialogActions leading={<Button title={t("Delete")} kind="destructive" disabled={busy} onPress={() => void remove()} />}>
         {editing ? (
           <>
             <Button
-              title="Cancel"
+              title={t("Cancel")}
               disabled={busy}
               onPress={() => {
                 setError("");
                 setEditing(false);
               }}
             />
-            <Button title="Save" kind="primary" disabled={!password || busy} onPress={() => void save()} />
+            <Button title={t("Save")} kind="primary" disabled={!password || busy} onPress={() => void save()} />
           </>
         ) : (
           <>
-            <Button title="Edit" onPress={() => setEditing(true)} />
-            <Button title="Done" kind="primary" onPress={closeSettingsSheet} />
+            <Button title={t("Edit")} onPress={() => setEditing(true)} />
+            <Button title={t("Done")} kind="primary" onPress={closeSettingsSheet} />
           </>
         )}
       </DialogActions>

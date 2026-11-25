@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { useEffect, useRef, useState } from "react";
 import { Animated, StyleSheet, View } from "react-native";
 import { useSidebarSide, useWindowId } from "../../../state/browser/hooks";
@@ -169,11 +170,11 @@ function CoachMark({ stop, index, count, windowId }: { stop: TourStop; index: nu
           {stop.body}
         </Text>
         <View style={{ flexDirection: "row", alignItems: "center", marginTop: space.m, gap: space.s }}>
-          {last ? null : <Button variant="text" look="link" tone="textTertiary" label="Skip Tour" title="Skip Tour" onPress={endToolTour} />}
+          {last ? null : <Button variant="text" look="link" tone="textTertiary" label={t("Skip Tour")} title={t("Skip Tour")} onPress={endToolTour} />}
           <View style={{ flex: 1 }} />
-          {video ? <Button variant="pill" title="Watch Video Tour" onPress={() => (endToolTour(), openVideoTour(windowId))} /> : null}
-          {index > 0 && !last ? <Button variant="pill" title="Back" onPress={() => stepToolTour(-1)} /> : null}
-          <Button variant="pill" title={last ? "Done" : "Next"} primary onPress={() => stepToolTour(1)} />
+          {video ? <Button variant="pill" title={t("Watch Video Tour")} onPress={() => (endToolTour(), openVideoTour(windowId))} /> : null}
+          {index > 0 && !last ? <Button variant="pill" title={t("Back")} onPress={() => stepToolTour(-1)} /> : null}
+          <Button variant="pill" title={last ? t("Done") : t("Next")} primary onPress={() => stepToolTour(1)} />
         </View>
       </View>
     </Panel>

@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { useEffect } from "react";
 import { AppState, View } from "react-native";
 import type { DownloadSettings } from "../../../state/downloads/actions";
@@ -104,8 +105,8 @@ function StartupSection() {
           <PopUp
             value={restoreSession ? "keep" : "close"}
             options={[
-              { value: "keep", title: "Keep windows and tabs" },
-              { value: "close", title: "Start fresh" },
+              { value: "keep", title: t("Keep windows and tabs") },
+              { value: "close", title: t("Start fresh") },
             ]}
             onChange={(v) => updateSettings({ restoreSession: v === "keep" })}
             minWidth={190}
@@ -177,10 +178,10 @@ function DownloadsSection() {
           anchor="general.downloadsFolder"
           description={current ? (current.managed ? `${homeRelative(current.folder)}, set by your organization.` : homeRelative(current.folder)) : undefined}
         >
-          <Button title="Change…" disabled={locked} onPress={() => void change()} />
+          <Button title={t("Change…")} disabled={locked} onPress={() => void change()} />
         </Row>
         <Row anchor="general.separateDownloadFolders">
-          <Toggle value={separate} accessibilityLabel="Separate folder for each profile" onChange={setSeparate} />
+          <Toggle value={separate} accessibilityLabel={t("Separate folder for each profile")} onChange={setSeparate} />
         </Row>
         <Row anchor="general.askWhereToSave">
           <Toggle value={current?.askWhereToSave ?? false} disabled={locked} onChange={(v) => apply({ askWhereToSave: v })} />
@@ -215,8 +216,8 @@ function ContentBlockingSection() {
         ))}
         <Row anchor="general.filterLists" onPress={() => goToSettingsPane("general", null, SETTINGS_DETAIL.filterLists)} />
         {unavailable && (
-          <Row title="uBlock Origin isn't answering" description="Its settings show here once it responds. Pages keep the blocking they had.">
-            <Button title="Try Again" onPress={refresh} />
+          <Row title={t("uBlock Origin isn't answering")} description={t("Its settings show here once it responds. Pages keep the blocking they had.")}>
+            <Button title={t("Try Again")} onPress={refresh} />
           </Row>
         )}
       </Group>
@@ -242,11 +243,11 @@ function ImportSection() {
       <SectionHeader title="Import" />
       <Group>
         <Row anchor="general.importBrowser">
-          <Button title="Import…" onPress={() => openImport()} />
+          <Button title={t("Import…")} onPress={() => openImport()} />
         </Row>
         <SetupCodeRow />
         <Row anchor="general.redoSetup">
-          <Button title="Redo Setup…" onPress={redoSetupFromSettings} />
+          <Button title={t("Redo Setup…")} onPress={redoSetupFromSettings} />
         </Row>
       </Group>
     </>

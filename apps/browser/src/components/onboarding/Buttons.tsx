@@ -1,3 +1,4 @@
+import { t } from "../../lib/i18n";
 import type { ReactNode, Ref } from "react";
 import { Animated, Pressable, View } from "react-native";
 import { GlassFill, Symbol, Text, useGlass, useHover, type SymbolProps } from "../ui";
@@ -134,5 +135,5 @@ export function CircleButton({
 }
 
 export function BackButton({ onPress }: { onPress: () => void }) {
-  return <CircleButton title="Back" icon="chevron.left" size={12} symbolWeight="semibold" box={14} onPress={onPress} />;
+  return <CircleButton title={t("Back")} icon="chevron.left" size={12} symbolWeight="semibold" box={14} onPress={onPress} />;
 }

@@ -6,6 +6,7 @@ import { useShortcutHint, withShortcut } from "../../state/commands/commandShort
 import { Box, Button, MenuRow } from "../ui";
 import { useTheme } from "../ui/theme";
 import type { ToolbarPalette } from "../ui/toolbarColors";
+import { t } from "../../lib/i18n";
 
 export const readerButtonShown = (state: { active: boolean; available: boolean } | undefined, quiet: boolean) => !!state && (state.active || (state.available && !quiet));
 
@@ -26,7 +27,7 @@ export const ReaderButton = memo(function ReaderButton({ tabId, palette, onFocus
         onFocus();
         void toggleReader(tabId);
       }}
-      tooltip={withShortcut(state.active ? "Hide Reader" : "Show Reader", hint)}
+      tooltip={withShortcut(state.active ? t("Hide Reader") : t("Show Reader"), hint)}
     />
   );
 });
@@ -37,7 +38,7 @@ export function ReaderRow({ tabId, onClose }: { tabId: string; onClose: () => vo
   return (
     <MenuRow
       icon="doc.plaintext"
-      title={state.active ? "Hide Reader" : "Show Reader"}
+      title={state.active ? t("Hide Reader") : t("Show Reader")}
       onPress={() => {
         onClose();
         void toggleReader(tabId);
@@ -54,12 +55,12 @@ export function ReaderLookRow({ tabId }: { tabId: string }) {
   return (
     <MenuRow
       icon="textformat"
-      title="Reader Text"
+      title={t("Reader Text")}
       accessory={
         <Box row gap="xs" style={CENTER_ROW}>
-          <Button variant="stepper" icon="minus" tooltip="Smaller Text" disabled={size === 0} onPress={() => stepReaderSize(-1)} />
-          <Button variant="stepper" icon="plus" tooltip="Larger Text" disabled={size === READER_SIZE_NAMES.length - 1} onPress={() => stepReaderSize(1)} />
-          <Button variant="pill" title={font === "serif" ? "Sans-Serif" : "Serif"} onPress={toggleReaderFont} />
+          <Button variant="stepper" icon="minus" tooltip={t("Smaller Text")} disabled={size === 0} onPress={() => stepReaderSize(-1)} />
+          <Button variant="stepper" icon="plus" tooltip={t("Larger Text")} disabled={size === READER_SIZE_NAMES.length - 1} onPress={() => stepReaderSize(1)} />
+          <Button variant="pill" title={font === "serif" ? t("Sans-Serif") : t("Serif")} onPress={toggleReaderFont} />
         </Box>
       }
     />

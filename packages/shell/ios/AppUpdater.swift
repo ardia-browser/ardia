@@ -156,11 +156,11 @@ public final class AppUpdater: NSObject {
       .paragraphStyle: centered,
     ]
     let links = [
-      ("Source code", "\(repository)/tree/v\(version)"),
-      ("License", "\(repository)/blob/v\(version)/LICENSE"),
-      ("Credits", "\(repository)/blob/v\(version)/NOTICE"),
+      (ShellL10n.t("Source code"), "\(repository)/tree/v\(version)"),
+      (ShellL10n.t("License"), "\(repository)/blob/v\(version)/LICENSE"),
+      (ShellL10n.t("Credits"), "\(repository)/blob/v\(version)/NOTICE"),
     ]
-    let credits = NSMutableAttributedString(string: "\(aboutNotice)\n\n", attributes: plain)
+    let credits = NSMutableAttributedString(string: "\(ShellL10n.t(aboutNotice))\n\n", attributes: plain)
     for (index, (title, url)) in links.enumerated() {
       if index > 0 { credits.append(NSAttributedString(string: "  ·  ", attributes: plain)) }
       var linked = plain
@@ -270,9 +270,9 @@ public final class AppUpdater: NSObject {
   private func showNotSetUp() {
     let alert = NSAlert()
     let name = ProcessInfo.processInfo.processName
-    alert.messageText = "Updates aren't set up for this build"
-    alert.informativeText = "This copy of \(name) doesn't have an update feed, so it can't check for new versions. Get newer versions from wherever you got this one."
-    alert.addButton(withTitle: "OK")
+    alert.messageText = ShellL10n.t("Updates aren't set up for this build")
+    alert.informativeText = ShellL10n.t("This copy of {name} doesn't have an update feed, so it can't check for new versions. Get newer versions from wherever you got this one.", replacing: "name", with: name)
+    alert.addButton(withTitle: ShellL10n.t("OK"))
     if let window = NSApp.keyWindow, window.attachedSheet == nil {
       alert.beginSheetModal(for: window)
     } else {

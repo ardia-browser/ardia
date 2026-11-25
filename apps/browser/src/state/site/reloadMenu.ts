@@ -12,6 +12,7 @@ import { useBrowser } from "../browser/store";
 import { openSettings } from "../settings/settingsWindows";
 import { showToast } from "../app/toasts";
 import { withLivePage } from "../tabs/livePage";
+import { t } from "../../lib/i18n";
 
 export function siteOrigin(url: string): string | null {
   try {
@@ -28,7 +29,7 @@ export async function setSiteBlocking(tab: Pick<Tab, "id" | "windowId">, host: s
     () => true,
   );
   const allowed = await isContentBlockerAllowed(host);
-  if (failed) showToast(tab.windowId, "Couldn't Change the Ad Blocker", `Blocking on ${host} is as it was. Try again.`, { icon: "exclamationmark.triangle" });
+  if (failed) showToast(tab.windowId, t("Couldn't Change the Ad Blocker"), t("Blocking on {host} is as it was. Try again.", { host }), { icon: "exclamationmark.triangle" });
   else void webviews.get(tab.id)?.reload();
   return allowed;
 }
@@ -36,9 +37,9 @@ export async function setSiteBlocking(tab: Pick<Tab, "id" | "windowId">, host: s
 export async function clearSiteDataAfterConfirm(tab: Pick<Tab, "id" | "windowId" | "profileId">, origin: string): Promise<number | null> {
   const host = new URL(origin).hostname;
   const { confirmed } = await confirm({
-    title: `Clear cookies and site data for ${host}?`,
-    message: "You'll be signed out of this site, and its offline data will be deleted.",
-    confirmTitle: "Clear",
+    title: t("Clear cookies and site data for {host}?", { host }),
+    message: t("You'll be signed out of this site, and its offline data will be deleted."),
+    confirmTitle: t("Clear"),
     destructive: true,
     windowId: tab.windowId,
   });
@@ -55,11 +56,11 @@ type ReloadMenuState = { blocker: "on" | "off" | "offInSettings" | "unavailable"
 export function reloadMenuItems({ blocker }: ReloadMenuState): MenuItem[] {
   return menuSections(
     [
-      { id: "reload", title: "Reload", symbol: "arrow.clockwise", ...menuShortcut("reload") },
-      { id: "forceReload", title: "Hard Reload", symbol: "arrow.triangle.2.circlepath", ...menuShortcut("forceReload") },
+      { id: "reload", title: t("Reload"), symbol: "arrow.clockwise", ...menuShortcut("reload") },
+      { id: "forceReload", title: t("Hard Reload"), symbol: "arrow.triangle.2.circlepath", ...menuShortcut("forceReload") },
     ],
-    [{ id: "blocking", title: "Block Ads & Trackers", symbol: "hand.raised", checked: blocker === "on", enabled: blocker !== "unavailable" }],
-    [{ id: "clearData", title: "Clear Cookies and Site Data…", symbol: "trash" }],
+    [{ id: "blocking", title: t("Block Ads & Trackers"), symbol: "hand.raised", checked: blocker === "on", enabled: blocker !== "unavailable" }],
+    [{ id: "clearData", title: t("Clear Cookies and Site Data…"), symbol: "trash" }],
   );
 }
 

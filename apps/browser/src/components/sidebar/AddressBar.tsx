@@ -32,6 +32,7 @@ import { GLYPH } from "../toolbar/tokens";
 import { HEADER_TOOLS, headerToggleXIn, navButtonsFitting, type HeaderButton } from "../window/dockMotion";
 import { ARC_LIGHTS_CENTER } from "../../state/windows/dockMotion";
 import { PAGE_IDENTITY_TAG } from "../../state/tabs/tabReveal";
+import { t } from "../../lib/i18n";
 
 const BUTTON = layout.toolbarButton;
 const { edge: EDGE } = HEADER_TOOLS;
@@ -76,7 +77,7 @@ export function SidebarHeaderTools({ width }: { width: number }) {
           icon={right ? "sidebar.right" : "sidebar.left"}
           glyph={GLYPH}
           onPress={() => toggleSidebar(windowId)}
-          tooltip={withShortcut("Hide Tabs", hints.toggleSidebar)}
+          tooltip={withShortcut(t("Hide Tabs"), hints.toggleSidebar)}
         />
       )}
       {tab ? <NavigationButtons tab={tab} palette={palette} hints={hints} buttons={shown} slots={at.slice(toggle ? 1 : 0).map(place)} /> : null}

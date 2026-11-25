@@ -1,3 +1,4 @@
+import { t } from "../../lib/i18n";
 import {
   addToDock,
   backgroundInstance,
@@ -28,8 +29,8 @@ const ICON = require("../../../assets/app-icon.png");
 
 
 const LINK_CHOICES: ChoiceOption<boolean>[] = [
-  { value: true, preview: "links-little", title: "Little Ardia", subtitle: "A small window that's gone when you're done" },
-  { value: false, preview: "links-tab", title: "A new tab", subtitle: "Right in your main window" },
+  { value: true, preview: "links-little", title: t("Little Ardia"), subtitle: t("A small window that's gone when you're done") },
+  { value: false, preview: "links-tab", title: t("A new tab"), subtitle: t("Right in your main window") },
 ];
 
 export function HomeStep() {
@@ -82,11 +83,11 @@ function DefaultBrowserQuestion() {
   return (
     <StepLayout
       pageKey="default"
-      title="Make Ardia your default?"
-      subtitle="Links from everywhere open here."
+      title={t("Make Ardia your default?")}
+      subtitle={t("Links from everywhere open here.")}
       actions={
         <StepActions
-          continueTitle={busy ? "Setting Up…" : "Continue"}
+          continueTitle={busy ? t("Setting Up…") : t("Continue")}
           disabled={!system || busy}
           holdForward={pending}
           onContinue={() => void apply()}
@@ -100,19 +101,19 @@ function DefaultBrowserQuestion() {
         <OptionCard
           control="check"
           icon="globe"
-          title="Set Ardia as default browser"
-          subtitle={system?.isDefault ? "Ardia is already your default browser" : PLATFORM_FEATURES.setsDefaultBrowser ? "Open links and web pages in Ardia" : `Continue opens ${PLATFORM_TERMS.os} Settings, where you choose Ardia`}
+          title={t("Set Ardia as default browser")}
+          subtitle={system?.isDefault ? t("Ardia is already your default browser") : PLATFORM_FEATURES.setsDefaultBrowser ? t("Open links and web pages in Ardia") : t("Continue opens {os} Settings, where you choose Ardia", { os: PLATFORM_TERMS.os })}
           selected={!!defaultOn}
           disabled={!system || system.isDefault}
           onPress={() => setExtras(defaultOn ? { setDefault: false, trial: !redo } : { setDefault: true })}
         />
         {system && !defaultOn && !redo && PLATFORM_FEATURES.setsDefaultBrowser ? (
-          <OptionCard control="check" icon="calendar" title="Try it for seven days" subtitle="We'll check in to make sure you love it." selected={trial} onPress={() => setExtras({ trial: !trial })} />
+          <OptionCard control="check" icon="calendar" title={t("Try it for seven days")} subtitle={t("We'll check in to make sure you love it.")} selected={trial} onPress={() => setExtras({ trial: !trial })} />
         ) : null}
         {system && system.dockAvailable && !system.inDock ? (
-          <OptionCard control="check" icon="dock.rectangle" title="Add Ardia to Dock" subtitle="Quick access whenever you need it" selected={dock} onPress={() => setExtras({ dock: !dock })} />
+          <OptionCard control="check" icon="dock.rectangle" title={t("Add Ardia to Dock")} subtitle={t("Quick access whenever you need it")} selected={dock} onPress={() => setExtras({ dock: !dock })} />
         ) : null}
-        <OptionCard control="check" icon="power" title="Open Ardia at login" subtitle="Ready when you sign in" selected={login} onPress={() => setExtras({ login: !login })} />
+        <OptionCard control="check" icon="power" title={t("Open Ardia at login")} subtitle={t("Ready when you sign in")} selected={login} onPress={() => setExtras({ login: !login })} />
       </View>
     </StepLayout>
   );
@@ -125,8 +126,8 @@ function LinksQuestion() {
   return (
     <StepLayout
       pageKey="links"
-      title="Where do links from other apps open?"
-      subtitle={`From ${PLATFORM_TERMS.linkSourceApps} and the rest.`}
+      title={t("Where do links from other apps open?")}
+      subtitle={t("From {apps} and the rest.", { apps: PLATFORM_TERMS.linkSourceApps })}
       actions={
         <StepActions
           onContinue={() =>
@@ -163,8 +164,8 @@ function SystemPreview({ isDefault, dock, login }: { isDefault: boolean; dock: b
       <Image source={ICON} style={{ width: 132, height: 132 }} />
       <View style={{ gap: space.m, alignItems: "center" }}>
         {chip(isDefault, "globe", "Default browser")}
-        {PLATFORM_FEATURES.dock ? chip(dock, "dock.rectangle", "In your Dock") : null}
-        {chip(login, "power", "Opens at login")}
+        {PLATFORM_FEATURES.dock ? chip(dock, "dock.rectangle", t("In your Dock")) : null}
+        {chip(login, "power", t("Opens at login"))}
       </View>
     </View>
   );

@@ -2,18 +2,18 @@ import AppKit
 import ArdiaCore
 
 enum MainMenu {
-  private static var moveToProfile = NSMenu(title: "Move to Profile")
-  private static var moveToWindow = NSMenu(title: "Move to Window")
-  static var profiles = NSMenu(title: "Profiles")
-  private static var profilesItem = NSMenuItem(title: "Profiles", action: nil, keyEquivalent: "")
+  private static var moveToProfile = NSMenu(title: ShellL10n.t("Move to Profile"))
+  private static var moveToWindow = NSMenu(title: ShellL10n.t("Move to Window"))
+  static var profiles = NSMenu(title: ShellL10n.t("Profiles"))
+  private static var profilesItem = NSMenuItem(title: ShellL10n.t("Profiles"), action: nil, keyEquivalent: "")
   private static var profilesSeparator = NSMenuItem.separator()
-  private static var littleArdiaInProfile = NSMenu(title: "New Little Ardia Window in Profile")
-  private static var littleArdiaInProfileItem = NSMenuItem(title: "New Little Ardia Window in Profile", action: nil, keyEquivalent: "")
-  private static var bookmarks = NSMenu(title: "Bookmarks")
+  private static var littleArdiaInProfile = NSMenu(title: ShellL10n.t("New Little Ardia Window in Profile"))
+  private static var littleArdiaInProfileItem = NSMenuItem(title: ShellL10n.t("New Little Ardia Window in Profile"), action: nil, keyEquivalent: "")
+  private static var bookmarks = NSMenu(title: ShellL10n.t("Bookmarks"))
   private static var bookmarksFixedCount = 0
   private static var bookmarkItems: [NSMenuItem] = []
-  private static var history = NSMenu(title: "History")
-  private static var extensions = NSMenu(title: "Extensions")
+  private static var history = NSMenu(title: ShellL10n.t("History"))
+  private static var extensions = NSMenu(title: ShellL10n.t("Extensions"))
   private static var extensionIcons: [String: NSImage] = [:]
 
   static func performAppWideKey(_ event: NSEvent) -> Bool {
@@ -36,11 +36,11 @@ enum MainMenu {
     ArdiaWebView.setAppWideKeys { MainMenu.performAppWideKey($0) }
     let appName = ProcessInfo.processInfo.processName
     let main = KeyEquivalentMenu()
-    moveToProfile = NSMenu(title: "Move to Profile")
-    moveToWindow = NSMenu(title: "Move to Window")
-    profiles = NSMenu(title: "Profiles")
+    moveToProfile = NSMenu(title: ShellL10n.t("Move to Profile"))
+    moveToWindow = NSMenu(title: ShellL10n.t("Move to Window"))
+    profiles = NSMenu(title: ShellL10n.t("Profiles"))
     profilesSeparator = NSMenuItem.separator()
-    littleArdiaInProfile = NSMenu(title: "New Little Ardia Window in Profile")
+    littleArdiaInProfile = NSMenu(title: ShellL10n.t("New Little Ardia Window in Profile"))
 
     func std(_ title: String, _ action: Selector) -> StandardItem { StandardItem(title, action) }
     func sub(_ title: String, _ items: [NSMenuItem], menu: NSMenu? = nil) -> NSMenuItem {
@@ -67,33 +67,33 @@ enum MainMenu {
     }
     bookmarkItems = []
 
-    let shareMenu = NSMenu(title: "Share")
+    let shareMenu = NSMenu(title: ShellL10n.t("Share"))
     shareMenu.delegate = ShareMenu.shared
 
-    let quit = std("Quit \(appName)", #selector(MenuTarget.quit(_:)))
+    let quit = std(ShellL10n.t("Quit {app}", replacing: "app", with: appName), #selector(MenuTarget.quit(_:)))
     quit.target = MenuTarget.shared
-    let closeWindow = std("Close Window", #selector(MenuTarget.closeWindow(_:)))
+    let closeWindow = std(ShellL10n.t("Close Window"), #selector(MenuTarget.closeWindow(_:)))
     closeWindow.target = MenuTarget.shared
-    let services = NSMenu(title: "Services")
+    let services = NSMenu(title: ShellL10n.t("Services"))
     NSApp.servicesMenu = services
     _ = top(appName, [
-      aboutItem("About \(appName)"),
+      aboutItem(ShellL10n.t("About {app}", replacing: "app", with: appName)),
       updatesItem(),
       .separator(),
       cmd(.openSettings),
       cmd(.importBrowserData),
       .separator(),
-      sub("Services", [], menu: services),
+      sub(ShellL10n.t("Services"), [], menu: services),
       .separator(),
-      std("Hide \(appName)", #selector(NSApplication.hide(_:))),
-      std("Hide Others", #selector(NSApplication.hideOtherApplications(_:))),
-      std("Show All", #selector(NSApplication.unhideAllApplications(_:))),
+      std(ShellL10n.t("Hide {app}", replacing: "app", with: appName), #selector(NSApplication.hide(_:))),
+      std(ShellL10n.t("Hide Others"), #selector(NSApplication.hideOtherApplications(_:))),
+      std(ShellL10n.t("Show All"), #selector(NSApplication.unhideAllApplications(_:))),
       .separator(),
       quit,
     ])
 
-    littleArdiaInProfileItem = sub("New Little Ardia Window in Profile", [], menu: littleArdiaInProfile)
-    _ = top("File", [
+    littleArdiaInProfileItem = sub(ShellL10n.t("New Little Ardia Window in Profile"), [], menu: littleArdiaInProfile)
+    _ = top(ShellL10n.t("File"), [
       cmd(.newTab),
       cmd(.newTabInGroup),
       cmd(.newWindow),
@@ -113,24 +113,24 @@ enum MainMenu {
       cmd(.cleanUpTabs),
       .separator(),
       cmd(.savePage),
-      sub("Share", [cmd(.share), .separator()], menu: shareMenu),
+      sub(ShellL10n.t("Share"), [cmd(.share), .separator()], menu: shareMenu),
       hidden(.emailPageLocation),
       cmd(.print),
       cmd(.printWithSystemDialog),
     ])
 
-    let paste = std("Paste and Match Style", #selector(MenuTarget.pasteAndMatchStyle(_:)))
+    let paste = std(ShellL10n.t("Paste and Match Style"), #selector(MenuTarget.pasteAndMatchStyle(_:)))
     paste.target = MenuTarget.shared
     let edits = [
-      std("Cut", #selector(NSText.cut(_:))), std("Copy", #selector(NSText.copy(_:))),
-      std("Paste", #selector(NSText.paste(_:))), std("Select All", #selector(NSText.selectAll(_:))),
+      std(ShellL10n.t("Cut"), #selector(NSText.cut(_:))), std(ShellL10n.t("Copy"), #selector(NSText.copy(_:))),
+      std(ShellL10n.t("Paste"), #selector(NSText.paste(_:))), std(ShellL10n.t("Select All"), #selector(NSText.selectAll(_:))),
     ]
     edits.forEach { $0.target = MenuTarget.shared }
-    let undo = std("Undo", MenuTarget.undoAction)
+    let undo = std(ShellL10n.t("Undo"), MenuTarget.undoAction)
     undo.target = MenuTarget.shared
-    let redo = std("Redo", MenuTarget.redoAction)
+    let redo = std(ShellL10n.t("Redo"), MenuTarget.redoAction)
     redo.target = MenuTarget.shared
-    _ = top("Edit", [
+    _ = top(ShellL10n.t("Edit"), [
       undo,
       redo,
       .separator(),
@@ -140,10 +140,10 @@ enum MainMenu {
       cmd(.copyUrlAsMarkdown),
       edits[2],
       paste,
-      std("Delete", #selector(NSText.delete(_:))),
+      std(ShellL10n.t("Delete"), #selector(NSText.delete(_:))),
       edits[3],
       .separator(),
-      sub("Find", [
+      sub(ShellL10n.t("Find"), [
         cmd(.findInPage),
         cmd(.findAndReplace),
         cmd(.findNext),
@@ -151,42 +151,42 @@ enum MainMenu {
         cmd(.useSelectionForFind),
         cmd(.jumpToSelection),
       ]),
-      sub("Spelling and Grammar", [
-        std("Show Spelling and Grammar", #selector(NSText.showGuessPanel(_:))),
-        std("Check Document Now", #selector(NSText.checkSpelling(_:))),
+      sub(ShellL10n.t("Spelling and Grammar"), [
+        std(ShellL10n.t("Show Spelling and Grammar"), #selector(NSText.showGuessPanel(_:))),
+        std(ShellL10n.t("Check Document Now"), #selector(NSText.checkSpelling(_:))),
         .separator(),
-        std("Check Spelling While Typing", #selector(NSTextView.toggleContinuousSpellChecking(_:))),
-        std("Check Grammar With Spelling", #selector(NSTextView.toggleGrammarChecking(_:))),
-        std("Correct Spelling Automatically", #selector(NSTextView.toggleAutomaticSpellingCorrection(_:))),
+        std(ShellL10n.t("Check Spelling While Typing"), #selector(NSTextView.toggleContinuousSpellChecking(_:))),
+        std(ShellL10n.t("Check Grammar With Spelling"), #selector(NSTextView.toggleGrammarChecking(_:))),
+        std(ShellL10n.t("Correct Spelling Automatically"), #selector(NSTextView.toggleAutomaticSpellingCorrection(_:))),
       ]),
-      sub("Substitutions", [
-        std("Show Substitutions", #selector(NSTextView.orderFrontSubstitutionsPanel(_:))),
+      sub(ShellL10n.t("Substitutions"), [
+        std(ShellL10n.t("Show Substitutions"), #selector(NSTextView.orderFrontSubstitutionsPanel(_:))),
         .separator(),
-        std("Smart Copy/Paste", #selector(NSTextView.toggleSmartInsertDelete(_:))),
-        std("Smart Quotes", #selector(NSTextView.toggleAutomaticQuoteSubstitution(_:))),
-        std("Smart Dashes", #selector(NSTextView.toggleAutomaticDashSubstitution(_:))),
-        std("Smart Links", #selector(NSTextView.toggleAutomaticLinkDetection(_:))),
-        std("Data Detectors", #selector(NSTextView.toggleAutomaticDataDetection(_:))),
-        std("Text Replacement", #selector(NSTextView.toggleAutomaticTextReplacement(_:))),
+        std(ShellL10n.t("Smart Copy/Paste"), #selector(NSTextView.toggleSmartInsertDelete(_:))),
+        std(ShellL10n.t("Smart Quotes"), #selector(NSTextView.toggleAutomaticQuoteSubstitution(_:))),
+        std(ShellL10n.t("Smart Dashes"), #selector(NSTextView.toggleAutomaticDashSubstitution(_:))),
+        std(ShellL10n.t("Smart Links"), #selector(NSTextView.toggleAutomaticLinkDetection(_:))),
+        std(ShellL10n.t("Data Detectors"), #selector(NSTextView.toggleAutomaticDataDetection(_:))),
+        std(ShellL10n.t("Text Replacement"), #selector(NSTextView.toggleAutomaticTextReplacement(_:))),
       ]),
-      sub("Transformations", [
-        std("Make Upper Case", #selector(NSResponder.uppercaseWord(_:))),
-        std("Make Lower Case", #selector(NSResponder.lowercaseWord(_:))),
-        std("Capitalize", #selector(NSResponder.capitalizeWord(_:))),
+      sub(ShellL10n.t("Transformations"), [
+        std(ShellL10n.t("Make Upper Case"), #selector(NSResponder.uppercaseWord(_:))),
+        std(ShellL10n.t("Make Lower Case"), #selector(NSResponder.lowercaseWord(_:))),
+        std(ShellL10n.t("Capitalize"), #selector(NSResponder.capitalizeWord(_:))),
       ]),
-      sub("Speech", [
-        std("Start Speaking", #selector(NSTextView.startSpeaking(_:))),
-        std("Stop Speaking", #selector(NSTextView.stopSpeaking(_:))),
+      sub(ShellL10n.t("Speech"), [
+        std(ShellL10n.t("Start Speaking"), #selector(NSTextView.startSpeaking(_:))),
+        std(ShellL10n.t("Stop Speaking"), #selector(NSTextView.stopSpeaking(_:))),
       ]),
-      sub("AutoFill", [
+      sub(ShellL10n.t("AutoFill"), [
         cmd(.autofill, arg: "contact"),
         cmd(.autofill, arg: "passwords"),
         cmd(.autofill, arg: "creditCard"),
       ]),
     ])
 
-    _ = top("View", [
-      sub("Appearance", [
+    _ = top(ShellL10n.t("View"), [
+      sub(ShellL10n.t("Appearance"), [
         cmd(.setAppearance, arg: "auto"),
         cmd(.setAppearance, arg: "light"),
         cmd(.setAppearance, arg: "dark"),
@@ -195,7 +195,7 @@ enum MainMenu {
       cmd(.reload),
       cmd(.forceReload).alternate(),
       .separator(),
-      sub("Browser Layout", [
+      sub(ShellL10n.t("Browser Layout"), [
         cmd(.setTabLayout, arg: "sidebarLeft"),
         cmd(.setTabLayout, arg: "sidebarRight"),
         cmd(.setTabLayout, arg: "top"),
@@ -207,7 +207,7 @@ enum MainMenu {
         .separator(),
         cmd(.toggleSidebar),
         cmd(.toggleMinimalism),
-        bookmarkItem(sub("Show Bookmarks Bar", [
+        bookmarkItem(sub(ShellL10n.t("Show Bookmarks Bar"), [
           cmd(.setBookmarksBar, arg: "always"),
           cmd(.setBookmarksBar, arg: "newTab"),
           cmd(.setBookmarksBar, arg: "never"),
@@ -216,7 +216,7 @@ enum MainMenu {
         ])),
         cmd(.togglePinnedFold).hiddenWhenDisabled(),
       ]),
-      sub("Split View", [
+      sub(ShellL10n.t("Split View"), [
         cmd(.openSplitPane),
         cmd(.openSplitPaneBelow),
         cmd(.focusNextPane),
@@ -235,14 +235,14 @@ enum MainMenu {
       cmd(.zoomIn),
       cmd(.zoomOut),
       .separator(),
-      sub("Hide Elements", [
+      sub(ShellL10n.t("Hide Elements"), [
         cmd(.hideElement),
         cmd(.showHiddenElements),
       ]),
       .separator(),
-      std("Enter Full Screen", #selector(NSWindow.toggleFullScreen(_:))),
+      std(ShellL10n.t("Enter Full Screen"), #selector(NSWindow.toggleFullScreen(_:))),
       .separator(),
-      sub("Developer", [
+      sub(ShellL10n.t("Developer"), [
         cmd(.viewSource),
         cmd(.devTools),
         cmd(.inspectElements),
@@ -253,7 +253,7 @@ enum MainMenu {
       ]),
     ])
 
-    _ = top("Tabs", [
+    _ = top(ShellL10n.t("Tabs"), [
       cmd(.back),
       cmd(.forward),
       .separator(),
@@ -275,8 +275,8 @@ enum MainMenu {
       cmd(.newGroupWithTabs),
       hidden(.closeTabGroup),
       .separator(),
-      sub("Move to Profile", [], menu: moveToProfile),
-      sub("Move to Window", [], menu: moveToWindow),
+      sub(ShellL10n.t("Move to Profile"), [], menu: moveToProfile),
+      sub(ShellL10n.t("Move to Window"), [], menu: moveToWindow),
       bookmarkItem(NSMenuItem.separator()),
       bookmarkItem(cmd(.bookmarkPage)),
       .separator(),
@@ -285,28 +285,28 @@ enum MainMenu {
       cmd(.toggleMute),
     ])
 
-    bookmarks = top("Bookmarks", [
-      cmd(.bookmarkPage, title: "Bookmark This Page"),
+    bookmarks = top(ShellL10n.t("Bookmarks"), [
+      cmd(.bookmarkPage, title: ShellL10n.t("Bookmark This Page")),
       cmd(.bookmarkAllTabs),
       cmd(.manageBookmarks),
       cmd(.exportBookmarks),
     ])
     bookmarksFixedCount = bookmarks.items.count
     if let bookmarksRoot = main.items.first(where: { $0.submenu === bookmarks }) { bookmarkItems.append(bookmarksRoot) }
-    history = top("History", [])
-    extensions = top("Extensions", [])
+    history = top(ShellL10n.t("History"), [])
+    extensions = top(ShellL10n.t("Extensions"), [])
 
-    profilesItem = sub("Profiles", [], menu: profiles)
-    let minimizeAll = std("Minimize All", #selector(NSApplication.miniaturizeAll(_:)))
-    let arrange = std("Arrange in Front", #selector(MenuTarget.arrangeWindowsInFront(_:)))
+    profilesItem = sub(ShellL10n.t("Profiles"), [], menu: profiles)
+    let minimizeAll = std(ShellL10n.t("Minimize All"), #selector(NSApplication.miniaturizeAll(_:)))
+    let arrange = std(ShellL10n.t("Arrange in Front"), #selector(MenuTarget.arrangeWindowsInFront(_:)))
     arrange.target = MenuTarget.shared
-    let keepOnTop = std("Keep Window on Top", #selector(MenuTarget.toggleKeepOnTop(_:)))
+    let keepOnTop = std(ShellL10n.t("Keep Window on Top"), #selector(MenuTarget.toggleKeepOnTop(_:)))
     keepOnTop.target = MenuTarget.shared
     minimizeAll.isAlternate = true
-    let windowMenu = top("Window", [
-      std("Minimize", #selector(NSWindow.performMiniaturize(_:))),
+    let windowMenu = top(ShellL10n.t("Window"), [
+      std(ShellL10n.t("Minimize"), #selector(NSWindow.performMiniaturize(_:))),
       minimizeAll,
-      std("Zoom", #selector(NSWindow.performZoom(_:))),
+      std(ShellL10n.t("Zoom"), #selector(NSWindow.performZoom(_:))),
       arrange,
       keepOnTop,
       .separator(),
@@ -317,7 +317,7 @@ enum MainMenu {
       profilesItem,
       hidden(.openProfileMenu),
     ])
-    let helpMenu = top("Help", helpItems())
+    let helpMenu = top(ShellL10n.t("Help"), helpItems())
     MenuCatalog.capture(
       main, dynamic: [services, shareMenu, moveToProfile, moveToWindow, profiles, littleArdiaInProfile, history, extensions],
       growing: [bookmarks, windowMenu])
@@ -351,7 +351,7 @@ enum MainMenu {
   }
 
   private static func updatesItem() -> NSMenuItem {
-    let item = NSMenuItem(title: "Check for Updates…", action: #selector(AppUpdater.checkForUpdates(_:)), keyEquivalent: "")
+    let item = NSMenuItem(title: ShellL10n.t("Check for Updates…"), action: #selector(AppUpdater.checkForUpdates(_:)), keyEquivalent: "")
     item.target = AppUpdater.shared
     return item
   }
@@ -415,7 +415,7 @@ enum MainMenu {
   }
 
   private static func emptyItem() -> NSMenuItem {
-    let item = NSMenuItem(title: "Empty", action: nil, keyEquivalent: "")
+    let item = NSMenuItem(title: ShellL10n.t("Empty"), action: nil, keyEquivalent: "")
     item.isEnabled = false
     return item
   }
@@ -427,9 +427,9 @@ enum MainMenu {
     if children.isEmpty { menu.addItem(emptyItem()) }
     if let id, hasGroupLinks(children) {
       menu.addItem(.separator())
-      menu.addItem(CommandItem("Add to Sidebar as Group", "addFolderToSidebar", arg: id))
+      menu.addItem(CommandItem(ShellL10n.t("Add to Sidebar as Group"), "addFolderToSidebar", arg: id))
       if arcHolder && children.contains(where: { $0.children.map(hasGroupLinks) ?? false }) {
-        menu.addItem(CommandItem("Restore Arc Folders as Groups", "restoreArcFolders", arg: id))
+        menu.addItem(CommandItem(ShellL10n.t("Restore Arc Folders as Groups"), "restoreArcFolders", arg: id))
       }
     }
     item.submenu = menu
@@ -460,17 +460,17 @@ enum MainMenu {
     let state = MenuState.current
     if state.profiles.count == 2 {
       for p in state.profiles {
-        let item = CommandItem("New \(p.title) Window", "newWindow", arg: p.id)
+        let item = CommandItem(ShellL10n.t("New {profile} Window", replacing: "profile", with: p.title), "newWindow", arg: p.id)
         item.windowless = true
         menu.addItem(item)
       }
     } else {
-      let item = CommandItem("New Window", "newWindow")
+      let item = CommandItem(ShellL10n.t("New Window"), "newWindow")
       item.windowless = true
       menu.addItem(item)
     }
     if state.profiles.count > 2 {
-      let inProfile = NSMenu(title: "New Window in Profile")
+      let inProfile = NSMenu(title: ShellL10n.t("New Window in Profile"))
       for p in state.profiles {
         let item = CommandItem(p.title, "newWindow", arg: p.id)
         item.windowless = true
@@ -480,14 +480,14 @@ enum MainMenu {
       root.submenu = inProfile
       menu.addItem(root)
     }
-    let incognito = CommandItem("New Incognito Window", "newIncognitoWindow")
+    let incognito = CommandItem(ShellL10n.t("New Incognito Window"), "newIncognitoWindow")
     incognito.windowless = true
     menu.addItem(incognito)
-    let small = CommandItem("New Little Ardia Window", "newLittleArdia")
+    let small = CommandItem(ShellL10n.t("New Little Ardia Window"), "newLittleArdia")
     small.windowless = true
     menu.addItem(small)
     if state.profiles.count > 1 {
-      let inProfile = NSMenu(title: "New Little Ardia Window in Profile")
+      let inProfile = NSMenu(title: ShellL10n.t("New Little Ardia Window in Profile"))
       for p in state.profiles {
         let item = CommandItem(p.title, "newLittleArdia", arg: p.id)
         item.windowless = true
@@ -536,21 +536,21 @@ enum MainMenu {
     moveToWindow.removeAllItems()
     for w in state.windows { moveToWindow.addItem(CommandItem(w.title, "moveTabToWindow", arg: w.id)) }
     if !state.windows.isEmpty { moveToWindow.addItem(.separator()) }
-    moveToWindow.addItem(CommandItem("New Window", "moveTabToWindow", arg: "new"))
+    moveToWindow.addItem(CommandItem(ShellL10n.t("New Window"), "moveTabToWindow", arg: "new"))
   }
 
   private static func buildBookmarkMenus(_ state: MenuState) {
     while bookmarks.items.count > bookmarksFixedCount { bookmarks.removeItem(at: bookmarksFixedCount) }
     bookmarks.addItem(.separator())
     if !state.bookmarks.recentBookmarks.isEmpty {
-      let header = NSMenuItem(title: "Recent Bookmarks", action: nil, keyEquivalent: "")
+      let header = NSMenuItem(title: ShellL10n.t("Recent Bookmarks"), action: nil, keyEquivalent: "")
       header.isEnabled = false
       bookmarks.addItem(header)
       addBookmarks(state.bookmarks.recentBookmarks, to: bookmarks)
       bookmarks.addItem(.separator())
     }
-    bookmarks.addItem(folderItem("Bookmarks Bar", state.bookmarks.bookmarksBar, holdsArcHolders: true))
-    bookmarks.addItem(folderItem("Other Bookmarks", state.bookmarks.otherBookmarks))
+    bookmarks.addItem(folderItem(ShellL10n.t("Bookmarks Bar"), state.bookmarks.bookmarksBar, holdsArcHolders: true))
+    bookmarks.addItem(folderItem(ShellL10n.t("Other Bookmarks"), state.bookmarks.otherBookmarks))
   }
 
   private static func buildExtensions(_ state: MenuState) {
@@ -571,14 +571,14 @@ enum MainMenu {
     history.addItem(CommandItem(.showHistory))
     history.addItem(CommandItem(.clearBrowsingData))
     history.addItem(.separator())
-    let header = NSMenuItem(title: "Recently Closed", action: nil, keyEquivalent: "")
+    let header = NSMenuItem(title: ShellL10n.t("Recently Closed"), action: nil, keyEquivalent: "")
     header.isEnabled = false
     history.addItem(header)
     for entry in state.recentlyClosed { history.addItem(CommandItem(entry.title, "restoreClosed", arg: entry.id)) }
     if state.recentlyClosed.isEmpty { history.addItem(emptyItem()) }
     if !state.recentlyClosedGroups.isEmpty {
       history.addItem(.separator())
-      let groupsHeader = NSMenuItem(title: "Recently Closed Groups", action: nil, keyEquivalent: "")
+      let groupsHeader = NSMenuItem(title: ShellL10n.t("Recently Closed Groups"), action: nil, keyEquivalent: "")
       groupsHeader.isEnabled = false
       history.addItem(groupsHeader)
       for entry in state.recentlyClosedGroups { history.addItem(CommandItem(entry.title, "restoreClosed", arg: entry.id)) }

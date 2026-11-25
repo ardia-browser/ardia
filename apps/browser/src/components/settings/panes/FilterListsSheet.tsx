@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { useEffect, useState } from "react";
 import { ScrollView, View } from "react-native";
 import {
@@ -124,7 +125,7 @@ export function FilterListsSheet() {
           </Text>
         }
       >
-        <Button title="Done" kind="primary" onPress={closeSettingsSheet} />
+        <Button title={t("Done")} kind="primary" onPress={closeSettingsSheet} />
       </DialogActions>
     </Sheet>
   );
@@ -184,7 +185,7 @@ function CustomLists({ blocker, refresh }: { blocker: ContentBlockerState | null
   };
   return (
     <View>
-      <SectionHeader title="Your lists" description="Filter lists you add by address, in Adblock Plus or uBlock Origin format." />
+      <SectionHeader title="Your lists" description={t("Filter lists you add by address, in Adblock Plus or uBlock Origin format.")} />
       <Group>
         {lists.map((l) => (
           <Row
@@ -192,7 +193,7 @@ function CustomLists({ blocker, refresh }: { blocker: ContentBlockerState | null
             title={<Checkbox value={l.enabled} onChange={(v) => toggle(l, v)} label={filterListLabel(l.id, l.title)} />}
             description={customListText(l)}
           >
-            <Button variant="icon" icon="trash" size="m" onPress={() => remove(l)} tooltip="Remove" />
+            <Button variant="icon" icon="trash" size="m" onPress={() => remove(l)} tooltip={t("Remove")} />
           </Row>
         ))}
         <Row

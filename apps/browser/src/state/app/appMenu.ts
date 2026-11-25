@@ -7,6 +7,7 @@ import { browserLayoutMenuItem, runBrowserLayoutChoice } from "../sidebar/sideba
 import { consentToken } from "../telemetry/client";
 import { checkForUpdates } from "./appSettings";
 import { menuSections } from "./menuSections";
+import { t } from "../../lib/i18n";
 
 type Listed = "newTab" | "newWindow" | "newIncognitoWindow" | "showHistory" | "downloads" | "findInPage" | "print" | "openSettings" | "keyboardShortcuts" | "reportProblem" | "releaseNotes";
 
@@ -26,7 +27,7 @@ const SYMBOLS: Record<Listed, string> = {
   releaseNotes: "sparkles",
 };
 
-const listed = (command: Listed): MenuItem => ({ id: command, title: COMMANDS[command].title, symbol: SYMBOLS[command], ...menuShortcut(command) });
+const listed = (command: Listed): MenuItem => ({ id: command, title: t(COMMANDS[command].title), symbol: SYMBOLS[command], ...menuShortcut(command) });
 
 export const appMenuItems = (s: BrowserState, windowId: string): MenuItem[] =>
   menuSections(
@@ -38,9 +39,9 @@ export const appMenuItems = (s: BrowserState, windowId: string): MenuItem[] =>
       listed("openSettings"),
       {
         id: "help",
-        title: "Help",
+        title: t("Help"),
         symbol: "questionmark.circle",
-        children: [listed("keyboardShortcuts"), listed("releaseNotes"), { id: CHECK_FOR_UPDATES, title: "Check for Updates…", symbol: "arrow.triangle.2.circlepath" }, listed("reportProblem")],
+        children: [listed("keyboardShortcuts"), listed("releaseNotes"), { id: CHECK_FOR_UPDATES, title: t("Check for Updates…"), symbol: "arrow.triangle.2.circlepath" }, listed("reportProblem")],
       },
     ],
   );

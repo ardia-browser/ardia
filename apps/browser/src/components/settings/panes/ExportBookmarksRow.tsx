@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { useState } from "react";
 import { exportBookmarks } from "../../../state/bookmarks/exportHtml";
 import { Button } from "../../ui";
@@ -23,7 +24,7 @@ export function ExportBookmarksRow({ profileId }: { profileId: string }) {
   };
   return (
     <Row anchor="profiles.exportBookmarks" description={status || undefined}>
-      <Button title="Export…" disabled={busy} onPress={() => void run()} />
+      <Button title={t("Export…")} disabled={busy} onPress={() => void run()} />
     </Row>
   );
 }

@@ -1,3 +1,4 @@
+import { t } from "../../lib/i18n";
 import { useEffect } from "react";
 import { View } from "react-native";
 import type { OfficialPlugin } from "../../state/plugins/actions";
@@ -43,8 +44,8 @@ export function PluginsStep() {
   return (
     <StepLayout
       pageKey="plugins"
-      title={nothingToDo ? "You're already set" : phase === "installed" ? "Installed" : "Want the extras?"}
-      subtitle={nothingToDo ? "Nothing to install." : phase === "installed" ? "Open a new terminal to use it." : "Official plugins. Optional."}
+      title={nothingToDo ? t("You're already set") : phase === "installed" ? t("Installed") : t("Want the extras?")}
+      subtitle={nothingToDo ? t("Nothing to install.") : phase === "installed" ? t("Open a new terminal to use it.") : t("Official plugins. Optional.")}
       actions={
         <StepActions
           continueTitle={primaryTitle(plugins, { picks, phase: shownPhase })}
@@ -74,7 +75,7 @@ function PluginCard({ plugin, picked, asking }: { plugin: OfficialPlugin; picked
   const view = officialView(plugin, programs, failure ? { state: "failed", reason: failure } : working ? { state: "installing" } : null, working ? fetch : undefined);
   if (plugin.state === "available" && (phase === "offer" || asking))
     return <OptionCard control="check" icon={plugin.icon} title={officialTitle(plugin)} subtitle={plugin.blurb} subtitleLines={1} selected={picked} onPress={() => togglePluginPick(plugin)} />;
-  return <StatusCard plugin={plugin} status={view.note === "comingSoon" ? "" : (view.status ?? (view.note === "installed" ? "Installed" : null))} failed={view.failed} busy={view.busy} soon={view.note === "comingSoon"} done={view.note === "installed" && !view.failed && !view.busy} />;
+  return <StatusCard plugin={plugin} status={view.note === "comingSoon" ? "" : (view.status ?? (view.note === "installed" ? t("Installed") : null))} failed={view.failed} busy={view.busy} soon={view.note === "comingSoon"} done={view.note === "installed" && !view.failed && !view.busy} />;
 }
 
 function StatusCard({ plugin, status, failed, busy, soon, done }: { plugin: OfficialPlugin; status: string | null; failed: boolean; busy: boolean; soon: boolean; done: boolean }) {
@@ -94,7 +95,7 @@ function StatusCard({ plugin, status, failed, busy, soon, done }: { plugin: Offi
             </Text>
           )}
         </View>
-        {soon ? <Tag title="Coming soon" /> : null}
+        {soon ? <Tag title={t("Coming soon")} /> : null}
         {busy ? <ActivitySpinner style={SPINNER} /> : null}
         {done ? (
           <View pointerEvents="none">
@@ -105,7 +106,7 @@ function StatusCard({ plugin, status, failed, busy, soon, done }: { plugin: Offi
       </View>
       {failed && phase === "failed" ? (
         <View style={{ flexDirection: "row" }}>
-          <SecondaryButton title="Try Again" onPress={() => void installPluginAgain(plugin.name)} />
+          <SecondaryButton title={t("Try Again")} onPress={() => void installPluginAgain(plugin.name)} />
         </View>
       ) : null}
     </ChoiceCard>

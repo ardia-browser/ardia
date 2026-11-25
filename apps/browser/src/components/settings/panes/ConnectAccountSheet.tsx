@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { useEffect, useState, type ReactNode } from "react";
 import { View } from "react-native";
 import { copyText } from "../../../state/app/system";
@@ -101,8 +102,8 @@ function GithubConnect({ busy, run }: ConnectProps) {
           {flow.userCode}
         </Text>
         <DialogActions>
-          <Button title="Cancel" onPress={() => (flow.cancel(), setFlow(null))} />
-          <Button title="Open GitHub" kind="primary" onPress={() => openUrlFromSettings(flow.verificationUri)} />
+          <Button title={t("Cancel")} onPress={() => (flow.cancel(), setFlow(null))} />
+          <Button title={t("Open GitHub")} kind="primary" onPress={() => openUrlFromSettings(flow.verificationUri)} />
         </DialogActions>
       </View>
     );
@@ -112,20 +113,20 @@ function GithubConnect({ busy, run }: ConnectProps) {
       <Help>
         Paste a personal access token (classic: "repo" and "read:org" scopes; fine-grained: read access to pull requests, checks and metadata).
       </Help>
-      <FormField label="Personal access token">
+      <FormField label={t("Personal access token")}>
         <TextField value={token} onChangeText={setToken} placeholder="ghp_…" secure onSubmit={() => token && void run(() => connectGithub(token))} />
       </FormField>
       <DialogActions>
-        <Button title="Cancel" onPress={closeSettingsSheet} />
+        <Button title={t("Cancel")} onPress={closeSettingsSheet} />
         <Button title={busy ? "Checking…" : "Connect"} kind="primary" disabled={!token.trim() || busy} onPress={() => void run(() => connectGithub(token))} />
       </DialogActions>
       <Divider thick style={SPLIT} />
       <Help>Or sign in with your own GitHub OAuth app (Settings › Developer settings › OAuth Apps, with Device Flow enabled).</Help>
-      <FormField label="OAuth app client ID">
+      <FormField label={t("OAuth app client ID")}>
         <TextField value={clientId} onChangeText={setClientId} placeholder="Iv1.…" />
       </FormField>
       <DialogActions>
-        <Button title="Sign In with GitHub…" disabled={!clientId.trim() || busy} onPress={() => void signIn()} />
+        <Button title={t("Sign In with GitHub…")} disabled={!clientId.trim() || busy} onPress={() => void signIn()} />
       </DialogActions>
     </View>
   );
@@ -138,14 +139,14 @@ function BitbucketConnect({ busy, run }: ConnectProps) {
   return (
     <View>
       <Help>Create an API token (bitbucket.org › Personal settings › API tokens, with read access to pull requests and repositories), then enter your Atlassian account email with it. Bitbucket can't search review requests across repositories, so the folder lists your own pull requests.</Help>
-      <FormField label="Email or username">
+      <FormField label={t("Email or username")}>
         <TextField value={user} onChangeText={setUser} placeholder="you@example.com" />
       </FormField>
-      <FormField label="API token">
+      <FormField label={t("API token")}>
         <TextField value={token} onChangeText={setToken} secure onSubmit={go} />
       </FormField>
       <DialogActions>
-        <Button title="Cancel" onPress={closeSettingsSheet} />
+        <Button title={t("Cancel")} onPress={closeSettingsSheet} />
         <Button title={busy ? "Checking…" : "Connect"} kind="primary" disabled={!user.trim() || !token.trim() || busy} onPress={go} />
       </DialogActions>
     </View>
@@ -158,11 +159,11 @@ function NotionConnect({ busy, run }: ConnectProps) {
   return (
     <View>
       <Help>Create an internal integration at notion.so/my-integrations (read content; read user information for editor names), copy its secret, and share the pages or teamspaces you want with it (••• › Connections).</Help>
-      <FormField label="Internal integration secret">
+      <FormField label={t("Internal integration secret")}>
         <TextField value={token} onChangeText={setToken} placeholder="ntn_…" secure onSubmit={go} />
       </FormField>
       <DialogActions>
-        <Button title="Cancel" onPress={closeSettingsSheet} />
+        <Button title={t("Cancel")} onPress={closeSettingsSheet} />
         <Button title={busy ? "Checking…" : "Connect"} kind="primary" disabled={!token.trim() || busy} onPress={go} />
       </DialogActions>
     </View>
@@ -178,17 +179,17 @@ function ConfluenceConnect({ busy, run }: ConnectProps) {
   return (
     <View>
       <Help>Create an API token at id.atlassian.com › Security › API tokens, then enter your Confluence Cloud site and account email.</Help>
-      <FormField label="Site">
+      <FormField label={t("Site")}>
         <TextField value={site} onChangeText={setSite} placeholder="https://your-team.atlassian.net" />
       </FormField>
-      <FormField label="Email">
+      <FormField label={t("Email")}>
         <TextField value={email} onChangeText={setEmail} placeholder="you@example.com" />
       </FormField>
-      <FormField label="API token">
+      <FormField label={t("API token")}>
         <TextField value={token} onChangeText={setToken} secure onSubmit={go} />
       </FormField>
       <DialogActions>
-        <Button title="Cancel" onPress={closeSettingsSheet} />
+        <Button title={t("Cancel")} onPress={closeSettingsSheet} />
         <Button title={busy ? "Checking…" : "Connect"} kind="primary" disabled={!site.trim() || !email.trim() || !token.trim() || busy} onPress={go} />
       </DialogActions>
     </View>
@@ -210,14 +211,14 @@ function GoogleConnect({ busy, run }: ConnectProps) {
       <Help>
         In Google Cloud Console, enable the Drive API and create an OAuth client of type "Desktop app" (add yourself as a test user). Ardia opens Google's consent page in a tab and reads the result from its redirect; it asks only to see your files' names and dates.
       </Help>
-      <FormField label="Client ID">
+      <FormField label={t("Client ID")}>
         <TextField value={clientId} onChangeText={setClientId} placeholder="…apps.googleusercontent.com" />
       </FormField>
-      <FormField label="Client secret">
+      <FormField label={t("Client secret")}>
         <TextField value={secret} onChangeText={setSecret} secure />
       </FormField>
       <DialogActions>
-        <Button title="Cancel" onPress={closeSettingsSheet} />
+        <Button title={t("Cancel")} onPress={closeSettingsSheet} />
         <Button title={busy ? "Waiting for Google…" : "Sign In with Google…"} kind="primary" disabled={!clientId.trim() || !secret.trim() || busy} onPress={go} />
       </DialogActions>
     </View>

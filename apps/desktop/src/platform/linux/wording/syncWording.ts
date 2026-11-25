@@ -10,7 +10,7 @@ export const SYNC_WORDING: readonly Wording[] = [
             title={\`\${PLATFORM_TERMS.cloudDrive} is off on this \${PLATFORM_TERMS.computer}\`}
             description={\`\${PLATFORM_TERMS.turnOnCloudDrive}, or pick any folder that syncs, like Dropbox.\`}
           >
-            {PLATFORM_TERMS.cloudDriveSettingsUrl ? <Button title="Open iCloud Settings" onPress={() => void Linking.openURL(PLATFORM_TERMS.cloudDriveSettingsUrl)} /> : null}
+            {PLATFORM_TERMS.cloudDriveSettingsUrl ? <Button title={t("Open iCloud Settings")} onPress={() => void Linking.openURL(PLATFORM_TERMS.cloudDriveSettingsUrl)} /> : null}
 `,
         `            icon={<Symbol name="exclamationmark.triangle.fill" size={13} color={theme.warning} style={WARNING_ICON} />}
             title="The default sync folder’s location is missing"
@@ -26,28 +26,28 @@ export const SYNC_WORDING: readonly Wording[] = [
     replacements: [
       ["  useEffect(() => void recoveryKitPreview(168)?.then(setPreview), []);\n", ""],
       [
-        "  const more = async () => {\n    const choice = await showMenu([\n      { id: \"copy\", title: \"Copy\", symbol: \"doc.on.doc\" },\n      ...(PLATFORM_FEATURES.sharesFiles ? [{ id: \"share\", title: \"Share…\", symbol: \"square.and.arrow.up\" }] : []),\n      { separator: true },\n      { id: \"text\", title: \"Save as Text…\", symbol: \"doc.plaintext\" },\n    ]);\n    if (choice === \"copy\") await copyRecoveryKit();\n    else if (choice === \"share\") await shareRecoveryKit();\n    else if (choice === \"text\") await save(\"text\");\n  };\n",
+        "  const more = async () => {\n    const choice = await showMenu([\n      { id: \"copy\", title: t(\"Copy\"), symbol: \"doc.on.doc\" },\n      ...(PLATFORM_FEATURES.sharesFiles ? [{ id: \"share\", title: \"Share…\", symbol: \"square.and.arrow.up\" }] : []),\n      { separator: true },\n      { id: \"text\", title: \"Save as Text…\", symbol: \"doc.plaintext\" },\n    ]);\n    if (choice === \"copy\") await copyRecoveryKit();\n    else if (choice === \"share\") await shareRecoveryKit();\n    else if (choice === \"text\") await save(\"text\");\n  };\n",
         "",
       ],
       [
-        `subtitle="Your Recovery Kit contains all you need to recover your data should you lose access to this device."`,
-        `subtitle="Your Recovery Kit is a text file with all you need to recover your data should you lose access to this device. It holds your recovery phrase, so keep it private."`,
+        `subtitle={t("Your Recovery Kit contains all you need to recover your data should you lose access to this device.")}`,
+        `subtitle={t("Your Recovery Kit is a text file with all you need to recover your data should you lose access to this device. It holds your recovery phrase, so keep it private.")}`,
       ],
       [`Saved to {saved.replace(/^\\/Users\\/[^/]+/, "~")}.`, `Saved to {saved.replace(/^\\/home\\/[^/]+/, "~")}.`],
       [
-        `        <View accessibilityLabel="Recovery kit preview" style={[PREVIEW_FRAME(), { borderColor: theme.groupBorder }]}>
+        `        <View accessibilityLabel={t("Recovery kit preview")} style={[PREVIEW_FRAME(), { borderColor: theme.groupBorder }]}>
           {preview ? <Image source={{ uri: preview }} style={PREVIEW} /> : null}
         </View>
 `,
         "",
       ],
       [
-        `      <DialogActions leading={<Button title="Other Options" onPress={() => void more()} />}>
-        <Button title="Close" onPress={closeSettingsSheet} />
-        <Button title="Save…" kind="primary" onPress={() => void save("pdf")} />`,
+        `      <DialogActions leading={<Button title={t("Other Options")} onPress={() => void more()} />}>
+        <Button title={t("Close")} onPress={closeSettingsSheet} />
+        <Button title={t("Save…")} kind="primary" onPress={() => void save("pdf")} />`,
         `      <DialogActions>
-        <Button title="Close" onPress={closeSettingsSheet} />
-        <Button title="Save as Text…" kind="primary" onPress={() => void save("text")} />`,
+        <Button title={t("Close")} onPress={closeSettingsSheet} />
+        <Button title={t("Save as Text…")} kind="primary" onPress={() => void save("text")} />`,
       ],
       ["return `Couldn’t save the sync key in ${PLATFORM_TERMS.secretStore}.`;", `return "Couldn’t save the sync key in your system keyring.";`],
       [

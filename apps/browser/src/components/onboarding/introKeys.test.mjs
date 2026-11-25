@@ -32,7 +32,7 @@ test("the links step names apps from the platform it runs on", () => {
   assert.equal(MAC_TERMS.linkSourceApps, "Mail, Slack, Notes");
   assert.ok(!/\bNotes\b/.test(WINDOWS_TERMS.linkSourceApps), "Notes is the Mac's app");
   const step = readFileSync(new URL("HomeStep.tsx", import.meta.url), "utf8");
-  assert.ok(step.includes("From ${PLATFORM_TERMS.linkSourceApps} and the rest."));
+  assert.ok(step.includes('t("From {apps} and the rest.", { apps: PLATFORM_TERMS.linkSourceApps })'));
   assert.ok(!step.includes("Mail, Slack, Notes"));
 });
 
@@ -41,7 +41,8 @@ test("Settings names the same kind of apps for a link from another app as the li
   assert.equal(WINDOWS_TERMS.linkSourceExamples, "Outlook, Teams or Slack");
   for (const app of WINDOWS_TERMS.linkSourceExamples.split(/, | or /)) assert.ok(WINDOWS_TERMS.linkSourceApps.includes(app), `${app} is not in the links step's list`);
   const pane = readFileSync(new URL("../settings/panes/Tabs.tsx", import.meta.url), "utf8");
-  assert.equal(pane.split("A link from ${PLATFORM_TERMS.linkSourceExamples} opens").length, 3);
+  assert.equal(pane.split('t("A link from {apps} opens').length, 3);
+  assert.equal(pane.split("apps: PLATFORM_TERMS.linkSourceExamples").length, 3);
   assert.ok(!pane.includes("Discord, Slack or Mail"));
 });
 

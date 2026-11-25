@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { Box, Button, PopUp, space, Text, TextField, Toggle } from "../../ui";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
@@ -75,8 +76,8 @@ function AllProfilesSection() {
   return (
     <>
       <SectionHeader
-        title="All profiles"
-        description="Each profile keeps its own history, logins, cookies and extensions, unless it was created to share another's data."
+        title={t("All profiles")}
+        description={t("Each profile keeps its own history, logins, cookies and extensions, unless it was created to share another's data.")}
       />
       <Group>
         <Row anchor="profiles.defaultProfile">
@@ -175,7 +176,7 @@ function ThisProfileSection({ profileId }: { profileId: string }) {
   return (
     <>
       <Box gap="ml" style={DETAILS_HEAD}>
-        <Pressable onPress={() => pickIcon(badge.current)} tooltip="Change Icon">
+        <Pressable onPress={() => pickIcon(badge.current)} tooltip={t("Change Icon")}>
           <View ref={badge} collapsable={false}>
             <ProfileBadge profile={profile} size={64} />
           </View>
@@ -192,12 +193,12 @@ function ThisProfileSection({ profileId }: { profileId: string }) {
 
       <SectionHeader title="This profile" />
       <Group>
-        <Row title="Name">
+        <Row title={t("Name")}>
           <TextField value={name} onChangeText={editName} onSubmit={commitName} onBlur={commitName} width={220} />
         </Row>
-        <Row title="Icon" description={iconTitle(profile.icon)}>
+        <Row title={t("Icon")} description={iconTitle(profile.icon)}>
           <Box row gap="s">
-            {profile.icon ? <Button title="Remove" onPress={() => chooseIcon(profileId, null)} /> : null}
+            {profile.icon ? <Button title={t("Remove")} onPress={() => chooseIcon(profileId, null)} /> : null}
             <View ref={changeButton} collapsable={false}>
               <Button title={profile.icon ? "Change…" : "Add…"} onPress={() => pickIcon(changeButton.current)} />
             </View>
@@ -206,7 +207,7 @@ function ThisProfileSection({ profileId }: { profileId: string }) {
         {sharing ? (
           <Row
             icon={<ColorStack colors={sharedColors} size={14} />}
-            title="Shared data"
+            title={t("Shared data")}
             description={`${listOf(sharedNames)} share Cookies, Passwords, Extensions, Bookmarks, and History. Each keeps its own tabs.`}
           />
         ) : null}
@@ -214,15 +215,15 @@ function ThisProfileSection({ profileId }: { profileId: string }) {
           <Toggle value={!!syncLink?.enabled} disabled={!syncLink} accessibilityLabel={setting("profiles.syncThisProfile").title} onChange={(on) => setProfileSynced(profileId, on)} />
         </Row>
         {synced ? (
-          <Row title="Sync All Open Tabs" description={`Every open tab in this profile, not just pinned ones, is the same on all your ${PLATFORM_TERMS.syncedComputer}s.`}>
-            <Toggle value={!!profile.syncTabs} disabled={!syncsTabs} accessibilityLabel="Sync All Open Tabs" onChange={(on) => setOpenTabsSynced(profileId, on)} />
+          <Row title={t("Sync All Open Tabs")} description={`Every open tab in this profile, not just pinned ones, is the same on all your ${PLATFORM_TERMS.syncedComputer}s.`}>
+            <Toggle value={!!profile.syncTabs} disabled={!syncsTabs} accessibilityLabel={t("Sync All Open Tabs")} onChange={(on) => setOpenTabsSynced(profileId, on)} />
           </Row>
         ) : null}
         <Row
           anchor="profiles.profileDownloadsFolder"
           description={downloads ? (downloads.managed ? `${homeRelative(downloads.folder)}, set by your organization.` : homeRelative(downloads.folder)) : undefined}
         >
-          <Button title="Change…" disabled={!downloads || downloads.managed} onPress={() => void changeDownloads()} />
+          <Button title={t("Change…")} disabled={!downloads || downloads.managed} onPress={() => void changeDownloads()} />
         </Row>
         {PLATFORM_FEATURES.preloadPages ? <PreloadPagesRow profileId={profileId} /> : null}
         <Row anchor="profiles.siteSettings" onPress={() => goToSettingsPane("profiles", profileId, SETTINGS_DETAIL.sites)} />
@@ -247,14 +248,14 @@ function DataSection({ profileId }: { profileId: string }) {
           anchor="profiles.clearBrowsingData"
           description={sharing ? "History, cookies, site data and cached files, for every profile that shares them." : "History, cookies, site data and cached files for this profile."}
         >
-          <Button title="Clear…" onPress={() => showSettingsSheet(<ClearDataDialog profileId={profileId} onClose={closeSettingsSheet} />)} />
+          <Button title={t("Clear…")} onPress={() => showSettingsSheet(<ClearDataDialog profileId={profileId} onClose={closeSettingsSheet} />)} />
         </Row>
         <Row
-          title="Delete profile"
+          title={t("Delete profile")}
           description={only ? "You can't delete your only profile." : sharing ? "Removes its tabs. The data it shares stays." : "Removes its tabs, history, bookmarks and site data."}
         >
           <Button
-            title="Delete…"
+            title={t("Delete…")}
             kind="destructive"
             disabled={only}
             onPress={() =>

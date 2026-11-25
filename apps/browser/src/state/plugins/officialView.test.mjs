@@ -150,7 +150,7 @@ test("an installed official plugin keeps its program-link failure and Try Again"
 test("the Settings row says Install… for every official plugin, the sheet takes its words from the record, and the row has no switch", () => {
   const row = readFileSync(new URL("../../components/settings/panes/OfficialPlugins.tsx", import.meta.url), "utf8");
   const sheet = readFileSync(new URL("../../components/plugins/PluginConsentSheet.tsx", import.meta.url), "utf8");
-  assert.match(row, /<Button title="Install…"/);
+  assert.match(row, /<Button title=(?:"Install…"|\{t\("Install…"\)\})/);
   assert.doesNotMatch(row, /Turn On|<Toggle/);
   assert.match(sheet, /CONSENT_WORDS\[useConsentVerb\(name, hash\)\]/);
   assert.match(sheet, /\{`\$\{words\.title\} \$\{m\?\.title \?\? name\}\?`\}/);

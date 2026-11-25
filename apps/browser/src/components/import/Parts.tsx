@@ -1,3 +1,4 @@
+import { t } from "../../lib/i18n";
 import { useState, type ReactNode } from "react";
 import { ActivityIndicator, Image, View } from "react-native";
 import { useProfiles } from "../../state/browser/hooks";
@@ -49,7 +50,7 @@ export function TargetPicker({ target, onChange }: { target: string; onChange: (
   return profiles.length > 1 ? (
     <View style={{ flexDirection: "row", alignItems: "center", gap: space.m }}>
       <Text size="small" tone="textSecondary">
-        Import into
+        {t("Import into")}
       </Text>
       <PopUp value={target} options={profiles.map((p) => ({ value: p.id, title: p.name }))} onChange={onChange} minWidth={130} />
     </View>
@@ -71,7 +72,7 @@ function SettingsSteps({ steps, openTitle, onOpen, onRecheck }: { steps: string[
       </View>
       <View style={{ flexDirection: "row", alignItems: "center", gap: space.ml }}>
         <Button title={openTitle} kind="primary" onPress={onOpen} />
-        <Button title="Check Again" onPress={onRecheck} />
+        <Button title={t("Check Again")} onPress={onRecheck} />
       </View>
     </>
   );
@@ -91,8 +92,8 @@ function StepBadge({ children }: { children: ReactNode }) {
 export function FullDiskAccessSteps({ onOpen, onRecheck }: { onOpen: () => void; onRecheck: () => void }) {
   return (
     <SettingsSteps
-      steps={["Click “Open Full Disk Access Settings” below", `Turn on ${APP} in the list`, "Come back here: we'll continue automatically"]}
-      openTitle="Open Full Disk Access Settings"
+      steps={[t("Click “Open Full Disk Access Settings” below"), t("Turn on {app} in the list", { app: APP }), t("Come back here: we'll continue automatically")]}
+      openTitle={t("Open Full Disk Access Settings")}
       onOpen={onOpen}
       onRecheck={onRecheck}
     />
@@ -115,9 +116,9 @@ export function FileDrop({ onFile, onChoose }: { onFile: (path: string) => void;
     >
       <SelectableCard selected={over} dashed style={DROP}>
         <Symbol name="doc.zipper" size={24} color={theme.textSecondary} style={{ width: 32, height: 32 }} />
-        <Text tone="textSecondary">Choose .zip file or drag it here</Text>
+        <Text tone="textSecondary">{t("Choose .zip file or drag it here")}</Text>
         <Button
-          title="Choose .zip file"
+          title={t("Choose .zip file")}
           onPress={() =>
             void onChoose().then((path) => {
               if (path) onFile(path);

@@ -1,3 +1,4 @@
+import { t } from "../../lib/i18n";
 import { EmptyState, ListRow, SearchField, space, Text } from "../ui";
 import { useEffect, useMemo, useRef } from "react";
 import { ScrollView, View, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent, type TextInput } from "react-native";
@@ -67,7 +68,7 @@ export function SettingsSearchField() {
         inputRef={input}
         value={query}
         onChangeText={setSettingsQuery}
-        placeholder="Search"
+        placeholder={t("Search")}
         onSubmit={() => {
           const { query, selected } = currentSettingsSearch();
           const keyHit = keyHits[selected];
@@ -146,7 +147,7 @@ export function SettingsSearchResults({ query }: { query: string }) {
   if (empty) {
     const combo = parseCombo(query);
     const subtitle = combo ? `No command or setting uses ${formatShortcut(combo)}.` : `Nothing matches “${query.trim()}”. Try a setting's name or a shorter word, like “dark” or “downloads”.`;
-    return <EmptyState symbol="magnifyingglass" title="No Results" subtitle={subtitle} />;
+    return <EmptyState symbol="magnifyingglass" title={t("No Results")} subtitle={subtitle} />;
   }
   return (
     <ScrollView

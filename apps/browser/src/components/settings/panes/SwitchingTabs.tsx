@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { Box, Button, space, Text } from "../../ui";
 import { Anchor, FormField, SectionHeader } from "../Form";
 import { PictureChoice } from "../PictureChoice";
@@ -15,15 +16,15 @@ import { goToSettingsPane } from "../../../state/settings/settingsWindows";
 const CTRL_TAB_KEY = PLATFORM_TERMS.switchTabsKey;
 
 const AFTER_CLOSING_DOWN: { value: Settings["afterClosingTab"]; title: string; caption: string }[] = [
-  { value: "tabAbove", title: "Tab above", caption: "Goes to the tab right above it." },
-  { value: "tabBelow", title: "Tab below", caption: "Goes to the tab right below it." },
-  { value: "previouslyActive", title: "Previously active tab", caption: "Goes back to the tab you used before, like Arc." },
+  { value: "tabAbove", title: t("Tab above"), caption: "Goes to the tab right above it." },
+  { value: "tabBelow", title: t("Tab below"), caption: "Goes to the tab right below it." },
+  { value: "previouslyActive", title: t("Previously active tab"), caption: "Goes back to the tab you used before, like Arc." },
 ];
 
 const AFTER_CLOSING_ACROSS: { value: Settings["afterClosingTab"]; title: string; caption: string }[] = [
-  { value: "tabAbove", title: "Tab to the left", caption: "Goes to the tab to the left." },
-  { value: "tabBelow", title: "Tab to the right", caption: "Goes to the tab to the right." },
-  { value: "previouslyActive", title: "Previously active tab", caption: "Goes back to the tab you used before, like Arc." },
+  { value: "tabAbove", title: t("Tab to the left"), caption: "Goes to the tab to the left." },
+  { value: "tabBelow", title: t("Tab to the right"), caption: "Goes to the tab to the right." },
+  { value: "previouslyActive", title: t("Previously active tab"), caption: "Goes back to the tab you used before, like Arc." },
 ];
 
 export function SwitchingTabsSection() {
@@ -81,7 +82,7 @@ function CustomCtrlTabNote() {
       <Text size="caption" tone="textSecondary" style={FILL}>
         {`Custom: you set your own keys for ${CTRL_TAB_KEY} in Shortcuts. Pick one above to use it instead.`}
       </Text>
-      <Button title="Show in Shortcuts" onPress={showKeys} />
+      <Button title={t("Show in Shortcuts")} onPress={showKeys} />
     </Box>
   );
 }

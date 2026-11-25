@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { useEffect, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { getPasskeyAccess, NO_PASSKEY_ACCESS } from "../../../state/engines/passkeys";
@@ -29,7 +30,7 @@ const WEBKIT_LIMITS: LimitGroup[] = [
   },
   {
     title: "WebKit Extensions",
-    limits: [{ label: "Extensions", detail: "Not supported" }],
+    limits: [{ label: t("Extensions"), detail: "Not supported" }],
   },
   {
     title: "WebKit Ad Blocking",
@@ -66,7 +67,7 @@ function WebKitLimitsSheet() {
         ))}
       </ScrollView>
       <DialogActions>
-        <Button title="Done" kind="primary" onPress={closeSettingsSheet} />
+        <Button title={t("Done")} kind="primary" onPress={closeSettingsSheet} />
       </DialogActions>
     </Sheet>
   );

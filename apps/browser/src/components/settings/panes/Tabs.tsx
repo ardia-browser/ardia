@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { useState } from "react";
 import { View } from "react-native";
 import { useTheme } from "../../ui/theme";
@@ -21,61 +22,61 @@ import type { SettingsPlace } from "../../../state/settings/settingsWindows";
 const APP = "Ardia";
 
 const SIDEBAR_SIDES: SegmentOption<Settings["sidebarSide"]>[] = [
-  { value: "left", title: "Left" },
-  { value: "right", title: "Right" },
+  { value: "left", title: t("Left") },
+  { value: "right", title: t("Right") },
 ];
 
 type SleepingLook = "normal" | "fade" | "strike" | "both";
 
 const SLEEPING_LOOKS: Option<SleepingLook>[] = [
-  { value: "normal", title: "Look normal" },
-  { value: "fade", title: "Fade icon" },
-  { value: "strike", title: "Strike through" },
-  { value: "both", title: "Both" },
+  { value: "normal", title: t("Look normal") },
+  { value: "fade", title: t("Fade icon") },
+  { value: "strike", title: t("Strike through") },
+  { value: "both", title: t("Both") },
 ];
 
 const NEW_TAB_OPENS: Option<Settings["newTabOpens"]>[] = [
-  { value: "page", title: "New Tab page" },
-  { value: "commandBar", title: "Command bar" },
+  { value: "page", title: t("New Tab page") },
+  { value: "commandBar", title: t("Command bar") },
 ];
 
 const NEW_TABS_DOWN: Option<Settings["newTabPosition"]>[] = [
-  { value: "bottom", title: "At the bottom" },
-  { value: "top", title: "At the top" },
-  { value: "nextToCurrent", title: "Below the current tab" },
+  { value: "bottom", title: t("At the bottom") },
+  { value: "top", title: t("At the top") },
+  { value: "nextToCurrent", title: t("Below the current tab") },
 ];
 
 const NEW_TABS_ACROSS: Option<Settings["newTabPosition"]>[] = [
-  { value: "bottom", title: "On the right" },
-  { value: "top", title: "On the left" },
-  { value: "nextToCurrent", title: "Next to the current tab" },
+  { value: "bottom", title: t("On the right") },
+  { value: "top", title: t("On the left") },
+  { value: "nextToCurrent", title: t("Next to the current tab") },
 ];
 
 type OtherSiteLinks = "same" | "peek";
 
 const OTHER_SITE_LINKS: Option<OtherSiteLinks>[] = [
-  { value: "same", title: "Same tab" },
-  { value: "peek", title: "Peek" },
+  { value: "same", title: t("Same tab") },
+  { value: "peek", title: t("Peek") },
 ];
 
 const NEW_TAB_LINKS: Option<Settings["newTabLinksOpenIn"]>[] = [
-  { value: "tab", title: "New tab" },
-  { value: "peek", title: "Peek" },
-  { value: "littleArdia", title: "Little Ardia" },
+  { value: "tab", title: t("New tab") },
+  { value: "peek", title: t("Peek") },
+  { value: "littleArdia", title: t("Little Ardia") },
 ];
 
 const PEEK_BUTTONS: Option<Settings["peekButtons"]>[] = [
-  { value: "top", title: "In the title bar" },
-  { value: "left", title: "On the left" },
-  { value: "right", title: "On the right" },
+  { value: "top", title: t("In the title bar") },
+  { value: "left", title: t("On the left") },
+  { value: "right", title: t("On the right") },
 ];
 
 const NEVER_CLEAN_UP = "never";
 
 const DURATION_UNITS: Option<DurationUnit>[] = [
-  { value: "minutes", title: "Minutes" },
-  { value: "hours", title: "Hours" },
-  { value: "days", title: "Days" },
+  { value: "minutes", title: t("Minutes") },
+  { value: "hours", title: t("Hours") },
+  { value: "days", title: t("Days") },
 ];
 
 export function TabsPane(_place: SettingsPlace) {
@@ -99,14 +100,14 @@ function LayoutSection() {
       <Box gap="xl">
         <Anchor id="tabs.layout" shape="card">
           <Box row gap="xl">
-            <LayoutChoice layout="sidebar" title="Vertical sidebar" selected={!top} side={sidebarSide} />
-            <LayoutChoice layout="top" title="Horizontal row" selected={top} />
+            <LayoutChoice layout="sidebar" title={t("Vertical sidebar")} selected={!top} side={sidebarSide} />
+            <LayoutChoice layout="top" title={t("Horizontal row")} selected={top} />
           </Box>
         </Anchor>
         <Group>
           <SettingToggle
             anchor="tabs.autoHideTabs"
-            description={`Tabs slide away until you point at the ${top ? "top edge" : "edge"}. ${keyText("⌘S")} toggles.`}
+            description={t("Tabs slide away until you point at the {edge}. {key} toggles.", { edge: top ? t("top edge") : t("edge"), key: keyText("⌘S") })}
           />
           <Row anchor="tabs.sidebarSide">
             <Segmented options={SIDEBAR_SIDES} value={sidebarSide} onChange={chooseSidebarSide} />
@@ -147,8 +148,8 @@ function ButtonsRow({ top }: { top: boolean }) {
   return (
     <Row anchor="tabs.buttons" description={top ? "Hide Tabs in the toolbar." : undefined}>
       <Box row gap="l" style={CHECKLIST}>
-        <Checkbox value={sidebarButton} label="Hide Tabs" onChange={(showSidebarButton) => updateSettings({ showSidebarButton })} />
-        {top ? null : <Checkbox value={clearButton} label="Clear" onChange={(showClearButton) => updateSettings({ showClearButton })} />}
+        <Checkbox value={sidebarButton} label={t("Hide Tabs")} onChange={(showSidebarButton) => updateSettings({ showSidebarButton })} />
+        {top ? null : <Checkbox value={clearButton} label={t("Clear")} onChange={(showClearButton) => updateSettings({ showClearButton })} />}
       </Box>
     </Row>
   );
@@ -166,7 +167,7 @@ function TabsAndTopAppsSection() {
       <SectionHeader title="Tabs and Top Apps" />
       <Group>
         <Row anchor="tabs.badges">
-          <Toggle value={unread || topAppBadges} accessibilityLabel="Badges" onChange={(on) => updateSettings({ showUnreadCounts: on, showTopAppBadges: on })} />
+          <Toggle value={unread || topAppBadges} accessibilityLabel={t("Badges")} onChange={(on) => updateSettings({ showUnreadCounts: on, showTopAppBadges: on })} />
         </Row>
         <Row anchor="tabs.sleepingTabs">
           <PopUp
@@ -250,8 +251,8 @@ function LinksSection() {
           anchor="tabs.openLinksInLittleArdia"
           description={
             littleArdia
-              ? `A link from ${PLATFORM_TERMS.linkSourceExamples} opens in Little Ardia, a small window of its own. ${keyText("⌘O")} moves it into ${APP}; closing it throws it away.`
-              : `A link from ${PLATFORM_TERMS.linkSourceExamples} opens as a new tab in the ${APP} window you used last.`
+              ? t("A link from {apps} opens in Little Ardia, a small window of its own. {key} moves it into {app}; closing it throws it away.", { apps: PLATFORM_TERMS.linkSourceExamples, key: keyText("⌘O"), app: APP })
+              : t("A link from {apps} opens as a new tab in the {app} window you used last.", { apps: PLATFORM_TERMS.linkSourceExamples, app: APP })
           }
         />
         <SettingToggle anchor="tabs.littleArdiaOpensNewTabLinks" />
@@ -274,7 +275,7 @@ function LinksSection() {
 function CleanUpSection() {
   const minutes = useSettings((s) => s.cleanUpInactiveTabsAfterMinutes);
   const shown = minutes ?? DAILY_CLEAN_UP_MINUTES;
-  const options = [{ value: NEVER_CLEAN_UP, title: "Never" }, ...cleanUpChoices(shown)];
+  const options = [{ value: NEVER_CLEAN_UP, title: t("Never") }, ...cleanUpChoices(shown)];
   const choose = (v: string) => {
     if (v === NEVER_CLEAN_UP) return updateSettings({ cleanUpInactiveTabsAfterMinutes: null });
     if (v === CUSTOM_CLEAN_UP) return showSettingsSheet(<CustomCleanUpSheet minutes={shown} />);
@@ -307,7 +308,7 @@ function CustomCleanUpSheet({ minutes }: { minutes: number }) {
   };
   return (
     <Sheet size="s" onClose={closeSettingsSheet}>
-      <DialogTitle subtitle="Close unused tabs after:">Custom Clean Up Time</DialogTitle>
+      <DialogTitle subtitle={t("Close unused tabs after:")}>Custom Clean Up Time</DialogTitle>
       <Box row gap="m" style={FIELDS}>
         <TextField
           value={amount}
@@ -337,8 +338,8 @@ function CustomCleanUpSheet({ minutes }: { minutes: number }) {
         </Text>
       )}
       <DialogActions>
-        <Button title="Cancel" onPress={closeSettingsSheet} />
-        <Button title="Save" kind="primary" onPress={save} />
+        <Button title={t("Cancel")} onPress={closeSettingsSheet} />
+        <Button title={t("Save")} kind="primary" onPress={save} />
       </DialogActions>
     </Sheet>
   );

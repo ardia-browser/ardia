@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { useState } from "react";
 import { View } from "react-native";
 import { resolveInput } from "@ardia/core";
@@ -38,8 +39,8 @@ export function WebEngineSection() {
           <PopUp value={engine} options={DEFAULT_ENGINE_OPTIONS} onChange={(value) => updateSettings({ pageEngine: value })} minWidth={190} />
         </Row>
         <Row anchor="advanced.websiteEngines">
-          {!protectedVideo && <Button title="Add Streaming Sites" onPress={() => updateSettings({ protectedVideoInWebKit: true })} />}
-          <Button title="Add Rule…" icon="plus" onPress={() => showSettingsSheet(<RuleSheet />)} />
+          {!protectedVideo && <Button title={t("Add Streaming Sites")} onPress={() => updateSettings({ protectedVideoInWebKit: true })} />}
+          <Button title={t("Add Rule…")} icon="plus" onPress={() => showSettingsSheet(<RuleSheet />)} />
         </Row>
         {automatic && protectedVideo && <StreamingSitesRow />}
         {automatic && sites.map((site) => <RuleRow key={site} site={site} engine={rules[site]!} />)}
@@ -67,11 +68,11 @@ function StreamingSitesRow() {
   return (
     <Row
       icon={<Symbol name="play.tv" size={14} color={theme.icon} style={STREAMING_ICON} />}
-      title="Streaming sites"
+      title={t("Streaming sites")}
       description={`${shown}${more > 0 ? ` and ${more} more` : ""} open in WebKit, which plays their protected video.`}
     >
       <Text tone="textSecondary">{ENGINE_NAMES.webkit}</Text>
-      <Button variant="icon" icon="trash" size="m" onPress={() => updateSettings({ protectedVideoInWebKit: false })} tooltip="Remove" />
+      <Button variant="icon" icon="trash" size="m" onPress={() => updateSettings({ protectedVideoInWebKit: false })} tooltip={t("Remove")} />
     </Row>
   );
 }
@@ -80,8 +81,8 @@ function RuleRow({ site, engine }: { site: string; engine: PageEngine }) {
   return (
     <Row icon={<Favicon url={site} />} title={siteLabel(site)}>
       <PopUp value={engine} options={ENGINE_OPTIONS} onChange={(value) => setWebsiteEngine(site, value)} minWidth={110} />
-      <Button variant="icon" icon="pencil" size="m" onPress={() => showSettingsSheet(<RuleSheet site={site} engine={engine} />)} tooltip="Edit" />
-      <Button variant="icon" icon="trash" size="m" onPress={() => setWebsiteEngine(site, null)} tooltip="Remove" />
+      <Button variant="icon" icon="pencil" size="m" onPress={() => showSettingsSheet(<RuleSheet site={site} engine={engine} />)} tooltip={t("Edit")} />
+      <Button variant="icon" icon="trash" size="m" onPress={() => setWebsiteEngine(site, null)} tooltip={t("Remove")} />
     </Row>
   );
 }
@@ -100,11 +101,11 @@ function RuleSheet({ site, engine: initial }: { site?: string; engine?: PageEngi
   };
   return (
     <Sheet onClose={closeSettingsSheet}>
-      <DialogTitle subtitle="A rule matches the site's address exactly: its scheme, host and port. Subdomains need their own rule.">{site ? "Edit Rule" : "Add Rule"}</DialogTitle>
-      <FormField label="Website">
+      <DialogTitle subtitle={t("A rule matches the site's address exactly: its scheme, host and port. Subdomains need their own rule.")}>{site ? "Edit Rule" : "Add Rule"}</DialogTitle>
+      <FormField label={t("Website")}>
         <TextField value={address} onChangeText={setAddress} placeholder="netflix.com" onSubmit={save} onEscape={closeSettingsSheet} />
       </FormField>
-      <FormField label="Opens in" inline>
+      <FormField label={t("Opens in")} inline>
         <PopUp value={engine} options={ENGINE_OPTIONS} onChange={setEngine} />
       </FormField>
       {error && (
@@ -116,7 +117,7 @@ function RuleSheet({ site, engine: initial }: { site?: string; engine?: PageEngi
         leading={
           site ? (
             <Button
-              title="Remove"
+              title={t("Remove")}
               kind="destructive"
               onPress={() => {
                 setWebsiteEngine(site, null);
@@ -126,8 +127,8 @@ function RuleSheet({ site, engine: initial }: { site?: string; engine?: PageEngi
           ) : null
         }
       >
-        <Button title="Cancel" onPress={closeSettingsSheet} />
-        <Button title={site ? "Save" : "Add"} kind="primary" onPress={save} />
+        <Button title={t("Cancel")} onPress={closeSettingsSheet} />
+        <Button title={site ? t("Save") : t("Add")} kind="primary" onPress={save} />
       </DialogActions>
     </Sheet>
   );
@@ -138,19 +139,19 @@ const PASSKEYS_WAITING = "WebKit pages can't use passkeys until Apple grants Ard
 function EnginesDifferSheet() {
   return (
     <Sheet size="l" onClose={closeSettingsSheet}>
-      <DialogTitle subtitle="Every page opens in Chromium or WebKit. Here's what changes between them.">How engines differ</DialogTitle>
+      <DialogTitle subtitle={t("Every page opens in Chromium or WebKit. Here's what changes between them.")}>{t("How engines differ")}</DialogTitle>
       <View style={DIFFER_LIST}>
         <Group>
           <Row
-            title="Separate sign-ins"
-            description="Each engine keeps its own cookies; Bring sign-ins along copies them on switch."
+            title={t("Separate sign-ins")}
+            description={t("Each engine keeps its own cookies; Bring sign-ins along copies them on switch.")}
           />
           <PasskeyAccessRow waiting={PASSKEYS_WAITING} />
-          <Row title={ABOUT_ENGINES_TITLE} description="How Automatic picks an engine, and what WebKit pages can't do." onPress={() => showWebKitLimits("enginesPane")} />
+          <Row title={ABOUT_ENGINES_TITLE} description={t("How Automatic picks an engine, and what WebKit pages can't do.")} onPress={() => showWebKitLimits("enginesPane")} />
         </Group>
       </View>
       <DialogActions>
-        <Button title="Done" kind="primary" onPress={closeSettingsSheet} />
+        <Button title={t("Done")} kind="primary" onPress={closeSettingsSheet} />
       </DialogActions>
     </Sheet>
   );

@@ -24,8 +24,8 @@ public class DialogsModule: Module, DialogsNative {
       return
     }
     let alert = DialogsModule.alert(title: options.title, message: options.message)
-    alert.addButton(withTitle: options.confirmTitle)
-    alert.addButton(withTitle: options.cancelTitle)
+    alert.addButton(withTitle: ShellL10n.t(options.confirmTitle))
+    alert.addButton(withTitle: ShellL10n.t(options.cancelTitle))
     if options.destructive { alert.buttons.first?.hasDestructiveAction = true }
     if let suppression = options.suppression {
       alert.showsSuppressionButton = true
@@ -69,7 +69,7 @@ public class DialogsModule: Module, DialogsNative {
       return
     }
     let alert = DialogsModule.alert(title: options.title, message: options.message)
-    for choice in options.choices { alert.addButton(withTitle: choice) }
+    for choice in options.choices { alert.addButton(withTitle: ShellL10n.t(choice)) }
     if options.noDefault { alert.buttons.first?.keyEquivalent = "" }
     if let cancel = options.cancelChoice, alert.buttons.indices.contains(cancel) {
       alert.buttons[cancel].keyEquivalent = "\u{1b}"
@@ -95,8 +95,8 @@ public class DialogsModule: Module, DialogsNative {
       return
     }
     let alert = DialogsModule.alert(title: options.title, message: options.message)
-    alert.addButton(withTitle: options.confirmTitle)
-    alert.addButton(withTitle: "Cancel")
+    alert.addButton(withTitle: ShellL10n.t(options.confirmTitle))
+    alert.addButton(withTitle: ShellL10n.t("Cancel"))
     let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
     field.stringValue = options.value
     field.placeholderString = options.placeholder
@@ -123,7 +123,7 @@ public class DialogsModule: Module, DialogsNative {
     panel.canChooseDirectories = true
     panel.canCreateDirectories = true
     panel.allowsMultipleSelection = false
-    if let prompt { panel.prompt = prompt }
+    if let prompt { panel.prompt = ShellL10n.t(prompt) }
     if let current { panel.directoryURL = URL(fileURLWithPath: current, isDirectory: true) }
     panel.begin { response in promise.resolve(response == .OK ? panel.url?.path : nil) }
   }

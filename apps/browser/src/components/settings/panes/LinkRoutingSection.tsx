@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { useMemo, useState } from "react";
 import { Image, View } from "react-native";
 import { useAirTrafficConfig, useLinkHooks, useRoutableProfiles, useRouteGroupName, useWatchRouteTargets, type LinkHookRow, type LinkHookState, type RoutableProfile } from "../../../state/airTraffic/hooks";
@@ -40,20 +41,20 @@ export function LinkRoutingSection({ profileId }: { profileId: string | null }) 
   const profiles = useRoutableProfiles();
   return (
     <View>
-      <SectionHeader title="Link routing" description="Choose where links from other apps open." />
+      <SectionHeader title="Link routing" description={t("Choose where links from other apps open.")} />
       <Box gap="xl">
         <Group>
           <Row anchor="automations.linkRules">
             <Box row gap="s">
-              {hooks.length ? <Button title="Automation…" onPress={() => goToSettingsPane("advanced")} /> : null}
-              <Button title="Add Rule…" icon="plus" onPress={() => showSettingsSheet(<RuleSheet />)} />
+              {hooks.length ? <Button title={t("Automation…")} onPress={() => goToSettingsPane("advanced")} /> : null}
+              <Button title={t("Add Rule…")} icon="plus" onPress={() => showSettingsSheet(<RuleSheet />)} />
             </Box>
           </Row>
           {hooks.map((h) => (
             <HookRow key={`hook:${h.name}`} hook={h} />
           ))}
           {rules.length === 0 ? (
-            <Row key="none" icon={null} title="No rules yet" description="Add one to send links from an app, or links to a site, to a profile." />
+            <Row key="none" icon={null} title={t("No rules yet")} description={t("Add one to send links from an app, or links to a site, to a profile.")} />
           ) : (
             rules.map((rule, i) => <RuleRow key={rule.id} rule={rule} index={i} last={i === rules.length - 1} profiles={profiles} />)
           )}
@@ -73,12 +74,12 @@ function RuleRow({ rule, index, last, profiles }: { rule: AirTrafficRule; index:
   const groupGone = !!rule.groupKey && !groupName;
   const more = async () => {
     const choice = await showMenu([
-      { id: "edit", title: "Edit…", symbol: "pencil" },
+      { id: "edit", title: t("Edit…"), symbol: "pencil" },
       { separator: true },
       { id: "up", title: "Move Up", symbol: "arrow.up", enabled: index > 0 },
       { id: "down", title: "Move Down", symbol: "arrow.down", enabled: !last },
       { separator: true },
-      { id: "delete", title: "Delete", symbol: "trash" },
+      { id: "delete", title: t("Delete"), symbol: "trash" },
     ]);
     if (choice === "edit") showSettingsSheet(<RuleSheet rule={rule} />);
     else if (choice === "up" || choice === "down") moveAirTrafficRule(rule.id, choice === "up" ? -1 : 1);
@@ -86,8 +87,8 @@ function RuleRow({ rule, index, last, profiles }: { rule: AirTrafficRule; index:
   };
   return (
     <Row icon={null} title={`${fromLabel(rule.from)} · ${conditionLabel(rule.when)} → ${target ?? "a deleted profile"}`} description={ruleProblem(target, groupGone)}>
-      <Toggle value={rule.enabled} accessibilityLabel="Use this rule" onChange={(enabled) => void updateAirTrafficRule(rule.id, { enabled })} />
-      <Button variant="icon" icon="ellipsis.circle" size="m" onPress={() => void more()} tooltip="Edit, Move or Delete" />
+      <Toggle value={rule.enabled} accessibilityLabel={t("Use this rule")} onChange={(enabled) => void updateAirTrafficRule(rule.id, { enabled })} />
+      <Button variant="icon" icon="ellipsis.circle" size="m" onPress={() => void more()} tooltip={t("Edit, Move or Delete")} />
     </Row>
   );
 }
@@ -211,7 +212,7 @@ function caughtBy(preview: Extract<LinkPreview, { ok: true }>): {
       title: `hooks.json: ${trace.hook.name} asks ${trace.hook.program?.[0] ?? "a program"}`,
       detail: `If it doesn't answer: ${lands}`,
     };
-  if (trace.by === "fallback") return { title: "Links no rule catches", detail: lands };
+  if (trace.by === "fallback") return { title: t("Links no rule catches"), detail: lands };
   return {
     title: "No rule catches it",
     detail: `Ardia's usual routing. ${lands}`,
@@ -255,7 +256,7 @@ function AppLinks({ profileId: initialProfileId }: { profileId: string | null })
         {allowed === null ? (
           <Row icon={null} title=" " description=" " />
         ) : allowed.length === 0 ? (
-          <Row icon={null} title="No apps yet" description="Check “Always allow” when a site opens an app, and it shows up here." />
+          <Row icon={null} title={t("No apps yet")} description={t("Check “Always allow” when a site opens an app, and it shows up here.")} />
         ) : (
           allowed.map((a) => (
             <Row
@@ -264,7 +265,7 @@ function AppLinks({ profileId: initialProfileId }: { profileId: string | null })
               title={a.origin.replace(/^https?:\/\//, "")}
               description={`Opens ${a.scheme}: links in ${a.app ?? "an app that's no longer installed"}`}
             >
-              <Button title="Remove" onPress={() => void removeExternalAppAllowance(currentEngineProfile(profileId), a.origin, a.scheme).then(refresh)} />
+              <Button title={t("Remove")} onPress={() => void removeExternalAppAllowance(currentEngineProfile(profileId), a.origin, a.scheme).then(refresh)} />
             </Row>
           ))
         )}

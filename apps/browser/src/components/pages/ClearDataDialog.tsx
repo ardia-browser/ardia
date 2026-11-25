@@ -10,6 +10,7 @@ import { noteBrowsingDataCleared } from "../../state/telemetry/historyRemovalCou
 import { consentToken } from "../../state/telemetry/client";
 import { Box, Button, Checkbox, Dialog, DialogActions, DialogTitle, Group, PopUp, Row, space, Text } from "../ui";
 import { clearDataDialog } from "./tokens";
+import { t } from "../../lib/i18n";
 
 const RANGES = [
   { value: "hour", title: "Last hour", ms: 3_600_000 },
@@ -72,25 +73,25 @@ export function ClearDataDialog({ profileId, onClose }: { profileId: string; onC
 
   return (
     <Dialog width="m" onDismiss={leave} onSubmit={() => void clear()}>
-      <DialogTitle subtitle={multipleProfiles ? `From your ${profileName} profile` : undefined}>Clear Browsing Data</DialogTitle>
+      <DialogTitle subtitle={multipleProfiles ? t("From your {profile} profile", { profile: profileName }) : undefined}>{t("Clear Browsing Data")}</DialogTitle>
       <Box row gap="ml" style={RANGE_ROW}>
-        <Text>Time range</Text>
-        <PopUp value={range} options={RANGES.map(({ value, title }) => ({ value, title }))} onChange={setRange} minWidth={clearDataDialog.rangeMinWidth} disabled={busy} />
+        <Text>{t("Time range")}</Text>
+        <PopUp value={range} options={RANGES.map(({ value, title }) => ({ value, title: t(title) }))} onChange={setRange} minWidth={clearDataDialog.rangeMinWidth} disabled={busy} />
       </Box>
       <View style={OPTIONS}>
         <Group>
-          <Option value={history} onChange={setHistory} disabled={busy} title="Browsing history" subtitle="Clears the pages you visited from History and the command bar." />
-          <Option value={siteData} onChange={setSiteData} disabled={busy} title="Cookies, site data and cached files" subtitle="Signs you out of most sites." />
+          <Option value={history} onChange={setHistory} disabled={busy} title={t("Browsing history")} subtitle={t("Clears the pages you visited from History and the command bar.")} />
+          <Option value={siteData} onChange={setSiteData} disabled={busy} title={t("Cookies, site data and cached files")} subtitle={t("Signs you out of most sites.")} />
         </Group>
       </View>
       {error && (
         <Text size="caption" tone="destructive" style={ERROR}>
-          Some browsing data could not be cleared. Please try again.
+          {t("Some browsing data could not be cleared. Please try again.")}
         </Text>
       )}
       <DialogActions>
-        <Button title="Cancel" onPress={leave} />
-        <Button title={error ? "Retry" : "Clear Data"} kind="primary" disabled={busy || (!history && !siteData)} onPress={() => void clear()} />
+        <Button title={t("Cancel")} onPress={leave} />
+        <Button title={error ? t("Retry") : t("Clear Data")} kind="primary" disabled={busy || (!history && !siteData)} onPress={() => void clear()} />
       </DialogActions>
     </Dialog>
   );

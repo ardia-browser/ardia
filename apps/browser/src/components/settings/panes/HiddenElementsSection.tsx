@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { useEffect, useState } from "react";
 import { Button } from "../../ui";
 import { Favicon } from "../../favicon/Favicon";
@@ -30,7 +31,7 @@ export function HiddenElementsSection() {
   return (
     <>
       <SectionHeader
-        title="Hidden elements"
+        title={t("Hidden elements")}
         description={hosts.length ? "Hidden with View › Hide Element… (⇧⌘H). They stay hidden on every visit, subdomains included." : "Nothing hidden in this profile."}
         action={<ProfilePicker value={selected} onChange={setSelected} />}
       />
@@ -47,7 +48,7 @@ export function HiddenElementsSection() {
                 title={host}
                 description={`${list.length} element${list.length === 1 ? "" : "s"}: ${titles.join(", ")}${more > 0 ? ` and ${more} more` : ""}`}
               >
-                <Button title="Show Again" onPress={() => loaded && void restoreHiddenElements(loaded.profile, list)} />
+                <Button title={t("Show Again")} onPress={() => loaded && void restoreHiddenElements(loaded.profile, list)} />
               </Row>
             );
           })}

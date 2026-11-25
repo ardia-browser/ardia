@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import type { ReactNode } from "react";
 import { approveAutomationRule, removeAutomationRule, useAutomationRules, type AutomationRuleRow } from "../../../state/automation/approvalRows";
 import { Button } from "../../ui";
@@ -7,7 +8,7 @@ import { setting } from "../settingsIndex";
 function RuleRow({ rule, pending }: { rule: AutomationRuleRow; pending: boolean }) {
   return (
     <Row title={rule.name} description={rule.summary}>
-      {pending ? <Button title="Approve" onPress={() => approveAutomationRule(rule)} /> : null}
+      {pending ? <Button title={t("Approve")} onPress={() => approveAutomationRule(rule)} /> : null}
       <Button variant="icon" icon="trash" size="m" onPress={() => removeAutomationRule(rule)} tooltip={pending ? "Remove" : "Revoke"} />
     </Row>
   );

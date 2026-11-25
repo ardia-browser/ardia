@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { View } from "react-native";
 import { defaultEngine, type EngineMode, ENGINE_NAMES } from "../../../state/engines/engines";
 import { setEngineMode } from "../../../state/engines/actions";
@@ -10,7 +11,7 @@ import { Row } from "../Form";
 import { showWebKitLimits, ABOUT_ENGINES_TITLE } from "./WebKitLimitsSheet";
 
 const MODE_OPTIONS: SegmentOption<EngineMode>[] = [
-  { value: "automatic", title: "Automatic" },
+  { value: "automatic", title: t("Automatic") },
   { value: "chromium", title: ENGINE_NAMES.chromium },
   { value: "webkit", title: ENGINE_NAMES.webkit },
 ];

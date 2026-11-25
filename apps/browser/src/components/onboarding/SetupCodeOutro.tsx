@@ -1,3 +1,4 @@
+import { t } from "../../lib/i18n";
 import { useEffect, useMemo, useState } from "react";
 import { finishOnboarding } from "../../state/onboarding/onboarding";
 import { requestAppDownload } from "../../state/onboarding/demoSteps";
@@ -31,18 +32,18 @@ export function SetupCodeOutro() {
 
   return (
     <StepLayout
-      title="Your setup code"
-      subtitle="Paste it into Ardia after you download it, on its first screen or in Settings › General. Ardia sets itself up just like this."
+      title={t("Your setup code")}
+      subtitle={t("Paste it into Ardia after you download it, on its first screen or in Settings › General. Ardia sets itself up just like this.")}
       actions={
         <>
           <StepActions icon="arrow.right" continueTitle="Done" onContinue={() => finishOnboarding()} holdScroll />
-          <SecondaryButton title={copied ? "Copied, downloading" : "Download & Copy"} filled onPress={downloadAndCopy} />
+          <SecondaryButton title={copied ? t("Copied, downloading") : t("Download & Copy")} filled onPress={downloadAndCopy} />
         </>
       }
-      preview={<SetupLines heading="You picked:" lines={lines} />}
+      preview={<SetupLines heading={t("You picked:")} lines={lines} />}
     >
       <ChoiceCard dashed radius={radius.panel} style={{ paddingVertical: space.xl, paddingHorizontal: space.xl }}>
-        <Text selectable accessibilityLabel={`Setup code ${code}`} color={colors.title} style={{ ...monoFace(), lineHeight: proseLineHeight.body }}>
+        <Text selectable accessibilityLabel={t("Setup code {code}", { code })} color={colors.title} style={{ ...monoFace(), lineHeight: proseLineHeight.body }}>
           {code}
         </Text>
       </ChoiceCard>

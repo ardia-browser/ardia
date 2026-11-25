@@ -95,7 +95,7 @@ enum SharePicker {
       item.representedObject = choice(service.title)
       return item
     }
-    let more = NSMenuItem(title: "More…", action: #selector(ShareMenu.openSharingSettings(_:)), keyEquivalent: "")
+    let more = NSMenuItem(title: ShellL10n.t("More…"), action: #selector(ShareMenu.openSharingSettings(_:)), keyEquivalent: "")
     more.target = ShareMenu.shared
     let picker = NSSharingServicePicker.self as AnyObject
     let image = NSSelectorFromString("sharedMoreMenuImage")

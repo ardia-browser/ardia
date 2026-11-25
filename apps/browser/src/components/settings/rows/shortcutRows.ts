@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { type SettingSection } from "./types";
 import type { SettingsPane } from "../../../state/settings/settingsWindows";
 import { keyText } from "../../../state/commands/keyText";
@@ -9,12 +10,12 @@ export const shortcutRows = {
       section: "Keyboard",
       rows: {
         menuCommands: {
-          title: "Keyboard shortcuts",
+          title: t("Keyboard shortcuts"),
           keywords: ["shortcuts", "keyboard shortcuts", "hotkeys", "keybindings", "remap", "menu shortcuts", "customize keyboard shortcuts", "mouse button", "middle click", "mouse shortcut", "side button"],
         },
         extensionShortcuts: {
-          title: "Extension commands",
-          description: "Shortcuts that extensions add.",
+          title: t("Extension commands"),
+          description: t("Shortcuts that extensions add."),
           keywords: ["hotkeys", "extension shortcuts"],
         },
         undoReopensClosedTab: {
@@ -29,13 +30,13 @@ export const shortcutRows = {
       section: "Clicks",
       rows: {
         peekModifier: {
-          title: "Peek a link with",
-          description: "Opens the link in a preview over the page.",
+          title: t("Peek a link with"),
+          description: t("Opens the link in a preview over the page."),
           keywords: ["peek", "preview", "shift click", "option click", "arc"],
         },
         splitLinkModifier: {
-          title: "Open a link in split view with",
-          description: "Opens the link in a pane beside the page.",
+          title: t("Open a link in split view with"),
+          description: t("Opens the link in a pane beside the page."),
           keywords: ["split view", "split screen", "side by side", "option click", "alt click", "option shift click", "download", "dia"],
           shown: () => splitViewAvailable,
         },
@@ -48,7 +49,7 @@ export const shortcutRows = {
         optShiftClickOpensInGroup: {
           title: `${keyText("⌥⇧")}-click opens tab in group`,
           explained: true,
-          description: "Opens the tab in a group with the current tab.",
+          description: t("Opens the tab in a group with the current tab."),
           keywords: ["option shift click", "split"],
         },
       },

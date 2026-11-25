@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { setSharing, useTelemetry } from "../../../state/telemetry/client";
@@ -99,10 +100,10 @@ function ResetIdSheet() {
       <DialogTitle subtitle={done ? IDENTITY_COPY.resetDone(done) : IDENTITY_COPY.resetBody}>{IDENTITY_COPY.resetTitle}</DialogTitle>
       <DialogActions>
         {done ? (
-          <Button title="Done" kind="primary" onPress={closeSettingsSheet} />
+          <Button title={t("Done")} kind="primary" onPress={closeSettingsSheet} />
         ) : (
           <>
-            <Button title="Cancel" onPress={closeSettingsSheet} />
+            <Button title={t("Cancel")} onPress={closeSettingsSheet} />
             <Button title={IDENTITY_COPY.resetConfirm} kind="destructive" onPress={() => void reset()} />
           </>
         )}
@@ -173,7 +174,7 @@ export function WhatsSentSheet() {
           </Text>
         }
       >
-        <Button title="Done" kind="primary" onPress={closeSettingsSheet} />
+        <Button title={t("Done")} kind="primary" onPress={closeSettingsSheet} />
       </DialogActions>
     </Sheet>
   );

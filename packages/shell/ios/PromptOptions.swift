@@ -5,6 +5,6 @@ struct PromptOptions: Record {
   @Field var message: String = ""
   @Field var value: String = ""
   @Field var placeholder: String?
-  @Field var confirmTitle: String = "OK"
+  @Field var confirmTitle: String = ShellL10n.t("OK")
   @Field var windowId: String?
 }

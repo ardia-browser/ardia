@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { View } from "react-native";
 import { type SystemCalendar, calendarBlocked, connectCalendar, openCalendarPrivacy, setCalendarHidden, useCalendar } from "../../../state/live/calendar";
 import { ALERT_LEADS, COUNTDOWN_LEADS, countdownLeadTitle } from "../../../state/live/meetings";
@@ -11,7 +12,7 @@ import { Group, Row, SectionHeader } from "../Form";
 
 const COUNTDOWN_OFF = "off";
 const COUNTDOWN_OPTIONS: Option<string>[] = [
-  { value: COUNTDOWN_OFF, title: "Off" },
+  { value: COUNTDOWN_OFF, title: t("Off") },
   ...COUNTDOWN_LEADS.map((m, i) => ({ value: String(m), title: countdownLeadTitle(m), separatorBefore: i === 0 })),
 ];
 
@@ -35,8 +36,8 @@ function OfferedCalendarSection() {
   return (
     <View>
       <SectionHeader
-        title="Calendar"
-        description="Pin a calendar to see your day, a countdown and meeting alerts. Uses the Calendar app's accounts."
+        title={t("Calendar")}
+        description={t("Pin a calendar to see your day, a countdown and meeting alerts. Uses the Calendar app's accounts.")}
       />
       <Group>
         <Row
@@ -52,10 +53,10 @@ function OfferedCalendarSection() {
           }
         >
           {blocked ? (
-            <Button title="Open System Settings" onPress={openCalendarPrivacy} />
+            <Button title={t("Open System Settings")} onPress={openCalendarPrivacy} />
           ) : !connected ? (
             <Box row gap="s">
-              {requestError ? <Button title="Open System Settings" onPress={openCalendarPrivacy} /> : null}
+              {requestError ? <Button title={t("Open System Settings")} onPress={openCalendarPrivacy} /> : null}
               <Button title={requesting ? "Connecting…" : "Connect Calendar…"} kind="primary" disabled={requesting} onPress={() => void connectCalendar()} />
             </Box>
           ) : null}
@@ -67,8 +68,8 @@ function OfferedCalendarSection() {
           <PopUp
             value={settings.alertCondition}
             options={[
-              { value: "always", title: "Always" },
-              { value: "activeOnly", title: "Only When Active" },
+              { value: "always", title: t("Always") },
+              { value: "activeOnly", title: t("Only When Active") },
             ]}
             disabled={settings.alertLead === "never"}
             onChange={(v) => updateCalendarSettings({ alertCondition: v })}
@@ -76,27 +77,27 @@ function OfferedCalendarSection() {
           />
         </Row>
         <Row anchor="automations.calendarPreview">
-          <Toggle value={settings.showPreview} accessibilityLabel="Show calendar preview" onChange={(v) => updateCalendarSettings({ showPreview: v })} />
+          <Toggle value={settings.showPreview} accessibilityLabel={t("Show calendar preview")} onChange={(v) => updateCalendarSettings({ showPreview: v })} />
         </Row>
         <Row anchor="automations.countdown">
-          <PopUp value={countdown} options={COUNTDOWN_OPTIONS} onChange={pickCountdown} minWidth={170} accessibilityLabel="Countdown to next meeting" />
+          <PopUp value={countdown} options={COUNTDOWN_OPTIONS} onChange={pickCountdown} minWidth={170} accessibilityLabel={t("Countdown to next meeting")} />
         </Row>
         <Row anchor="automations.groupMeetingTabs">
-          <Toggle value={autoGroup} accessibilityLabel="Group tabs for meetings" onChange={(v) => updateSettings({ autoGroupMeetingTabs: v })} />
+          <Toggle value={autoGroup} accessibilityLabel={t("Group tabs for meetings")} onChange={(v) => updateSettings({ autoGroupMeetingTabs: v })} />
         </Row>
       </Group>
 
       {connected && calendars.length ? (
         <>
-          <SectionHeader title="Active calendars" description="Meetings from unchecked calendars don't show or alert." />
+          <SectionHeader title="Active calendars" description={t("Meetings from unchecked calendars don't show or alert.")} />
           <Group>
-            {owned.length ? <CalendarList title="My Calendars" calendars={owned} hidden={settings.hiddenCalendarIds} /> : null}
-            {others.length ? <CalendarList title="Other Calendars" calendars={others} hidden={settings.hiddenCalendarIds} /> : null}
+            {owned.length ? <CalendarList title={t("My Calendars")} calendars={owned} hidden={settings.hiddenCalendarIds} /> : null}
+            {others.length ? <CalendarList title={t("Other Calendars")} calendars={others} hidden={settings.hiddenCalendarIds} /> : null}
           </Group>
         </>
       ) : connected ? (
         <View style={NO_CALENDARS}>
-          <EmptyState symbol="calendar" title="No calendars found" subtitle="Add accounts in the Calendar app." />
+          <EmptyState symbol="calendar" title={t("No calendars found")} subtitle={t("Add accounts in the Calendar app.")} />
         </View>
       ) : null}
     </View>

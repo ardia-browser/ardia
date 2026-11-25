@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { View } from "react-native";
 import { setContentBlockerAllowed } from "../../../state/site/siteSettings";
 import { Button, space, Text } from "../../ui";
@@ -26,8 +27,8 @@ function FilterListsContent() {
         <>
           <SectionHeader title="uBlock Origin" />
           <Group>
-            <Row title="uBlock Origin isn't answering" description="Its settings show here once it responds. Pages keep the blocking they had.">
-              <Button title="Try Again" onPress={refresh} />
+            <Row title={t("uBlock Origin isn't answering")} description={t("Its settings show here once it responds. Pages keep the blocking they had.")}>
+              <Button title={t("Try Again")} onPress={refresh} />
             </Row>
           </Group>
         </>
@@ -35,11 +36,11 @@ function FilterListsContent() {
       <FilterLists blocker={blocker} refresh={refresh} />
       {!!blocker?.allowedHosts.length && (
         <>
-          <SectionHeader title="Sites without blocking" description="Turned off from a site's controls. Blocking applies to subdomains too." />
+          <SectionHeader title="Sites without blocking" description={t("Turned off from a site's controls. Blocking applies to subdomains too.")} />
           <Group>
             {blocker.allowedHosts.map((host) => (
               <Row key={host} icon={<Favicon url={`https://${host}`} />} title={host}>
-                <Button title="Block Again" onPress={() => void setContentBlockerAllowed(host, false).then(refresh)} />
+                <Button title={t("Block Again")} onPress={() => void setContentBlockerAllowed(host, false).then(refresh)} />
               </Row>
             ))}
           </Group>

@@ -48,6 +48,7 @@ import { useDownloadsPlacement } from "./useDownloadsPlacement";
 import { useWindowRootSize } from "../../state/windows/rootSize";
 import { DOWNLOADS_LIST as L, FILE_ICON_GLYPH_SHARE, MAGNET, useDownloadsColors } from "./tokens";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
+import { t } from "../../lib/i18n";
 
 const rowFill = (theme: Theme, hovered: boolean, pressed: boolean) => (hovered || pressed ? menuRowFill(theme, pressed) : undefined);
 
@@ -118,13 +119,13 @@ function DownloadsPanel({ windowId, closing, onClosed }: { windowId: string; clo
             <View style={{ marginTop: upward ? 0 : arrowRoom, marginBottom: upward ? arrowRoom : 0, paddingTop: L.padTop, paddingBottom: L.padBottom }}>
               <View style={{ flexDirection: "row", alignItems: "center", paddingLeft: PANEL.inset, paddingRight: PANEL.inset - L.textButtonPad, height: L.header }}>
                 <Text size="caption" weight="semibold" tone="textSecondary" style={{ flex: 1, letterSpacing: L.headerTracking }}>
-                  RECENT DOWNLOADS
+                  {t("RECENT DOWNLOADS")}
                 </Text>
                 {clearable && (
                   <Button
                     variant="text"
                     look="panel"
-                    title="Clear"
+                    title={t("Clear")}
                     onPress={() => {
                       setOpen(false);
                       clearDownloads(windowId);
@@ -134,7 +135,7 @@ function DownloadsPanel({ windowId, closing, onClosed }: { windowId: string; clo
               </View>
               {ids.length === 0 ? (
                 <View style={{ height: PANEL.rowHeight, paddingHorizontal: PANEL.inset, justifyContent: "center" }}>
-                  <Text tone="textSecondary">No downloads yet</Text>
+                  <Text tone="textSecondary">{t("No downloads yet")}</Text>
                 </View>
               ) : (
                 <ScrollView style={{ maxHeight: listMax }} showsVerticalScrollIndicator={ids.length * L.row > listMax} contentContainerStyle={{ paddingHorizontal: PANEL.rowInset }}>
@@ -145,7 +146,7 @@ function DownloadsPanel({ windowId, closing, onClosed }: { windowId: string; clo
               )}
               <MenuSeparator />
               <FooterButton
-                title="View all downloads"
+                title={t("View all downloads")}
                 onPress={() => {
                   setOpen(false);
                   openInternalPage("downloads", windowId);

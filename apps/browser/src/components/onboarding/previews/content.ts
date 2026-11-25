@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { articleTints, tabTints } from "./tokens";
 
 export type Tab = { title: string; host: string; color: string; icon: string };
@@ -11,8 +12,8 @@ export const TABS: readonly Tab[] = [
   { title: "Sourdough, day 2", host: "cooking.nytimes.com", color: tabTints.cooking, icon: "fork.knife" },
   { title: "Pull requests", host: "github.com", color: tabTints.github, icon: "arrow.triangle.pull" },
 ];
-export const NEW_TAB: Tab = { title: "New Tab", host: "", color: tabTints.newTab, icon: "plus" };
-export const BLANK: Tab = { title: "New Tab", host: "", color: tabTints.blank, icon: "globe" };
+export const NEW_TAB: Tab = { title: t("New Tab"), host: "", color: tabTints.newTab, icon: "plus" };
+export const BLANK: Tab = { title: t("New Tab"), host: "", color: tabTints.blank, icon: "globe" };
 export const tab = (i: number) => TABS[i % TABS.length]!;
 
 type Pair = readonly [string, string];

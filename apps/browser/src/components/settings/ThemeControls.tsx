@@ -1,3 +1,4 @@
+import { t } from "../../lib/i18n";
 import { useRef, type ReactNode } from "react";
 import { StyleSheet, View, type GestureResponderEvent, type StyleProp, type ViewStyle } from "react-native";
 import { colorHex, flatColors, lookAngle, PAD_LIGHTNESS, padColor, stopLightness, themeGrainAlpha, themeLayerAlpha, themeUnderColor, withStopAt, withStopLightness, type ShownLook, type ThemeStop } from "../../lib/profileLook";
@@ -40,11 +41,11 @@ export function DirectionDial({ angle, onChange }: { angle: number; onChange: (a
         onMouseEnter={measure}
         accessible
         accessibilityRole="adjustable"
-        accessibilityLabel="Direction"
+        accessibilityLabel={t("Direction")}
         accessibilityValue={{ text: `${Math.round(angle)}°` }}
         accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
         onAccessibilityAction={(e) => step(e.nativeEvent.actionName === "increment" ? 1 : -1)}
-        tooltip="Drag to turn the gradient"
+        tooltip={t("Drag to turn the gradient")}
         style={{ width: DIAL, height: DIAL, borderRadius: capsule(DIAL), backgroundColor: ui.control, borderWidth: DIAL_BORDER, borderColor: ui.controlBorder }}
         onStartShouldSetResponder={() => true}
         onResponderGrant={(e) => {
@@ -177,7 +178,7 @@ export function LightnessBar({ theme, index, onChange, snapTo }: { theme: Profil
         value={stopLightness(stop)}
         snapTo={snapTo}
         thumbColor={colorHex(stop.color)}
-        tooltip="Brightness"
+        tooltip={t("Brightness")}
         onChange={(v, settle) => onChange(withStopLightness(theme, index, v), settle)}
         bar={
           <View style={{ height: 8, borderRadius: capsule(8), overflow: "hidden", flexDirection: "row" }}>

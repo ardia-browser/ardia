@@ -17,7 +17,8 @@ let package = Package(
   ],
   targets: [
     .target(name: "ArdiaUpdaterCore", path: "ios/UpdaterCore"),
-    .testTarget(name: "ArdiaUpdaterCoreTests", dependencies: ["ArdiaUpdaterCore"], path: "tests"),
+    .target(name: "ArdiaShellLocalization", path: "ios", sources: ["ShellLocalization.swift"]),
+    .testTarget(name: "ArdiaUpdaterCoreTests", dependencies: ["ArdiaUpdaterCore", "ArdiaShellLocalization"], path: "tests"),
     .target(name: "ArdiaTranslateCore", path: "ios/TranslateCore"),
     .testTarget(name: "ArdiaTranslateCoreTests", dependencies: ["ArdiaTranslateCore"], path: "translate-tests"),
     .target(name: "ArdiaReportCore", path: "ios/ReportCore"),

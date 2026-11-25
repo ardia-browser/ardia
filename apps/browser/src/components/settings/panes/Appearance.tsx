@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import type { AppIcon } from "../../../state/app/appSettings";
 import { Box, GlassFill, PopUp, radius, space, Text, Toggle, type Option } from "../../ui";
 import { Image, View } from "react-native";
@@ -28,62 +29,62 @@ import type { SettingsPlace } from "../../../state/settings/settingsWindows";
 const ADDRESS_BAR_IN_MENU = PLATFORM_FEATURES.menuBar ? "Also in View › Show Address Bar in Sidebar." : "";
 
 const MODES: { value: Settings["appearance"]; title: string; description: string }[] = [
-  { value: "auto", title: "Automatic", description: "Follow the system appearance setting" },
-  { value: "light", title: "Light", description: "Use the light application appearance" },
-  { value: "dark", title: "Dark", description: "Use the dark application appearance" },
+  { value: "auto", title: t("Automatic"), description: "Follow the system appearance setting" },
+  { value: "light", title: t("Light"), description: "Use the light application appearance" },
+  { value: "dark", title: t("Dark"), description: "Use the dark application appearance" },
 ];
 
 const STYLES: { value: Settings["interfaceStyle"]; title: string }[] = [
-  { value: "glass", title: "Glass" },
-  { value: "classic", title: "Classic" },
+  { value: "glass", title: t("Glass") },
+  { value: "classic", title: t("Classic") },
 ];
 
 const GLOWS: Option<Settings["selectedTabGlow"]>[] = [
-  { value: "full", title: "Full" },
-  { value: "soft", title: "Soft" },
-  { value: "off", title: "Off" },
+  { value: "full", title: t("Full") },
+  { value: "soft", title: t("Soft") },
+  { value: "off", title: t("Off") },
 ];
 
 const SELECTED_TOP_APP: Option<Settings["selectedTopApp"]>[] = [
-  { value: "ring", title: "Ring" },
-  { value: "fill", title: "Fill only" },
-  { value: "outline", title: "Outline only" },
+  { value: "ring", title: t("Ring") },
+  { value: "fill", title: t("Fill only") },
+  { value: "outline", title: t("Outline only") },
 ];
 
 const MINIMALISM_PINNED_ICONS: Option<Settings["minimalismPinnedIcons"]>[] = [
-  { value: "letters", title: "Letters" },
-  { value: "logos", title: "Site Logos" },
+  { value: "letters", title: t("Letters") },
+  { value: "logos", title: t("Site Logos") },
 ];
 
 const SIDEBAR_TEXT_SIZES: Option<Settings["sidebarTextSize"]>[] = [
-  { value: "default", title: "Default" },
-  { value: "large", title: "Large" },
-  { value: "larger", title: "Larger" },
+  { value: "default", title: t("Default") },
+  { value: "large", title: t("Large") },
+  { value: "larger", title: t("Larger") },
 ];
 
 const ADDRESS_BAR: { value: Settings["addressBar"]; title: string; caption: string }[] = [
-  { value: "toolbar", title: "In the toolbar", caption: "Above the page, with its buttons." },
-  { value: "sidebar", title: "In the sidebar", caption: "Above your tabs; the page gets more room." },
+  { value: "toolbar", title: t("In the toolbar"), caption: "Above the page, with its buttons." },
+  { value: "sidebar", title: t("In the sidebar"), caption: "Above your tabs; the page gets more room." },
 ];
 
 type CommandBarPlace = "field" | "centred";
 
 const COMMAND_BAR_PLACES: { value: CommandBarPlace; title: string; caption: string }[] = [
-  { value: "field", title: "At the address", caption: "Opens where the address is, like Chrome." },
-  { value: "centred", title: "In the center", caption: "Floats over the page, like Arc." },
+  { value: "field", title: t("At the address"), caption: "Opens where the address is, like Chrome." },
+  { value: "centred", title: t("In the center"), caption: "Floats over the page, like Arc." },
 ];
 
 const ADDRESS_BAR_BUTTONS: Option<Settings["addressBarButtons"]>[] = [
-  { value: "hover", title: "Show on hover" },
-  { value: "always", title: "Always show" },
+  { value: "hover", title: t("Show on hover") },
+  { value: "always", title: t("Always show") },
 ];
 
 type FullScreenFrame = "keep" | "remove" | "tabsHidden";
 
 const FULL_SCREEN_FRAME: Option<FullScreenFrame>[] = [
-  { value: "keep", title: "Keep frame" },
-  { value: "remove", title: "Remove" },
-  { value: "tabsHidden", title: "Remove when tabs are hidden" },
+  { value: "keep", title: t("Keep frame") },
+  { value: "remove", title: t("Remove") },
+  { value: "tabsHidden", title: t("Remove when tabs are hidden") },
 ];
 
 const FULL_SCREEN_PATCH: Record<FullScreenFrame, Pick<Settings, "pageFrameZeroInFullScreen" | "pageFrameZeroWhenTabsHidden">> = {
@@ -183,7 +184,7 @@ function SizeAndTextSection() {
           <PopUp value={size} options={SIDEBAR_TEXT_SIZES} onChange={(v) => updateSettings({ sidebarTextSize: v })} minWidth={120} />
         </Row>
         <Row anchor="appearance.sidebarTextContrast">
-          <Toggle value={highContrast} accessibilityLabel="Higher contrast sidebar text" onChange={(on) => updateSettings({ sidebarTextContrast: on ? "high" : "standard" })} />
+          <Toggle value={highContrast} accessibilityLabel={t("Higher contrast sidebar text")} onChange={(on) => updateSettings({ sidebarTextContrast: on ? "high" : "standard" })} />
         </Row>
       </Group>
     </>

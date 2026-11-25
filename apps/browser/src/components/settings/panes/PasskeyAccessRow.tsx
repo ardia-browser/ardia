@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { useEffect, useState } from "react";
 import { AppState, Linking } from "react-native";
 import { getPasskeyAccess, NO_PASSKEY_ACCESS, requestPasskeyAccess, type PasskeyAccess, type PasskeyAccessStatus } from "../../../state/engines/passkeys";
@@ -32,8 +33,8 @@ export function PasskeyAccessRow({ waiting, title = "Passkeys" }: { waiting: str
   };
   return (
     <Row title={title} description={PASSKEY_STATUS[access.status as keyof typeof PASSKEY_STATUS]}>
-      {access.status === "notDetermined" && <Button title="Allow Passkeys…" disabled={asking} onPress={() => void ask()} />}
-      {access.status === "denied" && <Button title="Open System Settings" onPress={() => void Linking.openURL("x-apple.systempreferences:com.apple.preference.security")} />}
+      {access.status === "notDetermined" && <Button title={t("Allow Passkeys…")} disabled={asking} onPress={() => void ask()} />}
+      {access.status === "denied" && <Button title={t("Open System Settings")} onPress={() => void Linking.openURL("x-apple.systempreferences:com.apple.preference.security")} />}
     </Row>
   );
 }

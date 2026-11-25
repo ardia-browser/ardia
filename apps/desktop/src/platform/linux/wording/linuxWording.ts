@@ -17,7 +17,7 @@ export const LINUX_WORDING: readonly Wording[] = [
   {
     file: "components/onboarding/LookStep.tsx",
     replacements: [
-      [`subtitle: "Buttons and panels catch the light, as in Tahoe"`, `subtitle: "Buttons and panels catch the light"`],
+      [`subtitle: t("Buttons and panels catch the light, as in Tahoe")`, `subtitle: t("Buttons and panels catch the light")`],
       ["subtitle: `Light by day, dark by night, like your ${PLATFORM_TERMS.computer}`", `subtitle: "Light by day, dark by night, like your desktop"`],
     ],
   },
@@ -26,12 +26,12 @@ export const LINUX_WORDING: readonly Wording[] = [
     replacements: [
       [
         `        {system && system.dockAvailable && !system.inDock ? (
-          <OptionCard control="check" icon="dock.rectangle" title="Add Ardia to Dock" subtitle="Quick access whenever you need it" selected={dock} onPress={() => setExtras({ dock: !dock })} />
+          <OptionCard control="check" icon="dock.rectangle" title={t("Add Ardia to Dock")} subtitle={t("Quick access whenever you need it")} selected={dock} onPress={() => setExtras({ dock: !dock })} />
         ) : null}
 `,
         "",
       ],
-      ["        {PLATFORM_FEATURES.dock ? chip(dock, \"dock.rectangle\", \"In your Dock\") : null}\n", ""],
+      ["        {PLATFORM_FEATURES.dock ? chip(dock, \"dock.rectangle\", t(\"In your Dock\")) : null}\n", ""],
     ],
   },
   {
@@ -147,7 +147,7 @@ export const LINUX_WORDING: readonly Wording[] = [
   },
   {
     file: "components/import/steps/SafariStep.tsx",
-    replacements: [["`macOS protects ${source.name}'s data from other apps. To import", "`${source.name}'s data is protected from other apps. To import"]],
+    replacements: [[`t("macOS protects {source}'s data from other apps. To import`, `t("{source}'s data is protected from other apps. To import`]],
   },
   {
     file: "state/import/runImport.ts",
@@ -175,13 +175,13 @@ export const LINUX_WORDING: readonly Wording[] = [
   {
     file: "components/pages/DownloadsPage.tsx",
     replacements: [
-      ["<Button title={`Show in ${PLATFORM_TERMS.fileManager}`}", "<Button title=\"Show in Folder\""],
+      [`<Button title={t("Show in {target}", { target: t(PLATFORM_TERMS.fileManager) })}`, `<Button title={t("Show in Folder")}`],
     ],
   },
   {
     file: "state/downloads/downloadMenu.ts",
     replacements: [
-      ["{ id: \"reveal\", title: `Show in ${PLATFORM_TERMS.fileManager}`", "{ id: \"reveal\", title: \"Show in Folder\""],
+      [`{ id: "reveal", title: t("Show in {target}", { target: t(PLATFORM_TERMS.fileManager) })`, `{ id: "reveal", title: t("Show in Folder")`],
     ],
   },
   {

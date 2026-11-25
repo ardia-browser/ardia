@@ -1,8 +1,8 @@
+import { t, tp } from "../../../lib/i18n";
 import { useEffect, useMemo, useRef } from "react";
 import { Animated, View } from "react-native";
 import { allArcHolders, restoreArcFolders } from "../../../state/bookmarks/bookmarkGroups";
 import { useBookmarks } from "../../../state/bookmarks/hooks";
-import { plural } from "../../../state/browser/model";
 import { useProfileOrder, useProfileRecords } from "../../../state/profiles/hooks";
 import type { ImportCounts } from "../../../state/import/apply";
 import { backTo, closeImport, openFoundExtensions, type ImportFlow } from "../../../state/import/flow";
@@ -16,16 +16,16 @@ import { importLayout, importMotion, importType } from "../tokens";
 
 function summaryOf(counts: ImportCounts) {
   return [
-    counts.bookmarks && plural(counts.bookmarks, "bookmark"),
-    counts.history && plural(counts.history, "history item"),
-    counts.passwords && plural(counts.passwords, "password"),
-    counts.cookies && plural(counts.cookies, "cookie"),
-    counts.addresses && `${counts.addresses} ${counts.addresses === 1 ? "address" : "addresses"}`,
-    counts.cards && plural(counts.cards, "card"),
-    counts.tabs && plural(counts.tabs, "tab"),
-    counts.rules && plural(counts.rules, "Air Traffic Control rule"),
-    counts.archived && plural(counts.archived, "archived tab"),
-    counts.settings && plural(counts.settings, "setting"),
+    counts.bookmarks && tp("{count} bookmark", "{count} bookmarks", counts.bookmarks),
+    counts.history && tp("{count} history item", "{count} history items", counts.history),
+    counts.passwords && tp("{count} password", "{count} passwords", counts.passwords),
+    counts.cookies && tp("{count} cookie", "{count} cookies", counts.cookies),
+    counts.addresses && tp("{count} address", "{count} addresses", counts.addresses),
+    counts.cards && tp("{count} card", "{count} cards", counts.cards),
+    counts.tabs && tp("{count} tab", "{count} tabs", counts.tabs),
+    counts.rules && tp("{count} Air Traffic Control rule", "{count} Air Traffic Control rules", counts.rules),
+    counts.archived && tp("{count} archived tab", "{count} archived tabs", counts.archived),
+    counts.settings && tp("{count} setting", "{count} settings", counts.settings),
   ].filter(Boolean) as string[];
 }
 
@@ -34,25 +34,25 @@ function ExtensionList({ flow }: { flow: ImportFlow }) {
   const onboarding = useOnboarding((s) => s.windowId !== null);
   if (step.name !== "done") return null;
   const { extensions } = step;
-  if (extensions.listing) return <ExtensionListingView listing={extensions.listing} sourceName={source?.name ?? "Your browser"} />;
+  if (extensions.listing) return <ExtensionListingView listing={extensions.listing} sourceName={source?.name ?? t("Your browser")} />;
   if (!extensions.list.length) return null;
   const centered = { textAlign: "center" } as const;
   return (
     <View style={{ alignSelf: "stretch", marginTop: space.xl, gap: space.m }}>
       <Text size="small" tone="textSecondary" style={centered}>
-        {`${source?.name ?? "Your browser"} has ${plural(extensions.list.length, "extension")} from the Chrome Web Store. Add the ones you want there:`}
+        {t("{browser} has {extensions} from the Chrome Web Store. Add the ones you want there:", { browser: source?.name ?? t("Your browser"), extensions: tp("{count} extension", "{count} extensions", extensions.list.length) })}
       </Text>
       <Text size="small" style={centered} numberOfLines={3}>
         {extensions.list.map((e) => e.name).join(", ")}
       </Text>
       {extensions.opened ? (
         <Text size="small" tone="textSecondary" style={centered}>
-          {`${extensions.list.length === 1 ? "Its page is" : "Their pages are"} open in your sidebar${onboarding ? ", ready when you finish setting up" : ""}. Click Add to ${APP} on each one you want.`}
+          {tp("Its page is open in your sidebar{when}. Click Add to {app} on each one you want.", "Their pages are open in your sidebar{when}. Click Add to {app} on each one you want.", extensions.list.length, { when: onboarding ? t(", ready when you finish setting up") : "", app: APP })}
         </Text>
       ) : (
         <View style={{ alignItems: "center" }}>
           <Button
-            title={extensions.list.length === 1 ? "Open in Chrome Web Store" : `Open ${extensions.list.length} in Chrome Web Store`}
+            title={tp("Open in Chrome Web Store", "Open {count} in Chrome Web Store", extensions.list.length)}
             onPress={openFoundExtensions}
           />
         </View>
@@ -74,14 +74,14 @@ function SearchEngineLine({ flow, failed }: { flow: ImportFlow; failed: boolean 
   const { source, step } = flow;
   if (step.name !== "done" || !step.searchEngine) return null;
   const { name, offered } = step.searchEngine;
-  const from = source?.name ?? "Your other browser";
-  const line = offered ? `${from} searches with ${name}. ${APP} kept the search engine you chose.` : `Search uses ${name} now, as in ${from}. You can change it in Settings › Profiles.`;
+  const from = source?.name ?? t("Your other browser");
+  const line = offered ? t("{from} searches with {name}. {app} kept the search engine you chose.", { from, name, app: APP }) : t("Search uses {name} now, as in {from}. You can change it in Settings › Profiles.", { from, name });
   return (
     <View style={{ alignItems: failed ? "flex-start" : "center", gap: space.m, marginTop: failed ? space.s : 0 }}>
       <Text size="small" tone="textSecondary" style={failed ? undefined : { textAlign: "center" }}>
         {line}
       </Text>
-      {offered && <Button title={`Use ${name} for Search`} onPress={takeOfferedEngine} />}
+      {offered && <Button title={t("Use {name} for Search", { name })} onPress={takeOfferedEngine} />}
     </View>
   );
 }
@@ -94,7 +94,7 @@ function RestoreArcFolders() {
   if (!arcHolders.length) return null;
   return (
     <Button
-      title="Restore Arc Folders as Groups"
+      title={t("Restore Arc Folders as Groups")}
       onPress={() => {
         for (const id of arcHolders) restoreArcFolders(id, null);
       }}
@@ -110,21 +110,21 @@ export function DoneBody({ flow }: { flow: ImportFlow }) {
   if (failures.length)
     return (
       <>
-        <Title title={summary.length ? "Partially imported" : "Import failed"} subtitle="Only some of your data imported. Please try again!" />
+        <Title title={summary.length ? t("Partially imported") : t("Import failed")} subtitle={t("Only some of your data imported. Please try again!")} />
         <Text weight="semibold" style={{ marginBottom: space.s }}>
-          Some import steps failed:
+          {t("Some import steps failed:")}
         </Text>
         {failures.map((f) => (
           <Text key={f.kind} tone="textSecondary" style={{ marginBottom: space.xs }}>
-            {f.profiles.length ? `${kindTitle(f.kind)} import failed for profiles ${f.profiles.join(", ")}` : `${kindTitle(f.kind)} import failed`}
+            {f.profiles.length ? t("{kind} import failed for profiles {profiles}", { kind: kindTitle(f.kind), profiles: f.profiles.join(t(", ")) }) : t("{kind} import failed", { kind: kindTitle(f.kind) })}
           </Text>
         ))}
-        {summary.length > 0 && <Text size="small" tone="textSecondary" style={{ marginTop: space.l }}>{`Imported ${summary.join(", ")}.`}</Text>}
+        {summary.length > 0 && <Text size="small" tone="textSecondary" style={{ marginTop: space.l }}>{t("Imported {summary}.", { summary: summary.join(t(", ")) })}</Text>}
         <SearchEngineLine flow={flow} failed />
         <LeftBehind notes={notes} failed />
         <ExtensionList flow={flow} />
         <Text size="small" tone="textTertiary" style={{ marginTop: space.l }}>
-          You can retry the import later from the app menu.
+          {t("You can retry the import later from the app menu.")}
         </Text>
       </>
     );
@@ -132,10 +132,10 @@ export function DoneBody({ flow }: { flow: ImportFlow }) {
     <View style={{ alignItems: "center", marginTop: importLayout.doneTop, gap: space.l }}>
       <SuccessMark />
       <Text weight="semibold" style={importType.done}>
-        You're all set
+        {t("You're all set")}
       </Text>
       <Text tone="textSecondary" style={{ textAlign: "center" }}>
-        {summary.length ? `Imported ${summary.join(", ")}.` : "There was nothing new to import."}
+        {summary.length ? t("Imported {summary}.", { summary: summary.join(t(", ")) }) : "There was nothing new to import."}
       </Text>
       <SearchEngineLine flow={flow} failed={false} />
       <LeftBehind notes={notes} failed={false} />
@@ -150,8 +150,8 @@ export function DoneFooter({ flow }: { flow: ImportFlow }) {
   return (
     <>
       <Spacer />
-      {failed && <Button title="Try Again" onPress={() => backTo("choose")} />}
-      <Button title={failed ? "Continue" : "Finish importing"} kind="primary" onPress={closeImport} />
+      {failed && <Button title={t("Try Again")} onPress={() => backTo("choose")} />}
+      <Button title={failed ? t("Continue") : t("Finish importing")} kind="primary" onPress={closeImport} />
     </>
   );
 }

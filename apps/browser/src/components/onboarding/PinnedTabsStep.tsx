@@ -1,3 +1,4 @@
+import { t, tp } from "../../lib/i18n";
 import { useRef } from "react";
 import { StyleSheet, View } from "react-native";
 import { useWindowHistory } from "../../state/history/hooks";
@@ -26,16 +27,16 @@ export function PinnedTabsStep() {
 
   const pinSelected = () => {
     if (windowId && selected.length) pinSites(windowId, selected);
-    confirmAnswer("pins", {}, selected.length ? [`${selected.length} ${selected.length === 1 ? "app" : "apps"} pinned`] : []);
+    confirmAnswer("pins", {}, selected.length ? [tp("{count} app pinned", "{count} apps pinned", selected.length)] : []);
   };
 
   return (
     <StepLayout
-      title="Keep your favorite apps handy"
-      subtitle="Pin the apps you use most. They stay put when you open Ardia."
+      title={t("Keep your favorite apps handy")}
+      subtitle={t("Pin the apps you use most. They stay put when you open Ardia.")}
       actions={
         <StepActions
-          continueTitle={selected.length ? `Pin ${selected.length} ${selected.length === 1 ? "Tab" : "Tabs"}` : "Continue"}
+          continueTitle={selected.length ? tp("Pin {count} Tab", "Pin {count} Tabs", selected.length) : t("Continue")}
           onContinue={pinSelected}
           onSkip={() => skipStep()}
           holdScroll

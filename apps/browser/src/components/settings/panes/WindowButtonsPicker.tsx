@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { PopUp, type Option } from "../../ui";
 import { useSettings } from "../../../state/browser/hooks";
 import { updateSettings } from "../../../state/settings/actions";
@@ -6,9 +7,9 @@ import { windowButtonsChoosable } from "../../../lib/windowChrome";
 import { Group, Row, SectionHeader } from "../Form";
 
 const WINDOW_BUTTON_CHOICES: Option<Settings["windowButtons"]>[] = [
-  { value: "native", title: "Native" },
-  { value: "trafficLights", title: "Traffic lights" },
-  { value: "hidden", title: "Hidden" },
+  { value: "native", title: t("Native") },
+  { value: "trafficLights", title: t("Traffic lights") },
+  { value: "hidden", title: t("Hidden") },
 ];
 
 const WINDOW_BUTTON_DESCRIPTIONS: Record<Settings["windowButtons"], string> = {

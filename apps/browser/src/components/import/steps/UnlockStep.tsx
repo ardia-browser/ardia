@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { Button } from "../../ui";
 import { APP } from "../model";
 import { ErrorText, Handoff, Spacer, Title } from "../Parts";
@@ -12,8 +13,8 @@ export function UnlockBody({ flow }: { flow: ImportFlow }) {
   return (
     <>
       <Title
-        title="Unlock your data for import"
-        subtitle={`${APP} can securely import logins, cookies and cards from your previous browser, so you stay signed in and don't have to enter your passwords again.`}
+        title={t("Unlock your data for import")}
+        subtitle={t("{app} can securely import logins, cookies and cards from your previous browser, so you stay signed in and don't have to enter your passwords again.", { app: APP })}
       />
       <Handoff
         iconPath={source.iconPath}
@@ -21,9 +22,9 @@ export function UnlockBody({ flow }: { flow: ImportFlow }) {
         lead={
           many
             ? `Some data is encrypted, so macOS will ask for your computer password once for each selected profile.`
-            : `Some data is encrypted, so macOS will ask for your computer password to bring it securely into ${APP}.`
+            : t("Some data is encrypted, so macOS will ask for your computer password to bring it securely into {app}.", { app: APP })
         }
-        detail={`macOS may ask whether ${APP} can use “${source.keychainService ?? `${source.name} Safe Storage`}” from your keychain: it's the key ${source.name} encrypts passwords, cookies, cards and open tabs with. Click Allow. Your data stays on this Mac.`}
+        detail={t("macOS may ask whether {app} can use “{service}” from your keychain: it's the key {source} encrypts passwords, cookies, cards and open tabs with. Click Allow. Your data stays on this Mac.", { app: APP, source: source.name, service: source.keychainService ?? `${source.name} Safe Storage` })}
       />
       {error && <ErrorText text={error} />}
     </>
@@ -36,10 +37,10 @@ export function UnlockFooter({ flow }: { flow: ImportFlow }) {
   const { unlocking } = step;
   return (
     <>
-      <Button title="Back" onPress={() => backTo(source.profiles.length > 1 || importsBySpaces(source) ? "profiles" : "choose")} />
+      <Button title={t("Back")} onPress={() => backTo(source.profiles.length > 1 || importsBySpaces(source) ? "profiles" : "choose")} />
       <Spacer />
-      <Button title="Skip Encrypted Data" onPress={skipEncryptedData} />
-      <Button title={unlocking ? "Waiting for password..." : "Continue"} kind="primary" disabled={unlocking} onPress={() => void unlockAndImport()} />
+      <Button title={t("Skip Encrypted Data")} onPress={skipEncryptedData} />
+      <Button title={unlocking ? t("Waiting for password...") : "Continue"} kind="primary" disabled={unlocking} onPress={() => void unlockAndImport()} />
     </>
   );
 }

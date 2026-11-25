@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import type { Settings } from "../../../state/settings/settings";
 
 export type SettingsEnv = { top: boolean; glass?: boolean; syncOn?: boolean; calendarAccess?: boolean; officialPlugins?: readonly string[] };
@@ -9,6 +10,6 @@ export const APP = "Ardia";
 export const WEBKIT_LIMITS_KEYWORDS = ["webkit limitations", "limitations", "not supported", "unsupported", "passkeys", "security keys", "picture in picture", "client hints", "midi", "casting", "chromecast", "chrome.debugger", "webrequest", "removeparam", "about engines", "how automatic works"];
 
 export const ENGINE_MODE_ROW = {
-  title: "Engine",
+  title: t("Engine"),
   keywords: ["engine mode", "only", "just", "chromium only", "webkit only", "safari", "automatic", "always"],
 } satisfies SettingRow;

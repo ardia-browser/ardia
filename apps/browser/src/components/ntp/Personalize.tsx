@@ -8,6 +8,7 @@ import { PERSONALIZE_PANEL } from "./tokens";
 import { closePersonalizePanelOf, setPersonalizePanel as setOpen, usePersonalizePanel } from "../../state/pages/personalizePanel";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
 import { perLook } from "../ui/tokens";
+import { t } from "../../lib/i18n";
 
 const INSET = space.xl;
 const BUTTON = 30;
@@ -23,13 +24,13 @@ export function PersonalizeButton({ windowId }: { windowId: string }) {
   return (
     <>
       {open ? <PersonalizePanel windowId={windowId} onClose={() => setOpen(null)} /> : null}
-      <View {...hoverProps} tooltip="Personalize" style={{ position: "absolute", right: INSET, bottom: INSET - GLYPH_DROP }}>
+      <View {...hoverProps} tooltip={t("Personalize")} style={{ position: "absolute", right: INSET, bottom: INSET - GLYPH_DROP }}>
         <Pressable
           onPress={() => setOpen(open ? null : windowId)}
           onPressIn={pressMotion.onPressIn}
           onPressOut={pressMotion.onPressOut}
           accessibilityRole="button"
-          accessibilityLabel="Personalize"
+          accessibilityLabel={t("Personalize")}
           accessibilityState={{ expanded: open }}
         >
           {({ pressed }) => (
@@ -57,37 +58,37 @@ export function PersonalizeButton({ windowId }: { windowId: string }) {
 const PERSONALIZE_GLYPH = { width: BUTTON, height: BUTTON, alignItems: "center", justifyContent: "center" } as const;
 
 function PersonalizePanel({ windowId, onClose }: { windowId: string; onClose: () => void }) {
-  const t = useRef(new Animated.Value(0)).current;
+  const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    Animated.spring(t, { toValue: 1, ...PERSONALIZE_PANEL.spring, useNativeDriver: true }).start();
+    Animated.spring(anim, { toValue: 1, ...PERSONALIZE_PANEL.spring, useNativeDriver: true }).start();
   }, []);
   return (
     <>
-      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close Personalize" />
+      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel={t("Close Personalize")} />
       <Animated.View
         style={{
           position: "absolute",
           right: INSET,
           bottom: INSET + BUTTON + space.m,
           width: PANEL_WIDTH,
-          opacity: t.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolate: "clamp" }),
-          transform: [{ translateY: t.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }, { scale: t.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] }) }],
+          opacity: anim.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolate: "clamp" }),
+          transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }, { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] }) }],
         }}
       >
         <Panel radius={PERSONALIZE_PANEL.radius} shadow={shadow.dialog}>
           <Box pad="xl" gap="xl">
             <Box gap="xs">
               <Text size="title" weight="semibold">
-                {PERSONALIZE_COPY.title}
+                {t(PERSONALIZE_COPY.title)}
               </Text>
               <Text size="small" tone="textSecondary" style={SUBTITLE()}>
-                {PERSONALIZE_COPY.subtitle}
+                {t(PERSONALIZE_COPY.subtitle)}
               </Text>
             </Box>
             <ThemePicker windowId={windowId} size={28} gap={space.xs} />
             <Box gap="m">
               <Text size="small" tone="textSecondary">
-                {PERSONALIZE_COPY.layouts}
+                {t(PERSONALIZE_COPY.layouts)}
               </Text>
               <TabLayoutPicker windowId={windowId} />
             </Box>

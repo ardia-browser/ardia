@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { asSecret, reveal } from "@ardia/core";
 import { confirm, showMenu } from "../../../state/app/system";
 import { Box, Button, Checkbox, DialogActions, DialogTitle, ink, lineHeight, proseLineHeight, radius, Sheet, space, Symbol, tabularNums, Text, TextField } from "../../ui";
@@ -67,7 +68,7 @@ function RecoveryKitSheet() {
   };
   const more = async () => {
     const choice = await showMenu([
-      { id: "copy", title: "Copy", symbol: "doc.on.doc" },
+      { id: "copy", title: t("Copy"), symbol: "doc.on.doc" },
       ...(PLATFORM_FEATURES.sharesFiles ? [{ id: "share", title: "Share…", symbol: "square.and.arrow.up" }] : []),
       { separator: true },
       { id: "text", title: "Save as Text…", symbol: "doc.plaintext" },
@@ -80,7 +81,7 @@ function RecoveryKitSheet() {
     <Sheet size="l" onClose={closeSettingsSheet}>
       <Box row gap="xl">
         <View style={FILL}>
-          <DialogTitle subtitle="Your Recovery Kit contains all you need to recover your data should you lose access to this device.">Save Your Recovery Kit</DialogTitle>
+          <DialogTitle subtitle={t("Your Recovery Kit contains all you need to recover your data should you lose access to this device.")}>Save Your Recovery Kit</DialogTitle>
           <Box row gap="m" pad="ml" radius="panel" style={[SECTION_TOP, { backgroundColor: look.warningFill }]}>
             <Symbol name="exclamationmark.triangle.fill" size={12} color={theme.warning} style={{ width: 16, height: 16 }} />
             <Text size="small" style={WARNING_TEXT()}>
@@ -93,13 +94,13 @@ function RecoveryKitSheet() {
           </Box>
           {saved ? <Body>Saved to {saved.replace(/^\/Users\/[^/]+/, "~")}.</Body> : null}
         </View>
-        <View accessibilityLabel="Recovery kit preview" style={[PREVIEW_FRAME(), { borderColor: theme.groupBorder }]}>
+        <View accessibilityLabel={t("Recovery kit preview")} style={[PREVIEW_FRAME(), { borderColor: theme.groupBorder }]}>
           {preview ? <Image source={{ uri: preview }} style={PREVIEW} /> : null}
         </View>
       </Box>
-      <DialogActions leading={<Button title="Other Options" onPress={() => void more()} />}>
-        <Button title="Close" onPress={closeSettingsSheet} />
-        <Button title="Save…" kind="primary" onPress={() => void save("pdf")} />
+      <DialogActions leading={<Button title={t("Other Options")} onPress={() => void more()} />}>
+        <Button title={t("Close")} onPress={closeSettingsSheet} />
+        <Button title={t("Save…")} kind="primary" onPress={() => void save("pdf")} />
       </DialogActions>
     </Sheet>
   );
@@ -152,7 +153,7 @@ function PhraseSheet({ folder, onChooseFolder }: { folder: FolderInfo | null; on
   if (joined) return <JoinedSheet />;
   return (
     <Sheet onClose={closeSettingsSheet}>
-      <DialogTitle subtitle="Enter your 24-word recovery phrase to sync with another device.">Connect with Recovery Phrase</DialogTitle>
+      <DialogTitle subtitle={t("Enter your 24-word recovery phrase to sync with another device.")}>Connect with Recovery Phrase</DialogTitle>
       <View style={CHECK_TOP}>
         <TextField
           multiline
@@ -181,11 +182,11 @@ function PhraseSheet({ folder, onChooseFolder }: { folder: FolderInfo | null; on
           <Text size="caption" tone="textSecondary" lines={1} style={FILL}>
             {folderLabel(folder)}
           </Text>
-          {onChooseFolder ? <Button title="Change…" kind="plain" onPress={onChooseFolder} /> : null}
+          {onChooseFolder ? <Button title={t("Change…")} kind="plain" onPress={onChooseFolder} /> : null}
         </Box>
       ) : null}
       <DialogActions>
-        <Button title="Cancel" onPress={closeSettingsSheet} />
+        <Button title={t("Cancel")} onPress={closeSettingsSheet} />
         <Button title={busy ? "Connecting…" : "Connect"} kind="primary" disabled={busy || count !== WORDS || !folder} onPress={() => void submit()} />
       </DialogActions>
     </Sheet>
@@ -237,7 +238,7 @@ export function RemoteProfileRow({ profile }: { profile: RemoteProfile }) {
       description={remoteProfileDescription(profile)}
     >
       <Box row gap="s">
-        <Button title="Remove…" disabled={!!profile.sharedByOthers} onPress={() => void confirmRemoveFromSync(profile)} />
+        <Button title={t("Remove…")} disabled={!!profile.sharedByOthers} onPress={() => void confirmRemoveFromSync(profile)} />
         <Button title={`Add to This ${PLATFORM_TERMS.computerTitle}`} disabled={!!profile.waiting} onPress={() => addRemoteProfile(profile.syncId)} />
       </Box>
     </Row>
@@ -275,8 +276,8 @@ function JoinedSheet() {
         </View>
       ) : null}
       <DialogActions>
-        <Button title="Done" kind={addable > 1 ? "default" : "primary"} onPress={closeSettingsSheet} />
-        {addable > 1 ? <Button title="Add All" kind="primary" onPress={() => addAllRemoteProfiles(remote)} /> : null}
+        <Button title={t("Done")} kind={addable > 1 ? "default" : "primary"} onPress={closeSettingsSheet} />
+        {addable > 1 ? <Button title={t("Add All")} kind="primary" onPress={() => addAllRemoteProfiles(remote)} /> : null}
       </DialogActions>
     </Sheet>
   );
@@ -298,7 +299,7 @@ function ConnectDeviceSheet() {
         Connect Another Device
       </DialogTitle>
       <Box row gap="xl" style={[SECTION_TOP, { alignItems: "center" }]}>
-        <View style={syncCodeFrame(theme, qr !== null)}>{qr ? <Image source={{ uri: qr }} style={QR} /> : <Button title="Show Code" onPress={() => void recoveryQrCode().then(setQr)} />}</View>
+        <View style={syncCodeFrame(theme, qr !== null)}>{qr ? <Image source={{ uri: qr }} style={QR} /> : <Button title={t("Show Code")} onPress={() => void recoveryQrCode().then(setQr)} />}</View>
         <Text size="small" tone="textSecondary" style={QR_NOTE()}>
           {PLATFORM_FEATURES.syncsWithPhone
             ? "Click Show Code. On your iPhone, open Ardia, tap Sync With Mac, and scan the code. For another Mac, you can also scan it with your iPhone’s camera and paste the words there with Universal Clipboard."
@@ -319,11 +320,11 @@ function ConnectDeviceSheet() {
         leading={
           <>
             <Button title={words ? "Hide Words" : "Show Words"} onPress={() => (words ? setWords(null) : void recoveryWords().then((phrase) => setWords(phrase && reveal(phrase).split(" "))))} />
-            <Button title="Copy Words" onPress={() => void copyRecoveryPhrase()} />
+            <Button title={t("Copy Words")} onPress={() => void copyRecoveryPhrase()} />
           </>
         }
       >
-        <Button title="Done" kind="primary" onPress={closeSettingsSheet} />
+        <Button title={t("Done")} kind="primary" onPress={closeSettingsSheet} />
       </DialogActions>
     </Sheet>
   );
@@ -339,9 +340,9 @@ function StopSheet() {
       <DialogTitle subtitle={`Syncing will stop on this device. To re-enable sync, you’ll need another device that is currently syncing, or the recovery phrase from your Recovery Kit. Everything on this ${PLATFORM_TERMS.computer} stays as it is.`}>
         Stop Syncing This Device?
       </DialogTitle>
-      <DialogActions leading={<Button title="Save Recovery Kit" onPress={() => showSettingsSheet(<RecoveryKitSheet />)} />}>
-        <Button title="Cancel" onPress={closeSettingsSheet} />
-        <Button title="Stop Syncing" kind="destructive" onPress={() => showSettingsSheet(<DeleteDataSheet />)} />
+      <DialogActions leading={<Button title={t("Save Recovery Kit")} onPress={() => showSettingsSheet(<RecoveryKitSheet />)} />}>
+        <Button title={t("Cancel")} onPress={closeSettingsSheet} />
+        <Button title={t("Stop Syncing")} kind="destructive" onPress={() => showSettingsSheet(<DeleteDataSheet />)} />
       </DialogActions>
     </Sheet>
   );
@@ -361,11 +362,11 @@ function DeleteDataSheet() {
         Delete Sync Data?
       </DialogTitle>
       <View style={CHECK_TOP}>
-        <Checkbox value={understood} onChange={setUnderstood} label="I understand this cannot be undone" />
+        <Checkbox value={understood} onChange={setUnderstood} label={t("I understand this cannot be undone")} />
       </View>
       <DialogActions>
-        <Button title="Keep Sync Data" disabled={busy} onPress={() => void finish(false)} />
-        <Button title="Delete My Sync Data" kind="destructive" disabled={!understood || busy} onPress={() => void finish(true)} />
+        <Button title={t("Keep Sync Data")} disabled={busy} onPress={() => void finish(false)} />
+        <Button title={t("Delete My Sync Data")} kind="destructive" disabled={!understood || busy} onPress={() => void finish(true)} />
       </DialogActions>
     </Sheet>
   );

@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { useEffect } from "react";
 import { AppState, View } from "react-native";
 import { checkForUpdates } from "../../../state/app/appSettings";
@@ -53,7 +54,7 @@ export function UpdatesSection() {
             <Segmented
               value={live.channel}
               options={[
-                { value: "stable", title: "Stable" },
+                { value: "stable", title: t("Stable") },
                 { value: "nightly", title: "Nightly" },
               ]}
               onChange={(channel) => ready && setUpdaterPrefs({ channel })}
@@ -87,8 +88,8 @@ function VersionDetails({ status }: { status: string | null }) {
         {engines}
       </Text>
       <View style={LINKS}>
-        <Button variant="text" look="link" pad="none" title="Source code" onPress={() => openUrls([`${REPOSITORY}/tree/v${systemInfo().appVersion}`])} />
-        <Button variant="text" look="link" pad="none" title="Licenses" onPress={() => openUrls(["chrome://credits"])} />
+        <Button variant="text" look="link" pad="none" title={t("Source code")} onPress={() => openUrls([`${REPOSITORY}/tree/v${systemInfo().appVersion}`])} />
+        <Button variant="text" look="link" pad="none" title={t("Licenses")} onPress={() => openUrls(["chrome://credits"])} />
       </View>
     </View>
   );

@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import type { PasswordManagerSpec } from "../../../lib/pluginPasswordManager";
 import { useProfilesUsing } from "../../../state/site/passwordManager";
 import { goToSettingsPane } from "../../../state/settings/settingsWindows";
@@ -10,8 +11,8 @@ export function PasswordManagerDetails({ name, spec }: { name: string; spec: Pas
     <>
       <SectionHeader title="Password manager" />
       <Group>
-        <Row title="Profiles" description={using.length ? `Used in ${using.join(", ")}.` : "No profile uses it yet. Pick it in Settings › Profiles › Passwords."}>
-          <Button title="Profiles…" onPress={() => goToSettingsPane("profiles", null)} />
+        <Row title={t("Profiles")} description={using.length ? `Used in ${using.join(", ")}.` : "No profile uses it yet. Pick it in Settings › Profiles › Passwords."}>
+          <Button title={t("Profiles…")} onPress={() => goToSettingsPane("profiles", null)} />
         </Row>
       </Group>
     </>

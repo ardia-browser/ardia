@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { useSettings } from "../../../state/browser/hooks";
 import { updateSettings } from "../../../state/settings/actions";
 import type { Settings } from "../../../state/settings/settings";
@@ -7,10 +8,10 @@ import { Row } from "../Form";
 type BookmarksBarChoice = Settings["bookmarksBar"] | "hidden";
 
 const BOOKMARKS_BAR_CHOICES: Option<BookmarksBarChoice>[] = [
-  { value: "always", title: "Always" },
-  { value: "newTab", title: "On new tabs" },
-  { value: "never", title: "Never" },
-  { value: "hidden", title: "Hide bookmarks entirely" },
+  { value: "always", title: t("Always") },
+  { value: "newTab", title: t("On new tabs") },
+  { value: "never", title: t("Never") },
+  { value: "hidden", title: t("Hide bookmarks entirely") },
 ];
 
 export function BookmarksBarRow() {

@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import type { ReactNode } from "react";
 import { View } from "react-native";
 import { Box, Button, Text } from "../../ui";
@@ -31,7 +32,7 @@ export function TabCornersSlider() {
   const control = tabCornersControl(inForce, chosen);
   return (
     <FrameSlider position={control.position} tooltip={`${inForce} pt`} label={control.label} onChange={(v) => updateSettings({ tabCornerRadius: Math.round(v * TAB_CORNERS.max) })}>
-      {control.followsTheme ? null : <Button variant="icon" icon="arrow.uturn.backward" size="m" onPress={() => updateSettings({ tabCornerRadius: null })} tooltip="Follow the Theme" />}
+      {control.followsTheme ? null : <Button variant="icon" icon="arrow.uturn.backward" size="m" onPress={() => updateSettings({ tabCornerRadius: null })} tooltip={t("Follow the Theme")} />}
     </FrameSlider>
   );
 }

@@ -1,3 +1,4 @@
+import { t } from "../../lib/i18n";
 import { useEffect, type ReactNode } from "react";
 import { View } from "react-native";
 import { space } from "../ui/tokens";
@@ -71,16 +72,16 @@ export function change(patch: Partial<Settings>, live = false) {
 const LAYOUT_KEYS = keysOf("layout");
 
 const TAB_CHOICES: ChoiceOption<Settings["tabLayout"]>[] = [
-  { value: "sidebar", preview: "tabs-sidebar", title: "In the sidebar", subtitle: "A tall list down the side, as in Arc" },
-  { value: "top", preview: "tabs-top", title: "Along the top", subtitle: "Classic tabs above the page" },
+  { value: "sidebar", preview: "tabs-sidebar", title: t("In the sidebar"), subtitle: t("A tall list down the side, as in Arc") },
+  { value: "top", preview: "tabs-top", title: t("Along the top"), subtitle: t("Classic tabs above the page") },
 ];
 const ADDRESS_CHOICES: ChoiceOption<Settings["addressBar"]>[] = [
-  { value: "toolbar", preview: "address-toolbar", title: "In the toolbar", subtitle: "Above the page, as in Dia" },
-  { value: "sidebar", preview: "address-sidebar", title: "In the sidebar", subtitle: "On top of your tabs, as in Arc" },
+  { value: "toolbar", preview: "address-toolbar", title: t("In the toolbar"), subtitle: t("Above the page, as in Dia") },
+  { value: "sidebar", preview: "address-sidebar", title: t("In the sidebar"), subtitle: t("On top of your tabs, as in Arc") },
 ];
 const CMDL_CHOICES: ChoiceOption<Settings["commandBarPlacement"]>[] = [
-  { value: "field", preview: "cmdl-field", title: "Under the address", subtitle: "Drops down from the field, as in Dia" },
-  { value: "centred", preview: "cmdl-centred", title: "In the center", subtitle: "Floats over the page, as in Arc" },
+  { value: "field", preview: "cmdl-field", title: t("Under the address"), subtitle: t("Drops down from the field, as in Dia") },
+  { value: "centred", preview: "cmdl-centred", title: t("In the center"), subtitle: t("Floats over the page, as in Arc") },
 ];
 
 function styleOf(values: Pick<Settings, (typeof LAYOUT_KEYS)[number]>, preset: Preset) {
@@ -104,11 +105,11 @@ export function LayoutStep() {
     return (
       <Page
         id={id}
-        title="Where's the address bar?"
-        subtitle="Your window changes as you pick."
+        title={t("Where's the address bar?")}
+        subtitle={t("Your window changes as you pick.")}
         tag={tag}
         patch={{ addressBar: values.addressBar }}
-        picked={[values.addressBar === "sidebar" ? "Address in the sidebar" : "Address in the toolbar"]}
+        picked={[values.addressBar === "sidebar" ? t("Address in the sidebar") : t("Address in the toolbar")]}
       >
         <ChoiceList options={ADDRESS_CHOICES} value={values.addressBar} onChange={(addressBar) => change({ addressBar }, true)} mock={focus} />
       </Page>
@@ -118,7 +119,7 @@ export function LayoutStep() {
       <Page
         id={id}
         title={`Where does ${keyText("⌘L")} open?`}
-        subtitle="The command bar, for going anywhere."
+        subtitle={t("The command bar, for going anywhere.")}
         tag={tag}
         patch={{ commandBarPlacement: values.commandBarPlacement }}
         picked={[values.commandBarPlacement !== "field" ? `${keyText("⌘L")} opens in the center` : `${keyText("⌘L")} opens under the address`]}
@@ -134,11 +135,11 @@ export function LayoutStep() {
   return (
     <Page
       id="tabs"
-      title="Where do your tabs go?"
-      subtitle="Your window changes as you pick."
+      title={t("Where do your tabs go?")}
+      subtitle={t("Your window changes as you pick.")}
       tag={tag}
       patch={{ tabLayout: values.tabLayout }}
-      picked={[top ? "Tabs along the top" : "Tabs in the sidebar"]}
+      picked={[top ? t("Tabs along the top") : t("Tabs in the sidebar")]}
     >
       <ChoiceList options={TAB_CHOICES} value={values.tabLayout} onChange={(tabLayout) => change({ tabLayout }, true)} mock={focus} />
     </Page>
@@ -148,20 +149,20 @@ export function LayoutStep() {
 const TABS_MORE = questionKeys("tabsMore");
 
 const NEW_TAB_CHOICES: ChoiceOption<Settings["newTabOpens"]>[] = [
-  { value: "page", preview: "newtab-page", title: "The New Tab page", subtitle: "Your apps and a search box, as in Dia" },
-  { value: "commandBar", preview: "newtab-commandbar", title: "The command bar", subtitle: "Start typing right away, as in Arc" },
+  { value: "page", preview: "newtab-page", title: t("The New Tab page"), subtitle: t("Your apps and a search box, as in Dia") },
+  { value: "commandBar", preview: "newtab-commandbar", title: t("The command bar"), subtitle: t("Start typing right away, as in Arc") },
 ];
 const TIDY_CHOICES: ChoiceOption<"keep" | "tidy">[] = [
-  { value: "keep", preview: "tidy-keep", title: "Keep them", subtitle: "Tabs stay until you close them" },
-  { value: "tidy", preview: "tidy-auto", title: "Tidy them up", subtitle: "Close the ones you haven't used in a while" },
+  { value: "keep", preview: "tidy-keep", title: t("Keep them"), subtitle: t("Tabs stay until you close them") },
+  { value: "tidy", preview: "tidy-auto", title: t("Tidy them up"), subtitle: t("Close the ones you haven't used in a while") },
 ];
 const QUIT_CHOICES: ChoiceOption<boolean>[] = [
-  { value: true, preview: "quit-restore", title: "Restore my tabs", subtitle: "Pick up where you left off" },
-  { value: false, preview: "quit-fresh", title: "Start fresh", subtitle: "Open to a clean window" },
+  { value: true, preview: "quit-restore", title: t("Restore my tabs"), subtitle: t("Pick up where you left off") },
+  { value: false, preview: "quit-fresh", title: t("Start fresh"), subtitle: t("Open to a clean window") },
 ];
 const WINDOW_CHOICES: ChoiceOption<boolean>[] = [
-  { value: false, preview: "windows-separate", title: "Separate", subtitle: "Each window has its own tabs" },
-  { value: true, preview: "windows-shared", title: "Shared", subtitle: "Every window shows the same tabs, as in Arc" },
+  { value: false, preview: "windows-separate", title: t("Separate"), subtitle: t("Each window has its own tabs") },
+  { value: true, preview: "windows-shared", title: t("Shared"), subtitle: t("Every window shows the same tabs, as in Arc") },
 ];
 const CTRL_TAB_KEY = PLATFORM_TERMS.switchTabsKey;
 const CTRL_TAB_OPTIONS: ChoiceOption<CtrlTabPreset | null>[] = CTRL_TAB_CHOICES.map((c) => ({ value: c.value, preview: `ctrltab-${c.value}`, title: c.title, subtitle: c.caption }));
@@ -177,7 +178,7 @@ const TIDY_AFTER = [
 const PEEK_WITH: { value: PeekModifier; title: string }[] = [
   { value: "shift", title: `${keyText("⇧")}-click` },
   { value: "alt", title: `${keyText("⌥")}-click` },
-  { value: "off", title: "Off" },
+  { value: "off", title: t("Off") },
 ];
 
 const tidyLabel = (minutes: number) => (minutes !== TIDY_AFTER[0]!.value && TIDY_AFTER.find((o) => o.value === minutes)?.title) || durationTitle(minutes);
@@ -191,15 +192,15 @@ export function TabsStep() {
   if (id === "ctrlTab") return <CtrlTabQuestion focus={focus} />;
   if (id === "newTabPosition") {
     const options: ChoiceOption<Settings["newTabPosition"]>[] = [
-      { value: "bottom", preview: "newtabpos-bottom", title: top ? "On the right" : "At the bottom", subtitle: top ? "After your other tabs, as in Dia" : "Under your other tabs, as in Dia" },
-      { value: "top", preview: "newtabpos-top", title: top ? "On the left" : "At the top", subtitle: top ? "Before your other tabs, as in Arc" : "Above your other tabs, as in Arc" },
-      { value: "nextToCurrent", preview: "newtabpos-next", title: top ? "Next to the current tab" : "Below the current tab", subtitle: top ? "Right after the tab you're on" : "Right under the tab you're on" },
+      { value: "bottom", preview: "newtabpos-bottom", title: top ? t("On the right") : t("At the bottom"), subtitle: top ? t("After your other tabs, as in Dia") : t("Under your other tabs, as in Dia") },
+      { value: "top", preview: "newtabpos-top", title: top ? t("On the left") : t("At the top"), subtitle: top ? t("Before your other tabs, as in Arc") : t("Above your other tabs, as in Arc") },
+      { value: "nextToCurrent", preview: "newtabpos-next", title: top ? t("Next to the current tab") : t("Below the current tab"), subtitle: top ? t("Right after the tab you're on") : t("Right under the tab you're on") },
     ];
     return (
       <Page
         id={id}
-        title="Where do new tabs go?"
-        subtitle="Where a tab lands when you open it."
+        title={t("Where do new tabs go?")}
+        subtitle={t("Where a tab lands when you open it.")}
         patch={{ newTabPosition: values.newTabPosition, newTabButtonPosition: values.newTabButtonPosition }}
         picked={[]}
       >
@@ -211,10 +212,10 @@ export function TabsStep() {
     return (
       <Page
         id={id}
-        title="What about old tabs?"
-        subtitle="Tabs you opened and forgot."
+        title={t("What about old tabs?")}
+        subtitle={t("Tabs you opened and forgot.")}
         patch={{ cleanUpInactiveTabsAfterMinutes: tidy }}
-        picked={[tidy === null ? "Old tabs stay until you close them" : `Old tabs tidy up after ${tidyLabel(tidy)}`]}
+        picked={[tidy === null ? t("Old tabs stay until you close them") : t("Old tabs tidy up after {duration}", { duration: tidyLabel(tidy) })]}
       >
         <ChoiceList
           options={TIDY_CHOICES}
@@ -224,7 +225,7 @@ export function TabsStep() {
         />
         {tidy === null ? null : (
           <OptionRow
-            title="Tidy after"
+            title={t("Tidy after")}
             value={tidy}
             options={TIDY_AFTER.some((o) => o.value === tidy) ? TIDY_AFTER : [...TIDY_AFTER, { value: tidy, title: tidyLabel(tidy) }]}
             onChange={(cleanUpInactiveTabsAfterMinutes) => change({ cleanUpInactiveTabsAfterMinutes })}
@@ -236,8 +237,8 @@ export function TabsStep() {
     return (
       <Page
         id={id}
-        title="When you quit and come back?"
-        subtitle="What Ardia opens to."
+        title={t("When you quit and come back?")}
+        subtitle={t("What Ardia opens to.")}
         patch={{ restoreSession: values.restoreSession }}
         picked={values.restoreSession ? [] : ["Ardia starts fresh each launch"]}
       >
@@ -248,8 +249,8 @@ export function TabsStep() {
     return (
       <Page
         id={id}
-        title="Two windows, same tabs?"
-        subtitle="How windows share what's open."
+        title={t("Two windows, same tabs?")}
+        subtitle={t("How windows share what's open.")}
         patch={{ shareTabsAcrossWindows: values.shareTabsAcrossWindows }}
         picked={values.shareTabsAcrossWindows ? ["Windows share their tabs"] : []}
       >
@@ -265,19 +266,19 @@ export function TabsStep() {
     return (
       <Page
         id={id}
-        title="A few more tab habits"
-        subtitle="Small things Arc and Dia do differently."
+        title={t("A few more tab habits")}
+        subtitle={t("Small things Arc and Dia do differently.")}
         patch={touchedOrPresetPatch(TABS_MORE, values)}
         picked={[]}
       >
         <View style={{ gap: space.m }}>
-          <OptionCard control="check" title="Top Apps grow with the sidebar" subtitle="Up to four across, as in Arc" selected={values.balancedTopApps} onPress={() => change({ balancedTopApps: !values.balancedTopApps })} />
-          <OptionRow title="Peek a link with" value={values.peekModifier} options={PEEK_WITH} onChange={(peekModifier) => change({ peekModifier })} />
-          <OptionCard control="check" title={`${keyText("⌘Z")} reopens closed tabs`} subtitle="Outside text fields, as in Arc" selected={values.undoReopensClosedTab} onPress={() => change({ undoReopensClosedTab: !values.undoReopensClosedTab })} />
+          <OptionCard control="check" title={t("Top Apps grow with the sidebar")} subtitle={t("Up to four across, as in Arc")} selected={values.balancedTopApps} onPress={() => change({ balancedTopApps: !values.balancedTopApps })} />
+          <OptionRow title={t("Peek a link with")} value={values.peekModifier} options={PEEK_WITH} onChange={(peekModifier) => change({ peekModifier })} />
+          <OptionCard control="check" title={t("{key} reopens closed tabs", { key: keyText("⌘Z") })} subtitle={t("Outside text fields, as in Arc")} selected={values.undoReopensClosedTab} onPress={() => change({ undoReopensClosedTab: !values.undoReopensClosedTab })} />
           <OptionCard
             control="check"
             title={`${keyText("⌘")}-click on a link makes a tab group`}
-            subtitle="Keeps related tabs together"
+            subtitle={t("Keeps related tabs together")}
             selected={values.cmdClickCreatesTabGroup}
             onPress={() => change({ cmdClickCreatesTabGroup: !values.cmdClickCreatesTabGroup })}
           />
@@ -288,7 +289,7 @@ export function TabsStep() {
     <Page
       id="newTab"
       title={`What does ${keyText("⌘T")} open?`}
-      subtitle="What you see when you open a tab."
+      subtitle={t("What you see when you open a tab.")}
       patch={{ newTabOpens: values.newTabOpens }}
       picked={[values.newTabOpens === "commandBar" ? `${keyText("⌘T")} opens the command bar` : `${keyText("⌘T")} opens the New Tab page`]}
     >
@@ -302,8 +303,8 @@ function CtrlTabQuestion({ focus }: { focus: MockFocus }) {
   return (
     <Page
       id="ctrlTab"
-      title={`What does ${CTRL_TAB_KEY} do?`}
-      subtitle="How you switch tabs from the keyboard."
+      title={t("What does {key} do?", { key: CTRL_TAB_KEY })}
+      subtitle={t("How you switch tabs from the keyboard.")}
       patch={ctrlTabAnswerPatch(choice)}
       picked={choice === "custom" ? [] : [CTRL_TAB_PICKED[choice]]}
       onConfirm={() => noteCtrlTabAnswer(choice)}

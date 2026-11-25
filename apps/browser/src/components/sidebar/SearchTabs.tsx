@@ -13,6 +13,7 @@ import { TabIcon } from "./TabIcon";
 import { FolderOrIcon } from "./AnimatedFolder";
 import { SIDEBAR_SHADOW } from "./tokens";
 import { SectionLabel } from "./SectionLabel";
+import { t } from "../../lib/i18n";
 
 const WIDTH = 560;
 const ROW = 36;
@@ -45,14 +46,14 @@ function SearchPanel({ windowId, windowWidth }: { windowId: string; windowWidth:
   const sections = useMemo(() => {
     const { open, closed } = searchCandidates(windowId);
     const q = query.trim();
-    if (!q) return [{ title: "Open Tabs", rows: open }, { title: "Recently Closed", rows: closed.slice(0, 8) }];
+    if (!q) return [{ title: t("Open Tabs"), rows: open }, { title: t("Recently Closed"), rows: closed.slice(0, 8) }];
     const rank = (rows: Row[]) =>
       rows
         .map((r) => ({ r, score: Math.max(fuzzyScore(q, r.title), fuzzyScore(q, hostOf(r.url)) * 0.9, fuzzyScore(q, r.url) * 0.6) }))
         .filter((x) => x.score > 0)
         .sort((a, b) => b.score - a.score)
         .map((x) => x.r);
-    return [{ title: "Open Tabs", rows: rank(open) }, { title: "Recently Closed", rows: rank(closed).slice(0, 8) }];
+    return [{ title: t("Open Tabs"), rows: rank(open) }, { title: t("Recently Closed"), rows: rank(closed).slice(0, 8) }];
   }, [query, tabs, closedTabs, closedGroups, windowId]);
   const rows = sections.flatMap((s) => s.rows);
   const close = () => setSidebarUi({ searchTabs: null });
@@ -90,7 +91,7 @@ function SearchPanel({ windowId, windowWidth }: { windowId: string; windowWidth:
               setSelected(0);
               scroll.current?.scrollTo({ y: 0, animated: false });
             }}
-            placeholder="Search Tabs"
+            placeholder={t("Search Tabs")}
             onSubmit={() => choose(rows[selected])}
             onEscape={close}
             onArrow={move}
@@ -101,7 +102,7 @@ function SearchPanel({ windowId, windowWidth }: { windowId: string; windowWidth:
         <ScrollView ref={scroll} style={{ maxHeight: ROW * MAX_ROWS + 60 }} showsVerticalScrollIndicator={false}>
           {rows.length === 0 ? (
             <Text tone="textTertiary" style={NO_MATCH}>
-              No tabs match “{query.trim()}”
+              {t("No tabs match “{query}”", { query: query.trim() })}
             </Text>
           ) : null}
           {sections.map((section) =>
@@ -124,7 +125,7 @@ function SearchPanel({ windowId, windowWidth }: { windowId: string; windowWidth:
 
 function ResultRow({ row, selected, onHover, onPress }: { row: Row; selected: boolean; onHover(): void; onPress(): void }) {
   const theme = useTheme();
-  const detail = row.kind === "tab" ? (row.current && !row.where ? "Current Tab" : row.where) : row.detail;
+  const detail = row.kind === "tab" ? (row.current && !row.where ? t("Current Tab") : row.where) : row.detail;
   return (
     <ListRow height={ROW} selected={selected} onPress={onPress} onHover={(hovered) => hovered && onHover()}>
         {row.kind === "closed" && row.group ? <FolderOrIcon icon={row.icon} open={false} color={row.group.color} /> : <TabIcon url={row.url} favicon={row.favicon} icon={row.icon} />}

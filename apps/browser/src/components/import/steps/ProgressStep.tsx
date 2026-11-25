@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { useEffect, useRef } from "react";
 import { ActivityIndicator, Animated, View } from "react-native";
 import { Button, curve, space, Symbol, Text, useTheme } from "../../ui";
@@ -13,9 +14,9 @@ export function ProgressBody({ flow }: { flow: ImportFlow }) {
   const { status, preparing } = step;
   return (
     <>
-      <Title title={`Importing from ${source?.name ?? "file"}`} subtitle={preparing > 1 ? `Preparing ${preparing} profiles` : "Preparing your profile"} spinner />
+      <Title title={t("Importing from {source}", { source: source?.name ?? t("file") })} subtitle={preparing > 1 ? t("Preparing {count} profiles", { count: preparing }) : t("Preparing your profile")} spinner />
       <Text size="small" tone="textSecondary" style={{ marginBottom: space.l }}>
-        Hold on while we fetch your data...
+        {t("Hold on while we fetch your data...")}
       </Text>
       <View style={{ gap: space.s }}>
         {KINDS.filter((k) => status[k.kind]).map((k, i) => (
@@ -30,7 +31,7 @@ export function ProgressFooter() {
   return (
     <>
       <Spacer />
-      <Button title="Cancel" onPress={cancelImport} />
+      <Button title={t("Cancel")} onPress={cancelImport} />
     </>
   );
 }

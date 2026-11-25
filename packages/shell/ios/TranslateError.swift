@@ -8,8 +8,8 @@ enum TranslateError: LocalizedError {
   case unavailable, noWindow
   var errorDescription: String? {
     switch self {
-    case .unavailable: return "needs macOS 26"
-    case .noWindow: return "no window to ask in"
+    case .unavailable: return ShellL10n.t("needs macOS 26")
+    case .noWindow: return ShellL10n.t("no window to ask in")
     }
   }
 }

@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { View } from "react-native";
 import { copyText } from "../../../state/app/system";
@@ -105,15 +106,15 @@ function OfficialPluginRow({ plugin }: { plugin: OfficialPlugin }) {
       {view.busy && view.status ? <ActivitySpinner style={SPINNER} /> : null}
       {view.note === "comingSoon" ? (
         <Text size="small" tone="textTertiary">
-          Coming soon
+          {t("Coming soon")}
         </Text>
       ) : null}
       {view.firstCommand ? <FirstCommand command={view.firstCommand} /> : null}
       {view.action === "install" || (view.busy && !view.status) ? (
-        <Button title="Install…" disabled={view.busy} onPress={() => void install()} />
+        <Button title={t("Install…")} disabled={view.busy} onPress={() => void install()} />
       ) : null}
-      {view.action === "again" ? <Button title="Try Again" onPress={() => void install()} /> : null}
-      {view.action === "update" ? <Button title="Update…" onPress={() => void install()} /> : null}
+      {view.action === "again" ? <Button title={t("Try Again")} onPress={() => void install()} /> : null}
+      {view.action === "update" ? <Button title={t("Update…")} onPress={() => void install()} /> : null}
     </Row>
   );
 }
@@ -131,7 +132,7 @@ function FirstCommand({ command }: { command: string }) {
         {command}
       </Text>
       <Button
-        title={copied ? "Copied" : "Copy"}
+        title={copied ? t("Copied") : t("Copy")}
         onPress={() => {
           copyText(command);
           setCopied(true);

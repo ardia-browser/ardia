@@ -21,6 +21,7 @@ import { consentToken, type ConsentToken } from "../telemetry/choice";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { userClose } from "../tabs/closeActivation";
 import type { CloseOptions } from "../tabs/tabs";
+import { t } from "../../lib/i18n";
 
 type GroupChoice = Destination | { kind: "color"; color: GroupColor | null };
 
@@ -32,11 +33,11 @@ export function groupColorItems(current: GroupColor | null, siteColor: string | 
   const matched = siteColor ? nearestGroupColor(siteColor) : null;
   const color = (c: GroupColor | null) => ({ kind: "color" as const, color: c });
   return [
-    { value: color("none"), title: "None", swatch: NO_GROUP_COLOR_SWATCH, checked: current === "none" },
-    { value: color(null), title: "Neutral", swatch: NEUTRAL_GROUP_SWATCH.light, swatchDark: NEUTRAL_GROUP_SWATCH.dark, checked: !current },
-    ...(matchSite ? [{ value: color(matched), title: "Match Site Color", enabled: !!matched, swatch: matched ? GROUP_COLORS[matched].hex : undefined }] : []),
+    { value: color("none"), title: t("None"), swatch: NO_GROUP_COLOR_SWATCH, checked: current === "none" },
+    { value: color(null), title: t("Neutral"), swatch: NEUTRAL_GROUP_SWATCH.light, swatchDark: NEUTRAL_GROUP_SWATCH.dark, checked: !current },
+    ...(matchSite ? [{ value: color(matched), title: t("Match Site Color"), enabled: !!matched, swatch: matched ? GROUP_COLORS[matched].hex : undefined }] : []),
     { separator: true },
-    ...GROUP_COLOR_ORDER.map((c) => ({ value: color(c), title: GROUP_COLORS[c].name, swatch: GROUP_COLORS[c].hex, checked: current === c })),
+    ...GROUP_COLOR_ORDER.map((c) => ({ value: color(c), title: t(GROUP_COLORS[c].name), swatch: GROUP_COLORS[c].hex, checked: current === c })),
   ];
 }
 
@@ -60,45 +61,45 @@ export function groupMenuItems(s: BrowserState, windowId: string, groupId: strin
   const incognito = isIncognitoProfile(g.profileId);
   return sections<GroupMenuItem>(
     [
-      { id: "newTab", title: "New Tab in Group", symbol: "plus.app", ...hintWhen(shown, "newTabInGroup", s) },
-      ...withAlternate({ id: "copy", title: "Copy All Links", symbol: "link" }, { id: "copyMd", title: "Copy All Links as Markdown", symbol: "link" }, null),
-      { id: "duplicate", title: "Duplicate Group", symbol: "plus.square.on.square" },
+      { id: "newTab", title: t("New Tab in Group"), symbol: "plus.app", ...hintWhen(shown, "newTabInGroup", s) },
+      ...withAlternate({ id: "copy", title: t("Copy All Links"), symbol: "link" }, { id: "copyMd", title: t("Copy All Links as Markdown"), symbol: "link" }, null),
+      { id: "duplicate", title: t("Duplicate Group"), symbol: "plus.square.on.square" },
     ],
     [
-      ...(g.parentId ? [] : [{ id: "pin", title: g.pinned ? "Unpin Group" : "Pin Group", symbol: g.pinned ? "pin.slash" : "pin" }]),
+      ...(g.parentId ? [] : [{ id: "pin", title: g.pinned ? t("Unpin Group") : t("Pin Group"), symbol: g.pinned ? "pin.slash" : "pin" }]),
       {
         id: "moveTo",
-        title: "Move to",
+        title: t("Move to"),
         symbol: "arrow.up.forward.square",
         children: [
-          { id: "moveToProfile", title: "Profile", symbol: "person", enabled: !incognito, children: profileItems(s, (id) => id === g.profileId) },
-          ...(g.pinned ? [] : [{ id: "moveToWindow", title: "Window", symbol: "macwindow", enabled: !incognito, children: windowItems(s, windowId) }]),
-          ...(bookmarksShown(s.settings) ? [{ id: "bookmarkBar", title: "Bookmarks Bar", symbol: "bookmark" }] : []),
+          { id: "moveToProfile", title: t("Profile"), symbol: "person", enabled: !incognito, children: profileItems(s, (id) => id === g.profileId) },
+          ...(g.pinned ? [] : [{ id: "moveToWindow", title: t("Window"), symbol: "macwindow", enabled: !incognito, children: windowItems(s, windowId) }]),
+          ...(bookmarksShown(s.settings) ? [{ id: "bookmarkBar", title: t("Bookmarks Bar"), symbol: "bookmark" }] : []),
         ],
       },
       {
         id: "customize",
-        title: "Customize",
+        title: t("Customize"),
         symbol: "slider.horizontal.3",
         children: [
-          { id: "rename", title: "Rename…", symbol: "pencil" },
-          { id: "icon", title: hasOwnGroupIcon(g.icon) ? "Change Icon…" : "Add Icon…", symbol: "photo" },
-          { id: "color", title: "Color", symbol: "paintpalette", children: groupColorItems(g.color, siteColor) },
+          { id: "rename", title: t("Rename…"), symbol: "pencil" },
+          { id: "icon", title: hasOwnGroupIcon(g.icon) ? t("Change Icon…") : t("Add Icon…"), symbol: "photo" },
+          { id: "color", title: t("Color"), symbol: "paintpalette", children: groupColorItems(g.color, siteColor) },
           { separator: true },
-          { id: "nest", title: "New Nested Group", symbol: "folder.badge.plus" },
+          { id: "nest", title: t("New Nested Group"), symbol: "folder.badge.plus" },
         ],
       },
       ...sharedFolderMenuItems(s, groupId),
       ...(incognito ? [] : pluginMenuItems("group", pluginGroupContext(s, windowId, groupId))),
     ],
     [
-      { id: "sleep", title: "Sleep Tabs", symbol: "moon.zzz", enabled: groupTabIds(s.groups, groupId).some((id) => canSleep(s, id)) },
-      { id: "ungroup", title: "Ungroup", symbol: "folder.badge.minus" },
+      { id: "sleep", title: t("Sleep Tabs"), symbol: "moon.zzz", enabled: groupTabIds(s.groups, groupId).some((id) => canSleep(s, id)) },
+      { id: "ungroup", title: t("Ungroup"), symbol: "folder.badge.minus" },
       ...(PLATFORM_FEATURES.menuAlternates
-        ? withAlternate({ id: "close", title: "Close Group", symbol: "xmark" }, { id: "delete", title: "Delete Group", symbol: "trash" }, null)
+        ? withAlternate({ id: "close", title: t("Close Group"), symbol: "xmark" }, { id: "delete", title: t("Delete Group"), symbol: "trash" }, null)
         : [
-            { id: "close", title: "Close Group", symbol: "xmark" },
-            { id: "delete", title: "Delete Group", symbol: "trash" },
+            { id: "close", title: t("Close Group"), symbol: "xmark" },
+            { id: "delete", title: t("Delete Group"), symbol: "trash" },
           ]),
     ],
   );

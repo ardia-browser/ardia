@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { useState } from "react";
 import { View } from "react-native";
 import { describeCommandInstall, installCommandInBackground, useCommandInstall } from "../../../state/app/linuxCommandInstall";
@@ -40,7 +41,7 @@ type MemorySaverPreset = Exclude<MemorySaverLevel, "custom">;
 
 const MEMORY_SAVER_LEVELS: Record<MemorySaverPreset, { title: string; description: () => string; settings: Partial<MemorySaverKeys> }> = {
   off: {
-    title: "Off",
+    title: t("Off"),
     description: () => "Tabs stay loaded.",
     settings: { memorySaver: false },
   },
@@ -86,7 +87,7 @@ export function AdvancedPane(_: SettingsPlace) {
         <SettingToggle anchor="advanced.showFullUrl" />
         <SettingToggle anchor="advanced.commandScrollZoom" />
         <Row anchor="advanced.chromeSettings">
-          <Button title="Open Chromium Settings" onPress={openChromeSettings} />
+          <Button title={t("Open Chromium Settings")} onPress={openChromeSettings} />
         </Row>
       </Group>
       <PerformanceSection />
@@ -115,23 +116,23 @@ function PerformanceSection() {
           <PopUp value={level} options={options} onChange={(v) => v !== "custom" && updateSettings(MEMORY_SAVER_LEVELS[v].settings)} minWidth={190} />
         </Row>
         <Row anchor="advanced.keepActiveSites">
-          <Button title="Add Site…" icon="plus" onPress={() => showSettingsSheet(<KeepActiveSiteSheet />)} />
+          <Button title={t("Add Site…")} icon="plus" onPress={() => showSettingsSheet(<KeepActiveSiteSheet />)} />
         </Row>
         {sitesListed &&
           [...keepActiveSites]
             .sort((a, b) => a.localeCompare(b))
             .map((site) => (
               <Row key={site} icon={<Favicon url={siteUrl(site)} />} title={site}>
-                <Button variant="icon" icon="trash" size="m" onPress={() => stopKeepingSiteActive(site)} tooltip="Remove" />
+                <Button variant="icon" icon="trash" size="m" onPress={() => stopKeepingSiteActive(site)} tooltip={t("Remove")} />
               </Row>
             ))}
         <Row anchor="advanced.batterySaver" description={BATTERY_SAVER_DESCRIPTIONS[batterySaverWhen]}>
           <PopUp
             value={batterySaverWhen}
             options={[
-              { value: "lowBattery", title: "When battery is low" },
-              { value: "unplugged", title: "When unplugged" },
-              { value: "never", title: "Never" },
+              { value: "lowBattery", title: t("When battery is low") },
+              { value: "unplugged", title: t("When unplugged") },
+              { value: "never", title: t("Never") },
             ]}
             onChange={(v) => updateSettings({ batterySaverWhen: v })}
             minWidth={190}
@@ -171,7 +172,7 @@ function PluginProgramsRow({ name, title }: { name: string; title: string }) {
         </Text>
       }
     >
-      {failed ? <Button title="Try Again" onPress={() => relinkPrograms(name)} /> : null}
+      {failed ? <Button title={t("Try Again")} onPress={() => relinkPrograms(name)} /> : null}
     </Row>
   );
 }
@@ -191,7 +192,7 @@ function ProgramControlRow() {
           : null;
   return (
     <Row anchor="advanced.programControl" description={note ?? undefined}>
-      <Toggle value={on} accessibilityLabel="Let programs control Ardia" onChange={setControlFromSettings} />
+      <Toggle value={on} accessibilityLabel={t("Let programs control Ardia")} onChange={setControlFromSettings} />
     </Row>
   );
 }
@@ -267,9 +268,9 @@ function CommandLineSection() {
             </View>
           }
         >
-          {failed && on ? <Button title="Try Again" onPress={tryAgain} /> : null}
-          {on && !failed && install.installedVersion && !install.installing ? <Button title="Reinstall" onPress={() => void installCommandInBackground("settings")} /> : null}
-          <Toggle value={on} accessibilityLabel="ardia command" onChange={setOn} />
+          {failed && on ? <Button title={t("Try Again")} onPress={tryAgain} /> : null}
+          {on && !failed && install.installedVersion && !install.installing ? <Button title={t("Reinstall")} onPress={() => void installCommandInBackground("settings")} /> : null}
+          <Toggle value={on} accessibilityLabel={t("ardia command")} onChange={setOn} />
         </Row>
         )}
         <SettingToggle anchor="advanced.compactCliPill" />
@@ -294,8 +295,8 @@ function KeepActiveSiteSheet() {
   };
   return (
     <Sheet onClose={closeSettingsSheet}>
-      <DialogTitle subtitle="Sites you add will always stay active and memory won't be freed up from them.">Add Site</DialogTitle>
-      <FormField label="Site">
+      <DialogTitle subtitle={t("Sites you add will always stay active and memory won't be freed up from them.")}>{t("Add Site")}</DialogTitle>
+      <FormField label={t("Site")}>
         <TextField value={site} onChangeText={setSite} placeholder="youtube.com" onSubmit={() => void add()} onEscape={closeSettingsSheet} autoFocus />
       </FormField>
       {error && (
@@ -304,8 +305,8 @@ function KeepActiveSiteSheet() {
         </Text>
       )}
       <DialogActions>
-        <Button title="Cancel" onPress={closeSettingsSheet} />
-        <Button title="Add" kind="primary" disabled={saving || !site.trim()} onPress={() => void add()} />
+        <Button title={t("Cancel")} onPress={closeSettingsSheet} />
+        <Button title={t("Add")} kind="primary" disabled={saving || !site.trim()} onPress={() => void add()} />
       </DialogActions>
     </Sheet>
   );

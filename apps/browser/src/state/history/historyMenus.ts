@@ -2,12 +2,13 @@ import { confirm } from "../../platform/dialogs";
 import { showMenu, type MenuItem } from "../../platform/menus";
 import { menuSections } from "../app/menuSections";
 import { copyLinkItems, openAllItems, openLinkItems, runLinkChoice, type Link } from "../bookmarks/linkMenus";
+import { t } from "../../lib/i18n";
 
 export async function confirmRemoveSelected(windowId: string): Promise<boolean> {
   const { confirmed } = await confirm({
-    title: "Remove selected items?",
-    message: "Are you sure you want to delete these pages from your history?",
-    confirmTitle: "Remove",
+    title: t("Remove selected items?"),
+    message: t("Are you sure you want to delete these pages from your history?"),
+    confirmTitle: t("Remove"),
     destructive: true,
     windowId,
   });
@@ -16,11 +17,11 @@ export async function confirmRemoveSelected(windowId: string): Promise<boolean> 
 
 export function historyRowMenuItems(count: number): MenuItem[] {
   if (count > 1)
-    return menuSections(openAllItems(count, count), copyLinkItems(count), [{ id: "remove", title: `Remove ${count} Pages from History…`, symbol: "trash" }]);
+    return menuSections(openAllItems(count, count), copyLinkItems(count), [{ id: "remove", title: t("Remove {count} Pages from History…", { count }), symbol: "trash" }]);
   return menuSections(
     openLinkItems(),
-    [...copyLinkItems(), { id: "more", title: "More from This Site", symbol: "magnifyingglass" }],
-    [{ id: "remove", title: "Remove from History", symbol: "trash" }],
+    [...copyLinkItems(), { id: "more", title: t("More from This Site"), symbol: "magnifyingglass" }],
+    [{ id: "remove", title: t("Remove from History"), symbol: "trash" }],
   );
 }
 

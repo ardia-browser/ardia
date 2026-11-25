@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { View } from "react-native";
 import { useShallow } from "zustand/react/shallow";
 import { deleteLiveFolder, manualRefresh, statusText } from "../../../state/live/engine";
@@ -36,11 +37,11 @@ export function LiveFoldersSection() {
         </Box>
       ) : (
         <Group>
-          <Row title="No live folders yet" />
+          <Row title={t("No live folders yet")} />
         </Group>
       )}
 
-      <SectionHeader title="Connected accounts" description="Live folders read from these accounts." />
+      <SectionHeader title="Connected accounts" description={t("Live folders read from these accounts.")} />
       <Group>
         {ACCOUNTS.map((id) => (
           <AccountRow key={id} id={id} />
@@ -60,8 +61,8 @@ function FolderGroup({ folder, profileName }: { folder: LiveFolder; profileName:
     <Group>
       <Row title={folder.name} description={`${profileName} · ${folder.sources.map((s) => SOURCES[s].name).join(", ")} · ${statusText(folder.id)}`}>
         <Box row gap="s">
-          <Button title="Refresh" onPress={() => void manualRefresh(folder.id)} />
-          <Button title="Delete" kind="destructive" onPress={() => deleteLiveFolder(folder.id, { consent: consentToken() })} />
+          <Button title={t("Refresh")} onPress={() => void manualRefresh(folder.id)} />
+          <Button title={t("Delete")} kind="destructive" onPress={() => deleteLiveFolder(folder.id, { consent: consentToken() })} />
         </Box>
       </Row>
       {folder.kind === "pullRequests"
@@ -93,7 +94,7 @@ function AccountRow({ id }: { id: LiveSourceId }) {
   const source = SOURCES[id];
   return (
     <Row anchor={`automations.${id}`} icon={<Favicon url={source.site} size={18} />} title={source.name} description={account ? `Connected as ${connectedAs(id, account)}` : undefined}>
-      {account ? <Button title="Disconnect" onPress={() => void disconnect(id)} /> : <Button title="Connect…" onPress={() => showSettingsSheet(<ConnectAccountSheet id={id} />)} />}
+      {account ? <Button title={t("Disconnect")} onPress={() => void disconnect(id)} /> : <Button title={t("Connect…")} onPress={() => showSettingsSheet(<ConnectAccountSheet id={id} />)} />}
     </Row>
   );
 }

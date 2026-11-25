@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import {
   clearSiteData,
   getSiteSettings,
@@ -44,10 +45,10 @@ const SETTING_LABELS: [SiteSettingType, string][] = [
 ];
 
 const VALUE_OPTIONS: { value: SiteSettingValue; title: string }[] = [
-  { value: "default", title: "Default" },
-  { value: "allow", title: "Allow" },
-  { value: "block", title: "Block" },
-  { value: "ask", title: "Ask" },
+  { value: "default", title: t("Default") },
+  { value: "allow", title: t("Allow") },
+  { value: "block", title: t("Block") },
+  { value: "ask", title: t("Ask") },
 ];
 
 const siteLabel = (origin: string) => origin.replace(/^https?:\/\//, "");
@@ -67,24 +68,24 @@ export function SitesPage({ profileId }: { profileId: string }) {
     <ProfileSubPage>
       {(PLATFORM_FEATURES.blocksAutoplay || PLATFORM_FEATURES.answersPermissionRequests) && (
         <>
-          <SectionHeader title="All sites" description="Defaults for every site. These apply in every profile." />
+          <SectionHeader title="All sites" description={t("Defaults for every site. These apply in every profile.")} />
           <Group>
             {PLATFORM_FEATURES.blocksAutoplay ? (
               <Row
-                title="Block autoplay on every site"
-                description="Sites you allow in Site Controls still autoplay. Chromium tabs only."
+                title={t("Block autoplay on every site")}
+                description={t("Sites you allow in Site Controls still autoplay. Chromium tabs only.")}
               >
-                <Toggle value={blockAutoplay} accessibilityLabel="Block autoplay on every site" onChange={(v) => updateSettings({ blockAutoplayEverywhere: v })} />
+                <Toggle value={blockAutoplay} accessibilityLabel={t("Block autoplay on every site")} onChange={(v) => updateSettings({ blockAutoplayEverywhere: v })} />
               </Row>
             ) : null}
             {PLATFORM_FEATURES.answersPermissionRequests ? (
               <Row
-                title="Block requests to send notifications"
-                description="Sites that ask are blocked. Sites you already allowed keep sending them."
+                title={t("Block requests to send notifications")}
+                description={t("Sites that ask are blocked. Sites you already allowed keep sending them.")}
               >
                 <Toggle
                   value={blockNotifications}
-                  accessibilityLabel="Block requests to send notifications"
+                  accessibilityLabel={t("Block requests to send notifications")}
                   onChange={(v) => updateSettings({ blockNotificationRequests: v })}
                 />
               </Row>
@@ -93,12 +94,12 @@ export function SitesPage({ profileId }: { profileId: string }) {
         </>
       )}
 
-      <SectionHeader title="Sites" description="Sites you allowed or blocked something for in this profile." />
+      <SectionHeader title="Sites" description={t("Sites you allowed or blocked something for in this profile.")} />
       <Group>
         {origins === undefined ? (
           <Row title=" " description=" " />
         ) : origins.length === 0 ? (
-          <Row title="No sites yet" description="Sites appear here after you allow or block something for them." />
+          <Row title={t("No sites yet")} description={t("Sites appear here after you allow or block something for them.")} />
         ) : (
           origins.map((origin) => <Row key={origin} icon={<Favicon url={origin} />} title={siteLabel(origin)} onPress={() => openSite(origin)} />)
         )}
@@ -110,7 +111,7 @@ export function SitesPage({ profileId }: { profileId: string }) {
           <Group>
             {zoomHosts.map((host) => (
               <Row key={host} icon={<Favicon url={`https://${host}`} />} title={host} description={percent(levels[host]!)}>
-                <Button title="Reset" onPress={() => void setZoom(profile, host, 1).then(() => void reloadZooms())} />
+                <Button title={t("Reset")} onPress={() => void setZoom(profile, host, 1).then(() => void reloadZooms())} />
               </Row>
             ))}
           </Group>
@@ -145,7 +146,7 @@ export function SitePage({ profileId, origin }: { profileId: string; origin: str
     <ProfileSubPage>
       <SectionHeader title={host} description={null} action={<Favicon url={origin} size={20} />} />
       <Group>
-        {settings && !shown.length ? <Row title="Nothing to change for this site" /> : null}
+        {settings && !shown.length ? <Row title={t("Nothing to change for this site")} /> : null}
         {shown.map(([type, label]) => (
           <Row key={type} title={label} description={settings![type].isDefault ? `Default (${effectiveSettingValue(type, settings!)})` : undefined}>
             <PopUp
@@ -161,16 +162,16 @@ export function SitePage({ profileId, origin }: { profileId: string; origin: str
       <SectionHeader title="This site" />
       <Group>
         {zoom !== undefined ? (
-          <Row title="Zoom" description={percent(zoom)}>
-            <Button title="Reset" onPress={() => void setZoom(profile, host, 1).then(() => void reloadZooms())} />
+          <Row title={t("Zoom")} description={percent(zoom)}>
+            <Button title={t("Reset")} onPress={() => void setZoom(profile, host, 1).then(() => void reloadZooms())} />
           </Row>
         ) : null}
-        <Row title="Permissions" description="Puts every permission back to its default.">
-          <Button title="Reset Permissions" onPress={() => void resetSiteSettings(profile, origin).then(changed)} />
+        <Row title={t("Permissions")} description={t("Puts every permission back to its default.")}>
+          <Button title={t("Reset Permissions")} onPress={() => void resetSiteSettings(profile, origin).then(changed)} />
         </Row>
-        <Row title="Site data" description={status || "Cookies and storage this site keeps in this profile."}>
+        <Row title={t("Site data")} description={status || "Cookies and storage this site keeps in this profile."}>
           <Button
-            title="Clear Site Data"
+            title={t("Clear Site Data")}
             onPress={() =>
               void clearSiteData(profile, origin)
                 .catch((): ClearSiteDataResult => ({ cookies: false, storage: false }))

@@ -1,3 +1,4 @@
+import { t } from "../../lib/i18n";
 import { Button, ListRow, NativeFormContext, space, Symbol, Text, VisualEffect, WindowDragRegion } from "../ui";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
@@ -236,8 +237,8 @@ export function SettingsWindow() {
       <View style={{ width: StyleSheet.hairlineWidth * 2, backgroundColor: look.sidebarDivider }} />
       <View style={{ flex: 1 }}>
         <PageToolbar size="window" drag>
-          <Button variant="icon" toolbar icon="chevron.left" size="l" disabled={!nav.back.length} onPress={() => settingsBack()} tooltip="Back" />
-          <Button variant="icon" toolbar icon="chevron.right" size="l" disabled={!nav.forward.length} onPress={() => settingsForward()} tooltip="Forward" />
+          <Button variant="icon" toolbar icon="chevron.left" size="l" disabled={!nav.back.length} onPress={() => settingsBack()} tooltip={t("Back")} />
+          <Button variant="icon" toolbar icon="chevron.right" size="l" disabled={!nav.forward.length} onPress={() => settingsForward()} tooltip={t("Forward")} />
           <Text size="title" weight="semibold" ardiaCentersCapitals style={WINDOW_TITLE}>
             {title}
           </Text>

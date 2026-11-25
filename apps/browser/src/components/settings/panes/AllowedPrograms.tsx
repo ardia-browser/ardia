@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { approvalLine, refreshControlApprovals, refreshExpiredApprovals, revokeApproval, useControlApprovals } from "../../../state/automation/controlApprovals";
@@ -26,7 +27,7 @@ export function AllowedProgramsRows() {
       <Row anchor="advanced.allowedPrograms" description={note} />
       {approvals.map((approval) => (
         <Row key={approval.key} title={approval.name} description={approvalLine(approval, now)}>
-          <Button variant="icon" icon="trash" size="m" onPress={() => void revokeApproval(approval.key)} tooltip="Remove" />
+          <Button variant="icon" icon="trash" size="m" onPress={() => void revokeApproval(approval.key)} tooltip={t("Remove")} />
         </Row>
       ))}
     </>

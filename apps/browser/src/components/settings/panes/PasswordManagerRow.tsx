@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { usePlugins } from "../../../state/plugins/store";
 import { choicePlugin, type ManagerPlugin, type PasswordManagerChoice } from "../../../state/site/passwordManagerChoice";
@@ -15,7 +16,7 @@ export function managerPopUp(plugins: readonly ManagerPlugin[], stored: Password
       { value: "ardia", title: "Ardia" },
       ...plugins.map((p) => ({ value: `plugin:${p.name}` as PasswordManagerChoice, title: p.title })),
       ...(offPlugin ? [{ value: offPlugin, title: `${storedPlugin?.title ?? choicePlugin(offPlugin)} (${storedPlugin?.installed === false ? "not installed" : "off"})` }] : []),
-      { value: "none", title: "None (an extension handles logins)", separatorBefore: true },
+      { value: "none", title: t("None (an extension handles logins)"), separatorBefore: true },
     ],
   };
 }

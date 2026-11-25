@@ -1,3 +1,4 @@
+import { t as translate } from "../../lib/i18n";
 import { useEffect, useMemo, useRef } from "react";
 import { Animated, StyleSheet, View } from "react-native";
 import { ink, reduceMotion, Text, ThemeSwatch, useTheme } from "../ui";
@@ -163,13 +164,13 @@ export function AnonCard({ on }: { on: boolean }) {
             </View>
           </View>
           <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.rowBorder }} />
-          <Move badge="ABILITY" title="Ghost Mode" body={NEVER} />
-          <Move energy={2} title="Bug Report" body={on ? SHARED : SHARED_OFF} dim={!on} />
+          <Move badge={translate("ABILITY")} title={translate("Ghost Mode")} body={NEVER} />
+          <Move energy={2} title={translate("Bug Report")} body={on ? SHARED : SHARED_OFF} dim={!on} />
           <View style={{ flex: 1, justifyContent: "flex-end" }}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", paddingTop: space.m, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.rowBorder }}>
-              <Stat label="WEAKNESS" value="—" />
-              <Stat label="RESISTS" value="Trackers" />
-              <Stat label="DATA SOLD" value="0" />
+              <Stat label={translate("WEAKNESS")} value="—" />
+              <Stat label={translate("RESISTS")} value="Trackers" />
+              <Stat label={translate("DATA SOLD")} value="0" />
             </View>
           </View>
         </View>

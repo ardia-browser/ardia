@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { useState, type ReactNode } from "react";
 import { View } from "react-native";
 import { removeAirTrafficRule, tryAddAirTrafficRule, updateAirTrafficRule, type RuleDraft } from "../../../state/airTraffic/store";
@@ -29,11 +30,11 @@ export function GroupPicker({ profileId, value, onChange }: { profileId: string;
   const groups = useRouteGroups(profileId);
   const known = !value || groups.some((g) => g.key === value);
   const options: Option<string>[] = [
-    { value: NO_GROUP, title: "None" },
+    { value: NO_GROUP, title: t("None") },
     ...(known ? [] : [{ value, title: CLOSED_GROUP }]),
     ...groups.map((g, i) => ({ value: g.key, title: g.name, separatorBefore: i === 0 })),
   ];
-  return <PopUp value={value} options={options} onChange={onChange} minWidth={180} accessibilityLabel="Tab group" />;
+  return <PopUp value={value} options={options} onChange={onChange} minWidth={180} accessibilityLabel={t("Tab group")} />;
 }
 
 export function profileOptions(profiles: RoutableProfile[], usedLast = USED_LAST): Option<string>[] {
@@ -54,11 +55,11 @@ export function AppPicker({ value, onChange, anyTitle = "Any app", other, extras
 }
 
 const KIND_OPTIONS: Option<LinkCondition["kind"]>[] = [
-  { value: "any", title: "Any link" },
-  { value: "site", title: "Links to a site" },
-  { value: "pattern", title: "Links matching a pattern" },
-  { value: "contains", title: "Links containing" },
-  { value: "equals", title: "Links to exactly" },
+  { value: "any", title: t("Any link") },
+  { value: "site", title: t("Links to a site") },
+  { value: "pattern", title: t("Links matching a pattern") },
+  { value: "contains", title: t("Links containing") },
+  { value: "equals", title: t("Links to exactly") },
 ];
 
 const UNSAVED = "Ardia couldn't save the rule. Your changes are still here; try again.";
@@ -125,16 +126,16 @@ export function RuleSheet({ rule }: { rule?: AirTrafficRule }) {
 
   return (
     <Sheet onClose={closeSettingsSheet}>
-      <DialogTitle subtitle="Links from other apps that fit this rule open where you choose.">{rule ? "Edit Rule" : "Add Rule"}</DialogTitle>
-      <Line label="From">
+      <DialogTitle subtitle={t("Links from other apps that fit this rule open where you choose.")}>{rule ? "Edit Rule" : "Add Rule"}</DialogTitle>
+      <Line label={t("From")}>
         <AppPicker value={typing ? null : from} onChange={pickApp} other />
       </Line>
       {typing ? (
         <View style={FIELD_BELOW}>
-          <TextField value={typed} onChangeText={setTyped} placeholder="App name or bundle ID" autoFocus onSubmit={save} onEscape={closeSettingsSheet} />
+          <TextField value={typed} onChangeText={setTyped} placeholder={t("App name or bundle ID")} autoFocus onSubmit={save} onEscape={closeSettingsSheet} />
         </View>
       ) : null}
-      <Line label="Links">
+      <Line label={t("Links")}>
         <PopUp value={kind} options={KIND_OPTIONS} onChange={(k) => (setKind(k), setError(null))} minWidth={180} />
       </Line>
       {kind !== "any" ? (
@@ -142,14 +143,14 @@ export function RuleSheet({ rule }: { rule?: AirTrafficRule }) {
           <TextField value={text} onChangeText={setText} placeholder={PLACEHOLDERS[kind]} mono={kind === "pattern"} onSubmit={save} onEscape={closeSettingsSheet} />
         </View>
       ) : null}
-      <Line label="Open in">
+      <Line label={t("Open in")}>
         <PopUp value={profileId} options={profileOptions(profiles)} onChange={(p) => (setProfileId(p), setGroupKey(NO_GROUP))} minWidth={180} />
       </Line>
-      <Line label="As">
+      <Line label={t("As")}>
         <PopUp value={open} options={OPEN_OPTIONS} onChange={setOpen} minWidth={180} />
       </Line>
       {grouped ? (
-        <Line label="Group">
+        <Line label={t("Group")}>
           <GroupPicker profileId={profileId} value={groupKey} onChange={setGroupKey} />
         </Line>
       ) : null}
@@ -159,10 +160,10 @@ export function RuleSheet({ rule }: { rule?: AirTrafficRule }) {
         </Text>
       ) : null}
       <DialogActions
-        leading={rule ? <Button title="Remove" kind="destructive" onPress={() => (removeAirTrafficRule(rule.id), closeSettingsSheet())} /> : null}
+        leading={rule ? <Button title={t("Remove")} kind="destructive" onPress={() => (removeAirTrafficRule(rule.id), closeSettingsSheet())} /> : null}
       >
-        <Button title="Cancel" onPress={closeSettingsSheet} />
-        <Button title={rule ? "Save" : "Add"} kind="primary" onPress={save} />
+        <Button title={t("Cancel")} onPress={closeSettingsSheet} />
+        <Button title={rule ? t("Save") : t("Add")} kind="primary" onPress={save} />
       </DialogActions>
     </Sheet>
   );

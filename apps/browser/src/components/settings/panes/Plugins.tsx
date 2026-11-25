@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { useEffect, useState } from "react";
 import { View } from "react-native";
 import type { PluginManifest, RowSpec, RowValue } from "../../../lib/pluginManifest";
@@ -46,7 +47,7 @@ function UnavailablePage() {
     <View>
       <SectionHeader anchor="plugins.plugins" />
       <Group>
-        <Row title="Plugins aren't here yet" description={`Plugins aren't available on ${PLATFORM_TERMS.os} yet.`} />
+        <Row title={t("Plugins aren't here yet")} description={`Plugins aren't available on ${PLATFORM_TERMS.os} yet.`} />
       </Group>
     </View>
   );
@@ -63,8 +64,8 @@ function PluginList() {
         {order.length ? (
           order.map((name) => <PluginRow key={name} name={name} />)
         ) : (
-          <Row title="None yet" description={how ? `Put a plugin's folder in ${pluginsFolderPath()}, or run ardia plugins install <folder>.` : undefined}>
-            {how ? null : <Button variant="text" look="link" pad="none" title="How to add one" onPress={() => setHow(true)} />}
+          <Row title={t("None yet")} description={how ? `Put a plugin's folder in ${pluginsFolderPath()}, or run ardia plugins install <folder>.` : undefined}>
+            {how ? null : <Button variant="text" look="link" pad="none" title={t("How to add one")} onPress={() => setHow(true)} />}
           </Row>
         )}
       </Group>
@@ -212,8 +213,8 @@ function SecretRow({ name, row }: { name: string; row: Extract<RowSpec, { type: 
   return (
     <Row title={row.title} description={[row.description, status].filter(Boolean).join(" · ") || undefined}>
       <TextField value={draft} width={180} secure placeholder={saved ? "••••••••" : row.placeholder} onChangeText={setDraft} onSubmit={() => draft && void write(draft)} />
-      <Button title="Save" disabled={!draft || busy} onPress={() => void write(draft)} />
-      {saved ? <Button title="Clear" disabled={busy} onPress={() => void write(null)} /> : null}
+      <Button title={t("Save")} disabled={!draft || busy} onPress={() => void write(draft)} />
+      {saved ? <Button title={t("Clear")} disabled={busy} onPress={() => void write(null)} /> : null}
     </Row>
   );
 }
@@ -248,13 +249,13 @@ function PluginPage({ name }: { name: string }) {
         {listing.official && record.updated && record.approved === listing.hash ? <Row title={autoUpdateNote(record.updated).title} description={autoUpdateNote(record.updated).description} /> : null}
         {active && (m?.process || (m?.main && process)) ? (
           <Row title={m?.process ? "Its program" : "Its code"} description={m?.process ? m.process.run.join(" ") : typeof m?.main === "string" ? m.main : m?.main?.entry}>
-            <Button title="Show Log" onPress={() => showPluginLog(name)} />
-            <Button title="Restart" onPress={() => restartPlugin(name)} />
+            <Button title={t("Show Log")} onPress={() => showPluginLog(name)} />
+            <Button title={t("Restart")} onPress={() => restartPlugin(name)} />
           </Row>
         ) : null}
         {m?.programs.length && active ? (
           <Row title={m.programs.length === 1 ? "Its command" : "Its commands"} description={programsText(programs) ?? m.programs.map((p) => p.name).join(", ")}>
-            {canRelink(programs) ? <Button title="Try Again" onPress={() => relinkPrograms(name)} /> : null}
+            {canRelink(programs) ? <Button title={t("Try Again")} onPress={() => relinkPrograms(name)} /> : null}
           </Row>
         ) : null}
       </Group>
@@ -289,8 +290,8 @@ function PluginPage({ name }: { name: string }) {
         </>
       )}
       <Group>
-        <Row title="Remove" description={listing.official ? "Removes its download and its commands on your PATH. Its data stays." : `Moves the plugin to the ${PLATFORM_TERMS.trash}.`}>
-          <Button title="Remove…" kind="destructive" onPress={() => void confirmRemove(name, m?.title ?? name)} />
+        <Row title={t("Remove")} description={listing.official ? "Removes its download and its commands on your PATH. Its data stays." : `Moves the plugin to the ${PLATFORM_TERMS.trash}.`}>
+          <Button title={t("Remove…")} kind="destructive" onPress={() => void confirmRemove(name, m?.title ?? name)} />
         </Row>
       </Group>
     </PaneSubPage>

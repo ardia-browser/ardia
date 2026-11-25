@@ -11,6 +11,7 @@ import { openOverflowMenu, openSidebarMenu } from "../../state/sidebar/menus";
 import { toggleNewTabBar } from "../../state/omnibox/newTabBar";
 import { noteRowPressIn } from "../../state/sidebar/heldTabPress";
 import { modifiersOf } from "../../lib/keys";
+import { t } from "../../lib/i18n";
 import { useShortcutHint, withShortcut } from "../../state/commands/commandShortcuts";
 import { useClipped, useShift, type ClipSource } from "./EntryMotion";
 import { ROW_GLYPH, TAB_ROW, useSidebarTokens } from "./tokens";
@@ -47,13 +48,13 @@ export const NewTabRow = memo(function NewTabRow({ windowId, shift = null, clip 
     setWidths((w) => (w[key] === width ? w : { ...w, [key]: width }));
   };
   const quietInk = hex(withAlpha(theme.textTab, hovered ? tokens.quietText : tokens.quietFaintText));
-  const hint = `${cleaned} cleaned`;
+  const hint = t("{count} cleaned", { count: cleaned });
   const hintFits = widths.hint > 0 && NEW_TAB_LABEL_X + widths.label + CLEANED_HINT_GAP + widths.hint <= widths.row - CLEANED_HINT_RIGHT;
   return (
     <View {...hoverProps} onLayout={measure("row")} style={[{ flexDirection: "row", alignItems: "center" }, clipped ? clippedRow() : null]}>
       <View pointerEvents="none" style={MEASURE_OFFSCREEN}>
         <Text lines={1} style={MEASURE_TEXT} onLayout={measure("label")}>
-          New Tab
+          {t("New Tab")}
         </Text>
         {cleaned > 0 ? (
           <Text lines={1} size="caption" style={MEASURE_TEXT} onLayout={measure("hint")}>
@@ -63,7 +64,7 @@ export const NewTabRow = memo(function NewTabRow({ windowId, shift = null, clip 
       </View>
       <ContextMenuArea style={{ flex: 1 }} onContextMenu={() => void openSidebarMenu(windowId)}>
         <Pressable
-          tooltip={`${withShortcut("New Tab", newTabHint)} — ⌥-click to open in Split View`}
+          tooltip={t("{title} — ⌥-click to open in Split View", { title: withShortcut(t("New Tab"), newTabHint) })}
           onPressIn={() => {
             squish.onPressIn?.();
             pressMotion.onPressIn?.();
@@ -99,7 +100,7 @@ export const NewTabRow = memo(function NewTabRow({ windowId, shift = null, clip 
               <Animated.View pointerEvents="none" style={iconScale}>
                 {drawnSymbol({ name: "plus", size: quiet ? sidebarPoints(10) : ROW_GLYPH.plus, weight: "medium", color: quiet ? quietInk : tokens.newTabIcon, style: { width: ROW_GLYPH.box, height: ROW_GLYPH.box } })}
               </Animated.View>
-              <SidebarRowLabel text="New Tab" color={quiet ? quietInk : tokens.newTabLabel} compact={quiet} />
+              <SidebarRowLabel text={t("New Tab")} color={quiet ? quietInk : tokens.newTabLabel} compact={quiet} />
             </View>
             </Squish>
           )}
@@ -117,7 +118,7 @@ export const NewTabRow = memo(function NewTabRow({ windowId, shift = null, clip 
           size="s"
           weight="semibold"
           color={hovered ? theme.textSecondary : theme.textTertiary}
-          tooltip="Open and recently closed tabs"
+          tooltip={t("Open and recently closed tabs")}
           onPress={() => void openOverflowMenu(windowId)}
         />}
       </View>

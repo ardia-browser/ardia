@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { Box, Button, capsule, ContextMenuArea, SlidingThumb, space, Text, useHover, useSlidingThumb } from "../../ui";
 import { hapticTick } from "../../../state/app/system";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -166,7 +167,7 @@ export function ProfileBar({ selectedId }: { selectedId: string }) {
           </View>
         </ScrollView>
       </View>
-      <Button variant="icon" icon="plus" box={PILL_HEIGHT} glyph={PILL_PLUS_GLYPH} capsule tooltip="Create Profile" onPress={() => void requestCreateProfile()} />
+      <Button variant="icon" icon="plus" box={PILL_HEIGHT} glyph={PILL_PLUS_GLYPH} capsule tooltip={t("Create Profile")} onPress={() => void requestCreateProfile()} />
     </Box>
   );
 }

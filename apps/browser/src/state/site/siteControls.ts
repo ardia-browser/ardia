@@ -9,6 +9,7 @@ import { ensureLocationPermission } from "./locationAccess";
 import { noteSiteControls } from "../telemetry/usage";
 import { consentToken } from "../telemetry/client";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
+import { t } from "../../lib/i18n";
 
 export type SitePermission = { type: SiteSettingType; title: string; icon: string; badge: string; choices: SiteSettingValue[] };
 
@@ -82,7 +83,7 @@ export async function readSiteBlocker(host: string): Promise<SiteBlocker | null>
 
 export function blockerLabel(blocker: SiteBlocker | null, blocked: number): string {
   if (!blocker) return "…";
-  if (!blocker.enabled) return "Off in Settings";
-  if (blocker.allowed) return "Off for this site";
-  return blocked > 0 ? `On · ${blocked} blocked on this page` : "On";
+  if (!blocker.enabled) return t("Off in Settings");
+  if (blocker.allowed) return t("Off for this site");
+  return blocked > 0 ? t("On · {count} blocked on this page", { count: blocked }) : t("On");
 }

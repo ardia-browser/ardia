@@ -31,7 +31,7 @@ final class CommandItem: NSMenuItem, Rebindable {
   convenience init(_ command: CommandTable.Command, arg: String? = nil, title: String? = nil) {
     let id = arg.map { "\(command.rawValue):\($0)" } ?? command.rawValue
     let key = CommandTable.keys[id]?.first
-    self.init(title ?? CommandTable.titles[id] ?? id, command.rawValue, arg: arg, key: key?.key ?? "", key?.mods ?? .command)
+    self.init(title ?? CommandTable.titles[id].map(ShellL10n.t) ?? id, command.rawValue, arg: arg, key: key?.key ?? "", key?.mods ?? .command)
   }
 
   func aliasItems() -> [CommandItem] {

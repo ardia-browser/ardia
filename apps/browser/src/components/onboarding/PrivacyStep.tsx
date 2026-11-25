@@ -1,3 +1,4 @@
+import { t } from "../../lib/i18n";
 import { engineHost } from "@ardia/core";
 import { View } from "react-native";
 import { searchEngines } from "../../state/settings/settings";
@@ -36,7 +37,7 @@ export function SearchPrivacyStep() {
         id={id}
         title={SHARING_COPY.onboarding.title}
         patch={{}}
-        picked={share ? ["Sharing crash reports"] : []}
+        picked={share ? [t("Sharing crash reports")] : []}
         onConfirm={() => {
           if (share !== isSharing() || !redo) setSharing(share, redo ? "settings" : "onboarding");
         }}
@@ -50,12 +51,12 @@ export function SearchPrivacyStep() {
   return (
     <Page
       id="engine"
-      title="Search with what?"
-      subtitle="For anything that isn't a website."
+      title={t("Search with what?")}
+      subtitle={t("For anything that isn't a website.")}
       patch={{ searchEngine: values.searchEngine }}
-      picked={[`Search with ${engine?.name ?? "your engine"}`]}
+      picked={[t("Search with {engine}", { engine: engine?.name ?? t("your engine") })]}
     >
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.m }} accessibilityRole="radiogroup" accessibilityLabel="Search engine">
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.m }} accessibilityRole="radiogroup" accessibilityLabel={t("Search engine")}>
         {engines.map((e) => (
           <EngineTile key={e.id} title={e.name} url={`https://${engineHost(e)}`} selected={e.id === values.searchEngine} onPress={() => setDraft({ searchEngine: e.id })} />
         ))}

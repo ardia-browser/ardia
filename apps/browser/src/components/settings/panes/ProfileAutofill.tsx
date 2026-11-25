@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import {
   cardNetworkName,
   deleteAddress,
@@ -33,13 +34,13 @@ export function AddressesPage({ profileId }: { profileId: string }) {
   return (
     <ProfileSubPage>
       <SectionHeader
-        title="Addresses"
+        title={t("Addresses")}
         description={setting("profiles.addresses").description}
-        action={<Button title="Add Address…" onPress={() => showSettingsSheet(<AddressSheet profile={profile} onChanged={load} />)} />}
+        action={<Button title={t("Add Address…")} onPress={() => showSettingsSheet(<AddressSheet profile={profile} onChanged={load} />)} />}
       />
       <Group>
         {addresses && !addresses.length ? (
-          <Row title="No saved addresses" description="Addresses you enter in forms can be saved here." />
+          <Row title={t("No saved addresses")} description={t("Addresses you enter in forms can be saved here.")} />
         ) : (
           (addresses ?? []).map((a) => (
             <Row
@@ -64,13 +65,13 @@ export function CardsPage({ profileId }: { profileId: string }) {
   return (
     <ProfileSubPage>
       <SectionHeader
-        title="Cards"
+        title={t("Cards")}
         description={`${setting("profiles.cards").description} Card numbers are kept in ${PLATFORM_TERMS.secretStore}.`}
-        action={<Button title="Add Card…" onPress={() => showSettingsSheet(<CardSheet profile={profile} onChanged={load} />)} />}
+        action={<Button title={t("Add Card…")} onPress={() => showSettingsSheet(<CardSheet profile={profile} onChanged={load} />)} />}
       />
       <Group>
         {cards && !cards.length ? (
-          <Row title="No saved cards" description="Cards you enter at checkout can be saved here." />
+          <Row title={t("No saved cards")} description={t("Cards you enter at checkout can be saved here.")} />
         ) : (
           (cards ?? []).map((c) => (
             <Row
@@ -133,15 +134,15 @@ async function confirmDelete(title: string, message: string) {
 
 function SheetButtons({ canDelete, onDelete, onSave, saveDisabled }: { canDelete: boolean; onDelete: () => void; onSave: () => void; saveDisabled?: boolean }) {
   return (
-    <DialogActions leading={canDelete ? <Button title="Delete" kind="destructive" onPress={onDelete} /> : null}>
-      <Button title="Cancel" onPress={closeSettingsSheet} />
-      <Button title="Save" kind="primary" disabled={saveDisabled} onPress={onSave} />
+    <DialogActions leading={canDelete ? <Button title={t("Delete")} kind="destructive" onPress={onDelete} /> : null}>
+      <Button title={t("Cancel")} onPress={closeSettingsSheet} />
+      <Button title={t("Save")} kind="primary" disabled={saveDisabled} onPress={onSave} />
     </DialogActions>
   );
 }
 
 const ADDRESS_FIELDS: { key: keyof SavedAddress | "line1" | "line2"; title: string }[] = [
-  { key: "name", title: "Name" },
+  { key: "name", title: t("Name") },
   { key: "organization", title: "Organization" },
   { key: "line1", title: "Street Address" },
   { key: "line2", title: "Apt, Suite, etc." },
@@ -150,7 +151,7 @@ const ADDRESS_FIELDS: { key: keyof SavedAddress | "line1" | "line2"; title: stri
   { key: "postalCode", title: "ZIP / Postal Code" },
   { key: "country", title: "Country / Region" },
   { key: "phone", title: "Phone" },
-  { key: "email", title: "Email" },
+  { key: "email", title: t("Email") },
 ];
 
 function AddressSheet({ profile, saved, onChanged }: { profile: string; saved?: SavedAddress; onChanged: () => void }) {
@@ -245,11 +246,11 @@ function CardSheet({ profile, saved, onChanged }: { profile: string; saved?: Sav
       <DialogTitle icon={saved ? <NetworkBadge network={saved.network} /> : undefined}>{saved ? `${cardNetworkName(saved.network)} •••• ${saved.last4}` : "Add Card"}</DialogTitle>
       <View style={SHEET_BODY}>
         <Group>
-          <FormRow title="Card Number">
+          <FormRow title={t("Card Number")}>
             {number === null ? (
               <Box row center gap="xs">
                 <Text>{`•••• •••• •••• ${saved?.last4 ?? ""}`}</Text>
-                <Button variant="icon" icon="eye" size="m" onPress={() => void reveal()} tooltip="Show Card Number" />
+                <Button variant="icon" icon="eye" size="m" onPress={() => void reveal()} tooltip={t("Show Card Number")} />
               </Box>
             ) : (
               <Box row center gap="xs">
@@ -263,14 +264,14 @@ function CardSheet({ profile, saved, onChanged }: { profile: string; saved?: Sav
                   autoFocus={!saved}
                   width={saved ? FIELD_WIDTH - 28 : FIELD_WIDTH}
                 />
-                {saved ? <Button variant="icon" icon="doc.on.doc" size="m" onPress={() => copyText(digits)} tooltip="Copy Card Number" /> : null}
+                {saved ? <Button variant="icon" icon="doc.on.doc" size="m" onPress={() => copyText(digits)} tooltip={t("Copy Card Number")} /> : null}
               </Box>
             )}
           </FormRow>
-          <FormRow title="Name on Card">
+          <FormRow title={t("Name on Card")}>
             <TextField value={name} onChangeText={setName} width={FIELD_WIDTH} />
           </FormRow>
-          <FormRow title="Expiration Date">
+          <FormRow title={t("Expiration Date")}>
             <Box row gap="s">
               <PopUp value={month} options={MONTHS} onChange={setMonth} minWidth={90} />
               <PopUp value={year} options={yearOptions(saved?.expYear)} onChange={setYear} minWidth={90} />

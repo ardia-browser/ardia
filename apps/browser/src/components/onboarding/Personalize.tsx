@@ -1,3 +1,4 @@
+import { t } from "../../lib/i18n";
 import { StyleSheet, View } from "react-native";
 import { useSettings, useTabLayout } from "../../state/browser/hooks";
 import { chooseSidebarSide, toggleTabLayout } from "../../state/settings/actions";
@@ -18,8 +19,8 @@ export const PERSONALIZE_COPY = {
 type Side = Settings["sidebarSide"];
 
 const SIDE_OPTIONS: SegmentOption<Side>[] = [
-  { value: "left", title: "Left" },
-  { value: "right", title: "Right" },
+  { value: "left", title: t("Left") },
+  { value: "right", title: t("Right") },
 ];
 
 const OFF_OPACITY = 0.4;
@@ -33,9 +34,9 @@ export function TabLayoutPicker({ windowId }: { windowId: string }) {
   const sideOn = layout === "sidebar";
   return (
     <View style={{ gap: space.ml }}>
-      <View style={{ flexDirection: "row", gap: space.ml }} accessibilityRole="radiogroup" accessibilityLabel="Tab layout">
-        <LayoutButton kind="sidebar" side={side} title="Sidebar" subtitle="Tabs down the side" selected={layout === "sidebar"} onPress={() => pick("sidebar")} />
-        <LayoutButton kind="top" side="left" title="Classic" subtitle="Tabs along the top" selected={layout === "top"} onPress={() => pick("top")} />
+      <View style={{ flexDirection: "row", gap: space.ml }} accessibilityRole="radiogroup" accessibilityLabel={t("Tab layout")}>
+        <LayoutButton kind="sidebar" side={side} title={t("Sidebar")} subtitle={t("Tabs down the side")} selected={layout === "sidebar"} onPress={() => pick("sidebar")} />
+        <LayoutButton kind="top" side="left" title={t("Classic")} subtitle={t("Tabs along the top")} selected={layout === "top"} onPress={() => pick("top")} />
       </View>
       <View
         pointerEvents={sideOn ? "auto" : "none"}

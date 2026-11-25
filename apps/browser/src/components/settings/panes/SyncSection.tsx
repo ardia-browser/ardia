@@ -1,3 +1,4 @@
+import { t } from "../../../lib/i18n";
 import { useEffect, useState } from "react";
 import { Linking, View } from "react-native";
 import { showMenu } from "../../../state/app/system";
@@ -54,7 +55,7 @@ export function SyncSection() {
       <>
         <SectionHeader title="Sync" />
         <Group>
-          <Row anchor="general.sync" description="Sync isn’t available in this build." />
+          <Row anchor="general.sync" description={t("Sync isn’t available in this build.")} />
         </Group>
       </>
     );
@@ -111,7 +112,7 @@ function SyncOff({ info }: { info: FolderInfo | null }) {
       { id: "folder", title: "Choose Sync Folder…", symbol: "folder" },
       { separator: true },
       ...(hasData ? [{ id: "new", title: "Set Up Without Another Device", symbol: "plus.app", enabled: !noICloud }] : []),
-      { id: "phrase", title: "Enter Recovery Phrase…", symbol: "key" },
+      { id: "phrase", title: t("Enter Recovery Phrase…"), symbol: "key" },
     ]);
     if (choice === "folder") void chooseSyncFolder();
     else if (choice === "new") void turnOn();
@@ -136,9 +137,9 @@ function SyncOff({ info }: { info: FolderInfo | null }) {
                   : `End-to-end encrypted through ${where}.`
           }
         >
-          <Button title="More" onPress={() => void otherOptions()} />
+          <Button title={t("More")} onPress={() => void otherOptions()} />
           {hasData ? (
-            <Button title="Enter Recovery Phrase…" kind="primary" onPress={enterPhrase} />
+            <Button title={t("Enter Recovery Phrase…")} kind="primary" onPress={enterPhrase} />
           ) : (
             <Button
               title={busy ? "Turning On…" : asksWhere ? "Turn On…" : "Turn On"}
@@ -154,8 +155,8 @@ function SyncOff({ info }: { info: FolderInfo | null }) {
             title={`${PLATFORM_TERMS.cloudDrive} is off on this ${PLATFORM_TERMS.computer}`}
             description={`${PLATFORM_TERMS.turnOnCloudDrive}, or pick any folder that syncs, like Dropbox.`}
           >
-            {PLATFORM_TERMS.cloudDriveSettingsUrl ? <Button title="Open iCloud Settings" onPress={() => void Linking.openURL(PLATFORM_TERMS.cloudDriveSettingsUrl)} /> : null}
-            <Button title="Choose…" onPress={() => void chooseSyncFolder()} />
+            {PLATFORM_TERMS.cloudDriveSettingsUrl ? <Button title={t("Open iCloud Settings")} onPress={() => void Linking.openURL(PLATFORM_TERMS.cloudDriveSettingsUrl)} /> : null}
+            <Button title={t("Choose…")} onPress={() => void chooseSyncFolder()} />
           </Row>
         ) : null}
       </Group>
@@ -224,14 +225,14 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
       <Group>
         <Row icon={<SyncIcon on={!locked} />} anchor="general.sync" description={statusLine(status, lastSyncedAt, pending)}>
           {locked ? (
-            <Button title="Enter Recovery Phrase…" kind="primary" onPress={() => showPhraseEntry(info)} />
+            <Button title={t("Enter Recovery Phrase…")} kind="primary" onPress={() => showPhraseEntry(info)} />
           ) : (
-            <Button title="Connect Another Device…" onPress={showConnectDevice} />
+            <Button title={t("Connect Another Device…")} onPress={showConnectDevice} />
           )}
-          <Button title="Advanced…" onPress={() => void advanced()} />
+          <Button title={t("Advanced…")} onPress={() => void advanced()} />
         </Row>
         <Row anchor="general.syncFolder" description={info ? folderLabel(info) : " "}>
-          {PLATFORM_FEATURES.movesSyncFolder ? <Button title="Move…" disabled={locked || !info} onPress={() => void move()} /> : null}
+          {PLATFORM_FEATURES.movesSyncFolder ? <Button title={t("Move…")} disabled={locked || !info} onPress={() => void move()} /> : null}
         </Row>
         <Checklist
           anchor="general.whatSyncs"
@@ -251,7 +252,7 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
         <Row anchor="general.syncDevices" description={devices.length ? undefined : `Just this ${PLATFORM_TERMS.computer} so far. Other devices show here once they sync.`} />
         {devices.map((d) => (
           <Row key={d.id} title={d.current ? `${d.name} (This ${PLATFORM_TERMS.computerTitle})` : d.name} description={d.current ? statusLine(status, lastSyncedAt, 0) : deviceDetail(d, ago)}>
-            {d.current ? null : <Button title="Remove…" onPress={() => void confirmRemoveDevice(d)} />}
+            {d.current ? null : <Button title={t("Remove…")} onPress={() => void confirmRemoveDevice(d)} />}
           </Row>
         ))}
       </Group>
@@ -271,9 +272,9 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
       {joining || remoteProfiles.length ? (
         <>
           <SectionHeader
-            title="Profiles on your other devices"
+            title={t("Profiles on your other devices")}
             description={joining ? lookingForProfiles(pending) : `Add them to this ${PLATFORM_TERMS.computer}. Choose which profiles sync on each profile's page.`}
-            action={remoteProfiles.filter((p) => !p.waiting).length > 1 ? <Button title="Add All" onPress={() => addAllRemoteProfiles(remoteProfiles)} /> : undefined}
+            action={remoteProfiles.filter((p) => !p.waiting).length > 1 ? <Button title={t("Add All")} onPress={() => addAllRemoteProfiles(remoteProfiles)} /> : undefined}
           />
           {remoteProfiles.length ? (
             <Group>

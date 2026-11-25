@@ -1942,32 +1942,6 @@
             }
           ]
         }
-      },
-      "platforms": {
-        "linux": {
-          "ok": {
-            "children": [
-              {
-                "children": [
-                  {
-                    "title": "anon",
-                    "type": "url",
-                    "url": "https://anon.example/"
-                  }
-                ],
-                "title": "",
-                "type": "folder"
-              },
-              {
-                "title": "after",
-                "type": "url",
-                "url": "https://after.example/"
-              }
-            ],
-            "title": "Bookmarks",
-            "type": "folder"
-          }
-        }
       }
     },
     {

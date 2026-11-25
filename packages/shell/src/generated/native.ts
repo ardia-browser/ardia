@@ -304,7 +304,7 @@ export type TranslateNative = {
   status(source: string, target: string): Promise<"installed" | "supported" | "unsupported">;
   supportedLanguages(): Promise<string[]>;
   prepare(source: string, target: string): Promise<void>;
-  translateBlocks(source: string, target: string, blocks: string[][], owner: string): Promise<(string[] | null)[]>;
+  translateBlocks(source: string, target: string, blocks: string[][], owner: string): Promise<(string[] | null)[] | { parts: (string[] | null)[]; errors: string[] }>;
   open(owner: string): Promise<void>;
   cancel(owner: string): Promise<void>;
   translate(source: string, target: string, texts: string[]): Promise<(string | null)[]>;

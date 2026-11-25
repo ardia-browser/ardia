@@ -1515,8 +1515,8 @@
       "types": "packages/shell/src/generated/native.ts",
       "swift": "packages/shell/ios/ShellNative.swift",
       "sha256": {
-        "types": "824356c4ceb0f526b84811590c1aab1a8ad59aa6b3f949f06ad68fb723cef12f",
-        "swift": "41a93592952890260b4a8e0f8fba27b9931a42b5ee4a4b1b2bb25ca358f7c010"
+        "types": "32eb981fb6594e111b5a6383f84b3c42fc7c6ac3216560d128fa1b6139762734",
+        "swift": "d7ccd40486db41fd385218b0597b67a356976c0fb2306bf01332f9cd2c4d2f72"
       },
       "modules": {
         "ArdiaShell": {

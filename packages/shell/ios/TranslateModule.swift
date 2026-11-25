@@ -40,9 +40,11 @@ public class TranslateModule: Module, TranslateNative {
     try await DownloadPrompt.run(source: Locale.Language(identifier: source), target: Locale.Language(identifier: target))
   }
 
-  static func translateBlocks(_ source: String, _ target: String, _ blocks: [[String]], _ owner: String) async -> [[String]?] {
-    guard #available(macOS 26.0, *) else { return blocks.map { _ in nil } }
-    return await TranslationSessions.translateBlocks(source: source, target: target, owner: owner, blocks)
+  static func translateBlocks(_ source: String, _ target: String, _ blocks: [[String]], _ owner: String) async -> [String: Any] {
+    guard #available(macOS 26.0, *) else { return ["parts": blocks.map { _ in NSNull() as Any }, "errors": ["unavailable"]] }
+    let answer = await TranslationSessions.translateBlocks(source: source, target: target, owner: owner, blocks)
+    let parts = answer.parts.map { part -> Any in part.map { $0 as Any } ?? NSNull() }
+    return ["parts": parts, "errors": answer.errors]
   }
 
   static func `open`(_ owner: String) async {

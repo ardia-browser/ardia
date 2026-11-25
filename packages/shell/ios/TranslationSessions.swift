@@ -6,6 +6,34 @@ import SwiftUI
 
 @available(macOS 26.0, *)
 @MainActor
+private final class FailureNotes {
+  private static let limit = 8
+  private(set) var kinds: [String] = []
+
+  func add(_ error: Error) {
+    if kinds.count < Self.limit { kinds.append(Self.kind(of: error)) }
+  }
+
+  private static func kind(of error: Error) -> String {
+    if error is CancellationError { return "cancelled" }
+    switch error {
+    case TranslationError.unsupportedLanguagePairing: return "unsupported_language_pairing"
+    case TranslationError.unsupportedSourceLanguage: return "unsupported_source_language"
+    case TranslationError.unableToIdentifyLanguage: return "unable_to_identify_language"
+    case TranslationError.nothingToTranslate: return "nothing_to_translate"
+    case TranslationError.internalError: return "internal_error"
+    default: return "other"
+    }
+  }
+}
+
+@available(macOS 26.0, *)
+private enum FailureScope {
+  @TaskLocal static var notes: FailureNotes?
+}
+
+@available(macOS 26.0, *)
+@MainActor
 enum TranslationSessions {
   private static var sessions: [String: TranslationSession] = [:]
   private static var lowLatencyPairs: Set<String> = []
@@ -20,8 +48,13 @@ enum TranslationSessions {
     let pieces: [String]
   }
 
+  private struct Fresh: Sendable {
+    let parts: [String]?
+    let errors: [String]
+  }
+
   private static var memo: [PassageKey: [String]] = [:]
-  private static let work = SharedWork<PassageKey, [String]>()
+  private static let work = SharedWork<PassageKey, Fresh>()
   private static let memoLimit = 5000
 
   static func translations(source: String, target: String, standard: Bool = false, _ requests: [TranslationSession.Request]) async throws -> [TranslationSession.Response] {
@@ -37,14 +70,19 @@ enum TranslationSessions {
     return out
   }
 
-  static func translateBlocks(source: String, target: String, owner: String, _ blocks: [[String]]) async -> [[String]?] {
+  static func translateBlocks(source: String, target: String, owner: String, _ blocks: [[String]]) async -> (parts: [[String]?], errors: [String]) {
     let keys = blocks.map { PassageKey(source: source, target: target, pieces: $0) }
     var found: [PassageKey: [String]] = [:]
-    await withTaskGroup(of: (PassageKey, [String]?).self) { group in
+    var errors: [String] = []
+    await withTaskGroup(of: (PassageKey, Fresh?).self) { group in
       for key in Set(keys) { group.addTask { @MainActor in (key, await passage(key, owner: owner)) } }
-      for await (key, parts) in group { if let parts { found[key] = parts } }
+      for await (key, fresh) in group {
+        guard let fresh else { continue }
+        if let parts = fresh.parts { found[key] = parts }
+        errors += fresh.errors
+      }
     }
-    return keys.map { found[$0] }
+    return (keys.map { found[$0] }, errors)
   }
 
   private static var attributedAvailable: Bool {
@@ -60,11 +98,17 @@ enum TranslationSessions {
     work.cancel(owner: owner)
   }
 
-  private static func passage(_ key: PassageKey, owner: String) async -> [String]? {
-    if let known = memo[key] { return known }
-    let parts = await work.value(for: key, owner: owner) { await translateFresh(key) }
-    if let parts, !TranslateModule.isUnchanged(parts, from: key.pieces) { remember(key, parts) }
-    return parts
+  private static func passage(_ key: PassageKey, owner: String) async -> Fresh? {
+    if let known = memo[key] { return Fresh(parts: known, errors: []) }
+    let fresh = await work.value(for: key, owner: owner) { await translateNoted(key) }
+    if let parts = fresh?.parts, !TranslateModule.isUnchanged(parts, from: key.pieces) { remember(key, parts) }
+    return fresh
+  }
+
+  private static func translateNoted(_ key: PassageKey) async -> Fresh {
+    let notes = FailureNotes()
+    let parts = await FailureScope.$notes.withValue(notes) { await translateFresh(key) }
+    return Fresh(parts: parts, errors: notes.kinds)
   }
 
   private static func translateFresh(_ key: PassageKey) async -> [String]? {
@@ -128,6 +172,7 @@ enum TranslationSessions {
     do {
       return try await work(session)
     } catch {
+      FailureScope.notes?.add(error)
       if sessions[key] === session { sessions[key] = nil }
       throw error
     }

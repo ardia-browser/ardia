@@ -1111,7 +1111,7 @@ protocol TranslateNative {
   static func status(_ source: String, _ target: String) async -> String
   static func supportedLanguages() async -> [String]
   static func prepare(_ source: String, _ target: String) async throws
-  static func translateBlocks(_ source: String, _ target: String, _ blocks: [[String]], _ owner: String) async -> [[String]?]
+  static func translateBlocks(_ source: String, _ target: String, _ blocks: [[String]], _ owner: String) async -> [String: Any]
   static func `open`(_ owner: String) async
   static func cancel(_ owner: String) async
   static func translate(_ source: String, _ target: String, _ texts: [String]) async throws -> [String?]
@@ -1149,7 +1149,7 @@ extension TranslateNative {
   }
 
   static var translateBlocksFunction: AnyDefinition {
-    AsyncFunction("translateBlocks") { (source: String, target: String, blocks: [[String]], owner: String) async -> [[String]?] in await Self.translateBlocks(source, target, blocks, owner) }
+    AsyncFunction("translateBlocks") { (source: String, target: String, blocks: [[String]], owner: String) async -> [String: Any] in await Self.translateBlocks(source, target, blocks, owner) }
   }
 
   static var openFunction: AnyDefinition {

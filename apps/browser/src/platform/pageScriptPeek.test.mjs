@@ -620,6 +620,33 @@ test("a plain click on a link that opens a new tab notes it at the end of the cl
   assert.deepEqual(newTabLinks(env), ["https://other.example/x", "https://other.example/y"]);
 });
 
+const siteLinkHandled = (env) => env.sent.filter((m) => m.kind === "siteLinkHandled");
+
+test("a click the page cancels on a link to another site is reported, with a reason and no address (#4110)", () => {
+  const env = environment();
+  env.handlers.peekConfig(siteConfig());
+  env.gesture([env.link("https://other.example/products")], {}, { page: (e) => e.preventDefault() });
+  env.gesture([env.link("https://other.example/story", { target: "_blank" })], {}, { page: (e) => e.preventDefault() });
+  env.gesture([env.link(`https://page.example/url?q=${encodeURIComponent("https://other.example/x")}`)], {}, { page: (e) => e.preventDefault() });
+  assert.deepEqual(siteLinkHandled(env).map((m) => m.reason), ["click", "newTab", "click"]);
+  assert.deepEqual(siteLinkHandled(env).map((m) => Object.keys(m).sort()), Array(3).fill(["kind", "reason"]));
+  assert.equal(peeks(env).length, 0);
+  assert.deepEqual(newTabLinks(env), []);
+});
+
+test("a cancelled click is not reported for a link on the same site, an uncancelled click, or with links to other sites off", () => {
+  const env = environment();
+  env.handlers.peekConfig(siteConfig());
+  env.gesture([env.link("https://page.example/inbox")], {}, { page: (e) => e.preventDefault() });
+  env.gesture([env.link("https://other.example/story")], {});
+  assert.deepEqual(siteLinkHandled(env), []);
+  const off = environment();
+  off.handlers.peekConfig(siteConfig({ otherSites: false }));
+  off.gesture([off.link("https://other.example/story")], {}, { page: (e) => e.preventDefault() });
+  off.gesture([off.link("https://other.example/story", { target: "_blank" })], {}, { page: (e) => e.preventDefault() });
+  assert.deepEqual(siteLinkHandled(off), []);
+});
+
 test("a hundred clicks the page stops leave no listener behind", () => {
   const env = environment();
   env.handlers.peekConfig(siteConfig());

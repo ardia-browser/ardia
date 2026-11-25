@@ -244,6 +244,14 @@
    ]
   },
   {
+   "id": "chromium-page-message:siteLinkHandled",
+   "source": "frame",
+   "guard": "Page script sends it only after a trusted click on a link to another site that the page cancelled itself, and only with Peek links to other sites on; native allow-lists the reason to click, newTab or other and sends no address; the app only counts it for a pinned page. A frame can inflate one count",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ]
+  },
+  {
    "id": "chromium-page-message:theme",
    "source": "page",
    "guard": "Main frame only; colour string parsed as a colour for the toolbar tint",
@@ -263,7 +271,7 @@
    "id": "page-script-message-count:page_script.js",
    "source": "page",
    "guard": "Every send or post call in the page script, including those with a kind computed at run time; each literal kind has its own row and native receiver. The count changes when a send is added, so a new one gets reviewed",
-   "count": 34,
+   "count": 35,
    "checks": [
     "packages/ardiacore/ios/page_script.js"
    ]

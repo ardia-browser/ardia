@@ -1,5 +1,6 @@
 import { WebView } from "../ui";
 import { type OpenWindowRequest, openFromPage } from "../../state/tabs/openFromPage";
+import { notePageHandledSiteLink } from "../../state/tabs/pinnedSiteLinkOutcome";
 import type { PageEngine } from "../../state/engines/engines";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet } from "react-native";
@@ -367,6 +368,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
       onAutoplayBlocked={(count) => noteSiteControls("autoplayPlaysBlocked", count)}
       onFieldProviderOpened={(opened: FieldProviderOpened) => fieldProviderOpened(tabId, opened)}
       onFieldProviderHint={(hint: FieldProviderHint) => fieldProviderHint(tabId, hint)}
+      onSiteLinkHandled={() => notePageHandledSiteLink(tabId)}
       onVerificationCodeFound={(found: VerificationCodeFound) => verificationCodeFound(tabId, found)}
       onNotificationClose={closeWebNotification}
       onDiscarded={(url, reason) => {

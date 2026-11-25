@@ -164,6 +164,9 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
     [self emit:@"selection" payload:@{@"selection" : SelectionState(dict, RootPointsPerLocalPoint(self)) ?: NSNull.null}];
   } else if ([kind isEqualToString:@"newTabLink"] && dict) {
     [self noteNewTabLink:Text(dict, @"url", 8192)];
+  } else if ([kind isEqualToString:@"siteLinkHandled"] && dict) {
+    NSString *reason = Text(dict, @"reason", 16);
+    [self emit:@"siteLinkHandled" payload:@{@"reason" : [@[ @"click", @"newTab" ] containsObject:reason ?: @""] ? reason : @"other"}];
   } else if ([kind isEqualToString:@"linkDrop"] && main) {
     NSString *url = Text(dict, @"url", 8192);
     NSString *scheme = (url.length ? [NSURL URLWithString:url].scheme.lowercaseString : nil) ?: @"";

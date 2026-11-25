@@ -37,6 +37,7 @@ import type {
   ProtectedMediaRequest,
   ScrollState,
   SecurityInfo,
+  SiteLinkHandledReason,
   VerificationCodeFound,
   WebNotification,
   WebViewProps,
@@ -97,6 +98,7 @@ type NativeEvents = {
   onAppBadge: AppBadge;
   onFieldProviderOpened: FieldProviderOpened;
   onFieldProviderHint: { state?: string };
+  onSiteLinkHandled: { reason?: string };
   onVerificationCodeFound: VerificationCodeFound;
 };
 type Handlers = keyof NativeEvents;
@@ -105,6 +107,7 @@ export type NativeProps = Omit<WebViewProps, Handlers> & { pageEvents: string[];
 
 const FIELD_PROVIDER_REFUSALS: readonly FieldProviderPanelRefusal[] = ["hidden", "notFocused", "unavailable", "notKey", "notEditing", "throttled", "refused", "noPanel"];
 const FOCUS_RESTORE_OUTCOMES: readonly FocusRestoreOutcome[] = ["focused", "kept", "refused", "gaveUp"];
+const SITE_LINK_HANDLED_REASONS: readonly SiteLinkHandledReason[] = ["click", "newTab"];
 
 const PAGE_EVENTS = {
   onNavigationChange: "navigation",
@@ -159,6 +162,7 @@ const PAGE_EVENTS = {
   onAppBadge: "appBadge",
   onFieldProviderOpened: "fieldProviderOpened",
   onFieldProviderHint: "fieldProviderHint",
+  onSiteLinkHandled: "siteLinkHandled",
   onVerificationCodeFound: "verificationCodeFound",
 } as const satisfies Record<Handlers, string>;
 export type PageEventName = (typeof PAGE_EVENTS)[Handlers];
@@ -225,6 +229,7 @@ const unwrap: { [K in Handlers]: (e: NativeEvents[K]) => Parameters<NonNullable<
     },
   ],
   onFieldProviderHint: (e) => [{ state: e.state === "dismissed" ? "dismissed" : "shown" } as FieldProviderHint],
+  onSiteLinkHandled: (e) => [SITE_LINK_HANDLED_REASONS.find((r) => r === e.reason) ?? "other"],
   onVerificationCodeFound: (e) => [{ token: String(e.token), app: String(e.app ?? ""), main: e.main === true }],
 };
 

@@ -14,6 +14,9 @@ import { noteBlockedPageBehind, noteLinkTabWait } from "../telemetry/usage";
 import { isBlockedPage } from "../site/contentBlocking";
 import { notePeekFromShiftWindow, notePopupOpenedAsTab } from "../telemetry/popupTabCounts";
 import { noteLinkTabLoad } from "../telemetry/barLoadFocus";
+import { type ConsentToken, consentToken } from "../telemetry/choice";
+import { notePinnedSiteLink } from "../telemetry/pinnedSiteLinkCounts";
+import { pinnedSiteLinkOutcome } from "./pinnedSiteLinkOutcome";
 
 export type { OpenWindowRequest } from "../../platform/tabs";
 
@@ -22,18 +25,19 @@ type PageRef = { windowId: string; profileId: string; tabId?: string };
 const UNGATED = new Set(["current", "peek", "incognito"]);
 
 export function openFromPage(request: OpenWindowRequest, page: PageRef) {
+  const consent = consentToken();
   if (request.linkWait) noteLinkTabWait(request.linkWait);
-  if (UNGATED.has(request.disposition) || !isGatedUrl(request.url)) return openNow(request, page, false);
+  if (UNGATED.has(request.disposition) || !isGatedUrl(request.url)) return openNow(request, page, false, consent);
   const gated = gateOpening(request.url, { tabId: page.tabId ?? null, windowId: page.windowId, profileId: page.profileId, via: "link" }, null);
   settleOpening(gated, null, (verdict) => {
     if (verdict && "cancel" in verdict) {
       if (request.adoptId) void discardOffered(request.adoptId).catch(() => false);
       return;
     }
-    if (!verdict) return openNow(request, page, true);
+    if (!verdict) return openNow(request, page, true, consent);
     const adoptId = asAdoptId(request.adoptId);
-    if (!adoptId) return openNow({ ...request, url: verdict.url }, page, true);
-    openNow(request, page, true);
+    if (!adoptId) return openNow({ ...request, url: verdict.url }, page, true, consent);
+    openNow(request, page, true, consent);
     const s = useBrowser.getState();
     const tabId = Object.keys(s.tabs).find((id) => {
       const p = s.tabs[id]!.page;
@@ -43,7 +47,7 @@ export function openFromPage(request: OpenWindowRequest, page: PageRef) {
   });
 }
 
-function openNow(request: OpenWindowRequest, page: PageRef, gated: boolean) {
+function openNow(request: OpenWindowRequest, page: PageRef, gated: boolean, consent: ConsentToken | null) {
   const { url, profile, point } = request;
   const disposition = opensBehind(request) ? "background" : request.disposition;
   if (disposition !== request.disposition) noteBlockedPageBehind();
@@ -72,6 +76,8 @@ function openNow(request: OpenWindowRequest, page: PageRef, gated: boolean) {
   if (isSmall(s, w.id) && disposition !== "window" && disposition !== "incognito") {
     return void s.newTab(w.id, { url, adoptId, openerId: from.tabId, profileId: from.profileId, background: true, gated });
   }
+  const siteLink = pinnedSiteLinkOutcome(s, request, disposition, page.tabId);
+  if (siteLink) notePinnedSiteLink(siteLink, consent);
   if (disposition === "foreground" && request.fromClick && isAdoptKind(adoptId, "ardiacore") && page.tabId) {
     const route = newTabLinkRoute(s, page.tabId, url);
     if (route === "peek") return void s.openPeek(page.tabId, url, point ?? null, { adoptId });

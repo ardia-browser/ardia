@@ -1590,8 +1590,16 @@
     const defaultPrevented = getter(Event.prototype, "defaultPrevented");
     const scheduleTimeout = window.setTimeout;
     const carriesUrl = (url) => apply(test, /[?&][^=&#]*=(https?(:|%3A)(\/\/|%2F%2F))/i, [url]);
+    const siteLinkHandled = (reason, link) => {
+      if (!peekOtherSites) return;
+      const url = linkUrl(link);
+      if (url && (otherSite(url) || carriesUrl(url))) send("siteLinkHandled", { reason });
+    };
     const peekSiteLink = (e, link) => {
-      if (defaultPrevented(e)) return trace("the page handled the click", {});
+      if (defaultPrevented(e)) {
+        siteLinkHandled("click", link);
+        return trace("the page handled the click", {});
+      }
       const url = linkUrl(link);
       if (!peekable({ link, url, path: [] })) return trace("the link changed during the click", { url });
       if (url.length > MAX_SITE_PEEK_URL) return trace("the link is too long to hand over", { length: url.length });
@@ -1602,7 +1610,8 @@
       send("peek", { url, key: "site", origin: pageOrigin, x: clientX(e) * scale, y: clientY(e) * scale, moved: 0 });
     };
     const noteNewTabLink = (e, link) => {
-      if (defaultPrevented(e) || replacesPage(link)) return;
+      if (defaultPrevented(e)) return siteLinkHandled("newTab", link);
+      if (replacesPage(link)) return;
       const url = linkUrl(link);
       if (url && apply(test, /^https?:/i, [url])) send("newTabLink", { url });
     };

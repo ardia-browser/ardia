@@ -33,24 +33,18 @@ const SHORTCUT_ROW_BATCH = 32;
 function useProgressiveCount(total: number, initial: number, step: number): number {
   const [shown, setShown] = useState(() => Math.min(total, initial));
   useEffect(() => {
-    if (total <= initial) return setShown(total);
-    setShown((current) => Math.min(total, Math.max(current, initial)));
-    let cancelled = false;
-    let frame = 0;
-    const more = () => {
-      if (cancelled) return;
-      setShown((current) => {
-        const next = Math.min(total, current + step);
-        if (next < total) frame = requestAnimationFrame(more);
-        return next;
-      });
-    };
-    frame = requestAnimationFrame(more);
-    return () => {
-      cancelled = true;
-      cancelAnimationFrame(frame);
-    };
-  }, [total, initial, step]);
+    if (total <= initial) {
+      if (shown !== total) setShown(total);
+      return;
+    }
+    if (shown < initial) {
+      setShown(initial);
+      return;
+    }
+    if (shown >= total) return;
+    const frame = requestAnimationFrame(() => setShown((current) => Math.min(total, current + step)));
+    return () => cancelAnimationFrame(frame);
+  }, [shown, total, initial, step]);
   return Math.min(total, shown);
 }
 

@@ -87,7 +87,7 @@ export function syncShortcutItems(items: MenuShortcut[]) {
 
 export const shortcutItems = resource(
   "menuShortcuts",
-  (): Promise<MenuShortcut[]> => menuShortcuts().then(nextShortcutItems, () => []),
+  (): Promise<MenuShortcut[]> => menuShortcuts().then(nextShortcutItems),
   { refreshOnMount: false },
 );
 export const engineVersion = resource("engineInfo", () => engineInfo().catch(() => null));

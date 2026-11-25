@@ -6,7 +6,6 @@
 #import "ArdiaStartup.h"
 #import "ArdiaTabParking.h"
 #import "ArdiaWebViewInternal.h"
-#import "ArdiaPictureInPicture.h"
 
 #import <Security/Security.h>
 #import <objc/runtime.h>
@@ -40,7 +39,6 @@ static void EndFailedPageDragsAtMouseUp() {
   WatchReservedShortcuts();
   ardia_host::InstallActivationGuardsLate();
   EndFailedPageDragsAtMouseUp();
-  ardia_pip::ForgetSavedSize();
   if (gScratchDataDir && ardia_host::Background())
     ardia_host::InstallTestCrashGuard([gDataDirectory stringByDeletingLastPathComponent]);
   ArdiaCoreEngine *engine = ArdiaCoreEngine.sharedEngine;

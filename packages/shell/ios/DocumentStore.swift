@@ -17,6 +17,7 @@ enum DocumentStore {
   private static var staged: [String: Staged] = [:]
   private static var generation: UInt64 = 0
   private static var closed = false
+  private static var flushTimedOut = false
   private static let flushOnQuit = NotificationCenter.default.addObserver(
     forName: NSApplication.willTerminateNotification, object: nil, queue: nil
   ) { _ in flush() }
@@ -211,12 +212,20 @@ enum DocumentStore {
   }
 
   @discardableResult
-  static func flush() -> Bool {
-    queue.sync {
+  static func flush(timeout: TimeInterval = BoundedFlush.defaultTimeout) -> Bool {
+    lock.lock()
+    if closed || flushTimedOut {
+      let empty = staged.isEmpty
+      lock.unlock()
+      return empty
+    }
+    lock.unlock()
+    let finished = BoundedFlush.run(on: queue, timeout: timeout) { remaining in
       lock.lock()
       let keys = Array(staged.keys)
       lock.unlock()
       for key in keys {
+        guard remaining() else { break }
         lock.lock()
         let generation = staged[key]?.generation
         lock.unlock()
@@ -224,7 +233,13 @@ enum DocumentStore {
       }
     }
     lock.lock()
-    defer { lock.unlock() }
-    return staged.isEmpty
+    if !finished { flushTimedOut = true }
+    let remainingCount = staged.count
+    let empty = finished && staged.isEmpty
+    lock.unlock()
+    if !finished {
+      NSLog("Ardia: document flush timed out after \(timeout)s with \(remainingCount) staged document(s)")
+    }
+    return empty
   }
 }

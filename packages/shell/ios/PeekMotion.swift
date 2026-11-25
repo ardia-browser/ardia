@@ -296,7 +296,7 @@ final class PeekMotion {
       return f
     }
     f.topRadius = g.restRadius
-    f.bottomRadius = g.restRadius
+    f.bottomRadius = g.restBottomRadius
     if phase == .waiting || phase == .idle || (phase == .finished && outcome != .promoted) {
       f.page = base
       f.shownPage = g.rest
@@ -358,7 +358,7 @@ final class PeekMotion {
       f.scrimAlpha = 1 - p
     }
     f.topRadius = Self.lerp(g.restRadius, g.tabTopRadius, ec)
-    f.bottomRadius = Self.lerp(g.restRadius, g.tabBottomRadius, ec)
+    f.bottomRadius = Self.lerp(g.restBottomRadius, g.tabBottomRadius, ec)
     if warp.value > 1e-4, residual.count == (Self.rows + 1) * (Self.columns + 1) {
       let rest = restGrid()
       let w = warp.value

@@ -8,7 +8,7 @@ type PeekLayoutInput = {
   pageTop: number;
   bar: number;
   inset: number;
-  restRadius: number;
+  cardRadius: number;
   paneRadius: number;
   from: { x: number; y: number } | null;
   fullscreen: boolean;
@@ -54,7 +54,8 @@ export function peekGeometry(o: PeekLayoutInput): PeekStageGeometry {
     rest,
     card,
     source,
-    restRadius: o.restRadius,
+    restRadius: o.paneRadius,
+    restBottomRadius: o.inset === 0 ? o.cardRadius : o.paneRadius,
     tabTopRadius: o.fullscreen || o.pageTop > 0 ? 0 : o.paneRadius,
     tabBottomRadius: o.fullscreen ? 0 : o.paneRadius,
     fullscreen: o.fullscreen,

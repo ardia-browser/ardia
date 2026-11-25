@@ -122,6 +122,7 @@ function PeekCard({
   const fromX = peek.from && origin ? peek.from.x - origin.x : null;
   const fromY = peek.from && origin ? peek.from.y - origin.y : null;
   const sideRoom = sideRoomFor(buttons);
+  const cardRadius = smallWindowRadius();
   const geometry = useMemo(
     () =>
       peekGeometry({
@@ -130,14 +131,14 @@ function PeekCard({
         pageTop,
         bar: SMALL_BAR_HEIGHT,
         inset: card.inset,
-        restRadius: card.radius,
+        cardRadius,
         paneRadius: card.radius,
         from: fromX === null || fromY === null ? null : { x: fromX, y: fromY },
         fullscreen,
         pageAtTabSize: PLATFORM_FEATURES.nativePeekMotion,
         sideRoom,
       }),
-    [width, height, pageTop, card.inset, card.radius, fromX, fromY, fullscreen, sideRoom.left, sideRoom.right],
+    [width, height, pageTop, card.inset, card.radius, cardRadius, fromX, fromY, fullscreen, sideRoom.left, sideRoom.right],
   );
 
   useEffect(() => {

@@ -137,6 +137,13 @@ test("interactive credential requests get longer deadlines than ordinary request
   assert.deepEqual([...f.delays.values()], [30000, 180000, 900000, 180000, 180000, 30000, 30000]);
 });
 
+test("taking a trusted site out waits for every loaded profile to follow, past the ordinary deadline", () => {
+  const f = fixture();
+  void f.host.call("contentBlocker.removeAllowed", "", "{}");
+  void f.host.call("contentBlocker.setAllowed", "", "{}");
+  assert.deepEqual([...f.delays.values()], [90000, 30000]);
+});
+
 test("the bang list fetch outlives its native 60 s timeout", () => {
   const f = fixture();
   void f.host.invoke("ArdiaShell.fetchBangList", { args: [null] });
@@ -149,6 +156,16 @@ test("the ardia command's installer outlives its native 300 s deadline, kill gra
   void f.host.invoke("ArdiaCli.install", { args: [] });
   void f.host.invoke("ArdiaCli.installedVersion", { args: [] });
   assert.deepEqual([...f.delays.values()], [330000, 30000]);
+});
+
+test("the engine-owned update answers at once, so its calls keep the ordinary deadline", () => {
+  const f = fixture();
+  void f.host.invoke("ArdiaUpdates.update", { args: ["0.2.48"] });
+  void f.host.invoke("ArdiaUpdates.status", { args: [] });
+  void f.host.invoke("ArdiaUpdates.claimOutcome", { args: [1] });
+  void f.host.invoke("ArdiaUpdates.installKind", { args: [] });
+  void f.host.invoke("ArdiaUpdates.restart", { args: [] });
+  assert.deepEqual([...f.delays.values()], [30000, 30000, 30000, 30000, 30000]);
 });
 
 test("calendar requests that may open Evolution Data Server backends get room to finish", () => {

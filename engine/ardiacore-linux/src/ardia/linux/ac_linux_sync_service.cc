@@ -7,11 +7,12 @@
 #include <vector>
 
 #include "ardia/core/ac_launch_switches.h"
+#include "ardia/desktop/ac_desktop_paths.h"
 #include "ardia/linux/ac_linux_credential_service.h"
 #include "ardia/linux/ac_linux_files.h"
 #include "ardia/linux/ac_linux_sync.h"
-#include "ardia/linux/ac_linux_sync_crypto.h"
 #include "ardia/linux/ac_linux_sync_json.h"
+#include "ardia/linux/ac_linux_sync_keys.h"
 #include "ardia/linux/ac_linux_sync_keystore.h"
 #include "ardia/linux/ac_linux_sync_vault.h"
 #include "base/base64.h"
@@ -93,8 +94,8 @@ std::unique_ptr<sync::KeyStore> MakeKeyStore() {
   base::PathService::Get(chrome::DIR_USER_DATA, &user_data);
   chrome::GetDefaultUserDataDirectory(&default_user_data);
   if (sync::UseFileKeyStore(ardiacore::BackgroundInstance(), command.HasSwitch(switches::kUserDataDir),
-                            user_data.value(), default_user_data.value())) {
-    return sync::MakeFileKeyStore(user_data.Append(kKeyDirectory).value());
+                            ardia::desktop_paths::Text(user_data), ardia::desktop_paths::Text(default_user_data))) {
+    return sync::MakeFileKeyStore(ardia::desktop_paths::Text(user_data.AppendASCII(kKeyDirectory)));
   }
   return sync::MakeSecretServiceKeyStore();
 }
@@ -105,7 +106,7 @@ sync::CoreOptions MakeOptions() {
   if (configured && sync::ValidFolderPath(*configured)) {
     options.default_folder = *configured;
   } else {
-    options.default_folder = sync::DefaultFolder(base::GetHomeDir().value());
+    options.default_folder = sync::DefaultFolder(ardia::desktop_paths::Text(base::GetHomeDir()));
   }
   return options;
 }
@@ -329,12 +330,12 @@ class SyncPicker : public ui::SelectFileDialog::Listener {
 
 void ChooseFolder(base::WeakPtr<LinuxShellWebView> shell, const std::vector<sync::JsonValue>& args, Done done) {
   base::FilePath start;
-  if (!args.empty() && args[0].is_string() && sync::ValidFolderPath(args[0].text)) start = base::FilePath(args[0].text);
+  if (!args.empty() && args[0].is_string() && sync::ValidFolderPath(args[0].text)) start = ardia::desktop_paths::FromText<base::FilePath>(args[0].text);
   SyncPicker::Show(shell, ui::SelectFileDialog::SELECT_FOLDER, u"Choose a Sync Folder", start, base::BindOnce(
       [](Done done, std::optional<base::FilePath> path) {
-        if (!path || !sync::ValidFolderPath(path->value()) || !base::IsStringUTF8(path->value()))
+        if (!path || !sync::ValidFolderPath(ardia::desktop_paths::Text(*path)) || !base::IsStringUTF8(ardia::desktop_paths::Text(*path)))
           return std::move(done).Run(true, base::Value());
-        std::move(done).Run(true, base::Value(path->value()));
+        std::move(done).Run(true, base::Value(ardia::desktop_paths::Text(*path)));
       },
       std::move(done)));
 }
@@ -347,7 +348,7 @@ void SaveKit(base::WeakPtr<LinuxShellWebView> shell, base::WeakPtr<Profile> prof
   WhenUnlocked(base::BindOnce(
                    [](base::WeakPtr<LinuxShellWebView> shell, base::WeakPtr<Profile> profile, Done done) {
                      SyncPicker::Show(shell, ui::SelectFileDialog::SELECT_SAVEAS_FILE, u"Save Recovery Kit",
-                                      base::GetHomeDir().Append(sync::kKitTextName), base::BindOnce(
+                                      base::GetHomeDir().AppendASCII(sync::kKitTextName), base::BindOnce(
                          [](base::WeakPtr<Profile> profile, Done done, std::optional<base::FilePath> path) {
                            if (!path) return std::move(done).Run(true, base::Value());
                            Authorize(profile, base::BindOnce(
@@ -358,7 +359,7 @@ void SaveKit(base::WeakPtr<LinuxShellWebView> shell, base::WeakPtr<Profile> prof
                                  Runner()->PostTaskAndReplyWithResult(
                                      FROM_HERE, base::BindOnce([](std::string path, std::string created) {
                                        return Core().SaveKit(path, created);
-                                     }, path.value(), created),
+                                     }, ardia::desktop_paths::Text(path), created),
                                      base::BindOnce(&Reply, std::move(done)));
                                },
                                std::move(*path), std::move(done)));
@@ -485,7 +486,7 @@ void LinuxSyncInvoke(const LinuxSyncCaller& caller, Profile* app_profile, LinuxS
     case sync::Route::kReveal:
       if (args.empty() || !args[0].is_string() || !sync::ValidFolderPath(args[0].text))
         return Fail(std::move(done), "ERR_SYNC_ARGUMENT", "The sync folder must be an absolute path");
-      platform_util::OpenItem(app_profile, base::FilePath(args[0].text), platform_util::OPEN_FOLDER, base::DoNothing());
+      platform_util::OpenItem(app_profile, ardia::desktop_paths::FromText<base::FilePath>(args[0].text), platform_util::OPEN_FOLDER, base::DoNothing());
       return std::move(done).Run(true, base::Value());
     case sync::Route::kNothing:
       return std::move(done).Run(true, base::Value());

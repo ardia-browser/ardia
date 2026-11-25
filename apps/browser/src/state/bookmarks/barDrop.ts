@@ -3,9 +3,9 @@ import { isWithin } from "./bookmarks";
 
 export type DropSpot = { parentId: string; slot: number; zone?: string } | { into: string };
 
-export type ZoneItem = { id: string; start: number; size: number; folder: boolean };
+type ZoneItem = { id: string; start: number; size: number; folder: boolean };
 
-export type ItemHit = { slot: number } | { into: string };
+type ItemHit = { slot: number } | { into: string };
 
 export const sameSpot = (a: DropSpot | null, b: DropSpot | null) =>
   a === b || (!!a && !!b && ("into" in a ? "into" in b && a.into === b.into : "slot" in b && a.parentId === b.parentId && a.slot === b.slot && a.zone === b.zone));

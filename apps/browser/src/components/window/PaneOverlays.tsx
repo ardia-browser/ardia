@@ -5,13 +5,14 @@ import { webviews } from "../../state/tabs/webviewHandles";
 import { Button, Dialog, DialogActions, DialogTitle, space, Symbol, Text, usePresence } from "../ui";
 import { Hud } from "./Hud";
 import { patchPage, usePage } from "../../state/tabs/pageState";
+import { noteRendererResponsive } from "../../state/telemetry/freezes";
 import { STATUS_MOTION, windowColors } from "./tokens";
 
-export function StatusBubble({ tabId, maxWidth }: { tabId: string; maxWidth: number }) {
+export function StatusBubble({ tabId, maxWidth, enter = false }: { tabId: string; maxWidth: number; enter?: boolean }) {
   const colors = windowColors(useTheme().dark);
   const status = usePage(tabId, (p) => p.status);
   const atTop = usePage(tabId, (p) => p.statusAtTop);
-  const { shown, appear: opacity } = usePresence(status || null, STATUS_MOTION);
+  const { shown, appear: opacity } = usePresence(status || null, STATUS_MOTION, enter);
   if (!shown) return null;
   return (
     <Animated.View pointerEvents="none" style={{ position: "absolute", left: space.s, ...(atTop ? { top: space.s } : { bottom: space.s }), maxWidth, opacity }}>
@@ -68,6 +69,7 @@ export function SadTab({ tabId }: { tabId: string }) {
         <Button variant="pill"
           title="Exit Page"
           onPress={() => {
+            noteRendererResponsive(tabId, true);
             patchPage(tabId, { unresponsive: false });
             void webviews.get(tabId)?.resolveUnresponsive(true);
           }}

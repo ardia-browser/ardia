@@ -1,7 +1,8 @@
+import { withEntry } from "../browser/changes";
 import type { StateCreator } from "zustand";
 import type { AdoptId } from "../browser/types";
 import type { BrowserState } from "../browser/store";
-import { activeTabId, IDLE_LIVE, makeTab, navigationTo, without } from "../browser/model";
+import { activeTabId, makeTab, navigationTo, without } from "../browser/model";
 import { forgetOpeners, insertionIndex } from "../tabs/openers";
 import { groupWithOpener } from "../pins/tabGrouping";
 import { adoptedPage, hasNavigatedPage, isAsleep, loadedPage, renavigated } from "../tabs/pageSession";
@@ -11,17 +12,18 @@ import { pinnedGroupMembers } from "../browser/structure";
 import { orderSections } from "../groups/groups";
 import { withoutFragment } from "../../lib/url";
 
-export type PeekPoint = { x: number; y: number };
+type PeekPoint = { x: number; y: number };
 export type SiteLanding = { host: string; until: number; then: "tab" | "source" };
 export type Peek = { tabId: string; sourceId: string; sourcePage: string; from: PeekPoint | null; landing?: SiteLanding };
-export type PeekOptions = { adoptId?: AdoptId; landing?: SiteLanding };
+type PeekOptions = { adoptId?: AdoptId; landing?: SiteLanding };
+type PeekToTabOptions = { activate?: boolean; sourceId?: string };
 
 export type PeekSlice = {
   peeks: Record<string, Peek>;
 
   openPeek(sourceTabId: string, url: string, from?: PeekPoint | null, options?: PeekOptions): string;
   closePeek(sourceTabId: string): void;
-  peekToTab(windowId: string, options?: { activate?: boolean; sourceId?: string }): string | undefined;
+  peekToTab(windowId: string, options?: PeekToTabOptions): string | undefined;
 };
 
 type PeekState = Pick<BrowserState, "peeks" | "tabs">;
@@ -95,7 +97,7 @@ export function settlePeeks(s: BrowserState, prev: BrowserState): BrowserState |
 export const createPeekSlice: StateCreator<BrowserState, [], [], PeekSlice> = (set, get) => ({
   peeks: {},
 
-  openPeek(sourceTabId, url, from = null, { adoptId, landing } = {}) {
+  openPeek(sourceTabId, url, from = null, { adoptId, landing }: PeekOptions = {}) {
     let s = get();
     const source = s.tabs[sourceTabId];
     const w = source ? s.windows[source.windowId] : undefined;
@@ -106,8 +108,7 @@ export const createPeekSlice: StateCreator<BrowserState, [], [], PeekSlice> = (s
     const peek: Peek = { tabId: tab.id, sourceId: sourceTabId, sourcePage: withoutFragment(s.tabs[sourceTabId]!.url), from, ...(landing ? { landing } : {}) };
     set({
       ...s,
-      tabs: { ...s.tabs, [tab.id]: tab },
-      live: { ...s.live, [tab.id]: IDLE_LIVE },
+      tabs: withEntry(s.tabs, tab.id, tab),
       peeks: { ...s.peeks, [sourceTabId]: peek },
     });
     return tab.id;
@@ -118,17 +119,17 @@ export const createPeekSlice: StateCreator<BrowserState, [], [], PeekSlice> = (s
     if (s.peeks[sourceTabId]) set(withoutPeek(s, sourceTabId));
   },
 
-  peekToTab(windowId, { activate = true, sourceId } = {}) {
+  peekToTab(windowId, { activate = true, sourceId }: PeekToTabOptions = {}) {
     let s = get();
     const peek = sourceId ? s.peeks[sourceId] : shownPeek(s, windowId);
     const tab = peek ? s.tabs[peek.tabId] : undefined;
     if (!peek || !tab || tab.windowId !== windowId || !s.windows[windowId]) return undefined;
     s = { ...s, peeks: without(s.peeks, [peek.sourceId]) };
-    if (activate) s = forgetOpeners(s, windowId);
+    if (activate) s = forgetOpeners(s, windowId, tab.profileId);
     const loaded = hasNavigatedPage(tab);
     const moved = { ...tab, openerId: s.tabs[peek.sourceId] ? peek.sourceId : null, page: loaded ? renavigated(tab, navigationTo(tab.url)) : tab.page, lastActiveAt: Date.now() };
     if (moved.openerId) moved.linkOpenerId = peek.sourceId;
-    const tabs = { ...s.tabs, [tab.id]: moved };
+    const tabs = withEntry(s.tabs, tab.id, moved);
     const w = s.windows[windowId]!;
     const tabIds = [...w.tabIds];
     tabIds.splice(Math.min(insertionIndex({ ...s, tabs }, w, moved, false), tabIds.length), 0, tab.id);

@@ -6,6 +6,7 @@ import unittest
 
 
 SOURCE = pathlib.Path(__file__).resolve().parents[1] / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 
 from support import VALUES, WRITER, cpp_string, cpp_value
 
@@ -150,7 +151,7 @@ int main() {
             (root / 'base/json/json_writer.h').write_text(WRITER)
             (root / 'main.cc').write_text(main)
             binary = root / 'session-merge'
-            result = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-I', str(root), '-I', str(SOURCE), str(SOURCE / 'ardia/linux/ac_linux_session.cc'), str(root / 'main.cc'), '-o', str(binary)], capture_output=True, text=True)
+            result = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-I', str(root), '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE), str(SOURCE / 'ardia/linux/ac_linux_session.cc'), str(root / 'main.cc'), '-o', str(binary)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             result = subprocess.run([str(binary)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -336,7 +337,7 @@ auto& Hosts() { return hosts; }
             (root / 'base/json/json_reader.h').write_text(reader)
             (root / 'worker.cc').write_text(main)
             binary = root / 'session-worker'
-            result = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-I', str(root), '-I', str(SOURCE), str(SOURCE / 'ardia/linux/ac_linux_session.cc'), str(root / 'worker.cc'), '-o', str(binary)], capture_output=True, text=True)
+            result = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-I', str(root), '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE), str(SOURCE / 'ardia/linux/ac_linux_session.cc'), str(root / 'worker.cc'), '-o', str(binary)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             result = subprocess.run([str(binary)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

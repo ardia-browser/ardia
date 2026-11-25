@@ -1,4 +1,4 @@
-import { Dot, Panel, Symbol, Button, tabularNums, Text, useHover, reduceMotion } from "../ui";
+import { continuousCorners, Dot, Panel, Symbol, Button, tabularNums, Text, useHover, reduceMotion } from "../ui";
 import { useShallow } from "zustand/react/shallow";
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Animated, Image, Pressable, View } from "react-native";
@@ -6,22 +6,22 @@ import { switchToTab, toggleMute } from "../../state/browser/actions";
 import { useTheme } from "../ui/theme";
 import { buttonMotion, curve, usePressScaleMotion } from "../ui/motion";
 import { font, radius, space, weight } from "../ui/tokens";
-import { useTab } from "../../state/browser/hooks";
+import { useSettings, useTab } from "../../state/browser/hooks";
 import { useMuteState } from "../../state/tabs/hooks";
 import { muteTitle } from "../../state/tabs/mute";
 import { Favicon } from "../favicon/Favicon";
 import { useSidebarTokens } from "../sidebar/tokens";
 import { GlassFill, useGlass } from "../ui/Glass";
 import { useArtwork } from "../../state/media/artwork";
-import { sidebarPlayerOpenCounter } from "../../state/telemetry/mediaCardCounts";
+import { noteSidebarPlayerFromOtherProfile, sidebarPlayerOpenCounter } from "../../state/telemetry/mediaCardCounts";
 import {
   dismissPlayer,
   formatTime,
   isPlaying,
   mediaCommand,
-  playerTabFor,
   positionOf,
   sidebarPlayerCandidates,
+  sidebarPlayerTabFor,
   skipOrTrack,
   transportIcons,
   useHiddenPlayerTabs,
@@ -60,12 +60,14 @@ const UNPIN_MS = 150;
 const MARQUEE_PASSES_AT_REST = 1;
 
 export const SIDEBAR_PLAYER_HEIGHT = ROW_HEIGHT + 8;
+export const SIDEBAR_PLAYER_GROWTH = GROWTH;
 
-export type PlayerMotion = {
+type PlayerMotion = {
   progress: Animated.Value;
   overhang: Animated.Value;
   listClip: Animated.AnimatedMultiplication<number>;
   listUnclip: Animated.AnimatedMultiplication<number>;
+  expandedSlot: { current: boolean };
 };
 
 export function usePlayerMotion(): PlayerMotion {
@@ -73,18 +75,24 @@ export function usePlayerMotion(): PlayerMotion {
     const progress = new Animated.Value(0);
     const overhang = new Animated.Value(1);
     const listClip = Animated.multiply(progress.interpolate({ inputRange: [0, 1], outputRange: [0, -GROWTH] }), overhang);
-    return { progress, overhang, listClip, listUnclip: Animated.multiply(listClip, -1) };
+    return { progress, overhang, listClip, listUnclip: Animated.multiply(listClip, -1), expandedSlot: { current: false } };
   });
   return motion;
 }
 
-export function useSidebarPlayerTab(windowId: string, profileId: string): string | undefined {
+export function useSidebarPlayerTab(windowId: string, profileId: string, current: boolean): string | undefined {
   const sessions = useMedia(useShallow((m) => Object.keys(m.sessions)));
   const hidden = useHiddenPlayerTabs(windowId, profileId, sessions);
   const candidates = useMedia(useShallow((m) => sidebarPlayerCandidates(m, hidden)));
   const shown = useRef<string | undefined>(undefined);
-  shown.current = useMedia((m) => playerTabFor(m, candidates, shown.current));
-  return shown.current;
+  const acrossProfiles = useSettings((st) => st.playingNowAcrossProfiles);
+  shown.current = useMedia((m) => sidebarPlayerTabFor(m, candidates, windowId, shown.current, acrossProfiles));
+  const tabId = shown.current;
+  const fromOtherProfile = useTab(tabId, (tab) => !!tab && tab.profileId !== profileId);
+  useEffect(() => {
+    if (current && fromOtherProfile) noteSidebarPlayerFromOtherProfile();
+  }, [current, fromOtherProfile, tabId]);
+  return tabId;
 }
 
 const isLive = (session: Session) => session.duration === null;
@@ -100,6 +108,7 @@ function useExpansion(want: boolean, motion: PlayerMotion) {
     return () => clearTimeout(timer);
   }, [want, expanded]);
   useLayoutEffect(() => {
+    motion.expandedSlot.current = slot === "expanded";
     if (slot === "expanded") {
       if (expanded) return void motion.overhang.setValue(0);
       return setSlot("row");
@@ -123,6 +132,7 @@ function useExpansion(want: boolean, motion: PlayerMotion) {
     () => () => {
       motion.progress.setValue(0);
       motion.overhang.setValue(1);
+      motion.expandedSlot.current = false;
     },
     [],
   );
@@ -238,7 +248,7 @@ const PlayerRow = memo(function PlayerRow({ tabId, hovered, reveal }: { tabId: s
       style={{ flex: 1, minWidth: 0, alignSelf: "stretch", flexDirection: "row", alignItems: "center", marginRight: TRAILING_INSET }}
     >
       <Animated.View tooltip="Back to Tab" style={artScaleStyle}>
-        <View style={{ width: ART, height: ART, borderRadius: radius.control, overflow: "hidden", backgroundColor: media.artPlaceholder, alignItems: "center", justifyContent: "center" }}>
+        <View style={{ width: ART, height: ART, ...continuousCorners(radius.control), overflow: "hidden", backgroundColor: media.artPlaceholder, alignItems: "center", justifyContent: "center" }}>
           {artwork ? <Image source={{ uri: artwork }} resizeMode="cover" style={{ width: ART, height: ART }} /> : <Favicon url={tab.url} favicon={tab.favicon} size={16} profileId={tab.profileId} />}
         </View>
       </Animated.View>
@@ -302,10 +312,10 @@ export function SidebarPlayer({ tabId, motion, docked }: { tabId: string; motion
         style={{ position: "absolute", left: -HOVER_SLOP, right: -HOVER_SLOP, bottom: -below, height: (expanded ? EXPANDED_HEIGHT : ROW_HEIGHT) + HOVER_SLOP + below }}
       >
         <View pointerEvents="box-none" style={{ position: "absolute", left: HOVER_SLOP, right: HOVER_SLOP, bottom: below, height: EXPANDED_HEIGHT }}>
-          <Animated.View pointerEvents="box-none" style={{ position: "absolute", top: 0, left: 0, right: 0, height: EXPANDED_HEIGHT, borderRadius: radius.panel, overflow: "hidden", transform: [{ translateY: reveal.mask }] }}>
+          <Animated.View pointerEvents="box-none" style={{ position: "absolute", top: 0, left: 0, right: 0, height: EXPANDED_HEIGHT, ...continuousCorners(radius.panel), overflow: "hidden", transform: [{ translateY: reveal.mask }] }}>
             <Animated.View pointerEvents="none" style={{ position: "absolute", top: 0, left: 0, right: 0, height: EXPANDED_HEIGHT, transform: [{ translateY: reveal.unmask }] }}>
               {glass ? (
-                <View style={{ flex: 1, overflow: "hidden", borderRadius: radius.panel }}>
+                <View style={{ flex: 1, ...continuousCorners(radius.panel), overflow: "hidden" }}>
                   <GlassFill radius={radius.panel} state={want ? "lit" : "rest"} />
                 </View>
               ) : (

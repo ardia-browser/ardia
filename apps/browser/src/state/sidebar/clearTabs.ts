@@ -2,15 +2,20 @@ import { closeTab } from "../browser/actions";
 import { useBrowser } from "../browser/store";
 import { plural } from "../browser/model";
 import { cleanedTabsFor } from "../pins/closedTabs";
-import { canUndoClear, type ClearedTabs } from "../pins/tabCleanup";
-import { noteCleanUp } from "../telemetry/usage";
+import { canUndoClear, clearedTabIds, type ClearedTabs } from "../pins/clearedTabs";
+import { live } from "../live/store";
+import { noteCleanUp, noteClearClosedSelectedTab } from "../telemetry/usage";
 import { showUndoToast } from "./undoToast";
+import { userClose, type ByUser } from "../tabs/closeActivation";
 
 const store = () => useBrowser.getState();
 
-export function closeAllTabs(windowId: string) {
-  const cleared = store().clearUnpinnedTabs(windowId);
-  if (cleared?.entries.length) showClearUndo(cleared, `Cleared ${plural(cleared.entries.length, "Tab")}`, "arrow.down");
+export function closeAllTabs(windowId: string, user?: ByUser) {
+  const cleared = store().clearUnpinnedTabs(windowId, user ? userClose(clearedTabIds(store(), windowId), user) : {});
+  const count = (cleared?.entries.length ?? 0) + (cleared?.blankPanes?.length ?? 0);
+  if (!cleared || !count) return;
+  if (cleared.selectedTabId) noteClearClosedSelectedTab(user?.consent);
+  showClearUndo(cleared, `Cleared ${plural(count, "Tab")}`, "arrow.down");
 }
 
 export function cleanUpWithUndo(windowId: string) {
@@ -30,15 +35,15 @@ export function cleanUpWithUndo(windowId: string) {
   });
 }
 
-export function middleClickTab(tabId: string) {
+export function middleClickTab(tabId: string, user: ByUser) {
   const removed = store().removeClosedPin(tabId);
-  if (!removed) return void closeTab(tabId);
+  if (!removed) return void closeTab(tabId, { user });
   if (removed.entries.length) showClearUndo(removed, "Removed Pinned Tab", "pin.slash");
 }
 
 const showClearUndo = (cleared: ClearedTabs, title: string, icon: string) =>
   showUndoToast(cleared.windowId, title, icon, {
-    undo: () => store().undoClearTabs(cleared),
+    undo: () => store().undoClearTabs(cleared, (folderId) => !!live().folders[folderId]),
     watched: (s) => [s.windows[cleared.windowId], s.tabs, s.groups, s.splits, s.closedTabs],
     canUndo: (s) => canUndoClear(s, cleared),
   });

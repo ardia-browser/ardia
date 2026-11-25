@@ -42,7 +42,6 @@ class ShellGlassView : public views::View, public content::GpuDataManagerObserve
   void OnGpuProcessCrashed() override;
 
  private:
-  bool SoftwareCompositor();
   void Refresh();
   void RequestPresented(int generation);
   void Presented(int generation);

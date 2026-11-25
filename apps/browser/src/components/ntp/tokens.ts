@@ -16,7 +16,7 @@ const dark = {
   releaseNotesScrim: "rgba(10,10,10,0.35)",
 };
 
-export type NtpColors = typeof dark;
+type NtpColors = typeof dark;
 
 const light: NtpColors = {
   cardFill: "#FFFFFF80",
@@ -35,7 +35,7 @@ export function useNtpColors(): NtpColors {
   return useTheme().dark ? dark : light;
 }
 
-export type NtpShadow = { color: string; opacity: number; radius: number; offset: [number, number] };
+type NtpShadow = { color: string; opacity: number; radius: number; offset: [number, number] };
 
 export const NTP_CARD = { border: 1 } as const;
 

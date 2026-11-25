@@ -1,5 +1,3 @@
 import type { ReactNode } from "react";
 
-export function WindowOverlays({ children }: { children: ReactNode }) {
-  return <>{children}</>;
-}
+export const windowOverlays = (children: ReactNode) => <>{children}</>;

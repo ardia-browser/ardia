@@ -7,6 +7,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 LINUX = SOURCE / 'ardia/linux'
 REPO = ROOT.parents[1]
 PATCHES = ROOT.parent / 'patches'
@@ -52,7 +53,7 @@ class HardwareTests(unittest.TestCase):
             header.write_text(f'#include "{FIXTURE}"\n')
             binary = Path(directory) / 'hardware'
             subprocess.run([os.environ.get('CXX', 'c++'), '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g',
-                            '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-I', directory, '-I', str(SOURCE),
+                            '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-I', directory, '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE),
                             str(ROOT / 'tests/hardware_test.cc'), '-o', str(binary)],
                            check=True, text=True, timeout=180)
             result = subprocess.run([str(binary)], text=True, timeout=60, capture_output=True,
@@ -109,8 +110,11 @@ class HardwareTests(unittest.TestCase):
         self.assertIn('if (args.size() != 1 || !args[0].is_bool()) {', call)
         self.assertIn('ui::NativeTheme::SetArdiaLinuxThinScrollBars(args[0].GetBool());', call)
         self.assertIn('return std::move(done).Run(true, base::Value());', call)
-        self.assertIn('AsyncFunction("setThinScrollBars") { (thin: Bool) in ThinScrollBars.set(thin) }',
-                      (REPO / 'packages/shell/ios/SystemModule.swift').read_text())
+        mac = (REPO / 'packages/shell/ios/SystemModule.swift').read_text()
+        self.assertIn('static func setThinScrollBars(_ thin: Bool) { ThinScrollBars.set(thin) }', mac)
+        self.assertIn('Self.setThinScrollBarsFunction', mac)
+        self.assertIn('AsyncFunction("setThinScrollBars") { (thin: Bool) in Self.setThinScrollBars(thin) }',
+                      (REPO / 'packages/shell/ios/ShellNative.swift').read_text())
 
     def test_the_scroll_bar_patch_is_linux_only_and_follows_the_open_urls_patch(self):
         steps = [line.split() for line in (PATCHES / 'series').read_text().splitlines() if line.startswith('chromium ')]

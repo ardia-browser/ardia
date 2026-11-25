@@ -70,8 +70,8 @@ void WindowHost::OnTabStripModelChanged(
           source ? TabBridge::GetOrCreate(source)->tab() : nil;
       if (!disposition) {
         disposition = tab_strip_model->active_index() == inserted.index
-                          ? WindowOpenDisposition::NEW_FOREGROUND_TAB
-                          : WindowOpenDisposition::NEW_BACKGROUND_TAB;
+                          ? WindowOpenDisposition::kNewForegroundTab
+                          : WindowOpenDisposition::kNewBackgroundTab;
       }
       if ([delegate respondsToSelector:@selector
                     (window:didInsertTab:opener:disposition:)]) {

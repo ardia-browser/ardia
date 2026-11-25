@@ -5,8 +5,9 @@ import { Pressable, View } from "react-native";
 import { cacheKey, pruneEngineFavicons } from "../../state/favicons/favicons";
 import { isIncognitoProfile } from "../../state/browser/model";
 import { useProfileName, useProfileOrder } from "../../state/profiles/hooks";
-import { clearHistory } from "../../state/history/actions";
+import { clearHistory, skipInRunningImports } from "../../state/history/actions";
 import { noteBrowsingDataCleared } from "../../state/telemetry/historyRemovalCounts";
+import { consentToken } from "../../state/telemetry/client";
 import { Box, Button, Checkbox, Dialog, DialogActions, DialogTitle, Group, PopUp, Row, space, Text } from "../ui";
 import { clearDataDialog } from "./tokens";
 
@@ -41,15 +42,17 @@ export function ClearDataDialog({ profileId, onClose }: { profileId: string; onC
     setError(false);
     const ms = RANGES.find((r) => r.value === range)!.ms;
     const startedAt = Date.now();
+    const consent = consentToken();
     const since = ms === Infinity ? undefined : startedAt - ms;
     const profile = currentEngineProfile(profileId);
     const icons = cacheKey(profileId);
     const types: BrowsingDataType[] = [...(history ? ["history" as const] : []), ...(siteData ? ["siteData" as const, "cache" as const] : [])];
     let cleared = false;
+    const importAgain = history ? skipInRunningImports(profile, since, startedAt) : undefined;
     try {
       if (!isIncognitoProfile(profileId)) {
         await clearBrowsingData(profile, types, since);
-        noteBrowsingDataCleared(true);
+        noteBrowsingDataCleared(true, consent);
       }
       if (history) {
         if (currentEngineProfile(profileId) === profile) clearHistory(profileId, since, startedAt);
@@ -57,7 +60,8 @@ export function ClearDataDialog({ profileId, onClose }: { profileId: string; onC
       }
       cleared = true;
     } catch {
-      noteBrowsingDataCleared(false);
+      importAgain?.();
+      noteBrowsingDataCleared(false, consent);
       if (!left.current) setError(true);
     } finally {
       pending.current = false;

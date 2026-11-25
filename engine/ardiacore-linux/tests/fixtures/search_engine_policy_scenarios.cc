@@ -1,11 +1,11 @@
-#include "ardia/linux/ac_linux_search_engine_policy.h"
+#include "ardia/desktop/ac_desktop_search_engine_policy.h"
 
 #include <cassert>
 #include <cstdio>
 #include <string>
 #include <vector>
 
-namespace engines = ardiacore::linux_search_engines;
+namespace engines = ardiacore::desktop_search_engines;
 
 namespace {
 

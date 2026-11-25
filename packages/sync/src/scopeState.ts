@@ -2,7 +2,7 @@ import type { HLC } from "./hlc.ts";
 
 export type Origin = [device: string, seq: number];
 export type SyncRecord = { h: HLC; v: unknown; o: Origin };
-export type Op = { k: string; h: HLC; v: unknown };
+type Op = { k: string; h: HLC; v: unknown };
 
 export type LogFile = { v: 1; kind: "log"; device: string; seq: number; at: number; ops: Op[] };
 export type SnapshotFile = {
@@ -72,6 +72,7 @@ export type Extraction = {
   ignore?: (key: string) => boolean;
   republish?: (key: string) => boolean;
   published?: (keys: Set<string>) => void;
+  json?: (key: string, value: unknown) => string | undefined;
 };
 
 export type ApplyRecords = {
@@ -81,6 +82,7 @@ export type ApplyRecords = {
   joined: boolean;
   held(): boolean;
   landed(key: string): void;
+  defer(key: string): void;
 };
 
 export interface Adapter {
@@ -92,9 +94,11 @@ export interface Adapter {
     known: (key: string) => boolean,
     remote: (key: string) => unknown,
     stamp: (key: string) => HLC | undefined,
+    baseJson: (key: string) => string | undefined,
   ): Extraction | null | Promise<Extraction | null>;
   apply(visible: Map<string, unknown>, changed: Set<string>, base: (key: string) => unknown, records: ApplyRecords): boolean | void | Promise<boolean | void>;
   editedAt?(value: unknown): number | undefined;
+  extractsOnlyFrom?(): object | undefined;
   adoptRemoteOnJoin?: boolean;
   publishAfterPull?: boolean;
 }

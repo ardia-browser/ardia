@@ -8,15 +8,15 @@ export type FolderRow =
   | { kind: "header"; key: string; title: string }
   | { kind: "more"; key: string; section: string; count: number };
 
-export const SECTION_TITLES: Record<PullRequestSection, string | null> = {
+const SECTION_TITLES: Record<PullRequestSection, string | null> = {
   authored: null,
   review: "Review Requests",
   team: "Team Review Requests",
 };
 
-export const PAGE_SIZE = 8;
+const PAGE_SIZE = 8;
 
-export type LiveTabPlace = "row" | "stray" | "hidden";
+type LiveTabPlace = "row" | "stray" | "hidden";
 
 export const repoKey = (it: LiveItem) => (it.pr ? `${it.source}:${it.pr.repo}` : null);
 
@@ -24,8 +24,26 @@ export function liveTabPlace(itemId: string, shown: Set<string>, hidden: Set<str
   return shown.has(itemId) ? "row" : hidden.has(itemId) ? "hidden" : "stray";
 }
 
+const openItemsByFolder = new WeakMap<Record<string, Tab>, Map<string, Set<string>>>();
+
+function openLiveItems(tabs: Record<string, Tab>, folderId: string): Set<string> | undefined {
+  let index = openItemsByFolder.get(tabs);
+  if (!index) {
+    index = new Map();
+    for (const t of Object.values(tabs)) {
+      if (!t.liveItem) continue;
+      const items = index.get(t.liveItem.folderId);
+      if (items) items.add(t.liveItem.itemId);
+      else index.set(t.liveItem.folderId, new Set([t.liveItem.itemId]));
+    }
+    openItemsByFolder.set(tabs, index);
+  }
+  return index.get(folderId);
+}
+
 export function liveTabOpen(tabs: Record<string, Tab>, folderId: string, itemIds: string[]): boolean {
-  return Object.values(tabs).some((t) => t.liveItem?.folderId === folderId && itemIds.includes(t.liveItem.itemId));
+  const open = openLiveItems(tabs, folderId);
+  return !!open && itemIds.some((id) => open.has(id));
 }
 
 export function stackMembers(items: LiveItem[], stackId: string): LiveItem[] {

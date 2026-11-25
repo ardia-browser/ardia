@@ -10,6 +10,8 @@ const { folderRows, liveTabOpen, liveTabPlace, stackMembers } = await import("./
 const { liveFolderMenuItems } = await import("../sidebar/liveMenus.ts");
 const { hideNewRepos, setShowNewRepos, showAllRepos } = await import("./repoFilter.ts");
 const { applyFetch, createFolder, finishCompleting, hideItems, live, markUnread, removeFolder, setRepoHidden, showAllIn, toggleStack, updateFolder, useLive } = await import("./store.ts");
+const { setConsentPeriod } = await import("../telemetry/consentPeriod.ts");
+setConsentPeriod(true, "folder-options-test");
 
 const pr = (id, number, headRef, baseRef) => ({
   id,
@@ -195,6 +197,34 @@ test("a pull request counts as open while any window has its tab, so another win
   assert.equal(liveTabOpen(tabs, "f", ["pr3"]), false);
 });
 
+test("rows asking whether their pull request is open read the tab list once, not once per row", () => {
+  const raw = Object.fromEntries(Array.from({ length: 1000 }, (_, i) => [`t${i}`, { id: `t${i}`, windowId: "w" }]));
+  raw.t7.liveItem = { folderId: "f", itemId: "pr7" };
+  let scans = 0;
+  const tabs = new Proxy(raw, { ownKeys: (o) => (scans++, Reflect.ownKeys(o)) });
+  const open = Array.from({ length: 100 }, (_, i) => liveTabOpen(tabs, "f", [`pr${i}`]));
+  assert.deepEqual(open.flatMap((o, i) => (o ? [i] : [])), [7]);
+  assert.equal(scans, 1);
+});
+
+test("folders in different profiles refreshing at once share one fetch per service, and each lists the pull requests", async () => {
+  const ids = ["p1", "p2", "p3"].map((profile) => createFolder(profile, "pullRequests", ["github"]));
+  const { fetch } = SOURCES.github;
+  let calls = 0;
+  SOURCES.github.fetch = async () => (calls++, [pr("shared", 1, "one", "main")]);
+  try {
+    await Promise.all(ids.map(refreshFolder));
+    assert.equal(calls, 1);
+    for (const id of ids) assert.deepEqual(live().items[id].map((it) => it.id), ["shared"]);
+    updateFolder(ids[2], { filters: { authored: true, reviewRequests: false } });
+    await Promise.all(ids.map(refreshFolder));
+    assert.equal(calls, 3);
+  } finally {
+    SOURCES.github.fetch = fetch;
+    ids.forEach(removeFolder);
+  }
+});
+
 test("a stack split across sections counts as open when a member in the other section has its tab open", () => {
   const spanning = [stacked[0], { ...stacked[1], section: "review" }];
   const header = folderRows({ id: "f", kind: "pullRequests", groupStacks: true }, spanning, {}).find((r) => r.kind === "stack");
@@ -312,7 +342,7 @@ test("a pull request hidden until refresh stays hidden when its repo is hidden a
 });
 
 const repoMenu = (id) => {
-  const submenu = liveFolderMenuItems("no-window", id).find((it) => it.id === "repos");
+  const submenu = liveFolderMenuItems(id).find((it) => it.id === "filters").children.find((it) => it.id === "repos");
   return {
     enabled: submenu.enabled,
     rows: submenu.children.map((it) => (it.separator ? "---" : `${it.checked === false ? "[ ]" : it.checked ? "[x]" : ""}${it.title}${it.enabled === false ? " (off)" : ""}`)),
@@ -411,9 +441,9 @@ test("a hidden repo's pull requests come back read when it's shown, even after t
   assert.deepEqual(live().unread[id], [], "c was in the folder before its repo was hidden, so it isn't new");
 });
 
-test("a live folder's menu has a group's Color submenu, without Match Site Color, checked at the folder's colour", () => {
+test("a live folder's Customize menu has a group's Color submenu, without Match Site Color, checked at the folder's colour", () => {
   const id = createFolder("p", "pullRequests", []);
-  const colors = () => liveFolderMenuItems("w", id).find((item) => item.id === "color")?.children ?? [];
+  const colors = () => liveFolderMenuItems(id).find((item) => item.id === "customize")?.children.find((item) => item.id === "color")?.children ?? [];
   const ids = colors().filter((item) => item.id).map((item) => item.id);
   assert.deepEqual(ids.slice(0, 2), ["color:none", "color:neutral"]);
   assert.equal(ids.length, 11, "None, Neutral and the nine colours");
@@ -433,7 +463,7 @@ test("picking a colour from a live folder's menu saves it, Neutral clears it, No
   const real = shell.showMenu;
   takeLiveHideCounts();
   const pick = async (title) => {
-    shell.showMenu = (shown) => Promise.resolve(shown.find((it) => it.id === "color").children.find((it) => it.title === title).id);
+    shell.showMenu = (shown) => Promise.resolve(shown.find((it) => it.id === "customize").children.find((it) => it.id === "color").children.find((it) => it.title === title).id);
     try {
       await openLiveFolderMenu("w", id);
     } finally {
@@ -446,4 +476,33 @@ test("picking a colour from a live folder's menu saves it, Neutral clears it, No
   assert.equal(await pick("None"), "none");
   assert.equal(takeLiveHideCounts().live_folder_color_picks, 3);
   removeFolder(id);
+});
+
+test("a live folder's menu: refresh and read, then Filters, Sources and Customize, and Delete alone; no status line or Move Up and Down", () => {
+  const id = createFolder("p", "pullRequests", ["github"]);
+  const rows = (items) => items.map((it) => (it.separator ? "---" : `${it.title}${it.symbol ? ` [${it.symbol}]` : ""}${it.children ? " ›" : ""}`));
+  const items = liveFolderMenuItems(id);
+  assert.deepEqual(rows(items), [
+    "Refresh [arrow.clockwise]",
+    "Mark All as Read [checkmark]",
+    "---",
+    "Filters [line.3.horizontal.decrease.circle] ›",
+    "Sources [arrow.triangle.pull] ›",
+    "Customize [slider.horizontal.3] ›",
+    "---",
+    "Delete Live Folder [trash]",
+  ]);
+  assert.deepEqual(rows(items.find((it) => it.id === "filters").children), [
+    "Created by Me",
+    "Awaiting My Review",
+    "Repositories ›",
+    "---",
+    "Group Stacked Pull Requests",
+    "Show Completed",
+  ]);
+  assert.equal(rows(items.find((it) => it.id === "sources").children).at(-1), "Live Folder Settings… [gearshape]");
+  const docs = createFolder("d", "documents", []);
+  assert.ok(!liveFolderMenuItems(docs).some((it) => it.id === "filters"), "documents have no pull request filters");
+  removeFolder(id);
+  removeFolder(docs);
 });

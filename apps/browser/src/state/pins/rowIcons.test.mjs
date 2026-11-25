@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { drawnIcon, ghostIcon, hidesRowIcon, isTextOnlyRow, NO_ROW_ICON, ownIcon } from "./rowIcons.ts";
+import { drawnIcon, ghostIcon, ghostTileIcon, hidesRowIcon, isTextOnlyRow, NO_ROW_ICON, ownIcon } from "./rowIcons.ts";
 import { iconValue } from "../automation/workspaceOps.ts";
 
 const row = { pin: { as: "row" }, customIcon: NO_ROW_ICON, url: "https://a.example/", pinnedUrl: "https://a.example/" };
@@ -38,6 +38,14 @@ test("the drag ghost of a text-only row draws no icon, and every other ghost kee
   assert.deepEqual(ghostIcon(tile, false), { icon: NO_ROW_ICON });
   assert.deepEqual(ghostIcon(row, false), { icon: NO_ROW_ICON });
   assert.equal(ghostIcon(undefined, false), null);
+});
+
+test("a text-only row's ghost turned tile still draws the tab's icon, which falls back to its favicon", () => {
+  assert.equal(ghostIcon(row, true), null, "the row shape stays text-only");
+  assert.deepEqual(ghostTileIcon(row), { icon: NO_ROW_ICON });
+  assert.equal(drawnIcon(ghostTileIcon(row).icon), null, "No Icon draws nothing itself, so TabIcon shows the favicon");
+  assert.deepEqual(ghostTileIcon({ ...row, customIcon: "🚀" }), { icon: "🚀" });
+  assert.equal(ghostTileIcon(undefined), null);
 });
 
 test("No Icon isn't a symbol anyone can pick, so the text format symbol stays a row icon", () => {

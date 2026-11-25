@@ -8,7 +8,7 @@ public final class AppUpdater: NSObject {
   static var feedOverride: String? {
     let config = LaunchConfig.shared
     if let feed = config.instance("updateFeed") ?? UserDefaults.standard.string(forKey: "ACUpdateFeedURL") { return feed }
-    return config.background ? "https://github.com/mantrakp04/ardia/releases/latest/download/appcast.xml" : nil
+    return config.background ? "https://github.com/ardia-browser/ardia/releases/latest/download/appcast.xml" : nil
   }
 
   static let channelDefaultsKey = "ACUpdateChannel"
@@ -147,7 +147,7 @@ public final class AppUpdater: NSObject {
 
   private static var aboutCredits: NSAttributedString {
     let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
-    let repository = "https://github.com/mantrakp04/ardia"
+    let repository = "https://github.com/ardia-browser/ardia"
     let centered = NSMutableParagraphStyle()
     centered.alignment = .center
     let plain: [NSAttributedString.Key: Any] = [
@@ -193,6 +193,12 @@ public final class AppUpdater: NSObject {
   private var sessionObservation: NSKeyValueObservation?
   private var firstCheckPending = false
   private var started = false
+  private var downloading = false
+  private var updateCycle = UpdateCycleStamp<ArdiaConsentStamp>()
+
+  private var currentUpdateStamp: ArdiaConsentStamp {
+    updateCycle.stamp { ArdiaConsentStamp.begin() }
+  }
 
   public var isConfigured: Bool {
     guard !Self.isOff else { return false }
@@ -309,12 +315,43 @@ extension AppUpdater: SPUUpdaterDelegate {
     let noUpdate = (error as NSError?).map { $0.domain == SUSparkleErrorDomain && $0.code == Int(SUError.noUpdateError.rawValue) } ?? false
     switchCheck.handle(.finished(failed: error != nil && !noUpdate))
     userDriver.quietCheck = false
+    updateCycle.end()
   }
 
   public func feedParameters(for updater: SPUUpdater, sendingSystemProfile sendingProfile: Bool) -> [[String: String]] {
     guard firstCheckPending else { return [] }
     firstCheckPending = false
     return [["key": "first", "value": "1"]]
+  }
+
+  public func updater(_ updater: SPUUpdater, willDownloadUpdate item: SUAppcastItem, with request: NSMutableURLRequest) {
+    downloading = true
+    ShellEvents.send(.app, currentUpdateStamp.onto(["type": "updateStep", "step": "downloadStarted"]))
+  }
+
+  public func updater(_ updater: SPUUpdater, didDownloadUpdate item: SUAppcastItem) {
+    downloading = false
+    ShellEvents.send(.app, currentUpdateStamp.onto(["type": "updateStep", "step": "downloadFinished"]))
+  }
+
+  public func userDidCancelDownload(_ updater: SPUUpdater) {
+    downloading = false
+    updateCycle.end()
+  }
+
+  public func updater(_ updater: SPUUpdater, willInstallUpdate item: SUAppcastItem) {
+    ShellEvents.send(.app, currentUpdateStamp.onto(["type": "updateStep", "step": "installing"]))
+  }
+
+  public func updater(_ updater: SPUUpdater, didAbortWithError error: Error) {
+    let nsError = error as NSError
+    let failure = SparkleFailure.of(domain: nsError.domain, code: nsError.code, downloading: downloading)
+    let stamp = currentUpdateStamp
+    downloading = false
+    updateCycle.end()
+    guard let failure else { return }
+    NSLog("Ardia: update failed while \(failure.stage == .download ? "downloading" : "installing") (\(failure.reason))")
+    ShellEvents.send(.app, stamp.onto(failure.event))
   }
 
   public func updater(_ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem, immediateInstallationBlock immediateInstallHandler: @escaping () -> Void) -> Bool {

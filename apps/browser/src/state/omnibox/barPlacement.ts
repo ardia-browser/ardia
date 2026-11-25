@@ -33,3 +33,8 @@ export const placementFromCard = (card: PlacementSetting, current: PlacementSett
   card === "centred" && current === "centredOnClick" ? current : card;
 
 export const isCentred = (placement: BarPlacement | undefined) => placement === "centred" || placement === "centredNoField";
+
+export function centredBarLeft(card: { left: number; width: number }, barWidth: number, windowWidth: number): number {
+  const centre = windowWidth > 0 ? windowWidth / 2 : card.left + card.width / 2;
+  return Math.min(Math.max(centre - barWidth / 2, card.left), card.left + card.width - barWidth);
+}

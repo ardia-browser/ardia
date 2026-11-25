@@ -3,7 +3,7 @@ import ArdiaCore
 import AVFoundation
 import ExpoModulesCore
 
-public class ReportModule: Module {
+public class ReportModule: Module, ReportNative {
   private static let event = "onReport"
   private static let escapeKey: UInt16 = 53
   private static let recordingOptions = (maxSeconds: 60.0, fps: 15.0, maxPixelWidth: 1440.0)
@@ -16,9 +16,98 @@ public class ReportModule: Module {
     DispatchQueue.main.async { self?.send(["type": "upload", "id": id, "sent": sent, "total": total]) }
   }
 
+  static func draftDirectory() -> String { ReportFiles.draftDirectory() }
+
+  static func fileSize(_ path: String) -> Int { ReportFiles.size(path) }
+
+  static func removeFile(_ path: String) { ReportFiles.remove(path) }
+
+  func startRecording(_ windowId: String, _ includePages: Bool, _ path: String, _ maxSeconds: Double?, _ fps: Double?, _ maxPixelWidth: Double?) -> Bool { self.startRecording(windowId: windowId, includePages: includePages, path: path, maxSeconds: maxSeconds, fps: fps, maxPixelWidth: maxPixelWidth) }
+
+  func cancelRecording() {
+    self.recorder?.cancel()
+    self.recorder = nil
+    self.endRecordingUI()
+  }
+
+  func isRecording() -> Bool { self.recorder != nil }
+
+  static func recordingThumbnail(_ path: String, _ out: String) -> Bool { Self.thumbnail(path: path, out: out) }
+
+  static func gzipFile(_ source: String, _ destination: String, _ removeSource: Bool) throws -> Int {
+    let bytes = try ReportFiles.gzip(file: source, to: destination)
+    if removeSource { ReportFiles.remove(source) }
+    return bytes
+  }
+
+  static func gzipText(_ text: String, _ destination: String) throws -> Int { try ReportFiles.gzip(text: text, to: destination) }
+
+  func upload(_ id: String, _ url: String, _ method: String, _ headers: [String: String], _ path: String, _ promise: Promise) {
+    guard let target = URL(string: url), ["http", "https"].contains(target.scheme ?? "") else {
+      return promise.resolve(["status": 0, "body": "", "error": "bad url"])
+    }
+    self.uploader.upload(id: id, url: target, method: method, headers: headers, file: URL(fileURLWithPath: path)) { promise.resolve($0) }
+  }
+
+  func cancelUploads() { self.uploader.cancelAll() }
+
+  static func devRenderCost(_ windowId: String) -> [[String: Any]] {
+    guard let content = WindowManager.shared.window(windowId)?.contentView, let root = content.layer else { return [] }
+    let ctx = CGContext(data: nil, width: Int(content.bounds.width), height: Int(content.bounds.height), bitsPerComponent: 8, bytesPerRow: 0,
+      space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+    var out: [[String: Any]] = []
+    func time(_ layer: CALayer, _ path: String, _ depth: Int) {
+      let t0 = CACurrentMediaTime()
+      layer.render(in: ctx)
+      let ms = (CACurrentMediaTime() - t0) * 1000
+      out.append(["path": path, "ms": ms, "class": String(describing: type(of: layer)), "delegate": layer.delegate.map { String(describing: type(of: $0)) } ?? "", "subs": layer.sublayers?.count ?? 0])
+      if depth < 12, ms > 2 { for (i, sub) in (layer.sublayers ?? []).enumerated() { time(sub, path + "/\(i)", depth + 1) } }
+    }
+    time(root, "", 0)
+    return out.sorted { ($0["path"] as! String) < ($1["path"] as! String) }
+  }
+
+  func devSnapshotPill(_ path: String) -> [String: Double]? { self.pill?.snapshot(to: path) }
+
+  static func devRecordingPages(_ windowId: String) -> [[String: Any]] { WindowManager.shared.window(windowId).map(ReportRecorder.devScan) ?? [] }
+
+  static func devPlaceWindow(_ windowId: String, _ frame: [Double]) -> Bool {
+    guard LaunchConfig.shared.background, frame.count == 4, let window = WindowManager.shared.window(windowId) else { return false }
+    window.setFrame(NSRect(x: frame[0], y: frame[1], width: frame[2], height: frame[3]), display: true)
+    return true
+  }
+
+  func devWindowServerAlpha(_ windowNumber: Int, _ alpha: Double) -> Bool {
+    typealias MainConnection = @convention(c) () -> Int32
+    typealias SetAlpha = @convention(c) (Int32, Int32, Float) -> Int32
+    guard LaunchConfig.shared.background, let connection = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "CGSMainConnectionID"),
+      let set = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "CGSSetWindowAlpha")
+    else { return false }
+    let main = unsafeBitCast(connection, to: MainConnection.self)
+    return unsafeBitCast(set, to: SetAlpha.self)(main(), Int32(windowNumber), Float(alpha)) == 0
+  }
+
+  static func devPages(_ windowId: String) -> [[String: Any]] {
+    guard let content = WindowManager.shared.window(windowId)?.contentView else { return [] }
+    var out: [[String: Any]] = []
+    func visit(_ view: NSView, depth: Int) {
+      let name = NSStringFromClass(type(of: view))
+      if view is ArdiaWebView || name.contains("RenderWidgetHost") || name.contains("WebContentsView") {
+        let inWindow = view.convert(view.bounds, to: nil)
+        var opacity: Float = 1
+        var chain: NSView? = view
+        while let v = chain { opacity *= v.layer?.opacity ?? 1; chain = v.superview }
+        out.append(["class": name, "depth": depth, "window": [inWindow.minX, inWindow.minY, inWindow.width, inWindow.height], "visible": [view.visibleRect.minX, view.visibleRect.minY, view.visibleRect.width, view.visibleRect.height], "hidden": view.isHiddenOrHasHiddenAncestor, "opacity": opacity, "flipped": view.isFlipped])
+      }
+      for child in view.subviews { visit(child, depth: depth + 1) }
+    }
+    visit(content, depth: 0)
+    return out
+  }
+
   public func definition() -> ModuleDefinition {
-    Name("ArdiaReport")
-    Events(Self.event)
+    Name(Self.moduleName)
+    Self.eventsDefinition
 
     OnCreate {
       self.lifetime.begin(self) { [weak self] in
@@ -35,108 +124,41 @@ public class ReportModule: Module {
       Prop("playing") { (view: ReportVideoView, playing: Bool) in view.playing = playing }
     }
 
-    Function("draftDirectory") { () -> String in ReportFiles.draftDirectory() }
+    Self.draftDirectoryFunction
 
-    Function("fileSize") { (path: String) -> Int in ReportFiles.size(path) }
+    Self.fileSizeFunction
 
-    Function("removeFile") { (path: String) in ReportFiles.remove(path) }
+    Self.removeFileFunction
 
-    AsyncFunction("startRecording") { (windowId: String, includePages: Bool, path: String, maxSeconds: Double?, fps: Double?, maxPixelWidth: Double?) -> Bool in
-      self.startRecording(windowId: windowId, includePages: includePages, path: path, maxSeconds: maxSeconds, fps: fps, maxPixelWidth: maxPixelWidth)
-    }.runOnQueue(.main)
+    startRecordingFunction
 
-    AsyncFunction("stopRecording") { () -> Bool in
-      self.stopRecording()
-    }.runOnQueue(.main)
+    stopRecordingFunction
 
-    AsyncFunction("cancelRecording") { () in
-      self.recorder?.cancel()
-      self.recorder = nil
-      self.endRecordingUI()
-    }.runOnQueue(.main)
+    cancelRecordingFunction
 
-    Function("isRecording") { () -> Bool in self.recorder != nil }
+    isRecordingFunction
 
-    AsyncFunction("recordingThumbnail") { (path: String, out: String) -> Bool in
-      Self.thumbnail(path: path, out: out)
-    }.runOnQueue(DispatchQueue.global(qos: .userInitiated))
+    Self.recordingThumbnailFunction
 
-    AsyncFunction("gzipFile") { (source: String, destination: String, removeSource: Bool) -> Int in
-      let bytes = try ReportFiles.gzip(file: source, to: destination)
-      if removeSource { ReportFiles.remove(source) }
-      return bytes
-    }.runOnQueue(DispatchQueue.global(qos: .utility))
+    Self.gzipFileFunction
 
-    AsyncFunction("gzipText") { (text: String, destination: String) -> Int in
-      try ReportFiles.gzip(text: text, to: destination)
-    }.runOnQueue(DispatchQueue.global(qos: .utility))
+    Self.gzipTextFunction
 
-    AsyncFunction("upload") { (id: String, url: String, method: String, headers: [String: String], path: String, promise: Promise) in
-      guard let target = URL(string: url), ["http", "https"].contains(target.scheme ?? "") else {
-        return promise.resolve(["status": 0, "body": "", "error": "bad url"])
-      }
-      self.uploader.upload(id: id, url: target, method: method, headers: headers, file: URL(fileURLWithPath: path)) { promise.resolve($0) }
-    }
+    uploadFunction
 
-    Function("cancelUploads") { () in self.uploader.cancelAll() }
+    cancelUploadsFunction
 
-    AsyncFunction("devRenderCost") { (windowId: String) -> [[String: Any]] in
-      guard let content = WindowManager.shared.window(windowId)?.contentView, let root = content.layer else { return [] }
-      let ctx = CGContext(data: nil, width: Int(content.bounds.width), height: Int(content.bounds.height), bitsPerComponent: 8, bytesPerRow: 0,
-        space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-      var out: [[String: Any]] = []
-      func time(_ layer: CALayer, _ path: String, _ depth: Int) {
-        let t0 = CACurrentMediaTime()
-        layer.render(in: ctx)
-        let ms = (CACurrentMediaTime() - t0) * 1000
-        out.append(["path": path, "ms": ms, "class": String(describing: type(of: layer)), "delegate": layer.delegate.map { String(describing: type(of: $0)) } ?? "", "subs": layer.sublayers?.count ?? 0])
-        if depth < 12, ms > 2 { for (i, sub) in (layer.sublayers ?? []).enumerated() { time(sub, path + "/\(i)", depth + 1) } }
-      }
-      time(root, "", 0)
-      return out.sorted { ($0["path"] as! String) < ($1["path"] as! String) }
-    }.runOnQueue(.main)
+    Self.devRenderCostFunction
 
-    AsyncFunction("devSnapshotPill") { (path: String) -> [String: Double]? in
-      self.pill?.snapshot(to: path)
-    }.runOnQueue(.main)
+    devSnapshotPillFunction
 
-    AsyncFunction("devRecordingPages") { (windowId: String) -> [[String: Any]] in
-      WindowManager.shared.window(windowId).map(ReportRecorder.devScan) ?? []
-    }.runOnQueue(.main)
+    Self.devRecordingPagesFunction
 
-    AsyncFunction("devPlaceWindow") { (windowId: String, frame: [Double]) -> Bool in
-      guard LaunchConfig.shared.background, frame.count == 4, let window = WindowManager.shared.window(windowId) else { return false }
-      window.setFrame(NSRect(x: frame[0], y: frame[1], width: frame[2], height: frame[3]), display: true)
-      return true
-    }.runOnQueue(.main)
+    Self.devPlaceWindowFunction
 
-    AsyncFunction("devWindowServerAlpha") { (windowNumber: Int, alpha: Double) -> Bool in
-      typealias MainConnection = @convention(c) () -> Int32
-      typealias SetAlpha = @convention(c) (Int32, Int32, Float) -> Int32
-      guard LaunchConfig.shared.background, let connection = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "CGSMainConnectionID"),
-        let set = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "CGSSetWindowAlpha")
-      else { return false }
-      let main = unsafeBitCast(connection, to: MainConnection.self)
-      return unsafeBitCast(set, to: SetAlpha.self)(main(), Int32(windowNumber), Float(alpha)) == 0
-    }.runOnQueue(.main)
+    devWindowServerAlphaFunction
 
-    AsyncFunction("devPages") { (windowId: String) -> [[String: Any]] in
-      guard let content = WindowManager.shared.window(windowId)?.contentView else { return [] }
-      var out: [[String: Any]] = []
-      func visit(_ view: NSView, depth: Int) {
-        let name = NSStringFromClass(type(of: view))
-        if view is ArdiaWebView || name.contains("RenderWidgetHost") || name.contains("WebContentsView") {
-          let inWindow = view.convert(view.bounds, to: nil)
-          var opacity: Float = 1
-          var chain: NSView? = view
-          while let v = chain { opacity *= v.layer?.opacity ?? 1; chain = v.superview }
-          out.append(["class": name, "depth": depth, "window": [inWindow.minX, inWindow.minY, inWindow.width, inWindow.height], "visible": [view.visibleRect.minX, view.visibleRect.minY, view.visibleRect.width, view.visibleRect.height], "hidden": view.isHiddenOrHasHiddenAncestor, "opacity": opacity, "flipped": view.isFlipped])
-        }
-        for child in view.subviews { visit(child, depth: depth + 1) }
-      }
-      visit(content, depth: 0)
-      return out
-    }.runOnQueue(.main)
+    Self.devPagesFunction
   }
 
   private func startRecording(windowId: String, includePages: Bool, path: String, maxSeconds: Double?, fps: Double?, maxPixelWidth: Double?) -> Bool {
@@ -165,7 +187,7 @@ public class ReportModule: Module {
     return true
   }
 
-  private func stopRecording() -> Bool {
+  func stopRecording() -> Bool {
     guard let recorder else { return false }
     self.recorder = nil
     endRecordingUI()

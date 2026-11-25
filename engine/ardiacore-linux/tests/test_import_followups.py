@@ -5,7 +5,7 @@ import sqlite3
 import struct
 import unittest
 
-from support import NOW_MS, ImportFixture, aes_cbc, basic_key, keyring_key, make_logins, tree_digests, webkit
+from support import NOW_MS, ImportFixture, aes_cbc, basic_key, bookmark, folder, keyring_key, make_logins, tree_digests, webkit
 
 
 def v11(value, key=None):
@@ -49,6 +49,9 @@ def snss_commands():
         (6, pickle(struct.pack('<ii', 13, 0), p_string('https://popup.example/'), p_string16('Popup'))),
         (255, b''),
     ]
+
+
+TOKEN = '0123456789abcdef0123456789abcdef'
 
 
 def snss_v3():
@@ -229,6 +232,44 @@ class CookieAndAutofillTests(ImportFixture):
         self.assertEqual(sorted(c['number'] for c in autofill['cards']), ['4111111111111111', '5555555555554444'])
         self.assertEqual(autofill['addresses'][0], {'name': 'Ada Lovelace', 'organization': 'Engines Ltd', 'street': '12 Analytical St', 'city': 'London',
                                                     'postalCode': 'N1', 'country': 'GB', 'phone': '+44 20 0000', 'email': 'ada@example.com'})
+
+    def plain_cookies(self, default, values):
+        network = default / 'Network'
+        network.mkdir()
+        db = sqlite3.connect(network / 'Cookies')
+        db.execute('CREATE TABLE meta(key LONGVARCHAR NOT NULL UNIQUE PRIMARY KEY, value LONGVARCHAR)')
+        db.execute("INSERT INTO meta VALUES ('version', '24')")
+        db.execute('CREATE TABLE cookies(creation_utc INTEGER NOT NULL, host_key TEXT NOT NULL, top_frame_site_key TEXT NOT NULL, name TEXT NOT NULL, value TEXT NOT NULL, encrypted_value BLOB NOT NULL, path TEXT NOT NULL, expires_utc INTEGER NOT NULL, is_secure INTEGER NOT NULL, is_httponly INTEGER NOT NULL, last_access_utc INTEGER NOT NULL, has_expires INTEGER NOT NULL, is_persistent INTEGER NOT NULL, priority INTEGER NOT NULL, samesite INTEGER NOT NULL, source_scheme INTEGER NOT NULL, source_port INTEGER NOT NULL, last_update_utc INTEGER NOT NULL, source_type INTEGER NOT NULL, has_cross_site_ancestor INTEGER NOT NULL)')
+        db.executemany('INSERT INTO cookies VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                       [(webkit(1600000000000), f'c{i}.example', '', f'c{i}', value, b'', '/', 0, 0, 0, webkit(1650000000000), 0, 0, 1, -1, 2, 443, webkit(1650000000000), 0, 0)
+                        for i, value in enumerate(values)])
+        db.commit()
+        db.close()
+
+    def tabs_and_bookmarks(self, cookie_values):
+        default = self.chrome_profile('Default')
+        (default / 'Sessions').mkdir()
+        (default / 'Sessions' / 'Session_13300000000000000').write_bytes(snss_v3())
+        (default / 'Bookmarks').write_text(json.dumps({'roots': {
+            'bookmark_bar': folder('Bar', [bookmark('Remote work', 'https://remote.example/'), bookmark(TOKEN, 'https://token.example/')]),
+            'synced': folder('Mobile', [bookmark('Phone', 'https://phone.example/')]),
+        }}))
+        self.plain_cookies(default, cookie_values)
+        return self.read('chrome', 'Default', ['tabs', 'bookmarks', 'cookies'])
+
+    def test_short_cookie_values_that_match_field_names_or_kinds_do_not_withhold_the_import(self):
+        out = self.tabs_and_bookmarks(['active', 'pinned', 'folder', 'mobile', 'toolbar', 'Tab A', 'Remote work', 'https://tab-a.example/'])
+        self.assertEqual(sorted(c['value'] for c in out['cookies']), ['Remote work', 'Tab A', 'active', 'folder', 'https://tab-a.example/', 'mobile', 'pinned', 'toolbar'])
+        self.assertEqual([t['url'] for t in out['result']['tabs']], ['https://tab-a.example/', 'https://tab-b.example/'])
+        serialized = json.dumps(out['result'])
+        for collision in ['"active"', '"pinned"', '"folder"', '"mobile"', '"toolbar"', '"Tab A"', '"Remote work"', '"https://tab-a.example/"']:
+            self.assertIn(collision, serialized)
+        self.assertFalse(out['withheld'])
+
+    def test_a_token_length_cookie_value_found_in_the_result_still_withholds_it(self):
+        out = self.tabs_and_bookmarks([TOKEN])
+        self.assertIn(f'"{TOKEN}"', json.dumps(out['result']))
+        self.assertTrue(out['withheld'])
 
 if __name__ == '__main__':
     unittest.main()

@@ -2,10 +2,11 @@
 #import "ArdiaEarlyWindow.h"
 #import "ArdiaServices.h"
 #import "ArdiaNavigationDownloads.h"
-#import "ArdiaProtectedVideo.h"
+#import "ArdiaRuntime.h"
 #import "ArdiaStartup.h"
 #import "ArdiaTabParking.h"
 #import "ArdiaWebViewInternal.h"
+#import "ArdiaPictureInPicture.h"
 
 #import <Security/Security.h>
 #import <objc/runtime.h>
@@ -18,6 +19,18 @@
 
 using namespace ardia_host;
 
+static void EndFailedPageDragsAtMouseUp() {
+  const SEL begin = @selector(beginDraggingSessionWithItems:event:source:);
+  const bool installed = ardia_runtime::ReplaceMethod(NSClassFromString(@"WebContentsViewCocoa"), begin, ^id(IMP original) {
+    return ^NSDraggingSession *(NSView *view, NSArray<NSDraggingItem *> *items, NSEvent *event, id<NSDraggingSource> source) {
+      NSDraggingSession *session = ((NSDraggingSession * (*)(NSView *, SEL, NSArray<NSDraggingItem *> *, NSEvent *, id<NSDraggingSource>))original)(view, begin, items, event, source);
+      session.animatesToStartingPositionsOnCancelOrFail = NO;
+      return session;
+    };
+  });
+  if (!installed) NSLog(@"[ardiacore] page drag session override not installed: WebContentsViewCocoa has no %@", NSStringFromSelector(begin));
+}
+
 @implementation ArdiaHostEngineDelegate
 
 - (void)engineDidStart {
@@ -26,12 +39,13 @@ using namespace ardia_host;
   ArdiaLaunchSequence.shared.engineRunning = YES;
   WatchReservedShortcuts();
   ardia_host::InstallActivationGuardsLate();
+  EndFailedPageDragsAtMouseUp();
+  ardia_pip::ForgetSavedSize();
   if (gScratchDataDir && ardia_host::Background())
     ardia_host::InstallTestCrashGuard([gDataDirectory stringByDeletingLastPathComponent]);
   ArdiaCoreEngine *engine = ArdiaCoreEngine.sharedEngine;
   if (ArdiaCoreProfile *profile = ardia_host::PersonalIfLoaded(engine)) Profiles()[@""] = profile;
   ardia_host::LoadContentBlocker(@"");
-  [ArdiaProtectedVideo loadIntoProfile:Profiles()[@""]];
   [ArdiaWebView installScrollZoom];
   [ArdiaWebView installSwitchPrewarm];
   [ArdiaWebView removeSharedImages];
@@ -40,7 +54,10 @@ using namespace ardia_host;
   NSBundle *bundle = [NSBundle bundleForClass:ArdiaHostEngineDelegate.class];
   NSString *path = [bundle pathForResource:@"page_script" ofType:@"js"];
   NSString *script = path ? [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:nil] : nil;
-  if (script) engine.pageScript = [ArdiaProtectedVideo pageScriptFrom:script];
+  NSString *metricsPath = [bundle pathForResource:@"page_metrics" ofType:@"js"];
+  NSString *metrics = metricsPath ? [NSString stringWithContentsOfFile:metricsPath encoding:NSUTF8StringEncoding error:nil] : nil;
+  if (script && metrics) script = ardia_host::WithPageMetrics(script, metrics);
+  if (script) engine.pageScript = script;
   [ArdiaLaunchSequence.shared reach:ArdiaLaunchEngineStarted];
 
   CFRunLoopObserverRef idle = CFRunLoopObserverCreateWithHandler(
@@ -102,6 +119,7 @@ using namespace ardia_host;
 
 - (void)engineQuitCancelled {
   NSLog(@"[ardiacore] quit cancelled");
+  [NSNotificationCenter.defaultCenter postNotificationName:@"ArdiaHostQuitCancelled" object:nil];
   if (ArdiaHost.quitCancelledHandler) ArdiaHost.quitCancelledHandler();
 }
 

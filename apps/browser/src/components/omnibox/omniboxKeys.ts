@@ -30,7 +30,7 @@ export const barKeyDownEvents = (scopeAsksForBackspace: boolean, removable: bool
 
 export type BarKeyEvent = { nativeEvent: { key: string; metaKey?: boolean; altKey?: boolean; shiftKey?: boolean; ctrlKey?: boolean } };
 
-export type BarKeyContext = {
+type BarKeyContext = {
   bar: ReturnType<typeof useBarText>;
   hero: boolean;
   shownCompletion: string;
@@ -44,6 +44,8 @@ export type BarKeyContext = {
   onDone?(reason?: BarDismissal): void;
   reset(): void;
   removeRow(url: string): void;
+  rowsHeld: boolean;
+  releaseRows(): void;
   forceSearch(): void;
   go(url: string, disposition?: Disposition): void;
   choose(s: Suggestion | undefined, disposition?: Disposition, byEnter?: boolean): void;
@@ -54,9 +56,10 @@ export function barKeyDown(e: BarKeyEvent, k: BarKeyContext) {
   const { bar, items, selectedIndex, current } = k;
   const { scope, typed } = bar;
   const select = (index: number) => bar.dispatch({ kind: "selected", index });
+  const navigate = (index: number) => (k.rowsHeld ? k.releaseRows() : select(index));
   const move = (delta: 1 | -1) => {
     const n = items.length;
-    select(!n ? 0 : (selectedIndex + delta + n) % n);
+    navigate(!n ? 0 : (selectedIndex + delta + n) % n);
   };
   k.cancelBang();
   if (key === "Escape") {
@@ -68,8 +71,8 @@ export function barKeyDown(e: BarKeyEvent, k: BarKeyContext) {
   }
   if (key === "ArrowDown" || (ctrlKey && key === "n")) return move(1);
   if (key === "ArrowUp" || (ctrlKey && key === "p")) return move(-1);
-  if (key === "PageUp") return select(0);
-  if (key === "PageDown") return select(Math.max(0, items.length - 1));
+  if (key === "PageUp") return navigate(0);
+  if (key === "PageDown") return navigate(Math.max(0, items.length - 1));
   if (key === "Delete" && shiftKey) return isRemovable(current) ? k.removeRow(current.url) : undefined;
   if ((key === "Tab" && !ctrlKey) || key === "Backspace") {
     const action = siteSearchKey(key, { shiftKey, altKey, metaKey, ctrlKey }, { typed, completion: k.shownCompletion, scope, offered: k.tabScope, scopeFrom: bar.scopeFrom });

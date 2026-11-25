@@ -1,6 +1,6 @@
 # Linux acceptance suite
 
-`apps/linux/scripts/acceptance` runs headless acceptance scenarios against a packaged Linux Ardia. Each scenario
+`apps/desktop/scripts/acceptance` runs headless acceptance scenarios against a packaged Linux Ardia. Each scenario
 launches Ardia with throwaway profiles and checks a feature through the shell, the page and CDP. The suite prints one
 result per scenario as JSON:
 
@@ -13,8 +13,8 @@ No scenario runs in CI. The package job runs `scripts/linux/smoke.mjs` only (see
 ## Running it
 
 ```sh
-pnpm --filter @ardia/linux build
-pnpm --filter @ardia/linux acceptance -- <path to the packaged ardia executable> [apps/linux/dist]
+pnpm --filter @ardia/desktop build
+pnpm --filter @ardia/desktop acceptance -- <path to the packaged ardia executable> [apps/desktop/dist/linux]
 ```
 
 - **UI directory.** The second argument is optional. When given, the UI is loaded from it (`--ardia-ui-dir`);
@@ -32,7 +32,7 @@ Results go to stdout and to `<results>/results.json`. Each scenario writes its c
 `<results>/<id>/`. A failing scenario keeps its scratch profiles, including the browser log and `*-command.json` with
 the exact command line.
 
-`pnpm --filter @ardia/linux acceptance:self-test` tests the harness without an Ardia build: the CDP client against a
+`pnpm --filter @ardia/desktop acceptance:self-test` tests the harness without an Ardia build: the CDP client against a
 mock peer, the launch plumbing and shell driver against a mock host, the runner and its report, the classifiers, the
 fixture servers and certificates, and `scripts/linux/smoke.mjs`. When `/usr/bin/chromium` (or
 `ARDIA_ACCEPTANCE_CHROMIUM`) is installed, it also checks SPKI trust, resolver mapping, gated downloads, synthesized
@@ -65,11 +65,15 @@ Requirements: `openssl` and Node 22 or newer (for the built-in WebSocket client)
 | F02 | #12 | Isolated and shared-data profiles, private windows |
 | F03 | #13 | Site panel connection security for HTTPS, HTTP, mixed, bad-certificate and internal pages |
 | F23 | #33 | History jumps of two or more, zoom feedback, reset and per-site persistence |
-| F08 | #18 | Download events, controls, settings and restart |
+| F08 | #18 | Download events, controls, settings and restart; real presses inside and outside the downloads panel (#2155) |
 | F09 | #19 | Extension management, toolbar action, popup and side panel, with `fixtures/extension/` |
 | F10 | #20 | Online search suggestions through the native host, only when enabled, and never from a private window |
 | F26 | #36 | Unsupported platform settings are hidden and startup has no backend rejections |
 | F27 | #37 | Onboarding starts once on a fresh profile and app services run once per launch |
+| F29 | #2391 | New Tab page and command bar disappear on the first frame after sidebar and Ctrl+Tab switches |
+| F30 | #2736 | Peeking the hidden sidebar never hides the page under it |
+| F31 | #3285, #3630 | Opening the hidden toolbar (a hover peek, the reveal a scroll up makes, a click on the strip, a peek revealed and collapsed again at once) and folding it away never hides the page, never lets it protrude past the card bottom or drop its bottom corners, and clips `contentRect` without per-frame page resizes when `tab.viewportClip` is advertised |
+| F28 | #2341 | Sidebar rows and Top Apps tiles reorder by drag in a space the window switched to, not only the one it opened in |
 
 Each scenario's report lists its manual steps, such as touchpad pinch zoom, Web Store installs, popup placement and
 onboarding by hand.

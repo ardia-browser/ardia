@@ -40,6 +40,7 @@
 #include "ardia/core/ac_autofill_trigger.h"
 #include "ardia/core/ac_browser.h"
 #include "ardia/core/ac_content_hooks.h"
+#include "ardia/core/ac_discard_veto.h"
 #include "ardia/core/ac_extension_view.h"
 #include "ardia/core/ac_page_channel.h"
 #include "ardia/core/ac_password_prompt.h"
@@ -182,7 +183,17 @@ using ardiacore::NS;
   namespace policies = performance_manager::policies;
   using performance_manager::PerformanceManager;
   NSArray<NSNumber*>* unavailable = @[ @-1 ];
-  if (!_contents || !PerformanceManager::IsAvailable()) {
+  if (!_contents) {
+    return unavailable;
+  }
+  if (_contents->WasDiscarded()) {
+    return @[];
+  }
+  NSMutableArray<NSNumber*>* vetoes = [NSMutableArray array];
+  for (ardiacore::DiscardVeto veto : ardiacore::DiscardVetoesFor(_contents)) {
+    [vetoes addObject:@(static_cast<int>(veto))];
+  }
+  if (!PerformanceManager::IsAvailable()) {
     return unavailable;
   }
   base::WeakPtr<performance_manager::PageNode> page =
@@ -199,10 +210,14 @@ using ardiacore::NS;
   const auto reason =
       policies::DiscardEligibilityPolicy::DiscardReason::PROACTIVE;
   std::vector<policies::CannotDiscardReason> kept_by;
-  if (eligibility->CanDiscardWithCustomRecentVisibilityWindow(
-          page.get(), reason, base::Seconds(seconds), &kept_by) !=
-      policies::CanDiscardResult::kEligible) {
-    NSMutableArray<NSNumber*>* codes = [NSMutableArray array];
+  policies::CanDiscardResult eligible;
+  {
+    ardiacore::ScopedDiscardVetoBypass chrome_reasons_only;
+    eligible = eligibility->CanDiscardWithCustomRecentVisibilityWindow(
+        page.get(), reason, base::Seconds(seconds), &kept_by);
+  }
+  if (eligible != policies::CanDiscardResult::kEligible || vetoes.count) {
+    NSMutableArray<NSNumber*>* codes = vetoes;
     for (policies::CannotDiscardReason kept : kept_by) {
       [codes addObject:@(static_cast<int>(kept))];
     }

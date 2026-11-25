@@ -3,7 +3,7 @@ import type { ComponentType } from "react";
 import type { ViewProps } from "react-native";
 import type { MeadowProps, MeadowTone } from "./index";
 
-type NativeMeadowProps = ViewProps & { night: boolean; onTone?: (event: { nativeEvent: MeadowTone }) => void };
+type NativeMeadowProps = ViewProps & { night: boolean; creeper?: boolean; onTone?: (event: { nativeEvent: MeadowTone }) => void; onReady?: () => void; onBoom?: () => void };
 
 let NativeMeadow: ComponentType<NativeMeadowProps> | null = null;
 

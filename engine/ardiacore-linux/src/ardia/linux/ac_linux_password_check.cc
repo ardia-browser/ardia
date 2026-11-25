@@ -21,13 +21,6 @@ namespace {
 
 constexpr std::array<int64_t, 6> kRetryDelaysMs = {0, 0, 2000, 5000, 30000, 60000};
 
-void WipeBytes(void* data, size_t size) {
-  volatile unsigned char* bytes = static_cast<volatile unsigned char*>(data);
-  for (size_t i = 0; i < size; ++i) {
-    bytes[i] = 0;
-  }
-}
-
 bool WriteAll(int fd, const char* data, size_t size) {
   while (size > 0) {
     const ssize_t written = send(fd, data, size, MSG_NOSIGNAL);
@@ -114,22 +107,9 @@ std::optional<std::string> UnusablePassword(std::string_view password) {
   return std::nullopt;
 }
 
-void Wipe(std::string& secret) {
-  if (!secret.empty()) {
-    WipeBytes(secret.data(), secret.size());
-  }
-  secret.clear();
-}
-
-Verdict RunHelper(const std::string& helper, const std::string& user, std::string& password, int deadline_ms) {
-  std::string secret;
-  secret.reserve(password.size() + 1);
-  secret.append(password);
-  secret.push_back('\0');
-  Wipe(password);
+Verdict RunHelper(const std::string& helper, const std::string& user, std::string_view password, int deadline_ms) {
   int ends[2];
   if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, ends) != 0) {
-    Wipe(secret);
     return Verdict::kFailed;
   }
   const int nowhere = open("/dev/null", O_RDWR | O_CLOEXEC);
@@ -154,11 +134,12 @@ Verdict RunHelper(const std::string& helper, const std::string& user, std::strin
   }
   if (spawned != 0) {
     close(ends[1]);
-    Wipe(secret);
     return Verdict::kFailed;
   }
-  WriteAll(ends[1], secret.data(), secret.size());
-  Wipe(secret);
+  constexpr char kTerminator = '\0';
+  if (WriteAll(ends[1], password.data(), password.size())) {
+    WriteAll(ends[1], &kTerminator, 1);
+  }
   shutdown(ends[1], SHUT_WR);
   close(ends[1]);
   int status = 0;

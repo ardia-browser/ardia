@@ -13,4 +13,9 @@ if [ -e /etc/apparmor.d/abi/4.0 ] && [ -f /usr/share/ardia/apparmor/ardia ]; the
 fi
 if command -v update-desktop-database >/dev/null 2>&1; then update-desktop-database -q /usr/share/applications || true; fi
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true; fi
+if [ "$1" = configure ] || [ "$1" = abort-remove ] || [ "$1" = abort-deconfigure ] || [ "$1" = abort-upgrade ]; then
+  for name in x-www-browser gnome-www-browser; do
+    update-alternatives --install "/usr/bin/$name" "$name" /usr/bin/ardia 100
+  done
+fi
 exit 0

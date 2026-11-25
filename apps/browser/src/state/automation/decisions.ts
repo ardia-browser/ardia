@@ -1,9 +1,10 @@
+import { consentToken } from "../telemetry/client";
 import { isFields } from "../../lib/decode";
 import { minimizedUrl, originOf as urlOrigin, urlParts } from "../../lib/urlParts";
 import { anyMatches, matchesUrl } from "../../lib/matchPattern";
 import { sourceMatches, type LinkSource as SourceInfo } from "../../lib/linkSource";
 import { airTrafficFallback, airTrafficRule, type AirTrafficRule, type AirTrafficTarget, type OpenAs } from "../airTraffic/rules";
-import { currentAirTraffic, profileUsable } from "../airTraffic/store";
+import { currentAirTraffic, targetUsableNow } from "../airTraffic/store";
 import { noteAirTrafficLink } from "../telemetry/airTrafficCounts";
 import { isIncognitoProfile } from "../browser/model";
 import { useBrowser } from "../browser/store";
@@ -36,7 +37,7 @@ function decidingHook<A>(event: DecideEvent, plan: Plan<A>): Deciding<A> | null 
 function askHook<A>(hook: HookSpec, event: DecideEvent, data: Record<string, unknown>, plan: Plan<A>, signal?: AbortSignal): Promise<A | null> | null {
   if (servingConnection(hook) === null) return null;
   const sent = hook.fullUrls || typeof data.url !== "string" ? data : { ...data, url: minimizedUrl(data.url) };
-  return requestDecision(hook, event, sent, DECIDE_DEADLINE_MS[event], signal).then(
+  return requestDecision(hook, event, sent, DECIDE_DEADLINE_MS[event], signal, consentToken()).then(
     (answer) => (answer === undefined || answer === null ? null : plan.answer(answer)),
     () => null,
   );
@@ -93,9 +94,9 @@ export function traceOpening(url: string): OpeningTrace {
   return { by: "none" };
 }
 
-export type LinkSource = SourceInfo;
+type LinkSource = SourceInfo;
 export type LinkVerdict = { drop: true } | LinkRoute;
-type LinkRoute = { profileId: string | null; open: OpenAs | null; windowId: string | null };
+type LinkRoute = { profileId: string | null; open: OpenAs | null; windowId: string | null; groupKey: string | null };
 
 const fromApplies = (hook: HookSpec, source: LinkSource) => sourceMatches(hook.from, source);
 
@@ -115,7 +116,7 @@ function routeOf(profile: unknown, open: unknown, window: unknown): LinkVerdict 
   const s = useBrowser.getState();
   const windowId = typeof window === "string" && eligibleKind(s, window) === "normal" ? window : null;
   if (window !== undefined && !windowId) return null;
-  return { profileId, open: (open as OpenAs | undefined) ?? null, windowId };
+  return { profileId, open: (open as OpenAs | undefined) ?? null, windowId, groupKey: null };
 }
 
 const linkData = (url: string, source: LinkSource) => ({ url, source: source ?? { bundleId: null, appName: null } });
@@ -137,15 +138,15 @@ export type LinkTrace =
   | { by: "program"; hook: HookSpec; otherwise: LinkSettled }
   | LinkSettled;
 
-const routeTo = (target: AirTrafficTarget): LinkRoute => ({ profileId: target.profileId, open: target.open, windowId: null });
+const routeTo = (target: AirTrafficTarget): LinkRoute => ({ profileId: target.profileId, open: target.open, windowId: null, groupKey: target.groupKey ?? null });
 
 function settledLink(): LinkSettled {
-  const fallback = airTrafficFallback(currentAirTraffic(), profileUsable);
+  const fallback = airTrafficFallback(currentAirTraffic(), targetUsableNow);
   return fallback ? { by: "fallback", verdict: routeTo(fallback.target) } : { by: "usual" };
 }
 
 export function traceLink(url: string, source: LinkSource): LinkTrace {
-  const ruled = airTrafficRule(currentAirTraffic(), url, source, profileUsable);
+  const ruled = airTrafficRule(currentAirTraffic(), url, source, targetUsableNow);
   if (ruled?.by === "rule") return { by: "rule", rule: ruled.rule, index: ruled.index, verdict: routeTo(ruled.target) };
   const found = decidingHook("link.opening", linkPlan(url, source));
   if (found && "program" in found) return { by: "program", hook: found.hook, otherwise: settledLink() };
@@ -183,12 +184,12 @@ export function decidePermission(request: { tabId: string | null; origin: string
   return verdict ?? "ask";
 }
 
-export function downloadFolderAllowed(folder: string, approvedFolders: readonly string[]): boolean {
+function downloadFolderAllowed(folder: string, approvedFolders: readonly string[]): boolean {
   if (!folder.startsWith("~/") || folder.split("/").some((part) => part === ".." || part === "." || part === "")) return false;
   return isInsideDownloads(folder) || approvedFolders.some((f) => folder === f || folder.startsWith(`${f}/`));
 }
 
-export type FinishedDownload = { url: string; filename: string; mimeType: string; size: number; path: string; profile: string | null };
+type FinishedDownload = { url: string; filename: string; mimeType: string; size: number; path: string; profile: string | null };
 
 const originOf = (url: string) => {
   const parts = urlParts(url);

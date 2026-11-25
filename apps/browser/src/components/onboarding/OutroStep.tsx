@@ -26,12 +26,11 @@ export function OutroStep() {
       subtitle="Everything you set up is saved. Change any of it later in Settings."
       actions={
         <>
-          <StepActions icon="arrow.right" continueTitle={redo ? "Done" : "Get Started"} onContinue={() => finishOnboarding()} />
+          <StepActions icon="arrow.right" continueTitle={redo ? "Done" : "Get Started"} onContinue={() => finishOnboarding()} holdScroll />
           {redo ? null : <SecondaryButton title="Take the Tour" onPress={() => finishOnboarding({ tour: true })} />}
         </>
       }
       preview={<Postcard lines={lines} />}
-      previewOptional
     >
       <View style={{ gap: space.ml }}>
         {SHORTCUTS.map(([keys, label]) => (

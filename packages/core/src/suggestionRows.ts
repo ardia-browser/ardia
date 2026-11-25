@@ -1,8 +1,10 @@
 import type { Candidate } from "./candidatePool.ts";
-import { pageKey } from "./pageText.ts";
+import { documentKey, pageKey, routeOf, withRootSlash } from "./pageText.ts";
 import type { CommandAction, Suggestion } from "./suggestion.ts";
 
-export const pageSuggestion = (c: Candidate, tabId: string | null | undefined = c.tabId): Suggestion => ({
+export type PageRow = Pick<Candidate, "url" | "title" | "favicon" | "visits" | "bookmarked" | "tabId">;
+
+export const pageSuggestion = (c: PageRow, tabId: string | null | undefined = c.tabId): Suggestion => ({
   kind: "page",
   url: c.url,
   title: c.title,
@@ -15,7 +17,7 @@ export const pageSuggestion = (c: Candidate, tabId: string | null | undefined = 
 export function suggestionKey(s: Suggestion): string {
   switch (s.kind) {
     case "page":
-      return `${s.tabId ? "tab" : "page"}:${pageKey(s.url)}`;
+      return s.tabId ? `tab:${pageKey(s.url)}` : `page:${withRootSlash(s.url)}`;
     case "search":
       return `search:${s.url}`;
     case "calc":
@@ -29,6 +31,20 @@ export function suggestionKey(s: Suggestion): string {
     case "provider":
       return `provider:${s.providerId}:${pageKey(s.url)}`;
   }
+}
+
+export function listsRoutesApart(items: readonly Suggestion[]): boolean {
+  const routes = new Map<string, string>();
+  for (const s of items) {
+    if (s.kind !== "page") continue;
+    const route = routeOf(s.url);
+    if (!route) continue;
+    const document = documentKey(s.url);
+    const seen = routes.get(document);
+    if (seen === undefined) routes.set(document, route);
+    else if (seen !== route) return true;
+  }
+  return false;
 }
 
 export class Output {

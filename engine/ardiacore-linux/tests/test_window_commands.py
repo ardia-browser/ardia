@@ -6,7 +6,9 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 LINUX = SOURCE / 'ardia/linux'
+DESKTOP = LINUX.parents[3] / 'ardiacore-desktop' / 'src' / 'ardia' / 'desktop'
 REPO = ROOT.parents[1]
 
 
@@ -15,7 +17,7 @@ class WindowCommandsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='ardia-window-commands-') as directory:
             binary = Path(directory) / 'window-commands'
             subprocess.run([os.environ.get('CXX', 'c++'), '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g',
-                            '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-I', str(SOURCE),
+                            '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE),
                             str(ROOT / 'tests/window_commands_test.cc'), '-o', str(binary)],
                            check=True, text=True, timeout=180)
             result = subprocess.run([str(binary)], text=True, timeout=60, capture_output=True,
@@ -25,7 +27,7 @@ class WindowCommandsTests(unittest.TestCase):
 
     def test_the_edit_names_are_the_macs_standard_selectors(self):
         catalog = (REPO / 'apps/browser/src/state/commands/commandCatalog.ts').read_text()
-        core = (LINUX / 'ac_linux_window_commands.h').read_text()
+        core = (DESKTOP / 'ac_desktop_window_commands.h').read_text()
         for name in ('undo', 'redo', 'cut', 'copy', 'paste', 'pasteAndMatchStyle', 'selectAll'):
             self.assertIn(f'"std:{name}:"', catalog)
             self.assertIn(f'{{"{name}", EditAction::', core)
@@ -35,7 +37,7 @@ class WindowCommandsTests(unittest.TestCase):
         host = (LINUX / 'ac_linux_host.cc').read_text()
         command = host[host.index('void ShellHostView::TabCommand('):]
         claimed = command.index('TabBinding* binding = ClaimedBinding(args);')
-        edit = command.index('} else if (command == ardia::linux_commands::kEditCommand) {')
+        edit = command.index('} else if (command == ardia::desktop_commands::kEditCommand) {')
         self.assertLess(claimed, edit)
         body = command[edit:command.index('} else if (command == "resolveUnresponsive") {')]
         self.assertLess(body.index('if (!action) return std::move(done).Run(false,'), body.index('switch (*action)'))
@@ -46,9 +48,9 @@ class WindowCommandsTests(unittest.TestCase):
     def test_full_screen_toggles_a_browser_window_the_caller_reaches_and_answers_the_new_state(self):
         host = (LINUX / 'ac_linux_host.cc').read_text()
         route = host[host.index('if (method == "ArdiaShell.windowFrame" || method == "ArdiaShell.closeWindow" ||'):]
-        self.assertLess(route.index('method == ardia::linux_commands::kToggleFullScreenCall ||'), route.index('ShellHostView* target = nullptr;'))
-        self.assertLess(route.index(': Reaches(host))) target = host;'), route.index('} else if (method == ardia::linux_commands::kToggleFullScreenCall) {'))
-        body = route[route.index('} else if (method == ardia::linux_commands::kToggleFullScreenCall) {'):]
+        self.assertLess(route.index('method == ardia::desktop_commands::kToggleFullScreenCall ||'), route.index('ShellHostView* target = nullptr;'))
+        self.assertLess(route.index(': Reaches(host))) target = host;'), route.index('} else if (method == ardia::desktop_commands::kToggleFullScreenCall) {'))
+        body = route[route.index('} else if (method == ardia::desktop_commands::kToggleFullScreenCall) {'):]
         body = body[:body.index('} else if (method == "ArdiaShell.focusWindow") {')]
         self.assertIn('target->is_utility() ? nullptr : ExclusiveAccessManager::From(target->browser())', body)
         self.assertLess(body.index('if (!widget || !access) return std::move(done).Run(false,'), body.index('ToggleBrowserFullscreenMode(true)'))
@@ -57,18 +59,18 @@ class WindowCommandsTests(unittest.TestCase):
 
     def test_the_host_advertises_both(self):
         host = (LINUX / 'ac_linux_host.cc').read_text()
-        self.assertIn('for (const char* capability : ardia::linux_commands::kWindowCommandCapabilities) capabilities.Append(capability);', host)
-        core = (LINUX / 'ac_linux_window_commands.h').read_text()
+        self.assertIn('for (const char* capability : ardia::desktop_commands::kWindowCommandCapabilities) capabilities.Append(capability);', host)
+        core = (DESKTOP / 'ac_desktop_window_commands.h').read_text()
         self.assertIn('kToggleFullScreenCall[] = "ArdiaShell.toggleFullScreen"', core)
         self.assertIn('kEditCapability[] = "tab.edit"', core)
         self.assertIn('kReadTextCall[] = "ArdiaShell.readText"', core)
         self.assertIn('kWindowCommandCapabilities[] = {"ArdiaShell.toggleFullScreen", "tab.edit",\n'
                       '                                                             "ArdiaShell.readText"}', core)
-        self.assertIn('"ac_linux_window_commands.h"', (LINUX / 'BUILD.gn').read_text())
+        self.assertIn('"ac_desktop_window_commands.h"', (DESKTOP / 'BUILD.gn').read_text())
 
     def test_read_text_answers_the_copy_paste_clipboard_as_plain_text_and_takes_no_arguments(self):
         host = (LINUX / 'ac_linux_host.cc').read_text()
-        body = host[host.index('if (method == ardia::linux_commands::kReadTextCall) {'):]
+        body = host[host.index('if (method == ardia::desktop_commands::kReadTextCall) {'):]
         body = body[:body.index('if (method == "ArdiaShell.copyText") {')]
         self.assertLess(body.index('takes no arguments'), body.index('ReadText('))
         self.assertIn('clipboard->ReadText(ui::ClipboardBuffer::kCopyPaste,', body)

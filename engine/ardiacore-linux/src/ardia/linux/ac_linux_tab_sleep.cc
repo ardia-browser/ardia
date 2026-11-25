@@ -36,7 +36,9 @@ std::optional<double> ParseLinuxSleepSeconds(const base::ListValue& args) {
 base::ListValue SleepLinuxTabIfHidden(content::WebContents* contents, double seconds) {
   namespace policies = performance_manager::policies;
   using performance_manager::PerformanceManager;
-  if (!contents || !PerformanceManager::IsAvailable()) return Unavailable();
+  if (!contents) return Unavailable();
+  if (contents->WasDiscarded()) return base::ListValue();
+  if (!PerformanceManager::IsAvailable()) return Unavailable();
   base::WeakPtr<performance_manager::PageNode> page = PerformanceManager::GetPrimaryPageNodeForWebContents(contents);
   if (!page) return Unavailable();
   performance_manager::Graph* graph = page->GetGraph();

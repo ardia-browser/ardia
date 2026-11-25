@@ -8,11 +8,12 @@ import { tmpdir } from "node:os";
 import { inflateSync } from "node:zlib";
 import { basename, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { SHELL_PREFIX, closeAllApps, killAllAppsNow, launchArdia, launchArguments, launchEnvironment } from "../../apps/linux/scripts/acceptance/lib/ardia.mjs";
-import { connectCdp, evaluate } from "../../apps/linux/scripts/acceptance/lib/cdp.mjs";
-import { errorText, js, nonce, until, withDeadline } from "../../apps/linux/scripts/acceptance/lib/util.mjs";
+import { SHELL_PREFIX, closeAllApps, killAllAppsNow, launchArdia, launchArguments, launchEnvironment } from "../../apps/desktop/scripts/acceptance/lib/ardia.mjs";
+import { connectCdp, evaluate } from "../../apps/desktop/scripts/acceptance/lib/cdp.mjs";
+import { errorText, js, nonce, until, withDeadline } from "../../apps/desktop/scripts/acceptance/lib/util.mjs";
+import { selfieKeys } from "./ubo-seed.mjs";
 
-export const USAGE = `Usage: node scripts/linux/smoke.mjs --package <Ardia-*linux-x64*.tar.xz|.deb|.AppImage> --results <dir> [--timeout-ms N] [--keep] [--allow-old-engine]
+export const USAGE = `Usage: node scripts/linux/smoke.mjs --package <Ardia-*linux-x64*.tar.xz|.deb|.rpm|.AppImage> --results <dir> [--timeout-ms N] [--keep] [--allow-old-engine]
 
 Strict smoke gate for a packaged Ardia Linux build. It extracts the tarball into
 a temporary folder, launches ardia/bin/ardia headless (ozone headless, SwiftShader,
@@ -24,15 +25,19 @@ ARDIA_BACKGROUND=1, a throwaway profile and HOME, the sandbox on) without
   bootstrap         the native bootstrap reports appBuild "linux-host"
   native-tab        a native tab loads a local HTTP fixture, visibly, without window.__ardiaHost
   sandbox           every renderer runs under seccomp-bpf in its own namespaces, no --no-sandbox
-  content-blocker   the packaged uBlock Origin and its Linux bridge are present and load, tuned to save its engine soon after launch
+  content-blocker   the packaged uBlock Origin and its Linux bridge are present and load, tuned to save its engine soon after launch,
+                    and seeded with its saved engine so a new profile filters from its first page
   restart-restore   after a clean quit and relaunch on the same profile the fixture tab is restored
   staged-install    install.sh --destdir stages the launcher, desktop entry, runtime and polkit policy,
                     and lib/ardia/VERSION and lib/ardia/cli when the package has them; for a .deb its
                     control file, maintainer scripts, setuid chrome-sandbox, policy and AppArmor profile;
+                    for an .rpm its header, root-owned files, setuid chrome-sandbox, scriptlets, AppArmor
+                    profile, a policy without the self-update action, since the package manager updates it,
+                    and no requirement on a library it bundles or on the Qt its shims load only where installed;
                     for an AppImage its type 2 header, AppRun and no setuid helper
   app-version       systemInfo.appVersion is lib/ardia/VERSION (skip: a package without VERSION)
   cli-install       the bundled installer installs the bundled CLI into a scratch home, ardia --version
-                    prints the package version, and a second install is a no-op (skip: no lib/ardia/cli)
+                    prints its own version (the CLI is versioned apart from the app), and a second install is a no-op (skip: no lib/ardia/cli)
   cli-control       in an instance driven over --remote-debugging-pipe (the token server never starts
                     with --remote-debugging-port), once settings.cliControl is on ardia windows works,
                     ardia browse opens the fixture in a background tab and reads its title, and
@@ -42,12 +47,20 @@ ARDIA_BACKGROUND=1, a throwaway profile and HOME, the sandbox on) without
                     loads a userscript that retitles the fixture page, ardia scripts list shows it as
                     reported, the fixture opens retitled, and after ardia scripts uninstall it opens
                     with its own title (skip: no lib/ardia/cli; old: no ArdiaUserScripts methods)
+  window-state      ArdiaShell.windowButtonLayout answers {layout: string|null, desktop: string},
+                    ArdiaShell.windowState for the shell's own window answers three booleans, and for
+                    an unknown window fails with "No such native window" (old: neither call advertised)
+  sync-core         ArdiaSync.core answers "rust", and ArdiaSync.enterPhrase runs the Rust core: a valid
+                    phrase for a folder that doesn't exist answers noData, a broken checksum answers
+                    checksum, and an unknown word answers unknownWord naming the word typed; nothing is
+                    saved (old: ArdiaSync.core not advertised)
 
 It writes <results>/results.json ({ok, package, started, assertions[]}) and the
 launch logs to <results>, prints a table, and exits 0 only when every check ran
 and passed or was skipped. A check whose feature the engine's host predates
 (appVersion is Chromium's version; no engine.setCliControl, ArdiaCli.install or
-ArdiaAutomation.start capability) reports "old": a failure, unless
+ArdiaAutomation.start capability; neither ArdiaShell.windowButtonLayout nor
+ArdiaShell.windowState; no ArdiaSync.core) reports "old": a failure, unless
 --allow-old-engine accepts it, as CI and release.sh do for an engine that isn't
 the commit's own.
 
@@ -59,18 +72,38 @@ the commit's own.
   -h, --help        show this help
 `;
 
-export const ASSERTIONS = ["ldd", "shell-ui", "bootstrap", "native-tab", "sandbox", "content-blocker", "restart-restore", "staged-install", "app-version", "cli-install", "cli-control", "cli-scripts"];
-export const FORBIDDEN_SWITCHES = ["--no-sandbox", "--disable-seccomp-filter-sandbox", "--disable-namespace-sandbox", "--disable-setuid-sandbox", "--disable-gpu-sandbox", "--no-zygote-sandbox", "--single-process", "--in-process-gpu"];
-export const TREE_FORBIDDEN_SWITCHES = ["--no-sandbox", "--disable-seccomp-filter-sandbox", "--disable-namespace-sandbox", "--disable-setuid-sandbox"];
-export const STAGED_FILES = [
+export const privateFolder = (path) => mkdir(path, { recursive: true, mode: 0o700 });
+export const ASSERTIONS = ["ldd", "shell-ui", "bootstrap", "native-tab", "sandbox", "content-blocker", "restart-restore", "staged-install", "app-version", "cli-install", "cli-control", "cli-scripts", "window-state", "sync-core"];
+const FORBIDDEN_SWITCHES = ["--no-sandbox", "--disable-seccomp-filter-sandbox", "--disable-namespace-sandbox", "--disable-setuid-sandbox", "--disable-gpu-sandbox", "--no-zygote-sandbox", "--single-process", "--in-process-gpu"];
+const TREE_FORBIDDEN_SWITCHES = ["--no-sandbox", "--disable-seccomp-filter-sandbox", "--disable-namespace-sandbox", "--disable-setuid-sandbox"];
+const STAGED_FILES = [
   { path: "usr/bin/ardia", mode: 0o755 },
   { path: "usr/share/applications/ardia.desktop", mode: 0o644 },
   { path: "usr/lib/ardia/chrome", mode: 0o755 },
   { path: "usr/lib/ardia/ardia-ui/index.html", mode: 0o644 },
   { path: "usr/share/polkit-1/actions/dev.ardia.linux.policy", mode: 0o644 },
 ];
-export const BLOCKER_FILES = ["manifest.json", "js/vapi.js", "js/vapi-common.js", "js/vapi-client.js"];
-export const UBO_TUNING = { selfieDelayInSeconds: 3, autoUpdateDelayAfterLaunch: 600 };
+const BLOCKER_FILES = ["manifest.json", "js/vapi.js", "js/vapi-common.js", "js/vapi-client.js"];
+const UBO_TUNING = { selfieDelayInSeconds: 3, autoUpdateDelayAfterLaunch: 600 };
+export const UBO_SEED = "ardia-seed/storage.json";
+
+export function uboSeedProblems(seedText, start, storageSource) {
+  const problems = [];
+  if (!start.includes("await ardiaSeedFromPackage();")) problems.push("js/start.js doesn't load the seed");
+  let storage = null;
+  try {
+    storage = JSON.parse(seedText ?? "").storage;
+  } catch {}
+  if (!storage || typeof storage !== "object") return [...problems, `no readable ${UBO_SEED}`];
+  if (typeof storage.version !== "string" || !storage.version) problems.push("the seed has no version");
+  if (!Array.isArray(storage.selectedFilterLists)) problems.push("the seed has no list selection");
+  try {
+    for (const key of selfieKeys(storageSource)) if (typeof storage[key] !== "string" || !storage[key]) problems.push(`the seed has no ${key}`);
+  } catch (error) {
+    problems.push(errorText(error));
+  }
+  return problems;
+}
 
 export function uboTuningProblems(background, tuning = UBO_TUNING) {
   return Object.entries(tuning).flatMap(([name, wanted]) => {
@@ -80,8 +113,10 @@ export function uboTuningProblems(background, tuning = UBO_TUNING) {
   });
 }
 export const VERSION_PATTERN = /^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$/;
-export const CLI_CONTROL_CAPABILITIES = ["engine.setCliControl", "ArdiaCli.install", "ArdiaAutomation.start"];
+const CLI_CONTROL_CAPABILITIES = ["engine.setCliControl", "ArdiaCli.install", "ArdiaAutomation.start"];
 export const USER_SCRIPTS_CAPABILITIES = ["ArdiaUserScripts.watch", "ArdiaUserScripts.read", "ArdiaUserScripts.readStatus", "ArdiaUserScripts.writeStatus"];
+export const WINDOW_STATE_CAPABILITIES = ["ArdiaShell.windowButtonLayout", "ArdiaShell.windowState"];
+export const UNKNOWN_WINDOW_ERROR = "No such native window";
 export const SCRIPT_NAME = "Ardia smoke script";
 export const SCRIPT_TITLE_PREFIX = "Scripted: ";
 
@@ -89,14 +124,16 @@ export function userScriptSource() {
   return ["// ==UserScript==", `// @name        ${SCRIPT_NAME}`, "// @version     1.0.0", "// @match       http://127.0.0.1/smoke/*", "// @run-at      document-end", "// @grant       none", "// ==/UserScript==", "", `document.title = ${JSON.stringify(SCRIPT_TITLE_PREFIX)} + document.title;`, ""].join("\n");
 }
 export const CLI_INSTALLER = "ardia-cli-install.sh";
-export const CLI_DIGEST = "ardia-cli.sha256";
+const CLI_DIGEST = "ardia-cli.sha256";
 export const cliTarball = (version) => `ardia-cli-${version}-linux-x64.tar.gz`;
+const CLI_VERSION_LINE = /^ardia [0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$/;
 const BRIDGE_DIR = new URL("../../engine/ardiacore-linux/content-blocker/", import.meta.url);
 const DEFAULT_TIMEOUT_MS = 300000;
 
 export function packageFormat(path) {
   if (/\.tar\.xz$/.test(path)) return "tar";
   if (/\.deb$/.test(path)) return "deb";
+  if (/\.rpm$/.test(path)) return "rpm";
   if (/\.AppImage$/.test(path)) return "appimage";
   return null;
 }
@@ -123,6 +160,38 @@ export function debLayoutProblems(listing, fields) {
   if (entries.has("./usr/lib/ardia/chrome-sandbox")) expect("./usr/lib/ardia/chrome-sandbox", (e) => e.mode === "-rwsr-xr-x", "is not setuid root 4755");
   if (fields.Package !== "ardia") problems.push(`the package is called ${fields.Package}, not ardia`);
   if (fields.Architecture !== "amd64") problems.push(`the architecture is ${fields.Architecture}, not amd64`);
+  return problems;
+}
+
+export function rpmLayoutProblems(listing, fields) {
+  const problems = [];
+  const entries = new Map(listing.split("\n").filter(Boolean).map((line) => {
+    const parts = line.trim().split(/\s+/);
+    const arrow = parts.indexOf("->");
+    return [arrow > 0 ? parts[arrow - 1] : parts.at(-1), { mode: parts[0], owner: `${parts[2]}/${parts[3]}`, target: arrow > 0 ? parts[arrow + 1] : null }];
+  }));
+  const expect = (path, check, message) => {
+    const entry = entries.get(path);
+    if (!entry) problems.push(`${path} is missing`);
+    else if (!check(entry)) problems.push(`${path} ${message} (${entry.mode} ${entry.owner})`);
+  };
+  for (const [path, entry] of entries) if (entry.owner !== "root/root") problems.push(`${path} is owned by ${entry.owner}, not root`);
+  expect("/usr/lib/ardia/chrome", (e) => e.mode === "-rwxr-xr-x", "is not 0755");
+  expect("/usr/lib/ardia/ardia-launch", (e) => e.mode === "-rwxr-xr-x", "is not 0755");
+  expect("/usr/lib/ardia/chrome-sandbox", (e) => e.mode === "-rwsr-xr-x", "is not setuid root 4755");
+  expect("/usr/bin/ardia", (e) => e.target === "../lib/ardia/ardia-launch", "is not a link to ../lib/ardia/ardia-launch");
+  expect("/usr/share/polkit-1/actions/dev.ardia.linux.policy", (e) => e.mode === "-rw-r--r--", "is not 0644");
+  expect("/usr/share/ardia/apparmor/ardia", (e) => e.mode === "-rw-r--r--", "is not 0644");
+  expect("/usr/share/applications/ardia.desktop", (e) => e.mode === "-rw-r--r--", "is not 0644");
+  expect("/usr/share/licenses/ardia/copyright", (e) => e.mode === "-rw-r--r--", "is not 0644");
+  if (fields.name !== "ardia") problems.push(`the package is called ${fields.name}, not ardia`);
+  if (fields.arch !== "x86_64") problems.push(`the architecture is ${fields.arch}, not x86_64`);
+  if (!/\/etc\/apparmor\.d\/ardia/.test(fields.scripts ?? "")) problems.push("the scriptlets never install the AppArmor profile");
+  const bundled = new Set(fields.bundled ?? []);
+  for (const requirement of (fields.requires ?? "").split("\n").map((line) => line.trim()).filter(Boolean)) {
+    const soname = requirement.split("(")[0];
+    if (/^libQt\d/.test(soname) || bundled.has(soname)) problems.push(`the .rpm requires ${requirement}, which Ardia bundles or loads only where it is installed`);
+  }
   return problems;
 }
 
@@ -263,6 +332,65 @@ export function appVersionVerdict(version, appVersion) {
   if (appVersion === version) return { status: "pass", message: `appVersion is ${version}` };
   if (typeof appVersion === "string" && /^\d+\.\d+\.\d+\.\d+$/.test(appVersion)) return { status: "old", message: `the host reports Chromium's version ${appVersion} as appVersion, not lib/ardia/VERSION ${version}: the engine predates lib/ardia/VERSION` };
   return { status: "fail", message: `appVersion is ${JSON.stringify(appVersion)}, not lib/ardia/VERSION ${version}` };
+}
+
+export function windowStateProblems(reply) {
+  const problems = [];
+  const layout = reply?.layout;
+  if (!layout || typeof layout !== "object" || Array.isArray(layout)) problems.push(`windowButtonLayout answered ${JSON.stringify(layout)}, not an object`);
+  else {
+    const keys = Object.keys(layout).sort().join(",");
+    if (keys !== "desktop,layout") problems.push(`windowButtonLayout has keys ${keys}, not desktop,layout`);
+    if (layout.layout !== null && typeof layout.layout !== "string") problems.push(`windowButtonLayout.layout is ${JSON.stringify(layout.layout)}, not a string or null`);
+    if (typeof layout.desktop !== "string") problems.push(`windowButtonLayout.desktop is ${JSON.stringify(layout.desktop)}, not a string`);
+  }
+  const state = reply?.state;
+  if (!state || typeof state !== "object" || Array.isArray(state)) problems.push(`windowState answered ${JSON.stringify(state)}, not an object`);
+  else {
+    const keys = Object.keys(state).sort().join(",");
+    if (keys !== "fullScreen,maximized,tiled") problems.push(`windowState has keys ${keys}, not fullScreen,maximized,tiled`);
+    for (const key of ["maximized", "tiled", "fullScreen"]) if (typeof state[key] !== "boolean") problems.push(`windowState.${key} is ${JSON.stringify(state[key])}, not a boolean`);
+  }
+  if (reply?.unknown !== UNKNOWN_WINDOW_ERROR) problems.push(`windowState for an unknown window answered ${JSON.stringify(reply?.unknown)}, not the error ${JSON.stringify(UNKNOWN_WINDOW_ERROR)}`);
+  return problems;
+}
+
+export const SYNC_CORE_ACCOUNT = "aaaaaaaaaaaaaaaaaaaaaaaaaa";
+export const SYNC_CORE_PHRASES = {
+  valid: [...Array(23).fill("abandon"), "art"].join(" "),
+  checksum: Array(24).fill("abandon").join(" "),
+  unknown: [...Array(22).fill("abandon"), "zzzz", "art"].join(" "),
+};
+
+export function syncCoreVerdict(capabilities) {
+  if (!Array.isArray(capabilities) || !capabilities.includes("ArdiaSync.core")) return { status: "old", message: "the host doesn't advertise ArdiaSync.core: the engine predates the Rust sync core on Linux" };
+  return { status: "pass", message: "the host advertises ArdiaSync.core" };
+}
+
+export function syncCoreProblems(reply) {
+  const problems = [];
+  if (reply?.core !== "rust") problems.push(`ArdiaSync.core answered ${JSON.stringify(reply?.core)}, not "rust"`);
+  const expect = (name, want) => {
+    const got = reply?.[name];
+    if (!got || typeof got !== "object" || Object.entries(want).some(([key, value]) => got[key] !== value)) problems.push(`enterPhrase with the ${name} phrase answered ${JSON.stringify(got)}, not ${JSON.stringify(want)}`);
+  };
+  expect("valid", { error: "noData" });
+  expect("checksum", { error: "checksum" });
+  expect("unknown", { error: "unknownWord", word: "zzzz" });
+  return problems;
+}
+
+export function windowStateSupport(capabilities) {
+  const list = Array.isArray(capabilities) ? capabilities : [];
+  return WINDOW_STATE_CAPABILITIES.filter((name) => list.includes(name));
+}
+
+export function windowStateVerdict(capabilities) {
+  const advertised = windowStateSupport(capabilities);
+  if (!advertised.length) return { status: "old", message: `the host advertises neither ${WINDOW_STATE_CAPABILITIES.join(" nor ")}: the engine predates window state on Linux` };
+  const missing = WINDOW_STATE_CAPABILITIES.filter((name) => !advertised.includes(name));
+  if (missing.length) return { status: "fail", message: `the host advertises ${advertised.join(", ")} without ${missing.join(", ")}: the engine ships the two together` };
+  return { status: "pass", message: `the host advertises ${advertised.join(" and ")}` };
 }
 
 export function cliControlSupport(capabilities) {
@@ -518,23 +646,24 @@ class Smoke {
     const into = join(this.work, "package");
     await mkdir(into);
     this.format = this.options.format ?? packageFormat(this.packagePath);
-    if (!this.format) throw new Error(`${this.packagePath} is not a .tar.xz, .deb or .AppImage`);
+    if (!this.format) throw new Error(`${this.packagePath} is not a .tar.xz, .deb, .rpm or .AppImage`);
     const unpack = {
       tar: () => run("tar", ["-xJf", this.packagePath, "-C", into], { timeout: 180000 }),
       deb: () => run("dpkg-deb", ["-x", this.packagePath, into], { timeout: 180000 }),
+      rpm: () => run("bash", ["-c", 'rpm2cpio "$1" | cpio -idm --quiet --no-absolute-filenames', "rpm2cpio", this.packagePath], { timeout: 180000, cwd: into }),
       appimage: () => run(this.packagePath, ["--appimage-extract"], { timeout: 180000, cwd: into }),
     }[this.format];
     const result = await unpack();
     if (result.code !== 0) throw new Error(`unpacking the ${this.format} package exited ${result.code}: ${result.stderr.slice(-400)}`);
-    this.root = { tar: join(into, "ardia"), deb: join(into, "usr"), appimage: join(into, "squashfs-root") }[this.format];
-    this.launcher = { tar: join(this.root, "bin", "ardia"), deb: join(this.root, "bin", "ardia"), appimage: join(this.root, "AppRun") }[this.format];
+    this.root = { tar: join(into, "ardia"), deb: join(into, "usr"), rpm: join(into, "usr"), appimage: join(into, "squashfs-root") }[this.format];
+    this.launcher = { tar: join(this.root, "bin", "ardia"), deb: join(this.root, "bin", "ardia"), rpm: join(this.root, "bin", "ardia"), appimage: join(this.root, "AppRun") }[this.format];
     this.runtime = join(this.root, "lib", "ardia");
     this.chrome = join(this.runtime, "chrome");
     for (const path of [this.launcher, this.chrome, join(this.runtime, "ardia-launch"), join(this.runtime, "ardia-ui", "index.html"), ...(this.format === "tar" ? [join(this.root, "install.sh")] : [])]) {
       if (!(await fileInfo(path))?.isFile) throw new Error(`the package has no ${path.slice(into.length + 1)}`);
     }
     this.profile = join(this.work, "profile");
-    await mkdir(this.profile);
+    await privateFolder(this.profile);
     this.version = (await readFile(join(this.runtime, "VERSION"), "utf8").catch(() => null))?.trim() || null;
     this.cliDir = join(this.runtime, "cli");
     this.hasCli = Boolean((await stat(this.cliDir).catch(() => null))?.isDirectory());
@@ -652,6 +781,12 @@ class Smoke {
     if (typeof manifest.key !== "string" || manifest.manifest_version !== 2) throw new Error("the packaged manifest is not the keyed MV2 uBlock Origin build");
     const tuning = uboTuningProblems(await readFile(join(blocker, "js", "background.js"), "utf8").catch(() => ""));
     if (tuning.length) throw new Error(`the packaged uBlock Origin is not tuned for launch: ${tuning.join("; ")}`);
+    const seeding = uboSeedProblems(
+      await readFile(join(blocker, UBO_SEED), "utf8").catch(() => null),
+      await readFile(join(blocker, "js", "start.js"), "utf8").catch(() => ""),
+      await readFile(join(blocker, "js", "storage.js"), "utf8").catch(() => ""),
+    );
+    if (seeding.length) throw new Error(`the packaged uBlock Origin is not seeded: ${seeding.join("; ")}`);
     let last;
     const state = await until(async () => {
       last = await shell.call("contentBlocker.state");
@@ -696,6 +831,7 @@ class Smoke {
 
   async stagedInstall() {
     if (this.format === "deb") return this.debLayout();
+    if (this.format === "rpm") return this.rpmLayout();
     if (this.format === "appimage") return this.appImageLayout();
     const stage = join(this.work, "stage");
     await mkdir(stage);
@@ -754,6 +890,26 @@ class Smoke {
     return { format: "deb", version: fields.Version, setuidHelper: listing.stdout.includes("./usr/lib/ardia/chrome-sandbox") };
   }
 
+  async rpmLayout() {
+    const listing = await run("rpm", ["-qplv", this.packagePath], { timeout: 60000 });
+    if (listing.code !== 0) throw new Error(`rpm -qplv exited ${listing.code}: ${listing.stderr.slice(-400)}`);
+    const header = await run("rpm", ["-qp", "--qf", "%{NAME}\\n%{ARCH}\\n%{VERSION}\\n", this.packagePath], { timeout: 60000 });
+    const [name, arch, version] = header.stdout.split("\n");
+    const scripts = await run("rpm", ["-qp", "--scripts", this.packagePath], { timeout: 60000 });
+    const requires = await run("rpm", ["-qpR", this.packagePath], { timeout: 60000 });
+    if (requires.code !== 0) throw new Error(`rpm -qpR exited ${requires.code}: ${requires.stderr.slice(-400)}`);
+    const bundled = (await readdir(join(this.root, "lib/ardia"))).filter((file) => /\.so(\.\d+)*$/.test(file));
+    const problems = rpmLayoutProblems(listing.stdout, { name, arch, scripts: scripts.stdout, requires: requires.stdout, bundled });
+    if (this.version && version !== this.version.replace("-", "~")) problems.push(`the .rpm version is ${version}, not ${this.version.replace("-", "~")}`);
+    const policy = await readFile(join(this.root, "share/polkit-1/actions/dev.ardia.linux.policy"), "utf8").catch(() => "");
+    if (!policy.includes("dev.ardia.linux.reauthenticate")) problems.push("the .rpm's polkit policy has no reauthenticate action");
+    if (policy.includes("dev.ardia.linux.update")) problems.push("the .rpm's polkit policy offers the self-update action, which rpm owns");
+    const desktop = await readFile(join(this.root, "share/applications/ardia.desktop"), "utf8").catch(() => "");
+    if (!/^Exec=\/usr\/bin\/ardia /m.test(desktop)) problems.push("the .rpm's desktop entry does not run /usr/bin/ardia");
+    if (problems.length) throw new Error(problems.join("; "));
+    return { format: "rpm", version };
+  }
+
   async appImageLayout() {
     const problems = [];
     const head = Buffer.alloc(16);
@@ -771,6 +927,40 @@ class Smoke {
     if (!(await fileInfo(join(this.root, "ardia.png")))?.isFile) problems.push("the AppImage has no ardia.png");
     if (problems.length) throw new Error(problems.join("; "));
     return { format: "appimage" };
+  }
+
+  async windowState(shell) {
+    const verdict = windowStateVerdict(this.capabilities);
+    if (verdict.status === "old") throw outcome("old", verdict.message, { capabilities: this.capabilities?.length ?? null });
+    if (verdict.status === "fail") throw new Error(verdict.message);
+    const reply = await shell.eval(`(async () => {
+      const host = globalThis.__ardiaHost;
+      const call = (method, args) => host.invoke(method, { args });
+      const layout = await call("ArdiaShell.windowButtonLayout", []);
+      const state = await call("ArdiaShell.windowState", [host.bootstrap.windowId]);
+      const unknown = await call("ArdiaShell.windowState", [${js(nonce("no-such-window"))}]).then((value) => ({ answered: value }), (error) => String(error?.message ?? error));
+      return { windowId: host.bootstrap.windowId, layout, state, unknown };
+    })()`);
+    const problems = windowStateProblems(reply);
+    if (problems.length) throw Object.assign(new Error(problems.join("; ")), { detail: reply });
+    return reply;
+  }
+
+  async syncCore(shell) {
+    const verdict = syncCoreVerdict(this.capabilities);
+    if (verdict.status === "old") throw outcome("old", verdict.message, { capabilities: this.capabilities?.length ?? null });
+    const reply = await shell.eval(`(async () => {
+      const host = globalThis.__ardiaHost;
+      const call = (method, args) => host.invoke(method, { args }).catch((error) => ({ thrown: String(error?.message ?? error) }));
+      const core = await call("ArdiaSync.core", []);
+      const claim = await call("ArdiaSync.claimAuthority", []);
+      const phrase = (text) => call("ArdiaSync.enterPhrase", [${js(SYNC_CORE_ACCOUNT)}, text, ${js(`/${nonce("no-sync-folder")}`)}]);
+      const phrases = ${js(SYNC_CORE_PHRASES)};
+      return { core, claim, valid: await phrase(phrases.valid), checksum: await phrase(phrases.checksum), unknown: await phrase(phrases.unknown) };
+    })()`);
+    const problems = syncCoreProblems(reply);
+    if (problems.length) throw Object.assign(new Error(problems.join("; ")), { detail: reply });
+    return reply;
   }
 
   async appVersion(shell) {
@@ -826,7 +1016,7 @@ class Smoke {
       if (current !== this.version) throw new Error(`${this.cliEnv.ARDIA_CLI_HOME}/current points at ${JSON.stringify(current)}, not ${this.version}`);
       this.cliBin = bin;
       const reported = await this.ardia(["--version"], { timeout: 30000 });
-      if (reported.code !== 0 || reported.stdout.trim() !== `ardia ${this.version}`) throw new Error(`ardia --version exited ${reported.code} and printed ${JSON.stringify((reported.stdout + reported.stderr).trim())}, not "ardia ${this.version}"`);
+      if (reported.code !== 0 || !CLI_VERSION_LINE.test(reported.stdout.trim())) throw new Error(`ardia --version exited ${reported.code} and printed ${JSON.stringify((reported.stdout + reported.stderr).trim())}, not "ardia <its own version>"`);
       const second = await install();
       if (second.code !== 0 || (second.stdout.trim().split("\n").at(-1) ?? "") !== `installed ${bin}`) throw new Error(`the second install exited ${second.code}: ${(second.stdout + second.stderr).trim().split("\n").slice(-3).join(" | ")}`);
       if (installerRanAgain(second.stdout)) throw new Error(`the second install of the current version wasn't a no-op: ${second.stdout.trim().split("\n").join(" | ")}`);
@@ -841,7 +1031,8 @@ class Smoke {
 
   async pipeInstance(name, { extensions = false } = {}) {
     const profile = join(this.work, `${name}-profile`);
-    await mkdir(join(profile, "home"), { recursive: true });
+    await privateFolder(profile);
+    await mkdir(join(profile, "home"));
     const args = pipeLaunchArguments(launchArguments({ scratch: profile, extensions }));
     const env = launchEnvironment({ scratch: profile });
     const refused = launchRefusal(args, env);
@@ -1010,11 +1201,13 @@ class Smoke {
       return this.shellUi(shell);
     }, { timeout: 120000 });
     if (!first) {
-      for (const name of [...ASSERTIONS.slice(2, 7), "app-version"]) this.skip(name, `Ardia did not start: ${launched.detail.error}`);
+      for (const name of [...ASSERTIONS.slice(2, 7), "app-version", "window-state", "sync-core"]) this.skip(name, `Ardia did not start: ${launched.detail.error}`);
     } else {
       await this.record("bootstrap", () => this.bootstrap(first.shell));
       this.capabilities = await first.shell.eval("globalThis.__ardiaHost?.bootstrap?.capabilities ?? []").catch(() => null);
       await this.record("app-version", () => this.appVersion(first.shell));
+      await this.record("window-state", () => this.windowState(first.shell));
+      await this.record("sync-core", () => this.syncCore(first.shell));
       await this.record("content-blocker", () => this.contentBlocker(first.shell), { timeout: 90000 });
       const tab = await this.record("native-tab", () => this.nativeTab(first.app, first.shell), { timeout: 90000 });
       if (tab.ok) first.tabId = tab.detail.tabId;

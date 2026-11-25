@@ -18,6 +18,9 @@ final class LittleArdiaHandoff {
       [weak self] note in
       self?.noteActive(note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)
     }
+    NotificationCenter.default.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
+      self?.userLeftArdia()
+    }
   }
 
   func start() {
@@ -54,6 +57,13 @@ final class LittleArdiaHandoff {
       return
     }
     ShellEvents.send(.app, ["type": "littleArdiaReturnedToApp"])
+  }
+
+  private func userLeftArdia() {
+    guard !returnApps.isEmpty else { return }
+    let dropped = returnApps.count
+    returnApps.removeAll()
+    ShellEvents.send(.app, ["type": "littleArdiaReturnDropped", "count": dropped])
   }
 
   private func isOther(_ app: NSRunningApplication) -> Bool {

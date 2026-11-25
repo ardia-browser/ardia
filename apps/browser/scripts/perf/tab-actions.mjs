@@ -5,10 +5,12 @@
 //
 //   node tab-actions.mjs run --app <Release Ardia.app> --side <label>=<main.jsbundle> [--side <label>=<bundle>]
 //        [--side-env <label>:K=V] [--side-app <label>=<Release Ardia.app>] [--launches 4] [--n 5] [--actions a,b] [--out dir] [--port 9317] [--page-port 47917]
-//        [--extra-tabs N]
+//        [--extra-tabs N] [--busy-ms N]
 //       Each launch runs every action --n times; launches alternate between the sides (A B B A ...), so the sides
 //       share the machine. Writes <out>/samples.jsonl, one line per action. --extra-tabs adds N plain tabs to the first
-//       window's Personal list (the many-tab session: J2 and J3 must not grow with it).
+//       window's Personal list (the many-tab session: J2 and J3 must not grow with it). --busy-ms keeps the JS thread
+//       busy for about N ms when a click (sidebar row) lands, as a GC pause or a big write does in the field; each
+//       sample's busyLeft is how much of that was still to run at the press (null: the loop hadn't started).
 //   node tab-actions.mjs fixture <session.json> [--page-port 47917]   the session alone; serve: its pages alone
 //   node tab-actions.mjs report <out>
 //       Per side and action: median and p90 of event → last paint, its split, and React renders per action.
@@ -40,7 +42,7 @@ import { createServer } from "node:http";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { INJECTION_ENTITLEMENTS, prepareApp } from "../../../../scripts/lib/app-copy.mjs";
-import { launch } from "../../../../scripts/lib/instance.mjs";
+import { launch, sleep } from "../../../../scripts/lib/instance.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const [command, ...rest] = process.argv.slice(2);
@@ -53,7 +55,6 @@ for (let i = 0; i < rest.length; i++) {
   else if (rest[i] === "--side-app") flags["side-app"].push(rest[++i]);
   else flags[rest[i].slice(2)] = rest[++i];
 }
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const quantile = (xs, q) => {
   const s = xs.filter(Number.isFinite).sort((a, b) => a - b);
   if (!s.length) return NaN;
@@ -380,7 +381,16 @@ async function runAction(rig, ctx, name) {
   const before = await active();
   if (ctx.countAdds) await rig.op({ op: "adds", reset: true });
   const t0 = await rig.begin();
+  const busyMs = Number(flags["busy-ms"] ?? 0);
+  const busy = busyMs > 0 && name === "click";
+  const pressAt = Date.now() + 400;
+  const busyRun = busy
+    ? rig.eval(`globalThis.__busy = { start: Date.now() }; while (Date.now() < ${pressAt + busyMs}); __busy.end = Date.now(); return true;`, busyMs + 20000).catch(() => null)
+    : null;
+  if (busy) await sleep(pressAt - Date.now());
   const sent = await send();
+  await busyRun;
+  const busyLeft = busy ? await rig.eval(`return __busy.start < ${sent.down} ? __busy.end - ${sent.down} : null;`) : null;
   await sleep(1000);
   const got = await rig.collect();
   const adds = ctx.countAdds ? await rig.op({ op: "adds", reset: true }) : null;
@@ -411,7 +421,7 @@ async function runAction(rig, ctx, name) {
     await S(`const s = S(), w = s.windows[${JSON.stringify(w1)}]; for (const id of w.tabIds) if (s.tabs[id].url.includes("-child")) S().closeTab(id); return true;`);
   }
   return {
-    action: name, worked, ...(adds ? { reAdds: adds.reAdds, newAdds: adds.newAdds } : {}), ...timing, press: start === "up" ? startAt - sent.down : 0, switched: after !== before, expect: expectTab, landed: after,
+    action: name, worked, ...(adds ? { reAdds: adds.reAdds, newAdds: adds.newAdds } : {}), ...timing, press: start === "up" ? startAt - sent.down : 0, ...(busy ? { busyLeft } : {}), switched: after !== before, expect: expectTab, landed: after,
     renders: got.renders, commits: got.commits.length, storeUpdates: got.storeUpdates, hostUpdates: got.hostUpdates, mounts: got.mounts, top: got.top,
   };
 }

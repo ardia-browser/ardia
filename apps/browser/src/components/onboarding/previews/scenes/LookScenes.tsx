@@ -1,41 +1,43 @@
 import { Animated, View } from "react-native";
-import { fill, sideCard, TOOLBAR_H } from "../geometry";
-import { tab } from "../content";
+import { fill, TOOLBAR_H } from "../geometry";
 import { lookFor } from "../look";
 import { tracker } from "../timeline";
-import { Glyph, Label, Toolbar } from "../Kit";
+import { Glyph, Label } from "../Kit";
 import { Page } from "../MockPages";
 import { Pill } from "../Floating";
 import { mockInk, sceneMs } from "../tokens";
 import { font } from "../../../ui/tokens";
 import type { Scene } from "../scene";
-import { Std } from "./SceneParts";
+import { Rest } from "./SceneParts";
 import { PLATFORM_TERMS } from "../../../../lib/platformTerms";
 
 export function appearance(mode: "light" | "dark" | "auto"): Scene {
-  return ({ g, p, opts }) => {
+  return ({ g, look, p, opts }) => {
     const t = tracker(p, sceneMs.appearance);
-    const toDark = mode === "auto" ? opts.systemDark : mode === "dark";
-    const from = lookFor(!toDark, opts.accent, opts.palette);
-    const to = lookFor(toDark, opts.accent, opts.palette);
-    const icon = toDark ? "moon.fill" : "sun.max.fill";
-    const label = mode === "auto" ? `Auto · ${toDark ? "Dark" : "Light"} like your ${PLATFORM_TERMS.computer}` : toDark ? "Dark" : "Light";
+    const dark = look.dark;
+    const flip = lookFor(!dark, opts.accent, opts.palette);
+    const turn = 700;
+    const back = 2000;
+    const shown = (isDark: boolean) => (mode === "auto" ? `Auto · ${isDark ? "Dark" : "Light"} like your ${PLATFORM_TERMS.computer}` : isDark ? "Dark" : "Light");
+    const pill = (l: typeof look, opacity: Animated.AnimatedInterpolation<number>) => (
+      <Pill g={g} look={l} style={{ opacity, transform: [{ translateY: t.trip(6 * g.s, 0, 300, back + 300, 280, 240) }] }}>
+        <Animated.View style={{ transform: [{ rotate: t.deg([[340, -90], [780, 0]]) }] }}>
+          <Glyph g={g} name={l.dark ? "moon.fill" : "sun.max.fill"} size={14} color={l.dark ? mockInk.moon : mockInk.sun} weight="medium" box={18} />
+        </Animated.View>
+        <Label g={g} size={font.body.fontSize} color={l.t.textPrimary} weight="500">
+          {shown(l.dark)}
+        </Label>
+      </Pill>
+    );
+    if (mode !== "auto") return <Rest g={g} look={look} opts={opts} over={pill(look, t.pulse(300, back + 300, 220, 240))} />;
     return (
       <>
-        <View style={fill}>
-          <Std g={g} look={from} opts={opts} />
-        </View>
-        <Animated.View style={[fill, { opacity: t.in(200, 420) }]}>
-          <Std g={g} look={to} opts={opts} />
+        <Rest g={g} look={look} opts={opts} />
+        <Animated.View style={[fill, { opacity: t.pulse(turn, back, 420, 420) }]}>
+          <Rest g={g} look={flip} opts={opts} />
         </Animated.View>
-        <Pill g={g} look={to} style={{ opacity: t.in(420, 220), transform: [{ translateY: t([[420, 6 * g.s], [700, 0]]) }] }}>
-          <Animated.View style={{ transform: [{ rotate: t.deg([[460, -90], [900, 0]]) }] }}>
-            <Glyph g={g} name={icon} size={14} color={toDark ? mockInk.moon : mockInk.sun} weight="medium" box={18} />
-          </Animated.View>
-          <Label g={g} size={font.body.fontSize} color={to.t.textPrimary} weight="500">
-            {label}
-          </Label>
-        </Pill>
+        {pill(look, t([[300, 0], [520, 1], [turn, 1], [turn + 200, 0], [back + 200, 0], [back + 420, 1], [back + 600, 1], [back + 800, 0]]))}
+        {pill(flip, t([[turn + 200, 0], [turn + 420, 1], [back, 1], [back + 200, 0]]))}
       </>
     );
   };
@@ -44,22 +46,23 @@ export function appearance(mode: "light" | "dark" | "auto"): Scene {
 export function siteColor(on: boolean): Scene {
   return ({ g, look, p, opts }) => {
     const t = tracker(p, sceneMs.siteColor);
-    const c = sideCard(g);
-    const toolbarOpts = { ...opts, addressInSidebar: false };
+    const load = 500;
+    const loaded = 1100;
+    const tint = on ? t([[load, 1], [load + 200, 0], [loaded + 120, 0], [loaded + 520, 1]]) : 0;
     return (
-      <Std
+      <Rest
         g={g}
         look={look}
-        opts={toolbarOpts}
+        opts={{ ...opts, siteColor: on }}
+        site={tint}
         page={
           <>
             <View style={[fill, { top: TOOLBAR_H * g.s, backgroundColor: look.page }]} />
-            <Animated.View style={[fill, { opacity: t.in(80, 320), transform: [{ translateY: t([[80, 6 * g.s], [420, 0]]) }] }]}>
+            <Animated.View style={[fill, { opacity: t([[load, 1], [load + 200, 0], [loaded, 0], [loaded + 320, 1]]), transform: [{ translateY: t([[load + 200, 0], [loaded, 6 * g.s], [loaded + 340, 0]]) }] }]}>
               <Page g={g} look={look} top={TOOLBAR_H} />
             </Animated.View>
           </>
         }
-        card={on ? <Toolbar g={g} look={look} w={c.w} t={tab(0)} site style={{ opacity: t.in(560, 380) }} /> : null}
       />
     );
   };

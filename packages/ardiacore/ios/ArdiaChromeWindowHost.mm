@@ -1,9 +1,11 @@
 #import "ArdiaChromeWindowInternal.h"
 #import "ArdiaEarlyWindow.h"
 #import "ArdiaInterfaceScale.h"
+#import "ArdiaPictureInPictureInternal.h"
 #import "ArdiaRuntime.h"
 #import "ArdiaWebViewInternal.h"
 
+#import <QuartzCore/QuartzCore.h>
 #import <objc/message.h>
 #import <objc/runtime.h>
 
@@ -14,8 +16,11 @@ using namespace ardia_window;
 namespace {
 
 BOOL (^gShouldClose)(NSWindow *);
+BOOL (^gPlaysForAutoPictureInPicture)(NSWindow *);
 
 void (^gSwapped)(NSWindow *, NSWindow *);
+
+NSString *(^gFocusHandoffSummary)(NSWindow *);
 
 const void *const kFloatsForWindowManagersKey = &kFloatsForWindowManagersKey;
 
@@ -124,6 +129,10 @@ NSView *ArdiaWindowRootView(NSWindow *window) {
   return WindowCornerRadius(nil);
 }
 
++ (CGFloat)drawnWindowCornerRadius {
+  return DrawnWindowCornerRadius(nil);
+}
+
 + (CGFloat)frameCornerRadiusOfWindow:(NSWindow *)window {
   if (window.styleMask & NSWindowStyleMaskFullScreen) return 0;
   NSView *frame = window.contentView.superview;
@@ -178,6 +187,11 @@ NSView *ArdiaWindowRootView(NSWindow *window) {
   AnswerFloatingSubrole(window.class);
 }
 
++ (void)floatOverActiveSpace:(NSWindow *)window {
+  if (!window) return;
+  ardia_pip::FloatOverActiveSpace(window);
+}
+
 + (void)recordLaunchLayout {
   [ArdiaEarlyWindow recordNow];
 }
@@ -191,17 +205,36 @@ NSView *ArdiaWindowRootView(NSWindow *window) {
 }
 
 + (void)showProfile:(NSString *)profile inWindow:(NSWindow *)window {
+  [self showProfile:profile inWindow:window report:nil];
+}
+
++ (void)showProfile:(NSString *)profile
+           inWindow:(NSWindow *)window
+             report:(void (^)(BOOL, double, double, BOOL))report {
   ArdiaWindowController *controller = [ArdiaWindowController forNSWindow:window];
   if (!controller) return;
+  const CFTimeInterval started = CACurrentMediaTime();
+  const BOOL profileLoaded = ardia_host::LoadedProfile(profile ?: @"") != nil;
   __weak ArdiaCoreWindow *coreWindow = controller.coreWindow;
   __weak ArdiaWindowController *weakController = controller;
   ardia_host::WithProfile(profile ?: @"", ^(ArdiaCoreProfile *p) {
     ArdiaWindowController *shown = weakController;
     if (!p || !coreWindow || !shown) return;
+    ArdiaCoreProfile *before = coreWindow.activeProfile;
     coreWindow.activeProfile = p;
+    ardia_host::NoteProfileSwitch(p, coreWindow.window);
+    if (before && before != p) ardia_host::CheckPaintingAfterProfileSwitch(coreWindow.window);
+    const double activeMs = (CACurrentMediaTime() - started) * 1000;
     ArdiaCoreTab *tab = [ArdiaTabStrip activeTabInWindow:shown profile:p];
     ArdiaWebView *view = tab ? [ArdiaTabRegistry viewForTab:tab] : nil;
     NSWindow *shownWindow = coreWindow.window;
+    if (report) {
+      void (^shownFirstFrame)(BOOL) = ^(BOOL heldTimedOut) {
+        report(profileLoaded, activeMs, (CACurrentMediaTime() - started) * 1000, heldTimedOut);
+      };
+      if (view && shownWindow && view.window == shownWindow && [[coreWindow tabsForProfile:p] containsObject:tab])
+        [view reportSwapShown:shownFirstFrame];
+    }
     if (view && shownWindow && view.window == shownWindow && [[coreWindow tabsForProfile:p] containsObject:tab])
       [view requestFocusRestoreIn:shownWindow];
   });
@@ -218,17 +251,24 @@ NSView *ArdiaWindowRootView(NSWindow *window) {
 }
 
 + (void)setTrafficLightsCenter:(NSValue *)center trailing:(BOOL)trailing inWindow:(NSWindow *)window {
-  if (objc_getAssociatedObject(window, kLightsShownKey)) {
+  const BOOL translated = objc_getAssociatedObject(window, kLightsShownKey) != nil;
+  NSValue *current = objc_getAssociatedObject(window, kLightsCenterKey);
+  const BOOL placed = ArdiaTrafficLightsTrailing(window) == trailing && (current == center || [current isEqual:center]);
+  if (placed && !translated) return;
+  [CATransaction begin];
+  [CATransaction setDisableActions:YES];
+  if (translated) {
     objc_setAssociatedObject(window, kLightsShownKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     objc_setAssociatedObject(window, kLightsMoveKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     TranslateTrafficLights(window, 0);
+    TuckTrafficLightsOutsideWindow(window);
   }
-  const BOOL wasTrailing = ArdiaTrafficLightsTrailing(window);
-  NSValue *current = objc_getAssociatedObject(window, kLightsCenterKey);
-  if (wasTrailing == trailing && (current == center || [current isEqual:center])) return;
-  objc_setAssociatedObject(window, kLightsTrailingKey, trailing ? @YES : nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-  objc_setAssociatedObject(window, kLightsCenterKey, center, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-  RetileTrafficLights(window);
+  if (!placed) {
+    objc_setAssociatedObject(window, kLightsTrailingKey, trailing ? @YES : nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(window, kLightsCenterKey, center, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    RetileTrafficLights(window);
+  }
+  [CATransaction commit];
 }
 
 + (void)moveTrafficLightsCenter:(NSValue *)center trailing:(BOOL)trailing inWindow:(NSWindow *)window {
@@ -237,6 +277,10 @@ NSView *ArdiaWindowRootView(NSWindow *window) {
   NSValue *current = shown ? (shown == NSNull.null ? nil : shown) : objc_getAssociatedObject(window, kLightsCenterKey);
   if (current == center || [current isEqual:center]) return;
   if (!MoveTrafficLights(window, center)) [self setTrafficLightsCenter:center trailing:trailing inWindow:window];
+}
+
++ (void)insetTrafficLightsOfWindow:(NSWindow *)window {
+  if (window) InsetUtilityTrafficLights(window);
 }
 
 + (NSSize)windowSizeFromInterfaceSize:(NSSize)size forWindow:(NSWindow *)window {
@@ -276,12 +320,32 @@ NSView *ArdiaWindowRootView(NSWindow *window) {
   else [window close];
 }
 
++ (BOOL)windowIsFullScreen:(NSWindow *)window {
+  return IsWindowFullScreen(window);
+}
+
 + (BOOL)windowFullScreenIsForPage:(NSWindow *)window {
   return [objc_getAssociatedObject(window, kWindowFullScreenKey) enteredForPage];
 }
 
 + (BOOL)userSeesWindow:(NSWindow *)window {
   return [ArdiaWindowController userSees:window];
+}
+
++ (BOOL)userSeesOnlyThroughWindowServer:(NSWindow *)window {
+  return [ArdiaWindowController userSeesOnlyThroughWindowServer:window];
+}
+
++ (void)reconsiderSightOfWindow:(NSWindow *)window {
+  [ArdiaWindowController reconsiderSightOf:window];
+}
+
++ (void)setPlaysForAutoPictureInPictureHandler:(BOOL (^)(NSWindow *))handler {
+  gPlaysForAutoPictureInPicture = [handler copy];
+}
+
++ (BOOL (^)(NSWindow *))playsForAutoPictureInPictureHandler {
+  return gPlaysForAutoPictureInPicture;
 }
 
 + (void)setShouldCloseHandler:(BOOL (^)(NSWindow *))handler {
@@ -302,6 +366,14 @@ NSView *ArdiaWindowRootView(NSWindow *window) {
 
 + (BOOL (^)(NSWindow *, NSEvent *))refusesUnhandledKeyHandler {
   return gRefusesUnhandledKey;
+}
+
++ (void)setFocusHandoffSummaryHandler:(NSString *(^)(NSWindow *))handler {
+  gFocusHandoffSummary = [handler copy];
+}
+
++ (NSString *(^)(NSWindow *))focusHandoffSummaryHandler {
+  return gFocusHandoffSummary;
 }
 
 + (void)embedRootView:(NSView *)root inWindow:(NSWindow *)window {

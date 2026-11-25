@@ -65,7 +65,7 @@ const ENTRIES = [
   { id: "savePage", title: "Save Page As", keywords: ["save as"], page: true, ran: ({ calls }) => assert.deepEqual(calls.pageCommands, ["savePage"]) },
   { id: "cast", title: "Cast", keywords: ["cast tab"], page: true, ran: () => assert.ok(engineCalled("media", "showCastDialog")) },
   { id: "taskManager", title: "Task Manager", keywords: ["open task manager"], ran: () => assert.ok(engineCalled("engine", "openTaskManager")) },
-  { id: "manageExtensions", title: "Manage Extensions", keywords: [], ran: () => assert.equal(useSettingsNav.getState().pane, "extensions") },
+  { id: "manageExtensions", title: "Manage Extensions", keywords: [], ran: () => assert.equal(useSettingsNav.getState().pane, "profiles") },
   {
     id: "addExtension",
     title: "Add Extension",
@@ -149,13 +149,17 @@ test("picking a command bar action counts which command it ran, never its profil
   trackSuggestionChosen({ kind: "action", id: "viewSource" });
   trackSuggestionChosen({ kind: "action", id: "switchProfile:p_secret" });
   trackSuggestionChosen({ kind: "search" });
+  trackSuggestionChosen({ kind: "page", url: "https://excalidraw.com/#json=a,b" }, "literal");
+  trackSuggestionChosen({ kind: "page", url: "https://linear.app/b", tabId: "t7" }, "renamed_tab");
   await client.saveQueueNow();
-  const sent = JSON.parse(stub.docs.get("telemetry-queue.json"))
-    .events.filter((x) => x.event === "suggestion_chosen")
-    .map((x) => [x.properties.type, x.properties.command]);
+  const events = JSON.parse(stub.docs.get("telemetry-queue.json")).events.filter((x) => x.event === "suggestion_chosen");
+  const sent = events.map((x) => [x.properties.type, x.properties.command, x.properties.via]);
   assert.deepEqual(sent, [
-    ["action", "viewSource"],
-    ["action", "switchProfile"],
-    ["search", undefined],
+    ["action", "viewSource", undefined],
+    ["action", "switchProfile", undefined],
+    ["search", undefined, undefined],
+    ["url", undefined, "literal"],
+    ["tab", undefined, "renamed_tab"],
   ]);
+  assert.ok(!JSON.stringify(events).includes("excalidraw") && !JSON.stringify(events).includes("linear.app"), "no address is sent");
 });

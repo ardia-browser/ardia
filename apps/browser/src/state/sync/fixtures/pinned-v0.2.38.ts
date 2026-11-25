@@ -1,7 +1,7 @@
 import { assignPositions, type Adapter, type Extraction } from "@ardia/sync";
 import { useBrowser, type BrowserState } from "../../browser/store";
 import { orderSections, syncGroupOrder } from "../../groups/groups";
-import { makeTab, pinKeyOf, TILE_PIN, without } from "../../browser/model";
+import { makeTab, pinKeyOf, TILE_PIN } from "../../browser/model";
 import { adoptParkedPins, parkWindowPins } from "../../pins/parkedPins";
 import { removeTabs } from "../../tabs/tabs";
 import type { Tab, TabGroup } from "../../browser/types";
@@ -165,17 +165,16 @@ export function pinnedAdapter(profileId: string): Adapter {
         windows[w.id] = window;
         groups = syncGroupOrder(groups, window);
       }
-      let { live, parkedPins } = s;
+      let { parkedPins } = s;
       const parkWindow = windows[PARK];
       if (parkWindow) {
         parkedPins = parkWindowPins(parkedPins, parkWindow, { tabs, groups, history: s.history, profiles: s.profiles });
         for (const id of parkWindow.tabIds) delete tabs[id];
-        live = without(live, parkWindow.tabIds);
         groups = Object.fromEntries(Object.entries(groups).filter(([, g]) => g.windowId !== PARK));
         delete windows[PARK];
       }
       const { find, splits, selection, windowOrder, windowUi } = s;
-      useBrowser.setState({ tabs, windows, groups, live, find, splits, selection, windowOrder, windowUi, parkedPins });
+      useBrowser.setState({ tabs, windows, groups, find, splits, selection, windowOrder, windowUi, parkedPins });
     },
   };
 }

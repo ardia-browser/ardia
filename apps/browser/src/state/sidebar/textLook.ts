@@ -1,4 +1,4 @@
-import { useBrowser } from "../browser/store";
+import { useSettings } from "../browser/hooks";
 import type { Settings } from "../settings/settings";
 import { useSystemIncreaseContrast, watchSystemContrast } from "../app/systemContrast";
 
@@ -6,7 +6,7 @@ export const highContrastSidebarText = (contrast: Settings["sidebarTextContrast"
 
 export function useSidebarHighContrast(): boolean {
   watchSystemContrast();
-  const contrast = useBrowser((s) => s.settings.sidebarTextContrast);
+  const contrast = useSettings((s) => s.sidebarTextContrast);
   const increaseContrast = useSystemIncreaseContrast((s) => s.on);
   return highContrastSidebarText(contrast, increaseContrast);
 }

@@ -1,14 +1,42 @@
 #!/usr/bin/env bash
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
+repo=$(cd "$here/../.." && pwd)
 src=${CHROMIUM_SRC:-$HOME/chromium-build/chromium_git/chromium/src}
 owned=(ardia/linux)
 mode=${1:-}
+sources=()
+targets=()
+line_number=0
+while IFS= read -r line || [[ -n "$line" ]]; do
+  line_number=$((line_number + 1))
+  [[ -n "$line" ]] || continue
+  IFS=$'\t' read -r source target extra <<<"$line"
+  if [[ "$line" == *$'\r'* || -n "${extra:-}" || -z "${target:-}" || "$line" != "$source"$'\t'"$target" ]]; then
+    echo "error: copies.tsv:$line_number: expected <source><TAB><target>: $line" >&2
+    exit 1
+  fi
+  for path in "$source" "$target"; do
+    case "/$path/" in
+      *//* | */./* | */../* | *\\*) echo "error: copies.tsv:$line_number: $path isn't a relative path without ., .. or \\" >&2; exit 1 ;;
+    esac
+  done
+  sources+=("$source")
+  targets+=("$target")
+done <"$here/copies.tsv"
 case "$mode" in
-  --paths) printf '%s\n' ardia/core/ac_hooks.h ardia/core/ac_content_hooks.h ardia/core/ac_host_visibility.h ardia/core/ac_launch_switches.h ardia/core/page_script.js; exit 0 ;;
+  --paths) printf '%s\n' "${targets[@]}"; exit 0 ;;
   ''|--check) ;;
   *) echo "usage: $0 [--check|--paths]" >&2; exit 64 ;;
 esac
+if [[ "$mode" != --check ]]; then
+  for index in "${!sources[@]}"; do
+    case "${sources[index]}" in
+      engine/chromium/src/*)
+        [[ -f "$src/${targets[index]}" ]] || { echo "error: ${targets[index]} isn't in the tree: the Linux logos replace Chromium's, they add none" >&2; exit 1; } ;;
+    esac
+  done
+fi
 if [[ "$mode" == --check ]]; then
   diff -r "$here/src/ardia/linux" "$src/ardia/linux" >/dev/null || { echo "drift: ardia/linux" >&2; exit 1; }
 else
@@ -24,11 +52,9 @@ copy_file() {
     cmp -s "$source" "$target" || cp "$source" "$target"
   fi
 }
-copy_file "$here/../ardiacore/src/ardia/core/ac_hooks.h" "$src/ardia/core/ac_hooks.h"
-copy_file "$here/../ardiacore/src/ardia/core/ac_content_hooks.h" "$src/ardia/core/ac_content_hooks.h"
-copy_file "$here/../ardiacore/src/ardia/core/ac_host_visibility.h" "$src/ardia/core/ac_host_visibility.h"
-copy_file "$here/../ardiacore/src/ardia/core/ac_launch_switches.h" "$src/ardia/core/ac_launch_switches.h"
-copy_file "$here/../../packages/ardiacore/ios/page_script.js" "$src/ardia/core/page_script.js"
+for index in "${!sources[@]}"; do
+  copy_file "$repo/${sources[index]}" "$src/${targets[index]}"
+done
 for file in "$here"/src/ardia/core/*; do
   copy_file "$file" "$src/ardia/core/${file##*/}"
 done

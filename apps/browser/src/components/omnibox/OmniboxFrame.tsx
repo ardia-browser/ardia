@@ -14,12 +14,13 @@ type FrameProps = {
   scope: SearchScope | null;
   field: ReactNode;
   list: ReactNode;
+  rowsHover: ReturnType<typeof useHover>["hoverProps"];
   pulse: ReactNode;
 };
 
 const ICON_SLOT = { width: BAR.iconSlot, alignItems: "center" } as const;
 
-export function DropdownFrame({ rootRef, onContextMenu, leadingIcon, scope, field, list, pulse, onSiteControls }: FrameProps & { onSiteControls: (() => void) | null }) {
+export function DropdownFrame({ rootRef, onContextMenu, leadingIcon, scope, field, list, rowsHover, pulse, onSiteControls }: FrameProps & { onSiteControls: (() => void) | null }) {
   const theme = useTheme();
   return (
     <View ref={rootRef}>
@@ -42,12 +43,14 @@ export function DropdownFrame({ rootRef, onContextMenu, leadingIcon, scope, fiel
           ) : null}
         </View>
       </ContextMenuArea>
-      {list}
+      <View collapsable={false} {...rowsHover}>
+        {list}
+      </View>
     </View>
   );
 }
 
-export function PanelFrame({ rootRef, onContextMenu, leadingIcon, scope, field, list, pulse, hero, rowHeight, bottom }: FrameProps & { hero: boolean; rowHeight: number; bottom: ReactNode }) {
+export function PanelFrame({ rootRef, onContextMenu, leadingIcon, scope, field, list, rowsHover, pulse, hero, rowHeight, bottom }: FrameProps & { hero: boolean; rowHeight: number; bottom: ReactNode }) {
   return (
     <View ref={rootRef}>
       {pulse}
@@ -67,8 +70,10 @@ export function PanelFrame({ rootRef, onContextMenu, leadingIcon, scope, field, 
           {field}
         </View>
       </ContextMenuArea>
-      {list}
-      {bottom}
+      <View collapsable={false} {...rowsHover}>
+        {list}
+        {bottom}
+      </View>
     </View>
   );
 }

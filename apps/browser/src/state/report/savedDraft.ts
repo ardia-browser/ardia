@@ -13,7 +13,7 @@ type ReadyRecording = Extract<Recording, { phase: "ready" }>;
 type ReadyTrace = Extract<Trace, { phase: "ready" }>;
 type Pending = { stage: FailedStage; errorClass: FailureClass; status: number; created: Created | null };
 
-export type SavedDraft = {
+type SavedDraft = {
   draft: ReportDraft;
   draftDir: string | null;
   recording: ReadyRecording | null;
@@ -22,7 +22,7 @@ export type SavedDraft = {
   identity: ReportIdentity | null;
 };
 
-export type Restored = Pick<ReportSheetState, "draft" | "draftDir" | "recording" | "trace" | "upload"> & { identity: ReportIdentity | null };
+type Restored = Pick<ReportSheetState, "draft" | "draftDir" | "recording" | "trace" | "upload"> & { identity: ReportIdentity | null };
 
 export function savedDraftOf(s: ReportSheetState, identity: ReportIdentity | null): SavedDraft | null {
   if (s.sent) return null;
@@ -75,7 +75,8 @@ function traceFrom(v: unknown, exists: (path: string) => boolean): ReadyTrace | 
 function createdFrom(v: unknown): Created | null {
   if (!isFields(v) || !isString(v.id) || !isString(v.token) || !isFields(v.uploadUrls) || !isStringList(v.uploaded)) return null;
   const urls = Object.fromEntries(Object.entries(v.uploadUrls).filter((entry): entry is [string, string] => isString(entry[1])));
-  return { id: v.id, name: isString(v.name) ? v.name : null, token: v.token, uploadUrls: urls, uploaded: v.uploaded };
+  const declared = isFields(v.declared) ? Object.fromEntries(Object.entries(v.declared).filter((entry): entry is [string, number] => isNumber(entry[1]))) : undefined;
+  return { id: v.id, name: isString(v.name) ? v.name : null, token: v.token, uploadUrls: urls, uploaded: v.uploaded, ...(declared ? { declared } : {}) };
 }
 
 function identityFrom(v: unknown): ReportIdentity | null {

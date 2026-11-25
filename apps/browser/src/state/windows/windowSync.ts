@@ -4,8 +4,15 @@ import { engineProfile, windowTitle } from "../browser/model";
 import { windowOpens } from "./windowOpenOrder";
 import { focusedWindowOf } from "./ui";
 import { adoptOf } from "../tabs/pageSession";
+import { noteLittleArdiaFitBelowSaved } from "../telemetry/littleArdiaEscapes";
+import { isSmallWindow } from "./small";
+import { signalFullScreenExit } from "./fullScreenExits";
+import type { Frame } from "../browser/types";
 
-export type LightsCenter = LightsPlace | null;
+const fitsBelowSaved = (frame: Frame, was: Frame | null | undefined, [width, height]: readonly [number, number]) =>
+  (!was || was[2] !== frame[2] || was[3] !== frame[3]) && (Math.round(frame[2]) < width || Math.round(frame[3]) < height);
+
+type LightsCenter = LightsPlace | null;
 
 export type WindowPort = {
   open(id: string, options: OpenWindowOptions, lightsCenter: LightsCenter): void;
@@ -17,7 +24,7 @@ export type WindowPort = {
   releaseProfile(profile: string): void;
 };
 
-export type WindowSyncSetup = {
+type WindowSyncSetup = {
   port: WindowPort;
   getState(): BrowserState;
   isQuitting(): boolean;
@@ -42,8 +49,14 @@ export function createWindowSync({ port, getState, isQuitting, lightsCenter, isU
     port.onEvent((e) => {
       const s = getState();
       if (e.type === "focus") s.setFocusedWindow(e.id);
-      if (e.type === "frame") s.setWindowFrame(e.id, e.frame);
-      if (e.type === "fullScreen" && !isQuitting()) s.setWindowFullScreen(e.id, e.on);
+      if (e.type === "frame") {
+        const w = s.windows[e.id];
+        if (e.fitted && w && isSmallWindow(w) && fitsBelowSaved(e.frame, w.frame, s.settings.littleArdiaSize)) noteLittleArdiaFitBelowSaved();
+        s.setWindowFrame(e.id, e.frame, e.restored, e.fitted);
+      }
+      if (e.type === "maximized" && !isQuitting()) s.setWindowMaximized(e.id, e.on);
+      if (e.type === "fullScreen" && !isQuitting()) s.setWindowFullScreen(e.id, e.on, e.display);
+      if (e.type === "fullScreen" && !e.on) signalFullScreenExit(e.id);
       if (e.type === "close") {
         if (isQuitting()) return;
         open.delete(e.id);
@@ -68,7 +81,7 @@ export function createWindowSync({ port, getState, isQuitting, lightsCenter, isU
       const under = behind ?? (w.kind === "main" ? w.opensBehind : undefined);
       port.open(
         id,
-        { frame: w.frame, incognito: w.kind === "private", title: titles.get(id), focus, profile, ...(under ? { behind: under } : {}), ...(prev && w.kind !== "small" && !w.chromeWindow ? { animated: true } : {}), ...small, ...made },
+        { frame: w.restoredFrame ?? w.frame, ...(w.maximized && w.kind !== "small" ? { maximized: true } : {}), incognito: w.kind === "private", title: titles.get(id), focus, profile, ...(w.display ? { display: w.display } : {}), ...(under ? { behind: under } : {}), ...(prev && w.kind !== "small" && !w.chromeWindow ? { animated: true } : {}), ...small, ...made },
         lightsCenter(s, id),
       );
     }

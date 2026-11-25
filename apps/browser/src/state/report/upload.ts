@@ -6,7 +6,7 @@ export type FailureClass = "offline" | "storage" | "server" | "rate_limited" | "
 
 export const RETRY_DELAYS_MS = [2_000, 8_000] as const;
 
-export type Created = { id: string; name: string | null; token: string; uploadUrls: Record<string, string>; uploaded: string[] };
+export type Created = { id: string; name: string | null; token: string; uploadUrls: Record<string, string>; uploaded: string[]; declared?: Record<string, number> };
 
 export type Sent = { id: string; name: string | null; issueUrl: string | null; issueNumber: number | null; uploadMs: number; bytes: number; retries: number };
 
@@ -18,7 +18,7 @@ export type UploadState =
   | { phase: "sent"; sent: Sent }
   | { phase: "failed"; stage: FailedStage; message: string; created: Created | null; errorClass: FailureClass; status: number; attempts: number };
 
-export type JsonReply = { status: number; json: unknown };
+type JsonReply = { status: number; json: unknown };
 
 export type UploadDeps = {
   postJson(url: string, body: unknown, headers: Record<string, string>): Promise<JsonReply>;
@@ -28,7 +28,7 @@ export type UploadDeps = {
   sleep(ms: number): Promise<void>;
 };
 
-export type Endpoint = { url: string; key: string; keyHeader: string };
+type Endpoint = { url: string; key: string; keyHeader: string };
 
 const object = (value: unknown): Record<string, unknown> => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
 const text = (value: unknown): string | null => (typeof value === "string" && value ? value : null);
@@ -40,7 +40,7 @@ export function resolveUrl(base: string, path: string): string {
   return `${base.replace(/[?#].*$/, "").replace(/\/[^/]*$/, "")}/${path}`;
 }
 
-export function reportPath(endpoint: string, id: string, suffix: string): string {
+function reportPath(endpoint: string, id: string, suffix: string): string {
   return `${endpoint.replace(/\/+$/, "")}/${encodeURIComponent(id)}/${suffix}`;
 }
 
@@ -77,7 +77,19 @@ export function failureClass(status: number, json: unknown): FailureClass {
   return "server";
 }
 
-export const isRetryable = (errorClass: FailureClass) => errorClass === "offline" || errorClass === "storage" || errorClass === "server";
+const isRetryable = (errorClass: FailureClass) => errorClass === "offline" || errorClass === "storage" || errorClass === "server";
+
+export type RestartReason = "expired" | "rejected" | "files_changed";
+
+export function restartReason(failed: Extract<UploadState, { phase: "failed" }>, files: ReportFile[]): RestartReason | null {
+  const created = failed.created;
+  if (!created) return null;
+  if (failed.errorClass === "expired") return "expired";
+  if (failed.errorClass === "rejected") return "rejected";
+  const declared = created.declared;
+  const unchanged = !!declared && Object.keys(declared).length === files.length && files.every((f) => declared[f.name] === f.bytes);
+  return unchanged ? null : "files_changed";
+}
 
 const sentence = (value: string) => (/[.!?]$/.test(value) ? value : `${value}.`);
 
@@ -139,7 +151,8 @@ export async function sendReport(
     const id = text(answer.id);
     const token = text(answer.upload_token);
     if (!succeeded(reply.status) || !id || (files.length > 0 && !token)) return finish(failure("create", reply, attempts, null));
-    created = { id, name: text(answer.name), token: token ?? "", uploadUrls: uploadUrlsFrom(reply.json, endpoint.url, id, files), uploaded: [] };
+    const declared = Object.fromEntries(files.map((f) => [f.name, f.bytes]));
+    created = { id, name: text(answer.name), token: token ?? "", uploadUrls: uploadUrlsFrom(reply.json, endpoint.url, id, files), uploaded: [], declared };
   }
   const auth = { Authorization: `Bearer ${created.token}`, [endpoint.keyHeader]: endpoint.key };
   let done = files.filter((f) => created!.uploaded.includes(f.name)).reduce((sum, f) => sum + f.bytes, 0);

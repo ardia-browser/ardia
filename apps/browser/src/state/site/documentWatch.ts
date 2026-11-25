@@ -1,4 +1,4 @@
-export type DocumentWatchPort = {
+type DocumentWatchPort = {
   holds(): boolean;
   loading(): boolean;
   sameDocument(): Promise<boolean | null | undefined>;

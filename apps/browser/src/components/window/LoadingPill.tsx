@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Animated, View } from "react-native";
-import { useLastingLoad } from "../../state/tabs/lastingLoad";
 import { notePageOverlay } from "../../state/telemetry/usage";
+import { consentToken } from "../../state/telemetry/client";
 import { capsule, hairline, reduceMotion, useTheme } from "../ui";
 import { HudPlate } from "./Hud";
 import { LOADING_PILL } from "./tokens";
@@ -10,9 +10,8 @@ const { width, height, top, track, motion } = LOADING_PILL;
 const FULL = 1;
 const WIPED = 2;
 
-export function LoadingPill({ tabId }: { tabId: string }) {
+export function LoadingPill({ loading }: { loading: boolean }) {
   const theme = useTheme();
-  const loading = useLastingLoad(tabId);
   const [mounted, setMounted] = useState(loading);
   if (loading && !mounted) setMounted(true);
   const opacity = useRef(new Animated.Value(0)).current;
@@ -24,8 +23,9 @@ export function LoadingPill({ tabId }: { tabId: string }) {
     if (!mounted) return;
     if (loading) {
       let current = true;
-      notePageOverlay("loadingPill");
-      const long = setTimeout(() => notePageOverlay("loadingPillLong"), LOADING_PILL.longShowMs);
+      const consent = consentToken();
+      notePageOverlay("loadingPill", consent);
+      const long = setTimeout(() => notePageOverlay("loadingPillLong", consent), LOADING_PILL.longShowMs);
       cycle.current?.run.stop();
       scale.setValue(1);
       const grow = Animated.timing(sweep, { toValue: FULL, ...motion.sweep, useNativeDriver: true });

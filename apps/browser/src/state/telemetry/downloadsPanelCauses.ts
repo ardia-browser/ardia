@@ -1,8 +1,8 @@
 const opens = { button: 0, command: 0 };
 const closes = { escape: 0, button: 0, command: 0 };
 
-export type DownloadsPanelOpening = keyof typeof opens;
-export type DownloadsPanelClosing = keyof typeof closes;
+type DownloadsPanelOpening = keyof typeof opens;
+type DownloadsPanelClosing = keyof typeof closes;
 
 export const noteDownloadsPanelOpen = (cause: DownloadsPanelOpening) => void (opens[cause] += 1);
 export const noteDownloadsPanelClose = (cause: DownloadsPanelClosing) => void (closes[cause] += 1);

@@ -12,6 +12,7 @@ import { hostLiveClient, LIVE_CAPABILITIES } from "../../../apps/linux/src/hostL
 import { linuxLiveSources } from "../../../apps/linux/src/liveSources.ts";
 import { live, setAccount } from "../../../apps/browser/src/state/live/store.ts";
 import { LiveError } from "../../../apps/browser/src/state/live/types.ts";
+import { asSecret } from "../../../packages/core/src/secret.ts";
 
 const TOOL = process.env.LIVE_HOST_TOOL;
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "fixtures/live-contract");
@@ -112,8 +113,9 @@ function pick(route, fallback) {
 
 function defaultFor(host, method, path, body) {
   if (host === "api.github.com") {
-    const query = JSON.parse(body).query;
-    return ["github", query.includes("LiveFolderDetails") ? "details" : query.includes("LiveFolder") ? "folder" : "viewer"];
+    const { query, variables } = JSON.parse(body);
+    if (query.includes("search(")) return ["github", /(^|\s)author:@me(\s|$)/.test(variables.q) ? "folder" : "emptySearch"];
+    return ["github", query.includes("LiveFolderDetails") ? "details" : "viewer"];
   }
   if (host === "github.com") return ["github", path === "/login/device/code" ? "deviceCode" : "deviceToken"];
   if (host === "api.bitbucket.org") {
@@ -184,14 +186,14 @@ test("GitHub: a token connects from the documented viewer reply and a folder map
 test("GitHub: bad credentials, the primary and secondary rate limits and SAML enforcement keep their meaning", async () => {
   serve("api.github.com /graphql", "badCredentials");
   await rejectsWith(SOURCES.github.fetch(prFolder), "signedOut");
+  serve("api.github.com /graphql", "ssoRequired");
+  await rejectsWith(SOURCES.github.fetch(prFolder), "sso");
   serve("api.github.com /graphql", "primaryRateLimit");
-  await rejectsWith(SOURCES.github.fetch(prFolder), "rateLimited", /rate limit already exceeded/);
+  await rejectsWith(SOURCES.github.fetch(prFolder), "rateLimited", /^Rate Limit Exceeded$/);
   serve("api.github.com /graphql", "secondaryRateLimit");
   await rejectsWith(SOURCES.github.fetch(prFolder), "rateLimited");
   serve("api.github.com /graphql", "secondaryRateLimitNoRetryAfter");
   await rejectsWith(SOURCES.github.fetch(prFolder), "rateLimited");
-  serve("api.github.com /graphql", "ssoRequired");
-  await rejectsWith(SOURCES.github.fetch(prFolder), "sso");
   assert.ok(live().accounts.github, "a refresh failure never drops the account");
 });
 
@@ -248,7 +250,7 @@ test("Confluence: an API token connects to the site and CQL search maps the expa
 });
 
 test("Google Drive: the documented code exchange connects, files map, and a refresh reply without a refresh token keeps the stored one", async () => {
-  await linux.connectGoogle(CREDENTIALS.googleClient, CREDENTIALS.googleSecret, CREDENTIALS.googleCode, CREDENTIALS.googleVerifier, REDIRECT);
+  await linux.connectGoogle(CREDENTIALS.googleClient, CREDENTIALS.googleSecret, asSecret("oauthToken", CREDENTIALS.googleCode), asSecret("oauthToken", CREDENTIALS.googleVerifier), REDIRECT);
   assert.equal(live().accounts.gdrive.login, "emma@acme.example");
   const exchange = Object.fromEntries(new URLSearchParams(requests.find((r) => r.host === "oauth2.googleapis.com").body));
   assert.deepEqual([exchange.grant_type, exchange.redirect_uri, exchange.code], ["authorization_code", REDIRECT, CREDENTIALS.googleCode]);

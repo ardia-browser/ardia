@@ -6,7 +6,7 @@ backed out without another build. `apps/browser/src/platform/killSwitches.ts` is
 
 ## Rules
 
-- **At most 8 switches live** (`MAX_SWITCHES`). `killSwitches.test.mjs` fails above 8, and for any switch past its
+- **At most 9 switches live** (`MAX_SWITCHES`; 8 until 2026-11-16, raised by one for `peekGenie`, the first switch guarding a private macOS API rather than a speed change, pending the owner's OK). `killSwitches.test.mjs` fails above the cap, and for any switch past its
   `removeBy` date: delete the switch and its old path, or move the date and say why in the commit.
 - Every switch is **on by default**, has an `owner` (an area) and an `about` line, and falls back to the behaviour from
   before the change when off, with a unit test of both paths.
@@ -62,7 +62,6 @@ and a `removeBy` like the switches, don't count against the 8, and the site's sw
 |---|---|
 | `serverWindowDragAllOpen` | with `serverWindowDrag`, every view in the titlebar band is left open to window moves (`ServerWindowDrag.swift`) |
 | `dragRegionEveryMount` | with `serverWindowDrag`, every React Native mount rebuilds each window's title-bar drag region 0.1 s later, as before #1682; off, a mount rebuilds only the window whose title bar the pointer is in and leaves the others for the pointer's arrival (read natively, once a launch: `ServerWindowDrag.swift`) |
-| `webkitSignIn` | moving a Chromium page to WebKit first copies the cookies that page's own address gets (HttpOnly included, partitioned ones left out) into the profile's WebKit store, so a cookie sign-in (Netflix, Disney+…) comes along; at most 1.5 s, then the move goes ahead either way (`state/engines/engineSignIn.ts`, `WebKitCookieImport.swift`) |
 
 The environment-only switches of 2026-10-17 to 10-20 (`ARDIA_EARLY_WINDOW_FIRST`, `ARDIA_SCROLL_FULL_RATE`,
 `ARDIA_WALLET_PASSES`, …) shipped their default in 0.2.40 and are gone with their other branch.

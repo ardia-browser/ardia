@@ -59,6 +59,10 @@ NSArray<NSDictionary *> *KnownHosts() {
   ];
 }
 
+NSArray<NSString *> *SystemRegisteredHosts() {
+  return @[ @"com.apple.passwordmanager" ];
+}
+
 NSString *ManifestPath(NSString *dir, NSString *name) {
   return [dir stringByAppendingPathComponent:[name stringByAppendingPathExtension:@"json"]];
 }
@@ -71,7 +75,12 @@ bool IsUsable(NSDictionary *manifest, NSString *name) {
          path.isAbsolutePath && [NSFileManager.defaultManager isExecutableFileAtPath:path];
 }
 
-NSDictionary<NSString *, NSData *> *InstalledHosts() {
+NSString *AppBundleOf(NSString *path) {
+  NSRange app = [path rangeOfString:@".app/"];
+  return app.location == NSNotFound ? nil : [path substringToIndex:app.location + 4];
+}
+
+NSDictionary<NSString *, NSData *> *InstalledHosts(NSUInteger *unusable) {
   NSMutableDictionary<NSString *, NSData *> *hosts = [NSMutableDictionary dictionary];
   for (NSDictionary *manifest in KnownHosts()) {
     NSString *name = manifest[@"name"];
@@ -82,10 +91,33 @@ NSDictionary<NSString *, NSData *> *InstalledHosts() {
       hosts[name] = [NSJSONSerialization dataWithJSONObject:manifest
                                                     options:NSJSONWritingPrettyPrinted | NSJSONWritingWithoutEscapingSlashes
                                                       error:nil];
+    else if (NSString *bundle = AppBundleOf(manifest[@"path"]); bundle && [NSFileManager.defaultManager fileExistsAtPath:bundle])
+      (*unusable)++;
+  }
+  for (NSString *name in SystemRegisteredHosts()) {
+    NSData *system = [NSData dataWithContentsOfFile:ManifestPath(kChromeSystemDir, name)];
+    if (system && IsUsable([NSJSONSerialization JSONObjectWithData:system options:0 error:nil], name)) hosts[name] = system;
   }
   return hosts;
 }
 
+}
+
+NSDictionary<NSString *, NSNumber *> *ProbeHosts(NSString *userDataDir) {
+  NSFileManager *fm = NSFileManager.defaultManager;
+  NSString *dir = [userDataDir stringByAppendingPathComponent:@"NativeMessagingHosts"];
+  NSData *listData = [NSData dataWithContentsOfFile:[dir stringByAppendingPathComponent:kManagedList]];
+  NSArray *listed = listData ? [NSJSONSerialization JSONObjectWithData:listData options:0 error:nil] : nil;
+  NSSet<NSString *> *managed = [listed isKindOfClass:NSArray.class] ? [NSSet setWithArray:listed] : [NSSet set];
+  NSUInteger unusable = 0, registered = 0, kept = 0, missing = 0;
+  NSDictionary<NSString *, NSData *> *hosts = InstalledHosts(&unusable);
+  for (NSString *name in hosts) {
+    const bool present = [fm fileExistsAtPath:ManifestPath(dir, name)];
+    if (present && [managed containsObject:name]) registered++;
+    else if (present) kept++;
+    else missing++;
+  }
+  return @{@"found" : @(hosts.count), @"registered" : @(registered), @"keptTheirs" : @(kept), @"missing" : @(missing), @"unusable" : @(unusable)};
 }
 
 void SyncHosts(NSString *userDataDir) {
@@ -97,7 +129,8 @@ void SyncHosts(NSString *userDataDir) {
   NSArray *previous = listData ? [NSJSONSerialization JSONObjectWithData:listData options:0 error:nil] : nil;
   NSSet<NSString *> *managed = [previous isKindOfClass:NSArray.class] ? [NSSet setWithArray:previous] : [NSSet set];
 
-  NSDictionary<NSString *, NSData *> *hosts = InstalledHosts();
+  NSUInteger unusable = 0;
+  NSDictionary<NSString *, NSData *> *hosts = InstalledHosts(&unusable);
   NSMutableSet<NSString *> *nowManaged = [NSMutableSet set];
   for (NSString *name in hosts) {
     NSString *path = ManifestPath(dir, name);

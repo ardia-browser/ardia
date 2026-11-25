@@ -173,6 +173,8 @@ type Readable = number | Pick<AnimatedValue, "__getValue">;
 const read = (node: Readable) => (typeof node === "number" ? node : node.__getValue());
 const combined = (get: () => number) => ({ __getValue: get });
 
+export const PanResponder = { create: () => ({ panHandlers: {} }) };
+
 export const Animated = {
   createAnimatedComponent: <Component>(component: Component) => component,
   Value: AnimatedValue,
@@ -183,6 +185,13 @@ export const Animated = {
   add: (a: Readable, b: Readable) => combined(() => read(a) + read(b)),
   subtract: (a: Readable, b: Readable) => combined(() => read(a) - read(b)),
   multiply: (a: Readable, b: Readable) => combined(() => read(a) * read(b)),
+};
+
+const layoutAnimations: unknown[] = [];
+
+export const LayoutAnimation = {
+  Types: { spring: "spring", linear: "linear", easeInEaseOut: "easeInEaseOut", easeIn: "easeIn", easeOut: "easeOut", keyboard: "keyboard" },
+  configureNext: (config: unknown) => void layoutAnimations.push(config),
 };
 
 export const findNodeHandle = () => null;

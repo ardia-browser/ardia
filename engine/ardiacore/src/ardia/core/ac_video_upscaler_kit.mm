@@ -211,7 +211,8 @@ ArdiaVideoUpscalerKit* BuildKit(ArdiaVideoUpscalerKit* previous,
       if (padded) {
         CVPixelBufferRelease(padded);
       }
-      if (!kit.vtOutput || !kit.paddedInput) {
+      if (!kit.vtOutput || !kit.paddedInput || HasExtendedPixels(kit.paddedInput) ||
+          HasExtendedPixels(kit.vtOutput)) {
         return nil;
       }
     }

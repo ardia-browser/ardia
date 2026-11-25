@@ -2,15 +2,19 @@ name: Linked issue
 
 on:
   pull_request_target:
-    types: [opened, edited, reopened, synchronize]
+    types: [opened, edited, reopened]
 
 permissions:
   issues: read
   pull-requests: read
 
+concurrency:
+  group: linked-issue-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   linked-issue:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     if: github.event.pull_request.user.login != 'dependabot[bot]'
     steps:
       - env:

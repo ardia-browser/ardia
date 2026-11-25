@@ -1,5 +1,5 @@
 import type { BrowserState } from "../browser/store";
-import { rootOf } from "../groups/groups";
+import { rootsIn } from "../groups/groups";
 import type { BrowserWindow, ParkedPins, TabGroup } from "../browser/types";
 import { entryKey, parseEntry } from "../sidebar/entryKey";
 import { isPinnedRow, pinKeyOf } from "../browser/model";
@@ -10,9 +10,10 @@ function pinnedBlocks(s: Pick<BrowserState, "tabs" | "groups">, w: BrowserWindow
   const blocks: Block[] = [];
   const byRoot = new Map<string, Block>();
   const pinnedRoot = new Map<string, TabGroup>();
+  const rootFor = rootsIn(s.groups);
   for (const g of Object.values(s.groups)) {
     if (!g.pinned || g.windowId !== w.id || g.profileId !== profileId) continue;
-    const root = rootOf(s.groups, g.id) ?? g;
+    const root = rootFor(g.id) ?? g;
     for (const id of g.tabIds) pinnedRoot.set(id, root);
   }
   for (const id of w.tabIds) {
@@ -35,7 +36,7 @@ function pinnedBlocks(s: Pick<BrowserState, "tabs" | "groups">, w: BrowserWindow
   return blocks;
 }
 
-export type Anchors = Map<string, string | null>;
+type Anchors = Map<string, string | null>;
 
 export function anchorsOf(keys: string[]): Anchors {
   const anchors: Anchors = new Map();

@@ -7,13 +7,7 @@ public struct ZenSidebar: Equatable {
   public var separateEssentials = true
 
   public func favicons(for pages: [String]) -> [ImportedFavicon] {
-    let wanted = Set(pages)
-    var total = 0
-    return favicons.filter { icon in
-      guard wanted.contains(icon.page), total + icon.png.count <= ChromiumFavicons.maximumTotalBytes else { return false }
-      total += icon.png.count
-      return true
-    }
+    FirefoxFavicons.sessionIcons(favicons, for: pages)
   }
 
   public static func sessionFiles(profile: URL) -> [URL] {

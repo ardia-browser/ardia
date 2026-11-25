@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import { sourceTiles } from "./sourceTiles.ts";
 import { PLATFORM_FEATURES as MAC } from "../../lib/platformFeatures.ts";
-import { PLATFORM_FEATURES as WINDOWS } from "../../lib/platformFeatures.windows.ts";
 
 const summary = (tiles) => tiles.map((t) => [t.id, t.name, t.found, t.app, t.importId ?? null]);
 
@@ -19,17 +18,6 @@ test("on the Mac a tile is found by its app bundle and keeps the app's path for 
   ]);
   assert.equal(sourceTiles(() => false, MAC).find((t) => t.id === "brave")?.name, "Brave or Edge");
   assert.ok(sourceTiles((c) => c.id === "helium", MAC).some((t) => t.id === "helium" && t.found));
-});
-
-test("on Windows a tile is found by the import's list, has no app path, and the Mac-only browsers are left out", () => {
-  const listed = new Set(["edge", "firefox"]);
-  assert.deepEqual(summary(sourceTiles((c) => listed.has(c.importId ?? c.id), WINDOWS)), [
-    ["arc", "Arc", false, null, null],
-    ["chrome", "Chrome", false, null, null],
-    ["firefox", "Firefox", true, null, null],
-    ["zen", "Zen", false, null, null],
-    ["edge", "Edge", true, null, null],
-  ]);
 });
 
 test("on Linux the import's list also finds Chromium, Vivaldi and Opera, which the Mac never offers", async () => {

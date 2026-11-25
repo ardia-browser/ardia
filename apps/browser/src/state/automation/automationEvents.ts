@@ -5,8 +5,7 @@ import { focusedWindowOf } from "../windows/ui";
 import { eligibleKind, isEligibleTab, shownPage } from "./automationWindows";
 import type { AutomationEventName } from "./eventNames";
 
-export { AUTOMATION_EVENTS, type AutomationEventName } from "./eventNames";
-export type AutomationEventSink = (name: AutomationEventName, data: Record<string, unknown>) => void;
+type AutomationEventSink = (name: AutomationEventName, data: Record<string, unknown>) => void;
 
 type Commit = { url: string; at: number };
 
@@ -24,7 +23,7 @@ function tabData(s: BrowserState, tabId: string) {
   return { windowId: t.windowId, tabId, profile: t.profileId, ...shownPage(t) };
 }
 
-export function diffStates(s: BrowserState, prev: BrowserState, send: AutomationEventSink) {
+function diffStates(s: BrowserState, prev: BrowserState, send: AutomationEventSink) {
   const layout = s.windows !== prev.windows || s.tabs !== prev.tabs || s.peeks !== prev.peeks;
   if (s.windows !== prev.windows) {
     for (const id in s.windows) if (eligibleKind(s, id) && !eligibleKind(prev, id)) send("window.opened", windowData(s, id));
@@ -104,7 +103,7 @@ export function startEventFeed(send: AutomationEventSink) {
   sink = send;
   if (stopWatching) return;
   startedAt = Date.now();
-  void reportPageCommits(true).catch(() => {});
+  void reportPageCommits("automation", true).catch(() => {});
   const s = useBrowser.getState();
   for (const id in s.tabs) commits.set(id, { url: s.tabs[id]!.url, at: startedAt });
   const unsubscribe = useBrowser.subscribe((next, prev) => {
@@ -115,7 +114,7 @@ export function startEventFeed(send: AutomationEventSink) {
 }
 
 export function stopEventFeed() {
-  if (stopWatching) void reportPageCommits(false).catch(() => {});
+  if (stopWatching) void reportPageCommits("automation", false).catch(() => {});
   stopWatching?.();
   stopWatching = null;
   sink = null;

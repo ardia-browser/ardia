@@ -288,7 +288,7 @@ bool LinuxPageStatus::OpenBlockedPopup(const base::ListValue& args) {
                                               ContentSettingsType::POPUPS, CONTENT_SETTING_ALLOW);
     }
   }
-  popups->ShowBlockedPopup(id, WindowOpenDisposition::NEW_FOREGROUND_TAB);
+  popups->ShowBlockedPopup(id, WindowOpenDisposition::kNewForegroundTab);
   return true;
 }
 

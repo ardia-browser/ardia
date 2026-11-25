@@ -43,7 +43,10 @@ test("search suggestions go through the browser's own network stack, never the a
     }
     const rows = JSON.stringify(value.items);
     assert.ok(rows.includes("1password login") && rows.includes("1password pricing"), "query rows shown");
-    assert.ok(!rows.includes("https://1password.com/") && !rows.includes("https://my.1password.com/"), "Google's navigation rows are not shown as queries");
+    const searches = value.items.filter((i) => i.kind === "search").map((i) => i.query);
+    assert.ok(!searches.some((q) => q.includes("1password.com")), "Google's navigation rows are not shown as queries");
+    const sites = value.items.filter((i) => i.kind === "page").map((i) => i.url);
+    assert.ok(sites.includes("https://1password.com/"), "Google's navigation rows are listed as sites");
     h.unmount();
   } finally {
     globalThis.fetch = appFetch;

@@ -14,4 +14,6 @@ export const hidesRowIcon = (t: Pick<Tab, "pin" | "customIcon" | "url" | "pinned
 export const ghostIcon = (tab: Pick<Tab, "pin" | "customIcon" | "url" | "pinnedUrl"> | undefined, draggingRow: boolean): { icon: string | null } | null =>
   tab && !(draggingRow && hidesRowIcon(tab)) ? { icon: tab.customIcon } : null;
 
+export const ghostTileIcon = (tab: Pick<Tab, "pin" | "customIcon" | "url" | "pinnedUrl"> | undefined): { icon: string | null } | null => ghostIcon(tab, false);
+
 export const ownIcon = (t: Pick<Tab, "pin" | "customIcon"> | undefined): string | null => (t && (isPinnedRow(t) ? t.customIcon : drawnIcon(t.customIcon))) ?? null;

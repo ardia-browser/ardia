@@ -1,13 +1,15 @@
+import { useShallow } from "zustand/react/shallow";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, PanResponder, StyleSheet, View } from "react-native";
 import { useTheme } from "../ui/theme";
 import { updateSplit } from "../../state/splits/actions";
 import { useDragFallbackPane } from "../../state/splits/hooks";
 import type { SplitView } from "../../state/browser/types";
-import { resize, type Divider, type Rect } from "../window/geometry";
+import { evenPair, resize, type Divider, type Rect } from "../window/geometry";
 import { capsule, OverPage, space, Symbol, Text, Toast, withAlpha } from "../ui";
 import { hideToast, useToasts } from "../../state/app/toasts";
-import { useWindowId } from "../../state/browser/hooks";
+import { noteSplit } from "../../state/telemetry/usage";
+import { useTab, useWindowId, useWindowProfileId } from "../../state/browser/hooks";
 import { useCardFrame } from "../window/cardFrame";
 import type { Size } from "../ui/useSettled";
 import { overPeek } from "../../state/windows/dockMotion";
@@ -79,11 +81,14 @@ function windowCorners(rect: Rect, origin: { x: number; y: number } | null, wind
 
 const sizesOf = (split: SplitView) => ({ sizes: split.slots.map((slot) => slot.size), stack: split.slots.find((slot) => "stack" in slot)?.stackSizes });
 
+const CLICK_SLOP = 3;
+
 function DividerHandle({ split, divider, width, height }: { split: SplitView; divider: Divider; width: number; height: number }) {
   const theme = useTheme();
   const [hovered, setHovered] = useState(false);
   const [dragging, setDragging] = useState(false);
   const start = useRef<{ sizes: number[]; stack?: [number, number] }>(sizesOf(split));
+  const dragged = useRef(false);
   const latest = useRef({ split, divider, width, height });
   latest.current = { split, divider, width, height };
 
@@ -94,11 +99,13 @@ function DividerHandle({ split, divider, width, height }: { split: SplitView; di
         onPanResponderGrant: () => {
           const { split: v } = latest.current;
           start.current = sizesOf(v);
+          dragged.current = false;
           setDragging(true);
         },
         onPanResponderMove: (_, g) => {
           const { split: v, divider: d, width: w, height: h } = latest.current;
           const delta = d.vertical ? g.dx : g.dy;
+          if (Math.abs(delta) > CLICK_SLOP) dragged.current = true;
           const gap = d.vertical ? d.rect.width : d.rect.height;
           if (d.kind === "root") {
             updateSplit(v.id, { sizes: resize(start.current.sizes, d.index, delta, d.vertical ? w : h, gap) });
@@ -113,12 +120,22 @@ function DividerHandle({ split, divider, width, height }: { split: SplitView; di
     [],
   );
 
+  const evenOut = () => {
+    if (dragged.current) return;
+    const { split: v, divider: d } = latest.current;
+    const now = sizesOf(v);
+    if (d.kind === "root") updateSplit(v.id, { sizes: evenPair(now.sizes, d.index) });
+    else if (now.stack) updateSplit(v.id, { stackSizes: [0.5, 0.5] });
+    noteSplit("splitDividerResets");
+  };
+
   const { rect, vertical } = divider;
   const active = hovered || dragging;
   const cursor = vertical ? "col-resize" : "row-resize";
   return (
     <View
       {...responder.panHandlers}
+      onDoubleClick={evenOut}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -150,14 +167,20 @@ function DividerHandle({ split, divider, width, height }: { split: SplitView; di
 const HANDLE_THICKNESS = 4;
 const HANDLE_LENGTH = 36;
 
+const NOT_DRAGGING = { dragging: null, x: -1, y: -1, lifted: null, outside: false, target: null } as const;
+
 export function DropTargets({ panes, origin }: { panes: Record<string, Rect>; origin: { x: number; y: number } | null }) {
   const windowId = useWindowId();
-  const dragging = useTabDrag((s) => (s.phase === "tab" && s.windowId === windowId ? s.tabId : null));
-  const x = useTabDrag((s) => (s.phase === "tab" ? s.x : -1));
-  const y = useTabDrag((s) => (s.phase === "tab" ? s.y : -1));
-  const lifted = useTabDrag((s) => (s.phase === "tab" ? s.lifted : null));
-  const outside = useTabDrag((s) => s.phase === "tab" && s.outside);
-  const target = useTabDrag((s) => (s.phase === "tab" ? s.target : null));
+  const { dragging, x, y, lifted, outside, target } = useTabDrag(
+    useShallow((s) =>
+      s.phase === "tab"
+        ? { dragging: s.windowId === windowId ? s.tabId : null, x: s.x, y: s.y, lifted: s.lifted, outside: s.outside, target: s.target }
+        : NOT_DRAGGING,
+    ),
+  );
+  const draggedProfile = useTab(dragging ?? undefined, (t) => t?.profileId);
+  const windowProfile = useWindowProfileId();
+  const foreign = !!dragging && draggedProfile !== windowProfile;
   const full = Object.keys(panes).length >= 3;
   const fallback = useDragFallbackPane(dragging, panes, windowId);
   const candidates = useMemo((): [string, Rect][] => {
@@ -168,7 +191,7 @@ export function DropTargets({ panes, origin }: { panes: Record<string, Rect>; or
   const px = origin ? x - origin.x : -1;
   const py = origin ? y - origin.y : -1;
   const overPage = !!origin && x >= 0 && !overPeek(windowId, x) && Object.values(panes).some((r) => px >= r.x && px <= r.x + r.width && py >= r.y && py <= r.y + r.height);
-  const shown = !!dragging && !!origin && !full && !outside && candidates.length > 0 && (lifted ?? overPage);
+  const shown = !!dragging && !foreign && !!origin && !full && !outside && candidates.length > 0 && (lifted ?? overPage);
   const [grown, setGrown] = useState(false);
   useEffect(() => {
     setGrown(false);
@@ -180,7 +203,7 @@ export function DropTargets({ panes, origin }: { panes: Record<string, Rect>; or
   const hit = splitViewAvailable && shown && grown && overPage ? zoneHit(candidates, px, py, target) : null;
   const preview = shown && overPage;
   const resolver = useRef({ candidates, origin, panes, ready: false });
-  resolver.current = { candidates, origin, panes, ready: !!dragging && !!origin && !full && candidates.length > 0 && grown && lifted !== false };
+  resolver.current = { candidates, origin, panes, ready: !!dragging && !foreign && !!origin && !full && candidates.length > 0 && grown && lifted !== false };
   useEffect(() => {
     if (!dragging) return;
     setTargetResolver((x, y, current, outside) => {
@@ -296,17 +319,23 @@ export const SplitToast = memo(function SplitToast({ windowId }: { windowId: str
   const toast = useToasts((s) => s.toasts[windowId] ?? null);
   const [shown, setShown] = useState(toast);
   const [closing, setClosing] = useState(false);
+  const [held, setHeld] = useState(false);
   if (toast && toast !== shown) {
     setShown(toast);
     setClosing(false);
   } else if (!toast && shown && !closing) setClosing(true);
   useEffect(() => {
-    if (!toast || toast.sticky) return;
-    const timer = setTimeout(() => setClosing(true), toast.action ? TOAST_ACTION_MS : TOAST_MS);
+    if (!toast || toast.sticky || (held && toast.secondary)) return;
+    const timer = setTimeout(() => setClosing(true), toast.holdMs ?? (toast.action ? TOAST_ACTION_MS : TOAST_MS));
     return () => clearTimeout(timer);
-  }, [toast?.id]);
+  }, [toast?.id, held && !!toast?.secondary]);
   if (!shown) return null;
-  const action = shown.action;
+  const { action, secondary } = shown;
+  const pick = (chosen: typeof action) => () => {
+    chosen?.run();
+    setShown(null);
+    hideToast(windowId, shown.id);
+  };
   return (
     <Toast
       key={shown.id}
@@ -314,11 +343,11 @@ export const SplitToast = memo(function SplitToast({ windowId }: { windowId: str
       message={shown.message ?? undefined}
       icon={shown.icon ?? "rectangle.split.3x1"}
       action={action?.title}
-      onAction={() => {
-        action?.run();
-        setShown(null);
-        hideToast(windowId, shown.id);
-      }}
+      onAction={pick(action)}
+      secondary={secondary?.title}
+      onSecondary={pick(secondary)}
+      onHeld={secondary ? setHeld : undefined}
+      titleLines={shown.titleLines}
       closing={closing}
       onClosed={() => {
         setShown(null);

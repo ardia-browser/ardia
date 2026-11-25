@@ -2,9 +2,9 @@ import type { BrowserState } from "../browser/store";
 import type { BrowserWindow, ClosedGroup, ClosedTab, ClosedWindow } from "../browser/types";
 import { isIncognitoProfile } from "../browser/model";
 
-export type RecentlyClosed = { tabs: ClosedTab[]; windows: ClosedWindow[]; groups: ClosedGroup[] };
+type RecentlyClosed = { tabs: ClosedTab[]; windows: ClosedWindow[]; groups: ClosedGroup[] };
 
-export const RECENTLY_CLOSED_SHOWN = 10;
+const RECENTLY_CLOSED_SHOWN = 10;
 
 export function recentlyClosedIn(s: BrowserState, w: BrowserWindow | undefined): RecentlyClosed {
   const everyProfile = !w || w.kind === "private";

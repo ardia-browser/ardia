@@ -3,7 +3,7 @@ import { base, pagePath } from "../data/site";
 import { DISCORD, NIGHTLY, RELEASES, REPO } from "../data/release";
 ---
 
-<footer class="foot paint edge edge-b dark" data-shot="footer">
+<footer class="foot paint edge edge-b dark" data-paint="midnight" data-shot="footer">
   <div class="fireflies" aria-hidden="true" data-fireflies>
     {Array.from({ length: 14 }, (_, i) => <span style={`--x: ${(i * 37 + 11) % 97}%; --y: ${(i * 53 + 7) % 83}%; --d: ${6 + ((i * 7) % 9)}s; --o: ${-((i * 13) % 11)}s`} />)}
   </div>
@@ -15,7 +15,7 @@ import { DISCORD, NIGHTLY, RELEASES, REPO } from "../data/release";
         <a class="link" href={REPO} rel="noopener" data-track="github_clicked" data-track-link="source" data-track-location="footer"
           >Source on GitHub</a
         >
-        <a class="link" href={pagePath("notes")}>Release notes</a>
+        <a class="link" href={pagePath("notes")}>Changelog</a>
         <a class="link" href={pagePath("benchmarks")}>Benchmarks</a>
         <a class="link" href={pagePath("try")}>Try the demo</a>
         <a class="link" href={pagePath("arc")}>Moving from Arc</a>
@@ -33,7 +33,7 @@ import { DISCORD, NIGHTLY, RELEASES, REPO } from "../data/release";
           data-track="download_clicked"
           data-track-version="nightly"
           data-track-channel="nightly"
-          data-track-location="footer">Nightly (wet paint)</a
+          data-track-location="footer">Nightly</a
         >
         <a
           class="link"
@@ -44,6 +44,7 @@ import { DISCORD, NIGHTLY, RELEASES, REPO } from "../data/release";
           data-track-location="footer">Report a bug</a
         >
         <a class="link" href={DISCORD} rel="noopener" data-track="discord_clicked" data-track-location="footer">Discord</a>
+        <a class="link" href={`${pagePath("home")}#donate`} data-track="donate_clicked" data-track-location="footer">Donate</a>
         <a class="link" href={`${base}/press`} data-track="press_kit_opened" data-track-via="footer">Press kit</a>
         <a class="link" href={pagePath("privacy")}>Privacy</a>
         <a class="link" href={pagePath("terms")}>Terms</a>
@@ -54,15 +55,13 @@ import { DISCORD, NIGHTLY, RELEASES, REPO } from "../data/release";
           Not affiliated with Google or The Browser Company.
         </p>
         <p>
-          This website counts its own visitors, on its own servers: page views, clicks and session replays,
-          with typing masked. Replays are deleted after 30 days. No third party sees any of it. Countries come from{" "}
-          <a class="link" href="https://db-ip.com" rel="noopener">IP Geolocation by DB-IP</a>, looked up on our
-          servers, and the IP isn’t kept.
+          We self-host site analytics and 30-day session replays with typing masked, and never keep IP addresses. Country lookup uses{" "}
+          <a class="link" href="https://db-ip.com" rel="noopener">IP Geolocation by DB-IP</a>.
         </p>
       </div>
       <div class="col">
         <p class="label h">Built on</p>
-        <p>Chromium and uBlock Origin. Open source under GPL-3.0.</p>
+        <p>Chromium with Helium’s privacy patches, WebKit for the sites that need it, and uBlock Origin. Open source under GPL-3.0.</p>
       </div>
     </div>
   </div>
@@ -70,9 +69,6 @@ import { DISCORD, NIGHTLY, RELEASES, REPO } from "../data/release";
 
 <style>
   .foot {
-    --bg: var(--night);
-    --bg-top: #1d2b4c;
-    --wash: linear-gradient(180deg, #1d2b4c 0%, var(--night) 40%, #0d1424 100%);
     padding: clamp(64px, 9vw, 128px) 0 clamp(40px, 5vw, 64px);
   }
   .fireflies {
@@ -118,13 +114,14 @@ import { DISCORD, NIGHTLY, RELEASES, REPO } from "../data/release";
     position: relative;
   }
   .sign-off {
-    font-size: clamp(3rem, 0.6rem + 10.4vw, 11.4rem);
-    line-height: 0.84;
-    margin-left: -0.04em;
+    font-size: clamp(2.6rem, 1rem + 6vw, 7rem);
+    line-height: 0.98;
+    letter-spacing: -0.03em;
+    margin-left: -0.03em;
   }
   .sign-off span {
     white-space: nowrap;
-    color: var(--sun);
+    color: var(--figure);
   }
   .cols {
     display: grid;
@@ -135,7 +132,7 @@ import { DISCORD, NIGHTLY, RELEASES, REPO } from "../data/release";
     padding-top: 24px;
     border-top: 1px solid var(--night-rule);
     font-size: var(--t-small);
-    color: var(--night-ink-2);
+    color: var(--ink-2);
   }
   .col {
     grid-column: span 4;
@@ -144,15 +141,23 @@ import { DISCORD, NIGHTLY, RELEASES, REPO } from "../data/release";
     gap: 8px;
     align-items: flex-start;
   }
+  .col:has(> a) {
+    gap: 4px;
+  }
   .col p:not(.h) {
     max-width: 30em;
   }
   .h {
-    color: var(--night-ink);
+    color: var(--ink);
     margin-bottom: 6px;
   }
   .col a {
-    color: var(--night-ink);
+    color: var(--ink);
+  }
+  .col > a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 26px;
   }
   @media (max-width: 800px) {
     .sign-off {

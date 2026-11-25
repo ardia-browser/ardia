@@ -1,12 +1,15 @@
 The Ardia Linux host draws its own window controls in every window it hosts. Its Settings and Import windows are
 legacy app windows (TYPE_APP with an app name and no web app controller), so on X11 Chromium asked the window manager
 for its frame and the window showed both the manager's title bar and Ardia's controls, and with a custom frame it
-drew a title bar of its own. The host names such windows through g_ardia_linux_frameless_app; they get Chromium's
-custom frame and no window title bar, as a normal browser window does. The hook is null outside the Linux host.
+drew a title bar of its own, its window icon (the product logo) over the window's top-left corner, and the 3 dip
+extra top border Linux adds to windows without a tab strip as a band of frame colour above the page. The host names
+such windows through g_ardia_linux_frameless_app; they get Chromium's custom frame with no window title bar, no window
+icon and no extra top border, so the page meets the frame's edge on all four sides. The window manager's icon for the
+window is unchanged. The hook is null outside the Linux host.
 --- a/chrome/browser/ui/views/frame/browser_native_widget_aura_linux.cc
 +++ b/chrome/browser/ui/views/frame/browser_native_widget_aura_linux.cc
-@@ -17,6 +17,8 @@
- #include "ui/ozone/public/ozone_platform.h"
+@@ -20,6 +20,8 @@
+ #include "ui/platform_window/platform_window.h"
  #include "ui/views/widget/widget.h"
  
 +bool ArdiaLinuxFramelessApp(const BrowserWindowInterface* browser);
@@ -14,7 +17,7 @@ custom frame and no window title bar, as a normal browser window does. The hook 
  BrowserNativeWidgetAuraLinux::BrowserNativeWidgetAuraLinux(
      BrowserWidget* browser_widget,
      BrowserView* browser_view)
-@@ -82,6 +84,10 @@ bool BrowserNativeWidgetAuraLinux::UseCustomFrame() const {
+@@ -130,6 +132,10 @@
      return false;
    }
  
@@ -27,7 +30,7 @@ custom frame and no window title bar, as a normal browser window does. The hook 
    if (!ui::OzonePlatform::GetInstance()
 --- a/chrome/browser/ui/views/frame/browser_view.cc
 +++ b/chrome/browser/ui/views/frame/browser_view.cc
-@@ -434,6 +434,18 @@ bool (*g_ardia_linux_shell_passes_point)(gfx::NativeView child,
+@@ -448,6 +448,18 @@
                                           const gfx::Point& location) = nullptr;
  void (*g_ardia_linux_minimum_size)(const BrowserWindowInterface*,
                                     gfx::Size* minimum) = nullptr;
@@ -46,7 +49,7 @@ custom frame and no window title bar, as a normal browser window does. The hook 
  
  namespace {
  
-@@ -4023,6 +4035,9 @@ views::View* BrowserView::GetInitiallyFocusedView() {
+@@ -4727,11 +4739,17 @@
  }
  
  bool BrowserView::ShouldShowWindowTitle() const {
@@ -55,4 +58,42 @@ custom frame and no window title bar, as a normal browser window does. The hook 
 +  }
    return WindowFeatureController::From(browser_)->SupportsWindowFeature(
        WindowFeatureController::WindowFeature::kFeatureTitleBar);
+ }
+ 
+ bool BrowserView::ShouldShowWindowIcon() const {
++  if (ArdiaLinuxFramelessApp(browser_.get())) {
++    return false;
++  }
+ #if !BUILDFLAG(IS_CHROMEOS)
+   if (GetIsWebAppType() && !GetSupportsTabStrip()) {
+     return true;
+--- a/chrome/browser/ui/views/frame/browser_frame_view_layout_linux.cc
++++ b/chrome/browser/ui/views/frame/browser_frame_view_layout_linux.cc
+@@ -5,7 +5,9 @@
+ #include "chrome/browser/ui/views/frame/browser_frame_view_layout_linux.h"
+ 
+ #include "base/i18n/rtl.h"
++#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+ #include "chrome/browser/ui/views/frame/browser_frame_view_linux.h"
++#include "chrome/browser/ui/views/frame/browser_view.h"
+ #include "chrome/browser/ui/views/frame/opaque_browser_frame_view_layout.h"
+ #include "ui/gfx/geometry/insets.h"
+ #include "ui/views/window/frame_view_utils_linux.h"
+@@ -23,6 +25,8 @@ constexpr unsigned int kExtraTopBorder =
+ 
+ }  // namespace
+ 
++bool ArdiaLinuxFramelessApp(const BrowserWindowInterface* browser);
++
+ BrowserFrameViewLayoutLinux::BrowserFrameViewLayoutLinux() = default;
+ BrowserFrameViewLayoutLinux::~BrowserFrameViewLayoutLinux() = default;
+ 
+@@ -72,5 +76,8 @@ gfx::Insets BrowserFrameViewLayoutLinux:
+ }
+ 
+ int BrowserFrameViewLayoutLinux::NonClientExtraTopThickness() const {
++  if (view_ && ArdiaLinuxFramelessApp(view_->GetBrowserView()->browser())) {
++    return 0;
++  }
+   return delegate_->IsTabStripVisible() ? 0 : kExtraTopBorder;
  }

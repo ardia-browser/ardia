@@ -215,6 +215,21 @@ NSString *StoreFolder(NSString *profile, NSString *extensionId, id version) {
   });
 }
 
++ (void)preloadPages:(NSString *)profile reply:(ArdiaServiceReply)reply {
+  ardia_host::WithProfile(ardia_host::OriginalProfileName(profile), ^(ArdiaCoreProfile *p) {
+    if (!p) return reply(nil, @"profile not loaded");
+    reply(p.preloadPages ? @YES : @NO, nil);
+  });
+}
+
++ (void)setPreloadPages:(BOOL)on profile:(NSString *)profile reply:(ArdiaServiceReply)reply {
+  ardia_host::WithProfile(ardia_host::OriginalProfileName(profile), ^(ArdiaCoreProfile *p) {
+    if (!p) return reply(nil, @"profile not loaded");
+    p.preloadPages = on;
+    reply(nil, nil);
+  });
+}
+
 + (void)addresses:(NSString *)profile reply:(ArdiaServiceReply)reply {
   [self callBase:@"ac_autofill_addresses" profile:profile args:nil completion:Dated(@"addresses", reply)];
 }
@@ -279,6 +294,7 @@ NSString *StoreFolder(NSString *profile, NSString *extensionId, id version) {
       for (NSString *key in @[ @"popup", @"actionTitle", @"actionIcon", @"sidePanel", @"hasAction" ])
         if (manifest[key]) item[key] = manifest[key];
       item[@"incognitoSplit"] = @([manifest[@"incognitoSplit"] boolValue]);
+      item[@"incognitoAllowed"] = manifest[@"incognitoAllowed"] ?: NSNull.null;
       for (NSString *key in @[ @"siteAccess", @"optionsUrl", @"path", @"homepageUrl" ])
         if (!item[key]) item[key] = NSNull.null;
       const BOOL fromStore = [info[@"location"] isEqual:@"FROM_STORE"];

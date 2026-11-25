@@ -1,6 +1,6 @@
 import { fuzzyScore, hostOf } from "@ardia/core";
 
-export type GroupPanelGroup = { tabIds: string[]; parentId?: string };
+type GroupPanelGroup = { tabIds: string[]; parentId?: string };
 export type GroupPanelTab = { id: string; title: string; url: string; usedAt: number };
 
 export function groupTabIds(groups: Record<string, GroupPanelGroup>, groupId: string): string[] {

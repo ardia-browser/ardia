@@ -24,6 +24,7 @@ typedef int (*ArdiaAppStartFunction)(const ArdiaEngineApi *engine);
 typedef int (*ArdiaAppPreTranslateFunction)(const void *message);
 typedef void (*ArdiaAppStopFunction)(void);
 typedef int (*ArdiaAppRunFunction)(void);
+typedef const wchar_t *(*ArdiaAppStartFailureFunction)(void);
 
 #ifdef __cplusplus
 }

@@ -6,6 +6,7 @@ import unittest
 
 
 SOURCE = pathlib.Path(__file__).resolve().parents[1] / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 LINUX = SOURCE / 'ardia' / 'linux'
 
 LEDGER = r'''#include <array>
@@ -203,13 +204,17 @@ static void ASmallWindowOpensAtItsSizeCentredLikeTheMac() {
   const auto tiny = RequestedSmallFrame({100, 50}, area, true);
   assert(tiny.bounds.width == kSmallWindowMinWidth && tiny.bounds.height == kSmallWindowMinHeight);
   const auto huge = RequestedSmallFrame({5000, 4000}, area, true);
-  assert(huge.bounds.width == 1920 && huge.bounds.height == 1048);
-  assert(huge.bounds.x == 0 && huge.bounds.y == 32);
+  assert(huge.bounds.width == 1536 && huge.bounds.height == 838);
+  assert(huge.bounds.x == 192 && huge.bounds.y == 32 + 105);
   const auto tall = RequestedSmallFrame({900, 1040}, area, true);
-  assert(tall.bounds.height == 1040 && tall.bounds.y == 32 + 4);
+  assert(tall.bounds.height == 838 && tall.bounds.y == 32 + 105);
+  const auto cramped = RequestedSmallFrame({900, 640}, Rect{0, 0, 500, 360}, true);
+  assert(cramped.bounds.width == 420 && cramped.bounds.height == 300);
+  assert(cramped.bounds.x == 40 && cramped.bounds.y == 30);
   const Rect second{-1280, 200, 1280, 720};
   const auto other = RequestedSmallFrame({900, 640}, second, true);
-  assert(other.bounds.x == -1280 + 190 && other.bounds.y == 200 + 40);
+  assert(other.bounds.width == 900 && other.bounds.height == 576);
+  assert(other.bounds.x == -1280 + 190 && other.bounds.y == 200 + 72);
   const auto wayland = RequestedSmallFrame({1000, 700}, area, false);
   assert(!wayland.positioned && wayland.bounds.width == 1000 && wayland.bounds.height == 700);
   assert(wayland.bounds.x == 0 && wayland.bounds.y == 0);
@@ -223,7 +228,7 @@ static void ASmallWindowOpensAtItsSizeCentredLikeTheMac() {
   }
   const auto negative = RequestedSmallFrame({-1e300, -1e300}, area, true);
   assert(negative.bounds.width == kSmallWindowMinWidth && negative.bounds.height == kSmallWindowMinHeight);
-  assert(kSmallWindowMinWidth == 420 && kSmallWindowMinHeight == 300);
+  assert(kSmallWindowMinWidth == 420 && kSmallWindowMinHeight == 300 && kSmallWindowLargestShare == 0.8);
 }
 
 static void AUtilityWindowOpensCentredOverItsOpenerInsideTheWorkArea() {
@@ -277,7 +282,7 @@ class WindowLifecycleLedgerTests(unittest.TestCase):
             root = pathlib.Path(scratch)
             (root / 'ledger.cc').write_text(LEDGER)
             binary = root / 'ledger'
-            built = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-I', str(SOURCE),
+            built = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE),
                                     str(root / 'ledger.cc'), str(LINUX / 'ac_linux_window_lifecycle.cc'), '-o', str(binary)],
                                    capture_output=True, text=True)
             self.assertEqual(built.returncode, 0, built.stdout + built.stderr)

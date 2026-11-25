@@ -1,4 +1,4 @@
-import { openFile } from "../../platform/files";
+import { openDownload } from "../downloads/openDownload";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { downloadVisibleIn } from "../downloads/downloadsSlice";
 import { focusedWindowOf } from "./ui";
@@ -10,10 +10,10 @@ let openingWhenDone = false;
 export function startOpenWhenDone() {
   if (openingWhenDone) return;
   openingWhenDone = true;
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["downloads"], (s, prev) => {
     if (s.downloads === prev.downloads || !openWhenDone.size) return;
     for (const d of s.downloads) {
-      if (d.state !== "downloading" && openWhenDone.delete(d.id) && d.state === "finished") void openFile(d.path);
+      if (d.state !== "downloading" && openWhenDone.delete(d.id) && d.state === "finished") void openDownload(d.path);
     }
   });
 }
@@ -26,13 +26,13 @@ export function toggleOpenWhenDone(id: string) {
 }
 
 export const onDownloadsChanged = (listener: () => void) =>
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["downloads"], (s, prev) => {
     if (s.downloads !== prev.downloads) listener();
   });
 
 export function watchNewDownloads(windowId: string, onFresh: (download: BrowserState["downloads"][number]) => void) {
   const seen = new Set(useBrowser.getState().downloads.map((d) => d.id));
-  return useBrowser.subscribe((s, prev) => {
+  return useBrowser.subscribeTo(["downloads"], (s, prev) => {
     if (s.downloads === prev.downloads) return;
     const fresh = s.downloads.find((d) => !seen.has(d.id));
     s.downloads.forEach((d) => seen.add(d.id));

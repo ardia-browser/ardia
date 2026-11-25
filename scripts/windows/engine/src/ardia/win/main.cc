@@ -18,16 +18,31 @@
 #include "ardia/win/hooks.h"
 #include "ardia/win/host.h"
 #include "ardia/win/kept_pages.h"
+#include "ardia/win/launch_guard.h"
+#include "ardia/win/renderer_efficiency.h"
 #include "ardia/win/test_gate.h"
+#include "ardia/win/webui/webui_mode.h"
+#include "ardia/win/webui/webui_shell.h"
+#include "ardia/win/webui/webui_window_policy.h"
+#include "base/base_paths.h"
+#include "base/base_paths_win.h"
 #include "base/base_switches.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/location.h"
 #include "base/logging.h"
 #include "base/no_destructor.h"
+#include "base/path_service.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/process/launch.h"
 #include "base/process/process.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/time/time.h"
 #include "base/values.h"
 #include "chrome/browser/devtools/chrome_devtools_manager_delegate.h"
+#include "chrome/chrome_elf/chrome_elf_main.h"
 #include "chrome/install_static/user_data_dir.h"
 #include "chrome/browser/chrome_browser_main.h"
 #include "chrome/browser/chrome_browser_main_extra_parts.h"
@@ -61,6 +76,11 @@ App& TheApp() {
   return app;
 }
 
+int& RequestedExitCode() {
+  static int exit_code = 0;
+  return exit_code;
+}
+
 struct Gate {
   std::string refusal = "no scratch ARDIA_DATA_DIR";
   bool asked = false;
@@ -75,26 +95,6 @@ Gate& TheGate() {
 std::unique_ptr<ScopedKeepAlive>& KeepAlive() {
   static base::NoDestructor<std::unique_ptr<ScopedKeepAlive>> keep_alive;
   return *keep_alive;
-}
-
-std::wstring AppLibraryPath() {
-  std::wstring path(MAX_PATH, L'\0');
-  DWORD length = ::GetModuleFileNameW(nullptr, path.data(),
-                                      static_cast<DWORD>(path.size()));
-  path.resize(length);
-  size_t slash = path.find_last_of(L'\\');
-  if (slash == std::wstring::npos) {
-    return std::wstring();
-  }
-  path.resize(slash + 1);
-  path.append(L"ArdiaApp.dll");
-  return path;
-}
-
-bool AppLibraryPresent() {
-  std::wstring path = AppLibraryPath();
-  return !path.empty() &&
-         ::GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES;
 }
 
 std::wstring Environment(const wchar_t* name) {
@@ -161,13 +161,21 @@ bool BrowserProcess(const base::CommandLine& command_line) {
   return command_line.GetSwitchValueNative(switches::kProcessType).empty();
 }
 
+constexpr size_t kLongestUserDataDirectory = 32768;
+
 std::wstring ChromiumUserDataDir() {
-  std::wstring user_data_dir;
-  std::wstring invalid;
-  if (!install_static::GetUserDataDirectory(&user_data_dir, &invalid) ||
-      !invalid.empty()) {
+  std::wstring user_data_dir(kLongestUserDataDirectory, L'\0');
+  std::wstring invalid(kLongestUserDataDirectory, L'\0');
+  if (!GetUserDataDirectoryThunk(user_data_dir.data(), user_data_dir.size(),
+                                 invalid.data(), invalid.size()) ||
+      invalid[0] != L'\0') {
     return std::wstring();
   }
+  const size_t end = user_data_dir.find(L'\0');
+  if (end == std::wstring::npos) {
+    return std::wstring();
+  }
+  user_data_dir.resize(end);
   return user_data_dir;
 }
 
@@ -244,7 +252,7 @@ void AddLaunchSwitches(base::CommandLine* command_line) {
   command_line->AppendSwitch(switches::kHideCrashRestoreBubble);
   command_line->AppendSwitch("keep-old-history");
   AddFeatures(command_line, switches::kDisableFeatures,
-              "CalculateNativeWinOcclusion");
+              "CalculateNativeWinOcclusion,SettingsGlowupJourneys");
   AddFeatures(command_line, switches::kEnableFeatures, "WebContentsDiscard");
   std::wstring data_dir = Environment(L"ARDIA_DATA_DIR");
   while (!data_dir.empty() &&
@@ -269,18 +277,59 @@ void AddLaunchSwitches(base::CommandLine* command_line) {
 }
 
 void WriteLaunchLog(const std::string& line) {
-  const base::FilePath path =
-      base::CommandLine::ForCurrentProcess()->GetSwitchValuePath("log-file");
+  std::wstring path =
+      base::CommandLine::ForCurrentProcess()->GetSwitchValueNative("log-file");
+  if (path.empty()) {
+    path = LaunchLogPath();
+  }
   if (path.empty()) {
     return;
   }
-  FILE* file = _wfsopen(path.value().c_str(), L"ab", _SH_DENYNO);
+  FILE* file = _wfsopen(path.c_str(), L"ab", _SH_DENYNO);
   if (!file) {
     return;
   }
   const std::string text = "engine 0 " + line + "\n";
   fwrite(text.data(), 1, text.size(), file);
   fclose(file);
+}
+
+void SaveLaunchGuardFacts(const LaunchGuardFacts& facts) {
+  const std::wstring data_dir = AppDataDirectory();
+  if (data_dir.empty()) {
+    return;
+  }
+  const std::string json =
+      "{\"waitedForPreviousMs\":" +
+      std::to_string(facts.predecessor_wait_ms < 0 ? 0
+                                                    : facts.predecessor_wait_ms) +
+      ",\"unfinishedStartsBefore\":" +
+      std::to_string(facts.unfinished_starts_before) +
+      ",\"restoreStateSetAside\":" +
+      (facts.recovered_to.empty() ? "false" : "true") +
+      ",\"profileHeldByAnother\":" +
+      (facts.profile_held_by_another ? "true" : "false") + "}\n";
+  FILE* file = nullptr;
+  if (_wfopen_s(&file, (data_dir + L"\\launch-guard.json").c_str(), L"wb") !=
+          0 ||
+      !file) {
+    return;
+  }
+  fwrite(json.data(), 1, json.size(), file);
+  fclose(file);
+}
+
+void NoteLaunchGuard() {
+  const LaunchGuardFacts& facts = GuardFacts();
+  SaveLaunchGuardFacts(facts);
+  WriteLaunchLog("launch guard: waited " +
+                 std::to_string(facts.predecessor_wait_ms < 0
+                                    ? 0
+                                    : facts.predecessor_wait_ms) +
+                 " ms for a previous Ardia, " +
+                 std::to_string(facts.unfinished_starts_before) +
+                 " unfinished starts before this one, restore state " +
+                 (facts.recovered_to.empty() ? "kept" : "set aside"));
 }
 
 void NoteTestGate() {
@@ -363,16 +412,87 @@ bool PreTranslate(const MSG& msg) {
   return taken;
 }
 
-void StartApp() {
-  App& app = TheApp();
-  std::wstring path = AppLibraryPath();
-  app.module =
-      ::LoadLibraryExW(path.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
-  if (!app.module) {
-    LOG(ERROR) << "Ardia: the app library did not load, error "
-               << ::GetLastError();
-    QuitApp();
+bool Background() {
+  return Set(Environment(L"ARDIA_BACKGROUND")) ||
+         base::CommandLine::ForCurrentProcess()->HasSwitch(
+             ardiacore::kBackgroundSwitch);
+}
+
+void ShowStartFailureAndQuit(const std::wstring& reason) {
+  if (!Background()) {
+    const std::wstring log = LaunchLogPath();
+    std::wstring text = L"Ardia couldn't start.\n\n" + reason +
+                        L"\n\nInstalling Ardia again from ardia.dev usually "
+                        L"fixes this.";
+    if (!log.empty()) {
+      text += L" The details are in " + log + L".";
+    }
+    ::MessageBoxW(nullptr, text.c_str(), L"Ardia",
+                  MB_OK | MB_ICONERROR | MB_SETFOREGROUND | MB_TASKMODAL |
+                      MB_TOPMOST);
+  }
+  QuitApp();
+}
+
+void FailStart(const std::wstring& reason) {
+  MarkStartSettled();
+  LOG(ERROR) << "Ardia: the app did not start: " << base::WideToUTF8(reason);
+  WriteLaunchLog("app start failed: " + base::WideToUTF8(reason));
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(&ShowStartFailureAndQuit, reason));
+}
+
+std::wstring AppRefusal(HMODULE module, int result) {
+  auto failure = reinterpret_cast<ArdiaAppStartFailureFunction>(
+      ::GetProcAddress(module, "ArdiaAppStartFailure"));
+  const wchar_t* text = failure ? failure() : nullptr;
+  std::wstring reason = text && *text ? std::wstring(text)
+                                      : std::wstring(L"The app stopped while starting");
+  return reason + L" (code " + std::to_wstring(result) + L").";
+}
+
+void ShowRecoveryNotice(const std::wstring& folder) {
+  if (Background()) {
     return;
+  }
+  const std::wstring text =
+      L"Ardia didn't finish starting the last few times, so it opened "
+      L"without your last session.\n\nYour bookmarks, history and "
+      L"passwords are untouched. The session it set aside is in " +
+      folder + L".";
+  ::MessageBoxW(nullptr, text.c_str(), L"Ardia",
+                MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND | MB_TOPMOST);
+}
+
+void ClaimGuardUntilOwned(int attempts_left) {
+  ClaimGuard();
+  if (OwnsGuard() || attempts_left <= 0) {
+    return;
+  }
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
+      FROM_HERE, base::BindOnce(&ClaimGuardUntilOwned, attempts_left - 1),
+      base::Milliseconds(kClaimRetryMs));
+}
+
+bool StartApp() {
+  App& app = TheApp();
+  const std::wstring path = install_static::ReactNativeAppLibraryPath();
+  const DWORD load_flags =
+      path.starts_with(L"\\\\?\\")
+          ? LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS
+          : LOAD_WITH_ALTERED_SEARCH_PATH;
+  app.module = path.empty()
+                   ? nullptr
+                   : ::LoadLibraryExW(path.c_str(), nullptr, load_flags);
+  if (!app.module) {
+    const DWORD error = path.empty() ? ERROR_MOD_NOT_FOUND : ::GetLastError();
+    FailStart(error == ERROR_MOD_NOT_FOUND
+                  ? L"A file Ardia needs is missing from its folder "
+                    L"(Windows error 126)."
+                  : L"Ardia's app library could not be loaded (Windows "
+                    L"error " +
+                        std::to_wstring(error) + L").");
+    return false;
   }
   auto start = reinterpret_cast<ArdiaAppStartFunction>(
       ::GetProcAddress(app.module, "ArdiaAppStart"));
@@ -381,9 +501,8 @@ void StartApp() {
   app.stop = reinterpret_cast<ArdiaAppStopFunction>(
       ::GetProcAddress(app.module, "ArdiaAppStop"));
   if (!start) {
-    LOG(ERROR) << "Ardia: the app library has no ArdiaAppStart";
-    QuitApp();
-    return;
+    FailStart(L"Ardia's app library doesn't match its engine.");
+    return false;
   }
   std::wstring traced = Environment(L"ARDIA_INPUT_TRACE");
   if (!traced.empty()) {
@@ -391,12 +510,12 @@ void StartApp() {
   }
   int result = start(EngineApi());
   if (result != 0) {
-    LOG(ERROR) << "Ardia: the app did not start, code " << result;
-    QuitApp();
-    return;
+    FailStart(AppRefusal(app.module, result));
+    return false;
   }
   app.started = true;
   base::g_ardia_pre_translate_message = &PreTranslate;
+  return true;
 }
 
 void StopApp() {
@@ -426,12 +545,25 @@ class MainParts : public ChromeBrowserMainExtraParts {
 
   void PostBrowserStart() override {
     NoteTestGate();
+    NoteLaunchGuard();
+    ClaimGuardUntilOwned(kClaimAttempts);
     Host::Get()->Start();
     WatchEngineEvents();
-    StartApp();
+    if (!StartApp()) {
+      return;
+    }
+    base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
+        FROM_HERE, base::BindOnce(&MarkStartSettled),
+        base::Seconds(kStartSettlesAfterSeconds));
+    const std::wstring recovered = GuardFacts().recovered_to;
+    if (!recovered.empty()) {
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, base::BindOnce(&ShowRecoveryNotice, recovered));
+    }
   }
 
   void PostMainMessageLoopRun() override {
+    MarkExiting();
     StopApp();
     KeepAlive().reset();
   }
@@ -441,12 +573,185 @@ void AddMainParts(ChromeBrowserMainParts* main_parts) {
   main_parts->AddParts(std::make_unique<MainParts>());
 }
 
+class WebUIMainParts : public ChromeBrowserMainExtraParts {
+ public:
+  WebUIMainParts() = default;
+  WebUIMainParts(const WebUIMainParts&) = delete;
+  WebUIMainParts& operator=(const WebUIMainParts&) = delete;
+  ~WebUIMainParts() override = default;
+
+  void PreEarlyInitialization() override {
+    KeepRealProfileClosed(base::CommandLine::ForCurrentProcess());
+  }
+
+  void PreBrowserStart() override {
+    KeepAlive() = std::make_unique<ScopedKeepAlive>(
+        KeepAliveOrigin::APP_CONTROLLER, KeepAliveRestartOption::DISABLED);
+    RegisterWebUIShell();
+  }
+
+  void PostBrowserStart() override {
+    NoteTestGate();
+    NoteLaunchGuard();
+    WriteLaunchLog("webui shell: --ardia-shell=webui; the React Native app is "
+                   "not loaded");
+    ClaimGuardUntilOwned(kClaimAttempts);
+    StartRendererEfficiency();
+    base::g_ardia_pre_translate_message = &WebUIShellPreTranslate;
+    OpenWebUIShell();
+  }
+
+  void PostMainMessageLoopRun() override {
+    base::g_ardia_pre_translate_message = nullptr;
+    CloseWebUIShell();
+    MarkExiting();
+    KeepAlive().reset();
+  }
+};
+
+void AddWebUIMainParts(ChromeBrowserMainParts* main_parts) {
+  main_parts->AddParts(std::make_unique<WebUIMainParts>());
+}
+
+base::ListValue WebUIRelaunchUrls(const base::CommandLine& command_line,
+                             const base::FilePath& cur_dir) {
+  base::ListValue urls;
+  for (const base::CommandLine::StringType& argument :
+       command_line.GetArgs()) {
+    GURL url(base::WideToUTF8(argument));
+    if (!url.is_valid()) {
+      url = url_formatter::FixupRelativeFile(cur_dir,
+                                             base::FilePath(argument));
+    }
+    if (url.is_valid() &&
+        webui_window::RelaunchUrlAccepted(url.scheme(), url.spec().size(),
+                                          urls.size())) {
+      urls.Append(url.spec());
+    }
+  }
+  return urls;
+}
+
+bool WebUIRelaunched(const base::CommandLine& command_line,
+                     const base::FilePath& cur_dir) {
+  ClearExiting();
+  OpenWebUIShellWithUrls(WebUIRelaunchUrls(command_line, cur_dir));
+  return true;
+}
+
+std::wstring LocalAppDataDirectory() {
+  const std::wstring from_environment = Environment(L"LOCALAPPDATA");
+  if (!from_environment.empty()) {
+    return from_environment;
+  }
+  base::FilePath local;
+  if (!base::PathService::Get(base::DIR_LOCAL_APP_DATA, &local)) {
+    return std::wstring();
+  }
+  return local.value();
+}
+
+constexpr char kWebUIRelaunchedSwitch[] = "ardia-webui-relaunched";
+
+std::wstring WebUIAppData() {
+  return WebUIAppDataDirectory(Environment(L"ARDIA_DATA_DIR"),
+                               LocalAppDataDirectory());
+}
+
+void RefuseReactNativeFolders(const std::wstring& app_data,
+                              const std::wstring& user_data) {
+  const std::wstring clash = ReactNativeFolderClash({app_data, user_data});
+  if (clash.empty()) {
+    return;
+  }
+  LOG(ERROR) << "Ardia engine: " << base::WideToUTF8(clash)
+             << "; the WebUI shell is not starting";
+  base::Process::TerminateCurrentProcessImmediately(1);
+}
+
+void RefuseShellModeDisagreement(bool webui) {
+  const bool early = IsWebUIShellSelectedForUserDataDirectory();
+  const bool reparsed = WebUIShellRequested(
+      base::CommandLine::FromString(::GetCommandLineW()));
+  if (webui == early && reparsed == early) {
+    return;
+  }
+  LOG(ERROR) << "Ardia engine: install_static read the shell mode as "
+             << (early ? "webui" : "rnw") << " and Chromium as "
+             << (webui ? "webui" : "rnw") << "; not starting";
+  base::Process::TerminateCurrentProcessImmediately(1);
+}
+
+void RelaunchIntoWebUIProfile() {
+  const std::wstring app_data = WebUIAppData();
+  const std::wstring user_data = WebUIUserDataDirectory(app_data);
+  if (user_data.empty()) {
+    base::Process::TerminateCurrentProcessImmediately(1);
+  }
+  RefuseReactNativeFolders(app_data, user_data);
+  if (SameFolder(user_data, ChromiumUserDataDir())) {
+    return;
+  }
+  base::CommandLine relaunch = base::CommandLine::FromString(::GetCommandLineW());
+  base::FilePath program;
+  if (!base::PathService::Get(base::FILE_EXE, &program)) {
+    base::Process::TerminateCurrentProcessImmediately(1);
+  }
+  relaunch.SetProgram(program);
+  if (relaunch.HasSwitch(kWebUIRelaunchedSwitch)) {
+    LOG(ERROR) << "Ardia engine: the WebUI shell's profile folder was not "
+                  "taken after a relaunch; not starting";
+    base::Process::TerminateCurrentProcessImmediately(1);
+  }
+  relaunch.RemoveSwitch(switches::kUserDataDir);
+  relaunch.AppendSwitchNative(switches::kUserDataDir, user_data);
+  relaunch.AppendSwitch(kWebUIRelaunchedSwitch);
+  base::LaunchOptions options;
+  options.grant_foreground_privilege = true;
+  const base::Process child = base::LaunchProcess(relaunch, options);
+  base::Process::TerminateCurrentProcessImmediately(child.IsValid() ? 0 : 1);
+}
+
+void BeforeWebUIChromeMain(base::CommandLine* command_line) {
+  command_line->RemoveSwitch(kWebUIRelaunchedSwitch);
+  const std::wstring app_data = WebUIAppData();
+  const std::wstring user_data = WebUIUserDataDirectory(app_data);
+  if (user_data.empty() || !SameFolder(user_data, ChromiumUserDataDir())) {
+    LOG(ERROR) << "Ardia engine: the WebUI shell has no profile folder of its "
+                  "own; not starting";
+    base::Process::TerminateCurrentProcessImmediately(1);
+  }
+  RefuseReactNativeFolders(app_data, user_data);
+  SetAppDataDirectory(app_data);
+  base::CreateDirectory(base::FilePath(app_data));
+  RefuseReactNativeFolders(app_data, user_data);
+  GuardBrowserLaunch(user_data, command_line);
+  command_line->RemoveSwitch(switches::kUserDataDir);
+  command_line->AppendSwitchNative(switches::kUserDataDir, user_data);
+  command_line->RemoveSwitch(ardiacore::kDataDirSwitch);
+  command_line->AppendSwitchNative(ardiacore::kDataDirSwitch, app_data);
+  command_line->AppendSwitch(switches::kNoStartupWindow);
+  command_line->AppendSwitch(switches::kNoFirstRun);
+  command_line->AppendSwitch(switches::kNoDefaultBrowserCheck);
+  command_line->AppendSwitch(switches::kHideCrashRestoreBubble);
+  AddFeatures(command_line, switches::kDisableFeatures,
+              "CalculateNativeWinOcclusion");
+  if (Set(Environment(L"ARDIA_BACKGROUND"))) {
+    command_line->AppendSwitch(ardiacore::kBackgroundSwitch);
+    command_line->AppendSwitch(switches::kMuteAudio);
+  }
+  g_ardia_win_add_main_parts = &AddWebUIMainParts;
+  g_ardia_win_relaunched = &WebUIRelaunched;
+  InstallWebUIShellHooks();
+}
+
 bool KeepsWindowWithoutTabs(const BrowserWindowInterface* browser) {
   return Host::Get()->Keeps(browser);
 }
 
 bool Relaunched(const base::CommandLine& command_line,
                 const base::FilePath& cur_dir) {
+  ClearExiting();
   base::ListValue urls;
   for (const base::CommandLine::StringType& argument :
        command_line.GetArgs()) {
@@ -467,16 +772,40 @@ bool Relaunched(const base::CommandLine& command_line,
 
 }
 
+void NoteForTest(const std::string& line) {
+  if (ardiacore::TestInstance()) {
+    WriteLaunchLog(line);
+  }
+}
+
 void BeforeChromeMain() {
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
   if (!BrowserProcess(*command_line)) {
     return;
   }
   command_line->RemoveSwitch(switches::kProcessType);
+  const bool webui = WebUIShellRequested(*command_line);
+  RefuseShellModeDisagreement(webui);
+  if (webui) {
+    RelaunchIntoWebUIProfile();
+  }
   DecideTestGate(command_line);
-  if (!AppLibraryPresent()) {
+  if (webui) {
+    BeforeWebUIChromeMain(command_line);
     return;
   }
+  if (command_line->HasSwitch(kHeadlessSwitch) ||
+      !install_static::ReactNativeAppLibraryBesideExe()) {
+    return;
+  }
+  std::wstring data_dir = Environment(L"ARDIA_DATA_DIR");
+  while (!data_dir.empty() &&
+         (data_dir.back() == L'\\' || data_dir.back() == L'/')) {
+    data_dir.pop_back();
+  }
+  GuardBrowserLaunch(
+      data_dir.empty() ? ChromiumUserDataDir() : data_dir + L"\\Chromium",
+      command_line);
   AddLaunchSwitches(command_line);
   ardia_win::AskBeforeDiscards();
   g_ardia_win_hosts_normal_windows = true;
@@ -487,14 +816,29 @@ void BeforeChromeMain() {
   g_ardia_keeps_window_without_tabs = &KeepsWindowWithoutTabs;
 }
 
+void AfterChromeMain(int exit_code) {
+  if (!g_ardia_win_add_main_parts) {
+    return;
+  }
+  base::Process::TerminateCurrentProcessImmediately(
+      exit_code != 0 ? exit_code : RequestedExitCode());
+}
+
 const char* TestGateDecision() {
   return TheGate().refusal.c_str();
 }
 
 void QuitApp() {
+  MarkExiting();
+  MarkStartSettled();
   KeepAlive().reset();
   ChromeDevToolsManagerDelegate::AllowBrowserToClose();
   chrome::CloseAllBrowsersAndQuit();
+}
+
+void QuitAppWithExitCode(int exit_code) {
+  RequestedExitCode() = exit_code;
+  QuitApp();
 }
 
 }

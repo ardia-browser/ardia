@@ -9,6 +9,8 @@ import { isSilenced } from "../tabs/mute";
 import { dismissHover } from "./hover";
 import { sidebarUi } from "./sidebarUi";
 import { cancelSwitcher, closeSwitcherRow, commitSwitcher, moveSwitcher } from "./switcher";
+import { noteTabSwitcherReleasedInMenu } from "../telemetry/tabSwitcherOpens";
+import { chromeCtrlTabStoreChanged, followChromeCtrlTab } from "../commands/chromeCtrlTab";
 
 let started = false;
 
@@ -18,6 +20,7 @@ export function startSidebarEffects() {
   startLive();
 
   useBrowser.subscribe((s, prev) => {
+    chromeCtrlTabStoreChanged(s, prev);
     const switcher = sidebarUi().switcher;
     if (switcher && s.windows !== prev.windows && !s.windows[switcher.windowId]) cancelSwitcher();
     const sitesChanged = s.settings.mutedSites !== prev.settings.mutedSites || s.privateSiteMutes !== prev.privateSiteMutes;
@@ -35,6 +38,7 @@ export function startSidebarEffects() {
       dismissHover();
       useBrowser.getState().closeAbandonedNewTabs();
     }
+    if (e.type === "switcherReleased" && e.afterMenu && sidebarUi().switcher) noteTabSwitcherReleasedInMenu();
     if (e.type === "switcherReleased" || e.type === "resignActive") commitSwitcher();
     if (e.type === "switcherMouseUp" || (e.type === "switcherKey" && e.key === "escape")) cancelSwitcher();
     if (e.type === "switcherKey" && e.key === "close") void closeSwitcherRow();
@@ -47,4 +51,5 @@ export function startSidebarEffects() {
   });
 
   startAutoCleanUp();
+  followChromeCtrlTab();
 }

@@ -3,15 +3,20 @@ import { View } from "react-native";
 import { space } from "../ui/tokens";
 import { durationTitle } from "../../lib/time";
 import { DEFAULT_SETTINGS, type PeekModifier, type Settings } from "../../state/settings/settings";
-import { ChoiceList, useMockFocus, type ChoiceOption } from "./ChoiceList";
-import { MockPanel, useScreen } from "./Screen";
-import { confirmAnswer, previewLive, PRESET_NAMES, PRESETS, setOnboardingDraft, skipStep, useOnboarding, type Preset, type QuestionId } from "../../state/onboarding/onboarding";
+import { ChoiceList, type ChoiceOption, type MockFocus } from "./ChoiceList";
+import { useScreen } from "./Screen";
+import { useSection, useSharedMockFocus } from "./sectionContext";
+import { confirmAnswer, previewLive, PRESET_NAMES, PRESETS, setOnboardingDraft, skipStep, touchedOrPresetPatch, useOnboarding, type Preset, type QuestionId } from "../../state/onboarding/onboarding";
 import { keysOf, questionKeys, useQuestions } from "../../state/onboarding/questions";
 import { placementCard, placementFromCard } from "../../state/omnibox/barPlacement";
 import { StepActions, StepLayout } from "./StepLayout";
 import { OptionCard } from "./OptionCard";
 import { OptionRow } from "./Parts";
 import { keyText } from "../../state/commands/keyText";
+import { PLATFORM_TERMS } from "../../lib/platformTerms";
+import type { CtrlTabPreset } from "../../state/commands/ctrlTabKeys";
+import { ctrlTabAnswerPatch, noteCtrlTabAnswer, pickOnboardingCtrlTab, useOnboardingCtrlTab } from "../../state/onboarding/ctrlTabAnswer";
+import { CTRL_TAB_CHOICES } from "../settings/ctrlTabChoices";
 
 export function Page({
   id,
@@ -22,16 +27,18 @@ export function Page({
   picked,
   preview,
   onConfirm,
+  holdScroll,
   children,
 }: {
   id: QuestionId;
   title: string;
-  subtitle: string;
+  subtitle?: string;
   tag?: string;
   patch: Partial<Settings>;
   picked: string[];
-  preview: ReactNode;
+  preview?: ReactNode;
   onConfirm?: () => void;
+  holdScroll?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -40,21 +47,20 @@ export function Page({
       title={title}
       subtitle={subtitle}
       tag={tag}
+      preview={preview}
       actions={<StepActions onContinue={() => {
             onConfirm?.();
             confirmAnswer(id, patch, picked);
-          }} onSkip={() => skipStep()} />}
-      preview={preview}
+          }} onSkip={() => skipStep("question")} holdScroll={holdScroll} />}
     >
       {children}
     </StepLayout>
   );
 }
 
-export function useQuestion(step: "layout" | "tabs" | "look") {
-  const sub = useOnboarding((s) => s.sub);
-  const id = useQuestions(step)[sub]?.id;
-  return { id, focus: useMockFocus(id) };
+export function useQuestion() {
+  const { id, active } = useSection();
+  return { id, active, focus: useSharedMockFocus() };
 }
 
 export function change(patch: Partial<Settings>, live = false) {
@@ -74,7 +80,7 @@ const ADDRESS_CHOICES: ChoiceOption<Settings["addressBar"]>[] = [
 ];
 const CMDL_CHOICES: ChoiceOption<Settings["commandBarPlacement"]>[] = [
   { value: "field", preview: "cmdl-field", title: "Under the address", subtitle: "Drops down from the field, as in Dia" },
-  { value: "centred", preview: "cmdl-centred", title: "In the centre", subtitle: "Floats over the page, as in Arc" },
+  { value: "centred", preview: "cmdl-centred", title: "In the center", subtitle: "Floats over the page, as in Arc" },
 ];
 
 function styleOf(values: Pick<Settings, (typeof LAYOUT_KEYS)[number]>, preset: Preset) {
@@ -85,11 +91,12 @@ function styleOf(values: Pick<Settings, (typeof LAYOUT_KEYS)[number]>, preset: P
 }
 
 export function LayoutStep() {
-  const { id, focus } = useQuestion("layout");
-  const { values, mock } = useScreen(LAYOUT_KEYS);
+  const { id, active, focus } = useQuestion();
+  const { values } = useScreen(LAYOUT_KEYS);
   const preset = useOnboarding((s) => s.preset);
-  useEffect(() => previewLive(values), []);
-  const preview = <MockPanel settings={mock} focus={focus.focus} />;
+  useEffect(() => {
+    if (active) previewLive(values);
+  }, [active]);
   const tag = styleOf(values, preset);
   const top = values.tabLayout === "top";
 
@@ -102,7 +109,6 @@ export function LayoutStep() {
         tag={tag}
         patch={{ addressBar: values.addressBar }}
         picked={[values.addressBar === "sidebar" ? "Address in the sidebar" : "Address in the toolbar"]}
-        preview={preview}
       >
         <ChoiceList options={ADDRESS_CHOICES} value={values.addressBar} onChange={(addressBar) => change({ addressBar }, true)} mock={focus} />
       </Page>
@@ -115,8 +121,7 @@ export function LayoutStep() {
         subtitle="The command bar, for going anywhere."
         tag={tag}
         patch={{ commandBarPlacement: values.commandBarPlacement }}
-        picked={[values.commandBarPlacement !== "field" ? `${keyText("⌘L")} opens in the centre` : `${keyText("⌘L")} opens under the address`]}
-        preview={preview}
+        picked={[values.commandBarPlacement !== "field" ? `${keyText("⌘L")} opens in the center` : `${keyText("⌘L")} opens under the address`]}
       >
         <ChoiceList
           options={CMDL_CHOICES}
@@ -134,7 +139,6 @@ export function LayoutStep() {
       tag={tag}
       patch={{ tabLayout: values.tabLayout }}
       picked={[top ? "Tabs along the top" : "Tabs in the sidebar"]}
-      preview={preview}
     >
       <ChoiceList options={TAB_CHOICES} value={values.tabLayout} onChange={(tabLayout) => change({ tabLayout }, true)} mock={focus} />
     </Page>
@@ -159,6 +163,12 @@ const WINDOW_CHOICES: ChoiceOption<boolean>[] = [
   { value: false, preview: "windows-separate", title: "Separate", subtitle: "Each window has its own tabs" },
   { value: true, preview: "windows-shared", title: "Shared", subtitle: "Every window shows the same tabs, as in Arc" },
 ];
+const CTRL_TAB_KEY = PLATFORM_TERMS.switchTabsKey;
+const CTRL_TAB_OPTIONS: ChoiceOption<CtrlTabPreset | null>[] = CTRL_TAB_CHOICES.map((c) => ({ value: c.value, preview: `ctrltab-${c.value}`, title: c.title, subtitle: c.caption }));
+const CTRL_TAB_PICKED: Record<CtrlTabPreset, string> = {
+  step: `${CTRL_TAB_KEY} steps through your tabs`,
+  switcher: `${CTRL_TAB_KEY} opens the recent tabs switcher`,
+};
 const TIDY_AFTER = [
   { value: 12 * 60, title: "12 h" },
   { value: 24 * 60, title: "1 day" },
@@ -173,12 +183,12 @@ const PEEK_WITH: { value: PeekModifier; title: string }[] = [
 const tidyLabel = (minutes: number) => (minutes !== TIDY_AFTER[0]!.value && TIDY_AFTER.find((o) => o.value === minutes)?.title) || durationTitle(minutes);
 
 export function TabsStep() {
-  const { id, focus } = useQuestion("tabs");
+  const { id, focus } = useQuestion();
   const { values, mock } = useScreen(keysOf("tabs"));
   const top = mock.tabLayout === "top";
   const tidy = values.cleanUpInactiveTabsAfterMinutes;
-  const preview = <MockPanel settings={mock} focus={focus.focus} />;
 
+  if (id === "ctrlTab") return <CtrlTabQuestion focus={focus} />;
   if (id === "newTabPosition") {
     const options: ChoiceOption<Settings["newTabPosition"]>[] = [
       { value: "bottom", preview: "newtabpos-bottom", title: top ? "On the right" : "At the bottom", subtitle: top ? "After your other tabs, as in Dia" : "Under your other tabs, as in Dia" },
@@ -192,7 +202,6 @@ export function TabsStep() {
         subtitle="Where a tab lands when you open it."
         patch={{ newTabPosition: values.newTabPosition, newTabButtonPosition: values.newTabButtonPosition }}
         picked={[]}
-        preview={preview}
       >
         <ChoiceList options={options} value={values.newTabPosition} onChange={(newTabPosition) => change({ newTabPosition, newTabButtonPosition: newTabPosition === "top" ? "top" : "bottom" })} mock={focus} />
       </Page>
@@ -206,7 +215,6 @@ export function TabsStep() {
         subtitle="Tabs you opened and forgot."
         patch={{ cleanUpInactiveTabsAfterMinutes: tidy }}
         picked={[tidy === null ? "Old tabs stay until you close them" : `Old tabs tidy up after ${tidyLabel(tidy)}`]}
-        preview={preview}
       >
         <ChoiceList
           options={TIDY_CHOICES}
@@ -232,7 +240,6 @@ export function TabsStep() {
         subtitle="What Ardia opens to."
         patch={{ restoreSession: values.restoreSession }}
         picked={values.restoreSession ? [] : ["Ardia starts fresh each launch"]}
-        preview={preview}
       >
         <ChoiceList options={QUIT_CHOICES} value={values.restoreSession} onChange={(restoreSession) => change({ restoreSession })} mock={focus} />
       </Page>
@@ -245,7 +252,6 @@ export function TabsStep() {
         subtitle="How windows share what's open."
         patch={{ shareTabsAcrossWindows: values.shareTabsAcrossWindows }}
         picked={values.shareTabsAcrossWindows ? ["Windows share their tabs"] : []}
-        preview={preview}
       >
         <ChoiceList
           options={WINDOW_CHOICES}
@@ -261,9 +267,8 @@ export function TabsStep() {
         id={id}
         title="A few more tab habits"
         subtitle="Small things Arc and Dia do differently."
-        patch={Object.fromEntries(TABS_MORE.map((k) => [k, values[k]]))}
+        patch={touchedOrPresetPatch(TABS_MORE, values)}
         picked={[]}
-        preview={preview}
       >
         <View style={{ gap: space.m }}>
           <OptionCard control="check" title="Top Apps grow with the sidebar" subtitle="Up to four across, as in Arc" selected={values.balancedTopApps} onPress={() => change({ balancedTopApps: !values.balancedTopApps })} />
@@ -286,9 +291,24 @@ export function TabsStep() {
       subtitle="What you see when you open a tab."
       patch={{ newTabOpens: values.newTabOpens }}
       picked={[values.newTabOpens === "commandBar" ? `${keyText("⌘T")} opens the command bar` : `${keyText("⌘T")} opens the New Tab page`]}
-      preview={preview}
     >
       <ChoiceList options={NEW_TAB_CHOICES} value={values.newTabOpens} onChange={(newTabOpens) => change({ newTabOpens })} mock={focus} />
+    </Page>
+  );
+}
+
+function CtrlTabQuestion({ focus }: { focus: MockFocus }) {
+  const choice = useOnboardingCtrlTab();
+  return (
+    <Page
+      id="ctrlTab"
+      title={`What does ${CTRL_TAB_KEY} do?`}
+      subtitle="How you switch tabs from the keyboard."
+      patch={ctrlTabAnswerPatch(choice)}
+      picked={choice === "custom" ? [] : [CTRL_TAB_PICKED[choice]]}
+      onConfirm={() => noteCtrlTabAnswer(choice)}
+    >
+      <ChoiceList options={CTRL_TAB_OPTIONS} value={choice === "custom" ? null : choice} onChange={(preset) => preset && pickOnboardingCtrlTab(preset)} mock={focus} />
     </Page>
   );
 }

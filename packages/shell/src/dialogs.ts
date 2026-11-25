@@ -1,3 +1,5 @@
+import type { DialogsNative } from "./generated/native";
+
 export type ConfirmOptions = {
   title: string;
   message?: string;
@@ -6,6 +8,20 @@ export type ConfirmOptions = {
   destructive?: boolean;
   suppression?: string;
   windowId?: string;
+  onlyIfShown?: boolean;
+  dismissKey?: string;
+  sheetOnly?: boolean;
+};
+
+export type ChooseOptions = {
+  title: string;
+  message?: string;
+  choices: string[];
+  cancelChoice?: number;
+  noDefault?: boolean;
+  windowId?: string;
+  onlyIfShown?: boolean;
+  dismissKey?: string;
 };
 
 export type PromptOptions = {
@@ -17,9 +33,4 @@ export type PromptOptions = {
   windowId?: string;
 };
 
-export type DialogsNative = {
-  confirm(options: ConfirmOptions): Promise<{ confirmed: boolean; suppressed: boolean }>;
-  prompt(options: PromptOptions): Promise<string | null>;
-  pickFiles(): Promise<string[]>;
-  pickFolder(current: string | null, prompt: string | null): Promise<string | null>;
-};
+export type { DialogsNative };

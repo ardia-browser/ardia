@@ -1,7 +1,7 @@
 import { EMOJI_GROUPS } from "./emojiData";
 
-export type EmojiEntry = { emoji: string; name: string; nameWords: string; words: string };
-export type EmojiSection = { title: string; emoji: EmojiEntry[] };
+type EmojiEntry = { emoji: string; name: string; nameWords: string; words: string };
+type EmojiSection = { title: string; emoji: EmojiEntry[] };
 
 let sections: EmojiSection[] | null = null;
 

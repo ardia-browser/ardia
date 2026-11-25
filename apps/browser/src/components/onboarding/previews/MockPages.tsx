@@ -9,7 +9,7 @@ import { Favicon, Glyph, Label } from "./Kit";
 import { pick, type Look } from "./look";
 import { mockNtp } from "./tokens";
 
-export function Hero({ g, look, a, height }: { g: Geo; look: Look; a: Article; height: number }) {
+function Hero({ g, look, a, height }: { g: Geo; look: Look; a: Article; height: number }) {
   const h = a.hero;
   return (
     <View style={{ height: height * g.s, borderRadius: radius.panel * g.s, overflow: "hidden", backgroundColor: pick(look, h.sky) }}>
@@ -28,7 +28,7 @@ export function Page({ g, look, a = NOTES, top = 0, children }: { g: Geo; look: 
         <Label g={g} size={font.large.fontSize} color={look.ink} weight="700" family="Georgia">
           {a.site}
         </Label>
-        <View style={{ flexDirection: "row", gap: space.xl * g.s }}>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", flexShrink: 1, height: font.caption.fontSize * 1.3 * g.s, overflow: "hidden", columnGap: space.xl * g.s, marginLeft: space.xl * g.s }}>
           {["Journal", "Maps", "About"].map((n) => (
             <Label key={n} g={g} size={font.caption.fontSize} color={look.inkDim}>
               {n}

@@ -47,7 +47,7 @@ export type PullRequestInfo = {
   stack?: { id: string; position: number; size: number };
 };
 
-export type DocumentInfo = {
+type DocumentInfo = {
   kind: string;
   editedBy: string | null;
   place: string | null;
@@ -70,7 +70,7 @@ export type CompletedItem = { item: LiveItem; state: CompletionState; at: number
 
 export type CompletionState = "merged" | "closed" | "reviewed";
 
-export type LiveErrorKind = "signedOut" | "sso" | "rateLimited" | "network" | "notConfigured" | "other";
+export type LiveErrorKind = "signedOut" | "sso" | "tokenBlocked" | "rateLimited" | "network" | "notConfigured" | "other";
 
 export type FolderStatus = {
   state: "initializing" | "idle" | "updating" | "error";

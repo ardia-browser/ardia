@@ -11,33 +11,36 @@
   const prefix = crypto.randomUUID();
   let sequence = 0;
   let disposed = false;
-  const interactive = new Map([
-    ["ArdiaPasswords.unlock", 180000],
-    ["ArdiaPasswords.reveal", 180000],
-    ["ArdiaPasswords.update", 180000],
+  const hostDeadlines = new Map([
     ["ArdiaAutofill.cardNumber", 180000],
-    ["ArdiaPasswords.export", 900000],
-    ["ArdiaSync.createPhrase", 180000],
-    ["ArdiaSync.enterPhrase", 180000],
-    ["ArdiaSync.unlock", 180000],
-    ["ArdiaSync.forget", 180000],
-    ["ArdiaSync.status", 180000],
-    ["ArdiaSync.read", 120000],
-    ["ArdiaSync.write", 120000],
-    ["ArdiaSync.deleteChain", 120000],
-    ["ArdiaSync.recoveryWords", 180000],
-    ["ArdiaSync.qrCode", 180000],
-    ["ArdiaSync.copyRecoveryPhrase", 180000],
-    ["ArdiaSync.chooseFolder", 900000],
-    ["ArdiaSync.saveRecoveryKit", 900000],
-    ["ArdiaLive.request", 180000],
-    ["ArdiaLive.connect", 180000],
-    ["ArdiaLive.disconnect", 180000],
+    ["ArdiaCalendar.objects", 120000],
     ["ArdiaCalendar.requestAccess", 120000],
     ["ArdiaCalendar.sources", 60000],
-    ["ArdiaCalendar.objects", 120000],
     ["ArdiaCli.install", 330000],
+    ["ArdiaLive.connect", 180000],
+    ["ArdiaLive.disconnect", 180000],
+    ["ArdiaLive.request", 180000],
+    ["ArdiaPasswords.export", 900000],
+    ["ArdiaPasswords.reveal", 180000],
+    ["ArdiaPasswords.unlock", 180000],
+    ["ArdiaPasswords.update", 180000],
     ["ArdiaShell.fetchBangList", 75000],
+    ["ArdiaSync.chooseFolder", 900000],
+    ["ArdiaSync.copyRecoveryPhrase", 180000],
+    ["ArdiaSync.createPhrase", 180000],
+    ["ArdiaSync.deleteChain", 120000],
+    ["ArdiaSync.enterPhrase", 180000],
+    ["ArdiaSync.forget", 180000],
+    ["ArdiaSync.qrCode", 180000],
+    ["ArdiaSync.read", 120000],
+    ["ArdiaSync.recoveryWords", 180000],
+    ["ArdiaSync.saveRecoveryKit", 900000],
+    ["ArdiaSync.status", 180000],
+    ["ArdiaSync.unlock", 180000],
+    ["ArdiaSync.write", 120000],
+  ]);
+  const engineDeadlines = new Map([
+    ["contentBlocker.removeAllowed", 90000],
   ]);
 
   const request = (method, args, deadline = 30000) => {
@@ -93,13 +96,13 @@
         if (typeof name !== "string" || typeof profile !== "string" || (args !== null && typeof args !== "string")) {
           return Promise.reject(new TypeError("Invalid engine call"));
         }
-        return request("engine.call", { name, profile, args });
+        return request("engine.call", { name, profile, args }, engineDeadlines.get(name));
       },
       invoke(method, args = {}) {
         if (typeof method !== "string" || !args || typeof args !== "object" || Array.isArray(args)) {
           return Promise.reject(new TypeError("Invalid host call"));
         }
-        return request("host.invoke", { method, args }, interactive.get(method));
+        return request("host.invoke", { method, args }, hostDeadlines.get(method));
       },
       onEvent(listener) {
         if (typeof listener !== "function") throw new TypeError("Expected an event listener");

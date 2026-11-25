@@ -1,9 +1,9 @@
 import type { ProviderSection } from "@ardia/core";
 import type { OmniboxProvider } from "./providers";
 
-export const PROVIDER_DEADLINE_MS = 1500;
+const PROVIDER_DEADLINE_MS = 1500;
 
-export type ProviderQueries = {
+type ProviderQueries = {
   run(text: string, providers: readonly OmniboxProvider[], onSection: (section: ProviderSection) => void): void;
   cancel(): void;
 };

@@ -254,3 +254,36 @@ if (!window[KEY]) {
 export function pickerCall(op: "start" | "cancel" | "apply" | "unhide", ...args: unknown[]): string {
   return `${INSTALL}\nwindow[Symbol.for("ardia.elementPicker")].ensure?.();\nPromise.resolve(window[Symbol.for("ardia.elementPicker")].${op}(...${JSON.stringify(args)})).then((v) => post("result", JSON.stringify(v)), () => post("result", "null"));`;
 }
+
+const randomWord = () => Math.floor(Math.random() * 2 ** 30) + 1;
+const SECRET = randomWord();
+const CHALLENGE = randomWord();
+const ANSWER = (((SECRET ^ CHALLENGE) >>> 0) % 65521) * 65537 + (CHALLENGE % 9973);
+
+function edited(source: string, edits: readonly (readonly [string, string])[]): string {
+  return edits.reduce((text, [from, to]) => {
+    if (text.split(from).length !== 2) throw new Error(`the picker no longer has exactly one ${JSON.stringify(from.trim().split("\n")[0])}`);
+    return text.replace(from, () => to);
+  }, source);
+}
+
+const TRUSTED_INSTALL = edited(INSTALL, [
+  ['const KEY = Symbol.for("ardia.elementPicker");\nif (!window[KEY]) {\n', 'const KEY = Symbol.for("ardia.elementPicker");\nif (!Object.prototype.hasOwnProperty.call(window, KEY)) {\n'],
+  ["  const p = (window[KEY] = {\n    session: null,\n", `  const p = {\n    session: null,\n    prove: (challenge) => (((${SECRET} ^ challenge) >>> 0) % 65521) * 65537 + (challenge % 9973),\n`],
+  ["        const onMove = (e) => {\n", "        const onMove = (e) => {\n          if (!e.isTrusted) return;\n"],
+  ["          if (e.button !== 0) return;\n", "          if (!e.isTrusted || e.button !== 0) return;\n"],
+  ["        const onKey = (e) => {\n", "        const onKey = (e) => {\n          if (!e.isTrusted) return;\n"],
+  ["      });\n    },\n  });\n}\n", "      });\n    },\n  };\n  Object.defineProperty(window, KEY, { value: p, configurable: false, enumerable: false, writable: false });\n}\n"],
+]);
+
+export const REFUSED_PICKER = { refused: true } as const;
+
+export function trustedPickerCall(op: "start" | "cancel" | "apply" | "unhide", ...args: unknown[]): string {
+  return `try {\n${TRUSTED_INSTALL}\n} catch (e) {}
+const picker = window[Symbol.for("ardia.elementPicker")];
+if (!picker || typeof picker.prove !== "function" || picker.prove(${CHALLENGE}) !== ${ANSWER}) post("result", ${JSON.stringify(JSON.stringify(REFUSED_PICKER))});
+else {
+  picker.ensure?.();
+  Promise.resolve(picker.${op}(...${JSON.stringify(args)})).then((v) => post("result", JSON.stringify(v)), () => post("result", "null"));
+}`;
+}

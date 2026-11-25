@@ -2,6 +2,8 @@ export AC_CHROMIUM_BUILD="${AC_CHROMIUM_BUILD:-$HOME/chromium-build-win}"
 export AC_WIN_BUILD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 export AC_REPO="${AC_REPO:-$(cd "$AC_WIN_BUILD_DIR/../../.." && pwd)}"
 export AC_MAC_BUILD_DIR="$AC_REPO/engine/patches/build"
+export AC_TARGET_OS=mac
+unset AC_TARGET_CPU
 source "$AC_MAC_BUILD_DIR/env.sh"
 export CHROMIUM_VERSION="$(awk -F' *= *' '/^\[/ { section = $0 } section == "[chromium]" && $1 == "version" { print $2 }' "$AC_WIN_BUILD_DIR/helium-pins.ini")"
 export HELIUM_TAG="$(awk -F' *= *' '/^\[/ { section = $0 } section == "[helium-chromium]" && $1 == "tag" { print $2 }' "$AC_WIN_BUILD_DIR/helium-pins.ini")"

@@ -1,7 +1,11 @@
 import { lastTabClosesWindow, onWindowRequest } from "../../platform/tabs";
+import { noteMouseShortcutRun } from "../telemetry/mouseShortcutCounts";
+import { menuSyncTotals } from "./menuSyncTotals";
+import { nativeConsent } from "../telemetry/nativeConsent";
 import { onDownload } from "../../platform/downloads";
 import { releaseProfile } from "../../platform/profiles";
-import { closeWindow, onWindowEvent, openWindow, restoreFullScreen, setTrafficLightsCenter, setWindowTitle, windowIds } from "../../platform/windows";
+import { closeWindow, onWindowEvent, openWindow, restoreFullScreen, setWindowTitle, windowIds } from "../../platform/windows";
+import { setTrafficLightsCenter } from "../windows/nativeWindow";
 import { isDarkAppearance, onAppEvent, onOpenURLs, replyToTerminate } from "../../platform/app";
 import { startNativeSettings } from "../settings/nativeSettings";
 import { startInterfaceScaleRefresh } from "./interfaceScaleRefresh";
@@ -10,27 +14,33 @@ import { Appearance } from "react-native";
 import { useBrowser } from "../browser/store";
 import { setLastTabKeepsWindow } from "../omnibox/newTabBarPolicy";
 import { isUtilityWindowId } from "../settings/settingsWindows";
+import { INTRO_WINDOW_ID } from "../onboarding/introWindow";
 import { openingLightsCenter } from "../windows/layout";
 import { createWindowSync, type WindowPort } from "../windows/windowSync";
 import { closeLittleArdiaForAppLink, openExternalUrls } from "../littleArdia/actions";
+import { noteIncomingLinksRefused } from "../telemetry/externalAppCounts";
 import { startUnclaimedEscape } from "../windows/unclaimedEscape";
 import { SMALL_LIGHTS_CENTER } from "../windows/small";
 import { runCommand } from "../commands/commands";
 import { setMenuBarShortcuts } from "../commands/commandShortcuts";
 import { finishAnimatedCloses } from "../windows/closeAnimated";
-import { startKeyboardFollows } from "../focus/keyboardFollows";
+import { followHandedBack, startKeyboardFollows } from "../focus/keyboardFollows";
 import { cancelAbandonedFocusMoves, settlingCommandFocus } from "../focus/focusHandoff";
 import { flushPersistence, resumePersistence } from "../session/persist";
-import { flushLive } from "../live/store";
+import { flushLive, useLive } from "../live/store";
 import { startWindowCloseGuard } from "../windows/windowClose";
 import { openLastWindowOrNew } from "../windows/lastWindow";
 import { noteDockReopen } from "../telemetry/usage";
-import { noteLittleArdiaAppHandoff } from "../telemetry/littleArdiaEscapes";
+import { noteSparkleUpdate } from "../telemetry/updateCounts";
+import { noteWindowReopenedMaximized } from "../telemetry/windowPlacementCounts";
+import { noteLittleArdiaAppHandoff, noteLittleArdiaLinkKeptBehind, noteLittleArdiaReturnsDropped } from "../telemetry/littleArdiaEscapes";
+import { notePageFocusReturnRequestAfterMenu } from "../telemetry/pageFocusReturns";
 import { startExtensionsBridge } from "../extensions/bridge";
 import { useExtensions } from "../extensions/actions";
 import { useReader } from "../reader/reader";
 import { answerQuitAfterSaves, isQuitting, setQuitting } from "./quit";
-import { menuInputsChanged, trackedMenuState, type MenuReads } from "../commands/menuState";
+import { extensionsChangeMenu, liveReachesMenu, menuInputsChanged, menuLiveKey, pagesChangeMenu, readerChangesMenu, trackedMenuState, type MenuReads } from "../commands/menuState";
+import { onLiveChange } from "../tabs/tabLive";
 import { usePages } from "../tabs/pageState";
 import { openFromWindowlessPage } from "../tabs/openFromWindowlessPage";
 import { startCaptionRegionSync } from "../windows/captionRegions";
@@ -38,8 +48,9 @@ import { startCaptionRegionSync } from "../windows/captionRegions";
 const QUIT_SAVES_WAIT_MS = 3_000;
 
 
-export const shellWindowPort: WindowPort = {
+const shellWindowPort: WindowPort = {
   open(id, options, lightsCenter) {
+    if (options.maximized) noteWindowReopenedMaximized();
     void setTrafficLightsCenter(id, lightsCenter);
     void openWindow(id, options);
   },
@@ -55,10 +66,14 @@ export function startNativeSync() {
   if (!store.getState().windowOrder.length) openLastWindowOrNew("launch");
 
   cancelAbandonedFocusMoves();
-  onCommand((e) => settlingCommandFocus(e, runCommand));
+  onCommand((e) => {
+    if (e.mouseButton) noteMouseShortcutRun(e.mouseButton, nativeConsent(e));
+    const user = { consent: nativeConsent(e) };
+    settlingCommandFocus(e, (event) => runCommand(event, { user }));
+  });
   startWindowCloseGuard();
   startExtensionsBridge();
-  onOpenURLs((urls, pointer, source, returnTo) => openExternalUrls(urls, pointer, source, returnTo));
+  onOpenURLs((urls, pointer, source, returnTo) => noteIncomingLinksRefused(openExternalUrls(urls, pointer, source, returnTo)));
   onWindowRequest(({ request, profile, fromWindow }) => openFromWindowlessPage(request, profile, fromWindow));
   startUnclaimedEscape();
   startKeyboardFollows();
@@ -80,7 +95,14 @@ export function startNativeSync() {
       openLastWindowOrNew("dock");
     }
     if (e.type === "appLinkOpened") closeLittleArdiaForAppLink(e.windowId);
+    if (e.type === "snapKeyHandedBack") followHandedBack(e.windowId);
+    if (e.type === "snapKeyHandedBack" && e.afterMenu) notePageFocusReturnRequestAfterMenu();
     if (e.type === "littleArdiaReturnedToApp") noteLittleArdiaAppHandoff("returnToApp");
+    if (e.type === "littleArdiaReturnDropped") noteLittleArdiaReturnsDropped(e.count);
+    if (e.type === "littleArdiaLinkKeptBehind") noteLittleArdiaLinkKeptBehind(e.when);
+    if (e.type === "littleArdiaGlobalShortcut") noteLittleArdiaAppHandoff("globalShortcut");
+    if (e.type === "littleArdiaGlobalShortcutBehind") noteLittleArdiaAppHandoff("globalShortcutBehind");
+    if (e.type === "updateStep" || e.type === "updateFailed") noteSparkleUpdate(e);
     if (e.type === "quitWarningSuppressed") s.updateSettings({ warnBeforeQuitting: false });
     if (e.type === "willQuit") {
       setQuitting(true);
@@ -100,7 +122,7 @@ export function startNativeSync() {
     getState: store.getState,
     isQuitting,
     lightsCenter: (s, id) => (s.windows[id]?.kind === "small" ? SMALL_LIGHTS_CENTER : openingLightsCenter(s, id)),
-    isUtilityWindow: isUtilityWindowId });
+    isUtilityWindow: (id) => isUtilityWindowId(id) || id === INTRO_WINDOW_ID });
   windows.listen();
 
   let lastMenu = "";
@@ -108,15 +130,21 @@ export function startNativeSync() {
   let lastBookmarkMenus: unknown[] = [];
   let menuTimer: ReturnType<typeof setTimeout> | undefined;
   let menuReads: MenuReads | null = null;
+  let menuLive = "";
   const syncMenu = () => {
     menuTimer = undefined;
-    const { state, reads } = trackedMenuState(store.getState());
+    const now = store.getState();
+    menuLive = menuLiveKey(now);
+    const { state, reads } = trackedMenuState(now);
     menuReads = reads;
     const { bookmarkFolders, recentBookmarks, bookmarksBar, otherBookmarks, ...rest } = state;
     const bookmarkMenus = [bookmarkFolders, recentBookmarks, bookmarksBar, otherBookmarks];
     const json = JSON.stringify(rest);
     const bookmarksChanged = !bookmarkMenus.every((menu, i) => menu === lastBookmarkMenus[i]);
-    if (json === lastMenu && !bookmarksChanged) return;
+    const unchanged = json === lastMenu && !bookmarksChanged;
+    menuSyncTotals.builds++;
+    if (unchanged) return;
+    menuSyncTotals.sends++;
     lastMenu = json;
     lastBookmarkMenus = bookmarkMenus;
     const sent = setMenuStateParts(state, bookmarksChanged);
@@ -136,14 +164,22 @@ export function startNativeSync() {
     windows.sync(s, prev);
     if (!menuReads || menuInputsChanged(menuReads, s, prev)) menuTimer ??= setTimeout(syncMenu, 120);
   });
+  onLiveChange((tabId) => {
+    if (menuTimer !== undefined) return;
+    const s = store.getState();
+    if (liveReachesMenu(s, tabId) && menuLiveKey(s) !== menuLive) menuTimer = setTimeout(syncMenu, 120);
+  });
   usePages.subscribe((p, prev) => {
-    if (p.pages !== prev.pages) menuTimer ??= setTimeout(syncMenu, 120);
+    if (menuTimer === undefined && pagesChangeMenu(store.getState(), p.pages, prev.pages)) menuTimer = setTimeout(syncMenu, 120);
   });
   useExtensions.subscribe((e, prev) => {
-    if (e.lists !== prev.lists) menuTimer ??= setTimeout(syncMenu, 120);
+    if (e.lists !== prev.lists && extensionsChangeMenu(e.lists, prev.lists)) menuTimer ??= setTimeout(syncMenu, 120);
   });
-  useReader.subscribe(() => {
-    menuTimer ??= setTimeout(syncMenu, 120);
+  useReader.subscribe((r, prev) => {
+    if (readerChangesMenu(r, prev)) menuTimer ??= setTimeout(syncMenu, 120);
+  });
+  useLive.subscribe((l, prev) => {
+    if (l.folderOrder !== prev.folderOrder || l.folders !== prev.folders) menuTimer ??= setTimeout(syncMenu, 120);
   });
   void windows.sweep();
   startCaptionRegionSync();

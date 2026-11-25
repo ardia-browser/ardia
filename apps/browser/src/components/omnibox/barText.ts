@@ -3,7 +3,7 @@ import type { BarSnapshot } from "../../state/omnibox/barState";
 
 export type Selection = { start: number; end: number };
 
-export type BarText = {
+type BarText = {
   typed: string;
   edited: boolean;
   suppressCompletion: boolean;
@@ -44,6 +44,8 @@ export function previewText(s: Suggestion | undefined): string | null {
   if (s?.kind === "page") return displayUrl(s.url);
   return null;
 }
+
+export const fullUrlShown = (value: string, s: Suggestion | undefined): string | null => (s?.kind === "page" && value === displayUrl(s.url) ? s.url : null);
 
 const caret = (at: number): Selection => ({ start: at, end: at });
 
@@ -99,6 +101,9 @@ export function selectionTracker(initial: Selection, now = Date.now) {
     },
     collapse() {
       current = { start: 0, end: 0 };
+    },
+    rebase() {
+      before = current;
     },
     beforeEdit: () => (now() - movedAt < CARET_WITH_KEY_MS ? before : current),
   };

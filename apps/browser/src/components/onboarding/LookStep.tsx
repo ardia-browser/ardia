@@ -1,25 +1,28 @@
 import { appIcons, currentAppIcon, setAppIcon, type AppIcon } from "../../state/app/appSettings";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { View } from "react-native";
-import { space } from "../ui/tokens";
+import { radius, space } from "../ui/tokens";
 import { PROFILE_COLORS } from "../ui/theme";
 import { useWindowProfileValue } from "../../state/profiles/hooks";
 import type { Settings } from "../../state/settings/settings";
 import { ChoiceList, type ChoiceOption } from "./ChoiceList";
+import { ChoiceCard } from "./ChoiceCard";
 import { ThemePicker } from "../settings/ThemeEditor";
-import { MockPanel, StylePanel, useScreen } from "./Screen";
+import { StylePanel, useScreen } from "./Screen";
 import { liquidGlass, previewColor, previewLive, previewTheme, setOnboardingExtras, useOnboarding } from "../../state/onboarding/onboarding";
-import { keysOf } from "../../state/onboarding/questions";
+import { keysOf, questionKeys } from "../../state/onboarding/questions";
 import { change, Page, useQuestion } from "./LayoutSteps";
 import { OptionCard } from "./OptionCard";
-import { OptionRow, useOnboardingCard } from "./Parts";
+import { useMockFocusValue } from "./sectionContext";
+import { showLiveTheme } from "./liveTheme";
+import { OptionRow } from "./Parts";
 import { Slider } from "../settings/ThemeControls";
 import { Text } from "../ui";
 import { noteOnboardingStyle } from "../../state/telemetry/usage";
 import { PAGE_FRAME, pageFrameInset } from "../../lib/windowLayout";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
 
-const LOOK_KEYS = keysOf("look");
+const LOOK_KEYS = [...keysOf("look"), ...questionKeys("style")];
 
 const APPEARANCE_CHOICES: ChoiceOption<Settings["appearance"]>[] = [
   { value: "auto", preview: "appearance-auto", title: "Automatic", subtitle: `Light by day, dark by night, like your ${PLATFORM_TERMS.computer}` },
@@ -33,10 +36,6 @@ const SITE_COLOR_CHOICES: ChoiceOption<boolean>[] = [
 const STYLE_CHOICES: ChoiceOption<Settings["interfaceStyle"]>[] = [
   { value: "glass", preview: "style-glass", title: "Liquid Glass", subtitle: "Buttons and panels catch the light, as in Tahoe" },
   { value: "classic", preview: "style-classic", title: "Classic", subtitle: "Flat and quiet, as in Dia" },
-];
-const SWITCHER_CHOICES: ChoiceOption<boolean>[] = [
-  { value: false, preview: "switcher-dots", title: "Dots", subtitle: "A quiet row of dots, as in Dia" },
-  { value: true, preview: "switcher-icons", title: "Icons", subtitle: "Each profile's symbol or emoji, as in Arc" },
 ];
 const BOOKMARKS_BAR: { value: Settings["bookmarksBar"]; title: string }[] = [
   { value: "always", title: "Always" },
@@ -53,22 +52,23 @@ const FRAME_VALUE_WIDTH = 40;
 const framePicked = (frame: number) => (frame === PAGE_FRAME.default ? [] : frame === 0 ? ["Edge-to-edge page"] : [`Page frame ${frame} pt`]);
 
 export function LookStep() {
-  const { id, focus } = useQuestion("look");
+  const { id, active, focus } = useQuestion();
   const { values, mock } = useScreen(LOOK_KEYS);
-  const { compact } = useOnboardingCard();
   const windowId = useOnboarding((s) => s.windowId) ?? "";
   const appIcon = useOnboarding((s) => s.extras.appIcon);
   const color = useWindowProfileValue(windowId, (p) => p?.color);
   const customTheme = useWindowProfileValue(windowId, (p) => !!p?.theme);
   const [icons, setIcons] = useState<{ list: AppIcon[]; current: string | null }>({ list: [], current: null });
-  const preview = <MockPanel settings={mock} focus={focus.focus} />;
   useEffect(() => {
-    previewLive({ appearance: values.appearance, extendWebsiteColor: values.extendWebsiteColor, ...(liquidGlass ? { interfaceStyle: values.interfaceStyle } : {}) });
+    if (active) previewLive({ appearance: values.appearance, extendWebsiteColor: values.extendWebsiteColor, ...(liquidGlass ? { interfaceStyle: values.interfaceStyle } : {}) });
+  }, [active]);
+  useEffect(() => {
+    if (id !== "lookMore") return;
     void Promise.all([appIcons(56), currentAppIcon()]).then(
       ([list, current]) => setIcons({ list, current }),
       () => {},
     );
-  }, []);
+  }, [id]);
 
   if (id === "appearance")
     return (
@@ -78,7 +78,6 @@ export function LookStep() {
         subtitle="Incognito windows are always dark."
         patch={{ appearance: values.appearance }}
         picked={[`Appearance ${APPEARANCE_LABEL[values.appearance]}`]}
-        preview={preview}
       >
         <ChoiceList options={APPEARANCE_CHOICES} value={values.appearance} onChange={(appearance) => change({ appearance }, true)} mock={focus} />
       </Page>
@@ -91,16 +90,16 @@ export function LookStep() {
         subtitle="Change it any time in Settings › Appearance."
         patch={{ interfaceStyle: values.interfaceStyle, glassTintWithTheme: values.glassTintWithTheme, glassTintAmount: values.glassTintAmount }}
         picked={values.interfaceStyle === "classic" ? ["Classic style"] : values.glassTintWithTheme ? [`Glass tinted ${Math.round(values.glassTintAmount * 100)} %`] : []}
-        preview={<StylePanel settings={mock} focus={focus.focus} />}
+        preview={<FocusedStylePanel settings={mock} />}
         onConfirm={() => noteOnboardingStyle(values.interfaceStyle, values.glassTintWithTheme)}
       >
         <ChoiceList options={STYLE_CHOICES} value={values.interfaceStyle} onChange={(interfaceStyle) => change({ interfaceStyle }, true)} mock={focus} />
         {values.interfaceStyle === "glass" ? (
-          <View style={{ gap: compact ? space.m : space.ml }}>
+          <View style={{ gap: space.ml }}>
             <OptionCard
               control="check"
               title="Tint the glass with your color"
-              subtitle={compact ? undefined : "Buttons and fields take on your theme color"}
+              subtitle="Buttons and fields take on your theme color"
               selected={values.glassTintWithTheme}
               onPress={() => change({ glassTintWithTheme: !values.glassTintWithTheme }, true)}
             />
@@ -120,7 +119,6 @@ export function LookStep() {
         subtitle="The room between the page and the window. Change it any time in Settings › Appearance."
         patch={{ pageFrame: values.pageFrame, borderlessMode: values.borderlessMode }}
         picked={framePicked(frame)}
-        preview={preview}
       >
         <View style={{ gap: space.ml }}>
           {FRAME_CHOICES.map((c) => (
@@ -137,24 +135,6 @@ export function LookStep() {
       </Page>
     );
   }
-  if (id === "switcher")
-    return (
-      <Page
-        id={id}
-        title="Dots or icons?"
-        subtitle="How the switcher at the bottom of the sidebar shows your profiles."
-        patch={{ profileSwitcherIcons: values.profileSwitcherIcons }}
-        picked={values.profileSwitcherIcons ? ["Profile icons in the sidebar"] : []}
-        preview={<MockPanel settings={mock} focus={focus.focus} switcher />}
-      >
-        <ChoiceList
-          options={SWITCHER_CHOICES}
-          value={values.profileSwitcherIcons}
-          onChange={(profileSwitcherIcons) => change({ profileSwitcherIcons })}
-          mock={focus}
-        />
-      </Page>
-    );
   if (id === "siteColor")
     return (
       <Page
@@ -163,7 +143,6 @@ export function LookStep() {
         subtitle="Many sites have a color of their own."
         patch={{ extendWebsiteColor: values.extendWebsiteColor }}
         picked={[]}
-        preview={preview}
       >
         <ChoiceList options={SITE_COLOR_CHOICES} value={values.extendWebsiteColor} onChange={(extendWebsiteColor) => change({ extendWebsiteColor }, true)} mock={focus} />
       </Page>
@@ -176,7 +155,6 @@ export function LookStep() {
         subtitle="All of these live in Settings too."
         patch={{ hideToolbarWhileScrolling: values.hideToolbarWhileScrolling, bookmarksBar: values.bookmarksBar }}
         picked={[]}
-        preview={preview}
         onConfirm={() => {
           if (appIcon && appIcon !== icons.current) void setAppIcon(appIcon);
         }}
@@ -201,10 +179,24 @@ export function LookStep() {
         </View>
       </Page>
     );
-  const name = customTheme ? "Custom" : color ? PROFILE_COLORS[color]?.name : null;
+  const name = color ? PROFILE_COLORS[color]?.name : null;
   return (
-    <Page id="color" title="Pick a color" subtitle="It tints the sidebar and the window." patch={{}} picked={name ? [`${name} theme`] : []} preview={preview}>
-      <ThemePicker windowId={windowId} size={32} gap={space.xs} onPreset={previewColor} onTheme={previewTheme} />
+    <Page id="color" title="Pick a color" subtitle="It tints the sidebar and the window." patch={{}} picked={name ? [customTheme ? `${name} theme, edited` : `${name} theme`] : []}>
+      <ThemePicker windowId={windowId} size={32} gap={space.xs} onPreset={previewColor} onTheme={previewTheme} onLiveTheme={showLiveTheme} frame={framedEditor} />
     </Page>
   );
+}
+
+function framedEditor(editor: ReactNode) {
+  return (
+    <ChoiceCard radius={radius.panel} raised style={EDITOR_CARD}>
+      {editor}
+    </ChoiceCard>
+  );
+}
+
+const EDITOR_CARD = { padding: space.xl } as const;
+
+function FocusedStylePanel({ settings }: { settings: Partial<Settings> }) {
+  return <StylePanel settings={settings} focus={useMockFocusValue()} />;
 }

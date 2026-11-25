@@ -609,7 +609,7 @@ void Popups() {
   assert(!status->OpenBlockedPopup(base::ListValue().Append("4").Append(1)) && !status->OpenBlockedPopup(base::ListValue().Append("99")));
   auto* settings=HostContentSettingsMapFactory::GetForProfile(&m.profile);settings->set.clear();
   assert(status->OpenBlockedPopup(base::ListValue().Append("4").Append(true)));
-  assert(m.popup_helper.shown.size()==1 && m.popup_helper.shown[0].first==4 && m.popup_helper.shown[0].second==WindowOpenDisposition::NEW_FOREGROUND_TAB);
+  assert(m.popup_helper.shown.size()==1 && m.popup_helper.shown[0].first==4 && m.popup_helper.shown[0].second==WindowOpenDisposition::kNewForegroundTab);
   assert(settings->set.size()==1 && settings->set[0].first=="https://example.test/" && settings->set[0].second==CONTENT_SETTING_ALLOW);
   assert(!status->OpenBlockedPopup(base::ListValue().Append("4")));
   assert(Count(Created(m,created),"popupBlocked")==1);

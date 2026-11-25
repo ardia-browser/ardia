@@ -7,8 +7,10 @@ import { usePage } from "../../state/tabs/pageState";
 import { CAPTURE_DOT_RIM } from "./tokens";
 import { PeekMark } from "../peek/PeekMark";
 import { useTabShared } from "../../state/media/screenShare";
+import { useTabHasBadges } from "../../state/media/tabBadges";
 
 export const TabBadges = memo(function TabBadges({ tabId, size = 16 }: { tabId: string; size?: number }) {
+  if (!useTabHasBadges(tabId)) return null;
   return (
     <>
       <CaptureBadge tabId={tabId} size={size} />

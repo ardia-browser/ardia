@@ -7,6 +7,7 @@ source_set("hooks") {
 
 source_set("launch_switches") {
   sources = [
+    "../linux/ac_linux_cast_core.h",
     "../linux/ac_linux_launch_config.h",
     "ac_launch_switches.h",
     "ac_launch_switches_linux.cc",

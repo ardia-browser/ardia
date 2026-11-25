@@ -43,7 +43,7 @@ export function appUrlOrigin(url: string): string | null {
   return parts ? `${APP_SCHEME}://${parts.host}` : null;
 }
 
-export type AppUrlRoute =
+type AppUrlRoute =
   | { kind: "page"; page: AppPageHost }
   | { kind: "settings"; section: string | null }
   | { kind: "newTab" }

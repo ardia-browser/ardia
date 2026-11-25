@@ -1,10 +1,10 @@
 --- a/chrome/browser/chrome_content_browser_client.cc
 +++ b/chrome/browser/chrome_content_browser_client.cc
-@@ -5672,9 +5672,21 @@
+@@ -5789,9 +5789,21 @@
    }
  }
  
-+#if BUILDFLAG(IS_LINUX)
++#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
 +extern void (*g_ardia_linux_navigation_throttles)(
 +    content::NavigationThrottleRegistry& registry);
 +void (*g_ardia_linux_navigation_throttles)(
@@ -14,7 +14,7 @@
  void ChromeContentBrowserClient::CreateThrottlesForNavigation(
      content::NavigationThrottleRegistry& registry) {
    CreateAndAddChromeThrottlesForNavigation(registry);
-+#if BUILDFLAG(IS_LINUX)
++#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
 +  if (g_ardia_linux_navigation_throttles) {
 +    g_ardia_linux_navigation_throttles(registry);
 +  }

@@ -5,8 +5,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { inflateSync } from "node:zlib";
 import { launch, reporter, session, sleep } from "../../../scripts/lib/instance.mjs";
+import { readPng } from "../../../scripts/lib/png.mjs";
 
 const args = process.argv.slice(2);
 const appArg = args.find((a) => !a.startsWith("--"));
@@ -125,37 +125,6 @@ function dump(name, crops, r) {
   rep.log(`frames judged: ${file}`);
 }
 
-function readPng(path) {
-  const buf = readFileSync(path);
-  let width = 0, height = 0, channels = 4;
-  const idat = [];
-  for (let at = 8; at < buf.length; ) {
-    const length = buf.readUInt32BE(at), type = buf.toString("ascii", at + 4, at + 8);
-    if (type === "IHDR") {
-      width = buf.readUInt32BE(at + 8);
-      height = buf.readUInt32BE(at + 12);
-      assert.equal(buf[at + 16], 8, "8-bit");
-      channels = { 2: 3, 6: 4 }[buf[at + 17]];
-    } else if (type === "IDAT") idat.push(buf.subarray(at + 8, at + 8 + length));
-    at += 12 + length;
-  }
-  const raw = inflateSync(Buffer.concat(idat));
-  const stride = width * channels;
-  const out = Buffer.alloc(stride * height);
-  for (let y = 0; y < height; y++) {
-    const filter = raw[y * (stride + 1)];
-    for (let x = 0; x < stride; x++) {
-      const v = raw[y * (stride + 1) + 1 + x];
-      const a = x >= channels ? out[y * stride + x - channels] : 0;
-      const b = y ? out[(y - 1) * stride + x] : 0;
-      const c = x >= channels && y ? out[(y - 1) * stride + x - channels] : 0;
-      const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
-      const pred = [0, a, b, (a + b) >> 1, pa <= pb && pa <= pc ? a : pb <= pc ? b : c][filter];
-      out[y * stride + x] = (v + pred) & 255;
-    }
-  }
-  return { width, height, channels, data: out };
-}
 function snapshotGrey(path, [x0, y0, x1, y1]) {
   const png = readPng(path);
   const r = { w: Math.round((x1 - x0) / 8), h: Math.round((y1 - y0) / 8) };

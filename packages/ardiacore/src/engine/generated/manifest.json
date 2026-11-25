@@ -1,0 +1,5017 @@
+{
+  "domains": {
+    "autofill": {
+      "kind": "engine",
+      "types": "packages/ardiacore/src/engine/generated/autofill.ts",
+      "swift": "packages/ardiacore/ios/AutofillCalls.swift",
+      "calls": {
+        "settings": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "setSettings": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "addresses": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "saveAddress": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "cards": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "remove": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "cardNumber": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "showSuggestions": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        }
+      },
+      "events": {}
+    },
+    "bookmarks": {
+      "kind": "engine",
+      "types": "packages/ardiacore/src/engine/generated/bookmarks.ts",
+      "swift": "packages/ardiacore/ios/BookmarksCalls.swift",
+      "calls": {
+        "tree": {
+          "service": "ac_bookmarks_tree",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "apply": {
+          "service": "ac_bookmarks_apply",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "watch": {
+          "service": "ac_bookmarks_watch",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "exportHtml": {
+          "service": "ac_bookmarks_export_html",
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        }
+      },
+      "events": {
+        "changed": {
+          "topic": "bookmarks.changed",
+          "mac": "forward",
+          "desktop": "forward",
+          "windows": "forward"
+        }
+      }
+    },
+    "contentBlocker": {
+      "kind": "engine",
+      "types": "packages/ardiacore/src/engine/generated/contentBlocker.ts",
+      "swift": "packages/ardiacore/ios/ContentBlockerCalls.swift",
+      "calls": {
+        "state": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "setEnabled": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "setListEnabled": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "addList": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "removeList": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "isAllowed": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "setAllowed": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "removeAllowed": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent",
+          "deadline": 90000
+        },
+        "hiddenElements": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "hideElements": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "restoreElements": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "devFailNextMessage": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "devDelayNextLoad": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        }
+      },
+      "events": {
+        "changed": {
+          "topic": "contentBlocker.changed",
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        }
+      }
+    },
+    "downloads": {
+      "kind": "engine",
+      "types": "packages/ardiacore/src/engine/generated/downloads.ts",
+      "swift": "packages/ardiacore/ios/DownloadsCalls.swift",
+      "calls": {
+        "settings": {
+          "service": "ac_downloads_settings",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "setSettings": {
+          "service": "ac_downloads_set_settings",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "cancel": {
+          "service": "ac_downloads_command",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom",
+          "routeField": "null"
+        },
+        "pause": {
+          "service": "ac_downloads_command",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom",
+          "routeField": "null"
+        },
+        "resume": {
+          "service": "ac_downloads_command",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom",
+          "routeField": "null"
+        },
+        "keep": {
+          "service": "ac_downloads_command",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom",
+          "routeField": "null"
+        }
+      },
+      "events": {
+        "changed": {
+          "topic": "downloads.changed",
+          "mac": "custom",
+          "desktop": "forward",
+          "windows": "custom"
+        }
+      }
+    },
+    "engine": {
+      "kind": "engine",
+      "types": "packages/ardiacore/src/engine/generated/engine.ts",
+      "swift": "packages/ardiacore/ios/EngineCalls.swift",
+      "calls": {
+        "info": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "components": {
+          "service": "ac_components_list",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom",
+          "routeField": "components"
+        },
+        "tasks": {
+          "service": "ac_tasks_list",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom",
+          "routeField": "tasks"
+        },
+        "nativeMessagingHosts": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "childProcessCpu": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "beginTracing": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "endTracing": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "isTracing": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "systemState": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "batterySaver": {
+          "service": "ac_battery_saver",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "memorySaver": {
+          "service": "ac_memory_saver",
+          "mac": "service",
+          "desktop": "custom",
+          "windows": "service"
+        },
+        "validateKeepActiveSite": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "trimMemory": {
+          "service": "ac_memory_trim",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "openTaskManager": {
+          "service": "ac_task_manager_open",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "cliControlStatus": {
+          "service": "ac_cli_control",
+          "mac": "service",
+          "desktop": "custom",
+          "windows": "service"
+        },
+        "setCliControl": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "setCliActiveTab": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "cliTabTargets": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "setCliHeldTabs": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "cliOwnsTab": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "cliConsoleDelta": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "cliDevToolsOpen": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "cliDevToolsSend": {
+          "service": "ac_cli_devtools_send",
+          "mac": "service",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "cliDevToolsClose": {
+          "service": "ac_cli_devtools_close",
+          "mac": "service",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "cliCancel": {
+          "service": "ac_cli_cancel",
+          "mac": "service",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "cliSnapshot": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "cliWaitSettled": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "cliHitTest": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "cliClick": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "cliScreenshot": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "cliMoveOffscreen": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "cliCloseOffscreenTabs": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        }
+      },
+      "events": {
+        "systemState": {
+          "topic": "engine.systemState",
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "cliControl": {
+          "topic": "cliControl",
+          "mac": "forward",
+          "desktop": "custom",
+          "windows": "forward"
+        },
+        "cliDevTools": {
+          "topic": "cliDevTools",
+          "mac": "forward",
+          "desktop": "custom",
+          "windows": "forward"
+        },
+        "hoverLost": {
+          "topic": "engine.hoverLost",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "popupProtectedMedia": {
+          "topic": "engine.popupProtectedMedia",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "devToolsKeyKept": {
+          "topic": "engine.devToolsKeyKept",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "cursorRestored": {
+          "topic": "engine.cursorRestored",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "windowUnpainted": {
+          "topic": "engine.windowUnpainted",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "pressLoopLong": {
+          "topic": "engine.pressLoopLong",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        }
+      }
+    },
+    "extensions": {
+      "kind": "engine",
+      "types": "packages/ardiacore/src/engine/generated/extensions.ts",
+      "swift": "packages/ardiacore/ios/ExtensionsCalls.swift",
+      "calls": {
+        "list": {
+          "service": "ac_extensions_list",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom"
+        },
+        "inspectUnpacked": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "install": {
+          "service": "ac_extensions_install",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom"
+        },
+        "installCrx": {
+          "service": "ac_extensions_install_crx",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom"
+        },
+        "setEnabled": {
+          "service": "ac_extensions_set_enabled",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom"
+        },
+        "uninstall": {
+          "service": "ac_extensions_uninstall",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom"
+        },
+        "reload": {
+          "service": "ac_extensions_reload",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom"
+        },
+        "configure": {
+          "service": "ac_extensions_configure",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom"
+        },
+        "chooseFolder": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "resolveInstallPrompt": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "actionStates": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "sidePanelUrl": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "watchActions": {
+          "service": "ac_extensions_watch_actions",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "syncState": {
+          "service": "ac_extensions_sync_state",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "syncApply": {
+          "service": "ac_extensions_sync_apply",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "loadHealth": {
+          "service": "ac_extensions_load_health",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        }
+      },
+      "events": {
+        "changed": {
+          "topic": "extensions.changed",
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "tabs": {
+          "topic": "extensions.tabs",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "installPrompt": {
+          "topic": "extensions.installPrompt",
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "installFailed": {
+          "topic": "extensions.installFailed",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "sidePanel": {
+          "topic": "extensions.sidePanel",
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "actionPopup": {
+          "topic": "extensions.actionPopup",
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "actionShortcut": {
+          "topic": "extensions.actionShortcut",
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "action": {
+          "topic": "extensions.action",
+          "mac": "forward",
+          "desktop": "forward",
+          "windows": "forward"
+        },
+        "sync": {
+          "topic": "extensions.sync",
+          "mac": "forward",
+          "desktop": "forward",
+          "windows": "forward"
+        }
+      }
+    },
+    "favicons": {
+      "kind": "engine",
+      "types": "packages/ardiacore/src/engine/generated/favicons.ts",
+      "swift": "packages/ardiacore/ios/FaviconsCalls.swift",
+      "calls": {
+        "get": {
+          "service": "ac_favicons_get",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "peek": {
+          "service": "ac_favicons_peek",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom"
+        },
+        "set": {
+          "service": "ac_favicons_set",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "fetch": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        }
+      },
+      "events": {}
+    },
+    "history": {
+      "kind": "engine",
+      "types": "packages/ardiacore/src/engine/generated/history.ts",
+      "swift": "packages/ardiacore/ios/HistoryModule.swift",
+      "calls": {
+        "query": {
+          "service": "ac_history_query",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "add": {
+          "service": "ac_history_add",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "import": {
+          "service": "ac_history_import",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "deleteUrls": {
+          "service": "ac_history_delete_urls",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "watch": {
+          "service": "ac_history_watch",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        }
+      },
+      "events": {
+        "changed": {
+          "topic": "history.changed",
+          "mac": "forward",
+          "desktop": "forward",
+          "windows": "forward"
+        }
+      }
+    },
+    "media": {
+      "kind": "engine",
+      "types": "packages/ardiacore/src/engine/generated/media.ts",
+      "swift": "packages/ardiacore/ios/MediaCalls.swift",
+      "calls": {
+        "displayMediaSources": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "displayMediaThumbnails": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "screenRecordingAllowed": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "requestScreenRecording": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "selectDevice": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "cancelDeviceChooser": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "refreshDeviceChooser": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "openBluetoothSettings": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "devShowBluetoothChooser": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "devChooserEvents": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "showCastDialog": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "startCasting": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "stopCasting": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "closeCastDialog": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "watchCastRoutes": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "terminateCastRoute": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "changeCaptureSource": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "stopCapture": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        }
+      },
+      "events": {
+        "deviceChooser": {
+          "topic": "media.deviceChooser",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "castDialog": {
+          "topic": "media.castDialog",
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "castRoutes": {
+          "topic": "media.castRoutes",
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        }
+      }
+    },
+    "passwords": {
+      "kind": "engine",
+      "types": "packages/ardiacore/src/engine/generated/passwords.ts",
+      "swift": "packages/ardiacore/ios/PasswordsCalls.swift",
+      "calls": {
+        "list": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "unlock": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "reveal": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "remove": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "neverSaveOrigins": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "allowSaving": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "export": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "autofillEnabled": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "setAutofillEnabled": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "setFieldProviders": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "showSystemPanel": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "showPanelHint": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "systemPanelAvailable": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "otpauthHandler": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "setUpVerificationCode": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        }
+      },
+      "events": {}
+    },
+    "permissions": {
+      "kind": "engine",
+      "types": "packages/ardiacore/src/engine/generated/permissions.ts",
+      "swift": "packages/ardiacore/ios/PermissionsCalls.swift",
+      "calls": {
+        "resolve": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "resolveExternalApp": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "externalAppAllowances": {
+          "service": "ac_external_apps_allowances",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom",
+          "routeField": "allowances"
+        },
+        "removeExternalAppAllowance": {
+          "service": "ac_external_apps_remove",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom",
+          "routeField": "null"
+        },
+        "devExternalLaunches": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        }
+      },
+      "events": {
+        "requested": {
+          "topic": "permissions.requested",
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "dismissed": {
+          "topic": "permissions.dismissed",
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        }
+      }
+    },
+    "profiles": {
+      "kind": "engine",
+      "types": "packages/ardiacore/src/engine/generated/profiles.ts",
+      "swift": "packages/ardiacore/ios/ProfilesCalls.swift",
+      "calls": {
+        "loaded": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "ctrlTabMru": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "release": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "unloadIdle": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "deleteData": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "clearBrowsingData": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        }
+      },
+      "events": {
+        "loaded": {
+          "topic": "profiles.loaded",
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        }
+      }
+    },
+    "search": {
+      "kind": "engine",
+      "types": "packages/ardiacore/src/engine/generated/search.ts",
+      "swift": "packages/ardiacore/ios/SearchCalls.swift",
+      "calls": {
+        "engines": {
+          "service": "ac_search_engines_list",
+          "mac": "custom",
+          "desktop": "route",
+          "windows": "custom"
+        },
+        "setEngineName": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "suggest": {
+          "service": "ac_search_suggest",
+          "mac": "service",
+          "desktop": "absent",
+          "windows": "service"
+        },
+        "stopSuggest": {
+          "service": "ac_search_suggest_stop",
+          "mac": "service",
+          "desktop": "absent",
+          "windows": "service"
+        }
+      },
+      "events": {}
+    },
+    "sites": {
+      "kind": "engine",
+      "types": "packages/ardiacore/src/engine/generated/sites.ts",
+      "swift": "packages/ardiacore/ios/SitesCalls.swift",
+      "calls": {
+        "settings": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "setSetting": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "origins": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "reset": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "clearData": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "zoomLevels": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "readStorage": {
+          "service": "ac_local_storage_read",
+          "mac": "service",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "writeStorage": {
+          "service": "ac_local_storage_write",
+          "mac": "service",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "registrableDomains": {
+          "service": "ac_registrable_domains",
+          "mac": "service",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "setZoom": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "preloadPages": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "setPreloadPages": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        }
+      },
+      "events": {}
+    },
+    "tabs": {
+      "kind": "engine",
+      "types": "packages/ardiacore/src/engine/generated/tabs.ts",
+      "swift": "packages/ardiacore/ios/TabsCalls.swift",
+      "calls": {
+        "routeLinkTabs": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "stripCommand": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "strips": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "lastTabPolicy": {
+          "service": "ac_tabs_last_tab_policy",
+          "mac": "service",
+          "desktop": "route",
+          "windows": "service"
+        },
+        "diagnostics": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "input": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "reportCommits": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "devBrowserId": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "devEvents": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "devWindowNumber": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "devFocusPage": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "devPagePhase": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "devClosePage": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "devPictureInPicture": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "devPictureInPictureAction": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "devPostPeekMouseUp": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "devScrollZoom": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        }
+      },
+      "events": {
+        "strips": {
+          "topic": "tabs.strips",
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        }
+      }
+    },
+    "webKit": {
+      "kind": "engine",
+      "types": "packages/ardiacore/src/engine/generated/webKit.ts",
+      "swift": "packages/ardiacore/ios/WebKitCalls.swift",
+      "calls": {
+        "removeDownloadStaging": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "endPrivateSession": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "cookieStoreKey": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "importCookies": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "exportCookies": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "writeCopiedAddress": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "setFraudWarnings": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "watchSiteData": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "siteDataReady": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "readSiteData": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "writeSiteData": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "setZoom": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "notificationAction": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "passkeyAccess": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "requestPasskeyAccess": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "devStoreExists": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "devHoldStore": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "devTouchStore": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "devParkedTransfers": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "devContentBlocker": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        }
+      },
+      "events": {
+        "counted": {
+          "topic": "webKit.counted",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "copyAddress": {
+          "topic": "webKit.copyAddress",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "siteDataWanted": {
+          "topic": "webKit.siteDataWanted",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "siteCookiesChanged": {
+          "topic": "webKit.siteCookiesChanged",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "notification": {
+          "topic": "webKit.notification",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "notificationClose": {
+          "topic": "webKit.notificationClose",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "openWindow": {
+          "topic": "webKit.openWindow",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        }
+      }
+    },
+    "webView": {
+      "kind": "engine",
+      "types": "packages/ardiacore/src/engine/generated/webView.ts",
+      "swift": "packages/ardiacore/ios/WebViewCalls.swift",
+      "calls": {
+        "setDisplayMediaPicker": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "setPeekModifier": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "setSplitLinkModifier": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "setPeekOtherSiteTabs": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "setSelectionPopover": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "setBlockAutoplayEverywhere": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "custom"
+        },
+        "setCommandScrollZoom": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "setLittleArdiaOpensNewTabLinks": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "setPopupsOpenAsTabs": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "custom"
+        },
+        "setAutoPictureInPicture": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "setVideoUpscaling": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "setVideoUpscalingTestConditions": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "videoUpscalingState": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "takeContentDrift": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "takePageMetrics": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "takeFirstPaintHolds": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        }
+      },
+      "events": {}
+    },
+    "windows": {
+      "kind": "engine",
+      "types": "packages/ardiacore/src/engine/generated/windows.ts",
+      "swift": "packages/ardiacore/ios/WindowsCalls.swift",
+      "calls": {
+        "list": {
+          "mac": "custom",
+          "desktop": "custom",
+          "windows": "absent"
+        },
+        "dev": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        }
+      },
+      "events": {}
+    }
+  },
+  "modules": {
+    "shaders": {
+      "kind": "module",
+      "package": "packages/shaders",
+      "types": "packages/shaders/src/generated/native.ts",
+      "swift": "packages/shaders/ios/ShadersNative.swift",
+      "sha256": {
+        "types": "9b3d31e50065d975d3c8d1a0a32285e0a19cfcb84d150a12f5da55d8756c70e9",
+        "swift": "9bf2eee20d7afe4eec3948c38bc97f09b467fc34a1d5cc8d7dd5a82eacc121ac"
+      },
+      "modules": {
+        "ArdiaAreaLight": {
+          "native": "AreaLightNative",
+          "functions": {
+            "debugSnapshot": {
+              "args": [
+                "dir"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            }
+          },
+          "events": {}
+        },
+        "ArdiaWindowBackdrop": {
+          "native": "WindowBackdropNative",
+          "functions": {
+            "holdKeyLook": {
+              "args": [
+                "on"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            }
+          },
+          "events": {}
+        },
+        "ArdiaMeadow": {
+          "native": "MeadowNative",
+          "functions": {
+            "debugState": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "debugEval": {
+              "args": [
+                "script"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            }
+          },
+          "events": {}
+        }
+      }
+    },
+    "shell": {
+      "kind": "module",
+      "package": "packages/shell",
+      "types": "packages/shell/src/generated/native.ts",
+      "swift": "packages/shell/ios/ShellNative.swift",
+      "sha256": {
+        "types": "824356c4ceb0f526b84811590c1aab1a8ad59aa6b3f949f06ad68fb723cef12f",
+        "swift": "41a93592952890260b4a8e0f8fba27b9931a42b5ee4a4b1b2bb25ca358f7c010"
+      },
+      "modules": {
+        "ArdiaShell": {
+          "native": "ShellNative",
+          "functions": {
+            "setAppearance": {
+              "args": [
+                "mode"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "custom"
+            },
+            "isDarkAppearance": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "custom"
+            },
+            "startDictation": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "fetchBangList": {
+              "args": [
+                "etag"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "custom",
+              "deadline": 75000
+            },
+            "copyText": {
+              "args": [
+                "text"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "custom"
+            },
+            "copyURL": {
+              "args": [
+                "address"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "readText": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "custom"
+            },
+            "dictationAvailable": {
+              "args": [],
+              "async": false,
+              "mac": "absent",
+              "desktop": "custom",
+              "windows": "custom"
+            }
+          },
+          "events": {
+            "onOpenURLs": {
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "custom"
+            },
+            "onAppEvent": {
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "custom"
+            }
+          }
+        },
+        "ArdiaAppWindows": {
+          "native": "AppWindowsNative",
+          "functions": {
+            "windowCornerRadius": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "drawnWindowCornerRadius": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "frameCornerRadius": {
+              "args": [
+                "id"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "openWindow": {
+              "args": [
+                "id",
+                "options"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "closeWindow": {
+              "args": [
+                "id"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "animateWindowClose": {
+              "args": [
+                "id",
+                "after"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "setTrafficLightsCenter": {
+              "args": [
+                "id",
+                "center",
+                "trailing"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "watchSidebarEdge": {
+              "args": [
+                "id",
+                "on",
+                "hold",
+                "right",
+                "whilePressed"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "focusWindow": {
+              "args": [
+                "id"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "setWindowShown": {
+              "args": [
+                "id",
+                "shown",
+                "burst"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "restoreFullScreen": {
+              "args": [
+                "ids",
+                "focus"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "dragPreviewBegin": {
+              "args": [
+                "windowId",
+                "chip",
+                "grab"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "dragPreviewPage": {
+              "args": [
+                "base64",
+                "frame"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "dragPreviewUpdate": {
+              "args": [
+                "shape",
+                "point"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "dragPreviewCancel": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "raiseView": {
+              "args": [
+                "tag",
+                "levels",
+                "raised"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "dragPreviewPlaceholder": {
+              "args": [
+                "title",
+                "favicon"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "windowFrame": {
+              "args": [
+                "id"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "windowGeometry": {
+              "args": [
+                "id"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "setWindowFrame": {
+              "args": [
+                "id",
+                "frame"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "setWindowZoomed": {
+              "args": [
+                "id",
+                "on"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "setWindowFullScreen": {
+              "args": [
+                "id",
+                "on"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "dragPreviewEnd": {
+              "args": [
+                "windowId",
+                "frame"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "setWindowTitle": {
+              "args": [
+                "id",
+                "title"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "windowIds": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "replyToTerminate": {
+              "args": [
+                "ok"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            }
+          },
+          "events": {
+            "onWindowEvent": {
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom"
+            }
+          }
+        },
+        "ArdiaFocus": {
+          "native": "FocusNative",
+          "functions": {
+            "pressesWithoutRelease": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "takeFocusHandoffCounts": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "setConsentEpoch": {
+              "args": [
+                "epoch"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "pressRepeated": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "takeEditKeyAcks": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "takeInputSourceKeys": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "cancelFocusMove": {
+              "args": [
+                "generation",
+                "restoringSource"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "claimFocus": {
+              "args": [
+                "generation",
+                "tag"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "saveKeyResponder": {
+              "args": [
+                "windowId"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "restoreKeyResponder": {
+              "args": [
+                "token"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "discardKeyResponder": {
+              "args": [
+                "token"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "setSwitcherCapture": {
+              "args": [
+                "active"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "setDragEscapeCapture": {
+              "args": [
+                "active"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "takeHoverCounts": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "switcherPointerMoved": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            }
+          },
+          "events": {}
+        },
+        "ArdiaMenus": {
+          "native": "MenusNative",
+          "functions": {
+            "setMenuState": {
+              "args": [
+                "state"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "setMenuBookmarks": {
+              "args": [
+                "bookmarks"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "showMenu": {
+              "args": [
+                "items"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "updateMenu": {
+              "args": [
+                "items"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "openSurfaces": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "capturePageMenus": {
+              "args": [
+                "captures"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "dismissSurface": {
+              "args": [
+                "id"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "menuBar": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "performMenuBarItem": {
+              "args": [
+                "ref",
+                "windowId"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "menuShortcuts": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "recordShortcut": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "cancelRecording": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "mouseShortcutMonitor": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            }
+          },
+          "events": {
+            "onCommand": {
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom"
+            },
+            "onSurface": {
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            }
+          }
+        },
+        "ArdiaDialogs": {
+          "native": "DialogsNative",
+          "functions": {
+            "confirm": {
+              "args": [
+                "options"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "dismissShownOnly": {
+              "args": [
+                "key"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "choose": {
+              "args": [
+                "options"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "prompt": {
+              "args": [
+                "options"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "pickFiles": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "pickFolder": {
+              "args": [
+                "current",
+                "prompt"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            }
+          },
+          "constants": {
+            "dismissesShownOnly": {
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            }
+          },
+          "events": {}
+        },
+        "ArdiaDocuments": {
+          "native": "DocumentsNative",
+          "functions": {
+            "readDocument": {
+              "args": [
+                "name"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "documentExists": {
+              "args": [
+                "name"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "writeDocument": {
+              "args": [
+                "name",
+                "contents"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "documentSaved": {
+              "args": [
+                "name"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "createDocument": {
+              "args": [
+                "name",
+                "contents"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "listDocuments": {
+              "args": [
+                "prefix"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "removeDocument": {
+              "args": [
+                "name"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "copyDocument": {
+              "args": [
+                "name",
+                "copyName"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "syncDocument": {
+              "args": [
+                "name"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "saveDocument": {
+              "args": [
+                "name",
+                "contents"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            }
+          },
+          "events": {}
+        },
+        "ArdiaApp": {
+          "native": "AppNative",
+          "functions": {
+            "interfaceScale": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "interfaceScaleRange": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "setInterfaceScale": {
+              "args": [
+                "scale"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "setWindowActivity": {
+              "args": [
+                "windowId",
+                "url",
+                "title"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "share": {
+              "args": [
+                "url",
+                "title",
+                "windowId",
+                "anchor"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "shareText": {
+              "args": [
+                "text",
+                "windowId",
+                "anchor"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "shareVia": {
+              "args": [
+                "service",
+                "url",
+                "title",
+                "windowId"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "isInDock": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "addToDock": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "appIcons": {
+              "args": [
+                "size"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "appIcon": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "setAppIcon": {
+              "args": [
+                "id"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "systemInfo": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "crashReports": {
+              "args": [
+                "since"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "hardwareInfo": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "custom"
+            },
+            "diagnosticsSample": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "openExternalURL": {
+              "args": [
+                "url"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "custom"
+            },
+            "playIntroMusic": {
+              "args": [
+                "cues",
+                "muted"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "setIntroMusicMuted": {
+              "args": [
+                "muted"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "stopIntroMusic": {
+              "args": [
+                "fade"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "launchConfig": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            }
+          },
+          "constants": {
+            "apiVersion": {
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            }
+          },
+          "events": {}
+        },
+        "ArdiaUpdater": {
+          "native": "UpdaterNative",
+          "functions": {
+            "updaterState": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "checkForUpdates": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "setAutomaticUpdateChecks": {
+              "args": [
+                "on"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "setAutomaticUpdateDownloads": {
+              "args": [
+                "on"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "setUpdateChannel": {
+              "args": [
+                "channel"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            }
+          },
+          "events": {}
+        },
+        "ArdiaNotifications": {
+          "native": "NotificationsNative",
+          "functions": {
+            "notificationPermission": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "requestNotificationPermission": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "postNotification": {
+              "args": [
+                "options"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "removeNotifications": {
+              "args": [
+                "ids"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "openNotificationSettings": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            }
+          },
+          "events": {
+            "onNotificationResponse": {
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom"
+            }
+          }
+        },
+        "ArdiaLocation": {
+          "native": "LocationNative",
+          "functions": {
+            "locationPermission": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "absent"
+            },
+            "requestLocationPermission": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "absent"
+            },
+            "openLocationSettings": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "devLocationRequests": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            }
+          },
+          "events": {}
+        },
+        "ArdiaScripting": {
+          "native": "ScriptingNative",
+          "functions": {
+            "setScriptState": {
+              "args": [
+                "state"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "replyToScript": {
+              "args": [
+                "id",
+                "result",
+                "error"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            }
+          },
+          "events": {
+            "onScriptCommand": {
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            }
+          }
+        },
+        "ArdiaDev": {
+          "native": "DevNative",
+          "functions": {
+            "devCrash": {
+              "args": [
+                "kind"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devBlockMain": {
+              "args": [
+                "ms"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devNotificationCenter": {
+              "args": [
+                "actAsEngine"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devNotificationCategoryRace": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devRenderIntroMusic": {
+              "args": [
+                "cues",
+                "path"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devLittleArdiaHotKey": {
+              "args": [
+                "press"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devMenuCommand": {
+              "args": [
+                "command",
+                "arg"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devPostKey": {
+              "args": [
+                "windowId",
+                "key",
+                "keyCode",
+                "modifiers"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devPostKeys": {
+              "args": [
+                "windowId",
+                "presses"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devMenuItems": {
+              "args": [
+                "title",
+                "perform",
+                "asTitleBar"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devDragBlockedRects": {
+              "args": [
+                "windowId"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devDragRegionRects": {
+              "args": [
+                "windowId"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devDragRegionState": {
+              "args": [
+                "windowId"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devDragRegionPointer": {
+              "args": [
+                "windowId",
+                "x",
+                "top",
+                "on"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devReceiveURLsWhenDetached": {
+              "args": [
+                "urls",
+                "timeoutMs"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devURLDelivery": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devOpenURLDeliveries": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devShortcutRecording": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devDragPreviewState": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devWindowMoveProbe": {
+              "args": [
+                "id",
+                "probe"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devWindowResizeProbe": {
+              "args": [
+                "id",
+                "probe"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devWindowReplayAfterMove": {
+              "args": [
+                "id",
+                "rect"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devSetWindowFrame": {
+              "args": [
+                "id",
+                "rect"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devSnapshotWindow": {
+              "args": [
+                "windowId",
+                "path",
+                "transparent"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devSnapshotBurst": {
+              "args": [
+                "windowId",
+                "dir",
+                "rect",
+                "durationMs"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devSetPointer": {
+              "args": [
+                "windowId",
+                "x",
+                "y",
+                "on"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devPointerSweep": {
+              "args": [
+                "windowId",
+                "sweep"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devSidebarEdgePointer": {
+              "args": [
+                "windowId",
+                "x",
+                "y",
+                "on"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devSidebarEdgeStats": {
+              "args": [
+                "reset"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devHoverStats": {
+              "args": [
+                "reset"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devSetMouseButtons": {
+              "args": [
+                "pressed"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devTypeKeys": {
+              "args": [
+                "windowId",
+                "text",
+                "interval"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devFieldTrace": {
+              "args": [
+                "on"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devKeyEquivalent": {
+              "args": [
+                "windowId",
+                "press"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devMenuBar": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devKeyEquivalentTrace": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devFocusHandoffTrace": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devClick": {
+              "args": [
+                "windowId",
+                "click"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devRunAppleScript": {
+              "args": [
+                "source"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            }
+          },
+          "events": {}
+        },
+        "ArdiaSystem": {
+          "native": "SystemNative",
+          "functions": {
+            "isDefaultBrowser": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "custom"
+            },
+            "setAsDefaultBrowser": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "custom"
+            },
+            "launchAtLoginStatus": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "custom"
+            },
+            "setLaunchAtLogin": {
+              "args": [
+                "enabled"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "custom"
+            },
+            "fileExists": {
+              "args": [
+                "path"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "openFile": {
+              "args": [
+                "path"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom"
+            },
+            "revealFile": {
+              "args": [
+                "path"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "moveToTrash": {
+              "args": [
+                "path"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom"
+            },
+            "fileIcon": {
+              "args": [
+                "path",
+                "size"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom"
+            },
+            "runningAppIcon": {
+              "args": [
+                "pid",
+                "size"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "hapticTick": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "setThinScrollBars": {
+              "args": [
+                "thin"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "custom"
+            }
+          },
+          "constants": {
+            "backgroundInstance": {
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            }
+          },
+          "events": {}
+        },
+        "ArdiaCalendar": {
+          "native": "CalendarNative",
+          "functions": {
+            "authorizationStatus": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "requestAccess": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "absent",
+              "deadline": 120000
+            },
+            "calendars": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "events": {
+              "args": [
+                "start",
+                "end",
+                "calendarIds"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            }
+          },
+          "events": {
+            "onCalendarChanged": {
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "absent"
+            }
+          }
+        },
+        "ArdiaKeychain": {
+          "native": "KeychainNative",
+          "functions": {
+            "get": {
+              "args": [
+                "account"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "read": {
+              "args": [
+                "account"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "set": {
+              "args": [
+                "account",
+                "secret"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "delete": {
+              "args": [
+                "account"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            }
+          },
+          "events": {}
+        },
+        "ArdiaGlassEffect": {
+          "native": "GlassEffectNative",
+          "functions": {
+            "isLiquidGlass": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            }
+          },
+          "events": {}
+        },
+        "ArdiaDockSelection": {
+          "native": "DockSelectionNative",
+          "functions": {
+            "iconTheme": {
+              "args": [
+                "uri",
+                "emoji"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "iconAccent": {
+              "args": [
+                "uri"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            }
+          },
+          "events": {}
+        },
+        "ArdiaInlineCompletion": {
+          "native": "InlineCompletionNative",
+          "functions": {
+            "complete": {
+              "args": [
+                "tag",
+                "typed",
+                "completion"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "keepWhileTyping": {
+              "args": [
+                "tag",
+                "on"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "takeKept": {
+              "args": [
+                "tag",
+                "start",
+                "end"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "copyFieldAs": {
+              "args": [
+                "shown",
+                "url"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            }
+          },
+          "events": {}
+        },
+        "ArdiaTranslate": {
+          "native": "TranslateNative",
+          "functions": {
+            "userLanguages": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "languageName": {
+              "args": [
+                "identifier"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "detect": {
+              "args": [
+                "text"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "status": {
+              "args": [
+                "source",
+                "target"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "supportedLanguages": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "prepare": {
+              "args": [
+                "source",
+                "target"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "translateBlocks": {
+              "args": [
+                "source",
+                "target",
+                "blocks",
+                "owner"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "open": {
+              "args": [
+                "owner"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "cancel": {
+              "args": [
+                "owner"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "translate": {
+              "args": [
+                "source",
+                "target",
+                "texts"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            }
+          },
+          "constants": {
+            "available": {
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            }
+          },
+          "events": {}
+        },
+        "ArdiaMagnifyArea": {
+          "native": "MagnifyAreaNative",
+          "functions": {
+            "devMagnify": {
+              "args": [
+                "windowId",
+                "x",
+                "y",
+                "steps"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            }
+          },
+          "events": {}
+        },
+        "ArdiaWheelArea": {
+          "native": "WheelAreaNative",
+          "functions": {
+            "devWheel": {
+              "args": [
+                "windowId",
+                "x",
+                "y",
+                "steps"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "glideScroll": {
+              "args": [
+                "tag",
+                "y",
+                "durationMs"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "steerScroll": {
+              "args": [
+                "tag",
+                "lo",
+                "hi",
+                "glideMs",
+                "canForward",
+                "canBack"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            }
+          },
+          "events": {}
+        },
+        "ArdiaPeekStage": {
+          "native": "PeekStageNative",
+          "functions": {
+            "devState": {
+              "args": [
+                "windowId"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "devPageFrames": {
+              "args": [
+                "windowId"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "devPostMagnify": {
+              "args": [
+                "windowId",
+                "x",
+                "y",
+                "phase",
+                "magnification"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "devPostScroll": {
+              "args": [
+                "windowId",
+                "x",
+                "y",
+                "dy"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "devPostButton": {
+              "args": [
+                "windowId",
+                "x",
+                "y",
+                "button"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            }
+          },
+          "events": {}
+        },
+        "ArdiaFileDrop": {
+          "native": "FileDropNative",
+          "functions": {
+            "devDrag": {
+              "args": [
+                "windowId",
+                "action",
+                "x",
+                "y",
+                "payload"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "devLastFileDrag": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            }
+          },
+          "events": {}
+        },
+        "ArdiaCli": {
+          "native": "CliNative",
+          "functions": {
+            "installedVersion": {
+              "args": [],
+              "async": false,
+              "mac": "absent",
+              "desktop": "adapted",
+              "windows": "custom"
+            },
+            "canInstallUnattended": {
+              "args": [],
+              "async": false,
+              "mac": "absent",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "install": {
+              "args": [],
+              "async": true,
+              "mac": "absent",
+              "desktop": "adapted",
+              "windows": "custom",
+              "deadline": 330000
+            }
+          },
+          "events": {
+            "onInstallLine": {
+              "mac": "absent",
+              "desktop": "adapted",
+              "windows": "absent"
+            }
+          }
+        },
+        "ArdiaUserScripts": {
+          "native": "UserScriptsNative",
+          "functions": {
+            "watch": {
+              "args": [
+                "on"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom"
+            },
+            "read": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "custom"
+            },
+            "readStatus": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "custom"
+            },
+            "writeStatus": {
+              "args": [
+                "json"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "absent"
+            }
+          },
+          "events": {
+            "onChange": {
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "absent"
+            }
+          }
+        },
+        "ArdiaConfig": {
+          "native": "ConfigNative",
+          "functions": {
+            "readFile": {
+              "args": [
+                "name"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom"
+            },
+            "watch": {
+              "args": [
+                "names"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom"
+            },
+            "writeSchemas": {
+              "args": [
+                "files"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom"
+            }
+          },
+          "events": {
+            "onChange": {
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            }
+          }
+        },
+        "ArdiaAutomation": {
+          "native": "AutomationNative",
+          "functions": {
+            "start": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "absent"
+            },
+            "stop": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "absent"
+            },
+            "reply": {
+              "args": [
+                "connection",
+                "line",
+                "ticket"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "absent"
+            },
+            "cutOff": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "broadcast": {
+              "args": [
+                "connections",
+                "line"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "absent"
+            },
+            "devtoolsEndpoint": {
+              "args": [
+                "connection"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "answerPeer": {
+              "args": [
+                "ask",
+                "outcome"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "approvals": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "revokeApproval": {
+              "args": [
+                "key"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "armFiles": {
+              "args": [
+                "spec"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "disarmFiles": {
+              "args": [
+                "ids",
+                "purge"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "fileArms": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "claimArmedDownload": {
+              "args": [
+                "arm",
+                "download",
+                "path"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "placeArmedDownload": {
+              "args": [
+                "arm",
+                "download",
+                "path"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "releaseArmedDownload": {
+              "args": [
+                "arm",
+                "download",
+                "state"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            }
+          },
+          "events": {
+            "onRequest": {
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "absent"
+            },
+            "onClose": {
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "absent"
+            },
+            "onWritten": {
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "absent"
+            },
+            "onPeerAsk": {
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "onPeerAskEnded": {
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            }
+          }
+        },
+        "ArdiaPlugins": {
+          "native": "PluginsNative",
+          "functions": {
+            "folder": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "list": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "start": {
+              "args": [
+                "spec"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "stop": {
+              "args": [
+                "name",
+                "run",
+                "graceMs"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "reply": {
+              "args": [
+                "name",
+                "run",
+                "line"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "event": {
+              "args": [
+                "name",
+                "run",
+                "line"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "call": {
+              "args": [
+                "name",
+                "run",
+                "line"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "linkPrograms": {
+              "args": [
+                "spec"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "takeAfterUpdateQuitStops": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "setAfterUpdateQuitConsent": {
+              "args": [
+                "consent"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "legacyProgramsInstalled": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "programRegistry": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "sweepPrograms": {
+              "args": [
+                "active"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "unlinkPrograms": {
+              "args": [
+                "name",
+                "programs",
+                "remove"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "officialPlugins": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "fetchOfficial": {
+              "args": [
+                "name"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "cancelOfficialFetch": {
+              "args": [
+                "name"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "promoteOfficial": {
+              "args": [
+                "name",
+                "folderId",
+                "approved"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "hostFetch": {
+              "args": [
+                "spec"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "storageRead": {
+              "args": [
+                "name"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "storageWrite": {
+              "args": [
+                "name",
+                "text"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "readPluginFile": {
+              "args": [
+                "name",
+                "folderId",
+                "approved",
+                "path"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "remove": {
+              "args": [
+                "name",
+                "official",
+                "folderId"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "revealLog": {
+              "args": [
+                "name"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "revealFolder": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "devSnapshotPage": {
+              "args": [
+                "name",
+                "path"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            }
+          },
+          "events": {
+            "onLine": {
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "onExit": {
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "onOfficialFetch": {
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            }
+          }
+        },
+        "ArdiaSystemSignals": {
+          "native": "SystemSignalsNative",
+          "functions": {
+            "watchIdle": {
+              "args": [
+                "thresholds"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "custom"
+            },
+            "holdsIncomingLinks": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "setHoldIncomingLinks": {
+              "args": [
+                "hold",
+                "hooksStamp"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "setApprovedDownloadFolders": {
+              "args": [
+                "folders"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "moveCompletedDownload": {
+              "args": [
+                "path",
+                "folder"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "devPost": {
+              "args": [
+                "name"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "custom"
+            }
+          },
+          "events": {
+            "onSystemSignal": {
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "absent"
+            }
+          }
+        },
+        "ArdiaReport": {
+          "native": "ReportNative",
+          "functions": {
+            "draftDirectory": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "absent"
+            },
+            "fileSize": {
+              "args": [
+                "path"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "absent"
+            },
+            "removeFile": {
+              "args": [
+                "path"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "absent"
+            },
+            "startRecording": {
+              "args": [
+                "windowId",
+                "includePages",
+                "path",
+                "maxSeconds",
+                "fps",
+                "maxPixelWidth"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "stopRecording": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "cancelRecording": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "isRecording": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "recordingThumbnail": {
+              "args": [
+                "path",
+                "out"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "absent"
+            },
+            "gzipFile": {
+              "args": [
+                "source",
+                "destination",
+                "removeSource"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "absent"
+            },
+            "gzipText": {
+              "args": [
+                "text",
+                "destination"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "absent"
+            },
+            "upload": {
+              "args": [
+                "id",
+                "url",
+                "method",
+                "headers",
+                "path"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "absent"
+            },
+            "cancelUploads": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "absent"
+            },
+            "devRenderCost": {
+              "args": [
+                "windowId"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devSnapshotPill": {
+              "args": [
+                "path"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devRecordingPages": {
+              "args": [
+                "windowId"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devPlaceWindow": {
+              "args": [
+                "windowId",
+                "frame"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devWindowServerAlpha": {
+              "args": [
+                "windowNumber",
+                "alpha"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devPages": {
+              "args": [
+                "windowId"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            }
+          },
+          "events": {
+            "onReport": {
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "absent"
+            }
+          }
+        },
+        "ArdiaTelemetryLocal": {
+          "native": "TelemetryLocalNative",
+          "functions": {
+            "append": {
+              "args": [
+                "day",
+                "text"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "appendNow": {
+              "args": [
+                "day",
+                "text"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "configure": {
+              "args": [
+                "maxBytes",
+                "keepDays"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "prune": {
+              "args": [
+                "now"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "clear": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "exportForReport": {
+              "args": [
+                "since"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "exportToDownloads": {
+              "args": [
+                "now"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            }
+          },
+          "events": {}
+        },
+        "ArdiaFieldGlow": {
+          "native": "FieldGlowNative",
+          "functions": {
+            "show": {
+              "args": [
+                "id",
+                "timings"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "progress": {
+              "args": [
+                "id",
+                "progress",
+                "still"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "pulse": {
+              "args": [
+                "id",
+                "period",
+                "low"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "finish": {
+              "args": [
+                "id",
+                "still"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "reset": {
+              "args": [
+                "id"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            }
+          },
+          "events": {}
+        }
+      }
+    },
+    "sync": {
+      "kind": "module",
+      "package": "packages/sync",
+      "types": "packages/sync/src/generated/native.ts",
+      "swift": "packages/sync/ios/SyncNative.swift",
+      "sha256": {
+        "types": "a1e5a4064125ab8f762e1336845b26cc5db346c2a09344004857928ae1066fd1",
+        "swift": "b5196cc68e00ac623efc491d02f3f6ab2c9aa8efeb98935be0e3afce1d240d43"
+      },
+      "modules": {
+        "ArdiaSync": {
+          "native": "SyncNative",
+          "functions": {
+            "folderInfo": {
+              "args": [
+                "path"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom"
+            },
+            "chooseFolder": {
+              "args": [
+                "current"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom",
+              "deadline": 900000
+            },
+            "newDeviceId": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "custom",
+              "windows": "custom"
+            },
+            "takeOpenFailures": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "deviceName": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom"
+            },
+            "createPhrase": {
+              "args": [
+                "account"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom",
+              "deadline": 180000
+            },
+            "enterPhrase": {
+              "args": [
+                "account",
+                "text",
+                "folder"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom",
+              "deadline": 180000
+            },
+            "unlock": {
+              "args": [
+                "account"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom",
+              "deadline": 180000
+            },
+            "forget": {
+              "args": [
+                "account"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom",
+              "deadline": 180000
+            },
+            "chainStatus": {
+              "args": [
+                "folder"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom"
+            },
+            "createChain": {
+              "args": [
+                "folder"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom"
+            },
+            "write": {
+              "args": [
+                "folder",
+                "scope",
+                "payload"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom",
+              "deadline": 120000
+            },
+            "read": {
+              "args": [
+                "folder",
+                "scope",
+                "known"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom",
+              "deadline": 120000
+            },
+            "remove": {
+              "args": [
+                "folder",
+                "scope",
+                "ids"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom"
+            },
+            "deleteChain": {
+              "args": [
+                "folder"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom",
+              "deadline": 120000
+            },
+            "sealLocal": {
+              "args": [
+                "text"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom"
+            },
+            "openLocal": {
+              "args": [
+                "sealed"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom"
+            },
+            "recoveryWords": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom",
+              "deadline": 180000
+            },
+            "qrCode": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom",
+              "deadline": 180000
+            },
+            "recoveryKitPreview": {
+              "args": [
+                "width"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom"
+            },
+            "saveRecoveryKit": {
+              "args": [
+                "format"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom",
+              "deadline": 900000
+            },
+            "copyRecoveryKit": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom"
+            },
+            "shareRecoveryKit": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom"
+            },
+            "copyRecoveryPhrase": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom",
+              "deadline": 180000
+            },
+            "revealFolder": {
+              "args": [
+                "path"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom"
+            },
+            "readPasswords": {
+              "args": [
+                "engineProfile"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom"
+            },
+            "savePassword": {
+              "args": [
+                "engineProfile",
+                "origin",
+                "username",
+                "sealed",
+                "replacing"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "custom"
+            },
+            "takeFileCounts": {
+              "args": [],
+              "async": false,
+              "mac": "absent",
+              "desktop": "absent",
+              "windows": "custom"
+            }
+          },
+          "constants": {
+            "core": {
+              "mac": "custom",
+              "desktop": "adapted",
+              "windows": "absent"
+            }
+          },
+          "events": {}
+        },
+        "ArdiaSharedFolders": {
+          "native": "SharedFoldersNative",
+          "functions": {
+            "location": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "read": {
+              "args": [
+                "path",
+                "identity"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "apply": {
+              "args": [
+                "path",
+                "ops",
+                "identity"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "resolve": {
+              "args": [
+                "path"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "discard": {
+              "args": [
+                "path",
+                "identity"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "create": {
+              "args": [
+                "parent",
+                "parentIdentity",
+                "name"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "watch": {
+              "args": [
+                "paths"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            }
+          },
+          "events": {
+            "onChange": {
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            }
+          }
+        }
+      }
+    },
+    "import": {
+      "kind": "module",
+      "package": "packages/import",
+      "types": "packages/import/src/generated/native.ts",
+      "swift": "packages/import/ios/ImportNative.swift",
+      "sha256": {
+        "types": "df0b66cc3a7976ffefa9ff5c99e525639d8a46f2b041c4584d11ffd9e847bffe",
+        "swift": "6874f3fa2b959284e86da09be93e11bc9b2dd773d12e8194c1affe72978a6023"
+      },
+      "modules": {
+        "ArdiaImport": {
+          "native": "ImportNative",
+          "functions": {
+            "listBrowsers": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "custom"
+            },
+            "importData": {
+              "args": [
+                "jobId",
+                "browserId",
+                "profileId",
+                "kinds",
+                "options"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "cancelImport": {
+              "args": [
+                "jobId"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "custom"
+            },
+            "unlockBrowser": {
+              "args": [
+                "browserId",
+                "primaryPassword"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "custom"
+            },
+            "isBrowserUnlocked": {
+              "args": [
+                "browserId"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "forgetUnlockedKeys": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "custom"
+            },
+            "writeImported": {
+              "args": [
+                "token",
+                "profile",
+                "kinds"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "custom"
+            },
+            "discardImported": {
+              "args": [
+                "token"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "custom"
+            },
+            "listExtensions": {
+              "args": [
+                "browserId",
+                "profileId"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "custom"
+            },
+            "importSafariExport": {
+              "args": [
+                "jobId",
+                "path"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "safariHasFullDiskAccess": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "openFullDiskAccessSettings": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "importSafariDirect": {
+              "args": [
+                "jobId"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "readDiaTabs": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "custom"
+            },
+            "importBookmarksHTML": {
+              "args": [
+                "path"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "custom"
+            },
+            "importPasswordsCSV": {
+              "args": [
+                "path"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "custom"
+            },
+            "chooseImportFile": {
+              "args": [
+                "kind"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "custom"
+            }
+          },
+          "events": {
+            "onImportEvent": {
+              "mac": "custom",
+              "desktop": "host",
+              "windows": "custom"
+            }
+          }
+        }
+      }
+    }
+  }
+}

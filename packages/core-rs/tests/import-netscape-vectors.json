@@ -1,0 +1,2095 @@
+{
+  "sources": {
+    "rust": "packages/core-rs/crates/ardia-import-core (netscape_bookmarks), the answer under expect",
+    "swift": "run: packages/import/ios/Core/NetscapeBookmarks.swift (NetscapeBookmarks.load) on macOS 27.2, by tests/import-netscape/test_import_netscape.py",
+    "linux": "run: engine/ardiacore-linux/src/ardia/linux/ac_linux_import_formats.cc (ParseNetscapeBookmarks) built against engine/ardiacore-linux/tests/fixtures/import_base.h, by tests/import-netscape/test_import_netscape.py"
+  },
+  "inputs": {
+    "text": "the string as UTF-8",
+    "hex": "the bytes",
+    "bom": "a count of EF BB BF prefixes",
+    "padTo": "spaces appended until the file has this many bytes",
+    "nestedFolders": "the root list holds link L0 and folder F1; each Fi holds link Li and, below N, folder Fi+1",
+    "nestedLists": "N opened lists without headings around one link, all closed",
+    "unclosedLists": "N opened lists without headings and one link, none closed",
+    "links": "the root list holds this many links",
+    "insideFolders": "with links, the links sit inside this many nested folders"
+  },
+  "outcomes": {
+    "ok": "the BookmarkNode tree, compared with numbers as doubles",
+    "error": "the error code; crashed when the process died",
+    "shape": "links, folders below the top Bookmarks folder, and the deepest folder level with the top level at 1"
+  },
+  "limits": {
+    "maxInputBytes": 67108864,
+    "maxFolderDepth": 64,
+    "maxNodes": 250000
+  },
+  "cases": [
+    {
+      "name": "chrome export with the bookmarks bar, nested folders, dates and other bookmarks",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n    <DT><H3 ADD_DATE=\"1700000000\" LAST_MODIFIED=\"1700000500\" PERSONAL_TOOLBAR_FOLDER=\"true\">Bookmarks bar</H3>\n    <DL><p>\n        <DT><A HREF=\"https://ardia.dev/\" ADD_DATE=\"1700000001\" ICON=\"data:image/png;base64,iVBORw0KGgo=\">Ardia</A>\n        <DT><H3 ADD_DATE=\"1700000002\" LAST_MODIFIED=\"0\">Work</H3>\n        <DL><p>\n            <DT><A HREF=\"https://docs.example/a?b=c&amp;d=e#f\" ADD_DATE=\"1700000003\">Docs</A>\n            <DT><H3 ADD_DATE=\"1700000004\">Empty</H3>\n            <DL><p>\n            </DL><p>\n        </DL><p>\n    </DL><p>\n    <DT><H3 ADD_DATE=\"1700000005\" UNFILED_BOOKMARKS_FOLDER=\"true\">Other bookmarks</H3>\n    <DL><p>\n        <DT><A HREF=\"https://other.example/\" ADD_DATE=\"1700000006\">Other</A>\n    </DL><p>\n</DL><p>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "folder",
+              "title": "Bookmarks bar",
+              "dateAdded": 1700000000000.0,
+              "children": [
+                {
+                  "type": "url",
+                  "title": "Ardia",
+                  "url": "https://ardia.dev/",
+                  "dateAdded": 1700000001000.0
+                },
+                {
+                  "type": "folder",
+                  "title": "Work",
+                  "dateAdded": 1700000002000.0,
+                  "children": [
+                    {
+                      "type": "url",
+                      "title": "Docs",
+                      "url": "https://docs.example/a?b=c&d=e#f",
+                      "dateAdded": 1700000003000.0
+                    },
+                    {
+                      "type": "folder",
+                      "title": "Empty",
+                      "dateAdded": 1700000004000.0,
+                      "children": []
+                    }
+                  ]
+                }
+              ],
+              "role": "toolbar"
+            },
+            {
+              "type": "folder",
+              "title": "Other bookmarks",
+              "dateAdded": 1700000005000.0,
+              "children": [
+                {
+                  "type": "url",
+                  "title": "Other",
+                  "url": "https://other.example/",
+                  "dateAdded": 1700000006000.0
+                }
+              ],
+              "role": "other"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "firefox export with the menu, toolbar, unsorted, place: queries, separators and descriptions",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<!-- This is an automatically generated file.\n     It will be read and overwritten.\n     DO NOT EDIT! -->\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<meta http-equiv=\"Content-Security-Policy\"\n      content=\"default-src 'self'; script-src 'none'; img-src data: *; object-src 'none'\"></meta>\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks Menu</H1>\n\n<DL><p>\n    <DT><A HREF=\"https://www.mozilla.org/en-US/firefox/central/\" ADD_DATE=\"1700000000\" LAST_MODIFIED=\"1700000001\" ICON_URI=\"fake-favicon-uri:https://www.mozilla.org/en-US/firefox/central/\">Getting Started</A>\n    <HR>    <DT><A HREF=\"place:parent=menu________&queryType=1\" ADD_DATE=\"1700000000\">Recent Tags</A>\n    <DT><H3 ADD_DATE=\"1700000002\" LAST_MODIFIED=\"1700000003\">Mozilla Firefox</H3>\n    <DL><p>\n        <DT><A HREF=\"https://support.mozilla.org/\" ADD_DATE=\"1700000004\" SHORTCUTURL=\"help\" TAGS=\"docs,help\">Get Help</A>\n        <DD>Firefox support &amp; help\n    </DL><p>\n    <DT><H3 ADD_DATE=\"1700000005\" LAST_MODIFIED=\"1700000006\" PERSONAL_TOOLBAR_FOLDER=\"true\">Bookmarks Toolbar</H3>\n    <DL><p>\n        <DT><A HREF=\"PLACE:sort=8&maxResults=10\">Most Visited</A>\n        <DT><A HREF=\"https://toolbar.example/\" ADD_DATE=\"1700000007\">Toolbar</A>\n    </DL><p>\n    <DT><H3 ADD_DATE=\"1700000008\" LAST_MODIFIED=\"1700000009\" UNFILED_BOOKMARKS_FOLDER=\"true\">Other Bookmarks</H3>\n    <DL><p>\n        <DT><A HREF=\"https://unsorted.example/\" ADD_DATE=\"1700000010\">Unsorted</A>\n    </DL><p>\n</DL>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "url",
+              "title": "Getting Started",
+              "url": "https://www.mozilla.org/en-US/firefox/central/",
+              "dateAdded": 1700000000000.0
+            },
+            {
+              "type": "folder",
+              "title": "Mozilla Firefox",
+              "dateAdded": 1700000002000.0,
+              "children": [
+                {
+                  "type": "url",
+                  "title": "Get Help",
+                  "url": "https://support.mozilla.org/",
+                  "dateAdded": 1700000004000.0
+                }
+              ]
+            },
+            {
+              "type": "folder",
+              "title": "Bookmarks Toolbar",
+              "dateAdded": 1700000005000.0,
+              "children": [
+                {
+                  "type": "url",
+                  "title": "Toolbar",
+                  "url": "https://toolbar.example/",
+                  "dateAdded": 1700000007000.0
+                }
+              ],
+              "role": "toolbar"
+            },
+            {
+              "type": "folder",
+              "title": "Other Bookmarks",
+              "dateAdded": 1700000008000.0,
+              "children": [
+                {
+                  "type": "url",
+                  "title": "Unsorted",
+                  "url": "https://unsorted.example/",
+                  "dateAdded": 1700000010000.0
+                }
+              ],
+              "role": "other"
+            }
+          ]
+        }
+      },
+      "platforms": {
+        "swift": {
+          "ok": {
+            "children": [
+              {
+                "dateAdded": 1700000000000,
+                "title": "Getting Started",
+                "type": "url",
+                "url": "https://www.mozilla.org/en-US/firefox/central/"
+              },
+              {
+                "dateAdded": 1700000000000,
+                "title": "Recent Tags",
+                "type": "url",
+                "url": "place:parent=menu________&queryType=1"
+              },
+              {
+                "children": [
+                  {
+                    "dateAdded": 1700000004000,
+                    "title": "Get Help",
+                    "type": "url",
+                    "url": "https://support.mozilla.org/"
+                  }
+                ],
+                "dateAdded": 1700000002000,
+                "title": "Mozilla Firefox",
+                "type": "folder"
+              },
+              {
+                "children": [
+                  {
+                    "title": "Most Visited",
+                    "type": "url",
+                    "url": "PLACE:sort=8&maxResults=10"
+                  },
+                  {
+                    "dateAdded": 1700000007000,
+                    "title": "Toolbar",
+                    "type": "url",
+                    "url": "https://toolbar.example/"
+                  }
+                ],
+                "dateAdded": 1700000005000,
+                "role": "toolbar",
+                "title": "Bookmarks Toolbar",
+                "type": "folder"
+              },
+              {
+                "children": [
+                  {
+                    "dateAdded": 1700000010000,
+                    "title": "Unsorted",
+                    "type": "url",
+                    "url": "https://unsorted.example/"
+                  }
+                ],
+                "dateAdded": 1700000008000,
+                "role": "other",
+                "title": "Other Bookmarks",
+                "type": "folder"
+              }
+            ],
+            "title": "Bookmarks",
+            "type": "folder"
+          }
+        },
+        "linux": {
+          "ok": {
+            "children": [
+              {
+                "dateAdded": 1700000000000,
+                "title": "Getting Started",
+                "type": "url",
+                "url": "https://www.mozilla.org/en-US/firefox/central/"
+              },
+              {
+                "children": [
+                  {
+                    "dateAdded": 1700000004000,
+                    "title": "Get Help",
+                    "type": "url",
+                    "url": "https://support.mozilla.org/"
+                  }
+                ],
+                "dateAdded": 1700000002000,
+                "title": "Mozilla Firefox",
+                "type": "folder"
+              },
+              {
+                "children": [
+                  {
+                    "title": "Most Visited",
+                    "type": "url",
+                    "url": "PLACE:sort=8&maxResults=10"
+                  },
+                  {
+                    "dateAdded": 1700000007000,
+                    "title": "Toolbar",
+                    "type": "url",
+                    "url": "https://toolbar.example/"
+                  }
+                ],
+                "dateAdded": 1700000005000,
+                "role": "toolbar",
+                "title": "Bookmarks Toolbar",
+                "type": "folder"
+              },
+              {
+                "children": [
+                  {
+                    "dateAdded": 1700000010000,
+                    "title": "Unsorted",
+                    "type": "url",
+                    "url": "https://unsorted.example/"
+                  }
+                ],
+                "dateAdded": 1700000008000,
+                "role": "other",
+                "title": "Other Bookmarks",
+                "type": "folder"
+              }
+            ],
+            "title": "Bookmarks",
+            "type": "folder"
+          }
+        }
+      }
+    },
+    {
+      "name": "safari export with the favorites bar, reading list and no dates",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n\t<HTML>\n\t<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n\t<Title>Bookmarks</Title>\n\t<H1>Bookmarks</H1>\n\t<DT><H3 FOLDED>Favorites</H3>\n\t<DL><p>\n\t\t<DT><H3 FOLDED id=\"com.apple.FavoritesBar\">Favourites Bar</H3>\n\t\t<DL><p>\n\t\t\t<DT><A HREF=\"https://apple.com/\">Apple</A>\n\t\t</DL><p>\n\t\t<DT><H3 id=\"com.apple.ReadingList\">Reading List</H3>\n\t\t<DL><p>\n\t\t\t<DT><A HREF=\"https://read.example/later\">Read later</A>\n\t\t</DL><p>\n\t</DL><p>\n\t<DT><A HREF=\"https://loose.example/\">Loose</A>\n</HTML>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "folder",
+              "title": "Favorites",
+              "children": [
+                {
+                  "type": "folder",
+                  "title": "Favourites Bar",
+                  "children": [
+                    {
+                      "type": "url",
+                      "title": "Apple",
+                      "url": "https://apple.com/"
+                    }
+                  ],
+                  "role": "toolbar"
+                },
+                {
+                  "type": "folder",
+                  "title": "Reading List",
+                  "children": [
+                    {
+                      "type": "url",
+                      "title": "Read later",
+                      "url": "https://read.example/later"
+                    }
+                  ],
+                  "role": "readingList"
+                }
+              ]
+            },
+            {
+              "type": "url",
+              "title": "Loose",
+              "url": "https://loose.example/"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "lower-case tags, single quotes, unquoted values and attributes across lines",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<dt><h3 add_date=1700000000>lower</h3>\n<dl><p>\n<dt><a href='https://single.example/' add_date='1700000001'>single</a>\n<dt><a href=https://unquoted.example/?a=1 add_date=1700000002>unquoted</a>\n<dT><A\n  HrEf=\"https://lines.example/\"\n  Add_Date=\"1700000003\"\n>lines</A>\n</dl><p>\n</DL><p>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "folder",
+              "title": "lower",
+              "dateAdded": 1700000000000.0,
+              "children": [
+                {
+                  "type": "url",
+                  "title": "single",
+                  "url": "https://single.example/",
+                  "dateAdded": 1700000001000.0
+                },
+                {
+                  "type": "url",
+                  "title": "unquoted",
+                  "url": "https://unquoted.example/?a=1",
+                  "dateAdded": 1700000002000.0
+                },
+                {
+                  "type": "url",
+                  "title": "lines",
+                  "url": "https://lines.example/",
+                  "dateAdded": 1700000003000.0
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "named, decimal and hex entities decode once in titles and hrefs",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><A HREF=\"https://e.example/?a=1&amp;b=2&c=3&lt;&#x3E;\">A &amp; B &lt;C&gt; &quot;D&quot; &apos;E&apos; &#8364; &#x20AC; &#X20ac; &amp;lt; &copy; &AMP; &amp</A>\n</DL><p>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "url",
+              "title": "A & B <C> \"D\" 'E' € € € &lt; &copy; &AMP; &amp",
+              "url": "https://e.example/?a=1&b=2&c=3<>"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "numeric entities that are not characters stay as text",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><A HREF=\"https://n.example/\">[&#0;] [&#xD800;] [&#xDFFF;] [&#x110000;] [&#;] [&#x;] [&#+65;] [&#-65;] [&#x+41;] [&#65a;]</A>\n</DL><p>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "url",
+              "title": "[&#0;] [&#xD800;] [&#xDFFF;] [&#x110000;] [&#;] [&#x;] [&#+65;] [&#-65;] [&#x+41;] [&#65a;]",
+              "url": "https://n.example/"
+            }
+          ]
+        }
+      },
+      "platforms": {
+        "swift": {
+          "ok": {
+            "children": [
+              {
+                "title": "[\u0000] [&#xD800;] [&#xDFFF;] [&#x110000;] [&#;] [&#x;] [A] [&#-65;] [A] [&#65a;]",
+                "type": "url",
+                "url": "https://n.example/"
+              }
+            ],
+            "title": "Bookmarks",
+            "type": "folder"
+          }
+        }
+      }
+    },
+    {
+      "name": "an entity name is decoded only within ten bytes",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><A HREF=\"https://len.example/\">[&#000000065;] [&#0000000065;] [&#x00000041;] [&#x000000041;] [&#x0010FFFF;]</A>\n</DL><p>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "url",
+              "title": "[A] [&#0000000065;] [A] [&#x000000041;] [􏿿]",
+              "url": "https://len.example/"
+            }
+          ]
+        }
+      },
+      "platforms": {
+        "linux": {
+          "ok": {
+            "children": [
+              {
+                "title": "[&#000000065;] [&#0000000065;] [A] [&#x000000041;] [􏿿]",
+                "type": "url",
+                "url": "https://len.example/"
+              }
+            ],
+            "title": "Bookmarks",
+            "type": "folder"
+          }
+        }
+      }
+    },
+    {
+      "name": "bookmarklets and other schemes are kept as written",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><A HREF=\"javascript:(function(){alert(&quot;hi&quot;);var a=1&amp;&amp;2;})()\">Bookmarklet</A>\n<DT><A HREF=\"javascript:void(document.title='&lt;x&gt;')\">Quotes</A>\n<DT><A HREF=\"data:text/html,<b>x</b>\">Data</A>\n<DT><A HREF=\"file:///Users/me/notes.txt\">File</A>\n<DT><A HREF=\"chrome://settings/\">Settings</A>\n</DL><p>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "url",
+              "title": "Bookmarklet",
+              "url": "javascript:(function(){alert(\"hi\");var a=1&&2;})()"
+            },
+            {
+              "type": "url",
+              "title": "Quotes",
+              "url": "javascript:void(document.title='<x>')"
+            },
+            {
+              "type": "url",
+              "title": "Data",
+              "url": "data:text/html,<b>x</b>"
+            },
+            {
+              "type": "url",
+              "title": "File",
+              "url": "file:///Users/me/notes.txt"
+            },
+            {
+              "type": "url",
+              "title": "Settings",
+              "url": "chrome://settings/"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "an empty or blank title takes the url",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><A HREF=\"https://empty.example/\"></A>\n<DT><A HREF=\"https://blank.example/\">   \t </A>\n<DT><A HREF=\"https://nbsp.example/\">&nbsp;</A>\n<DT><A HREF=\"https://ideographic.example/\">　x　</A>\n<DT><A HREF=\"https://bom.example/\">﻿y﻿</A>\n</DL><p>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "url",
+              "title": "https://empty.example/",
+              "url": "https://empty.example/"
+            },
+            {
+              "type": "url",
+              "title": "https://blank.example/",
+              "url": "https://blank.example/"
+            },
+            {
+              "type": "url",
+              "title": "https://nbsp.example/",
+              "url": "https://nbsp.example/"
+            },
+            {
+              "type": "url",
+              "title": "x",
+              "url": "https://ideographic.example/"
+            },
+            {
+              "type": "url",
+              "title": "﻿y﻿",
+              "url": "https://bom.example/"
+            }
+          ]
+        }
+      },
+      "platforms": {
+        "linux": {
+          "ok": {
+            "children": [
+              {
+                "title": "https://empty.example/",
+                "type": "url",
+                "url": "https://empty.example/"
+              },
+              {
+                "title": "https://blank.example/",
+                "type": "url",
+                "url": "https://blank.example/"
+              },
+              {
+                "title": " ",
+                "type": "url",
+                "url": "https://nbsp.example/"
+              },
+              {
+                "title": "　x　",
+                "type": "url",
+                "url": "https://ideographic.example/"
+              },
+              {
+                "title": "﻿y﻿",
+                "type": "url",
+                "url": "https://bom.example/"
+              }
+            ],
+            "title": "Bookmarks",
+            "type": "folder"
+          }
+        }
+      }
+    },
+    {
+      "name": "links without a usable href are skipped",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><A>no href</A>\n<DT><A HREF=\"\">empty</A>\n<DT><A HREF>bare</A>\n<DT><A HREF=\"   \">blank</A>\n<DT><A HREF=\"https://kept.example/\">kept</A>\n</DL><p>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "url",
+              "title": "kept",
+              "url": "https://kept.example/"
+            }
+          ]
+        }
+      },
+      "platforms": {
+        "swift": {
+          "ok": {
+            "children": [
+              {
+                "title": "blank",
+                "type": "url",
+                "url": "   "
+              },
+              {
+                "title": "kept",
+                "type": "url",
+                "url": "https://kept.example/"
+              }
+            ],
+            "title": "Bookmarks",
+            "type": "folder"
+          }
+        }
+      }
+    },
+    {
+      "name": "hrefs are trimmed",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><A HREF=\"  https://padded.example/ \t\">padded</A>\n<DT><A HREF=\"&#32;https://entity.example/&#10;\">entity</A>\n</DL><p>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "url",
+              "title": "padded",
+              "url": "https://padded.example/"
+            },
+            {
+              "type": "url",
+              "title": "entity",
+              "url": "https://entity.example/"
+            }
+          ]
+        }
+      },
+      "platforms": {
+        "swift": {
+          "ok": {
+            "children": [
+              {
+                "title": "padded",
+                "type": "url",
+                "url": "  https://padded.example/ \t"
+              },
+              {
+                "title": "entity",
+                "type": "url",
+                "url": " https://entity.example/\n"
+              }
+            ],
+            "title": "Bookmarks",
+            "type": "folder"
+          }
+        }
+      }
+    },
+    {
+      "name": "place: queries are skipped in any case",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><A HREF=\"place:sort=8\">lower</A>\n<DT><A HREF=\"Place:sort=8\">mixed</A>\n<DT><A HREF=\" place:sort=8\">padded</A>\n<DT><A HREF=\"placed:sort=8\">placed</A>\n</DL><p>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "url",
+              "title": "placed",
+              "url": "placed:sort=8"
+            }
+          ]
+        }
+      },
+      "platforms": {
+        "swift": {
+          "ok": {
+            "children": [
+              {
+                "title": "lower",
+                "type": "url",
+                "url": "place:sort=8"
+              },
+              {
+                "title": "mixed",
+                "type": "url",
+                "url": "Place:sort=8"
+              },
+              {
+                "title": "padded",
+                "type": "url",
+                "url": " place:sort=8"
+              },
+              {
+                "title": "placed",
+                "type": "url",
+                "url": "placed:sort=8"
+              }
+            ],
+            "title": "Bookmarks",
+            "type": "folder"
+          }
+        },
+        "linux": {
+          "ok": {
+            "children": [
+              {
+                "title": "mixed",
+                "type": "url",
+                "url": "Place:sort=8"
+              },
+              {
+                "title": "placed",
+                "type": "url",
+                "url": "placed:sort=8"
+              }
+            ],
+            "title": "Bookmarks",
+            "type": "folder"
+          }
+        }
+      }
+    },
+    {
+      "name": "add_date is whole seconds after 1970",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><A HREF=\"https://d.example/1\" ADD_DATE=\"1700000000\">int</A>\n<DT><A HREF=\"https://d.example/2\" ADD_DATE=\" 1700000000 \">spaces</A>\n<DT><A HREF=\"https://d.example/3\" ADD_DATE=\"0\">zero</A>\n<DT><A HREF=\"https://d.example/4\" ADD_DATE=\"-5\">negative</A>\n<DT><A HREF=\"https://d.example/5\" ADD_DATE=\"1.5\">fraction</A>\n<DT><A HREF=\"https://d.example/6\" ADD_DATE=\"+1700000000\">plus</A>\n<DT><A HREF=\"https://d.example/7\" ADD_DATE=\"1e9\">exponent</A>\n<DT><A HREF=\"https://d.example/8\" ADD_DATE=\"0x10\">hex</A>\n<DT><A HREF=\"https://d.example/9\" ADD_DATE=\"abc\">word</A>\n<DT><A HREF=\"https://d.example/10\" ADD_DATE=\"\">empty</A>\n<DT><A HREF=\"https://d.example/11\" ADD_DATE=\"9223372036854775807\">max</A>\n<DT><A HREF=\"https://d.example/12\" ADD_DATE=\"9223372036854775808\">over</A>\n<DT><A HREF=\"https://d.example/13\" ADD_DATE=\"&#49;700000000\">entity</A>\n<DT><A HREF=\"https://d.example/14\" ADD_DATE=\"0001700000000\">zeros</A>\n</DL><p>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "url",
+              "title": "int",
+              "url": "https://d.example/1",
+              "dateAdded": 1700000000000.0
+            },
+            {
+              "type": "url",
+              "title": "spaces",
+              "url": "https://d.example/2",
+              "dateAdded": 1700000000000.0
+            },
+            {
+              "type": "url",
+              "title": "zero",
+              "url": "https://d.example/3"
+            },
+            {
+              "type": "url",
+              "title": "negative",
+              "url": "https://d.example/4"
+            },
+            {
+              "type": "url",
+              "title": "fraction",
+              "url": "https://d.example/5"
+            },
+            {
+              "type": "url",
+              "title": "plus",
+              "url": "https://d.example/6"
+            },
+            {
+              "type": "url",
+              "title": "exponent",
+              "url": "https://d.example/7"
+            },
+            {
+              "type": "url",
+              "title": "hex",
+              "url": "https://d.example/8"
+            },
+            {
+              "type": "url",
+              "title": "word",
+              "url": "https://d.example/9"
+            },
+            {
+              "type": "url",
+              "title": "empty",
+              "url": "https://d.example/10"
+            },
+            {
+              "type": "url",
+              "title": "max",
+              "url": "https://d.example/11",
+              "dateAdded": 9.223372036854776e+21
+            },
+            {
+              "type": "url",
+              "title": "over",
+              "url": "https://d.example/12"
+            },
+            {
+              "type": "url",
+              "title": "entity",
+              "url": "https://d.example/13"
+            },
+            {
+              "type": "url",
+              "title": "zeros",
+              "url": "https://d.example/14",
+              "dateAdded": 1700000000000.0
+            }
+          ]
+        }
+      },
+      "platforms": {
+        "swift": {
+          "ok": {
+            "children": [
+              {
+                "dateAdded": 1700000000000,
+                "title": "int",
+                "type": "url",
+                "url": "https://d.example/1"
+              },
+              {
+                "title": "spaces",
+                "type": "url",
+                "url": "https://d.example/2"
+              },
+              {
+                "title": "zero",
+                "type": "url",
+                "url": "https://d.example/3"
+              },
+              {
+                "title": "negative",
+                "type": "url",
+                "url": "https://d.example/4"
+              },
+              {
+                "dateAdded": 1500,
+                "title": "fraction",
+                "type": "url",
+                "url": "https://d.example/5"
+              },
+              {
+                "dateAdded": 1700000000000,
+                "title": "plus",
+                "type": "url",
+                "url": "https://d.example/6"
+              },
+              {
+                "dateAdded": 1000000000000,
+                "title": "exponent",
+                "type": "url",
+                "url": "https://d.example/7"
+              },
+              {
+                "dateAdded": 16000,
+                "title": "hex",
+                "type": "url",
+                "url": "https://d.example/8"
+              },
+              {
+                "title": "word",
+                "type": "url",
+                "url": "https://d.example/9"
+              },
+              {
+                "title": "empty",
+                "type": "url",
+                "url": "https://d.example/10"
+              },
+              {
+                "dateAdded": 9.223372036854776e+21,
+                "title": "max",
+                "type": "url",
+                "url": "https://d.example/11"
+              },
+              {
+                "dateAdded": 9.223372036854776e+21,
+                "title": "over",
+                "type": "url",
+                "url": "https://d.example/12"
+              },
+              {
+                "title": "entity",
+                "type": "url",
+                "url": "https://d.example/13"
+              },
+              {
+                "dateAdded": 1700000000000,
+                "title": "zeros",
+                "type": "url",
+                "url": "https://d.example/14"
+              }
+            ],
+            "title": "Bookmarks",
+            "type": "folder"
+          }
+        }
+      }
+    },
+    {
+      "name": "folder roles come from the toolbar and unfiled flags and Safari ids",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><H3 PERSONAL_TOOLBAR_FOLDER=\"TRUE\">upper true</H3>\n<DL><p><DT><A HREF=\"https://1.example/\">1</A></DL><p>\n<DT><H3 personal_toolbar_folder=\"false\" UNFILED_BOOKMARKS_FOLDER=\"True\">unfiled</H3>\n<DL><p><DT><A HREF=\"https://2.example/\">2</A></DL><p>\n<DT><H3 PERSONAL_TOOLBAR_FOLDER>bare flag</H3>\n<DL><p><DT><A HREF=\"https://3.example/\">3</A></DL><p>\n<DT><H3 ID=\"com.apple.favoritesbar\">id case</H3>\n<DL><p><DT><A HREF=\"https://4.example/\">4</A></DL><p>\n<DT><H3 ID=\"com.apple.ReadingList\" PERSONAL_TOOLBAR_FOLDER=\"true\">both</H3>\n<DL><p><DT><A HREF=\"https://5.example/\">5</A></DL><p>\n</DL><p>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "folder",
+              "title": "upper true",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "1",
+                  "url": "https://1.example/"
+                }
+              ],
+              "role": "toolbar"
+            },
+            {
+              "type": "folder",
+              "title": "unfiled",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "2",
+                  "url": "https://2.example/"
+                }
+              ],
+              "role": "other"
+            },
+            {
+              "type": "folder",
+              "title": "bare flag",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "3",
+                  "url": "https://3.example/"
+                }
+              ]
+            },
+            {
+              "type": "folder",
+              "title": "id case",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "4",
+                  "url": "https://4.example/"
+                }
+              ]
+            },
+            {
+              "type": "folder",
+              "title": "both",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "5",
+                  "url": "https://5.example/"
+                }
+              ],
+              "role": "toolbar"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a repeated attribute keeps its first value",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><A HREF=\"https://first.example/\" href=\"https://second.example/\" ADD_DATE=\"1700000000\" ADD_DATE=\"1600000000\">dup</A>\n</DL><p>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "url",
+              "title": "dup",
+              "url": "https://first.example/",
+              "dateAdded": 1700000000000.0
+            }
+          ]
+        }
+      },
+      "platforms": {
+        "swift": {
+          "ok": {
+            "children": [
+              {
+                "dateAdded": 1600000000000,
+                "title": "dup",
+                "type": "url",
+                "url": "https://second.example/"
+              }
+            ],
+            "title": "Bookmarks",
+            "type": "folder"
+          }
+        }
+      }
+    },
+    {
+      "name": "spaces around an equals sign are allowed",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><A HREF = \"https://spaced.example/\" ADD_DATE= 1700000000>spaced</A>\n</DL><p>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "url",
+              "title": "spaced",
+              "url": "https://spaced.example/",
+              "dateAdded": 1700000000000.0
+            }
+          ]
+        }
+      },
+      "platforms": {
+        "swift": {
+          "error": "unreadable"
+        },
+        "linux": {
+          "error": "empty"
+        }
+      }
+    },
+    {
+      "name": "an unmatched quote in an attribute runs to the next quote",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><A HREF=\"https://before.example/\">before</A>\n<DT><A HREF=\"https://broken.example/>broken</A>\n<DT><A HREF=\"https://after.example/\">after</A>\n</DL><p>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "url",
+              "title": "before",
+              "url": "https://before.example/"
+            },
+            {
+              "type": "url",
+              "title": "after",
+              "url": "https://broken.example/>broken</A>\n<DT><A HREF="
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "an unmatched quote with no other quote runs to the end of the file",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><A HREF=\"https://kept.example/\">kept</A>\n<DT><A HREF='https://eof.example/>eof\n</DL><p>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "url",
+              "title": "kept",
+              "url": "https://kept.example/"
+            },
+            {
+              "type": "url",
+              "title": "https://eof.example/>eof\n</DL><p>",
+              "url": "https://eof.example/>eof\n</DL><p>"
+            }
+          ]
+        }
+      },
+      "platforms": {
+        "swift": {
+          "ok": {
+            "children": [
+              {
+                "title": "kept",
+                "type": "url",
+                "url": "https://kept.example/"
+              },
+              {
+                "title": "https://eof.example/>eof\n</DL><p>\n",
+                "type": "url",
+                "url": "https://eof.example/>eof\n</DL><p>\n"
+              }
+            ],
+            "title": "Bookmarks",
+            "type": "folder"
+          }
+        }
+      }
+    },
+    {
+      "name": "a commented-out bookmark is skipped",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<!-- <DT><A HREF=\"https://hidden.example/\">hidden</A> -->\n<DT><A HREF=\"https://shown.example/\">shown</A>\n</DL><p>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "url",
+              "title": "shown",
+              "url": "https://shown.example/"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "an unterminated comment hides the rest of the file",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><A HREF=\"https://shown.example/\">shown</A>\n<!-- <DT><A HREF=\"https://hidden.example/\">hidden</A>\n</DL><p>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "url",
+              "title": "shown",
+              "url": "https://shown.example/"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a comment inside a title is dropped and the text around it kept",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><A HREF=\"https://c.example/\">before<!-- note -->after</A>\n</DL><p>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "url",
+              "title": "beforeafter",
+              "url": "https://c.example/"
+            }
+          ]
+        }
+      },
+      "platforms": {
+        "swift": {
+          "ok": {
+            "children": [
+              {
+                "title": "before",
+                "type": "url",
+                "url": "https://c.example/"
+              }
+            ],
+            "title": "Bookmarks",
+            "type": "folder"
+          }
+        },
+        "linux": {
+          "ok": {
+            "children": [
+              {
+                "title": "before",
+                "type": "url",
+                "url": "https://c.example/"
+              }
+            ],
+            "title": "Bookmarks",
+            "type": "folder"
+          }
+        }
+      }
+    },
+    {
+      "name": "a literal less-than sign in a title is kept",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><A HREF=\"https://lt.example/\">a < b <= c <3</A>\n</DL><p>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "url",
+              "title": "a < b <= c <3",
+              "url": "https://lt.example/"
+            }
+          ]
+        }
+      },
+      "platforms": {
+        "swift": {
+          "ok": {
+            "children": [
+              {
+                "title": "a",
+                "type": "url",
+                "url": "https://lt.example/"
+              }
+            ],
+            "title": "Bookmarks",
+            "type": "folder"
+          }
+        }
+      }
+    },
+    {
+      "name": "inline tags inside a title are dropped",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><A HREF=\"https://b.example/\">so <B>bold</B> <span class=\"x\">and</span> <!DOCTYPE x>done</A>\n</DL><p>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "url",
+              "title": "so bold and done",
+              "url": "https://b.example/"
+            }
+          ]
+        }
+      },
+      "platforms": {
+        "swift": {
+          "ok": {
+            "children": [
+              {
+                "title": "so bold and",
+                "type": "url",
+                "url": "https://b.example/"
+              }
+            ],
+            "title": "Bookmarks",
+            "type": "folder"
+          }
+        },
+        "linux": {
+          "ok": {
+            "children": [
+              {
+                "title": "so bold and",
+                "type": "url",
+                "url": "https://b.example/"
+              }
+            ],
+            "title": "Bookmarks",
+            "type": "folder"
+          }
+        }
+      }
+    },
+    {
+      "name": "a link without a closing tag ends at the next bookmark",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><A HREF=\"https://1.example/\">one\n<DT><A HREF=\"https://2.example/\">two</A>\n</DL><p>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "url",
+              "title": "one",
+              "url": "https://1.example/"
+            },
+            {
+              "type": "url",
+              "title": "two",
+              "url": "https://2.example/"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a link without a closing tag ends at the end of its list",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><H3>Folder</H3>\n<DL><p>\n<DT><A HREF=\"https://in.example/\">inside\n</DL><p>\n<DT><A HREF=\"https://out.example/\">outside</A>\n</DL><p>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "folder",
+              "title": "Folder",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "inside",
+                  "url": "https://in.example/"
+                }
+              ]
+            },
+            {
+              "type": "url",
+              "title": "outside",
+              "url": "https://out.example/"
+            }
+          ]
+        }
+      },
+      "platforms": {
+        "swift": {
+          "ok": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "title": "inside",
+                    "type": "url",
+                    "url": "https://in.example/"
+                  },
+                  {
+                    "title": "outside",
+                    "type": "url",
+                    "url": "https://out.example/"
+                  }
+                ],
+                "title": "Folder",
+                "type": "folder"
+              }
+            ],
+            "title": "Bookmarks",
+            "type": "folder"
+          }
+        },
+        "linux": {
+          "ok": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "title": "inside",
+                    "type": "url",
+                    "url": "https://in.example/"
+                  },
+                  {
+                    "title": "outside",
+                    "type": "url",
+                    "url": "https://out.example/"
+                  }
+                ],
+                "title": "Folder",
+                "type": "folder"
+              }
+            ],
+            "title": "Bookmarks",
+            "type": "folder"
+          }
+        }
+      }
+    },
+    {
+      "name": "a link without a closing tag ends at its description",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><A HREF=\"https://dd.example/\">title\n<DD>a description\n<DT><A HREF=\"https://next.example/\">next</A>\n</DL><p>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "url",
+              "title": "title",
+              "url": "https://dd.example/"
+            },
+            {
+              "type": "url",
+              "title": "next",
+              "url": "https://next.example/"
+            }
+          ]
+        }
+      },
+      "platforms": {
+        "swift": {
+          "ok": {
+            "children": [
+              {
+                "title": "title\na description",
+                "type": "url",
+                "url": "https://dd.example/"
+              },
+              {
+                "title": "next",
+                "type": "url",
+                "url": "https://next.example/"
+              }
+            ],
+            "title": "Bookmarks",
+            "type": "folder"
+          }
+        },
+        "linux": {
+          "ok": {
+            "children": [
+              {
+                "title": "title\na description",
+                "type": "url",
+                "url": "https://dd.example/"
+              },
+              {
+                "title": "next",
+                "type": "url",
+                "url": "https://next.example/"
+              }
+            ],
+            "title": "Bookmarks",
+            "type": "folder"
+          }
+        }
+      }
+    },
+    {
+      "name": "a heading without a closing tag ends at its list",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><H3>Unclosed heading\n<DL><p>\n<DT><A HREF=\"https://h.example/\">h</A>\n</DL><p>\n</DL><p>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "folder",
+              "title": "Unclosed heading",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "h",
+                  "url": "https://h.example/"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "folders left open at the end of the file are closed",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><H3>A</H3>\n<DL><p>\n<DT><H3>B</H3>\n<DL><p>\n<DT><A HREF=\"https://open.example/\">open</A>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "folder",
+              "title": "A",
+              "children": [
+                {
+                  "type": "folder",
+                  "title": "B",
+                  "children": [
+                    {
+                      "type": "url",
+                      "title": "open",
+                      "url": "https://open.example/"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "extra closing lists are ignored",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n</DL></DL>\n<DL><p>\n<DT><A HREF=\"https://1.example/\">1</A>\n</DL><p>\n</DL><p>\n</DL><p>\n<DT><A HREF=\"https://2.example/\">2</A>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "url",
+              "title": "1",
+              "url": "https://1.example/"
+            },
+            {
+              "type": "url",
+              "title": "2",
+              "url": "https://2.example/"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a heading without a list is an empty folder",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><H3>Lonely</H3>\n<DT><A HREF=\"https://after.example/\">after</A>\n<DT><H3>First</H3>\n<DT><H3>Second</H3>\n<DL><p>\n<DT><A HREF=\"https://second.example/\">in second</A>\n</DL><p>\n<DT><H3>Last</H3>\n</DL><p>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "folder",
+              "title": "Lonely",
+              "children": []
+            },
+            {
+              "type": "url",
+              "title": "after",
+              "url": "https://after.example/"
+            },
+            {
+              "type": "folder",
+              "title": "First",
+              "children": []
+            },
+            {
+              "type": "folder",
+              "title": "Second",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "in second",
+                  "url": "https://second.example/"
+                }
+              ]
+            },
+            {
+              "type": "folder",
+              "title": "Last",
+              "children": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a list without a heading becomes an untitled list folder",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DL><p>\n<DT><A HREF=\"https://anon.example/\">anon</A>\n</DL><p>\n<DT><A HREF=\"https://after.example/\">after</A>\n</DL><p>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "folder",
+              "title": "",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "anon",
+                  "url": "https://anon.example/"
+                }
+              ],
+              "role": "list"
+            },
+            {
+              "type": "url",
+              "title": "after",
+              "url": "https://after.example/"
+            }
+          ]
+        }
+      },
+      "platforms": {
+        "linux": {
+          "ok": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "title": "anon",
+                    "type": "url",
+                    "url": "https://anon.example/"
+                  }
+                ],
+                "title": "",
+                "type": "folder"
+              },
+              {
+                "title": "after",
+                "type": "url",
+                "url": "https://after.example/"
+              }
+            ],
+            "title": "Bookmarks",
+            "type": "folder"
+          }
+        }
+      }
+    },
+    {
+      "name": "links before the first list and a heading before it",
+      "file": {
+        "text": "<DT><A HREF=\"https://early.example/\">early</A>\n<DT><H3>Head</H3>\n<DL><p>\n<DT><A HREF=\"https://in.example/\">in</A>\n</DL><p>\n<DL><p>\n<DT><A HREF=\"https://late.example/\">late</A>\n</DL><p>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "url",
+              "title": "early",
+              "url": "https://early.example/"
+            },
+            {
+              "type": "folder",
+              "title": "Head",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "in",
+                  "url": "https://in.example/"
+                }
+              ]
+            },
+            {
+              "type": "url",
+              "title": "late",
+              "url": "https://late.example/"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "an empty file is unreadable",
+      "file": {
+        "text": ""
+      },
+      "expect": {
+        "error": "unreadable"
+      },
+      "platforms": {
+        "linux": {
+          "error": "empty"
+        }
+      }
+    },
+    {
+      "name": "a file of spaces is unreadable",
+      "file": {
+        "text": " \n\t\r\n "
+      },
+      "expect": {
+        "error": "unreadable"
+      },
+      "platforms": {
+        "linux": {
+          "error": "empty"
+        }
+      }
+    },
+    {
+      "name": "html with no bookmarks is unreadable",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><A HREF=\"\">x</A>\n<DT><A>y</A>\n</DL><p>\n"
+      },
+      "expect": {
+        "error": "unreadable"
+      },
+      "platforms": {
+        "linux": {
+          "error": "empty"
+        }
+      }
+    },
+    {
+      "name": "plain text is unreadable",
+      "file": {
+        "text": "https://not-a-bookmarks-file.example/\n"
+      },
+      "expect": {
+        "error": "unreadable"
+      },
+      "platforms": {
+        "linux": {
+          "error": "empty"
+        }
+      }
+    },
+    {
+      "name": "a chromium bookmarks json file is unreadable",
+      "file": {
+        "text": "{\"roots\":{\"bookmark_bar\":{\"type\":\"folder\",\"children\":[{\"type\":\"url\",\"name\":\"A\",\"url\":\"https://a.example/\"}]}}}"
+      },
+      "expect": {
+        "error": "unreadable"
+      },
+      "platforms": {
+        "linux": {
+          "error": "empty"
+        }
+      }
+    },
+    {
+      "name": "a single empty folder is a bookmark tree",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><H3>Only</H3>\n<DL><p>\n</DL><p>\n</DL><p>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "folder",
+              "title": "Only",
+              "children": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "crlf line endings and tabs",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\r\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\r\n<TITLE>Bookmarks</TITLE>\r\n<H1>Bookmarks</H1>\r\n<DL><p>\r\n\t<DT><H3>Tabs</H3>\r\n\t<DL><p>\r\n\t\t<DT><A HREF=\"https://crlf.example/\">crlf\r\n title</A>\r\n\t</DL><p>\r\n</DL><p>\r\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "folder",
+              "title": "Tabs",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "crlf\r\n title",
+                  "url": "https://crlf.example/"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "unicode titles and urls pass through",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><A HREF=\"https://例え.jp/パス?q=日本\">日本語 タイトル</A>\n<DT><A HREF=\"https://emoji.example/\">🦊 fox 👨‍👩‍👧</A>\n<DT><A HREF=\"https://rtl.example/\">‮טקסט‬</A>\n<DT><A HREF=\"https://nul.example/\">a\u0000b\u0001c</A>\n</DL><p>\n"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "url",
+              "title": "日本語 タイトル",
+              "url": "https://例え.jp/パス?q=日本"
+            },
+            {
+              "type": "url",
+              "title": "🦊 fox 👨‍👩‍👧",
+              "url": "https://emoji.example/"
+            },
+            {
+              "type": "url",
+              "title": "‮טקסט‬",
+              "url": "https://rtl.example/"
+            },
+            {
+              "type": "url",
+              "title": "a\u0000b\u0001c",
+              "url": "https://nul.example/"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "one utf-8 bom is skipped",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><A HREF=\"https://bom.example/\">bom</A>\n</DL><p>\n",
+        "bom": 1
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "url",
+              "title": "bom",
+              "url": "https://bom.example/"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a second utf-8 bom is text before the document",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><A HREF=\"https://bom.example/\">bom</A>\n</DL><p>\n",
+        "bom": 2
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "url",
+              "title": "bom",
+              "url": "https://bom.example/"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "invalid utf-8 is read as latin-1",
+      "file": {
+        "hex": "3c21444f4354595045204e455453434150452d426f6f6b6d61726b2d66696c652d313e0a3c4d45544120485454502d45515549563d22436f6e74656e742d547970652220434f4e54454e543d22746578742f68746d6c3b20636861727365743d5554462d38223e0a3c5449544c453e426f6f6b6d61726b733c2f5449544c453e0a3c48313e426f6f6b6d61726b733c2f48313e0a3c444c3e3c703e0a3c44543e3c4120485245463d2268747470733a2f2f6c6174696e2e6578616d706c652f636166e9223e636166e9206372e86d653c2f413e0a3c2f444c3e3c703e0a"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "url",
+              "title": "café crème",
+              "url": "https://latin.example/café"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "bytes 0x80 to 0x9f are latin-1 controls",
+      "file": {
+        "hex": "3c21444f4354595045204e455453434150452d426f6f6b6d61726b2d66696c652d313e0a3c4d45544120485454502d45515549563d22436f6e74656e742d547970652220434f4e54454e543d22746578742f68746d6c3b20636861727365743d5554462d38223e0a3c5449544c453e426f6f6b6d61726b733c2f5449544c453e0a3c48313e426f6f6b6d61726b733c2f48313e0a3c444c3e3c703e0a3c44543e3c4120485245463d2268747470733a2f2f63702e6578616d706c652f223e9371756f7465649420803c2f413e0a3c2f444c3e3c703e0a"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "url",
+              "title": "quoted ",
+              "url": "https://cp.example/"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a utf-8 encoded surrogate makes the file latin-1",
+      "file": {
+        "hex": "3c21444f4354595045204e455453434150452d426f6f6b6d61726b2d66696c652d313e0a3c4d45544120485454502d45515549563d22436f6e74656e742d547970652220434f4e54454e543d22746578742f68746d6c3b20636861727365743d5554462d38223e0a3c5449544c453e426f6f6b6d61726b733c2f5449544c453e0a3c48313e426f6f6b6d61726b733c2f48313e0a3c444c3e3c703e0a3c44543e3c4120485245463d2268747470733a2f2f732e6578616d706c652f223eeda08020636166c3a93c2f413e0a3c2f444c3e3c703e0a"
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "url",
+              "title": "í  cafÃ©",
+              "url": "https://s.example/"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a utf-16 file is unreadable",
+      "file": {
+        "hex": "fffe3c00210044004f004300540059005000450020004e0045005400530043004100500045002d0042006f006f006b006d00610072006b002d00660069006c0065002d0031003e000a003c004d00450054004100200048005400540050002d00450051005500490056003d00220043006f006e00740065006e0074002d0054007900700065002200200043004f004e00540045004e0054003d00220074006500780074002f00680074006d006c003b00200063006800610072007300650074003d005500540046002d00380022003e000a003c005400490054004c0045003e0042006f006f006b006d00610072006b0073003c002f005400490054004c0045003e000a003c00480031003e0042006f006f006b006d00610072006b0073003c002f00480031003e000a003c0044004c003e003c0070003e000a003c00440054003e003c004100200048005200450046003d002200680074007400700073003a002f002f007500310036002e006500780061006d0070006c0065002f0022003e007500310036003c002f0041003e000a003c002f0044004c003e003c0070003e000a00"
+      },
+      "expect": {
+        "error": "unreadable"
+      },
+      "platforms": {
+        "linux": {
+          "error": "empty"
+        }
+      }
+    },
+    {
+      "name": "folders nested past 64 levels keep 64 levels and the deeper links",
+      "file": {
+        "nestedFolders": 70
+      },
+      "expect": {
+        "shape": {
+          "links": 71,
+          "folders": 64,
+          "depth": 64
+        }
+      },
+      "platforms": {
+        "swift": {
+          "shape": {
+            "links": 71,
+            "folders": 70,
+            "depth": 70
+          }
+        }
+      }
+    },
+    {
+      "name": "anonymous lists nested past 64 levels keep 64 levels",
+      "file": {
+        "nestedLists": 100
+      },
+      "expect": {
+        "shape": {
+          "links": 1,
+          "folders": 64,
+          "depth": 64
+        }
+      },
+      "platforms": {
+        "swift": {
+          "shape": {
+            "links": 1,
+            "folders": 99,
+            "depth": 99
+          }
+        }
+      }
+    },
+    {
+      "name": "100,000 unclosed lists keep 64 levels",
+      "file": {
+        "unclosedLists": 100000
+      },
+      "expect": {
+        "shape": {
+          "links": 1,
+          "folders": 64,
+          "depth": 64
+        }
+      },
+      "platforms": {
+        "swift": {
+          "error": "crashed"
+        }
+      }
+    },
+    {
+      "name": "at most 250,000 nodes are read",
+      "file": {
+        "links": 250001
+      },
+      "expect": {
+        "shape": {
+          "links": 250000,
+          "folders": 0,
+          "depth": 0
+        }
+      },
+      "platforms": {
+        "swift": {
+          "shape": {
+            "links": 250001,
+            "folders": 0,
+            "depth": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "folders take their node before their links",
+      "file": {
+        "links": 250000,
+        "insideFolders": 3
+      },
+      "expect": {
+        "shape": {
+          "links": 249997,
+          "folders": 3,
+          "depth": 3
+        }
+      },
+      "platforms": {
+        "swift": {
+          "shape": {
+            "links": 250000,
+            "folders": 3,
+            "depth": 3
+          }
+        },
+        "linux": {
+          "shape": {
+            "links": 0,
+            "folders": 0,
+            "depth": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "a file of exactly 64 MiB is read",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><A HREF=\"https://big.example/\">big</A>\n</DL><p>\n",
+        "padTo": 67108864
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "url",
+              "title": "big",
+              "url": "https://big.example/"
+            }
+          ]
+        }
+      },
+      "platforms": {
+        "linux": {
+          "error": "tooLarge"
+        }
+      }
+    },
+    {
+      "name": "a file over 64 MiB is too large",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><A HREF=\"https://big.example/\">big</A>\n</DL><p>\n",
+        "padTo": 67108865
+      },
+      "expect": {
+        "error": "tooLarge"
+      },
+      "platforms": {
+        "swift": {
+          "ok": {
+            "children": [
+              {
+                "title": "big",
+                "type": "url",
+                "url": "https://big.example/"
+              }
+            ],
+            "title": "Bookmarks",
+            "type": "folder"
+          }
+        }
+      }
+    },
+    {
+      "name": "a file over 32 MiB is read",
+      "file": {
+        "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n<DT><A HREF=\"https://big.example/\">big</A>\n</DL><p>\n",
+        "padTo": 33554433
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "url",
+              "title": "big",
+              "url": "https://big.example/"
+            }
+          ]
+        }
+      },
+      "platforms": {
+        "linux": {
+          "error": "tooLarge"
+        }
+      }
+    }
+  ]
+}

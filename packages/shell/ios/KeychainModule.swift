@@ -3,53 +3,77 @@ import ExpoModulesCore
 import Foundation
 import Security
 
-public class KeychainModule: Module {
+public class KeychainModule: Module, KeychainNative {
   private static let service = "Ardia Connected Accounts"
 
+  static func get(_ account: String) -> String? {
+    if let store = IsolatedSecrets.shared { return store.get(account) }
+    var item: CFTypeRef?
+    guard SecItemCopyMatching(Self.readQuery(account) as CFDictionary, &item) == errSecSuccess, let data = item as? Data else { return nil }
+    return String(data: data, encoding: .utf8)
+  }
+
+  static func read(_ account: String) -> [String: Any] {
+    if let store = IsolatedSecrets.shared { return store.read(account) }
+    var item: CFTypeRef?
+    let status = SecItemCopyMatching(Self.readQuery(account) as CFDictionary, &item)
+    if status == errSecItemNotFound { return ["status": "missing"] }
+    guard status == errSecSuccess else { return ["status": "error", "reason": "Keychain read failed (status \(status))"] }
+    guard let data = item as? Data, let text = String(data: data, encoding: .utf8) else {
+      return ["status": "error", "reason": "Keychain item isn't valid UTF-8"]
+    }
+    return ["status": "ok", "value": text]
+  }
+
+  static func set(_ account: String, _ secret: String) -> Bool {
+    if let store = IsolatedSecrets.shared { return store.set(account, secret) }
+    let data = Data(secret.utf8)
+    let update: [String: Any] = [kSecValueData as String: data]
+    var status = SecItemUpdate(Self.query(account) as CFDictionary, update as CFDictionary)
+    if status == errSecItemNotFound {
+      var add = Self.query(account)
+      add[kSecValueData as String] = data
+      add[kSecAttrLabel as String] = "Ardia: \(account)"
+      status = SecItemAdd(add as CFDictionary, nil)
+    } else if status != errSecSuccess {
+      SecItemDelete(Self.query(account) as CFDictionary)
+      var add = Self.query(account)
+      add[kSecValueData as String] = data
+      status = SecItemAdd(add as CFDictionary, nil)
+    }
+    return status == errSecSuccess
+  }
+
+  static func delete(_ account: String) -> Bool {
+    if let store = IsolatedSecrets.shared { return store.set(account, nil) }
+    let status = SecItemDelete(Self.query(account) as CFDictionary)
+    return status == errSecSuccess || status == errSecItemNotFound
+  }
+
   public func definition() -> ModuleDefinition {
-    Name("ArdiaKeychain")
+    Name(Self.moduleName)
 
-    AsyncFunction("get") { (account: String) -> String? in
-      if let store = IsolatedSecrets.shared { return store.get(account) }
-      var query = Self.query(account)
-      query[kSecReturnData as String] = true
-      query[kSecMatchLimit as String] = kSecMatchLimitOne
-      #if DEBUG
-      query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
-      #endif
-      var item: CFTypeRef?
-      guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess, let data = item as? Data else { return nil }
-      return String(data: data, encoding: .utf8)
-    }
+    Self.getFunction
 
-    AsyncFunction("set") { (account: String, secret: String) -> Bool in
-      if let store = IsolatedSecrets.shared { return store.set(account, secret) }
-      let data = Data(secret.utf8)
-      let update: [String: Any] = [kSecValueData as String: data]
-      var status = SecItemUpdate(Self.query(account) as CFDictionary, update as CFDictionary)
-      if status == errSecItemNotFound {
-        var add = Self.query(account)
-        add[kSecValueData as String] = data
-        add[kSecAttrLabel as String] = "Ardia: \(account)"
-        status = SecItemAdd(add as CFDictionary, nil)
-      } else if status != errSecSuccess {
-        SecItemDelete(Self.query(account) as CFDictionary)
-        var add = Self.query(account)
-        add[kSecValueData as String] = data
-        status = SecItemAdd(add as CFDictionary, nil)
-      }
-      return status == errSecSuccess
-    }
+    Self.readFunction
 
-    AsyncFunction("delete") { (account: String) -> Bool in
-      if let store = IsolatedSecrets.shared { return store.set(account, nil) }
-      let status = SecItemDelete(Self.query(account) as CFDictionary)
-      return status == errSecSuccess || status == errSecItemNotFound
-    }
+    Self.setFunction
+
+    Self.deleteFunction
   }
 
   private static func query(_ account: String) -> [String: Any] {
     [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account]
+  }
+
+  private static func readQuery(_ account: String) -> [String: Any] {
+    var query = query(account)
+    query[kSecReturnData as String] = true
+    query[kSecMatchLimit as String] = kSecMatchLimitOne
+    #if DEBUG
+    query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
+    #endif
+    return query
   }
 }
 
@@ -73,6 +97,18 @@ private final class IsolatedSecrets {
     lock.lock()
     defer { lock.unlock() }
     return load()?[account]
+  }
+
+  func read(_ account: String) -> [String: Any] {
+    lock.lock()
+    defer { lock.unlock() }
+    guard FileManager.default.fileExists(atPath: url.path) else { return ["status": "missing"] }
+    guard let data = try? Data(contentsOf: url) else { return ["status": "error", "reason": "Connected Accounts file is unreadable"] }
+    guard let secrets = try? JSONDecoder().decode([String: String].self, from: data) else {
+      return ["status": "error", "reason": "Connected Accounts file isn't valid JSON"]
+    }
+    guard let value = secrets[account] else { return ["status": "missing"] }
+    return ["status": "ok", "value": value]
   }
 
   func set(_ account: String, _ secret: String?) -> Bool {

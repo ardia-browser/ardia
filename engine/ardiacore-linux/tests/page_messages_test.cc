@@ -12,7 +12,7 @@
 #include "ardia/linux/ac_linux_page_commits.h"
 #include "ardia/linux/ac_linux_page_evaluation.h"
 #include "ardia/linux/ac_linux_page_messages.h"
-#include "ardia/linux/ac_linux_status_geometry.h"
+#include "ardia/desktop/ac_desktop_status_geometry.h"
 
 using namespace ardiacore;
 
@@ -174,6 +174,11 @@ void Options() {
   Expect(!LinuxAutoplayDecision(false, true, false), "a default site plays when blocking everywhere is off");
   Expect(LinuxAutoplayDecision(false, true, true), "blocking everywhere covers a site left at the default");
   Expect(!LinuxAutoplayDecision(false, false, true), "a site allowed by hand keeps playing when blocking everywhere is on");
+  Expect(LinuxAutoplayCoversScheme("http") && LinuxAutoplayCoversScheme("https"), "autoplay rules cover web pages");
+  Expect(LinuxAutoplayCoversScheme("file"), "autoplay rules cover local files");
+  Expect(!LinuxAutoplayCoversScheme("chrome") && !LinuxAutoplayCoversScheme("chrome-extension") &&
+             !LinuxAutoplayCoversScheme("data") && !LinuxAutoplayCoversScheme(""),
+         "the shell, extension pages and other schemes keep Chromium's own autoplay policy");
   Expect(std::find(std::begin(kLinuxPageMessageRoutes), std::end(kLinuxPageMessageRoutes),
                    std::string_view("webView.setBlockAutoplayEverywhere")) != std::end(kLinuxPageMessageRoutes),
          "the host routes and advertises block autoplay everywhere");

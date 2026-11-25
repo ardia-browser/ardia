@@ -39,6 +39,18 @@ int main(int argc, char **argv) {
     Check([[seven tabIdsOfSplit:seven.splits[0]] isEqual:abc], "a version 7 split reads its slots in order, stacks included");
     Check([seven tabIdsOfSplit:seven.splits[1]].count == 0, "version 7 ignores the old tabIds");
     Check(Write([root stringByAppendingPathComponent:@"newer"], @{ @"version" : @(ArdiaSavedSession.version + 1), @"tabs" : @[] }) == nil, "a newer file is refused");
+    NSDictionary *window = @{ @"id" : @"w", @"profileId" : @"default", @"incognito" : @NO, @"tabIds" : @[ @"a" ], @"activeTabIds" : @{ @"default" : @"a" }, @"frame" : NSNull.null, @"sidebarOpen" : @YES };
+    NSDictionary *hint = @{ @"id" : @"a", @"url" : @"https://a.example/", @"profile" : @"default" };
+    ArdiaSavedSession *typed = Write([root stringByAppendingPathComponent:@"typed"], @{ @"version" : @11, @"windows" : @[ window ], @"tabs" : @[], @"focusedWindowId" : @"w", @"launchTab" : hint, @"launchBackdrop" : NSNull.null });
+    Check(typed && [typed.launchTabId isEqual:@"a"] && [typed windowWithId:@"w"], "a well-typed session reads, null frame and backdrop included");
+    NSArray *malformed = @[ @{ @"incognito" : NSNull.null }, @{ @"incognito" : @[] }, @{ @"tabIds" : @"a" }, @{ @"frame" : @{} }, @{ @"kind" : @1 }, @{ @"activeTabIds" : @[] }, @{ @"id" : NSNull.null } ];
+    for (NSUInteger i = 0; i < malformed.count; i++) {
+      NSMutableDictionary *bad = [window mutableCopy];
+      [bad addEntriesFromDictionary:malformed[i]];
+      ArdiaSavedSession *declined = Write([root stringByAppendingPathComponent:[NSString stringWithFormat:@"malformed%lu", (unsigned long)i]], @{ @"version" : @11, @"windows" : @[ bad ], @"focusedWindowId" : @"w", @"launchTab" : hint });
+      Check(declined == nil, [NSString stringWithFormat:@"a malformed window (case %lu) declines early launch", (unsigned long)i].UTF8String);
+    }
+    Check(Write([root stringByAppendingPathComponent:@"windowsObject"], @{ @"version" : @11, @"windows" : @{} }) == nil, "windows that aren't a list decline early launch");
   }
   return 0;
 }

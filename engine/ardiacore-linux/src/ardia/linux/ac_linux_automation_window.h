@@ -27,6 +27,31 @@ inline constexpr const char* kCapabilities[] = {"engine.cliOwnsTab", "engine.cli
                                                 "engine.cliCloseOffscreenTabs", "engine.cliTabTargets"};
 inline constexpr size_t kMaxTargetTabs = 512;
 
+struct EngineCliRoute {
+  const char* name;
+  const char* service;
+  bool tab;
+};
+
+inline constexpr EngineCliRoute kEngineCliRoutes[] = {
+    {"engine.cliDevToolsOpen", "ac_cli_devtools_open", true},
+    {"engine.cliDevToolsSend", "ac_cli_devtools_send", false},
+    {"engine.cliDevToolsClose", "ac_cli_devtools_close", false},
+    {"engine.cliCancel", "ac_cli_cancel", false},
+    {"engine.cliSnapshot", "ac_cli_snapshot", true},
+    {"engine.cliWaitSettled", "ac_cli_wait_settled", true},
+    {"engine.cliHitTest", "ac_cli_hit_test", true},
+    {"engine.cliClick", "ac_cli_click", true},
+    {"engine.cliScreenshot", "ac_cli_screenshot", true},
+};
+
+inline const EngineCliRoute* EngineCliRouteFor(std::string_view name) {
+  for (const EngineCliRoute& route : kEngineCliRoutes) {
+    if (name == route.name) return &route;
+  }
+  return nullptr;
+}
+
 struct OffscreenTab {
   bool found = false;
   bool discarded = false;

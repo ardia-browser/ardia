@@ -1,16 +1,26 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 const mac = await import("./platformTerms.ts");
-const windows = await import("./platformTerms.windows.ts");
+const windows = await import("./platformTerms.win.ts");
 const macFeatures = (await import("./platformFeatures.ts")).PLATFORM_FEATURES;
-const windowsFeatures = (await import("./platformFeatures.windows.ts")).PLATFORM_FEATURES;
+const windowsFeatures = (await import("./platformFeatures.win.ts")).PLATFORM_FEATURES;
+const linuxFeatures = (await import("./platformFeatures.linux.ts")).PLATFORM_FEATURES;
 
 test("the OS ids keep the Mac's macos report key and darwin os.type, and name Windows on Windows", () => {
   assert.deepEqual(mac.PLATFORM_IDS, { report: "macos", otel: "darwin" });
   assert.deepEqual(windows.PLATFORM_IDS, { report: "windows_os", otel: "windows" });
 });
 
-test("only the Mac reports memory pressure", () => {
+test("the Mac and the desktop hosts report memory pressure", () => {
   assert.equal(macFeatures.memoryPressure, true);
-  assert.equal(windowsFeatures.memoryPressure, false);
+  assert.equal(windowsFeatures.memoryPressure, true);
+  assert.equal(linuxFeatures.memoryPressure, true);
+});
+
+test("a pop-up button looks like its platform's: the Mac's accent box with two chevrons, Windows's single chevron, and on Windows it is never narrower than its title", async () => {
+  const macChrome = await import("./platformChrome.ts");
+  const windowsChrome = await import("./platformChrome.windows.ts");
+  assert.deepEqual(macChrome.POP_UP_CHROME, { indicator: "accentUpDown", growsToItsTitle: false });
+  assert.deepEqual(windowsChrome.POP_UP_CHROME, { indicator: "chevronDown", growsToItsTitle: true });
+  assert.deepEqual((await import("./platformChrome.desktop.ts")).POP_UP_CHROME, macChrome.POP_UP_CHROME);
 });

@@ -3,7 +3,7 @@ import type { ActionState, InstalledExtension } from "../../state/extensions/sto
 import { Badge, Button, ContextMenuArea, Symbol, useToolbarRowContext } from "../ui";
 import { chooseFromMenu } from "../../state/app/menuChoice";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Image, PanResponder, View } from "react-native";
+import { Animated, Image, PanResponder, View, type ImageSourcePropType } from "react-native";
 import { useTheme } from "../ui/theme";
 import type { ToolbarPalette } from "../ui/toolbarColors";
 import { usePages } from "../../state/tabs/pageState";
@@ -11,6 +11,7 @@ import { ink, opacity } from "../ui/tokens";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
 import { BADGE_FALLBACK_FILL, TOOLBAR_DRAG_START } from "./tokens";
 import { SLIDE } from "../tabstrip/tokens";
+import { TOOLBAR_TRAILING } from "../../lib/toolbarRow";
 import { isLight } from "../../lib/color";
 import { dropToolbarAnchor, setToolbarAnchor } from "../../state/extensions/toolbarAnchors";
 import { onInterfaceScaleSettled } from "../../state/settings/interfaceScale";
@@ -34,9 +35,8 @@ import { dropIndex, makeRoomShift, toolbarOrder, type ToolbarDrag } from "../../
 const BUTTON = 28;
 const GLYPH = 14;
 const GLYPH_BOX = 18;
-const IMAGE = 16;
-const GAP = 2;
-const PITCH = BUTTON + GAP;
+const IMAGE = TOOLBAR_TRAILING.extensionIcon;
+const GAP = TOOLBAR_TRAILING.itemGap;
 
 function useToolbarExtensions(windowId: string, limit: number) {
   const shown = useWindowExtensions(windowId);
@@ -47,17 +47,17 @@ function useToolbarExtensions(windowId: string, limit: number) {
     const room = Math.max(0, limit - (casting ? 1 : 0));
     const overflow = all.length > room;
     const pinned = overflow ? all.slice(0, Math.max(0, room - 1)) : all;
-    return { pinned, hidden: pinned.length ? all.slice(pinned.length) : [], overflow, casting, routes };
+    return { pinned, overflow, casting, routes };
   }, [shown, routes, casting, limit]);
 }
 
-export const extensionsFitting = (room: number) => Math.max(1, Math.floor((room + GAP) / PITCH));
+export const extensionsFitting = (room: number, button = BUTTON) => Math.max(1, Math.floor((room + GAP) / (button + GAP)));
 
 export function useToolbarExtensionsWidth(windowId: string, limit = Infinity): number {
   const { pinned, overflow, casting } = useToolbarExtensions(windowId, limit);
   const button = useToolbarRowContext().extensionButton;
   const count = pinned.length + (overflow ? 1 : 0) + (casting ? 1 : 0);
-  return count ? count * (button + GAP) - GAP + 6 : 0;
+  return count ? count * (button + GAP) - GAP : 0;
 }
 
 type ToolbarExtensionsProps = {
@@ -83,7 +83,7 @@ function TabToolbarExtensions({
   limit = Infinity,
   onActivate,
 }: ToolbarExtensionsProps) {
-  const { pinned, hidden, overflow, routes } = useToolbarExtensions(windowId, limit);
+  const { pinned, overflow, routes } = useToolbarExtensions(windowId, limit);
   const ready = usePages((p) => !!p.ready[tabId]);
   const pitch = useToolbarRowContext().extensionButton + GAP;
   const reorderable = useToolbarReorderable(windowId);
@@ -115,7 +115,7 @@ function TabToolbarExtensions({
           ))}
         </View>
       ) : null}
-      {overflow && <OverflowButton windowId={windowId} tabId={tabId} hidden={reorderable ? hidden : []} palette={palette} onActivate={onActivate} />}
+      {overflow && <OverflowButton windowId={windowId} tabId={tabId} palette={palette} onActivate={onActivate} />}
     </View>
   );
 }
@@ -279,22 +279,39 @@ function CastButton({ windowId, tabId, routes, palette }: { windowId: string; ta
   );
 }
 
-function OverflowButton({ windowId, tabId, hidden, palette, onActivate }: { windowId: string; tabId: string; hidden: InstalledExtension[]; palette: ToolbarPalette; onActivate?: () => void }) {
-  const { ref, measure } = useAnchor(windowId, tabId, "*");
+export function OverflowButton({
+  windowId,
+  tabId,
+  palette,
+  onActivate,
+  mayActivate,
+  slot = "*",
+  asset,
+  glyph,
+}: {
+  windowId: string;
+  tabId: string;
+  palette: ToolbarPalette;
+  onActivate?: () => void;
+  mayActivate?: () => boolean;
+  slot?: string;
+  asset?: ImageSourcePropType;
+  glyph?: number;
+}) {
+  const { ref, measure } = useAnchor(windowId, tabId, slot);
   const onPress = async () => {
     const anchor = await measure();
     const enabled = currentWindowExtensions(windowId);
-    const choice = await chooseFromMenu(extensionOverflowItems(enabled, hidden));
-    if (choice && typeof choice === "object" && "front" in choice) void moveToolbarExtension(windowId, choice.front.id, 0, "menu");
-    else if (choice && typeof choice === "object") {
+    const choice = await chooseFromMenu(extensionOverflowItems(enabled));
+    if (choice && typeof choice === "object") {
+      if (mayActivate && !mayActivate()) return;
       onActivate?.();
       void activateExtension(windowId, choice, anchor, undefined, tabId);
-    }
-    else if (choice !== "front") runExtensionListChoice(choice, windowId);
+    } else runExtensionListChoice(choice, windowId);
   };
   return (
     <View ref={ref} onLayout={() => void measure()}>
-      <Button variant="icon" icon="puzzlepiece.extension" look="extension" palette={palette} tooltip="Extensions" onPress={() => void onPress()} />
+      <Button variant="icon" icon="puzzlepiece.extension" asset={asset} glyph={glyph} look="extension" palette={palette} tooltip="Extensions" onPress={() => void onPress()} />
     </View>
   );
 }

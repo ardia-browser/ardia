@@ -1,5 +1,5 @@
-import { cleanUrl, markdownLink } from "@ardia/core";
-import { copyText } from "../../platform/clipboard";
+import { cleanUrl, linkLines, markdownLink } from "@ardia/core";
+import { copyLink } from "../../platform/clipboard";
 import type { MenuItem } from "../../platform/menus";
 import { withOptionAlternate, type MenuEntry } from "../app/menuSections";
 import { openLinks, openUrl, type OpenAllMode } from "./actions";
@@ -7,23 +7,34 @@ import { splitViewAvailable } from "../splits/splits";
 
 export type Link = { url: string; title?: string | null };
 
-export const OPEN_SYMBOLS = { tab: "plus.app", window: "macwindow.badge.plus", incognito: "eyeglasses", split: "rectangle.split.2x1" } as const;
+const OPEN_SYMBOLS = { tab: "plus.app", window: "macwindow.badge.plus", incognito: "eyeglasses", split: "rectangle.split.2x1" } as const;
 
 export function openLinkItems({ split = true }: { split?: boolean } = {}): MenuItem[] {
   return [
     { id: "tab", title: "Open in New Tab", symbol: OPEN_SYMBOLS.tab },
-    { id: "window", title: "Open in New Window", symbol: OPEN_SYMBOLS.window },
-    { id: "incognito", title: "Open in Incognito Window", symbol: OPEN_SYMBOLS.incognito },
     ...(split && splitViewAvailable ? [{ id: "split", title: "Open in Split View", symbol: OPEN_SYMBOLS.split }] : []),
+    {
+      id: "openIn",
+      title: "Open in",
+      symbol: "macwindow",
+      children: [
+        { id: "window", title: "New Window", symbol: OPEN_SYMBOLS.window },
+        { id: "incognito", title: "Incognito Window", symbol: OPEN_SYMBOLS.incognito },
+      ],
+    },
   ];
 }
 
-export function openAllItems(links: number, label: "All" | number = "All"): MenuItem[] {
+export function openAllItems(links: number, label: "All" | number = "All", { elsewhere = true }: { elsewhere?: boolean } = {}): MenuItem[] {
   const what = label === "All" ? "All" : String(label);
   return [
     { id: "openAll", title: `Open ${what} in New ${label === 1 ? "Tab" : "Tabs"}`, symbol: OPEN_SYMBOLS.tab, enabled: links > 0 },
-    { id: "openAllWindow", title: `Open ${what} in New Window`, symbol: OPEN_SYMBOLS.window, enabled: links > 0 },
-    { id: "openAllIncognito", title: `Open ${what} in Incognito Window`, symbol: OPEN_SYMBOLS.incognito, enabled: links > 0 },
+    ...(elsewhere
+      ? [
+          { id: "openAllWindow", title: `Open ${what} in New Window`, symbol: OPEN_SYMBOLS.window, enabled: links > 0 },
+          { id: "openAllIncognito", title: `Open ${what} in Incognito Window`, symbol: OPEN_SYMBOLS.incognito, enabled: links > 0 },
+        ]
+      : []),
   ];
 }
 
@@ -60,6 +71,6 @@ export function runLinkChoice(choice: string | null, links: Link[], windowId: st
 
 export function copyLinks(links: Link[], markdown: boolean) {
   if (!links.length) return;
-  const lines = links.map((l) => (markdown ? markdownLink(l.title || l.url, l.url) : cleanUrl(l.url)));
-  copyText(markdown && lines.length > 1 ? lines.map((l) => `- ${l}`).join("\n") : lines.join("\n"));
+  const lines = links.map((l) => (markdown ? markdownLink(l.title ?? "", l.url) : cleanUrl(l.url)));
+  copyLink(linkLines(lines, markdown));
 }

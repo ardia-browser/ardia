@@ -17,6 +17,8 @@ const { useFavicons, EMPTY_ICONS } = await import("../../state/favicons/favicons
 const { takeHistoryRemovalCounts } = await import("../../state/telemetry/historyRemovalCounts.ts");
 const { ClearDataDialog } = await import("./ClearDataDialog.tsx");
 const { Dialog } = await import("../ui/index.ts");
+const { setConsentPeriod } = await import("../../state/telemetry/consentPeriod.ts");
+setConsentPeriod(true, "clear-data-test");
 const S = () => useBrowser.getState();
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 const nodes = (node) => !node || typeof node !== "object" ? [] : [node, ...[node.props?.children].flat(Infinity).flatMap(nodes)];

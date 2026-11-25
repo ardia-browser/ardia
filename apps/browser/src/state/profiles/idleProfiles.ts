@@ -39,5 +39,9 @@ export function idleProfiles() {
     }
     return due;
   };
-  return Object.assign(ready, { noteShown });
+  const due = (profile: string, now: number, delayMs: number | null) => {
+    const since = idleSince.get(profile);
+    return delayMs !== null && !shown.has(profile) && since !== undefined && now - since >= delayMs;
+  };
+  return Object.assign(ready, { noteShown, due });
 }

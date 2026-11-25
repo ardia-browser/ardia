@@ -24,6 +24,7 @@ export const NextMeetingBadge = memo(function NextMeetingBadge({ tabId }: { tabI
   const [label, setLabel] = useState(text);
   useEffect(() => {
     if (text) setLabel(text);
+    else if (!label) return;
     Animated.spring(shown, { toValue: text ? 1 : 0, ...(text ? liveMotion.badgeSpring : liveMotion.badgeHideSpring), useNativeDriver: true }).start(({ finished }) => {
       if (finished && !text) setLabel(null);
     });

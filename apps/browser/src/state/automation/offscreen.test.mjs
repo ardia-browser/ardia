@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { mock, test } from "node:test";
+const mockTimers = mock.timers;
 const { useBrowser } = await import("../browser/store.ts");
 const { startAutomation } = await import("./controlSocket.ts");
 const stub = await import("../../test-native/index.ts");
@@ -63,9 +64,62 @@ test("offscreen: the shown tab, a tab the command didn't open, one that was show
     assert.match((await call("offscreen", { tab: hidden })).error.message, /couldn't take/);
     assert.ok(S().tabs[hidden]);
     assert.match((await call("offscreen", { tab: "tab-nope" })).error.message, /no such tab/);
-    assert.match((await call("offscreen", { tab: hidden, window: "w" })).error.message, /takes tab, not window/);
+    assert.match((await call("offscreen", { tab: hidden, window: "w" })).error.message, /takes no window \(it takes tab\)/);
   } finally {
     delete globalThis.acTestCliOwns;
     delete globalThis.acTestCliMoveOffscreen;
+  }
+});
+
+test("offscreen: the 5 s close asks the engine first, so a connection JS hasn't heard about yet keeps its tabs", async () => {
+  const { noteCliConnections } = await import("./offscreen.ts");
+  let closes = 0;
+  let live = 0;
+  globalThis.acTestCliCloseOffscreen = () => void closes++;
+  globalThis.acTestCliControl = () => ({ state: "on", port: 1, connections: live, generation: 1, file: "" });
+  const settle = async () => {
+    for (let i = 0; i < 20; i++) await tick();
+  };
+  try {
+    mockTimers.enable({ apis: ["setTimeout"] });
+    noteCliConnections(1);
+    noteCliConnections(0);
+    live = 1;
+    mockTimers.tick(5000);
+    mockTimers.reset();
+    await settle();
+    assert.equal(closes, 0, "a connection the engine counts keeps the off-screen tabs");
+    live = 0;
+    mockTimers.enable({ apis: ["setTimeout"] });
+    noteCliConnections(1);
+    noteCliConnections(0);
+    mockTimers.tick(5000);
+    mockTimers.reset();
+    await settle();
+    assert.equal(closes, 1, "with no connection left, the off-screen tabs close");
+  } finally {
+    mockTimers.reset();
+    delete globalThis.acTestCliCloseOffscreen;
+    delete globalThis.acTestCliControl;
+  }
+});
+
+test("offscreen: when the engine's status can't be read, the 5 s close still runs", async () => {
+  const { noteCliConnections } = await import("./offscreen.ts");
+  let closes = 0;
+  globalThis.acTestCliCloseOffscreen = () => void closes++;
+  globalThis.acTestCliControl = () => Promise.reject(new Error("engine gone"));
+  try {
+    mockTimers.enable({ apis: ["setTimeout"] });
+    noteCliConnections(1);
+    noteCliConnections(0);
+    mockTimers.tick(5000);
+    mockTimers.reset();
+    for (let i = 0; i < 20; i++) await tick();
+    assert.equal(closes, 1);
+  } finally {
+    mockTimers.reset();
+    delete globalThis.acTestCliCloseOffscreen;
+    delete globalThis.acTestCliControl;
   }
 });

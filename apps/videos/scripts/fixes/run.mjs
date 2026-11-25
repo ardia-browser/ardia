@@ -47,7 +47,7 @@ function sceneLib(name) {
 }
 
 if (selfLib && !existsSync(selfLib)) {
-  const built = spawnSync("clang", ["-dynamiclib", "-fobjc-arc", "-framework", "AppKit", "-framework", "AVFoundation", "-framework", "CoreMedia", "-framework", "CoreVideo", "-o", selfLib, join(here, "selfrec.m")], { stdio: "inherit" });
+  const built = spawnSync("clang", ["-dynamiclib", "-fobjc-arc", "-framework", "AppKit", "-framework", "AVFoundation", "-framework", "CoreMedia", "-framework", "CoreVideo", "-framework", "QuartzCore", "-o", selfLib, join(here, "selfrec.m")], { stdio: "inherit" });
   if (built.status !== 0) throw new Error("selfrec.dylib didn't build");
 }
 
@@ -146,7 +146,7 @@ async function shoot(scene, name, side) {
     data, js, probe, port, onboarded: true, files: { "telemetry.json": { sharing: false, decidedAt: 1, askDoneAt: 1 }, ...(scene.files ?? {}) }, session: JSON.parse(readFileSync(sessionFile, "utf8")),
     switches: [`--host-resolver-rules=MAP *.example 127.0.0.1:${sitesPort}`, ...(selfLib ? ["--disable-features=RemoteCoreAnimationAPI"] : []), ...(scene.switches ?? [])],
     instance: { importSourceDir: empty, importSafariHome: empty, downloadsDir: downloads, ...(scene.instance ?? {}) },
-    env: { ...(libs ? { DYLD_INSERT_LIBRARIES: libs } : {}), ...(selfLib ? { FIXES_SELFREC_DIR: join(data, "selfrec") } : {}), ...(pasteLib ? { FIXES_PASTEBOARD_NAME: `com.ardia.film.${name}-${side}` } : {}), ...(scene.env ?? {}) },
+    env: { ...(libs ? { DYLD_INSERT_LIBRARIES: libs } : {}), ...(selfLib ? { FIXES_SELFREC_DIR: join(data, "selfrec"), ...(process.env.FIXES_SELFREC_LAYERS ? { FIXES_SELFREC_LAYERS: "1" } : {}), ...(process.env.FIXES_SELFREC_SCALE ? { FIXES_SELFREC_SCALE: process.env.FIXES_SELFREC_SCALE } : {}) } : {}), ...(pasteLib ? { FIXES_PASTEBOARD_NAME: `com.ardia.film.${name}-${side}` } : {}), ...(scene.env ?? {}) },
     ...(scene.test ? { test: scene.test } : {}),
   };
   const start = scene.withoutDevTools ? launchWithoutDevTools : launch;
@@ -191,7 +191,7 @@ async function shoot(scene, name, side) {
     await sleep(scene.tail ?? 900);
     await rec.stop();
     const events = [...result.events, ...(Array.isArray(externalEvents) ? externalEvents : [])].sort((a, b) => a.t - b.t).map((e) => ({ ...e, t: Math.round(e.t - t0) / 1000 }));
-    writeFileSync(join(footage, side, `${name}.json`), JSON.stringify({ ...result, events, setup: JSON.parse(setup), prepared, rect: started.rect, scale: started.scale }, null, 1));
+    writeFileSync(join(footage, side, `${name}.json`), JSON.stringify({ ...result, events, setup: JSON.parse(setup), prepared, rect: started.rect, scale: started.scale, ...(scene.env?.FIXES_SELFREC_CROP && selfLib ? { crop: scene.env.FIXES_SELFREC_CROP.split(",").map(Number) } : {}) }, null, 1));
     console.log(`${name} ${side}: ${out}, ${events.length} events, marks ${events.filter((e) => e.mark).map((e) => `${e.mark}@${e.t}`).join(" ")}`);
   } finally {
     await instance.quit();

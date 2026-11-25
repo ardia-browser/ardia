@@ -7,6 +7,8 @@
 #include <utility>
 
 #include "ardia/linux/ac_linux_password_check.h"
+#include "ardia/linux/ac_linux_password_field.h"
+#include "ardia/linux/ac_linux_secret_text.h"
 #include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -23,11 +25,12 @@
 #include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "ui/base/base_window.h"
 #include "content/public/browser/browser_thread.h"
-#include "ui/base/ime/text_input_type.h"
 #include "ui/base/mojom/dialog_button.mojom.h"
 #include "ui/base/mojom/ui_base_types.mojom.h"
 #include "ui/views/controls/message_box_view.h"
-#include "ui/views/controls/textfield/textfield.h"
+#include "ui/views/border.h"
+#include "ui/views/layout/layout_provider.h"
+#include "ui/views/view_class_properties.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_observer.h"
 #include "ui/views/window/dialog_delegate.h"
@@ -113,11 +116,20 @@ class Confirmation : public views::WidgetObserver {
     text += purpose_;
     text += u".\n\n";
     text += base::UTF8ToUTF16(problem.empty() ? "Enter the password you use to log in to this computer." : problem);
+    auto field = std::make_unique<PasswordField>(u"Login password");
+    if (!field->usable()) {
+      return Finish(profile_, false, false);
+    }
+    const views::LayoutProvider* layout = views::LayoutProvider::Get();
+    gfx::Insets sides = layout->GetInsetsMetric(views::INSETS_DIALOG);
+    sides.set_top_bottom(0, 0);
+    gfx::Insets edges =
+        layout->GetDialogInsetsForContentType(views::DialogContentType::kText, views::DialogContentType::kControl);
+    edges.set_left_right(0, 0);
+    field->SetProperty(views::kMarginsKey, sides);
     auto message = std::make_unique<views::MessageBoxView>(text);
-    message->SetPromptField(std::u16string());
-    field_ = message->GetVisiblePromptField();
-    field_->SetTextInputType(ui::TEXT_INPUT_TYPE_PASSWORD);
-    field_->SetAccessibleName(u"Login password");
+    message->SetBorder(views::CreateEmptyBorder(edges));
+    field_ = message->AddChildView(std::move(field));
     delegate_->SetInitiallyFocusedView(field_);
     delegate_->SetContentsView(std::move(message));
     widget_.reset(views::DialogDelegate::CreateDialogWidget(
@@ -128,14 +140,19 @@ class Confirmation : public views::WidgetObserver {
     widget_->Show();
   }
 
-  void OnWidgetDestroying(views::Widget* widget) override { Forced(); }
+  void OnWidgetDestroying(views::Widget* widget) override {
+    if (field_) {
+      field_->Clear();
+    }
+    Forced();
+  }
   void OnWidgetDestroyed(views::Widget* widget) override { Forced(); }
 
  private:
   void Close() {
     observation_.Reset();
     if (field_) {
-      field_->SetText(std::u16string());
+      field_->Clear();
     }
     field_ = nullptr;
     widget_.reset();
@@ -154,27 +171,26 @@ class Confirmation : public views::WidgetObserver {
   void OnClose(views::Widget::ClosedReason reason) {
     DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
     const bool accepted = reason == views::Widget::ClosedReason::kAcceptButtonClicked;
-    std::string password;
+    std::unique_ptr<SecretBytes> password;
     if (accepted && field_) {
-      password = base::UTF16ToUTF8(field_->GetText());
+      password = field_->TakeUtf8();
     }
     observation_.Reset();
     Close();
     if (!accepted) {
-      Wipe(password);
       return Finish(profile_, false, true);
     }
-    if (std::optional<std::string> problem = UnusablePassword(password)) {
-      Wipe(password);
+    if (!password) {
+      return Show("That password is too long to check.");
+    }
+    if (std::optional<std::string> problem = UnusablePassword(password->view())) {
       return Show(*problem);
     }
     if (const int64_t wait = TheThrottle().WaitMs(NowMs()); wait > 0) {
-      Wipe(password);
       return Show("Too many wrong passwords." + WaitText(wait));
     }
     const Checker& checker = TheChecker();
     if (!checker.helper || !checker.user) {
-      Wipe(password);
       return Finish(profile_, false, false);
     }
     checking_ = true;
@@ -183,10 +199,8 @@ class Confirmation : public views::WidgetObserver {
         {base::MayBlock(), base::TaskPriority::USER_BLOCKING,
          base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN},
         base::BindOnce(
-            [](std::string helper, std::string user, std::string password) {
-              Verdict verdict = RunHelper(helper, user, password);
-              Wipe(password);
-              return verdict;
+            [](std::string helper, std::string user, std::unique_ptr<SecretBytes> password) {
+              return RunHelper(helper, user, password->view());
             },
             *checker.helper, *checker.user, std::move(password)),
         base::BindOnce(&Confirmation::Checked, weak_factory_.GetWeakPtr()));
@@ -210,7 +224,7 @@ class Confirmation : public views::WidgetObserver {
   base::OnceCallback<void(bool, bool)> done_;
   std::unique_ptr<views::DialogDelegate> delegate_;
   std::unique_ptr<views::Widget> widget_;
-  raw_ptr<views::Textfield> field_ = nullptr;
+  raw_ptr<PasswordField> field_ = nullptr;
   bool checking_ = false;
   base::ScopedObservation<views::Widget, views::WidgetObserver> observation_{this};
   base::WeakPtrFactory<Confirmation> weak_factory_{this};

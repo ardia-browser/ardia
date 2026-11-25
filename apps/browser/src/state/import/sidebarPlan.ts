@@ -1,8 +1,8 @@
 import type { ImportedTab, ImportResult, SpaceSuggestion } from "../../platform/importModule";
 
-export type PlannedSpace = { space: SpaceSuggestion; partition: number };
+type PlannedSpace = { space: SpaceSuggestion; partition: number };
 
-export type SidebarPlan = {
+type SidebarPlan = {
   spaces: PlannedSpace[];
   partitions: number;
   dataPartition: number;

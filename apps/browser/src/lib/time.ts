@@ -1,5 +1,7 @@
 const units = (n: number, unit: string) => (n === 1 ? `1 ${unit} ago` : `${n} ${unit}s ago`);
 
+export const utcDay = (at: number) => new Date(at).toISOString().slice(0, 10);
+
 export function ago(at: number, now = Date.now()): string {
   const s = Math.max(0, (now - at) / 1000);
   if (s < 60) return "just now";

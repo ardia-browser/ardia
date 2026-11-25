@@ -7,7 +7,7 @@ results; a cold run spends most of its time in `swift test`'s first build. Each 
 | Package | Command | What runs |
 | --- | --- | --- |
 | `apps/browser` | `pnpm --filter @ardia/browser test` | Every `src/**/*.test.mjs` under the test loader (below) |
-| `packages/core` | `pnpm --filter @ardia/core test` | `apps/ios/scripts/bundle-shared.mjs --check`, then `src/**/*.test.ts` |
+| `packages/core` | `pnpm --filter @ardia/core test` | `apps/phone/scripts/bundle-shared.mjs --check`, then `src/**/*.test.ts` |
 | `packages/sync` | `pnpm --filter @ardia/sync test` | `swift test`, `node --test`, the shared bundle check, then the rename's launch migration end to end (`scripts/legacy-migration-e2e.mjs`) |
 | `packages/import` | `pnpm --filter @ardia/import test` | `swift test` |
 | `packages/shell` | `pnpm --filter @ardia/shell test` | `swift test` (the updater's channel switch among them) |
@@ -44,24 +44,71 @@ holds the rest.
 | Layout shifts | `node apps/browser/scripts/layout-shift-test.mjs <Release app>` (reads a probe a Debug app's React dev hook replaces) | Nothing already on screen moves when late content arrives |
 | Window toolbar | `node apps/browser/scripts/window-toolbar-test.mjs <Release app>` (31 of 39 checks fail on a Debug app) | The toolbar's buttons and layout in each window kind |
 | Hover layout | `node apps/browser/scripts/hover-shift-test.mjs <Debug app>` | Hovering moves nothing: every hover-tracked view in the sidebar, the tab strip and the downloads popover (below) |
+| Symbol geometry | `node apps/browser/scripts/symbol-geometry-test.mjs <ad hoc Debug app> [cdpPort] [metroPort]` | Live-folder status changes and interface-scale transitions keep every symbol image inside its bounds, including the hidden image used again at window scale |
 | Sidebar clicks | `node apps/browser/scripts/sidebar-click-test.mjs <Debug app>` | One click opens a tab or pinned tile: in the frame its hover card appears, under another tile's appearing card, after a New Tab and after closing a pinned tab (0.2.39-nightly.5: tabs needed two clicks), and when the pointer drifts up to 9 pt between press and release, while a 14 pt press stays a drag (#947) |
 | Menus | `node apps/browser/scripts/menus-test.mjs <Debug app> [--only=<regex>]` | Right-clicks on the sidebar's rows, tiles, split panes, groups, header, footer and background open their menu, and each item does what it says (tab, several-tab, group, sidebar, Top Apps, reload button, profile, bookmark, history, download and extension menus; moves between profiles and windows, private windows refused); the page menu's Copy Link Address, Save Link As… cancelled, Back and Forward. Menus come from `ac.menus` in the dev harness where nothing can be right-clicked |
 | Onboarding | `node apps/browser/scripts/onboarding-test.mjs <Debug app>` | No text field sits behind the onboarding card, a click on the first row's checkbox toggles it, another window keeps its New Tab field meanwhile, and the New Tab field is back and focused once it ends, in a bar of the same height (the hidden New Tab field took the first row's cursor and its checkbox clicks) |
 | New Tab row hover | `node apps/browser/scripts/newtab-row-hover-test.mjs <Debug app> [--trials=6]` | Click the sidebar's New Tab row, open a page from the New Tab page, move the pointer off: every view the pointer entered heard it leave, with new tabs next to the current one and at the bottom (#1280: the row's size changed under the pointer as the new tab slid in, its tracking area was remade, and it stayed highlighted) |
 | Sidebar scroll | `node apps/browser/scripts/sidebar-scroll-test.mjs <Debug app>` | The pinned tiles hold still while the tabs scroll (Dia's dock), with the address field in the sidebar and without: a row dragged onto a tile after a scroll pins it there, selecting a tile while scrolled leaves the list put, and a dock too tall for the window scrolls with the tabs; after a change to another profile's page, a click on a tab in view leaves the list put |
+| Sidebar slides | `node apps/browser/scripts/sidebar-slide-test.mjs <Debug app> [--trials=3]` | Closing a tab leaves no blank space: the rows below slide up, every slide rests at 0, and the sidebar looks the same before and after every row renders again. Also when the list updates while the slides still run later than they should have finished (a close that kept the app busy), and when a row renders just as its slide ends; both left a row one place down with a blank space above it (#2186) |
 | Settings layout | `node apps/browser/scripts/settings-shift-test.mjs <Debug app> [--panes a,b] [--attach <data dir>] [--keep]` | Every Settings pane, the first right after the window opens: nothing moves, appears, disappears or changes between its first frame on screen and once it has settled; ⌘F, typing, Return and Escape in Settings search |
-| Peek | `node apps/browser/scripts/peek-edge-test.mjs <Debug app>` | The auto-hidden sidebar's peek: a pointer resting on the window's top or bottom edge beside it keeps it out, one well past the edge closes it, an edge crossing outside its column never opens it, pressing another space's dot keeps it out, and with the window against a screen edge another display shares, crossing it stops at the edge and peeks while a second push goes through |
+| Peek | `node apps/browser/scripts/peek-edge-test.mjs <Debug app>` | The auto-hidden sidebar's peek: a pointer resting on the window's top or bottom edge beside it keeps it out, one well past the edge closes it, an edge crossing outside its column never opens it, pressing another space's dot keeps it out, and with the window against a screen edge another display shares, the pointer crosses without being held, an overshoot that comes straight back peeks, and crossing again closes the peek at once |
 | Import window | `node apps/browser/scripts/import-flow-test.mjs <Debug app> <scratch dir> [flow…] [--record <file>] [--compare <file>] [--keep]` | Every flow of the import window (Chrome with unlock, skip and back, Arc, Firefox, Dia, Safari direct, export and a bad file) against `packages/import/fixtures`, with a background-only stand-in for Dia, never a real profile |
 | Sync | `node packages/sync/scripts/e2e.mjs <Debug app>` | Two and three hidden instances through one folder (`docs/sync.md`) |
 | Import | `node packages/import/scripts/e2e.mjs <Debug app> <scratch dir>` | Cookies, addresses and cards from a fake Chrome home (`packages/import/README.md`) |
-| Video upscaling | `node apps/browser/scripts/video-upscaling-test.mjs <Debug app> [--keep] [check…]` (`--list`) | What the GPU process upscales in every state the gate decides (playing, paused, native size, background tab, app inactive, occluded, Low Power, thermal, screen sharing (acted, and a real tab share through the picker), PiP, HDR, full screen, Little Ardia, setting off), from its `ArdiaVSR.*` trace events and `videoUpscalingState()` |
+| Video upscaling | `node apps/browser/scripts/video-upscaling-test.mjs <Debug app> [--keep] [check…]` (`--list`) | What the GPU process upscales in every state the gate decides (playing, paused, native size, a source over 720p, background tab, app inactive, occluded, Low Power, thermal, screen sharing (acted, and a real tab share through the picker), PiP, HDR, full screen, Little Ardia, setting off), from its `ArdiaVSR.*` trace events and `videoUpscalingState()` |
 | PiP click to skip | `node apps/browser/scripts/pip-click-seek-test.mjs <Debug app> [--keep] [--expect-no-seek]` | A click on the left or right of the video Picture in Picture window skips 10 s back or ahead, and each click of a quick double or triple click skips again; the centre column, a drag (also one that only passes 3 pt at the release), a dead-band double-click and a stashed window never seek; the video in the window is the one that moves, even paused while another plays; a page with only a `seekto` handler is asked on the timeline it reported, kept current through repeated clicks and a pause though it reports once, also for a video in a closed shadow root; Chrome's close button still closes (#1735). `--expect-no-seek` runs it against a build from before, where no click moves the video |
+| PiP resizing | `node apps/browser/scripts/pip-resize-test.mjs <Debug app> [--keep]` | A pinch or an edge drag on the video Picture in Picture window moves a stand-in that mirrors the live video every display frame while the real window waits, then hands over at the final size; two quick pinches share one stand-in; edge and corner drags keep the aspect ratio and the opposite edge or corner; a window parked past the screen edge resizes where it is; a pinch right after a mouse resize grows the window (it once crashed); a press or a two-finger move on the window while another app is active asks for Ardia to become active with only that window in front (a hidden instance never activates, so the pinch after it needs a trackpad) |
 | Engine patches | `python3 engine/patches/series.py check` | The patch series reproduces the Chromium tree (`docs/engine-build.md`) |
 | Engine (ArdiaCore) | `node packages/ardiacore/scripts/acceptance.mjs <Debug app> <scratch dir> [--keep] [check…]` | The app on ArdiaCore, hidden (`docs/ardiacore-parity.md`). `--keep` leaves the instance up and `--attach <scratch dir> [check…]` re-runs checks on it in seconds; `--list` gives each check's section and what it needs (brought along automatically) |
 | Focus (ArdiaCore) | `node packages/ardiacore/scripts/activation-acceptance.mjs <Debug app> <scratch dir> [check…]` | The panes shown, Chrome's active tab and native focus agree |
 | UI pixels | `scripts/agent/ui-snapshots capture <Debug app> <out dir>` before and after, then `scripts/agent/ui-snapshots compare <before dir> <after dir>` (`list`, `--help`) | A refactor changed no pixels: every UI state of a fixed seeded session, snapshotted in-process (works with the screen locked) and diffed |
 | Native perf | `node apps/browser/scripts/perf/native-bench.mjs --app <Release app> --out <dir>` | Launch, idle, memory, tab and window latency; the release perf gate (`docs/perf/README.md`) |
 | JS perf | `node apps/browser/scripts/perf/js-bench.mjs run --app <Release app> --bundle <main.jsbundle> --label <name>` | What each interaction costs the JS thread (`docs/perf/README.md`) |
+
+## CI
+
+- `checks.yml` starts only on the paths one of its jobs reads, and a `which checks run` job (`dorny/paths-filter`)
+  picks the jobs from the change: `typecheck, tests and Mac bundle` (typecheck, the portable tests, the store
+  simulator and the Mac bundle, Metro then Hermes) for the workspace code; the browser's tests in six shares
+  (`--test-shard=I/6`) for what those tests read, which reaches past `apps/browser` into every package, the engine
+  sources, `apps/desktop/src`, `scripts/{lib,security,windows}`, `tests/` and two docs; and `repository, vouch and
+  stale tests` (`test:root`, no install) for `scripts/`, `engine/`, `.github/`, `.claude/`, the site, the release
+  notes, `docs/dia-feature-parity.md` and any test file (for the promises lock and the parity citations). A
+  docs-only change (other than the parity doc), phone-app, dashboard or videos change starts none of them, unless it
+  touches a test file. When the filter can't tell (an API error, a
+  force push it can't diff, a pull request of 3,000 files or more) or the `which checks run` job fails, every job
+  runs. `scripts/ci/workflow-paths.test.mjs` keeps the trigger paths and the filters in step, follows the meadow
+  check's site imports, and fails when a Linux fixture or a root test names a file its job doesn't start on. Each share restores the TSX it transpiled last time (`ardia-test-tsx-I-of-6-…`); only pushes to
+  `main` save it, so pull requests add no caches. A newer push cancels the run before it, on `main` too.
+- `conventions.yml` runs the conventions check (`docs/conventions.md` › The check) on every pull request and every
+  push to `main`, with no paths filter and no install, so a file in a folder no other workflow watches is checked
+  too. `expiring-skips.yml` runs its expiry part every Monday and lists skips past their date, as warnings, in the
+  run's summary.
+- CI runs on Blacksmith's Linux and macOS runners; only the Windows jobs stay on GitHub's
+  ([ci-runners.md](ci-runners.md)).
+- `linux.yml` starts on what the Linux build and its fixture suites read (`apps/desktop`, the shared UI and the desktop
+  packages' sources, the engine sources, its scripts, and the few Mac files the parity fixtures compare against,
+  which `workflow-paths.test.mjs` finds in the suites and checks), not on the rest of the Mac, iPhone, Android or
+  Windows native code; `windows.yml`
+  leaves out `packages/phone`; `windows-engine-inputs.yml` starts on the engine inputs `check_inputs.py` reads;
+  `deploy.yml` starts on `main` only for paths one of its services deploys from.
+- `mac.yml` compiles the Mac app (Debug, unsigned, on Blacksmith's macOS 27 with Xcode 27.1) on pull requests and pushes that touch its native code:
+  `apps/browser/macos`, the packages' `ios` folders, the Dock tile and plugin host, the engine's public headers, the
+  workspace manifests, the patches and the lockfile. It builds against this commit's engine, or the nearest published
+  one before it, and any compiler error fails it. When `engine/ardiacore/src/ardia/core/public` changed since that
+  engine it also fails after the build, asking for the engine to be published first.
+- The heavy workflows (`ios.yml`, `android.yml`, `linux.yml`, `windows.yml`, `mac.yml`, `rust.yml`, `engine-series.yml`) run their vouch
+  `gate` job only for pull requests from forks. Pushes, manual runs and branches of this repository skip it and start
+  the build at once. A newer push or pull request run cancels the one before it (`engine-series.yml` cancels only
+  superseded pull request runs: each push runs on its own); manual and release runs each have their own
+  group and are never cancelled. `windows.yml` reads the `full-ci` label in its `identity` job: from the event on a
+  first attempt, with no API call, and live on a re-run, so adding the label and re-running all jobs gives the full run.
+- Jobs on Blacksmith keep their `actions/cache` entries in Blacksmith's cache (25 GB per repo, least recently used
+  entries over 7 days old evicted; `blacksmith cache list` or the Blacksmith dashboard shows them). GitHub's cache
+  REST API doesn't see those, so `caches.yml` prunes only what GitHub's runners save (the Windows jobs). Caches that
+  would fill a limit are saved on pushes to `main` only, and `caches.yml`'s sweep covers Gradle (`gradle-phone-`,
+  which `--main-only` also deletes from every other branch), Xcode compilation caches (`xcode-cas-`), Pods (`pods-`, shared by `mac.yml` and the Release workflow, and `phone-pods-`).
 
 ## ArdiaCore acceptance
 
@@ -98,6 +145,12 @@ Test hygiene the run keeps (each was a real failure):
 - A check that needs a page on screen (permission prompts, choosers, context menus) shows it first: Chrome holds
   those for hidden tabs. Checks that need "no user activation" reload the page first (CDP's `userGesture` leaves
   one behind).
+
+`node packages/ardiacore/scripts/token-signals-check.mjs <app> [metro host:port] [scratch dir]` runs the engine-answered
+`Ardia.*` DevTools methods and `tabs.hold {untilDisconnect, live}` over the real token connection and control socket in
+one hidden instance (no DevTools port): the console ring, watermarks and generations, hit tests (listeners, cover,
+delegation, a cross-site iframe as a remote frame, cancellation on disconnect, the 4-probe cap), the focused frame's
+origin and document id, refusals off a tab session and for bad parameters, and SIGKILL ending a live hold.
 
 `node packages/ardiacore/scripts/drag-end-check.mjs <Debug app> [scratch dir]` checks that a page keeps taking clicks and keys
 after a drag nobody ends (`chromium-drag-always-ends.patch`, `docs/engine-build.md`): a DevTools session that took a drag and went
@@ -139,6 +192,20 @@ Launch with `scripts/agent/ac launch <app> --data <dir> [--instance K=V] [--test
   in the dev harness has the current scale, `pixelRatio` and `hairline`. For a real 1× backing scale (pixel checks),
   add `--arg=-AppleMagnifiedMode --arg=YES` (low resolution mode, `devicePixelRatio` 1). Dev clicks and `windows.dev`
   points are root points.
+- **`applePasswordsPanel`** (password manager plugins, `docs/plugins.md` › passwordManager): background mode only logs
+  `[ardiacore] system passwords panel (background mode, not shown)` for the key and Edit › AutoFill › Passwords…; with
+  this key it sends AppKit's `_handleInsertFromPasswordsCommand:` for real and logs the first responder, the target and
+  whether AppKit took it (`log show --predicate 'eventMessage CONTAINS "system passwords panel"'`). Apple's panel
+  belongs to another process and can show on screen, so use it only with the screen locked or the owner's OK. After a
+  send it logs `held=1`: AppKit's own show-or-hide pass is held for 1.5 s, since its delayed dismiss used to cancel a
+  panel still opening. A pass skipped meanwhile runs once when the hold ends (`hold ended, replaying …`), and the hold
+  ends at once if the send is refused or focus leaves the page (`hold ended early`). It then compares the Passwords
+  panel windows on screen with those there before the send, at 0.6 s and again at 1.5 s, and logs `seen`, `missing`
+  (reported as `noPanel`, which opens nothing in Ardia) or `unchecked` (another app's window names were hidden). Every
+  refusal logs `refused reason=<reason> via=<badge|menu> field=<username|password|code|other>`.
+- **`systemPanelRace`**: right after sending the Passwords command, runs AppKit's
+  `_showOrHideAutoFillForCurrentTextInputContextIfAppropriate` at once, while Ardia is still active: the ordering that
+  lost the panel before the hold. Use it with a visible instance to check the panel still shows.
 - **`appDialog`**: `confirm` and `prompt` write their options (and `kind`) to `<data dir>/dialog.json` and answer from
   `dialog.json.pick` (deleted): `confirm` (with `,suppress` to tick the suppression box) or anything else to cancel; a
   prompt's answer is the text, empty to cancel. With no pick file they run as usual (background mode cancels).
@@ -157,11 +224,20 @@ Launch with `scripts/agent/ac launch <app> --data <dir> [--instance K=V] [--test
   `tabs.devPictureInPictureAction` also takes `alpha:<0–1>` (WindowServer alpha, so a hidden run's PiP window can be
   captured with `screencapture -l`), `mouse:<moved|down|dragged|up>:<x>,<y>[:<clicks>]` (top-left points; the click
   count defaults to 1), `stash` and `handle` (toggles the stash handle's hover), `skip` (JSON: the last click skip's
-  seconds, point and click count, and how many there were) and `skip:<seconds>` (the click skip's own path).
+  seconds, point and click count, and how many there were) and `skip:<seconds>` (the click skip's own path),
+  `pinch:<total factor>,<steps>,<hz>` (a pinch replayed through the stand-in), `pinchStats` (JSON: how many times the stand-in
+  moved and how far apart), `standIn` (the stand-in's window number while one is up),
+  `interactive` (test instances: shows a hidden run's PiP window and lets it take the pointer, for real-pointer checks with
+  `peekaboo move`), `resizeCursor` (JSON: AppKit's resize direction at points along each edge and the cursor we'd show,
+  with counters) and `resizeCursor:<on|off>` (turns the edge resize cursor on or off, for before/after runs).
 - **`allowOcclusion`**: macOS posts no occlusion change for a window a band below normal, so minimizing and
   deminiaturizing post one for it (the page goes hidden as in a user's minimized window).
-- **The `ardia` command** (`cliHome`, `cliBinDir`, `cliUrl` (`file://` works), test `cliInstallScript`): a test
-  instance installs or upgrades only with the first two set, so it never touches the real home. Its
+- **The `ardia` command** (`cliHome`, `cliBinDir`, `cliUrl` (`file://` works), test `cliInstallScript`, test
+  `bundledPlugins`): on macOS a test instance links built-in plugins' programs only into `cliBinDir`, takes its program
+  registry from the bundled manifests' `claim`s, and adopts an old install only from `cliHome`, so it never touches the real home; give it the plugin folder with
+  `ARDIA_TEST bundledPlugins=<dir>` (`scripts/release/official-plugins.py bundle <dir>` for the pinned ones, or
+`plugins/cli/build.sh <dir>` in ardia-browser/plugins for a local one), since a Debug build bundles none. On Linux a
+  test instance installs or upgrades only with the first two set. Its
   `--remote-debugging-port` makes the "Let the ardia command control Ardia" setting stand aside; test that setting in an
   instance launched without one.
 
@@ -178,7 +254,10 @@ Launch with `scripts/agent/ac launch <app> --data <dir> [--instance K=V] [--test
   script times the up itself. AppKit still keeps an inactive app's first click on unselected text or a page to
   itself: `devWindow(n, "fakeActiveClicks")` lets them through, as in the active app. `devWindow(n,
   "responderChanges")` lists the first-responder changes since the last call with their stacks (who took a field's
-  focus).
+  focus). `devWindow(n, "hoverProbe:responderNil:1")` resigns the first responder (`:0` only reads it), and
+  `"hoverProbe:check:<x>,<y>,click"` runs the hover probe as a click there; `"hoverProbe"` lists the episodes it emitted.
+  `"hoverProbe:watch:1"` turns on the click and move watch in a hidden instance (`:0` turns it off), so a `devClick`
+  after `responderNil:1` goes through the same path as a user's click.
 - **Windows:** they stay behind every other app's windows: each window's level is set a band below normal (normal at
   CoreGraphics layer -1000000, floating at -999997…; `-level` answers the one asked for), so no ordering, activation
   attempt or AppKit reshuffle lifts one over the owner's, the app's own keep production's order, and Mission Control
@@ -221,7 +300,8 @@ the app as a person would rather than writing a new helper:
 
 A control that shows on hover (a row's ✕, a live folder's refresh, Show in Finder) goes in a `HoverSlot`
 (`components/ui/HoverSlot.tsx`): the slot keeps the width of what it shows at rest, at least the control's, and the control
-lies over it. `useHover` and `useRowHover` mark their handlers, and the dev harness's `ac.hoverShift.check({ scopes })`
+lies over it. A slot that takes room only on hover (`reserve="hover"`) and shows nothing at rest mounts no view until the hover,
+and the check counts it as opening from no width. `useHover` and `useRowHover` mark their handlers, and the dev harness's `ac.hoverShift.check({ scopes })`
 (`src/components/ui/hoverShift.ts`) hovers each marked view inside the named components in turn, measures every view under its
 parent before and while hovered, and returns what moved or resized; only a HoverSlot's inside may change.
 `hover-shift-test.mjs` runs it on the sidebar (with groups, a live folder and its open items), the tab strip and the
@@ -242,11 +322,47 @@ lose or leak data, or when the bug is invisible by eye and has shipped before.
 | `apps/browser/src/state/sync/adapters.test.mjs`, `engine.test.mjs` | Bookmark delete-vs-add and move cycles, parked pinned tabs, passwords (newest wins); a crash right after a batch lands; nothing published before its journal is on disk | Sync data loss (0.2.11) |
 | `apps/browser/src/state/sync/pairs.test.mjs` | Two in-memory Macs, every ordered pair of pinned-tab edits (pin, unpin, re-pin, row/tile, moves into groups, new groups, group unpin/re-pin/delete/restyle, rename, loaded pages, a member's page, a trip away and back, and a page copied to a new mirror before its window closes, profile moves) and lifecycle steps (park and reopen, a mirror window, a relaunch through the saved session, a snapshot collecting tombstones 46 days on) in six schedules (one after the other, concurrent, concurrent with a third Mac running the shipped 0.2.38 pinned adapter and scope from `fixtures`, either Mac's log delayed, a third Mac joining from the folder after B's delayed log, A's first log 44 days late while B compacts and a third Mac joins from that snapshot, without the ops that compact again), 7,402 runs in about 8 s: all Macs converge on the same pins, names, icons and group styles, every record names a group that exists, nothing pinned or kept regular is lost, the Mac that unpins a group keeps it, windows, splits and groups stay whole and ordered, each edit's outcome holds (renames, restyles, the page a Mac navigated to is sent, the later explicit choice), and nothing is sent once settled. Fourteen more cases: a member waiting for a group that never comes stands alone after 90 days on an idle Mac; seven page changes (a member navigated behind another window, copied to a new mirror whose window then closes, copied to a third window, a new group's mirror navigated before its first sync, navigated and unpinned then re-pinned elsewhere, a tile navigated then moved into a group, a mirror copy navigated in front), each with and without an edit from the other Mac, sent exactly as the shipped 0.2.38 adapter sends them, checked side by side; a Mac keeps the regular group it unpinned when the other restyles the pinned one; and, as documented in `docs/sync.md`, two Macs showing a pin at different pages, the page-change-versus-unpin conflict and three compaction residuals. The settle checks let a pin two Macs show at different pages keep sending; anything else must go quiet | Concurrent pinned-tab sync (0.2.40) |
 | `apps/browser/src/state/telemetry/sanitize.test.mjs` | URLs, hosts, paths, user names, quoted text, emails, dev hosts and NSException reasons never leave the Mac | Privacy: telemetry must never carry what the user browsed |
+| `apps/browser/src/boundaries.test.mjs`, `hostileInputs.test.mjs`, `state/site/hidingRuleSink.test.mjs`, `packages/ardiacore/tests/page-script-synthetic-input.test.mjs` | Every place page, sync, other-app, plugin or socket data enters the browser is in the boundary table with its guard; one shared list of hostile inputs through each guard, checked at the sink; picked hiding rules compile under the pinned uBlock Origin to one plain cosmetic rule; the page script ignores made-up input (`docs/security-testing.md`) | 0.2.48: a picked selector with a line break became an extra filter line |
 | `packages/core/src/url.test.ts` | Typed text → URL (`resolveInput`, `fixupUrl`); IDN homograph spoofing stays punycode; tracking parameters stripped without touching the rest; `ardia://` shown, never `chrome://` | URL parsing and security |
 | `packages/core/src/suggest.test.ts` | Inline completion never fills a long sign-in URL; free text never autocompletes; open tabs switchable; frecency ranking; a newer fetch aborts the older one | Omnibox ranking |
 | `packages/sync` | The 9 convergence cases above, and the crypto's 5 (`docs/sync.md` › Tests) | Sync correctness and encryption |
 | `packages/import/tests/ImportTests.swift` | Importing never writes to the source profile, never leaves its data folder, decrypts logins only with the right key and only after consent | Another browser's data and secrets |
 | `extras/raycast-ardia` | Tab and profile ids, and what's typed into New Tab, are quoted in the AppleScript it sends; its answer reads back into the right tabs and profiles; a profile name matches whole, then by a start only one profile has, ignoring case, and a start several share names them instead of picking one | Script injection; New Window opening the wrong profile |
+
+## Promises: the tests that guard closed bugs
+
+`scripts/ci/promises.lock` holds each regression test that guards a closed bug to what it was when the bug closed.
+One tab-separated line per promise: the closed issue, a hash, the test file and the test's name (its describe path,
+`outer › inner`, when the name alone isn't unique in the file; a name is found with its whitespace changed too). The
+hash covers the test's source, a Swift test's attributes, and the head of every block it sits in: a loop and the
+list it walks, a `describe.skip`, an `if` around it, a Swift `@Suite(.disabled())`. Also covered: a guard in front of the test
+(`if (…) test(…)`), a suite's options (`describe("…", { skip: true }, …)`) and a Swift `#if` around it. Not
+covered: data a test reads from outside those (a table defined above the loop), `before`/`beforeEach` hooks and
+other setup, and the code that runs before a test registers (a `try` around it); an edit there needs no `--update`,
+so a reviewer reads those changes by eye. Whitespace, comments, trailing commas and quote style don't
+count, so reformatting is free; semicolons do, and a line break after `return`, `break`, `continue` or `throw`
+counts as one. node:test `test(…)` and `it(…)` in JavaScript, TypeScript and TSX, XCTest `func test…` and Swift
+Testing `@Test` functions can be locked.
+
+`scripts/ci/promises.test.mjs` (the repository job, which runs on any test file change) fails when a locked test is
+deleted, renamed or its body changes. To change one on purpose:
+
+- the test still guards the bug: `node scripts/ci/promises.mjs --update <issue>` records the new hash, and the
+  lock's diff shows the reviewer which promise moved;
+- it moved or was renamed: fix its file or name in the lock, then `--update <issue>`;
+- it no longer holds (the feature went): delete its line and say why in the pull request.
+
+A fix for a bug adds its regression test with `node scripts/ci/promises.mjs --add <issue> <file> "<test name>"`
+once the issue closes. The seed (2026-11-22) is 168 tests for 85 closed bugs: the #857 rows above, every test
+whose name cites a closed bug's issue (the store simulator's #2175 case too, whose body also pins three open bugs
+and so changes when they're fixed), and the tests a closing commit added for its bug, without the telemetry counts,
+perf harnesses and incidental tests those commits also brought. `node scripts/ci/promises.mjs` checks
+the lock in about 0.2 s.
+
+`docs/dia-feature-parity.md` cites tests the same checked way: a code span holding the test file's repo path, or
+`path#test name` for one test in it (Python `test_*.py` files by path only). `scripts/ci/parity-tests.test.mjs` fails when a cited file or test is gone or a
+test file is named any other way (a bare name, outside a code span), and `node scripts/ci/parity-tests.mjs --list`
+prints each row with its tests.
 
 ## What went, and why
 

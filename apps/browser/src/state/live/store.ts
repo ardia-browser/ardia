@@ -1,10 +1,12 @@
 import { createLivePersistence, type LivePersistenceIntent, type LiveProjection } from "../../platform/livePersistence";
 import { create } from "zustand";
+import { noteLiveSave } from "../telemetry/workCounts";
 import { repoKey, stackMembers } from "./rows";
 import type { CompletedItem, CompletionState, FolderStatus, LiveAccount, LiveFolder, LiveFolderKind, LiveItem, LiveSourceId } from "./types";
 import { DEFAULT_COUNTDOWN_LEAD, keepDismissedNow, type DismissedNow } from "./meetings";
+import { sameList } from "../../lib/lists";
 
-export type LiveConfig = {
+type LiveConfig = {
   githubClientId: string;
   bitbucketUser: string;
   confluenceSite: string;
@@ -12,7 +14,7 @@ export type LiveConfig = {
   googleClientId: string;
 };
 
-export type CalendarSettings = {
+type CalendarSettings = {
   alertLead: string;
   alertCondition: "always" | "activeOnly";
   showPreview: boolean;
@@ -22,7 +24,7 @@ export type CalendarSettings = {
   prompted: boolean;
 };
 
-export type MeetingGroup = {
+type MeetingGroup = {
   groupId: string;
   callTabId: string;
   occurrence: string | null;
@@ -53,9 +55,9 @@ type LiveState = {
   dismissedNow: DismissedNow;
 };
 
-export const DEFAULT_CONFIG: LiveConfig = { githubClientId: "", bitbucketUser: "", confluenceSite: "", confluenceEmail: "", googleClientId: "" };
+const DEFAULT_CONFIG: LiveConfig = { githubClientId: "", bitbucketUser: "", confluenceSite: "", confluenceEmail: "", googleClientId: "" };
 
-export const DEFAULT_CALENDAR: CalendarSettings = {
+const DEFAULT_CALENDAR: CalendarSettings = {
   alertLead: "1",
   alertCondition: "always",
   showPreview: true,
@@ -66,7 +68,7 @@ export const DEFAULT_CALENDAR: CalendarSettings = {
 };
 
 const PERSISTED = ["folders", "folderOrder", "items", "known", "unread", "hidden", "repoHidden", "completed", "expandedStacks", "accounts", "config", "calendar", "meetingGroups", "dismissedAlerts", "dismissedNow"] as const;
-const persistence = createLivePersistence();
+const persistence = createLivePersistence(noteLiveSave);
 const saved = persistence.load() as Partial<LiveState>;
 
 const FOLDER_OPTION_DEFAULTS = { groupStacks: true, showCompleted: true, hiddenRepos: [] as string[], showNewRepos: true, shownRepos: [] as string[] } satisfies Partial<LiveFolder>;
@@ -132,10 +134,11 @@ persistence.start((payload, invalidated = []) => {
     });
   } finally { applyingCanonical = false; }
 });
-export const beginLiveRefresh = (folderId: string) => persistence.beginRefresh(folderId);
+export const liveRefreshClaims = { begin: (folderId: string) => persistence.beginRefresh(folderId) };
+export const beginLiveRefresh = (folderId: string) => liveRefreshClaims.begin(folderId);
 export const flushLive = () => persistence.flush();
 
-export const FOLDER_DEFAULTS: Record<LiveFolderKind, { name: string; sources: LiveSourceId[] }> = {
+const FOLDER_DEFAULTS: Record<LiveFolderKind, { name: string; sources: LiveSourceId[] }> = {
   pullRequests: { name: "Pull Requests", sources: ["github"] },
   documents: { name: "Documents", sources: ["notion"] },
 };
@@ -267,11 +270,12 @@ export function applyFetch(folderId: string, fetched: LiveItem[], gone: Record<s
       ...(s.completed[folderId] ?? []).filter((c) => !ids.has(c.item.id) && !leaving.some((l) => l.id === c.item.id)),
     ].slice(0, MAX_COMPLETED);
     const stillThere = new Set(merged.map((it) => it.id));
+    const unread = first ? [] : [...new Set([...(s.unread[folderId] ?? []), ...unreadFresh])].filter((id) => stillThere.has(id));
     return {
-      items: { ...s.items, [folderId]: merged },
-      hidden: stillHidden.length === wasHidden.length && stillHidden.every((it, i) => it === wasHidden[i]) ? s.hidden : { ...s.hidden, [folderId]: stillHidden },
-      known: { ...s.known, [folderId]: [...known, ...fresh].slice(-MAX_KNOWN) },
-      unread: { ...s.unread, [folderId]: first ? [] : [...new Set([...(s.unread[folderId] ?? []), ...unreadFresh])].filter((id) => stillThere.has(id)) },
+      items: sameList(merged, prev) ? s.items : { ...s.items, [folderId]: merged },
+      hidden: sameList(stillHidden, wasHidden) ? s.hidden : { ...s.hidden, [folderId]: stillHidden },
+      known: fresh.length || !s.known[folderId] ? { ...s.known, [folderId]: [...known, ...fresh].slice(-MAX_KNOWN) } : s.known,
+      unread: s.unread[folderId] && sameList(unread, s.unread[folderId]) ? s.unread : { ...s.unread, [folderId]: unread },
       completed: leaving.length || (s.completed[folderId] ?? []).length !== completed.length ? { ...s.completed, [folderId]: completed } : s.completed,
       completing: leaving.length ? { ...s.completing, [folderId]: [...(s.completing[folderId] ?? []), ...leaving.map((l) => l.id)] } : s.completing,
       status: { ...s.status, [folderId]: { state: "idle", lastFetch: now, error: null } },

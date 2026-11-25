@@ -133,7 +133,7 @@ for (const theme of themes) {
   const reset = async () => {
     await evaluate(resetScript("ac.store", seed.seedTabs()));
     await evaluate(`return ac.shell.devSetPointer(${JSON.stringify(windowId)}, null);`);
-    for (let i = 0; i < 100 && (await evaluate(`return Object.values(ac.store.getState().live).some((l) => l.isLoading)`)); i++) await settle(100);
+    for (let i = 0; i < 100 && (await evaluate(`return Object.keys(ac.store.getState().tabs).some((id) => ac.tabLive.liveOf(id).isLoading)`)); i++) await settle(100);
     await evaluate(resetScript("ac.store", seed.seedTabs()));
   };
   const setups = {
@@ -167,7 +167,7 @@ for (const theme of themes) {
     },
   };
   try {
-    for (let i = 0; i < 100 && !(await evaluate(`const s = ac.store.getState(); return !s.live.t_browser?.isLoading && !!s.tabs.t_browser`)); i++) await settle(100);
+    for (let i = 0; i < 100 && !(await evaluate(`const s = ac.store.getState(); return !ac.tabLive.liveOf("t_browser").isLoading && !!s.tabs.t_browser`)); i++) await settle(100);
     await settle(2500);
     if (theme === themes[0] && flag("favicons")) report.favicons = await harvestFavicons(evaluate);
     mkdirSync(join(out, theme), { recursive: true });
@@ -198,10 +198,10 @@ async function pageColors(evaluate) {
     await evaluate(`ac.store.getState().activate(${JSON.stringify(tab.id)}); return true;`);
     for (let i = 0; i < 120; i++) {
       await settle(100);
-      if (await evaluate(`const l = ac.store.getState().live[${JSON.stringify(tab.id)}]; return !!l && !l.isLoading`)) break;
+      if (await evaluate(`const l = ac.store.getState().tabs[${JSON.stringify(tab.id)}] && ac.tabLive.liveOf(${JSON.stringify(tab.id)}); return !!l && !l.isLoading`)) break;
     }
     await settle(800);
-    pages[tab.url] = await evaluate(`const s = ac.store.getState(); const p = ac.pageState.getState().pages?.[${JSON.stringify(tab.id)}] ?? null; return { live: s.live[${JSON.stringify(tab.id)}], title: s.tabs[${JSON.stringify(tab.id)}].title, url: s.tabs[${JSON.stringify(tab.id)}].url, themeColorSource: p?.themeColorSource ?? null, security: p?.security?.level ?? null }`);
+    pages[tab.url] = await evaluate(`const s = ac.store.getState(); const p = ac.pageState.getState().pages?.[${JSON.stringify(tab.id)}] ?? null; return { live: ac.tabLive.liveOf(${JSON.stringify(tab.id)}), title: s.tabs[${JSON.stringify(tab.id)}].title, url: s.tabs[${JSON.stringify(tab.id)}].url, themeColorSource: p?.themeColorSource ?? null, security: p?.security?.level ?? null }`);
   }
   await evaluate(`ac.store.getState().activate("t_browser"); return true;`);
   return pages;

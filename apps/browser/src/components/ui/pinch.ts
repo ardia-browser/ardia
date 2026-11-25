@@ -3,7 +3,7 @@ export const PINCH_CLOSE_AT = -0.25;
 const SPREAD_TO_TAB = 0.4;
 
 export type PinchOutcome = "open" | "close" | "stay";
-export type PinchPhase = "began" | "changed" | "ended" | "cancelled";
+type PinchPhase = "began" | "changed" | "ended" | "cancelled";
 
 export function pinchOutcome(magnification: number): PinchOutcome {
   if (magnification >= PINCH_OPEN_AT) return "open";

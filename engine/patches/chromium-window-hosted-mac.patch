@@ -1,8 +1,8 @@
 --- a/components/remote_cocoa/app_shim/bridged_content_view.h
 +++ b/components/remote_cocoa/app_shim/bridged_content_view.h
-@@ -57,6 +57,13 @@
- @property(assign, nonatomic) BOOL drawMenuBackgroundForBlur;
- @property(strong, nonatomic) NSEvent* keyDownEventForTesting;
+@@ -71,6 +71,13 @@
+ // ends.
+ @property(assign, nonatomic) BOOL deferInputContextActivation;
  
 +// Ardia: a view the embedder added as a subview of this one to show its
 +// own UI over the widget's views (ArdiaCore's windows, engine/ardiacore). Hit
@@ -16,15 +16,15 @@
                          bounds:(gfx::Rect)rect;
 --- a/components/remote_cocoa/app_shim/bridged_content_view.mm
 +++ b/components/remote_cocoa/app_shim/bridged_content_view.mm
-@@ -198,6 +198,7 @@
- @synthesize bridge = _bridge;
+@@ -221,6 +221,7 @@
  @synthesize drawMenuBackgroundForBlur = _drawMenuBackgroundForBlur;
  @synthesize keyDownEventForTesting = _keyDownEvent;
+ @synthesize deferInputContextActivation = _deferInputContextActivation;
 +@synthesize ardiaEmbeddedView = _ardiaEmbeddedView;
  
  - (instancetype)initWithBridge:(remote_cocoa::NativeWidgetNSWindowBridge*)bridge
                          bounds:(gfx::Rect)bounds {
-@@ -291,6 +292,13 @@
+@@ -369,6 +370,13 @@
    // This is important when the window has a native titlebar, in which case the
    // superview is taller than the contentView.
    NSPoint pointInView = [self convertPoint:point fromView:self.superview];
@@ -38,7 +38,7 @@
    gfx::Point flippedPoint(point.x, NSHeight(self.frame) - pointInView.y);
    remote_cocoa::mojom::HitTestResult hitTestResult;
    _bridge->host()->GetHitTestResult(flippedPoint, &hitTestResult);
-@@ -1714,6 +1722,10 @@
+@@ -1812,6 +1820,10 @@
  // NSAccessibility formal protocol implementation:
  
  - (NSArray*)accessibilityChildren {
@@ -49,7 +49,7 @@
    if (id accessible = _bridge->host_helper()->GetNativeViewAccessible())
      return @[ accessible ];
    return [super accessibilityChildren];
-@@ -1722,10 +1734,22 @@
+@@ -1820,10 +1832,22 @@
  // NSAccessibility informal protocol implementation:
  
  - (id)accessibilityHitTest:(NSPoint)point {

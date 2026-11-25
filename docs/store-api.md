@@ -41,8 +41,20 @@ store but through `storeAction` wrappers in each domain's `actions.ts` (`newTab`
   URL) and pinned groups, with their order and tab/group ids; the next window that shows the profile takes them back,
   unloaded (`createWindow` — ⌘N, the Dock, a link from another app, the first window after a relaunch —,
   `switchProfile`, Reopen Closed Window, ⇧⌘T of a tile's page), and the park empties, so nothing comes back twice.
-  Only the last window of a profile parks: while another window shows the profile, the pins are there.
+  Only the last window of a profile parks: while another window shows the profile, the pins are there. With Share tabs
+  across windows on, a closing window's profiles that no open window holds go to the open window used last, pins
+  included (`handOverTabs`, then `handOverPins` adopts what the close parked; state/tabs/sharedWindowClose.ts).
   Sync publishes parked pins as the profile's pins and applies changes to them in place (state/sync/adapters `pinnedAdapter`).
+  A session save that would drop pinned tabs or pinned folders of a profile that still exists first appends one entry to
+  `pins-backup.json` (newest 20 saves; state/session/pinGuard.ts): `dropped` counts the keys each profile lost and `pins`
+  holds each such profile's previous pins in parked-pins shape, without merging pins of the same page. To restore, merge
+  the entry's tabs, groups and splits whose ids `parkedPins[profileId]` doesn't have yet; never replace newer parked pins.
+  The next window showing the profile adopts them.
+  The whole session also has immutable daily backups (`session-backup-<ms>.json`, the 7 newest kept) and pre-migration
+  snapshots (`session-premigration-<ms>.json`, the 3 newest kept), and a damaged `session.json`
+  is copied aside and the newest backup restored before anything is saved over it (`state/session/sessionSafety.ts`,
+  docs/conventions.md). A `session.json` from a newer build is never written; an older build saves to
+  `session-older-build-v<version>.json` instead, outside the daily backups.
 - Pins are per profile in every window (state/pins/pinMirror.ts): each regular window showing a profile holds its own copy
   (a Tab, a TabGroup) of every pinned tile and pinned group, linked by `pinKey` (unset on the first copy, whose id is
   the key; `pinKeyOf`). A store listener (`mirrorPins`) carries a change of one window's pinned section to the others
@@ -217,11 +229,16 @@ ordered transaction that names its cause. There are no echo windows, timers or "
     place, keeping a group both neighbours share). A split is one row: its panes move together and nothing lands
     between them;
   - a new active tab that stayed in the strip is shown (`activate`'s rules, opener bookkeeping included), unless
-    it's Chrome's pick of a successor (`activePickedOnClose`; from engines that don't say, any activation that comes
-    with the old active tab leaving): then the store's own rule (state/tabs/openers.ts) decides. An explicit activation
+    it's Chrome's pick of a successor (`activePickedOnClose`, counted only while the old active tab left the strip in
+    this change, so a flag still held from an earlier close never stops a switch; from engines that don't say, any
+    activation that comes with the old active tab leaving): then the store's own rule (state/tabs/openers.ts)
+    decides. An extension that activates another tab and then discards the shown one (Auto Tab Discard) is a switch
+    too: the old tab stays in the strip, so there is no successor to pick. An explicit activation
     in the same change as the close (an extension's remove then update) is a switch, and wins over the store's
-    successor command still on its way. A split's other pane and a tab of a profile the window isn't showing
-    aren't shown (the focused pane changes on user focus; profiles keep their own tab);
+    successor command still on its way. A tab of another space that shares the window's data is shown too: the
+    window switches to that space (otherwise the app would send Chrome back to the tab being discarded). A split's
+    other pane and a tab of a space with its own data aren't shown (the focused pane changes on user focus;
+    spaces with their own data keep their own tab);
   - a tab Chrome made (`tab:` adoption) takes Chrome's pin, place and activation the first time the app sees it;
     a tab arriving in a strip of another app window (an extension moving it; the window is `appWindow`, else the
     one its other tabs are in) changes window as it is, page and live state included (`intoWindow`; its view takes

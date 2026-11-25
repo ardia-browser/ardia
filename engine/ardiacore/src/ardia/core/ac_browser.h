@@ -294,6 +294,7 @@ class TabBridge : public content::WebContentsObserver,
   void EnsureFindObserved();
   void EnsureZoomObserved();
   void EnsurePopupsObserved();
+  blocked_content::PopupBlockerTabHelper* LivePopups();
   void EnsureAudibleObserved();
   [[nodiscard]] base::AutoReset<bool> HostFocuses() {
     return base::AutoReset<bool>(&host_focusing_, true);

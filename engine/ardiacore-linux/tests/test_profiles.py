@@ -7,6 +7,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 
 FIXTURE = r'''
 #include "ardia/linux/ac_linux_profiles.h"
@@ -490,7 +491,7 @@ class ProfileRegistryTests(unittest.TestCase):
             root = Path(directory)
             (root / 'main.cc').write_text(FIXTURE)
             binary = root / 'profiles'
-            result = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-I', str(SOURCE),
+            result = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE),
                                      str(SOURCE / 'ardia/linux/ac_linux_profiles.cc'), str(root / 'main.cc'), '-o', str(binary)],
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)

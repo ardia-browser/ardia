@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { StyleSheet, View, type ViewProps, type ViewStyle } from "react-native";
 import { useBrowser } from "../../../../../apps/browser/src/state/browser/store";
-import { edgeGain, fallbackRadius, highlightMask, maskStyle, peakGain, SHADE_OUTSET, shadeMask, shapeMask, type RimCurve, type RimProfile, type ShadeProfile } from "./glassRim";
+import type { MiddleClickEvent } from "./MouseArea";
+import { edgeGain, fallbackRadius, highlightMask, maskStyle, peakGain, shapeMask, type RimCurve, type RimProfile, type ShadeProfile } from "./glassRim";
 
 type Style = ViewStyle & Record<string, unknown>;
 
@@ -41,7 +42,7 @@ export type SurfaceProps = ViewProps & {
   shadowOffset?: [number, number];
 };
 
-export const CA_SHADOW_BLUR = 2;
+const CA_SHADOW_BLUR = 2;
 
 export function Surface({ fill, fillColors, fillStops, fade, fadeStops, cornerRadius = 0, borderColor, borderWidth = 0, borderColors, shadowColor: color, shadowOpacity = 0, shadowRadius = 0, shadowOffset, style, children, ...props }: SurfaceProps) {
   const gradientBorder = !!borderColors && borderColors.length >= 2 && borderWidth > 0;
@@ -116,7 +117,7 @@ const RIM_ANGLES = [0, 1, 8.5, 25, 45, 65, 81.5, 89, 90];
 const RIM_DEPTHS = [0, 0.25, 0.75, 1.25, 1.75];
 const GLOW_BY_ANGLE: RimCurve = [[0, 1], [5, 0.9], [10, 0.8], [20, 0.7], [35, 0.6], [90, 0.6]];
 
-export const GLASS: { light: GlassLook; dark: GlassLook } = {
+const GLASS: { light: GlassLook; dark: GlassLook } = {
   light: {
     saturate: 1.8705,
     slope: 0.6098,
@@ -192,10 +193,29 @@ function backdrop(filter: string, extra?: Record<string, string>): React.CSSProp
 
 function inScrollView(node: Element | null) {
   for (let a = node?.parentElement; a; a = a.parentElement) {
+    if (a.hasAttribute("data-ardia-wheel-area")) return true;
     const overflow = getComputedStyle(a).overflowY;
     if (overflow === "auto" || overflow === "scroll") return true;
   }
   return false;
+}
+
+function scrolledGlassSurface(theme: "light" | "dark", clear: boolean, cornerRadius: number): React.CSSProperties {
+  const dark = theme === "dark";
+  return {
+    ...layer,
+    borderRadius: fallbackRadius(cornerRadius),
+    background: dark
+      ? clear
+        ? "linear-gradient(to bottom, rgba(255,255,255,0.09), rgba(255,255,255,0.04))"
+        : "linear-gradient(to bottom, rgba(255,255,255,0.14), rgba(255,255,255,0.07))"
+      : clear
+        ? "linear-gradient(to bottom, rgba(255,255,255,0.44), rgba(255,255,255,0.24))"
+        : "linear-gradient(to bottom, rgba(255,255,255,0.68), rgba(255,255,255,0.42))",
+    boxShadow: dark
+      ? "inset 0 1px 0.5px rgba(255,255,255,0.2), inset 0 0 0 0.5px rgba(255,255,255,0.1), 0 1px 3px rgba(0,0,0,0.26)"
+      : "inset 0 1px 0.5px rgba(255,255,255,0.82), inset 0 0 0 0.5px rgba(255,255,255,0.48), 0 1px 3px rgba(0,0,0,0.07)",
+  };
 }
 
 export function GlassEffect({ cornerRadius = 0, tint, glassStyle = "regular", dark, style, children, ...props }: GlassEffectProps) {
@@ -207,13 +227,23 @@ export function GlassEffect({ cornerRadius = 0, tint, glassStyle = "regular", da
   const host = useRef<HTMLDivElement | null>(null);
   const [scrolled, setScrolled] = useState(false);
   useLayoutEffect(() => setScrolled(inScrollView(host.current)), []);
-  const highlight = highlightMask(cornerRadius, g.rim, theme);
-  const shape = shapeMask(cornerRadius);
-  const shade = scrolled ? shadeMask(cornerRadius, g.shade, theme) : null;
-  const clip: React.CSSProperties = shape ? {} : { borderRadius: fallbackRadius(cornerRadius), overflow: "hidden" };
-  const shaped = shape ? maskStyle(shape) : {};
   const { opacity, ...rest } = StyleSheet.flatten(style) ?? {};
   const fade: React.CSSProperties = opacity === undefined ? {} : { opacity: Number(opacity) };
+  if (scrolled) {
+    const radiusStyle: React.CSSProperties = { borderRadius: fallbackRadius(cornerRadius) };
+    return (
+      <View pointerEvents="none" {...props} style={rest}>
+        <div ref={host} style={{ ...scrolledGlassSurface(theme, clear, cornerRadius), ...fade }}>
+          {tint ? <div style={{ ...layer, ...radiusStyle, background: tint }} /> : null}
+        </div>
+        {children}
+      </View>
+    );
+  }
+  const highlight = highlightMask(cornerRadius, g.rim, theme);
+  const shape = shapeMask(cornerRadius);
+  const clip: React.CSSProperties = shape ? {} : { borderRadius: fallbackRadius(cornerRadius), overflow: "hidden" };
+  const shaped = shape ? maskStyle(shape) : {};
   return (
     <View pointerEvents="none" {...props} style={rest}>
       <div ref={host} style={{ ...layer, ...clip }}>
@@ -221,7 +251,6 @@ export function GlassEffect({ cornerRadius = 0, tint, glassStyle = "regular", da
         {tint ? <div style={{ ...layer, ...shaped, background: tint, ...fade }} /> : null}
         <div style={{ ...backdrop(`brightness(${1 + peakGain(g.rim)})`, highlight ? maskStyle(highlight) : { mask: fallbackBands(g.rim), WebkitMask: fallbackBands(g.rim) }), ...fade }} />
       </div>
-      {shade ? <div style={{ ...layer, inset: -SHADE_OUTSET, background: "#000", ...maskStyle(shade), ...fade }} /> : null}
       {children}
     </View>
   );
@@ -231,13 +260,24 @@ export function GlassGroup({ strength: _strength, ...props }: ViewProps & { stre
   return <View {...props} />;
 }
 
-export type ContextMenuAreaProps = ViewProps & { onContextMenu?: () => void; captureDescendants?: boolean };
+export type ContextMenuAreaProps = ViewProps & { onContextMenu?: () => void; onMiddleClick?: (e: MiddleClickEvent) => void; captureDescendants?: boolean };
 
-export function ContextMenuArea({ onContextMenu, captureDescendants: _capture, ...props }: ContextMenuAreaProps) {
-  const WebView = View as unknown as React.ComponentType<ViewProps & { onContextMenu?: (e: MouseEvent) => void }>;
+type WebMenuProps = ViewProps & { onContextMenu?: (e: MouseEvent) => void; onAuxClick?: (e: MouseEvent) => void; onMouseDown?: (e: MouseEvent) => void };
+
+export function ContextMenuArea({ onContextMenu, onMiddleClick, captureDescendants: _capture, ...props }: ContextMenuAreaProps) {
+  const WebView = View as unknown as React.ComponentType<WebMenuProps>;
   return (
     <WebView
       {...props}
+      onMouseDown={(e) => {
+        if (e.button === 1 && onMiddleClick) e.preventDefault();
+      }}
+      onAuxClick={(e) => {
+        if (e.button !== 1 || !onMiddleClick) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onMiddleClick({ shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey });
+      }}
       onContextMenu={(e) => {
         if (!onContextMenu) return;
         e.preventDefault();

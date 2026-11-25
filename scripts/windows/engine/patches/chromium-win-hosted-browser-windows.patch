@@ -60,35 +60,47 @@
    }
 --- a/chrome/browser/ui/views/frame/browser_desktop_window_tree_host_win.cc
 +++ b/chrome/browser/ui/views/frame/browser_desktop_window_tree_host_win.cc
-@@ -51,6 +51,7 @@
+@@ -51,6 +51,9 @@
  #include "ui/gfx/win/icon_util.h"
  #include "ui/gfx/win/msg_util.h"
  #include "ui/views/controls/menu/native_menu_win.h"
 +#include "ardia/win/hooks.h"  // nogncheck
++
++bool g_ardia_win_shell_frame = false;
  
  class VirtualDesktopHelper
      : public base::RefCountedDeleteOnSequence<VirtualDesktopHelper> {
-@@ -492,6 +493,11 @@
+@@ -492,6 +495,11 @@
    if (!browser_view_) {
      // If there is no browser view the frame should be system drawn.
      return views::FrameMode::SYSTEM_DRAWN;
 +  }
 +
 +  // Ardia: a hosted window is a child of the app's window, with no frame.
-+  if (g_ardia_win_hosts_normal_windows && browser_view_->GetIsNormalType()) {
++  if (g_ardia_win_hosts_normal_windows && !g_ardia_win_shell_frame && browser_view_->GetIsNormalType()) {
 +    return views::FrameMode::CUSTOM_DRAWN;
    }
  
    const views::FrameMode system_frame_mode =
-@@ -514,6 +520,11 @@
+@@ -514,6 +522,11 @@
  }
  
  bool BrowserDesktopWindowTreeHostWin::ShouldUseNativeFrame() const {
 +  // Ardia: a hosted window is a child of the app's window, with no frame.
-+  if (g_ardia_win_hosts_normal_windows && browser_view_ &&
-+      browser_view_->GetIsNormalType()) {
++  if (g_ardia_win_hosts_normal_windows && !g_ardia_win_shell_frame &&
++      browser_view_ && browser_view_->GetIsNormalType()) {
 +    return false;
 +  }
    if (!browser_view_ ||
        !views::DesktopWindowTreeHostWin::ShouldUseNativeFrame()) {
      return false;
+@@ -537,6 +550,9 @@
+ 
+ bool BrowserDesktopWindowTreeHostWin::ShouldWindowContentsBeTransparent()
+     const {
+   CHECK(browser_view_);
++  if (g_ardia_win_shell_frame && browser_view_->GetIsNormalType()) {
++    return views::DesktopWindowTreeHostWin::ShouldWindowContentsBeTransparent();
++  }
+   return false;
+ }

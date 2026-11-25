@@ -1,0 +1,47 @@
+{
+  "series": "engine/patches/series",
+  "series_win": "scripts/windows/engine/series-win",
+  "win_patches": "scripts/windows/engine/patches",
+  "series_tags": ["all", "mac", "win"],
+  "trees": [
+    "engine/chromium/src",
+    "engine/ardiacore-desktop/src",
+    "engine/patches/build",
+    "apps/browser/assets/offline-game",
+    "apps/browser/assets/offline-game-pipeline",
+    "scripts/windows/engine"
+  ],
+  "files": [
+    "engine/patches/series.py",
+    "apps/browser/windows/Ardia/EngineApi.h",
+    "engine/ardiacore/src/ardia/core/ac_hooks.h",
+    "engine/ardiacore/src/ardia/core/ac_content_hooks.h",
+    "engine/ardiacore/src/ardia/core/ac_host_visibility.h",
+    "engine/ardiacore/src/ardia/core/ac_launch_switches.cc",
+    "engine/ardiacore/src/ardia/core/ac_launch_switches.h",
+    "engine/ardiacore-linux/src/ardia/linux/ac_linux_document_reducer.cc",
+    "engine/ardiacore-linux/src/ardia/linux/ac_linux_document_reducer.h",
+    "engine/ardiacore-linux/src/ardia/linux/ac_linux_document_schema.cc",
+    "engine/ardiacore-linux/src/ardia/linux/ac_linux_document_service.cc",
+    "engine/ardiacore-linux/src/ardia/linux/ac_linux_document_service.h",
+    "engine/ardiacore-linux/src/ardia/linux/ac_linux_documents.cc",
+    "engine/ardiacore-linux/src/ardia/linux/ac_linux_documents.h",
+    "engine/ardiacore-linux/src/ardia/linux/ac_linux_session.cc",
+    "engine/ardiacore-linux/src/ardia/linux/ac_linux_session.h",
+    "engine/ardiacore-linux/src/ardia/linux/bootstrap.js",
+    "engine/ardiacore-linux/src/ardia/linux/generate_bootstrap.py",
+    "engine/ardiacore-linux/src/ardia/linux/ac_linux_close_hooks.cc",
+    "engine/ardiacore-linux/src/ardia/linux/ac_linux_close_hooks.h",
+    "engine/ardiacore-linux/src/ardia/linux/ac_linux_content_hooks.h"
+  ],
+  "resource_lists": [
+    "engine/patches/build/ardia_resources.txt",
+    "scripts/windows/engine/ardia_resources_win.txt"
+  ],
+  "excluded": [
+    "engine/patches/build/tests",
+    "scripts/windows/engine/check_inputs.py",
+    "scripts/windows/engine/prebuilt.json"
+  ],
+  "excluded_patterns": ["scripts/windows/engine/*_test.py"]
+}

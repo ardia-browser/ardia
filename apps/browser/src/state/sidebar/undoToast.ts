@@ -1,7 +1,7 @@
 import { useBrowser, type BrowserState } from "../browser/store";
 import { hideKeyedToast, showToast, useToasts } from "../app/toasts";
 
-export type Undoable = { message?: string; undo: () => void; watched: (s: BrowserState) => unknown[]; canUndo: (s: BrowserState) => boolean };
+type Undoable = { message?: string; undo: () => void; watched: (s: BrowserState) => unknown[]; canUndo: (s: BrowserState) => boolean };
 
 let undoToasts = 0;
 

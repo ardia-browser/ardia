@@ -5,7 +5,10 @@ The Mac step (engine/patches/build/03-helium.py) with helium-windows in place of
 helium-windows (scripts/windows/engine/helium-pins.ini pins both by commit; the checkouts are $CB/helium and $CB/helium-windows).
 The stages, the omitted downloads, the guard and the Mac step's skips of helium-chromium patches are the same.
 The helium-macos skips are replaced by WINDOWS_SKIP, and scripts/windows/engine/ardia_resources_win.txt adds the Windows icons after
-the Mac step's resources. --helium-macos takes the helium-windows checkout.
+the Mac step's resources. --helium-macos takes the helium-windows checkout, and the shared step runs its one-platform-repo path
+(--platform mac) on any host, so a Linux host doesn't take helium-linux and its skips. The Windows pins are its own:
+helium-chromium may stay behind the Mac's until helium-windows follows; the guard still fails on a shared skip
+the Windows series doesn't have.
 
 Usage: scripts/windows/engine/03-helium.py --apply [--only STAGE,...] [--from STAGE] [--no-brand] (under the chromium lock)
 """
@@ -88,9 +91,6 @@ def stage_pins_windows(ctx):
     chromium = config['chromium']['version']
     if os.environ.get('CHROMIUM_VERSION', chromium) != chromium:
         problems.append(f'env.sh CHROMIUM_VERSION {os.environ["CHROMIUM_VERSION"]} != scripts/windows/engine/helium-pins.ini {chromium}')
-    mac_pins = mac.pins()
-    if mac_pins['helium-chromium']['commit'] != config['helium-chromium']['commit']:
-        problems.append('scripts/windows/engine/helium-pins.ini and helium-pins.ini pin different helium-chromium commits')
     helium_chromium = (ctx.hc / 'chromium_version.txt').read_text().strip()
     if helium_chromium != chromium:
         problems.append(f'Helium {config["helium-chromium"]["tag"]} is made for Chromium {helium_chromium}')
@@ -147,6 +147,8 @@ def main():
     for flag, value in defaults.items():
         if not any(a == flag or a.startswith(flag + '=') for a in argv):
             argv += [flag, str(value)]
+    if not any(a == '--platform' or a.startswith('--platform=') for a in argv):
+        argv += ['--platform', 'mac']
     (CB / 'logs').mkdir(parents=True, exist_ok=True)
     sys.argv = [sys.argv[0]] + argv
     return mac.main()

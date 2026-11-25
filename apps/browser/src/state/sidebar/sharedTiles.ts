@@ -5,7 +5,7 @@ import { useBrowser, type BrowserState } from "../browser/store";
 import { topAppsShared } from "../pins/topApps";
 import { pagerFor } from "../windows/profilePager";
 
-export type SharedSides = { before: boolean; after: boolean };
+type SharedSides = { before: boolean; after: boolean };
 
 export function sharedTileSides(s: Pick<BrowserState, "profiles" | "profileOrder">, slot: number): SharedSides {
   const id = s.profileOrder[slot];

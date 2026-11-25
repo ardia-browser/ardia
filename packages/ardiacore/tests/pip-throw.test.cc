@@ -292,7 +292,7 @@ int main() {
   CHECK(PickCorner(middle, {-1000, -650}, screen) == kBottomLeft);
   CHECK(PickCorner(middle, {1000, -650}, screen) == kBottomRight);
   CHECK(PickCorner(middle, {0, 0}, screen) == kNoCorner);
-  CHECK(PickCorner(middle, {0, 1000}, screen) == kNoCorner);
+  CHECK(PickCorner(middle, {0, 1000}, screen) == kTopLeft || PickCorner(middle, {0, 1000}, screen) == kTopRight);
   CHECK(PickCorner(middle, {1000, 0}, screen) == kTopRight || PickCorner(middle, {1000, 0}, screen) == kBottomRight);
   CHECK(PickCorner({1300, 200}, {1000, 0}, screen) == kBottomRight);
   CHECK(PickCorner({1300, 800}, {1000, 0}, screen) == kTopRight);
@@ -346,7 +346,7 @@ int main() {
 
   CHECK(FingerDelta(5, 3, true).x == 5 && FingerDelta(5, 3, true).y == -3);
   CHECK(FingerDelta(5, 3, false).x == -5 && FingerDelta(5, 3, false).y == 3);
-  CHECK(!SwipeFlings({6, 0}) && SwipeFlings({5, 4}) && SwipeFlings({-7, 0}));
+  CHECK(!SwipeSurelyFlings({-7, 0}) && SwipeSurelyFlings({-10, 0}));
   CHECK(SwipeVelocity({10, -2}).x == 900 && SwipeVelocity({10, -2}).y == -180);
   CHECK(!DragFlings({350, 0}) && DragFlings({300, 200}));
 
@@ -673,6 +673,37 @@ int main() {
 
   failures += PropertyTest();
   failures += ProgressTest();
+  {
+    const Rect visible{0, 25, 1512, 920};
+    CHECK(!PulledPastHalf({1512 - 480 - 200, 600, 480, 270}, visible, true));
+    const Rect docked = CornerFrame(kBottomRight, 480, 270, visible);
+    CHECK(FlickLanding(docked, {900, 0}).x == docked.x + 90 && FlickLanding(docked, {900, 0}).y == docked.y);
+    CHECK(FlickLanding(docked, {900, 600}).x == docked.x);
+    CHECK(FlickLanding(docked, {-2000, 300}).x == docked.x - 200);
+    CHECK(!PastEdgeEnoughToTuck(384 * 0.3, 384) && !PastEdgeEnoughToTuck(384 * 0.5, 384) && PastEdgeEnoughToTuck(384 * 0.5 + 1, 384));
+    CHECK(!PulledOutOfTuck(20) && !PulledOutOfTuck(47.5) && PulledOutOfTuck(48) && PulledOutOfTuck(300));
+    CHECK(CornerInReach({docked.x - 40, docked.y + 50, 480, 270}, visible) == kBottomRight);
+    CHECK(CornerInReach({docked.x + 29, docked.y + 61, 480, 270}, visible) == kBottomRight);
+    CHECK(CornerInReach({docked.x - 70, docked.y + 60, 480, 270}, visible) == kNoCorner);
+    CHECK(CornerInReach(docked, visible) == kBottomRight && CornerInReach({600, 400, 480, 270}, visible) == kNoCorner);
+    CHECK(CornerPulledInto({600, 400, 480, 270}, {docked.x - 40, docked.y + 50, 480, 270}, visible) == kBottomRight);
+    CHECK(CornerPulledInto({docked.x - 12, docked.y + 12, 480, 270}, {docked.x - 42, docked.y + 32, 480, 270}, visible) == kNoCorner);
+    CHECK(CornerPulledInto(docked, {docked.x - 30, docked.y + 20, 480, 270}, visible) == kNoCorner);
+    CHECK(CornerPulledInto({600, 400, 480, 270}, {700, 400, 480, 270}, visible) == kNoCorner);
+    CHECK(CornerPulledInto({10, 600, 480, 270}, {docked.x - 20, docked.y + 20, 480, 270}, visible) == kBottomRight);
+    CHECK(!SwipeSurelyFlings({6, 1}) && !SwipeSurelyFlings({7, 6}) && SwipeSurelyFlings({7, 9}) && SwipeSurelyFlings({0, -10}) && SwipeSurelyFlings({124, 4}));
+    const Rect whole{0, 0, 1512, 982};
+    CHECK(PickCorner({700, 500}, {2700, 4410}, whole) == kTopRight);
+    CHECK(PickCorner({700, 500}, {0, 1000}, whole) == kTopLeft);
+    CHECK(PickCorner({900, 500}, {0, 1000}, whole) == kTopRight && PickCorner({900, 500}, {0, -1000}, whole) == kBottomRight);
+    CHECK(PickCorner({700, 500}, {1000, 0}, whole) != kNoCorner && PickCorner({700, 500}, {0, 0}, whole) == kNoCorner);
+    CHECK(PulledPastHalf({300, 600, 480, 270}, visible, true));
+    CHECK(!PulledPastHalf({1512 / 2.0 - 240 + 1, 600, 480, 270}, visible, true));
+    CHECK(PulledPastHalf({1512 / 2.0 - 240 - 1, 600, 480, 270}, visible, true));
+    CHECK(!PulledPastHalf({200, 600, 480, 270}, visible, false));
+    CHECK(PulledPastHalf({900, 600, 480, 270}, visible, false));
+  }
+
   if (failures) return 1;
   std::printf("pip-throw: all passed\n");
   return 0;

@@ -1,33 +1,34 @@
 import { confirm } from "../../platform/dialogs";
 import { locationPermission, openLocationSettings, requestLocationPermission, type LocationPermission } from "../../platform/location";
-import { capture } from "../telemetry/client";
+import { capture, consentToken, type ConsentToken } from "../telemetry/client";
 
 let toldAboutSettings = false;
 
-const noteLocationAccess = (outcome: "granted" | "denied_by_user" | "denied_by_system" | "error") => capture("location_access", { outcome });
+const noteLocationAccess = (outcome: "granted" | "denied_by_user" | "denied_by_system" | "error", consent: ConsentToken | null) => capture("location_access", { outcome }, consent);
 
 const blockedBySystem = (status: LocationPermission) => status === "denied" || status === "restricted" || status === "servicesOff";
 
 export async function ensureLocationPermission(windowId?: string): Promise<boolean> {
+  const consent = consentToken();
   let status: LocationPermission;
   try {
     status = await locationPermission();
     if (status === "notDetermined") {
       status = await requestLocationPermission();
-      if (status === "granted") noteLocationAccess("granted");
-      else if (blockedBySystem(status)) noteLocationAccess("denied_by_user");
-      else noteLocationAccess("error");
+      if (status === "granted") noteLocationAccess("granted", consent);
+      else if (blockedBySystem(status)) noteLocationAccess("denied_by_user", consent);
+      else noteLocationAccess("error", consent);
       return status === "granted";
     }
   } catch {
-    noteLocationAccess("error");
+    noteLocationAccess("error", consent);
     return false;
   }
   if (status === "granted") {
-    noteLocationAccess("granted");
+    noteLocationAccess("granted", consent);
     return true;
   }
-  noteLocationAccess("denied_by_system");
+  noteLocationAccess("denied_by_system", consent);
   if (toldAboutSettings) return false;
   toldAboutSettings = true;
   const off = status === "servicesOff";

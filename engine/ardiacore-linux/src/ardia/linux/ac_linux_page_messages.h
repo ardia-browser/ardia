@@ -54,6 +54,7 @@ bool LinuxPageSenderAccepted(LinuxPageMessageKind kind, const LinuxPageSender& s
 std::optional<LinuxPageMessage> NormalizeLinuxPageMessage(LinuxPageMessageKind kind, const base::Value& value);
 bool IsLinuxPageHttpUrl(std::string_view url);
 bool LinuxAutoplayDecision(bool site_blocks, bool site_is_default, bool block_everywhere);
+bool LinuxAutoplayCoversScheme(std::string_view scheme);
 std::string LinuxNowPlayingReport(bool present, bool has_video, std::string_view playback_state);
 
 class LinuxPageMessageBudget {

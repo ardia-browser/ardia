@@ -37,10 +37,13 @@ const void *const kJoinsFullScreenSpacesKey = &kJoinsFullScreenSpacesKey;
 BOOL MarkedToJoinFullScreenSpaces(NSWindow *window) { return objc_getAssociatedObject(window, kJoinsFullScreenSpacesKey) != nil; }
 
 void AnswerNonactivatingPanelForMarkedWindows() {
-  ardia_runtime::ReplaceMethod(NSWindow.class, @selector(_isNonactivatingPanel), ^id(IMP original) {
-    return ^BOOL(NSWindow *window) {
-      return MarkedToJoinFullScreenSpaces(window) || ((BOOL (*)(id, SEL))original)(window, @selector(_isNonactivatingPanel));
-    };
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    ardia_runtime::ReplaceMethod(NSWindow.class, @selector(_isNonactivatingPanel), ^id(IMP original) {
+      return ^BOOL(NSWindow *window) {
+        return MarkedToJoinFullScreenSpaces(window) || ((BOOL (*)(id, SEL))original)(window, @selector(_isNonactivatingPanel));
+      };
+    });
   });
 }
 
@@ -77,6 +80,13 @@ void JoinFullScreenSpaces(NSWindow *window) {
                                             NSWindowCollectionBehaviorFullScreenAuxiliary;
   if (joined != window.collectionBehavior) window.collectionBehavior = joined;
   objc_setAssociatedObject(window, kJoinsFullScreenSpacesKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+void FloatOverActiveSpace(NSWindow *window) {
+  AnswerNonactivatingPanelForMarkedWindows();
+  window.collectionBehavior &= ~NSWindowCollectionBehaviorMoveToActiveSpace;
+  JoinFullScreenSpaces(window);
+  PreventActivation(window);
 }
 
 }

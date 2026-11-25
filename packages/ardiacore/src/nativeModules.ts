@@ -9,9 +9,13 @@ export type ArdiaCoreNativeModules = {
     prepareTransfer(tabId: string): void;
     releaseTransfer(tabId: string): void;
     claimLaunchTab(tabId: string, url: string, profile: string): void;
-    revealTab(tabId: string): void;
-    dropTabReveals(tabId: string): void;
-    revealOffered(adoptId: string, overTabId: string): void;
+    revealTab(tabId: string, press: number): void;
+    dropTabReveals(overTabId: string, press: number, toTabId: string): void;
+    claimTabPress(tabId: string, startedAt: number): number;
+    dropTabPress(press: number): void;
+    setTabsInSplits(tabIds: string[]): void;
+    setNativeTabSwitch(enabled: boolean): void;
+    revealOffered(adoptId: string, overTabId: string, press: number): void;
     discardOffered(adoptId: string): Promise<boolean>;
   };
   ArdiaEngine: { inputIdleSeconds(): number };

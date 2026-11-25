@@ -1,27 +1,26 @@
+const fs = require("node:fs");
 const path = require("node:path");
 const { getDefaultConfig, mergeConfig } = require("@react-native/metro-config");
 
 const projectRoot = __dirname;
 const workspaceRoot = path.resolve(projectRoot, "../..");
-const expoModulesOnWindows = path.resolve(workspaceRoot, "packages/expo-windows/src/index.ts");
-const literal = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const windowsProject = path.resolve(projectRoot, "windows").split(path.sep).map(literal).join("[/\\\\]");
-const windowsBuildOutput = new RegExp(`^${windowsProject}[/\\\\].*`);
+const linkedDependencies = readLinkedDependencies(path.resolve(workspaceRoot, "node_modules/.ardia-linked-deps.json"));
+
+function readLinkedDependencies(marker) {
+  try {
+    return JSON.parse(fs.readFileSync(marker, "utf8")).nodeModules ?? [];
+  } catch {
+    return [];
+  }
+}
 
 const config = mergeConfig(getDefaultConfig(projectRoot), {
-  watchFolders: [workspaceRoot],
+  watchFolders: [workspaceRoot, ...linkedDependencies],
   resolver: {
-    blockList: [windowsBuildOutput, /.*\.ProjectImports\.zip/],
-    nodeModulesPaths: [path.resolve(workspaceRoot, "node_modules")],
+    nodeModulesPaths: [path.resolve(workspaceRoot, "node_modules"), ...linkedDependencies.slice(0, 1)],
     resolveRequest(context, moduleName, platform) {
       if (platform === "macos" && (moduleName === "react-native" || moduleName.startsWith("react-native/"))) {
         moduleName = moduleName.replace(/^react-native/, "react-native-macos");
-      }
-      if (platform === "windows") {
-        if (moduleName === "expo-modules-core") return { type: "sourceFile", filePath: expoModulesOnWindows };
-        if (moduleName === "react-native" || moduleName.startsWith("react-native/")) {
-          moduleName = moduleName.replace(/^react-native/, "react-native-windows");
-        }
       }
       if (process.env.AC_REACT_PROFILING === "1" && moduleName.endsWith("/ReactNativeRenderer-prod")) {
         moduleName = moduleName.replace(/-prod$/, "-profiling");

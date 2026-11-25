@@ -9,7 +9,9 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 LINUX = SOURCE / 'ardia/linux'
+DESKTOP = LINUX.parents[3] / 'ardiacore-desktop' / 'src' / 'ardia' / 'desktop'
 REPO = ROOT.parents[1]
 
 
@@ -27,8 +29,8 @@ class ReportCoreTests(unittest.TestCase):
         cls.binary = root / 'report-core'
         compiled = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g',
                                    '-fsanitize=address,undefined', '-fno-omit-frame-pointer',
-                                   '-I', str(root / 'include'), '-I', str(SOURCE),
-                                   str(ROOT / 'tests/report_core_test.cc'), str(LINUX / 'ac_linux_report_core.cc'),
+                                   '-I', str(root / 'include'), '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE),
+                                   str(ROOT / 'tests/report_core_test.cc'), str(DESKTOP / 'ac_desktop_report_core.cc'),
                                    '-lz', '-o', str(cls.binary)], capture_output=True, text=True, timeout=300)
         if compiled.returncode != 0:
             if 'zlib.h' in compiled.stderr or 'cannot find -lz' in compiled.stderr:
@@ -61,8 +63,8 @@ class ReportCoreTests(unittest.TestCase):
                 self.assertEqual(gzip.decompress(destination.read_bytes()), data)
 
     def test_the_caps_names_ids_and_json_limit_are_the_feedback_services(self):
-        core = (LINUX / 'ac_linux_report_core.cc').read_text()
-        header = (LINUX / 'ac_linux_report_core.h').read_text()
+        core = (DESKTOP / 'ac_desktop_report_core.cc').read_text()
+        header = (DESKTOP / 'ac_desktop_report_core.h').read_text()
         validate = (REPO / 'infra/feedback/lib/validate.mjs').read_text()
         self.assertIn('export const MAX_JSON_BYTES = 128 * 1024;', validate)
         self.assertIn('kJsonMaxBytes = 128 * 1024;', header)
@@ -80,7 +82,7 @@ class ReportCoreTests(unittest.TestCase):
 
     def test_the_mac_uploader_gives_the_reply_shape_and_limits(self):
         uploader = (REPO / 'packages/shell/ios/ReportUploader.swift').read_text()
-        header = (LINUX / 'ac_linux_report_core.h').read_text()
+        header = (DESKTOP / 'ac_desktop_report_core.h').read_text()
         self.assertIn('upload.body.prefix(4096)', uploader)
         self.assertIn('kUploadReplyMaxBytes = 4096;', header)
         self.assertIn('configuration.timeoutIntervalForResource = 15 * 60', uploader)
@@ -88,7 +90,7 @@ class ReportCoreTests(unittest.TestCase):
         self.assertIn('error.map { cancelled ? "cancelled" : $0.localizedDescription }', uploader)
         files = (REPO / 'packages/shell/ios/ReportFiles.swift').read_text()
         self.assertIn('deflateInit2_(&stream, 6, Z_DEFLATED, 31, 8, Z_DEFAULT_STRATEGY', files)
-        self.assertIn('deflateInit2(&stream, 6, Z_DEFLATED, 31, 8, Z_DEFAULT_STRATEGY)', (LINUX / 'ac_linux_report_core.cc').read_text())
+        self.assertIn('deflateInit2(&stream, 6, Z_DEFLATED, 31, 8, Z_DEFAULT_STRATEGY)', (DESKTOP / 'ac_desktop_report_core.cc').read_text())
         self.assertIn('DocumentStore.url("Report Drafts")', files)
         self.assertIn('kDraftsFolder[] = "Report Drafts";', header)
 
@@ -103,25 +105,63 @@ class ReportHostTests(unittest.TestCase):
 
     def test_every_path_is_checked_as_given_and_again_once_symlinks_are_resolved(self):
         existing = self.body('std::optional<base::FilePath> ExistingDraftPath(', 'std::optional<base::FilePath> NewDraftPath(')
-        self.assertLess(existing.index('if (!report::InsideDrafts(drafts.value(), path)) return std::nullopt;'),
-                        existing.index('RealPath(base::FilePath(path))'))
-        self.assertIn('!report::InsideDrafts(real_drafts->value(), real->value())', existing)
+        self.assertLess(existing.index('if (!Inside(drafts, path)) return std::nullopt;'),
+                        existing.index('RealPath(paths::FromText<base::FilePath>(path), false)'))
+        self.assertIn('!Inside(*real_drafts, paths::Text(*real))', existing)
         fresh = self.body('std::optional<base::FilePath> NewDraftPath(', 'std::optional<std::string> CreateDraft(')
-        self.assertLess(fresh.index('if (!report::InsideDrafts(drafts.value(), path)) return std::nullopt;'),
-                        fresh.index('RealPath(given.DirName())'))
-        self.assertIn('if (!report::InsideDrafts(real_drafts->value(), real.value()) || base::IsLink(real)) return std::nullopt;', fresh)
+        self.assertLess(fresh.index('if (!Inside(drafts, path)) return std::nullopt;'),
+                        fresh.index('RealPath(given.DirName(), false)'))
+        self.assertIn('if (!Inside(*real_drafts, paths::Text(real)) || ExistingReparsePoint(real)) return std::nullopt;', fresh)
         remove = self.body('bool RemovePath(', 'double GzipInto(')
-        self.assertLess(remove.index('if (!report::InsideDrafts(drafts.value(), path)) return false;'),
-                        remove.index('RealPath(given.DirName())'))
-        self.assertLess(remove.index('if (!report::InsideDrafts(real_drafts->value(), real.value())) return false;'),
+        self.assertLess(remove.index('if (!Inside(drafts, path)) return false;'),
+                        remove.index('RealPath(given.DirName(), false)'))
+        self.assertLess(remove.index('if (!Inside(*real_drafts, paths::Text(real))) return false;'),
                         remove.index('return base::DeletePathRecursively(real);'))
         self.assertIn('ExistingDraftPath(DraftsFolder(documents), path)', self.body('double FileSize(', 'bool RemovePath('))
         gzip_file = self.body('double GzipFile(', 'double GzipText(')
         self.assertIn('ExistingDraftPath(drafts, source)', gzip_file)
         self.assertIn('NewDraftPath(drafts, destination)', gzip_file)
-        self.assertIn('NewDraftPath(DraftsFolder(documents), destination)', self.body('double GzipText(', 'struct UploadFile {'))
-        self.assertIn('ExistingDraftPath(DraftsFolder(documents), path)', self.body('UploadFile FindUploadFile(', 'scoped_refptr<network::SharedURLLoaderFactory> SystemLoaderFactory()'))
+        gzip_text = self.body('double GzipText(', 'struct UploadFile {')
+        self.assertIn('const base::FilePath drafts = DraftsFolder(documents);', gzip_text)
+        self.assertIn('NewDraftPath(drafts, destination)', gzip_text)
+        upload = self.body('UploadFile FindUploadFile(', 'scoped_refptr<network::SharedURLLoaderFactory> SystemLoaderFactory()')
+        self.assertIn('ExistingDraftPath(drafts, path)', upload)
+        self.assertIn('base::win::ScopedHandle held = OpenDraftHandle(drafts, *real, GENERIC_READ, FILE_SHARE_READ);', upload)
+        self.assertIn('if (file.bytes < 1 || file.bytes > max_bytes) return file;', upload)
+        self.assertIn('if (cancelled && cancelled->load(std::memory_order_relaxed)) return {};', upload)
+        self.assertIn('verified.ReadAndCheck(static_cast<int64_t>(offset), output.subspan(offset, chunk))', upload)
+        self.assertIn('loader_->AttachStringForUpload(std::move(*body), type);', self.service)
+        self.assertIn('transfer->Put(factory.get(), url, headers, file.path, std::move(file.body));', self.service)
+        self.assertIn('base::BindOnce(&FindUploadFile, documents, args[4].GetString(), request.max_bytes, transfer->CancelFlag())', self.service)
         self.assertIn('base::FilePath real = base::MakeAbsoluteFilePath(path);', self.service)
+        self.assertIn('report::InsideDrafts(paths::Text(drafts), path, kSeparator)', self.body('bool Inside(', 'void OwnerOnly('))
+        self.assertIn('static_cast<char>(base::FilePath::kSeparators[0])', self.service)
+        windows = self.body('#if BUILDFLAG(IS_WIN)\nconstexpr DWORD kShareAll', 'std::optional<base::FilePath> RealPath(')
+        self.assertIn('FILE_FLAG_OPEN_REPARSE_POINT', windows)
+        self.assertIn('GetFinalPathNameByHandleW', windows)
+        self.assertIn('report::DosFinalPath(', windows)
+        self.assertIn('FILE_ATTRIBUTE_REPARSE_POINT', windows)
+        self.assertIn('bool ExistingReparsePoint(const base::FilePath& path) {\n  return base::IsLink(path);', windows)
+        output = self.body('base::File OpenDraftOutput(', 'bool SameFileAs(')
+        self.assertIn('CREATE_NEW', output)
+        self.assertIn('HandleInside(drafts, created.get())', output)
+        self.assertIn('return base::File(destination, base::File::FLAG_CREATE_ALWAYS | base::File::FLAG_WRITE);', output)
+        gzip_file = self.body('double GzipFile(', 'double GzipText(')
+        self.assertIn('base::File input = OpenDraftInput(drafts, *from);', gzip_file)
+        self.assertIn('!input.IsValid() || SameFileAs(input, *to)', gzip_file)
+        self.assertIn('RemoveDraftFile(input, *from);', gzip_file)
+        self.assertIn('RemoveDraftFile(output, destination);', self.body('double GzipInto(', 'double GzipFile('))
+        removal = self.body('void RemoveDraftFile(', 'double GzipInto(')
+        self.assertIn('DeleteThroughHandle(file.GetPlatformFile());', removal)
+        self.assertIn('OpenDraftHandle(drafts, source, GENERIC_READ | DELETE, FILE_SHARE_READ)', self.body('base::File OpenDraftInput(', 'void RemoveDraftFile('))
+        tree = self.body('bool RemoveTree(', '#else\nbool ExistingReparsePoint(')
+        self.assertIn('kShareReadWrite', tree)
+        self.assertIn('if (ReparsePoint(handle.get())) return depth > 0 && DeleteThroughHandle(handle.get());', tree)
+        self.assertIn('return RemoveTree(drafts, real, 0);', self.body('bool RemovePath(', 'base::File OpenDraftOutput('))
+        self.assertIn('DeleteThroughHandle(existing.get())', output)
+        same = self.body('bool SameFileAs(', 'base::File OpenDraftInput(')
+        self.assertIn('nFileIndexHigh', same)
+        self.assertIn('source.st_dev == target.st_dev && source.st_ino == target.st_ino', same)
         for banned in ('GetTempDir', 'CreateTemporaryFile', 'PathService', 'NormalizeFilePath'):
             self.assertNotIn(banned, self.service)
 
@@ -129,8 +169,9 @@ class ReportHostTests(unittest.TestCase):
         draft = self.body('std::optional<std::string> CreateDraft(', 'double FileSize(')
         self.assertIn('documents.AppendASCII(report::kDraftsFolder)', self.service)
         self.assertIn('drafts.AppendASCII(base::Uuid::GenerateRandomV4().AsLowercaseString())', draft)
-        self.assertEqual(draft.count('base::SetPosixFilePermissions('), 2)
-        self.assertEqual(draft.count('0700'), 2)
+        self.assertEqual(draft.count('OwnerOnly('), 2)
+        owner = self.body('void OwnerOnly(', 'std::optional<base::FilePath> RealPath(')
+        self.assertIn('#if BUILDFLAG(IS_POSIX)\n  base::SetPosixFilePermissions(folder, 0700);\n#endif', owner)
 
     def test_a_json_post_reaches_only_create_and_complete_with_allowed_headers_and_a_bounded_body(self):
         post = self.body('void StartPost(', 'void StartUpload(')
@@ -148,10 +189,12 @@ class ReportHostTests(unittest.TestCase):
         target = upload.index('request.target != report::Target::kFile || !report::MethodAllowed(request.target, args[2].GetString())')
         headers = upload.index('report::AllowedHeaders(request.target, *given)')
         background = upload.index('if (BackgroundInstance())')
-        find = upload.index('base::BindOnce(&FindUploadFile, documents, args[4].GetString())')
+        admit = upload.index('Transfer* transfer = Admit(caller, args[0].GetString(), report::kUploadReplyMaxBytes, std::move(emit), &done);')
+        find = upload.index('base::BindOnce(&FindUploadFile, documents, args[4].GetString(), request.max_bytes, transfer->CancelFlag())')
+        alive = upload.index('if (!transfer) return;', find)
         size = upload.index('if (!report::UploadSizeAllowed(request, file.bytes)) {')
-        send = upload.index('transfer->Put(factory.get(), url, headers, file.path);')
-        self.assertTrue(target < headers < background < find < size < send)
+        send = upload.index('transfer->Put(factory.get(), url, headers, file.path, std::move(file.body));')
+        self.assertTrue(target < headers < background < admit < find < alive < size < send)
 
     def test_requests_carry_no_credentials_follow_no_redirect_and_answer_the_macs_shape(self):
         create = self.body('  void Create(', '  void Start(')
@@ -178,11 +221,11 @@ class ReportHostTests(unittest.TestCase):
         route = self.host[self.host.index('if (ardiacore::LinuxReportInvokes(method)) {'):]
         route = route[:route.index('if (ardiacore::LinuxNotificationsInvokes(method)) {')]
         self.assertIn('profile() ? DocumentDirectory(profile()) : base::FilePath(), id_,', route)
-        self.assertIn('if (host) host->Event("ArdiaReport", ardia::linux_report::kEvent, std::move(event));', route)
+        self.assertIn('if (host) host->Event("ArdiaReport", ardia::desktop_report::kEvent, std::move(event));', route)
         closing = self.host[self.host.index('ShellHostView::~ShellHostView() {'):]
         self.assertIn('ardiacore::LinuxReportCallerGone(id_);', closing[:closing.index('DropPlayer();')])
-        self.assertIn('  if (!is_utility()) {\n    for (const char* capability : ardia::linux_report::kReportCapabilities) capabilities.Append(capability);\n  }', self.host)
-        header = (LINUX / 'ac_linux_report_core.h').read_text()
+        self.assertIn('  if (!is_utility()) {\n    for (const char* capability : ardia::desktop_report::kReportCapabilities) capabilities.Append(capability);\n  }', self.host)
+        header = (DESKTOP / 'ac_desktop_report_core.h').read_text()
         self.assertIn('kReportCapabilities[] = {"report.files", "report.send"};', header)
         calls = header[header.index('kReportCalls[] = {'):]
         calls = calls[:calls.index('};')]
@@ -197,11 +240,11 @@ class ReportHostTests(unittest.TestCase):
     def test_the_shell_keeps_its_own_answers_until_it_opts_in(self):
         fallbacks = (REPO / 'apps/linux/src/appModuleFallbacks.ts').read_text()
         self.assertIn('if (hostSupports(`${name}.${method}`, host)) return undefined;', fallbacks)
-        header = (LINUX / 'ac_linux_report_core.h').read_text()
+        header = (DESKTOP / 'ac_desktop_report_core.h').read_text()
         advertised = header[header.index('kReportCapabilities[] = {'):header.index('};')]
         self.assertNotIn('ArdiaReport.', advertised)
-        build = (LINUX / 'BUILD.gn').read_text()
-        for name in ('"ac_linux_report.cc"', '"ac_linux_report.h"', '"ac_linux_report_core.cc"', '"ac_linux_report_core.h"', '"//third_party/zlib"'):
+        build = (LINUX / 'BUILD.gn').read_text() + (DESKTOP / 'BUILD.gn').read_text()
+        for name in ('"ac_linux_report.cc"', '"ac_linux_report.h"', '"ac_desktop_report_core.cc"', '"ac_desktop_report_core.h"', '"//third_party/zlib"'):
             self.assertIn(name, build)
 
 

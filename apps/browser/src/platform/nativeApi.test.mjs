@@ -6,14 +6,7 @@ const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 
 test("the JS bundle and the native build declare the same API version", () => {
   const js = read("./nativeApi.ts").match(/export const NATIVE_API_VERSION = (\d+);/)?.[1];
-  const native = read("../../../../packages/shell/ios/AppModule.swift").match(/Constant\("apiVersion"\) \{ \(\) -> Int in (\d+) \}/)?.[1];
-  assert.ok(js && native, "both declarations found");
-  assert.equal(js, native);
-});
-
-test("the JS bundle and the Windows build declare the same API version", () => {
-  const js = read("./nativeApi.ts").match(/export const WINDOWS_NATIVE_API_VERSION = (\d+);/)?.[1];
-  const native = read("../../windows/Ardia/AppModule.h").match(/const int windowsApiVersion = (\d+);/)?.[1];
+  const native = read("../../../../packages/shell/ios/AppModule.swift").match(/static var apiVersion: Int \{ (\d+) \}/)?.[1];
   assert.ok(js && native, "both declarations found");
   assert.equal(js, native);
 });
@@ -22,19 +15,21 @@ const packagesDir = new URL("../../../../packages/", import.meta.url);
 const nativePackages = readdirSync(packagesDir).filter((name) => existsSync(new URL(`${name}/expo-module.config.json`, packagesDir)));
 
 const registrationsIn = (where, source) => {
-  const domain = source.match(/CallTable\(domain: "([a-zA-Z]+)"/)?.[1];
+  const domain = source.match(/CallTable\(domain: "([a-zA-Z]+)"/)?.[1] ?? source.match(/static let calls = ([a-z][a-zA-Z]*)CallTable\(/)?.[1];
   const found = [];
   const branches = [];
   let owner = null;
+  let conforms = null;
   let groups = 0;
   for (const line of source.split("\n")) {
-    owner = line.match(/^(?:(?:public|open|final) )*class (\w+)/)?.[1] ?? owner;
+    const declared = line.match(/^(?:(?:public|open|final) )*class (\w+)(?:\s*:\s*Module\s*,\s*(\w+)Native\b)?/);
+    if (declared) [owner, conforms] = [declared[1], declared[2] ?? null];
     const directive = line.trim().match(/^#(if|elseif|else|endif)\b/)?.[1];
     if (directive === "if") branches.push({ group: ++groups, arm: 0 });
     else if (directive === "elseif" || directive === "else") branches.at(-1).arm += 1;
     else if (directive === "endif") branches.pop();
-    const name = line.match(/^ {4}Name\((?:"([^"]+)"|Self\.calls\.moduleName)\)/);
-    if (name) found.push({ name: name[1] ?? `Ardia${domain[0].toUpperCase()}${domain.slice(1)}`, module: `${where} ${owner}`, branch: branches.map((b) => ({ ...b })) });
+    const name = line.match(/^ {4}Name\((?:"([^"]+)"|(Self\.calls\.moduleName)|Self\.moduleName)\)/);
+    if (name) found.push({ name: name[1] ?? (name[2] ? `Ardia${domain[0].toUpperCase()}${domain.slice(1)}` : `Ardia${conforms}`), module: `${where} ${owner}`, branch: branches.map((b) => ({ ...b })) });
   }
   return found;
 };

@@ -24,6 +24,49 @@ function ancestorSet(groups: Record<string, TabGroup>, id: string): Set<string> 
 
 export const depthOf = (groups: Record<string, TabGroup>, id: string): number => ancestorSet(groups, id).size;
 
+function climbing(groups: Record<string, TabGroup>) {
+  const known = new Map<string, { depth: number; root: string }>();
+  return (id: string) => {
+    const cached = known.get(id);
+    if (cached) return cached;
+    const path: string[] = [];
+    const onPath = new Set<string>();
+    let top: { depth: number; root: string } | null = null;
+    for (let at = id; ; ) {
+      path.push(at);
+      onPath.add(at);
+      const parent = groups[at]?.parentId;
+      if (!parent || !groups[parent]) {
+        top = { depth: -1, root: at };
+        break;
+      }
+      const above = known.get(parent);
+      if (above) {
+        top = above;
+        break;
+      }
+      if (onPath.has(parent)) break;
+      at = parent;
+    }
+    if (!top) return null;
+    for (let i = path.length - 1, depth = top.depth + 1; i >= 0; i--, depth++) known.set(path[i]!, { depth, root: top.root });
+    return known.get(id)!;
+  };
+}
+
+export function depthsIn(groups: Record<string, TabGroup>): (id: string) => number {
+  const climb = climbing(groups);
+  return (id) => climb(id)?.depth ?? depthOf(groups, id);
+}
+
+export function rootsIn(groups: Record<string, TabGroup>): (id: string) => TabGroup | undefined {
+  const climb = climbing(groups);
+  return (id) => {
+    const found = climb(id);
+    return found ? groups[found.root] : rootOf(groups, id);
+  };
+}
+
 export const ancestorIds = (groups: Record<string, TabGroup>, id: string): string[] => [...ancestorSet(groups, id)];
 
 export function rootOf(groups: Record<string, TabGroup>, id: string): TabGroup | undefined {
@@ -74,24 +117,39 @@ export function canNest(groups: Record<string, TabGroup>, groupId: string, paren
 }
 
 function lineage(groups: Record<string, TabGroup>) {
-  const above = new Map<string, Set<string>>();
-  const of = (id: string): Set<string> => {
-    const known = above.get(id);
-    if (known) return known;
+  const walkOf = new Map<string, number>();
+  const indexOf = new Map<string, number>();
+  const sizeOf = new Map<string, number>();
+  let walks = 0;
+  const visit = (id: string) => {
+    if (sizeOf.has(id)) return;
+    const walk = ++walks;
     const chain: string[] = [];
     let at: string | undefined = id;
-    while (at && groups[at] && !above.has(at) && !chain.includes(at)) {
+    while (at && groups[at] && !sizeOf.has(at) && walkOf.get(at) !== walk) {
+      walkOf.set(at, walk);
+      indexOf.set(at, chain.length);
       chain.push(at);
       at = groups[at]!.parentId;
     }
-    let up = at && above.has(at) ? new Set([at, ...above.get(at)!]) : new Set<string>();
-    for (const g of chain.reverse()) {
-      above.set(g, up);
-      up = new Set([g, ...up]);
-    }
-    return above.get(id)!;
+    let size = at && sizeOf.has(at) ? sizeOf.get(at)! + 1 : 0;
+    for (let i = chain.length - 1; i >= 0; i--, size++) sizeOf.set(chain[i]!, size);
   };
-  return of;
+  return {
+    depth: (id: string) => {
+      visit(id);
+      return sizeOf.get(id)!;
+    },
+    closesLoop: (id: string, parentId: string) => {
+      visit(parentId);
+      return walkOf.get(id) === walkOf.get(parentId) && indexOf.get(id)! > indexOf.get(parentId)!;
+    },
+    above: (id: string) => {
+      const out = new Set<string>();
+      for (let at = groups[id]?.parentId; at && groups[at] && at !== id && !out.has(at); at = groups[at]!.parentId) out.add(at);
+      return out;
+    },
+  };
 }
 
 const nested = new WeakMap<Record<string, TabGroup>, Record<string, TabGroup>>();
@@ -114,13 +172,13 @@ function nestOnce(groups: Record<string, TabGroup>): Record<string, TabGroup> {
   for (const g of all) {
     if (!g.parentId) continue;
     const p = groups[g.parentId];
-    const broken = !p || p.windowId !== g.windowId || p.profileId !== g.profileId || ancestorsBefore(g.parentId).has(g.id);
+    const broken = !p || p.windowId !== g.windowId || p.profileId !== g.profileId || ancestorsBefore.closesLoop(g.id, g.parentId);
     if (broken) edit(withParent(cur(g.id), undefined));
   }
   const ancestors = lineage(next ?? groups);
   const byDepth = Object.values(next ?? groups)
     .filter((g) => g.parentId)
-    .map((g) => [g.id, ancestors(g.id).size] as const)
+    .map((g) => [g.id, ancestors.depth(g.id)] as const)
     .sort((a, z) => z[1] - a[1]);
   for (const [id] of byDepth) {
     const g = cur(id);
@@ -139,8 +197,8 @@ function nestOnce(groups: Record<string, TabGroup>): Record<string, TabGroup> {
   const leaving = new Map<string, Set<string>>();
   for (const [t, ids] of holders) {
     if (ids.length < 2) continue;
-    const deepest = ids.reduce((a, z) => (ancestors(z).size > ancestors(a).size ? z : a));
-    const chain = ancestors(deepest);
+    const deepest = ids.reduce((a, z) => (ancestors.depth(z) > ancestors.depth(a) ? z : a));
+    const chain = ancestors.above(deepest);
     for (const id of ids) if (id !== deepest && !chain.has(id)) leaving.get(id)?.add(t) ?? leaving.set(id, new Set([t]));
   }
   for (const [id, gone] of leaving) edit({ ...cur(id), tabIds: cur(id).tabIds.filter((x) => !gone.has(x)) });

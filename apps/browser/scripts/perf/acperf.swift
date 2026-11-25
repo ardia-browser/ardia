@@ -34,7 +34,7 @@ func windows(_ pid: pid_t) -> [[String: Any]] {
     guard (w[kCGWindowOwnerPID as String] as? Int32) == pid else { return nil }
     let b = w[kCGWindowBounds as String] as? [String: Double] ?? [:]
     return ["id": w[kCGWindowNumber as String] ?? 0, "layer": w[kCGWindowLayer as String] ?? 0,
-            "alpha": w[kCGWindowAlpha as String] ?? 0, "w": b["Width"] ?? 0, "h": b["Height"] ?? 0]
+            "alpha": w[kCGWindowAlpha as String] ?? 0, "x": b["X"] ?? 0, "y": b["Y"] ?? 0, "w": b["Width"] ?? 0, "h": b["Height"] ?? 0]
   }
 }
 
@@ -203,9 +203,9 @@ case "postscroll":
       let (point, fixed, coarse): (CGEventField, CGEventField, CGEventField) = horizontal
         ? (.scrollWheelEventPointDeltaAxis2, .scrollWheelEventFixedPtDeltaAxis2, .scrollWheelEventDeltaAxis2)
         : (.scrollWheelEventPointDeltaAxis1, .scrollWheelEventFixedPtDeltaAxis1, .scrollWheelEventDeltaAxis1)
-      event.setDoubleValueField(point, value: dy)
-      event.setDoubleValueField(fixed, value: dy)
       event.setIntegerValueField(coarse, value: Int64(max(-10, min(10, (dy / 10).rounded()))))
+      event.setIntegerValueField(point, value: Int64(dy.rounded()))
+      event.setDoubleValueField(fixed, value: dy)
       event.setIntegerValueField(.scrollWheelEventScrollPhase, value: phase)
       event.setIntegerValueField(.scrollWheelEventMomentumPhase, value: momentum)
     }

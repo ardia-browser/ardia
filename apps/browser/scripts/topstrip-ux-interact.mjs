@@ -1,10 +1,11 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { session as sessionOf } from "../../../scripts/lib/instance.mjs";
 
 const WIDTH = 1280;
 const HEIGHT = 640;
+const DOUBLE_CLICK_GAP_MS = 200;
 
 function makeMeasure(ctx, inst, out) {
   let shot = 0;
@@ -166,12 +167,72 @@ export async function runInteractions(ctx) {
       record("backgroundTab", { selectedShift: after.detail.selSpan[0] - before.detail.selSpan[0], selInViewAfter: after.detail.selSpan[0] >= 0 ? 1 : 0, selTitleBefore: before.selTitlePt });
     }
 
+    if (want("revealYieldsToScroll")) for (const [name, dy] of [["", -4], ["Precise", -0.6]]) {
+      await prepare("c120", WIDTH, "mid");
+      const r = await run(`const w = st().windows.c120; const loose = stripOrder("c120").filter((t) => !st().tabs[t].pin);
+        const steps = Array.from({ length: 30 }, (_, i) => ({ phase: "wheel", dy: ${dy}, timestampMs: i * 16 }));
+        const page = globalThis.topStripPages["c120|default"];
+        const before = Math.round(page.scroll().x);
+        return D.devSetWindowFrame("c120", [40 + Object.keys(st().windows).indexOf("c120") * 11, 60 + Object.keys(st().windows).indexOf("c120") * 7, w.frame[2], ${HEIGHT}]).then((frame) => nativeOf(frame)).then((n) => {
+          setTimeout(() => ac.actions.switchToTab(loose[3]), 60);
+          return globalThis.expo.modules.ArdiaSwipe.devSimulate(640, 21, n, steps, true);
+        }).then(() => wait(250)).then(() => { const atEnd = Math.round(page.scroll().x); return wait(1200).then(() => {
+          const sc = page.scroll(); const chip = page.chips().find((c) => c.id === loose[3]);
+          return { before, afterWheel: atEnd, settled: Math.round(sc.x), selectedShown: chip.start >= sc.x - 1 && chip.end <= sc.x + sc.viewport + 1, active: st().windows.c120.activeTabIds.default.split("-").pop() };
+        }); });`, 60000);
+      record(`revealYieldsToScroll${name}`, { ...r, dy, snappedBack: r.settled !== r.afterWheel });
+    }
+
+    if (want("closeGhostScrolled")) {
+      const trials = [];
+      for (const settle of [1, 2, 3, 4]) {
+        await prepare("c120", WIDTH, "mid");
+        const m0 = await measure("c120", "cg0", { hits: false });
+        const scroll = await run(`return Math.round(globalThis.topStripPages["c120|default"].scroll().x);`);
+        const target = m0.detail.favs.find(([t, x, full]) => full && /^t\d+$/.test(t) && t !== m0.active.split("-").pop() && x > 400 && x < 1000);
+        const colour = ctx.COLOURS[Number(target[0].slice(1))];
+        const shot = join(out, "frames", `close-ghost-scrolled-${settle}.png`);
+        await run(`st().closeTabs(["c120-${target[0]}"]); return frames(${settle}).then(() => D.devSnapshotWindow("c120", ${JSON.stringify(shot)}, false));`);
+        const img = ctx.readPng(shot);
+        const k = img.width / WIDTH;
+        const px = (x, y) => { const i = (Math.round(y * k) * img.width + Math.round(x * k)) * 4; return [img.rgba[i], img.rgba[i + 1], img.rgba[i + 2]]; };
+        const far = (p, q) => Math.abs(p[0] - q[0]) + Math.abs(p[1] - q[1]) + Math.abs(p[2] - q[2]);
+        const bg = px(target[1] - 6, 6);
+        let ink = 0;
+        for (let y = 12; y < 30; y++) for (let x = target[1] - 2; x < target[1] + 18; x++) { const c = px(x, y); if (far(c, colour) < far(c, bg)) ink++; }
+        trials.push({ settle, scroll, target: target[0], ink });
+        await run(`ac.runCommand({ command: "reopenClosedTab", arg: null, windowId: "c120" }); return wait(1200);`);
+      }
+      record("closeGhostScrolled", { seen: trials.filter((t) => t.ink > 40).length, of: trials.length, trials });
+    }
+
+    if (want("groupEdgeDrag")) for (const selectDuring of [false, true]) {
+      await prepare("c120", WIDTH, 0);
+      const group = await run(`const id = st().createGroup(["c120-t4", "c120-t5", "c120-t6", "c120-t7"], { name: "Edge" }); st().updateGroup(id, { collapsed: false }); return wait(1200).then(() => id);`);
+      const before = await run(`const p = globalThis.topStripPages["c120|default"]; const sc = p.scroll(); const first = p.chips().find((c) => c.id === "c120-t4");
+        return { x: Math.round(first.start - sc.x + 71 - 14), scroll: Math.round(sc.x), max: Math.round(sc.content - sc.viewport), at: st().windows.c120.tabIds.indexOf("c120-t4"), viewport: Math.round(sc.viewport) };`);
+      const edge = before.viewport + 60;
+      const pts = [[before.x, 21], [before.x, 21], [before.x + 12, 21], [before.x + 60, 21]];
+      for (let x = before.x + 60; x < edge; x += 60) pts.push([x, 21]);
+      for (let i = 0; i < 24; i++) pts.push([edge, 21]);
+      await run(`const w = st().windows.c120; return D.devSetWindowFrame("c120", [40 + Object.keys(st().windows).indexOf("c120") * 11, 60 + Object.keys(st().windows).indexOf("c120") * 7, w.frame[2], ${HEIGHT}]).then((frame) => nativeOf(frame))
+        .then((n) => { if (${selectDuring}) setTimeout(() => ac.actions.switchToTab("c120-t60"), 700); return ac.engine.call("windows.dev", { window: n, action: "drag:${pts.map((p) => p.join(",")).join(";")}" }); }).then(() => wait(${pts.length * 12 * 16 + 1500}));`, 120000);
+      const after = await run(`const p = globalThis.topStripPages["c120|default"]; const sc = p.scroll(); const chip = p.chips().find((c) => c.id === "c120-t60");
+        return { scroll: Math.round(sc.x), at: st().windows.c120.tabIds.indexOf("c120-t4"), active: st().windows.c120.activeTabIds.default.split("-").pop(), t60Shown: chip.start >= sc.x - 1 && chip.end <= sc.x + sc.viewport + 1 };`);
+      record(selectDuring ? "groupEdgeDragSelect" : "groupEdgeDrag", { fromIndex: before.at, toIndex: after.at, movedTabs: after.at - before.at, scrolledFrom: before.scroll, scrolledTo: after.scroll, max: before.max, grabX: before.x, ...(selectDuring ? { active: after.active, t60Shown: after.t60Shown } : {}) });
+      await run(`st().ungroup(${JSON.stringify(group)}); return wait(600);`);
+    }
+
     if (want("closeUnderPointer")) {
-      for (const [id, width, at] of [["c60", WIDTH], ["c30", WIDTH], ["c15", 900], ["c15", 1728], ["c15", 1728, "end"]]) {
+      for (const [id, width, at] of [["c60", WIDTH], ["c30", WIDTH], ["c15", 900], ["c15", 900, "left"], ["c15", 900, "right"], ["c15", 900, "selected"], ["c15", 1728], ["c15", 1728, "end"]]) {
         await prepare(id, width, "mid");
         const m0 = await measure(id, "cp0");
-        const visible = m0.detail.tabs.filter(([t, a, b]) => a > m0.detail.viewport[0] + 30 && b < m0.detail.viewport[1] - 30 && `${id}-${t}` !== m0.active);
-        const target = at === "end" ? m0.detail.tabs.filter(([t]) => `${id}-${t}` !== m0.active).at(-1) : visible[Math.floor(visible.length / 2)] ?? visible[0];
+        const visible = m0.detail.tabs.filter(([t, a, b]) => a > m0.detail.viewport[0] + 30 && b < m0.detail.viewport[1] - 30 && t !== m0.active.split("-").pop());
+        const selected = m0.detail.tabs.find(([t]) => t === m0.active.split("-").pop());
+        const side = (left) => visible.filter(([, a]) => (selected ? (left ? a < selected[1] : a > selected[1]) : false));
+        const middle = (list) => list[Math.floor(list.length / 2)] ?? list[0];
+        const target = at === "end" ? m0.detail.tabs.filter(([t]) => t !== m0.active.split("-").pop()).at(-1)
+          : at === "left" ? middle(side(true)) : at === "right" ? middle(side(false)) : at === "selected" ? selected : middle(visible);
         if (!target) {
           record(`closeUnderPointer.${id}`, { error: "no tab" });
           continue;
@@ -191,13 +252,39 @@ export async function runInteractions(ctx) {
               });
               return step(0).then(() => hitAt()).then((h) => { closes.push({ chain: h, sameAsClose: h === chain0, final: true }); return closes; });
             });`, 90000);
-        const isClose = !/FileDragView/.test(res[0].chain);
-        const landed = res.slice(1).filter((c, k) => isClose && c.sameAsClose && (res[k].closed ?? 0) > 0).length;
+        const isClose = (res[0].closed ?? 0) > 0;
+        const firstClose = res.findIndex((c) => (c.closed ?? 0) > 0);
+        const landed = firstClose < 0 ? 0 : res.slice(firstClose + 1).filter((c) => (c.closed ?? 0) > 0).length;
         const closed = res.reduce((n, c) => n + (c.closed ?? 0), 0);
         const mAfter = await measure(id, "cp1", { hits: false });
         savePng(ctx, mAfter.img, join(out, "frames", `close-under-pointer-${id}.png`));
-        record(`closeUnderPointer.${id}-${width}${at ? "-" + at : ""}`, { closedOf5: closed, landedOf5: landed, startedOnClose: isClose, target: target[0], x, steps: res.map((c) => [c.closed ?? null, c.chain.slice(0, 40)]) });
-        await run(`const id = ${JSON.stringify(id)}; return D.devSetPointer(id, ${width} / 2, 400, true).then(() => wait(700)).then(() => { const need = ${Number(id.slice(1))} - stripOrder(id).filter((t) => !st().tabs[t].pin).length; for (let i = 0; i < need; i++) st().newTab(id, { url: "http://127.0.0.1:${port}/page/" + id + "/" + (300 + i), background: true }); return wait(900); });`);
+        record(`closeUnderPointer.${id}-${width}${at ? "-" + at : ""}`, { closedOf5: closed, closesAfterFirst: landed, startedOnClose: isClose, target: target[0], x, steps: res.map((c) => [c.closed ?? null, c.chain.slice(0, 40)]) });
+        await run(`const id = ${JSON.stringify(id)}; return D.devSetPointer(id, ${width} / 2, 400, true).then(() => wait(700)).then(() => { const need = ${Number(id.slice(1))} - stripOrder(id).filter((t) => !st().tabs[t].pin).length; for (let i = 0; i < need; i++) ac.runCommand({ command: "reopenClosedTab", arg: null, windowId: id }); return wait(1500); });`);
+      }
+    }
+
+    if (want("doubleClickSelect")) {
+      for (const at of ["left", "right"]) {
+        await prepare("c15", 900, "mid");
+        const m0 = await measure("c15", "dc0");
+        const selected = m0.detail.tabs.find(([t]) => t === m0.active.split("-").pop());
+        const visible = m0.detail.tabs.filter(([t, a, b]) => a > m0.detail.viewport[0] + 30 && b < m0.detail.viewport[1] - 30 && t !== m0.active.split("-").pop() && b - a < 60);
+        const list = visible.filter(([, a]) => (selected ? (at === "left" ? a < selected[1] : a > selected[1]) : false));
+        const target = list[Math.floor(list.length / 2)];
+        if (!target) {
+          record(`doubleClickSelect.${at}`, { error: "no tab" });
+          continue;
+        }
+        const x = target[2] - 6 - 11;
+        const res = await run(`const id = "c15";
+          return D.devSetPointer(id, ${x}, 21, true).then(() => wait(450)).then(() => D.devSetWindowFrame(id, [40 + Object.keys(st().windows).indexOf(id) * 11, 60 + Object.keys(st().windows).indexOf(id) * 7, 900, ${HEIGHT}]))
+            .then((frame) => nativeOf(frame)).then((n) => {
+              const count = stripOrder(id).length;
+              const click = () => ac.engine.call("windows.dev", { window: n, action: "click:${x},21" });
+              return click().then(() => wait(${DOUBLE_CLICK_GAP_MS})).then(click).then(() => wait(900)).then(() => ({ closed: count - stripOrder(id).length, active: st().windows[id].activeTabIds.default }));
+            });`, 60000);
+        record(`doubleClickSelect.${at}`, { closed: res.closed, selected: res.active.split("-").pop(), target: target[0], x, gapMs: DOUBLE_CLICK_GAP_MS });
+        await run(`const id = "c15"; return D.devSetPointer(id, 450, 400, true).then(() => wait(700)).then(() => { const need = 15 - stripOrder(id).filter((t) => !st().tabs[t].pin).length; for (let i = 0; i < need; i++) ac.runCommand({ command: "reopenClosedTab", arg: null, windowId: id }); return wait(1500); });`);
       }
     }
 
@@ -334,11 +421,12 @@ export async function runInteractions(ctx) {
             return step(0).then(() => hitAt()).then((h) => { steps.push({ before: h, sameAsClose: h === chain0, final: true }); return { chain0, steps }; });
           });`, 90000);
         const closed = res.steps.reduce((a, c) => a + (c.closed ?? 0), 0);
-        const startedOnClose = !/FileDragView/.test(res.chain0);
-        const landed = res.steps.slice(1).filter((c, k) => startedOnClose && c.sameAsClose && (res.steps[k].closed ?? 0) > 0).length;
+        const startedOnClose = (res.steps[0].closed ?? 0) > 0;
+        const firstClose = res.steps.findIndex((c) => (c.closed ?? 0) > 0);
+        const landed = firstClose < 0 ? 0 : res.steps.slice(firstClose + 1).filter((c) => (c.closed ?? 0) > 0).length;
         const order = await run(`return stripOrder(${JSON.stringify(id)});`);
         const neighbourSelected = res.steps.filter((c) => c.closed).map((c) => c.selectedAfter);
-        record(`closeRun.${n}-${pos}`, { closedOf5: closed, landedOf5: landed, startedOnClose, selectedAfter: neighbourSelected.map((t) => t?.split("-").pop()), x, selRun: sel, steps: res.steps.map((c) => [c.closed ?? null, c.before.slice(0, 30), c.under, c.scroll, c.selectedAfter?.split("-").pop()]), orderAround: order.slice(Math.max(0, order.indexOf(activeId) - 3), order.indexOf(activeId) + 8).map((t) => t.split("-").pop()) });
+        record(`closeRun.${n}-${pos}`, { closedOf5: closed, closesAfterFirst: landed, startedOnClose, selectedAfter: neighbourSelected.map((t) => t?.split("-").pop()), x, selRun: sel, steps: res.steps.map((c) => [c.closed ?? null, c.before.slice(0, 30), c.under, c.scroll, c.selectedAfter?.split("-").pop()]), orderAround: order.slice(Math.max(0, order.indexOf(activeId) - 3), order.indexOf(activeId) + 8).map((t) => t.split("-").pop()) });
         await run(`const id = ${JSON.stringify(id)}; return D.devSetPointer(id, 640, 400, true).then(() => wait(600)).then(() => { const need = ${n} - stripOrder(id).filter((t) => !st().tabs[t].pin).length; for (let i = 0; i < need; i++) st().newTab(id, { url: "http://127.0.0.1:${port}/page/" + id + "/" + (200 + i), background: true }); return wait(900); });`);
       }
     }

@@ -132,7 +132,7 @@ const SuggestionRow = memo(
             }}
           >
             <SuggestionIcon suggestion={s} />
-            <Text lines={1} size="title" style={{ flexShrink: 1 }}>
+            <Text lines={1} size="title" ardiaCentersCapitals style={{ flexShrink: 1 }}>
               {title}
               {accessory ? (
                 <NativeText style={{ color: theme.textSecondary }}>
@@ -142,7 +142,7 @@ const SuggestionRow = memo(
               ) : null}
             </Text>
             <View style={{ flex: 1 }} />
-            {hint && !removable ? <Text size="small" tone="textTertiary">{hint}</Text> : null}
+            {hint && !removable ? <Text size="small" tone="textTertiary" ardiaCentersCapitals>{hint}</Text> : null}
             {removable ? (
               <Button variant="icon" icon="xmark" size="s" color={theme.textSecondary} tooltip="Remove from History" onPress={onRemove} />
             ) : null}

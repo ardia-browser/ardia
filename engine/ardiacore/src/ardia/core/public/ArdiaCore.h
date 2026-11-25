@@ -97,12 +97,20 @@ ARDIACORE_EXPORT
                                          NSString* _Nullable error))completion;
 @property(readonly) NSString* chromiumVersion;
 @property(readonly) NSString* keepAliveState;
+@property(readonly) NSString* pictureInPictureCloses;
 @end
 
 @interface ArdiaCoreEngine (IdleProfiles)
 - (nullable NSString*)sleepIdleProfile:(ArdiaCoreProfile*)profile
                            hostedTabs:(NSArray<ArdiaCoreTab*>*)tabs;
 - (NSString*)unloadIdleProfile:(ArdiaCoreProfile*)profile;
+@end
+
+@interface ArdiaCoreEngine (CliHolds)
++ (NSInteger)holdTabsForCli:(NSArray<ArdiaCoreTab*>*)tabs
+                      until:(NSArray<NSNumber*>*)untilMs
+                       live:(NSArray<NSNumber*>*)live
+                     marked:(NSMutableIndexSet*)marked;
 @end
 
 @interface ArdiaCoreEngine (Tracing)
@@ -127,6 +135,7 @@ ARDIACORE_EXPORT
 @property BOOL passwordsOffered;
 @property BOOL addressesAutofilled;
 @property BOOL cardsAutofilled;
+@property BOOL preloadPages;
 - (void)clearBrowsingData:(NSArray<NSString*>*)types
                     since:(nullable NSDate*)since
                completion:(nullable void (^)(void))completion;
@@ -355,6 +364,7 @@ ARDIACORE_EXPORT
 - (BOOL)executeChromeCommand:(int)command;
 - (void)openBlockedPopup:(NSString*)popupId always:(BOOL)always;
 - (void)showDevTools;
+- (void)showDevToolsPanel:(NSString*)panel;
 - (void)closeDevTools;
 @property(readonly, nullable) NSView* devToolsView;
 - (void)devToolsLayoutForSize:(NSSize)size

@@ -1,4 +1,4 @@
-export const RIVALS_MAX_AGE_DAYS = 60;
+const RIVALS_MAX_AGE_DAYS = 60;
 
 export class RivalsRefused extends Error {}
 
@@ -6,7 +6,7 @@ const DAY_MS = 86_400_000;
 const daysBetween = (from, to) => Math.round((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / DAY_MS);
 const majorMinor = (version) => String(version ?? "").split(".").slice(0, 2).join(".");
 
-export function machineMismatch(fresh, stored) {
+function machineMismatch(fresh, stored) {
   if (typeof stored !== "object" || !stored) return ["the stored machine isn't recorded field by field"];
   return ["model", "chip"].filter((k) => fresh?.[k] !== stored[k]).map((k) => `${k}: stored "${stored[k]}", this Mac "${fresh?.[k]}"`);
 }

@@ -1,0 +1,24 @@
+name: Linux update verifier toolchain
+description: Installs rustup when the runner lacks it, then the toolchain packages/core-rs/rust-toolchain.toml pins and its x86_64-unknown-linux-musl target, so scripts/linux/update-verify.sh can build lib/ardia/ardia-update-verify
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+      with:
+        path: |
+          ~/.cargo/registry/index
+          ~/.cargo/registry/cache
+          packages/core-rs/target/x86_64-unknown-linux-musl
+        key: update-verify-${{ runner.os }}-${{ hashFiles('packages/core-rs/rust-toolchain.toml', 'packages/core-rs/Cargo.lock') }}
+        restore-keys: update-verify-${{ runner.os }}-
+    - name: Rust for ardia-update-verify
+      shell: bash
+      run: |
+        set -euo pipefail
+        if ! command -v rustup >/dev/null && [ ! -x "$HOME/.cargo/bin/rustup" ]; then
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none --no-modify-path
+        fi
+        echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+        cd packages/core-rs
+        PATH="$HOME/.cargo/bin:$PATH" rustup toolchain install
+        PATH="$HOME/.cargo/bin:$PATH" rustup target add x86_64-unknown-linux-musl

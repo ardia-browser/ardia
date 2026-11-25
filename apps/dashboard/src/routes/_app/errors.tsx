@@ -201,6 +201,7 @@ function GroupDetail({ group }: { group: Group }) {
               {o.platform ? <span>{o.platform}</span> : null}
               {o.level ? <span>{o.level}</span> : null}
               {o.crashSignal ? <span className="font-mono">{o.crashSignal}</span> : null}
+              {o.namedFrames ? <span>{o.namedFrames} native frames named</span> : null}
               {o.url ? <span className="truncate font-mono">{o.url}</span> : null}
             </div>
             {o.frames.length ? (

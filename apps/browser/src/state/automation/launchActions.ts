@@ -1,6 +1,6 @@
 import { automationCommands, automationDecision, isCatalogCommand, variantsOf } from "./automationCommands";
 
-export type LaunchAction = { command: string; arg: string | null };
+type LaunchAction = { command: string; arg: string | null };
 
 export const MAX_LAUNCH_ACTIONS = 20;
 

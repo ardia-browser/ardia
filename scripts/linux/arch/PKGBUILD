@@ -1,11 +1,15 @@
 pkgname=ardia-bin
-pkgver=0.0.0
+pkgver=0.2.47nightly.2
 pkgrel=1
-pkgdesc="Ardia, a Chromium-based browser with Arc's sidebar and Dia's polish"
+pkgdesc="A Chromium-based browser with Arc's sidebar and Dia's polish"
 arch=('x86_64')
 url="https://ardia.dev"
-license=('Apache-2.0')
-depends=('alsa-lib' 'dbus' 'gtk3' 'hicolor-icon-theme' 'libcups' 'libxss' 'libxtst' 'nss' 'polkit' 'ttf-liberation' 'xdg-utils')
+license=('GPL-3.0-only')
+depends=(
+  'alsa-lib' 'at-spi2-core' 'cairo' 'dbus' 'expat' 'glib2' 'glibc' 'gtk3' 'hicolor-icon-theme' 'libcups'
+  'libgcc' 'libx11' 'libxcb' 'libxcomposite' 'libxdamage' 'libxext' 'libxfixes' 'libxkbcommon' 'libxrandr'
+  'mesa' 'nspr' 'nss' 'pango' 'polkit' 'systemd-libs' 'ttf-liberation' 'xdg-utils'
+)
 optdepends=(
   'libsecret: encrypt saved passwords with the Secret Service keyring'
   'kwallet: encrypt saved passwords with KWallet'
@@ -14,15 +18,10 @@ optdepends=(
 provides=('ardia')
 conflicts=('ardia')
 options=('!strip' '!debug')
-source=("ardia-linux-x64.tar.xz")
-sha256sums=('SKIP')
-
-pkgver() {
-  local version
-  version=$(cat "$srcdir/ardia/lib/ardia/VERSION" 2>/dev/null) || version=$pkgver
-  printf '%s\n' "${version//-/_}"
-}
+source=("$pkgname-$pkgver.tar.xz::https://github.com/ardia-browser/ardia/releases/download/v${pkgver/nightly/-nightly}/Ardia-${pkgver/nightly/-nightly}-linux-x64.tar.xz")
+sha256sums=('fc7d5072887c578f84f93364b15706bc8e57c67aee5ca9cd5ce6fa9d887ac7b3')
 
 package() {
   "$srcdir/ardia/install.sh" --prefix /usr --destdir "$pkgdir"
+  [ ! -f "$pkgdir/usr/lib/ardia/chrome-sandbox" ] || chmod 4755 "$pkgdir/usr/lib/ardia/chrome-sandbox"
 }

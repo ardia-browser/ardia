@@ -6,8 +6,9 @@ import { WindowRoot } from "../../../apps/browser/src/App";
 import { startNativeSync } from "../../../apps/browser/src/state/app/nativeSync";
 import { startTabPages } from "../../../apps/browser/src/state/tabs/tabPages";
 import { setStoreBatching, useBrowser } from "../../../apps/browser/src/state/browser/store";
+import { liveOf } from "../../../apps/browser/src/state/tabs/tabLive";
 import { Customize } from "./Customize";
-import { demoSettings } from "./customizeFlow";
+import { demoSettings, syncOnboardingCover } from "./customizeFlow";
 import { startEmbed } from "./embed";
 import { isFrameable } from "./frameable";
 import { pageTitle } from "./pages";
@@ -24,12 +25,13 @@ useBrowser.getState().hydrate({ ...demoSession(), settings: demoSettings() });
 useBrowser.setState((s) => ({ history: demoHistory(s) }));
 startTabPages();
 startNativeSync();
+syncOnboardingCover();
 
 const params = new URLSearchParams(location.search);
 const embed = params.has("embed");
 const bare = embed || params.has("bare");
 
-Object.assign(globalThis, { ardiaDemo: { store: useBrowser, emitCommand } });
+Object.assign(globalThis, { ardiaDemo: { store: useBrowser, tabLive: { liveOf }, emitCommand } });
 
 function warmOtherProfiles() {
   const s = useBrowser.getState();

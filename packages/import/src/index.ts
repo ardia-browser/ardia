@@ -1,5 +1,6 @@
 import { ArdiaError, ardiaError, type TabGroupColor } from "@ardia/core";
-import { requireNativeModule, type EventSubscription } from "expo-modules-core";
+import { requireNativeModule } from "expo-modules-core";
+import type { ImportNative } from "./generated/native";
 
 export type ImportKind =
   | "bookmarks"
@@ -10,7 +11,9 @@ export type ImportKind =
   | "autofill"
   | "spaces"
   | "pinnedTabs"
-  | "favorites";
+  | "favorites"
+  | "linkRules"
+  | "archive";
 
 export type BrowserFamily = "chromium" | "firefox" | "safari" | "arc";
 
@@ -38,6 +41,7 @@ export type BrowserProfile = {
   available: ImportKind[];
   spaces?: SpaceSummary[];
   tabsNeedKey?: boolean;
+  diaSidebar?: boolean;
 };
 
 export type BrowserSource = {
@@ -55,7 +59,7 @@ export type BrowserSource = {
   asksAppForTabs?: boolean;
 };
 
-export type BookmarkRole = "toolbar" | "other" | "mobile" | "menu" | "readingList" | "liveGitHubPullRequests" | "liveBitbucketPullRequests" | "split";
+export type BookmarkRole = "toolbar" | "other" | "mobile" | "menu" | "readingList" | "liveGitHubPullRequests" | "liveBitbucketPullRequests" | "split" | "list";
 
 export type BookmarkNode = {
   type: "folder" | "url";
@@ -65,6 +69,8 @@ export type BookmarkNode = {
   children?: BookmarkNode[];
   role?: BookmarkRole;
   pageTitle?: string;
+  icon?: string;
+  color?: TabGroupColor | (string & {});
 };
 
 export type ImportedHistoryEntry = { url: string; title: string; visits: number; lastVisit: number; typedCount?: number };
@@ -109,6 +115,8 @@ export type SpaceSuggestion = {
   tabs: ImportedTab[];
   theme?: string;
   container?: number;
+  openGroups?: BookmarkNode[];
+  favorites?: ImportedTab[];
 };
 
 export type ProfileSuggestion = { name: string; color?: string; avatarPath?: string };
@@ -118,6 +126,19 @@ export type ImportWarning =
   | { kind?: undefined; code: "unreadableBookmarks" | "unreadableHistory" | "unreadableTabs" | "unreadableCookies" | "unreadableFile"; message: string };
 
 export type ImportedFavicon = { page: string; icon: string; png: string };
+
+export type ArcLinkDestination = { kind: "space" | "littleArc" | "mostRecent"; spaceId?: string; spaceName?: string };
+export type ArcLinkRule = { id: string; match: "contains" | "equals"; text: string; to: ArcLinkDestination };
+export type ArcRouting = { rules: ArcLinkRule[]; skipped: number; fallback?: ArcLinkDestination };
+export type ArcArchivedTab = { url: string; title: string; customTitle?: string; archivedAt: number; spaceId?: string; spaceName?: string; auto: boolean };
+export type ArcArchive = { tabs: ArcArchivedTab[]; dropped?: number; cleanUpAfterMinutes?: number };
+export type ImportedSearchEngine = { name: string; keyword: string; url: string; prepopulateId?: number };
+
+export type ImportCoreRead = {
+  format: "chromium_bookmarks";
+  backend: "rust" | "native";
+  outcome: "ok" | "notFound" | "unreadable" | "tooLarge" | "argument";
+};
 
 export type ImportResult = {
   browserId: string;
@@ -136,9 +157,15 @@ export type ImportResult = {
   spaces: SpaceSuggestion[];
   favorites: ImportedTab[];
   favicons: ImportedFavicon[];
+  searchEngine?: ImportedSearchEngine;
   separateEssentials?: boolean;
+  diaSidebar?: { primarySpaceId?: string };
+  arcRouting?: ArcRouting;
+  arcArchive?: ArcArchive;
+  arcCachedIcons?: number;
   failed: ImportKind[];
   warnings: ImportWarning[];
+  importCore?: ImportCoreRead[];
 };
 
 export type SafariExport = {
@@ -163,7 +190,17 @@ export type WrittenCounts = {
   error?: string;
 };
 
-export type ImportedExtension = { id: string; name: string; webStoreUrl: string };
+export type ImportedExtensionSkip = "manifestV2" | "unpacked" | "policy" | "external" | "notWebStore";
+
+export type ImportedExtension = {
+  id: string;
+  name: string;
+  webStoreUrl: string;
+  version?: string;
+  enabled?: boolean;
+  pinnedIndex?: number;
+  skip?: ImportedExtensionSkip;
+};
 
 export type ImportProgress = {
   kind: ImportKind;
@@ -172,7 +209,7 @@ export type ImportProgress = {
   total?: number;
 };
 
-type NativeImportOptions = { historyLimit?: number; historySince?: number; spaceIds?: string[]; chunkSize?: number; streamHistory: boolean };
+export type NativeImportOptions = { historyLimit?: number; historySince?: number; spaceIds?: string[]; chunkSize?: number; streamHistory: boolean };
 
 export type ImportOptions = {
   historyLimit?: number;
@@ -200,30 +237,11 @@ export type DiaTabsResult = {
   favicons: ImportedFavicon[];
 };
 
-type ImportEvent =
+export type ImportEvent =
   | ({ jobId: string; type: "progress" } & ImportProgress)
   | { jobId: string; type: "history"; entries: string };
 
-const Native = requireNativeModule<{
-  addListener(name: "onImportEvent", listener: (e: ImportEvent) => void): EventSubscription;
-  listBrowsers(): Promise<string>;
-  importData(jobId: string, browserId: string, profileId: string, kinds: ImportKind[], options: NativeImportOptions): Promise<string>;
-  cancelImport(jobId: string): void;
-  unlockBrowser(browserId: string, primaryPassword: string | null): Promise<null>;
-  isBrowserUnlocked(browserId: string): boolean;
-  forgetUnlockedKeys(): void;
-  writeImported(token: string, profile: string, kinds: ("cookies" | "autofill")[]): Promise<string>;
-  discardImported(token: string): void;
-  listExtensions(browserId: string, profileId: string): Promise<string>;
-  importSafariExport(jobId: string, path: string): Promise<string>;
-  safariHasFullDiskAccess(): boolean;
-  openFullDiskAccessSettings(): Promise<null>;
-  importSafariDirect(jobId: string): Promise<string>;
-  importBookmarksHTML(path: string): Promise<string>;
-  importPasswordsCSV(path: string): Promise<string>;
-  chooseImportFile(kind: "safariExport" | "bookmarksHTML" | "passwordsCSV"): Promise<string | null>;
-  readDiaTabs(): Promise<string>;
-}>("ArdiaImport");
+const Native = requireNativeModule<ImportNative>("ArdiaImport");
 
 let jobSeq = 0;
 

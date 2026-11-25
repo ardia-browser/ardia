@@ -6,6 +6,7 @@ from support import compile_and_run
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 LINUX = ROOT / 'src/ardia/linux'
+DESKTOP = LINUX.parents[3] / 'ardiacore-desktop' / 'src' / 'ardia' / 'desktop'
 
 
 class SearchEnginePolicyTests(unittest.TestCase):
@@ -14,7 +15,7 @@ class SearchEnginePolicyTests(unittest.TestCase):
         self.assertIn('search engine policy scenarios passed', output)
 
     def test_the_owned_engine_guid_is_a_lowercase_uuid(self):
-        policy = (LINUX / 'ac_linux_search_engine_policy.h').read_text()
+        policy = (DESKTOP / 'ac_desktop_search_engine_policy.h').read_text()
         guid = re.search(r'kOwnedEngineGuid\[\] = "([^"]+)"', policy).group(1)
         self.assertRegex(guid, r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')
 
@@ -27,8 +28,8 @@ class SearchEnginePolicyTests(unittest.TestCase):
         for needle in ('is_default_search_managed()', 'IsExtensionControlledDefaultSearch()', 'RegisterOnLoadedCallback(',
                        'ShutdownStarted()', 'OnProfileAdded(', 'GetProfileByPath(path)'):
             self.assertIn(needle, service)
-        build = (LINUX / 'BUILD.gn').read_text()
-        for source in ('ac_linux_search_engine_policy.h', 'ac_linux_search_engines.cc', 'ac_linux_search_engines.h'):
+        build = (LINUX / 'BUILD.gn').read_text() + (DESKTOP / 'BUILD.gn').read_text()
+        for source in ('ac_desktop_search_engine_policy.h', 'ac_linux_search_engines.cc', 'ac_linux_search_engines.h'):
             self.assertIn(f'"{source}"', build)
 
 

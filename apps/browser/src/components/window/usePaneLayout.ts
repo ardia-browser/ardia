@@ -1,17 +1,20 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { newTabLingeringOver, successorWhenLeaving, useMountedTabIds, useShownPaneKeys, useSplitsOf, useWarmTabIds, wakePanes } from "../../state/windows/card";
 import { pagerFor } from "../../state/windows/profilePager";
 import { useTabDrag } from "../../state/drag/tabDrag";
 import type { SplitView } from "../../state/browser/types";
 import { splitGeometry, type Rect } from "./geometry";
-import { useCardFrame } from "./cardFrame";
 import { splitTabIds } from "../../state/splits/splits";
+import { notePageOverlay } from "../../state/telemetry/usage";
+import { consentToken } from "../../state/telemetry/client";
+import { useMemoryPressure } from "../../state/tabs/sleepingTabs";
+import { capWarmPanes } from "../../state/tabs/sleepPolicy";
 
 const NEW_TAB_LINGER_MS = 400;
+const NEW_TAB_LINGER_LATE_MS = 100;
 
-export function usePaneLayout(windowId: string, activeId: string | undefined, split: SplitView | undefined, fullscreenTab: string | undefined, size: { width: number; height: number }) {
+export function usePaneLayout(windowId: string, activeId: string | undefined, split: SplitView | undefined, fullscreenTab: string | undefined, size: { width: number; height: number }, gap: number) {
   const mounted = useMountedTabIds(windowId);
-  const gap = useCardFrame().splitGap;
 
   const mountedIds = useMemo(() => new Set(mounted), [mounted]);
 
@@ -27,12 +30,24 @@ export function usePaneLayout(windowId: string, activeId: string | undefined, sp
 
   useEffect(() => wakePanes(Object.keys(panes)), [panes]);
 
-  const [linger, setLinger] = useState<{ from: string | undefined; id?: string }>({ from: activeId });
-  if (linger.from !== activeId) setLinger({ from: activeId, id: fullscreenTab ? undefined : newTabLingeringOver(windowId, linger.from, activeId, mounted) });
-  const lingerId = linger.from === activeId ? linger.id : undefined;
+  const shownBefore = useRef(activeId);
+  const linger = useMemo(() => {
+    const from = shownBefore.current;
+    return { id: from === activeId || fullscreenTab ? undefined : newTabLingeringOver(windowId, from, activeId, mounted) };
+  }, [activeId]);
+  useEffect(() => {
+    shownBefore.current = activeId;
+  }, [activeId]);
+  const [expired, setExpired] = useState<typeof linger | null>(null);
+  const lingerId = expired === linger ? undefined : linger.id;
   useEffect(() => {
     if (!linger.id) return;
-    const timer = setTimeout(() => setLinger((now) => (now === linger ? { from: now.from } : now)), NEW_TAB_LINGER_MS);
+    const consent = consentToken();
+    const due = Date.now() + NEW_TAB_LINGER_MS;
+    const timer = setTimeout(() => {
+      if (Date.now() - due > NEW_TAB_LINGER_LATE_MS) notePageOverlay("newTabLingerLate", consent);
+      setExpired(linger);
+    }, NEW_TAB_LINGER_MS);
     return () => clearTimeout(timer);
   }, [linger]);
   const lingerRect: Rect | undefined = lingerId && size.width > 0 ? { x: 0, y: 0, width: size.width, height: size.height } : undefined;
@@ -43,12 +58,19 @@ export function usePaneLayout(windowId: string, activeId: string | undefined, sp
   const successor = useMemo(() => (leaving ? successorWhenLeaving(leaving, windowId) : undefined), [leaving, windowId]);
   const warm = useWarmTabIds(windowId, pagerPages, successor);
   const warmSplits = useSplitsOf(warm);
+  const pressure = useMemoryPressure();
   const warmPanes = useMemo(() => {
+    const rects: Record<string, Rect> = {};
+    for (const id of warm) rects[id] = { x: 0, y: 0, width: size.width, height: size.height };
+    for (const v of warmSplits) Object.assign(rects, splitGeometry(v, size.width, size.height, gap).panes);
+    const panesOf = (id: string) => {
+      const v = warmSplits.find((split) => splitTabIds(split).includes(id));
+      return v ? splitTabIds(v) : [id];
+    };
     const out: Record<string, Rect> = {};
-    for (const id of warm) out[id] = { x: 0, y: 0, width: size.width, height: size.height };
-    for (const v of warmSplits) Object.assign(out, splitGeometry(v, size.width, size.height, gap).panes);
+    for (const id of capWarmPanes(warm, panesOf, new Set(Object.keys(shownPanes)), pressure)) out[id] = rects[id]!;
     return out;
-  }, [warm, warmSplits, size.width, size.height, gap]);
+  }, [warm, warmSplits, shownPanes, pressure, size.width, size.height, gap]);
 
   const shown = useShownPaneKeys(mounted, shownPanes);
 

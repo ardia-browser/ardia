@@ -3,6 +3,7 @@ import Foundation
 public struct ArcSidebar: Equatable {
   public var spaces: [SpaceSuggestion] = []
   public var favorites: [String: [ImportedTab]] = [:]
+  public var iconItems: [String: String] = [:]
 
   public static func parse(_ data: Data) throws -> ArcSidebar {
     guard let top = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -15,6 +16,10 @@ public struct ArcSidebar: Equatable {
     let items = Items(objects(box["items"]))
 
     var out = ArcSidebar()
+    for item in objects(box["items"]) {
+      guard let id = item["id"] as? String, let url = tab(item, pinned: false)?.url, out.iconItems[url] == nil else { continue }
+      out.iconItems[url] = id
+    }
     var untitled = 0
     for space in objects(box["spaces"]) {
       guard let id = space["id"] as? String else { continue }

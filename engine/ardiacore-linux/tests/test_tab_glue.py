@@ -7,8 +7,9 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 HOST = SOURCE / 'ardia/linux/ac_linux_host.cc'
-FILES = [SOURCE / 'ardia/linux/ac_linux_tab_policy.cc']
+FILES = [DESKTOP_SOURCE / 'ardia/desktop/ac_desktop_tab_policy.cc']
 FIXTURE = ROOT / 'tests/fixtures/media.h'
 
 
@@ -25,7 +26,7 @@ def body(source, signature):
 
 PRELUDE = r'''
 #include "fixtures/media.h"
-#include "ardia/linux/ac_linux_tab_policy.h"
+#include "ardia/desktop/ac_desktop_tab_policy.h"
 
 namespace mojom { enum class LifecycleUnitDiscardReason { EXTERNAL }; }
 struct FakeMedia {
@@ -57,7 +58,9 @@ class TabBinding {
   bool presented = false;
   bool pane_visible = false;
   std::vector<std::pair<std::string, base::DictValue>> sent;
+  bool wake_ready_pending = false;
   void ReportPresentation(std::string name, base::DictValue data) { sent.emplace_back(std::move(name), std::move(data)); }
+  bool PresentNow(std::string name, base::DictValue data) { ReportPresentation(std::move(name), std::move(data)); return true; }
   base::WeakPtr<TabBinding> GetWeakPtr() { return weak_.GetWeakPtr(); }
   void WasDiscarded();
   void DidStartNavigation(content::NavigationHandle* handle);
@@ -201,7 +204,7 @@ class TabGlueTests(unittest.TestCase):
         test = directory / 'glue.cc'
         test.write_text(PRELUDE + '\n'.join(methods) + TESTS)
         cls.binary = directory / 'glue'
-        subprocess.run([os.environ.get('CXX', 'c++'), '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g', '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-no-pie', '-I', str(directory), '-I', str(SOURCE), '-I', str(ROOT / 'tests'), *map(str, FILES), str(test), '-o', str(cls.binary)], check=True, text=True, timeout=120)
+        subprocess.run([os.environ.get('CXX', 'c++'), '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g', '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-no-pie', '-I', str(directory), '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE), '-I', str(ROOT / 'tests'), *map(str, FILES), str(test), '-o', str(cls.binary)], check=True, text=True, timeout=120)
 
     @classmethod
     def tearDownClass(cls):

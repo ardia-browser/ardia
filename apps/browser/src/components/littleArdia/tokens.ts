@@ -15,7 +15,6 @@ export const SMALL_BAR_BUTTON = 28;
 export const SMALL_BAR_GAP = 2;
 export const SMALL_FIELD_GAP = 6;
 export const SMALL_FIELD_HEIGHT = 28;
-export const SMALL_FIELD_MAX_WIDTH = 520;
 
 export const smallBarRow = perLook((): ToolbarRow => ({ ...TOOLBAR_ROWS.regular, button: SMALL_BAR_BUTTON, buttonRadius: radius.toolbar }));
 

@@ -11,7 +11,7 @@ import { decodeSetupCode, describeSetupChoices, encodeSetupCode, SETUP_SETTING_K
 
 export type SetupCodeApplied = { ok: true; lines: string[] } | { ok: false; error: string };
 
-export function onboardingSetupChoices(): SetupChoices {
+function onboardingSetupChoices(): SetupChoices {
   const { windowId, preset, picked, extras, baseline } = useOnboarding.getState();
   const s = useBrowser.getState();
   const id = resolveWindowId(s, windowId);

@@ -89,6 +89,7 @@ std::optional<std::pair<float, float>> LumaWeights(IOSurfaceRef surface,
 simd_float4x4 YuvToRgbMatrix(float kr, float kb, bool full_range);
 void CopyColorTags(IOSurfaceRef from, IOSurfaceRef to, const gfx::ColorSpace& space);
 std::string SurfaceTags(IOSurfaceRef surface);
+bool HasExtendedPixels(CVPixelBufferRef buffer);
 bool VideoToolboxQuarantined();
 API_AVAILABLE(macos(26.0))
 void KeepQuarantinedProcessor(VTFrameProcessor* processor);

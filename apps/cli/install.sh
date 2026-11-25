@@ -35,7 +35,7 @@
 set -eu
 umask 022
 
-repo=mantrakp04/ardia
+repo=ardia-browser/plugins
 version_pattern='^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}(-[a-z]{1,16}\.[0-9]{1,4})?$'
 if [ "$(uname -s)" = Linux ]; then
   os=linux
@@ -268,9 +268,9 @@ if [ -n "${ARDIA_CLI_URL:-}" ]; then
     version=${version%"$asset_suffix"}
   fi
 elif [ -n "$version" ]; then
-  url=https://github.com/$repo/releases/download/v$version/ardia-cli-$version$asset_suffix
+  url=https://github.com/$repo/releases/download/cli-v$version/ardia-cli-$version$asset_suffix
 else
-  pattern="https://github\.com/$repo/releases/download/v[0-9a-z.-]*/ardia-cli-[0-9a-z.-]*-$asset_platform\.tar\.gz"
+  pattern="https://github\.com/$repo/releases/download/cli-v[0-9a-z.-]*/ardia-cli-[0-9a-z.-]*-$asset_platform\.tar\.gz"
   url=$(fetch https://api.github.com/repos/$repo/releases/latest 2>/dev/null | grep -o "$pattern" | head -n 1 || true)
   if [ -z "$url" ]; then
     url=$(fetch "https://api.github.com/repos/$repo/releases?per_page=30" 2>/dev/null | grep -o "$pattern" | head -n 1 || true)

@@ -24,7 +24,7 @@ constexpr std::string_view kBrowsingDataTypes[] = {"history", "siteData", "cache
 
 constexpr std::string_view kServiceCalls[] = {
     "sites.settings", "sites.setSetting", "sites.origins", "sites.reset", "sites.clearData",
-    "profiles.clearBrowsingData",
+    "sites.registrableDomains", "profiles.clearBrowsingData",
 };
 
 constexpr std::string_view kBlockerCalls[] = {
@@ -32,6 +32,7 @@ constexpr std::string_view kBlockerCalls[] = {
     "contentBlocker.isAllowed", "contentBlocker.setAllowed", "contentBlocker.devFailNextMessage",
     "contentBlocker.devDelayNextLoad", "contentBlocker.hiddenElements", "contentBlocker.hideElements",
     "contentBlocker.restoreElements", "contentBlocker.addList", "contentBlocker.removeList",
+    "contentBlocker.removeAllowed",
 };
 
 constexpr std::string_view kNamedProfileCalls[] = {
@@ -43,6 +44,8 @@ constexpr std::string_view kPrivateHiding = "a private window keeps its hidden e
 
 constexpr size_t kMaxOrigin = 2048;
 constexpr size_t kMaxHost = 253;
+constexpr size_t kMaxRegistrableHosts = 256;
+constexpr size_t kMaxRegistrableHost = 512;
 constexpr size_t kMaxListId = 128;
 constexpr double kMaxSinceMs = 8.64e15;
 
@@ -330,6 +333,18 @@ std::variant<ServiceRequest, Failure> PrepareServiceCall(std::string_view name,
     return ServiceRequest{name == "sites.reset" ? "ac_site_settings_reset" : "ac_site_data_clear",
                           base::DictValue().Set("origin", *String(args, "origin"))};
   }
+  if (name == "sites.registrableDomains") {
+    const base::Value* hosts = args.Find("hosts");
+    if (!OnlyKeys(args, {"hosts"}) || !hosts || !hosts->is_list() || hosts->GetList().size() == 0 ||
+        hosts->GetList().size() > kMaxRegistrableHosts)
+      return Invalid("hosts must list 1 to 256 host names");
+    base::ListValue names;
+    for (const base::Value& host : hosts->GetList()) {
+      if (!host.is_string() || host.GetString().size() > kMaxRegistrableHost) return Invalid("each host must be a string");
+      names.Append(base::Value(host.GetString()));
+    }
+    return ServiceRequest{"ac_registrable_domains", base::DictValue().Set("hosts", base::Value(std::move(names)))};
+  }
   if (name == "profiles.clearBrowsingData") {
     if (!OnlyKeys(args, {"types", "since"})) return Invalid("unexpected browsing data arguments");
     const base::Value* types = args.Find("types");
@@ -399,6 +414,16 @@ std::variant<base::Value, Failure> CompleteServiceCall(std::string_view name,
                            .Set("cookies", cookies->Clone())
                            .Set("storage", base::Value(*storage)));
   }
+  if (name == "sites.registrableDomains") {
+    const base::Value* domains = dict.Find("domains");
+    if (!domains || !domains->is_list()) return BadReply("Missing registrable domains");
+    base::ListValue out;
+    for (const base::Value& domain : domains->GetList()) {
+      if (!domain.is_string()) return BadReply("Malformed registrable domain");
+      out.Append(base::Value(domain.GetString()));
+    }
+    return base::Value(base::DictValue().Set("domains", base::Value(std::move(out))));
+  }
   if (name == "profiles.clearBrowsingData") {
     const std::optional<bool> ok = Bool(dict, "ok");
     if (!ok) return BadReply("Malformed browsing data reply");
@@ -467,6 +492,15 @@ std::variant<BlockerRequest, Failure> PrepareBlockerCall(std::string_view name,
     if (!OnlyKeys(args, {"id"}) || !id || !ValidListId(*id)) return BlockerInvalid("a filter list id is required");
     request.op = BlockerOp::kRemoveList;
     request.id = *id;
+    return request;
+  }
+  if (name == "contentBlocker.removeAllowed") {
+    const std::string* host = String(args, "host");
+    if (!OnlyKeys(args, {"host"}) || !host) return BlockerInvalid("a host is required");
+    std::optional<std::string> normalized = NormalizeHost(*host);
+    if (!normalized) return BlockerInvalid("host must be a plain host name");
+    request.op = BlockerOp::kRemoveAllowed;
+    request.host = std::move(*normalized);
     return request;
   }
   if (name == "contentBlocker.isAllowed" || name == "contentBlocker.setAllowed") {
@@ -557,7 +591,21 @@ int64_t InheritRetryDelayMs(int attempt) {
 
 bool Mutates(BlockerOp op) {
   return op == BlockerOp::kSetEnabled || op == BlockerOp::kSetList || op == BlockerOp::kSetAllowed ||
+         op == BlockerOp::kRemoveAllowed ||
          op == BlockerOp::kAddList || op == BlockerOp::kRemoveList;
+}
+
+bool ChangedBlocker(BlockerOp op, const base::Value* value) {
+  if (!Mutates(op) || !value) return false;
+  if (op == BlockerOp::kRemoveAllowed) return value->is_bool() && value->GetBool();
+  return true;
+}
+
+bool WaitsForFollowers(BlockerOp op) { return op == BlockerOp::kRemoveAllowed; }
+
+std::variant<base::Value, Failure> AfterFollowers(std::variant<base::Value, Failure> reply, int failed) {
+  if (failed <= 0 || std::holds_alternative<Failure>(reply)) return reply;
+  return Failure{"ERR_PARTIAL", "Another loaded profile didn't follow the default profile's content blocker settings yet"};
 }
 
 bool AnswersWithoutBlocker(const BlockerRequest& request) {
@@ -589,6 +637,7 @@ std::string_view BridgeOpName(BlockerOp op) {
     case BlockerOp::kRestoreElements: return "restoreElements";
     case BlockerOp::kAddList: return "addList";
     case BlockerOp::kRemoveList: return "removeList";
+    case BlockerOp::kRemoveAllowed: return "removeAllowed";
   }
   return "state";
 }
@@ -675,6 +724,10 @@ std::variant<base::Value, Failure> CompleteBlockerCall(const BlockerRequest& req
     if (!value || !value->is_bool()) return BadReply("The content blocker gave no answer");
     return base::Value(value->GetBool());
   }
+  if (request.op == BlockerOp::kRemoveAllowed) {
+    if (!value || !value->is_bool()) return BadReply("The content blocker gave no answer");
+    return base::Value(base::DictValue().Set("removed", base::Value(value->GetBool())));
+  }
   if (request.op == BlockerOp::kAddList) {
     const base::DictValue* added = value && value->is_dict() ? &value->GetDict() : nullptr;
     const std::string* id = added ? String(*added, "id") : nullptr;
@@ -744,7 +797,8 @@ base::DictValue BridgeRequest(const PendingCall& call, int64_t now_ms) {
       args.Set("id", call.request.id);
       args.Set("enabled", base::Value(call.request.flag));
       break;
-    case BlockerOp::kIsAllowed: args.Set("host", call.request.host); break;
+    case BlockerOp::kIsAllowed:
+    case BlockerOp::kRemoveAllowed: args.Set("host", call.request.host); break;
     case BlockerOp::kSetAllowed:
       args.Set("host", call.request.host);
       args.Set("allowed", base::Value(call.request.flag));

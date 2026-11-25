@@ -1,0 +1,50 @@
+name: Stale pull requests
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Only log what the sweep would change
+        type: boolean
+        default: false
+      max_prs:
+        description: Most pull requests to nudge, close or clear in this run
+        type: number
+        default: 40
+  pull_request_target:
+    types: [synchronize, reopened, edited, ready_for_review]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 30
+    if: >-
+      (github.event_name != 'pull_request_target' ||
+       (github.event.sender.type != 'Bot' && contains(github.event.pull_request.labels.*.name, 'stale'))) &&
+      (github.event_name != 'issue_comment' ||
+       (github.event.issue.pull_request && github.event.comment.user.type != 'Bot' &&
+        contains(github.event.issue.labels.*.name, 'stale')))
+    concurrency:
+      group: stale-${{ github.event.pull_request.number || github.event.issue.number || 'sweep' }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          sparse-checkout: .github
+      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+        with:
+          retries: 3
+          script: |
+            const stale = require(`${process.env.GITHUB_WORKSPACE}/.github/stale/stale.cjs`);
+            await stale.run({ github, context, core });

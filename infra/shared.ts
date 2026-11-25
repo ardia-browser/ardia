@@ -16,6 +16,7 @@ export const SECRETS = {
   dashboardGithubToken: "DASHBOARD_GITHUB_TOKEN",
   feedbackUploadSecret: "FEEDBACK_UPLOAD_SECRET",
   feedbackGithubIssuesToken: "FEEDBACK_GITHUB_ISSUES_TOKEN",
+  donateStripeKey: "DONATE_STRIPE_KEY",
 } as const;
 
 export const CLICKHOUSE_USERS = { reader: "reader", sandbox: "sandbox" } as const;

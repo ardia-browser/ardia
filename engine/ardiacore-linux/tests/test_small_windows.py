@@ -39,12 +39,15 @@ class SmallWindowTests(unittest.TestCase):
         self.assertIn('kSmallWindowMinHeight = 300;', core)
         self.assertIn('kSmallWindowWidth = 900;', core)
         self.assertIn('kSmallWindowHeight = 640;', core)
+        self.assertIn('kSmallWindowLargestShare = 0.8;', core)
         manager = (REPO / 'packages/shell/ios/WindowManager.swift').read_text()
         self.assertIn('window.minSize = NSSize(width: 420, height: 300)', manager)
-        self.assertIn('let width = min(max(size?.width ?? 900, window.minSize.width), visible.width)', manager)
-        self.assertIn('let height = min(max(size?.height ?? 640, window.minSize.height), visible.height)', manager)
-        self.assertIn('let origin = NSPoint(x: (visible.midX - width / 2).rounded(), y: (visible.midY - height / 2).rounded())', manager)
+        self.assertIn('static let smallDefaultSize = CGSize(width: 900, height: 640)', manager)
+        self.assertIn('ArdiaChromeWindowHost.littleFrame(for: size, minimumSize: window.minSize, visibleFrame: visible)', manager)
         self.assertNotIn('lift', manager)
+        fit = (REPO / 'packages/ardiacore/ios/ArdiaLittleFitMath.h').read_text()
+        self.assertIn('kLargestShareOfScreen = 0.8;', fit)
+        self.assertIn('std::round(visible * share)', fit)
         self.assertIn('size?: [number, number];', (REPO / 'packages/shell/src/windows.ts').read_text())
 
     def test_a_small_window_without_a_frame_opens_at_its_size_on_the_openers_display(self):

@@ -37,7 +37,15 @@ export const Animated = {
   event: (mapping: never, config?: Driven) => WebAnimated.event(mapping, jsDriven(config) as never),
 } as unknown as typeof WebAnimated;
 
-export const findNodeHandle = (component: unknown) => (component instanceof Element ? component : null) as unknown as number | null;
+export const findNodeHandle = (component: unknown) => {
+  if (component instanceof Element) return component as unknown as number;
+  const getter = (component as { getScrollableNode?: () => unknown } | null)?.getScrollableNode;
+  if (typeof getter === "function") {
+    const inner = getter.call(component);
+    if (inner instanceof Element) return inner as unknown as number;
+  }
+  return null;
+};
 
 type KeyMatch = { key: string; metaKey?: boolean; shiftKey?: boolean; altKey?: boolean; ctrlKey?: boolean };
 type MacTextInputProps = ComponentProps<typeof WebTextInput> & {

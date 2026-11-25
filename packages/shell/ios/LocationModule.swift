@@ -1,20 +1,20 @@
 import ExpoModulesCore
 
-public class LocationModule: Module {
-  public func definition() -> ModuleDefinition {
-    Name("ArdiaLocation")
+public class LocationModule: Module, LocationNative {
+  static func locationPermission() -> String { LocationAccess.shared.status() }
 
-    AsyncFunction("locationPermission") { () -> String in
-      LocationAccess.shared.status()
-    }.runOnQueue(.main)
-    AsyncFunction("requestLocationPermission") { (promise: Promise) in
-      LocationAccess.shared.request { promise.resolve($0) }
-    }.runOnQueue(.main)
-    AsyncFunction("openLocationSettings") {
-      LocationAccess.shared.openSettings()
-    }.runOnQueue(.main)
-    AsyncFunction("devLocationRequests") { () -> Int in
-      LocationAccess.shared.fakeRequests
-    }.runOnQueue(.main)
+  static func requestLocationPermission(_ promise: Promise) { LocationAccess.shared.request { promise.resolve($0) } }
+
+  static func openLocationSettings() { LocationAccess.shared.openSettings() }
+
+  static func devLocationRequests() -> Int { LocationAccess.shared.fakeRequests }
+
+  public func definition() -> ModuleDefinition {
+    Name(Self.moduleName)
+
+    Self.locationPermissionFunction
+    Self.requestLocationPermissionFunction
+    Self.openLocationSettingsFunction
+    Self.devLocationRequestsFunction
   }
 }

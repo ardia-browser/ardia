@@ -369,6 +369,10 @@ NSMapTable<ArdiaCoreProfile *, ArdiaWindowController *> *StandaloneWindows() {
 }
 
 - (BOOL)window:(ArdiaCoreWindow *)window preHandleKeyEvent:(NSEvent *)event {
+  if (KeepsReservedKeyInDevTools(window.window, event)) {
+    if (event.type == NSEventTypeKeyDown && !event.isARepeat) [ArdiaEvents emit:@"engine.devToolsKeyKept" data:[[ArdiaConsentStamp begin] onto:@{}]];
+    return NO;
+  }
   return ArdiaPerformReservedKey(event);
 }
 

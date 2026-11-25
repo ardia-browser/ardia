@@ -3,9 +3,9 @@
 #include <set>
 #include <string>
 
-#include "ardia/linux/ac_linux_window_commands.h"
+#include "ardia/desktop/ac_desktop_window_commands.h"
 
-namespace commands = ardia::linux_commands;
+namespace commands = ardia::desktop_commands;
 
 int main() {
   using commands::EditAction;

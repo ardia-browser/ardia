@@ -208,6 +208,12 @@
         return send({ what: "setWhitelist", whitelist: (allowed ? kept.concat([host]) : kept).join("\n") }).then(() => null);
       });
 
+    const removeAllowed = ({ host }) =>
+      trusted().then((t) => {
+        if (typeof host !== "string" || !t.whitelist.includes(host) || (t.whitelistDefault || []).includes(host)) return false;
+        return send({ what: "setWhitelist", whitelist: t.whitelist.filter((d) => d !== host).join("\n") }).then(() => true);
+      });
+
     const sameSet = (a, b) => a.length === b.length && a.every((x) => b.includes(x));
     const strings = (value) => Array.isArray(value) && value.every((x) => typeof x === "string");
 
@@ -298,6 +304,7 @@
       setList,
       isAllowed,
       setAllowed,
+      removeAllowed,
       settings,
       follow,
       addList,

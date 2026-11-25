@@ -14,6 +14,7 @@ export type JsonSchema = {
   prefixItems?: JsonSchema[];
   minItems?: number;
   maxItems?: number;
+  uniqueItems?: boolean;
   properties?: Record<string, JsonSchema>;
   additionalProperties?: JsonSchema | boolean;
   propertyNames?: JsonSchema;

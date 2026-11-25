@@ -7,7 +7,7 @@
 -    "platforms": ["win", "mac"]
 +    "platforms": ["win", "mac", "linux"]
    },
-   "file_browser_handlers": {
+   "minimum_chrome_version": {
      "channel": "stable",
 --- a/chrome/browser/extensions/api/settings_overrides/settings_overrides_api.cc
 +++ b/chrome/browser/extensions/api/settings_overrides/settings_overrides_api.cc

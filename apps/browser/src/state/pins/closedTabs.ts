@@ -2,9 +2,10 @@ import type { BrowserState } from "../browser/store";
 import { ancestorIds, closedGroupInfo, descendantIds, innermostGroupOf, insertAll, nestGroups, orderSections, placeGroups, rejoinGroups, syncGroupOrder } from "../groups/groups";
 import { inPinnedContainer, newId, snapshotTab, viewTabIds } from "../browser/model";
 import { pendingRestore, restoreId } from "../tabs/adoptIds";
-import { activated, apply, removeTabs, withNewTab } from "../tabs/tabs";
+import { activated, apply, removeTabs, withFallbackNewTab, withNewTab, type UserClose } from "../tabs/tabs";
 import { groupLabel, withGroup } from "./tabGrouping";
 import type { BrowserWindow, ClosedGroup, ClosedTab, ClosedWindow, NestedGroupSnapshot, Tab, TabGroup } from "../browser/types";
+import { sleepsNow } from "../tabs/openers";
 import { isAsleep } from "../tabs/pageSession";
 
 export const MAX_CLOSED_TABS = 50;
@@ -22,8 +23,41 @@ export const cleanedTabsFor = (s: Pick<BrowserState, "windows" | "cleanedTabs" |
   keptCleanedTabs(s.windows[windowId]?.kind === "private" ? (s.privateCleanedTabs[windowId] ?? NO_CLEANED) : s.cleanedTabs);
 const NO_CLEANED: ClosedTab[] = [];
 
-export function closedTabEntry(s: Pick<BrowserState, "groups">, t: Tab, at: { windowId: string; index: number }, closedAt: number, group: TabGroup | null | undefined = innermostGroupOf(s.groups, t.id)): ClosedTab {
+function profileIndexOf(s: Pick<BrowserState, "windows" | "tabs">, windowId: string, profileId: string, tabId: string): number | undefined {
+  const w = s.windows[windowId];
+  if (!w) return undefined;
+  let i = 0;
+  for (const id of w.tabIds) {
+    if (id === tabId) return i;
+    if (s.tabs[id]?.profileId === profileId) i++;
+  }
+  return undefined;
+}
+
+export function restoreIndex(
+  s: BrowserState,
+  windowId: string,
+  profileId: string,
+  entry: { windowId: string; index: number; profileIndex?: number },
+  priorInBatch = 0,
+): number | undefined {
+  if (windowId !== entry.windowId) return undefined;
+  const w = s.windows[windowId];
+  if (!w) return undefined;
+  if (typeof entry.profileIndex !== "number" || !Number.isFinite(entry.profileIndex)) return Math.max(0, entry.index - priorInBatch);
+  const target = Math.max(0, entry.profileIndex - priorInBatch);
+  let seen = 0;
+  for (let i = 0; i < w.tabIds.length; i++) {
+    if (s.tabs[w.tabIds[i]!]?.profileId !== profileId) continue;
+    if (seen === target) return i;
+    seen++;
+  }
+  return w.tabIds.length;
+}
+
+export function closedTabEntry(s: Pick<BrowserState, "groups" | "windows" | "tabs">, t: Tab, at: { windowId: string; index: number }, closedAt: number, group: TabGroup | null | undefined = innermostGroupOf(s.groups, t.id)): ClosedTab {
   const parents = group ? ancestorIds(s.groups, group.id).map((id) => closedGroupInfo(s.groups[id]!)) : [];
+  const profileIndex = profileIndexOf(s, at.windowId, t.profileId, t.id);
   return {
     kind: "tab",
     id: newId("ct"),
@@ -32,6 +66,7 @@ export function closedTabEntry(s: Pick<BrowserState, "groups">, t: Tab, at: { wi
     ...(pendingRestore(t) ? { restoreFrom: pendingRestore(t) } : {}),
     windowId: at.windowId,
     index: at.index,
+    ...(profileIndex !== undefined ? { profileIndex } : {}),
     group: group ? closedGroupInfo(group) : null,
     ...(parents.length ? { parents } : {}),
     closedAt,
@@ -41,7 +76,7 @@ export function closedTabEntry(s: Pick<BrowserState, "groups">, t: Tab, at: { wi
 export const closedWindowEntry = (w: BrowserWindow, tabs: ClosedWindow["tabs"], groups: ClosedWindow["groups"], closedAt: number): ClosedWindow => ({
   kind: "window",
   id: newId("cw"),
-  window: { profileId: w.profileId, frame: w.frame, ...(w.tabLayout ? { tabLayout: w.tabLayout } : {}), ...(w.autoHideTabs !== undefined ? { autoHideTabs: w.autoHideTabs } : {}) },
+  window: { profileId: w.profileId, frame: w.frame, ...(w.restoredFrame ? { restoredFrame: w.restoredFrame } : {}), ...(w.maximized ? { maximized: true } : {}), ...(w.tabLayout ? { tabLayout: w.tabLayout } : {}), ...(w.autoHideTabs !== undefined ? { autoHideTabs: w.autoHideTabs } : {}) },
   tabs,
   groups,
   closedAt,
@@ -55,33 +90,37 @@ export function closedEntries(s: BrowserState, ids: string[]): ClosedTab[] {
     .map((t) => closedTabEntry(s, t, { windowId: t.windowId, index: s.windows[t.windowId]?.tabIds.indexOf(t.id) ?? 0 }, now));
 }
 
-export function closeQuietly(s: BrowserState, ids: string[]): BrowserState {
+export function closeQuietly(
+  s: BrowserState,
+  ids: string[],
+  userClose?: UserClose,
+  groupFallback?: (windowId: string, profileId: string) => string | undefined,
+): BrowserState {
+  const closing = new Set(ids);
   for (const w of Object.values(s.windows)) {
     const view = viewTabIds(s, w.id);
-    if (view.length && view.every((id) => ids.includes(id))) s = withNewTab(s, w.id)[0];
+    if (view.length && view.every((id) => closing.has(id))) s = withFallbackNewTab(s, w, closing, userClose);
   }
-  return removeTabs(s, ids, false);
+  return removeTabs(s, ids, false, userClose, groupFallback);
 }
 
-function showAboveGroup(before: BrowserState, s: BrowserState, g: TabGroup): BrowserState {
-  const w = s.windows[g.windowId];
+function aboveGroupPick(before: BrowserState, g: TabGroup): string | undefined {
   const was = before.windows[g.windowId]?.activeTabIds[g.profileId];
-  if (!w || !was || !g.tabIds.includes(was)) return s;
+  if (!was || !g.tabIds.includes(was)) return undefined;
   const order = viewTabIds(before, g.windowId, g.profileId).filter((id) => !inPinnedContainer(before, id));
   const at = order.indexOf(g.tabIds[0]!);
-  const stays = (id: string) => !!s.tabs[id] && !g.tabIds.includes(id) && !isAsleep(s.tabs[id]);
-  const pick = order.slice(0, at).reverse().find(stays) ?? order.slice(at).find(stays);
-  if (!pick) return s;
-  if (w.profileId === g.profileId) return apply(s, activated(s, pick));
-  return { ...s, windows: { ...s.windows, [w.id]: { ...w, activeTabIds: { ...w.activeTabIds, [g.profileId]: pick } } } };
+  const stays = (id: string) => !!before.tabs[id] && !g.tabIds.includes(id) && !isAsleep(before.tabs[id]);
+  const nearest = (at < 0 ? order : [...order.slice(0, at).reverse(), ...order.slice(at)]).filter(stays);
+  return nearest.find((id) => !sleepsNow(before, id)) ?? nearest[0];
 }
 
-export function closingGroup(s: BrowserState, groupId: string, deleted = false): BrowserState {
+export function closingGroup(s: BrowserState, groupId: string, deleted = false, userClose?: UserClose): BrowserState {
   let g = s.groups[groupId];
   for (let p = g?.parentId ? s.groups[g.parentId] : undefined; g && p?.tabIds.length === g.tabIds.length; p = p.parentId ? s.groups[p.parentId] : undefined) g = p;
   const w = g && s.windows[g.windowId];
   if (!g || !w) return s;
   const nested = nestedSnapshot(s, g);
+  const profileIndex = profileIndexOf(s, w.id, g.profileId, g.tabIds[0]!);
   const entry: ClosedGroup = {
     kind: "group",
     id: newId("cg"),
@@ -91,10 +130,13 @@ export function closingGroup(s: BrowserState, groupId: string, deleted = false):
     ...(nested.length ? { nested } : {}),
     windowId: w.id,
     index: w.tabIds.indexOf(g.tabIds[0]!),
+    ...(profileIndex !== undefined ? { profileIndex } : {}),
     closedAt: Date.now(),
   };
   const recordable = w.kind !== "private" && entry.tabs.some((t) => t.url);
-  const next = showAboveGroup(s, closeQuietly(s, g.tabIds), g);
+  const pick = aboveGroupPick(s, g);
+  const groupFallback = pick ? (windowId: string, profileId: string) => (windowId === g.windowId && profileId === g.profileId ? pick : undefined) : undefined;
+  const next = closeQuietly(s, g.tabIds, userClose, groupFallback);
   if (!recordable) return next;
   if (deleted) return { ...next, deletedGroups: [...keptDeletedGroups(next.deletedGroups), entry] };
   return { ...next, closedGroups: [...next.closedGroups, entry].slice(-MAX_CLOSED_GROUPS) };
@@ -204,7 +246,10 @@ export function restoringGroup(s: BrowserState, entry: ClosedGroup, requested?: 
     closedGroups: s.closedGroups.filter((c) => c.id !== entry.id),
     deletedGroups: s.deletedGroups.filter((c) => c.id !== entry.id),
   };
-  const index = windowId === entry.windowId ? entry.index : undefined;
+  const groupProfile = entry.tabs[0]?.profileId;
+  const w = next.windows[windowId]!;
+  const profileId = groupProfile && (next.profiles[groupProfile] || w.kind === "private") ? groupProfile : w.profileId;
+  const index = groupProfile && profileId === groupProfile ? restoreIndex(next, windowId, profileId, entry) : undefined;
   const [restored, ids] = restoreSnapshots(
     next,
     windowId,

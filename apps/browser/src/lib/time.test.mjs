@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-const { durationMinutes, durationParts, durationTitle, MAX_DURATION_MINUTES } = await import("./time.ts");
+const { durationMinutes, durationParts, durationTitle, MAX_DURATION_MINUTES, utcDay } = await import("./time.ts");
 
 test("a duration in minutes reads in the largest unit that holds it exactly", () => {
   for (const [minutes, amount, unit] of [[30, 30, "minutes"], [90, 90, "minutes"], [60, 1, "hours"], [36 * 60, 36, "hours"], [1440, 1, "days"], [7 * 1440, 7, "days"]]) {
@@ -23,4 +23,11 @@ test("a typed amount becomes whole minutes, and nothing at or below zero or past
   for (const [amount, unit] of [["0", "minutes"], ["0.2", "minutes"], ["-5", "minutes"], ["", "hours"], ["abc", "days"], ["1e3", "minutes"], ["366", "days"]]) {
     assert.equal(durationMinutes(amount, unit), null, `${amount} ${unit}`);
   }
+});
+
+test("a day is the UTC calendar date of a moment", () => {
+  assert.equal(utcDay(Date.parse("2026-10-25T23:59:59-05:00")), "2026-10-26");
+  assert.equal(utcDay(Date.parse("2026-10-26T00:00:00Z")), "2026-10-26");
+  assert.equal(utcDay(Date.parse("2026-10-25T23:59:59.999Z")), "2026-10-25");
+  assert.equal(utcDay(0), "1970-01-01");
 });

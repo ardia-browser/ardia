@@ -25,6 +25,7 @@ final class AppDelegate: ExpoAppDelegate {
       InterfaceScale.follow(root)
       return root
     }
+    HermesFatal.install()
     factory.rootViewFactory.initializeReactHost(launchOptions: nil)
 
     super.applicationDidFinishLaunching(notification)
@@ -33,7 +34,7 @@ final class AppDelegate: ExpoAppDelegate {
   }
 
   override func application(_ application: NSApplication, open urls: [URL]) {
-    OpenURLInbox.receive(urls)
+    OpenURLInbox.receiveFromOtherApp(urls)
   }
 
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }

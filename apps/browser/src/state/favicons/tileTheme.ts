@@ -1,6 +1,7 @@
 import { iconTheme, type IconTheme } from "../../platform/favicons";
 import { useEffect, useState } from "react";
-import { useAppearanceDark, useFavicon, useFaviconTheme } from "./favicons";
+import { useAppearanceDark } from "./favicons";
+import { useFavicon, useFaviconTheme } from "./faviconHooks";
 import { iconSymbol } from "../../lib/customIcon";
 import { drawnIcon } from "../pins/rowIcons";
 

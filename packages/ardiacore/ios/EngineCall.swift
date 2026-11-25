@@ -80,12 +80,7 @@ struct CallReply {
     return value
   }
 
-  static func engineError(_ json: String) -> String? {
-    guard json.contains("\"error\"") else { return nil }
-    guard let reply = try? JSONSerialization.jsonObject(with: Data(json.utf8), options: [.fragmentsAllowed]) else { return "the engine's reply isn't JSON" }
-    guard let dict = reply as? [String: Any], let error = dict["error"] else { return nil }
-    return error as? String ?? "\(error)"
-  }
+  static func engineError(_ json: String) -> String? { EngineReplyError.message(json) }
 }
 
 typealias CallHandler = (CallArgs, CallReply) throws -> Void
@@ -100,6 +95,10 @@ struct CallTable {
     AsyncFunction("call") { (name: String, profile: String, args: String, promise: Promise) in
       run(name, profile, args, promise)
     }.runOnQueue(.main)
+  }
+
+  func dropping(_ verbs: Set<String>) -> CallTable {
+    CallTable(domain: domain, handlers: handlers.filter { !verbs.contains($0.key) })
   }
 
   func forwardEvents(to module: Module) -> AnyDefinition {
@@ -124,6 +123,12 @@ enum EngineCall {
   static func passing(_ name: String) -> CallHandler {
     { args, reply in
       ArdiaEngineBridge.call(name, profile: args.profile, args: args.json) { reply.engine($0) }
+    }
+  }
+
+  static func passingLoaded(_ name: String) -> CallHandler {
+    { args, reply in
+      ArdiaEngineBridge.callLoaded(name, profile: args.profile, args: args.json) { reply.engine($0) }
     }
   }
 

@@ -47,6 +47,7 @@ int main(int argc, char** argv) {
   const std::string mode = argv[1];
   if (mode == "split") {
     Pane p;
+    p.binding->pane_radii = desktop_window_corners::Corners{0, 0, 10, 10};
     p.Dock();
     assert(!ardiacore::shown_slot);
     p.host.Show(p.binding, true);
@@ -55,6 +56,12 @@ int main(int argc, char** argv) {
     assert(p.host.restacks == 1);
     assert(p.binding->viewport()->bounds() == gfx::Rect(100, 50, 500, 600));
     assert(p.tools()->bounds() == gfx::Rect(100, 50, 800, 600));
+    assert(std::ranges::count(p.host.clipped, p.binding->viewport()) == 1);
+    assert(std::ranges::count(p.host.clipped, p.tools()) == 1);
+    for (size_t i = 0; i < p.host.clipped.size(); ++i) {
+      if (p.host.clipped[i] == p.binding->viewport()) assert((p.host.clipped_radii[i] == desktop_window_corners::Corners{0, 0, 0, 10}));
+      if (p.host.clipped[i] == p.tools()) assert((p.host.clipped_radii[i] == desktop_window_corners::Corners{0, 0, 10, 10}));
+    }
     assert(*p.host.GetIndexOf(p.tools()) < *p.host.GetIndexOf(p.binding->viewport()));
     DevToolsWindow::strategies[&p.page].hide = true;
     p.host.LayoutPane(p.binding);
@@ -131,7 +138,7 @@ int main(int argc, char** argv) {
     assert(chrome.web_contents() == &p.frontend);
     p.binding->claim = "claim";
     chrome.SetWebContents(nullptr);
-    p.binding->viewport_ = p.host.AddChildView(std::make_unique<ViewportView>(0));
+    p.binding->viewport_ = p.host.AddChildView(std::make_unique<ViewportView>(nullptr));
     p.host.Show(p.binding, true);
     assert(p.tools() && p.tools()->GetVisible() && p.tools()->web_contents() == &p.frontend);
     assert(views::focus_manager.focused == p.tools() && p.frontend.focuses == 1);
@@ -167,6 +174,157 @@ int main(int argc, char** argv) {
     assert(p.tools()->web_contents() == &p.frontend);
     return 0;
   }
+  if (mode == "tab-return" || mode == "tab-return-unmanaged") {
+    views::manages_layers = mode == "tab-return";
+    Pane p;
+    p.Dock();
+    p.host.Show(p.binding, true);
+    auto& chrome = p.host.browser_view_storage.containers[&p.page].devtools;
+    aura::Window& native = p.frontend.native;
+    const auto shown_in_pane = [&] { return p.tools()->holder()->Holds(&native) && native.IsVisible(); };
+    assert(shown_in_pane());
+    for (int round = 0; round < 3; ++round) {
+      p.host.Show(p.binding, false);
+      assert(!p.tools()->GetVisible() && !p.tools()->web_contents() && !native.parented);
+      p.host.Show(p.binding, true);
+      assert(shown_in_pane());
+      chrome.SetWebContents(&p.frontend);
+      chrome.SetVisible(true);
+      assert(chrome.holder()->Holds(&native) && !p.tools()->holder()->Holds(&native));
+      if (round == 1) {
+        p.host.LayoutPane(p.binding);
+      } else {
+        chrome.SetWebContents(nullptr);
+        chrome.SetVisible(false);
+        assert(!native.parented && !native.IsVisible());
+        p.host.OnDevToolsDockChanged(&p.page, &p.frontend);
+      }
+      DrainPosted();
+      assert(!chrome.web_contents() && !chrome.GetVisible());
+      assert(p.tools()->GetVisible() && p.tools()->web_contents() == &p.frontend);
+      assert(shown_in_pane());
+      assert(p.binding->viewport()->bounds() == gfx::Rect(100, 50, 500, 600));
+    }
+    p.host.Show(p.binding, false);
+    chrome.SetWebContents(&p.frontend);
+    p.host.Show(p.binding, true);
+    assert(!chrome.web_contents() && shown_in_pane());
+    DevToolsWindow::docked.clear();
+    p.host.LayoutPane(p.binding);
+    assert(!p.tools()->GetVisible() && !p.tools()->web_contents() && !native.parented);
+    assert(p.binding->viewport()->bounds() == gfx::Rect(100, 50, 800, 600));
+    return 0;
+  }
+  if (mode == "tab-return-focus") {
+    views::detach_advances_focus = true;
+    Pane p;
+    p.Dock();
+    p.host.Show(p.binding, true);
+    auto& chrome = p.host.browser_view_storage.containers[&p.page].devtools;
+    assert(views::focus_manager.focused == p.tools() && p.frontend.focuses == 1);
+    chrome.SetWebContents(&p.frontend);
+    chrome.SetWebContents(nullptr);
+    p.host.LayoutPane(p.binding);
+    assert(p.tools()->holder()->Holds(&p.frontend.native) && views::focused_detaches == 0);
+    assert(views::focus_manager.focused == p.tools() && p.frontend.focuses == 2);
+    p.binding->viewport()->RequestFocus();
+    chrome.SetWebContents(&p.frontend);
+    chrome.SetWebContents(nullptr);
+    p.host.LayoutPane(p.binding);
+    assert(p.tools()->holder()->Holds(&p.frontend.native));
+    assert(views::focus_manager.focused == p.binding->viewport() && p.frontend.focuses == 2);
+    return 0;
+  }
+  if (mode == "clipped-content") {
+    Pane p;
+    p.binding->pane_radii = desktop_window_corners::Corners{0, 0, 10, 10};
+    p.binding->pane_bounds = gfx::Rect(100, 70, 800, 580);
+    p.binding->content_bounds = gfx::Rect(100, 70, 800, 600);
+    p.binding->pane_visible = true;
+    p.host.LayoutPane(p.binding);
+    ViewportView* view = p.binding->viewport();
+    assert(view->bounds() == gfx::Rect(100, 70, 800, 580));
+    assert(view->ClipsContent());
+    assert(view->holder()->bounds() == gfx::Rect(0, 0, 800, 600));
+    assert(view->holder()->clip_installed);
+    assert(view->holder()->clip_rect == gfx::Rect(0, 0, 800, 580));
+    assert(view->layer() && view->layer()->masks_to_bounds);
+    assert(view->layer()->radii == gfx::RoundedCornersF(0, 0, 10, 10));
+    assert(view->holder()->applied_radii == gfx::RoundedCornersF());
+    assert((p.host.clipped_radii.back() == desktop_window_corners::Corners{0, 0, 10, 10}));
+    const int base_before_move = view->base_bounds_changes;
+    p.binding->pane_bounds = gfx::Rect(100, 82, 800, 568);
+    p.binding->content_bounds = gfx::Rect(100, 82, 800, 600);
+    p.host.LayoutPane(p.binding);
+    assert(view->base_bounds_changes == base_before_move);
+    assert(view->holder()->bounds() == gfx::Rect(0, 0, 800, 600));
+    assert(view->holder()->clip_installed && view->holder()->clip_rect == gfx::Rect(0, 0, 800, 568));
+    assert(view->layer()->masks_to_bounds && view->layer()->radii == gfx::RoundedCornersF(0, 0, 10, 10));
+    p.binding->pane_bounds = gfx::Rect(100, 50, 800, 600);
+    p.binding->content_bounds = gfx::Rect(100, 50, 800, 600);
+    p.host.LayoutPane(p.binding);
+    assert(!view->ClipsContent());
+    assert(!view->holder()->clip_installed && view->holder()->clip_rect.IsEmpty());
+    assert(!view->layer()->masks_to_bounds && view->layer()->radii == gfx::RoundedCornersF());
+    assert(view->holder()->applied_radii == gfx::RoundedCornersF(0, 0, 10, 10));
+    p.binding->pane_bounds = gfx::Rect(100, 70, 800, 580);
+    p.binding->content_bounds = gfx::Rect(100, 70, 800, 600);
+    p.host.LayoutPane(p.binding);
+    assert(view->ClipsContent() && view->holder()->clip_installed);
+    p.binding->content_bounds = gfx::Rect(100, 70, 800, 580);
+    p.host.LayoutPane(p.binding);
+    assert(!view->ClipsContent() && !view->holder()->clip_installed);
+    assert(view->holder()->applied_radii == gfx::RoundedCornersF(0, 0, 10, 10));
+    p.binding->pane_bounds = gfx::Rect(100, 70, 800, 580);
+    p.binding->content_bounds = gfx::Rect(100, 70, 800, 600);
+    p.host.LayoutPane(p.binding);
+    assert(view->ClipsContent());
+    p.binding->pane_visible = false;
+    p.binding->content_bounds = gfx::Rect(100, 70, 800, 580);
+    p.host.LayoutPane(p.binding);
+    assert(!view->GetVisible() && !view->web_contents());
+    assert(view->ClipsContent() && view->holder()->bounds() == gfx::Rect(0, 0, 800, 600));
+    p.binding->pane_visible = true;
+    p.binding->content_bounds = gfx::Rect(100, 70, 800, 600);
+    p.host.LayoutPane(p.binding);
+    assert(view->ClipsContent() && view->holder()->clip_installed && view->holder()->clip_rect == gfx::Rect(0, 0, 800, 580));
+    p.binding->pane_visible = false;
+    p.host.LayoutPane(p.binding);
+    p.binding->pane_visible = true;
+    p.binding->pane_bounds = gfx::Rect(100, 50, 800, 600);
+    p.binding->content_bounds = gfx::Rect(100, 50, 800, 600);
+    p.host.LayoutPane(p.binding);
+    assert(!view->ClipsContent() && !view->holder()->clip_installed);
+    assert(view->holder()->applied_radii == gfx::RoundedCornersF(0, 0, 10, 10));
+    p.binding->pane_bounds = gfx::Rect(100, 70, 800, 580);
+    p.binding->content_bounds = gfx::Rect(100, 70, 800, 600);
+    p.Dock();
+    p.host.LayoutPane(p.binding);
+    assert(view->bounds() == gfx::Rect(100, 70, 500, 580));
+    assert(!view->ClipsContent() && view->holder()->bounds() == gfx::Rect(0, 0, 500, 580));
+    return 0;
+  }
+  if (mode == "clipped-content-unmanaged") {
+    views::manages_layers = false;
+    Pane p;
+    p.binding->pane_radii = desktop_window_corners::Corners{0, 0, 10, 10};
+    p.binding->pane_bounds = gfx::Rect(100, 70, 800, 580);
+    p.binding->content_bounds = gfx::Rect(100, 70, 800, 600);
+    p.binding->pane_visible = true;
+    p.host.LayoutPane(p.binding);
+    ViewportView* view = p.binding->viewport();
+    assert(!view->layer());
+    assert(view->ClipsContent() && view->holder()->clip_installed);
+    assert(view->holder()->GetNativeViewContainer()->layer()->radii == gfx::RoundedCornersF(0, 0, 10, 10));
+    assert(view->holder()->applied_radii == gfx::RoundedCornersF());
+    p.binding->pane_bounds = gfx::Rect(100, 50, 800, 600);
+    p.binding->content_bounds = gfx::Rect(100, 50, 800, 600);
+    p.host.LayoutPane(p.binding);
+    assert(!view->ClipsContent() && !view->holder()->clip_installed);
+    assert(view->holder()->GetNativeViewContainer()->layer()->radii == gfx::RoundedCornersF());
+    assert(view->holder()->applied_radii == gfx::RoundedCornersF(0, 0, 10, 10));
+    return 0;
+  }
   assert(false);
 }
 '''
@@ -180,18 +338,22 @@ class PaneLayoutTests(unittest.TestCase):
             raise unittest.SkipTest('C++ compiler unavailable')
         host = HOST.read_text()
         watch = method(host, 'class DevToolsFrontendWatch') + ';' if 'class DevToolsFrontendWatch' in host else 'struct DevToolsFrontendWatch {};'
+        viewport_view = method(host, 'class ViewportView') + ';'
         methods = '\n'.join(method(host, signature) for signature in [
-            'void ShellHostView::LayoutPane(', 'void ShellHostView::OnDevToolsDockChanged(',
+            'bool HoldsNativeView(', 'void ShellHostView::LayoutPane(', 'void ShellHostView::ClipPaneView(', 'void ShellHostView::OnDevToolsDockChanged(',
             'void ShellHostView::HideDevToolsViewport(', 'void TabBinding::WebContentsDestroyed(',
             'void TabBinding::FocusFromHost(', 'void TabBinding::OnWebContentsFocused('])
         methods = methods.replace('content::RenderWidgetHost*', 'void*')
-        code = FIXTURE.read_text().replace('#pragma once\n', '').replace('ARDIA_FRONTEND_WATCH', watch).replace('ARDIA_HOST_METHODS', methods)
+        code = (FIXTURE.read_text().replace('#pragma once\n', '')
+                .replace('ARDIA_VIEWPORT_VIEW', viewport_view)
+                .replace('ARDIA_FRONTEND_WATCH', watch)
+                .replace('ARDIA_HOST_METHODS', methods))
         cls.temp = tempfile.TemporaryDirectory(prefix='ardia-pane-layout-')
         cls.addClassCleanup(cls.temp.cleanup)
         root = pathlib.Path(cls.temp.name)
         (root / 'main.cc').write_text(code + MAIN)
         cls.binary = root / 'pane'
-        result = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-Wno-unused-parameter',
+        result = subprocess.run([compiler, '-std=c++20', '-I', str(ROOT / 'src'), '-I', str(ROOT.parent / 'ardiacore-desktop' / 'src'), '-Wall', '-Wextra', '-Werror', '-Wno-unused-parameter',
                                  '-Wno-unused-private-field', '-fsanitize=address,undefined', '-fno-omit-frame-pointer',
                                  str(root / 'main.cc'), '-o', str(cls.binary)], capture_output=True, text=True, timeout=120)
         if result.returncode:
@@ -219,6 +381,21 @@ class PaneLayoutTests(unittest.TestCase):
 
     def test_undocking_releases_the_frontend_before_chrome_moves_it_into_its_window(self):
         self.run_case('undock')
+
+    def test_returning_to_a_tab_takes_its_frontend_back_from_chromes_container(self):
+        self.run_case('tab-return')
+
+    def test_returning_to_a_tab_takes_its_frontend_back_when_views_do_not_manage_layers(self):
+        self.run_case('tab-return-unmanaged')
+
+    def test_taking_the_frontend_back_keeps_keyboard_focus_where_it_was(self):
+        self.run_case('tab-return-focus')
+
+    def test_clipped_content_keeps_pane_bounds_and_falls_back_when_devtools_is_docked(self):
+        self.run_case('clipped-content')
+
+    def test_clipped_content_clears_container_corners_when_views_do_not_manage_layers(self):
+        self.run_case('clipped-content-unmanaged')
 
 if __name__ == '__main__':
     unittest.main()

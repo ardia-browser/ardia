@@ -2,10 +2,11 @@ import { create } from "zustand";
 import { hoverHeld } from "../app/transientUi";
 import { useBrowser } from "../browser/store";
 import { noteStripHoverCard } from "../telemetry/stripHoverCards";
+import { consentToken } from "../telemetry/client";
 import { tabDragging } from "../drag/tabDrag";
 import type { Anchor } from "../sidebar/sidebarUi";
 
-export type StripHover = { windowId: string; tabId: string; anchor: Anchor };
+type StripHover = { windowId: string; tabId: string; anchor: Anchor };
 
 export const STRIP_HOVER_DELAY_MS = { show: 500, leave: 160 };
 
@@ -30,11 +31,12 @@ const hide = () => {
 };
 
 async function show(target: Pointed, mine: number) {
+  const consent = consentToken();
   const anchor = await target.measure();
   if (mine !== ticket || pointed !== target || !anchor || !tabCardsOn() || tabDragging() || hoverHeld(target.windowId)) return;
   useStripHover.setState({ hover: { windowId: target.windowId, tabId: target.tabId, anchor } });
   const s = useBrowser.getState();
-  noteStripHoverCard(s.tabs[target.tabId]?.profileId !== s.windows[target.windowId]?.profileId);
+  noteStripHoverCard(s.tabs[target.tabId]?.profileId !== s.windows[target.windowId]?.profileId, consent);
 }
 
 export function stripChipEntered(windowId: string, tabId: string, measure: () => Promise<Anchor | null>) {
@@ -70,7 +72,7 @@ export function dismissStripHover() {
   hide();
 }
 
-useBrowser.subscribe((s, prev) => {
+useBrowser.subscribeTo(["settings"], (s, prev) => {
   if (!s.settings.showTabHoverMenu && prev.settings.showTabHoverMenu) dismissStripHover();
 });
 

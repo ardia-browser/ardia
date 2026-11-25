@@ -5,7 +5,7 @@ import { createServer, request as httpRequest } from "node:http";
 import { createServer as createNetServer } from "node:net";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { forBuild, launchVariables, mergeLaunchEnv } from "./launchEnv.mjs";
+import { forBuild, launchVariables, mergeLaunchEnv, scratchInstance } from "./launchEnv.mjs";
 
 export { launchVariables, mergeLaunchEnv };
 
@@ -25,7 +25,7 @@ export function parsePort(value) {
   return n;
 }
 const pidList = (text) => [...new Set(text.split(/\s+/).filter(Boolean).map(Number))].filter((n) => Number.isInteger(n) && n > 0);
-export const commandIsBinary = (command, binary) => command === binary || command.startsWith(`${binary} `);
+const commandIsBinary = (command, binary) => command === binary || command.startsWith(`${binary} `);
 export function listenerPids(port) {
   let r;
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -35,7 +35,7 @@ export function listenerPids(port) {
   if (r.error || r.status > 1) throw new Error(`lsof failed for port ${port}: ${r.error ?? r.stderr}`);
   return pidList(r.stdout);
 }
-export function parseProcessLine(line) {
+function parseProcessLine(line) {
   const m = /^\s*(\S+\s+\S+\s+\S+\s+\S+\s+\S+)\s+(.*\S)\s*$/.exec(line);
   return m ? { started: m[1], command: m[2] } : null;
 }
@@ -57,7 +57,7 @@ export function binaryPids(binary) {
   return new Set(r.stdout.split("\n").map((l) => /^\s*(\d+)\s+(.*)$/.exec(l))
     .filter((m) => m && commandIsBinary(m[2], binary)).map((m) => Number(m[1])));
 }
-export function ownedCandidate(listeners, before, commandOf, binary) {
+function ownedCandidate(listeners, before, commandOf, binary) {
   if (!listeners.length) return null;
   if (listeners.length !== 1) throw new Error(`port has ${listeners.length} listeners: ${listeners.join(", ")}`);
   const [pid] = listeners;
@@ -67,7 +67,7 @@ export function ownedCandidate(listeners, before, commandOf, binary) {
   return pid;
 }
 export const realPath = (path) => { try { return realpathSync(path); } catch { return path; } };
-export function spawnedPids(binary, before, port, dataDirs) {
+function spawnedPids(binary, before, port, dataDirs) {
   const r = processTable(["pid", "ppid", "command"]);
   if (r.status !== 0) return [];
   const rows = r.stdout.split("\n").map((l) => /^\s*(\d+)\s+(\d+)\s+(.*)$/.exec(l)).filter(Boolean)
@@ -371,7 +371,7 @@ export async function launch(app, opts = {}) {
   const env = appEnv(app, mergeLaunchEnv({
     ARDIA_BACKGROUND: "1", ARDIA_DATA_DIR: data, ARDIA_REMOTE_DEBUGGING_PORT: String(port),
     ...launchVariables({
-      instance: { ...(location ? { jsLocation: location } : {}), ...(switches ? { chromiumSwitches: switches } : {}), ...opts.instance },
+      instance: scratchInstance(data, { ...(location ? { jsLocation: location } : {}), ...(switches ? { chromiumSwitches: switches } : {}), ...opts.instance }),
       test: opts.test, trace: opts.trace, switchOverrides: opts.switchOverrides,
     }),
   }, opts.env));

@@ -4,17 +4,17 @@ import { useIsActiveTab, usePageProfileId, useTab, useWindowId } from "../../sta
 import { useShownTabIdFor } from "../../state/tabs/topStrip";
 import { TabIcon } from "../sidebar/TabIcon";
 import { Divider, FadeLabel, Symbol } from "../ui";
-import { surfaceTheme, ThemeContext, useTheme } from "../ui/theme";
+import { surfaceTheme, useTheme } from "../ui/theme";
+import { ThemeOverride } from "../ui/ThemeOverride";
 import type { ToolbarPalette } from "../ui/toolbarColors";
 import { font, space } from "../ui/tokens";
 import { DockContext, FloatingStrip } from "./context";
 import { SelectedTab } from "./SelectedTab";
 import { dragGeometry, type DragGeometry } from "./stripGroups";
-import type { GroupOut } from "./model";
 import { ItemRow, useWebsiteBand } from "./TabChip";
 import { CHIP_LABEL_GAP, CHIP_PAD, GAP, TOP_STRIP_HEIGHT } from "./tokens";
 import { useStripDrag } from "./useStripDrag";
-import { useEdgeOpacity } from "./edgeFade";
+import { useStripPick } from "./stripPick";
 import { StripScrollContext } from "./stripScroll";
 import { useStripCardHover } from "./StripHoverCard";
 import { useChipHover, useChipHovered } from "./reachableHover";
@@ -22,11 +22,11 @@ import { TabPressArea } from "../sidebar/TabPressArea";
 import { tabTitle } from "../../state/browser/model";
 import { useStruckTitle } from "../../state/sidebar/rowState";
 import { SLEEPING_TITLE_OPACITY } from "../sidebar/tokens";
+import { useStripSlide } from "./stripMotion";
 
-export function SplitChip({ tabIds, width, paneWidths, geometry: givenGeometry, from: givenFrom, group, out }: { tabIds: string[]; width: number; paneWidths?: number[]; geometry?: DragGeometry; from?: number; group: string | null; out?: GroupOut }) {
+export function SplitChip({ tabIds, width, paneWidths, geometry: givenGeometry, from: givenFrom, group }: { tabIds: string[]; width: number; paneWidths?: number[]; geometry?: DragGeometry; from?: number; group: string | null }) {
   const strip = useContext(DockContext);
   const scroll = useContext(StripScrollContext);
-  const topLevel = !givenGeometry && !group;
   const geometryOf = () => givenGeometry ?? strip!.current.top;
   const fromOf = () => givenFrom ?? strip?.current.slotOf(tabIds[0]!) ?? -1;
   const onTint = useTheme();
@@ -59,24 +59,20 @@ export function SplitChip({ tabIds, width, paneWidths, geometry: givenGeometry, 
     scroll,
     axis: "x",
   });
-  const edge = useEdgeOpacity(tabIds.join(","), () => {
-    if (out) return out.slot >= 0 ? [out.left, width] : null;
-    const from = fromOf();
-    return topLevel && from >= 0 ? [geometryOf().lefts[from]!, geometryOf().slots[from]!.width] : null;
-  });
+  const [slid, slidRef] = useStripSlide(!givenGeometry && !group ? tabIds[0]! : null);
   return (
-    <ThemeContext.Provider value={theme}>
-      <Animated.View ref={drag.ref} {...drag.panHandlers} mouseDownCanMoveWindow={false} style={{ ...drag.style, zIndex: drag.dragging ? 10 : active ? 1 : 0 }}>
-        <Animated.View {...hover.hoverProps} style={{ width, height: TOP_STRIP_HEIGHT, opacity: drag.dragging ? 1 : edge }}>
+    <ThemeOverride theme={theme}>
+      <Animated.View ref={drag.ref} {...drag.panHandlers} pointerEvents="box-none" mouseDownCanMoveWindow={false} style={{ ...drag.style, zIndex: drag.dragging ? 10 : active ? 1 : 0 }}>
+        <View {...hover.hoverProps} {...slid} ref={slidRef} style={[{ width, height: TOP_STRIP_HEIGHT }, slid.style as object]}>
           {active && <SelectedTab width={width} band={band} opaque={drag.dragging} />}
           <ItemRow hovered={hovered && !active} pressed={false} padded={false}>
             {tabIds.map((id, i) => (
               <SplitPart key={id} tabId={id} first={i === 0} last={i === tabIds.length - 1} ink={ink} width={paneWidth(id)} />
             ))}
           </ItemRow>
-        </Animated.View>
+        </View>
       </Animated.View>
-    </ThemeContext.Provider>
+    </ThemeOverride>
   );
 }
 
@@ -93,12 +89,14 @@ function SplitPart({ tabId, first, last, ink, width }: { tabId: string; first: b
   const hover = useChipHover();
   const card = useStripCardHover(windowId, tabId, drag.ref, hover);
   const struck = useStruckTitle(tabId);
+  const pick = useStripPick();
   if (!tab) return null;
   return (
     <Animated.View ref={drag.ref} {...drag.panHandlers} {...card} {...hover.hoverProps} style={{ ...(width === undefined ? { flex: 1 } : { width }), alignSelf: "stretch", opacity: drag.style.opacity }}>
       <TabPressArea
         windowId={windowId}
         tab={tab}
+        onSwitch={pick}
         style={PART_FILL}
         pressStyle={{ flex: 1, flexDirection: "row", alignItems: "center", paddingLeft: first ? CHIP_PAD.left : 0, paddingRight: last ? CHIP_PAD.right : 0 }}
       >

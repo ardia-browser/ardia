@@ -19,7 +19,7 @@ export function OptionCard({
   disabled,
   onHover,
   preview,
-  dense,
+  subtitleLines = 2,
 }: {
   title: string;
   subtitle?: string;
@@ -30,11 +30,11 @@ export function OptionCard({
   disabled?: boolean;
   onHover?: (hovered: boolean) => void;
   preview?: ReactNode;
-  dense?: boolean;
+  subtitleLines?: number;
 }) {
   const colors = useOnboardingColors();
   const { hovered, hoverProps } = useHover();
-  const pressMotion = usePressScaleMotion(!disabled, preview ? 0.98 : 0.99);
+  const pressMotion = usePressScaleMotion(false);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : undefined;
   const first = useRef(true);
   useEffect(() => {
@@ -71,7 +71,7 @@ export function OptionCard({
                   {title}
                 </Text>
                 {subtitle ? (
-                  <Text size="small" lines={2} color={colors.rowSubtitle}>
+                  <Text size="small" lines={subtitleLines} color={colors.rowSubtitle}>
                     {subtitle}
                   </Text>
                 ) : null}
@@ -125,9 +125,9 @@ export function OptionCard({
               flexDirection: "row",
               alignItems: "center",
               gap: space.l,
-              minHeight: dense ? undefined : RADIO_MIN_HEIGHT,
+              minHeight: RADIO_MIN_HEIGHT,
               paddingVertical: space.ml,
-              paddingHorizontal: dense ? space.l : space.xl,
+              paddingHorizontal: space.xl,
             }}
           >
             <Radio on={selected} look="ring" />

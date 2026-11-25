@@ -18,6 +18,18 @@
  #else
    params.argc = argc;
    params.argv = argv;
+@@ -222,6 +226,11 @@
+ 
+   int rv = content::ContentMain(std::move(params));
+ 
++#if BUILDFLAG(IS_WIN)
++  ardia_win::AfterChromeMain(IsNormalResultCode(static_cast<ResultCode>(rv))
++                                 ? content::RESULT_CODE_NORMAL_EXIT
++                                 : rv);
++#endif
+   if (IsNormalResultCode(static_cast<ResultCode>(rv))) {
+     return content::RESULT_CODE_NORMAL_EXIT;
+   }
 --- a/chrome/browser/chrome_browser_main.cc
 +++ b/chrome/browser/chrome_browser_main.cc
 @@ -765,6 +765,12 @@

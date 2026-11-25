@@ -222,7 +222,7 @@ export const closeOnArt = { rest: "rgba(255,255,255,0.1)", hover: "rgba(255,255,
 
 export const arcSelectedFill = { dark: "rgba(255,255,255,0.24)", light: "rgba(255,255,255,0.8)" } as const;
 
-export type SiteToolbarRoles = {
+type SiteToolbarRoles = {
   text: string;
   secondary: string;
   icon: string;
@@ -306,6 +306,9 @@ export type Radius = keyof typeof radius;
 
 export const concentric = (outer: number, inset: number) => Math.max(0, outer - inset);
 
+export const continuousCorners = (borderRadius: number) => ({ borderRadius, borderCurve: "continuous" as const });
+export const clippedContinuousCorners = (borderRadius: number) => ({ ...continuousCorners(borderRadius), overflow: "hidden" as const });
+
 export const capsule = (height: number) => height / 2;
 
 export type TypeSize = keyof typeof font;
@@ -371,6 +374,6 @@ export const sheetWidth = { xs: 320, s: 420, m: 440, l: 480, xl: 560 } as const;
 
 export type SheetSize = keyof typeof sheetWidth;
 
-export const toastLayout = { bottom: space.xxxl, maxWidth: 420, rise: 10 } as const;
+export const toastLayout = { bottom: space.xxxl, edge: space.l, maxWidth: 420, twoActionMaxWidth: 600 } as const;
 
 export const POPOVER_WIDTH = { s: 300, m: 340, l: 360 } as const;

@@ -9,6 +9,7 @@ from support import method
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 LINUX = SOURCE / 'ardia/linux'
 HOST = (LINUX / 'ac_linux_host.cc').read_text()
 DOWNLOADS = (LINUX / 'ac_linux_downloads.cc').read_text()
@@ -243,7 +244,7 @@ class EngineEventRoutingTests(unittest.TestCase):
             root = pathlib.Path(scratch)
             (root / 'routing.cc').write_text(code)
             built = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-Wno-unused-parameter',
-                                    '-fsanitize=address,undefined', '-I', str(SOURCE),
+                                    '-fsanitize=address,undefined', '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE),
                                     str(root / 'routing.cc'), '-o', str(root / 'routing')],
                                    capture_output=True, text=True, timeout=120)
             self.assertEqual(built.returncode, 0, built.stdout + built.stderr)

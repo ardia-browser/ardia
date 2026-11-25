@@ -10,15 +10,22 @@ ardia_sources = [
   "ac_bookmarks.cc",
   "ac_browsing_data.cc",
   "ac_cli_control.cc",
+  "ac_cli_control_file.cc",
+  "ac_cli_control_file.h",
+  "ac_cli_hit_probe.cc",
+  "ac_cli_hit_probe.h",
+  "ac_cli_hit_probe_helpers.cc",
+  "ac_cli_hit_probe_internal.h",
+  "ac_cli_console_ring.cc",
+  "ac_cli_console_ring.h",
   "ac_cli_owned_tabs.cc",
   "ac_cli_owned_tabs.h",
+  "ac_cli_page_signals.cc",
+  "ac_cli_page_signals.h",
   "ac_cli_token_policy.cc",
   "ac_cli_token_policy.h",
-  "ac_cli_token_policy_contexts.cc",
   "ac_cli_token_policy_events.cc",
   "ac_cli_token_policy_internal.h",
-  "ac_cli_token_policy_methods.cc",
-  "ac_cli_token_policy_web_targets.cc",
   "ac_cli_visible_tabs.cc",
   "ac_cli_visible_tabs.h",
   "ac_cookies.cc",
@@ -74,6 +81,39 @@ if (is_mac) {
   ]
 }
 
+if (!is_win) {
+  ardia_sources += [
+    "ac_cli_cdp.cc",
+    "ac_cli_cdp.h",
+    "ac_cli_devtools_sessions.cc",
+    "ac_cli_devtools_sessions.h",
+    "ac_cli_hit_tester.cc",
+    "ac_cli_hit_tester.h",
+    "ac_cli_ops.cc",
+    "ac_cli_ops.h",
+    "ac_cli_page_model.cc",
+    "ac_cli_page_model.h",
+    "ac_cli_page_reader.cc",
+    "ac_cli_page_reader.h",
+    "ac_cli_ref_store.cc",
+    "ac_cli_screenshot.cc",
+    "ac_cli_screenshot.h",
+    "ac_cli_settle.cc",
+    "ac_cli_tab_ops.cc",
+    "ac_cli_tab_ops.h",
+    "ac_cli_tab_ops_calls.cc",
+    "ac_cli_tab_report.cc",
+    "ac_extension_alarms.cc",
+    "ac_extension_dnr.cc",
+    "ac_extension_grants.cc",
+    "ac_extension_mirror.cc",
+    "ac_extension_mirror_internal.h",
+    "ac_extension_storage.cc",
+    "ac_local_storage.cc",
+    "ac_passwords_page.cc",
+  ]
+}
+
 if (is_linux) {
   ardia_sources += [
     "ac_engine_dispatch.cc",
@@ -82,6 +122,7 @@ if (is_linux) {
     "ac_reauth_linux.cc",
     "ac_reauth_linux.h",
     "ac_reauth_linux_policy.h",
+    "ac_windowless_page_linux.cc",
     "pip/ac_pip_hyprland.cc",
     "pip/ac_pip_hyprland.h",
     "pip/ac_pip_linux.cc",
@@ -119,6 +160,7 @@ source_set("ardia") {
     "//chrome/browser/password_manager/factories",
     "//chrome/browser/performance_manager/public/user_tuning",
     "//chrome/browser/picture_in_picture",
+    "//chrome/browser/policy",
     "//chrome/browser/profiles:profile",
     "//chrome/browser/search_engines",
     "//chrome/browser/sessions",
@@ -148,6 +190,7 @@ source_set("ardia") {
     "//components/password_manager/core/browser/features:password_features",
     "//components/password_manager/core/common",
     "//components/performance_manager",
+    "//components/policy/core/browser",
     "//components/prefs",
     "//components/search_engines",
     "//components/sessions",
@@ -166,6 +209,8 @@ source_set("ardia") {
     "//services/network/public/cpp",
     "//services/network/public/mojom",
     "//skia",
+    "//components/viz/common",
+    "//ui/gfx/codec",
     "//third_party/blink/public/common",
     "//third_party/boringssl",
     "//ui/base",
@@ -173,6 +218,17 @@ source_set("ardia") {
     "//ui/views",
     "//url",
   ]
+
+  if (!is_win) {
+    deps += [
+      "//components/password_manager/core/browser/password_store:password_store_interface",
+      "//components/services/storage/public/mojom",
+      "//extensions/browser/api/alarms",
+      "//extensions/browser/api/permissions",
+      "//extensions/browser/api/storage",
+      "//extensions/common/api",
+    ]
+  }
 
   if (is_mac) {
     frameworks = [ "QuartzCore.framework" ]

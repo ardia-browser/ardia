@@ -87,7 +87,7 @@ async function captureDemo() {
         for (let i = 0; i < 100 && !(await page.eval("!!globalThis.ardiaDemo && document.readyState === 'complete'").catch(() => false)); i++) await sleep(100);
         await page.eval("document.fonts.ready.then(() => true)");
         await run(page, reset);
-        for (let i = 0; i < 100 && (await run(page, "const s = ardiaDemo.store.getState(); return !!s.live.t_browser?.isLoading;")); i++) await sleep(100);
+        for (let i = 0; i < 100 && (await run(page, "return ardiaDemo.tabLive.liveOf('t_browser').isLoading;")); i++) await sleep(100);
         await mouse(page, -10, -10);
         await sleep(700);
         await setups[state](page);

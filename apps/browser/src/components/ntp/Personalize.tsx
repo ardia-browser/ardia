@@ -3,7 +3,6 @@ import { useEffect, useRef } from "react";
 import { Animated, Pressable, StyleSheet, View } from "react-native";
 import { PERSONALIZE_COPY, TabLayoutPicker } from "../onboarding/Personalize";
 import { ThemePicker } from "../settings/ThemeEditor";
-import { useWindowProfileValue } from "../../state/profiles/hooks";
 import { Box, capsule, Panel, proseLineHeight, shadow, space, Symbol, Text, useHover, useTheme } from "../ui";
 import { PERSONALIZE_PANEL } from "./tokens";
 import { closePersonalizePanelOf, setPersonalizePanel as setOpen, usePersonalizePanel } from "../../state/pages/personalizePanel";
@@ -13,8 +12,7 @@ import { perLook } from "../ui/tokens";
 const INSET = space.xl;
 const BUTTON = 30;
 const GLYPH_DROP = 1.5;
-const PANEL_WIDTH = 352;
-const EDITING_PANEL_WIDTH = 432;
+const PANEL_WIDTH = 432;
 
 export function PersonalizeButton({ windowId }: { windowId: string }) {
   const theme = useTheme();
@@ -60,7 +58,6 @@ const PERSONALIZE_GLYPH = { width: BUTTON, height: BUTTON, alignItems: "center",
 
 function PersonalizePanel({ windowId, onClose }: { windowId: string; onClose: () => void }) {
   const t = useRef(new Animated.Value(0)).current;
-  const editing = useWindowProfileValue(windowId, (p) => !!p?.theme);
   useEffect(() => {
     Animated.spring(t, { toValue: 1, ...PERSONALIZE_PANEL.spring, useNativeDriver: true }).start();
   }, []);
@@ -72,7 +69,7 @@ function PersonalizePanel({ windowId, onClose }: { windowId: string; onClose: ()
           position: "absolute",
           right: INSET,
           bottom: INSET + BUTTON + space.m,
-          width: editing ? EDITING_PANEL_WIDTH : PANEL_WIDTH,
+          width: PANEL_WIDTH,
           opacity: t.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolate: "clamp" }),
           transform: [{ translateY: t.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }, { scale: t.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] }) }],
         }}

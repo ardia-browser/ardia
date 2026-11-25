@@ -6,12 +6,15 @@
 #include <utility>
 #include <vector>
 
+#include "base/command_line.h"
+#include "base/environment.h"
 #include "base/functional/bind.h"
 #include "base/no_destructor.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/net/system_network_context_manager.h"
+#include "chrome/common/chrome_switches.h"
 #include "content/public/browser/browser_thread.h"
 #include "net/base/load_flags.h"
 #include "net/base/net_errors.h"
@@ -95,6 +98,13 @@ scoped_refptr<network::SharedURLLoaderFactory> SystemLoaderFactory() {
 
 void Finished(Source source, Fetched fetched);
 
+GURL RequestUrl(Source source) {
+  if (source == Source::kReleases && UpdateFeed()) {
+    return GURL(linux_self_update_policy::ReleasesUrl(*UpdateFeed()));
+  }
+  return GURL(policy::UrlFor(source));
+}
+
 class Load {
  public:
   explicit Load(Source source) : source_(source) {}
@@ -103,7 +113,7 @@ class Load {
 
   void Start(network::mojom::URLLoaderFactory* factory) {
     auto request = std::make_unique<network::ResourceRequest>();
-    request->url = GURL(policy::UrlFor(source_));
+    request->url = RequestUrl(source_);
     request->method = "GET";
     request->credentials_mode = network::mojom::CredentialsMode::kOmit;
     request->redirect_mode = network::mojom::RedirectMode::kError;
@@ -176,6 +186,17 @@ bool StartLoading(Source source) {
   return true;
 }
 
+}
+
+const std::optional<linux_self_update_policy::Feed>& UpdateFeed() {
+  static const base::NoDestructor<std::optional<linux_self_update_policy::Feed>> feed([] {
+    const auto environment = base::Environment::Create();
+    const bool isolated = base::CommandLine::ForCurrentProcess()->HasSwitch(switches::kUserDataDir) ||
+                          !environment->GetVar("ARDIA_DATA_DIR").value_or("").empty();
+    if (!isolated) return std::optional<linux_self_update_policy::Feed>();
+    return linux_self_update_policy::FeedOverride(environment->GetVar("ARDIA_UPDATE_FEED").value_or(""));
+  }());
+  return *feed;
 }
 
 void Fetch(Source source, FetchReply reply) {

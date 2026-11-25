@@ -63,11 +63,9 @@ std::optional<std::string> CurrentUser();
 Verdict VerdictForExit(std::optional<int> exit_code);
 std::optional<std::string> UnusablePassword(std::string_view password);
 
-void Wipe(std::string& secret);
-
 Verdict RunHelper(const std::string& helper,
                   const std::string& user,
-                  std::string& password,
+                  std::string_view password,
                   int deadline_ms = kHelperDeadlineMs);
 
 class Throttle {

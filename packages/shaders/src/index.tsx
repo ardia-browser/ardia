@@ -1,12 +1,12 @@
 import type { ThemeBackdropProps, ThemeTexture } from "@ardia/core";
 import { requireNativeModule, requireNativeViewManager } from "expo-modules-core";
-import type { ComponentType } from "react";
 import type { ViewProps } from "react-native";
+import type { ShadersModules } from "./generated/native";
 import { MEADOW_INK } from "./meadowPage/config";
 
 export const DIA_SPECTRUM = ["#0358F7", "#5092C7", "#E1E1FE", "#FFD400", "#FA3D1D", "#FD02F5"];
 
-export type Rect = { x: number; y: number; width: number; height: number };
+type Rect = { x: number; y: number; width: number; height: number };
 
 export type AreaLightPalette = "blue" | "red" | "pink" | "orange" | "yellow" | "green" | "purple";
 
@@ -24,7 +24,9 @@ export type WindowBackdropProps = ViewProps &
 
 const NativeBackdrop = requireNativeViewManager<WindowBackdropProps>("ArdiaWindowBackdrop");
 
-const BackdropModule = requireNativeModule<{ holdKeyLook(on: boolean): Promise<void> }>("ArdiaWindowBackdrop");
+const nativeModule = <Name extends keyof ShadersModules>(name: Name) => requireNativeModule<ShadersModules[Name]>(name);
+
+const BackdropModule = nativeModule("ArdiaWindowBackdrop");
 
 export function holdThemedWindowsKeyLook(on: boolean) {
   void BackdropModule.holdKeyLook(on);
@@ -88,7 +90,7 @@ export function meadowTextStyle({ tone, halo }: MeadowTone) {
   };
 }
 
-export type MeadowText = { fontSize: number; fontWeight: string; letterSpacing?: number; fontFamily?: string };
+type MeadowText = { fontSize: number; fontWeight: string; letterSpacing?: number; fontFamily?: string };
 
 export type MeadowMotion = { delay: number; duration: number; easing: string };
 
@@ -113,8 +115,10 @@ export type MeadowIntroEvent =
   | { kind: "mute"; muted: boolean }
   | { kind: "closed" };
 
-export type MeadowProps = ViewProps & { night: boolean; onTone?: (tone: MeadowTone) => void; intro?: MeadowIntro; onIntro?: (event: MeadowIntroEvent) => void };
+export type MeadowProps = ViewProps & { night: boolean; creeper?: boolean; onReady?: () => void; onBoom?: () => void; onTone?: (tone: MeadowTone) => void; intro?: MeadowIntro; onIntro?: (event: MeadowIntroEvent) => void };
 
 export type { MeadowPageConfig, MeadowPageReport, MeadowPageState } from "./meadowPage/config";
+
+export type { AreaLightNative, MeadowNative, MetalSurfaceSnapshot, ShadersModules, WindowBackdropNative } from "./generated/native";
 
 export { Meadow } from "./meadow";

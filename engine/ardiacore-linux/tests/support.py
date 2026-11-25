@@ -1,9 +1,12 @@
 import hashlib
 import json
+import os
 import secrets
 import pathlib
+import platform
 import shutil
 import sqlite3
+import struct
 import subprocess
 import tempfile
 import unittest
@@ -11,6 +14,27 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 LINUX = ROOT / 'src/ardia/linux'
 FIXTURES = ROOT / 'tests/fixtures'
+CORE_RS = ROOT.parents[1] / 'packages/core-rs'
+
+
+def core_rs_flags(test, directory):
+    cargo = shutil.which('cargo') or next((str(path) for path in [pathlib.Path.home() / '.cargo/bin/cargo']
+                                           if path.exists()), None)
+    if cargo is None:
+        if os.environ.get('CI'):
+            raise AssertionError('cargo is unavailable, and the Linux sync code links the Rust core')
+        test.skipTest('cargo is unavailable to build the Rust sync core')
+    target = pathlib.Path(os.environ.get('CARGO_TARGET_DIR') or CORE_RS / 'target')
+    built = subprocess.run([cargo, 'build', '--locked', '--quiet', '-p', 'ardia-ffi', '--target-dir', str(target)],
+                           cwd=CORE_RS, capture_output=True, text=True, timeout=540)
+    test.assertEqual(built.returncode, 0, built.stderr)
+    headers = pathlib.Path(directory) / 'core-rs-headers'
+    (headers / 'ardia/core_rs').mkdir(parents=True, exist_ok=True)
+    link = headers / 'ardia/core_rs/include'
+    if not link.exists():
+        link.symlink_to(CORE_RS / 'include', target_is_directory=True)
+    system = ['-lpthread', '-ldl', '-lm'] if platform.system() == 'Linux' else []
+    return ['-I', str(headers)], [str(target / 'debug/libardia_core.a'), *system]
 
 VALUES = r'''
 #pragma once
@@ -282,7 +306,7 @@ def compile_and_run(test, name, sources, args=(), extra_includes=()):
         compiled = subprocess.run([
             compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g',
             '-fsanitize=address,undefined', '-fno-omit-frame-pointer',
-            *[f'-I{path}' for path in extra_includes], '-I', str(ROOT / 'src'),
+            *[f'-I{path}' for path in extra_includes], '-I', str(ROOT / 'src'), '-I', str(ROOT.parent / 'ardiacore-desktop' / 'src'),
             *[str(source) for source in sources], '-o', str(executable),
         ], capture_output=True, text=True, timeout=120)
         test.assertEqual(compiled.returncode, 0, compiled.stderr)
@@ -302,7 +326,17 @@ SHIMS = {
 }
 IMPORT_SOURCES = ['ac_linux_import_formats.cc', 'ac_linux_import_readers.cc', 'ac_linux_import_crypto.cc',
                   'ac_linux_import_storage.cc', 'ac_linux_import_secrets.cc', 'ac_linux_import_sessions.cc',
-                  'ac_linux_import_keyring.cc']
+                  'ac_linux_import_keyring.cc', 'ac_linux_import_zen.cc']
+
+
+def mozlz4(data):
+    raw = data.encode() if isinstance(data, str) else data
+    if len(raw) < 15:
+        head = bytes([len(raw) << 4])
+    else:
+        rest = len(raw) - 15
+        head = b'\xf0' + b'\xff' * (rest // 255) + bytes([rest % 255])
+    return b'mozLz40\0' + struct.pack('<I', len(raw)) + head + raw
 
 
 def basic_key():
@@ -352,6 +386,58 @@ def make_logins(path, rows):
     db.close()
 
 
+def der(tag, body):
+    size = len(body)
+    length = bytes([size]) if size < 0x80 else bytes([0x80 | ((size.bit_length() + 7) // 8)]) + size.to_bytes((size.bit_length() + 7) // 8, 'big')
+    return bytes([tag]) + length + body
+
+
+def der_oid(dotted):
+    parts = [int(p) for p in dotted.split('.')]
+    body = bytes([parts[0] * 40 + parts[1]])
+    for part in parts[2:]:
+        chunk = [part & 0x7f]
+        part >>= 7
+        while part:
+            chunk.insert(0, 0x80 | (part & 0x7f))
+            part >>= 7
+        body += bytes(chunk)
+    return der(0x06, body)
+
+
+def firefox_pbes2(plain, global_salt, password=b''):
+    entry_salt, iv, iterations = b'e' * 32, b'i' * 14, 1
+    key = hashlib.pbkdf2_hmac('sha256', hashlib.sha1(global_salt + password).digest(), entry_salt, iterations, 32)
+    cipher = subprocess.run(['openssl', 'enc', '-aes-256-cbc', '-K', key.hex(), '-iv', (b'\x04\x0e' + iv).hex(), '-nosalt'],
+                            input=plain, capture_output=True, timeout=30, check=True).stdout
+    kdf = der(0x30, der_oid('1.2.840.113549.1.5.12') + der(0x30, der(0x04, entry_salt) + der(0x02, bytes([iterations])) +
+                                                          der(0x02, bytes([32])) + der(0x30, der_oid('1.2.840.113549.2.9') + b'\x05\x00')))
+    scheme = der(0x30, der_oid('2.16.840.1.101.3.4.1.42') + der(0x04, iv))
+    return der(0x30, der(0x30, der_oid('1.2.840.113549.1.5.13') + der(0x30, kdf + scheme)) + der(0x04, cipher))
+
+
+def make_firefox_key4(path, global_salt=b'g' * 20, logins_key=None):
+    db = sqlite3.connect(path)
+    db.execute('CREATE TABLE metaData(id PRIMARY KEY UNIQUE ON CONFLICT REPLACE, item1, item2)')
+    db.execute('CREATE TABLE nssPrivate(id PRIMARY KEY UNIQUE ON CONFLICT ABORT, a0, a1, a2, a3, a10, a11, a12, a102)')
+    db.execute("INSERT INTO metaData VALUES ('password', ?, ?)", (global_salt, firefox_pbes2(b'password-check', global_salt)))
+    if logins_key is not None:
+        db.execute('INSERT INTO nssPrivate(id, a3, a11, a102) VALUES (1, ?, ?, ?)',
+                   (b'as-logins-key', firefox_pbes2(logins_key, global_salt), b'logins'))
+    db.commit()
+    db.close()
+
+
+def make_firefox_logins_db(path, rows=()):
+    db = sqlite3.connect(path)
+    columns = 'guid TEXT, origin TEXT, httpRealm TEXT, formActionOrigin TEXT, secFields TEXT, timeCreated INTEGER, timeLastUsed INTEGER, timesUsed INTEGER'
+    db.execute(f'CREATE TABLE loginsL({columns}, is_deleted INTEGER DEFAULT 0)')
+    db.execute(f'CREATE TABLE loginsM({columns}, is_overridden INTEGER DEFAULT 0)')
+    db.executemany('INSERT INTO loginsL(guid, origin, formActionOrigin, secFields, timeCreated, timeLastUsed, timesUsed) VALUES (?,?,?,?,?,?,?)', rows)
+    db.commit()
+    db.close()
+
+
 def bookmark(name, url, added_ms=1700000000000):
     return {'type': 'url', 'name': name, 'url': url, 'date_added': str(webkit(added_ms))}
 
@@ -376,7 +462,7 @@ class ImportFixture(unittest.TestCase):
         cls.binary = root / 'import-scenarios'
         compiled = subprocess.run([
             compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g', '-fsanitize=address,undefined',
-            '-fno-omit-frame-pointer', f'-I{include}', '-I', str(ROOT / 'src'),
+            '-fno-omit-frame-pointer', f'-I{include}', '-I', str(ROOT / 'src'), '-I', str(ROOT.parent / 'ardiacore-desktop' / 'src'),
             *[str(LINUX / name) for name in IMPORT_SOURCES],
             str(FIXTURES / 'import_scenarios.cc'), '-lsqlite3', '-lcrypto', '-ldl', '-o', str(cls.binary),
         ], capture_output=True, text=True, timeout=300)

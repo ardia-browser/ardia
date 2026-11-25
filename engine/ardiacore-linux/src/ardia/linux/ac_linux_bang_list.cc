@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "ardia/core/ac_launch_switches.h"
-#include "ardia/linux/ac_linux_bang_list_policy.h"
+#include "ardia/desktop/ac_desktop_bang_list_policy.h"
 #include "base/functional/bind.h"
 #include "base/no_destructor.h"
 #include "base/strings/string_util.h"
@@ -33,7 +33,7 @@ namespace ardiacore {
 
 namespace {
 
-namespace bang_list = ardia::linux_bang_list;
+namespace bang_list = ardia::desktop_bang_list;
 
 using Done = base::OnceCallback<void(bool, base::Value)>;
 

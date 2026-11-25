@@ -1,4 +1,4 @@
-import { createContext, useContext } from "react";
+import { createContext, useContext, useMemo, useSyncExternalStore } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { isBookmarked } from "../bookmarks/bookmarks";
 import { useBrowser, type BrowserState } from "./store";
@@ -8,8 +8,9 @@ import type { BrowserWindow, FindState, Profile, Tab, TabGroup, TabLive } from "
 import { CLOSED_FIND, DEFAULT_WINDOW_UI } from "../windows/ui";
 import { downloadsIn } from "../downloads/downloadsSlice";
 import { focusedWindowOf } from "../windows/ui";
-import { ALL, useKeyed, watchLiveRecord, watchSettings, watchTabRecord, watchWindowRecord } from "./keyedWatch";
+import { ALL, useKeyed, useWindowOrFocusedSettings, useWindowSettings, watchAppDark, watchSettings, watchTabRecord, watchWindowRecord } from "./keyedWatch";
 import { useTabState } from "../tabs/tabStateWatch";
+import { shownLiveOf, watchLive } from "../tabs/tabLive";
 
 export const WindowContext = createContext<string | null>(null);
 
@@ -34,7 +35,7 @@ export function usePageProfileId(): string {
 }
 
 export const useIsIncognito = () => useWindowField((w) => w.kind === "private", false);
-export const useTabsShown = (windowId: string) => useBrowser((s) => tabsShownIn(s, windowId));
+export const useTabsShown = (windowId: string) => useWindowSettings(windowId, (s) => tabsShownIn(s, windowId));
 export const useSidebarOpen = () => useTabsShown(useWindowId());
 export const useWindowProfileId = () => useWindowField((w) => w.profileId, "");
 
@@ -82,16 +83,30 @@ export const useProfile = <T>(profileId: string | null | undefined, select: (p: 
 export const useGroup = <T>(groupId: string | null | undefined, select: (g: TabGroup | undefined) => T): T =>
   useBrowser((s) => select(groupId ? s.groups[groupId] : undefined));
 
+const inert = () => () => {};
+
+export function watchShownLive(tabId: string, listener: () => void): () => void {
+  const offLive = watchLive(tabId, listener);
+  const offTab = watchTabRecord(tabId, listener);
+  return () => {
+    offLive();
+    offTab();
+  };
+}
+
 export function useTabLive(tabId: string | undefined): TabLive;
 export function useTabLive<T>(tabId: string | undefined, select: (live: TabLive) => T): T;
 export function useTabLive<T>(tabId: string | undefined, select?: (live: TabLive) => T) {
-  return useKeyed(watchLiveRecord, tabId, () => {
-    const live = (tabId && useBrowser.getState().live[tabId]) || IDLE_LIVE;
+  const subscribe = useMemo(() => (tabId ? (listener: () => void) => watchShownLive(tabId, listener) : inert), [tabId]);
+  const read = () => {
+    const live = tabId ? shownLiveOf(useBrowser.getState(), tabId) : IDLE_LIVE;
     return select ? select(live) : live;
-  });
+  };
+  return useSyncExternalStore(subscribe, read, read);
 }
 
 export const useFind = (tabId: string | undefined): FindState => useBrowser((s) => (tabId && s.find[tabId]) || CLOSED_FIND);
+export const useFindOpen = (tabId: string): boolean => useBrowser((s) => !!s.find[tabId]?.open);
 
 export function useWindowUi() {
   const id = useWindowId();
@@ -107,12 +122,14 @@ export function useIsBookmarked(url: string): boolean {
   return useBrowser((s) => isBookmarked(s, bookmarkProfileId(s, s.windows[id]), url));
 }
 
-export const useAppDark = (): boolean => useBrowser((s) => s.ui.appDark);
+export const useAppDark = (): boolean => useKeyed(watchAppDark, ALL, () => useBrowser.getState().ui.appDark);
 
-export const useTabLayout = (windowId?: string | null): "sidebar" | "top" => useBrowser((s) => tabLayoutOf(s, windowId));
+export const useTabLayout = (windowId?: string | null): "sidebar" | "top" => useWindowOrFocusedSettings(windowId, (s) => tabLayoutOf(s, windowId));
 
-export const useSidebarSide = (windowId?: string | null): SidebarSide => useBrowser((s) => sidebarSideOf(s, windowId));
+export const useSidebarSide = (windowId?: string | null): SidebarSide => useWindowOrFocusedSettings(windowId, (s) => sidebarSideOf(s, windowId));
 
-export const useWindowFullScreen = (windowId?: string | null): boolean => useBrowser((s) => !!windowId && !!s.windows[windowId]?.fullScreen);
+export const useTabsPlace = (windowId: string): "top" | SidebarSide => useWindowSettings(windowId, (s) => (tabLayoutOf(s, windowId) === "top" ? "top" : sidebarSideOf(s, windowId)));
+
+export const useWindowFullScreen = (windowId?: string | null): boolean => useKeyed(watchWindowRecord, windowId || null, () => !!windowId && !!useBrowser.getState().windows[windowId]?.fullScreen);
 
 export const useDownloads = <T>(windowId: string, select: (downloads: BrowserState["downloads"]) => T): T => useBrowser((s) => select(downloadsIn(s, windowId)));

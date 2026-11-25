@@ -1,0 +1,246 @@
+{
+  "chains" : {
+    "ordinary" : {
+      "chainTag" : "h2zf35mqk7uz4achercqnm7zbm",
+      "phrase" : "awful supreme heart leopard seminar age lizard hand aware health coral muscle glance save uphold orient carbon people leopard outside describe neither health symbol",
+      "scopeTags" : {
+        "app" : "gh4leaam7ko2d356dfvkhtcc7m",
+        "p:personal000000000000000000" : "mgvozs5mp7oimakoqla5ajmbxi"
+      }
+    },
+    "sparse" : {
+      "chainTag" : "huknjioftzmznh6j7patq3ifte",
+      "phrase" : "yellow abandon abandon abandon abandon abandon abandon abandon abandon among scale abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon advance wink",
+      "scopeTags" : {
+        "app" : "ci7phyrxmjqxl6vxdy2ba6ve6q",
+        "p:personal000000000000000000" : "h3tnyxcz5x5t5tcqsmafqokcf4"
+      }
+    }
+  },
+  "localStates" : [
+    {
+      "entropy" : "ordinary",
+      "fileId" : "state",
+      "payload" : "local-state",
+      "sealed" : "Tk5TMTybwVt7CBVNp/sd2zpkeIFj6+C7ftT/SIqJZDlXlDcRDPD9CvqU4Wm2NYEi8amUAlW9kLQwNiujhcfyfaCohNwbtobku0CXnDiuC/cOg3RX7Y9hSobWmisTrvhQupQPVVitOXFa2FQzvArk2gdZn26yrWbCtvYiPIQvCSpiYXT8DTDyE1rzaUdsifXEhEA9aEJ7mN54++q+H5Yb3L+fjiDORR5aNfE083lq7sg55R1eGjk2bFosT8Bw3vIFHHt/4FjK82rl8ekkwuZs/PJ1PpF0nz0Pc91jhSFZRhwM5iy4CeDqd5RBRenrEhK9JWNpUezDJfHhkTxwL97nQJDp1PLNeFFxl3DWFU1xtz990s7QEsE7C5qJxytBjzX809mZ8CNCSgfQPyHKn56fNOyMh2svSLg3wF1Y2+ucOJKp9LHG+zc1HHpoXii4xlDzexjCcy+2wvj9UTF/RGw/iMngJYp0caMlpsKf+9nfMaq8RY0+8C+9lFwcQgunBeltMFYBJZ+g7ubA75/lo/gWiu+b50m4V8+E6B1mu4FFL1DGFLqOFnrXs/lB1WvvOUqgKIvsIjtJGrHyI4iHedAvVp8jaC1u3D3onB9lG+CG6H0RxOudDBU4Sw8BgzpmiFEF4U431jPvYpAWx1XsFUba4e4cTQ9gdLiLQ3QbJ2cYo1KHoOsb18w1sbjFWhE31MTYAo5Y5YBEFkRVPPxu0X9o4miNoZorjByfeFfvThp5lZtnh8hyonFxX/vkhO9AuPVj4431wtFKGCWQRtzG/1lT2x7jLvyDG1vjlr/KOe44QBQyiOjC27Wkk9UFRP0h7U08Z60ZwaY6xztWjtSyiuzB7HjgU86ycWhLm0dwLvZqF4ZljBt0OBKu4DkQsRrSTdkxMoE0twugPxWJ1EQvoHVZSlYB/2pg8Dmxt5Xd/jLP2WnwsisnShsmWQkoeggZqH9VUusk2dwvUfx2kQ6eTK1dQxrGkk95uF+D8tD9xXRNs9kWyR40znAUchTy+HSEq1oASzy//RcUBCCXLatt8UuRG6PGSxCj1ORefGPvXXT8juzdqgoKDXvdkgR3PriNZxxOCY0lFgPdtHCXsUzosMvx0cxBCaftOloeiHeMU+D0aT71ZLZ8pEUoFbKay+i5YEfUHmfZ3ZPCXQpfyABayNmWa2+XiyZKn/r5wcstS+JLpkfGucGTxWUbxJ/XmSsiZD26HnCgmcjKjMcPiNfsFJVG++n9etgWdQNwBYDDSi9VOfbKJwif3ocS9JQIfnqzjrDKjvMPMAMJYXDJdJoWjdd815pvHmnP6LcXOrB7M8GVDUFkPPsyCcvAKVSN11KzZhFsNskLTczyhUK5a6SCPTWbmNPEL9z1rCZJa2F/6SwYUZa5j4bG94g49sHWI8pLSZDv"
+    },
+    {
+      "entropy" : "sparse",
+      "fileId" : "state",
+      "payload" : "local-state",
+      "sealed" : "Tk5TMTW6mzKZy+WLw6VYr3JEqepGDNiz+qwX7ohx3WLi1VsfsxoZ7DZzahNZ528qfxEX3z256bIE33fkyK4hxyR87rImD1MvJN8x/S9h0DYDst/rcJ6dgin95Z+XEvS03bKSHLWcR1lwnUUbnECdRYjM+VIk/2bQRARjMun0ARNQcP7OvSAwe+sWs9sjVicBvIxqlSSaIbk88GPvTnQCsT49A/sxEXbM1iNKrl0YMIBTn4XYCwEHst7AP8uYCeVE+swfAXeqJC90HzBfk7jrtzibbCzkrj66TdlIbJijKyoxnWrcWGV0Upy6Pl3N4e0r8fyB5G6Zq8GpkgiXb9Y6+s2Zj6AXnPgLoPCjr8JBmFpMwF35FDlxfdYC/N9LS/wrE00es1IUazfsE2QryOJHWgL8xuz7BU/oo0TVZ2hrPakP+JEQaIso2+tpq442julUulwdb4EafuqO3Prg9+Z64/4CFFKATNEpciVUIdDGSkBgyqhC79pMwga2IKNOT5SQjJ2CigPvN8J56FV/4Avkpb4ZnASsSKkwJpFeEgux8Uw2chit4W0t1uRwfFiZEyDlrfIzoSXrNUU1f1CfZ8Ye1k4OWzl+DpdkbNv6foCWNzPzMuPAp88nwQ5SGTxKOqa3txBWyeK8JByQ8ImTusTte92N7itNKijEgtOQvneS10psbmgRsZanuJ6Z5/pgZ2Ix7dkbT7xybmFeSDLJgV+7Jr04hR16h7UXBt0iV/2NHJdOOWZqzC38AcE8ySQaa3FyEJsebaD2dhunxEADD/1xZ0wpJ+AHVfbyG9bIiH9BKLA3xIGoEQPflF+BfRjeYvs26kecjNPajGKwIvg+tvallZv7DtFTXI2bJ5MBZ7c/K4V20cUaAvahy8VKoyaQVGFuXybha3MNnqoNNPDL6+ffik+RooVHaTmJrelzOaN22kUM+2DK90jkcGOXe4H/9448tj1PFydimwpgFIgrk2Fng5izXwLh/11CYLZtvZqt+/5852Ue7Bvy7SzX77XHxqOVTH/2qnGVopLwsk7mXk+eXxM0rFMWjcijUXAY51qZ0BgiSaKZOYlrHvwm9+9N+NJ+/MD3eIPFTL4qnYUIEANl7dRXDt6CJSYt8HGmeU35YOM9lh6wTGvdClqtBxn91pHhEf56UkdHSZQNgd8jfYD8xuCRDGDCTB2G5c4du/LhB6qBRk++DVlZLDO0Sqc348eL+XxwUMmBF7rUc5ncINL0EYrXKXMjZ687GQVuDUve8IQOlmynE8FUIYZeeB3PFVO2YSkIyiHj2l0RpNsJWubkJvk8Mjmb3v0JjNZ0d6equ7IexafIeSdXl//dxcqS8bdWdrMg+w0fPwQEX4D9XnvpR6l1dyF4adDDpJGMLsPO1ZC9pAaD+LX5krEVUNVPLwjF"
+    }
+  ],
+  "passwords" : [
+    {
+      "entropy" : "ordinary",
+      "origin" : "https://bank.example",
+      "password" : "hunter2 é😀",
+      "sealed" : "AcrrIDM5nPs4BkGJEVDKU2CsGtA234mRaskXUkyZPWLEn4dCoLqdAGNektybOCWXgD8SCgYVXTg7BD1iAg==",
+      "username" : "luke"
+    },
+    {
+      "entropy" : "ordinary",
+      "origin" : "https://bücher.example",
+      "password" : "correct horse battery staple",
+      "sealed" : "Aa73++BqZf/XkwAZ2JPaNbNRHKqtrBoCGo27xRbc/TdwlWf3xF/JEDcWtJz4ZTLcJ8VbQCYniEWETgWMvw==",
+      "username" : "zoë@例え.jp"
+    },
+    {
+      "entropy" : "ordinary",
+      "origin" : "https://ardia.dev",
+      "password" : "correct horse battery staplé",
+      "sealed" : "Ac1l+ZsHh+q2jU4f3hf6FH7nM4dGnhfb2lRCCcB5sFvzNgZrd0ngNxuYUFIq+jMbPzFCWZpcz5OYYiAl1L5QBtJk1L6rVuV1LsXVJKKI8jBGOggKUJnXp+sfaP/L",
+      "username" : ""
+    },
+    {
+      "entropy" : "sparse",
+      "origin" : "https://bank.example",
+      "password" : "hunter2 é😀",
+      "sealed" : "AeBTDiHAMPPepnT74q8pdVr7eswMLj3zsOeTcLeJYqXqqAIVpluh0xiGWOSqCz6pazB/hzvQUE8cjzWhug==",
+      "username" : "luke"
+    },
+    {
+      "entropy" : "sparse",
+      "origin" : "https://bücher.example",
+      "password" : "correct horse battery staple",
+      "sealed" : "AdY/1+mAexYoHS6+IkSpEQc5p1S3korprFUNC8TnpL9JGRjleMpnJL26PDClIBZkahahF6+5MyNeP9Lzcw==",
+      "username" : "zoë@例え.jp"
+    },
+    {
+      "entropy" : "sparse",
+      "origin" : "https://ardia.dev",
+      "password" : "correct horse battery staplé",
+      "sealed" : "AffHgdV83jblmbmG8JLLHYhIjIGhH/+7cQlL2NAbxkACxHH0E1Dsf/AHwFlOU0e3yKRrsskaYGuvI6urbmgkmavW5kdNNbIPRyHJ/c9M2l+8nnUEImmBXYVX0/vu",
+      "username" : ""
+    }
+  ],
+  "vault" : {
+    "damaged" : [
+      {
+        "entropy" : "ordinary",
+        "id" : "tzkhnvckqz2ccwfw2msp5c6jky",
+        "path" : "vault/h2zf35mqk7uz4achercqnm7zbm/gh4leaam7ko2d356dfvkhtcc7m/tzkhnvckqz2ccwfw2msp5c6jky.nns",
+        "payload" : "log-line",
+        "scope" : "app"
+      }
+    ],
+    "files" : [
+      {
+        "entropy" : "ordinary",
+        "id" : "k6s5tui52jhfei32qihguzxuui",
+        "path" : "vault/h2zf35mqk7uz4achercqnm7zbm/gh4leaam7ko2d356dfvkhtcc7m/k6s5tui52jhfei32qihguzxuui.nns",
+        "payload" : "log-line",
+        "scope" : "app"
+      },
+      {
+        "entropy" : "ordinary",
+        "id" : "zsiw2mzu7zuwbq7s2mwin4l3lm",
+        "path" : "vault/h2zf35mqk7uz4achercqnm7zbm/gh4leaam7ko2d356dfvkhtcc7m/zsiw2mzu7zuwbq7s2mwin4l3lm.nns",
+        "payload" : "pattern-1019",
+        "scope" : "app"
+      },
+      {
+        "entropy" : "ordinary",
+        "id" : "ccpuxwjb5kpwrzbb5rbq22h67e",
+        "path" : "vault/h2zf35mqk7uz4achercqnm7zbm/gh4leaam7ko2d356dfvkhtcc7m/ccpuxwjb5kpwrzbb5rbq22h67e.nns",
+        "payload" : "pattern-1020",
+        "scope" : "app"
+      },
+      {
+        "entropy" : "ordinary",
+        "id" : "fhjq3vviqu324hbk7nbpkb7tgm",
+        "path" : "vault/h2zf35mqk7uz4achercqnm7zbm/gh4leaam7ko2d356dfvkhtcc7m/fhjq3vviqu324hbk7nbpkb7tgm.nns",
+        "payload" : "pattern-1021",
+        "scope" : "app"
+      },
+      {
+        "entropy" : "ordinary",
+        "id" : "3wnslogvisgp7f575zgpacu6pm",
+        "path" : "vault/h2zf35mqk7uz4achercqnm7zbm/gh4leaam7ko2d356dfvkhtcc7m/3wnslogvisgp7f575zgpacu6pm.nns",
+        "payload" : "empty",
+        "scope" : "app"
+      },
+      {
+        "entropy" : "ordinary",
+        "id" : "f4rawqixsaa3k33nrr4bugb3s4",
+        "path" : "vault/h2zf35mqk7uz4achercqnm7zbm/mgvozs5mp7oimakoqla5ajmbxi/f4rawqixsaa3k33nrr4bugb3s4.nns",
+        "payload" : "log-line",
+        "scope" : "p:personal000000000000000000"
+      },
+      {
+        "entropy" : "ordinary",
+        "id" : "rrgrtggdupj322fc5hap5dqt4a",
+        "path" : "vault/h2zf35mqk7uz4achercqnm7zbm/mgvozs5mp7oimakoqla5ajmbxi/rrgrtggdupj322fc5hap5dqt4a.nns",
+        "payload" : "pattern-1019",
+        "scope" : "p:personal000000000000000000"
+      },
+      {
+        "entropy" : "ordinary",
+        "id" : "pvngvksg3kgiq543ypnqwwemle",
+        "path" : "vault/h2zf35mqk7uz4achercqnm7zbm/mgvozs5mp7oimakoqla5ajmbxi/pvngvksg3kgiq543ypnqwwemle.nns",
+        "payload" : "pattern-1020",
+        "scope" : "p:personal000000000000000000"
+      },
+      {
+        "entropy" : "ordinary",
+        "id" : "eguzsq6yz35xvhrxcvub2g24te",
+        "path" : "vault/h2zf35mqk7uz4achercqnm7zbm/mgvozs5mp7oimakoqla5ajmbxi/eguzsq6yz35xvhrxcvub2g24te.nns",
+        "payload" : "pattern-1021",
+        "scope" : "p:personal000000000000000000"
+      },
+      {
+        "entropy" : "ordinary",
+        "id" : "3pfiw4stjrg2cbxsyzsmyl6lxm",
+        "path" : "vault/h2zf35mqk7uz4achercqnm7zbm/mgvozs5mp7oimakoqla5ajmbxi/3pfiw4stjrg2cbxsyzsmyl6lxm.nns",
+        "payload" : "empty",
+        "scope" : "p:personal000000000000000000"
+      },
+      {
+        "entropy" : "sparse",
+        "id" : "tn5r3jy25atxndyxojo7vkrupe",
+        "path" : "vault/huknjioftzmznh6j7patq3ifte/ci7phyrxmjqxl6vxdy2ba6ve6q/tn5r3jy25atxndyxojo7vkrupe.nns",
+        "payload" : "log-line",
+        "scope" : "app"
+      },
+      {
+        "entropy" : "sparse",
+        "id" : "zqqawygfemf3i6erxpdfveamqm",
+        "path" : "vault/huknjioftzmznh6j7patq3ifte/ci7phyrxmjqxl6vxdy2ba6ve6q/zqqawygfemf3i6erxpdfveamqm.nns",
+        "payload" : "pattern-1019",
+        "scope" : "app"
+      },
+      {
+        "entropy" : "sparse",
+        "id" : "s35ujfjy55rnznuto4rnqaheiy",
+        "path" : "vault/huknjioftzmznh6j7patq3ifte/ci7phyrxmjqxl6vxdy2ba6ve6q/s35ujfjy55rnznuto4rnqaheiy.nns",
+        "payload" : "pattern-1020",
+        "scope" : "app"
+      },
+      {
+        "entropy" : "sparse",
+        "id" : "kyyl4sq6k2zqbddvcfuzy7ausa",
+        "path" : "vault/huknjioftzmznh6j7patq3ifte/ci7phyrxmjqxl6vxdy2ba6ve6q/kyyl4sq6k2zqbddvcfuzy7ausa.nns",
+        "payload" : "pattern-1021",
+        "scope" : "app"
+      },
+      {
+        "entropy" : "sparse",
+        "id" : "6q3gizgkovs4b4cmrukgxamnpu",
+        "path" : "vault/huknjioftzmznh6j7patq3ifte/ci7phyrxmjqxl6vxdy2ba6ve6q/6q3gizgkovs4b4cmrukgxamnpu.nns",
+        "payload" : "empty",
+        "scope" : "app"
+      },
+      {
+        "entropy" : "sparse",
+        "id" : "ivhc7pp6vhr36y37niqy6t4x2u",
+        "path" : "vault/huknjioftzmznh6j7patq3ifte/h3tnyxcz5x5t5tcqsmafqokcf4/ivhc7pp6vhr36y37niqy6t4x2u.nns",
+        "payload" : "log-line",
+        "scope" : "p:personal000000000000000000"
+      },
+      {
+        "entropy" : "sparse",
+        "id" : "yc73l22a43bvwu4epys3tgygqq",
+        "path" : "vault/huknjioftzmznh6j7patq3ifte/h3tnyxcz5x5t5tcqsmafqokcf4/yc73l22a43bvwu4epys3tgygqq.nns",
+        "payload" : "pattern-1019",
+        "scope" : "p:personal000000000000000000"
+      },
+      {
+        "entropy" : "sparse",
+        "id" : "vmyas2bciwu7m72h52ehaxpjm4",
+        "path" : "vault/huknjioftzmznh6j7patq3ifte/h3tnyxcz5x5t5tcqsmafqokcf4/vmyas2bciwu7m72h52ehaxpjm4.nns",
+        "payload" : "pattern-1020",
+        "scope" : "p:personal000000000000000000"
+      },
+      {
+        "entropy" : "sparse",
+        "id" : "ppd6w6ujwxlpgs3jthdyjnm7uu",
+        "path" : "vault/huknjioftzmznh6j7patq3ifte/h3tnyxcz5x5t5tcqsmafqokcf4/ppd6w6ujwxlpgs3jthdyjnm7uu.nns",
+        "payload" : "pattern-1021",
+        "scope" : "p:personal000000000000000000"
+      },
+      {
+        "entropy" : "sparse",
+        "id" : "pazq3jg5uk4423bykeab2ja46e",
+        "path" : "vault/huknjioftzmznh6j7patq3ifte/h3tnyxcz5x5t5tcqsmafqokcf4/pazq3jg5uk4423bykeab2ja46e.nns",
+        "payload" : "empty",
+        "scope" : "p:personal000000000000000000"
+      }
+    ],
+    "pending" : [
+      {
+        "entropy" : "ordinary",
+        "id" : "3kxt2wmd3uerpyxu3p7jvb4er4",
+        "path" : "vault/h2zf35mqk7uz4achercqnm7zbm/gh4leaam7ko2d356dfvkhtcc7m/.3kxt2wmd3uerpyxu3p7jvb4er4.nns.icloud",
+        "scope" : "app"
+      },
+      {
+        "entropy" : "sparse",
+        "id" : "q4h573z3uboqstapl763capi7e",
+        "path" : "vault/huknjioftzmznh6j7patq3ifte/h3tnyxcz5x5t5tcqsmafqokcf4/.q4h573z3uboqstapl763capi7e.nns.icloud",
+        "scope" : "p:personal000000000000000000"
+      }
+    ]
+  },
+  "wordlistSha256" : "187db04a869dd9bc7be80d21a86497d692c0db6abd3aa8cb6be5d618ff757fae"
+}

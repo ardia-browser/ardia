@@ -4,6 +4,7 @@ Chromium's cross build takes, in the layout depot_tools/win_toolchain/package_fr
 VC/Tools/MSVC/<ver>/{bin,include,lib,atlmfc,crt}, VC/redist, DIA SDK/{bin,idl,include,lib}, "Windows Kits/10" (only
 the --winver files of Include, Lib, Source and bin), sys32/sys64/sysarm64 runtimes, the SetEnv files and VS_VERSION.
 The zip is named for the hash get_toolchain_if_necessary.py computes from the unpacked files (first 10 characters).
+Every lookup in the unpacked tree ignores case, as Windows and a Mac do, so a Linux host packs the same files.
 When the SDK has no Debuggers directory (the SDK inside Visual Studio's packages doesn't), --debuggers-from gives
 Microsoft's debugger engine package (NuGet Microsoft.Debugging.Platform.DbgEng, unpacked): its dbghelp.dll and
 dbgcore.dll for x64, x86 and arm64 go in Windows Kits/10/Debuggers/<cpu>, which vs_toolchain.py copies from.
@@ -12,7 +13,7 @@ Usage: package_toolchain.py --msvc DIR --winver 10.0.28000.0 --vs-version 2026 -
          [--debuggers-from DIR] [--stored]
 """
 import argparse
-import glob
+import fnmatch
 import os
 import shutil
 import sys
@@ -30,25 +31,45 @@ def walk(base):
             yield os.path.join(root, f)
 
 
-def one(pattern):
-    found = sorted(glob.glob(pattern))
+def find(base, pattern):
+    found = [base]
+    for part in pattern.replace('\\', '/').split('/'):
+        if not part:
+            continue
+        step = []
+        for parent in found:
+            if not os.path.isdir(parent):
+                continue
+            step += [os.path.join(parent, name) for name in sorted(os.listdir(parent))
+                     if fnmatch.fnmatchcase(name.lower(), part.lower())]
+        found = step
+    return found
+
+
+def one(base, pattern):
+    found = find(base, pattern)
     if len(found) != 1:
-        sys.exit(f'expected one match for {pattern}, found {found}')
+        sys.exit(f'expected one match for {pattern} in {base}, found {found}')
     return found[0]
+
+
+def at(base, rel):
+    found = find(base, rel)
+    return found[0] if found else os.path.join(base, rel)
 
 
 def build_file_list(vs, winver, vc_tools, debuggers_from):
     result = []
     for rel in ['DIA SDK/bin', 'DIA SDK/idl', 'DIA SDK/include', 'DIA SDK/lib', f'{vc_tools}/atlmfc',
                 f'{vc_tools}/crt', 'VC/redist', f'{vc_tools}/bin', f'{vc_tools}/include', f'{vc_tools}/lib']:
-        base = os.path.join(vs, rel)
+        base = at(vs, rel)
         if not os.path.isdir(base):
             sys.exit(f'{base} missing')
         for path in walk(base):
             if os.path.basename(path).lower() == 'vctip.exe':
                 continue
             result.append((path, os.path.relpath(path, vs)))
-    redist = one(os.path.join(vs, 'VC/redist/MSVC/14.*.*'))
+    redist = one(vs, 'VC/redist/MSVC/14.*.*')
     pairs = [
         ('x86/Microsoft.VC*.CRT', 'sys32'), ('x86/Microsoft.VC*.CRT', 'Windows Kits/10/bin/x86'),
         ('debug_nonredist/x86/Microsoft.VC*.DebugCRT', 'sys32'),
@@ -60,38 +81,38 @@ def build_file_list(vs, winver, vc_tools, debuggers_from):
         ('debug_nonredist/arm64/Microsoft.VC*.DebugCRT', 'sysarm64'),
     ]
     for pattern, dest in pairs:
-        base = one(os.path.join(redist, pattern))
+        base = one(redist, pattern)
         for path in walk(base):
             if os.path.basename(path).lower() == 'vctip.exe':
                 continue
             result.append((path, os.path.join(dest, os.path.relpath(path, base))))
-    sdk = os.path.join(vs, 'Windows Kits/10')
+    sdk = at(vs, 'Windows Kits/10')
     for path in walk(sdk):
         tail = os.path.relpath(path, sdk)
-        if tail.startswith(SDK_SKIP):
+        if tail.lower().startswith(tuple(s.lower() for s in SDK_SKIP)):
             continue
-        if tail.startswith(VERSIONED) and winver not in tail:
+        if tail.lower().startswith(tuple(v.lower() for v in VERSIONED)) and winver not in tail:
             continue
         result.append((path, os.path.join('Windows Kits/10', tail)))
     for cpu, dests in (('x86', ['Windows Kits/10/bin/x86', 'sys32']),
                        ('x64', ['VC/bin/amd64_x86', 'VC/bin/amd64', 'Windows Kits/10/bin/x64', 'sys64'])):
-        ucrt = os.path.join(sdk, 'Redist', winver, 'ucrt/DLLs', cpu)
+        ucrt = at(sdk, f'Redist/{winver}/ucrt/DLLs/{cpu}')
         if not os.path.isdir(ucrt):
-            ucrt = os.path.join(sdk, 'Redist/ucrt/DLLs', cpu)
-        dlls = sorted(glob.glob(os.path.join(ucrt, '*')))
+            ucrt = at(sdk, f'Redist/ucrt/DLLs/{cpu}')
+        dlls = find(ucrt, '*')
         if not dlls:
             sys.exit(f'no ucrt DLLs in {ucrt}')
         for dll in dlls:
             for dest in dests:
                 result.append((dll, os.path.join(dest, os.path.basename(dll))))
     for cpu, dest in (('x86', 'sys32'), ('x64', 'sys64'), ('arm64', 'sysarm64')):
-        result.append((os.path.join(sdk, 'bin', winver, cpu, 'ucrt/ucrtbased.dll'), os.path.join(dest, 'ucrtbased.dll')))
-    if not os.path.isdir(os.path.join(sdk, 'Debuggers')):
+        result.append((at(sdk, f'bin/{winver}/{cpu}/ucrt/ucrtbased.dll'), os.path.join(dest, 'ucrtbased.dll')))
+    if not os.path.isdir(at(sdk, 'Debuggers')):
         if not debuggers_from:
             sys.exit(f'{sdk}/Debuggers is missing: pass --debuggers-from')
         for package_cpu, cpu in (('amd64', 'x64'), ('x86', 'x86'), ('arm64', 'arm64')):
             for dll in ('dbghelp.dll', 'dbgcore.dll'):
-                result.append((os.path.join(debuggers_from, 'content', package_cpu, dll),
+                result.append((at(debuggers_from, f'content/{package_cpu}/{dll}'),
                                f'Windows Kits/10/Debuggers/{cpu}/{dll}'))
 
     def skippable(f):
@@ -138,7 +159,7 @@ def main():
     parser.add_argument('--stored', action='store_true')
     args = parser.parse_args()
     vs = os.path.abspath(args.msvc)
-    vc_tools = os.path.relpath(one(os.path.join(vs, 'VC/Tools/MSVC/14.*.*')), vs)
+    vc_tools = os.path.relpath(one(vs, 'VC/Tools/MSVC/14.*.*'), vs)
     files = build_file_list(vs, args.winver, vc_tools, args.debuggers_from)
     files += set_env_files(args.depot_tools, vc_tools, args.winver, args.vs_version, None)
     missing = [s for s, _ in files if not os.path.exists(s)]

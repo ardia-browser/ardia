@@ -8,7 +8,7 @@ import { perLook } from "../ui/tokens";
 
 export const PAGE_WIDTH = 880;
 
-export type PageToolbarSize = keyof typeof pageToolbar;
+type PageToolbarSize = keyof typeof pageToolbar;
 
 export function PageToolbar({ size, divider, drag, children }: { size: PageToolbarSize; divider?: boolean; drag?: boolean; children: ReactNode }) {
   const theme = useTheme();

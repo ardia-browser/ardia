@@ -1,9 +1,11 @@
 #ifndef ARDIA_WIN_HOOKS_H_
 #define ARDIA_WIN_HOOKS_H_
 
+#include <atomic>
 #include <memory>
 #include <optional>
 
+#include "base/process/process.h"
 #include "base/win/windows_types.h"
 #include "ui/base/window_open_disposition.h"
 
@@ -37,6 +39,8 @@ class Origin;
 
 extern bool g_ardia_win_hosts_normal_windows;
 
+extern bool g_ardia_win_shell_frame;
+
 extern std::unique_ptr<BrowserFrameView> (*g_ardia_win_frame_view)(
     BrowserWidget* widget,
     BrowserView* browser_view);
@@ -58,6 +62,13 @@ extern bool (*g_ardia_win_open_as_offer)(
     const blink::mojom::WindowFeatures& features);
 
 extern void (*g_ardia_win_offer_inserted)();
+
+extern std::atomic<void (*)(const void* key,
+                            const base::Process& process,
+                            base::Process::Priority priority)>
+    g_ardia_win_renderer_priority;
+
+extern std::atomic<void (*)(const void* key)> g_ardia_win_renderer_gone;
 
 extern std::unique_ptr<RenderViewContextMenuBase> (*g_ardia_win_context_menu)(
     content::RenderFrameHost& render_frame_host,

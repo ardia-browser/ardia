@@ -1,6 +1,6 @@
 const counts = { opened: 0, stepped: 0 };
 
-export type FindUse = keyof typeof counts;
+type FindUse = keyof typeof counts;
 
 export const noteFind = (use: FindUse) => void (counts[use] += 1);
 

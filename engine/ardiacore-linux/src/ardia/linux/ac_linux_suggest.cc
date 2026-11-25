@@ -7,7 +7,7 @@
 #include <utility>
 #include <vector>
 
-#include "ardia/linux/ac_linux_suggest_policy.h"
+#include "ardia/desktop/ac_desktop_suggest_policy.h"
 #include "base/files/file_path.h"
 #include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
@@ -40,7 +40,7 @@
 namespace ardia::linux_suggest {
 namespace {
 
-namespace policy = ardia::linux_suggest_policy;
+namespace policy = ardia::desktop_suggest_policy;
 
 constexpr net::NetworkTrafficAnnotationTag kTrafficAnnotation =
     net::DefineNetworkTrafficAnnotation("ardia_linux_search_suggestions", R"(

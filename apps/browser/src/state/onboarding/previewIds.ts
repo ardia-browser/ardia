@@ -10,6 +10,8 @@ export type PreviewId =
   | "newtabpos-bottom"
   | "newtabpos-top"
   | "newtabpos-next"
+  | "ctrltab-step"
+  | "ctrltab-switcher"
   | "tidy-keep"
   | "tidy-auto"
   | "quit-restore"
@@ -23,10 +25,6 @@ export type PreviewId =
   | "style-classic"
   | "sitecolor-on"
   | "sitecolor-off"
-  | "switcher-dots"
-  | "switcher-icons"
-  | "typed-website"
-  | "typed-search"
   | "block-on"
   | "block-off"
   | "links-little"
@@ -44,6 +42,8 @@ export const PREVIEW_IDS: readonly PreviewId[] = [
   "newtabpos-bottom",
   "newtabpos-top",
   "newtabpos-next",
+  "ctrltab-step",
+  "ctrltab-switcher",
   "tidy-keep",
   "tidy-auto",
   "quit-restore",
@@ -57,10 +57,6 @@ export const PREVIEW_IDS: readonly PreviewId[] = [
   "style-classic",
   "sitecolor-on",
   "sitecolor-off",
-  "switcher-dots",
-  "switcher-icons",
-  "typed-website",
-  "typed-search",
   "block-on",
   "block-off",
   "links-little",

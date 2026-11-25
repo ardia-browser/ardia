@@ -7,6 +7,7 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 LINUX = SOURCE / 'ardia' / 'linux'
 PATCHES = ROOT.parents[0] / 'patches'
 
@@ -55,7 +56,7 @@ class GeoClueTests(unittest.TestCase):
             scratch = pathlib.Path(scratch)
             (scratch / 'geoclue.cc').write_text(SCENARIOS)
             binary = scratch / 'geoclue'
-            compiled = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined', '-I', str(SOURCE),
+            compiled = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined', '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE),
                                        str(scratch / 'geoclue.cc'), '-o', str(binary)], capture_output=True, text=True, timeout=120)
             self.assertEqual(compiled.returncode, 0, compiled.stderr)
             result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=30)
@@ -71,7 +72,9 @@ class GeoClueTests(unittest.TestCase):
                        'geoclue::FixFrom(values)', 'content::GetUIThreadTaskRunner({})', 'kPositionUnavailable']:
             self.assertIn(needle, provider)
         host = (LINUX / 'ac_linux_host.cc').read_text()
-        self.assertIn('ardia::InstallLinuxLocationProvider();', host)
+        self.assertIn('ardia::desktop::Platform().InstallLocationProvider();', host)
+        self.assertIn('void InstallLocationProvider() override { InstallLinuxLocationProvider(); }',
+                      (LINUX / 'ac_linux_desktop_platform.cc').read_text())
         self.assertIn('.Append("ArdiaLocation.locationPermission")', host)
 
     def test_a_precise_request_after_a_coarse_one_raises_the_running_client_and_its_end_lowers_it(self):

@@ -39,10 +39,12 @@ the start unless noted. All clocks are epoch ms on the same Mac: JS's `Date.now(
 | | `rn_ms` | → React Native starts loading the bundle (`launchApp`, after the early window and its first commit; from 0.2.46-nightly.7). `js_ms - rn_ms` is the bundle load, `rn_ms - engine_ms` the early window |
 | | `js_ms` | → the bundle's first module runs (`state/telemetry/jsStart.ts`) |
 | | `commit_ms` | → the first window's first React commit |
+| | `first_commit_ms` | the first window root's first render → that commit: how long the first commit took to build and mount (launch's first commit, `launch.firstCommitMounts` in the ratchet; from the release after 0.2.48) |
 | | `launch_ms` | → the first window's root effect (**unchanged** since 0.2.x, so old data stays comparable) |
 | | `content_ms` | → that first commit on screen |
 | | `usable_ms` | → the app answers at once: the first timer after the first commit that runs within 50 ms of being set (both the main and JS threads free), and not before `content_ms` |
 | | `tab_request_ms`, `tab_commit_ms`, `tab_paint_ms` | → the restored active tab's load asked for, committed, first contentful paint |
+| | `sidebar_rows_later`, `sidebar_rows_ms`, `sidebar_rows_release` | sidebar rows still unmounted when the launch's first content reached the screen (rows grow as usual until then; 0 for a short list), that moment → all of them mounted (null when a window closed first), and what let the first restored window's rows in: `loaded` (its restored page finished loading), `nopage` (250 ms; no web page to wait for, such as History), `deadline` (1 s), `scroll`, `drag`, `profile` (its profile changed), `reveal` (a tab picked by shortcut or search was revealed), `late` (a sidebar first shown 3 s or more after JS started holds nothing). `state/sidebar/launchRows.ts`; from the first nightly after #3768 |
 | J2 new tab (`perf_journeys`) | `j2_js` | ⌘T (or the New Tab button) → JS has the new tab |
 | | `j2_commit` | → the new tab's command bar committed |
 | | `j2_shown` | → that commit on screen |
@@ -62,7 +64,19 @@ the start unless noted. All clocks are epoch ms on the same Mac: JS's `Date.now(
 Each `perf_journeys` step goes as `<step>_p50`, `_p75`, `_p95`, `_max` and `_n` (ms; at most 500 samples per step per
 summary). Counts: `j3_cold` (the page was hidden), `j3_warm` (it was still painting), `j3_load` (it had to load),
 `j3_other` (no page: New Tab), `j2_no_bar`, `j4_no_load` (not a page load: a ardia: page, a download),
-`j4_no_paint` (nothing painted within 30 s), `j4_replaced` (another navigation came first).
+`j4_no_paint` (nothing painted within 30 s), `j4_replaced` (another navigation came first), `j3_native` (a sidebar
+press showed the page from native code before JS switched), `j3_native_dropped` (of those, shown and then not
+selected: a drag, a press on the shown tab's row, a press JS never heard, the tab closed, crashed or put to sleep
+while shown, a split made around it, the app or the window left, another selection winning, the 5 s backstop; a page a
+later press replaced is not counted, its own switch still follows). Both count only pages whose pixels reached the
+screen: one cancelled while it waited for its first frame is neither. Watch `j3_native_dropped / j3_native` stay small
+and `j3_view`'s p95 fall. A switch native code showed first is timed from its own press (the `nativePress` mark, kept
+under that press's number, so no other switch to the same tab can use it and a press taken back takes it along), not
+from the last input, so a release that came before JS heard the press, or a stall longer than a second, still gives
+a `j3` sample. Until JS commits the switch the page shown is pixels only: keys and clicks at the page reach neither
+page, and the keyboard stays where it was.
+A page of this Space that is kept warm keeps both this and JS's own reveal off (`revealableOver`); another Space's
+warm page does only while it is awake (the 10 s after a Space switch or swipe).
 Context: `tabs`, how many tabs were open when the summary went out (an exact count, from the first nightly after 0.2.46-nightly.6), so J2 and J3 can
 be split by tab count: they must not grow with it (#1330). Before it, join `perf_memory`'s tab count by copy.
 `perf_journeys` goes hourly and at quit, like `perf_omnibox`; `perf_launch` once its steps are in (≤ 30 s after the first
@@ -84,6 +98,18 @@ can be told from a slow launch on a quiet one; null when the call failed, never 
 launch was hidden, started as a login item, false when it wasn't; null when AppKit hadn't finished launching when the
 value was read). Both, and `main_ms`, `startup_ms` and `chromium_ms`, come from the first nightly after
 0.2.46-nightly.7; an earlier build leaves them out, and a mark the app didn't reach is null, never 0.
+`launch_source` (`login_item`, `documents` when another app opened a link or file with Ardia, `user`; null before AppKit
+finished launching, nothing else ever sent), `appkit_will_finish_ms` and `appkit_did_finish_ms` (`NSApplicationWillFinishLaunching`
+and `NSApplicationDidFinishLaunching`, from process start) come from the first nightly after 0.2.47-nightly.4.
+`cold_nth` (`1`, `2`, `3+`: which cold launch of this version on this copy this is; null on a warm launch, and on every launch of a
+copy that updated before the field existed, until its next version) and `version_age` (`<1d`, `<2d`, `<4d`, `<7d`, `7d+`
+since this version's first launch on this copy, null under the same rule) come from the first nightly after 0.2.48 (#3650).
+Compare versions on matched cohorts, never on all cold launches: each copy's 1st cold launch of a version is its slowest
+(0.2.46: 2,431 ms `js_ms` p50, then 1,923, then 1,544 for the 3rd and later), and in a version's first days nearly every
+cold launch is a 1st one. That mix made 0.2.47, two days old, read about 1.1 s slower than a settled 0.2.46. Matched per copy,
+the gap was +347 ms, all before `engine_ms`. The dashboard's launch regression rows are warm launches
+(`cold` not `true`, `first_of_version = false`) and 1st cold launches (`cold_nth = 1`, `first_of_version = false`). Linux sends
+no boot time, so it has no `cold` or `cold_nth`: its warm row is every launch but a version's first, and it has no 1st-cold row.
 
 ### A session's payload
 

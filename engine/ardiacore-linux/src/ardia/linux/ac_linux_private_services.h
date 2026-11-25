@@ -51,6 +51,19 @@ inline linux_profiles::ProfileError RoutePrivateCall(std::string_view name, cons
   return ProfileError::kNone;
 }
 
+inline constexpr std::string_view kFaviconPeekCall = "favicons.peek";
+
+inline constexpr linux_profiles::ProfileError RouteFaviconPeek(bool page_off_the_record, bool page_ending,
+                                                               linux_profiles::ProfileKind requested,
+                                                               bool source_loaded) {
+  using linux_profiles::ProfileError;
+  if (!page_off_the_record) return ProfileError::kWindowMismatch;
+  if (page_ending) return ProfileError::kPrivateEnding;
+  if (requested == linux_profiles::ProfileKind::kPrivate) return ProfileError::kPrivateService;
+  if (!source_loaded) return ProfileError::kUnavailable;
+  return ProfileError::kNone;
+}
+
 inline constexpr linux_profiles::ProfileError RouteProfileRelease(bool private_page, bool hosts_requested,
                                                                   bool live_elsewhere) {
   const bool refused = private_page ? !hosts_requested : live_elsewhere;

@@ -79,7 +79,7 @@ function Card({
               <NtpCardTitle>{SHARING_COPY.ask.title}</NtpCardTitle>
               <Text size="caption" style={{ lineHeight: lineHeight.caption, color: colors.body }}>
                 {SHARING_COPY.ask.body}{" "}
-                <Span onPress={() => openSettings("privacy")} style={LINK} accessibilityRole="link">
+                <Span onPress={() => openSettings("general")} style={LINK} accessibilityRole="link">
                   {SHARING_COPY.whatsSent}
                 </Span>
               </Text>

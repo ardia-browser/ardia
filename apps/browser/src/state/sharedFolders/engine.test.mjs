@@ -12,6 +12,9 @@ const pending = new Map();
 const failing = new Set();
 const unstageable = new Set();
 let duringRead = async () => {};
+let duringSave = () => {};
+let duringApply = async () => {};
+const nextConflicts = [];
 const byPath = new Map();
 let listing = { exists: true, root: { entries: [], manifest: null, manifestPending: false } };
 
@@ -29,6 +32,7 @@ globalThis.acTestNativeModules = {
   ArdiaApp: { ...shellNativeModules.ArdiaApp, share: async (url) => void (shares.push(url), events.push("share")) },
   ArdiaDocuments: {
     readDocument: (name) => pending.get(name) ?? landed.get(name) ?? null,
+    documentExists: (name) => pending.has(name) || landed.has(name),
     writeDocument: (name, contents) => {
       if (unstageable.has(name)) throw new Error(`can't stage ${name}`);
       pending.set(name, contents);
@@ -36,7 +40,7 @@ globalThis.acTestNativeModules = {
     },
     saveDocument: async (name, contents) => void pending.set(name, contents),
     documentSaved: (name) =>
-      new Promise((resolve, reject) =>
+      new Promise((resolve, reject) => duringSave(name) ??
         setTimeout(() => {
           events.push(`awaited ${name}`);
           const error = land(name);
@@ -53,8 +57,13 @@ globalThis.acTestNativeModules = {
       await duringRead();
       return now;
     },
-    apply: async (path, ops) => (events.push(`apply ${path} ${JSON.parse(ops).length}`), files.set("ops", JSON.parse(ops)), { conflicts: [] }),
-    create: async (parent, name) => `${parent}/${name}`,
+    apply: async (path, ops) => {
+      events.push(`apply ${path} ${JSON.parse(ops).length}`);
+      files.set("ops", JSON.parse(ops));
+      await duringApply();
+      return { conflicts: nextConflicts.splice(0) };
+    },
+    create: async (parent, _parentIdentity, name) => ({ path: `${parent}/${name}`, device: 1, inode: 1 }),
     watch: () => {},
     addListener: () => ({ remove() {} }),
   },
@@ -95,6 +104,9 @@ function fresh() {
   unstageable.clear();
   listing = { exists: true, root: { entries: [], manifest: null, manifestPending: false } };
   duringRead = async () => {};
+  duringSave = () => {};
+  duringApply = async () => {};
+  nextConflicts.length = 0;
   byPath.clear();
 }
 
@@ -253,4 +265,59 @@ test("Share Folder waits for a round that starts after it, not one already runni
   const shared = events.indexOf("share");
   assert.ok(shared >= 0, "the sheet opened");
   assert.equal(events.slice(0, shared).filter((e) => e.startsWith("read ")).length, 2, `a fresh round ran before the sheet (${reads.length} reads)`);
+});
+
+function setupAt(path) {
+  const { profileId, key } = setup();
+  unbindFolder(profileId, key);
+  bindFolder(profileId, key, path);
+  return { profileId, key, applies: () => events.filter((e) => e.startsWith(`apply ${path} `)) };
+}
+
+const remoteLink = (url) => ({ exists: true, root: { entries: [{ kind: "link", file: `${url.split("/")[2]}.webloc`, text: webloc(url) }], manifest: null, manifestPending: false } });
+
+test("a socket round whose save fails after control went off schedules no retry", async () => {
+  const { profileId, key, applies } = setupAt("/scratch/Ardia Shared/Revoked Save");
+  await wait(900);
+  listing = remoteLink("https://revoked-save.example/");
+  let on = true;
+  failing.add("session.json");
+  duringSave = () => void (on = false);
+  events.length = 0;
+  await settled(syncFolderNow(profileId, key, () => on));
+  failing.delete("session.json");
+  duringSave = () => {};
+  await wait(5000);
+  assert.deepEqual(applies(), [], "no retry wrote files after control went off");
+});
+
+test("a socket round whose write was pending when control went off commits neither base nor status", async () => {
+  const { profileId, key } = setupAt("/scratch/Ardia Shared/Revoked Apply");
+  await wait(900);
+  await settled(syncFolderNow(profileId, key));
+  const before = sharedFolderOf(profileId, key).base;
+  const status = useSharedFolders.getState().sync[`${profileId}\u0001${key}`]?.at;
+  listing = remoteLink("https://revoked-apply.example/");
+  let on = true;
+  duringApply = async () => void (on = false);
+  await settled(syncFolderNow(profileId, key, () => on));
+  assert.equal(sharedFolderOf(profileId, key).base, before, "the base didn't move");
+  assert.equal(useSharedFolders.getState().sync[`${profileId}\u0001${key}`]?.at, status, "the status didn't change");
+});
+
+test("a socket round's conflict retry carries the socket's guard", async () => {
+  const { profileId, key, applies } = setupAt("/scratch/Ardia Shared/Conflict Retry");
+  await wait(900);
+  await settled(syncFolderNow(profileId, key));
+  await wait(900);
+  listing = remoteLink("https://conflict-retry.example/");
+  let on = true;
+  nextConflicts.push("conflict-retry.example.webloc");
+  events.length = 0;
+  const before = applies().length;
+  await settled(syncFolderNow(profileId, key, () => on));
+  assert.equal(applies().length, before + 1);
+  on = false;
+  await wait(5000);
+  assert.equal(applies().length, before + 1, "the retry didn't run once control was off");
 });

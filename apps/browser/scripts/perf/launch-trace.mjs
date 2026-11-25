@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
+import { median } from "./median.mjs";
 
 const { values: o, positionals: files } = parseArgs({
   allowPositionals: true,
@@ -9,12 +10,6 @@ if (files.length !== 2) {
   console.error("usage: node launch-trace.mjs <a/results.json> <b/results.json> [--top n]");
   process.exit(64);
 }
-const median = (xs) => {
-  const s = xs.filter(Number.isFinite).sort((a, b) => a - b);
-  if (!s.length) return NaN;
-  const m = s.length >> 1;
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-};
 
 function analyze(file) {
   const ev = JSON.parse(readFileSync(file, "utf8")).traceEvents;

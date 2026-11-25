@@ -5,7 +5,8 @@ import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-n
 import { Button } from "./Button";
 import { PANEL_CLOSE_GLYPH, PANEL_CLOSE_SIZE } from "./ButtonKinds";
 import { curve, duration } from "./motion";
-import { surfaceTheme, ThemeContext, useTheme } from "./theme";
+import { surfaceTheme, useTheme } from "./theme";
+import { ThemeOverride } from "./ThemeOverride";
 import { concentric, font as typeScale, lineHeight, POPOVER_WIDTH, radius, shadow, space, typeFace, weight } from "./tokens";
 import { useHover } from "./useHover";
 import { Panel, type PanelProps } from "./Panel";
@@ -66,6 +67,17 @@ export function usePopoverPresence(open: boolean) {
   if (open && !shown) setShown(true);
   return { shown: open || shown, closing: !open, onClosed: () => setShown(false) };
 }
+
+export type PanelPresence = { closing: boolean; onClosed: () => void };
+
+export function usePanelsPresence<K extends string>(open: string | null, kinds: readonly K[]): (kind: K) => PanelPresence | null {
+  const opened = kinds.find((kind) => kind === open);
+  const [shown, setShown] = useState<readonly K[]>(NONE_SHOWN);
+  if (opened && !shown.includes(opened)) setShown([...shown, opened]);
+  return (kind) => (kind === open || shown.includes(kind) ? { closing: kind !== open, onClosed: () => setShown((now) => (now.includes(kind) ? now.filter((k) => k !== kind) : now)) } : null);
+}
+
+const NONE_SHOWN: readonly never[] = [];
 
 export function usePopoverMotion(closing: boolean, onClosed?: () => void, ready = true) {
   const appear = useRef(new Animated.Value(0)).current;
@@ -146,20 +158,20 @@ export function PopoverSurface({ children, glass = false, ...props }: Omit<Panel
   const paneGlass = useGlass("panes");
   if (glass && paneGlass)
     return (
-      <ThemeContext.Provider value={theme}>
+      <ThemeOverride theme={theme}>
         <Panel {...props} glass fill={theme.panel} radius={PANEL.radius}>
           {children}
         </Panel>
-      </ThemeContext.Provider>
+      </ThemeOverride>
     );
   return (
-    <ThemeContext.Provider value={theme}>
+    <ThemeOverride theme={theme}>
       <Panel {...props} fill={theme.popoverFill} radius={PANEL.radius} border={theme.popoverBorder} shadow={shadow.popover}>
         <VisualEffect material="menu" cornerRadius={PANEL.radius} style={StyleSheet.absoluteFill} />
         <View style={{ ...StyleSheet.absoluteFillObject, borderRadius: PANEL.radius, backgroundColor: theme.popoverTint }} />
         {children}
       </Panel>
-    </ThemeContext.Provider>
+    </ThemeOverride>
   );
 }
 

@@ -20,8 +20,9 @@ test("every setting is either on the config allowlist or deliberately left out, 
   for (const key of SETTING_KEYS) assert.ok(allowed.has(key) !== excluded.has(key), `${key} must be in exactly one list`);
   assert.equal(allowed.size + excluded.size, SETTING_KEYS.length, "no stale names in either list");
   assert.deepEqual([...excluded].sort(), [
-    "allowJavaScriptFromAppleEvents", "cliControl", "customSearchEngines", "customSearchUrl", "defaultProfileId", "extensionSearchEngines", "fairPlayInChromium",
-    "newTabUrl", "pageEngine", "protectedVideoInWebKit", "websiteEngines",
+    "allowJavaScriptFromAppleEvents", "cliControl", "customSearchEngines", "customSearchUrl", "defaultProfileId", "engineMode", "engineSwitchAsksAboutUnsavedWork",
+    "engineSwitchCarriesSiteData", "engineSwitchKeepsPage", "extensionSearchEngines", "newTabUrl", "offerWebKitForProtectedVideo", "pageEngine",
+    "protectedVideoInWebKit", "webKitFraudWarnings", "websiteEngines",
   ]);
 });
 
@@ -49,6 +50,9 @@ test("config.schema.json lists the allowlist with defaults, shortcuts by command
   assert.match(shortcuts.description, /cmd\+shift\+t/);
   assert.equal(accepts(shortcuts, { newTab: "cmd+t", reopenClosedTab: "" }), true);
   assert.equal(accepts(shortcuts, { notACommand: "cmd+t" }), false);
+  assert.equal(accepts(shortcuts, { "switchProfile:default": "alt+1", "newLittleArdia:p-1-2": "" }), true);
+  assert.equal(accepts(shortcuts, { "switchProfile:": "alt+1" }), false);
+  assert.equal(accepts(shortcuts, { "switchProfile:default": 1 }), false);
   assert.equal(accepts(schema.properties.theme, "nord"), true);
   assert.equal(accepts(schema.properties.theme, null), true);
   assert.equal(accepts(schema.properties.theme, "Nord!"), false);
@@ -116,9 +120,36 @@ test("theme.schema.json covers type, metrics, layout and icons with Ardia's defa
 
 test("the schema files are written as 2-space JSON with a final newline", () => {
   const files = schemaFiles(colorRoles);
-  assert.deepEqual(Object.keys(files), ["config.schema.json", "theme.schema.json"]);
+  assert.deepEqual(Object.keys(files), ["config.schema.json", "theme.schema.json", "plugin.schema.json"]);
   for (const text of Object.values(files)) {
     assert.ok(text.endsWith("}\n"));
     assert.equal(text, `${JSON.stringify(JSON.parse(text), null, 2)}\n`);
+  }
+});
+
+test("plugin.schema.json states the prerequisites of permissions.state the way the manifest reader does", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { readManifest } = await import("../../lib/pluginManifest.ts");
+  const schema = JSON.parse(readFileSync(new URL("../../../../../docs/plugin.schema.json", import.meta.url), "utf8"));
+  const permissions = schema.then.properties.permissions;
+  assert.ok(permissions.anyOf, "permissions carries the state prerequisites");
+  const cases = [
+    {},
+    { state: false },
+    { state: { events: ["downloads"] } },
+    { state: { events: ["tabs"] } },
+    { state: { events: ["navigation", "downloads"] } },
+    { state: { events: ["workspace"] }, tabs: "read" },
+    { state: { events: ["tabs"] }, tabs: "write" },
+    { state: { intents: ["tabs.pin"] } },
+    { state: { intents: ["tabs.pin"] }, tabs: "read" },
+    { state: { intents: ["tabs.pin"] }, tabs: "write" },
+    { state: { events: ["tabs"], intents: ["tabs.move"] }, tabs: "write" },
+    { state: { events: ["downloads"], intents: [] } },
+  ];
+  for (const given of cases) {
+    const doc = { manifest: 2, name: "p", title: "P", main: "index.js", permissions: given, contributes: { commands: [{ name: "go", title: "Go" }] } };
+    const valid = readManifest(JSON.stringify(doc)).problems.length === 0;
+    assert.equal(accepts(permissions, given), valid, JSON.stringify(given));
   }
 });

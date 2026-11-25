@@ -1,0 +1,347 @@
+---
+import { base } from "../data/site";
+import { DONATE_AMOUNTS, DONATE_FREQUENCIES, DONATE_LINKS, MONTHLY_CUSTOM, donateFloorOf, donateLabel } from "../data/donate";
+
+interface Props {
+  id?: string;
+  location?: string;
+  compact?: boolean;
+}
+const { id = "donate", location = "contributors", compact = false } = Astro.props;
+const titleId = `${id}-title`;
+---
+
+<div
+  class:list={["donate", { compact }]}
+  id={id}
+  data-shot={compact ? undefined : "donate"}
+  data-reveal={compact ? undefined : ""}
+  style={compact ? undefined : "--i: 3"}
+>
+  <h3 class="poster" id={titleId}>Chip in for the paint.</h3>
+  <fieldset class="frequency" aria-labelledby={titleId}>
+    <legend class="visually-hidden">How often</legend>
+    {
+      DONATE_FREQUENCIES.map((frequency) => (
+        <label>
+          <input type="radio" name={`${id}-frequency`} value={frequency.key} checked={frequency.key === "monthly"} />
+          <span>{frequency.label}</span>
+        </label>
+      ))
+    }
+  </fieldset>
+  {
+    DONATE_FREQUENCIES.map((frequency) => (
+      <ul class="amounts" role="list" data-frequency={frequency.key} aria-label={`${frequency.label} amounts`}>
+        {DONATE_AMOUNTS.map((amount) => {
+          const href = DONATE_LINKS[frequency.key][amount];
+          return href ? (
+            <li data-floor={donateFloorOf(amount)}>
+              <a
+                class:list={["amount", { custom: amount === "custom", sixseven: amount === "67" }]}
+                href={href}
+                rel="noopener"
+                data-track="donate_clicked"
+                data-track-frequency={frequency.key}
+                data-track-amount={amount}
+                data-track-location={location}
+              >
+                {donateLabel(amount)}
+                {frequency.key === "monthly" && amount !== "custom" && <span class="per">/mo</span>}
+              </a>
+            </li>
+          ) : (
+            <li>
+              <form class="amount amount-form" action={`${base}${MONTHLY_CUSTOM.path}`} method="post">
+                <span aria-hidden="true">$</span>
+                <input
+                  name="amount"
+                  type="text"
+                  inputmode="numeric"
+                  pattern="[1-9][0-9]{0,3}|10000"
+                  maxlength="5"
+                  autocomplete="off"
+                  title={`Whole dollars, ${MONTHLY_CUSTOM.min} to ${MONTHLY_CUSTOM.max.toLocaleString("en-US")}`}
+                  placeholder="Custom"
+                  required
+                  aria-label="Monthly amount in dollars"
+                />
+                <span class="per">/mo</span>
+                <button
+                  type="submit"
+                  aria-label="Give this amount monthly"
+                  data-track="donate_clicked"
+                  data-track-frequency={frequency.key}
+                  data-track-amount={amount}
+                  data-track-location={location}
+                >
+                  →
+                </button>
+              </form>
+            </li>
+          );
+        })}
+      </ul>
+    ))
+  }
+  <p class="fine">Secure checkout by Stripe. It asks for your email to send the receipt. Cancel a monthly gift any time from that email.</p>
+</div>
+
+<script>
+  import { DONATE_FLOOR, isDonateFloorVariant } from "../data/donate";
+  import { getFeatureFlag } from "../scripts/telemetry";
+
+  const LOCAL_HOST = /^(localhost|127\.0\.0\.1|\[::1\])$/;
+
+  function showFloor(variant: unknown) {
+    if (!isDonateFloorVariant(variant)) return;
+    document.documentElement.dataset.donateFloor = variant;
+    for (const link of document.querySelectorAll<HTMLAnchorElement>(".donate a.amount[href*='.stripe.com/']")) {
+      const url = new URL(link.href);
+      url.searchParams.set("client_reference_id", `${DONATE_FLOOR.flag}_${variant}`);
+      link.href = url.href;
+    }
+  }
+
+  let decided = false;
+  const nearby = new IntersectionObserver((entries) => entries.some((entry) => entry.isIntersecting) && decideFloor(), {
+    rootMargin: "800px 0px",
+  });
+
+  function decideFloor() {
+    if (decided) return;
+    decided = true;
+    nearby.disconnect();
+    const forced = LOCAL_HOST.test(location.hostname) ? new URLSearchParams(location.search).get("nnflag") : null;
+    if (isDonateFloorVariant(forced)) showFloor(forced);
+    else void getFeatureFlag(DONATE_FLOOR.flag).then(showFloor);
+  }
+
+  for (const donate of document.querySelectorAll<HTMLElement>(".donate:not(.compact)")) nearby.observe(donate);
+  for (const opener of document.querySelectorAll<HTMLElement>("[popovertarget='donate-pop']")) {
+    opener.addEventListener("pointerenter", decideFloor, { once: true });
+    opener.addEventListener("focus", decideFloor, { once: true });
+    opener.addEventListener("click", decideFloor, { once: true });
+  }
+</script>
+
+<style>
+  li[data-floor="five"],
+  :global(:root[data-donate-floor="five"]) li[data-floor="ten"] {
+    display: none;
+  }
+  :global(:root[data-donate-floor="five"]) li[data-floor="five"] {
+    display: list-item;
+  }
+  .donate {
+    margin-top: clamp(64px, 7vw, 112px);
+    padding-top: clamp(32px, 3.5vw, 48px);
+    border-top: 1px solid var(--night-rule);
+    max-width: 44em;
+  }
+  h3 {
+    font-size: var(--t-h3);
+  }
+  .compact {
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  .compact h3 {
+    font-size: 1.5rem;
+  }
+  .compact .fine {
+    font-size: 0.86rem;
+  }
+  .compact .amount {
+    min-width: 64px;
+    min-height: 44px;
+    padding: 0 14px;
+    font-size: 1rem;
+  }
+  .frequency {
+    display: inline-flex;
+    gap: 4px;
+    margin: 28px 0 0;
+    padding: 4px;
+    border: 0;
+    border-radius: 999px;
+    background: rgb(239 232 220 / 0.08);
+    box-shadow: inset 0 0 0 1px var(--night-rule);
+  }
+  .frequency label {
+    position: relative;
+    cursor: pointer;
+  }
+  .frequency input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    margin: 0;
+    cursor: pointer;
+  }
+  .frequency span {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+    padding: 0 18px;
+    border-radius: 999px;
+    font-size: var(--t-small);
+    font-weight: 560;
+    color: var(--ink-2);
+  }
+  .frequency input:checked + span {
+    background: var(--ink);
+    color: var(--ink-on);
+  }
+  .frequency input:focus-visible + span {
+    outline: 2px solid var(--sun);
+    outline-offset: 2px;
+  }
+  .amounts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 18px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .donate:has(input[value="once"]:checked) .amounts[data-frequency="monthly"],
+  .donate:has(input[value="monthly"]:checked) .amounts[data-frequency="once"] {
+    display: none;
+  }
+  .amount {
+    display: inline-flex;
+    gap: 2px;
+    min-height: 48px;
+    min-width: 76px;
+    justify-content: center;
+    align-items: center;
+    padding: 0 18px;
+    border-radius: 14px;
+    background: rgb(239 232 220 / 0.06);
+    box-shadow: inset 0 0 0 1.5px rgb(239 232 220 / 0.28);
+    color: var(--ink);
+    font-family: var(--poster);
+    font-size: 1.1rem;
+    font-weight: 680;
+    text-decoration: none;
+    font-variant-numeric: tabular-nums;
+  }
+  .amount:hover,
+  .amount:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 2px var(--sun);
+    color: var(--sun);
+  }
+  a.amount:active {
+    transform: scale(0.96);
+  }
+  .amount.custom {
+    font-family: var(--sans);
+    font-size: var(--t-small);
+    font-weight: 600;
+  }
+  .amount.sixseven {
+    --sixseven-ink: #16130f;
+    background-color: var(--sun);
+    background-image: var(--impasto);
+    background-size: 120px;
+    background-blend-mode: soft-light;
+    box-shadow: 0 6px 18px rgb(5 8 18 / 0.28);
+    color: var(--sixseven-ink);
+    transform: rotate(-3deg);
+  }
+  .amount.sixseven .per {
+    color: rgb(22 19 15 / 0.7);
+  }
+  .amount.sixseven:hover,
+  .amount.sixseven:focus-visible {
+    background-color: var(--sun-pale);
+    box-shadow:
+      0 6px 18px rgb(5 8 18 / 0.28),
+      inset 0 0 0 2px var(--sixseven-ink);
+    color: var(--sixseven-ink);
+  }
+  a.amount.sixseven:active {
+    transform: rotate(-3deg) scale(0.96);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .amount.sixseven:hover {
+      animation: sixseven-weigh 0.9s ease-in-out infinite;
+    }
+  }
+  @keyframes sixseven-weigh {
+    0%,
+    100% {
+      transform: rotate(-3deg);
+    }
+    25% {
+      transform: rotate(4deg) translateY(-2px);
+    }
+    50% {
+      transform: rotate(-6deg) translateY(1px);
+    }
+    75% {
+      transform: rotate(3deg) translateY(-1px);
+    }
+  }
+  .donate .amount.amount-form {
+    --go: 40px;
+    gap: 4px;
+    padding: 0 4px 0 14px;
+  }
+  .donate.compact .amount.amount-form {
+    --go: 36px;
+  }
+  .amount-form:focus-within {
+    box-shadow: inset 0 0 0 2px var(--sun);
+  }
+  .amount-form input {
+    width: 6ch;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+  }
+  .amount-form input::placeholder {
+    color: var(--ink-2);
+    font-family: var(--sans);
+    font-size: var(--t-small);
+    font-weight: 600;
+  }
+  .amount-form input:focus {
+    outline: none;
+  }
+  .amount-form button {
+    display: grid;
+    place-items: center;
+    width: var(--go);
+    height: var(--go);
+    flex: none;
+    margin-left: 6px;
+    padding: 0;
+    border: 0;
+    border-radius: 10px;
+    background: var(--ink);
+    color: var(--ink-on);
+    font: inherit;
+    cursor: pointer;
+  }
+  .amount-form button:active {
+    transform: scale(0.96);
+  }
+  .per {
+    font-family: var(--sans);
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--ink-2);
+  }
+  .fine {
+    margin-top: 16px;
+    font-size: var(--t-small);
+    color: var(--ink-3);
+    max-width: 34em;
+  }
+</style>

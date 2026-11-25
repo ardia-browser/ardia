@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-const { barReducer, initialBar, previewText, selectionTracker } = await import("./barText.ts");
+const { barReducer, fullUrlShown, initialBar, previewText, selectionTracker } = await import("./barText.ts");
 
 const fresh = (text = "") => initialBar(null, text);
 const run = (state, ...events) => events.reduce(barReducer, state);
@@ -107,6 +107,15 @@ test("a key reads the selection from before its own caret move, and an older mov
   assert.deepEqual(sel.before, { start: 0, end: 10 });
 });
 
+test("a kept letter is a keystroke, not a caret move: the next key reads the kept selection as before its edit", () => {
+  let t = 1000;
+  const sel = selectionTracker({ start: 1, end: 9 }, () => t);
+  sel.note({ start: 2, end: 9 });
+  sel.rebase();
+  t += 20;
+  assert.deepEqual(sel.beforeEdit(), { start: 2, end: 9 });
+});
+
 test("a highlighted row shows its query or address in the field, other rows keep what was typed", () => {
   assert.equal(previewText({ kind: "search", query: "lebron james age", url: "https://duckduckgo.com/?q=lebron+james+age", engine: "DuckDuckGo", suggested: true }), "lebron james age");
   assert.equal(previewText({ kind: "page", url: "https://www.example.com/", title: "Example", favicon: null }), "example.com");
@@ -114,4 +123,17 @@ test("a highlighted row shows its query or address in the field, other rows keep
   assert.equal(previewText({ kind: "action", id: "settings", title: "Settings" }), null);
   assert.equal(previewText({ kind: "calc", expression: "2+2", value: "4", url: "" }), null);
   assert.equal(previewText(undefined), null);
+});
+
+test("copying a visited page shown without its scheme copies the page's full address, like Arc and Dia", () => {
+  const page = { kind: "page", url: "https://setu.atlassian.net/wiki/spaces/ENG/pages/1/TDD", title: "TDD" };
+  assert.equal(fullUrlShown("setu.atlassian.net/wiki/spaces/ENG/pages/1/TDD", page), page.url);
+  assert.equal(fullUrlShown("example.com", { kind: "page", url: "http://www.example.com/" }), "http://www.example.com/");
+});
+
+test("text that is not a page row's address, such as a search or a partial edit, is copied as typed", () => {
+  const page = { kind: "page", url: "https://example.com/docs" };
+  assert.equal(fullUrlShown("example.com/doc", page), null);
+  assert.equal(fullUrlShown("example.com/docs", { kind: "search", query: "example.com/docs", url: "https://google.com/search?q=x" }), null);
+  assert.equal(fullUrlShown("example.com/docs", undefined), null);
 });

@@ -7,12 +7,13 @@
     "build": "astro build",
     "preview": "astro preview",
     "check": "astro check",
-    "deploy": "../../infra/site/deploy.sh"
+    "deploy": "../../infra/site/deploy.sh",
+    "typecheck": "astro sync && tsrs --noEmit"
   },
   "dependencies": {
     "@fontsource-variable/martian-mono": "^5.3.0",
-    "@fontsource-variable/mona-sans": "^5.3.0",
     "@rrweb/record": "2.1.6",
+    "allo-font": "^1.0.3",
     "astro": "^7.3.4",
     "web-vitals": "6.2.2"
   },
@@ -20,6 +21,7 @@
     "@astrojs/check": "^0.9.10",
     "sharp": "^0.35.4",
     "subset-font": "^2.9.0",
+    "tsrs": "7.1.0-beta.tsrs4",
     "typescript": "^5.9.3"
   }
 }

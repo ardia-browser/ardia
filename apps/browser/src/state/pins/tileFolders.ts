@@ -1,11 +1,11 @@
 import type { BrowserState } from "../browser/store";
-import { changedIds } from "../browser/changes";
+import { changedIds, withEntry } from "../browser/changes";
 import { newId, pinSection, TILE_PIN } from "../browser/model";
 import { placing } from "./placing";
 import { sameTopApp } from "./topApps";
 import type { ParkedPins, Tab, TileFolder } from "../browser/types";
 
-export const FOLDER_CELL = "folder:";
+const FOLDER_CELL = "folder:";
 export const folderCell = (folderId: string) => `${FOLDER_CELL}${folderId}`;
 export const folderIdOfCell = (key: string): string | null => (key.startsWith(FOLDER_CELL) ? key.slice(FOLDER_CELL.length) : null);
 
@@ -59,7 +59,7 @@ export function addToTileFolder(s: BrowserState, ids: string[], ontoId: string, 
   if (pinSection(onto) !== "tile") return s;
   const folder = tileFolderOf(onto) ?? { id: newId("tf"), name: "" };
   const moving = sameWindow(s, ids, onto!).filter((id) => id !== ontoId);
-  const next = tileFolderOf(onto) === folder ? s : { ...s, tabs: { ...s.tabs, [ontoId]: withTileFolder(onto!, folder) } };
+  const next = tileFolderOf(onto) === folder ? s : { ...s, tabs: withEntry(s.tabs, ontoId, withTileFolder(onto!, folder)) };
   if (!moving.length) return next;
   const last = folderMembers(next, onto!.windowId, folder.id, onto!.profileId).filter((id) => !moving.includes(id)).at(-1);
   const at = beforeId && !moving.includes(beforeId) ? beforeId : after(next, onto!.windowId, last, moving);
@@ -166,4 +166,9 @@ export function settleTileFolders(s: BrowserState, prev: BrowserState): BrowserS
   }
   if (!tabs && !parkedPins) return null;
   return { ...s, ...(tabs ? { tabs } : {}), ...(parkedPins ? { parkedPins } : {}) };
+}
+
+export function shownFolderTab(s: Pick<BrowserState, "tabs" | "windows">, windowId: string, profileId: string, folderId: string): string | null {
+  const id = s.windows[windowId]?.activeTabIds[profileId];
+  return id && s.tabs[id]?.windowId === windowId && tileFolderOf(s.tabs[id])?.id === folderId ? id : null;
 }

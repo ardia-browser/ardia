@@ -1,7 +1,10 @@
 import { canonical } from "./canon.ts";
 import { hlcWall, type Clock, type HLC } from "./hlc.ts";
 import { holdsBack, noteFileHealth } from "./fileHealth.ts";
-import type { Adapter, LogFile, Origin, ScopeOptions, ScopeState, SnapshotFile, SyncFile, SyncRecord, Transport } from "./scopeState.ts";
+import { baseKeysWith, baseWritesUnder, dropBase, dropRecord, putBase, putRecord, visible } from "./scopeKeys.ts";
+export * from "./scopeKeys.ts";
+import { covered, isApplied, markApplied, raiseApplied } from "./applied.ts";
+import type { Adapter, LogFile, ScopeOptions, ScopeState, SnapshotFile, SyncFile, SyncRecord, Transport } from "./scopeState.ts";
 
 const DEFAULTS: Required<Omit<ScopeOptions, "persist" | "holdApply">> = {
   expired: () => false,
@@ -23,7 +26,7 @@ const isValue = (o: Record<string, unknown>) => Object.prototype.hasOwnProperty.
 const isOp = (v: unknown) => isObject(v) && typeof v.k === "string" && typeof v.h === "string" && isValue(v);
 const isRecord = (v: unknown) => isObject(v) && typeof v.h === "string" && isOrigin(v.o) && isValue(v);
 
-function parseSyncFile(payload: string): SyncFile | null {
+export function parseSyncFile(payload: string): SyncFile | null {
   let file: unknown;
   try {
     file = JSON.parse(payload);
@@ -38,22 +41,6 @@ function parseSyncFile(payload: string): SyncFile | null {
   return null;
 }
 
-export const covered = (vv: Record<string, number>, [device, seq]: Origin) => (vv[device] ?? 0) >= seq;
-
-function markApplied(state: ScopeState, device: string, seq: number) {
-  if (covered(state.vv, [device, seq])) return;
-  const extra = new Set(state.extra[device] ?? []);
-  extra.add(seq);
-  let top = state.vv[device] ?? 0;
-  while (extra.delete(top + 1)) top++;
-  state.vv[device] = top;
-  if (extra.size) state.extra[device] = [...extra].sort((a, b) => a - b);
-  else delete state.extra[device];
-}
-
-const isApplied = (state: ScopeState, [device, seq]: Origin) =>
-  covered(state.vv, [device, seq]) || (state.extra[device]?.includes(seq) ?? false);
-
 function see(state: ScopeState, device: string, at: number) {
   if (!(device in state.seen) || at > state.seen[device]!) state.seen[device] = at;
 }
@@ -62,7 +49,7 @@ function mergeRecord(state: ScopeState, key: string, record: SyncRecord, clock: 
   clock.observe(record.h);
   const current = state.records[key];
   if (current && current.h >= record.h) return false;
-  state.records[key] = record;
+  putRecord(state, key, record);
   return true;
 }
 
@@ -82,29 +69,13 @@ export function ingestSnapshot(state: ScopeState, file: SnapshotFile, clock: Clo
     if (!(key in state.records) && isApplied(state, record.o)) continue;
     if (mergeRecord(state, key, record, clock)) changed.add(key);
   }
-  for (const [key, record] of Object.entries(state.records)) {
-    if (!(key in file.records) && covered(file.vv, record.o)) {
-      delete state.records[key];
+  for (const key in state.records) {
+    if (!(key in file.records) && covered(file.vv, state.records[key]!.o)) {
+      dropRecord(state, key);
       changed.add(key);
     }
   }
-  for (const [device, seq] of Object.entries(file.vv)) {
-    if (seq > (state.vv[device] ?? 0)) {
-      state.vv[device] = seq;
-      const extra = (state.extra[device] ?? []).filter((s) => s > seq);
-      for (let top = seq; extra[0] === top + 1; top++) state.vv[device] = extra.shift()!;
-      if (extra.length) state.extra[device] = extra;
-      else delete state.extra[device];
-    }
-  }
-}
-
-export function visible(state: ScopeState, prefix: string): Map<string, unknown> {
-  const out = new Map<string, unknown>();
-  for (const [key, record] of Object.entries(state.records)) {
-    if (record.v !== null && key.startsWith(prefix)) out.set(key, record.v);
-  }
-  return out;
+  for (const [device, seq] of Object.entries(file.vv)) raiseApplied(state, device, seq);
 }
 
 const parseBase = (json: string | undefined) => (json === undefined ? undefined : (JSON.parse(json) as unknown));
@@ -127,24 +98,44 @@ function settleDurable(state: ScopeState) {
 type Change = { key: string; value: unknown; json: string };
 type Stamps = Map<string, { json: string; h: HLC }>;
 
+type Extracted = { source: object; baseWrites: number; joined: boolean };
+const extractedFrom = new WeakMap<ScopeState, Map<string, Extracted>>();
+
+function unchangedSinceExtracted(state: ScopeState, adapter: Adapter, source: object | undefined) {
+  const last = source && extractedFrom.get(state)?.get(adapter.prefix);
+  return !!last && last.source === source && last.joined === state.joined && last.baseWrites === baseWritesUnder(state, adapter.prefix);
+}
+
+function noteExtracted(state: ScopeState, adapter: Adapter, source: object | undefined) {
+  if (!source) return;
+  let byPrefix = extractedFrom.get(state);
+  if (!byPrefix) extractedFrom.set(state, (byPrefix = new Map()));
+  byPrefix.set(adapter.prefix, { source, baseWrites: baseWritesUnder(state, adapter.prefix), joined: state.joined });
+}
+
 async function changesOf(state: ScopeState, adapter: Adapter, now: number) {
   if (adapter.adoptRemoteOnJoin && !state.joined) return null;
+  const source = adapter.extractsOnlyFrom?.();
+  if (unchangedSinceExtracted(state, adapter, source)) return { changes: [], settle: undefined, source: undefined };
   let pending: Set<string> | null = null;
   const queued = (key: string) => (pending ??= new Set([...state.outbox, ...(state.journal ?? []).flatMap((f) => f.ops)].map((op) => op.k))).has(key);
-  const extraction = await adapter.extract((key) => parseBase(state.base[key]), queued, now, (key) => key in state.records, (key) => state.records[key]?.v, (key) => state.records[key]?.h);
+  const extraction = await adapter.extract((key) => parseBase(state.base[key]), queued, now, (key) => key in state.records, (key) => state.records[key]?.v, (key) => state.records[key]?.h, (key) => state.base[key]);
   if (!extraction) return null;
   const changes: Change[] = [];
-  for (const [key, value] of extraction.values) {
+  const { values, json: knownJson, republish, ignore } = extraction;
+  values.forEach((value, key) => {
     if (value === null || value === undefined) throw new Error(`[sync] ${key}: a live value can't be null`);
-    const json = canonical(value);
-    if (state.base[key] === json && !extraction.republish?.(key)) continue;
+    const json = knownJson?.(key, value) ?? canonical(value);
+    if (state.base[key] === json && !republish?.(key)) return;
     changes.push({ key, value, json });
-  }
-  for (const key of Object.keys(state.base)) {
-    if (!key.startsWith(adapter.prefix) || extraction.values.has(key) || extraction.ignore?.(key)) continue;
+  });
+  const keys = baseKeysWith(state, adapter.prefix);
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i]!;
+    if (!(key in state.base) || values.has(key) || ignore?.(key)) continue;
     changes.push({ key, value: null, json: "null" });
   }
-  return { changes, settle: extraction.published };
+  return { changes, settle: extraction.published, source };
 }
 
 function stampOf(state: ScopeState, adapter: Adapter, clock: Clock, { key, value }: Change): HLC {
@@ -163,16 +154,17 @@ async function publishAdapter(state: ScopeState, adapter: Adapter, clock: Clock,
   if (!found) return published;
   for (const change of found.changes) {
     const { key, value, json } = change;
-    if (value === null) delete state.base[key];
-    else state.base[key] = json;
+    if (value === null) dropBase(state, key);
+    else putBase(state, key, json);
     const candidate = stamps?.get(key);
     const h = candidate?.json === json ? candidate.h : stampOf(state, adapter, clock, change);
     const known = state.records[key];
     if (known && known.h >= h) continue;
-    state.records[key] = { h, v: value, o: [device, state.seq + 1] };
+    putRecord(state, key, { h, v: value, o: [device, state.seq + 1] });
     state.outbox.push({ k: key, h, v: value });
     published.add(key);
   }
+  noteExtracted(state, adapter, found.source);
   const { settle } = found;
   if (settle && published.size) settleWhenDurable(state, () => settle(published));
   return published;
@@ -209,8 +201,8 @@ export function restoreJournal(state: ScopeState, batches: LogFile[], clock: Clo
     if (file.seq === saved + 1) state.outbox = [];
     for (const op of file.ops) {
       mergeRecord(state, op.k, { h: op.h, v: op.v, o: [file.device, file.seq] }, clock);
-      if (op.v === null) delete state.base[op.k];
-      else state.base[op.k] = canonical(op.v);
+      if (op.v === null) dropBase(state, op.k);
+      else putBase(state, op.k, canonical(op.v));
     }
     state.seq = file.seq;
     if (file.seq <= written) markApplied(state, file.device, file.seq);
@@ -248,20 +240,28 @@ export async function pull(state: ScopeState, transport: Transport, scope: strin
   return changed;
 }
 
-async function applyAdapter(state: ScopeState, adapter: Adapter, keys: Set<string>, now: number, horizon: number, held: () => boolean): Promise<boolean> {
+async function applyAdapter(state: ScopeState, adapter: Adapter, keys: Set<string>, now: number, horizon: number, held: () => boolean, deferred: Set<string>): Promise<boolean> {
   const mine = new Set([...keys].filter((k) => k.startsWith(adapter.prefix)));
   if (!mine.size) return true;
   const view = visible(state, adapter.prefix);
   const applyAs = (state.applyAs ??= {});
   applyAs[adapter.prefix] ??= state.joined ? "joined" : "joining";
   const settle = (key: string) => {
-    if (view.has(key)) state.base[key] = canonical(view.get(key));
-    else delete state.base[key];
+    if (view.has(key)) putBase(state, key, canonical(view.get(key)));
+    else dropBase(state, key);
   };
   const landed = new Set<string>();
   let ok: boolean | void = false;
   try {
-    const records = { known: (key: string) => key in state.records, now, horizon, joined: applyAs[adapter.prefix] === "joined", held, landed: (key: string) => void landed.add(key) };
+    const records = {
+      known: (key: string) => key in state.records,
+      now,
+      horizon,
+      joined: applyAs[adapter.prefix] === "joined",
+      held,
+      landed: (key: string) => void landed.add(key),
+      defer: (key: string) => void (mine.has(key) && deferred.add(key)),
+    };
     ok = await adapter.apply(view, mine, (key) => parseBase(state.base[key]), records);
   } catch (error) {
     console.warn(`[sync] applying ${adapter.prefix} failed`, error);
@@ -275,7 +275,7 @@ async function applyAdapter(state: ScopeState, adapter: Adapter, keys: Set<strin
     return false;
   }
   applyAs[adapter.prefix] = "joined";
-  for (const key of mine) settle(key);
+  for (const key of mine) if (!deferred.has(key)) settle(key);
   return true;
 }
 
@@ -335,7 +335,7 @@ export async function compact(state: ScopeState, transport: Transport, scope: st
   const tombstoneTTL = Object.keys(state.extra).length ? 2 * o.tombstoneTTL : o.tombstoneTTL;
   for (const [key, record] of Object.entries(state.records)) {
     const drop = record.v === null ? now - hlcWall(record.h) > tombstoneTTL : o.expired(key, record.v, now);
-    if (drop) delete state.records[key];
+    if (drop) dropRecord(state, key);
     else records[key] = record;
   }
   const vv = { ...state.vv };
@@ -348,7 +348,7 @@ export async function compact(state: ScopeState, transport: Transport, scope: st
   return true;
 }
 
-export type CycleResult = { published: number; changed: number; pending: number; compacted: boolean; snapshotBytes: number };
+type CycleResult = { published: number; changed: number; pending: number; compacted: boolean; snapshotBytes: number };
 
 export async function syncScope(args: {
   scope: string;
@@ -380,9 +380,11 @@ export async function syncScope(args: {
     published += late.size;
     for (const key of late) keys.delete(key);
     heldApply ||= applyHeld();
-    const applied = !heldApply && (await applyAdapter(state, adapter, keys, now(), 2 * (options?.tombstoneTTL ?? DEFAULTS.tombstoneTTL), applyHeld));
+    const deferred = new Set<string>();
+    const applied = !heldApply && (await applyAdapter(state, adapter, keys, now(), 2 * (options?.tombstoneTTL ?? DEFAULTS.tombstoneTTL), applyHeld, deferred));
     heldApply ||= applyHeld();
-    if (!applied) unapplied.push(...[...keys].filter((k) => k.startsWith(adapter.prefix)));
+    if (!applied) for (const key of keys) if (key.startsWith(adapter.prefix)) unapplied.push(key);
+    if (applied) for (const key of deferred) unapplied.push(key);
   }
   state.unapplied = [...unapplied, ...[...keys].filter((k) => !adapters.some((a) => k.startsWith(a.prefix)))];
   if (!heldApply && (!state.awaitRemote || Object.keys(state.seen).some((d) => d !== device))) {

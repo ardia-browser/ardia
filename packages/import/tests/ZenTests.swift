@@ -114,7 +114,8 @@ final class ZenTests: XCTestCase {
     XCTAssertEqual(all.tabs.count, 3)
     XCTAssertFalse(all.tabs.contains { $0.url == "https://firefox-only.example/" })
     XCTAssertEqual(all.favorites.map(\.url), ["https://mail.example/"])
-    XCTAssertEqual(all.favicons.map(\.page), ["https://chat.example/room", "https://play.example/"])
+    XCTAssertEqual(all.favicons.map(\.page), ["https://chat.example/room", "https://play.example/", "https://mail.example/",
+                                             "https://docs.example/a"])
 
     let play = try importer.importData(browserId: "zen", profileId: main, kinds: [.tabs, .spaces, .pinnedTabs],
                                        options: ImportOptions(spaceIds: ["{play-space}"]))

@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Animated, StyleSheet, View, type ViewStyle } from "react-native";
 import { topStripPeekHeld, watchHolds } from "../../state/app/transientUi";
-import { useSettings, useWindowFullScreen, useWindowId, useWindowProfileId } from "../../state/browser/hooks";
+import { useWindowFullScreen, useWindowId, useWindowProfileId } from "../../state/browser/hooks";
 import { beginExternalDrag, endExternalDrag, moveExternalDrag } from "../../state/drag/tabDrag";
 import { lightsCenter, TOP_STRIP_LIGHTS_CENTER } from "../../state/windows/dockMotion";
+import { useWindowChrome } from "../../state/windows/windowButtons";
 import { usePagerPages } from "../../state/windows/profilePager";
 import { DownloadsButton } from "../downloads/DownloadsButton";
 import { useMinimalism } from "../../state/windows/layout";
 import { ProfileIndicator, useProfileIndicatorWidth } from "../profiles/ProfileIndicator";
-import { ClipView, ContextMenuArea, Panel, shadow, WindowDragRegion } from "../ui";
+import { ClipView, ContextMenuArea, continuousCorners, Panel, shadow, WindowDragRegion } from "../ui";
 import { layout, useTheme } from "../ui/theme";
 import { TintInk } from "../ui/TintInk";
 import { radius } from "../ui/tokens";
@@ -46,12 +47,13 @@ import { stripCaptionRoom } from "./stripGroups";
 export { TOP_STRIP_HEIGHT } from "./tokens";
 
 export function TopTabStrip({ width, floating = false, hidden = false, swipe = true }: { width: number; floating?: boolean; hidden?: boolean; swipe?: boolean }) {
+  useWindowChrome();
   const windowId = useWindowId();
   const current = useWindowProfileId();
   const { pages } = usePagerPages(windowId);
-  const profileChip = useProfileIndicatorWidth(PROFILE_ROOM);
   const minimal = useMinimalism();
-  const controls = minimal ? 0 : (profileChip ? profileChip + CONTROLS_GAP : 0) + DOWNLOADS_BOX;
+  const profileChip = useProfileIndicatorWidth(PROFILE_ROOM, !minimal);
+  const controls = minimal ? profileChip : (profileChip ? profileChip + CONTROLS_GAP : 0) + DOWNLOADS_BOX;
   const fullScreen = useWindowFullScreen(windowId);
   const left = floating || fullScreen ? 8 : layout.trafficLightsWidth + LIGHTS_GAP;
   const room = stripCaptionRoom(floating, fullScreen);
@@ -76,14 +78,14 @@ export function TopTabStrip({ width, floating = false, hidden = false, swipe = t
             ))}
           </ClipView>
         </ContextMenuArea>
-        {minimal ? null : (
+        {controls ? (
           <View mouseDownCanMoveWindow={false} style={{ position: "absolute", right: 8 + room, top: MID - 17, flexDirection: "row", alignItems: "center", gap: CONTROLS_GAP }}>
             <TintInk>
-              <ProfileIndicator room={PROFILE_ROOM} />
-              <DownloadsButton windowId={windowId} />
+              <ProfileIndicator room={PROFILE_ROOM} profileShown={!minimal} />
+              {minimal ? null : <DownloadsButton windowId={windowId} />}
             </TintInk>
           </View>
-        )}
+        ) : null}
         {swipe && <ProfileSwipeArea surface="strip" style={StyleSheet.absoluteFill} pageWidth={pageWidth + flare * 2} />}
         {!floating && <StripDropHighlight left={left} right={right} />}
       </StripDropArea>
@@ -113,24 +115,23 @@ function StripDropArea({ style, children }: { style: ViewStyle; children: React.
 
 function StripDropHighlight({ left, right }: { left: number; right: number }) {
   const corner = tabRadius();
-  const place = useMemo(() => ({ left: left - 4, right: right - 4, top: ITEM_TOP - 1, height: ITEM_HEIGHT + 2, borderRadius: corner + 1 }), [left, right, corner]);
+  const place = useMemo(() => ({ left: left - 4, right: right - 4, top: ITEM_TOP - 1, height: ITEM_HEIGHT + 2, ...continuousCorners(corner + 1) }), [left, right, corner]);
   return <WindowDropGlow place={place} />;
 }
 
-export function TopStripPeek({ windowWidth, enabled: hidden }: { windowWidth: number; enabled: boolean }) {
+export function TopStripPeek({ windowWidth, enabled }: { windowWidth: number; enabled: boolean }) {
+  useWindowChrome();
   const theme = useTheme();
   const windowId = useWindowId();
-  const revealOnHover = useSettings((s) => s.revealTabsOnHover);
-  const enabled = hidden && revealOnHover;
   const { slide, live, show, hide, recheck, cancelPending } = usePeek(enabled, false, () => topStripPeekHeld(windowId), undefined, noteTabStripPeek);
   const latestRecheck = useRef(recheck);
   latestRecheck.current = recheck;
   useEffect(() => (live ? watchHolds("topStrip", () => latestRecheck.current()) : undefined), [live]);
   useEffect(() => {
-    if (!hidden) return;
+    if (!enabled) return;
     void setTrafficLightsCenter(windowId, lightsCenter(layout.sidebarWidth));
     return () => void setTrafficLightsCenter(windowId, null);
-  }, [hidden, windowId]);
+  }, [enabled, windowId]);
   const leaveStrip = (e: { nativeEvent: { clientY: number } }) => {
     if (live && e.nativeEvent.clientY < PEEK_HOVER_HEIGHT) hide();
     else cancelPending();

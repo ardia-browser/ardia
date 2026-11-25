@@ -10,6 +10,7 @@ from support import VALUES, WRITER, cpp_value
 FIXTURE_TOKEN = secrets.token_hex(16)
 
 SOURCE = pathlib.Path(__file__).resolve().parents[1] / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 
 
 class DocumentValidationTests(unittest.TestCase):
@@ -154,7 +155,7 @@ for (int scenario = 0; scenario < 10; ++scenario) {
             (root / 'main.cc').write_text(main.replace('@FIXTURE_TOKEN@', FIXTURE_TOKEN))
             compiler = shutil.which('clang++') or shutil.which('c++')
             binary = root / 'validation'
-            result = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-I', str(root), '-I', str(SOURCE), *[str(SOURCE / 'ardia/linux' / name) for name in ['ac_linux_documents.cc', 'ac_linux_document_schema.cc', 'ac_linux_document_reducer.cc']], str(root / 'main.cc'), '-o', str(binary)], capture_output=True, text=True)
+            result = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-I', str(root), '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE), *[str(SOURCE / 'ardia/linux' / name) for name in ['ac_linux_documents.cc', 'ac_linux_document_schema.cc', 'ac_linux_document_reducer.cc']], str(root / 'main.cc'), '-o', str(binary)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             result = subprocess.run([str(binary)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

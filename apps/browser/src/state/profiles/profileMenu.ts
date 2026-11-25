@@ -12,10 +12,10 @@ import { openProfileIconPicker } from "./iconPicker";
 import { choosePresetColor } from "./themeActions";
 
 export type ProfileMenuPlace = "sidebar" | "settings";
-export type ProfileColorChoice = { id: ProfileColor; title: string; swatch: string };
+type ProfileColorChoice = { id: ProfileColor; title: string; swatch: string };
 type ProfileMenuItem = ChoiceItem<{ color: ProfileColor }, "rename" | "icon" | "color" | "topApps" | "settings" | "details" | "default" | "delete">;
 
-export type ProfileMenuState = {
+type ProfileMenuState = {
   place: ProfileMenuPlace;
   hasIcon: boolean;
   colors: ProfileColorChoice[];
@@ -32,14 +32,14 @@ export function profileMenuItems({ place, hasIcon, colors, color, isDefault, onl
       { id: "icon" as const, title: hasIcon ? "Change Icon…" : "Add Icon…", symbol: "photo" },
       { id: "color" as const, title: "Color", symbol: "paintpalette", children: colors.map((c) => ({ value: { color: c.id }, title: c.title, swatch: c.swatch, checked: c.id === color })) },
     ],
-    [sharesTopApps !== null && { id: "topApps" as const, title: "Share Top Apps", symbol: "square.grid.2x2", checked: sharesTopApps }],
+    [place === "settings" && sharesTopApps !== null && { id: "topApps" as const, title: "Share Top Apps", symbol: "square.grid.2x2", checked: sharesTopApps }],
     place === "sidebar"
       ? [{ id: "settings" as const, title: "Profile Settings…", symbol: "gearshape" }]
       : [
           { id: "details" as const, title: "Show Profile Details", symbol: "info.circle" },
           { id: "default" as const, title: "Make Default Profile", symbol: "star", enabled: !isDefault },
         ],
-    [{ id: "delete" as const, title: "Delete Profile…", symbol: "trash", enabled: !only }],
+    [place === "settings" && { id: "delete" as const, title: "Delete Profile…", symbol: "trash", enabled: !only }],
   );
 }
 
@@ -61,7 +61,7 @@ export async function showProfileMenu(
       place,
       hasIcon: !!profile.icon,
       colors,
-      color: profile.theme ? null : profile.color,
+      color: profile.color,
       isDefault: currentSettings().defaultProfileId === profileId,
       only: currentProfileOrder().length <= 1,
       sharesTopApps: sharingProfiles({ profiles: currentProfiles(), profileOrder: currentProfileOrder() }, profileId).length ? !!profile.shareTopApps : null,

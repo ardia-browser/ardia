@@ -8,9 +8,9 @@
     "macos": "xcodebuild -workspace macos/Ardia.xcworkspace -scheme Ardia-macOS -derivedDataPath build -destination 'platform=macOS,arch=arm64' -quiet -configuration Debug && open -n --env ARDIA_DATA_DIR=\"${ARDIA_DATA_DIR:-$HOME/Library/Application Support/Ardia Dev}\" build/Build/Products/Debug/Ardia.app",
     "pods": "cd macos && pod install",
     "build": "xcodebuild -workspace macos/Ardia.xcworkspace -scheme Ardia-macOS -derivedDataPath build -destination 'platform=macOS,arch=arm64' -quiet -configuration Release",
-    "typecheck": "tsc -p .",
+    "typecheck": "tsrs -p .",
     "test": "node --no-warnings --import ./src/test-loader.mjs --test \"src/**/*.test.mjs\" \"scripts/**/*.test.mjs\"",
-    "bundle:windows": "react-native bundle --platform windows --dev false --entry-file index.js --bundle-output build-windows/index.windows.bundle --assets-dest build-windows"
+    "sim": "node --no-warnings scripts/sim/run.mjs"
   },
   "dependencies": {
     "@ardia/core": "workspace:*",
@@ -24,8 +24,7 @@
     "react": "19.1.4",
     "react-native": "0.81.6",
     "react-native-macos": "0.81.9",
-    "zustand": "^5.0.8",
-    "react-native-windows": "0.81.38"
+    "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

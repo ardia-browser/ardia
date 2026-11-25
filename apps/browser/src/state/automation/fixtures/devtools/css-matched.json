@@ -1,0 +1,351 @@
+{
+ "matched": {
+  "inlineStyle": {
+   "styleSheetId": "inline-1",
+   "cssProperties": [
+    {
+     "name": "color",
+     "value": "purple",
+     "text": "color: purple;",
+     "range": {
+      "startLine": 0,
+      "startColumn": 0,
+      "endLine": 0,
+      "endColumn": 20
+     }
+    }
+   ],
+   "shorthandEntries": []
+  },
+  "attributesStyle": {
+   "cssProperties": [],
+   "shorthandEntries": []
+  },
+  "matchedCSSRules": [
+   {
+    "rule": {
+     "selectorList": {
+      "selectors": [
+       {
+        "text": "div",
+        "specificity": {
+         "a": 0,
+         "b": 0,
+         "c": 1
+        }
+       }
+      ],
+      "text": "div"
+     },
+     "origin": "user-agent",
+     "style": {
+      "cssProperties": [
+       {
+        "name": "display",
+        "value": "block",
+        "text": "display: block;",
+        "range": {
+         "startLine": 0,
+         "startColumn": 0,
+         "endLine": 0,
+         "endColumn": 20
+        }
+       }
+      ],
+      "shorthandEntries": []
+     }
+    },
+    "matchingSelectors": [
+     0
+    ]
+   },
+   {
+    "rule": {
+     "selectorList": {
+      "selectors": [
+       {
+        "text": ".btn",
+        "specificity": {
+         "a": 0,
+         "b": 1,
+         "c": 0
+        }
+       }
+      ],
+      "text": ".btn"
+     },
+     "origin": "regular",
+     "style": {
+      "cssProperties": [
+       {
+        "name": "color",
+        "value": "red",
+        "text": "color: red;",
+        "range": {
+         "startLine": 1,
+         "startColumn": 2,
+         "endLine": 1,
+         "endColumn": 22
+        }
+       },
+       {
+        "name": "padding",
+        "value": "4px",
+        "text": "padding: 4px;",
+        "range": {
+         "startLine": 2,
+         "startColumn": 2,
+         "endLine": 2,
+         "endColumn": 22
+        }
+       },
+       {
+        "name": "padding-top",
+        "value": "4px",
+        "text": "padding-top: 4px;",
+        "range": {
+         "startLine": 2,
+         "startColumn": 2,
+         "endLine": 2,
+         "endColumn": 22
+        },
+        "implicit": true
+       },
+       {
+        "name": "margin",
+        "value": "oops",
+        "text": "margin: oops;",
+        "range": {
+         "startLine": 3,
+         "startColumn": 2,
+         "endLine": 3,
+         "endColumn": 22
+        },
+        "parsedOk": false
+       }
+      ],
+      "shorthandEntries": [],
+      "styleSheetId": "S1"
+     },
+     "styleSheetId": "S1"
+    },
+    "matchingSelectors": [
+     0
+    ]
+   },
+   {
+    "rule": {
+     "selectorList": {
+      "selectors": [
+       {
+        "text": "#buy.btn",
+        "specificity": {
+         "a": 1,
+         "b": 1,
+         "c": 0
+        }
+       }
+      ],
+      "text": "#buy.btn"
+     },
+     "origin": "regular",
+     "style": {
+      "cssProperties": [
+       {
+        "name": "color",
+        "value": "blue",
+        "text": "color: blue;",
+        "range": {
+         "startLine": 6,
+         "startColumn": 2,
+         "endLine": 6,
+         "endColumn": 22
+        }
+       },
+       {
+        "name": "padding",
+        "value": "8px",
+        "text": "padding: 8px;",
+        "range": {
+         "startLine": 7,
+         "startColumn": 2,
+         "endLine": 7,
+         "endColumn": 22
+        },
+        "disabled": true
+       }
+      ],
+      "shorthandEntries": [],
+      "styleSheetId": "S1"
+     },
+     "styleSheetId": "S1"
+    },
+    "matchingSelectors": [
+     0
+    ]
+   },
+   {
+    "rule": {
+     "selectorList": {
+      "selectors": [
+       {
+        "text": "button"
+       },
+       {
+        "text": ".cta"
+       }
+      ],
+      "text": "button, .cta"
+     },
+     "origin": "regular",
+     "style": {
+      "cssProperties": [
+       {
+        "name": "color",
+        "value": "green",
+        "text": "color: green !important;",
+        "range": {
+         "startLine": 3,
+         "startColumn": 4,
+         "endLine": 3,
+         "endColumn": 24
+        },
+        "important": true
+       }
+      ],
+      "shorthandEntries": [],
+      "styleSheetId": "S2"
+     },
+     "styleSheetId": "S2"
+    },
+    "matchingSelectors": [
+     1
+    ]
+   }
+  ],
+  "inherited": [
+   {
+    "matchedCSSRules": [
+     {
+      "rule": {
+       "selectorList": {
+        "selectors": [
+         {
+          "text": "body",
+          "specificity": {
+           "a": 0,
+           "b": 0,
+           "c": 1
+          }
+         }
+        ],
+        "text": "body"
+       },
+       "origin": "regular",
+       "style": {
+        "cssProperties": [
+         {
+          "name": "font-size",
+          "value": "18px",
+          "text": "font-size: 18px;",
+          "range": {
+           "startLine": 20,
+           "startColumn": 2,
+           "endLine": 20,
+           "endColumn": 22
+          }
+         },
+         {
+          "name": "color",
+          "value": "black",
+          "text": "color: black;",
+          "range": {
+           "startLine": 21,
+           "startColumn": 2,
+           "endLine": 21,
+           "endColumn": 22
+          }
+         }
+        ],
+        "shorthandEntries": [],
+        "styleSheetId": "S1"
+       },
+       "styleSheetId": "S1"
+      },
+      "matchingSelectors": [
+       0
+      ]
+     }
+    ]
+   },
+   {
+    "matchedCSSRules": [
+     {
+      "rule": {
+       "selectorList": {
+        "selectors": [
+         {
+          "text": "html",
+          "specificity": {
+           "a": 0,
+           "b": 0,
+           "c": 1
+          }
+         }
+        ],
+        "text": "html"
+       },
+       "origin": "regular",
+       "style": {
+        "cssProperties": [
+         {
+          "name": "font-size",
+          "value": "16px",
+          "text": "font-size: 16px;",
+          "range": {
+           "startLine": 30,
+           "startColumn": 2,
+           "endLine": 30,
+           "endColumn": 22
+          }
+         }
+        ],
+        "shorthandEntries": [],
+        "styleSheetId": "S1"
+       },
+       "styleSheetId": "S1"
+      },
+      "matchingSelectors": [
+       0
+      ]
+     }
+    ]
+   }
+  ],
+  "pseudoElements": []
+ },
+ "computed": {
+  "computedStyle": [
+   {
+    "name": "color",
+    "value": "rgb(0, 128, 0)"
+   },
+   {
+    "name": "font-size",
+    "value": "18px"
+   },
+   {
+    "name": "display",
+    "value": "block"
+   },
+   {
+    "name": "padding",
+    "value": "4px"
+   },
+   {
+    "name": "margin",
+    "value": "0px"
+   }
+  ]
+ }
+}

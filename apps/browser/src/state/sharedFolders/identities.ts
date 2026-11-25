@@ -21,7 +21,7 @@ function localLinks(local: LocalEntry[], into: Map<string, LocalLink>) {
   return into;
 }
 
-export const preferred = (b: BaseLink, candidates: RemoteLink[]): RemoteLink | undefined =>
+const preferred = (b: BaseLink, candidates: RemoteLink[]): RemoteLink | undefined =>
   candidates.find((r) => r.file === b.file) ?? candidates.find((r) => nameOfFile(r.file, "link") === b.name) ?? candidates[0];
 
 const shared = (a: Set<string>, z: Set<string>) => [...a].filter((x) => z.has(x)).length;

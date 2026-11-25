@@ -2,9 +2,10 @@ import { create } from "zustand";
 import { readDocument, writeDocument } from "../../platform/documents";
 import { parseSaved, unchanged, versionedJson, type Migrations } from "../../lib/savedDocument";
 import { isFields } from "../../lib/decode";
+import { identityOf as identityOfFolder, type ResolvedSharedFolder, type SharedFolderIdentity } from "../../platform/sharedFolders";
 import type { BaseEntry } from "./tree";
 
-export type SharedFolder = { path: string; base: BaseEntry[]; addedAt: number };
+export type SharedFolder = { path: string; base: BaseEntry[]; addedAt: number; identity?: SharedFolderIdentity };
 
 export type SharedFolderSync = {
   state: "syncing" | "synced" | "waiting" | "paused" | "missing" | "error";
@@ -36,6 +37,9 @@ function cleanBase(list: unknown[]): BaseEntry[] {
 
 const validFolder = (f: unknown): f is SharedFolder => isFields(f) && text(f.path) && Array.isArray(f.base);
 
+const identityOf = (v: unknown): SharedFolderIdentity | undefined =>
+  isFields(v) && Number.isSafeInteger(v.device) && Number.isSafeInteger(v.inode) ? { device: v.device as number, inode: v.inode as number } : undefined;
+
 function load(): SharedFoldersState["folders"] {
   const doc = parseSaved(readDocument(DOC), DOC_VERSION, DOC_MIGRATIONS);
   if (!doc || !isFields(doc.folders)) return {};
@@ -43,11 +47,15 @@ function load(): SharedFoldersState["folders"] {
   for (const [profileId, byKey] of Object.entries(doc.folders)) {
     if (!isFields(byKey)) continue;
     const kept = Object.fromEntries(
-      Object.entries(byKey).flatMap(([key, f]) => (validFolder(f) ? [[key, { path: f.path, base: cleanBase(f.base), addedAt: typeof f.addedAt === "number" ? f.addedAt : 0 }]] : [])),
+      Object.entries(byKey).flatMap(([key, f]) => (validFolder(f) ? [[key, withIdentity({ path: f.path, base: cleanBase(f.base), addedAt: typeof f.addedAt === "number" ? f.addedAt : 0 }, identityOf(f.identity))]] : [])),
     ) as Record<string, SharedFolder>;
     if (Object.keys(kept).length) out[profileId] = kept;
   }
   return out;
+}
+
+function withIdentity(folder: SharedFolder, identity: SharedFolderIdentity | undefined): SharedFolder {
+  return identity ? { ...folder, identity } : folder;
 }
 
 export const useSharedFolders = create<SharedFoldersState>()(() => ({ folders: load(), sync: {} }));
@@ -88,8 +96,20 @@ function patchFolders(profileId: string, key: string, folder: SharedFolder | nul
   save();
 }
 
-export function bindFolder(profileId: string, key: string, path: string) {
-  patchFolders(profileId, key, { path, base: [], addedAt: Date.now() });
+export function bindFolder(profileId: string, key: string, path: string, identity?: SharedFolderIdentity) {
+  patchFolders(profileId, key, withIdentity({ path, base: [], addedAt: Date.now() }, identity));
+}
+
+export function bindFolderIfUnbound(profileId: string, key: string, folder: ResolvedSharedFolder): boolean {
+  if (sharedFolderOf(profileId, key)) return false;
+  bindFolder(profileId, key, folder.path, identityOfFolder(folder));
+  return true;
+}
+
+export function upgradeFolder(profileId: string, key: string, was: SharedFolder, found: ResolvedSharedFolder): boolean {
+  if (sharedFolderOf(profileId, key) !== was || was.identity) return false;
+  patchFolders(profileId, key, { ...was, path: found.path, identity: identityOfFolder(found) });
+  return true;
 }
 
 export function unbindFolder(profileId: string, key: string) {

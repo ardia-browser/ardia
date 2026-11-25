@@ -1,7 +1,7 @@
 import { anonymousIdentity, type AnonymousIdentity } from "@ardia/core";
 import { revealFile } from "../../platform/files";
 import { useTelemetry } from "./choice";
-import { capture } from "./client";
+import { capture, consentToken } from "./client";
 import { exportLocalCopy } from "./localStore";
 
 export { resetAnonymousId, shortInstallId } from "./identity";
@@ -20,8 +20,9 @@ export function identityFor(installId: string): AnonymousIdentity {
 }
 
 export async function viewMyData(): Promise<{ lines: number; path: string } | null> {
+  const consent = consentToken();
   const exported = await exportLocalCopy();
-  capture("local_copy_exported", { ok: !!exported, lines: exported?.lines ?? 0, bytes: exported?.bytes ?? 0 });
+  capture("local_copy_exported", { ok: !!exported, lines: exported?.lines ?? 0, bytes: exported?.bytes ?? 0 }, consent);
   if (!exported) return null;
   void revealFile(exported.path).catch(() => false);
   return { lines: exported.lines, path: exported.path };

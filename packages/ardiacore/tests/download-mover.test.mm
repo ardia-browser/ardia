@@ -406,6 +406,22 @@ int main() {
       CHECK([cut lengthOfBytesUsingEncoding:NSUTF8StringEncoding] <= 255);
       CHECK([cut hasSuffix:@".pdf"]);
     }
+    {
+      NSString *from = Make(@"src/armed.bin", @"armed bytes");
+      NSMutableDictionary *event = FinishedEvent(from, @"armed bytes");
+      event[@"id"] = @"armed";
+      [mover noteDownloadEvent:event];
+      NSString *placed = [gHome stringByAppendingPathComponent:@"Desktop/armed.bin"];
+      [NSFileManager.defaultManager createDirectoryAtPath:placed.stringByDeletingLastPathComponent withIntermediateDirectories:YES attributes:nil error:nil];
+      CHECK(rename(from.fileSystemRepresentation, placed.fileSystemRepresentation) == 0);
+      [mover rememberMove:@"armed" from:from to:placed];
+      NSDictionary *moved = [mover moveDownloadAt:placed toFolder:@"~/Downloads/Sorted"];
+      CHECK([Reason(moved) isEqual:@"ok"]);
+      NSString *sorted = moved[@"path"];
+      NSDictionary *replayed = [mover noteDownloadEvent:@{@"id" : @"armed", @"path" : from, @"state" : @"finished"}];
+      CHECK([replayed[@"path"] isEqual:sorted]);
+      CHECK([replayed[@"filename"] isEqual:@"armed.bin"]);
+    }
     [NSFileManager.defaultManager removeItemAtPath:gHome error:nil];
   }
   if (failures) std::printf("%d failure(s)\n", failures);

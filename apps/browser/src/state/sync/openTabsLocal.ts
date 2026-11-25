@@ -2,14 +2,12 @@ import type { BrowserState } from "../browser/store";
 import { pinKeyOf } from "../browser/model";
 import { pinnedGroupMembers } from "../browser/structure";
 import { ancestorIds, innermostGroupOf } from "../groups/groups";
-import { isRegularWindow } from "../windows/small";
+import { isRegularWindow, regularWindows } from "../windows/small";
 import { peekTabIds } from "../peek/peek";
 import type { Tab, TabGroup } from "../browser/types";
 import { syncsAsOpenTab } from "./openTabRecords";
 
 type Members = ReadonlySet<string>;
-
-const regularWindows = (s: BrowserState) => s.windowOrder.map((id) => s.windows[id]).filter(isRegularWindow);
 
 export function regularOpenTab(s: BrowserState, t: Tab | undefined, pinnedMembers: Members = pinnedGroupMembers(s.groups)): t is Tab {
   return !!t && !t.pin && !t.liveItem && !pinnedMembers.has(t.id) && isRegularWindow(s.windows[t.windowId]) && !peekTabIds(s.peeks).has(t.id);
@@ -21,7 +19,7 @@ export const syncedOpenTab = (s: BrowserState, t: Tab | undefined, pinnedMembers
 export const holdsOpenTabs = (s: BrowserState, profileId: string) =>
   Object.values(s.windows).some((w) => isRegularWindow(w) && (w.profileId === profileId || w.tabIds.some((id) => s.tabs[id]?.profileId === profileId)));
 
-export type LocalOpenTabs = { synced: { key: string; tab: Tab }[]; byKey: Map<string, Tab[]>; held: Set<string>; pinned: Set<string> };
+type LocalOpenTabs = { synced: { key: string; tab: Tab }[]; byKey: Map<string, Tab[]>; held: Set<string>; pinned: Set<string> };
 
 export function localOpenTabs(s: BrowserState, profileId: string): LocalOpenTabs {
   const members = pinnedGroupMembers(s.groups);

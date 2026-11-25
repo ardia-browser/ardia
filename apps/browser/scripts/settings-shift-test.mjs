@@ -74,7 +74,6 @@ const firstFrameOf = (pane, deadline) => nextFrame().then(() => {
 `;
 
 const switchTo = (pane, from, idleMs) => `${PROBE}
-const t0 = Date.now();
 ac.openSettings(${JSON.stringify(from)});
 return new Promise((r) => setTimeout(r, ${idleMs})).then(() => {
   const asked = Date.now();

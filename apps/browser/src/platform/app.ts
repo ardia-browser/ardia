@@ -16,11 +16,11 @@ export {
 import { call } from "@ardia/ardiacore";
 import { nativeModule, type AppEvent, type AppearanceMode, type OpenURLSource, type UpdateChannel } from "@ardia/shell";
 
-export type { OpenURLSource };
+export type { AppEvent, OpenURLSource };
 
 export { replyToTerminate } from "./windows";
 
-export { WIDEVINE_COMPONENT_ID } from "@ardia/ardiacore";
+export { WIDEVINE_COMPONENT_ID, type EngineComponent } from "@ardia/ardiacore";
 
 export const engineInfo = () => call("engine.info");
 export const listComponents = () => call("engine.components");

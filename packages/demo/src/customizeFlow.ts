@@ -4,7 +4,7 @@ import { onboardingSetupCode } from "../../../apps/browser/src/state/presets/act
 import { DEFAULT_SETTINGS, type Settings } from "../../../apps/browser/src/state/settings/settings";
 import { focusedWindowOf } from "../../../apps/browser/src/state/windows/ui";
 
-export const DEMO_PRESET = presetFor("arc");
+const DEMO_PRESET = presetFor("arc");
 
 export const demoSettings = (): Settings => ({ ...DEFAULT_SETTINGS, ...PRESETS[DEMO_PRESET] });
 
@@ -18,7 +18,16 @@ export type CustomizeState = { active: boolean; code: string | null };
 
 let code: string | null = null;
 
-export function customizeState(): CustomizeState {
+export function syncOnboardingCover() {
+  const sync = () => {
+    const o = useOnboarding.getState();
+    if (typeof document !== "undefined") document.documentElement.classList.toggle("ardia-onboarding-covered", !!o.windowId && o.step !== "intro" && !o.leaving);
+  };
+  sync();
+  return useOnboarding.subscribe(sync);
+}
+
+function customizeState(): CustomizeState {
   const o = useOnboarding.getState();
   if (o.windowId && o.step === "outro") code = onboardingSetupCode().code;
   return { active: !!o.windowId && !o.leaving, code };

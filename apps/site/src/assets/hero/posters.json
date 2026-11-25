@@ -6,42 +6,26 @@
       2400,
       1000
     ],
-    "heroHeight": 1011,
-    "width": 2387,
-    "height": 1005,
+    "heroHeight": 1000,
+    "width": 2400,
+    "height": 1000,
     "files": [
       {
         "file": "dawn-wider-1600.webp",
         "width": 1600,
-        "height": 674,
-        "quality": 46,
-        "bytes": 45624
+        "height": 667,
+        "quality": 62,
+        "bytes": 38748
       },
       {
-        "file": "dawn-wider-2196.webp",
-        "width": 2196,
-        "height": 925,
-        "quality": 46,
-        "bytes": 91434
+        "file": "dawn-wider-2400.webp",
+        "width": 2400,
+        "height": 1000,
+        "quality": 62,
+        "bytes": 91776
       }
     ],
-    "lqip": "data:image/webp;base64,UklGRmoAAABXRUJQVlA4IF4AAABwAwCdASoYAAoAPtFapEwoJSOiMAgBABoJYgCw7BKCZ8Yd+QgA9wiW2cfYV8ztyA4qmqg9E9HSLGtTDmsvMP4XBDVbqT1mm0x2FrXpAdhHVjWD5w0n6SQh/3F0gAAA",
-    "tones": {
-      "title": {
-        "tone": "light",
-        "halo": 0
-      },
-      "lede": {
-        "tone": "light",
-        "halo": 0.05
-      },
-      "cta": {
-        "tone": "dark",
-        "halo": 1
-      }
-    },
-    "sky": "light",
-    "headerHalo": 0.4
+    "lqip": "data:image/webp;base64,UklGRm4AAABXRUJQVlA4IGIAAACwAwCdASoYAAoAPtFWpkuoJKOhsAgBABoJQBOiP/wEbL31Wiw4AAD283NXOQUq1rpcoEAUsu6APbfHIUu2jJ1z7d65ioQEodDzqa2+qjJUviOTOSNwqI3Cl02AMGnVYZEAAA=="
   },
   {
     "state": "dawn",
@@ -58,34 +42,18 @@
         "file": "dawn-wide-1280.webp",
         "width": 1280,
         "height": 720,
-        "quality": 47,
-        "bytes": 41598
+        "quality": 62,
+        "bytes": 35682
       },
       {
-        "file": "dawn-wide-1766.webp",
-        "width": 1766,
-        "height": 993,
-        "quality": 47,
-        "bytes": 81454
+        "file": "dawn-wide-1920.webp",
+        "width": 1920,
+        "height": 1080,
+        "quality": 62,
+        "bytes": 80224
       }
     ],
-    "lqip": "data:image/webp;base64,UklGRngAAABXRUJQVlA4IGwAAABQBACdASoYAA4APtFWpEuoJKOhsAgBABoJZACdMoGv/gMTSvil7ND9XLLQAPel6RdC6JRyr+GUjSUs1D8Ejqiqg9J2G8m1xSQajbpvCG93pC7tQVEBIYfedxauNZSvfGkg8Ow2ynMbhOp9AAA=",
-    "tones": {
-      "title": {
-        "tone": "light",
-        "halo": 0
-      },
-      "lede": {
-        "tone": "light",
-        "halo": 0.1
-      },
-      "cta": {
-        "tone": "light",
-        "halo": 1
-      }
-    },
-    "sky": "light",
-    "headerHalo": 0.4
+    "lqip": "data:image/webp;base64,UklGRnYAAABXRUJQVlA4IGoAAAAQBACdASoYAA4APtFcpkyoJSOiMAgBABoJZACdEf/gMHdNZytHN1aKAADXOGAjPUXIavDLUVcZS2GgrFxqBRqtlNGalKu4PbhSssPpjQO2FSkuZwrMjqzDWpi/fH9V14zh2/itxIDGaAAA"
   },
   {
     "state": "dawn",
@@ -94,42 +62,26 @@
       1440,
       900
     ],
-    "heroHeight": 940,
-    "width": 1917,
-    "height": 1252,
+    "heroHeight": 900,
+    "width": 1960,
+    "height": 1225,
     "files": [
       {
         "file": "dawn-laptop-1280.webp",
         "width": 1280,
-        "height": 836,
-        "quality": 42,
-        "bytes": 33246
+        "height": 800,
+        "quality": 51,
+        "bytes": 35140
       },
       {
-        "file": "dawn-laptop-1917.webp",
-        "width": 1917,
-        "height": 1252,
-        "quality": 42,
-        "bytes": 81530
+        "file": "dawn-laptop-1920.webp",
+        "width": 1920,
+        "height": 1200,
+        "quality": 51,
+        "bytes": 81650
       }
     ],
-    "lqip": "data:image/webp;base64,UklGRngAAABXRUJQVlA4IGwAAABQBACdASoYABAAPtFUo0uoJKMhsAgBABoJYgCdMoMpADvhBpK0B1+uTU8AAPcG4kUBlKNcmp9c+5hehcKfcQhROc8jxptQ3Q9YgULClt7GzaRnHPq/s9njCLNjqeBPJSW5fkYG2cvvRv4AAAA=",
-    "tones": {
-      "title": {
-        "tone": "light",
-        "halo": 0
-      },
-      "lede": {
-        "tone": "light",
-        "halo": 0
-      },
-      "cta": {
-        "tone": "dark",
-        "halo": 1
-      }
-    },
-    "sky": "light",
-    "headerHalo": 0.4
+    "lqip": "data:image/webp;base64,UklGRoAAAABXRUJQVlA4IHQAAABwBACdASoYAA8APtFipk0oJiOiMAgBABoJYgCdMoMnSn/AX5bzd9yA/0xEoADW2hhg3iMwwOcBxOI1HWn1gqnA6Q9vgYwAE2NRaVT/6FCAQWRjuMf3CRRoepxQpFdkf3cNafS3N6cwlNAvcf8pKi8F56QAAA=="
   },
   {
     "state": "dawn",
@@ -147,33 +99,17 @@
         "width": 1100,
         "height": 846,
         "quality": 50,
-        "bytes": 31918
+        "bytes": 32334
       },
       {
         "file": "dawn-mid-1600.webp",
         "width": 1600,
         "height": 1231,
         "quality": 50,
-        "bytes": 69404
+        "bytes": 70824
       }
     ],
-    "lqip": "data:image/webp;base64,UklGRoAAAABXRUJQVlA4IHQAAADQBACdASoYABIAPtFWo0uoJKMhsAgBABoJYwCsMxmv/gL6lXHqGcpgv5Po8sCIAAD3BuD1+QGOuuDodQ6qnXvZeX8fm8UYx/nfLMeHL9Bh50nO/RbyEyzEWZpuutlL+eiO+3G/YrjoWlbqaTmQJVTdgIAAAA==",
-    "tones": {
-      "title": {
-        "tone": "light",
-        "halo": 0
-      },
-      "lede": {
-        "tone": "light",
-        "halo": 0
-      },
-      "cta": {
-        "tone": "light",
-        "halo": 0.8500000000000001
-      }
-    },
-    "sky": "light",
-    "headerHalo": 0.4
+    "lqip": "data:image/webp;base64,UklGRnwAAABXRUJQVlA4IHAAAABQBACdASoYABIAPtFWo0uoJKMhsAgBABoJYwC/Sf/gFSXOguDsQity6iwAANbXQzlqxbvUpKQaz88W0lOSg38wiGY+krXAFgkuCYmkGTeWN0XiPFLiFCa1JCz95bDBrRl+JfDNUl641btePypxwAAA"
   },
   {
     "state": "dawn",
@@ -182,46 +118,26 @@
       390,
       844
     ],
-    "heroHeight": 896,
-    "width": 692,
-    "height": 1590,
+    "heroHeight": 844,
+    "width": 713,
+    "height": 1543,
     "files": [
       {
         "file": "dawn-tall-440.webp",
         "width": 440,
-        "height": 1011,
+        "height": 952,
         "quality": 49,
-        "bytes": 14820
+        "bytes": 16302
       },
       {
-        "file": "dawn-tall-692.webp",
-        "width": 692,
-        "height": 1590,
+        "file": "dawn-tall-656.webp",
+        "width": 656,
+        "height": 1420,
         "quality": 49,
-        "bytes": 38724
+        "bytes": 38824
       }
     ],
-    "lqip": "data:image/webp;base64,UklGRpQAAABXRUJQVlA4IIgAAADQBACdASoYADcAPtFapUu/pSuhrAsz8BoJQBgbidJH86nYvD9MEwuhOZv76FfsAAD+ubbYDS7pP0MYKAN4zMEKrCRhkEUtsn7xhGEYwBYa6rsiw+BnKgwC4odo5t+bdi42+aoTyhuZKc3zmuEFGf5ltJSUN4OeMTcwOFckiOmHqAahXUk8AAAA",
-    "tones": {
-      "title": {
-        "tone": "light",
-        "halo": 0
-      },
-      "lede": {
-        "tone": "light",
-        "halo": 0.05
-      },
-      "cta": {
-        "tone": "light",
-        "halo": 0.7000000000000001
-      },
-      "send": {
-        "tone": "light",
-        "halo": 0
-      }
-    },
-    "sky": "light",
-    "headerHalo": 0.4
+    "lqip": "data:image/webp;base64,UklGRpoAAABXRUJQVlA4II4AAACwBACdASoYADQAPtFcpEwoJaOiMBgKAQAaCWJrT1RJJjRfdhTHv622RkaVokgAAP7P78mAImYPnateVtwInsp2g+WS2L7a6o6+KgpFphLgRMb0HCRIpXnmw9qz7rYQU+hoVcE56vITspxYZfT8F3hPeGVfyeZ/D0ZwGVpcM4JJo0LPLn2mWRu2WKagiYAA"
   },
   {
     "state": "morning",
@@ -230,42 +146,26 @@
       2400,
       1000
     ],
-    "heroHeight": 1011,
-    "width": 2387,
-    "height": 1005,
+    "heroHeight": 1000,
+    "width": 2400,
+    "height": 1000,
     "files": [
       {
         "file": "morning-wider-1600.webp",
         "width": 1600,
-        "height": 674,
+        "height": 667,
         "quality": 45,
-        "bytes": 81026
+        "bytes": 49210
       },
       {
-        "file": "morning-wider-1709.webp",
-        "width": 1709,
-        "height": 720,
+        "file": "morning-wider-2208.webp",
+        "width": 2208,
+        "height": 920,
         "quality": 45,
-        "bytes": 91566
+        "bytes": 91472
       }
     ],
-    "lqip": "data:image/webp;base64,UklGRnYAAABXRUJQVlA4IGoAAABwAwCdASoYAAoAPtFUpEuoJKOhsAgBABoJZgAAMBQLrRX38XAA/vAKeD5bSdqcl1uYRreGaq+KYQ0VV++GuMR/NySil7wX3mXjrU6xW9VpaIVvmPtXjst3bNQp5UiHpLJRFRcdb3L46gAA",
-    "tones": {
-      "title": {
-        "tone": "light",
-        "halo": 0
-      },
-      "lede": {
-        "tone": "light",
-        "halo": 0
-      },
-      "cta": {
-        "tone": "light",
-        "halo": 0.6000000000000001
-      }
-    },
-    "sky": "light",
-    "headerHalo": 0
+    "lqip": "data:image/webp;base64,UklGRnYAAABXRUJQVlA4IGoAAACQAwCdASoYAAoAPtFUpEuoJKOhsAgBABoJZgB3AARyhd9Sd/gcAP7wCH+v/RrXW7SFmAzHeobJH8aI4QN+nVbgx2gw16Wc7fRu0Id5N2DIlE2JdBufNun1bL0M332Xfix4BOEaonyHUAAA"
   },
   {
     "state": "morning",
@@ -282,34 +182,18 @@
         "file": "morning-wide-1280.webp",
         "width": 1280,
         "height": 720,
-        "quality": 47,
-        "bytes": 70132
+        "quality": 46,
+        "bytes": 44186
       },
       {
-        "file": "morning-wide-1375.webp",
-        "width": 1375,
-        "height": 773,
-        "quality": 47,
-        "bytes": 80880
+        "file": "morning-wide-1766.webp",
+        "width": 1766,
+        "height": 993,
+        "quality": 46,
+        "bytes": 80050
       }
     ],
-    "lqip": "data:image/webp;base64,UklGRngAAABXRUJQVlA4IGwAAADQAwCdASoYAA4APtFWo0uoJKMhsAgBABoJbAAAW+gJ/Vy+6DNuq2AA/u2ZAGBmJ0kUbWp/jCk3hi3w2dHRD0+Mr7Ovjion0Ua38aLzZkHIpbfMJJj6O7aGop0xUiBTXVzSa2qUFWkXpbnAAAA=",
-    "tones": {
-      "title": {
-        "tone": "light",
-        "halo": 0
-      },
-      "lede": {
-        "tone": "light",
-        "halo": 0
-      },
-      "cta": {
-        "tone": "light",
-        "halo": 0
-      }
-    },
-    "sky": "light",
-    "headerHalo": 0
+    "lqip": "data:image/webp;base64,UklGRnwAAABXRUJQVlA4IHAAAADQAwCdASoYAA4APtFUpEuoJKOhsAgBABoJaAAAXKzGcYM0cYvaX4AA/u2VfQEeqjGkkTgE+UFwsomqlLo+nlb6ISzUDfHBSDneAHhfUjx+i3yRO3zgBQ6iQYnavRuY6E2gUh4IEmW+gz1aDU+rTAAA"
   },
   {
     "state": "morning",
@@ -318,42 +202,26 @@
       1440,
       900
     ],
-    "heroHeight": 940,
-    "width": 1917,
-    "height": 1252,
+    "heroHeight": 900,
+    "width": 1960,
+    "height": 1225,
     "files": [
       {
         "file": "morning-laptop-1280.webp",
         "width": 1280,
-        "height": 836,
-        "quality": 44,
-        "bytes": 60980
+        "height": 800,
+        "quality": 43,
+        "bytes": 51106
       },
       {
-        "file": "morning-laptop-1493.webp",
-        "width": 1493,
-        "height": 975,
-        "quality": 44,
-        "bytes": 80398
+        "file": "morning-laptop-1625.webp",
+        "width": 1625,
+        "height": 1016,
+        "quality": 43,
+        "bytes": 81478
       }
     ],
-    "lqip": "data:image/webp;base64,UklGRnoAAABXRUJQVlA4IG4AAADQAwCdASoYABAAPtFWpEwoJKOiMAgBABoJaAC/OCIj0JQNAiOkhwAA/u2VewpC9Os9rmrDbcbkBJrnfmMZycBJUUib4UBtl7jcGEoISNo2JIJRkzUGk+Xu1yWmfNXWhQS9xwgu7ccNrnCgrkaAAA==",
-    "tones": {
-      "title": {
-        "tone": "light",
-        "halo": 0
-      },
-      "lede": {
-        "tone": "light",
-        "halo": 0
-      },
-      "cta": {
-        "tone": "light",
-        "halo": 0.55
-      }
-    },
-    "sky": "light",
-    "headerHalo": 0
+    "lqip": "data:image/webp;base64,UklGRogAAABXRUJQVlA4IHwAAADwAwCdASoYAA8APtFWo0uoJKMhsAgBABoJZgBVI4el8vFXXRwYMu0AAP7tlXzhjt8BnHvN709eQR2boSJDr8684q02m6Q2L5qw1Bnx+eVZjz3bJE23kZO7BvNZOeng/6V4YdD46y39vU71izMAsFjAP+/cIMxfNFwQAAAA"
   },
   {
     "state": "morning",
@@ -371,33 +239,17 @@
         "width": 1100,
         "height": 846,
         "quality": 42,
-        "bytes": 45924
+        "bytes": 47448
       },
       {
         "file": "morning-mid-1354.webp",
         "width": 1354,
         "height": 1042,
         "quality": 42,
-        "bytes": 71328
+        "bytes": 71422
       }
     ],
-    "lqip": "data:image/webp;base64,UklGRoYAAABXRUJQVlA4IHoAAACQBACdASoYABIAPtFco00oJSMiMBgIAQAaCUJcB/gAn1gOq99UxrWaXfB1kqAA/u2Vfv4VDuexSE0e2Lp7s8cYk02uLJi57fob+ufveP2npWUb6vFft6dnLoAIsPcnaxjV64kHdCXqOygEKC+r3A1Mxhk4yQVjFOQAAA==",
-    "tones": {
-      "title": {
-        "tone": "light",
-        "halo": 0
-      },
-      "lede": {
-        "tone": "light",
-        "halo": 0
-      },
-      "cta": {
-        "tone": "light",
-        "halo": 0
-      }
-    },
-    "sky": "light",
-    "headerHalo": 0
+    "lqip": "data:image/webp;base64,UklGRoAAAABXRUJQVlA4IHQAAAAQBACdASoYABIAPtFYo0uoJSMhsAgBABoJQBgbhER27hadMKjEea9xIAD+7ZQl8KzlIYOBLZMZmERddEI2rJU6xjs2BpBiaeoXmml3QF49ESTmb0SRKuapAjH6q+ytnkIDgt9hLYko3q+AcPX+bnJ1+5AAAA=="
   },
   {
     "state": "morning",
@@ -406,45 +258,25 @@
       390,
       844
     ],
-    "heroHeight": 896,
-    "width": 692,
-    "height": 1590,
+    "heroHeight": 844,
+    "width": 713,
+    "height": 1543,
     "files": [
       {
         "file": "morning-tall-440.webp",
         "width": 440,
-        "height": 1011,
+        "height": 952,
         "quality": 40,
-        "bytes": 18866
+        "bytes": 21242
       },
       {
-        "file": "morning-tall-637.webp",
-        "width": 637,
-        "height": 1464,
+        "file": "morning-tall-604.webp",
+        "width": 604,
+        "height": 1307,
         "quality": 40,
-        "bytes": 38540
+        "bytes": 38748
       }
     ],
-    "lqip": "data:image/webp;base64,UklGRrIAAABXRUJQVlA4IKYAAABQBQCdASoYADcAPtFcpk2oJSOiKBgNUQAaCWMAuwBSilYw9cAy8OLxqQIRfY8wlfDEHAAA/vEFJ8QDA2zctycqizMwQrnEw2ewtQCmPXCKiPVDHcURE3/vs/kGSbTZYKlYUguausvFV/sAgTOtclNqyFeGkRgqig/3r+6HS1kUntZKg7ZHuTxe6H9Yv/guPbHfjhqy0JE6yS7eAjMwtKvyKQheXwAA",
-    "tones": {
-      "title": {
-        "tone": "light",
-        "halo": 0
-      },
-      "lede": {
-        "tone": "light",
-        "halo": 0
-      },
-      "cta": {
-        "tone": "light",
-        "halo": 0
-      },
-      "send": {
-        "tone": "light",
-        "halo": 1
-      }
-    },
-    "sky": "light",
-    "headerHalo": 0
+    "lqip": "data:image/webp;base64,UklGRqoAAABXRUJQVlA4IJ4AAABQBQCdASoYADQAPtFcpk6oJKMiLBVZmQAaCWMAwggoQze5ntE08oZiZ7q/a/1tmzeARKAA/vCYJ6XAV833G8pWSx8fZE+iZsYnmUk5mk7ALg4LECV1hfcbsGTLgdQQ+mlFXPrwAgCQz2VPaY6yPApuaNCuMCeR6JhuIImk5/Q8SpuX22U44AVnUdnKqYKIz2PEx5A7mdn5JEkE6JoAAA=="
   }
 ]

@@ -6,6 +6,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 
 
 class ConfigCoreTests(unittest.TestCase):
@@ -14,7 +15,7 @@ class ConfigCoreTests(unittest.TestCase):
         cls.directory = tempfile.TemporaryDirectory(prefix='ardia-config-core-')
         cls.binary = Path(cls.directory.name) / 'config-core'
         subprocess.run([os.environ.get('CXX', 'c++'), '-std=c++20', '-Wall', '-Wextra', '-Werror', '-g',
-                        '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-I', str(SOURCE), str(ROOT / 'tests/config_core_test.cc'),
+                        '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE), str(ROOT / 'tests/config_core_test.cc'),
                         '-o', str(cls.binary)],
                        check=True, text=True, timeout=120)
 

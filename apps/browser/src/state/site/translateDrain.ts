@@ -2,7 +2,7 @@ export type Passage = [number, [number, string][]];
 export type Translated = [number, string | null];
 export type PageBatch = { passages: unknown[]; more: boolean; gone: boolean; done: number; total: number };
 
-export type DrainPort = {
+type DrainPort = {
   inFlight: number;
   holds(): boolean;
   released: Promise<void>;
@@ -15,7 +15,7 @@ export type DrainPort = {
 
 const MAX_PIECES = 40;
 
-export const cleanPassages = (passages: unknown[]): Passage[] =>
+const cleanPassages = (passages: unknown[]): Passage[] =>
   passages
     .filter((p): p is Passage => Array.isArray(p) && typeof p[0] === "number" && Array.isArray(p[1]))
     .map(([id, pieces]): Passage => [id, pieces.filter((x) => Array.isArray(x) && typeof x[0] === "number" && typeof x[1] === "string").slice(0, MAX_PIECES)]);

@@ -6,26 +6,18 @@ import { fileURLToPath } from "node:url";
 
 const APP = fileURLToPath(new URL("../../../", import.meta.url));
 
-const ON_WINDOWS = `import { registerHooks } from "node:module";
-registerHooks({ resolve(specifier, context, next) {
-  const resolved = next(specifier, context);
-  const swapped = resolved.url.match(/\\/lib\\/(platformFeatures|platformTerms)\\.ts$/) || resolved.url.match(/\\/state\\/commands\\/(keyText)\\.ts$/);
-  return swapped ? { ...resolved, url: resolved.url.replace(/\\.ts$/, ".windows.ts") } : resolved;
-} });`;
-
 const OFFERS = `
 const { useBrowser } = await import("./src/state/browser/store.ts");
-const { PANES, SETTINGS, unshownSettings } = await import("./src/components/settings/settingsIndex.ts");
+const { SETTINGS, unshownSettings } = await import("./src/components/settings/settingsIndex.ts");
 const { UNAVAILABLE_COMMANDS } = await import("./src/state/commands/commandCatalog.ts");
 const { profileUnloadDelay } = await import("./src/state/profiles/idleProfiles.ts");
 const { loadedTabBudget } = await import("./src/state/tabs/loadedTabBudget.ts");
 const { canSwitchEngine, engineForUrl, tabEngine, typedNavigationEngine } = await import("./src/state/engines/engines.ts");
-const { goToSettingsPane, useSettingsNav } = await import("./src/state/settings/settingsWindows.ts");
 const { DATA_TYPES, SYNCED_KINDS, typeSyncedFor, defaultTypes } = await import("./src/state/sync/syncDoc.ts");
 const S = () => useBrowser.getState();
 S().hydrate({});
-const unshown = new Set(unshownSettings(S().settings, { top: false }).split("\\n"));
-const watched = ["sync.sync", "calendar.access", "engines.defaultEngine", "privacy.blockAds", "privacy.filterLists", "general.littleWindowGestures", "tabs.videoUpscaling", "tabs.tabReorderHaptics", "appearance.pageScrollBars"];
+const unshown = new Set(unshownSettings(S().settings, { top: false, syncOn: true, calendarAccess: true }).split("\\n"));
+const watched = ["general.sync", "automations.calendarAccess", "automations.meetingAlert", "advanced.pageEngine", "advanced.websiteEngines", "advanced.commandScrollZoom", "general.blockAds", "general.filterLists", "tabs.videoUpscaling"];
 function pageEngines() {
   const settings = S().settings;
   const withRules = { settings: { ...settings, pageEngine: "webkit", websiteEngines: { "https://rule.example": "webkit" } }, tabs: { marked: { id: "marked", url: "https://example.com/", engine: "webkit", page: { kind: "empty" } } } };
@@ -37,11 +29,8 @@ function pageEngines() {
     typedNavigationEngine(withRules, withRules.tabs.marked, "https://open.spotify.com/"),
   ];
 }
-goToSettingsPane("calendar");
-const calendarLink = useSettingsNav.getState().pane;
 const shownCopy = SETTINGS.filter((e) => !unshown.has(e.id)).map((e) => [e.id, [e.title, e.description ?? ""].join(" ")]);
 console.log(JSON.stringify({
-  panes: PANES.map((p) => p.id).filter((id) => ["sync", "calendar", "engines"].includes(id)),
   hidden: watched.filter((id) => unshown.has(id)),
   engineCommand: UNAVAILABLE_COMMANDS.has("togglePageEngine"),
   hidingCommands: ["hideElement", "showHiddenElements"].map((id) => UNAVAILABLE_COMMANDS.has(id)),
@@ -49,7 +38,6 @@ console.log(JSON.stringify({
   sleepsTabsOverBudget: loadedTabBudget({ memorySaver: true, memorySaverMode: "balanced" }, { memoryPressure: "normal", physicalMemory: 16 * 2 ** 30, lowPowerMode: false, thermalState: "nominal" }) !== null,
   switchesEngine: canSwitchEngine("https://example.com/"),
   pageEngines: pageEngines(),
-  calendarLink,
   closedWindows: SETTINGS.find((e) => e.id.endsWith(".windowsAndTabs"))?.description ?? null,
   syncTypes: DATA_TYPES.map((t) => t.id),
   syncsPasswords: SYNCED_KINDS.includes("passwords") || typeSyncedFor(defaultTypes(), "passwords", true),
@@ -57,34 +45,14 @@ console.log(JSON.stringify({
 }));
 `;
 
-function offers(onWindows) {
-  const hooks = onWindows ? ["--import", `data:text/javascript,${encodeURIComponent(ON_WINDOWS)}`] : [];
-  const run = spawnSync(process.execPath, ["--no-warnings", "--import", "./src/test-loader.mjs", ...hooks, "--input-type=module", "-e", OFFERS], { cwd: APP, encoding: "utf8" });
+function offers() {
+  const run = spawnSync(process.execPath, ["--no-warnings", "--import", "./src/test-loader.mjs", "--input-type=module", "-e", OFFERS], { cwd: APP, encoding: "utf8" });
   assert.equal(run.status, 0, run.stderr);
   return JSON.parse(run.stdout.trim().split("\n").at(-1));
 }
 
-test("Windows offers Sync without passwords but no Calendar or WebKit pane, no blocker, gesture, upscaling, haptics or scroll bar row, and no Settings copy that names the Mac", () => {
-  assert.deepEqual(offers(true), {
-    panes: ["sync"],
-    hidden: ["calendar.access", "engines.defaultEngine", "privacy.blockAds", "privacy.filterLists", "general.littleWindowGestures", "tabs.videoUpscaling", "tabs.tabReorderHaptics", "appearance.pageScrollBars"],
-    engineCommand: true,
-    hidingCommands: [true, true],
-    unloadsProfiles: false,
-    sleepsTabsOverBudget: true,
-    switchesEngine: false,
-    pageEngines: ["chromium", "chromium", "chromium", "chromium", "chromium"],
-    calendarLink: "general",
-    closedWindows: "What you see the next time you open it. Ctrl+Shift+T reopens closed windows too.",
-    syncTypes: ["bookmarks", "history", "tabs", "pinned", "extensions", "settings"],
-    syncsPasswords: false,
-    macWords: [],
-  });
-});
-
-test("the Mac keeps every pane, row and the engine switch", () => {
-  const mac = offers(false);
-  assert.deepEqual(mac.panes, ["sync", "engines", "calendar"]);
+test("the Mac keeps every row and the engine switch", () => {
+  const mac = offers();
   assert.deepEqual(mac.hidden, []);
   assert.equal(mac.engineCommand, false);
   assert.deepEqual(mac.hidingCommands, [false, false]);
@@ -92,15 +60,14 @@ test("the Mac keeps every pane, row and the engine switch", () => {
   assert.equal(mac.sleepsTabsOverBudget, true);
   assert.equal(mac.switchesEngine, true);
   assert.deepEqual(mac.pageEngines, ["webkit", "webkit", "webkit", "webkit", "webkit"]);
-  assert.equal(mac.calendarLink, "calendar");
   assert.equal(mac.closedWindows, "What you see the next time you open it. Closed windows stay in History › Recently Closed.");
   assert.deepEqual(mac.syncTypes, ["bookmarks", "history", "tabs", "pinned", "passwords", "extensions", "settings"]);
   assert.equal(mac.syncsPasswords, true);
 });
 
 const PANES_DIR = new URL("./panes/", import.meta.url);
-const HIDDEN_ON_WINDOWS = new Set(["Calendar.tsx", "Engines.tsx", "HiddenElementsSection.tsx"]);
-const MAC_ONLY_STATES = [["General.tsx", "requiresApproval"], ["Privacy.tsx", 'title="Content blocking"']];
+const HIDDEN_ON_WINDOWS = new Set(["CalendarSection.tsx", "WebEngineSection.tsx", "EngineModeRow.tsx", "HiddenElementsSection.tsx", "PasskeyAccessRow.tsx", "PasswordManagerPlugin.tsx", "WebKitLimitsSheet.tsx"]);
+const MAC_ONLY_STATES = [["General.tsx", "requiresApproval"], ["General.tsx", 'title="Content blocking"']];
 const MAC_WORDS = /macOS|Touch ID|Keychain|this Mac|their Mac|View ›|Apple silicon|System Settings/;
 
 test("the Settings panes Windows shows write no Mac word outside PLATFORM_TERMS or a Mac-only state", () => {
@@ -120,7 +87,9 @@ test("the Settings panes Windows shows write no Mac word outside PLATFORM_TERMS 
 });
 
 test("Hide anything's Settings section is mounted only where the content blocker keeps its rules", () => {
-  const privacy = readFileSync(new URL("Privacy.tsx", PANES_DIR), "utf8");
-  const mounts = privacy.split("\n").filter((line) => line.includes("<HiddenElementsSection"));
-  assert.deepEqual(mounts.map((line) => line.trim()), ["{PLATFORM_FEATURES.contentBlocker && <HiddenElementsSection />}"]);
+  const page = readFileSync(new URL("FilterListsPage.tsx", PANES_DIR), "utf8");
+  assert.match(page, /\{PLATFORM_FEATURES\.contentBlocker \? <FilterListsContent \/> : null\}/);
+  assert.match(page.slice(page.indexOf("function FilterListsContent")), /<HiddenElementsSection \/>/);
+  const mounts = readdirSync(PANES_DIR).filter((f) => f.endsWith(".tsx") && readFileSync(new URL(f, PANES_DIR), "utf8").includes("<HiddenElementsSection"));
+  assert.deepEqual(mounts, ["FilterListsPage.tsx"]);
 });

@@ -1,6 +1,7 @@
 #include "ardia/linux/ac_linux_report.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -9,16 +10,19 @@
 #include <vector>
 
 #include "ardia/core/ac_launch_switches.h"
-#include "ardia/linux/ac_linux_report_core.h"
+#include "ardia/desktop/ac_desktop_paths.h"
+#include "ardia/desktop/ac_desktop_report_core.h"
 #include "base/compiler_specific.h"
 #include "base/containers/span.h"
 #include "base/files/file.h"
 #include "base/files/file_util.h"
 #include "base/functional/bind.h"
+#include "base/memory/weak_ptr.h"
 #include "base/no_destructor.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
 #include "base/uuid.h"
+#include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/net/system_network_context_manager.h"
 #include "content/public/browser/browser_thread.h"
@@ -33,11 +37,21 @@
 #include "services/network/public/mojom/url_response_head.mojom.h"
 #include "url/gurl.h"
 
+#if BUILDFLAG(IS_WIN)
+#include <windows.h>
+
+#include "base/files/file_enumerator.h"
+#include "base/win/scoped_handle.h"
+#else
+#include <sys/stat.h>
+#endif
+
 namespace ardiacore {
 
 namespace {
 
-namespace report = ardia::linux_report;
+namespace report = ardia::desktop_report;
+namespace paths = ardia::desktop_paths;
 
 using Done = base::OnceCallback<void(bool, base::Value)>;
 
@@ -87,39 +101,143 @@ base::FilePath DraftsFolder(const base::FilePath& documents) {
   return documents.AppendASCII(report::kDraftsFolder);
 }
 
-std::optional<base::FilePath> RealPath(const base::FilePath& path) {
+constexpr char kSeparator = static_cast<char>(base::FilePath::kSeparators[0]);
+
+bool Inside(const base::FilePath& drafts, std::string_view path) {
+  return report::InsideDrafts(paths::Text(drafts), path, kSeparator);
+}
+
+void OwnerOnly(const base::FilePath& folder) {
+#if BUILDFLAG(IS_POSIX)
+  base::SetPosixFilePermissions(folder, 0700);
+#endif
+}
+
+#if BUILDFLAG(IS_WIN)
+constexpr DWORD kShareAll = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+constexpr DWORD kShareReadWrite = FILE_SHARE_READ | FILE_SHARE_WRITE;
+constexpr int kMaxRemoveDepth = 16;
+
+base::win::ScopedHandle OpenOnDisk(const base::FilePath& path, DWORD access, DWORD disposition, bool follow_leaf,
+                                   DWORD share = kShareAll) {
+  return base::win::ScopedHandle(::CreateFileW(
+      path.value().c_str(), access, share, nullptr, disposition,
+      FILE_FLAG_BACKUP_SEMANTICS | (follow_leaf ? 0 : FILE_FLAG_OPEN_REPARSE_POINT), nullptr));
+}
+
+bool DirectoryHandle(HANDLE handle) {
+  FILE_ATTRIBUTE_TAG_INFO info = {};
+  return ::GetFileInformationByHandleEx(handle, FileAttributeTagInfo, &info, sizeof(info)) &&
+         (info.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+}
+
+bool DeleteThroughHandle(HANDLE handle) {
+  FILE_DISPOSITION_INFO remove = {TRUE};
+  return ::SetFileInformationByHandle(handle, FileDispositionInfo, &remove, sizeof(remove)) != 0;
+}
+
+bool ReparsePoint(HANDLE handle) {
+  FILE_ATTRIBUTE_TAG_INFO info = {};
+  return !::GetFileInformationByHandleEx(handle, FileAttributeTagInfo, &info, sizeof(info)) ||
+         (info.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+}
+
+std::optional<base::FilePath> FinalPathOf(HANDLE handle) {
+  std::wstring buffer(MAX_PATH, L'\0');
+  DWORD length = ::GetFinalPathNameByHandleW(handle, buffer.data(), static_cast<DWORD>(buffer.size()),
+                                             FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
+  if (length >= buffer.size()) {
+    buffer.resize(length + 1);
+    length = ::GetFinalPathNameByHandleW(handle, buffer.data(), static_cast<DWORD>(buffer.size()),
+                                         FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
+  }
+  if (length == 0 || length >= buffer.size()) return std::nullopt;
+  buffer.resize(length);
+  const std::optional<std::string> dos = report::DosFinalPath(paths::Text(base::FilePath(buffer)));
+  if (!dos) return std::nullopt;
+  return paths::FromText<base::FilePath>(*dos);
+}
+
+bool ExistingReparsePoint(const base::FilePath& path) {
+  base::win::ScopedHandle handle = OpenOnDisk(path, FILE_READ_ATTRIBUTES, OPEN_EXISTING, false);
+  return handle.is_valid() && ReparsePoint(handle.get());
+}
+
+bool HandleInside(const base::FilePath& drafts, HANDLE handle) {
+  base::win::ScopedHandle folder = OpenOnDisk(drafts, FILE_READ_ATTRIBUTES, OPEN_EXISTING, true);
+  const std::optional<base::FilePath> real_drafts =
+      folder.is_valid() ? FinalPathOf(folder.get()) : std::nullopt;
+  const std::optional<base::FilePath> final_path = FinalPathOf(handle);
+  return real_drafts && final_path && !ReparsePoint(handle) && Inside(*real_drafts, paths::Text(*final_path));
+}
+
+base::win::ScopedHandle OpenDraftHandle(const base::FilePath& drafts, const base::FilePath& path, DWORD access,
+                                        DWORD share) {
+  base::win::ScopedHandle handle = OpenOnDisk(path, access, OPEN_EXISTING, false, share);
+  if (!handle.is_valid() || !HandleInside(drafts, handle.get())) return base::win::ScopedHandle();
+  return handle;
+}
+
+bool RemoveTree(const base::FilePath& drafts, const base::FilePath& path, int depth) {
+  base::win::ScopedHandle handle =
+      OpenOnDisk(path, DELETE | FILE_READ_ATTRIBUTES | FILE_LIST_DIRECTORY, OPEN_EXISTING, false, kShareReadWrite);
+  if (!handle.is_valid()) return false;
+  if (ReparsePoint(handle.get())) return depth > 0 && DeleteThroughHandle(handle.get());
+  if (!HandleInside(drafts, handle.get())) return false;
+  if (DirectoryHandle(handle.get())) {
+    if (depth >= kMaxRemoveDepth) return false;
+    base::FileEnumerator children(path, false, base::FileEnumerator::FILES | base::FileEnumerator::DIRECTORIES);
+    for (base::FilePath child = children.Next(); !child.empty(); child = children.Next()) {
+      if (!RemoveTree(drafts, child, depth + 1)) return false;
+    }
+  }
+  return DeleteThroughHandle(handle.get());
+}
+#else
+bool ExistingReparsePoint(const base::FilePath& path) {
+  return base::IsLink(path);
+}
+#endif
+
+std::optional<base::FilePath> RealPath(const base::FilePath& path, bool follow_leaf) {
+#if BUILDFLAG(IS_WIN)
+  base::win::ScopedHandle handle = OpenOnDisk(path, FILE_READ_ATTRIBUTES, OPEN_EXISTING, follow_leaf);
+  if (!handle.is_valid() || (!follow_leaf && ReparsePoint(handle.get()))) return std::nullopt;
+  return FinalPathOf(handle.get());
+#else
   base::FilePath real = base::MakeAbsoluteFilePath(path);
   if (real.empty()) return std::nullopt;
   return real;
+#endif
 }
 
 std::optional<base::FilePath> ExistingDraftPath(const base::FilePath& drafts, const std::string& path) {
-  if (!report::InsideDrafts(drafts.value(), path)) return std::nullopt;
-  const std::optional<base::FilePath> real_drafts = RealPath(drafts);
-  const std::optional<base::FilePath> real = RealPath(base::FilePath(path));
-  if (!real_drafts || !real || !report::InsideDrafts(real_drafts->value(), real->value())) return std::nullopt;
+  if (!Inside(drafts, path)) return std::nullopt;
+  const std::optional<base::FilePath> real_drafts = RealPath(drafts, true);
+  const std::optional<base::FilePath> real = RealPath(paths::FromText<base::FilePath>(path), false);
+  if (!real_drafts || !real || !Inside(*real_drafts, paths::Text(*real))) return std::nullopt;
   return real;
 }
 
 std::optional<base::FilePath> NewDraftPath(const base::FilePath& drafts, const std::string& path) {
-  if (!report::InsideDrafts(drafts.value(), path)) return std::nullopt;
-  const base::FilePath given(path);
-  const std::optional<base::FilePath> real_drafts = RealPath(drafts);
-  const std::optional<base::FilePath> parent = RealPath(given.DirName());
+  if (!Inside(drafts, path)) return std::nullopt;
+  const base::FilePath given = paths::FromText<base::FilePath>(path);
+  const std::optional<base::FilePath> real_drafts = RealPath(drafts, true);
+  const std::optional<base::FilePath> parent = RealPath(given.DirName(), false);
   if (!real_drafts || !parent) return std::nullopt;
   const base::FilePath real = parent->Append(given.BaseName());
-  if (!report::InsideDrafts(real_drafts->value(), real.value()) || base::IsLink(real)) return std::nullopt;
+  if (!Inside(*real_drafts, paths::Text(real)) || ExistingReparsePoint(real)) return std::nullopt;
   return real;
 }
 
 std::optional<std::string> CreateDraft(const base::FilePath& documents) {
   const base::FilePath drafts = DraftsFolder(documents);
   if (!base::CreateDirectory(drafts)) return std::nullopt;
-  base::SetPosixFilePermissions(drafts, 0700);
+  OwnerOnly(drafts);
   const base::FilePath draft = drafts.AppendASCII(base::Uuid::GenerateRandomV4().AsLowercaseString());
   if (!base::CreateDirectory(draft)) return std::nullopt;
-  base::SetPosixFilePermissions(draft, 0700);
-  return draft.value();
+  OwnerOnly(draft);
+  return paths::Text(draft);
 }
 
 double FileSize(const base::FilePath& documents, const std::string& path) {
@@ -131,27 +249,91 @@ double FileSize(const base::FilePath& documents, const std::string& path) {
 
 bool RemovePath(const base::FilePath& documents, const std::string& path) {
   const base::FilePath drafts = DraftsFolder(documents);
-  if (!report::InsideDrafts(drafts.value(), path)) return false;
-  const base::FilePath given(path);
-  const std::optional<base::FilePath> real_drafts = RealPath(drafts);
-  const std::optional<base::FilePath> parent = RealPath(given.DirName());
+  if (!Inside(drafts, path)) return false;
+  const base::FilePath given = paths::FromText<base::FilePath>(path);
+  const std::optional<base::FilePath> real_drafts = RealPath(drafts, true);
+  const std::optional<base::FilePath> parent = RealPath(given.DirName(), false);
   if (!real_drafts || !parent) return false;
   const base::FilePath real = parent->Append(given.BaseName());
-  if (!report::InsideDrafts(real_drafts->value(), real.value())) return false;
+  if (!Inside(*real_drafts, paths::Text(real))) return false;
+#if BUILDFLAG(IS_WIN)
+  return RemoveTree(drafts, real, 0);
+#else
   return base::DeletePathRecursively(real);
+#endif
 }
 
-double GzipInto(const base::FilePath& destination, const report::GzipRead& read) {
-  base::File output(destination, base::File::FLAG_CREATE_ALWAYS | base::File::FLAG_WRITE);
+base::File OpenDraftOutput(const base::FilePath& drafts, const base::FilePath& destination) {
+#if BUILDFLAG(IS_WIN)
+  if (base::PathExists(destination)) {
+    base::win::ScopedHandle existing =
+        OpenDraftHandle(drafts, destination, DELETE | FILE_READ_ATTRIBUTES, kShareReadWrite);
+    if (!existing.is_valid() || DirectoryHandle(existing.get()) || !DeleteThroughHandle(existing.get())) {
+      return base::File();
+    }
+  }
+  base::win::ScopedHandle created = OpenOnDisk(destination, GENERIC_WRITE | DELETE, CREATE_NEW, false, FILE_SHARE_READ);
+  if (!created.is_valid()) return base::File();
+  if (!HandleInside(drafts, created.get())) {
+    DeleteThroughHandle(created.get());
+    return base::File();
+  }
+  return base::File(std::move(created));
+#else
+  return base::File(destination, base::File::FLAG_CREATE_ALWAYS | base::File::FLAG_WRITE);
+#endif
+}
+
+bool SameFileAs(const base::File& input, const base::FilePath& destination) {
+#if BUILDFLAG(IS_WIN)
+  BY_HANDLE_FILE_INFORMATION source = {};
+  if (!::GetFileInformationByHandle(input.GetPlatformFile(), &source)) return true;
+  base::win::ScopedHandle other = OpenOnDisk(destination, FILE_READ_ATTRIBUTES, OPEN_EXISTING, false);
+  if (!other.is_valid()) return false;
+  BY_HANDLE_FILE_INFORMATION target = {};
+  if (!::GetFileInformationByHandle(other.get(), &target)) return true;
+  return source.dwVolumeSerialNumber == target.dwVolumeSerialNumber && source.nFileIndexHigh == target.nFileIndexHigh &&
+         source.nFileIndexLow == target.nFileIndexLow;
+#else
+  struct stat source = {};
+  if (fstat(input.GetPlatformFile(), &source) != 0) return true;
+  struct stat target = {};
+  if (lstat(destination.value().c_str(), &target) != 0) return false;
+  return source.st_dev == target.st_dev && source.st_ino == target.st_ino;
+#endif
+}
+
+base::File OpenDraftInput(const base::FilePath& drafts, const base::FilePath& source) {
+#if BUILDFLAG(IS_WIN)
+  base::win::ScopedHandle handle = OpenDraftHandle(drafts, source, GENERIC_READ | DELETE, FILE_SHARE_READ);
+  if (!handle.is_valid() || DirectoryHandle(handle.get())) return base::File();
+  return base::File(std::move(handle));
+#else
+  return base::File(source, base::File::FLAG_OPEN | base::File::FLAG_READ);
+#endif
+}
+
+void RemoveDraftFile(base::File& file, const base::FilePath& path) {
+#if BUILDFLAG(IS_WIN)
+  DeleteThroughHandle(file.GetPlatformFile());
+  file.Close();
+#else
+  file.Close();
+  base::DeleteFile(path);
+#endif
+}
+
+double GzipInto(const base::FilePath& drafts, const base::FilePath& destination, const report::GzipRead& read) {
+  base::File output = OpenDraftOutput(drafts, destination);
   if (!output.IsValid()) return -1;
   const int64_t written = report::Gzip(read, [&output](const uint8_t* data, size_t size) {
     return output.WriteAtCurrentPosAndCheck(UNSAFE_BUFFERS(base::span<const uint8_t>(data, size)));
   });
-  output.Close();
   if (written < 0) {
-    base::DeleteFile(destination);
+    RemoveDraftFile(output, destination);
     return -1;
   }
+  output.Close();
   return static_cast<double>(written);
 }
 
@@ -160,22 +342,26 @@ double GzipFile(const base::FilePath& documents, const std::string& source, cons
   const std::optional<base::FilePath> from = ExistingDraftPath(drafts, source);
   const std::optional<base::FilePath> to = NewDraftPath(drafts, destination);
   if (!from || !to || *from == *to || base::DirectoryExists(*from)) return -1;
-  base::File input(*from, base::File::FLAG_OPEN | base::File::FLAG_READ);
-  if (!input.IsValid()) return -1;
-  const double written = GzipInto(*to, [&input](uint8_t* buffer, size_t capacity) -> int64_t {
+  base::File input = OpenDraftInput(drafts, *from);
+  if (!input.IsValid() || SameFileAs(input, *to)) return -1;
+  const double written = GzipInto(drafts, *to, [&input](uint8_t* buffer, size_t capacity) -> int64_t {
     const std::optional<size_t> count = input.ReadAtCurrentPos(UNSAFE_BUFFERS(base::span<uint8_t>(buffer, capacity)));
     return count ? static_cast<int64_t>(*count) : -1;
   });
-  input.Close();
-  if (written >= 0 && remove_source) base::DeleteFile(*from);
+  if (written >= 0 && remove_source) {
+    RemoveDraftFile(input, *from);
+  } else {
+    input.Close();
+  }
   return written;
 }
 
 double GzipText(const base::FilePath& documents, const std::string& text, const std::string& destination) {
-  const std::optional<base::FilePath> to = NewDraftPath(DraftsFolder(documents), destination);
+  const base::FilePath drafts = DraftsFolder(documents);
+  const std::optional<base::FilePath> to = NewDraftPath(drafts, destination);
   if (!to) return -1;
   size_t offset = 0;
-  return GzipInto(*to, [&text, &offset](uint8_t* buffer, size_t capacity) -> int64_t {
+  return GzipInto(drafts, *to, [&text, &offset](uint8_t* buffer, size_t capacity) -> int64_t {
     const size_t count = std::min(capacity, text.size() - offset);
     UNSAFE_BUFFERS(std::copy_n(text.data() + offset, count, buffer));
     offset += count;
@@ -186,12 +372,39 @@ double GzipText(const base::FilePath& documents, const std::string& text, const 
 struct UploadFile {
   base::FilePath path;
   int64_t bytes = -1;
+  std::optional<std::string> body;
 };
 
-UploadFile FindUploadFile(const base::FilePath& documents, const std::string& path) {
-  const std::optional<base::FilePath> real = ExistingDraftPath(DraftsFolder(documents), path);
+UploadFile FindUploadFile(const base::FilePath& documents, const std::string& path, int64_t max_bytes,
+                          std::shared_ptr<std::atomic<bool>> cancelled) {
+  if (cancelled && cancelled->load(std::memory_order_relaxed)) return {};
+  const base::FilePath drafts = DraftsFolder(documents);
+  const std::optional<base::FilePath> real = ExistingDraftPath(drafts, path);
   if (!real || base::DirectoryExists(*real)) return {};
+#if BUILDFLAG(IS_WIN)
+  base::win::ScopedHandle held = OpenDraftHandle(drafts, *real, GENERIC_READ, FILE_SHARE_READ);
+  LARGE_INTEGER size = {};
+  if (!held.is_valid() || DirectoryHandle(held.get()) || !::GetFileSizeEx(held.get(), &size)) return {};
+  UploadFile file;
+  file.path = *real;
+  file.bytes = size.QuadPart;
+  if (file.bytes < 1 || file.bytes > max_bytes) return file;
+  base::File verified(std::move(held));
+  std::string body(static_cast<size_t>(file.bytes), '\0');
+  constexpr size_t kReadChunk = 256 * 1024;
+  size_t offset = 0;
+  auto output = base::as_writable_byte_span(body);
+  while (offset < output.size()) {
+    if (cancelled && cancelled->load(std::memory_order_relaxed)) return {};
+    const size_t chunk = std::min(kReadChunk, output.size() - offset);
+    if (!verified.ReadAndCheck(static_cast<int64_t>(offset), output.subspan(offset, chunk))) return {};
+    offset += chunk;
+  }
+  file.body = std::move(body);
+  return file;
+#else
   return {*real, base::GetFileSize(*real).value_or(-1)};
+#endif
 }
 
 scoped_refptr<network::SharedURLLoaderFactory> SystemLoaderFactory() {
@@ -216,6 +429,8 @@ class Transfer {
   ~Transfer() = default;
 
   int caller() const { return caller_; }
+  std::shared_ptr<std::atomic<bool>> CancelFlag() const { return cancelled_; }
+  base::WeakPtr<Transfer> Weak() { return weak_.GetWeakPtr(); }
 
   void Post(network::mojom::URLLoaderFactory* factory, const std::string& url, const std::vector<report::Header>& headers,
             std::string body) {
@@ -225,20 +440,32 @@ class Transfer {
   }
 
   void Put(network::mojom::URLLoaderFactory* factory, const std::string& url, const std::vector<report::Header>& headers,
-           const base::FilePath& file) {
+           const base::FilePath& file, std::optional<std::string> body) {
     std::string type;
     for (const auto& [name, value] : headers) {
       if (name == "Content-Type") type = value;
     }
     Create(url, "PUT", headers, report::kUploadTimeoutSeconds);
-    loader_->AttachFileForUpload(file, type);
+    if (body) {
+      loader_->AttachStringForUpload(std::move(*body), type);
+    } else {
+      loader_->AttachFileForUpload(file, type);
+    }
     loader_->SetOnUploadProgressCallback(base::BindRepeating(&Transfer::OnProgress, base::Unretained(this)));
     Start(factory);
   }
 
   void Cancel() {
+    cancelled_->store(true, std::memory_order_relaxed);
     loader_.reset();
     if (done_) std::move(done_).Run(true, Reply(0, std::string(), "cancelled"));
+  }
+
+  void RefuseAndRemove(const char* message) {
+    cancelled_->store(true, std::memory_order_relaxed);
+    Done done = std::move(done_);
+    std::erase_if(Running(), [this](const std::unique_ptr<Transfer>& owned) { return owned.get() == this; });
+    Refuse(std::move(done), message);
   }
 
  private:
@@ -288,7 +515,9 @@ class Transfer {
   const size_t reply_limit_;
   LinuxReportEvent emit_;
   Done done_;
+  std::shared_ptr<std::atomic<bool>> cancelled_ = std::make_shared<std::atomic<bool>>(false);
   std::unique_ptr<network::SimpleURLLoader> loader_;
+  base::WeakPtrFactory<Transfer> weak_{this};
 };
 
 std::optional<std::vector<report::Header>> HeadersFrom(const base::Value& value) {
@@ -356,21 +585,23 @@ void StartUpload(const base::ListValue& args, const base::FilePath& documents, i
   auto headers = given ? report::AllowedHeaders(request.target, *given) : std::nullopt;
   if (!headers) return Refuse(std::move(done), "These headers are not sent with a report file");
   if (BackgroundInstance()) return Refuse(std::move(done), "Background instances send no reports");
+  Transfer* transfer = Admit(caller, args[0].GetString(), report::kUploadReplyMaxBytes, std::move(emit), &done);
+  if (!transfer) return;
   base::ThreadPool::PostTaskAndReplyWithResult(
       FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_VISIBLE},
-      base::BindOnce(&FindUploadFile, documents, args[4].GetString()),
+      base::BindOnce(&FindUploadFile, documents, args[4].GetString(), request.max_bytes, transfer->CancelFlag()),
       base::BindOnce(
-          [](report::Request request, std::string id, std::string url, std::vector<report::Header> headers, int caller,
-             LinuxReportEvent emit, Done done, UploadFile file) {
+          [](base::WeakPtr<Transfer> transfer, report::Request request, std::string url,
+             std::vector<report::Header> headers, UploadFile file) {
+            if (!transfer) return;
             if (!report::UploadSizeAllowed(request, file.bytes)) {
-              return Refuse(std::move(done), "The file is missing, empty, too large or outside the report's folder");
+              return transfer->RefuseAndRemove("The file is missing, empty, too large or outside the report's folder");
             }
             scoped_refptr<network::SharedURLLoaderFactory> factory = SystemLoaderFactory();
-            if (!factory) return Refuse(std::move(done), "The network is unavailable");
-            Transfer* transfer = Admit(caller, std::move(id), report::kUploadReplyMaxBytes, std::move(emit), &done);
-            if (transfer) transfer->Put(factory.get(), url, headers, file.path);
+            if (!factory) return transfer->RefuseAndRemove("The network is unavailable");
+            transfer->Put(factory.get(), url, headers, file.path, std::move(file.body));
           },
-          request, args[0].GetString(), args[1].GetString(), std::move(*headers), caller, std::move(emit), std::move(done)));
+          transfer->Weak(), request, args[1].GetString(), std::move(*headers)));
 }
 
 void ReplyWithBytes(Done done, const char* failure, double bytes) {

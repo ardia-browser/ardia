@@ -30,6 +30,10 @@ export type PagerStateEvent = {
   selected: number;
   profileId?: string | null;
   velocity: number;
+  motion?: number;
+  frames?: number;
+  longFrames?: number;
+  worstGapMs?: number;
 };
 
 export type PagerSnapshot = {

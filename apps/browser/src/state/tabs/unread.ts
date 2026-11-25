@@ -90,7 +90,7 @@ const tabSide = (tabId: string, t: Tab | undefined): TabSide => {
 
 const sameSide = (a: TabSide, b: TabSide) => a.source === b.source && a.origin === b.origin && sameUnread(a.title, b.title);
 
-export function unreadFrom(side: TabSide, page: PageSignals): Unread | null {
+function unreadFrom(side: TabSide, page: PageSignals): Unread | null {
   if (!side.source || !side.origin || page.phase === "ended") return null;
   const app = page.app.get(side.origin);
   if (app) return app;

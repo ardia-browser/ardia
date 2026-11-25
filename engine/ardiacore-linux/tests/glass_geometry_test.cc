@@ -2,9 +2,9 @@
 #include <cmath>
 #include <string_view>
 
-#include "ardia/linux/ac_linux_glass_geometry.h"
+#include "ardia/desktop/ac_desktop_glass_geometry.h"
 
-using namespace ardia::linux_glass;
+using namespace ardia::desktop_glass;
 
 namespace {
 

@@ -5,12 +5,14 @@ import { useBrowser, type BrowserState } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import { isEmptyCardTab, NEW_TAB_BAR_POLICY, newTabOpensBar } from "./newTabBarPolicy";
 import { hasPage } from "../tabs/pageSession";
-import { focusHeroBar } from "./barState";
 import { isSmall } from "../windows/small";
 import type { NewTabTarget } from "../browser/types";
 import { notePageOverlay } from "../telemetry/usage";
+import type { ConsentToken } from "../telemetry/client";
+import { noteCommandBarKeyDismissal } from "../telemetry/inlineCompletionCounts";
 import { noteBarLoad } from "../telemetry/barLoadFocus";
-import { customNewTabUrl } from "../settings/settings";
+import { navigateTyped, noteTypedOpen } from "../plugins/typedAddresses";
+import { focusHeroBar } from "./barState";
 
 export { isEmptyCardTab };
 
@@ -35,19 +37,28 @@ export function showNewTabBar(windowId: string, target: NewTabTarget = IN_LIST):
   return true;
 }
 
-function focusShownNewTabPage(s: BrowserState, windowId: string): boolean {
-  if (!s.settings.reuseEmptyNewTab || customNewTabUrl(s.settings)) return false;
-  const active = activeTabId(s, windowId);
-  if (!active || !isEmptyCardTab(s, s.tabs[active])) return false;
-  if (s.windowUi[windowId]?.panel.open) s.closePanel(windowId);
-  if (!focusHeroBar(windowId, active)) return false;
-  notePageOverlay("newTabReused");
+const openedByCommandKey = new WeakSet<object>();
+
+export function showNewTabBarForCommandKey(windowId: string): boolean {
+  if (!showNewTabBar(windowId)) return false;
+  const panel = store().windowUi[windowId]?.panel;
+  if (panel) openedByCommandKey.add(panel);
   return true;
+}
+
+export const commandKeyOpenedNewTabBar = (panel: object | undefined) => !!panel && openedByCommandKey.has(panel);
+
+export function dismissNewTabBarByCommandKey(windowId: string, consent: ConsentToken | null) {
+  closeNewTabBar(windowId);
+  const now = store();
+  const active = activeTabId(now, windowId);
+  if (active && !now.tabs[active]?.url) focusHeroBar(windowId, active);
+  noteCommandBarKeyDismissal(consent);
 }
 
 export function toggleNewTabBar(windowId: string, target: NewTabTarget = IN_LIST): boolean {
   const s = store();
-  if (!barOpensHere(s, windowId)) return target.kind === "list" && focusShownNewTabPage(s, windowId);
+  if (!barOpensHere(s, windowId)) return false;
   const panel = s.windowUi[windowId]?.panel;
   if (panel?.newTab && shownUnasked.delete(panel)) notePageOverlay("newTabBarKept");
   else if (panel?.newTab) closeNewTabBar(windowId);
@@ -69,18 +80,20 @@ export function openFromNewTabBar(windowId: string, target: NewTabTarget, url: s
   s.closePanel(windowId);
   const into = target.kind === "into" ? s.tabs[target.tabId] : undefined;
   if (into && into.windowId === windowId && isEmptyCardTab(s, into)) {
-    store().navigate(into.id, url);
+    navigateTyped(into.id, url, () => store().navigate(into.id, url));
     return noteBarLoad(into.id);
   }
   const group = target.kind === "group" ? s.groups[target.groupId] : undefined;
   if (group && group.windowId === windowId && group.profileId === s.windows[windowId]!.profileId) {
     const id = store().newTabInGroup(group.id);
     if (!id) return;
-    store().navigate(id, url);
+    navigateTyped(id, url, () => store().navigate(id, url));
     store().activate(id);
     return noteBarLoad(id);
   }
-  noteBarLoad(store().newTab(windowId, { url, newTabCommand: true }));
+  const opened = store().newTab(windowId, { url, newTabCommand: true });
+  noteTypedOpen(opened, url);
+  noteBarLoad(opened);
 }
 
 const launchTabs = new Set<string>();

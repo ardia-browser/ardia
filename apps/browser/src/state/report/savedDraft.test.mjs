@@ -71,3 +71,10 @@ test("damaged or unknown saved drafts are ignored", () => {
   assert.equal(odd.draft.attach.system, true);
   assert.deepEqual(odd.upload, { phase: "idle" });
 });
+
+test("a failed send keeps the sizes its report declared through a relaunch, and an older save has none", () => {
+  const declared = { "recording.mp4": 146_000 };
+  const upload = { phase: "failed", stage: "upload", message: "x", created: { ...created, declared }, errorClass: "offline", status: 0, attempts: 3 };
+  assert.deepEqual(roundTrip(filled({ upload })).upload.created.declared, declared);
+  assert.equal("declared" in roundTrip(filled({ upload: { ...upload, created } })).upload.created, false);
+});

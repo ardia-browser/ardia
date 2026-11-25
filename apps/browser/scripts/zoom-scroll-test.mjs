@@ -92,7 +92,6 @@ try {
     await reset();
     await setting(false);
     try {
-      await sleep(300);
       const { zoomed } = await withCommand(notches(3, -3));
       const after = await zoom();
       const scrollY = await page("scrollY");
@@ -101,7 +100,6 @@ try {
       return detail;
     } finally {
       await setting(true);
-      await sleep(300);
     }
   });
 

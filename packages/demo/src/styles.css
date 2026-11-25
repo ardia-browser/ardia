@@ -219,6 +219,11 @@ html.embed body {
     inset 0 0 0 0.5px rgba(255, 255, 255, 0.25);
 }
 
+html.ardia-onboarding-covered .ardia-webview-host {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .ardia-nudge {
   position: fixed;
   top: 0;

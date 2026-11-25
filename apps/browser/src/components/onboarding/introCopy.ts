@@ -15,6 +15,8 @@ export const INTRO_LOOK = {
   taglineRise: 6,
   exitScale: 1.08,
   exitHold: 0.6,
+  appearIn: 0.5,
+  boomFade: 0.45,
 } as const;
 
 export const INTRO_MUTE = {

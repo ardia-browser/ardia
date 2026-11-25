@@ -9,7 +9,7 @@ const LIGHT: typeof DARK = {
   popupBorder: "rgba(0,0,0,0.14)",
 };
 
-export type ExtensionColors = typeof DARK;
+type ExtensionColors = typeof DARK;
 
 export function useExtensionColors(): ExtensionColors {
   return useTheme().dark ? DARK : LIGHT;

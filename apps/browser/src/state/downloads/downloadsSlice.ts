@@ -7,6 +7,7 @@ import { engineProfile, isIncognitoProfile, privateSession } from "../browser/mo
 import { focusedWindowOf, patchWindowUi } from "../windows/ui";
 import { awaitsKeep } from "./status";
 import { noteDownloadsPanel } from "../telemetry/downloadsPanelCounts";
+import { noteDownloadSeen } from "../telemetry/downloadWork";
 import { forgetDownloadProgress, showDownloadProgress, withoutProgress } from "./progress";
 
 export type DownloadsSlice = {
@@ -47,13 +48,24 @@ export function withoutRepeats<Row extends Pick<Download, "url" | "path" | "prof
   });
 }
 
-export const downloadsIn = (s: Pick<BrowserState, "downloads" | "windows" | "profiles">, windowId: string) =>
-  s.downloads.filter((d) => downloadVisibleIn(s, d, s.windows[windowId]));
+const shownDownloads = new WeakMap<BrowserState["downloads"], Map<string, { window: BrowserWindow | undefined; profiles: BrowserState["profiles"]; shown: BrowserState["downloads"] }>>();
+
+export function downloadsIn(s: Pick<BrowserState, "downloads" | "windows" | "profiles">, windowId: string): BrowserState["downloads"] {
+  const window = s.windows[windowId];
+  let byWindow = shownDownloads.get(s.downloads);
+  const hit = byWindow?.get(windowId);
+  if (hit && hit.window === window && hit.profiles === s.profiles) return hit.shown;
+  const shown = s.downloads.filter((d) => downloadVisibleIn(s, d, window));
+  if (!byWindow) shownDownloads.set(s.downloads, (byWindow = new Map()));
+  byWindow.set(windowId, { window, profiles: s.profiles, shown });
+  return shown;
+}
 
 export const createDownloadsSlice: StateCreator<BrowserState, [], [], DownloadsSlice> = (set, get) => ({
   downloads: [],
 
   upsertDownload(d) {
+    noteDownloadSeen(d);
     const before = get().downloads;
     set((s) => {
       const listed = s.downloads.find((x) => x.id === d.id);

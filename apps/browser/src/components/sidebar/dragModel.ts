@@ -29,30 +29,51 @@ export type Item = ItemSpec & {
   size: Animated.Value;
   frame: Frame | null;
   headerFrame: Frame | null;
+  held?: number;
 };
 
 export type Drop = StoreDrop & { sequence?: string[] };
 
-export const blockKind = (i: Item) => i.kind === "row" || i.kind === "group" || i.kind === "live" || i.kind === "split";
+const blockKind = (i: Item) => i.kind === "row" || i.kind === "group" || i.kind === "live" || i.kind === "split";
 export const pinnedBlock = (i: Item) => (i.section === "pinnedRows" || i.section === "pinnedGroups") && !i.parentGroup && blockKind(i);
 export const boxed = (i: Item): i is Extract<Item, { kind: "group" | "live" }> => i.kind === "group" || i.kind === "live";
 export const isGroupItem = (i: Item): i is Extract<Item, { kind: "group" }> => i.kind === "group";
 export const folderOf = (i: Item): string | undefined => (i.kind === "tile" ? i.folderId : undefined);
 export const tabCell = (i: Item) => (i.kind === "row" || i.kind === "tile") && !folderOf(i);
-export const tailKey = (place: Exclude<Section, "pinnedRows"> | { group: string }) => (typeof place === "string" ? `tail:${place}` : `tail:group:${place.group}`);
 export const apart = (a: Item, b: Item) => a.section !== b.section && (a.section === "folder" || b.section === "folder");
+export const tailKey = (place: Exclude<Section, "pinnedRows"> | { group: string }) => (typeof place === "string" ? `tail:${place}` : `tail:group:${place.group}`);
 export const cellKey = (cell: string) => {
   const folderId = folderIdOfCell(cell);
   return folderId ? entryKey("tileFolder", folderId) : entryKey("tab", cell);
 };
 
-export type Ghost = { item: Item; count: number; width: number; height: number; position: Animated.ValueXY; landing?: boolean };
+export type Ghost = { item: Item; count: number; width: number; height: number; grab: { x: number; y: number }; position: Animated.ValueXY; landing?: boolean };
 
 export const restingTail = perLook(() => ({ marginTop: -layout.rowGap }));
+
+type ItemLook = { source: boolean; landing: boolean; clipped: boolean; inFold: boolean; rowGap: number; tailOffset: Animated.AnimatedAddition<number> };
+
+export function dragItemStyle(item: Item, { source, landing, clipped, inFold, rowGap, tailOffset }: ItemLook) {
+  const horizontal = item.kind === "tile";
+  return {
+    ...(horizontal ? null : { marginTop: item.kind === "tail" ? tailOffset : item.gap, flexShrink: 0 }),
+    ...(source
+      ? horizontal
+        ? { opacity: 0 }
+        : { height: item.size, marginBottom: inFold ? 0 : -rowGap, opacity: 0, overflow: "hidden" as const }
+      : landing
+        ? { opacity: 0 }
+        : null),
+    ...(clipped && !source && !landing ? { marginTop: horizontal ? -rowGap : tailOffset, paddingTop: rowGap, overflow: "hidden" as const } : null),
+  };
+}
 export const pinSlotPitch = () => layout.pinnedHeight + TILE_GAP;
 export const EDGE = 28;
 export const FOLDER_HOLD_MS = 400;
+export const SPLIT_HOLD_MS = 250;
+export const SPLIT_REST_SLOP = 4;
 export const spring = (value: Animated.Value, toValue: number) => Animated.spring(value, { toValue, ...SLIDE });
+export const ROOM_SPRING = { ...SLIDE, restDisplacementThreshold: 0.002, restSpeedThreshold: 0.02 } as const;
 
 export const inside = (f: Frame, x: number, y: number, slop = 0) => x >= f.x - slop && x <= f.x + f.w + slop && y >= f.y - slop && y <= f.y + f.h + slop;
 export const measure = (view: View | null): Promise<Frame | null> =>

@@ -7,7 +7,7 @@
 #include <utility>
 #include <vector>
 
-#include "ardia/linux/ac_linux_favicon_policy.h"
+#include "ardia/desktop/ac_desktop_favicon_policy.h"
 #include "base/base64.h"
 #include "base/functional/bind.h"
 #include "base/no_destructor.h"
@@ -39,7 +39,7 @@
 namespace ardiacore {
 namespace {
 
-namespace policy = linux_favicons;
+namespace policy = desktop_favicons;
 
 constexpr net::NetworkTrafficAnnotationTag kTrafficAnnotation =
     net::DefineNetworkTrafficAnnotation("ardia_linux_favicon_fetch", R"(

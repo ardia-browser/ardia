@@ -10,11 +10,13 @@
 #include <utility>
 #include <vector>
 
+#include "ardia/desktop/ac_desktop_paths.h"
 #include "ardia/linux/ac_linux_import_crypto.h"
 #include "ardia/linux/ac_linux_import_formats.h"
 #include "ardia/linux/ac_linux_import_keyring.h"
 #include "ardia/linux/ac_linux_import_readers.h"
 #include "ardia/linux/ac_linux_import_secrets.h"
+#include "ardia/linux/ac_linux_import_zen.h"
 #include "ardia/linux/ac_linux_profile_service.h"
 #include "ardia/linux/ac_linux_profiles.h"
 #include "base/callback_list.h"
@@ -96,7 +98,7 @@ li::Environment CurrentEnvironment() {
   base::FilePath own;
   base::PathService::Get(chrome::DIR_USER_DATA, &own);
   return li::MakeEnvironment(home ? home->c_str() : nullptr, config ? config->c_str() : nullptr,
-                             temp.value().c_str(), own.value());
+                             ardia::desktop_paths::Text(temp).c_str(), ardia::desktop_paths::Text(own));
 }
 
 using ProfileResolved = base::OnceCallback<void(Profile*, std::string)>;
@@ -461,7 +463,7 @@ class ImportedWriter {
   }
 
   void Next() {
-    const std::string dir = profile_dir_.value();
+    const std::string dir = ardia::desktop_paths::Text(profile_dir_);
     if (cookies_ && cookie_offset_ < data_.cookies.size()) {
       const size_t end = std::min(data_.cookies.size(), cookie_offset_ + li::kCookieBatch);
       int dropped = 0;
@@ -832,6 +834,9 @@ class ImportService {
       const base::DictValue& given = values[4].GetDict();
       if (std::optional<int> limit = given.FindInt("historyLimit"); limit && *limit > 0) options.history_limit = limit;
       if (std::optional<double> since = given.FindDouble("historySince"); since && *since > 0) options.history_since = since;
+      if (!li::RequestedSpaceIds(given.Find("spaceIds"), &options.space_ids)) {
+        return Fail(std::move(done), "invalid", "Invalid import request");
+      }
     }
     options.now_ms = base::Time::Now().InMillisecondsFSinceUnixEpoch();
     if (std::optional<li::SecretBytes> secret = unlocked_.Copy(requester.owner, browser, NowMs())) {
@@ -876,7 +881,7 @@ class ImportService {
       if (outcome.withheld) {
         event.Set("type", "failed");
         event.Set("code", "ERR_SECRET_IN_REPLY");
-        event.Set("message", "The import result was withheld because it contained a password");
+        event.Set("message", "The import result was withheld because it contained an imported password, cookie or card number");
       } else {
         base::ListValue failed;
         base::ListValue warnings;
@@ -987,9 +992,9 @@ class ImportService {
     base::DictValue event;
     event.Set("jobId", request);
     event.Set("type", "chosen");
-    if (path && li::ValidLocalFile(path->value())) {
-      chosen_.Remember(owner, kind, path->value(), NowMs());
-      event.Set("path", path->value());
+    if (path && li::ValidLocalFile(ardia::desktop_paths::Text(*path))) {
+      chosen_.Remember(owner, kind, ardia::desktop_paths::Text(*path), NowMs());
+      event.Set("path", ardia::desktop_paths::Text(*path));
     } else {
       event.Set("path", base::Value());
     }

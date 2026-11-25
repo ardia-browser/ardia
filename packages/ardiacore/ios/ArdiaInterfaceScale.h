@@ -28,7 +28,6 @@ NS_SWIFT_NAME(InterfaceScale)
 + (NSPoint)rootPointFromScreen:(NSPoint)point inWindow:(NSWindow *)window NS_SWIFT_NAME(rootPoint(fromScreen:in:));
 
 + (NSSize)windowSizeFromRoot:(NSSize)size NS_SWIFT_NAME(windowSize(fromRoot:));
-+ (NSSize)rootSizeFromWindow:(NSSize)size NS_SWIFT_NAME(rootSize(fromWindow:));
 + (CGFloat)windowLengthFromRoot:(CGFloat)length NS_SWIFT_NAME(windowLength(fromRoot:));
 + (CGFloat)rootLengthFromWindow:(CGFloat)length NS_SWIFT_NAME(rootLength(fromWindow:));
 

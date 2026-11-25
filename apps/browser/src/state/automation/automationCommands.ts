@@ -2,7 +2,7 @@ import type { BrowserCommand } from "../../platform/commands";
 import { COMMANDS, commandBarTitle, UNAVAILABLE_COMMANDS } from "../commands/commandCatalog";
 import { isConfigSettingKey } from "../settings/configAllowlist";
 
-export type AutomationDecision = "run" | "endsApp" | "changesEngine" | "leftOutSetting" | "control" | "needsArgument";
+type AutomationDecision = "run" | "endsApp" | "changesEngine" | "leftOutSetting" | "control" | "needsArgument" | "needsPerson";
 
 export const AUTOMATION: Readonly<Record<BrowserCommand, AutomationDecision>> = {
   newTab: "run",
@@ -17,20 +17,23 @@ export const AUTOMATION: Readonly<Record<BrowserCommand, AutomationDecision>> = 
   focusCommandBar: "run",
   closeTab: "run",
   closeAllTabs: "run",
-  print: "run",
+  print: "needsPerson",
   copyUrl: "run",
   copyUrlAsMarkdown: "run",
   findInPage: "run",
   findNext: "run",
   findPrevious: "run",
-  hideElement: "run",
+  hideElement: "needsPerson",
   showHiddenElements: "run",
   setAppearance: "run",
   reload: "run",
   forceReload: "run",
   toggleTabLayout: "run",
+  setTabLayout: "run",
   toggleSidebar: "run",
   toggleSidebarSide: "run",
+  toggleCompactToolbar: "run",
+  togglePinnedFold: "run",
   openSplitPane: "run",
   useSelectionForFind: "run",
   findAndReplace: "run",
@@ -41,7 +44,7 @@ export const AUTOMATION: Readonly<Record<BrowserCommand, AutomationDecision>> = 
   toggleJavaScriptFromAppleEvents: "leftOutSetting",
   toggleAddressBar: "run",
   toggleMinimalism: "run",
-  cast: "run",
+  cast: "needsPerson",
   zoomReset: "run",
   zoomIn: "run",
   zoomOut: "run",
@@ -74,14 +77,14 @@ export const AUTOMATION: Readonly<Record<BrowserCommand, AutomationDecision>> = 
   switchProfile: "needsArgument",
   nextProfile: "run",
   previousProfile: "run",
-  newProfile: "run",
+  newProfile: "needsPerson",
   openSettings: "run",
-  importBrowserData: "run",
+  importBrowserData: "needsPerson",
   showHistory: "run",
-  clearBrowsingData: "run",
+  clearBrowsingData: "needsPerson",
   manageBookmarks: "run",
-  exportBookmarks: "run",
-  bookmarkAllTabs: "run",
+  exportBookmarks: "needsPerson",
+  bookmarkAllTabs: "needsPerson",
   setBookmarksBar: "run",
   toggleBookmarksBar: "run",
   newTabInGroup: "run",
@@ -89,34 +92,35 @@ export const AUTOMATION: Readonly<Record<BrowserCommand, AutomationDecision>> = 
   cleanUpTabs: "run",
   tidyPins: "run",
   searchTabs: "run",
-  renameTab: "run",
-  changeTabIcon: "run",
+  renameTab: "needsPerson",
+  changeTabIcon: "needsPerson",
   returnToPinnedUrl: "run",
-  tabSwitcher: "run",
-  share: "run",
-  reportProblem: "run",
+  tabSwitcher: "needsPerson",
+  share: "needsPerson",
+  reportProblem: "needsPerson",
   keyboardShortcuts: "run",
   copyDiagnostics: "run",
-  toolTour: "run",
+  copyLastFreeze: "run",
+  toolTour: "needsPerson",
   videoTour: "run",
   releaseNotes: "run",
-  showOnboarding: "run",
+  showOnboarding: "needsPerson",
   taskManager: "run",
   openExtension: "needsArgument",
   addExtension: "run",
   manageExtensions: "run",
-  pinExtensions: "run",
-  autofill: "run",
-  openFile: "run",
-  savePage: "run",
-  emailPageLocation: "run",
-  printWithSystemDialog: "run",
+  pinExtensions: "needsPerson",
+  autofill: "needsPerson",
+  openFile: "needsPerson",
+  savePage: "needsPerson",
+  emailPageLocation: "needsPerson",
+  printWithSystemDialog: "needsPerson",
   stop: "run",
-  caretBrowsing: "run",
+  caretBrowsing: "needsPerson",
   moveTabDown: "run",
   moveTabUp: "run",
   closeTabGroup: "run",
-  openProfileMenu: "run",
+  openProfileMenu: "needsPerson",
 };
 
 type SpecView = { title?: string; scope?: string; variants?: Readonly<Record<string, unknown>>; toggles?: string; chooses?: string };
@@ -139,7 +143,7 @@ export const variantsOf = (command: BrowserCommand): string[] | null => {
   return variants ? Object.keys(variants) : null;
 };
 
-export type AutomationCommand = { id: BrowserCommand; title: string; scope: string | null; variants: string[] | null };
+type AutomationCommand = { id: BrowserCommand; title: string; scope: string | null; variants: string[] | null };
 
 export function automationCommands(): AutomationCommand[] {
   return (Object.keys(SPECS) as BrowserCommand[])

@@ -792,8 +792,18 @@ Plan PlanInvoke(std::string_view method, const std::vector<Arg>& values) {
   return Engine("ac_passwords_update", json, Reply::kOk, {Store::kPasswords});
 }
 
-Plan PlanExport(std::string_view path) {
-  if (path.empty() || path[0] != '/' || !PlainText(path, kMaxPathBytes)) {
+namespace {
+
+bool AbsoluteExportPath(std::string_view path, char separator) {
+  if (separator == '/') return !path.empty() && path[0] == '/';
+  const bool drive = path.size() >= 3 && ((path[0] >= 'a' && path[0] <= 'z') || (path[0] >= 'A' && path[0] <= 'Z'));
+  return drive && path[1] == ':' && path[2] == separator;
+}
+
+}
+
+Plan PlanExport(std::string_view path, char separator) {
+  if (!AbsoluteExportPath(path, separator) || !PlainText(path, kMaxPathBytes)) {
     return Invalid("ERR_EXPORT_PATH", "An absolute export path is required");
   }
   return Engine("ac_passwords_export", Json().Text("path", std::string(path)), Reply::kExport,

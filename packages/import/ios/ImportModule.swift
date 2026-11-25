@@ -2,7 +2,7 @@ import AppKit
 import ArdiaCore
 import ExpoModulesCore
 
-public class ImportModule: Module {
+public class ImportModule: Module, ImportNative {
   private let importer: Importer = {
     let support = LaunchConfig.shared.instance("importSourceDir").map { URL(fileURLWithPath: $0, isDirectory: true) }
       ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -38,117 +38,145 @@ public class ImportModule: Module {
   private let vault = ImportVault()
   private static let work = DispatchQueue(label: "ardia.import", qos: .userInitiated, attributes: .concurrent)
 
+  func listBrowsers(_ promise: Promise) { self.run(promise) { try Self.json(self.importer.discovery.list()) } }
+
+  func importData(_ jobId: String, _ browserId: String, _ profileId: String, _ kinds: [ImportKind], _ options: ImportRequestOptions, _ promise: Promise) {
+    let cancellation = self.jobs.start(jobId)
+    let observer = self.observer(jobId: jobId, options: options)
+    self.run(promise, job: jobId) {
+      var result = try self.importer.importData(browserId: browserId, profileId: profileId, kinds: kinds,
+                                                options: options.importOptions, observer: observer, cancellation: cancellation)
+      result.vaultToken = self.vault.keep(cookies: result.cookies, addresses: result.addresses, cards: result.cards)
+      return try Self.json(result)
+    }
+  }
+
+  func cancelImport(_ jobId: String) { self.jobs.cancel(jobId) }
+
+  func unlockBrowser(_ browserId: String, _ primaryPassword: String?, _ promise: Promise) {
+    self.run(promise) {
+      try self.importer.unlock(browserId: browserId, primaryPassword: primaryPassword ?? "", secret: Self.secret)
+      return nil
+    }
+  }
+
+  func isBrowserUnlocked(_ browserId: String) -> Bool { self.importer.isUnlocked(browserId) }
+
+  func forgetUnlockedKeys() {
+    self.importer.forgetKeys()
+    self.vault.discardAll()
+  }
+
+  func writeImported(_ token: String, _ profile: String, _ kinds: [ImportKind], _ promise: Promise) {
+    guard let entry = self.vault.take(token) else { return promise.reject("notFound", "Nothing to write; import again") }
+    Task { @MainActor in
+      promise.resolve(await ImportWriter.write(entry, profile: profile, kinds: Set(kinds)))
+    }
+  }
+
+  func discardImported(_ token: String) { self.vault.discard(token) }
+
+  func listExtensions(_ browserId: String, _ profileId: String, _ promise: Promise) {
+    self.run(promise) {
+      guard let def = BrowserDefinition.find(browserId), def.isChromiumBased else { return "[]" }
+      return try Self.json(ChromiumExtensions.list(profile: try self.importer.discovery.profileDirectory(def, profileId)))
+    }
+  }
+
+  func importSafariExport(_ jobId: String, _ path: String, _ promise: Promise) {
+    let cancellation = self.jobs.start(jobId)
+    self.run(promise, job: jobId) {
+      var data = try SafariExport.load(Self.fileURL(path), cancellation: cancellation)
+      data.vaultToken = self.vault.keep(cookies: data.cookies, addresses: [], cards: data.cards)
+      return try Self.json(data)
+    }
+  }
+
+  static func safariHasFullDiskAccess() -> Bool { SafariDirect.hasAccess(home: Self.safariHome) }
+
+  static func openFullDiskAccessSettings(_ promise: Promise) {
+    let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!
+    NSWorkspace.shared.open(url)
+    promise.resolve(nil)
+  }
+
+  func importSafariDirect(_ jobId: String, _ promise: Promise) {
+    let cancellation = self.jobs.start(jobId)
+    self.run(promise, job: jobId) {
+      var data = try SafariDirect.load(home: Self.safariHome, cancellation: cancellation)
+      data.vaultToken = self.vault.keep(cookies: data.cookies, addresses: [], cards: data.cards)
+      return try Self.json(data)
+    }
+  }
+
+  func readDiaTabs(_ promise: Promise) {
+    self.run(promise) {
+      let fixture = LaunchConfig.shared.testValue("importDiaWindows").map { URL(fileURLWithPath: $0) }
+      let app = WorkspaceDiaApp(bundleIdentifier: Self.diaBundleId, consent: fixture.map { _ in { .granted } })
+      let source: DiaScriptingSource = fixture.map(DiaFixtureWindows.init(url:)) ?? DiaAppleEvents(bundleIdentifier: Self.diaBundleId)
+      var result = try DiaTabsFetch.read(app: app, source: source)
+      result.favicons = self.importer.favicons(browserId: "dia", pages: result.profiles.flatMap { $0.pinned.map(\.url) + $0.tabs.map(\.url) })
+      return try Self.json(result)
+    }
+  }
+
+  func importBookmarksHTML(_ path: String, _ promise: Promise) { self.run(promise) { try Self.json(NetscapeBookmarks.load(Self.fileURL(path))) } }
+
+  func importPasswordsCSV(_ path: String, _ promise: Promise) { self.run(promise) { try Self.json(PasswordsCSV.load(Self.fileURL(path))) } }
+
+  static func chooseImportFile(_ kind: ImportFileKind, _ promise: Promise) {
+    let panel = NSOpenPanel()
+    panel.allowsMultipleSelection = false
+    switch kind {
+    case .safariExport:
+      panel.canChooseDirectories = true
+      panel.allowedContentTypes = [.zip]
+    case .bookmarksHTML:
+      panel.allowedContentTypes = [.html]
+    case .passwordsCSV:
+      panel.allowedContentTypes = [.commaSeparatedText]
+    }
+    panel.begin { response in promise.resolve(response == .OK ? panel.url?.path : nil) }
+  }
+
   public func definition() -> ModuleDefinition {
-    Name("ArdiaImport")
-    Events("onImportEvent")
+    Name(Self.moduleName)
+    Self.eventsDefinition
 
     OnCreate { Self.work.async { SQLiteSnapshot.removeLeftovers() } }
 
-    AsyncFunction("listBrowsers") { (promise: Promise) in
-      self.run(promise) { try Self.json(self.importer.discovery.list()) }
-    }
+    listBrowsersFunction
 
-    AsyncFunction("importData") { (jobId: String, browserId: String, profileId: String, kinds: [ImportKind], options: ImportRequestOptions, promise: Promise) in
-      let cancellation = self.jobs.start(jobId)
-      let observer = self.observer(jobId: jobId, options: options)
-      self.run(promise, job: jobId) {
-        var result = try self.importer.importData(browserId: browserId, profileId: profileId, kinds: kinds,
-                                                  options: options.importOptions, observer: observer, cancellation: cancellation)
-        result.vaultToken = self.vault.keep(cookies: result.cookies, addresses: result.addresses, cards: result.cards)
-        return try Self.json(result)
-      }
-    }
+    importDataFunction
 
-    Function("cancelImport") { (jobId: String) in self.jobs.cancel(jobId) }
+    cancelImportFunction
 
-    AsyncFunction("unlockBrowser") { (browserId: String, primaryPassword: String?, promise: Promise) in
-      self.run(promise) {
-        try self.importer.unlock(browserId: browserId, primaryPassword: primaryPassword ?? "", secret: Self.secret)
-        return nil
-      }
-    }
+    unlockBrowserFunction
 
-    Function("isBrowserUnlocked") { (browserId: String) -> Bool in self.importer.isUnlocked(browserId) }
-    Function("forgetUnlockedKeys") {
-      self.importer.forgetKeys()
-      self.vault.discardAll()
-    }
+    isBrowserUnlockedFunction
+    forgetUnlockedKeysFunction
 
-    AsyncFunction("writeImported") { (token: String, profile: String, kinds: [ImportKind], promise: Promise) in
-      guard let entry = self.vault.take(token) else { return promise.reject("notFound", "Nothing to write; import again") }
-      Task { @MainActor in
-        promise.resolve(await ImportWriter.write(entry, profile: profile, kinds: Set(kinds)))
-      }
-    }
+    writeImportedFunction
 
-    Function("discardImported") { (token: String) in self.vault.discard(token) }
+    discardImportedFunction
 
-    AsyncFunction("listExtensions") { (browserId: String, profileId: String, promise: Promise) in
-      self.run(promise) {
-        guard let def = BrowserDefinition.find(browserId), def.isChromiumBased else { return "[]" }
-        return try Self.json(ChromiumExtensions.list(profile: try self.importer.discovery.profileDirectory(def, profileId)))
-      }
-    }
+    listExtensionsFunction
 
-    AsyncFunction("importSafariExport") { (jobId: String, path: String, promise: Promise) in
-      let cancellation = self.jobs.start(jobId)
-      self.run(promise, job: jobId) {
-        var data = try SafariExport.load(Self.fileURL(path), cancellation: cancellation)
-        data.vaultToken = self.vault.keep(cookies: data.cookies, addresses: [], cards: data.cards)
-        return try Self.json(data)
-      }
-    }
+    importSafariExportFunction
 
-    Function("safariHasFullDiskAccess") { () -> Bool in SafariDirect.hasAccess(home: Self.safariHome) }
+    Self.safariHasFullDiskAccessFunction
 
-    AsyncFunction("openFullDiskAccessSettings") { (promise: Promise) in
-      let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!
-      NSWorkspace.shared.open(url)
-      promise.resolve(nil)
-    }.runOnQueue(.main)
+    Self.openFullDiskAccessSettingsFunction
 
-    AsyncFunction("importSafariDirect") { (jobId: String, promise: Promise) in
-      let cancellation = self.jobs.start(jobId)
-      self.run(promise, job: jobId) {
-        var data = try SafariDirect.load(home: Self.safariHome, cancellation: cancellation)
-        data.vaultToken = self.vault.keep(cookies: data.cookies, addresses: [], cards: data.cards)
-        return try Self.json(data)
-      }
-    }
+    importSafariDirectFunction
 
-    AsyncFunction("readDiaTabs") { (promise: Promise) in
-      self.run(promise) {
-        let fixture = LaunchConfig.shared.testValue("importDiaWindows").map { URL(fileURLWithPath: $0) }
-        let app = WorkspaceDiaApp(bundleIdentifier: Self.diaBundleId, consent: fixture.map { _ in { .granted } })
-        let source: DiaScriptingSource = fixture.map(DiaFixtureWindows.init(url:)) ?? DiaAppleEvents(bundleIdentifier: Self.diaBundleId)
-        var result = try DiaTabsFetch.read(app: app, source: source)
-        result.favicons = self.importer.favicons(browserId: "dia", pages: result.profiles.flatMap { $0.pinned.map(\.url) + $0.tabs.map(\.url) })
-        return try Self.json(result)
-      }
-    }
+    readDiaTabsFunction
 
-    AsyncFunction("importBookmarksHTML") { (path: String, promise: Promise) in
-      self.run(promise) { try Self.json(NetscapeBookmarks.load(Self.fileURL(path))) }
-    }
+    importBookmarksHTMLFunction
 
-    AsyncFunction("importPasswordsCSV") { (path: String, promise: Promise) in
-      self.run(promise) { try Self.json(PasswordsCSV.load(Self.fileURL(path))) }
-    }
+    importPasswordsCSVFunction
 
-    AsyncFunction("chooseImportFile") { (kind: ImportFileKind, promise: Promise) in
-      let panel = NSOpenPanel()
-      panel.allowsMultipleSelection = false
-      switch kind {
-      case .safariExport:
-        panel.canChooseDirectories = true
-        panel.allowedContentTypes = [.zip]
-      case .bookmarksHTML:
-        panel.allowedContentTypes = [.html]
-      case .passwordsCSV:
-        panel.allowedContentTypes = [.commaSeparatedText]
-      }
-      panel.begin { response in promise.resolve(response == .OK ? panel.url?.path : nil) }
-    }.runOnQueue(.main)
+    Self.chooseImportFileFunction
   }
 
   private func run(_ promise: Promise, job: String? = nil, _ body: @escaping () throws -> String?) {

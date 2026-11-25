@@ -6,7 +6,7 @@
 #include <utility>
 #include <vector>
 
-#include "ardia/linux/ac_linux_glass_geometry.h"
+#include "ardia/desktop/ac_desktop_glass_geometry.h"
 #include "base/feature_list.h"
 #include "base/functional/bind.h"
 #include "components/viz/common/frame_timing_details.h"
@@ -28,7 +28,7 @@ bool ArdiaLinuxGpuCompositingDisabled();
 namespace ardia {
 namespace {
 
-namespace glass = linux_glass;
+namespace glass = desktop_glass;
 
 std::optional<double> Number(const base::DictValue* dict, std::string_view key) {
   return dict ? dict->FindDouble(key) : std::nullopt;
@@ -92,7 +92,6 @@ void ShellGlassView::Apply(const base::DictValue& args, double zoom, Done done) 
   }
   base::ListValue accepted;
   std::set<std::string> kept;
-  if (available_ && SoftwareCompositor()) Refresh();
   if (available_) {
     for (const Wanted& region : wanted) {
       if (kept.size() >= glass::kMaxRegions) break;
@@ -137,17 +136,12 @@ void ShellGlassView::Clear() {
   regions_.clear();
 }
 
-bool ShellGlassView::SoftwareCompositor() {
-  ui::Compositor* compositor = layer()->GetCompositor();
-  return compositor && compositor->force_software_compositor();
-}
-
 void ShellGlassView::OnGpuInfoUpdate() { Refresh(); }
 
 void ShellGlassView::OnGpuProcessCrashed() { Refresh(); }
 
 void ShellGlassView::Refresh() {
-  const bool now = Supported() && !SoftwareCompositor();
+  const bool now = Supported();
   if (now == available_) return;
   available_ = now;
   if (!available_) Clear();

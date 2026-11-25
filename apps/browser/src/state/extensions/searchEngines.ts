@@ -2,6 +2,13 @@ import type { ExtensionSearchEngine } from "@ardia/core";
 import { extensionSearchEngines } from "../../platform/extensions";
 import { useBrowser } from "../browser/store";
 import { useExtensions } from "./actions";
+import { consentToken } from "../telemetry/client";
+import { warnFor } from "../telemetry/logs";
+
+const live = new Map<string, readonly ExtensionSearchEngine[]>();
+
+export const liveExtensionSearchEngines = (profile: string): readonly ExtensionSearchEngine[] => live.get(profile) ?? [];
+export const setLiveExtensionSearchEngines = (profile: string, engines: readonly ExtensionSearchEngine[]) => void live.set(profile, engines);
 
 export function startExtensionSearchEngines() {
   const timers: Record<string, ReturnType<typeof setTimeout>> = {};
@@ -19,13 +26,15 @@ export function startExtensionSearchEngines() {
 }
 
 async function refreshExtensionSearchEngines(profile: string) {
+  const consent = consentToken();
   let engines: ExtensionSearchEngine[];
   try {
     engines = await extensionSearchEngines(profile);
   } catch (error) {
-    console.warn("[extensions] search engines failed", error);
+    warnFor(consent, "[extensions] search engines failed", error);
     return;
   }
+  setLiveExtensionSearchEngines(profile, engines);
   const s = useBrowser.getState();
   const current = s.settings.extensionSearchEngines;
   const next = [...current.filter((e) => e.profile !== profile), ...engines];

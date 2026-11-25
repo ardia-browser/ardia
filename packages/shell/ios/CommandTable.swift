@@ -26,8 +26,11 @@ enum CommandTable {
     case reload
     case forceReload
     case toggleTabLayout
+    case setTabLayout
     case toggleSidebarSide
     case toggleSidebar
+    case toggleCompactToolbar
+    case togglePinnedFold
     case openSplitPane
     case useSelectionForFind
     case findAndReplace
@@ -94,6 +97,7 @@ enum CommandTable {
     case reportProblem
     case keyboardShortcuts
     case copyDiagnostics
+    case copyLastFreeze
     case toolTour
     case videoTour
     case releaseNotes
@@ -142,8 +146,13 @@ enum CommandTable {
     "reload": "Refresh",
     "forceReload": "Force Refresh the Page",
     "toggleTabLayout": "Show Tabs in Sidebar",
+    "setTabLayout:sidebarLeft": "Sidebar on Left",
+    "setTabLayout:sidebarRight": "Sidebar on Right",
+    "setTabLayout:top": "Top Tab Bar",
     "toggleSidebarSide": "Sidebar on Right",
     "toggleSidebar": "Auto-Hide Tabs",
+    "toggleCompactToolbar": "Compact Toolbar",
+    "togglePinnedFold": "Collapse Pinned Tabs",
     "openSplitPane": "Open Split Pane",
     "useSelectionForFind": "Use Selection for Find",
     "findAndReplace": "Find and Replace…",
@@ -214,6 +223,7 @@ enum CommandTable {
     "reportProblem": "Report a Problem…",
     "keyboardShortcuts": "Keyboard Shortcuts",
     "copyDiagnostics": "Copy Diagnostics",
+    "copyLastFreeze": "Copy Last Freeze",
     "toolTour": "Tool Tour",
     "videoTour": "Video Tour",
     "releaseNotes": "Release Notes",
@@ -275,8 +285,8 @@ enum CommandTable {
     "viewSource": [("u", [.option, .command])],
     "back": [("[", [.command]), ("\u{F702}", [.command])],
     "forward": [("]", [.command]), ("\u{F703}", [.command])],
-    "nextTab": [("]", [.shift, .command]), ("}", [.command]), ("\u{F72D}", [.control]), ("\u{F701}", [.option, .command])],
-    "previousTab": [("[", [.shift, .command]), ("{", [.command]), ("\u{F72C}", [.control]), ("\u{F700}", [.option, .command])],
+    "nextTab": [("]", [.shift, .command]), ("}", [.command]), ("\u{9}", [.control]), ("\u{F72D}", [.control]), ("\u{F701}", [.option, .command])],
+    "previousTab": [("[", [.shift, .command]), ("{", [.command]), ("\u{9}", [.control, .shift]), ("\u{F72C}", [.control]), ("\u{F700}", [.option, .command])],
     "selectTab:1": [("1", [.command])],
     "selectTab:2": [("2", [.command])],
     "selectTab:3": [("3", [.command])],
@@ -303,8 +313,6 @@ enum CommandTable {
     "cleanUpTabs": [("k", [.option, .command])],
     "searchTabs": [("a", [.shift, .command])],
     "returnToPinnedUrl": [("\u{D}", [.command])],
-    "tabSwitcher:forward": [("\u{9}", [.control])],
-    "tabSwitcher:backward": [("\u{9}", [.control, .shift])],
     "share": [("s", [.option, .command])],
     "reportProblem": [("i", [.option, .shift, .command])],
     "openFile": [("o", [.command])],
@@ -325,7 +333,7 @@ enum CommandTable {
     "std:cut:": [("x", [.command])],
     "std:copy:": [("c", [.command])],
     "std:paste:": [("v", [.command])],
-    "std:pasteAndMatchStyle:": [("v", [.shift, .command])],
+    "std:pasteAndMatchStyle:": [("v", [.shift, .command]), ("v", [.option, .shift, .command])],
     "std:selectAll:": [("a", [.command])],
     "std:showGuessPanel:": [(":", [.command])],
     "std:checkSpelling:": [(";", [.command])],

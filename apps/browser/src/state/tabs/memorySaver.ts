@@ -1,4 +1,5 @@
 import { isKeepActiveSiteValid, setMemorySaver, type MemorySaverMode } from "../../platform/performance";
+import { isQuitting } from "../app/quit";
 import { useBrowser } from "../browser/store";
 import type { Settings } from "../settings/settings";
 
@@ -28,7 +29,7 @@ export function startMemorySaver() {
   started = true;
   const push = () => void setMemorySaver(memorySaverRequest(useBrowser.getState().settings)).catch(() => {});
   push();
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["settings"], (s, prev) => {
     if (changed(s.settings, prev.settings)) push();
   });
 }
@@ -38,9 +39,10 @@ export function keepActiveSiteOf(typed: string): string {
   return `${scheme.toLowerCase()}${host.toLowerCase()}${rest === "/" ? "" : rest}`;
 }
 
-export async function keepSiteActive(typed: string): Promise<string | null> {
+export async function keepSiteActive(typed: string, stillWanted: () => boolean = () => true): Promise<string | null> {
   const site = keepActiveSiteOf(typed);
   if (!site || /\s/.test(site) || !(await isKeepActiveSiteValid(site).catch(() => false))) return "Enter a site, like youtube.com.";
+  if (isQuitting() || !stillWanted()) return null;
   const sites = store().settings.keepActiveSites;
   if (!sites.includes(site)) store().updateSettings({ keepActiveSites: [...sites, site] });
   return null;

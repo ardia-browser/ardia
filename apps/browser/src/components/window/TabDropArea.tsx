@@ -7,7 +7,7 @@ import { installDroppedCrx } from "../../state/extensions/crxDrop";
 import type { TabPlacement } from "../../state/pins/placing";
 import { FileDropArea, type DroppedItem, type DropUpdate } from "../ui";
 
-export type DropPoint = [number, number];
+type DropPoint = [number, number];
 export type TabDropTarget = {
   windowId: string;
   enter(count: number, at: DropPoint, token: number): unknown;
@@ -18,7 +18,7 @@ export type TabDropTarget = {
 
 const MAX_DROPPED_TABS = 50;
 
-export function droppedUrls(items: DroppedItem[]): string[] {
+function droppedUrls(items: DroppedItem[]): string[] {
   const urls = items.flatMap((item) => {
     if (item.kind === "file") return /^file:\/\/\/[^/]/i.test(item.url) ? [item.url] : [];
     const raw = item.kind === "url" ? item.url.trim() : item.text.trim();

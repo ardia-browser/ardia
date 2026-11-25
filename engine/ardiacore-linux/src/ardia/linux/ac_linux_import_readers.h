@@ -20,6 +20,7 @@ inline constexpr int kProgressStep = 1000;
 inline constexpr int64_t kStaleScratchSeconds = 60 * 60;
 
 enum class Family { kChromium, kFirefox };
+enum class Sidebar { kNone, kZen };
 
 struct BrowserDefinition {
   const char* id;
@@ -28,6 +29,9 @@ struct BrowserDefinition {
   bool under_config;
   const char* path;
   bool root_is_profile;
+  bool xdg_under_config;
+  const char* xdg_path;
+  Sidebar sidebar;
 };
 
 const BrowserDefinition* FindBrowser(std::string_view id);
@@ -72,6 +76,7 @@ struct ImportOptions {
   std::optional<SecretBytes> chromium_key;
   std::optional<SecretBytes> firefox_primary_password;
   std::optional<SecretBytes> firefox_card_key;
+  std::optional<std::vector<std::string>> space_ids;
   double now_ms = 0;
 };
 

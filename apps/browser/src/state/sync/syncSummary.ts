@@ -3,6 +3,8 @@ import { useBrowser } from "../browser/store";
 import { DEVICE_TABS, PROFILE, deviceTabs, profileRecord, profileScope, recordId, type DeviceTabs } from "./records";
 import { deviceKindOf, deviceRecords, isCurrentDevice, offersTabs } from "./devices";
 import { remoteProfileRecord, sharedDataChain } from "./profileLinks";
+import { beingRemoved, sharesItsData } from "./profileRemoval";
+import { deviceBeingRemoved } from "./deviceRemoval";
 import { APP_SCOPE, type RemoteProfile, type RemoteTabs, type SyncDoc, type SyncedDevice, type SyncUi } from "./syncDoc";
 
 export function summarize(doc: SyncDoc): Pick<SyncUi, "devices" | "remoteTabs" | "remoteProfiles"> {
@@ -13,7 +15,7 @@ export function summarize(doc: SyncDoc): Pick<SyncUi, "devices" | "remoteTabs" |
     for (const [device, at] of Object.entries(scope.seen)) lastSeen.set(device, Math.max(at, lastSeen.get(device) ?? 0));
   }
   const now = Date.now();
-  const records = new Map([...deviceRecords(app)].filter(([id, r]) => id === doc.deviceId || isCurrentDevice(r, lastSeen.get(id), now)));
+  const records = new Map([...deviceRecords(app)].filter(([id, r]) => id === doc.deviceId || (!deviceBeingRemoved(doc, id) && isCurrentDevice(r, lastSeen.get(id), now))));
   const names = new Map([...records].map(([id, r]) => [id, r.n]));
   const devices: SyncedDevice[] = [...records].map(([id, r]) => ({
     id,
@@ -22,6 +24,8 @@ export function summarize(doc: SyncDoc): Pick<SyncUi, "devices" | "remoteTabs" |
     receivesTabs: offersTabs(r, lastSeen.get(id), now),
     lastSeen: lastSeen.get(id) ?? null,
     current: id === doc.deviceId,
+    ...(typeof r.v === "string" && r.v ? { version: r.v } : {}),
+    ...(typeof r.os === "string" && r.os ? { os: r.os } : {}),
   }));
   devices.sort((a, b) => Number(b.current) - Number(a.current) || (b.lastSeen ?? 0) - (a.lastSeen ?? 0));
   const remoteTabs: Record<string, RemoteTabs[]> = {};
@@ -43,7 +47,7 @@ export function summarize(doc: SyncDoc): Pick<SyncUi, "devices" | "remoteTabs" |
   }
   const linked = new Set(Object.values(doc.profiles).map((l) => l.syncId));
   const remoteProfiles = [...visible(app, PROFILE)]
-    .filter(([k, v]) => !doc.joining && !linked.has(recordId(PROFILE, k)) && profileRecord(v))
+    .filter(([k, v]) => !doc.joining && !linked.has(recordId(PROFILE, k)) && !beingRemoved(doc, recordId(PROFILE, k)) && profileRecord(v))
     .map(([k, v]): RemoteProfile => {
       const syncId = recordId(PROFILE, k);
       const record = profileRecord(v)!;
@@ -56,6 +60,7 @@ export function summarize(doc: SyncDoc): Pick<SyncUi, "devices" | "remoteTabs" |
         icon: record.i,
         ...(ownerName !== undefined ? { sharesWith: { name: ownerName, added: !!adds[1] } } : {}),
         ...(waitingFor ? { waiting: true as const } : {}),
+        ...(sharesItsData(doc, syncId) ? { sharedByOthers: true as const } : {}),
       };
     });
   return { devices, remoteTabs, remoteProfiles };

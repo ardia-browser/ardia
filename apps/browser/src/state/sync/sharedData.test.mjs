@@ -1,3 +1,4 @@
+import { asSecret } from "@ardia/core";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -93,7 +94,7 @@ test("a profile that shares data on one Mac shares the same profile's data on th
   await b.with(async () => {
     S().createProfile({ name: "Home" });
     engineB.startSync();
-    assert.ok("ok" in (await engineB.enterRecoveryPhrase("/sync", "words")));
+    assert.ok("ok" in (await engineB.enterRecoveryPhrase("/sync", asSecret("syncPhrase", "words"))));
     await engineB.syncNow();
     await engineB.syncNow();
 
@@ -133,7 +134,7 @@ test("adding a profile whose owner isn't on this Mac adds the owner too, sharing
 
   await c.with(async () => {
     engineC.startSync();
-    assert.ok("ok" in (await engineC.enterRecoveryPhrase("/sync", "words")));
+    assert.ok("ok" in (await engineC.enterRecoveryPhrase("/sync", asSecret("syncPhrase", "words"))));
     await engineC.syncNow();
     await engineC.syncNow();
     const homework = engineC.useSync.getState().remoteProfiles.find((p) => p.name === "Homework");
@@ -174,7 +175,7 @@ async function join(mac, engine, before = () => {}) {
   await mac.with(async () => {
     before();
     engine.startSync();
-    assert.ok("ok" in (await engine.enterRecoveryPhrase("/sync", "words")));
+    assert.ok("ok" in (await engine.enterRecoveryPhrase("/sync", asSecret("syncPhrase", "words"))));
     await engine.syncNow();
     await engine.syncNow();
   });
@@ -702,4 +703,75 @@ test("a Mac that joined while the other Mac's files couldn't be read for over a 
     Date.now = realNow;
     unreadable.clear();
   }
+});
+
+test("share: a Mac offline past the tombstone lifetime after another Mac removed its sharing profile brings the link and both profiles back", async () => {
+  const { Clock, emptyScope, syncScope, compact } = await import("@ardia/sync");
+  const { appAdapters } = await import("./scopeAdapters.ts");
+  const { emptyDoc } = await import("./syncDoc.ts");
+  const DAY = 86_400_000;
+  const files = new Map();
+  let wall = 1_900_000_000_000;
+  const transport = {
+    write: async (scope, payload) => {
+      const id = `c${files.size + 1}-${wall}`;
+      files.set(id, { scope, payload });
+      return id;
+    },
+    read: async (scope, known) => {
+      const here = [...files].filter(([, f]) => f.scope === scope);
+      return { files: here.filter(([id]) => !known.includes(id)).map(([id, f]) => ({ id, payload: f.payload })), pending: [], damaged: [], present: here.map(([id]) => id) };
+    },
+    remove: async (_scope, ids) => ids.forEach((id) => files.delete(id)),
+  };
+  const macOf = (device, profiles) => {
+    S().hydrate({});
+    const ids = {};
+    if (profiles) {
+      ids.owner = S().createProfile({ name: "Home" });
+      ids.work = S().createProfile({ name: "Work", shareWith: ids.owner });
+    }
+    const doc = { ...emptyDoc(), deviceId: device, enabled: true, profiles: profiles ? { [ids.owner]: { syncId: "sHome", enabled: true }, [ids.work]: { syncId: "sWork", enabled: true } } : {} };
+    doc.scopes = { app: { ...emptyScope(), joined: true } };
+    return { device, doc, ids, browser: S(), clock: new Clock(device, null, () => ++wall) };
+  };
+  const run = async (m, times = 2) => {
+    for (let i = 0; i < times; i++) {
+      useBrowser.setState(m.browser, true);
+      await syncScope({ scope: "app", state: m.doc.scopes.app, transport, adapters: appAdapters(m.doc, false), clock: m.clock, device: m.device, now: () => wall });
+      m.browser = S();
+    }
+  };
+  const liveIn = (m, key) => m.doc.scopes.app.records[key]?.v != null;
+  const a = macOf("A", true);
+  const c = macOf("C", true);
+  await run(a);
+  await run(c);
+  await run(a);
+  c.doc.profiles[c.ids.owner] = { ...c.doc.profiles[c.ids.owner], enabled: false };
+  await run(c);
+  assert.ok(liveIn(c, "share:sWork") && liveIn(c, "prof:sWork") && liveIn(c, "prof:sHome"), "both profiles and the link are in sync");
+
+  useBrowser.setState(a.browser, true);
+  S().deleteProfile(a.ids.work);
+  S().deleteProfile(a.ids.owner);
+  a.browser = S();
+  a.doc.profiles = {};
+  a.doc.removing = ["sWork", "sHome"];
+  await run(a);
+  assert.ok(!liveIn(a, "share:sWork") && !liveIn(a, "prof:sWork") && !liveIn(a, "prof:sHome"), "A removed both");
+
+  wall += 46 * DAY;
+  await run(a);
+  await compact(a.doc.scopes.app, transport, "app", "A", wall, {}, true);
+  wall += 3 * DAY;
+  await compact(a.doc.scopes.app, transport, "app", "A", wall, {}, true);
+  assert.ok(!("share:sWork" in a.doc.scopes.app.records), "the removal's tombstone is gone from A's snapshot");
+
+  await run(c, 3);
+  const n = macOf("N", false);
+  await run(n);
+  assert.ok(liveIn(n, "share:sWork"), "C restores the link a Mac joining now reads");
+  assert.ok(liveIn(n, "prof:sWork"), "and the sharing profile");
+  assert.ok(liveIn(n, "prof:sHome"), "and its owner's details");
 });

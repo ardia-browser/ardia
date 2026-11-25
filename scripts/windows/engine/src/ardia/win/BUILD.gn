@@ -1,11 +1,44 @@
 assert(is_win)
 
+declare_args() {
+  ardia_linux_compile_probe = false
+}
+
+if (ardia_linux_compile_probe) {
+  group("linux_compile_probe") {
+    deps = [ "//ardia/linux:compile_probe" ]
+  }
+}
+
+action("webui_bootstrap") {
+  script = "//ardia/linux/generate_bootstrap.py"
+  sources = [ "//ardia/linux/bootstrap.js" ]
+  outputs = [ "$root_gen_dir/ardia/linux/host_bootstrap.h" ]
+  args = [
+    "--input",
+    rebase_path(sources[0], root_build_dir),
+    "--output",
+    rebase_path(outputs[0], root_build_dir),
+  ]
+}
+
 source_set("win") {
   sources = [
+    "//ardia/linux/ac_linux_document_reducer.cc",
+    "//ardia/linux/ac_linux_document_reducer.h",
+    "//ardia/linux/ac_linux_document_schema.cc",
+    "//ardia/linux/ac_linux_document_service.cc",
+    "//ardia/linux/ac_linux_document_service.h",
+    "//ardia/linux/ac_linux_documents.cc",
+    "//ardia/linux/ac_linux_documents.h",
+    "//ardia/linux/ac_linux_session.cc",
+    "//ardia/linux/ac_linux_session.h",
     "ac_calls.cc",
     "ac_calls.h",
     "api.cc",
     "api.h",
+    "autoplay.cc",
+    "autoplay.h",
     "context_menu.cc",
     "context_menu.h",
     "external_apps.cc",
@@ -18,16 +51,23 @@ source_set("win") {
     "host_visibility.cc",
     "kept_pages.cc",
     "kept_pages.h",
+    "launch_guard.cc",
+    "launch_guard.h",
     "main.cc",
     "main.h",
     "page_links.cc",
     "page_links.h",
+    "page_links_internal.h",
+    "page_links_peek.cc",
+    "page_links_session.cc",
     "page_links_script.h",
     "private_sessions.cc",
     "private_sessions.h",
     "profiles.cc",
     "profiles.h",
     "public/EngineApi.h",
+    "renderer_efficiency.cc",
+    "renderer_efficiency.h",
     "tab_calls.cc",
     "tab_calls.h",
     "tab_events.cc",
@@ -36,10 +76,55 @@ source_set("win") {
     "tab_state.h",
     "test_gate.cc",
     "test_gate.h",
+    "webui/desktop_platform_win.cc",
+    "webui/desktop_platform_win.h",
+    "webui/webui_bridge.cc",
+    "webui/webui_bridge.h",
+    "webui/webui_caption_script.h",
+    "webui/webui_documents.cc",
+    "webui/webui_documents.h",
+    "webui/webui_file_picker.cc",
+    "webui/webui_file_picker.h",
+    "webui/webui_frame.cc",
+    "webui/webui_frame.h",
+    "webui/webui_host_calls.cc",
+    "webui/webui_host_internal.h",
+    "webui/webui_host_tabs.cc",
+    "webui/webui_host_view.cc",
+    "webui/webui_host_view.h",
+    "webui/webui_mode.cc",
+    "webui/webui_mode.h",
+    "webui/webui_policy.h",
+    "webui/webui_shell.cc",
+    "webui/webui_shell.h",
+    "webui/webui_storage.cc",
+    "webui/webui_storage.h",
+    "webui/webui_telemetry.cc",
+    "webui/webui_telemetry.h",
+    "webui/webui_update_policy.h",
+    "webui/webui_updates.cc",
+    "webui/webui_updates.h",
+    "webui/webui_window_policy.h",
+    "webui/webui_windows.cc",
+    "webui/webui_windows.h",
+  ]
+  sources += get_target_outputs(":webui_bootstrap")
+
+  libs = [
+    "bcrypt.lib",
+    "dwmapi.lib",
   ]
 
   deps = [
     ":launch_switches",
+    ":webui_bootstrap",
+    "//ardia/desktop",
+    "//third_party/icu",
+    "//components/input",
+    "//services/network/public/cpp",
+    "//services/network/public/mojom",
+    "//ui/display",
+    "//ui/views/controls/webview",
     "//base",
     "//chrome/app:command_ids",
     "//chrome/browser",
@@ -49,6 +134,7 @@ source_set("win") {
     "//chrome/browser/ui:recently_audible_helper",
     "//chrome/browser/profiles:profile",
     "//chrome/common",
+    "//chrome/chrome_elf:chrome_elf_main_include",
     "//chrome/install_static:install_static_util",
     "//components/blocked_content",
     "//components/content_settings/core/browser",
@@ -56,6 +142,7 @@ source_set("win") {
     "//components/favicon/core",
     "//components/find_in_page",
     "//components/keep_alive_registry",
+    "//components/performance_manager",
     "//components/policy/core/common",
     "//components/prefs",
     "//components/sessions",
@@ -73,6 +160,8 @@ source_set("win") {
     "//third_party/blink/public/common",
     "//ui/aura",
     "//ui/base",
+    "//ui/base/clipboard",
+    "//ui/shell_dialogs",
     "//ui/events",
     "//ui/gfx",
     "//ui/views",

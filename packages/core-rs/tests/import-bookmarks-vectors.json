@@ -1,0 +1,2101 @@
+{
+  "sources": {
+    "rust": "packages/core-rs/crates/ardia-import-core, the answer under expect",
+    "swift": "run: packages/import/ios/Core/ChromiumBookmarks.swift (ChromiumBookmarks.load, which calls ardia_import_chromium_bookmarks in libardia_apple and maps its tooLarge to the app's unreadable) on macOS 27.2, by tests/import-bookmarks/test_import_bookmarks.py",
+    "linux": "read from engine/ardiacore-linux/src/ardia/linux/ac_linux_import_readers.cc (ReadChromiumBookmarks, base::JSONReader with JSON_PARSE_RFC), not run"
+  },
+  "inputs": {
+    "json": "the value, serialized compactly as UTF-8",
+    "text": "the string as UTF-8",
+    "hex": "the bytes",
+    "bom": "true or a count of EF BB BF prefixes",
+    "padTo": "spaces appended until the file has this many bytes",
+    "nestedFolders": "bookmark_bar holds link L0 and folder F1; each Fi holds link Li and, below N, folder Fi+1",
+    "links": "bookmark_bar holds this many links"
+  },
+  "outcomes": {
+    "ok": "the BookmarkNode tree, compared with numbers as doubles",
+    "error": "the error code",
+    "shape": "links, folders below the top Bookmarks folder, and the deepest folder level with the roots at 1"
+  },
+  "limits": {
+    "maxInputBytes": 67108864,
+    "maxFolderDepth": 64,
+    "maxNodes": 250000,
+    "maxJsonDepth": 200
+  },
+  "cases": [
+    {
+      "name": "chrome profile with all three roots, nested folders, dates and guids",
+      "files": {
+        "Bookmarks": {
+          "json": {
+            "checksum": "0123456789abcdef",
+            "roots": {
+              "bookmark_bar": {
+                "type": "folder",
+                "name": "Bookmarks bar",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "Ardia",
+                    "url": "https://ardia.dev/",
+                    "guid": "0bc5d13f-2cba-5d74-951f-3f233fe6c908",
+                    "id": "5",
+                    "meta_info": {
+                      "last_visited_desktop": "13300000000000001"
+                    },
+                    "date_added": "13300000000000000"
+                  },
+                  {
+                    "type": "folder",
+                    "name": "Work",
+                    "children": [
+                      {
+                        "type": "url",
+                        "name": "Docs",
+                        "url": "https://docs.example/a?b=c#d",
+                        "date_added": "13300000000001000"
+                      },
+                      {
+                        "type": "folder",
+                        "name": "Empty",
+                        "children": [],
+                        "date_added": "13300000000000000"
+                      }
+                    ],
+                    "guid": "6c4a4a2a-1a8c-4d66-9d4b-1b9b2d6c1a10",
+                    "date_modified": "13300000000003000",
+                    "date_added": "13300000000002000"
+                  }
+                ],
+                "guid": "0bc5d13f-2cba-5d74-951f-3f233fe6c908",
+                "id": "1",
+                "date_added": "13300000000000000"
+              },
+              "other": {
+                "type": "folder",
+                "name": "Other bookmarks",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "Other",
+                    "url": "http://other.example/"
+                  }
+                ],
+                "date_added": "0"
+              },
+              "synced": {
+                "type": "folder",
+                "name": "Mobile bookmarks",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "Phone",
+                    "url": "https://m.example/",
+                    "date_added": "13300000000005000"
+                  }
+                ]
+              }
+            },
+            "version": 1
+          }
+        }
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "folder",
+              "title": "Bookmarks bar",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "Ardia",
+                  "url": "https://ardia.dev/",
+                  "dateAdded": 1655526400000
+                },
+                {
+                  "type": "folder",
+                  "title": "Work",
+                  "children": [
+                    {
+                      "type": "url",
+                      "title": "Docs",
+                      "url": "https://docs.example/a?b=c#d",
+                      "dateAdded": 1655526400001
+                    },
+                    {
+                      "type": "folder",
+                      "title": "Empty",
+                      "children": [],
+                      "dateAdded": 1655526400000
+                    }
+                  ],
+                  "dateAdded": 1655526400002
+                }
+              ],
+              "dateAdded": 1655526400000,
+              "role": "toolbar"
+            },
+            {
+              "type": "folder",
+              "title": "Other bookmarks",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "Other",
+                  "url": "http://other.example/"
+                }
+              ],
+              "role": "other"
+            },
+            {
+              "type": "folder",
+              "title": "Mobile bookmarks",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "Phone",
+                  "url": "https://m.example/",
+                  "dateAdded": 1655526400005
+                }
+              ],
+              "role": "mobile"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "empty and unnamed roots: empty roots are left out, an empty name takes the default title",
+      "files": {
+        "Bookmarks": {
+          "json": {
+            "checksum": "0123456789abcdef",
+            "roots": {
+              "bookmark_bar": {
+                "type": "folder",
+                "name": "",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "A",
+                    "url": "https://a.example/"
+                  }
+                ]
+              },
+              "other": {
+                "type": "folder",
+                "name": "Other bookmarks",
+                "children": []
+              },
+              "synced": {
+                "type": "folder",
+                "name": "Mobile",
+                "children": [
+                  {
+                    "type": "folder",
+                    "name": "Only folders",
+                    "children": []
+                  }
+                ]
+              }
+            },
+            "version": 1
+          }
+        }
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "folder",
+              "title": "Bookmarks Bar",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "A",
+                  "url": "https://a.example/"
+                }
+              ],
+              "role": "toolbar"
+            },
+            {
+              "type": "folder",
+              "title": "Mobile",
+              "children": [
+                {
+                  "type": "folder",
+                  "title": "Only folders",
+                  "children": []
+                }
+              ],
+              "role": "mobile"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "roots without a name and other browsers' root names",
+      "files": {
+        "Bookmarks": {
+          "json": {
+            "roots": {
+              "bookmark_bar": {
+                "type": "folder",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "E",
+                    "url": "https://e.example/"
+                  }
+                ]
+              },
+              "other": {
+                "type": "folder",
+                "name": "Other favorites",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "O",
+                    "url": "https://o.example/"
+                  }
+                ]
+              },
+              "synced": {
+                "type": "folder",
+                "name": 7,
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "M",
+                    "url": "https://m.example/"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "folder",
+              "title": "Bookmarks Bar",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "E",
+                  "url": "https://e.example/"
+                }
+              ],
+              "role": "toolbar"
+            },
+            {
+              "type": "folder",
+              "title": "Other favorites",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "O",
+                  "url": "https://o.example/"
+                }
+              ],
+              "role": "other"
+            },
+            {
+              "type": "folder",
+              "title": "Mobile Bookmarks",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "M",
+                  "url": "https://m.example/"
+                }
+              ],
+              "role": "mobile"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "unknown root keys and roots that are not folders are ignored",
+      "files": {
+        "Bookmarks": {
+          "json": {
+            "roots": {
+              "trash": {
+                "type": "folder",
+                "name": "Trash",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "T",
+                    "url": "https://t.example/"
+                  }
+                ]
+              },
+              "bookmark_bar": {
+                "type": "url",
+                "name": "Bar",
+                "url": "https://bar.example/"
+              },
+              "other": {
+                "name": "No type",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "X",
+                    "url": "https://x.example/"
+                  }
+                ]
+              },
+              "synced": "mobile"
+            }
+          }
+        }
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": []
+        }
+      }
+    },
+    {
+      "name": "every non-empty url string is kept, whatever its scheme",
+      "files": {
+        "Bookmarks": {
+          "json": {
+            "checksum": "0123456789abcdef",
+            "roots": {
+              "bookmark_bar": {
+                "type": "folder",
+                "name": "",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "Bookmarklet",
+                    "url": "javascript:alert(document.title)"
+                  },
+                  {
+                    "type": "url",
+                    "name": "File",
+                    "url": "file:///etc/passwd"
+                  },
+                  {
+                    "type": "url",
+                    "name": "Data",
+                    "url": "data:text/html,<script>alert(1)</script>"
+                  },
+                  {
+                    "type": "url",
+                    "name": "Chrome",
+                    "url": "chrome://settings/"
+                  },
+                  {
+                    "type": "url",
+                    "name": "Blank",
+                    "url": "about:blank"
+                  },
+                  {
+                    "type": "url",
+                    "name": "Relative",
+                    "url": "not a url"
+                  },
+                  {
+                    "type": "url",
+                    "name": "Spaces",
+                    "url": "  https://padded.example/  "
+                  }
+                ]
+              }
+            },
+            "version": 1
+          }
+        }
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "folder",
+              "title": "Bookmarks Bar",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "Bookmarklet",
+                  "url": "javascript:alert(document.title)"
+                },
+                {
+                  "type": "url",
+                  "title": "File",
+                  "url": "file:///etc/passwd"
+                },
+                {
+                  "type": "url",
+                  "title": "Data",
+                  "url": "data:text/html,<script>alert(1)</script>"
+                },
+                {
+                  "type": "url",
+                  "title": "Chrome",
+                  "url": "chrome://settings/"
+                },
+                {
+                  "type": "url",
+                  "title": "Blank",
+                  "url": "about:blank"
+                },
+                {
+                  "type": "url",
+                  "title": "Relative",
+                  "url": "not a url"
+                },
+                {
+                  "type": "url",
+                  "title": "Spaces",
+                  "url": "  https://padded.example/  "
+                }
+              ],
+              "role": "toolbar"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "urls that are empty, missing or not strings drop their bookmark",
+      "files": {
+        "Bookmarks": {
+          "json": {
+            "checksum": "0123456789abcdef",
+            "roots": {
+              "bookmark_bar": {
+                "type": "folder",
+                "name": "",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "Empty",
+                    "url": ""
+                  },
+                  {
+                    "type": "url",
+                    "name": "Missing"
+                  },
+                  {
+                    "type": "url",
+                    "name": "Number",
+                    "url": 5
+                  },
+                  {
+                    "type": "url",
+                    "name": "Null",
+                    "url": null
+                  },
+                  {
+                    "type": "url",
+                    "name": "Kept",
+                    "url": "https://kept.example/"
+                  }
+                ]
+              }
+            },
+            "version": 1
+          }
+        }
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "folder",
+              "title": "Bookmarks Bar",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "Kept",
+                  "url": "https://kept.example/"
+                }
+              ],
+              "role": "toolbar"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "missing and non-string titles become empty",
+      "files": {
+        "Bookmarks": {
+          "json": {
+            "checksum": "0123456789abcdef",
+            "roots": {
+              "bookmark_bar": {
+                "type": "folder",
+                "name": "",
+                "children": [
+                  {
+                    "type": "url",
+                    "url": "https://missing.example/"
+                  },
+                  {
+                    "type": "url",
+                    "name": null,
+                    "url": "https://null.example/"
+                  },
+                  {
+                    "type": "url",
+                    "name": 42,
+                    "url": "https://number.example/"
+                  },
+                  {
+                    "type": "folder",
+                    "name": [
+                      "x"
+                    ],
+                    "children": [
+                      {
+                        "type": "url",
+                        "name": "",
+                        "url": "https://empty.example/"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            "version": 1
+          }
+        }
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "folder",
+              "title": "Bookmarks Bar",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "",
+                  "url": "https://missing.example/"
+                },
+                {
+                  "type": "url",
+                  "title": "",
+                  "url": "https://null.example/"
+                },
+                {
+                  "type": "url",
+                  "title": "",
+                  "url": "https://number.example/"
+                },
+                {
+                  "type": "folder",
+                  "title": "",
+                  "children": [
+                    {
+                      "type": "url",
+                      "title": "",
+                      "url": "https://empty.example/"
+                    }
+                  ]
+                }
+              ],
+              "role": "toolbar"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "unknown node types are dropped with their subtree",
+      "files": {
+        "Bookmarks": {
+          "json": {
+            "checksum": "0123456789abcdef",
+            "roots": {
+              "bookmark_bar": {
+                "type": "folder",
+                "name": "",
+                "children": [
+                  {
+                    "type": "URL",
+                    "name": "Upper",
+                    "url": "https://upper.example/"
+                  },
+                  {
+                    "type": "separator",
+                    "name": "Separator"
+                  },
+                  {
+                    "name": "No type",
+                    "url": "https://none.example/"
+                  },
+                  {
+                    "type": "Folder",
+                    "name": "Upper folder",
+                    "children": [
+                      {
+                        "type": "url",
+                        "name": "Inner",
+                        "url": "https://inner.example/"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "url",
+                    "name": "Kept",
+                    "url": "https://kept.example/"
+                  }
+                ]
+              }
+            },
+            "version": 1
+          }
+        }
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "folder",
+              "title": "Bookmarks Bar",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "Kept",
+                  "url": "https://kept.example/"
+                }
+              ],
+              "role": "toolbar"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "children that are not objects are skipped one by one",
+      "files": {
+        "Bookmarks": {
+          "json": {
+            "checksum": "0123456789abcdef",
+            "roots": {
+              "bookmark_bar": {
+                "type": "folder",
+                "name": "",
+                "children": [
+                  3,
+                  null,
+                  "x",
+                  [
+                    {
+                      "type": "url",
+                      "name": "Nested",
+                      "url": "https://nested.example/"
+                    }
+                  ],
+                  {
+                    "type": "url",
+                    "name": "Kept",
+                    "url": "https://kept.example/"
+                  }
+                ]
+              },
+              "other": {
+                "type": "folder",
+                "name": "",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "Other",
+                    "url": "https://other.example/"
+                  }
+                ]
+              }
+            },
+            "version": 1
+          }
+        }
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "folder",
+              "title": "Bookmarks Bar",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "Kept",
+                  "url": "https://kept.example/"
+                }
+              ],
+              "role": "toolbar"
+            },
+            {
+              "type": "folder",
+              "title": "Other Bookmarks",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "Other",
+                  "url": "https://other.example/"
+                }
+              ],
+              "role": "other"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a folder whose children is not an array is an empty folder",
+      "files": {
+        "Bookmarks": {
+          "json": {
+            "checksum": "0123456789abcdef",
+            "roots": {
+              "bookmark_bar": {
+                "type": "folder",
+                "name": "",
+                "children": [
+                  {
+                    "type": "folder",
+                    "name": "Object",
+                    "children": {
+                      "0": {
+                        "type": "url",
+                        "name": "Hidden",
+                        "url": "https://hidden.example/"
+                      }
+                    }
+                  },
+                  {
+                    "type": "folder",
+                    "name": "Missing"
+                  },
+                  {
+                    "type": "folder",
+                    "name": "Null",
+                    "children": null
+                  }
+                ]
+              }
+            },
+            "version": 1
+          }
+        }
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "folder",
+              "title": "Bookmarks Bar",
+              "children": [
+                {
+                  "type": "folder",
+                  "title": "Object",
+                  "children": []
+                },
+                {
+                  "type": "folder",
+                  "title": "Missing",
+                  "children": []
+                },
+                {
+                  "type": "folder",
+                  "title": "Null",
+                  "children": []
+                }
+              ],
+              "role": "toolbar"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "duplicates are kept in order",
+      "files": {
+        "Bookmarks": {
+          "json": {
+            "checksum": "0123456789abcdef",
+            "roots": {
+              "bookmark_bar": {
+                "type": "folder",
+                "name": "",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "Same",
+                    "url": "https://same.example/"
+                  },
+                  {
+                    "type": "url",
+                    "name": "Same",
+                    "url": "https://same.example/"
+                  },
+                  {
+                    "type": "folder",
+                    "name": "Same",
+                    "children": []
+                  },
+                  {
+                    "type": "folder",
+                    "name": "Same",
+                    "children": []
+                  }
+                ]
+              }
+            },
+            "version": 1
+          }
+        }
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "folder",
+              "title": "Bookmarks Bar",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "Same",
+                  "url": "https://same.example/"
+                },
+                {
+                  "type": "url",
+                  "title": "Same",
+                  "url": "https://same.example/"
+                },
+                {
+                  "type": "folder",
+                  "title": "Same",
+                  "children": []
+                },
+                {
+                  "type": "folder",
+                  "title": "Same",
+                  "children": []
+                }
+              ],
+              "role": "toolbar"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "unicode titles and urls survive byte for byte",
+      "files": {
+        "Bookmarks": {
+          "text": "{\"roots\":{\"bookmark_bar\":{\"type\":\"folder\",\"children\":[{\"type\":\"url\",\"name\":\"\u65e5\u672c\u8a9e \\u00e9t\\u00e9 \\ud83d\\ude00 \ud83d\ude80\",\"url\":\"https://\u4f8b\u3048.jp/\u30d1\u30b9?q=\u00fc\"},{\"type\":\"url\",\"name\":\"\u05e2\u05d1\u05e8\u05d9\u05ea \u202e right-to-left\",\"url\":\"https://xn--fsq.example/\"},{\"type\":\"url\",\"name\":\"nul\\u0000inside \\\"quoted\\\" \\\\ \\/ \\b\\f\\n\\r\\t\",\"url\":\"https://nul.example/\"},{\"type\":\"url\",\"name\":\"\u00a0\u2028\u2029\",\"url\":\"https://space.example/\"}]}}}"
+        }
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "folder",
+              "title": "Bookmarks Bar",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "\u65e5\u672c\u8a9e \u00e9t\u00e9 \ud83d\ude00 \ud83d\ude80",
+                  "url": "https://\u4f8b\u3048.jp/\u30d1\u30b9?q=\u00fc"
+                },
+                {
+                  "type": "url",
+                  "title": "\u05e2\u05d1\u05e8\u05d9\u05ea \u202e right-to-left",
+                  "url": "https://xn--fsq.example/"
+                },
+                {
+                  "type": "url",
+                  "title": "nul\u0000inside \"quoted\" \\ / \b\f\n\r\t",
+                  "url": "https://nul.example/"
+                },
+                {
+                  "type": "url",
+                  "title": "\u00a0\u2028\u2029",
+                  "url": "https://space.example/"
+                }
+              ],
+              "role": "toolbar"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "date_added: int64 microseconds since 1601 as a string, kept only after 1970",
+      "files": {
+        "Bookmarks": {
+          "json": {
+            "checksum": "0123456789abcdef",
+            "roots": {
+              "bookmark_bar": {
+                "type": "folder",
+                "name": "",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "plain",
+                    "url": "https://0.example/",
+                    "date_added": "13300000000000000"
+                  },
+                  {
+                    "type": "url",
+                    "name": "plus sign",
+                    "url": "https://1.example/",
+                    "date_added": "+13300000000000000"
+                  },
+                  {
+                    "type": "url",
+                    "name": "leading space",
+                    "url": "https://2.example/",
+                    "date_added": " 13300000000000000"
+                  },
+                  {
+                    "type": "url",
+                    "name": "before 1970",
+                    "url": "https://3.example/",
+                    "date_added": "5"
+                  },
+                  {
+                    "type": "url",
+                    "name": "the unix epoch",
+                    "url": "https://4.example/",
+                    "date_added": "11644473600000000"
+                  },
+                  {
+                    "type": "url",
+                    "name": "negative",
+                    "url": "https://5.example/",
+                    "date_added": "-5"
+                  },
+                  {
+                    "type": "url",
+                    "name": "exponent",
+                    "url": "https://6.example/",
+                    "date_added": "1e16"
+                  },
+                  {
+                    "type": "url",
+                    "name": "hex",
+                    "url": "https://7.example/",
+                    "date_added": "0x2F40BE4B2A2C000"
+                  },
+                  {
+                    "type": "url",
+                    "name": "empty",
+                    "url": "https://8.example/",
+                    "date_added": ""
+                  },
+                  {
+                    "type": "url",
+                    "name": "number, not string",
+                    "url": "https://9.example/",
+                    "date_added": 13300000000000000
+                  },
+                  {
+                    "type": "url",
+                    "name": "past int64",
+                    "url": "https://10.example/",
+                    "date_added": "99999999999999999999"
+                  },
+                  {
+                    "type": "url",
+                    "name": "odd past 2^53",
+                    "url": "https://11.example/",
+                    "date_added": "13300000000123457"
+                  },
+                  {
+                    "type": "url",
+                    "name": "fraction",
+                    "url": "https://12.example/",
+                    "date_added": "13300000000000000.5"
+                  }
+                ]
+              }
+            },
+            "version": 1
+          }
+        }
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "folder",
+              "title": "Bookmarks Bar",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "plain",
+                  "url": "https://0.example/",
+                  "dateAdded": 1655526400000
+                },
+                {
+                  "type": "url",
+                  "title": "plus sign",
+                  "url": "https://1.example/",
+                  "dateAdded": 1655526400000
+                },
+                {
+                  "type": "url",
+                  "title": "leading space",
+                  "url": "https://2.example/"
+                },
+                {
+                  "type": "url",
+                  "title": "before 1970",
+                  "url": "https://3.example/"
+                },
+                {
+                  "type": "url",
+                  "title": "the unix epoch",
+                  "url": "https://4.example/"
+                },
+                {
+                  "type": "url",
+                  "title": "negative",
+                  "url": "https://5.example/"
+                },
+                {
+                  "type": "url",
+                  "title": "exponent",
+                  "url": "https://6.example/"
+                },
+                {
+                  "type": "url",
+                  "title": "hex",
+                  "url": "https://7.example/"
+                },
+                {
+                  "type": "url",
+                  "title": "empty",
+                  "url": "https://8.example/"
+                },
+                {
+                  "type": "url",
+                  "title": "number, not string",
+                  "url": "https://9.example/"
+                },
+                {
+                  "type": "url",
+                  "title": "past int64",
+                  "url": "https://10.example/"
+                },
+                {
+                  "type": "url",
+                  "title": "odd past 2^53",
+                  "url": "https://11.example/",
+                  "dateAdded": 1655526400123.457
+                },
+                {
+                  "type": "url",
+                  "title": "fraction",
+                  "url": "https://12.example/"
+                }
+              ],
+              "role": "toolbar"
+            }
+          ]
+        }
+      },
+      "platforms": {
+        "linux": {
+          "ok": {
+            "type": "folder",
+            "title": "Bookmarks",
+            "children": [
+              {
+                "type": "folder",
+                "title": "Bookmarks Bar",
+                "children": [
+                  {
+                    "type": "url",
+                    "title": "plain",
+                    "url": "https://0.example/",
+                    "dateAdded": 1655526400000
+                  },
+                  {
+                    "type": "url",
+                    "title": "plus sign",
+                    "url": "https://1.example/"
+                  },
+                  {
+                    "type": "url",
+                    "title": "leading space",
+                    "url": "https://2.example/",
+                    "dateAdded": 1655526400000
+                  },
+                  {
+                    "type": "url",
+                    "title": "before 1970",
+                    "url": "https://3.example/"
+                  },
+                  {
+                    "type": "url",
+                    "title": "the unix epoch",
+                    "url": "https://4.example/"
+                  },
+                  {
+                    "type": "url",
+                    "title": "negative",
+                    "url": "https://5.example/"
+                  },
+                  {
+                    "type": "url",
+                    "title": "exponent",
+                    "url": "https://6.example/"
+                  },
+                  {
+                    "type": "url",
+                    "title": "hex",
+                    "url": "https://7.example/"
+                  },
+                  {
+                    "type": "url",
+                    "title": "empty",
+                    "url": "https://8.example/"
+                  },
+                  {
+                    "type": "url",
+                    "title": "number, not string",
+                    "url": "https://9.example/"
+                  },
+                  {
+                    "type": "url",
+                    "title": "past int64",
+                    "url": "https://10.example/"
+                  },
+                  {
+                    "type": "url",
+                    "title": "odd past 2^53",
+                    "url": "https://11.example/",
+                    "dateAdded": 1655526400123.457
+                  },
+                  {
+                    "type": "url",
+                    "title": "fraction",
+                    "url": "https://12.example/"
+                  }
+                ],
+                "role": "toolbar"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "duplicate keys: the last one wins",
+      "files": {
+        "Bookmarks": {
+          "text": "{\"roots\":{\"bookmark_bar\":{\"type\":\"folder\",\"children\":[{\"type\":\"url\",\"name\":\"first\",\"name\":\"last\",\"url\":\"https://first.example/\",\"url\":\"https://last.example/\"}]}},\"roots\":{\"other\":{\"type\":\"folder\",\"children\":[{\"type\":\"url\",\"name\":\"second roots\",\"url\":\"https://second.example/\"}]}}}"
+        }
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "folder",
+              "title": "Other Bookmarks",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "second roots",
+                  "url": "https://second.example/"
+                }
+              ],
+              "role": "other"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "one leading UTF-8 byte order mark is skipped",
+      "files": {
+        "Bookmarks": {
+          "json": {
+            "checksum": "0123456789abcdef",
+            "roots": {
+              "other": {
+                "type": "folder",
+                "name": "",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "A",
+                    "url": "https://a.example/"
+                  }
+                ]
+              }
+            },
+            "version": 1
+          },
+          "bom": true
+        }
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "folder",
+              "title": "Other Bookmarks",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "A",
+                  "url": "https://a.example/"
+                }
+              ],
+              "role": "other"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a second byte order mark is unreadable",
+      "files": {
+        "Bookmarks": {
+          "json": {
+            "checksum": "0123456789abcdef",
+            "roots": {
+              "other": {
+                "type": "folder",
+                "name": "",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "A",
+                    "url": "https://a.example/"
+                  }
+                ]
+              }
+            },
+            "version": 1
+          },
+          "bom": 2
+        }
+      },
+      "expect": {
+        "error": "unreadable"
+      }
+    },
+    {
+      "name": "surrounding JSON whitespace is fine",
+      "files": {
+        "Bookmarks": {
+          "text": " \n\t\r{\"checksum\": \"0123456789abcdef\", \"roots\": {\"other\": {\"type\": \"folder\", \"name\": \"\", \"children\": [{\"type\": \"url\", \"name\": \"A\", \"url\": \"https://a.example/\"}]}}, \"version\": 1}\r\n "
+        }
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "folder",
+              "title": "Other Bookmarks",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "A",
+                  "url": "https://a.example/"
+                }
+              ],
+              "role": "other"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "invalid UTF-8 is unreadable",
+      "files": {
+        "Bookmarks": {
+          "hex": "7b22726f6f7473223a7b226f74686572223a7b2274797065223a22666f6c646572222c226368696c6472656e223a5b7b2274797065223a2275726c222c226e616d65223a22ff222c2275726c223a2268747470733a2f2f612e6578616d706c652f227d5d7d7d7d"
+        }
+      },
+      "expect": {
+        "error": "unreadable"
+      }
+    },
+    {
+      "name": "a lone surrogate escape is unreadable",
+      "files": {
+        "Bookmarks": {
+          "text": "{\"roots\":{\"other\":{\"type\":\"folder\",\"children\":[{\"type\":\"url\",\"name\":\"\\ud800\",\"url\":\"https://a.example/\"}]}}}"
+        }
+      },
+      "expect": {
+        "error": "unreadable"
+      }
+    },
+    {
+      "name": "a trailing comma is unreadable",
+      "files": {
+        "Bookmarks": {
+          "text": "{\"checksum\": \"0123456789abcdef\", \"roots\": {\"other\": {\"type\": \"folder\", \"name\": \"\", \"children\": [{\"type\": \"url\", \"name\": \"A\", \"url\": \"https://a.example/\"}]}}, \"version\": 1,}"
+        }
+      },
+      "expect": {
+        "error": "unreadable"
+      }
+    },
+    {
+      "name": "a comment is unreadable",
+      "files": {
+        "Bookmarks": {
+          "text": "{\"checksum\": \"0123456789abcdef\", \"roots\": {\"other\": {\"type\": \"folder\", \"name\": \"\", \"children\": [{\"type\": \"url\", \"name\": \"A\", \"url\": \"https://a.example/\"}]}}, \"version\": 1} // saved"
+        }
+      },
+      "expect": {
+        "error": "unreadable"
+      }
+    },
+    {
+      "name": "text after the document is unreadable",
+      "files": {
+        "Bookmarks": {
+          "text": "{\"checksum\": \"0123456789abcdef\", \"roots\": {\"other\": {\"type\": \"folder\", \"name\": \"\", \"children\": [{\"type\": \"url\", \"name\": \"A\", \"url\": \"https://a.example/\"}]}}, \"version\": 1}{}"
+        }
+      },
+      "expect": {
+        "error": "unreadable"
+      }
+    },
+    {
+      "name": "a truncated file is unreadable",
+      "files": {
+        "Bookmarks": {
+          "text": "{\"checksum\": \"0123456789abcdef\", \"roots\""
+        }
+      },
+      "expect": {
+        "error": "unreadable"
+      }
+    },
+    {
+      "name": "an empty file is unreadable",
+      "files": {
+        "Bookmarks": {
+          "text": ""
+        }
+      },
+      "expect": {
+        "error": "unreadable"
+      }
+    },
+    {
+      "name": "a top-level array is unreadable",
+      "files": {
+        "Bookmarks": {
+          "json": [
+            {
+              "checksum": "0123456789abcdef",
+              "roots": {
+                "other": {
+                  "type": "folder",
+                  "name": "",
+                  "children": [
+                    {
+                      "type": "url",
+                      "name": "A",
+                      "url": "https://a.example/"
+                    }
+                  ]
+                }
+              },
+              "version": 1
+            }
+          ]
+        }
+      },
+      "expect": {
+        "error": "unreadable"
+      }
+    },
+    {
+      "name": "roots that are not an object are unreadable",
+      "files": {
+        "Bookmarks": {
+          "json": {
+            "roots": [
+              {
+                "type": "folder",
+                "name": "",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "A",
+                    "url": "https://a.example/"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "error": "unreadable"
+      }
+    },
+    {
+      "name": "a file without roots is unreadable",
+      "files": {
+        "Bookmarks": {
+          "json": {
+            "version": 1
+          }
+        }
+      },
+      "expect": {
+        "error": "unreadable"
+      }
+    },
+    {
+      "name": "a number out of double range is unreadable",
+      "files": {
+        "Bookmarks": {
+          "text": "{\"checksum\": \"0123456789abcdef\", \"roots\": {\"other\": {\"type\": \"folder\", \"name\": \"\", \"children\": [{\"type\": \"url\", \"name\": \"A\", \"url\": \"https://a.example/\"}]}}, \"version\": 1,\"id\":1e400}"
+        }
+      },
+      "expect": {
+        "error": "unreadable"
+      }
+    },
+    {
+      "name": "known roots that are all missing give an empty tree",
+      "files": {
+        "Bookmarks": {
+          "json": {
+            "roots": {}
+          }
+        }
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": []
+        }
+      }
+    },
+    {
+      "name": "AccountBookmarks: children join the root with the same role, new roots go last",
+      "files": {
+        "Bookmarks": {
+          "json": {
+            "checksum": "0123456789abcdef",
+            "roots": {
+              "bookmark_bar": {
+                "type": "folder",
+                "name": "",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "Local",
+                    "url": "https://local.example/"
+                  }
+                ]
+              },
+              "other": {
+                "type": "folder",
+                "name": "",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "O",
+                    "url": "https://o.example/"
+                  }
+                ]
+              }
+            },
+            "version": 1
+          }
+        },
+        "AccountBookmarks": {
+          "json": {
+            "checksum": "0123456789abcdef",
+            "roots": {
+              "bookmark_bar": {
+                "type": "folder",
+                "name": "Account bar",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "Acct",
+                    "url": "https://account.example/"
+                  }
+                ],
+                "date_added": "13300000000000000"
+              },
+              "synced": {
+                "type": "folder",
+                "name": "",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "Phone",
+                    "url": "https://phone.example/"
+                  }
+                ]
+              }
+            },
+            "version": 1
+          }
+        }
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "folder",
+              "title": "Bookmarks Bar",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "Local",
+                  "url": "https://local.example/"
+                },
+                {
+                  "type": "url",
+                  "title": "Acct",
+                  "url": "https://account.example/"
+                }
+              ],
+              "role": "toolbar"
+            },
+            {
+              "type": "folder",
+              "title": "Other Bookmarks",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "O",
+                  "url": "https://o.example/"
+                }
+              ],
+              "role": "other"
+            },
+            {
+              "type": "folder",
+              "title": "Mobile Bookmarks",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "Phone",
+                  "url": "https://phone.example/"
+                }
+              ],
+              "role": "mobile"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "AccountBookmarks alone",
+      "files": {
+        "AccountBookmarks": {
+          "json": {
+            "checksum": "0123456789abcdef",
+            "roots": {
+              "bookmark_bar": {
+                "type": "folder",
+                "name": "Account bar",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "Acct",
+                    "url": "https://account.example/"
+                  }
+                ],
+                "date_added": "13300000000000000"
+              },
+              "synced": {
+                "type": "folder",
+                "name": "",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "Phone",
+                    "url": "https://phone.example/"
+                  }
+                ]
+              }
+            },
+            "version": 1
+          }
+        }
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "folder",
+              "title": "Account bar",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "Acct",
+                  "url": "https://account.example/"
+                }
+              ],
+              "dateAdded": 1655526400000,
+              "role": "toolbar"
+            },
+            {
+              "type": "folder",
+              "title": "Mobile Bookmarks",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "Phone",
+                  "url": "https://phone.example/"
+                }
+              ],
+              "role": "mobile"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "an unreadable AccountBookmarks is ignored",
+      "files": {
+        "Bookmarks": {
+          "json": {
+            "checksum": "0123456789abcdef",
+            "roots": {
+              "other": {
+                "type": "folder",
+                "name": "",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "A",
+                    "url": "https://a.example/"
+                  }
+                ]
+              }
+            },
+            "version": 1
+          }
+        },
+        "AccountBookmarks": {
+          "text": "{\"roots\":"
+        }
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "folder",
+              "title": "Other Bookmarks",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "A",
+                  "url": "https://a.example/"
+                }
+              ],
+              "role": "other"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "an unreadable AccountBookmarks alone gives an empty tree",
+      "files": {
+        "AccountBookmarks": {
+          "text": "nope"
+        }
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": []
+        }
+      }
+    },
+    {
+      "name": "an unreadable Bookmarks fails even when AccountBookmarks reads",
+      "files": {
+        "Bookmarks": {
+          "text": "{"
+        },
+        "AccountBookmarks": {
+          "json": {
+            "checksum": "0123456789abcdef",
+            "roots": {
+              "bookmark_bar": {
+                "type": "folder",
+                "name": "Account bar",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "Acct",
+                    "url": "https://account.example/"
+                  }
+                ],
+                "date_added": "13300000000000000"
+              },
+              "synced": {
+                "type": "folder",
+                "name": "",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "Phone",
+                    "url": "https://phone.example/"
+                  }
+                ]
+              }
+            },
+            "version": 1
+          }
+        }
+      },
+      "expect": {
+        "error": "unreadable"
+      }
+    },
+    {
+      "name": "no bookmark files",
+      "files": {},
+      "expect": {
+        "error": "notFound"
+      },
+      "platforms": {
+        "linux": {
+          "error": "empty"
+        }
+      }
+    },
+    {
+      "name": "folders nested past 64 levels keep their first 64 levels",
+      "files": {
+        "Bookmarks": {
+          "nestedFolders": 70
+        }
+      },
+      "expect": {
+        "shape": {
+          "links": 64,
+          "folders": 65,
+          "depth": 65
+        }
+      }
+    },
+    {
+      "name": "JSON nested past 200 containers is unreadable",
+      "files": {
+        "Bookmarks": {
+          "nestedFolders": 120
+        }
+      },
+      "expect": {
+        "error": "unreadable"
+      }
+    },
+    {
+      "name": "at most 250,000 nodes are read, counting each folder before its children",
+      "files": {
+        "Bookmarks": {
+          "links": 250001
+        }
+      },
+      "expect": {
+        "shape": {
+          "links": 249999,
+          "folders": 1,
+          "depth": 1
+        }
+      },
+      "platforms": {
+        "linux": {
+          "shape": {
+            "links": 250000,
+            "folders": 1,
+            "depth": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "the node budget is shared with AccountBookmarks",
+      "files": {
+        "Bookmarks": {
+          "links": 250000
+        },
+        "AccountBookmarks": {
+          "json": {
+            "checksum": "0123456789abcdef",
+            "roots": {
+              "other": {
+                "type": "folder",
+                "name": "",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "A",
+                    "url": "https://a.example/"
+                  }
+                ]
+              }
+            },
+            "version": 1
+          }
+        }
+      },
+      "expect": {
+        "shape": {
+          "links": 249999,
+          "folders": 1,
+          "depth": 1
+        }
+      },
+      "platforms": {
+        "linux": {
+          "shape": {
+            "links": 250000,
+            "folders": 1,
+            "depth": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "a Bookmarks file of exactly 64 MiB is read",
+      "files": {
+        "Bookmarks": {
+          "json": {
+            "checksum": "0123456789abcdef",
+            "roots": {
+              "other": {
+                "type": "folder",
+                "name": "",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "A",
+                    "url": "https://a.example/"
+                  }
+                ]
+              }
+            },
+            "version": 1
+          },
+          "padTo": 67108864
+        }
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "folder",
+              "title": "Other Bookmarks",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "A",
+                  "url": "https://a.example/"
+                }
+              ],
+              "role": "other"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a Bookmarks file over 64 MiB is too large",
+      "files": {
+        "Bookmarks": {
+          "json": {
+            "checksum": "0123456789abcdef",
+            "roots": {
+              "other": {
+                "type": "folder",
+                "name": "",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "A",
+                    "url": "https://a.example/"
+                  }
+                ]
+              }
+            },
+            "version": 1
+          },
+          "padTo": 67108865
+        }
+      },
+      "expect": {
+        "error": "tooLarge"
+      },
+      "platforms": {
+        "linux": {
+          "error": "unreadable"
+        },
+        "swift": {
+          "error": "unreadable"
+        }
+      }
+    },
+    {
+      "name": "an AccountBookmarks over 64 MiB is ignored",
+      "files": {
+        "Bookmarks": {
+          "json": {
+            "checksum": "0123456789abcdef",
+            "roots": {
+              "bookmark_bar": {
+                "type": "folder",
+                "name": "",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "Local",
+                    "url": "https://local.example/"
+                  }
+                ]
+              },
+              "other": {
+                "type": "folder",
+                "name": "",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "O",
+                    "url": "https://o.example/"
+                  }
+                ]
+              }
+            },
+            "version": 1
+          }
+        },
+        "AccountBookmarks": {
+          "json": {
+            "checksum": "0123456789abcdef",
+            "roots": {
+              "bookmark_bar": {
+                "type": "folder",
+                "name": "Account bar",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "Acct",
+                    "url": "https://account.example/"
+                  }
+                ],
+                "date_added": "13300000000000000"
+              },
+              "synced": {
+                "type": "folder",
+                "name": "",
+                "children": [
+                  {
+                    "type": "url",
+                    "name": "Phone",
+                    "url": "https://phone.example/"
+                  }
+                ]
+              }
+            },
+            "version": 1
+          },
+          "padTo": 67108865
+        }
+      },
+      "expect": {
+        "ok": {
+          "type": "folder",
+          "title": "Bookmarks",
+          "children": [
+            {
+              "type": "folder",
+              "title": "Bookmarks Bar",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "Local",
+                  "url": "https://local.example/"
+                }
+              ],
+              "role": "toolbar"
+            },
+            {
+              "type": "folder",
+              "title": "Other Bookmarks",
+              "children": [
+                {
+                  "type": "url",
+                  "title": "O",
+                  "url": "https://o.example/"
+                }
+              ],
+              "role": "other"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

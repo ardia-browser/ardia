@@ -17,373 +17,61 @@ the plan and the state of the port. The request is issue #351.
 
 Logic is written once. Only code that calls the OS is written per platform.
 
-## What works on Windows today
+## The default shell (#4142, #4143)
 
-Walked by hand on 2026-11-14 in the Windows 11 ARM VM (1920 by 1080), with the `Ardia-Setup-arm64` installer of run
-43544610044 (commit 45a0962e6, engine `windows-engine-20261113-12`, `ArdiaApp.dll` checked against the artifact), from
-a fresh data folder, as a user would: 41 driven runs, every row below seen on that build. Later that day the rows
-changed by #1658, #1686 and #1691 were seen again, and Tour and Open at login walked, on run 43565273476 (commit
-d83398e1f, engine `windows-engine-20261113-16`), and the intro, onboarding and tab strip that evening on #1737's
-build 72901e27a (run 43624897005, engine `windows-engine-20261113-21`); those rows say so, and rows others saw say
-who and on which build. Of the 76 rows, 56 work, 8 work with a difference, 4 do nothing, 7 are not offered
-and 1 was not walked. Works with a difference says
-what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidden" are off on Windows behind
-`PLATFORM_FEATURES` until what they need exists. The walk before this one (2026-11-13, bfd586fe) is in git history.
+Windows is the Chromium WebUI shell: Chromium is the app and serves the shared desktop UI (`apps/desktop`, its
+`--mode win` build) from `chrome://ardia/`, as on Linux. CI, the Release workflow and `windows-alpha` build, test and
+publish only the WebUI installers (`assemble-webui.ps1 -Shippable`, `make-installer.ps1`), and `publish-alpha.sh`
+publishes only builds whose `Ardia.build.json` names `"shell": "webui"`. The React
+Native Windows app (`apps/browser/windows`, `packages/expo-windows`) was deleted in #4143; only the icon and
+`EngineApi.h` stay in `apps/browser/windows/Ardia`, since the installer, the Windows engine's build and its key read
+them, with `SyncWordlist.h`, the wordlist copy `ardia-sync-vectors` checks (its test is a Linux engine key input). The engine still picks the shell as #4162 left it (a browser process with no `--ardia-shell` switch starts the
+WebUI shell unless `ArdiaApp.dll` sits beside the launcher), so its React Native branch is now dormant: no install
+ships `ArdiaApp.dll`, and removing that branch is an engine change for a later engine.
 
-**Install, first launch, updates**
-
-| Feature | State | Tracked in |
-| --- | --- | --- |
-| Installer (wizard, Start menu, Open Ardia) | Works (`setup exit 0` over an empty and over an existing install) | |
-| First launch after the installer | Works: onboarding, no release notes | #1517 |
-| First launch with a link | Works: the link opens in a Little Ardia window in front, onboarding waits in the main window behind it | |
-| Onboarding (main's walk-through, #1762) | Works (72901e27a): eight steps (source, layout, tabs, look, search and privacy, pins, default browser, outro), Edge found on this PC, Windows wording, Ctrl+T, Ctrl+L and Ctrl+S key caps, no Dock card or trial, no app icon row; Skip on every step; Get Started and Take the Tour. Gaps: Tab leaves the intro for the page behind it, and the links step names the Mac's Notes (#1812); the default-browser hand-off to Windows Settings wasn't seen (the VM's default is already Ardia) | #1812 |
-| Intro animation and music | Differs: no Windows machine with a real GPU has run the animated meadow yet. Where Chromium gives no WebGL2 (the VM and the CI runners: no GPU, and the engine has no SwiftShader) the dawn poster stands in, or the plain dark background at night, within about 0.4 s (14 of 14 launches on 72901e27a). On software rendering (WARP, turned on with test switches) the scene draws: in the VM on 65dd9760b, in light with the page's own icon and wordmark and at night with the moon and fireflies; Tab, Space and Enter work Mute and Skip, and a click on Skip ends it. The WARP self-check runs it on every PR on x64 and ARM64. Music not checked (the VM has no audio out) | #1547, #1546, #1737, #1249 |
-| Tour | Works (d83398e1f): Take the Tour shows five stops (search, tabs in the sidebar, room to focus, two pages side by side, all set) with Back, Next and Skip Tour; Done ends it | |
-| Import from Edge | Works (onboarding finds Edge; import itself checked in #1357) | #1516 |
-| Check for updates | Differs: Check Now says "No Windows update published yet" and names the build (0.2.47-nightly.1, Windows alpha 290) | #1517 |
-| Default browser | Works: Settings › General says "Ardia is your default browser" in this VM | #1439 |
-| Open at login | Works (d83398e1f, the VM user's own data folder): on, it writes the `Run` entry for the installed `Ardia.exe`; off, it removes it. When Windows has it turned off in Task Manager's Startup apps, the row asks you to allow it there (#1694; it named the Mac's System Settings before). A sign-in wasn't done: it needs the VM account's password | #1694 |
-
-**Windows and tabs**
-
-| Feature | State | Tracked in |
-| --- | --- | --- |
-| New tab, close, reopen closed tab (Ctrl+Shift+T) | Works | |
-| Ctrl+Z reopens closed tabs | Works once turned on in Keyboard Shortcuts (off by default, as on the Mac) | |
-| New window | Works | |
-| Private window | Works; closing one with two tabs asks first (Close 2 tabs?, Don't ask me again) | #1453 |
-| Close-tabs confirm while other windows load | Works: the confirm (like the prompt and the file pickers) runs on its own thread, so other windows keep loading and taking input while it is open; it stays in front of its own window and comes forward with it (#1688's self-check holds a confirm while a page loads, on CI; not walked here) | #1672, #1688 |
-| Quit and relaunch with the session restored | Works (tabs, the split and the open windows came back) | |
-| Engine memory trimmed after tabs close, once input is idle | Works (logged after closes) | #1544 |
-| Memory Saver's loaded-tab budget (the tabs hidden longest sleep past it) | Works (engine `windows-engine-20261116-4`, which also has #2052's page-place guard; seen by the `engine sleep:` self-checks in CI, not walked in the VM): the Mac's budget and sweep, sized from this PC's memory and Windows' memory load (85 % a warning, 95 % critical); the page view's `sleepIfHidden` asks Chromium's discard policy with the proactive reason, so a shown page or split pane, a page hidden within the mode's wait, typed form input, audio, capture and the other protections keep a tab awake. A page the app hid is no longer its page window's active tab, which Chromium would otherwise keep from every discard, and Chromium's DevTools-open state means a DevTools window inspects the page, not the engine's own always-attached page client (before -10 no Windows page could be discarded at all, by this budget, Chrome's Memory Saver timer or memory pressure). A discard is in place (`WebContentsDiscard`, as on the Mac), so the tab keeps its page and back/forward list. A slept tab wakes on show at its address and scroll. A pop-up window's page is not a tab, so the budget never asks it. The engine keeps a page for its own reasons too, in every discard but one the user or one of their extensions asks for (Chrome's Memory Saver timer, its memory-pressure and frozen-with-growing-memory discards as well as the budget, `kept_pages.cc` through `chromium-win-discard-asks-the-host.patch`; a kept page is never taken by an urgent discard either, since Windows' urgent discards skip protected pages; a discard the user or one of their extensions asks for, such as `chrome.tabs.discard()` from a tab-suspender extension, does not ask the host): the opener of a live pop-up or of a pending offer (100), so the pop-up's `window.opener` keeps working; a `beforeunload` handler (content's own handler state; the page graph's flag is never set in Chromium 157) on a page the user has used (101); a held Web Lock (102) or blocking IndexedDB lock (103); a WebSocket, WebTransport, WebRTC or direct-socket connection (104: the same signals that keep a page from freezing; in Chromium 157 an open WebSocket registers only the sticky feature, so a page that has used one stays kept until it navigates or reloads); a DevTools window, or a DevTools client other than the engine's own on the page or tab target: an extension's `chrome.debugger` or a remote CDP tool (105). Chromium's own protections hold as on the Mac (audible, capture, form input, notifications). Not seen yet, so such a page can still sleep (#2050): a Web Lock held by a dedicated worker, a WebSocket held by a SharedWorker, a blocking IndexedDB lock in a shared or service worker, an EventSource or long fetch stream, an upload. A hidden Peek card that stays mounted is not a shown page: after the mode's wait it can sleep, and it reloads at its address and scroll when it shows again. A tab that slept once still opens a new tab its link script saw clicked (the script Peek runs in) and an app-link ask. Pinned tabs sleep like any tab, as on the Mac (#1069). A page window keeps #2052's guard through a sleep and holds its place again once it wakes. Self-checks: `engine sleep:` in `selfCheck/engineSleep.ts`, `engineSleepKept.ts` and `engineSleepPlace.ts` | #1969 |
-| Unload inactive profiles (Settings › Advanced, with Memory Saver) | Not offered; hidden: the engine has no `profiles.unloadIdle` | #1425 |
-| Little Ardia (Ctrl+Alt+N) | Works, app-drawn chrome; its command bar lists recent pages | |
-| Search Tabs (Ctrl+Shift+A), Ctrl+Tab | Works (d83398e1f): the new page has the keyboard after Ctrl+Tab and after Next Tab into a tab a restore left unloaded (#1658, #1691). Gap: a new tab opened with an address (Ctrl+T, the address, Enter) doesn't get the keyboard, tracked in #1689 (still so on 72901e27a) | #1658, #1689 |
-| Pin, Top Apps, New Group with Tab, tab menus | Works (the tab menu offers Move to Top Apps, Remove from Split View, Close Split View) | |
-| Page picture (a pinned page in another window) | Works: the other window shows the page picture | #1540 |
-| Tabs in the sidebar or across the top (Ctrl+Shift+S), hide the sidebar (Ctrl+S) | Works. The pale box once left over the page's top-left came from visiting a second profile, not from Ctrl+S: the next profile's sidebar page, parked beside the sidebar, cut a hole in the page. Gone on d83398e1f, on a full-width tab and a split pane. With tabs across the top (72901e27a), the open and recently closed tabs button and New Tab stay clear of the caption buttons down to the narrowest window (600 px), where tabs scroll instead, and a right-click on the empty strip opens the tab menu | #1673, #1583 |
-| Minimalism mode (Ctrl+Alt+M) | Works, except one edge (53d5a2bee, walked 2026-11-14): in all five layouts (sidebar left, right, hidden; tabs on top with the strip shown and hidden) the window buttons sit in the band, the sidebar header or the strip with only app UI under them; minimize, maximize, restore and close work, the band, strip or header drags and double-click maximizes; Split View, full screen, a second window and turning it off behave, at 100% and 125%. Left, right and bottom resize work; where the page reaches the top edge (sidebar right), the band resizes the window (#1888; a real drag in CI, the cursor and double click untried in the VM) | #1831, #1888 |
-| Profiles: switch with Alt+1, Alt+2 | Works (Work opened in its own colour) | |
-| Open in WebKit, Engines pane, Opens in | Does nothing (no WebKit on Windows); hidden | #1522 |
-| Split View (Ctrl+\, two pages, Next Pane) | Works: the empty pane takes the next address, Alt+Shift+] moves focus to the other pane's page. Seen on #1686's build: Focus Next Split Pane into an empty pane puts the typing in its search field, and a page left full screen by a tab switch comes back in a window and gets Escape | #1490, #1658 |
-| Peek | Works: Shift-click opens it over a split pane and in a private window; Escape closes it. Keys reach the Peek's page without a click, and after Escape they reach the source page with the link still focused, as on the Mac (the engine thread saw both in the VM on build 339 of #1708; not re-walked here). Its buttons at the top, left and right (53d5a2bee, walked 2026-11-14) are app UI over the page with a clean cut, answer clicks, include Split View's, and the tooltip reads "Open as Tab (Ctrl+O)" | #1531, #1576, #1708 |
-| A download while split | Differs: an insecure (http) download is blocked by Chromium's own download bubble; a download from localhost reaches Ardia's panel | #1519 |
-| Pop-up windows from pages | Works: the pop-up stays a tab of its opener's window, so `window.opener` and `postMessage` keep working, and shows in a pop-up window the app draws, sized and placed as the page asked | #1518 |
-| Open pop-up windows as tabs (Settings › Tabs › Links) | Works, not seen on Windows yet: with it on, a page's pop-up opens as a foreground tab beside the page instead of a pop-up window, as on the Mac (`engine/popupsAsTabs.ts`); a pop-up from Little Ardia, one with no page to open beside, an extension's, and a pop-up window already open stay windows | #1986 |
-| Main, Settings and Little Ardia window chrome | Works, no system title bar | |
-
-**Pages**
-
-| Feature | State | Tracked in |
-| --- | --- | --- |
-| Command bar (history, open tabs, suggestions) | Works | |
-| Inline completion in the command bar | Works (top match completes inline) | #1520 |
-| Find in page | Works: the app's find bar, from a page or the app's UI (Ctrl+F); count, Enter, Shift+Enter, F3 and Shift+F3 step; Escape gives the page the keyboard back; private windows too | #1758 |
-| Page loading in the address field | Works (#1865's build 0bcabc63e, run 43642845254, 125%): while a slow page loads the glow fills the toolbar field, a Split View pane's field, a Peek's bar and Little Ardia's field, sweeps across when the load ends and fades; a load under 150 ms shows nothing; the tab's spinner and the stop button as before | #1820 |
-| Reading mode (Ctrl+Alt+R, F9) | Works (53d5a2bee, walked 2026-11-14): it draws on a local article and on Wikipedia; Larger Text and the font switch work, Escape leaves it, F9 and Ctrl+Alt+R toggle it and it stays across a tab switch. A reload leaves it, as on the Mac. Find in page finds nothing inside it, as the shared reader keeps the article in a closed shadow root | #1831, #1883 |
-| Zoom (Ctrl+=, Ctrl+0) | Works, with the zoom icon in the address bar | |
-| Print | Works (Chromium's print preview, Microsoft Print to PDF) | |
-| JavaScript alert, confirm and prompt | Works (Chromium's dialogs over the page) | |
-| Page, link and image menus | Differs: Chromium's menu, trimmed as on the Mac (no Open link in split view, Cast, reading mode, QR code, send to your devices, Lens or other-profile items; Save as shows no Ctrl+S), but without the Mac's own items for a selection (search with Ardia's engine, Share) | #1811 |
-| Full-screen (a page element) | Works; Escape leaves it | |
-| Picture in picture | Differs: Chromium's window, no stash, corners or mini player | #1425 |
-| Downloads (download, panel, Ctrl+J) | Works: the panel opens for a new download and lists it, including one held for Keep; Ctrl+J opens it and Escape closes it (53d5a2bee, walked 2026-11-14) | #1519, #1610 |
-| History (Ctrl+H), Clear Browsing Data (Ctrl+Shift+Del) | Works; history is kept past 90 days and an import keeps its older pages, as on the Mac (engine `windows-engine-20261115-17` passes `keep-old-history`; seen by the `engine history:` self-check in CI) | #2009 |
-| Bookmarks (Ctrl+D, Ctrl+Shift+O) | Works | |
-| mailto and other app links | Works: the app's prompt, then the handler (`mailto` opens the mail app without a prompt, as Chromium and the Mac allow it by default). The engine thread saw the prompt and the handler in the VM on build 347 of #1701; not walked here. The first click on the prompt works after using the page since #1749, and a data: page's prompt stops counting once its document is gone since #1750 (engine `-22`); the engine thread saw the first in the VM and the self-check proves the second on both CPUs. | #1590, #1701, #1749, #1750 |
-| Translate | Not offered | #1520 |
-| Network error page | Works (Chromium's) | |
-| DevTools (F12), Task Manager (Shift+Esc) | Works (Chromium's) | |
-
-**Passwords, permissions, extensions**
-
-| Feature | State | Tracked in |
-| --- | --- | --- |
-| Offer to save a password | Differs: Chromium's bubble (Save, Never, No thanks) | #1425 |
-| Fill a saved password | Works | |
-| Notification and location prompts | Differs: Chromium's prompts (Allow, Block; while visiting, this time, never) | #1425 |
-| Camera and microphone | Not walked: the VM has no camera | |
-| Chrome Web Store install | Differs: the store says Add to Ardia, Chromium's Add extension dialog, then the icon in the toolbar and the extension's own page | stand-ins `extensions.resolveInstallPrompt` |
-| ardia://extensions | Works | |
-| Ad, tracker and cookie-banner blocking | Not offered; hidden | #1425 |
-| Hide anything (Hide Element) | Not offered; hidden: its rules are kept by the content blocker, which Windows lacks | #1425 |
-| Block autoplay on every site, and Autoplay per site in Site Controls | Not offered; hidden: on the Mac the page script blocks media nobody asked to play, from the global switch and the site's Autoplay choice, and the Windows page script has no such blocking, so the switch (`webView.setBlockAutoplayEverywhere` is missing) and the per-site choice (stored, never read) are hidden behind `blocksAutoplay` | #1425, #1774 |
-| Block requests to send notifications (Settings › Privacy & Security) | Not offered; hidden: it turns a notification request down when the app hears one, and on Windows the app hears none and can't answer one (`permissions.resolve`), so Chromium's own prompt still asks | #1425 |
-| Bookmark export | Works: Windows' Save As, then the HTML file is written | #1551 |
-| Password export | Works up to Windows' own sign-in prompt over the app window; the walk cancelled it there (the VM account's password is not typed in a test), so the file was not written | #1551 |
-
-**Settings**
-
-| Feature | State | Tracked in |
-| --- | --- | --- |
-| Settings window, panes, search | Works (all twelve panes; search finds rows and opens their pane) | |
-| Profiles: create, switcher | Works | |
-| Appearance: light and dark | Works | |
-| Higher contrast text | Works (403b48b2c, walked 2026-11-14): Automatic follows a Windows contrast theme turned on while the app runs and one already on at launch, through the shell's `isHighContrast` and its `highContrast` event (react-native-windows' `AppTheme` is UWP-only and always read off). Changing the theme while Settings is open can crash the window layer, on older builds too | #1831, #1882, #1900 |
-| Keyboard Shortcuts pane | Works, Windows keys | |
-| "…" menu | Works, except Check for Updates | #1517 |
-| Sync | Works: Turn On Sync at the default folder shows the Recovery Kit, the pane says updated just now, every What Syncs row but Passwords; a Mac and a PC exchanged pinned tabs and bookmarks both ways (#1594) | #1575, #1425 |
-| Calendar | Does nothing; hidden | #1521 |
-| Trackpad gestures, video upscaling, reorder haptics, thin scroll bars | Does nothing; hidden | #1522, #1520 |
-| Keep new-tab links inside a Little Ardia window, zoom with Ctrl and the mouse wheel, offer to save and fill passwords | Does nothing (the engine has no call for them yet); hidden | #1783, #1425 |
-| Warn before quitting | Works (#1796's build 1f4d97db1, run 43631924720): with it on, closing the last window (close button, Alt+F4, Ctrl+Shift+W, a lone Little Ardia's Ctrl+W; Ctrl+W on a window's last tab follows the same rule) asks first with the Mac's words; Cancel keeps the app running, Quit exits, Don't ask again turns it off; a hidden instance never asks | #1782, #1803 |
-| The ardia command, Widevine | Not offered (each says so) | |
-| Copy naming the Mac | Works: the walk found three more (a ⌘T, "History › Recently Closed", "File › Close All Tabs"), fixed in #1668's PR | #1522, #1668 |
-
-## The Windows app
-
-- `apps/browser/windows` is the app project: React Native for Windows 0.81 on the new architecture, which is the
-  only one Windows supports from 0.82 on. The Mac stays on the old architecture until it upgrades past 0.81.
-- The UI is the same TypeScript. Metro bundles it for the `windows` platform (`pnpm -C apps/browser bundle:windows`),
-  where `react-native` is `react-native-windows` and `expo-modules-core` is `packages/expo-windows`.
-- `packages/expo-windows` is the API our native packages call (`requireNativeModule`, `requireNativeViewManager`,
-  `uuid`), on Windows:
-  - a module that has a C++ version answers from it (a React Native turbo module of the same name), one method at
-    a time: a method it lacks falls through;
-  - a method with no C++ version answers from `src/defaults.ts`, or with `null`, and logs its name once;
-  - a view is either native (`ArdiaVectorIcon`, registered in `Modules.h`), drawn in TypeScript
-    (`src/views`, `src/symbol`, `src/windowDragRegion.tsx`), or a plain view that logs its name once and lets
-    presses through to what is under or inside it (several Mac views are empty layers over other content, and a
-    stand-in that took presses made the sidebar's tabs unclickable).
-
-  The log, and `ardiaWindowsMissing()` in the JS console, list what the app has reached so far that has no Windows
-  version, not everything left to port.
-- The app is a library, `ArdiaApp.dll` (the `Ardia` project), because Chromium's sandbox needs Chromium's own launcher
-  to be the process. It runs in two modes, chosen by who calls it (`EngineApi.h` has the types):
-  - Standalone: `Ardia.exe` is a stub (`ArdiaLauncher`) that loads `ArdiaApp.dll` from its own folder and calls
-    `ArdiaAppRun`, which sets the app up and runs its own event loop. This is what CI builds and tests.
-  - In the engine: Chromium's launcher loads the library on its UI thread and calls `ArdiaAppStart` with its API table.
-    The app sets up and returns; Chromium runs the loop, hands each message to `ArdiaAppPreTranslateMessage` first, and
-    calls `ArdiaAppStop` when the loop ends. Quitting asks the engine (`app.quit`) instead of ending the loop.
-    Pending telemetry and documents are written while stopping (`ShutDown` in `Ardia.cpp`), while their worker
-    threads still run. Nothing in the library may wait on another thread from an exit handler or a static destructor:
-    those run during `ExitProcess`, after Windows has ended every other thread, so such a wait only ends on its
-    timeout and the process outlives the quit (#1706: 30 s, which made the installer give up with exit 5).
-  - `ArdiaEngineHost` (`EngineHostModule.h`) is the bridge: `available()`, `hostCall`, `engineCall`, and the engine's
-    events as `ArdiaEngineHost:event`. Other native code reaches the engine through `Host::Engine()`.
-  - What belongs to the app comes from the library (`AppImage.h`: the bundle folder, dialogs, window classes, the
-    version); what is about the process stays with the executable (launch at login).
-  - Windows finds the Windows App SDK's classes through the manifest of the process's executable, not the library's.
-    The `Ardia` project writes that list to `ArdiaApp.winrt.manifest` in the output folder, and the stub links it in
-    with its own entries (`ArdiaLauncher/Ardia.exe.manifest`: Windows 10 and 11, per-monitor DPI, common controls 6).
-    `scripts/windows/host-manifest.ps1 -From ArdiaApp.dll -To <exe>` writes the same list into another executable,
-    keeping what it already declares: the engine's launcher needs it. The library, its DLLs and `Ardia.pri` have to sit
-    next to that executable.
-- Native code is C++ in `apps/browser/windows/Ardia`, header-only, one module per header, named as on the Mac
-  (`ArdiaApp` in `AppModule.h`), all included from `Modules.h`. Events reach JS as the device event
-  `<Module>:<event>` (`Events.h`). Folders come from `Paths.h`: data in `%LOCALAPPDATA%\Ardia` or `ARDIA_DATA_DIR`,
-  config in `%APPDATA%\Ardia`.
-- Windows are the app's own (`WindowManager.h`, `ArdiaAppWindows`): one runtime, one window per window id, each
-  mounted with its id, as on the Mac. No window has a system title bar or system caption buttons: every window draws
-  into its whole frame, and the UI draws minimize, maximize and close itself (`components/window/WindowControls.tsx`),
-  as the Mac's lights live inside the UI there. So no band is kept free at the top: the page card starts at the page
-  frame, and Settings and Import have no title bar above them.
-  - Where the buttons sit comes from `windowControlsPlace` in `state/windows/layout.ts`: in the card's toolbar row, in
-    a right sidebar's header, at the end of the top tab strip, in Little Ardia's bar. With the address bar in a left
-    sidebar they sit at the sidebar's leading end, in their own row above the header (one button and a 3 point gap
-    tall, `sidebarControlsRow`), in the same order as everywhere else (menu, minimize, maximize, close), and the card
-    reaches the page frame (#1973); the row beside them is a caption region, counted from the left (a negative third
-    value in a caption region is a width). Only a card with no toolbar and no sidebar showing (address bar in the
-    sidebar, tabs hidden) and Minimalism's band layouts keep a 32 point band for them. They take the site's toolbar
-    colours in the toolbar, and when the toolbar hides while scrolling a smaller set fades in on the 20 point strip.
-    The room every row keeps for them (171 points: 12 to the edge, 129 of buttons, 30 to drag by) is in
-    `lib/platformChrome.windows.ts` and `WINDOW_CONTROLS` in `lib/windowChrome.ts`.
-  - With no lights on the left, a sidebar header with nothing in it collapses to the page frame on Windows
-    (`sidebarHeaderCollapsed`), so the tabs start at the top; the downloads button then sits in the sidebar's footer.
-    The header stays for a profile indicator, an incognito window, the address row, and a right sidebar.
-  - Resizing from the top edge over a page: Windows keeps the top resize band inside the client area, and the page is
-    its own window above it. The page window's hit test (`HostedFrameView::NonClientHitTest` in `ardia/win/frame_view.cc`)
-    answers what the app window answers at that point when that is its top edge or a top corner (so the band's size,
-    and no band while maximized or full screen, are the app window's own), and the page's content everywhere else.
-    Chromium would take the press that follows as a page press, so the engine's message hook (`PreTranslate` in
-    `ardia/win/main.cc`, called before Chromium's pump dispatches) takes a hosted page's non-client press and double
-    click with those codes: the press becomes the app window's own size command, the double click the app window's.
-    A move in the band sets the resize cursor (Chromium's page child window answers WM_SETCURSOR with nothing) and still
-    reaches Chromium. Chromium arms its non-client leave tracking on the page's top-level window, which never sees the
-    pointer leave from over its child, so the hook arms it on the child itself and, when the child reports the pointer
-    left the page, sends the page window WM_MOUSELEAVE: a page's hover ends when the pointer leaves through the band. Touch and pen can't resize from the top edge over a page: their contact arrives as WM_NCPOINTERDOWN,
-    which Chromium handles (untried without a touch device). `HTTOP` alone (Chromium handles the press) and
-    `HTTRANSPARENT` (a child window's transparency doesn't reach another top-level window) both left the window
-    unresized in a real drag. `launch-smoke.ps1` drags the band over a page in Minimalism with the sidebar on the
-    right and expects the window to resize from the top; the `tab.hitTest` host verb answers the page's and the app
-    window's hit for the self-check.
-  - Moving the window: a drag region is a view that moves the window when the UI's own hit-testing gives it the press,
-    so a control on top of it still clicks, and the app moves the window while the button is down (Escape puts it
-    back, a maximized window restores under the pointer, a release at the top edge maximizes). The UI also marks
-    caption regions for Windows (`captionRegions` in `state/windows/layout.ts`, sent by `state/windows/captionRegions.ts`
-    through `platform/windowControls.windows.ts`): the gap beside the window buttons and the gutter above the card,
-    where nothing else sits. Windows moves the window itself from those, so its snap, drag off a maximized window,
-    double click to maximize and system menu work, and each press still reaches the UI so popovers and the command
-    panel close. No region is marked while the command panel, the downloads popover or onboarding is open. Native lays
-    a pass-through over the rest of any band Windows would treat as a title bar. The launch log says
-    `input regions of <id>: ...`, `title band of <id> is caption|content` (caption while any region is marked),
-    which path each drag took, and `maximized|restored <id>`.
-  - A hidden sidebar slides back in when the pointer reaches the window's edge, as on the Mac: `watchSidebarEdge`
-    polls the pointer every 40 ms while a window is watched and logs `sidebar edge over|away <id>`.
-  - React Native for Windows hit-tests by layout and ignores `transform`, and the app runs every animation that
-    doesn't repeat from JS on Windows, so a running animation keeps writing its values to a view until it ends. So a
-    style never swaps an Animated value for a constant while an animation may still write to it: the view keeps the
-    same node, and `useGated` (`components/ui/motion.ts`) pins that node to its resting value while its state is off.
-    A sidebar docked while its peek was closing drew its rows off where they click before this (#1852); the self-check
-    `sidebar peek layer rests at identity after docking mid-close` docks the first window six times as its peek
-    closes and logs `self-check note: sidebar peek, <n> cycles, <m> docked mid-close, ...`. And no view that takes
-    clicks rests under a non-zero transform (#1868).
-  - The app quits when its last window closes: it sends `willQuit`, then quits on the UI's yes or after 3 seconds
-    without a reply; a no cancels the quit.
-  - Warn before quitting asks when closing a browser window would quit the app: the setting is on, the instance
-    isn't hidden, and no other window stays open: `windowIds()` less the browser windows the UI has closed or is
-    closing (Settings, Import and pop-up windows count while listed). A pop-up keeps Ardia running like any window:
-    closing the last browser window with a pop-up open neither asks nor quits, and the user closing that pop-up (its
-    button, Alt+F4, Ctrl+W, the system menu) is the close that quits and asks. A page that closes itself
-    (`window.close()`) closes its pop-up window at once, so in the last window it quits without asking: the question
-    protects what is still open, and nothing is. Little Ardia's own closes (Ctrl+W, Escape) and Ctrl+W on a
-    window's last tab ask the same way; when the last-tab confirm asks, it stands in for the quit question.
-    Windows has no Quit command, so these are the only places it asks; the Mac asks on ⌘Q and never on a window's
-    close. It asks before the window closes, so a Cancel leaves the window and the app as they were and no quit
-    starts; Quit closes the window and the quit above runs as before. A close that asked it never also shows the
-    close-tabs confirm. The dialog is the shared confirm on the dialog thread (#1672). Closing Settings when it is
-    the only window left quits without asking: Settings closes without a close request. A window that closes
-    elsewhere while a close-tabs confirm is open isn't counted again, so that close can then quit without asking.
-    Both are #1803.
-  - Windows fade as on the Mac (`WindowFade.h`), fade only with no grow. A window opened with `animated`, and every
-    window that is not a browser window (Little Ardia, Settings, Import: the Mac's system animates those open),
-    stays transparent until its React root has content or for 0.6 s, then fades in over 0.25 s (Little Ardia
-    0.20 s); `animateWindowClose` fades it out from where it is over 0.18 s (0.15 s), hides it and then
-    resolves. With `after` naming a new window it waits for that window to appear plus 0.20 s and hides at once. The
-    fade makes the app window and every visible window it owns (the page windows) layered for its length and puts
-    their styles back at the end; on the way out they ignore clicks, and pages still shown after the hide stay
-    transparent until the engine hides them (at most 2 s). A minimized, full screen or not yet shown window, or
-    Windows' "Animation effects" off, shows and hides at once. The launch log says `window <id> fades in over <ms> ms
-    with <n> page windows`, `window <id> shown`, `window <id> fades out over <ms> ms`, `window <id> hidden` and
-    `window <id> hidden at once: <reason>`.
-- What has a C++ version: windows, documents, config files and their watcher, secrets (Credential Manager), local
-  telemetry, launch config and system info, file actions and icons, launch at login, the theme, lock and sleep
-  signals, the clipboard, the bang list, confirm, prompt and file dialogs, the command table with its shortcuts and
-  context menus, the Escape and tab switcher key captures, icons, file and link drops, notifications, and the file, SQLite
-  and key primitives behind importing another browser's data (Import from another browser, below).
-- File and link drops: each browser window's top-level window and its child windows take OLE drops (`FileDropTarget.h`).
-  Every `FileDropArea` reports its frame in the window to native as it mounts, lays out and changes, and again when a
-  drag enters the window; native picks the innermost enabled area under the pointer, so the cursor shows copy or no
-  drop at once, and reads files (`CF_HDROP`), links (`UniformResourceLocatorW`) and text (`CF_UNICODETEXT`) with the
-  Mac's rules for each accept mode (`FileDropItems.h`), `.url` and `.webloc` files included. The area gets the Mac's
-  enter, move, exit and drop updates. Dragging a file out of the app is not built yet, so `devLastFileDrag` is empty.
-- The app's identity (`AppIcon.h`): at startup the process takes the AppUserModelID `Ardia.Browser`, the one the
-  installer's Start menu and desktop shortcuts carry, so the taskbar groups every window under that shortcut, uses its
-  icon, and a pin made from a running window relaunches Ardia. Every window the app opens gets Ardia's icon from the
-  library's resources (`WM_SETICON`, big and small at the window's DPI), and notifications register with the name
-  Ardia and a PNG of that icon written to the data folder. The launch log says `app icon: AppUserModelID is ...`
-  (and what it was) and `app icon: set on <id>`. `scripts/windows/launcher-identity.ps1` gives the engine's launcher
-  Ardia's icon as its first icon group and Ardia's name in its version strings (Task Manager shows the
-  FileDescription); `assemble.ps1` runs it, and `-Check` only reads it back.
-- Notifications are Windows App SDK app notifications (`NotificationCenter.h`): the app registers at startup, before
-  the first window, which also registers its toast activator for this unpackaged app, so a click on a toast reaches
-  the running app or launches it. Clicks are held until a window is open, then sent as `onNotificationResponse`.
-  Windows has no permission prompt: the system setting for the app is the answer. A background instance registers
-  but logs toasts instead of showing them. Windows reports no dismissals, so there is no `close` response. If
-  registration fails, notifications answer as not set up and the launch log says why once.
-- A press reaches the UI as a touch with no button: pointer events never arrive, and the app's pointer input does not
-  pass through the UI thread's message queue. So the window root (`OutsidePressRoot` in `src/views/inputAreas.tsx`)
-  asks native which button is down when a touch starts (`ArdiaWindowsHost.pointerState`), and for a right or middle
-  press it takes the press, finds the context menu or middle click area under the real target, and acts on release.
-- Shortcuts are the Mac's with Command as Ctrl and Option as Alt, except where Windows has its own convention;
-  `CommandTable.h` holds both columns. The JS command catalog still shows the Mac keys in Settings.
-- Escape reaches a focused field or dialog through React Native's own key events, which is how the command bar and
-  Search Tabs close. A popover with nothing focused in it needs the key captured, as the Mac's key monitor does:
-  while the UI holds Escape (`captureEscape` in `platform/focus.ts`, for a page popover, a sidebar or bookmarks bar
-  drag, and on Windows the Downloads popover too), `ArdiaFocus.setDragEscapeCapture` (`FocusModule.h`) has the
-  keyboard hook in `MenuKeyboard.h` take a bare Escape in an Ardia window and send `dragEscape`. While the tab
-  switcher is open the hook takes every key, as on the Mac: Escape and the left and right arrows go to the switcher,
-  W with Ctrl held (with or without Shift, never with Alt or as a key repeat) closes its highlighted row, and its own
-  shortcut still runs. The launch log says `keys escape capture on|off` and
-  `keys escape sent to the open popover or drag`. The Mac's Downloads popover does not close on Escape yet
-  (`PLATFORM_FEATURES.escapeClosesDownloads` is off there).
-- "Ctrl+Z reopens closed tabs" works as the Mac's retargeted Undo: with the setting on, the keyboard hook in
-  `MenuKeyboard.h` sends `reopenClosedTab` for a plain Ctrl+Z in a browser window (Little Ardia included, Settings and
-  Import not) when Reopen isn't disabled, no command is bound to Ctrl+Z, the window itself is the active one (not a
-  dialog it owns, such as a prompt, nor a page), and no text field of the app has focus. Everything else keeps Ctrl+Z:
-  a text field or a dialog's edit box undoes typing, a page gets its own undo, a command bound to Ctrl+Z runs. The app's text fields are React Native `TextInput`s
-  inside the island, which Win32 focus can't tell apart, so `src/textFocus.ts` wraps React Native's
-  `TextInputState.focusInput`/`blurInput` and tells `ArdiaFocus.setTextInputFocused`; a page is a Chromium window on the
-  same thread, so the hook reads the focused window's class (`Chrome_*`). The launch log says `ctrl+z reopens the last
-  closed tab`, `ctrl+z left to the focused text field`, `ctrl+z left to the focused dialog or page` or `ctrl+z left to the focused page`.
-- Animations run in JavaScript on Windows (`packages/expo-windows/src/animation`). React Native for Windows' native
-  animation driver adds what it animates to the view's own style instead of replacing it, turns a scale around the
-  top-left corner, never reports where an animation ended, and drops scroll and gesture events, so anything but a
-  plain fade started doubled, ended in the wrong place or did not move. `installAnimation` therefore answers
-  `useNativeDriver: true` with the JS driver, which sets the view's real props every frame, as the sidebar's slide
-  always did. The exceptions are endless loops of one animation (the loading and refresh spinners), which stay native
-  and cost the JS thread nothing.
-  - Frames are paced: React Native's `requestAnimationFrame` is a zero timeout here, so an animation would step as
-    fast as the threads allow. `motion.ts` runs every frame callback of a turn together, 60 times a second.
-  - A scale, rotation or skew turns around the view's centre, as on the Mac: React Native for Windows applies a
-    transform from the top-left corner, so `pivot.ts` wraps any transform that is not at rest in a half-size translate
-    there and back. `transformOrigin` then means what it means on the Mac, and the command panel grows out of its
-    field as it does there.
-  - While an animation runs, every shown page and every surface over a page is measured again each frame
-    (`followMotion`), so the page window and the holes cut in it follow what moves: the toolbar that hides while
-    scrolling, a peek, a popover that grows in. Endless loops do not count.
-  - The launch log says `[ardia windows] motion <n> frames in <ms> ms, longest <ms> ms, <n> long` when a burst of
-    animation ends: how many frames it got, the longest gap between two, and how many gaps were over 2.5 frames.
-    The same numbers go to telemetry, where sharing is on, as `animation_bursts` and `animation_long_frames` in the
-    hourly `usage_counts` (`platform/motion.windows.ts`, the `ArdiaMotion` module): a rising share of long frames
-    per burst is the sign that animations stutter in the field.
-  - What this costs and where it is not exact:
-    - An animation needs the UI thread: while the engine opens its first page (most of a second) a row's slide
-      stalls and then jumps. The Mac's native driver keeps going there.
-    - A value that an endless loop animates natively must not be animated any other way afterwards, and nothing
-      else may share its view's animated props: React Native refuses to mix the two drivers on one value.
-    - While a view is scaled, `measureInWindow` reports it half its size times (1 - scale) further right and down
-      than it is drawn, because React Native measures as if the platform turned around the centre by itself. So a
-      hole cut for a surface that is growing in sits off by that much until the scale reaches 1 (a popover: under
-      a tenth of its size, for 150 ms).
-    - A surface that fades in over a page shows the card through its hole for a frame or two first: the hole is
-      cut when the surface mounts, before its fade is visible, and the page, being a window above the UI, cannot
-      be faded over.
-    - React Native for Windows resolves the half-size translate when the transform changes, not when the view's
-      size changes: a view that is resized while it holds a scale or rotation keeps turning around its old centre
-      until its transform changes again. An animation changes it every frame; a fixed rotation on a view that
-      resizes would need its transform set again.
-- While the command panel sits beside the window buttons it keeps their 138 points free at the right
-  (`trailingClearance` in `lib/windowChrome.ts`). Little Ardia's bar numbers for both systems are in
-  `components/littleArdia/barLayout.ts`.
-- Icons are the web demo's set (`packages/demo/src/shims/web/symbols`), resolved in TypeScript and drawn natively as
-  Direct2D geometry in Composition shapes.
-- Materials are native views (`MaterialViews.h`, the `ArdiaMaterials` module in `MaterialsModule.h`), each with the old
-  flat drawing as its fallback. A window backdrop that covers its whole window asks the system for Mica Alt behind the
-  window on Windows 11 22H2 (build 22621) and later and draws the Mac's tint over it. Visual effects, glass and popover
-  bubbles blur what is under them inside the window with a Composition backdrop brush (Gaussian blur, saturation and a
-  tint). Window and theme gradients are Composition linear gradients at their real angle. Windows 10, a background
-  instance and any failure keep the flat colours; the launch log says once which path each one took.
-- Switching profiles slides the sidebar's pages and crossfades the tint as on the Mac. The Mac's native pager
-  (`Pager.swift`) has a TypeScript version in `packages/expo-windows/src/pager`: the `ArdiaSwipe` view and module with
-  the same events (`onPagerPosition` every frame, `onPagerState` on select and settle), sequence numbers and spring
-  (critically damped, a quarter-second period), stepped on the app's 60 Hz frames. With Windows' animations off it
-  lands at once. Swipe gestures (two-finger scroll, the rubber band, haptics) have no input on Windows yet, so only
-  clicks, shortcuts and outside switches page.
-- Shadows of the views drawn in TypeScript (`Surface`, popover bubbles) are rounded rings drawn behind the fill
-  (`src/views/shadowLayers.ts`), fading like a Gaussian blur of the edge: React Native for Windows casts a view's shadow
-  from its rectangle whatever its corner radius, which left grey square corners behind the new tab's command bar.
-- The Windows native API has its own version: `WINDOWS_NATIVE_API_VERSION` in `platform/nativeApi.ts` and
-  `windowsApiVersion` in `AppModule.h`. Bump both when the Windows native surface changes. A Mac bump doesn't
-  touch it.
-- `--log-file=<path>` makes the app write its launch log, React Native's log and JavaScript errors to a file. Each
-  line is `<level> <ms since process start> <message>`.
-- A background instance (`ARDIA_BACKGROUND=1`) shows its windows without taking focus and answers dialogs and menus
-  without showing them, as on the Mac.
+An install of the React Native shell still upgrades: the WebUI installer removes the files the React Native shell
+shipped (`RetiredShell "rnw"` in `Ardia.iss`, `shell-layout.ps1`'s list), moves its login item, and
+`ardia-webui-migrate.exe` moves its data on the first WebUI start ("Moving a user's data from the RNW shell" below).
+The login item: the WebUI shell's Open at Login is `Run\Ardia WebUI` (with `--ardia-shell=webui`), the React Native
+app's was `Run\Ardia`. `UpdateLoginItems` in `Ardia.iss` moves `Run\Ardia`, when it launches this install's
+`Ardia.exe` with no arguments or only a shell switch, to `Run\Ardia WebUI` and the WebUI command. Its
+`StartupApproved\Run` state comes along, written first: when `Ardia WebUI` had no item, the old item's approval bytes
+replace any orphan an earlier Open at Login left there (or that orphan is deleted when the old item had none, and an
+approval that exists but can't be read stops the move), so an item Windows disabled stays disabled and an orphan never
+flips one; a live `Ardia WebUI` item keeps its own approval, or none, which means enabled. Only after the approval and
+the new item are written is the old value deleted, and its approval only once the old value is gone; if either write
+fails, the old item stays, rewritten in place. A custom `Ardia WebUI` value is never overwritten, and nothing is
+created where neither exists. Sections below that still name the React Native app describe what it did, for that
+upgrade.
 
 ## The engine in the app
 
 The engine is Chromium's own browser, built for Windows with our patches (`docs/engine-build-windows.md`). The product
-is one folder: Chromium's launcher as `Ardia.exe`, `chrome.dll`, and the app's library and files beside them
-(`scripts/windows/assemble.ps1` puts an engine and the app's build output together and gives the launcher the app's
-manifest entries). With `ArdiaApp.dll` beside the launcher the browser process runs the app; without it the same build
-is plain Chromium.
+is one folder: Chromium's launcher as `Ardia.exe`, `chrome.dll` and the engine's files, the shared desktop UI as
+`ardia-ui\` (`pnpm -C apps/desktop build:win`, served from `chrome://ardia/`), `ardia-webui-migrate.exe`,
+`ardia-update-verify.exe` with the pinned `windows-update.pem`, and `Ardia.build.json`. `scripts/windows/assemble-webui.ps1`
+puts an engine and that UI build together and gives the launcher Ardia's icon and name ("Packaging, installing and
+upgrading the WebUI shell" below has its switches). A browser process started without `--ardia-shell` or `--headless` opens the
+WebUI shell in the WebUI profile (`%LOCALAPPDATA%\Ardia WebUI\Chromium`), as `--ardia-shell=webui` does, and a child
+process (`--type=` with a value) is no shell ("Selecting the shell and keeping real data out" below). The engine's
+React Native branch, taken only with `--ardia-shell=rnw` or with `ArdiaApp.dll` beside the launcher, is dormant, since no install ships that file.
+The bullets below that name the React Native app describe what it did, for an upgrade from it.
 
+- Features the engine turns off at launch (`AddLaunchSwitches` in `scripts/windows/engine/src/ardia/win/main.cc`,
+  appended to any `--disable-features` the launcher passed, which a launcher's `--enable-features` can't undo):
+  `CalculateNativeWinOcclusion`, and `SettingsGlowupJourneys` (engine `windows-engine-20261117-9`, #2326). The latter
+  feeds Chrome's own guided tours, which Ardia never shows, and its chrome://settings handlers CHECK for a tracked
+  browser view in the tab's window, which a hidden page window doesn't have. The Mac turns it off too (#2289). The
+  `engine settings:` self-checks change a search engine, a site permission, the theme and browsing data through
+  chrome://settings in shown, private, pop-up and hidden pages and ask the engine for the page after each.
+- A browser-theme change (chrome://settings › Appearance › Reset to default, a theme installed or removed) leaves a
+  hosted page window's frame alone (`chromium-win-hosted-theme-change.patch`, engine `windows-engine-20261117-9`,
+  #2332). Chromium regenerates the frame on Windows for every theme change, which asks the window for a DWM frame
+  transition; a hosted window's frame is custom drawn, so that ended in a failed CHECK that closed the app.
 - The Visual C++ runtime ships inside the folder. React Native's DLLs import the app-container CRT (`vcruntime140_app.dll`,
   `msvcp140_app.dll` and the other `*_app.dll`), whose exports forward to the desktop `VCRUNTIME140.dll`, `MSVCP140.dll`
   and friends. A clean Windows 11 has none of those, and the per-user installer can't run `vc_redist`, so
-  `assemble.ps1` (`vc-runtime.ps1`) reads every PE file's imports, delay-loads and forwarded exports and copies each
+  `assemble-webui.ps1` (`vc-runtime.ps1`) reads every PE file's imports, delay-loads and forwarded exports and copies each
   redist DLL they reach from the build machine's Visual Studio (`VC\Redist\MSVC\<version>\<cpu>`, the version from
   `Microsoft.VCRedistVersion.default.txt`, found with vswhere; `-VcRedist <folder>` overrides it), for the launcher's
   CPU (all nine on x64, eight on ARM64, which has no `vcruntime140_1`). A forwarder whose target the redist lacks is left
@@ -405,15 +93,28 @@ is plain Chromium.
   top-level, it is what a window tool finds under the pointer (AltSnap's Alt+drag, a script posting SC_MOVE), so while a page
   is shown and not fullscreen its window holds its place: the host's own placement is the only move or resize it takes,
   a change that skipped WM_WINDOWPOSCHANGING (SWP_NOSENDCHANGING) is put back, and a system move or size started on it
-  goes to the app window (#2051, `Test-PageHoldsPlace` in `launch-smoke.ps1`). The guard stays on the window through Memory
+  goes to the app window (#2051; `Test-PageHoldsPlace` in the deleted `launch-smoke.ps1` checked it). The guard stays on the window through Memory
   Saver: a hidden page that sleeps keeps it, and the page holds its place again once it wakes (`engineSleepPlace.ts`). A window
   Chromium opens by itself (a link opened in a new window) stays off screen until the app adopts its tabs.
 - The verbs: `tab.create` (a key, a profile, a URL or a tab to adopt; the same key again moves the tab to the window
   that asks), `tab.show` (visible, and where in the window, in the UI's points; a corner radius and holes),
   `tab.close`, `tab.call` (load, back, forward, reload, stop, find, zoom, scripts, DevTools, print, site info and the
-  rest of the Mac tab's methods, `tab_calls.cc`), `tab.discard`, `tabs.list`, `host.info`, `app.quit`. Events come as
+  rest of the Mac tab's methods, `tab_calls.cc`), `tab.discard`, `tabs.list`, `host.info`, `renderer.efficiencyCounts` (takes the hourly counts), `renderer.efficiency`
+  (a tab's renderer: pid, priority, memory priority, power throttling), `app.quit`. Events come as
   the topic `tab` with a key, a name and data (navigation, progress, favicon, find, zoom, security, media, pagePress,
   windowClose and more), and `tab.opened` for a tab Chromium made itself, with who opened it.
+- The page view (`engine/EngineWebView.tsx`) is the native view under the shared `WebView`, so its handle is typed as
+  `WebViewNativeHandle` from `@ardia/ardiacore`, the calls the shared `WebView` makes on the Mac's view: a method
+  added to that contract that Windows lacks fails `pnpm -C packages/expo-windows typecheck`. Each method goes to `tab.call`
+  (`engine/pageCalls.ts`), is answered in TypeScript (`capturePicture`, `downloadFavicon`, `focusIfUnfocused`), or is
+  in `NOT_ON_WINDOWS_YET`, which answers the Mac's empty answer and logs the method once. Those need the engine:
+  `downloadImage`, `requestPictureInPicture`, `takeControlPress`, `exitPictureInPicture`, `resolvePasswordPrompt`,
+  `resolveAutofillPrompt`, `answerAutofillPrompt`, `executeExtensionAction`, `resolveDisplayMedia` (Chromium's own
+  picker shows), `mediaCaptureSourceId` and `notificationAction`. A failed `tab.call` rejects with the engine's error,
+  as on the Mac, an `evaluate` result, navigation list or cookie list of the wrong type rejects with `ERR_BAD_REPLY`,
+  and a closed page answers the empty answer. A focus the page takes only once it shows logs `could not take focus`
+  when the engine refuses it. `nativeTag` is null: a page is its own window, with no React Native tag to hand keyboard
+  focus to.
 - `tab.close` closes as the Mac's `TabBridge::CloseAfterUnloadHandlers` does: a page with `beforeunload` or `unload`
   handlers gets `beforeunload` with its prompt cancelled (no "Leave site?" is ever shown for a tab the app closed), then
   its unload handlers whatever it answered, each step with 2 seconds, and then the host deletes the tab
@@ -458,10 +159,87 @@ is plain Chromium.
   into a site being torn down, and `Microsoft.UI.Input` fails fast (`0xc0000602`, seen in a VM dump). Keys typed in it no longer reach the app's shortcut hook. One dialog per window at a time; a dialog whose window goes away, or every
   dialog when the app stops, is cancelled within 250 ms, except the open-file picker: quitting with it open waits the
   stop's full 2 s and leaves its thread running (exit code 0, no crash; #1747). The launch log notes how many dialogs
-  were open at stop, how long they took and how many were left. Pop-up menus (`TrackPopupMenuEx`) still run on the UI thread
-  and stall pages while a menu is open (#1687). The self-check holds a real confirm on both threads and checks that a
-  page loads only in the first case; `dialog_pages_asked` and `dialog_pages_stalled` count pages asked while a dialog
-  was open and how many hadn't loaded 10 s later.
+  were open at stop, how long they took and how many were left. Pop-up menus run the same way (#1687): the UI thread
+  builds the menu and takes the cursor point, and `TrackPopupMenuEx` runs on a `RunModal` thread, owned by that
+  thread's hidden `ModalParent` at the app window, which takes the foreground so keys and outside clicks reach the
+  menu. The app window stays enabled, the `resignActive` its deactivation would send is held back
+  (`ActivatesMenuThread`) and sent after the menu only if another app took the foreground, and a menu is closed
+  (`EndMenu`) when its window goes or the app stops. A right press in the sidebar while a page has the keyboard
+  activates the app window first, before any menu, so the page lost the keyboard to the sidebar for good (#2218, seen on
+  the CI runner: the field kept its caret but `document.hasFocus()` was false and the keys went nowhere). The app window
+  now remembers the page it was activated from when the secondary button was down (`TakePageLeftBySecondaryPress`). The
+  sidebar's presses reach WinUI without passing the UI thread's mouse messages or a `WH_MOUSE` hook (the CI input trace
+  had none and the hook was never called), so the window reads the physical buttons on a 15 ms timer from that press
+  until 2 s after its release, at most 10 s held (`FollowSecondaryPress`); another button or a new right press forgets
+  the page. The menu reads it on the UI thread before its thread starts (`PageTheMenuPressLeft`, within 2 s of the button release and only for
+  the menu's own window), and when the menu is dismissed without a choice it gives the keyboard back through the same
+  follow path the Windows key uses (`snapKeyHandedBack` with `afterMenu`), only if that window is still in front,
+  enabled, not minimized and holds no dialog, the page is still that window's and shown, and no switcher, popover,
+  Windows-key or command-bar hold is under way. A choice keeps today's behaviour, since its command may focus a field.
+  The launch log records each request and why a request was skipped ("menu: …"), and `page_focus_return_requests_after_menu` counts the requests, including ones a focused app field or a later foreground change refuses. The self-check holds a real confirm and a real menu on both
+  threads and checks that a page loads only in the first case; `dialog_pages_asked` and `dialog_pages_stalled` count
+  pages asked while a dialog or a menu was open and how many hadn't loaded 10 s later.
+- A launch while the previous Ardia on the same profile is still closing waits for it to end (up to 45 s) instead of
+  handing its command line to a browser that is shutting down, or starting a second browser on the same profile once
+  that one has let go of Chromium's process singleton (which happens before its shutdown is over: the old process
+  then still writes its profile). The quitting browser signals it from `QuitApp` and from its main parts' end
+  (`launch_guard.cc`, named objects under `Local\ArdiaBrowser.<hash of the user data folder>`); a launch while it runs
+  normally isn't held. Without this, Chromium's own singleton took the closing browser for a hung one and killed it
+  (`RESULT_CODE_HUNG`) before it had written its profile. The launch log says how long a start waited.
+- When the app can't start inside the engine (its library doesn't load, it has no `ArdiaAppStart`, or that refuses),
+  the engine shows why in a message box (none in a hidden instance), writes it to the launch log as
+  `app start failed: <reason>`, and quits from inside the run loop, so the process exits 0. It used to call
+  `QuitApp()` before the run loop and CHECK-crash at `browser_process_impl.cc:1959` with nothing on screen (#2044).
+  The app hands back its reason through `ArdiaAppStartFailure`.
+- A start that crashes or fails before it has run for 15 s counts as unfinished (`launch-starts.txt` in the data
+  folder; a quit before then counts as finished). After two unfinished starts in a row, the next one moves the
+  state Ardia restores at launch (`session.json`, `launch-look.json`, `switches-cache.json`, `bookmarks-cache.json`)
+  to `Recovery\<date-time>` in the data folder, deletes Chromium's graphics caches (`GrShaderCache`,
+  `GraphiteDawnCache`, `ShaderCache`, `GPUPersistentCache` and the profile's `GPUCache`, `DawnGraphiteCache`,
+  `DawnWebGPUCache`: a relaunch differs from a first run in what the first session wrote there), and says so once it
+  has opened, so a profile that crashes Ardia at every start opens again on its own. Chromium's profile (bookmarks,
+  history, passwords, cookies) isn't touched. #2097's recording (the app gone about 4 s after its window appears, at
+  every launch after onboarding) is that shape; the launch log now kept in `Logs` says what ended it.
+- **Crash reports.** `ArdiaApp.crashReports(since)` lists the minidumps Chromium's crash handler (Crashpad) wrote after
+  `since` (milliseconds), so the telemetry owner's native-crash report (`reportNativeCrashes`, the same consent as the
+  Mac and Linux) can name what ended a run on the next launch. It used to answer an empty list, so a Windows crash left
+  no report (#3664). `CrashDumps.h` does the work and uses only the standard library, so a test compiles it on any
+  machine; `AppModule.h` picks the folders and builds the JS objects.
+  - Where: the profile's `Crashpad\reports` folder (`%LOCALAPPDATA%\Ardia\User Data` for an everyday instance, the
+    instance's data folder for a test instance, whose dumps then never reach the everyday profile). Files over 32 MB
+    and empty or damaged ones are skipped. Every dump newer than the asking time is read (Crashpad prunes the folder
+    itself), so a burst of helper dumps can't hide an older browser one; then the newest five from the browser process
+    and five from the others are kept, as on Linux. A file's time is converted with the file clock, so asking again from
+    a report's `fileTime` never returns that dump again. The walk runs on its own thread, so it never holds the UI thread.
+  - What is read: the minidump's header, exception stream, module list and process times (bounds-checked, nothing is
+    executed) and three of Crashpad's annotations, `ptype`, `ver` and `ardia-ver`; every other annotation, the stacks,
+    the memory and the thread contexts are never copied. A dump written without a crash (Crashpad's simulated-exception
+    code) or without an exception stream is skipped.
+  - What comes back (`CrashReport`): the process kind (`ptype`; none means the browser), `terminationNamespace`
+    `WIN32_EXCEPTION`, the exception as its Windows name (`EXCEPTION_ACCESS_VIOLATION`, `STATUS_STACK_BUFFER_OVERRUN`,
+    or `STATUS_XXXXXXXX` for a code with no name), for an access violation whether it read, wrote or executed, one
+    frame naming the faulting module's file name and the offset in it (`nvoglv64.dll` +`0x1234`, `???` when the
+    address is in no module or the name isn't a plain `.dll`, `.exe`, `.sys`, `.drv`, `.ocx` or `.cpl` file name), the seconds the process had run (the dump's time minus its start time), the engine
+    version for a helper process (kept only when it has the shape of a version), and the dump's time and its file's modification time. No folder or file path, URL, page title or user
+    name is returned, and the module name has its folder cut off. The parser also reads an `ardia-ver` annotation as the
+    browser's app version, but no Windows build writes one yet, so a browser report carries no version. A browser-process
+    crash may also never reach Crashpad at all; that is #3665.
+  - `ArdiaApp.devWriteCrashFixture(name, hex)` writes a dump into that folder for the self-check. It refuses unless the
+    instance is a test instance, and refuses any name but letters, digits and dashes before `.dmp`, and Windows'
+    reserved device names. It answers true or false,
+    never a path.
+  - Self-check (`appSystem.ts`, `sampleMinidump.ts`): the inert-calls check asks for reports newer than tomorrow and
+    expects none; two more write a GPU-process dump (access violation in `nvoglv64.dll`, uptime 3 s, an engine
+    version) and a browser dump (stack buffer overrun in `Ardia.exe`, an app version) and read each back through
+    `crashReports(0)`. `windowsCrashReports.test.mjs` compiles the same parser with the system C++ compiler and
+    checks the dumps the self-check builds, plus damaged, oversized, simulated and hostile ones.
+- A window closed while minimized keeps its restored place and size for the next launch (the frame event's restored
+  bounds); it used to save the minimized frame and come back as a 480 x 360 window in the corner.
+- `scripts/windows/relaunch-check.ps1` (CI, after the installer check) installs the build and closes and reopens
+  it: twice right away, once after it has exited, once while the previous browser is held at its exit (it must
+  wait, with no second browser), once with two unfinished starts recorded (the session must be set aside), and
+  once with `Microsoft.ReactNative.dll` hidden (it must exit 0 with the reason logged). Every launch must show one
+  window from one browser, and Windows must log no Ardia crash, Crashpad no dump and the launch log no fatal line.
 - A second launch reaches the running app: Chromium's process singleton hands it the command line, and
   `chromium-win-relaunch-to-app.patch` gives that to `//ardia/win`, which sends the topic `relaunch` with the web and
   file addresses on it. The app treats them as links from another app (`onOpenURLs`: a Little Ardia window or a tab,
@@ -513,8 +291,8 @@ is plain Chromium.
   `platform/keyboardFollow.windows.ts`; the Mac has no such call and subscribes to nothing). `pages.ts` sends it once
   the page shows, unless a text field of that window has the keyboard: React Native's focused field and the window it
   is in decide, and a field the user left by pressing a page of its window no longer counts. A field in the content
-  area of another tab (its New Tab page, an empty split pane, an internal page: the views `TabPane` wraps in
-  `TabContentArea`, whose `contentAreaOf` prop the field walk reads) doesn't count either, since the new page replaces
+  area of another tab (its New Tab page, an empty split pane, an internal page: `TabPane`'s `NewTabDropArea` and
+  `InternalPage`, whose `contentAreaOf` prop the field walk reads) doesn't count either, since the new page replaces
   it; the sidebar, the command bar, the find bar and the toolbar keep the keyboard. Only a page already showing
   in that window gets the ask at once. For any other page (none yet, sleeping, hidden, prewarmed, still opening, or
   still showing in the window a tab moved from) the ask is kept until that page shows in that window, however long it
@@ -535,6 +313,33 @@ is plain Chromium.
   app text field is focused while the keyboard is in a page of the field's own window (the command bar, the find bar,
   an empty pane's search field), `ArdiaFocus.takeKeyboardFromPage` activates that window. A page that hides or
   closes leaves full screen, as the Mac's does.
+- Win+Up, Win+Down, Win+Left, Win+Right, Win+Z and their chains work while a page has the keyboard, as natively as
+  with the sidebar (#2148). The shell acts on the window that was in front when the Windows key went down (CI showed
+  an arrow sent later, with the app window in front, still ignored), and a page's own window can't be snapped, so
+  nothing moved. `MenuKeyboard`'s thread hook sees the Windows key go down over a page; when the foreground window is
+  then a page window owned by one of the app's browser or Little Ardia windows (and the instance isn't a background
+  one; a pop-up window's page keeps today's behaviour), the app window takes the foreground at once (same thread, so
+  nothing is taken from another app) and the hook remembers the page. The user's own keys then reach the shell with
+  the app window as its target; nothing is ever sent with `SendInput`, so the shell acts on the arrow's key-down, a
+  held arrow repeats, Win+Left then Up in one press works, and Snap Assist and the snap layouts are the system's. The
+  keyboard goes back to the remembered page through the follow path (`snapKeyHandedBack` to `followHandedBack`, which
+  asks the window's Peek page, or else its shown tab, to follow): at once on the key-up of any other key pressed with
+  the Windows key (V, the period, H, a letter, a digit), so clipboard history, the emoji panel and dictation still
+  type into the page; 150 ms after the Windows key is let go if the app window is still in front and not minimized;
+  or, when Start, Snap Assist or another program came to the front, as soon as the app window is in front again. The
+  shell eats the Windows key's own key-up when a tap opens Start, so the key counts as let go once it is no longer
+  physically down. The page is let go if it or its window goes away, another window of the app comes to the front, the
+  window is minimized, or 5 s pass; if the Windows key is up and another program is still in front then, the page is
+  asked to follow anyway, and the follow path gives it the keyboard when the window is activated again, as Windows
+  gives it back to the last active window today. The page sees one blur and focus. The launch log counts the pages
+  held and given back ("snap keys: … so far"). The launch check presses the five keys with the sidebar and with a page
+  focused, quickly and with the Windows key held 300 ms around the arrow, presses Win+Left then Up in one press and
+  compares it with the sidebar's, presses Win+V, Win+. and a Windows key tap from a page's text box, each dismissed
+  with Escape, and checks after each where the keyboard is and that typing still reaches the box; a pop-up window's
+  page must keep the keyboard, and the pop-up its place, through Win+Up. No clipboard or emoji panel opens on the CI
+  runner, so the check proves that the text box keeps the keyboard, not that a panel inserts into it; the keyboard is
+  back in the page at the key-up of V or the period, before a panel item is picked. Win+Shift+Left and Right need a
+  second monitor and aren't checked.
 - Find in page is the app's bar, as on the Mac. Ctrl+F in a page reaches the app's `findInPage` through `MenuKeyboard`'s
   thread keyboard hook, which sees keys meant for the page windows (the hosted windows have no Chromium shortcuts), so
   Chromium's own find bar never shows. React Native for Windows fires both `onKeyDown` and `onSubmitEditing` for one
@@ -543,7 +348,9 @@ is plain Chromium.
   ignores `findNext` (#1425), so reopening the bar on the same words moves one match on.
 - Peek opens as on the Mac. The engine host keeps a DevTools session of its own on each page and puts the Peek part of
   ArdiaCore's page script into an isolated world of every web frame (`page_links.cc`): the page can't see the script
-  or its binding. A click on a link with the Peek key (`webView.setPeekModifier`), the Split key
+  or its binding. It is registered for each new document (`Page.addScriptToEvaluateOnNewDocument` in that world, with
+  the binding scoped to it), so it is in place before a page that just woke from sleep or came by a cross-process
+  navigation takes input (engine `windows-engine-20261117-9`, #2198; the `engine links:` self-checks). A click on a link with the Peek key (`webView.setPeekModifier`), the Split key
   (`setSplitLinkModifier`), or a plain click to another site on a tab that peeks those (`setPeekOtherSiteTabs`), is
   cancelled and reported; the host checks it against the last real left mouse-up over that page and sends the Mac's
   `openWindow` (`peek` or `split`), or falls back as the Mac does. A tab the page opens itself carries `fromClick` only
@@ -632,7 +439,8 @@ is plain Chromium.
   CPU's zip with its SHA-256, `fetch-engine.ps1` downloads and checks it, and the Windows workflow assembles the app
   with it, launches it with the self-check (which then loads a page through the engine) and runs the tour's pages
   part. The release is a draft, so only the repository's own runs can fetch it; a fork's pull request skips those
-  steps. A new engine build is a new release and a new `prebuilt.json`.
+  steps. A new engine build is a new release and a new `prebuilt.json`, whose `source` is the commit it was built from
+  and `key` that commit's Windows engine key (`engine/engine-key.sh --platform win <source>`).
 - A tab opened with no address shows a committed `about:blank` until its first load, which replaces that entry, so
   the first real page reports `canGoBack: false` and Back never leads to a blank page (the Mac's "ahead blank" rule).
   `downloadNavigation`'s `committedUrl` is the tab's last committed page, empty while it has only that opening page.
@@ -681,311 +489,64 @@ is plain Chromium.
   reader, which keeps a decoded scratch copy of a string with escapes (a password with a backslash), and its
   serializer, which can free a smaller buffer while it grows, are not wiped.
 
-## Calls Windows still answers with a stand-in
-
-`forwarded.json` lists, per domain, the Mac's verbs that Windows has no handler for (`missing`). Each falls back to
-`defaults.ts` or `null` and logs its name once. What each one needs:
-
-- **Default**: the stand-in is the right answer on Windows, or the verb is a Mac test hook.
-- **Native**: C++ in `apps/browser/windows`, no engine build.
-- **Engine**: a new or changed `ac_*` call, host verb or `tab.call` method in a Windows engine build.
-
-| Verb | Needs | What and why |
-| --- | --- | --- |
-| `autofill.settings`, `autofill.setSettings` | Engine | The Mac reads and writes the profile's `autofill.profile_enabled` and `autofill.credit_card_enabled` prefs; no `ac_*` call touches prefs. Today Settings › Autofill shows both toggles on and disabled. |
-| `autofill.showSuggestions` | Engine | Shows Chromium's autofill popup in a tab: a `tab.call` method. |
-| `contentBlocker.state`, `setEnabled`, `setListEnabled`, `isAllowed`, `setAllowed` | Engine | The Mac's blocker is uBlock Origin loaded as a component extension (`loadComponentExtension`, not an `ac_*` call) and driven through its hidden pages. Windows needs that load in the engine and the extension in the Windows package. Today Settings › Privacy shows no blocker. |
-| `contentBlocker.devFailNextMessage`, `devDelayNextLoad` | Default | Mac test hooks. |
-| `engine.beginTracing`, `endTracing`, `isTracing` | Engine | Chromium's tracing controller for Report a Problem. |
-| `engine.cliTabTargets`, `cliOwnsTab`, `cliMoveOffscreen`, `cliCloseOffscreenTabs` | Default | The `ardia` command's control is off on Windows (the engine swaps its control file for a stand-in), so it opens no tabs to look up, take off-screen or close. |
-| `extensions.resolveInstallPrompt` | Engine | Answers the Web Store's install prompt, which the engine doesn't send to the app on Windows yet. |
-| `extensions.actionStates`, `extensions.sidePanelUrl` | Engine | An extension's toolbar state and side panel for a tab. |
-| `media.displayMediaSources`, `screenRecordingAllowed`, `requestScreenRecording` | Engine | The app's own screen share picker; Chromium's picker shows today. |
-| `media.selectDevice`, `cancelDeviceChooser`, `refreshDeviceChooser`, `openBluetoothSettings` | Engine | The Bluetooth, USB, serial and HID choosers drawn by the app; Chromium's own show today. |
-| `media.showCastDialog`, `startCasting`, `stopCasting`, `closeCastDialog`, `watchCastRoutes`, `terminateCastRoute` | Engine | Casting. |
-| `media.changeCaptureSource`, `media.stopCapture` | Engine | A tab's camera, microphone or screen capture. |
-| `media.devShowBluetoothChooser`, `media.devChooserEvents` | Default | Mac test hooks. |
-| `passwords.autofillEnabled`, `passwords.setAutofillEnabled` | Engine | The profile's `credentials_enable_service` pref, as for autofill. Today Settings › Passwords' offer-to-save toggle reads off and changes nothing. |
-| `permissions.resolve` | Engine | Permission prompts drawn by the app; Chromium's own prompt shows today. |
-| `permissions.devExternalLaunches` | Default | Mac test hook. |
-| `profiles.loaded` | Engine | The profiles the engine has loaded, plus the `profiles.loaded` event. Today the call fails and the app counts every profile as open, as with lazy loading off. |
-| Profile folder names (no verb) | App | The engine names a profile's folder `Ardia ` plus its id, with lowercase letters, digits and `-` kept and every other byte written `_` and two lowercase hex digits (`profiles.cc`), so each name has its own folder even on a case-insensitive disk and Ardia's own ids (`p-<base36>-<base36>`) keep the folder they always had. `profiles.deleteData` still maps only ids of that shape and refuses the rest; it could map the escape too. |
-| `search.setEngineName` | Default | Names the search engine in the app's own page context menu; Windows shows Chromium's menu, which names Chromium's default engine. Needed again once the app draws that menu. |
-| `tabs.routeLinkTabs`, `stripCommand`, `strips`, `reportCommits` | Default | The Mac's Chromium tab strip; Windows hosts pages only, so the empty answers are right. |
-| `tabs.dev*` (10 verbs) | Default | Mac test hooks. |
-| `webView.setDisplayMediaPicker`, `setSelectionPopover`, `setCommandScrollZoom`, `setLittleArdiaOpensNewTabLinks`, `setAutoPictureInPicture` | Engine | Settings for the page script and the Mac's page input hooks, which Windows doesn't have yet. |
-| `webView.setVideoUpscaling`, `setVideoUpscalingTestConditions`, `videoUpscalingState` | Native and engine | The Mac upscales with MetalFX; Windows needs a Direct3D path. |
-| `windows.list`, `windows.dev` | Default | The Mac's Chromium window hosts. |
-
-`search.suggest`, `search.stopSuggest` and `extensions.loadHealth` are forwarded to the engine
-(`ac_search_suggest`, `ac_search_suggest_stop`, `ac_extensions_load_health`) since `windows-engine-20261112-2`. When the
-Mac forwards a call the shipped Windows engine lacks, `forwarded.json` lists it under `awaitingEngine` and Windows
-answers it in TypeScript until a new engine build has it; none waits now.
-
-Not in `forwarded.json` but also engine work: media next and previous track. The media controls send `mediaCommand`
-`next` or `previous` (`state/media/media.ts`), the Windows view passes it on as `tab.call`, and `MediaCommand` in
-`tab_calls.cc` runs a page script that has no case for either, so nothing happens. The Mac calls the page's own
-`nexttrack` and `previoustrack` handlers through its page script. The engine needs to call
-`content::MediaSession::Get(contents)->NextTrack()` and `PreviousTrack()` there, and to send a `nowPlaying` tab event
-(title, artist, album, artwork, playback state, position, duration, rate, video or not, and the actions the page set
-handlers for, from a `MediaSessionObserver`): Windows sends only `media` (audible, muted), so the app never builds a
-session with track actions, and the mini player shows skip by 15 seconds where the Mac shows the track buttons.
-
-Answered in TypeScript on Windows since this list was made: `engine.info` (from `host.info`), `favicons.fetch` (the
-icon Chromium stored for that address, from `ac_favicons_get`, asked again after 0.4 and 1.5 s while Chromium writes
-it), and `profiles.deleteData`.
-
-Answered on Windows since the engine took Windows paths (`windows-engine-20261112-2`), in `domains/exports.ts`,
-`unpacked.ts` and `systemState.ts`, with the dialogs, file reads and power reading passed in as the domain engine's
-`desktop` (`domains/desktop.ts`):
-
-- Links to other apps: `chromium-win-external-protocol-dialog.patch` gives Chromium's `ExternalProtocolHandler` the
-  hook the Mac's `apply.sh` adds (`g_ardia_win_external_protocol_dialog`, called after Chromium's own block state and
-  denied schemes, with the request's user gesture). For a tab the host keeps, `ardia/win/external_apps.cc` sends the
-  `externalApp` tab event (`id`, `url`, `origin` or null, `userGesture`, `offTheRecord`) to `domains/externalApps.ts`
-  and keeps the asking document. The `externalAppAlive` page call answers `{ alive: true }` once per request while
-  that document is the one showing: still there, active (not kept in the back/forward cache, not pending deletion
-  after a navigation) and in the tab's primary page. The Mac's `ResolveExternalApp` checks only that the document
-  still exists. Every request with an initiating origin that isn't an
-  extension's counts as a page's, opaque origins included: a `data:` page or a sandboxed frame needs its document
-  alive too. Only a request with no initiating origin (the browser) or an extension's needs just its tab. The prompt
-  shows an origin only when it isn't opaque; otherwise it says "This page wants to open this application." and never
-  borrows another page's name. A cross-site navigation drops the page's prompt (`state/tabs/pageEvents.ts`
-  `leftPage`, as on the Mac); after a same-site navigation or a reload the prompt can stay, and Open then launches
-  nothing because the asking document is no longer the one showing, even while the back/forward cache keeps it. The engine keeps a page's 8 newest asks at most, and the app tells it
-  (`externalAppForget`) whenever it drops one without launching: a no, no handler, a closed page or a forgotten
-  profile. `mailto` never asks: Chromium allows it by default and opens the mail app itself,
-  as on the Mac.
-  - **Describe:** `ArdiaExternalApps.describe` names the scheme's handler and draws its icon (`AssocQueryStringW` with
-    `ASSOCSTR_FRIENDLYAPPNAME` and `ASSOCSTR_EXECUTABLE`, then `SystemShell::FileIcon`). A classic scheme under
-    `Software\Classes` (how Zoom and Slack register) gets no name from `AssocQueryString` on Windows 11 build 26200,
-    so, like Chromium's `GetAppForSchemeUsingRegistry`, it then takes the scheme's own name (without `URL:`) or the
-    program of its `shell\open\command`. A packaged handler (the new Outlook for `mailto`) has a name but no
-    executable, so its prompt shows no icon. Like Chromium, it knows only
-    schemes whose `HKCR` key carries `URL Protocol`, so a file type's ProgID can't pose as a link scheme, and it
-    refuses one-letter schemes (drive letters).
-  - **Prompt:** the Mac's prompt shows in the Mac's words. Like every page prompt it ignores input for half a second
-    after it appears and after an Ardia window becomes active; the window becoming active again because the user
-    clicked from one of its own page windows back into it doesn't count (`WindowManager.h` marks that `focus` event
-    `fromPage`, and `state/site/promptGuard.ts` skips it), so the first click on the prompt works. "Always allow" is offered only for an https or loopback
-    site, outside private windows, and kept per profile in `external-app-allowances.json`; deleting a profile
-    forgets them. A remembered site opens the app without asking only when the request had a user gesture.
-  - **Lifetime:** an ask belongs to its page and is dropped when the page closes. Before any launch the engine must
-    answer `true` to the `externalAppAlive` page call, which needs the asking document to be the active one in the
-    tab's primary page, so a prompt survives a single-page site's route change but opens nothing once its document
-    is no longer shown, cached or not.
-    The prompt carries an id the app makes, so two pages whose engine ids collide never answer each other's
-    prompt. The engine's origin must be a serialized origin (no user info, path or spaces), and a profile deleted
-    while a yes waits for the engine keeps no allowance and opens nothing.
-  - **Counts:** the prompt's buttons are counted in the app (`externalAppCounts.ts`: `external_app_allows`,
-    `external_app_allows_always`, `external_app_declines`), on the Mac too. Only Windows knows whether a launch
-    happened, so `ArdiaExternalAppCounts.takeLaunches` adds `external_app_launches`, `external_app_launches_refused`
-    (allowed, but the page had gone, the profile was deleted or the handler changed) and
-    `external_app_launches_automatic`; the Mac sends 0 for those three. Watch refused against launches.
-  - **Open:** `ArdiaExternalApps.open` opens only the asked URL of a pending request. It never opens http, https or
-    file. It escapes the URL as Chromium's `EscapeExternalHandlerValue` does, and hands it to `ShellExecuteExW` as
-    the single `lpFile`, with the system folder as the working folder as Chromium does. It takes the handler's
-    name and executable from the prompt and opens nothing if the scheme's handler changed since.
-  - **Denied schemes** stay Chromium's own (`ExternalProtocolHandler`), which run before the engine's hook, as on
-    the Mac.
-  - **Self-check** (`selfCheck/externalApps.ts`): `describe` names no handler and `open` opens nothing for browser,
-    one-letter, path, file-type (`txtfile`) and unknown schemes. It launches nothing unless the test instance sets
-    `ARDIA_TEST=externalAppLaunch=1` (read from the launch config, so only in a test instance, see Test instances;
-    it lifts only the background instance's refusal to launch): then each link in the data folder's `external-app-links.txt` goes through the
-    real gate and launch, which must name a handler, open nothing on no and open on yes (a line starting `! ` must
-    stay refused). The VM run uses that with a throwaway handler registered under `HKCU`.
-- `bookmarks.exportHtml` and `passwords.export`: `ArdiaDialogs.saveFile` (a Windows save panel, `SaveDialog.h`; the
-  password one carries the Mac's warning that anyone who can open the file can read the passwords), then
-  `ac_bookmarks_export_html` or `ac_passwords_export`, which asks Windows to confirm it is you before it writes
-  (`reauthFailed` otherwise). A background instance answers the panel from `file-chooser.txt` and logs that a file was
-  chosen, never which.
-  Windows confirms the password export with Windows Hello, or with the Windows Security password prompt when Hello
-  isn't set up. Chromium shows that over `GetLastActiveBrowser()`'s window, which in Ardia is a page window, so
-  `chromium-win-reauth-app-window.patch` gives it a hook and the engine host answers with the app window the user is
-  in. In Chrome that password prompt is modal on the browser UI thread, so other engine calls
-  and quitting wait on it (the old stall, when the prompt sat unseen on a page window); the patch runs it on a pool
-  thread that shutdown doesn't wait for. Every confirmation has a 110 s deadline, under the app's two-minute
-  timeout: at the deadline the export answers `reauthFailed`, the password prompt is closed, and a later answer is
-  dropped, so nothing is written after the app gave up. If either export has not answered
-  after `EXPORT_ANSWER_MS` (two minutes, enough for a large profile), it fails the way the Mac's does: the bookmark
-  export reports "Couldn't export" and the password export answers `writeFailed`.
-- `extensions.chooseFolder` and `extensions.inspectUnpacked`: `ArdiaDialogs.pickFolder`, then the Mac's
-  `ReadManifest` in TypeScript over `ArdiaWindowsImport`'s file reads: the manifest (comments and trailing commas
-  allowed, as Chrome does), its `_locales` messages (locale names only), the icons as data addresses, and the id from `key`.
-  Every read goes through `readTextWithin`/`readBase64Within`, which compare the opened file's real path with the
-  folder's, so no `..`, junction or symlink reaches outside it; the size limit is the opened file's, not a link's. `install` and `installCrx` already went to `ac_extensions_install` and `ac_extensions_install_crx`.
-- `engine.systemState`: `ArdiaSystemSignals.powerState` (`GetSystemPowerStatus`, `GlobalMemoryStatusEx`) mapped onto
-  the Mac's shape: on battery, the battery's level, battery saver as `lowPowerMode`, and memory pressure from the
-  memory load (warning at 85%, critical at 95%). It is read again every 20 s and `engine.systemState` is sent when it
-  changes, as macOS's notifications do. Settings › Advanced says "battery saver" where the Mac says Low Power Mode.
-
-Deleting a profile's data: native (`ArdiaEngineHost.removeProfileFolder`) works out Chromium's data folder itself, as
-the engine does (`<ARDIA_DATA_DIR>\Chromium` in an instance with its own data folder, `%LOCALAPPDATA%\Ardia\User Data`
-otherwise), and acts only where that folder holds the `Default` profile folder or `Local State` and agrees with `host.info`'s
-`userDataDir`. The folder counts first: Chromium saves `Local State` with `ReplaceFile`, and while it does a reader can
-find the file missing, which made a removal answer "refused" and leave a deleted profile's data on disk (#2120). A profile
-is deleted by its folder only when its id is one Ardia makes: lowercase `a-z`, `0-9` and `-`, at most 238 characters,
-so that `Ardia <id> (removing)` fits one 255-character NTFS name. Its folder is then exactly `Ardia <id>`. Any other id
-(hand-edited state, a sync from something else, a bug) could share its folder with another profile, so on purpose
-nothing is renamed, removed or cleared for it: the answer says the id isn't one Ardia makes, its data stays, and the
-app logs that it couldn't delete it. A name with `@` is a private session to the engine and has no folder; a name with
-a NUL is refused, since the engine reads it only up to the NUL. Native renames the folder to `<folder> (removing)` first,
-which fails while the engine holds a file in it, so a loaded profile's folder is never half removed: its browsing data
-is cleared through `ac_browsing_data_clear` instead and the folder goes at the next launch. A `(removing)` folder left by
-an earlier try is cleared first, and while it stays the answer is that files are left, never that the folder is gone.
-The original profile's folder is never removed: as on the Mac (`ProfileData.swift`), its browsing data, form data and
-site settings, passwords and never-save sites, addresses, cards, running extensions, site settings and zoom levels are
-cleared one by one through their `ac_*` calls, and each step that fails is named. The launch log says
-`profile folder removed|in use|partly removed: <folder>`.
-
-## Import from another browser
-
-The Mac's `ArdiaImport` (Swift, `packages/import`) has a Windows version in TypeScript, `packages/expo-windows/src/import`,
-that answers the same methods with the same result shapes, so the wizard (`components/import`) and
-`state/import/apply.ts` are the Mac's. Only the OS calls and the secrets are native: `ArdiaWindowsImport` (`ImportModule.h`,
-`ImportFiles.h`, `ImportSecrets.h`, `ImportNss.h`, `ImportFirefox.h`, `ImportFirefoxCookies.h`, `ImportAutofill.h`).
-
-- Native primitives: the two data folders (`localAppData`, `roamingAppData`, or `<importSourceDir>\Local` and `\Roaming`
-  when `ARDIA_INSTANCE=importSourceDir=<dir>` is set in a test instance), `list` a folder,
-  `readText` and `readBase64` a file up to a size, and `query` a SQLite file: it is copied with its `-wal` and
-  `-journal` to `%TEMP%\ardia-import-<pid>-<random>` (leftovers over an hour old go at the next launch), opened with
-  Windows' own `winsqlite3.dll` with ATTACH off, and only statements SQLite calls read-only run. The browsers' secret
-  stores (`Cookies`, `cookies.sqlite`, `Login Data`, `Web Data`, `key4.db`, `logins.db`, `logins.json` and their
-  `-wal`/`-journal`) are refused to these generic reads under any name Windows resolves to them (any case, a trailing
-  dot or space, a stream suffix, a short name: the check also reads the opened file's real name), so their plain-text
-  values can't reach JS through them. A sidecar that exists but can't be copied fails the snapshot rather than leaving
-  it without the latest writes, and a copy during which the database or its WAL changed (a checkpoint, a write) is
-  taken again, up to three times, then reported as in use. `openSnapshot`, `querySnapshot` and `closeSnapshot` keep one snapshot open across
-  calls (closed after 10 idle minutes otherwise), so history is read 5,000 rows a page instead of in one reply. A file the browser holds open with no
-  sharing (Chrome does this to `Network\Cookies` and others while it runs) answers `inUse`, and that kind fails with
-  "Quit <browser> and import again".
-- Discovery (`browsers.ts`, `discovery.ts`): Chrome, Edge, Arc, Firefox, Zen, Brave, Vivaldi, Opera, Opera GX, Chromium,
-  and the Beta, Dev and Canary (`SxS`) channels of Chrome and Edge and Brave's Beta and Nightly, each from its own folder
-  under `%LOCALAPPDATA%` or `%APPDATA%` (Arc from its package's `LocalCache`). Chromium profiles come from `Local State`
-  and the `Default` and `Profile *` folders; Firefox and Zen profiles from `profiles.ini` (relative paths only).
-- What is read, per profile, with the Mac's readers ported: bookmarks (`Bookmarks`, `AccountBookmarks`; Firefox
-  `places.sqlite`), history (`History`; `places.sqlite`), open tabs (the newest cleartext `Sessions\Session_*` or
-  `Current Session`; Firefox and Zen `sessionstore-backups\recovery.jsonlz4` and the rest, LZ4 in TypeScript), favicons
-  for the imported tabs and bookmarks bar (`Favicons`), a bookmarks HTML file and a passwords CSV file (picked with
-  `ArdiaDialogs.pickFiles`).
-- Spaces (`arcSidebar.ts`, `zenSession.ts`, `zenSidebar.ts`, `sidebars.ts`, ported from `ArcSidebar.swift` and
-  `ZenSidebar.swift`): Arc for Windows keeps `StorableSidebar.json` beside its `User Data`, in
-  `%LOCALAPPDATA%\Packages\TheBrowserCompany.Arc_ttt1ap7aakyb4\LocalCache\Local\Arc`, in the Mac's format (the path
-  and the format are what the open-source exporters read, e.g. ivnvxd/arc-export, which parses both platforms' files with
-  the same code). Its spaces, pinned tabs, today tabs and favourites (Top Apps) come over per Chromium profile. Zen's
-  workspaces, folders, pinned tabs and Essentials come from `zen-sessions.jsonlz4` in the profile folder, then
-  `zen-sessions-backup\`, then the Firefox session store and `places.sqlite` `zen_workspaces`, as on the Mac; the source
-  carries `sidebar: "arc"` or `"zen"`, so the wizard offers spaces.
-- Passwords and cookies (Chromium family): the key is `os_crypt.encrypted_key` in `Local State`, unwrapped with DPAPI
-  (`CryptUnprotectData`, no prompt: it is the same Windows user), and values are `v10` AES-256-GCM through BCrypt; a value
-  with no prefix is tried as plain DPAPI (Chrome before 80). Chrome's app-bound values (`v20`, `app_bound_encrypted_key`)
-  need Chrome's elevated service to unwrap, so they are counted and skipped, and the kind warns "N passwords use Google
-  Chrome's app-bound encryption, which only Google Chrome can read" (an `undecryptable` warning, as the Mac's). So the
-  wizard has no unlock step on Windows (`needsKeychain` is false), and the key is unwrapped the first time a kind needs it.
-- Firefox and Zen passwords: `ImportNss.h` derives the `key4.db` key with BCrypt (PBES2: PBKDF2-SHA256 and AES-256-CBC;
-  older profiles: the SHA-1 and 3DES PBE) with the empty primary password, as the Mac's wizard does; a profile with a
-  primary password set fails the kind with the Mac's locked "Wrong Firefox primary password". `ImportFirefox.h` decrypts
-  `logins.json` (3DES or AES-CBC fields) and `logins.db` (JWE, AES-256-GCM under the `as-logins-key` key) and merges
-  them as `FirefoxLogins.swift` does. Firefox and Zen cookies (`ImportFirefoxCookies.h`, `cookies.sqlite`) skip container
-  and private-window cookies and say how many ("N cookies from containers or private windows weren't imported").
-- Autofill (Chromium family, `ImportAutofill.h`): `Web Data` addresses (the token tables and the older
-  `autofill_profiles`) and cards (`v10`, or plain DPAPI; `v20` is app-bound and counted), as `ChromiumAutofill.swift`
-  reads them. A card the key can't open without `Local State` is counted as locked.
-- Secrets: the key stays native and is wiped by `forgetUnlockedKeys`. Passwords reach JS (`credentials`), as on the Mac,
-  because `savePassword` (`ac_passwords_add`) takes them from there. Cookie values and autofill entries never do: native
-  decrypts them straight into wiped buffers already in `ac_cookies_import`'s and `ac_autofill_import`'s JSON, batches of
-  500, keeps them for 10 minutes under one one-time token per import (the autofill joins the cookies' entry), and JS gets
-  the counts and the token. `writeImported(token, profile, kinds)` sends the cookie batches and then the autofill
-  batches to the engine one after another, wipes each after its reply, and wipes the kinds the wizard didn't ask for. A token is dropped after 10 minutes even if nothing asks again, and a vault
-  `forgetUnlockedKeys` cleared while a read was running stays empty.
-- Not on Windows yet, each offered by no profile so the wizard doesn't show it: Chromium's encrypted session files
-  (`Sessions_Encrypted`), extensions found in the profile, Safari, Dia's tabs.
-- Tests: `apps/browser/src/state/import/windowsImport.test.mjs`, `windowsSidebars.test.mjs` and `windowsAutofill.test.mjs`
-  run the TypeScript against `packages/import/fixtures` with a stand-in for the native module
-  (`state/import/fixtures/windowsHost.mjs`: Node's own `node:sqlite`, the same snapshot copy). The self-check's import area
-  exercises every native method in the app; `launch-smoke.ps1` copies the fixtures' Firefox, Zen and Chrome profiles
-  into the self-check's data folder (`import-fixtures`), so the NSS, `logins.db`, cookie and `Web Data` readers decrypt
-  real files there. Telemetry: `import_runs`, `import_kinds_done`, `import_kinds_failed` and
-  `import_secrets_left` in the hourly `usage_counts` (`state/telemetry/importRuns.ts`, every platform): a rising share of
-  failed kinds or secrets left on Windows is the sign to look at.
-
-## Sync
-
-Windows syncs with Macs through the same folder and the same vault: `folder\<chain tag>\<scope tag>\<file id>.nns`,
-sealed exactly as `packages/sync/ios/Core/SyncCrypto.swift` seals it. The engine (`state/sync`) is the Mac's;
-`ArdiaSync` is answered by `packages/expo-windows/src/sync` (layout, listing, QR code, Recovery Kit) over the native
-`ArdiaWindowsSync` (`SyncModule.h` and the `Sync*.h` headers next to it), which keeps every secret out of JS:
-
-- Keys: the 24 words are made and read natively (`SyncPhrase.h`, the Mac's wordlist in `SyncWordlist.h`), the entropy
-  is sealed with DPAPI for the current user into `<data folder>\Sync\sync-key-<device id>.dpapi` and wiped after the
-  four keys are derived (BCrypt HKDF, HMAC and AES-256-GCM in `SyncCrypto.h`). A failed unseal never makes a new key;
-  sync asks for the phrase. Each operation holds the keys it started with; `forget` bumps a generation, so a result or
-  an owner check that began before it is dropped.
-- Passwords are off on Windows (`PLATFORM_FEATURES.syncsPasswords`: no What Syncs row, the type never syncs, and
-  the Mac's synced passwords stay in the vault untouched). Chromium turns `kSkipUndecryptablePasswords` on by default
-  on Windows only, and Ardia keeps it on: Settings, export and autofill read through the affiliation path, which still
-  leaves out a login it can't decrypt. The plain login read is strict on Windows (`chromium-win-strict-login-list.patch`):
-  it fails when any login can't be decrypted, for every caller of that read, so no caller has to remember a flag.
-  Chromium never deletes a login it can't decrypt on Windows (`chromium-win-keep-every-login.patch`):
-  `LoginDatabase::DeleteUndecryptableLogins`, the only code that does, deletes nothing, so neither
-  `kClearUndecryptablePasswords` nor `kClearUndecryptablePasswordsOnSync` can turn it on. That rule is proven from the
-  source, not exercised: a test instance's `--user-data-dir` already skips Chromium's cleanup.
-  `ac_passwords_logins` answers the full list (empty means no passwords), "undecryptable" or "unreadable"; "closed"
-  and "no password store" mean the profile isn't ready. Sites never to save and federated sign-ins have no password
-  and are left out. An ordinary login whose stored password is empty is listed with `"passwordless": true` and no
-  password: Chromium stores such logins (an imported one with an empty password, a username-only one), and on disk
-  they look the same as a damaged blob, so the engine lists them and Sync decides. The native side passes it on
-  unsealed (`SyncLogins::SealedLogins`), and Sync's password adapter neither uploads it nor reads it as a deletion
-  (`ignore`), and never writes a synced password over it: such a login stays as it is on this machine and nothing about
-  it is uploaded, and a damaged row is the user's to fix by saving the password again. Before passwords sync on
-  Windows (#1425), Sync must treat every error as "skip this cycle, delete nothing". The Mac drops such a login
-  silently (#1933).
-- Passwords, once the engine lists them: `ac_passwords_logins` is called and its reply sealed in C++ (`SyncSystem.h`),
-  and a synced password is opened only to hand it to `ac_passwords_add`. The Mac's vault files carry plaintext `p` in `pw:` records, as the Mac
-  writes them; `SyncLogins.h` swaps them for sealed `s` before JS sees a document (escaped keys included; a login it
-  can't seal loses its `p`) and back when writing. Replacing a password reads the old one first and puts it back if
-  the add fails, because `ac_passwords_update` asks the user to sign in again.
-- Disclosure (Show Words, Copy Words, Show Code, the Recovery Kit): Windows Hello, else Windows' own password prompt
-  checked with `LogonUser` against this user's SID, valid for 60 seconds as on the Mac. A hidden test instance answers
-  from `ARDIA_TEST=reauth=granted`. Copied words are kept out of clipboard history and the cloud clipboard.
-- Files: written to a hidden staging file, flushed, then moved into place without replacing; read only when the size
-  and write time didn't change during the read. OneDrive's online-only files are never opened: they wait as pending
-  while a single background reader downloads them (one try per file a minute, at most 64 queued). A file another
-  program is writing waits too. Links where the vault's own folders belong are refused, and deleting the vault never
-  follows one. Like the Mac, sync polls every 15 seconds; it does not watch the folder.
-- The Recovery Kit is drawn in TypeScript (`kit.ts`, `pdf.ts`), with a QR code module for module CoreImage's
-  (`qr.ts`, `windows-interop/qr.txt`); the preview is the kit with masked words, rendered by `Windows.Data.Pdf`.
-
-Proof that the formats agree: `packages/sync/tests/WindowsInteropTests.swift` opens a vault written through the
-Windows code path (`fixtures/windows-interop/windows`), `state/sync/windowsVault.test.mjs` reads the vault the Mac's
-Swift core wrote (`fixtures/windows-interop/mac`), and the self-check opens that same Mac vault with the native code.
-
 ## Updates
 
 - The updates live on the GitHub prerelease `windows-alpha`: `Ardia-Setup-x64.exe`, `Ardia-Setup-arm64.exe`, the
-  feed `windows-update.json` (version, build, and per CPU the installer's address, SHA-256 and size) and the
-  engine's source. `scripts/windows/publish-alpha.sh` puts one build there, the feed last. It keeps the installers of
-  the build before, so an update the app already offered still downloads, and removes older ones. It refuses a build
-  at or below the live feed's, since no installed app would take it.
+  feed `windows-update.json` (version, build, and per CPU the installer's address, SHA-256 and size), its raw 64-byte
+  Ed25519 signature `windows-update.json.sig`, and the engine's source. `scripts/windows/publish-alpha.sh` signs the
+  feed with `scripts/windows/sign-update.mjs` (using `--key`, `WINDOWS_UPDATE_KEY_FILE` or
+  `WINDOWS_UPDATE_ED_PRIVATE_KEY`, checked against `scripts/windows/windows-update.pem`) and self-verifies
+  `windows-update.json`, `windows-update.json.sig` and both installers with `ardia-update-verify` before uploading,
+  putting the feed and its `.sig` up after the installers. A live publish without a signing key fails closed;
+  `--dry-run` without a key signs with an ephemeral test key so the verification path still runs. Keeping
+  `windows-update.json`'s JSON shape unchanged and carrying the signature in `windows-update.json.sig` lets older
+  unsigned installs keep updating while new installs enforce the signature. It keeps the installers of the build
+  before, so an update the app already offered still downloads, and removes older ones. It refuses a build at or below
+  the live feed's, since no installed app would take it.
 - Every release refreshes it (Releases, below), so installed Windows apps update to each nightly and stable.
-  `publish-alpha.sh <run id>` still publishes one green Windows workflow run there as an alpha between releases.
-- A build knows what it is from `Ardia.build.json` beside `Ardia.exe` (`assemble.ps1 -Version -Build`). The build
+  Between releases, dispatch `.github/workflows/windows-alpha.yml` with a green Windows workflow run id so alpha
+  publishes share the `ardia-windows-alpha-publish` concurrency group with `release.yml` (`scripts/windows/publish-alpha.sh`
+  refuses live local publishes unless `--allow-local-publish` is explicitly passed; `--dry-run` works locally).
+- A build knows what it is from `Ardia.build.json` beside `Ardia.exe` (`assemble-webui.ps1 -Version -Build`, which
+  also stamps `"shell": "webui"`). The build
   number is the number of commits in the built commit's history (`git rev-list --count`, the workflow's `identity`
   job), so it grows with `main` and a release outranks every build before it, CI's included; builds before this rule
   were numbered by the run (up to about 670). The Windows workflow puts the same file beside the installer in its
   `Ardia-Setup-<cpu>` artifact, which is where `publish-alpha.sh` reads a build's version and number. `ArdiaApp.systemInfo` takes its version and build from that file, since the library has no version
   resource, so telemetry, About and problem reports name the build; a folder build without it says 0.0.0, build 0. Only an installed build with that file updates: Settings › General › Updates shows "not set up" for a
   folder build.
-- `packages/expo-windows/src/updater` is the app's `ArdiaUpdater` on Windows. It reads the feed, offers a higher
-  build for this CPU, downloads it, and asks before installing; with automatic downloads on it downloads first and
-  asks once. It checks 30 s after launch and every 6 hours, never in a hidden instance, and in an instance with its
-  own data folder only when a test instance names a feed with `ARDIA_INSTANCE=updateFeed=<url>` (then installers must
-  sit beside it).
-- The native half (`UpdateModule.h`, `ArdiaWindowsUpdate`) only fetches from the release's address, checks the
-  download's size and SHA-256 against the feed, and runs the installer from the Updates folder in the data folder
-  after hashing it again while holding it open. The installer runs silently, closes what is left of the app and
-  opens it again (`/relaunch=1`). Nothing is signed yet, so what stands behind an update is GitHub's HTTPS and the
-  release's write access.
+- The WebUI shell updates from the signed feed. Its native half is
+  `scripts/windows/engine/src/ardia/win/webui/webui_updates.cc`, which serves `ArdiaUpdates.installKind`, `status`,
+  `check`, `update`, `claimOutcome` and `restart` to the shell; the rules it follows are in `webui_update_policy.h` and
+  tested by `scripts/windows/engine/tests/webui_update_policy_test.cc`. `check` fetches the feed and its signature
+  through Chromium's network stack (a redirect only to GitHub's release hosts over https), stages them in a fresh
+  folder under `<app data>\Updates` that is never a link, and runs `ardia-update-verify.exe windows-manifest` against
+  `windows-update.pem` beside `Ardia.exe`. Each staged file is created with `CREATE_NEW` and no sharing, checked
+  before a byte is written, then reopened read-only (only `FILE_SHARE_READ`) as the same file and held while the
+  verifier reads it. The verified offer stays in the browser process: the shell only says which build to download,
+  never a URL, hash or path. `update` streams the installer into an unpredictably named staging file, hashing it as it
+  is written, renames it to `Ardia-Setup-<sha16>.exe` through its handle, reopens it read-only (no `DELETE` access, so
+  `CreateProcessW` can open it, and only `FILE_SHARE_READ`) as the same file and holds that handle
+  through `windows-package` and until `restart` starts it with the RNW updater's silent arguments and quits, so nothing
+  can change it in between. One install runs at a time: a second `restart`, from any window, answers `busy`, and a
+  launch that fails releases the held installer. A file that fails a check is deleted only through its own handle,
+  never by path. A hidden instance never starts it. `claimOutcome` answers with the outcome it consumed, and each run
+  keeps the consent period it started in (in `windows-updates.json`), so a window that settles another window's run
+  counts it under that period or not at all. `update` says whether it started the run, so a stale Update click in another
+  window never takes over the run's consent period. The kind is `installer` beside
+  `unins000.exe`, `portable` without it, and `unsupported` without the verifier, key or `Ardia.build.json`.
+- The WebUI side in the shared UI is `apps/desktop/src/platform/win/hostUpdates.ts` (wired through `updater.win.ts`
+  and `updates.win.ts`). It keeps the RNW behaviour: checks 30 s after launch and every 6 hours from one window, never
+  in a hidden instance or a scratch data folder (an app-data folder other than `%LOCALAPPDATA%\Ardia WebUI`) unless a
+  test instance names `updateFeed`, preferences in
+  `windows-updates.json`, and the app menu's Check for Updates… turns into Restart to Update once the installer is
+  ready. A portable copy points to the release page. It reuses the existing counts: `update_checks_*`,
+  `update_downloads_*`, `update_download_failures_<reason>`, `update_install_failures_<reason>`, `update_restarts` and
+  `windows_update_manifest_*`.
+- `assemble-webui.ps1 -Shippable` needs `-UpdateVerify <ardia-update-verify.exe>` and copies the pinned
+  `scripts/windows/windows-update.pem` beside it. Both files are in `$ShellKept` (`shell-layout.ps1`), which
+  `make-installer.ps1` hands to `Ardia.iss` as `kept-files.txt`. Switching shells or updating within a shell never
+  removes them, even when an older install's manifest still lists them as React Native files.
 
 ## Releases
 
@@ -993,12 +554,15 @@ The Release workflow (`.github/workflows/release.yml`, dispatched by the `releas
 Mac, for every nightly and stable:
 
 1. Its `windows` job calls `windows.yml` with the release's version, at the release's commit: the same build, pinned
-   engine (`scripts/windows/engine/prebuilt.json`), launch, tour and installer checks as CI, for x64 and arm64.
+   engine (`scripts/windows/engine/prebuilt.json`), launch, tour and installer checks as CI, for x64 and arm64. The
+   installers it ships are the WebUI shell's (the `webui` and `webui-arm64` jobs).
    `release-files.ps1` names each tested installer `Ardia-<version>-windows-<cpu>-setup.exe` with its `.sha256`, and
    the job leaves them with `Ardia.build.json` in the artifacts `windows-release-x64` and `windows-release-arm64`. Its
    `source` job packs the engine's source, `Ardia-<version>-windows-source.tar.xz` with a `.sha256`, in
-   `windows-release-source`: `scripts/windows/engine-source.sh`, from the Helium tags `helium-pins.ini` pins at that
-   commit, with a README naming Chromium's source and this repository's tree.
+   `windows-release-source`: `scripts/windows/engine-source.sh`, from the Helium tags `helium-pins.ini` pins at the
+   commit `prebuilt.json` names as its engine's `source`, so the archive matches the engine the installers carry even
+   when the pins have moved on ahead of a new prebuilt. Its README names Chromium's source, this repository's tree at
+   that engine commit, and the tree at the release's commit for the app.
 2. `publish` attaches both installers, the engine's source and their `.sha256` files to `v<version>` (`publish.sh`
    checks the hashes and that the build is this version, and refuses installers without their source), so every
    release keeps the source beside its Windows binaries for as long as it stays up. A dry run checks the same and
@@ -1018,7 +582,7 @@ gh workflow run windows.yml -R ardia-browser/ardia --ref v<version> -f version=<
 gh run download <run id> -R ardia-browser/ardia -p 'windows-release-*' -D dist/<version>/artifacts
 mkdir -p dist/<version>/windows && cp -n dist/<version>/artifacts/windows-release-*/* dist/<version>/windows/
 gh release upload v<version> -R ardia-browser/ardia dist/<version>/windows/Ardia-<version>-windows-*
-scripts/windows/publish-alpha.sh --installers dist/<version>/windows --commit v<version>
+scripts/windows/publish-alpha.sh --allow-local-publish --installers dist/<version>/windows --commit v<version>
 ```
 
 When the cause is in the code (a stale engine pin needs a new engine release and `prebuilt.json`), fix it on `main`;
@@ -1028,47 +592,37 @@ the release already: re-run that job alone (its re-run touches nothing else), or
 
 ## Test instances
 
-`LaunchConfig.h` (`AppLaunch::Shared()`) reads the environment once at launch; `Paths.h` holds the one raw reader and
-the data folder. Whether this launch is a test instance is decided once, by the engine, before the app loads
-(`scripts/windows/engine/src/ardia/win/test_gate.cc`), and handed to the app through `EngineApi.h`'s
-`testGateRefusal()`, so the two can't disagree when the marker or a folder changes in between. `TestGate.h` holds the
-same rule for the app run without the engine (`ArdiaAppRun`). No other Windows native file reads
-the environment (`platform/windowsLaunchConfig.test.mjs` fails if one does). The one exception is the small
-`ArdiaLauncher`, which runs before the DLL loads and reads `ARDIA_BACKGROUND` only to keep a failed launch quiet.
+Whether a launch is a test instance is decided once, by the engine, before Chromium starts (`DecideTestGate` in
+`main.cc`, the rule in `scripts/windows/engine/src/ardia/win/test_gate.cc`), from `ARDIA_DATA_DIR`,
+`ARDIA_REMOTE_DEBUGGING_PORT`, `ARDIA_TEST` and `ARDIA_TRACE`. The WebUI shell reads nothing else from the environment
+to get test powers, and `EngineApi.h`'s `testGateRefusal()` hands the same decision to anything that asks later.
 
 A test instance needs all of:
 
 - an absolute `ARDIA_DATA_DIR` (not `C:foo` or `\foo`);
 - that folder and its `Chromium` folder, compared by their final paths on a local volume (junctions, `subst` drives and
-  8.3 names resolved), are not, inside or around the real `%LOCALAPPDATA%\Ardia` or `%APPDATA%\Ardia`;
+  8.3 names resolved), are not, inside or around the real profile folders (`%LOCALAPPDATA%\Ardia WebUI`, and the
+  React Native app's `%LOCALAPPDATA%\Ardia` and `%APPDATA%\Ardia` an upgraded install may still hold);
 - a test build: an `Ardia.test-build` file beside `Ardia.exe`.
 
 Windows builds are not signed yet, and the alpha publishes the exact installer CI built and tested, so no build flag
-can tell a published build from a tested one. The marker does instead: `launch-smoke.ps1` and `tour.ps1` write it
-beside the app they run, `assemble.ps1` never copies it, `make-installer.ps1` refuses a folder that holds it and
-`installer-check.ps1` fails when an install carries it. So a build installed from the alpha, or updated to by the
+can tell a published build from a tested one. The marker does instead: CI's tour step writes it into a copy of the
+assembled build before `tour-webui.ps1` runs it, `assemble-webui.ps1` writes it only with `-TestBuild` and refuses it
+with `-Shippable`, `make-installer.ps1` refuses a folder that holds it and `installer-check.ps1` fails when an install
+carries it. So a build installed from the alpha, or updated to by the
 app, ignores test keys. A VM script that tests an installed build with test keys writes the marker into the install
 folder first. That folder is the user's to write, like the Mac's app bundle: anyone who can drop the marker can also
-replace `ArdiaApp.dll`, and on the Mac a changed bundle is likewise no longer signed for distribution.
+replace `chrome.dll`, and on the Mac a changed bundle is likewise no longer signed for distribution.
 
 What it guards: the unmodified build people install can't be switched into test behaviour by the environment alone,
 and a test instance never runs on the real profile folders by mistake. What it doesn't: code already running as the
 user, which can plant the marker, race the folder check with a junction, or hard-link a scratch file to a real one.
 That code can also decrypt the real profile's DPAPI secrets directly, without Ardia; the Mac's keychain ties its items
-to the signed app, and Windows has nothing like it until builds are signed or installed per machine. `ARDIA_CONFIG_DIR`
-gets the same folder check, and a folder that can't be resolved on a local volume doesn't count.
+to the signed app, and Windows has nothing like it until builds are signed or installed per machine. A scratch folder
+that can't be resolved on a local volume doesn't count.
 
-Secrets stay apart the way the Mac's mock keychain keeps them: Credential Manager targets are named after the data
-folder, Chromium's key sits in the data folder's `Local State`, and the Sync key (`SyncSecrets.h`) lives in
-`<data folder>\Sync`, which the folder check covers too, sealed by DPAPI under a purpose a test instance never shares
-(`ardia-sync-key/v1/test-instance/<account>`). A real key copied or hard-linked into a test instance doesn't unseal
-there, and one sealed in a test instance can't stand in for the real one. `reauth=granted` skips Windows Hello only
-for that test key. A test key sealed by a build before this rule doesn't unseal any more and counts as no key, so
-the scratch instance makes a new one. Sync's `selfTest`, which seals and removes a probe key, needs a test instance.
-
-Outside a test instance the launch config drops `ARDIA_TEST`, `ARDIA_TRACE`, `ARDIA_CONFIG_DIR` and the test-only
-`ARDIA_INSTANCE` keys (`updateFeed`, `importSourceDir`, `importSafariHome`), and the launch log says once why. The other
-`ARDIA_INSTANCE` keys and `ARDIA_BACKGROUND` stay instance settings, as on the Mac.
+Secrets stay apart the way the Mac's mock keychain keeps them: Chromium's key sits in the data folder's `Local State`,
+sealed by DPAPI, so a test instance's scratch profile never shares the real profile's key.
 
 The engine applies the same decision to its own switches (`main.cc` `DecideTestGate`, before Chromium starts):
 
@@ -1087,7 +641,8 @@ The engine applies the same decision to its own switches (`main.cc` `DecideTestG
   profile to an outsider (`--load-extension`, `--disable-web-security`, `--enable-automation`, the remote debugging and
   proxy switches and the rest of `kSwitchesThatOpenTheProfile`), plus five Windows-only ones that start a chosen
   program as a browser child or run children unsandboxed (`--browser-subprocess-path`, `--renderer-cmd-prefix`,
-  `--utility-cmd-prefix`, `--gpu-launcher`, `--no-sandbox`; nothing in the engine, CI or the probe passes them), and
+  `--utility-cmd-prefix`, `--gpu-launcher`, `--no-sandbox`; nothing in the engine or the probe passes them, and CI
+  passes them only in `test-gate-check.ps1` to verify they are stripped), and
   unsets `SSLKEYLOGFILE`; if that variable can't be cleared the engine doesn't start. This happens before Chromium starts and
   again after `chrome://flags` adds its switches. A second launch handed to the running instance only gives it its URLs
   (`Relaunched`), and child processes only get switches the browser process still has. The launch log gets one
@@ -1099,82 +654,21 @@ The engine applies the same decision to its own switches (`main.cc` `DecideTestG
 
 What the marker does and doesn't protect: it marks a build CI tests, and only a build with it honours any of the above.
 The gate keeps test powers off the real profile's folder for an unmodified shipped build; it is not a boundary against
-someone who can write the app folder (who can add the marker, or replace `Ardia.exe` or `ArdiaApp.dll`) or who can
+someone who can write the app folder (who can add the marker, or replace `Ardia.exe` or `chrome.dll`) or who can
 already read the real profile. For example, in a marker build a scratch folder whose `Default` profile folder is a
 junction to the real profile's passes the gate; that gives nothing beyond copying the real profile into a scratch
 folder, which a test instance is allowed to open.
 
-`launch-smoke.ps1` checks it with the engine. With no marker, a relative folder, the real profile folder, a junction to
-it, an empty `--type=` on the real profile, an approved folder while `--user-data-dir` points at the real profile or at a
-junction to the approved folder, and `--load-extension` with debugging switches outside a test instance, the engine must
-log its refusal (so it did start), leave the port closed, and (for the extension) never run it, while the same extension
-does run in a test instance. A scratch folder with the marker must get both powers, with the port answering
-`/json/version`.
-
-## Checks
-
-- To build the app on a PC you need Visual Studio 2022 with the C++ desktop workload and the Windows SDK
-  **10.0.26100.0**, the version `Ardia.vcxproj` names; with another SDK the build stops before compiling. The
-  GitHub runners have it. Then `pnpm install` and, in `apps/browser`,
-  `npx react-native run-windows --release --arch x64 --no-launch --no-deploy --no-packager`.
-- `.github/workflows/windows.yml` builds the x64 app on a Windows runner and runs `scripts/windows/launch-smoke.ps1`,
-  which launches it three times and uploads each launch's log: a first launch (onboarding) and a launch with
-  onboarding done (the browser window), each with a screenshot when the runner allows a capture, then a hidden
-  self-check launch.
-- A pull request gets the fast run. The `gate` job waits for a vouch, like the iPhone build. Then three things start
-  together. A Linux job (`javascript`) bundles the app's JavaScript with Metro, once for both CPUs. Each CPU's build
-  job (`app`, `arm64-app`, both on x64 runners) looks in the Actions cache for an app built from the same native code
-  (`windows-app-<cpu>-<hash>`; the hash covers `apps/browser/windows`, each package's `package.json` and `windows`
-  folder, the lockfile, the patches and the workflow) and compiles only when none is there, then saves it.
-- Each CPU then has two jobs side by side on its own kind of runner: `x64` and `arm64` run the launch check's
-  launches, input and self-check (`launch-smoke.ps1 -Part launch`), `x64-gate` and `arm64-gate` its test-gate checks
-  (`-Part gate`). Each takes the built app, from the cache or from the build job, and when the app was reused
-  `scripts/windows/rebundle.ps1` compiles the Linux bundle with the Hermes compiler saved beside that app and
-  replaces the app's `Bundle` folder; a reused app carries no source maps. When the app was compiled in this run,
-  the same script checks instead that the Linux bundle, compiled here, matches the build's own `Bundle` file for
-  file, so the reuse path is known to test the bundle a build would make. A run that compiled launches the app as
-  built too, with its own launcher; a run that reused launches only the assembled app with the engine inside.
-- A push to `main` or to the Windows branch gets the full run, and so does a pull request with the `full-ci` label
-  (add the label, then push or re-run the run). A pull request can read its base branch's caches and no other pull
-  request's, which is why the Windows branch builds on every push: without that, each pull request into it would
-  compile once for itself. A full run always compiles, saves that app for pull requests to reuse, and adds the tours, the
-  installers and the install check. Only a full run has the `Ardia-Setup-<cpu>` artifacts that
-  `scripts/windows/publish-alpha.sh` publishes.
-- With the browser window open, the x64 run also drives the app with real input and fails when the default layout
-  marks no caption region; a drag by the gap beside the window buttons is not Windows' own move or does not move the
-  window by the dragged distance; dragging it to the top edge does not maximize the window or dragging back down does
-  not restore its size; a double click there does not maximize or restore it; the app's maximize, restore or minimize
-  button does not do so; a drag of the toolbar's empty middle is not the app's own move; Ctrl+T matches no command; the sidebar button does not take its click; or the pointer just outside the
-  window's left edge does not bring the hidden sidebar's edge over and away. The ARM runner's desktop is covered by
-  Windows' own first-run screen, so its screenshots show that screen and it skips the input.
-- After assembling, `scripts/windows/dependency-check.ps1` (x64 and ARM64) reads the import table, delay-load table and
-  forwarded exports of every PE file in the folder (`pe-imports.ps1`) and fails when a DLL they name is neither in
-  the folder, an API set (`api-ms-win-*`, `ext-ms-*`), nor on its explicit list of DLLs a clean Windows 11 ships in
-  System32 (checked against a clean 25H2 install). The Visual C++ runtime (`vcruntime*`, `msvcp*`, `concrt*`,
-  `vccorlib*`, `vcomp*`, `vcamp*`, `ucrtbased`) can never be on that list. `pe-imports.test.ps1` checks the reader and
-  the runtime deployment against PE images it builds in memory. A new system DLL an engine or app update imports goes
-  on the list once it is confirmed in a clean Windows 11's System32.
-- Both runs then write the library's WinRT list into a copy of `Ardia.exe` with `scripts/windows/host-manifest.ps1`
-  and read it back, so the script the engine's launcher depends on is exercised on every build.
-- `scripts/windows/tour.ps1` drives a full screenshot tour and writes `tour.md`, one line per stop with the facts it
-  read. Among them: Downloads and Search Tabs must close on Escape (the caption regions go away while one is open and
-  come back, and for Downloads the log shows the native Escape capture taking the key), and Little Ardia's command
-  panel must be drawn whole below its field, with the window buttons on the bare bar (screen brightness where the
-  panel used to be cut off, and under the buttons). In Settings › Appearance it clicks the Light tile's picture, found by UI Automation,
-  and then Automatic's, and each must change `appearance` in `session.json`.
-- The self-check (`--self-check`, only in a test instance, see Test instances; so are the file-drop fixtures it uses) runs
-  `packages/expo-windows/src/selfCheck`: each area exercises its native code from inside the real app, and the
-  launch fails if any check does. A new native method gets a check there. It also renders every view drawn in JS
-  in the window (`selfCheck/stage.tsx`), writes `config.json` and waits for the watcher's `onChange`
-  (`ARDIA_CONFIG_DIR` points the config folder at the data folder for that), and moves a file to the Recycle Bin.
-- The smoke launch fails when the browser window answers `WM_GETICON` with no big or small icon, or the launch log
-  does not show the AppUserModelID and the window icon; the installer check fails when the Start menu shortcut lacks
-  the AppUserModelID or an icon file, the uninstall entry's icon is not a file, or the installed `Ardia.exe` does not
-  carry Ardia's icon and name.
-- `platform/windowsModules.test.mjs` fails when the app imports something from `expo-modules-core` that
-  `packages/expo-windows` doesn't export.
-- Nobody can compile Windows code on the Mac: CI is the compiler. The Windows VM on shiv covers behaviour by hand,
-  with an ARM64 build. Speed numbers and the x64 build need real hardware before a release.
+CI checks both sides in `.github/workflows/windows.yml`'s `webui` job: `tour-webui.ps1` runs a marked copy as a test
+instance and needs the debugging port to answer, and `scripts/windows/webui-pilot/test-gate-check.ps1` runs private
+unmarked and marked copies of the assembled build to check the refusals (no `Ardia.test-build` marker, a relative
+`ARDIA_DATA_DIR` refused early with exit 1, a junction as `ARDIA_DATA_DIR`, `%LOCALAPPDATA%\Ardia WebUI` and a junction
+to it, `%LOCALAPPDATA%\Ardia` and a junction to it refused at `install_static`, an empty `--type=` on the real WebUI
+profile, a `--user-data-dir` pointing into `%LOCALAPPDATA%\Ardia\User Data` or elsewhere without a scratch
+`ARDIA_DATA_DIR`, and `--load-extension` with debugging and child-launch switches stripped outside a test instance,
+checked on live child command lines and via `cors-probe.mjs` for `--disable-web-security`) alongside positive controls
+for a marked scratch test instance, `--load-extension`, renderer switch propagation, and cross-origin fetch when
+`--disable-web-security` is kept.
 
 ## Speed targets
 
@@ -1187,50 +681,707 @@ The Mac's numbers are the targets for Windows, measured from the first engine bu
 | Tab switch to shown | 9 ms |
 | New tab to first paint | 78 ms |
 
-## What still separates Windows from the Mac (2026-11-14 walk, brought up to date on 2026-11-15)
+## WebUI pilot (`--ardia-shell=webui`)
 
-Ranked by how much a user notices. Sizes are rough: S is under a day, M is one to three days, L is more.
+Issue #3686, part of #3678 (Track 4 of the cross-platform design: Windows on the desktop host). The pilot asks whether
+Windows can drop React Native Windows and run the Linux model: Chromium is the app, and the shared desktop UI
+(`apps/desktop`, built in its Linux mode) is served from `chrome://ardia/`. It proves the hard parts on one window before any
+Linux patch is widened or the host is moved. Proven on 2026-11-23 in a fresh Windows 11 guest (`dockurr/windows` on
+a Boat VM, 1920×1080) with a Windows x64 engine and UI bundle built from this change on `main` at `5b1e984`: the
+real-input run (28 checks; 28 at 150% on the previous engine of this change, which differs only in the folder checks
+below), the junction check (31, every launch's real argv checked), the bridge's hostile-input check (11 checks over
+15 malformed requests, 6 bad arguments, 12 reserved tab URLs and 5 reserved navigations), the stale-document check
+(8), the close-cycle check (8 closes with pass-through regions active), the policy and cleanup-race check
+(`profile-edges.ps1`: a `UserDataDir` policy refused with its folder never created, and 3 of 3 launches opening while
+20,000 folders in the profile were being deleted; the engine before this round wrote Crashpad files into the policy
+folder and refused all 3 launches), the concurrent-runs check (`ports.ps1`) and
+`install_static_unittests --gtest_filter=UserDataDir.ArdiaShell*:UserDataDir.WebUITree*` (6 tests) all passed.
 
-App side, an agent can do these now:
-1. A new tab opened with an address (Ctrl+T, the address, Enter) gets no keyboard (#1689). S, with the engine
-   thread.
-2. Changing a Windows contrast theme while Settings is open crashes Ardia, inside the Windows App SDK (#1900). S once
-   the cause is seen on Windows.
-3. A private pop-up left as the only window closes the tabs it opens at once, where a regular one gets a browser window
-   back (#1910): the app can't open a window on the pop-up's private session yet. S.
-4. The top edge over a page that reaches it (#1888): a real drag in CI resizes the window from the top; the cursor, a
-   double click and a maximized window are untried in the VM. S.
-5. The theme's grain draws nothing, and the sidebar and toolbar don't blur what is behind them (#1921). M.
-6. The Mac's own items in the page menu: search a selection with Ardia's engine and Share (Chromium's menu is otherwise
-   trimmed as on the Mac since #1811). S.
-7. The app's own prompts for passwords, notifications and location, drawn like the Mac's (#1425 for the events the app
-   needs). M each once the engine reports them. A pop-up's prompts go to its opener's window, as on the Mac's
-   `ArdiaPopupWindow` (else any window of its profile). Today Chromium's own prompt shows, most likely in the
-   pop-up's window (not yet seen in the VM).
-8. Picture in picture: the Mac's stash, corners and mini player (#1425 for the window events). L.
-9. A pop-up whose opener wrote its document shows about:blank in its origin strip (#1863). S.
-10. Dragging a pinned extension to reorder the toolbar (main's #1935): the engine takes `pinnedIndex` since
-    `windows-engine-20261115-3`; that the new order sticks, and the drag itself, are untried on Windows. S.
-11. A group's and a live folder's icon is the plain folder symbol, filled while open, not the Mac's animated folder
-    (main's #376; `views/FolderIcon.tsx`). S.
+### Selecting the shell and keeping real data out
 
-Engine work (#1425): the walk found nothing new missing beyond what is already listed there:
-- password sync on Windows: the engine's login read is ready (#1918); Sync still has to handle its errors before
-  `syncsPasswords` turns on;
-- the password, permission and picture-in-picture events the app needs to draw its own prompts and windows;
-- the 67 calls `packages/expo-windows/src/engine/domains/forwarded.json` lists under `missing`;
-- nothing else open from the 2026-11-14 walk: a tab the app closes no longer prompts and is gone within its deadlines
-  (#1696), a data: page's app-link prompt needs its document alive (#1750), the first click on a page prompt works after
-  using the page (#1749), and the app process exits at once after quit (#1761).
+- `chrome.exe --ardia-shell=webui` turns it on, and since the cutover (#4142) so does a launch without the switch
+  from a folder with no `ArdiaApp.dll`. `--ardia-shell=rnw`, or no switch with `ArdiaApp.dll` beside the launcher,
+  still makes `BeforeChromeMain` start React Native Windows. A child process (`--type=` with a value) is neither.
+- Order in `BeforeChromeMain` (`main.cc`): the WebUI branch first makes sure Chromium will open the WebUI profile,
+  then the test gate runs (as for RNW), then the WebUI branch returns **before** the `ArdiaApp.dll` check. A WebUI start
+  never loads the app library, the RNW message hooks, the hosted-window frame or `AskBeforeDiscards`.
+- Its own folders: app data in `%LOCALAPPDATA%\Ardia WebUI` (a sibling of the RNW app's `%LOCALAPPDATA%\Ardia`, never
+  inside it) and Chromium's profile in `%LOCALAPPDATA%\Ardia WebUI\Chromium`. A test instance's `ARDIA_DATA_DIR` is
+  used as is (`<ARDIA_DATA_DIR>\Chromium`), so the test gate, CDP and scratch-folder rules are the RNW ones.
+- Chromium on Windows takes its profile folder from `install_static`, which `chrome_elf` computes from the process's
+  real command line before any Ardia code runs, and opens Crashpad's database there; changing `--user-data-dir` in
+  `BeforeChromeMain` does nothing (the first pilot run opened the wrong folder). So `chromium-win-webui-user-data-dir.patch`
+  (the one Windows patch the pilot adds, after `chromium-win-install-names.patch`) decides it in `install_static`:
+  with `--ardia-shell=webui` and no `--user-data-dir`, policy or `ARDIA_DATA_DIR` naming another folder, it picks
+  `%LOCALAPPDATA%\Ardia WebUI\Chromium`.
+- **Both stages read the switch the same way.** `install_static::IsWebUIShellCommandLine` repeats what
+  `base::CommandLine::ParseFromString` and `AppendSwitchesAndArguments` do in Chromium 158 (`base/command_line.cc`):
+  trim the whole command line with base's whitespace set, split it as `CommandLineToArgvW` does (`install_static`'s
+  `TokenizeCommandLineToArray`), skip the program, trim each argument, stop reading switches at `--`, take `--`, `-`
+  or `/` as a prefix, stop at `single-argument` compared case-sensitively before the name is lowercased (so
+  `--SINGLE-ARGUMENT` is an ordinary switch, as in base), lowercase the name, and let the last value win.
+  `install_static_unittests` runs the same 48 command lines through both parsers (`UserDataDir.ArdiaShell*`: trimming,
+  `--single-argument` in three cases, quotes, `=` and repeated switches) and checks the tokens against
+  `CommandLineToArgvW`. At startup `BeforeChromeMain` also asks both and exits with code 1 if they disagree
+  (`RefuseShellModeDisagreement`), so a spelling the two parsers read differently stops the engine instead of
+  opening one profile in the other's mode.
+- Whichever folder was chosen (command line, policy, `ARDIA_DATA_DIR` or that default) is resolved through the opened
+  handle of its nearest existing part (`GetFinalPathNameByHandle`, by volume GUID, so `\\?\`, 8.3, UNC
+  `\\localhost\C$`, `subst` and junction spellings all land on one path), before it is created and again after.
+  It is compared with the React Native app's folders resolved the same way: `%LOCALAPPDATA%\Ardia` and `%APPDATA%\Ardia`
+  and their `User Data` folders (followed wherever a junction moved them). If they are the same, one contains the
+  other, a folder can't be resolved, or the chosen folder can't be created, the process exits with code 1 there,
+  before Crashpad starts. There is no fallback: neither Chromium's default folder (the React Native app's) nor a
+  temporary one.
+- **No links inside the WebUI tree.** After the folder is created, `install_static` walks the whole profile tree
+  (`WebUITreeHasLink`: `FindFirstFileEx`, never following a link) and exits with code 1 if any file or folder in it
+  is a reparse point: a junction, a directory or file symlink, at any depth. Ardia's own check walks the WebUI
+  app-data folder with the same function. The pilot's tree is its own, so the walk is bounded, and it doesn't matter
+  where a link points: a stale link to an unrelated folder refuses too. The WebUI folder itself may still be a link
+  (a profile moved to another drive); its target is what gets compared above. Only a reparse attribute refuses.
+  A folder that disappears between being listed and being opened (`ERROR_FILE_NOT_FOUND`, `ERROR_PATH_NOT_FOUND`)
+  is skipped, so the running shell clearing its caches can't stop a second launch; so is a subfolder that answers
+  `ERROR_ACCESS_DENIED`, because a folder being deleted while something still holds it open answers exactly that,
+  and a folder in the user's own profile that the user can't list could only have been locked down by a process
+  running as the user, which is out of scope below. If the profile folder itself can't be listed for any reason
+  other than being gone, or a subfolder fails any other way, the walk can't vouch for the tree and the shell
+  refuses to start. `install_static_unittests` (`UserDataDir.WebUITreeWalk*`) checks a plain tree, a subfolder and
+  the root removed just before they're listed, and a directory symlink.
+- **No managed relocation.** If a `UserDataDir` policy is set (HKLM or HKCU, under the install's
+  `SOFTWARE\Policies` key that `install_static` reads), it moves the React Native app's profile and would also decide
+  the WebUI shell's, so the WebUI shell exits with code 1 in `install_static`, before Crashpad opens anything there.
+  The pilot doesn't support managed profile relocation.
+- After those checks `install_static` keeps a handle open on the profile folder for the life of the process, opened
+  with `FILE_LIST_DIRECTORY | SYNCHRONIZE` and sharing read and write but not delete, and hands Chromium the handle's
+  final path, not the spelling it was given. A handle with no access rights is left out of Windows' sharing check, so
+  it is the real access that makes the missing delete share hold: while the handle is open, renaming or deleting the
+  folder fails, and so does renaming the folder above it, because NTFS doesn't rename a folder with an open handle
+  inside.
+- **What is left.**
+  - Between resolving the folder and opening that handle (microseconds, before Crashpad or chrome.dll), and between
+    the tree walk and Chromium opening each file, another process could swap a parent folder or plant a link. Only a
+    process running as the same user can do that, and such a process can already write both profiles directly, so
+    the race gives it nothing it doesn't have. Closing it fully would mean handing Crashpad and Chromium an open
+    handle instead of a path, which is out of scope for the pilot.
+  - Links someone deliberately puts inside the React Native app's own profile pointing into the WebUI tree are out of
+    scope for the same reason: only a same-user process can make them, and the WebUI shell doesn't walk the React
+    Native profile at startup. The checks are there against mistakes and stale links, not against code already
+    running as the user.
+- If the folder Chromium will use is safe but isn't the WebUI one (an explicit `--user-data-dir`), the engine starts
+  itself again with the WebUI folder and exits (`RelaunchIntoWebUIProfile`, once: a second mismatch refuses to start).
+  Folders are compared by resolved path (`SameFolder`), not by spelling.
+- Ardia's own code checks again before Chromium opens the profile (`ReactNativeFolderClash`, the test gate's
+  `CanonicalPath`, with the same set of React Native folders and the link walk) and exits with code 1 on the same
+  conditions.
+- Checked in a throwaway Windows 11 guest by `scripts/windows/webui-pilot/junction.ps1`. It never touches the account's
+  own folders: every launch gets `LOCALAPPDATA` and `APPDATA` inside a run folder of its own under `C:\pilot\runs`,
+  marked with a `.pilot-run` file holding a fresh id, and the harness deletes only a folder whose marker names it
+  (links are unlinked first, never followed). Each launch starts suspended, the harness reads its real command line
+  back and splits it with `CommandLineToArgvW`, and a case counts only if the engine got exactly the arguments meant.
+  Each of these exits 1 with no window, and no file or folder in the React Native folder is added, removed or
+  changed: `Ardia WebUI` as a junction to `Ardia` (with the switch also spelled `--ARDIA-SHELL`, `-ardia-shell`,
+  `/ardia-shell`, `--Ardia-Shell`, padded with spaces, and after `--SINGLE-ARGUMENT`); `Ardia WebUI\Chromium` as a
+  junction to `Ardia\User Data`; a junction and a directory symlink at depth 1 (`Chromium\Default`) and at depth 3
+  (`Chromium\Default\Local Storage\leveldb`) into the React Native profile, a junction to an unrelated folder, a
+  file symlink to its `Local State`, and a junction beside `Chromium` in the app-data folder; `--user-data-dir`
+  pointing into `Ardia\User Data`, also spelled `\\?\…`, as its 8.3 short name and as `\\localhost\C$\…`;
+  `ARDIA_DATA_DIR` pointing at `Ardia`; `Ardia WebUI` made a file, so the profile folder can't be created; and
+  `Ardia\User Data` moved elsewhere behind a junction with `Ardia WebUI\Chromium` joined to the same place. The same
+  launch with none of these opens the window in `Ardia WebUI\Chromium` (also with the switch spelled upper case or
+  with one dash, and with a `--user-data-dir` that has a space in it), and `Ardia WebUI` can't be renamed while it
+  runs. With `ARDIA_TEST_PIN_PAUSE_MS` in a test build, `install_static` waits right after the pin, before chrome.dll
+  loads or Crashpad starts; renaming `Ardia WebUI\Chromium` or `Ardia WebUI` then fails, which shows the handle
+  alone holds the folder.
+- The WebUI shell's session (`session.json`) lives in its app-data folder, so the launch guard's recovery sets it aside
+  after unfinished starts as it does the React Native app's. A start counts as finished when the shell reports it has
+  painted (`ArdiaShell.shellPainted`); if the UI bundle's entry page can't be read, the engine says which folder it
+  looked in and quits instead of leaving a blank window.
+- The launch guard runs for the WebUI profile: `SetAppDataDirectory` points its facts, unfinished-start count,
+  restore-state recovery and launch log at the WebUI folder, and `GuardBrowserLaunch` waits on the WebUI profile's own
+  mutex, so a relaunch waits for the closing WebUI instance, never for the RNW one.
+- A second `--ardia-shell=webui` launch reaches the first through Chromium's process singleton (`g_ardia_win_relaunched`),
+  which raises the existing window instead of opening a Chromium browser window.
 
-Decisions for Shivam:
-- the calendar source on Windows (#1521);
-- Translate (#1520);
-- signing, or a per-machine install (#1659).
+### What the pilot is
 
-With the engine and owner items set aside, the app side has not reached parity yet: items 1 to 4, 9 and 10 are bugs a
-user hits, and 5 to 8 and 11 are visible differences from the Mac. Everything else in the table works or differs
-only where the engine, Windows itself or a decision stands in the way.
+| File | What it does |
+| --- | --- |
+| `src/ardia/win/webui/webui_mode.{h,cc}` | the switch, the folder rules above, and the one-shot startup migration hook (`RunWebUIStartupMigration`, which launches `ardia-webui-migrate.exe --from-rnw` from the executable's own folder before documents/session load, with a 60 s timeout, skipped for scratch `ARDIA_DATA_DIR` unless `--ardia-migrate-from-rnw` is passed, refused (exit 75) when that comes without a non-empty `--ardia-migrate-rnw-data=<dir>` (`StartupMigrationRequestIncomplete`), and always skipped with `--ardia-no-migrate`, non-fatal when absent). It returns a `StartupMigrationResult`, and `StartupMigrationAllowsShell` in `webui_policy.h` decides whether the writable shell opens: only when no migration was asked for, when the migrator isn't bundled, or when it exited 0. Otherwise (a non-zero exit, including `failed` 1, `refused` 2, `busy` 3 and usage 64, or a timeout, a failed launch or wait, or a migrator that fails its containment check) `OpenWebUIShell` opens no window, logs `startup migration incomplete (<outcome>)`, explains in a message box (none in a hidden instance), settles the launch guard and quits with exit code 75 (`kStartupMigrationIncompleteExitCode`). The marker is missing, so the next launch retries before anything is written on top of a partial copy |
+| `src/ardia/win/webui/webui_policy.h` | pure testable helpers for Windows document names/limits (`ValidWindowsDocumentName`: 1-200 `[A-Za-z0-9._-]`, no Windows device names; `ReservedWindowsDocumentName`, case-insensitive: `session.json`, `live.json`, `live.canonical.json`, the migrator's `rnw-migration.json` and `rnw-migration.lock`, and the launch guard's `launch-starts.txt` and its `launch-starts.txt.tmp` staging file; `EngineOwnedWindowsDocumentName`: `launch-guard.json`, which `SaveLaunchGuardFacts` in `main.cc` writes at every start and the launch telemetry reads, so it stays readable and in `bootstrap.documents` but `writeDocument`, `saveDocument` and `removeDocument` refuse it in any case (`WritableWindowsDocumentName`); `WindowsDocumentLimit`: writes up to 8 MiB, 48 MiB for `sync-state.nns` in any letter case; reads up to `kWindowsDocumentReadLimit`, 64 MiB; the name and read limits equal `ardia-shell-migration`'s `DOCUMENT_NAME_LIMIT` and `DOCUMENT_LIMIT`, so a document the migrator copies under a name in that character set reads back; names with other characters, such as spaces or non-ASCII, still copy but can't be read through `readDocument`), the `bootstrap.documents` budget (`BootstrapDocumentEligible`, `BootstrapDocumentFits`: at most 128 documents and 8 MiB, checked against the listed size before a file is opened), `BootstrapAssignmentScript` (the bootstrap goes through `JSON.parse`, so a document named `__proto__` stays an own property instead of setting the prototype), `DownloadCommandForRoute` (`downloads.cancel`/`pause`/`resume`/`keep` forward `{id, command}` to `ac_downloads_command`, as on Linux), canonical final-path containment (`NormalizeWinFinalPath`, `IsStrictlyWithinWinDirectory`, `IsDirectChildOfWinDirectory`), handle-relative `FileRenameInformation` sizing/leaf validation, startup migration policy/CLI quoting, and the `HTMAXBUTTON` hover/press state machine (`MaximizeButtonStateMachine`) |
+| `src/ardia/win/webui/webui_updates.{h,cc}`, `webui_update_policy.h` | the signed in-app updater's `ArdiaUpdates.*` calls (Updates, above) and their pure rules |
+| `src/ardia/win/webui/webui_shell.{h,cc}` | the bridge bound to the live shell document as on Linux (`Trusted`: the shell's live primary main frame with the committed origin `chrome://ardia/`; `OwnsHandler`: the handler of that document's generation; a new document (a reload or a renderer swap) or a renderer exit retires the generation, which drops its pending replies (`DeliverReply`), its events and its pages; `OnJavascriptDisallowed` drops that handler's pending replies at once and retires the generation only if the handler no longer owns the live document; a page whose creation was asked by a retired document is never made and its profile never loaded; closing the window tears the shell down while its views are still alive (`TearDown`, from `OnWidgetDestroying` and before the widget is reset: the document is retired, in-flight telemetry posts, pages, delegate, pass-through regions and the view pointers are cleared, weak pointers are invalidated, and `ShellContents` deletes its children before its own state), so destroying the shell's WebContents can't call back into freed views; tab URLs pass one check (`AllowedPageUrl`) before any profile loads and again before a page navigates: no `javascript:`, no `chrome://ardia` in any spelling or behind `view-source:`, nothing that doesn't parse; rows in `boundaries.json`); one `views::Widget` (`ShellTreeHost`, a `DesktopWindowTreeHostWin` with Chrome's client-area insets and `WM_CAPTURECHANGED`/`WM_CANCELMODE`/`WM_ACTIVATE`/`WM_NCMOUSELEAVE` maximize-state resets; `ShellFrame`, a `views::FrameView` hit tester), the `chrome://ardia` WebUI config, handle-verified `ReadAsset` data source (regular single-link non-reparse disk file and strict final-path containment via `GetFinalPathNameByHandleW` against the opened `AssetDirectory()` handle) and `ardiaRequest` handler, desktop document store (`ArdiaShell.readDocument`/`writeDocument`/`saveDocument`/`removeDocument` and `bootstrap.documents` with strict name/device/reserved validation, `FILE_FLAG_OPEN_REPARSE_POINT`, `nNumberOfLinks == 1`, UTF-8 validation on reads, final-path direct-child checks, handle-relative `NtSetInformationFile` `FileRenameInformationEx` atomic commits and handle-based `FileDispositionInformationEx`/`FileDispositionInfo` cleanup/deletes), `ArdiaTelemetry.post` (advertised in `capabilities`; `TelemetryPostAllowed` applies `ardia::desktop_telemetry_policy::PostAcceptable` and then requires the body to parse as a JSON object, so `{` alone or `{} trailing` is refused with `ERR_TELEMETRY_REFUSED`; sent over Chromium's system `URLLoaderFactory`; in a test instance only, `ARDIA_TEST_TELEMETRY_ENDPOINT` may point it at an `http` localhost URL, and `ArdiaShell.testTelemetrySink` reports `requestsStarted`, counted where the request is handed to the network, and `inFlight`, which `bridge.ps1` uses to show refused posts never reach the network and a valid one reaches a loopback listener), `HTMAXBUTTON` hover/press tracking (`WM_NCMOUSEMOVE`, `WM_NCMOUSELEAVE` via `TME_NONCLIENT \| TME_LEAVE`, `WM_NCLBUTTONDOWN`/`UP`, deactivation/capture reset in both `PreTranslate` and `ShellTreeHost`) emitting `ArdiaShell.maximizeButtonState`, the transparent shell `WebView` above the page `WebView`s, input pass-through, page leases and navigation events, accelerators, `session.read`/`session.write`, `engine.call` for all 37 generated routes of `ardia/desktop/generated/ac_desktop_routes.h` through the Windows `ac_*` table |
+| `src/ardia/win/webui/webui_caption_script.h` | lines added to `host-bootstrap.js` that report the shell's maximize button rectangle (`ArdiaShell.setMaximizeButton`) and mirror `ArdiaShell.maximizeButtonState` onto `data-ardia-nc-hover`/`data-ardia-nc-pressed` |
+| `scripts/windows/assemble-webui.ps1` | engine + `apps/desktop/dist/win` (default, or any UI build folder with `index.html`) as `ardia-ui\` beside `chrome.exe`, plus optional `-MigrateBin` to bundle `ardia-webui-migrate.exe` and `-UpdateVerify` to bundle `ardia-update-verify.exe` with the pinned `windows-update.pem` beside it; `-Shippable` makes the build the installer takes (below) and needs both |
+| `scripts/windows/webui-pilot/` | the real-input run below (`run.ps1`, its helpers and test page), the packaged-build tour (`tour-webui.ps1`), the stale-document check (`stale.ps1`), the hostile-input check at the bridge and document sinks (`bridge.ps1`), the junction and `ardia-ui\` asset-escape check (`junction.ps1`) and the close-cycle check (`close.ps1`), the policy and cleanup-race check (`profile-edges.ps1`) and the concurrent-runs check (`ports.ps1`); they track the processes they start and stop only those and their children, launch with `--remote-debugging-port=0` and read the port back from the run's own `DevToolsActivePort`, using it only while the process listening on it is one this run started, run each launch in its own marked folder under `C:\pilot\runs`, and delete only a folder whose `.pilot-run` marker names it |
+
+The frontend is `apps/desktop`'s Linux-mode production build (`pnpm -C apps/desktop build`), unchanged, with Linux wording; its `--mode win` build (#3972) has the Windows wording and is the next one to run here. Host calls the pilot doesn't answer
+resolve to `null` (and `engine.call`s outside the routes fail as unknown) and are logged once each as
+`webui shell: unhandled host call …`; the shell starts, renders and navigates with them.
+
+### Results
+
+`scripts/windows/webui-pilot/run.ps1` drives the window with `SendInput` (real pointer and keys, in the console
+session), reads state over CDP and Win32, and records the screen. Every check passed at both scales:
+
+| Check | 100% (96 dpi) | 150% (144 dpi) |
+| --- | --- | --- |
+| Shared UI from `chrome://ardia/` in a frameless window, DWM shadow and rounded corners | yes | yes |
+| `WM_NCHITTEST`: left, right, bottom, bottom-right outside the visible frame (native invisible borders) | 10, 11, 15, 17 | 10, 11, 15, 17 |
+| `WM_NCHITTEST`: top edge inside the client area, through the shell's `Chrome_RenderWidgetHostHWND` | 12 (`HTTOP`) | 12 |
+| `WM_NCHITTEST` over the shell's HTML maximize button | 9 (`HTMAXBUTTON`, via `HTTRANSPARENT` to the frame) | 9 |
+| Snap layouts flyout on hovering the shell's maximize button | shown | shown |
+| Typing an address in the shell, Enter: the page loads in the content area (`file:///…/form.html`) | yes | yes |
+| Click into the page's input, type: the keys land in the page | yes | yes |
+| Ctrl+L from the page: focus moves to the shell's field, the page keeps its text | yes | yes |
+| Click back into the page and type: keys land in the page again | yes | yes |
+| Resize from the right edge, the bottom-right corner, the top edge | yes | yes |
+| Drag the window by the sidebar (`ArdiaShell.startWindowMove`) | moved 135,87 for a 140,90 drag | same |
+| Drag to the screen's left edge: Aero Snap; drag out restores the size | yes | yes |
+| Win+Left (left half, full height), Win+Right (back), Win+Up (maximized), Win+Down (restored) | yes | yes |
+| Shell maximize button click toggles maximize | yes | yes |
+| Close button: every engine process gone | 0.6 s | 0.6 s |
+| Relaunch: the window comes back with the session's tab | yes | yes |
+| A second launch while running raises the same window, no second window | yes | yes |
+| Alt+F4 exits | yes | yes |
+
+Proofs (screenshots, two 105 s recordings, logs) are in the PR.
+
+Found on the way, and the fixes the desktop host needs too:
+
+- **Tear the shell down while its views are alive.** With `CLIENT_OWNS_WIDGET`, `~ShellContents` freed its pass-through
+  regions before `views::View` deleted the shell `WebView`, whose WebContents teardown reached `RetireRenderer` and
+  wrote into the freed vector. The engine before `TearDown` crashed on 12 of 12 closes with pass-through regions active
+  (`close.ps1`: exit `0x80000003` and a Crashpad dump each time, by `ArdiaShell.closeWindow` and by `WM_CLOSE`); with
+  it, 12 of 12 exit 0 with no dump. The desktop host owns its widget the same way and needs the same order.
+- **Running `install_static_unittests` on Windows** needs `icudtl.dat`, `dbghelp.dll`, `dbgcore.dll` and
+  `msdia140.dll` beside it and a process at normal priority (a scheduled task's background priority fails its start
+  check). Seven of Chromium's own `UserDataDir` tests fail there because they expect `Chromium\User Data` and the
+  `Chromium` policy key, which Helium and `chromium-win-install-names.patch` rename; the `UserDataDir.ArdiaShell*`
+  tests are the ones this change adds, and they pass.
+- **Pass-through needs a root `WindowTargeter` on Windows.** The Linux model (shell `WebView` above the page
+  `WebView`s, `WidgetDelegate::ShouldDescendIntoChildForEventHandling` skipping the shell where a page shows) was not
+  enough: `Widget::ShouldDescendIntoChildForEventHandling` then compares view and window layers
+  (`kNativeViewHostManagesLayers`), and clicks over the page landed on the widget's content window, reaching neither
+  web contents. A targeter on the content window (`ShellRootTargeter`) that explores a page's window directly when the
+  point is in a pass-through rectangle fixes it. The same applies to a `BrowserView`-hosted shell.
+- **The shell's child window is the `WebContentsViewAura`, not a `NativeViewHost` container**, with
+  `kNativeViewHostManagesLayers` on: Linux's `holder()->GetNativeViewContainer()` comparison never matches on Windows.
+- **`<windowsx.h>` must not be included next to Views**: its `IsMinimized`/`IsMaximized` macros rename
+  `Widget::IsMinimized` and break the link.
+- **`ArdiaShell.setWindowTitle` renames the HWND** to the page title; tools must find the window by process and class.
+
+### What compiled from the Linux host
+
+`series_win.py` now copies these `engine/ardiacore-linux` files into the Windows tree at `//ardia/linux`, and
+`//ardia/win` compiles them as they are. The list CI checks is `accepted-linux-sources.txt`; they are in the Windows
+key's `key-inputs.json`, so a change to one moves the Windows key too:
+
+| Linux file | Used as | What for |
+| --- | --- | --- |
+| `bootstrap.js` + `generate_bootstrap.py` | as is | the `chrome.send` bridge, `window.__ardiaHost` |
+| `ac_linux_session.{h,cc}` | as is | `MergeLinuxSession` for `session.read`/`session.write` |
+| `ac_desktop_routes.h` (from `engine/ardiacore-desktop`) | as is | generated `kRoutes` (37 routes): `engine.call` names to `ac_*` services |
+| `ac_desktop_policy.h` (from `engine/ardiacore-desktop`) | as is | the shared `StoredRead` type (`kFound`/`kMissing`/`kFailed`) the document store answers with; the Windows rules are in `webui_policy.h`, not here: `ReadAsset` calls `ValidWindowsAssetPath`, and the document store calls `ValidWindowsDocumentName`, `ReservedWindowsDocumentName` and `WindowsDocumentLimit` |
+| `ac_desktop_window_state.h` (from `engine/ardiacore-desktop`) | as is | `ArdiaShell.windowState`/`windowButtonLayout` names |
+
+Rewritten for the pilot (each marks code the desktop host should own once, shared):
+
+| Linux code | Windows pilot | Why |
+| --- | --- | --- |
+| `ShellHostView` inside `BrowserView` (`ac_linux_host.cc`, 8,921 lines) | `ShellHostView` inside `BrowserView` (`webui/webui_host_view.{h,cc}`, `webui_host_tabs.cc`, `webui_host_calls.cc`; #4112) | the pilot's single `ShellWindow` widget is gone: each Chromium browser window carries the shell over its own `BrowserView`, see "WebUI host on BrowserView" below |
+| `ShellDataSource`, `ShellController`, `ShellConfig`, `ReadAsset`, `MimeType`, `AssetDirectory` | same code, copied | file-local in `ac_linux_host.cc`; move to `engine/ardiacore-desktop` as is |
+| `ViewportTargeter`, `ShellTransparency`, `SubtractFromRegion`, `PassesShellPoint`, `DoesIntersectRect`, `SetInputRegions` | same logic, plus `ShellRootTargeter` | see Results |
+| `HostMessageHandler` | `Handler` | same transport; the renderer-generation and lease bookkeeping is reduced to one window and generation `1` |
+| `linux_window::StartCaptionMove` | `WM_SYSCOMMAND SC_MOVE \| HTCAPTION`, only while the left button is down | Win32 move loop, Aero Snap included |
+| `chromium-linux-borderless-frame`, `-window-state` (GTK and Wayland frames) | `ShellTreeHost::GetClientAreaInsets`/`GetDwmFrameInsetsInPixels` + `ShellFrame::NonClientHitTest` + `WebUIShellPreTranslate` | Chrome's own Windows frame model: invisible native resize borders, top edge in the client, DWM shadow and rounded corners; `HTMAXBUTTON` presses are taken in the message pump and toggle maximize |
+
+**WebUI host on BrowserView (#4112).** In `--ardia-shell=webui` the shell lives inside Chromium's own windows, as on
+Linux. `InstallWebUIShellHooks` (`webui_shell.cc`, called from `BeforeWebUIChromeMain`) sets
+`g_ardia_win_hosts_normal_windows` (no tab strip, toolbar, bookmark bar or Chromium shortcuts in a normal window),
+`g_ardia_win_shell_frame` (`chromium-win-hosted-browser-windows.patch`: the window keeps the system DWM frame and its
+contents stay transparent, so Mica and the rounded corners survive), `g_ardia_win_frame_view` (`ShellBrowserFrameView`
+in `webui_frame.cc`: top-edge resize, `HTMAXBUTTON` over the shell's maximize button for Snap Layouts) and
+`g_ardia_keeps_window_without_tabs` (a shell window and its companions stay open with no tabs until they close).
+
+- `WindowRegistry` (`webui_windows.cc`) opens the `main` window at start, `ArdiaShell.openWindow` windows (browser,
+  small, private, Settings, Import), and adopts any normal window Chromium opens by itself as `chromeMade`, its tabs
+  offered as unclaimed. It tracks activation order (focus, links from other apps), private window ordinals
+  (`ArdiaShell.privateWindows`), placement (`window-placement.txt`, the RNW format, cascaded 28 px from the window
+  in front, fitted to the display's work area) and quits when the last browser window closes.
+- `ShellHostView` (`webui_host_view.cc`) is a child view over the `BrowserView`: the `chrome://ardia/` shell
+  `WebView` on top and one viewport `WebView` per shown tab under it. Tabs are real `TabStripModel` tabs created with
+  `Navigate` (`kNewBackgroundTab`), so popups, `beforeunload`, session tab ids and tab helpers are Chromium's own. A
+  tab of another profile lives in a hidden companion browser of that profile owned by the window (`EnsureMember`,
+  `RouteProfile`); private and utility windows take no companions. The `BrowserView`'s own contents view is emptied
+  after every strip change (`ReattachViewports`), and a page view Chromium took back is detached and reattached so a
+  shown pane never stays blank. When Chromium replaces a tab's contents (a discard), the binding follows the new
+  contents and the shell gets a `pageLifecycle` `rebind` whose lease carries the next `bindingGeneration`, not a
+  close. `tab.presentations` also activates the
+  presented tab in its native `TabStripModel`, so Chromium's active-tab services follow the shell.
+- Closing: when companions hold tabs, the shell's close and the system's (`WM_CLOSE` from Alt+F4 or the taskbar,
+  taken by `CaptionInput`) first run the companions' `beforeunload` while the visible window is still there to show
+  their prompts (`ConfirmWindowUnload`, like Linux's `ConfirmCompanions`); the window's own tabs then go through
+  Chromium's ordinary close, download warning included. A cancel resets the companions, and each new close attempt
+  clears any confirmation a cancelled one left behind, so the next close asks again, and so does quitting
+  (`ArdiaShell.quit`, closing the last window) through `ResetAllCompanionConfirmations`. `closing_` is set only when the
+  widget actually starts closing (`OnWidgetClosing`), so a cancelled `beforeunload` never leaves documents refused.
+  Companions closed after their window are emptied without prompts.
+- A `session.write` broadcasts `ArdiaHost` `session` (`base`, `session`, `sourceWindowId`) to every non-private
+  window, the writer getting its own base back, so Settings changes reach open windows at once. Entering and leaving
+  full screen sends `ArdiaShell` `onWindowEvent` `{type: "fullScreen", id, on}`, and `minimizeWindow` takes a target
+  window id. A window opens only for the live shell document that asked for it (`LiveFor`), on the display its
+  requested, cascaded or saved frame falls on (`EffectivePlacementRect`). A closed window sends
+  `onWindowEvent` `{type: "close", id}` to the other windows (a private one only to its opener). Chromium's "Open link
+  in private window" becomes the shell's `openWindow` page event (`OffTheRecordNavigation`), and any other private
+  window Chromium opens (say "Open link in new window" from a private window) is hidden at once and its pages go to the
+  shell of the private window sharing its session, or else the front regular window, as `openWindow` requests, so the
+  shell opens real private windows for them (`HandOverPrivateWindow`). A page no shell takes within 5 s moves into the
+  same-session private window as an unclaimed tab; the empty Chromium window then closes.
+- Host calls served there: `tab.create` (with `adoptId`, `previousClaim` and transfers between windows after
+  `ArdiaTabs.prepareTransfer`), `tab.viewport`, `tab.presentations`, `tab.command` (`loadUrl`, `goBack`,
+  `goForward`, `goToOffset`, `reload`, `forceReload`, `stopLoading`, `focus`, `blur`, `zoomStep`, `setMuted`,
+  `close`, `navigationEntries`), `tab.release`, `tab.close`, `ArdiaTabs.unclaimedTabs` and the `unclaimed` event,
+  `ArdiaTabs.claimLaunchTab`, `ArdiaShell.setActiveProfile`, `openWindow`, `focusWindow`, `windowIdentity`,
+  `windowIds`, `privateWindows`, `toggleFullScreen`, `pickFolder`, `pickFiles`, `copyText`, `readText`,
+  `listenForOpenURLs` with `onOpenURLs` (a second launch's URLs), `documents.watch`/`unwatch`/`commit`/`flush` with
+  `documents.changed` (the shared `LinuxDocumentService` from `engine/ardiacore-linux`, compiled as is), and
+  `profiles.loaded`; plus everything the pilot served (documents, session, telemetry, platform calls, routes).
+- #4107's widened hooks are set in WebUI mode only (`InstallWebUIShellHooks`; the RNW host leaves them null):
+  `g_ardia_linux_is_companion`, `g_ardia_linux_companion_owner` (a companion's tab-modal dialogs and permission
+  prompts show in the visible window), `g_ardia_linux_present_companion` (a companion's `Show`/`Activate` focuses
+  the owning window, its other window requests are dropped), `g_ardia_linux_window_tab_count` (one close warning
+  for the window's tabs across its companions) and `g_ardia_linux_shell_passes_point` (`BrowserView` hands input at
+  the shell's pass-through regions to the page below). Still deferred: the close drain
+  (`g_ardia_linux_close_hooks`, `beginWindowCloseDrain`, `acknowledgeWindowClose`; until it lands
+  `LinuxCloseHooksActive()` stays false and Chromium closes WebUI windows itself, running `beforeunload`),
+  `ArdiaShell.beginDialog`, picture in picture, glass regions, notifications, idle signals, drag escape and switcher
+  capture; none is advertised, so the desktop falls back as it does on a host without them.
+
+**Compile probe** of the rest (`ARDIA_LINUX_COMPILE_PROBE=1`, objects only, nothing linked;
+`docs/engine-build-windows.md`), on the Windows tree with the patches `series-win` takes (#4107, 2026-11-24): of the
+118 `.cc` files, **81 compile on Windows as they are** and 37 don't (75 of 122 before #4107):
+
+| Why | Files |
+| --- | --- |
+| POSIX headers (`poll.h`, `unistd.h`, `dirent.h`, `dlfcn.h`, `sys/*`) | 18: `automation`, `calendar_eds`, `cli`, `config_core`, `control_core`, `desktop_core`, `import_keyring`, `import_readers`, `import_storage`, `memory_pressure`, `power`, `secret_text`, `self_update`, `sync`, `sync_keystore`, `sync_vault`, `system`, `user_scripts_store` |
+| POSIX types and calls (`uid_t`, `st_mtim`, `S_ISREG`, `mkdir`), mostly through `ac_linux_downloads.h` and `ac_linux_password_check.h` | 10: `downloads`, `file_drop`, `files`, `host`, `import_sessions`, `native_messaging`, `password_check`, `password_field`, `password_prompt`, `user_scripts` |
+| D-Bus | 2: `geoclue`, `system_signals` |
+| Needs a Linux-only copy or shim (`ac_test_media_route_provider.h` from `copies.tsv`, the `ac_engine_call` dlsym shim, the Rust core's `ardia/core_rs/include/ardia_core.h`) | 3: `cast`, `saved_history_engine`, `sync_keys` |
+| `base::FileDescriptorWatcher` | 1: `config` |
+| Other Linux-only APIs (`password_manager::kPasswordStore` switch, `GetAppOutput(argv)`, `ui::IndexFromPointFlags`) | 3: `credential_service`, `external_apps`, `typeahead_input` |
+
+`base::FilePath` is UTF-16 on Windows, and no file fails for it any more: the 9 files that passed `value()` as a
+`std::string` or built a path from one (`background_dialogs`, `import_service`, `live_service`, `profile_service`,
+`report`, `site_controls_service`, `sync_service`, `download_service`, `extension_service`), and the path sites of
+`config`, `credential_service` and `user_scripts`, go through `ardia/desktop/ac_desktop_paths.h`: `Text(path)` is
+`value()` where paths are narrow (Linux, byte for byte, never through the locale as `AsUTF8Unsafe` would) and UTF-8
+from `AsUTF8Unsafe` where they're wide, `FromText<base::FilePath>(text)` the reverse. `page_channel` and `web_store`
+compile now that `chromium-linux-page-agent.patch` (its `ISOLATED_WORLD_ID_ARDIA_PAGE`) and
+`chromium-linux-web-store-uninstall.patch` are on the Windows tree.
+
+The 81 that compile include the documents service (`document_reducer`, `documents`, `document_schema`,
+`document_service`), the page layer (`page_channel`, `page_lease`, `page_state`, `page_status`, `page_commands`,
+`page_messages`, `page_media`, `page_prompts`, `page_evaluation`), prompts and dialogs (`dialogs`, `dialog_views`,
+`permission_prompts`, `password_prompts`, `autofill_prompts`, `background_dialogs`), extensions (`extensions`,
+`extension_views`, `extension_keybindings`, `extension_shortcuts`, `extension_service`, `web_store`),
+`crash_dumps(_core)`, `report`, `notifications(_core)`, `close_hooks`, `devtools_authority`, the sync, import, live,
+profile, download and site-controls services, `sync_crypto`, `sync_json`, `sync_wordlist`, `import_crypto`,
+`import_formats`, `import_secrets`, `import_zen`, `glass`, `pip_player`, `profiles`, `site_controls`, `telemetry`,
+`window_lifecycle`, `window_caption` and the rest. The hook globals most of them set are now declared on the Windows
+tree by the patches `series-win` takes; linking them into `chrome.dll` is the BrowserView host's work.
+
+### Moving a user's data from the RNW shell (#4043)
+
+The cutover is an upgrade, so the WebUI host gets the React Native Windows shell's data by a one-time copy that
+never changes the original. `packages/core-rs/crates/ardia-shell-migration` is the migration;
+its `ardia-webui-migrate --from-rnw` binary runs it on demand, and the WebUI host (`--ardia-shell=webui`) invokes it
+automatically at startup in `OpenWebUIShell` (`RunWebUIStartupMigration` in `webui_mode.cc`) before loading
+`session.json` or `bootstrap.documents` whenever `ardia-webui-migrate.exe` is bundled beside `chrome.exe` and the
+default user app-data folder is in use (or both `--ardia-migrate-from-rnw` and `--ardia-migrate-rnw-data=<dir>` are
+passed for a scratch `ARDIA_DATA_DIR` run, with an `=`: Chromium's switch parser reads `--ardia-migrate-rnw-data <dir>`
+as an empty switch followed by a stray argument; `--ardia-migrate-from-rnw` under `ARDIA_DATA_DIR` without a non-empty
+`--ardia-migrate-rnw-data=<dir>` is refused like an incomplete migration, so the shell doesn't open; `--ardia-no-migrate` always disables it). The default Windows shell is still RNW.
+
+| RNW keeps | at | WebUI gets | how |
+| --- | --- | --- | --- |
+| documents (`session.json` and the rest of `DocumentStore`), window placement | `%LOCALAPPDATA%\Ardia\<name>` | `%LOCALAPPDATA%\Ardia WebUI\<name>`, where the WebUI host already reads `session.json` | byte copy |
+| config, hooks, themes | `%APPDATA%\Ardia\{config.json,hooks.json,themes\*.json}` (`<data>\config` with `ARDIA_DATA_DIR`) | `Ardia WebUI\config\…` | byte copy |
+| sealed sync keys | `%LOCALAPPDATA%\Ardia\Sync\sync-key-<account>.dpapi`, DPAPI with entropy `ardia-sync-key/v1[/test-instance]/<account>` | `Ardia WebUI\Sync\sync-key-x<lowercase hex of the account>.dpapi`, the name and entropy the WebUI host's DPAPI secret store (`desktop_platform_win.cc`, #4039) reads | byte copy under the new name, only once the key unseals to 32 bytes for its own account |
+| connected accounts | Credential Manager `Ardia Connected Accounts/<account>` (`… [<data dir>]/` with `ARDIA_DATA_DIR`): the first 2,560 bytes on the base item, comment `Ardia g<1|2> <chunks>`, the rest on `<base>#g<generation>#<n>` (`<base>#<n>` before generations), up to 64 chunks | `Ardia WebUI\Secrets\account-x<lowercase hex of the UTF-8 account>.dpapi`, DPAPI with entropy `ardia-connected-account/v1[/test-instance]/<account>`; the WebUI host has no connected-accounts store yet (`ArdiaKeychain` is refused on desktop), so the cutover's store reads this layout | reassembled as `CredentialStore::Get` does. RNW writes continuation chunks (no comment) before the base (comment `Ardia …`), each with the account as its `UserName`, so an item counts as a chunk only when it has no comment and a chunk-shaped name, and a chunk completes a secret only when its `UserName` and the base's are both exactly the account (blank owners never match); a chunk name two bases could both claim (`acct` generation 1 and legacy `acct#g1`) fails both. The namespace (`Ardia Connected Accounts [<dir>]/`) matches without case, as Credential Manager does, while the account keeps its case: one no base claims is an orphan of an interrupted first write and is left out (`credential_chunks_orphaned`), while a chunk-shaped name with its own comment is an account of its own. A missing chunk leaves the account out |
+| Chromium's profile (cookies, saved passwords, extensions) and the install identity | `%LOCALAPPDATA%\Ardia\User Data`, the installer's registry | untouched and not copied | stays where it is |
+
+Scratch files (`dialog.json`, `menu.json`, `activation.log`, `file-chooser.txt`, `Ardia.png`), dot files, staged
+`.partial`/`.tmp` files and the folders beside the documents (`Logs`, `Telemetry`, `Crashpad` and the like) are left.
+
+- **Rollback.** The RNW folders and Credential Manager items are only read (the vault interface has no write), so the
+  RNW build opens exactly what it left. The tests compare every file's bytes and write time and the vault before and
+  after, including after interrupted runs.
+- **Restartable.** Each file is written to a `.<name>.<random>.rnw-migration.partial` beside it, flushed, then renamed;
+  a later run removes its own leftovers (only `.ardia-mig-*.rnw-migration.partial`; other dot files stay). `rnw-migration.json`, the marker, is written last and only when every step finished;
+  with it present (a whole finished report: version, run id, a finished outcome, every count) the migration doesn't
+  run again, so what the WebUI host writes afterwards is never overwritten. A
+  file the run finds already in place with the same content (for secrets, the same plaintext) counts as unchanged; one
+  that differs (pilot data) is copied to `rnw-migration-kept\` before the RNW copy replaces it; a retry that finds a
+  different pilot copy than the one kept keeps it too, as `<name>.<run>.kept`, named by a hash of its content, so an unchanged copy reuses its backup on every retry and a changed one gets its own (a different file already holding that name is never overwritten; the copy takes the next free name), and shortened with a hash of the name when that would pass 255 characters. An exclusive lock
+  on `rnw-migration.lock` makes a second concurrent run answer `busy`. `migration.rs` stops before every rename in
+  turn and resumes each to the same result as an uninterrupted run.
+- **Safety.** Overlapping or relative folders are refused, and so is a root with a link or junction anywhere above it,
+  or a linked marker or lock. Each root is reached by walking from the volume root one folder handle at a time, never by
+  name, refusing any link or reparse point on the way (and creating missing folders on that chain for the WebUI
+  root), and its handle's final path (`GetFinalPathNameByHandleW`, `F_GETPATH`, `/proc/self/fd`) is pinned. Every
+  folder below it is opened relative to the folder handle above it (`openat`/`mkdirat` on Unix, `NtCreateFile` with `RootDirectory` and
+  `FILE_OPEN_REPARSE_POINT` on Windows) and held while it's used, so swapping a folder for a link by name mid-run
+  changes nothing: reads, staged files, listings (`fdopendir`; `GetFileInformationByHandleEx(FileFullDirectoryInfo)`),
+  renames (`renameat`; `NtSetInformationFile` with `FileRenameInformationEx`, falling back to `FileRenameInformation`,
+  on the open staged file with the held folder as `RootDirectory`, which the Win32 `SetFileInformationByHandle`
+  refuses), deletes (`unlinkat`; `FileDispositionInformationEx` on a handle) and the lock all go through those
+  handles, and every file read and the lock file must have exactly one link.
+  Nothing is opened through a symlink, junction or other reparse point (`O_NOFOLLOW`, `FILE_FLAG_OPEN_REPARSE_POINT`)
+  on either side, files with more than one link (`nNumberOfLinks`, `st_nlink`) and files over the
+  limits (64 MiB documents, 4 MiB config, 64 KiB keys) are skipped, names follow the RNW stores' own rules, account
+  file names are lowercase hex, DPAPI runs with `CRYPTPROTECT_UI_FORBIDDEN` and plaintext is read into one buffer of its exact size and zeroed. Staged files have short fixed names
+  (`.ardia-mig-<pid>-<n>-<random>.rnw-migration.partial`), and accounts are at most 120 bytes so
+  `account-x<hex>.dpapi` stays within NTFS's 255-character name. Boundary
+  row `native:rnw-webui-migration`.
+- **Report.** The report is committed before the marker, so a marker never exists without the report of its run; a
+  report that can't be written fails the run (`failed_stage: report`), and a marker that can't be written replaces the
+  success report with a `failed`/`marker` one. Each run writes `rnw-migration-attempt.json` with only an outcome (`migrated`, `migrated_with_skips`,
+  `already_migrated`, `nothing_to_migrate`, `busy`, `refused`, `failed`), the failed stage (`layout`, `lock`,
+  `documents`, `config`, `sync_keys`, `credentials`, `report`, `marker`), the attempt number, the
+  duration and counts. The exit code is 0, 1 (failed, run again), 2 (refused), 3 (busy) or 64 (usage).
+- **Telemetry.** Every event on Windows carries `host_shell` (`rnw` or `webui`, `state/telemetry/hostShell.*.ts`). On
+  the WebUI host the telemetry leader loads the attempt report from disk with its own documents before the launch
+  events read it, and sends `shell_migration` once per run only while sharing is on; the run is marked reported
+  (`rnw-migration-reported.json`) only after the event went out and that mark is saved, so with sharing off it
+  stays pending, and so it does when the event is dropped or throws (`capture` now says whether it queued the
+  event, and a relay that drops it says so), and until the queue holding the event is saved to disk while the consent the launch started with is still the current one. It is reported
+  only by the telemetry leader: on the desktop host, once the window has taken over from the startup relay (the
+  leadership's after-lead hook), with the consent the launch started with, and at most once per run of the app. If the host can't store the mark, the next launch sends the run again: a duplicate, never a lost report. The desktop document and telemetry routes are live on both Linux and Windows WebUI (`webui_host_calls.cc` serves
+`ArdiaShell.readDocument`/`writeDocument`/`saveDocument`/`removeDocument`, populates `bootstrap.documents`, and
+advertises and handles `ArdiaTelemetry.post` using `ardia::desktop_telemetry_policy`), so
+`rnw-migration-attempt.json` and `rnw-migration-reported.json` flow end-to-end into `shell_migration` telemetry. The event carries the outcome, `failed_stage`, `attempt`, `duration_ms`, `prior_failed_stage` and the counts: known enums
+  and capped counts only. A failed attempt now quits before the report can be sent, so the next run copies the stage
+  the previous failed attempt stopped at into its own report as `prior_failed_stage` (from that report's
+  `failed_stage`, or the one it carried). A retry that succeeds still says where the one before it failed, and
+  `attempt` still counts the tries. Both are carried only from a previous report that validates
+  (`valid_attempt_report`: version 1, a 32-hex `run`, an outcome a report is written with, a numeric `attempt`);
+  anything else starts over at attempt 1 with no prior stage. Watch
+  `shell_migration` by outcome: `failed` and `refused` should stay near zero, and `credentials_incomplete` and
+  `sync_keys_unreadable` against `credentials` and `sync_keys`.
+- **Checks.** `tests/hostile.rs` runs the shared hostile corpus (`scripts/security/hostile-inputs.mjs`, read with node)
+  as document, theme, sync-key and account names and checks the sink: nothing appears outside the WebUI folder, the
+  RNW folder is unchanged, every file that lands matches the layout's own names, and a plain control migrates.
+  `cargo test -p ardia-shell-migration` (Mac, Linux and Windows in `rust.yml`; on Windows also real DPAPI,
+  a chunked account through Credential Manager, junctions on both sides and above a root, hard links and the WebUI
+  sync-key name). In a Windows 11 guest,
+  `scripts/windows/webui-pilot/upgrade.ps1 -Migrator <dir>\ardia-webui-migrate.exe [-RnwApp <RNW build>]` seeds a
+  scratch RNW profile (documents, config, sealed keys, single, chunked, legacy and torn accounts, a fake Chromium
+  profile), stops the migrator before each rename and resumes it (needs `Ardia.test-build` beside the migrator for
+  `ARDIA_TEST_MIGRATION_STOP_AT_COMMIT`), checks every item, a second run, the RNW folder, vault and keys unchanged,
+  the RNW build opening its folder again, the WebUI shell opening the migrated one, and refusals for overlap and a
+  junction. It uses `ARDIA_DATA_DIR`-style scratch folders and removes the Credential Manager items it made.
+  With `-RnwInstaller <Ardia-Setup.exe> -WebUIInstaller <Ardia-Setup.exe>` it also runs the installed upgrade
+  described under "Packaging, installing and upgrading the WebUI shell".
+
+### Packaging, installing and upgrading the WebUI shell (#4113)
+
+The WebUI shell ships through the same Inno Setup installer as the React Native shell, from a folder that looks the
+same to Windows: `Ardia.exe`, `chrome.dll` and the engine's files, with `ardia-ui\` and `ardia-webui-migrate.exe` in
+place of `ArdiaApp.dll`. Since the cutover (#4142) it is the shell CI, releases and `windows-alpha` ship.
+
+- **Assembly.** `assemble-webui.ps1 -Engine <engine> -Ui apps/desktop/dist/win -Out <dir> -MigrateBin
+  <ardia-webui-migrate.exe> -UpdateVerify <ardia-update-verify.exe> -Shippable -Version <v> -Build <n>` renames `chrome.exe` to `Ardia.exe`, gives it Ardia's
+  icon and name (`launcher-identity.ps1`, `-AppIcon` to use another `.ico`), adds the Visual C++ runtime the launcher
+  and the migrator need (`vc-runtime.ps1`, `-VcRedist <folder>` to name the redist), checks the migrator and the
+  update verifier are built for the launcher's CPU, copies the pinned `windows-update.pem` and stamps
+  `Ardia.build.json`. It refuses to start without the migrator, the update verifier or a `-Build` above 0,
+  with `-TestBuild`, or from an engine that carries an `Ardia.test-build` marker, and refuses to finish with
+  `chrome.exe` or any React Native file left in the folder: a shippable folder never carries a test marker, and the
+  tour marks a copy instead. `-LauncherName Ardia.exe` alone does the rename and the icon without the rest. Without
+  these switches it assembles the pilot as before (`chrome.exe`, no rename); an engine's own `Ardia.test-build` is
+  dropped unless `-TestBuild` asks for one.
+- **One layout rule.** `scripts/windows/shell-layout.ps1` decides which shell a folder holds (`ArdiaApp.dll`: React
+  Native; `ardia-ui\index.html`: WebUI; both or neither: refused), lists what an install of each ships, the
+  commands it registers and what each shell owns: its own folders (`$ShellOwnedFolders`: `Bundle\`,
+  `Microsoft.UI.Xaml\` and `NpuDetect\` for React Native, `ardia-ui\` for WebUI) and a fixed list of exact files
+  (`$ShellOwned`, taken from the built React Native app: its library, WinUI and Windows App SDK files, the files with
+  fixed names in its folders and the XAML `.mui` file in each locale folder; `ardia-ui\index.html` and the migrator
+  for WebUI). It names what is wrong with a folder, including anything the other shell owns and, for the WebUI shell,
+  a missing `Ardia.build.json`. `make-installer.ps1`, `installer-check.ps1`,
+  `dependency-check.ps1`, `assemble-webui.ps1` and `upgrade.ps1` all read it, and `shell-layout.test.ps1` checks it
+  with the assembler's and the installer's refusals.
+- **Installer.** `make-installer.ps1` packages only a WebUI folder, and `Ardia.iss` is the WebUI shell's only. It adds `--ardia-shell=webui` to the Start Menu and desktop shortcuts, the
+  launch after setup and the relaunch after an update, `"Ardia.exe" --ardia-shell=webui --single-argument %1` for
+  `ArdiaHTM` and `"Ardia.exe" --ardia-shell=webui` for `StartMenuInternet\Ardia`. Switching shells removes only what
+  the other shell shipped, and only once this shell is in place. `make-installer.ps1` writes a manifest of every
+  file the payload ships in its shell's own folders and fixed list (`ardia-rnw-files.txt` or `ardia-webui-files.txt`,
+  so every hashed `ardia-ui\assets\` file is named), which the install puts beside `Ardia.exe`, and hands the
+  installer the other shell's fixed list as `retired-shell.txt` without installing it. At `ssInstall`, before
+  anything is copied, the installer notes whether the other shell is there (its marker or its manifest) and reads
+  this shell's own manifest from the last install. At `ssPostInstall`, after Inno has closed the app and copied every
+  file, nothing happens unless this shell's marker (`ardia-ui\index.html` or `ArdiaApp.dll`) is now installed and the
+  install folder isn't a link. Then an update of the same shell removes the files the last build's manifest listed
+  and the new one doesn't (old hashed `ardia-ui\assets\` or `Bundle\` files), and a switch reads the other shell's
+  manifest, or, for a React Native install from before manifests, the fixed list (the only place a `*\` entry is
+  accepted; a manifest on disk takes exact paths, never `*` or `?`). Each file goes only if `GetFileAttributesW` shows
+  no reparse point on the install folder, any folder on its path or the file itself, with `DeleteFile`; each emptied
+  folder goes bottom up with `RemoveDir`, which leaves a folder holding anything else, or a link, alone. A file that is
+  behind a link or can't be removed stays listed: in this shell's manifest after an update, or in the other shell's
+  manifest, which is otherwise deleted, so a later install tries again. A file someone added in
+  `Bundle\` or `ardia-ui\` stays, as does its folder, and an install that stops early leaves the old shell whole. So a
+  WebUI install over the React Native one leaves no React Native file (an install from before manifests may keep
+  `Bundle\assets\`, whose names change each build), and a rollback removes `ardia-ui\` and the migrator. User data is in `%LOCALAPPDATA%\Ardia` and `%LOCALAPPDATA%\Ardia WebUI`, never in the
+  install folder, so neither step touches it. A WebUI install needs `Ardia.build.json`, as `installer-check.ps1` does.
+- **Installer check.** `installer-check.ps1` checks the layout's own files (for the WebUI shell
+  `ardia-ui\index.html` and `ardia-webui-migrate.exe`, and no `ArdiaApp.dll`), the Start Menu shortcut's target,
+  arguments, icon and AppUserModelID, the registered commands with or without the switch, and that no
+  `Ardia.test-build` was installed. It also seeds the React Native app's login item (`Run\Ardia`, no switch) with a
+  disabled `StartupApproved\Run` value, clears `Run\Ardia WebUI` but leaves an orphaned enabled approval under it, and adds an item for
+  `Ardia.exe` with extra arguments and an unrelated one. After the install the other shell's item and its approval
+  are gone, this shell's item opens this shell's command with the disabled approval bytes, and the other two are
+  untouched. A failed check still uninstalls (warning, never hiding the failure, if that fails too), and every value
+  it touched is restored after the uninstall; the `StartupApproved\Run` key itself is left in place. The installer makes
+  no `%LOCALAPPDATA%\Ardia\User Data`, so a WebUI install leaves no React Native folder behind.
+- **Installed upgrade and rollback.** `upgrade.ps1 -RnwInstaller <rnw setup> -WebUIInstaller <webui setup>` (in a
+  disposable Windows 11 account: it refuses to start when the user already has Ardia's uninstall entry, Start Menu
+  shortcut, `StartMenuInternet\Ardia` or `ArdiaHTM` registration, an `%LOCALAPPDATA%\Ardia\User Data` folder (even
+  empty) or an `Ardia WebUI` folder; `shell-layout.ps1` and `launcher-identity.ps1` sit beside it or one folder up) installs the React Native build silently into the run's own
+  folder (`/DIR=`), runs the direct-migrator checks above against that install, then seeds a second profile sealed
+  as a shipped build seals it (no `test-instance` in the DPAPI entropy: an installed build has no `Ardia.test-build`,
+  so it isn't a test instance and passes no `--test-instance` to the migrator), runs the installed React Native
+  build on it and closes it with `WM_CLOSE` (`installed-rnw-clean-exit`). It installs the WebUI build over it and
+  checks the layout (no React Native file left), `Ardia.exe`'s identity, the uninstall entry and the shortcut. Every
+  WebUI start passes `--user-data-dir=<data>\Chromium`, the folder the engine would otherwise relaunch into, so the
+  process the harness started is the one that migrates and exits. It starts it twice so the migration must fail
+  (`--ardia-migrate-from-rnw` without `--ardia-migrate-rnw-data`, and a junction at `Secrets`), expecting that
+  process's exit code to be 75 with no window, no marker, no process left running from the install and the React
+  Native profile and vault unchanged; then starts it with
+  `--ardia-shell=webui --ardia-migrate-from-rnw --ardia-migrate-rnw-data=<profile>` and checks the window opens, the
+  marker and the attempt report `shell_migration` sends (outcome, attempt, duration and counts, no paths or names),
+  tabs, history, bookmarks, extensions, window placement, config, the sync key and every Credential Manager account,
+  that cookies and logins stay behind, and that the React Native profile is unchanged. Last it reinstalls the React
+  Native build (rollback), checks the layout is the React Native one again, runs it on the untouched profile and
+  reads back every account and the sync key, and uninstalls. Before the forced failures it also updates the WebUI
+  install with the same installer after adding a file only the last manifest lists, a manifest entry behind a junction
+  and a file no manifest lists, and checks the first is removed, the junction's target and the third stay, and the
+  junction entry stays listed (`same-shell-update-*`). Every process it starts is tracked by its id and creation time,
+  and every stop, whether a run ends, a window closes or the run cleans up, goes through `Stop-VerifiedProcess`: right
+  before stopping, the process must still have the same id and creation time and run from the install folder or the
+  React Native build, and a tracked process's children count only when they started after it, so a reused process id
+  is never stopped. Results go to `C:\pilot\proof\<label>-results.json`.
+- **Tour.** `webui-pilot/tour-webui.ps1 -App <folder> -Out <dir>` tours a packaged WebUI build (`Ardia.exe` or
+  `chrome.exe`, with `ardia-ui\` and an `Ardia.test-build` marker, which CDP needs) with real input and CDP:
+  a clean launch, the window's icon and AppUserModelID (`SHGetPropertyStoreForWindow`, expected `Ardia.Browser`),
+  a caption drag and back (within 16 px, with the whole window, its caption buttons included, on the 1024 by 768
+  runner screen), a double-click on the top-most title bar region at the first unobstructed point inside the window
+  and the screen (`data-ardia-drag="caption"`, which the desktop shim sets on every
+  drag region whose double-click is the title bar action) to maximize and back, the `HTMAXBUTTON` hover and press states
+  (`data-ardia-nc-hover`, `data-ardia-nc-pressed`, cleared when a press leaves the button) and a click on it,
+  typing an address, Ctrl+T and Ctrl+Tab between two tabs, Ctrl+\ for a split pane (typed into only once the shell holds the keyboard, then a fresh page loaded in it and
+  shown beside the one already there; a desktop shell text field's `focus()`, a field React focused for `autoFocus`
+  before its ref attached, and a focus claim each ask a page to hand the keyboard to the shell, `tab.command` `blur`, when the shell document doesn't have it, and a handoff a newer one
+  or another focus choice overtook never counts), Ctrl+, for Settings, a
+  download from a page, a document written, read, found on disk and removed through `ArdiaShell`, a second
+  `Ardia.exe --ardia-shell=webui --single-argument <address>` whose process exits while the running engine opens the
+  address in Little Ardia (links from other apps open there by default), which the tour then closes, and Close on the
+  main window with no process left running from the build's folder; the engine is stopped before the next launch either
+  way. Then it starts `Ardia.exe` again with no
+  `--ardia-shell` switch and checks the WebUI shell answers `ArdiaShell.windowIdentity`; that the browser's live
+  DevTools port is the one in a WebUI profile's `DevToolsActivePort` (the run's `ARDIA_DATA_DIR\Chromium`, or
+  `LOCALAPPDATA\Ardia WebUI\Chromium` when no relaunch moves it there, which Chromium writes only into the folder it
+  opened), with its `Local State`, no React Native `Ardia\User Data` and no `--ardia-shell` on any process; and
+  that the engine answers `ArdiaUpdates.status` with kind `portable` (`Ardia.build.json`, `ardia-update-verify.exe` and
+  `windows-update.pem` beside the launcher, no uninstaller) and this build's `Ardia.build.json`. That launch points
+  `LOCALAPPDATA` and `APPDATA` into the run's own folder, and runs only when the account has no `Ardia` or
+  `Ardia WebUI` folder before the tour starts (every clean CI runner). Elsewhere the tour reports it as skipped,
+  unless `-RequireFlagless` (as CI passes) makes that a failure. Handing an address to a running WebUI shell
+  needs the Wave 5B-3b engine (#4118); since the cutover the tour gates the run, so the engine pinned in
+  `prebuilt.json` must carry it. It writes `tour-webui-results.json` and `tour-webui.md` (each check,
+  pass or fail, its time and detail). `lib.ps1` takes `PILOT_APP`, `PILOT_RUNS` and `PILOT_PROOF` so the tour also
+  runs outside `C:\pilot`, finds `Ardia.exe` when there is no `chrome.exe`, and skips screenshots without ffmpeg.
+  Its waits, log and argument quoting live in `webui-pilot/wait.ps1`: `Log` writes `steps.log` and the console but
+  never the output stream, `Wait-Until -NoThrow` returns nothing on a timeout (so `[bool]` of it is `$false`) and
+  names the last error a check threw, kept through later checks that come back false until one passes, and `wait.test.ps1` checks them and compiles every `Add-Type` in `lib.ps1`,
+  `upgrade.ps1` and `tour-webui.ps1` with the default assemblies (PowerShell 7 drops them when
+  `-ReferencedAssemblies` is given).
+- **CI.** The `webui` (x64, `windows-latest`) and `webui-arm64` (`windows-11-arm`) jobs in `windows.yml` run the same
+  steps on every Windows run, and are its only jobs besides `identity` and `source`: `shell-layout.test.ps1`,
+  `pe-imports.test.ps1`, `update-verify.test.ps1` and `wait.test.ps1` on PowerShell 7 and Windows PowerShell (x64), `pnpm -C apps/desktop
+  build:win`, `cargo build --release -p ardia-shell-migration --bin ardia-webui-migrate` (its cache keyed by the
+  runner's CPU), the engine, `assemble-webui.ps1 -Shippable` and `dependency-check.ps1`. Full runs (`full-ci`, pushes
+  to `main`, releases) also make `Ardia-Setup-<cpu>.exe`, install and uninstall it with
+  `installer-check.ps1`, stamp it with `Ardia.build.json` (`release-files.ps1`) and, on x64, tour a copy
+  of the build marked as a test build; a failed tour fails the run. Artifacts: `Ardia-Setup-<cpu>` (what
+  `publish-alpha.sh <run id>` takes), `Ardia-windows-<cpu>`, `windows-release-<cpu>` when the run has a version, and
+  `tour-webui`.
+  `scripts/ci/windows-webui.test.mjs` keeps this wiring and the installer's WebUI default in place.
+- **Cutover (#4142).** The release jobs take the WebUI installers, `assemble-webui.ps1` stamps `"shell": "webui"` in
+  `Ardia.build.json`, and `publish-alpha.sh` refuses a build without that stamp (a build with none is a React Native
+  one). #4143 then deleted the React Native shell, its CI jobs and its scripts. The upgrade path above is what existing installs
+  take: the React Native app's updater runs the WebUI installer, which removes the React Native files and starts
+  `Ardia.exe --ardia-shell=webui`, which migrates the user's data before its first window.
+
+### Linux patches the pilot needed widened to Windows
+
+None: the pilot runs in a plain `views::Widget`. It adds one Windows patch of its own,
+`chromium-win-webui-user-data-dir.patch` (the profile folder, above). Hosting the shell in a
+`BrowserView` as Linux does will need these, by what they touch:
+
+| Patch | What it changes | For a BrowserView-hosted shell on Windows |
+| --- | --- | --- |
+| `chromium-ardia-linux-layer` | links the layer into `chrome`, calls it from `chrome_browser_main` and `chrome_main_delegate` | widen, or keep using `//ardia/win`'s existing `g_ardia_win_add_main_parts` hook (the pilot does) |
+| `chromium-linux-shell-above-input` | `BrowserView::ShouldDescendIntoChildForEventHandling` asks the host | widen as is (no Linux API); the pilot's widget delegate does the same |
+| `chromium-linux-background-windows`, `-companion-browsers`, `-window-minimum-size` | hidden companion browsers that hold a profile's tabs, minimum size | widen as is (Views and browser code) |
+| `chromium-linux-document-close` | defers browser close until the shell has sealed its documents | widen as is |
+| `chromium-linux-page-agent`, `-page-prompts`, `-page-status`, `-wheel-zoom`, `-unhandled-key`, `-private-links`, `-navigation-hold-hook`, `-autoplay-policy`, `-geolocation` | page channel, prompts drawn by the shell, status, zoom, keys, private links, autoplay | widen; the Windows autoplay patch (`chromium-win-autoplay-policy`, Blink commit parameter) is the one to keep |
+| `chromium-linux-devtools-authority`, `-devtools-open-tab` | devtools as tabs the shell owns | widen; `chromium-win-devtools-other-clients` overlaps |
+| `chromium-linux-auto-pip`, `-pip-placement`, `-pip-in-window`, `-media-player-pip` | picture in picture inside the window | widen as is |
+| `chromium-linux-action-popup-hook`, `-extension-keybindings`, `-settings-overrides`, `-web-store-uninstall` | extensions UI through the shell | widen; `-settings-overrides` touches a manifest feature list |
+| `chromium-linux-open-urls` | links from other apps reach the running shell | Windows has `g_ardia_win_relaunched` already (the pilot uses it) |
+| `chromium-linux-thin-scroll-bars`, `-glass-compositing` | overlay scroll bars, a transparent compositor for glass | widen `-thin-scroll-bars`; glass is DWM Mica on Windows instead |
+| `chromium-linux-frameless-utility-windows` | frameless settings and import windows | Windows: the same `ShellTreeHost`/`ShellFrame` the pilot uses |
+| `chromium-linux-window-state`, `-borderless-frame` | GTK and Wayland frame, tiling and decorations | Linux only; replaced by the pilot's DWM frame model |
+| `chromium-linux-native-messaging-hosts`, `-branding`, `-wayland-cursor-fallback`, `helium-branding-linux` | POSIX paths, Linux branding, Wayland | Linux only |
+
+### Blockers
+
+None fundamental. Views on Windows hosts the WebUI shell, a page below it, native resize and snap, and the snap
+layouts flyout over an HTML button. Closed in #4087:
+
+- **`HTMAXBUTTON` hover and press state:** `CaptionInput::PreTranslate` (`webui_frame.cc`) tracks `WM_NCMOUSEMOVE`, `WM_NCMOUSELEAVE`
+  (armed via `TrackMouseEvent` with `TME_NONCLIENT | TME_LEAVE`), `WM_NCLBUTTONDOWN`, `WM_NCLBUTTONUP`, and clears
+  state on client input, capture loss, cancel mode, or deactivation in both `PreTranslate` and
+  `CaptionInput::FilterMessage` (an `HWNDSubclass` filter on the browser window, which sees the sent
+  `WM_CAPTURECHANGED`, `WM_CANCELMODE` and `WM_ACTIVATE`) via `MaximizeButtonStateMachine`,
+  emitting `ArdiaShell.maximizeButtonState` (`{ windowId, hovered, pressed }`) to `apps/desktop/src/maximizeButtonState.ts`
+  and `WindowControls.tsx` for immediate hover/active styling alongside Snap Layouts.
+- **Final-path root and file containment:** the root folder and the files in it are opened differently.
+  `ReadAsset` (on `ardia-ui\`) and the document store (on the WebUI app-data folder: `readDocument`, `writeDocument`,
+  `removeDocument` and `bootstrap.documents`) open the root with `OpenDirectoryFinalPath(directory, true)`, which
+  follows a reparse point: the root itself may be a junction or another redirect, and its canonical final path from
+  `GetFinalPathNameByHandleW` is what files are checked against. Every asset or document file is then opened with
+  `FILE_FLAG_OPEN_REPARSE_POINT`, must be a single-link regular disk file that is not a reparse point
+  (`nNumberOfLinks == 1`), and its own final path must sit inside that canonical root (`IsStrictlyWithinWinDirectory` for
+  assets, `IsDirectChildOfWinDirectory` for documents). Both paths come from `GetFinalPathNameByHandleW`, which spells
+  every folder in its on-disk case, so `WinFinalPathStartsWith` folds case only in the drive letter, the UNC server
+  and share, or the volume GUID, and compares every folder after that exactly: a case-sensitive NTFS folder whose name
+  differs only in case is outside. So a junction or symlink below the root that points outside is
+  refused (`asset-junction-escape-refused` in `junction.ps1`, with a CSP-allowed image control;
+  `documents-refuse-reparse-point` in `bridge.ps1`), while a root that is itself a junction works
+  (`documents-read-under-junction-app-data-root` in `junction.ps1`: `Ardia WebUI` is a junction in the default layout,
+  where the test gate keeps CDP closed, so the check seeds two documents in the junction's target and reads the
+  shell's `bootstrap documents: <n>` log line: the 2 seeded plus the engine's own `launch-guard.json`, 0 when the root
+  is refused). `asset-sink-refuses-hostile-corpus` sends every value of the shared hostile corpus to
+  `chrome://ardia/<value>`, raw and URL-encoded, and checks each request on its own against the test-only
+  `ArdiaShell.testAssetSink` counters (`served`, `refused`, `outsideRoot`, `unreadable`, counted only in a test
+  instance). A same-origin request must move exactly one counter and never `served` or `outsideRoot`, a request the
+  URL resolves to another origin (stopped by CSP) must move none, and a value the URL parser resolves to the shell
+  page itself is counted and not sent, so a skipped or misrouted probe can't hide behind another's refusal. Every image
+  must fail; the PNG control raises `served` by one and the junction escape raises `outsideRoot` by one. Those checks don't show that the root can't be
+  redirected: whoever can re-point the root already owns the folder. A root re-pointed between opening the root and
+  opening a file fails the containment check.
+
+Remaining open points:
+
+- **Private pages and private `engine.call`s are refused** in the pilot (a private page would trip
+  `ScopedProfileKeepAlive`'s check on an off-the-record profile).
+- **Pages are bare `WebContents`.** No tab helpers, `TabStripModel`, dialogs, permission prompts, downloads, popups or
+  devtools: that is what the companion-browser model of the Linux host (and its patches) gives.
+
+### Remaining work for the full desktop host
+
+In order, as the next PRs:
+
+1. `engine/ardiacore-desktop` with the platform-neutral half: the 75 Linux files that compile, plus the data source,
+   WebUI config, bridge, viewports and input regions out of `ac_linux_host.cc`, and `ShellRootTargeter`
+   (selector sets in `series_win.py` and the key tooling first, Track 2).
+2. The POSIX seams behind `ac_desktop_platform.h`: files and folders (`dirent`, `mkdir`, `stat`), process and pipe I/O
+   (`poll`, `GetAppOutput`), memory locking (`mman`) and file watching (`inotify` → `ReadDirectoryChangesW`), `uid_t`
+   checks (Windows ACLs). Windows delegates for secrets (DPAPI), calendar, location, power, idle and session signals in
+   place of D-Bus, libsecret and EDS. `FilePath` UTF-16 is done (#4107, above).
+3. Widen to `IS_LINUX || IS_WIN` the Views and browser patches in the table, then host the shell in a `BrowserView`
+   with companion browsers as Linux does, keeping `ShellTreeHost`/`ShellFrame` as the Windows frame. The patches are on
+   the Windows tree since #4107 ([below](#the-linux-patches-windows-takes-4107)); what's left is the host and the
+   guards that change behavior, which it turns on behind the WebUI shell.
+4. The host calls the pilot stubs (logged as `unhandled host call` at start: `ArdiaShell.readDocument`/`writeDocument`,
+   `setActiveProfile`, `openWindow`, `setMenuBookmarks`, `setMenuState`, `shellPainted`, `ArdiaTabs.unclaimedTabs`/
+   `claimLaunchTab`, `tab.presentations`, `tab.command` `setMuted`/`evaluate`/`capturePicture`, and the `engine.call`s
+   `documents.watch`, `profiles.loaded`, `engine.info`, `downloads.list`, `engine.memorySaver`, `engine.systemState`,
+   `tabs.strips`, `search.setEngineName`, `webView.*`, `webKit.setFraudWarnings`, `profiles.ctrlTabMru`), then Track 3's
+   generated routes so the list stops being hand-kept.
+5. Windows wording (`--mode win`, `.win.ts`), Mica, the installer and the upgrade migration (Track 4's cutover), and a
+   CI job that runs `run.ps1`'s checks plus the Linux acceptance tour over CDP.
+
+Two RNW features the desktop host must carry over:
+
+1. **Crash reports** (#2442): the RNW app reads Crashpad minidumps itself (`apps/browser/windows/Ardia/CrashDumps.h`,
+   native API v25). On the desktop host this is `ac_linux_crash_dumps(_core)`, which compiles on Windows: it lists and
+   reads Chromium's own Crashpad database (`chrome::DIR_CRASH_DUMPS`, `<User Data>\Crashpad` on Windows, through
+   `crashpad::CrashReportDatabase`, so the `reports\<uuid>.dmp` layout and its metadata are Crashpad's) and hands the
+   dump's bytes to `ArdiaCrash.read`. The dump reader is `apps/desktop/src/hostCrashReports.ts`: a dump whose system info
+   says Windows (`PlatformId` 2) becomes a `WIN32_EXCEPTION` report as RNW's does: the NTSTATUS name (RNW's table,
+   `STATUS_<hex>` otherwise), `ACCESS_READ`/`WRITE`/`EXECUTE` for access and in-page faults, one frame from the
+   exception address, and only a module file name RNW would also send (`.dll`, `.exe` and the like; never a folder,
+   a UNC path or a URL). Which reader runs is the build's, never the dump's: `@platform/crashPlatform` says what
+   `SystemInfo` platform the host expects (Linux `0x8201`, Windows 2), and a dump without system info or naming
+   another platform isn't reported. Both readers keep only what follows the last `/` or `\`, strings over 4 KiB
+   aren't decoded, and a module list whose count runs past its stream's declared size is dropped.
+   `hostCrashReports.test.mjs` covers both readers and those malformed dumps.
+2. **Report a Problem** (#3666): Windows has no native uploader today. `ac_desktop_report_core` and `ac_linux_report`
+   compile on Windows (#4107): paths are UTF-8 through `ac_desktop_paths.h`, `InsideDrafts` takes the native separator
+   (a drive root and `\` on Windows, where it also refuses `/`, `:` streams and segments ending in `.` or a space,
+   which Windows strips, and folds only the drive letter's case), and `0700` on the drafts folder is POSIX only (the
+   profile folder's ACL already keeps it the user's). On Windows `_wfullpath` resolves no junction, so every path is
+   checked through an opened handle: the drafts folder and the target and its parent resolve with
+   `GetFinalPathNameByHandleW` (`DosFinalPath` refuses UNC and volume-GUID forms), the target and its parent are opened
+   with `FILE_FLAG_OPEN_REPARSE_POINT` and refused when they are reparse points, an output is created with
+   `CREATE_NEW` on such a handle (after removing a regular file there) and checked inside the drafts folder before a
+   byte is written, and an input's open handle is checked the same way. The checked handle is what the operation
+   uses: a replaced output and a removed gzip source or failed output are deleted through their own handles
+   (`FileDispositionInfo`), removing a draft walks it under held folder handles that deny delete sharing and deletes
+   each entry through its handle (a link inside is deleted as a link, never followed), and an upload reads its bytes
+   from the verified handle (within the file's size cap) and sends them as the request body, so nothing reopens the
+   path. A gzip refuses a destination that is its
+   source by file identity (volume serial and file index on Windows, `st_dev`/`st_ino` on POSIX), not by path text,
+   which a case alias or a hard link would pass. The password export (`PlanExport`) takes the native separator too,
+   so a Windows drive-rooted destination reaches `ac_passwords_export`, which `ardia-layer-win.patch` already reads
+   with `FilePath::IsAbsolute`. `apps/desktop` joins a Windows draft folder
+   and its file with `\` (`draftFilePath`). `report_core_test.cc` and `hostReport.test.mjs` cover the Windows paths.
+
+### The Linux patches Windows takes (#4107)
+
+`series.py` still refuses a platform set (`linux,win`), and teaching it one moves every key, the Mac's included, so
+`series-win` names each patch with a `take` line instead: Windows applies that `linux` line at its own place in the
+shared series, as a `linux,win` line will. A `take` line changes nothing for the Mac or Linux. The Linux engine key
+does move, for the launch-config split, the widened and gated patches and the changed Linux layer sources
+(`c6e339147f82` on main, `eb14e4729781` here), so Linux needs a new engine; the macOS key is byte for byte
+`origin/main`'s. On the Windows tree (MSI, 2026-11-24) all 24 apply with `git apply`, no
+fuzz, and `chromium-win-ardia-layer-calls-mac-only`, `-external-protocol-dialog`, `-hosted-popups-and-menus` and
+`-hosted-theme-change` are remade on top of them, so 132 of the 133 patches apply strictly (the one with fuzz is the
+`mac` line `chromium-safe-storage-one-key-for-every-data-dir`). The 35 Chromium files they touch pass `clang-cl
+-fsyntax-only` with their targets' flags.
+
+Nothing changes for the React Native Windows shell. A taken hook is a null pointer (or a `false` flag) until the
+desktop host sets it, which only the WebUI shell will. Guards that would change behavior on their own stay
+`IS_LINUX`, so Windows compiles stock code there:
+
+| Patch | On Windows |
+| --- | --- |
+| `-private-links`, `-navigation-hold-hook`, `-devtools-open-tab`, `-pip-in-window`, `-web-store-uninstall`, `-media-player-pip`, `-geolocation`, `-document-close` (its GN deps) | guards widened to `IS_LINUX \|\| IS_WIN` (`is_linux \|\| is_win`); null hooks, so stock until set |
+| `-page-agent` | the browser-side binder and `ISOLATED_WORLD_ID_ARDIA_PAGE` widened; the renderer agent (`//ardia/linux:page_agent`) stays Linux until Windows builds it |
+| `-shell-above-input`, `-companion-browsers`, `-window-minimum-size`, `-page-prompts`, `-page-status`, `-wheel-zoom`, `-unhandled-key`, `-action-popup-hook`, `-thin-scroll-bars` | no guards: null hooks |
+| `-background-windows` | taken without its launch-config half, now `chromium-linux-launch-config.patch` (`linux`); its `--ardia-background` check stays Linux |
+| `-auto-pip` | hooks taken; the feature switches it adds in `BasicStartupComplete` stay Linux |
+| `-document-close` | every path it changes asks `ardia::LinuxCloseHooksActive()`: always true on Linux, true on Windows only once a host sets `g_ardia_linux_close_hooks.defer`. Until then none of its Linux close code runs: `BrowserCloseManager` runs Chromium's own bodies (no deferred success callback, no confirmed-browser rescan, Chromium's own downloads callback), `UnloadController` registers no close client, builds no close continuation, touches no pending-unload map or close flag and keeps Chromium's state transitions and repeat `OnWindowCloseComplete`, and `RenderFrameHostImpl` starts no close dispatch for any `beforeunload`, navigations included, and posts Chromium's own ACK |
+| `-pip-placement`, `-extension-keybindings`, `-settings-overrides`, `-devtools-authority` | guards stay Linux: they call Linux layer code or change behavior unconditionally; taken so the files match Linux's and the patches after them apply. `-devtools-authority` and `chromium-win-devtools-other-clients` share no file |
+
+`linux-hooks.gn` gives Windows `//ardia/linux:close_hooks` (`ac_linux_close_hooks.cc`, which `-document-close`
+links) and the `ac_linux_content_hooks.h` header
+`-media-player-pip` includes. `chromium-win-autoplay-policy.patch` stays Windows' autoplay patch and
+`-autoplay-policy` stays Linux, and so do `-window-state`, `-borderless-frame`, `-glass-compositing`,
+`-frameless-utility-windows`, `-open-urls`, `-native-messaging-hosts`, `-branding`, `-wayland-cursor-fallback`,
+`chromium-helium-branding-linux` and `chromium-ardia-linux-layer`.
+
 
 ## Order of work
 

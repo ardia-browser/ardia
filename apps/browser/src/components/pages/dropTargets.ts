@@ -1,6 +1,6 @@
 import type { View } from "react-native";
 
-export type Rect = { x: number; y: number; width: number; height: number };
+type Rect = { x: number; y: number; width: number; height: number };
 
 export class DropTargets<T> {
   private views = new Map<string, { view: View; data: T }>();

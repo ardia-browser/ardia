@@ -391,7 +391,7 @@ class ZoomObserver : public base::CheckedObserver {
 inline ZoomController::~ZoomController() { auto copy=observers; for(auto* o:copy) o->OnZoomControllerDestroyed(this); assert(observers.empty()); }
 struct PageZoom { static void Zoom(content::WebContents* contents,content::PageZoom step) { auto* c=ZoomController::FromWebContents(contents); c->level=step==content::PAGE_ZOOM_RESET?c->fallback:c->level+static_cast<int>(step); auto copy=c->observers;for(auto* o:copy) if(std::find(c->observers.begin(),c->observers.end(),o)!=c->observers.end()) o->OnZoomChanged({}); } };
 }
-enum class WindowOpenDisposition { CURRENT_TAB, NEW_FOREGROUND_TAB, NEW_BACKGROUND_TAB, NEW_POPUP };
+enum class WindowOpenDisposition { kCurrentTab, kNewForegroundTab, kNewBackgroundTab, kNewPopup };
 namespace blocked_content {
 class UrlListManager {
  public:

@@ -5,11 +5,12 @@ import { orderChoiceKey } from "../pins/pinChoices";
 import { arrangeParked, arrangePinnedArea, parkedAnchors, parkedAreaKeys, pinnedAnchors, pinnedAreaKeys } from "../pins/pinnedArea";
 import { fromSync } from "../pins/pinOrderChoices";
 import { PIN_TAB, PIN_GROUP, anchorIn, PIN_ORDER, PIN_ROW, ROW, type PinOrderValue, type PinValue } from "./pinRecords";
-import { choiceStillOut, homeWindow, openWindows, settleChoices, store } from "./pinnedSyncState";
+import { choiceStillOut, homeWindow, settleChoices, store } from "./pinnedSyncState";
 import { entryId } from "../sidebar/entryKey";
+import { regularWindows } from "../windows/small";
 
 export function pinnedOrderAdapter(profileId: string): Adapter {
-  const shownIn = (s: BrowserState) => openWindows(s).filter((w) => w.tabIds.some((id) => s.tabs[id]?.profileId === profileId));
+  const shownIn = (s: BrowserState) => regularWindows(s).filter((w) => w.tabIds.some((id) => s.tabs[id]?.profileId === profileId));
   return {
     prefix: PIN_ORDER,
     extract: (base, queued, _now, _known, remote, stamp) => {

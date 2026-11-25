@@ -1,4 +1,4 @@
-export type BadgeFit = { pad: number; scale: number };
+type BadgeFit = { pad: number; scale: number };
 
 type BadgeFitInput = { textWidth: number; room: number; roomyPad: number; tightPad: number; minScale: number };
 

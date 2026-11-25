@@ -3,7 +3,7 @@ import { activeTabId } from "../browser/model";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { notePageOverlay } from "../telemetry/usage";
 
-export type NewTabNotice = { id: number; tabId: string; sourceId: string };
+type NewTabNotice = { id: number; tabId: string; sourceId: string };
 
 export const useNewTabNotices = create<{ notices: Record<string, NewTabNotice | null> }>()(() => ({ notices: {} }));
 
@@ -33,7 +33,7 @@ export function holdNewTabNotice(windowId: string, notice: NewTabNotice, held: b
   else scheduleHide(windowId, notice.id);
 }
 
-export function clearNewTabNotice(windowId: string, id: number) {
+function clearNewTabNotice(windowId: string, id: number) {
   useNewTabNotices.setState((s) => (s.notices[windowId]?.id === id ? { notices: { ...s.notices, [windowId]: null } } : s));
   if (Object.values(useNewTabNotices.getState().notices).some(Boolean)) return;
   stopWatchingNoticedTabs?.();

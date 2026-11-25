@@ -3,6 +3,7 @@ import { test } from "node:test";
 await import("../../test-native/index.ts");
 const { useBrowser } = await import("../browser/store.ts");
 const { scriptChange, scriptState, scriptStatePublisher } = await import("./scripting.ts");
+const { liveOf, onLiveChange } = await import("../tabs/tabLive.ts");
 
 const S = () => useBrowser.getState();
 const untitled = (state) => JSON.stringify({ ...state, windows: state.windows.map((w) => ({ ...w, title: "", tabs: w.tabs.map((t) => ({ ...t, title: "" })) })) });
@@ -21,7 +22,7 @@ test("a change scripts can see is pushed: at once when a tab, window or profile 
     (id) => S().updateTab(id, { url: pick(["https://a.example/", "file:///tmp/a.txt", "https://b.example/page"]) }),
     (id) => S().updateTab(id, { customTitle: pick([null, "Mine"]) }),
     (id) => S().updateTab(id, { pin: pick([null, { as: "row" }, { as: "tile" }]) }),
-    (id) => S().updateLive(id, { isLoading: !S().live[id]?.isLoading }),
+    (id) => S().updateLive(id, { isLoading: !liveOf(id).isLoading }),
     (id) => S().updateLive(id, { progress: rand(10) / 10, canGoBack: !!rand(2) }),
     (id) => S().activate(id),
     (id) => S().setFocusedWindow(S().tabs[id].windowId),
@@ -30,13 +31,18 @@ test("a change scripts can see is pushed: at once when a tab, window or profile 
     () => S().createProfile?.({ name: `P${rand(3)}` }),
   ];
   const seen = { structure: 0, titles: 0, none: 0 };
+  let loadFlipped = false;
+  onLiveChange((_, live, prev) => {
+    if (live.isLoading !== prev.isLoading) loadFlipped = true;
+  });
   for (let i = 0; i < 800; i++) {
     const before = S();
+    const was = scriptState(before);
     const step = pick(steps);
+    loadFlipped = false;
     step(pick(Object.keys(before.tabs)));
     const after = S();
-    const change = scriptChange(after, before);
-    const was = scriptState(before);
+    const change = scriptChange(after, before) ?? (loadFlipped ? "structure" : null);
     const now = scriptState(after);
     if (change === null) assert.equal(JSON.stringify(now), JSON.stringify(was), `${step} changed what scripts read and nothing would push it`);
     if (change === "titles") assert.equal(untitled(now), untitled(was), `${step} changed more than titles and waits a second`);

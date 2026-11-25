@@ -1,7 +1,7 @@
 import { RADII, ROW_METRICS, type ChromePart, type ThemeLook } from "./themeLook";
 
 export const MINIMALISM_METRICS = { rowHeight: 28, rowGap: 2, pinnedHeight: 34 } as const;
-export const MINIMALISM_RADII = { chrome: 9, pinned: 9 } as const;
+const MINIMALISM_RADII = { chrome: 9, pinned: 9 } as const;
 export const MINIMALISM_HIDDEN: readonly ChromePart[] = ["addressField", "navButtons", "sidebarButton", "downloads", "profile"];
 
 const looks = new WeakMap<ThemeLook, ThemeLook>();

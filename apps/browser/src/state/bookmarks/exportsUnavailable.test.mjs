@@ -8,10 +8,10 @@ const APP = fileURLToPath(new URL("../../../", import.meta.url));
 const ON_WINDOWS = `import { registerHooks } from "node:module";
 registerHooks({ resolve(specifier, context, next) {
   const resolved = next(specifier, context);
-  return resolved.url.endsWith("/lib/platformFeatures.ts") ? { ...resolved, url: resolved.url.replace(/platformFeatures\\.ts$/, "platformFeatures.windows.ts") } : resolved;
+  return resolved.url.endsWith("/lib/platformFeatures.ts") ? { ...resolved, url: resolved.url.replace(/platformFeatures\\.ts$/, "platformFeatures.win.ts") } : resolved;
 } });`;
 
-const WINDOWS_FEATURES = new URL("../../lib/platformFeatures.windows.ts", import.meta.url).href;
+const WINDOWS_FEATURES = new URL("../../lib/platformFeatures.win.ts", import.meta.url).href;
 
 const WITHOUT_EXPORTS = `import { registerHooks } from "node:module";
 const features = "import { PLATFORM_FEATURES as windows } from '${WINDOWS_FEATURES}'; export const PLATFORM_FEATURES = { ...windows, exportsBookmarksAndPasswords: false };";
@@ -36,7 +36,7 @@ console.log(JSON.stringify({
   unavailable: UNAVAILABLE_COMMANDS.has("exportBookmarks"),
   bar: barActions(S(), w).some((a) => a.id === "exportBookmarks"),
   organize: organizeMenuItems().filter((i) => !i.separator).map((i) => i.id),
-  unshown: ["general.exportBookmarks", "passwords.exportPasswords"].filter((id) => unshown.includes(id)),
+  unshown: ["profiles.exportBookmarks"].filter((id) => unshown.includes(id)),
   cli: automationCommands().some((c) => c.id === "exportBookmarks"),
   menuDisabled: menuState(S()).disabled.includes("exportBookmarks"),
 }));
@@ -54,7 +54,7 @@ const EVERY_ENTRY_POINT = {
   bar: true,
   organize: ["bookmark", "folder", "import", "export"],
   unshown: [],
-  cli: true,
+  cli: false,
   menuDisabled: false,
 };
 
@@ -71,7 +71,7 @@ test("a platform without exports offers no menu, bar action, command, shortcut o
     unavailable: true,
     bar: false,
     organize: ["bookmark", "folder", "import"],
-    unshown: ["general.exportBookmarks", "passwords.exportPasswords"],
+    unshown: ["profiles.exportBookmarks"],
     cli: false,
     menuDisabled: true,
   });

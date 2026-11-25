@@ -1,4 +1,5 @@
 #import "ArdiaChromeWindowInternal.h"
+#import "ArdiaWebView.h"
 #import "ArdiaWindowController.h"
 
 #import <objc/message.h>
@@ -8,6 +9,7 @@ using namespace ardia_window;
 namespace {
 
 NSString *const kQuitIdentifier = @"ardia.shortcut.std:quit:";
+NSString *const kCopyUrlIdentifier = @"ardia.command.copyUrl";
 NSString *const kFullScreenIdentifier = @"ardia.shortcut.std:toggleFullScreen:";
 
 NSSet<NSString *> *ReservedIdentifiers() {
@@ -15,7 +17,7 @@ NSSet<NSString *> *ReservedIdentifiers() {
     @"ardia.command.closeTab", @"ardia.shortcut.std:closeWindow:", @"ardia.command.newIncognitoWindow", @"ardia.command.newTab",
     @"ardia.command.newWindow", @"ardia.command.reopenClosedTab", @"ardia.command.nextTab", @"ardia.command.previousTab",
     @"ardia.command.nextProfile", @"ardia.command.previousProfile",
-    @"ardia.command.tabSwitcher", kQuitIdentifier, @"ardia.command.copyUrl", @"ardia.command.devTools", @"ardia.command.toggleDevTools",
+    @"ardia.command.tabSwitcher", kQuitIdentifier, kCopyUrlIdentifier, @"ardia.command.devTools", @"ardia.command.toggleDevTools",
     @"ardia.command.searchTabs"
   ]];
   return reserved;
@@ -81,7 +83,7 @@ NSMenuItem *MenuItemForEvent(NSEvent *event, NSSet<NSString *> *identifiers) {
   const unichar first = key.length ? [key characterAtIndex:0] : 0;
   const bool fKey = first >= NSF1FunctionKey && first <= NSF35FunctionKey;
   const bool globeKey = (mods & NSEventModifierFlagFunction) && !IsFunctionKey(key);
-  if (!fKey && !globeKey && !(mods & (NSEventModifierFlagCommand | NSEventModifierFlagControl))) return nil;
+  if (!fKey && !globeKey && !(mods & (NSEventModifierFlagCommand | NSEventModifierFlagControl | NSEventModifierFlagOption))) return nil;
   if ([key isEqualToString:@"\x19"]) key = @"\t";
   if (NSMenuItem *item = MenuItemWithIdentifier(NSApp.mainMenu, key, mods, identifiers)) return item;
   NSString *unshifted = [event charactersByApplyingModifiers:0].lowercaseString;
@@ -99,6 +101,20 @@ SidebarKeyPress gSidebarKeyPressForPage;
 bool IsSidebarKey(NSEvent *event) {
   static NSSet<NSString *> *sidebar = [NSSet setWithObject:@"ardia.command.toggleSidebar"];
   return event.type == NSEventTypeKeyDown && MenuItemForEvent(event, sidebar) != nil;
+}
+
+bool IsInDevTools(NSView *view) {
+  for (NSView *ancestor = view.superview; ancestor; ancestor = ancestor.superview) {
+    if (![ancestor isKindOfClass:ArdiaWebView.class]) continue;
+    NSView *devTools = ((ArdiaWebView *)ancestor).devtoolsView;
+    return devTools && [view isDescendantOf:devTools];
+  }
+  return false;
+}
+
+bool IsDevToolsPickerKey(NSEvent *event) {
+  return ModifiersOfKey(@"c", event.modifierFlags) == (NSEventModifierFlagCommand | NSEventModifierFlagShift) &&
+         [event.charactersIgnoringModifiers.lowercaseString isEqualToString:@"c"];
 }
 
 }
@@ -128,6 +144,13 @@ bool KeepsUnhandledSidebarKeyInPage(NSWindow *window, NSEvent *event) {
   const bool typing = [focused isKindOfClass:NSView.class] && [ArdiaCorePageView isEditingText:(NSView *)focused];
   if (!typing) gSidebarKeyPressForPage = SidebarKeyPress{};
   return typing;
+}
+
+bool KeepsReservedKeyInDevTools(NSWindow *window, NSEvent *event) {
+  if (!IsDevToolsPickerKey(event)) return false;
+  if (![ReservedMenuItemForEvent(event).identifier isEqualToString:kCopyUrlIdentifier]) return false;
+  NSResponder *focused = window.firstResponder;
+  return [focused isKindOfClass:NSView.class] && IsInDevTools((NSView *)focused);
 }
 
 }

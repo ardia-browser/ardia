@@ -99,7 +99,7 @@ export function foldedGroupHeight(windowId: string, profileId: string, groupId: 
 export const usePendingEntriesHeight = (windowId: string, profileId: string, entries: string[], from: number, growing: boolean): number =>
   useBrowser((s) => (growing ? entriesHeight(s, windowId, profileId, entries.slice(from)) : 0));
 
-export type RevealSpot = { span: { section: Section; top: number; height: number } } | { keys: string[] } | null;
+type RevealSpot = { span: { section: Section; top: number; height: number } } | { keys: string[] } | null;
 
 export function revealSpot(windowId: string, tabId: string, tilesFixed: boolean, newTabAtTop: boolean): RevealSpot {
   const s = useBrowser.getState();

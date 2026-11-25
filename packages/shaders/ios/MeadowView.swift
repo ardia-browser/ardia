@@ -4,6 +4,8 @@ import WebKit
 
 final class MeadowView: ExpoView {
   let onTone = EventDispatcher()
+  let onReady = EventDispatcher()
+  let onBoom = EventDispatcher()
 
   private let clip = NSView()
   private let pageHost = NSView()
@@ -16,6 +18,13 @@ final class MeadowView: ExpoView {
   private var pageNight = false
   var night = false {
     didSet { if night != oldValue { nightChanged() } }
+  }
+  var creeper = false {
+    didSet {
+      guard creeper != oldValue, webView != nil else { return }
+      tearDown()
+      load()
+    }
   }
   private var timeline: [String: Double] = [:]
   private let created = CACurrentMediaTime()
@@ -101,7 +110,7 @@ final class MeadowView: ExpoView {
     Self.live = self
     timeline = [:]
     mark("created")
-    let opening = URL(string: night ? "#night" : "#day", relativeTo: page)?.absoluteURL ?? page
+    let opening = URL(string: (night ? "#night" : "#day") + (night && creeper ? "-creeper" : ""), relativeTo: page)?.absoluteURL ?? page
     webView.loadFileURL(opening, allowingReadAccessTo: bundle.bundleURL)
     placePoster()
   }
@@ -167,6 +176,7 @@ final class MeadowView: ExpoView {
       ready = true
       mark("firstFrame")
       sendNight()
+      onReady([:])
       NSAnimationContext.runAnimationGroup({ context in
         context.duration = Self.handoff
         context.timingFunction = CAMediaTimingFunction(controlPoints: 0.37, 0, 0.63, 1)
@@ -174,6 +184,8 @@ final class MeadowView: ExpoView {
       }, completionHandler: { [weak self] in
         self?.poster.isHidden = true
       })
+    case "boom":
+      onBoom([:])
     case "tone":
       guard let tone = body["tone"] as? String else { return }
       onTone(["tone": tone, "halo": (body["halo"] as? Double) ?? 0])

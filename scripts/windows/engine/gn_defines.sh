@@ -1,5 +1,5 @@
 source "$AC_MAC_BUILD_DIR/gn_defines.sh"
-_win_drop=(is_official_build chrome_pgo_phase target_cpu enable_cdm_host_verification)
+_win_drop=(is_official_build chrome_pgo_phase target_os target_cpu enable_cdm_host_verification)
 _win_add=(
   'target_os="win"'
   "target_cpu=\"${WIN_CPU:-x64}\""

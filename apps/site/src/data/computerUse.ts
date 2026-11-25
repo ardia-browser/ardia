@@ -1,5 +1,4 @@
 import raw from "./computerUse.json";
-import { REPO } from "./release";
 
 type RawCell = (typeof raw.cells)[number];
 type RawContender = (typeof raw.contenders)[number];
@@ -103,5 +102,5 @@ export const computerUse = {
     return `${side} + ${k?.model} on ${(SHORT[c.task] ?? c.task).toLowerCase()} passed ${c.passes} of ${c.runs}`;
   }),
   charts: MODELS.map(chartOf),
-  source: `${REPO}/tree/main/apps/cli/bench`,
+  source: "https://github.com/ardia-browser/plugins/tree/main/plugins/cli/bench",
 };

@@ -1,7 +1,7 @@
 import type { Candidate, Pool } from "./candidatePool.ts";
 import { shownWordsOf, type PageText } from "./pageText.ts";
 
-export type Query = {
+type Query = {
   q: string;
   segmentStarts: [string, string] | null;
   word: boolean;
@@ -110,10 +110,60 @@ export class TopList {
   offer(r: Ranked) {
     const items = this.items;
     if (items.length === this.size && items[items.length - 1]!.s >= r.s) return;
+    const same = r.c.renamed ? sameKeyAt(items, r) : -1;
+    if (same >= 0) {
+      if (items[same]!.s >= r.s) return;
+      items.splice(same, 1);
+    }
     let i = items.length;
     while (i > 0 && items[i - 1]!.s < r.s) i--;
     items.splice(i, 0, r);
     if (items.length > this.size) items.pop();
     if (items.length === this.size) this.floor = items[items.length - 1]!.s;
   }
+}
+
+const LEADING_PAGE_ROWS = 3;
+const LEADING_ROWS = 5;
+
+const matchesAhead = (a: Ranked, b: Ranked) => a.m > b.m || (a.m === b.m && a.s > b.s);
+
+function sameKeyAt(items: readonly Ranked[], r: Ranked): number {
+  for (let i = 0; i < items.length; i++) if (items[i]!.c.text.key === r.c.text.key) return i;
+  return -1;
+}
+
+export class TabList {
+  readonly items: Ranked[] = [];
+  takes(m: number, s: number): boolean {
+    const last = this.items[LEADING_ROWS - 1];
+    return !last || m > last.m || (m === last.m && s > last.s);
+  }
+  offer(r: Ranked) {
+    const items = this.items;
+    const same = r.c.renamed ? sameKeyAt(items, r) : -1;
+    if (same >= 0) {
+      if (!matchesAhead(r, items[same]!)) return;
+      items.splice(same, 1);
+    }
+    if (items.length === LEADING_ROWS && !matchesAhead(r, items[items.length - 1]!)) return;
+    let i = items.length;
+    while (i > 0 && matchesAhead(r, items[i - 1]!)) i--;
+    items.splice(i, 0, r);
+    if (items.length > LEADING_ROWS) items.pop();
+  }
+}
+
+export function leadingRows(ranked: readonly Ranked[], tabs: readonly Ranked[]): Ranked[] {
+  const lead: Ranked[] = [];
+  for (const x of ranked) {
+    if (lead.length >= LEADING_PAGE_ROWS) break;
+    if (sameKeyAt(lead, x) < 0) lead.push(x);
+  }
+  const bar = lead.length === LEADING_PAGE_ROWS ? lead[LEADING_PAGE_ROWS - 1]!.m : 0;
+  for (const t of tabs) {
+    if (lead.length >= LEADING_ROWS) break;
+    if (t.m >= bar && sameKeyAt(lead, t) < 0) lead.push(t);
+  }
+  return lead;
 }

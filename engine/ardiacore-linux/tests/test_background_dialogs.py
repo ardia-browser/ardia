@@ -5,6 +5,7 @@ import tempfile
 import unittest
 
 SOURCE = pathlib.Path(__file__).resolve().parents[1] / 'src'
+DESKTOP_SOURCE = SOURCE.parents[1] / 'ardiacore-desktop' / 'src'
 
 PICKS = r'''#include <cassert>
 #include <string>
@@ -37,7 +38,7 @@ class BackgroundFileDialogTests(unittest.TestCase):
             source = pathlib.Path(directory) / 'picks.cc'
             binary = pathlib.Path(directory) / 'picks'
             source.write_text(PICKS)
-            built = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-I', str(SOURCE),
+            built = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-I', str(SOURCE), '-I', str(DESKTOP_SOURCE),
                                     str(source), '-o', str(binary)], capture_output=True, text=True)
             self.assertEqual(built.returncode, 0, built.stderr)
             ran = subprocess.run([str(binary)], capture_output=True, text=True)

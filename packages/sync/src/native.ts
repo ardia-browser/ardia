@@ -1,5 +1,6 @@
 import { requireOptionalNativeModule } from "expo-modules-core";
-import type { Listing, Transport } from "./scopeState.ts";
+import type { SyncModules } from "./generated/native.ts";
+import type { Transport } from "./scopeState.ts";
 
 export type FolderInfo = {
   path: string;
@@ -22,37 +23,12 @@ export type PhraseResult =
 
 export type SealedLogin = { origin: string; username: string; created: number } & ({ sealed: string; passwordless?: undefined } | { passwordless: true; sealed?: undefined });
 
-type SyncNative = {
-  folderInfo(path: string | null): Promise<FolderInfo>;
-  chooseFolder(current: string | null): Promise<string | null>;
-  newDeviceId(): string;
-  deviceName(): string;
-  createPhrase(account: string): Promise<boolean>;
-  enterPhrase(account: string, text: string, folder: string): Promise<PhraseResult>;
-  unlock(account: string): Promise<boolean>;
-  forget(account: string): Promise<void>;
-  chainStatus(folder: string): Promise<"ok" | "missing" | "unavailable">;
-  createChain(folder: string): Promise<void>;
-  write(folder: string, scope: string, payload: string): Promise<string>;
-  read(folder: string, scope: string, known: string[]): Promise<Listing>;
-  remove(folder: string, scope: string, ids: string[]): Promise<void>;
-  deleteChain(folder: string): Promise<void>;
-  sealLocal(text: string): Promise<string>;
-  openLocal(sealed: string): Promise<string | null>;
-  recoveryWords(): Promise<string[] | null>;
-  qrCode(): Promise<string | null>;
-  recoveryKitPreview(width: number): Promise<string | null>;
-  saveRecoveryKit(format: "pdf" | "text"): Promise<string | null>;
-  copyRecoveryKit(): Promise<boolean | null>;
-  shareRecoveryKit(): Promise<boolean | null>;
-  copyRecoveryPhrase(): Promise<boolean | null>;
-  revealFolder(path: string): Promise<void>;
-  readPasswords(engineProfile: string): Promise<SealedLogin[] | null>;
-  savePassword(engineProfile: string, origin: string, username: string, sealed: string, replacing: boolean): Promise<boolean>;
-  takeFileCounts?(): { placeholders: number; busy: number; hydrated: number };
-};
+export type SyncCore = "rust" | "native";
+export type SyncOpenFailure = "format" | "authentication" | "too_large" | "other";
 
-export const SyncNative = requireOptionalNativeModule<SyncNative>("ArdiaSync");
+export type SyncNative = SyncModules["ArdiaSync"];
+
+export const SyncNative = requireOptionalNativeModule<SyncModules["ArdiaSync"]>("ArdiaSync");
 
 export const folderTransport = (native: SyncNative, folder: string): Transport => ({
   write: (scope, payload) => native.write(folder, scope, payload),

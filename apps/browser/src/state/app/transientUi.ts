@@ -63,7 +63,7 @@ const SURFACES: Record<Surface, { open: (at: Where) => boolean; watch: Watch[] }
   extensionPopup: { open: (at) => useExtensions.getState().popup?.windowId === at.windowId, watch: [onExtensions] },
 };
 
-export const HOLDS: Record<Held, { chrome: Chrome | null; surfaces: Surface[] }> = {
+const HOLDS: Record<Held, { chrome: Chrome | null; surfaces: Surface[] }> = {
   peek: { chrome: "sidebar", surfaces: ["menu", "rename", "iconPicker", "hoverCard", "resize", "downloads", "popover", "historyMenu"] },
   topStrip: { chrome: null, surfaces: ["menu", "downloads"] },
   toolbar: { chrome: "toolbar", surfaces: ["menu", "panel", "find", "popover", "historyMenu", "extensionPopup"] },

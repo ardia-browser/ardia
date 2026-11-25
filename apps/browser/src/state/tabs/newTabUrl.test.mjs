@@ -6,9 +6,7 @@ const { customNewTabUrl } = await import("../settings/settings.ts");
 const { runCommand } = await import("../commands/commands.ts");
 const { settingsSnapshot } = await import("../telemetry/settingsSnapshot.ts");
 const { unshownSettings } = await import("../../components/settings/settingsIndex.ts");
-const { toggleNewTabBar } = await import("../omnibox/newTabBar.ts");
 const { setOpeningGate } = await import("./openingGate.ts");
-const { registerHeroBar } = await import("../omnibox/barState.ts");
 const { startAutomation } = await import("../automation/controlSocket.ts");
 const { reloadHooks, useHookRules } = await import("../automation/hookRules.ts");
 const { approveRule, resetApprovalsForTests } = await import("../automation/approvals.ts");
@@ -173,26 +171,6 @@ test("the address syncs like the other New Tab settings, and telemetry gets only
   assert.ok(!JSON.stringify(snapshot).includes("secret"));
   reset({ newTabUrl: "hello world" });
   assert.equal(settingsSnapshot(S().settings).custom_new_tab_url, "false");
-});
-
-test("with Reuse an empty New Tab page on, ⌘T on an empty New Tab page opens the address instead of focusing the page", () => {
-  reset({ newTabUrl: "example.com", reuseEmptyNewTab: true });
-  const w = S().createWindow({ url: "https://a.com/" });
-  const empty = S().newTab(w);
-  let focused = 0;
-  const unregister = registerHeroBar(w, empty, () => void focused++);
-  try {
-    assert.equal(toggleNewTabBar(w), false, "the empty page isn't reused while an address is set");
-    const before = S().windows[w].tabIds.length;
-    runCommand({ command: "newTab", arg: null, windowId: w });
-    assert.deepEqual([focused, S().windows[w].tabIds.length, shownUrl(w)], [0, before + 1, "https://example.com"]);
-    S().updateSettings({ newTabUrl: "" });
-    S().activate(empty);
-    assert.equal(toggleNewTabBar(w), true, "with no address, the empty page is reused as before");
-    assert.equal(focused, 1);
-  } finally {
-    unregister();
-  }
 });
 
 let nextId = 0;

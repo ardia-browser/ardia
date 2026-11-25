@@ -1,22 +1,12 @@
 import { memo } from "react";
 import { StyleSheet, View } from "react-native";
-import { Button, concentric, type IconPalette } from "../ui";
+import { Button, clippedContinuousCorners, continuousCorners, type IconPalette } from "../ui";
 import { useTheme } from "../ui/theme";
 import { GlassFill, useGlass } from "../ui/Glass";
-import { SIDEBAR_FIELD } from "./geometry";
+import { SIDEBAR_FIELD, SIDEBAR_FIELD_CONTROL } from "./geometry";
 import { useSidebarTokens } from "./tokens";
 
 const FIELD_BORDER = StyleSheet.hairlineWidth;
-const FIELD_BUTTON_BOX = 24;
-const FIELD_BUTTON = {
-  box: FIELD_BUTTON_BOX,
-  get inset() {
-    return (SIDEBAR_FIELD.height - FIELD_BUTTON_BOX) / 2;
-  },
-  get radius() {
-    return concentric(SIDEBAR_FIELD.radius, (SIDEBAR_FIELD.height - FIELD_BUTTON_BOX) / 2);
-  },
-};
 
 export const SidebarFieldFill = memo(function SidebarFieldFill({
   hovered,
@@ -35,7 +25,7 @@ export const SidebarFieldFill = memo(function SidebarFieldFill({
       style={[
         StyleSheet.absoluteFill,
         {
-          borderRadius: SIDEBAR_FIELD.radius,
+          ...clippedContinuousCorners(SIDEBAR_FIELD.radius),
           borderWidth: FIELD_BORDER,
           borderColor: theme.pinnedRestingStroke,
           backgroundColor: hovered ? theme.tabHover : theme.pinnedResting,
@@ -62,26 +52,25 @@ export function FieldSiteButton({
 }) {
   const tokens = useSidebarTokens();
   return (
-    <View
+    <Button
       style={{
-        marginLeft: FIELD_BUTTON.inset,
-        width: FIELD_BUTTON.box,
-        height: FIELD_BUTTON.box,
-        borderRadius: FIELD_BUTTON.radius,
+        marginLeft: SIDEBAR_FIELD_CONTROL.inset,
+        width: SIDEBAR_FIELD_CONTROL.box,
+        height: SIDEBAR_FIELD_CONTROL.box,
+        ...continuousCorners(SIDEBAR_FIELD_CONTROL.radius),
         backgroundColor: tokens.fieldButtonPlate,
       }}
-    >
-      <Button
-        variant="icon"
-        toolbar
-        palette={palette}
-        icon={icon}
-        color={color}
-        look="field"
-        active={active}
-        onPress={onPress}
-        tooltip={tooltip}
-      />
-    </View>
+      variant="icon"
+      toolbar
+      palette={palette}
+      icon={icon}
+      color={color}
+      look="field"
+      box={SIDEBAR_FIELD_CONTROL.box}
+      radius={SIDEBAR_FIELD_CONTROL.radius}
+      active={active}
+      onPress={onPress}
+      tooltip={tooltip}
+    />
   );
 }

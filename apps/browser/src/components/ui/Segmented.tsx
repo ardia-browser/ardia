@@ -1,27 +1,33 @@
-import { Animated, Pressable, StyleSheet, View } from "react-native";
+import { Animated, Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import { Symbol } from "./native";
 import { Text } from "./Text";
 import { useTheme } from "./theme";
 import { concentric, radius, space } from "./tokens";
 import { buttonMotion, usePressScaleMotion } from "./motion";
+import { SlidingThumb, useSlidingThumb } from "./SlidingThumb";
 
 export type SegmentOption<T extends string> = { value: T; title: string; image?: string };
 
 const INSET = StyleSheet.hairlineWidth * 2;
 const SEGMENT = { height: 20, imageWidth: 30, glyph: 11, glyphBox: 14 } as const;
+const SEGMENT_RADIUS = concentric(radius.control, INSET);
 
-export function Segmented<T extends string>({ options, value, onChange }: { options: SegmentOption<T>[]; value: T; onChange: (value: T) => void }) {
+export function Segmented<T extends string>({ options, value, onChange, fill }: { options: SegmentOption<T>[]; value: T; onChange: (value: T) => void; fill?: boolean }) {
   const theme = useTheme();
+  const thumb = useSlidingThumb(value);
   return (
-    <View style={{ flexDirection: "row", borderRadius: radius.control, backgroundColor: theme.control, borderWidth: INSET, borderColor: theme.controlBorder, padding: INSET }}>
-      {options.map((o) => {
-        return <Segment key={o.value} option={o} selected={o.value === value} onPress={() => onChange(o.value)} />;
-      })}
+    <View style={{ borderRadius: radius.control, backgroundColor: theme.control, borderWidth: INSET, borderColor: theme.controlBorder, padding: INSET }}>
+      <View style={{ flexDirection: "row" }}>
+        <SlidingThumb x={thumb.x} width={thumb.width} style={{ borderRadius: SEGMENT_RADIUS, backgroundColor: theme.formAccent }} />
+        {options.map((o) => (
+          <Segment key={o.value} option={o} selected={o.value === value} fill={fill} onPress={() => onChange(o.value)} onLayout={(e) => thumb.measure(o.value, e)} />
+        ))}
+      </View>
     </View>
   );
 }
 
-function Segment<T extends string>({ option, selected, onPress }: { option: SegmentOption<T>; selected: boolean; onPress: () => void }) {
+function Segment<T extends string>({ option, selected, fill, onPress, onLayout }: { option: SegmentOption<T>; selected: boolean; fill?: boolean; onPress: () => void; onLayout: (e: LayoutChangeEvent) => void }) {
   const theme = useTheme();
   const ink = selected ? theme.onAccent : theme.icon;
   const pressMotion = usePressScaleMotion(true, buttonMotion.controlPressScale);
@@ -35,6 +41,8 @@ function Segment<T extends string>({ option, selected, onPress }: { option: Segm
       onPress={onPress}
       onPressIn={pressMotion.onPressIn}
       onPressOut={pressMotion.onPressOut}
+      onLayout={onLayout}
+      style={fill && !option.image ? styles.fill : null}
     >
       <Animated.View
         style={[
@@ -42,10 +50,8 @@ function Segment<T extends string>({ option, selected, onPress }: { option: Segm
             width: option.image ? SEGMENT.imageWidth : undefined,
             height: SEGMENT.height,
             paddingHorizontal: option.image ? undefined : space.m,
-            borderRadius: concentric(radius.control, INSET),
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: selected ? theme.formAccent : undefined,
           },
           scaleStyle,
         ]}
@@ -53,7 +59,7 @@ function Segment<T extends string>({ option, selected, onPress }: { option: Segm
         {option.image ? (
           <Symbol name={option.image} size={SEGMENT.glyph} color={ink} style={{ width: SEGMENT.glyphBox, height: SEGMENT.glyphBox }} />
         ) : (
-          <Text size="small" color={selected ? theme.onAccent : theme.textPrimary}>
+          <Text size="small" color={selected ? theme.onAccent : theme.textPrimary} ardiaCentersCapitals>
             {option.title}
           </Text>
         )}
@@ -61,3 +67,5 @@ function Segment<T extends string>({ option, selected, onPress }: { option: Segm
     </Pressable>
   );
 }
+
+const styles = StyleSheet.create({ fill: { flex: 1 } });

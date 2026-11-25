@@ -63,7 +63,19 @@ using namespace ardia_pip;
     return layer.cornerRadius == self.cornerRadius && layer.masksToBounds && !window.opaque && window.hasShadow &&
            self.overlay.layer.borderWidth == 1;
   };
+  auto clickHandle = [=] {
+    ArdiaPiPHandle *handle = self.overlay.handle;
+    const NSPoint point = [handle convertPoint:NSMakePoint(NSMidX(handle.bounds), NSMidY(handle.bounds)) toView:nil];
+    for (NSEventType type : {NSEventTypeLeftMouseDown, NSEventTypeLeftMouseUp})
+      [NSApp postEvent:[NSEvent mouseEventWithType:type location:point modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime
+                                      windowNumber:window.windowNumber context:nil eventNumber:0 clickCount:1
+                                          pressure:type == NSEventTypeLeftMouseDown]
+               atStart:NO];
+    return NSStringFromPoint(point);
+  };
+  __block NSString *rightClickAt = @"", *leftClickAt = @"";
   auto dragTo = [=](CGFloat x) {
+    [self stopMotion];
     self->_sawDrag = YES;
     [window setFrameOrigin:NSMakePoint(x, NSMinY(window.frame))];
     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(settle) object:nil];
@@ -94,12 +106,12 @@ using namespace ardia_pip;
   });
   after(3.4, ^{
     record(@"Chrome's move re-stashes", self.stashedEdge == ArdiaPiPEdgeRight && fabs(NSMinX(window.frame) - (NSMaxX(visibleRight) - kPeek)) < 0.5, nil);
-    self.overlay.handle.onClick();
+    rightClickAt = clickHandle();
   });
   after(4.6, ^{
     record(@"handle click brings it back", self.stashedEdge == ArdiaPiPEdgeNone && self.overlay.handle.hidden &&
                                                 fabs(NSMaxX(window.frame) - (NSMaxX(visibleRight) - kReturnMargin)) < 0.5,
-           nil);
+           @{@"clickedAt" : rightClickAt});
     dragTo(NSMinX(visibleLeft) - NSWidth(window.frame) * 0.7);
   });
   after(5.8, ^{
@@ -108,9 +120,19 @@ using namespace ardia_pip;
                                                 NSMinX(self.overlay.handle.frame) == NSWidth(self.overlay.bounds) - kPeek,
            @{@"handle" : NSStringFromRect(self.overlay.handle.frame)});
     snapshot(@"stashed-left");
-    dragTo(NSMinX(visibleLeft) + 100);
+    leftClickAt = clickHandle();
   });
   after(7.0, ^{
+    record(@"left handle click brings it back", self.stashedEdge == ArdiaPiPEdgeNone && self.overlay.handle.hidden &&
+                                                     fabs(NSMinX(window.frame) - (NSMinX(visibleLeft) + kReturnMargin)) < 0.5,
+           @{@"clickedAt" : leftClickAt});
+    dragTo(NSMinX(visibleLeft) - NSWidth(window.frame) * 0.7);
+  });
+  after(8.2, ^{
+    record(@"drag past left edge stashes again", self.stashedEdge == ArdiaPiPEdgeLeft, nil);
+    dragTo(NSMinX(visibleLeft) + 100);
+  });
+  after(9.4, ^{
     record(@"drag out of the stash", self.stashedEdge == ArdiaPiPEdgeNone && fabs(NSMinX(window.frame) - (NSMinX(visibleLeft) + 100)) < 0.5, nil);
     NSArray *saved = [NSArray arrayWithContentsOfFile:[dir stringByAppendingPathComponent:@"Chromium/ArdiaPictureInPicture.plist"]];
     NSRect frame = window.frame;
@@ -128,15 +150,15 @@ using namespace ardia_pip;
            @{@"menu" : [[self menu].itemArray valueForKey:@"title"]});
     [window setFrame:NSInsetRect(start, 40, 22.5) display:YES];
   });
-  after(7.6, ^{
+  after(10.0, ^{
     record(@"still rounded after a resize", rounded(), nil);
     [window setFrame:start display:YES];
   });
-  after(8.2, ^{
+  after(10.6, ^{
     record(@"menu: Back to Tab", self.view != nil, nil);
     [self backToTab];
   });
-  after(9.7, ^{
+  after(12.1, ^{
     record(@"PiP closed after Back to Tab", !window.visible, nil);
     write();
   });
@@ -228,6 +250,63 @@ using namespace ardia_pip;
                                        context:nil eventNumber:0 clickCount:clicks pressure:type.integerValue == NSEventTypeLeftMouseDown || type.integerValue == NSEventTypeLeftMouseDragged];
   if (type.integerValue == NSEventTypeMouseMoved) [window.contentView mouseMoved:event];
   else [NSApp postEvent:event atStart:NO];
+}
+
+- (NSString *)devMagnify:(NSArray<NSString *> *)args {
+  NSWindow *window = _window;
+  if (!ArdiaLaunchConfig.shared.testInstance) return @"test instances only";
+  if (args.count != 5 && args.count != 6) return @"usage: x,y,total,steps,main|none|otherApp[,noEnd]";
+  constexpr int kGestureType = 29, kGestureHIDType = 110, kZoomGesture = 8, kGestureZoomValue = 113, kGesturePhase = 132, kWindowUnderPointer = 51;
+  constexpr int kGestureBegan = 1, kGestureChanged = 2, kGestureEnded = 4;
+  const NSRect frame = window.frame;
+  const NSPoint pointer = NSMakePoint(NSMinX(frame) + args[0].doubleValue, NSMaxY(frame) - args[1].doubleValue);
+  const double total = args[2].doubleValue;
+  const int steps = MAX(1, args[3].intValue);
+  NSString *mode = args[4];
+  NSWindow *browser = nil;
+  for (NSWindow *candidate in NSApp.orderedWindows)
+    if (candidate != window && candidate.visible && candidate.level == NSNormalWindowLevel && ![ArdiaPiPZoom zooms:candidate]) {
+      browser = candidate;
+      break;
+    }
+  const NSInteger target = [mode isEqual:@"main"] ? browser.windowNumber : 0;
+  const BOOL otherApp = [mode isEqual:@"otherApp"];
+  const BOOL dropEnd = args.count == 6 && [args[5] isEqual:@"noEnd"];
+  const double each = std::pow(total, 1.0 / steps) - 1;
+  const CGFloat top = NSMaxY(NSScreen.screens.firstObject.frame);
+  auto send = [=](double seconds, int phase, double magnification) {
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(seconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+      CGEventRef cg = CGEventCreate(nullptr);
+      CGEventSetType(cg, (CGEventType)kGestureType);
+      CGEventSetIntegerValueField(cg, (CGEventField)kGestureHIDType, kZoomGesture);
+      CGEventSetDoubleValueField(cg, (CGEventField)kGestureZoomValue, magnification);
+      CGEventSetIntegerValueField(cg, (CGEventField)kGesturePhase, phase);
+      CGEventSetLocation(cg, CGPointMake(pointer.x, top - pointer.y));
+      if (target) CGEventSetIntegerValueField(cg, (CGEventField)kWindowUnderPointer, target);
+      NSEvent *event = [NSEvent eventWithCGEvent:cg];
+      CFRelease(cg);
+      if (event.type != NSEventTypeMagnify) return;
+      if (otherApp) PinchFromOtherApp(event);
+      else [NSApp postEvent:event atStart:NO];
+    });
+  };
+  const double interval = 1.0 / 120;
+  send(0, kGestureBegan, 0);
+  for (int i = 1; i <= steps; i++) send(i * interval, kGestureChanged, each);
+  if (!dropEnd) send((steps + 1) * interval, kGestureEnded, 0);
+  NSWindow *under = [ArdiaPiPZoom windowUnder:pointer];
+  NSDictionary *answer = @{
+    @"pointer" : NSStringFromPoint(pointer),
+    @"topmost" : @([NSWindow windowNumberAtPoint:pointer belowWindowWithWindowNumber:0]),
+    @"under" : @(under.windowNumber),
+    @"pip" : @(window.windowNumber),
+    @"browser" : @(browser.windowNumber),
+    @"requestedEventWindow" : @(target),
+    @"active" : @(NSApp.isActive),
+    @"followsOtherApps" : @(FollowsPinchesFromOtherApps()),
+    @"windows" : [ArdiaPiPZoom devWindowsAt:pointer],
+  };
+  return [[NSString alloc] initWithData:[NSJSONSerialization dataWithJSONObject:answer options:0 error:nil] encoding:NSUTF8StringEncoding];
 }
 
 @end

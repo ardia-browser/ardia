@@ -7,13 +7,16 @@ import { groupLabel, movingGroup, withGroup, withRowsGrouped } from "../pins/tab
 import { withSplitRows } from "../splits/splits";
 import { removeTabs, withNewTab } from "../tabs/tabs";
 import type { BrowserWindow, ClosedGroup, ClosedGroupInfo, GroupColor, Tab, TabGroup } from "../browser/types";
-import { depthOf, descendantIds, innermostGroupOf, nestGroups, reparent } from "./groupNesting";
+import { depthsIn, descendantIds, innermostGroupOf, nestGroups, reparent } from "./groupNesting";
 import { withShownTab, withoutShownTabs } from "./shownTabs";
 import { pinnedGroupMembers } from "../browser/structure";
 import { newTabHome } from "../tabs/newTabHome";
 import { groupingOnto } from "../pins/placing";
+import type { CloseOptions } from "../tabs/tabs";
 
-export { ancestorIds, canNest, commonGroup, depthOf, descendantIds, groupPath, innermostGroupOf, nestGroups, reparent, rootOf, withParent } from "./groupNesting";
+export { ancestorIds, canNest, commonGroup, depthOf, depthsIn, descendantIds, groupPath, innermostGroupOf, nestGroups, reparent, rootOf, rootsIn, withParent } from "./groupNesting";
+
+type GroupTabsOptions = { pinned?: boolean; name?: string };
 
 export type GroupsSlice = {
   groups: Record<string, TabGroup>;
@@ -24,16 +27,16 @@ export type GroupsSlice = {
   removeTabsFromGroup(tabIds: string[]): void;
   ungroup(groupId: string): void;
   newNestedGroup(parentId: string): string;
-  closeGroup(groupId: string): void;
-  deleteGroup(groupId: string): void;
+  closeGroup(groupId: string, options?: CloseOptions): void;
+  deleteGroup(groupId: string, options?: CloseOptions): void;
   closedGroups: ClosedGroup[];
   deletedGroups: ClosedGroup[];
-  groupTabs(ids: string[], options?: { pinned?: boolean; name?: string }): string;
+  groupTabs(ids: string[], options?: GroupTabsOptions): string;
   groupOnto(ids: string[], targetId: string): string;
   moveGroup(groupId: string, placement: GroupPlacement): void;
   duplicateGroup(groupId: string): string;
   newTabInGroup(groupId: string): string;
-  moveGroupToBookmarksBar(groupId: string): void;
+  moveGroupToBookmarksBar(groupId: string, options?: CloseOptions): void;
 };
 
 export function syncGroupOrder(groups: Record<string, TabGroup>, window: BrowserWindow): Record<string, TabGroup> {
@@ -72,9 +75,10 @@ export function placeBlock(tabIds: string[], block: string[]): string[] {
 }
 
 export function placeGroups(tabIds: string[], groups: Record<string, TabGroup>, windowId: string): string[] {
+  const depth = depthsIn(groups);
   const own = Object.values(groups)
     .filter((g) => g.windowId === windowId)
-    .map((g) => [g, depthOf(groups, g.id)] as const)
+    .map((g) => [g, depth(g.id)] as const)
     .sort((a, z) => a[1] - z[1]);
   let at = new Map(tabIds.map((id, i) => [id, i]));
   for (const [g] of own) {
@@ -199,15 +203,19 @@ export const createGroupsSlice: StateCreator<BrowserState, [], [], GroupsSlice> 
       let groups = s.groups;
       const windows = { ...s.windows };
       const touched = new Set<string>();
+      const leaving = new Map<string, Set<string>>();
       for (const id of withSplitRows(s, tabIds)) {
         const g = innermostGroupOf(groups, id);
-        const w = g && windows[g.windowId];
-        if (!g || !w) continue;
+        if (g && windows[g.windowId]) leaving.set(g.id, (leaving.get(g.id) ?? new Set()).add(id));
+      }
+      for (const [groupId, out] of leaving) {
+        const g = groups[groupId]!;
+        const w = windows[g.windowId]!;
         touched.add(w.id);
-        const kept = g.tabIds.filter((x) => x !== id);
+        const kept = g.tabIds.filter((x) => !out.has(x));
         if (kept.length) {
-          const order = w.tabIds.filter((x) => x !== id);
-          order.splice(order.indexOf(kept.at(-1)!) + 1, 0, id);
+          const order = w.tabIds.filter((x) => !out.has(x));
+          insertAll(order, order.indexOf(kept.at(-1)!) + 1, w.tabIds.filter((x) => out.has(x)));
           windows[w.id] = { ...w, tabIds: order };
           groups = { ...groups, [g.id]: { ...g, tabIds: kept } };
         } else {
@@ -257,15 +265,15 @@ export const createGroupsSlice: StateCreator<BrowserState, [], [], GroupsSlice> 
     return group.id;
   },
 
-  closeGroup(groupId) {
-    set(closingGroup(get(), groupId));
+  closeGroup(groupId, options) {
+    set(closingGroup(get(), groupId, false, options?.userClose));
   },
 
-  deleteGroup(groupId) {
-    set(closingGroup(get(), groupId, true));
+  deleteGroup(groupId, options) {
+    set(closingGroup(get(), groupId, true, options?.userClose));
   },
 
-  groupTabs(ids, { pinned = true, name } = {}) {
+  groupTabs(ids, { pinned = true, name }: GroupTabsOptions = {}) {
     const [next, id] = withRowsGrouped(get(), ids, { pinned, name });
     if (id) set({ ...next, selection: { ...next.selection, [next.groups[id]!.windowId]: [] } });
     return id;
@@ -316,7 +324,7 @@ export const createGroupsSlice: StateCreator<BrowserState, [], [], GroupsSlice> 
     return id;
   },
 
-  moveGroupToBookmarksBar(groupId) {
+  moveGroupToBookmarksBar(groupId, options) {
     const s = get();
     const g = s.groups[groupId];
     if (!g) return;
@@ -338,6 +346,6 @@ export const createGroupsSlice: StateCreator<BrowserState, [], [], GroupsSlice> 
       }
     };
     file(g);
-    set(closingGroup(get(), groupId));
+    set(closingGroup(get(), groupId, false, options?.userClose));
   },
 });

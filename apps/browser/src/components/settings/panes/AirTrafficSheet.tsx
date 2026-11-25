@@ -1,9 +1,9 @@
 import { useState, type ReactNode } from "react";
 import { View } from "react-native";
-import { addAirTrafficRule, removeAirTrafficRule, updateAirTrafficRule, type RuleDraft } from "../../../state/airTraffic/store";
-import { patternProblem, siteHost, type AirTrafficRule, type LinkCondition, type OpenAs, type SourceApp } from "../../../state/airTraffic/rules";
+import { removeAirTrafficRule, tryAddAirTrafficRule, updateAirTrafficRule, type RuleDraft } from "../../../state/airTraffic/store";
+import { linkTextProblem, patternProblem, siteHost, type AirTrafficRule, type LinkCondition, type OpenAs, type SourceApp } from "../../../state/airTraffic/rules";
 import { pickableApps, sourceAppKey } from "../../../state/airTraffic/sourceApps";
-import { useRecentSourceApps, useRoutableProfiles, type RoutableProfile } from "../../../state/airTraffic/hooks";
+import { useRecentSourceApps, useRoutableProfiles, useRouteGroups, type RoutableProfile } from "../../../state/airTraffic/hooks";
 import { closeSettingsSheet } from "../../../state/settings/sheet";
 import { Button, DialogActions, DialogTitle, PopUp, Sheet, space, Text, TextField, type Option } from "../../ui";
 
@@ -18,8 +18,23 @@ const USED_LAST_VALUE = "";
 const ANY = "any";
 const OTHER = "other";
 
-export const conditionLabel = (when: LinkCondition) => (when.kind === "any" ? "any link" : when.kind === "site" ? when.host : when.pattern);
+export const conditionLabel = (when: LinkCondition) =>
+  when.kind === "any" ? "any link" : when.kind === "site" ? when.host : when.kind === "pattern" ? when.pattern : when.kind === "contains" ? `containing “${when.text}”` : `exactly ${when.text}`;
 export const fromLabel = (from: SourceApp | null) => (from ? `From ${from.name}` : "Any app");
+
+const NO_GROUP = "";
+export const CLOSED_GROUP = "A closed tab group";
+
+export function GroupPicker({ profileId, value, onChange }: { profileId: string; value: string; onChange: (groupKey: string) => void }) {
+  const groups = useRouteGroups(profileId);
+  const known = !value || groups.some((g) => g.key === value);
+  const options: Option<string>[] = [
+    { value: NO_GROUP, title: "None" },
+    ...(known ? [] : [{ value, title: CLOSED_GROUP }]),
+    ...groups.map((g, i) => ({ value: g.key, title: g.name, separatorBefore: i === 0 })),
+  ];
+  return <PopUp value={value} options={options} onChange={onChange} minWidth={180} accessibilityLabel="Tab group" />;
+}
 
 export function profileOptions(profiles: RoutableProfile[], usedLast = USED_LAST): Option<string>[] {
   return [{ value: USED_LAST_VALUE, title: usedLast }, ...profiles.map((p, i) => ({ value: p.id, title: p.name, separatorBefore: i === 0 }))];
@@ -42,7 +57,21 @@ const KIND_OPTIONS: Option<LinkCondition["kind"]>[] = [
   { value: "any", title: "Any link" },
   { value: "site", title: "Links to a site" },
   { value: "pattern", title: "Links matching a pattern" },
+  { value: "contains", title: "Links containing" },
+  { value: "equals", title: "Links to exactly" },
 ];
+
+const UNSAVED = "Ardia couldn't save the rule. Your changes are still here; try again.";
+
+const conditionText = (when: LinkCondition | undefined) =>
+  !when || when.kind === "any" ? "" : when.kind === "site" ? when.host : when.kind === "pattern" ? when.pattern : when.text;
+
+const PLACEHOLDERS: Record<Exclude<LinkCondition["kind"], "any">, string> = {
+  site: "github.com",
+  pattern: "*github* or https://*.example.com/docs/*",
+  contains: "meet.google.com",
+  equals: "example.com/docs",
+};
 
 function typedApp(text: string): SourceApp | null {
   const typed = text.trim();
@@ -56,9 +85,11 @@ export function RuleSheet({ rule }: { rule?: AirTrafficRule }) {
   const [typing, setTyping] = useState(false);
   const [typed, setTyped] = useState("");
   const [kind, setKind] = useState<LinkCondition["kind"]>(rule?.when.kind ?? "any");
-  const [text, setText] = useState(rule?.when.kind === "site" ? rule.when.host : rule?.when.kind === "pattern" ? rule.when.pattern : "");
+  const [text, setText] = useState(conditionText(rule?.when));
   const [profileId, setProfileId] = useState(rule ? (rule.profileId ?? USED_LAST_VALUE) : (profiles[0]?.id ?? USED_LAST_VALUE));
   const [open, setOpen] = useState<OpenAs>(rule?.open ?? "tab");
+  const [groupKey, setGroupKey] = useState(rule?.groupKey ?? NO_GROUP);
+  const grouped = !!profileId && open === "tab";
   const [error, setError] = useState<string | null>(null);
 
   const pickApp = (app: SourceApp | null | "other") => {
@@ -77,10 +108,18 @@ export function RuleSheet({ rule }: { rule?: AirTrafficRule }) {
       const problem = patternProblem(text);
       if (problem) return setError(`That pattern doesn't work: ${problem}.`);
       when = { kind: "pattern", pattern: text.trim() };
+    } else if (kind === "contains" || kind === "equals") {
+      const problem = linkTextProblem(kind, text);
+      if (problem) return setError(`That doesn't work: ${problem}.`);
+      when = { kind, text: text.trim() };
     }
-    const draft: RuleDraft = { enabled: rule?.enabled ?? true, from: app, when, profileId: profileId || null, open };
-    if (rule) updateAirTrafficRule(rule.id, draft);
-    else if (!addAirTrafficRule(draft)) return setError("That's the most rules Ardia keeps. Remove one first.");
+    const draft: RuleDraft = { enabled: rule?.enabled ?? true, from: app, when, profileId: profileId || null, open, groupKey: (grouped && groupKey) || undefined };
+    if (rule) {
+      if (!updateAirTrafficRule(rule.id, draft)) return setError(UNSAVED);
+    } else {
+      const added = tryAddAirTrafficRule(draft);
+      if ("refused" in added) return setError(added.refused === "full" ? "That's the most rules Ardia keeps. Remove one first." : UNSAVED);
+    }
     closeSettingsSheet();
   };
 
@@ -100,15 +139,20 @@ export function RuleSheet({ rule }: { rule?: AirTrafficRule }) {
       </Line>
       {kind !== "any" ? (
         <View style={FIELD_BELOW}>
-          <TextField value={text} onChangeText={setText} placeholder={kind === "site" ? "github.com" : "*github* or https://*.example.com/docs/*"} mono={kind === "pattern"} onSubmit={save} onEscape={closeSettingsSheet} />
+          <TextField value={text} onChangeText={setText} placeholder={PLACEHOLDERS[kind]} mono={kind === "pattern"} onSubmit={save} onEscape={closeSettingsSheet} />
         </View>
       ) : null}
       <Line label="Open in">
-        <PopUp value={profileId} options={profileOptions(profiles)} onChange={setProfileId} minWidth={180} />
+        <PopUp value={profileId} options={profileOptions(profiles)} onChange={(p) => (setProfileId(p), setGroupKey(NO_GROUP))} minWidth={180} />
       </Line>
       <Line label="As">
         <PopUp value={open} options={OPEN_OPTIONS} onChange={setOpen} minWidth={180} />
       </Line>
+      {grouped ? (
+        <Line label="Group">
+          <GroupPicker profileId={profileId} value={groupKey} onChange={setGroupKey} />
+        </Line>
+      ) : null}
       {error ? (
         <Text size="caption" tone="destructive" style={ERROR}>
           {error}

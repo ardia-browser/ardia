@@ -6,7 +6,7 @@ import { curve } from "../ui/motion";
 import { useTheme } from "../ui/theme";
 import { DROP_GLOW_MS, DROP_RING_WIDTH } from "./tokens";
 
-export type DropGlowPlace = Pick<ViewStyle, "left" | "right" | "top" | "bottom" | "height" | "borderRadius">;
+type DropGlowPlace = Pick<ViewStyle, "left" | "right" | "top" | "bottom" | "height" | "borderRadius">;
 
 export function WindowDropGlow({ place }: { place: DropGlowPlace }) {
   const windowId = useWindowId();

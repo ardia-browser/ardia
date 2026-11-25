@@ -8,6 +8,7 @@ enum WindowMotion {
     let exitScale: CGFloat
     static let little = Style(entranceDuration: 0.2, exitDuration: 0.15, entranceScale: 0.97, exitScale: 0.985)
     static let main = Style(entranceDuration: 0.25, exitDuration: 0.18, entranceScale: 0.98, exitScale: 0.99)
+    static let burst = Style(entranceDuration: 0.5, exitDuration: 0.18, entranceScale: 0.3, exitScale: 0.99)
   }
   private static let settleAfter: TimeInterval = 0.5
   private static let entranceKey = "ardia.window.entrance"

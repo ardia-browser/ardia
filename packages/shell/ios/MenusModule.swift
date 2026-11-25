@@ -2,20 +2,85 @@ import AppKit
 import ArdiaCore
 import ExpoModulesCore
 
-public class MenusModule: Module {
+public class MenusModule: Module, MenusNative {
   private let lifetime = ModuleLifetime()
   private static weak var openMenu: NSMenu?
 
+  static func setMenuState(_ state: MenuStateUpdate) {
+    let shortcutWasGlobal = MenuState.current.littleArdiaShortcutFromAnyApp
+    MenuState.current = MenuState(state)
+    MainMenu.refresh()
+    MouseShortcuts.shared.update(MenuState.current.mouseShortcuts)
+    if MenuState.current.littleArdiaShortcutFromAnyApp != shortcutWasGlobal { LittleArdiaHotKey.shared.shortcutsChanged() }
+  }
+
+  static func setMenuBookmarks(_ bookmarks: MenuBookmarks) {
+    MenuState.setBookmarks(bookmarks)
+    MainMenu.refresh()
+  }
+
+  func showMenu(_ items: [MenuItem], _ promise: Promise) {
+    if let file = MenuChoice.testFile(flag: "appMenu", name: "menu.json") {
+      promise.resolve(MenuChoice.testPick(items, dumpingTo: file, appContext: self.appContext))
+      return
+    }
+    let target = MenuChoice()
+    let menu = MenusModule.contextMenu(items, target: target)
+    let location = NSEvent.mouseLocation
+    let popUp = {
+      MenusModule.openMenu = menu
+      menu.popUp(positioning: nil, at: location, in: nil)
+      if MenusModule.openMenu === menu { MenusModule.openMenu = nil }
+      DispatchQueue.main.async { promise.resolve(target.chosen) }
+    }
+    if MenuItem.anyKeepOpen(items) { RunLoop.main.perform(popUp) } else { popUp() }
+  }
+
+  static func updateMenu(_ items: [MenuItem]) {
+    guard let menu = MenusModule.openMenu else { return }
+    MenusModule.update(menu, with: MenusModule.itemsById(items))
+  }
+
+  static func openSurfaces() -> [[String: Any]] { OpenSurfaces.shared.list() }
+
+  static func capturePageMenus(_ captures: Bool) { OpenSurfaces.shared.capturesPageMenus = captures }
+
+  static func dismissSurface(_ id: String) throws { try MenusModule.surfaceCall { try OpenSurfaces.shared.dismiss(id) } }
+
+  static func menuBar() throws -> [[String: Any]] {
+    guard !WindowManager.shared.anyIncognitoWindow else {
+      throw Exception(name: "refused", description: OpenSurfaces.privateWindowOpen, code: "refused")
+    }
+    return MenuCatalog.rows
+  }
+
+  static func performMenuBarItem(_ ref: String, _ windowId: String) throws -> String { try MenusModule.surfaceCall { try MenuBarAction.perform(ref: ref, windowId: windowId) } }
+
+  static func menuShortcuts() -> [[String: Any]] { MainMenu.shortcutList() }
+
+  func recordShortcut(_ promise: Promise) {
+    lifetime.run { ShortcutRecorder.shared.record(promise, for: self) }
+  }
+
+  static func cancelRecording() { ShortcutRecorder.shared.finish(nil) }
+
+  static func mouseShortcutMonitor() -> [String: Any] { ["installed": MouseShortcuts.shared.isInstalled, "installs": MouseShortcuts.shared.installs] }
+
   public func definition() -> ModuleDefinition {
-    Name("ArdiaMenus")
-    Events(ShellEvents.Channel.command.rawValue)
+    Name(Self.moduleName)
+    Self.eventsDefinition
 
     OnCreate {
       self.lifetime.begin(self) {
         ShortcutRecorder.shared.abandon(by: self)
         ShellEvents.retire(self)
+        DispatchQueue.main.async { OpenSurfaces.shared.capturesPageMenus = false }
       }
       ShellEvents.attach(.command, to: self, while: self.lifetime)
+      self.lifetime.onMain {
+        OpenSurfaces.shared.send = { [weak self] type, body in self?.sendEvent("onSurface", body.merging(["type": type]) { first, _ in first }) }
+        OpenSurfaces.shared.start()
+      }
       self.lifetime.onMain { NSApp.mainMenu = MainMenu.build() }
     }
 
@@ -24,43 +89,31 @@ public class MenusModule: Module {
       ShellEvents.detach(self)
     }
 
-    AsyncFunction("setMenuState") { (state: MenuStateUpdate) in
-      MenuState.current = MenuState(state)
-      MainMenu.refresh()
-    }.runOnQueue(.main)
-    AsyncFunction("setMenuBookmarks") { (bookmarks: MenuBookmarks) in
-      MenuState.setBookmarks(bookmarks)
-      MainMenu.refresh()
-    }.runOnQueue(.main)
-    AsyncFunction("showMenu") { (items: [MenuItem], promise: Promise) in
-      if let file = MenuChoice.testFile(flag: "appMenu", name: "menu.json") {
-        promise.resolve(MenuChoice.testPick(items, dumpingTo: file, appContext: self.appContext))
-        return
-      }
-      let target = MenuChoice()
-      let menu = MenusModule.contextMenu(items, target: target)
-      let location = NSEvent.mouseLocation
-      let popUp = {
-        MenusModule.openMenu = menu
-        menu.popUp(positioning: nil, at: location, in: nil)
-        if MenusModule.openMenu === menu { MenusModule.openMenu = nil }
-        DispatchQueue.main.async { promise.resolve(target.chosen) }
-      }
-      if MenuItem.anyKeepOpen(items) { RunLoop.main.perform(popUp) } else { popUp() }
-    }.runOnQueue(.main)
+    Self.setMenuStateFunction
+    Self.setMenuBookmarksFunction
+    showMenuFunction
 
-    AsyncFunction("updateMenu") { (items: [MenuItem]) in
-      guard let menu = MenusModule.openMenu else { return }
-      MenusModule.update(menu, with: MenusModule.itemsById(items))
-    }.runOnQueue(.main)
+    Self.updateMenuFunction
 
-    AsyncFunction("menuShortcuts") { () -> [[String: Any]] in MainMenu.shortcutList() }.runOnQueue(.main)
+    Self.openSurfacesFunction
+    Self.capturePageMenusFunction
+    Self.dismissSurfaceFunction
+    Self.menuBarFunction
+    Self.performMenuBarItemFunction
 
-    AsyncFunction("recordShortcut") { [weak self] (promise: Promise) in
-      guard let self else { return }
-      self.lifetime.run { ShortcutRecorder.shared.record(promise, for: self) }
-    }.runOnQueue(.main)
-    AsyncFunction("cancelRecording") { ShortcutRecorder.shared.finish(nil) }.runOnQueue(.main)
+    Self.menuShortcutsFunction
+
+    recordShortcutFunction
+    Self.cancelRecordingFunction
+    Self.mouseShortcutMonitorFunction
+  }
+
+  private static func surfaceCall<T>(_ body: () throws -> T) throws -> T {
+    do { return try body() } catch OpenSurfaces.Problem.missing(let message) {
+      throw Exception(name: "no_window", description: message, code: "no_window")
+    } catch OpenSurfaces.Problem.refused(let message) {
+      throw Exception(name: "refused", description: message, code: "refused")
+    }
   }
 
   private static func itemsById(_ items: [MenuItem]) -> [String: MenuItem] {
@@ -107,12 +160,16 @@ public class MenusModule: Module {
       entry.state = item.checked ? .on : .off
       if let symbol = item.symbol {
         entry.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+        #if compiler(>=6.4)
         if #available(macOS 27.0, *) { entry.preferredImageVisibility = .visible }
+        #endif
       } else if let hex = item.swatch, let light = RGBA(hex: hex)?.srgb {
         let dark = item.swatchDark.flatMap { RGBA(hex: $0)?.srgb } ?? light
         entry.image = light.alphaComponent == 0
           ? emptySwatch() : swatch(NSColor(name: nil) { $0.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light })
+        #if compiler(>=6.4)
         if #available(macOS 27.0, *) { entry.preferredImageVisibility = .visible }
+        #endif
       }
       menu.addItem(entry)
     }

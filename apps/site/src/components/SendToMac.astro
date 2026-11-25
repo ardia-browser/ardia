@@ -1,42 +1,58 @@
 ---
-import { TESTFLIGHT, sentLink } from "../data/release";
+import { ANDROID_APK, TESTFLIGHT, sentLink } from "../data/release";
 
 interface Props {
   location: "hero" | "closing" | "release_notes";
   main?: boolean;
 }
 const { location, main = false } = Astro.props;
-const email = `mailto:?subject=${encodeURIComponent("Ardia, for my Mac")}&body=${encodeURIComponent(
-  `Open this on your Mac: ${sentLink("email")}`,
+const email = `mailto:?subject=${encodeURIComponent("Ardia for Mac")}&body=${encodeURIComponent(
+  `Download Ardia on your Mac: ${sentLink("email")}`,
 )}`;
 ---
 
-<div class="send phone-only" id={main ? "send" : undefined} data-send-panel={main ? "main" : ""} data-location={location} data-meadow-keep-out="copy">
-  <a class="btn send-main" href={email} data-send="main">
-    <svg width="18" height="14" viewBox="0 0 18 14" fill="none" aria-hidden="true">
-      <path d="M1.5 1.5h15v9h-15zM0 12.5h18" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path>
-    </svg>
-    Send to my Mac
-  </a>
+<div class:list={["send", "phone-only", { "send-compact": main }]} id={main ? "send" : undefined} data-send-panel={main ? "main" : ""} data-location={location} data-meadow-keep-out="copy">
+  <div class="send-actions">
+    <a class="btn send-main" href={email} data-send="main">
+      <svg width="17" height="13" viewBox="0 0 18 14" fill="none" aria-hidden="true">
+        <path d="M1.5 1.5h15v9h-15zM0 12.5h18" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path>
+      </svg>
+      <span>{main ? "Send to Mac" : "Send to my Mac"}</span>
+    </a>
+    <a
+      class="btn nightly-btn testflight ios-only"
+      href={TESTFLIGHT}
+      rel="noopener"
+      data-track="testflight_clicked"
+      data-track-location={location}
+    >
+      <svg width="13" height="18" viewBox="0 0 14 20" fill="none" aria-hidden="true">
+        <rect x="1" y="1" width="12" height="18" rx="2.5" stroke="currentColor" stroke-width="2"></rect>
+        <path d="M5.5 15.5h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+      </svg>
+      <span>{main ? "iPhone app" : "Get the iPhone app"}</span>
+      {!main && <span class="btn-meta">TestFlight</span>}
+    </a>
+    <a
+      class="btn nightly-btn testflight android-only"
+      href={ANDROID_APK}
+      rel="noopener"
+      data-track="android_apk_clicked"
+      data-track-location={location}
+    >
+      <svg width="13" height="18" viewBox="0 0 14 20" fill="none" aria-hidden="true">
+        <rect x="1" y="1" width="12" height="18" rx="2.5" stroke="currentColor" stroke-width="2"></rect>
+        <path d="M5.5 15.5h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+      </svg>
+      <span>{main ? "Android app" : "Get the Android app"}</span>
+      {!main && <span class="btn-meta">APK</span>}
+    </a>
+  </div>
   <div class="send-more" data-meadow-keep-out="copy">
     <button type="button" class="send-link" data-send="share" hidden>Share</button>
     <button type="button" class="send-link" data-send="copy"><span data-copy-label aria-live="polite">Copy link</span></button>
     <a class="send-link" href={email} data-send="email">Email it to me</a>
   </div>
-  <a
-    class="btn nightly-btn testflight ios-only"
-    href={TESTFLIGHT}
-    rel="noopener"
-    data-track="testflight_clicked"
-    data-track-location={location}
-  >
-    <svg width="14" height="20" viewBox="0 0 14 20" fill="none" aria-hidden="true">
-      <rect x="1" y="1" width="12" height="18" rx="2.5" stroke="currentColor" stroke-width="2"></rect>
-      <path d="M5.5 15.5h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
-    </svg>
-    Get the iPhone app
-    <span class="btn-meta">TestFlight</span>
-  </a>
 </div>
 
 <style>
@@ -44,19 +60,48 @@ const email = `mailto:?subject=${encodeURIComponent("Ardia, for my Mac")}&body=$
     margin-top: 26px;
     scroll-margin-top: 84px;
   }
-  .send-main {
+  .send-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .send-main,
+  .testflight {
     width: 100%;
     justify-content: center;
+  }
+  .send-compact {
+    margin-top: 14px;
+  }
+  .send-compact .send-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .send-compact .send-main,
+  .send-compact .testflight {
+    --h: 46px;
+    flex: 1 1 136px;
+    width: auto;
+    padding: 0 14px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    gap: 8px;
   }
   .send-more {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
-    gap: 0 24px;
+    gap: 0 22px;
     margin-top: 6px;
   }
+  .send-compact .send-more {
+    justify-content: center;
+    gap: 0 22px;
+    margin-top: 8px;
+  }
   .send-link {
-    min-height: 44px;
+    min-height: 40px;
     display: inline-flex;
     align-items: center;
     padding: 0;
@@ -72,16 +117,13 @@ const email = `mailto:?subject=${encodeURIComponent("Ardia, for my Mac")}&body=$
     cursor: pointer;
     touch-action: manipulation;
   }
-  .testflight {
-    width: 100%;
-    justify-content: center;
-    margin-top: 14px;
-  }
   .send-link[hidden] {
     display: none;
   }
-  .send[data-flash] .send-main {
-    animation: flash 900ms var(--ease-out);
+  @media (prefers-reduced-motion: no-preference) {
+    .send[data-flash] .send-main {
+      animation: flash 500ms var(--ease-out);
+    }
   }
   @keyframes flash {
     30% {

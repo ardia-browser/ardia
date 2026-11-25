@@ -6,7 +6,7 @@ import { faviconFor, PAGES } from "./pages";
 export const WINDOW_ID = "w_demo";
 export const PERSONAL: Profile = { id: "default", name: "Personal", color: "plum", icon: null, createdAt: 0 };
 export const WORK: Profile = { id: "p_work", name: "Work", color: "blue", icon: null, createdAt: 0 };
-export const ACTIVE_TABS = { [PERSONAL.id]: "t_browser", [WORK.id]: "t_vite" };
+const ACTIVE_TABS = { [PERSONAL.id]: "t_browser", [WORK.id]: "t_vite" };
 
 type Page = { url: string; title: string };
 type FaviconOf = (url: string) => string | null;
@@ -65,7 +65,7 @@ export function seedWindow(tabs: Tab[], frame: BrowserWindow["frame"] = null, no
   };
 }
 
-export const HISTORY_PAGES: Page[] = [
+const HISTORY_PAGES: Page[] = [
   ...Object.values(PAGES),
   { url: "https://en.wikipedia.org/wiki/Hypertext", title: "Hypertext - Wikipedia" },
   { url: "https://en.wikipedia.org/wiki/World_Wide_Web", title: "World Wide Web - Wikipedia" },

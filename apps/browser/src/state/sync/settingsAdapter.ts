@@ -2,6 +2,8 @@ import { canonical, type Adapter, type SyncRecord } from "../../platform/sync";
 import { useBrowser } from "../browser/store";
 import { DEFAULT_SETTINGS, SETTING_KEYS, SETTING_SPECS, validSettingValue, type SettingKey, type Settings } from "../settings/settings";
 import { fromLegacy } from "../../lib/legacy";
+import { chosenHere, retiredDefaultsWaiting } from "../settings/retiredDefaults";
+import { settleRetiredDefaults } from "../settings/settleRetiredDefaults";
 import { CLEAN_UP_KEY, hoursFromMinutes, LEGACY_CLEAN_UP_KEY, minutesFromHours } from "../settings/cleanUpAfter";
 
 const store = () => useBrowser.getState();
@@ -36,18 +38,22 @@ export const settingsAdapter: Adapter = {
     }
     return { values, ignore: (key) => !values.has(key) };
   },
-  apply: (visible, changed) => {
-    const patch: Record<string, unknown> = {};
-    for (const key of changed) {
-      const name = settingOf(key);
-      const record = visible.get(key) as { v: unknown } | undefined;
-      if (!record || key !== recordKey(name) || !(SYNCED_SETTINGS as readonly string[]).includes(name)) continue;
-      const value = fromRecord(name, record.v);
-      if (validSettingValue(name as SettingKey, value)) patch[name] = value;
-    }
-    if (Object.keys(patch).length) store().updateSettings(patch as Partial<Settings>, { fromSync: true });
-  },
+  apply: (visible, changed) => applySettingRecords(visible, changed),
 };
+
+function applySettingRecords(visible: ReadonlyMap<string, unknown>, changed: Iterable<string>) {
+  const patch: Record<string, unknown> = {};
+  for (const key of changed) {
+    const name = settingOf(key);
+    const record = visible.get(key) as { v: unknown } | undefined;
+    if (!record || key !== recordKey(name) || !(SYNCED_SETTINGS as readonly string[]).includes(name)) continue;
+    const value = fromRecord(name, record.v);
+    if (validSettingValue(name as SettingKey, value)) patch[name] = value;
+  }
+  if (Object.keys(patch).length) store().updateSettings(patch as Partial<Settings>, { fromSync: true });
+}
+
+export const settingSyncedIn = (records: Record<string, SyncRecord>, name: SettingKey) => records[recordKey(name)] !== undefined;
 
 export function settingsToReapply(records: Record<string, SyncRecord>): string[] {
   const settings = store().settings;
@@ -59,3 +65,26 @@ export function settingsToReapply(records: Record<string, SyncRecord>): string[]
     return canonical(value) === canonical(settings[name]) ? [] : [key];
   });
 }
+
+export function retiredDefaultsHeldBySync(records: Record<string, SyncRecord>): Map<string, { v: unknown }> {
+  const meta = store().settingsMeta;
+  const held = new Map<string, { v: unknown }>();
+  for (const name of retiredDefaultsWaiting(meta)) {
+    const key = recordKey(name);
+    const value = fromRecord(name, (fromLegacy(records[key]?.v) as { v?: unknown } | null | undefined)?.v);
+    if (chosenHere(meta, name) || value === null || value === undefined || !validSettingValue(name as SettingKey, value)) continue;
+    held.set(key, { v: toRecord(name, value) });
+  }
+  return held;
+}
+
+type SavedAppScope = { records: Record<string, SyncRecord>; unapplied: string[] };
+
+export function settleSettingsFromSavedSync(app: SavedAppScope | undefined, settingsSynced: boolean) {
+  const held = app && settingsSynced ? retiredDefaultsHeldBySync(app.records) : new Map<string, { v: unknown }>();
+  if (held.size) applySettingRecords(held, held.keys());
+  settleRetiredDefaults((name) => held.has(recordKey(name)));
+  if (app) app.unapplied = [...new Set([...app.unapplied, ...settingsToReapply(app.records)])];
+}
+
+export const settleRetiredDefaultsWithoutSync = () => settleRetiredDefaults(() => false);

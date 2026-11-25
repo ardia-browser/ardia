@@ -3,6 +3,7 @@
 #import "ArdiaEarlyWindow.h"
 #import "ArdiaServices.h"
 #import "ArdiaNavigationDownloads.h"
+#import "ArdiaPiPGestureLog.h"
 #import "ArdiaStartup.h"
 #import "ArdiaTabParking.h"
 #import "ArdiaWebViewInternal.h"
@@ -189,6 +190,13 @@ static void (^gQuitCancelledHandler)(void);
   return ardia_host::LoadedDataProfileNames();
 }
 
++ (NSDictionary<NSString *, NSString *> *)loadedProfilePaths {
+  NSMutableDictionary<NSString *, NSString *> *paths = [NSMutableDictionary dictionary];
+  for (NSString *name in ardia_host::LoadedDataProfileNames())
+    if (NSString *path = ardia_host::LoadedProfile(name).path) paths[name] = path;
+  return paths;
+}
+
 + (BOOL)stopCapture:(NSString *)tabId {
   ArdiaCoreTab *tab = ardia_host::TabWithAppTabId(tabId);
   return [tab stopCapture];
@@ -343,6 +351,28 @@ static NSDictionary<NSString *, id> *OffscreenRefusal(NSString *reason) {
       for (ArdiaCoreTab *tab in [[window tabsForProfile:profile] copy]) [tab close];
 }
 
++ (NSDictionary<NSString *, id> *)cliHoldTabs:(NSArray<NSDictionary<NSString *, id> *> *)holds {
+  NSMutableArray<ArdiaCoreTab *> *tabs = [NSMutableArray array];
+  NSMutableArray<NSNumber *> *until = [NSMutableArray array];
+  NSMutableArray<NSNumber *> *live = [NSMutableArray array];
+  NSMutableArray<NSString *> *ids = [NSMutableArray array];
+  for (NSDictionary<NSString *, id> *hold in holds) {
+    id tabId = hold[@"tabId"];
+    id ends = hold[@"until"];
+    id drawing = hold[@"live"];
+    if (![tabId isKindOfClass:NSString.class] || ![ends isKindOfClass:NSNumber.class]) continue;
+    if (ArdiaCoreTab *tab = ardia_host::TabWithAppTabId(tabId)) {
+      [tabs addObject:tab];
+      [until addObject:ends];
+      [live addObject:@([drawing isKindOfClass:NSNumber.class] && [drawing boolValue])];
+      [ids addObject:tabId];
+    }
+  }
+  NSMutableIndexSet *placed = [NSMutableIndexSet indexSet];
+  NSInteger kept = [ArdiaCoreEngine holdTabsForCli:tabs until:until live:live marked:placed];
+  return @{@"kept" : @(kept), @"marked" : [ids objectsAtIndexes:placed]};
+}
+
 + (void)cliTabTargets:(NSArray<NSString *> *)tabIds completion:(void (^)(NSDictionary<NSString *, id> *targets))completion {
   static NSMutableDictionary<NSString *, NSString *> *lastTarget;
   static NSMutableDictionary<NSString *, NSNumber *> *generations;
@@ -394,7 +424,7 @@ static NSDictionary<NSString *, id> *OffscreenRefusal(NSString *reason) {
     [sources addObject:@{
       @"id" : [NSString stringWithFormat:@"screen:%u:0", display.unsignedIntValue],
       @"kind" : @"screen",
-      @"name" : screen.localizedName ?: [NSString stringWithFormat:@"Screen %lu", (unsigned long)index],
+      @"name" : screen.localizedName.length ? screen.localizedName : [NSString stringWithFormat:@"Screen %lu", (unsigned long)index],
       @"width" : @(screen.frame.size.width),
       @"height" : @(screen.frame.size.height),
     }];
@@ -456,6 +486,18 @@ static NSDictionary<NSString *, id> *OffscreenRefusal(NSString *reason) {
   return gDataDirectory ?: @"";
 }
 
++ (void)beginPressLoop:(NSString *)name {
+  ardia_host::BeginPressLoop(name);
+}
+
++ (void)endPressLoop {
+  ardia_host::EndPressLoop();
+}
+
++ (void)notePointer:(NSEvent *)event swallowedBy:(NSString *)name {
+  ardia_host::NotePointer(event, name);
+}
+
 + (NSDictionary<NSString *, id> *)engineInfo {
   ArdiaCoreEngine *engine = ArdiaCoreEngine.sharedEngine;
   NSInteger chromeWindows = 0;
@@ -469,6 +511,8 @@ static NSDictionary<NSString *, id> *OffscreenRefusal(NSString *reason) {
     @"popupWindows" : @(ardia_host::PopupWindowCount()),
     @"chromeWindows" : @(chromeWindows),
     @"keepAlive" : engine.keepAliveState ?: @"",
+    @"pictureInPictureCloses" : engine.pictureInPictureCloses ?: @"",
+    @"pictureInPictureGestures" : ardia_pip::GestureLog(),
     @"lastUsedProfile" : engine.defaultProfile.name ?: @"",
     @"focus" : ardia_host::FocusState(),
   };

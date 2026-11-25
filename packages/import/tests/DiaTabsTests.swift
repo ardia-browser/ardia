@@ -80,7 +80,7 @@ final class DiaTabsTests: XCTestCase {
     XCTAssertTrue(dia[0].asksAppForTabs)
     for profile in dia[0].profiles {
       XCTAssertTrue(profile.available.contains(.tabs) && profile.available.contains(.pinnedTabs))
-      XCTAssertFalse(profile.tabsNeedKey)
+      XCTAssertEqual(profile.tabsNeedKey, profile.diaSidebar)
     }
     XCTAssertFalse(try XCTUnwrap(list.first { $0.id == "chrome" }).asksAppForTabs)
   }

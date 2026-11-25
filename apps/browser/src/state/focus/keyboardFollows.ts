@@ -30,3 +30,9 @@ export function startKeyboardFollows(follow: FollowKeyboard | null = followKeybo
     }
   });
 }
+
+export function followHandedBack(windowId: string, follow: FollowKeyboard | null = followKeyboard, store: Pick<Store, "getState"> = useBrowser): void {
+  const s = store.getState();
+  const tabId = peekShownIn(s, windowId) ?? shownTabOf(s, windowId);
+  if (follow && tabId) follow(tabId, windowId);
+}

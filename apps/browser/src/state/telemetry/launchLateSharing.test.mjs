@@ -21,10 +21,12 @@ test("a window opened after sharing is turned on mid-session does not start a la
   assert.equal(client.isSharing(), false);
   journeys.startJourneys(null);
 
-  journeys.launchCommitted();
+  const atStart = client.consentNow();
+  assert.equal(atStart, null);
+  journeys.launchCommitted(atStart);
   client.setSharing(true, "onboarding");
   assert.equal(client.isSharing(), true);
-  journeys.launchCommitted();
+  journeys.launchCommitted(client.consentNow());
 
   assert.deepEqual(journeys.devJourneys().pending, []);
   journeys.journeysEnding();

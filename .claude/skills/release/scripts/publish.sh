@@ -27,30 +27,71 @@ channel="$(channel_of "$version")"
 dmg="$dist/Ardia-$version.dmg"
 zip="$dist/Ardia-$version.zip"
 feed="$dist/appcast.xml"
-cli="$dist/ardia-cli-$version-macos-arm64.tar.gz"
 
 assets=()
-for file in "$dmg" "$zip" "$feed" "$cli" "$cli.sha256"; do
+for file in "$dmg" "$zip" "$feed"; do
   [ -f "$file" ] || die "no $file (scripts/release.sh $version first)"
   assets+=("$file")
 done
+app_symbols="$dist/$(app_symbols_name "$version")"
+app_uuids="$dist/$(app_uuids_name "$version")"
+for file in "$app_symbols" "$app_uuids"; do
+  [ -f "$file" ] && [ -s "$file" ] || die "no $file: a release ships the app's symbols, or its crashes can't be named (scripts/release.sh packs them; in CI the sign job's release artifact carries them)"
+  assets+=("$file")
+done
+echo "PASS  the app's symbols join the release"
+built="$dist/appcast.built.xml"
+[ -f "$built" ] || cp "$feed" "$built"
+delta_lines="$(appcast deltas "$built" "$version")" || die "couldn't read $version's deltas from $built"
+deltas=0
+while read -r from url length signature; do
+  [ -n "$from" ] || continue
+  name="${url##*/}"
+  delta="$dist/$name"
+  [ "$url" = "$REPO_URL/releases/download/v$version/$name" ] || die "$version's delta from build $from points at $url, not at v$version's release"
+  [ -f "$delta" ] || die "no $delta: the appcast lists it (in CI the sign job's release artifact carries the .delta files)"
+  [ "$length" = "$(stat -f %z "$delta")" ] || die "the appcast's length for $name is $length, the file is $(stat -f %z "$delta")"
+  assets+=("$delta")
+  deltas=$((deltas + 1))
+done <<<"$delta_lines"
+echo "PASS  $deltas Sparkle delta(s) join the release"
+"$root/scripts/release/check-packages.sh" "$dist" "$version" || die "the update zip or the DMG isn't laid out as installs expect (scripts/release/check-packages.sh)"
 linux="$dist/linux"
 if [ -d "$linux" ]; then
   linux_package="$linux/Ardia-$version-linux-x64.tar.xz"
   linux_cli="$linux/ardia-cli-$version-linux-x64.tar.gz"
-  linux_deb="$linux/Ardia-$version-linux-x64.deb"
   linux_appimage="$linux/Ardia-$version-linux-x64.AppImage"
-  for file in "$linux_package" "$linux_package.sha256" "$linux_deb" "$linux_deb.sha256" "$linux_appimage" "$linux_appimage.sha256" "$linux_cli" "$linux_cli.sha256"; do
-    [ -f "$file" ] || die "$linux has no $(basename "$file") (scripts/linux/release.sh $version first, or remove $linux to publish without Linux)"
-    assets+=("$file")
-  done
+  linux_arch="$linux/ardia-bin-$version.src.tar.gz"
   provenance="$linux/provenance.txt"
   [ -f "$provenance" ] || die "$linux has no provenance.txt"
-  grep -q '^engine key [0-9a-f]\{40\} (exact)' "$provenance" && ! grep -q 'uncommitted changes' "$provenance" \
+  grep -q '^engine key [0-9a-f]\{40\} (exact[,)]' "$provenance" && ! grep -q 'uncommitted changes' "$provenance" \
     || die "$linux is a Linux test build (an inexact engine or uncommitted changes, $provenance), not a release"
-  (cd "$linux" && shasum -a 256 -c --quiet "${linux_package##*/}.sha256" "${linux_deb##*/}.sha256" "${linux_appimage##*/}.sha256" "${linux_cli##*/}.sha256") \
+  linux_files=("$linux_package" "$linux_appimage" "$linux_arch" "$linux_cli")
+  for format in deb rpm flatpak; do
+    if grep -q "^$format dropped" "$provenance"; then
+      echo "note: $(grep -m1 "^$format dropped" "$provenance"): the release ships without the .$format"
+    else
+      linux_files+=("$linux/Ardia-$version-linux-x64.$format")
+    fi
+  done
+  linux_sums=()
+  for file in "${linux_files[@]}"; do
+    for asset in "$file" "$file.sha256"; do
+      [ -f "$asset" ] || die "$linux has no $(basename "$asset") (scripts/linux/release.sh $version first, or remove $linux to publish without Linux)"
+      assets+=("$asset")
+    done
+    linux_sums+=("${file##*/}.sha256")
+  done
+  (cd "$linux" && shasum -a 256 -c --quiet "${linux_sums[@]}") \
     || die "the Linux assets in $linux don't match their .sha256 files"
-  echo "PASS  the Linux tarball, .deb, AppImage and CLI join the release"
+  echo "PASS  the Linux assets join the release: ${linux_files[*]##*/}"
+  linux_update="$linux/Ardia-$version-linux-update.txt"
+  if [ -f "$linux_update" ] && [ -f "$linux_update.sig" ]; then
+    assets+=("$linux_update" "$linux_update.sig")
+    echo "PASS  the signed Linux self-update manifest joins the release"
+  else
+    echo "note: no signed $(basename "$linux_update") in $linux: installed Linux apps won't update themselves to $version"
+  fi
 else
   echo "note: no $linux: the release ships without the Linux tarball"
 fi
@@ -79,7 +120,7 @@ if [ -d "$windows" ]; then
 else
   echo "note: no $windows: the release ships without the Windows installers"
 fi
-item_channel="$(appcast channel "$feed" "$version")"
+item_channel="$(appcast channel "$built" "$version")"
 [ "$item_channel" = "$channel" ] || die "$version's item in $feed is on the $item_channel channel, not $channel"
 [ -f "$dist/release-notes.md" ] || die "no $dist/release-notes.md"
 if ! git -C "$root" ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null 2>&1; then
@@ -94,15 +135,15 @@ trap 'exit 130' INT TERM HUP
 take_lock "$version" "$dry" "$break_lock"
 stable_tag="$(latest_stable_tag)"
 
-built="$dist/appcast.built.xml"
-[ -f "$built" ] || cp "$feed" "$built"
 merged="$feed"
 [ "$dry" = 1 ] && merged="$work/appcast.xml"
-if download_live_feed "$stable_tag" "$work/live"; then
+if download_live_feed "$stable_tag" "$work/live" && node "$root/scripts/release/feed-check.mjs" "$work/live/appcast.xml" "$version"; then
   appcast merge "$work/live/appcast.xml" "$built" "$version" "$merged"
-else
-  echo "note: $stable_tag has no appcast.xml yet: $version starts it"
+elif [ "${PUBLISH_NEW_FEED:-0}" = 1 ] || [ "$dry" = 1 ]; then
+  echo "note: $stable_tag has no usable appcast.xml: $version starts the feed"
   cp "$built" "$merged"
+else
+  die "$stable_tag has no usable appcast.xml (missing, empty or not a whole Sparkle appcast), so publishing would start a feed without every earlier release: put the last good one back (docs/releasing.md › Feed recovery), or set PUBLISH_NEW_FEED=1 if $version really starts the feed"
 fi
 appcast check-above "$merged" "$version"
 if [ "$channel" = stable ]; then
@@ -148,6 +189,8 @@ if [ "$channel" = nightly ]; then
   [ "$size" = "$(stat -f %z "$dmg")" ] && echo "PASS  $url is $version's DMG" \
     || { echo "FAIL  $url is $version's DMG (size $size, expected $(stat -f %z "$dmg"))"; status=1; }
   to="$(curl -s -o /dev/null --max-time 15 -w '%{redirect_url}' https://ardia.dev/nightly || true)"
+  legacy_nightly_dmg_url="https://github.com/mantrakp04/ardia/releases/download/nightly/Ardia-Nightly.dmg"
+  [ "$to" = "$legacy_nightly_dmg_url" ] && to="$(curl -s -o /dev/null --max-time 15 -w '%{redirect_url}' "$legacy_nightly_dmg_url" || true)"
   [ "$to" = "$NIGHTLY_DMG_URL" ] && echo "PASS  https://ardia.dev/nightly leads there" \
     || { echo "FAIL  https://ardia.dev/nightly leads there (goes to ${to:-nothing}: deploy the site, infra/site/nginx.conf)"; status=1; }
 fi

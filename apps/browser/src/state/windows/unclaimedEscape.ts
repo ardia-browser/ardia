@@ -1,4 +1,6 @@
 import { onAppEvent } from "../../platform/app";
+import { cancelConsentOnEscape } from "../plugins/consentSurface";
+import { SETTINGS_WINDOW_ID } from "../settings/settingsWindows";
 import { activeTabId } from "../browser/model";
 import { useBrowser } from "../browser/store";
 import { closeLittleArdiaOnEscape } from "../littleArdia/actions";
@@ -16,6 +18,7 @@ export function escapePressed(tabId: string, pressedIn: EscapePressedIn) {
 export function startUnclaimedEscape() {
   onAppEvent((e) => {
     if (e.type !== "unclaimedEscape") return;
+    if (cancelConsentOnEscape(e.windowId, SETTINGS_WINDOW_ID)) return;
     const tabId = activeTabId(useBrowser.getState(), e.windowId);
     if (tabId) escapePressed(tabId, "window");
   });

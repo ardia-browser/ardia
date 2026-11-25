@@ -1,7 +1,7 @@
 import type { BrowserState } from "../browser/store";
 import { changedIds } from "../browser/changes";
 import { orderSections, syncGroupOrder, withParent } from "../groups/groups";
-import { familyKeyOf, IDLE_LIVE, inPinnedContainer, newId, pinKeyOf } from "../browser/model";
+import { familyKeyOf, inPinnedContainer, newId, pinKeyOf } from "../browser/model";
 import { frozenOn, hasOwnOrSharedPage, hasPage, holderOfPage, IDLE, isAsleep, wakeOf, withNavigationAt, withWake } from "./pageSession";
 import { chainOf, copyOf, hasDuplicates, keyField, profilesOf, sectionOf, signature, treeOrder, union } from "../pins/pinMirror";
 import { removeTabs, withNewTab } from "./tabs";
@@ -125,7 +125,6 @@ function conformList(input: BrowserState, windowId: string, profileId: string, s
   const mine = cur.items.map((i) => i.tab);
   const used = new Set<string>();
   const tabs = { ...s.tabs };
-  const live = { ...s.live };
   let groups = { ...s.groups };
   const byKey = new Map<string, Tab[]>();
   for (const m of mine) byKey.get(pinKeyOf(m))?.push(m) ?? byKey.set(pinKeyOf(m), [m]);
@@ -136,7 +135,6 @@ function conformList(input: BrowserState, windowId: string, profileId: string, s
     if (!t) {
       const copy = { ...copyOf(src, windowId, false), page: IDLE, lastActiveAt: src.lastActiveAt, ...(src.restoredAt ? { restoredAt: src.restoredAt } : {}) };
       tabs[copy.id] = copy;
-      live[copy.id] = IDLE_LIVE;
       used.add(copy.id);
       return copy.id;
     }
@@ -203,7 +201,7 @@ function conformList(input: BrowserState, windowId: string, profileId: string, s
 
   const window = { ...w, tabIds: orderSections(ids, tabs, groups) };
   groups = syncGroupOrder(groups, window);
-  let next: BrowserState = { ...s, tabs, live, groups, windows: { ...s.windows, [windowId]: window } };
+  let next: BrowserState = { ...s, tabs, groups, windows: { ...s.windows, [windowId]: window } };
   if (!gone.length) return next;
   return removeTabs(keepShownProfile(next, windowId, gone), gone, false);
 }

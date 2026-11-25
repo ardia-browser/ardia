@@ -10,7 +10,7 @@ import { useIsActiveTab, useSettings, useTab, useWindowId } from "../../state/br
 import { useIsSelected } from "../../state/pins/hooks";
 import { NextMeetingBadge } from "../live/NextMeetingBadge";
 import { TileStatus } from "./TileStatus";
-import { returnShownTabToPinnedUrl } from "../../state/sidebar/actions";
+import { refreshShownTile } from "../../state/sidebar/actions";
 import { pinSlotPitch, cellKey, tailKey } from "./dragModel";
 import { useDragController, useDragging, useDragItem, useDropPins, useFolderTarget, usePinnedCount, usePinSlots } from "./DragProvider";
 import { FolderTile } from "./FolderTile";
@@ -79,19 +79,20 @@ export function PinFieldZone({ top, height }: { top: number; height: number }) {
         borderRadius: radius.chrome,
         borderWidth: active ? 1.5 : 1,
         borderStyle: "dashed",
-        borderColor: active ? theme.accent : tokens.dragBorder,
+        borderColor: active ? tokens.dropMark : tokens.dragBorder,
         backgroundColor: tokens.dragSilhouette,
         alignItems: "center",
         justifyContent: "center",
       }}
     >
-      <PinGlyph color={active ? theme.accent : theme.textSecondary} />
+      <PinGlyph color={active ? tokens.dropMark : theme.textSecondary} />
     </View>
   );
 }
 
 export function PinSlotZone({ top = 0 }: { top?: number }) {
   const theme = useTheme();
+  const tokens = useSidebarTokens();
   const controller = useDragController();
   const active = useDropPins();
   const gap = controller?.items.get(tailKey("tiles"))?.gap;
@@ -125,13 +126,13 @@ export function PinSlotZone({ top = 0 }: { top?: number }) {
           borderRadius: radius.pinned,
           borderWidth: 1.5,
           borderStyle: "dashed",
-          borderColor: theme.accent,
+          borderColor: tokens.dropMark,
           backgroundColor: theme.dropZoneFill,
           alignItems: "center",
           justifyContent: "center",
         }}
       >
-        <PinGlyph color={theme.accent} />
+        <PinGlyph color={tokens.dropMark} />
       </Animated.View>
     </>
   );
@@ -167,9 +168,8 @@ const PinnedTile = memo(function PinnedTile({ tabId, width, sliding, x, y }: { t
       <View
         ref={(v) => registerRow(windowId, tabId, v)}
         {...hoverProps}
-        onDoubleClick={() => returnShownTabToPinnedUrl(windowId, tabId)}
       >
-        <TabPressArea windowId={windowId} tab={tab}>
+        <TabPressArea windowId={windowId} tab={tab} selected={selected} onDoubleClick={(wasShown) => refreshShownTile(windowId, tabId, wasShown)}>
           {({ pressed }) => (
             <TileFace tabId={tabId} width={width} active={active} selected={selected} hovered={hovered} pressed={pressed} />
           )}

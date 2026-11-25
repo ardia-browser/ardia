@@ -1,5 +1,8 @@
-import { useCallback, useEffect, useMemo, useReducer, type Ref } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, type Ref } from "react";
 import type { Animated, View } from "react-native";
+import { appearOf, holdsDrawn } from "./shiftMarks";
+
+export { appearOf, setAppearing, setSliding } from "./shiftMarks";
 
 export type ClipSource = { clipped: () => boolean; subscribe: (changed: () => void) => () => void };
 export type EntryMotion = { shift: Animated.Value | null; clip: ClipSource };
@@ -27,7 +30,14 @@ export function useAnimatedStyle(style: object | null, own?: (view: View | null)
   return [animated, ref];
 }
 
-export function useShift(shift: Animated.Value | null, own?: (view: View | null) => void) {
-  const style = useMemo(() => (shift ? { transform: [{ translateY: shift }] } : null), [shift]);
-  return useAnimatedStyle(style, own);
+export function useShift(shift: Animated.Value | null, own?: (view: View | null) => void): [Record<string, unknown>, Ref<View>] {
+  const style = useMemo(() => {
+    if (!shift) return null;
+    const opacity = appearOf(shift);
+    return opacity ? { transform: [{ translateY: shift }], opacity } : { transform: [{ translateY: shift }] };
+  }, [shift]);
+  const [moved, ref] = useAnimatedStyle(style, own);
+  const drawn = useRef(moved);
+  if (!shift || !holdsDrawn(shift)) drawn.current = moved;
+  return [drawn.current, ref];
 }

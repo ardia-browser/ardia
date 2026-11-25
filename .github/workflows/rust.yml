@@ -1,0 +1,262 @@
+name: Rust
+
+on:
+  pull_request:
+    paths: &rust
+      - "packages/core-rs/**"
+      - "packages/plugin-broker/**"
+      - "packages/shell/plugin-host/HostPrelude.swift"
+      - "packages/sync/tests/fixtures/**"
+      - "packages/sync/ios/Core/Wordlist.swift"
+      - "packages/phone/android/src/main/java/com/ardia/sync/core/Wordlist.kt"
+      - "apps/browser/windows/Ardia/SyncWordlist.h"
+      - "engine/ardiacore-linux/src/ardia/linux/ac_linux_sync_keys.h"
+      - "engine/ardiacore-linux/src/ardia/linux/ac_linux_sync_keys.cc"
+      - "engine/ardiacore-linux/copies.tsv"
+      - "engine/ardiacore-linux/src/ardia/linux/ac_linux_self_update_policy.h"
+      - "engine/ardiacore-linux/src/ardia/linux/ac_linux_import_formats.h"
+      - "engine/ardiacore-linux/src/ardia/linux/ac_linux_import_formats.cc"
+      - "engine/ardiacore-linux/tests/fixtures/import_base.h"
+      - "scripts/linux/ardia-update"
+      - "scripts/linux/linux-update.pem"
+      - "scripts/linux/update-verify.sh"
+      - "scripts/linux/update-helper-test.sh"
+      - "scripts/linux/package.py"
+      - "scripts/linux/linux_formats.py"
+      - "scripts/linux/runtime_files.py"
+      - "scripts/linux/install.sh"
+      - "scripts/linux/sign-update.mjs"
+      - "scripts/linux/dev.ardia.linux.policy"
+      - "scripts/linux/arch/**"
+      - ".github/actions/linux-update-verify/**"
+      - "apps/desktop/src/platform/linux/updateReleases.ts"
+      - "apps/browser/src/lib/versions.ts"
+      - "packages/import/ios/Core/**"
+      - "scripts/windows/windows-update.pem"
+      - "scripts/windows/sign-update.mjs"
+      - "scripts/windows/sign-update.test.mjs"
+      - "scripts/windows/publish-alpha.sh"
+      - "scripts/security/hostile-inputs.mjs"
+      - ".github/workflows/rust.yml"
+  push:
+    branches: [main]
+    paths: *rust
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rust-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run: ${{ steps.vouch.outputs.run }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          sparse-checkout: .github
+      - id: vouch
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+        with:
+          retries: 3
+          script: |
+            const vouch = require(`${process.env.GITHUB_WORKSPACE}/.github/vouch/vouch.cjs`);
+            await vouch.gate({ github, context, core });
+
+  core:
+    name: core-rs (${{ matrix.os }})
+    needs: gate
+    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest, runner: blacksmith-6vcpu-macos-latest }
+          - { os: ubuntu-latest, runner: blacksmith-8vcpu-ubuntu-2404 }
+          - { os: windows-latest, runner: windows-latest }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    env:
+      BINDGEN_CLI_VERSION: "0.73.2"
+    defaults:
+      run:
+        shell: bash
+        working-directory: packages/core-rs
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            packages/core-rs/target
+          key: core-rs-${{ runner.os }}-${{ hashFiles('packages/core-rs/rust-toolchain.toml', 'packages/core-rs/Cargo.lock', 'packages/core-rs/tests/boringssl/Cargo.lock') }}
+          restore-keys: core-rs-${{ runner.os }}-
+      - name: Toolchain
+        run: rustup toolchain install && rustup component add llvm-tools && rustc --version && cargo --version
+      - name: Format
+        run: cargo fmt --check
+      - name: Clippy
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+      - name: Test, vectors and header drift
+        run: cargo test --locked --all-features
+      - name: Release static libraries
+        run: cargo build --locked --release -p ardia-ffi -p ardia-update-ffi -p ardia-import-ffi -p ardia-apple-ffi
+      - name: The shared and static libraries export exactly the header's functions in every build
+        if: runner.os != 'Windows'
+        run: |
+          python3 -I tests/check_exports.py
+          for build in "--all-targets -p ardia-ffi -p ardia-update-ffi -p ardia-import-ffi -p ardia-apple-ffi" "--all-targets --all-features" "--workspace --all-targets --all-features"; do
+            echo "cargo build --release $build"
+            cargo build --locked --release $build
+            python3 -I tests/check_exports.py
+          done
+          cargo build --locked --release -p ardia-ffi -p ardia-update-ffi -p ardia-import-ffi -p ardia-apple-ffi
+      - name: C and C++ smoke against the static library
+        if: runner.os != 'Windows'
+        run: |
+          extra=""
+          if [ "$RUNNER_OS" = "Linux" ]; then extra="-lpthread -ldl -lm"; fi
+          cc -std=c11 -Wall -Wextra -Werror -pedantic -I include tests/c/smoke.c target/release/libardia_core.a $extra -o "$RUNNER_TEMP/ardia-core-smoke"
+          "$RUNNER_TEMP/ardia-core-smoke"
+          c++ -std=c++17 -Wall -Wextra -Werror -pedantic -I include tests/cpp/smoke.cc target/release/libardia_core.a $extra -o "$RUNNER_TEMP/ardia-core-smoke-cpp"
+          "$RUNNER_TEMP/ardia-core-smoke-cpp"
+          cc -std=c11 -Wall -Wextra -Werror -pedantic -I include tests/c/update_smoke.c target/release/libardia_update.a $extra -o "$RUNNER_TEMP/ardia-update-smoke"
+          "$RUNNER_TEMP/ardia-update-smoke"
+          c++ -std=c++17 -Wall -Wextra -Werror -pedantic -I include tests/cpp/update_smoke.cc target/release/libardia_update.a $extra -o "$RUNNER_TEMP/ardia-update-smoke-cpp"
+          "$RUNNER_TEMP/ardia-update-smoke-cpp"
+          cc -std=c11 -Wall -Wextra -Werror -pedantic -I include tests/c/import_smoke.c target/release/libardia_import.a $extra -o "$RUNNER_TEMP/ardia-import-smoke"
+          "$RUNNER_TEMP/ardia-import-smoke"
+          c++ -std=c++17 -Wall -Wextra -Werror -pedantic -I include tests/cpp/import_smoke.cc target/release/libardia_import.a $extra -o "$RUNNER_TEMP/ardia-import-smoke-cpp"
+          "$RUNNER_TEMP/ardia-import-smoke-cpp"
+          sanitize="-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=all -g"
+          cc -std=c11 -Wall -Wextra -Werror -pedantic $sanitize -I include tests/c/import_smoke.c target/release/libardia_import.a $extra -o "$RUNNER_TEMP/ardia-import-smoke-asan"
+          "$RUNNER_TEMP/ardia-import-smoke-asan"
+          c++ -std=c++17 -Wall -Wextra -Werror -pedantic $sanitize -I include tests/cpp/import_smoke.cc target/release/libardia_import.a $extra -o "$RUNNER_TEMP/ardia-import-smoke-cpp-asan"
+          "$RUNNER_TEMP/ardia-import-smoke-cpp-asan"
+          cc -std=c11 -Wall -Wextra -Werror -pedantic -I include tests/c/smoke.c target/release/libardia_apple.a $extra -o "$RUNNER_TEMP/ardia-apple-smoke"
+          "$RUNNER_TEMP/ardia-apple-smoke"
+          cc -std=c11 -Wall -Wextra -Werror -pedantic -I include tests/c/import_smoke.c target/release/libardia_apple.a $extra -o "$RUNNER_TEMP/ardia-apple-import-smoke"
+          "$RUNNER_TEMP/ardia-apple-import-smoke"
+      - name: Linux's sync keys, linked to the core, against the shared vectors
+        if: runner.os == 'Linux'
+        env:
+          ARDIA_REQUIRE_LINUX_CROSSCHECK: "1"
+        run: python3 -I tests/linux-sync/test_linux_sync.py -v
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        if: runner.os == 'Linux'
+        with:
+          path: ~/.cache/ardia-bindgen-cli-${{ env.BINDGEN_CLI_VERSION }}
+          key: bindgen-cli-${{ env.BINDGEN_CLI_VERSION }}-${{ runner.os }}-${{ runner.arch }}
+      - name: The crypto known answers and the update vectors through the BoringSSL backend
+        if: runner.os == 'Linux'
+        run: |
+          command -v cmake >/dev/null && command -v ninja >/dev/null && command -v clang++ >/dev/null && dpkg -s libclang-dev >/dev/null 2>&1 \
+            || (sudo apt-get update && sudo apt-get install -y --no-install-recommends cmake ninja-build clang libclang-dev)
+          bindgen_root="$HOME/.cache/ardia-bindgen-cli-$BINDGEN_CLI_VERSION"
+          if [ "$("$bindgen_root/bin/bindgen" --version 2>/dev/null)" != "bindgen $BINDGEN_CLI_VERSION" ]; then
+            (cd "$RUNNER_TEMP" && cargo install --locked --force bindgen-cli --version "=$BINDGEN_CLI_VERSION" --root "$bindgen_root")
+          fi
+          PATH="$bindgen_root/bin:$PATH" tests/boringssl/check.sh
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        if: runner.os == 'Linux'
+        with:
+          node-version: 24
+      - name: Linux updater, engine policy, OpenSSL and TypeScript against the shared update vectors
+        if: runner.os == 'Linux'
+        env:
+          ARDIA_REQUIRE_LINUX_CROSSCHECK: "1"
+        run: python3 -I tests/linux-update/test_linux_update.py -v
+      - name: Windows updater verifier and signing script against the shared update vectors and hostile inputs
+        if: runner.os == 'Linux'
+        env:
+          ARDIA_REQUIRE_WINDOWS_CROSSCHECK: "1"
+        run: python3 -I tests/windows-update/test_windows_update.py -v && node --test ../../scripts/windows/sign-update.test.mjs tests/windows-update/publish-alpha.test.mjs
+      - name: Rust through the C ABI and the Linux C++ Netscape HTML parsers against the shared vectors and hostile inputs
+        if: runner.os == 'Linux'
+        env:
+          ARDIA_REQUIRE_IMPORT_CROSSCHECK: "rust,linux"
+        run: python3 -I tests/import-netscape/test_import_netscape.py -v
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        if: runner.os == 'macOS'
+        with:
+          node-version: 24
+      - name: Rust through the C ABI and Swift Chromium bookmark parsers against the shared import vectors and hostile inputs
+        if: runner.os == 'macOS'
+        env:
+          ARDIA_REQUIRE_IMPORT_CROSSCHECK: "rust,swift"
+        run: python3 -I tests/import-bookmarks/test_import_bookmarks.py -v
+      - name: Rust through the C ABI, Swift and Linux C++ Netscape HTML parsers against the shared vectors and hostile inputs
+        if: runner.os == 'macOS'
+        env:
+          ARDIA_REQUIRE_IMPORT_CROSSCHECK: "rust,swift,linux"
+        run: python3 -I tests/import-netscape/test_import_netscape.py -v
+
+  linux-update-helper:
+    name: Linux update helper and ardia-update-verify in Debian, Ubuntu and Arch
+    needs: gate
+    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24
+      - uses: ./.github/actions/linux-update-verify
+      - name: Packaging tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends dpkg-dev binutils xz-utils openssl
+      - name: Install, upgrade and refuse in fresh containers
+        run: scripts/linux/update-helper-test.sh
+
+  plugin-broker:
+    needs: gate
+    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+        working-directory: packages/plugin-broker
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            packages/plugin-broker/target
+          key: plugin-broker-${{ runner.os }}-${{ hashFiles('packages/core-rs/rust-toolchain.toml', 'packages/plugin-broker/Cargo.lock') }}
+          restore-keys: plugin-broker-${{ runner.os }}-
+      - name: Toolchain
+        run: rustup toolchain install 1.100.0 --profile minimal && rustup override set 1.100.0
+      - name: Build
+        run: cargo build --locked --all-targets
+      - name: Test
+        run: cargo test --locked --workspace --lib --bins
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24
+      - name: esbuild for the sdk-bench fixture, at the version packages/shaders pins
+        run: npm install --no-save --no-package-lock --prefix . "esbuild@$(node -p 'require("../shaders/package.json").devDependencies.esbuild')"
+      - name: Plugin host sandbox order and end to end
+        run: cargo test --locked -p ardia-plugin-host --test confine_order --test e2e

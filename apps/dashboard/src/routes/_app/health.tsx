@@ -296,7 +296,7 @@ function ProtectedVideo({ p }: { p: ProtectedVideoData }) {
         <Stat source="app" label="Refusals" value={formatExact(t?.refusals ?? 0)} sub={`${formatExact((t?.licence ?? 0) + (t?.keystatus ?? 0))} at licence or key status`} />
         <Stat source="app" label="Keys refused" value={formatExact(t?.createKeys ?? 0)} sub="createMediaKeys refused" />
         <Stat source="app" label="Left in Chromium" value={formatExact(t?.webKitSites ?? 0)} sub={`on sites set to WebKit; ${formatExact(t?.listedSites ?? 0)} on the streaming list`} />
-        <Stat source="app" label="WebKit full screen" value={formatExact(t?.webKitFullscreens ?? 0)} sub={`${formatExact(t?.fullscreenFramesKept ?? 0)} kept the page filling the screen`} />
+        <Stat source="app" label="WebKit full screen" value={formatExact(t?.webKitFullscreens ?? 0)} sub={`${formatExact(t?.fullscreenFramesKept ?? 0)} left the page's size to WebKit`} />
       </div>
       <DataTable
         dense

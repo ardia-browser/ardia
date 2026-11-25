@@ -44,7 +44,14 @@ extension WebKitTab: PageTab {
 
   func fillWithPage() {
     guard let webView, webView.frame != bounds else { return }
+    guard webView.superview === self else { return noteFullScreenFrameKept() }
     webView.frame = bounds
+  }
+
+  private func noteFullScreenFrameKept() {
+    guard pageMedia.fullscreen, !pageMedia.fullscreenFrameKept else { return }
+    pageMedia.fullscreenFrameKept = true
+    ArdiaEvents.emit("webKit.counted", data: ArdiaConsentStamp.begin().onto(["name": "fullscreenFrameKept"]))
   }
 
   func followInterfaceScale() {

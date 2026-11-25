@@ -8,7 +8,7 @@ import { ALL, useKeyed } from "../browser/keyedWatch";
 import { commandTitle, shortcutSources, UNAVAILABLE_COMMANDS } from "./commandCatalog";
 import type { BrowserCommand } from "../../platform/commands";
 import { ALTERNATE_MODIFIER } from "./keyNotation";
-import { formatShortcut, resolveShortcuts, type ResolvedShortcuts, type Shortcut, type ShortcutOverrides, type ShortcutSource } from "./shortcuts";
+import { comboKey, formatShortcut, resolveShortcuts, type ResolvedShortcuts, type Shortcut, type ShortcutOverrides, type ShortcutSource } from "./shortcuts";
 import { noteSettingsPick } from "../telemetry/settingsPickerCounts";
 import { ctrlTabChoiceOf, ctrlTabCombos, ctrlTabCustomTarget, ctrlTabOverrides, type CtrlTabChoice, type CtrlTabPreset } from "./ctrlTabKeys";
 
@@ -22,12 +22,22 @@ type MenuBar = { listed: ReadonlySet<string>; fixed: readonly ShortcutSource[] }
 const useMenuBar = create<{ bar: MenuBar | undefined; revision: number }>()(() => ({ bar: undefined, revision: 0 }));
 let resolvedFor: { overrides: ShortcutOverrides; mouse: ShortcutOverrides | undefined; profiles: readonly string[]; menuBar: MenuBar | undefined; resolved: ResolvedShortcuts } | undefined;
 
+function sameMenuBar(a: MenuBar | undefined, b: MenuBar): boolean {
+  if (!a || a.listed.size !== b.listed.size || a.fixed.length !== b.fixed.length) return false;
+  for (const id of b.listed) if (!a.listed.has(id)) return false;
+  return b.fixed.every((source, i) => {
+    const prev = a.fixed[i];
+    return prev?.id === source.id && prev.keys.length === source.keys.length && prev.keys.every((k, j) => comboKey(k) === comboKey(source.keys[j]!));
+  });
+}
+
 export function setMenuBarShortcuts(offered: readonly MenuShortcut[]) {
   const items = offered.filter((item) => !UNAVAILABLE_COMMANDS.has(item.id));
   const fixed = items.flatMap((item): ShortcutSource[] =>
     item.remappable ? [] : [{ id: item.id, fixed: true, keys: [{ key: item.key, modifiers: item.modifiers }] }],
   );
   const bar = { listed: new Set(items.map((item) => item.id)), fixed };
+  if (sameMenuBar(useMenuBar.getState().bar, bar)) return;
   useMenuBar.setState((m) => ({ bar, revision: m.revision + 1 }));
 }
 

@@ -22,7 +22,7 @@ import { noteIncomingLinksRefused } from "../telemetry/externalAppCounts";
 import { startUnclaimedEscape } from "../windows/unclaimedEscape";
 import { SMALL_LIGHTS_CENTER } from "../windows/small";
 import { runCommand } from "../commands/commands";
-import { setMenuBarShortcuts } from "../commands/commandShortcuts";
+import { syncShortcutItems } from "../settings/paneData";
 import { finishAnimatedCloses } from "../windows/closeAnimated";
 import { followHandedBack, startKeyboardFollows } from "../focus/keyboardFollows";
 import { cancelAbandonedFocusMoves, settlingCommandFocus } from "../focus/focusHandoff";
@@ -148,11 +148,11 @@ export function startNativeSync() {
     lastMenu = json;
     lastBookmarkMenus = bookmarkMenus;
     const sent = setMenuStateParts(state, bookmarksChanged);
-    const menuItems = JSON.stringify([state.profiles.map((p) => p.id), (state.extensions ?? []).map((e) => e.id)]);
+    const menuItems = JSON.stringify([state.profiles.map((p) => [p.id, p.title]), (state.extensions ?? []).map((e) => [e.id, e.title])]);
     if (menuItems === lastMenuItems) return void sent;
     lastMenuItems = menuItems;
     void sent.then(menuShortcuts).then((items) => {
-      setMenuBarShortcuts(items);
+      syncShortcutItems(items);
       menuTimer ??= setTimeout(syncMenu, 120);
     }, () => {});
   };

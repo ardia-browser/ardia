@@ -4,7 +4,7 @@ import { ScrollView, StyleSheet, View } from "react-native";
 import { useProfile } from "../../state/browser/hooks";
 import { usePluginTitle } from "../../state/plugins/hooks";
 import { trackSettingsSection } from "../../state/telemetry/track";
-import { preparePane, usePaneLoaded } from "../../state/settings/paneData";
+import { preparePane, refreshShortcutsInBackground, usePaneLoaded } from "../../state/settings/paneData";
 import { dropReveal, revealTargetShown, revealWanted, runReveal, settingsSearchHost, useSettingsSearch } from "../../state/settings/searchState";
 import { anchorView } from "./anchors";
 import { findSetting, resolveSettingId, PANES, paneTitle } from "./settingsIndex";
@@ -78,6 +78,7 @@ function usePrefetchAllPanes(shown: SettingsPane | null) {
     const frame = requestAnimationFrame(() => {
       timer = setTimeout(() => {
         for (const p of PANES) if (p.id !== shown) void preparePane(p.id, null);
+        void refreshShortcutsInBackground();
       }, PREFETCH_DELAY_MS);
     });
     return () => {

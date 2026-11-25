@@ -314,7 +314,7 @@ enum MainMenu {
     ])
     let helpMenu = top("Help", helpItems())
     MenuCatalog.capture(
-      main, dynamic: [services, shareMenu, moveToProfile, moveToWindow, profiles, littleArdiaInProfile, history, extensions],
+      main, dynamic: [services, shareMenu, moveToSpace, moveToWindow, spaces, littleArdiaInSpace, history, extensions],
       growing: [bookmarks, windowMenu])
     NSApp.windowsMenu = windowMenu
     NSApp.helpMenu = helpMenu

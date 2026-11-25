@@ -8,7 +8,7 @@ import { SIDEBAR_ROW } from "../../lib/sidebarMetrics";
 import { WINDOW_CHROME } from "../../lib/windowChrome";
 import { arcSelectedFill, colorRoles, HIGH_CONTRAST_INK, ink, INCOGNITO_TINT, withAlpha, PROFILE_COLORS, radius, type ColorRoles, type ProfileColorSpec, type ShadowLevel } from "./tokens";
 import type { BasePalette } from "../../lib/themeFile";
-import { visibleLine, visibleSelection } from "../../lib/selectionContrast";
+import { selectionLightnessDelta, visibleLine, visibleSelection } from "../../lib/selectionContrast";
 
 export { PROFILE_COLORS } from "./tokens";
 
@@ -67,8 +67,15 @@ export function inkOn(rows: readonly string[], dark: boolean): string {
   return worst(own) >= MIN_INK_CONTRAST || worst(other) <= worst(own) ? own : other;
 }
 
-function arcSelectionRoles(base: ColorRoles, windowTint: readonly string[], adaptiveInk: boolean): Pick<Theme, "tabSelected" | "pinnedSelectedFill" | "rowSelectedText" | "tabSelectedText"> {
-  const tabSelected = base.dark ? arcSelectedFill.dark : visibleSelection(arcSelectedFill.light, ink.black, windowTint);
+export const DIA_FILL_MIN_LIGHTNESS = 0.04;
+
+function darkSelectedFill(base: ColorRoles, windowTint: readonly string[]): string {
+  const keepsWhiteInk = inkOn(windowTint, true) === ink.white;
+  return keepsWhiteInk && selectionLightnessDelta(base.tabSelected, windowTint) >= DIA_FILL_MIN_LIGHTNESS ? base.tabSelected : arcSelectedFill.dark;
+}
+
+function customSelectionRoles(base: ColorRoles, windowTint: readonly string[], adaptiveInk: boolean): Pick<Theme, "tabSelected" | "pinnedSelectedFill" | "rowSelectedText" | "tabSelectedText"> {
+  const tabSelected = base.dark ? darkSelectedFill(base, windowTint) : visibleSelection(arcSelectedFill.light, ink.black, windowTint);
   const inkOver = (fill: string) => (adaptiveInk ? inkOn(windowTint.map((tint) => over(fill, tint)), base.dark) : base.tabSelectedText);
   return {
     tabSelected,
@@ -180,7 +187,7 @@ function customTheme(custom: ProfileTheme, color: ProfileColor, appDark: boolean
     const windowTint = opaqueThemeTint(look, dark);
     theme = {
       ...preset,
-      ...arcSelectionRoles(dark ? preset.palettes.dark : preset.palettes.light, windowTint, adaptiveInk),
+      ...customSelectionRoles(dark ? preset.palettes.dark : preset.palettes.light, windowTint, adaptiveInk),
       pinnedDivider: visibleLine(preset.divider, inkOn(windowTint, dark), windowTint),
       adaptiveInk,
       profileColor: nearestPreset(accent),

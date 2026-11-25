@@ -4,7 +4,7 @@ await import("../../test-native/index.ts");
 const { themeFor, profileTheme, tintTheme, PROFILE_COLORS } = await import("../ui/theme.ts");
 const { profileSurfaces, contrastRatio, toneStep, MIN_PANE_TEXT_CONTRAST } = await import("./profileSurfaces.ts");
 const { startingTheme, oklab } = await import("../../lib/profileLook.ts");
-const { colorDistance, parseColor } = await import("../../lib/color.ts");
+const { colorDistance, luminance, parseColor } = await import("../../lib/color.ts");
 
 const lab = (color) => {
   const [r, g, b] = parseColor(color);
@@ -65,11 +65,12 @@ test("split panes stand apart from their row and from the shown pane, and the sh
   }
 });
 
-test("a pane on a light custom backdrop steps away from white titles instead of washing them out", () => {
+test("a mid-tone custom backdrop's selected row is the presets' dark tab, and its panes keep white titles readable", () => {
   const theme = tintTheme(profileTheme({ color: "green", theme: startingTheme("#2E8C9A") }, true));
   const s = profileSurfaces(theme);
-  const row = contrastRatio(theme.textTab, s.selectedRow);
-  assert.ok(contrastRatio(theme.textTab, s.activePanes.rest) >= row, `${s.activePanes.rest} on ${s.selectedRow}: ${row}`);
+  assert.ok(luminance(s.selectedRow) < luminance(s.sidebar), `${s.selectedRow} on ${s.sidebar}`);
+  assert.ok(contrastRatio(theme.textTab, s.selectedRow) >= MIN_PANE_TEXT_CONTRAST, s.selectedRow);
+  assert.ok(contrastRatio(theme.textTab, s.activePanes.rest) >= MIN_PANE_TEXT_CONTRAST, s.activePanes.rest);
 });
 
 test("a tone near white keeps its hue instead of clipping to another one", () => {

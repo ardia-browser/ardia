@@ -175,7 +175,7 @@ enum CrashReports {
     ] {
       if let value = value as? String { report[key] = value }
     }
-    if let launched = reportTime(body["procLaunch"]), let captured = reportTime(body["captureTime"]), captured >= launched {
+    if let launched = reportTime(body["procLaunch"]), let captured = reportTime(body["captureTime"]), captured.timeIntervalSince(launched) >= 0 {
       report["uptimeSeconds"] = Int(captured.timeIntervalSince(launched).rounded())
     }
     if let writable = writableMegabytes(body["vmSummary"] as? String) { report["vmWritableMB"] = writable }

@@ -1,6 +1,7 @@
 import { TurboModuleRegistry } from "react-native";
 import type { WindowsHostModule } from "./nativeModuleTypes";
 import { installAnimation } from "./animation";
+import { markHoles } from "./engine/holeMarks";
 import { watchRelaunches } from "./engine/relaunch";
 import { openLaunchLinks } from "./launchLinks";
 import { runSelfCheck } from "./selfCheck";
@@ -10,6 +11,7 @@ import { startUpdateChecks } from "./updater";
 import { viewNamed } from "./views/registry";
 import { installWindowRoot } from "./windowRoot";
 import type { ComponentType } from "react";
+import type { AppNative } from "@ardia/shell";
 
 export type { EventSubscription } from "./events";
 export { emitNativeEvent } from "./events";
@@ -23,6 +25,7 @@ export function requireNativeViewManager<Props = object>(name: string): Componen
 const SELF_CHECK_AFTER_MS = 4000;
 
 installAnimation();
+markHoles(requireNativeModule<Pick<AppNative, "launchConfig">>("ArdiaApp").launchConfig().test.holeMarks === "1");
 installWindowRoot();
 installTextFocusReport();
 watchRelaunches();

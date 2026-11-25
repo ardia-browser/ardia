@@ -1,19 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
-usage='usage: scripts/linux/arch/update-pkgbuild.sh <version> (--sha256 HEX | --package TARBALL) [--out DIR]
+usage='usage: scripts/linux/arch/update-pkgbuild.sh <version> (--sha256 HEX | --package TARBALL) [--arm64-sha256 HEX | --arm64-package TARBALL] [--out DIR]
        scripts/linux/arch/update-pkgbuild.sh --check
 
-Points the ardia-bin PKGBUILD at the release tarball of Ardia <version>
-(Ardia-<version>-linux-x64.tar.xz on the v<version> GitHub release): it sets
-pkgver (a nightly'"'"'s -nightly.<n> becomes nightly.<n>, which pacman
-sorts before its stable), resets pkgrel to 1, pins sha256sums to HEX
-or to the digest of TARBALL, and writes the matching .SRCINFO, as
-makepkg --printsrcinfo would, without needing makepkg.
+Points the ardia-bin PKGBUILD at the release tarball(s) of Ardia <version>
+(Ardia-<version>-linux-x64.tar.xz, and optionally Ardia-<version>-linux-arm64.tar.xz
+on the v<version> GitHub release): it sets pkgver (a nightly'"'"'s -nightly.<n>
+becomes nightly.<n>, which pacman sorts before its stable), resets pkgrel to 1,
+pins sha256sums to HEX or to the digest of TARBALL, and writes the matching
+.SRCINFO, as makepkg --printsrcinfo would, without needing makepkg.
 
-  --out DIR   write PKGBUILD and .SRCINFO to DIR (the AUR checkout) instead of
-              updating scripts/linux/arch in place
-  --check     exit 1 if scripts/linux/arch/.SRCINFO doesn'"'"'t match its PKGBUILD
-  -h, --help  show this help'
+  --arm64-sha256 HEX    also enable aarch64 with this Ardia-<version>-linux-arm64.tar.xz digest
+  --arm64-package FILE  also enable aarch64 from this Ardia-<version>-linux-arm64.tar.xz tarball
+  --out DIR             write PKGBUILD and .SRCINFO to DIR (the AUR checkout) instead of
+                        updating scripts/linux/arch in place
+  --check               exit 1 if scripts/linux/arch/.SRCINFO doesn'"'"'t match its PKGBUILD
+  -h, --help            show this help'
 
 die() { echo "update-pkgbuild.sh: $*" >&2; exit 1; }
 
@@ -34,12 +36,24 @@ srcinfo() (
       printf '\t%s = %s\n' "$attr" "$value"
     done
   done
+  for a in "${arch[@]}"; do
+    for attr in source sha256sums; do
+      var="${attr}_${a}"
+      declare -p "$var" >/dev/null 2>&1 || continue
+      eval "values=(\"\${${var}[@]}\")"
+      for value in "${values[@]}"; do
+        printf '\t%s = %s\n' "$var" "$value"
+      done
+    done
+  done
   printf '\npkgname = %s\n' "$pkgname"
 )
 
 version=""
 sha256=""
 tarball=""
+arm64_sha256=""
+arm64_tarball=""
 out=""
 check=0
 while [ $# -gt 0 ]; do
@@ -47,6 +61,8 @@ while [ $# -gt 0 ]; do
     -h|--help) echo "$usage"; exit 0 ;;
     --sha256) [ $# -ge 2 ] || die "--sha256 needs a digest"; sha256=$2; shift 2 ;;
     --package) [ $# -ge 2 ] || die "--package needs a tarball"; tarball=$2; shift 2 ;;
+    --arm64-sha256) [ $# -ge 2 ] || die "--arm64-sha256 needs a digest"; arm64_sha256=$2; shift 2 ;;
+    --arm64-package) [ $# -ge 2 ] || die "--arm64-package needs a tarball"; arm64_tarball=$2; shift 2 ;;
     --out) [ $# -ge 2 ] || die "--out needs a directory"; out=$2; shift 2 ;;
     --check) check=1; shift ;;
     -*) echo "$usage" >&2; exit 64 ;;
@@ -55,7 +71,7 @@ while [ $# -gt 0 ]; do
 done
 
 if [ "$check" = 1 ]; then
-  [ -z "$version$sha256$tarball$out" ] || { echo "$usage" >&2; exit 64; }
+  [ -z "$version$sha256$tarball$arm64_sha256$arm64_tarball$out" ] || { echo "$usage" >&2; exit 64; }
   if ! diff -u "$here/.SRCINFO" <(srcinfo "$here/PKGBUILD"); then
     die "scripts/linux/arch/.SRCINFO doesn't match its PKGBUILD (above): run update-pkgbuild.sh <version> --sha256 <digest>"
   fi
@@ -72,16 +88,37 @@ if [ -n "$tarball" ]; then
   sha256=$(sha256sum "$tarball" | cut -d' ' -f1)
 fi
 [[ "$sha256" =~ ^[0-9a-f]{64}$ ]] || die "pass the tarball's sha256 (64 lowercase hex digits) with --sha256, or --package"
+if [ -n "$arm64_tarball" ]; then
+  [ -z "$arm64_sha256" ] || die "pass --arm64-sha256 or --arm64-package, not both"
+  [ -f "$arm64_tarball" ] || die "no tarball at $arm64_tarball"
+  [ "${arm64_tarball##*/}" = "Ardia-$version-linux-arm64.tar.xz" ] || die "${arm64_tarball##*/} isn't Ardia-$version-linux-arm64.tar.xz"
+  arm64_sha256=$(sha256sum "$arm64_tarball" | cut -d' ' -f1)
+fi
+if [ -n "$arm64_sha256" ]; then
+  [[ "$arm64_sha256" =~ ^[0-9a-f]{64}$ ]] || die "pass the arm64 tarball's sha256 (64 lowercase hex digits) with --arm64-sha256, or --arm64-package"
+fi
 
 out=${out:-$here}
 mkdir -p "$out"
 pkgbuild=$(mktemp)
 trap 'rm -f "$pkgbuild"' EXIT
-sed -e "s/^pkgver=.*/pkgver=${version/-nightly/nightly}/" -e 's/^pkgrel=.*/pkgrel=1/' \
-  -e "s/^sha256sums=.*/sha256sums=('$sha256')/" "$here/PKGBUILD" > "$pkgbuild"
-grep -qx "pkgver=${version/-nightly/nightly}" "$pkgbuild" && grep -qx "sha256sums=('$sha256')" "$pkgbuild" \
-  || die "the PKGBUILD lost its one-line pkgver= or sha256sums= assignment"
+if [ -n "$arm64_sha256" ]; then
+  sed -e "s/^pkgver=.*/pkgver=${version/-nightly/nightly}/" \
+    -e 's/^pkgrel=.*/pkgrel=1/' \
+    -e "s/^arch=.*/arch=('x86_64' 'aarch64')/" \
+    -e 's/^source=("\$pkgname-\$pkgver\.tar\.xz::\(.*\)-linux-x64\.tar\.xz")/source_x86_64=("$pkgname-$pkgver-x64.tar.xz::\1-linux-x64.tar.xz")\nsource_aarch64=("$pkgname-$pkgver-arm64.tar.xz::\1-linux-arm64.tar.xz")/' \
+    -e "s/^sha256sums=.*/sha256sums_x86_64=('$sha256')\nsha256sums_aarch64=('$arm64_sha256')/" "$here/PKGBUILD" > "$pkgbuild"
+  grep -qx "pkgver=${version/-nightly/nightly}" "$pkgbuild" \
+    && grep -qx "sha256sums_x86_64=('$sha256')" "$pkgbuild" \
+    && grep -qx "sha256sums_aarch64=('$arm64_sha256')" "$pkgbuild" \
+    || die "the PKGBUILD lost its one-line pkgver= or sha256sums= assignment"
+else
+  sed -e "s/^pkgver=.*/pkgver=${version/-nightly/nightly}/" -e 's/^pkgrel=.*/pkgrel=1/' \
+    -e "s/^sha256sums=.*/sha256sums=('$sha256')/" "$here/PKGBUILD" > "$pkgbuild"
+  grep -qx "pkgver=${version/-nightly/nightly}" "$pkgbuild" && grep -qx "sha256sums=('$sha256')" "$pkgbuild" \
+    || die "the PKGBUILD lost its one-line pkgver= or sha256sums= assignment"
+fi
 srcinfo "$pkgbuild" > "$out/.SRCINFO"
 cp "$pkgbuild" "$out/PKGBUILD"
 chmod 0644 "$out/PKGBUILD" "$out/.SRCINFO"
-echo "$out/PKGBUILD: ardia-bin ${version/-nightly/nightly}-1, sha256 $sha256"
+echo "$out/PKGBUILD: ardia-bin ${version/-nightly/nightly}-1, sha256 $sha256${arm64_sha256:+, arm64 $arm64_sha256}"

@@ -13,7 +13,7 @@ import { connectCdp, evaluate } from "../../apps/desktop/scripts/acceptance/lib/
 import { errorText, js, nonce, until, withDeadline } from "../../apps/desktop/scripts/acceptance/lib/util.mjs";
 import { selfieKeys } from "./ubo-seed.mjs";
 
-export const USAGE = `Usage: node scripts/linux/smoke.mjs --package <Ardia-*linux-x64*.tar.xz|.deb|.rpm|.AppImage> --results <dir> [--timeout-ms N] [--keep] [--allow-old-engine]
+export const USAGE = `Usage: node scripts/linux/smoke.mjs --package <Ardia-*linux-<cpu>*.tar.xz|.deb|.rpm|.AppImage> --results <dir> [--cpu x64|arm64] [--timeout-ms N] [--keep] [--allow-old-engine]
 
 Strict smoke gate for a packaged Ardia Linux build. It extracts the tarball into
 a temporary folder, launches ardia/bin/ardia headless (ozone headless, SwiftShader,
@@ -127,7 +127,10 @@ export function userScriptSource() {
 }
 export const CLI_INSTALLER = "ardia-cli-install.sh";
 const CLI_DIGEST = "ardia-cli.sha256";
-export const cliTarball = (version) => `ardia-cli-${version}-linux-x64.tar.gz`;
+const DEB_ARCH = { x64: "amd64", arm64: "arm64" };
+const RPM_ARCH = { x64: "x86_64", arm64: "aarch64" };
+export const packageCpu = (path) => (/-linux-arm64(?:[.-]|$)/.test(basename(path ?? "")) ? "arm64" : "x64");
+export const cliTarball = (version, cpu = "x64") => `ardia-cli-${version}-linux-${cpu}.tar.gz`;
 const CLI_VERSION_LINE = /^ardia [0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$/;
 const BRIDGE_DIR = new URL("../../engine/ardiacore-linux/content-blocker/", import.meta.url);
 const DEFAULT_TIMEOUT_MS = 300000;
@@ -140,7 +143,7 @@ export function packageFormat(path) {
   return null;
 }
 
-export function debLayoutProblems(listing, fields) {
+export function debLayoutProblems(listing, fields, cpu = "x64") {
   const problems = [];
   const entries = new Map(listing.split("\n").filter(Boolean).map((line) => {
     const parts = line.split(/\s+/);
@@ -160,12 +163,13 @@ export function debLayoutProblems(listing, fields) {
   expect("./usr/share/ardia/apparmor/ardia", (e) => e.mode === "-rw-r--r--", "is not 0644");
   for (const name of DESKTOP_ENTRIES) expect(`./usr/share/applications/${name}`, (e) => e.mode === "-rw-r--r--", "is not 0644");
   if (entries.has("./usr/lib/ardia/chrome-sandbox")) expect("./usr/lib/ardia/chrome-sandbox", (e) => e.mode === "-rwsr-xr-x", "is not setuid root 4755");
+  const expectedArch = DEB_ARCH[cpu] ?? "amd64";
   if (fields.Package !== "ardia") problems.push(`the package is called ${fields.Package}, not ardia`);
-  if (fields.Architecture !== "amd64") problems.push(`the architecture is ${fields.Architecture}, not amd64`);
+  if (fields.Architecture !== expectedArch) problems.push(`the architecture is ${fields.Architecture}, not ${expectedArch}`);
   return problems;
 }
 
-export function rpmLayoutProblems(listing, fields) {
+export function rpmLayoutProblems(listing, fields, cpu = "x64") {
   const problems = [];
   const entries = new Map(listing.split("\n").filter(Boolean).map((line) => {
     const parts = line.trim().split(/\s+/);
@@ -186,8 +190,9 @@ export function rpmLayoutProblems(listing, fields) {
   expect("/usr/share/ardia/apparmor/ardia", (e) => e.mode === "-rw-r--r--", "is not 0644");
   for (const name of DESKTOP_ENTRIES) expect(`/usr/share/applications/${name}`, (e) => e.mode === "-rw-r--r--", "is not 0644");
   expect("/usr/share/licenses/ardia/copyright", (e) => e.mode === "-rw-r--r--", "is not 0644");
+  const expectedArch = RPM_ARCH[cpu] ?? "x86_64";
   if (fields.name !== "ardia") problems.push(`the package is called ${fields.name}, not ardia`);
-  if (fields.arch !== "x86_64") problems.push(`the architecture is ${fields.arch}, not x86_64`);
+  if (fields.arch !== expectedArch) problems.push(`the architecture is ${fields.arch}, not ${expectedArch}`);
   if (!/\/etc\/apparmor\.d\/ardia/.test(fields.scripts ?? "")) problems.push("the scriptlets never install the AppArmor profile");
   const bundled = new Set(fields.bundled ?? []);
   for (const requirement of (fields.requires ?? "").split("\n").map((line) => line.trim()).filter(Boolean)) {
@@ -209,7 +214,11 @@ export function parseArgs(argv) {
     if (arg === "-h" || arg === "--help") options.help = true;
     else if (arg === "--package") options.package = value();
     else if (arg === "--results") options.results = value();
-    else if (arg === "--timeout-ms") {
+    else if (arg === "--cpu") {
+      const cpu = value();
+      if (cpu !== "x64" && cpu !== "arm64") throw new Error(`--cpu must be x64 or arm64, not ${cpu}`);
+      options.cpu = cpu;
+    } else if (arg === "--timeout-ms") {
       const raw = value();
       const parsed = Number(raw);
       if (!Number.isInteger(parsed) || parsed <= 0) throw new Error(`--timeout-ms must be a positive integer, not ${raw}`);
@@ -323,10 +332,10 @@ export function modeProblems(entries) {
   return problems;
 }
 
-export function packageStagedFiles({ version = null, cli = false } = {}) {
+export function packageStagedFiles({ version = null, cli = false, cpu = "x64" } = {}) {
   const files = [];
   if (version) files.push({ path: "usr/lib/ardia/VERSION", mode: 0o644 });
-  if (cli && version) files.push({ path: `usr/lib/ardia/cli/${CLI_INSTALLER}`, mode: 0o755 }, { path: `usr/lib/ardia/cli/${cliTarball(version)}`, mode: 0o644 }, { path: `usr/lib/ardia/cli/${CLI_DIGEST}`, mode: 0o644 });
+  if (cli && version) files.push({ path: `usr/lib/ardia/cli/${CLI_INSTALLER}`, mode: 0o755 }, { path: `usr/lib/ardia/cli/${cliTarball(version, cpu)}`, mode: 0o644 }, { path: `usr/lib/ardia/cli/${CLI_DIGEST}`, mode: 0o644 });
   return files;
 }
 
@@ -599,6 +608,7 @@ class Smoke {
     this.assertions = [];
     this.started = new Date().toISOString();
     this.packagePath = resolve(options.package);
+    this.cpu = options.cpu ?? packageCpu(this.packagePath);
     this.results = resolve(options.results);
     this.apps = [];
   }
@@ -842,14 +852,14 @@ class Smoke {
     await writeFile(join(this.results, "install.log"), `${result.stdout}${result.stderr}`);
     if (result.code !== 0) throw new Error(`install.sh --destdir exited ${result.code}: ${result.stderr.slice(-400)}`);
     const entries = [];
-    for (const { path, mode } of [...STAGED_FILES, ...packageStagedFiles({ version: this.version, cli: this.hasCli })]) entries.push({ path, expected: mode, actual: await fileInfo(join(stage, path)) });
+    for (const { path, mode } of [...STAGED_FILES, ...packageStagedFiles({ version: this.version, cli: this.hasCli, cpu: this.cpu })]) entries.push({ path, expected: mode, actual: await fileInfo(join(stage, path)) });
     const problems = modeProblems(entries);
     if (this.version) {
       const staged = (await readFile(join(stage, "usr/lib/ardia/VERSION"), "utf8").catch(() => "")).trim();
       if (staged !== this.version) problems.push(`the staged lib/ardia/VERSION reads ${JSON.stringify(staged)}, not ${this.version}`);
     }
     if (this.hasCli && this.version) {
-      const name = cliTarball(this.version);
+      const name = cliTarball(this.version, this.cpu);
       const [staged, packaged] = await Promise.all([readFile(join(stage, "usr/lib/ardia/cli", name)).catch(() => null), readFile(join(this.cliDir, name)).catch(() => null)]);
       if (!staged || !packaged || !staged.equals(packaged)) problems.push(`the staged ${name} differs from the package's`);
     }
@@ -876,7 +886,7 @@ class Smoke {
     if (listing.code !== 0) throw new Error(`dpkg-deb -c exited ${listing.code}: ${listing.stderr.slice(-400)}`);
     const control = await run("dpkg-deb", ["-f", this.packagePath], { timeout: 60000 });
     const fields = Object.fromEntries(control.stdout.split("\n").map((line) => /^([A-Za-z-]+): (.*)$/.exec(line)).filter(Boolean).map((m) => [m[1], m[2]]));
-    const problems = debLayoutProblems(listing.stdout, fields);
+    const problems = debLayoutProblems(listing.stdout, fields, this.cpu);
     if (this.version && fields.Version !== this.version.replace("-", "~")) problems.push(`the .deb version is ${fields.Version}, not ${this.version.replace("-", "~")}`);
     const scripts = join(this.work, "deb-control");
     const extracted = await run("dpkg-deb", ["-e", this.packagePath, scripts], { timeout: 60000 });
@@ -905,7 +915,7 @@ class Smoke {
     const requires = await run("rpm", ["-qpR", this.packagePath], { timeout: 60000 });
     if (requires.code !== 0) throw new Error(`rpm -qpR exited ${requires.code}: ${requires.stderr.slice(-400)}`);
     const bundled = (await readdir(join(this.root, "lib/ardia"))).filter((file) => /\.so(\.\d+)*$/.test(file));
-    const problems = rpmLayoutProblems(listing.stdout, { name, arch, scripts: scripts.stdout, requires: requires.stdout, bundled });
+    const problems = rpmLayoutProblems(listing.stdout, { name, arch, scripts: scripts.stdout, requires: requires.stdout, bundled }, this.cpu);
     if (this.version && version !== this.version.replace("-", "~")) problems.push(`the .rpm version is ${version}, not ${this.version.replace("-", "~")}`);
     const policy = await readFile(join(this.root, "share/polkit-1/actions/dev.ardia.linux.policy"), "utf8").catch(() => "");
     if (!policy.includes("dev.ardia.linux.reauthenticate")) problems.push("the .rpm's polkit policy has no reauthenticate action");
@@ -999,7 +1009,7 @@ class Smoke {
   async cliInstall() {
     if (!this.hasCli) throw outcome("skip", "no lib/ardia/cli in the package");
     if (!this.version) throw new Error("the package has lib/ardia/cli but no lib/ardia/VERSION");
-    const name = cliTarball(this.version);
+    const name = cliTarball(this.version, this.cpu);
     const tarball = join(this.cliDir, name);
     const installer = join(this.cliDir, CLI_INSTALLER);
     const problems = modeProblems([

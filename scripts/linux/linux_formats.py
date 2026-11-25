@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import pathlib
+import platform
 import re
 import shutil
 import subprocess
@@ -25,7 +26,10 @@ DEB_MAINTAINER = 'Ardia <hello@ardia.dev>'
 DEB_SOURCE = 'https://github.com/ardia-browser/ardia'
 DEB_RELEASE_NOTES = 'https://ardia.dev/release-notes'
 DEB_VERSION = re.compile(r'^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$')
-GLIBC_SONAMES = {'libc.so.6', 'libm.so.6', 'libdl.so.2', 'libpthread.so.0', 'librt.so.1', 'ld-linux-x86-64.so.2'}
+GLIBC_SONAMES = {'libc.so.6', 'libm.so.6', 'libdl.so.2', 'libpthread.so.0', 'librt.so.1', 'ld-linux-x86-64.so.2', 'ld-linux-aarch64.so.1'}
+DEB_ARCH = {'x64': 'amd64', 'arm64': 'arm64'}
+RPM_ARCH = {'x64': 'x86_64', 'arm64': 'aarch64'}
+VALID_CPUS = ('x64', 'arm64')
 OPTIONAL_LIBRARIES = {'libqt5_shim.so', 'libqt6_shim.so'}
 SONAME_PACKAGES = {
     'libgcc_s.so.1': 'libgcc-s1',
@@ -281,7 +285,14 @@ def build_date():
     return datetime.datetime.fromtimestamp(int(epoch) if epoch else int(time.time()), datetime.timezone.utc)
 
 
-def build_deb(root, destination, version):
+def check_cpu(cpu):
+    if cpu not in VALID_CPUS:
+        raise ValueError(f'unsupported Linux CPU {cpu!r}: expected one of {", ".join(VALID_CPUS)}')
+    return cpu
+
+
+def build_deb(root, destination, version, cpu='x64'):
+    cpu = check_cpu(cpu)
     if shutil.which('dpkg-deb') is None:
         raise ValueError('dpkg-deb is required to build the .deb')
     control_version = deb_version(version)
@@ -297,7 +308,7 @@ def build_deb(root, destination, version):
         (control / 'control').write_text('\n'.join([
             'Package: ardia',
             f'Version: {control_version}',
-            'Architecture: amd64',
+            f'Architecture: {DEB_ARCH[cpu]}',
             f'Maintainer: {DEB_MAINTAINER}',
             f'Installed-Size: {size}',
             f'Depends: {", ".join(deb_depends(usr / "lib/ardia"))}',
@@ -348,7 +359,8 @@ def rpm_scriptlet(name):
     return '\n'.join(lines).strip() + '\n'
 
 
-def rpm_spec(version, sonames, tree, date):
+def rpm_spec(version, sonames, tree, date, cpu='x64'):
+    rpm_arch = RPM_ARCH[check_cpu(cpu)]
     optional = '|'.join(re.escape(name).replace('\\', '\\\\') for name in sorted(OPTIONAL_LIBRARIES))
     stamp = date.strftime('%a %b %d %Y')
     owned = '\n'.join(f'%dir {folder}' for folder in RPM_SHARED_FOLDERS)
@@ -368,7 +380,7 @@ License: GPL-3.0-only
 URL: https://ardia.dev
 Vendor: Ardia
 Packager: {DEB_MAINTAINER}
-BuildArch: x86_64
+BuildArch: {rpm_arch}
 AutoReqProv: yes
 {chr(10).join(f'Requires: {name}' for name in RPM_REQUIRES)}
 {chr(10).join(f'Recommends: {name}' for name in RPM_RECOMMENDS)}
@@ -412,7 +424,8 @@ def stage_rpm_tree(root, tree, version):
     return usr
 
 
-def rpmbuild(tree, destination, version, payload=RPM_PAYLOAD):
+def rpmbuild(tree, destination, version, payload=RPM_PAYLOAD, cpu='x64'):
+    rpm_arch = RPM_ARCH[check_cpu(cpu)]
     if shutil.which('rpmbuild') is None:
         raise ValueError('rpmbuild is required to build the .rpm (apt install rpm, dnf install rpm-build)')
     usr = tree / 'usr'
@@ -424,9 +437,9 @@ def rpmbuild(tree, destination, version, payload=RPM_PAYLOAD):
     with tempfile.TemporaryDirectory(prefix='ardia-rpmbuild-') as scratch:
         top = pathlib.Path(scratch)
         spec = top / 'ardia.spec'
-        spec.write_text(rpm_spec(version, bundled_sonames(usr / 'lib/ardia'), tree, date))
+        spec.write_text(rpm_spec(version, bundled_sonames(usr / 'lib/ardia'), tree, date, cpu=cpu))
         environment = {**os.environ, 'LC_ALL': 'C', 'SOURCE_DATE_EPOCH': str(int(date.timestamp()))}
-        result = subprocess.run(['rpmbuild', '-bb', '--quiet', '--target', 'x86_64', '--define', f'_topdir {top}', '--define', f'_rpmdir {top}/out',
+        result = subprocess.run(['rpmbuild', '-bb', '--quiet', '--target', rpm_arch, '--define', f'_topdir {top}', '--define', f'_rpmdir {top}/out',
                                  '--define', '_build_name_fmt ardia.rpm', '--define', f'_binary_payload {payload}',
                                  '--define', 'use_source_date_epoch_as_buildtime 1', '--define', 'clamp_mtime_to_source_date_epoch 1',
                                  '--define', '_buildhost ardia.dev', str(spec)], capture_output=True, text=True, env=environment)
@@ -436,12 +449,12 @@ def rpmbuild(tree, destination, version, payload=RPM_PAYLOAD):
     return destination
 
 
-def build_rpm(root, destination, version, payload=RPM_PAYLOAD):
+def build_rpm(root, destination, version, payload=RPM_PAYLOAD, cpu='x64'):
     rpm_version(version)
     with tempfile.TemporaryDirectory(prefix='ardia-rpm-') as scratch:
         tree = pathlib.Path(scratch) / 'tree'
         stage_rpm_tree(root, tree, version)
-        return rpmbuild(tree, destination, version, payload)
+        return rpmbuild(tree, destination, version, payload, cpu=cpu)
 
 
 def flatpak_manifest(source):
@@ -549,10 +562,21 @@ def build_flatpak(tarball, destination, version, work=None):
     return destination
 
 
-def appimage_tools(cache=None):
+def host_mksquashfs(folder):
+    machine = platform.machine().lower()
+    host_cpu = 'arm64' if machine in ('aarch64', 'arm64') else 'x64'
+    host_os = 'darwin' if platform.system().lower() == 'darwin' else 'linux'
+    candidate = folder / host_os / host_cpu / 'mksquashfs'
+    if candidate.is_file():
+        return candidate
+    return folder / 'mksquashfs'
+
+
+def appimage_tools(cache=None, cpu='x64'):
+    cpu = check_cpu(cpu)
     cache = pathlib.Path(cache or os.environ.get('ARDIA_APPIMAGE_TOOLS') or pathlib.Path.home() / '.cache/ardia-appimage')
     folder = cache / APPIMAGE_TOOLS['folder']
-    tools = {'runtime': folder / 'runtimes/runtime-x64', 'mksquashfs': folder / 'mksquashfs'}
+    tools = {'runtime': folder / f'runtimes/runtime-{cpu}', 'mksquashfs': host_mksquashfs(folder)}
     if all(path.is_file() for path in tools.values()):
         return tools
     cache.mkdir(parents=True, exist_ok=True)
@@ -570,6 +594,7 @@ def appimage_tools(cache=None):
         source = unpacked / APPIMAGE_TOOLS['folder'] if (unpacked / APPIMAGE_TOOLS['folder']).is_dir() else unpacked
         shutil.rmtree(folder, ignore_errors=True)
         shutil.move(str(source), str(folder))
+    tools = {'runtime': folder / f'runtimes/runtime-{cpu}', 'mksquashfs': host_mksquashfs(folder)}
     for path in tools.values():
         if not path.is_file():
             raise ValueError(f'the AppImage toolset has no {path.relative_to(folder)}')
@@ -577,8 +602,8 @@ def appimage_tools(cache=None):
     return tools
 
 
-def build_appimage(root, destination, tools=None):
-    tools = tools or appimage_tools()
+def build_appimage(root, destination, tools=None, cpu='x64'):
+    tools = tools or appimage_tools(cpu=cpu)
     with tempfile.TemporaryDirectory(prefix='ardia-appimage-') as scratch:
         app = pathlib.Path(scratch) / 'AppDir'
         shutil.copytree(root, app, symlinks=True, ignore=shutil.ignore_patterns('install.sh', 'apparmor.d', 'polkit-1'))
@@ -602,7 +627,7 @@ def build_appimage(root, destination, tools=None):
     return destination
 
 
-def from_tarball(tarball, version, rpm=None, flatpak=None):
+def from_tarball(tarball, version, rpm=None, flatpak=None, cpu='x64'):
     for path in (rpm, flatpak):
         if path is not None and path.exists():
             raise ValueError(f'refusing to overwrite {path}')
@@ -610,15 +635,15 @@ def from_tarball(tarball, version, rpm=None, flatpak=None):
         with tempfile.TemporaryDirectory(prefix='ardia-tarball-') as scratch:
             with tarfile.open(tarball, 'r:xz') as packed:
                 packed.extractall(scratch, filter='tar')
-            build_rpm(pathlib.Path(scratch) / 'ardia', rpm, version)
+            build_rpm(pathlib.Path(scratch) / 'ardia', rpm, version, cpu=cpu)
             print(rpm)
     if flatpak is not None:
         build_flatpak(tarball, flatpak, version)
         print(flatpak)
 
 
-def release_tarball_url(version):
-    return f'{DEB_SOURCE}/releases/download/v{version}/Ardia-{version}-linux-x64.tar.xz'
+def release_tarball_url(version, cpu='x64'):
+    return f'{DEB_SOURCE}/releases/download/v{version}/Ardia-{version}-linux-{check_cpu(cpu)}.tar.xz'
 
 
 def main():
@@ -627,25 +652,28 @@ def main():
     tarball = commands.add_parser('from-tarball', help='build the .rpm and the Flatpak from a release tarball, such as one already published')
     tarball.add_argument('--tarball', type=pathlib.Path, required=True)
     tarball.add_argument('--version', required=True)
+    tarball.add_argument('--cpu', choices=VALID_CPUS, default='x64')
     tarball.add_argument('--rpm', type=pathlib.Path)
     tarball.add_argument('--flatpak', type=pathlib.Path)
     rpm = commands.add_parser('rpm', help='build an .rpm from an installed tree (a folder holding usr/), as the .rpm install test does for its older build')
     rpm.add_argument('--tree', type=pathlib.Path, required=True)
     rpm.add_argument('--version', required=True)
     rpm.add_argument('--destination', type=pathlib.Path, required=True)
+    rpm.add_argument('--cpu', choices=VALID_CPUS, default='x64')
     rpm.add_argument('--fast', action='store_true', help='a quickly compressed payload, for tests')
     flathub = commands.add_parser('flathub', help='write dev.ardia.Ardia.json and its metainfo for a published release tarball')
     flathub.add_argument('--version', required=True)
     flathub.add_argument('--sha256', required=True)
+    flathub.add_argument('--cpu', choices=VALID_CPUS, default='x64')
     flathub.add_argument('--out', type=pathlib.Path, required=True)
     args = parser.parse_args()
     try:
         if args.command == 'from-tarball':
-            from_tarball(args.tarball.resolve(), args.version, args.rpm and args.rpm.resolve(), args.flatpak and args.flatpak.resolve())
+            from_tarball(args.tarball.resolve(), args.version, args.rpm and args.rpm.resolve(), args.flatpak and args.flatpak.resolve(), cpu=args.cpu)
         elif args.command == 'rpm':
-            print(rpmbuild(args.tree.resolve(), args.destination.resolve(), args.version, 'w1T.zstdio' if args.fast else RPM_PAYLOAD))
+            print(rpmbuild(args.tree.resolve(), args.destination.resolve(), args.version, 'w1T.zstdio' if args.fast else RPM_PAYLOAD, cpu=args.cpu))
         else:
-            print(write_flatpak_manifest(args.out, args.version, {'url': release_tarball_url(args.version), 'sha256': args.sha256}))
+            print(write_flatpak_manifest(args.out, args.version, {'url': release_tarball_url(args.version, cpu=args.cpu), 'sha256': args.sha256}))
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         parser.error(str(error))
 

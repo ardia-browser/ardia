@@ -11,8 +11,9 @@ die() { echo "error: $*" >&2; exit 1; }
 
 if [ "${1:-}" = --arch ]; then
   case "${2:-}" in
-    linux-x86_64) shift 2; exec "$root/scripts/linux/fetch-engine.sh" "$@" ;;
-    *) die "usage: fetch-engine.sh [--nearest] | fetch-engine.sh --arch linux-x86_64 [--nearest]" ;;
+    linux-x86_64) shift 2; exec "$root/scripts/linux/fetch-engine.sh" --cpu x64 "$@" ;;
+    linux-arm64|linux-aarch64) shift 2; exec "$root/scripts/linux/fetch-engine.sh" --cpu arm64 "$@" ;;
+    *) die "usage: fetch-engine.sh [--nearest] | fetch-engine.sh --arch linux-x86_64|linux-arm64 [--nearest]" ;;
   esac
 fi
 

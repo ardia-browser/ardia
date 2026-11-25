@@ -1,11 +1,10 @@
 import { foreignWriteHooks } from "./foreignWriteHooks";
 import { listExtensions } from "../../platform/extensions";
-import { stepPager } from "../../platform/pager";
 import { confirm } from "../../platform/dialogs";
 import { focusWindow } from "../../platform/windows";
 import { managesWindowClose } from "../../platform/windowClose";
 import { chooseFromMenu, type ChoiceItem } from "../app/menuChoice";
-import { pageToProfile } from "../windows/profilePager";
+import { pageToProfile, pagerFor } from "../windows/profilePager";
 import { profileNames, requestCreateProfile } from "../profiles/createProfileRequest";
 import { storeAction, useBrowser } from "./store";
 import { rootOf } from "../groups/groups";
@@ -245,9 +244,15 @@ export function switchProfile(windowId: string, profileId: string, animated = fa
 }
 
 export function cycleProfile(windowId: string, delta: 1 | -1, mayWrite?: () => boolean) {
-  if (!cycleTarget(windowId, delta)) return;
+  const target = cycleTarget(windowId, delta);
+  if (!target) return;
   const commit = writesFor(mayWrite);
-  void stepPager(windowId, delta, true, store().profileOrder).then((ok) => ok || (mayWrite && !mayWrite()) || commit(() => cycleFromStore(windowId, delta)));
+  const pager = pagerFor(windowId);
+  if (pager.hasDeferredSelection) {
+    if (mayWrite && !mayWrite()) return;
+    return commit(() => pager.switchTo(target, mayWrite));
+  }
+  void pager.stepNative(delta, true).then((ok) => ok || (mayWrite && !mayWrite()) || commit(() => cycleFromStore(windowId, delta)));
 }
 
 function cycleFromStore(windowId: string, delta: 1 | -1) {

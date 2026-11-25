@@ -5,7 +5,7 @@ import { test } from "node:test";
 registerHooks({
   resolve(specifier, context, next) {
     if (!context.parentURL?.endsWith("/browser/actions.ts") || specifier !== "../windows/profilePager") return next(specifier, context);
-    return { url: `data:text/javascript,${encodeURIComponent("export const pageToProfile = () => {};")}`, shortCircuit: true };
+    return { url: `data:text/javascript,${encodeURIComponent("export const pageToProfile = () => {}; export const pagerFor = () => ({ hasDeferredSelection: false });")}`, shortCircuit: true };
   },
 });
 

@@ -42,6 +42,7 @@ class ProfilePager {
   private wheelState = { sum: 0, last: 0, trigger: 0 };
   private external = 0;
   private externalGeneration = 0;
+  private deferredSelectionSequence: number | null = null;
   private seen = 0;
   private switchedSinceBegan = false;
   private holdWatch: ReturnType<typeof setInterval> | null = null;
@@ -102,7 +103,11 @@ class ProfilePager {
     this.noteMotionFrames(event);
     const snapshot = pagerState(this.windowId);
     this.noteMotion(snapshot ? !atRest(snapshot) : event.phase !== "settled");
-    if (this.external) return;
+    if (this.external) {
+      const sequence = snapshot?.selectionSequence ?? (event.phase === "selected" ? event.sequence : 0);
+      if (this.deferredSelectionSequence === null || sequence <= this.deferredSelectionSequence) return;
+      this.cancelDeferredSelection();
+    }
     this.commitNative(snapshot ?? event, event);
   };
 
@@ -159,6 +164,7 @@ class ProfilePager {
   private selectExternal(profileId: string, waitForRows: boolean) {
     const generation = ++this.externalGeneration;
     this.external = generation;
+    this.deferredSelectionSequence = waitForRows ? Math.max(this.seen, pagerState(this.windowId)?.selectionSequence ?? 0) : null;
     const done = (ok: boolean) => {
       if (this.external !== generation) return;
       this.external = 0;
@@ -166,6 +172,14 @@ class ProfilePager {
     };
     const select = () => {
       if (this.external !== generation) return;
+      const snapshot = this.hasDeferredSelection ? pagerState(this.windowId) : null;
+      if (snapshot && this.deferredSelectionSequence !== null && snapshot.selectionSequence > this.deferredSelectionSequence) {
+        this.cancelDeferredSelection();
+        this.noteMotion(!atRest(snapshot));
+        this.commitNative(snapshot);
+        return;
+      }
+      this.deferredSelectionSequence = null;
       const order = useBrowser.getState().profileOrder;
       const index = order.indexOf(profileId);
       if (index >= 0) this.pos.setValue(index);
@@ -174,6 +188,16 @@ class ProfilePager {
     };
     if (waitForRows) requestAnimationFrame(() => requestAnimationFrame(select));
     else select();
+  }
+
+  get hasDeferredSelection() {
+    return this.deferredSelectionSequence !== null;
+  }
+
+  private cancelDeferredSelection() {
+    if (!this.hasDeferredSelection) return;
+    this.deferredSelectionSequence = null;
+    this.external = 0;
   }
 
   private commitNative(report: NativeReport | null, event?: PagerStateEvent) {
@@ -187,7 +211,9 @@ class ProfilePager {
     const ack = selectionOf(report);
     if (event?.phase === "began") this.switchedSinceBegan = false;
     if (event?.phase === "settled") notePagerSettle(this.switchedSinceBegan || switches);
-    if (!switches && ack <= this.state.getState().ack) return;
+    const newerSelection = ack > this.state.getState().ack;
+    if (!switches && !newerSelection) return;
+    if (switches && newerSelection) this.externalGeneration++;
     unstable_batchedUpdates(() => {
       if (switches) {
         this.switchedSinceBegan = true;
@@ -236,9 +262,20 @@ class ProfilePager {
     this.step(delta);
   }
 
+  stepNative(delta: -1 | 1, wrap: boolean): Promise<boolean> {
+    const generation = ++this.externalGeneration;
+    return stepPager(this.windowId, delta, wrap, useBrowser.getState().profileOrder).then((ok) => ok || generation !== this.externalGeneration);
+  }
+
   step(delta: -1 | 1) {
     if (!this.current()) return;
-    void stepPager(this.windowId, delta, false, useBrowser.getState().profileOrder).then((ok) => {
+    if (this.hasDeferredSelection) {
+      const index = this.index();
+      const next = index >= 0 ? useBrowser.getState().profileOrder[index + delta] : undefined;
+      if (next) this.switchTo(next);
+      return;
+    }
+    void this.stepNative(delta, false).then((ok) => {
       if (ok) return;
       const next = useBrowser.getState().profileOrder[this.index() + delta];
       if (this.index() >= 0 && next) useBrowser.getState().switchProfile(this.windowId, next);
@@ -249,9 +286,11 @@ class ProfilePager {
     const s = useBrowser.getState();
     const index = s.profileOrder.indexOf(profileId);
     if (!s.profiles[profileId] || !this.current() || index < 0) return;
+    this.cancelDeferredSelection();
+    const generation = ++this.externalGeneration;
     if (!this.active) return s.switchProfile(this.windowId, profileId);
     void switchPager(this.windowId, index, s.profileOrder).then((ok) => {
-      if (ok || (mayWrite && !mayWrite())) return;
+      if (ok || generation !== this.externalGeneration || (mayWrite && !mayWrite())) return;
       useBrowser.getState().switchProfile(this.windowId, profileId);
     });
   }
@@ -265,6 +304,7 @@ class ProfilePager {
     if (this.holdWatch) clearInterval(this.holdWatch);
     this.holdWatch = null;
     this.external = 0;
+    this.deferredSelectionSequence = null;
     this.externalGeneration++;
     this.unsubscribe();
     pagers.delete(this.windowId);

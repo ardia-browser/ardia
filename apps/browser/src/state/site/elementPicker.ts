@@ -4,7 +4,7 @@ const INSTALL = String.raw`
 const KEY = Symbol.for("ardia.elementPicker");
 if (!window[KEY]) {
   const LOOK = ${JSON.stringify(PICKER_STYLE)};
-  const MAX_DEPTH = 12;
+  const MAX_DEPTH = 64;
   const ATTRIBUTES = ["data-testid", "data-test-id", "data-test", "data-qa", "data-component", "data-module"];
   const STATE_CLASS = /^(?:is-|has-)?(?:active|hover|hovered|focus|focused|open|opened|selected|visible|show|shown|hidden|current|loaded|loading)$/i;
   const GENERATED = /^(?:css|sc|jsx|emotion|styled|svelte|tw|ember|ng-tns|_)[-_]?[a-z0-9]*\d/i;
@@ -66,6 +66,7 @@ if (!window[KEY]) {
       node = node.parentElement;
     }
     let best = parts.join(" > ");
+    if (!best || !matchesOnly(best, el)) return null;
     for (let i = 1; i < parts.length; i++) {
       const shorter = parts.slice(i).join(" > ");
       if (anchored(parts.slice(i)) && matchesOnly(shorter, el)) best = shorter;
@@ -231,6 +232,7 @@ if (!window[KEY]) {
         };
         const pick = (el) => {
           const selector = selectorFor(el);
+          if (!selector) return finish({ cancelled: true });
           el.style.setProperty("display", "none", "important");
           rules.add(selector);
           writeRules();
